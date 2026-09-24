@@ -467,6 +467,60 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     category: 'simulation',
     implementation: ['src/simulation/flowPulse/depressionInventory.ts'],
   },
+  'olv.simulation.terrain-access.local-step': {
+    id: 'olv.simulation.terrain-access.local-step',
+    version: 1,
+    name: 'Local step-height metric',
+    summary:
+      'Maximum absolute elevation discontinuity between a cell and its valid '
+      + 'neighbours within a 3×3 footprint, plus the pairwise edge form used to '
+      + 'gate one directed move. A geometric discontinuity measure, not a '
+      + 'classification of what caused it.',
+    citation: 'Internal composition (footprint-maximum finite difference); no single source method.',
+    category: 'simulation',
+    implementation: ['src/simulation/terrainAccess/localStep.ts'],
+  },
+  'olv.simulation.terrain-access.directional-grade': {
+    id: 'olv.simulation.terrain-access.directional-grade',
+    version: 1,
+    name: 'Directional longitudinal grade and cross slope',
+    summary:
+      'Decomposes the Horn elevation gradient into the component along a '
+      + 'declared physical heading (longitudinal grade) and the component '
+      + 'perpendicular to it (cross slope), so a route experiences a cell\'s '
+      + 'slope differently depending on the direction it crosses it in, rather '
+      + 'than being screened against total slope regardless of heading.',
+    citation: 'Vector decomposition of Horn (1981) slope/aspect; internal implementation.',
+    category: 'simulation',
+    implementation: ['src/simulation/terrainAccess/directionalGrade.ts'],
+  },
+  'olv.simulation.terrain-access.cost-map': {
+    id: 'olv.simulation.terrain-access.cost-map',
+    version: 1,
+    name: 'Terrain access hard eligibility and soft traversability cost',
+    summary:
+      'Separates direction-independent hard blocks (NoData, ROI, minimum '
+      + 'terrain support, ruggedness, above-ground obstruction evidence, '
+      + 'vehicle-width clearance) from direction-dependent ones (longitudinal '
+      + 'grade, cross slope, step height), and assigns eligible edges a '
+      + 'distance-scaled cost from declared, bounded utilization weights.',
+    citation: 'Internal composition (declared multi-term utilization cost); no single source method.',
+    category: 'simulation',
+    implementation: ['src/simulation/terrainAccess/traversabilityCost.ts'],
+  },
+  'olv.simulation.terrain-access.astar': {
+    id: 'olv.simulation.terrain-access.astar',
+    version: 1,
+    name: 'Deterministic 8-connected A* over eligible terrain cells',
+    summary:
+      'Least-cost route search with a planimetric-distance admissible '
+      + 'heuristic and a fixed, documented tie-break (lower f, then lower h, '
+      + 'then lower cell index), over cells the cost-map hard-eligibility pass '
+      + 'accepted. Never expands a hard-blocked cell or a hard-blocked edge.',
+    citation: 'Hart, Nilsson & Raphael (1968), doi:10.1109/TSSC.1968.300136 (A*)',
+    category: 'simulation',
+    implementation: ['src/simulation/terrainAccess/aStarTerrain.ts'],
+  },
 };
 
 /**

@@ -50,6 +50,10 @@ the paper that specifies it.
 | `olv.simulation.terrain-flow.accumulation` | 1 | Cells draining through each cell; metric area withheld when the scale is unresolved | internal (dependency-ordered pass over the D8 graph) |
 | `olv.simulation.terrain-flow.catchment` | 1 | Cells draining to a selected outlet | internal (reverse D8 traversal) |
 | `olv.simulation.terrain-flow.depression-inventory` | 1 | Groups raised cells into 8-connected depressions with cell count, area, deepest fill and outlet elevation; raw mode lists sink candidates instead | internal (connected-component grouping over Priority-Flood's output) |
+| `olv.simulation.terrain-access.local-step` | 1 | Local step-height metric (3×3 footprint maximum + pairwise edge form) | internal (footprint-maximum finite difference) |
+| `olv.simulation.terrain-access.directional-grade` | 1 | Directional longitudinal grade and cross slope, decomposed from the Horn gradient by heading | internal (vector decomposition of Horn 1981) |
+| `olv.simulation.terrain-access.cost-map` | 1 | Terrain access hard eligibility (node/edge split) and soft traversability cost | internal (declared multi-term utilization cost) |
+| `olv.simulation.terrain-access.astar` | 1 | Deterministic 8-connected A* over eligible terrain cells | Hart, Nilsson & Raphael (1968) |
 
 ## Honesty boundary
 
