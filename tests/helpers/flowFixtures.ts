@@ -1,5 +1,5 @@
 /**
- * flowFixtures.ts — the Flow Pulse test fixture shared across the routing,
+ * flowFixtures.ts: the Flow Pulse test fixture shared across the routing,
  * click-guard, overlay-geometry, three.js-overlay and package specs: one
  * projected horizontal scale, one run identity, and one row-major DTM
  * builder (`null` marks a cell with no reachable data). Each spec used to

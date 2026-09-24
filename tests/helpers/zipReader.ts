@@ -1,5 +1,5 @@
 /**
- * zipReader.ts — read one stored (uncompressed) entry back out of a
+ * zipReader.ts: read one stored (uncompressed) entry back out of a
  * store-only ZIP built by `buildZip`/`zipStore`, without depending on a real
  * unzip library. Shared by every spec that asserts on an export package's
  * contents (Flow Pulse, DEM), which used to carry byte-identical copies of
