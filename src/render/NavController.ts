@@ -52,6 +52,7 @@ import {
   isDollySettled,
 } from './wheelDollyMath';
 import { readDevFlags } from '../perf/devFlags';
+import { perFrameToDt } from './orbitFeel';
 
 /** The four navigation modes ('pan' is the v0.5.5 hand tool, program §P1). */
 export type NavMode = 'orbit' | 'walk' | 'fly' | 'pan';
@@ -177,6 +178,8 @@ export class NavController {
 
   // ── Camera tween ───────────────────────────────────────────────────────
   private _tween: Tween | null = null;
+  /** OrbitControls damping as tuned for a 60 Hz frame; captured on first update. */
+  private _dampingBase: number | null = null;
 
   // ── Hand tool (pan) — v0.5.5 P1 ────────────────────────────────────────
   /** `?handPan` dev flag, read once at construction (default true). */
@@ -584,6 +587,9 @@ export class NavController {
       // P2 — integrate any in-flight dolly velocity BEFORE `controls.update()`
       // re-reads the pose.
       this._stepWheelDolly(step);
+      // Damping is tuned per 60 Hz frame; scale it to this frame's length.
+      this._dampingBase ??= this._controls.dampingFactor;
+      this._controls.dampingFactor = perFrameToDt(this._dampingBase, dt);
       this._controls.update();
       return;
     }

@@ -257,7 +257,7 @@ import {
   ROTATE_SPEED_TOUCH,
   SETTLE_MS,
   SOFT_CLAMP_LERP_PER_FRAME,
-  STREAMING_LERP_PER_FRAME,
+  STREAMING_LERP_PER_FRAME, perFrameToDt,
   EXPAND_FRACTION,
   isWithinSettleWindow,
 } from './orbitFeel';
@@ -5249,7 +5249,7 @@ export class Viewer {
       this._edlBaseStrength * (distanceFactor / 0.7) * densityFactor;
   }
 
-  private _maintainOrbitCenter(): void {
+  private _maintainOrbitCenter(dtSec = 1 / 60): void {
     if (!this._orbitClampAabb) return;
     if (this._nav.mode !== 'orbit') return;
     if (this._nav.isTweening) return;
@@ -5296,7 +5296,7 @@ export class Viewer {
         // relative offset stays constant. Without this, OrbitControls
         // recomputes spherical state around the moving target and the
         // user sees the camera "rotating around a weird axis."
-        this._translateOrbit(live, STREAMING_LERP_PER_FRAME);
+        this._translateOrbit(live, perFrameToDt(STREAMING_LERP_PER_FRAME, dtSec));
         this._lastStreamingCenter = live;
         // Refresh the clamp AABB so the next clamp step uses the new
         // envelope rather than the attach-time snapshot.
@@ -5315,7 +5315,7 @@ export class Viewer {
       EXPAND_FRACTION,
     );
     if (clamped[0] !== t.x || clamped[1] !== t.y || clamped[2] !== t.z) {
-      this._translateOrbit(clamped, SOFT_CLAMP_LERP_PER_FRAME);
+      this._translateOrbit(clamped, perFrameToDt(SOFT_CLAMP_LERP_PER_FRAME, dtSec));
     }
   }
 
@@ -6044,7 +6044,7 @@ export class Viewer {
         this._nav.update(delta);
         if (this._camPose.movedOutsideControls(this._camera, this._nav.mode)) this._demand.cameraMoved();
       },
-      maintainOrbitCenter: () => this._maintainOrbitCenter(),
+      maintainOrbitCenter: (dt) => this._maintainOrbitCenter(dt),
       updateAdaptiveEdl: () => this._updateAdaptiveEdl(),
       shouldRenderFrame: () => this._demand.shouldRender(),
       isTweening: () => this._nav.isTweening,

@@ -42,7 +42,7 @@ export interface RenderLoopHost {
   /** Integrate the navigation controller (OrbitControls damping, tweens). */
   updateNav(delta: number): void;
   /** Soft-clamp + streaming bounds-refinement lerp for the orbit pivot. */
-  maintainOrbitCenter(): void;
+  maintainOrbitCenter(dtSec: number): void;
   /** Modulate EDL strength from camera-to-target distance. */
   updateAdaptiveEdl(): void;
 
@@ -181,7 +181,7 @@ export function runRenderFrame(host: RenderLoopHost): void {
   host.updateNav(delta);
   // Orbit-pivot maintenance — cheap and bounded; runs every frame regardless
   // of EDL/render state.
-  host.maintainOrbitCenter();
+  host.maintainOrbitCenter(delta);
   // Adaptive EDL strength — cheap, runs every frame.
   host.updateAdaptiveEdl();
 
