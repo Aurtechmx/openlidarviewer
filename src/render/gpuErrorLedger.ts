@@ -214,3 +214,4 @@ export {
   type RendererWithDeviceLoss,
 } from './deviceGeneration';
 export { deviceNoticeReporter } from './deviceNotice';
+export { recoverRenderCore } from './contextRecovery';

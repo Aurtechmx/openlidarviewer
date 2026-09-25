@@ -44,11 +44,11 @@
  * Cancelling the loss event is the backend's job and it already does it, which
  * is what lets a restore follow. Nothing here cancels anything.
  *
- * A restore has no owner, because nothing in the renderer rebuilds on it: the
- * canvas can raise `webglcontextrestored` and three will not act. The counter
- * still wants it, since a restored context is a new era whether or not
- * anything has been built in it yet, so {@link watchContextRestore} listens
- * for that one event and nothing else.
+ * A restore has no owner inside three: the canvas can raise
+ * `webglcontextrestored` and the renderer will not act. The counter still
+ * wants it, since a restored context is a new era, so
+ * {@link watchContextRestore} listens for that one event; the Viewer's
+ * reporter then rebuilds the renderer (`contextRecovery.ts`).
  *
  * Pure of three.js and of the DOM: both wirings take a structural shape, so a
  * fake drives them in Node.
@@ -188,8 +188,7 @@ export function wireRendererDeviceLoss(
  * Advance the generation when a WebGL context is restored.
  *
  * The one event with no other owner. The loss is reported by the renderer and
- * cancelled by its backend; a restore is reported by nothing, because nothing
- * rebuilds on it. Listening for it keeps the counter honest about a context
+ * cancelled by its backend; a restore is reported by nothing inside three. Listening for it keeps the counter honest about a context
  * that exists again, which is what decides whether anything held from before
  * may be used.
  */
