@@ -34,6 +34,7 @@ export class RecordingEl {
   readonly tagName: string;
   constructor(tagName: string) { this.tagName = tagName; }
   setAttribute(k: string, v: string): void { this.attrs[k] = v; }
+  getAttribute(k: string): string | null { return this.attrs[k] ?? null; }
   removeAttribute(k: string): void { delete this.attrs[k]; }
   set textContent(v: string) { this._text = v; }
   /** This node's own text plus every descendant's, in tree order. */
