@@ -133,8 +133,8 @@ For the size itself, read `bundle.liveEntryKiB` in
 just measured. This paragraph used to carry the number instead and said
 805 KiB long after the shell had grown past it.
 
-The `vite` override is scoped to `vitepress` alone. The application builds on
-Vite 8.2.2 and is not affected by it. `npm run docs:build` passes on the
+The `vite` override is scoped to `vitepress` alone, so the application still
+builds on Vite 8.2.2. `npm run docs:build` passes on the
 overridden tree.
 
 ## Stubbed to prune

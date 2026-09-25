@@ -45,7 +45,8 @@ WebGPU and WebGL2 backends all apply to a COPC scan exactly as to any other.
 Every resident node also keeps its full decoded per-point attributes, so the
 measurement, annotation, point-inspection, and live-probe tools work on a
 streaming scan exactly as on a static one: a click reports the same real-world
-coordinates, intensity, classification, return, GPS time, and point-source id.
+coordinates and the same attributes (intensity, classification, return, GPS
+time and point-source id).
 
 ## The streaming panel
 
@@ -58,9 +59,9 @@ live node and point counts, the cache size, and controls:
 - Pause / Resume: stop or resume loading new detail.
 - Clear cache: drop the cached compressed chunks.
 
-`?debug=1` adds a streaming section to the diagnostics overlay: visible,
-queued, loading, and resident node counts, displayed and source points, cache
-and GPU estimates, and the scheduler tick time.
+`?debug=1` adds a streaming section to the diagnostics overlay. It shows
+node counts by state (visible, queued, loading, resident) and displayed against
+source points, with cache and GPU estimates and the scheduler tick time.
 
 ## Opening a remote COPC scan
 

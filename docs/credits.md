@@ -36,7 +36,7 @@ to each dataset's own licence.
 | Approx. size | 83.8 MB (streamed progressively: the viewer fetches only the resident set) |
 | Transport verified | HTTP 206 partial content, `Accept-Ranges: bytes`, `Access-Control-Allow-Origin: *` (checked 2026-07-19) |
 
-Nothing is uploaded: the object is fetched by range request straight into the
+Nothing is uploaded. The object is fetched by range request straight into the
 browser, and the same consent gate that covers any remote scan applies before the
 first byte. If the object is ever withdrawn or moved, the action fails through the
 normal remote-open error path (a toast naming the fetch failure) rather than

@@ -1,6 +1,7 @@
 # Usage
 
-How to open, navigate, measure, annotate, inspect, and export a scan. To try
+How to open a scan and move around it, then measure, annotate, inspect and
+export it. To try
 it without installing anything, open the live version at
 <https://app.openlidarviewer.org/>.
 
@@ -10,7 +11,7 @@ Open the app in a modern WebGL/WebGPU-capable browser (Chrome or Edge work well)
 
 For LAS and LAZ files a short preload summary appears first: the format, the source point count, and how the file will be loaded. A status toast then tracks the load through its stages (reading, decoding, optimizing) and a very large file shows a live point counter and a progress bar. A Cancel control on the toast stops a load in progress; nothing is added to the scene if you cancel.
 
-A "Project ready" card then appears with a quick summary: format, point count, bounding box, detected attributes, a suggested navigation mode, and a performance estimate. It dismisses on its own.
+A "Project ready" card then summarises the file: its format, point count, bounding box and detected attributes, with a suggested navigation mode and a performance estimate. It dismisses on its own.
 
 Supported imports are `LAS`, `LAZ`, `E57`, `PLY`, `OBJ`, `GLB`, `GLTF`, `XYZ`, `CSV`, `PCD`, `PTS`, and `PTX`. Large hierarchical-streaming formats, `COPC` (`.copc.laz`) and `EPT` (Entwine Point Tile, via an `ept.json` URL), open progressively through their octree hierarchies; see [`streaming.md`](streaming.md). Nothing is uploaded. The file is read and rendered entirely in your browser.
 
@@ -24,7 +25,7 @@ Click Close in the tool dock to clear the current scan (and any additional layer
 
 The Scan Intelligence panel controls how the cloud looks:
 
-- Color by switches between Height, Intensity, Classification, RGB, and Normal. Only the modes the file actually contains are offered, and the best one is selected automatically. Normal shading maps each point's surface-normal direction to colour and appears for files that carry per-point normals, such as many E57 scans.
+- Color by switches the colour mode between Height, Intensity and Classification, or RGB and Normal. Only the modes the file actually contains are offered, and the best one is selected automatically. Normal shading maps each point's surface-normal direction to colour and appears for files that carry per-point normals, such as many E57 scans.
 - Point size sets the base on-screen size of each point.
 - Detail shows the honest `shown / total` count. A cloud larger than the point budget is loaded at reduced density so the viewer stays responsive: see [performance.md](performance.md).
 
@@ -44,19 +45,19 @@ In Walk and Fly, click the scan to capture the cursor for mouse-look, and press 
 
 ## Inspecting with Scan Intelligence
 
-The Scan report shows the headline metrics: point count, width, depth, height, density, spacing, and which attributes (RGB, intensity, classification) are present. When a LAS or LAZ file records them, it also shows the capture sensor, the source software, and the capture date. Open the Advanced report for the scan's georeferenced bounding box (the min and max corners in real-world coordinates) and integrity diagnostics, including invalid coordinates, duplicate points, stray outliers, and a declared-vs-decoded point-count check.
+The Scan report shows the headline metrics: point count, width, depth, height, density, spacing, and which attributes (RGB, intensity, classification) are present. When a LAS or LAZ file records them, it also shows the capture sensor, the source software, and the capture date. Open the Advanced report for the scan's georeferenced bounding box (the min and max corners in real-world coordinates) and integrity diagnostics. Those flag invalid coordinates, duplicate points and stray outliers, and compare the declared point count against the decoded one.
 
 ## Measuring
 
 Click Measure in the tool dock to open the measurement toolbar. Pick a tool from it, then click points on the scan:
 
-- Distance: two points; the straight-line distance between them.
-- Polyline: any number of points; the total path length. Double-click or press Done to finish.
-- Area: three or more points forming a polygon; reports both the true area in the polygon's own plane and the horizontal map-projected area.
-- Height: two points; the vertical difference between them.
-- Angle: three points; the angle at the middle vertex.
-- Slope: two points; the rise, run, slope angle, and grade percentage.
-- Profile: two points; the full cross-section geometry of the line: 3D length, horizontal distance, vertical drop, and grade percentage. Reads in a single compact card ("12.5 m · Δh +2.3 m · 18.4%"); the overlay draws the 3D segment plus an L-bent ghost so the run and drop are visible separately.
+- Distance takes two clicks and reports the straight-line distance between them.
+- Polyline takes any number of clicks and reports the total path length. Double-click or press Done to finish.
+- Area takes three or more clicks forming a polygon and reports both the true area in the polygon's own plane and the horizontal map-projected area.
+- Height takes two clicks and reports the vertical difference between them.
+- Angle takes three clicks and reports the angle at the middle vertex.
+- Slope takes two clicks and reports the rise, run, slope angle, and grade percentage.
+- Profile takes two clicks and reports the full cross-section geometry of the line: 3D length, horizontal distance, vertical drop, and grade percentage. Reads in a single compact card ("12.5 m · Δh +2.3 m · 18.4%"); the overlay draws the 3D segment plus an L-bent ghost so the run and drop are visible separately.
 
 While placing, undo removes the last point. Once placed, drag any point to move it, and a measurement can be renamed or deleted from the Measurements panel. Clear all empties the list. The units toggle switches every readout between metric and imperial. Export saves all measurements to a JSON session file, and Import loads one back. Measurements persist for the browser session.
 
@@ -64,7 +65,7 @@ Measurement is for visual inspection. See the note in [limitations.md](limitatio
 
 ## Annotating
 
-Annotations mark points of interest for review. Click Annotate in the tool dock, then click a point on the scan: a numbered marker drops on it and a compact card opens. Give the annotation a title, choose a category (note, info, warning, or issue) and add an optional note. Keep the "Save current camera view" checkbox ticked to store the exact viewpoint you placed it from. Save commits the annotation; Cancel discards the draft, so an abandoned card never leaves a stray marker.
+Annotations mark points of interest for review. Click Annotate in the tool dock, then click a point on the scan: a numbered marker drops on it and a compact card opens. Give the annotation a title and pick its category (note, info, warning or issue). A free-text note is optional. Keep the "Save current camera view" checkbox ticked to store the exact viewpoint you placed it from. Save commits the annotation; Cancel discards the draft, so an abandoned card never leaves a stray marker.
 
 You can also link an annotation to a measurement: when the scan has measurements, the editor offers a "Linked measurement" selector, and a linked annotation shows the measurement's name in the panel.
 
@@ -82,7 +83,7 @@ The picking tools (Measure, Inspect, Annotate, and Probe) are mutually exclusive
 
 ## Saved views
 
-In the Saved views section of the panel, click Save current view (or press `V`) to store a named view state: the camera plus the display state you are looking at: the clip box, colour mode, class filter, elevation/intensity filters, and render settings. Each saved view can be renamed in place; click Go to glide the camera back and reapply that state, or the `×` to delete it. Saved views are kept in the session file, so they survive an export and import, which means a report or paper can cite a view state by name ("Figure 3 is the 'north-scarp' state") and a reader with the same scan regenerates it. Views saved by older versions carry only a camera and restore exactly as they always did. One honest caveat for streamed scans (COPC/EPT): a restored view reproduces the same settings over whatever detail is resident at that moment, so expect the same picture, not necessarily the same individual points.
+In the Saved views section of the panel, click Save current view (or press `V`) to store a named view state: the camera plus the display state you are looking at. That state covers the clip box and colour mode, the class and elevation/intensity filters, and the render settings. Each saved view can be renamed in place; click Go to glide the camera back and reapply that state, or the `×` to delete it. Saved views are kept in the session file, so they survive an export and import, which means a report or paper can cite a view state by name ("Figure 3 is the 'north-scarp' state") and a reader with the same scan regenerates it. Views saved by older versions carry only a camera and restore exactly as they always did. One honest caveat for streamed scans (COPC/EPT): a restored view reproduces the same settings over whatever detail is resident at that moment, so expect the same picture, not necessarily the same individual points.
 
 ## Keyboard shortcuts
 
@@ -90,18 +91,18 @@ Press `?` for the shortcut sheet: every action with its key, searchable, from th
 
 ## Exporting
 
-Snapshot, in the tool dock, saves the current view as a PNG; any placed measurements and annotations are burned into the image, so the snapshot works as inspection evidence. The Visual Export Studio opens richer image modes (orthographic RGB, height map, intensity, classification, and normal) with legend customisation. Export, in the panel, re-exports the loaded cloud as PLY, OBJ, XYZ, or CSV in real-world coordinates.
+Snapshot, in the tool dock, saves the current view as a PNG; any placed measurements and annotations are burned into the image, so the snapshot works as inspection evidence. The Visual Export Studio adds image modes beyond the screen view, such as orthographic RGB and a height map; intensity, classification and normal images are there too, each with a customisable legend. Export, in the panel, re-exports the loaded cloud in real-world coordinates as a PLY or OBJ file, or as XYZ or CSV text.
 
-Report PDF. Export → Report PDF builds a multi-page technical report from the live working state: a cover page, dataset summary (point count, bounds, density, CRS), embedded image exports, annotations and measurements tables, technical notes, and a footer. Two built-in templates (Survey Summary, Technical Report) set the default voice; three themes (`light-technical`, `dark-inspection`, `minimal-engineering`) and white-label project metadata (Client / Project / Phase / Reference / Date) plus an optional footer note propagate through every page. Branding (accent colour, logo, organisation, author) and the metric/imperial unit system propagate through every table. The PDF engine and its pdf-lib dependency load only when you click the button, so the initial app payload stays unchanged for users who never need a report.
+Report PDF. Export → Report PDF builds a multi-page technical report from the live working state. It opens with a cover page and a dataset summary (point count, bounds, density, CRS), then embeds the image exports and tables of annotations and measurements, and ends with technical notes and a footer. Two built-in templates (Survey Summary, Technical Report) set the default voice; three themes (`light-technical`, `dark-inspection`, `minimal-engineering`) and white-label project metadata (Client / Project / Phase / Reference / Date) plus an optional footer note propagate through every page. Branding (accent colour, logo, organisation, author) and the metric/imperial unit system propagate through every table. The PDF engine and its pdf-lib dependency load only when you click the button, so the initial app payload stays unchanged for users who never need a report.
 
 <!-- #region session-reference -->
 <!-- The region markers on this page let the docs site's "Embed & session
      reference" include these sections verbatim — this file stays the single
      canonical copy. Keep the markers around their sections when editing. -->
-Session round-trip (`.olvsession`). The session Export saves the full working state (camera, render settings, active colour mode, annotations, measurements, named views, and scan metadata) to a `.olvsession` JSON file. Import loads one back, restoring the camera and view exactly. Older measurement-only and v2 session files still open via the v1/v2/v3 schema back-compat in the parser.
+Session round-trip (`.olvsession`). The session Export saves the full working state to a `.olvsession` JSON file. The file holds the camera, render settings and active colour mode. It also stores the annotations, measurements and named views, along with the scan metadata. Import loads one back, restoring the camera and view exactly. Older measurement-only and v2 session files still open via the v1/v2/v3 schema back-compat in the parser.
 <!-- #endregion session-reference -->
 
-## Mobile Usage
+## Mobile usage
 
 1. Open OpenLiDARViewer on your phone.
 2. Tap "Open scan from device."

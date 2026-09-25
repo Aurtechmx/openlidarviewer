@@ -46,7 +46,7 @@ OpenLiDARViewer is not affiliated with, endorsed by, or sponsored by Apple or an
 
 ## Mobile measurement
 
-To measure on mobile, open the Measure tool, pick a kind from the toolbar (distance, polyline, area, height, angle, or slope) and tap points on the scan. Tap a placed point to drag it, and use the Clear and Done controls to remove measurements or exit the tool. The units toggle switches between metric and imperial.
+To measure on mobile, open the Measure tool, pick a kind from the toolbar and tap points on the scan. The kinds are the desktop ones: distance, polyline and area, plus height, angle and slope. Tap a placed point to drag it, and use the Clear and Done controls to remove measurements or exit the tool. The units toggle switches between metric and imperial.
 
 Measurements are intended for visual inspection and documentation workflows unless validated against survey-grade data and procedures.
 

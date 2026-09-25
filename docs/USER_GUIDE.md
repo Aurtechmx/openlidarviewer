@@ -49,7 +49,7 @@ Measure, Annotate and Analyse from the dock switch the left rail to the tab that
 
 ### Moving the camera
 
-You start in Orbit: drag to swing around the scan, scroll to zoom. Switch to Walk or Fly and the movement keys take over, and clicking the view hands the cursor to the camera until you press Esc.
+You start in Orbit, where dragging swings around the scan and scrolling zooms. Switch to Walk or Fly and the movement keys take over, and clicking the view hands the cursor to the camera until you press Esc.
 
 | Key / input | Does |
 |---|---|
@@ -95,13 +95,13 @@ Point size, eye-dome lighting (which adds depth cues), and a few other rendering
 
 Open the Tools tab and start Measure, or press M. A toolbar appears over the view; pick a kind there and click points on the scan:
 
-- Distance: straight line between two points
+- Distance: straight line between a pair of points
 - Polyline: total length of a multi-segment path
 - Area: a polygon, reported both as true area and as flat map area
-- Height: vertical difference between two points
+- Height: vertical difference between a pair of points
 - Angle: the angle at a corner
 - Slope: rise, run, angle, and grade percent
-- Profile: a cross-section between two points, with a height chart
+- Profile: a cross-section between a pair of points, with a height chart
 - Box: two opposite corners, reported as width, depth, height and volume
 - Volume: cut and fill against a base level, from a polygon or a lasso
 
