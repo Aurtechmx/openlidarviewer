@@ -1,0 +1,397 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Every user-facing capability with its release status: stable, preview or hidden. docs/project/STABILITY_POLICY.md defines what each status promises. scripts/lint-capability-manifest.mjs checks this file against the source tree, docs/validation/unreachable-modules.json, docs/validation/claim-register.yaml and the public documents.",
+  "statuses": {
+    "stable": "Reachable in the shipped build and covered by the stability policy.",
+    "preview": "Reachable in the shipped build, labelled in the interface, and free to change between minor versions.",
+    "hidden": "Present in the source tree and not offered to users. Public documents may not describe it as available."
+  },
+  "capabilities": [
+    {
+      "id": "open-las-laz",
+      "title": "Open LAS and LAZ files",
+      "status": "stable",
+      "modules": [
+        "src/io/loadLas.ts",
+        "src/io/lazDecode.ts"
+      ]
+    },
+    {
+      "id": "open-e57",
+      "title": "Open E57 files",
+      "status": "stable",
+      "modules": [
+        "src/io/loadE57.ts",
+        "src/io/e57"
+      ],
+      "claims": [
+        "E57-INGEST"
+      ]
+    },
+    {
+      "id": "open-mesh-and-text-formats",
+      "title": "Open PLY, OBJ, GLB/GLTF, XYZ, CSV, PCD, PTX and PTS files",
+      "status": "stable",
+      "modules": [
+        "src/io/loadPly.ts",
+        "src/io/loadObj.ts",
+        "src/io/loadGltf.ts",
+        "src/io/loadXyz.ts",
+        "src/io/loadPcd.ts",
+        "src/io/loadPtx.ts",
+        "src/io/loadPts.ts"
+      ]
+    },
+    {
+      "id": "stream-copc",
+      "title": "Stream COPC files and URLs",
+      "status": "stable",
+      "modules": [
+        "src/io/copc"
+      ]
+    },
+    {
+      "id": "stream-ept",
+      "title": "Stream EPT datasets",
+      "status": "stable",
+      "modules": [
+        "src/io/ept"
+      ]
+    },
+    {
+      "id": "stream-3d-tiles",
+      "title": "Open .pnts tiles and stream point-cloud 3D Tiles tilesets",
+      "status": "stable",
+      "modules": [
+        "src/io/loadPnts.ts",
+        "src/io/tiles3d"
+      ]
+    },
+    {
+      "id": "public-catalog",
+      "title": "Curated catalog of public COPC and EPT datasets",
+      "status": "stable",
+      "modules": [
+        "src/io/catalog",
+        "src/ui/CatalogPanel.ts"
+      ]
+    },
+    {
+      "id": "navigation",
+      "title": "Orbit, Walk, Fly and Pan navigation with camera presets",
+      "status": "stable",
+      "modules": [
+        "src/render/NavController.ts"
+      ]
+    },
+    {
+      "id": "share-view-link",
+      "title": "Shareable view links",
+      "status": "stable",
+      "modules": [
+        "src/io/shareState.ts"
+      ]
+    },
+    {
+      "id": "session-files",
+      "title": "Session save and open",
+      "status": "stable",
+      "modules": [
+        "src/io/session.ts",
+        "src/io/sessionFile.ts"
+      ]
+    },
+    {
+      "id": "measurement",
+      "title": "Distance, area, height, angle, slope and profile measurement",
+      "status": "stable",
+      "modules": [
+        "src/ui/MeasurePanel.ts",
+        "src/export/measurementExport.ts"
+      ],
+      "claims": [
+        "MEAS-DISTANCE",
+        "MEAS-AREA",
+        "MEAS-HEIGHT",
+        "MEAS-ANGLE",
+        "MEAS-PROFILE"
+      ]
+    },
+    {
+      "id": "volume",
+      "title": "Point-sample and stockpile volume",
+      "status": "stable",
+      "modules": [
+        "src/ui/LassoVolumeTool.ts"
+      ],
+      "claims": [
+        "VOL-POINT-SAMPLE",
+        "VOL-STOCKPILE"
+      ]
+    },
+    {
+      "id": "profile-workbench",
+      "title": "Cross-section profile workbench",
+      "status": "stable",
+      "modules": [
+        "src/ui/ProfileWorkbench.ts"
+      ],
+      "claims": [
+        "MEAS-PROFILE"
+      ]
+    },
+    {
+      "id": "crs-handling",
+      "title": "CRS detection and UTM projection",
+      "status": "stable",
+      "modules": [
+        "src/io/crs.ts",
+        "src/io/wktParser.ts"
+      ],
+      "claims": [
+        "CRS-UTM-PROJECTION"
+      ]
+    },
+    {
+      "id": "terrain-dtm",
+      "title": "Ground classification and confidence-aware DTM",
+      "status": "stable",
+      "modules": [
+        "src/terrain/ground",
+        "src/terrain/surface"
+      ],
+      "claims": [
+        "GROUND-FILTER",
+        "DTM",
+        "DSM",
+        "CHM",
+        "HOLDOUT-RMSE"
+      ]
+    },
+    {
+      "id": "terrain-rasters",
+      "title": "Slope, aspect, hillshade, TPI and VRM rasters",
+      "status": "stable",
+      "modules": [
+        "src/terrain/surface"
+      ],
+      "claims": [
+        "SLOPE-RASTER",
+        "ASPECT-RASTER",
+        "HILLSHADE",
+        "TPI",
+        "VRM"
+      ]
+    },
+    {
+      "id": "contours",
+      "title": "Evidence-graded contour generation and export",
+      "status": "stable",
+      "modules": [
+        "src/terrain/contour",
+        "src/terrain/export"
+      ],
+      "claims": [
+        "CONTOURS",
+        "CONTOURS-CARTOGRAPHIC"
+      ]
+    },
+    {
+      "id": "dem-export",
+      "title": "DEM package export (ASCII Grid and GeoTIFF)",
+      "status": "stable",
+      "modules": [
+        "src/terrain/export/demPackage.ts",
+        "src/terrain/export/demGeoTiff.ts",
+        "src/terrain/export/demAsciiGrid.ts"
+      ]
+    },
+    {
+      "id": "change-detection",
+      "title": "Two-epoch change raster and change volume",
+      "status": "stable",
+      "modules": [
+        "src/terrain/change/compareEpochs.ts",
+        "src/terrain/change/changeRaster.ts"
+      ],
+      "claims": [
+        "EPOCH-ALIGN",
+        "CHANGE-RASTER",
+        "CHANGE-VOLUME"
+      ]
+    },
+    {
+      "id": "point-export",
+      "title": "LAS, PLY, OBJ, XYZ, CSV and PNG export",
+      "status": "stable",
+      "modules": [
+        "src/io/exporters.ts",
+        "src/ui/ExportPanel.ts"
+      ]
+    },
+    {
+      "id": "pdf-reports",
+      "title": "Annotated multi-page PDF reports",
+      "status": "stable",
+      "modules": [
+        "src/report/ReportEngine.ts",
+        "src/report/ReportPdfRenderer.ts",
+        "src/ui/AnnotationPanel.ts"
+      ],
+      "claims": [
+        "REPORT-DIGEST"
+      ]
+    },
+    {
+      "id": "dataset-intelligence",
+      "title": "Dataset Intelligence card and Scan Intelligence panel",
+      "status": "stable",
+      "modules": [
+        "src/ui/DatasetIntelligenceCard.ts",
+        "src/terrain/datasetIntelligence.ts"
+      ]
+    },
+    {
+      "id": "command-palette",
+      "title": "Command palette",
+      "status": "stable",
+      "modules": [
+        "src/ui/CommandPalette.ts",
+        "src/ui/actionRegistry.ts"
+      ]
+    },
+    {
+      "id": "themes",
+      "title": "Dark, Light and High-contrast themes",
+      "status": "stable",
+      "modules": [
+        "src/ui/ThemeToggle.ts"
+      ]
+    },
+    {
+      "id": "flow-pulse-lab",
+      "title": "Flow Pulse (Field Simulation Lab)",
+      "status": "preview",
+      "modules": [
+        "src/ui/fieldSimulation/flowPulseLab.ts",
+        "src/simulation/flowPulse"
+      ],
+      "claims": [
+        "TERRAIN-FLOW-PULSE",
+        "TERRAIN-FLOW-DEPRESSION-INVENTORY"
+      ],
+      "uiLabel": {
+        "file": "src/app/actions/analysisActions.ts",
+        "text": "Flow Pulse (Field Simulation Lab)"
+      }
+    },
+    {
+      "id": "terrain-access-lab",
+      "title": "Terrain Access (Field Simulation Lab)",
+      "status": "preview",
+      "modules": [
+        "src/ui/fieldSimulation/terrainAccessLab.ts",
+        "src/simulation/terrainAccess"
+      ],
+      "claims": [
+        "TERRAIN-ACCESS"
+      ],
+      "uiLabel": {
+        "file": "src/app/actions/analysisActions.ts",
+        "text": "Terrain Access (Field Simulation Lab)"
+      }
+    },
+    {
+      "id": "observatory",
+      "title": "Observatory (observation evidence)",
+      "status": "preview",
+      "modules": [
+        "src/app/openObservatoryRun.ts",
+        "src/observation/ledger.ts",
+        "src/ui/observatory/observatoryPanel.ts"
+      ],
+      "uiLabel": {
+        "file": "src/app/actions/analysisActions.ts",
+        "text": "Observatory (observation evidence)"
+      },
+      "note": "No claim register entry backs it yet."
+    },
+    {
+      "id": "tie-point-registration",
+      "title": "Scan-to-scan registration from tie points or ICP",
+      "status": "hidden",
+      "modules": [
+        "src/registration/tiePointAlignment.ts",
+        "src/registration/generalIcp.ts",
+        "src/registration/planarIcp.ts",
+        "src/registration/rigidSolve.ts",
+        "src/registration/transformStore.ts",
+        "src/geo/tiePointRegister.ts"
+      ],
+      "docTerms": [
+        "tie-point registration",
+        "tie point registration",
+        "tie-point alignment"
+      ]
+    },
+    {
+      "id": "cross-crs-placement",
+      "title": "Cross-CRS project placement planner",
+      "status": "hidden",
+      "modules": [
+        "src/geo/projectPlacement.ts"
+      ],
+      "docTerms": [
+        "cross-CRS placement",
+        "placement planner"
+      ]
+    },
+    {
+      "id": "continuity-field",
+      "title": "Continuity Field surface display",
+      "status": "hidden",
+      "modules": [
+        "src/render/continuity/ContinuityRuntime.ts"
+      ],
+      "docTerms": [
+        "Continuity Field"
+      ]
+    },
+    {
+      "id": "observation-overlay",
+      "title": "Observation point overlay and scan-station suggestion",
+      "status": "hidden",
+      "modules": [
+        "src/render/observation/ObservationPointOverlay.ts",
+        "src/observation/stationSuggestion.ts"
+      ],
+      "docTerms": [
+        "station suggestion",
+        "suggested scan station",
+        "observation overlay"
+      ]
+    },
+    {
+      "id": "qa-service",
+      "title": "QA service",
+      "status": "hidden",
+      "modules": [
+        "src/qa/QaService.ts"
+      ],
+      "docTerms": [
+        "QA service"
+      ]
+    },
+    {
+      "id": "classification-evidence-record",
+      "title": "Per-point classification evidence record",
+      "status": "hidden",
+      "modules": [
+        "src/classification/classificationEvidence.ts"
+      ],
+      "docTerms": [
+        "classification evidence record"
+      ]
+    }
+  ]
+}
