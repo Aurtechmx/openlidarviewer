@@ -29,6 +29,9 @@ export const LAZY_ONLY = [
   'src/perf/navProbeHook.ts',
   'src/perf/navProbeInstall.ts',
   'src/perf/navJankRecord.ts',
+  'src/perf/navDriver.ts',
+  'src/perf/navTrajectories.ts',
+  'src/perf/navDriverLoader.ts',
 ];
 
 /** A path with POSIX separators, so the checks read the same on Windows. */

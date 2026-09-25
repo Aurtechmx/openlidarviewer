@@ -55,6 +55,7 @@ const ROOT = resolve(HERE, '..');
 const EXCLUDED = [
   /node_modules/,
   /lazyChunks\.ts$/,
+  /navDriverLoader\.ts$/,
   /parseBuffer\.ts$/,
   /loaderRegistry\.ts$/,
   /loadFile\.ts$/,

@@ -24,7 +24,7 @@
 import { cameraIsMoving, edlActiveThisFrame } from './edlMotionGate';
 import { shouldRunProbePick } from './hoverPickGate';
 import { noteDrawn } from './drawSignal';
-import { navSink, type NavProbeSink, type NavUploadSample } from '../perf/navProbeHook';
+import { navSink, navDrive, stepNav, type NavProbeSink, type NavUploadSample } from '../perf/navProbeHook';
 
 export { feedFrameMs } from '../perf/navProbeHook';
 import type { PointInfo } from './pointInfo';
@@ -186,10 +186,18 @@ export function runRenderFrame(host: RenderLoopHost): void {
   if (probe) probe.frameBegin(probe.now());
   const delta = host.advanceFrameClock();
   host.recordFrame(delta);
-  host.updateNav(delta);
-  // Orbit-pivot maintenance — cheap and bounded; runs every frame regardless
-  // of EDL/render state.
-  host.maintainOrbitCenter(delta);
+  if (navDrive() === null) {
+    host.updateNav(delta);
+    // Orbit-pivot maintenance — cheap and bounded; runs every frame regardless
+    // of EDL/render state.
+    host.maintainOrbitCenter(delta);
+  } else {
+    // `?benchmark=nav` camera driver: its fixed steps replace the clock delta.
+    stepNav(delta, (dt) => {
+      host.updateNav(dt);
+      host.maintainOrbitCenter(dt);
+    });
+  }
   // Adaptive EDL strength — cheap, runs every frame.
   host.updateAdaptiveEdl();
 
