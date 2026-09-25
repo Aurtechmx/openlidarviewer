@@ -126,7 +126,41 @@ export interface ObservatoryF7Scene {
   readonly voxelEdge: number;
 }
 
+export interface ObservatoryF11Region extends ObservatoryAabb {
+  readonly name: string;
+  readonly state: string;
+  readonly rows?: { readonly sources: number; readonly hit: number; readonly pass: number };
+  readonly normal?: readonly [number, number, number];
+}
+
+export interface ObservatoryF11Scene {
+  readonly id: 'F11';
+  readonly description: string;
+  readonly domain: ObservatoryAabb;
+  readonly voxelEdge: number;
+  readonly station: { readonly id: string; readonly origin: readonly [number, number, number]; readonly status: string };
+  readonly regions: readonly ObservatoryF11Region[];
+  readonly defaultState: string;
+  readonly instrumentModel: {
+    readonly heightAboveSurface: number;
+    readonly minRange: number;
+    readonly maxRange: number;
+    readonly verticalFieldOfViewDegrees: number;
+    readonly angularStepDegrees: number;
+    readonly sameAsSourceIndex: number | null;
+  };
+  readonly parameters: {
+    readonly stateWeights: { readonly SHADOWED: number; readonly UNADDRESSED: number; readonly NO_RETURN_PATH: number; readonly CONFLICT: number; readonly WEAK_SURFACE: number };
+    readonly redundancyWeight: number;
+    readonly weakSurfaceFloors: { readonly sources: number; readonly consistency: number };
+    readonly p_solid: number;
+  };
+  readonly candidates: readonly { readonly candidateIndex: number; readonly name: string; readonly position: readonly [number, number, number] }[];
+  readonly stationCount: number;
+}
+
 export function buildF1Scene(): ObservatoryF1Scene;
+export function buildF11Scene(): ObservatoryF11Scene;
 export function buildF8Cases(): ObservatoryF8Cases;
 export function buildF5Scene(): ObservatoryF5Scene;
 export function buildF6Scene(): ObservatoryF6Scene;

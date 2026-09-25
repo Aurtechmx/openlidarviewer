@@ -20,6 +20,8 @@ import { openModal, type ModalHandle } from '../Modal';
 import type { ObservatoryRunner, ObservatoryRunnerState } from '../../app/observatoryRunner';
 import { originChip, basisChip, suggestedStationChip, type ObservatoryBasis } from './stateChip';
 import type { ObservationRunRecord } from '../../observation/runRecord';
+import type { StationPlanningResult } from '../../observation/stationSuggestion';
+import type { CandidateGainTerms } from '../../observation/coverageGain';
 import type { ObservatoryOverlayHost } from '../../render/ObservatoryOverlay';
 import { triggerDownload } from '../../io/download';
 import { loadObservatoryOverlay, loadObservatoryPackage } from '../../lazyChunks';
@@ -83,10 +85,69 @@ function shadowSection(record: ObservationRunRecord | null): HTMLElement {
   return sectionCard('Shadow', body);
 }
 
-function planningSection(): HTMLElement {
+const SUGGESTED_LABEL = 'SUGGESTED STATION (not observed)';
+
+function fmt(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(2);
+}
+
+/** OB-UI-04's candidate probe: every Coverage Gain term, one line. */
+export function candidateTermsText(t: CandidateGainTerms, redundancyWeight: number): string {
+  const c = t.weightedCounts;
+  return `weighted sum ${fmt(t.weightedVisibilitySum)} − ${redundancyWeight} × ${t.redundantCount} revisited = gain ${fmt(t.gain)}; `
+    + `visible ${t.visibleVoxelCount}: shadowed ${c.SHADOWED}, not addressed ${c.UNADDRESSED}, fired, no return ${c.NO_RETURN_PATH}, `
+    + `conflict ${c.CONFLICT}, weak surface ${c.WEAK_SURFACE}, not read in this load ${t.excludedVoxelCount}`;
+}
+
+function planningSection(record: ObservationRunRecord | null, planning: StationPlanningResult | null | undefined): HTMLElement {
   const body = el('div', { className: 'olv-observatory-planning' });
-  body.append(el('p', { text: 'Station suggestion is not implemented in this release.' }));
-  body.append(suggestedStationChip());
+  if (!record || !planning) {
+    body.append(el('p', { text: record ? 'Coverage Gain was not run for this field.' : 'No run yet.' }));
+    return sectionCard('Planning', body);
+  }
+  const unit = record.source.metresPerUnit != null ? 'm' : 'source units';
+  const perUnit = record.source.metresPerUnit ?? 1;
+  const len = (v: number): string => `${(v * perUnit).toFixed(2)} ${unit}`;
+  const m = planning.instrumentModel;
+  const authority = planning.authority;
+  body.append(el('p', {
+    className: 'olv-observatory-planning-authority',
+    text: authority.authority === 'preview'
+      ? `Authority: preview (${authority.reasons.join('; ')})`
+      : 'Authority: measured',
+  }));
+  body.append(el('p', {
+    text: `Instrument model: height ${len(m.heightAboveSurface)}, range ${len(m.minRange)} to ${len(m.maxRange)}, `
+      + `vertical field of view ${m.verticalFieldOfViewDegrees}°, planning step ${m.angularStepDegrees}° (${planning.planningRayCount} rays per candidate)`,
+  }));
+  body.append(el('p', {
+    text: `Candidates: ${planning.candidates.length} scored (${planning.qualifyingCount} qualifying, cap ${planning.candidateCap}, ${planning.droppedByCap} dropped by the cap)`,
+  }));
+  body.append(el('p', { text: `Not read in this load: ${planning.notReadVoxelCount} voxel(s), weight 0` }));
+
+  const s = planning.suggestion;
+  const list = el('ol', { className: 'olv-observatory-suggestions' });
+  s.selectedCandidateIndices.forEach((index, rank) => {
+    const c = planning.candidates.find((k) => k.candidateIndex === index)!;
+    const row = el('li', { className: 'olv-observatory-suggestion' });
+    row.append(suggestedStationChip());
+    row.append(el('span', { text: ` ${SUGGESTED_LABEL} ${rank + 1}: candidate ${index} at (${c.position.map((v) => v.toFixed(2)).join(', ')}), gain ${fmt(s.gainAtSelection[rank]!)}` }));
+    row.append(el('p', { className: 'olv-observatory-candidate-terms', text: candidateTermsText(s.termsAtSelection[rank]!, planning.parameters.redundancyWeight) }));
+    list.append(row);
+  });
+  if (s.selectedCandidateIndices.length === 0) {
+    body.append(el('p', {
+      text: s.stopReason === 'no-candidates'
+        ? 'No suggested station: no level, clear surface voxel qualified as a candidate.'
+        : 'No suggested station: no candidate adds coverage to this field.',
+    }));
+  } else {
+    body.append(list);
+  }
+  if (s.stopReason === 'no-positive-gain' && s.selectedCandidateIndices.length > 0) {
+    body.append(el('p', { text: `Stopped after ${s.selectedCandidateIndices.length} of ${s.declaredStationCount}: no remaining candidate adds coverage.` }));
+  }
+  body.append(el('p', { text: 'Reachability is not checked: no terrain access model exists in this release.' }));
   return sectionCard('Planning', body);
 }
 
@@ -153,7 +214,7 @@ export function renderObservatoryPanel(
   root.append(sourcesSection(record));
   root.append(evidenceSection(record));
   root.append(shadowSection(record));
-  root.append(planningSection());
+  root.append(planningSection(record, outcome.planning));
   root.append(recordSection(record, actions.onExport));
   return root;
 }
@@ -210,6 +271,6 @@ async function exportCurrent(state: ObservatoryRunnerState): Promise<void> {
   if (state.phase !== 'committed' || state.outcome.status !== 'ok') return;
   const outcome = state.outcome;
   const { buildObservatoryPackage } = await loadObservatoryPackage();
-  const pkg = buildObservatoryPackage(outcome.record, outcome.rows, outcome.frontier.frontierVoxelKeys);
+  const pkg = buildObservatoryPackage(outcome.record, outcome.rows, outcome.frontier.frontierVoxelKeys, { planning: outcome.planning ?? null });
   triggerDownload(new Blob([pkg as unknown as BlobPart], { type: 'application/zip' }), `observatory-${outcome.record.id}.zip`);
 }

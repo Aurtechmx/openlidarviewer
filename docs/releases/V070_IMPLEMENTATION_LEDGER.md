@@ -6397,3 +6397,98 @@ to `macos-26-intel` with iOS 26.5 / iPhone 17e, resolved by exact name by
 the session. `ios-streak.mjs` counts only runs on the pinned runner: a run
 whose "Set up job" log names an arm64 image is EXCLUDED, neither counting
 toward 20 nor resetting the streak, and stays outside the 20% guard.
+
+### L171 · BUILT · SCIENCE
+
+Observatory phase O10: Coverage Gain and station suggestion
+(`docs/observatory/SPEC.md` §5.6 OB-GAIN-01 to 06, §9.1 F11, F12, F15).
+Baseline `e9daea78`.
+
+`src/observation/coverageGain.ts` implements `olv.observation.coverage-gain`.
+The instrument model (height above the standing surface, minimum and maximum
+range, vertical field of view, planning step, or "same as source N", refused
+when source N declares nothing) is validated and recorded in full.
+Candidates stand on `SURFACE` voxels whose fitted normal is within 20° of
+vertical and whose column is clear of ray-stopping voxels to instrument
+height, one per square cell of the declared spacing, indexed in grid order,
+thinned by an even stride when over the cap; the cap and the dropped count
+are recorded. Planning rays point at the bin centres of the declared step
+and are walked with the ledger's own `clipRayToDomain` and
+`traverseVoxelSteps`; `SURFACE` stops a ray, and `PARTIAL` stops it at a hit
+fraction of `p_solid` or more. `scoreCandidate` reports every term of
+`G(c) = Σ w(state)·vis·inc − λ_red·redundant` separately: visible voxels,
+the weighted sum, per-state tallies (`SHADOWED`, `UNADDRESSED`,
+`NO_RETURN_PATH`, `CONFLICT`, weak `SURFACE`), the redundant count and
+penalty, the gain and the `NOT_READ` count, which carries weight 0.
+`planningAuthority` returns `measured` only for basis `full`, no `NOT_READ`
+voxel and declared origins, and otherwise `preview` with every reason named.
+
+`src/observation/stationSuggestion.ts` implements
+`olv.observation.station-suggestion`: greedy selection for a declared
+station count against a hypothetical covered set, ties to the lower
+candidate index, stopping when no gain is positive and recording why. The
+canonical ledger rows and state map are only read. `ReachabilityProvider`
+stays an interface with no implementation (OB-GAIN-06).
+
+`src/observation/incidence.ts` is the one home of incidence estimation: the
+covariance normal fit (`fitNormalFromResidentPoints`, moved from
+`strength.ts`, which re-exports it), a streamed per-voxel moment
+accumulator, `|cos i|` and the median. Strength's `incidence` component and
+Coverage Gain's `inc_c` term both use it. The eigen solve is closed form
+rather than `src/math/symEig3.ts`: importing `symEig3` split it into a shared
+chunk and added 36 bytes to the entry chunk's dependency map. The closed form
+agrees with `symEig3` on 500 covariances (eigenvalues to 1e-10, normal
+direction to 1e-8).
+
+`src/app/observatoryFromCloud.ts` runs planning after the shadow frontier:
+normals from the resident points of each `SURFACE` voxel in one pass, a
+default model of 1.5 m height, 0.5 m minimum range, the domain diagonal as
+maximum range, a 180° sweep and a 5° step (source units when the linear unit
+is unknown), 16 candidates and 2 suggested stations. The run record lists
+`olv.observation.coverage-gain@1` and `olv.observation.station-suggestion@1`
+when planning ran. `fieldDigest` and the state counts are identical with and
+without planning, and suggested stations never enter the station list. On a
+9,702-point wall-and-ground cloud the whole run takes 33 ms without planning
+and 67 ms with it (Node 22, mean of 5); no worker was added (OB-RT-03).
+
+The panel's Planning section replaces the not-implemented line with the
+result: authority and its reasons, the instrument model, candidate counts
+and cap, the `NOT_READ` count, each suggestion as "SUGGESTED STATION (not
+observed)" with its position, gain and every term, and a statement that
+reachability is not checked. `candidates.csv` now lists every candidate with
+every term, the suggested rank and gain at selection, and a header naming the
+methods, authority, instrument model, weights and candidate grid.
+`observatoryPackage.ts` resolves the run record's `id@version` method tags
+through the registry; before this entry the live export threw
+`Unknown method id` on them. Suggested stations are not drawn in the 3D view.
+
+Validation. `validation/observatory/oracle/coverage_gain.py` (standard
+library, `fractions.Fraction`, reusing `ray_aabb_traversal.py`'s clip and
+traversal) is registered as `olv-observatory-coverage-gain-py` in the
+`olv-observatory-analytic-oracle` lineage. It scores the declared field in
+`validation/observatory/fixtures/f11-coverage-gain.json` (written by
+`scripts/generate-observatory-fixtures.mjs`): three candidates, 1,296 planning
+rays each, every term frozen in
+`validation/observatory/expected/f11-coverage-gain.expected.json`. F11: the
+candidate behind the wall ranks first (gain 2,603.9 against 1,167.6 beside
+station 1) and every count matches the oracle exactly, sums to 1e-9. F12: the
+second pick is the candidate past the pillar, reaching 118 `SHADOWED` voxels
+the first cannot, and the field is unchanged. End to end through
+`runObservatoryOverCloud`, the top candidate stands behind the wall and the
+second suggestion still reaches shadow. F15: a station with an `ASSUMED`
+origin gives authority `preview` naming the station, in the panel and in
+`candidates.csv`, beside the `ASSUMED ORIGIN` badge and `stations.json`.
+`coverage_gain.py --check` and the four existing Observatory oracles pass.
+
+Tests: `tests/observatoryCoverageGain.test.ts` (29, per requirement
+OB-GAIN-01 to 06 and `incidence.ts`), `tests/observatoryFixturesO10.test.ts`
+(13, F11, F12, F15), `tests/observatoryPlanningPanel.test.ts` (10, panel and
+`candidates.csv`), one more OB-UI-05 case in
+`tests/observatoryPanelWording.test.ts` over a committed run with planning,
+and a Planning assertion in `tests/e2e/observatoryPanel.spec.ts`.
+`coverageGain.ts`, `stationSuggestion.ts` and `strength.ts` leave
+`docs/validation/unreachable-modules.json`. `observatoryFromCloud.ts` reads
+`.positions` once instead of three times (baseline 174 to 172). Bundle:
+entry chunk 823,094 bytes and Viewer 751,944 bytes, both equal to the
+baseline build; `openObservatoryRun` 20,042 to 35,860, `observatoryPanel`
+9,509 to 12,685, `observatoryPackage` 13,158 to 15,649.

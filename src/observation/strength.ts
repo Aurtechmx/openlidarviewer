@@ -18,22 +18,18 @@
  * exactly this reuse) and records one sample per hitting ray, rather than a
  * second, independently-tuned re-derivation of the hit rule.
  *
- * `incidence`'s local surface normal is fit from a voxel's own resident
- * points, when supplied, via `symEig3` over their mean-centred covariance
- * (`src/math/symEig3.ts`) — the smallest-eigenvalue eigenvector, the same
- * normal-fit `src/classification/geometryDescriptors.ts` uses for its own
- * verticality descriptor, reimplemented locally here (a few lines) rather
- * than imported, so `src/observation` takes on no dependency on
- * `src/classification` for one shared formula (`lint:module-graph`'s own
- * layer-neutrality concern, not an OB-INT-01 ban — `geometryDescriptors.ts`
- * itself is UI/three-free, but this keeps O6's own dependency surface to
- * `src/math` alone).
+ * `incidence`'s local surface normal, the per-ray `|cos i|` and the median
+ * over them live in `incidence.ts`, shared with Coverage Gain's `inc_c` term
+ * (`coverageGain.ts`), so the two methods use one incidence estimate. The
+ * normal is the smallest-eigenvalue eigenvector of a voxel's mean-centred
+ * resident-point covariance (a closed-form solve `incidence.ts` checks
+ * against `src/math/symEig3.ts` in its tests).
  *
  * Pure and DOM-free (OB-INT-01). No presentation, no run record, no
  * composite-index wiring into the panel: those are O7/O9.
  */
 
-import { symEig3 } from '../math/symEig3';
+import { incidenceCosine, medianCosine } from './incidence';
 import {
   computeHitWindows,
   stepOverlapsAnyWindow,
@@ -223,65 +219,15 @@ export function mergeStrengthHitSamples(
 }
 
 // ---------------------------------------------------------------------------
-// normal fit: symEig3 over resident points (§2.5's "or the source normals when present" is a caller choice — see computeStrengthComponents's normal parameter)
+// normal fit and incidence cosine: shared with coverage gain (incidence.ts)
 // ---------------------------------------------------------------------------
 
-/**
- * Fits a unit surface normal from a voxel's own resident points via
- * `symEig3` over their mean-centred covariance — the smallest eigenvalue's
- * eigenvector (§2.5: "The normal comes from `symEig3` over the voxel's
- * resident points"). `positions` is a flat `x,y,z,...` array; `indices`
- * selects which records belong to this voxel. Returns `null` for fewer than
- * 3 points (no plane to fit) or a degenerate (zero-variance) neighbourhood.
- * The sign is arbitrary (an eigenvector has no intrinsic orientation);
- * {@link computeStrengthComponents} takes `|cos i|` for exactly this reason.
- */
-export function fitNormalFromResidentPoints(positions: Float32Array | Float64Array, indices: readonly number[]): Vec3 | null {
-  const n = indices.length;
-  if (n < 3) return null;
-  let mx = 0, my = 0, mz = 0;
-  for (const i of indices) {
-    mx += positions[i * 3]!;
-    my += positions[i * 3 + 1]!;
-    mz += positions[i * 3 + 2]!;
-  }
-  mx /= n; my /= n; mz /= n;
-
-  let cxx = 0, cxy = 0, cxz = 0, cyy = 0, cyz = 0, czz = 0;
-  for (const i of indices) {
-    const dx = positions[i * 3]! - mx;
-    const dy = positions[i * 3 + 1]! - my;
-    const dz = positions[i * 3 + 2]! - mz;
-    cxx += dx * dx; cxy += dx * dy; cxz += dx * dz;
-    cyy += dy * dy; cyz += dy * dz; czz += dz * dz;
-  }
-  const inv = 1 / n;
-  const eig = symEig3(cxx * inv, cxy * inv, cxz * inv, cyy * inv, cyz * inv, czz * inv);
-  if (!(eig.values[2] >= 0) || !Number.isFinite(eig.values[2])) return null;
-  // A well-defined normal needs a genuine 2D spread: if the SECOND-largest
-  // eigenvalue is also ~0 relative to the largest, the points are collinear
-  // (or coincident) and every direction perpendicular to that one line is an
-  // equally valid "smallest eigenvalue" vector — not a plane normal at all.
-  const spread = Math.max(eig.values[0], 1e-12);
-  if (eig.values[1] <= spread * 1e-9) return null;
-  const normal = eig.vectors[2];
-  const len = Math.hypot(normal[0], normal[1], normal[2]);
-  if (!(len > 0) || !Number.isFinite(len)) return null;
-  return [normal[0] / len, normal[1] / len, normal[2] / len];
-}
+/** Re-exported from `incidence.ts`, the one home of the normal fit both strength and Coverage Gain use. */
+export { fitNormalFromResidentPoints } from './incidence';
 
 // ---------------------------------------------------------------------------
 // the five components, assembled
 // ---------------------------------------------------------------------------
-
-/** Median of a numeric array (linear-interpolated for an even count — matches `Array.prototype.sort`'s own numeric comparator, no external dependency). Returns `NaN` for an empty array. */
-function median(values: readonly number[]): number {
-  const n = values.length;
-  if (n === 0) return Number.NaN;
-  const sorted = values.slice().sort((a, b) => a - b);
-  const mid = Math.floor(n / 2);
-  return n % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
-}
 
 /** A declared useful range band (SPEC §2.5's "declared useful range band"; the same `minRange`/`maxRange` concept `StationAngularDomain` already declares, `observationField.ts`). Either bound omitted means unbounded on that side. */
 export interface StrengthRangeBand {
@@ -332,15 +278,14 @@ export function computeStrengthComponents(
     sz += s.direction[2];
     if (withinBand(s.range, rangeBand)) inBand++;
     if (normal !== null) {
-      const dot = s.direction[0] * normal[0] + s.direction[1] * normal[1] + s.direction[2] * normal[2];
-      cosines.push(Math.min(1, Math.max(0, Math.abs(dot))));
+      cosines.push(incidenceCosine(s.direction, normal));
     }
   }
   const n = samples.length;
   const meanNorm = Math.hypot(sx / n, sy / n, sz / n);
   const angularSpread = Math.min(1, Math.max(0, 1 - meanNorm));
   const rangeFit = inBand / n;
-  const incidence = normal === null ? Number.NaN : median(cosines);
+  const incidence = normal === null ? Number.NaN : medianCosine(cosines);
 
   return { sources, angularSpread, incidence, rangeFit, consistency };
 }

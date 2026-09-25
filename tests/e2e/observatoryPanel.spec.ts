@@ -42,6 +42,13 @@ test.describe('Observatory panel', () => {
     await expect(modal.locator('.olv-observatory-station-row')).toContainText('DECLARED ORIGIN');
     // Evidence lists every state, including a real count for at least one.
     await expect(modal.locator('.olv-observatory-state-counts')).toContainText(/SURFACE: \d+/);
+    // Planning shows the Coverage Gain result, labelled preview on a
+    // resident-only field, with the instrument model it ran under.
+    const planning = modal.locator('.olv-observatory-planning');
+    await expect(planning).toContainText('Authority: preview (basis resident-only)');
+    await expect(planning).toContainText('Instrument model: height');
+    await expect(planning).toContainText('Reachability is not checked');
+    await expect(planning).not.toContainText('not implemented');
   });
 
   test('closing the scan removes the shadow overlay and leaves no stale panel state', async ({ page }) => {

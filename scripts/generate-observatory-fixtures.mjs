@@ -287,6 +287,59 @@ export function buildF7Scene() {
   };
 }
 
+/**
+ * F11/F12 (docs/observatory/SPEC.md §9.1): Coverage Gain over F1's wall and
+ * room, declared as a classified field rather than traversed, so the scoring
+ * oracle (`validation/observatory/oracle/coverage_gain.py`) and the
+ * TypeScript scorer read the same states without either depending on the
+ * other's ledger. Regions are world boxes tested against voxel centres,
+ * first match wins, and every voxel no region claims is `UNADDRESSED`.
+ * `rows` gives a region's ledger counters (all `sources` share them);
+ * `normal` gives its fitted surface normal.
+ *
+ * Candidate 0 stands beside station 1; candidate 1 stands behind the wall,
+ * inside the shadow; candidate 2 stands past a pillar that hides part of the
+ * shadow from candidate 1, so the greedy second pick (F12) is the station
+ * that reaches the first pick's residual shadow.
+ */
+export function buildF11Scene() {
+  const box = (min, max) => ({ minCorner: min, maxCorner: max });
+  return {
+    id: 'F11',
+    description: 'Coverage Gain over F1: a candidate behind the wall versus a candidate beside station 1, plus the greedy second suggestion (F12).',
+    domain: box([-1, -6, -1], [16, 6, 6]),
+    voxelEdge: 0.5,
+    station: { id: 'station-1', origin: [0, 0, 0], status: 'DECLARED' },
+    regions: [
+      { name: 'not-read corner', state: 'NOT_READ', ...box([-1, 4, -1], [1, 6, 6]) },
+      { name: 'wall', state: 'SURFACE', ...box([5, -2, 0], [5.5, 2, 3]), rows: { sources: 1, hit: 20, pass: 0 }, normal: [1, 0, 0] },
+      { name: 'pillar', state: 'SURFACE', ...box([10, -2, 0], [10.5, -0.5, 3]), rows: { sources: 1, hit: 12, pass: 0 }, normal: [1, 0, 0] },
+      { name: 'back wall', state: 'SURFACE', ...box([15, -5, 0], [15.5, 5, 5]), rows: { sources: 2, hit: 30, pass: 1 }, normal: [1, 0, 0] },
+      { name: 'partial, blocking', state: 'PARTIAL', ...box([12, 3, 0], [12.5, 4, 1]), rows: { sources: 1, hit: 3, pass: 0 } },
+      { name: 'partial, passing', state: 'PARTIAL', ...box([12, -4, 0], [12.5, -3, 1]), rows: { sources: 1, hit: 1, pass: 4 } },
+      { name: 'conflict', state: 'CONFLICT', ...box([8, -4, 1], [8.5, -3, 2]), rows: { sources: 2, hit: 10, pass: 10 } },
+      { name: 'shadow behind the wall', state: 'SHADOWED', ...box([5.5, -2, 0], [15, 2, 3]) },
+      { name: 'room ceiling', state: 'NO_RETURN_PATH', ...box([5.5, -5, 5], [15, 5, 6]) },
+      { name: 'room', state: 'OBSERVED_EMPTY', ...box([5.5, -5, 0], [15, 5, 5]) },
+      { name: 'in front of the wall', state: 'OBSERVED_EMPTY', ...box([-1, -6, 0], [5, 6, 6]) },
+    ],
+    defaultState: 'UNADDRESSED',
+    instrumentModel: { heightAboveSurface: 1, minRange: 0.25, maxRange: 20, verticalFieldOfViewDegrees: 90, angularStepDegrees: 5, sameAsSourceIndex: null },
+    parameters: {
+      stateWeights: { SHADOWED: 1, UNADDRESSED: 1, NO_RETURN_PATH: 0.25, CONFLICT: 0.5, WEAK_SURFACE: 0.5 },
+      redundancyWeight: 0.02,
+      weakSurfaceFloors: { sources: 2, consistency: 0.9 },
+      p_solid: 0.9,
+    },
+    candidates: [
+      { candidateIndex: 0, name: 'beside station 1', position: [0.25, 1.25, 1.25] },
+      { candidateIndex: 1, name: 'behind the wall', position: [8.25, 0.25, 1.25] },
+      { candidateIndex: 2, name: 'past the pillar', position: [13.25, -1.25, 1.25] },
+    ],
+    stationCount: 2,
+  };
+}
+
 if (isCliEntry(import.meta.url)) {
   const write = process.argv.includes('--write');
   if (!write) {
@@ -302,6 +355,7 @@ if (isCliEntry(import.meta.url)) {
   const f2 = buildF2Scene();
   const f3 = buildF3Scene();
   const f7 = buildF7Scene();
+  const f11 = buildF11Scene();
   writeFileSync(join(FIXTURES_DIR, 'f1-wall-room.json'), `${JSON.stringify(f1, null, 2)}\n`);
   writeFileSync(join(FIXTURES_DIR, 'f8-dda-cases.json'), `${JSON.stringify(f8, null, 2)}\n`);
   writeFileSync(join(FIXTURES_DIR, 'f5-sky-noreturn.json'), `${JSON.stringify(f5, null, 2)}\n`);
@@ -310,7 +364,8 @@ if (isCliEntry(import.meta.url)) {
   writeFileSync(join(FIXTURES_DIR, 'f2-second-station.json'), `${JSON.stringify(f2, null, 2)}\n`);
   writeFileSync(join(FIXTURES_DIR, 'f3-conflict-box.json'), `${JSON.stringify(f3, null, 2)}\n`);
   writeFileSync(join(FIXTURES_DIR, 'f7-unaddressed-pocket.json'), `${JSON.stringify(f7, null, 2)}\n`);
+  writeFileSync(join(FIXTURES_DIR, 'f11-coverage-gain.json'), `${JSON.stringify(f11, null, 2)}\n`);
   console.log(`generate-observatory-fixtures: wrote f1-wall-room.json and f8-dda-cases.json (${f8.cases.length} F8 case(s))`);
   console.log('generate-observatory-fixtures: wrote f5-sky-noreturn.json, f6-strided-notread.json, f16-multireturn-canopy.json');
-  console.log('generate-observatory-fixtures: wrote f2-second-station.json, f3-conflict-box.json, f7-unaddressed-pocket.json');
+  console.log('generate-observatory-fixtures: wrote f2-second-station.json, f3-conflict-box.json, f7-unaddressed-pocket.json, f11-coverage-gain.json');
 }
