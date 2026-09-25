@@ -340,42 +340,9 @@ export function classifyGroundSmrf(
     return emptyResult(cellSizeM, warnings);
   }
 
-  // ── 1. bounds (finite points only) ────────────────────────────────
-  let minH1 = Infinity;
-  let minH2 = Infinity;
-  let maxH1 = -Infinity;
-  let maxH2 = -Infinity;
-  let analyzed = 0;
-  for (const p of points) {
-    const [h1, h2, v] = axes(p, vertical);
-    if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(v)) continue;
-    analyzed++;
-    if (h1 < minH1) minH1 = h1;
-    if (h2 < minH2) minH2 = h2;
-    if (h1 > maxH1) maxH1 = h1;
-    if (h2 > maxH2) maxH2 = h2;
-  }
-  if (analyzed === 0) {
-    warnings.push('all points non-finite — nothing to classify');
-    return emptyResult(cellSizeM, warnings);
-  }
-  if (analyzed < sourcePointCount) {
-    warnings.push(`${sourcePointCount - analyzed} non-finite points skipped`);
-  }
-
-  const cols = Math.max(1, Math.floor((maxH1 - minH1) / cellSizeM) + 1);
-  const rows = Math.max(1, Math.floor((maxH2 - minH2) / cellSizeM) + 1);
-  const nCells = cols * rows;
-
-  const cellOf = (h1: number, h2: number): number => {
-    let col = Math.floor((h1 - minH1) / cellSizeM);
-    let row = Math.floor((h2 - minH2) / cellSizeM);
-    if (col < 0) col = 0;
-    else if (col >= cols) col = cols - 1;
-    if (row < 0) row = 0;
-    else if (row >= rows) row = rows - 1;
-    return row * cols + col;
-  };
+  const frame = finiteGridFrame(points, vertical, cellSizeM, warnings);
+  if (frame === null) return emptyResult(cellSizeM, warnings);
+  const { minH1, minH2, cols, rows, nCells, analyzed, cellOf } = frame;
 
   // ── 2. minimum-elevation grid (optionally despiked) ───────────────
   const minGrid = new Float32Array(nCells).fill(Number.NaN);
@@ -537,6 +504,65 @@ export function classifyGroundSmrf(
 }
 
 /**
+ * Grid frame over the finite returns: bounds, cols/rows and the clamped
+ * cell index. Shared by {@link classifyGroundSmrf} and
+ * {@link groundFromTrustedClassification} so both use one geometry rule.
+ * Returns null (after recording the warning) when no point is finite.
+ */
+function finiteGridFrame(
+  points: ReadonlyArray<TerrainPoint>,
+  vertical: VerticalAxis,
+  cellSizeM: number,
+  warnings: string[],
+): {
+  minH1: number;
+  minH2: number;
+  cols: number;
+  rows: number;
+  nCells: number;
+  analyzed: number;
+  cellOf: (h1: number, h2: number) => number;
+} | null {
+  const sourcePointCount = points.length;
+  let minH1 = Infinity;
+  let minH2 = Infinity;
+  let maxH1 = -Infinity;
+  let maxH2 = -Infinity;
+  let analyzed = 0;
+  for (const p of points) {
+    const [h1, h2, v] = axes(p, vertical);
+    if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(v)) continue;
+    analyzed++;
+    if (h1 < minH1) minH1 = h1;
+    if (h2 < minH2) minH2 = h2;
+    if (h1 > maxH1) maxH1 = h1;
+    if (h2 > maxH2) maxH2 = h2;
+  }
+  if (analyzed === 0) {
+    warnings.push('all points non-finite — nothing to classify');
+    return null;
+  }
+  if (analyzed < sourcePointCount) {
+    warnings.push(`${sourcePointCount - analyzed} non-finite points skipped`);
+  }
+
+  const cols = Math.max(1, Math.floor((maxH1 - minH1) / cellSizeM) + 1);
+  const rows = Math.max(1, Math.floor((maxH2 - minH2) / cellSizeM) + 1);
+  const nCells = cols * rows;
+
+  const cellOf = (h1: number, h2: number): number => {
+    let col = Math.floor((h1 - minH1) / cellSizeM);
+    let row = Math.floor((h2 - minH2) / cellSizeM);
+    if (col < 0) col = 0;
+    else if (col >= cols) col = cols - 1;
+    if (row < 0) row = 0;
+    else if (row >= rows) row = rows - 1;
+    return row * cols + col;
+  };
+  return { minH1, minH2, cols, rows, nCells, analyzed, cellOf };
+}
+
+/**
  * Build a {@link GroundFilterResult} that TRUSTS an authoritative ground
  * classification instead of re-deriving one with SMRF. Every finite point in
  * `points` is treated as ground (the caller has already selected the ASPRS
@@ -568,42 +594,9 @@ export function groundFromTrustedClassification(
     return emptyResult(cellSizeM, warnings);
   }
 
-  // Bounds over the finite returns (identical rule to classifyGroundSmrf).
-  let minH1 = Infinity;
-  let minH2 = Infinity;
-  let maxH1 = -Infinity;
-  let maxH2 = -Infinity;
-  let analyzed = 0;
-  for (const p of points) {
-    const [h1, h2, v] = axes(p, vertical);
-    if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(v)) continue;
-    analyzed++;
-    if (h1 < minH1) minH1 = h1;
-    if (h2 < minH2) minH2 = h2;
-    if (h1 > maxH1) maxH1 = h1;
-    if (h2 > maxH2) maxH2 = h2;
-  }
-  if (analyzed === 0) {
-    warnings.push('all points non-finite — nothing to classify');
-    return emptyResult(cellSizeM, warnings);
-  }
-  if (analyzed < sourcePointCount) {
-    warnings.push(`${sourcePointCount - analyzed} non-finite points skipped`);
-  }
-
-  const cols = Math.max(1, Math.floor((maxH1 - minH1) / cellSizeM) + 1);
-  const rows = Math.max(1, Math.floor((maxH2 - minH2) / cellSizeM) + 1);
-  const nCells = cols * rows;
-
-  const cellOf = (h1: number, h2: number): number => {
-    let col = Math.floor((h1 - minH1) / cellSizeM);
-    let row = Math.floor((h2 - minH2) / cellSizeM);
-    if (col < 0) col = 0;
-    else if (col >= cols) col = cols - 1;
-    if (row < 0) row = 0;
-    else if (row >= rows) row = rows - 1;
-    return row * cols + col;
-  };
+  const frame = finiteGridFrame(points, vertical, cellSizeM, warnings);
+  if (frame === null) return emptyResult(cellSizeM, warnings);
+  const { minH1, minH2, cols, rows, nCells, analyzed, cellOf } = frame;
 
   // Minimum-elevation grid + provisional surface, so the returned result
   // carries a valid bare-earth surface like the SMRF path (used for provenance,

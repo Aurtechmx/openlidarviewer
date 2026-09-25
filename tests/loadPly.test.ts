@@ -206,6 +206,30 @@ describe('loadPly — binary double body decodes at full precision (v0.7 D5 Part
   // with margin for the other two axes' smaller spreads.
   const WORLD_ERROR_BOUND_M = 2e-5;
 
+  /** Largest per-axis world error of point 0 against its seed. */
+  function firstPointWorldError(pc: Awaited<ReturnType<typeof loadPly>>): number {
+    const out: [number, number, number] = [0, 0, 0];
+    pc.worldXYZ(0, out);
+    return Math.max(
+      Math.abs(out[0] - UTM_SEED_POINTS[0][0]),
+      Math.abs(out[1] - UTM_SEED_POINTS[0][1]),
+      Math.abs(out[2] - UTM_SEED_POINTS[0][2]),
+    );
+  }
+
+  /** Copy the header and write the first two seeds as LE doubles at `stride`. */
+  function writeSeedDoubles(body: ArrayBuffer, headerBytes: Uint8Array, stride: number): DataView {
+    new Uint8Array(body, 0, headerBytes.length).set(headerBytes);
+    const view = new DataView(body, headerBytes.length);
+    for (let i = 0; i < 2; i++) {
+      const [x, y, z] = UTM_SEED_POINTS[i];
+      view.setFloat64(i * stride + 0, x, true);
+      view.setFloat64(i * stride + 8, y, true);
+      view.setFloat64(i * stride + 16, z, true);
+    }
+    return view;
+  }
+
   function assertWorldMatchesSeed(pc: Awaited<ReturnType<typeof loadPly>>) {
     expect(pc.pointCount).toBe(UTM_SEED_POINTS.length);
     const out: [number, number, number] = [0, 0, 0];
@@ -316,29 +340,15 @@ describe('loadPly — binary double body decodes at full precision (v0.7 D5 Part
     const headerBytes = new TextEncoder().encode(header);
     // Per vertex: 3 doubles + a zero-length list (one uchar count byte, no items).
     const body = new ArrayBuffer(headerBytes.length + 2 * 25);
-    new Uint8Array(body, 0, headerBytes.length).set(headerBytes);
-    const view = new DataView(body, headerBytes.length);
-    for (let i = 0; i < 2; i++) {
-      const [x, y, z] = UTM_SEED_POINTS[i];
-      view.setFloat64(i * 25 + 0, x, true);
-      view.setFloat64(i * 25 + 8, y, true);
-      view.setFloat64(i * 25 + 16, z, true);
-      view.setUint8(i * 25 + 24, 0); // list count
-    }
+    const view = writeSeedDoubles(body, headerBytes, 25);
+    for (let i = 0; i < 2; i++) view.setUint8(i * 25 + 24, 0); // list count
     const pc = await loadPly(body);
     expect(pc.pointCount).toBe(2);
     // The fallback quantised the coordinates onto the float32 grid: the
     // world error is far above the double-precision bound this suite
     // otherwise asserts, proving the ambiguous-stride bail-out fired rather
     // than reading through the list property by accident.
-    const out: [number, number, number] = [0, 0, 0];
-    pc.worldXYZ(0, out);
-    const err = Math.max(
-      Math.abs(out[0] - UTM_SEED_POINTS[0][0]),
-      Math.abs(out[1] - UTM_SEED_POINTS[0][1]),
-      Math.abs(out[2] - UTM_SEED_POINTS[0][2]),
-    );
-    expect(err).toBeGreaterThan(WORLD_ERROR_BOUND_M);
+    expect(firstPointWorldError(pc)).toBeGreaterThan(WORLD_ERROR_BOUND_M);
   });
 
   test('an element declared before vertex falls back to the float32 values', async () => {
@@ -356,23 +366,9 @@ describe('loadPly — binary double body decodes at full precision (v0.7 D5 Part
     ].join('\n');
     const headerBytes = new TextEncoder().encode(header);
     const body = new ArrayBuffer(headerBytes.length + 2 * 24);
-    new Uint8Array(body, 0, headerBytes.length).set(headerBytes);
-    const view = new DataView(body, headerBytes.length);
-    for (let i = 0; i < 2; i++) {
-      const [x, y, z] = UTM_SEED_POINTS[i];
-      view.setFloat64(i * 24 + 0, x, true);
-      view.setFloat64(i * 24 + 8, y, true);
-      view.setFloat64(i * 24 + 16, z, true);
-    }
+    writeSeedDoubles(body, headerBytes, 24);
     const pc = await loadPly(body);
     expect(pc.pointCount).toBe(2);
-    const out: [number, number, number] = [0, 0, 0];
-    pc.worldXYZ(0, out);
-    const err = Math.max(
-      Math.abs(out[0] - UTM_SEED_POINTS[0][0]),
-      Math.abs(out[1] - UTM_SEED_POINTS[0][1]),
-      Math.abs(out[2] - UTM_SEED_POINTS[0][2]),
-    );
-    expect(err).toBeGreaterThan(WORLD_ERROR_BOUND_M);
+    expect(firstPointWorldError(pc)).toBeGreaterThan(WORLD_ERROR_BOUND_M);
   });
 });
