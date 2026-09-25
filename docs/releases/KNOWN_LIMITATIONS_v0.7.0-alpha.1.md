@@ -4,14 +4,17 @@
 follows is the state so far, and every entry is reproduced rather than carried
 forward from v0.6.9 by default.
 
-## Classification flags are preserved but not yet acted upon
+## Withheld points are excluded from terrain and profiles only
 
 The decoder keeps Synthetic, Key-Point, Withheld and Overlap, and both LAS
-writers emit them. No processing path consumes them yet, so a withheld point
-still enters terrain, density and stockpile as an ordinary return. ASPRS says a
+writers emit them. Terrain analysis and profiles (the profile chart and the
+profile workbench section) leave Withheld points out and record how many
+points they read, how many were Withheld and how many they analysed. Overlap
+points are kept. When a source carries no flags, as a voxel-reduced load does,
+the Withheld count is recorded as unknown. Density, stockpile volumes and the
+other analyses still read a Withheld point as an ordinary return. ASPRS says a
 producer generally sets Withheld on overlap points culled during flight-line
-merging, so this matters on conforming files. A withheld processing policy is
-open work.
+merging, so this matters on conforming files.
 
 ## Flags do not survive every derivation
 
@@ -188,7 +191,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 108 for the shell, 76 for the renderer and 23 for the Analyse panel,
-across 966 modules with no dependency cycles.
+across 967 modules with no dependency cycles.
 
 ## The shell has little headroom
 
