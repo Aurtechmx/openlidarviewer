@@ -1,6 +1,7 @@
 /**
- * navJank.spec.ts: the heavy-navigation benchmark runner. Tagged `@gpu`, so it
- * runs only in the `gpu` project, never in the deterministic lane.
+ * navJank.spec.ts: the heavy-navigation benchmark runner. Tagged `@bench`, so it
+ * runs only in the `bench` project (`npm run test:e2e:bench`, headed), never in
+ * the deterministic lane or the advisory gpu job.
  *
  * For each scripted trajectory: one cold run (the first load in a fresh
  * browser context) and OLV_NAV_RUNS warm runs (default 5) in the same context,
@@ -15,7 +16,7 @@
  * local copy of `ot_356000_3972000_1.laz`; the spec skips without it.
  *
  *   OLV_NAV_DATASET=/path/to/ot_356000_3972000_1.laz OLV_NAV_MACHINE=mbp-local \
- *     npx playwright test tests/e2e/navJank.spec.ts --project=gpu --headed
+ *     npx playwright test tests/e2e/navJank.spec.ts --project=bench --headed
  *
  * Each trajectory's result is kept under the OS temp directory per commit and
  * machine, and after every test the kept trajectories are merged into
@@ -23,7 +24,8 @@
  * be run one trajectory at a time (`-g orbit`) and still yield one file. Read
  * it with `node scripts/nav-jank-report.mjs <file>`.
  *
- * Chromium runs with the flags in {@link ANTI_THROTTLE_ARGS}, so an occluded
+ * Chromium runs with the flags in {@link ANTI_THROTTLE_ARGS} (set for this file
+ * only, not the bench project), so an occluded
  * or unfocused headed window is not throttled; the environment's flags say so.
  * Each run records `document.visibilityState` and `document.hasFocus()` at its
  * start and end, and a run during which the page was hidden is invalid: it is
@@ -374,7 +376,7 @@ function writeMerged(commit: string): string {
 // Top level: launch options force a worker of their own, which a describe group cannot ask for.
 test.use({ launchOptions: { args: THROTTLE_FLAGS_ON ? ANTI_THROTTLE_ARGS : [] } });
 
-test.describe('@gpu navigation jank benchmark', () => {
+test.describe('@bench navigation jank benchmark', () => {
   test.skip(!DATASET || !existsSync(DATASET), 'set OLV_NAV_DATASET to a local copy of OLV-DS-090 (ot_356000_3972000_1.laz)');
   test.describe.configure({ mode: 'serial' });
 
