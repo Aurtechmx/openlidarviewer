@@ -356,9 +356,11 @@ async function recoverWithheldAwareCore(
   signal: AbortSignal,
 ): Promise<TerrainCore | null> {
   try {
+    const { gatherWithheldAwareTerrainCore, WITHHELD_GATHER_MAX_SOURCE_BYTES } = await loadWithheldAwareTerrainGather();
+    // The gather refuses `buffer.byteLength` over this ceiling; checking
+    // `file.size` first refuses an oversized source before it is read at all.
+    if (signal.aborted || file.size > WITHHELD_GATHER_MAX_SOURCE_BYTES) return null;
     const buffer = await file.arrayBuffer();
-    if (signal.aborted) return null;
-    const { gatherWithheldAwareTerrainCore } = await loadWithheldAwareTerrainGather();
     if (signal.aborted) return null;
     const recovered = await gatherWithheldAwareTerrainCore(buffer, file.name, coreParams, { signal });
     return recovered?.core ?? null;

@@ -28,6 +28,8 @@ import type { AnalysePanel } from '../src/ui/AnalysePanel';
 import type { CrsService } from '../src/geo/CrsService';
 import type { AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
 
+import { WITHHELD_GATHER_MAX_SOURCE_BYTES } from '../src/terrain/ground/withheldAwareTerrainGather';
+
 const gatherModule = await import('../src/terrain/ground/withheldAwareTerrainGather');
 
 const WITHHELD_FLAG = 0b0100;
@@ -233,5 +235,45 @@ describe('the existing analysis cancellation reaches the recovery', () => {
     expect(capturedSignal).toBeDefined();
     expect(capturedSignal!.aborted).toBe(true);
     spy.mockRestore();
+  }, 120_000);
+});
+
+describe('an oversized source is refused before it is read', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    clearTerrainCoreCache();
+  });
+
+  function sizedFile(size: number): { file: File; read: ReturnType<typeof vi.fn> } {
+    const read = vi.fn(async () => new ArrayBuffer(8));
+    const file = { name: 'huge.laz', size, arrayBuffer: read } as unknown as File;
+    return { file, read };
+  }
+
+  it('a File over the gather ceiling never has arrayBuffer() called and lands "not recorded"', async () => {
+    const { file, read } = sizedFile(WITHHELD_GATHER_MAX_SOURCE_BYTES + 1);
+    const gatherSpy = vi.spyOn(gatherModule, 'gatherWithheldAwareTerrainCore');
+    const { runner, updates, statuses } = harness({
+      getActiveId: () => 'scan-1',
+      getRecoverySource: () => file,
+    });
+    await runner.run();
+    expect(read).not.toHaveBeenCalled();
+    expect(gatherSpy).not.toHaveBeenCalled();
+    expect(updates).toHaveLength(1);
+    expect(updates[0].dtm.withheldExcluded ?? null).toBeNull();
+    expect(statuses.some((s) => s.includes(RECOVERED_STATUS_FRAGMENT))).toBe(false);
+  }, 120_000);
+
+  it('a File at the ceiling still takes the recovery path', async () => {
+    const { file, read } = sizedFile(WITHHELD_GATHER_MAX_SOURCE_BYTES);
+    const gatherSpy = vi.spyOn(gatherModule, 'gatherWithheldAwareTerrainCore').mockResolvedValue(null);
+    const { runner } = harness({
+      getActiveId: () => 'scan-1',
+      getRecoverySource: () => file,
+    });
+    await runner.run();
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(gatherSpy).toHaveBeenCalledTimes(1);
   }, 120_000);
 });
