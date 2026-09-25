@@ -6528,3 +6528,20 @@ on an empty directory rather than measuring anything. The prior caveats hold:
 a culled node carries no points, so a drawn-node share is not a GPU-time
 share, and the stored baseline is an orthographic four-camera snapshot, not a
 frustum.
+
+### L84 · PARTIAL · CORRECTNESS
+
+The counter this account said did not exist now does. `deviceGeneration.ts`'s
+`DeviceGeneration` is wired through `watchDeviceChanges` at `Viewer.ts:4306`
+and exposed as `viewer.deviceGeneration` (`Viewer.ts:3245-3250`). L134
+measured it against a forced `WEBGL_lose_context` on the WebGL backend: the
+context reports lost, the restore arrives, the interface survives and no page
+error is raised either side.
+
+The renderer's own resources are covered; the Continuity Field's are not.
+`ContinuityRuntime.ts:368` reads `input.display.deviceGeneration` and hands it
+straight to `HistoryTargets.resize`, but nothing in `Viewer.ts` constructs
+that `DisplayState` or calls into `ContinuityRuntime` at all, because the
+subsystem is still unreachable from `main.ts`. The generation a history
+surface would need to invalidate against exists and is measured; it has
+nowhere to be read from yet.

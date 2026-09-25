@@ -9,7 +9,7 @@ entry. This is the latest account of each, which is a different question
 and the one a reader usually has. Where an entry was revisited, the last
 heading in the file wins.
 
-Entries: 166. Revisited at least once: 20.
+Entries: 166. Revisited at least once: 21.
 
 ## Totals
 
@@ -112,7 +112,7 @@ Entries: 166. Revisited at least once: 20.
 | L81 | PARTIAL | EVIDENCE | 1 |
 | L82 | PARTIAL | ARCHITECTURE | 1 |
 | L83 | PARTIAL | ARCHITECTURE | 1 |
-| L84 | PARTIAL | CORRECTNESS | 1 |
+| L84 | PARTIAL | CORRECTNESS | 2 |
 | L85 | FIXED | ARCHITECTURE | 1 |
 | L86 | FIXED | PERFORMANCE | 1 |
 | L87 | FIXED | SCIENTIFIC | 1 |
