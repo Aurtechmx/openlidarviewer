@@ -178,7 +178,7 @@ Nothing here has run on a phone, a tablet, or any browser with a GPU adapter.
 
 ## Final verdict
 
-**CONTINUITY FIELD NOT READY FOR v0.7**
+CONTINUITY FIELD NOT READY FOR v0.7
 
 No blocker was reproduced, and the instruction for this verdict is to list only
 the reproduced ones, so the list is empty. That is not the same as passing.

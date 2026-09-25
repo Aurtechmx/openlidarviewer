@@ -20,17 +20,17 @@ Use a modern Chromium-based browser (Chrome or Edge) with WebGL 2.0 support and 
 
 ## Dataset size
 
-Small point clouds work on most modern laptops. Medium datasets benefit from 16 GB of RAM and a modern GPU. Very large LiDAR datasets are best handled through streaming formats such as COPC or EPT — opened progressively through their octree hierarchies so only what the current view needs is fetched, decoded, and uploaded to the GPU. Non-streaming formats above the point budget are downsampled on load to stay responsive; browser memory limits can still affect extremely large scans regardless of format.
+Small point clouds work on most modern laptops. Medium datasets benefit from 16 GB of RAM and a modern GPU. Very large LiDAR datasets are best handled through streaming formats such as COPC or EPT: opened progressively through their octree hierarchies so only what the current view needs is fetched, decoded, and uploaded to the GPU. Non-streaming formats above the point budget are downsampled on load to stay responsive; browser memory limits can still affect extremely large scans regardless of format.
 
-Clouds above the device's point budget (roughly 3M points on a capable desktop, less on weaker hardware) are downsampled on load to stay responsive — see *Loading large files* below. The Detail control always shows the honest `shown / total` count, so you know exactly what you are looking at.
+Clouds above the device's point budget (roughly 3M points on a capable desktop, less on weaker hardware) are downsampled on load to stay responsive: see *Loading large files* below. The Detail control always shows the honest `shown / total` count, so you know exactly what you are looking at.
 
 ## Loading large files
 
-How a local file is read depends on its format. An eligible LAZ is read by range: a small prefix is handed to the parse worker, the worker reads the LAZ chunk table from the file, a pool of chunk workers decodes the compressed chunks, and a bounded preview cloud is drawn while the decode continues; the compressed file is never resident whole. An ordinary LAS, and every other static format, is planned from a small header slice and then read whole under the memory guard, or indexed into the out-of-core store when it is heavy. COPC and EPT sources stream by hierarchy and never read the file at all. For the whole-file path the plan chooses a load strategy from the point count and byte size: a cloud within the point budget is decoded in full; a cloud moderately over budget is decoded and voxel-downsampled; a cloud far over budget is *stride-decoded* down to a memory-safe intermediate — a stratified, jittered one-in-N sample of the records — which is then voxel-downsampled to the budget. The cloud is never fully *decoded* into memory — though its source bytes are read in once — and because the final step is the same voxel pass medium clouds get, the result keeps uniform density: no scan-line aliasing, and no flight-strip density blocks. That jitter belongs to the load path; the streamed-analysis sampler (`terrainStreamSample`) still decimates its resident set by plain stride. For uncompressed LAS the stride step also makes the decode proportionally faster. LAZ records decompress in sequence, so stride cannot skip that work, but a large chunked LAZ now fans its chunks across a worker pool and produces the byte-identical result in a fraction of the wall-clock; a file the chunk table cannot describe falls back to the sequential decoder, where stride lowers the memory peak but not the decode time. A file too large for the whole-file path instead takes the out-of-core route: a large uncompressed LAS or chunked LAZ is indexed into browser storage and streamed rather than read whole.
+How a local file is read depends on its format. An eligible LAZ is read by range: a small prefix is handed to the parse worker, the worker reads the LAZ chunk table from the file, a pool of chunk workers decodes the compressed chunks, and a bounded preview cloud is drawn while the decode continues; the compressed file is never resident whole. An ordinary LAS, and every other static format, is planned from a small header slice and then read whole under the memory guard, or indexed into the out-of-core store when it is heavy. COPC and EPT sources stream by hierarchy and never read the file at all. For the whole-file path the plan chooses a load strategy from the point count and byte size: a cloud within the point budget is decoded in full; a cloud moderately over budget is decoded and voxel-downsampled; a cloud far over budget is *stride-decoded* down to a memory-safe intermediate (a stratified, jittered one-in-N sample of the records) which is then voxel-downsampled to the budget. The cloud is never fully *decoded* into memory (though its source bytes are read in once) and because the final step is the same voxel pass medium clouds get, the result keeps uniform density: no scan-line aliasing, and no flight-strip density blocks. That jitter belongs to the load path; the streamed-analysis sampler (`terrainStreamSample`) still decimates its resident set by plain stride. For uncompressed LAS the stride step also makes the decode proportionally faster. LAZ records decompress in sequence, so stride cannot skip that work, but a large chunked LAZ now fans its chunks across a worker pool and produces the byte-identical result in a fraction of the wall-clock; a file the chunk table cannot describe falls back to the sequential decoder, where stride lowers the memory peak but not the decode time. A file too large for the whole-file path instead takes the out-of-core route: a large uncompressed LAS or chunked LAZ is indexed into browser storage and streamed rather than read whole.
 
 Before any large allocation, the load estimates the memory it will need. If that is risky for the device, it automatically falls back to a sparser load and says so in the status toast, rather than risking an out-of-memory crash.
 
-The load reports staged progress — detecting format, reading, decoding with a live point counter, optimizing, rendering — and can be cancelled at any point from the Cancel control on the progress toast. Adding `?debug=1` to the URL logs a per-stage timing breakdown to the browser console.
+The load reports staged progress (detecting format, reading, decoding with a live point counter, optimizing, rendering) and can be cancelled at any point from the Cancel control on the progress toast. Adding `?debug=1` to the URL logs a per-stage timing breakdown to the browser console.
 
 ## Rendering backend
 
@@ -40,7 +40,7 @@ The device-pixel-ratio is capped at 2, which bounds the render cost on high-dens
 
 ## Eye Dome Lighting
 
-Eye Dome Lighting adds a single full-screen post-processing pass that samples scene depth — a small, fixed cost independent of point count, and cheap next to drawing the cloud itself. It is on by default on desktop WebGPU and off by default on the WebGL 2 fallback and on phones, so a weaker device is never dropped below interactive on load. It can be toggled, and its strength tuned, from the Rendering section of the panel. Turning it off restores the direct render path with no post-processing overhead.
+Eye Dome Lighting adds a single full-screen post-processing pass that samples scene depth: a small, fixed cost independent of point count, and cheap next to drawing the cloud itself. It is on by default on desktop WebGPU and off by default on the WebGL 2 fallback and on phones, so a weaker device is never dropped below interactive on load. It can be toggled, and its strength tuned, from the Rendering section of the panel. Turning it off restores the direct render path with no post-processing overhead.
 
 ## Browser settings
 
@@ -48,7 +48,7 @@ For best performance, enable hardware acceleration, use a modern Chromium-based 
 
 ## Benchmarks
 
-Real-world figures — a 9.6 M-point drone LAZ survey and a 55 K-point iPhone scan, both opened from one drag-and-drop on an Apple MacBook Pro M3 Max — are recorded in [`benchmarks.md`](benchmarks.md), alongside the v0.3.3 synthetic stress runs that validate bounded residency and zero thrash up to 1 B-point streaming hierarchies. Hardware, browser, dataset, and the rendering detail you pick all change the numbers; the published figures are field observations, not a formal benchmark suite.
+Real-world figures (a 9.6 M-point drone LAZ survey and a 55 K-point iPhone scan, both opened from one drag-and-drop on an Apple MacBook Pro M3 Max) are recorded in [`benchmarks.md`](benchmarks.md), alongside the v0.3.3 synthetic stress runs that validate bounded residency and zero thrash up to 1 B-point streaming hierarchies. Hardware, browser, dataset, and the rendering detail you pick all change the numbers; the published figures are field observations, not a formal benchmark suite.
 
 ## Privacy
 
@@ -73,7 +73,7 @@ Recommendations:
 The live entry is 710 KiB against a 720 KiB ceiling and a 680 KiB warning
 line. Attribution below comes from a sourcemap build (`vite build
 --sourcemap`, then aggregating `sourcesContent` per module), not from
-reading the import list — two rounds of guessing from imports were wrong,
+reading the import list: two rounds of guessing from imports were wrong,
 both in the optimistic direction.
 
 Entry: **175 modules, 1 910 KiB of source → 477 KiB minified → 710 KiB after
@@ -98,14 +98,14 @@ removed from the entry pays back roughly 1.5x in the shipped figure.
 
 Checked and rejected, so the next person does not re-derive them:
 
-- **`kmlExport`, `measurementExport`** — `main.ts` imports these as `import
+- `kmlExport`, `measurementExport`: `main.ts` imports these as `import
   type` only. They are erased at compile time and contribute nothing. The
   import list makes them look eager; they are not.
-- **`spaceMetrics` / `wallSlice`** — called synchronously inside
+- `spaceMetrics` / `wallSlice`: called synchronously inside
   `applyScanRoute(): boolean`. Deferring means making scan routing async and
   changing every caller's contract, for ~25 KiB. Bad trade against the risk
   of a routing regression.
-- **`benchmark`, `streamingBenchmark`** — 30 and 22 references through
+- `benchmark`, `streamingBenchmark`: 30 and 22 references through
   `main.ts`. Too woven to move without decomposing their callers first.
 
 ### Where the real reduction is

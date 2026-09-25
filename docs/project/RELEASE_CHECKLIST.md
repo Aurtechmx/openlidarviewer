@@ -49,7 +49,7 @@ assuming the working tree is right: `package.sh` builds the archive from
       grep `dist/` for unexpected hosts (`unpkg`, `cdn`, `jsdelivr`, `googleapis`,
       `analytics`); the only outbound calls should be user-initiated dataset/
       catalog fetches. The `loaderConfig.test.ts` guard keeps loaders.gl workers
-      off — keep it passing.
+      off: keep it passing.
 - [ ] No secrets added: skim the diff for credentials/tokens before pushing
       (the repo ships local-first, with no keys or backend).
 - [ ] CSP: the deploy ships an ENFORCING `Content-Security-Policy` (`.htaccess`
@@ -66,7 +66,7 @@ assuming the working tree is right: `package.sh` builds the archive from
 
 ## 5. Release asset set (attach all to the prerelease)
 
-Every asset must be produced from the **exact final tagged commit**, and the
+Every asset must be produced from the exact final tagged commit, and the
 staged set must contain all of:
 
 - [ ] source ZIP (`openlidarviewer-v<X.Y.Z>-source-<timestamp>.zip`)

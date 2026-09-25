@@ -1,4 +1,4 @@
-# SpatialContext — consumer inventory and routing status
+# SpatialContext: consumer inventory and routing status
 
 `src/geo/SpatialContext.ts` is one explicit description of the frame a dataset's
 coordinates live in: horizontal CRS and linear unit, vertical unit and datum
@@ -24,14 +24,14 @@ table does not support.
 
 Once, at a boundary, then passed down.
 
-- **`CrsService.context()`** (`src/geo/CrsService.ts`) is the active scan's
+- `CrsService.context()` (`src/geo/CrsService.ts`) is the active scan's
   context. It is memoised on the resolved CRS and invalidated inside
   `_setCurrent`, so two consumers reading it in one frame get the same object
   and a stale one cannot outlive the override that replaced it. It is never
   `null`: with no scan open it is the explicit unknown frame, whose
   `metricClaimsPermitted` is `false`, so an early read fails closed rather than
   dereferencing null.
-- **`spatialContextFrom(cloud.metadata?.crs)`** is used where several scans are
+- `spatialContextFrom(cloud.metadata?.crs)` is used where several scans are
   in play at once and there is no single "active" CRS: the epoch comparison
   builds one context per epoch, the streaming grade builds one for the streaming
   source, and the LAS and report exporters build one for the cloud being written.
@@ -41,14 +41,14 @@ has re-opened the divergence this closes.
 
 ## How to read the table
 
-- **Status** — `migrated` means the file imports the context and reads its
+- Status: `migrated` means the file imports the context and reads its
   fields. `carrier` means it reads a fact the context computed, carried to it on
   an export model, and derives nothing itself. `pending` means it still derives
   its own answer.
-- **Routes through** — the file(s) the gate checks. Every `migrated` path must
+- Routes through: the file(s) the gate checks. Every `migrated` path must
   import `geo/SpatialContext` or `geo/frameCompatibility`; every `migrated` and
   `carrier` path must be free of the deprecated predicates listed below.
-- **Reads** — the context fields it now uses.
+- Reads: the context fields it now uses.
 
 ## Inventory (17 consumers)
 
@@ -96,12 +96,12 @@ A missing vertical unit has three defensible answers, and the tree used to spell
 all three as `??` chains that look alike. `verticalMetresPerUnit(ctx, policy)`
 names them:
 
-- `'none'` — no fallback. Correct wherever the output states a metre value for a
+- `'none'`: no fallback. Correct wherever the output states a metre value for a
   height (RFC 7946 ordinates, KML `absolute`): a horizontal unit is not evidence
   about Z.
-- `'horizontal-when-known'` — fall back only when the horizontal factor is
+- `'horizontal-when-known'`: fall back only when the horizontal factor is
   itself a real declared unit. Correct for a label that names the unit.
-- `'horizontal'` — the GeoTIFF convention as written. Correct only where a
+- `'horizontal'`: the GeoTIFF convention as written. Correct only where a
   factor keeps a GEOMETRY self-consistent (grid spacing, cell floors) rather
   than making a claim.
 
@@ -114,12 +114,12 @@ factor would answer a question the file already answered wrongly.
 Every row above is routed. Two seams inside those consumers still hold their
 own derivation, and they are named here rather than hidden:
 
-- **`src/main.ts`'s contour-export `linearUnit`** still reads
+- `src/main.ts`'s contour-export `linearUnit` still reads
   `crsService.current()?.linearUnit`, because "no scan open yet" and "a scan
   whose CRS is unknown" are two different answers there and the context
   deliberately collapses both to the unknown frame. Routing it would flip the
   DXF `$INSUNITS` default for an export taken before the CRS resolves.
-- **`src/render/measure/volume.ts`** and `stockpileVolume.ts` are pure geometry
+- `src/render/measure/volume.ts` and `stockpileVolume.ts` are pure geometry
   over source-local coordinates and hold no CRS at all. Their unit gate lives at
   the call site, which is routed (row 4). They are correct un-migrated, and
   handing them a context would be ceremony.

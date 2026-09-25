@@ -1,6 +1,6 @@
 # Known limitations: OpenLiDARViewer 0.7.0-alpha.1
 
-**In development.** This document is written from the final state at freeze. What
+In development. This document is written from the final state at freeze. What
 follows is the state so far, and every entry is reproduced rather than carried
 forward from v0.6.9 by default.
 

@@ -70,7 +70,6 @@ Removing the transform would delete that liability outright: no worker exclude
 list to keep complete, no per-point performance carve-outs, a smaller and faster
 deployed bundle, and one build path instead of two.
 
-This ADR recommends removing JS obfuscation from the official live build, but
-does not do it. That change alters the shipped artifact and is the maintainer's
-call. It should be a separate, deliberate change with its own review, not a side
-effect of this reliability fix.
+This ADR recommends removing JS obfuscation from the official live build and
+does not do it here. That change alters the shipped artifact, so it belongs in a
+separate change with its own review, apart from this reliability fix.

@@ -66,10 +66,10 @@ that cell produced. Never because a coordinate happened to be nearby.
 
 Three states describe how much of that survives:
 
-- **Exact.** Every valid cell names the record it produced.
-- **Partial.** Some records were not decoded this session. The ones that were
+- Exact. Every valid cell names the record it produced.
+- Partial. Some records were not decoded this session. The ones that were
   still link exactly.
-- **Unavailable.** The identity is gone, and the reason says which step spent
+- Unavailable. The identity is gone, and the reason says which step spent
   it: voxel centroids, a source topology that could not be read as a grid, or an
   identity that was never established.
 

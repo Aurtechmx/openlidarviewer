@@ -1,7 +1,7 @@
 # Heavy clouds: the native out-of-core pipeline
 
-Plain LAS/LAZ files were read whole — one `File.arrayBuffer()`, one
-sequential decode, one full-size attribute allocation — and only then reduced
+Plain LAS/LAZ files were read whole (one `File.arrayBuffer()`, one
+sequential decode, one full-size attribute allocation) and only then reduced
 to the render budget. A large uncompressed LAS and a large chunked LAZ now take
 the out-of-core path this document describes; the whole-file shape below is the
 baseline it replaces, and it still applies to any format without a streaming
@@ -10,14 +10,14 @@ file hits them: the browser's single-`ArrayBuffer` cap (~2 GB), the duplicate
 compressed copy inside the laz-perf WASM heap, and decoded attribute arrays
 sized to the source count (~30 B/point) before any budget applies. COPC and
 EPT avoid all three because they stream through the octree scheduler; a plain
-LAS/LAZ has no index, so it never could — until it is given one.
+LAS/LAZ has no index, so it never could, until it is given one.
 
 This document is the program of record for the native pipeline that removes
 those ceilings. Every component in it is first-party OLV code: the readers,
 the chunk-table decoder, the indexer, the tile store, and the source that
 feeds the existing streaming engine. The only third-party piece anywhere in
 the path is the already-bundled laz-perf WASM, used exactly as COPC already
-uses it — one independent chunk at a time.
+uses it: one independent chunk at a time.
 
 ## Components
 
@@ -54,29 +54,29 @@ the whole file at once.
 A LAZ file's points are compressed in independent chunks (fixed point count,
 or variable for layered PDRF 6+ files), and the file carries a table of chunk
 byte ranges. Whole-file decoders ignore it and run one arithmetic-coder state
-across the entire stream — strictly sequential, one core, no matter how many
+across the entire stream: strictly sequential, one core, no matter how many
 the machine has. Reading the table restores random access, and with it:
 
-- **Parallel decode.** Each chunk is an independent decode unit. A pool of
+- Parallel decode. Each chunk is an independent decode unit. A pool of
   `navigator.hardwareConcurrency` workers decodes chunks concurrently through
   the same per-chunk laz-perf path COPC nodes already use
   (`copcChunkDecompress.decompressChunk`), with decoded buffers transferred,
   never copied. Decode throughput scales with cores until memory bandwidth
   binds, where a sequential decoder is pinned to one core by construction.
-- **Bounded memory.** One chunk's compressed bytes in the WASM heap at a time
+- Bounded memory. One chunk's compressed bytes in the WASM heap at a time
   per worker, instead of the whole file.
-- **Progressive first paint.** Chunks decode in priority order, so early
+- Progressive first paint. Chunks decode in priority order, so early
   batches reach the GPU while the tail is still decompressing.
 
 The table itself is arithmetic-coded (the laszip integer-compressor scheme),
 so random access requires decoding it. `src/io/heavy/` carries a native
-TypeScript implementation of that decoder — models, symbol decode, and the
-integer-corrector path — scoped to the chunk table. It ships with a mirror
+TypeScript implementation of that decoder (models, symbol decode, and the
+integer-corrector path) scoped to the chunk table. It ships with a mirror
 encoder used by the round-trip test suite, and its output is checked against
 hard invariants on every real file: monotonic chunk offsets, ranges inside the
 file, the last chunk ending exactly at the table, and counts consistent with
 the header. A file that fails any of these falls back to the legacy whole-file
-path rather than trusting a suspect table — the native fast path fails closed
+path rather than trusting a suspect table: the native fast path fails closed
 into the proven slow path, and the failure is recorded in load telemetry.
 
 Pointwise-compressed LAZ (compressor 1, written by pre-2011 tools) has no
@@ -124,9 +124,9 @@ separately so neither borrows the other's number.
 
 | Phase | Scope | Gate |
 |-------|-------|------|
-| 0 | `src/io/heavy/`: native arithmetic decoder (chunk-table subset), LAZ chunk-table parser, sliced LAS batch reader — all over `RangeSource`, all Node-testable | Round-trip + parity + fail-closed tests green; conformance run against real laszip-written files before the fast path defaults on |
+| 0 | `src/io/heavy/`: native arithmetic decoder (chunk-table subset), LAZ chunk-table parser, sliced LAS batch reader: all over `RangeSource`, all Node-testable | Round-trip + parity + fail-closed tests green; conformance run against real laszip-written files before the fast path defaults on |
 | 1 | `OlvOocIndexer`: two-pass out-of-core octree build (bounds+histogram pass, bucketing pass), node buffers spilled to OPFS | Node counts sum to source count; every point inside its node cube; bounded peak RAM on a synthetic > 2 GB fixture |
-| 2 | OLV Tile Store: OPFS layout — manifest, plaintext hierarchy, per-node tiles in the store's own binary framing | Store round-trips through its own reader; hierarchy parses without touching tiles |
+| 2 | OLV Tile Store: OPFS layout: manifest, plaintext hierarchy, per-node tiles in the store's own binary framing | Store round-trips through its own reader; hierarchy parses without touching tiles |
 | 3 | `OlvTileSource` + OPFS-directory `RangeSource`; `loadPlan` routes over-ceiling plain files to build-then-stream | E2E: multi-GB plain LAS streams with residency ≤ 1.5 × pointBudget and no whole-file read on the heavy path |
 | 4 (optional) | Compaction: a LAZ encoder enabling single-file `.copc.laz` output from the Tile Store | Gated on a security review of any new WASM; the Tile Store remains the default |
 
@@ -151,8 +151,8 @@ the plan, independently of capability. A file the plan does NOT route out of cor
 returns `not-heavy` and the whole-file loader takes it unchanged. But once a file
 is confirmed heavy, the whole-file loader is not a safe fallback: its single
 `new Uint8Array(total)` is the allocation that made the file heavy. So a heavy
-file whose out-of-core path cannot complete — OPFS or workers absent, the
-preflight refuses, or the build fails before commit — returns a `heavy: true`
+file whose out-of-core path cannot complete (OPFS or workers absent, the
+preflight refuses, or the build fails before commit) returns a `heavy: true`
 status and the open REFUSES with a named reason that points at COPC/EPT, rather
 than falling through into an out-of-memory crash. Only `attached` and `cancelled`
 are terminal otherwise. A Node test drives the whole decision
@@ -173,33 +173,33 @@ exists.
 
 ## Constraints carried from the rest of the codebase
 
-- **Monolith ratchet.** No phase grows `main.ts` or `Viewer.ts`; wiring goes
+- Monolith ratchet. No phase grows `main.ts` or `Viewer.ts`; wiring goes
   through the existing delegation seams (`openScan.ts`, `loadPlan.ts`).
-- **Position-frame discipline.** New decoded buffers are origin-relative
+- Position-frame discipline. New decoded buffers are origin-relative
   (source-local frame), produced through the existing `decodeRecord` path;
   any new direct position read is classified in
   `docs/validation/position-frames.json`.
-- **Worker registry.** The chunk-decode pool registers its workers like every
+- Worker registry. The chunk-decode pool registers its workers like every
   other worker in `workerRegistry.ts`.
-- **Fail-closed loading.** Malformed tables, impossible counts, and truncated
+- Fail-closed loading. Malformed tables, impossible counts, and truncated
   chunks surface as `LoadError('malformed-file')` or fall back to the legacy
   path; the heavy path never guesses.
 
 ## Risks and their handling
 
-- **OPFS footprint** (phase 1–2): uncompressed tiles cost ~30 B/point on
-  disk — a 500 M-point cloud needs ~15 GB free. The indexer checks available
+- OPFS footprint (phase 1 to 2): uncompressed tiles cost ~30 B/point on
+  disk: a 500 M-point cloud needs ~15 GB free. The indexer checks available
   quota before starting and reports the requirement; phase 4 compaction is the
   long-term answer.
-- **Two-pass build time** (phase 1): the indexer reads the file twice; for
+- Two-pass build time (phase 1): the indexer reads the file twice; for
   LAZ that is two decompression passes, though both are chunk-parallel. The
   build shows progress and cancels cleanly. Its OPFS store is a persistent
   local cache: a later open of the same source reuses the built index and skips
   the build, after a source-fingerprint and cache-generation match. The cache is
-  not durable — the browser or user may clear origin-private storage, and the
-  indexer evicts least-recently-used stores past a soft byte cap — so a session
+  not durable (the browser or user may clear origin-private storage, and the
+  indexer evicts least-recently-used stores past a soft byte cap) so a session
   does not accumulate unbounded multi-GB caches.
-- **Native decoder conformance** (phase 0): a round-trip test proves the
+- Native decoder conformance (phase 0): a round-trip test proves the
   decoder against its own mirror encoder, which cannot catch a shared
   misreading of the laszip stream format. The invariant checks catch gross
   divergence on any real file at open time, and the phase-0 gate includes a

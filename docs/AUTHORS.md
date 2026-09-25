@@ -2,7 +2,7 @@
 
 OpenLiDARViewer is developed and maintained by:
 
-- **A. Urias** — creator and maintainer, Aurtech (aurtech.mx).
+- A. Urias: creator and maintainer, Aurtech (aurtech.mx).
 
 Copyright © 2026 Aurtech. Released under the GNU Affero General Public License version 3 only (AGPL-3.0-only); see [LICENSE](../LICENSE). Releases through v0.6.6 were under the MIT License.
 

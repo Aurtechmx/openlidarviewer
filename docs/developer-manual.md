@@ -1,12 +1,12 @@
-# OpenLiDARViewer — Developer Manual
+# OpenLiDARViewer: Developer Manual
 
 A single-page, open-source, browser-based point-cloud viewer. This manual is
 the reference for building, testing, extending, and shipping the project.
 
-- **Project README:** [`../README.md`](../README.md)
-- **Architecture map:** [`architecture.md`](architecture.md)
-- **Contributing guide:** [`../CONTRIBUTING.md`](../.github/CONTRIBUTING.md)
-- **Release history:** [`../CHANGELOG.md`](../CHANGELOG.md)
+- Project README: [`../README.md`](../README.md)
+- Architecture map: [`architecture.md`](architecture.md)
+- Contributing guide: [`../CONTRIBUTING.md`](../.github/CONTRIBUTING.md)
+- Release history: [`../CHANGELOG.md`](../CHANGELOG.md)
 
 ---
 
@@ -31,7 +31,7 @@ Scan Intelligence report, and export the result.
 | FR-3 | Detect format from magic bytes first, file extension second. |
 | FR-4 | Parse and downsample off the main thread, in a Web Worker. |
 | FR-5 | Recenter georeferenced clouds to a shared local origin, doing the subtraction in float64 before the float32 downcast, within a small bounded error. |
-| FR-6 | Keep clouds within a point budget — voxel-downsampling, or stride decoding when far over budget — and always display the honest `shown / total` count. |
+| FR-6 | Keep clouds within a point budget (voxel-downsampling, or stride decoding when far over budget) and always display the honest `shown / total` count. |
 | FR-7 | Render with three.js using WebGPU, with an automatic WebGL 2 fallback. |
 | FR-8 | Color by RGB, height, intensity, classification, or surface normal; auto-select the best mode on load; offer only the modes the file actually contains. |
 | FR-9 | Hold multiple clouds in one scene, rebased onto a shared origin. |
@@ -41,27 +41,27 @@ Scan Intelligence report, and export the result.
 | FR-13 | Export the cloud to PLY, OBJ, XYZ, or CSV, and save the current view as a PNG, all client-side. |
 | FR-14 | Save and restore named camera views. |
 | FR-15 | Support an embed mode (`?embed=1`) that strips the chrome for `<iframe>` use. |
-| FR-16 | Inspect a picked point — show its real-world coordinates and attributes, with one-click copy to the clipboard. |
-| FR-17 | Close the current scan — clear every loaded cloud and return to the empty state, ready for another file. |
-| FR-18 | Render with Eye Dome Lighting depth shading, adaptive or fixed point sizing, and antialiased round points — all tunable from the Rendering panel. |
-| FR-19 | Plan a LAS/LAZ load from its header — fast-load huge clouds by stride decoding, guard against out-of-memory, report staged progress, and allow the load to be cancelled mid-flight. |
-| FR-20 | Stream hierarchical point-cloud datasets (`COPC` `.copc.laz` and `EPT` `ept.json`) — local or remote — through a view-dependent scheduler with bounded residency. |
-| FR-21 | Generate multi-page PDF technical reports — three built-in templates (Survey Summary, Technical Report, Scan QA), cover + dataset summary + image exports + annotations + measurements + technical notes, with branding (accent + logo) and metric/imperial unit awareness. |
+| FR-16 | Inspect a picked point: show its real-world coordinates and attributes, with one-click copy to the clipboard. |
+| FR-17 | Close the current scan: clear every loaded cloud and return to the empty state, ready for another file. |
+| FR-18 | Render with Eye Dome Lighting depth shading, adaptive or fixed point sizing, and antialiased round points: all tunable from the Rendering panel. |
+| FR-19 | Plan a LAS/LAZ load from its header: fast-load huge clouds by stride decoding, guard against out-of-memory, report staged progress, and allow the load to be cancelled mid-flight. |
+| FR-20 | Stream hierarchical point-cloud datasets (`COPC` `.copc.laz` and `EPT` `ept.json`) (local or remote) through a view-dependent scheduler with bounded residency. |
+| FR-21 | Generate multi-page PDF technical reports: three built-in templates (Survey Summary, Technical Report, Scan QA), cover + dataset summary + image exports + annotations + measurements + technical notes, with branding (accent + logo) and metric/imperial unit awareness. |
 | FR-22 | Round-trip the full working state (camera, render settings, colour mode, annotations, measurements, named views, scan metadata) through a `.olvsession` JSON package. |
-| FR-23 | Export the Visual Export Studio image modes — orthographic RGB, height map, intensity, classification, depth, normal, and contour — with legend customisation. |
+| FR-23 | Export the Visual Export Studio image modes (orthographic RGB, height map, intensity, classification, depth, normal, and contour) with legend customisation. |
 
 ### 2.2 Non-functional requirements
 
 | ID | Requirement |
 |------|-------------|
-| NFR-1 | **Privacy** — local files are read and rendered client-side and are not uploaded; no accounts, no telemetry. Remote datasets and location search fetch from their listed providers. |
-| NFR-2 | **Performance** — parsing runs in a worker; clouds are capped by voxel downsampling at a point budget. |
-| NFR-3 | **Compatibility** — works on modern evergreen browsers; WebGPU where available, WebGL 2 everywhere else. |
-| NFR-4 | **Zero friction** — usable with no install and no file conversion. |
-| NFR-5 | **Quality** — strict TypeScript; the algorithmic core is test-first; CI gates every change. |
-| NFR-6 | **Licensing** — AGPL-3.0-only; citable via `CITATION.cff`. |
-| NFR-7 | **Deployability** — builds to static files hostable on any CDN or GitHub Pages. |
-| NFR-8 | **Maintainability** — one responsibility per file; analysis modules never import the renderer. |
+| NFR-1 | Privacy: local files are read and rendered client-side and are not uploaded; no accounts, no telemetry. Remote datasets and location search fetch from their listed providers. |
+| NFR-2 | Performance: parsing runs in a worker; clouds are capped by voxel downsampling at a point budget. |
+| NFR-3 | Compatibility: works on modern evergreen browsers; WebGPU where available, WebGL 2 everywhere else. |
+| NFR-4 | Zero friction: usable with no install and no file conversion. |
+| NFR-5 | Quality: strict TypeScript; the algorithmic core is test-first; CI gates every change. |
+| NFR-6 | Licensing: AGPL-3.0-only; citable via `CITATION.cff`. |
+| NFR-7 | Deployability: builds to static files hostable on any CDN or GitHub Pages. |
+| NFR-8 | Maintainability: one responsibility per file; analysis modules never import the renderer. |
 
 ---
 
@@ -80,7 +80,7 @@ Scan Intelligence report, and export the result.
 
 ## 4. Prerequisites
 
-- **Node.js 22+** and npm 10+.
+- Node.js 22+ and npm 10+.
 - A modern browser for development (Chrome or Edge recommended for WebGPU).
 
 ### 4.1 Windows
@@ -261,20 +261,20 @@ drop -> preflight { head-slice sniff -> LAS/LAZ header -> load plan }
 
 Three load-bearing decisions:
 
-1. **The coordinate bridge.** Georeferenced LAS data uses large UTM
+1. The coordinate bridge. Georeferenced LAS data uses large UTM
    coordinates that overflow 32-bit floats. Every cloud is recentered to an
    integer local origin; the subtraction is done in float64 *before* the
    float32 downcast. `.las`/`.laz` records are decoded straight into that
-   local frame — the float64 arithmetic precedes the float32 store — so both
+   local frame (the float64 arithmetic precedes the float32 store) so both
    keep full precision with no intermediate global-coordinate pass.
-2. **Preflight, then parse in a worker.** The format and, for LAS/LAZ, a
+2. Preflight, then parse in a worker. The format and, for LAS/LAZ, a
    budget-aware load plan are decided on the main thread from a 16 KB head
-   slice — so an unsupported file fails before any large read. Parsing and
+   slice, so an unsupported file fails before any large read. Parsing and
    downsampling then run in a long-lived worker, reused across loads, so the
    UI stays responsive on large surveys.
-3. **The analysis API.** A module is `{ id, label, run(cloud, selection?) }`
+3. The analysis API. A module is `{ id, label, run(cloud, selection?) }`
    returning pass/warn/fail rows. Modules are pure functions over
-   `PointCloud` — decoupled from rendering and easy to unit-test.
+   `PointCloud`: decoupled from rendering and easy to unit-test.
 
 See [`architecture.md`](architecture.md) for the full map.
 
@@ -286,21 +286,21 @@ See [`architecture.md`](architecture.md) for the full map.
 |---------|---------|
 | `npm run dev` | Vite dev server with hot reload. |
 | `npm run build` | Typecheck then produce the static production build in `dist/`. |
-| `npm run build:live` | The deployment build — same as `build`, plus a source-transform pass on the project's own code (Vite mode `live`). Used only for the public live site. |
+| `npm run build:live` | The deployment build: same as `build`, plus a source-transform pass on the project's own code (Vite mode `live`). Used only for the public live site. |
 | `npm run preview` | Serve the production build locally. |
-| `npm run typecheck` | `tsc --noEmit` — strict type checking. |
+| `npm run typecheck` | `tsc --noEmit`: strict type checking. |
 | `npm test` | Run the Vitest unit suite once. |
 | `npm run test:watch` | Vitest in watch mode. |
 | `npm run test:e2e` | Playwright end-to-end tests (run `npx playwright install --with-deps chromium` first). |
-| `npm run test:smoke:widths` | The startup smoke spec at five viewport widths — 320, 375, 767, 768, 1440. One build and one preview server serve all five. |
+| `npm run test:smoke:widths` | The startup smoke spec at five viewport widths: 320, 375, 767, 768, 1440. One build and one preview server serve all five. |
 
-A `?debug=1` URL parameter logs a per-stage load-timing breakdown — read, decode, downsample, GPU upload, total — to the browser console. It is useful when profiling the load pipeline and is off in normal use.
+A `?debug=1` URL parameter logs a per-stage load-timing breakdown (read, decode, downsample, GPU upload, total) to the browser console. It is useful when profiling the load pipeline and is off in normal use.
 
 ---
 
 ## 9. Testing strategy
 
-- **Unit (Vitest, Node).** The algorithmic core is test-first: format
+- Unit (Vitest, Node). The algorithmic core is test-first: format
   sniffer, LAS header parser, coordinate bridge, `PointCloud`, every loader,
   the E57 parser, voxel downsampling, parse dispatch, the load planner, the
   stratified stride sampler, the staged-progress and telemetry helpers, color
@@ -308,18 +308,18 @@ A `?debug=1` URL parameter logs a per-stage load-timing breakdown — read, deco
   Eye Dome Lighting depth maths and the adaptive point-size curve, the
   measurement core (geometry, formatting, serialization, label layout), the
   exporters, and both analysis modules. Tests assert against deterministic
-  fixtures — including a committed synthetic E57 (`tests/fixtures/synthetic.e57`,
-  generated by `scripts/make-e57-fixture.mjs`) — with ground truth in
+  fixtures (including a committed synthetic E57, `tests/fixtures/synthetic.e57`,
+  generated by `scripts/make-e57-fixture.mjs`) with ground truth in
   `tests/fixtures/FIXTURES.md`.
-- **End-to-end (Playwright).** `tests/e2e/viewer.spec.ts` drives the built
+- End-to-end (Playwright). `tests/e2e/viewer.spec.ts` drives the built
   app: load a sample, confirm the cloud renders and the Scan Report appears,
   load a second cloud, drop an E57 scan, close a scan and load another, and
   check embed mode. `tests/e2e/measure.spec.ts` covers the measurement
   toolbar, kind picker, units toggle, a distance placement round-trip, and
-  session export. `tests/e2e/rendering.spec.ts` toggles Eye Dome Lighting —
-  exercising the post-processing pipeline — and the point-size and
+  session export. `tests/e2e/rendering.spec.ts` toggles Eye Dome Lighting
+  (exercising the post-processing pipeline) and the point-size and
   antialiasing controls.
-- **Not unit-tested:** `Viewer.ts`, `NavController.ts`, the measurement
+- Not unit-tested: `Viewer.ts`, `NavController.ts`, the measurement
   controller and SVG overlay, `InspectTool.ts`, and the worker entry require a
   browser/GPU and are covered by E2E plus manual checks. Their pure logic
   lives in `navMath.ts`, `pointInfo.ts`, and `render/measure/`, which *are*
@@ -331,8 +331,8 @@ A `?debug=1` URL parameter logs a per-stage load-timing breakdown — read, deco
 
 `.github/workflows/ci.yml` runs on every push and pull request:
 
-- **build-and-test** — `npm ci` -> `npm run typecheck` -> `npm test` -> `npm run build`. The hard gate.
-- **e2e** — installs Chromium and runs `npm run test:e2e`. Advisory: it drives a headless browser, so a GPU-related failure is reported but does not block the build.
+- build-and-test: `npm ci` -> `npm run typecheck` -> `npm test` -> `npm run build`. The hard gate.
+- e2e: installs Chromium and runs `npm run test:e2e`. Advisory: it drives a headless browser, so a GPU-related failure is reported but does not block the build.
 
 Pre-merge checklist for any PR into `main`: all review threads resolved, the
 build-and-test job green, branch rebased on the latest `main`.
@@ -341,12 +341,12 @@ build-and-test job green, branch rebased on the latest `main`.
 
 ## 11. Coding standards
 
-- **Strict TypeScript** — `verbatimModuleSyntax` (use `import type` for
+- Strict TypeScript: `verbatimModuleSyntax` (use `import type` for
   type-only imports), `erasableSyntaxOnly` (no `enum`, no `namespace`), and
   full `strict` mode.
-- **Conventional Commits** — `type(scope): description`; `feat`, `fix`,
+- Conventional Commits: `type(scope): description`; `feat`, `fix`,
   `docs`, `test`, `ci`, `chore`, `refactor`, `perf`.
-- **Branching** — trunk-based; short-lived `feature/*` and `fix/*` branches,
+- Branching: trunk-based; short-lived `feature/*` and `fix/*` branches,
   merged into `main` via pull request.
 
 ---
@@ -379,12 +379,12 @@ matching `tests/myModule.test.ts`.
 
 ## 13. Security & privacy
 
-- **Local files stay local.** Files you open are read, parsed, and rendered in
-  the browser and are not uploaded — there is no backend to send them to.
-- **No telemetry, no accounts.** The network requests OpenLiDARViewer makes are:
+- Local files stay local. Files you open are read, parsed, and rendered in
+  the browser and are not uploaded: there is no backend to send them to.
+- No telemetry, no accounts. The network requests OpenLiDARViewer makes are:
   its own static assets; a remote dataset you open (fetched from that provider's
   host); and the location search you initiate (Microsoft Planetary Computer).
-- **Dependency surface** is limited to three.js, loaders.gl, and `laz-perf`.
+- Dependency surface is limited to three.js, loaders.gl, and `laz-perf`.
   CI runs against pinned versions; `npm audit` is recommended before a release.
 
 ---
@@ -413,11 +413,11 @@ rather than blocking unrelated work.
 | WebKit | 156 | 9 |
 
 Every engine skips the same four. The extra skips are all one capability:
-**clipboard read**. Five specs check that the camera moved by copying the "Copy
+clipboard read. Five specs check that the camera moved by copying the "Copy
 view link" share link and reading the pose back out of the clipboard. Only
-Chromium implements the clipboard permission in Playwright — Firefox and WebKit
+Chromium implements the clipboard permission in Playwright: Firefox and WebKit
 both reject `grantPermissions(['clipboard-read'])` with "Unknown permission",
-and WebKit's `navigator.clipboard.readText()` additionally resolves to an empty
+and WebKit's `navigator.clipboard.readText()` also resolves to an empty
 string instead of the copied text. Three of the five ask for the permission and
 so skip on both engines; the other two read the clipboard without asking and
 skip on WebKit only, since Firefox's failed `writeText` makes the app fall back
@@ -436,23 +436,23 @@ specs in about a minute with none.
 One backend difference is worth knowing when reading a failure: on a Mac,
 Playwright's WebKit returns a real WebGPU adapter, while headless Chromium and
 Firefox return none and fall back to WebGL 2. `edlDefaultEnabled` turns Eye Dome
-Lighting on for desktop WebGPU only, so EDL starts **on** under WebKit and
-**off** under the other two. Specs must not assume either starting state.
+Lighting on for desktop WebGPU only, so EDL starts on under WebKit and
+off under the other two. Specs must not assume either starting state.
 
 ---
 
 ## 15. Deployment
 
 `npm run build` emits static files in `dist/`. Host them on any static host
-(GitHub Pages, Netlify, S3/CloudFront, any CDN) — there is no server
+(GitHub Pages, Netlify, S3/CloudFront, any CDN): there is no server
 component. For embedding, serve the same build and link with `?embed=1`.
 
 ---
 
 ## 16. Release history
 
-The full per-release record — what shipped, where, and the supporting
-test counts and build metrics — lives in [`../CHANGELOG.md`](../CHANGELOG.md).
+The full per-release record (what shipped, where, and the supporting
+test counts and build metrics) lives in [`../CHANGELOG.md`](../CHANGELOG.md).
 The v0.3.3 release notes give a complete summary of every capability
 shipped through this release.
 

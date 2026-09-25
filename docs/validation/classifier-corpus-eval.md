@@ -81,7 +81,7 @@ False building is the share of non-building points called building.
 | vegetation-no-returns | 8960 | 0.990 | 1.000 | 0.977 | 0.989 | 0.994 | n/a | 0.001 | 0.000 |
 | units-metre | 8918 | 0.990 | 1.000 | 0.989 | 0.984 | 0.976 | 1.000 | 0.001 | 0.000 |
 | units-foot | 8918 | 0.990 | 1.000 | 0.989 | 0.984 | 0.976 | 1.000 | 0.001 | 0.000 |
-| **pooled** | 106765 | 0.702 | 0.914 | 0.479 | 0.541 | 0.783 | 0.752 | 0.001 | 0.037 |
+| pooled | 106765 | 0.702 | 0.914 | 0.479 | 0.541 | 0.783 | 0.752 | 0.001 | 0.037 |
 
 Cost: 2 ms to 11 ms per scene of roughly 9,000 points, measured on Node 26,
 darwin arm64, Apple M3 Max. Peak resident memory stayed under 90 MB across the
@@ -257,7 +257,7 @@ Measured on the corpus, v1 to v2, macro-F1:
 | vegetation-no-returns | 0.9901 | 0.9901 |
 | units-metre | 0.9898 | 0.9898 |
 | units-foot | 0.9898 | 0.9898 |
-| **pooled** | 0.6113 | 0.7017 |
+| pooled | 0.6113 | 0.7017 |
 
 Pooled, across the corpus:
 
@@ -278,17 +278,17 @@ by-product and not a fix for mechanism 2.
 
 ## What is still broken
 
-- **Rolling and steep terrain.** Ground recall stays at 0.402 and 0.636. The
+- Rolling and steep terrain. Ground recall stays at 0.402 and 0.636. The
   cause is diagnosed above and no default was changed to move it.
-- **The blunders themselves.** All 30 gross returns are still classified ground.
+- The blunders themselves. All 30 gross returns are still classified ground.
   Height above ground is clamped at zero, so a return below the surface lands in
   the ground band, and the classifier has no low-noise class to put it in. v2
   stops a blunder from dragging the surface; it does not label the blunder.
-- **Walls.** `walls-roofs` was 0.325 macro-F1 in v2. Wall returns read as rough
+- Walls. `walls-roofs` was 0.325 macro-F1 in v2. Wall returns read as rough
   and split across the vegetation bands. v3's structural-verticality rescue
   reclassifies planar-vertical neighbourhoods as building walls, which lifts it
   to 0.398 (building F1 0.423 to 0.638).
-- **One blunder per cell.** The rejection is a single pass and falls back to the
+- One blunder per cell. The rejection is a single pass and falls back to the
   second-lowest return, so a cell holding two blunders stays low.
 
 ## Recommended experiments

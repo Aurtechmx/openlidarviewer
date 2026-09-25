@@ -6,10 +6,10 @@ Every scientific method OpenLiDARViewer runs is identified by a stable `id@versi
 
 The Contour Studio geometry products carry these method ids on the product and in the exported vector attributes (`method_id`, `method_version`):
 
-- `olv.contour.analytical@1` — exact isolines of the terrain grid (marching squares, cell-centre registration). No smoothing or displacement.
-- `olv.contour.generalize@1` — the shipped cartographic generalization: simplification at a bounded per-purpose tolerance (each Contour Studio purpose maps to a tolerance in grid cells) followed by Chaikin corner-cutting. This is the id stamped on every generalized Contour Studio export.
-- `olv.contour.generalize.dp@1` — a Douglas–Peucker variant with a fixed tolerance, available in the geometry-product library.
-- `olv.contour.generalize.terrain-adaptive@1` — a per-feature variant that scales tolerance by support, confidence, closure, and length within a bounded band, then applies the same Chaikin corner-cutting. This is the id stamped when a surface selects terrain-aware generalization, which reaches the shipped export path.
+- `olv.contour.analytical@1`: exact isolines of the terrain grid (marching squares, cell-centre registration). No smoothing or displacement.
+- `olv.contour.generalize@1`: the shipped cartographic generalization: simplification at a bounded per-purpose tolerance (each Contour Studio purpose maps to a tolerance in grid cells) followed by Chaikin corner-cutting. This is the id stamped on every generalized Contour Studio export.
+- `olv.contour.generalize.dp@1`: a Douglas to Peucker variant with a fixed tolerance, available in the geometry-product library.
+- `olv.contour.generalize.terrain-adaptive@1`: a per-feature variant that scales tolerance by support, confidence, closure, and length within a bounded band, then applies the same Chaikin corner-cutting. This is the id stamped when a surface selects terrain-aware generalization, which reaches the shipped export path.
 
 These ids are stamped by the geometry-product builders. Routing them through the canonical `ScientificAnalysisRecord` (which validates ids against the method registry) is part of the export wiring and is registered there when an exporter emits the record.
 

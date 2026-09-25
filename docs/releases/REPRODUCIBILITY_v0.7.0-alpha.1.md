@@ -1,6 +1,6 @@
 # Reproducibility: OpenLiDARViewer 0.7.0-alpha.1
 
-**In development.** The pinned toolchain, archive digests and the
+In development. The pinned toolchain, archive digests and the
 release-authoritative test record are written here at freeze. They are absent
 now because they do not yet exist.
 

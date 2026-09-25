@@ -2,7 +2,7 @@
 
 One section per `olv.observation.*` id in `src/science/methodRegistry.ts`
 (OB-INT-04). These seven ids are registered early, ahead of most of their
-code, under the maintainer's approval to reserve their names and version
+code, to reserve their names and version
 numbers before the phases that build them
 (`validation/protocols/v070-decision-rules.md`). Each section states plainly
 whether the method has an implementation behind it today and, when it does
@@ -155,7 +155,7 @@ F7 omits it, so F8's, F9's and every prior test's original domain-bound
 reading is unaffected.
 
 The voxel row's open-addressing table is accumulated by `LedgerBuilder`, a
-typed-array-column table over the packed voxel key — the storage style
+typed-array-column table over the packed voxel key: the storage style
 OB-LED-03 names as precedent, matching `voxelDownsample.ts`'s
 `VoxelAccumulator`: linear probing, capacity doubling that rehashes keys but
 never renumbers a slot, row and per-source counters held in flat
@@ -167,7 +167,7 @@ phase's original correctness pass.
 `checkVoxelDomainBudget`'s `estimatedBytes` is grounded in this table's own
 WORST-CASE cost, not a single favourable sample of it. Sampling
 `measureLedgerBuilderBytesPerVoxel` at one occupancy (1.5 million) first gave
-~77 B/voxel at one source per occupied voxel, ~119 at four — but that point
+~77 B/voxel at one source per occupied voxel, ~119 at four, but that point
 sits deep into a capacity-doubling cycle, where every column is amortized
 over a near-full table. Sweeping occupancy across doubling boundaries shows
 the true worst case sits right AFTER a doubling, when only `capacity/2 + 1`
@@ -193,8 +193,8 @@ station count is available so the check stays a pure function of `domain`
 and `voxelEdge` alone in that case.
 
 `SOFT_MAX_BUDGET_BYTES`/`HARD_MAX_BUDGET_BYTES` fix OB-LED-03's real-memory
-envelope in BYTES — 183 MiB soft, ~2.86 GiB hard, the same envelope the
-original 48-byte-assumed 4,000,000 / 64,000,000 cell pair intended — and the
+envelope in BYTES (183 MiB soft, ~2.86 GiB hard, the same envelope the
+original 48-byte-assumed 4,000,000 / 64,000,000 cell pair intended) and the
 cell ceiling is DERIVED per call as `envelopeBytes / worstCase(sourceCount)`,
 so the byte envelope can never be exceeded at any occupancy or source count.
 Resulting cell ceilings at a few source counts:
@@ -239,7 +239,7 @@ fold order. `computeFieldDigest` then sorts rows by key and each row's
 (`src/canonicalHash.ts`), since `canonicalJson` sorts object keys but not
 array elements, and a raw `Uint32Array` would otherwise serialize through a
 lexicographic key sort past nine elements. F9's worker-count axis is read as
-IN-PROCESS PARTITION count (the maintainer's 2026-09-23 decision): 1, 2 and 5
+IN-PROCESS PARTITION count (fixed on 2026-09-23): 1, 2 and 5
 partitions of the same deterministic ray-chunk list, merged by this same
 order-independent merge, give an identical `fieldDigest`. No Web Worker and
 no `WORKER_REGISTRY` entry exist yet; `RayPartitionInput`/`PartialLedger` are

@@ -29,7 +29,7 @@ summary no longer matches the registry, which is how a stale count is caught.
 
 ## Scope
 
-One record per `CHANGELOG.md` **Fixed** entry for 0.6.2. Where one entry covers
+One record per `CHANGELOG.md` Fixed entry for 0.6.2. Where one entry covers
 more than one distinct fault, the faults are listed in that record's
 `bundledFaults` field and the record count still follows the changelog, so the
 registry total and the changelog total are the same number by construction.

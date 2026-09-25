@@ -364,14 +364,14 @@ const fact = (name, value) => {
 
 // ── Fact 7: Float64 flip-sequence step count ────────────────────────────────
 // The migration roadmap enumerates a numbered flip sequence and a Status line
-// "steps 1–N landed". N must equal the count of steps marked DONE.
+// "steps 1 to N landed". N must equal the count of steps marked DONE.
 {
   const DOC = 'docs/architecture/float64-transform.md';
   if (existsSync(resolve(ROOT, DOC))) {
     const text = read(DOC);
-    const doneSteps = (text.match(/^\d+\.\s+\*\*DONE/gm) ?? []).length;
+    const doneSteps = (text.match(/^\d+\.\s+(?:\*\*)?DONE/gm) ?? []).length;
     fact('Float64 DONE steps', doneSteps);
-    const status = text.match(/steps\s+1[–-](\d+)\s+landed/i);
+    const status = text.match(/steps\s+1\s*(?:[–-]|to)\s*(\d+)\s+landed/i);
     if (status && Number(status[1]) !== doneSteps) {
       problems.push(`${DOC}: Status says steps 1–${status[1]} landed; ${doneSteps} steps are marked DONE.`);
     }

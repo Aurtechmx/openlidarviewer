@@ -1,6 +1,6 @@
-# Project spatial frame — design
+# Project spatial frame: design
 
-Status: **foundation landed, scene wiring deferred.** This document specifies
+Status: foundation landed, scene wiring deferred. This document specifies
 the shared project coordinate frame. The value types and their pure transform
 math ship now, unit-tested, with no change to how the scene mounts clouds. The
 live wiring (mounting every layer through the frame, Compare Studio, cross-layer
@@ -9,14 +9,14 @@ browser and it reshapes the project schema.
 
 ## The problem
 
-Today each cloud is mounted in **its own** local render space. A cloud picks an
+Today each cloud is mounted in its own local render space. A cloud picks an
 integer origin `floor(min)` over its own points and subtracts it in Float64
 before narrowing to Float32 (see [coordinate-precision.md](../coordinate-precision.md)).
-That is correct for a single scan — both endpoints of a measurement share one
-origin — but there is no authoritative frame *above* the individual clouds.
+That is correct for a single scan (both endpoints of a measurement share one
+origin) but there is no authoritative frame *above* the individual clouds.
 
 The consequence, already noted under "Known limits" in the precision contract:
-two georeferenced clouds with **different** source origins are each recentred
+two georeferenced clouds with different source origins are each recentred
 about their own `floor(min)`, so both land near local zero and appear overlaid
 even when they occupy different places in the world. Their true source origins
 are recorded per cloud, but the scene has no single frame that all layers are
@@ -52,28 +52,28 @@ interface LayerSpatialTransform {
 
 ### Precision contract
 
-The frame does **not** change where Float64 ends and Float32 begins — it makes
+The frame does not change where Float64 ends and Float32 begins: it makes
 the boundary project-wide instead of per-cloud:
 
-- **GPU** receives small Float32 **project-local** coordinates: `source_world −
-  projectOrigin`, narrowed once, exactly as a single cloud is narrowed today —
+- GPU receives small Float32 project-local coordinates: `source_world −
+  projectOrigin`, narrowed once, exactly as a single cloud is narrowed today,
   but every layer shares one `projectOrigin`, so they land in their true
   relative positions.
-- **CPU / measurement / export** keep Float64 source and project transforms.
+- CPU / measurement / export keep Float64 source and project transforms.
   Absolute coordinates are recovered as `projectLocal + projectOrigin` in
   Float64, the same rule `pointInfo.ts` already follows for a single cloud.
 
 `projectOrigin` is chosen as a `floor(min)` over the union of loaded layers (or
 pinned when a project is created), so the residuals every layer feeds the GPU
-stay inside Float32's sub-mm range for realistic project extents — the invariant
+stay inside Float32's sub-mm range for realistic project extents: the invariant
 the precision audit already pins for one cloud, now held across the set.
 
 ### Same-frame today, reprojection later
 
 `sourceToProject` is a 4×4 so the seam is stable, but v0.6 populates it as a
-**pure translation** `source_world − projectOrigin` and requires the layers to
+pure translation `source_world − projectOrigin` and requires the layers to
 already share a CRS (the equal-CRS case the viewer supports today). Mixed-CRS
-reprojection — rotating/scaling one CRS into another — is out of scope here and
+reprojection (rotating/scaling one CRS into another) is out of scope here and
 stays the domain of a downstream tool (PDAL/GDAL/proj4); the matrix simply
 reserves the room so adding it later doesn't reshape the type.
 
@@ -94,21 +94,21 @@ The model is a superset of today's behaviour, so the transition is non-breaking:
 
 ## What lands now vs. what is staged
 
-**Now (foundation, Node-verified):**
+Now (foundation, Node-verified):
 - `ProjectSpatialFrame` / `LayerSpatialTransform` value types.
 - Pure Float64 transform math: build a layer transform from a project origin and
   a source origin, map source-local ↔ project-local, and recover absolute
-  world coordinates — with a unit test pinning the round-trip and the sub-mm
+  world coordinates, with a unit test pinning the round-trip and the sub-mm
   residual bound.
 
-**Staged (design-gated, browser-verified) — not in this build:**
+Staged (design-gated, browser-verified), not in this build:
 - Mounting every layer through its `LayerSpatialTransform` at the scene graph.
 - Compare Studio, shared clipping, project cameras, and cross-layer picking
   reading the project frame instead of per-cloud origins.
 - Persisting the frame in the project/session schema.
 
 Each staged step changes what the user sees and must be validated in the
-browser, the same way the streaming dissolve and flicker work is — so it is
+browser, the same way the streaming dissolve and flicker work is, so it is
 called out here as ready-to-wire against a tested foundation, not folded blindly
 into a release build.
 
@@ -120,14 +120,14 @@ ship behind the existing "experimental" disclosure until confirmed on a
 two-scan fixture, and only then does the `KNOWN_LIMITATIONS` entry flip from
 "foundation, not an active system" to active.
 
-1. **Frame ownership in `AppContext`** (Node-gated). The composition root from
+1. Frame ownership in `AppContext` (Node-gated). The composition root from
    alpha.1 (`AppRuntime`/`AppContext`) holds a `ProjectSpatialFrame | null`.
    Null is the single-cloud degenerate case. The first georeferenced layer seeds
    it via `chooseProjectOrigin` over the layers' `sourceOrigin`s; adding or
    removing a layer recomputes it. Pure state, no scene change. Gate: a reducer
    test for seed / recompute / clear.
 
-2. **Per-layer transform at mount** (browser-verified). Each layer applies its
+2. Per-layer transform at mount (browser-verified). Each layer applies its
    `LayerSpatialTransform.sourceToProject` (a translation today) to its
    scene-graph group instead of sitting at its own local zero. A single layer
    resolves to `projectOrigin = sourceOrigin` → identity → byte-identical, held
@@ -135,46 +135,46 @@ two-scan fixture, and only then does the `KNOWN_LIMITATIONS` entry flip from
    different source origins render at their true relative offset instead of
    overlaid at zero.
 
-3. **Camera framing reads the frame** (browser-verified, math Node-gated).
+3. Camera framing reads the frame (browser-verified, math Node-gated).
    `frame all` / reset fits the union project bounds in project-local, so it
    frames the whole project rather than one layer. Gate the bounds-union math;
    verify the framing visually.
 
-4. **Cross-layer measurement and picking** (math Node-gated, visual browser).
+4. Cross-layer measurement and picking (math Node-gated, visual browser).
    A pick resolves to a project-local point; two endpoints on different layers
    share `projectOrigin`, so the distance between them is correct, and the
    coordinate readout recovers absolute as `projectLocal + projectOrigin`. Gate:
    a measurement test with two layers at different origins asserting the true
    distance; verify a cross-layer measurement in the browser.
 
-5. **Shared clipping and Compare Studio** (browser-verified). The clip box and
+5. Shared clipping and Compare Studio (browser-verified). The clip box and
    Compare operate in project-local, so they apply consistently across layers.
 
-6. **Persist the frame** (Node-gated, schema bump). Store `projectOrigin` and
+6. Persist the frame (Node-gated, schema bump). Store `projectOrigin` and
    each layer's `sourceOrigin` in the session/project schema (v8) so reopening
    restores the same frame; the `matchSessionToScan` source-identity guard
    already validates each layer before rebase. Gate: a v7→v8 round-trip and a
    migration test (a v7 single-layer session opens as the degenerate frame).
 
-**Mixed-CRS safety.** A layer whose CRS disagrees with the frame's CRS is not
+Mixed-CRS safety. A layer whose CRS disagrees with the frame's CRS is not
 reprojected (still out of scope). It mounts in its own frame and is flagged,
-rather than silently mislocated — the documented no-reprojection limitation,
+rather than silently mislocated: the documented no-reprojection limitation,
 made explicit at the seam. Because the frame carries the authoritative up-axis
 and units, this step also removes the mixed-format multi-cloud divergence where
 the colorbar and inspector read elevation off different axes.
 
 ## Naming the frame at every position read
 
-A raw `cloud.positions` read is not wrong by itself, but it is silent. The
+A raw `cloud.positions` read is correct by itself. It is also silent. The
 buffer is the same `Float32Array` in every frame, so a site that means world
 coordinates and a site that means source-local coordinates are spelled
 identically, and a mistake between them survives review because there is
-nothing in the code to review. That was the residual risk left over from the
-coordinate-integrity work: not too much raw access, but unlabelled raw access.
+nothing in the code to review. The risk is unlabelled raw access, not the
+amount of raw access.
 
 Two mechanisms close it.
 
-**Accessors, where one is honest.** `src/model/pointFrames.ts` holds
+Accessors, where one is honest. `src/model/pointFrames.ts` holds
 `sourcePositions(cloud)` and `renderLocalPositions(chunk)`; both return the
 buffer unchanged, so the label costs nothing and a hot path has no reason to
 route around it. The frames that need arithmetic already had their boundary:
@@ -183,7 +183,7 @@ route around it. The frames that need arithmetic already had their boundary:
 for a placement-aware walk, and `copyPlacedPositions` in
 `src/render/measure/lassoVolumeCompute.ts` for a placed copy.
 
-**A classification for the rest.** Reads that should stay raw (loaders writing
+A classification for the rest. Reads that should stay raw (loaders writing
 the buffer, model internals, the GPU upload boundary, reviewed numeric kernels)
 are listed in `docs/validation/position-frames.json`, keyed by file plus the
 enclosing symbol, each naming the frame it expects and why:

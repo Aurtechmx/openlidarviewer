@@ -43,7 +43,7 @@ would rather not post publicly.
 
 ## Citing the work
 
-Use the **Cite this repository** button on the repository page, which reads
+Use the Cite this repository button on the repository page, which reads
 [CITATION.cff](../../CITATION.cff) and gives you the current reference, including
 BibTeX. Cite the software version and its DOI when you use the tool. Once the
 OpenLiDARViewer paper is published it will carry its own reference for the

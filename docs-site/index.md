@@ -4,7 +4,7 @@ layout: home
 hero:
   name: OpenLiDARViewer
   text: Open any 3D scan in a browser tab
-  tagline: Drone LiDAR, terrestrial laser scans, and phone scans — no install, no upload, no conversion. Local-first, cited, and honest about what it can't tell you.
+  tagline: Drone LiDAR, terrestrial laser scans, and phone scans. No install, no upload, no conversion. Local-first, cited, and honest about what it can't tell you.
   actions:
     - theme: brand
       text: Open the viewer
@@ -18,13 +18,13 @@ hero:
 
 features:
   - title: Local-first by design
-    details: Files are read and rendered in your browser. There is no server to upload to — your data never leaves your device.
+    details: Files are read and rendered in your browser. There is no server to upload to, so your data never leaves your device.
   - title: Twelve import formats, four streaming
-    details: "LAS, LAZ, E57, PLY, OBJ, GLB/GLTF, XYZ, CSV, PCD, PTX, PTS for static loads — plus four streaming paths with bounded memory: progressive COPC and EPT, 3D Tiles PNTS tilesets, and out-of-core LAS / chunked LAZ indexed via OPFS."
+    details: "LAS, LAZ, E57, PLY, OBJ, GLB/GLTF, XYZ, CSV, PCD, PTX, PTS for static loads, plus four streaming paths with bounded memory: progressive COPC and EPT, 3D Tiles PNTS tilesets, and out-of-core LAS / chunked LAZ indexed via OPFS."
     link: /formats/
     linkText: Format matrix
   - title: Honesty about uncertainty
-    details: Every scientific product carries an explicit evidence level, and the claim register records what each result may — and may not — be called.
+    details: Every scientific product carries an explicit evidence level, and the claim register records what each result may and may not be called.
     link: /validation/claim-register
     linkText: Claim register
   - title: Terrain intelligence

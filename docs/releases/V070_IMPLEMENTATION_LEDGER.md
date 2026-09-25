@@ -5108,7 +5108,7 @@ sanitation.
 Method registry: `MethodCategory` gains `'observation'`. `methodRegistry.ts`
 registers `olv.observation.rays`, `.ledger`, `.states`, `.strength`,
 `.shadow-frontier`, `.coverage-gain` and `.station-suggestion` at version 1,
-under the maintainer's approval to reserve the seven ids before most of their
+to reserve the seven ids before most of their
 code exists. Six of the seven summaries say plainly "not implemented in v0.7"
 and name the phase that will build them (O3 for rays, O4 for the ledger, O5
 for shadow frontier, O6 for strength, O10 for Coverage Gain and station
@@ -5419,8 +5419,8 @@ per-voxel figure. Both facts are stated plainly in the code rather than left
 for a reader to discover.
 
 `RayPartitionInput`/`PartialLedger`/`traverseRayChunks`/`mergePartialLedgers`
-are the worker-shaped partition contract SPEC's F9 and the maintainer's
-decision both name: `traverseRayChunks` traverses one partition's chunks
+are the worker-shaped partition contract SPEC's F9 and the partition
+rule both name: `traverseRayChunks` traverses one partition's chunks
 against a fresh table with no shared mutable state across calls, and
 `mergePartialLedgers` folds every partition's rows with a saturating-sum-
 and-flag rule per counter, a bitwise OR per presence word, and the same
@@ -5540,7 +5540,7 @@ against this entry and `methods.md` finds zero em dashes and no regression
 on this file's own 21 pre-existing triads. `gen:v070-status` is regenerated
 after this entry.
 
-**Corrected account (phase O4b):** the paragraph above describes O4's `Map`-
+Corrected account (phase O4b): the paragraph above describes O4's `Map`-
 keyed `LedgerBuilder` as a deliberate scope reduction against OB-LED-03's own
 cited precedent (`voxelDownsample.ts`'s typed-array `VoxelAccumulator`). That
 storage choice is now replaced: `LedgerBuilder` is a typed-array
@@ -5583,7 +5583,7 @@ skipped, 1 pre-existing todo, 0 failures), and `lint:layer-boundaries`,
 `lint:module-graph`, `lint:unreachable-modules`, `lint:method-literals`,
 `lint:oracle-registry` and `lint:doc-narration` all pass.
 
-**Second correction (phase O4b, follow-up):** the previous correction's
+Second correction (phase O4b, follow-up): the previous correction's
 77/119 B/voxel figures were a single sample at 1.5 million occupied voxels,
 deep into a capacity-doubling cycle where every column is amortized over a
 near-full table. Sweeping `measureLedgerBuilderBytesPerVoxel` across
