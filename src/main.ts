@@ -198,7 +198,7 @@ import {
   loadExporters,
   loadExportStudio,
   loadReportEngine,
-  loadDebugOverlay,
+  loadDebugOverlay, loadNavProbe,
   loadTour,
   loadStreamingBenchmark,
   loadInstrumentedRangeSource,
@@ -3568,8 +3568,8 @@ if (debug || benchmark) {
     stage.overlay.append(debugOverlay.element);
     debugOverlay.start();
   });
+  if (urlParams.get('benchmark') === 'nav') void loadNavProbe().then((m) => m.installNavProbe(window));
 }
-
 
 /** Sample live COPC streaming counters for the debug overlay, or null. */
 function streamingDebugSample(): StreamingDebugStats | null {

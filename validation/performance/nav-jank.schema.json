@@ -1,0 +1,576 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openlidarviewer.org/schemas/nav-jank.schema.json",
+  "title": "Navigation jank run record",
+  "description": "One heavy-navigation benchmark record: the environment, one summary per trajectory run, and an aggregate. Frame time is the viewer's accepted per-frame clock delta; a jank event is a frame longer than twice the run's median frame time; a burst is two or more consecutive jank frames.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "env",
+    "runs",
+    "summary"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "enum": [
+        1
+      ]
+    },
+    "env": {
+      "type": "object",
+      "required": [
+        "commit",
+        "browser",
+        "os",
+        "renderer",
+        "dpr",
+        "refreshEstimateHz",
+        "datasetSha256",
+        "trajectoryDigest",
+        "flags",
+        "cache"
+      ],
+      "properties": {
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{7,40}$|^unknown$"
+        },
+        "browser": {
+          "type": "string",
+          "minLength": 1
+        },
+        "os": {
+          "type": "string",
+          "minLength": 1
+        },
+        "renderer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dpr": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "refreshEstimateHz": {
+          "type": "number",
+          "minimum": 0
+        },
+        "datasetSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$|^unknown$"
+        },
+        "trajectoryDigest": {
+          "type": "string",
+          "minLength": 1
+        },
+        "flags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cache": {
+          "type": "string",
+          "enum": [
+            "cold",
+            "warm"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "runs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "summary"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "summary": {
+            "type": "object",
+            "required": [
+              "frames",
+              "drawnFrames",
+              "durationMs",
+              "frameMs",
+              "cpuMs",
+              "over",
+              "jank",
+              "inputToDrawMs",
+              "longestStarvationMs",
+              "upload",
+              "lod",
+              "quality",
+              "longTasks"
+            ],
+            "properties": {
+              "frames": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "drawnFrames": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "durationMs": {
+                "type": "number"
+              },
+              "frameMs": {
+                "type": "object",
+                "required": [
+                  "p50",
+                  "p95",
+                  "p99",
+                  "samples"
+                ],
+                "properties": {
+                  "p50": {
+                    "type": "number"
+                  },
+                  "p95": {
+                    "type": "number"
+                  },
+                  "p99": {
+                    "type": "number"
+                  },
+                  "samples": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              },
+              "cpuMs": {
+                "type": "object",
+                "required": [
+                  "p50",
+                  "p95",
+                  "p99"
+                ],
+                "properties": {
+                  "p50": {
+                    "type": "number"
+                  },
+                  "p95": {
+                    "type": "number"
+                  },
+                  "p99": {
+                    "type": "number"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "over": {
+                "type": "object",
+                "required": [
+                  "16.7",
+                  "33.3",
+                  "50",
+                  "100"
+                ],
+                "properties": {
+                  "16.7": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "33.3": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "50": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "100": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              },
+              "jank": {
+                "type": "object",
+                "required": [
+                  "thresholdMs",
+                  "events",
+                  "bursts",
+                  "longestBurst"
+                ],
+                "properties": {
+                  "thresholdMs": {
+                    "type": "number"
+                  },
+                  "events": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "bursts": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "longestBurst": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              },
+              "inputToDrawMs": {
+                "type": "object",
+                "required": [
+                  "p50",
+                  "p95",
+                  "samples"
+                ],
+                "properties": {
+                  "p50": {
+                    "type": "number"
+                  },
+                  "p95": {
+                    "type": "number"
+                  },
+                  "samples": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              },
+              "longestStarvationMs": {
+                "type": "number"
+              },
+              "upload": {
+                "type": "object",
+                "required": [
+                  "passes",
+                  "p95Ms",
+                  "p95Bytes",
+                  "totalBytes",
+                  "stoppedBy"
+                ],
+                "properties": {
+                  "passes": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "p95Ms": {
+                    "type": "number"
+                  },
+                  "p95Bytes": {
+                    "type": "number"
+                  },
+                  "totalBytes": {
+                    "type": "number"
+                  },
+                  "stoppedBy": {
+                    "type": "object",
+                    "required": [
+                      "drained",
+                      "time",
+                      "bytes",
+                      "nodes"
+                    ],
+                    "properties": {
+                      "drained": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "time": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "bytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "nodes": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
+              },
+              "lod": {
+                "type": "object",
+                "required": [
+                  "added",
+                  "removed",
+                  "churnPerSec"
+                ],
+                "properties": {
+                  "added": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "removed": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "churnPerSec": {
+                    "type": "number"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "quality": {
+                "type": "object",
+                "required": [
+                  "transitions",
+                  "byKind",
+                  "events"
+                ],
+                "properties": {
+                  "transitions": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "byKind": {
+                    "type": "object",
+                    "required": [
+                      "edl",
+                      "dpr",
+                      "phase"
+                    ],
+                    "properties": {
+                      "edl": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "dpr": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "phase": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "events": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "t",
+                        "kind",
+                        "from",
+                        "to"
+                      ],
+                      "properties": {
+                        "t": {
+                          "type": "number"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "edl",
+                            "dpr",
+                            "phase"
+                          ]
+                        },
+                        "from": {
+                          "type": [
+                            "number",
+                            "string"
+                          ]
+                        },
+                        "to": {
+                          "type": [
+                            "number",
+                            "string"
+                          ]
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "longTasks": {
+                "type": "object",
+                "required": [
+                  "count",
+                  "byOwner"
+                ],
+                "properties": {
+                  "count": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "byOwner": {
+                    "type": "object",
+                    "required": [
+                      "upload",
+                      "stream",
+                      "edl",
+                      "cull",
+                      "unattributed"
+                    ],
+                    "properties": {
+                      "upload": {
+                        "type": "object",
+                        "required": [
+                          "count",
+                          "totalMs"
+                        ],
+                        "properties": {
+                          "count": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "totalMs": {
+                            "type": "number"
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "stream": {
+                        "type": "object",
+                        "required": [
+                          "count",
+                          "totalMs"
+                        ],
+                        "properties": {
+                          "count": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "totalMs": {
+                            "type": "number"
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "edl": {
+                        "type": "object",
+                        "required": [
+                          "count",
+                          "totalMs"
+                        ],
+                        "properties": {
+                          "count": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "totalMs": {
+                            "type": "number"
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "cull": {
+                        "type": "object",
+                        "required": [
+                          "count",
+                          "totalMs"
+                        ],
+                        "properties": {
+                          "count": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "totalMs": {
+                            "type": "number"
+                          }
+                        },
+                        "additionalProperties": false
+                      },
+                      "unattributed": {
+                        "type": "object",
+                        "required": [
+                          "count",
+                          "totalMs"
+                        ],
+                        "properties": {
+                          "count": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "totalMs": {
+                            "type": "number"
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "runs",
+        "frames",
+        "medianFrameP95Ms",
+        "medianFrameP99Ms",
+        "worstFrameP99Ms",
+        "jankEvents",
+        "jankBursts",
+        "worstStarvationMs",
+        "medianInputToDrawP95Ms",
+        "longTasks"
+      ],
+      "properties": {
+        "runs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "frames": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "medianFrameP95Ms": {
+          "type": "number"
+        },
+        "medianFrameP99Ms": {
+          "type": "number"
+        },
+        "worstFrameP99Ms": {
+          "type": "number"
+        },
+        "jankEvents": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "jankBursts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "worstStarvationMs": {
+          "type": "number"
+        },
+        "medianInputToDrawP95Ms": {
+          "type": "number"
+        },
+        "longTasks": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

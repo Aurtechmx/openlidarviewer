@@ -24,6 +24,7 @@
 import { cameraIsMoving, edlActiveThisFrame } from './edlMotionGate';
 import { shouldRunProbePick } from './hoverPickGate';
 import { noteDrawn } from './drawSignal';
+import { navSink, type NavUploadSample } from '../perf/navProbeHook';
 import type { PointInfo } from './pointInfo';
 import type { ToolMode } from './Viewer';
 
@@ -96,8 +97,10 @@ export interface RenderLoopHost {
 
   /** Is a streaming (COPC/EPT) session attached? */
   hasStreaming(): boolean;
-  /** Drain metered streaming commits (no-op in immediate mode). */
-  pumpStreamingCommit(): void;
+  /** Drain metered streaming commits (no-op in immediate mode); returns the pass result when one ran. */
+  pumpStreamingCommit(): NavUploadSample | null | undefined | void;
+  /** Applied device pixel ratio and refinement phase, read only while the navigation probe records. */
+  navQuality?(): { dpr: number; phase: string };
   /**
    * Advance any node fade that is part way through.
    *
@@ -176,6 +179,9 @@ function frameNow(): number {
  * `render()` call and the overlay re-projection are gated on `rendered`.
  */
 export function runRenderFrame(host: RenderLoopHost): void {
+  // Navigation probe (`?benchmark=nav` only): null in a normal session.
+  const probe = navSink;
+  if (probe) probe.frameBegin(probe.now());
   const delta = host.advanceFrameClock();
   host.recordFrame(delta);
   host.updateNav(delta);
@@ -203,12 +209,20 @@ export function runRenderFrame(host: RenderLoopHost): void {
   // Streamed draw culling, before the draw and at its cadence. A node outside
   // the frustum keeps its mesh, its decoded chunk and its cache slot; only the
   // submission is skipped, so turning back costs a draw rather than a stream.
-  if (rendered && host.hasStreaming()) host.cullStreamingToFrustum();
+  if (rendered && host.hasStreaming()) {
+    const t = probe ? probe.now() : 0;
+    host.cullStreamingToFrustum();
+    if (probe) probe.span('olv:cull', t, probe.now());
+  }
 
+  let drawn = false;
+  let drewEdl = false;
   if (rendered) {
+    drawn = true;
+    drewEdl = wantEdl;
     host.noteRendered();
     // EDL when parked → post-processing pipeline; moving or EDL off → direct.
-    if (wantEdl) host.renderEdl();
+    if (wantEdl) renderEdlSpan(host, probe);
     else host.renderScene();
     host.setEdlPaintedAtRest(wantEdl);
     noteDrawn();
@@ -217,8 +231,10 @@ export function runRenderFrame(host: RenderLoopHost): void {
     // repaint so the depth cue snaps back, then resume idle throttling. A
     // sweep that is still building defers it: the shading belongs after the
     // last phase has merged, not over a quarter of one.
+    drawn = true;
+    drewEdl = true;
     host.noteRendered();
-    host.renderEdl();
+    renderEdlSpan(host, probe);
     host.setEdlPaintedAtRest(true);
     noteDrawn();
   } else {
@@ -231,11 +247,21 @@ export function runRenderFrame(host: RenderLoopHost): void {
   // differently on the same scan; `schedulerCadence` holds the policy. The
   // commit pump and the fade step run every iteration regardless.
   if (host.hasStreaming()) {
-    host.pumpStreamingCommit();
+    if (probe) {
+      const t = probe.now();
+      const res = host.pumpStreamingCommit();
+      const end = probe.now();
+      probe.upload(res || null, end - t);
+      probe.span('olv:upload', t, end);
+    } else host.pumpStreamingCommit();
     // Every iteration, drawn or not: a fade that only advanced on drawn
     // frames would stall behind the idle throttle part way through.
     host.stepStreamingFades();
-    if (host.streamingTickDue(nowMs)) host.tickStreaming();
+    if (host.streamingTickDue(nowMs)) {
+      const t = probe ? probe.now() : 0;
+      host.tickStreaming();
+      if (probe) probe.span('olv:stream', t, probe.now());
+    }
   }
 
   // After render, camera matrices are current — project the tool overlays.
@@ -277,4 +303,15 @@ export function runRenderFrame(host: RenderLoopHost): void {
     host.renderAnnotateOverlay();
     host.notifyFrameDrawn();
   }
+  if (probe) {
+    const q = host.navQuality?.() ?? { dpr: 1, phase: 'full-refine' };
+    probe.frameEnd(probe.now(), drawn, drewEdl, q.dpr, q.phase);
+  }
+}
+
+/** Paint through the EDL post-process, timed as an 'olv:edl' span while the probe records. */
+function renderEdlSpan(host: RenderLoopHost, probe: typeof navSink): void {
+  const t = probe ? probe.now() : 0;
+  host.renderEdl();
+  if (probe) probe.span('olv:edl', t, probe.now());
 }

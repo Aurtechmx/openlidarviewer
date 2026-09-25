@@ -88,6 +88,7 @@ import { computeSharedElevationRange, elevationOptsFor, applyElevationColors } f
 import { type ActiveColorbar } from './activeColorbar';
 import { captureSnapshot, canvasToBlob, type SnapshotHost, type SnapshotOptions } from './snapshot';
 import { runRenderFrame, type RenderLoopHost } from './renderLoop';
+import { feedFrameMs } from '../perf/navProbeHook';
 import { type ClipBox, clipKeepsPoint, countKept } from './clip/clipBox';
 import { edlDefaultEnabled, EDL_DEFAULTS } from './edl';
 import { angularVelocity } from './angularVelocity';
@@ -5036,9 +5037,7 @@ export class Viewer {
     this._frameTimes[this._frameWrite] = ms;
     this._frameWrite = (this._frameWrite + 1) % this._frameTimes.length;
     if (this._frameCount < this._frameTimes.length) this._frameCount++;
-    // Per-frame streaming-session sampling for the benchmark — only when a
-    // benchmark is collecting on a streaming scan. The hot path stays cheap.
-    this._streaming?.benchmark?.recordFrameMs(ms);
+    feedFrameMs(this._streaming?.benchmark, ms); // streaming benchmark and nav probe; both null in a normal session
   }
 
   /** A coarse mobile check — a small viewport, matching the app's phone heuristic. */
@@ -6051,6 +6050,7 @@ export class Viewer {
       activityUntilMs: () => this._demand.gate.activityUntilMs,
       cameraActivityUntilMs: () => this._demand.gate.cameraUntilMs,
       edlEnabled: () => this._edlEnabled,
+      navQuality: () => ({ dpr: this._renderer.getPixelRatio(), phase: this._refinementPhasesEnabled ? this._phases.phase : 'full-refine' }),
       applyAdaptiveDpr: (moving, delta, nowMs, rendered) => {
         this._updateRefinementAndDpr(moving, delta, nowMs, rendered);
         // Shared coarse-LOD gain follows the live phase — a uniform write, so

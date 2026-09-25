@@ -12,6 +12,7 @@ import type { StreamingNodeRecord } from '../../io/copc/copcTypes';
 import type { StreamingNode, NodeState } from './StreamingNode';
 import { createStreamingNode } from './StreamingNode';
 import { LoadError } from '../../io/loadErrors';
+import { navSink } from '../../perf/navProbeHook';
 
 /**
  * Whether two records sharing an id disagree on a load-bearing immutable field.
@@ -181,6 +182,9 @@ export class StreamingNodeStore {
    * the `resident` state.
    */
   setState(node: StreamingNode, state: NodeState, residentPointCount = 0): void {
+    if (navSink && (node.state === 'resident') !== (state === 'resident')) {
+      navSink.lodChange(state === 'resident' ? 1 : 0, state === 'resident' ? 0 : 1);
+    }
     if (node.state === 'resident') {
       this._residentPoints -= node.residentPointCount;
       this._resident.delete(node);
