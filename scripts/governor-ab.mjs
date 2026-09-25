@@ -47,6 +47,28 @@ export const CRITERIA = Object.freeze({
   digestsIdentical: true,
 });
 
+/**
+ * The v2 criteria (render scale and presentation point budget). Fixed before
+ * any v2 measurement; not to be changed after seeing results. Every clause
+ * must pass on every trajectory:
+ *
+ * 1. p95 frame time (active window) at least 10% lower with the governor on;
+ * 2. frames over 50 ms (active window) not higher (median);
+ * 3. quality transitions at most 6 per trajectory with the governor on;
+ * 4. time to stationary quality after the last input at most 500 ms above off
+ *    (medians);
+ * 5. after settling, render scale and point budget back at their configured
+ *    values in every on run (governor outputs 1 and 1, no mesh still reduced,
+ *    backing ratio equal to the off runs');
+ * 6. scientific result digests identical (presentationInvariance, which
+ *    covers the v2 outputs active).
+ */
+export const CRITERIA_V2 = Object.freeze({
+  ...CRITERIA,
+  timeToStationaryMaxExtraMs: 500,
+  settledRestored: true,
+});
+
 /** Off/on pairs per trajectory. */
 export const PAIRS = 5;
 
@@ -108,7 +130,8 @@ function samples(sessions) {
     for (const [name, t] of Object.entries(r.trajectories)) {
       if (!t.warm) continue;
       const row = runMetrics(t.warm.runs[0].summary);
-      ((out[name] ??= { off: [], on: [] })[s.cond]).push({ pair: s.pair, session: s.index, ...row });
+      const meta = (t.runMeta ?? []).filter((m) => m.cache === 'warm').at(-1);
+      ((out[name] ??= { off: [], on: [] })[s.cond]).push({ pair: s.pair, session: s.index, ...row, presentation: meta?.presentation ?? null });
     }
   }
   return out;
@@ -131,6 +154,20 @@ export function judgeTrajectory(off, on, digestsIdentical) {
     qualityTransitionsOn: { off: qOff, on: qOn, threshold: CRITERIA.qualityTransitionsMaxOn, pass: qOn.median <= CRITERIA.qualityTransitionsMaxOn },
     digestsIdentical: { pass: digestsIdentical },
   };
+  const tOff = stat(off.map((r) => r.timeToStationaryQualityMs));
+  const tOn = stat(on.map((r) => r.timeToStationaryQualityMs));
+  criteria.timeToStationary = {
+    off: tOff, on: tOn, extraMs: tOn.median - tOff.median, threshold: CRITERIA_V2.timeToStationaryMaxExtraMs,
+    pass: tOn.median - tOff.median <= CRITERIA_V2.timeToStationaryMaxExtraMs,
+  };
+  const offRatios = new Set(off.map((r) => r.presentation?.backingRatio ?? null));
+  const settled = on.map((r) => {
+    const g = r.presentation?.governor ?? null;
+    const ok = g !== null && g.renderScale === 1 && g.pointBudgetFraction === 1 && g.reducedMeshes === 0
+      && offRatios.size === 1 && offRatios.has(r.presentation.backingRatio) && r.presentation.backingRatio !== null;
+    return { pair: r.pair, governor: g, backingRatio: r.presentation?.backingRatio ?? null, ok };
+  });
+  criteria.settledRestored = { offBackingRatios: [...offRatios], on: settled, pass: settled.every((x) => x.ok) };
   return { criteria, failed: Object.entries(criteria).filter(([, c]) => !c.pass).map(([k]) => k) };
 }
 
@@ -169,7 +206,7 @@ export function evaluate(sha = headSha()) {
   const first = sessions[0].r;
   const record = {
     kind: 'olv-governor-ab',
-    version: 1,
+    version: 2,
     generatedAt: new Date().toISOString(),
     commit: sha,
     machine: MACHINE,
@@ -182,9 +219,11 @@ export function evaluate(sha = headSha()) {
         'p95 frame time (active window) improves by at least 10% with the governor on (median of runs)',
         'frames over 50 ms (active window) do not increase (median; also report max)',
         'quality transitions per trajectory at most 6 with the governor on',
-        'scientific result digests identical on vs off (presentationInvariance with governor on/off plus any digests the runner records)',
+        'scientific result digests identical on vs off (presentationInvariance with governor on/off, v2 outputs active, plus any digests the runner records)',
+        'time to stationary quality after the last input at most 500 ms above off (medians)',
+        'after settling, render scale and point budget back at their configured values in every on run',
       ],
-      constants: CRITERIA,
+      constants: CRITERIA_V2,
     },
     scientificDigests: { presentationInvariance: invariance, runner: [...new Set(runnerDigests)], pairRefusals },
     trajectories,
@@ -203,14 +242,16 @@ const f1 = (v) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
 
 /** The per-trajectory table: off vs on medians with IQR for each criterion. */
 export function formatVerdict(record) {
-  const rows = [['trajectory', 'p95 off', 'p95 on', 'Δp95', '>50 off', '>50 on (max)', 'q.trans off', 'q.trans on', 'failed']];
+  const rows = [['trajectory', 'p95 off', 'p95 on', 'Δp95', '>50 off', '>50 on (max)', 'q.trans off', 'q.trans on', 'tsq off', 'tsq on', 'restored', 'failed']];
   for (const [n, t] of Object.entries(record.trajectories)) {
     const c = t.criteria;
     const mi = (s) => `${f1(s.median)} ±${f1(s.iqr)}`;
     rows.push([
       n, mi(c.p95Improvement.off), mi(c.p95Improvement.on), `${(c.p95Improvement.improvement * 100).toFixed(1)}%`,
       mi(c.over50NoIncrease.off), `${mi(c.over50NoIncrease.on)} (${c.over50NoIncrease.on.max})`,
-      mi(c.qualityTransitionsOn.off), mi(c.qualityTransitionsOn.on), t.failed.join(',') || '-',
+      mi(c.qualityTransitionsOn.off), mi(c.qualityTransitionsOn.on),
+      c.timeToStationary ? mi(c.timeToStationary.off) : '-', c.timeToStationary ? mi(c.timeToStationary.on) : '-',
+      c.settledRestored ? String(c.settledRestored.pass) : '-', t.failed.join(',') || '-',
     ]);
   }
   const w = rows[0].map((_, i) => Math.max(...rows.map((r) => r[i].length)));

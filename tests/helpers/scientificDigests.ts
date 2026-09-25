@@ -205,6 +205,8 @@ export interface ResolvedPresentation {
   /** Backing-store pixel ratio after the quality ceiling and governor pressure. */
   readonly backingPixelRatio: number;
   readonly edlDrawn: boolean;
+  /** Drawn fraction of each point mesh after the governor's v2 point budget. */
+  readonly drawnPointFraction: number;
   /** Canvas CSS size: what `canvas.clientWidth/clientHeight` return. Unchanged by DPR. */
   readonly cssWidth: number;
   readonly cssHeight: number;
@@ -213,7 +215,7 @@ export interface ResolvedPresentation {
 
 const DEVICE: QualityDevice = { tier: 'high', isMobile: false, backend: 'webgl2' };
 
-const GOVERNOR_INPUT: Record<GovernorSetting, FrameBudgetInput> = {
+export const GOVERNOR_INPUT: Record<GovernorSetting, FrameBudgetInput> = {
   nominal: {
     phase: 'full-refine', tweening: false, recentMedianMs: 8, recentHighMs: 10,
     pendingGpuNodes: 0, streamingBacklog: 0, continuityPending: false, mobileTier: false,
@@ -229,7 +231,7 @@ const GOVERNOR_INPUT: Record<GovernorSetting, FrameBudgetInput> = {
  * feeds the frame times (median and high as stated), the upload queue reports
  * the pending nodes, and one more frame resolves the policy with them.
  */
-function wiredGovernor(input: FrameBudgetInput): GovernorWiring {
+export function wiredGovernor(input: FrameBudgetInput): GovernorWiring {
   const g = new GovernorWiring(input.mobileTier);
   for (let i = 0; i < GOVERNOR_WINDOW - 1; i++) g.frameMs(input.recentMedianMs);
   g.frameMs(input.recentHighMs);
@@ -249,6 +251,7 @@ export function resolvePresentation(s: PresentationSettings): ResolvedPresentati
     policy: gov.policy,
     backingPixelRatio: gov.dpr(ratio, Math.min(ratio, 0.5), ratio),
     edlDrawn: s.edl && gov.edl(),
+    drawnPointFraction: gov.policy.pointBudgetFraction,
     cssWidth: 1200,
     cssHeight: 800,
     pose: s.pose,

@@ -122,3 +122,57 @@ describe('restated constants', () => {
     expect((globalThis as Record<string, unknown>)[GOVERNOR_SLOT]).toBe(g);
   });
 });
+
+describe('v2 presentation outputs', () => {
+  const mesh = (n: number) => ({ geometry: { isInstancedBufferGeometry: true, instanceCount: n, attributes: { aPos: { count: n } } } });
+
+  it('moving under load: render scale to 0.6, points to 40%; both restore when stationary', () => {
+    const g = new GovernorWiring();
+    fill(g, msAt(0.8));
+    g.frame('moving', false);
+    expect(g.policy.renderScale).toBe(0.6);
+    expect(g.policy.pointBudgetFraction).toBe(0.4);
+    expect(g.dpr(1, 1, 1)).toBe(0.6);
+    expect(g.dpr(2, 2, 2)).toBe(1.2); // floor at max: only the render scale acts
+    const big = mesh(1000);
+    const small = mesh(10);
+    const scene = { children: [big, { children: [small] }] };
+    g.points(scene);
+    expect(big.geometry.instanceCount).toBe(400);
+    expect(small.geometry.instanceCount).toBe(4);
+    // Lighter frames while moving never raise either output.
+    fill(g, msAt(0));
+    g.frame('moving', false);
+    expect(g.policy.renderScale).toBe(0.6);
+    // Stationary: points at once, render scale one step per RESTORE_FRAMES frames.
+    g.frame('coverage', false);
+    expect(g.policy.pointBudgetFraction).toBe(1);
+    g.points(scene);
+    expect(big.geometry.instanceCount).toBe(1000);
+    expect(small.geometry.instanceCount).toBe(10);
+    const scales: number[] = [];
+    for (let i = 0; i < 8; i++) { g.frame('full-refine', false); scales.push(g.policy.renderScale); }
+    expect(scales[scales.length - 1]).toBe(1);
+    expect(new Set(scales).size).toBeGreaterThan(1); // gradual, not one jump
+    expect(g.dpr(1, 1, 1)).toBe(1);
+    expect(g.presentation()).toEqual({ renderScale: 1, pointBudgetFraction: 1, reducedMeshes: 0 });
+    expect(g.renderScaleChanges).toBe(3);
+  });
+
+  it('never below the floors, and a count set by its owner is left alone', () => {
+    const g = new GovernorWiring();
+    fill(g, msAt(5));
+    g.frame('moving', true);
+    expect(g.policy.renderScale).toBeGreaterThanOrEqual(0.6);
+    expect(g.policy.pointBudgetFraction).toBeGreaterThanOrEqual(0.4);
+    const preview = { geometry: { isInstancedBufferGeometry: true, instanceCount: 3, attributes: { aPos: { count: 100 } } } };
+    const owned = mesh(100);
+    g.points({ children: [preview, owned] });
+    expect(preview.geometry.instanceCount).toBe(3);
+    expect(owned.geometry.instanceCount).toBe(40);
+    owned.geometry.instanceCount = 77; // its owner rewrote it
+    g.frame('full-refine', false);
+    g.points({ children: [owned] });
+    expect(owned.geometry.instanceCount).toBe(77);
+  });
+});

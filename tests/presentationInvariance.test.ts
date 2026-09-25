@@ -19,7 +19,9 @@
  *   - frame budget governor     the wired governor (GovernorWiring, as `?governor=on`
  *                               installs it) fed a nominal ('idle') and a stressed
  *                               ('moving', loaded) frame window → dprPressure applied to
- *                               the DPR step, allowEdl to the EDL gate, hover
+ *                               the DPR step, allowEdl to the EDL gate, hover;
+ *                               v2: renderScale (floor 0.6) caps the ratio and
+ *                               pointBudgetFraction (floor 0.4) the drawn count
  *   - camera pose               two top-down orthographic cameras (different centre and
  *                               zoom); the lasso is the same world footprint projected
  *                               through each pose's projector
@@ -50,6 +52,9 @@ import {
   STATIC_LASSO_WORLD,
   STRADDLE_LASSO_WORLD,
   WITHHELD_LIFT,
+  GOVERNOR_INPUT,
+  wiredGovernor,
+  digestOf,
   type BudgetSetting,
   type GovernorSetting,
   type PoseId,
@@ -88,6 +93,36 @@ describe('presentation matrix', () => {
     expect(new Set(MATRIX.map((rp) => rp.policy.allowDetailedHover))).toEqual(new Set([true, false]));
     expect(new Set(MATRIX.map((rp) => rp.edlDrawn))).toEqual(new Set([true, false]));
     expect(new Set(MATRIX.map((rp) => rp.backingPixelRatio)).size).toBeGreaterThan(2);
+  });
+
+  it('the v2 outputs are active in the stressed cells and off in the nominal ones', () => {
+    for (const rp of MATRIX) {
+      const stressed = rp.settings.governor === 'stressed';
+      expect(rp.policy.renderScale, label(rp)).toBe(stressed ? 0.6 : 1);
+      expect(rp.drawnPointFraction, label(rp)).toBe(stressed ? 0.4 : 1);
+    }
+    const lowRes = MATRIX.find((rp) => rp.settings.governor === 'stressed' && rp.settings.dpr === 1)!;
+    expect(lowRes.backingPixelRatio).toBeLessThanOrEqual(0.6);
+  });
+});
+
+describe('v2 point budget: drawing fewer instances leaves every result alone', () => {
+  it('results after the governor reduced the static meshes equal the unreduced ones', () => {
+    const scene = staticScene();
+    const ref = MATRIX.find((rp) => rp.settings.governor === 'nominal')!;
+    const before = [dtmOutcome(scene, ref).digest, stockpileOutcome(scene, ref, STATIC_LASSO_WORLD).digest,
+      profileOutcome(scene, ref).seriesDigest, scanReportDensity(scene)];
+    const gov = wiredGovernor(GOVERNOR_INPUT.stressed);
+    const n = scene.cloud.pointCount;
+    const positions = digestOf(Array.from(scene.cloud.positions));
+    const mesh = { geometry: { isInstancedBufferGeometry: true, instanceCount: n, attributes: { aPos: { count: n } } } };
+    gov.points({ children: [mesh] });
+    expect(mesh.geometry.instanceCount).toBe(Math.floor(n * 0.4));
+    expect(digestOf(Array.from(scene.cloud.positions))).toBe(positions);
+    for (const rp of MATRIX.filter((r) => r.settings.governor === 'stressed')) {
+      expect([dtmOutcome(scene, rp).digest, stockpileOutcome(scene, rp, STATIC_LASSO_WORLD).digest,
+        profileOutcome(scene, rp).seriesDigest, scanReportDensity(scene)], label(rp)).toEqual(before);
+    }
   });
 });
 

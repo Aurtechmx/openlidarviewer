@@ -22,6 +22,8 @@ export interface GovernorSink {
   dpr(target: number, floor: number, maxDpr: number): number;
   /** Whether this frame's policy allows Eye Dome Lighting. */
   edl(): boolean;
+  /** Apply the drawn point fraction to the point meshes under `root`. */
+  points(root: object): void;
   /** The per-frame upload limits after the policy's commit scale. */
   uploadLimits<L extends { readonly maxNodes?: number; readonly maxBytes?: number }>(limits: L, pending: number): L;
 }
@@ -47,4 +49,9 @@ export function governor(): GovernorSink | null {
 /** The adaptive DPR target after the governor's pressure; `target` itself when none is installed. */
 export function governDpr(target: number, floor: number, maxDpr: number): number {
   return governor()?.dpr(target, floor, maxDpr) ?? target;
+}
+
+/** Draw the point meshes under `root` at the governor's point fraction; no-op when none is installed. */
+export function governPoints(root: object): void {
+  governor()?.points(root);
 }

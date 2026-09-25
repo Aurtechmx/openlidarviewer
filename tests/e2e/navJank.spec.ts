@@ -145,6 +145,12 @@ interface RunMeta {
    * Read from the probe's columns when the build exposes them, else empty.
    */
   tail: [number, number, number, number, number][];
+  /**
+   * At the end of the run: the backing-store ratio (canvas width over CSS
+   * width) and, under `?governor=on`, the governor's two v2 outputs, the
+   * meshes still drawn below their full count, and how often each output changed.
+   */
+  presentation: { backingRatio: number | null; governor: Record<string, number> | null };
 }
 
 interface DriveOut {
@@ -268,6 +274,16 @@ async function drive(page: Page, name: string, sceneDiagonal: number): Promise<D
         gapsAfterInput: deltas.filter(([t]) => last !== null && t > last).length,
         quality: summary.quality.events.map((e) => [rel(e.t), e.kind, e.from, e.to] as [number, string, number | string, number | string]),
         tail: [] as [number, number, number, number, number][],
+        presentation: (() => {
+          const c = [...document.querySelectorAll('canvas')].sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)[0];
+          const g = (window as unknown as { __olvGovernor?: {
+            presentation(): Record<string, number>; renderScaleChanges: number; pointBudgetChanges: number;
+          } }).__olvGovernor;
+          return {
+            backingRatio: c && c.clientWidth > 0 ? Math.round((c.width / c.clientWidth) * 100) / 100 : null,
+            governor: g ? { ...g.presentation(), renderScaleChanges: g.renderScaleChanges, pointBudgetChanges: g.pointBudgetChanges } : null,
+          };
+        })(),
       };
       if (cols?._f && cols._tEnd && cols._drawn && cols._edl && cols._wake && cols._phase && last !== null) {
         for (let k = 0; k < cols._f.count && meta.tail.length < 200; k++) {

@@ -28,7 +28,7 @@ import { governor } from './perf/governorHook';
 import { navSink, navDrive, stepNav, type NavProbeSink, type NavUploadSample } from '../perf/navProbeHook';
 
 export { feedFrameMs } from '../perf/navProbeHook';
-export { governDpr } from './perf/governorHook';
+export { governDpr, governPoints } from './perf/governorHook';
 import type { PointInfo } from './pointInfo';
 import type { ToolMode } from './Viewer';
 
