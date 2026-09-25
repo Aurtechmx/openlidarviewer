@@ -33,6 +33,7 @@
 import { el } from './dom';
 import { buildColorbarSvg, formatColorbarValue } from '../render/colorbar';
 import type { ActiveColorbar } from '../render/activeColorbar';
+import { MOBILE_LAYOUT_QUERY } from './isMobileDevice';
 
 export class ColorbarOverlay {
   /** The overlay card — append to `stage.overlay`. Hidden until a spec arrives. */
@@ -126,5 +127,33 @@ export class ColorbarOverlay {
 
   private _setVisible(visible: boolean): void {
     this.element.classList.toggle('olv-hidden', !visible);
+    if (visible) this._place();
+  }
+
+  /** Where the overlay was mounted, so it can go back there. */
+  private _home: HTMLElement | null = null;
+
+  /**
+   * Wherever the workspace rails show (desktop and large-touch), the legend
+   * docks at the top of the right rail beside the colour controls it
+   * explains. Floating mid-stage it landed on, or showed through, the
+   * navigation card at common tablet and laptop sizes. The phone layout keeps
+   * the floating card.
+   */
+  private _place(): void {
+    if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return;
+    const rail = document.querySelector<HTMLElement>('.olv-right-rail');
+    const phone = typeof matchMedia === 'function' && matchMedia(MOBILE_LAYOUT_QUERY).matches;
+    const parent = this.element.parentElement;
+    if (rail && !phone) {
+      if (parent !== rail) {
+        if (parent) this._home = parent;
+        rail.prepend(this.element);
+      }
+      this.element.classList.add('olv-colorbar-docked');
+    } else {
+      if (this._home && parent !== this._home) this._home.append(this.element);
+      this.element.classList.remove('olv-colorbar-docked');
+    }
   }
 }

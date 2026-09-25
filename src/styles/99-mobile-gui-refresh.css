@@ -317,7 +317,15 @@
    (the MOBILE_LAYOUT_QUERY layout) never match: they are under 768 px wide or
    under 501 px tall. A fine or hovering pointer never matches either. */
 @media (pointer: coarse) and (hover: none) and (min-width: 768px) and (min-height: 600px) {
-  :root { --olv-rail-width: 320px; }
+  /* Rails as wide as the screen allows, narrow enough at 1024 px that the
+     navigation card fits between the two 44 px rail tabs. */
+  :root {
+    --olv-rail-width: clamp(285px, 25vw, 320px);
+    --olv-right-rail-width: clamp(260px, 23vw, 340px);
+  }
+  /* Centre the navigation card in the stage between the rails, not in the
+     viewport, so neither rail tab lands on its chips. */
+  .olv-navbar { left: calc(50% + (var(--olv-rail-width) - var(--olv-right-rail-width)) / 2); }
   .olv-left-panels button, .olv-left-panels summary, .olv-left-panels select,
   .olv-left-panels input:not([type='checkbox']):not([type='radio']),
   .olv-right-rail button, .olv-right-rail summary, .olv-right-rail select,
@@ -335,8 +343,6 @@
   .olv-dock .olv-tool { min-height: 48px; padding-inline: 12px; }
   .olv-rail-tab, .olv-right-rail-tab { width: 44px; height: 88px; }
   .olv-rail-tab:hover, .olv-right-rail-tab:hover { width: 44px; }
-  /* The wider right-rail tab would sit under the colour legend; clear it. */
-  .olv-colorbar { right: calc(var(--olv-right-rail-width, 232px) + 66px); }
   /* No precise drags: the rail width is fixed above, so the corner grip goes,
      and the workbench splitter gets a finger-wide strip. */
   .olv-mp-resize { display: none; }

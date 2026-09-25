@@ -87,7 +87,15 @@ export function wireDockClearance(dock: HTMLElement, column: HTMLElement): () =>
     try {
       const ro = new ResizeObserver(() => {
         const h = dock.offsetHeight; // 0 while hidden (display: none)
-        column.style.setProperty('--olv-dock-clear', h > 0 ? `${h + 14 + 8}px` : '80px');
+        const clear = h > 0 ? `${h + 14 + 8}px` : '80px';
+        column.style.setProperty('--olv-dock-clear', clear);
+        // The right rail ends above the dock too (40-inspector.css). Written
+        // only on change and outside the observer callback: a same-frame write
+        // re-lays-out the stage and trips the ResizeObserver loop guard.
+        const root = document.documentElement.style;
+        if (root.getPropertyValue('--olv-dock-clear') !== clear) {
+          requestAnimationFrame(() => root.setProperty('--olv-dock-clear', clear));
+        }
       });
       ro.observe(dock);
       observer = ro;

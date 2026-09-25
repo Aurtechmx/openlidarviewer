@@ -51,28 +51,36 @@ async function smallTargets(page: Page, engine: string): Promise<string[]> {
 }
 
 /**
- * Controls whose centre is covered by one of the floating overlays: the colour
- * legend, the status toast or the navigation card. A control counts as covered
- * when elementFromPoint at its centre lands inside one of those overlays and
- * the control is not itself part of that overlay.
+ * Controls whose centre is covered by anything else: elementFromPoint at the
+ * centre of every visible control must land on the control or a descendant.
+ * A control scrolled out of its own scroll container (its centre outside a
+ * clipping ancestor) is not visible, so it is skipped rather than reported.
  */
-async function coveredByOverlays(page: Page): Promise<string[]> {
+async function coveredControls(page: Page): Promise<string[]> {
   return page.evaluate(() => {
-    const OVERLAYS = '.olv-colorbar, .olv-lasso-toast.olv-visible, .olv-navbar';
     const out: string[] = [];
+    const clippedAway = (c: HTMLElement, x: number, y: number): boolean => {
+      for (let a = c.parentElement; a; a = a.parentElement) {
+        const cs = getComputedStyle(a);
+        if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
+        const r = a.getBoundingClientRect();
+        if (x < r.left || x > r.right || y < r.top || y > r.bottom) return true;
+      }
+      return false;
+    };
     for (const c of document.querySelectorAll<HTMLElement>('button, a[href], input, select, summary, [role="button"], [role="tab"]')) {
       const r = c.getBoundingClientRect();
       if (r.width === 0 || r.height === 0 || getComputedStyle(c).visibility === 'hidden') continue;
-      if (c.closest('.olv-lasso-toast:not(.olv-visible)')) continue; // faded-out toast: not shown
+      if (c.closest('.olv-lasso-toast:not(.olv-visible), [aria-hidden="true"], [inert]')) continue;
+      if (!c.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
       const x = r.left + r.width / 2;
       const y = r.top + r.height / 2;
       if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
+      if (clippedAway(c, x, y)) continue;
       const hit = document.elementFromPoint(x, y);
       if (!hit || c.contains(hit)) continue;
-      const over = hit.closest(OVERLAYS);
-      if (over && !over.contains(c)) {
-        out.push(`${c.className} "${(c.textContent ?? '').trim().slice(0, 20)}" under ${over.className}`);
-      }
+      const by = hit.closest<HTMLElement>('[class]');
+      out.push(`${c.className} "${(c.textContent ?? '').trim().slice(0, 20)}" under ${by?.className ?? hit.tagName}`);
     }
     return out;
   });
@@ -134,12 +142,12 @@ for (const size of [{ width: 1280, height: 800 }, { width: 1024, height: 768 }])
       await expect(page.locator('.olv-lasso-toast.olv-visible')).toBeVisible();
       await expect(page.locator('.olv-navbar')).toBeVisible();
       await page.waitForTimeout(500); // let the toast's move settle before hit-testing
-      expect(await coveredByOverlays(page)).toEqual([]);
+      expect(await coveredControls(page)).toEqual([]);
       await page.screenshot({ path: `test-results/large-touch-${size.width}x${size.height}-toast-${info.project.name}.png` });
       // Once the toast times out the legend is back, and still covers nothing.
       await expect(page.locator('.olv-lasso-toast.olv-visible')).toHaveCount(0, { timeout: 10_000 });
       await expect(page.locator('.olv-colorbar')).toBeVisible();
-      expect(await coveredByOverlays(page)).toEqual([]);
+      expect(await coveredControls(page)).toEqual([]);
 
       expect(await smallTargets(page, info.project.name)).toEqual([]);
       await noHorizontalScroll(page);
@@ -210,19 +218,25 @@ for (const size of [{ width: 1280, height: 800 }, { width: 1024, height: 768 }])
   });
 }
 
-test.describe('fine pointer at the same size', () => {
-  test.use({ viewport: { width: 1280, height: 800 } });
+for (const size of [{ width: 1280, height: 800 }, { width: 1024, height: 768 }]) {
+  test.describe(`fine pointer ${size.width}x${size.height}`, () => {
+    test.use({ viewport: size });
 
-  test('keeps the desktop density (the large-touch rules do not apply)', async ({ page }) => {
-    await openScan(page);
-    expect(await page.evaluate((q) => matchMedia(q).matches, LARGE_TOUCH_LAYOUT_QUERY)).toBe(false);
-    const tab = await page.locator('.olv-rail-tab').boundingBox();
-    expect(tab?.width).toBeLessThan(44);
-    const chip = await page.locator('.olv-ws-tab').first().boundingBox();
-    expect(chip?.height).toBeLessThan(44);
-    // The overlay fix is not large-touch only: the desktop had the same overlap.
-    await expect(page.locator('.olv-lasso-toast.olv-visible')).toBeVisible();
-    await page.waitForTimeout(500);
-    expect(await coveredByOverlays(page)).toEqual([]);
+    test('keeps the desktop density, and nothing sits over a control', async ({ page }) => {
+      await openScan(page);
+      expect(await page.evaluate((q) => matchMedia(q).matches, LARGE_TOUCH_LAYOUT_QUERY)).toBe(false);
+      const tab = await page.locator('.olv-rail-tab').boundingBox();
+      expect(tab?.width).toBeLessThan(44);
+      const chip = await page.locator('.olv-ws-tab').first().boundingBox();
+      expect(chip?.height).toBeLessThan(44);
+      // The overlap fixes are not large-touch only: the desktop had them too.
+      await expect(page.locator('.olv-lasso-toast.olv-visible')).toBeVisible();
+      await page.waitForTimeout(500);
+      expect(await coveredControls(page)).toEqual([]);
+      // The right rail ends above the dock.
+      const rail = await page.locator('.olv-right-rail').boundingBox();
+      const dock = await page.locator('.olv-dock').boundingBox();
+      if (rail && dock && rail.x < dock.x + dock.width) expect(rail.y + rail.height).toBeLessThanOrEqual(dock.y);
+    });
   });
-});
+}

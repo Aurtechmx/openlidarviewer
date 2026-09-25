@@ -47,7 +47,13 @@
 /* A status toast lifted over the navigation card (panelChrome.ts) lands
    mid-stage, where this legend floats: the legend steps aside until the toast
    times out, so neither hides the other's controls. */
-body:has(.olv-lasso-toast.olv-visible[data-lifted]) .olv-colorbar { visibility: hidden; }
+body:has(.olv-lasso-toast.olv-visible[data-lifted]) .olv-colorbar:not(.olv-colorbar-docked) { visibility: hidden; }
+/* Docked at the top of the right rail (ColorbarOverlay.ts): a card in the
+   rail's flow, not a floating overlay. */
+.olv-colorbar.olv-colorbar-docked {
+  position: static; transform: none; right: auto; top: auto; z-index: auto;
+  flex-shrink: 0;
+}
 
 /* ─── Layer Health card ──────────────────────────────────────────────
  * Per-layer spatial facts (CRS, units, datum, compatibility, frame
