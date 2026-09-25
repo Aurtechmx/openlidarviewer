@@ -6545,3 +6545,19 @@ that `DisplayState` or calls into `ContinuityRuntime` at all, because the
 subsystem is still unreachable from `main.ts`. The generation a history
 surface would need to invalidate against exists and is measured; it has
 nowhere to be read from yet.
+
+### L103 · PARTIAL · SCIENTIFIC
+
+"There is neither" is now half right. L114 measured a real browser session
+for the Continuity Field: WebGPU creates all three history surfaces and
+WebGL 2 reports `EXT_color_buffer_float` and an R32F framebuffer complete,
+recorded in `validation/renderer-capability/`. A device to render on exists;
+`docs/continuity-field.md:63-67` and `verify-renderer-benchmark.mjs:16-20`
+both say so now, correcting the same repeated claim.
+
+What is still missing is the wiring: nothing calls the Continuity Field from
+a renderer, so no frame has ever been drawn through it and a screenshot
+corpus has nothing to screenshot. There is still no phone, tablet or WebKit
+device; the probe is one Chromium session on one laptop. The ten
+deterministic grid scenes this account built stand as they were: a rule
+check, not a substitute for either gap.

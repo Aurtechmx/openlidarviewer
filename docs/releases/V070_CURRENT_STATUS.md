@@ -9,7 +9,7 @@ entry. This is the latest account of each, which is a different question
 and the one a reader usually has. Where an entry was revisited, the last
 heading in the file wins.
 
-Entries: 166. Revisited at least once: 21.
+Entries: 166. Revisited at least once: 22.
 
 ## Totals
 
@@ -131,7 +131,7 @@ Entries: 166. Revisited at least once: 21.
 | L100 | REFUSED | ARCHITECTURE | 1 |
 | L101 | REFUSED | SCIENTIFIC | 1 |
 | L102 | BUILT | SCIENTIFIC | 1 |
-| L103 | PARTIAL | SCIENTIFIC | 1 |
+| L103 | PARTIAL | SCIENTIFIC | 2 |
 | L104 | MEASURED | SCIENTIFIC | 1 |
 | L105 | MEASURED | ARCHITECTURE | 1 |
 | L106 | MEASURED | ARCHITECTURE | 1 |
