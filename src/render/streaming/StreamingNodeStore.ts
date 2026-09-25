@@ -12,7 +12,15 @@ import type { StreamingNodeRecord } from '../../io/copc/copcTypes';
 import type { StreamingNode, NodeState } from './StreamingNode';
 import { createStreamingNode } from './StreamingNode';
 import { LoadError } from '../../io/loadErrors';
-import { navSink } from '../../perf/navProbeHook';
+import type { NavProbeSink } from '../../perf/navProbeHook';
+
+/**
+ * The navigation probe's sink slot (`NAV_SINK_SLOT` in perf/navProbeHook.ts),
+ * read directly: a value import would split that module into a chunk shared
+ * with the Viewer and add its preload entry to the startup shell.
+ */
+const navSink = (): NavProbeSink | undefined =>
+  (globalThis as { __olvNavSink?: NavProbeSink }).__olvNavSink;
 
 /**
  * Whether two records sharing an id disagree on a load-bearing immutable field.

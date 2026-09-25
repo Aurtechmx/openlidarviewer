@@ -6,6 +6,7 @@ import { navSink, NAV_SINK_SLOT } from '../src/perf/navProbeHook';
 import { buildNavJankRecord, validateJsonSchema, type NavJankEnv } from '../src/perf/navJankRecord';
 import { runRenderFrame, type RenderLoopHost } from '../src/render/renderLoop';
 import { GpuUploadQueue } from '../src/render/gpuUploadQueue';
+import { StreamingNodeStore } from '../src/render/streaming/StreamingNodeStore';
 
 const SCHEMA = JSON.parse(
   readFileSync(fileURLToPath(new URL('../validation/performance/nav-jank.schema.json', import.meta.url)), 'utf8'),
@@ -187,6 +188,28 @@ describe('render loop wiring', () => {
 
   it('touches nothing when no probe runs', () => {
     expect(() => runRenderFrame(host())).not.toThrow();
+  });
+});
+
+describe('LOD churn from the node store', () => {
+  it('counts nodes entering and leaving the resident set', () => {
+    const store = new StreamingNodeStore();
+    const node = store.add({
+      id: '0-0-0-0', key: { depth: 0, x: 0, y: 0, z: 0 }, depth: 0, bounds: [0, 0, 0, 1, 1, 1],
+      pointCount: 10, byteOffset: 0, byteSize: 0, spacing: 1,
+    });
+    const { probe } = manual();
+    probe.start();
+    try {
+      probe.frameBegin(0);
+      store.setState(node, 'queued');
+      store.setState(node, 'resident', 10);
+      store.setState(node, 'resident', 10);
+      store.setState(node, 'unloaded');
+      probe.frameMs(16);
+      probe.frameEnd(1000, true, false, 1, 'full-refine');
+    } finally { probe.stop(); }
+    expect(probe.summarize().lod).toMatchObject({ added: 1, removed: 1 });
   });
 });
 
