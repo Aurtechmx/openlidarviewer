@@ -90,26 +90,28 @@ def f32(x):
     return struct.unpack('<f', struct.pack('<f', x))[0]
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--dir', default=DEFAULT_DIR)
-    args = ap.parse_args()
+REPO_ROOT = os.path.realpath(os.path.join(HERE, '..', '..', '..'))
+MAX_CELLS = 1_000_000  # far above any committed fixture; bounds every loop below
 
-    with open(os.path.join(args.dir, 'terrain_evidence.tif'), 'rb') as fh:
-        data = fh.read()
-    with open(os.path.join(args.dir, 'expected.json'), encoding='utf-8') as fh:
-        exp = json.load(fh)
 
-    failures = []
+def confined_dir(path):
+    """Resolve a CLI directory and refuse anything outside the repository."""
+    target = os.path.realpath(path)
+    if os.path.commonpath([target, REPO_ROOT]) != REPO_ROOT:
+        raise SystemExit('refusing to read outside %s: %s' % (REPO_ROOT, target))
+    return target
 
-    def check(cond, msg):
-        if not cond:
-            failures.append(msg)
 
-    check(hashlib.sha256(data).hexdigest() == exp['sha256'], 'file sha256 differs from expected.json')
-
-    t = read_ifd(data)
+def grid_size(exp):
     cols, rows = exp['cols'], exp['rows']
+    if not (isinstance(cols, int) and isinstance(rows, int)):
+        raise ValueError('cols/rows are not integers')
+    if cols <= 0 or rows <= 0 or cols * rows > MAX_CELLS:
+        raise ValueError('grid %rx%r outside 1..%d cells' % (cols, rows, MAX_CELLS))
+    return cols, rows
+
+
+def check_layout(t, cols, rows, check):
     check(t[256] == [cols] and t[257] == [rows], 'image size')
     check(t[259] == [1], 'compression is not none')
     check(t[277] == [3], 'samples per pixel is not 3')
@@ -120,9 +122,8 @@ def main():
     check(t[278] == [rows], 'rows per strip')
     check(t[279] == [cols * rows * 3 * 4], 'strip byte count')
 
-    nodata = float(t[42113])
-    check(nodata == exp['noData'], 'GDAL_NODATA %r' % t[42113])
 
+def check_band_metadata(t, exp, check):
     meta = ET.fromstring(t[42112])
     names, units = {}, {}
     for item in meta.findall('Item'):
@@ -134,6 +135,8 @@ def main():
     check([names.get(i) for i in range(3)] == exp['bandNames'], 'band names %r' % names)
     check([units.get(i) for i in range(3)] == exp['bandUnits'], 'band units %r' % units)
 
+
+def check_georef(t, exp, rows, check):
     cell = exp['cellSize']
     check(t[33550] == [cell, cell, 0.0], 'pixel scale %r' % t[33550])
     check(t[33922] == [0.0, 0.0, 0.0, exp['xllCorner'], exp['yllCorner'] + rows * cell, 0.0],
@@ -144,8 +147,9 @@ def main():
     check(keys.get(3072) == exp['epsg'], 'projected EPSG %r' % keys.get(3072))
     check(4096 not in keys, 'evidence raster declares a vertical CRS')
 
-    # Decode: row 0 of the file is the north row; expected.json is south-first.
-    off = t[273][0]
+
+def decode_bands(data, off, cols, rows, nodata):
+    # Row 0 of the file is the north row; expected.json is south-first.
     bands = [[None] * (cols * rows) for _ in range(3)]
     o = off
     for r in range(rows):
@@ -155,19 +159,24 @@ def main():
             o += 12
             for b in range(3):
                 bands[b][grid_row * cols + c] = None if vals[b] == nodata else vals[b]
+    return bands
 
+
+def check_bands(bands, exp, n, cell, check):
     for b, key in enumerate(['supportCount', 'interpolationDistance', 'cellState']):
-        bad = [i for i in range(cols * rows) if bands[b][i] != exp[key][i]]
+        bad = [i for i in range(n) if bands[b][i] != exp[key][i]]
         check(not bad, '%s differs at cells %r' % (key, bad[:5]))
-
-    count, dist, state = bands
-    for i in range(cols * rows):
+    dist = bands[1]
+    for i in range(n):
         if exp['interpDistanceCells'][i] is not None:
             check(dist[i] == f32(exp['interpDistanceCells'][i] * cell),
                   'band 2 != interpDistanceCells x cell size at %d' % i)
 
-    measured = [(i % cols, i // cols) for i in range(cols * rows) if count[i] is not None and count[i] > 0]
-    for i in range(cols * rows):
+
+def check_recomputed(bands, cols, n, cell, check):
+    count, dist, state = bands
+    measured = [(i % cols, i // cols) for i in range(n) if count[i] is not None and count[i] > 0]
+    for i in range(n):
         if count[i] is None:
             continue
         x, y = i % cols, i // cols
@@ -177,13 +186,48 @@ def main():
         check((state[i] == 4) == (count[i] == 0 and steps >= 3), 'cell_state 4 rule at %d' % i)
         check(state[i] in (1, 2, 3, 4), 'cell_state code %r at %d' % (state[i], i))
 
-    written = sum(1 for v in state if v is not None)
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--dir', default=DEFAULT_DIR)
+    args = ap.parse_args()
+    base = confined_dir(args.dir)
+
+    with open(os.path.join(base, 'terrain_evidence.tif'), 'rb') as fh:
+        data = fh.read()
+    with open(os.path.join(base, 'expected.json'), encoding='utf-8') as fh:
+        exp = json.load(fh)
+
+    failures = []
+
+    def check(cond, msg):
+        if not cond:
+            failures.append(msg)
+
+    check(hashlib.sha256(data).hexdigest() == exp['sha256'], 'file sha256 differs from expected.json')
+
+    t = read_ifd(data)
+    cols, rows = grid_size(exp)
+    n = cols * rows
+    check_layout(t, cols, rows, check)
+
+    nodata = float(t[42113])
+    check(nodata == exp['noData'], 'GDAL_NODATA %r' % t[42113])
+
+    check_band_metadata(t, exp, check)
+    check_georef(t, exp, rows, check)
+
+    bands = decode_bands(data, t[273][0], cols, rows, nodata)
+    check_bands(bands, exp, n, exp['cellSize'], check)
+    check_recomputed(bands, cols, n, exp['cellSize'], check)
+
+    written = sum(1 for v in bands[2] if v is not None)
     if failures:
         for f in failures:
             print('FAIL', f)
         return 1
     print('evidence_geotiff: OK: %dx%d grid, 3 Float32 bands, %d written cells, %d NoData'
-          % (cols, rows, written, cols * rows - written))
+          % (cols, rows, written, n - written))
     return 0
 
 
