@@ -216,7 +216,7 @@ import { getEdlPreset, type EdlPresetId } from './edlPresets';
 import type { Vec3, VolumeRecord } from './measure/types';
 import { TouchTracker } from './touchTracker';
 import { TouchTapGate } from './touchTapGate';
-import { CameraPoseWatch, DampingSettleGate, FrameDemand } from './frameDemand';
+import { CameraPoseWatch, DampingSettleGate, FrameDemand, VisibleHeartbeat } from './frameDemand';
 import { resolveStreamingCompatibility } from './streamingCompatibility';
 import { InspectTool } from './InspectTool';
 import { AnnotationController } from './annotate/AnnotationController';
@@ -687,16 +687,13 @@ export class Viewer {
   private _streaming: StreamingSession | null = null;
   /** The stand-in a load shows before its cloud commits. Never a layer. */
   /**
-   * Streaming heartbeat — a timer that ticks the scheduler INDEPENDENTLY of
-   * the render loop. The RAF loop is deliberately cancelled while the tab is
-   * hidden (thermal hardening), and it is also the loop that fed the
-   * scheduler — so opening a large dataset and switching tabs while it
-   * loaded froze streaming at 0 nodes, silently, and a missed resume left it
-   * frozen for good. The heartbeat makes the background-streaming promise
-   * real: node fetch/decode keeps flowing while hidden, and rendering alone
-   * stays RAF-gated.
+   * Streaming heartbeat — ticks the scheduler independently of the render
+   * loop, which is cancelled while idle, so node fetch/decode keeps flowing
+   * with the camera at rest. It runs only while the document is visible:
+   * a hidden tab does no streaming work and resumes on `visibilitychange`.
+   * Started on attach, stopped on detach (and so on dispose).
    */
-  private _streamingHeartbeat: ReturnType<typeof setInterval> | null = null;
+  private readonly _streamingHeartbeat = new VisibleHeartbeat(() => this._tickStreaming(), 200);
   /** Frames since the streaming scheduler last ran — for throttling. */
   /**
    * Last-observed centre of the streaming cloud's bounds. The streaming
@@ -1730,8 +1727,7 @@ export class Viewer {
     // contract). 200 ms is comfortably above a tick's sub-millisecond cost and
     // close to the RAF path's every-6th-frame cadence; the RAF tick still runs
     // when the loop is live, so a visible tab keeps its snappier reaction.
-    if (this._streamingHeartbeat !== null) clearInterval(this._streamingHeartbeat);
-    this._streamingHeartbeat = setInterval(() => this._tickStreaming(), 200);
+    this._streamingHeartbeat.start();
     this._configureForStreaming(cloud);
     // A streaming open can land directly in a scalar default mode
     // (elevation on an RGB-less COPC) with no setStreamingColorMode call —
@@ -1770,10 +1766,7 @@ export class Viewer {
 
   /** Detach and fully dispose the current streaming cloud, if any. */
   detachStreamingCloud(): void {
-    if (this._streamingHeartbeat !== null) {
-      clearInterval(this._streamingHeartbeat);
-      this._streamingHeartbeat = null;
-    }
+    this._streamingHeartbeat.stop();
     if (!this._streaming) return;
     // Stop the scheduler, dispose the renderer's GPU meshes, and release the
     // source's underlying reader (best-effort, swallowing a late-close reject).

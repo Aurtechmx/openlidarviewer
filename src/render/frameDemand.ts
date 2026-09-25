@@ -341,3 +341,58 @@ export class FrameDemand {
  * re-exports the same two for the same reason.
  */
 export { CameraPoseWatch, DampingSettleGate } from './renderActivityGate';
+
+/** The slice of `document` the heartbeat reads; injectable for tests. */
+export interface VisibilitySource {
+  readonly hidden: boolean;
+  addEventListener(type: 'visibilitychange', fn: () => void): void;
+  removeEventListener(type: 'visibilitychange', fn: () => void): void;
+}
+
+/**
+ * A repeating tick that runs only while started AND the document is visible.
+ * `start()` arms it (idempotent); a hidden document clears the interval and a
+ * `visibilitychange` back to visible re-arms it with one immediate tick.
+ * `stop()` clears the interval and removes the visibility listener.
+ */
+export class VisibleHeartbeat {
+  private _timer: ReturnType<typeof setInterval> | null = null;
+  private _armed = false;
+  private readonly _onVisibility = (): void => this._sync(true);
+  private readonly _tick: () => void;
+  private readonly _intervalMs: number;
+  private readonly _doc: VisibilitySource | null;
+
+  constructor(tick: () => void, intervalMs: number, doc: VisibilitySource | null = typeof document === 'undefined' ? null : document) {
+    this._tick = tick;
+    this._intervalMs = intervalMs;
+    this._doc = doc;
+  }
+
+  get running(): boolean {
+    return this._timer !== null;
+  }
+
+  start(): void {
+    if (!this._armed) this._doc?.addEventListener('visibilitychange', this._onVisibility);
+    this._armed = true;
+    this._sync(false);
+  }
+
+  stop(): void {
+    if (this._armed) this._doc?.removeEventListener('visibilitychange', this._onVisibility);
+    this._armed = false;
+    this._sync(false);
+  }
+
+  private _sync(resumed: boolean): void {
+    const want = this._armed && !this._doc?.hidden;
+    if (!want && this._timer !== null) {
+      clearInterval(this._timer);
+      this._timer = null;
+    } else if (want && this._timer === null) {
+      this._timer = setInterval(this._tick, this._intervalMs);
+      if (resumed) this._tick();
+    }
+  }
+}
