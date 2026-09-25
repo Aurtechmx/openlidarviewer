@@ -63,16 +63,23 @@ import type { Vec3, VolumeRecord } from '../../src/render/measure/types';
 // ── Canonical hashing ─────────────────────────────────────────────────────
 
 /** Key-sorted JSON; non-finite numbers and typed arrays spelled out, so nothing collapses to null. */
+
+/** Locale-independent order, so a digest reads the same on every machine. */
+function byCodeUnit(a: string, b: string): number {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+}
+
 export function canonicalJson(value: unknown): string {
   return JSON.stringify(value, (_k, v: unknown) => {
     if (typeof v === 'number' && !Number.isFinite(v)) return `#${String(v)}`;
     if (ArrayBuffer.isView(v) && !(v instanceof DataView)) {
       return Array.from(v as unknown as ArrayLike<number>, (n) => (Number.isFinite(n) ? n : `#${String(n)}`));
     }
-    if (v instanceof Map) return Object.fromEntries([...v.entries()].sort(([a], [b]) => (String(a) < String(b) ? -1 : 1)));
+    if (v instanceof Map) return Object.fromEntries([...v.entries()].sort(([a], [b]) => byCodeUnit(String(a), String(b))));
     if (v && typeof v === 'object' && !Array.isArray(v)) {
       const o = v as Record<string, unknown>;
-      return Object.fromEntries(Object.keys(o).sort().filter((k) => o[k] !== undefined).map((k) => [k, o[k]]));
+      return Object.fromEntries(Object.keys(o).sort(byCodeUnit).filter((k) => o[k] !== undefined).map((k) => [k, o[k]]));
     }
     return v;
   });
