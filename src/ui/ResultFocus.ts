@@ -17,6 +17,7 @@
 
 import { el } from './dom';
 import { openModal, type ModalHandle } from './Modal';
+import { prefersReducedMotion } from '../reducedMotion';
 
 export interface ResultFocusOptions {
   /** Surface title — labels the dialog for assistive tech. */
@@ -40,14 +41,6 @@ export type ResultFocusHandle = ModalHandle;
  * needs a JS timer because the DOM node is torn down at the end of it.
  */
 const EXIT_MS = 130;
-
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
 
 /**
  * Open a focus surface and mount it on `document.body`. Returns the `openModal`

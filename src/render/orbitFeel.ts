@@ -121,9 +121,11 @@ export interface GlideView {
  * share one 60 Hz update would apply (`perUpdate`, in the unit `floor` is in)
  * is under `floor`, or when the on-screen travel still to come
  * (`remainingPx`, null when the viewport is unknown) is under
- * `SETTLED_REMAINING_PX`.
+ * `SETTLED_REMAINING_PX`. Under `prefers-reduced-motion` (`reduced`) every
+ * released glide is at rest at once: no inertia, the camera stops on release.
  */
-export function glideRestRule(remainingPx: number | null, perUpdate: number, floor: number): boolean {
+export function glideRestRule(remainingPx: number | null, perUpdate: number, floor: number, reduced = false): boolean {
+  if (reduced) return true;
   const share = Math.abs(perUpdate);
   if (share === 0 || !Number.isFinite(share)) return true;
   if (share < floor) return true;
@@ -143,6 +145,7 @@ export function glideAtRest(
   distance: number,
   dampingFactor: number,
   view: GlideView | null = null,
+  reduced = false,
 ): { rotation: boolean; pan: boolean } {
   const k = Number.isFinite(dampingFactor) && dampingFactor > 0 ? Math.min(dampingFactor, 1) : 1;
   const rot = Math.hypot(delta.theta, delta.phi);
@@ -151,8 +154,8 @@ export function glideAtRest(
   const px = (angle: number, shift: number): number | null =>
     view === null ? null : stepPixels(angle, shift, d, view.heightPx, view.fovYRad);
   return {
-    rotation: glideRestRule(px(rot, 0), rot * k, GLIDE_REST_ROTATION_RAD),
-    pan: glideRestRule(px(0, move), move * k, GLIDE_REST_PAN_REL * d),
+    rotation: glideRestRule(px(rot, 0), rot * k, GLIDE_REST_ROTATION_RAD, reduced),
+    pan: glideRestRule(px(0, move), move * k, GLIDE_REST_PAN_REL * d, reduced),
   };
 }
 
@@ -171,11 +174,11 @@ function decayTravel(v: number, rate: number): number {
  * `exp(-rate * t)`) is at rest. Used for the arrow-key orbit once its keys
  * are up.
  */
-export function orbitVelocityAtRest(speedRadPerSec: number, rate: number, distance: number, view: GlideView | null): boolean {
+export function orbitVelocityAtRest(speedRadPerSec: number, rate: number, distance: number, view: GlideView | null, reduced = false): boolean {
   const speed = Math.abs(speedRadPerSec);
   const remaining = decayTravel(speed, rate);
   const px = view === null ? null : stepPixels(remaining, 0, Math.max(distance, 0), view.heightPx, view.fovYRad);
-  return glideRestRule(px, speed / 60, GLIDE_REST_ROTATION_RAD);
+  return glideRestRule(px, speed / 60, GLIDE_REST_ROTATION_RAD, reduced);
 }
 
 /**
