@@ -17,9 +17,8 @@
  * the v0.6.0 notes state the contrast honestly for LAZ, which carries none, so
  * plausible-but-wrong LAZ data cannot be detected at all — which is why
  * discarding the one integrity signal that does exist was worth closing.
- * `docs/v0.5.7-plan.md` already called for it ("CRC validation also lets us
- * fail honestly on a genuinely corrupt file rather than mis-reading it"); only
- * the stripping half shipped.
+ * CRC validation also lets the reader fail honestly on a genuinely corrupt
+ * file rather than mis-reading it.
  *
  * CHECKSUM VARIANT AND COVERAGE, exactly. For each page the stored value is
  * CRC-32C (Castagnoli — see `crc32c.ts`) computed over that page's first

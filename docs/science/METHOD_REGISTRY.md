@@ -8,14 +8,14 @@ the paper that specifies it.
 
 ## Identifier and versioning rules
 
-- **Id form:** `olv.<area>.<method>` (e.g. `olv.validation.spatial-block`). The
+- Id form: `olv.<area>.<method>` (e.g. `olv.validation.spatial-block`). The
   id never changes once published.
-- **Version:** an integer, bumped only when the method's behaviour changes in a
+- Version: an integer, bumped only when the method's behaviour changes in a
   way that could move its numbers (a new threshold, a corrected estimator, a
   different formula). A pure refactor that leaves the output identical does not
   bump it.
-- **Tag form:** `id@version`, e.g. `olv.validation.spatial-block@2`.
-- **Citations are never fabricated.** An internal composition with no single
+- Tag form: `id@version`, e.g. `olv.validation.spatial-block@2`.
+- Citations are never fabricated. An internal composition with no single
   source paper says so.
 
 ## Registered methods
@@ -27,9 +27,9 @@ the paper that specifies it.
 | `olv.terrain.vrm` | 1 | Vector Ruggedness Measure | Sappington et al. (2007) |
 | `olv.terrain.tpi` | 1 | Topographic Position Index | Weiss (2001) |
 | `olv.contour.analytical` | 1 | Analytical iso-contour geometry | internal (grid contour extraction) |
-| `olv.contour.generalize` | 1 | Uniform contour generalization; the shipped pass is Douglas–Peucker followed by Chaikin corner-cutting, which also moves vertices (see `methodRegistry.ts`) | Douglas & Peucker (1973); Chaikin (1974) |
-| `olv.contour.generalize.dp` | 1 | Douglas–Peucker contour simplification | Douglas & Peucker (1973) |
-| `olv.contour.generalize.terrain-adaptive` | 1 | Terrain-adaptive contour generalization; feature-scaled Douglas–Peucker followed by the same Chaikin corner-cutting | internal (feature-scaled DP, then Chaikin) |
+| `olv.contour.generalize` | 1 | Uniform contour generalization; the shipped pass is Douglas to Peucker followed by Chaikin corner-cutting, which also moves vertices (see `methodRegistry.ts`) | Douglas & Peucker (1973); Chaikin (1974) |
+| `olv.contour.generalize.dp` | 1 | Douglas to Peucker contour simplification | Douglas & Peucker (1973) |
+| `olv.contour.generalize.terrain-adaptive` | 1 | Terrain-adaptive contour generalization; feature-scaled Douglas to Peucker followed by the same Chaikin corner-cutting | internal (feature-scaled DP, then Chaikin) |
 | `olv.class.derived-heuristic` | 3 | Derived point classification (heuristic) | Zhang et al. (2003); internal composition |
 | `olv.topology.linkage-record` | 1 | Source acquisition topology linkage record | internal (provenance record) |
 | `olv.dtm.idw-fill` | 1 | DTM raster + void fill; the shipped fill is geodesic, an Euclidean IDW prefill only seeds it (see `methodRegistry.ts`) | internal |
@@ -59,8 +59,8 @@ the paper that specifies it.
 
 ### Observatory (reserved v0.7, docs/observatory/SPEC.md)
 
-Registered early, ahead of the code, under the maintainer's decision-rule
-approval (`docs/observatory/SPEC.md` §4 OB-INT-04). Every row below except
+Registered early, ahead of the code, under the decision rules
+(`docs/observatory/SPEC.md` §4 OB-INT-04). Every row below except
 `olv.observation.states` names a method with no implementation in the tree;
 the id and version are reserved so a later phase's first commit cannot
 collide with a name someone already used informally. Full status,

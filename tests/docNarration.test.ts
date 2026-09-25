@@ -89,6 +89,6 @@ describe('the whole docs tree', () => {
     // while a bad pathspec skipped every top-level document.
     const m = /(\d+) document\(s\) read under docs\//.exec(out);
     expect(m, out).not.toBeNull();
-    expect(Number(m![1])).toBeGreaterThan(150);
+    expect(Number(m![1])).toBeGreaterThan(120);
   });
 });

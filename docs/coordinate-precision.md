@@ -1,4 +1,4 @@
-# Coordinate precision invariants — v0.3.2 research-grade audit
+# Coordinate precision invariants: v0.3.2 research-grade audit
 
 OpenLiDARViewer holds itself to a research-grade precision contract on
 georeferenced scans (positions retain millimetre-class fidelity in the
@@ -13,20 +13,20 @@ doc and update the corresponding test. The numbers here are the contract.
 
 ## Coordinate spaces
 
-The pipeline has **three** distinct coordinate spaces. Knowing which space
+The pipeline has three distinct coordinate spaces. Knowing which space
 you're in is the single biggest source of correctness bugs.
 
 ### 1. File CRS (Float64, large magnitudes)
 
-The coordinates as stored in the source file — e.g. UTM 12N northing
+The coordinates as stored in the source file: e.g. UTM 12N northing
 4,100,876.789 m, Mercator easting 11,800,000.005 m, or geographic latitude
 40.71428 °. Magnitudes can be in the millions for projected CRSs, hundreds
 of degrees for geographic ones.
 
-- **Reader:** the LAS chunk decoder reads `int32` X/Y/Z values, applies the
+- Reader: the LAS chunk decoder reads `int32` X/Y/Z values, applies the
   per-cloud `scale` and `offset` from the LAS public header, both Float64.
-- **Storage:** **NEVER stored as Float32.** A UTM coordinate at 4M m has
-  only ~0.5 m precision when narrowed to Float32 — sub-mm precision needs
+- Storage: NEVER stored as Float32. A UTM coordinate at 4M m has
+  only ~0.5 m precision when narrowed to Float32: sub-mm precision needs
   Float64.
 
 ### 2. Local render space (Float32 + Float64 origin)
@@ -35,12 +35,12 @@ The space the GPU operates in. We pick a per-cloud integer `origin`
 (`Math.floor(min)`) and subtract it from every coordinate **while still in
 Float64**, then narrow the small residual to Float32. The residual stays
 within roughly `[0, size_of_cloud]`, so for a 10 km × 10 km × 1 km scan,
-the largest residual is 10,000 m — well within Float32's sub-mm sweet spot.
+the largest residual is 10,000 m: well within Float32's sub-mm sweet spot.
 
-- **Storage:** Float32Array buffers on the GPU.
-- **Origin:** kept as a Float64 `[number, number, number]` tuple on the
+- Storage: Float32Array buffers on the GPU.
+- Origin: kept as a Float64 `[number, number, number]` tuple on the
   `PointCloud` (`origin` field) or in `StreamingPointCloud.renderOrigin`.
-- **Invariant:** `world = local + origin` is exact to within Float32
+- Invariant: `world = local + origin` is exact to within Float32
   precision of the local residual.
 
 #### The frame behind that invariant
@@ -74,13 +74,13 @@ frame is built from a declaration, never from the magnitude of a coordinate.
 Three.js's standard space. Camera position + projection matrices operate
 on the local-render-space coordinates.
 
-- **Implication:** measurements computed against camera-space data inherit
+- Implication: measurements computed against camera-space data inherit
   Float32 precision. For research-grade absolute distances, do the math
   against the world-space coordinates (local + origin) in Float64.
 
 ## The Float64 → Float32 narrow point
 
-Exactly **one** narrow happens per coordinate, in `coordinateBridge.ts`:
+Exactly one narrow happens per coordinate, in `coordinateBridge.ts`:
 
 ```ts
 export function recenter(coords: Float64Array, origin: [number, number, number]): Float32Array {
@@ -97,7 +97,7 @@ export function recenter(coords: Float64Array, origin: [number, number, number])
 
 The subtraction happens in Float64 (both operands are doubles), and the
 narrow to Float32 happens only on assignment to the `Float32Array`. Doing
-those two steps in the opposite order — narrow first, subtract second —
+those two steps in the opposite order (narrow first, subtract second)
 would discard sub-metre detail before it could be kept. This is enforced
 by `tests/coordinatePrecision.test.ts` and a regression check on the
 COPC decode path.
@@ -134,9 +134,9 @@ within 10 km of the render origin per the v0.3.1 precision contract).
 
 ## Measurements
 
-Measurements are computed against the **local-space mesh positions**
+Measurements are computed against the local-space mesh positions
 (Float32). For a single scan whose render origin is the scan's own
-floored-min, this is correct — both endpoints share the same origin so
+floored-min, this is correct: both endpoints share the same origin so
 the displacement is precise.
 
 The unit reported by the measurement tool is METRES. For LAS files whose
@@ -174,7 +174,7 @@ permit the scientific deliverables consult. It is pure: no DOM, no three.js.
 
 ### The quantity
 
-For each axis the policy computes the **reach**, the largest local coordinate
+For each axis the policy computes the reach, the largest local coordinate
 magnitude the local-origin strategy leaves:
 
 ```
@@ -211,7 +211,7 @@ largest error on one coordinate is half a step. Because the step is set by
 magnitude, the far corner of the extent is where it is largest, which makes the
 reach the correct argument for a worst case.
 
-The policy also reports a **typical** step, the mean over coordinates spread
+The policy also reports a typical step, the mean over coordinates spread
 uniformly across `[0, reach]`. The step function is piecewise constant on
 binades, so the mean has a closed form. With `b = floor(log2 R)` and
 `top = 2^(b−23)`:
@@ -234,13 +234,13 @@ it against a direct numerical integration of the real step function.
 | `unusable` | > 10 mm | The step consumes that whole accuracy budget on its own. |
 | `unknown` | no linear unit | The step has no length, so it is not graded. Never a pass. |
 
-**1 mm** is where two independent anchors land. LAS and LAZ store scaled
+1 mm is where two independent anchors land. LAS and LAZ store scaled
 integers and the conventional scale factor is 0.001, so a source file is itself
 millimetre-quantized. And 1 mm is already this project's boundary elsewhere:
 `REBASE_QUANTUM_BUDGET_M` in `src/app/LayerService.ts` refuses a mount that
 cannot hold it.
 
-**10 mm** is the tightest vertical accuracy class in the ASPRS positional
+10 mm is the tightest vertical accuracy class in the ASPRS positional
 accuracy standard, 1 cm RMSE. A step above that consumes the entire error
 budget of the strictest class a dataset can be specified at, before any analysis
 has run. It is also the resolution the measurement surfaces print at
@@ -279,9 +279,9 @@ refusal engages at 524,288 ft.
 The Scan Report carries two rows next to the extent they derive from
 (`src/analysis/modules/scanReport.ts`):
 
-- **In-memory resolution**: worst case and typical, with the grade. A grade
+- In-memory resolution: worst case and typical, with the grade. A grade
   other than `fine` renders as a warning row.
-- **Quantization basis**, under the Advanced report: the governing axis, its
+- Quantization basis, under the Advanced report: the governing axis, its
   reach, and the local origin the figures were computed against.
 
 Both fail closed on the unit, the same rule the extent block follows. Without an
@@ -311,7 +311,7 @@ budget, and the remedy: tile the dataset into smaller extents, or load it as
 COPC so each region streams near its own local origin, and run the deliverable
 per tile.
 
-The precision term is **required**, not optional, because a call site can forget
+The precision term is required, not optional, because a call site can forget
 an optional field and a forgotten precision term reads exactly like a passing
 one. `null` is the honest "no scan frame was measured" and is spelled out at
 each call site. `tests/terrainRunnerPrecisionWiring.test.ts` proves the terrain
@@ -351,23 +351,23 @@ is the measurement, not the architecture.
 
 ## Known limits (where research-grade *doesn't* extend)
 
-- **Reprojection.** v0.3.2 does NOT reproject coordinates between CRSs.
+- Reprojection. v0.3.2 does NOT reproject coordinates between CRSs.
   An analyst comparing a UTM 12N scan and a UTM 13N scan needs a
   downstream tool (PDAL, GDAL, proj4) to align them. The viewer flags
   the CRS in the scan-report card; equal-CRS scans display alongside
   each other correctly, mixed-CRS scans display in local render space
   with the visual offset they have on disk.
-- **Geographic CRSs (degrees).** Latitude/longitude in degrees aren't a
-  natural unit for the measurement tool — "0.0001 degrees" reads as
+- Geographic CRSs (degrees). Latitude/longitude in degrees aren't a
+  natural unit for the measurement tool: "0.0001 degrees" reads as
   about 11 m near the equator, but as ~7.8 m at 45° latitude. The
   measurement tool's "(unknown units)" annotation is the v0.3.2 honest
   output. Real geographic distance needs spherical math (haversine /
-  geodesic) — out of scope for v0.3.2.
-- **Vertical datums.** The CRS's vertical reference (ellipsoidal vs
+  geodesic): out of scope for v0.3.2.
+- Vertical datums. The CRS's vertical reference (ellipsoidal vs
   orthometric height) is recorded in the WKT but not currently
   surfaced. Survey-grade vertical comparisons require knowing the
   geoid model used; we plan to surface this in v0.3.3.
-- **Wide-area Float32 quantization.** Measured, graded and refused past
+- Wide-area Float32 quantization. Measured, graded and refused past
   10 mm, but not fixed. Positions remain Float32, so a wide extent still
   resolves coarsely; the policy above states the figure and declines the
   deliverables that would claim more than it supports. The streaming

@@ -43,18 +43,18 @@ ordering.
 
 Three designs follow from that, with different costs.
 
-**A depth prepass, then a second point draw.** Render depth, derive the edge
+A depth prepass, then a second point draw. Render depth, derive the edge
 response, draw the points again with the response bound. This is the version
 that works exactly as described, and it draws every point twice. Vertex cost is
 precisely the quantity the temporal block investigation was opened to reduce, so
 this design spends the budget that one was trying to save.
 
-**Sharpening in the postprocess alone.** Leave the kernel unchanged and treat
+Sharpening in the postprocess alone. Leave the kernel unchanged and treat
 edges after the fact. Cheap, and it does not do what the phase asks: the splat
 still covers the same pixels, so the foreground still writes across the
 silhouette and the postprocess is shading a fringe rather than preventing one.
 
-**A precomputed per-point descriptor.** The density grid behind
+A precomputed per-point descriptor. The density grid behind
 `localDensitySizes` already visits every point once and already produces a
 per-point multiplier that the size graph reads at vertex time. A per-cell
 measure of how much the points in a cell disagree in depth would ride the same

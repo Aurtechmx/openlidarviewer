@@ -21,8 +21,8 @@
  *
  * CASE SENSITIVITY. `git ls-files --ignored` matches patterns through
  * core.ignorecase, which is true by default on macOS and false on the Linux
- * runners. Left to the local default, `*AUDIT*.md` matches the tracked
- * docs/_audit/v0.5.4-terrain-audit.md on a Mac and nothing in CI, so the lint
+ * runners. Left to the local default, `*AUDIT*.md` matches a tracked
+ * `*-audit.md` file on a Mac and nothing in CI, so the lint
  * would be red for half the contributors and green on the machine that decides.
  * core.ignorecase=false is pinned below so this judges paths the way CI and
  * `git archive` do. The patterns that matter here (`.agents/`, `skills-lock.json`)

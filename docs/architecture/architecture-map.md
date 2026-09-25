@@ -26,13 +26,13 @@ from the tree and fails when a cell drifts.
 | Core numerics | `src/process`, `src/numeric.ts`, `src/units` | ~2.4k | Compensated sums, Welford, unit types. No dependencies. |
 | Model | `src/model` | ~3.6k | `PointCloud`, layer model. Plain data. |
 | Geo | `src/geo` | ~5.2k | CRS math, `ProjectSpatialFrame`, transforms. |
-| Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~47k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. **UI-free by lint.** |
+| Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~47k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. UI-free by lint. |
 | I/O | `src/io` | ~36k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
 | Render | `src/render` | ~73k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
 | Export / report | `src/export`, `src/report`, `src/convert` | ~14k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~18k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~36k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 4,950 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 4,950 | Wiring. A monolith under decomposition. |
 
 ## Composition root
 
@@ -94,15 +94,15 @@ so it belongs beside the panels.
 
 Recorded so the next pass does not re-derive them:
 
-- **The filter cluster** (`_classFiltered`, `_elevFilter*`, `_intenFilter*`) —
+- The filter cluster (`_classFiltered`, `_elevFilter*`, `_intenFilter*`),
   not CPU predicates. They are three.js shader uniforms folded in a TSL pass;
   there is no Node-testable logic to lift.
-- **Classification history** (`_classEpochs`, `_classHistory`) — its substance
+- Classification history (`_classEpochs`, `_classHistory`): its substance
   (`ClassEditHistory`, `ClassificationEpochs`, `applyClassSwap`,
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (4,950)** — the largest blocks, which are the extraction
+`src/main.ts` (4,950): the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` is a thin assembler in `src/app/actionDefinitions.ts` over
@@ -165,36 +165,36 @@ Done: `importSession` (~208 lines) lives in `src/app/sessionIo.ts`, called with 
 `SessionIoDeps` object of ~16 accessors the shell binds to its own state, and
 lazy-loaded from `main.ts` on the first `.olvsession` file (v0.7 shell headroom).
 The pure cloud→fingerprint adapter (`scanFactsFromStreaming` / `scanFactsFromStatic`)
-moved to `src/app/sessionScanFacts.ts` — re-exported unchanged off `sessionIo.ts` — because
+moved to `src/app/sessionScanFacts.ts` (re-exported unchanged off `sessionIo.ts`) because
 `openScan.ts` calls it synchronously on every scan load and must stay eager; the
 parse/verify/rebase halves it leans on already lived in `src/io/session.ts`
 (`tests/sessionIo.test.ts`).
 
-Done: `handleFile` (~336 lines) — the open/load pipeline — now lives in
+Done: `handleFile` (~336 lines) (the open/load pipeline) now lives in
 `src/app/openScan.ts` as `openScan(file, deps)`, driven through an `OpenScanDeps`
 object of accessor functions closing over the shell's services rather than the
 Viewer class. The two genuinely pure decisions it made are extracted and
-Node-tested — `layerChipCount` (the file-total vs strided-display count the Layers
-chip shows) and `shouldResetSavedWork` (fresh-project vs additive open) — alongside
+Node-tested: `layerChipCount` (the file-total vs strided-display count the Layers
+chip shows) and `shouldResetSavedWork` (fresh-project vs additive open). They sit alongside
 the three-way router's session / COPC / static dispatch (`tests/openScan.test.ts`).
 `main.ts` keeps a thin `handleFile` delegate that binds its running state to the deps.
 
-Done: `handleRemoteEpt` / `openStreamingCopc` (~406 lines) — the remote / streaming
-open pipeline — now live in `src/app/openStreaming.ts`, driven through an
+Done: `handleRemoteEpt` / `openStreamingCopc` (~406 lines) (the remote / streaming
+open pipeline) now live in `src/app/openStreaming.ts`, driven through an
 `OpenStreamingDeps` object of accessor functions closing over the shell's services
 and its mutable streaming-session state (the load flag, the COPC / EPT decode
 workers, the benchmark collector, the quality preset) rather than the Viewer class.
-The pure decisions the extraction exposes are Node-tested — `isEptUrl` (the
+The pure decisions the extraction exposes are Node-tested (`isEptUrl` (the
 COPC-vs-EPT routing predicate the shell's URL router dispatches on), `isAbortError`
 (the user-cancel classifier both remote handlers surface through) and
-`linkAbortSignals` — alongside the guarded remote-open paths: the one-load guard, the
+`linkAbortSignals`) alongside the guarded remote-open paths: the one-load guard, the
 URL-validation gate, and the honest error surfacing (`tests/openStreaming.test.ts`).
 The SSRF URL validation (`validateRemoteEptUrl` / `validateRemoteCopcUrl`) is
 preserved exactly. `main.ts` keeps thin `openStreamingCopc` / `handleRemoteEpt`
 delegates that bind its running state to the deps.
 
-Done: `generateReportPdf` / `exportGeoContext` (~402 lines) — the report / geo-context
-export orchestration — now live in `src/app/reportExport.ts`, driven through a
+Done: `generateReportPdf` / `exportGeoContext` (~402 lines) (the report / geo-context
+export orchestration) now live in `src/app/reportExport.ts`, driven through a
 `ReportExportDeps` object of accessor functions closing over the shell's services
 and its resolved CRS rather than the Viewer class. The capture-type fingerprint
 comes from `src/diagnostics/captureProvenance.ts`, the one store the Inspector
@@ -202,7 +202,7 @@ card, the report PDF and the image exports all read, so the three surfaces canno
 state different capture types for the same scan; it also carries the user's
 capture-type override into the deliverables. The
 report engine (which pulls pdf-lib) is passed as a lazy loader so the module stays
-free of the boot graph. The pure decisions the extraction exposes are Node-tested —
+free of the boot graph. The pure decisions the extraction exposes are Node-tested:
 `effectiveCrsName` (the CRS-label honesty rule: only a projected / geographic CRS
 names the export frame, so a post-override label can't confidently place an export
 in the CRS the user rejected), `reportPointCount` (the file-scale honesty rule the
@@ -250,7 +250,7 @@ that must touch nothing but the pose (`tests/viewStateCoordinator.test.ts`). The
 field order and the present/absent guards stay in `src/io/viewState.ts`.
 `main.ts` keeps five thin delegates and the deps object.
 
-**`src/render/Viewer.ts` (6,153)** — the constructor and a handful of large
+`src/render/Viewer.ts` (6,153): the constructor and a handful of large
 methods dominate:
 
 Done: the renderer, scene, cameras and EDL pipeline are built by
@@ -262,15 +262,15 @@ clip-range, background and depth-mode decisions are pure in
 view-bound wiring that follows. Fan-out unchanged (one import in, one out),
 no cycle: the FOV constant moved to the policy module.
 
-The count fell by 9 with the refinement-phase seam: the P6 phase bookkeeping —
-the park timestamp, the readiness-verdict mapping and the transition call — was
+The count fell by 9 with the refinement-phase seam: the P6 phase bookkeeping
+(the park timestamp, the readiness-verdict mapping and the transition call) was
 inline in the adaptive-DPR branch, so it advanced only when DPR did. It now
 lives in `src/render/refinementPhaseState.ts`, which the Viewer advances every
 frame and both consumers (DPR, the streaming scheduler) read.
 
 The count fell by 37 with the profile seam. The constructor held the whole
-profile-sampler walk — eligibility, the streaming gate, the buffer
-concatenation and the sampler call — inline in a callback, where nothing could
+profile-sampler walk (eligibility, the streaming gate, the buffer
+concatenation and the sampler call) inline in a callback, where nothing could
 test it without a WebGL context. `src/render/measure/profileSectionSeam.ts`
 owns that walk now and serves the raw section over the same corridor from the
 same eligibility decision, so a chart and the returns under it cannot describe
@@ -282,7 +282,7 @@ host that lends scene membership and a redraw request so an overlay module owns
 its own objects and disposal. That growth is now more than repaid.
 
 Spans below are the symbol's real extent, read from the TypeScript symbol graph
-rather than estimated by pattern-matching — an earlier revision of this table
+rather than estimated by pattern-matching: an earlier revision of this table
 overstated `_onResize` by 10× and listed a colour-write block that had already
 been extracted, and both errors pointed the decomposition at the wrong work.
 
@@ -326,7 +326,7 @@ symmetric teardown. The `StreamingRenderer` no longer takes the concrete
 `Viewer`: it takes a six-method `StreamingRendererHost` (the mesh factory + the
 dissolve-uniform bookkeeping), which is the coupling the "passes the Viewer
 itself as host" note below flagged. The decisions the extraction exposes are
-Node-tested — the `shouldFadeIn` gate, the guarded fan-out to the two
+Node-tested: the `shouldFadeIn` gate, the guarded fan-out to the two
 display-only node hooks (a throwing legend/reroute hook must not break the
 stream) with its benchmark bookkeeping, the fresh-per-node hook read, and the
 teardown order (`tests/streamingAttach.test.ts`). `Viewer` keeps a thin
@@ -344,20 +344,20 @@ because a few blocks are large, so the line count falls slowly even as the
 testable logic leaves. That is expected and fine: the goal is the extractions
 above, not the number.
 
-**The streaming cluster's behavioural boundary is now extracted.** The part
-that had a genuine boundary — the session assembly that `attachStreamingCloud`
-built inline, and the `StreamingRenderer` taking the Viewer *itself* as host —
+The streaming cluster's behavioural boundary is now extracted. The part
+that had a genuine boundary (the session assembly that `attachStreamingCloud`
+built inline, and the `StreamingRenderer` taking the Viewer *itself* as host)
 now lives behind `StreamingHost` / `StreamingRendererHost` (see the Done entry
 above). What stays on the Viewer under `_streaming*` is the irreducibly
 view-bound remainder: `_configureForStreaming` (camera near/far, EDL uniforms,
 nav base-speed, orbit-clamp envelope, measure datum), the detach-side orbit and
 datum recompute, the per-frame `_tickStreaming` camera feed, and the heartbeat.
 Lifting those behind a host would mean a wide accessor surface over the camera,
-EDL uniforms and orbit state with no Node-testable decision to gain — GPU/camera
-mutation, not logic — so they belong here. The EDL cluster (`_edl*`) is a
-smaller follow-on. Everything else on the class — the constructor's
+EDL uniforms and orbit state with no Node-testable decision to gain (GPU/camera
+mutation, not logic) so they belong here. The EDL cluster (`_edl*`) is a
+smaller follow-on. Everything else on the class (the constructor's
 scene/pipeline build, the render loop's requestAnimationFrame scheduling, event
-wiring — is the same view-bound remainder, and belongs here.
+wiring) is the same view-bound remainder, and belongs here.
 
 ### Help, actions and keys share one truth
 
@@ -375,15 +375,15 @@ disagree on a key, or when a non-action binding has no line for Help.
 
 ## Test and gate topology
 
-- **Unit / integration** — `tests/*.test.ts`, run in sharded buckets
+- Unit / integration: `tests/*.test.ts`, run in sharded buckets
   (`scripts/test-bucket.mjs`) because one large vitest process can fail to
   terminate on a constrained runner.
-- **End-to-end** — `tests/e2e/*.spec.ts`, split into two Playwright projects:
+- End-to-end: `tests/e2e/*.spec.ts`, split into two Playwright projects:
   `deterministic` (blocking, 165 tests) and `gpu` (advisory, `@gpu`-tagged).
   Untagged specs block by default.
-- **Coverage ratchet** — `npm run coverage`, scoped to the pure modules only.
-- **Mutation** — `npm run mutation`, scoped to the numeric core.
-- **Release gate** — `npm run test:release` runs static checks, lints, build,
+- Coverage ratchet: `npm run coverage`, scoped to the pure modules only.
+- Mutation: `npm run mutation`, scoped to the numeric core.
+- Release gate: `npm run test:release` runs static checks, lints, build,
   bundle budget, every bucket, and the smoke specs; it prints a literal
   `GATE EXIT:` line, which is the only trustworthy signal.
 
@@ -395,4 +395,4 @@ change. A map that drifts from the tree is worse than no map.
 
 One convention makes that work: a destination marked *(planned)* is an extraction
 target that does not exist yet, and the check skips it. When the extraction lands,
-drop the marker — from then on the path is held to account like any other.
+drop the marker: from then on the path is held to account like any other.

@@ -14,8 +14,8 @@ import { stripHtmlComments } from './stripHtmlComments.mts';
  * markdown from docs/ and the repo root, so there is exactly one authoritative
  * copy of every document and the site can never fork it. Because srcDir is
  * docs-site/ itself, a repo document is published only when a wrapper page
- * explicitly includes it; docs/_audit/**, the internal plan documents, and
- * research notes are unpublishable unless someone deliberately writes a
+ * explicitly includes it; research notes and other internal documents are
+ * unpublishable unless someone deliberately writes a
  * wrapper for them. scripts/lint-docs-site.mjs enforces that no wrapper ever
  * does, and that the built output stays clean.
  */

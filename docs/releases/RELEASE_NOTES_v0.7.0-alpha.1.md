@@ -1,6 +1,6 @@
 # Release notes: OpenLiDARViewer v0.7.0-alpha.1
 
-**This is a development cut on the way to v0.7.0.** It carries no DOI, and its
+This is a development cut on the way to v0.7.0. It carries no DOI, and its
 test figures are not release-authoritative. The figures and claims for v0.7.0
 are written at that freeze, from the gate that runs against the tagged tree.
 

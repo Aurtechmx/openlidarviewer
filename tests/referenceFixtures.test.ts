@@ -1,7 +1,7 @@
 /**
  * referenceFixtures.test.ts — the viewer's projection maths against PROJ.
  *
- * Roadmap item P1 #9 (docs/architecture/coordinate-integrity-roadmap.md): every
+ * Every
  * other CRS test in this repository checks the transforms for INTERNAL
  * self-consistency — a forward/inverse round trip returns the input, an anchor
  * matches Snyder's worked example. Those catch sign errors and dropped terms,

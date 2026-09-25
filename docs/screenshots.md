@@ -11,7 +11,7 @@ Scan Intelligence panel on the right and the navigation HUD below.
 
 ## measurement-tool.jpg
 
-The measurement toolkit — a distance measurement between two picked points,
+The measurement toolkit: a distance measurement between two picked points,
 read directly inside the point cloud. The toolkit also measures polyline,
 area, height, angle, and slope.
 
@@ -22,7 +22,7 @@ showing its real-world coordinates, attributes, layer, and index.
 
 ## scan-intelligence-panel.jpg
 
-The Scan Intelligence panel — point count, dimensions, density, spacing,
+The Scan Intelligence panel: point count, dimensions, density, spacing,
 detected attributes, and the Advanced report of integrity diagnostics.
 
 ## Notes

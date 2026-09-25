@@ -184,7 +184,7 @@ def write_meshes() -> dict:
 
 
 # --- Gate 2 — per-cloud elevation-filter fixtures --------------------------
-# These expose the bug described in docs/gate2-per-cloud-filter-plan.md: the
+# These expose a per-cloud elevation-filter bug: the
 # elevation filter converts a world-space window into attribute space with ONE
 # origin and ONE up-axis for the whole scene, so a second static cloud with a
 # different origin, or a different up-axis format, clips at the wrong world
@@ -405,7 +405,7 @@ def main() -> None:
     md.append("## Gate 2 — per-cloud elevation filter (gate2-*)")
     md.append("")
     md.append(
-        "Fixtures for `docs/gate2-per-cloud-filter-plan.md` Stage B. The elevation "
+        "Fixtures for the per-cloud elevation filter. The elevation "
         "filter converts a world-space window into attribute space with ONE origin "
         "and ONE up-axis for the whole scene (`Viewer.setElevationFilter`), so a "
         "second cloud with a different origin, or a different up-axis format, "

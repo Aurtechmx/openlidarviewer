@@ -1,6 +1,6 @@
 # Validation report: OpenLiDARViewer v0.7.0-alpha.1
 
-**In development. Not release-authoritative.** Test figures, browser matrix and
+In development. Not release-authoritative. Test figures, browser matrix and
 packaging digests are recorded here at freeze, from the gate that runs against
 the tagged tree. They are deliberately absent rather than provisional, so that
 nothing in this file can be read as a result that has not been produced.

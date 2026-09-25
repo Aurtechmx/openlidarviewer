@@ -36,8 +36,7 @@ const GIT = binaryOnPath('git');
 /**
  * Documents a reader follows to check a claim.
  *
- * Not every Markdown file in the repository: `docs/_audit/` and the older
- * planning notes are an archive of what was thought at the time, and their
+ * Not every Markdown file in the repository: the older planning notes were an archive of what was thought at the time, and their
  * links rotted honestly as the tree moved. Failing the build on those would
  * bury the citations that matter under thirty that do not, which is how a check
  * gets switched off. Pass `--all` to see the archive too.

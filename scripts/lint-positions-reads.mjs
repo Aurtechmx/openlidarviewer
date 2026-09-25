@@ -3,7 +3,6 @@
  * lint-positions-reads.mjs — a REPORT-ONLY inventory of direct `.positions`
  * reads outside `src/model/`.
  *
- * This is the running companion to docs/architecture/float64-frame-migration-plan.md.
  * It prints, grouped by file with `file:line`, every place outside the model
  * that reaches into a cloud's `.positions` buffer directly. That surface is the
  * exact set of call sites the Float64 project-frame migration (roadmap P1 #2)
@@ -71,7 +70,6 @@ for (const file of files) {
 
 console.log('lint:positions-reads — REPORT ONLY (never fails a gate)');
 console.log(`Scope ${SCOPE.id}: ${SCOPE.label}.`);
-console.log('Destination: docs/architecture/float64-frame-migration-plan.md · roadmap P1 #2.');
 console.log(report.join('\n'));
 console.log(`\nTotal: ${totalReads} direct .positions reads across ${totalFiles} files (scope ${SCOPE.id}).`);
 console.log('This is a report, not a gate. The gate is `npm run lint:position-access`, which holds');

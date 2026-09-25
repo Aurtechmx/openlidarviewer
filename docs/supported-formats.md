@@ -19,12 +19,12 @@ Format support is still evolving. This page separates what works today from what
 | `PTS` | Terrestrial laser scanners | Whitespace-delimited text; optional header count; 3/4/6/7-column layouts; chunked reading |
 | `PNTS` | 3D Tiles point tile | A single tile; magic-byte detected; `RTC_CENTER` applied; Draco refused |
 | `tileset.json` | 3D Tiles 1.0 / 1.1 | Opened by URL; streamed against the camera like COPC and EPT; PNTS content only; explicit or implicit (quadtree / octree subtree) hierarchy; other `asset.version` values refused |
-| `COPC` | Cloud-optimised LiDAR | `.copc.laz`; opened by progressive octree streaming — see [streaming.md](streaming.md) |
-| `EPT` | Entwine Point Tile | `ept.json` manifest + hierarchy + tiles; binary and laszip tile decode; local and remote — see [streaming.md](streaming.md) |
+| `COPC` | Cloud-optimised LiDAR | `.copc.laz`; opened by progressive octree streaming: see [streaming.md](streaming.md) |
+| `EPT` | Entwine Point Tile | `ept.json` manifest + hierarchy + tiles; binary and laszip tile decode; local and remote: see [streaming.md](streaming.md) |
 
 ## Current export targets
 
-`PLY`, `OBJ`, `XYZ`, and `CSV`, re-exported in real-world (global) coordinates, plus `PNG` snapshots of the current view (orthographic RGB, height map, intensity, classification, depth, normal, contour with legend customisation). Multi-page **PDF technical reports** (cover page + dataset summary + embedded image exports + annotations + measurements + technical notes; three built-in templates including a cloud-derived Scan QA report) ship as of v0.3.3. Working state — camera, render settings, colour mode, annotations, measurements, scan metadata — round-trips through the `.olvsession` JSON package.
+`PLY`, `OBJ`, `XYZ`, and `CSV`, re-exported in real-world (global) coordinates, plus `PNG` snapshots of the current view (orthographic RGB, height map, intensity, classification, depth, normal, contour with legend customisation). Multi-page PDF technical reports (cover page + dataset summary + embedded image exports + annotations + measurements + technical notes; three built-in templates including a cloud-derived Scan QA report) ship as of v0.3.3. Working state (camera, render settings, colour mode, annotations, measurements, scan metadata) round-trips through the `.olvsession` JSON package.
 
 ## iPhone and mobile scan exports
 
@@ -32,7 +32,7 @@ OpenLiDARViewer opens exports from iPhone LiDAR and mobile scanning apps when th
 
 ## Terrestrial laser scanners (E57)
 
-`E57` (ASTM E2807) is the standard exchange format for terrestrial laser scanners and is read directly in the browser by a from-scratch TypeScript parser — nothing is uploaded and no conversion step is needed.
+`E57` (ASTM E2807) is the standard exchange format for terrestrial laser scanners and is read directly in the browser by a from-scratch TypeScript parser: nothing is uploaded and no conversion step is needed.
 
 The parser decodes Cartesian coordinates, RGB colour, intensity, classification, and per-point surface normals. It applies each scan's recorded pose (rotation and translation), drops points the file flags as invalid, and bridges global coordinates into the viewer's local space with the same coordinate bridge the LAS loader uses. Multi-scan E57 files are merged into a single cloud, and the file's generating software is read from the header and shown in the Scan Report.
 
@@ -42,17 +42,17 @@ E57 exports from Trimble survey scanners were checked manually during developmen
 
 Georeferenced drone LiDAR surveys in `LAS` and `LAZ` work today, including large UTM-scale coordinates handled by the coordinate bridge.
 
-`PCD` — the Point Cloud Library format — is read directly in the browser in its ASCII, binary, and binary-compressed variants, with position, RGB colour, intensity, surface normals, and labels decoded where the file carries them.
+`PCD` (the Point Cloud Library format) is read directly in the browser in its ASCII, binary, and binary-compressed variants, with position, RGB colour, intensity, surface normals, and labels decoded where the file carries them.
 
 `PTX` and `PTS`, the terrestrial laser-scanner text formats, are also read in the browser. PTX multi-scan files apply each scan's recorded pose matrix, merge every scan into one cloud, and record the scanner origin (shown in the Scan Report). PTS files read the optional leading point-count line and the standard 3-, 4-, 6-, and 7-column layouts; like XYZ and CSV they are decoded in bounded chunks over the already-loaded file, which avoids a second whole-file copy as strings (the source file itself is read in once; COPC/EPT are the true streaming paths).
 
 ## Large-scale and web formats
 
-`COPC` (Cloud Optimized Point Cloud) `.copc.laz` files stream today — opened progressively through their octree hierarchy with partial range reads, worker-based decoding, and bounded memory. Remote COPC over HTTP range requests ships in v0.3.1 with fail-fast URL validation and classified error messages.
+`COPC` (Cloud Optimized Point Cloud) `.copc.laz` files stream today: opened progressively through their octree hierarchy with partial range reads, worker-based decoding, and bounded memory. Remote COPC over HTTP range requests ships in v0.3.1 with fail-fast URL validation and classified error messages.
 
-`EPT` (Entwine Point Tile) joins COPC as a first-class streaming source in v0.3.3 — a `ept.json` URL opens an EPT dataset progressively. Both `binary` and `laszip` tile dataTypes are supported; the laz-perf WASM module is shared with the COPC path so a session that touches both formats pays the WASM cost only once. Remote EPT carries the same URL-validation + error-classification polish as remote COPC. See [streaming.md](streaming.md).
+`EPT` (Entwine Point Tile) joins COPC as a first-class streaming source in v0.3.3: a `ept.json` URL opens an EPT dataset progressively. Both `binary` and `laszip` tile dataTypes are supported; the laz-perf WASM module is shared with the COPC path so a session that touches both formats pays the WASM cost only once. Remote EPT carries the same URL-validation + error-classification polish as remote COPC. See [streaming.md](streaming.md).
 
-`3D Tiles` / `PNTS`: a single `.pnts` tile opens today. It is detected by its `pnts` magic bytes (so a tile saved under another name still opens, and a file that only borrows the extension is refused rather than read as a tile), decoded through the viewer's PNTS reader — uncompressed `POSITION` and `POSITION_QUANTIZED`, RGBA/RGB/RGB565/CONSTANT_RGBA colour — and placed by adding the feature table's `RTC_CENTER` back to every position. Draco-compressed tiles are refused.
+`3D Tiles` / `PNTS`: a single `.pnts` tile opens today. It is detected by its `pnts` magic bytes (so a tile saved under another name still opens, and a file that only borrows the extension is refused rather than read as a tile), decoded through the viewer's PNTS reader (uncompressed `POSITION` and `POSITION_QUANTIZED`, RGBA/RGB/RGB565/CONSTANT_RGBA colour) and placed by adding the feature table's `RTC_CENTER` back to every position. Draco-compressed tiles are refused.
 
 A whole `tileset.json` opens by URL, and it is worth being exact about what that is and what it is not.
 
@@ -60,11 +60,11 @@ What opens: a streamed 3D Tiles 1.0 or 1.1 tileset whose content is PNTS. The en
 
 A streamed tileset reports no source point total. A `tileset.json` never states one, and the per-tile figures the scheduler admits on are decode-admission estimates rather than counts, so a sum of them would read as a measurement it is not. The colour modes offered are the ones a point tile can fill: intensity, classification and returns are absent from the format and are not offered.
 
-Both refinement modes stream. ADD means a tile's children are extra detail alongside it, and every resident node draws. REPLACE means the children replace the parent's content, so the scheduler's replace frontier hides a REPLACE parent once every one of its children is resident — an atomic parent-to-children swap with no instant of doubled geometry and no instant of a hole. Until a REPLACE parent's children are all resident it keeps drawing and its subtree is withheld, so a parent straddling the view edge, whose off-screen children never load, shows its coarse level rather than a gap. That is conservative, not wrong: a parent fully in view refines as soon as its children fit the budget and land.
+Both refinement modes stream. ADD means a tile's children are extra detail alongside it, and every resident node draws. REPLACE means the children replace the parent's content, so the scheduler's replace frontier hides a REPLACE parent once every one of its children is resident: an atomic parent-to-children swap with no instant of doubled geometry and no instant of a hole. Until a REPLACE parent's children are all resident it keeps drawing and its subtree is withheld, so a parent straddling the view edge, whose off-screen children never load, shows its coarse level rather than a gap. That is conservative, not wrong: a parent fully in view refines as soon as its children fit the budget and land.
 
 Implicit tiling opens. A tileset that describes its hierarchy with a subdivision scheme and subtree files rather than a written-out tree is expanded into the equivalent explicit document before it is parsed, so every refusal the explicit path makes applies to it unchanged. Quadtree and octree schemes are read, availability arrives as a constant or as a bitstream in an internal or external buffer, and subtree and buffer URLs pass the same origin and credential checks as tile content, including the directory-escape rule. The expansion is bounded: subtree levels, tiles per subtree, external buffers, available levels, subtree count, total expanded tiles and subtree bytes each have a ceiling that refuses by name rather than truncating. A sphere bounding volume on an implicit tile is refused, as is a tile declaring both `implicitTiling` and `children`. The older extension spellings are refused by name.
 
-A tile whose content is a nested external `tileset.json` is followed: the referenced document is fetched, its own implicit and external references expanded in turn, and its root spliced in as a child in the referencing tile's frame, so a set split across several documents opens as one scene. The follow is bounded — the count of external documents, the nesting depth and the bytes of one document each refuse by name — and a document that references itself, directly or around a cycle, is refused rather than followed forever.
+A tile whose content is a nested external `tileset.json` is followed: the referenced document is fetched, its own implicit and external references expanded in turn, and its root spliced in as a child in the referencing tile's frame, so a set split across several documents opens as one scene. The follow is bounded (the count of external documents, the nesting depth and the bytes of one document each refuse by name) and a document that references itself, directly or around a cycle, is refused rather than followed forever.
 
 What does not open: the wider 3D Tiles ecosystem. B3DM, I3DM, CMPT and glTF content are refused by name, because mesh tiles need a renderer this viewer does not have. Draco-compressed tiles are refused rather than partially read.
 
@@ -73,19 +73,19 @@ Two further limits of the supported subset are known:
 - Content is selected by the URI extension. 3D Tiles 1.1 does not require a content URI to have a file extension, and permits content to be identified by its magic header or to be JSON, so a tileset that names its tiles without an extension is not opened even when every tile in it is PNTS.
 - Both the single `content` and the 3D Tiles 1.1 `contents[]` array are read; every content entry on a tile is classified and served independently, and a tile whose entries are all point clouds streams all of them.
 
-## Mobile Scan Exports
+## Mobile scan exports
 
 OpenLiDARViewer can open compatible files exported from mobile scanning apps when the exported format is supported by the viewer.
 
 Recommended mobile formats:
 
-- GLTF / GLB — practical for mobile mesh workflows and some free mobile scanning workflows
-- PLY — useful for point-cloud workflows when available
-- OBJ — common mesh format when available
-- XYZ / CSV — useful for raw point-coordinate workflows
-- LAS / LAZ — professional LiDAR formats if exported or converted
+- GLTF / GLB: practical for mobile mesh workflows and some free mobile scanning workflows
+- PLY: useful for point-cloud workflows when available
+- OBJ: common mesh format when available
+- XYZ / CSV: useful for raw point-coordinate workflows
+- LAS / LAZ: professional LiDAR formats if exported or converted
 
-Mobile scanning apps: Several iPhone LiDAR scanning apps — such as Polycam, Scaniverse, or 3D Scanner App — can export scans in these formats. Available formats and free-tier options differ between apps and can change, so check each app's current help documentation. Some formats may require a paid plan.
+Mobile scanning apps: Several iPhone LiDAR scanning apps (such as Polycam, Scaniverse, or 3D Scanner App) can export scans in these formats. Available formats and free-tier options differ between apps and can change, so check each app's current help documentation. Some formats may require a paid plan.
 
 Trademark note: OpenLiDARViewer is not affiliated with, endorsed by, or sponsored by Apple or any third-party scanning app.
 

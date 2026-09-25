@@ -151,7 +151,7 @@ sharp:
 - ours versus the closed form: max separation 0.0000643 of a level, RMSE
   0.0000072, over all 11,564 interior cells;
 - and a zero-tolerance identity, re-encoding our intensity in GDAL's own scale,
-  `round(1 + 254·h)`, reproduces the committed `hillshade-gdal.asc` **exactly**
+  `round(1 + 254·h)`, reproduces the committed `hillshade-gdal.asc` exactly
   at every one of those cells.
 
 The reported figures include the encoding difference rather than subtracting it,
@@ -173,14 +173,14 @@ ground is level. Three things must be handled or the comparison quietly
 measures the wrong thing, and all three are handled in
 `tests/aspectCrossCheck.test.ts`:
 
-- **Circular difference.** 359° and 1° are 2° apart, not 358°. Every pair is
+- Circular difference. 359° and 1° are 2° apart, not 358°. Every pair is
   folded to its shortest angular separation before any tolerance is applied.
-- **Flat cells.** `gdaldem aspect` writes NODATA where it detects a flat; our
+- Flat cells. `gdaldem aspect` writes NODATA where it detects a flat; our
   kernel returns 0, which is a real direction (due north). Comparing those two
   would compare a value against a placeholder, so cells whose *closed-form*
   slope is at or below 2° are excluded on all three legs, and the test fails
   if GDAL wrote NODATA anywhere inside the surviving set.
-- **Frame and row order.** Ours is radians in the math frame (CCW from east,
+- Frame and row order. Ours is radians in the math frame (CCW from east,
   π/2 = north) on a northing-up grid; GDAL is degrees clockwise from north;
   ASCII Grid writes the northern row first while our kernel treats row+1 as
   north. `(90 − mathDeg) mod 360` converts the frame, and the rows are flipped
@@ -205,7 +205,7 @@ manual, documented step run once per fixture on a workstation.
 
 ## Procedure per product
 
-The goal is a reference raster on the **same grid** as ours (same origin, cell
+The goal is a reference raster on the same grid as ours (same origin, cell
 size, extent, and row order), so the two can be compared cell for cell.
 
 ### DTM / DSM (PDAL)
@@ -227,7 +227,7 @@ size, extent, and row order), so the two can be compared cell for cell.
 
 ### Slope / aspect / hillshade (GDAL)
 
-1. Run GDAL against the **same** reference or source DEM:
+1. Run GDAL against the same reference or source DEM:
 
    ```
    gdaldem slope reference_dtm.tif reference_slope.tif -compute_edges
@@ -284,7 +284,7 @@ size, extent, and row order), so the two can be compared cell for cell.
 2. The second command runs two tools and computes nothing itself. `ogr2ogr`
    with the SQLite dialect builds the corridor table, `ST_Line_Locate_Point`
    for chainage, `ST_Distance` for the corridor test, the nearest station for
-   the bin, and selects the elevation column **as text**, so the value R
+   the bin, and selects the elevation column as text, so the value R
    reduces is the value the sampler binned and no number is re-printed on the
    way. `Rscript` then applies `quantile(type = 7)` per station.
 
@@ -317,7 +317,7 @@ When a reference is generated:
 
 ## What E4 does and does not mean
 
-E4 means two independent implementations agree. It does **not** mean either one
+E4 means two independent implementations agree. It does not mean either one
 is correct against the physical world; that is E5 (field ground truth). A DTM
 that matches PDAL within 5 cm still carries no survey certification. Keep the
 field-validation caveats in place after any E4 promotion.

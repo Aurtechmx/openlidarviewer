@@ -1,10 +1,10 @@
-# Mobile Browser Support
+# Mobile browser support
 
 ## Overview
 
 OpenLiDARViewer supports mobile-friendly viewing and file loading for compatible point-cloud and 3D scan files. You can open and inspect those files from phones and tablets, directly in a mobile browser.
 
-## Supported Mobile Browsers
+## Supported mobile browsers
 
 - Safari browser on iPhone devices
 - Chrome browser on iPhone devices (note that browsers on iOS use Apple's WebKit engine)
@@ -13,7 +13,7 @@ OpenLiDARViewer supports mobile-friendly viewing and file loading for compatible
 
 WebGPU availability varies by browser and device. OpenLiDARViewer uses WebGPU when present and falls back to WebGL 2 otherwise.
 
-## Opening Files on iPhone Devices
+## Opening files on iPhone devices
 
 To open a scan on an iPhone:
 
@@ -23,7 +23,7 @@ To open a scan on an iPhone:
 4. Select the file in the native file picker.
 5. Wait for parsing and rendering to finish.
 
-## Recommended Mobile Scan Workflow
+## Recommended mobile scan workflow
 
 OpenLiDARViewer can open compatible exports from mobile scanning apps. Useful formats include:
 
@@ -33,28 +33,28 @@ OpenLiDARViewer can open compatible exports from mobile scanning apps. Useful fo
 - XYZ / CSV for raw point-coordinate workflows
 - LAS / LAZ, which are more common in drone and professional LiDAR workflows
 
-Several iPhone LiDAR scanning apps — such as Polycam, Scaniverse, or 3D Scanner App — can export scans in formats OpenLiDARViewer reads, including GLTF/GLB, OBJ, and PLY. Export formats, free-tier availability, and pricing differ between apps and can change over time, so check each app's current help documentation before relying on a particular export. Some formats may require a paid plan.
+Several iPhone LiDAR scanning apps (such as Polycam, Scaniverse, or 3D Scanner App) can export scans in formats OpenLiDARViewer reads, including GLTF/GLB, OBJ, and PLY. Export formats, free-tier availability, and pricing differ between apps and can change over time, so check each app's current help documentation before relying on a particular export. Some formats may require a paid plan.
 
 OpenLiDARViewer is not affiliated with, endorsed by, or sponsored by Apple or any third-party scanning app, including those named above. Third-party product names are used only for descriptive compatibility and workflow documentation.
 
-## Touch Navigation
+## Touch navigation
 
 - Drag with one finger to rotate.
 - Pinch to zoom.
 - Drag with two fingers to pan.
 - Double tap to focus on a point where supported.
 
-## Mobile Measurement
+## Mobile measurement
 
-To measure on mobile, open the Measure tool, pick a kind from the toolbar — distance, polyline, area, height, angle, or slope — and tap points on the scan. Tap a placed point to drag it, and use the Clear and Done controls to remove measurements or exit the tool. The units toggle switches between metric and imperial.
+To measure on mobile, open the Measure tool, pick a kind from the toolbar (distance, polyline, area, height, angle, or slope) and tap points on the scan. Tap a placed point to drag it, and use the Clear and Done controls to remove measurements or exit the tool. The units toggle switches between metric and imperial.
 
 Measurements are intended for visual inspection and documentation workflows unless validated against survey-grade data and procedures.
 
-## Mobile Rendering
+## Mobile rendering
 
-Eye Dome Lighting — the screen-space depth shading — is off by default on phones and on the WebGL 2 backend, so a scan opens at full speed on a weaker mobile GPU. It can still be switched on from the Rendering section of the Scan Intelligence panel if your device handles it comfortably. Adaptive point sizing and round, antialiased points are on by default on mobile, the same as on desktop.
+Eye Dome Lighting (the screen-space depth shading) is off by default on phones and on the WebGL 2 backend, so a scan opens at full speed on a weaker mobile GPU. It can still be switched on from the Rendering section of the Scan Intelligence panel if your device handles it comfortably. Adaptive point sizing and round, antialiased points are on by default on mobile, the same as on desktop.
 
-## Mobile Performance Tips
+## Mobile performance tips
 
 - Start with smaller GLTF / GLB / PLY files.
 - Use Mobile Safe or Balanced detail.
@@ -72,7 +72,7 @@ Eye Dome Lighting — the screen-space depth shading — is off by default on ph
 - Available file formats depend on implementation status.
 - Measurements are not survey-grade by default.
 
-## Manual QA Checklist
+## Manual QA checklist
 
 - [ ] Safari browser on iPhone loads the app
 - [ ] Chrome browser on iPhone loads the app

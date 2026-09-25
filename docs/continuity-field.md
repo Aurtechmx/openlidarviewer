@@ -11,7 +11,7 @@ rest on measurement and which do not.
 ## What it does, in the terms this document uses throughout
 
 A point cloud drawn as sprites leaves holes between samples of a surface that
-is continuous. Closing those holes is **presentation reconstruction**: pixels
+is continuous. Closing those holes is presentation reconstruction: pixels
 the renderer paints where no sample was recorded, because neighbouring samples
 on one surface bracket them.
 

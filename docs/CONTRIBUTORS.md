@@ -1,6 +1,6 @@
 # Contributors
 
-Creator and maintainer: **A. Urias (Aurtech)**.
+Creator and maintainer: A. Urias (Aurtech).
 
 Want to contribute or get in touch? Send an email to <info@aurtech.mx>.
 

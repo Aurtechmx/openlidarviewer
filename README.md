@@ -23,7 +23,7 @@ A browser-native LiDAR and point-cloud viewer for fast local inspection, 3D navi
 
 ## Try it in 10 seconds
 
-No install, no account, no upload. Open **[app.openlidarviewer.org](https://app.openlidarviewer.org/)**, then drag a `.las`, `.laz`, or `.copc.laz` file (or paste a remote COPC / `ept.json` URL) onto the page. You're navigating the cloud in your browser, and the file never leaves your device.
+No install, no account, no upload. Open [app.openlidarviewer.org](https://app.openlidarviewer.org/), then drag a `.las`, `.laz`, or `.copc.laz` file (or paste a remote COPC / `ept.json` URL) onto the page. You're navigating the cloud in your browser, and the file never leaves your device.
 
 New here? The [User Guide](docs/USER_GUIDE.md) walks through opening a scan, measuring, analysing terrain, comparing two scans, and sharing your work. Full documentation, the format matrix, and the scientific validation record live at the [docs site](https://openlidarviewer.org/).
 
@@ -81,7 +81,7 @@ Game-like navigation lets a scan be explored like a 3D environment.
 - Smart camera presets (Top, Iso, Oblique, Planar): one-click jumps that frame the cloud from a known angle
 - A triangular nav widget that surfaces the current mode and a centre Reset
 - Saved, renamable camera views for repeatable inspection
-- Shareable view links: **Copy view link** reproduces the current view (camera, colour mode, point sizing); no scan data is shared, the recipient still needs the same file
+- Shareable view links: Copy view link reproduces the current view (camera, colour mode, point sizing); no scan data is shared, the recipient still needs the same file
 - Movement speed scales with the size of the loaded scan, so the controls feel right for a small room or a kilometre-wide survey
 
 | Control | Action |
@@ -141,13 +141,13 @@ Open the Measure tool, pick a kind from the toolbar, and place points directly o
 | Profile | Cross-section between two points: 3D length, horizontal distance, vertical drop, and grade |
 
 - Every measurement is editable: drag a point, undo the last point while placing, rename, or clear. Placed measurements list in a compact panel and persist for the session. One toggle switches all readouts between metric and imperial. The set exports to a JSON session file and re-imports later
-- **Cross-section profile** renders a height-vs-distance chart strip under the row, resizable from a default 140 px out to 360 px so the curve reads at deliverable size
-- **Volume (cut / fill)** against a polygon or 3D lasso, with NaN / degenerate / self-intersection guards and a streaming-resident caveat when nodes are still loading
-- **Classification editor**: paint a class id over a lassoed selection and write the result back to LAS
-- **Density heatmap** overlay for coverage QA, **box clipping / slicing** for interactive cross-cuts, and **measurement chains** that combine placed measurements as sum / difference / ratio
-- A **Scan Intelligence** panel with point count, dimensions, density, spacing, attributes, and an Advanced report of integrity diagnostics
-- A **Dataset Intelligence** card (header-derived Point Density, Terrain Complexity, Ground Visibility, Streaming Coverage, Terrain Confidence) that leaves a row blank rather than fabricating a bucket when no signal is available
-- **Point inspection**: click a point to read its coordinates and attributes (LAS return number, point source ID, GPS time, and UTM + lat/lon when a CRS is known), with one-click copy, or hover with the live probe for a click-free readout
+- Cross-section profile renders a height-vs-distance chart strip under the row, resizable from a default 140 px out to 360 px so the curve reads at deliverable size
+- Volume (cut / fill) against a polygon or 3D lasso, with NaN / degenerate / self-intersection guards and a streaming-resident caveat when nodes are still loading
+- Classification editor: paint a class id over a lassoed selection and write the result back to LAS
+- Density heatmap overlay for coverage QA, box clipping / slicing for interactive cross-cuts, and measurement chains that combine placed measurements as sum / difference / ratio
+- A Scan Intelligence panel with point count, dimensions, density, spacing, attributes, and an Advanced report of integrity diagnostics
+- A Dataset Intelligence card (header-derived Point Density, Terrain Complexity, Ground Visibility, Streaming Coverage, Terrain Confidence) that leaves a row blank rather than fabricating a bucket when no signal is available
+- Point inspection: click a point to read its coordinates and attributes (LAS return number, point source ID, GPS time, and UTM + lat/lon when a CRS is known), with one-click copy, or hover with the live probe for a click-free readout
 - Capture provenance from LAS/LAZ and E57 headers (sensor, source software, date), shown in the Scan Report when the file carries it
 
 Measurement is meant for visual inspection and research, not survey-grade use. OLV makes no survey-grade claim; if accuracy matters, check against ground control using your own procedures.
@@ -160,7 +160,7 @@ OpenLiDARViewer ships a terrain analysis stack under `src/terrain/`. Shared type
 
 The lightest surface is the Dataset Intelligence card in the Inspector: header-derived, informational, and it does not perform ground classification. The main capability is the confidence-aware DTM and contour pipeline (`src/terrain/contour/`, `ground/`, `surface/`) surfaced through the Analyse panel: ground classification, a gridded DTM with per-cell confidence and hold-out RMSE validation, a 0-100 heuristic terrain readiness index (workflow-readiness weights, not an external accuracy calibration), surface models (DSM, canopy height, slope, multi-directional hillshade), a single top-level Terrain Assessment verdict, evidence-graded contour export (GeoJSON / SVG / DXF), a printable map sheet, and a georeferenced DEM package (ASCII Grid + GeoTIFF). Ground classification is a heuristic: its output is derived, not survey-grade. A DTM quality gate governs whether terrain-product export is enabled, and per-cell confidence is calibrated against measured hold-out error, not asserted. Treat terrain products and DEM exports as export-ready only when the Terrain Assessment reads Good, and as preview otherwise.
 
-**Contour Studio** is the post-analysis step that turns an analysed scan into a contour deliverable, kept out of the Analyse panel so map-making doesn't crowd the terrain work. You pick a purpose (Engineering Plan, Survey Review, Terrain Research, Presentation Map, or Custom); a purpose only bundles presentation defaults and can never raise a claim. Analytical contours are the exact isolines of the grid, while cartographic contours are generalised for legibility, reference the analytical geometry's hash, and are never labelled exact. Every export routes through one evidence gate that can only downgrade (validated, exploratory, or blocked): a blocked product returns a diagnostic instead of a polished file, an exploratory one is watermarked, and the permit decision is stamped into each artifact's provenance. Exports cover contour vectors (GeoJSON, DXF, SVG), a map-sheet PDF, a DEM raster package, a terrain intelligence report, and a complete ZIP with a SHA256SUMS manifest. Validation is internal hold-out only: nothing is survey-grade, and no output asserts certification.
+Contour Studio is the post-analysis step that turns an analysed scan into a contour deliverable, kept out of the Analyse panel so map-making doesn't crowd the terrain work. You pick a purpose (Engineering Plan, Survey Review, Terrain Research, Presentation Map, or Custom); a purpose only bundles presentation defaults and can never raise a claim. Analytical contours are the exact isolines of the grid, while cartographic contours are generalised for legibility, reference the analytical geometry's hash, and are never labelled exact. Every export routes through one evidence gate that can only downgrade (validated, exploratory, or blocked): a blocked product returns a diagnostic instead of a polished file, an exploratory one is watermarked, and the permit decision is stamped into each artifact's provenance. Exports cover contour vectors (GeoJSON, DXF, SVG), a map-sheet PDF, a DEM raster package, a terrain intelligence report, and a complete ZIP with a SHA256SUMS manifest. Validation is internal hold-out only: nothing is survey-grade, and no output asserts certification.
 
 See [`docs/terrain-intelligence.md`](docs/terrain-intelligence.md), [`docs/validation/terrain-validation-matrix.md`](docs/validation/terrain-validation-matrix.md), and [`docs/contour-studio.md`](docs/contour-studio.md).
 </details>
@@ -209,10 +209,10 @@ More in [`docs/screenshots.md`](docs/screenshots.md).
 
 ## Formats & requirements
 
-**Import:** `LAS`, `LAZ`, `E57`, `PLY`, `OBJ`, `GLB`, `GLTF`, `XYZ`, `CSV`, `PCD`, `PTX`, `PTS`.
-**Export:** `LAS` (1.2 / 1.4), `PLY`, `OBJ`, `XYZ`, `CSV`, and `PNG` snapshots.
+Import: `LAS`, `LAZ`, `E57`, `PLY`, `OBJ`, `GLB`, `GLTF`, `XYZ`, `CSV`, `PCD`, `PTX`, `PTS`.
+Export: `LAS` (1.2 / 1.4), `PLY`, `OBJ`, `XYZ`, `CSV`, and `PNG` snapshots.
 
-For large datasets, stream **COPC** (`.copc.laz`) or **EPT** (`ept.json`), which load progressively with bounded memory. For lightweight sharing, use **PLY** or **GLB**.
+For large datasets, stream COPC (`.copc.laz`) or EPT (`ept.json`), which load progressively with bounded memory. For lightweight sharing, use PLY or GLB.
 
 <details>
 <summary><b>Format matrix and compatibility notes</b></summary>
@@ -286,11 +286,11 @@ A fuller walkthrough is in [`docs/usage.md`](docs/usage.md).
 
 Each assumes a single drag-and-drop or URL open, with everything happening locally in the browser.
 
-- **Large streaming dataset review.** Open COPC (`.copc.laz`) or EPT (`ept.json`), local file or remote URL. Navigate at interactive frame rates against datasets far larger than browser memory; the scheduler streams only what the current view needs.
-- **Inspection reporting.** Annotate findings, measure distances / areas / slopes / angles / profiles, then export a multi-page PDF report (cover, dataset summary, embedded image exports, annotations, measurements, technical notes). Three templates and brand-aware accent + logo support.
-- **Terrain analysis.** Export height maps from drone LiDAR with legend customisation and unit-system control, useful for slope review, elevation comparison, and quick topographic figures. Cross-section profiles report 3D length, horizontal distance, vertical drop, and grade across any two picked points.
-- **Classification QA.** Export classification maps, toggle the colour mode to highlight specific classes, place annotations on misclassified regions, and round-trip the working state through `.olvsession`.
-- **Mobile scan review.** Open lightweight datasets (`.glb`, `.ply`, `.obj` from Polycam, Scaniverse, or similar) on tablets or phones. The viewer adapts rendering detail and EDL defaults for weaker GPUs so a phone scan is readable from the first frame.
+- Large streaming dataset review. Open COPC (`.copc.laz`) or EPT (`ept.json`), local file or remote URL. Navigate at interactive frame rates against datasets far larger than browser memory; the scheduler streams only what the current view needs.
+- Inspection reporting. Annotate findings, measure distances / areas / slopes / angles / profiles, then export a multi-page PDF report (cover, dataset summary, embedded image exports, annotations, measurements, technical notes). Three templates and brand-aware accent + logo support.
+- Terrain analysis. Export height maps from drone LiDAR with legend customisation and unit-system control, useful for slope review, elevation comparison, and quick topographic figures. Cross-section profiles report 3D length, horizontal distance, vertical drop, and grade across any two picked points.
+- Classification QA. Export classification maps, toggle the colour mode to highlight specific classes, place annotations on misclassified regions, and round-trip the working state through `.olvsession`.
+- Mobile scan review. Open lightweight datasets (`.glb`, `.ply`, `.obj` from Polycam, Scaniverse, or similar) on tablets or phones. The viewer adapts rendering detail and EDL defaults for weaker GPUs so a phone scan is readable from the first frame.
 </details>
 
 ## Under the hood
@@ -354,24 +354,24 @@ Full detail is in [`docs/limitations.md`](docs/limitations.md).
 
 ## FAQ
 
-**Can I view LAS / LAZ / COPC files in the browser?**
+Can I view LAS / LAZ / COPC files in the browser?
 Yes. Drag a `.las`, `.laz`, or `.copc.laz` onto [app.openlidarviewer.org](https://app.openlidarviewer.org/), or paste a remote COPC / `ept.json` URL. No install, no plugin.
 
-**Is my data uploaded anywhere?**
+Is my data uploaded anywhere?
 No. Files are read and rendered locally. The only network calls are for remote datasets you choose to open; your local files never leave your device.
 
-**What's the largest scan it can open?**
+What's the largest scan it can open?
 Most local files are bounded by browser memory and the GPU. A very large uncompressed LAS or chunked LAZ is the exception: it is indexed out of core into browser storage and streamed through the same scheduler, and reopening the same file reuses that index. A content hash authorises the reuse, so an edited file never gets a stale one. The index is a cache, not durable storage: the browser or you may clear it, and old ones are evicted under a size cap. Where storage is missing or too small, the file is refused with guidance rather than loaded whole.
 
 For anything else too large, stream it as COPC or EPT, or convert it with PDAL or Entwine. Streaming loads only the set the camera needs.
 
-**Which formats are supported?**
+Which formats are supported?
 LAS / LAZ, PLY, XYZ / CSV, E57, and glTF / GLB for static loads; for streaming: COPC, EPT, a 3D Tiles PNTS tileset, and a very large uncompressed LAS or chunked LAZ indexed out of core. See [Formats & requirements](#formats--requirements).
 
-**Is it survey-grade?**
+Is it survey-grade?
 No. Measurements and quality grades describe the data you loaded; they are not a survey-grade certification. Validate against ground control where accuracy matters.
 
-**Does it need WebGPU?**
+Does it need WebGPU?
 No. WebGPU is the primary path and it falls back to WebGL 2 automatically.
 
 ## Project & research
@@ -405,11 +405,11 @@ Contributions are welcome. See [CONTRIBUTING.md](.github/CONTRIBUTING.md), the [
 
 OpenLiDARViewer stands on a lot of open work, and we're grateful for it.
 
-**Built on** [three.js](https://github.com/mrdoob/three.js) (rendering), [loaders.gl](https://github.com/visgl/loaders.gl) (format parsing), [proj4js](https://github.com/proj4js/proj4js) (CRS transforms), [pdf-lib](https://github.com/Hopding/pdf-lib) (reports), and [laz-perf](https://github.com/hobuinc/laz-perf) (LAZ decoding). Full licenses in [THIRD_PARTY_NOTICES.md](docs/project/THIRD_PARTY_NOTICES.md).
+Built on [three.js](https://github.com/mrdoob/three.js) (rendering), [loaders.gl](https://github.com/visgl/loaders.gl) (format parsing), [proj4js](https://github.com/proj4js/proj4js) (CRS transforms), [pdf-lib](https://github.com/Hopding/pdf-lib) (reports), and [laz-perf](https://github.com/hobuinc/laz-perf) (LAZ decoding). Full licenses in [THIRD_PARTY_NOTICES.md](docs/project/THIRD_PARTY_NOTICES.md).
 
-**Data:** the streamed sample datasets are limited to sources with a confirmed open licence: [USGS 3DEP](https://www.usgs.gov/3d-elevation-program) (public domain) and the swisstopo and GURS national programmes (via FLAI). Providers and terms are listed in [docs/credits.md](docs/credits.md).
+Data: the streamed sample datasets are limited to sources with a confirmed open licence: [USGS 3DEP](https://www.usgs.gov/3d-elevation-program) (public domain) and the swisstopo and GURS national programmes (via FLAI). Providers and terms are listed in [docs/credits.md](docs/credits.md).
 
-**Format specifications OLV builds against (no conformance claimed):** ASPRS (LAS/LAZ), the Khronos Group (glTF/GLB), ASTM (E57), and OGC / IOGP-EPSG (coordinate systems). Particular thanks to **Howard Butler** and **Hobu, Inc.**, whose work on laz-perf, COPC, and Entwine this viewer relies on.
+Format specifications OLV builds against (no conformance claimed): ASPRS (LAS/LAZ), the Khronos Group (glTF/GLB), ASTM (E57), and OGC / IOGP-EPSG (coordinate systems). Particular thanks to Howard Butler and Hobu, Inc., whose work on laz-perf, COPC, and Entwine this viewer relies on.
 
 ## Citation & research collaboration
 

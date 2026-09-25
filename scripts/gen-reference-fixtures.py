@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """gen-reference-fixtures.py — emit an independent CRS reference table via pyproj.
 
-Roadmap item P1 #9 (docs/architecture/coordinate-integrity-roadmap.md): the UTM
+The UTM
 projection maths is checked for internal self-consistency (round trips, Snyder
 anchors) but NOT against a second, independent implementation in a committed,
 reproducible fixture. This script produces that fixture from PROJ (via pyproj),
