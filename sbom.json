@@ -3,9 +3,9 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
   "version": 1,
-  "serialNumber": "urn:uuid:b5fcd786-a04f-403a-885d-6ead0249064f",
+  "serialNumber": "urn:uuid:8be6b4d0-d882-424f-b0f3-a32e5801ccbf",
   "metadata": {
-    "timestamp": "2026-09-19T00:20:43.966Z",
+    "timestamp": "2026-09-25T14:51:53.360Z",
     "tools": {
       "components": [
         {
@@ -177,7 +177,13 @@
         {
           "url": "https://registry.npmjs.org/@fontsource-variable/inter/-/inter-5.3.0.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "3aea4be3cbdae093687dbf7bc3a358785f52ed6fe41cd28cd04afc0de9b99ea8b88de38bad5243a04f2d644a673099ad92f35b0751083cfc0771d905e9bd6850"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -223,7 +229,13 @@
         {
           "url": "https://registry.npmjs.org/@fontsource/jetbrains-mono/-/jetbrains-mono-5.3.0.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "7ea0df07923d7f5a754d5e3ce9a52007db7cccff383f43b516d411e4e97dbe3c0fcbe4be1081a55589b572f8f65b9b217193138369d915d54ca07e7016ef1ad4"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -269,7 +281,13 @@
         {
           "url": "https://registry.npmjs.org/@fontsource/manrope/-/manrope-5.3.0.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "a1b2750efdfeb8203a1e51e05bcbb8046631251f489f61d6ee08c98657e512f92b8f55f5892130bb47d3a0bf896060bf1442857c8cf5b01b8f76ebdc2f680800"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -283,8 +301,8 @@
       "type": "library",
       "name": "core",
       "group": "@loaders.gl",
-      "version": "4.4.5",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5",
+      "version": "4.5.2",
+      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.5.2",
       "description": "The core API for working with loaders.gl loaders and writers",
       "licenses": [
         {
@@ -294,7 +312,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40loaders.gl/core@4.4.5",
+      "purl": "pkg:npm/%40loaders.gl/core@4.5.2",
       "externalReferences": [
         {
           "url": "git+https://github.com/visgl/loaders.gl.git",
@@ -312,9 +330,15 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@loaders.gl/core/-/core-4.4.5.tgz",
+          "url": "https://registry.npmjs.org/@loaders.gl/core/-/core-4.5.2.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "025d4d11dfed0b3d0a2d6b25aa611a1a46bd17f56904b1941728dbd0e73bce09a0bf324400e31669cee71a03bc66aa1b978b95702f074e4352142315e0f28843"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -322,196 +346,14 @@
           "name": "cdx:npm:package:path",
           "value": "node_modules/@loaders.gl/core"
         }
-      ],
-      "components": [
-        {
-          "type": "library",
-          "name": "loader-utils",
-          "group": "@loaders.gl",
-          "version": "4.4.5",
-          "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5|@loaders.gl/loader-utils@4.4.5",
-          "description": "Framework-independent loaders for 3D graphics formats",
-          "licenses": [
-            {
-              "license": {
-                "id": "MIT",
-                "acknowledgement": "declared"
-              }
-            }
-          ],
-          "purl": "pkg:npm/%40loaders.gl/loader-utils@4.4.5",
-          "externalReferences": [
-            {
-              "url": "git+https://github.com/visgl/loaders.gl.git",
-              "type": "vcs",
-              "comment": "as detected from PackageJson property \"repository.url\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl#readme",
-              "type": "website",
-              "comment": "as detected from PackageJson property \"homepage\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl/issues",
-              "type": "issue-tracker",
-              "comment": "as detected from PackageJson property \"bugs.url\""
-            },
-            {
-              "url": "https://registry.npmjs.org/@loaders.gl/loader-utils/-/loader-utils-4.4.5.tgz",
-              "type": "distribution",
-              "comment": "as detected from npm-ls property \"resolved\""
-            }
-          ],
-          "properties": [
-            {
-              "name": "cdx:npm:package:path",
-              "value": "node_modules/@loaders.gl/core/node_modules/@loaders.gl/loader-utils"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "name": "schema-utils",
-          "group": "@loaders.gl",
-          "version": "4.4.5",
-          "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5|@loaders.gl/schema-utils@4.4.5",
-          "description": "Schema-related utilities for loaders.gl...",
-          "licenses": [
-            {
-              "license": {
-                "id": "MIT",
-                "acknowledgement": "declared"
-              }
-            }
-          ],
-          "purl": "pkg:npm/%40loaders.gl/schema-utils@4.4.5",
-          "externalReferences": [
-            {
-              "url": "git+https://github.com/visgl/loaders.gl.git",
-              "type": "vcs",
-              "comment": "as detected from PackageJson property \"repository.url\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl#readme",
-              "type": "website",
-              "comment": "as detected from PackageJson property \"homepage\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl/issues",
-              "type": "issue-tracker",
-              "comment": "as detected from PackageJson property \"bugs.url\""
-            },
-            {
-              "url": "https://registry.npmjs.org/@loaders.gl/schema-utils/-/schema-utils-4.4.5.tgz",
-              "type": "distribution",
-              "comment": "as detected from npm-ls property \"resolved\""
-            }
-          ],
-          "properties": [
-            {
-              "name": "cdx:npm:package:path",
-              "value": "node_modules/@loaders.gl/core/node_modules/@loaders.gl/schema-utils"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "name": "schema",
-          "group": "@loaders.gl",
-          "version": "4.4.5",
-          "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5|@loaders.gl/schema@4.4.5",
-          "description": "Table format APIs for JSON, CSV, etc...",
-          "licenses": [
-            {
-              "license": {
-                "id": "MIT",
-                "acknowledgement": "declared"
-              }
-            }
-          ],
-          "purl": "pkg:npm/%40loaders.gl/schema@4.4.5",
-          "externalReferences": [
-            {
-              "url": "git+https://github.com/visgl/loaders.gl.git",
-              "type": "vcs",
-              "comment": "as detected from PackageJson property \"repository.url\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl#readme",
-              "type": "website",
-              "comment": "as detected from PackageJson property \"homepage\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl/issues",
-              "type": "issue-tracker",
-              "comment": "as detected from PackageJson property \"bugs.url\""
-            },
-            {
-              "url": "https://registry.npmjs.org/@loaders.gl/schema/-/schema-4.4.5.tgz",
-              "type": "distribution",
-              "comment": "as detected from npm-ls property \"resolved\""
-            }
-          ],
-          "properties": [
-            {
-              "name": "cdx:npm:package:path",
-              "value": "node_modules/@loaders.gl/core/node_modules/@loaders.gl/schema"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "name": "worker-utils",
-          "group": "@loaders.gl",
-          "version": "4.4.5",
-          "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5|@loaders.gl/worker-utils@4.4.5",
-          "description": "Utilities for running tasks on worker threads",
-          "licenses": [
-            {
-              "license": {
-                "id": "MIT",
-                "acknowledgement": "declared"
-              }
-            }
-          ],
-          "purl": "pkg:npm/%40loaders.gl/worker-utils@4.4.5",
-          "externalReferences": [
-            {
-              "url": "git+https://github.com/visgl/loaders.gl.git",
-              "type": "vcs",
-              "comment": "as detected from PackageJson property \"repository.url\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl#readme",
-              "type": "website",
-              "comment": "as detected from PackageJson property \"homepage\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl/issues",
-              "type": "issue-tracker",
-              "comment": "as detected from PackageJson property \"bugs.url\""
-            },
-            {
-              "url": "https://registry.npmjs.org/@loaders.gl/worker-utils/-/worker-utils-4.4.5.tgz",
-              "type": "distribution",
-              "comment": "as detected from npm-ls property \"resolved\""
-            }
-          ],
-          "properties": [
-            {
-              "name": "cdx:npm:package:path",
-              "value": "node_modules/@loaders.gl/core/node_modules/@loaders.gl/worker-utils"
-            }
-          ]
-        }
       ]
     },
     {
       "type": "library",
       "name": "gltf",
       "group": "@loaders.gl",
-      "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/gltf@4.4.3",
+      "version": "4.5.2",
+      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/gltf@4.5.2",
       "description": "Framework-independent loader for the glTF format",
       "licenses": [
         {
@@ -521,7 +363,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40loaders.gl/gltf@4.4.3",
+      "purl": "pkg:npm/%40loaders.gl/gltf@4.5.2",
       "externalReferences": [
         {
           "url": "git+https://github.com/visgl/loaders.gl.git",
@@ -539,9 +381,15 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@loaders.gl/gltf/-/gltf-4.4.3.tgz",
+          "url": "https://registry.npmjs.org/@loaders.gl/gltf/-/gltf-4.5.2.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "16c98d651c95c2e93c973f3e5e48a2892002578d5312dc4c1054301a279a18ef24d1d3fd0bca89c935338e7a4e2029d1e77052e239e116be63cd4138f3a1151b"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -549,14 +397,67 @@
           "name": "cdx:npm:package:path",
           "value": "node_modules/@loaders.gl/gltf"
         }
+      ],
+      "components": [
+        {
+          "type": "library",
+          "name": "meshoptimizer",
+          "version": "1.2.0",
+          "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/gltf@4.5.2|meshoptimizer@1.2.0",
+          "author": "Arseny Kapoulkine",
+          "description": "Mesh optimization library that makes meshes smaller and faster to render",
+          "licenses": [
+            {
+              "license": {
+                "id": "MIT",
+                "acknowledgement": "declared"
+              }
+            }
+          ],
+          "purl": "pkg:npm/meshoptimizer@1.2.0",
+          "externalReferences": [
+            {
+              "url": "git+https://github.com/zeux/meshoptimizer.git",
+              "type": "vcs",
+              "comment": "as detected from PackageJson property \"repository.url\""
+            },
+            {
+              "url": "https://github.com/zeux/meshoptimizer",
+              "type": "website",
+              "comment": "as detected from PackageJson property \"homepage\""
+            },
+            {
+              "url": "https://github.com/zeux/meshoptimizer/issues",
+              "type": "issue-tracker",
+              "comment": "as detected from PackageJson property \"bugs.url\""
+            },
+            {
+              "url": "https://registry.npmjs.org/meshoptimizer/-/meshoptimizer-1.2.0.tgz",
+              "type": "distribution",
+              "hashes": [
+                {
+                  "alg": "SHA-512",
+                  "content": "75abd165e2096f126b136e1cc1095eed90ecc63764fcea6134e57cde85fe79f4229f2a0763d25ccb3dcc1db6a81b4ab24996a395d1b3b4d67544dfd3d7d3d9b2"
+                }
+              ],
+              "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+            }
+          ],
+          "properties": [
+            {
+              "name": "cdx:npm:package:path",
+              "value": "node_modules/@loaders.gl/gltf/node_modules/meshoptimizer"
+            }
+          ]
+        }
       ]
     },
     {
       "type": "library",
       "name": "obj",
       "group": "@loaders.gl",
-      "version": "4.5.1",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.1",
+      "version": "4.5.2",
+      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.2",
       "description": "Framework-independent loader for the OBJ format",
       "licenses": [
         {
@@ -566,7 +467,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40loaders.gl/obj@4.5.1",
+      "purl": "pkg:npm/%40loaders.gl/obj@4.5.2",
       "externalReferences": [
         {
           "url": "git+https://github.com/visgl/loaders.gl.git",
@@ -584,9 +485,15 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@loaders.gl/obj/-/obj-4.5.1.tgz",
+          "url": "https://registry.npmjs.org/@loaders.gl/obj/-/obj-4.5.2.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "7748502abc4a2754c29120b2a25687654558be5b347c9b52cf648675e89bfeb8a114165bae8481aa2895a67c0a3e301b6bdcd699f294b33b8f1b2770c8c72870"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -594,196 +501,14 @@
           "name": "cdx:npm:package:path",
           "value": "node_modules/@loaders.gl/obj"
         }
-      ],
-      "components": [
-        {
-          "type": "library",
-          "name": "loader-utils",
-          "group": "@loaders.gl",
-          "version": "4.5.1",
-          "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.1|@loaders.gl/loader-utils@4.5.1",
-          "description": "Framework-independent loaders for 3D graphics formats",
-          "licenses": [
-            {
-              "license": {
-                "id": "MIT",
-                "acknowledgement": "declared"
-              }
-            }
-          ],
-          "purl": "pkg:npm/%40loaders.gl/loader-utils@4.5.1",
-          "externalReferences": [
-            {
-              "url": "git+https://github.com/visgl/loaders.gl.git",
-              "type": "vcs",
-              "comment": "as detected from PackageJson property \"repository.url\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl#readme",
-              "type": "website",
-              "comment": "as detected from PackageJson property \"homepage\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl/issues",
-              "type": "issue-tracker",
-              "comment": "as detected from PackageJson property \"bugs.url\""
-            },
-            {
-              "url": "https://registry.npmjs.org/@loaders.gl/loader-utils/-/loader-utils-4.5.1.tgz",
-              "type": "distribution",
-              "comment": "as detected from npm-ls property \"resolved\""
-            }
-          ],
-          "properties": [
-            {
-              "name": "cdx:npm:package:path",
-              "value": "node_modules/@loaders.gl/obj/node_modules/@loaders.gl/loader-utils"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "name": "schema-utils",
-          "group": "@loaders.gl",
-          "version": "4.5.1",
-          "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.1|@loaders.gl/schema-utils@4.5.1",
-          "description": "Schema-related utilities for loaders.gl...",
-          "licenses": [
-            {
-              "license": {
-                "id": "MIT",
-                "acknowledgement": "declared"
-              }
-            }
-          ],
-          "purl": "pkg:npm/%40loaders.gl/schema-utils@4.5.1",
-          "externalReferences": [
-            {
-              "url": "git+https://github.com/visgl/loaders.gl.git",
-              "type": "vcs",
-              "comment": "as detected from PackageJson property \"repository.url\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl#readme",
-              "type": "website",
-              "comment": "as detected from PackageJson property \"homepage\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl/issues",
-              "type": "issue-tracker",
-              "comment": "as detected from PackageJson property \"bugs.url\""
-            },
-            {
-              "url": "https://registry.npmjs.org/@loaders.gl/schema-utils/-/schema-utils-4.5.1.tgz",
-              "type": "distribution",
-              "comment": "as detected from npm-ls property \"resolved\""
-            }
-          ],
-          "properties": [
-            {
-              "name": "cdx:npm:package:path",
-              "value": "node_modules/@loaders.gl/obj/node_modules/@loaders.gl/schema-utils"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "name": "schema",
-          "group": "@loaders.gl",
-          "version": "4.5.1",
-          "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.1|@loaders.gl/schema@4.5.1",
-          "description": "Table format APIs for JSON, CSV, etc...",
-          "licenses": [
-            {
-              "license": {
-                "id": "MIT",
-                "acknowledgement": "declared"
-              }
-            }
-          ],
-          "purl": "pkg:npm/%40loaders.gl/schema@4.5.1",
-          "externalReferences": [
-            {
-              "url": "git+https://github.com/visgl/loaders.gl.git",
-              "type": "vcs",
-              "comment": "as detected from PackageJson property \"repository.url\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl#readme",
-              "type": "website",
-              "comment": "as detected from PackageJson property \"homepage\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl/issues",
-              "type": "issue-tracker",
-              "comment": "as detected from PackageJson property \"bugs.url\""
-            },
-            {
-              "url": "https://registry.npmjs.org/@loaders.gl/schema/-/schema-4.5.1.tgz",
-              "type": "distribution",
-              "comment": "as detected from npm-ls property \"resolved\""
-            }
-          ],
-          "properties": [
-            {
-              "name": "cdx:npm:package:path",
-              "value": "node_modules/@loaders.gl/obj/node_modules/@loaders.gl/schema"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "name": "worker-utils",
-          "group": "@loaders.gl",
-          "version": "4.5.1",
-          "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.1|@loaders.gl/worker-utils@4.5.1",
-          "description": "Utilities for running tasks on worker threads",
-          "licenses": [
-            {
-              "license": {
-                "id": "MIT",
-                "acknowledgement": "declared"
-              }
-            }
-          ],
-          "purl": "pkg:npm/%40loaders.gl/worker-utils@4.5.1",
-          "externalReferences": [
-            {
-              "url": "git+https://github.com/visgl/loaders.gl.git",
-              "type": "vcs",
-              "comment": "as detected from PackageJson property \"repository.url\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl#readme",
-              "type": "website",
-              "comment": "as detected from PackageJson property \"homepage\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl/issues",
-              "type": "issue-tracker",
-              "comment": "as detected from PackageJson property \"bugs.url\""
-            },
-            {
-              "url": "https://registry.npmjs.org/@loaders.gl/worker-utils/-/worker-utils-4.5.1.tgz",
-              "type": "distribution",
-              "comment": "as detected from npm-ls property \"resolved\""
-            }
-          ],
-          "properties": [
-            {
-              "name": "cdx:npm:package:path",
-              "value": "node_modules/@loaders.gl/obj/node_modules/@loaders.gl/worker-utils"
-            }
-          ]
-        }
       ]
     },
     {
       "type": "library",
       "name": "ply",
       "group": "@loaders.gl",
-      "version": "4.5.1",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/ply@4.5.1",
+      "version": "4.5.2",
+      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/ply@4.5.2",
       "description": "Framework-independent loader for the PLY format",
       "licenses": [
         {
@@ -793,7 +518,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40loaders.gl/ply@4.5.1",
+      "purl": "pkg:npm/%40loaders.gl/ply@4.5.2",
       "externalReferences": [
         {
           "url": "git+https://github.com/visgl/loaders.gl.git",
@@ -811,197 +536,21 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@loaders.gl/ply/-/ply-4.5.1.tgz",
+          "url": "https://registry.npmjs.org/@loaders.gl/ply/-/ply-4.5.2.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "48e8b700b29468e084ec7b5acc73d7c71a7db682f9f638db79952e131995dc80ec5cb339b8eb3f8736c75be9264f9ffc436f8385a99f8873b95fda1637edf38f"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
         {
           "name": "cdx:npm:package:path",
           "value": "node_modules/@loaders.gl/ply"
-        }
-      ],
-      "components": [
-        {
-          "type": "library",
-          "name": "loader-utils",
-          "group": "@loaders.gl",
-          "version": "4.5.1",
-          "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/ply@4.5.1|@loaders.gl/loader-utils@4.5.1",
-          "description": "Framework-independent loaders for 3D graphics formats",
-          "licenses": [
-            {
-              "license": {
-                "id": "MIT",
-                "acknowledgement": "declared"
-              }
-            }
-          ],
-          "purl": "pkg:npm/%40loaders.gl/loader-utils@4.5.1",
-          "externalReferences": [
-            {
-              "url": "git+https://github.com/visgl/loaders.gl.git",
-              "type": "vcs",
-              "comment": "as detected from PackageJson property \"repository.url\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl#readme",
-              "type": "website",
-              "comment": "as detected from PackageJson property \"homepage\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl/issues",
-              "type": "issue-tracker",
-              "comment": "as detected from PackageJson property \"bugs.url\""
-            },
-            {
-              "url": "https://registry.npmjs.org/@loaders.gl/loader-utils/-/loader-utils-4.5.1.tgz",
-              "type": "distribution",
-              "comment": "as detected from npm-ls property \"resolved\""
-            }
-          ],
-          "properties": [
-            {
-              "name": "cdx:npm:package:path",
-              "value": "node_modules/@loaders.gl/ply/node_modules/@loaders.gl/loader-utils"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "name": "schema-utils",
-          "group": "@loaders.gl",
-          "version": "4.5.1",
-          "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/ply@4.5.1|@loaders.gl/schema-utils@4.5.1",
-          "description": "Schema-related utilities for loaders.gl...",
-          "licenses": [
-            {
-              "license": {
-                "id": "MIT",
-                "acknowledgement": "declared"
-              }
-            }
-          ],
-          "purl": "pkg:npm/%40loaders.gl/schema-utils@4.5.1",
-          "externalReferences": [
-            {
-              "url": "git+https://github.com/visgl/loaders.gl.git",
-              "type": "vcs",
-              "comment": "as detected from PackageJson property \"repository.url\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl#readme",
-              "type": "website",
-              "comment": "as detected from PackageJson property \"homepage\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl/issues",
-              "type": "issue-tracker",
-              "comment": "as detected from PackageJson property \"bugs.url\""
-            },
-            {
-              "url": "https://registry.npmjs.org/@loaders.gl/schema-utils/-/schema-utils-4.5.1.tgz",
-              "type": "distribution",
-              "comment": "as detected from npm-ls property \"resolved\""
-            }
-          ],
-          "properties": [
-            {
-              "name": "cdx:npm:package:path",
-              "value": "node_modules/@loaders.gl/ply/node_modules/@loaders.gl/schema-utils"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "name": "schema",
-          "group": "@loaders.gl",
-          "version": "4.5.1",
-          "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/ply@4.5.1|@loaders.gl/schema@4.5.1",
-          "description": "Table format APIs for JSON, CSV, etc...",
-          "licenses": [
-            {
-              "license": {
-                "id": "MIT",
-                "acknowledgement": "declared"
-              }
-            }
-          ],
-          "purl": "pkg:npm/%40loaders.gl/schema@4.5.1",
-          "externalReferences": [
-            {
-              "url": "git+https://github.com/visgl/loaders.gl.git",
-              "type": "vcs",
-              "comment": "as detected from PackageJson property \"repository.url\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl#readme",
-              "type": "website",
-              "comment": "as detected from PackageJson property \"homepage\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl/issues",
-              "type": "issue-tracker",
-              "comment": "as detected from PackageJson property \"bugs.url\""
-            },
-            {
-              "url": "https://registry.npmjs.org/@loaders.gl/schema/-/schema-4.5.1.tgz",
-              "type": "distribution",
-              "comment": "as detected from npm-ls property \"resolved\""
-            }
-          ],
-          "properties": [
-            {
-              "name": "cdx:npm:package:path",
-              "value": "node_modules/@loaders.gl/ply/node_modules/@loaders.gl/schema"
-            }
-          ]
-        },
-        {
-          "type": "library",
-          "name": "worker-utils",
-          "group": "@loaders.gl",
-          "version": "4.5.1",
-          "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/ply@4.5.1|@loaders.gl/worker-utils@4.5.1",
-          "description": "Utilities for running tasks on worker threads",
-          "licenses": [
-            {
-              "license": {
-                "id": "MIT",
-                "acknowledgement": "declared"
-              }
-            }
-          ],
-          "purl": "pkg:npm/%40loaders.gl/worker-utils@4.5.1",
-          "externalReferences": [
-            {
-              "url": "git+https://github.com/visgl/loaders.gl.git",
-              "type": "vcs",
-              "comment": "as detected from PackageJson property \"repository.url\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl#readme",
-              "type": "website",
-              "comment": "as detected from PackageJson property \"homepage\""
-            },
-            {
-              "url": "https://github.com/visgl/loaders.gl/issues",
-              "type": "issue-tracker",
-              "comment": "as detected from PackageJson property \"bugs.url\""
-            },
-            {
-              "url": "https://registry.npmjs.org/@loaders.gl/worker-utils/-/worker-utils-4.5.1.tgz",
-              "type": "distribution",
-              "comment": "as detected from npm-ls property \"resolved\""
-            }
-          ],
-          "properties": [
-            {
-              "name": "cdx:npm:package:path",
-              "value": "node_modules/@loaders.gl/ply/node_modules/@loaders.gl/worker-utils"
-            }
-          ]
         }
       ]
     },
@@ -1029,7 +578,13 @@
         {
           "url": "https://registry.npmjs.org/laz-perf/-/laz-perf-0.0.7.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "db146a9bf7ffd94a834b9aaa9233b20dbeae5488e4570e921a64253284d096255691984f7c86d4253b9b525de64e5a1a5aa29c8e54bfbab98fd42628c5e96c12"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -1074,7 +629,13 @@
         {
           "url": "https://registry.npmjs.org/pdf-lib/-/pdf-lib-1.17.1.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "57f9a9c890284ec3787273f7d6f734c1f340d7ea76d1ebeaaa76a9d0a2e8454374624fe9df0379d83384b0be2804570b75befa865a4a3edcc9220a3aee3fd72f"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -1119,7 +680,13 @@
             {
               "url": "https://registry.npmjs.org/tslib/-/tslib-1.14.1.tgz",
               "type": "distribution",
-              "comment": "as detected from npm-ls property \"resolved\""
+              "hashes": [
+                {
+                  "alg": "SHA-512",
+                  "content": "5e78b7e4d2b38e032bc1ebf2b074c202bb4b0e93efc9ef3357fd04e04c989f8dcfeffeeabd0c0f87d0469077b06ccba5567b5b8a099c4fbadd5f704da3dc1126"
+                }
+              ],
+              "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
             }
           ],
           "properties": [
@@ -1165,7 +732,13 @@
         {
           "url": "https://registry.npmjs.org/proj4/-/proj4-2.22.0.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "315bc7d3d42b626dc0db7e6b717dfd58388229a9eb0626e5bb6f25d0a6089ff0760e87e6621bcffcb2d2e37904eba8cd0dfc7f3f597f9da877266b00abc5206d"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -1210,13 +783,223 @@
         {
           "url": "https://registry.npmjs.org/three/-/three-0.186.0.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "72bfdf20cd9d74c4956d856091f0f88cb26fec587ff194e3be8fbb8107925465191f1a71f450f0a0be620bb854cff2e2440f3031ba9f9dbf74c4a7e6d7f1c791"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
         {
           "name": "cdx:npm:package:path",
           "value": "node_modules/three"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "loader-utils",
+      "group": "@loaders.gl",
+      "version": "4.5.2",
+      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/loader-utils@4.5.2",
+      "description": "Framework-independent loaders for 3D graphics formats",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40loaders.gl/loader-utils@4.5.2",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/loaders.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@loaders.gl/loader-utils/-/loader-utils-4.5.2.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "a2fe6c7bd1ce9af8096ac387abdbf677211f6060a5495405c85c1a0fbf010fc36acf5c51c54e4ee53464d7d5a9204c6cf4c169372a958141ead721353d3c162d"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@loaders.gl/loader-utils"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "schema-utils",
+      "group": "@loaders.gl",
+      "version": "4.5.2",
+      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema-utils@4.5.2",
+      "description": "Schema-related utilities for loaders.gl...",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40loaders.gl/schema-utils@4.5.2",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/loaders.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@loaders.gl/schema-utils/-/schema-utils-4.5.2.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "8226b3e19ce6c6ec6158d5754d239acd492c6e01418278edc453076e291a0de0476103731ec1961a81b748bb2f9a7282279abf7d4c05259a911aa4d57417282a"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@loaders.gl/schema-utils"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "schema",
+      "group": "@loaders.gl",
+      "version": "4.5.1",
+      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema@4.5.1",
+      "description": "Table format APIs for JSON, CSV, etc...",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40loaders.gl/schema@4.5.1",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/loaders.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@loaders.gl/schema/-/schema-4.5.1.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "aab32a73020741109f031ff392e8ee23c65f8b068e5ef87cdb2e4e5d57cf906b40c391212c13377d0c6a74d3a97d5872d26e06082e90be55f2bab257731fbec9"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@loaders.gl/schema"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "worker-utils",
+      "group": "@loaders.gl",
+      "version": "4.5.2",
+      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/worker-utils@4.5.2",
+      "description": "Utilities for running tasks on worker threads",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40loaders.gl/worker-utils@4.5.2",
+      "externalReferences": [
+        {
+          "url": "git+https://github.com/visgl/loaders.gl.git",
+          "type": "vcs",
+          "comment": "as detected from PackageJson property \"repository.url\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl#readme",
+          "type": "website",
+          "comment": "as detected from PackageJson property \"homepage\""
+        },
+        {
+          "url": "https://github.com/visgl/loaders.gl/issues",
+          "type": "issue-tracker",
+          "comment": "as detected from PackageJson property \"bugs.url\""
+        },
+        {
+          "url": "https://registry.npmjs.org/@loaders.gl/worker-utils/-/worker-utils-4.5.2.tgz",
+          "type": "distribution",
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "c39cd68ed59065160c13d1a4eeffaee6d02ce5b1dafb4f5ab75d35d3abd9ef0348d183f891b715bb8db8fafc4fd9d7e9a51e78536828892d516384066065d771"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+        }
+      ],
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@loaders.gl/worker-utils"
         }
       ]
     },
@@ -1255,7 +1038,13 @@
         {
           "url": "https://registry.npmjs.org/@probe.gl/log/-/log-4.1.1.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "91c66cf414f8e292fb852d4e91118a6115c8fd237d29e8d494f0fe058e340e0b912f3742e6d2c6ff6f1618cc9f29d9ffe75193e1ad29fb43fcc6f0e7d44cfe2a"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -1269,8 +1058,8 @@
       "type": "library",
       "name": "draco",
       "group": "@loaders.gl",
-      "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/draco@4.4.3",
+      "version": "4.5.2",
+      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/draco@4.5.2",
       "description": "Framework-independent loader and writer for Draco compressed meshes and point clouds",
       "licenses": [
         {
@@ -1280,7 +1069,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40loaders.gl/draco@4.4.3",
+      "purl": "pkg:npm/%40loaders.gl/draco@4.5.2",
       "externalReferences": [
         {
           "url": "git+https://github.com/visgl/loaders.gl.git",
@@ -1298,9 +1087,15 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@loaders.gl/draco/-/draco-4.4.3.tgz",
+          "url": "https://registry.npmjs.org/@loaders.gl/draco/-/draco-4.5.2.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "6149a9767358ad0d944c81e2cd802d427407862a2a21bb044ad39c26607fa1f7b9ce9e669386f953b8faf99174c4a5304739c1d67b0243b93e68cb3df7b9e4b9"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -1314,8 +1109,8 @@
       "type": "library",
       "name": "images",
       "group": "@loaders.gl",
-      "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/images@4.4.3",
+      "version": "4.5.2",
+      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/images@4.5.2",
       "description": "Framework-independent loaders and writers for images (PNG, JPG, ...)",
       "licenses": [
         {
@@ -1325,7 +1120,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40loaders.gl/images@4.4.3",
+      "purl": "pkg:npm/%40loaders.gl/images@4.5.2",
       "externalReferences": [
         {
           "url": "git+https://github.com/visgl/loaders.gl.git",
@@ -1343,9 +1138,15 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@loaders.gl/images/-/images-4.4.3.tgz",
+          "url": "https://registry.npmjs.org/@loaders.gl/images/-/images-4.5.2.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "5f0f69c6e3abc484a0d9a095b459a2cad305bb100741cf8a1b2e6ba151837ebc990d88b8f78486b6025a540996198de9c4e5e46777a6d8158995e1b95bf8f35e"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -1357,100 +1158,10 @@
     },
     {
       "type": "library",
-      "name": "loader-utils",
-      "group": "@loaders.gl",
-      "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/loader-utils@4.4.3",
-      "description": "Framework-independent loaders for 3D graphics formats",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/%40loaders.gl/loader-utils@4.4.3",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/visgl/loaders.gl.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/visgl/loaders.gl#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/visgl/loaders.gl/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/@loaders.gl/loader-utils/-/loader-utils-4.4.3.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/@loaders.gl/loader-utils"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "schema",
-      "group": "@loaders.gl",
-      "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema@4.4.3",
-      "description": "Table format APIs for JSON, CSV, etc...",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/%40loaders.gl/schema@4.4.3",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/visgl/loaders.gl.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/visgl/loaders.gl#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/visgl/loaders.gl/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/@loaders.gl/schema/-/schema-4.4.3.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/@loaders.gl/schema"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "textures",
       "group": "@loaders.gl",
-      "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/textures@4.4.3",
+      "version": "4.5.2",
+      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/textures@4.5.2",
       "description": "Framework-independent loaders for compressed and super compressed (basis) textures ",
       "licenses": [
         {
@@ -1460,7 +1171,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40loaders.gl/textures@4.4.3",
+      "purl": "pkg:npm/%40loaders.gl/textures@4.5.2",
       "externalReferences": [
         {
           "url": "git+https://github.com/visgl/loaders.gl.git",
@@ -1478,9 +1189,15 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@loaders.gl/textures/-/textures-4.4.3.tgz",
+          "url": "https://registry.npmjs.org/@loaders.gl/textures/-/textures-4.5.2.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "5f7a1cadebe5cd7994405554bb119c896a1e9b00bc66c5340802863f5bc3ad66b010d1c2b9907a97f8175a2022d8eff149ef2d02f6d32cf02aa4357f14b48d55"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -1525,7 +1242,13 @@
         {
           "url": "https://registry.npmjs.org/@math.gl/core/-/core-4.1.0.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "16b747042546dd076bc28af0ad44b35c868afbff4e0912ec731236394cbab0b387c878013327e7106b3df7f9b728dbecfbde41b2740b5a49557e929f4337f028"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -1571,7 +1294,13 @@
         {
           "url": "https://registry.npmjs.org/@pdf-lib/standard-fonts/-/standard-fonts-1.0.0.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "854df404af4850dfecbb4327f5576554ab16052e86ca155faa3c25d458d93784f13fa702c348cfdb0ed5dc77f9b97eccd00649d7abdecbdc84d27cbb49ae7d64"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -1617,7 +1346,13 @@
         {
           "url": "https://registry.npmjs.org/@pdf-lib/upng/-/upng-1.0.1.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "7502b6154310b68c153f4d26b4892cae56617455d064f0beb5a8a1d6ae02bcf679bea77147f2ca05a160d2801fcddd469476575d23dd41fcd09edf95886bc421"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -1659,7 +1394,13 @@
         {
           "url": "https://registry.npmjs.org/pako/-/pako-1.0.11.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "e212c1f0fcb8cd971ee6ce3277d5f3a29ab056fff218d855d4197c353982ab5efadc778adbe130553bfe95e19e2f5dc39e1db07dbaa8c153d70883b4cf8b5a63"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -1704,7 +1445,13 @@
         {
           "url": "https://registry.npmjs.org/mgrs/-/mgrs-1.0.0.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "6b035b4cea82c4ad430468da94adf1a9622cb4166037a7f1b0c4a25cbb3dfeca6a5a4176a4085bdabad80854acaf5fed4fb3e17031a3667746f125989f46f260"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -1748,7 +1495,13 @@
         {
           "url": "https://registry.npmjs.org/wkt-parser/-/wkt-parser-1.5.5.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "ff33188bde3fec3edfc5c3929559969fabe738c8f71aae5dd71bd58da60e4bd9fa874a8e27823b61857105661c1f5beaf7eb2e86acd7927d39631e3bcd035420"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -1762,8 +1515,8 @@
       "type": "library",
       "name": "stats",
       "group": "@probe.gl",
-      "version": "4.1.1",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@probe.gl/stats@4.1.1",
+      "version": "4.1.2",
+      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@probe.gl/stats@4.1.2",
       "description": "Stats object for reporting performance statistics",
       "licenses": [
         {
@@ -1773,7 +1526,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40probe.gl/stats@4.1.1",
+      "purl": "pkg:npm/%40probe.gl/stats@4.1.2",
       "externalReferences": [
         {
           "url": "git+https://github.com/visgl/probe.gl.git",
@@ -1791,9 +1544,15 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@probe.gl/stats/-/stats-4.1.1.tgz",
+          "url": "https://registry.npmjs.org/@probe.gl/stats/-/stats-4.1.2.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "1ea7345081ddd08676f896e8bf34f3ee5606ec263d0fcc8207cd73c8ff76665f540d23dcc3670b6d3c925b5e2478041e028d6c8c68d4c34f8a1f1af463687f84"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -1838,7 +1597,13 @@
         {
           "url": "https://registry.npmjs.org/@math.gl/types/-/types-4.1.0.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "72561974772646f33354ae5f8de0e44251d4cd741235d67bb38c4ea82de724f833e02fd366451e713a3d612e0faee66ab4375afda8387ab9dd3f43089f8d1d18"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -1883,7 +1648,13 @@
         {
           "url": "https://registry.npmjs.org/@types/geojson/-/geojson-7946.0.16.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "e82f27a96babde3f7c53afa55c37d351621f82f654f84ba6be91ca7188ee8ca1fbc286322e3dac5267dfd2d461aea33b068854c3b3f3dd90758e3da05bd16f9a"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -1896,8 +1667,8 @@
     {
       "type": "library",
       "name": "apache-arrow",
-      "version": "21.1.0",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|apache-arrow@21.1.0",
+      "version": "21.2.0",
+      "bom-ref": "openlidarviewer@0.7.0-alpha.1|apache-arrow@21.2.0",
       "author": "Apache Software Foundation",
       "description": "Apache Arrow columnar in-memory format",
       "licenses": [
@@ -1908,7 +1679,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/apache-arrow@21.1.0",
+      "purl": "pkg:npm/apache-arrow@21.2.0",
       "externalReferences": [
         {
           "url": "git+https://github.com/apache/arrow-js.git",
@@ -1926,9 +1697,15 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/apache-arrow/-/apache-arrow-21.1.0.tgz",
+          "url": "https://registry.npmjs.org/apache-arrow/-/apache-arrow-21.2.0.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "1f17ba020ab6ea040e33de78aa9cd84a594904f265f9ed7a5390a47ee31484bacd6dafb99ca92db485657e56a8bcdea8693adab6a30600ef07e6efda36198759"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -1973,103 +1750,19 @@
         {
           "url": "https://registry.npmjs.org/@probe.gl/env/-/env-4.1.1.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "fbaf2c78d0cc56c11e811078ee9140fd6b35163cbc6a0705617c73a2b293a323dc0facddfa0679ba1c282dded3cec4b0e98767b3fff6284b335a7f849cd1d36c"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
         {
           "name": "cdx:npm:package:path",
           "value": "node_modules/@probe.gl/env"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "schema-utils",
-      "group": "@loaders.gl",
-      "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema-utils@4.4.3",
-      "description": "Schema-related utilities for loaders.gl...",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/%40loaders.gl/schema-utils@4.4.3",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/visgl/loaders.gl.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/visgl/loaders.gl#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/visgl/loaders.gl/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/@loaders.gl/schema-utils/-/schema-utils-4.4.3.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/@loaders.gl/schema-utils"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "worker-utils",
-      "group": "@loaders.gl",
-      "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/worker-utils@4.4.3",
-      "description": "Utilities for running tasks on worker threads",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/%40loaders.gl/worker-utils@4.4.3",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/visgl/loaders.gl.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/visgl/loaders.gl#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/visgl/loaders.gl/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/@loaders.gl/worker-utils/-/worker-utils-4.4.3.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/@loaders.gl/worker-utils"
         }
       ]
     },
@@ -2108,7 +1801,13 @@
         {
           "url": "https://registry.npmjs.org/draco3d/-/draco3d-1.5.7.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "9ba5822adfdeac35dcc3eef42095e71bb3376b0c103c0b19bc9197e7363b6de06aa442f0e910c6918554d16e37005c727b8a436798b62dbc9cfcd346ab08d455"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -2153,7 +1852,13 @@
         {
           "url": "https://registry.npmjs.org/ktx-parse/-/ktx-parse-0.7.1.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "15e037839ea4b1d14dc235c926c73508273b728f802580e9ea2a48a7cefccd9d9b53c91644e6ad2d87f7f53404778fd745252f057a2f43c81a54a58f5ec08b11"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -2165,165 +1870,10 @@
     },
     {
       "type": "library",
-      "name": "texture-compressor",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|texture-compressor",
-      "purl": "pkg:npm/texture-compressor?download_url=node_modules%2F%40loaders.gl%2Ftextures%2Fvendor-stubs%2Ftexture-compressor",
-      "externalReferences": [
-        {
-          "url": "node_modules/@loaders.gl/textures/vendor-stubs/texture-compressor",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/texture-compressor"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "helpers",
-      "group": "@swc",
-      "version": "0.5.23",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@swc/helpers@0.5.23",
-      "author": "강동윤",
-      "description": "External helpers for the swc project.",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/%40swc/helpers@0.5.23",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/swc-project/swc.git#packages/helpers",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\" and \"repository.directory\""
-        },
-        {
-          "url": "https://swc.rs",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/swc-project/swc/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/@swc/helpers/-/helpers-0.5.23.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/@swc/helpers"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "command-line-args",
-      "group": "@types",
-      "version": "5.2.3",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@types/command-line-args@5.2.3",
-      "description": "TypeScript definitions for command-line-args",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/%40types/command-line-args@5.2.3",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/DefinitelyTyped/DefinitelyTyped.git#types/command-line-args",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\" and \"repository.directory\""
-        },
-        {
-          "url": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/command-line-args",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/DefinitelyTyped/DefinitelyTyped/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/@types/command-line-args/-/command-line-args-5.2.3.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/@types/command-line-args"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "command-line-usage",
-      "group": "@types",
-      "version": "5.0.4",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@types/command-line-usage@5.0.4",
-      "description": "TypeScript definitions for command-line-usage",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/%40types/command-line-usage@5.0.4",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/DefinitelyTyped/DefinitelyTyped.git#types/command-line-usage",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\" and \"repository.directory\""
-        },
-        {
-          "url": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/command-line-usage",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/DefinitelyTyped/DefinitelyTyped/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/@types/command-line-usage/-/command-line-usage-5.0.4.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/@types/command-line-usage"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "node",
       "group": "@types",
-      "version": "24.13.2",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@types/node@24.13.2",
+      "version": "25.9.8",
+      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@types/node@25.9.8",
       "description": "TypeScript definitions for node",
       "licenses": [
         {
@@ -2333,7 +1883,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40types/node@24.13.2",
+      "purl": "pkg:npm/%40types/node@25.9.8",
       "externalReferences": [
         {
           "url": "git+https://github.com/DefinitelyTyped/DefinitelyTyped.git#types/node",
@@ -2351,113 +1901,21 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@types/node/-/node-24.13.2.tgz",
+          "url": "https://registry.npmjs.org/@types/node/-/node-25.9.8.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "55f32b49c0e6321509426779840add42716f2b4388783dfab8dd956b515ca5868b07f06092033c525739d17b582123cccfb00f277d3e3744f910cd2395c75f47"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
         {
           "name": "cdx:npm:package:path",
           "value": "node_modules/@types/node"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "command-line-args",
-      "version": "6.0.2",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|command-line-args@6.0.2",
-      "author": "Lloyd Brookes",
-      "description": "A mature, feature-complete library to parse command-line options.",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/command-line-args@6.0.2",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/75lb/command-line-args.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/75lb/command-line-args#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/75lb/command-line-args/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/command-line-args/-/command-line-args-6.0.2.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:constraint:engine:node",
-          "value": ">=12.20"
-        },
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/command-line-args"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "command-line-usage",
-      "version": "7.0.4",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|command-line-usage@7.0.4",
-      "author": "Lloyd Brookes",
-      "description": "Generates command-line usage information",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/command-line-usage@7.0.4",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/75lb/command-line-usage.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/75lb/command-line-usage#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/75lb/command-line-usage/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/command-line-usage/-/command-line-usage-7.0.4.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:constraint:engine:node",
-          "value": ">=12.20.0"
-        },
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/command-line-usage"
         }
       ]
     },
@@ -2496,7 +1954,13 @@
         {
           "url": "https://registry.npmjs.org/flatbuffers/-/flatbuffers-25.9.23.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "308d6ab3b2e8e12cb0d043b3525d318ecda5b287aa164bb8e0aa6781f21db87058bf39bc876fbb2bc60c421d49b55555ad4be12e9370a958b80c445e8142613d"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -2508,51 +1972,52 @@
     },
     {
       "type": "library",
-      "name": "json-bignum",
-      "version": "0.0.3",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|json-bignum@0.0.3",
-      "author": "Datalanche, Inc.",
-      "description": "Node.js JSON replacement which handles 64-bit integers and arbitrary-precision decimals.",
+      "name": "json-with-bigint",
+      "version": "3.5.12",
+      "bom-ref": "openlidarviewer@0.7.0-alpha.1|json-with-bigint@3.5.12",
+      "author": "Ivan Korolenko",
+      "description": "JS library that allows you to easily serialize and deserialize data with BigInt values",
       "licenses": [
         {
           "license": {
             "id": "MIT",
-            "acknowledgement": "declared",
-            "url": "https://github.com/datalanche/json-bignum/raw/master/LICENSE"
+            "acknowledgement": "declared"
           }
         }
       ],
-      "purl": "pkg:npm/json-bignum@0.0.3",
+      "purl": "pkg:npm/json-with-bigint@3.5.12",
       "externalReferences": [
         {
-          "url": "git+https://github.com/datalanche/json-bignum.git",
+          "url": "git+https://github.com/Ivan-Korolenko/json-with-bigint.git",
           "type": "vcs",
           "comment": "as detected from PackageJson property \"repository.url\""
         },
         {
-          "url": "https://github.com/datalanche/json-bignum",
+          "url": "https://github.com/Ivan-Korolenko/json-with-bigint#readme",
           "type": "website",
           "comment": "as detected from PackageJson property \"homepage\""
         },
         {
-          "url": "https://github.com/datalanche/json-bignum/issues",
+          "url": "https://github.com/Ivan-Korolenko/json-with-bigint/issues",
           "type": "issue-tracker",
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/json-bignum/-/json-bignum-0.0.3.tgz",
+          "url": "https://registry.npmjs.org/json-with-bigint/-/json-with-bigint-3.5.12.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "bb06c5ff0492b8e802eeaaa5ab6ed7a7907a6b630756e837b7489d65d4eabb4267945be026e1fb8eef8a024fc9d3a0bb19f868632da09dbf70cf620da9c9deef"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
         {
-          "name": "cdx:npm:package:constraint:engine:node",
-          "value": ">=0.8"
-        },
-        {
           "name": "cdx:npm:package:path",
-          "value": "node_modules/json-bignum"
+          "value": "node_modules/json-with-bigint"
         }
       ]
     },
@@ -2591,7 +2056,13 @@
         {
           "url": "https://registry.npmjs.org/tslib/-/tslib-2.8.1.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "a0916ef781d06fe29576e49440bef09e99aa9df98bb0e03f9c087a6fa107d30084a0ad3f98f79753a737c0a0d5f373243ae1cf447b525ca294f7d2016b34bfdb"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
@@ -2604,8 +2075,8 @@
     {
       "type": "library",
       "name": "undici-types",
-      "version": "7.18.2",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|undici-types@7.18.2",
+      "version": "7.24.6",
+      "bom-ref": "openlidarviewer@0.7.0-alpha.1|undici-types@7.24.6",
       "description": "A stand-alone types package for Undici",
       "licenses": [
         {
@@ -2615,7 +2086,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/undici-types@7.18.2",
+      "purl": "pkg:npm/undici-types@7.24.6",
       "externalReferences": [
         {
           "url": "git+https://github.com/nodejs/undici.git",
@@ -2633,642 +2104,21 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/undici-types/-/undici-types-7.18.2.tgz",
+          "url": "https://registry.npmjs.org/undici-types/-/undici-types-7.24.6.tgz",
           "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
+          "hashes": [
+            {
+              "alg": "SHA-512",
+              "content": "591356fac2608f9381378ff42691c5aadab38696e75741ae07e3a8cc0f6008bedaf7ddd2994fb5241642ccb37162c6cc7c87832fe953b29843e6337937e9f4ce"
+            }
+          ],
+          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
         }
       ],
       "properties": [
         {
           "name": "cdx:npm:package:path",
           "value": "node_modules/undici-types"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "array-back",
-      "version": "6.2.3",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|array-back@6.2.3",
-      "author": "Lloyd Brookes",
-      "description": "Guarantees an array back",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/array-back@6.2.3",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/75lb/array-back.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/75lb/array-back#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/75lb/array-back/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/array-back/-/array-back-6.2.3.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:constraint:engine:node",
-          "value": ">=12.17"
-        },
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/array-back"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "find-replace",
-      "version": "5.0.2",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|find-replace@5.0.2",
-      "author": "Lloyd Brookes",
-      "description": "Replace or remove multiple items in an array.",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/find-replace@5.0.2",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/75lb/find-replace.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/75lb/find-replace#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/75lb/find-replace/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/find-replace/-/find-replace-5.0.2.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:constraint:engine:node",
-          "value": ">=14"
-        },
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/find-replace"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "lodash.camelcase",
-      "version": "4.3.0",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|lodash.camelcase@4.3.0",
-      "author": "John-David Dalton",
-      "description": "The lodash method `_.camelCase` exported as a module.",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/lodash.camelcase@4.3.0",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/lodash/lodash.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://lodash.com/",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/lodash/lodash/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/lodash.camelcase/-/lodash.camelcase-4.3.0.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/lodash.camelcase"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "typical",
-      "version": "7.3.0",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|typical@7.3.0",
-      "author": "Lloyd Brookes",
-      "description": "Isomorphic, functional type-checking for Javascript",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/typical@7.3.0",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/75lb/typical.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/75lb/typical#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/75lb/typical/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/typical/-/typical-7.3.0.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:constraint:engine:node",
-          "value": ">=12.17"
-        },
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/typical"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "chalk-template",
-      "version": "0.4.0",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|chalk-template@0.4.0",
-      "description": "Terminal string styling with tagged template literals",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/chalk-template@0.4.0",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/chalk/chalk-template.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/chalk/chalk-template#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/chalk/chalk-template/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/chalk-template/-/chalk-template-0.4.0.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:constraint:engine:node",
-          "value": ">=12"
-        },
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/chalk-template"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "table-layout",
-      "version": "4.1.1",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|table-layout@4.1.1",
-      "author": "Lloyd Brookes",
-      "description": "Stylable text tables, handling ansi colour. Useful for console output.",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/table-layout@4.1.1",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/75lb/table-layout.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/75lb/table-layout#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/75lb/table-layout/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/table-layout/-/table-layout-4.1.1.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:constraint:engine:node",
-          "value": ">=12.17"
-        },
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/table-layout"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "chalk",
-      "version": "4.1.2",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|chalk@4.1.2",
-      "description": "Terminal string styling done right",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/chalk@4.1.2",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/chalk/chalk.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/chalk/chalk#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/chalk/chalk/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/chalk/-/chalk-4.1.2.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:constraint:engine:node",
-          "value": ">=10"
-        },
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/chalk"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "wordwrapjs",
-      "version": "5.1.1",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|wordwrapjs@5.1.1",
-      "author": "Lloyd Brookes",
-      "description": "Word-wrapping for javascript.",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/wordwrapjs@5.1.1",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/75lb/wordwrapjs.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/75lb/wordwrapjs#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/75lb/wordwrapjs/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/wordwrapjs/-/wordwrapjs-5.1.1.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:constraint:engine:node",
-          "value": ">=12.17"
-        },
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/wordwrapjs"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "ansi-styles",
-      "version": "4.3.0",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|ansi-styles@4.3.0",
-      "author": "Sindre Sorhus",
-      "description": "ANSI escape codes for styling strings in the terminal",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/ansi-styles@4.3.0",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/chalk/ansi-styles.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/chalk/ansi-styles#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/chalk/ansi-styles/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/ansi-styles/-/ansi-styles-4.3.0.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:constraint:engine:node",
-          "value": ">=8"
-        },
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/ansi-styles"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "supports-color",
-      "version": "7.2.0",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|supports-color@7.2.0",
-      "author": "Sindre Sorhus",
-      "description": "Detect whether a terminal supports color",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/supports-color@7.2.0",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/chalk/supports-color.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/chalk/supports-color#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/chalk/supports-color/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/supports-color/-/supports-color-7.2.0.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:constraint:engine:node",
-          "value": ">=8"
-        },
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/supports-color"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "color-convert",
-      "version": "2.0.1",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|color-convert@2.0.1",
-      "author": "Heather Arthur",
-      "description": "Plain color conversion functions",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/color-convert@2.0.1",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/Qix-/color-convert.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/Qix-/color-convert#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/Qix-/color-convert/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/color-convert/-/color-convert-2.0.1.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:constraint:engine:node",
-          "value": ">=7.0.0"
-        },
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/color-convert"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "has-flag",
-      "version": "4.0.0",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|has-flag@4.0.0",
-      "author": "Sindre Sorhus",
-      "description": "Check if argv has a specific flag",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/has-flag@4.0.0",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/sindresorhus/has-flag.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/sindresorhus/has-flag#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/sindresorhus/has-flag/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/has-flag/-/has-flag-4.0.0.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:constraint:engine:node",
-          "value": ">=8"
-        },
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/has-flag"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "color-name",
-      "version": "1.1.4",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|color-name@1.1.4",
-      "author": "DY",
-      "description": "A list of color names and its values",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/color-name@1.1.4",
-      "externalReferences": [
-        {
-          "url": "git+ssh://git@github.com/colorjs/color-name.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/colorjs/color-name",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/colorjs/color-name/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/color-name/-/color-name-1.1.4.tgz",
-          "type": "distribution",
-          "comment": "as detected from npm-ls property \"resolved\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/color-name"
         }
       ]
     }
@@ -3280,10 +2130,10 @@
         "openlidarviewer@0.7.0-alpha.1|@fontsource-variable/inter@5.3.0",
         "openlidarviewer@0.7.0-alpha.1|@fontsource/jetbrains-mono@5.3.0",
         "openlidarviewer@0.7.0-alpha.1|@fontsource/manrope@5.3.0",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/gltf@4.4.3",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.1",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/ply@4.5.1",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/gltf@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/ply@4.5.2",
         "openlidarviewer@0.7.0-alpha.1|laz-perf@0.0.7",
         "openlidarviewer@0.7.0-alpha.1|pdf-lib@1.17.1",
         "openlidarviewer@0.7.0-alpha.1|proj4@2.22.0",
@@ -3300,139 +2150,47 @@
       "ref": "openlidarviewer@0.7.0-alpha.1|@fontsource/manrope@5.3.0"
     },
     {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5",
+      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.5.2",
       "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5|@loaders.gl/loader-utils@4.4.5",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5|@loaders.gl/schema-utils@4.4.5",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5|@loaders.gl/schema@4.4.5",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5|@loaders.gl/worker-utils@4.4.5",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/loader-utils@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema-utils@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema@4.5.1",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/worker-utils@4.5.2",
         "openlidarviewer@0.7.0-alpha.1|@probe.gl/log@4.1.1"
       ]
     },
     {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5|@loaders.gl/loader-utils@4.4.5",
+      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/gltf@4.5.2",
       "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5|@loaders.gl/schema@4.4.5",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5|@loaders.gl/worker-utils@4.4.5",
-        "openlidarviewer@0.7.0-alpha.1|@probe.gl/log@4.1.1",
-        "openlidarviewer@0.7.0-alpha.1|@probe.gl/stats@4.1.1"
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/draco@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/images@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/loader-utils@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema@4.5.1",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/textures@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@math.gl/core@4.1.0",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/gltf@4.5.2|meshoptimizer@1.2.0"
       ]
     },
     {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5|@loaders.gl/schema-utils@4.4.5",
+      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/gltf@4.5.2|meshoptimizer@1.2.0"
+    },
+    {
+      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.2",
       "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5|@loaders.gl/schema@4.4.5",
-        "openlidarviewer@0.7.0-alpha.1|@math.gl/types@4.1.0",
-        "openlidarviewer@0.7.0-alpha.1|@types/geojson@7946.0.16",
-        "openlidarviewer@0.7.0-alpha.1|apache-arrow@21.1.0"
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/loader-utils@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema-utils@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema@4.5.1"
       ]
     },
     {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5|@loaders.gl/schema@4.4.5",
+      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/ply@4.5.2",
       "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@types/geojson@7946.0.16",
-        "openlidarviewer@0.7.0-alpha.1|apache-arrow@21.1.0"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5|@loaders.gl/worker-utils@4.4.5",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/gltf@4.4.3",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/draco@4.4.3",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/images@4.4.3",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/loader-utils@4.4.3",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema@4.4.3",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/textures@4.4.3",
-        "openlidarviewer@0.7.0-alpha.1|@math.gl/core@4.1.0"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.1",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.1|@loaders.gl/loader-utils@4.5.1",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.1|@loaders.gl/schema-utils@4.5.1",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.1|@loaders.gl/schema@4.5.1"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.1|@loaders.gl/loader-utils@4.5.1",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.1|@loaders.gl/schema@4.5.1",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.1|@loaders.gl/worker-utils@4.5.1",
-        "openlidarviewer@0.7.0-alpha.1|@probe.gl/log@4.1.1",
-        "openlidarviewer@0.7.0-alpha.1|@probe.gl/stats@4.1.1"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.1|@loaders.gl/schema-utils@4.5.1",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.1|@loaders.gl/schema@4.5.1",
-        "openlidarviewer@0.7.0-alpha.1|@math.gl/types@4.1.0",
-        "openlidarviewer@0.7.0-alpha.1|@types/geojson@7946.0.16",
-        "openlidarviewer@0.7.0-alpha.1|apache-arrow@21.1.0"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.1|@loaders.gl/schema@4.5.1",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@types/geojson@7946.0.16",
-        "openlidarviewer@0.7.0-alpha.1|apache-arrow@21.1.0"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.1|@loaders.gl/worker-utils@4.5.1",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/ply@4.5.1",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/ply@4.5.1|@loaders.gl/loader-utils@4.5.1",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/ply@4.5.1|@loaders.gl/schema-utils@4.5.1",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/ply@4.5.1|@loaders.gl/schema@4.5.1"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/ply@4.5.1|@loaders.gl/loader-utils@4.5.1",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/ply@4.5.1|@loaders.gl/schema@4.5.1",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/ply@4.5.1|@loaders.gl/worker-utils@4.5.1",
-        "openlidarviewer@0.7.0-alpha.1|@probe.gl/log@4.1.1",
-        "openlidarviewer@0.7.0-alpha.1|@probe.gl/stats@4.1.1"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/ply@4.5.1|@loaders.gl/schema-utils@4.5.1",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/ply@4.5.1|@loaders.gl/schema@4.5.1",
-        "openlidarviewer@0.7.0-alpha.1|@math.gl/types@4.1.0",
-        "openlidarviewer@0.7.0-alpha.1|@types/geojson@7946.0.16",
-        "openlidarviewer@0.7.0-alpha.1|apache-arrow@21.1.0"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/ply@4.5.1|@loaders.gl/schema@4.5.1",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@types/geojson@7946.0.16",
-        "openlidarviewer@0.7.0-alpha.1|apache-arrow@21.1.0"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/ply@4.5.1|@loaders.gl/worker-utils@4.5.1",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5"
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/loader-utils@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema-utils@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema@4.5.1"
       ]
     },
     {
@@ -3461,56 +2219,71 @@
       "ref": "openlidarviewer@0.7.0-alpha.1|three@0.186.0"
     },
     {
+      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/loader-utils@4.5.2",
+      "dependsOn": [
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema@4.5.1",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/worker-utils@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@probe.gl/log@4.1.1",
+        "openlidarviewer@0.7.0-alpha.1|@probe.gl/stats@4.1.2"
+      ]
+    },
+    {
+      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema-utils@4.5.2",
+      "dependsOn": [
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema@4.5.1",
+        "openlidarviewer@0.7.0-alpha.1|@math.gl/types@4.1.0",
+        "openlidarviewer@0.7.0-alpha.1|@types/geojson@7946.0.16",
+        "openlidarviewer@0.7.0-alpha.1|apache-arrow@21.2.0"
+      ]
+    },
+    {
+      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema@4.5.1",
+      "dependsOn": [
+        "openlidarviewer@0.7.0-alpha.1|@types/geojson@7946.0.16",
+        "openlidarviewer@0.7.0-alpha.1|apache-arrow@21.2.0"
+      ]
+    },
+    {
+      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/worker-utils@4.5.2",
+      "dependsOn": [
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.5.2"
+      ]
+    },
+    {
       "ref": "openlidarviewer@0.7.0-alpha.1|@probe.gl/log@4.1.1",
       "dependsOn": [
         "openlidarviewer@0.7.0-alpha.1|@probe.gl/env@4.1.1"
       ]
     },
     {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/draco@4.4.3",
+      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/draco@4.5.2",
       "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/loader-utils@4.4.3",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema-utils@4.4.3",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema@4.4.3",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/worker-utils@4.4.3",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/loader-utils@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema-utils@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema@4.5.1",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/worker-utils@4.5.2",
         "openlidarviewer@0.7.0-alpha.1|draco3d@1.5.7"
       ]
     },
     {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/images@4.4.3",
+      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/images@4.5.2",
       "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/loader-utils@4.4.3"
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/loader-utils@4.5.2"
       ]
     },
     {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/loader-utils@4.4.3",
+      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/textures@4.5.2",
       "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema@4.4.3",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/worker-utils@4.4.3",
-        "openlidarviewer@0.7.0-alpha.1|@probe.gl/log@4.1.1",
-        "openlidarviewer@0.7.0-alpha.1|@probe.gl/stats@4.1.1"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema@4.4.3",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@types/geojson@7946.0.16",
-        "openlidarviewer@0.7.0-alpha.1|apache-arrow@21.1.0"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/textures@4.4.3",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/images@4.4.3",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/loader-utils@4.4.3",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema@4.4.3",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/worker-utils@4.4.3",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/images@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/loader-utils@4.5.2",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema@4.5.1",
+        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/worker-utils@4.5.2",
         "openlidarviewer@0.7.0-alpha.1|@math.gl/types@4.1.0",
-        "openlidarviewer@0.7.0-alpha.1|ktx-parse@0.7.1",
-        "openlidarviewer@0.7.0-alpha.1|texture-compressor"
+        "openlidarviewer@0.7.0-alpha.1|ktx-parse@0.7.1"
       ]
     },
     {
@@ -3541,7 +2314,7 @@
       "ref": "openlidarviewer@0.7.0-alpha.1|wkt-parser@1.5.5"
     },
     {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@probe.gl/stats@4.1.1"
+      "ref": "openlidarviewer@0.7.0-alpha.1|@probe.gl/stats@4.1.2"
     },
     {
       "ref": "openlidarviewer@0.7.0-alpha.1|@math.gl/types@4.1.0"
@@ -3550,36 +2323,16 @@
       "ref": "openlidarviewer@0.7.0-alpha.1|@types/geojson@7946.0.16"
     },
     {
-      "ref": "openlidarviewer@0.7.0-alpha.1|apache-arrow@21.1.0",
+      "ref": "openlidarviewer@0.7.0-alpha.1|apache-arrow@21.2.0",
       "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@swc/helpers@0.5.23",
-        "openlidarviewer@0.7.0-alpha.1|@types/command-line-args@5.2.3",
-        "openlidarviewer@0.7.0-alpha.1|@types/command-line-usage@5.0.4",
-        "openlidarviewer@0.7.0-alpha.1|@types/node@24.13.2",
-        "openlidarviewer@0.7.0-alpha.1|command-line-args@6.0.2",
-        "openlidarviewer@0.7.0-alpha.1|command-line-usage@7.0.4",
+        "openlidarviewer@0.7.0-alpha.1|@types/node@25.9.8",
         "openlidarviewer@0.7.0-alpha.1|flatbuffers@25.9.23",
-        "openlidarviewer@0.7.0-alpha.1|json-bignum@0.0.3",
+        "openlidarviewer@0.7.0-alpha.1|json-with-bigint@3.5.12",
         "openlidarviewer@0.7.0-alpha.1|tslib@2.8.1"
       ]
     },
     {
       "ref": "openlidarviewer@0.7.0-alpha.1|@probe.gl/env@4.1.1"
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema-utils@4.4.3",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5",
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/schema@4.4.3",
-        "openlidarviewer@0.7.0-alpha.1|@types/geojson@7946.0.16",
-        "openlidarviewer@0.7.0-alpha.1|apache-arrow@21.1.0"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/worker-utils@4.4.3",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.4.5"
-      ]
     },
     {
       "ref": "openlidarviewer@0.7.0-alpha.1|draco3d@1.5.7"
@@ -3588,114 +2341,22 @@
       "ref": "openlidarviewer@0.7.0-alpha.1|ktx-parse@0.7.1"
     },
     {
-      "ref": "openlidarviewer@0.7.0-alpha.1|texture-compressor"
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@swc/helpers@0.5.23",
+      "ref": "openlidarviewer@0.7.0-alpha.1|@types/node@25.9.8",
       "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|tslib@2.8.1"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@types/command-line-args@5.2.3"
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@types/command-line-usage@5.0.4"
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@types/node@24.13.2",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|undici-types@7.18.2"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|command-line-args@6.0.2",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|array-back@6.2.3",
-        "openlidarviewer@0.7.0-alpha.1|find-replace@5.0.2",
-        "openlidarviewer@0.7.0-alpha.1|lodash.camelcase@4.3.0",
-        "openlidarviewer@0.7.0-alpha.1|typical@7.3.0"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|command-line-usage@7.0.4",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|array-back@6.2.3",
-        "openlidarviewer@0.7.0-alpha.1|chalk-template@0.4.0",
-        "openlidarviewer@0.7.0-alpha.1|table-layout@4.1.1",
-        "openlidarviewer@0.7.0-alpha.1|typical@7.3.0"
+        "openlidarviewer@0.7.0-alpha.1|undici-types@7.24.6"
       ]
     },
     {
       "ref": "openlidarviewer@0.7.0-alpha.1|flatbuffers@25.9.23"
     },
     {
-      "ref": "openlidarviewer@0.7.0-alpha.1|json-bignum@0.0.3"
+      "ref": "openlidarviewer@0.7.0-alpha.1|json-with-bigint@3.5.12"
     },
     {
       "ref": "openlidarviewer@0.7.0-alpha.1|tslib@2.8.1"
     },
     {
-      "ref": "openlidarviewer@0.7.0-alpha.1|undici-types@7.18.2"
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|array-back@6.2.3"
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|find-replace@5.0.2"
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|lodash.camelcase@4.3.0"
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|typical@7.3.0"
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|chalk-template@0.4.0",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|chalk@4.1.2"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|table-layout@4.1.1",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|array-back@6.2.3",
-        "openlidarviewer@0.7.0-alpha.1|wordwrapjs@5.1.1"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|chalk@4.1.2",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|ansi-styles@4.3.0",
-        "openlidarviewer@0.7.0-alpha.1|supports-color@7.2.0"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|wordwrapjs@5.1.1"
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|ansi-styles@4.3.0",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|color-convert@2.0.1"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|supports-color@7.2.0",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|has-flag@4.0.0"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|color-convert@2.0.1",
-      "dependsOn": [
-        "openlidarviewer@0.7.0-alpha.1|color-name@1.1.4"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|has-flag@4.0.0"
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|color-name@1.1.4"
+      "ref": "openlidarviewer@0.7.0-alpha.1|undici-types@7.24.6"
     }
   ]
 }

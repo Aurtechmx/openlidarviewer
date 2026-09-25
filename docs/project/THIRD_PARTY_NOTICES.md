@@ -26,10 +26,10 @@ only the direct entry points.
 | Package | Declared range | Resolved | License | Upstream |
 | --- | --- | --- | --- | --- |
 | three | ^0.186.0 | 0.186.0 | MIT | https://github.com/mrdoob/three.js |
-| @loaders.gl/core | ^4.4.5 | 4.4.5 | MIT | https://github.com/visgl/loaders.gl |
-| @loaders.gl/gltf | ^4.4.2 | 4.4.3 | MIT | https://github.com/visgl/loaders.gl |
-| @loaders.gl/obj | ^4.5.1 | 4.5.1 | MIT | https://github.com/visgl/loaders.gl |
-| @loaders.gl/ply | ^4.5.1 | 4.5.1 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/core | ^4.5.2 | 4.5.2 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/gltf | ^4.5.2 | 4.5.2 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/obj | ^4.5.2 | 4.5.2 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/ply | ^4.5.2 | 4.5.2 | MIT | https://github.com/visgl/loaders.gl |
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 | https://github.com/hobuinc/laz-perf |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT | https://github.com/Hopding/pdf-lib |
 | proj4 | ^2.22.0 | 2.22.0 | MIT | https://github.com/proj4js/proj4js |
@@ -48,59 +48,41 @@ no executable code; they belong to the production graph and are listed for
 completeness. All of these licenses are permissive and compatible with
 AGPL-3.0-only distribution; none require the distributor to relicense.
 
-MIT (46 packages):
+MIT (29 packages):
 
-- @loaders.gl/core 4.4.5
-- @loaders.gl/draco 4.4.3
-- @loaders.gl/gltf 4.4.3
-- @loaders.gl/images 4.4.3
-- @loaders.gl/loader-utils 4.4.3
-- @loaders.gl/obj 4.5.1
-- @loaders.gl/ply 4.5.1
-- @loaders.gl/schema 4.4.3
-- @loaders.gl/schema-utils 4.4.3
-- @loaders.gl/textures 4.4.3
-- @loaders.gl/worker-utils 4.4.3
+- @loaders.gl/core 4.5.2
+- @loaders.gl/draco 4.5.2
+- @loaders.gl/gltf 4.5.2
+- @loaders.gl/images 4.5.2
+- @loaders.gl/loader-utils 4.5.2
+- @loaders.gl/obj 4.5.2
+- @loaders.gl/ply 4.5.2
+- @loaders.gl/schema 4.5.1
+- @loaders.gl/schema-utils 4.5.2
+- @loaders.gl/textures 4.5.2
+- @loaders.gl/worker-utils 4.5.2
 - @math.gl/core 4.1.0
 - @math.gl/types 4.1.0
 - @pdf-lib/standard-fonts 1.0.0
 - @pdf-lib/upng 1.0.1
 - @probe.gl/env 4.1.1
 - @probe.gl/log 4.1.1
-- @probe.gl/stats 4.1.1
-- @types/command-line-args 5.2.3
-- @types/command-line-usage 5.0.4
+- @probe.gl/stats 4.1.2
 - @types/geojson 7946.0.16
-- @types/node 24.13.2
-- ansi-styles 4.3.0
-- array-back 6.2.3
-- chalk 4.1.2
-- chalk-template 0.4.0
-- color-convert 2.0.1
-- color-name 1.1.4
-- command-line-args 6.0.2
-- command-line-usage 7.0.4
-- find-replace 5.0.2
-- has-flag 4.0.0
-- json-bignum 0.0.3
+- @types/node 25.9.8
+- json-with-bigint 3.5.12
 - ktx-parse 0.7.1
-- lodash.camelcase 4.3.0
+- meshoptimizer 1.2.0
 - mgrs 1.0.0
 - pdf-lib 1.17.1
 - proj4 2.22.0
-- supports-color 7.2.0
-- table-layout 4.1.1
-- texture-compressor 1.0.2
 - three 0.186.0
-- typical 7.3.0
-- undici-types 7.18.2
+- undici-types 7.24.6
 - wkt-parser 1.5.5
-- wordwrapjs 5.1.1
 
-Apache-2.0 (5 packages):
+Apache-2.0 (4 packages):
 
-- @swc/helpers 0.5.23
-- apache-arrow 21.1.0
+- apache-arrow 21.2.0
 - draco3d 1.5.7
 - flatbuffers 25.9.23
 - laz-perf 0.0.7
@@ -140,7 +122,7 @@ here for transparency.
 | @stryker-mutator/core | ^10.0.0 | 10.0.0 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
 | @stryker-mutator/vitest-runner | ^10.0.0 | 10.0.0 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
 | @types/proj4 | ^2.19.0 | 2.19.0 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
-| @loaders.gl/las | ^4.5.1 | 4.5.1 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/las | ^4.5.2 | 4.5.2 | MIT | https://github.com/visgl/loaders.gl |
 
 ## License texts
 
