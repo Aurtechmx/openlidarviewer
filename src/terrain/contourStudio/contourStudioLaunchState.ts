@@ -36,6 +36,13 @@ export interface ContourStudioPrerequisites {
 
   /** A usable terrain surface (DTM) exists or was computed. */
   readonly terrainSurfaceAvailable: boolean;
+  /**
+   * The DTM quality gate's own reasons when it blocked a surface that exists
+   * (too little measured ground, no reliable interval). Empty or omitted when
+   * the gate did not block. Kept apart from `terrainSurfaceAvailable` so a
+   * blocked surface is not reported as a missing one.
+   */
+  readonly surfaceBlockedReasons?: readonly string[];
   /** A ground source exists (classified) or could be derived. */
   readonly groundSourceAvailable: boolean;
 
@@ -186,6 +193,7 @@ export function evaluateContourStudioLaunchState(
   // Hard blockers: no surface or no ground means nothing to contour at all.
   const blocking: string[] = [];
   if (!prereqs.terrainSurfaceAvailable) blocking.push(REASON.noSurface);
+  else if (prereqs.surfaceBlockedReasons?.length) blocking.push(...prereqs.surfaceBlockedReasons);
   if (!prereqs.groundSourceAvailable) blocking.push(REASON.noGround);
   const unsupported = clamp01(prereqs.unsupportedFraction);
   if (unsupported > MAX_UNSUPPORTED_FRACTION_FOR_DELIVERABLE) {

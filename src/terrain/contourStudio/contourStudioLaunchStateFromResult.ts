@@ -85,6 +85,9 @@ export interface LaunchFrameContext {
   readonly precision: PrecisionPermit | null;
 }
 
+/** Stated when a blocked gate verdict arrives without its own reasons. */
+const SURFACE_BLOCKED_FALLBACK = 'The terrain quality gate blocked this surface.';
+
 /**
  * Map a completed analysis result + frame context into the prerequisite facts.
  * Pure. `readiness` drives surface availability and support sufficiency:
@@ -102,13 +105,18 @@ export function contourStudioPrerequisitesFromResult(
   const unsupportedFraction = total > 0 ? tally.empty / total : 1;
 
   const readiness = result.quality.readiness;
+  const covered = tally.measured + tally.interpolated + tally.lowConfidence + tally.edgeRisk;
 
   return {
     scanLoaded: true,
     analysisComplete: true,
     streaming: ctx.streaming,
-    // A blocked surface means the quality gate found nothing usable to contour.
-    terrainSurfaceAvailable: readiness !== 'blocked',
+    // A surface exists when any cell is measured or interpolated. The gate can
+    // block a surface that exists; that verdict travels as its own reasons.
+    terrainSurfaceAvailable: covered > 0,
+    ...(readiness === 'blocked'
+      ? { surfaceBlockedReasons: result.quality.reasons?.length ? result.quality.reasons : [SURFACE_BLOCKED_FALLBACK] }
+      : {}),
     // Measured ground cells are the honest signal that a ground source exists.
     groundSourceAvailable: tally.measured > 0,
     intervalRecommended: result.gate.recommendedM != null,
