@@ -56,6 +56,7 @@ const EXCLUDED = [
   /node_modules/,
   /lazyChunks\.ts$/,
   /navDriverLoader\.ts$/,
+  /governorLoader\.ts$/,
   /parseBuffer\.ts$/,
   /loaderRegistry\.ts$/,
   /loadFile\.ts$/,

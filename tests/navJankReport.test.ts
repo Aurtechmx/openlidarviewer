@@ -16,7 +16,7 @@ import {
   spread,
   type NavJankResults,
 } from '../scripts/lib/navJankResults.mjs';
-import { compareRefusals, compareResults, formatComparison, formatTable } from '../scripts/nav-jank-report.mjs';
+import { abRefusals, compareRefusals, compareResults, formatComparison, formatTable, GOVERNOR_FLAG } from '../scripts/nav-jank-report.mjs';
 
 const SCHEMA = JSON.parse(
   readFileSync(fileURLToPath(new URL('../validation/performance/nav-jank.schema.json', import.meta.url)), 'utf8'),
@@ -152,5 +152,29 @@ describe('nav-jank-report', () => {
     expect(compareRefusals(a, { ...a, version: 1 } as unknown as NavJankResults)[0]).toMatch(/version/);
     expect(compareRefusals(a, {} as NavJankResults)[0]).toMatch(/not a nav-jank results file/);
     expect(() => compareResults(a, session([20], { dpr: 1 }))).toThrow(/refusing/);
+  });
+});
+
+describe('governor A/B (--ab)', () => {
+  const off = () => session([20]);
+  const on = (env: Partial<NavJankEnv> = {}) => session([18], { flags: [...ENV.flags, GOVERNOR_FLAG], ...env });
+
+  it('the governor flag makes the two sessions different environments', () => {
+    expect(compareRefusals(off(), on())[0]).toMatch(/flags/);
+  });
+
+  it('accepts off vs on when every other field matches', () => {
+    expect(abRefusals(off(), on())).toEqual([]);
+    expect(compareResults(off(), on(), abRefusals).orbit.frameP95Ms).toMatchObject({ base: 20, head: 18 });
+    expect(formatComparison(off(), on(), abRefusals)).toMatch(/governor off vs on/);
+  });
+
+  it('refuses anything else that differs, and a swapped or missing flag', () => {
+    expect(abRefusals(off(), on({ dpr: 3 }))[0]).toMatch(/dpr/);
+    expect(abRefusals(off(), on({ flags: [...ENV.flags, GOVERNOR_FLAG, 'headless'] }))[0]).toMatch(/flags/);
+    expect(abRefusals(off(), off())).toEqual([`on file lacks the ${GOVERNOR_FLAG} flag`]);
+    expect(abRefusals(on(), on())).toContain(`off file carries the ${GOVERNOR_FLAG} flag`);
+    expect(abRefusals(off(), session([20], { flags: [...ENV.flags, GOVERNOR_FLAG] }, 'other'))[0]).toMatch(/commit differs/);
+    expect(abRefusals(off(), on({ trajectoryDigest: 'x' }))).toEqual(['orbit: trajectory digest differs']);
   });
 });

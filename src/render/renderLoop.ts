@@ -24,9 +24,11 @@
 import { cameraIsMoving, edlActiveThisFrame } from './edlMotionGate';
 import { shouldRunProbePick } from './hoverPickGate';
 import { noteDrawn } from './drawSignal';
+import { governor } from './perf/governorHook';
 import { navSink, navDrive, stepNav, type NavProbeSink, type NavUploadSample } from '../perf/navProbeHook';
 
 export { feedFrameMs } from '../perf/navProbeHook';
+export { governDpr } from './perf/governorHook';
 import type { PointInfo } from './pointInfo';
 import type { ToolMode } from './Viewer';
 
@@ -212,7 +214,10 @@ export function runRenderFrame(host: RenderLoopHost): void {
   // resizes all ask the loop to keep drawing, and reading that as motion
   // dropped EDL and the pixel ratio over a scene that never moved.
   const moving = cameraIsMoving(host.isTweening(), nowMs, host.cameraActivityUntilMs());
-  const wantEdl = edlActiveThisFrame(host.edlEnabled(), moving);
+  // `?governor=on`: resolve the frame budget policy before the DPR and EDL use it.
+  const gov = governor();
+  gov?.frame(host.navQuality?.().phase ?? 'full-refine', host.isTweening());
+  const wantEdl = edlActiveThisFrame(host.edlEnabled(), moving) && (gov?.edl() ?? true);
   // Pick this frame's DPR before rendering so the render uses it.
   host.applyAdaptiveDpr(moving, delta, nowMs, rendered);
 

@@ -87,7 +87,7 @@ import type { ColorMode, CoverageColorGrid, ColorForModeOptions } from './colorM
 import { computeSharedElevationRange, elevationOptsFor, applyElevationColors } from './projectElevationScale';
 import { type ActiveColorbar } from './activeColorbar';
 import { captureSnapshot, canvasToBlob, type SnapshotHost, type SnapshotOptions } from './snapshot';
-import { runRenderFrame, feedFrameMs, type RenderLoopHost } from './renderLoop';
+import { runRenderFrame, feedFrameMs, governDpr, type RenderLoopHost } from './renderLoop';
 import { type ClipBox, clipKeepsPoint, countKept } from './clip/clipBox';
 import { edlDefaultEnabled, EDL_DEFAULTS } from './edl';
 import { angularVelocity } from './angularVelocity';
@@ -5999,10 +5999,10 @@ export class Viewer {
     const maxDpr = currentPixelRatio();
     const floor = Math.min(maxDpr, DPR_MOTION_FLOOR);
 
-    const target = refinementDprTarget({
+    const target = governDpr(refinementDprTarget({
       maxDpr, floor, phasesEnabled: this._refinementPhasesEnabled,
       dprScale: this._phases.dprScale, phase, moving, angularSpeed,
-    });
+    }), floor, maxDpr); // `?governor=on` pressure; identity otherwise
     const applied = this._renderer.getPixelRatio();
     if (shouldApplyDpr(applied, target, nowMs, this._lastDprChangeMs)) {
       this._renderer.setPixelRatio(target);

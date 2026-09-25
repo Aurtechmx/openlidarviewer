@@ -408,3 +408,22 @@ describe('runRenderFrame — hover is not camera motion', () => {
     expect(host.applyAdaptiveDpr).toHaveBeenCalledWith(false, expect.any(Number), expect.any(Number), true);
   });
 });
+
+describe('runRenderFrame — frame budget governor (`?governor=on`)', () => {
+  it('a loaded governor withholds EDL at rest; removing it restores the paint', async () => {
+    const { installGovernor, uninstallGovernor, GOVERNOR_WINDOW } = await import('../src/render/perf/governorWiring');
+    const g = installGovernor();
+    try {
+      for (let i = 0; i < GOVERNOR_WINDOW; i++) g.frameMs(80);
+      const host = makeHost({ edlEnabled: () => true, cameraActivityUntilMs: () => 0 });
+      runRenderFrame(host);
+      expect(host.renderEdl).not.toHaveBeenCalled();
+      expect(host.renderScene).toHaveBeenCalledTimes(1);
+    } finally {
+      uninstallGovernor();
+    }
+    const host = makeHost({ edlEnabled: () => true, cameraActivityUntilMs: () => 0 });
+    runRenderFrame(host);
+    expect(host.renderEdl).toHaveBeenCalledTimes(1);
+  });
+});

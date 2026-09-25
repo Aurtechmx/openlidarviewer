@@ -35,6 +35,9 @@
  * those flags, and OLV_NAV_WINDOW=covered|minimized covers the window with a
  * second browser window or minimises it before each trajectory.
  *
+ * OLV_NAV_GOVERNOR=on runs with the frame budget governor wired (`?governor=on`,
+ * flag `governor=on`); scripts/governor-ab.mjs alternates it off and on.
+ *
  * Nothing about timing is asserted: this measures.
  */
 import { test, expect, type BrowserContext, type Page, type TestInfo } from '@playwright/test';
@@ -53,6 +56,8 @@ const DATASET = process.env.OLV_NAV_DATASET ?? '';
 const RUNS = Math.max(1, Number(process.env.OLV_NAV_RUNS ?? 5));
 const MACHINE = process.env.OLV_NAV_MACHINE ?? 'local';
 const WINDOW_MODE = process.env.OLV_NAV_WINDOW ?? 'normal';
+/** OLV_NAV_GOVERNOR=on loads the page with `?governor=on` (frame budget governor wired); recorded in the flags. */
+const GOVERNOR = process.env.OLV_NAV_GOVERNOR === 'on';
 /** Chromium switches that stop it throttling an occluded, unfocused or background window. */
 const ANTI_THROTTLE_ARGS = [
   '--disable-backgrounding-occluded-windows',
@@ -70,7 +75,8 @@ const DRIVE_TIMEOUT_MS = 180_000;
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const SCHEMA = JSON.parse(readFileSync(join(ROOT, 'validation/performance/nav-jank.schema.json'), 'utf8'));
-const OUT_DIR = join(ROOT, 'validation/performance/nav-jank');
+/** OLV_NAV_OUT_DIR sends the merged result elsewhere (the governor A/B keeps its runs out of the committed set). */
+const OUT_DIR = process.env.OLV_NAV_OUT_DIR || join(ROOT, 'validation/performance/nav-jank');
 
 function registeredSha(): string | null {
   const reg = readFileSync(join(ROOT, 'validation/datasets/dataset-register.yaml'), 'utf8');
@@ -165,7 +171,7 @@ async function probeSnapshot(page: Page): Promise<string> {
 
 /** Open the dataset through the file input and wait for the committed cloud's first frame. */
 async function load(page: Page, cache: 'cold' | 'warm'): Promise<LoadTiming> {
-  await page.goto('/?benchmark=nav');
+  await page.goto(GOVERNOR ? '/?benchmark=nav&governor=on' : '/?benchmark=nav');
   await expect(page.locator('.olv-empty-title')).toBeVisible();
   const report = page.waitForEvent('console', {
     predicate: (m) => m.text().includes('OpenLiDARViewer — benchmark'),
@@ -352,12 +358,13 @@ async function environment(page: Page, context: BrowserContext, info: TestInfo):
       headless ? 'headless' : 'headed',
       ...(THROTTLE_FLAGS_ON ? ANTI_THROTTLE_ARGS.map((a) => a.replace(/^--/, '')) : []),
       ...(WINDOW_MODE === 'normal' ? [] : [`window=${WINDOW_MODE}`]),
+      ...(GOVERNOR ? ['governor=on'] : []),
     ],
   };
 }
 
 function partialDir(commit: string): string {
-  const dir = join(WORK_DIR, `${commit.slice(0, 12)}-${MACHINE}`);
+  const dir = join(WORK_DIR, `${commit.slice(0, 12)}-${MACHINE}${GOVERNOR ? '-governor' : ''}`);
   mkdirSync(dir, { recursive: true });
   return dir;
 }
