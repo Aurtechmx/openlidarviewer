@@ -53,7 +53,7 @@ Read from `openlidarviewer-v0.7.0-alpha.1-source-20260922-2110.zip` (SHA-256 `1b
 | GPU uploads | `src/render/gpuUploadQueue.ts` (time-budgeted, generation-stamped, stale items discarded before upload) | The existing latest-generation-wins mechanism. |
 | Device loss | `src/render/deviceGeneration.ts`, `gpuErrorLedger.ts` | Tells a resource which device era it belongs to. |
 | Frame demand | `src/render/frameDemand.ts`, `renderInvalidation.ts` (`gpu-commit-pending`, `streaming-ready` reasons), `renderActivityGate.ts` | The earlier "final committed node never painted until the heartbeat" risk is handled by `commitPending` plus `commitWork`. Covered by `tests/frameDemand.test.ts` and `tests/invalidationDrawsFrame.test.ts`. |
-| Frame budget | `src/render/perf/frameBudgetGovernor.ts` | Pure, presentation-only, with hysteresis. Registered as staged in `docs/validation/unreachable-modules.json` and wired by a separate render-loop phase. |
+| Frame budget | `src/render/perf/frameBudgetGovernor.ts` | Pure, presentation-only, with hysteresis. Wired behind `?governor=on` (`src/render/perf/governorWiring.ts`); off by default. |
 | Presentation reconstruction | `src/render/continuity/`, `docs/continuity-field.md` | The project's direct / accumulated / reconstructed vocabulary. Reconstructed pixels are structurally unpickable. |
 | Gates and registries | method registry, claim register, oracle registry, V070 ledger, unreachable-module register, layer-boundary lint, position-access ratchet, monolith ratchet, `lazyChunks.ts`, `WORKER_REGISTRY`, test-bucket map | Same constraints as SensorPrint SPEC §1.2. |
 
