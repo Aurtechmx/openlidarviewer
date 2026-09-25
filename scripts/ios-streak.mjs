@@ -35,7 +35,10 @@ export function ghJobMeta(gh) {
   return ({ jobId }) => {
     if (jobId == null) return { image: null };
     try {
-      return { image: runnerImage(stepLog(gh(['run', 'view', '--job', String(jobId), '--log']), 'Set up job')) };
+      const log = gh(['run', 'view', '--job', String(jobId), '--log']);
+      // gh sometimes labels every line of an older job "UNKNOWN STEP"; the
+      // set-up header is still the first thing in the log.
+      return { image: runnerImage(stepLog(log, 'Set up job')) ?? runnerImage(log.split('\n').slice(0, 40).join('\n')) };
     } catch {
       return { image: null };
     }

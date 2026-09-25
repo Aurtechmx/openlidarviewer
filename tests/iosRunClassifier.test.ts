@@ -166,6 +166,8 @@ describe('pinned runner', () => {
     const meta = ghJobMeta((args) => { calls.push(args); return SETUP.split('\n').map((l) => `job\tSet up job\t${l}`).join('\n'); });
     expect(meta({ id: 1, jobId: 42 }).image).toBe('macos-26-arm64');
     expect(calls[0]).toEqual(['run', 'view', '--job', '42', '--log']);
+    const unknown = SETUP.split('\n').map((l) => `job\tUNKNOWN STEP\t${l}`).join('\n');
+    expect(ghJobMeta(() => unknown)({ id: 1, jobId: 42 }).image).toBe('macos-26-arm64');
     expect(ghJobMeta(() => { throw new Error('gone'); })({ id: 1, jobId: 42 }).image).toBeNull();
     expect(ghJobMeta(() => '')({ id: 1, jobId: null }).image).toBeNull();
   });
