@@ -74,7 +74,7 @@ Entries: 166. Revisited at least once: 20.
 | L43 | FIXED | STATE | 1 |
 | L44 | FIXED | LIFECYCLE | 1 |
 | L45 | FIXED | ARCHITECTURE | 1 |
-| L46 | PARTIAL | PERFORMANCE | 2 |
+| L46 | PARTIAL | PERFORMANCE | 3 |
 | L47 | PARTIAL | UI | 4 |
 | L48 | FIXED | PERFORMANCE | 1 |
 | L49 | MEASURED | PERFORMANCE | 1 |

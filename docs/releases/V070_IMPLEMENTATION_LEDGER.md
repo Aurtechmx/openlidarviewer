@@ -6508,3 +6508,23 @@ the honest `as-is` branch and refuses a credited stand-down.
 falls to `source` regardless of what the Continuity Field is doing.
 `reconstructedShare` is hardcoded `null` at `BaseExportMode.ts:469`; no census
 feeds it. Both wait on the same seam the render side has not opened.
+
+### L46 · PARTIAL · PERFORMANCE
+
+The renderer is wired now. `renderLoop.ts:229` calls
+`host.cullStreamingToFrustum()` on every rendered frame with a session
+attached, `Viewer._buildRenderLoopHost` binds that to
+`StreamingRenderer.cullToFrustum` (`Viewer.ts:6057`), and `cullToFrustum`
+derives the frustum planes from the live camera and calls
+`applyFrustumVisibility`, whose only write to `mesh.visible` is
+`_applyVisibility` (`StreamingRenderer.ts:430`). `tests/renderLoop.test.ts`
+now asserts the call fires on a rendered frame with streaming attached and
+does not on an idle frame or with no session, closing the gap the mock alone
+left open.
+
+What is unproven is still unproven. No record exists in
+`validation/renderer-benchmark/`; `verify-renderer-benchmark.mjs` exits clean
+on an empty directory rather than measuring anything. The prior caveats hold:
+a culled node carries no points, so a drawn-node share is not a GPU-time
+share, and the stored baseline is an orthographic four-camera snapshot, not a
+frustum.
