@@ -127,6 +127,12 @@ interface RunMeta {
   gapsAfterInput: number;
   /** Quality transitions: [ms after first input, kind, from, to]. */
   quality: [number, string, number | string, number | string][];
+  /**
+   * Frames from 500 ms before the last input on (at most 200): [ms after first
+   * input, drawn, EDL drawn, idle wake 0/1 heartbeat/2 wake, phase code].
+   * Read from the probe's columns when the build exposes them, else empty.
+   */
+  tail: [number, number, number, number, number][];
 }
 
 interface DriveOut {
@@ -230,6 +236,10 @@ async function drive(page: Page, name: string, sceneDiagonal: number): Promise<D
         document.removeEventListener('visibilitychange', onVis);
       }
       const summary = w.__olvNavProbe.stop(name);
+      const cols = sink as unknown as {
+        _f?: { count: number; at(k: number): number };
+        _tEnd?: Float64Array; _drawn?: Uint8Array; _edl?: Uint8Array; _wake?: Uint8Array; _phase?: Uint8Array;
+      } | undefined;
       const endT = performance.now();
       const first = inputs.length ? Math.min(...inputs) : null;
       const last = inputs.length ? Math.max(...inputs) : null;
@@ -245,7 +255,15 @@ async function drive(page: Page, name: string, sceneDiagonal: number): Promise<D
         gapsDuringInput: deltas.filter(([t]) => first !== null && last !== null && t >= first && t <= last).length,
         gapsAfterInput: deltas.filter(([t]) => last !== null && t > last).length,
         quality: summary.quality.events.map((e) => [rel(e.t), e.kind, e.from, e.to] as [number, string, number | string, number | string]),
+        tail: [] as [number, number, number, number, number][],
       };
+      if (cols?._f && cols._tEnd && cols._drawn && cols._edl && cols._wake && cols._phase && last !== null) {
+        for (let k = 0; k < cols._f.count && meta.tail.length < 200; k++) {
+          const i = cols._f.at(k);
+          if (cols._tEnd[i] < last - 500) continue;
+          meta.tail.push([rel(cols._tEnd[i]), cols._drawn[i], cols._edl[i], cols._wake[i], cols._phase[i]]);
+        }
+      }
       if (!res) return { trajectoryDigest: 'timeout', settled: false, unsettledAt: 'input', frames: 0, timedOut: true, summary, meta };
       return { ...res, timedOut: false, summary, meta };
     },
