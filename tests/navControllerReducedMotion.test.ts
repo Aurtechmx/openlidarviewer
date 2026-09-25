@@ -12,24 +12,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as THREE from 'three';
 import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { NavController } from '../src/render/NavController';
-
-function stubTarget(): { addEventListener: () => void; removeEventListener: () => void } {
-  return { addEventListener: () => {}, removeEventListener: () => {} };
-}
-
-function stubCanvas(): HTMLCanvasElement {
-  return {
-    ...stubTarget(),
-    style: {},
-    clientWidth: 800,
-    clientHeight: 600,
-    contains: () => false,
-    releasePointerCapture: () => {},
-    setPointerCapture: () => {},
-    requestPointerLock: () => Promise.resolve(),
-    getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }),
-  } as unknown as HTMLCanvasElement;
-}
+import { stubCanvas, stubTarget } from './helpers/navCanvasStubs';
 
 function stubControls(): OrbitControls {
   return {

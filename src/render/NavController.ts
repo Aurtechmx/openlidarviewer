@@ -855,7 +855,8 @@ export class NavController {
       ORBIT_KEY_RATE,
     );
     // Keys up: the easing never reaches zero, so stop the tail by the shared rest rule.
-    if (targetYaw === 0 && targetPitch === 0) {
+    const keysUp = !this._orbitKeys.left && !this._orbitKeys.right && !this._orbitKeys.up && !this._orbitKeys.down;
+    if (keysUp) {
       const speed = Math.hypot(this._orbitVel[0], this._orbitVel[1]);
       const distance = this._camera.position.distanceTo(this._controls.target);
       if (speed > 0 && orbitVelocityAtRest(speed, ORBIT_KEY_RATE, distance, this._glideView())) this._orbitVel = [0, 0, 0];
