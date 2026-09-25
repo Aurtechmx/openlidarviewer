@@ -884,6 +884,7 @@ export class Inspector {
     this._navPresetSelect = el('select', {
       className: 'olv-report-select',
       ariaLabel: 'Navigation preset',
+      tip: 'Choose how dragging orbits the view. A preset sets both orbit direction options.',
     }) as HTMLSelectElement;
     for (const [value, label] of [
       ['default', 'Default'],

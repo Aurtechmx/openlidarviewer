@@ -31,6 +31,14 @@
  *      reasoning as #3 — a glyph alone tells a hovering mouse user nothing.
  *      Caught the project card "Dismiss" `×` (ProjectCard.ts).
  *
+ *   5. A `<select>` or `<a>` explained by `ariaLabel` alone (via `el()`, or a
+ *      bare `document.createElement('select')` given only a deferred
+ *      `aria-label`). A select shows its current option, not what the choice
+ *      controls, and a link shows where it goes, not why; the aria-label
+ *      reaches assistive tech but nothing appears on hover or focus. Caught
+ *      the header Credits/Guide/GitHub links and four Inspector/reclassify
+ *      selects.
+ *
  * A direct `document.createElement('button')` (bypassing `el()` entirely,
  * as a couple of the field-simulation lab controls once did) is scanned the
  * same way as #1: it needs a deferred `target.title =` / `target.dataset.tip
@@ -94,6 +102,10 @@ function extractBalanced(text, openIdx) {
 const EL_CALL = /(?:([\w.]+)\s*=\s*)?\bel\(\s*'([a-zA-Z][\w-]*)'\s*,/g;
 /** Bare `document.createElement('button')`, same deferred-target idea. */
 const CREATE_BUTTON = /(?:([\w.]+)\s*=\s*)?\bdocument\.createElement\(\s*'button'\s*\)/g;
+/** Bare `document.createElement('select')`, checked under rule #5. */
+const CREATE_SELECT = /(?:(?:const|let|var)\s+)?(?:([\w.]+)\s*=\s*)?\bdocument\.createElement\(\s*'select'\s*\)/g;
+/** Tags covered by rule #5: aria-label alone shows nothing on hover/focus. */
+const ARIA_ONLY_TAGS = new Set(['select', 'a']);
 // Matches both `tip: '...'` and the object-literal shorthand `title` (i.e.
 // `{ title }`, equivalent to `{ title: title }`) that several call sites use.
 const HAS_TIP_OR_TITLE = /\b(tip|title)\b/;
@@ -138,6 +150,24 @@ function hasDeferredExplanation(text, target, fromIdx) {
   return followup.test(after);
 }
 
+/** A deferred visible explanation (`title` / `data-tip`), not `aria-label`. */
+function hasDeferredVisibleExplanation(text, target, fromIdx) {
+  if (!target) return false;
+  const after = text.slice(fromIdx, fromIdx + FOLLOWUP_WINDOW);
+  const escaped = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(
+    `${escaped}\\.title\\s*=|${escaped}\\.dataset\\.tip\\s*=|` +
+      `${escaped}\\.setAttribute\\(\\s*['"](title|data-tip)['"]`,
+  ).test(after);
+}
+
+function hasDeferredAria(text, target, fromIdx) {
+  if (!target) return false;
+  const after = text.slice(fromIdx, fromIdx + FOLLOWUP_WINDOW);
+  const escaped = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`${escaped}\\.setAttribute\\(\\s*['"]aria-label['"]`).test(after);
+}
+
 function hasDeferredRoleButton(text, target, fromIdx) {
   if (!target) return false;
   const after = text.slice(fromIdx, fromIdx + FOLLOWUP_WINDOW);
@@ -174,6 +204,15 @@ export function findUnexplainedButtons(text) {
       continue;
     }
 
+    if (ARIA_ONLY_TAGS.has(tag)) {
+      const ariaOnly =
+        HAS_ARIA.test(props) &&
+        !HAS_TIP_OR_TITLE.test(props) &&
+        !hasDeferredVisibleExplanation(text, target, braceIdx);
+      if (ariaOnly) offenders.push(text.slice(0, match.index).split('\n').length);
+      continue;
+    }
+
     // Any other tag: only in scope once it is dressed up as a button.
     if (HAS_TIP_OR_TITLE.test(props) || HAS_ARIA.test(props)) continue;
     if (!hasDeferredRoleButton(text, target, braceIdx)) continue;
@@ -185,6 +224,14 @@ export function findUnexplainedButtons(text) {
   while ((match = CREATE_BUTTON.exec(text))) {
     const target = match[1];
     if (hasDeferredExplanation(text, target, match.index)) continue;
+    offenders.push(text.slice(0, match.index).split('\n').length);
+  }
+
+  CREATE_SELECT.lastIndex = 0;
+  while ((match = CREATE_SELECT.exec(text))) {
+    const target = match[1];
+    if (!hasDeferredAria(text, target, match.index)) continue;
+    if (hasDeferredVisibleExplanation(text, target, match.index)) continue;
     offenders.push(text.slice(0, match.index).split('\n').length);
   }
 

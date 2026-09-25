@@ -316,6 +316,7 @@ export class Stage {
       text: 'GitHub',
       href: 'https://github.com/aurtechmx/openlidarviewer',
       ariaLabel: 'OpenLiDARViewer on GitHub',
+      tip: 'Open the source code and issue tracker in a new tab.',
     });
     github.target = '_blank';
     github.rel = 'noreferrer';
@@ -327,6 +328,7 @@ export class Stage {
       text: 'Guide',
       href: 'https://openlidarviewer.org/guide/',
       ariaLabel: 'OpenLiDARViewer user guide',
+      tip: 'Open the user guide in a new tab.',
     });
     guide.target = '_blank';
     guide.rel = 'noreferrer';
@@ -339,6 +341,7 @@ export class Stage {
       text: 'Credits',
       href: 'credits.html',
       ariaLabel: 'Data sources and credits',
+      tip: 'Open the data sources and credits page in a new tab.',
     });
     credits.target = '_blank';
     credits.rel = 'noreferrer';

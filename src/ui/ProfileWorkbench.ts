@@ -352,6 +352,7 @@ class ProfileWorkbench {
       ? (el('select', {
           className: 'olv-workbench-select',
           ariaLabel: 'Which returns the section scatter draws',
+          tip: 'Choose which returns the section scatter draws: all, ground only, or without vegetation and noise.',
         }) as HTMLSelectElement)
       : null;
     if (this._rawScope) {

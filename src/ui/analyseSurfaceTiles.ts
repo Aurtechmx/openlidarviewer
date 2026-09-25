@@ -515,6 +515,7 @@ export class SurfaceTiles {
     const palSelect = document.createElement('select');
     palSelect.className = 'olv-analyse-relief-select';
     palSelect.setAttribute('aria-label', 'Relief palette');
+    palSelect.setAttribute('data-tip', 'Shade the relief in grey, or colour it by elevation.');
     palSelect.disabled = !elevRange;
     const shadeOpt = document.createElement('option');
     shadeOpt.value = '';
