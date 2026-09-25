@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { dropTinyPly } from './helpers';
+import { MOBILE_LAYOUT_QUERY } from '../../src/ui/isMobileDevice';
 
 /**
  * tests/e2e/touchGesture.spec.ts
@@ -318,21 +319,28 @@ async function openRenderingSection(page: import('@playwright/test').Page): Prom
 
   // At phone width the panels live in a collapsed bottom sheet rather than an
   // always-open side rail, so the summary exists in the DOM but has no layout
-  // box. Clicking it there times out on "element is not visible", which reads
-  // like the setting is unreachable on a touch device. It is not: the sheet
-  // opens and its View tab holds the Rendering section. Verified by hand at
-  // 375x812, where the chip is 44 px tall and carries `olv-chip-active`.
-  if (!(await renderingDetails.locator('summary').isVisible())) {
+  // box. The sheet opens and its View tab holds the Rendering section.
+  //
+  // Pick the branch from the layout query the app itself keys on, not from a
+  // one-shot visibility probe. The summary on desktop can be off-layout for a
+  // frame after the empty state hides, and a non-waiting `isVisible()` there
+  // sent desktop WebKit down the phone path to click a sheet handle that never
+  // renders. The sheet in turn is shown only once the scan is revealed, which
+  // can also trail the empty state, so on a phone wait for the sheet before
+  // touching it.
+  const isPhoneLayout = await page.evaluate(
+    (q) => window.matchMedia(q).matches,
+    MOBILE_LAYOUT_QUERY,
+  );
+  if (isPhoneLayout) {
+    await expect(page.locator('.olv-mobile-sheet')).toBeVisible();
     const viewTab = page.locator('.olv-msheet-tab', { hasText: 'View' });
-    if (await viewTab.count()) {
-      // The sheet starts collapsed; its handle is the chevron beside the tabs.
-      if (!(await viewTab.isVisible())) {
-        await page.locator('.olv-dock [aria-label*="xpand"], .olv-msheet-handle').first().click();
-      }
-      await viewTab.click();
-      await expect(renderingDetails.locator('summary')).toBeVisible({ timeout: 10_000 });
-    }
+    // The sheet starts at 'peek' (head only), where the tabs are already
+    // showing; selecting a tab opens the body.
+    await viewTab.click();
+    await expect(viewTab).toHaveAttribute('aria-selected', 'true');
   }
+  await expect(renderingDetails.locator('summary')).toBeVisible({ timeout: 10_000 });
 
   const isOpen = await renderingDetails.evaluate((d) =>
     (d as HTMLDetailsElement).open,
