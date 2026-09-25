@@ -11,6 +11,8 @@
 // provenance/dataset-intelligence helpers, so they extract cleanly behind a
 // thin factory that captures the inspector once. Call sites destructure the
 // returned object and otherwise behave exactly as before.
+import { withheldCount } from '../science/withheldPolicy';
+import { alignedFlags } from '../science/withheldCounts';
 import type { Inspector } from '../ui/Inspector';
 import { isLinearUnitKnown } from '../geo/CoordinateTypes';
 import { captureProvenance } from '../diagnostics/captureProvenance';
@@ -65,6 +67,7 @@ export interface InspectorCardRefreshers {
   refreshDatasetIntelligenceFromStaticCloud(cloud: {
     readonly pointCount: number;
     readonly declaredPointCount?: number;
+    readonly classificationFlags?: Uint8Array;
     readonly metadata?: { crs?: { linearUnit?: string; linearUnitToMetres?: number; verticalUnitToMetres?: number } | null };
     bounds(): { min: [number, number, number]; max: [number, number, number] };
   }): void;
@@ -262,6 +265,7 @@ export function createInspectorCardRefreshers(
   function refreshDatasetIntelligenceFromStaticCloud(cloud: {
     readonly pointCount: number;
     readonly declaredPointCount?: number;
+    readonly classificationFlags?: Uint8Array;
     readonly metadata?: { crs?: { linearUnit?: string; linearUnitToMetres?: number; verticalUnitToMetres?: number } | null };
     bounds(): { min: [number, number, number]; max: [number, number, number] };
   }): void {
@@ -290,7 +294,12 @@ export function createInspectorCardRefreshers(
       // loader strided for display — matching the Scan Report, not the smaller
       // in-memory sample that would under-report the tier.
       const declared = cloud.declaredPointCount;
-      const n = declared !== undefined && declared > cloud.pointCount ? declared : cloud.pointCount;
+      // Withheld points leave the count as they leave the Scan Report's Density
+      // row; a header total cannot be inspected, so it stays whole.
+      const strided = declared !== undefined && declared > cloud.pointCount;
+      const n = strided
+        ? declared
+        : cloud.pointCount - withheldCount(alignedFlags(cloud.classificationFlags, cloud.pointCount));
       const summary: Parameters<Inspector['setDatasetIntelligence']>[0] = {
         pointCount: n,
         bboxVolume,

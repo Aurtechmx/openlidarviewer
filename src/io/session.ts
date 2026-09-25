@@ -49,6 +49,7 @@ import {
 import type { SessionProjectFrame } from './sessionFrame';
 import { parseWorkOwnership, serializeWorkOwnership } from '../model/workOwnership';
 import type { WorkOwnership } from '../model/workOwnership';
+import { parseWithheldReadCounts } from './withheldCountsJson';
 
 /**
  * Current session-file schema version (v8). The history, oldest first: v3 added
@@ -1269,6 +1270,11 @@ function parseMeasurements(v: unknown): Measurement[] {
       // keeps the measurement.
       const provenance = parseProfileProvenance(item.profileProvenance);
       if (provenance) m.profileProvenance = provenance;
+      // Additive: the Withheld counts. Absent on a profile saved before the
+      // exclusion, which read every point; a malformed record is dropped.
+      const withheld = parseWithheldReadCounts(item.profileWithheld);
+      if (withheld) m.profileWithheld = withheld;
+      if (typeof item.profileMethod === 'string') m.profileMethod = item.profileMethod;
     } else if (k === 'volume') {
       const volume = parseVolumeRecord(item.volume);
       if (volume) m.volume = volume;

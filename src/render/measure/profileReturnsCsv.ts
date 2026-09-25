@@ -42,9 +42,13 @@ import { formatStation } from './profileSummary';
 import { classificationLabel } from '../pointInfo';
 import { heightLabel, heightReferenceNote, type VerticalReference } from '../../geo/height';
 import { profileSectionHas, type ProfileSectionPoints } from './profileSectionBuilder';
+import type { WithheldReadCounts } from '../../science/withheldCounts';
 
-/** Receipt/format version stamped into the sidecar. */
-export const PROFILE_RETURNS_RECEIPT_VERSION = 1;
+/**
+ * Receipt/format version stamped into the sidecar. 2 adds `withheld`: the
+ * section walk leaves Withheld points out, so the receipt says how many.
+ */
+export const PROFILE_RETURNS_RECEIPT_VERSION = 2;
 
 /**
  * Where a source's classification codes came from.
@@ -112,6 +116,8 @@ export interface ProfileReturnsCsvOptions {
    * `displayedCount` and read for nothing else — it can never remove a row.
    */
   readonly displayedIndices?: ArrayLike<number>;
+  /** The section's Withheld accounting (`ProfileSectionResult.withheld`). */
+  readonly withheld?: WithheldReadCounts;
 }
 
 export interface ProfileReturnsSourceReceipt {
@@ -140,6 +146,8 @@ export interface ProfileReturnsReceipt {
   readonly acceptedCount: number;
   /** Returns drawn at export time, or null when the caller passed none. */
   readonly displayedCount: number | null;
+  /** Points examined, Withheld left out, points read; null when not supplied. */
+  readonly withheld: WithheldReadCounts | null;
   readonly visualLodInUse: boolean;
   readonly vertical: {
     readonly reference: VerticalReference;
@@ -367,6 +375,7 @@ export function buildProfileReturnsCsv(
     })),
     acceptedCount: n,
     displayedCount: options.displayedIndices ? options.displayedIndices.length : null,
+    withheld: options.withheld ?? null,
     visualLodInUse: options.visualLodInUse ?? false,
     vertical: {
       reference: options.verticalReference,

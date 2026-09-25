@@ -29,8 +29,15 @@ import {
   AUTO_CORRIDOR_FRACTION,
   DEFAULT_GROUND_PERCENTILE,
   DEFAULT_PROFILE_SAMPLE_COUNT,
+  dropWithheld,
+  PROFILE_SERIES_METHOD_TAG,
   type ProfileSourceBuffer,
 } from './profileSampler';
+import {
+  alignedFlags,
+  withheldReadCounts,
+  type WithheldReadCounts,
+} from '../../science/withheldCounts';
 import { resolveCorridorHalfWidth } from './profileCorridor';
 import { buildProfileFrame, type ProfileFrame } from './profileGeometry';
 import {
@@ -114,6 +121,10 @@ export interface ProfileSeriesResult {
   residentOnly: boolean;
   corridorWidth: number;
   groundPercentile: number;
+  /** Points walked, Withheld left out, and points the percentile read. */
+  withheld: WithheldReadCounts;
+  /** The method tag the series was sampled under. */
+  method: string;
 }
 
 /** User overrides for the derived series. Absent fields take the defaults. */
@@ -161,6 +172,8 @@ export interface ProfileSectionResult {
   readonly aborted: boolean;
   readonly skippedSlots: readonly number[];
   readonly examined: number;
+  /** Points examined, Withheld left out, and points the corridor test read. */
+  readonly withheld: WithheldReadCounts;
 }
 
 /** A section request. */
@@ -333,19 +346,46 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
     let total = 0;
     let streamingPoints = 0;
     let anyClass = false;
+    // Withheld points are left out before the buffers are joined, as the
+    // terrain gather leaves them out before it samples. A source with no
+    // flags channel (a voxel-reduced display cloud, a decoder that produced
+    // none) is read whole and makes the excluded count 'unknown'. The
+    // full-resolution re-decode the terrain path can fall back on is not
+    // used here: a profile is sampled synchronously on every commit and
+    // resample, and a whole-file re-decode per line drawn is not a cost that
+    // step can carry. The record says 'unknown' instead of guessing.
+    let sourcePoints = 0;
+    let withheldExcluded = 0;
+    let everySourceFlagged = true;
     const { statics, residents } = walkScene(deps);
+    const take = (
+      raw: ProfileSourceBuffer,
+      channels: ProfileSourceChannels | null,
+      streaming: boolean,
+    ): void => {
+      const n = raw.pos.length / 3;
+      sourcePoints += n;
+      const flags = alignedFlags(channels?.classificationFlags, n);
+      let buf = raw;
+      if (flags) {
+        const dropped = dropWithheld(raw, flags);
+        buf = dropped.buffer;
+        withheldExcluded += dropped.excluded;
+      } else {
+        everySourceFlagged = false;
+      }
+      if (buf.cls) anyClass = true;
+      buffers.push(buf);
+      total += buf.pos.length;
+      if (streaming) streamingPoints += raw.pos.length;
+    };
     for (const { layer, pos } of statics) {
       const cls = alignedClassification(layer.channels, pos.length);
-      if (cls) anyClass = true;
-      buffers.push({ pos, cls, placement: layer.placement });
-      total += pos.length;
+      take({ pos, cls, placement: layer.placement }, layer.channels, false);
     }
     for (const { node, pos } of residents) {
       const cls = alignedClassification(node.channels, pos.length);
-      if (cls) anyClass = true;
-      buffers.push({ pos, cls });
-      total += pos.length;
-      streamingPoints += pos.length;
+      take({ pos, cls }, node.channels, true);
     }
     if (total === 0) return null;
     // Flatten — cheap because only the resident set is walked. The assembler
@@ -376,7 +416,14 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
     // nodes may still refine the profile as they stream in, and a fully-loaded
     // static cloud beside them does not complete the streaming part (audit #8:
     // gating on `staticPoints === 0` hid the caveat in mixed scenes).
-    return { samples, residentOnly: streamingPoints > 0, corridorWidth, groundPercentile };
+    return {
+      samples,
+      residentOnly: streamingPoints > 0,
+      corridorWidth,
+      groundPercentile,
+      withheld: withheldReadCounts(sourcePoints, withheldExcluded, everySourceFlagged),
+      method: PROFILE_SERIES_METHOD_TAG,
+    };
   }
 
   function* sectionChunks(
@@ -446,6 +493,11 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
       aborted: step.value.aborted,
       skippedSlots: step.value.skippedSlots,
       examined: step.value.examined,
+      withheld: withheldReadCounts(
+        step.value.examined,
+        step.value.withheldExcluded,
+        step.value.everySourceFlagged,
+      ),
     };
   }
 

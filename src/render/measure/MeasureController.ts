@@ -33,6 +33,7 @@ import type {
 import { MIN_POINTS, isFull } from './types';
 import type { WorkOwnership } from '../../model/workOwnership';
 import type { ProfileProvenance } from './profileProvenance';
+import type { WithheldReadCounts } from '../../science/withheldCounts';
 import {
   distance,
   bearingDegrees,
@@ -223,6 +224,10 @@ export interface ProfileSamplerResult {
   residentOnly: boolean;
   corridorWidth?: number;
   groundPercentile?: number;
+  /** Points walked, Withheld left out, points read. Absent on older wirings. */
+  withheld?: WithheldReadCounts;
+  /** Method tag the series was sampled under. */
+  method?: string;
 }
 
 /**
@@ -303,6 +308,14 @@ export interface MeasurementSummary {
    * Absent on a measurement recorded before the record existed.
    */
   profileProvenance?: ProfileProvenance;
+  /**
+   * Profile only — points walked, Withheld points left out, and points the
+   * percentile read. Absent on a profile sampled before the exclusion
+   * existed, which read every point.
+   */
+  profileWithheld?: WithheldReadCounts;
+  /** Profile only — the method tag; absent on a profile sampled under v1. */
+  profileMethod?: string;
   /**
    * Profile only — the cumulative chainages (in METRES, through the same B2
    * factor the chart/table read) of the intermediate station dots drawn on the
@@ -943,6 +956,8 @@ export class MeasureController {
         m.profileCorridorWidth != null ? m.profileCorridorWidth * f : undefined,
       profileGroundPercentile: m.profileGroundPercentile,
       profileProvenance: m.profileProvenance,
+      profileWithheld: m.profileWithheld,
+      profileMethod: m.profileMethod,
       // Station-dot chainages in metres (× the same B2 factor as the samples),
       // in dot order, so the panel can couple a hovered tick/row to the scene
       // dot at the matching index. Only meaningful for profiles.
@@ -1517,6 +1532,9 @@ export class MeasureController {
     // Resident-only reflects the LATEST sample — a re-sample after streaming
     // completes may clear the caveat, so assign rather than only-set-true.
     m.profileChartResidentOnly = residentOnly || undefined;
+    // Assigned, not only set: a resample replaces the counts with its own.
+    m.profileWithheld = Array.isArray(result) ? undefined : result.withheld;
+    m.profileMethod = Array.isArray(result) ? undefined : result.method;
     if (!Array.isArray(result)) {
       if (
         typeof result.corridorWidth === 'number' &&

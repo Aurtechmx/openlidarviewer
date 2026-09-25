@@ -8,6 +8,11 @@ import { isZUpFormat } from '../../io/sniffFormat';
 import { heightLabel } from '../../geo/height';
 import { estimateInMemoryPrecision } from '../../geo/inMemoryPrecision';
 import { inMemoryPrecisionRows } from '../inMemoryPrecisionRows';
+import { SCAN_DENSITY_METHOD_TAG } from '../streamingExtentRows';
+
+export { SCAN_DENSITY_METHOD_TAG };
+import { isWithheld } from '../../science/withheldPolicy';
+import { alignedFlags, describeWithheldRead, withheldReadCounts } from '../../science/withheldCounts';
 
 function rowInfo(label: string, value: string): AnalysisRow {
   return { label, value, status: 'info' };
@@ -220,28 +225,43 @@ export const scanReport: AnalysisModule = {
 
     const footprintArea = width * depth;
 
+    // Density and spacing leave points with the LAS Withheld flag out, as
+    // terrain and profiles do (withheldPolicy.ts); Overlap stays. The count
+    // row above is the file's.
+    // A declared total, or a buffer with no flags channel (a voxel-reduced
+    // load), cannot say how many were Withheld, so the exclusion is 'unknown'.
+    const flags = strided ? undefined : alignedFlags(cloud.classificationFlags, totalN);
+    let excluded = 0;
+    if (flags) for (let i = 0; i < totalN; i++) if (isVisible(i) && isWithheld(flags[i])) excluded++;
+    const withheld = withheldReadCounts(reportedN, excluded, flags !== undefined);
+    const densityN = withheld.analysedPoints;
+
     // Point density — over the file's true count (back-scaled when strided).
     // Both figures are nominal averages (count ÷ footprint), and on a strided
     // load they mix bases — the header's count over the SAMPLE's footprint —
     // so the row says so rather than reading as a measured density.
     const mixedBasis = strided ? ' (mean: declared count over the display-sample footprint)' : '';
-    if (footprintArea <= 0 || reportedN === 0) {
+    if (footprintArea <= 0 || densityN === 0) {
       rows.push(withScope(rowWarn('Density', 'N/A (degenerate footprint)'), scope));
     } else {
-      rows.push(withScope(rowInfo('Density', `${(reportedN / footprintArea).toFixed(1)}${basis.densityUnit}${mixedBasis}`), scope));
+      rows.push(withScope(rowInfo('Density', `${(densityN / footprintArea).toFixed(1)}${basis.densityUnit}${mixedBasis}`), scope));
     }
 
     // Estimated point spacing. The cm/m formatter assumes metres, so it is used
     // only when the unit is confirmed; an unconfirmed scan shows the raw source
     // spacing without a metre label.
-    if (footprintArea <= 0 || reportedN === 0) {
+    if (footprintArea <= 0 || densityN === 0) {
       rows.push(withScope(rowWarn('Spacing', 'N/A (degenerate footprint)'), scope));
     } else {
-      const spacing = Math.sqrt(footprintArea / reportedN);
+      const spacing = Math.sqrt(footprintArea / densityN);
       const spacingValue = basis.unitKnown ? formatLength(spacing) : `${spacing.toFixed(2)} (source units)`;
       const spacingBasis = strided ? ' (nominal: √(display-sample footprint ÷ declared count))' : '';
       rows.push(withScope(rowInfo('Spacing', `${spacingValue}${spacingBasis}`), scope));
     }
+    // What the two figures above were computed over, and under which method.
+    rows.push(
+      withScope(rowInfo('Density basis', `${describeWithheldRead(withheld)} (${SCAN_DENSITY_METHOD_TAG})`), scope),
+    );
 
     // In-memory resolution — what the Float32 position buffer can still tell
     // apart at this extent. The other extent rows describe the survey; this one

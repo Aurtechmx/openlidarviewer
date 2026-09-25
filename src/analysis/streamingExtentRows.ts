@@ -1,4 +1,5 @@
 import type { SpatialContext } from '../geo/SpatialContext';
+import { describeWithheldRead, withheldReadCounts } from '../science/withheldCounts';
 import { verticalMetresPerUnit } from '../geo/SpatialContext';
 
 /** One extent/density/spacing row the streaming Scan-report emits. */
@@ -22,6 +23,13 @@ export interface StreamingExtentResult {
   readonly unitConfirmed: boolean;
   readonly rows: readonly ExtentRowSpec[];
 }
+
+/**
+ * The method tag the static and streaming Density and Spacing rows are
+ * computed under (`methodRegistry.ts`). v2 leaves Withheld points out of the
+ * count; v1 counted them.
+ */
+export const SCAN_DENSITY_METHOD_TAG = 'olv.density.scan-report@2';
 
 /**
  * Build the Width / Depth / Height / Density / Spacing rows for the streaming
@@ -78,6 +86,13 @@ export function streamingExtentRows(
     rows.push(
       { label: 'Density', value: `${density.toFixed(1)}${densityUnit}`, scoped: true },
       { label: 'Spacing', value: `${spacing.toFixed(2)}${spacingUnit}`, scoped: true },
+      // The total is the header's: no flag was read, so how many of those
+      // points are Withheld is unknown and none are excluded.
+      {
+        label: 'Density basis',
+        value: `${describeWithheldRead(withheldReadCounts(sourcePointCount, 0, false))} (${SCAN_DENSITY_METHOD_TAG})`,
+        scoped: true,
+      },
     );
   }
 

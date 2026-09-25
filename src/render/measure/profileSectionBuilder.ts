@@ -71,6 +71,12 @@ export interface ProfileSourceChannels {
   readonly pointSourceId?: Uint16Array;
   readonly gpsTime?: Float64Array;
   readonly normals?: Float32Array;
+  /**
+   * The normalised classification-flag byte, read only to leave Withheld
+   * points out of the walk. It is not carried into a section: the policy
+   * decides what is read, and a section records what was read.
+   */
+  readonly classificationFlags?: Uint8Array;
 }
 
 /** Accepted returns, as struct-of-arrays. All arrays share one index space. */

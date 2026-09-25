@@ -334,6 +334,7 @@ function sectionWithOutlierAtIndexOne(count: number): ProfileSectionResult {
     aborted: false,
     skippedSlots: [],
     examined: count,
+    withheld: { sourcePoints: count, withheldExcluded: 0, analysedPoints: count },
   };
 }
 

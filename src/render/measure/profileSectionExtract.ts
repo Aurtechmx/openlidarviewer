@@ -30,6 +30,8 @@ import {
   type ProfileSourceChannels,
   type ProfileSectionPoints,
 } from './profileSectionBuilder';
+import { isWithheld } from '../../science/withheldPolicy';
+import { alignedFlags } from '../../science/withheldCounts';
 
 /** An axis-aligned box in the project frame. */
 export interface ProfileSourceBounds {
@@ -81,6 +83,10 @@ export interface ProfileSectionExtractResult {
   readonly skippedSlots: readonly number[];
   /** Points examined, which excludes any source the bounds test skipped. */
   readonly examined: number;
+  /** Examined points left out as Withheld; they never reach the corridor test. */
+  readonly withheldExcluded: number;
+  /** True when every examined source carried an aligned flags channel. */
+  readonly everySourceFlagged: boolean;
 }
 
 const DEFAULT_CHUNK = 65536;
@@ -159,6 +165,8 @@ export function* extractProfileSectionChunks(
   let examined = 0;
   let sinceYield = 0;
   let aborted = false;
+  let withheld = 0;
+  let everySourceFlagged = true;
 
   for (const src of sources) {
     if (opts.signal?.aborted) {
@@ -170,15 +178,24 @@ export function* extractProfileSectionChunks(
       continue;
     }
     builder.beginSource(src.slot, src.channels, src.pointCount);
+    // Scientific processing leaves Withheld out (withheldPolicy.ts). The
+    // skipped point keeps its index, so every accepted return still names
+    // its source point exactly.
+    const flags = alignedFlags(src.channels?.classificationFlags, src.pointCount);
+    if (!flags) everySourceFlagged = false;
     for (let i = 0; i < src.pointCount; i++) {
-      src.readProjectXYZ(i, xyz);
-      if (profileCorridorAccepts(frame, band, bandSq, xyz[0]!, xyz[1]!, xyz[2]!, scratch)) {
-        builder.push(
-          i,
-          scratch[PROFILE_HIT_CHAINAGE]!,
-          scratch[PROFILE_HIT_HEIGHT]!,
-          scratch[PROFILE_HIT_LATERAL]!,
-        );
+      if (flags && isWithheld(flags[i]!)) {
+        withheld++;
+      } else {
+        src.readProjectXYZ(i, xyz);
+        if (profileCorridorAccepts(frame, band, bandSq, xyz[0]!, xyz[1]!, xyz[2]!, scratch)) {
+          builder.push(
+            i,
+            scratch[PROFILE_HIT_CHAINAGE]!,
+            scratch[PROFILE_HIT_HEIGHT]!,
+            scratch[PROFILE_HIT_LATERAL]!,
+          );
+        }
       }
       examined++;
       if (++sinceYield >= chunk) {
@@ -193,7 +210,14 @@ export function* extractProfileSectionChunks(
     if (aborted) break;
   }
 
-  return { points: builder.finish(), aborted, skippedSlots: skipped, examined };
+  return {
+    points: builder.finish(),
+    aborted,
+    skippedSlots: skipped,
+    examined,
+    withheldExcluded: withheld,
+    everySourceFlagged,
+  };
 }
 
 /** Run {@link extractProfileSectionChunks} to completion. */

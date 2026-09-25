@@ -180,7 +180,7 @@ export interface OpenScanDeps {
     applyDisplayProfile: (cloud: PointCloud, target: Inspector) => void;
   }>;
   /** Run the analysis modules over a cloud for the Scan Report. */
-  runModules: (cloud: PointCloud, scope?: ClassScope) => AnalysisRow[];
+  runModules: (cloud: PointCloud, scope?: ClassScope) => Promise<AnalysisRow[]>;
   /** Derive the active class scope for the report. */
   currentClassScope: (cloud: PointCloud) => ClassScope;
   /** Pre-warm the lazy Visual Export Studio chunk. */
