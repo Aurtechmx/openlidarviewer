@@ -67,6 +67,7 @@ export interface InspectorCardRefreshers {
   refreshDatasetIntelligenceFromStaticCloud(cloud: {
     readonly pointCount: number;
     readonly declaredPointCount?: number;
+    readonly decodedPointCount?: number;
     readonly classificationFlags?: Uint8Array;
     readonly metadata?: { crs?: { linearUnit?: string; linearUnitToMetres?: number; verticalUnitToMetres?: number } | null };
     bounds(): { min: [number, number, number]; max: [number, number, number] };
@@ -265,6 +266,7 @@ export function createInspectorCardRefreshers(
   function refreshDatasetIntelligenceFromStaticCloud(cloud: {
     readonly pointCount: number;
     readonly declaredPointCount?: number;
+    readonly decodedPointCount?: number;
     readonly classificationFlags?: Uint8Array;
     readonly metadata?: { crs?: { linearUnit?: string; linearUnitToMetres?: number; verticalUnitToMetres?: number } | null };
     bounds(): { min: [number, number, number]; max: [number, number, number] };
@@ -296,9 +298,13 @@ export function createInspectorCardRefreshers(
       const declared = cloud.declaredPointCount;
       // Withheld points leave the count as they leave the Scan Report's Density
       // row; a header total cannot be inspected, so it stays whole.
-      const strided = declared !== undefined && declared > cloud.pointCount;
+      // The source total is the larger of the header's declared count and the
+      // pre-downsample decode count: a voxel-downsampled file with no header
+      // total still holds fewer points than it decoded.
+      const sourceTotal = Math.max(declared ?? 0, cloud.decodedPointCount ?? 0);
+      const strided = sourceTotal > cloud.pointCount;
       const n = strided
-        ? declared
+        ? sourceTotal
         : cloud.pointCount - withheldCount(alignedFlags(cloud.classificationFlags, cloud.pointCount));
       const summary: Parameters<Inspector['setDatasetIntelligence']>[0] = {
         pointCount: n,
@@ -311,7 +317,8 @@ export function createInspectorCardRefreshers(
         coverageMeta: {
           // A loader stride leaves only a display sample resident: the extent
           // is complete, the point set is not, so the row must not say "Full".
-          coverage: cloud.pointCount < n ? 'display-sample' : 'full',
+          coverage: strided ? 'display-sample' : 'full',
+          sourceComplete: !strided,
           sourcePointCount: n,
           // What is actually resident (and what a run can walk) — the declared
           // header total stays on `sourcePointCount`.
@@ -376,6 +383,9 @@ export function createInspectorCardRefreshers(
         bboxSpansM,
         coverageMeta: {
           coverage: 'resident-only' as const,
+          // Streaming residency moves with the view and the budget, so the
+          // card never states that every source point is resident.
+          sourceComplete: false,
           sourcePointCount: sourcePoints ?? 0,
           // Nothing has been analysed at attach time. `noteAnalyzedPointCount`
           // replaces this with the real walked-point count once a terrain run
@@ -428,9 +438,10 @@ export function createInspectorCardRefreshers(
     foldCoverageMeta(
       {
         ...(Number.isFinite(count) && count > 0 ? { analyzedPointCount: Math.round(count) } : {}),
-        // The engine's 'full' means "every RESIDENT point walked"; a strided
-        // display sample stays labelled as one. Any partial mode wins as-is.
-        coverage: mode === 'full' && base.coverage === 'display-sample' ? base.coverage : mode,
+        // The engine's 'full' means the grid spans the extent, not that every
+        // source point was read: without sourceComplete the load-time reading
+        // (display sample, resident nodes) stays. Any partial mode wins as-is.
+        coverage: mode === 'full' && base.sourceComplete !== true ? base.coverage : mode,
         ...(Number.isFinite(confidence) ? { confidence } : {}),
       },
       { engineRan: true, ...(Number.isFinite(ground) ? { groundPointRatio: ground } : {}) },

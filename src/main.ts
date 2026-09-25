@@ -4498,7 +4498,7 @@ streamingUi.onTick(({ cloud, scheduler, counts, diagnostics: diag }) => {
   publishStreamingDetail(inspector, cloud, debug);
   if (diag.readinessPhase === 'settled') {
     // First settled current-view verdict: the scan route's one-shot
-    // re-evaluation on the now fully-resident cloud (depth gate and
+    // re-evaluation on the resident view, not the whole source (depth gate and
     // spend-on-landed-verdict live on the coordinator).
     routeCoordinator.onStreamingSettled({
       hierarchyDepth: cloud.octree.nodes().length > 0 ? cloud.maxDepth() : 0,
