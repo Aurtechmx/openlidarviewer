@@ -7,10 +7,10 @@ import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  classifyRun, compileSignatures, computeStreak, stepLog,
+  classifyRun, compileSignatures, computeStreak, stepLog, runnerImage, exclusionReason,
   SCRIPT_START_MARKER, FIRST_ASSERTION_MARKER, type Verdict, type SignatureList,
 } from '../scripts/lib/iosRunClassifier.mjs';
-import { evaluate, format } from '../scripts/ios-streak.mjs';
+import { evaluate, format, ghJobMeta } from '../scripts/ios-streak.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const LIST: SignatureList = JSON.parse(readFileSync(resolve(ROOT, 'scripts/ios-infra-signatures.json'), 'utf8'));
@@ -110,7 +110,7 @@ describe('stepLog', () => {
 
 describe('computeStreak', () => {
   const seq = (s: string) => [...s].map((c, i) => ({
-    id: i, verdict: ({ P: 'PASS', F: 'FAILURE', I: 'INFRASTRUCTURE' } as Record<string, Verdict>)[c] }));
+    id: i, verdict: ({ P: 'PASS', F: 'FAILURE', I: 'INFRASTRUCTURE', X: 'EXCLUDED' } as Record<string, Verdict>)[c] }));
 
   it('counts passes since the last failure', () => {
     expect(computeStreak(seq('PPFPPP')).streak).toBe(3);
@@ -129,6 +129,63 @@ describe('computeStreak', () => {
     expect(r.unreliable).toBe(true);
     expect(r.eligibleToBlock).toBe(false);
     expect(computeStreak(seq('PPPPI')).unreliable).toBe(false); // exactly 20%
+  });
+});
+
+describe('pinned runner', () => {
+  const SETUP = [
+    '2026-09-25T09:04:08.8216690Z ##[group]Runner Image',
+    '2026-09-25T09:04:08.8217090Z Image: macos-26-arm64',
+    '2026-09-25T09:04:08.8217480Z Version: 20260907.0351.1',
+    '2026-09-25T09:04:08.8218300Z Included Software: https://example.invalid/Readme.md',
+  ].join('\n');
+
+  it('reads the image line of a Set up job log', () => {
+    expect(runnerImage(SETUP)).toBe('macos-26-arm64');
+    expect(runnerImage(SETUP.replace('macos-26-arm64', 'macos-26'))).toBe('macos-26');
+    expect(runnerImage('no image here')).toBeNull();
+    expect(runnerImage(undefined)).toBeNull();
+  });
+
+  it('excludes arm64 images only; an Intel or unknown image counts', () => {
+    expect(exclusionReason('macos-26-arm64')).toMatch(/not the pinned Intel runner/);
+    expect(exclusionReason('macos-26')).toBeNull();
+    expect(exclusionReason(null)).toBeNull();
+  });
+
+  it('EXCLUDED neither counts, resets, nor enters the 20% guard', () => {
+    const seq = (s: string) => [...s].map((c, i) => ({
+      id: i, verdict: ({ P: 'PASS', F: 'FAILURE', I: 'INFRASTRUCTURE', X: 'EXCLUDED' } as Record<string, Verdict>)[c] }));
+    const r = computeStreak(seq('PPXXXPIPP'));
+    expect(r).toMatchObject({ streak: 5, attempts: 6, infraCount: 1, excludedRuns: [2, 3, 4], unreliable: false });
+    expect(computeStreak(seq('PFXX')).streak).toBe(0);
+  });
+
+  it('the default job-metadata source reads the Set up job step through gh', () => {
+    const calls: string[][] = [];
+    const meta = ghJobMeta((args) => { calls.push(args); return SETUP.split('\n').map((l) => `job\tSet up job\t${l}`).join('\n'); });
+    expect(meta({ id: 1, jobId: 42 }).image).toBe('macos-26-arm64');
+    expect(calls[0]).toEqual(['run', 'view', '--job', '42', '--log']);
+    expect(ghJobMeta(() => { throw new Error('gone'); })({ id: 1, jobId: 42 }).image).toBeNull();
+    expect(ghJobMeta(() => '')({ id: 1, jobId: null }).image).toBeNull();
+  });
+
+  it('evaluate excludes arm64 runs through an injected job-metadata source', () => {
+    const ok = { jobs: [{ databaseId: 900, conclusion: 'success', steps: STEPS.map((name) => ({ name, conclusion: 'success' })) }] };
+    const bad = { jobs: [{ databaseId: 901, conclusion: 'failure', steps: failingAt(ASSERT) }] };
+    const views: Record<string, unknown> = { '1': ok, '2': bad, '3': ok };
+    const gh = (args: string[]) => {
+      if (args[1] === 'list') return JSON.stringify([3, 2, 1].map((id) => ({
+        databaseId: id, status: 'completed', conclusion: id === 2 ? 'failure' : 'success', createdAt: `t${id}`, headBranch: 'main' })));
+      if (args.includes('--log-failed')) throw new Error('an excluded run must not be read for failure logs');
+      return JSON.stringify(views[args[2]]);
+    };
+    const jobMeta = ({ id }: { id: number }) => ({ image: id === 2 ? 'macos-26-arm64' : 'macos-26' });
+    const r = evaluate({ gh, jobMeta, limit: 10 });
+    expect(r.runs.map((x) => [x.id, x.verdict])).toEqual([[1, 'PASS'], [2, 'EXCLUDED'], [3, 'PASS']]);
+    expect(r).toMatchObject({ streak: 2, attempts: 2, excludedRuns: [2] });
+    expect(format(r)).toContain('excluded 1');
+    expect(format(r)).toMatch(/2 {2}t2 {2}EXCLUDED/);
   });
 });
 

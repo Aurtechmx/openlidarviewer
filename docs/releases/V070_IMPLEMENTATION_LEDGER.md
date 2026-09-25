@@ -6383,3 +6383,14 @@ INFRASTRUCTURE run (35883012823, ENOTFOUND while installing the driver),
 leg ADVISORY. `iosRunClassifier.test.ts` covers each signature, a
 signature-matching failure after the first assertion, the missing-marker case,
 the streak and the 20% guard.
+
+25 September 2026: `macos-latest` now maps to an arm64 image
+(`macos-26-arm64`, a paravirtual-GPU VM). On it SimMetalHost crash-loops one
+to three seconds after the two-finger pinch and takes Mobile Safari down
+(runs 36085521670, 36113030817, 36116348510; the simulator log reports
+"Process crashed: SimMetalHost"). `ios-simulator.yml` on main is now pinned
+to `macos-26-intel` with iOS 26.5 / iPhone 17e, resolved by exact name by
+`scripts/pin-ios-simulator.mjs`, with WebDriverAgent built once and reused by
+the session. `ios-streak.mjs` counts only runs on the pinned runner: a run
+whose "Set up job" log names an arm64 image is EXCLUDED, neither counting
+toward 20 nor resetting the streak, and stays outside the 20% guard.
