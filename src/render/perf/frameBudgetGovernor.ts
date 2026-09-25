@@ -86,16 +86,13 @@ export const MIN_COMMIT_SCALE = 0.1;
 /**
  * v2 presentation outputs. `renderScale` multiplies the backing-store ratio
  * and `pointBudgetFraction` the drawn instance count of each point mesh.
- * Both only fall while moving, never rise until the camera stops, and the
- * render scale climbs back one step per `RESTORE_FRAMES` stationary frames.
- * Neither reaches a buffer an analysis reads: the drawn count is a draw
+ * Both only fall while moving, never rise until the camera stops, and both
+ * come back in one step once it has. Neither reaches a buffer an analysis reads: the drawn count is a draw
  * parameter, the positions behind it are untouched.
  */
 export const RENDER_SCALE_FLOOR = 0.6;
 export const RENDER_SCALE_STEP = 0.2;
 export const POINT_FRACTION_FLOOR = 0.4;
-/** Stationary frames between two render-scale restore steps. */
-export const RESTORE_FRAMES = 3;
 
 /** What the loop measured, and what is waiting on it. */
 export interface FrameBudgetInput {
@@ -117,8 +114,13 @@ export interface FrameBudgetInput {
   readonly mobileTier: boolean;
   /** The frame time to measure against; defaults to `TARGET_FRAME_MS`. */
   readonly targetFrameMs?: number;
-  /** Consecutive frames outside the moving band, for the gradual restore. */
-  readonly stationaryFrames?: number;
+  /**
+   * Whether the camera moved recently enough to hold the v2 outputs down. The
+   * phase stays 'moving' for the render holdover after the camera stops, which
+   * outlasts the motion; the wiring passes a shorter stillness test here.
+   * Defaults to the moving band.
+   */
+  readonly presentationMoving?: boolean;
 }
 
 /** What the frame's optional work is allowed. Every number is in `[0, 1]`. */
@@ -270,17 +272,15 @@ export function frameBudgetPolicy(
     : 1;
 
   // v2: while moving, drop to the level the load asks for and hold the lowest
-  // level reached; stationary, restore the scale in steps and the points at once.
+  // level reached; once still, restore both at once.
   const loadLevel = load > 0.5 ? 2 : load > 0 ? 1 : 0;
   let renderScale: number;
   let pointBudgetFraction: number;
-  if (band === 'moving') {
+  if (input.presentationMoving ?? band === 'moving') {
     renderScale = Math.min(previous.renderScale, round1(1 - loadLevel * RENDER_SCALE_STEP));
     pointBudgetFraction = Math.min(previous.pointBudgetFraction, round1(1 - loadLevel * (1 - POINT_FRACTION_FLOOR) / 2));
   } else {
-    const n = input.stationaryFrames ?? RESTORE_FRAMES;
-    const due = n > 0 && n % RESTORE_FRAMES === 0;
-    renderScale = due ? Math.min(1, round1(previous.renderScale + RENDER_SCALE_STEP)) : previous.renderScale;
+    renderScale = 1;
     pointBudgetFraction = 1;
   }
   renderScale = Math.max(RENDER_SCALE_FLOOR, renderScale);

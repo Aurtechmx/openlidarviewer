@@ -12,7 +12,7 @@
  * contents or any measurement.
  */
 import { frameBudgetPolicy, UNLOADED_POLICY, type FrameBudgetPolicy } from './frameBudgetGovernor';
-import type { GovernorSink } from './governorHook';
+import type { GovernorSink, KeepNodeBuilders } from './governorHook';
 import type { RefinementPhase } from '../refinementPhase';
 
 /**
@@ -21,6 +21,9 @@ import type { RefinementPhase } from '../refinementPhase';
  */
 const DPR_STEP = 0.25;
 
+/** `PHI_CONJUGATE` in fadeDither.ts (the dissolve hash), restated for the same reason. */
+export const KEEP_HASH_STEP = 0.618033988749895;
+
 /** `GOVERNOR_SLOT` in governorHook.ts, restated for the same reason. */
 const SLOT = '__olvGovernor';
 
@@ -28,6 +31,14 @@ const SLOT = '__olvGovernor';
 export const GOVERNOR_WINDOW = 30;
 
 const PHASES: readonly string[] = ['moving', 'coverage', 'center-refine', 'full-refine'];
+
+/**
+ * The camera counts as still for the v2 outputs once it has not moved for this
+ * long. The phase stays 'moving' through the 350 ms render holdover, which
+ * outlasts the motion itself; restoring on the phase left the view reduced
+ * after the camera had come to rest.
+ */
+export const STILL_MS = 100;
 
 /** The ratio `target` after `pressure` in [0, 1]: 0 leaves it, 1 takes it to `floor`. */
 export function governedDpr(target: number, floor: number, maxDpr: number, pressure: number): number {
@@ -48,14 +59,32 @@ export function governedUploadLimits<L extends { readonly maxNodes?: number; rea
 }
 
 /** The duck-typed slice of a three.js instanced point mesh the point budget touches. */
-interface DrawnGeometry {
-  readonly isInstancedBufferGeometry?: boolean;
-  instanceCount: number;
-  readonly attributes?: { readonly aPos?: { readonly count: number } };
+interface MaskedMaterial {
+  readonly isNodeMaterial?: boolean;
+  sizeNode: unknown;
+  needsUpdate: boolean;
 }
 interface SceneNode {
   readonly children?: readonly SceneNode[];
-  readonly geometry?: DrawnGeometry;
+  readonly geometry?: { readonly isInstancedBufferGeometry?: boolean };
+  readonly material?: MaskedMaterial | readonly MaskedMaterial[];
+}
+type KeepUniform = { value: number };
+interface Fold {
+  /** The size node this wiring set; a different one means the owner rebuilt it. */
+  node: unknown;
+  keep: KeepUniform;
+}
+
+/**
+ * The per-point keep test: the Weyl hash of the instance index (the same one
+ * the streaming dissolve uses, `fadeHashUnit`) at or below `keep`. Kept points
+ * are spread evenly over the buffer order instead of being its first share.
+ */
+function foldKeep(m: MaskedMaterial, keep: KeepUniform, t: KeepNodeBuilders): unknown {
+  type N = { mul(x: unknown): N };
+  const base = (m.sizeNode ?? t.materialPointSize) as N;
+  return base.mul(t.step(t.fract((t.float(t.instanceIndex) as N).mul(KEEP_HASH_STEP)), keep));
 }
 
 /** The ratio after `renderScale`, never below `RENDER_SCALE_FLOOR` of `maxDpr`. */
@@ -71,9 +100,10 @@ export class GovernorWiring implements GovernorSink {
   private _write = 0;
   private _pending = 0;
   private _policy: FrameBudgetPolicy = UNLOADED_POLICY;
-  private _stationary = 0;
-  /** Geometries drawn below their full count: geometry -> [full count, count set]. */
-  private readonly _reduced = new Map<DrawnGeometry, [number, number]>();
+  /** The keep fold of each point material this wiring has touched. */
+  private readonly _folds = new WeakMap<MaskedMaterial, Fold>();
+  /** Keep uniforms currently below 1. */
+  private readonly _reduced = new Set<KeepUniform>();
   /** Changes of the two v2 outputs, for the A/B record. */
   renderScaleChanges = 0;
   pointBudgetChanges = 0;
@@ -96,7 +126,11 @@ export class GovernorWiring implements GovernorSink {
     if (this._count < GOVERNOR_WINDOW) this._count++;
   }
 
-  frame(phase: string, tweening: boolean): void {
+  /**
+   * `quietMs` is the time since the camera last moved; without it the v2
+   * outputs follow the phase.
+   */
+  frame(phase: string, tweening: boolean, quietMs?: number): void {
     if (this._count === 0) return;
     const s = this._sorted.subarray(0, this._count);
     s.set(this._ring.subarray(0, this._count));
@@ -104,7 +138,6 @@ export class GovernorWiring implements GovernorSink {
     const mid = this._count >> 1;
     const median = this._count % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
     const prev = this._policy;
-    this._stationary = tweening || phase === 'moving' ? 0 : this._stationary + 1;
     this._policy = frameBudgetPolicy({
       phase: (PHASES.includes(phase) ? phase : 'full-refine') as RefinementPhase,
       tweening,
@@ -114,7 +147,7 @@ export class GovernorWiring implements GovernorSink {
       streamingBacklog: 0,
       continuityPending: false,
       mobileTier: this._mobileTier,
-      stationaryFrames: this._stationary,
+      presentationMoving: quietMs === undefined ? undefined : tweening || !(quietMs >= STILL_MS),
     }, prev);
     if (this._policy.renderScale !== prev.renderScale) this.renderScaleChanges++;
     if (this._policy.pointBudgetFraction !== prev.pointBudgetFraction) this.pointBudgetChanges++;
@@ -125,33 +158,51 @@ export class GovernorWiring implements GovernorSink {
   }
 
   /**
-   * Draw each instanced point mesh under `root` at the policy's fraction of
-   * its full count, or restore it. Only the draw count changes; a mesh whose
-   * count someone else set below full (a growing preview) is left alone, and
-   * a count changed by its owner since is not restored over.
+   * Draw each instanced point mesh under `root` at the policy's fraction, or
+   * restore it. A material is folded once with a keep test on its size graph
+   * (a zero-size point is not drawn) and from then on only the uniform moves;
+   * the instance count and every buffer are left alone. A size graph its owner
+   * rebuilt since is folded again.
    */
-  points(root: object): void {
+  points(root: object, tsl: KeepNodeBuilders): void {
     const f = this._policy.pointBudgetFraction;
     if (f >= 1) {
       if (this._reduced.size === 0) return;
-      for (const [g, [full, set]] of this._reduced) if (g.instanceCount === set) g.instanceCount = full;
+      for (const u of this._reduced) u.value = 1;
       this._reduced.clear();
       return;
     }
+    const apply = (m: MaskedMaterial): void => {
+      if (!m.isNodeMaterial) return;
+      let fold = this._folds.get(m);
+      if (!fold || m.sizeNode !== fold.node) {
+        const keep = fold?.keep ?? (tsl.uniform(1) as KeepUniform);
+        fold = { keep, node: foldKeep(m, keep, tsl) };
+        m.sizeNode = fold.node;
+        m.needsUpdate = true;
+        this._folds.set(m, fold);
+      }
+      fold.keep.value = f;
+      this._reduced.add(fold.keep);
+    };
     const visit = (n: SceneNode): void => {
-      const g = n.geometry;
-      const full = g?.isInstancedBufferGeometry ? g.attributes?.aPos?.count : undefined;
-      if (g && full !== undefined && full > 0) {
-        const held = this._reduced.get(g);
-        const want = Math.max(1, Math.floor(full * f));
-        if (held ? g.instanceCount === held[1] : g.instanceCount === full) {
-          g.instanceCount = want;
-          this._reduced.set(g, [full, want]);
-        }
+      if (n.geometry?.isInstancedBufferGeometry && n.material) {
+        if (Array.isArray(n.material)) for (const m of n.material as readonly MaskedMaterial[]) apply(m);
+        else apply(n.material as MaskedMaterial);
       }
       if (n.children) for (const c of n.children) visit(c);
     };
     visit(root as SceneNode);
+  }
+
+  /** The share of `material`'s points drawn, 1 when never folded. */
+  keepOf(material: object): number {
+    return this._folds.get(material as MaskedMaterial)?.keep.value ?? 1;
+  }
+
+  /** Whether an output is still below its configured value, so frames are owed. */
+  settling(): boolean {
+    return this._policy.renderScale < 1 || this._policy.pointBudgetFraction < 1 || this._reduced.size > 0;
   }
 
   /** The two v2 outputs, for a settled-state check. */

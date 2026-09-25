@@ -24,11 +24,20 @@
 import { cameraIsMoving, edlActiveThisFrame } from './edlMotionGate';
 import { shouldRunProbePick } from './hoverPickGate';
 import { noteDrawn } from './drawSignal';
-import { governor } from './perf/governorHook';
+import { governor, governPoints as governPointsWith, type KeepNodeBuilders } from './perf/governorHook';
+import { float, fract, instanceIndex, materialPointSize, step, uniform } from 'three/tsl';
+import { RENDER_HOLDOVER_MS } from './renderActivityGate';
 import { navSink, navDrive, stepNav, type NavProbeSink, type NavUploadSample } from '../perf/navProbeHook';
 
 export { feedFrameMs } from '../perf/navProbeHook';
-export { governDpr, governPoints } from './perf/governorHook';
+export { governDpr } from './perf/governorHook';
+
+const KEEP_BUILDERS = { float, fract, step, uniform, instanceIndex, materialPointSize } as unknown as KeepNodeBuilders;
+
+/** Draw the point meshes under `root` at the governor's point fraction; no-op when none is installed. */
+export function governPoints(root: object): void {
+  governPointsWith(root, KEEP_BUILDERS);
+}
 import type { PointInfo } from './pointInfo';
 import type { ToolMode } from './Viewer';
 
@@ -216,7 +225,7 @@ export function runRenderFrame(host: RenderLoopHost): void {
   const moving = cameraIsMoving(host.isTweening(), nowMs, host.cameraActivityUntilMs());
   // `?governor=on`: resolve the frame budget policy before the DPR and EDL use it.
   const gov = governor();
-  gov?.frame(host.navQuality?.().phase ?? 'full-refine', host.isTweening());
+  gov?.frame(host.navQuality?.().phase ?? 'full-refine', host.isTweening(), nowMs - host.cameraActivityUntilMs() + RENDER_HOLDOVER_MS);
   const wantEdl = edlActiveThisFrame(host.edlEnabled(), moving) && (gov?.edl() ?? true);
   // Pick this frame's DPR before rendering so the render uses it.
   host.applyAdaptiveDpr(moving, delta, nowMs, rendered);

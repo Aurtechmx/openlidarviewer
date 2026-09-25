@@ -21,7 +21,7 @@
  *                               ('moving', loaded) frame window → dprPressure applied to
  *                               the DPR step, allowEdl to the EDL gate, hover;
  *                               v2: renderScale (floor 0.6) caps the ratio and
- *                               pointBudgetFraction (floor 0.4) the drawn count
+ *                               pointBudgetFraction (floor 0.4) the drawn share
  *   - camera pose               two top-down orthographic cameras (different centre and
  *                               zoom); the lasso is the same world footprint projected
  *                               through each pose's projector
@@ -61,6 +61,11 @@ import {
   type PresentationSettings,
   type ResolvedPresentation,
 } from './helpers/scientificDigests';
+import * as tsl from 'three/tsl';
+import type { KeepNodeBuilders } from '../src/render/perf/governorHook';
+
+const TSL = tsl as unknown as KeepNodeBuilders;
+
 
 const DPRS = [0.5, 1, 2] as const;
 const EDLS = [true, false] as const;
@@ -106,7 +111,7 @@ describe('presentation matrix', () => {
   });
 });
 
-describe('v2 point budget: drawing fewer instances leaves every result alone', () => {
+describe('v2 point budget: drawing fewer points leaves every result alone', () => {
   it('results after the governor reduced the static meshes equal the unreduced ones', () => {
     const scene = staticScene();
     const ref = MATRIX.find((rp) => rp.settings.governor === 'nominal')!;
@@ -115,9 +120,11 @@ describe('v2 point budget: drawing fewer instances leaves every result alone', (
     const gov = wiredGovernor(GOVERNOR_INPUT.stressed);
     const n = scene.cloud.pointCount;
     const positions = digestOf(Array.from(scene.cloud.positions));
-    const mesh = { geometry: { isInstancedBufferGeometry: true, instanceCount: n, attributes: { aPos: { count: n } } } };
-    gov.points({ children: [mesh] });
-    expect(mesh.geometry.instanceCount).toBe(Math.floor(n * 0.4));
+    const mesh = { geometry: { isInstancedBufferGeometry: true, instanceCount: n }, material: { isNodeMaterial: true, sizeNode: null as unknown, needsUpdate: false } };
+    gov.points({ children: [mesh] }, TSL);
+    expect(mesh.geometry.instanceCount).toBe(n); // the keep test is in the size graph, not the count
+    expect(mesh.material.sizeNode).not.toBeNull();
+    expect(gov.presentation().reducedMeshes).toBe(1);
     expect(digestOf(Array.from(scene.cloud.positions))).toBe(positions);
     for (const rp of MATRIX.filter((r) => r.settings.governor === 'stressed')) {
       expect([dtmOutcome(scene, rp).digest, stockpileOutcome(scene, rp, STATIC_LASSO_WORLD).digest,
