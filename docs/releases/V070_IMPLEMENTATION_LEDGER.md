@@ -6356,3 +6356,30 @@ Values change only on files that contain Withheld points inside the lasso.
 The polygon Volume tool, profiles and density still read every point.
 
 Covered by `tests/lassoVolumeWithheld.test.ts`.
+
+### L13 · OPEN · EVIDENCE
+
+The iOS simulator leg stays advisory until it passes 20 consecutive runs, and
+each run is classified by script, not by reading its log. `scripts/ios-streak.mjs`
+reads the workflow's runs through `gh` and classifies each one with
+`scripts/lib/iosRunClassifier.mjs` against the signature list in
+`scripts/ios-infra-signatures.json`.
+
+A run is INFRASTRUCTURE only when its first failing step comes before the
+first app assertion and its log matches a listed signature: runner
+provisioning, a network or DNS error while downloading dependencies or the
+driver, a missing simulator runtime, or WebDriverAgent unreachable on :8100
+before the session opens. `ios-touch-check.mjs` prints `OLV-IOS-SCRIPT-START`
+when it starts and `OLV-IOS-FIRST-ASSERTION` immediately before its first
+assertion; inside that step, only text between the two can match. Any other
+failure is FAILURE and resets the streak. A run with no start marker, no log
+or no assertion step is FAILURE. INFRASTRUCTURE neither counts toward 20 nor
+resets the streak, and is listed by run id. If more than 20% of the evaluated
+window (default 30 completed runs) is INFRASTRUCTURE, the leg reads
+UNRELIABLE whatever the streak. Signatures change only by commit.
+
+On 24 September 2026 the script read 28 completed runs: streak 2 of 20, one
+INFRASTRUCTURE run (35883012823, ENOTFOUND while installing the driver),
+leg ADVISORY. `iosRunClassifier.test.ts` covers each signature, a
+signature-matching failure after the first assertion, the missing-marker case,
+the streak and the 20% guard.
