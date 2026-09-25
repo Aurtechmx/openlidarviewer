@@ -100,13 +100,14 @@ describe('createAppLifetime', () => {
     const streamingUi = { endSession: vi.fn() };
     const order: string[] = [];
     const tag = (name: string, fn: () => void) => () => { order.push(name); fn(); };
-    // Mirrors the registrations at the end of src/main.ts.
-    runtime.lifetime.register(tag('stage', () => stage.dispose()), 'stage');
-    runtime.lifetime.register(tag('viewer', () => { debugOverlay.stop(); viewer.dispose(); }), 'viewer');
-    runtime.lifetime.register(tag('decode workers', () => { copc.dispose(); ept.dispose(); }), 'decode workers');
-    runtime.lifetime.register(tag('streaming session', () => streamingUi.endSession()), 'streaming session');
     const win = new EventTarget();
-    runtime.lifetime.bindPagehide(win);
+    // Mirrors the registration at the end of src/main.ts.
+    runtime.lifetime.own({
+      stage: tag('stage', () => stage.dispose()),
+      viewer: tag('viewer', () => { debugOverlay.stop(); viewer.dispose(); }),
+      'decode workers': tag('decode workers', () => { copc.dispose(); ept.dispose(); }),
+      'streaming session': tag('streaming session', () => streamingUi.endSession()),
+    }, win);
     win.dispatchEvent(new Event('pagehide'));
     win.dispatchEvent(new Event('pagehide'));
     runtime.lifetime.disposeAll();
@@ -119,10 +120,9 @@ describe('createAppLifetime', () => {
   it('main.ts registers the boot owners and binds pagehide', async () => {
     const { readFileSync } = await import('node:fs');
     const src = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
-    for (const label of ['stage', 'viewer', 'decode workers', 'streaming session']) {
-      expect(src).toContain(`'${label}');`);
-    }
-    expect(src).toContain('runtime.lifetime.bindPagehide(window);');
+    const block = src.slice(src.indexOf('runtime.lifetime.own({'));
+    for (const label of ['stage:', 'viewer:', "'decode workers':", "'streaming session':"]) expect(block).toContain(label);
+    expect(block).toContain('}, window);');
     expect(src).not.toMatch(/addEventListener\('beforeunload'/);
   });
 });

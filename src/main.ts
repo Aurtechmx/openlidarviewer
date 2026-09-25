@@ -741,11 +741,11 @@ viewerLoaded.then((v) => {
 // Releasing Space resumes the modal tool after a hold-Space re-orient.
 window.addEventListener('keyup', (e) => {
   if (e.code === 'Space' && viewer?.toolActive) viewer.setToolPaused(false);
-}, { signal: runtime.lifetime.signal });
+}, runtime.lifetime);
 
 // Blur (Cmd-Tab away while holding Space, etc.) must also resume the tool, or it
 // would stay stuck in the paused/navigation state.
-window.addEventListener('blur', () => viewer?.setToolPaused(false), { signal: runtime.lifetime.signal });
+window.addEventListener('blur', () => viewer?.setToolPaused(false), runtime.lifetime);
 
 // Right-click the 3-D canvas for a small navigation context menu. The menu UI
 // is lazy-loaded on first use, so it stays out of the startup shell. Only armed
@@ -4940,10 +4940,10 @@ async function saveSnapshot(): Promise<void> {
   }
 }
 
-// Root owner of app-lifetime resources (docs/disposal-contracts.md): a
-// non-persisted pagehide releases them once, newest registration first.
-runtime.lifetime.register(() => stage.dispose(), 'stage');
-runtime.lifetime.register(() => { debugOverlay?.stop(); viewer?.dispose(); }, 'viewer');
-runtime.lifetime.register(() => { copcDecoder?.dispose(); eptLaszipDecoder?.dispose(); }, 'decode workers');
-runtime.lifetime.register(() => streamingUi.endSession(), 'streaming session');
-runtime.lifetime.bindPagehide(window);
+// Root owner (docs/disposal-contracts.md): a non-persisted pagehide releases these, newest first.
+runtime.lifetime.own({
+  stage: () => stage.dispose(),
+  viewer: () => { debugOverlay?.stop(); viewer?.dispose(); },
+  'decode workers': () => { copcDecoder?.dispose(); eptLaszipDecoder?.dispose(); },
+  'streaming session': () => streamingUi.endSession(),
+}, window);

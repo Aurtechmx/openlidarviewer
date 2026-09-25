@@ -28,73 +28,66 @@ export interface DisposeFailure {
 }
 
 export interface AppLifetime {
-  register(dispose: Disposer, label: string): () => void;
+  register(dispose: Disposer, label: string): () => unknown;
   disposeAll(): void;
   readonly disposed: boolean;
-  /** Aborted when disposal starts; pass as `{ signal }` to addEventListener. */
+  /** Aborted when disposal starts. The lifetime itself is valid addEventListener options. */
   readonly signal: AbortSignal;
   /** Dispose on a non-persisted `pagehide`. Returns a detach function. */
-  bindPagehide(target: Pick<EventTarget, 'addEventListener' | 'removeEventListener'>): () => void;
+  bindPagehide(target: PagehideTarget): () => void;
+  /** Register each owner in key order (key = label), then bind `pagehide` on `target`. */
+  own(owners: Record<string, Disposer>, target: PagehideTarget): void;
 }
 
-interface Entry {
-  readonly dispose: Disposer;
-  readonly label: string;
-}
+type PagehideTarget = Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;
 
-const reportFailures = (failures: readonly DisposeFailure[]): void => {
-  console.warn(`[lifetime] ${failures.length} disposer(s) threw:`, failures.map((f) => f.label).join(', '), failures);
-};
+/** A registration: its disposer and its label. */
+type Entry = [dispose: Disposer, label: string];
 
-export function createAppLifetime(onErrors: (failures: readonly DisposeFailure[]) => void = reportFailures): AppLifetime {
-  const entries: Entry[] = [];
+export function createAppLifetime(
+  onErrors: (failures: readonly DisposeFailure[]) => void = (failures) => console.warn('[lifetime]', failures),
+): AppLifetime {
+  const entries = new Set<Entry>();
   const controller = new AbortController();
-  let disposed = false;
-
-  const run = (entry: Entry, failures: DisposeFailure[]): void => {
-    try {
-      entry.dispose();
-    } catch (error) {
-      failures.push({ label: entry.label, error });
+  // Newest first. An entry is deleted before it runs, so a re-entrant call or
+  // an unregister from inside a disposer cannot run anything twice.
+  const drain = (list: Entry[]): void => {
+    const failures: DisposeFailure[] = [];
+    for (const e of list.reverse()) {
+      if (!entries.delete(e)) continue;
+      try {
+        e[0]();
+      } catch (error) {
+        failures.push({ label: e[1], error });
+      }
     }
+    if (failures.length) onErrors(failures);
   };
-
   const lifetime: AppLifetime = {
-    get disposed() {
-      return disposed;
-    },
+    disposed: false,
     signal: controller.signal,
     register(dispose, label) {
-      const entry: Entry = { dispose, label };
-      if (disposed) {
-        const failures: DisposeFailure[] = [];
-        run(entry, failures);
-        if (failures.length) onErrors(failures);
-        return () => {};
-      }
-      entries.push(entry);
-      return () => {
-        const i = entries.indexOf(entry);
-        if (i >= 0) entries.splice(i, 1);
-      };
+      const entry: Entry = [dispose, label];
+      entries.add(entry);
+      if (lifetime.disposed) drain([entry]);
+      return () => entries.delete(entry);
     },
     disposeAll() {
-      if (disposed) return;
-      disposed = true;
+      if (lifetime.disposed) return;
+      (lifetime as { disposed: boolean }).disposed = true;
       controller.abort();
-      const failures: DisposeFailure[] = [];
-      // Popped one at a time so a re-entrant call or an unregister from inside
-      // a disposer sees the remaining list, and nothing runs twice.
-      while (entries.length) run(entries.pop()!, failures);
-      if (failures.length) onErrors(failures);
+      drain([...entries]);
     },
     bindPagehide(target) {
       const onPagehide = (event: Event): void => {
-        if ((event as PageTransitionEvent).persisted) return;
-        lifetime.disposeAll();
+        if (!(event as PageTransitionEvent).persisted) lifetime.disposeAll();
       };
       target.addEventListener('pagehide', onPagehide);
       return () => target.removeEventListener('pagehide', onPagehide);
+    },
+    own(owners, target) {
+      for (const [label, dispose] of Object.entries(owners)) lifetime.register(dispose, label);
+      lifetime.bindPagehide(target);
     },
   };
   return lifetime;

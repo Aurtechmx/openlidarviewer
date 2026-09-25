@@ -163,6 +163,10 @@ function liveSourceTransformPlugin() {
       /render\/panMath\.ts/,
       /render\/Viewer\.ts/,
       /render\/measure\/snap\.ts/,
+      // Size exclusion: the app lifetime owner is eager shell code with no
+      // literals worth transforming; transformed it costs ~1.2 KB of the
+      // index chunk's budget.
+      /app\/appLifetime\.ts/,
     ],
     options: {
       // A fixed RNG seed makes the transform deterministic — every
