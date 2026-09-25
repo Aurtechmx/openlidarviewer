@@ -563,10 +563,10 @@ The evidence boundary inspector was implemented, tested and unreachable. Its
 register entry asked for a provenance or report surface that renders the
 field-by-field breakdown and calls it from the application graph.
 
-The DEM README now carries an evidence contract section: the claim the artifact
-belongs to, what that claim carries before any study is considered, what it
-resolved to here, the resolution state, the matched study or none, and the
-verdict. Where a scoped study matched, each envelope field it was checked
+The DEM README now carries an evidence contract section. It names the claim the
+artifact belongs to and what that claim carries before any study is considered.
+It then records what the claim resolved to here, the resolution state, the
+matched study (or none) and the verdict. Where a scoped study matched, each envelope field it was checked
 against is listed with its status.
 
 Section 49's condition is that the view must not implement its own
@@ -1267,8 +1267,8 @@ properties of a rendered image, and none can be settled from arithmetic.
 
 ### L71 · PARTIAL · CORRECTNESS
 
-Depth cannot tell a hole in the sampling from a fold in the surface. Two points
-either side of a roof ridge sit at almost the same distance from the camera and
+Depth cannot tell a hole in the sampling from a fold in the surface. A pair of
+points either side of a roof ridge sit at almost the same distance from the camera and
 pass the depth test comfortably, so filling between them lays a flat patch
 across the ridge. Where normals exist they settle it, because the two sides face
 different ways.
@@ -1625,9 +1625,9 @@ undefined.
 A pass returning zero, false or an empty string is a result rather than a
 failure, and is returned as one.
 
-Two of the four things this phase asks to protect need nothing here. The dataset
-and the measurement tools are out of reach of this subsystem entirely, held by
-the parity and authority guards, so a continuity failure cannot put a
+The dataset and the measurement tools, which this phase asks to protect along
+with two other properties, need nothing here. They are out of reach of this
+subsystem entirely, held by the parity and authority guards, so a continuity failure cannot put a
 measurement wrong however it fails.
 
 ### L84 · PARTIAL · CORRECTNESS
@@ -2101,8 +2101,8 @@ so in the same words the reconstruction ceiling uses.
 Two guarantees carry the design. The factor is strictly positive, so coverage
 reorders and never excludes: zero is the score that means not a candidate this
 tick, and a node that is never a candidate never arrives, which would make
-source completeness depend on where the camera was pointed. Everything that
-reads completeness, from the evidence lens to the export frontier, is entitled
+source completeness depend on where the camera was pointed. Every reader of
+completeness, the evidence lens and the export frontier included, is entitled
 to the same answer whatever the renderer finds worth looking at.
 
 The second is that coverage multiplies the projected size rather than adding a
@@ -3564,8 +3564,9 @@ and a test fails on any line of it that runs naming one of those.
 ### L136 · FIXED · ARCHITECTURE
 
 Phase D3. A sweep may only run under a still camera, a complete refinement and
-an epoch that did not move. The first two were enforced. The third was not,
-and it is the one that shows.
+an epoch that did not move. The camera and refinement conditions were enforced;
+the epoch condition was not, and a moved epoch is what produces a visible
+artifact.
 
 `nextConvergence` already refuses anything short of `full-refine` and restarts
 when the epoch differs from the one being accumulated. What it did not refuse
@@ -3938,8 +3939,8 @@ test, which changes nothing today and stops the two drifting again.
 
 A test asserting the two agree in every combination of mode and grant passes
 against the defective version as well, because once the reference takes the
-grant the two expressions are the same boolean. What makes it worth keeping is
-the other direction: reverting the `granted` term in the reference turns it
+grant the two expressions are the same boolean. The test is kept for the other
+direction: reverting the `granted` term in the reference turns it
 red at `adaptive/true`, which is the defect that was there. The comment now
 says that rather than claiming the test catches something it does not.
 
@@ -4086,12 +4087,13 @@ layout is unchanged pending that check.
 The legs exist and run; none is required. The ruleset for `main` requires
 `ci-green` and `CodeQL`, and `ci-green` depends only on Chromium jobs. The full
 suites on Firefox and WebKit (`browsers.yml`) carry `continue-on-error: true`.
-The smoke workflow is titled "blocking" but is not a required check. Windows
+The smoke workflow is titled "blocking", yet the ruleset does not list it as a
+required check. Windows
 runs Chromium only.
 
 On the latest main run the Firefox, WebKit and iPhone-shaped WebKit legs pass,
-including the touch gestures. That is one run of each, not a stability record.
-The iOS simulator leg has not yet passed. Making any of these blocking is a
+including the touch gestures. Each has passed once, which says nothing yet about
+flake rate, and the iOS simulator leg has not passed at all. Making any of these blocking is a
 release-policy decision and is not made here.
 
 ### L28 · PARTIAL · SEMANTICS
@@ -4294,8 +4296,8 @@ checks the record's `build` field against `buildIdentityProvenance()`.
 
 The iOS simulator leg (`.github/workflows/ios-simulator.yml`) verifies a real
 XCUITest session through to an OS-dispatched gesture: it opens the app in
-Mobile Safari inside the simulator, navigates to the test seam, loads a scan,
-reads the camera pose, and dispatches a two-finger pinch. All of that passes.
+Mobile Safari inside the simulator and navigates to the test seam. There it
+loads a scan, reads the camera pose and dispatches a two-finger pinch. All of that passes.
 What it cannot verify on a GitHub-hosted macOS runner is the render the pinch
 is meant to resume: the WebGL frame never completes.
 
@@ -4381,7 +4383,7 @@ counts every `input()` in the file against the four gesture listeners.
 Reverting `setColorMode` to `input()` turns four cases red across the two
 files.
 
-What remains: a pointer move in the measure or probe tool picks inside the
+One gap remains. A pointer move in the measure or probe tool picks inside the
 frame and repaints the overlay only on a drawn frame, so a hover whose frame
 arrives after the holdover shows its cursor at the next heartbeat. Lasso
 reclassify and classification undo and redo rewrite classification colours
@@ -4953,8 +4955,9 @@ entry.
 
 ### L161 · BUILT · SCIENCE
 
-Observatory phase O1: types, the state-table function, the freshness-stamp
-extension, a fixture generator, and oracles for F8 and the state table.
+Observatory phase O1 adds the types and the state-table function, extends the
+freshness stamp, and ships a fixture generator with oracles for F8 and the state
+table.
 Baseline `728b3b3a`, one commit ahead of L160's `affffa41` on this branch,
 carrying only a SPEC wording fix (OB-UI-05's "not read in this load") the O1
 gate run below already reflects.
@@ -5258,9 +5261,9 @@ one to three ordered returns per cell, on dyadic-rational ranges) are new
 generator functions in `scripts/generate-observatory-fixtures.mjs`, following
 F1/F8's own pattern: a pure function, drift-checked in
 `tests/observatoryFixtureF5F6F16.test.ts` against a committed JSON fixture
-under `validation/observatory/fixtures/`. Each scene is declarative (grid
-dimensions, station origin, fitted-coverage numbers, and either a no-return
-cell list, a stride, or per-cell declared returns); the ray-level assertions
+under `validation/observatory/fixtures/`. Each scene is declarative: grid
+dimensions, station origin and fitted-coverage numbers, plus one return model
+(a no-return cell list, a stride, or per-cell declared returns); the ray-level assertions
 in the same file build the actual `OrganizedRangeFrame` from that scene and
 run it through the ray builder. Registering these under
 `validation/external-oracles/oracle-registry.json` was considered and
@@ -5628,7 +5631,7 @@ azimuth/elevation band and optional `[minRange, maxRange]`, and
 `SourceObservationRecord[]` input per voxel by combining an
 `ObservationLedgerRow`'s per-source counters (when a row exists) with this
 addressed test (always), over every cell of the ledger's own domain grid,
-not only touched rows: an untouched but addressed voxel still resolves
+including cells no row touched: an untouched but addressed voxel still resolves
 through the "addressed, no ray happened to land here" branch `types.ts`
 documents, and a voxel no station addresses resolves `UNADDRESSED` by the
 residual-default rule O1 already implements. Every voxel this function
