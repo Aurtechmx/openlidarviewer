@@ -90,16 +90,22 @@ def f32(x):
     return struct.unpack('<f', struct.pack('<f', x))[0]
 
 
-REPO_ROOT = os.path.realpath(os.path.join(HERE, '..', '..', '..'))
+TREE = os.path.realpath(os.path.join(HERE, '..'))
 MAX_CELLS = 1_000_000  # far above any committed fixture; bounds every loop below
 
 
 def confined_dir(path):
-    """Resolve a CLI directory and refuse anything outside the repository."""
-    target = os.path.realpath(path)
-    if os.path.commonpath([target, REPO_ROOT]) != REPO_ROOT:
-        raise SystemExit('refusing to read outside %s: %s' % (REPO_ROOT, target))
-    return target
+    """Map a CLI directory onto a directory of this oracle tree, or refuse it.
+
+    The returned path is the tree's own directory entry, never the argument,
+    so nothing outside validation/terrain-evidence/ can be opened.
+    """
+    wanted = os.path.realpath(path)
+    for root, dirs, _files in os.walk(TREE):
+        if os.path.realpath(root) == wanted:
+            return root
+        dirs.sort()
+    raise SystemExit('refusing to read outside %s: %s' % (TREE, wanted))
 
 
 def grid_size(exp):
