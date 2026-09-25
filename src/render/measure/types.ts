@@ -14,6 +14,7 @@
 import type { Vec3 } from '../navMath';
 import type { MeasurementTrust } from './measurementTrust';
 import type { ProfileProvenance } from './profileProvenance';
+import type { WithheldReadCounts } from '../../science/withheldCounts';
 import type { WorkOwnership } from '../../model/workOwnership';
 
 export type { Vec3 };
@@ -261,6 +262,14 @@ export interface Measurement {
    * percentile alone.
    */
   profileProvenance?: ProfileProvenance;
+  /**
+   * Profile only — points walked, Withheld points left out, and points the
+   * percentile read (`withheldCounts.ts`). Absent on a profile sampled before
+   * the exclusion, which read every point.
+   */
+  profileWithheld?: WithheldReadCounts;
+  /** Profile only — the method tag; absent on a profile sampled under v1. */
+  profileMethod?: string;
   /**
    * Volume only — the cut/fill record from `volumeCutFill`. Optional so
    * a volume measurement loaded from a session file that pre-dates the

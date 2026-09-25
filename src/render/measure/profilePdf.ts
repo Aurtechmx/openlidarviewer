@@ -116,6 +116,7 @@ import type { DerivedSurfaceLegend, DerivedSurfaceSource } from './profileDerive
 // What shaped the estimate, as the record the app keeps beside the sample.
 import { describeProfileProvenance } from './profileProvenance';
 import type { ProfileProvenance } from './profileProvenance';
+import { describeWithheldRead, type WithheldReadCounts } from '../../science/withheldCounts';
 // Height headings. `Elevation` is earned by an orthometric reference and by
 // nothing else — the sheet outlives the session, so it is the last place a
 // reader can discover which surface a height was measured from.
@@ -144,6 +145,13 @@ export interface ProfilePdfInput {
   readonly corridorWidthM?: number | null;
   /** Per-bin height percentile used by the sampler (for provenance). */
   readonly groundPercentile?: number | null;
+  /**
+   * Points walked, Withheld left out, points read. Null or absent for a
+   * profile sampled before the exclusion, which read every point.
+   */
+  readonly withheld?: WithheldReadCounts | null;
+  /** Method tag the series was sampled under; absent means v1. */
+  readonly method?: string | null;
   /** Horizontal CRS string, if known. */
   readonly crs?: string | null;
   /** Vertical datum string, if known. */
@@ -947,6 +955,9 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       ? 'Provenance: no record of the sources read was attached to this export, so the ' +
         'contributing sources and the read scope are not recorded on this drawing.'
       : `Provenance: ${describeProfileProvenance(record)}`,
+    input.withheld
+      ? `Points: ${describeWithheldRead(input.withheld)} (${input.method ?? 'method not recorded'}).`
+      : 'Points: Withheld handling not recorded; sampled before Withheld points were excluded.',
     NOT_SURVEY_GRADE_NOTE +
       (residentOnly
         ? ' Sampled from streaming-resident points only - may refine as more data loads.'

@@ -32,17 +32,27 @@
  * format whose flags move cannot leave two answers in the tree.
  *
  * ── THE STATE OF THE TREE ───────────────────────────────────────────────────
- * The terrain gather (`sampleStridedTerrain`) is the one caller. It drops
- * Withheld points from what it samples, and the DTM records that it did, or
- * that it could not know because the cloud carried no flags channel. The
- * floor-plan and routing paths read through the same gather, so they exclude
- * Withheld points too. The lasso volume walk (`lassoVolumeCompute.ts`) drops
- * them at its input as well and records how many. The other scientific paths
- * (density, the ground filter outside terrain, the polygon volume tool,
- * profiles, the classifier, registration and change, and measurement) still
- * read every point the cloud holds. Each carries recorded
- * evidence of its own, so each is applied as its own change with its own
- * before-and-after on real data.
+ * Callers that exclude Withheld points:
+ *
+ *   - the terrain gather (`sampleStridedTerrain`), and through it the DTM,
+ *     floor-plan, routing and field-simulation paths. The DTM records that it
+ *     excluded them, or that it could not know because the cloud carried no
+ *     flags channel.
+ *   - the lasso volume walk (`lassoVolumeCompute.ts`), which records how many
+ *     it dropped.
+ *   - the profile series (`profileSectionSeam.sampleSeries`, via
+ *     `dropWithheld`) and the raw section the profile workbench draws
+ *     (`extractProfileSectionChunks`). Both record points read, Withheld
+ *     excluded and points analysed (`withheldCounts.ts`), with 'unknown' when a
+ *     source had no flags. They read the resident cloud only; unlike terrain
+ *     they do not re-decode a voxel-reduced source at full resolution, because
+ *     a profile samples synchronously on every commit and resample.
+ *
+ * The other scientific paths still read every point the cloud holds: density
+ * (the scan report's Density and Spacing rows, the streaming extent rows, the
+ * inspector's density class), the ground filter outside terrain, the polygon
+ * volume tool, the classifier, registration and change, and measurement. Each
+ * carries recorded evidence of its own, so each is applied as its own change.
  *
  * Pure: no DOM, no GPU, no cloud. Flags in, decisions out.
  */

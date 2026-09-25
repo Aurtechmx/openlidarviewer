@@ -54,6 +54,8 @@ export function profilePdfInputFor(
     residentOnly: s.profileChartResidentOnly,
     corridorWidthM: s.profileCorridorWidthM ?? null,
     groundPercentile: s.profileGroundPercentile ?? null,
+    withheld: s.profileWithheld ?? null,
+    method: s.profileMethod ?? null,
     crs: options.context?.crs ?? null,
     verticalDatum: options.context?.verticalDatum ?? null,
     unitSystem: options.unitSystem,

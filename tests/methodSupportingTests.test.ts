@@ -61,6 +61,10 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
     'tests/terrainAccessAStar.test.ts',
     'tests/terrainAccessOracleAgreement.test.ts',
   ],
+  'olv.profile.corridor-percentile': [
+    'tests/profileWithheld.test.ts',
+    'tests/profileSectionSeam.test.ts',
+  ],
   'olv.ground.smrf': [
     'tests/groundFilterValidation.test.ts',
     'tests/groundFilterPdalAgreement.test.ts',

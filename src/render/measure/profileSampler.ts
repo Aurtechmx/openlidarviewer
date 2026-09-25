@@ -57,6 +57,7 @@ import type { LayerSpatialTransform } from '../../geo/ProjectSpatialFrame';
 import { placeBufferInto } from '../layerPlacement';
 import { NON_GROUND_CLASSES } from '../../terrain/ground/classificationFilter';
 import { buildProfileFrame, DEGENERATE_HORIZONTAL_LENGTH } from './profileGeometry';
+import { isWithheld } from '../../science/withheldPolicy';
 
 /** A placed source buffer contributing to a combined profile walk. */
 export interface ProfileSourceBuffer {
@@ -100,6 +101,42 @@ export function assembleProfileBuffers(
     coff += m;
   }
   return { positions, classification };
+}
+
+/**
+ * The method tag a sampled series records (`methodRegistry.ts`). v2 leaves
+ * Withheld points out; a stored profile with no tag was sampled under v1.
+ */
+export const PROFILE_SERIES_METHOD_TAG = 'olv.profile.corridor-percentile@2';
+
+/**
+ * The buffer with its Withheld points removed, and how many there were.
+ *
+ * `flags` must already be aligned to `buf.pos` (see `alignedFlags`). A buffer
+ * with no Withheld point is returned as the same object, so a file without
+ * them assembles exactly the bytes it did before the exclusion existed.
+ * Overlap and every other flag are ignored: only Withheld is dropped.
+ */
+export function dropWithheld(
+  buf: ProfileSourceBuffer,
+  flags: ArrayLike<number>,
+): { buffer: ProfileSourceBuffer; excluded: number } {
+  const n = buf.pos.length / 3;
+  let excluded = 0;
+  for (let i = 0; i < n; i++) if (isWithheld(flags[i]!)) excluded++;
+  if (excluded === 0) return { buffer: buf, excluded };
+  const pos = new Float32Array((n - excluded) * 3);
+  const cls = buf.cls ? new Uint8Array(n - excluded) : undefined;
+  let o = 0;
+  for (let i = 0; i < n; i++) {
+    if (isWithheld(flags[i]!)) continue;
+    pos[o * 3] = buf.pos[i * 3]!;
+    pos[o * 3 + 1] = buf.pos[i * 3 + 1]!;
+    pos[o * 3 + 2] = buf.pos[i * 3 + 2]!;
+    if (cls) cls[o] = buf.cls![i]!;
+    o++;
+  }
+  return { buffer: { pos, cls, placement: buf.placement }, excluded };
 }
 
 // The section frame (normalised up, horizontal direction, chainage origin)

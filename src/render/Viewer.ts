@@ -1131,9 +1131,8 @@ export class Viewer {
           placement: e.placement,
           id: e.cloud.name,
           positions: e.cloud.positions,
-          // Named field by field: `classification` is a getter on the class,
-          // so a spread of the cloud would drop the one channel the derived
-          // series reads, and the profile would quietly stop honouring it.
+          // Named field by field: the channels are getters on the class, so a
+          // spread would drop the ones the series and section read.
           channels: {
             rgb: e.cloud.colors,
             intensity: e.cloud.intensity,
@@ -1143,6 +1142,7 @@ export class Viewer {
             pointSourceId: e.cloud.pointSourceId,
             gpsTime: e.cloud.gpsTime,
             normals: e.cloud.normals,
+            classificationFlags: e.cloud.classificationFlags,
           },
           bounds: null,
         })),

@@ -139,6 +139,7 @@ function tinySection(count = 32): ProfileSectionResult {
     points: { count, chainage, height, lateralOffset: new Float32Array(count), sourceSlot: new Uint16Array(count), pointIndex: new Uint32Array(count), channelPresence: new Uint8Array(count) },
     frame: null as never, band: 1.5, scope: 'static' as never, scopeLabel: 'One loaded layer.',
     classificationOnEverySource: true, streamingComplete: null, sources: [], generation: 1, aborted: false, skippedSlots: [], examined: count,
+    withheld: { sourcePoints: count, withheldExcluded: 0, analysedPoints: count },
   };
 }
 

@@ -53,6 +53,7 @@ import {
   describeClassBasis,
   GROUND_BASIS_UNVERIFIED_NOTE,
 } from '../render/measure/profileProvenance';
+import { describeWithheldRead } from '../science/withheldCounts';
 import {
   axisSpanCaption,
   CHAINAGE_TICK_SPACING_PX,
@@ -699,6 +700,7 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
       value: axisSpanCaption((bounds.maxHeight - bounds.minHeight) * scale, unit),
     },
     { label: 'Sources', value: String(section.sources.length) },
+    { label: 'Points read', value: describeWithheldRead(section.withheld) },
     { label: 'Colour', value: colouring.legend.kind === 'unavailable' ? 'unavailable' : colouring.mode },
   ];
   if (filterDescriptor) {

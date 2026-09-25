@@ -31,6 +31,8 @@ export type MethodCategory =
   | 'dtm'
   | 'feature'
   | 'provenance'
+  /** A section line through the cloud: a height-vs-chainage estimate. */
+  | 'profile'
   /** A declared model applied to a measured product, producing a simulated result. */
   | 'simulation'
   /** Ray-and-voxel scanner-visibility evidence (Observatory, docs/observatory/SPEC.md). */
@@ -407,6 +409,28 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'Internal composition (per-feature Douglas–Peucker tolerance scaled by terrain confidence and feature scale, then Chaikin corner-cutting); no single source method.',
     category: 'contour',
     implementation: ['src/terrain/contour/contourShapeStyle.ts'],
+  },
+  'olv.profile.corridor-percentile': {
+    id: 'olv.profile.corridor-percentile',
+    version: 2,
+    name: 'Corridor-percentile profile',
+    summary:
+      'Height-vs-chainage profile along a section line: the points within a ' +
+      'horizontal corridor are binned by chainage and each bin is reduced to a ' +
+      'type-7 percentile of its heights, after an optional class exclusion. v2 ' +
+      'leaves points carrying the LAS Withheld flag out of the corridor and ' +
+      'records points read, Withheld excluded (or unknown when a source has no ' +
+      'flags) and points analysed; Overlap points are kept. v1 read every point, ' +
+      'and a profile recorded without a method tag was sampled under v1.',
+    citation:
+      'Internal composition (corridor binning with a Hyndman & Fan (1996) type-7 ' +
+      'quantile per bin); Withheld per ASPRS LAS 1.4 R15.',
+    category: 'profile',
+    implementation: [
+      'src/render/measure/profileSampler.ts',
+      'src/render/measure/profileSectionSeam.ts',
+      'src/render/measure/profileSectionExtract.ts',
+    ],
   },
   'olv.simulation.terrain-flow.d8': {
     id: 'olv.simulation.terrain-flow.d8',
