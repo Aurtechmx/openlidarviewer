@@ -13,6 +13,7 @@ export interface NavJankTrajectoryInput {
   cold?: NavJankRecord;
   warm?: NavJankRecord;
   loads?: unknown[];
+  runMeta?: unknown[];
 }
 
 export interface NavJankResults {
@@ -29,6 +30,7 @@ export interface NavJankResults {
     cold: NavJankRecord | null;
     warm: NavJankRecord | null;
     loads: unknown[];
+    runMeta: unknown[];
     coldMetrics: Record<string, number> | null;
     warmMedians: Record<string, Spread> | null;
     longTasksByOwner: Record<string, { count: number; totalMs: number }>;

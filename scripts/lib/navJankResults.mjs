@@ -86,8 +86,10 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 /**
  * Assemble a results file.
  *
- * `trajectories` maps a trajectory name to `{ cold, warm, loads }`: `cold` and
- * `warm` are nav-jank records, `loads` the per-run load timings. Every record
+ * `trajectories` maps a trajectory name to `{ cold, warm, loads, runMeta }`:
+ * `cold` and `warm` are nav-jank records, `loads` the per-run load timings,
+ * `runMeta` per-run facts outside the record schema (page visibility and focus,
+ * the input window, frame-gap and quality-transition timelines). Every record
  * must share one fingerprint, and a trajectory's cold and warm records one
  * trajectory digest; a mismatch throws, since the file would compare unlike runs.
  */
@@ -98,7 +100,7 @@ export function buildNavJankResults({ generatedAt, machine, dataset, trajectorie
   const fingerprint = fingerprintOf(first.env);
   const out = {};
   for (const name of names) {
-    const { cold, warm, loads = [] } = trajectories[name];
+    const { cold, warm, loads = [], runMeta = [] } = trajectories[name];
     const records = [cold, warm].filter(Boolean);
     for (const r of records) {
       if (!same(fingerprintOf(r.env), fingerprint)) throw new Error(`${name}: environment differs from the session's`);
@@ -111,6 +113,7 @@ export function buildNavJankResults({ generatedAt, machine, dataset, trajectorie
       cold: cold ?? null,
       warm: warm ?? null,
       loads,
+      runMeta,
       coldMetrics: cold ? runMetrics(cold.runs[0].summary) : null,
       warmMedians: warm ? summarizeRuns(warmSummaries) : null,
       longTasksByOwner: longTasksByOwner([...(cold ? [cold.runs[0].summary] : []), ...warmSummaries]),

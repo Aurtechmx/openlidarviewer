@@ -23,6 +23,16 @@
  * be run one trajectory at a time (`-g orbit`) and still yield one file. Read
  * it with `node scripts/nav-jank-report.mjs <file>`.
  *
+ * Chromium runs with the flags in {@link ANTI_THROTTLE_ARGS}, so an occluded
+ * or unfocused headed window is not throttled; the environment's flags say so.
+ * Each run records `document.visibilityState` and `document.hasFocus()` at its
+ * start and end, and a run during which the page was hidden is invalid: it is
+ * listed in the notes and left out of the records.
+ *
+ * Diagnostics (not for a baseline): OLV_NAV_THROTTLE_FLAGS=off launches without
+ * those flags, and OLV_NAV_WINDOW=covered|minimized covers the window with a
+ * second browser window or minimises it before each trajectory.
+ *
  * Nothing about timing is asserted: this measures.
  */
 import { test, expect, type BrowserContext, type Page, type TestInfo } from '@playwright/test';
@@ -40,6 +50,16 @@ const TRAJECTORIES = ['orbit', 'flythrough', 'zoomShock', 'scrub', 'stopInspect'
 const DATASET = process.env.OLV_NAV_DATASET ?? '';
 const RUNS = Math.max(1, Number(process.env.OLV_NAV_RUNS ?? 5));
 const MACHINE = process.env.OLV_NAV_MACHINE ?? 'local';
+const WINDOW_MODE = process.env.OLV_NAV_WINDOW ?? 'normal';
+/** Chromium switches that stop it throttling an occluded, unfocused or background window. */
+const ANTI_THROTTLE_ARGS = [
+  '--disable-backgrounding-occluded-windows',
+  '--disable-renderer-backgrounding',
+  '--disable-background-timer-throttling',
+];
+const THROTTLE_FLAGS_ON = process.env.OLV_NAV_THROTTLE_FLAGS !== 'off';
+/** A frame-clock delta at least this long counts as a gap in the run's timeline. */
+const GAP_MS = 200;
 const DATASET_ID = 'OLV-DS-090-JEMEZ-SNOWOFF-2010-FOREST';
 /** Upper bound on one load (file input to the committed cloud's first frame). */
 const LOAD_TIMEOUT_MS = 240_000;
@@ -80,6 +100,22 @@ async function datasetSha(path: string): Promise<string> {
 
 interface LoadTiming { cache: 'cold' | 'warm'; timeToFirstRenderMs: number | null; pointsRendered: string | null; wallMs: number }
 
+interface RunMeta {
+  visibility: { start: string; end: string; hiddenDuring: boolean };
+  focus: { start: boolean; end: boolean };
+  /** performance.now() of the probe start and of the first and last dispatched input. */
+  probeStartT: number;
+  firstInputT: number | null;
+  lastInputT: number | null;
+  endT: number;
+  /** Frame-clock deltas of at least GAP_MS: [ms after first input, delta ms]. */
+  gaps: [number, number][];
+  gapsDuringInput: number;
+  gapsAfterInput: number;
+  /** Quality transitions: [ms after first input, kind, from, to]. */
+  quality: [number, string, number | string, number | string][];
+}
+
 interface DriveOut {
   trajectoryDigest: string;
   settled: boolean;
@@ -87,6 +123,7 @@ interface DriveOut {
   frames: number;
   timedOut: boolean;
   summary: NavProbeSummary;
+  meta: RunMeta;
 }
 
 /** Live long-task attribution, for a stall report. */
@@ -132,26 +169,99 @@ async function drive(page: Page, name: string): Promise<DriveOut> {
   // Let the first frames after the load pass before measuring.
   await page.waitForTimeout(1_000);
   return page.evaluate(
-    async ({ name, timeoutMs }) => {
+    async ({ name, timeoutMs, gapMs }) => {
       type Result = { trajectoryDigest: string; settled: boolean; unsettledAt: string | null; frames: number };
       const w = window as unknown as {
         __olvNavProbe: { stop(n?: string): NavProbeSummary; start(): void };
         __olvNavDriver: { run(n: string, o: { fixedStep: boolean }): Promise<Result> };
+        __olvNavSink?: { frameMs(ms: number): void };
       };
+      const visStart = document.visibilityState;
+      const focusStart = document.hasFocus();
+      let hiddenDuring = visStart === 'hidden';
+      const onVis = (): void => {
+        if (document.visibilityState === 'hidden') hiddenDuring = true;
+      };
+      document.addEventListener('visibilitychange', onVis);
+      const inputs: number[] = [];
+      const onInput = (e: Event): void => {
+        inputs.push(e.timeStamp);
+      };
+      const types = ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'keydown'];
+      for (const t of types) window.addEventListener(t, onInput, { capture: true, passive: true });
+
       w.__olvNavProbe.stop();
+      const probeStartT = performance.now();
       w.__olvNavProbe.start();
+      // Wrap the installed sink's frame-time hook to keep a timeline of long deltas.
+      const deltas: [number, number][] = [];
+      const sink = w.__olvNavSink;
+      const orig = sink?.frameMs;
+      if (sink && orig) {
+        sink.frameMs = (ms: number) => {
+          if (ms >= gapMs) deltas.push([performance.now(), ms]);
+          orig.call(sink, ms);
+        };
+      }
       let timer = 0;
       const timeout = new Promise<null>((r) => {
         timer = window.setTimeout(() => r(null), timeoutMs);
       });
-      const res = await Promise.race([w.__olvNavDriver.run(name, { fixedStep: false }), timeout]);
-      clearTimeout(timer);
+      let res: Result | null;
+      try {
+        res = await Promise.race([w.__olvNavDriver.run(name, { fixedStep: false }), timeout]);
+      } finally {
+        clearTimeout(timer);
+        if (sink && orig) sink.frameMs = orig;
+        for (const t of types) window.removeEventListener(t, onInput, { capture: true });
+        document.removeEventListener('visibilitychange', onVis);
+      }
       const summary = w.__olvNavProbe.stop(name);
-      if (!res) return { trajectoryDigest: 'timeout', settled: false, unsettledAt: 'input', frames: 0, timedOut: true, summary };
-      return { ...res, timedOut: false, summary };
+      const endT = performance.now();
+      const first = inputs.length ? Math.min(...inputs) : null;
+      const last = inputs.length ? Math.max(...inputs) : null;
+      const rel = (t: number): number => Math.round((t - (first ?? probeStartT)) * 10) / 10;
+      const meta = {
+        visibility: { start: visStart, end: document.visibilityState, hiddenDuring: hiddenDuring || document.visibilityState === 'hidden' },
+        focus: { start: focusStart, end: document.hasFocus() },
+        probeStartT,
+        firstInputT: first,
+        lastInputT: last,
+        endT,
+        gaps: deltas.map(([t, ms]) => [rel(t), Math.round(ms * 10) / 10] as [number, number]),
+        gapsDuringInput: deltas.filter(([t]) => first !== null && last !== null && t >= first && t <= last).length,
+        gapsAfterInput: deltas.filter(([t]) => last !== null && t > last).length,
+        quality: summary.quality.events.map((e) => [rel(e.t), e.kind, e.from, e.to] as [number, string, number | string, number | string]),
+      };
+      if (!res) return { trajectoryDigest: 'timeout', settled: false, unsettledAt: 'input', frames: 0, timedOut: true, summary, meta };
+      return { ...res, timedOut: false, summary, meta };
     },
-    { name, timeoutMs: DRIVE_TIMEOUT_MS },
+    { name, timeoutMs: DRIVE_TIMEOUT_MS, gapMs: GAP_MS },
   );
+}
+
+/** Diagnostics only: cover the page's window with a second window, or minimise it. */
+async function applyWindowMode(page: Page, context: BrowserContext): Promise<BrowserContext | null> {
+  if (WINDOW_MODE === 'normal') return null;
+  const cdp = await context.newCDPSession(page);
+  const { windowId, bounds } = await cdp.send('Browser.getWindowForTarget');
+  if (WINDOW_MODE === 'minimized') {
+    await cdp.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'minimized' } });
+    return null;
+  }
+  const browser = context.browser();
+  if (!browser) throw new Error('no browser');
+  const cover = await browser.newContext();
+  const coverPage = await cover.newPage();
+  await coverPage.setContent('<body style="background:#444"></body>');
+  const c = await cover.newCDPSession(coverPage);
+  const w2 = await c.send('Browser.getWindowForTarget');
+  await c.send('Browser.setWindowBounds', {
+    windowId: w2.windowId,
+    bounds: { left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height },
+  });
+  await coverPage.bringToFront();
+  return cover;
 }
 
 async function environment(page: Page, context: BrowserContext, info: TestInfo): Promise<Omit<NavJankEnv, 'trajectoryDigest' | 'cache'>> {
@@ -199,7 +309,13 @@ async function environment(page: Page, context: BrowserContext, info: TestInfo):
     dpr: probe.dpr,
     refreshEstimateHz: probe.hz,
     datasetSha256: await datasetSha(DATASET),
-    flags: ['benchmark=nav', 'frame-clock', headless ? 'headless' : 'headed'],
+    flags: [
+      'benchmark=nav',
+      'frame-clock',
+      headless ? 'headless' : 'headed',
+      ...(THROTTLE_FLAGS_ON ? ANTI_THROTTLE_ARGS.map((a) => a.replace(/^--/, '')) : []),
+      ...(WINDOW_MODE === 'normal' ? [] : [`window=${WINDOW_MODE}`]),
+    ],
   };
 }
 
@@ -224,6 +340,9 @@ function writeMerged(commit: string): string {
   return file;
 }
 
+// Top level: launch options force a worker of their own, which a describe group cannot ask for.
+test.use({ launchOptions: { args: THROTTLE_FLAGS_ON ? ANTI_THROTTLE_ARGS : [] } });
+
 test.describe('@gpu navigation jank benchmark', () => {
   test.skip(!DATASET || !existsSync(DATASET), 'set OLV_NAV_DATASET to a local copy of OLV-DS-090 (ot_356000_3972000_1.laz)');
   test.describe.configure({ mode: 'serial' });
@@ -243,30 +362,40 @@ test.describe('@gpu navigation jank benchmark', () => {
       try {
         const page = await context.newPage();
         page.setDefaultTimeout(60_000);
-        const runs: { cache: 'cold' | 'warm'; load: LoadTiming; out: DriveOut }[] = [];
+        const runs: { cache: 'cold' | 'warm'; load: LoadTiming; out: DriveOut; valid: boolean }[] = [];
         let env: Omit<NavJankEnv, 'trajectoryDigest' | 'cache'> | null = null;
         for (let i = 0; i <= RUNS; i++) {
           const cache = i === 0 ? 'cold' : 'warm';
           const timing = await load(page, cache);
           env ??= await environment(page, context, info);
+          const cover = await applyWindowMode(page, context);
           const out = await drive(page, name);
+          await cover?.close();
+          const valid = !out.meta.visibility.hiddenDuring;
+          if (!valid) notes.push(`${name} run ${i} (${cache}): INVALID, the page was hidden during the run`);
           if (out.timedOut) notes.push(`${name} run ${i} (${cache}): trajectory did not finish in ${DRIVE_TIMEOUT_MS} ms`);
           else if (!out.settled) notes.push(`${name} run ${i} (${cache}): camera did not settle (${out.unsettledAt})`);
           console.log(
             `[nav-jank] ${name} ${cache} #${i}: load ${timing.wallMs} ms, frames ${out.summary.frames}, ` +
               `p95 ${out.summary.frameMs.p95.toFixed(1)} ms, starvation ${out.summary.longestStarvationMs.toFixed(0)} ms, ` +
-              `long tasks ${out.summary.longTasks.count}`,
+              `p99 ${out.summary.frameMs.p99.toFixed(1)} ms, long tasks ${out.summary.longTasks.count}, ` +
+              `gaps>=${GAP_MS}ms ${out.meta.gaps.length} (during input ${out.meta.gapsDuringInput}, after ${out.meta.gapsAfterInput}), ` +
+              `vis ${out.meta.visibility.start}->${out.meta.visibility.end}${out.meta.visibility.hiddenDuring ? ' HIDDEN' : ''}, ` +
+              `focus ${out.meta.focus.start}->${out.meta.focus.end}`,
           );
-          runs.push({ cache, load: timing, out });
+          runs.push({ cache, load: timing, out, valid });
         }
         if (!env) throw new Error('no environment');
         const digests = new Set(runs.filter((r) => !r.out.timedOut).map((r) => r.out.trajectoryDigest));
+        const coldRuns = runs.slice(0, 1).filter((r) => r.valid);
+        const warmRuns = runs.slice(1).filter((r) => r.valid);
         expect(digests.size).toBe(1);
         const trajectoryDigest = [...digests][0];
         const toRuns = (rs: typeof runs): NavJankRun[] => rs.map((r, k) => ({ name: `${name}-${r.cache}-${k}`, summary: r.out.summary }));
-        const cold = buildNavJankRecord({ ...env, trajectoryDigest, cache: 'cold' }, toRuns(runs.slice(0, 1)));
-        const warm = buildNavJankRecord({ ...env, trajectoryDigest, cache: 'warm' }, toRuns(runs.slice(1)));
-        for (const rec of [cold, warm]) expect(validateJsonSchema(SCHEMA, rec)).toEqual([]);
+        const cold = coldRuns.length ? buildNavJankRecord({ ...env, trajectoryDigest, cache: 'cold' }, toRuns(coldRuns)) : undefined;
+        const warm = warmRuns.length ? buildNavJankRecord({ ...env, trajectoryDigest, cache: 'warm' }, toRuns(warmRuns)) : undefined;
+        if (!cold && !warm) throw new Error(`${name}: every run was invalid (page hidden)`);
+        for (const rec of [cold, warm]) if (rec) expect(validateJsonSchema(SCHEMA, rec)).toEqual([]);
 
         const sha = env.datasetSha256;
         const registered = registeredSha();
@@ -276,7 +405,14 @@ test.describe('@gpu navigation jank benchmark', () => {
           generatedAt: new Date().toISOString(),
           machine: MACHINE,
           dataset: { id: DATASET_ID, licence: 'CC-BY-4.0', file: 'ot_356000_3972000_1.laz', sha256: sha, bytes: statSync(DATASET).size, registeredSha256: registered },
-          trajectories: { [name]: { cold, warm, loads: runs.map((r) => r.load) } },
+          trajectories: {
+            [name]: {
+              cold,
+              warm,
+              loads: runs.map((r) => r.load),
+              runMeta: runs.map((r) => ({ cache: r.cache, valid: r.valid, settled: r.out.settled, unsettledAt: r.out.unsettledAt, ...r.out.meta })),
+            },
+          },
           notes,
         });
         writeFileSync(join(partialDir(env.commit), `${name}.json`), JSON.stringify(result));
