@@ -11,6 +11,11 @@
  *
  * The scan is `tiny.ply`: on the runner's software renderer a drag over the
  * multichunk LAZ fixture outlasts the test timeout.
+ *
+ * The full matrix (every trajectory, two fixed-step and two real-delta runs)
+ * is tagged @gpu: on a software renderer the longer trajectories outlast the
+ * test timeout. The deterministic lane keeps one fixed-step replay check on
+ * the shortest trajectory.
  */
 import { test, expect, type Page } from '@playwright/test';
 import { dropTinyPly } from './helpers';
@@ -50,8 +55,24 @@ async function run(page: Page, name: string, fixedStep: boolean): Promise<{ driv
 }
 
 test.describe('nav driver', () => {
+  test('replays flythrough to the same pose in fixed-step mode', async ({ page }) => {
+    test.setTimeout(240_000);
+    const a = await run(page, 'flythrough', true);
+    const b = await run(page, 'flythrough', true);
+    for (const r of [a, b]) {
+      expect(r.drive.trajectoryDigest).toMatch(/^[0-9a-f]{64}$/);
+      expect(r.drive.settled).toBe(true);
+      expect(r.probe.frames).toBeGreaterThan(0);
+      expect(r.probe.inputToDrawMs.samples).toBeGreaterThan(0);
+    }
+    expect(b.drive.trajectoryDigest).toBe(a.drive.trajectoryDigest);
+    expect(b.drive.startCameraDigest).toBe(a.drive.startCameraDigest);
+    expect(b.drive.finalCameraDigest).toBe(a.drive.finalCameraDigest);
+    expect(a.drive.finalCameraDigest).not.toBe(a.drive.startCameraDigest);
+  });
+
   for (const name of NAMES) {
-    test(`replays ${name} deterministically`, async ({ page }, info) => {
+    test(`replays ${name} deterministically @gpu`, async ({ page }, info) => {
       test.setTimeout(240_000);
       const fixedA = await run(page, name, true);
       const fixedB = await run(page, name, true);
