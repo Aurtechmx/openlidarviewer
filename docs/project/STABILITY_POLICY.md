@@ -54,7 +54,10 @@ Stable. The capability is reachable in the shipped build and falls under the
 freezes above. Its behaviour, its inputs and outputs, and the claims it cites
 in the claim register change only by a new minor or major version, with the
 change stated in the release notes. A stable capability is removed only after
-one minor version in which it is marked for removal.
+one minor version in which it is marked for removal. The exception is a
+stable capability found to produce incorrect results or to be a security risk:
+it is withdrawn in the next release, and the withdrawal and its reason are
+recorded in the release notes and the erratum.
 
 Preview. The capability is reachable in the shipped build and carries a label
 in the interface, such as Field Simulation Lab. It may change or be withdrawn
