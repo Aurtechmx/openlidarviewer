@@ -150,6 +150,27 @@ describe('waking', () => {
     expect(h.frameScheduled).toBe(false);
   });
 
+  it('keeps one chain when a frame wakes the scheduler from inside itself', () => {
+    const pending: (() => void)[] = [];
+    let wake = (): void => {};
+    const s = new FrameScheduler({
+      requestFrame: (cb) => pending.push(cb),
+      cancelFrame: () => {},
+      setTimer: () => 0,
+      clearTimer: () => {},
+      nowMs: () => 0,
+      needsFrame: () => true,
+      runFrame: () => wake(),
+    });
+    wake = () => s.wake();
+    s.start();
+    for (let k = 0; k < 8; k++) {
+      expect(pending.length).toBe(1);
+      pending.shift()!();
+    }
+    expect(pending.length).toBe(1);
+  });
+
   it('does nothing before start or after stop', () => {
     const h = new Harness();
     const s = new FrameScheduler(h.host);

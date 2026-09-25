@@ -135,13 +135,17 @@ export class FrameScheduler {
   }
 
   private _schedule(): void {
+    // A wake from inside a frame (a camera change during the nav update) has
+    // already scheduled the next one; a second request would start a second
+    // chain, and every chain that wakes itself again doubles.
+    if (this._frame !== null) return;
     this._frame = this._host.requestFrame(() => {
       this._frame = null;
       // The frame runs before the question is asked, so a frame that creates
       // work for the next one (a decode committed, a fade started) is already
       // reflected when the scheduler decides whether to sleep.
       this._host.runFrame();
-      if (!this._running) return;
+      if (!this._running || this._frame !== null) return;
       if (this._host.needsFrame(this._host.nowMs())) this._schedule();
       else this._sleep();
     });
