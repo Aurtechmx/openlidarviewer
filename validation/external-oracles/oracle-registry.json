@@ -486,6 +486,37 @@
         "The multi-return case only exercises the component formulas over a sample set shaped like a 2nd-return-only hit (a sample carrying the OVERLAPPING return's own range, not the ray's primary range); it does not itself drive a real multi-return traversal or returnTable/returnCounts lookup, which is `accumulateStrengthHitSamples`'s own TypeScript-side responsibility, covered instead by `tests/observatoryStrength.test.ts`'s real end-to-end multi-return group.",
         "Does not check `incidence`'s normal-fitting step (`fitNormalFromResidentPoints`'s `symEig3` covariance fit): every case hands the oracle a normal directly, matching how `computeStrengthComponents` itself takes a normal as an argument rather than fitting one internally."
       ]
+    },
+    {
+      "oracleId": "olv-terrain-evidence-geotiff-py",
+      "name": "Terrain evidence GeoTIFF reader (evidence_geotiff.py)",
+      "version": "1",
+      "executables": [
+        "validation/terrain-evidence/oracle/evidence_geotiff.py"
+      ],
+      "roleCapabilities": [
+        "standard-conformance-validator",
+        "analytic-truth"
+      ],
+      "domains": [
+        "geotiff-multiband-layout",
+        "terrain-evidence-raster"
+      ],
+      "lineageGroup": "olv-terrain-evidence-oracle",
+      "implementationLanguage": "Python (standard library only)",
+      "license": "AGPL-3.0-only",
+      "architecture": "any (no native dependency)",
+      "installationMethod": "in-repository; run with the interpreter .python-version pins",
+      "sourceRevision": null,
+      "independenceNotes": [
+        "Parses the written file from the TIFF 6.0, OGC GeoTIFF 1.1, GDAL_METADATA and GDAL_NODATA layouts with struct and xml.etree; it imports no viewer code and does not reuse src/terrain/export/demGeoTiff.ts.",
+        "Recomputes interpolation distance as the Chebyshev distance to the nearest cell with support_count > 0 and checks the measured and edge-risk cell_state rules from the raster alone. Not external validation: the rules come from this project's own documents, so a shared misreading would survive agreement."
+      ],
+      "limitations": [
+        "Checks one synthetic 12 x 10 fixture (validation/terrain-evidence/fixture), not a raster from a real scan.",
+        "The distance recomputation assumes an open grid, where 8-connected steps equal the Chebyshev distance; it does not model obstacles.",
+        "Says nothing about the accuracy of any height, and does not check the low-confidence rule, which depends on the confidence grid the raster does not carry."
+      ]
     }
   ]
 }

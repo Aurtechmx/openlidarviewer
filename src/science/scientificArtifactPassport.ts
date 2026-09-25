@@ -118,6 +118,20 @@ export interface PassportArtifact {
   readonly sha256: string;
 }
 
+/**
+ * A file that travels with the artifact and describes it, bound by its own
+ * digest (e.g. the terrain evidence raster beside a DEM). Absent from passports
+ * whose artifact has none, so their bytes and seal are unchanged.
+ */
+export interface PassportCompanion {
+  readonly filename: string;
+  readonly mediaType: string;
+  readonly bytes: number;
+  readonly sha256: string;
+  /** Registered method tag (`id@version`) that produced the file. */
+  readonly method: string;
+}
+
 /** The build identity that produced the artifact. */
 export interface PassportBuild {
   readonly version: string;
@@ -142,6 +156,8 @@ export interface ScientificArtifactPassport {
   readonly method: PassportMethod;
   readonly evidence: PassportEvidence;
   readonly artifact: PassportArtifact;
+  /** Companion files bound beside the artifact; absent when there are none. */
+  readonly companions?: readonly PassportCompanion[];
   readonly build: PassportBuild;
   /** SHA-256 over the canonical passport serialization WITHOUT this field. */
   readonly passportSha256: string;
@@ -162,6 +178,13 @@ export interface ScientificArtifactPassportInput {
     readonly mediaType: string;
     readonly bytes: Uint8Array;
   };
+  /** Companion files to bind by digest, each with the registered method id that produced it. */
+  readonly companions?: readonly {
+    readonly filename: string;
+    readonly mediaType: string;
+    readonly bytes: Uint8Array;
+    readonly methodId: string;
+  }[];
   /** Geoid model name for the reproducibility line, when known. */
   readonly geoid?: string | null;
   /** Build identity; default the analysis record's build. */
@@ -212,6 +235,7 @@ function passportBody(p: Omit<ScientificArtifactPassport, 'passportSha256'>): Re
     method: p.method,
     evidence: p.evidence,
     artifact: p.artifact,
+    ...(p.companions !== undefined ? { companions: p.companions } : {}),
     build: p.build,
   };
 }
@@ -252,6 +276,17 @@ export function buildScientificArtifactPassport(
 
   const build = input.build ?? record.build;
 
+  const companions = input.companions?.map((c): PassportCompanion => {
+    if (!isMethodId(c.methodId)) throw new Error(`Unknown method id: ${c.methodId}`);
+    return {
+      filename: c.filename,
+      mediaType: c.mediaType,
+      bytes: c.bytes.length,
+      sha256: sha256Hex(c.bytes),
+      method: methodTag(methodRef(c.methodId)),
+    };
+  });
+
   const body: Omit<ScientificArtifactPassport, 'passportSha256'> = {
     schemaVersion: SCIENTIFIC_ARTIFACT_PASSPORT_SCHEMA,
     scienceId,
@@ -282,6 +317,7 @@ export function buildScientificArtifactPassport(
       bytes: input.artifact.bytes.length,
       sha256: artifactSha256,
     },
+    ...(companions !== undefined ? { companions } : {}),
     build: { version: build.version, commit: build.commit, dirty: build.dirty },
   };
 
@@ -307,6 +343,12 @@ export type PassportVerificationState =
  * state. Omit them all to run the internal-consistency checks only.
  */
 export interface PassportVerifyOptions {
+  /**
+   * Companion file bytes by filename, to confirm each `companions[].sha256`.
+   * A recorded companion missing from this map, or with different bytes, is
+   * `ARTIFACT_CHANGED`.
+   */
+  readonly companionBytes?: Readonly<Record<string, Uint8Array>>;
   /** The exact artifact bytes on disk, to confirm `artifact.sha256`. */
   readonly artifactBytes?: Uint8Array;
   /** The source bytes, to confirm `source.sha256` (only when small enough to hash). */
@@ -415,6 +457,14 @@ export function verifyScientificArtifactPassport(
   // Exported artifact bytes.
   if (opts.artifactBytes) {
     if (sha256Hex(opts.artifactBytes) !== passport.artifact.sha256) return 'ARTIFACT_CHANGED';
+  }
+
+  // Companion files bound beside the artifact.
+  if (opts.companionBytes) {
+    for (const c of passport.companions ?? []) {
+      const bytes = opts.companionBytes[c.filename];
+      if (bytes === undefined || sha256Hex(bytes) !== c.sha256) return 'ARTIFACT_CHANGED';
+    }
   }
 
   // Source bytes (only meaningful when a digest was recorded).

@@ -503,6 +503,10 @@ export default defineConfig(({ mode }) => ({
           // reaching gradeForConfidence — can't let the heuristic hoist it into
           // the eager index bundle and blow its budget.
           if (id.includes('/terrain/ground/cellConfidence')) return 'cellConfidence';
+          // The cell-status leaf reads only cellConfidence and is shared by the
+          // analysis chunk and the DEM export chunk; keeping it beside
+          // cellConfidence stops it becoming one more chunk the shell lists.
+          if (id.includes('/terrain/quality/dtmCellStatus')) return 'cellConfidence';
           // LocalFileRangeSource is reached only through lazyChunks' dynamic
           // import, and rolldown emits it as its own chunk today. Pinning it
           // states that boundary explicitly: rolldown 1.2.6 changed its
