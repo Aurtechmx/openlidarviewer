@@ -6593,3 +6593,21 @@ and exits clean on the empty directory rather than measuring anything.
 There is still no phone, tablet or WebKit device, correction or not; the
 schema, the required-scene set and the four structural checks this account
 built are unaffected and still gate the first record that appears.
+
+### L115 · PARTIAL · SCIENTIFIC
+
+The account above overstates the code. "Geometry rasters suspend
+reconstruction" is not true today: `BaseExportMode.ts:460` calls
+`presentationOfCapture(capturedCaps, 'as-is')` with the literal string
+`'as-is'`, never `capturePolicyFor`'s verdict. The comment above it says why:
+the renderer sits behind the export-to-render boundary the module-graph
+ratchet holds shrink-only, and this caller performs no suspension.
+`capturePolicyFor` (`presentationMode.ts:96`) computes the obligation and is
+imported nowhere outside its own file and its test.
+
+What ships is disclosure, not isolation. A geometry raster captured while
+reconstruction runs is labelled `reconstructed`, not stood down.
+`tests/exportIsolation.test.ts` names the gap directly, in a describe block
+titled "the suspension is named but not yet performed," and pins the absent
+import with a source-text assertion. L64 separately found
+`continuityCapabilities` itself never populated by `Viewer.exportImage`.
