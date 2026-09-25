@@ -218,8 +218,8 @@ relevant contracts.
   bit-identical output. Different `residentNodesHash` may differ (the contract
   verifies the dependency, not equivalence).
 - C2: Abortable. Cancelled within the first 50 % of estimated runtime:
-  throws `AbortError`, does not populate the cache, leaves no GPU buffer, worker
-  handle, or DOM listener dangling.
+  throws `AbortError`, does not populate the cache, and leaves nothing dangling (no GPU
+  buffer, worker handle or DOM listener).
 - C3: Non-mutating. Must not change the cloud's points/attributes, active
   color mode, camera/viewport/post-processing, or the streaming scheduler's
   wanted/resident/pending sets.

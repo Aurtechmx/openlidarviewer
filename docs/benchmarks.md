@@ -49,8 +49,8 @@ identical 250k workload reported peak RSS about 50 % apart depending only on
 what had run before it. The isolation mode is recorded in `raw.json` and in the
 manifest, so a reader can always see which regime produced a curve.
 
-It reports a measured curve and claims no complexity class: five points on one
-machine cannot separate one from another. The 1M tier is not optional: if it
+It reports a measured curve and claims no complexity class: five tier measurements on
+one machine cannot separate one from another. The 1M tier is not optional: if it
 cannot complete, the failed tier is preserved with its exact reason and the
 suite fails until the limitation is written into `acceptedTierFailures`.
 
@@ -169,8 +169,7 @@ rather than falling off a cliff (run 1 about 37 % above the asymptote, runs
 2-6 still 5-15 % above it, flat from run 7) so one warm-up left the first two
 recorded runs about 11 % slow and three still left about 8 %.
 
-Six does not fully remove it either, and the suite says so rather than
-pretending otherwise. On a loaded machine the first recorded run still comes in
+Six does not fully remove it either. On a loaded machine the first recorded run still comes in
 several per cent high, and a freshly spawned tier process has been seen to spike
 28 % on its first recorded run. The transient tracks machine load and allocator
 state, not the pipeline, so nothing fails on it: a benchmark that goes red
@@ -197,10 +196,10 @@ neither could ever have been a pass condition. The band is withheld entirely
 below five comparison runs, where its width would come from an IQR estimated on
 too few points.
 
-Two things the tables will not do. They never sum the stage column: the
+The tables never sum the stage column: the
 isolated `rasterize` and `descriptors` timings re-run work the `dtm` stage
 already does, so the total comes from the driver's `pipelineDurationMs()` and
-the leaves are labelled and kept apart. And they never report a number that was
+the leaves are labelled and kept apart. They also never report a number that was
 not measured: an unavailable value says `unavailable` and carries its reason,
 including peak heap, which no sampler can observe between synchronous stages.
 
@@ -221,9 +220,9 @@ separately, never one silently standing in for the other.
 
 Output lands in `benchmark-results/`: `latest/` is replaced on every run,
 `archive/<UTC timestamp>-<short commit>/` is immutable and a second write to an
-existing archive is refused. `manifest.json` carries the commit, working-tree
-cleanliness, host and toolchain versions, the configuration, and a SHA-256 for
-every file; `benchmark:verify` recomputes all of them, re-derives every summary
+existing archive is refused. `manifest.json` records the commit and whether the
+working tree was clean, the host and toolchain versions and the configuration.
+It also holds a SHA-256 for every file; `benchmark:verify` recomputes all of them, re-derives every summary
 statistic from the raw values and re-renders every Markdown, HTML and CSV
 file (the top-level `summary.md` and `summary.html` included) from the
 published JSON, so a hand-edited figure fails even when the digest is refreshed
@@ -288,9 +287,9 @@ benchmark 1 uses and for the same reason.
 
 ### What is allowed to differ
 
-Every difference below is reported, never dropped. Execution time, memory observations, CPU model, operating system, architecture, Node and
-V8 metadata, timestamps, build identity, everything derived from build
-identity, and archive paths. `comparison.json` lists each observed difference
+Every difference below is reported, never dropped. The expected differences are execution time and memory observations; the host
+description (CPU model, operating system, architecture, Node and V8 metadata);
+timestamps; build identity and everything derived from it; and archive paths. `comparison.json` lists each observed difference
 with the value every platform reported, and names the categories excluded by
 construction.
 
@@ -335,7 +334,7 @@ this suite reports is output identity, not which host is faster.
 subdirectory per platform. Every human-readable file is rendered from
 `comparison.json`, and the verifier re-derives the comparison from the platform
 records in the subdirectories before re-rendering both and comparing byte for
-byte. That is what makes an edited verdict fail even when every digest in the
+byte. An edited verdict therefore fails even when every digest in the
 manifest has been refreshed to match the edit.
 
 ### A single leg reports itself as one
@@ -698,7 +697,7 @@ two legs that need hardware or a second machine. What it runs is the correctness
 set, in about 26 s: units, round-trip, contours, provenance, failure recovery,
 seed sensitivity, archive portability, clean clone.
 
-A green `:quick` is not a publication result, and the summary says so under its
+A green `:quick` is not a publication result. The summary prints that under its
 own heading.
 
 `:verify` fails on any suite that ran and failed, and on any *required* suite
@@ -891,9 +890,9 @@ whole point of the project.
 
 The scheduler / cache / eviction logic has been untouched since v0.3.3.
 v0.3.4 added Viewer-deferral, ease-out fade, and EPT transport polish;
-v0.3.5 added the smoke gate, the main-deferral lint, the Profile
-measurement kind, the broken-stub removal, and the v0.3.4 hotfix: none of
-which touch the per-tick rescore loop or the eviction-pressure machinery.
+v0.3.5 added the smoke gate and the main-deferral lint, the Profile
+measurement kind, and the v0.3.4 hotfix, and removed a broken stub. None of
+these touch the per-tick rescore loop or the eviction-pressure machinery.
 The figures below were captured against v0.3.3 and remain the canonical
 credibility numbers for the streaming subsystem in v0.3.5.
 
@@ -970,7 +969,7 @@ on every upload.)
 > holds bounded memory + interactive FPS at 500 M points; 1 B synthetic
 > survives a 5-minute sustained orbit without OOM or thrash."
 
-Status: met for bounded memory + zero thrash at 1 B. Interactive FPS
+That target is met for bounded memory + zero thrash at 1 B. Interactive FPS
 at 500 M is met on this sandbox; the 250 M tick latency is the known weak
 point and is reflected honestly in the table. The 5-minute sustained-orbit
 promise is captured implicitly by the dispatch-gate fix below: the
@@ -1053,9 +1052,9 @@ true per-node decode is heavier and is captured on device.
 
 A fixed wide frustum can only exercise *admission* backpressure: the whole scene
 stays wanted, so the scheduler fills to the `1.5 × pointBudget` hysteresis cap
-and defers the rest: nothing is ever evicted. To measure the eviction path (the
-"regions pulsing" churn), two things have to be true, and the harness arranges
-both without touching a scheduler knob:
+and defers the rest: nothing is ever evicted. Measuring the eviction path (the
+"regions pulsing" churn) needs a moving wanted set and real wall-clock time
+exceeds. The harness arranges both without touching a scheduler knob:
 
 - The wanted set has to move. The navigation flies a tight orthographic
   window (~18 % of the extent per axis) between scattered dwell targets, so
@@ -1215,8 +1214,8 @@ than per hover.
 Selection reads the same way as extraction. The chunked path meets the bound at
 every section measured: the longest uninterrupted task is 28.8 ms over 2,397,156
 returns. It grows far more slowly than the section does: five times the returns
-buy 40 % more slice, because what sets the longest one is the bucket sort and not
-the number of returns. `selectProfileSectionLod` run to completion still misses
+buy 40 % more slice, because the bucket sort sets the longest slice and the
+number of returns barely moves it. `selectProfileSectionLod` run to completion still misses
 the bound at every section measured, 108 ms over 479,442 returns and 389 ms over
 2,397,156, for the same reason `extractProfileSection` does: the helper never
 returns to its caller. Selection cost follows the section size rather than the

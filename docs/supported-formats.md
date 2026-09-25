@@ -34,7 +34,7 @@ OpenLiDARViewer opens exports from iPhone LiDAR and mobile scanning apps when th
 
 `E57` (ASTM E2807) is the standard exchange format for terrestrial laser scanners and is read directly in the browser by a from-scratch TypeScript parser: nothing is uploaded and no conversion step is needed.
 
-The parser decodes Cartesian coordinates, RGB colour, intensity, classification, and per-point surface normals. It applies each scan's recorded pose (rotation and translation), drops points the file flags as invalid, and bridges global coordinates into the viewer's local space with the same coordinate bridge the LAS loader uses. Multi-scan E57 files are merged into a single cloud, and the file's generating software is read from the header and shown in the Scan Report.
+The parser decodes Cartesian coordinates and, where present, RGB colour, intensity, classification and per-point surface normals. It applies each scan's recorded pose (rotation and translation), drops points the file flags as invalid, and bridges global coordinates into the viewer's local space with the same coordinate bridge the LAS loader uses. Multi-scan E57 files are merged into a single cloud, and the file's generating software is read from the header and shown in the Scan Report.
 
 E57 exports from Trimble survey scanners were checked manually during development. No Trimble fixture is committed, so that check is not reproducible from this archive. Other standard E57 files, from Leica, FARO, Matterport and similar systems, follow the same ASTM format and are expected to work; E57 files that use uncommon or non-standard schema features may not.
 
@@ -54,9 +54,9 @@ Georeferenced drone LiDAR surveys in `LAS` and `LAZ` work today, including large
 
 `3D Tiles` / `PNTS`: a single `.pnts` tile opens today. It is detected by its `pnts` magic bytes (so a tile saved under another name still opens, and a file that only borrows the extension is refused rather than read as a tile), decoded through the viewer's PNTS reader (uncompressed `POSITION` and `POSITION_QUANTIZED`, RGBA/RGB/RGB565/CONSTANT_RGBA colour) and placed by adding the feature table's `RTC_CENTER` back to every position. Draco-compressed tiles are refused.
 
-A whole `tileset.json` opens by URL, and it is worth being exact about what that is and what it is not.
+A whole `tileset.json` opens by URL, within a narrow subset of the specification.
 
-What opens: a streamed 3D Tiles 1.0 or 1.1 tileset whose content is PNTS. The entry document is fetched and walked into a flat store of tiles, and from there the scan behaves as a COPC or EPT stream does: the scheduler culls against the camera, selects what fits the point budget, and fetches and decodes tile bodies as they are needed. Each tile is placed by its own cumulative transform, after its `RTC_CENTER` and before the render origin, in float64. A document declaring any other `asset.version` is refused by name, because that value fixes the schema the rest of the document is written in.
+The subset is a streamed 3D Tiles 1.0 or 1.1 tileset whose content is PNTS. The entry document is fetched and walked into a flat store of tiles, and from there the scan behaves as a COPC or EPT stream does: the scheduler culls against the camera, selects what fits the point budget, and fetches and decodes tile bodies as they are needed. Each tile is placed by its own cumulative transform, after its `RTC_CENTER` and before the render origin, in float64. A document declaring any other `asset.version` is refused by name, because that value fixes the schema the rest of the document is written in.
 
 A streamed tileset reports no source point total. A `tileset.json` never states one, and the per-tile figures the scheduler admits on are decode-admission estimates rather than counts, so a sum of them would read as a measurement it is not. The colour modes offered are the ones a point tile can fill: intensity, classification and returns are absent from the format and are not offered.
 
@@ -66,7 +66,7 @@ Implicit tiling opens. A tileset that describes its hierarchy with a subdivision
 
 A tile whose content is a nested external `tileset.json` is followed: the referenced document is fetched, its own implicit and external references expanded in turn, and its root spliced in as a child in the referencing tile's frame, so a set split across several documents opens as one scene. The follow is bounded (the count of external documents, the nesting depth and the bytes of one document each refuse by name) and a document that references itself, directly or around a cycle, is refused rather than followed forever.
 
-What does not open: the wider 3D Tiles ecosystem. B3DM, I3DM, CMPT and glTF content are refused by name, because mesh tiles need a renderer this viewer does not have. Draco-compressed tiles are refused rather than partially read.
+The rest of the 3D Tiles ecosystem does not open. B3DM, I3DM, CMPT and glTF content are refused by name, because mesh tiles need a renderer this viewer does not have. Draco-compressed tiles are refused rather than partially read.
 
 Two further limits of the supported subset are known:
 
@@ -85,10 +85,10 @@ Recommended mobile formats:
 - XYZ / CSV: useful for raw point-coordinate workflows
 - LAS / LAZ: professional LiDAR formats if exported or converted
 
-Mobile scanning apps: Several iPhone LiDAR scanning apps (such as Polycam, Scaniverse, or 3D Scanner App) can export scans in these formats. Available formats and free-tier options differ between apps and can change, so check each app's current help documentation. Some formats may require a paid plan.
+Several iPhone LiDAR scanning apps (such as Polycam, Scaniverse, or 3D Scanner App) can export scans in these formats. Available formats and free-tier options differ between apps and can change, so check each app's current help documentation. Some formats may require a paid plan.
 
-Trademark note: OpenLiDARViewer is not affiliated with, endorsed by, or sponsored by Apple or any third-party scanning app.
+OpenLiDARViewer has no affiliation with Apple or any third-party scanning app, and none of them endorses or sponsors it.
 
 ## Notes
 
-Format support varies with browser memory, GPU capacity, dataset size, preprocessing, and implementation status. Very large files may need downsampling, tiling, or conversion before they load smoothly.
+Format support depends on the device (browser memory, GPU capacity) and on the data: its size, how it was preprocessed, and how complete OLV's reader for that format is. Very large files may need downsampling, tiling, or conversion before they load smoothly.

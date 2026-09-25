@@ -45,10 +45,9 @@ repeats that trigonometry.
 ## DTM basis and units
 
 `dtmTerrainAccessGrid.ts` converts the analysed `DtmGrid` (and, optionally,
-an aligned DSM/nDSM) into a `TerrainAccessGrid`: elevation, a valid mask,
-per-cell terrain confidence (0-100, `DtmGrid.confidence` unchanged), the
-DTM's coverage code, an optional above-ground height layer, and an optional
-ROI mask.
+an aligned DSM/nDSM) into a `TerrainAccessGrid`. The grid carries elevation with a valid mask,
+per-cell terrain confidence (0-100, `DtmGrid.confidence` unchanged) and the
+DTM's coverage code. An above-ground height layer and an ROI mask are optional.
 
 A run refuses outright (`UNITS_UNRESOLVED`) rather than guess when the
 horizontal scale is unresolved, when a geographic frame's latitude is

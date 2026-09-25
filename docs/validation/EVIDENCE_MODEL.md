@@ -140,8 +140,8 @@ shape is unchanged.
 - When adding or changing a product, add/update its register entry in the same
   change. A product with no register entry is treated as `E0` / not exportable.
 - Existing caveats may be strengthened, never silently removed (rule 12).
-- When external evidence is unavailable, build the harness, write the dataset
-  spec, and set `externalValidationStatus: pending`, do not infer it from
+- When external evidence is unavailable, build the harness and write the dataset
+  spec, then set `externalValidationStatus: pending`. Never infer it from
   density, format, or metadata (rule 9).
 
 ## Tooling that moves a claim up the ladder (Phase 3 to 4)

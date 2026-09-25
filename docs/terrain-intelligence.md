@@ -44,13 +44,12 @@ Two small, live pieces support the pipeline without being part of it.
   consumer reads (`TerrainPoint`, `TerrainCoverageMode`, and the result
   envelope). Every result carries `coverage` / `sourcePointCount` /
   `analyzedPointCount` / `confidence` / `warnings`, so analyses never imply
-  full-cloud certainty when only resident streaming nodes were walked. These
-  types are imported across the ground, contour, surface, validate, and
-  quality stages.
+  full-cloud certainty when only resident streaming nodes were walked. All five
+  stages import these types (ground, contour, surface, validate, quality).
 - Dataset Intelligence card (`src/ui/DatasetIntelligenceCard.ts`,
-  `src/terrain/datasetIntelligence.ts`). Inspector card that renders Point
-  Density, Terrain Complexity, Ground Visibility, Streaming Coverage, and
-  Terrain Confidence. It is informational only and header-derived: it
+  `src/terrain/datasetIntelligence.ts`). Inspector card whose rows are Point
+  Density, Terrain Complexity and Ground Visibility, plus Streaming Coverage
+  and Terrain Confidence. It is informational only and header-derived: it
   computes a cheap summary from declared point count, bounding-box volume,
   optional resident-neighbour density, and an optional terrain suggestion. It
   never performs ground classification and renders `—` rather than
@@ -321,7 +320,7 @@ also written to the browser's origin-private file system, in a directory named
 `olv-terrain-core`. Re-opening the same data after a reload restores the core
 from there instead of recomputing it.
 
-An entry is keyed by four things: a SHA-256 of the analysed position bytes, a
+An entry is keyed by a SHA-256 of the analysed position bytes, a
 SHA-256 of the per-point classification, the exact core parameters (cell size,
 CRS and vertical frame, unit factors, excluded classes, ground filter settings,
 hold-out seed, aggregation, sample scale), and the method generation, which is

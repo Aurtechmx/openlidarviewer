@@ -48,10 +48,8 @@ It was established by running it, not inferred. A worktree at `v0.6.1` with
 code, the file counts and the test counts are recorded in the registry's
 `conventionalSuiteDefinition` block.
 
-Two things this value does not say. It does not say that any test in that run
-exercised the defect: seventeen records sit in code that was present at
-`v0.6.1`, and the suite passed with all of them in the tree. And it is not
-available for code that did not exist at `v0.6.1`. One record spans both cases
+This value does not say that any test in that run exercised the defect: seventeen records sit in code that was present at
+`v0.6.1`, and the suite passed with all of them in the tree. Nor is it available for code that did not exist at `v0.6.1`. One record spans both cases
 and is recorded as `mixed`, with the split stated in its
 `conventionalSuiteNote`. The schema permits `unknown`; it does not permit
 inferring `green`.
@@ -132,8 +130,8 @@ table. The primary-category table is reported on its own alongside them.
 ## A correction to the changelog's composition
 
 The 0.6.2 changelog says eighteen defects are fixed, "four carried from the
-v0.6.1 vertical-unit audit, fourteen found by the new suites". The total holds.
-The split does not, on two points.
+v0.6.1 vertical-unit audit, fourteen found by the new suites". The total of eighteen
+is right, and the split is wrong in two places.
 
 `KNOWN_LIMITATIONS_v0.6.1.md` records five vertical-unit gaps, not four. Four
 were closed in PR #47: `OLV-DEF-004`, `OLV-DEF-005`, `OLV-DEF-006` and
@@ -177,10 +175,10 @@ limitations documents, not here.
 Everything above this heading describes what the records contain. What follows
 is reading, and is separable from the records.
 
-Three observations survive the records without extending them.
+The records support the observations below without being extended.
 
-The suites that found defects found them by comparing two things that had to
-agree: two exporters of one raster, the streaming and static gradings of one
+The suites that found defects found them by comparing a pair of results that had
+to agree: two exporters of one raster, the streaming and static gradings of one
 scan, an independent decoder against the shipped one, a declaration against the
 artifact it describes. None of these is a new idea. Metamorphic relations,
 differential testing against a second implementation and cross-checking against

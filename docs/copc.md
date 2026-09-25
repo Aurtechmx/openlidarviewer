@@ -33,8 +33,8 @@ streaming scan writes the resident set and says so in the file itself:
 ## Local and remote COPC
 
 A local `.copc.laz` (dragged in or picked) streams from disk through the
-same path: nothing is uploaded anywhere. A remote COPC streams over HTTP
-and requires two things of the server:
+same path: nothing is uploaded anywhere. A remote COPC streams over HTTP,
+and the server has to support range requests and CORS:
 
 - Range requests: `Accept-Ranges: bytes`, honoured with `206 Partial
   Content`. Without them there is nothing to stream.
@@ -47,8 +47,8 @@ requirements behind its "Connection requirements" disclosure.
 
 ## What arrives, and what does not
 
-Each decoded node carries position, intensity, classification, return
-number/count, and GPS time; RGB and point-source id are used when every
+Each decoded node carries position, intensity and classification, plus
+return number/count and GPS time; RGB and point-source id are used when every
 resident node carries them. A missing attribute degrades the related
 feature rather than failing the load: nothing assumes RGB or intensity
 exist. The CRS comes from the file's own metadata (WKT), with the same

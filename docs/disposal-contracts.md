@@ -146,6 +146,6 @@ When you introduce a new GPU buffer / worker / timer / listener:
 4. If the resource needs a real browser, add an assertion to the
    long-session e2e spec.
 
-The default assumption is: **a resource without a documented disposal
-trigger is a leak**. Reviewers should refuse to merge a PR that adds
+By default, **a resource without a documented disposal trigger is treated
+as a leak**. Reviewers should refuse to merge a PR that adds
 one without filling in this table.

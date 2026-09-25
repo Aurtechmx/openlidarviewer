@@ -5,9 +5,9 @@ Date: 2026-08-05
 
 ## Context
 
-The app ships five Web Workers: the file parser, the COPC tile decoder, the EPT
-laszip decoder, the terrain-core compute worker, and the classification derive
-worker. Each worker reaches its module through `new Worker(new URL('./x.ts',
+The app ships five Web Workers. Three decode data (the file parser, the COPC
+tile decoder and the EPT laszip decoder), and two compute (the terrain-core
+worker and the classification derive worker). Each worker reaches its module through `new Worker(new URL('./x.ts',
 import.meta.url))`, and the live deployment build (`npm run build:live`) runs a
 JavaScript source transform over the app's own TypeScript.
 
@@ -47,10 +47,10 @@ single source fails the build and the test suite rather than shipping a 404.
 ## Consequences
 
 Adding a worker means appending one registry entry. The obfuscation exclude, the
-chunk pins, and the emission assertions follow from it. The parallel-list drift
-that produced #266 can no longer occur.
+chunk pins, and the emission assertions follow from it. With one list, the
+parallel-list drift that produced #266 has nothing left to drift against.
 
-This change does not touch the transform itself. The live build still obfuscates
+The transform itself is unchanged. The live build still obfuscates
 the app's own source.
 
 ## The larger option: remove obfuscation from the official live build

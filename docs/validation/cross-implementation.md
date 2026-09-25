@@ -169,9 +169,9 @@ the steps below and commits the real reference file.
 ## Aspect is a direction, and that changes the comparison
 
 Slope is a magnitude; aspect is a bearing on a circle, undefined where the
-ground is level. Three things must be handled or the comparison quietly
-measures the wrong thing, and all three are handled in
-`tests/aspectCrossCheck.test.ts`:
+ground is level. Unless the comparison handles circular
+difference, flat cells, and frame and row order, it measures the wrong thing
+without saying so. `tests/aspectCrossCheck.test.ts` handles all three:
 
 - Circular difference. 359° and 1° are 2° apart, not 358°. Every pair is
   folded to its shortest angular separation before any tolerance is applied.

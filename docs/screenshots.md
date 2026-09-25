@@ -6,24 +6,25 @@ saved as compressed JPEGs so they stay light in the repository.
 
 ## openlidarviewer-main.jpg
 
-The main viewer: a 9.6M-point drone LiDAR survey, height-colored, with the
+The main viewer showing a 9.6M-point drone LiDAR survey, height-colored, with the
 Scan Intelligence panel on the right and the navigation HUD below.
 
 ## measurement-tool.jpg
 
-The measurement toolkit: a distance measurement between two picked points,
-read directly inside the point cloud. The toolkit also measures polyline,
-area, height, angle, and slope.
+The measurement toolkit placing a distance between two picked points, read
+directly inside the point cloud. Polyline, area and height measurements work
+the same way, as do angle and slope.
 
 ## inspect-tool.jpg
 
-The Inspect tool: a glowing marker on the selected point and a compact card
+The Inspect tool puts a glowing marker on the selected point and a compact card
 showing its real-world coordinates, attributes, layer, and index.
 
 ## scan-intelligence-panel.jpg
 
-The Scan Intelligence panel: point count, dimensions, density, spacing,
-detected attributes, and the Advanced report of integrity diagnostics.
+The Scan Intelligence panel lists point count, dimensions, density and
+spacing, then the detected attributes and the Advanced report of integrity
+diagnostics.
 
 ## Notes
 

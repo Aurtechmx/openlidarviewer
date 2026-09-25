@@ -67,7 +67,7 @@ remaining classes and their coordinate space:
 | Sessions | source | geometry is already stored layer-local + origin; origin recorded becomes `sourceOrigin` (equal today, so old sessions stay valid) |
 | Renderer origin collection (`Viewer.ts:2062`) | render | unchanged: placement is exactly its job |
 
-The columns are the point: after the flip there are only two lifts
+The columns show that after the flip there are only two lifts
 (source, `sourceOrigin`; project, `sourceOrigin` then translation) and
 each site names which one it means. No site may add a bare `origin` again;
 `lint:position-access` holds the surface and `origin` itself is removed.

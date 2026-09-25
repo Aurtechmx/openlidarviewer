@@ -3,9 +3,10 @@
 Status: foundation landed, scene wiring deferred. This document specifies
 the shared project coordinate frame. The value types and their pure transform
 math ship now, unit-tested, with no change to how the scene mounts clouds. The
-live wiring (mounting every layer through the frame, Compare Studio, cross-layer
-picking) is deliberately staged behind it, because it is verifiable only in the
-browser and it reshapes the project schema.
+live wiring is staged behind it on purpose. That covers mounting every layer
+through the frame, plus Compare Studio and cross-layer picking. It waits
+because it is verifiable only in the browser and it reshapes the project
+schema.
 
 ## The problem
 
@@ -20,9 +21,10 @@ two georeferenced clouds with different source origins are each recentred
 about their own `floor(min)`, so both land near local zero and appear overlaid
 even when they occupy different places in the world. Their true source origins
 are recorded per cloud, but the scene has no single frame that all layers are
-expressed in. That gap touches every multi-layer surface: Compare Studio,
-cross-layer measurement, shared clipping, project cameras, cross-layer picking,
-change detection, multi-layer derived products, and project reopening.
+expressed in. That gap touches every multi-layer surface. Compare Studio,
+change detection and multi-layer derived products all need it, and so do
+cross-layer measurement and picking, shared clipping, project cameras and
+project reopening.
 
 ## The model
 

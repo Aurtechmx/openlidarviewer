@@ -4,7 +4,7 @@ OpenLiDARViewer runs in the browser and depends on modern GPU-accelerated web re
 
 ## What performance depends on
 
-The main factors are point count, browser memory, GPU capability, point size, rendering detail, the color mode in use, the file format, and how the data was prepared.
+Point count, browser memory and GPU capability matter most. Point size, rendering detail and the color mode in use change the per-frame cost, and the file format and how the data was prepared change the load cost.
 
 ## System requirements
 
@@ -99,8 +99,8 @@ removed from the entry pays back roughly 1.5x in the shipped figure.
 Checked and rejected, so the next person does not re-derive them:
 
 - `kmlExport`, `measurementExport`: `main.ts` imports these as `import
-  type` only. They are erased at compile time and contribute nothing. The
-  import list makes them look eager; they are not.
+  type` only. TypeScript erases them at compile time, so they add
+  no bytes even though the import list makes them look eager.
 - `spaceMetrics` / `wallSlice`: called synchronously inside
   `applyScanRoute(): boolean`. Deferring means making scan routing async and
   changing every caller's contract, for ~25 KiB. Bad trade against the risk
