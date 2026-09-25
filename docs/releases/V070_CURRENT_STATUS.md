@@ -9,7 +9,7 @@ entry. This is the latest account of each, which is a different question
 and the one a reader usually has. Where an entry was revisited, the last
 heading in the file wins.
 
-Entries: 166. Revisited at least once: 19.
+Entries: 166. Revisited at least once: 20.
 
 ## Totals
 
@@ -17,11 +17,11 @@ Entries: 166. Revisited at least once: 19.
 | --- | --- |
 | FIXED | 54 |
 | BUILT | 41 |
-| PARTIAL | 32 |
+| PARTIAL | 33 |
 | MEASURED | 15 |
 | NOT REPRODUCIBLE | 10 |
 | DEFERRED | 6 |
-| OPEN | 4 |
+| OPEN | 3 |
 | REFUSED | 3 |
 | SUPERSEDED | 1 |
 
@@ -92,7 +92,7 @@ Entries: 166. Revisited at least once: 19.
 | L61 | PARTIAL | CORRECTNESS | 1 |
 | L62 | PARTIAL | CORRECTNESS | 1 |
 | L63 | FIXED | CORRECTNESS | 1 |
-| L64 | OPEN | CORRECTNESS | 1 |
+| L64 | PARTIAL | CORRECTNESS | 2 |
 | L65 | PARTIAL | PERFORMANCE | 1 |
 | L66 | PARTIAL | ARCHITECTURE | 1 |
 | L67 | PARTIAL | PERFORMANCE | 1 |

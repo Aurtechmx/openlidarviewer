@@ -6492,3 +6492,19 @@ and a Planning assertion in `tests/e2e/observatoryPanel.spec.ts`.
 entry chunk 823,094 bytes and Viewer 751,944 bytes, both equal to the
 baseline build; `openObservatoryRun` 20,042 to 35,860, `observatoryPanel`
 9,509 to 12,685, `observatoryPackage` 13,158 to 15,649.
+
+### L64 · PARTIAL · CORRECTNESS
+
+The labelling mechanism now exists. `BaseExportMode.ts:460` computes
+`presentation` from `context.continuityCapabilities` through
+`presentationOfCapture`, `FigureStampContext` carries `presentation` and
+`reconstructedShare`, and `tests/exportIsolation.test.ts` pins the caller to
+the honest `as-is` branch and refuses a credited stand-down.
+
+`continuityCapabilities` (`types.ts:304`) is declared and never assigned.
+`Viewer.exportImage` builds its `ExportContext` from `renderer`, `scene`,
+`camera`, `canvas`, `adapter` and `classScopeStamp` alone, so `capturedCaps` at
+`BaseExportMode.ts:459` is `undefined` on every real call and the ternary
+falls to `source` regardless of what the Continuity Field is doing.
+`reconstructedShare` is hardcoded `null` at `BaseExportMode.ts:469`; no census
+feeds it. Both wait on the same seam the render side has not opened.
