@@ -66,6 +66,10 @@ describe('classifyRun', () => {
   it('simulator runtime missing', () => {
     expect(run('Boot the simulator', '::error::no iPhone simulator is available on this image'))
       .toMatchObject({ verdict: 'INFRASTRUCTURE', signature: 'simulator-runtime-missing' });
+    expect(run('Boot the simulator', '::error::runtime "iOS 26.5" is not on this image — it has: iOS 26.4'))
+      .toMatchObject({ verdict: 'INFRASTRUCTURE', signature: 'simulator-runtime-missing' });
+    expect(run('Boot the simulator', '::error::device "iPhone 17e" is not available under runtime "iOS 26.5" on this image — it has: iPhone 17'))
+      .toMatchObject({ verdict: 'INFRASTRUCTURE', signature: 'simulator-runtime-missing' });
   });
 
   it('WebDriverAgent unreachable on :8100 before the session opens', () => {
