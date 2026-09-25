@@ -20,7 +20,7 @@ export const CRITERIA_V3: Readonly<{
   ciLevel: number;
 }>;
 export const V3_PAIRS: number;
-export const V3_DATASETS: Readonly<Record<'A' | 'B', { id: string; path: string }>>;
+export const V3_DATASETS: Readonly<Record<'A' | 'B', { id: string; file: string }>>;
 export function plan(pairs?: number): { index: number; pair: number; cond: 'off' | 'on' }[];
 export function mulberry32(seed: number): () => number;
 export function pairedBootstrapCI(

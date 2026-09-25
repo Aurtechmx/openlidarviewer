@@ -117,13 +117,25 @@ export const V3_PAIRS = 7;
 export const V3_DATASETS = Object.freeze({
   A: {
     id: 'OLV-DS-090-JEMEZ-SNOWOFF-2010-FOREST',
-    path: '/Users/ssid02/Documents/OpenLiDAR/Sets/PointClouds/Jemez River Basin Snow-off Lidar Survey /ot_356000_3972000_1.laz',
+    file: 'ot_356000_3972000_1.laz',
   },
   B: {
     id: 'OLV-DS-093-ROGUE-SISKIYOU-2019-10TDM3449',
-    path: '/Users/ssid02/Documents/OpenLiDAR/Sets/PointClouds/OR_RogueRiverSiskiyouNF_B1_2019:/USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3449.laz',
+    file: 'USGS_LPC_OR_RogueSiskiyouNF_2019_B19_10TDM3449.laz',
   },
 });
+
+/**
+ * Local path of a v3 dataset, from OLV_GOV_AB_PATH_A / OLV_GOV_AB_PATH_B. The
+ * file is the register's download; the runner checks its SHA-256.
+ */
+function datasetPath(key) {
+  const path = process.env[`OLV_GOV_AB_PATH_${key}`];
+  if (!path) {
+    throw new Error(`Set OLV_GOV_AB_PATH_${key} to the local copy of ${V3_DATASETS[key].id} (${V3_DATASETS[key].file}).`);
+  }
+  return path;
+}
 
 /** Off/on pairs per trajectory. */
 export const PAIRS = V3_PAIRS;
@@ -177,7 +189,7 @@ export function step(sha = headSha()) {
     cwd: ROOT,
     stdio: 'inherit',
     env: {
-      ...process.env, OLV_NAV_DATASET: V3_DATASETS[DATASET_KEY].path, OLV_NAV_DATASET_ID: V3_DATASETS[DATASET_KEY].id, OLV_NAV_RUNS: '1', OLV_NAV_GOVERNOR: next.cond, OLV_NAV_OUT_DIR: dir, OLV_NAV_MACHINE: MACHINE },
+      ...process.env, OLV_NAV_DATASET: datasetPath(DATASET_KEY), OLV_NAV_DATASET_ID: V3_DATASETS[DATASET_KEY].id, OLV_NAV_RUNS: '1', OLV_NAV_GOVERNOR: next.cond, OLV_NAV_OUT_DIR: dir, OLV_NAV_MACHINE: MACHINE },
   });
   if (res.status !== 0) throw new Error(`session ${next.index} (${next.cond}) failed with exit ${res.status}`);
   return true;
@@ -402,8 +414,13 @@ export function evaluate(sha = headSha()) {
   const outDir = join(ROOT, 'validation', 'performance', 'governor-ab');
   mkdirSync(outDir, { recursive: true });
   const file = join(outDir, `${record.generatedAt.slice(0, 10)}-${sha.slice(0, 8)}-${MACHINE}-v3-${DATASET_KEY}.json`);
-  if (existsSync(file)) throw new Error(`refusing to overwrite ${file}`);
-  writeFileSync(file, JSON.stringify(record, null, 2) + '\n');
+  // 'wx' creates the file or fails if it exists, in one step.
+  try {
+    writeFileSync(file, JSON.stringify(record, null, 2) + '\n', { flag: 'wx' });
+  } catch (err) {
+    if (err?.code === 'EEXIST') throw new Error(`refusing to overwrite ${file}`);
+    throw err;
+  }
   return { file, record };
 }
 
