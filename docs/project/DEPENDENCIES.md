@@ -13,6 +13,14 @@ toolchain, and lockfile hash for a published release live in the release manifes
 and the exact-tag evidence attached to that release. A committed document cannot
 name the commit it ships in; those generated records can.
 
+In the v0.7.0 cycle the whole loaders.gl family moved to 4.5.2 together
+(`@loaders.gl/core` from 4.4.5, `gltf` from 4.4.3, `obj`, `ply` and `las` from
+4.5.1); every 4.5.2 package requires core ~4.5.0, so they cannot move one at a
+time. `apache-arrow` 21.2.0 dropped its command-line dependencies and
+`@loaders.gl/textures` no longer depends on `texture-compressor`, so the
+production set went from 56 to 37 components. `@loaders.gl/gltf` now depends on
+`meshoptimizer` 1.2.0 (MIT).
+
 Since v0.6.0 the three bundled font packages moved from 5.2.8 to 5.3.0. No
 package was added or removed, and no other bundled package changed.
 
@@ -23,7 +31,7 @@ package was added or removed, and no other bundled package changed.
 | Canonical Node | 22.18.0 (`.nvmrc`) |
 | Canonical npm | 10.9.3 (`package.json` `packageManager`) |
 | `package-lock` lockfileVersion | 3 |
-| SBOM | CycloneDX 1.6, root `openlidarviewer@0.7.0-alpha.1`, 56 components |
+| SBOM | CycloneDX 1.6, root `openlidarviewer@0.7.0-alpha.1`, 37 components |
 
 The CycloneDX bill of materials for the production dependency set is in
 [sbom.json](../../sbom.json). Licences are credited in
@@ -38,10 +46,10 @@ These ship in the deploy archive.
 | @fontsource-variable/inter | ^5.3.0 | 5.3.0 | OFL-1.1 |
 | @fontsource/jetbrains-mono | ^5.3.0 | 5.3.0 | OFL-1.1 |
 | @fontsource/manrope | ^5.3.0 | 5.3.0 | OFL-1.1 |
-| @loaders.gl/core | ^4.4.5 | 4.4.5 | MIT |
-| @loaders.gl/gltf | ^4.4.2 | 4.4.3 | MIT |
-| @loaders.gl/obj | ^4.5.1 | 4.5.1 | MIT |
-| @loaders.gl/ply | ^4.5.1 | 4.5.1 | MIT |
+| @loaders.gl/core | ^4.5.2 | 4.5.2 | MIT |
+| @loaders.gl/gltf | ^4.5.2 | 4.5.2 | MIT |
+| @loaders.gl/obj | ^4.5.2 | 4.5.2 | MIT |
+| @loaders.gl/ply | ^4.5.2 | 4.5.2 | MIT |
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT |
 | proj4 | ^2.22.0 | 2.22.0 | MIT |
@@ -53,7 +61,7 @@ Build, test, docs, and mutation tooling. None reaches the deployed app.
 
 | Package | Declared range | Resolved | License |
 |---|---|---|---|
-| @loaders.gl/las | ^4.5.1 | 4.5.1 | MIT |
+| @loaders.gl/las | ^4.5.2 | 4.5.2 | MIT |
 | @playwright/test | ^1.63.0 | 1.63.0 | Apache-2.0 |
 | @stryker-mutator/core | ^10.0.0 | 10.0.0 | Apache-2.0 |
 | @stryker-mutator/vitest-runner | ^10.0.0 | 10.0.0 | Apache-2.0 |
@@ -131,7 +139,9 @@ overridden tree.
 
 ## Stubbed to prune
 
-`texture-compressor` is replaced by a local empty stub through a
+From loaders.gl 4.5.2, `@loaders.gl/textures` no longer depends on
+`texture-compressor`, so nothing in the tree resolves it and the override below
+is inert. `texture-compressor` was replaced by a local empty stub through a
 `file:vendor-stubs/texture-compressor` override. It sits under
 `@loaders.gl/textures` on the encode path only, which shells out to `npx
 texture-compressor`. OLV decodes glTF and never encodes, so it never invokes
