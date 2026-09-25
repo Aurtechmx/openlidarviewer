@@ -6577,3 +6577,19 @@ untested, and `limitations.md` left alone rather than describing a limitation
 of code nothing runs. There is still no phone, tablet or WebKit device; one
 Chromium session on one machine narrows nothing about them, correction or
 not.
+
+### L110 · PARTIAL · SCIENTIFIC
+
+"No runner here exposes a WebGPU adapter" is the same claim L114 corrected
+elsewhere in this programme, and it was wrong here too: the browser this
+project previews in reaches both a WebGPU adapter and a WebGL 2 context, per
+`validation/renderer-capability/`. The sixteen fields still have no record,
+and the reason still holds without that sentence: the field has never drawn
+a frame, because nothing wires it into a renderer, so every field but the
+commit hash would still have had to be invented.
+
+`verify-renderer-benchmark.mjs:16-20` states the corrected reason directly
+and exits clean on the empty directory rather than measuring anything.
+There is still no phone, tablet or WebKit device, correction or not; the
+schema, the required-scene set and the four structural checks this account
+built are unaffected and still gate the first record that appears.
