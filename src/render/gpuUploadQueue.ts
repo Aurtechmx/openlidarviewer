@@ -157,6 +157,8 @@ export class GpuUploadQueue {
   private readonly _live = new Set<string>();
   /** Bumped whenever a removal path replaces `_items`; see `process`. */
   private _revision = 0;
+  /** The result of the most recent `process` pass, or null before the first. */
+  lastResult: UploadProcessResult | null = null;
   private _pendingBytes = 0;
   private readonly _maxPendingBytes: number;
   private readonly _maxItemBytes: number;
@@ -424,7 +426,7 @@ export class GpuUploadQueue {
     // slicing that rebuilt list by our index would drop items nobody released.
     if (this._revision === revision) this._items = this._items.slice(i);
     if (this._pendingBytes < 0) this._pendingBytes = 0;
-    return {
+    this.lastResult = {
       uploaded,
       uploadedBytes,
       discarded: stale + failed + oversized,
@@ -434,6 +436,7 @@ export class GpuUploadQueue {
       remaining: this._items.length,
       stoppedBy,
     };
+    return this.lastResult;
   }
 
 }

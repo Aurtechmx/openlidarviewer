@@ -25,6 +25,10 @@ export const LAZY_ONLY = [
   'src/app/diagnostics/copyDiagnostics.ts',
   'src/app/diagnostics/errorLedger.ts',
   'src/render/deviceNotice.ts',
+  'src/perf/navProbe.ts',
+  'src/perf/navProbeHook.ts',
+  'src/perf/navProbeInstall.ts',
+  'src/perf/navJankRecord.ts',
 ];
 
 /** A path with POSIX separators, so the checks read the same on Windows. */

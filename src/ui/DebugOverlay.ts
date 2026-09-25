@@ -21,6 +21,7 @@ import type { LoadTelemetry } from '../io/loadTelemetry';
 import { formatTelemetry } from '../io/loadTelemetry';
 import { FrameTelemetry } from '../perf/frameTelemetry';
 import { readDevFlags } from '../perf/devFlags';
+import { installNavProbe } from '../perf/navProbeInstall';
 import { buildMetricsJson } from '../perf/metricsJson';
 import type { StreamingDiagnostics } from '../render/streaming/streamingDiagnostics';
 import { formatStreamingDiagnostics } from '../render/streaming/streamingDiagnostics';
@@ -272,6 +273,9 @@ export class DebugOverlay {
     // neither ships this chunk nor gains the hook.
     registerMetricsHook(() => this.metricsJson());
     if (this._timer !== undefined) return;
+    // `?benchmark=nav` adds the navigation frame probe and its window hook.
+    // It rides this diagnostics chunk, so the startup shell never carries it.
+    if (new URLSearchParams(location.search).get('benchmark') === 'nav') installNavProbe(window);
     this._perfCollector.start();
     this._refresh();
     this._timer = window.setInterval(() => this._refresh(), REFRESH_MS);

@@ -12,6 +12,15 @@ import type { StreamingNodeRecord } from '../../io/copc/copcTypes';
 import type { StreamingNode, NodeState } from './StreamingNode';
 import { createStreamingNode } from './StreamingNode';
 import { LoadError } from '../../io/loadErrors';
+import type { NavProbeSink } from '../../perf/navProbeHook';
+
+/**
+ * The navigation probe's sink slot (`NAV_SINK_SLOT` in perf/navProbeHook.ts),
+ * read directly: a value import would split that module into a chunk shared
+ * with the Viewer and add its preload entry to the startup shell.
+ */
+const navSink = (): NavProbeSink | undefined =>
+  (globalThis as { __olvNavSink?: NavProbeSink }).__olvNavSink;
 
 /**
  * Whether two records sharing an id disagree on a load-bearing immutable field.
@@ -181,6 +190,10 @@ export class StreamingNodeStore {
    * the `resident` state.
    */
   setState(node: StreamingNode, state: NodeState, residentPointCount = 0): void {
+    const probe = (node.state === 'resident') !== (state === 'resident') ? navSink() : null;
+    if (probe) {
+      probe.lodChange(state === 'resident' ? 1 : 0, state === 'resident' ? 0 : 1);
+    }
     if (node.state === 'resident') {
       this._residentPoints -= node.residentPointCount;
       this._resident.delete(node);
