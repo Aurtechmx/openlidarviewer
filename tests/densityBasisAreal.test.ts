@@ -186,6 +186,28 @@ describe('density tier — the static loader hands over the spans', () => {
     expect(spans[2]).toBeCloseTo(91.44, 1);
   });
 
+  it('a fully loaded cloud leaves Withheld points out of the count, and keeps Overlap', () => {
+    const { inspector, last } = makeInspector();
+    // 4 points, flags: none, Withheld (0b0100), Overlap (0b1000), Withheld.
+    const small = {
+      pointCount: 4,
+      classificationFlags: new Uint8Array([0, 0b0100, 0b1000, 0b0100]),
+      metadata: { crs: METRE },
+      bounds: tile.bounds,
+    };
+    createInspectorCardRefreshers(inspector, () => METRE).refreshDatasetIntelligenceFromStaticCloud(small);
+    expect(last().pointCount).toBe(2);
+  });
+
+  it('a header total is counted whole: its Withheld share cannot be read', () => {
+    const { inspector, last } = makeInspector();
+    createInspectorCardRefreshers(inspector, () => METRE).refreshDatasetIntelligenceFromStaticCloud({
+      ...tile,
+      classificationFlags: new Uint8Array(tile.pointCount).fill(0b0100),
+    });
+    expect(last().pointCount).toBe(89_600_000);
+  });
+
   it('an unknown unit fails closed — no spans, no areal claim', () => {
     const { inspector, last } = makeInspector();
     createInspectorCardRefreshers(inspector, () => UNKNOWN)

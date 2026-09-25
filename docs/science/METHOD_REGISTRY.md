@@ -45,6 +45,7 @@ the paper that specifies it.
 | `olv.feature.building-footprint` | 1 | Building footprint candidate extraction | internal (connected-component + boundary trace) |
 | `olv.feature.conductor-fit` | 1 | Conductor centreline and sag fit | internal (parabolic small-sag approximation) |
 | `olv.profile.corridor-percentile` | 2 | Corridor-percentile profile; v2 leaves LAS Withheld points out and records points read, Withheld excluded (or unknown) and points analysed, and keeps Overlap; v1 read every point | internal (corridor binning, Hyndman & Fan (1996) type-7 quantile) |
+| `olv.density.scan-report` | 2 | Scan report point density and spacing; v2 leaves LAS Withheld points out of the count and records points counted, Withheld excluded (or unknown) and points analysed, and keeps Overlap; v1 counted every point | internal (count over footprint) |
 | `olv.simulation.terrain-flow.d8` | 1 | D8 single-flow-direction routing, by steepest descent per metre | O'Callaghan & Mark (1984) |
 | `olv.simulation.terrain-flow.priority-flood` | 2 | Priority-Flood depression conditioning onto a second surface, seeded at the grid boundary; NoData is a wall and cells it encloses are counted | Barnes, Lehman & Mulla (2014) |
 | `olv.simulation.terrain-flow.priority-flood.gap-outlet` | 1 | The same conditioning with NoData gaps read as drainage exits, declared for gaps that are open water | Barnes, Lehman & Mulla (2014) |

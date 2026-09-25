@@ -162,7 +162,7 @@ describe('the audit this policy records', () => {
     return out;
   }
 
-  it('only terrain and the profile walks consult the Withheld bit', () => {
+  it('only terrain, the profile walks and the scan report density consult the Withheld bit', () => {
     // This pins the audit rather than the intent. When a product starts
     // applying the policy, this fails: update the list here and record the
     // before-and-after for that product, because its numbers moved.
@@ -182,9 +182,12 @@ describe('the audit this policy records', () => {
     // its buffers (profileSampler, profileSectionSeam) and the workbench
     // section skips them in its corridor walk (profileSectionExtract).
     // profileSectionBuilder only declares the flags channel's type. Their
-    // before-and-after is tests/profileWithheld.test.ts.
+    // before-and-after is tests/profileWithheld.test.ts. The scan report
+    // (analysis/scanReport.ts) leaves Withheld points out of its density
+    // count; see tests/scanReportWithheld.test.ts.
     const reading = SCIENTIFIC_DIRS.flatMap(filesReadingFlags);
     expect(reading.sort()).toEqual([
+      'analysis/scanReport.ts',
       'render/measure/lassoVolumeCompute.ts',
       'render/measure/profileSampler.ts',
       'render/measure/profileSectionBuilder.ts',

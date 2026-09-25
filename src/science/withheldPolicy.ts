@@ -48,11 +48,17 @@
  *     they do not re-decode a voxel-reduced source at full resolution, because
  *     a profile samples synchronously on every commit and resample.
  *
- * The other scientific paths still read every point the cloud holds: density
- * (the scan report's Density and Spacing rows, the streaming extent rows, the
- * inspector's density class), the ground filter outside terrain, the polygon
- * volume tool, the classifier, registration and change, and measurement. Each
- * carries recorded evidence of its own, so each is applied as its own change.
+ *   - density: the scan report's Density and Spacing rows count only the
+ *     points that are not Withheld and add a "Density basis" row with the
+ *     counts; the Dataset Intelligence density tier uses the same count. A
+ *     count from the file header (a strided load, a streaming source's
+ *     extent rows) cannot be inspected, so it is used whole and its Withheld
+ *     share is recorded as 'unknown'.
+ *
+ * The other scientific paths still read every point the cloud holds: the
+ * ground filter outside terrain, the polygon volume tool, the classifier,
+ * registration and change, and measurement. Each carries recorded evidence
+ * of its own, so each is applied as its own change.
  *
  * Pure: no DOM, no GPU, no cloud. Flags in, decisions out.
  */

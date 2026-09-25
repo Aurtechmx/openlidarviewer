@@ -158,13 +158,15 @@ describe('Overlap is not Withheld', () => {
 });
 
 describe('where the policy is applied', () => {
-  it('is imported under src/ by the terrain gather, the lasso volume walk and the profile walks alone', () => {
+  it('is imported under src/ by the terrain gather, the lasso volume walk, the profile walks and density alone', () => {
     // Floor-plan and routing read through the terrain gather, so they inherit
     // the exclusion without importing the policy. The lasso volume walk
-    // (tests/lassoVolumeWithheld.test.ts) and the profile series and workbench
-    // section (tests/profileWithheld.test.ts) apply it themselves. Another
-    // importer is a new product applying it, which needs its own
-    // before-and-after.
+    // (tests/lassoVolumeWithheld.test.ts), the profile series and workbench
+    // section (tests/profileWithheld.test.ts), and the scan report's density
+    // rows with the Dataset Intelligence density tier
+    // (tests/scanReportWithheld.test.ts, tests/densityBasisAreal.test.ts)
+    // apply it themselves. Another importer is a new product applying it,
+    // which needs its own before-and-after.
     const SRC = join(FIXTURES, '..', '..', 'src');
     const importers: string[] = [];
     const walk = (dir: string): void => {
@@ -178,6 +180,8 @@ describe('where the policy is applied', () => {
     };
     walk(SRC);
     expect(importers.sort()).toEqual([
+      'src/analysis/modules/scanReport.ts',
+      'src/app/inspectorCardRefreshers.ts',
       'src/render/measure/lassoVolumeCompute.ts',
       'src/render/measure/profileSampler.ts',
       'src/render/measure/profileSectionExtract.ts',

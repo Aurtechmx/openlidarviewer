@@ -33,6 +33,8 @@ export type MethodCategory =
   | 'provenance'
   /** A section line through the cloud: a height-vs-chainage estimate. */
   | 'profile'
+  /** Points per unit of footprint area, and the spacing that follows from it. */
+  | 'density'
   /** A declared model applied to a measured product, producing a simulated result. */
   | 'simulation'
   /** Ray-and-voxel scanner-visibility evidence (Observatory, docs/observatory/SPEC.md). */
@@ -409,6 +411,21 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'Internal composition (per-feature Douglas–Peucker tolerance scaled by terrain confidence and feature scale, then Chaikin corner-cutting); no single source method.',
     category: 'contour',
     implementation: ['src/terrain/contour/contourShapeStyle.ts'],
+  },
+  'olv.density.scan-report': {
+    id: 'olv.density.scan-report',
+    version: 2,
+    name: 'Scan report point density and spacing',
+    summary:
+      'Nominal areal density (points over the horizontal footprint of the ' +
+      'extent) and the spacing sqrt(footprint / points) that follows from it. ' +
+      'v2 leaves points carrying the LAS Withheld flag out of the count and ' +
+      'records points counted, Withheld excluded (or unknown when the loaded ' +
+      'cloud has no flags or the count is the file header total) and points ' +
+      'analysed; Overlap points are kept. v1 counted every point.',
+    citation: 'Internal composition (count over footprint); Withheld per ASPRS LAS 1.4 R15.',
+    category: 'density',
+    implementation: ['src/analysis/modules/scanReport.ts'],
   },
   'olv.profile.corridor-percentile': {
     id: 'olv.profile.corridor-percentile',
