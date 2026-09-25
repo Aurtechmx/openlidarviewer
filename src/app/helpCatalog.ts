@@ -34,7 +34,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       'Drop a point-cloud file (LAS or LAZ, E57, PLY, COPC) on the page, or use Open scan from device. Every scan stays on your device: nothing is uploaded.',
       'The tool dock along the bottom holds the tools. The left tabs (Data, Tools, Analyse, Export) switch the panel column. The command palette lists every action by name.',
     ],
-    actionIds: ['camera.frame-all', 'tour.replay', 'help.shortcuts'],
+    actionIds: ['camera.frame-all', 'tour.replay', 'help.shortcuts', 'help.copy-diagnostics'],
     keywords: ['open', 'drop', 'file', 'start', 'begin', 'privacy', 'local'],
   },
   {

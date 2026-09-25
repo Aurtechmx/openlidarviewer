@@ -73,7 +73,7 @@ import {
   type ElevLayer,
 } from './elevationWindowResolver';
 import {
-  DeviceGeneration, GpuErrorLedger, installGpuDeviceErrors, watchDeviceChanges,
+  DeviceGeneration, GpuErrorLedger, deviceNoticeReporter, installGpuDeviceErrors, watchDeviceChanges,
   type RendererWithDeviceLoss,
 } from './gpuErrorLedger';
 import { computeExportFrontier, type FrontierNode } from './streaming/exportFrontier';
@@ -1387,7 +1387,7 @@ export class Viewer {
     };
     // One detach for both: the renderer's hook outlives a dropped one.
     const rendererLike = this._renderer as unknown as RendererWithDeviceLoss;
-    this._detachContextLoss = watchDeviceChanges(canvas, rendererLike, this._devices);
+    this._detachContextLoss = watchDeviceChanges(canvas, rendererLike, this._devices, deviceNoticeReporter(canvas, () => this.requestFrame()));
     canvas.addEventListener('dblclick', this._onCanvasDblClick);
     canvas.addEventListener('click', this._onCanvasClick);
     canvas.addEventListener('pointermove', this._onCanvasPointerMove);

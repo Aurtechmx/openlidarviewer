@@ -792,7 +792,7 @@ describe.runIf(WORKFLOW_RECORDER_ENABLED)('buildActionRegistry — workflow reco
     appended[0].fire('change');
     await flush();
     expect(h.replay).not.toHaveBeenCalled();
-    expect(h.toast).toHaveBeenCalledWith("Workflow · couldn't load file: not a workflow");
+    expect(h.toast).toHaveBeenCalledWith("Workflow · couldn't load file: not a workflow. Nothing was changed. Choose another workflow file and try again.");
   });
 
   it('reports a non-Error load failure as an unknown error', async () => {
@@ -802,7 +802,7 @@ describe.runIf(WORKFLOW_RECORDER_ENABLED)('buildActionRegistry — workflow reco
     appended[0].files = [{ name: 'broken.olvworkflow' }];
     appended[0].fire('change');
     await flush();
-    expect(h.toast).toHaveBeenCalledWith("Workflow · couldn't load file: unknown error");
+    expect(h.toast).toHaveBeenCalledWith("Workflow · couldn't load file: unknown error. Nothing was changed. Choose another workflow file and try again.");
   });
 
   it('does nothing when the replay picker is cancelled', async () => {
@@ -814,5 +814,22 @@ describe.runIf(WORKFLOW_RECORDER_ENABLED)('buildActionRegistry — workflow reco
     await flush();
     expect(input.removed).toBe(true);
     expect(h.loadFromFile).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildActionRegistry — help', () => {
+  it('Copy diagnostics reports through the status toast', async () => {
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal('navigator', { userAgent: 'UA', clipboard: { writeText } });
+    vi.stubGlobal('window', { devicePixelRatio: 1, innerWidth: 1280, matchMedia: () => ({ matches: false }) });
+    try {
+      const h = harness({ getViewer: () => null as unknown as FakeViewer });
+      h.run('help.copy-diagnostics');
+      await vi.waitFor(() => expect(h.toast).toHaveBeenCalledTimes(1));
+      expect(h.toast.mock.calls[0][0]).toMatch(/^Diagnostics copied\./);
+      expect(writeText).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

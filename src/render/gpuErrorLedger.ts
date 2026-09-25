@@ -22,6 +22,8 @@
  * Neither piece references `Viewer`, three.js, or the DOM.
  */
 
+import { recordError } from '../app/diagnostics/errorLedger';
+
 /** Default cap on the remembered distinct-message set. */
 export const GPU_ERROR_CAP = 64;
 
@@ -63,6 +65,7 @@ export class GpuErrorLedger {
     // later — harmless, and far better than an unbounded set.
     if (this._seen.size >= this._cap) this._seen.clear();
     this._seen.add(message);
+    recordError('gpu', 'gpu-error', false, 'reload');
     return true;
   }
 
@@ -71,6 +74,7 @@ export class GpuErrorLedger {
    * cleared by {@link reset} — a lost device stays lost until reload.
    */
   noteDeviceLost(): void {
+    if (!this._deviceLost) recordError('gpu', 'webgpu-device-lost', false, 'reload');
     this._deviceLost = true;
   }
 
@@ -209,3 +213,4 @@ export {
   type DeviceLossReport,
   type RendererWithDeviceLoss,
 } from './deviceGeneration';
+export { deviceNoticeReporter } from './deviceNotice';

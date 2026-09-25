@@ -122,6 +122,8 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
   const help = contributeHelpActions({
     getTour: deps.getTour,
     ensureShortcutSheet: deps.ensureShortcutSheet,
+    getViewer: deps.getViewer,
+    notify: (message) => deps.showLassoToast(message),
   });
   // The theme rows sit between the camera rows and the tools, as before.
   const theme = view.filter((a) => a.section === 'Theme');

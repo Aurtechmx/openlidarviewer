@@ -272,3 +272,24 @@ export function installStaleChunkRecovery(
 
   return { importOrReload, dispose };
 }
+
+/**
+ * Feed uncaught errors (kind 0) and unhandled rejections (kind 1) into the
+ * diagnostics error ledger's shared buffer as `[ms, kind, className]` tuples
+ * (see app/diagnostics/errorLedger.ts, ERROR_LEDGER_KEY). It lives here, in the
+ * shell's error-recovery owner, because a module of its own would cost the
+ * startup chunk more than the code does; the ledger itself is lazy and turns
+ * the tuples into sanitized entries when it is read. No message is kept.
+ */
+export function captureWindowErrors(target: Pick<Window, 'addEventListener'>): void {
+  const g = globalThis as { __olvErrorLedger?: unknown[] };
+  const push = (kind: number, err: unknown): void => {
+    const b = (g.__olvErrorLedger ??= []);
+    b.push([performance.now(), kind, err instanceof Error ? err.name : 0]);
+    if (b.length > 50) b.shift();
+  };
+  target.addEventListener('error', (e) => push(0, (e as ErrorEvent).error));
+  target.addEventListener('unhandledrejection', (e) => push(1, (e as PromiseRejectionEvent).reason));
+}
+
+if (typeof window !== 'undefined') captureWindowErrors(window);

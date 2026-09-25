@@ -52,7 +52,7 @@
   },
   "fanOut": {
     "src/main.ts": {
-      "runtime": 109,
+      "runtime": 108,
       "typeOnly": 22,
       "dynamic": 7,
       "modules": [
@@ -78,7 +78,6 @@
         "src/app/inspectorVisualCoordinator.ts",
         "src/app/kmlActions.ts",
         "src/app/measurePanelMount.ts",
-        "src/app/measurementExportActions.ts",
         "src/app/navPaletteActions.ts",
         "src/app/openScan.ts",
         "src/app/openStreaming.ts",
@@ -254,7 +253,7 @@
   "watchFanOut": {
     "src/ui/AnalysePanel.ts": {
       "runtime": 23,
-      "typeOnly": 16,
+      "typeOnly": 17,
       "dynamic": 0,
       "modules": [
         "src/export/exportScanIdentity.ts",
@@ -283,25 +282,23 @@
       ]
     },
     "src/ui/Inspector.ts": {
-      "runtime": 16,
-      "typeOnly": 12,
+      "runtime": 14,
+      "typeOnly": 13,
       "dynamic": 0,
       "modules": [
         "src/diagnostics/usageCounters.ts",
-        "src/geo/CrsRegistry.ts",
         "src/lazyChunks.ts",
         "src/model/layerCompatibility.ts",
         "src/prefs.ts",
-        "src/render/class/classScope.ts",
         "src/render/edl.ts",
         "src/render/navPrefs.ts",
-        "src/render/pointInfo.ts",
         "src/render/terrainWorkflowPresets.ts",
         "src/ui/DatasetIntelligenceCard.ts",
         "src/ui/Modal.ts",
         "src/ui/collapsibleSection.ts",
         "src/ui/colorChipModel.ts",
         "src/ui/dom.ts",
+        "src/ui/politeAnnounce.ts",
         "src/ui/streamingDetail.ts"
       ]
     },
@@ -434,7 +431,7 @@
     },
     "src/app/actionDefinitions.ts": {
       "runtime": 7,
-      "typeOnly": 13,
+      "typeOnly": 14,
       "dynamic": 0,
       "modules": [
         "src/app/actions/analysisActions.ts",
@@ -453,25 +450,29 @@
     "components": []
   },
   "context": {
-    "filesScanned": 899,
+    "filesScanned": 965,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [
       {
         "file": "src/ui/dom.ts",
-        "importers": 60
+        "importers": 70
       },
       {
         "file": "src/lazyChunks.ts",
-        "importers": 24
+        "importers": 30
       },
       {
         "file": "src/units/units.ts",
-        "importers": 24
+        "importers": 26
       },
       {
         "file": "src/io/loadErrors.ts",
         "importers": 19
+      },
+      {
+        "file": "src/ui/Modal.ts",
+        "importers": 17
       },
       {
         "file": "src/geo/height.ts",
@@ -482,6 +483,14 @@
         "importers": 16
       },
       {
+        "file": "src/science/methodRegistry.ts",
+        "importers": 16
+      },
+      {
+        "file": "src/io/download.ts",
+        "importers": 15
+      },
+      {
         "file": "src/model/PointCloud.ts",
         "importers": 15
       },
@@ -490,32 +499,20 @@
         "importers": 15
       },
       {
-        "file": "src/geo/SpatialContext.ts",
-        "importers": 13
-      },
-      {
-        "file": "src/io/formatByteSize.ts",
-        "importers": 13
-      },
-      {
         "file": "src/io/lasDecodeShared.ts",
-        "importers": 13
+        "importers": 14
       },
       {
         "file": "src/numeric.ts",
-        "importers": 13
+        "importers": 14
       },
       {
         "file": "src/render/colorModes.ts",
-        "importers": 13
+        "importers": 14
       },
       {
-        "file": "src/render/pointInfo.ts",
-        "importers": 13
-      },
-      {
-        "file": "src/science/methodRegistry.ts",
-        "importers": 13
+        "file": "src/terrain/ground/cellConfidence.ts",
+        "importers": 14
       }
     ],
     "topFanInNote": "The most-imported files by distinct static importers, runtime edges only. Recorded so a review can see what the tree leans on; not enforced, because a widely imported pure module is a healthy hub and a widely imported stateful one is a defect, and this scan cannot tell them apart."

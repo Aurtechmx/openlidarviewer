@@ -811,3 +811,21 @@ export function invalidateObservatoryOverlay(): void {
  * full-resolution decode path (`decodeFull` / `loadFile`) into `index`.
  */
 export const loadWithheldAwareTerrainGather = () => import('./terrain/ground/withheldAwareTerrainGather');
+
+/**
+ * Load the "Copy diagnostics" report builder on the first use of that action.
+ * Nothing in the startup shell needs it.
+ */
+export const loadCopyDiagnostics = () => import('./app/diagnostics/copyDiagnostics');
+
+/**
+ * Load the binder that shows WebGL context loss and restore on the status toast.
+ * The reporter lives in the Viewer chunk, so this resolves once the Viewer exists.
+ */
+export const loadDeviceNotice = () => import('./render/deviceNotice');
+
+/**
+ * Load the measurement export orchestration (GeoJSON/CSV, integrity and
+ * findings reports) on the first measurement export.
+ */
+export const loadMeasurementExportActions = () => import('./app/measurementExportActions');

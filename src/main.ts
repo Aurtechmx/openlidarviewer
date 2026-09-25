@@ -119,13 +119,7 @@ import {
 } from './app/kmlActions';
 import { makeExportCrsResolver, resolvedExportCrs } from './app/exportCrsResolver';
 import { createInspectorVisualCoordinator } from './app/inspectorVisualCoordinator';
-import {
-  exportMeasurementsFile,
-  exportMeasurementIntegrityReport,
-  collectMeasurementFindings,
-  exportFindingsReport,
-  type MeasurementExportActionDeps,
-} from './app/measurementExportActions';
+import type { MeasurementExportActionDeps } from './app/measurementExportActions';
 import { exportImageAction } from './app/exportImageAction';
 import { ClipPanel } from './ui/ClipPanel';
 import type { ClipBox } from './render/clip/clipBox';
@@ -209,7 +203,7 @@ import {
   loadTour,
   loadStreamingBenchmark,
   loadInstrumentedRangeSource,
-  loadViewer,
+  loadViewer, loadDeviceNotice, loadMeasurementExportActions,
   loadBatchConverter,
   loadSpaceReportPdf,
   loadFloorPlan,
@@ -2246,17 +2240,14 @@ void viewerLoaded.then(() => {
     routeCoordinator.onStreamingNodeReady();
   };
   // GPU render-stage failures (shader-compile / pipeline-creation) surface on the
-  // WebGPU device's uncaptured-error channel — AFTER a scan's decode + attach have
-  // already resolved. Without this hook such a failure is silent: the scan "opens",
-  // the progress toast clears, and the canvas stays blank with no reason shown
-  // (the exact "scans not opening and doesn't show why" report). Route it to BOTH
-  // surfaces a scan can be opened from — the drop-zone toast (device files) and the
-  // catalog status line (public datasets) — so whichever the user just used shows
-  // the cause. De-duplicated inside the Viewer, so this fires once per distinct error.
+  // WebGPU device's uncaptured-error channel AFTER decode + attach resolved; without
+  // this hook the canvas stays blank with no reason shown. Route it to both surfaces
+  // a scan can be opened from (drop-zone toast, catalog status line). De-duplicated
+  // inside the Viewer, so this fires once per distinct error. WebGL context loss and
+  // restore reach the same toast through the device-notice binder.
+  void loadDeviceNotice().then((m) => m.bindDeviceNotices(document, dropZone)).catch(() => {});
   viewer.onGpuError = (message) => {
-    const friendly =
-      `The GPU couldn't render this scan (${message}). ` +
-      `Try a smaller scan, reload the page, or update your browser/GPU drivers.`;
+    const friendly = `The GPU couldn't render this scan (${message}). Try a smaller scan, reload the page, or update your browser/GPU drivers.`;
     dropZone.setError(friendly);
     catalogPanel.showOpenError(friendly);
   };
@@ -2750,20 +2741,20 @@ const exportPanel = new ExportPanel({
   // Measurement deliverables — orchestration lives in measurementExportActions.
   exportMeasurements: async (format) => {
     if (!viewer) return;
-    await exportMeasurementsFile(format, measurementExportActionDeps(viewer));
+    await (await loadMeasurementExportActions()).exportMeasurementsFile(format, measurementExportActionDeps(viewer));
   },
   exportIntegrityReport: async () => {
     if (!viewer) return;
-    await exportMeasurementIntegrityReport(measurementExportActionDeps(viewer));
+    await (await loadMeasurementExportActions()).exportMeasurementIntegrityReport(measurementExportActionDeps(viewer));
   },
   collectMeasurementFindings: async () => {
     if (!viewer) return [];
-    return collectMeasurementFindings(measurementExportActionDeps(viewer));
+    return (await loadMeasurementExportActions()).collectMeasurementFindings(measurementExportActionDeps(viewer));
   },
   activeFindingsTargetId: () => scans.activeExportTargetId(), // ledger owner
   exportFindingsReport: async (findings) => {
     if (!viewer) return;
-    await exportFindingsReport(measurementExportActionDeps(viewer), findings);
+    await (await loadMeasurementExportActions()).exportFindingsReport(measurementExportActionDeps(viewer), findings);
   },
   exportKml: () => void exportSiteKml(kmlDeps),
   kmlStatus: () => siteKmlStatus(kmlDeps),
