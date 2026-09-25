@@ -57,6 +57,25 @@ describe('contourStudioLaunchStateFromResult', () => {
     expect(s.status).toBe('unavailable');
   });
 
+  it('names the gate reason, not a missing surface, when a covered surface is blocked', () => {
+    const r = resultStub({ readiness: 'blocked', measured: 70 });
+    (r.quality as { reasons: string[] }).reasons = [
+      'Only 7% of the surface is measured ground — too little to contour honestly.',
+    ];
+    const s = contourStudioLaunchStateFromResult(r, OK_FRAME);
+    expect(s.status).toBe('unavailable');
+    const reasons = 'reasons' in s ? s.reasons : [];
+    expect(reasons).toContain('Only 7% of the surface is measured ground — too little to contour honestly.');
+    expect(reasons).not.toContain('No terrain surface has been computed.');
+  });
+
+  it('reports no surface only when no cell is covered', () => {
+    const r = resultStub({ readiness: 'blocked', measured: 0 });
+    (r.cellStatusTally as { interpolated: number }).interpolated = 0;
+    const s = contourStudioLaunchStateFromResult(r, OK_FRAME);
+    expect('reasons' in s ? s.reasons : []).toContain('No terrain surface has been computed.');
+  });
+
   it('maps previewOnly readiness to exploratory (sparse support)', () => {
     const s = contourStudioLaunchStateFromResult(resultStub({ readiness: 'previewOnly' }), OK_FRAME);
     expect(s.status).toBe('exploratory');
