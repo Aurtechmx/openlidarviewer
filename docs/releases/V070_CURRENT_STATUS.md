@@ -9,14 +9,14 @@ entry. This is the latest account of each, which is a different question
 and the one a reader usually has. Where an entry was revisited, the last
 heading in the file wins.
 
-Entries: 165. Revisited at least once: 19.
+Entries: 166. Revisited at least once: 19.
 
 ## Totals
 
 | Status | Entries |
 | --- | --- |
 | FIXED | 54 |
-| BUILT | 40 |
+| BUILT | 41 |
 | PARTIAL | 32 |
 | MEASURED | 15 |
 | NOT REPRODUCIBLE | 10 |
@@ -194,3 +194,4 @@ Entries: 165. Revisited at least once: 19.
 | L168 | BUILT | SCIENCE | 1 |
 | L169 | BUILT | SCIENCE | 1 |
 | L170 | BUILT | SCIENCE | 1 |
+| L171 | BUILT | SCIENCE | 1 |
