@@ -75,8 +75,8 @@ one section per id.
 | `olv.observation.states` | 1 | Observation state table; the pure decision function is implemented and tested (O1), not yet wired to a live ledger | internal (state-transition rules, SPEC §2.2-§2.4) |
 | `olv.observation.strength` | 1 | Observation strength components, not implemented, planned for phase O6 | internal (strength components, SPEC §2.5) |
 | `olv.observation.shadow-frontier` | 1 | Shadow frontier, not implemented, planned for phase O5 | Curless & Levoy (1996) |
-| `olv.observation.coverage-gain` | 1 | Coverage Gain, not implemented, planned for phase O10 | Scott, Roth & Rivest (2003) |
-| `olv.observation.station-suggestion` | 1 | Next-station suggestion, not implemented, planned for phase O10 | Scott, Roth & Rivest (2003) |
+| `olv.observation.coverage-gain` | 1 | Coverage Gain over candidate stations, with every term reported (O10) | Scott, Roth & Rivest (2003) |
+| `olv.observation.station-suggestion` | 1 | Next-station suggestion by greedy selection against a hypothetical ledger copy (O10) | Scott, Roth & Rivest (2003) |
 
 ## Honesty boundary
 

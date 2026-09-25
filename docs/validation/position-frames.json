@@ -32,8 +32,8 @@
       "file": "src/app/observatoryFromCloud.ts",
       "symbol": "runObservatoryOverCloud",
       "frame": "source-local",
-      "reads": 3,
-      "why": "Reads the cloud's own resident-point buffer (source-local, relative to its own sourceOrigin) to build one ray per station record (buildUnstructuredSourceRays) and to fingerprint the source for the run record's digest. The domain box is converted to world before traversal precisely because these reads stay source-local (see the module's own comment)."
+      "reads": 1,
+      "why": "Reads the cloud's own resident-point buffer (source-local, relative to its own sourceOrigin) to build one ray per station record (buildUnstructuredSourceRays), to fingerprint the source for the run record's digest, and to fit SURFACE-voxel normals for Coverage Gain planning. The domain box is converted to world before traversal precisely because these reads stay source-local (see the module's own comment)."
     },
     {
       "file": "src/app/processStudioMount.ts",

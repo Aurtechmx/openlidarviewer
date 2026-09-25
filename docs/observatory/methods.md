@@ -335,8 +335,8 @@ Computes, per `SURFACE` voxel: `sources` (distinct sources with `hit > 0`,
 read straight off an `ObservationLedgerRow`'s own `perSource`, no per-ray
 geometry needed), `angularSpread` (one minus the norm of the mean unit ray
 direction of the hitting rays), `incidence` (median `cos i` between hitting
-rays and the local surface normal, from `symEig3` over the voxel's resident
-points or source normals when present), `rangeFit` (fraction of hits inside
+rays and the local surface normal, the smallest-eigenvalue eigenvector of the
+voxel's resident-point covariance, or source normals when present), `rangeFit` (fraction of hits inside
 the declared useful range band, the same `minRange`/`maxRange` concept
 `StationAngularDomain` already declares, `observationField.ts`), and
 `consistency` (the hit fraction `f`, `row.counters.hit / (hit + pass)`)
@@ -363,12 +363,18 @@ over both a single-return (F1) and a real multi-return fixture. When a step
 overlaps more than one return's window, the sample's own range is the
 FIRST (lowest `returnIndex`) overlapping return, matching the same
 left-to-right evaluation order `stepOverlapsAnyWindow` itself uses.
-`incidence`'s normal, when fit from resident points, uses
-`fitNormalFromResidentPoints`'s own local `symEig3` covariance fit (the
-smallest-eigenvalue eigenvector), reimplemented locally in `strength.ts`
-rather than imported from `src/classification/geometryDescriptors.ts`'s
-equivalent, to keep `src/observation`'s own dependency surface to
-`src/math` alone.
+`incidence`'s normal, when fit from resident points, is
+`fitNormalFromResidentPoints`'s covariance fit (the smallest-eigenvalue
+eigenvector). The normal fit, the per-ray `|cos i|` and the median live in
+`src/observation/incidence.ts`, which `olv.observation.coverage-gain` also
+uses for its incidence term, so the two methods share one incidence
+estimate. The eigen solve there is closed form (the trigonometric solution
+of the characteristic cubic, then a cross product of two rows of `C − λI`);
+SPEC §2.5 names `symEig3`, and `tests/observatoryCoverageGain.test.ts` checks
+the closed form against `src/math/symEig3.ts` on 500 covariances (eigenvalues
+to 1e-10, normal direction to 1e-8). `symEig3` itself is not imported, because
+it also sits in the classification and registration chunks and importing it
+would split it into a shared chunk the entry chunk lists.
 
 #### Assumptions
 
@@ -481,87 +487,147 @@ directly against the Python oracle above.
 
 #### Status
 
-Not implemented in v0.7.
+Implemented in phase O10 (`src/observation/coverageGain.ts`), run by the
+Observatory panel after every committed evidence run and written to
+`candidates.csv`.
 
 #### Phase
 
 O10 (Coverage Gain and station suggestion).
 
-For a candidate station `c` on a user-declared instrument model, traverses
-planning rays against the ledger and scores each one by the declared
-per-state weights, the incidence term, and a redundancy penalty for
-already-strong voxels revisited (SPEC §5.6 OB-GAIN-03). Named Coverage Gain
-because it counts voxels a hypothetical station would newly address. It is
-not an information-theoretic quantity and is never named as one.
+Coverage Gain counts voxels a hypothetical station would newly address
+(SPEC §5.6). It is not an information-theoretic quantity and is never named
+as one. For candidate `c`:
+
+```text
+G(c) = Σ_v w(state(v)) · vis_c(v) · inc_c(v) − λ_red · redundant_c
+```
+
+- `vis_c(v)` is 1 when at least one planning ray from `c` reaches `v`. Rays
+  run over `[minRange, maxRange]`, clipped to the domain, and are walked with
+  the ledger's own `clipRayToDomain` and `traverseVoxelSteps`. `SURFACE`
+  stops a ray; `PARTIAL` stops it when its hit fraction is at least
+  `p_solid`. A stopping voxel is itself visible.
+- `inc_c(v)` is the largest `|cos i|` between a ray reaching `v` and `v`'s
+  fitted normal (`incidence.ts`, the estimate `olv.observation.strength`
+  uses). A voxel with no fitted normal has `inc_c(v) = 1`.
+- `w` is declared per state. `redundant_c` counts visible strong `SURFACE`
+  voxels and, during a greedy pass, voxels an earlier pick already reaches;
+  neither carries weight.
+- `NOT_READ` voxels carry weight 0 and are counted per candidate and for the
+  whole field (OB-GAIN-05).
+
+Every term is reported separately for every candidate: visible voxels, the
+weighted sum, the per-state tallies, the redundant count and penalty, the
+gain and the excluded `NOT_READ` count.
 
 #### Assumptions
 
-The instrument model (height above a standing surface, minimum and maximum
-range, vertical field of view, planning angular step, or "same as source N")
-is user-declared and recorded in full. No manufacturer table is consulted
-(OB-GAIN-01, `ObservationInstrumentModel` in `coverageGain.ts`). Candidates
-are generated deterministically on a declared grid over `SURFACE` voxels
-near-vertical and clear above to instrument height, capped, with ties broken
-by candidate index (OB-GAIN-02).
+The instrument model is declared and recorded in full: height above the
+standing surface, minimum and maximum range, vertical field of view (a span
+centred on the horizon, clamped to ±90°), and the planning angular step. "Same
+as source N" copies source N's declared parameters and is refused when the
+source declares none. No manufacturer table is consulted (OB-GAIN-01).
+
+Planning rays point at the centre of each azimuth and elevation bin of the
+declared step. When the step divides 45° evenly, no ray runs exactly along a
+grid axis or a 45° diagonal.
+
+Candidates (OB-GAIN-02) stand on `SURFACE` voxels whose fitted normal lies
+within a declared angle of vertical, with no ray-stopping voxel in the column
+above up to instrument height. The position is the voxel centre plus the
+instrument height. Qualifying voxels are bucketed into square cells of the
+declared spacing; each cell keeps the voxel nearest its centre (ties to the
+lower key). Cells are indexed in (row, column) order. Over the cap, an evenly
+strided subset is kept, and the cap and the dropped count are recorded.
+
+A `SURFACE` voxel is weak when it has fewer hitting sources than the
+declared floor or a hit fraction below the declared floor: the two strength
+components the ledger row carries. Direction-dependent strength components
+are not floored, because the ledger keeps counts, not per-ray geometry.
+
+The live run fits normals from the resident points of each `SURFACE` voxel
+in one pass over the cloud and declares the model when the user has not:
+1.5 m height, 0.5 m minimum range, the domain diagonal as maximum range, a
+180° vertical sweep and a 5° step. With an unknown linear unit these values
+are read as source units, and the panel says "source units".
 
 #### Parameters
 
 Per-state weights: `SHADOWED` 1.0, `UNADDRESSED` 1.0, `NO_RETURN_PATH` 0.25,
-`CONFLICT` 0.5, weak `SURFACE` 0.5, others 0 (`DEFAULT_GAIN_STATE_WEIGHTS` in
-`coverageGain.ts`). Also the redundancy weight, and the candidate-grid
-spacing and cap.
+`CONFLICT` 0.5, weak `SURFACE` 0.5, others 0 (`DEFAULT_GAIN_STATE_WEIGHTS`).
+Redundancy weight `λ_red` 0.1. Weak-surface floors: 2 sources, hit fraction
+0.9. Standing-normal limit 20° from vertical. Candidate cap 24 by default, 16
+in the live run; the live spacing is the larger of 4 voxel edges and one
+sixth of the domain's longer horizontal side. `p_solid` is the run's
+preregistered threshold.
 
 #### Failure modes
 
-Planning on a field with authority below `measured` is labelled preview.
-`NOT_READ` voxels get weight 0, and the panel reports how many there were
-(OB-GAIN-05).
+An instrument model with a non-finite or non-positive range, field of view or
+step, or a maximum range not above the minimum, is refused. Planning over a
+field whose basis is not `full`, that has any `NOT_READ` voxel, or that uses
+an assumed or reconstructed origin carries authority `preview`, and every
+reason is named in the panel and in `candidates.csv` (OB-GAIN-05,
+OB-INV-04). A field with no level, clear `SURFACE` voxel produces no
+candidates, and the panel says so.
 
 #### Determinism
 
-The candidate grid and tie-break rule are both fixed functions of their
-inputs (F11: a candidate behind a wall outranks one beside the source, every
-term matching the oracle).
+Candidate generation walks voxel keys in ascending order; visibility keys are
+sorted before scoring; sums run in ascending key order. F11 compares every
+term with `validation/observatory/oracle/coverage_gain.py`, which traverses
+in exact rational arithmetic over the same float directions; counts match
+exactly and sums to 1e-9.
 
 ## `olv.observation.station-suggestion`
 
 #### Status
 
-Not implemented in v0.7.
+Implemented in phase O10 (`src/observation/stationSuggestion.ts`).
 
 #### Phase
 
 O10 (Coverage Gain and station suggestion).
 
-Runs greedy sequential selection. After picking the best-scoring candidate,
-its planned visibility is applied to a hypothetical copy of the ledger,
-never the canonical one, and every remaining candidate's gain is
-recomputed, repeated for a user-declared number of stations (SPEC §5.6
-OB-GAIN-04).
+Greedy sequential selection (SPEC §5.6 OB-GAIN-04). Each round scores every
+unpicked candidate, picks the highest gain (ties to the lower candidate
+index), and adds the voxels its planning rays reach to a hypothetical covered
+set. Later rounds re-score against that set: a covered voxel carries no
+weight and counts as redundant. The pass stops at the declared station count,
+or earlier when no remaining gain is positive, and records why.
 
 #### Assumptions
 
-Every suggested station is labelled "SUGGESTED STATION (not observed)"
-everywhere it appears: panel, 3D view, exports, session files. It never
-enters the evidence ledger (OB-INV-05). SPEC defines, for v0.7, only the
-`ReachabilityProvider` interface (`reachable`, `unreachable` or `unknown`,
-each with an evidence reference) with no implementation behind it
-(OB-GAIN-06). `stationSuggestion.ts` transcribes that interface, and the
-panel offers no "reachable" mode until a provider carrying recorded evidence
-is registered.
+A candidate's visible voxel set depends only on the canonical `SURFACE` and
+`PARTIAL` states, so it is traced once and each round only re-scores. The
+covered set is the hypothetical copy of the ledger; the canonical rows and
+state map are only read. A suggested station is labelled "SUGGESTED STATION
+(not observed)" in the panel and in `candidates.csv`, never enters the
+ledger or the station list, and never changes `fieldDigest` (OB-INV-05). The
+3D view does not draw suggested stations in this release.
+
+SPEC defines, for v0.7, only the `ReachabilityProvider` interface
+(`reachable`, `unreachable` or `unknown`, each with an evidence reference)
+with no implementation behind it (OB-GAIN-06). The panel states that
+reachability is not checked and offers no reachable mode.
 
 #### Parameters
 
-The declared station count for one greedy run. Otherwise inherits Coverage
-Gain's parameters, since it scores candidates the same way.
+The declared station count (2 in the live run). Otherwise Coverage Gain's
+parameters, since it scores candidates the same way.
 
 #### Failure modes
 
-Not yet applicable. The canonical ledger is asserted unchanged by the search
-once F12 can be scored (O10).
+A station count that is not a positive integer is refused. With no
+candidates the result is empty with stop reason `no-candidates`; with no
+positive gain left, `no-positive-gain`.
 
 #### Determinism
 
-Given a fixed candidate order and a fixed ledger snapshot, the greedy order
-is a deterministic function of both (F12: a second suggestion covers the
-first's residual shadow, and the canonical ledger is unchanged).
+Given a fixed candidate order and a fixed field, the greedy order is a
+deterministic function of both. F12 compares the selection order and every
+term at selection with `coverage_gain.py`, checks that the second pick
+reaches `SHADOWED` voxels the first does not, and checks that the field is
+unchanged; the end-to-end run checks that `fieldDigest` is identical with and
+without planning.

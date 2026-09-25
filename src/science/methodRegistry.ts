@@ -647,8 +647,8 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       "independently bounded and shown only as separate components (never a hidden composite without its " +
       "weights, OB-STR-02). sources and consistency read straight off an ObservationLedgerRow; angularSpread, " +
       "incidence and rangeFit come from accumulateStrengthHitSamples, which re-walks a chunk's rays with the " +
-      "same clip/DDA/hit-window primitives the O4 ledger traversal uses. incidence's normal is fit via symEig3 " +
-      "over resident points (fitNormalFromResidentPoints) or supplied directly. Not yet wired into a run record " +
+      "same clip/DDA/hit-window primitives the O4 ledger traversal uses. incidence's normal is the smallest-eigenvalue eigenvector " +
+      "of the resident points' covariance (fitNormalFromResidentPoints, in incidence.ts, shared with Coverage Gain) or supplied directly. Not yet wired into a run record " +
       "or any presentation surface (O7/O9).",
     'Internal composition of the strength components (docs/observatory/SPEC.md §2.5); no single source method.',
     'src/observation/strength.ts',
@@ -665,23 +665,25 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   ),
   'olv.observation.coverage-gain': observationMethod(
     'olv.observation.coverage-gain',
-    'Coverage Gain (not implemented)',
-      'Not implemented in v0.7. Reserves the id and version ahead of phase O10, which will generate ' +
-      'candidate stations on a declared grid and score each against the evidence ledger by the declared ' +
-      'per-state weights, incidence and redundancy terms. src/observation/coverageGain.ts holds the declared ' +
-      'instrument-model and per-candidate term shapes only; no candidate generation or scoring exists yet. ' +
-      'Not an information-theoretic quantity, and never named as one.',
+    'Coverage Gain',
+      'Phase O10: candidates on a declared grid over level SURFACE voxels with a clear column to instrument ' +
+      'height, capped by an even stride; planning rays at bin centres of the declared angular step walked with ' +
+      'the ledger clip and DDA, stopped by SURFACE and by PARTIAL at or above p_solid; every term of ' +
+      'G(c) = sum w(state) vis inc - lambda_red redundant reported per candidate, with NOT_READ weighted 0 and ' +
+      'counted. inc comes from incidence.ts, the incidence estimate strength also uses. Scored against a ' +
+      'standard-library Python oracle on F11. Counts voxels a hypothetical station would newly address; not ' +
+      'an information-theoretic quantity.',
     'Scott, Roth & Rivest (2003), doi:10.1145/641865.641868 (view-planning framing).',
     'src/observation/coverageGain.ts',
   ),
   'olv.observation.station-suggestion': observationMethod(
     'olv.observation.station-suggestion',
-    'Next-station suggestion (not implemented)',
-      'Not implemented in v0.7. Reserves the id and version ahead of phase O10, which will run greedy ' +
-      'sequential selection over Coverage Gain candidates against a hypothetical copy of the ledger, never ' +
-      'the canonical one. src/observation/stationSuggestion.ts holds the declared result shape and the ' +
-      'ReachabilityProvider interface OB-GAIN-06 defines for v0.7 (no implementation of it exists, and the ' +
-      'panel offers no "reachable" mode until one is registered with evidence).',
+    'Next-station suggestion',
+      'Phase O10: greedy sequential selection over Coverage Gain candidates for a declared station count. ' +
+      'After each pick, the voxels its planning rays reach join a hypothetical covered set and every other ' +
+      'candidate is re-scored against it; ties go to the lower candidate index and the pass stops when no gain ' +
+      'is positive. The canonical ledger is only read, and a suggested station never becomes a source. ' +
+      'ReachabilityProvider is an interface only (OB-GAIN-06); no reachable mode is offered.',
     'Scott, Roth & Rivest (2003), doi:10.1145/641865.641868 (view-planning framing; greedy sequential selection).',
     'src/observation/stationSuggestion.ts',
   ),

@@ -57,6 +57,7 @@ import {
 import { presenceMaskWordCount } from '../observation/types';
 import type { ObservationRunRecord, ObservationRunStation } from '../observation/runRecord';
 import { buildObservationConfig } from '../observation/runRecord';
+import type { StationPlanningResult } from '../observation/stationSuggestion';
 
 /** A caller-supplied origin, for `stations.json`. */
 export interface ObservatoryPackageOptions {
@@ -67,6 +68,8 @@ export interface ObservatoryPackageOptions {
   readonly build?: BuildIdentity;
   readonly crsName?: string | null;
   readonly sourceSha256?: string | null;
+  /** The run's Coverage Gain result, written to `candidates.csv` with every term; `null` or omitted writes a header-only file. */
+  readonly planning?: StationPlanningResult | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -278,6 +281,18 @@ export function recomputeFieldDigestFromExport(
 // CSV bodies
 // ---------------------------------------------------------------------------
 
+/**
+ * A run record's `methods` entry, given as a registered id or as its
+ * `id@version` tag (the live run writes tags), resolved to the registered tag.
+ * A tag whose version the registry does not declare is refused.
+ */
+function registeredTag(idOrTag: string): string {
+  const at = idOrTag.indexOf('@');
+  const tag = methodTag(methodRef(at === -1 ? idOrTag : idOrTag.slice(0, at)));
+  if (at !== -1 && tag !== idOrTag) throw new Error(`method tag ${idOrTag} does not match the registered ${tag}`);
+  return tag;
+}
+
 function stateSummaryCsv(record: ObservationRunRecord): string {
   const rows = Object.entries(record.stateCounts).map(([state, count]) => `${state},${count}`);
   return ['state,count', ...rows].join('\n') + '\n';
@@ -294,12 +309,45 @@ function frontierCsv(record: ObservationRunRecord, frontierVoxelKeys: readonly n
   return [summary, ...lines].join('\n') + '\n';
 }
 
-/** OB-GAIN-01..04 (phase O10) are not implemented; this is a stable header-only file, per OB-EXP-01's bundle shape. */
-function candidatesCsv(): string {
-  return [
-    '# Coverage Gain (olv.observation.coverage-gain, olv.observation.station-suggestion) is not implemented in this build; no candidates were generated.',
-    'candidateIndex,weightedVisibilitySum,redundantPenalty,gain,excludedVoxelCount',
-  ].join('\n') + '\n';
+const CANDIDATE_COLUMNS = 'candidateIndex,x,y,z,suggestedRank,gainAtSelection,visibleVoxelCount,weightedVisibilitySum,'
+  + 'shadowed,unaddressed,noReturnPath,conflict,weakSurface,redundantCount,redundantPenalty,gain,excludedVoxelCount';
+
+/**
+ * OB-EXP-01 `candidates.csv`: every candidate with every Coverage Gain term
+ * against the canonical field (OB-GAIN-03), its rank and gain at selection
+ * when the greedy pass picked it (OB-GAIN-04), and a header naming the
+ * authority, the instrument model and the weights. A picked row is a
+ * suggested station, not an observation (OB-INV-05).
+ */
+function candidatesCsv(planning: StationPlanningResult | null): string {
+  if (planning === null) {
+    return ['# Coverage Gain was not run for this field; no candidates were generated.', CANDIDATE_COLUMNS].join('\n') + '\n';
+  }
+  const m = planning.instrumentModel;
+  const p = planning.parameters;
+  const w = p.stateWeights;
+  const s = planning.suggestion;
+  const header = [
+    `# methods: ${planning.methods.map((id) => registeredTag(id)).join(', ')}`,
+    `# authority: ${planning.authority.authority}${planning.authority.reasons.length ? ` (${planning.authority.reasons.join('; ')})` : ''}`,
+    `# instrument model: heightAboveSurface=${m.heightAboveSurface} minRange=${m.minRange} maxRange=${m.maxRange} `
+      + `verticalFieldOfViewDegrees=${m.verticalFieldOfViewDegrees} angularStepDegrees=${m.angularStepDegrees} sameAsSourceIndex=${m.sameAsSourceIndex ?? ''} planningRays=${planning.planningRayCount}`,
+    `# weights: SHADOWED=${w.SHADOWED} UNADDRESSED=${w.UNADDRESSED} NO_RETURN_PATH=${w.NO_RETURN_PATH} CONFLICT=${w.CONFLICT} WEAK_SURFACE=${w.WEAK_SURFACE} `
+      + `redundancyWeight=${p.redundancyWeight} weakSurfaceFloors.sources=${p.weakSurfaceFloors.sources} weakSurfaceFloors.consistency=${p.weakSurfaceFloors.consistency} p_solid=${p.p_solid}`,
+    `# candidates: spacing=${p.candidateSpacing} cap=${planning.candidateCap} qualifying=${planning.qualifyingCount} droppedByCap=${planning.droppedByCap} notReadVoxels=${planning.notReadVoxelCount}`,
+    `# rows with a suggestedRank are SUGGESTED STATION (not observed); declared count ${s.declaredStationCount}, stop reason ${s.stopReason}`,
+  ];
+  const lines = planning.candidateTerms.map((t) => {
+    const c = planning.candidates.find((k) => k.candidateIndex === t.candidateIndex)!;
+    const rank = s.selectedCandidateIndices.indexOf(t.candidateIndex);
+    const k = t.weightedCounts;
+    return [
+      t.candidateIndex, ...c.position, rank >= 0 ? rank + 1 : '', rank >= 0 ? s.gainAtSelection[rank] : '',
+      t.visibleVoxelCount, t.weightedVisibilitySum, k.SHADOWED, k.UNADDRESSED, k.NO_RETURN_PATH, k.CONFLICT, k.WEAK_SURFACE,
+      t.redundantCount, t.redundantPenalty, t.gain, t.excludedVoxelCount,
+    ].join(',');
+  });
+  return [...header, CANDIDATE_COLUMNS, ...lines].join('\n') + '\n';
 }
 
 function stationsJson(record: ObservationRunRecord): string {
@@ -338,7 +386,7 @@ function readmeText(record: ObservationRunRecord, opts: {
     '  field.bin + field.json       Every voxel\'s counters (header: layout, columns, little-endian, SHA-256 per column)',
     '  state-summary.csv            Per-state voxel counts',
     '  frontier.csv                 The shadow frontier\'s voxel keys and summary',
-    '  candidates.csv                Coverage Gain candidates (not implemented in this build; header only)',
+    '  candidates.csv               Coverage Gain candidates, every term; suggested stations are not observations',
     '  processing-manifest.json     Ordered, tamper-evident processing steps',
     '  scientific-passport.json     Tamper-evident provenance for field.bin',
     '  SHA256SUMS.txt                SHA-256 of every file above',
@@ -353,7 +401,7 @@ function readmeText(record: ObservationRunRecord, opts: {
     `  Metres/unit    ${record.source.metresPerUnit ?? 'unknown (metric figures withheld, OB-INV-10)'}`,
     '',
     'Method',
-    `  Methods run    ${record.methods.map((id) => methodTag(methodRef(id))).join(', ')}`,
+    `  Methods run    ${record.methods.map((id) => registeredTag(id)).join(', ')}`,
     `  Parameters     p_solid=${record.parameters.p_solid} p_empty=${record.parameters.p_empty} n_min=${record.parameters.n_min} ` +
       `tau_abs=${record.parameters.tau_abs} tau_rel=${record.parameters.tau_rel}`,
     '',
@@ -408,9 +456,9 @@ export function buildObservatoryPackage(
 
   entries.push({ name: `${basename}/state-summary.csv`, bytes: new TextEncoder().encode(stateSummaryCsv(record)) });
   entries.push({ name: `${basename}/frontier.csv`, bytes: new TextEncoder().encode(frontierCsv(record, frontierVoxelKeys)) });
-  entries.push({ name: `${basename}/candidates.csv`, bytes: new TextEncoder().encode(candidatesCsv()) });
+  entries.push({ name: `${basename}/candidates.csv`, bytes: new TextEncoder().encode(candidatesCsv(options.planning ?? null)) });
 
-  const ops: ProcessingOpInput[] = record.methods.map((id) => ({ method: methodTag(methodRef(id)), params: {} }));
+  const ops: ProcessingOpInput[] = record.methods.map((id) => ({ method: registeredTag(id), params: {} }));
   const manifest = buildProcessingManifest({ build: softwareVersion, source: record.source.filename, ops });
   entries.push({ name: `${basename}/processing-manifest.json`, bytes: new TextEncoder().encode(`${JSON.stringify(manifest, null, 2)}\n`) });
 
@@ -422,7 +470,7 @@ export function buildObservatoryPackage(
     kind: 'observation-evidence-ledger',
     source: record.source.filename,
     crs: { horizontal: options.crsName ?? 'not recorded', horizontalKnown: options.crsName != null, verticalDatum: 'unknown', verticalDatumKnown: false },
-    methodIds: [...record.methods],
+    methodIds: record.methods.map((m) => registeredTag(m).split('@')[0]!),
     evidenceExploratory: true,
     summary: { fieldDigest: record.fieldDigest, ...record.stateCounts },
     generatedAt: generationDateIso,

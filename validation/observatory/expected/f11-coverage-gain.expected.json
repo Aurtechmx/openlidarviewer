@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "planningRayCount": 1296,
+  "grid": [
+    34,
+    24,
+    14
+  ],
+  "stateCounts": {
+    "CONFLICT": 4,
+    "NOT_READ": 224,
+    "NO_RETURN_PATH": 760,
+    "OBSERVED_EMPTY": 6140,
+    "PARTIAL": 8,
+    "SHADOWED": 894,
+    "SURFACE": 266,
+    "UNADDRESSED": 3128
+  },
+  "candidateTerms": [
+    {
+      "candidateIndex": 0,
+      "visibleVoxelCount": 5123,
+      "weightedVisibilitySum": 1376.623744836817,
+      "weightedCounts": {
+        "SHADOWED": 0,
+        "UNADDRESSED": 1279,
+        "NO_RETURN_PATH": 303,
+        "CONFLICT": 0,
+        "WEAK_SURFACE": 47
+      },
+      "redundantCount": 3,
+      "redundantPenalty": 0.06,
+      "gain": 1376.563744836817,
+      "excludedVoxelCount": 200,
+      "weightedVisibilitySumExact": "24799048737105862537/18014398509481984",
+      "redundantPenaltyExact": "17293822569102705/288230376151711744",
+      "gainExact": "396767485971124697887/288230376151711744"
+    },
+    {
+      "candidateIndex": 1,
+      "visibleVoxelCount": 6489,
+      "weightedVisibilitySum": 2899.2859750183507,
+      "weightedCounts": {
+        "SHADOWED": 790,
+        "UNADDRESSED": 2001,
+        "NO_RETURN_PATH": 311,
+        "CONFLICT": 4,
+        "WEAK_SURFACE": 66
+      },
+      "redundantCount": 85,
+      "redundantPenalty": 1.7,
+      "gain": 2897.585975018351,
+      "excludedVoxelCount": 64,
+      "weightedVisibilitySumExact": "52228892946932599535/18014398509481984",
+      "redundantPenaltyExact": "489991639457909975/288230376151711744",
+      "gainExact": "835172295511463682585/288230376151711744"
+    },
+    {
+      "candidateIndex": 2,
+      "visibleVoxelCount": 5603,
+      "weightedVisibilitySum": 2509.599750158255,
+      "weightedCounts": {
+        "SHADOWED": 625,
+        "UNADDRESSED": 1774,
+        "NO_RETURN_PATH": 385,
+        "CONFLICT": 4,
+        "WEAK_SURFACE": 26
+      },
+      "redundantCount": 119,
+      "redundantPenalty": 2.38,
+      "gain": 2507.219750158255,
+      "excludedVoxelCount": 41,
+      "weightedVisibilitySumExact": "45208929998647227899/18014398509481984",
+      "redundantPenaltyExact": "685988295241073965/288230376151711744",
+      "gainExact": "722656891683114572419/288230376151711744"
+    }
+  ],
+  "selectedCandidateIndices": [
+    1,
+    2
+  ],
+  "termsAtSelection": [
+    {
+      "candidateIndex": 1,
+      "visibleVoxelCount": 6489,
+      "weightedVisibilitySum": 2899.2859750183507,
+      "weightedCounts": {
+        "SHADOWED": 790,
+        "UNADDRESSED": 2001,
+        "NO_RETURN_PATH": 311,
+        "CONFLICT": 4,
+        "WEAK_SURFACE": 66
+      },
+      "redundantCount": 85,
+      "redundantPenalty": 1.7,
+      "gain": 2897.585975018351,
+      "excludedVoxelCount": 64,
+      "weightedVisibilitySumExact": "52228892946932599535/18014398509481984",
+      "redundantPenaltyExact": "489991639457909975/288230376151711744",
+      "gainExact": "835172295511463682585/288230376151711744"
+    },
+    {
+      "candidateIndex": 2,
+      "visibleVoxelCount": 5603,
+      "weightedVisibilitySum": 521.0,
+      "weightedCounts": {
+        "SHADOWED": 93,
+        "UNADDRESSED": 368,
+        "NO_RETURN_PATH": 240,
+        "CONFLICT": 0,
+        "WEAK_SURFACE": 0
+      },
+      "redundantCount": 4149,
+      "redundantPenalty": 82.98,
+      "gain": 438.02,
+      "excludedVoxelCount": 41,
+      "weightedVisibilitySumExact": "521",
+      "redundantPenaltyExact": "23917356613069041015/288230376151711744",
+      "gainExact": "126250669361972777609/288230376151711744"
+    }
+  ],
+  "stopReason": "declared-count-reached"
+}

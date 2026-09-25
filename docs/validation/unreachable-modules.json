@@ -427,26 +427,10 @@
       "review": "2027-09-20"
     },
     {
-      "path": "src/observation/strength.ts",
-      "status": "staged",
-      "why": "SPEC \u00a72.5's declared strength-component shape (ObservationStrengthComponents) and worked saturating-map example only. Phase O2, registering olv.observation.strength early. No incidence, eigen-normal or composite computation exists yet; that is O6.",
-      "graduation": "Reachable when O6 computes ObservationStrengthComponents per SURFACE voxel and a panel or export consumer reads the result.",
-      "review": "2027-03-31",
-      "declaredIn": "docs/observatory/SPEC.md"
-    },
-    {
       "path": "src/observation/session.ts",
       "status": "staged",
       "why": "OB-SES-01's session commit gate (commitObservationSession, wiring the existing observationFreshnessBreach into an actual commit path for the first time) and rerun-digest check (verifyObservationRerun), tested against F14 (ROI changed mid-run refuses with reason 'roi'). Phase O7. No production module calls it yet: nothing in the production graph holds a live ObservationFreshnessStamp to commit against, which needs a coordinator (O9).",
       "graduation": "Reachable when a coordinator (O9) commits a real run's session against a live freshness stamp and offers a rerun on reload.",
-      "review": "2027-03-31",
-      "declaredIn": "docs/observatory/SPEC.md"
-    },
-    {
-      "path": "src/observation/coverageGain.ts",
-      "status": "staged",
-      "why": "OB-GAIN-01/OB-GAIN-03's declared instrument-model and per-candidate gain-term shapes only (ObservationInstrumentModel, CandidateGainTerms, DEFAULT_GAIN_STATE_WEIGHTS). Phase O2, registering olv.observation.coverage-gain early. No candidate generation or scoring exists yet; that is O10.",
-      "graduation": "Reachable when O10 generates candidates and scores CandidateGainTerms against a real ledger.",
       "review": "2027-03-31",
       "declaredIn": "docs/observatory/SPEC.md"
     },
@@ -471,14 +455,6 @@
       "status": "staged",
       "why": "OB-PR-01's per-point presentation overlay: a standalone THREE.Points object (never the scan's own render mesh) whose position attribute is built once and whose colour attribute alone is replaced per field version, tested for the no-geometry-rebuild guarantee (phase O8). No `lazyChunks.ts` loader exists for it yet: an unreferenced loader is dead code the bundler drops before emitting a chunk, which trips `olv-chunk-emission-guard` (learned during this phase). Adding that loader is deferred to the coordinator (O9), which will call it from a real mount and can register `lazyChunks.ts`'s Flow-Pulse-style invalidator for scan close, CRS change and reclassification in the same change.",
       "graduation": "Reachable when a coordinator (O9) adds a called `lazyChunks.ts` loader and mounts it on a real resident cloud.",
-      "review": "2027-03-31",
-      "declaredIn": "docs/observatory/SPEC.md"
-    },
-    {
-      "path": "src/observation/stationSuggestion.ts",
-      "status": "staged",
-      "why": "OB-GAIN-04/OB-GAIN-06's declared greedy-result shape and the ReachabilityProvider interface SPEC defines (with no implementation) for v0.7 only. Phase O2, registering olv.observation.station-suggestion early. No greedy search, hypothetical-ledger copy or reachability provider exists yet; the search is O10, and Terrain Access (which would implement ReachabilityProvider) is explicitly LATER, not v0.7.",
-      "graduation": "Reachable when O10's greedy search produces a StationSuggestionResult and a panel or export consumer reads it. ReachabilityProvider itself graduates only with a future Terrain Access implementation, outside v0.7.",
       "review": "2027-03-31",
       "declaredIn": "docs/observatory/SPEC.md"
     }

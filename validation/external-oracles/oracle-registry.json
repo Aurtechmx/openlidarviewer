@@ -484,7 +484,37 @@
       "limitations": [
         "Checks the five closed-form formulas over seven hand-picked, dyadic-or-simple-diagonal cases (strength-lattice.json) chosen to exercise every NaN/degenerate branch (no samples, no hit/pass evidence, no normal supplied, an out-of-band range, a voxel hit only by a pulse's 2nd return), not a statistically representative sample of real hitting-ray geometry.",
         "The multi-return case only exercises the component formulas over a sample set shaped like a 2nd-return-only hit (a sample carrying the OVERLAPPING return's own range, not the ray's primary range); it does not itself drive a real multi-return traversal or returnTable/returnCounts lookup, which is `accumulateStrengthHitSamples`'s own TypeScript-side responsibility, covered instead by `tests/observatoryStrength.test.ts`'s real end-to-end multi-return group.",
-        "Does not check `incidence`'s normal-fitting step (`fitNormalFromResidentPoints`'s `symEig3` covariance fit): every case hands the oracle a normal directly, matching how `computeStrengthComponents` itself takes a normal as an argument rather than fitting one internally."
+        "Does not check `incidence`'s normal-fitting step (`fitNormalFromResidentPoints`'s covariance fit): every case hands the oracle a normal directly, matching how `computeStrengthComponents` itself takes a normal as an argument rather than fitting one internally."
+      ]
+    },
+    {
+      "oracleId": "olv-observatory-coverage-gain-py",
+      "name": "Observatory Coverage Gain and greedy station-suggestion oracle (coverage_gain.py)",
+      "version": "1",
+      "executables": [
+        "validation/observatory/oracle/coverage_gain.py"
+      ],
+      "roleCapabilities": [
+        "analytic-truth",
+        "generator-truth"
+      ],
+      "domains": [
+        "observation-coverage-gain"
+      ],
+      "lineageGroup": "olv-observatory-analytic-oracle",
+      "implementationLanguage": "Python (standard library only)",
+      "license": "AGPL-3.0-only",
+      "architecture": "any (no native dependency)",
+      "installationMethod": "in-repository; run with the interpreter .python-version pins",
+      "sourceRevision": null,
+      "independenceNotes": [
+        "Written from docs/observatory/SPEC.md §5.6 and docs/observatory/methods.md's coverage-gain and station-suggestion sections, not from src/observation/coverageGain.ts or stationSuggestion.ts. Traverses planning rays with ray_aabb_traversal.py's own slab clip and Amanatides & Woo traversal in exact rational arithmetic, and sums the gain terms as fractions. Not external validation: both implementations follow this project's own SPEC, so a shared misreading would survive agreement.",
+        "Shares its lineageGroup with olv-observatory-state-table-py, olv-observatory-ray-aabb-traversal-py, olv-observatory-shadow-frontier-py and olv-observatory-strength-py for the reason stated on the first of those entries."
+      ],
+      "limitations": [
+        "Scores one declared field (validation/observatory/fixtures/f11-coverage-gain.json: F1's wall and room with a pillar, a not-read corner, PARTIAL, CONFLICT and strong and weak SURFACE regions) and three candidates given by position; it does not generate candidates from a field, which tests/observatoryCoverageGain.test.ts covers on the TypeScript side.",
+        "Uses the float planning directions math.cos/math.sin produce, converted exactly to fractions. A last-bit difference between the platform libm and the JavaScript engine's trigonometry could move a ray that grazes a voxel corner; the fixture's 5° step keeps every ray off grid axes and 45° diagonals, and the frozen terms matched the TypeScript scorer exactly on the machine that wrote them.",
+        "Takes fitted normals as declared per region; it does not check the covariance normal fit."
       ]
     },
     {

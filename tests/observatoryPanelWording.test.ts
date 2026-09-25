@@ -6,6 +6,8 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import { installRecordingDom, type RecordingEl } from './helpers/recordingDom';
+import { runObservatoryOverCloud } from '../src/app/observatoryFromCloud';
+import { wallAndGroundCloud } from './helpers/observatoryPlanningFixtures';
 
 beforeAll(() => {
   installRecordingDom();
@@ -46,6 +48,16 @@ describe('OB-UI-05 wording', () => {
 
   it('a refused outcome carries no banned word', () => {
     assertClean({ phase: 'committed', outcome: { status: 'refused', reason: 'voxel-budget' as never } });
+  });
+
+  it('a committed run with Coverage Gain planning carries no banned word, declared or assumed origin', () => {
+    for (const originStatus of ['DECLARED', 'ASSUMED']) {
+      const outcome = runObservatoryOverCloud(wallAndGroundCloud(originStatus), {
+        voxelEdge: 0.5, declaredStepBudget: 50_000_000, filename: null, metresPerUnit: null, buildTag: 'test', planning: { candidateCap: 6 },
+      });
+      expect(outcome.status).toBe('ok');
+      assertClean({ phase: 'committed', outcome });
+    }
   });
 
   it('the Planning section badges use only SPEC-declared badge words', () => {
