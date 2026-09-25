@@ -7,7 +7,7 @@ import type { Action } from '../../ui/actionRegistry';
 import type { TourHandle } from '../../ui/onboarding/bootTour';
 import type { ShortcutSheet } from '../../ui/ShortcutSheet';
 import { keyDisplayFor } from '../../ui/keyBindings';
-import { loadCopyDiagnostics } from '../../lazyChunks';
+import { loadCopyDiagnostics, loadOfflineCopy } from '../../lazyChunks';
 import type { DiagnosticsViewer } from '../diagnostics/copyDiagnostics';
 
 export interface HelpActionDeps {
@@ -53,6 +53,32 @@ export function contributeHelpActions(deps: HelpActionDeps): Action[] {
         void loadCopyDiagnostics()
           .then((m) => m.copyDiagnostics(deps.getViewer ?? (() => null), notify))
           .catch(() => notify('Could not load the diagnostics report. Nothing was changed. Reload the page and try again.'));
+      },
+    },
+    {
+      id: 'help.offline-save',
+      title: 'Make available offline',
+      section: 'Help',
+      hint: 'Downloads every app file, after showing the size, so the viewer opens and reads local files with no connection.',
+      keywords: ['offline', 'download', 'cache', 'install', 'no connection', 'field'],
+      run: () => {
+        const notify = deps.notify ?? (() => {});
+        void loadOfflineCopy()
+          .then((m) => m.makeAvailableOffline(notify))
+          .catch(() => notify('Could not start the offline download. Reload the page and try again.'));
+      },
+    },
+    {
+      id: 'help.offline-remove',
+      title: 'Remove offline copy',
+      section: 'Help',
+      hint: 'Deletes the downloaded offline copy of the app. Your scans are never stored in it.',
+      keywords: ['offline', 'remove', 'delete', 'cache', 'storage', 'free space'],
+      run: () => {
+        const notify = deps.notify ?? (() => {});
+        void loadOfflineCopy()
+          .then((m) => m.removeOfflineCopy(notify))
+          .catch(() => notify('Could not remove the offline copy. Reload the page and try again.'));
       },
     },
   );

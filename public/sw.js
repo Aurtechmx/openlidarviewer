@@ -17,6 +17,8 @@
  *     screen a precached HTML entry would cause).
  *   - same-origin GET assets → cache-first with a background refresh; the
  *     /assets/* files are content-hashed and immutable, so this is safe.
+ *   - full build copy        → only on request ("Make available offline"),
+ *     into its own cache; install caches just the fixed shell.
  */
 
 // Bump on every release: `activate` prunes any OLV cache whose name !== VERSION,
@@ -43,33 +45,69 @@ const SHELL = [
   './icon-512.png',
 ];
 
+// The opt-in full copy of the build lives in its own cache so "Remove offline
+// copy" can drop it without touching the shell. Its existence is also the
+// persisted opt-in: a worker cannot read the page's localStorage, so an
+// updated worker re-precaches on activate when any OLV offline cache exists.
+const OFFLINE_SUFFIX = '-offline';
+const OFFLINE_CACHE = VERSION + OFFLINE_SUFFIX;
+
+function isOfflineCache(k) {
+  return k.startsWith(CACHE_PREFIX) && k.endsWith(OFFLINE_SUFFIX);
+}
+
+/** Manifest entries as {url, bytes}; accepts the older plain-string form. */
+function manifestEntries(m) {
+  return (m && Array.isArray(m.assets) ? m.assets : [])
+    .map((a) => (typeof a === 'string' ? { url: a, bytes: 0 } : a))
+    .filter((a) => a && typeof a.url === 'string' && HASHED_APP_ASSET.test(a.url));
+}
+
 /**
- * Precache every content-hashed bundle the build lists in sw-precache.json
- * (written by the olv-sw-precache-manifest Vite plugin): entry, lazy chunks,
- * workers, wasm and fonts. Without it only chunks the page happened to request
- * through this worker were cached, so opening a file offline after a single
- * visit failed on the first lazy import. Each entry is added on its own so one
- * missing file cannot abort install; a dev server has no manifest and skips.
+ * Cache every content-hashed bundle listed in sw-precache.json (entry, lazy
+ * chunks, workers, wasm, fonts) into the offline cache, then drop entries a
+ * previous build left there. Only runs when the user asked for an offline
+ * copy. Each file is added on its own so one failure cannot abort the rest;
+ * `onProgress(done, total)` reports after every file.
  */
-function precacheBuild(cache) {
+function precacheBuild(onProgress) {
+  const report = typeof onProgress === 'function' ? onProgress : () => {};
   return fetch('./sw-precache.json', { cache: 'no-store' })
-    .then((res) => (res.ok ? res.json() : { assets: [] }))
+    .then((res) => (res.ok ? res.json() : Promise.reject(new Error('manifest ' + res.status))))
     .then((m) =>
-      Promise.all(
-        (Array.isArray(m.assets) ? m.assets : [])
-          .filter((a) => typeof a === 'string' && HASHED_APP_ASSET.test(a))
-          .map((a) => cache.add(a).catch(() => {})),
-      ),
-    )
-    .catch(() => {});
+      caches.open(OFFLINE_CACHE).then((cache) => {
+        const entries = manifestEntries(m);
+        const total = entries.length;
+        let done = 0;
+        let failed = 0;
+        return Promise.all(
+          entries.map((a) =>
+            cache
+              .add(a.url)
+              .catch(() => {
+                failed += 1;
+              })
+              .then(() => {
+                done += 1;
+                report(done, total);
+              }),
+          ),
+        )
+          .then(() => {
+            const keep = new Set(entries.map((a) => new URL(a.url, self.location.href).href));
+            return cache.keys().then((reqs) => Promise.all(reqs.filter((r) => !keep.has(r.url)).map((r) => cache.delete(r))));
+          })
+          .then(() => ({ total, failed }));
+      }),
+    );
 }
 
 self.addEventListener('install', (event) => {
-  // Precache the shell; activate immediately so offline works on the next load.
+  // Cache only the fixed shell; activate immediately so offline works next load.
   event.waitUntil(
     caches
       .open(VERSION)
-      .then((cache) => cache.addAll(SHELL).then(() => precacheBuild(cache)))
+      .then((cache) => cache.addAll(SHELL))
       .then(() => self.skipWaiting())
       .catch(() => {
         /* a missing shell asset must not abort install */
@@ -78,18 +116,51 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  // Drop caches from older versions, then take control of open clients.
+  // Drop caches from older versions, then take control of open clients. When
+  // the user opted into an offline copy, refill it for this build first.
   event.waitUntil(
     caches
       .keys()
-      .then((keys) =>
-        Promise.all(
+      .then((keys) => {
+        const optedIn = keys.some(isOfflineCache);
+        return Promise.all(
           // Only OLV's own caches — never a co-hosted app's cache on this origin.
-          keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== VERSION).map((k) => caches.delete(k)),
-        ),
-      )
-      .then(() => self.clients.claim()),
+          keys
+            .filter((k) => k.startsWith(CACHE_PREFIX) && k !== VERSION && k !== OFFLINE_CACHE && !isOfflineCache(k))
+            .map((k) => caches.delete(k)),
+        )
+          .then(() => self.clients.claim())
+          .then(() => (optedIn ? precacheBuild().catch(() => {}) : undefined))
+          .then(() =>
+            Promise.all(keys.filter((k) => isOfflineCache(k) && k !== OFFLINE_CACHE).map((k) => caches.delete(k))),
+          );
+      }),
   );
+});
+
+/**
+ * Page requests, answered on the MessageChannel port the page passes:
+ *   {type:'olv-offline-save'}   → {type:'progress', done, total}…, then
+ *                                 {type:'done', total, failed} or {type:'error'}
+ *   {type:'olv-offline-remove'} → {type:'removed'}
+ */
+self.addEventListener('message', (event) => {
+  const data = event.data;
+  const port = event.ports && event.ports[0];
+  if (!data || !port) return;
+  if (data.type === 'olv-offline-save') {
+    const work = precacheBuild((done, total) => port.postMessage({ type: 'progress', done, total }))
+      .then((r) => port.postMessage({ type: 'done', total: r.total, failed: r.failed }))
+      .catch(() => port.postMessage({ type: 'error' }));
+    if (event.waitUntil) event.waitUntil(work);
+  } else if (data.type === 'olv-offline-remove') {
+    const work = caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter(isOfflineCache).map((k) => caches.delete(k))))
+      .then(() => port.postMessage({ type: 'removed' }))
+      .catch(() => port.postMessage({ type: 'error' }));
+    if (event.waitUntil) event.waitUntil(work);
+  }
 });
 
 /**

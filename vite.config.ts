@@ -1,10 +1,11 @@
 import { defineConfig, type PluginOption } from 'vite';
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import liveSourceTransform from 'vite-plugin-javascript-obfuscator';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { requireBinaryOnPath } from './scripts/lib/binaryOnPath.mjs';
+import { buildSwPrecacheManifest } from './scripts/lib/swPrecacheManifest.mjs';
 import {
   workerExcludePatterns,
   workerChunkPins,
@@ -266,9 +267,9 @@ function thirdPartyNotices() {
 
 /**
  * Write `sw-precache.json` beside index.html: every content-hashed app bundle
- * under assets/ (entry, lazy chunks, workers, wasm, fonts). public/sw.js reads
- * it at install so the whole app shell is cached after ONE online visit,
- * including chunks the first visit never requested. Read from disk after the
+ * under assets/ (entry, lazy chunks, workers, wasm, fonts) with its byte size,
+ * plus the total. public/sw.js caches the list only when the user runs "Make
+ * available offline"; the page shows `totalBytes` before starting. Read from disk after the
  * write so worker sub-build outputs are included.
  */
 function swPrecacheManifest() {
@@ -277,11 +278,7 @@ function swPrecacheManifest() {
     apply: 'build' as const,
     writeBundle(options: { dir?: string }): void {
       const dir = options.dir ?? 'dist';
-      const assets = readdirSync(join(dir, 'assets'))
-        .filter((f) => /-[A-Za-z0-9_-]{8,}\.(?:js|mjs|css|wasm|woff2?)$/i.test(f))
-        .sort()
-        .map((f) => `./assets/${f}`);
-      writeFileSync(join(dir, 'sw-precache.json'), JSON.stringify({ assets }) + '\n');
+      writeFileSync(join(dir, 'sw-precache.json'), JSON.stringify(buildSwPrecacheManifest(dir)) + '\n');
     },
   };
 }

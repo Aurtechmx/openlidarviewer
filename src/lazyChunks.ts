@@ -826,6 +826,9 @@ export const loadWithheldAwareTerrainGather = () => import('./terrain/ground/wit
  */
 export const loadCopyDiagnostics = () => import('./app/diagnostics/copyDiagnostics');
 
+/** Load the opt-in offline copy controller (Help: Make available offline / Remove offline copy). */
+export const loadOfflineCopy = () => import('./app/offlineCopy');
+
 /**
  * Load the binder that shows WebGL context loss and restore on the status toast.
  * The reporter lives in the Viewer chunk, so this resolves once the Viewer exists.
