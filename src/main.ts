@@ -42,6 +42,7 @@ import { createTourLauncher } from './app/tourLauncher';
 import { findDuplicateIds, type Action } from './ui/actionRegistry';
 import { toggleTool } from './app/toggleTool';
 import type { SessionIoDeps } from './app/sessionIo';
+import type { SessionSnapshotDeps } from './app/sessionSnapshot';
 import { openScan, type OpenScanDeps } from './app/openScan';
 import {
   openStreamingCopc as runOpenStreamingCopc,
@@ -233,7 +234,7 @@ import {
   loadTilesetOpen,
   loadActionRegistry,
   loadToolLauncher,
-  loadStockpilePresenter, loadSessionIo, loadAnalysisModules,
+  loadStockpilePresenter, loadSessionIo, loadAnalysisModules, loadRecovery, loadSessionSnapshot,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -2905,7 +2906,7 @@ let mountAnalysePanelElement: ((el: HTMLElement) => void) | null = null;
 let mountObjectPanelElement: ((el: HTMLElement) => void) | null = null;
 
 function revealAnalysePanel(name: string, settled = true): void {
-  lastCloudName = baseName(name);
+  lastCloudName = baseName(name); recovery?.onSourceLoaded();
   exportPanel.setVisible(true);
   exportPanel.refresh();
   // Build the measure snap index from the resident cloud (static scans only;
@@ -4017,123 +4018,23 @@ function applyShareState(state: ShareState, cloud: PointCloud): void {
  * only while the requested scan stays active (else refuses, never splices).
  */
 async function exportSession(): Promise<void> {
-  let stem = 'openlidarviewer';
   await writeScanScopedExport({
     requestedScanId: scans.activeExportTargetId(), // streaming leaves activeId null
     activeScanId: () => scans.activeExportTargetId(),
     refuse: () => showLassoToast(SESSION_EXPORT_SCAN_CHANGED_REFUSAL),
     // Both lazy imports resolve before any state is read; their exports spread into one deps object.
-    load: async () => ({ ...(await loadSession()), ...(await loadExportProvenance()) }),
-    write: (json) => downloadText(`${stem}.olvsession`, json),
-    serialize: ({ serializeSession, buildExportProvenance, processingManifestFromProvenance }) => {
-      const cloud = scans.activeCloud() ?? undefined;
-      // A streaming-only session has no static cloud. Its frame still exists — the
-      // streaming source's renderOrigin — and streaming COPC/EPT are LAS-derived,
-      // hence Z-up. Deriving origin/upAxis from the (absent) static cloud wrote
-      // [0,0,0] + Y-up, so the session reopened displaced by the whole render origin
-      // and mis-oriented.
-      const upAxis: 'y' | 'z' = cloud ? (isZUpFormat(cloud.sourceFormat) ? 'z' : 'y') : viewer.streamingCloud ? 'z' : 'y';
-
-      // populate the v3 fields so the .olvsession captures
-      // the full working state, not just the inspection annotations. The
-      // optional fields are only emitted when there's something meaningful
-      // to write — a session exported with no scan loaded won't pollute
-      // the file with bogus render defaults.
-      const streamingCloud = viewer.streamingCloud;
-      const exportFileName = streamingCloud?.name ?? (cloud ? cloud.name : null);
-
-      let scanSummary: import('./io/session').SessionScanSummary | undefined;
-      if (streamingCloud && streamingCloud.sourcePointCount !== null) {
-        // Tight data AABB, not the octree cube. No summary without a source total.
-        const b = streamingCloud.dataBounds();
-        const crs = streamingCloud.crs();
-        scanSummary = {
-          fileName: streamingCloud.name,
-          sourcePoints: streamingCloud.sourcePointCount,
-          width: b[3] - b[0],
-          depth: b[4] - b[1],
-          height: b[5] - b[2],
-          ...(crs ? { crs: crs.name, crsUnit: crs.linearUnit, ...(crs.epsg != null ? { epsg: crs.epsg } : {}) } : {}),
-        };
-      } else if (cloud) {
-        const b = cloud.bounds();
-        const crs = cloud.metadata?.crs;
-        scanSummary = {
-          fileName: cloud.name,
-          sourcePoints: cloud.declaredPointCount ?? cloud.decodedPointCount ?? cloud.pointCount,
-          width: b.max[0] - b.min[0],
-          depth: b.max[1] - b.min[1],
-          height: b.max[2] - b.min[2],
-          ...(crs ? { crs: crs.name, crsUnit: crs.linearUnit, ...(crs.epsg != null ? { epsg: crs.epsg } : {}) } : {}),
-        };
-      }
-
-      // v7 — the verify-only processing manifest, filled into the slot the schema
-      // reserved. Derived from the CURRENT analysis result's provenance (the same
-      // derivation every terrain export stamps), so a session saved after an
-      // analysis carries the ordered, hash-chained record of the methods + final
-      // parameters behind the on-screen numbers. No analysis → the slot stays
-      // absent (serializeSession omits it), never an empty placeholder. The
-      // provenance/manifest builders ride the lazy terrain-export chunk, loaded with the writer above.
-      let processingManifest: unknown;
-      // Null-safe: saving a session before any scan (or before the panel's chunk
-      // resolves) simply carries no analysis manifest.
-      const analysed = analysePanel?.currentResultForProvenance() ?? null;
-      if (analysed) {
-        processingManifest = processingManifestFromProvenance(
-          buildExportProvenance(analysed, {
-            basename: exportFileName ? baseName(exportFileName) : null,
-            generatedAt: new Date(), verticalUnitToMetres: verticalMetresPerUnit(crsService.context(), 'horizontal-when-known') ?? null,
-            softwareVersion: __APP_VERSION__,
-            metricVersion: TERRAIN_METRIC_VERSION,
-          }), cloud?.organizedRange);
-      }
-
-      // The GLOBAL live state and every saved view's bundle come from the same
-      // capture path (captureViewState) — the extraction that replaced the old
-      // inline field-by-field block here, so the export and the named views can
-      // never record different notions of "the current state". Field-level
-      // rationale (the v5 clip write-side fix, the hidden-codes contract, the
-      // emit-only-when-set discipline) lives on captureViewState itself.
-      const viewState = captureViewState();
-      // `.olvsession` filename derives from the active scan name so exports don't collide; JSON internally.
-      stem = exportFileName ? baseName(exportFileName) : 'openlidarviewer';
-      return serializeSession({
-        upAxis,
-        // The scene's real frame, static OR streaming — exportGeoContext resolves the
-        // static cloud's origin, else the streaming renderOrigin, else zero.
-        origin: [...exportGeoContext().origin],
-        unitSystem: viewer.measure.unitSystem,
-        // v7 — a view with a captured bundle serialises it per-view; a camera-only
-        // view (e.g. restored from a v6 file) spreads nothing and keeps its exact
-        // v6 byte-shape.
-        views: viewBookmarks.savedViews.map((v) => ({ name: v.name, camera: v.pose, ...(v.state ?? {}) })),
-        measurements: viewer.measure.getMeasurements(),
-        annotations: viewer.annotate.getAnnotations(),
-        camera: viewState.camera,
-        render: viewState.render,
-        colorMode: viewState.colorMode,
-        scanSummary,
-        classFilter: viewState.classFilter,
-        ...(viewState.pointFilters ? { pointFilters: viewState.pointFilters } : {}),
-        clip: viewState.clip,
-        // v6 — stamp the producing app version so a later re-open can tell whether a
-        // newer build would read the scan differently (see exportStaleness).
-        software: __APP_VERSION__,
-        // v7 — the reserved slot, filled above when an analysis exists; the
-        // serializer omits it when undefined so no-analysis sessions keep their
-        // byte-shape.
-        processingManifest,
-        // The active scan's RESOLVED CRS (detection + any user override), so the
-        // choice round-trips and a re-open does not silently re-prompt or revert
-        // to the file's declared CRS (C4). The v4 schema already carries this
-        // field; the exporter simply never populated it.
-        crs: crsService.current() ?? undefined,
-        layerGroups: inspector.layerGroupsForSession(),
-      });
-    },
+    load: async () => ({ ...(await loadSession()), ...(await loadExportProvenance()), ...(await loadSessionSnapshot()) }),
+    write: (json) => downloadText(`${baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? 'openlidarviewer')}.olvsession`, json),
+    serialize: (m) => m.serializeActiveSession(m, sessionSnapshotDeps),
   });
 }
+
+const sessionSnapshotDeps: SessionSnapshotDeps = {
+  getViewer: () => viewer, activeCloud: () => scans.activeCloud(), analysedResult: () => analysePanel?.currentResultForProvenance() ?? null,
+  verticalUnitToMetres: () => verticalMetresPerUnit(crsService.context(), 'horizontal-when-known') ?? null,
+  captureViewState, savedViews: () => viewBookmarks.savedViews, origin: () => exportGeoContext().origin,
+  crs: () => crsService.current(), layerGroups: () => inspector.layerGroupsForSession(), appVersion: __APP_VERSION__,
+};
 
 /**
  * Session import — a thin caller over the extracted `src/app/sessionIo.ts`.
@@ -4891,7 +4792,7 @@ function closeScan(): void {
     inspector.removeCloud(id);
   }
   layerVisible.clear();
-  layers.solo = null;
+  layers.solo = null; recovery?.clear();
   resetToEmptyState();
 }
 
@@ -4946,3 +4847,7 @@ runtime.lifetime.own({
   'decode workers': () => { copcDecoder?.dispose(); eptLaszipDecoder?.dispose(); },
   'streaming session': () => streamingUi.endSession(),
 }, window);
+// Crash/reload recovery (src/app/recovery): journals the Save session JSON, never the cloud.
+let recovery: import('./app/recovery/recoveryController').RecoveryHandle | null = null;
+if (!bareMode) void loadRecovery().then((m) => { recovery = m.startRecovery({ lifetime: runtime.lifetime, isLoading: () => loading, restore: (json) => importSession(new File([json], 'recovery.olvsession')),
+  serialize: async () => (scans.activeExportTargetId() ? (await loadSessionSnapshot()).serializeActiveSession({ ...(await loadSession()), ...(analysePanel?.currentResultForProvenance() ? await loadExportProvenance() : {}) }, sessionSnapshotDeps) : null) }); }, () => {});

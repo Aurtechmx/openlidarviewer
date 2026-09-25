@@ -7,7 +7,8 @@ import type { Action } from '../../ui/actionRegistry';
 import type { TourHandle } from '../../ui/onboarding/bootTour';
 import type { ShortcutSheet } from '../../ui/ShortcutSheet';
 import { keyDisplayFor } from '../../ui/keyBindings';
-import { loadCopyDiagnostics, loadOfflineCopy } from '../../lazyChunks';
+import { loadCopyDiagnostics, loadOfflineCopy, loadRecovery } from '../../lazyChunks';
+import { recoveryEnabled, setRecoveryEnabled } from '../recovery/recoveryStatus';
 import type { DiagnosticsViewer } from '../diagnostics/copyDiagnostics';
 
 export interface HelpActionDeps {
@@ -79,6 +80,24 @@ export function contributeHelpActions(deps: HelpActionDeps): Action[] {
         void loadOfflineCopy()
           .then((m) => m.removeOfflineCopy(notify))
           .catch(() => notify('Could not remove the offline copy. Reload the page and try again.'));
+      },
+    },
+    {
+      id: 'help.session-recovery',
+      title: 'Turn session recovery on or off',
+      section: 'Help',
+      hint: 'Session recovery keeps your measurements, annotations, views and camera in this browser so they can be restored after a crash or reload. The point cloud is never stored.',
+      keywords: ['recovery', 'autosave', 'crash', 'reload', 'restore', 'session', 'privacy'],
+      run: () => {
+        const notify = deps.notify ?? (() => {});
+        const on = !recoveryEnabled();
+        setRecoveryEnabled(on);
+        if (on) {
+          notify('Session recovery is on. It starts after the next page load.');
+          return;
+        }
+        notify('Session recovery is off. Work saved for recovery in this browser was deleted.');
+        void loadRecovery().then((m) => m.clearRecoveryJournal()).catch(() => {});
       },
     },
   );

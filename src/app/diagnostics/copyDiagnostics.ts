@@ -18,6 +18,7 @@ import { isMobileDevice } from '../../ui/isMobileDevice';
 import { probeCapabilities, type CapabilityReport, type ProbeGl } from '../../platform/capabilityProbe';
 import { runtimeFormFactor, type RuntimeFormFactor } from '../../platform/runtimeFormFactor';
 import { errorLedgerSnapshot, ledgerToken, type ErrorLedgerEntry } from './errorLedger';
+import { recoveryStatus } from '../recovery/recoveryStatus';
 
 /** The Viewer surface the report reads. */
 export interface DiagnosticsViewer {
@@ -59,6 +60,8 @@ export interface DiagnosticsReport {
   readonly resident: { readonly nodes: number | null; readonly points: number | null };
   readonly errors: ErrorLedgerEntry[];
   readonly runtime: DiagnosticsRuntime | null;
+  /** Session recovery journal state, e.g. `on:indexeddb` or `off:storage-unavailable`. */
+  readonly recovery: string;
 }
 
 const BROWSERS: ReadonlyArray<[string, RegExp]> = [
@@ -142,6 +145,7 @@ export function buildDiagnosticsReport(
       action: ledgerToken(e.action),
     })),
     runtime: env.runtime ?? null,
+    recovery: recoveryStatus().split(':').map((t) => ledgerToken(t)).join(':'),
   };
 }
 
