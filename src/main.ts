@@ -852,7 +852,7 @@ function showInstantAnswer(scanLabel: string): void {
         case 'terrain':
           // Ensure the (lazy) panel is mounted before expanding + running, so
           // the busy state and result have somewhere to land.
-          analyseExpanded = true;
+          analyseExpanded = true; showWorkspaceMode?.('analyse');
           void ensureAnalysePanel().then((p) => {
             p.expand();
             void terrainRunner.run();
