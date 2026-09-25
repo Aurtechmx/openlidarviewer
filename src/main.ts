@@ -119,13 +119,7 @@ import {
 } from './app/kmlActions';
 import { makeExportCrsResolver, resolvedExportCrs } from './app/exportCrsResolver';
 import { createInspectorVisualCoordinator } from './app/inspectorVisualCoordinator';
-import {
-  exportMeasurementsFile,
-  exportMeasurementIntegrityReport,
-  collectMeasurementFindings,
-  exportFindingsReport,
-  type MeasurementExportActionDeps,
-} from './app/measurementExportActions';
+import type { MeasurementExportActionDeps } from './app/measurementExportActions';
 import { exportImageAction } from './app/exportImageAction';
 import { ClipPanel } from './ui/ClipPanel';
 import type { ClipBox } from './render/clip/clipBox';
@@ -209,7 +203,7 @@ import {
   loadTour,
   loadStreamingBenchmark,
   loadInstrumentedRangeSource,
-  loadViewer, loadDeviceNotice,
+  loadViewer, loadDeviceNotice, loadMeasurementExportActions,
   loadBatchConverter,
   loadSpaceReportPdf,
   loadFloorPlan,
@@ -2747,20 +2741,20 @@ const exportPanel = new ExportPanel({
   // Measurement deliverables — orchestration lives in measurementExportActions.
   exportMeasurements: async (format) => {
     if (!viewer) return;
-    await exportMeasurementsFile(format, measurementExportActionDeps(viewer));
+    await (await loadMeasurementExportActions()).exportMeasurementsFile(format, measurementExportActionDeps(viewer));
   },
   exportIntegrityReport: async () => {
     if (!viewer) return;
-    await exportMeasurementIntegrityReport(measurementExportActionDeps(viewer));
+    await (await loadMeasurementExportActions()).exportMeasurementIntegrityReport(measurementExportActionDeps(viewer));
   },
   collectMeasurementFindings: async () => {
     if (!viewer) return [];
-    return collectMeasurementFindings(measurementExportActionDeps(viewer));
+    return (await loadMeasurementExportActions()).collectMeasurementFindings(measurementExportActionDeps(viewer));
   },
   activeFindingsTargetId: () => scans.activeExportTargetId(), // ledger owner
   exportFindingsReport: async (findings) => {
     if (!viewer) return;
-    await exportFindingsReport(measurementExportActionDeps(viewer), findings);
+    await (await loadMeasurementExportActions()).exportFindingsReport(measurementExportActionDeps(viewer), findings);
   },
   exportKml: () => void exportSiteKml(kmlDeps),
   kmlStatus: () => siteKmlStatus(kmlDeps),

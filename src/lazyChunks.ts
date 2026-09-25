@@ -823,3 +823,9 @@ export const loadCopyDiagnostics = () => import('./app/diagnostics/copyDiagnosti
  * The reporter lives in the Viewer chunk, so this resolves once the Viewer exists.
  */
 export const loadDeviceNotice = () => import('./render/deviceNotice');
+
+/**
+ * Load the measurement export orchestration (GeoJSON/CSV, integrity and
+ * findings reports) on the first measurement export.
+ */
+export const loadMeasurementExportActions = () => import('./app/measurementExportActions');
