@@ -182,8 +182,9 @@ export class StreamingNodeStore {
    * the `resident` state.
    */
   setState(node: StreamingNode, state: NodeState, residentPointCount = 0): void {
-    if (navSink && (node.state === 'resident') !== (state === 'resident')) {
-      navSink.lodChange(state === 'resident' ? 1 : 0, state === 'resident' ? 0 : 1);
+    const probe = (node.state === 'resident') !== (state === 'resident') ? navSink() : null;
+    if (probe) {
+      probe.lodChange(state === 'resident' ? 1 : 0, state === 'resident' ? 0 : 1);
     }
     if (node.state === 'resident') {
       this._residentPoints -= node.residentPointCount;

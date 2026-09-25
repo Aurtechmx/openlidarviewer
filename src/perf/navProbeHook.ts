@@ -3,7 +3,7 @@
  *
  * The probe itself lives in a lazy chunk (`navProbe.ts`) that loads only under
  * `?benchmark=nav`. The render path imports this module instead: with no sink
- * installed every call below is a null check and nothing else, so a normal
+ * installed each hook is one property read and a null check, so a normal
  * session pays one branch per hook.
  */
 
@@ -29,15 +29,20 @@ export interface NavProbeSink {
   frameEnd(t: number, drawn: boolean, edl: boolean, dpr: number, phase: string): void;
 }
 
-/** The installed sink, or null when no probe is recording. */
-export let navSink: NavProbeSink | null = null;
+/**
+ * The global slot the probe installs itself in. A slot rather than a setter
+ * import keeps the probe chunk from importing this module, so this module
+ * stays inside the Viewer chunk and adds no shared chunk to the startup shell.
+ */
+export const NAV_SINK_SLOT = '__olvNavSink';
 
-export function setNavSink(sink: NavProbeSink | null): void {
-  navSink = sink;
+/** The installed sink, or null when no probe is recording. */
+export function navSink(): NavProbeSink | null {
+  return ((globalThis as Record<string, unknown>)[NAV_SINK_SLOT] as NavProbeSink | undefined) ?? null;
 }
 
 /** Feed one accepted frame time to the streaming benchmark and the probe. */
 export function feedFrameMs(bench: { recordFrameMs(ms: number): void } | null | undefined, ms: number): void {
   bench?.recordFrameMs(ms);
-  navSink?.frameMs(ms);
+  navSink()?.frameMs(ms);
 }

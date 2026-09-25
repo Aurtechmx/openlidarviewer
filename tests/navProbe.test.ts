@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { NavProbe, jankStats, inputToDraw, longestStarvation } from '../src/perf/navProbe';
-import { navSink } from '../src/perf/navProbeHook';
+import { navSink, NAV_SINK_SLOT } from '../src/perf/navProbeHook';
 import { buildNavJankRecord, validateJsonSchema, type NavJankEnv } from '../src/perf/navJankRecord';
 import { runRenderFrame, type RenderLoopHost } from '../src/render/renderLoop';
 import { GpuUploadQueue } from '../src/render/gpuUploadQueue';
@@ -30,7 +30,7 @@ const ENV: NavJankEnv = {
   refreshEstimateHz: 60, datasetSha256: 'b'.repeat(64), trajectoryDigest: 'orbit-1', flags: ['benchmark=nav'], cache: 'cold',
 };
 
-afterEach(() => { expect(navSink).toBeNull(); });
+afterEach(() => { expect(navSink()).toBeNull(); });
 
 describe('NavProbe ring', () => {
   it('wraps at capacity, keeps the newest frames and never replaces its columns', () => {
@@ -50,7 +50,8 @@ describe('NavProbe ring', () => {
   it('start/stop installs and removes the sink', () => {
     const { probe } = manual();
     probe.start();
-    expect(navSink).toBe(probe);
+    expect(navSink()).toBe(probe);
+    expect(NAV_SINK_SLOT).toBe('__olvNavSink');
     probe.stop();
   });
 });

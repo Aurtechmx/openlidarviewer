@@ -2,7 +2,7 @@
  * Navigation frame probe: a per-frame recorder for heavy-navigation runs.
  *
  * Loaded only under `?benchmark=nav`. While recording, the render loop reports
- * into it through {@link setNavSink}; while stopped, the sink is null and the
+ * into it through the global sink slot; while stopped, the sink is null and the
  * render path does nothing beyond a null check.
  *
  * Storage is a struct-of-arrays ring of typed columns sized once at
@@ -26,7 +26,14 @@
  *   'unattributed'.
  */
 import { percentileSorted } from './frameTelemetry';
-import { setNavSink, type NavProbeSink, type NavSpanName, type NavUploadSample } from './navProbeHook';
+import type { NavProbeSink, NavSpanName, NavUploadSample } from './navProbeHook';
+
+/** Mirrors `NAV_SINK_SLOT` in navProbeHook.ts; a value import would put that module in a shared chunk. */
+const SINK_SLOT = '__olvNavSink';
+
+function setNavSink(sink: NavProbeSink | null): void {
+  (globalThis as Record<string, unknown>)[SINK_SLOT] = sink ?? undefined;
+}
 
 /** Default frame capacity: ten minutes at 60 Hz. */
 export const NAV_PROBE_FRAMES = 36_000;

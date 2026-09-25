@@ -5,54 +5,50 @@
  * `window.__olvNavProbe`. Checks only that frames were recorded and that the
  * record it builds is valid against validation/performance/nav-jank.schema.json;
  * timings depend on the runner and are not asserted.
+ *
+ * The scan is `tiny.ply`: on the runner's software renderer a drag over the
+ * multichunk LAZ fixture outlasts the test timeout, probe or no probe.
  */
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { validateJsonSchema } from '../../src/perf/navJankRecord';
+import { dropTinyPly } from './helpers';
 
-const FIXTURE = fileURLToPath(new URL('../fixtures/multichunk.laz', import.meta.url));
 const SCHEMA = JSON.parse(
   readFileSync(fileURLToPath(new URL('../../validation/performance/nav-jank.schema.json', import.meta.url)), 'utf8'),
 );
 
+interface Handle {
+  start(): void;
+  stop(name?: string): unknown;
+  record(env: unknown): unknown;
+}
+
 test('nav probe records an orbit and builds a valid record', async ({ page }) => {
-  test.setTimeout(180_000);
-  await page.goto(`/?benchmark=${process.env.NAVPROBE_FLAG ?? 'nav'}`);
-  await expect(page.locator('.olv-empty-title')).toBeVisible();
-  await page.locator('.olv-file-input').first().setInputFiles(FIXTURE);
-  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 60_000 });
-  if (process.env.NAVPROBE_FLAG) {
-    const t0 = Date.now();
-    const box0 = (await page.locator('.olv-canvas').boundingBox())!;
-    await page.mouse.move(box0.x + 100, box0.y + 100);
-    await page.mouse.down();
-    for (let k = 1; k <= 8; k++) await page.mouse.move(box0.x + 100 + k * 16, box0.y + 100 + k * 4);
-    await page.mouse.up();
-    console.log(`CONTROL drag ms ${Date.now() - t0}`);
-    return;
-  }
+  await page.goto('/?benchmark=nav');
+  await dropTinyPly(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await page.waitForFunction(() => Boolean((window as { __olvNavProbe?: unknown }).__olvNavProbe));
 
+  // Restart so the run covers the orbit only, not the load.
   await page.evaluate(() => {
-    const p = (window as unknown as { __olvNavProbe: { stop(): void; start(): void } }).__olvNavProbe;
+    const p = (window as unknown as { __olvNavProbe: Handle }).__olvNavProbe;
     p.stop();
     p.start();
   });
   const box = await page.locator('.olv-canvas').boundingBox();
-  if (!box) throw new Error('no canvas');
+  if (!box) throw new Error('no canvas box');
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
   await page.mouse.move(cx, cy);
   await page.mouse.down();
-  const t0 = Date.now();
-  for (let k = 1; k <= 8; k++) await page.mouse.move(cx + k * 16, cy + k * 4);
-  console.log(`NAV drag ms ${Date.now() - t0}`);
+  for (let k = 1; k <= 10; k++) await page.mouse.move(cx + k * 14, cy + k * 4);
   await page.mouse.up();
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(400);
 
   const record = await page.evaluate(() => {
-    const p = (window as unknown as { __olvNavProbe: { stop(n: string): unknown; record(env: unknown): unknown } }).__olvNavProbe;
+    const p = (window as unknown as { __olvNavProbe: Handle }).__olvNavProbe;
     p.stop('orbit');
     return p.record({
       commit: 'unknown', browser: navigator.userAgent, os: navigator.platform || 'unknown', renderer: 'unknown',

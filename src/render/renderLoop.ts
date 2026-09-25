@@ -24,7 +24,7 @@
 import { cameraIsMoving, edlActiveThisFrame } from './edlMotionGate';
 import { shouldRunProbePick } from './hoverPickGate';
 import { noteDrawn } from './drawSignal';
-import { navSink, type NavUploadSample } from '../perf/navProbeHook';
+import { navSink, type NavProbeSink, type NavUploadSample } from '../perf/navProbeHook';
 
 export { feedFrameMs } from '../perf/navProbeHook';
 import type { PointInfo } from './pointInfo';
@@ -182,7 +182,7 @@ function frameNow(): number {
  */
 export function runRenderFrame(host: RenderLoopHost): void {
   // Navigation probe (`?benchmark=nav` only): null in a normal session.
-  const probe = navSink;
+  const probe = navSink();
   if (probe) probe.frameBegin(probe.now());
   const delta = host.advanceFrameClock();
   host.recordFrame(delta);
@@ -312,7 +312,7 @@ export function runRenderFrame(host: RenderLoopHost): void {
 }
 
 /** Paint through the EDL post-process, timed as an 'olv:edl' span while the probe records. */
-function renderEdlSpan(host: RenderLoopHost, probe: typeof navSink): void {
+function renderEdlSpan(host: RenderLoopHost, probe: NavProbeSink | null): void {
   const t = probe ? probe.now() : 0;
   host.renderEdl();
   if (probe) probe.span('olv:edl', t, probe.now());
