@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  describeProfileProblem,
   EMPTY_TERRAIN_ACCESS_PROFILE_FORM,
   parseTerrainAccessProfileForm,
   type TerrainAccessProfileFormValues,
@@ -110,5 +111,21 @@ describe('EMPTY_TERRAIN_ACCESS_PROFILE_FORM', () => {
     const result = parseTerrainAccessProfileForm({ ...FILLED, unknownPolicy: 'penalize' });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.profile.unknownPolicy).toBe('penalize');
+  });
+});
+
+describe('describeProfileProblem', () => {
+  it('names every problem of an empty form by its on-screen label', () => {
+    const parsed = parseTerrainAccessProfileForm(EMPTY_TERRAIN_ACCESS_PROFILE_FORM);
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    const lines = parsed.problems.map(describeProfileProblem);
+    expect(lines).toContain('Profile name is required');
+    expect(lines).toContain('Max longitudinal grade is required');
+    for (const line of lines) expect(line).not.toMatch(/\b[a-z]+[A-Z][A-Za-z]*\b/);
+  });
+
+  it('falls back to the key for a field it does not know', () => {
+    expect(describeProfileProblem({ field: 'other', reason: 'is odd' })).toBe('other is odd');
   });
 });
