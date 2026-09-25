@@ -8,6 +8,11 @@
  * Where the evidence is missing (no assertion step, no log, no start marker)
  * the answer is FAILURE.
  *
+ * Only runs on the pinned Intel runner count. A run whose "Set up job" log
+ * names an arm64 image is EXCLUDED: it neither counts nor resets the streak,
+ * because arm64 images crash the simulator's host GPU service (L13). A run
+ * with no recorded image is classified as usual.
+ *
  * Pure: no IO, no process, no network.
  */
 
@@ -15,6 +20,18 @@ export const SCRIPT_START_MARKER = 'OLV-IOS-SCRIPT-START';
 export const FIRST_ASSERTION_MARKER = 'OLV-IOS-FIRST-ASSERTION';
 export const REQUIRED_STREAK = 20;
 export const UNRELIABLE_INFRA_SHARE = 0.2;
+
+/** The `Image:` line of a "Set up job" log, or null when it has none. */
+export function runnerImage(setupLog) {
+  const m = /^(?:.*?\s)?Image:\s*(\S+)\s*$/m.exec(setupLog ?? '');
+  return m ? m[1] : null;
+}
+
+/** Why a run on `image` is excluded from the streak, or null when it counts. */
+export function exclusionReason(image) {
+  if (image && /arm64/i.test(image)) return `runner image ${image} is not the pinned Intel runner`;
+  return null;
+}
 
 const OK = new Set(['success', 'skipped', 'neutral', null, undefined, '']);
 
@@ -99,10 +116,13 @@ export function classifyRun(run, signatures) {
 
 /**
  * Streak over runs in chronological order (oldest first).
- * INFRASTRUCTURE neither counts nor resets; FAILURE resets to 0.
- * @param {{id?: string|number, verdict: 'PASS'|'FAILURE'|'INFRASTRUCTURE'}[]} runs
+ * INFRASTRUCTURE neither counts nor resets; FAILURE resets to 0. EXCLUDED
+ * runs are outside the evaluated window: not attempts, not in the 20% guard.
+ * @param {{id?: string|number, verdict: 'PASS'|'FAILURE'|'INFRASTRUCTURE'|'EXCLUDED'}[]} all
  */
-export function computeStreak(runs) {
+export function computeStreak(all) {
+  const excludedRuns = all.filter((r) => r.verdict === 'EXCLUDED').map((r) => r.id);
+  const runs = all.filter((r) => r.verdict !== 'EXCLUDED');
   let streak = 0;
   let infraCount = 0;
   const infraRuns = [];
@@ -118,6 +138,7 @@ export function computeStreak(runs) {
     infraCount,
     attempts,
     infraRuns,
+    excludedRuns,
     unreliable,
     eligibleToBlock: !unreliable && streak >= REQUIRED_STREAK,
   };

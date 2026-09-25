@@ -1,5 +1,5 @@
 /** Types for iosRunClassifier.mjs, which tests import. */
-export type Verdict = 'PASS' | 'FAILURE' | 'INFRASTRUCTURE';
+export type Verdict = 'PASS' | 'FAILURE' | 'INFRASTRUCTURE' | 'EXCLUDED';
 export interface SignatureList {
   firstAssertionStep: string;
   signatures: { id: string; note?: string; pattern: string; steps?: string; before?: string }[];
@@ -25,7 +25,10 @@ export declare function computeStreak(runs: { id?: string | number; verdict: Ver
   infraCount: number;
   attempts: number;
   infraRuns: (string | number | undefined)[];
+  excludedRuns: (string | number | undefined)[];
   unreliable: boolean;
   eligibleToBlock: boolean;
 };
+export declare function runnerImage(setupLog: string | null | undefined): string | null;
+export declare function exclusionReason(image: string | null): string | null;
 export declare function stepLog(logText: string, stepName: string): string;

@@ -15,8 +15,8 @@
     },
     {
       "id": "simulator-runtime-missing",
-      "note": "The runner image offers no usable iPhone simulator or runtime.",
-      "pattern": "no iPhone simulator is available on this image|runtime (?:profile )?(?:not found|is not available|unavailable)|No available runtime"
+      "note": "The runner image offers no usable iPhone simulator or runtime, including the pinned iOS 26.5 runtime or iPhone 17e device that scripts/pin-ios-simulator.mjs requires.",
+      "pattern": "no iPhone simulator is available on this image|runtime (?:profile )?(?:not found|is not available|unavailable)|No available runtime|runtime \"[^\"]+\" is not on this image|device \"[^\"]+\" is not available under runtime"
     },
     {
       "id": "wda-unreachable-8100",
