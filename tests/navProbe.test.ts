@@ -248,3 +248,48 @@ describe('nav jank record', () => {
     expect(() => buildNavJankRecord(ENV, [])).toThrow();
   });
 });
+
+describe('active window', () => {
+  it('covers first input to the loop\'s first sleep after the last input, without idle wakes', () => {
+    const { probe } = manual(128);
+    // Before input: two heartbeat wakes of 258 ms.
+    for (const end of [100, 358]) { probe.idleWake('heartbeat'); frame(probe, end, 258); }
+    probe.input(400);
+    // Input: 20 ms frames, one wake after a mid-run sleep (1000 ms delta), then EDL flapping after the last input.
+    for (let k = 1; k <= 10; k++) frame(probe, 400 + k * 20, 20, true, false, 1, 'moving');
+    probe.idleWake('wake');
+    frame(probe, 1600, 1000, true, false, 1, 'moving');
+    probe.input(1590);
+    for (let k = 1; k <= 5; k++) frame(probe, 1600 + k * 20, 20, true, k >= 4, 1, 'full-refine');
+    // Settled: the loop sleeps; heartbeat frames toggle EDL off and on after the last input.
+    probe.idleWake('heartbeat'); frame(probe, 1958, 258, true, false);
+    probe.idleWake('heartbeat'); frame(probe, 2216, 258, true, true);
+    const s = probe.summarize();
+    expect(s.idleWakes).toEqual({ heartbeat: 4, wake: 1 });
+    expect(s.frameMs.p99).toBe(1000);
+    expect(s.active.endReason).toBe('sleep');
+    expect(s.active.durationMs).toBe(1700 - 400);
+    expect(s.active.frames).toBe(15);
+    expect(s.active.frameMs).toEqual({ p50: 20, p95: 20, p99: 20, samples: 15 });
+    expect(s.active.over['100']).toBe(0);
+    // 358 → 420 holds the first input; the 580 → 1600 gap ends at a wake frame and is not counted.
+    expect(s.active.longestStarvationMs).toBe(62);
+    // EDL on at 1680, off at 1958: one flap; last transition at 2216.
+    expect(s.settle.postInputEdlFlaps).toBe(1);
+    expect(s.settle.timeToStationaryQualityMs).toBe(2216 - 1590);
+    expect(s.settle.finalEdl).toBe(1);
+    expect(validateJsonSchema(SCHEMA, buildNavJankRecord(ENV, [{ name: 'a', summary: s }]))).toEqual([]);
+  });
+
+  it('is empty without input and runs to the end when the loop never sleeps', () => {
+    const { probe } = manual();
+    frame(probe, 100, 16);
+    expect(probe.summarize().active.endReason).toBe('no-input');
+    probe.input(110);
+    frame(probe, 120, 16);
+    frame(probe, 136, 16);
+    const a = probe.summarize().active;
+    expect(a.endReason).toBe('run-end');
+    expect(a.frames).toBe(2);
+  });
+});

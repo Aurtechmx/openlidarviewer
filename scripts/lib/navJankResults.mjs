@@ -11,23 +11,38 @@
  */
 
 export const RESULTS_KIND = 'olv-nav-jank-results';
-export const RESULTS_VERSION = 1;
+export const RESULTS_VERSION = 2;
 
-/** The metrics the report prints, in order, with how to read each from a probe summary. */
+/**
+ * The metrics the report prints, in order, with how to read each from a probe
+ * summary. Frame statistics are the active window's (idle wakes excluded);
+ * the `whole*` ones cover the whole run and are the secondary view.
+ */
 export const METRICS = [
-  ['frameP50Ms', (s) => s.frameMs.p50],
-  ['frameP95Ms', (s) => s.frameMs.p95],
-  ['frameP99Ms', (s) => s.frameMs.p99],
-  ['over50', (s) => s.over['50']],
-  ['over100', (s) => s.over['100']],
-  ['jankEvents', (s) => s.jank.events],
+  ['frameP50Ms', (s) => s.active.frameMs.p50],
+  ['frameP95Ms', (s) => s.active.frameMs.p95],
+  ['frameP99Ms', (s) => s.active.frameMs.p99],
+  ['over50', (s) => s.active.over['50']],
+  ['over100', (s) => s.active.over['100']],
+  ['jankEvents', (s) => s.active.jank.events],
+  ['longestStarvationMs', (s) => s.active.longestStarvationMs],
+  ['activeDurationMs', (s) => s.active.durationMs],
   ['inputToDrawP95Ms', (s) => s.inputToDrawMs.p95],
-  ['longestStarvationMs', (s) => s.longestStarvationMs],
   ['uploadP95Ms', (s) => s.upload.p95Ms],
   ['lodChurnPerSec', (s) => s.lod.churnPerSec],
   ['qualityTransitions', (s) => s.quality.transitions],
+  ['postInputEdlFlaps', (s) => s.settle.postInputEdlFlaps],
+  ['timeToStationaryQualityMs', (s) => s.settle.timeToStationaryQualityMs],
   ['longTasks', (s) => s.longTasks.count],
+  ['wholeFrameP95Ms', (s) => s.frameMs.p95],
+  ['wholeFrameP99Ms', (s) => s.frameMs.p99],
+  ['wholeOver100', (s) => s.over['100']],
+  ['wholeStarvationMs', (s) => s.longestStarvationMs],
+  ['idleWakes', (s) => s.idleWakes.heartbeat + s.idleWakes.wake],
 ];
+
+/** Metrics of the whole-run (secondary) view. */
+export const SECONDARY_METRICS = ['wholeFrameP95Ms', 'wholeFrameP99Ms', 'wholeOver100', 'wholeStarvationMs', 'idleWakes'];
 
 /** The env fields two sessions must share to be compared (commit and cache are what differ). */
 export const FINGERPRINT_KEYS = ['browser', 'os', 'renderer', 'dpr', 'datasetSha256', 'flags'];

@@ -36,9 +36,10 @@ export type SchedulerFactory = (hooks: {
   nowMs: () => number;
   needsFrame: (nowMs: number) => boolean;
   runFrame: () => void;
+  idleWake?: (kind: 'heartbeat' | 'wake') => void;
 }) => FrameScheduler;
 import { RenderActivityGate } from './renderActivityGate';
-import { navDrive } from '../perf/navProbeHook';
+import { navDrive, navSink } from '../perf/navProbeHook';
 import { RenderInvalidation, type RenderInvalidationReason, type ServedFrame } from './renderInvalidation';
 
 /** The live signals that run without asking each frame. */
@@ -314,6 +315,8 @@ export class FrameDemand {
           this._served = null;
         }
       },
+      // `?benchmark=nav`: tell the probe the next frame's delta spans a sleep.
+      idleWake: (kind) => navSink()?.idleWake?.(kind),
     });
     this._scheduler.start();
   }

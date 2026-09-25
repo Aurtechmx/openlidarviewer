@@ -38,7 +38,7 @@
 import { test, expect, type BrowserContext, type Page, type TestInfo } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { closeSync, createReadStream, existsSync, openSync, readSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { release, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -96,6 +96,19 @@ async function datasetSha(path: string): Promise<string> {
   cache[key] = hash.digest('hex');
   writeFileSync(cacheFile, JSON.stringify(cache));
   return cache[key];
+}
+
+/** Bounds diagonal from the LAS/LAZ public header (max/min X, Y, Z doubles at byte 179), for the driver's rest tolerance. */
+function lasDiagonal(path: string): number {
+  const fd = openSync(path, 'r');
+  try {
+    const b = Buffer.alloc(48);
+    readSync(fd, b, 0, 48, 179);
+    const [maxX, minX, maxY, minY, maxZ, minZ] = [0, 8, 16, 24, 32, 40].map((o) => b.readDoubleLE(o));
+    return Math.hypot(maxX - minX, maxY - minY, maxZ - minZ);
+  } finally {
+    closeSync(fd);
+  }
 }
 
 interface LoadTiming { cache: 'cold' | 'warm'; timeToFirstRenderMs: number | null; pointsRendered: string | null; wallMs: number }
@@ -165,15 +178,15 @@ async function load(page: Page, cache: 'cold' | 'warm'): Promise<LoadTiming> {
   return { cache, timeToFirstRenderMs: ttfr ? Number(ttfr) : null, pointsRendered: points, wallMs };
 }
 
-async function drive(page: Page, name: string): Promise<DriveOut> {
+async function drive(page: Page, name: string, sceneDiagonal: number): Promise<DriveOut> {
   // Let the first frames after the load pass before measuring.
   await page.waitForTimeout(1_000);
   return page.evaluate(
-    async ({ name, timeoutMs, gapMs }) => {
+    async ({ name, timeoutMs, gapMs, sceneDiagonal }) => {
       type Result = { trajectoryDigest: string; settled: boolean; unsettledAt: string | null; frames: number };
       const w = window as unknown as {
         __olvNavProbe: { stop(n?: string): NavProbeSummary; start(): void };
-        __olvNavDriver: { run(n: string, o: { fixedStep: boolean }): Promise<Result> };
+        __olvNavDriver: { run(n: string, o: { fixedStep: boolean; sceneDiagonal: number }): Promise<Result> };
         __olvNavSink?: { frameMs(ms: number): void };
       };
       const visStart = document.visibilityState;
@@ -209,7 +222,7 @@ async function drive(page: Page, name: string): Promise<DriveOut> {
       });
       let res: Result | null;
       try {
-        res = await Promise.race([w.__olvNavDriver.run(name, { fixedStep: false }), timeout]);
+        res = await Promise.race([w.__olvNavDriver.run(name, { fixedStep: false, sceneDiagonal }), timeout]);
       } finally {
         clearTimeout(timer);
         if (sink && orig) sink.frameMs = orig;
@@ -236,7 +249,7 @@ async function drive(page: Page, name: string): Promise<DriveOut> {
       if (!res) return { trajectoryDigest: 'timeout', settled: false, unsettledAt: 'input', frames: 0, timedOut: true, summary, meta };
       return { ...res, timedOut: false, summary, meta };
     },
-    { name, timeoutMs: DRIVE_TIMEOUT_MS, gapMs: GAP_MS },
+    { name, timeoutMs: DRIVE_TIMEOUT_MS, gapMs: GAP_MS, sceneDiagonal },
   );
 }
 
@@ -369,7 +382,7 @@ test.describe('@gpu navigation jank benchmark', () => {
           const timing = await load(page, cache);
           env ??= await environment(page, context, info);
           const cover = await applyWindowMode(page, context);
-          const out = await drive(page, name);
+          const out = await drive(page, name, lasDiagonal(DATASET));
           await cover?.close();
           const valid = !out.meta.visibility.hiddenDuring;
           if (!valid) notes.push(`${name} run ${i} (${cache}): INVALID, the page was hidden during the run`);
@@ -378,7 +391,9 @@ test.describe('@gpu navigation jank benchmark', () => {
           console.log(
             `[nav-jank] ${name} ${cache} #${i}: load ${timing.wallMs} ms, frames ${out.summary.frames}, ` +
               `p95 ${out.summary.frameMs.p95.toFixed(1)} ms, starvation ${out.summary.longestStarvationMs.toFixed(0)} ms, ` +
-              `p99 ${out.summary.frameMs.p99.toFixed(1)} ms, long tasks ${out.summary.longTasks.count}, ` +
+              `p99 ${out.summary.frameMs.p99.toFixed(1)} ms, active p95/p99 ${out.summary.active.frameMs.p95.toFixed(1)}/` +
+              `${out.summary.active.frameMs.p99.toFixed(1)} ms, EDL flaps ${out.summary.settle.postInputEdlFlaps}, ` +
+              `to stationary ${out.summary.settle.timeToStationaryQualityMs.toFixed(0)} ms, settled ${out.settled}, long tasks ${out.summary.longTasks.count}, ` +
               `gaps>=${GAP_MS}ms ${out.meta.gaps.length} (during input ${out.meta.gapsDuringInput}, after ${out.meta.gapsAfterInput}), ` +
               `vis ${out.meta.visibility.start}->${out.meta.visibility.end}${out.meta.visibility.hiddenDuring ? ' HIDDEN' : ''}, ` +
               `focus ${out.meta.focus.start}->${out.meta.focus.end}`,
@@ -404,7 +419,7 @@ test.describe('@gpu navigation jank benchmark', () => {
         const result = buildNavJankResults({
           generatedAt: new Date().toISOString(),
           machine: MACHINE,
-          dataset: { id: DATASET_ID, licence: 'CC-BY-4.0', file: 'ot_356000_3972000_1.laz', sha256: sha, bytes: statSync(DATASET).size, registeredSha256: registered },
+          dataset: { id: DATASET_ID, boundsDiagonal: lasDiagonal(DATASET), licence: 'CC-BY-4.0', file: 'ot_356000_3972000_1.laz', sha256: sha, bytes: statSync(DATASET).size, registeredSha256: registered },
           trajectories: {
             [name]: {
               cold,

@@ -21,6 +21,18 @@
  * - starvation: the gap between two consecutive drawn frames when an input
  *   event falls within that gap or within {@link INPUT_ACTIVE_MS} before it
  *   starts; the longest such gap is reported.
+ * - idle wake: a frame that follows a sleep of the render loop, woken by the
+ *   idle heartbeat or by a wake while asleep; its clock delta spans the sleep,
+ *   not a frame's work.
+ * - active window: from the first input to the end of the post-input settle,
+ *   which is the last frame before the first heartbeat wake after the last
+ *   input, i.e. before the loop has slept a full heartbeat with nothing to do
+ *   (or the end of the run when it never does). The `active` block's frame
+ *   statistics cover the frames in it that are not idle wakes; the top-level
+ *   frame statistics cover the whole run and are kept as a secondary view.
+ * - post-input EDL flaps: EDL switched on and then off again after the last
+ *   input. Time to stationary quality: from the last input to the last
+ *   quality transition after it (0 when there is none).
  * - long task owner: the probe span ('olv:upload', 'olv:stream', 'olv:edl',
  *   'olv:cull') with the largest time overlap with the task, else
  *   'unattributed'.
@@ -113,6 +125,32 @@ export interface NavProbeSummary {
   lod: { added: number; removed: number; churnPerSec: number };
   quality: { transitions: number; byKind: Record<QualityKind, number>; events: QualityTransition[] };
   longTasks: { count: number; byOwner: Record<LongTaskOwner, { count: number; totalMs: number }> };
+  idleWakes: { heartbeat: number; wake: number };
+  active: NavActiveSummary;
+  settle: { postInputEdlFlaps: number; timeToStationaryQualityMs: number; finalEdl: number | null };
+}
+
+/** Frame statistics over the active window, idle wakes excluded. */
+export interface NavActiveSummary {
+  durationMs: number;
+  endReason: 'sleep' | 'run-end' | 'no-input';
+  frames: number;
+  frameMs: { p50: number; p95: number; p99: number; samples: number };
+  over: { '16.7': number; '33.3': number; '50': number; '100': number };
+  jank: { thresholdMs: number; events: number; bursts: number; longestBurst: number };
+  longestStarvationMs: number;
+}
+
+function overCounts(values: ArrayLike<number>, n: number): NavActiveSummary['over'] {
+  const over = { '16.7': 0, '33.3': 0, '50': 0, '100': 0 };
+  for (let k = 0; k < n; k++) {
+    const v = values[k];
+    if (v > FRAME_THRESHOLDS_MS[0]) over['16.7']++;
+    if (v > FRAME_THRESHOLDS_MS[1]) over['33.3']++;
+    if (v > FRAME_THRESHOLDS_MS[2]) over['50']++;
+    if (v > FRAME_THRESHOLDS_MS[3]) over['100']++;
+  }
+  return over;
 }
 
 /** Upper bound on transition events listed verbatim in a summary. */
@@ -150,6 +188,8 @@ export class NavProbe implements NavProbeSink {
   private readonly _dpr: Float32Array;
   private readonly _phase: Uint8Array;
   private readonly _drawn: Uint8Array;
+  /** 0 = none, 1 = heartbeat, 2 = wake while asleep. */
+  private readonly _wake: Uint8Array;
 
   // Event rings.
   private readonly _in = new RingIndex(8192);
@@ -177,6 +217,7 @@ export class NavProbe implements NavProbeSink {
   private _curCommits = 0;
   private _curLodAdd = 0;
   private _curLodRem = 0;
+  private _curWake = 0;
   private _prevEdl = -1;
   private _prevDpr = -1;
   private _prevPhase = -1;
@@ -207,6 +248,7 @@ export class NavProbe implements NavProbeSink {
     this._dpr = new Float32Array(n);
     this._phase = new Uint8Array(n);
     this._drawn = new Uint8Array(n);
+    this._wake = new Uint8Array(n);
     this.now = options.now ?? (() => performance.now());
     this._measures = options.measures ?? true;
     if (options.performanceObserver !== undefined) {
@@ -291,12 +333,17 @@ export class NavProbe implements NavProbeSink {
     this._curCommits = 0;
     this._curLodAdd = 0;
     this._curLodRem = 0;
+    this._curWake = 0;
   }
 
   // ---- sink ---------------------------------------------------------------
 
   frameMs(ms: number): void {
     this._curRaf = ms;
+  }
+
+  idleWake(kind: 'heartbeat' | 'wake'): void {
+    this._curWake = kind === 'heartbeat' ? 1 : 2;
   }
 
   frameBegin(t: number): void {
@@ -349,6 +396,7 @@ export class NavProbe implements NavProbeSink {
     this._dpr[i] = dpr;
     this._phase[i] = ph;
     this._drawn[i] = drawn ? 1 : 0;
+    this._wake[i] = this._curWake;
     if (this._prevEdl >= 0) {
       if (this._prevEdl !== edlOn) this._transition(t, 0, this._prevEdl, edlOn);
       if (this._prevDpr !== Math.fround(dpr)) this._transition(t, 1, this._prevDpr, dpr);
@@ -434,14 +482,7 @@ export class NavProbe implements NavProbeSink {
     const rafSorted = sortedCopy(raf, rafN);
     const cpuSorted = sortedCopy(cpu, cpuN);
     const median = pct(rafSorted, 50);
-    const over = { '16.7': 0, '33.3': 0, '50': 0, '100': 0 };
-    for (let k = 0; k < rafN; k++) {
-      const v = raf[k];
-      if (v > FRAME_THRESHOLDS_MS[0]) over['16.7']++;
-      if (v > FRAME_THRESHOLDS_MS[1]) over['33.3']++;
-      if (v > FRAME_THRESHOLDS_MS[2]) over['50']++;
-      if (v > FRAME_THRESHOLDS_MS[3]) over['100']++;
-    }
+    const over = overCounts(raf, rafN);
     const jank = jankStats(rafInOrder, 2 * median);
 
     const inputs: number[] = [];
@@ -460,10 +501,22 @@ export class NavProbe implements NavProbeSink {
 
     const byKind: Record<QualityKind, number> = { edl: 0, dpr: 0, phase: 0 };
     const events: QualityTransition[] = [];
+    const lastInput = inputs.length ? inputs[inputs.length - 1] : NaN;
+    let flaps = 0;
+    let edlOnAfterInput = false;
+    let lastQualityT = NaN;
     for (let k = 0; k < this._q.count; k++) {
       const i = this._q.at(k);
       const kind = QUALITY_KINDS[this._qKind[i]];
       byKind[kind]++;
+      if (this._qT[i] > lastInput) {
+        lastQualityT = this._qT[i];
+        if (kind === 'edl' && this._qTo[i] === 1) edlOnAfterInput = true;
+        else if (kind === 'edl' && this._qTo[i] === 0 && edlOnAfterInput) {
+          flaps++;
+          edlOnAfterInput = false;
+        }
+      }
       if (events.length < MAX_LISTED_TRANSITIONS) {
         const decode = (v: number): number | string => (kind === 'phase' ? phaseName(v) : v);
         events.push({ t: this._qT[i], kind, from: decode(this._qFrom[i]), to: decode(this._qTo[i]) });
@@ -474,6 +527,13 @@ export class NavProbe implements NavProbeSink {
     const durationMs = n > 0 ? this._tEnd[this._f.at(n - 1)] - first : 0;
     const upMsSorted = Float64Array.from(upMs).sort();
     const upBytesSorted = Float64Array.from(upBytes).sort();
+
+    const idleWakes = { heartbeat: 0, wake: 0 };
+    for (let k = 0; k < n; k++) {
+      const w = this._wake[this._f.at(k)];
+      if (w === 1) idleWakes.heartbeat++;
+      else if (w === 2) idleWakes.wake++;
+    }
 
     return {
       frames: n,
@@ -489,6 +549,69 @@ export class NavProbe implements NavProbeSink {
       lod: { added: lodAdded, removed: lodRemoved, churnPerSec: durationMs > 0 ? ((lodAdded + lodRemoved) * 1000) / durationMs : 0 },
       quality: { transitions: this._q.count, byKind, events },
       longTasks: { count: this._lt.count, byOwner },
+      idleWakes,
+      active: this._active(inputs),
+      settle: {
+        postInputEdlFlaps: flaps,
+        timeToStationaryQualityMs: Number.isNaN(lastQualityT) ? 0 : lastQualityT - lastInput,
+        finalEdl: n > 0 ? this._edl[this._f.at(n - 1)] : null,
+      },
+    };
+  }
+
+  /** Frame statistics over the active window (see the module header), idle wakes excluded. */
+  private _active(inputsAsc: readonly number[]): NavActiveSummary {
+    const n = this._f.count;
+    const empty = (endReason: NavActiveSummary['endReason']): NavActiveSummary => ({
+      durationMs: 0, endReason, frames: 0,
+      frameMs: { p50: 0, p95: 0, p99: 0, samples: 0 },
+      over: { '16.7': 0, '33.3': 0, '50': 0, '100': 0 },
+      jank: { thresholdMs: 0, events: 0, bursts: 0, longestBurst: 0 },
+      longestStarvationMs: 0,
+    });
+    if (inputsAsc.length === 0 || n === 0) return empty('no-input');
+    const first = inputsAsc[0];
+    const last = inputsAsc[inputsAsc.length - 1];
+    let endT = this._tEnd[this._f.at(n - 1)];
+    let endReason: NavActiveSummary['endReason'] = 'run-end';
+    for (let k = 0; k < n; k++) {
+      const i = this._f.at(k);
+      if (this._tEnd[i] > last && this._wake[i] === 1) {
+        endT = k > 0 ? Math.max(last, this._tEnd[this._f.at(k - 1)]) : last;
+        endReason = 'sleep';
+        break;
+      }
+    }
+    const inWindow = (i: number): boolean => this._tEnd[i] >= first && this._tEnd[i] <= endT && this._wake[i] === 0;
+    const raf: number[] = [];
+    const rafInOrder: number[] = [];
+    const drawnT: number[] = [];
+    const eligible: boolean[] = [];
+    let frames = 0;
+    for (let k = 0; k < n; k++) {
+      const i = this._f.at(k);
+      const ok = inWindow(i);
+      if (ok) {
+        frames++;
+        const r = this._raf[i];
+        if (!Number.isNaN(r)) raf.push(r);
+        rafInOrder.push(ok && !Number.isNaN(r) ? r : NaN);
+      }
+      if (this._drawn[i]) {
+        drawnT.push(this._tEnd[i]);
+        eligible.push(ok);
+      }
+    }
+    const sorted = Float64Array.from(raf).sort();
+    const median = pct(sorted, 50);
+    return {
+      durationMs: Math.max(0, endT - first),
+      endReason,
+      frames,
+      frameMs: { p50: median, p95: pct(sorted, 95), p99: pct(sorted, 99), samples: raf.length },
+      over: overCounts(raf, raf.length),
+      jank: { thresholdMs: 2 * median, ...jankStats(rafInOrder, 2 * median) },
+      longestStarvationMs: longestStarvation(inputsAsc, drawnT, INPUT_ACTIVE_MS, eligible),
     };
   }
 
@@ -540,14 +663,24 @@ export function inputToDraw(inputsAsc: readonly number[], drawnAsc: readonly num
   return out;
 }
 
-/** Longest gap between consecutive drawn frames that an input fell in, or within `activeMs` before. */
-export function longestStarvation(inputsAsc: readonly number[], drawnAsc: readonly number[], activeMs: number): number {
+/**
+ * Longest gap between consecutive drawn frames that an input fell in, or within
+ * `activeMs` before. With `eligible`, only gaps ending at a drawn frame whose
+ * flag is true count.
+ */
+export function longestStarvation(
+  inputsAsc: readonly number[],
+  drawnAsc: readonly number[],
+  activeMs: number,
+  eligible?: readonly boolean[],
+): number {
   let longest = 0;
   let j = 0;
   for (let k = 1; k < drawnAsc.length; k++) {
     const a = drawnAsc[k - 1];
     const b = drawnAsc[k];
     while (j < inputsAsc.length && inputsAsc[j] < a - activeMs) j++;
+    if (eligible && !eligible[k]) continue;
     if (j < inputsAsc.length && inputsAsc[j] <= b && b - a > longest) longest = b - a;
   }
   return longest;

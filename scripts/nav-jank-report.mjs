@@ -5,10 +5,12 @@
  *   node scripts/nav-jank-report.mjs <results.json>            one session
  *   node scripts/nav-jank-report.mjs <base.json> <head.json>   compare two
  *
- * One file: per trajectory, the warm-run medians (and the cold run) of frame
- * p50/p95/p99, frames over 50 and 100 ms, jank events, input-to-draw p95,
- * longest starvation, upload p95, LOD churn per second, quality transitions
- * and long tasks, then long-task time by owner.
+ * One file: per trajectory, the warm-run medians (and the cold run) of the
+ * active-window frame p50/p95/p99, frames over 50 and 100 ms, jank events and
+ * longest starvation, then input-to-draw p95, upload p95, LOD churn per
+ * second, quality transitions, EDL flaps after the last input, time to
+ * stationary quality and long tasks; then the whole-run view (frame p95/p99,
+ * frames over 100 ms, starvation, idle wakes) and long-task time by owner.
  *
  * Two files: the per-metric difference of the warm medians next to the
  * run-to-run spread (the larger of the two IQRs), marking a difference larger
@@ -19,7 +21,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { isCliEntry } from './lib/isCliEntry.mjs';
-import { FINGERPRINT_KEYS, METRICS, RESULTS_KIND, RESULTS_VERSION } from './lib/navJankResults.mjs';
+import { FINGERPRINT_KEYS, METRICS, RESULTS_KIND, RESULTS_VERSION, SECONDARY_METRICS } from './lib/navJankResults.mjs';
 
 const LABELS = {
   frameP50Ms: 'frame p50 ms',
@@ -28,13 +30,23 @@ const LABELS = {
   over50: '>50 ms',
   over100: '>100 ms',
   jankEvents: 'jank events',
-  inputToDrawP95Ms: 'input→draw p95 ms',
   longestStarvationMs: 'starvation ms',
+  activeDurationMs: 'active window ms',
+  inputToDrawP95Ms: 'input→draw p95 ms',
   uploadP95Ms: 'upload p95 ms',
   lodChurnPerSec: 'LOD churn/s',
   qualityTransitions: 'quality trans.',
+  postInputEdlFlaps: 'EDL flaps after input',
+  timeToStationaryQualityMs: 'to stationary quality ms',
   longTasks: 'long tasks',
+  wholeFrameP95Ms: 'whole-run frame p95 ms',
+  wholeFrameP99Ms: 'whole-run frame p99 ms',
+  wholeOver100: 'whole-run >100 ms',
+  wholeStarvationMs: 'whole-run starvation ms',
+  idleWakes: 'idle wakes',
 };
+
+const PRIMARY = METRICS.map(([k]) => k).filter((k) => !SECONDARY_METRICS.includes(k));
 
 const fmt = (v) => (v === null || v === undefined ? '-' : Number.isInteger(v) ? String(v) : v.toFixed(1));
 
@@ -55,8 +67,9 @@ export function formatTable(f) {
   const names = Object.keys(f.trajectories);
   const header = ['metric', ...names.flatMap((n) => [`${n} warm`, 'cold'])];
   const rows = [header];
+  const secondary = [['whole run (secondary)', ...names.flatMap((n) => [`${n} warm`, 'cold'])]];
   for (const [k] of METRICS) {
-    rows.push([
+    (SECONDARY_METRICS.includes(k) ? secondary : rows).push([
       LABELS[k] ?? k,
       ...names.flatMap((n) => {
         const t = f.trajectories[n];
@@ -75,6 +88,8 @@ export function formatTable(f) {
     `runs: ${runs} (+1 cold each)`,
     '',
     pad(rows),
+    '',
+    pad(secondary),
     ...(owners.length ? ['', pad(ownerRows)] : []),
   ].join('\n');
 }
@@ -128,7 +143,8 @@ export function formatComparison(a, b) {
   const blocks = [`base ${a.commit}  head ${b.commit}  (IQR = larger run-to-run interquartile range; * = |diff| > IQR)`];
   for (const [n, metrics] of Object.entries(cmp)) {
     const rows = [[n, 'base', 'head', 'diff', 'IQR', '']];
-    for (const [k, m] of Object.entries(metrics)) {
+    for (const k of [...PRIMARY, ...SECONDARY_METRICS]) {
+      const m = metrics[k];
       rows.push([LABELS[k] ?? k, fmt(m.base), fmt(m.head), (m.diff > 0 ? '+' : '') + fmt(m.diff), fmt(m.noise), m.beyondNoise ? '*' : '']);
     }
     blocks.push('', pad(rows));

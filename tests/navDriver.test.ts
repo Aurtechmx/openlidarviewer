@@ -7,7 +7,7 @@ import {
   trajectoryDigest,
   type NavStep,
 } from '../src/perf/navTrajectories';
-import { NavDriver, DRIVE_SLOT, cameraDigest, FIXED_NAV_DT_SEC, SETTLE_FRAMES, type NavDriverEnv } from '../src/perf/navDriver';
+import { NavDriver, DRIVE_SLOT, cameraDigest, FIXED_NAV_DT_SEC, SETTLE_UPDATES, withinRest, angleBetween, type NavDriverEnv } from '../src/perf/navDriver';
 import { NAV_DRIVE_SLOT, navDrive, stepNav, type NavDriveSink } from '../src/perf/navProbeHook';
 import { runRenderFrame, type RenderLoopHost } from '../src/render/renderLoop';
 
@@ -190,11 +190,32 @@ describe('driver sequencing', () => {
     const done = new NavDriver(f.env).run('zoomShock');
     await drain(f, () => { if (firstInput < 0 && f.log.length > 0) firstInput = f.updates(); });
     const r = await done;
-    expect(f.log[0].updates).toBeGreaterThanOrEqual(30 + SETTLE_FRAMES);
+    expect(f.log[0].updates).toBeGreaterThanOrEqual(30 + SETTLE_UPDATES);
     expect(r.startCameraDigest).toBe(cameraDigest([30, 0, 0], [0, 0, 0], [0, 0, 1]));
     expect(r.finalCameraDigest).toBe(cameraDigest([firstInput + 150, 0, 0], [0, 0, 0], [0, 0, 1]));
     expect(r.fixedStep).toBe(false);
     expect(r.settled).toBe(true);
+  });
+
+  it('counts navigation updates, so a loop that only updates on a heartbeat still settles', async () => {
+    const f = fakeEnv((u) => Math.min(u, 20));
+    const done = new NavDriver(f.env).run('zoomShock');
+    // The render loop runs one frame in eight once the input is over (an idle heartbeat).
+    await drain(f, (k) => f.setLoop(f.log.length < buildTrajectory('zoomShock').length || k % 8 === 0));
+    expect((await done).settled).toBe(true);
+  });
+
+  it('holds rest to a tolerance relative to the scene, not an absolute one', () => {
+    // A pan by `x` moves position and target together; `ty` moves the target alone (a turn).
+    const at = (x: number, ty = 0) => ({ position: [356_000 + x, 3_972_000, 2000], target: [356_000 + x, 3_972_000 + ty, 1900], up: [0, 0, 1] });
+    // A 0.5 mm pan in a 1.4 km scene is rest; 5 mm is not.
+    expect(withinRest(at(0), at(0.0005), 1414)).toBe(true);
+    expect(withinRest(at(0), at(0.005), 1414)).toBe(false);
+    expect(withinRest(at(0), at(0, 0.005), 1414)).toBe(false);
+    expect(angleBetween([1, 0, 0], [1, 1e-8, 0])).toBeCloseTo(1e-8, 15);
+    expect(angleBetween([0, 0, 1], [0, 0, 1])).toBe(0);
+    const tilted = { ...at(0), up: [0, Math.sin(1e-6), Math.cos(1e-6)] };
+    expect(withinRest(at(0), tilted, 1414)).toBe(false);
   });
 
   it('reports an unsettled run when the pose never holds', async () => {

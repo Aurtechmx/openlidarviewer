@@ -3,7 +3,8 @@ import type { NavJankRecord } from '../../src/perf/navJankRecord';
 import type { NavProbeSummary } from '../../src/perf/navProbe';
 
 export declare const RESULTS_KIND: 'olv-nav-jank-results';
-export declare const RESULTS_VERSION: 1;
+export declare const RESULTS_VERSION: 2;
+export declare const SECONDARY_METRICS: readonly string[];
 export declare const METRICS: ReadonlyArray<readonly [string, (summary: NavProbeSummary) => number]>;
 export declare const FINGERPRINT_KEYS: readonly string[];
 
@@ -18,7 +19,7 @@ export interface NavJankTrajectoryInput {
 
 export interface NavJankResults {
   kind: 'olv-nav-jank-results';
-  version: 1;
+  version: 2;
   recordSchema: string;
   generatedAt: string;
   machine: string;

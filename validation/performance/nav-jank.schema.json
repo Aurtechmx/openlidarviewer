@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://openlidarviewer.org/schemas/nav-jank.schema.json",
   "title": "Navigation jank run record",
-  "description": "One heavy-navigation benchmark record: the environment, one summary per trajectory run, and an aggregate. Frame time is the viewer's accepted per-frame clock delta; a jank event is a frame longer than twice the run's median frame time; a burst is two or more consecutive jank frames.",
+  "description": "One heavy-navigation benchmark record: the environment, one summary per trajectory run, and an aggregate. Frame time is the viewer's accepted per-frame clock delta; a jank event is a frame longer than twice the run's median frame time; a burst is two or more consecutive jank frames. Schema 2 adds the active window: from the first input to the end of the post-input settle (the last frame before the first idle-heartbeat wake after the last input), whose frame statistics exclude idle wakes (frames following a sleep of the loop, whose delta spans the sleep). The top-level per-run frame statistics cover the whole run and are kept as a secondary view.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -15,7 +15,7 @@
     "schemaVersion": {
       "type": "integer",
       "enum": [
-        1
+        2
       ]
     },
     "env": {
@@ -110,7 +110,10 @@
               "upload",
               "lod",
               "quality",
-              "longTasks"
+              "longTasks",
+              "idleWakes",
+              "active",
+              "settle"
             ],
             "properties": {
               "frames": {
@@ -511,6 +514,166 @@
                   }
                 },
                 "additionalProperties": false
+              },
+              "idleWakes": {
+                "type": "object",
+                "required": [
+                  "heartbeat",
+                  "wake"
+                ],
+                "properties": {
+                  "heartbeat": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "wake": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              },
+              "active": {
+                "type": "object",
+                "required": [
+                  "durationMs",
+                  "endReason",
+                  "frames",
+                  "frameMs",
+                  "over",
+                  "jank",
+                  "longestStarvationMs"
+                ],
+                "properties": {
+                  "durationMs": {
+                    "type": "number"
+                  },
+                  "endReason": {
+                    "type": "string",
+                    "enum": [
+                      "sleep",
+                      "run-end",
+                      "no-input"
+                    ]
+                  },
+                  "frames": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "frameMs": {
+                    "type": "object",
+                    "required": [
+                      "p50",
+                      "p95",
+                      "p99",
+                      "samples"
+                    ],
+                    "properties": {
+                      "p50": {
+                        "type": "number"
+                      },
+                      "p95": {
+                        "type": "number"
+                      },
+                      "p99": {
+                        "type": "number"
+                      },
+                      "samples": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "over": {
+                    "type": "object",
+                    "required": [
+                      "16.7",
+                      "33.3",
+                      "50",
+                      "100"
+                    ],
+                    "properties": {
+                      "16.7": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "33.3": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "50": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "100": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "jank": {
+                    "type": "object",
+                    "required": [
+                      "thresholdMs",
+                      "events",
+                      "bursts",
+                      "longestBurst"
+                    ],
+                    "properties": {
+                      "thresholdMs": {
+                        "type": "number"
+                      },
+                      "events": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "bursts": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "longestBurst": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "longestStarvationMs": {
+                    "type": "number"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "settle": {
+                "type": "object",
+                "required": [
+                  "postInputEdlFlaps",
+                  "timeToStationaryQualityMs",
+                  "finalEdl"
+                ],
+                "properties": {
+                  "postInputEdlFlaps": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "timeToStationaryQualityMs": {
+                    "type": "number"
+                  },
+                  "finalEdl": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "enum": [
+                      0,
+                      1,
+                      null
+                    ]
+                  }
+                },
+                "additionalProperties": false
               }
             },
             "additionalProperties": false
@@ -531,7 +694,11 @@
         "jankBursts",
         "worstStarvationMs",
         "medianInputToDrawP95Ms",
-        "longTasks"
+        "longTasks",
+        "medianActiveFrameP95Ms",
+        "medianActiveFrameP99Ms",
+        "worstActiveStarvationMs",
+        "postInputEdlFlaps"
       ],
       "properties": {
         "runs": {
@@ -566,6 +733,19 @@
           "type": "number"
         },
         "longTasks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "medianActiveFrameP95Ms": {
+          "type": "number"
+        },
+        "medianActiveFrameP99Ms": {
+          "type": "number"
+        },
+        "worstActiveStarvationMs": {
+          "type": "number"
+        },
+        "postInputEdlFlaps": {
           "type": "integer",
           "minimum": 0
         }

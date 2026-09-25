@@ -41,7 +41,21 @@ function summary(p95: number, longMs = 0): NavProbeSummary {
         cull: { count: 0, totalMs: 0 }, unattributed: { count: 0, totalMs: 0 },
       },
     },
+    idleWakes: { heartbeat: 4, wake: 1 },
+    active: {
+      durationMs: 1500, endReason: 'sleep', frames: 90,
+      frameMs: { p50: 16.7, p95, p99: p95 + 5, samples: 90 },
+      over: { '16.7': 9, '33.3': 2, '50': 1, '100': 0 },
+      jank: { thresholdMs: 33.4, events: 2, bursts: 1, longestBurst: 2 },
+      longestStarvationMs: 40,
+    },
+    settle: { postInputEdlFlaps: 0, timeToStationaryQualityMs: 300, finalEdl: 1 },
   } as unknown as NavProbeSummary;
+}
+
+/** The whole-run frame p95 differs from the active one, so the two views are told apart. */
+function withWholeP95(sum: NavProbeSummary, p95: number): NavProbeSummary {
+  return { ...sum, frameMs: { ...sum.frameMs, p95 } };
 }
 
 const ENV: NavJankEnv = {
@@ -70,6 +84,16 @@ describe('navJankResults', () => {
     expect(quantile([1, 2, 3, 4], 0.5)).toBe(2.5);
     expect(spread([5, 1, 3, 2, 4])).toEqual({ median: 3, iqr: 2, n: 5 });
     expect(spread([7])).toEqual({ median: 7, iqr: 0, n: 1 });
+  });
+
+  it('reads frame statistics from the active window and keeps the whole run apart', () => {
+    const r = buildNavJankResults({
+      generatedAt: 'x', machine: 'm', dataset: {},
+      trajectories: { o: { warm: buildNavJankRecord({ ...ENV, cache: 'warm' }, [{ name: 'o', summary: withWholeP95(summary(30), 258) }]) } },
+    });
+    expect(r.trajectories.o.warmMedians?.frameP95Ms.median).toBe(30);
+    expect(r.trajectories.o.warmMedians?.wholeFrameP95Ms.median).toBe(258);
+    expect(r.trajectories.o.warmMedians?.timeToStationaryQualityMs.median).toBe(300);
   });
 
   it('builds warm medians, cold metrics and long tasks by owner', () => {
@@ -106,7 +130,9 @@ describe('navJankResults', () => {
 describe('nav-jank-report', () => {
   it('prints a table with the warm median and the cold run', () => {
     const text = formatTable(session([20, 22, 24, 26, 28]));
-    expect(text).toMatch(/frame p95 ms\s+24(\.0)?\s+40/);
+    expect(text).toMatch(/\nframe p95 ms\s+24\s+40/);
+    expect(text).toMatch(/whole run \(secondary\)/);
+    expect(text).toMatch(/idle wakes\s+5\s+5/);
     expect(text).toMatch(/upload\s+120/);
     expect(text).toContain('orbit 5 warm');
   });
@@ -123,7 +149,7 @@ describe('nav-jank-report', () => {
     expect(compareRefusals(a, session([20], { renderer: 'webgl2 / SwiftShader' }))).toEqual([expect.stringMatching(/renderer/)]);
     expect(compareRefusals(a, session([20], { datasetSha256: 'b'.repeat(64) }))[0]).toMatch(/datasetSha256/);
     expect(compareRefusals(a, session([20], { trajectoryDigest: 'other' }))).toEqual(['orbit: trajectory digest differs']);
-    expect(compareRefusals(a, { ...a, version: 2 } as unknown as NavJankResults)[0]).toMatch(/version/);
+    expect(compareRefusals(a, { ...a, version: 1 } as unknown as NavJankResults)[0]).toMatch(/version/);
     expect(compareRefusals(a, {} as NavJankResults)[0]).toMatch(/not a nav-jank results file/);
     expect(() => compareResults(a, session([20], { dpr: 1 }))).toThrow(/refusing/);
   });

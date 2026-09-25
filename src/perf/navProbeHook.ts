@@ -27,6 +27,8 @@ export interface NavProbeSink {
   lodChange(added: number, removed: number): void;
   span(name: NavSpanName, start: number, end: number): void;
   frameEnd(t: number, drawn: boolean, edl: boolean, dpr: number, phase: string): void;
+  /** The frame about to run follows a sleep of the loop (see FrameSchedulerHost.idleWake). */
+  idleWake?(kind: 'heartbeat' | 'wake'): void;
 }
 
 /**

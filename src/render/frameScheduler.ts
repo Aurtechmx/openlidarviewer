@@ -74,6 +74,12 @@ export interface FrameSchedulerHost {
   needsFrame(nowMs: number): boolean;
   /** Run one frame. */
   runFrame(): void;
+  /**
+   * Told, just before a frame runs, that the loop slept before it: woken by
+   * the idle heartbeat, or by a `wake` while asleep. The frame's clock delta
+   * then spans the sleep. Optional; the navigation probe listens.
+   */
+  idleWake?(kind: 'heartbeat' | 'wake'): void;
 }
 
 /** What the scheduler is doing, for a trace and for the tests. */
@@ -83,6 +89,9 @@ export class FrameScheduler {
   private _frame: number | null = null;
   private _timer: number | null = null;
   private _running = false;
+  /** The loop slept since the last frame, and whether the heartbeat woke it. */
+  private _slept = false;
+  private _heartbeat = false;
 
   private readonly _host: FrameSchedulerHost;
 
@@ -114,6 +123,8 @@ export class FrameScheduler {
    */
   stop(): void {
     this._running = false;
+    this._slept = false;
+    this._heartbeat = false;
     if (this._frame !== null) {
       this._host.cancelFrame(this._frame);
       this._frame = null;
@@ -141,6 +152,11 @@ export class FrameScheduler {
     if (this._frame !== null) return;
     this._frame = this._host.requestFrame(() => {
       this._frame = null;
+      if (this._slept) {
+        this._host.idleWake?.(this._heartbeat ? 'heartbeat' : 'wake');
+        this._slept = false;
+        this._heartbeat = false;
+      }
       // The frame runs before the question is asked, so a frame that creates
       // work for the next one (a decode committed, a fade started) is already
       // reflected when the scheduler decides whether to sleep.
@@ -153,9 +169,11 @@ export class FrameScheduler {
 
   private _sleep(): void {
     if (this._timer !== null) return;
+    this._slept = true;
     this._timer = this._host.setTimer(() => {
       this._timer = null;
       if (!this._running) return;
+      this._heartbeat = true;
       // Draw the heartbeat frame, then ask again. Whether that frame reaches
       // the GPU is still the render gate's decision.
       this._schedule();
@@ -180,6 +198,7 @@ export function browserFrameScheduler(hooks: {
   nowMs: () => number;
   needsFrame: (nowMs: number) => boolean;
   runFrame: () => void;
+  idleWake?: (kind: 'heartbeat' | 'wake') => void;
 }): FrameScheduler {
   return new FrameScheduler({
     requestFrame: (cb) => requestAnimationFrame(cb),
@@ -189,5 +208,6 @@ export function browserFrameScheduler(hooks: {
     nowMs: hooks.nowMs,
     needsFrame: hooks.needsFrame,
     runFrame: hooks.runFrame,
+    idleWake: hooks.idleWake,
   });
 }
