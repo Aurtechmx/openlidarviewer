@@ -28,11 +28,11 @@ the two entries were renumbered when the branches were integrated.
 
 | ID | Category | Repro | Sev | Status | Was | Finding |
 |---|---|---|---|---|---|---|
-| L01 | EXPORT | READ | med | PARTIAL | B01 | LAS 1.2 write masks classification with 0x1f, so a class above 31 wraps to another valid class. |
+| L01 | EXPORT | READ | med | FIXED | B01 | LAS 1.2 write masks classification with 0x1f, so a class above 31 wraps to another valid class. |
 | L02 | EXPORT | TEST | med | FIXED | B02 | Scan angle rank written as constant zero. |
 | L03 | EXPORT | TEST | med | FIXED | B03 | User data written as constant zero. |
 | L04 | STANDARDS | TEST | high | FIXED | B04 | ASPRS class names defined independently in eight modules, and they disagreed. |
-| L05 | SCIENTIFIC | TEST | high | PARTIAL | B05 | One lasso, two estimators. The stored record now names which one made it; it does not yet carry the area-grid figure. |
+| L05 | SCIENTIFIC | TEST | high | FIXED | B05 | One lasso, two estimators. The stored record now names which one made it; it does not yet carry the area-grid figure. |
 | L06 | SCIENTIFIC | READ | med | PARTIAL | B06 | Two density figures on different bases. Each states its basis; neither is the other's source. |
 | L07 | SCIENTIFIC | TEST | high | FIXED | B07 | The boundary share counted a sampling gap as a survey edge, so it rose with the thinning rather than with the geometry. |
 | L08 | SCIENTIFIC | READ | n/a | NOT REPRODUCIBLE | B08 | PCA extent presented as minimum physical dimensions. |
@@ -74,7 +74,7 @@ the two entries were renumbered when the branches were integrated.
 | L44 | LIFECYCLE | TEST | med | FIXED | new | NavBar disposed its teardown group before clearing its timer, and the group rethrows. |
 | L45 | ARCHITECTURE | TEST | high | FIXED | new | The standards lint skipped any directory whose path contained 'dist' and all of `docs/release`. |
 | L46 | PERFORMANCE | TEST | med | PARTIAL | new | Streaming node meshes disable frustum culling. The decision and its baseline exist; the renderer is not yet wired to them. |
-| L47 | UI | TEST | med | NOT REPRODUCIBLE | new | Density point sizing was read as keying a 2D grid on (x, y). It keys on the cloud's two widest axes; a scene mixing orientations is the unmeasured residual. |
+| L47 | UI | TEST | med | PARTIAL | new | Density point sizing was read as keying a 2D grid on (x, y). It keys on the cloud's two widest axes; a scene mixing orientations is the unmeasured residual. |
 | L48 | PERFORMANCE | TEST | med | FIXED | new | Render-memory telemetry counted position and colour only, so a classified cloud was reported at three quarters of what it used. |
 | L49 | PERFORMANCE | READ | med | MEASURED | new | Compact source attributes are uploaded as Float32: RGB, classification and intensity cost 14 bytes a point more than the source carries. Without a layout change only colour can shrink, by 8 bytes a point. |
 
