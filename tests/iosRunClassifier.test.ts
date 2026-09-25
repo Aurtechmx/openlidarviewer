@@ -27,7 +27,7 @@ const run = (failStep: string, logText: string) =>
   classifyRun({ steps: failingAt(failStep), firstAssertionStep: ASSERT, logText, conclusion: 'failure' }, SIGS);
 
 describe('signature list', () => {
-  it('has an id and a note per signature, and the four approved classes', () => {
+  it('has an id and a note per signature, and the four signature classes', () => {
     for (const s of LIST.signatures) { expect(s.id).toBeTruthy(); expect(s.note).toBeTruthy(); }
     expect(LIST.signatures.map((s) => s.id)).toEqual([
       'runner-provisioning', 'dependency-download-network', 'simulator-runtime-missing', 'wda-unreachable-8100']);
