@@ -407,8 +407,8 @@ claims:
     supportingDatasets: []
     units: [cubic-metres]
     crsDatum: "Local metric; refuses geographic degrees."
-    assumptions: ["one median surface height per cell", "base uncertainty currently unquantified", "a preview or withheld figure is not a measurement"]
-    failureModes: ["coverage gaps below the support thresholds", "base-surface error", "a streaming source that is not fully resident"]
+    assumptions: ["one median surface height per cell", "base uncertainty currently unquantified", "a preview or withheld figure is not a measurement", "points flagged Withheld are left out of the input; Overlap points are kept"]
+    failureModes: ["coverage gaps below the support thresholds", "base-surface error", "a streaming source that is not fully resident", "Withheld points counted as unknown, and kept, where the source carries no flags"]
     exportAllowed: true
     userLabel: "Exploratory stockpile preview"
     softwareStatus: shipping

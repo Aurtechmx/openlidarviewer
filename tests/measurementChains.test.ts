@@ -113,6 +113,16 @@ describe('valueForDimension — routing', () => {
     expect(valueForDimension(v, 'area')).toBe(50);
   });
 
+  it('a withheld grid figure contributes null, not a fabricated number', () => {
+    const v = volumeM(50, 30, 10);
+    v.volume = { ...v.volume!, fill: undefined, cut: undefined, net: undefined, gridAuthority: 'withheld' };
+    expect(valueForDimension(v, 'volume-fill')).toBeNull();
+    expect(valueForDimension(v, 'volume-cut')).toBeNull();
+    expect(valueForDimension(v, 'volume-net')).toBeNull();
+    // The footprint itself is unaffected — only the volume figure is withheld.
+    expect(valueForDimension(v, 'area')).toBe(50);
+  });
+
   it('returns null when the dimension is not supported by the kind', () => {
     const d = distanceM([0, 0, 0], [1, 0, 0]);
     expect(valueForDimension(d, 'area')).toBeNull();

@@ -184,9 +184,20 @@ export function measurementMetrics(
       set('area_m2', polygonAreaHorizontal(mp, up));
       if (m.volume) {
         // cut/fill/net are stored volumes in native units, not point-derived.
-        set('cut_m3', m.volume.cut * Vol);
-        set('fill_m3', m.volume.fill * Vol);
-        set('net_m3', m.volume.net * Vol);
+        // A withheld grid figure carries none of the three — `set` already
+        // omits a non-finite value, so `undefined * Vol` (NaN) drops the column
+        // rather than exporting a fabricated zero.
+        if (m.volume.cut !== undefined) set('cut_m3', m.volume.cut * Vol);
+        if (m.volume.fill !== undefined) set('fill_m3', m.volume.fill * Vol);
+        if (m.volume.net !== undefined) set('net_m3', m.volume.net * Vol);
+        // The point-sample cross-check a switched lasso record keeps beside the
+        // grid figure — named so a reader never confuses it with
+        // the canonical cut_m3/fill_m3/net_m3 above.
+        if (m.volume.crossCheck) {
+          set('pointsample_cut_m3', m.volume.crossCheck.cut * Vol);
+          set('pointsample_fill_m3', m.volume.crossCheck.fill * Vol);
+          set('pointsample_net_m3', m.volume.crossCheck.net * Vol);
+        }
       }
       break;
   }
@@ -248,6 +259,11 @@ export function measurementsToGeoJSON(
           : inSourceUnits(measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres))),
       };
       if (ctx.crsName) properties.crs = ctx.crsName;
+      // Same coverage verdict the CSV's grid_authority column carries — see
+      // measurementsToCsv.
+      if (m.kind === 'volume' && m.volume?.gridAuthority) properties.grid_authority = m.volume.gridAuthority;
+      const w = m.kind === 'volume' ? m.volume?.withheld : undefined;
+      if (w) Object.assign(properties, { source_points: w.source, withheld_excluded: w.excluded, analysed_points: w.analysed });
       return { type: 'Feature' as const, geometry, properties };
     })
     .filter((f): f is NonNullable<typeof f> => f !== null);
@@ -305,6 +321,36 @@ const CLAIM_FOR_KIND: Readonly<Record<Measurement['kind'], string>> = {
 };
 
 /**
+ * The area-weighted grid's bare id (no `@version` — this file names a claim,
+ * not a method tag, and `lint:method-literals` only walks `id@version`
+ * strings). Kept beside `CLAIM_FOR_KIND` rather than duplicated at each call
+ * site below.
+ */
+const GRID_METHOD_ID = 'olv.volume.stockpile-area-grid';
+
+/**
+ * The claim a measurement's headline figure actually belongs to. `kind` alone
+ * decided this alone before the lasso record moved to the grid: every `'volume'` measurement was stamped
+ * `VOL-POINT-SAMPLE`, which is wrong for a lasso record the grid now owns —
+ * the same defect `CLAIM_FOR_KIND`'s own docstring names, one level down.
+ *
+ * A withheld grid published no figure at all: `fill`/`cut`/`net` are absent
+ * (session.ts's parser and withStockpileGrid both refuse to smuggle numbers
+ * past a withheld verdict), and the row's only actual numbers are the
+ * `crossCheck`'s point-sample ones. Naming VOL-STOCKPILE there would stamp an
+ * estimator that contributed nothing, so a withheld record falls through to
+ * the point-sample claim that produced what the row actually shows.
+ */
+function claimForMeasurement(m: Measurement): string | undefined {
+  if (
+    m.kind === 'volume'
+    && m.volume?.method?.startsWith(GRID_METHOD_ID)
+    && m.volume.gridAuthority !== 'withheld'
+  ) return 'VOL-STOCKPILE';
+  return CLAIM_FOR_KIND[m.kind];
+}
+
+/**
  * The claims a mixed collection actually draws on, in a stable order so two
  * exports of the same set produce the same stamp.
  *
@@ -319,7 +365,7 @@ const CLAIM_FOR_KIND: Readonly<Record<Measurement['kind'], string>> = {
 function claimsPresent(measurements: readonly Measurement[]): string[] {
   const seen = new Set<string>();
   for (const m of measurements) {
-    const c = CLAIM_FOR_KIND[m.kind];
+    const c = claimForMeasurement(m);
     if (c) seen.add(c);
   }
   return [...seen].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
@@ -368,6 +414,14 @@ const CSV_COLUMNS = [
   'length_m', 'horizontal_m', 'vertical_m', 'rise_m', 'run_m',
   'grade_pct', 'angle_deg', 'area_m2', 'horizontal_area_m2', 'perimeter_m',
   'width_m', 'depth_m', 'height_m', 'volume_m3', 'cut_m3', 'fill_m3', 'net_m3',
+  // A grid-owned lasso volume's coverage verdict, and the point-sample
+  // cross-check kept beside its canonical cut_m3/fill_m3/net_m3 above — blank
+  // on every other kind, and on a volume record from before the switch or
+  // from the hand-drawn polygon tool, which has no grid counterpart.
+  'grid_authority', 'pointsample_cut_m3', 'pointsample_fill_m3', 'pointsample_net_m3',
+  // A lasso result's input counts; `withheld_excluded` reads `unknown` when
+  // the source carried no flags, never 0.
+  'source_points', 'withheld_excluded', 'analysed_points',
   'evidence',
 ] as const;
 
@@ -408,7 +462,7 @@ export function measurementsToCsv(
   // does not, so stamping every row with the distance answer understated one
   // and misnamed the claim behind the rest.
   const evidenceFor = (m: Measurement): string => {
-    const status = evidenceStatus(CLAIM_FOR_KIND[m.kind] ?? 'MEAS-DISTANCE');
+    const status = evidenceStatus(claimForMeasurement(m) ?? 'MEAS-DISTANCE');
     return unitsKnown ? status : `${status}; units-unverified (source render units, not metres)`;
   };
   for (const m of measurements) {
@@ -422,6 +476,9 @@ export function measurementsToCsv(
       ...metrics,
       evidence: evidenceFor(m),
     };
+    if (m.kind === 'volume' && m.volume?.gridAuthority) base.grid_authority = m.volume.gridAuthority;
+    const w = m.kind === 'volume' ? m.volume?.withheld : undefined;
+    if (w) Object.assign(base, { source_points: w.source, withheld_excluded: w.excluded, analysed_points: w.analysed });
     rows.push(columns.map((c) => (c in base ? csvCell(base[c]) : '')).join(','));
   }
   return rows.join('\n');

@@ -1822,11 +1822,20 @@ export class MeasureController {
         const area = this._fmtArea(polygonAreaHorizontal(p, this._worldUp));
         const v = m.volume;
         if (!v) return `${area} footprint · cut/fill —`;
+        // A withheld grid figure carries no fill/cut/net at all — never a
+        // borrowed cut-and-fill number under the grid's name. The point-sample
+        // cross-check, when the record kept one, is the only number left to show.
+        if (v.fill === undefined || v.cut === undefined || v.net === undefined) {
+          const cc = v.crossCheck, reason = v.gridAuthorityReason ? ` (${v.gridAuthorityReason})` : '';
+          return `${area} · ${cc ? 'grid ' : ''}volume withheld${reason}` +
+            (cc ? ` · point-sample cross-check net ${this._fmtCutFill(Math.abs(cc.net))} ${cc.net < 0 ? 'cut' : 'fill'}` : '');
+        }
         const fill = this._fmtCutFill(Math.max(0, v.fill));
         const cut = this._fmtCutFill(Math.max(0, v.cut));
         const net = this._fmtCutFill(Math.abs(v.net));
         const netSign = v.net < 0 ? 'cut' : 'fill';
-        return `${area} · +${fill} fill · −${cut} cut · net ${net} ${netSign}`;
+        const preview = v.gridAuthority === 'preview' ? ' · PREVIEW' : '';
+        return `${area} · +${fill} fill · −${cut} cut · net ${net} ${netSign}${preview}`;
       }
     }
   }

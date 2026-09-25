@@ -6224,3 +6224,144 @@ figures after this phase's new files.
 (O10, coverage gain and next-station scoring) is not implemented; the
 Planning section says so. `gen:v070-status` is regenerated after this
 entry.
+
+### L05 · PARTIAL · SCIENTIFIC
+
+`tests/stockpileDualAnswer.test.ts` runs both estimators on the same lasso the
+app takes: the point-sample integration (`volumeCutFill`, reached through
+`computeLassoVolume`) that becomes the saved `VolumeRecord` at
+`Viewer.ts:1198`, and the area-weighted grid (`stockpileAreaGrid`) that the
+toast prints beside it through `stockpilePresenter.ts`. Both read the same
+polygon, base height, up axis and native coordinates; the record's figure and
+the grid's `fillM3` are both native times horizontal squared times vertical,
+so the two compare directly with no unit correction on either side.
+
+Twenty-seven analytic cases (cone, truncated pyramid and flat-topped mound;
+independent uniform positions, a Thomas-clustered scanner pattern, and a 1/d²
+range gradient; densities of 1 pt/m², 10 pts/m² and 100 pts/m², each averaged
+over several seeds) put a number on where each estimator lands against the
+closed-form volume. Under uniform sampling both centre on the
+truth; the grid reads slightly low and scatters less. Under a range gradient
+the point sample reads 16 to 25% low at every density and more points do not
+close it; the grid reads 1 to 6% low at every density. Clustered at 1 pt/m²,
+neither is within 20% of the truth and the grid reports PREVIEW on every run.
+Clustered at 10 pts/m², the grid reports MEASURED on every run while reading 3
+to 4% low.
+
+Repository fixtures widen the same picture. Two uniformly sampled
+rasterisation surfaces read within 1.1% by both, the grid the nearer; a
+surface with a density hot spot reads 39% low by point sample and 7% low by
+grid; a sharp 1 m step reads exact by point sample and 15% low by grid,
+because the grid's cell crosses the step. A sparse-coverage case that leaves
+46% support withholds the grid figure outright while the saved record still
+carries `high` confidence on point count alone, over 70% low against the
+closed form. A notch cut into the lasso that adds hull area but no points
+inflates the point-sample figure by more than 10%; the grid, weighting area
+actually covered, moves under 2%. On real airborne returns and on a canopy
+fixture with no closed form, the two disagree by 3.6% and 8.6% with nothing to
+settle which is right. Metres, US survey feet and a metres-over-feet compound
+representation give the same m³ on the path the app takes; the grid's own
+`linearUnitToMetres` option, not on that path, overstates a compound
+representation by the ratio of the two factors, which is a caller error rather
+than an estimator one.
+
+No sampling regime makes one estimator strictly closer. The point sample is
+exact against a sharp discontinuity the grid's cell blurs, and reads low
+wherever density itself varies with position, whether by clustering or by
+range; the grid removes most of that bias by weighting area rather than
+points, at the cost of a support threshold before it reports at all and of
+losing height where a real step falls inside one cell. Carrying the grid's
+figure into the record, which is what remains of this entry's earlier
+account, means carrying its coverage verdict (measured, preview or withheld)
+rather than dropping it, and deciding what a withheld lasso saves; this entry
+does not make that change.
+
+Covered by `tests/stockpileDualAnswer.test.ts`.
+
+### L05 · PARTIAL · SCIENTIFIC
+
+Two corrections to the account above. The saved Lasso `VolumeRecord` is built
+by `deriveVolumeRecord` at `main.ts:622`, fed through `computeLassoVolume`
+(`main.ts:589`) and `lassoVolume.ts`'s `volumeFromLassoWithFootprint`, which
+is the site `tests/stockpileDualAnswer.test.ts` reproduces. `Viewer.ts:1198`
+is a separate `volumeCutFill` call, inside `setVolumeSampler`'s callback and
+wired only to the point-and-click "Volume" polygon tool
+(`MeasureController.ts`, `kind === 'volume'`); it persists its own
+hand-rolled record with its own confidence tiers, is not reached through
+`computeLassoVolume`, has no stockpile-grid counterpart, and the harness does
+not touch it.
+
+`stockpileAuthority` also has two branches the harness's synthetic clouds
+never reached: an incomplete source and a voxel-reduced sample each cap the
+grid at PREVIEW ahead of its support fraction, and every case above walks an
+in-memory `PointCloud` with no streaming parts and no walk downsample, so
+`sourceComplete` read true and `sampled`/`streaming` read false throughout.
+The earlier account covered only the support/coverage axis of the verdict.
+Three added cases drive `stockpileToastSuffix` directly, on the same
+fully-supported cone selection the ladder's "full coverage" row reads
+MEASURED on at 99% support: a voxel-reduced source caps it at PREVIEW
+("display sample"), and a streaming source with an unknown resident count
+caps it at PREVIEW ("source is streaming and not fully resident"), each
+ahead of that support fraction.
+
+Covered by `tests/stockpileDualAnswer.test.ts`.
+
+### L05 · FIXED · SCIENTIFIC
+
+The lasso Volume record now stores the area-weighted grid's figure, with the
+point-sample cut and fill kept beside it as a labelled cross-check. Measured
+on the 21 analytic cases where every run is MEASURED
+(`tests/stockpileDualAnswer.test.ts`): the median per-run absolute error is
+1.44 percent for the grid and 6.71 percent for cut and fill; the per-case
+bias reading, which lets opposite-sign runs cancel, orders them the other way,
+1.40 percent against 0.90 percent. Uniform-sampling worst case: 18.3 percent
+against 31.9 percent. The report quotes both readings.
+
+`stockpileResult.ts`, in the lazy stockpile chunk, builds one result per
+lasso: the grid's `fill`, `cut`, `net` and `method`, the coverage verdict as
+`gridAuthority` and `gridAuthorityReason`, the point-sample figure under
+`crossCheck` with its own tag, the input counts under `withheld`, and
+`resultSchema: 1`. The toast's volume clause is formatted from that object
+and Save stores the same object, so the toast, the session file, the CSV and
+GeoJSON columns, the findings report and the evidence stamp all read one
+record. A withheld grid stores no `fill`, `cut` or `net`; nothing falls back
+to the cross-check under the grid's name, and the session parser drops those
+three fields from a withheld record even when a file supplies them. A
+withheld row's evidence stamp names VOL-POINT-SAMPLE, the estimator behind
+the only numbers it shows.
+
+A record saved before this change keeps its method tag
+(`olv.volume.stockpile@1`, or none) and its numbers; nothing re-derives it.
+The hand-drawn polygon Volume tool is unchanged and still stores cut and
+fill. Units follow the record's native-unit contract, so metres, US survey
+feet and a metre-over-foot compound CRS give the same cubic metres as
+before.
+
+Values that change for a user: on a lasso whose grid reports MEASURED or
+PREVIEW, the stored and exported `fill_m3`, `cut_m3` and `net_m3` become the
+grid's figures, and the point-sample figures move to `pointsample_*_m3`; on
+a withheld lasso those three columns are blank.
+
+Covered by `tests/stockpileResultParity.test.ts`,
+`tests/stockpileMethodIdentity.test.ts`, `tests/measureDerivations.test.ts`,
+`tests/stockpilePresenter.test.ts`, `tests/measurementExport.test.ts`,
+`tests/measurementReport.test.ts` and `tests/measurementChains.test.ts`.
+
+### L26 · PARTIAL · SCIENTIFIC
+
+The lasso volume leaves out points flagged Withheld at its input, the way
+the terrain gather does: ASPRS LAS 1.4 defines the flag as a point that
+should not be included in processing. `computeLassoVolume` drops them after
+the lasso and visibility filters and before the depth test, so neither the
+grid nor the point-sample cross-check reads them. Overlap and the other flags
+are not consulted. The result records `source`, `excluded` and `analysed`
+counts; when a contributing source has no flags channel (a voxel-reduced
+cloud, whose centroids carry none, or a decode without point semantics),
+`excluded` reads `unknown` rather than 0 and nothing is invented for it. The
+grid's method moves to `olv.volume.stockpile-area-grid@3`; a record stored at
+`@2` keeps that tag.
+
+Values change only on files that contain Withheld points inside the lasso.
+The polygon Volume tool, profiles and density still read every point.
+
+Covered by `tests/lassoVolumeWithheld.test.ts`.

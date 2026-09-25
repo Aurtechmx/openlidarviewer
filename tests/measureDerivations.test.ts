@@ -14,6 +14,8 @@
 
 import { describe, it, expect } from 'vitest';
 import { deriveVolumeRecord, horizontalSpanXY } from '../src/render/measure/measureDerivations';
+import { withStockpileGrid } from '../src/render/measure/stockpileResult';
+import type { StockpileGridFigure } from '../src/render/measure/stockpileResult';
 import type { VolumeResult } from '../src/render/measure/volume';
 import { POINT_SAMPLE_VOLUME_METHOD } from '../src/render/measure/volume';
 import { readFileSync } from 'node:fs';
@@ -133,5 +135,68 @@ describe('a derived volume record names its estimator', () => {
     expect(viewer).toMatch(/volumeMethod:\s*POINT_SAMPLE_VOLUME_METHOD/);
     const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
     expect(main).toMatch(/deriveVolumeRecord\([^)]*out\.volumeMethod\)/);
+    // The live path also hands the point-sample record to the stockpile chunk,
+    // which builds the stored result from it; a call that dropped this would
+    // keep the point-sample figure canonical for every lasso.
+    expect(main).toMatch(/lassoStockpileResult\(ps, out\.stockpileInputs, vol\)/);
+    expect(main).toMatch(/volume: stock\?\.record \?\? ps/);
+  });
+});
+
+// ── withStockpileGrid — the small module main.ts routes the switch through ──
+
+const psRecord = {
+  fill: 10, cut: 2, net: 8, referenceZ: 3, footprintArea: 20,
+  pointsInPolygon: 500, densityNative: 25, confidence: 'high' as const,
+  method: POINT_SAMPLE_VOLUME_METHOD,
+};
+
+const gridFigure = (over: Partial<StockpileGridFigure> = {}): StockpileGridFigure => ({
+  method: 'olv.volume.stockpile-area-grid@3',
+  authority: 'measured', reason: '',
+  fillNative: 7, cutNative: 1, netNative: 6,
+  ...over,
+});
+
+describe('withStockpileGrid', () => {
+  it('is a no-op with no grid figure', () => {
+    expect(withStockpileGrid(psRecord, null)).toEqual(psRecord);
+  });
+
+  it('is total against a record with no method to attribute the cross-check to', () => {
+    const noMethod = { ...psRecord, method: undefined };
+    expect(withStockpileGrid(noMethod, gridFigure())).toEqual(noMethod);
+  });
+
+  it('is total against a record with no point-sample figure at all', () => {
+    const noFigure = { ...psRecord, fill: undefined, cut: undefined, net: undefined };
+    expect(withStockpileGrid(noFigure, gridFigure())).toEqual(noFigure);
+  });
+
+  it('switches fill/cut/net and method, and keeps the rest of the record untouched', () => {
+    const out = withStockpileGrid(psRecord, gridFigure());
+    expect(out.fill).toBe(7);
+    expect(out.cut).toBe(1);
+    expect(out.net).toBe(6);
+    expect(out.method).toBe('olv.volume.stockpile-area-grid@3');
+    expect(out.confidence).toBe(psRecord.confidence);
+    expect(out.referenceZ).toBe(psRecord.referenceZ);
+    expect(out.footprintArea).toBe(psRecord.footprintArea);
+  });
+
+  it('a withheld grid clears fill/cut/net rather than falling back to the cross-check', () => {
+    const out = withStockpileGrid(psRecord, gridFigure({ authority: 'withheld', reason: 'insufficient observations' }));
+    expect('fill' in out).toBe(false);
+    expect('cut' in out).toBe(false);
+    expect('net' in out).toBe(false);
+    expect(out.gridAuthority).toBe('withheld');
+    expect(out.gridAuthorityReason).toBe('insufficient observations');
+  });
+
+  it('always moves the ORIGINAL point-sample numbers into crossCheck, whatever the authority', () => {
+    for (const authority of ['measured', 'preview', 'withheld'] as const) {
+      const out = withStockpileGrid(psRecord, gridFigure({ authority }));
+      expect(out.crossCheck).toEqual({ fill: 10, cut: 2, net: 8, method: POINT_SAMPLE_VOLUME_METHOD });
+    }
   });
 });

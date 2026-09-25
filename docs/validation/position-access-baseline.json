@@ -1,5 +1,5 @@
 {
-  "total": 175,
+  "total": 174,
   "files": {
     "src/app/epochFramePrep.ts": 2,
     "src/app/featureExtractionInput.ts": 1,
@@ -29,7 +29,7 @@
     "src/io/loadXyz.ts": 1,
     "src/io/parseWorker.ts": 3,
     "src/io/tiles3d/pntsDecode.ts": 1,
-    "src/main.ts": 6,
+    "src/main.ts": 5,
     "src/model/PointCloud.ts": 17,
     "src/model/pointFrames.ts": 2,
     "src/render/ContourOverlay.ts": 1,
@@ -43,10 +43,11 @@
     "src/render/localDensitySize.ts": 1,
     "src/render/measure/classificationEditor.ts": 1,
     "src/render/measure/lassoVolume.ts": 11,
-    "src/render/measure/lassoVolumeCompute.ts": 5,
+    "src/render/measure/lassoVolumeCompute.ts": 4,
     "src/render/measure/profileSampler.ts": 1,
     "src/render/measure/profileSectionSeam.ts": 3,
     "src/render/measure/snap.ts": 2,
+    "src/render/measure/stockpilePresenter.ts": 1,
     "src/render/measure/stockpileVolume.ts": 5,
     "src/render/measure/volume.ts": 1,
     "src/render/patchView.ts": 9,

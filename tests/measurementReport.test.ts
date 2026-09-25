@@ -176,3 +176,75 @@ describe('a volume finding is reported at the same precision as the rest', () =>
     expect(f.find((x) => x.unit === 'm³')!.value).toBeCloseTo(expected, 3);
   });
 });
+
+// a switched lasso record's finding is built from the grid figure, keeps
+// the point-sample number as a labelled cross-check, and states the grid's
+// known limitations rather than the point-sample-only caveat.
+function gridVolume(id: string, over: Record<string, unknown> = {}): Measurement {
+  return {
+    id, kind: 'volume', name: '',
+    points: [[0, 0, 0], [10, 0, 0], [10, 10, 0]],
+    volume: {
+      fill: 100, cut: 5, net: 95, referenceZ: 0, footprintArea: 50,
+      pointsInPolygon: 800, densityNative: 16, confidence: 'medium',
+      method: 'olv.volume.stockpile-area-grid@3', gridAuthority: 'measured', gridAuthorityReason: '',
+      crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' },
+      ...over,
+    },
+  } as unknown as Measurement;
+}
+
+describe('a grid-canonical volume finding', () => {
+  test('the headline is the grid net, not the point-sample net', () => {
+    const f = measurementsToFindings([gridVolume('v1')], up, 1);
+    expect(f).toHaveLength(1);
+    expect(f[0].value).toBeCloseTo(95, 6);
+  });
+
+  test('names the point-sample cross-check as a labelled figure, not the headline', () => {
+    const f = measurementsToFindings([gridVolume('v1')], up, 1);
+    expect(f[0].caveats!.join(' ')).toMatch(/Point-sample cross-check.*cut 30\.00 m³ \/ fill 120\.00 m³/);
+  });
+
+  test('states the grid\'s known limitations (the step, clustered-sparse, and the real-data disagreement)', () => {
+    const f = measurementsToFindings([gridVolume('v1')], up, 1);
+    const text = f[0].caveats!.join(' ');
+    expect(text).toMatch(/15%/);
+    expect(text).toMatch(/PREVIEW/);
+    expect(text).toMatch(/3\.6%/);
+    expect(text).toMatch(/8\.6%/);
+  });
+
+  test('a preview record labels the finding PREVIEW with its reason', () => {
+    const f = measurementsToFindings(
+      [gridVolume('v1', { gridAuthority: 'preview', gridAuthorityReason: 'display sample' })],
+      up, 1,
+    );
+    expect(f[0].caveats!.join(' ')).toMatch(/PREVIEW: display sample/);
+  });
+
+  test('a withheld record reports the cross-check net under a label that says the grid was withheld', () => {
+    const withheld = gridVolume('v1', {
+      fill: undefined, cut: undefined, net: undefined,
+      gridAuthority: 'withheld', gridAuthorityReason: 'insufficient observations',
+    });
+    const f = measurementsToFindings([withheld], up, 1);
+    expect(f).toHaveLength(1);
+    expect(f[0].label).toMatch(/point-sample cross-check — grid volume withheld/);
+    expect(f[0].value).toBeCloseTo(90, 6); // the cross-check's net, not a fabricated grid figure
+    expect(f[0].caveats!.join(' ')).toMatch(/withheld \(insufficient observations/);
+  });
+
+  test('a withheld record with no cross-check contributes no finding at all', () => {
+    const withheld = gridVolume('v1', {
+      fill: undefined, cut: undefined, net: undefined, crossCheck: undefined,
+      gridAuthority: 'withheld', gridAuthorityReason: 'insufficient observations',
+    });
+    expect(measurementsToFindings([withheld], up, 1)).toHaveLength(0);
+  });
+
+  test('an un-switched volume record is unaffected — no gridAuthority, no cross-check caveat', () => {
+    const f = measurementsToFindings([volume('v1', 116)], up, 1);
+    expect(f[0].caveats!.join(' ')).not.toMatch(/cross-check|PREVIEW|withheld/);
+  });
+});

@@ -175,6 +175,7 @@ import {
   presentStockpileAreaGrid,
   stockpileAreaGridToastLine,
   stockpileAuthority,
+  stockpileGridForLasso,
   stockpileToastSuffix,
 } from '../src/render/measure/stockpilePresenter';
 import { stockpileAreaGrid } from '../src/render/measure/stockpileAreaGrid';
@@ -220,7 +221,7 @@ describe('presentStockpileAreaGrid', () => {
     expect(v.authority).toBe('measured');
     expect(v.coverage).toBe('measured');
     expect(v.volumeM3).toBeCloseTo(20 * 10 * 3, 6);
-    expect(v.method).toBe('olv.volume.stockpile-area-grid@2');
+    expect(v.method).toBe('olv.volume.stockpile-area-grid@3');
     expect(v.supportFraction).toBeCloseTo(1, 6);
   });
 
@@ -349,5 +350,60 @@ describe('stockpileToastSuffix (area-grid)', () => {
   test('a degenerate footprint or too few points yields nothing', () => {
     expect(stockpileToastSuffix(RECT.slice(0, 2), Float32Array.from(prism(3, 1, 1)))).toBe('');
     expect(stockpileToastSuffix(RECT, new Float32Array(6))).toBe('');
+  });
+});
+
+// the Save path needs the SAME verdict the toast just printed, so it can
+// enrich the stored VolumeRecord rather than recomputing (and risking a
+// disagreement with what the user just read).
+describe('stockpileGridForLasso', () => {
+  test('returns the same suffix as stockpileToastSuffix, plus the structured view', () => {
+    const pts = Float32Array.from([...prism(3, 0.5, 0.5), ...prism(0, 0.5, 0.5)]);
+    const suffix = stockpileToastSuffix(RECT, pts);
+    const { suffix: fromLasso, view } = stockpileGridForLasso(RECT, pts);
+    expect(fromLasso).toBe(suffix);
+    expect(view?.authority).toBe('measured');
+    expect(view?.method).toBe('olv.volume.stockpile-area-grid@3');
+  });
+
+  test('view is null under the same gate that empties the suffix', () => {
+    expect(stockpileGridForLasso(RECT.slice(0, 2), Float32Array.from(prism(3, 1, 1))).view).toBeNull();
+    expect(stockpileGridForLasso(RECT, new Float32Array(6)).view).toBeNull();
+  });
+
+  test('view.authority tracks withheld/preview the same way the toast line does', () => {
+    const half = Float32Array.from(prism(3, 0.5, 0.5, 0, 9));
+    const { view, suffix } = stockpileGridForLasso(RECT, half);
+    expect(view?.authority).toBe('withheld');
+    expect(suffix).toMatch(/volume withheld/);
+  });
+
+  test('fillNative/cutNative/netNative are the grid figure BEFORE the CRS conversion', () => {
+    // A ground layer at z = 0 alongside the pile top, so the lowest-percentile
+    // base the toast path fits lands on the apron rather than on the pile
+    // itself — same fixture shape as the other stockpileToastSuffix tests above.
+    const pts = Float32Array.from([...prism(3, 0.5, 0.5), ...prism(0, 0.5, 0.5)]);
+    const lin = 0.3048;
+    const { view } = stockpileGridForLasso(RECT, pts, lin, { vert: 1 });
+    expect(view).not.toBeNull();
+    // the grid's own linearUnitToMetres stays off this path, so the
+    // native figure is exactly what `stockpileAreaGrid` returns with no unit
+    // factor — volumeM3 (the display figure) is fillNative times lin²·vert.
+    expect(view!.volumeM3).toBeCloseTo(view!.fillNative * lin * lin * 1, 9);
+  });
+});
+
+describe('the grid option that cubes one factor stays off the record path', () => {
+  test('presentStockpileAreaGrid never passes linearUnitToMetres into stockpileAreaGrid', () => {
+    // Same fixture the compound-CRS unit test in stockpileDualAnswer.test.ts
+    // pins at the app level; this asserts the mechanism directly: a metre run
+    // and a feet-horizontal run give the SAME native figure, which is only
+    // possible if the grid itself never saw the feet factor.
+    const pts = Float32Array.from(prism(3, 0.5, 0.5));
+    const metres = presentStockpileAreaGrid(RECT, pts, { z: 0, uncertainty: 0 }, complete);
+    const feet = presentStockpileAreaGrid(RECT, pts, { z: 0, uncertainty: 0 }, complete, { lin: 0.3048, vert: 1 });
+    expect(feet.fillNative).toBeCloseTo(metres.fillNative, 9);
+    expect(feet.cutNative).toBeCloseTo(metres.cutNative, 9);
+    expect(feet.netNative).toBeCloseTo(metres.netNative, 9);
   });
 });

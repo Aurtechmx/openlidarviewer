@@ -1440,17 +1440,36 @@ function parseProvenanceUnits(v: unknown): ProfileUnitContext | undefined {
 }
 
 const VOLUME_CONFIDENCE: ReadonlySet<VolumeRecord['confidence']> = new Set(['high', 'medium', 'low']);
+const GRID_AUTHORITY: ReadonlySet<unknown> = new Set(['measured', 'preview', 'withheld']);
+
+/** Whether every named field of `o` is a finite number. */
+const finiteFields = (o: Record<string, unknown>, keys: readonly string[]): boolean =>
+  keys.every((k) => isFiniteNum(o[k]));
 
 /**
  * Parse a persisted volume cut/fill record, or `undefined` when malformed. All
  * numeric fields must be finite; an unknown confidence band is dropped so the
  * record can't carry an invalid badge. Values are stored in native render
  * units³ (see the VolumeRecord unit contract) and are not converted here.
+ *
+ * `fill`/`cut`/`net` are required UNLESS `gridAuthority` reads `'withheld'`:
+ * a lasso whose grid is withheld is saved with no volume figure at all, so a
+ * session round trip must read that back as no figure, not reject the record
+ * or fabricate one. The point-sample cross-check such a record keeps needs all
+ * three numbers and its method tag, or it is dropped: a partial one would
+ * claim a figure for a component the source record never gave it.
  */
 function parseVolumeRecord(v: unknown): VolumeRecord | undefined {
   if (!isRecord(v)) return undefined;
-  const nums = ['fill', 'cut', 'net', 'referenceZ', 'footprintArea', 'pointsInPolygon'] as const;
-  for (const key of nums) if (!isFiniteNum(v[key])) return undefined;
+  if (!finiteFields(v, ['referenceZ', 'footprintArea', 'pointsInPolygon'])) return undefined;
+  const ga = v.gridAuthority as VolumeRecord['gridAuthority'];
+  if (ga !== undefined && !GRID_AUTHORITY.has(ga)) return undefined;
+  const withheldGrid = ga === 'withheld';
+  // A withheld record never carries fill/cut/net, no matter what the raw
+  // JSON supplies: a hand-edited or corrupted file must not be able to
+  // smuggle a cut/fill figure back in under a verdict that refused one.
+  const hasVolumeNums = !withheldGrid && finiteFields(v, ['fill', 'cut', 'net']);
+  if (!hasVolumeNums && !withheldGrid) return undefined;
   // The field was renamed `density` → `densityNative` to stop calling a native
   // horizontal-unit² figure "points/m²". Older files carry `density`, which held
   // exactly the same native value, so migrating it across is lossless.
@@ -1467,16 +1486,24 @@ function parseVolumeRecord(v: unknown): VolumeRecord | undefined {
     || !VOLUME_CONFIDENCE.has(v.confidence as VolumeRecord['confidence'])) {
     return undefined;
   }
+  // fill/cut/net lead, so a record that has them serialises in the same key
+  // order it always did.
   const record: VolumeRecord = {
-    fill: v.fill as number,
-    cut: v.cut as number,
-    net: v.net as number,
+    ...(hasVolumeNums ? { fill: v.fill as number, cut: v.cut as number, net: v.net as number } : {}),
     referenceZ: v.referenceZ as number,
     footprintArea: v.footprintArea as number,
     pointsInPolygon: v.pointsInPolygon as number,
     densityNative,
     confidence: v.confidence as VolumeRecord['confidence'],
   };
+  if (ga) {
+    record.gridAuthority = ga;
+    if (typeof v.gridAuthorityReason === 'string') record.gridAuthorityReason = v.gridAuthorityReason;
+    const cc = v.crossCheck;
+    if (isRecord(cc) && finiteFields(cc, ['fill', 'cut', 'net']) && typeof cc.method === 'string' && cc.method) {
+      record.crossCheck = { fill: cc.fill as number, cut: cc.cut as number, net: cc.net as number, method: cc.method };
+    }
+  }
   // Optional partial-coverage disclosure (points inside the footprint the
   // integration had to skip). Round-trips when present; older files omit it.
   if (isFiniteNum(v.skippedNonFinite) && v.skippedNonFinite > 0) {
@@ -1487,6 +1514,11 @@ function parseVolumeRecord(v: unknown): VolumeRecord | undefined {
   // method would give a historical figure a meaning it was never computed
   // under.
   if (typeof v.method === 'string' && v.method.length > 0) record.method = v.method;
+  if (isFiniteNum(v.resultSchema)) record.resultSchema = v.resultSchema;
+  const w = v.withheld;
+  if (isRecord(w) && finiteFields(w, ['source', 'analysed']) && (w.excluded === 'unknown' || isFiniteNum(w.excluded))) {
+    record.withheld = { source: w.source as number, excluded: w.excluded as number | 'unknown', analysed: w.analysed as number };
+  }
   return record;
 }
 

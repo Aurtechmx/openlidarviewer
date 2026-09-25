@@ -602,9 +602,10 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     // Volume factor is linear²·vertical, matching the measure tool and the
     // exports. Plain lin³ applied the HORIZONTAL unit to the vertical axis.
     const lin2 = lin * lin, vol = lin2 * vert;
-    const fillM3 = (out.result.fill * vol).toFixed(2);
-    const cutM3 = (out.result.cut * vol).toFixed(2);
-    const netM3 = (out.result.net * vol).toFixed(2), areaM2 = (out.result.footprintArea * lin2).toFixed(1);
+    const areaM2 = (out.result.footprintArea * lin2).toFixed(1);
+    // The canonical lasso result, built once in the stockpile chunk: Save
+    // stores it and the toast's volume clause is formatted from it.
+    const ps = deriveVolumeRecord(out.result, out.referenceZ, out.volumeMethod), stock = band?.lassoStockpileResult(ps, out.stockpileInputs, vol);
     // Stage the result for the toast's Save button. The polygon3D
     // is the convex-hull footprint at the integration reference
     // plane — saving promotes it to a regular Volume measurement.
@@ -612,7 +613,7 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
       out.polygon3D.length >= 3
         ? {
             polygon: out.polygon3D,
-            volume: deriveVolumeRecord(out.result, out.referenceZ, out.volumeMethod),
+            volume: stock?.record ?? ps,
             selectedCount: out.selectedCount,
           }
         : null;
@@ -634,13 +635,9 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
       crsVerdict.validity === 'safe-explicit-local'
         ? ' · units assumed metres'
         : '';
-    // The ` · Stockpile: … ± … (±%) · confidence` band, re-graded over the same
-    // sample against a "lowest ground" base plane. Empty when there is nothing
-    // trustworthy to claim (too few points / degenerate footprint).
-    const b = out.stockpileInputs, stockpileSuffix = band ? band.stockpileToastSuffix(b.polygon, b.positions, b.lin, b.options) : '';
     showLassoToast(
-      `Volume · fill ${fillM3} m³ · cut ${cutM3} m³ · net ${netM3} m³ · ` +
-        `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat} · ${out.selectionBasis.clause}.${stockpileSuffix}`,
+      `${stock?.headline ?? `Volume · net ${(out.result.net * vol).toFixed(2)} m³`} · ` +
+        `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat} · ${out.selectionBasis.clause}.${stock?.suffix ?? ''}`,
       pendingLassoSave && crsVerdict.canSaveMeasurement
         ? { label: 'Save to session', onClick: saveLassoVolumeIfPending }
         : undefined,

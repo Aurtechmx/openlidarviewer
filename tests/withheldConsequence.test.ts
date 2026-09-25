@@ -158,10 +158,12 @@ describe('Overlap is not Withheld', () => {
 });
 
 describe('where the policy is applied', () => {
-  it('is imported under src/ by the terrain gather alone', () => {
+  it('is imported under src/ by the terrain gather and the lasso volume walk alone', () => {
     // Floor-plan and routing read through that gather, so they inherit the
-    // exclusion without importing the policy. A second importer is a new
-    // product applying it, which needs its own before-and-after.
+    // exclusion without importing the policy. The lasso volume walk is the
+    // second product applying it (tests/lassoVolumeWithheld.test.ts). Another
+    // importer is a new product applying it, which needs its own
+    // before-and-after.
     const SRC = join(FIXTURES, '..', '..', 'src');
     const importers: string[] = [];
     const walk = (dir: string): void => {
@@ -174,6 +176,6 @@ describe('where the policy is applied', () => {
       }
     };
     walk(SRC);
-    expect(importers).toEqual(['src/render/terrainStreamSample.ts']);
+    expect(importers.sort()).toEqual(['src/render/measure/lassoVolumeCompute.ts', 'src/render/terrainStreamSample.ts']);
   });
 });
