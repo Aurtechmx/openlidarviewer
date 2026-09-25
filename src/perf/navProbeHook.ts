@@ -7,6 +7,8 @@
  * session pays one branch per hook.
  */
 
+import { governor } from '../render/perf/governorHook';
+
 /** Hot sections a long task can be attributed to. */
 export type NavSpanName = 'olv:upload' | 'olv:stream' | 'olv:edl' | 'olv:cull';
 
@@ -47,6 +49,7 @@ export function navSink(): NavProbeSink | null {
 export function feedFrameMs(bench: { recordFrameMs(ms: number): void } | null | undefined, ms: number): void {
   bench?.recordFrameMs(ms);
   navSink()?.frameMs(ms);
+  governor()?.frameMs(ms);
 }
 
 /**

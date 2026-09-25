@@ -4,6 +4,7 @@
  *
  *   node scripts/nav-jank-report.mjs <results.json>            one session
  *   node scripts/nav-jank-report.mjs <base.json> <head.json>   compare two
+ *   node scripts/nav-jank-report.mjs --ab <off.json> <on.json> governor off vs on
  *
  * One file: per trajectory, the warm-run medians (and the cold run) of the
  * active-window frame p50/p95/p99, frames over 50 and 100 ms, jank events and
@@ -18,6 +19,10 @@
  * environment fingerprint (browser, OS, renderer, DPR, dataset, flags), and a
  * trajectory whose digest differs, since none of those differences is a code
  * change. Exit 2 on a refusal.
+ *
+ * --ab: the same comparison between a governor-off and a governor-on session
+ * of one commit. Every environment field must match except the `governor=on`
+ * flag, which the off file must lack and the on file must carry.
  */
 import { readFileSync } from 'node:fs';
 import { isCliEntry } from './lib/isCliEntry.mjs';
@@ -118,9 +123,40 @@ export function compareRefusals(a, b) {
   return out;
 }
 
+/** The flag a governor-on session carries in its fingerprint. */
+export const GOVERNOR_FLAG = 'governor=on';
+
+/** Why `off` and `on` are not a governor A/B pair, or [] when they are. */
+export function abRefusals(off, on) {
+  const out = [];
+  for (const [f, l] of [[off, 'off'], [on, 'on']]) {
+    try {
+      assertResults(f, l);
+    } catch (e) {
+      out.push(e.message);
+    }
+  }
+  if (out.length) return out;
+  if (off.fingerprint.flags?.includes(GOVERNOR_FLAG)) out.push(`off file carries the ${GOVERNOR_FLAG} flag`);
+  if (!on.fingerprint.flags?.includes(GOVERNOR_FLAG)) out.push(`on file lacks the ${GOVERNOR_FLAG} flag`);
+  const strip = (f) => ({ ...f.fingerprint, flags: (f.fingerprint.flags ?? []).filter((x) => x !== GOVERNOR_FLAG) });
+  const a = strip(off);
+  const b = strip(on);
+  for (const k of FINGERPRINT_KEYS) {
+    if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) out.push(`environment differs in ${k}: ${JSON.stringify(a[k])} vs ${JSON.stringify(b[k])}`);
+  }
+  if (off.commit !== on.commit) out.push(`commit differs: ${off.commit} vs ${on.commit}`);
+  const shared = Object.keys(off.trajectories).filter((n) => n in on.trajectories);
+  if (shared.length === 0) out.push('no trajectory in common');
+  for (const n of shared) {
+    if (off.trajectories[n].trajectoryDigest !== on.trajectories[n].trajectoryDigest) out.push(`${n}: trajectory digest differs`);
+  }
+  return out;
+}
+
 /** Per trajectory and metric: base and head medians, difference, spread, and whether |diff| > spread. */
-export function compareResults(a, b) {
-  const refusals = compareRefusals(a, b);
+export function compareResults(a, b, refuse = compareRefusals) {
+  const refusals = refuse(a, b);
   if (refusals.length) throw new Error(`refusing to compare:\n  ${refusals.join('\n  ')}`);
   const out = {};
   for (const n of Object.keys(a.trajectories).filter((x) => x in b.trajectories)) {
@@ -138,9 +174,10 @@ export function compareResults(a, b) {
 }
 
 /** The comparison as text. */
-export function formatComparison(a, b) {
-  const cmp = compareResults(a, b);
-  const blocks = [`base ${a.commit}  head ${b.commit}  (IQR = larger run-to-run interquartile range; * = |diff| > IQR)`];
+export function formatComparison(a, b, refuse = compareRefusals) {
+  const cmp = compareResults(a, b, refuse);
+  const head = refuse === abRefusals ? `governor off vs on, commit ${a.commit}` : `base ${a.commit}  head ${b.commit}`;
+  const blocks = [`${head}  (IQR = larger run-to-run interquartile range; * = |diff| > IQR)`];
   for (const [n, metrics] of Object.entries(cmp)) {
     const rows = [[n, 'base', 'head', 'diff', 'IQR', '']];
     for (const k of [...PRIMARY, ...SECONDARY_METRICS]) {
@@ -153,21 +190,24 @@ export function formatComparison(a, b) {
 }
 
 if (isCliEntry(import.meta.url)) {
-  const files = process.argv.slice(2);
-  if (files.length < 1 || files.length > 2) {
-    console.error('usage: nav-jank-report.mjs <results.json> [<head-results.json>]');
+  const args = process.argv.slice(2);
+  const ab = args[0] === '--ab';
+  const files = ab ? args.slice(1) : args;
+  if (files.length < 1 || files.length > 2 || (ab && files.length !== 2)) {
+    console.error('usage: nav-jank-report.mjs <results.json> [<head-results.json>] | --ab <off.json> <on.json>');
     process.exit(1);
   }
+  const refuse = ab ? abRefusals : compareRefusals;
   const data = files.map((p) => JSON.parse(readFileSync(p, 'utf8')));
   try {
     if (data.length === 1) console.log(formatTable(data[0]));
     else {
-      const refusals = compareRefusals(data[0], data[1]);
+      const refusals = refuse(data[0], data[1]);
       if (refusals.length) {
         console.error(`refusing to compare:\n  ${refusals.join('\n  ')}`);
         process.exit(2);
       }
-      console.log(formatComparison(data[0], data[1]));
+      console.log(formatComparison(data[0], data[1], refuse));
     }
   } catch (e) {
     console.error(e.message);

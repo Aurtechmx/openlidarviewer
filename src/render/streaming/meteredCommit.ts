@@ -40,6 +40,7 @@ import type { SchedulerOptions } from './StreamingScheduler';
 import type { NodeState } from './StreamingNode';
 import type { StreamingBenchmark } from './streamingBenchmark';
 import type { StreamingCommitMode } from '../../perf/devFlags';
+import { governor } from '../perf/governorHook';
 
 export type { StreamingCommitMode };
 
@@ -103,6 +104,11 @@ export function frameUploadLimits(cfg: MeteredCommitConfig, frameMs?: number): U
       ? adaptiveUploadBudgetMs(cfg.baseBudgetMs, frameMs)
       : cfg.baseBudgetMs;
   return { budgetMs, maxBytes: cfg.maxBytesPerFrame, maxNodes: cfg.maxNodesPerFrame };
+}
+
+/** `limits` after an installed governor's commit scale (`?governor=on`); unchanged otherwise. */
+function governUploadLimits(limits: UploadLimits, pending: number): UploadLimits {
+  return governor()?.uploadLimits(limits, pending) ?? limits;
 }
 
 /** A snapshot of the driver's live metrics, for telemetry and the debug overlay. */
@@ -197,7 +203,7 @@ export function makeStreamingCommit(
       // read before the pass drains it.
       const backlog = queue.pendingCount;
       if (backlog > peakPendingNodes) peakPendingNodes = backlog;
-      const res = queue.process(frameUploadLimits(cfg, frameMs));
+      const res = queue.process(governUploadLimits(frameUploadLimits(cfg, frameMs), backlog));
       committedThisFrame = res.uploaded;
       committedBytesThisFrame = res.uploadedBytes;
       committedTotal += res.uploaded;

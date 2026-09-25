@@ -111,6 +111,7 @@ function liveSourceTransformPlugin() {
     // carry an `import()` specifier Vite must read statically:
     //   - `lazyChunks.ts`      — the COPC/streaming `import()` split points
     //   - `perf/navDriverLoader.ts` — the `?benchmark=nav` camera driver
+    //   - `render/perf/governorLoader.ts` — the `?governor=on` frame budget governor
     //   - `parseBuffer.ts` / `loaderRegistry.ts` — the loader chain reached
     //     from the main thread (the format converter's full-resolution
     //     decode), so their `import('./loadXyz' | './lazDecode')` split points
@@ -126,6 +127,7 @@ function liveSourceTransformPlugin() {
       ...workerExcludePatterns(),
       /lazyChunks\.ts/,
       /navDriverLoader\.ts/,
+      /governorLoader\.ts/,
       /parseBuffer\.ts/,
       /loaderRegistry\.ts/,
       // ── Performance exclusions (v0.5.3) ────────────────────────────────
@@ -505,6 +507,13 @@ export default defineConfig(({ mode }) => ({
           // downloads first. Same reason cellConfidence is pinned above.
           if (id.includes('/io/range/LocalFileRangeSource')) {
             return 'LocalFileRangeSource';
+          }
+          // The refinement phase and the scheduler cadence share one chunk. Both
+          // are read by the Viewer, the streaming scheduler and the lazy frame
+          // budget governor (`?governor=on`); left to the heuristic, the cadence
+          // splits into a chunk of its own and the shell's preload list grows.
+          if (id.includes('/render/refinementPhase.') || id.includes('/render/streaming/schedulerCadence')) {
+            return 'refinementPhase';
           }
           return undefined;
         },

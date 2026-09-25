@@ -13,8 +13,9 @@
  *   density    scanReport.run → the 'Density' row
  *
  * Presentation state is resolved through the app's own policy functions
- * (qualitySettingsFor, frameBudgetPolicy) and then applied where the app
- * applies it: the streaming point budget decides which nodes are resident,
+ * (qualitySettingsFor, and the frame budget governor through the same
+ * GovernorWiring the render loop installs under `?governor=on`) and then
+ * applied where the app applies it: the streaming point budget decides which nodes are resident,
  * the camera pose builds the lasso projector, and the lasso projector is
  * sized in CSS pixels (canvas.clientWidth/clientHeight), as the Viewer does.
  */
@@ -53,11 +54,8 @@ import {
   QUALITY_MIN,
   type QualityDevice,
 } from '../../src/render/quality/qualityPolicy';
-import {
-  frameBudgetPolicy,
-  type FrameBudgetInput,
-  type FrameBudgetPolicy,
-} from '../../src/render/perf/frameBudgetGovernor';
+import type { FrameBudgetInput, FrameBudgetPolicy } from '../../src/render/perf/frameBudgetGovernor';
+import { GOVERNOR_WINDOW, GovernorWiring } from '../../src/render/perf/governorWiring';
 import type { Vec3, VolumeRecord } from '../../src/render/measure/types';
 
 // ── Canonical hashing ─────────────────────────────────────────────────────
@@ -226,16 +224,31 @@ const GOVERNOR_INPUT: Record<GovernorSetting, FrameBudgetInput> = {
   },
 };
 
+/**
+ * The wired governor after a window of frames matching `input`: the recorder
+ * feeds the frame times (median and high as stated), the upload queue reports
+ * the pending nodes, and one more frame resolves the policy with them.
+ */
+function wiredGovernor(input: FrameBudgetInput): GovernorWiring {
+  const g = new GovernorWiring(input.mobileTier);
+  for (let i = 0; i < GOVERNOR_WINDOW - 1; i++) g.frameMs(input.recentMedianMs);
+  g.frameMs(input.recentHighMs);
+  g.frame(input.phase, input.tweening);
+  g.uploadLimits({ maxNodes: 8 }, input.pendingGpuNodes);
+  g.frame(input.phase, input.tweening);
+  return g;
+}
+
 export function resolvePresentation(s: PresentationSettings): ResolvedPresentation {
   const q = qualitySettingsFor(s.budget === 'low' ? QUALITY_MIN : midQualityPosition(), DEVICE);
-  const policy = frameBudgetPolicy(GOVERNOR_INPUT[s.governor]);
+  const gov = wiredGovernor(GOVERNOR_INPUT[s.governor]);
   const ratio = Math.min(s.dpr, q.maxPixelRatio);
   return {
     settings: s,
     streamingPointBudget: q.streamingPointBudget,
-    policy,
-    backingPixelRatio: Math.max(0.5, ratio * (1 - 0.5 * policy.dprPressure)),
-    edlDrawn: s.edl && policy.allowEdl,
+    policy: gov.policy,
+    backingPixelRatio: gov.dpr(ratio, Math.min(ratio, 0.5), ratio),
+    edlDrawn: s.edl && gov.edl(),
     cssWidth: 1200,
     cssHeight: 800,
     pose: s.pose,

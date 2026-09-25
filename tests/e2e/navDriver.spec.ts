@@ -48,9 +48,9 @@ interface DriveResult {
 
 interface ProbeSummary { frames: number; inputToDrawMs: { samples: number } }
 
-async function run(page: Page, name: string, fixedStep: boolean): Promise<{ drive: DriveResult; probe: ProbeSummary }> {
+async function run(page: Page, name: string, fixedStep: boolean, query = ''): Promise<{ drive: DriveResult; probe: ProbeSummary }> {
   // A fresh load per run, so every run starts from the framed view.
-  await page.goto('/?benchmark=nav');
+  await page.goto(`/?benchmark=nav${query}`);
   await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await page.waitForFunction(() => Boolean((window as { __olvNavDriver?: unknown }).__olvNavDriver));
@@ -83,6 +83,17 @@ test.describe('nav driver', () => {
     expect(b.drive.startCameraDigest).toBe(a.drive.startCameraDigest);
     expect(b.drive.finalCameraDigest).toBe(a.drive.finalCameraDigest);
     expect(a.drive.finalCameraDigest).not.toBe(a.drive.startCameraDigest);
+  });
+
+  test('?governor=on installs the governor and leaves the fixed-step path unchanged', async ({ page }) => {
+    test.setTimeout(240_000);
+    const off = await run(page, 'flythrough', true);
+    const on = await run(page, 'flythrough', true, '&governor=on');
+    expect(await page.evaluate(() => typeof (window as { __olvGovernor?: { edl?: unknown } }).__olvGovernor?.edl)).toBe('function');
+    expect(on.drive.settled).toBe(true);
+    expect(on.probe.frames).toBeGreaterThan(0);
+    expect(on.drive.trajectoryDigest).toBe(off.drive.trajectoryDigest);
+    expect(on.drive.finalCameraDigest).toBe(off.drive.finalCameraDigest);
   });
 
   for (const name of NAMES) {

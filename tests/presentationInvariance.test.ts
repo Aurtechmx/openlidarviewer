@@ -16,8 +16,10 @@
  *   - Eye Dome Lighting         {on, off}, gated by frameBudgetPolicy().allowEdl
  *   - presentation point budget {low, default}: qualitySettingsFor at the Speed end
  *                               and at the Balanced midpoint → streamingPointBudget
- *   - frame budget governor     frameBudgetPolicy at a nominal ('idle') and a stressed
- *                               ('moving', loaded) band → dprPressure, allowEdl, hover
+ *   - frame budget governor     the wired governor (GovernorWiring, as `?governor=on`
+ *                               installs it) fed a nominal ('idle') and a stressed
+ *                               ('moving', loaded) frame window → dprPressure applied to
+ *                               the DPR step, allowEdl to the EDL gate, hover
  *   - camera pose               two top-down orthographic cameras (different centre and
  *                               zoom); the lasso is the same world footprint projected
  *                               through each pose's projector
