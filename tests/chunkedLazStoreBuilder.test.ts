@@ -253,5 +253,7 @@ describe('chunked LAZ tile store builder', () => {
       const b = await slow.tiles.read(leaf.key);
       expect(a).toEqual(b);
     }
-  });
+    // Two complete LAZ tile-store builds: about 9 s alone, and past the 15 s
+    // default when the whole suite shares the CPU.
+  }, 60_000);
 });
