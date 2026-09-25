@@ -278,3 +278,24 @@ describe('stopping', () => {
     expect(h.frames).toBe(2);
   });
 });
+
+describe('idle wakes', () => {
+  it('tells the host which frames follow a sleep, and how the loop woke', () => {
+    const h = new Harness();
+    const kinds: string[] = [];
+    const s = new FrameScheduler({ ...h.host, idleWake: (k) => kinds.push(`${h.frames}:${k}`) });
+    s.start();
+    h.flushFrame();
+    // Asleep: the heartbeat wakes it.
+    h.flushTimer();
+    h.flushFrame();
+    // Asleep again: a wake (input) arrives before the heartbeat, and keeps the loop busy.
+    h.wants = true;
+    s.wake();
+    h.flushFrame();
+    // Busy: frames that follow frames are not idle wakes.
+    h.flushFrame();
+    expect(kinds).toEqual(['1:heartbeat', '2:wake']);
+    s.stop();
+  });
+});

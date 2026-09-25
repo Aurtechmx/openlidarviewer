@@ -17,9 +17,16 @@
  * Frame recording and adaptive quality keep the real delta either way.
  *
  * Before the first step and after the last one the driver waits for the
- * camera to settle (the pose, rounded to 1e-6, unchanged for
- * {@link SETTLE_FRAMES} frames, or {@link MAX_SETTLE_FRAMES} at most), and
- * hashes the pose at both ends.
+ * camera to come to rest, and hashes the pose at both ends. At rest means
+ * {@link SETTLE_UPDATES} consecutive navigation updates that each moved the
+ * camera position and target by at most {@link REST_REL_TOL} times the scene
+ * scale and turned the view and up directions by at most
+ * {@link REST_ANGLE_TOL} rad. The scene scale is the bounds diagonal the
+ * caller passes, else the camera-to-target distance of the first reported
+ * pose (the framed view). It counts navigation updates, not animation frames,
+ * because a loop at rest updates navigation only on its idle heartbeat; the
+ * wait gives up after {@link MAX_SETTLE_UPDATES} updates or
+ * {@link MAX_SETTLE_WAIT_FRAMES} animation frames.
  */
 import { canonicalJson } from '../canonicalHash';
 import { sha256Hex } from '../terrain/export/sha256';
@@ -39,10 +46,18 @@ export const DRIVE_SLOT = '__olvNavDrive';
 
 /** The fixed navigation step, in seconds. */
 export const FIXED_NAV_DT_SEC = 1 / 60;
-/** Consecutive frames with an unchanged pose that count as settled. */
-export const SETTLE_FRAMES = 10;
-/** Upper bound on the frames spent waiting for the camera to settle. */
-export const MAX_SETTLE_FRAMES = 600;
+/** Consecutive navigation updates within tolerance that count as at rest. */
+export const SETTLE_UPDATES = 10;
+/** Upper bound on the navigation updates spent waiting for rest. */
+export const MAX_SETTLE_UPDATES = 600;
+/** Upper bound on the animation frames spent waiting for rest (30 s at 60 Hz). */
+export const MAX_SETTLE_WAIT_FRAMES = 1800;
+/** Upper bound on the frames a step waits for queued fixed steps to integrate. */
+export const MAX_STEP_WAIT_FRAMES = 600;
+/** Position tolerance per update, as a fraction of the scene scale. */
+export const REST_REL_TOL = 1e-6;
+/** Direction tolerance per update, in radians. */
+export const REST_ANGLE_TOL = 1e-7;
 
 /** The canvas surface the driver needs. */
 export interface NavDriverCanvas {
@@ -66,6 +81,8 @@ export interface NavDriverEnv {
 export interface NavDriveOptions {
   fixedStep?: boolean;
   hint?: NavSceneHint;
+  /** Scene bounds diagonal, in world units, for the rest tolerance. */
+  sceneDiagonal?: number;
 }
 
 export interface NavDriveResult {
@@ -111,6 +128,34 @@ export function makeDomEvent(step: NavStep, clientX: number, clientY: number, bu
   });
 }
 
+type Vec3 = readonly number[];
+
+function dist(a: Vec3, b: Vec3): number {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+/** Angle between two vectors in radians (0 when either is zero-length). */
+export function angleBetween(a: Vec3, b: Vec3): number {
+  const cx = a[1] * b[2] - a[2] * b[1];
+  const cy = a[2] * b[0] - a[0] * b[2];
+  const cz = a[0] * b[1] - a[1] * b[0];
+  const dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = Math.hypot(cx, cy, cz);
+  return cross === 0 && dot >= 0 ? 0 : Math.atan2(cross, dot);
+}
+
+/** A reported pose. */
+interface Pose { position: Vec3; target: Vec3; up: Vec3 }
+
+/** Whether `b` is within the rest tolerance of `a` for a scene of scale `scale`. */
+export function withinRest(a: Pose, b: Pose, scale: number): boolean {
+  const tol = REST_REL_TOL * scale;
+  if (dist(a.position, b.position) > tol || dist(a.target, b.target) > tol) return false;
+  const dirA = [a.target[0] - a.position[0], a.target[1] - a.position[1], a.target[2] - a.position[2]];
+  const dirB = [b.target[0] - b.position[0], b.target[1] - b.position[1], b.target[2] - b.position[2]];
+  return angleBetween(dirA, dirB) <= REST_ANGLE_TOL && angleBetween(a.up, b.up) <= REST_ANGLE_TOL;
+}
+
 /** Per-run driver state shared with the sink. */
 interface DriveState {
   readonly fixed: boolean;
@@ -118,7 +163,13 @@ interface DriveState {
   owed: number;
   /** Digest of the last reported pose. */
   pose: string;
-  /** Consecutive reports equal to the one before. */
+  /** The last reported pose, for the rest check. */
+  last: Pose | null;
+  /** Scene scale for the rest tolerance; 0 until known. */
+  scale: number;
+  /** Navigation updates reported so far. */
+  updates: number;
+  /** Consecutive updates within the rest tolerance. */
   stable: number;
 }
 
@@ -142,7 +193,11 @@ export class NavDriver {
     if (!canvas) throw new Error('no viewer canvas');
     const steps = buildTrajectory(name, options.hint);
     const fixedStep = options.fixedStep === true;
-    const st: DriveState = { fixed: fixedStep, owed: 0, pose: '', stable: 0 };
+    const diag = options.sceneDiagonal;
+    const st: DriveState = {
+      fixed: fixedStep, owed: 0, pose: '', last: null, updates: 0, stable: 0,
+      scale: diag !== undefined && Number.isFinite(diag) && diag > 0 ? diag : 0,
+    };
     const sink: NavDriveSink = {
       fixedDtSec: fixedStep ? FIXED_NAV_DT_SEC : null,
       takeSteps: () => {
@@ -151,9 +206,12 @@ export class NavDriver {
         return n;
       },
       pose: (p, t, u) => {
-        const d = cameraDigest(p, t, u);
-        st.stable = d === st.pose ? st.stable + 1 : 0;
-        st.pose = d;
+        const cur: Pose = { position: [...p], target: [...t], up: [...u] };
+        if (st.scale === 0) st.scale = dist(cur.position, cur.target);
+        st.stable = st.last !== null && withinRest(st.last, cur, st.scale) ? st.stable + 1 : 0;
+        st.last = cur;
+        st.updates++;
+        st.pose = cameraDigest(p, t, u);
       },
     };
     this._busy = true;
@@ -194,19 +252,21 @@ export class NavDriver {
   }
 
   /**
-   * Wait until {@link SETTLE_FRAMES} consecutive navigation updates report the
-   * same pose, for at most {@link MAX_SETTLE_FRAMES} animation frames. In
-   * fixed-step mode one step is queued at a time and the wait ends only with
-   * none outstanding, so the pose it ends on is the same on every run.
+   * Wait until {@link SETTLE_UPDATES} consecutive navigation updates are within
+   * the rest tolerance, for at most {@link MAX_SETTLE_UPDATES} updates or
+   * {@link MAX_SETTLE_WAIT_FRAMES} animation frames. In fixed-step mode one
+   * step is queued at a time and the wait ends only with none outstanding,
+   * so the pose it ends on is the same on every run.
    */
   private async _settle(st: DriveState): Promise<{ frames: number; settled: boolean }> {
     st.stable = 0;
+    const from = st.updates;
     let frames = 0;
     for (;;) {
       await this._frame();
       frames++;
-      if (st.stable >= SETTLE_FRAMES && (!st.fixed || st.owed === 0)) return { frames, settled: true };
-      if (frames >= MAX_SETTLE_FRAMES) return { frames, settled: false };
+      if (st.stable >= SETTLE_UPDATES && (!st.fixed || st.owed === 0)) return { frames, settled: true };
+      if (st.updates - from >= MAX_SETTLE_UPDATES || frames >= MAX_SETTLE_WAIT_FRAMES) return { frames, settled: false };
       if (st.fixed && st.owed === 0) st.owed = 1;
     }
   }
@@ -235,7 +295,7 @@ export class NavDriver {
       await this._frame();
       frames++;
       if (stepFrame(steps[i]) <= frame && st.owed > 0) {
-        if (++waited > MAX_SETTLE_FRAMES) return { frames, complete: false };
+        if (++waited > MAX_STEP_WAIT_FRAMES) return { frames, complete: false };
         continue;
       }
       waited = 0;

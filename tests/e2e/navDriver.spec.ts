@@ -9,6 +9,10 @@
  * report, not asserted: they follow frame timing. The probe must have
  * recorded the dispatched input and the frames. No timing is asserted.
  *
+ * A last test is the deterministic-lane smoke of the benchmark runner
+ * (navJank.spec.ts): one short trajectory, the record built from it, the
+ * nav-jank results file built from that, and both checked against the schema.
+ *
  * The scan is `tiny.ply`: on the runner's software renderer a drag over the
  * multichunk LAZ fixture outlasts the test timeout.
  *
@@ -19,7 +23,16 @@
  * the shortest trajectory.
  */
 import { test, expect, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { buildNavJankRecord, validateJsonSchema } from '../../src/perf/navJankRecord';
+import type { NavProbeSummary } from '../../src/perf/navProbe';
+import { buildNavJankResults } from '../../scripts/lib/navJankResults.mjs';
 import { dropTinyPly } from './helpers';
+
+const SCHEMA = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../../validation/performance/nav-jank.schema.json', import.meta.url)), 'utf8'),
+);
 
 const NAMES = ['orbit', 'flythrough', 'zoomShock', 'scrub', 'stopInspect'] as const;
 
@@ -97,4 +110,24 @@ test.describe('nav driver', () => {
       console.log(`[nav-driver] ${name}: real-dt final pose ${realDt}`);
     });
   }
+});
+
+test('the benchmark runner builds a valid record from one trajectory', async ({ page }) => {
+  test.setTimeout(120_000);
+  const r = await run(page, 'stopInspect', false);
+  const env = {
+    commit: 'unknown', browser: 'chromium', os: process.platform, renderer: 'unknown', dpr: 1, refreshEstimateHz: 0,
+    datasetSha256: 'unknown', trajectoryDigest: r.drive.trajectoryDigest, flags: ['benchmark=nav', 'frame-clock'],
+  };
+  const summary = r.probe as unknown as NavProbeSummary;
+  const cold = buildNavJankRecord({ ...env, cache: 'cold' }, [{ name: 'stopInspect-cold-0', summary }]);
+  const warm = buildNavJankRecord({ ...env, cache: 'warm' }, [{ name: 'stopInspect-warm-1', summary }]);
+  expect(validateJsonSchema(SCHEMA, cold)).toEqual([]);
+  expect(validateJsonSchema(SCHEMA, warm)).toEqual([]);
+  const results = buildNavJankResults({
+    generatedAt: new Date().toISOString(), machine: 'ci', dataset: { file: 'tiny.ply' },
+    trajectories: { stopInspect: { cold, warm, loads: [] } },
+  });
+  expect(results.trajectories.stopInspect.trajectoryDigest).toBe(r.drive.trajectoryDigest);
+  expect(results.trajectories.stopInspect.warmMedians?.frameP95Ms.n).toBe(1);
 });

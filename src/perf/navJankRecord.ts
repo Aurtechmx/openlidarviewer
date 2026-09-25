@@ -26,7 +26,7 @@ export interface NavJankEnv {
 export interface NavJankRun { name: string; summary: NavProbeSummary }
 
 export interface NavJankRecord {
-  schemaVersion: 1;
+  schemaVersion: 2;
   env: NavJankEnv;
   runs: NavJankRun[];
   summary: {
@@ -40,6 +40,10 @@ export interface NavJankRecord {
     worstStarvationMs: number;
     medianInputToDrawP95Ms: number;
     longTasks: number;
+    medianActiveFrameP95Ms: number;
+    medianActiveFrameP99Ms: number;
+    worstActiveStarvationMs: number;
+    postInputEdlFlaps: number;
   };
 }
 
@@ -55,7 +59,7 @@ export function buildNavJankRecord(env: NavJankEnv, runs: readonly NavJankRun[])
   if (runs.length === 0) throw new Error('a nav jank record needs at least one run');
   const s = runs.map((r) => r.summary);
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     env: { ...env, flags: [...env.flags] },
     runs: runs.map((r) => ({ name: r.name, summary: r.summary })),
     summary: {
@@ -69,6 +73,10 @@ export function buildNavJankRecord(env: NavJankEnv, runs: readonly NavJankRun[])
       worstStarvationMs: Math.max(...s.map((x) => x.longestStarvationMs)),
       medianInputToDrawP95Ms: median(s.map((x) => x.inputToDrawMs.p95)),
       longTasks: s.reduce((a, x) => a + x.longTasks.count, 0),
+      medianActiveFrameP95Ms: median(s.map((x) => x.active.frameMs.p95)),
+      medianActiveFrameP99Ms: median(s.map((x) => x.active.frameMs.p99)),
+      worstActiveStarvationMs: Math.max(...s.map((x) => x.active.longestStarvationMs)),
+      postInputEdlFlaps: s.reduce((a, x) => a + x.settle.postInputEdlFlaps, 0),
     },
   };
 }
