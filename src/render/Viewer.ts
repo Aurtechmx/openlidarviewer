@@ -87,8 +87,7 @@ import type { ColorMode, CoverageColorGrid, ColorForModeOptions } from './colorM
 import { computeSharedElevationRange, elevationOptsFor, applyElevationColors } from './projectElevationScale';
 import { type ActiveColorbar } from './activeColorbar';
 import { captureSnapshot, canvasToBlob, type SnapshotHost, type SnapshotOptions } from './snapshot';
-import { runRenderFrame, type RenderLoopHost } from './renderLoop';
-import { feedFrameMs } from '../perf/navProbeHook';
+import { runRenderFrame, feedFrameMs, type RenderLoopHost } from './renderLoop';
 import { type ClipBox, clipKeepsPoint, countKept } from './clip/clipBox';
 import { edlDefaultEnabled, EDL_DEFAULTS } from './edl';
 import { angularVelocity } from './angularVelocity';

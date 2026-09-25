@@ -25,6 +25,8 @@ import { cameraIsMoving, edlActiveThisFrame } from './edlMotionGate';
 import { shouldRunProbePick } from './hoverPickGate';
 import { noteDrawn } from './drawSignal';
 import { navSink, type NavUploadSample } from '../perf/navProbeHook';
+
+export { feedFrameMs } from '../perf/navProbeHook';
 import type { PointInfo } from './pointInfo';
 import type { ToolMode } from './Viewer';
 
