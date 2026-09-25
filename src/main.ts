@@ -171,7 +171,6 @@ import { loadPrefs, savePrefs } from './prefs';
 import { applyNavPrefsChange, navigationPrefs, restoreNavPrefs } from './render/navPrefsWiring';
 import { makeNavPaletteActions } from './app/navPaletteActions';
 import type { AnalysisRow, RunOptions } from './analysis/ModuleApi';
-import { createAnalysisModuleRegistry } from './app/analysisModuleRegistry';
 import {
   availableModes,
   defaultMode,
@@ -235,7 +234,7 @@ import {
   loadTilesetOpen,
   loadActionRegistry,
   loadToolLauncher,
-  loadStockpilePresenter, loadSessionIo,
+  loadStockpilePresenter, loadSessionIo, loadAnalysisModules,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -892,7 +891,6 @@ const deviceCapsValue = deviceCaps({
   isMobile: isTouchFirstDevice(),
 });
 
-const registry = createAnalysisModuleRegistry();
 
 // The composition root owns the shared app state. v0.6 migrates main.ts's
 // module-level mutables onto it one cluster at a time: the layer/comparison
@@ -3634,11 +3632,9 @@ function streamingDebugSample(): StreamingDebugStats | null {
  * visible-class subset; when omitted (or full) the output is byte-identical to
  * the unscoped path.
  */
-function runModules(cloud: PointCloud, scope?: ClassScope): AnalysisRow[] {
-  const rows: AnalysisRow[] = [];
+function runModules(cloud: PointCloud, scope?: ClassScope): Promise<AnalysisRow[]> {
   const options: RunOptions = { spatialContext: crsService.context(), ...(scope ? { scope } : {}) }; // resolved ctx honours override
-  for (const module of registry.list()) rows.push(...module.run(cloud, undefined, options).rows);
-  return rows;
+  return loadAnalysisModules().then((m) => m.runAnalysisModules(cloud, options));
 }
 
 /**

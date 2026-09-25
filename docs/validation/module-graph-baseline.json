@@ -52,7 +52,7 @@
   },
   "fanOut": {
     "src/main.ts": {
-      "runtime": 108,
+      "runtime": 107,
       "typeOnly": 22,
       "dynamic": 7,
       "modules": [
@@ -65,7 +65,6 @@
         "src/app/LayerService.ts",
         "src/app/ScanRouteService.ts",
         "src/app/ScanService.ts",
-        "src/app/analysisModuleRegistry.ts",
         "src/app/classLegendRefresh.ts",
         "src/app/coordinateHudLazy.ts",
         "src/app/crsCoordinator.ts",
@@ -304,7 +303,7 @@
     },
     "src/render/measure/MeasureController.ts": {
       "runtime": 16,
-      "typeOnly": 4,
+      "typeOnly": 5,
       "dynamic": 0,
       "modules": [
         "src/render/measure/MeasureOverlay.ts",
@@ -351,7 +350,7 @@
       ]
     },
     "src/render/measure/profilePdf.ts": {
-      "runtime": 13,
+      "runtime": 14,
       "typeOnly": 1,
       "dynamic": 0,
       "modules": [
@@ -365,6 +364,7 @@
         "src/render/measure/profileProvenance.ts",
         "src/render/measure/profileSheetLayout.ts",
         "src/render/measure/profileSummary.ts",
+        "src/science/withheldCounts.ts",
         "src/terrain/export/exportNotes.ts",
         "src/units/units.ts",
         "src/winAnsiText.ts"
@@ -450,7 +450,7 @@
     "components": []
   },
   "context": {
-    "filesScanned": 965,
+    "filesScanned": 967,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [

@@ -1,7 +1,7 @@
 {
   "files": {
     "src/main.ts": {
-      "lines": 4954,
+      "lines": 4953,
       "goal": 2500
     },
     "src/render/Viewer.ts": {
@@ -14,16 +14,16 @@
       "lines": 3061
     },
     "src/ui/Inspector.ts": {
-      "lines": 2592
+      "lines": 2607
     },
     "src/render/measure/MeasureController.ts": {
-      "lines": 2387
+      "lines": 2405
     },
     "src/ui/MeasurePanel.ts": {
       "lines": 2204
     },
     "src/render/measure/profilePdf.ts": {
-      "lines": 1917
+      "lines": 1928
     },
     "src/render/streaming/StreamingScheduler.ts": {
       "lines": 1867

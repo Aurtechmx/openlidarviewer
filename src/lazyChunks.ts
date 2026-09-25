@@ -117,6 +117,14 @@ export const loadRenderProvenance = () => import('./ui/inspector/renderProvenanc
 export const loadRenderReport = () => import('./ui/inspector/renderReport');
 
 /**
+ * Load the analysis modules behind the Scan report (Health Check, Scan
+ * Report) on the first report, never in the startup shell. The Inspector
+ * shows its loading line until the rows arrive, so no figure is painted
+ * before it is computed.
+ */
+export const loadAnalysisModules = () => import('./app/analysisModuleRegistry');
+
+/**
  * Load the Speed ↔ Quality panel — the popover markup behind the header's
  * performance button — on the first click, never in the startup shell.
  *

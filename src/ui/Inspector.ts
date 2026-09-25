@@ -672,6 +672,8 @@ export class Inspector {
   private _reportChunkPromise: Promise<typeof this._renderReportFn> | null = null;
   /** The last rows handed to setReport(), for latest-wins and retry. */
   private _pendingReportRows: AnalysisRow[] | null = null;
+  /** The latest setReport() argument, rows or a pending computation. */
+  private _reportSource: unknown = null;
   private readonly _layerRows = new Map<string, HTMLElement>();
   /** Per-layer facts the group panel reads: display name and stable identity. */
   private readonly _layerFacts = new Map<string, { name: string; stableId: string | null }>();
@@ -2111,7 +2113,20 @@ export class Inspector {
    * `setReport()` arrives before the chunk loads, only the newest rows are
    * painted.
    */
-  setReport(rows: AnalysisRow[]): void {
+  setReport(rows: AnalysisRow[] | Promise<AnalysisRow[]>): void {
+    this._reportSource = rows;
+    if (!Array.isArray(rows)) {
+      // Rows still being computed: the loading line stays until they land,
+      // and a newer call made meanwhile wins.
+      this._report.replaceChildren(
+        el('div', { className: 'olv-report-empty', text: 'Loading scan report…' }),
+      );
+      rows.then(
+        (r) => { if (this._reportSource === rows) this.setReport(r); },
+        () => { if (this._reportSource === rows) this._showReportLoadError(); },
+      );
+      return;
+    }
     this._pendingReportRows = rows;
     if (this._renderReportFn) {
       this._renderReportFn(this._report, rows);

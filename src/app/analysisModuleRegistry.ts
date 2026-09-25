@@ -14,7 +14,8 @@
  *
  * Adding a module is an edit to this file rather than to the shell.
  */
-import { ModuleRegistry } from '../analysis/ModuleApi';
+import { ModuleRegistry, type AnalysisRow, type RunOptions } from '../analysis/ModuleApi';
+import type { PointCloud } from '../model/PointCloud';
 import { healthCheck } from '../analysis/modules/healthCheck';
 import { scanReport } from '../analysis/modules/scanReport';
 
@@ -24,4 +25,18 @@ export function createAnalysisModuleRegistry(): ModuleRegistry {
   registry.register(healthCheck);
   registry.register(scanReport);
   return registry;
+}
+
+let shared: ModuleRegistry | null = null;
+
+/**
+ * Run every registered module over a cloud and flatten the rows, in
+ * registration order. The shell reaches this through `loadAnalysisModules`,
+ * so the modules load with the first report rather than at startup.
+ */
+export function runAnalysisModules(cloud: PointCloud, options: RunOptions): AnalysisRow[] {
+  shared ??= createAnalysisModuleRegistry();
+  const rows: AnalysisRow[] = [];
+  for (const module of shared.list()) rows.push(...module.run(cloud, undefined, options).rows);
+  return rows;
 }

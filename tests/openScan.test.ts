@@ -157,7 +157,7 @@ function makeDeps(over: { loading?: boolean } = {}) {
     refreshAnnotationPanel: vi.fn(),
     setCurrentColorMode: vi.fn(),
     loadApplyDisplayProfile: vi.fn(async () => ({ applyDisplayProfile: vi.fn() })),
-    runModules: vi.fn(() => []),
+    runModules: vi.fn(async () => []),
     currentClassScope: vi.fn(() => ({}) as unknown as ClassScope),
     prewarmExportStudio: vi.fn(),
     getPendingShareState: () => null,
