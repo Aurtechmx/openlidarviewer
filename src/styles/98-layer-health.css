@@ -9,7 +9,8 @@
 .olv-colorbar {
   position: absolute; top: 50%; transform: translateY(-50%);
   right: calc(var(--olv-right-rail-width, 232px) + 28px);
-  z-index: var(--z-popover);
+  /* Below the navigation HUD: a legend must never hide the card's controls. */
+  z-index: calc(var(--z-hud) - 1);
   display: flex; flex-direction: column; gap: 2px;
   padding: 8px 10px;
   background: var(--panel);
@@ -43,6 +44,10 @@
 @media (max-width: 767px) {
   .olv-colorbar { right: 14px; }
 }
+/* A status toast lifted over the navigation card (panelChrome.ts) lands
+   mid-stage, where this legend floats: the legend steps aside until the toast
+   times out, so neither hides the other's controls. */
+body:has(.olv-lasso-toast.olv-visible[data-lifted]) .olv-colorbar { visibility: hidden; }
 
 /* ─── Layer Health card ──────────────────────────────────────────────
  * Per-layer spatial facts (CRS, units, datum, compatibility, frame
