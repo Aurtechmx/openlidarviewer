@@ -28,6 +28,7 @@ const ACCEPTED: Record<string, readonly Site[]> = {
   'src/app/profileWorkbenchSection.ts': [{ kind: 'requestAnimationFrame', count: 2, owner: 'one-shot deferred run' }],
   'src/render/snapshot.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot frame await' }],
   'src/render/drawSignal.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot frame await' }],
+  'src/perf/navDriver.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one frame per trajectory step; bounded by the trajectory, ?benchmark=nav only' }],
   'src/ui/ProjectCard.ts': [{ kind: 'setTimeout-rearm', count: 1, owner: 'fade hand-off poll; bounded by HANDOFF_CEILING_MS' }],
 };
 
