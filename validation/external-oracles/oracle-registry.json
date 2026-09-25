@@ -369,6 +369,123 @@
         "Validates arithmetic only. A correct recomputation says nothing about whether the underlying model is calibrated against real terrain.",
         "Run from the host toolchain rather than the digest-pinned oracle image, so reproducibility rests on the recorded version string."
       ]
+    },
+    {
+      "oracleId": "olv-observatory-state-table-py",
+      "name": "Observatory state-table oracle (state_table.py)",
+      "version": "1",
+      "executables": [
+        "validation/observatory/oracle/state_table.py"
+      ],
+      "roleCapabilities": [
+        "analytic-truth",
+        "generator-truth"
+      ],
+      "domains": [
+        "observation-state-table"
+      ],
+      "lineageGroup": "olv-observatory-analytic-oracle",
+      "implementationLanguage": "Python (standard library only)",
+      "license": "AGPL-3.0-only",
+      "architecture": "any (no native dependency)",
+      "installationMethod": "in-repository; run with the interpreter .python-version pins",
+      "sourceRevision": null,
+      "independenceNotes": [
+        "Written from docs/observatory/SPEC.md §2.2-§2.4 and validation/protocols/observatory/OB-ST-THRESHOLDS.protocol.json's boundary rules, not from src/observation/stateTable.ts. Not external validation: both are this project's own documents, so a shared misreading of SPEC would survive agreement between the two implementations. See this file's own module docstring."
+      ],
+      "limitations": [
+        "Checks a pure classification function against a bounded, explicitly enumerated lattice of counter combinations (see state-table-lattice.json), not against any real scan.",
+        "Shares no code, dependency or lineage with any other registered oracle in this file; the lineageGroup exists so a future in-repository Observatory or SensorPrint oracle that reuses this one's helper functions is recorded as sharing it, rather than counted as a second independent leg."
+      ]
+    },
+    {
+      "oracleId": "olv-observatory-ray-aabb-traversal-py",
+      "name": "Observatory ray-AABB clip and voxel traversal oracle (ray_aabb_traversal.py)",
+      "version": "1",
+      "executables": [
+        "validation/observatory/oracle/ray_aabb_traversal.py"
+      ],
+      "roleCapabilities": [
+        "analytic-truth",
+        "generator-truth"
+      ],
+      "domains": [
+        "voxel-traversal",
+        "ray-aabb-clipping"
+      ],
+      "lineageGroup": "olv-observatory-analytic-oracle",
+      "implementationLanguage": "Python (standard library only)",
+      "license": "AGPL-3.0-only",
+      "architecture": "any (no native dependency)",
+      "installationMethod": "in-repository; run with the interpreter .python-version pins",
+      "sourceRevision": null,
+      "independenceNotes": [
+        "Implements Amanatides & Woo (1987) 3D DDA traversal and slab-method AABB clipping directly from their published definitions, stepping in exact rational arithmetic (fractions.Fraction) rather than the floating-point the TypeScript traversal (docs/observatory/SPEC.md OB-LED-01, implemented starting phase O4) will use. The written tie rule for a ray exactly on a voxel face or corner is this oracle's own statement, not a transcription of any TypeScript code, since no TypeScript traversal exists yet.",
+        "Shares its lineageGroup with olv-observatory-state-table-py for the reason stated on that entry."
+      ],
+      "limitations": [
+        "Checked only against the four analytic F8 cases in validation/observatory/fixtures/f8-dda-cases.json (axis-aligned, along a face, grazing a corner, zero-length), not against a real scan or a general-position ray.",
+        "Exact-rational stepping is possible only because every F8 fixture coordinate is deliberately an exactly representable dyadic rational; it says nothing about floating-point behaviour on a ray whose parameters are not."
+      ]
+    },
+    {
+      "oracleId": "olv-observatory-shadow-frontier-py",
+      "name": "Observatory shadow-frontier adjacency oracle (shadow_frontier.py)",
+      "version": "1",
+      "executables": [
+        "validation/observatory/oracle/shadow_frontier.py"
+      ],
+      "roleCapabilities": [
+        "analytic-truth",
+        "generator-truth"
+      ],
+      "domains": [
+        "shadow-frontier-adjacency"
+      ],
+      "lineageGroup": "olv-observatory-analytic-oracle",
+      "implementationLanguage": "Python (standard library only)",
+      "license": "AGPL-3.0-only",
+      "architecture": "any (no native dependency)",
+      "installationMethod": "in-repository; run with the interpreter .python-version pins",
+      "sourceRevision": null,
+      "independenceNotes": [
+        "Written from docs/observatory/SPEC.md §2.4/§5.4's frontier definition directly, not from src/observation/shadowFrontier.ts. Not external validation: both are this project's own documents, so a shared misreading of SPEC would survive agreement between the two implementations. See this file's own module docstring.",
+        "Shares its lineageGroup with olv-observatory-state-table-py and olv-observatory-ray-aabb-traversal-py for the reason stated on the first of those entries."
+      ],
+      "limitations": [
+        "Checks 6-adjacency over one small, explicitly enumerated 5x3x1 grid (shadow-frontier-grid.json) built to exercise every adjacency kind and several non-adjacent neighbour states, not a grid produced by an actual traversal.",
+        "Says nothing about the area figure (`areaSquareMetres`), which is a direct arithmetic multiply the oracle does not separately check."
+      ]
+    },
+    {
+      "oracleId": "olv-observatory-strength-py",
+      "name": "Observatory observation-strength component oracle (strength.py)",
+      "version": "1",
+      "executables": [
+        "validation/observatory/oracle/strength.py"
+      ],
+      "roleCapabilities": [
+        "analytic-truth",
+        "generator-truth"
+      ],
+      "domains": [
+        "observation-strength-components"
+      ],
+      "lineageGroup": "olv-observatory-analytic-oracle",
+      "implementationLanguage": "Python (standard library only)",
+      "license": "AGPL-3.0-only",
+      "architecture": "any (no native dependency)",
+      "installationMethod": "in-repository; run with the interpreter .python-version pins",
+      "sourceRevision": null,
+      "independenceNotes": [
+        "Written from docs/observatory/SPEC.md §2.5's five component definitions directly, not from src/observation/strength.ts. Not external validation: both are this project's own documents, so a shared misreading of SPEC §2.5 would survive agreement between the two implementations. See this file's own module docstring.",
+        "Shares its lineageGroup with olv-observatory-state-table-py, olv-observatory-ray-aabb-traversal-py and olv-observatory-shadow-frontier-py for the reason stated on the first of those entries."
+      ],
+      "limitations": [
+        "Checks the five closed-form formulas over seven hand-picked, dyadic-or-simple-diagonal cases (strength-lattice.json) chosen to exercise every NaN/degenerate branch (no samples, no hit/pass evidence, no normal supplied, an out-of-band range, a voxel hit only by a pulse's 2nd return), not a statistically representative sample of real hitting-ray geometry.",
+        "The multi-return case only exercises the component formulas over a sample set shaped like a 2nd-return-only hit (a sample carrying the OVERLAPPING return's own range, not the ray's primary range); it does not itself drive a real multi-return traversal or returnTable/returnCounts lookup, which is `accumulateStrengthHitSamples`'s own TypeScript-side responsibility, covered instead by `tests/observatoryStrength.test.ts`'s real end-to-end multi-return group.",
+        "Does not check `incidence`'s normal-fitting step (`fitNormalFromResidentPoints`'s `symEig3` covariance fit): every case hands the oracle a normal directly, matching how `computeStrengthComponents` itself takes a normal as an argument rather than fitting one internally."
+      ]
     }
   ]
 }

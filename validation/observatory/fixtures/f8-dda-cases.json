@@ -1,0 +1,78 @@
+{
+  "domain": {
+    "minCorner": [
+      0,
+      0,
+      0
+    ],
+    "maxCorner": [
+      4,
+      4,
+      4
+    ]
+  },
+  "voxelEdge": 1,
+  "tieRule": "OB-LED-01: a coordinate exactly on a voxel boundary belongs to the voxel on the POSITIVE side of that boundary along that axis alone — the half-open interval [i*h, (i+1)*h) that already indexes every voxel, applied per axis independently. A ray grazing a shared corner or edge is resolved by applying this same per-axis rule on each axis at once; no separate corner or edge rule exists.",
+  "cases": [
+    {
+      "id": "F8-axis-aligned",
+      "description": "A ray parallel to +X, held at cell-centre Y and Z so it never meets a Y or Z boundary.",
+      "origin": [
+        0.5,
+        1.5,
+        2.5
+      ],
+      "direction": [
+        1,
+        0,
+        0
+      ],
+      "tMax": 3
+    },
+    {
+      "id": "F8-along-face",
+      "description": "A ray parallel to +X running exactly on the Y=1 face shared by the y=0 and y=1 voxel rows.",
+      "origin": [
+        0.5,
+        1,
+        2.5
+      ],
+      "direction": [
+        1,
+        0,
+        0
+      ],
+      "tMax": 3
+    },
+    {
+      "id": "F8-grazing-corner",
+      "description": "A diagonal ray in X and Y (Z held at cell-centre) that passes exactly through the corner shared by four voxels at (1, 1, z).",
+      "origin": [
+        0.5,
+        0.5,
+        0.5
+      ],
+      "direction": [
+        1,
+        1,
+        0
+      ],
+      "tMax": 2.5
+    },
+    {
+      "id": "F8-zero-length",
+      "description": "A ray whose declared extent is zero, entirely inside one voxel.",
+      "origin": [
+        1.5,
+        1.5,
+        1.5
+      ],
+      "direction": [
+        1,
+        0,
+        0
+      ],
+      "tMax": 0
+    }
+  ]
+}

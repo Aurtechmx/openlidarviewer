@@ -13,47 +13,7 @@
 import { describe, it, expect } from 'vitest';
 import { loadPcd } from '../src/io/loadPcd';
 import { CellState, NO_RECORD, cellIndexOf, recordForCell } from '../src/model/OrganizedRange';
-
-interface HeaderOptions {
-  readonly width: number;
-  readonly height: number;
-  readonly points?: number;
-  readonly viewpoint?: string | null;
-}
-
-/** An ascii PCD with x y z fields. `viewpoint: null` omits the line entirely. */
-function asciiPcd(options: HeaderOptions, rows: readonly string[]): ArrayBuffer {
-  const { width, height, points = width * height, viewpoint = '0 0 0 1 0 0 0' } = options;
-  const lines = [
-    '# .PCD v0.7',
-    'VERSION 0.7',
-    'FIELDS x y z',
-    'SIZE 8 8 8',
-    'TYPE F F F',
-    'COUNT 1 1 1',
-    `WIDTH ${width}`,
-    `HEIGHT ${height}`,
-    ...(viewpoint === null ? [] : [`VIEWPOINT ${viewpoint}`]),
-    `POINTS ${points}`,
-    'DATA ascii',
-    ...rows,
-    '',
-  ];
-  return new TextEncoder().encode(lines.join('\n')).buffer as ArrayBuffer;
-}
-
-/**
- * A 4-column by 3-row grid whose coordinates encode their own address:
- * x is the column, y is the row. Non-square on purpose — a transposed read
- * cannot hide on a square grid — and the coordinates make an off-by-one in
- * the record link visible rather than merely a different number.
- */
-const GRID_ROWS: string[] = [];
-for (let row = 0; row < 3; row++) {
-  for (let column = 0; column < 4; column++) {
-    GRID_ROWS.push(`${column} ${row} 0`);
-  }
-}
+import { GRID_ROWS, asciiPcd } from './helpers/asciiPcd';
 
 /** World coordinate of a display record, undoing the recentring origin. */
 function worldXY(

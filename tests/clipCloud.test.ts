@@ -55,4 +55,31 @@ describe('clipCloud', () => {
     expect(c.name).toBe('test.las');
     expect(c.sourceFormat).toBe('las');
   });
+
+  // OB-INT-02: `keep` can drop points from the middle of a station's range, so
+  // a subset the clip keeps is not the contiguous block a station's
+  // [start, end) describes. Dropped explicitly rather than carried stale.
+  it('drops the acquisition-stations sidecar rather than carrying a stale range', () => {
+    const withStations = new PointCloud({
+      positions: new Float32Array([0, 0, 0, 2, 0, 0, 0, 2, 0, 5, 5, 5]),
+      origin: [0, 0, 0],
+      sourceFormat: 'e57',
+      name: 'test.e57',
+      acquisitionStations: {
+        kind: 'acquisition-stations',
+        stations: [
+          {
+            id: 'scan-1',
+            source: 'e57-scan',
+            pose: { worldTranslation: [0, 0, 0], localPositionSource: 'not-applicable' },
+            recordRange: { start: 0, end: 4 },
+            originStatus: 'DECLARED',
+          },
+        ],
+      },
+    });
+    const c = clipCloud(withStations, clip('keep-inside'));
+    expect(c.pointCount).toBe(3);
+    expect(c.acquisitionStations).toBeUndefined();
+  });
 });

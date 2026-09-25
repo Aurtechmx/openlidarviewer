@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "kind": "threshold-preregistration",
+  "protocolId": "OB-ST-THRESHOLDS",
+  "governs": "OB-ST-01, OB-ST-02 (src/observation/stateTable.ts)",
+  "title": "Observatory state-table thresholds and boundary rules",
+  "conformance": "This record does NOT conform to validation/protocols/protocol.schema.json. That schema governs a cross-implementation tolerance comparison against a named reference tool over registered datasets, verified by scripts/verify-cross-implementation-study.mjs. This record instead preregisters the constants and boundary decisions a pure classification function reads, per docs/observatory/SPEC.md OB-ST-02: 'p_solid, p_empty and n_min are preregistered ... before any fixture is scored'. It follows this directory's convention (frozen, dated, rationale carried alongside the value, changed only with a recorded reason) rather than that schema's shape.",
+  "recordWrittenOn": "2026-09-22",
+  "parameters": [
+    {
+      "name": "p_solid",
+      "value": 0.9,
+      "unit": "dimensionless (hit / (hit + pass), range [0, 1])",
+      "usedBy": "SURFACE (SPEC §2.2), the solid side of CONFLICT (§2.3)",
+      "rationale": "A hit fraction at or above 0.9 means at most one in ten rays that reached this voxel's depth window passed through without a return, which is a comfortable majority for calling a voxel solid even before accounting for edge and mixed-pixel effects (which PARTIAL exists to absorb). Not yet checked against a real multi-station scene with known ground truth; SPEC §11 states plainly that this requires user data OLV does not hold today, and until then the verdict on any fixture scored under this value is READY WITH DOCUMENTED LIMITATIONS, not READY."
+    },
+    {
+      "name": "p_empty",
+      "value": 0.1,
+      "unit": "dimensionless (hit / (hit + pass), range [0, 1])",
+      "usedBy": "the empty side of CONFLICT (§2.3); OBSERVED_EMPTY uses hit = 0 exactly, not this threshold (§2.2)",
+      "rationale": "Chosen as the mirror of p_solid (0.1 = 1 - 0.9) so the two thresholds bound one symmetric confident band rather than two independently tuned ones; the porous/mixed middle between them is PARTIAL. Same 'requires user data' caveat as p_solid."
+    },
+    {
+      "name": "n_min",
+      "value": 5,
+      "unit": "count (integer ≥ 1, rays contributing to hit + pass)",
+      "usedBy": "the ray-count floor for SURFACE, OBSERVED_EMPTY and both sides of CONFLICT (§2.2, §2.3)",
+      "rationale": "Five rays is the smallest count at which a hit fraction stops being decided by a single ray's outcome (with n = 1..4, one flipped return moves f by 20 points or more). Not derived from a noise model; a future pass with real multi-station data may refine it, recorded here when it does."
+    },
+    {
+      "name": "tau_abs",
+      "value": null,
+      "unit": "metres",
+      "usedBy": "the hit window τ(r) = tau_abs + tau_rel·r (§2.1); consumed starting the ray builder and traversal (O3/O4), not by any O1 code path",
+      "derivation": "SPEC §2.1 states the default is 'derived from h and the source's angular step', i.e. a formula evaluated per run, not one constant. This record preregisters the formula rather than a number: tau_abs = h / 2, half the declared voxel edge — the smallest absolute slack that still lets a return exactly on a voxel boundary land inside one voxel's hit window rather than being pushed out by rounding.",
+      "rationale": "Not yet exercised by any O1 code; recorded now so the formula is on record before O3 first evaluates it, per OB-ST-02's spirit even though tau_abs/tau_rel are outside OB-ST-01's direct inputs."
+    },
+    {
+      "name": "tau_rel",
+      "value": null,
+      "unit": "dimensionless (metres of slack per metre of range)",
+      "usedBy": "the hit window τ(r) = tau_abs + tau_rel·r (§2.1); consumed starting O3/O4",
+      "derivation": "Preregistered as a formula: tau_rel = tan(angular_step / 2), where angular_step is the source's fitted angular sampling step (acquisitionCoverage). This is the half-angle footprint of one angular sample projected to unit range, so the hit window widens with range at the same rate the source's own beam spacing does.",
+      "rationale": "Same status as tau_abs: declared, not yet evaluated by any O1 code path."
+    }
+  ],
+  "boundaryRules": [
+    {
+      "id": "OUTSIDE_DOMAIN-first",
+      "rule": "OUTSIDE_DOMAIN is decided before any other rule, for every voxel outside the declared ROI, range window or angular extent, regardless of counters.",
+      "reason": "SPEC §2.4 numbers this rule 9 in its list but states in the same clause that it 'is applied first spatially'. The numbered position is presentation order; evaluation order places it first. src/observation/stateTable.ts and validation/observatory/oracle/state_table.py both implement it this way."
+    },
+    {
+      "id": "PARTIAL-is-the-total-complement",
+      "rule": "PARTIAL is decided for every voxel with hit + pass > 0 that is not SURFACE and not OBSERVED_EMPTY, not only the literal p_empty < f < p_solid band SPEC §2.2 states.",
+      "reason": "SPEC's three per-band definitions leave one combination unclaimed by any of them: hit = 0 with 0 < pass < n_min has f = 0, which is not '> p_empty' (so the literal PARTIAL text excludes it) and is not OBSERVED_EMPTY either (pass < n_min). SPEC §2.4 requires the whole table to be 'implemented as one pure function with an exhaustive test over counter combinations', which is only possible if every combination resolves to exactly one state. Reading PARTIAL as the complement of the other two closes the gap without moving the p_solid/p_empty boundary itself, and reads consistently with SPEC's own gloss on PARTIAL: 'absorbs vegetation, fences, edges and mixed pixels' — insufficient evidence to call a voxel solid or confidently empty is the same kind of ambiguity."
+    },
+    {
+      "id": "UNADDRESSED-is-the-residual-default",
+      "rule": "Within the branch where no source has any hit or pass evidence, the order is: SHADOWED (if any source individually qualifies), then NO_RETURN_PATH (if any source's no-return rays reached the voxel), then UNADDRESSED as the unconditional remainder — including when the source list is empty.",
+      "reason": "SPEC §2.4 defines UNADDRESSED as 'no source's ray domain covers it', which is the natural default for 'no positive evidence of any kind reached this voxel' once SHADOWED and NO_RETURN_PATH have each been given first refusal on their own positive evidence (behind-only, no-return-only). This ordering is total: it does not depend on every source's `addressed` flag agreeing with its counters, which SPEC does not require to be internally consistent for a hand-built or oracle-generated fixture."
+    },
+    {
+      "id": "CONFLICT-vs-OBSERVED_EMPTY-asymmetry",
+      "rule": "CONFLICT's 'empty' side uses f ≤ p_empty (with n ≥ n_min); OBSERVED_EMPTY uses hit = 0 exactly (with pass ≥ n_min). The two are deliberately different tests.",
+      "reason": "This is not a gap-closing choice; it transcribes SPEC §2.2 and §2.3 exactly as written, each in its own words. Recorded here so the asymmetry reads as intentional rather than as a transcription slip the next time someone compares the two definitions."
+    }
+  ],
+  "changeRule": "A value or boundary rule above may change only by editing this record with the new value, the date, and the reason for the change recorded alongside the old one (kept, not deleted, so the history of what a fixture was scored under stays readable). Any fixture already scored under a changed value is invalidated by the edit and needs re-scoring."
+}

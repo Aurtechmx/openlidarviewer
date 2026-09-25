@@ -9,12 +9,15 @@ import { openTerrainAnalysis, type TerrainAnalysisEntryDeps } from '../openTerra
 import { buildScanStory, type ScanStoryInputs } from '../../intelligence/scanStory';
 import { renderDatasetStoryCard } from '../../ui/scanStoryViews';
 import { openModal } from '../../ui/Modal';
-import { loadFlowPulseLab, loadTerrainAccessLab } from '../../lazyChunks';
+import { loadFlowPulseLab, loadObservatoryRun, loadTerrainAccessLab } from '../../lazyChunks';
 import { createLazySurfaceLoader, type LazyLoadToast } from '../lazySurfaceLoad';
+import type { ObservatoryEntryDeps } from '../openObservatoryRun';
 
 export interface AnalysisActionDeps {
   /** How to reach the Analyse panel and its run; see {@link openTerrainAnalysis}. */
   terrainAnalysisEntry: TerrainAnalysisEntryDeps;
+  /** How to reach the Observatory panel and its run; see {@link openObservatoryRun}. */
+  observatoryEntry: ObservatoryEntryDeps;
   buildCurrentStoryInputs: () => ScanStoryInputs;
   /**
    * Where a Flow Pulse Lab chunk-load failure is reported, with a "Try
@@ -86,6 +89,19 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
         void Promise.all([deps.terrainAnalysisEntry.showPanel(), loadTerrainAccessLab()])
           .then(([panel, lab]) => lab.openTerrainAccessLab(panel.terrainAccessInput ?? null))
           .catch((err) => console.warn('[terrain-access] lab chunk failed to load', err));
+      },
+    },
+    {
+      id: 'analyse.observatory',
+      title: 'Observatory (observation evidence)',
+      section: 'Analyse',
+      hint: 'What this scan has actually observed, what is shadowed, and what remains unaddressed.',
+      keywords: ['observatory', 'observation', 'evidence', 'shadow', 'coverage', 'stations', 'occlusion'],
+      run: () => {
+        // Dynamically imported, like Flow Pulse above: the coordinator pulls
+        // in the whole O1-O8 kernel (rays, ledger, states, shadow-frontier,
+        // run record), which must stay out of the action-registry chunk.
+        void loadObservatoryRun().then((mod) => mod.openObservatoryRun(deps.observatoryEntry, true));
       },
     },
     {

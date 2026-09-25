@@ -24,13 +24,13 @@ from the tree and fails when a cell drifts.
 | Layer | Path | Size | Role |
 |---|---|---:|---|
 | Core numerics | `src/process`, `src/numeric.ts`, `src/units` | ~2.4k | Compensated sums, Welford, unit types. No dependencies. |
-| Model | `src/model` | ~3.4k | `PointCloud`, layer model. Plain data. |
+| Model | `src/model` | ~3.6k | `PointCloud`, layer model. Plain data. |
 | Geo | `src/geo` | ~5.2k | CRS math, `ProjectSpatialFrame`, transforms. |
 | Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~47k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. **UI-free by lint.** |
 | I/O | `src/io` | ~36k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
-| Render | `src/render` | ~72k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
+| Render | `src/render` | ~73k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
 | Export / report | `src/export`, `src/report`, `src/convert` | ~14k | Studio exporters, PDF/report builders, batch conversion. |
-| Application services | `src/app` | ~17k | Composition root and the services that own shared state. |
+| Application services | `src/app` | ~18k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~36k | Panels, Inspector, Studio surfaces, onboarding. |
 | Shell | `src/main.ts` | 4,966 | Wiring. **A monolith under decomposition.** |
 

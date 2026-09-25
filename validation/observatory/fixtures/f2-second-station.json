@@ -1,0 +1,90 @@
+{
+  "id": "F2",
+  "description": "F1 plus a second station behind the wall, inside the room, looking back through it.",
+  "station": {
+    "id": "station-1",
+    "origin": [
+      0,
+      0,
+      0
+    ],
+    "status": "DECLARED"
+  },
+  "angularExtent": {
+    "azimuthDeg": [
+      0,
+      360
+    ],
+    "elevationDeg": [
+      -30,
+      45
+    ]
+  },
+  "wall": {
+    "minCorner": [
+      5,
+      -2,
+      0
+    ],
+    "maxCorner": [
+      5.2,
+      2,
+      3
+    ]
+  },
+  "room": {
+    "minCorner": [
+      5.2,
+      -5,
+      0
+    ],
+    "maxCorner": [
+      15,
+      5,
+      5
+    ]
+  },
+  "domain": {
+    "minCorner": [
+      -1,
+      -6,
+      -1
+    ],
+    "maxCorner": [
+      16,
+      6,
+      6
+    ]
+  },
+  "voxelEdge": 0.5,
+  "stations": [
+    {
+      "id": "station-1",
+      "origin": [
+        0,
+        0,
+        0
+      ],
+      "status": "DECLARED"
+    },
+    {
+      "id": "station-2",
+      "origin": [
+        10,
+        0,
+        1
+      ],
+      "status": "DECLARED",
+      "angularExtent": {
+        "azimuthDeg": [
+          0,
+          360
+        ],
+        "elevationDeg": [
+          -89,
+          89
+        ]
+      }
+    }
+  ]
+}

@@ -29,6 +29,13 @@
       "why": "Both branches are gather output: the denser re-gather, or the space-export context that was itself copied from a gather. Extracted verbatim from main.ts; the carrier is passed in so both reads stay here."
     },
     {
+      "file": "src/app/observatoryFromCloud.ts",
+      "symbol": "runObservatoryOverCloud",
+      "frame": "source-local",
+      "reads": 3,
+      "why": "Reads the cloud's own resident-point buffer (source-local, relative to its own sourceOrigin) to build one ray per station record (buildUnstructuredSourceRays) and to fingerprint the source for the run record's digest. The domain box is converted to world before traversal precisely because these reads stay source-local (see the module's own comment)."
+    },
+    {
       "file": "src/app/processStudioMount.ts",
       "symbol": "createProcessStudioFromShell.getActiveCloudData",
       "frame": "source-local",

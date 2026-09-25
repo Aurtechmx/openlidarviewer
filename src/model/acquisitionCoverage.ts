@@ -49,6 +49,7 @@
 import {
   CellState,
   cellIndexOf,
+  type AcquisitionPose,
   type CellStateValue,
   type OrganizedRangeFrame,
   type OrganizedRangeSet,
@@ -74,6 +75,16 @@ export interface AcquisitionCoverageOptions {
   readonly recordPosition: RecordPosition;
   /** Default `'z'`. */
   readonly upAxis?: UpAxis;
+  /**
+   * A fallback pose for a frame that carries none of its own.
+   *
+   * Structured E57 is the format this exists for: `E57GridBuilder.frame()`
+   * never sets `OrganizedRangeFrame.acquisitionPose` (PTX and PCD both do), so
+   * without this a structured-E57 setup is always `unfittedFrames`. Every
+   * existing caller that omits it keeps today's behaviour exactly: a frame
+   * with no `acquisitionPose` and no callback still fits nothing.
+   */
+  readonly poseForFrame?: (frame: OrganizedRangeFrame) => AcquisitionPose | undefined;
 }
 
 /** One setup's fitted angular extent, ready to answer queries. */
@@ -149,7 +160,7 @@ function fitFrame(
   frame: OrganizedRangeFrame,
   options: AcquisitionCoverageOptions,
 ): SetupCoverage | null {
-  const pose = frame.acquisitionPose;
+  const pose = frame.acquisitionPose ?? options.poseForFrame?.(frame);
   if (!pose) return null;
   const width = frame.width;
   const height = frame.height;

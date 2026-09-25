@@ -23,6 +23,7 @@ import type { CompassController } from '../ui/compassController';
 import type { ViewBookmarksService } from './viewBookmarks';
 import type { ThemeName } from '../ui/themes';
 import type { TerrainAnalysisEntryDeps } from './openTerrainAnalysis';
+import type { ObservatoryEntryDeps } from './openObservatoryRun';
 import type { ScanStoryInputs } from '../intelligence/scanStory';
 import { contributeCameraActions, type PlanViewActions } from './actions/cameraActions';
 import { contributeViewActions } from './actions/viewActions';
@@ -51,6 +52,7 @@ export interface ActionRegistryDeps {
   saveSnapshot: () => void | Promise<void>;
   copyShareLink: () => void | Promise<void>;
   terrainAnalysisEntry: TerrainAnalysisEntryDeps;
+  observatoryEntry: ObservatoryEntryDeps;
   runFillUnclassified: () => Promise<void>;
   toggleClip: () => void;
   buildCurrentStoryInputs: () => ScanStoryInputs;
@@ -102,6 +104,7 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
   });
   const analysis = contributeAnalysisActions({
     terrainAnalysisEntry: deps.terrainAnalysisEntry,
+    observatoryEntry: deps.observatoryEntry,
     buildCurrentStoryInputs: deps.buildCurrentStoryInputs,
   });
   const exports_ = contributeExportActions({

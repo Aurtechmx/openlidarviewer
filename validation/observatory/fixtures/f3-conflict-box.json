@@ -1,0 +1,67 @@
+{
+  "id": "F3",
+  "description": "A box present in station A's scan, absent in station B's: CONFLICT, both sources listed.",
+  "stationA": {
+    "id": "station-A",
+    "origin": [
+      0,
+      0,
+      1
+    ],
+    "status": "DECLARED",
+    "angularExtent": {
+      "azimuthDeg": [
+        0,
+        360
+      ],
+      "elevationDeg": [
+        -45,
+        45
+      ]
+    }
+  },
+  "stationB": {
+    "id": "station-B",
+    "origin": [
+      12,
+      0,
+      1
+    ],
+    "status": "DECLARED",
+    "angularExtent": {
+      "azimuthDeg": [
+        0,
+        360
+      ],
+      "elevationDeg": [
+        -45,
+        45
+      ]
+    }
+  },
+  "box": {
+    "minCorner": [
+      5,
+      -1,
+      0
+    ],
+    "maxCorner": [
+      7,
+      1,
+      2
+    ]
+  },
+  "domain": {
+    "minCorner": [
+      -1,
+      -4,
+      -1
+    ],
+    "maxCorner": [
+      13,
+      4,
+      4
+    ]
+  },
+  "voxelEdge": 0.5
+}

@@ -9,16 +9,16 @@ entry. This is the latest account of each, which is a different question
 and the one a reader usually has. Where an entry was revisited, the last
 heading in the file wins.
 
-Entries: 154. Revisited at least once: 18.
+Entries: 165. Revisited at least once: 19.
 
 ## Totals
 
 | Status | Entries |
 | --- | --- |
 | FIXED | 53 |
+| BUILT | 41 |
 | PARTIAL | 32 |
-| BUILT | 31 |
-| MEASURED | 14 |
+| MEASURED | 15 |
 | NOT REPRODUCIBLE | 10 |
 | DEFERRED | 6 |
 | OPEN | 4 |
@@ -183,3 +183,14 @@ Entries: 154. Revisited at least once: 18.
 | L152 | FIXED | ARCHITECTURE | 1 |
 | L153 | BUILT | SCIENTIFIC | 1 |
 | L154 | BUILT | SCIENTIFIC | 1 |
+| L160 | MEASURED | EVIDENCE | 1 |
+| L161 | BUILT | SCIENCE | 1 |
+| L162 | BUILT | SCIENCE | 1 |
+| L163 | BUILT | SCIENCE | 1 |
+| L164 | BUILT | SCIENCE | 1 |
+| L165 | BUILT | SCIENCE | 1 |
+| L166 | BUILT | SCIENCE | 1 |
+| L167 | BUILT | SCIENCE | 2 |
+| L168 | BUILT | SCIENCE | 1 |
+| L169 | BUILT | SCIENCE | 1 |
+| L170 | BUILT | SCIENCE | 1 |

@@ -1,0 +1,59 @@
+/* Observatory panel (docs/observatory/SPEC.md OB-UI-01): section layout and
+   the stateChip badge (origin/basis/suggested-station). */
+
+.olv-observatory-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 280px;
+}
+
+.olv-observatory-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.olv-observatory-section-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--olv-text-muted, #9aa3ad);
+}
+
+.olv-observatory-station-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.olv-observatory-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(34, 220, 255, 0.12);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.olv-observatory-state-counts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 2px 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.olv-observatory-run,
+.olv-observatory-export {
+  align-self: flex-start;
+}

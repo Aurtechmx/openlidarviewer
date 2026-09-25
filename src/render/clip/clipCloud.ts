@@ -82,6 +82,13 @@ export function clipCloud(cloud: PointCloud, clip: ClipBox): PointCloud {
     sourceFormat: cloud.sourceFormat,
     name: cloud.name,
     metadata: cloud.metadata,
+    // `organizedRange` and `acquisitionStations` (OB-INT-02) are both left
+    // unset here, deliberately: `keep` reindexes and can drop points from the
+    // middle of any station's range, so neither a cell-to-record identity nor
+    // a station's `[start, end)` describes the subset. Recomputing either
+    // from `keep` is possible in principle but not attempted here — this is
+    // the export/analysis subsetting path, not a loader, and nothing reads
+    // either sidecar off a clipped cloud today.
   });
   if (derived && classification) {
     // `classification` is the fresh buffer filterChannel just allocated and

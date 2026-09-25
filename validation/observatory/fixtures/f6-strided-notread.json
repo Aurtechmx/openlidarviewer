@@ -1,0 +1,22 @@
+{
+  "id": "F6",
+  "description": "Structured-E57 grid decoded at a stride: skipped cells give a not-read ray, never a returned one.",
+  "sourceKind": "e57-structured",
+  "width": 4,
+  "height": 4,
+  "station": {
+    "id": "scan-1",
+    "origin": [
+      1,
+      2,
+      3
+    ]
+  },
+  "coverage": {
+    "azimuth0": 0.1,
+    "azimuthStep": 0.15,
+    "polar0": 0.4,
+    "polarStep": 0.2
+  },
+  "stride": 2
+}

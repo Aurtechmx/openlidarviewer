@@ -39,6 +39,7 @@ function fakeDeps(overrides: Partial<AnalysisActionDeps> = {}): AnalysisActionDe
       showPanel: vi.fn(() => Promise.resolve({ hasResult: true, flowInput: null })),
       run: vi.fn(),
     },
+    observatoryEntry: {} as never,
     buildCurrentStoryInputs: vi.fn(),
     ...overrides,
   };

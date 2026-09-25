@@ -432,6 +432,62 @@
       "why": "How strongly to draw a brief mark at the camera's pivot, and the rule that it never appears in a capture. Nothing calls it because drawing it needs a three.js object in the Viewer chunk, which sits at 739 KiB against a 740 KiB ceiling: a six-line exported function measured 2 KiB in that chunk under the live transform, so a mesh and a material do not fit.",
       "graduation": "Reachable when the Viewer chunk has room. The wiring is small: a layer module owning its object through Viewer.derivedLayerHost(), a show call at the double-click, focus and orbit-centre sites, and one render-loop host method to step it. The pick path needs no change, since it walks the cloud registry rather than the scene.",
       "review": "2027-09-20"
+    },
+    {
+      "path": "src/observation/strength.ts",
+      "status": "staged",
+      "why": "SPEC \u00a72.5's declared strength-component shape (ObservationStrengthComponents) and worked saturating-map example only. Phase O2, registering olv.observation.strength early. No incidence, eigen-normal or composite computation exists yet; that is O6.",
+      "graduation": "Reachable when O6 computes ObservationStrengthComponents per SURFACE voxel and a panel or export consumer reads the result.",
+      "review": "2027-03-31",
+      "declaredIn": "docs/observatory/SPEC.md"
+    },
+    {
+      "path": "src/observation/session.ts",
+      "status": "staged",
+      "why": "OB-SES-01's session commit gate (commitObservationSession, wiring the existing observationFreshnessBreach into an actual commit path for the first time) and rerun-digest check (verifyObservationRerun), tested against F14 (ROI changed mid-run refuses with reason 'roi'). Phase O7. No production module calls it yet: nothing in the production graph holds a live ObservationFreshnessStamp to commit against, which needs a coordinator (O9).",
+      "graduation": "Reachable when a coordinator (O9) commits a real run's session against a live freshness stamp and offers a rerun on reload.",
+      "review": "2027-03-31",
+      "declaredIn": "docs/observatory/SPEC.md"
+    },
+    {
+      "path": "src/observation/coverageGain.ts",
+      "status": "staged",
+      "why": "OB-GAIN-01/OB-GAIN-03's declared instrument-model and per-candidate gain-term shapes only (ObservationInstrumentModel, CandidateGainTerms, DEFAULT_GAIN_STATE_WEIGHTS). Phase O2, registering olv.observation.coverage-gain early. No candidate generation or scoring exists yet; that is O10.",
+      "graduation": "Reachable when O10 generates candidates and scores CandidateGainTerms against a real ledger.",
+      "review": "2027-03-31",
+      "declaredIn": "docs/observatory/SPEC.md"
+    },
+    {
+      "path": "src/observation/presentationLegend.ts",
+      "status": "staged",
+      "why": "OB-PR-01/04/05, OB-UI-03: the presentation vocabulary (per-state glyph/label/RGB legend, fixed [0,1] ranges for observationStrength/observationHitFraction, the OB-UI-03 probe-text formatter), pure and unit-tested (phase O8). No production module reads it yet: mounting a colour-mode picker, a legend panel and a voxel probe onto a live scene is the panel/coordinator phase (O9).",
+      "graduation": "Reachable when a coordinator (O9) wires a colour-mode control, a legend and a probe onto a real Observatory panel.",
+      "review": "2027-03-31",
+      "declaredIn": "docs/observatory/SPEC.md"
+    },
+    {
+      "path": "src/render/observation/observationColorModes.ts",
+      "status": "staged",
+      "why": "OB-PR-01's per-point colour builder (buildObservationPointColors: observationState/observationStrength/observationHitFraction over a cloud's own positions and a classified field), pure and unit-tested including an OB-INV-06 digest-stability check (phase O8). No production module calls it yet: nothing in the production graph holds a resident cloud paired with a live classified field to colour, which needs a coordinator (O9).",
+      "graduation": "Reachable when a coordinator (O9) calls it for a real resident cloud against a real field version.",
+      "review": "2027-03-31",
+      "declaredIn": "docs/observatory/SPEC.md"
+    },
+    {
+      "path": "src/render/observation/ObservationPointOverlay.ts",
+      "status": "staged",
+      "why": "OB-PR-01's per-point presentation overlay: a standalone THREE.Points object (never the scan's own render mesh) whose position attribute is built once and whose colour attribute alone is replaced per field version, tested for the no-geometry-rebuild guarantee (phase O8). No `lazyChunks.ts` loader exists for it yet: an unreferenced loader is dead code the bundler drops before emitting a chunk, which trips `olv-chunk-emission-guard` (learned during this phase). Adding that loader is deferred to the coordinator (O9), which will call it from a real mount and can register `lazyChunks.ts`'s Flow-Pulse-style invalidator for scan close, CRS change and reclassification in the same change.",
+      "graduation": "Reachable when a coordinator (O9) adds a called `lazyChunks.ts` loader and mounts it on a real resident cloud.",
+      "review": "2027-03-31",
+      "declaredIn": "docs/observatory/SPEC.md"
+    },
+    {
+      "path": "src/observation/stationSuggestion.ts",
+      "status": "staged",
+      "why": "OB-GAIN-04/OB-GAIN-06's declared greedy-result shape and the ReachabilityProvider interface SPEC defines (with no implementation) for v0.7 only. Phase O2, registering olv.observation.station-suggestion early. No greedy search, hypothetical-ledger copy or reachability provider exists yet; the search is O10, and Terrain Access (which would implement ReachabilityProvider) is explicitly LATER, not v0.7.",
+      "graduation": "Reachable when O10's greedy search produces a StationSuggestionResult and a panel or export consumer reads it. ReachabilityProvider itself graduates only with a future Terrain Access implementation, outside v0.7.",
+      "review": "2027-03-31",
+      "declaredIn": "docs/observatory/SPEC.md"
     }
   ]
 }

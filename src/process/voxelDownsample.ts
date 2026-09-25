@@ -173,6 +173,15 @@ export function emitVoxelCloud(cloud: PointCloud, out: number, acc: VoxelSums): 
     organizedRange: cloud.organizedRange
       ? withLinkageUnavailable(cloud.organizedRange, 'voxel-centroids')
       : undefined,
+    // Dropped explicitly (OB-INT-02), never carried: a voxel collapses points
+    // from ANY station touching that cell into one centroid, so a station's
+    // pre-downsample records are not one contiguous block of the output —
+    // they are scattered across whichever voxels they happened to fall in,
+    // interleaved with another station's records that landed in the same
+    // voxels. Unlike the grid sidecar above, there is no "unavailable" shape
+    // to degrade to: a station IS a record range, and no range describes a
+    // scatter. `acquisitionStations` is left unset (not passed here at all)
+    // rather than copied and left stale.
   });
 }
 

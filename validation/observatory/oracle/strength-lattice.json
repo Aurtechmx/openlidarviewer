@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "description": "Hand-picked cases for docs/observatory/SPEC.md §2.5's five observation-strength components. Every direction is dyadic-exact (axis-aligned or a simple diagonal) so cross-implementation comparison needs only a small float tolerance, not exact-rational stepping.",
+  "cases": [
+    {
+      "id": "single-source-single-direction",
+      "counters": { "hit": 5, "pass": 0 },
+      "perSource": [{ "sourceIndex": 0, "hit": 5 }],
+      "samples": [
+        { "sourceIndex": 0, "direction": [1, 0, 0], "range": 5.0 },
+        { "sourceIndex": 0, "direction": [1, 0, 0], "range": 5.0 },
+        { "sourceIndex": 0, "direction": [1, 0, 0], "range": 5.0 },
+        { "sourceIndex": 0, "direction": [1, 0, 0], "range": 5.0 },
+        { "sourceIndex": 0, "direction": [1, 0, 0], "range": 5.0 }
+      ],
+      "normal": [-1, 0, 0],
+      "rangeBand": { "minRange": 0.0, "maxRange": 10.0 }
+    },
+    {
+      "id": "two-sources-opposing-directions",
+      "counters": { "hit": 10, "pass": 0 },
+      "perSource": [
+        { "sourceIndex": 0, "hit": 5 },
+        { "sourceIndex": 1, "hit": 5 }
+      ],
+      "samples": [
+        { "sourceIndex": 0, "direction": [1, 0, 0], "range": 5.0 },
+        { "sourceIndex": 0, "direction": [1, 0, 0], "range": 5.0 },
+        { "sourceIndex": 1, "direction": [-1, 0, 0], "range": 5.0 },
+        { "sourceIndex": 1, "direction": [-1, 0, 0], "range": 5.0 }
+      ],
+      "normal": [1, 0, 0],
+      "rangeBand": { "minRange": 0.0, "maxRange": 10.0 }
+    },
+    {
+      "id": "diagonal-spread-one-out-of-band",
+      "counters": { "hit": 8, "pass": 2 },
+      "perSource": [{ "sourceIndex": 0, "hit": 8 }],
+      "samples": [
+        { "sourceIndex": 0, "direction": [0.7071067811865476, 0.7071067811865476, 0], "range": 4.0 },
+        { "sourceIndex": 0, "direction": [1, 0, 0], "range": 4.0 },
+        { "sourceIndex": 0, "direction": [1, 0, 0], "range": 12.0 }
+      ],
+      "normal": [0, 0, 1],
+      "rangeBand": { "minRange": 0.0, "maxRange": 10.0 }
+    },
+    {
+      "id": "no-normal-supplied",
+      "counters": { "hit": 5, "pass": 0 },
+      "perSource": [{ "sourceIndex": 0, "hit": 5 }],
+      "samples": [
+        { "sourceIndex": 0, "direction": [0, 1, 0], "range": 3.0 }
+      ],
+      "normal": null,
+      "rangeBand": {}
+    },
+    {
+      "id": "no-samples-at-all",
+      "counters": { "hit": 0, "pass": 5 },
+      "perSource": [],
+      "samples": [],
+      "normal": [0, 0, 1],
+      "rangeBand": {}
+    },
+    {
+      "id": "no-hit-pass-evidence",
+      "counters": { "hit": 0, "pass": 0 },
+      "perSource": [],
+      "samples": [],
+      "normal": null,
+      "rangeBand": {}
+    },
+    {
+      "id": "multi-return-second-return-only-voxel",
+      "description": "A voxel hit only by the 2nd return of a 3-return pulse (SPEC ground-under-vegetation case): the ray's own first return lands at range 3.0, but this voxel's own hit samples must carry the RETURN that actually overlapped it (range 6.0), not the ray's primary range.",
+      "counters": { "hit": 5, "pass": 0 },
+      "perSource": [{ "sourceIndex": 0, "hit": 5 }],
+      "samples": [
+        { "sourceIndex": 0, "direction": [1, 0, 0], "range": 6.0 },
+        { "sourceIndex": 0, "direction": [1, 0, 0], "range": 6.0 },
+        { "sourceIndex": 0, "direction": [1, 0, 0], "range": 6.0 },
+        { "sourceIndex": 0, "direction": [1, 0, 0], "range": 6.0 },
+        { "sourceIndex": 0, "direction": [1, 0, 0], "range": 6.0 }
+      ],
+      "normal": [-1, 0, 0],
+      "rangeBand": { "minRange": 0.0, "maxRange": 10.0 }
+    }
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "id": "F16",
+  "description": "Structured-E57 canopy: a multi-return cell contributes one ray, not one per return.",
+  "sourceKind": "e57-structured",
+  "width": 2,
+  "height": 2,
+  "station": {
+    "id": "scan-1",
+    "origin": [
+      0,
+      0,
+      10
+    ]
+  },
+  "coverage": {
+    "azimuth0": 0,
+    "azimuthStep": 0.3,
+    "polar0": 1.4,
+    "polarStep": 0.1
+  },
+  "cells": [
+    {
+      "row": 0,
+      "column": 0,
+      "returns": [
+        {
+          "returnIndex": 0,
+          "range": 8
+        },
+        {
+          "returnIndex": 1,
+          "range": 8.5
+        }
+      ]
+    },
+    {
+      "row": 0,
+      "column": 1,
+      "returns": [
+        {
+          "returnIndex": 0,
+          "range": 7.25
+        }
+      ]
+    },
+    {
+      "row": 1,
+      "column": 0,
+      "returns": [
+        {
+          "returnIndex": 0,
+          "range": 6
+        },
+        {
+          "returnIndex": 1,
+          "range": 6.5
+        },
+        {
+          "returnIndex": 2,
+          "range": 9
+        }
+      ]
+    },
+    {
+      "row": 1,
+      "column": 1,
+      "returns": [
+        {
+          "returnIndex": 0,
+          "range": 5.5
+        }
+      ]
+    }
+  ]
+}

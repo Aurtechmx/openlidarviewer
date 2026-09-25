@@ -53,7 +53,7 @@ function declaredVersions() {
   // carry no literal `version:` field of their own — the helper hardcodes
   // one version for every call. Each such helper is matched here by name so
   // its ids are still recorded, rather than silently falling out of the map.
-  const HARDCODED_VERSION_BUILDERS = { terrainAccessMethod: 1 };
+  const HARDCODED_VERSION_BUILDERS = { terrainAccessMethod: 1, observationMethod: 1 };
   for (const [fn, version] of Object.entries(HARDCODED_VERSION_BUILDERS)) {
     const call = new RegExp(`'(olv\\.[\\w.-]+)':\\s*${fn}\\(`, 'g');
     for (let m = call.exec(text); m !== null; m = call.exec(text)) out.set(m[1], version);

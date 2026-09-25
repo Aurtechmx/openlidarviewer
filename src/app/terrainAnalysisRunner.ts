@@ -68,6 +68,7 @@ import {
   loadWithheldAwareTerrainGather,
   invalidateFlowOverlay,
   invalidateTerrainAccessOverlay,
+  invalidateObservatoryOverlay,
 } from '../lazyChunks';
 // Tiny pure constant (no heavy terrain code rides along) — the unit-aware
 // cell floor must agree with the metres-per-degree scale the pipeline uses.
@@ -1041,6 +1042,10 @@ export function createTerrainAnalysisRunner(
     // Same events, same reasoning, for the Terrain Access Lab's persisted
     // traversability-map/route overlay.
     invalidateTerrainAccessOverlay();
+    // Same event set again for the Observatory's own shadow-voxel overlay and
+    // runner (`src/app/observatoryRunner.ts`) — a no-op before its chunk ever
+    // loads, exactly like the Flow Pulse call just above.
+    invalidateObservatoryOverlay();
     // Same set of events end the relevance of any on-screen contour layer:
     // its scan closed, another scan took the viewer, its CRS changed, or its
     // classification was edited. `contourLayers` lives in this closure (it is
