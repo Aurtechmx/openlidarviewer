@@ -179,7 +179,11 @@ test.describe('recommended-view chip — hover pauses the auto-hide', () => {
       )
       .toBe(true);
 
-    // A real mouse hover (mouseenter), then release the keyboard focus.
+    // A real mouse hover (mouseenter), then release the keyboard focus. The
+    // pointer starts outside the chip: an earlier click can leave it resting
+    // where the chip appears, and Firefox fires mouseenter only when the
+    // pointer moves in, not when an element appears under a still pointer.
+    await page.mouse.move(0, 0);
     await apply.hover();
     await apply.evaluate((el) => (el as HTMLElement).blur());
     await expect(chip).toHaveAttribute('data-autohide', 'paused');
