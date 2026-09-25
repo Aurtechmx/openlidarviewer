@@ -59,6 +59,7 @@ import {
 } from '../../render/terrainAccessOverlayGeometry';
 import { TerrainAccessOverlay, type TerrainAccessOverlayHost } from '../../render/TerrainAccessOverlay';
 import {
+  describeProfileProblem,
   EMPTY_TERRAIN_ACCESS_PROFILE_FORM,
   parseTerrainAccessProfileForm,
   type TerrainAccessProfileFormValues,
@@ -436,7 +437,7 @@ function buildProfileForm(onSubmit: () => void): {
       problemsBox.replaceChildren();
       if (problems.length === 0) return;
       const list = el('ul', { className: 'olv-ta-form-problems-list' });
-      for (const p of problems) list.append(el('li', { text: `${p.field}: ${p.reason}` }));
+      for (const p of problems) list.append(el('li', { text: describeProfileProblem(p) }));
       problemsBox.append(list);
     },
   };

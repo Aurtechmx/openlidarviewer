@@ -145,3 +145,28 @@ export function parseTerrainAccessProfileForm(values: TerrainAccessProfileFormVa
 
   return { ok: true, profile };
 }
+
+/** The on-screen label for a problem's field key, from either the form or the profile validator. */
+const FIELD_LABELS: Readonly<Record<string, string>> = {
+  name: 'Profile name',
+  maxLongitudinalGradeDeg: 'Max longitudinal grade',
+  maxLongitudinalGrade: 'Max longitudinal grade',
+  maxCrossSlopeDeg: 'Max cross slope',
+  maxCrossSlope: 'Max cross slope',
+  maxStepHeightM: 'Max step height',
+  maxStepHeight: 'Max step height',
+  vehicleWidthM: 'Vehicle width',
+  vehicleWidth: 'Vehicle width',
+  minimumTerrainConfidence: 'Minimum terrain confidence',
+  maxRuggedness: 'Max ruggedness (VRM)',
+  vehicleLengthM: 'Vehicle length',
+  vehicleLength: 'Vehicle length',
+  obstacleHeightThresholdM: 'Obstacle height threshold',
+  obstacleHeightThreshold: 'Obstacle height threshold',
+  unknownPolicy: 'Weak-evidence policy',
+};
+
+/** A problem as the form shows it: "Vehicle width is required". Unknown keys fall back to the key. */
+export function describeProfileProblem(problem: { readonly field: string; readonly reason: string }): string {
+  return `${FIELD_LABELS[problem.field] ?? problem.field} ${problem.reason}`;
+}

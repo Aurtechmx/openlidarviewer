@@ -55,9 +55,9 @@ test('blank profile refuses with named field problems, per field', async ({ page
   const modal = page.locator('.olv-modal');
   await modal.locator('.olv-ta-form-submit').click();
   const problems = modal.locator('.olv-ta-form-problems-list');
-  await expect(problems).toContainText('name');
-  await expect(problems).toContainText('maxLongitudinalGradeDeg');
-  await expect(problems).toContainText('is required');
+  await expect(problems).toContainText('Profile name is required');
+  await expect(problems).toContainText('Max longitudinal grade is required');
+  await expect(problems).not.toContainText('maxLongitudinalGradeDeg');
   // The form is still on screen: a refusal never silently discards the form.
   await expect(modal.locator('.olv-ta-form')).toBeVisible();
 });
