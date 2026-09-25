@@ -88,6 +88,12 @@ export type CoverageBucket = TerrainCoverageMode | 'display-sample';
 /** Coverage meta as the card takes it — the engine's meta widened to {@link CoverageBucket}. */
 export type IntelCoverageMeta = Omit<TerrainCoverageMeta, 'coverage'> & {
   readonly coverage: CoverageBucket;
+  /**
+   * True only when every point the source declares is resident/decoded. Distinct
+   * from `coverage: 'full'`, which the engine emits when the grid spans the
+   * extent. Gates that need the complete data read this, never the coverage.
+   */
+  readonly sourceComplete?: boolean;
 };
 
 /** The Dataset Intelligence rows that carry a bucket. */

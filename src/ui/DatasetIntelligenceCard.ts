@@ -218,7 +218,7 @@ export class DatasetIntelligenceCard {
       this._row(
         'Streaming Coverage',
         this._coverageValue,
-        'Whether the analysis used every point (static load), a strided ' +
+        'Whether every source point is in memory (static load), a strided ' +
           'display sample of the file (large static loads), only the nodes ' +
           'resident in memory (streaming clouds mid-load), or a sampled ' +
           'subset. Drives the "may refine" caveat below.',

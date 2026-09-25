@@ -135,3 +135,40 @@ describe('a finished terrain run feeds the static card', () => {
     expect(last().coverageMeta?.analyzedPointCount).toBe(2_700_000);
   });
 });
+
+describe('sourceComplete is distinct from coverage "full"', () => {
+  it('a streaming scan never reads "Full Dataset" after a run whose grid reads full', () => {
+    const { inspector, last } = makeInspector();
+    const cards = createInspectorCardRefreshers(inspector);
+    cards.refreshDatasetIntelligenceFromStreamingCloud({
+      sourcePointCount: 1000,
+      metadata: { header: { min: [0, 0, 0], max: [100, 100, 10] } },
+      crs: () => METRE,
+    });
+    expect(last().coverageMeta?.sourceComplete).toBe(false);
+    cards.noteTerrainRun(run);
+    expect(last().coverageMeta?.coverage).toBe('resident-only');
+    expect(last().coverageMeta?.sourceComplete).toBe(false);
+    expect(summariseDataset(last())?.coverage.label).not.toBe('Full Dataset');
+  });
+
+  it('a voxel-downsampled static load with no header total is not source-complete', () => {
+    const { inspector, last } = makeInspector();
+    createInspectorCardRefreshers(inspector).refreshDatasetIntelligenceFromStaticCloud({
+      pointCount: 400_000,
+      decodedPointCount: 1_200_000,
+      metadata: { crs: METRE },
+      bounds: stridedCloud.bounds,
+    });
+    expect(last().coverageMeta?.sourceComplete).toBe(false);
+    expect(last().coverageMeta?.coverage).toBe('display-sample');
+    expect(last().coverageMeta?.sourcePointCount).toBe(1_200_000);
+  });
+
+  it('an unstrided static load is source-complete', () => {
+    const { inspector, last } = makeInspector();
+    createInspectorCardRefreshers(inspector).refreshDatasetIntelligenceFromStaticCloud(fullCloud);
+    expect(last().coverageMeta?.sourceComplete).toBe(true);
+    expect(last().coverageMeta?.coverage).toBe('full');
+  });
+});
