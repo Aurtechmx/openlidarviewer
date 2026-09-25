@@ -13,8 +13,9 @@
  * multichunk LAZ fixture outlasts the test timeout.
  *
  * The full matrix (every trajectory, two fixed-step and two real-delta runs)
- * is tagged @gpu: on a software renderer the longer trajectories outlast the
- * test timeout. The deterministic lane keeps one fixed-step replay check on
+ * is tagged @bench and runs with `npm run test:e2e:bench` on a machine with
+ * a GPU: on a software renderer the longer trajectories outlast the test
+ * timeout. The deterministic lane keeps one fixed-step replay check on
  * the shortest trajectory.
  */
 import { test, expect, type Page } from '@playwright/test';
@@ -72,7 +73,7 @@ test.describe('nav driver', () => {
   });
 
   for (const name of NAMES) {
-    test(`replays ${name} deterministically @gpu`, async ({ page }, info) => {
+    test(`replays ${name} deterministically @bench`, async ({ page }, info) => {
       test.setTimeout(240_000);
       const fixedA = await run(page, name, true);
       const fixedB = await run(page, name, true);
