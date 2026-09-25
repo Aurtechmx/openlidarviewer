@@ -3,7 +3,7 @@
  * grid, per §12.6 of the governing prompt.
  *
  * ── NODE CONSTRAINTS VS. EDGE CONSTRAINTS ───────────────────────────────────
- * The prompt's hard-block list mixes two different kinds of fact:
+ * The hard-block list mixes two different kinds of fact:
  *
  *   direction-independent (a property of the CELL): NoData, outside ROI,
  *   minimum support, ruggedness, obstruction evidence
@@ -338,7 +338,7 @@ export interface WhyNotReason {
 export interface WhyNotResult {
   readonly eligible: boolean;
   /** `'unknown'` when the blocking reason is missing/weak evidence rather
-   * than an exceeded geometric limit — the prompt's UNKNOWN/WITHHELD case. */
+   * than an exceeded geometric limit: the UNKNOWN/WITHHELD case. */
   readonly category: 'eligible' | 'blocked' | 'unknown';
   readonly reasons: readonly WhyNotReason[];
 }

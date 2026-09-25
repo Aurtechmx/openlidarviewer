@@ -207,8 +207,6 @@ It is never called accuracy, precision, confidence or probability.
 
 ## 4. Integration decisions
 
-Items marked ASK require the user's approval in chat before code is written.
-
 - OB-INT-01 Package and layering.
   - `src/observation/` is pure: no DOM, `three` or `ui/` imports. Add it to `LAYERS` in `scripts/lint-layer-boundaries.mjs` in O0.
   - Rendering adapters live in `src/render/observation/`; the panel lives in `src/ui/observatory/`.
@@ -216,7 +214,7 @@ Items marked ASK require the user's approval in chat before code is written.
   - `main.ts` and `Viewer.ts` do not grow; mounting is through a coordinator.
   - Imports are only through `lazyChunks.ts`; workers are only through `WORKER_REGISTRY`, after profiling.
   - Staged modules are registered in `unreachable-modules.json` with the phase that wires them.
-- OB-INT-02 Station sidecar (ASK: it changes loader output).
+- OB-INT-02 Station sidecar. It changes loader output.
   - Add an `AcquisitionStations` sidecar on `CloudMetadata`. Follow the `OrganizedRange` pattern: a sidecar, never a second cloud. Each station holds its id, declared pose (Float64), source (`e57-scan` / `ptx-block` / `pcd-viewpoint`) and a contiguous record range `[start, end)`.
   - E57 appends scans in order, so ranges cost nothing per point.
   - O0 verifies that sanitation keeps record ranges contiguous. If it does not, the sidecar stores a `Uint16` station index per record, and that memory cost is reported before the change.
@@ -235,13 +233,13 @@ Items marked ASK require the user's approval in chat before code is written.
 - OB-INT-06 Origins from SensorPrint.
   - Observatory defines `ObservationOrigin { position (Float64), status, method tag, uncertainty }`, unless SensorPrint's handoff type (SP-ORIG-04) already exists, in which case it consumes that.
   - Default policy: accept `DECLARED`. Accept `RECONSTRUCTED_STRONG` under a visible "reconstructed origin" label with authority `preview`. Refuse weaker statuses with a reason.
-  - Changing that policy is ASK.
+  - This default policy is fixed; a change to it is a versioned method change.
 - OB-INT-07 Frame budget governor. Wiring the governor is owned by the separate render-loop phase recorded in the unreachable register. Observatory does not wire it. When that phase lands, Observatory adds one optional-work switch (`observationOverlay`) with drop/restore thresholds like the existing switches, and a test that the switch cannot reach a canonical path.
 - OB-INT-08 Final paint. O0 runs `tests/frameDemand.test.ts` and `tests/invalidationDrawsFrame.test.ts`. It retires the old final-paint finding in the ledger if they pass and cover the burst-end case, and opens a defect with a failing test if they do not. No render-loop change is made inside Observatory.
 - OB-INT-09 Tests and oracles.
   - Test files go flat in `tests/` as `observatory*.test.ts`, or a new directory registered in `NESTED_TEST_DIRS`.
   - Oracles are standard-library Python in `validation/observatory/oracle/`, registered in `oracle-registry.json` under their own `lineageGroup`, with roles `analytic-truth` and `generator-truth` only.
-  - Adding numpy or scipy is ASK.
+  - The oracles have no numpy or scipy dependency.
 - OB-INT-10 Claims and ledger. Each phase opens and closes a ledger entry. Claims enter `claim-register.yaml` at the evidence that exists; synthetic fixtures alone reach E3 at most. `prohibitedClaim` entries cover complete coverage from resident-only data, occupancy probability, sensor simulation, optimal station placement, and survey-grade accuracy.
 
 ---
@@ -490,7 +488,7 @@ Each phase opens a ledger entry and closes it with evidence. v0.7 MUST covers O0
 |---|---|---|
 | O0 | Audit: fingerprint and gates. Verify every row of §1. Verify E57 record-range contiguity through sanitation, structured-E57 no-return semantics, and PCD viewpoint. Run the frame-demand tests (OB-INT-08). Add `src/observation` to the layer lint. Commit this SPEC. | O0 report; ledger entries; no behaviour change |
 | O1 | Types, state table function, freshness stamp, fixture generator, oracles for F8 and the state table | State-table exhaustive test; F8 |
-| O2 | Station sidecar (OB-INT-02), after approval | Stations for PTX and E57 fixtures; memory report |
+| O2 | Station sidecar (OB-INT-02) | Stations for PTX and E57 fixtures; memory report |
 | O3 | Ray builder (OB-RAY) | F5, F6, F16 ray-level |
 | O4 | Ledger and traversal (OB-LED) | F8, F9; budget refusal test |
 | O5 | States, conflict, shadow, frontier | F1 to F7, F17 |
@@ -553,7 +551,7 @@ Without them, the verdict cannot exceed `READY WITH DOCUMENTED LIMITATIONS`, and
 7. Performance: p50/p95 per stage, memory, upload bytes, bundle delta, Observatory-closed regression check.
 8. Disposal and device-loss results.
 9. Limitations: plain statements of fact.
-10. Open ASK items: with options.
+10. Open questions: each unresolved design question about the software, with its options.
 11. Verdict: `READY FOR v0.7`, `READY WITH DOCUMENTED LIMITATIONS` or `NOT READY`, with the evidence for it.
 
 ---

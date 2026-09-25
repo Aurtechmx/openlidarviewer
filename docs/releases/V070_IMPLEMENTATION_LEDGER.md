@@ -2277,8 +2277,7 @@ and letting disagreeing normals permit a fill.
 
 The expected answer was no scientific change. The measured answer is that four
 of the twelve categories moved, every one of them from a separately scoped bug
-fix, and none from the renderer work. The report is
-`docs/validation/v070-scientific-regression.md`.
+fix, and none from the renderer work.
 
 Running the suite at both ends would have compared pass counts. What was done
 instead compares values: of the test files present at the base, sixteen were
@@ -2317,7 +2316,7 @@ attribution harder than it needed to be.
 
 ### L105 · MEASURED · ARCHITECTURE
 
-Seven metrics at both ends, in `docs/validation/v070-architecture-metrics.md`.
+Seven metrics at both ends.
 The two the phase sets as conditions both hold: cycles stayed at zero, and no
 new renderer monolith appeared.
 
@@ -2524,8 +2523,7 @@ Fourteen blockers, none reproduced, and the register says which kind of "not
 reproduced" each one is, because a subsystem that never runs reproduces nothing
 and a bare status would be true of all fourteen while meaning nothing. Seven
 are held by a named test or cannot occur, five wait on hardware, one is an open
-risk and one an open gap. The register is
-`docs/validation/v070-release-blockers.md`.
+risk and one an open gap.
 
 The open risk is the sharpest thing this phase found, and it is an ordering
 constraint rather than a defect. Every Studio exporter renders to the live
@@ -2556,8 +2554,7 @@ change to shipped text.
 
 ### L112 · MEASURED · ARCHITECTURE
 
-Twenty-five steps audited against where they actually stand, in
-`docs/validation/v070-implementation-order.md`. Two are wired and reach a user,
+Twenty-five steps audited against where they actually stand. Two are wired and reach a user,
 fifteen are tested pure cores nothing calls, five need hardware, three are
 unimplemented.
 
@@ -2593,8 +2590,7 @@ and points at the runtime-only figure printed beside the count.
 
 ### L113 · MEASURED · SCIENTIFIC
 
-The final report is `docs/validation/v070-final-implementation-report.md`, and
-the verdict is that the Continuity Field is not ready for v0.7.
+The final verdict is that the Continuity Field is not ready for v0.7.
 
 No blocker was reproduced, and the instruction for the verdict is to list only
 reproduced ones, so that list is empty. Nothing was reproduced because nothing
@@ -2694,8 +2690,7 @@ times.
 import, which is the first genuine graduation in this programme rather than the
 type-only ones the register also counts.
 
-The wiring baseline the plan asks for is
-`docs/validation/v070-wiring-baseline.md`. It verifies thirteen hypotheses
+The wiring baseline verifies thirteen hypotheses
 against the tree and finds twelve holding, one half stale, and two numbers to
 correct: the plan cites `6502aad2` as the archive's evidence commit where the
 archive says `6ce80c79`, and the registered-unreachable count has moved. The
@@ -4888,8 +4883,7 @@ matching both the SPEC's stated archive commit and the tip of this branch, so
 no archive comparison was needed. `docs/observatory/SPEC.md` is committed
 verbatim from the supplied specification, byte for byte.
 
-Every SPEC §1.1, §1.2 and §1.3 row is checked against the working tree and
-recorded in `docs/observatory/O0-report.md`, with source-line evidence for
+Every SPEC §1.1, §1.2 and §1.3 row is checked against the working tree, with source-line evidence for
 each. All but two read TRUE. The `measured | preview | withheld` authority
 row is PARTIAL: it exists once, as `StockpileAuthority`
 (`src/render/measure/stockpilePresenter.ts:172`), scoped to the stockpile
@@ -4940,9 +4934,8 @@ left open rather than fixed here. `lint:doc-narration` fails on
 a phrase built from "not read" and a clause naming the current session; the
 lint matches that clause anywhere in a document, including inside a quoted UI
 string, and its own header states it carries no allowlist by design. The SPEC
-is not edited to route around it, per this phase's binding rule; the red
-stands, documented here and in `docs/observatory/O0-report.md` as an open ASK
-item. Separately, `docs/validation/claim-register.yaml:1133` states that no
+is not edited to route around it; the red
+stands and is documented here as an open question. Separately, `docs/validation/claim-register.yaml:1133` states that no
 E57 file produces a frame with identity, which `structuredFrames.ts`
 contradicts directly: `E57GridBuilder` decodes row and column indices and
 produces a frame with real `cellToRecord` identity, exercised by
@@ -5134,9 +5127,7 @@ Registering the ids resolves the `lint:method-literals` red L161 left open on
 `olv.observation.states@1`): the id now exists at the version quoted.
 
 Two documents needed a factual correction this phase's own additions caused,
-per `lint:architecture-truth`, which the task's own binding rule does not
-except (that exception is scoped to the monolith-size baseline only, not
-touched here). `docs/architecture/architecture-map.md`'s Model row moved from
+per `lint:architecture-truth`. `docs/architecture/architecture-map.md`'s Model row moved from
 "~3.4k" to "~3.5k": `AcquisitionStations.ts` pushed `src/model` past the
 rounding boundary. `docs/releases/KNOWN_LIMITATIONS_v0.7.0-alpha.1.md`'s
 module count moved from 898 to 906: the sidecar's own two production modules
@@ -5243,7 +5234,7 @@ per-ray object.
 `SourceRayBuild`, `ObservationReturnTable`, `GriddedRayCoverage` and
 `GriddedRayPositions` are the phase's new exported shapes, all additive.
 
-Structured E57's own pose gap, confirmed this session by `grep -n
+Structured E57's own pose gap, confirmed by `grep -n
 acquisitionPose src/io/e57/structuredFrames.ts src/io/loadE57.ts` returning
 nothing (PTX and PCD both set `OrganizedRangeFrame.acquisitionPose`;
 `E57GridBuilder.frame()` never does), is resolved without touching loader
@@ -5321,8 +5312,8 @@ on their own (19 passed at the phase's close, 22 with the three cases the
 precision pass added), all pass. `lint:layer-boundaries` (`src/observation`
 already in `LAYERS`, not `POPULATED_LAYERS`; no change needed there),
 `lint:position-access` (171 reads, one fewer than the pre-existing baseline;
-a stale allowlist entry the lint reports pre-dates this session and is left
-alone as out of scope), `lint:monolith-size`, `lint:unreachable-modules`,
+a stale allowlist entry the lint reports pre-dates this change and is left
+alone), `lint:monolith-size`, `lint:unreachable-modules`,
 `lint:method-literals`, `lint:worker-registry`, `lint:disposal-registry`,
 `lint:oracle-registry`, `lint:architecture-truth` (after the Model row fix
 above), `lint:release-truth`, `lint:module-graph`, `lint:claim-register`,

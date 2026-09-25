@@ -17,7 +17,7 @@ import { createStreamingClassLedger, type StreamingClassLedger } from './streami
 export interface AppRuntime {
   readonly context: AppContext;
   /**
-   * The one owner of layer identity for this session (audit item O). Binds each
+   * The one owner of layer identity for this session. Binds each
    * loaded cloud to a stable, name-independent id and decides the owner stamped
    * on new work. Held here so it is constructed once, alongside the shared
    * state, rather than as a module-level singleton in the shell.

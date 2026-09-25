@@ -7,7 +7,7 @@
  * and the only way to catch it is to assert against a surface whose answer can
  * be derived by hand.
  *
- * The cases follow the prompt's TF register: plane, bowl, ridge, valley, flat,
+ * The cases follow the TF register: plane, bowl, ridge, valley, flat,
  * anisotropic grid and NoData barrier.
  */
 import { describe, expect, it } from 'vitest';
