@@ -16,12 +16,27 @@ import type { ViewRecommendation } from '../render/camera/recommendView';
 /** How long the chip stays up before auto-hiding, in ms. */
 const AUTO_HIDE_MS = 9000;
 
+/**
+ * The auto-hide delay. Test-seam builds (`?test=1`) accept `rvcHideMs=<n>` so
+ * an e2e can exercise the pause/resume behaviour on a short timer; shipped
+ * builds compile this down to the constant.
+ */
+function autoHideMs(): number {
+  if (typeof __OLV_TEST_SEAM__ !== 'undefined' && __OLV_TEST_SEAM__ && typeof location !== 'undefined') {
+    const q = new URLSearchParams(location.search);
+    const n = Number(q.get('rvcHideMs'));
+    if (q.get('test') === '1' && Number.isFinite(n) && n > 0) return n;
+  }
+  return AUTO_HIDE_MS;
+}
+
 export class RecommendedViewChip {
   /** The chip element — mount into the stage overlay. */
   readonly element: HTMLElement;
   private readonly _label: HTMLElement;
   private _onApply: (() => void) | null = null;
   private _timer: number | null = null;
+  private readonly _hideMs: number;
   /**
    * Tracked separately, not as one combined flag: a mouse hover and a
    * keyboard focus can both be active on the chip at once (the user tabs to
@@ -37,7 +52,9 @@ export class RecommendedViewChip {
    *  `openModal` uses for dialogs, applied here without a focus trap. */
   private _returnFocusTo: HTMLElement | null = null;
 
-  constructor() {
+  /** @param hideMs auto-hide delay in ms; defaults to 9 s (see {@link autoHideMs}). */
+  constructor(hideMs: number = autoHideMs()) {
+    this._hideMs = hideMs;
     this._label = el('span', { className: 'olv-rvc-label' });
     const apply = el('button', {
       className: 'olv-rvc-apply',
@@ -106,6 +123,7 @@ export class RecommendedViewChip {
    */
   hide(): void {
     this._clearTimer();
+    this.element.dataset.autohide = 'off';
     this._hovered = false;
     this._focusedInside = false;
     const hadFocus = this.element.contains(document.activeElement);
@@ -130,6 +148,7 @@ export class RecommendedViewChip {
   private _syncTimer(): void {
     if (this._hovered || this._focusedInside) {
       this._clearTimer();
+      this.element.dataset.autohide = 'paused';
       return;
     }
     if (this.element.classList.contains('olv-hidden')) return;
@@ -138,7 +157,8 @@ export class RecommendedViewChip {
 
   private _arm(): void {
     this._clearTimer();
-    this._timer = window.setTimeout(() => this.hide(), AUTO_HIDE_MS);
+    this._timer = window.setTimeout(() => this.hide(), this._hideMs);
+    this.element.dataset.autohide = 'running';
   }
 
   private _clearTimer(): void {
