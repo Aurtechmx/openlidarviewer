@@ -58,3 +58,15 @@ export async function chooseRenderBackend(
     return 'webgl2';
   }
 }
+
+/**
+ * The page-level choice: `?backend=webgl2` pins the WebGL 2 backend even where
+ * WebGPU is usable, so the fallback path can be exercised on any machine;
+ * without it this is `chooseRenderBackend`. Lives in the lazy Viewer chunk.
+ */
+export async function chooseRenderBackendForPage(
+  gpu: RenderAdapterProbe | null | undefined,
+  search: string,
+): Promise<RenderBackendChoice> {
+  return new URLSearchParams(search).get('backend') === 'webgl2' ? 'webgl2' : chooseRenderBackend(gpu);
+}

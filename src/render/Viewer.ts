@@ -120,8 +120,8 @@ import {
 } from './camera/cameraPresets';
 import { followPerspective } from './camera/orthoCamera';
 import { projectionFromLegacyFov } from './camera/orthoProjection';
-export type { CameraPresetName } from './camera/cameraPresets';
-export type { StandardView } from './camera/cameraPresets';
+export type { CameraPresetName, StandardView } from './camera/cameraPresets';
+export { chooseRenderBackendForPage } from './viewerRenderBootstrap';
 import { compassHeadingDeg } from './viewCubeMath';
 import type { VolumeBudgetDecision } from './measure/volumeBudget';
 

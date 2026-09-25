@@ -9,7 +9,6 @@ import './styles';
 // Disable loaders.gl CDN workers before any parse (must run before any loader).
 import './io/loaderConfig';
 import type { Viewer } from './render/Viewer';
-import { chooseRenderBackend } from './render/renderBackendChoice';
 import { floorPlanPositions } from './app/floorPlanPositions';
 import { isMobileDevice, isTouchFirstDevice, MOBILE_LAYOUT_QUERY } from './ui/isMobileDevice';
 import { Stage } from './ui/Stage';
@@ -530,11 +529,11 @@ const viewerStarted = new Promise<void>((resolve) => { startViewer = resolve; })
 /** Start the Viewer import if it has not started, and hand back the shared promise. */
 const ensureViewer = (): Promise<Viewer> => { startViewer(); return viewerLoaded; };
 const viewerLoaded: Promise<Viewer> = viewerStarted.then(async () => {
-  const { Viewer: ViewerCtor } = await importOrReload(loadViewer);
+  const { Viewer: ViewerCtor, chooseRenderBackendForPage } = await importOrReload(loadViewer);
   // WebKit/iOS: navigator.gpu is present but requestAdapter() -> null; probe so
   // the renderer picks WebGL 2 instead of throwing on the first scan open.
   const gpu = (navigator as { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
-  viewer = new ViewerCtor(stage.canvas, (await chooseRenderBackend(gpu)) === 'webgl2');
+  viewer = new ViewerCtor(stage.canvas, (await chooseRenderBackendForPage(gpu, location.search)) === 'webgl2');
   // Feed the export adapter the RESOLVED CRS per cloud, so a rejected/local
   // override never reaches the ortho .prj (C10). Rule lives in the app module.
   viewer.setExportCrsResolver(makeExportCrsResolver({
