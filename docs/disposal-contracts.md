@@ -15,6 +15,19 @@ long-session spec: see the checklist at the bottom.
 
 ## Resource → owner → lifetime → disposal trigger
 
+### Root owner
+
+`runtime.lifetime` (`src/app/appLifetime.ts`, created by `createAppRuntime()`)
+is the root owner. main.ts registers the app-level owners with it at boot;
+`disposeAll()` runs them newest first, each at most once, continues past a
+throwing disposer and reports the failures together. A registration made after
+disposal runs immediately. It is covered by `tests/appLifetime.test.ts`.
+
+| Resource | Owner | Lifetime | Disposal trigger |
+| --- | --- | --- | --- |
+| App-level owners below (streaming session, decode workers, Viewer + debug overlay, Stage) | `runtime.lifetime` | Page session | `pagehide` with `event.persisted === false` → `disposeAll()`. A persisted `pagehide` (back/forward cache) keeps everything; `beforeunload` is not used |
+| Boot-time `window` listeners (keyup, blur) | `runtime.lifetime.signal` | Page session | `disposeAll()` aborts the signal the listeners were added with |
+
 ### Pure modules (tested in `tests/disposalContracts.test.ts`)
 
 | Resource | Owner | Lifetime | Disposal trigger |
@@ -36,7 +49,8 @@ long-session spec: see the checklist at the bottom.
 | `WebGLRenderer` / `WebGPURenderer` GL context | `Viewer._renderer` | Per Viewer instance | `viewer.dispose()` → `renderer.dispose()` + `renderer.forceContextLoss()` |
 | `requestAnimationFrame` loop | `Viewer` | Per Viewer instance | `viewer.dispose()` cancels the next frame |
 | ResizeObserver on the canvas parent | `Viewer` | Per Viewer instance | `viewer.dispose()` → `observer.disconnect()` |
-| COPC / EPT decode worker | `CopcWorkerClient` (created lazy in main.ts) | Page session: created on the first COPC or EPT open and reused by every scan after it | None on scan close. The warm decoder outlives each scan on purpose; it goes when the page does |
+| COPC / EPT decode worker | `CopcWorkerClient` (created lazy in main.ts) | Page session: created on the first COPC or EPT open and reused by every scan after it | None on scan close. The warm decoder outlives each scan on purpose; `runtime.lifetime` disposes it on `pagehide` |
+| Streaming heartbeat (`VisibleHeartbeat`, 200 ms) | `Viewer._streamingHeartbeat` | Per streaming scan, and only while the document is visible | `visibilitychange` to hidden clears the interval (resumes on visible); `viewer.detachStreamingCloud()` → `stop()` |
 | Streaming scheduler / renderer pair | `Viewer._streaming` | Per streaming scan | `viewer.detachStreamingCloud()` → scheduler.dispose() + renderer.dispose() |
 | HTTP range-source pending fetches | `HttpRangeSource` | Per streaming scan | `streamingSource.abort()` on detach |
 | Color attribute snapshots | `Viewer._selectionSnapshots` | Per highlight | `viewer.clearSelectionHighlight()` |
@@ -44,7 +58,7 @@ long-session spec: see the checklist at the bottom.
 | LassoVolumeTool SVG overlay | `LassoVolumeTool` | While armed | `lassoVolumeTool.disable()` → SVG removed, listeners detached |
 | InspectTool pointer listeners | `InspectTool` | Per Viewer instance | `viewer.dispose()` |
 | AnnotationController DOM panels | `AnnotationController` | Per Viewer instance | `viewer.dispose()` |
-| `window` event listeners (keydown, resize) | main.ts | Per session | Page reload: no per-scan cleanup needed |
+| `window` event listeners (keydown, resize) | main.ts | Per session | `runtime.lifetime` on `pagehide`: no per-scan cleanup needed |
 | Streaming status poll (`setInterval`) | `streamingUiCoordinator` | Per streaming scan | `endSession()` on close (also aborts an in-flight full-cloud grade) |
 | Scheduled task timers (recorder badge, settle clamp) | individual controllers | Per scope | `controller.dispose()` clears |
 | Continuity history colour surface | `HistoryTargets` | From `resize` at one backing-store size and device generation until either changes, or `dispose` | `HistoryTargets.dispose()`, and `resize` to a different size or device generation, which frees before allocating |
@@ -111,8 +125,13 @@ worker message listeners and global pointer listeners: each is removed by a
 `dispose()` on the owner, by a teardown function the registration returns, or
 by a `Stage.addTeardown` entry for shell-level wiring. The tables above are the
 inventory; a new registration adds a row and a contract test. The shell's
-session-scoped `window` listeners are the one recorded exception, and they end
-with the page.
+session-scoped `window` listeners take `runtime.lifetime.signal` and end on
+`pagehide`.
+
+Every `setInterval`, `requestAnimationFrame` and self-re-arming `setTimeout`
+site in `src/` is listed, with its owner, in `tests/timerOwnership.test.ts`. A
+new site fails that test until it is listed as bounded, owned by a disposer the
+root owner reaches, or driven by the frame scheduler.
 
 ## Adding a new resource
 
@@ -120,7 +139,8 @@ When you introduce a new GPU buffer / worker / timer / listener:
 
 1. Add a row to the table above identifying the owner.
 2. Wire the disposal call into the closest existing teardown trigger
-   (most often `Viewer.dispose()` or `closeScan()` in main.ts).
+   (most often `Viewer.dispose()` or `closeScan()` in main.ts). A new
+   page-session owner registers with `runtime.lifetime.register()`.
 3. If the resource is pure-data, add a contract test to
    `tests/disposalContracts.test.ts`.
 4. If the resource needs a real browser, add an assertion to the

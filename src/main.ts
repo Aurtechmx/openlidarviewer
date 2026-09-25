@@ -466,6 +466,7 @@ const catalogPanel = new CatalogPanel({
 // replay (app/tourLauncher.ts); boot logic lives in ui/onboarding/bootTour.ts.
 const tour: TourHandle = createTourLauncher(loadTour);
 
+const runtime = createAppRuntime();
 const stage = new Stage(app, {
   embed,
   samples: SAMPLES,
@@ -740,11 +741,11 @@ viewerLoaded.then((v) => {
 // Releasing Space resumes the modal tool after a hold-Space re-orient.
 window.addEventListener('keyup', (e) => {
   if (e.code === 'Space' && viewer?.toolActive) viewer.setToolPaused(false);
-});
+}, runtime.lifetime);
 
 // Blur (Cmd-Tab away while holding Space, etc.) must also resume the tool, or it
 // would stay stuck in the paused/navigation state.
-window.addEventListener('blur', () => viewer?.setToolPaused(false));
+window.addEventListener('blur', () => viewer?.setToolPaused(false), runtime.lifetime);
 
 // Right-click the 3-D canvas for a small navigation context menu. The menu UI
 // is lazy-loaded on first use, so it stays out of the startup shell. Only armed
@@ -897,7 +898,6 @@ const deviceCapsValue = deviceCaps({
 // cluster (visibility intent, solo, last comparison) and the active-scan
 // selection. The `layers`/`scan` locals are terse handles onto those clusters;
 // mutating their fields writes through to the context.
-const runtime = createAppRuntime();
 const layers = runtime.context.layers;
 const viewBookmarks = runtime.context.viewBookmarks;
 const bookmarks = createViewBookmarks(runtime.context);
@@ -969,8 +969,6 @@ function refreshColorbarOverlay(): void {
 let copcDecoder: CopcWorkerClient | null = null;
 /** The EPT laszip decode worker client — created lazily on the first EPT laszip open. */
 let eptLaszipDecoder: EptLaszipWorkerClient | null = null;
-/** The active streaming quality preset — initial value follows the static device tier (mirrors streamingProfile.qualityForTier); display-only and user-overridable. */
-/** Interval handle for the streaming-status poll, while a COPC is open. */
 /** Active streaming benchmark collector — non-null only under `?benchmark=1`. */
 let streamingBenchmark: StreamingBenchmark | null = null;
 /** Latched once the coarse view first finishes loading, per streaming session. */
@@ -1737,7 +1735,6 @@ const keyBindingDeps: KeyBindingDeps = {
 stage.addTeardown(installKeyDispatch(buildViewerKeyBindings(keyBindingDeps), keyBindingDeps));
 
 /** Helper: type-guard a string before passing to the typed Viewer setter. */
-
 
 const helpOverlay = createHelpOverlayLazy(stage.overlay, { getActions: () => ensureActionRegistry(), toast: { show: showLassoToast }, trigger: buttonLazyTrigger(() => dock.dock.querySelector<HTMLButtonElement>('.olv-tool-help')) }); // lazy chunk, see helpOverlayLazy.ts
 
@@ -3570,7 +3567,6 @@ if (debug || benchmark) {
   });
 }
 
-
 /** Sample live COPC streaming counters for the debug overlay, or null. */
 function streamingDebugSample(): StreamingDebugStats | null {
   // Returns null before the lazy Viewer chunk has resolved — the debug
@@ -3845,7 +3841,6 @@ function syncColorModeForActive(): void {
   if (mode !== currentColorMode) currentColorMode = mode;
   inspector.setColorModes(availableModes(cloud), currentColorMode);
 }
-
 
 /**
  * Surface the project-shared elevation toggle only when ≥2 layers share the
@@ -4275,7 +4270,7 @@ const openStreamingDeps: OpenStreamingDeps = {
   isPhone,
   closeStreaming,
   clearOpenStaticLayers,
-  startStreamingStatusPolling,
+  startStreamingStatusPolling: () => streamingUi.startPolling(),
   revealStreamingChrome: () => revealStreamingScanChrome({
     dock, inspector, navBar, backend: viewer.activeBackend(), body: document.body,
   }),
@@ -4494,9 +4489,6 @@ function hasResidentAtDepth(
   }
   return false;
 }
-
-/** Poll the streaming state ~4 Hz so the panel reflects progress. */
-function startStreamingStatusPolling(): void { streamingUi.startPolling(); }
 
 // The readers of each streaming poll tick: they all see the one snapshot the
 // panel was drawn from, so residency, the settle one-shot and the benchmark
@@ -4947,3 +4939,11 @@ async function saveSnapshot(): Promise<void> {
     dropZone.setError('Could not save the view');
   }
 }
+
+// Root owner (docs/disposal-contracts.md): a non-persisted pagehide releases these, newest first.
+runtime.lifetime.own({
+  stage: () => stage.dispose(),
+  viewer: () => { debugOverlay?.stop(); viewer?.dispose(); },
+  'decode workers': () => { copcDecoder?.dispose(); eptLaszipDecoder?.dispose(); },
+  'streaming session': () => streamingUi.endSession(),
+}, window);

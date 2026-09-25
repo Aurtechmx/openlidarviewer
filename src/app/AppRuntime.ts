@@ -10,6 +10,7 @@
  */
 
 import { createAppContext, type AppContext } from './appContext';
+import { createAppLifetime, type AppLifetime } from './appLifetime';
 import { createLayerIdentityService, type LayerIdentityService } from './layerIdentityService';
 import { createStreamingClassLedger, type StreamingClassLedger } from './streamingClassLedger';
 
@@ -30,6 +31,8 @@ export interface AppRuntime {
    * reset it from every path that changes the streaming dataset.
    */
   readonly streamingClasses: StreamingClassLedger;
+  /** Root owner of app-lifetime resources; disposed on a non-persisted pagehide. */
+  readonly lifetime: AppLifetime;
 }
 
 /** Construct the runtime with a fresh, empty AppContext and its services. */
@@ -38,5 +41,6 @@ export function createAppRuntime(): AppRuntime {
     context: createAppContext(),
     layerIdentity: createLayerIdentityService(),
     streamingClasses: createStreamingClassLedger(),
+    lifetime: createAppLifetime(),
   };
 }
