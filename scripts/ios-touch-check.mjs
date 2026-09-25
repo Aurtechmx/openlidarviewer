@@ -38,6 +38,14 @@ const UDID = process.env.OLV_SIM_UDID ?? '';
 /** The pose read, as a string so two reads compare with `!==`. */
 const POSE = 'return JSON.stringify(window.__OLV_TEST_API__.getCameraPose());';
 
+// Markers read by scripts/lib/iosRunClassifier.mjs. The first proves this
+// script started; the second is printed once, immediately before the first
+// app assertion. A failure logged before the second can be classified as
+// infrastructure; one after it cannot.
+const SCRIPT_START_MARKER = 'OLV-IOS-SCRIPT-START';
+const FIRST_ASSERTION_MARKER = 'OLV-IOS-FIRST-ASSERTION';
+console.log(SCRIPT_START_MARKER);
+
 const steps = [];
 const record = (name, ok, detail) => {
   steps.push({ name, ok, detail });
@@ -140,6 +148,7 @@ async function main() {
     // Polled, because navigation returns once the document loads, and the
     // app mounts the seam later, after its own modules run. A single read
     // races that and reports the seam missing from a build that has it.
+    console.log(FIRST_ASSERTION_MARKER);
     let seam = false;
     for (let i = 0; i < 60 && seam !== true; i++) {
       seam = await evaluate(sid, 'return !!window.__OLV_TEST_API__;');

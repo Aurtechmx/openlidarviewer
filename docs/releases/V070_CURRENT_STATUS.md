@@ -41,7 +41,7 @@ Entries: 165. Revisited at least once: 19.
 | L10 | OPEN | LIFECYCLE | 1 |
 | L11 | FIXED | UI | 3 |
 | L12 | FIXED | UI | 3 |
-| L13 | OPEN | EVIDENCE | 4 |
+| L13 | OPEN | EVIDENCE | 5 |
 | L14 | PARTIAL | ARCHITECTURE | 2 |
 | L15 | DEFERRED | ARCHITECTURE | 1 |
 | L16 | FIXED | EVIDENCE | 2 |

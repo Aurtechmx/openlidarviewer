@@ -13,6 +13,8 @@
 # simulator runtime, a WebDriverAgent build — and a leg like that must earn
 # trust before it can block a merge. `L13` records the browser matrix as
 # advisory; this joins it on those terms rather than as a required check.
+# It becomes eligible to block after 20 consecutive passes, counted by
+# `node scripts/ios-streak.mjs` with the classification rule in ledger L13.
 name: iOS simulator
 
 on:

@@ -175,7 +175,10 @@ Chromium blocks a release; Firefox, WebKit and Windows do not, and no ruleset
 requires the cross-browser smoke workflow. Touch gestures run end to end on all
 three engines, and in the iPhone-shaped WebKit project, as synthesized pointer
 events. Multi-touch on a real device is unverified. An advisory iOS simulator
-check drives real Mobile Safari and has not yet passed end to end. No matrix is
+check drives real Mobile Safari on a pinned simulator (iOS 26.5,
+iPhone 17e) and has passed end to end, including a two-finger pinch. It
+stays advisory until 20 consecutive passes, counted by `scripts/ios-streak.mjs`
+under the rule in ledger L13. No matrix is
 recorded for this development cut: that evidence comes from the engines
 themselves.
 

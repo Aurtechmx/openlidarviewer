@@ -1,0 +1,28 @@
+{
+  "comment": "Infrastructure signatures for the iOS simulator leg (.github/workflows/ios-simulator.yml). Rule: docs/releases/V070_IMPLEMENTATION_LEDGER.md, L13. A failed run is INFRASTRUCTURE only when its first failing step precedes the first app assertion AND the pre-assertion log matches one of these. `pattern` is a case-insensitive JavaScript regex. `steps`, when present, limits the signature to failing steps whose name matches that regex. `before`, when present, limits the match to log text preceding the first occurrence of that string. Add a signature only by commit, never while classifying a specific run.",
+  "firstAssertionStep": "Drive the touch model in Mobile Safari",
+  "signatures": [
+    {
+      "id": "runner-provisioning",
+      "note": "The hosted runner was lost, shut down or never acquired the job.",
+      "pattern": "runner has received a shutdown signal|lost communication with the server|hosted runner (?:encountered an error|lost)|job was not acquired by runner|could not find any available runner"
+    },
+    {
+      "id": "dependency-download-network",
+      "note": "Network or DNS error while fetching Node, npm packages, Appium or the XCUITest driver.",
+      "pattern": "\\b(?:ENOTFOUND|ECONNRESET|ETIMEDOUT|EAI_AGAIN)\\b|npm (?:ERR!|error) network|getaddrinfo",
+      "steps": "setup-node|npm ci|Install Appium"
+    },
+    {
+      "id": "simulator-runtime-missing",
+      "note": "The runner image offers no usable iPhone simulator or runtime.",
+      "pattern": "no iPhone simulator is available on this image|runtime (?:profile )?(?:not found|is not available|unavailable)|No available runtime"
+    },
+    {
+      "id": "wda-unreachable-8100",
+      "note": "WebDriverAgent did not answer on port 8100 before the Appium session opened.",
+      "pattern": "(?:ECONNREFUSED|ECONNRESET|socket hang up|timed out|not reachable)[^\\n]{0,200}:8100|:8100[^\\n]{0,200}(?:ECONNREFUSED|ECONNRESET|socket hang up|timed out|not reachable)|WebDriverAgent[^\\n]{0,80}(?:did not start|could not be started|not reachable)",
+      "before": "ok    session created"
+    }
+  ]
+}
