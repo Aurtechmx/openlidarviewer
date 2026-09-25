@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "quantity": "terrain evidence GeoTIFF (support_count, interpolation_distance, cell_state)",
+  "candidate": "src/terrain/export/demEvidence.ts and src/terrain/export/demGeoTiff.ts",
+  "fixture": "validation/terrain-evidence/fixture/terrain_evidence.tif with validation/terrain-evidence/fixture/expected.json",
+  "fixtureCheck": "tests/demEvidence.test.ts fails when the committed fixture differs from what the writer produces",
+  "oracles": [
+    {
+      "oracleId": "olv-terrain-evidence-geotiff-py",
+      "role": "standard-conformance-validator",
+      "invocation": "python3 validation/terrain-evidence/oracle/evidence_geotiff.py",
+      "parameterEquivalence": "Reads the committed file bytes; compares band count, sample types, tags, georeferencing and every cell against expected.json."
+    },
+    {
+      "oracleId": "olv-terrain-evidence-geotiff-py",
+      "role": "analytic-truth",
+      "invocation": "python3 validation/terrain-evidence/oracle/evidence_geotiff.py",
+      "parameterEquivalence": "Recomputes interpolation distance as the Chebyshev distance to the nearest cell with support_count > 0 on the same grid, and the measured and edge-risk cell_state rules, from the raster alone."
+    }
+  ]
+}

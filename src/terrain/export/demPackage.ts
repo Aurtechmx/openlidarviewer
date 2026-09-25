@@ -4,8 +4,10 @@
  * Assemble a georeferenced DEM deliverable from an analysis result: the
  * bare-earth DTM, the top-surface DSM, and the canopy height model (CHM), each
  * as both an Esri ASCII Grid (.asc) and a Float32 GeoTIFF (.tif), plus an
- * optional .prj (CRS WKT) and a metadata README with the survey details.
- * Bundled into a single store-only ZIP.
+ * optional .prj (CRS WKT) and a metadata README with the survey details, and
+ * a three-band terrain evidence GeoTIFF (per-cell support on the DTM grid, see
+ * demEvidence.ts) bound into the DTM passport. Bundled into a single
+ * store-only ZIP.
  *
  * Pure-data: returns the ZIP bytes; no DOM. The DSM grid is reconstructed as
  * DTM + canopy height (= max(DTM, DSM)), so no extra grid needs threading
@@ -38,6 +40,12 @@ import {
 } from './exportProvenance';
 import { writeAsciiGrid } from './demAsciiGrid';
 import { writeGeoTiff, verticalUnitGeoKeyCode } from './demGeoTiff';
+import {
+  hasEvidenceArrays,
+  writeTerrainEvidenceGeoTiff,
+  terrainEvidenceReadmeLines,
+  TERRAIN_EVIDENCE_METHOD_ID,
+} from './demEvidence';
 import { buildZip, type ZipEntry } from '../../convert/zipStore';
 import { buildSha256Manifest } from './sha256';
 import { verticalUnitLabel, horizontalUnitLabel } from '../../units/units';
@@ -214,6 +222,11 @@ export interface DemReadmeOptions {
   /** The evidence-gate permit stamp for this raster, or null. */
   readonly exportPermit?: ExportPermitStamp | null;
   readonly analysedBasis?: AnalysedBasis | null;
+  /**
+   * Filename of the terrain evidence raster in the same package, or null /
+   * omitted when the package carries none.
+   */
+  readonly evidenceFilename?: string | null;
 }
 
 /** Map a coverage mode to a one-line plain-English label. */
@@ -388,6 +401,9 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     `  ${basename}-dtm.asc / .tif   Bare-earth digital terrain model (ground)`,
     `  ${basename}-dsm.asc / .tif   Digital surface model (top surface: canopy + structures)`,
     `  ${basename}-chm.asc / .tif   Canopy height model (above-ground height = DSM - DTM)`,
+    ...(opts.evidenceFilename
+      ? [`  ${opts.evidenceFilename.padEnd(28)} Terrain evidence: per-cell support for the DTM (see below)`]
+      : []),
     `  *.prj                        Coordinate reference system (WKT), when known`,
     `  SHA256SUMS.txt               SHA-256 of every file above (verify: sha256sum -c)`,
     ``,
@@ -408,6 +424,7 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     // described, which the method digest cannot answer on its own.
     `  Surface digest ${surfaceDigest}`,
     ``,
+    ...(opts.evidenceFilename ? terrainEvidenceReadmeLines(opts.evidenceFilename, hUnit) : []),
     `Coverage mode`,
     `  ${coverageLabel(p.coverageMode)}`,
     `  Analysed basis: ${p.analysedBasisLine}`,
@@ -557,6 +574,24 @@ export function buildDemPackage(
     );
   }
 
+  // Terrain evidence raster: per-cell support on the DTM's grid and NoData
+  // cells. Written whenever the grid carries its per-cell support arrays.
+  const evidenceName = `${basename}_evidence.tif`;
+  const hUnit = isGeographic ? 'degrees' : projectedUnitLabel(options.linearUnit);
+  let evidenceBytes: Uint8Array | null = null;
+  if (hasEvidenceArrays(dtm)) {
+    evidenceBytes = writeTerrainEvidenceGeoTiff(dtm, {
+      xllCorner: xll,
+      yllCorner: yll,
+      noData: NO_DATA,
+      epsg,
+      isGeographic,
+      horizontalUnit: hUnit,
+      demValues: grids[0].values,
+    });
+    entries.push({ name: evidenceName, bytes: evidenceBytes });
+  }
+
   if (options.wkt) {
     entries.push({ name: `${basename}.prj`, bytes: new TextEncoder().encode(options.wkt) });
   }
@@ -573,6 +608,7 @@ export function buildDemPackage(
     metricVersion: options.metricVersion ?? 'unknown',
     exportPermit: options.exportPermit ?? null,
     analysedBasis: options.analysedBasis ?? null,
+    evidenceFilename: evidenceBytes ? evidenceName : null,
   });
   entries.push({
     name: `${basename}-README.txt`,
@@ -621,6 +657,18 @@ export function buildDemPackage(
         mediaType: 'image/tiff',
         bytes: dtmTif.bytes,
       },
+      ...(evidenceBytes
+        ? {
+            companions: [
+              {
+                filename: evidenceName,
+                mediaType: 'image/tiff',
+                bytes: evidenceBytes,
+                methodId: TERRAIN_EVIDENCE_METHOD_ID,
+              },
+            ],
+          }
+        : {}),
     });
     entries.push({
       name: `${basename}-dtm.tif.olv-passport.json`,
