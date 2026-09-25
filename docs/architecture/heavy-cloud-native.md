@@ -140,8 +140,8 @@ whose whole-file buffer would exceed the memory ceiling.
 
 The browser half of phase 3 is now wired for uncompressed LAS.
 `src/app/openScan.ts` calls `openLocalHeavyLas`, which reads only the header
-first, acts on the plan's `buildThenStream` verdict, runs `storagePreflight`,
-and dispatches the index to `localOocIndexerWorker`. The worker wraps the
+first and acts on the plan's `buildThenStream` verdict. It then runs
+`storagePreflight` and dispatches the index to `localOocIndexerWorker`. The worker wraps the
 `File` in a `LocalFileRangeSource`, opens an OPFS spill build, runs
 `buildTileStoreFromLas`, and posts back the manifest and hierarchy. The main
 thread reopens the promoted store from OPFS, constructs an `OlvTileSource`, and

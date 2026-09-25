@@ -107,8 +107,8 @@ so an anisotropic grid, including a geographic frame where the east-west
 cell length scales by the cosine of latitude, ranks a diagonal against a
 cardinal neighbour by real geometry.
 
-A cell with no downslope neighbour is one of three things, and raw mode
-reports which one rather than choosing for it. A sink has every neighbour
+A cell with no downslope neighbour is a sink, a flat or an outlet, and raw
+mode reports which one rather than choosing for it. A sink has every neighbour
 strictly higher or invalid, and flow stops. A flat has no neighbour lower
 but at least one equal, and is reported unresolved rather than given an
 arbitrary direction from iteration order. An outlet sits on the grid
@@ -231,7 +231,8 @@ Raw mode's flats are reported, not resolved, as described above under Flat
 handling. Interpolated DTM cells are routed over by default, so a path may
 cross ground no return landed on, and the run's limitations state how many.
 Whether Withheld points were excluded from the terrain behind a run is
-frequently undeclared, and the run says so rather than guessing. A grid
+frequently undeclared; the run then records it as undeclared instead of
+guessing. A grid
 above 4,000,000 cells is refused outright in this release. The depression
 inventory's evidence is weaker than the routing claim's evidence; see
 `docs/validation/claim-register.yaml`, entry `TERRAIN-FLOW-DEPRESSION-INVENTORY`.

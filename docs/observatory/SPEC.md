@@ -24,7 +24,7 @@ Governing rule:
 found surface ≠ passed through ≠ behind a surface ≠ fired with no return ≠ never addressed ≠ not read by this session ≠ what a new station might see
 ```
 
-Second rule: canonical fields are computed once, digested and exported. Everything drawn on screen is a presentation derived from them, and no presentation setting can change a canonical byte.
+The second rule is that canonical fields are computed once, digested and exported. Everything drawn on screen is a presentation derived from them, and no presentation setting can change a canonical byte.
 
 Observatory is deterministic geometry. It adds no learned inference, no model weights and no production Python.
 
@@ -48,7 +48,7 @@ Read from `openlidarviewer-v0.7.0-alpha.1-source-20260922-2110.zip` (SHA-256 `1b
 | Run records | `src/simulation/simulationRunRecord.ts` (`FieldSimulationKind` includes `'terrain-access'` and `'scan-rescue'`; SHA-256 via `render/measure/auditLog`) | Shape to follow for a reproducible run record. `terrain-access` and `scan-rescue` are enum values only, with no implementation. |
 | Rigid alignment | `src/registration/rigidSolve.ts` (Kabsch/Horn, scale fixed at 1, refuses degenerate input), `transformStore.ts` (non-destructive Float64 placement), `tiePointAlignment.ts`, `generalIcp.ts` | Staged, not reachable. Any pose alignment builds on these. |
 | Project frame | `src/geo/frame/`, `docs/architecture/project-spatial-frame.md`, `docs/coordinate-precision.md`, `src/model/pointFrames.ts` | Per-cloud Float64 origin with Float32 local positions. A shared project frame exists as foundation; scene wiring is deferred. |
-| Screen-space occlusion | `src/render/measure/lassoOcclusion.ts` | Camera-view depth test with scale-derived cell size. It shows the house style for tolerance reasoning. It is not a scanner-visibility method. |
+| Screen-space occlusion | `src/render/measure/lassoOcclusion.ts` | Camera-view depth test with scale-derived cell size. It shows the house style for tolerance reasoning, though it tests visibility from the camera and has no scanner model. |
 | Colour and range | `src/render/colorModes.ts` (categorical ids stay categorical), `paletteCatalog.ts`, `colorbar.ts`, `activeColorbar.ts`, `colorLegend.ts`, `elevationRange.ts` (`computeScalarRange`, percentile clip) | Presentation of per-point scalars and categories. |
 | GPU uploads | `src/render/gpuUploadQueue.ts` (time-budgeted, generation-stamped, stale items discarded before upload) | The existing latest-generation-wins mechanism. |
 | Device loss | `src/render/deviceGeneration.ts`, `gpuErrorLedger.ts` | Tells a resource which device era it belongs to. |
@@ -122,7 +122,7 @@ The hit fraction is `f = hit / (hit + pass)`. It is a statistic of ray outcomes,
 Deliberate differences from a four-state model:
 
 - `OBSERVED_EMPTY` is evidence. It is distinct from `UNADDRESSED`. Collapsing the two is the specific error this subsystem exists to prevent, in either direction.
-- `NO_RETURN_PATH` is its own state. A no-return ray can mean dark, specular or wet surfaces, water, glass, or distance beyond the instrument. It is never read as empty. This follows the rule already stated in `acquisitionCoverage.ts`.
+- `NO_RETURN_PATH` is its own state. A no-return ray can come from a dark, specular or wet surface, from water or glass, or from a target beyond the instrument's range. It is never read as empty. This follows the rule already stated in `acquisitionCoverage.ts`.
 - `NOT_READ` is its own state. A `NOT_DECODED` cell, or an unread streaming node, is a fact about this session, not about the scene.
 - `PARTIAL` absorbs vegetation, fences, edges and mixed pixels. Without it, every tree is a "conflict".
 

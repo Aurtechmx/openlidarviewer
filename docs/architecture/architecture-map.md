@@ -10,8 +10,8 @@ below.
 core math  →  science domain  →  application services  →  UI adapters  →  views
 ```
 
-The rule the linter enforces: **science and core must never import UI or
-three.js.** `src/terrain`, `src/validation`, `src/analysis` and `src/science`
+The layer linter enforces one import rule: **science and core must never
+import UI or three.js.** `src/terrain`, `src/validation`, `src/analysis` and `src/science`
 stay DOM-free and worker-safe, so a numeric module can run in a worker or a Node
 test without dragging a renderer behind it. Everything in this document exists to
 keep that arrow pointing one way.
@@ -65,7 +65,7 @@ move: you can hit it by relocating view-bound glue into a "host" module that
 re-exposes the whole class, which lowers the number without decoupling anything
 or gaining a single test. That is the trap this decomposition exists to avoid.
 
-The real condition: **every cluster with a genuine boundary and a Node-test
+The decomposition is finished when **every cluster with a genuine boundary and a Node-test
 payoff is extracted and tested, and the irreducibly view-bound remainder is
 enumerated below.** A cluster earns extraction when its logic can be decided
 without three.js or the DOM. When the only thing left is GPU material setup,
@@ -383,8 +383,8 @@ disagree on a key, or when a non-action binding has no line for Help.
   Untagged specs block by default.
 - Coverage ratchet: `npm run coverage`, scoped to the pure modules only.
 - Mutation: `npm run mutation`, scoped to the numeric core.
-- Release gate: `npm run test:release` runs static checks, lints, build,
-  bundle budget, every bucket, and the smoke specs; it prints a literal
+- Release gate: `npm run test:release` runs the static checks and lints,
+  then the build and bundle budget, then every bucket and the smoke specs; it prints a literal
   `GATE EXIT:` line, which is the only trustworthy signal.
 
 ## Keeping this document honest

@@ -1,9 +1,9 @@
 # SpatialContext: consumer inventory and routing status
 
 `src/geo/SpatialContext.ts` is one explicit description of the frame a dataset's
-coordinates live in: horizontal CRS and linear unit, vertical unit and datum
-reference, up axis, project-frame placement, and the single fail-closed gate
-`metricClaimsPermitted`. It is a façade over pieces that already exist
+coordinates live in. It holds the horizontal CRS and linear unit, the vertical
+unit and datum reference, the up axis and the project-frame placement, and it
+exposes the single fail-closed gate `metricClaimsPermitted`. It is a façade over pieces that already exist
 (`isLinearUnitKnown`, the `CrsValidation` ladder, `verticalReferenceFromDatum`,
 `ProjectSpatialFrame`), not a new source of truth.
 

@@ -296,8 +296,8 @@ is resident regardless of which classes are visible.
 precision term, and `resolveExportDecision` blocks when the measured worst-case
 step in metres exceeds the budget. That covers all eight registered scientific
 exporters through the one resolver they already pass through: the contour map
-PDF, the four contour vector formats, the DTM raster, the deliverable package,
-and the terrain intelligence report. Those are the products that mint a file of
+PDF and the four contour vector formats make five of them. The DTM raster,
+the deliverable package and the terrain intelligence report are the other three. Those are the products that mint a file of
 coordinates and elevations at a declared interval or cell size, which is the
 claim the representation has to be able to support.
 
