@@ -60,7 +60,7 @@ describe('F11 — Coverage Gain over the declared field, against coverage_gain.p
   });
 
   it('every term of every candidate matches the oracle', () => {
-    expect(result.candidateTerms.length).toBe(EXPECTED.candidateTerms.length);
+    expect(result.candidateTerms).toHaveLength(EXPECTED.candidateTerms.length);
     result.candidateTerms.forEach((t, i) => expectTermsMatch(t, EXPECTED.candidateTerms[i]));
   });
 
@@ -130,7 +130,7 @@ describe('F11/F12 end to end — wall on open ground through runObservatoryOverC
   });
 
   it('the second suggestion still reaches shadow the first did not', () => {
-    expect(planning.suggestion.selectedCandidateIndices.length).toBe(2);
+    expect(planning.suggestion.selectedCandidateIndices).toHaveLength(2);
     expect(planning.suggestion.termsAtSelection[1]!.weightedCounts.SHADOWED).toBeGreaterThan(0);
   });
 
@@ -140,7 +140,7 @@ describe('F11/F12 end to end — wall on open ground through runObservatoryOverC
     expect(bare.planning).toBeNull();
     expect(out.record.fieldDigest).toBe(bare.record.fieldDigest);
     expect(out.record.stateCounts).toEqual(bare.record.stateCounts);
-    expect(out.rows.length).toBe(bare.rows.length);
+    expect(out.rows).toHaveLength(bare.rows.length);
   });
 
   it('a suggested station never becomes a source (OB-INV-05)', () => {

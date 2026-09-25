@@ -149,7 +149,7 @@ function planOverField(
   }
   const rowByKey = new Map(rows.map((r) => [r.key, r] as const));
   const field: PlanningField = { domain, voxelEdge, grid, stateByKey, rowByKey, normalByKey: moments.normals() };
-  const model = { ...defaultPlanningModel(domain, options.metresPerUnit), ...(options.planning?.model ?? {}) };
+  const model = { ...defaultPlanningModel(domain, options.metresPerUnit), ...options.planning?.model };
   const horizontal = Math.max(domain.max[0] - domain.min[0], domain.max[1] - domain.min[1]);
   return planStations({
     field,

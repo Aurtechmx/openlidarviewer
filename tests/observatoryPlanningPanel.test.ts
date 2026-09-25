@@ -103,10 +103,10 @@ describe('candidates.csv (OB-EXP-01)', () => {
 
   it('lists every candidate with every term, and ranks the suggested ones', () => {
     const lines = csv.split('\n').filter((l) => /^\d/.test(l));
-    expect(lines.length).toBe(outcome.planning!.candidates.length);
-    for (const l of lines) expect(l.split(',').length).toBe(17);
+    expect(lines).toHaveLength(outcome.planning!.candidates.length);
+    for (const l of lines) expect(l.split(',')).toHaveLength(17);
     const ranked = lines.filter((l) => l.split(',')[4] !== '');
-    expect(ranked.length).toBe(2);
+    expect(ranked).toHaveLength(2);
     expect(csv).toContain('SUGGESTED STATION (not observed)');
   });
 

@@ -70,7 +70,7 @@ export function normalFromCovariance(cxx: number, cxy: number, cxz: number, cyy:
     const len = Math.hypot(c[0], c[1], c[2]);
     if (len > bestLen) { best = c; bestLen = len; }
   }
-  if (!(bestLen > 0) || !Number.isFinite(bestLen)) return null;
+  if (bestLen <= 0 || !Number.isFinite(bestLen)) return null;
   return [best[0] / bestLen, best[1] / bestLen, best[2] / bestLen];
 }
 

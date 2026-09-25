@@ -60,6 +60,15 @@ def grid_shape(domain, h):
     return [math.ceil((domain["maxCorner"][a] - domain["minCorner"][a]) / h) for a in range(3)]
 
 
+def matching_region(centre, regions):
+    """The first region whose half-open box holds the voxel centre, or None."""
+    for region in regions:
+        lo, hi = region["minCorner"], region["maxCorner"]
+        if all(F(lo[a]) <= centre[a] < F(hi[a]) for a in range(3)):
+            return region
+    return None
+
+
 def expand_field(fixture):
     """Every voxel's state, rows and normal, by voxel-centre membership in the first matching region."""
     domain = fixture["domain"]
@@ -71,17 +80,15 @@ def expand_field(fixture):
             for ix in range(nx):
                 c = [F(domain["minCorner"][a]) + (F(i) + F(1, 2)) * F(h) for a, i in enumerate((ix, iy, iz))]
                 key = ix + nx * (iy + ny * iz)
-                state = fixture["defaultState"]
-                for region in fixture["regions"]:
-                    lo, hi = region["minCorner"], region["maxCorner"]
-                    if all(F(lo[a]) <= c[a] < F(hi[a]) for a in range(3)):
-                        state = region["state"]
-                        if "rows" in region:
-                            rows[key] = region["rows"]
-                        if "normal" in region:
-                            normals[key] = region["normal"]
-                        break
-                states[key] = state
+                region = matching_region(c, fixture["regions"])
+                if region is None:
+                    states[key] = fixture["defaultState"]
+                    continue
+                states[key] = region["state"]
+                if "rows" in region:
+                    rows[key] = region["rows"]
+                if "normal" in region:
+                    normals[key] = region["normal"]
     return (nx, ny, nz), states, rows, normals
 
 
@@ -111,12 +118,32 @@ def blocks(state, row, p_solid):
     return n > 0 and F(row["hit"], n) >= F(p_solid)
 
 
+def incidence(direction, normal):
+    if normal is None:
+        return F(1)
+    return min(F(1), abs(sum(direction[a] * F(normal[a]) for a in range(3))))
+
+
+def walk_ray(origin, direction, clip, h, shape, field, best):
+    """Record every voxel this ray reaches, stopping at the first blocking one."""
+    nx, ny, nz = shape
+    states, rows, normals, p_solid = field
+    for ix, iy, iz in traverse(origin, direction, clip[0], clip[1], h):
+        if not (0 <= ix < nx and 0 <= iy < ny and 0 <= iz < nz):
+            continue
+        key = ix + nx * (iy + ny * iz)
+        inc = incidence(direction, normals.get(key))
+        if key not in best or inc > best[key]:
+            best[key] = inc
+        if blocks(states[key], rows.get(key), p_solid):
+            return
+
+
 def visibility(fixture, shape, states, rows, normals, position, dirs):
     domain = fixture["domain"]
     h = F(fixture["voxelEdge"])
-    nx, ny, nz = shape
     model = fixture["instrumentModel"]
-    p_solid = fixture["parameters"]["p_solid"]
+    field = (states, rows, normals, fixture["parameters"]["p_solid"])
     dmin = [F(v) for v in domain["minCorner"]]
     # Domain-relative coordinates: traverse() floors against 0.
     origin = [F(position[a]) - dmin[a] for a in range(3)]
@@ -126,21 +153,9 @@ def visibility(fixture, shape, states, rows, normals, position, dirs):
     for d in dirs:
         direction = [F(x) for x in d]
         clip = clip_ray_to_aabb(origin, direction, F(model["minRange"]), F(model["maxRange"]), lo, hi)
-        if clip is None or not clip[1] > clip[0]:
+        if clip is None or clip[1] <= clip[0]:
             continue
-        for ix, iy, iz in traverse(origin, direction, clip[0], clip[1], h):
-            if not (0 <= ix < nx and 0 <= iy < ny and 0 <= iz < nz):
-                continue
-            key = ix + nx * (iy + ny * iz)
-            normal = normals.get(key)
-            if normal is None:
-                inc = F(1)
-            else:
-                inc = min(F(1), abs(sum(direction[a] * F(normal[a]) for a in range(3))))
-            if key not in best or inc > best[key]:
-                best[key] = inc
-            if blocks(states[key], rows.get(key), p_solid):
-                break
+        walk_ray(origin, direction, clip, h, shape, field, best)
     return best
 
 
@@ -202,17 +217,15 @@ def as_json_terms(t):
     return out
 
 
-def compute_all():
-    fixture = json.loads(FIXTURE.read_text())
-    shape, states, rows, normals = expand_field(fixture)
-    dirs = directions(fixture["instrumentModel"])
-    params = fixture["parameters"]
-    vis = {c["candidateIndex"]: visibility(fixture, shape, states, rows, normals, c["position"], dirs) for c in fixture["candidates"]}
-    round1 = [score(i, vis[i], states, rows, params, set()) for i in sorted(vis)]
-
+def greedy_select(vis, states, rows, params, station_count):
+    """Greedy picks in order, and why selection stopped."""
+    if not isinstance(station_count, int) or station_count < 0:
+        raise SystemExit(f"stationCount must be a non-negative integer, got {station_count!r}")
     covered, picked, selections = set(), set(), []
     stop = "declared-count-reached" if vis else "no-candidates"
-    while len(selections) < fixture["stationCount"] and vis:
+    # A pick is never repeated: one round past the candidate count only reports "no-candidates".
+    rounds = min(station_count, len(vis) + 1) if vis else 0
+    while len(selections) < rounds:
         best = None
         for i in sorted(vis):
             if i in picked:
@@ -223,12 +236,24 @@ def compute_all():
         if best is None:
             stop = "no-candidates"
             break
-        if not best["gain"] > 0:
+        if best["gain"] <= 0:
             stop = "no-positive-gain"
             break
         picked.add(best["candidateIndex"])
         selections.append(best)
         covered |= set(vis[best["candidateIndex"]].keys())
+    return selections, stop
+
+
+def compute_all():
+    fixture = json.loads(FIXTURE.read_text())
+    shape, states, rows, normals = expand_field(fixture)
+    dirs = directions(fixture["instrumentModel"])
+    params = fixture["parameters"]
+    vis = {c["candidateIndex"]: visibility(fixture, shape, states, rows, normals, c["position"], dirs) for c in fixture["candidates"]}
+    round1 = [score(i, vis[i], states, rows, params, set()) for i in sorted(vis)]
+
+    selections, stop = greedy_select(vis, states, rows, params, fixture["stationCount"])
 
     state_counts = {}
     for s in states.values():

@@ -327,9 +327,10 @@ function candidatesCsv(planning: StationPlanningResult | null): string {
   const p = planning.parameters;
   const w = p.stateWeights;
   const s = planning.suggestion;
+  const reasons = planning.authority.reasons.length ? ` (${planning.authority.reasons.join('; ')})` : '';
   const header = [
     `# methods: ${planning.methods.map((id) => registeredTag(id)).join(', ')}`,
-    `# authority: ${planning.authority.authority}${planning.authority.reasons.length ? ` (${planning.authority.reasons.join('; ')})` : ''}`,
+    `# authority: ${planning.authority.authority}${reasons}`,
     `# instrument model: heightAboveSurface=${m.heightAboveSurface} minRange=${m.minRange} maxRange=${m.maxRange} `
       + `verticalFieldOfViewDegrees=${m.verticalFieldOfViewDegrees} angularStepDegrees=${m.angularStepDegrees} sameAsSourceIndex=${m.sameAsSourceIndex ?? ''} planningRays=${planning.planningRayCount}`,
     `# weights: SHADOWED=${w.SHADOWED} UNADDRESSED=${w.UNADDRESSED} NO_RETURN_PATH=${w.NO_RETURN_PATH} CONFLICT=${w.CONFLICT} WEAK_SURFACE=${w.WEAK_SURFACE} `
@@ -454,9 +455,11 @@ export function buildObservatoryPackage(
   entries.push({ name: `${basename}/field.bin`, bytes: fieldBytes });
   entries.push({ name: `${basename}/field.json`, bytes: new TextEncoder().encode(`${JSON.stringify(fieldHeader, null, 2)}\n`) });
 
-  entries.push({ name: `${basename}/state-summary.csv`, bytes: new TextEncoder().encode(stateSummaryCsv(record)) });
-  entries.push({ name: `${basename}/frontier.csv`, bytes: new TextEncoder().encode(frontierCsv(record, frontierVoxelKeys)) });
-  entries.push({ name: `${basename}/candidates.csv`, bytes: new TextEncoder().encode(candidatesCsv(options.planning ?? null)) });
+  entries.push(
+    { name: `${basename}/state-summary.csv`, bytes: new TextEncoder().encode(stateSummaryCsv(record)) },
+    { name: `${basename}/frontier.csv`, bytes: new TextEncoder().encode(frontierCsv(record, frontierVoxelKeys)) },
+    { name: `${basename}/candidates.csv`, bytes: new TextEncoder().encode(candidatesCsv(options.planning ?? null)) },
+  );
 
   const ops: ProcessingOpInput[] = record.methods.map((id) => ({ method: registeredTag(id), params: {} }));
   const manifest = buildProcessingManifest({ build: softwareVersion, source: record.source.filename, ops });

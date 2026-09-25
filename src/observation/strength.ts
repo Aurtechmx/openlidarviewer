@@ -29,7 +29,7 @@
  * composite-index wiring into the panel: those are O7/O9.
  */
 
-import { fitNormalFromResidentPoints, incidenceCosine, medianCosine } from './incidence';
+import { incidenceCosine, medianCosine } from './incidence';
 import {
   computeHitWindows,
   stepOverlapsAnyWindow,
@@ -223,7 +223,7 @@ export function mergeStrengthHitSamples(
 // ---------------------------------------------------------------------------
 
 /** Re-exported from `incidence.ts`, the one home of the normal fit both strength and Coverage Gain use. */
-export { fitNormalFromResidentPoints };
+export { fitNormalFromResidentPoints } from './incidence';
 
 // ---------------------------------------------------------------------------
 // the five components, assembled

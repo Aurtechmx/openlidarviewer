@@ -61,14 +61,14 @@ export type DeclaredSourceInstrument = Omit<ObservationInstrumentModel, 'sameAsS
 /** Throws on a model no planning ray can be built from. */
 export function validateInstrumentModel(model: ObservationInstrumentModel): void {
   const finitePositive = (v: number, name: string): void => {
-    if (!(v > 0) || !Number.isFinite(v)) throw new Error(`instrument model: ${name} must be a finite number > 0, got ${v}`);
+    if (v <= 0 || !Number.isFinite(v)) throw new Error(`instrument model: ${name} must be a finite number > 0, got ${v}`);
   };
-  if (!(model.heightAboveSurface >= 0) || !Number.isFinite(model.heightAboveSurface)) {
+  if (model.heightAboveSurface < 0 || !Number.isFinite(model.heightAboveSurface)) {
     throw new Error(`instrument model: heightAboveSurface must be finite and >= 0, got ${model.heightAboveSurface}`);
   }
-  if (!(model.minRange >= 0) || !Number.isFinite(model.minRange)) throw new Error(`instrument model: minRange must be finite and >= 0, got ${model.minRange}`);
+  if (model.minRange < 0 || !Number.isFinite(model.minRange)) throw new Error(`instrument model: minRange must be finite and >= 0, got ${model.minRange}`);
   finitePositive(model.maxRange, 'maxRange');
-  if (!(model.maxRange > model.minRange)) throw new Error(`instrument model: maxRange (${model.maxRange}) must exceed minRange (${model.minRange})`);
+  if (model.maxRange <= model.minRange) throw new Error(`instrument model: maxRange (${model.maxRange}) must exceed minRange (${model.minRange})`);
   finitePositive(model.verticalFieldOfViewDegrees, 'verticalFieldOfViewDegrees');
   finitePositive(model.angularStepDegrees, 'angularStepDegrees');
   if (model.angularStepDegrees > 90) throw new Error(`instrument model: angularStepDegrees must be <= 90, got ${model.angularStepDegrees}`);
@@ -259,7 +259,7 @@ export function generateCandidates(
   params: Pick<CoverageGainParameters, 'candidateSpacing' | 'candidateCap' | 'maxNormalAngleFromVerticalDegrees' | 'p_solid'>,
 ): CandidateGeneration {
   validateInstrumentModel(model);
-  if (!(params.candidateSpacing > 0) || !Number.isFinite(params.candidateSpacing)) {
+  if (params.candidateSpacing <= 0 || !Number.isFinite(params.candidateSpacing)) {
     throw new Error(`generateCandidates: candidateSpacing must be a finite number > 0, got ${params.candidateSpacing}`);
   }
   if (!Number.isInteger(params.candidateCap) || params.candidateCap < 0) {

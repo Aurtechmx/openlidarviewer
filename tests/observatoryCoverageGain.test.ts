@@ -181,7 +181,7 @@ describe('OB-GAIN-02 — candidates', () => {
 
   it('one candidate per spacing cell, standing on level ground at instrument height, indexed in grid order', () => {
     const g = generateCandidates(ground(), MODEL, PARAMS);
-    expect(g.candidates.length).toBe(16);
+    expect(g.candidates).toHaveLength(16);
     expect(g.qualifyingCount).toBe(16);
     expect(g.droppedByCap).toBe(0);
     expect(g.candidates.map((c) => c.candidateIndex)).toEqual([...Array(16).keys()]);
@@ -210,13 +210,13 @@ describe('OB-GAIN-02 — candidates', () => {
 
   it('a PARTIAL voxel above passes the column test only when it would not stop a planning ray', () => {
     const f = (hit: number, pass: number) => ground((_ix, _iy, iz) => (iz === 1 ? { state: 'PARTIAL', row: row(1, hit, pass) } : null));
-    expect(generateCandidates(f(1, 9), MODEL, PARAMS).candidates.length).toBe(16);
-    expect(generateCandidates(f(3, 0), MODEL, PARAMS).candidates.length).toBe(0);
+    expect(generateCandidates(f(1, 9), MODEL, PARAMS).candidates).toHaveLength(16);
+    expect(generateCandidates(f(3, 0), MODEL, PARAMS).candidates).toHaveLength(0);
   });
 
   it('the cap keeps an evenly strided subset and records what it dropped', () => {
     const g = generateCandidates(ground(), MODEL, { ...PARAMS, candidateCap: 4 });
-    expect(g.candidates.length).toBe(4);
+    expect(g.candidates).toHaveLength(4);
     expect(g.cap).toBe(4);
     expect(g.droppedByCap).toBe(12);
     expect(g.candidates.map((c) => c.position.slice(0, 2))).toEqual([[0.5, 0.5], [0.5, 2.5], [0.5, 4.5], [0.5, 6.5]]);
@@ -241,7 +241,7 @@ describe('OB-GAIN-03 — planning-ray visibility and gain terms', () => {
     expect(blocksPlanningRay('SURFACE', undefined, 0.9)).toBe(true);
     expect(blocksPlanningRay('CONFLICT', row(2, 10, 10), 0.9)).toBe(false);
     const passing = field(LINE, 1, (ix) => (ix === 2 ? { state: 'PARTIAL', row: row(1, 1, 4) } : { state: 'SHADOWED' }));
-    expect(traceCandidateVisibility(passing, 0, [0.5, 0.5, 0.5], oneRay, 0.9, dirX).keys.length).toBe(10);
+    expect(traceCandidateVisibility(passing, 0, [0.5, 0.5, 0.5], oneRay, 0.9, dirX).keys).toHaveLength(10);
   });
 
   it('min and max range bound the ray', () => {
