@@ -41,7 +41,7 @@ import { test, expect, type BrowserContext, type Page, type TestInfo } from '@pl
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { closeSync, createReadStream, existsSync, openSync, readSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { release, tmpdir } from 'node:os';
+import { release } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildNavJankRecord, validateJsonSchema, type NavJankEnv, type NavJankRun } from '../../src/perf/navJankRecord';
@@ -80,9 +80,13 @@ function registeredSha(): string | null {
 }
 
 /** SHA-256 of the dataset, cached by path, size and mtime (hashing 49 MB per run is waste). */
+/** Working files live under the repository's ignored playwright/.cache/ (kept between runs), not a shared temp directory. */
+const WORK_DIR = join(process.cwd(), 'playwright', '.cache', 'nav-jank');
+
 async function datasetSha(path: string): Promise<string> {
   const st = statSync(path);
-  const cacheFile = join(tmpdir(), 'olv-nav-dataset-sha.json');
+  mkdirSync(WORK_DIR, { recursive: true });
+  const cacheFile = join(WORK_DIR, 'dataset-sha.json');
   const key = `${path}|${st.size}|${st.mtimeMs}`;
   let cache: Record<string, string> = {};
   try {
@@ -353,7 +357,7 @@ async function environment(page: Page, context: BrowserContext, info: TestInfo):
 }
 
 function partialDir(commit: string): string {
-  const dir = join(tmpdir(), 'olv-nav-jank', `${commit.slice(0, 12)}-${MACHINE}`);
+  const dir = join(WORK_DIR, `${commit.slice(0, 12)}-${MACHINE}`);
   mkdirSync(dir, { recursive: true });
   return dir;
 }
