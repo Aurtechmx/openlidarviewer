@@ -139,6 +139,33 @@ describe('RecommendedViewChip — auto-hide timing', () => {
   });
 });
 
+describe('RecommendedViewChip — injected delay and timer state', () => {
+  it('honours a constructor-supplied auto-hide delay', () => {
+    const chip = new RecommendedViewChip(600);
+    const el = chip.element as unknown as FakeEl;
+    chip.show(REC, vi.fn());
+    vi.advanceTimersByTime(599);
+    expect(el.classList.contains('olv-hidden')).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect(el.classList.contains('olv-hidden')).toBe(true);
+  });
+
+  it('reports running / paused / off through data-autohide', () => {
+    const { chip, el } = makeChip();
+    chip.show(REC, vi.fn());
+    expect(el.dataset.autohide).toBe('running');
+    el.dispatchEvent({ type: 'mouseenter' });
+    expect(el.dataset.autohide).toBe('paused');
+    el.dispatchEvent({ type: 'focusin' });
+    el.dispatchEvent({ type: 'mouseleave' });
+    expect(el.dataset.autohide).toBe('paused');
+    el.dispatchEvent({ type: 'focusout', relatedTarget: null });
+    expect(el.dataset.autohide).toBe('running');
+    vi.advanceTimersByTime(9000);
+    expect(el.dataset.autohide).toBe('off');
+  });
+});
+
 describe('RecommendedViewChip — focus return', () => {
   it('restores focus to whatever held it before the chip appeared, when hide() runs while it holds focus', () => {
     const { chip, el } = makeChip();

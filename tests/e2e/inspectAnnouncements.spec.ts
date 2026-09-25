@@ -119,45 +119,55 @@ test('"+ New group", double-clicked fast, creates exactly one group', async ({ p
 test.describe('recommended-view chip — hover pauses the auto-hide', () => {
   test.slow();
 
-  test('stays visible past its 9s timer while genuinely hovered', async ({ page }) => {
+  test('stays visible past its auto-hide timer while genuinely hovered', async ({ page }) => {
     const fixture = fileURLToPath(new URL('../fixtures/multichunk.laz', import.meta.url));
-    // Root-caused a CI failure where this hover timed out for the full 90s
-    // with the button resolving but reported "not visible": the chip's
-    // `.olv-rvc` carried a `backdrop-filter`, which ties that layer's
-    // composite to a fresh capture of whatever sits behind it every frame.
-    // Under a busy WebGL main thread that capture can starve indefinitely —
-    // confirmed via `document.getAnimations()` on a real page that the entrance
-    // Web Animation was stuck at `currentTime: 0` (opacity permanently 0,
-    // genuinely unhoverable) for as long as the render loop kept the thread
-    // saturated, in headless Chromium specifically. Fixed by dropping the
-    // filter (`src/styles/40-inspector.css`) — the chip's background is
-    // already 92% opaque, so the blur bought little. The elementFromPoint
-    // check below stays as a regression guard: a stacking/paint bug here
-    // would again show something else answering for the button's own point.
-    //
-    // `page.clock` was also tried for the 9s window below, to remove real
-    // wall-clock time from the test entirely. Rejected: this Playwright's
-    // Chromium clock raced ahead of a `Date.now()` read unpredictably
-    // (`pauseAt` rejecting an already-past target) and, once paused, left
-    // an app-internal rAF-gated render never completing (an empty
-    // `.olv-rvc` className) on repeat runs — a second, clock-specific
-    // instability independent of the backdrop-filter bug above. The waits
-    // below stay real, but only ever start once the hover itself is
-    // confirmed to have landed.
-    await page.goto('/');
+    // The test seam shortens the chip's 9 s auto-hide so the pause is checked
+    // against a known, short timer. `data-autohide` on the chip reports the
+    // timer state (running / paused / off) directly, so the test asserts that
+    // the hover itself paused it rather than inferring it from elapsed time.
+    // `page.clock` is not used: it raced a `Date.now()` read and stalled an
+    // rAF-gated render in this Playwright's Chromium.
+    const HIDE_MS = 1_500;
+    await page.goto(`/?test=1&rvcHideMs=${HIDE_MS}`);
     await expect(page.locator('.olv-empty-title')).toBeVisible();
     await page.locator('.olv-file-input').first().setInputFiles(fixture);
     const card = page.locator('.olv-project-card');
     await expect(card).toHaveClass(/olv-visible/, { timeout: 60_000 });
     await page.locator('.olv-pc-dismiss').click({ timeout: 5_000 }).catch(() => {});
 
+    // Hold the timer with keyboard focus the moment the chip appears (polled
+    // in-page, so no round-trip can let the short timer lapse first). The
+    // focus is dropped again below, once the hover has landed, so the hover
+    // alone is what keeps the chip up.
+    await page.waitForFunction(
+      () => {
+        const c = document.querySelector('.olv-rvc');
+        if (!c || c.classList.contains('olv-hidden')) return false;
+        c.querySelector<HTMLElement>('.olv-rvc-apply')?.focus();
+        return true;
+      },
+      undefined,
+      { timeout: 30_000, polling: 50 },
+    );
     const chip = page.locator('.olv-rvc');
-    await expect(chip).not.toHaveClass(/olv-hidden/, { timeout: 30_000 });
+    await expect(chip).toHaveAttribute('data-autohide', 'paused');
 
     const apply = chip.locator('.olv-rvc-apply');
-    // Each poll round-trips evaluate() through the page, which queues behind
-    // fixture decode/render work that can hold the main thread for seconds.
-    // The longer budget waits for the answer; an occluded button still fails.
+    // Entrance animation settled before hovering, so the pointer targets the
+    // chip's resting position.
+    await expect
+      .poll(
+        () =>
+          apply.evaluate((el) =>
+            el
+              .closest('.olv-rvc')!
+              .getAnimations()
+              .every((a) => a.playState === 'finished'),
+          ),
+        { timeout: 20_000 },
+      )
+      .toBe(true);
+    // Nothing else answers for the button's own point (stacking/paint guard).
     await expect
       .poll(
         () =>
@@ -169,15 +179,20 @@ test.describe('recommended-view chip — hover pauses the auto-hide', () => {
       )
       .toBe(true);
 
-    // A real mouse hover — mouseenter/mouseleave, not a scripted class
-    // toggle — over the chip's Apply button.
+    // A real mouse hover (mouseenter), then release the keyboard focus.
     await apply.hover();
-    await page.waitForTimeout(9_500); // past the 9s auto-hide the chip would otherwise honour
-    await expect(chip).not.toHaveClass(/olv-hidden/);
+    await apply.evaluate((el) => (el as HTMLElement).blur());
+    await expect(chip).toHaveAttribute('data-autohide', 'paused');
 
-    // Moving the pointer off resumes the timer from a fresh 9s.
+    // Three full timer lengths later the hovered chip is still up.
+    await page.waitForTimeout(HIDE_MS * 3);
+    await expect(chip).not.toHaveClass(/olv-hidden/);
+    await expect(chip).toHaveAttribute('data-autohide', 'paused');
+
+    // Leaving restarts the timer, and the chip then hides on its own.
     await page.mouse.move(0, 0);
     await expect(chip).toHaveClass(/olv-hidden/, { timeout: 15_000 });
+    await expect(chip).toHaveAttribute('data-autohide', 'off');
   });
 });
 
