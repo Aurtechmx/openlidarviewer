@@ -112,6 +112,7 @@
     "docs:preview": "vitepress preview docs-site",
     "test:e2e:gpu": "playwright test --project=gpu",
     "test:e2e:bench": "playwright test --project=bench --headed",
+    "test:e2e:soak": "playwright test --project=soak",
     "coverage": "OLV_REACHABILITY=0 vitest run --coverage --maxWorkers=2 --testTimeout=60000 --exclude='tests/terrainRunnerDensityWiring.test.ts' --exclude='tests/benchmark/terrainCoreRebuildCost.test.ts'",
     "mutation": "stryker run",
     "evidence": "bash -c 'set -o pipefail; mkdir -p release; npm run test:release:execute > release/gate.log 2>&1; code=$?; node scripts/collect-evidence.mjs release/gate.log \"$code\" && npm run lint:evidence'",

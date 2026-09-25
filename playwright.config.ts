@@ -73,12 +73,15 @@ export default defineConfig({
   // They are ADVISORY in CI, not required: a new leg that goes red would
   // otherwise block every unrelated change while its failures are triaged.
   projects: [
-    { name: 'deterministic', use: { ...devices['Desktop Chrome'] }, grepInvert: /@gpu|@bench/, testIgnore: /firefoxWebglPreflight/ },
-    { name: 'gpu', use: { ...devices['Desktop Chrome'] }, grep: /@gpu/, grepInvert: /@bench/, testIgnore: /firefoxWebglPreflight/ },
+    { name: 'deterministic', use: { ...devices['Desktop Chrome'] }, grepInvert: /@gpu|@bench|@soak/, testIgnore: /firefoxWebglPreflight/ },
+    { name: 'gpu', use: { ...devices['Desktop Chrome'] }, grep: /@gpu/, grepInvert: /@bench|@soak/, testIgnore: /firefoxWebglPreflight/ },
     // Navigation benchmark runs. They measure frame pacing and replay whole
     // trajectories, which only means something on a real GPU and outlasts the
     // test timeout on a software renderer, so no CI job selects this project.
     { name: 'bench', use: { ...devices['Desktop Chrome'] }, grep: /@bench/, testIgnore: /firefoxWebglPreflight/ },
+    // Long-session soak (golden journey repeated). Minutes long, so no CI job
+    // selects it; run with `npm run test:e2e:soak`.
+    { name: 'soak', use: { ...devices['Desktop Chrome'] }, grep: /@soak/, testIgnore: /firefoxWebglPreflight/ },
     {
       name: 'firefox',
       use: {
@@ -109,10 +112,10 @@ export default defineConfig({
         // which is what supplies the display.
         headless: process.platform !== 'linux',
       },
-      grepInvert: /@gpu|@bench/,
+      grepInvert: /@gpu|@bench|@soak/,
       testIgnore: /firefoxWebglPreflight/,
     },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] }, grepInvert: /@gpu|@bench/, testIgnore: /firefoxWebglPreflight/ },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] }, grepInvert: /@gpu|@bench|@soak/, testIgnore: /firefoxWebglPreflight/ },
     // iPhone WebKit: the same engine family as Mobile Safari, with a phone
     // viewport, a device pixel ratio of 3 and real touch events. It is the
     // closest an install-free local gate gets to an iPhone, and it is NOT an
