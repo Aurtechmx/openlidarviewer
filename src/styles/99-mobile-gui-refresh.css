@@ -306,3 +306,42 @@
   .olv-dock .olv-tool-ico svg { width: 18px; height: 18px; }
 }
 
+
+/* ── Large-touch workspace (touch-first screens that get the desktop layout) ──
+   A coarse, non-hovering pointer on a screen at least 768 px wide and 600 px
+   tall keeps the desktop workspace (rails, mode tabs, dock) but sized for a
+   finger: every control reaches the 44 px minimum touch target, the rails are a
+   fixed finger-friendly width instead of a precise corner drag, and tips that
+   would need hover come up on a long-press (tipLayer.ts) or keyboard focus.
+   Mirrors LARGE_TOUCH_LAYOUT_QUERY in src/platform/runtimeFormFactor.ts. Phones
+   (the MOBILE_LAYOUT_QUERY layout) never match: they are under 768 px wide or
+   under 501 px tall. A fine or hovering pointer never matches either. */
+@media (pointer: coarse) and (hover: none) and (min-width: 768px) and (min-height: 600px) {
+  :root { --olv-rail-width: 320px; }
+  .olv-left-panels button, .olv-left-panels summary, .olv-left-panels select,
+  .olv-left-panels input:not([type='checkbox']):not([type='radio']),
+  .olv-right-rail button, .olv-right-rail summary, .olv-right-rail select,
+  .olv-right-rail input:not([type='checkbox']):not([type='radio']),
+  .olv-dock button, .olv-measure-bar button, .olv-mkind,
+  .olv-ws-tab, .olv-tl-chip, .olv-chip, .olv-mp-action,
+  .olv-pc-dismiss, .olv-colorbar-close, .olv-lasso-toast-action,
+  .olv-modal button, .olv-help-overlay button,
+  .olv-github, .olv-theme-toggle, .olv-quality-button, .olv-nav-hud-close, .olv-cam-chip, .olv-mp-del {
+    min-height: 44px; min-width: 44px;
+  }
+  .olv-chip, .olv-tl-chip, .olv-ws-tab, .olv-github, .olv-cam-chip { display: inline-flex; align-items: center; justify-content: center; }
+  .olv-left-panels summary, .olv-right-rail summary { display: flex; align-items: center; }
+  .olv-mp-footer { flex-wrap: wrap; }
+  .olv-dock .olv-tool { min-height: 48px; padding-inline: 12px; }
+  .olv-rail-tab, .olv-right-rail-tab { width: 44px; height: 88px; }
+  .olv-rail-tab:hover, .olv-right-rail-tab:hover { width: 44px; }
+  /* The wider right-rail tab would sit under the colour legend; clear it. */
+  .olv-colorbar { right: calc(var(--olv-right-rail-width, 232px) + 66px); }
+  /* No precise drags: the rail width is fixed above, so the corner grip goes,
+     and the workbench splitter gets a finger-wide strip. */
+  .olv-mp-resize { display: none; }
+  .olv-workbench-splitter { height: 24px; top: -8px; }
+  /* Long-press tips: 70-measurement-panels.css hides the layer on every
+     no-hover screen; here tipLayer.ts shows it on purpose. */
+  .olv-tip-layer { display: block; font-size: var(--text-sm); padding: 8px 12px; }
+}
