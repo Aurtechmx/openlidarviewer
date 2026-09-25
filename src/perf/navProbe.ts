@@ -30,6 +30,8 @@
  *   (or the end of the run when it never does). The `active` block's frame
  *   statistics cover the frames in it that are not idle wakes; the top-level
  *   frame statistics cover the whole run and are kept as a secondary view.
+ * - EDL state: the shading on screen, i.e. that of the last drawn frame; a
+ *   frame that drew nothing does not change it.
  * - post-input EDL flaps: EDL switched on and then off again after the last
  *   input. Time to stationary quality: from the last input to the last
  *   quality transition after it (0 when there is none).
@@ -380,7 +382,8 @@ export class NavProbe implements NavProbeSink {
 
   frameEnd(t: number, drawn: boolean, edl: boolean, dpr: number, phase: string): void {
     const i = this._f.slot();
-    const edlOn = edl ? 1 : 0;
+    // EDL is what is on screen: a frame that drew nothing leaves the last drawn frame's shading up.
+    const edlOn = drawn || this._prevEdl < 0 ? (edl ? 1 : 0) : this._prevEdl;
     const ph = phaseCode(phase);
     this._tEnd[i] = t;
     this._raf[i] = this._curRaf;

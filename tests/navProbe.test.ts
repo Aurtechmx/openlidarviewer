@@ -281,6 +281,16 @@ describe('active window', () => {
     expect(validateJsonSchema(SCHEMA, buildNavJankRecord(ENV, [{ name: 'a', summary: s }]))).toEqual([]);
   });
 
+  it('takes the EDL state from drawn frames only', () => {
+    const { probe } = manual();
+    frame(probe, 100, 16, true, true);
+    probe.idleWake('heartbeat');
+    frame(probe, 358, 258, false, false);
+    frame(probe, 374, 16, true, false);
+    const s = probe.summarize();
+    expect(s.quality.events.filter((e) => e.kind === 'edl')).toEqual([{ t: 374, kind: 'edl', from: 1, to: 0 }]);
+  });
+
   it('is empty without input and runs to the end when the loop never sleeps', () => {
     const { probe } = manual();
     frame(probe, 100, 16);
