@@ -91,7 +91,7 @@ Assertions before publishing:
       `test-evidence.json`, `gate.log`, `gate.log.sha256`, `SHA256SUMS`)
       separately.
 - [ ] No pre-release working notes or private readiness files are published
-      (`docs/_audit/`, `*READINESS*`, private notes stay export-ignored).
+      (`*READINESS*` files and private notes stay out of the repository).
 
 ## 6. Tag + push
 

@@ -289,36 +289,6 @@ const fact = (name, value) => {
   fact(`positions reads [${GATE_SCOPE.id}, lint:position-access scope]`, gateScan.total);
   fact(`positions read files [${GATE_SCOPE.id}, lint:position-access scope]`, gateScan.fileCount);
 
-  // This plan is `export-ignore`d (.gitattributes), so it is present in the
-  // repository and ABSENT from the published source archive. Reading it
-  // unguarded made the whole release gate ENOENT when run from that archive —
-  // the gate passed for us and failed for anyone who downloaded the source.
-  // A cross-check against a document that ships nowhere is a repo-only check:
-  // skip it when the document is absent, and say so rather than passing
-  // silently. Fact 7 below already guards its document this way.
-  const PLAN = 'docs/architecture/float64-frame-migration-plan.md';
-  const planText = existsSync(resolve(ROOT, PLAN)) ? read(PLAN) : null;
-  if (planText === null) {
-    notes.push(`${PLAN} is not present (export-ignored); its position-read claim was not cross-checked.`);
-  }
-  const claim = planText?.match(/([\d,]+)\s+direct\s+`?\.positions`?\s+reads\s+across\s+(\d+)\s+files/i);
-  if (claim) {
-    const statedReads = Number(claim[1].replace(/,/g, ''));
-    const statedFiles = Number(claim[2]);
-    if (statedReads !== reads) {
-      problems.push(
-        `${PLAN}: states ${claim[1]} direct .positions reads; the tree has ${reads} `
-        + `in the plan's scope (${PLAN_SCOPE.label}). `
-        + `Run "npm run lint:positions-reads" for the live list.`,
-      );
-    }
-    if (statedFiles !== files.size) {
-      problems.push(
-        `${PLAN}: states ${statedFiles} files with direct .positions reads; the tree has `
-        + `${files.size} in the plan's scope (${PLAN_SCOPE.label}).`,
-      );
-    }
-  }
 }
 
 // ── Fact 9: module-graph facts a CURRENT release document states in prose ───

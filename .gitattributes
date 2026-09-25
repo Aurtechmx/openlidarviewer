@@ -38,16 +38,6 @@
 # archive it ships in.
 docs/release/** -export-ignore
 
-# Exclude internal engineering docs (version-pinned plans, phase audits, PR
-# writeups) from `git archive` source exports. They stay tracked for developers
-# and history; they are not part of the public release artifact.
-docs/_audit/ export-ignore
-docs/architecture/v0.5.8-cleanup-plan.md export-ignore
-docs/architecture/float64-frame-migration-plan.md export-ignore
-docs/gate2-per-cloud-filter-plan.md export-ignore
-docs/v0.5.7-plan.md export-ignore
-docs/v0.5.7-object-e57-capture-lens.md export-ignore
-
 # Keep pre-release working notes out of `git archive` source exports.
 #
 # READINESS_REPORT_* lists the open blockers and the steps that must happen
@@ -70,8 +60,8 @@ REPRODUCIBILITY_v0.6.0-alpha.1.md export-ignore
 # version's. Every prerelease notes/limitations/reproducibility/validation
 # file stays in git history and on GitHub, but out of the deposit, so a
 # researcher is never unsure which evidence applies to v0.6.0 (and the alpha.2
-# validation report's link into docs/_audit/, itself export-ignored, cannot
-# dangle in the archive).
+# validation report's link to a since-removed working note cannot dangle in
+# the archive).
 RELEASE_NOTES_v0.6.0-alpha.*.md export-ignore
 KNOWN_LIMITATIONS_v0.6.0-alpha.*.md export-ignore
 REPRODUCIBILITY_v0.6.0-alpha.*.md export-ignore
@@ -79,10 +69,6 @@ VALIDATION_REPORT_v0.6.0-alpha.*.md export-ignore
 # The docs-site prerelease pages are the same history — one page per release,
 # and the deposit carries only the shipped one.
 docs-site/releases/v0.6.0-alpha.*.md export-ignore
-
-# Release planning: goals, baselines and sequencing for a cut. Same class as
-# a readiness report - what we intend to do and why, not what the release is.
-docs/architecture/stabilization-release-plan.md export-ignore
 
 # Superseded standalone release notes from earlier lines (v0.4.x, v0.5.x) are
 # development history, not part of the v0.6.0 deposit. VALIDATION_REPORT_v0.5.9.md
@@ -97,14 +83,6 @@ docs-site/releases/v0.4.*.md export-ignore
 docs-site/releases/v0.5.*.md export-ignore
 # The release checklist is an internal process aid, not scholarly content.
 docs/project/RELEASE_CHECKLIST.md export-ignore
-
-# Internal coordinate-integrity roadmap (findings + repair order), not a
-# reviewer-facing document. Kept out of the deposit like the other plans.
-docs/architecture/coordinate-integrity-roadmap.md export-ignore
-
-# Internal working notes and draft design specs, not reviewer-facing
-# documentation. Kept in git history; excluded from the scholarly deposit.
-docs/superpowers/ export-ignore
 
 # Keep TypeScript/source as text so a stray byte never flips a diff to binary
 *.ts text

@@ -302,7 +302,6 @@ function main() {
    */
   const COUNT_DOCS = [
     INVENTORY,
-    'docs/architecture/coordinate-integrity-roadmap.md',
     'src/geo/SpatialContext.ts',
   ];
   const TOTAL_CLAIM = /~?(\d+)\s+consumers?\b/gi;

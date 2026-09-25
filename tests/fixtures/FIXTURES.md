@@ -45,7 +45,7 @@ Same cube mesh as tiny.obj, exported as binary glTF.
 
 ## Gate 2 — per-cloud elevation filter (gate2-*)
 
-Fixtures for `docs/gate2-per-cloud-filter-plan.md` Stage B. The elevation filter converts a world-space window into attribute space with ONE origin and ONE up-axis for the whole scene (`Viewer.setElevationFilter`), so a second cloud with a different origin, or a different up-axis format, clips at the wrong world height. These pairs make that visible with a concrete world window and the point-index math for both the correct (per-cloud) answer and today's shared-origin/shared-axis answer.
+Fixtures for the per-cloud elevation filter. The elevation filter converts a world-space window into attribute space with ONE origin and ONE up-axis for the whole scene (`Viewer.setElevationFilter`), so a second cloud with a different origin, or a different up-axis format, clips at the wrong world height. These pairs make that visible with a concrete world window and the point-index math for both the correct (per-cloud) answer and today's shared-origin/shared-axis answer.
 
 ### gate2-origin-a.las / gate2-origin-b.las — different origins, same up-axis
 
