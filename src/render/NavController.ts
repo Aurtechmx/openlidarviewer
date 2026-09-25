@@ -52,7 +52,7 @@ import {
   isDollySettled,
 } from './wheelDollyMath';
 import { readDevFlags } from '../perf/devFlags';
-import { perFrameToDt } from './orbitFeel';
+import { dollyVelocityAtRest, glideAtRest, orbitVelocityAtRest, perFrameToDt, type GlideView } from './orbitFeel';
 import { navDrive } from '../perf/navProbeHook';
 import { loadNavDriver } from '../perf/navDriverLoader';
 
@@ -111,6 +111,8 @@ const MAX_DOLLY_VELOCITY = 3;
 const WHEEL_LINE_HEIGHT_PX = 16;
 /** Arrow-key orbit angular speed, radians per second (~4 s for a full turn). */
 const ORBIT_KEY_SPEED = 1.6;
+/** Responsiveness of the arrow-key orbit velocity (per second): it eases toward the target as exp(-rate * t). */
+const ORBIT_KEY_RATE = 8;
 
 /** The OS-level motion preference, read at tween start; false where unreadable. */
 function prefersReducedMotion(): boolean {
@@ -602,6 +604,7 @@ export class NavController {
       this._stepWheelDolly(step);
       // Damping is tuned per 60 Hz frame; scale it to this frame's length.
       this._dampingBase ??= this._controls.dampingFactor;
+      this._restGlide(this._dampingBase);
       this._controls.dampingFactor = perFrameToDt(this._dampingBase, dt);
       this._controls.update();
       return;
@@ -691,6 +694,11 @@ export class NavController {
    */
   private _stepWheelDolly(dt: number): void {
     if (!this._wheelDolly || isDollySettled(this._dollyVelocity)) return;
+    // The friction never reaches zero; stop the tail by the shared rest rule.
+    if (dollyVelocityAtRest(this._dollyVelocity, WHEEL_FRICTION, this._glideView())) {
+      this._dollyVelocity = 0;
+      return;
+    }
     const s = stepDolly(this._dollyVelocity, dt, WHEEL_FRICTION);
     this._dollyVelocity = s.velocity;
     if (s.scale === 1) return;
@@ -844,8 +852,15 @@ export class NavController {
       this._orbitVel,
       [targetYaw, targetPitch, 0],
       step,
-      8,
+      ORBIT_KEY_RATE,
     );
+    // Keys up: the easing never reaches zero, so stop the tail by the shared rest rule.
+    const keysUp = !this._orbitKeys.left && !this._orbitKeys.right && !this._orbitKeys.up && !this._orbitKeys.down;
+    if (keysUp) {
+      const speed = Math.hypot(this._orbitVel[0], this._orbitVel[1]);
+      const distance = this._camera.position.distanceTo(this._controls.target);
+      if (speed > 0 && orbitVelocityAtRest(speed, ORBIT_KEY_RATE, distance, this._glideView())) this._orbitVel = [0, 0, 0];
+    }
 
     const yaw = this._orbitVel[0] * step;
     const pitch = this._orbitVel[1] * step;
@@ -1336,6 +1351,35 @@ export class NavController {
       // Already released — ignore.
     }
     this._orbitPointerId = null;
+  }
+
+  /** The viewport the rest rule projects through, or null before layout. */
+  private _glideView(): GlideView | null {
+    return this._canvas.clientHeight > 0
+      ? { heightPx: this._canvas.clientHeight, fovYRad: THREE.MathUtils.degToRad(this._camera.fov) }
+      : null;
+  }
+
+  /**
+   * Bring a released drag's glide to rest: drop OrbitControls' pending
+   * rotation and pan once `glideAtRest` says the travel left is below what
+   * the loop still draws, so the camera stops instead of creeping on the idle
+   * heartbeat. Only between gestures; a drag in progress is untouched.
+   */
+  private _restGlide(dampingFactor: number): void {
+    const c = this._controls as unknown as {
+      state?: number;
+      _sphericalDelta?: { theta: number; phi: number };
+      _panOffset?: THREE.Vector3;
+    };
+    if (c.state !== -1 || !c._sphericalDelta || !c._panOffset) return;
+    const distance = this._camera.position.distanceTo(this._controls.target);
+    const rest = glideAtRest(c._sphericalDelta, c._panOffset, distance, dampingFactor, this._glideView());
+    if (rest.rotation) {
+      c._sphericalDelta.theta = 0;
+      c._sphericalDelta.phi = 0;
+    }
+    if (rest.pan) c._panOffset.set(0, 0, 0);
   }
 
   /**
