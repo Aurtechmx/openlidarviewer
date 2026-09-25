@@ -34,8 +34,9 @@ export function createNavProbeHandle(win: Window, probe = new NavProbe()): NavPr
   };
 }
 
-/** Install the hook on `win` and start recording at once. */
+/** Install the hook on `win` and start recording at once; a second call returns the first handle. */
 export function installNavProbe(win: Window & { __olvNavProbe?: NavProbeHandle }): NavProbeHandle {
+  if (win.__olvNavProbe) return win.__olvNavProbe;
   const handle = createNavProbeHandle(win);
   win.__olvNavProbe = handle;
   handle.start();

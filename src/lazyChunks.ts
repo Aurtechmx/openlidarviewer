@@ -368,9 +368,6 @@ export const loadLegacyClassGuard = () => import('./convert/legacyClassGuard');
 export const loadStreamingBenchmark = () =>
   import('./render/streaming/streamingBenchmark');
 
-/** Load the navigation frame probe (`?benchmark=nav` only). */
-export const loadNavProbe = () => import('./perf/navProbeInstall');
-
 /** Load the instrumented RangeSource wrapper (network-bytes accounting). */
 export const loadInstrumentedRangeSource = () =>
   import('./io/range/InstrumentedRangeSource');

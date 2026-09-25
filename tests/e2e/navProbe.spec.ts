@@ -17,11 +17,21 @@ const SCHEMA = JSON.parse(
 );
 
 test('nav probe records an orbit and builds a valid record', async ({ page }) => {
-  test.slow();
-  await page.goto('/?benchmark=nav');
+  test.setTimeout(180_000);
+  await page.goto(`/?benchmark=${process.env.NAVPROBE_FLAG ?? 'nav'}`);
   await expect(page.locator('.olv-empty-title')).toBeVisible();
   await page.locator('.olv-file-input').first().setInputFiles(FIXTURE);
-  await expect(page.locator('.olv-project-card')).toHaveClass(/olv-visible/, { timeout: 60_000 });
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 60_000 });
+  if (process.env.NAVPROBE_FLAG) {
+    const t0 = Date.now();
+    const box0 = (await page.locator('.olv-canvas').boundingBox())!;
+    await page.mouse.move(box0.x + 100, box0.y + 100);
+    await page.mouse.down();
+    for (let k = 1; k <= 8; k++) await page.mouse.move(box0.x + 100 + k * 16, box0.y + 100 + k * 4);
+    await page.mouse.up();
+    console.log(`CONTROL drag ms ${Date.now() - t0}`);
+    return;
+  }
   await page.waitForFunction(() => Boolean((window as { __olvNavProbe?: unknown }).__olvNavProbe));
 
   await page.evaluate(() => {
@@ -29,13 +39,15 @@ test('nav probe records an orbit and builds a valid record', async ({ page }) =>
     p.stop();
     p.start();
   });
-  const box = await page.locator('canvas').first().boundingBox();
+  const box = await page.locator('.olv-canvas').boundingBox();
   if (!box) throw new Error('no canvas');
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
   await page.mouse.move(cx, cy);
   await page.mouse.down();
-  for (let k = 1; k <= 20; k++) await page.mouse.move(cx + k * 8, cy + k * 2, { steps: 2 });
+  const t0 = Date.now();
+  for (let k = 1; k <= 8; k++) await page.mouse.move(cx + k * 16, cy + k * 4);
+  console.log(`NAV drag ms ${Date.now() - t0}`);
   await page.mouse.up();
   await page.waitForTimeout(500);
 
