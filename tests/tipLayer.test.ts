@@ -110,6 +110,12 @@ class FakeElement {
   getAttribute(k: string): string | null {
     return this.attrs[k] ?? null;
   }
+  hasAttribute(k: string): boolean {
+    return k in this.attrs;
+  }
+  removeAttribute(k: string): void {
+    delete this.attrs[k];
+  }
   appendChild(child: FakeElement): void {
     child.parent = this;
   }
@@ -121,12 +127,12 @@ class FakeElement {
     }
     return false;
   }
-  /** Only ever asked for `[data-tip]` in this module — walk up for it. */
+  /** Only ever asked for `[data-tip], [title]` in this module — walk up for it. */
   closest(selector: string): FakeElement | null {
-    if (selector !== '[data-tip]') return null;
+    if (selector !== '[data-tip], [title]') return null;
     let n: FakeElement | null = this;
     while (n) {
-      if (n.dataset.tip) return n;
+      if (n.dataset.tip || 'title' in n.attrs) return n;
       n = n.parent;
     }
     return null;
@@ -337,5 +343,70 @@ describe('installTipLayer', () => {
     env.fire('pointerover', { target: anchor, pointerType: 'mouse' });
     const layer = env.layer();
     expect(layer.textContent).toBe('Download the flow rasters as a ZIP.');
+  });
+
+  function anchorWithTitle(title: string): FakeElement {
+    const el = new FakeElement('button');
+    el.setAttribute('title', title);
+    el.rect = { top: 100, left: 100, right: 150, bottom: 120, width: 50, height: 20 };
+    return el;
+  }
+
+  it('falls back to a native title on hover, lifting it while shown and restoring it on hide', () => {
+    const anchor = anchorWithTitle('Frame the whole scan.');
+    env.fire('pointerover', { target: anchor, pointerType: 'mouse' });
+    const layer = env.layer();
+    expect(layer.hasClass('olv-tip-layer--visible')).toBe(true);
+    expect(layer.textContent).toBe('Frame the whole scan.');
+    expect(anchor.hasAttribute('title')).toBe(false); // no double native tooltip
+    env.fire('pointerout', { target: anchor, relatedTarget: null });
+    expect(layer.hasClass('olv-tip-layer--visible')).toBe(false);
+    expect(anchor.getAttribute('title')).toBe('Frame the whole scan.');
+  });
+
+  it('keeps the lifted-title anchor when the pointer moves onto its child', () => {
+    const outer = anchorWithTitle('Outer.');
+    const anchor = anchorWithTitle('Inner.');
+    anchor.parent = outer;
+    const child = new FakeElement('span');
+    child.parent = anchor;
+    env.fire('pointerover', { target: anchor, pointerType: 'mouse' });
+    env.fire('pointerover', { target: child, pointerType: 'mouse' });
+    expect(env.layer().textContent).toBe('Inner.');
+    expect(outer.getAttribute('title')).toBe('Outer.');
+  });
+
+  it('shows a title-only control on keyboard focus without removing its title', () => {
+    const anchor = anchorWithTitle('Frame the whole scan.');
+    anchor.focusVisible = true;
+    env.fire('focusin', { target: anchor });
+    expect(env.layer().textContent).toBe('Frame the whole scan.');
+    expect(anchor.getAttribute('title')).toBe('Frame the whole scan.');
+  });
+
+  it('restores the previous anchor title when hover moves straight to another control', () => {
+    const a = anchorWithTitle('A.');
+    const b = anchorWithTitle('B.');
+    env.fire('pointerover', { target: a, pointerType: 'mouse' });
+    env.fire('pointerover', { target: b, pointerType: 'mouse' });
+    expect(a.getAttribute('title')).toBe('A.');
+    expect(b.hasAttribute('title')).toBe(false);
+    expect(env.layer().textContent).toBe('B.');
+  });
+
+  it('does not clobber a title the app rewrote while the tip was shown', () => {
+    const anchor = anchorWithTitle('Old.');
+    env.fire('pointerover', { target: anchor, pointerType: 'mouse' });
+    anchor.setAttribute('title', 'New.');
+    hideTip();
+    expect(anchor.getAttribute('title')).toBe('New.');
+  });
+
+  it('prefers data-tip over title and leaves the title in place', () => {
+    const anchor = anchorWithTip('Styled.');
+    anchor.setAttribute('title', 'Native.');
+    env.fire('pointerover', { target: anchor, pointerType: 'mouse' });
+    expect(env.layer().textContent).toBe('Styled.');
+    expect(anchor.getAttribute('title')).toBe('Native.');
   });
 });

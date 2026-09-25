@@ -50,6 +50,9 @@ export class FakeEl {
   setAttribute(k: string, v: string): void {
     this.attrs[k] = v;
   }
+  getAttribute(k: string): string | null {
+    return this.attrs[k] ?? null;
+  }
   append(...kids: (FakeEl | string)[]): void {
     for (const k of kids) if (typeof k !== 'string') this.children.push(k);
   }

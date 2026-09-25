@@ -127,4 +127,49 @@ test.describe('control explanations', () => {
     await expect(heightChip).toBeVisible();
     await expect(heightChip).toHaveAttribute('title', /./);
   });
+
+  test('a title-only control gets the styled tip on hover without a native double, and on keyboard focus', async ({ page }) => {
+    test.slow();
+    await suppressOnboardingTour(page);
+    await page.goto('/');
+    await page.locator('.olv-file-input').first().setInputFiles(FIXTURE);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 60_000 });
+
+    const frame = page.getByRole('button', { name: /^Frame$/ });
+    await expect(frame).toBeVisible();
+    const title = await frame.getAttribute('title');
+    expect(title, 'Frame carries a native title').toBeTruthy();
+    expect(await frame.getAttribute('data-tip'), 'Frame has no data-tip of its own').toBeNull();
+
+    const tipLayer = page.locator('.olv-tip-layer');
+    await expect(async () => {
+      await frame.hover();
+      await expect(tipLayer).toHaveClass(/olv-tip-layer--visible/);
+    }).toPass();
+    await expect(tipLayer).toHaveText(title ?? '');
+    // Lifted while the styled tip shows, so the browser's own tooltip can't double it.
+    await expect(frame).not.toHaveAttribute('title', /./);
+
+    await page.mouse.move(0, 0);
+    await expect(tipLayer).not.toHaveClass(/olv-tip-layer--visible/);
+    await expect(frame).toHaveAttribute('title', title ?? '');
+
+    await frame.focus();
+    await expect(tipLayer).toHaveClass(/olv-tip-layer--visible/);
+    await expect(tipLayer).toHaveText(title ?? '');
+    await expect(frame).toHaveAttribute('title', title ?? '');
+  });
+
+  test('the header Guide link explains itself with a styled tip', async ({ page }) => {
+    await suppressOnboardingTour(page);
+    await page.goto('/');
+    const guide = page.locator('a.olv-github', { hasText: 'Guide' });
+    await expect(guide).toHaveAttribute('data-tip', /./);
+    const tipLayer = page.locator('.olv-tip-layer');
+    await expect(async () => {
+      await guide.hover();
+      await expect(tipLayer).toHaveClass(/olv-tip-layer--visible/);
+    }).toPass();
+    await expect(tipLayer).toHaveText((await guide.getAttribute('data-tip')) ?? '');
+  });
 });

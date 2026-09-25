@@ -73,7 +73,11 @@ export function renderProvenance(
     el('span', { className: 'olv-prov-override-label', text: 'Override:' }),
   );
 
-  const select = el('select', { className: 'olv-prov-override-select' });
+  const select = el('select', {
+    className: 'olv-prov-override-select',
+    ariaLabel: 'Capture type override',
+    tip: 'Set how this scan was captured if the automatic guess is wrong.',
+  });
   const options: Array<[CaptureType, string]> = [
     ['iphone-lidar', 'iPhone / handheld'],
     ['drone-lidar', 'Drone / UAV ALS'],

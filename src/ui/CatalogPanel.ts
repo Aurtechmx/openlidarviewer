@@ -175,6 +175,7 @@ export class CatalogPanel {
     this._select = el('select', {
       className: 'olv-catalog-select',
       ariaLabel: 'Curated public LiDAR location',
+      tip: 'Stream a verified public LiDAR dataset instead of opening a file.',
     }) as HTMLSelectElement;
     // Leading placeholder option so first paint reads as a prompt, not
     // as an already-picked default.

@@ -18,6 +18,12 @@
  * focus, not a mouse-driven focus). Hidden on Escape, `pointerleave` /
  * `pointerout` off the anchor, `focusout` off the anchor, `scroll`, and
  * `resize` — a stale position after any of those is worse than no tip.
+ *
+ * A control with only a native `title` (no `data-tip`) gets the same styled
+ * tip. On mouse hover its `title` is lifted off for as long as the tip shows
+ * (so the browser's own tooltip does not double up) and put back on hide. On
+ * keyboard focus the `title` stays: browsers show no native tooltip there,
+ * and it is still the control's accessible description.
  */
 
 import { computeTipPosition, type TipPosition } from './tipPositioning';
@@ -28,6 +34,21 @@ let layerEl: HTMLElement | null = null;
 // simpler than teaching the shim one just for this comparison.
 let layerDoc: Document | null = null;
 let activeAnchor: HTMLElement | null = null;
+/** A `title` lifted off `activeAnchor` while its tip shows; restored on hide. */
+let liftedTitle: string | null = null;
+
+const TIP_SELECTOR = '[data-tip], [title]';
+
+function tipText(anchor: HTMLElement): string {
+  return anchor.dataset.tip || liftedTitle || anchor.getAttribute('title') || '';
+}
+
+function restoreTitle(): void {
+  if (activeAnchor && liftedTitle !== null && !activeAnchor.hasAttribute('title')) {
+    activeAnchor.setAttribute('title', liftedTitle);
+  }
+  liftedTitle = null;
+}
 
 function ensureLayer(doc: Document): HTMLElement {
   if (layerEl && layerDoc === doc) return layerEl;
@@ -64,9 +85,14 @@ function reposition(doc: Document): void {
   applyPosition(layerEl, pos);
 }
 
-function showTip(doc: Document, anchor: HTMLElement): void {
-  const text = anchor.dataset.tip;
+function showTip(doc: Document, anchor: HTMLElement, fromPointer: boolean): void {
+  if (anchor !== activeAnchor) restoreTitle();
+  const text = tipText(anchor);
   if (!text) return;
+  if (fromPointer && !anchor.dataset.tip && liftedTitle === null) {
+    liftedTitle = text;
+    anchor.removeAttribute('title');
+  }
   const layer = ensureLayer(doc);
   layer.textContent = text;
   layer.classList.add('olv-tip-layer--visible');
@@ -77,15 +103,22 @@ function showTip(doc: Document, anchor: HTMLElement): void {
 /** Hide the layer. Exported so Escape-dismiss and other callers can force it
  * shut without reaching into module state. */
 export function hideTip(): void {
+  restoreTitle();
+  activeAnchor = null;
   if (!layerEl) return;
   layerEl.classList.remove('olv-tip-layer--visible');
-  activeAnchor = null;
 }
 
 function closestTipAnchor(doc: Document, target: EventTarget | null): HTMLElement | null {
   const view = doc.defaultView;
   if (!view || !(target instanceof view.HTMLElement)) return null;
-  return target.closest('[data-tip]');
+  const found = target.closest<HTMLElement>(TIP_SELECTOR);
+  // The active anchor's `title` may be lifted, so `closest` can skip past it
+  // to an ancestor; a target still inside it keeps it as the anchor.
+  if (activeAnchor && activeAnchor.contains(target) && (!found || found.contains(activeAnchor))) {
+    return activeAnchor;
+  }
+  return found;
 }
 
 function prefersNoHover(doc: Document): boolean {
@@ -107,7 +140,7 @@ export function installTipLayer(doc: Document): void {
     if (pe.pointerType && pe.pointerType !== 'mouse') return; // touch: no hover tip
     if (prefersNoHover(doc)) return;
     const anchor = closestTipAnchor(doc, event.target);
-    if (anchor) showTip(doc, anchor);
+    if (anchor) showTip(doc, anchor, true);
   });
 
   doc.addEventListener('pointerout', (event) => {
@@ -131,7 +164,7 @@ export function installTipLayer(doc: Document): void {
     if (!anchor) return;
     const focusVisible =
       typeof anchor.matches === 'function' ? anchor.matches(':focus-visible') : true;
-    if (focusVisible) showTip(doc, anchor);
+    if (focusVisible) showTip(doc, anchor, false);
   });
 
   doc.addEventListener('focusout', (event) => {

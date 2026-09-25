@@ -210,6 +210,7 @@ export function buildExportDeliverables(cb: ExportDeliverablesCallbacks): Export
   const reportSelect = el('select', {
     className: 'olv-report-select',
     ariaLabel: 'PDF report template',
+    tip: 'Choose the layout of the PDF report.',
   }) as HTMLSelectElement;
   for (const t of REPORT_TEMPLATES) {
     const option = el('option', { text: t.label, title: t.description });

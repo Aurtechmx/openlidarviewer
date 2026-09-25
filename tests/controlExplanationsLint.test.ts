@@ -110,6 +110,12 @@ describe('findUnexplainedButtons', () => {
       ["const head = el('div', { className: 'olv-panel-head' });", "head.setAttribute('role', 'button');"]],
     ['a bare document.createElement("button") with no follow-up',
       ["const b = document.createElement('button');", "b.textContent = 'Close';"]],
+    ['a select with ariaLabel alone',
+      ["const s = el('select', { className: 'olv-report-select', ariaLabel: 'Navigation preset' });"]],
+    ['a link with ariaLabel alone',
+      ["const a = el('a', { text: 'Guide', href: 'x', ariaLabel: 'User guide' });"]],
+    ['a bare createElement("select") with only a deferred aria-label',
+      ["const select = document.createElement('select');", "select.setAttribute('aria-label', 'Target classification');"]],
   ];
   it.each(flagged)('flags %s', (_name, lines) => {
     expect(findUnexplainedButtons(lines.join('\n'))).toEqual([1]);
@@ -128,6 +134,14 @@ describe('findUnexplainedButtons', () => {
       ["const b = document.createElement('button');", "b.title = 'Close this dialog.';"]],
     ['document.createElement("button") with a deferred dataset.tip',
       ["const b = document.createElement('button');", "b.dataset.tip = 'Close this dialog.';"]],
+    ['a select with ariaLabel plus a tip',
+      ["const s = el('select', { ariaLabel: 'Navigation preset', tip: 'Choose how dragging orbits.' });"]],
+    ['a link with ariaLabel plus a tip',
+      ["const a = el('a', { text: 'Guide', ariaLabel: 'User guide', tip: 'Open the guide.' });"]],
+    ['a bare createElement("select") with aria-label and a deferred dataset.tip',
+      ["const select = document.createElement('select');", "select.setAttribute('aria-label', 'Class');", "select.dataset.tip = 'Target class.';"]],
+    ['a select with no ariaLabel (labelled by a wrapping <label>)',
+      ["const s = el('select', { className: 'olv-x' });"]],
   ];
   it.each(accepted)('accepts %s', (_name, lines) => {
     expect(findUnexplainedButtons(lines.join('\n'))).toEqual([]);

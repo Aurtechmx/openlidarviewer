@@ -99,6 +99,7 @@ export function renderCrs(
   const select = el('select', {
     className: 'olv-crs-select',
     ariaLabel: 'Coordinate reference system',
+    tip: 'Keep the detected coordinate system, pick another, or treat the coordinates as local.',
   }) as HTMLSelectElement;
   const optDetected = document.createElement('option');
   optDetected.value = '__detected__';
