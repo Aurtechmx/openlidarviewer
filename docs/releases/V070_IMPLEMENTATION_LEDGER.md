@@ -6561,3 +6561,19 @@ corpus has nothing to screenshot. There is still no phone, tablet or WebKit
 device; the probe is one Chromium session on one laptop. The ten
 deterministic grid scenes this account built stand as they were: a rule
 check, not a substitute for either gap.
+
+### L109 · PARTIAL · SCIENTIFIC
+
+One of the three deliberate omissions rests on a claim L114 has since
+corrected. This account said no runner here exposes a WebGPU adapter;
+`docs/continuity-field.md` itself now says otherwise at lines 63-67, because
+the browser this project previews in does, and
+`validation/renderer-capability/` records it. Frame time is still unmeasured,
+but the reason is that the field is not wired into a renderer, not that no
+GPU is reachable, which is the distinction L114's own account draws.
+
+The other two omissions stand as written: no release notes while the tree is
+untested, and `limitations.md` left alone rather than describing a limitation
+of code nothing runs. There is still no phone, tablet or WebKit device; one
+Chromium session on one machine narrows nothing about them, correction or
+not.
