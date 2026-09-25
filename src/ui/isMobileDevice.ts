@@ -67,6 +67,6 @@ export function isMobileDevice(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
   return classifyMobile(
     window.matchMedia(MOBILE_LAYOUT_QUERY).matches,
-    window.matchMedia('(pointer: coarse) and (hover: none)').matches,
+    isTouchFirstDevice(),
   );
 }

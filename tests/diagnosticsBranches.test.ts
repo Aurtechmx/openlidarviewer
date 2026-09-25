@@ -136,7 +136,7 @@ describe('copyDiagnostics', () => {
     await copyDiagnostics(() => undefined, (m) => notes.push(m));
     expect(notes).toEqual([DIAGNOSTICS_COPIED]);
     const report = JSON.parse(String((writeText.mock.calls as unknown as string[][])[0][0]));
-    expect(Object.keys(report)).toEqual(['schema', 'build', 'browser', 'platform', 'render', 'source', 'resident', 'errors']);
+    expect(Object.keys(report)).toEqual(['schema', 'build', 'browser', 'platform', 'render', 'source', 'resident', 'errors', 'runtime']);
     expect(report.render.backend).toBeNull();
   });
 

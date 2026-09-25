@@ -24,6 +24,8 @@ export const LAZY_ONLY = [
   'src/ui/fieldSimulation/',
   'src/app/diagnostics/copyDiagnostics.ts',
   'src/app/diagnostics/errorLedger.ts',
+  'src/platform/capabilityProbe.ts',
+  'src/platform/runtimeFormFactor.ts',
   'src/render/deviceNotice.ts',
   'src/perf/navProbe.ts',
   'src/perf/navProbeHook.ts',

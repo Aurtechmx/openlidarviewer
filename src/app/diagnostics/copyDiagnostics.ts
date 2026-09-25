@@ -7,13 +7,16 @@
  * The report says what ran and how, never what was opened: build identity,
  * browser brand and major version, platform class, render backend, device tier,
  * pixel ratio, the source format, the streaming state, resident counts and the
- * error ledger. File names, URLs, coordinates and annotations are left out, and
+ * error ledger, and a runtime section (generic form factor plus the
+ * standards-only capability probe). File names, URLs, coordinates and annotations are left out, and
  * every free-text field passes through `ledgerToken`, which keeps only short
  * plain tokens.
  */
 import { BUILD_IDENTITY, type BuildIdentity } from '../../build/buildIdentity';
 import { deviceTier, type DeviceTier } from '../../render/deviceProfile';
 import { isMobileDevice } from '../../ui/isMobileDevice';
+import { probeCapabilities, type CapabilityReport, type ProbeGl } from '../../platform/capabilityProbe';
+import { runtimeFormFactor, type RuntimeFormFactor } from '../../platform/runtimeFormFactor';
 import { errorLedgerSnapshot, ledgerToken, type ErrorLedgerEntry } from './errorLedger';
 
 /** The Viewer surface the report reads. */
@@ -37,6 +40,13 @@ export interface DiagnosticsEnvironment {
   readonly deviceMemoryGB?: number;
   readonly hardwareConcurrency?: number;
   readonly devicePixelRatio: number;
+  /** Generic form factor and capability probe; absent when not probed. */
+  readonly runtime?: DiagnosticsRuntime;
+}
+
+export interface DiagnosticsRuntime {
+  readonly formFactor: RuntimeFormFactor;
+  readonly capabilities: CapabilityReport;
 }
 
 export interface DiagnosticsReport {
@@ -48,6 +58,7 @@ export interface DiagnosticsReport {
   readonly source: { readonly formats: string[]; readonly streaming: string | null };
   readonly resident: { readonly nodes: number | null; readonly points: number | null };
   readonly errors: ErrorLedgerEntry[];
+  readonly runtime: DiagnosticsRuntime | null;
 }
 
 const BROWSERS: ReadonlyArray<[string, RegExp]> = [
@@ -130,11 +141,39 @@ export function buildDiagnosticsReport(
       recoverable: e.recoverable === true,
       action: ledgerToken(e.action),
     })),
+    runtime: env.runtime ?? null,
   };
 }
 
+/**
+ * The renderer's own WebGL 2 context, only when the viewer runs on WebGL 2.
+ * `getContext('webgl2')` on a canvas that already holds a webgl2 context
+ * returns that same context, so nothing new is created. On WebGPU, or with no
+ * viewer yet, it returns null and the probe falls back to a throwaway context
+ * (asking the stage canvas before the viewer exists would claim it).
+ */
+function rendererGl(viewer: DiagnosticsViewer | null): ProbeGl | null {
+  if (!viewer || safely(() => viewer.activeBackend(), '') !== 'webgl2') return null;
+  const canvas = document.querySelector<HTMLCanvasElement>('canvas.olv-canvas');
+  return safely(() => (canvas?.getContext('webgl2') as ProbeGl | null) ?? null, null);
+}
+
+/** Probe the runtime section. Never throws. */
+export function browserRuntime(viewer: DiagnosticsViewer | null): DiagnosticsRuntime | undefined {
+  return safely(() => {
+    const backend = viewer ? safely(() => viewer.activeBackend(), '') : '';
+    return {
+      formFactor: runtimeFormFactor(),
+      capabilities: probeCapabilities({
+        existingGl: rendererGl(viewer),
+        backend: backend === 'webgpu' || backend === 'webgl2' ? backend : null,
+      }),
+    };
+  }, undefined);
+}
+
 /** Read the environment from the running browser. */
-export function browserEnvironment(): DiagnosticsEnvironment {
+export function browserEnvironment(viewer: DiagnosticsViewer | null = null): DiagnosticsEnvironment {
   const nav = navigator as Navigator & {
     userAgentData?: { brands?: Array<{ brand: string; version: string }> };
     deviceMemory?: number;
@@ -146,6 +185,7 @@ export function browserEnvironment(): DiagnosticsEnvironment {
     deviceMemoryGB: nav.deviceMemory,
     hardwareConcurrency: nav.hardwareConcurrency,
     devicePixelRatio: window.devicePixelRatio || 1,
+    runtime: browserRuntime(viewer),
   };
 }
 
@@ -160,7 +200,7 @@ export async function copyDiagnostics(
   writeText: (text: string) => Promise<void> = (text) => navigator.clipboard.writeText(text),
 ): Promise<void> {
   const viewer = safely(() => getViewer() ?? null, null);
-  const json = JSON.stringify(buildDiagnosticsReport(viewer, browserEnvironment()), null, 2);
+  const json = JSON.stringify(buildDiagnosticsReport(viewer, browserEnvironment(viewer)), null, 2);
   try {
     await writeText(json);
     notify(DIAGNOSTICS_COPIED);
