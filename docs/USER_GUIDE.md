@@ -71,6 +71,8 @@ There are also six standard views (top, front, side, and so on) and a toggle bet
 
 Keyboard and mouse. Press `?` any time for the full shortcut sheet. The ones worth knowing up front: `Cmd-K` (or `Ctrl-K`) opens a command palette that searches every tool and action, `Ctrl/Cmd-Z` undoes your last edit, right-clicking the scan opens a quick menu (focus here, frame, standard views), and holding `Space` while a tool is active lets you move the camera without putting the tool down. The full list is in [docs/navigation.md](navigation.md).
 
+To use the viewer with no connection, run Make available offline from the command palette or Help. It downloads the app files once (about 9 MB, the exact size is shown before it starts), and Remove offline copy deletes them.
+
 ---
 
 ## See the data

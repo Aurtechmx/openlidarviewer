@@ -1,9 +1,11 @@
 import { defineConfig, type PluginOption } from 'vite';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import liveSourceTransform from 'vite-plugin-javascript-obfuscator';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { requireBinaryOnPath } from './scripts/lib/binaryOnPath.mjs';
+import { buildSwPrecacheManifest } from './scripts/lib/swPrecacheManifest.mjs';
 import {
   workerExcludePatterns,
   workerChunkPins,
@@ -259,6 +261,24 @@ function thirdPartyNotices() {
     generateBundle(this: NoticeEmitter): void {
       const source = readFileSync(new URL('./docs/project/THIRD_PARTY_NOTICES.md', import.meta.url), 'utf8');
       this.emitFile({ type: 'asset', fileName: 'THIRD_PARTY_NOTICES.md', source });
+    },
+  };
+}
+
+/**
+ * Write `sw-precache.json` beside index.html: every content-hashed app bundle
+ * under assets/ (entry, lazy chunks, workers, wasm, fonts) with its byte size,
+ * plus the total. public/sw.js caches the list only when the user runs "Make
+ * available offline"; the page shows `totalBytes` before starting. Read from disk after the
+ * write so worker sub-build outputs are included.
+ */
+function swPrecacheManifest() {
+  return {
+    name: 'olv-sw-precache-manifest',
+    apply: 'build' as const,
+    writeBundle(options: { dir?: string }): void {
+      const dir = options.dir ?? 'dist';
+      writeFileSync(join(dir, 'sw-precache.json'), JSON.stringify(buildSwPrecacheManifest(dir)) + '\n');
     },
   };
 }
@@ -546,6 +566,7 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     chunkEmissionGuard() as PluginOption,
     thirdPartyNotices() as PluginOption,
+    swPrecacheManifest() as PluginOption,
     ...(mode === 'live' ? [liveSourceTransformPlugin() as PluginOption] : []),
     bundleAnalyzer(),
   ].filter(Boolean) as PluginOption[],
