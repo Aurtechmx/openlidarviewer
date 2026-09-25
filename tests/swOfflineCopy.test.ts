@@ -70,9 +70,9 @@ function harness(initial: Record<string, string[]>, opts: { failUrl?: string; ma
     listeners.get(type)!({ waitUntil: (p: Promise<unknown>) => (done = p), ...extra });
     await done;
   };
-  const message = async (data: object) => {
+  const message = async (data: object, origin = ORIGIN) => {
     const replies: Record<string, unknown>[] = [];
-    await fire('message', { data, ports: [{ postMessage: (m: Record<string, unknown>) => replies.push(m) }] });
+    await fire('message', { data, origin, ports: [{ postMessage: (m: Record<string, unknown>) => replies.push(m) }] });
     return replies;
   };
   return { stores, fetched, fire, message };
@@ -120,8 +120,15 @@ describe('service worker opt-in offline copy', () => {
 
   it('ignores messages without a reply port', async () => {
     const h = harness({});
-    await h.fire('message', { data: { type: 'olv-offline-save' }, ports: [] });
+    await h.fire('message', { data: { type: 'olv-offline-save' }, origin: ORIGIN, ports: [] });
     expect(h.fetched).toEqual([]);
+  });
+
+  it('ignores messages from another origin', async () => {
+    const h = harness({});
+    const replies = await h.message({ type: 'olv-offline-save' }, 'https://evil.example');
+    expect(h.fetched).toEqual([]);
+    expect(replies).toEqual([]);
   });
 
   it('activate refills the offline cache for the new build when the user had opted in, then drops the old one', async () => {

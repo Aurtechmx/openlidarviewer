@@ -80,26 +80,27 @@ function precacheBuild(onProgress) {
         const total = entries.length;
         let done = 0;
         let failed = 0;
-        return Promise.all(
-          entries.map((a) =>
-            cache
-              .add(a.url)
-              .catch(() => {
-                failed += 1;
-              })
-              .then(() => {
-                done += 1;
-                report(done, total);
-              }),
-          ),
-        )
-          .then(() => {
-            const keep = new Set(entries.map((a) => new URL(a.url, self.location.href).href));
-            return cache.keys().then((reqs) => Promise.all(reqs.filter((r) => !keep.has(r.url)).map((r) => cache.delete(r))));
-          })
+        const addOne = (a) =>
+          cache
+            .add(a.url)
+            .catch(() => {
+              failed += 1;
+            })
+            .then(() => {
+              done += 1;
+              report(done, total);
+            });
+        return Promise.all(entries.map(addOne))
+          .then(() => pruneCache(cache, entries))
           .then(() => ({ total, failed }));
       }),
     );
+}
+
+/** Delete every entry of `cache` that the manifest `entries` no longer lists. */
+function pruneCache(cache, entries) {
+  const keep = new Set(entries.map((a) => new URL(a.url, self.location.href).href));
+  return cache.keys().then((reqs) => Promise.all(reqs.filter((r) => !keep.has(r.url)).map((r) => cache.delete(r))));
 }
 
 self.addEventListener('install', (event) => {
@@ -145,8 +146,10 @@ self.addEventListener('activate', (event) => {
  *   {type:'olv-offline-remove'} → {type:'removed'}
  */
 self.addEventListener('message', (event) => {
+  // Only pages of this origin may drive the offline copy.
+  if (event.origin !== self.location.origin) return;
   const data = event.data;
-  const port = event.ports && event.ports[0];
+  const port = event.ports?.[0];
   if (!data || !port) return;
   if (data.type === 'olv-offline-save') {
     const work = precacheBuild((done, total) => port.postMessage({ type: 'progress', done, total }))
