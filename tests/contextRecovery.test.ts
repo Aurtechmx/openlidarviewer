@@ -131,3 +131,36 @@ describe('context recovery', () => {
     expect(b.r.localClippingEnabled).toBe(false);
   });
 });
+
+describe('recoverViewer surface', () => {
+  it('names fields and methods the Viewer class actually has', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(new URL('../src/render/Viewer.ts', import.meta.url), 'utf8');
+    for (const decl of [
+      /private _renderer: /, /private _post: /, /private readonly _canvas: /, /private readonly _devices = /,
+      /private readonly _edlLiveStrength = /, /private readonly _edlNear = /, /private readonly _edlFar = /,
+      /private _detachContextLoss: /, /private _watchDevice\(\): void/, /\n  requestFrame\(/,
+    ]) expect(src).toMatch(decl);
+  });
+
+  it('adopts the rebuilt core into the viewer fields and rewires it', async () => {
+    const old = fakeRenderer();
+    const next = fakeRenderer();
+    const nextPipeline = { outputNode: null } as unknown as THREE.RenderPipeline;
+    const { recoverViewer } = await import('../src/render/contextRecovery');
+    const create = vi.fn(() => ({ renderer: next.asRenderer, pipeline: nextPipeline, scenePass: { dispose() {} } }));
+    const devices = new DeviceGeneration();
+    const v = {
+      _renderer: old.asRenderer, _post: { outputNode: { edl: 1 } } as unknown as THREE.RenderPipeline,
+      _canvas: {} as HTMLCanvasElement, _devices: devices, _edlLiveStrength: 1, _edlNear: 1, _edlFar: 1,
+      _detachContextLoss: vi.fn(), _watchDevice: vi.fn(), requestFrame: vi.fn(),
+    };
+    await expect(recoverViewer(v, create as never)).resolves.toBe(true);
+    expect(create).toHaveBeenCalledWith(v._canvas, true, { strength: 1, near: 1, far: 1 });
+    expect(v._renderer).toBe(next.asRenderer);
+    expect(v._post).toBe(nextPipeline);
+    expect(v._detachContextLoss).toHaveBeenCalledTimes(1);
+    expect(v._watchDevice).toHaveBeenCalledTimes(1);
+    expect(v.requestFrame).toHaveBeenCalledTimes(1);
+  });
+});

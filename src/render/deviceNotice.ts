@@ -17,12 +17,12 @@ import { recordError } from '../app/diagnostics/errorLedger';
 export const DEVICE_NOTICE_EVENT = 'olv-device-notice';
 
 export const CONTEXT_LOST_NOTICE =
-  'Graphics context lost. Your project is unchanged. The view redraws when the browser restores the context; if it does not, save the session and reload the page.';
+  'Graphics context lost. Your project is unchanged. If the view does not redraw, save the session and reload the page.';
 /** The restore notice once the rebuilt renderer is drawing. */
 export const CONTEXT_RESTORED_NOTICE = 'Graphics context restored; the view has been redrawn.';
 /** The restore notice when the rebuild failed and the view stays blank. */
 export const CONTEXT_RECOVERY_FAILED_NOTICE =
-  'Graphics context restored, but the view could not be redrawn. Your project is unchanged. Save the session, then reload the page to see the scan again.';
+  'Graphics context restored, but the view did not redraw. Save the session and reload the page.';
 
 export interface DeviceNoticeDetail {
   readonly text: string;
@@ -35,19 +35,16 @@ export interface DeviceNoticeToast {
 }
 
 export function deviceNoticeReporter(target: EventTarget, recover: () => Promise<boolean>): (event: DeviceEvent) => void {
-  const notify = (text: string, lost: boolean): void => {
-    const detail: DeviceNoticeDetail = { text, lost };
+  const notify = (text: string): void => {
+    const detail: DeviceNoticeDetail = { text, lost: text !== CONTEXT_RESTORED_NOTICE };
     target.dispatchEvent(new CustomEvent(DEVICE_NOTICE_EVENT, { bubbles: true, detail }));
   };
   return (event) => {
     const lost = event === 'webgl-context-lost';
     if (!lost && event !== 'webgl-context-restored') return;
     recordError('gpu', event, true, lost ? 'wait-for-restore' : 'none');
-    if (lost) return notify(CONTEXT_LOST_NOTICE, true);
-    void recover().then(
-      (ok) => notify(ok ? CONTEXT_RESTORED_NOTICE : CONTEXT_RECOVERY_FAILED_NOTICE, !ok),
-      () => notify(CONTEXT_RECOVERY_FAILED_NOTICE, true),
-    );
+    if (lost) return notify(CONTEXT_LOST_NOTICE);
+    recover().then((ok) => notify(ok ? CONTEXT_RESTORED_NOTICE : CONTEXT_RECOVERY_FAILED_NOTICE), () => notify(CONTEXT_RECOVERY_FAILED_NOTICE));
   };
 }
 

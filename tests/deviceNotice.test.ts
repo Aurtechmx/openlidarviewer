@@ -67,10 +67,9 @@ describe('device notices', () => {
     }
   });
 
-  it('the notices say the project is unchanged; only the failed restore asks for a reload', () => {
+  it('the loss notice says the project is unchanged; only a failed restore asks for a reload', () => {
     expect(CONTEXT_LOST_NOTICE).toContain('Your project is unchanged');
     expect(CONTEXT_RESTORED_NOTICE).toBe('Graphics context restored; the view has been redrawn.');
-    expect(CONTEXT_RECOVERY_FAILED_NOTICE).toContain('Your project is unchanged');
     expect(CONTEXT_RECOVERY_FAILED_NOTICE).toContain('reload the page');
   });
 

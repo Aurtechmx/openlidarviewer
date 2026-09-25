@@ -22,8 +22,9 @@
  * dispose listeners it put on scene objects (so it does not stay reachable
  * through them) and removes its context-loss listener from the canvas.
  */
-import * as THREE from 'three/webgpu';
+import type * as THREE from 'three/webgpu';
 import type { DeviceGeneration } from './deviceGeneration';
+import type { EdlUniforms, createViewerRenderCore } from './viewerRenderBootstrap';
 
 /** The renderer and post pipeline a Viewer draws with. */
 export interface RecoverableCore {
@@ -75,9 +76,13 @@ export function retireRenderer(renderer: THREE.WebGPURenderer): void {
 /** Copy the drawing-buffer and clear state the Viewer set on `from`. */
 export function carryRendererState(from: THREE.WebGPURenderer, to: THREE.WebGPURenderer): void {
   to.setPixelRatio(from.getPixelRatio());
-  const size = from.getSize(new THREE.Vector2());
-  to.setSize(size.x, size.y, false);
-  to.setClearColor(from.getClearColor(new THREE.Color()), from.getClearAlpha());
+  // No runtime three import, so this chunk stays free of the vendor chunk:
+  // getSize() fills its target through set(), getClearColor() returns what
+  // its target's copy() returns, here a clone of the renderer's colour.
+  let w = 0, h = 0;
+  from.getSize({ set: (x: number, y: number) => { w = x; h = y; } } as unknown as THREE.Vector2);
+  to.setSize(w, h, false);
+  to.setClearColor(from.getClearColor({ copy: (c: THREE.Color) => c.clone() } as unknown as THREE.Color), from.getClearAlpha());
   const clip = (from as unknown as { localClippingEnabled?: boolean }).localClippingEnabled;
   (to as unknown as { localClippingEnabled?: boolean }).localClippingEnabled = clip === true;
 }
@@ -107,4 +112,41 @@ export async function recoverRenderCore(host: ContextRecoveryHost): Promise<bool
   retireRenderer(host.renderer);
   host.adopt({ renderer: next.renderer, pipeline: next.pipeline });
   return true;
+}
+
+/**
+ * The Viewer fields recovery reads and replaces. They are private on the
+ * class; the Viewer hands itself over so this wiring stays out of its chunk
+ * (with its core factory, so this chunk does not pull the bootstrap along),
+ * and `tests/contextRecovery.test.ts` pins the names against the class.
+ */
+export interface ViewerRecoverySurface {
+  _renderer: THREE.WebGPURenderer;
+  _post: THREE.RenderPipeline;
+  readonly _canvas: HTMLCanvasElement;
+  readonly _devices: DeviceGeneration;
+  readonly _edlLiveStrength: EdlUniforms['strength'];
+  readonly _edlNear: EdlUniforms['near'];
+  readonly _edlFar: EdlUniforms['far'];
+  readonly _detachContextLoss: (() => void) | null;
+  _watchDevice(): void;
+  requestFrame(): void;
+}
+
+/** Rebuild a Viewer's renderer on its own canvas after a context restore. */
+export function recoverViewer(v: ViewerRecoverySurface, create: typeof createViewerRenderCore): Promise<boolean> {
+  return recoverRenderCore({
+    renderer: v._renderer,
+    pipeline: v._post,
+    generation: v._devices,
+    disposed: () => v._detachContextLoss === null,
+    create: () => create(v._canvas, true, { strength: v._edlLiveStrength, near: v._edlNear, far: v._edlFar }),
+    adopt: (core) => {
+      v._renderer = core.renderer;
+      v._post = core.pipeline;
+      v._detachContextLoss?.();
+      v._watchDevice();
+      v.requestFrame();
+    },
+  });
 }

@@ -73,7 +73,7 @@ import {
   type ElevLayer,
 } from './elevationWindowResolver';
 import {
-  DeviceGeneration, GpuErrorLedger, deviceNoticeReporter, installGpuDeviceErrors, recoverRenderCore, watchDeviceChanges,
+  DeviceGeneration, GpuErrorLedger, deviceNoticeReporter, installGpuDeviceErrors, loadContextRecovery, watchDeviceChanges,
   type RendererWithDeviceLoss,
 } from './gpuErrorLedger';
 import { computeExportFrontier, type FrontierNode } from './streaming/exportFrontier';
@@ -4300,14 +4300,10 @@ export class Viewer {
     return backend?.isWebGPUBackend === true ? 'webgpu' : 'webgl2';
   }
 
-  /** Watch device loss and restore; a restore rebuilds the renderer (contextRecovery.ts). One detach for both. */
+  /** Watch device loss and restore; a restore rebuilds the renderer (contextRecovery.ts, loaded on demand). One detach for both; the caller drops the previous one. */
   private _watchDevice(): void {
-    this._detachContextLoss?.();
-    this._detachContextLoss = watchDeviceChanges(this._canvas, this._renderer as unknown as RendererWithDeviceLoss, this._devices, deviceNoticeReporter(this._canvas, () => recoverRenderCore({
-      renderer: this._renderer, pipeline: this._post, generation: this._devices, disposed: () => this._detachContextLoss === null,
-      create: () => createViewerRenderCore(this._canvas, true, { strength: this._edlLiveStrength, near: this._edlNear, far: this._edlFar }),
-      adopt: (core) => { this._renderer = core.renderer; this._post = core.pipeline; this._watchDevice(); this.requestFrame(); },
-    })));
+    const c = this._canvas;
+    this._detachContextLoss = watchDeviceChanges(c, this._renderer as unknown as RendererWithDeviceLoss, this._devices, deviceNoticeReporter(c, () => loadContextRecovery().then((m) => m.recoverViewer(this as never, createViewerRenderCore))));
   }
 
   /**
@@ -4828,10 +4824,7 @@ export class Viewer {
     this._detachContextLoss?.(); this._detachContextLoss = null;
     // Disconnect the ResizeObserver so the canvas can be garbage-collected
     // when the host eventually drops it.
-    if (this._resizeObserver) {
-      this._resizeObserver.disconnect();
-      this._resizeObserver = null;
-    }
+    this._resizeObserver?.disconnect(); this._resizeObserver = null;
     // Cancel any RAF scheduled by the resize debouncer so a disposed Viewer
     // doesn't run a final resize on a torn-down renderer.
     if (this._resizeRafId !== null) {
