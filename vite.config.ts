@@ -1,5 +1,6 @@
 import { defineConfig, type PluginOption } from 'vite';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import liveSourceTransform from 'vite-plugin-javascript-obfuscator';
 import { visualizer } from 'rollup-plugin-visualizer';
@@ -259,6 +260,28 @@ function thirdPartyNotices() {
     generateBundle(this: NoticeEmitter): void {
       const source = readFileSync(new URL('./docs/project/THIRD_PARTY_NOTICES.md', import.meta.url), 'utf8');
       this.emitFile({ type: 'asset', fileName: 'THIRD_PARTY_NOTICES.md', source });
+    },
+  };
+}
+
+/**
+ * Write `sw-precache.json` beside index.html: every content-hashed app bundle
+ * under assets/ (entry, lazy chunks, workers, wasm, fonts). public/sw.js reads
+ * it at install so the whole app shell is cached after ONE online visit,
+ * including chunks the first visit never requested. Read from disk after the
+ * write so worker sub-build outputs are included.
+ */
+function swPrecacheManifest() {
+  return {
+    name: 'olv-sw-precache-manifest',
+    apply: 'build' as const,
+    writeBundle(options: { dir?: string }): void {
+      const dir = options.dir ?? 'dist';
+      const assets = readdirSync(join(dir, 'assets'))
+        .filter((f) => /-[A-Za-z0-9_-]{8,}\.(?:js|mjs|css|wasm|woff2?)$/i.test(f))
+        .sort()
+        .map((f) => `./assets/${f}`);
+      writeFileSync(join(dir, 'sw-precache.json'), JSON.stringify({ assets }) + '\n');
     },
   };
 }
@@ -546,6 +569,7 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     chunkEmissionGuard() as PluginOption,
     thirdPartyNotices() as PluginOption,
+    swPrecacheManifest() as PluginOption,
     ...(mode === 'live' ? [liveSourceTransformPlugin() as PluginOption] : []),
     bundleAnalyzer(),
   ].filter(Boolean) as PluginOption[],

@@ -36,18 +36,40 @@ const SHELL = [
   './index.html',
   './manifest.webmanifest',
   './favicon.svg',
+  './brand-mark.svg',
   './favicon.ico',
   './apple-touch-icon.png',
   './icon-192.png',
   './icon-512.png',
 ];
 
+/**
+ * Precache every content-hashed bundle the build lists in sw-precache.json
+ * (written by the olv-sw-precache-manifest Vite plugin): entry, lazy chunks,
+ * workers, wasm and fonts. Without it only chunks the page happened to request
+ * through this worker were cached, so opening a file offline after a single
+ * visit failed on the first lazy import. Each entry is added on its own so one
+ * missing file cannot abort install; a dev server has no manifest and skips.
+ */
+function precacheBuild(cache) {
+  return fetch('./sw-precache.json', { cache: 'no-store' })
+    .then((res) => (res.ok ? res.json() : { assets: [] }))
+    .then((m) =>
+      Promise.all(
+        (Array.isArray(m.assets) ? m.assets : [])
+          .filter((a) => typeof a === 'string' && HASHED_APP_ASSET.test(a))
+          .map((a) => cache.add(a).catch(() => {})),
+      ),
+    )
+    .catch(() => {});
+}
+
 self.addEventListener('install', (event) => {
   // Precache the shell; activate immediately so offline works on the next load.
   event.waitUntil(
     caches
       .open(VERSION)
-      .then((cache) => cache.addAll(SHELL))
+      .then((cache) => cache.addAll(SHELL).then(() => precacheBuild(cache)))
       .then(() => self.skipWaiting())
       .catch(() => {
         /* a missing shell asset must not abort install */
@@ -165,8 +187,11 @@ self.addEventListener('fetch', (event) => {
   if (!isCacheableAsset(url)) return;
 
   // Same-origin static assets: serve from cache, refresh in the background.
+  // ignoreVary: the bundles are content-hashed and immutable, and a server's
+  // `Vary: Origin` would otherwise miss the precached copy for a module script
+  // request (which carries Origin) and fail the load offline.
   event.respondWith(
-    caches.match(req).then((cached) => {
+    caches.match(req, { ignoreVary: true }).then((cached) => {
       const network = fetch(req)
         .then((res) => {
           if (res && res.status === 200 && res.type === 'basic') {
