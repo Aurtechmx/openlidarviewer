@@ -73,7 +73,7 @@ import {
   type ElevLayer,
 } from './elevationWindowResolver';
 import {
-  DeviceGeneration, GpuErrorLedger, deviceNoticeReporter, installGpuDeviceErrors, watchDeviceChanges,
+  DeviceGeneration, GpuErrorLedger, deviceNoticeReporter, installGpuDeviceErrors, loadContextRecovery, watchDeviceChanges,
   type RendererWithDeviceLoss,
 } from './gpuErrorLedger';
 import { computeExportFrontier, type FrontierNode } from './streaming/exportFrontier';
@@ -590,7 +590,7 @@ export class Viewer {
   readonly ready: Promise<void>;
 
   // ── three.js objects ─────────────────────────────────────────────────────
-  private readonly _renderer: THREE.WebGPURenderer;
+  private _renderer: THREE.WebGPURenderer;
   private readonly _scene: THREE.Scene;
   private readonly _camera: THREE.PerspectiveCamera;
   /** The true-orthographic camera. A per-frame follower of `_camera` (the sole
@@ -745,7 +745,7 @@ export class Viewer {
    * surface (`outputNode`, `render()`, `dispose()`) is identical, so this
    * is a pure rename with no behaviour change.
    */
-  private readonly _post: THREE.RenderPipeline;
+  private _post: THREE.RenderPipeline;
   /** The scene render pass that feeds the post-processing pipeline. */
   private readonly _scenePass: ReturnType<typeof pass>;
   /** Whether EDL is on; defaulted by the capability gate once the backend is known. */
@@ -1042,17 +1042,10 @@ export class Viewer {
     this._post = core.pipeline;
 
     // ── OrbitControls ─────────────────────────────────────────────────────
-    // v0.3.6 smoothness tuning, take 2 — after the first pass made orbit
-    // feel "weird on the axis" on large LAS surveys (the camera over-
-    // coasted after release, exaggerating any minor target drift):
-    //   • dampingFactor: 0.05 → 0.07. Still softer than the v0.3.5 baseline
-    //     of 0.08 so glide is noticeable, but not so soft the camera
-    //     keeps moving distractingly after the finger lifts.
-    //   • rotateSpeed:   1.00 → 0.95. Closer to the v0.3.5 0.85 baseline
-    //     so the *active* drag doesn't feel slippery alongside the new
-    //     damping. The net feel is "a hair smoother than v0.3.5" rather
-    //     than "model-viewer's full coast", which is what the camera
-    //     navigation actually wants for survey data.
+    // v0.3.6 smoothness tuning, take 2 (the first pass over-coasted after
+    // release on large LAS surveys): dampingFactor 0.07 keeps a visible glide
+    // without drifting after the finger lifts, and rotateSpeed 0.95 keeps the
+    // active drag from feeling slippery. Net: a hair smoother than v0.3.5.
     this._controls = new OrbitControls(this._camera, canvas);
     this._controls.enableDamping = true;
     // Touch-class devices need slower rotate + faster settling than the
@@ -1382,9 +1375,7 @@ export class Viewer {
         if (this._renderer !== undefined) this._startLoop();
       }
     };
-    // One detach for both: the renderer's hook outlives a dropped one.
-    const rendererLike = this._renderer as unknown as RendererWithDeviceLoss;
-    this._detachContextLoss = watchDeviceChanges(canvas, rendererLike, this._devices, deviceNoticeReporter(canvas, () => this.requestFrame()));
+    this._watchDevice();
     canvas.addEventListener('dblclick', this._onCanvasDblClick);
     canvas.addEventListener('click', this._onCanvasClick);
     canvas.addEventListener('pointermove', this._onCanvasPointerMove);
@@ -4309,6 +4300,12 @@ export class Viewer {
     return backend?.isWebGPUBackend === true ? 'webgpu' : 'webgl2';
   }
 
+  /** Watch device loss and restore; a restore rebuilds the renderer (contextRecovery.ts, loaded on demand). One detach for both; the caller drops the previous one. */
+  private _watchDevice(): void {
+    const c = this._canvas;
+    this._detachContextLoss = watchDeviceChanges(c, this._renderer as unknown as RendererWithDeviceLoss, this._devices, deviceNoticeReporter(c, () => loadContextRecovery().then((m) => m.recoverViewer(this as never, createViewerRenderCore))));
+  }
+
   /**
    * Subscribe to the WebGPU device's `uncapturederror` event. This is the only
    * channel through which a shader-compile or render-pipeline validation error
@@ -4823,17 +4820,11 @@ export class Viewer {
     }
     // Detach the WebGPU uncaptured-error handler so a device that outlives this
     // Viewer can't retain it (and the disposed Viewer) through the closure.
-    if (this._detachGpuErrors) {
-      this._detachGpuErrors();
-      this._detachGpuErrors = null;
-    }
+    this._detachGpuErrors?.(); this._detachGpuErrors = null;
     this._detachContextLoss?.(); this._detachContextLoss = null;
     // Disconnect the ResizeObserver so the canvas can be garbage-collected
     // when the host eventually drops it.
-    if (this._resizeObserver) {
-      this._resizeObserver.disconnect();
-      this._resizeObserver = null;
-    }
+    this._resizeObserver?.disconnect(); this._resizeObserver = null;
     // Cancel any RAF scheduled by the resize debouncer so a disposed Viewer
     // doesn't run a final resize on a torn-down renderer.
     if (this._resizeRafId !== null) {

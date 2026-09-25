@@ -47,6 +47,7 @@ disposal runs immediately. It is covered by `tests/appLifetime.test.ts`.
 | `THREE.BufferGeometry` per static cloud | `Viewer._clouds` map | Until the cloud is removed | `viewer.removeCloud(id)` → `geometry.dispose()` |
 | `THREE.PointsMaterial` per static cloud | `Viewer._clouds` map | Until the cloud is removed | `viewer.removeCloud(id)` → `material.dispose()` |
 | `WebGLRenderer` / `WebGPURenderer` GL context | `Viewer._renderer` | Per Viewer instance | `viewer.dispose()` → `renderer.dispose()` + `renderer.forceContextLoss()` |
+| Renderer lost to a WebGL context loss | `Viewer._renderer` until recovery | Until `webglcontextrestored` | `recoverRenderCore()` (`contextRecovery.ts`) → `retireRenderer()`: stops its frame loop, drops its scene-object and canvas listeners; never `dispose()`, which would lose the restored context |
 | `requestAnimationFrame` loop | `Viewer` | Per Viewer instance | `viewer.dispose()` cancels the next frame |
 | ResizeObserver on the canvas parent | `Viewer` | Per Viewer instance | `viewer.dispose()` → `observer.disconnect()` |
 | COPC / EPT decode worker | `CopcWorkerClient` (created lazy in main.ts) | Page session: created on the first COPC or EPT open and reused by every scan after it | None on scan close. The warm decoder outlives each scan on purpose; `runtime.lifetime` disposes it on `pagehide` |

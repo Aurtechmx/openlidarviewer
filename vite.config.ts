@@ -112,6 +112,7 @@ function liveSourceTransformPlugin() {
     //   - `lazyChunks.ts`      — the COPC/streaming `import()` split points
     //   - `perf/navDriverLoader.ts` — the `?benchmark=nav` camera driver
     //   - `render/perf/governorLoader.ts` — the `?governor=on` frame budget governor
+    //   - `render/contextRecoveryLoader.ts` — the WebGL context-restore rebuild
     //   - `parseBuffer.ts` / `loaderRegistry.ts` — the loader chain reached
     //     from the main thread (the format converter's full-resolution
     //     decode), so their `import('./loadXyz' | './lazDecode')` split points
@@ -128,6 +129,7 @@ function liveSourceTransformPlugin() {
       /lazyChunks\.ts/,
       /navDriverLoader\.ts/,
       /governorLoader\.ts/,
+      /contextRecoveryLoader\.ts/,
       /parseBuffer\.ts/,
       /loaderRegistry\.ts/,
       // ── Performance exclusions (v0.5.3) ────────────────────────────────
@@ -284,6 +286,8 @@ function chunkEmissionGuard() {
     'lazDecode',
     // `perf/navDriverLoader.ts` lazy-imports the `?benchmark=nav` camera driver.
     'navDriver',
+    // `render/contextRecoveryLoader.ts` lazy-imports the context-restore rebuild.
+    'contextRecovery',
     // Vendor chunks pinned via manualChunks. The presence of these
     // chunks proves the manualChunks rule is still active — losing them
     // would re-inflate the loadLas / report chunks.

@@ -5,7 +5,7 @@
       "goal": 2500
     },
     "src/render/Viewer.ts": {
-      "lines": 6145,
+      "lines": 6136,
       "goal": 2000
     }
   },
@@ -17,7 +17,7 @@
       "lines": 2607
     },
     "src/render/measure/MeasureController.ts": {
-      "lines": 2405
+      "lines": 2414
     },
     "src/ui/MeasurePanel.ts": {
       "lines": 2204
