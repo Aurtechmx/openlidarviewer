@@ -110,6 +110,7 @@ function liveSourceTransformPlugin() {
     // The remaining literal entries below are the NON-worker split points that
     // carry an `import()` specifier Vite must read statically:
     //   - `lazyChunks.ts`      — the COPC/streaming `import()` split points
+    //   - `perf/navDriverLoader.ts` — the `?benchmark=nav` camera driver
     //   - `parseBuffer.ts` / `loaderRegistry.ts` — the loader chain reached
     //     from the main thread (the format converter's full-resolution
     //     decode), so their `import('./loadXyz' | './lazDecode')` split points
@@ -124,6 +125,7 @@ function liveSourceTransformPlugin() {
       // worker registry (src/workers/workerRegistry.ts).
       ...workerExcludePatterns(),
       /lazyChunks\.ts/,
+      /navDriverLoader\.ts/,
       /parseBuffer\.ts/,
       /loaderRegistry\.ts/,
       // ── Performance exclusions (v0.5.3) ────────────────────────────────
@@ -278,6 +280,8 @@ function chunkEmissionGuard() {
     // `loadLas.ts` lazy-imports `lazDecode` (laz-perf JS + embedded WASM) so
     // uncompressed `.las` files never download the decompressor.
     'lazDecode',
+    // `perf/navDriverLoader.ts` lazy-imports the `?benchmark=nav` camera driver.
+    'navDriver',
     // Vendor chunks pinned via manualChunks. The presence of these
     // chunks proves the manualChunks rule is still active — losing them
     // would re-inflate the loadLas / report chunks.

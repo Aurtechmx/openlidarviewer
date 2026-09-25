@@ -53,6 +53,8 @@ import {
 } from './wheelDollyMath';
 import { readDevFlags } from '../perf/devFlags';
 import { perFrameToDt } from './orbitFeel';
+import { navDrive } from '../perf/navProbeHook';
+import { loadNavDriver } from '../perf/navDriverLoader';
 
 /** The four navigation modes ('pan' is the v0.5.5 hand tool, program §P1). */
 export type NavMode = 'orbit' | 'walk' | 'fly' | 'pan';
@@ -324,6 +326,11 @@ export class NavController {
     // the `keyup` is dropped, so without this the camera would keep orbiting
     // or moving indefinitely on return. Reset all input when focus is lost.
     window.addEventListener('blur', this._onBlur);
+    // `?benchmark=nav`: the scripted camera driver (`window.__olvNavDriver`),
+    // loaded from this chunk so the startup shell's preload lists stay as they are.
+    if (new URLSearchParams(window.location?.search ?? '').get('benchmark') === 'nav') {
+      void loadNavDriver().then((m) => m.installNavDriver(window));
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -566,6 +573,12 @@ export class NavController {
 
   /** Advance navigation by `dt` seconds. Called once per rendered frame. */
   update(dt: number): void {
+    const drive = navDrive();
+    if (drive) {
+      const t = this._currentLookTarget();
+      const { position: p, up: u } = this._camera;
+      drive.pose([p.x, p.y, p.z], [t.x, t.y, t.z], [u.x, u.y, u.z]);
+    }
     const step = Math.min(Math.max(dt, 0), MAX_DT);
 
     // Input disabled (e.g. measuring): keep the camera frozen — but still let

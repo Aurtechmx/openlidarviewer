@@ -38,6 +38,7 @@ export type SchedulerFactory = (hooks: {
   runFrame: () => void;
 }) => FrameScheduler;
 import { RenderActivityGate } from './renderActivityGate';
+import { navDrive } from '../perf/navProbeHook';
 import { RenderInvalidation, type RenderInvalidationReason, type ServedFrame } from './renderInvalidation';
 
 /** The live signals that run without asking each frame. */
@@ -237,6 +238,9 @@ export class FrameDemand {
     const commitWork = this._sampleCommitWork();
     if (this._invalidation.needsFrame(nowMs)) return true;
     if (this._signals.tweening()) return true;
+    // The `?benchmark=nav` driver in fixed-step mode queues navigation steps
+    // every frame; the loop stays awake for the run to integrate them.
+    if (navDrive()?.fixedDtSec != null) return true;
     return commitWork || this._signals.streamingBusy() || this._signals.fading();
   }
 

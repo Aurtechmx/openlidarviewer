@@ -46,3 +46,40 @@ export function feedFrameMs(bench: { recordFrameMs(ms: number): void } | null | 
   bench?.recordFrameMs(ms);
   navSink()?.frameMs(ms);
 }
+
+/**
+ * The global slot the `?benchmark=nav` camera driver installs while it plays
+ * a trajectory. It receives the camera pose and, in fixed-step mode, hands
+ * the render loop the navigation steps to integrate.
+ */
+export const NAV_DRIVE_SLOT = '__olvNavDrive';
+
+/** What the navigation loop reports into while the camera driver runs. */
+export interface NavDriveSink {
+  /** Seconds per navigation step in fixed-step mode, or null to integrate the frame clock's delta. */
+  readonly fixedDtSec: number | null;
+  /** Fixed-step mode: the steps queued since the last call, which the caller now integrates. */
+  takeSteps(): number;
+  /** The camera pose at the start of a navigation update. */
+  pose(position: readonly number[], target: readonly number[], up: readonly number[]): void;
+}
+
+/** The installed driver sink, or null when no trajectory is playing. */
+export function navDrive(): NavDriveSink | null {
+  return ((globalThis as Record<string, unknown>)[NAV_DRIVE_SLOT] as NavDriveSink | undefined) ?? null;
+}
+
+/**
+ * Integrate navigation for one frame. With no driver, or a driver on the
+ * frame clock, `step` runs once with `delta`. In fixed-step mode it runs once
+ * per queued step with the fixed dt, and not at all when none is queued, so
+ * the camera advances with the driver's step clock rather than with frames.
+ */
+export function stepNav(delta: number, step: (dt: number) => void): void {
+  const drive = navDrive();
+  if (drive === null || drive.fixedDtSec === null) {
+    step(delta);
+    return;
+  }
+  for (let n = drive.takeSteps(); n > 0; n--) step(drive.fixedDtSec);
+}
