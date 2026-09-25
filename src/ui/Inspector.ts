@@ -992,6 +992,7 @@ export class Inspector {
       className: 'olv-sheet-close',
       text: '×',
       ariaLabel: 'Close scan info',
+      tip: 'Close scan info.',
     });
     sheetClose.addEventListener('click', (ev) => {
       ev.stopPropagation();
@@ -1012,7 +1013,10 @@ export class Inspector {
       text: '▾',
     });
     sheetChevron.setAttribute('aria-hidden', 'true');
-    const head = el('div', { className: 'olv-panel-head' }, [
+    const head = el('div', {
+      className: 'olv-panel-head',
+      tip: 'Tap to expand or collapse the scan info panel.',
+    }, [
       el('div', { className: 'olv-panel-title', text: 'Scan Intelligence' }),
       sheetChevron,
       sheetClose,
@@ -2150,6 +2154,7 @@ export class Inspector {
       className: 'olv-inline-retry',
       type: 'button',
       text: 'Try again',
+      tip: 'Retry loading the scan report.',
     }) as HTMLButtonElement;
     retry.addEventListener('click', () => {
       if (this._pendingReportRows) this.setReport(this._pendingReportRows);
@@ -2302,6 +2307,7 @@ export class Inspector {
       className: 'olv-inline-retry',
       type: 'button',
       text: 'Try again',
+      tip: 'Retry loading provenance.',
     }) as HTMLButtonElement;
     retry.addEventListener('click', () => {
       if (this._pendingProvenanceForChunk) this.setProvenance(this._pendingProvenanceForChunk);
@@ -2461,6 +2467,7 @@ export class Inspector {
       className: 'olv-inline-retry',
       type: 'button',
       text: 'Try again',
+      tip: 'Retry loading the coordinate system.',
     }) as HTMLButtonElement;
     retry.addEventListener('click', () => {
       if (this._pendingCrs) this.setCrs(this._pendingCrs);

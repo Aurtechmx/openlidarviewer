@@ -114,6 +114,7 @@ export class ProjectCard {
       className: 'olv-pc-dismiss',
       text: '×',
       ariaLabel: 'Dismiss',
+      tip: 'Dismiss this project card.',
     });
     dismiss.addEventListener('click', () => this._dismiss());
 

@@ -1031,6 +1031,7 @@ export class Stage {
       className: 'olv-empty-status-action',
       type: 'button',
       text: 'Retry',
+      tip: 'Try loading the same URL again.',
     });
     retry.addEventListener('click', () => {
       this._hideStatusBanner();
@@ -1041,6 +1042,7 @@ export class Stage {
       type: 'button',
       text: '×',
       ariaLabel: 'Dismiss',
+      tip: 'Dismiss this notice.',
     });
     dismiss.addEventListener('click', () => this._hideStatusBanner());
     this._statusBanner.append(label, retry, dismiss);

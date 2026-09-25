@@ -64,11 +64,11 @@ export interface ScanTypeControl {
   ): void;
 }
 
-const OPTIONS: ReadonlyArray<{ value: ScanTypeOverride; label: string }> = [
-  { value: 'terrain', label: 'Terrain' },
-  { value: 'object', label: 'Object' },
-  { value: 'interior', label: 'Interior' },
-  { value: 'auto', label: 'Auto' },
+const OPTIONS: ReadonlyArray<{ value: ScanTypeOverride; label: string; tip: string }> = [
+  { value: 'terrain', label: 'Terrain', tip: 'Treat this scan as terrain (ground surface).' },
+  { value: 'object', label: 'Object', tip: 'Treat this scan as a single object.' },
+  { value: 'interior', label: 'Interior', tip: 'Treat this scan as an interior space.' },
+  { value: 'auto', label: 'Auto', tip: 'Detect the scan type automatically.' },
 ];
 
 const EFFECTIVE_LABEL: Record<SpaceKind, string> = {
@@ -106,6 +106,7 @@ export function createScanTypeControl(opts: ScanTypeControlOptions): ScanTypeCon
     btn.className = 'olv-scan-type-opt';
     btn.dataset.value = o.value;
     btn.textContent = o.label;
+    btn.title = o.tip;
     btn.setAttribute('aria-pressed', 'false');
     // Guarded against the disabled state explicitly — the native `disabled`
     // attribute already blocks real clicks, but the guard keeps synthetic

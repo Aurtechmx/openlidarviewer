@@ -22,6 +22,7 @@ type ClickHandler = () => void;
 
 /** A tiny fake element supporting only the surface ThemeToggle touches. */
 class FakeEl {
+  readonly dataset: Record<string, string> = {};
   private _text = '';
   readonly attrs: Record<string, string> = {};
   readonly children: FakeEl[] = [];

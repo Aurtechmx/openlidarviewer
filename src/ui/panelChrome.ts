@@ -341,7 +341,7 @@ export function createToastHost(host: () => HTMLElement = () => document.body): 
       }
       root.replaceChildren(el('span', { className: 'olv-lasso-toast-msg', text: message }));
       if (action) {
-        const btn = el('button', { className: 'olv-lasso-toast-action', text: action.label });
+        const btn = el('button', { className: 'olv-lasso-toast-action', text: action.label, tip: action.label });
         btn.type = 'button';
         btn.addEventListener('click', () => {
           btn.blur();

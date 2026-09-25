@@ -89,12 +89,21 @@ export class TourOverlay {
     this._title = el('div', { className: 'olv-tour-title' });
     this._body = el('div', { className: 'olv-tour-body' });
     this._progress = el('div', { className: 'olv-tour-progress' });
-    this._backBtn = el('button', { className: 'olv-tour-btn', text: 'Back' });
+    this._backBtn = el('button', {
+      className: 'olv-tour-btn',
+      text: 'Back',
+      tip: 'Go to the previous tour step.',
+    });
     this._nextBtn = el('button', {
       className: 'olv-tour-btn olv-tour-btn-primary',
       text: 'Next',
+      tip: 'Go to the next tour step.',
     });
-    this._skipBtn = el('button', { className: 'olv-tour-skip', text: 'Skip tour' });
+    this._skipBtn = el('button', {
+      className: 'olv-tour-skip',
+      text: 'Skip tour',
+      tip: 'Close the guided tour and return to the viewer.',
+    });
     this._backBtn.addEventListener('click', () => session.back());
     this._nextBtn.addEventListener('click', () => session.next());
     this._skipBtn.addEventListener('click', () => session.skip());

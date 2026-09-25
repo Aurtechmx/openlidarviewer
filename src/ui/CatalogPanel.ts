@@ -424,6 +424,7 @@ export class CatalogPanel {
         const btn = el('button', {
           className: 'olv-catalog-result',
           type: 'button',
+          tip: 'Load this catalogue dataset into the viewer.',
         }, [
           el('div', { className: 'olv-catalog-result-main' }, [
             el('span', { className: 'olv-catalog-result-name', text: title }),

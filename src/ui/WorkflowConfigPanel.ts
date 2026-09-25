@@ -190,7 +190,7 @@ export class WorkflowConfigPanel {
     group.setAttribute('role', 'group');
     group.setAttribute('aria-label', label);
     const buttons = segments.map((s) => {
-      const b = el('button', { className: 'olv-wfc-seg-btn', text: s.label });
+      const b = el('button', { className: 'olv-wfc-seg-btn', text: s.label, tip: `${label}: ${s.label}` });
       b.addEventListener('click', () => {
         b.blur();
         set(s.value);
@@ -250,7 +250,10 @@ export class WorkflowConfigPanel {
 
   /** The live key-capture shortcut field plus an "Off" control. */
   private _shortcutRow(): HTMLElement {
-    this._shortcutBtn = el('button', { className: 'olv-wfc-shortcut' });
+    this._shortcutBtn = el('button', {
+      className: 'olv-wfc-shortcut',
+      tip: 'Click, then press a key combo to set the workflow-recorder shortcut.',
+    });
     this._shortcutBtn.addEventListener('click', () => {
       if (this._capturingShortcut) this._endShortcutCapture();
       else this._beginShortcutCapture();

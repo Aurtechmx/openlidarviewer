@@ -6,6 +6,14 @@
 // second one, which lint:module-graph's shrink-only ratchet would refuse.
 export { announcePolite } from './politeAnnounce';
 
+// Side-effect import: installs the single top-level `[data-tip]` glass
+// tooltip layer (see tipLayer.ts for why it has to be one shared layer,
+// appended to `document.body`, rather than a per-control pseudo-element).
+// Every module that builds a `data-tip` control already imports `el` from
+// this file, so importing it here — rather than wiring it from main.ts —
+// guarantees the layer exists before any control can be hovered/focused.
+import './tipLayer';
+
 interface ElProps {
   className?: string;
   text?: string;
@@ -32,6 +40,51 @@ interface ElProps {
   ariaLabel?: string;
 }
 
+/** One hidden description per distinct tip text, shared by every control. */
+const tipDescIds = new Map<string, string>();
+
+/**
+ * The id of the hidden description node for `tip`. The nodes live in one
+ * `hidden` host on `document.body`, outside the controls, so a control's own
+ * text stays exactly what it shows; `aria-describedby` resolves across the
+ * document and may point at hidden content.
+ */
+function tipDescriptionId(tip: string): string | null {
+  const existing = tipDescIds.get(tip);
+  if (existing) return existing;
+  const body = typeof document === 'undefined' ? null : document.body;
+  if (!body || typeof body.append !== 'function' || typeof document.getElementById !== 'function') return null; // minimal test DOM shim
+  let host = document.getElementById('olv-tip-descriptions');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'olv-tip-descriptions';
+    host.hidden = true;
+    body.append(host);
+  }
+  const id = `olv-tip-${tipDescIds.size + 1}`;
+  const desc = document.createElement('span');
+  desc.id = id;
+  desc.textContent = tip;
+  host.append(desc);
+  tipDescIds.set(tip, id);
+  return id;
+}
+
+/**
+ * Wire a `data-tip` explanation onto a node: the shared tip layer shows it on
+ * hover and focus, and `aria-describedby` gives assistive tech the same text.
+ * Icon-only controls (no visible text, no explicit aria-label) also get the
+ * tip as their accessible name.
+ */
+function wireTip(node: HTMLElement, tip: string, hasVisibleLabel: boolean): void {
+  node.dataset.tip = tip;
+  if (!hasVisibleLabel && !node.getAttribute('aria-label')) node.setAttribute('aria-label', tip);
+  // The visible label already says exactly this; a description would repeat it.
+  if (hasVisibleLabel && (node.textContent ?? '').trim() === tip.trim()) return;
+  const descId = tipDescriptionId(tip);
+  if (descId) node.setAttribute('aria-describedby', descId);
+}
+
 /** Create an element with optional props and children. */
 export function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -43,7 +96,6 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   if (props.text !== undefined) node.textContent = props.text;
   if (props.unsafeHtml !== undefined) node.innerHTML = props.unsafeHtml;
   if (props.title) node.title = props.title;
-  if (props.tip) node.dataset.tip = props.tip;
   if (props.ariaLabel) node.setAttribute('aria-label', props.ariaLabel);
   if (props.href && node instanceof HTMLAnchorElement) node.href = props.href;
   // `node.tagName === 'BUTTON'` rather than `instanceof HTMLButtonElement`: the
@@ -53,6 +105,7 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   if (props.type && (node instanceof HTMLInputElement || node.tagName === 'BUTTON'))
     (node as HTMLInputElement).type = props.type;
   for (const child of children) node.append(child);
+  if (props.tip) wireTip(node, props.tip, Boolean(props.text) || children.length > 0);
   return node;
 }
 
@@ -120,4 +173,34 @@ export function formatCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
+}
+
+/**
+ * Escape dismisses a `[data-tip]` control explanation: blurs a
+ * keyboard-focused control (hides its tooltip) and briefly suppresses hover
+ * tooltips via a body class, so a still-hovered pointer doesn't bring the
+ * bubble straight back. Installed once, from this module: every UI builder
+ * already imports `el()`, so no separate wiring is needed in main.ts.
+ */
+export function installControlTipDismissal(root: Document): void {
+  if (typeof root.addEventListener !== 'function') return; // minimal test DOM shim
+  root.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    // Duck-typed rather than `instanceof HTMLElement`: the unit-test DOM shim
+    // (no jsdom in this repo) has no HTMLElement global, and `dataset` +
+    // `blur` are all this needs from the active element.
+    const active = root.activeElement as { dataset?: DOMStringMap; blur?: () => void } | null;
+    if (active?.dataset?.tip && typeof active.blur === 'function') active.blur();
+    root.body?.classList.add('olv-tip-escaped');
+    setTimeout(() => root.body?.classList.remove('olv-tip-escaped'), 600);
+  });
+}
+
+if (
+  typeof document !== 'undefined' &&
+  typeof document.addEventListener === 'function' &&
+  !(document as { __olvTipDismissalInstalled?: boolean }).__olvTipDismissalInstalled
+) {
+  (document as { __olvTipDismissalInstalled?: boolean }).__olvTipDismissalInstalled = true;
+  installControlTipDismissal(document);
 }

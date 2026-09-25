@@ -56,6 +56,10 @@ function faceButton(view: StandardView, onView: (v: StandardView) => void): HTML
   // cardinal and a local letter with the scan's frame, but the button's
   // identity (which standard view it snaps to) never does.
   b.setAttribute('data-testid', `viewcube-${view}`);
+  // A default hover explanation; `applyLabels`/the top-view setup below may
+  // replace the aria-label with a fuller sentence, but the title still names
+  // the standard view this face snaps to.
+  b.title = `${VIEW_NAME[view]} view`;
   b.style.cssText =
     'position:absolute;width:20px;height:20px;border:0;border-radius:50%;cursor:pointer;' +
     'font:600 11px/20px system-ui,sans-serif;color:var(--text);' +

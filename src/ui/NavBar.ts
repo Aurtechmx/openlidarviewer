@@ -601,6 +601,7 @@ export class NavBar {
       className: 'olv-touch-hint-x',
       text: '×',
       ariaLabel: 'Dismiss',
+      tip: 'Dismiss this hint.',
     });
     touchDismiss.addEventListener('click', () => this.hideTouchHint());
     this.touchHint = el('div', { className: 'olv-touch-hint' }, [

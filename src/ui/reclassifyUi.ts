@@ -73,9 +73,12 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
   }
   select.value = '2'; // default to Ground
 
+  // Every caller below overwrites this with a specific explanation; the
+  // fallback only guards a future call site that forgets to.
   const mkBtn = (text: string, testid: string, extra = ''): HTMLButtonElement => {
     const b = el('button', { className: `olv-bc-pill${extra ? ' ' + extra : ''}`, text }) as HTMLButtonElement;
     b.type = 'button';
+    b.title = text;
     b.setAttribute('data-testid', testid);
     return b;
   };

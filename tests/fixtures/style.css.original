@@ -4076,45 +4076,71 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-micon-btn svg { width: 16px; height: 16px; display: block; }
 .olv-micon-btn .olv-mlabel { font-size: var(--text-2xs); }
 
-/* ── hover tooltip (custom, replaces the native title bubble) ────
- * A glass readout that slides out to the RIGHT of each rail control, with a
- * cyan hairline, mono type, a faint glow and a small diamond connector. Shown
- * on hover and keyboard focus; hidden from touch (no hover) and from reduced-
- * motion users' transitions. The accessible name still rides on aria-label. */
-.olv-mkind, .olv-micon-btn { position: relative; }
-.olv-measure-bar [data-tip]::after {
-  content: attr(data-tip);
-  position: absolute; top: calc(100% + 8px); left: 50%;
-  transform: translateX(-50%) translateY(-4px);
+/* ── control-explanation tooltip (custom, app-wide) ───────────────
+ * A glass readout, cyan hairline, mono type, faint glow, small diamond
+ * connector. Shown on hover and keyboard focus (`:focus-visible`) for any
+ * element carrying `data-tip` (set via `el({ tip })` in src/ui/dom.ts, which
+ * also wires an `aria-describedby` text node so assistive tech announces the
+ * same explanation — unchanged by the rule below).
+ *
+ * This used to be a `[data-tip]::after` pseudo-element painted on the
+ * control itself. That broke for any control inside a lower stacking
+ * context than a sibling panel (confirmed live: the header theme toggle's
+ * tip read only "Cycle the interf…", the rest hidden under
+ * `.olv-right-rail`) — z-index only wins ties *inside* an element's own
+ * stacking context, and no z-index on the pseudo-element can out-rank a
+ * context above it. `tipLayer.ts` renders ONE shared element instead,
+ * appended to `document.body` (the root stacking context) and positioned in
+ * JS from the hovered/focused control's `getBoundingClientRect()`, clamped
+ * so it never spills past the viewport (checked to 320px) — see
+ * tipPositioning.ts. `--olv-tip-connector-x` / `data-placement` are set by
+ * that positioning code, not authored here. */
+.olv-tip-layer {
+  position: fixed; top: 0; left: 0;
   padding: 4px 9px; border-radius: var(--radius-sm);
   background: rgba(8, 13, 26, 0.94);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border: 0.5px solid rgba(0, 178, 255, 0.42);
   color: var(--text); font-size: var(--text-2xs); font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em; white-space: nowrap; line-height: 1.2;
+  letter-spacing: 0.02em; white-space: normal; max-width: 260px; width: max-content;
+  line-height: 1.2;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 14px rgba(0, 178, 255, 0.14);
+  /* `pointer-events: none` while hidden: the layer persists at its LAST
+   * shown position between hovers (it is created once, lazily, then
+   * repositioned rather than removed), so leaving hit-testing on here would
+   * silently block clicks on whatever now sits under that stale spot.
+   * `.olv-tip-layer--visible` turns it back on — real hit-testing while
+   * actually shown, which is also what confirms this really is the
+   * topmost paint (see tests/e2e/controlExplanations.spec.ts's
+   * `elementFromPoint` assertion). */
   opacity: 0; pointer-events: none; z-index: var(--z-popover);
-  transition: opacity 140ms var(--ease-standard), transform 140ms var(--ease-standard);
+  transition: opacity 140ms var(--ease-standard);
 }
-.olv-measure-bar [data-tip]::before {
-  content: ''; position: absolute; top: calc(100% + 3px); left: 50%;
+.olv-tip-layer::before {
+  content: ''; position: absolute; left: var(--olv-tip-connector-x, 50%);
   width: 7px; height: 7px; transform: translateX(-50%) rotate(45deg);
   background: rgba(8, 13, 26, 0.94);
   border-left: 0.5px solid rgba(0, 178, 255, 0.42);
   border-top: 0.5px solid rgba(0, 178, 255, 0.42);
-  opacity: 0; pointer-events: none; z-index: var(--z-popover);
-  transition: opacity 140ms var(--ease-standard);
 }
-.olv-measure-bar [data-tip]:hover::after,
-.olv-measure-bar [data-tip]:focus-visible::after {
-  opacity: 1; transform: translateX(-50%) translateY(0);
+/* Below the anchor (default): connector sits on the tip box's top edge. */
+.olv-tip-layer:not([data-placement="above"])::before { top: -3.5px; }
+/* Flipped above the anchor: connector sits on the tip box's bottom edge,
+ * rotated so the same diamond still points toward the control. */
+.olv-tip-layer[data-placement="above"]::before {
+  bottom: -3.5px; top: auto;
+  border-left: none; border-top: none;
+  border-right: 0.5px solid rgba(0, 178, 255, 0.42);
+  border-bottom: 0.5px solid rgba(0, 178, 255, 0.42);
 }
-.olv-measure-bar [data-tip]:hover::before,
-.olv-measure-bar [data-tip]:focus-visible::before { opacity: 1; }
+.olv-tip-layer--visible { opacity: 1; pointer-events: auto; }
 @media (hover: none) {
-  /* Touch devices: no hover, so suppress the tooltip entirely. */
-  .olv-measure-bar [data-tip]::after,
-  .olv-measure-bar [data-tip]::before { display: none; }
+  /* Touch devices: no hover, so tipLayer.ts never shows this from a pointer
+   * event — kept here too as a static backstop against any drift. */
+  .olv-tip-layer { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .olv-tip-layer { transition: none; }
 }
 .olv-measure-finish:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;

@@ -263,6 +263,7 @@ class ProfileWorkbench {
       className: 'olv-workbench-btn',
       type: 'button',
       text: 'Collapse',
+      tip: 'Shrink the profile workbench to its title bar without closing it.',
     });
     const closeBtn = el('button', {
       className: 'olv-workbench-btn olv-workbench-close',

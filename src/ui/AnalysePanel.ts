@@ -2604,9 +2604,17 @@ export class AnalysePanel {
     // ── actions ──────────────────────────────────────────────────────────────
     const errLine = el('p', { className: 'olv-modal-error' });
     errLine.style.display = 'none';
-    const cancelBtn = el('button', { className: 'olv-modal-btn olv-modal-cancel', text: 'Cancel' });
+    const cancelBtn = el('button', {
+      className: 'olv-modal-btn olv-modal-cancel',
+      text: 'Cancel',
+      title: 'Close this dialog without generating the PDF.',
+    });
     cancelBtn.setAttribute('type', 'button');
-    const exportBtn = el('button', { className: 'olv-modal-btn olv-modal-cta', text: 'Export PDF' });
+    const exportBtn = el('button', {
+      className: 'olv-modal-btn olv-modal-cta',
+      text: 'Export PDF',
+      title: 'Generate the intelligence report PDF with the site details entered above.',
+    });
     exportBtn.setAttribute('type', 'button');
     const footer = el('div', { className: 'olv-modal-actions' });
     footer.append(errLine, cancelBtn, exportBtn);

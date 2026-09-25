@@ -710,7 +710,11 @@ export class ExportPanel {
       count = 0;
     }
 
-    const head = el('button', { className: 'olv-export-products-head', type: 'button' });
+    const head = el('button', {
+      className: 'olv-export-products-head',
+      type: 'button',
+      tip: 'Show or hide the list of exportable products for this scan.',
+    });
     const chevron = el('span', { className: 'olv-export-products-chevron', text: '▾' });
     head.append(el('span', { text: 'Products' }), chevron);
     const content = el('div', { className: 'olv-export-products-body' });
@@ -932,6 +936,7 @@ export class ExportPanel {
     // row, so a reader reaching for one button had nothing under the pointer.
     if (!enabled && reason) btn.title = reason;
     else if (enabled && enabledTitle) btn.title = enabledTitle;
+    else btn.title = `${label}: export this product for the current scan.`;
     btn.addEventListener('click', onClick);
     return btn;
   }
@@ -967,16 +972,17 @@ export class ExportPanel {
 
   private _renderCrsPills(): void {
     this._crsRow.replaceChildren();
-    const modes: { mode: CrsMode; label: string }[] = [
-      { mode: 'keep', label: 'Keep' },
-      { mode: 'assign', label: 'Assign EPSG' },
-      { mode: 'reproject', label: 'Reproject' },
+    const modes: { mode: CrsMode; label: string; tip: string }[] = [
+      { mode: 'keep', label: 'Keep', tip: 'Write the file with its existing CRS unchanged.' },
+      { mode: 'assign', label: 'Assign EPSG', tip: 'Label the file with an EPSG code without changing any coordinates.' },
+      { mode: 'reproject', label: 'Reproject', tip: 'Recompute every coordinate into a different CRS before writing the file.' },
     ];
-    modes.forEach(({ mode, label }) => {
+    modes.forEach(({ mode, label, tip }) => {
       const pill = el('button', {
         className: `olv-bc-pill${this._crsMode === mode ? ' is-active' : ''}`,
         text: label,
         type: 'button',
+        tip,
       });
       pill.setAttribute('aria-pressed', String(this._crsMode === mode));
       pill.addEventListener('click', () => {

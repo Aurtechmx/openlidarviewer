@@ -168,6 +168,7 @@ export function openModal(opts: ModalOptions): ModalHandle {
     className: 'olv-modal-x',
     text: '×', // ×
     ariaLabel: 'Close dialog',
+    tip: 'Close this dialog.',
     type: 'button',
   });
 
@@ -282,11 +283,13 @@ export function openConfirm(opts: ConfirmOptions): Promise<boolean> {
       className: 'olv-confirm-cancel',
       text: opts.cancelLabel ?? 'Cancel',
       type: 'button',
+      tip: 'Close this dialog and take no action.',
     });
     const confirmBtn = el('button', {
       className: 'olv-confirm-ok',
       text: opts.confirmLabel ?? 'Continue',
       type: 'button',
+      tip: opts.title ? `Proceed with: ${opts.title}` : 'Confirm and proceed.',
     });
     const footer = el('div', { className: 'olv-confirm-actions' }, [cancelBtn, confirmBtn]);
 

@@ -26,6 +26,7 @@ class FakeEl {
   type = '';
   text = '';
   tabIndex = 0;
+  readonly dataset: Record<string, string> = {};
   parent: FakeEl | null = null;
   readonly tagName: string;
   readonly children: FakeEl[] = [];

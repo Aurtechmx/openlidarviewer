@@ -96,7 +96,7 @@ export class BatchConverter {
     head.append(
       titleEl,
       (() => {
-        const x = el('button', { className: 'olv-bc-close', text: '✕', ariaLabel: 'Close' });
+        const x = el('button', { className: 'olv-bc-close', text: '✕', tip: 'Close batch convert.' });
         x.addEventListener('click', () => this.close());
         return x;
       })(),
@@ -121,7 +121,11 @@ export class BatchConverter {
     this._crsRow = el('div', { className: 'olv-bc-pills' });
     this._crsExtra = el('div', { className: 'olv-bc-crs-extra' });
     this._hint = el('p', { className: 'olv-bc-hint' });
-    this._convertBtn = el('button', { className: 'olv-bc-convert', type: 'button' }) as HTMLButtonElement;
+    this._convertBtn = el('button', {
+      className: 'olv-bc-convert',
+      type: 'button',
+      tip: 'Convert the queued files, or stop a run in progress without losing the queue.',
+    }) as HTMLButtonElement;
     // While a batch runs the same button is its stop control — clicking it aborts
     // rather than starting a second run, so a long conversion can be abandoned
     // without dismissing the modal and losing the queued files.
@@ -238,7 +242,7 @@ export class BatchConverter {
     if (this._files.length === 0) return;
     this._files.forEach((f, i) => {
       const row = el('div', { className: 'olv-bc-file-row' });
-      const remove = el('button', { className: 'olv-bc-file-del', text: '✕', ariaLabel: `Remove ${f.name}` });
+      const remove = el('button', { className: 'olv-bc-file-del', text: '✕', tip: `Remove ${f.name} from this batch.` });
       remove.addEventListener('click', () => {
         this._files.splice(i, 1);
         this._renderFileList();

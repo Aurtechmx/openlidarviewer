@@ -56,6 +56,7 @@ export function showContextMenu(clientX: number, clientY: number, items: Context
     const row = el('button', {
       className: 'olv-ctxmenu-item',
       text: item.label,
+      tip: item.label,
     }) as HTMLButtonElement;
     row.type = 'button';
     row.setAttribute('role', 'menuitem');

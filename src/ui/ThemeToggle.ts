@@ -81,6 +81,7 @@ export class ThemeToggle {
 
     const button = el('button', {
       className: 'olv-theme-toggle',
+      tip: 'Cycle the interface theme (dark, light, high-contrast).',
     }) as HTMLButtonElement;
     button.type = 'button';
 

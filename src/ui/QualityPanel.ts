@@ -159,6 +159,7 @@ export class QualityPanel {
     this._followButton = el('button', {
       className: 'olv-quality-follow',
       text: 'Follow the slider',
+      tip: 'Clear the manual quality overrides and let the auto quality slider control rendering again.',
     }) as HTMLButtonElement;
     this._followButton.type = 'button';
     this._followButton.addEventListener('click', () => this._callbacks.onPreference({ overrides: {} }));

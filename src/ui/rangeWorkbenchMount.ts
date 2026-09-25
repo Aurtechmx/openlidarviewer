@@ -90,6 +90,7 @@ export function mountRangeWorkbench(opts: MountRangeWorkbenchOptions): MountedRa
   const button = el('button', {
     className: 'olv-range-launcher-action',
     text: 'Open Range Frame Workbench',
+    tip: 'Open the acquisition-grid view of scanned and missed cells for this scan.',
   });
   button.type = 'button';
   button.addEventListener('click', () => {

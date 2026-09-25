@@ -12,6 +12,7 @@ import { createToastHost } from '../src/ui/panelChrome';
 
 class FakeEl {
   className = '';
+  readonly dataset: Record<string, string> = {};
   type = '';
   textContent = '';
   readonly children: FakeEl[] = [];

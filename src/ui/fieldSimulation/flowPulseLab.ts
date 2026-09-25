@@ -298,16 +298,12 @@ export function renderFlowPulseLab(outcome: FlowPulseResult | FlowRefusal): HTML
 
 type ClickMode = 'pulse' | 'catchment';
 
-function button(text: string, className: string): HTMLButtonElement {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = className;
-  b.textContent = text;
-  return b;
+function button(text: string, className: string, tip: string): HTMLButtonElement {
+  return el('button', { className, text, type: 'button', tip }) as HTMLButtonElement;
 }
 
 function makeRetryButton(onRetry: () => void): HTMLButtonElement {
-  const b = button('Retry', 'olv-flow-retry');
+  const b = button('Retry', 'olv-flow-retry', 'Retry loading the terrain surface.');
   b.addEventListener('click', onRetry);
   return b;
 }
@@ -317,14 +313,14 @@ function segmentedControl<T extends string>(
   ariaLabel: string,
   groupClassName: string,
   btnClassName: string,
-  options: ReadonlyArray<{ value: T; label: string }>,
+  options: ReadonlyArray<{ value: T; label: string; tip: string }>,
   current: () => T,
   onSelect: (value: T) => void,
 ): { element: HTMLElement; sync: () => void } {
   const group = el('div', { className: groupClassName, ariaLabel });
   group.setAttribute('role', 'group');
   const buttons = options.map((opt) => {
-    const b = button(opt.label, btnClassName);
+    const b = button(opt.label, btnClassName, opt.tip);
     b.dataset.value = opt.value;
     b.addEventListener('click', () => onSelect(opt.value));
     return b;
@@ -467,8 +463,8 @@ function mountFlowPulseInteractive(
     'olv-flow-cond',
     'olv-flow-cond-btn',
     [
-      { value: 'raw', label: 'Raw terrain' },
-      { value: 'priority-flood', label: 'Priority-Flood conditioned' },
+      { value: 'raw', label: 'Raw terrain', tip: 'Trace flow over the terrain surface as loaded, unconditioned.' },
+      { value: 'priority-flood', label: 'Priority-Flood conditioned', tip: 'Fill closed depressions first, so flow always reaches an outlet.' },
     ],
     () => conditioning,
     (value) => { if (value !== conditioning && !busy) void rerun(value); },
@@ -479,14 +475,14 @@ function mountFlowPulseInteractive(
     'olv-flow-mode',
     'olv-flow-mode-btn',
     [
-      { value: 'pulse', label: 'Trace downstream path' },
-      { value: 'catchment', label: 'Set catchment outlet' },
+      { value: 'pulse', label: 'Trace downstream path', tip: 'Click a cell to trace its downstream flow path.' },
+      { value: 'catchment', label: 'Set catchment outlet', tip: "Click a cell to set the catchment's outlet point." },
     ],
     () => mode,
     (value) => { mode = value; modeCtl.sync(); renderSelection(); },
   );
 
-  const overlayToggle = button('Show flow accumulation', 'olv-flow-overlay-toggle');
+  const overlayToggle = button('Show flow accumulation', 'olv-flow-overlay-toggle', 'Toggle the flow-accumulation overlay on the 3D view.');
   overlayToggle.setAttribute('aria-pressed', overlayOn ? 'true' : 'false');
   overlayToggle.addEventListener('click', () => {
     overlayOn = !overlayOn;
@@ -604,7 +600,7 @@ function mountFlowPulseInteractive(
     }
   }
 
-  const exportButton = button('Export package (ZIP)', 'olv-flow-export');
+  const exportButton = button('Export package (ZIP)', 'olv-flow-export', 'Export the run as a ZIP package: trace, catchment, and report.');
   let exportBusy = false;
 
   async function handleExport(): Promise<void> {
