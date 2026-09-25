@@ -39,7 +39,7 @@ const HISTORICAL = [
 ];
 
 const SCANNED = /\.(ts|tsx|mjs|js|md|py|sh|yaml|yml)$/;
-const TOOL_PATH = /(?:^|[`'"( ])((?:scripts|tools)\/[A-Za-z0-9._/-]+\.(?:mjs|js|ts|sh|py))/g;
+const TOOL_PATH = /(?:^|[`'"( ])((?:scripts|tools)\/[A-Za-z0-9._/-]+\.(?:mjs|js|ts|sh|py))(?![A-Za-z0-9])/g;
 const COMMENT = /^\s*(?:\/\/|\/\*|\*|#|<!--)/;
 const RETIRED = /\bretired\b|\bremoved\b|\bdeleted\b|no longer/i;
 
