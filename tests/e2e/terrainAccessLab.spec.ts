@@ -63,6 +63,9 @@ test('blank profile refuses with named field problems, per field', async ({ page
 });
 
 test('profile, start/goal by keyboard and click, run, route shown, why-not, export', async ({ page }) => {
+  // The whole workflow (load, profile, run, route, explanation, export) takes
+  // 27 to 29 s in WebKit on CI, close to the default 30 s budget.
+  test.slow();
   await page.goto('/?test=1');
   // Georeferenced (UTM zone 13N) fixture — unlike `dropDenseGridPly`'s local/
   // unreferenced PLY, this resolves a horizontal scale, so the run actually
