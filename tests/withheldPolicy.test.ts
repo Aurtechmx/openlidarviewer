@@ -175,8 +175,11 @@ describe('the audit this policy records', () => {
     // decision is still made in exactly one place. This file reads
     // `classificationFlags` only to carry it to that gather unmodified, never
     // to test a bit of its own.
+    //
+    // `render/measure/lassoVolumeCompute.ts` applies the policy to the lasso
+    // volume's input; its before-and-after is tests/lassoVolumeWithheld.test.ts.
     const reading = SCIENTIFIC_DIRS.flatMap(filesReadingFlags);
-    expect(reading).toEqual(['terrain/withheldAwareTerrainGather.ts']);
+    expect(reading.sort()).toEqual(['render/measure/lassoVolumeCompute.ts', 'terrain/withheldAwareTerrainGather.ts']);
   });
 
   it('the bit survives the pipeline that carries it', () => {

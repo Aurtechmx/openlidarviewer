@@ -34,6 +34,8 @@ import type {
   Vec2,
 } from './lassoVolume';
 import type { Vec3 } from '../navMath';
+import { isWithheld } from '../../science/withheldPolicy';
+import type { VolumeWithheldCounts } from './types';
 /** A resident streaming node as the lasso walk needs to see it. */
 export interface StreamingLassoPart {
   /** The node's decoded positions, render-local — which is world for a stream. */
@@ -45,6 +47,8 @@ export interface StreamingLassoPart {
    * buffer rather than the strided copy.
    */
   filters(stride: number): SelectionVisibilityFilters | null;
+  /** The node's own per-point flag bytes, or absent when it carries none. */
+  readonly flags?: Uint8Array;
 }
 
 /** A resident node as the parts builder needs to read it. */
@@ -52,6 +56,7 @@ export interface StreamingChunkView {
   readonly positions: Float32Array;
   readonly classification?: Uint8Array;
   readonly intensity?: Uint16Array;
+  readonly classificationFlags?: Uint8Array;
 }
 
 /**
@@ -76,6 +81,7 @@ export function streamingLassoParts(
 ): StreamingLassoPart[] {
   return chunks.map((chunk) => ({
     positions: chunk.positions,
+    flags: chunk.classificationFlags,
     filters: (stride: number) => lassoVisibilityFilters(clipKeep, acceptFor(chunk), stride),
   }));
 }
@@ -107,6 +113,37 @@ function applyVisibility(
     w++;
   }
   return { indices, screenX, screenY, depth, count: w };
+}
+
+/**
+ * Drop the points the producer marked Withheld from a selection, in place,
+ * the way the terrain gather does (`sampleStridedTerrain`): scientific
+ * processing leaves them out (`withheldPolicy.ts`), Overlap and every other
+ * marking are read as normal. `flags` indexes the source's OWN buffer, so the
+ * walk's strided index is multiplied back by `stride` first.
+ *
+ * Returns the compacted selection and the number dropped, or `null` when the source has no flags channel
+ * that lines up with its points: the count is then unknown, not zero, and
+ * nothing is dropped. A voxel-reduced cloud lands here, because its centroids
+ * carry no flags, and none are invented for them.
+ */
+export function dropWithheld(
+  sel: LassoSelectionWithDepth,
+  flags: Uint8Array | undefined,
+  pointCount: number,
+  stride: number,
+): { readonly sel: LassoSelectionWithDepth; readonly dropped: number | null } {
+  if (!flags || flags.length !== pointCount) return { sel, dropped: null };
+  const step = Math.max(1, Math.floor(stride));
+  const { indices, screenX, screenY, depth } = sel;
+  let w = 0;
+  for (let r = 0; r < sel.count; r++) {
+    const pi = indices[r];
+    if (isWithheld(flags[pi * step])) continue;
+    indices[w] = pi; screenX[w] = screenX[r]; screenY[w] = screenY[r]; depth[w] = depth[r];
+    w++;
+  }
+  return { sel: { indices, screenX, screenY, depth, count: w }, dropped: sel.count - w };
 }
 
 import { describeLassoSelectionBasis, rejectOccluded } from './lassoOcclusion';
@@ -288,6 +325,11 @@ export interface LassoVolumeComputeInput {
    * re-run without anything in the file saying why.
    */
   readonly basis?: LassoSelectionBasis;
+  /**
+   * Keep points the producer marked Withheld. Default false: a volume is
+   * scientific processing, which leaves them out (`withheldPolicy.ts`).
+   */
+  readonly includeWithheld?: boolean;
 }
 
 /** What the occlusion decision did, for the caller to state alongside the figure. */
@@ -337,6 +379,8 @@ export interface LassoVolumeComputeOutput {
   readonly referenceZ: number;
   readonly result: ReturnType<typeof volumeFromLassoWithFootprint>['result'];
   readonly selectionBasis: LassoSelectionBasisReport;
+  /** Source, Withheld-excluded and analysed point counts for this walk. */
+  readonly withheld: VolumeWithheldCounts;
 }
 
 /**
@@ -377,6 +421,25 @@ export function computeLassoVolume(
   // hides the ground in another, and a per-source buffer would never see that.
   const parts: Array<{ readonly id: string | null; readonly positions: Float32Array; readonly sel: LassoSelectionWithDepth }> = [];
   let candidateCount = 0;
+  // Withheld points leave at the input, before the depth buffer and the
+  // estimators see them. `withheldKnown` turns false as soon as one
+  // contributing source has no flags channel: its count is then unknown.
+  const excludeWithheld = !input.includeWithheld;
+  let withheldDropped = 0;
+  let withheldKnown = true;
+  let sourceCount = 0;
+  const takeWithheld = (
+    sel: LassoSelectionWithDepth,
+    flags: Uint8Array | undefined,
+    points: number,
+  ): LassoSelectionWithDepth => {
+    sourceCount += sel.count;
+    if (!excludeWithheld) return sel;
+    const out = dropWithheld(sel, flags, points, stride);
+    if (out.dropped === null) withheldKnown = false;
+    else withheldDropped += out.dropped;
+    return out.sel;
+  };
 
   // Static clouds, walked independently so per-cloud indices can go back to
   // the highlight pipeline.
@@ -386,9 +449,14 @@ export function computeLassoVolume(
     if (raw.count === 0) continue;
     // Hidden points leave before anything is measured or pooled into the depth
     // buffer, so neither the volume nor the occlusion test can see them.
-    const sel = applyVisibility(raw, positions, host.visibilityFor(entry, stride));
+    const visible = applyVisibility(raw, positions, host.visibilityFor(entry, stride));
+    if (visible.count === 0) continue;
+    if (visible.count < raw.count) anyHidden = true;
+    // A voxel-reduced cloud's points are centroids, which have no flags of
+    // their own: its Withheld count is unknown whatever array it holds.
+    const flags = host.wasReduced(entry.cloud) ? undefined : entry.cloud.classificationFlags;
+    const sel = takeWithheld(visible, flags, entry.cloud.pointCount);
     if (sel.count === 0) continue;
-    if (sel.count < raw.count) anyHidden = true;
     if (host.wasReduced(entry.cloud)) anySourceReduced = true;
     parts.push({ id, positions, sel });
     candidateCount += sel.count;
@@ -398,15 +466,18 @@ export function computeLassoVolume(
   // streaming renderer owns its own colour buffers, so per-mesh indexing is a
   // separate piece of work.
   for (const part of host.streamingParts) {
-    const positions = stride === 1 ? part.positions : stridePositions(part.positions, stride);
+    const src = part.positions;
+    const positions = stride === 1 ? src : stridePositions(src, stride);
     const raw = selectByLassoWithDepth({ positions, lasso, project: host.project });
     if (raw.count === 0) continue;
     // The same rule the static layers get: a clip box or a class filter that
     // hides a point hides it from the measurement too. Leaving this out meant a
     // clip bound the static layers and not a resident stream.
-    const sel = applyVisibility(raw, positions, part.filters(stride));
+    const visible = applyVisibility(raw, positions, part.filters(stride));
+    if (visible.count === 0) continue;
+    if (visible.count < raw.count) anyHidden = true;
+    const sel = takeWithheld(visible, part.flags, src.length / 3);
     if (sel.count === 0) continue;
-    if (sel.count < raw.count) anyHidden = true;
     parts.push({ id: null, positions, sel });
     candidateCount += sel.count;
   }
@@ -518,5 +589,10 @@ export function computeLassoVolume(
     referenceZ: lassoOut.referenceZ,
     result: lassoOut.result,
     selectionBasis,
+    withheld: {
+      source: sourceCount,
+      excluded: !excludeWithheld ? 0 : withheldKnown ? withheldDropped : 'unknown',
+      analysed: totalSelected,
+    },
   };
 }

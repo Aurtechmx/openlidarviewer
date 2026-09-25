@@ -111,13 +111,13 @@ describe('measurementMetrics', () => {
     expect(m.net_m3).toBe(90);
   });
 
-  // D2: a switched lasso record's fill/cut/net are the grid figure; the
+  // a switched lasso record's fill/cut/net are the grid figure; the
   // point-sample cross-check rides alongside under its own column names.
   const GRID_VOLUME = mk('volume', [[0, 0, 0], [10, 0, 0], [10, 10, 0]], {
     volume: {
       fill: 100, cut: 5, net: 95, referenceZ: 0, footprintArea: 50,
       pointsInPolygon: 800, densityNative: 16, confidence: 'medium',
-      method: 'olv.volume.stockpile-area-grid@2', gridAuthority: 'measured', gridAuthorityReason: '',
+      method: 'olv.volume.stockpile-area-grid@3', gridAuthority: 'measured', gridAuthorityReason: '',
       crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' },
     },
   });
@@ -136,7 +136,7 @@ describe('measurementMetrics', () => {
     const withheld = mk('volume', [[0, 0, 0], [10, 0, 0], [10, 10, 0]], {
       volume: {
         referenceZ: 0, footprintArea: 50, pointsInPolygon: 800, densityNative: 16,
-        confidence: 'high', method: 'olv.volume.stockpile-area-grid@2',
+        confidence: 'high', method: 'olv.volume.stockpile-area-grid@3',
         gridAuthority: 'withheld', gridAuthorityReason: 'insufficient observations',
         crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' },
       },
@@ -260,12 +260,12 @@ describe('measurementsToCsv', () => {
   });
 });
 
-describe('measurementsToCsv — D2 grid-canonical lasso volumes', () => {
+describe('measurementsToCsv — grid-canonical lasso volumes', () => {
   const gridVol = mk('volume', [[0, 0, 0], [10, 0, 0], [10, 10, 0]], {
     volume: {
       fill: 100, cut: 5, net: 95, referenceZ: 0, footprintArea: 50,
       pointsInPolygon: 800, densityNative: 16, confidence: 'medium',
-      method: 'olv.volume.stockpile-area-grid@2', gridAuthority: 'preview', gridAuthorityReason: 'display sample',
+      method: 'olv.volume.stockpile-area-grid@3', gridAuthority: 'preview', gridAuthorityReason: 'display sample',
       crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' },
     },
   });
@@ -432,7 +432,7 @@ describe('the evidence stamp names the claim behind each figure', () => {
     expect(note.match(/MEAS-DISTANCE/g)).toHaveLength(1);
   });
 
-  // D2: a lasso volume whose record switched to the area-weighted grid draws
+  // a lasso volume whose record switched to the area-weighted grid draws
   // on VOL-STOCKPILE, not VOL-POINT-SAMPLE — the same defect this describe
   // block's own header names, one level down (a claim per INSTANCE, not kind).
   const gridVol = {
@@ -440,7 +440,7 @@ describe('the evidence stamp names the claim behind each figure', () => {
     volume: {
       fill: 100, cut: 5, net: 95, referenceZ: 0, footprintArea: 50,
       pointsInPolygon: 800, densityNative: 16, confidence: 'medium',
-      method: 'olv.volume.stockpile-area-grid@2', gridAuthority: 'measured', gridAuthorityReason: '',
+      method: 'olv.volume.stockpile-area-grid@3', gridAuthority: 'measured', gridAuthorityReason: '',
     },
   } as never;
   const psVol = {
@@ -469,7 +469,7 @@ describe('the evidence stamp names the claim behind each figure', () => {
     id: 'w', kind: 'volume', name: 'w', points: [[0, 0, 0], [10, 0, 0], [10, 10, 0]],
     volume: {
       referenceZ: 0, footprintArea: 50, pointsInPolygon: 800, densityNative: 16,
-      confidence: 'high', method: 'olv.volume.stockpile-area-grid@2',
+      confidence: 'high', method: 'olv.volume.stockpile-area-grid@3',
       gridAuthority: 'withheld', gridAuthorityReason: 'insufficient observations',
       crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' },
     },

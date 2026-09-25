@@ -61,6 +61,25 @@ function roundTo3(v: number): number {
  * real-data comparisons against the point-sample cross-check that disagreed
  * by 3.6% and 8.6% with no ground truth to say which was right.
  */
+/**
+ * The measured accuracy behind the grid figure (ledger L05). Both readings
+ * are quoted: the per-run median error, and the per-case bias reading, which
+ * orders the two estimators the other way.
+ */
+const GRID_ACCURACY_EVIDENCE =
+  'Measured on 21 analytic cases: median per-run error 1.44% (grid) against ' +
+  '6.71% (point sample); the per-case bias reading reverses the order, ' +
+  '1.40% against 0.90%. Uniform-sampling worst case 18.3% against 31.9%.';
+
+/** The input counts a lasso result carries, as one caveat, or null. */
+function withheldCaveat(w: NonNullable<Measurement['volume']>['withheld']): string | null {
+  if (!w) return null;
+  if (w.excluded === 'unknown') {
+    return `${w.analysed} of ${w.source} selected points analysed; Withheld flags unavailable, so any Withheld points were not excluded.`;
+  }
+  return `${w.analysed} of ${w.source} selected points analysed; ${w.excluded} Withheld excluded.`;
+}
+
 const GRID_KNOWN_LIMITATIONS =
   'Known limits: a sharp step falling inside one grid cell reads low by ' +
   'about 15%; clustered, sparse coverage reaches PREVIEW at best; two ' +
@@ -139,8 +158,8 @@ export function measurementsToFindings(
       const V = L * L * Vv; // native render units³ → m³
       const footprint = `${(vol.footprintArea * L * L).toFixed(2)} m²`;
       const caveats: string[] = [];
-      // A switched (D2) lasso record's estimator is the area-weighted grid;
-      // an unswitched record (the polygon tool, or one saved before D2) keeps
+      // A grid-owned lasso record's estimator is the area-weighted grid;
+      // an unswitched record (the polygon tool, or one saved before the grid became its figure) keeps
       // its point-sample cut/fill as the only figure and needs none of this.
       if (vol.gridAuthority !== undefined) {
         caveats.push(
@@ -153,13 +172,15 @@ export function measurementsToFindings(
             `Point-sample cross-check (${vol.crossCheck.method}): cut ${(vol.crossCheck.cut * V).toFixed(2)} m³ / fill ${(vol.crossCheck.fill * V).toFixed(2)} m³.`,
           );
         }
-        caveats.push(GRID_KNOWN_LIMITATIONS);
+        caveats.push(GRID_KNOWN_LIMITATIONS, GRID_ACCURACY_EVIDENCE);
       } else {
         caveats.push(
           `Cut ${((vol.cut ?? 0) * V).toFixed(2)} m³ / fill ${((vol.fill ?? 0) * V).toFixed(2)} m³ over ${footprint} footprint.`,
           'Point-sample integration assumes uniform coverage inside the polygon.',
         );
       }
+      const wc = withheldCaveat(vol.withheld);
+      if (wc) caveats.push(wc);
       if (m.volumeResidentOnly) {
         caveats.push('Sampled from streaming resident points only — may refine as more nodes load.');
       }
@@ -168,7 +189,7 @@ export function measurementsToFindings(
       // point-sampled volume printed to ~1e-14 m³ beside a distance at 1 mm,
       // implying a resolution its own coverage caveat denies.
       //
-      // A withheld grid carries no net of its own (D2 clause 2); the
+      // A withheld grid carries no net of its own; the
       // cross-check's net is reported instead, under a label that says so —
       // never silently as the (absent) grid figure.
       if (vol.net !== undefined) {

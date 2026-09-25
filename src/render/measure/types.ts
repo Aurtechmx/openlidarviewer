@@ -96,7 +96,7 @@ export interface VolumeRecord {
   /**
    * Fill above the reference plane, native render units³ (×unitToMetres³ →
    * m³). Absent exactly when `gridAuthority` is `'withheld'`: a withheld
-   * lasso (D2) carries no volume figure at all rather than a borrowed one.
+   * lasso carries no volume figure at all rather than a borrowed one.
    */
   fill?: number;
   /** Cut below the reference plane; see `fill` for when this is absent. */
@@ -151,7 +151,7 @@ export interface VolumeRecord {
    */
   skippedNonFinite?: number;
   /**
-   * Lasso only, present from the D2 switch onward, when `method` names the
+   * Lasso only, present on a lasso record saved with the grid as its figure, when `method` names the
    * area-weighted grid: the coverage verdict `fill`/`cut`/`net` stand under.
    * `'measured'` is a plain figure; `'preview'` is the same arithmetic under a
    * scope the app cannot yet call complete (a streaming source short of full
@@ -168,7 +168,7 @@ export interface VolumeRecord {
   gridAuthorityReason?: string;
   /**
    * The point-sample cut/fill figure, kept as a labelled cross-check beside
-   * the grid once the grid became the canonical figure (D2 clause 5). Same
+   * the grid once the grid became the canonical figure. Same
    * unit contract as `fill`/`cut`/`net` (native render units³). Present only
    * alongside `gridAuthority` — a record from before the switch, and the
    * polygon tool's record, already have the point-sample number as their
@@ -181,6 +181,28 @@ export interface VolumeRecord {
     /** id@version of the cross-check estimator (the point-sample integration). */
     readonly method: string;
   };
+  /**
+   * Schema version of the canonical lasso result this record was built as
+   * (`stockpileResult.ts`, built once and read by the toast, the session, the
+   * exports and the report). Absent on a record saved before it and on the
+   * polygon Volume tool; such a record is read as saved, never rebuilt.
+   */
+  resultSchema?: number;
+  /** Lasso only: how many points the volume read, and how many were Withheld. */
+  withheld?: VolumeWithheldCounts;
+}
+
+/**
+ * The input a lasso volume read. `source` is every point the lasso and the
+ * visibility filters selected; `excluded` those left out as Withheld, or
+ * `'unknown'` when a contributing source carried no flags (a voxel-reduced
+ * cloud, a decode without point semantics); `analysed` what the estimators
+ * integrated after the occlusion test.
+ */
+export interface VolumeWithheldCounts {
+  readonly source: number;
+  readonly excluded: number | 'unknown';
+  readonly analysed: number;
 }
 
 /** A single placed measurement. */

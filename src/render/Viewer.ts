@@ -3737,7 +3737,7 @@ export class Viewer {
       result: out.result, volumeMethod: POINT_SAMPLE_VOLUME_METHOD,
       selectionRestrictedByVisibility: out.selectionRestrictedByVisibility, lasso,
       stockpileInputs: {
-        polygon: out.polygon3D, positions: out.selectedPositions, lin,
+        polygon: out.polygon3D, positions: out.selectedPositions, lin, withheld: out.withheld,
         options: {
           sourceReduced: out.anySourceReduced, densityUnitKnown, vert,
           streamingContributed: out.streamingContributed, walkSampled: out.budget.downsample,

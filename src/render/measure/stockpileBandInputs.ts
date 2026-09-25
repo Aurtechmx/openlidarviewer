@@ -13,6 +13,7 @@
  */
 import type { Vec3 } from '../navMath';
 import type { StockpileToastOptions } from './stockpilePresenter';
+import type { VolumeWithheldCounts } from './types';
 
 export interface StockpileBandInputs {
   /** The convex-hull footprint, lifted to the integration reference plane. */
@@ -23,4 +24,6 @@ export interface StockpileBandInputs {
   readonly lin: number;
   /** Scope and unit facts the band's honesty rules read. */
   readonly options: StockpileToastOptions;
+  /** Source, Withheld-excluded and analysed counts of the lasso walk. */
+  readonly withheld?: VolumeWithheldCounts;
 }

@@ -221,7 +221,7 @@ describe('presentStockpileAreaGrid', () => {
     expect(v.authority).toBe('measured');
     expect(v.coverage).toBe('measured');
     expect(v.volumeM3).toBeCloseTo(20 * 10 * 3, 6);
-    expect(v.method).toBe('olv.volume.stockpile-area-grid@2');
+    expect(v.method).toBe('olv.volume.stockpile-area-grid@3');
     expect(v.supportFraction).toBeCloseTo(1, 6);
   });
 
@@ -353,7 +353,7 @@ describe('stockpileToastSuffix (area-grid)', () => {
   });
 });
 
-// D2: the Save path needs the SAME verdict the toast just printed, so it can
+// the Save path needs the SAME verdict the toast just printed, so it can
 // enrich the stored VolumeRecord rather than recomputing (and risking a
 // disagreement with what the user just read).
 describe('stockpileGridForLasso', () => {
@@ -363,7 +363,7 @@ describe('stockpileGridForLasso', () => {
     const { suffix: fromLasso, view } = stockpileGridForLasso(RECT, pts);
     expect(fromLasso).toBe(suffix);
     expect(view?.authority).toBe('measured');
-    expect(view?.method).toBe('olv.volume.stockpile-area-grid@2');
+    expect(view?.method).toBe('olv.volume.stockpile-area-grid@3');
   });
 
   test('view is null under the same gate that empties the suffix', () => {
@@ -386,14 +386,14 @@ describe('stockpileGridForLasso', () => {
     const lin = 0.3048;
     const { view } = stockpileGridForLasso(RECT, pts, lin, { vert: 1 });
     expect(view).not.toBeNull();
-    // D2 item 4: the grid's own linearUnitToMetres stays off this path, so the
+    // the grid's own linearUnitToMetres stays off this path, so the
     // native figure is exactly what `stockpileAreaGrid` returns with no unit
     // factor — volumeM3 (the display figure) is fillNative times lin²·vert.
     expect(view!.volumeM3).toBeCloseTo(view!.fillNative * lin * lin * 1, 9);
   });
 });
 
-describe('D2 item 4 — the grid option that cubes one factor stays off the record path', () => {
+describe('the grid option that cubes one factor stays off the record path', () => {
   test('presentStockpileAreaGrid never passes linearUnitToMetres into stockpileAreaGrid', () => {
     // Same fixture the compound-CRS unit test in stockpileDualAnswer.test.ts
     // pins at the app level; this asserts the mechanism directly: a metre run

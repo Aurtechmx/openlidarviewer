@@ -18,6 +18,9 @@ import { stockpileVolume, type StockpileVolumeResult, type StockpileConfidence }
 import { stockpileAreaGrid, type StockpileAreaGridResult } from './stockpileAreaGrid';
 import type { Vec3 } from '../navMath';
 import { streamingIsComplete, type StreamingCoverage } from './profileSectionSnapshot';
+import { buildStockpileResult, stockpileResultHeadline } from './stockpileResult';
+import type { StockpileBandInputs } from './stockpileBandInputs';
+import type { VolumeRecord } from './types';
 
 export interface StockpileViewRow {
   readonly label: string;
@@ -325,7 +328,7 @@ export interface StockpileGridForLasso {
  * area-weighted grid, and build the toast text alongside the structured
  * verdict. Shared by {@link stockpileToastSuffix} (the toast has never needed
  * more than the string) and {@link stockpileGridForLasso} (the Save path,
- * which also needs the verdict to enrich the stored record — D2).
+ * which also needs the verdict to enrich the stored record).
  */
 function computeStockpileGridForLasso(
   polygon: ReadonlyArray<Vec3>,
@@ -382,7 +385,7 @@ export function stockpileToastSuffix(
 
 /**
  * {@link stockpileToastSuffix}, also returning the structured grid verdict so
- * the Save path can enrich the stored `VolumeRecord` (D2) with the SAME
+ * the Save path can enrich the stored `VolumeRecord` with the SAME
  * figure the toast just printed, rather than recomputing it a second time
  * with a chance to disagree.
  */
@@ -393,4 +396,30 @@ export function stockpileGridForLasso(
   options: StockpileToastOptions = {},
 ): StockpileGridForLasso {
   return computeStockpileGridForLasso(polygon, positions, lin, options);
+}
+
+/** What the lasso commit path takes from the stockpile chunk. */
+export interface LassoStockpileOutcome {
+  /** The canonical result (`stockpileResult.ts`): what Save stores. */
+  readonly record: VolumeRecord;
+  /** The toast's volume clause, formatted from {@link record}. */
+  readonly headline: string;
+  /** The ` · Stockpile: …` band for the same grid evaluation. */
+  readonly suffix: string;
+}
+
+/**
+ * Evaluate the grid once for a lasso, build the canonical result from it and
+ * the point-sample record, and format the toast from that result. `vol` is
+ * the native→m³ factor (linear² · vertical).
+ */
+export function lassoStockpileResult(
+  pointSample: VolumeRecord,
+  inputs: StockpileBandInputs,
+  vol: number,
+): LassoStockpileOutcome {
+  const { polygon, positions: sample, lin, options, withheld } = inputs;
+  const { suffix, view } = computeStockpileGridForLasso(polygon, sample, lin, options);
+  const record = buildStockpileResult(pointSample, view, withheld);
+  return { record, headline: stockpileResultHeadline(record, vol), suffix };
 }

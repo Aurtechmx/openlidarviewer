@@ -16,8 +16,8 @@ Entries: 165. Revisited at least once: 19.
 | Status | Entries |
 | --- | --- |
 | FIXED | 54 |
-| BUILT | 41 |
-| PARTIAL | 31 |
+| BUILT | 40 |
+| PARTIAL | 32 |
 | MEASURED | 15 |
 | NOT REPRODUCIBLE | 10 |
 | DEFERRED | 6 |
@@ -33,7 +33,7 @@ Entries: 165. Revisited at least once: 19.
 | L02 | FIXED | EXPORT | 1 |
 | L03 | FIXED | EXPORT | 1 |
 | L04 | FIXED | STANDARDS | 1 |
-| L05 | FIXED | SCIENTIFIC | 7 |
+| L05 | FIXED | SCIENTIFIC | 5 |
 | L06 | PARTIAL | SCIENTIFIC | 2 |
 | L07 | FIXED | SCIENTIFIC | 2 |
 | L08 | NOT REPRODUCIBLE | SCIENTIFIC | 2 |
@@ -54,7 +54,7 @@ Entries: 165. Revisited at least once: 19.
 | L23 | FIXED | SEMANTICS | 1 |
 | L24 | NOT REPRODUCIBLE | EXPORT | 1 |
 | L25 | SUPERSEDED | EVIDENCE | 1 |
-| L26 | BUILT | SCIENTIFIC | 4 |
+| L26 | PARTIAL | SCIENTIFIC | 5 |
 | L27 | NOT REPRODUCIBLE | EVIDENCE | 1 |
 | L28 | PARTIAL | SEMANTICS | 2 |
 | L29 | FIXED | STATE | 1 |

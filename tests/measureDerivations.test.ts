@@ -13,8 +13,9 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { deriveVolumeRecord, horizontalSpanXY, withStockpileGrid } from '../src/render/measure/measureDerivations';
-import type { StockpileGridFigure } from '../src/render/measure/measureDerivations';
+import { deriveVolumeRecord, horizontalSpanXY } from '../src/render/measure/measureDerivations';
+import { withStockpileGrid } from '../src/render/measure/stockpileResult';
+import type { StockpileGridFigure } from '../src/render/measure/stockpileResult';
 import type { VolumeResult } from '../src/render/measure/volume';
 import { POINT_SAMPLE_VOLUME_METHOD } from '../src/render/measure/volume';
 import { readFileSync } from 'node:fs';
@@ -134,14 +135,15 @@ describe('a derived volume record names its estimator', () => {
     expect(viewer).toMatch(/volumeMethod:\s*POINT_SAMPLE_VOLUME_METHOD/);
     const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
     expect(main).toMatch(/deriveVolumeRecord\([^)]*out\.volumeMethod\)/);
-    // D2: the live path also runs the point-sample record through the grid
-    // switch, not past it — a call that dropped this would silently keep the
-    // point-sample figure canonical for every lasso.
-    expect(main).toMatch(/withStockpileGrid\(\s*deriveVolumeRecord\(/);
+    // The live path also hands the point-sample record to the stockpile chunk,
+    // which builds the stored result from it; a call that dropped this would
+    // keep the point-sample figure canonical for every lasso.
+    expect(main).toMatch(/lassoStockpileResult\(ps, out\.stockpileInputs, vol\)/);
+    expect(main).toMatch(/volume: stock\?\.record \?\? ps/);
   });
 });
 
-// ── D2: withStockpileGrid — the small module main.ts routes the switch through ──
+// ── withStockpileGrid — the small module main.ts routes the switch through ──
 
 const psRecord = {
   fill: 10, cut: 2, net: 8, referenceZ: 3, footprintArea: 20,
@@ -150,7 +152,7 @@ const psRecord = {
 };
 
 const gridFigure = (over: Partial<StockpileGridFigure> = {}): StockpileGridFigure => ({
-  method: 'olv.volume.stockpile-area-grid@2',
+  method: 'olv.volume.stockpile-area-grid@3',
   authority: 'measured', reason: '',
   fillNative: 7, cutNative: 1, netNative: 6,
   ...over,
@@ -176,7 +178,7 @@ describe('withStockpileGrid', () => {
     expect(out.fill).toBe(7);
     expect(out.cut).toBe(1);
     expect(out.net).toBe(6);
-    expect(out.method).toBe('olv.volume.stockpile-area-grid@2');
+    expect(out.method).toBe('olv.volume.stockpile-area-grid@3');
     expect(out.confidence).toBe(psRecord.confidence);
     expect(out.referenceZ).toBe(psRecord.referenceZ);
     expect(out.footprintArea).toBe(psRecord.footprintArea);

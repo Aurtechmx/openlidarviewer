@@ -1822,15 +1822,13 @@ export class MeasureController {
         const area = this._fmtArea(polygonAreaHorizontal(p, this._worldUp));
         const v = m.volume;
         if (!v) return `${area} footprint · cut/fill —`;
-        // A withheld grid figure (D2) carries no fill/cut/net at all — never a
+        // A withheld grid figure carries no fill/cut/net at all — never a
         // borrowed cut-and-fill number under the grid's name. The point-sample
         // cross-check, when the record kept one, is the only number left to show.
         if (v.fill === undefined || v.cut === undefined || v.net === undefined) {
-          const reason = v.gridAuthorityReason ? ` (${v.gridAuthorityReason})` : '';
-          if (!v.crossCheck) return `${area} · volume withheld${reason}`;
-          const ccNet = this._fmtCutFill(Math.abs(v.crossCheck.net));
-          const ccSign = v.crossCheck.net < 0 ? 'cut' : 'fill';
-          return `${area} · grid volume withheld${reason} · point-sample cross-check net ${ccNet} ${ccSign}`;
+          const cc = v.crossCheck, reason = v.gridAuthorityReason ? ` (${v.gridAuthorityReason})` : '';
+          return `${area} · ${cc ? 'grid ' : ''}volume withheld${reason}` +
+            (cc ? ` · point-sample cross-check net ${this._fmtCutFill(Math.abs(cc.net))} ${cc.net < 0 ? 'cut' : 'fill'}` : '');
         }
         const fill = this._fmtCutFill(Math.max(0, v.fill));
         const cut = this._fmtCutFill(Math.max(0, v.cut));

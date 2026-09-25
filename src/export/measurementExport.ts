@@ -184,14 +184,14 @@ export function measurementMetrics(
       set('area_m2', polygonAreaHorizontal(mp, up));
       if (m.volume) {
         // cut/fill/net are stored volumes in native units, not point-derived.
-        // A withheld grid figure (D2) carries none of the three — `set` already
+        // A withheld grid figure carries none of the three — `set` already
         // omits a non-finite value, so `undefined * Vol` (NaN) drops the column
         // rather than exporting a fabricated zero.
         if (m.volume.cut !== undefined) set('cut_m3', m.volume.cut * Vol);
         if (m.volume.fill !== undefined) set('fill_m3', m.volume.fill * Vol);
         if (m.volume.net !== undefined) set('net_m3', m.volume.net * Vol);
         // The point-sample cross-check a switched lasso record keeps beside the
-        // grid figure (D2 clause 5) — named so a reader never confuses it with
+        // grid figure — named so a reader never confuses it with
         // the canonical cut_m3/fill_m3/net_m3 above.
         if (m.volume.crossCheck) {
           set('pointsample_cut_m3', m.volume.crossCheck.cut * Vol);
@@ -262,6 +262,8 @@ export function measurementsToGeoJSON(
       // Same coverage verdict the CSV's grid_authority column carries — see
       // measurementsToCsv.
       if (m.kind === 'volume' && m.volume?.gridAuthority) properties.grid_authority = m.volume.gridAuthority;
+      const w = m.kind === 'volume' ? m.volume?.withheld : undefined;
+      if (w) Object.assign(properties, { source_points: w.source, withheld_excluded: w.excluded, analysed_points: w.analysed });
       return { type: 'Feature' as const, geometry, properties };
     })
     .filter((f): f is NonNullable<typeof f> => f !== null);
@@ -328,7 +330,7 @@ const GRID_METHOD_ID = 'olv.volume.stockpile-area-grid';
 
 /**
  * The claim a measurement's headline figure actually belongs to. `kind` alone
- * decided this before D2: every `'volume'` measurement was stamped
+ * decided this alone before the lasso record moved to the grid: every `'volume'` measurement was stamped
  * `VOL-POINT-SAMPLE`, which is wrong for a lasso record the grid now owns —
  * the same defect `CLAIM_FOR_KIND`'s own docstring names, one level down.
  *
@@ -412,11 +414,14 @@ const CSV_COLUMNS = [
   'length_m', 'horizontal_m', 'vertical_m', 'rise_m', 'run_m',
   'grade_pct', 'angle_deg', 'area_m2', 'horizontal_area_m2', 'perimeter_m',
   'width_m', 'depth_m', 'height_m', 'volume_m3', 'cut_m3', 'fill_m3', 'net_m3',
-  // A switched (D2) lasso volume's coverage verdict, and the point-sample
+  // A grid-owned lasso volume's coverage verdict, and the point-sample
   // cross-check kept beside its canonical cut_m3/fill_m3/net_m3 above — blank
   // on every other kind, and on a volume record from before the switch or
   // from the hand-drawn polygon tool, which has no grid counterpart.
   'grid_authority', 'pointsample_cut_m3', 'pointsample_fill_m3', 'pointsample_net_m3',
+  // A lasso result's input counts; `withheld_excluded` reads `unknown` when
+  // the source carried no flags, never 0.
+  'source_points', 'withheld_excluded', 'analysed_points',
   'evidence',
 ] as const;
 
@@ -472,6 +477,8 @@ export function measurementsToCsv(
       evidence: evidenceFor(m),
     };
     if (m.kind === 'volume' && m.volume?.gridAuthority) base.grid_authority = m.volume.gridAuthority;
+    const w = m.kind === 'volume' ? m.volume?.withheld : undefined;
+    if (w) Object.assign(base, { source_points: w.source, withheld_excluded: w.excluded, analysed_points: w.analysed });
     rows.push(columns.map((c) => (c in base ? csvCell(base[c]) : '')).join(','));
   }
   return rows.join('\n');

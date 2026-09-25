@@ -113,7 +113,7 @@ describe('valueForDimension — routing', () => {
     expect(valueForDimension(v, 'area')).toBe(50);
   });
 
-  it('a withheld grid figure (D2) contributes null, not a fabricated number', () => {
+  it('a withheld grid figure contributes null, not a fabricated number', () => {
     const v = volumeM(50, 30, 10);
     v.volume = { ...v.volume!, fill: undefined, cut: undefined, net: undefined, gridAuthority: 'withheld' };
     expect(valueForDimension(v, 'volume-fill')).toBeNull();

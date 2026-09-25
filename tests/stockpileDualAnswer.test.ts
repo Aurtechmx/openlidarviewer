@@ -338,7 +338,7 @@ function dualAnswer(positions: Float32Array, lasso: ReadonlyArray<{ x: number; y
     recordBase: record.referenceZ,
     gridBase: baseZ,
     // `deriveVolumeRecord` always sets fill/cut/net; only a withheld grid
-    // record (D2, never built in this harness) leaves them absent.
+    // record (never built in this harness) leaves them absent.
     ps: { fill: record.fill! * vol, cut: record.cut! * vol, net: record.net! * vol },
     grid: {
       fill: g.fillM3 * vol,

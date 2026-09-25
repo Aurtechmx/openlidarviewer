@@ -177,7 +177,7 @@ describe('a volume finding is reported at the same precision as the rest', () =>
   });
 });
 
-// D2: a switched lasso record's finding is built from the grid figure, keeps
+// a switched lasso record's finding is built from the grid figure, keeps
 // the point-sample number as a labelled cross-check, and states the grid's
 // known limitations rather than the point-sample-only caveat.
 function gridVolume(id: string, over: Record<string, unknown> = {}): Measurement {
@@ -187,14 +187,14 @@ function gridVolume(id: string, over: Record<string, unknown> = {}): Measurement
     volume: {
       fill: 100, cut: 5, net: 95, referenceZ: 0, footprintArea: 50,
       pointsInPolygon: 800, densityNative: 16, confidence: 'medium',
-      method: 'olv.volume.stockpile-area-grid@2', gridAuthority: 'measured', gridAuthorityReason: '',
+      method: 'olv.volume.stockpile-area-grid@3', gridAuthority: 'measured', gridAuthorityReason: '',
       crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' },
       ...over,
     },
   } as unknown as Measurement;
 }
 
-describe('a grid-canonical volume finding (D2)', () => {
+describe('a grid-canonical volume finding', () => {
   test('the headline is the grid net, not the point-sample net', () => {
     const f = measurementsToFindings([gridVolume('v1')], up, 1);
     expect(f).toHaveLength(1);
