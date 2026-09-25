@@ -82,7 +82,7 @@ import { isZUpFormat, sceneUpAxisPolicy } from '../io/sniffFormat';
 import { classifyScanShape } from '../terrain/scanShape';
 import { yUpToCanonicalZUp } from '../terrain/canonicalFrame';
 import type { SourceFormat } from '../io/sniffFormat';
-import { colorForMode, defaultMode, refreshClassificationColours } from './colorModes';
+import { colorForMode, defaultMode, refreshClassificationColours, recolourEntry, writeModeColours, cancelSlicedRecolour } from './colorModes';
 import type { ColorMode, CoverageColorGrid, ColorForModeOptions } from './colorModes';
 import { computeSharedElevationRange, elevationOptsFor, applyElevationColors } from './projectElevationScale';
 import { type ActiveColorbar } from './activeColorbar';
@@ -264,7 +264,7 @@ import {
 import { selectStreamingPick } from './streaming/streamingPickSelection';
 // The shared sRGB → linear seam — every Float32 colour-attribute write goes
 // through this so recolour paths match the initial `toFloatColors` upload.
-import { writeFloatColorsInto, toFloatColors } from './colorEncode';
+import { toFloatColors } from './colorEncode';
 // The streaming render engine is type-only here and dynamically imported in
 // `attachStreamingCloud`, so `src/render/streaming/*` (scheduler, renderer,
 // octree, cache) stays out of the initial bundle and loads only when a COPC
@@ -290,7 +290,7 @@ import {
 // module excluded from the live-build source-transform so Vite can still emit the
 // chunks (see lazyChunks.ts). `loadExportStudio` is the export path's split
 // point; the streaming ones now load inside `streamingAttach.ts`.
-import { loadExportStudio } from '../lazyChunks';
+import { loadExportStudio, loadSlicedRecolour } from '../lazyChunks';
 import type { ChunkDecoder, DecodedChunk } from '../io/copc/copcChunkDecode';
 import type {
   ExportMode,
@@ -357,6 +357,7 @@ interface CloudEntry {
    * the multi-MB `new Float32Array` on every throttled drag step.
    */
   recolorScratch?: Float32Array;
+  recolourJob?: object;
 }
 
 /**
@@ -2352,12 +2353,7 @@ export class Viewer {
     this._coverageGrid = grid;
     for (const entry of this._clouds.values()) {
       if (entry.mode !== 'coverage' && entry.mode !== 'confidence') continue;
-      const raw = colorForMode(entry.mode, entry.cloud, { coverageGrid: grid ?? undefined });
-      const arr = entry.colorAttr.array as Float32Array;
-      // sRGB → linear via the shared EOTF seam — a bare `/255` here would
-      // double-encode and visibly pale the cloud vs the initial upload.
-      writeFloatColorsInto(arr, raw);
-      entry.colorAttr.needsUpdate = true;
+      writeModeColours(entry, colorForMode(entry.mode, entry.cloud, { coverageGrid: grid ?? undefined }));
     }
     this._demand.changed('style');
   }
@@ -2697,6 +2693,7 @@ export class Viewer {
     }
     for (const [, entry] of this._clouds) {
       if (entry.mode !== 'rgb') continue;
+      cancelSlicedRecolour(entry);
       const u8 = entry.cloud.colors;
       if (!u8 || u8.length === 0) continue;
       const arr = entry.colorAttr.array as Float32Array;
@@ -2740,16 +2737,9 @@ export class Viewer {
       mode === 'elevation'
         ? elevationOptsFor(entry, this._projectSharedElevation ? this.projectSharedElevationRange() : null, this._heightPercentileTrim)
         : { heightPercentileTrim: this._heightPercentileTrim, coverageGrid: this._coverageGrid ?? undefined, upAxis: isZUpFormat(entry.cloud.sourceFormat) ? 2 : 1 };
-    const raw = colorForMode(mode, entry.cloud, opts);
-    const arr = entry.colorAttr.array as Float32Array;
-    // sRGB → linear via the shared EOTF seam — keeps a mode switch
-    // byte-identical to what the initial `toFloatColors` upload produced.
-    writeFloatColorsInto(arr, raw);
-    entry.colorAttr.needsUpdate = true;
-    entry.mode = mode;
-    // The colour buffer changed. A once reason holds until a frame shows it,
-    // however late the browser runs that frame.
-    this._demand.changed('style');
+    // Large clouds recolour in slices; each slice records a once reason so a
+    // frame shows it, however late the browser runs that frame.
+    recolourEntry(entry, mode, opts, () => this._demand.changed('style'), loadSlicedRecolour);
     // The legend describes the active mode's ramp — refresh it.
     this._notifyColorContextChanged();
   }

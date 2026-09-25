@@ -39,6 +39,9 @@
  */
 export const loadViewer = () => import('./render/Viewer');
 
+/** The sliced colour-mode switch for large clouds (`recolourEntry`, colorModes.ts). */
+export const loadSlicedRecolour = () => import('./render/slicedRecolour');
+
 /**
  * Load the Contour Studio launcher (state adapter + launcher DOM builder) on
  * demand — the first time a terrain analysis completes, never in the initial

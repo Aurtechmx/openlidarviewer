@@ -26,6 +26,7 @@ const ACCEPTED: Record<string, readonly Site[]> = {
   'src/ui/onboarding/bootTour.ts': [{ kind: 'requestAnimationFrame', count: 2, owner: 'one-shot double-frame deferral of tour start' }],
   'src/ui/fieldSimulation/flowPulseLab.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot yield to the next frame' }],
   'src/app/profileWorkbenchSection.ts': [{ kind: 'requestAnimationFrame', count: 2, owner: 'one-shot deferred run' }],
+  'src/render/slicedRecolour.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one batch per frame; bounded by point count, stops when the entry recolourJob token is replaced' }],
   'src/render/snapshot.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot frame await' }],
   'src/render/drawSignal.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot frame await' }],
   'src/perf/navDriver.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one frame per trajectory step; bounded by the trajectory, ?benchmark=nav only' }],

@@ -160,6 +160,8 @@ function liveSourceTransformPlugin() {
       //     ray-plane math run on every captured pointermove of a grab
       //     (120+ Hz pointers); sibling of navMath.ts, excluded for the
       //     same per-event Math-wrapper reason.
+      //   - slicedRecolour.ts — the per-chunk colour write of a large-cloud
+      //     colour-mode switch, run inside a per-frame time budget.
       /analysis\/modules\/healthCheck\.ts/,
       /model\/PointCloud\.ts/,
       /render\/colorEncode\.ts/,
@@ -167,6 +169,7 @@ function liveSourceTransformPlugin() {
       /render\/panMath\.ts/,
       /render\/Viewer\.ts/,
       /render\/measure\/snap\.ts/,
+      /render\/slicedRecolour\.ts/,
     ],
     options: {
       // A fixed RNG seed makes the transform deterministic — every

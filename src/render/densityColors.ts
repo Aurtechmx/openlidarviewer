@@ -185,38 +185,50 @@ function horizontalPair(upAxis: 0 | 1 | 2): [number, number] {
   return [0, 1];
 }
 
-export function densityForChunk(input: DensityInput): DensityColors {
-  const positions = input.positions;
-  const [hx, hy] = horizontalPair(input.upAxis ?? 2);
-  const cellSize = Math.max(1e-6, input.cellSize);
-  const n = positions.length / 3;
-  const colors = new Uint8Array(n * 3);
+/** A density binning: the horizontal pair, the clamped cell size, and counts per cell key. */
+export interface DensityBins {
+  readonly hx: number;
+  readonly hy: number;
+  readonly cellSize: number;
+  readonly counts: Map<string, number>;
+}
 
-  if (n === 0) {
-    return { colors, meanDensity: 0, maxObservedDensity: 0 };
-  }
+export function densityBins(cellSize: number, upAxis: 0 | 1 | 2 = 2): DensityBins {
+  const [hx, hy] = horizontalPair(upAxis);
+  return { hx, hy, cellSize: Math.max(1e-6, cellSize), counts: new Map() };
+}
 
-  // Hash into a 2D voxel map: cellKey = `${ix}|${iy}`. Sparse maps are
-  // cheap in JS; a typed grid would need bounds, which we don't know
-  // up-front for a streamed chunk. Counting is O(N).
-  const counts = new Map<string, number>();
-  const cellOfPoint = new Int32Array(n);
-  const tmpKeyA = new Float64Array(2); // [ix, iy] working scratch
-  const keys: string[] = new Array(n);
+/** The cell key of point `i`. Sparse string keys: a streamed chunk has no known bounds. */
+function cellKey(positions: Float32Array, i: number, b: DensityBins): string {
+  return Math.floor(positions[i * 3 + b.hx] / b.cellSize) + '|' + Math.floor(positions[i * 3 + b.hy] / b.cellSize);
+}
 
-  for (let i = 0; i < n; i++) {
-    const x = positions[i * 3 + hx];
-    const y = positions[i * 3 + hy];
-    const ix = Math.floor(x / cellSize);
-    const iy = Math.floor(y / cellSize);
-    tmpKeyA[0] = ix;
-    tmpKeyA[1] = iy;
-    const k = ix + '|' + iy;
-    keys[i] = k;
-    cellOfPoint[i] = i; // unused, kept for symmetry
+/** Count points `[start, end)` into `b`; fills `keys[i]` when given. O(N). */
+export function countDensityCells(
+  b: DensityBins, positions: Float32Array, start: number, end: number, keys?: string[],
+): void {
+  const counts = b.counts;
+  for (let i = start; i < end; i++) {
+    const k = cellKey(positions, i, b);
+    if (keys) keys[i] = k;
     counts.set(k, (counts.get(k) ?? 0) + 1);
   }
+}
 
+/** The colour mapping resolved from a finished count. */
+export interface DensityScale {
+  readonly cellArea: number;
+  readonly cold: number;
+  readonly logHot: number;
+  readonly meanDensity: number;
+  readonly maxObservedDensity: number;
+}
+
+export function densityScale(
+  b: DensityBins, input: Pick<DensityInput, 'minDensity' | 'maxDensity'>,
+): DensityScale {
+  const counts = b.counts;
+  const cellSize = b.cellSize;
   const cellArea = cellSize * cellSize;
   let sum = 0;
   let maxObs = 0;
@@ -277,17 +289,41 @@ export function densityForChunk(input: DensityInput): DensityColors {
   // cold colour, which is the right visual semantic for "no points
   // here." No NaN, no surprise.
   const logHot = Math.log1p(Math.max(0, hot - cold));
+  return { cellArea, cold, logHot, meanDensity, maxObservedDensity: maxObs };
+}
 
-  for (let i = 0; i < n; i++) {
-    const cellD = (counts.get(keys[i]) ?? 0) / cellArea;
+/** Paint points `[start, end)` into `out` (3 bytes per point, from index 0). */
+export function paintDensity(
+  b: DensityBins, scale: DensityScale, positions: Float32Array,
+  start: number, end: number, out: Uint8Array, keys?: string[],
+): void {
+  const { cellArea, cold, logHot } = scale;
+  for (let i = start; i < end; i++) {
+    const cellD = (b.counts.get(keys ? keys[i] : cellKey(positions, i, b)) ?? 0) / cellArea;
     const t = logHot > 0 ? Math.log1p(Math.max(0, cellD - cold)) / logHot : 0;
     const rgb = sampleRamp(t);
-    colors[i * 3] = rgb[0];
-    colors[i * 3 + 1] = rgb[1];
-    colors[i * 3 + 2] = rgb[2];
+    const o = (i - start) * 3;
+    out[o] = rgb[0];
+    out[o + 1] = rgb[1];
+    out[o + 2] = rgb[2];
+  }
+}
+
+export function densityForChunk(input: DensityInput): DensityColors {
+  const positions = input.positions;
+  const n = positions.length / 3;
+  const colors = new Uint8Array(n * 3);
+
+  if (n === 0) {
+    return { colors, meanDensity: 0, maxObservedDensity: 0 };
   }
 
-  return { colors, meanDensity, maxObservedDensity: maxObs };
+  const b = densityBins(input.cellSize, input.upAxis ?? 2);
+  const keys: string[] = new Array(n);
+  countDensityCells(b, positions, 0, n, keys);
+  const scale = densityScale(b, input);
+  paintDensity(b, scale, positions, 0, n, colors, keys);
+  return { colors, meanDensity: scale.meanDensity, maxObservedDensity: scale.maxObservedDensity };
 }
 
 /**

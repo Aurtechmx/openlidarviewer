@@ -1018,7 +1018,65 @@ export interface RecolorableEntry {
  */
 export function refreshClassificationColours(entry: RecolorableEntry): void {
   if (entry.mode !== 'classification') return;
-  const raw = colorForMode('classification', entry.cloud);
+  writeModeColours(entry, colorForMode('classification', entry.cloud));
+}
+
+/**
+ * A colour attribute a sliced recolour can write. `recolourJob` is the token of
+ * the recolour in flight; any whole-buffer write clears it, so a stale job
+ * stops at its next slice instead of painting over the newer colours.
+ */
+export interface SliceableEntry {
+  readonly cloud: PointCloud;
+  readonly colorAttr: {
+    array: unknown;
+    needsUpdate: boolean;
+    addUpdateRange?(start: number, count: number): void;
+    clearUpdateRanges?(): void;
+  };
+  recolourJob?: object;
+}
+
+/**
+ * Stop any sliced recolour and drop its pending partial-upload ranges, so the
+ * whole-buffer write that follows uploads in full rather than only the ranges.
+ */
+export function cancelSlicedRecolour(entry: SliceableEntry): void {
+  entry.recolourJob = undefined;
+  entry.colorAttr.clearUpdateRanges?.();
+}
+
+/** Whole-buffer write through the sRGB → linear seam; cancels any sliced job. */
+export function writeModeColours(entry: SliceableEntry, raw: Uint8Array): void {
+  cancelSlicedRecolour(entry);
   writeFloatColorsInto(entry.colorAttr.array as Float32Array, raw);
   entry.colorAttr.needsUpdate = true;
+}
+
+/** Clouds at or above this size recolour in time-budgeted slices across frames. */
+export const SLICED_RECOLOUR_MIN_POINTS = 2_000_000;
+
+/**
+ * Switch `entry` to `mode`. Small clouds recolour synchronously; large ones
+ * hand off to the lazily loaded sliced recolour, which writes the same bytes
+ * in frame-sized chunks and calls `changed` after each so the view fills in.
+ */
+export function recolourEntry(
+  entry: SliceableEntry & { mode: ColorMode },
+  mode: ColorMode,
+  opts: ColorForModeOptions,
+  changed: () => void,
+  /** `loadSlicedRecolour` from lazyChunks.ts, passed in so this file adds no chunk edge. */
+  load: () => Promise<typeof import('./slicedRecolour')>,
+): void {
+  if (entry.cloud.pointCount < SLICED_RECOLOUR_MIN_POINTS) {
+    writeModeColours(entry, colorForMode(mode, entry.cloud, opts));
+    entry.mode = mode;
+    changed();
+    return;
+  }
+  const job = {};
+  entry.recolourJob = job;
+  entry.mode = mode;
+  void load().then((m) => m.runSlicedRecolour(entry, job, mode, opts, changed));
 }

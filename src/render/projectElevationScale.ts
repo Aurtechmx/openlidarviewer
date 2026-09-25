@@ -17,8 +17,7 @@
  * Pure math only (no Viewer / WebGL state) so it is unit-testable.
  */
 
-import { rampRangeForMode, colorForMode, type ColorForModeOptions } from './colorModes';
-import { writeFloatColorsInto } from './colorEncode';
+import { rampRangeForMode, colorForMode, writeModeColours, type ColorForModeOptions } from './colorModes';
 import { isZUpFormat } from '../io/sniffFormat';
 import { participatesInSharedAnalysis, type LayerCompatibility } from '../model/layerCompatibility';
 import type { PointCloud } from '../model/PointCloud';
@@ -131,6 +130,7 @@ export function elevationOptsFor(
 /** A layer whose colour buffer can be rewritten in place (CloudEntry subset). */
 export interface RecolorableLayer extends FrameLayer {
   colorAttr: { array: ArrayLike<number>; needsUpdate: boolean };
+  recolourJob?: object;
 }
 
 /**
@@ -145,8 +145,6 @@ export function applyElevationColors(
 ): void {
   for (const e of layers) {
     if (e.mode !== 'elevation') continue;
-    const raw = colorForMode('elevation', e.cloud, elevationOptsFor(e, shared, trim));
-    writeFloatColorsInto(e.colorAttr.array as Float32Array, raw); // sRGB → linear seam
-    e.colorAttr.needsUpdate = true;
+    writeModeColours(e, colorForMode('elevation', e.cloud, elevationOptsFor(e, shared, trim)));
   }
 }
