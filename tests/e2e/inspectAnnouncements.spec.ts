@@ -188,8 +188,32 @@ test.describe('recommended-view chip — hover pauses the auto-hide', () => {
     await apply.evaluate((el) => (el as HTMLElement).blur());
     await expect(chip).toHaveAttribute('data-autohide', 'paused');
 
-    // Three full timer lengths later the hovered chip is still up.
-    await page.waitForTimeout(HIDE_MS * 3);
+    // Three full timer lengths later the hovered chip is still up. The pointer
+    // is nudged within the button every 200 ms instead of left idle: Firefox
+    // headful under Xvfb periodically resyncs to the real X cursor (parked at
+    // the screen centre, outside the chip) and fires a window-level
+    // mouseleave (relatedTarget null) that the chip rightly treats as the
+    // pointer leaving. A nudge re-enters well inside one timer length, so the
+    // chip can only still be up at the end if hovering keeps pausing it.
+    const box = (await apply.boundingBox())!;
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    // Each 200 ms tick nudges the pointer and reads the chip's state; the
+    // poll settles once three timer lengths have passed with the chip paused
+    // at every tick.
+    const start = Date.now();
+    let tick = 0;
+    await expect
+      .poll(
+        async () => {
+          await page.mouse.move(cx + (tick++ % 2 ? 2 : -2), cy);
+          const state = await chip.getAttribute('data-autohide');
+          if (state !== 'paused') return `not paused: ${state}`;
+          return Date.now() - start >= HIDE_MS * 3 ? 'held' : 'holding';
+        },
+        { intervals: [200], timeout: HIDE_MS * 3 + 10_000 },
+      )
+      .toBe('held');
     await expect(chip).not.toHaveClass(/olv-hidden/);
     await expect(chip).toHaveAttribute('data-autohide', 'paused');
 
