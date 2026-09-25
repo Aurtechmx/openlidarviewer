@@ -198,10 +198,22 @@ test.describe('recommended-view chip — hover pauses the auto-hide', () => {
     const box = (await apply.boundingBox())!;
     const cx = box.x + box.width / 2;
     const cy = box.y + box.height / 2;
-    for (let t = 0; t < HIDE_MS * 3; t += 200) {
-      await page.mouse.move(cx + ((t / 200) % 2 ? 2 : -2), cy);
-      await page.waitForTimeout(200);
-    }
+    // Each 200 ms tick nudges the pointer and reads the chip's state; the
+    // poll settles once three timer lengths have passed with the chip paused
+    // at every tick.
+    const start = Date.now();
+    let tick = 0;
+    await expect
+      .poll(
+        async () => {
+          await page.mouse.move(cx + (tick++ % 2 ? 2 : -2), cy);
+          const state = await chip.getAttribute('data-autohide');
+          if (state !== 'paused') return `not paused: ${state}`;
+          return Date.now() - start >= HIDE_MS * 3 ? 'held' : 'holding';
+        },
+        { intervals: [200], timeout: HIDE_MS * 3 + 10_000 },
+      )
+      .toBe('held');
     await expect(chip).not.toHaveClass(/olv-hidden/);
     await expect(chip).toHaveAttribute('data-autohide', 'paused');
 
