@@ -44,9 +44,11 @@ export interface BenchmarkResult {
  * Assemble a {@link BenchmarkResult} from a finished load's telemetry.
  *
  * `telemetry` is the merged record — the worker-side stages plus the
- * main-thread `gpuUploadMs` / `firstRenderMs` — exactly what the debug console
- * block is given. `timeToFirstRenderMs` sums the whole-load span
- * (`totalLoadMs`) with the GPU upload and first-render costs that follow it.
+ * main-thread `gpuUploadMs` / `framingMs` / `firstDrawMs` — exactly what the
+ * debug console block is given. `timeToFirstRenderMs` sums the whole-load span
+ * (`totalLoadMs`) with the GPU upload and the time to the first drawn frame
+ * that follow it; `firstDrawMs` includes framing, and framing alone stands in
+ * when no draw was measured.
  *
  * `stages` carries the load's identity as well as its timings on the local LAZ
  * path (file name and size, declared point count, PDRF, chunk count, stride,
@@ -64,7 +66,7 @@ export function buildBenchmarkResult(
   const timeToFirstRenderMs =
     (telemetry.totalLoadMs ?? 0) +
     (telemetry.gpuUploadMs ?? 0) +
-    (telemetry.firstRenderMs ?? 0);
+    (telemetry.firstDrawMs ?? telemetry.framingMs ?? 0);
   return {
     file,
     format,

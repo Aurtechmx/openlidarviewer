@@ -9,15 +9,21 @@ const TELEMETRY: LoadTelemetry = {
   decodeMs: 40,
   totalLoadMs: 70,
   gpuUploadMs: 12,
-  firstRenderMs: 6,
+  framingMs: 2,
+  firstDrawMs: 6,
 };
 
-test('time-to-first-render sums the load span, GPU upload and first render', () => {
+test('time-to-first-render sums the load span, GPU upload and first draw', () => {
   const r = buildBenchmarkResult('scan.las', 'las', 100_000, TELEMETRY);
   expect(r.file).toBe('scan.las');
   expect(r.format).toBe('las');
   expect(r.pointCount).toBe(100_000);
   expect(r.timeToFirstRenderMs).toBeCloseTo(70 + 12 + 6);
+});
+
+test('framing stands in for the first draw when no draw was measured', () => {
+  const r = buildBenchmarkResult('a.las', 'las', 1, { totalLoadMs: 10, gpuUploadMs: 3, framingMs: 2 });
+  expect(r.timeToFirstRenderMs).toBeCloseTo(15);
 });
 
 test('missing stage timings are treated as zero', () => {

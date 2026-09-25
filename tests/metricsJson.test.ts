@@ -22,6 +22,7 @@ const telemetry: FrameTelemetrySnapshot = {
     over16_7: 7,
     over33_3: 2,
     over50: 1,
+    over100: 0,
   },
   longestTaskMs: 82.4,
   longTaskCount: 3,
@@ -46,7 +47,7 @@ describe('buildMetricsDocument', () => {
       },
       streaming: null,
     });
-    expect(doc.schema).toBe('openlidarviewer.debug-metrics/2');
+    expect(doc.schema).toBe('openlidarviewer.debug-metrics/3');
     expect(doc.appVersion).toBe('0.5.4');
     expect(doc.backend).toBe('webgpu');
     // Only the wired controls are reported as flags; staged controllers are
@@ -83,6 +84,7 @@ describe('buildMetricsDocument', () => {
       // key ignores it, and nothing in the tree validates the shape.
       over33_3Ms: 2,
       over50Ms: 1,
+      over100Ms: 0,
       longestTaskMs: 82.4,
       longTaskCount: 3,
       effectiveDpr: 1.5,

@@ -17,12 +17,29 @@ export interface LoadDiagnosticsDeps {
   getDebugOverlay(): Pick<DebugOverlay, 'setTelemetry' | 'setBenchmark'> | null;
 }
 
-/** Print and display the merged telemetry of one committed cloud. */
-export function reportLoadDiagnostics(
+/** How long {@link reportLoadDiagnostics} waits for the first drawn frame. */
+export const FIRST_DRAW_TIMEOUT_MS = 10_000;
+
+/**
+ * Print and display the merged telemetry of one committed cloud. When
+ * `firstDraw` is given, the report waits for it (up to
+ * {@link FIRST_DRAW_TIMEOUT_MS}) and records it as `firstDrawMs`; a frame that
+ * never draws (a hidden tab) leaves the field absent.
+ */
+export async function reportLoadDiagnostics(
   deps: LoadDiagnosticsDeps,
   cloud: Pick<PointCloud, 'name' | 'sourceFormat' | 'pointCount' | 'declaredPointCount'>,
-  telemetry: LoadTelemetry,
-): void {
+  loadTelemetry: LoadTelemetry,
+  firstDraw?: Promise<number>,
+): Promise<void> {
+  let telemetry = loadTelemetry;
+  if (firstDraw) {
+    let timer: number | undefined;
+    const timeout = new Promise<undefined>((resolve) => { timer = window.setTimeout(resolve, FIRST_DRAW_TIMEOUT_MS); });
+    const firstDrawMs = await Promise.race([firstDraw, timeout]);
+    clearTimeout(timer);
+    if (firstDrawMs !== undefined) telemetry = { ...telemetry, firstDrawMs };
+  }
   if (deps.debug) {
     console.log(
       '%cOpenLiDARViewer — load telemetry',

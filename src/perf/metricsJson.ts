@@ -92,7 +92,7 @@ export function buildMetricsDocument(input: MetricsJsonInput): Record<string, un
   const r = input.rendering;
   const s = input.streaming;
   return {
-    schema: 'openlidarviewer.debug-metrics/2',
+    schema: 'openlidarviewer.debug-metrics/3',
     appVersion: input.appVersion,
     generatedAt: input.generatedAt,
     backend: input.backend,
@@ -129,6 +129,7 @@ export function buildMetricsDocument(input: MetricsJsonInput): Record<string, un
           over16_7Ms: t.frame.over16_7,
           over33_3Ms: t.frame.over33_3,
           over50Ms: t.frame.over50,
+          over100Ms: t.frame.over100,
           longestTaskMs: t.longestTaskMs === null ? null : ms(t.longestTaskMs),
           longTaskCount: t.longTaskCount,
           effectiveDpr: t.effectiveDpr,

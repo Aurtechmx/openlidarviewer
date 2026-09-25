@@ -75,6 +75,21 @@ export const SOFT_CLAMP_LERP_PER_FRAME = 0.12;
 /** Per-frame lerp factor for streaming-bounds refinement of the orbit target. */
 export const STREAMING_LERP_PER_FRAME = 0.05;
 
+/** Longest frame step the time-based factors integrate, in seconds. */
+export const MAX_FEEL_DT_SEC = 0.1;
+
+/**
+ * Convert a per-frame factor tuned at 60 Hz into the factor for a frame of
+ * `dtSec` seconds, so the fraction covered per unit of wall time is the same
+ * at any refresh rate: `1 - (1 - k) ** (dtSec * 60)`. At 1/60 s it returns
+ * `k`. `dtSec` is clamped to [0, {@link MAX_FEEL_DT_SEC}] so a stalled frame
+ * cannot jump the camera the whole way.
+ */
+export function perFrameToDt(k: number, dtSec: number): number {
+  const dt = Number.isFinite(dtSec) ? Math.min(Math.max(dtSec, 0), MAX_FEEL_DT_SEC) : 0;
+  return 1 - (1 - k) ** (dt * 60);
+}
+
 /**
  * Envelope inflation expressed as a fraction of the AABB diagonal.
  * v0.3.6: bumped 0.25 → 0.4 after users on large aerial surveys hit the

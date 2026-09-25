@@ -58,6 +58,7 @@ export class FrameTimeRing {
   private _over16_7 = 0;
   private _over33_3 = 0;
   private _over50 = 0;
+  private _over100 = 0;
   private _totalFrames = 0;
 
   constructor(capacity = 240) {
@@ -81,6 +82,8 @@ export class FrameTimeRing {
     // are not the same experience: past about 50 ms a stutter stops reading as
     // a slow frame and starts reading as the view having caught on something.
     if (frameMs > 50) this._over50++;
+    // Past 100 ms the view has visibly frozen for a moment.
+    if (frameMs > 100) this._over100++;
   }
 
   /** Samples currently in the rolling window. */
@@ -108,6 +111,11 @@ export class FrameTimeRing {
     return this._over50;
   }
 
+  /** Cumulative frames long enough to read as a freeze (> 100 ms). */
+  get framesOver100(): number {
+    return this._over100;
+  }
+
   /** p50/p95/p99/max over the current window. Sorts a preallocated scratch. */
   snapshot(): FramePercentiles {
     const n = this._count;
@@ -131,6 +139,7 @@ export class FrameTimeRing {
     this._over16_7 = 0;
     this._over33_3 = 0;
     this._over50 = 0;
+    this._over100 = 0;
     this._totalFrames = 0;
   }
 }
@@ -152,6 +161,7 @@ export interface FrameTelemetrySnapshot {
     over16_7: number;
     over33_3: number;
     over50: number;
+    over100: number;
   };
   /**
    * Longest main-thread task (ms) observed via the `longtask`
@@ -305,6 +315,7 @@ export class FrameTelemetry {
         over16_7: this._ring.framesOver16_7,
         over33_3: this._ring.framesOver33_3,
         over50: this._ring.framesOver50,
+        over100: this._ring.framesOver100,
       },
       longestTaskMs: this._longTaskAvailable ? this._longestTaskMs : null,
       longTaskCount: this._longTaskAvailable ? this._longTaskCount : null,

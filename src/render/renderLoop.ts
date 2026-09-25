@@ -23,6 +23,7 @@
 
 import { cameraIsMoving, edlActiveThisFrame } from './edlMotionGate';
 import { shouldRunProbePick } from './hoverPickGate';
+import { noteDrawn } from './drawSignal';
 import type { PointInfo } from './pointInfo';
 import type { ToolMode } from './Viewer';
 
@@ -41,7 +42,7 @@ export interface RenderLoopHost {
   /** Integrate the navigation controller (OrbitControls damping, tweens). */
   updateNav(delta: number): void;
   /** Soft-clamp + streaming bounds-refinement lerp for the orbit pivot. */
-  maintainOrbitCenter(): void;
+  maintainOrbitCenter(dtSec: number): void;
   /** Modulate EDL strength from camera-to-target distance. */
   updateAdaptiveEdl(): void;
 
@@ -180,7 +181,7 @@ export function runRenderFrame(host: RenderLoopHost): void {
   host.updateNav(delta);
   // Orbit-pivot maintenance — cheap and bounded; runs every frame regardless
   // of EDL/render state.
-  host.maintainOrbitCenter();
+  host.maintainOrbitCenter(delta);
   // Adaptive EDL strength — cheap, runs every frame.
   host.updateAdaptiveEdl();
 
@@ -210,6 +211,7 @@ export function runRenderFrame(host: RenderLoopHost): void {
     if (wantEdl) host.renderEdl();
     else host.renderScene();
     host.setEdlPaintedAtRest(wantEdl);
+    noteDrawn();
   } else if (wantEdl && !host.edlPaintedAtRest() && host.sweepState() !== 'converging') {
     // Motion just settled and the last paint had EDL off — force one EDL
     // repaint so the depth cue snaps back, then resume idle throttling. A
@@ -218,6 +220,7 @@ export function runRenderFrame(host: RenderLoopHost): void {
     host.noteRendered();
     host.renderEdl();
     host.setEdlPaintedAtRest(true);
+    noteDrawn();
   } else {
     host.noteSkipped();
   }
