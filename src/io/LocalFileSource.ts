@@ -1,11 +1,13 @@
 /**
  * LocalFileSource.ts
  *
- * The `PointCloudSource` for a file the user dropped or picked from their
- * device — the only source ships. It wraps a `File` and delegates to the
- * established `loadFile` pipeline, so the local-first, worker-decoded, fully
- * tested load path is unchanged; this class is the clean seam the v0.3
- * streaming sources (`UrlSource`, `CopcSource`) will sit beside.
+ * The sole implementation of `PointCloudSource`. It wraps a `File` the user
+ * dropped or picked locally and delegates to the established `loadFile`
+ * pipeline, so the local-first, worker-decoded, fully tested load path is
+ * unchanged. Streaming and heavy sources (COPC, EPT, 3D Tiles) do not extend
+ * this class; they implement `StreamingSource` instead, defined in
+ * src/render/streaming/StreamingSource.ts (see PointCloudSource.ts for the
+ * split).
  *
  * Browser-bound (wraps a `File`); not imported in Node tests.
  */

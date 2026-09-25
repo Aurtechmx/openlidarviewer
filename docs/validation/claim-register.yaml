@@ -600,7 +600,7 @@ claims:
     claim: "Analytical contours simplified for legibility, with per-feature displacement recorded."
     currentEvidence: E2_ANALYTICALLY_VERIFIED
     requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
-    supportingTests: [tests/contourGeometryProduct.test.ts, tests/contourAdaptiveGeneralize.test.ts, tests/generalizationRecord.test.ts]
+    supportingTests: [tests/contourGeometryProduct.test.ts, tests/contourAdaptiveGeneralize.test.ts, tests/benchmark/contourCorrectness.test.ts]
     supportingDatasets: [synthetic contour geometry]
     supportingStudies: []
     units: [metres]

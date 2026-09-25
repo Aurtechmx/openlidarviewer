@@ -21,6 +21,7 @@ import type { ContourFeature } from '../contour/contourFeatureModel';
 import { canonicalHash } from '../../canonicalHash';
 import { methodRef } from '../../science/methodRegistry';
 import { raw, sourceUnits, toMetresIfKnown, type LinearUnitScale } from '../../units/units';
+import { quantileSorted } from '../quantile';
 
 export type ContourGeometryRole = 'analytical-isoline' | 'cartographic-generalization';
 
@@ -136,7 +137,7 @@ export function cartographicProduct(
 
   displacements.sort((a, b) => a - b);
   const max = displacements.at(-1) ?? 0;
-  const p95 = percentile(displacements, 0.95);
+  const p95 = displacements.length ? quantileSorted(displacements, 0.95) : 0;
   const mean = displacements.length
     ? displacements.reduce((s, d) => s + d, 0) / displacements.length
     : 0;
@@ -224,10 +225,4 @@ function segmentDistance(p: Pt, a: Pt, b: Pt): number {
   const cx = a[0] + t * dx;
   const cy = a[1] + t * dy;
   return Math.hypot(p[0] - cx, p[1] - cy);
-}
-
-function percentile(sortedAsc: readonly number[], q: number): number {
-  if (sortedAsc.length === 0) return 0;
-  const idx = Math.min(sortedAsc.length - 1, Math.max(0, Math.ceil(q * sortedAsc.length) - 1));
-  return sortedAsc[idx];
 }

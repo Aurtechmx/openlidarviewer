@@ -340,42 +340,9 @@ export function classifyGroundSmrf(
     return emptyResult(cellSizeM, warnings);
   }
 
-  // ── 1. bounds (finite points only) ────────────────────────────────
-  let minH1 = Infinity;
-  let minH2 = Infinity;
-  let maxH1 = -Infinity;
-  let maxH2 = -Infinity;
-  let analyzed = 0;
-  for (const p of points) {
-    const [h1, h2, v] = axes(p, vertical);
-    if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(v)) continue;
-    analyzed++;
-    if (h1 < minH1) minH1 = h1;
-    if (h2 < minH2) minH2 = h2;
-    if (h1 > maxH1) maxH1 = h1;
-    if (h2 > maxH2) maxH2 = h2;
-  }
-  if (analyzed === 0) {
-    warnings.push('all points non-finite — nothing to classify');
-    return emptyResult(cellSizeM, warnings);
-  }
-  if (analyzed < sourcePointCount) {
-    warnings.push(`${sourcePointCount - analyzed} non-finite points skipped`);
-  }
-
-  const cols = Math.max(1, Math.floor((maxH1 - minH1) / cellSizeM) + 1);
-  const rows = Math.max(1, Math.floor((maxH2 - minH2) / cellSizeM) + 1);
-  const nCells = cols * rows;
-
-  const cellOf = (h1: number, h2: number): number => {
-    let col = Math.floor((h1 - minH1) / cellSizeM);
-    let row = Math.floor((h2 - minH2) / cellSizeM);
-    if (col < 0) col = 0;
-    else if (col >= cols) col = cols - 1;
-    if (row < 0) row = 0;
-    else if (row >= rows) row = rows - 1;
-    return row * cols + col;
-  };
+  const frame = finiteGridFrame(points, vertical, cellSizeM, warnings);
+  if (frame === null) return emptyResult(cellSizeM, warnings);
+  const { minH1, minH2, cols, rows, nCells, analyzed, cellOf } = frame;
 
   // ── 2. minimum-elevation grid (optionally despiked) ───────────────
   const minGrid = new Float32Array(nCells).fill(Number.NaN);
@@ -537,6 +504,65 @@ export function classifyGroundSmrf(
 }
 
 /**
+ * Grid frame over the finite returns: bounds, cols/rows and the clamped
+ * cell index. Shared by {@link classifyGroundSmrf} and
+ * {@link groundFromTrustedClassification} so both use one geometry rule.
+ * Returns null (after recording the warning) when no point is finite.
+ */
+function finiteGridFrame(
+  points: ReadonlyArray<TerrainPoint>,
+  vertical: VerticalAxis,
+  cellSizeM: number,
+  warnings: string[],
+): {
+  minH1: number;
+  minH2: number;
+  cols: number;
+  rows: number;
+  nCells: number;
+  analyzed: number;
+  cellOf: (h1: number, h2: number) => number;
+} | null {
+  const sourcePointCount = points.length;
+  let minH1 = Infinity;
+  let minH2 = Infinity;
+  let maxH1 = -Infinity;
+  let maxH2 = -Infinity;
+  let analyzed = 0;
+  for (const p of points) {
+    const [h1, h2, v] = axes(p, vertical);
+    if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(v)) continue;
+    analyzed++;
+    if (h1 < minH1) minH1 = h1;
+    if (h2 < minH2) minH2 = h2;
+    if (h1 > maxH1) maxH1 = h1;
+    if (h2 > maxH2) maxH2 = h2;
+  }
+  if (analyzed === 0) {
+    warnings.push('all points non-finite — nothing to classify');
+    return null;
+  }
+  if (analyzed < sourcePointCount) {
+    warnings.push(`${sourcePointCount - analyzed} non-finite points skipped`);
+  }
+
+  const cols = Math.max(1, Math.floor((maxH1 - minH1) / cellSizeM) + 1);
+  const rows = Math.max(1, Math.floor((maxH2 - minH2) / cellSizeM) + 1);
+  const nCells = cols * rows;
+
+  const cellOf = (h1: number, h2: number): number => {
+    let col = Math.floor((h1 - minH1) / cellSizeM);
+    let row = Math.floor((h2 - minH2) / cellSizeM);
+    if (col < 0) col = 0;
+    else if (col >= cols) col = cols - 1;
+    if (row < 0) row = 0;
+    else if (row >= rows) row = rows - 1;
+    return row * cols + col;
+  };
+  return { minH1, minH2, cols, rows, nCells, analyzed, cellOf };
+}
+
+/**
  * Build a {@link GroundFilterResult} that TRUSTS an authoritative ground
  * classification instead of re-deriving one with SMRF. Every finite point in
  * `points` is treated as ground (the caller has already selected the ASPRS
@@ -568,42 +594,9 @@ export function groundFromTrustedClassification(
     return emptyResult(cellSizeM, warnings);
   }
 
-  // Bounds over the finite returns (identical rule to classifyGroundSmrf).
-  let minH1 = Infinity;
-  let minH2 = Infinity;
-  let maxH1 = -Infinity;
-  let maxH2 = -Infinity;
-  let analyzed = 0;
-  for (const p of points) {
-    const [h1, h2, v] = axes(p, vertical);
-    if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(v)) continue;
-    analyzed++;
-    if (h1 < minH1) minH1 = h1;
-    if (h2 < minH2) minH2 = h2;
-    if (h1 > maxH1) maxH1 = h1;
-    if (h2 > maxH2) maxH2 = h2;
-  }
-  if (analyzed === 0) {
-    warnings.push('all points non-finite — nothing to classify');
-    return emptyResult(cellSizeM, warnings);
-  }
-  if (analyzed < sourcePointCount) {
-    warnings.push(`${sourcePointCount - analyzed} non-finite points skipped`);
-  }
-
-  const cols = Math.max(1, Math.floor((maxH1 - minH1) / cellSizeM) + 1);
-  const rows = Math.max(1, Math.floor((maxH2 - minH2) / cellSizeM) + 1);
-  const nCells = cols * rows;
-
-  const cellOf = (h1: number, h2: number): number => {
-    let col = Math.floor((h1 - minH1) / cellSizeM);
-    let row = Math.floor((h2 - minH2) / cellSizeM);
-    if (col < 0) col = 0;
-    else if (col >= cols) col = cols - 1;
-    if (row < 0) row = 0;
-    else if (row >= rows) row = rows - 1;
-    return row * cols + col;
-  };
+  const frame = finiteGridFrame(points, vertical, cellSizeM, warnings);
+  if (frame === null) return emptyResult(cellSizeM, warnings);
+  const { minH1, minH2, cols, rows, nCells, analyzed, cellOf } = frame;
 
   // Minimum-elevation grid + provisional surface, so the returned result
   // carries a valid bare-earth surface like the SMRF path (used for provenance,
@@ -777,8 +770,79 @@ function merge(acc: number, val: number, pick: (a: number, b: number) => number)
   return Number.isFinite(acc) ? pick(acc, val) : val;
 }
 
-/** Separable 1-D windowed min/max over a flat square radius-`b` window. */
-function windowExtreme(
+/**
+ * Combine two already-folded window extrema, where NaN means "no finite
+ * value seen yet" rather than a real value: whichever side is NaN loses
+ * outright and the other passes through untouched. `pick` (`Math.min` or
+ * `Math.max`) only ever runs on two finite operands, so it is free to
+ * resolve a `-0`/`+0` tie exactly as it would in a direct fold — this
+ * combine never invents its own tie-break.
+ */
+function combineFold(a: number, b: number, pick: (x: number, y: number) => number): number {
+  if (Number.isNaN(a)) return b;
+  if (Number.isNaN(b)) return a;
+  return pick(a, b);
+}
+
+/**
+ * Centred sliding-window extreme (min or max) over one logical line of `len`
+ * elements — element `k` lives at `src[base + k * stride]` — for a flat
+ * radius-`r` element (window width `w = 2r + 1`). This is the van
+ * Herk / Gil-Werman decomposition: a forward running fold and a backward
+ * running fold, each reset every `w` elements, let every window's answer be
+ * read off with one more `combineFold` — O(len) total for the line, whatever
+ * `r` is, against O(len·r) for a direct per-window scan.
+ *
+ * The line is treated as flanked by `r` cells of the fold's absent value
+ * (NaN) on each side; reading past either end naturally yields that absent
+ * value, which is what clamps the window at the line's edges without a
+ * separate boundary case. A non-finite source value (NaN or an infinity) is
+ * normalised to that same absent value, matching the direct scan cell for
+ * cell. `forward` and `backward` are caller-owned scratch sized to fit every
+ * line of the pass, so a `windowExtreme` call allocates them once rather
+ * than once per line.
+ */
+function lineExtreme(
+  src: Float32Array,
+  base: number,
+  stride: number,
+  len: number,
+  r: number,
+  w: number,
+  pick: (a: number, b: number) => number,
+  forward: Float64Array,
+  backward: Float64Array,
+  out: Float32Array,
+  outBase: number,
+  outStride: number,
+): void {
+  const padded = forward.length;
+  const readAt = (k: number): number => {
+    const idx = k - r;
+    if (idx < 0 || idx >= len) return Number.NaN;
+    const v = src[base + idx * stride];
+    return Number.isFinite(v) ? v : Number.NaN;
+  };
+  for (let k = 0; k < padded; k++) {
+    const v = readAt(k);
+    forward[k] = k % w === 0 ? v : combineFold(forward[k - 1], v, pick);
+  }
+  for (let k = padded - 1; k >= 0; k--) {
+    const v = readAt(k);
+    backward[k] = (k + 1) % w === 0 ? v : combineFold(v, backward[k + 1], pick);
+  }
+  for (let col = 0; col < len; col++) {
+    out[outBase + col * outStride] = combineFold(backward[col], forward[col + w - 1], pick);
+  }
+}
+
+/**
+ * Separable 1-D windowed min/max over a flat square radius-`b` window.
+ * Exported only so the property test can pin it directly against the
+ * direct-scan reference it replaced; `erodeBy`/`dilateBy` are its only
+ * production callers.
+ */
+export function windowExtreme(
   grid: Float32Array,
   cols: number,
   rows: number,
@@ -786,36 +850,25 @@ function windowExtreme(
   mode: 'min' | 'max',
 ): Float32Array {
   const pick = mode === 'min' ? Math.min : Math.max;
-  const horizontal = new Float32Array(grid.length);
+  const w = 2 * b + 1;
+
   // pass 1 — horizontal
+  const horizontal = new Float32Array(grid.length);
+  const hPadded = Math.ceil((cols + 2 * b) / w) * w;
+  const hForward = new Float64Array(hPadded);
+  const hBackward = new Float64Array(hPadded);
   for (let row = 0; row < rows; row++) {
     const base = row * cols;
-    for (let col = 0; col < cols; col++) {
-      let acc = Number.NaN;
-      const lo = Math.max(0, col - b);
-      const hi = Math.min(cols - 1, col + b);
-      for (let c = lo; c <= hi; c++) {
-        const val = grid[base + c];
-        if (!Number.isFinite(val)) continue;
-        acc = Number.isNaN(acc) ? val : pick(acc, val);
-      }
-      horizontal[base + col] = acc;
-    }
+    lineExtreme(grid, base, 1, cols, b, w, pick, hForward, hBackward, horizontal, base, 1);
   }
+
   // pass 2 — vertical
   const out = new Float32Array(grid.length);
+  const vPadded = Math.ceil((rows + 2 * b) / w) * w;
+  const vForward = new Float64Array(vPadded);
+  const vBackward = new Float64Array(vPadded);
   for (let col = 0; col < cols; col++) {
-    for (let row = 0; row < rows; row++) {
-      let acc = Number.NaN;
-      const lo = Math.max(0, row - b);
-      const hi = Math.min(rows - 1, row + b);
-      for (let r = lo; r <= hi; r++) {
-        const val = horizontal[r * cols + col];
-        if (!Number.isFinite(val)) continue;
-        acc = Number.isNaN(acc) ? val : pick(acc, val);
-      }
-      out[row * cols + col] = acc;
-    }
+    lineExtreme(horizontal, col, cols, rows, b, w, pick, vForward, vBackward, out, col, cols);
   }
   return out;
 }

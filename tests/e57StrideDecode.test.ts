@@ -410,7 +410,7 @@ describe('loadE57 — stride or refuse', () => {
     expect(err).toBeInstanceOf(LoadError);
     const refusal = err as LoadError;
     expect(refusal.category).toBe('memory-constraint');
-    expect(refusal.message).toMatch(/\d+(\.\d+)?\s?(MB|GB)/);
+    expect(refusal.message).toMatch(/\d+(\.\d+)?\s?(MiB|GiB)/);
     expect(refusal.message).toContain('budget for this device');
     expect(refusal.message).toContain('COPC');
     expect(refusal.message).toContain('EPT');

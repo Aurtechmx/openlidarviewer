@@ -21,9 +21,14 @@ vi.mock('../src/render/streaming/sampleGrade', () => ({
   summarizeSampleGrade: vi.fn(() => ['Density: Moderate']),
 }));
 
-import { runFullCloudGrade } from '../src/render/streaming/runFullCloudGradeAction';
+import {
+  runFullCloudGrade,
+  type GradeActionHost,
+} from '../src/render/streaming/runFullCloudGradeAction';
 import { summarizeSampleGrade } from '../src/render/streaming/sampleGrade';
 import { spatialContextFrom } from '../src/geo/SpatialContext';
+import type { StreamingSource } from '../src/render/streaming/StreamingSource';
+import type { ChunkDecoder } from '../src/io/copc/copcChunkDecode';
 
 function makePanel() {
   return {
@@ -192,5 +197,64 @@ describe('runFullCloudGrade — a source that states no point total', () => {
     const panel = makePanel();
     await run(viewer, panel);
     expect(panel.setGradeResult).not.toHaveBeenCalled();
+  });
+});
+
+describe('runFullCloudGrade — host is a plain object, not a Viewer (render-F5)', () => {
+  // `viewer` is typed `GradeActionHost`, the structural slice the action
+  // reads (streamingCloud + streamingDecoder) — the same boundary
+  // `StreamingHost` (streamingAttach.ts) and `StreamingRendererHost`
+  // (StreamingRenderer.ts) draw. No `Viewer` import and no cast on `viewer`
+  // itself anywhere in this block: a plain object literal satisfies the
+  // parameter directly. (The nested `StreamingSource`/`ChunkDecoder` fakes
+  // still cast, same as `streamingAttach.test.ts`'s `node()` helper — those
+  // two heavy domain interfaces are orthogonal to this finding.)
+  const fakeCloud = { crs: () => null } as unknown as StreamingSource;
+  const fakeDecoder = {} as unknown as ChunkDecoder;
+
+  beforeEach(() => {
+    gradeFullCloud.mockReset();
+    vi.mocked(summarizeSampleGrade).mockClear();
+  });
+
+  it('grades and paints the result from a plain-object host', async () => {
+    const host: GradeActionHost = { streamingCloud: fakeCloud, streamingDecoder: fakeDecoder };
+    gradeFullCloud.mockResolvedValue(GRADED);
+    const panel = makePanel();
+    await runFullCloudGrade({
+      viewer: host,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      panel: panel as any,
+      context: spatialContextFrom(null as never),
+    });
+    expect(gradeFullCloud).toHaveBeenCalledTimes(1);
+    expect(panel.setGradeResult).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports an error and never decodes when the host has no streaming cloud', async () => {
+    const host: GradeActionHost = { streamingCloud: null, streamingDecoder: null };
+    const panel = makePanel();
+    await runFullCloudGrade({
+      viewer: host,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      panel: panel as any,
+      context: spatialContextFrom(null as never),
+    });
+    expect(panel.setGradeError).toHaveBeenCalledWith('Open a streaming COPC or EPT scan first.');
+    expect(gradeFullCloud).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a decode failure as a panel error, not a thrown exception', async () => {
+    const host: GradeActionHost = { streamingCloud: fakeCloud, streamingDecoder: fakeDecoder };
+    gradeFullCloud.mockRejectedValue(new Error('short chunk'));
+    const panel = makePanel();
+    await runFullCloudGrade({
+      viewer: host,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      panel: panel as any,
+      context: spatialContextFrom(null as never),
+    });
+    expect(panel.setGradeError).toHaveBeenCalledWith('Grade failed: short chunk');
+    expect(panel.setGradeCancelled).not.toHaveBeenCalled();
   });
 });

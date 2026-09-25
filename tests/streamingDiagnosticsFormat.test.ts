@@ -83,17 +83,17 @@ describe('formatStreamingDiagnostics', () => {
       pressureDepthReduction: /pressure -[\d,]+ depth/,
       fpsBudgetFactor: /fps budget ×/,
       fullRescoreCount: /rescores [\d,]+/,
-      cacheBytes: /cache {9}[\d.]+ [KMGT]?B \//,
+      cacheBytes: /cache {9}[\d.]+ [KMGT]?i?B \//,
       cacheEntries: /[\d,]+ entries/,
-      cacheMaxBytes: /\/ [\d.]+ [KMGT]?B ·/,
+      cacheMaxBytes: /\/ [\d.]+ [KMGT]?i?B ·/,
       cacheHits: /hits [\d,]+/,
       cacheMisses: /misses [\d,]+/,
       cacheEvictions: /evict [\d,]+/,
       generationId: /generation {4}[\d,]+/,
       decodeRetryCount: /decode retries [\d,]+/,
       uploadPendingNodes: /upload queue {2}[\d,]+ nodes/,
-      uploadPendingBytes: /nodes · [\d.]+ [KMGT]?B ·/,
-      residentDecodedBytes: /resident decoded [\d.]+ [KMGT]?B/,
+      uploadPendingBytes: /nodes · [\d.]+ [KMGT]?i?B ·/,
+      residentDecodedBytes: /resident decoded [\d.]+ [KMGT]?i?B/,
     };
 
     // The map covers exactly the field list — no field left unmarked, none stale.
@@ -106,10 +106,10 @@ describe('formatStreamingDiagnostics', () => {
   it('renders byte quantities through the shared formatter, not raw integers', () => {
     const d = build({ uploadPendingBytes: 65_536, residentDecodedBytes: 12_582_912 });
     const text = formatStreamingDiagnostics(d);
-    expect(text).toContain('8.0 MB');   // cacheBytes
-    expect(text).toContain('16.0 MB');  // cacheMaxBytes
-    expect(text).toContain('64.0 KB');  // uploadPendingBytes
-    expect(text).toContain('12.0 MB');  // residentDecodedBytes
+    expect(text).toContain('8.0 MiB');   // cacheBytes
+    expect(text).toContain('16.0 MiB');  // cacheMaxBytes
+    expect(text).toContain('64.0 KiB');  // uploadPendingBytes
+    expect(text).toContain('12.0 MiB');  // residentDecodedBytes
     expect(text).not.toContain('8,388,608');
   });
 

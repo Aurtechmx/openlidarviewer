@@ -178,8 +178,8 @@ export async function importSession(
     // counts, per-measurement points) bound the rest once the JSON is in hand.
     if (file.size > MAX_SESSION_BYTES) {
       throw new Error(
-        `This session file is too large (${Math.round(file.size / (1024 * 1024))} MB; ` +
-          `limit ${Math.round(MAX_SESSION_BYTES / (1024 * 1024))} MB).`,
+        `This session file is too large (${Math.round(file.size / (1024 * 1024))} MiB; ` +
+          `limit ${Math.round(MAX_SESSION_BYTES / (1024 * 1024))} MiB).`,
       );
     }
     // The session path's imports are light (no three.js), so a session restore

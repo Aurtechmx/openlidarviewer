@@ -82,7 +82,7 @@ export interface ExportWarning {
 export interface ExportSummary {
   readonly pointCountLabel: string;
   readonly formatLabel: string;
-  /** "~310 MB", a LAZ range "~26–45 MB", or "" when no points. */
+  /** "~310 MiB", a LAZ range "~26–45 MiB", or "" when no points. */
   readonly sizeLabel: string;
   /** Midpoint size estimate in bytes, or null when not estimable. */
   readonly sizeBytesEst: number | null;

@@ -6,14 +6,16 @@
  * default of NumPy, R and Excel's PERCENTILE.INC — so every reported
  * percentile is reproducible against standard tools.
  *
- * WHY one shared helper. The v0.4.3 audit found THREE percentile
+ * WHY one shared helper. The v0.5.3 audit found THREE percentile
  * conventions coexisting: nearest-rank (`ceil(q·n)−1`) in holdoutRmse /
  * buildDsm / hillshade vs type-7 in rasterizeDtm / lassoVolume /
  * profileSampler. The two disagree by up to one order-statistic gap — a
  * p95 residual, a p95 slope and a p95 canopy height would each round
- * differently depending on which file computed them. Everything now
- * routes through here; a future percentile need must import this, not
- * re-derive its own.
+ * differently depending on which file computed them. The terrain, validation
+ * and diagnostics modules now route through here. lassoVolume, lassoOcclusion,
+ * stockpileVolume and profileSampler in src/render/measure keep their own
+ * implementations of the same type-7 formula. A future percentile need must
+ * import this, not re-derive its own.
  *
  * Pure data: no DOM, no three.js, no I/O. Deterministic.
  */
