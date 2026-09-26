@@ -19,6 +19,7 @@ import {
   entryMatchesSource,
   fingerprintKey,
   openRecoveryStore,
+  pruneStale,
   type RecoveryEntry,
   type RecoveryStore,
 } from './recoveryJournal';
@@ -81,7 +82,7 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
     notice = null;
   };
 
-  const showNotice = (text: string, actions: ReadonlyArray<[label: string, run: () => void]>): void => {
+  const showNotice = (text: string, actions: ReadonlyArray<[label: string, run: () => void, tip: string]>): void => {
     hideNotice();
     const el = document.createElement('div');
     el.className = 'olv-toast olv-recovery-notice';
@@ -92,9 +93,10 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
     p.textContent = text;
     const row = document.createElement('div');
     row.className = 'olv-toast-row';
-    for (const [label, run] of actions) {
+    for (const [label, run, tip] of actions) {
       const b = document.createElement('button');
       b.type = 'button';
+      b.title = tip;
       b.className = 'olv-toast-cancel';
       b.textContent = label;
       b.addEventListener('click', run);
@@ -112,6 +114,20 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
     if (e) void store?.remove(e.key).catch(() => disable('remove-failed'));
   };
 
+  const clearAll = (): void => {
+    pending = null;
+    hideNotice();
+    void store?.clear().then(() => {
+      // Confirm in place of the notice, then let it go.
+      showNotice('Recovery data in this browser was deleted.', []);
+      const shown = notice;
+      setTimeout(() => { if (notice === shown) hideNotice(); }, 4000);
+    }, () => disable('clear-failed'));
+  };
+
+  const DISCARD_TIP = 'Delete this unsaved work from the browser.';
+  const CLEAR_TIP = 'Delete all work saved for recovery in this browser now.';
+
   const turnOff = (): void => {
     setRecoveryEnabled(false);
     pending = null;
@@ -122,8 +138,9 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
 
   const offerReopen = (e: RecoveryEntry): void =>
     showNotice(`Unsaved work found: ${describe(e)}. Open ${e.fileName} again (the same file or URL) to restore it.`, [
-      ['Discard', discard],
-      ['Turn off recovery', turnOff],
+      ['Discard', discard, DISCARD_TIP],
+      ['Clear', clearAll, CLEAR_TIP],
+      ['Turn off recovery', turnOff, 'Stop saving work for recovery in this browser and delete what is saved.'],
     ]);
 
   const write = async (): Promise<void> => {
@@ -170,7 +187,8 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
         if (!s) return disable('storage-unavailable');
         store = s;
         setRecoveryStatus(`on:${s.backend}`);
-        const [latest] = await s.list();
+        // Entries past the age limit are deleted before anything is offered.
+        const [latest] = await pruneStale(s, Date.now());
         if (latest && !off) {
           pending = latest;
           offerReopen(latest);
@@ -192,13 +210,14 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
               pending = null;
               hideNotice();
               void deps.restore(e.json);
-            }],
-            ['Discard', discard],
+            }, 'Put the saved measurements, annotations, views and camera back on this file.'],
+            ['Discard', discard, DISCARD_TIP],
+            ['Clear', clearAll, CLEAR_TIP],
           ]);
         } else {
           showNotice(
             `The open file differs from ${e.fileName}, so the unsaved work (${describe(e)}) was not restored. Open ${e.fileName} to restore it.`,
-            [['Discard', discard]],
+            [['Discard', discard, DISCARD_TIP], ['Clear', clearAll, CLEAR_TIP]],
           );
         }
       }, () => {});
@@ -213,7 +232,7 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
   return activeHandle;
 }
 
-/** Delete every journal entry, whatever store holds them. Used when the user turns recovery off. */
+/** Delete every journal entry, whatever store holds them. Used by Clear recovery data and when the user turns recovery off. */
 export async function clearRecoveryJournal(): Promise<void> {
   activeHandle?.clear();
   const store = await openRecoveryStore({

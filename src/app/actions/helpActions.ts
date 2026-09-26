@@ -100,6 +100,20 @@ export function contributeHelpActions(deps: HelpActionDeps): Action[] {
         void loadRecovery().then((m) => m.clearRecoveryJournal()).catch(() => {});
       },
     },
+    {
+      id: 'help.session-recovery-clear',
+      title: 'Clear recovery data',
+      section: 'Help',
+      hint: 'Deletes all work saved for recovery in this browser now. Saved entries are also deleted automatically after 7 days.',
+      keywords: ['recovery', 'clear', 'delete', 'privacy', 'shared computer', 'session'],
+      run: () => {
+        const notify = deps.notify ?? (() => {});
+        void loadRecovery()
+          .then((m) => m.clearRecoveryJournal())
+          .then(() => notify('Recovery data in this browser was deleted.'))
+          .catch(() => notify('Could not clear recovery data. Reload the page and try again.'));
+      },
+    },
   );
   return actions;
 }
