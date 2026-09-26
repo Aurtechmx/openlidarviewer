@@ -146,7 +146,7 @@ describe('volume placement fold (assembleVolumePositions)', () => {
       [{ pos: a, placement: null }, { pos: b }],
       a.length + b.length,
     );
-    expect(Array.from(out)).toEqual([1, 1, 1, 2, 2, 2, 3, 3, 3]);
+    expect(Array.from(out.positions)).toEqual([1, 1, 1, 2, 2, 2, 3, 3, 3]);
   });
 
   it('shifts each buffer by its own placement', () => {
@@ -155,7 +155,7 @@ describe('volume placement fold (assembleVolumePositions)', () => {
       { pos: b, placement: placed(0, 10, 0) },
     ];
     const out = assembleVolumePositions(buffers, a.length + b.length);
-    expect(Array.from(out)).toEqual([0, -1, -2, 1, 0, -1, 3, 13, 3]);
+    expect(Array.from(out.positions)).toEqual([0, -1, -2, 1, 0, -1, 3, 13, 3]);
   });
 });
 

@@ -97,6 +97,7 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
     'tests/stockpileVolume.test.ts',
     'tests/analyticVolumeOracle.test.ts',
     'tests/volumeSyntheticTruth.test.ts',
+    'tests/polygonVolumeWithheld.test.ts',
   ],
   'olv.volume.stockpile-area-grid': ['tests/stockpileAreaGrid.test.ts'],
   'olv.topology.linkage-record': ['tests/sourceTopologyManifest.test.ts'],

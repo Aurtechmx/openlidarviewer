@@ -266,7 +266,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   },
   'olv.volume.stockpile': {
     id: 'olv.volume.stockpile',
-    version: 1,
+    version: 2,
     name: 'Stockpile cut-fill volume with model sensitivity band',
     summary:
       'Cut-fill prism volume of a footprint above a fitted base plane, with a ' +
@@ -274,10 +274,12 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'area·σ(thickness)/√N and a heuristic base-height term. The arithmetic is ' +
       'a standard deviation of that model; it is not calibrated coverage, ' +
       'because the thickness samples are spatially correlated and the base term ' +
-      'is a spread rather than a measured error.',
+      'is a spread rather than a measured error. v2 leaves LAS Withheld points ' +
+      'out of the polygon Volume tool and records points read, Withheld excluded ' +
+      '(or unknown) and points analysed, and keeps Overlap; v1 read every point.',
     citation: 'Internal composition (prismatic cut-fill); standard earthworks method.',
     category: 'volume',
-    implementation: ['src/render/measure/stockpileVolume.ts'],
+    implementation: ['src/render/measure/stockpileVolume.ts', 'src/render/measure/polygonVolumeSample.ts'],
   },
   'olv.volume.stockpile-area-grid': {
     id: 'olv.volume.stockpile-area-grid',

@@ -118,7 +118,7 @@ describe('measurementMetrics', () => {
       fill: 100, cut: 5, net: 95, referenceZ: 0, footprintArea: 50,
       pointsInPolygon: 800, densityNative: 16, confidence: 'medium',
       method: 'olv.volume.stockpile-area-grid@3', gridAuthority: 'measured', gridAuthorityReason: '',
-      crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' },
+      crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' }, // method-literal-ok: a record stored at an earlier version
     },
   });
 
@@ -138,7 +138,7 @@ describe('measurementMetrics', () => {
         referenceZ: 0, footprintArea: 50, pointsInPolygon: 800, densityNative: 16,
         confidence: 'high', method: 'olv.volume.stockpile-area-grid@3',
         gridAuthority: 'withheld', gridAuthorityReason: 'insufficient observations',
-        crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' },
+        crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' }, // method-literal-ok: a record stored at an earlier version
       },
     } as never);
     const m = measurementMetrics(withheld, UP, 1);
@@ -266,7 +266,7 @@ describe('measurementsToCsv — grid-canonical lasso volumes', () => {
       fill: 100, cut: 5, net: 95, referenceZ: 0, footprintArea: 50,
       pointsInPolygon: 800, densityNative: 16, confidence: 'medium',
       method: 'olv.volume.stockpile-area-grid@3', gridAuthority: 'preview', gridAuthorityReason: 'display sample',
-      crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' },
+      crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' }, // method-literal-ok: a record stored at an earlier version
     },
   });
 
@@ -471,7 +471,7 @@ describe('the evidence stamp names the claim behind each figure', () => {
       referenceZ: 0, footprintArea: 50, pointsInPolygon: 800, densityNative: 16,
       confidence: 'high', method: 'olv.volume.stockpile-area-grid@3',
       gridAuthority: 'withheld', gridAuthorityReason: 'insufficient observations',
-      crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' },
+      crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' }, // method-literal-ok: a record stored at an earlier version
     },
   } as never;
 

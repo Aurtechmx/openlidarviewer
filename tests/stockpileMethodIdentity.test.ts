@@ -30,8 +30,8 @@ const base: VolumeRecord = {
 };
 
 describe('the two estimators are distinct records in the registry', () => {
-  it('names the point-sample estimator at version 1', () => {
-    expect(methodTag(methodRef('olv.volume.stockpile'))).toBe('olv.volume.stockpile@1');
+  it('names the point-sample estimator at version 2', () => {
+    expect(methodTag(methodRef('olv.volume.stockpile'))).toBe('olv.volume.stockpile@2');
   });
 
   it('names the area-weighted grid at version 3', () => {
@@ -42,7 +42,7 @@ describe('the two estimators are distinct records in the registry', () => {
 
   it('records that a v1 figure does not carry the v2 meaning', () => {
     // The registry says so in prose; this pins that the two are not aliases.
-    expect(method('olv.volume.stockpile')?.version).toBe(1);
+    expect(method('olv.volume.stockpile')?.version).toBe(2);
     expect(method('olv.volume.stockpile-area-grid')?.version).toBe(3);
     expect(method('olv.volume.stockpile-area-grid')?.summary).toContain('does not carry the v2 meaning');
     expect(method('olv.volume.stockpile-area-grid')?.summary).toContain('v3 is the lasso figure read with points flagged Withheld left out');
@@ -51,8 +51,8 @@ describe('the two estimators are distinct records in the registry', () => {
 
 describe('a stored record and its method', () => {
   it('carries the tag it was written with', () => {
-    const rec: VolumeRecord = { ...base, method: 'olv.volume.stockpile@1' };
-    expect(rec.method).toBe('olv.volume.stockpile@1');
+    const rec: VolumeRecord = { ...base, method: 'olv.volume.stockpile@1' }; // method-literal-ok: a record stored at an earlier version
+    expect(rec.method).toBe('olv.volume.stockpile@1'); // method-literal-ok: a record stored at an earlier version
   });
 
   it('leaves a record written before the field without one', () => {
@@ -92,8 +92,8 @@ const roundTrip = (v: VolumeRecord): VolumeRecord | undefined => {
 
 describe('a volume record through a session', () => {
   it('keeps the estimator it was written with', () => {
-    const back = roundTrip({ ...base, method: 'olv.volume.stockpile@1' });
-    expect(back?.method).toBe('olv.volume.stockpile@1');
+    const back = roundTrip({ ...base, method: 'olv.volume.stockpile@1' }); // method-literal-ok: a record stored at an earlier version
+    expect(back?.method).toBe('olv.volume.stockpile@1'); // method-literal-ok: a record stored at an earlier version
   });
 
   it('keeps an area-grid tag unchanged, rather than normalising it', () => {
@@ -122,7 +122,7 @@ const grid = (over: Partial<StockpileGridFigure> = {}): StockpileGridFigure => (
 
 describe('withStockpileGrid — scope', () => {
   it('passes the point-sample record through unchanged when there is no grid', () => {
-    const rec = { ...base, method: 'olv.volume.stockpile@1' };
+    const rec = { ...base, method: 'olv.volume.stockpile@1' }; // method-literal-ok: a record stored at an earlier version
     expect(withStockpileGrid(rec, null)).toEqual(rec);
   });
 
@@ -130,7 +130,7 @@ describe('withStockpileGrid — scope', () => {
     // Scope is enforced by main.ts only calling withStockpileGrid on the lasso
     // path (see measureDerivations.test.ts's grep on main.ts); this pins the
     // function's OWN half of the contract — untouched input, untouched output.
-    const rec = { ...base, method: 'olv.volume.stockpile@1' };
+    const rec = { ...base, method: 'olv.volume.stockpile@1' }; // method-literal-ok: a record stored at an earlier version
     const out = withStockpileGrid(rec, null);
     expect(out.gridAuthority).toBeUndefined();
     expect(out.crossCheck).toBeUndefined();
@@ -139,7 +139,7 @@ describe('withStockpileGrid — scope', () => {
 
 describe('withStockpileGrid — authority and method version', () => {
   it('a measured grid becomes the canonical fill/cut/net, tagged with the grid method', () => {
-    const rec = { ...base, method: 'olv.volume.stockpile@1' };
+    const rec = { ...base, method: 'olv.volume.stockpile@1' }; // method-literal-ok: a record stored at an earlier version
     const out = withStockpileGrid(rec, grid());
     expect(out.fill).toBe(90);
     expect(out.cut).toBe(3);
@@ -149,7 +149,7 @@ describe('withStockpileGrid — authority and method version', () => {
   });
 
   it('a preview grid is stored and labelled preview, with a number', () => {
-    const rec = { ...base, method: 'olv.volume.stockpile@1' };
+    const rec = { ...base, method: 'olv.volume.stockpile@1' }; // method-literal-ok: a record stored at an earlier version
     const out = withStockpileGrid(rec, grid({ authority: 'preview', reason: 'display sample' }));
     expect(out.gridAuthority).toBe('preview');
     expect(out.gridAuthorityReason).toBe('display sample');
@@ -157,7 +157,7 @@ describe('withStockpileGrid — authority and method version', () => {
   });
 
   it('a withheld grid carries no fill/cut/net at all — never the cross-check under the grid\'s name', () => {
-    const rec = { ...base, method: 'olv.volume.stockpile@1' };
+    const rec = { ...base, method: 'olv.volume.stockpile@1' }; // method-literal-ok: a record stored at an earlier version
     const out = withStockpileGrid(rec, grid({ authority: 'withheld', reason: 'insufficient observations' }));
     expect(out.gridAuthority).toBe('withheld');
     expect(out.fill).toBeUndefined();
@@ -170,22 +170,22 @@ describe('withStockpileGrid — authority and method version', () => {
 
 describe('withStockpileGrid — cut and fill cross-check', () => {
   it('keeps the point-sample figure as a labelled cross-check under its own tag', () => {
-    const rec = { ...base, method: 'olv.volume.stockpile@1' };
+    const rec = { ...base, method: 'olv.volume.stockpile@1' }; // method-literal-ok: a record stored at an earlier version
     const out = withStockpileGrid(rec, grid());
-    expect(out.crossCheck).toEqual({ fill: 120, cut: 4, net: 116, method: 'olv.volume.stockpile@1' });
+    expect(out.crossCheck).toEqual({ fill: 120, cut: 4, net: 116, method: 'olv.volume.stockpile@1' }); // method-literal-ok: a record stored at an earlier version
   });
 
   it('the cross-check survives even when the grid is withheld — it is the only figure left', () => {
-    const rec = { ...base, method: 'olv.volume.stockpile@1' };
+    const rec = { ...base, method: 'olv.volume.stockpile@1' }; // method-literal-ok: a record stored at an earlier version
     const out = withStockpileGrid(rec, grid({ authority: 'withheld', reason: 'insufficient observations' }));
-    expect(out.crossCheck).toEqual({ fill: 120, cut: 4, net: 116, method: 'olv.volume.stockpile@1' });
+    expect(out.crossCheck).toEqual({ fill: 120, cut: 4, net: 116, method: 'olv.volume.stockpile@1' }); // method-literal-ok: a record stored at an earlier version
   });
 });
 
 describe('a session round trip carries an old record and a switched one unchanged', () => {
   it('an old point-sample record and a new grid-canonical record each read back exactly as saved', () => {
-    const oldRecord: VolumeRecord = { ...base, method: 'olv.volume.stockpile@1' };
-    const newRecord = withStockpileGrid({ ...base, method: 'olv.volume.stockpile@1' }, grid());
+    const oldRecord: VolumeRecord = { ...base, method: 'olv.volume.stockpile@1' }; // method-literal-ok: a record stored at an earlier version
+    const newRecord = withStockpileGrid({ ...base, method: 'olv.volume.stockpile@1' }, grid()); // method-literal-ok: a record stored at an earlier version
     const session = {
       upAxis: 'z', origin: [0, 0, 0], unitSystem: 'metric', views: [], annotations: [],
       measurements: [
@@ -199,20 +199,20 @@ describe('a session round trip carries an old record and a switched one unchange
     expect(backOld).toEqual(oldRecord);
     expect(backNew.method).toBe('olv.volume.stockpile-area-grid@3');
     expect(backNew.gridAuthority).toBe('measured');
-    expect(backNew.crossCheck).toEqual({ fill: 120, cut: 4, net: 116, method: 'olv.volume.stockpile@1' });
+    expect(backNew.crossCheck).toEqual({ fill: 120, cut: 4, net: 116, method: 'olv.volume.stockpile@1' }); // method-literal-ok: a record stored at an earlier version
     expect(backNew.fill).toBe(90);
   });
 
   it('a withheld record round-trips with no fill/cut/net and the cross-check intact', () => {
     const withheld = withStockpileGrid(
-      { ...base, method: 'olv.volume.stockpile@1' },
+      { ...base, method: 'olv.volume.stockpile@1' }, // method-literal-ok: a record stored at an earlier version
       grid({ authority: 'withheld', reason: 'insufficient observations' }),
     );
     const back = roundTrip(withheld);
     expect(back?.fill).toBeUndefined();
     expect(back?.gridAuthority).toBe('withheld');
     expect(back?.gridAuthorityReason).toBe('insufficient observations');
-    expect(back?.crossCheck).toEqual({ fill: 120, cut: 4, net: 116, method: 'olv.volume.stockpile@1' });
+    expect(back?.crossCheck).toEqual({ fill: 120, cut: 4, net: 116, method: 'olv.volume.stockpile@1' }); // method-literal-ok: a record stored at an earlier version
   });
 
   it('a withheld record never reads back a fill/cut/net, even if the raw file carries one', () => {
@@ -223,7 +223,7 @@ describe('a session round trip carries an old record and a switched one unchange
     // grid's name.
     const tampered: VolumeRecord = {
       ...base,
-      method: 'olv.volume.stockpile@1',
+      method: 'olv.volume.stockpile@1', // method-literal-ok: a record stored at an earlier version
       gridAuthority: 'withheld',
       gridAuthorityReason: 'insufficient observations',
       fill: 999,

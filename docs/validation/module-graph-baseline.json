@@ -208,8 +208,8 @@
         "src/render/measure/classificationEpoch.ts",
         "src/render/measure/lassoVolume.ts",
         "src/render/measure/lassoVolumeCompute.ts",
+        "src/render/measure/polygonVolumeSample.ts",
         "src/render/measure/profileSectionSeam.ts",
-        "src/render/measure/volume.ts",
         "src/render/navMath.ts",
         "src/render/orbitCenter.ts",
         "src/render/orbitFeel.ts",
@@ -446,7 +446,7 @@
     "components": []
   },
   "context": {
-    "filesScanned": 998,
+    "filesScanned": 999,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [

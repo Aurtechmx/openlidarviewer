@@ -40,7 +40,8 @@
 import { methodRef, methodTag } from '../../science/methodRegistry';
 import type { Vec3 } from '../navMath';
 import type { LayerSpatialTransform } from '../../geo/ProjectSpatialFrame';
-import { placeBufferInto } from '../layerPlacement';
+import { accumulatorOffset, placeBufferInto } from '../layerPlacement';
+import { isWithheld } from '../../science/withheldPolicy';
 import {
   type PolygonValidity,
   validatePolygon,
@@ -51,27 +52,76 @@ export interface PlacedVolumeBuffer {
   readonly pos: Float32Array;
   /** Float64 placement into the shared project frame; null/absent = identity. */
   readonly placement?: LayerSpatialTransform | null;
+  /**
+   * The source's normalised classification-flags channel, one byte per point.
+   * Absent (or misaligned) means the source cannot say which points are
+   * Withheld; every point is then read and the exclusion count is unknown.
+   */
+  readonly flags?: Uint8Array | null;
+}
+
+/** The project-frame buffers a polygon cut/fill walk reads, split by the Withheld flag. */
+export interface AssembledVolumePositions {
+  /** Points the integration reads: every point not flagged Withheld. */
+  readonly positions: Float32Array;
+  /** Points flagged Withheld, left out of the integration and kept only to be counted. */
+  readonly withheldPositions: Float32Array;
+  /** False when a contributing source had no flags channel lined up with its points. */
+  readonly everySourceFlagged: boolean;
 }
 
 /**
  * Concatenate placed source buffers into one project-frame positions array,
  * folding each layer's Float64 placement in during the copy. `total` is the
- * summed element length (Σ pos.length) and the size of the returned array.
+ * summed element length (Σ pos.length).
  *
- * Identity placements bulk-copy with `set` — byte-for-byte — so a scene with
- * nothing mounted assembles exactly the buffer the pre-fold path did; only a
- * real translation walks the buffer to add its offset.
+ * Withheld points (LAS classification flag) go to `withheldPositions`
+ * instead: scientific processing leaves them out (`withheldPolicy.ts`), the
+ * way the lasso volume does (`lassoVolumeCompute.ts`). Overlap and every
+ * other marking are read as normal.
+ *
+ * A source with no flagged point takes the bulk path (`placeBufferInto`), so a
+ * scene without flags assembles byte-for-byte the buffer the earlier path did.
  */
 export function assembleVolumePositions(
   buffers: ReadonlyArray<PlacedVolumeBuffer>,
   total: number,
-): Float32Array {
-  const positions = new Float32Array(total);
+): AssembledVolumePositions {
+  let everySourceFlagged = true;
+  let withheldTotal = 0;
+  const aligned: Array<Uint8Array | null> = buffers.map(({ pos, flags }) => {
+    const n = pos.length / 3;
+    if (!flags || flags.length !== n) {
+      everySourceFlagged = false;
+      return null;
+    }
+    let w = 0;
+    for (let i = 0; i < n; i++) if (isWithheld(flags[i])) w++;
+    withheldTotal += w;
+    return w > 0 ? flags : null;
+  });
+  const positions = new Float32Array(total - withheldTotal * 3);
+  const withheldPositions = new Float32Array(withheldTotal * 3);
   let off = 0;
-  for (const { pos, placement } of buffers) {
-    off = placeBufferInto(positions, off, pos, placement);
-  }
-  return positions;
+  let wOff = 0;
+  buffers.forEach(({ pos, placement }, b) => {
+    const flags = aligned[b];
+    if (!flags) {
+      off = placeBufferInto(positions, off, pos, placement);
+      return;
+    }
+    const [dx, dy, dz] = accumulatorOffset(placement);
+    for (let i = 0, k = 0; k < pos.length; i++, k += 3) {
+      const dest = isWithheld(flags[i]) ? withheldPositions : positions;
+      const o = dest === positions ? off : wOff;
+      dest[o] = pos[k] + dx;
+      dest[o + 1] = pos[k + 1] + dy;
+      dest[o + 2] = pos[k + 2] + dz;
+      if (dest === positions) off += 3;
+      else wOff += 3;
+    }
+  });
+  return { positions, withheldPositions, everySourceFlagged };
 }
 
 // ── tiny vector helpers (duplicated module-local for the leaf contract) ────
