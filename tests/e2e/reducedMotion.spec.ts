@@ -73,14 +73,40 @@ test.describe('prefers-reduced-motion', () => {
 
   test('a camera preset lands without a long tween', async ({ page }) => {
     await loadReduced(page);
-    const before = await latestPose(page);
-    await page.locator('.olv-cam-views .olv-cam-chip').filter({ hasText: /^Top$/ }).click();
-    // Well under the 0.8 s tween a preset plays with motion.
-    await page.waitForTimeout(250);
-    const landed = await latestPose(page);
-    expect(moved(before, landed), 'the preset moved the camera').toBeGreaterThan(1e-4);
-    await page.waitForTimeout(700);
-    const later = await latestPose(page);
-    expect(moved(landed, later), 'no tween still running after landing').toBeLessThan(1e-6);
+    const chip = (name: string) =>
+      page.locator('.olv-cam-views .olv-cam-chip').filter({ hasText: new RegExp(`^${name}$`) });
+    const toast = page.locator('.olv-lasso-toast');
+    // Start from a known pose that differs from Top: the framed view after
+    // open can already be at (or near) the Top pose on some viewports.
+    await chip('Front').click();
+    await expect(toast).toHaveText('View · Front.');
+    await page.waitForTimeout(300);
+    const from = await latestPose(page);
+    const mark = await page.evaluate(() => (window as unknown as { __olvPoses: number[][] }).__olvPoses.length);
+
+    await chip('Top').click();
+    await expect(toast).toHaveText('View · Top.');
+    // The pose is reported at the START of each navigation update, so wait on
+    // the loop having reported a pose that differs from Front (the real signal
+    // the preset applied), then let it run on for well over a tween's length.
+    await page.waitForFunction(
+      ({ mark, from }) => {
+        const p = (window as unknown as { __olvPoses: number[][] }).__olvPoses.slice(mark);
+        return p.some((q) => q.some((v, i) => Math.abs(v - from[i]) / Math.max(1, Math.abs(v)) > 1e-4));
+      },
+      { mark, from },
+      { timeout: 10_000 },
+    );
+    await page.waitForTimeout(1_000);
+    const after = await page.evaluate(
+      (mark) => (window as unknown as { __olvPoses: number[][] }).__olvPoses.slice(mark),
+      mark,
+    );
+    const landed = after[after.length - 1];
+    expect(moved(from, landed), 'the preset moved the camera').toBeGreaterThan(1e-4);
+    // No tween: every reported pose is either the Front pose or the Top pose,
+    // never one in between. A 0.8 s eased tween reports many in-between poses.
+    const between = after.filter((q) => moved(from, q) > 1e-6 && moved(landed, q) > 1e-6);
+    expect(between, 'no in-between tween poses').toEqual([]);
   });
 });
