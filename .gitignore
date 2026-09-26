@@ -172,3 +172,4 @@ coconino-next-*-tiles.csv
 *.bak
 *.orig
 *.rej
+playwright-results

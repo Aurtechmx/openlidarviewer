@@ -380,12 +380,10 @@ jobs:
       # timeouts across 40 minutes, every one of them downstream of a missing
       # WebGL context and none of them saying so. `glxinfo` answers before
       # Playwright starts; the preflight spec answers before the suite does.
-      # Detect the software renderer and skip the render-dependent steps when
-      # it is absent. When the rasteriser did not come up there is nothing to
-      # test, so the step reports `renderer=absent` with a warning instead of a
-      # 40-minute run of timeouts. When the renderer is present the suite runs.
+      # A missing software renderer fails the job. Without it Firefox has no
+      # WebGL 2 context and the suite would only time out, so the step stops
+      # here with an error that names the cause.
       - name: Verify the runner has a software OpenGL renderer
-        id: glcheck
         run: |
           # `|| true` on both probes is load-bearing: GitHub runs `run:` steps with
           # `bash -eo pipefail`, so a failing apt-get or a glxinfo that cannot make a
@@ -395,13 +393,13 @@ jobs:
           sudo apt-get install -y --no-install-recommends mesa-utils || true
           xvfb-run -a glxinfo -B > /tmp/glxinfo.txt 2>&1 || true
           if grep -Eiq "llvmpipe|softpipe|software rasterizer" /tmp/glxinfo.txt; then
-            echo "renderer=present" >> "$GITHUB_OUTPUT"
+            echo "software renderer present"
           else
-            echo "renderer=absent" >> "$GITHUB_OUTPUT"
-            echo "::warning::No Mesa software renderer on this runner; skipping the render-dependent Firefox specs."
+            cat /tmp/glxinfo.txt
+            echo "::error::No Mesa software renderer on this runner; Firefox cannot get a WebGL 2 context."
+            exit 1
           fi
       - name: Verify Firefox gets a WebGL 2 context
-        if: steps.glcheck.outputs.renderer == 'present'
         run: |
           xvfb-run -a ./node_modules/.bin/playwright test \
             --project=firefox-preflight
@@ -414,7 +412,6 @@ jobs:
       # (see FIREFOX_DISPLAYS in playwright.config.ts); --workers must match
       # the number of displays so no two workers share one.
       - name: Deterministic end-to-end tests on Firefox
-        if: steps.glcheck.outputs.renderer == 'present'
         run: |
           for d in 90 91; do
             Xvfb ":$d" -screen 0 1280x1024x24 -nolisten tcp &
@@ -424,6 +421,9 @@ jobs:
           done
           DISPLAY=:90 OLV_FIREFOX_DISPLAYS=:90,:91 \
             ./node_modules/.bin/playwright test --project=firefox --workers=2
+      - name: The suite ran a non-zero number of tests
+        shell: bash
+        run: node scripts/assert-playwright-ran.mjs playwright-results/results.json
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -447,6 +447,9 @@ jobs:
         run: ./node_modules/.bin/playwright install --with-deps webkit
       - name: Deterministic end-to-end tests on WebKit
         run: ./node_modules/.bin/playwright test --project=webkit
+      - name: The suite ran a non-zero number of tests
+        shell: bash
+        run: node scripts/assert-playwright-ran.mjs playwright-results/results.json
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -496,6 +499,9 @@ jobs:
         # breakpoint in src/style.css, which is the boundary a layout
         # regression actually crosses.
         run: npm run test:smoke:widths
+      - name: The suite ran a non-zero number of tests
+        shell: bash
+        run: node scripts/assert-playwright-ran.mjs playwright-results/results.json
 
       # ── Checks that are pure Node ──
       # Each of these is named in the Windows section of the developer manual

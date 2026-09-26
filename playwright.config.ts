@@ -54,7 +54,11 @@ export default defineConfig({
   // on-first-retry trace + failure screenshot are bundled into playwright-report/
   // and uploadable (the advisory browser jobs are continue-on-error, so their
   // failures are only diagnosable from an uploaded trace).
-  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
+  // The JSON file is what CI reads to prove a blocking leg ran a non-zero
+  // number of tests (scripts/assert-playwright-ran.mjs).
+  reporter: process.env.CI
+    ? [['list'], ['html', { open: 'never' }], ['json', { outputFile: 'playwright-results/results.json' }]]
+    : 'list',
   use: {
     // Follows the web server: deploy-root runs get a kernel-assigned free port
     // and a loopback address, and a hardcoded 4173 here sent every spec to a
