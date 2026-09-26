@@ -450,7 +450,7 @@
     "topFanIn": [
       {
         "file": "src/ui/dom.ts",
-        "importers": 71
+        "importers": 72
       },
       {
         "file": "src/lazyChunks.ts",
