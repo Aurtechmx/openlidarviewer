@@ -34,7 +34,7 @@ import { writeGeoTiff } from './demGeoTiff';
 import { demWrittenMask } from './demEvidence';
 
 /** Registered method id for this raster. */
-export const TERRAIN_SENSITIVITY_METHOD_ID = 'olv.terrain.sensitivity.ensemble';
+export const TERRAIN_SENSITIVITY_METHOD_ID = 'olv.terrain.evidence.sensitivity';
 
 /** Band names in band order, as written to GDAL_METADATA. */
 export const TERRAIN_SENSITIVITY_BANDS = ['sensitivity_range', 'sensitivity_members'] as const;

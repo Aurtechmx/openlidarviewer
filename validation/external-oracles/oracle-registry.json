@@ -579,6 +579,39 @@
         "Does not run the ensemble: the member grids are inputs, so the oracle checks the range rule and the file, not the terrain pipeline behind each member.",
         "Says nothing about how close any height is to the ground."
       ]
+    },
+    {
+      "oracleId": "olv-terrain-attention-geotiff-py",
+      "name": "Terrain attention GeoTIFF reader and residual (attention_geotiff.py)",
+      "version": "1",
+      "executables": [
+        "validation/terrain-attention/oracle/attention_geotiff.py"
+      ],
+      "roleCapabilities": [
+        "standard-conformance-validator",
+        "analytic-truth"
+      ],
+      "domains": [
+        "geotiff-multiband-layout",
+        "terrain-attention-raster",
+        "terrain-reconstruction-residual"
+      ],
+      "lineageGroup": "olv-terrain-evidence-oracle",
+      "implementationLanguage": "Python (standard library only)",
+      "license": "AGPL-3.0-only",
+      "architecture": "any (no native dependency)",
+      "installationMethod": "in-repository; run with the interpreter .python-version pins",
+      "sourceRevision": null,
+      "independenceNotes": [
+        "Parses the written file from the TIFF 6.0, OGC GeoTIFF 1.1, GDAL_METADATA and GDAL_NODATA layouts with struct and xml.etree; it imports no viewer code and does not reuse src/terrain/export/demAttention.ts, geodesicFill.ts, idwFill.ts or demGeoTiff.ts.",
+        "Recomputes the residual with its own inverse distance prefill and heapq shortest path, and the level and reason from the protocol values. Not external validation: the rules come from this project's own protocol, so a shared misreading would survive agreement. Shares its lineageGroup with olv-terrain-evidence-geotiff-py, which it was modelled on."
+      ],
+      "limitations": [
+        "Checks one synthetic 6 x 4 fixture (validation/terrain-attention/fixture) with a height step and hand-set support inputs, not a real scan.",
+        "Takes cell_state, confidence and interpolation distance as inputs from expected.json; it does not recompute them.",
+        "Uses square 1 m cells and a metre vertical unit, so the anisotropic and foot step costs are not exercised.",
+        "Says nothing about how close any height is to the ground."
+      ]
     }
   ]
 }

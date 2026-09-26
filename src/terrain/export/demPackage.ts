@@ -44,19 +44,33 @@ import { writeAsciiGrid } from './demAsciiGrid';
 import { writeGeoTiff, verticalUnitGeoKeyCode } from './demGeoTiff';
 import {
   hasEvidenceArrays,
+  terrainEvidenceBands,
   writeTerrainEvidenceGeoTiff,
   terrainEvidenceReadmeLines,
   TERRAIN_EVIDENCE_METHOD_ID,
 } from './demEvidence';
 import {
   writeTerrainSensitivityGeoTiff,
+  terrainSensitivityBands,
   terrainSensitivityReadmeLines,
   TERRAIN_SENSITIVITY_METHOD_ID,
   type SensitivityMemberGrid,
 } from './demSensitivity';
+import {
+  reconstructionResidual,
+  terrainAttentionBands,
+  writeTerrainAttentionGeoTiff,
+  verticalReferenceInUnit,
+  demEvidenceTier,
+  demEvidenceRecord,
+  terrainAttentionReadmeLines,
+  TERRAIN_ATTENTION_METHOD_ID,
+  type DemEvidenceRecord,
+} from './demAttention';
+import { horizontalCellMetresXY } from '../ground/horizontalScale';
 import { buildZip, type ZipEntry } from '../../convert/zipStore';
 import { buildSha256Manifest } from './sha256';
-import { verticalUnitLabel, horizontalUnitLabel } from '../../units/units';
+import { verticalUnitLabel, horizontalUnitLabel, UNIT_FACTORS } from '../../units/units';
 
 // The integrity manifest moved beside the hash it is built from, where the
 // contour package can reach it without importing a DEM module. Re-exported so
@@ -150,6 +164,13 @@ export interface DemPackageOptions {
    * no sensitivity raster. The caller runs the ensemble; this only writes it.
    */
   readonly sensitivityGrids?: readonly SensitivityMemberGrid[] | null;
+  /**
+   * Write the attention raster (demAttention.ts) beside the evidence raster.
+   * Off by default: on OLV-DS-090 it added 37.5% to the package export time,
+   * above the 10% the cost rule in
+   * validation/protocols/evidencedem-attention-v1.md allows for a default.
+   */
+  readonly attention?: boolean;
 }
 
 /**
@@ -247,6 +268,10 @@ export interface DemReadmeOptions {
   readonly evidenceFrameResolved?: boolean;
   /** Filename of the sensitivity raster in the same package, or null / omitted. */
   readonly sensitivityFilename?: string | null;
+  /** Filename of the attention raster in the same package, or null / omitted. */
+  readonly attentionFilename?: string | null;
+  /** DEM evidence tier record; omitted writes no tier section. */
+  readonly demEvidence?: DemEvidenceRecord | null;
 }
 
 /** Map a coverage mode to a one-line plain-English label. */
@@ -434,6 +459,9 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     ...(opts.sensitivityFilename
       ? [`  ${opts.sensitivityFilename.padEnd(28)} Terrain sensitivity: model spread for the DTM (see below)`]
       : []),
+    ...(opts.attentionFilename
+      ? [`  ${opts.attentionFilename.padEnd(28)} Terrain attention: where to inspect first, and why (see below)`]
+      : []),
     `  *.prj                        Coordinate reference system (WKT), when known`,
     `  SHA256SUMS.txt               SHA-256 of every file above (verify: sha256sum -c)`,
     ``,
@@ -463,6 +491,7 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     ...(opts.sensitivityFilename
       ? terrainSensitivityReadmeLines(opts.sensitivityFilename, opts.evidenceVerticalUnit ?? 'unknown')
       : []),
+    ...(opts.demEvidence ? terrainAttentionReadmeLines(opts.attentionFilename ?? null, opts.demEvidence) : []),
     `Coverage mode`,
     `  ${coverageLabel(p.coverageMode)}`,
     `  Analysed basis: ${p.analysedBasisLine}`,
@@ -653,6 +682,63 @@ export function buildDemPackage(
     entries.push({ name: sensitivityName, bytes: sensitivityBytes });
   }
 
+  // Terrain attention raster: where to inspect first, with one reason per
+  // cell, from the evidence inputs, the reconstruction residual and (when
+  // requested) the sensitivity range. Written only on request, and only
+  // beside the evidence raster.
+  const attentionName = `${basename}_attention.tif`;
+  let attentionBytes: Uint8Array | null = null;
+  let residual: ReturnType<typeof reconstructionResidual> | null = null;
+  const vRef = evVUnit === 'unknown' ? null : verticalReferenceInUnit(evFactor);
+  if (evidenceBytes && hasEvidenceArrays(dtm) && options.attention === true) {
+    const hFactor = options.linearUnit === 'foot' ? UNIT_FACTORS.M_PER_FT
+      : options.linearUnit === 'us-survey-foot' ? UNIT_FACTORS.M_PER_US_FT : 1;
+    const lat = isGeographic ? yll + (dtm.rows * cellSize) / 2 : 0;
+    const step = horizontalCellMetresXY(cellSize, isGeographic, lat, hFactor);
+    residual = reconstructionResidual(dtm, {
+      cellMetresX: step.x,
+      cellMetresY: step.y,
+      verticalUnitToMetres: evFactor ?? 1,
+    });
+    const ev = terrainEvidenceBands(dtm, { frameResolved: evFrameResolved });
+    const sens = options.sensitivityGrids && options.sensitivityGrids.length > 0
+      ? terrainSensitivityBands(options.sensitivityGrids).range
+      : null;
+    const bands = terrainAttentionBands({
+      cols: dtm.cols,
+      rows: dtm.rows,
+      coverage: dtm.coverage,
+      interpDistanceCells: dtm.interpDistanceCells,
+      confidence: dtm.confidence,
+      cellState: ev.cellState,
+      residual: residual.residual,
+      sensitivityRange: sens,
+      verticalReference: vRef,
+    });
+    attentionBytes = writeTerrainAttentionGeoTiff(bands, dtm, {
+      xllCorner: xll,
+      yllCorner: yll,
+      epsg,
+      isGeographic,
+      demValues: grids[0].values,
+    });
+    entries.push({ name: attentionName, bytes: attentionBytes });
+  }
+  const hasDtmTif = entries.some((e) => e.name === `${basename}-dtm.tif`);
+  const demEvidence = demEvidenceRecord({
+    tier: demEvidenceTier({
+      passport: hasDtmTif,
+      evidence: evidenceBytes != null,
+      sensitivity: sensitivityBytes != null,
+      attention: attentionBytes != null,
+      verticalResolved: vRef != null,
+    }),
+    residual: attentionBytes ? residual : null,
+    verticalReference: vRef,
+    verticalUnit: evVUnit,
+    sensitivityGrids: sensitivityBytes ? options.sensitivityGrids ?? null : null,
+  });
+
   if (options.wkt) {
     entries.push({ name: `${basename}.prj`, bytes: new TextEncoder().encode(options.wkt) });
   }
@@ -673,6 +759,8 @@ export function buildDemPackage(
     evidenceVerticalUnit: evVUnit,
     evidenceFrameResolved: evFrameResolved,
     sensitivityFilename: sensitivityBytes ? sensitivityName : null,
+    attentionFilename: attentionBytes ? attentionName : null,
+    demEvidence,
   });
   entries.push({
     name: `${basename}-README.txt`,
@@ -721,6 +809,7 @@ export function buildDemPackage(
         mediaType: 'image/tiff',
         bytes: dtmTif.bytes,
       },
+      demEvidence: demEvidence as unknown as Record<string, unknown>,
       ...(evidenceBytes || sensitivityBytes
         ? {
             companions: [
@@ -729,6 +818,9 @@ export function buildDemPackage(
                 : []),
               ...(sensitivityBytes
                 ? [{ filename: sensitivityName, mediaType: 'image/tiff', bytes: sensitivityBytes, methodId: TERRAIN_SENSITIVITY_METHOD_ID }]
+                : []),
+              ...(attentionBytes
+                ? [{ filename: attentionName, mediaType: 'image/tiff', bytes: attentionBytes, methodId: TERRAIN_ATTENTION_METHOD_ID }]
                 : []),
             ],
           }
