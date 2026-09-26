@@ -11,12 +11,15 @@ import { probeProgressively } from './progressiveProbe';
 import { buildOpenFailureFacts } from './openFailureReport';
 import type { ProbeWorkerReply, ProbeWorkerRequest } from './formatProbeWorkerClient';
 
-self.onmessage = async (event: MessageEvent<ProbeWorkerRequest>): Promise<void> => {
+// A dedicated worker: only the page that created it can post to it.
+const ctx = self as unknown as DedicatedWorkerGlobalScope;
+
+ctx.onmessage = async (event: MessageEvent<ProbeWorkerRequest>): Promise<void> => {
   const { file } = event.data;
   const read = async (n: number): Promise<Uint8Array> => new Uint8Array(await file.slice(0, n).arrayBuffer());
   const { decision, sample, bound } = await probeProgressively(read, file.size, file.name);
   const reply: ProbeWorkerReply = decision.decoderId
     ? { type: 'format', decoderId: decision.decoderId }
     : { type: 'failure', facts: buildOpenFailureFacts(decision, sample, file.size, file.name, bound) };
-  self.postMessage(reply);
+  ctx.postMessage(reply);
 };
