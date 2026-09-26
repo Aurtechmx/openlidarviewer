@@ -184,7 +184,7 @@ themselves.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,692 lines (the desktop rail and phone sheet wiring moved to
+`src/main.ts` is 4,691 lines (the desktop rail and phone sheet wiring moved to
 `src/app/workspace/workspaceShell.ts`) and `src/render/Viewer.ts` is 6,136, eighty-seven lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own

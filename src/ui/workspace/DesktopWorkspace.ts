@@ -57,7 +57,7 @@ interface ModeDef {
 const MODES: readonly ModeDef[] = [
   { id: 'data', label: 'Data', title: 'What the scan is: layers, their health, and the classes it carries.' },
   { id: 'work', label: 'Tools', title: 'What you do to it: measure, inspect, annotate, clip.' },
-  { id: 'analyse', label: 'Analyse', title: 'Terrain analysis, contours and the products a run yields.' },
+  { id: 'analyse', label: 'Analyse', title: 'Process Studio, terrain analysis and the products a run yields.' },
   { id: 'output', label: 'Export', title: 'Write the scan, the rasters, the reports and the session out.' },
 ];
 
@@ -109,6 +109,11 @@ export interface DesktopWorkspaceOptions {
 /** The visible tab label for a mode (`work` reads `Tools`). */
 export function workspaceModeLabel(m: WorkspaceMode): string {
   return MODES.find((d) => d.id === m)?.label ?? m;
+}
+
+/** The tip saying what a mode holds. */
+export function workspaceModeTitle(m: WorkspaceMode): string {
+  return MODES.find((d) => d.id === m)?.title ?? '';
 }
 
 /** `true` when `v` is one of the four workspace modes. */
