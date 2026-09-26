@@ -53,7 +53,7 @@
   "fanOut": {
     "src/main.ts": {
       "runtime": 106,
-      "typeOnly": 22,
+      "typeOnly": 23,
       "dynamic": 7,
       "modules": [
         "@fontsource/jetbrains-mono/latin-400.css",
@@ -449,7 +449,7 @@
     "components": []
   },
   "context": {
-    "filesScanned": 982,
+    "filesScanned": 990,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [
@@ -470,15 +470,15 @@
         "importers": 19
       },
       {
+        "file": "src/io/sniffFormat.ts",
+        "importers": 17
+      },
+      {
         "file": "src/ui/Modal.ts",
         "importers": 17
       },
       {
         "file": "src/geo/height.ts",
-        "importers": 16
-      },
-      {
-        "file": "src/io/sniffFormat.ts",
         "importers": 16
       },
       {
