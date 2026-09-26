@@ -424,6 +424,13 @@
       "why": "A resident streaming node's decoded chunk. A streaming mesh sits at the scene origin, so render-local is also the world frame the clipping planes are given to three.js in, and the clip predicate is applied to these coordinates with no offset folded in."
     },
     {
+      "file": "src/render/measure/polygonVolumeSample.ts",
+      "symbol": "samplePolygonVolume",
+      "frame": "project-local",
+      "reads": 1,
+      "why": "The assembled cut/fill buffer from assembleVolumePositions: each layer's placement is folded in during the copy, so the polygon walk reads project coordinates."
+    },
+    {
       "file": "src/render/measure/profileSampler.ts",
       "symbol": "sampleProfile",
       "frame": "project-local",

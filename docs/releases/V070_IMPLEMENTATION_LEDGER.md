@@ -53,7 +53,7 @@ the two entries were renumbered when the branches were integrated.
 | L23 | SEMANTICS | TEST | high | FIXED | B23 | Classification flags were never decoded anywhere in the tree. |
 | L24 | EXPORT | READ | n/a | NOT REPRODUCIBLE | B24 | Extended writer suspected of clamping classification. |
 | L25 | EVIDENCE | TEST | high | SUPERSEDED | B25 | Adding any test turned the gate red, because the evidence lint compared published v0.6.9 documents against a changed machine state. |
-| L26 | SCIENTIFIC | READ | unmeasured | PARTIAL | B26 | Withheld points are left out of terrain, lasso stockpile volumes, profiles and density, each recording the count. The polygon Volume tool still reads them as ordinary returns. |
+| L26 | SCIENTIFIC | READ | unmeasured | FIXED | B26 | Withheld points entered terrain, density and stockpile as ordinary returns. Terrain, both volume tools, profiles and density now leave them out and record the counts. |
 | L27 | EVIDENCE | TEST | n/a | NOT REPRODUCIBLE | B27 | Scoping the evidence figure check to untagged versions. |
 | L28 | SEMANTICS | TEST | med | PARTIAL | B28 | Classification flags survived a load but not a derivation. |
 | L29 | STATE | TEST | high | FIXED | new | A failed candidate open closed a streaming scan that belonged to the project, not to the candidate. |
@@ -81,11 +81,11 @@ the two entries were renumbered when the branches were integrated.
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 25
+- FIXED: 26
 - MEASURED: 1
 - NOT REPRODUCIBLE: 9
 - OPEN: 3
-- PARTIAL: 6
+- PARTIAL: 5
 - SUPERSEDED: 1
 - total: 49
 
@@ -6326,7 +6326,7 @@ withheld row's evidence stamp names VOL-POINT-SAMPLE, the estimator behind
 the only numbers it shows.
 
 A record saved before this change keeps its method tag
-(`olv.volume.stockpile@1`, or none) and its numbers; nothing re-derives it.
+(`olv.volume.stockpile` at version 1, or none) and its numbers; nothing re-derives it.
 The hand-drawn polygon Volume tool is unchanged and still stores cut and
 fill. Units follow the record's native-unit contract, so metres, US survey
 feet and a metre-over-foot compound CRS give the same cubic metres as
@@ -6641,3 +6641,25 @@ Covered by `tests/withheldTerrainGather.test.ts`,
 `tests/terrainRunnerWithheldRecovery.test.ts`,
 `tests/lassoVolumeWithheld.test.ts`, `tests/profileWithheld.test.ts` and
 `tests/scanReportWithheld.test.ts`.
+
+### L26 · FIXED · SCIENTIFIC
+
+The polygon Volume tool now leaves out points flagged Withheld, the last
+consumer in this row that still read them. The Viewer's volume sampler hands
+each source's classification flags to `assembleVolumePositions`
+(`volume.ts`), which routes Withheld points to a separate buffer instead of
+the integration; `samplePolygonVolume` (`polygonVolumeSample.ts`, lifted out
+of `Viewer.ts`) integrates the rest and counts the Withheld points that fall
+inside the footprint. The record carries `source`, `excluded` and `analysed`
+the way the lasso record does, so the session file, the CSV and GeoJSON
+columns and the report caveat show them with no new plumbing. A source with
+no flags channel is read whole and its `excluded` reads `unknown`. Overlap and
+the other flags are not consulted.
+
+The point-sample estimator moves to `olv.volume.stockpile@2`; a record stored
+at `@1` keeps that tag. A cloud without flags integrates to the same figure as
+before. Terrain, lasso stockpile volume, profiles, density and the polygon
+Volume tool now all leave Withheld points out, which is the scope this row
+named.
+
+Covered by `tests/polygonVolumeWithheld.test.ts`.

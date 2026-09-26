@@ -183,7 +183,7 @@ import {
   createProfileSectionSeam,
   type ProfileSectionSeam,
 } from './measure/profileSectionSeam';
-import { volumeCutFill, assembleVolumePositions, POINT_SAMPLE_VOLUME_METHOD, type PlacedVolumeBuffer, type VolumeResult } from './measure/volume';
+import { samplePolygonVolume, POINT_SAMPLE_VOLUME_METHOD, type PlacedVolumeBuffer, type VolumeResult } from './measure/polygonVolumeSample';
 import {
   integrableClouds, integrableEntries, streamingMayCombine, sourceClassifiesGround,
   analysisClassification,
@@ -1149,73 +1149,32 @@ export class Viewer {
       streamingCoverage: () => this._streamingCoverage(),
     });
     this._measure.setProfileSampler((a, b, opts) => this.profileSeam.sampleSeries(a, b, opts));
-    // Volume sampler — feeds the cut/fill record half of a Volume
-    // measurement. Same residency-only contract as the profile sampler:
-    // walks every static cloud + every resident streaming node, runs
-    // `volumeCutFill` against the concatenated positions buffer, and
-    // returns the record. Null when no positions are loaded.
+    // Volume sampler: visible, unlocked clouds plus resident streaming nodes,
+    // with their flags so Withheld points stay out (`polygonVolumeSample.ts`).
+    // `up` is the configured world up, matching `autoReferenceZ` (v0.4.4 B1).
     this._measure.setVolumeSampler(
       (polygon, referenceZ): { record: VolumeRecord; residentOnly: boolean } | null => {
         const buffers: PlacedVolumeBuffer[] = [];
         let total = 0;
         let streamingPoints = 0;
-        // Match the picker: only visible, unlocked clouds feed the cut/fill, so
-        // a soloed epoch's volume never absorbs a hidden epoch's points behind it.
         for (const { cloud, placement } of integrableClouds(this._clouds.values())) {
           if (cloud.positions && cloud.positions.length > 0) {
-            buffers.push({ pos: cloud.positions, placement });
+            buffers.push({ pos: cloud.positions, placement, flags: cloud.classificationFlags });
             total += cloud.positions.length;
           }
         }
         const streamOk = this._streamingMayCombine(buffers.length);
         for (const { decoded } of streamOk ? this._streamingPickData.values() : []) {
           if (decoded.positions && decoded.positions.length > 0) {
-            buffers.push({ pos: decoded.positions });
+            buffers.push({ pos: decoded.positions, flags: decoded.classificationFlags });
             total += decoded.positions.length;
             streamingPoints += decoded.positions.length;
           }
         }
         if (total === 0) return null;
-        // The assembler folds each layer's Float64 placement into the project
-        // frame as it concatenates (identity while mounting is off = same bytes).
-        const positions = assembleVolumePositions(buffers, total);
-        // `up` is the configured world up, not a hardcoded [0,0,1]. The
-        // profile sampler above already reads `this._worldUp` (v0.4.4 audit,
-        // B1); the cut/fill path was missed. On a Y-up phone scan (PLY/OBJ/
-        // GLB) the controller derives the reference plane along `_worldUp`
-        // (`autoReferenceZ`), so integrating height along Z here disagreed
-        // with the reference and produced a wrong cut/fill volume.
         const up: Vec3 = [this._worldUp.x, this._worldUp.y, this._worldUp.z];
-        const result = volumeCutFill({
-          polygon,
-          referenceZ,
-          up,
-          positions,
-        });
-        let confidence: 'high' | 'medium' | 'low';
-        if (result.pointsInPolygon >= 1000) confidence = 'high';
-        else if (result.pointsInPolygon >= 100) confidence = 'medium';
-        else confidence = 'low';
-        // Volume readout is "resident-only" whenever any streaming bytes were in
-        // the walk — those may still refine as they stream in, regardless of a
-        // fully-loaded static cloud beside them (audit #8, same as the profile).
-        const residentOnly = streamingPoints > 0;
-        const record: VolumeRecord = {
-          fill: result.fill,
-          cut: result.cut,
-          net: result.net,
-          referenceZ,
-          footprintArea: result.footprintArea,
-          pointsInPolygon: result.pointsInPolygon,
-          densityNative: result.densityNative,
-          confidence, method: POINT_SAMPLE_VOLUME_METHOD,
-        };
-        // Non-finite returns inside the footprint were excluded from the
-        // integration — carry the count so the record discloses the
-        // partial coverage instead of presenting a clean number.
-        const skippedNonFinite = result.skippedNonFinite ?? 0;
-        if (skippedNonFinite > 0) record.skippedNonFinite = skippedNonFinite;
-        return { record, residentOnly };
+        // Resident-only whenever streaming bytes were in the walk (audit #8).
+        return { record: samplePolygonVolume(buffers, total, polygon, referenceZ, up), residentOnly: streamingPoints > 0 };
       },
     );
     this._inspect = new InspectTool(this._camera, canvas, {

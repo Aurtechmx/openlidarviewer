@@ -39,7 +39,7 @@ the paper that specifies it.
 | `olv.validation.reliability-wilson` | 1 | Measured-cell reliability | Wilson (1927) |
 | `olv.registration.icp-planar` | 1 | Planar rigid ICP | Besl & McKay (1992); Umeyama (1991) |
 | `olv.registration.epoch-horizontal-icp` | 1 | Repeat-epoch horizontal alignment (yaw + XY, Z locked) | Besl & McKay (1992); Umeyama (1991) |
-| `olv.volume.stockpile` | 1 | Stockpile cut-fill volume with model sensitivity band | internal (prismatic cut-fill) |
+| `olv.volume.stockpile` | 2 | Stockpile cut-fill volume with model sensitivity band; v2 leaves LAS Withheld points out of the polygon Volume tool and records points read, Withheld excluded (or unknown) and points analysed, and keeps Overlap; v1 read every point | internal (prismatic cut-fill) |
 | `olv.volume.stockpile-area-grid` | 3 | Area-weighted stockpile volume (grid integration) | internal (area-weighted DoD); Sutherland & Hodgman (1974) |
 | `olv.change.dtm-difference` | 1 | DTM-of-difference cut/fill (thresholded gain/loss/net) | Anderson (2019), LoD thresholding |
 | `olv.change.dtm-difference.raw-net` | 1 | DTM-of-difference cut/fill (raw net + thresholded gross) | Anderson (2019), thresholded gross vs raw net |
