@@ -29,6 +29,9 @@ import { availableParallelism } from 'node:os';
 import { ROOT, loadGates, directDeps } from './lib/gates.mjs';
 
 const TAIL_LINES = 40;
+// Lines collect-evidence.mjs reads from the gate log. A passing step's output
+// is otherwise dropped, so these are forwarded as each step finishes.
+const EVIDENCE_LINE = /^(GATE (TALLY|STAGE) .*|\s*[⚠✓]\s+\S*\s*index\s+\d+\s*KiB\s*\/\s*\d+\s*KiB.*)$/;
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(`--${name}`);
@@ -142,6 +145,7 @@ async function main() {
           results.set(step.script, r);
           state.set(step.script, r.code === 0 ? 'passed' : 'failed');
           console.log(`  ${r.code === 0 ? 'ok  ' : 'FAIL'} ${step.script} ${fmt(r.ms)}${r.code === 0 ? '' : ` exit=${r.code}`}`);
+          for (const line of r.output.split('\n')) if (EVIDENCE_LINE.test(line)) console.log(line);
           pump();
         });
         if (serial) break;
