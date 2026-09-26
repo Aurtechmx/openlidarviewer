@@ -17,7 +17,7 @@ import { suppressOnboardingTour, dropDenseGridPly, showWorkspaceMode } from './h
  */
 
 const MODES = ['data', 'work', 'analyse', 'output'] as const;
-const SLOTS = ['View', 'Analyse', 'Layers'] as const;
+const SLOTS = ['Data', 'Tools', 'Analyse', 'Export', 'View'] as const;
 
 interface ScrollAudit {
   /** Elements with overflow-y auto/scroll, designated scroller included. */
@@ -112,7 +112,7 @@ test.describe('phone sheet at 390x844', () => {
     test.slow();
     await load(page);
     // A measurement puts the Measurements panel (and its open station table)
-    // into the Analyse slot, the tallest content a slot carries.
+    // into the Tools slot, the tallest content a slot carries.
     // The open sheet covers the dock, so Measure is armed by its M shortcut.
     await page.keyboard.press('m');
     await placeProfile(page);
