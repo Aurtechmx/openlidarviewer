@@ -126,3 +126,19 @@ written only on request. The measurement is recorded below.
 The sensitivity raster's method id is `olv.terrain.evidence.sensitivity`, the
 id the specification names. It replaces `olv.terrain.sensitivity.ensemble`
 before any release shipped the old id.
+
+### Measurement (2026-09-26)
+
+- Dataset: OLV-DS-090, `ot_356000_3972000_1.laz`, SHA-256 checked against
+  the dataset register. 10,789,680 points decoded, source classification
+  used, 1 m cells: a 1001 x 1001 grid with 881,116 measured cells, so the
+  residual used sampling stride 4.
+- Machine: Apple M-series laptop, Node 22, single thread.
+- Method: the terrain analysis ran once (22.8 s). The DEM package was then
+  built 7 times with the attention raster and 7 times without, alternating,
+  after one warm-up build of each. Medians are reported.
+- Result: 2,281 ms with the attention raster, 1,425 ms without. The raster
+  added 856 ms, 37.5% of the package export time (3.4% of analysis plus
+  export).
+- Decision under the rule above: 37.5% is above 10%, so the attention raster
+  is written only on request. A default export has no attention raster.
