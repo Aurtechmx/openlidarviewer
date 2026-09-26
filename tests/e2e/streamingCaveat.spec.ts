@@ -6,7 +6,8 @@ import { EPT_FIXTURE_NODES, openEptFixture, routeEptFixture } from './streamingF
  * The streaming caveats. While only part of a streaming octree is resident,
  * the terrain analysis reports `resident-only` coverage (its DEM export is a
  * preliminary preview) and a Profile carries the `Resident-node analysis only`
- * caption. Once every node is resident, a re-run analysis no longer does.
+ * caption. Once every node is resident, the Profile caption clears on its own
+ * and a re-run analysis no longer reports resident-only coverage.
  *
  * The in-repo EPT fixture has a root and four child tiles. Each spec holds the
  * children back, so the scan stays partial for as long as it needs, then lets
@@ -71,7 +72,7 @@ test.describe('streaming caveats', () => {
     await expect(verdict).toBeVisible();
   });
 
-  test('a Profile on a partial stream carries the resident-only caption', async ({ page }) => {
+  test('a Profile carries the resident-only caption until every node is resident', async ({ page }) => {
     const release = await openPartialStream(page);
 
     await page.locator('.olv-tool', { hasText: 'Measure' }).click();
@@ -90,7 +91,11 @@ test.describe('streaming caveats', () => {
     await expect(caveat).toBeVisible({ timeout: 15_000 });
     await expect(caveat).toContainText('Resident-node analysis only');
 
+    // Once every node is resident the profile is re-sampled over the whole
+    // stream and the caption goes away.
     release();
     await expectFullyResident(page);
+    await expect(page.locator('.olv-mp-row')).toHaveCount(1);
+    await expect(page.locator('.olv-mp-chart-caveat')).toHaveCount(0, { timeout: 15_000 });
   });
 });

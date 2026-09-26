@@ -1,3 +1,4 @@
+import type { StreamingCoverage } from '../src/render/measure/profileSectionSnapshot';
 /**
  * profileSectionSeam.test.ts
  *
@@ -445,5 +446,32 @@ describe('profile section seam — the two products walk one corridor', () => {
       deps({ layers: () => [layer({ id: 'static', points: [2, 0, 5] })] }),
     );
     expect(staticOnly.sampleSeries(A, B, { corridorWidth: 1 })!.residentOnly).toBe(false);
+  });
+
+  it('clears resident-only once every known node is resident, and only then', () => {
+    let coverage: StreamingCoverage = { knownNodeCount: 2, residentNodeCount: 1, hierarchyComplete: true };
+    const seam = createProfileSectionSeam(
+      deps({
+        residentNodes: () => [node('0-0-0-0', [4, 0, 6])],
+        streamingMayCombine: () => true,
+        streamingCoverage: () => coverage,
+      }),
+    );
+    const residentOnly = (): boolean => seam.sampleSeries(A, B, { corridorWidth: 1 })!.residentOnly;
+    expect(residentOnly()).toBe(true);
+    expect(seam.residencyChanged()).toBe(false);
+    coverage = { knownNodeCount: 2, residentNodeCount: 2, hierarchyComplete: true };
+    expect(residentOnly()).toBe(false);
+    expect(seam.residencyChanged()).toBe(true);
+    expect(seam.residencyChanged()).toBe(false);
+    // An eviction brings it back, and the host hears about it.
+    coverage = { knownNodeCount: 2, residentNodeCount: 1, hierarchyComplete: true };
+    expect(residentOnly()).toBe(true);
+    expect(seam.residencyChanged()).toBe(true);
+    // A hierarchy still being read, or an unknown node count, is not complete.
+    coverage = { knownNodeCount: 2, residentNodeCount: 2, hierarchyComplete: false };
+    expect(residentOnly()).toBe(true);
+    coverage = { knownNodeCount: null, residentNodeCount: 2, hierarchyComplete: true };
+    expect(residentOnly()).toBe(true);
   });
 });
