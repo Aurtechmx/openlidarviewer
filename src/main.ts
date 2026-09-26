@@ -2135,7 +2135,7 @@ async function showReclassifyUi(): Promise<void> {
         onAutoClassify: () => runDeriveClassification(),
         onReclassified: (cls) => afterClassEdit(classLegendPanel, cls),
       });
-      classLegendPanel.element.after(ui.element);
+      classLegendPanel.element.append(ui.element); // rides with the legend onto the Classes page
       reclassifyUi = ui;
     })();
   }

@@ -23,6 +23,7 @@ test.describe('Data home', () => {
     await expect(classesRow).toContainText(/\d+ detected/, { timeout: 20_000 });
     await expect(home.locator('.olv-data-row', { hasText: 'Source and metadata' })).toBeVisible();
     await expect(home.locator('.olv-class-panel')).toBeHidden();
+    await expect(home.locator('.olv-reclass-panel')).toBeHidden();
 
     // Layer Health is per-scan: it sits in the Inspector, never in the left rail.
     await expect(page.locator('#olv-left-panels .olv-layerhealth-card')).toHaveCount(0);
@@ -34,6 +35,8 @@ test.describe('Data home', () => {
     await expect(title).toBeFocused();
     const legend = home.locator('.olv-class-panel');
     await expect(legend).toBeVisible();
+    // Edit classes rides with the legend onto the page.
+    await expect(legend.locator('.olv-reclass-panel')).toBeVisible({ timeout: 20_000 });
     await expect(home.locator('.olv-layers-section')).toBeHidden();
 
     const check = legend.locator('.olv-cl-row .olv-cl-check').first();

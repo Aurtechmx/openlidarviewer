@@ -44,6 +44,7 @@ export interface WorkspaceShellDeps {
     sourceSummary(): string;
     focusLayerHealth(): boolean;
     focusSource(): boolean;
+    onSourceChange(fn: () => void): () => void;
   };
   classLegend: Panel & { presentCodes(): number[] };
   annotation: HTMLElement;
@@ -126,6 +127,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     openFile: () => document.querySelector<HTMLButtonElement>('.olv-open-btn')?.click(),
   });
   refreshDataHome = dataHome.refresh;
+  d.addTeardown(d.inspector.onSourceChange(dataHome.refresh));
   const expandRightRail = (): void => d.overlay.querySelector<HTMLButtonElement>('.olv-right-rail-tab')?.click();
   const workspacePanels = {
     dataLayers: dataEls.layers,

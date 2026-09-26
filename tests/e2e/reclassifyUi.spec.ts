@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dropDenseGridPly, railChromeSettled, expectHittable } from './helpers';
+import { dropDenseGridPly, railChromeSettled, expectHittable, openClassesPage } from './helpers';
 
 /**
  * Reclassify control panel — the visible class-picker + undo/redo, driven as a
@@ -67,6 +67,8 @@ test('the reclassify panel mounts and its undo/redo buttons drive class edits', 
   // Click the REAL Undo button → class reverts, redo enables. The rail entrance
   // is awaited and the hit test checked, so the click keeps Playwright's
   // interception guard instead of forcing past it.
+  // The panel lives on the Classes page with the legend it edits.
+  await openClassesPage(page);
   await railChromeSettled(page);
   await expectHittable(undoBtn);
   await undoBtn.click();
@@ -74,6 +76,8 @@ test('the reclassify panel mounts and its undo/redo buttons drive class edits', 
   await expect(redoBtn).toBeEnabled();
 
   // Click the REAL Redo button → class re-applied.
+  // Undo's hover tip sits over Redo on the Classes page; a user moving to Redo leaves it.
+  await page.mouse.move(1, 1);
   await expectHittable(redoBtn);
   await redoBtn.click();
   expect(await page.evaluate(() => (window as unknown as { __OLV_TEST_API__: { classAt: (i: number) => number } }).__OLV_TEST_API__.classAt(0))).toBe(6);
