@@ -11,6 +11,7 @@
 
 import { verifyReportFile, type VerifyReportResult } from '../export/verifyReport';
 import { focusableIn, trapTab } from './Modal';
+import { formatBytesIn } from '../io/formatByteSize';
 
 function row(label: string, value: string): HTMLElement {
   const r = document.createElement('div');
@@ -154,8 +155,8 @@ export function oversizeReportResult(sizeBytes: number): VerifyReportResult | un
     valid: false,
     reason:
       `This file is too large to be a report ` +
-      `(${Math.round(sizeBytes / (1024 * 1024))} MiB; limit ` +
-      `${Math.round(MAX_REPORT_TEXT_BYTES / (1024 * 1024))} MiB).`,
+      `(${formatBytesIn(sizeBytes, 'MiB', 0)}; limit ` +
+      `${formatBytesIn(MAX_REPORT_TEXT_BYTES, 'MiB', 0)}).`,
   };
 }
 

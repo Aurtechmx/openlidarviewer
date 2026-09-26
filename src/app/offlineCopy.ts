@@ -9,6 +9,7 @@
  * Loaded on demand from the Help actions, never at startup.
  */
 import { storageRemove, storageSet } from '../ui/safeStorage';
+import { formatBytesIn } from '../io/formatByteSize';
 
 export const OFFLINE_OPT_IN_KEY = 'olv.offline-copy';
 const UNAVAILABLE = 'Offline copies are not available here. The app is not running under its service worker.';
@@ -32,7 +33,7 @@ function defaultEnv(): OfflineCopyEnv {
 }
 
 export function formatMegabytes(bytes: number): string {
-  return `${(bytes / 1_000_000).toFixed(1)} MB`;
+  return formatBytesIn(bytes, 'MB');
 }
 
 interface SwReply {

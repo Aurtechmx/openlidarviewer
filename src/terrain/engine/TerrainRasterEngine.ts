@@ -61,6 +61,7 @@
  * Module is loadable in Node and in workers (no top-level DOM/GPU access).
  */
 
+import { UNIT_FACTORS } from '../../units/units';
 import type { TerrainPoint } from '../TerrainContracts';
 import type { GroundFilterParams, GroundFilterResult } from '../ground/groundFilter';
 import type { RasterizeDtmParams, DemRaster } from '../ground/rasterizeDtm';
@@ -231,7 +232,7 @@ export const PROBE_ANISO_CELL_Y = 1;
  * foot-vertical DTM it would overstate slope by 1/0.3048 ≈ 3.28x. Both earlier
  * passes ran at zScale 1 on both sides and were blind to that.
  */
-export const PROBE_Z_SCALE = 0.3048;
+export const PROBE_Z_SCALE = UNIT_FACTORS.M_PER_FT;
 
 const TWO_PI = 2 * Math.PI;
 

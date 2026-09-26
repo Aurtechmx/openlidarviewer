@@ -37,6 +37,7 @@
 
 import type { SamplingPlan } from './samplingPlan';
 import { formatPointCount } from '../../io/loadPlan';
+import { formatBytesIn } from '../../io/formatByteSize';
 
 /**
  * Hard ceiling on the points a single full-cloud grade may decode, independent
@@ -96,12 +97,11 @@ export function sampleBudgetRefusal(
   const points = Math.max(0, plan.sampledPoints);
   const decodedBytes = points * DECODED_BYTES_PER_POINT;
   if (points <= MAX_SAMPLE_POINTS && decodedBytes <= MAX_SAMPLE_DECODED_BYTES) return null;
-  const mib = Math.round(decodedBytes / (1024 * 1024));
   return {
     headline: 'Full-cloud grade unavailable: the sample exceeds the safe decode budget',
     note:
       `Grading this cloud would decode ${formatPointCount(points)} points into a single ` +
-      `${mib} MiB buffer, above the ${formatPointCount(MAX_SAMPLE_POINTS)}-point safe ceiling. ` +
+      `${formatBytesIn(decodedBytes, 'MiB', 0)} buffer, above the ${formatPointCount(MAX_SAMPLE_POINTS)}-point safe ceiling. ` +
       `The selected octree node is larger than the whole-cloud sample budget, so the grade ` +
       `declines it here rather than force a multi-gigabyte allocation the streaming loader ` +
       `itself would refuse. Grade a smaller scan or lower the sample budget.`,

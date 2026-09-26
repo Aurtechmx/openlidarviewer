@@ -75,6 +75,8 @@
  * real surface and the volume that comes out still looks plausible.
  */
 
+import { quantileType7InPlace } from '../../terrain/quantile';
+
 /**
  * The projected candidate set: one entry per point that already passed the
  * polygon test, in selection order.
@@ -312,14 +314,7 @@ export function rejectOccluded(field: LassoDepthField): OcclusionRejection {
  * The caller owns the buffer and does not need it ordered afterwards.
  */
 function quantileInPlace(values: Float64Array, p: number): number {
-  const n = values.length;
-  if (n === 0) return 0;
-  values.sort();
-  const idx = Math.max(0, Math.min(1, p)) * (n - 1);
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return values[lo];
-  return values[lo] * (hi - idx) + values[hi] * (idx - lo);
+  return values.length === 0 ? 0 : quantileType7InPlace(values, p);
 }
 
 /**

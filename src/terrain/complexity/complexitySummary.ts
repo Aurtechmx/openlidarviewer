@@ -36,6 +36,7 @@
  * Pure data: no DOM, no three.js, no I/O. Deterministic.
  */
 
+import { UNIT_FACTORS } from '../../units/units';
 import { computeVRM } from './vectorRuggedness';
 import { computeTPI, TPI_CLASS, type TpiClassName } from './terrainPositionIndex';
 import type { ComplexityMetaInput } from './complexityEnvelope';
@@ -227,7 +228,7 @@ const fmtGroundM = (v: number | null): string => {
 function zUnit(verticalUnitToMetres = 1): string {
   const v = verticalUnitToMetres;
   if (!Number.isFinite(v) || v <= 0 || Math.abs(v - 1) < 1e-9) return 'm';
-  if (Math.abs(v - 0.3048) < 5e-4) return 'ft';
+  if (Math.abs(v - UNIT_FACTORS.M_PER_FT) < 5e-4) return 'ft';
   return 'z-units';
 }
 

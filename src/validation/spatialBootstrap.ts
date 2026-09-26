@@ -24,6 +24,8 @@
  * Pure arithmetic over plain arrays. No I/O, no DOM.
  */
 
+import { quantileNearestRankSorted } from '../terrain/quantile';
+
 /** One observation and the spatial block (tile, plot, site) it belongs to. */
 export interface BlockSample {
   readonly value: number;
@@ -176,10 +178,7 @@ function makeRng(seed: number): () => number {
 }
 
 /** Nearest-rank quantile, so an endpoint is always an observed replicate. */
-function quantileSorted(sorted: readonly number[], p: number): number {
-  const idx = Math.max(0, Math.ceil(p * sorted.length) - 1);
-  return sorted[Math.min(idx, sorted.length - 1)];
-}
+const quantileSorted = quantileNearestRankSorted;
 
 function standardDeviation(values: readonly number[]): number {
   const m = mean(values);

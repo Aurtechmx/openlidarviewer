@@ -28,6 +28,8 @@
  * same module-graph seam every Stream A leaf uses.
  */
 
+import { floorRankIndex } from '../terrain/quantile';
+
 /** A clipped scalar range, ready to feed `colorByScalar`. */
 export interface ScalarRange {
   /** Low end of the colour ramp. */
@@ -221,8 +223,8 @@ function percentileRangeCore(
   // Percentile pick — `Math.floor` so a low percentile picks a low index.
   // We clamp the upper to the last valid index so the 100th percentile
   // returns the largest value rather than reading past the end.
-  const loIdx = Math.max(0, Math.min(used - 1, Math.floor((lowerPct / 100) * used)));
-  const hiIdx = Math.max(0, Math.min(used - 1, Math.floor((upperPct / 100) * used)));
+  const loIdx = floorRankIndex(used, lowerPct / 100);
+  const hiIdx = floorRankIndex(used, upperPct / 100);
   let min = sorted[loIdx];
   let max = sorted[hiIdx];
 

@@ -33,6 +33,7 @@
  */
 
 import { IDENTITY_RGB_APPEARANCE, type RgbAppearance } from './rgbAppearance';
+import { floorRankIndex } from '../terrain/quantile';
 
 /** Classification the analyser assigns to a cloud's RGB histogram. */
 export type ScanColourClass =
@@ -100,8 +101,7 @@ function lum709(r: number, g: number, b: number): number {
 /** Sort + percentile pick on a Float32Array. Mutates `sorted` in place. */
 function percentile(sorted: Float32Array, p: number): number {
   if (sorted.length === 0) return 0;
-  const i = Math.max(0, Math.min(sorted.length - 1, Math.floor(sorted.length * p)));
-  return sorted[i];
+  return sorted[floorRankIndex(sorted.length, p)];
 }
 
 /**

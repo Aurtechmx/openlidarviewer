@@ -37,6 +37,7 @@ import {
   volumeCutFill,
 } from './volume';
 import type { VolumeResult } from './volume';
+import { quantile } from '../../terrain/quantile';
 
 /** A 2D point in screen space (pixel coordinates). */
 export interface Vec2 {
@@ -289,22 +290,8 @@ export function convexHull2D(points: ReadonlyArray<Vec2>): Vec2[] {
  * surface "selection contains no finite Z values" instead of "—".
  */
 export function percentile(values: ReadonlyArray<number>, percentile: number): number {
-  // Filter to finite values BEFORE sort — NaN ordering under
-  // `Array.prototype.sort` is implementation-defined and historically
-  // a source of silent-failure bugs in this exact pattern.
-  const finite: number[] = [];
-  for (const v of values) if (Number.isFinite(v)) finite.push(v);
-  const n = finite.length;
-  if (n === 0) return Number.NaN;
-  if (n === 1) return finite[0];
-  finite.sort((a, b) => a - b);
-  const p = Math.max(0, Math.min(1, percentile));
-  const idx = p * (n - 1);
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return finite[lo];
-  const t = idx - lo;
-  return finite[lo] * (1 - t) + finite[hi] * t;
+  // The shared type-7 `quantile` filters to finite values BEFORE sorting.
+  return quantile(values, percentile);
 }
 
 /** Inputs to `volumeFromLasso`. */

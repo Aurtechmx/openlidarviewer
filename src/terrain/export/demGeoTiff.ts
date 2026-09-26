@@ -24,6 +24,8 @@
  * Refs: TIFF 6.0; OGC GeoTIFF 1.1 (ModelTiepoint/ModelPixelScale, GeoKeys).
  */
 
+import { UNIT_FACTORS } from '../../units/units';
+
 export interface DemGeoTiffInput {
   /** Row-major cell values; length === cols*rows. Required unless `bands` is given. */
   readonly values?: ArrayLike<number>;
@@ -126,8 +128,8 @@ function uint16Blob(values: readonly number[]): Uint8Array {
 export function verticalUnitGeoKeyCode(metresPerUnit: number | null | undefined): number | null {
   if (metresPerUnit == null || !Number.isFinite(metresPerUnit)) return null;
   if (Math.abs(metresPerUnit - 1) < 1e-9) return 9001;
-  if (Math.abs(metresPerUnit - 0.3048) < 1e-9) return 9002;
-  if (Math.abs(metresPerUnit - 1200 / 3937) < 1e-9) return 9003;
+  if (Math.abs(metresPerUnit - UNIT_FACTORS.M_PER_FT) < 1e-9) return 9002;
+  if (Math.abs(metresPerUnit - UNIT_FACTORS.M_PER_US_FT) < 1e-9) return 9003;
   return null;
 }
 

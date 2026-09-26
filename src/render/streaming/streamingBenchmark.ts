@@ -13,7 +13,8 @@
  * Pure — no DOM, no three.js — unit-tested in Node.
  */
 
-import { clamp01 } from '../../numeric';
+import { quantileSorted } from '../../terrain/quantile';
+import { formatBytesIn } from '../../io/formatByteSize';
 
 /** Aggregate stats over a sample buffer — what we care about for tick / decode / frame times. */
 export interface AggregateStats {
@@ -149,16 +150,7 @@ export function aggregate(samples: readonly number[]): AggregateStats {
 
 /** Linearly-interpolated percentile on an already-sorted array. */
 function percentile(sortedAscending: readonly number[], q: number): number {
-  const n = sortedAscending.length;
-  if (n === 0) return 0;
-  if (n === 1) return sortedAscending[0];
-  const clamped = clamp01(q);
-  const idx = clamped * (n - 1);
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return sortedAscending[lo];
-  const frac = idx - lo;
-  return sortedAscending[lo] * (1 - frac) + sortedAscending[hi] * frac;
+  return sortedAscending.length === 0 ? 0 : quantileSorted(sortedAscending, q);
 }
 
 /** Monotonic clock — `performance.now()` where available, `Date.now()` otherwise. */
@@ -461,7 +453,7 @@ export function formatStreamingBenchmark(result: StreamingBenchmarkResult): stri
   const lines: string[] = [];
   const ms = (v: number | undefined): string =>
     v === undefined ? '       —' : `${v.toFixed(1).padStart(8)} ms`;
-  const mb = (n: number): string => `${(n / (1024 * 1024)).toFixed(2)} MiB`;
+  const mb = (n: number): string => formatBytesIn(n, 'MiB', 2);
   const ag = (label: string, a: AggregateStats): void => {
     if (a.count === 0) {
       lines.push(`  ${label.padEnd(14)}       —`);

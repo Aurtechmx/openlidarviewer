@@ -15,6 +15,7 @@ import {
   DEFAULT_WORKFLOW_CONFIG,
   type WorkflowRecorderConfig,
 } from '../render/workflow/workflowConfig';
+import { formatBytesIn } from '../io/formatByteSize';
 
 /**
  * Whole-file ceiling for a workflow read into a single string. A workflow is a
@@ -31,8 +32,8 @@ export const MAX_WORKFLOW_TEXT_BYTES = 32 * 1024 * 1024;
 export function assertWorkflowFileSize(sizeBytes: number): void {
   if (sizeBytes > MAX_WORKFLOW_TEXT_BYTES) {
     throw new Error(
-      `This workflow file is too large (${Math.round(sizeBytes / (1024 * 1024))} MiB; ` +
-        `limit ${Math.round(MAX_WORKFLOW_TEXT_BYTES / (1024 * 1024))} MiB).`,
+      `This workflow file is too large (${formatBytesIn(sizeBytes, 'MiB', 0)}; ` +
+        `limit ${formatBytesIn(MAX_WORKFLOW_TEXT_BYTES, 'MiB', 0)}).`,
     );
   }
 }

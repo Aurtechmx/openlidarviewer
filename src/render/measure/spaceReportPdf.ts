@@ -20,7 +20,7 @@
  */
 
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
-import type { SpaceMetrics } from '../../terrain/spaceMetrics';
+import { metresToFeet, type SpaceMetrics } from '../../terrain/spaceMetrics';
 import type { ObjectMetrics } from '../../terrain/objectMetrics';
 import { buildSpaceReportContent } from '../../terrain/space/spaceReportLayout';
 import type { FloorPlanModel } from '../../terrain/space/floorplan/extractFloorPlan';
@@ -356,8 +356,8 @@ function drawFloorPlan(
   // Dimensions + caption — units follow the caller's unit system, mirroring
   // the SVG sheet and the measurement panel (metric: metres first; imperial:
   // feet first), so the report never argues with the on-screen numbers.
-  const wFt = plan.widthM / 0.3048;
-  const dFt = plan.depthM / 0.3048;
+  const wFt = metresToFeet(plan.widthM);
+  const dFt = metresToFeet(plan.depthM);
   const dimsTxt =
     unitSystem === 'imperial'
       ? `W ${wFt.toFixed(1)} ft (${plan.widthM.toFixed(1)} m) x D ${dFt.toFixed(1)} ft (${plan.depthM.toFixed(1)} m)`

@@ -23,15 +23,24 @@ const SRC = join(ROOT, 'src');
 const UNITS = join('src', 'units', 'units.ts');
 
 /**
- * Derived factors the units module exports. The DEFINITIONS (0.3048 and
- * 1200/3937) stay legal everywhere: they are what a CRS scale is compared
- * against, and writing one is not a duplicated conversion.
+ * Derived factors the units module exports.
  */
 const OWNED = [
   { value: 1 / 0.3048, importAs: 'FT_PER_M', of: 'metres → feet' },
   { value: 180 / Math.PI, importAs: 'UNIT_FACTORS.DEG_PER_RAD', of: 'radians → degrees' },
   { value: Math.PI / 180, importAs: 'degToRad', of: 'degrees → radians' },
 ];
+
+/**
+ * The foot DEFINITIONS (international 0.3048 and US survey 1200/3937) are
+ * owned by the units module and the CRS parser. Two PDF deliverables each
+ * hard-coded one, which is how a sheet can drift from the panels for a CRS in
+ * the other foot. Anywhere else they must come from `UNIT_FACTORS` or from
+ * `metresPerLinearUnit` / `CrsInfo.linearUnitToMetres`.
+ */
+const DEFINITION_OWNERS = new Set([UNITS, join('src', 'io', 'crs.ts')]);
+/** Relative tolerance 1e-4 covers both feet (they differ by 2 ppm). */
+const FOOT_DEFINITION = 0.3048;
 
 /** Within 0.1 %: catches every spelling from five significant digits up. */
 const TOLERANCE = 1e-3;
@@ -67,10 +76,24 @@ for (const file of walk(SRC)) {
   scanned += 1;
   const raw = readFileSync(file, 'utf8');
   const lines = stripNonCode(raw).split('\n');
+  const ownsDefinitions = DEFINITION_OWNERS.has(rel);
   lines.forEach((code, i) => {
+    if (!ownsDefinitions && /\b1200\s*\/\s*3937\b/.test(code)) {
+      failures.push(
+        `${rel}:${i + 1} — 1200/3937 is the US survey foot; use UNIT_FACTORS.M_PER_US_FT or metresPerLinearUnit\n` +
+          `      ${raw.split('\n')[i].trim()}`,
+      );
+    }
     for (const m of code.matchAll(/\b\d+\.\d+\b/g)) {
       const n = Number(m[0]);
       if (!Number.isFinite(n)) continue;
+      if (!ownsDefinitions && Math.abs(n - FOOT_DEFINITION) / FOOT_DEFINITION < 1e-4) {
+        failures.push(
+          `${rel}:${i + 1} — ${m[0]} is a foot definition; use UNIT_FACTORS.M_PER_FT or metresPerLinearUnit\n` +
+            `      ${raw.split('\n')[i].trim()}`,
+        );
+        continue;
+      }
       for (const { value, importAs, of } of OWNED) {
         if (Math.abs(n - value) / value < TOLERANCE) {
           failures.push(

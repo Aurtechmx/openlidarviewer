@@ -58,6 +58,7 @@ import { placeBufferInto } from '../layerPlacement';
 import { NON_GROUND_CLASSES } from '../../terrain/ground/classificationFilter';
 import { buildProfileFrame, DEGENERATE_HORIZONTAL_LENGTH } from './profileGeometry';
 import { isWithheld } from '../../science/withheldPolicy';
+import { quantileSorted } from '../../terrain/quantile';
 
 /** A placed source buffer contributing to a combined profile walk. */
 export interface ProfileSourceBuffer {
@@ -360,22 +361,6 @@ export function autoCorridorWidth(a: Vec3, b: Vec3, up: Vec3): number {
   return buildProfileFrame(a, b, up).horizontalLength * AUTO_CORRIDOR_FRACTION;
 }
 
-/**
- * Type-7 quantile (linear interpolation between order statistics) over a
- * pre-sorted ascending array. `p` is in [0, 100]. Matches the default of
- * NumPy / R / Excel PERCENTILE.INC so results are reproducible against
- * standard tools. Caller guarantees `sorted.length >= 1`.
- */
-function percentileSorted(sorted: Float64Array, count: number, p: number): number {
-  if (count === 1) return sorted[0];
-  const frac = Math.max(0, Math.min(100, p)) / 100;
-  const rank = frac * (count - 1);
-  const lo = Math.floor(rank);
-  const hi = Math.ceil(rank);
-  if (lo === hi) return sorted[lo];
-  const w = rank - lo;
-  return sorted[lo] * (1 - w) + sorted[hi] * w;
-}
 
 /**
  * Sample a height-vs-distance profile along the segment a → b.
@@ -486,7 +471,8 @@ export function sampleProfile(input: SampleProfileInput): ProfileSample[] {
     let height = Number.NaN;
     if (els.length > 0) {
       const sorted = Float64Array.from(els).sort();
-      height = percentileSorted(sorted, sorted.length, percentile);
+      // Type-7 (NumPy / R / Excel PERCENTILE.INC); `percentile` is 0..100.
+      height = quantileSorted(sorted, percentile / 100);
     }
     out[i] = { distance: i * binStep, height, count: els.length };
   }

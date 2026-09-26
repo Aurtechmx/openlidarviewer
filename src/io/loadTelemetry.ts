@@ -8,6 +8,8 @@
  * This module has no DOM or three.js dependency, so it is unit-tested in Node.
  */
 
+import { formatBytesIn } from './formatByteSize';
+
 /** Millisecond timings for the stages of one file load. */
 export interface LoadTelemetry {
   /** Head-slice read + format sniff + load plan (main thread). */
@@ -140,7 +142,7 @@ const COUNT_ROWS: [string, keyof LoadTelemetry, 'bytes' | 'count' | 'text'][] = 
 
 function formatCount(value: number, unit: 'bytes' | 'count' | 'text'): string {
   if (unit === 'bytes') {
-    return value >= 1e6 ? `${(value / 1e6).toFixed(1)} MB` : `${(value / 1e3).toFixed(1)} kB`;
+    return formatBytesIn(value, value >= 1e6 ? 'MB' : 'kB');
   }
   return value.toLocaleString('en-US');
 }

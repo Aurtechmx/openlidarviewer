@@ -19,6 +19,8 @@
  * injectable for the same reason.
  */
 
+import { quantileNearestRankSorted } from '../terrain/quantile';
+
 /** Percentile summary over the ring's current window. */
 export interface FramePercentiles {
   /** Samples currently in the window (≤ ring capacity). */
@@ -40,9 +42,7 @@ export function percentileSorted(
   p: number,
 ): number {
   if (count <= 0) return 0;
-  const rank = Math.ceil((p / 100) * count);
-  const index = Math.min(count - 1, Math.max(0, rank - 1));
-  return sortedAsc[index];
+  return quantileNearestRankSorted(sortedAsc, p / 100, count);
 }
 
 /**
