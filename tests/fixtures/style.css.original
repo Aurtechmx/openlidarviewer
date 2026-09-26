@@ -9180,6 +9180,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
     height: auto;
     max-height: 92vh;
     max-height: min(92dvh, 92vh);
+    max-height: round(down, min(92dvh, 92vh), 1px);
     background: var(--panel-raised, var(--panel));
     border-top: 1px solid var(--hairline-strong, var(--hairline));
     border-radius: 16px 16px 0 0;
@@ -9204,11 +9205,18 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   .olv-mobile-sheet.olv-msheet--half {
     height: 50vh;
     height: 50dvh;
+    height: round(down, 50dvh, 1px);
   }
   .olv-mobile-sheet.olv-msheet--full {
     height: 88vh;
     height: min(88dvh, 92vh);
+    height: round(down, min(88dvh, 92vh), 1px);
   }
+  /* The sheet is pinned to the bottom edge, so a fractional detent height puts
+     its top, and every tab in the head, on a fractional pixel row. Firefox then
+     reports a 44 px tab as 43.99999 px tall. Rounding the detent down to whole
+     pixels keeps the head on the pixel grid; the lines above are the fallback
+     where round() is unsupported. */
 
   /* Head: a grip line, the segmented tablist, and the collapse handle. */
   .olv-msheet-head {
@@ -9368,14 +9376,17 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   .olv-mobile-sheet {
     max-height: 82vh;
     max-height: min(82dvh, 82vh);
+    max-height: round(down, min(82dvh, 82vh), 1px);
   }
   .olv-mobile-sheet.olv-msheet--half {
     height: 58vh;
     height: 58dvh;
+    height: round(down, 58dvh, 1px);
   }
   .olv-mobile-sheet.olv-msheet--full {
     height: 82vh;
     height: min(82dvh, 82vh);
+    height: round(down, min(82dvh, 82vh), 1px);
   }
   /* Shorter head so the collapsed peek leaves more of the scene in view. */
   .olv-msheet-head { padding-top: 10px; padding-bottom: 4px; }
