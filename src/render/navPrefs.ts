@@ -22,17 +22,22 @@
  * A named starting point for the invert signs. The invert flags are the source
  * of truth for behaviour; a preset is just a convenience that sets them.
  *
- *  - **default** — OLV's shipped convention: vertical orbit inverted,
- *    horizontal not. Dragging down raises the viewpoint, which is what
- *    Autodesk ReCap does and what most people reaching for this app expect.
- *  - **recap** — Autodesk ReCap-style. It now selects the same signs as
- *    `default`, and is kept as a name a user can recognise rather than merged
- *    away, because the two answer different questions: one is what OLV ships,
- *    the other is what ReCap does.
- *  - **nira** — Nira is a browser point-cloud viewer that inverts neither
- *    axis, so it is the preset to pick for no inversion at all.
+ *  - **default**: OLV's shipped convention, vertical orbit inverted and
+ *    horizontal not. Dragging down raises the viewpoint.
+ *  - **invert-vertical**: the same signs as `default`, named for what it does
+ *    so it stays meaningful if the shipped default ever changes.
+ *  - **no-invert**: neither axis inverted.
+ *
+ * Earlier builds stored the ids `recap` and `nira` for the last two;
+ * {@link parseNavigationPreferences} maps them through {@link LEGACY_NAV_PRESETS}.
  */
-export type NavigationPreset = 'default' | 'recap' | 'nira';
+export type NavigationPreset = 'default' | 'invert-vertical' | 'no-invert';
+
+/** Preset ids written by earlier builds, and the preset each now means. */
+export const LEGACY_NAV_PRESETS: Readonly<Record<string, NavigationPreset>> = {
+  recap: 'invert-vertical',
+  nira: 'no-invert',
+};
 
 /** The persisted navigation-handedness preferences. */
 export interface NavigationPreferences {
@@ -58,21 +63,21 @@ export const DEFAULT_NAVIGATION_PREFERENCES: NavigationPreferences = {
 };
 
 /** The presets the panel offers (kept in sync with {@link NavigationPreset}). */
-const NAV_PRESETS: ReadonlySet<NavigationPreset> = new Set(['default', 'recap', 'nira']);
+const NAV_PRESETS: ReadonlySet<NavigationPreset> = new Set(['default', 'invert-vertical', 'no-invert']);
 
 /**
  * The invert signs each preset selects. These sign combos are the ADJUSTABLE
- * product choice — the one place to retune what "ReCap" or "Nira" should feel
- * like without touching the handler. `default` and `recap` both invert the
- * vertical axis only; `nira` inverts neither.
+ * product choice, the one place to retune a preset without touching the
+ * handler. `default` and `invert-vertical` both invert the vertical axis only;
+ * `no-invert` inverts neither.
  */
 export function navPresetSigns(
   preset: NavigationPreset,
 ): { invertOrbitX: boolean; invertOrbitY: boolean } {
   switch (preset) {
-    case 'recap':
+    case 'invert-vertical':
       return { invertOrbitX: false, invertOrbitY: true };
-    case 'nira':
+    case 'no-invert':
       return { invertOrbitX: false, invertOrbitY: false };
     case 'default':
     default:
@@ -83,8 +88,9 @@ export function navPresetSigns(
 /**
  * Validate a raw persisted value into a complete {@link NavigationPreferences},
  * defaulting every field independently so a partial or corrupt record degrades
- * gracefully rather than throwing. A malformed boolean becomes `false`; an
- * unknown preset becomes `'default'`. Never throws.
+ * gracefully rather than throwing. A malformed boolean becomes `false`; a
+ * legacy preset id is mapped to its current name; an unknown preset becomes
+ * `'default'`. Never throws.
  */
 export function parseNavigationPreferences(raw: unknown): NavigationPreferences {
   const d = DEFAULT_NAVIGATION_PREFERENCES;
@@ -95,6 +101,8 @@ export function parseNavigationPreferences(raw: unknown): NavigationPreferences 
     invertOrbitY: typeof o.invertOrbitY === 'boolean' ? o.invertOrbitY : d.invertOrbitY,
     preset: NAV_PRESETS.has(o.preset as NavigationPreset)
       ? (o.preset as NavigationPreset)
-      : d.preset,
+      : typeof o.preset === 'string' && Object.hasOwn(LEGACY_NAV_PRESETS, o.preset)
+        ? LEGACY_NAV_PRESETS[o.preset]
+        : d.preset,
   };
 }

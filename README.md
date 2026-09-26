@@ -421,6 +421,10 @@ Being cited is the minimum; working together is the better outcome. Independent 
 
 OpenLiDARViewer v0.6.7 and later is licensed under the GNU Affero General Public License v3.0 only (AGPL-3.0-only). See [LICENSE](LICENSE). Releases through v0.6.6 were distributed under the MIT License and remain available under those original terms.
 
+OpenLiDARViewer is provided as is, without warranty of any kind; see sections 15 and 16 of the GNU AGPL.
+
+Files you open are processed on your device and are not uploaded, and the app has no analytics or telemetry. See [PRIVACY.md](PRIVACY.md).
+
 Commercial licensing may be available separately from Aur Technologies for eligible components and use cases such as closed-source embedding, OEM redistribution, or proprietary integration. See [LICENSING.md](LICENSING.md), [COMMERCIAL-LICENSING.md](COMMERCIAL-LICENSING.md), and [THIRD_PARTY_NOTICES.md](docs/project/THIRD_PARTY_NOTICES.md).
 
 If you use OpenLiDARViewer in research, a [CITATION.cff](CITATION.cff) is included. Developed by Aur Technologies ([aurtech.mx](https://aurtech.mx)).

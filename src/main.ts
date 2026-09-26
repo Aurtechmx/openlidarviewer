@@ -637,7 +637,7 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
         : '';
     showLassoToast(
       `${stock?.headline ?? `Volume · net ${(out.result.net * vol).toFixed(2)} m³`} · ` +
-        `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat} · ${out.selectionBasis.clause}.${stock?.suffix ?? ''}`,
+        `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat} · ${out.selectionBasis.clause}.${stock?.suffix ?? ''} Estimate from the point cloud, not survey-grade.`,
       pendingLassoSave && crsVerdict.canSaveMeasurement
         ? { label: 'Save to session', onClick: saveLassoVolumeIfPending }
         : undefined,

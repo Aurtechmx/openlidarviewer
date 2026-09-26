@@ -312,7 +312,7 @@ export class Stage {
     const privacy = el('div', {
       className: 'olv-badge',
       text: 'Private · on your device',
-      title: 'Your scan is read and rendered locally. Nothing is uploaded.',
+      title: 'Scans you open stay on your device. Remote datasets are downloaded from their hosts.',
     });
     // GitHub link demoted to a ghost link (item 9) — text + arrow, no pill
     // background — so the "Private · on your device" trust signal stays the

@@ -130,6 +130,13 @@ if [[ "$SOURCE_ONLY" != "1" ]]; then
   # ── Deploy archive: dist contents at the zip root, web-safe modes ────────
   echo "→ Normalising deploy modes (644 files / 755 dirs)…"
   cp -R dist "$TMP/deploy"
+  # The licence and the third-party notices must ship at the deploy root.
+  for legal in LICENSE THIRD_PARTY_NOTICES.md; do
+    if [[ ! -f "$TMP/deploy/$legal" ]]; then
+      echo "✗ dist/$legal is missing; the deploy archive would ship without it." >&2
+      exit 1
+    fi
+  done
   normalise_modes "$TMP/deploy"
 
   DEPLOY="openlidarviewer-v${VERSION}-deploy-${TS}-root.zip"

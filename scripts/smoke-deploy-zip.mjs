@@ -122,6 +122,11 @@ try {
   if (!existsSync(join(work, 'index.html'))) {
     throw new Error('the archive has no index.html at its root');
   }
+  // The licence and the third-party notices ship inside the archive, or the
+  // archive does not ship.
+  for (const legal of ['LICENSE', 'THIRD_PARTY_NOTICES.md']) {
+    if (!existsSync(join(work, legal))) throw new Error(`the archive has no ${legal} at its root`);
+  }
 
   const port = await freePort();
   console.log(`smoke:deploy — ${basename(zip)}\n  sha256 ${digest}\n  port ${port}`);

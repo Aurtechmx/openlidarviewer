@@ -59,6 +59,7 @@ import {
   formatGrade,
   formatLength,
   GEOGRAPHIC_CRS_MEASURE_NOTICE,
+  VOLUME_ESTIMATE_NOTICE,
 } from '../render/measure/format';
 import { breakdownParts } from './measureBreakdownRow';
 // Measurement context state — every displayed value states what kind of
@@ -1684,16 +1685,25 @@ export class MeasurePanel {
     // headline row when the cut/fill record was sampled against
     // resident nodes only. Same caption style as the profile branch so
     // the analyst's eye reads them as the same "may refine" signal.
-    if (s.kind === 'volume' && s.volumeResidentOnly) {
-      const caveat = el('div', {
-        className: 'olv-mp-chart-caveat',
-        text: 'Resident-node analysis only — cut / fill may refine as streaming loads.',
-      });
+    // Every volume result, lasso or polygon, carries the estimate caveat so a
+    // screenshot of the row never reads as a certified quantity.
+    if (s.kind === 'volume') {
+      const notes: HTMLElement[] = [];
+      if (s.volumeResidentOnly) {
+        notes.push(el('div', {
+          className: 'olv-mp-chart-caveat',
+          text: 'Resident-node analysis only — cut / fill may refine as streaming loads.',
+        }));
+      }
+      notes.push(el('div', {
+        className: 'olv-mp-chart-caveat olv-mp-volume-estimate',
+        text: VOLUME_ESTIMATE_NOTICE,
+      }));
       return el('div', { className: 'olv-mp-row-stack' }, [
         headRow,
         confLine,
         ...(breakdownLine ? [breakdownLine] : []),
-        caveat,
+        ...notes,
       ]);
     }
 

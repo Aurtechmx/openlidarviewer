@@ -36,6 +36,15 @@ describe('lint:sbom', () => {
     expect(problemsFor(realRead)).toEqual([]);
   });
 
+  it('fails when a bundled package has no generated copyright and licence entry', () => {
+    const read = (p: string): string | null =>
+      p === 'docs/project/THIRD_PARTY_NOTICES.md'
+        ? realRead(p)!.replace('\n#### three ', '\n#### three-removed ')
+        : realRead(p);
+    const problems = problemsFor(read);
+    expect(problems.some((p) => /no copyright and licence-text entry for "three /.test(p))).toBe(true);
+  });
+
   it('accepts scoped packages stored as group + name', () => {
     // Regression: CycloneDX writes "@loaders.gl/core" as group "@loaders.gl",
     // name "core". Keying on `name` alone failed every scoped dependency.

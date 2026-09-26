@@ -96,12 +96,28 @@
       OpenLiDARViewer v0.6.7 and later is licensed under the
       <a href="https://www.gnu.org/licenses/agpl-3.0.html">GNU Affero General
       Public License v3.0 only</a> (AGPL-3.0-only). Releases through v0.6.6 were
-      distributed under the MIT License and remain under those terms. The
-      corresponding source for the running application is on
-      <a href="https://github.com/aurtechmx/openlidarviewer">GitHub</a>.
+      distributed under the MIT License and remain under those terms. A copy of
+      the licence ships with the app as <a href="LICENSE">LICENSE</a>. The
+      corresponding source for the running application is
+      <a data-olv-source href="https://github.com/aurtechmx/openlidarviewer">on GitHub<span data-olv-source-label></span></a>.
       Commercial licensing is available separately from Aur Technologies for
       eligible components and use cases; write to
       <a href="mailto:alex@aurtech.mx">alex@aurtech.mx</a>.
+    </p>
+    <p>
+      OpenLiDARViewer is provided as is, without warranty of any kind; see
+      sections 15 and 16 of the GNU AGPL.
+    </p>
+
+    <h2>Privacy</h2>
+    <p>
+      Files you open are processed on your device and are not uploaded. The app
+      has no analytics and no telemetry. It uses your browser's local storage
+      for session recovery, your preferences and local usage counts, and keeps a
+      cache of its own files, plus the full offline copy if you choose to make
+      one. None of it leaves your device. When you open a remote dataset or a sample, it is downloaded
+      from the server that hosts it, and that server sees your IP address and
+      the tiles you view. See <a href="https://github.com/aurtechmx/openlidarviewer/blob/main/PRIVACY.md">PRIVACY.md</a>.
     </p>
 
     <h2>Built with</h2>
@@ -124,15 +140,47 @@
       by Mikhail Sharanda, and <strong>JetBrains Mono</strong> by the JetBrains
       Mono authors. All three are under the SIL Open Font License.
     </p>
+    <h2>Validation datasets</h2>
+    <p>
+      Statistics and small samples derived from these datasets are committed to
+      the repository as validation evidence. They are not shipped inside the app.
+    </p>
+    <ul>
+      <li>
+        <strong>Jemez River Basin Snow-off Lidar Survey</strong> (2010), by the
+        National Center for Airborne Laser Mapping (NCALM), distributed by
+        <a href="https://opentopography.org/">OpenTopography</a>. Licensed
+        <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.
+        Modified: decode and ground-filter agreement statistics were computed
+        from tile ot_356000_3972000_1.laz; the point data is not redistributed.
+        Register id OLV-DS-090.
+      </li>
+      <li>
+        <strong>3DPC of a gypsum slope in Finestrat, Alicante (Spain)</strong>
+        (2016 epoch), by A. Abellan and A. Riquelme, published on
+        <a href="https://doi.org/10.5281/zenodo.7576524">Zenodo</a>. Licensed
+        <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.
+        Modified: eighteen points and summary statistics were extracted as a
+        test reference; the scan is not redistributed. Register id OLV-DS-040.
+      </li>
+      <li>
+        <strong>2019 USFS Lidar: Rogue River-Siskiyou National Forest</strong>,
+        tile 10TDM3449, by the USDA Forest Service and the U.S. Geological Survey
+        3D Elevation Program, catalogued at
+        <a href="https://www.fisheries.noaa.gov/inport/item/64356">NOAA InPort item 64356</a>.
+        Public domain; credited as a courtesy. Register id OLV-DS-093.
+      </li>
+    </ul>
+
     <p class="note">
-      Full licence texts and copyright lines for everything above now ship with
+      Full licence texts and copyright lines for every bundled package ship with
       the app, in <a href="THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>.
       If we have credited you wrongly, or missed you, write to
       <a href="mailto:info@aurtech.mx">info@aurtech.mx</a> and we will put it
       right.
     </p>
 
-    <footer>OpenLiDARViewer · <a href="https://github.com/aurtechmx/openlidarviewer">GitHub</a> · <a href="https://hobu.co">Hobu</a></footer>
+    <footer>OpenLiDARViewer · <a data-olv-source href="https://github.com/aurtechmx/openlidarviewer">Source</a> · <a href="https://hobu.co">Hobu</a></footer>
   </main>
 </body>
 </html>

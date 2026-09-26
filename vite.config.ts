@@ -1,11 +1,12 @@
 import { defineConfig, type PluginOption } from 'vite';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import liveSourceTransform from 'vite-plugin-javascript-obfuscator';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { requireBinaryOnPath } from './scripts/lib/binaryOnPath.mjs';
 import { buildSwPrecacheManifest } from './scripts/lib/swPrecacheManifest.mjs';
+import { stampSourceLinks } from './scripts/lib/sourceLink.mjs';
 import {
   workerExcludePatterns,
   workerChunkPins,
@@ -261,6 +262,10 @@ function thirdPartyNotices() {
     generateBundle(this: NoticeEmitter): void {
       const source = readFileSync(new URL('./docs/project/THIRD_PARTY_NOTICES.md', import.meta.url), 'utf8');
       this.emitFile({ type: 'asset', fileName: 'THIRD_PARTY_NOTICES.md', source });
+      // The AGPL text travels with the build, so the deployed site and the
+      // deploy archive carry the licence the work is offered under.
+      const licence = readFileSync(new URL('./LICENSE', import.meta.url), 'utf8');
+      this.emitFile({ type: 'asset', fileName: 'LICENSE', source: licence });
     },
   };
 }
@@ -272,6 +277,28 @@ function thirdPartyNotices() {
  * available offline"; the page shows `totalBytes` before starting. Read from disk after the
  * write so worker sub-build outputs are included.
  */
+/**
+ * Point the credits page's source links at the commit this build was cut
+ * from, so the source offer names the running version rather than whatever
+ * the default branch holds later.
+ */
+function creditsSourceLink(identity: { version: string; commit: string; dirty: boolean }) {
+  let outDir = 'dist';
+  return {
+    name: 'olv-credits-source-link',
+    apply: 'build' as const,
+    writeBundle(options: { dir?: string }): void {
+      if (options.dir) outDir = options.dir;
+    },
+    closeBundle(): void {
+      const target = join(outDir, 'credits.html');
+      const source = readFileSync(new URL('./public/credits.html', import.meta.url), 'utf8');
+      if (!existsSync(outDir)) return;
+      writeFileSync(target, stampSourceLinks(source, identity));
+    },
+  };
+}
+
 function swPrecacheManifest() {
   return {
     name: 'olv-sw-precache-manifest',
@@ -446,7 +473,9 @@ function bundleAnalyzer(): PluginOption {
   });
 }
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode }) => {
+  const buildIdentity = resolveBuildIdentity(mode);
+  return {
   base: './',
   // Defense-in-depth against duplicate runtime copies. These packages are
   // correctness-sensitive to being single-instance (three's WebGPU/TSL
@@ -550,7 +579,7 @@ export default defineConfig(({ mode }) => ({
   },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
-    __BUILD_IDENTITY__: JSON.stringify(resolveBuildIdentity(mode)),
+    __BUILD_IDENTITY__: JSON.stringify(buildIdentity),
     // The Playwright seam in src/main.ts (`?test=1` mounts
     // `window.__OLV_TEST_API__`) is compiled in only for the dev server and
     // for a build that opts in with OLV_TEST_SEAM=1, which is what the
@@ -566,8 +595,10 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     chunkEmissionGuard() as PluginOption,
     thirdPartyNotices() as PluginOption,
+    creditsSourceLink(buildIdentity) as PluginOption,
     swPrecacheManifest() as PluginOption,
     ...(mode === 'live' ? [liveSourceTransformPlugin() as PluginOption] : []),
     bundleAnalyzer(),
   ].filter(Boolean) as PluginOption[],
-}));
+  };
+});

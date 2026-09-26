@@ -30,15 +30,15 @@ describe('parseNavigationPreferences', () => {
 
   test('round-trips a complete, valid record', () => {
     expect(
-      parseNavigationPreferences({ invertOrbitX: true, invertOrbitY: false, preset: 'recap' }),
-    ).toEqual({ invertOrbitX: true, invertOrbitY: false, preset: 'recap' });
+      parseNavigationPreferences({ invertOrbitX: true, invertOrbitY: false, preset: 'invert-vertical' }),
+    ).toEqual({ invertOrbitX: true, invertOrbitY: false, preset: 'invert-vertical' });
   });
 
   test('validates each field independently — a bad field falls back, good ones survive', () => {
     // invertOrbitX malformed → false; invertOrbitY valid → kept; preset valid → kept.
     expect(
-      parseNavigationPreferences({ invertOrbitX: 'yes', invertOrbitY: true, preset: 'nira' }),
-    ).toEqual({ invertOrbitX: false, invertOrbitY: true, preset: 'nira' });
+      parseNavigationPreferences({ invertOrbitX: 'yes', invertOrbitY: true, preset: 'no-invert' }),
+    ).toEqual({ invertOrbitX: false, invertOrbitY: true, preset: 'no-invert' });
   });
 
   test('a malformed boolean falls back to that field default, not to false', () => {
@@ -56,8 +56,19 @@ describe('parseNavigationPreferences', () => {
     expect(parseNavigationPreferences({ preset: 42 }).preset).toBe('default');
   });
 
+  test('maps preset ids stored by earlier builds to their current names', () => {
+    expect(parseNavigationPreferences({ preset: 'recap' }).preset).toBe('invert-vertical');
+    expect(parseNavigationPreferences({ preset: 'nira' }).preset).toBe('no-invert');
+    // The flags are stored alongside and still win over the preset.
+    expect(
+      parseNavigationPreferences({ invertOrbitX: true, invertOrbitY: false, preset: 'nira' }),
+    ).toEqual({ invertOrbitX: true, invertOrbitY: false, preset: 'no-invert' });
+    // Inherited object keys are not legacy ids.
+    expect(parseNavigationPreferences({ preset: 'toString' }).preset).toBe('default');
+  });
+
   test('accepts each known preset', () => {
-    for (const preset of ['default', 'recap', 'nira'] as const) {
+    for (const preset of ['default', 'invert-vertical', 'no-invert'] as const) {
       expect(parseNavigationPreferences({ preset }).preset).toBe(preset);
     }
   });
@@ -65,8 +76,8 @@ describe('parseNavigationPreferences', () => {
 
 // ────────────────────────────────────────────────────────────────────────────
 // navPresetSigns — the documented preset → invert-sign mapping (the adjustable
-// product choice). default / nira match OLV's current convention; recap inverts
-// only the vertical axis (the common CAD "feels inverted" case).
+// product choice). default and invert-vertical invert only the vertical axis;
+// no-invert inverts neither.
 // ────────────────────────────────────────────────────────────────────────────
 
 describe('navPresetSigns', () => {
@@ -80,12 +91,12 @@ describe('navPresetSigns', () => {
     });
   });
 
-  test('recap inverts the vertical orbit only', () => {
-    expect(navPresetSigns('recap')).toEqual({ invertOrbitX: false, invertOrbitY: true });
+  test('invert-vertical inverts the vertical orbit only', () => {
+    expect(navPresetSigns('invert-vertical')).toEqual({ invertOrbitX: false, invertOrbitY: true });
   });
 
-  test('nira inverts neither axis, so it is the no-inversion preset', () => {
-    expect(navPresetSigns('nira')).toEqual({ invertOrbitX: false, invertOrbitY: false });
+  test('no-invert inverts neither axis', () => {
+    expect(navPresetSigns('no-invert')).toEqual({ invertOrbitX: false, invertOrbitY: false });
   });
 });
 
@@ -146,7 +157,7 @@ describe('parsePrefs — navigation preferences', () => {
     expect(parsePrefs(json).navigation).toEqual({
       invertOrbitX: false,
       invertOrbitY: true,
-      preset: 'recap',
+      preset: 'invert-vertical',
     });
   });
 
