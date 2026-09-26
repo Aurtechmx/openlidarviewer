@@ -3,7 +3,7 @@ import { test, expect, type Page } from '@playwright/test';
 /**
  * The Manrope swap does not move the header.
  *
- * Manrope is served `font-display: swap`. index.html preloads the 400/500
+ * Manrope is served `font-display: swap`. the build preloads the 400/500
  * weights so the first paint is already in Manrope, and a metric-matched
  * "Manrope Fallback" face (src/styles/01-tokens.css) keeps the line boxes
  * identical for a first paint that does beat the font.

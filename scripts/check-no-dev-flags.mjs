@@ -43,7 +43,7 @@ let files;
 try {
   files = walk(dist);
 } catch {
-  console.error(`check-no-dev-flags: no build at ${dist}; run npm run build:live first`);
+  console.error(`check-no-dev-flags: No build found at ${dist}; run npm run build:live first`);
   process.exit(2);
 }
 if (files.length === 0) {

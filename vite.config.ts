@@ -310,6 +310,43 @@ function swPrecacheManifest() {
   };
 }
 
+/**
+ * Preload Manrope 400/500 (the header and empty-state weights) so the first
+ * paint is already in Manrope and the header does not shift on the swap.
+ *
+ * The preload must name the exact file the @fontsource CSS loads, or the font
+ * downloads twice. In a build that is the content-hashed asset Vite emitted
+ * for the CSS url(), found in the bundle; in dev it is the node_modules path
+ * the dev server serves the CSS url() from. Source index.html names neither,
+ * so it references nothing that a source archive without node_modules lacks.
+ */
+const PRELOAD_FONTS = ['manrope-latin-400-normal', 'manrope-latin-500-normal'];
+
+function fontPreload() {
+  const tag = (href: string) => ({
+    tag: 'link',
+    attrs: { rel: 'preload', href, as: 'font', type: 'font/woff2', crossorigin: '' },
+    injectTo: 'head-prepend' as const,
+  });
+  return {
+    name: 'olv-font-preload',
+    transformIndexHtml: {
+      order: 'post' as const,
+      handler(_html: string, ctx: { bundle?: Record<string, { fileName: string }> }) {
+        if (!ctx.bundle) {
+          return PRELOAD_FONTS.map((n) => tag(`/node_modules/@fontsource/manrope/files/${n}.woff2`));
+        }
+        const files = Object.values(ctx.bundle).map((o) => o.fileName);
+        return PRELOAD_FONTS.map((n) => {
+          const hit = files.find((f) => f.startsWith('assets/') && f.endsWith('.woff2') && f.includes(`${n}-`));
+          if (!hit) throw new Error(`olv-font-preload: no emitted asset for ${n}.woff2`);
+          return tag(`./${hit}`);
+        });
+      },
+    },
+  };
+}
+
 function chunkEmissionGuard(devFlags: boolean) {
   const required = [
     // Every lazyChunks.ts seam, derived from the module itself at config
@@ -605,6 +642,7 @@ export default defineConfig(({ mode }) => {
     chunkEmissionGuard(mode !== 'live') as PluginOption,
     thirdPartyNotices() as PluginOption,
     creditsSourceLink(buildIdentity) as PluginOption,
+    fontPreload() as PluginOption,
     swPrecacheManifest() as PluginOption,
     ...(mode === 'live' ? [liveSourceTransformPlugin() as PluginOption] : []),
     bundleAnalyzer(),
