@@ -97,9 +97,25 @@ describe('every entry point converges on the one command', () => {
       getActions: () => [{ id: 'tool.measure', title: 'Measure', section: 'Tools', run }],
       counts: () => ({ measurements: 0, annotations: 0 }),
       isToolPanelActive: () => false,
+      resume: () => false,
     });
     (launcher.element as unknown as FakeEl).find((e) => e.hasClass('olv-tl-row'))!.fire('click');
     expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('launcher: a tool that is already on reopens its page instead of switching off', async () => {
+    const { createToolLauncher } = await import('../src/ui/toolLauncher');
+    const run = vi.fn();
+    const resume = vi.fn(() => true);
+    const launcher = createToolLauncher({
+      getActions: () => [{ id: 'tool.measure', title: 'Measure', section: 'Tools', run }],
+      counts: () => ({ measurements: 0, annotations: 0 }),
+      isToolPanelActive: () => false,
+      resume,
+    });
+    (launcher.element as unknown as FakeEl).find((e) => e.hasClass('olv-tl-row'))!.fire('click');
+    expect(resume).toHaveBeenCalledWith('tool.measure');
+    expect(run).not.toHaveBeenCalled();
   });
 
   it('keyboard: the M / A / I bindings name the registry action and call the global handler', () => {
