@@ -566,11 +566,23 @@ export class NavController {
   /** Advance navigation by `dt` seconds. Called once per rendered frame. */
   update(dt: number): void {
     const drive = navDrive();
-    if (drive) {
-      const t = this._currentLookTarget();
-      const { position: p, up: u } = this._camera;
-      drive.pose([p.x, p.y, p.z], [t.x, t.y, t.z], [u.x, u.y, u.z]);
+    if (drive === null) {
+      this._update(dt);
+      return;
     }
+    drive.pose(...this._driveSnapshot());
+    this._update(dt);
+    drive.poseAfter?.(...this._driveSnapshot());
+  }
+
+  /** The camera's position, look target and up vector, as the driver sink reads them. */
+  private _driveSnapshot(): [number[], number[], number[]] {
+    const t = this._currentLookTarget();
+    const { position: p, up: u } = this._camera;
+    return [[p.x, p.y, p.z], [t.x, t.y, t.z], [u.x, u.y, u.z]];
+  }
+
+  private _update(dt: number): void {
     const step = Math.min(Math.max(dt, 0), MAX_DT);
 
     // Input disabled (e.g. measuring): keep the camera frozen — but still let
