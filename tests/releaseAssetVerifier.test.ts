@@ -114,6 +114,8 @@ const DEPLOY_FILES: Record<string, string> = {
   'index.html': '<!doctype html>',
   '.htaccess': 'headers',
   _headers: 'headers',
+  LICENSE: 'GNU AFFERO GENERAL PUBLIC LICENSE',
+  'THIRD_PARTY_NOTICES.md': '# Third-Party Notices',
   'assets/app.js': 'code',
 };
 
@@ -454,6 +456,15 @@ describeZip('release:verify — archive contents', () => {
     stageRelease({ deployFiles: { 'index.html': 'x', 'assets/a.js': 'x' } });
     failsWith('_headers');
   });
+
+  for (const legal of ['LICENSE', 'THIRD_PARTY_NOTICES.md']) {
+    it(`rejects a deploy zip without ${legal}`, () => {
+      const deployFiles = { ...DEPLOY_FILES };
+      delete deployFiles[legal];
+      stageRelease({ deployFiles });
+      failsWith(`missing ${legal}`);
+    });
+  }
 
   it('rejects a corrupt archive', () => {
     stageRelease();

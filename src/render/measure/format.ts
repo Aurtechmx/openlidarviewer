@@ -59,6 +59,13 @@ export const VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE =
  * what still holds instead of only what does not. ONE string, shared by the
  * panel caveat and the PDF's datum row, so the wording cannot fork.
  */
+/**
+ * Shown under every cut / fill / stockpile volume result. The figure is
+ * estimated from the sampled point cloud, so it is not a certified quantity.
+ */
+export const VOLUME_ESTIMATE_NOTICE =
+  'Estimate from the point cloud, not survey-grade. Verify before relying on it for quantities or payment.';
+
 export const DATUM_CONFLICT_MEASURE_NOTICE =
   'Local heights, not elevations: conflicting cloud origins mean no single ' +
   'vertical datum describes this scene. Height differences, grades and ' +

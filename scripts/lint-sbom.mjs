@@ -152,6 +152,15 @@ export function collectSbomProblems(read) {
             `docs/project/THIRD_PARTY_NOTICES.md does not attribute bundled package "${full}".`,
           );
         }
+        // The generated section carries the package's copyright lines and
+        // licence text; a heading per bundled package at its SBOM version.
+        const gen = noticesText.split('<!-- generated:licence-texts:begin')[1] ?? '';
+        if (!gen.includes(`\n#### ${full} ${c.version}\n`)) {
+          problems.push(
+            `docs/project/THIRD_PARTY_NOTICES.md has no copyright and licence-text entry for "${full} ${c.version}". ` +
+              'Run node scripts/gen-third-party-notices.mjs.',
+          );
+        }
       }
     }
   }

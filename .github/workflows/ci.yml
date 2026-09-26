@@ -79,6 +79,10 @@ jobs:
         run: npm run lint:release-truth
       - name: SBOM lint (CycloneDX root + components match the lockfile)
         run: npm run lint:sbom
+      - name: Third-party notices lint (licence texts match the installed packages)
+        run: npm run lint:notices
+      - name: Dataset attribution lint (attribution-required datasets are credited)
+        run: npm run lint:dataset-attribution
       - name: Position-access lint (world coordinates go through the accessor)
         run: npm run lint:position-access
       - name: Int-truncation lint (no bitwise wrap on a value that can exceed 2^31)

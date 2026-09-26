@@ -92,8 +92,12 @@ const SOURCE_FORBIDDEN = [
   /(^|\/)docs\/_audit\//,
 ];
 
-/** The deploy archive's root contract. */
-const DEPLOY_REQUIRED = ['index.html', '.htaccess', '_headers'];
+/**
+ * The deploy archive's root contract. LICENSE and THIRD_PARTY_NOTICES.md are
+ * part of it: the archive is what people receive, so the licence terms and the
+ * notices for bundled components must travel inside it.
+ */
+export const DEPLOY_REQUIRED = ['index.html', '.htaccess', '_headers', 'LICENSE', 'THIRD_PARTY_NOTICES.md'];
 
 const sha256 = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
 

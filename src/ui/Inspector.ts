@@ -888,8 +888,8 @@ export class Inspector {
     }) as HTMLSelectElement;
     for (const [value, label] of [
       ['default', 'Default'],
-      ['recap', 'ReCap'],
-      ['nira', 'Nira'],
+      ['invert-vertical', 'Inverted vertical'],
+      ['no-invert', 'No inversion'],
     ] as const) {
       const option = el('option', { text: label });
       option.value = value;

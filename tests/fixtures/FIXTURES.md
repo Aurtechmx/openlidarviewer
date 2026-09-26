@@ -117,3 +117,18 @@ measure. LAS point format 6, version 1.4.
 - synthetic: 1
 - keyPoint: 1
 - ground returns: 8, so a DTM reads 5 under the policy and 8 without it
+
+## Provenance of the other fixtures
+
+Where each remaining binary or reference fixture came from. "Project data"
+means the points were made up for the test and carry no third-party data.
+
+| File | Origin | Third-party data |
+|---|---|---|
+| `multichunk.laz` | Added in #441 (commit 4a6747b8). 120 000 synthetic points written by the app's LAS writer (PDRF 7), then LAZ-compressed with PDAL 2.10.2 so it holds three laszip chunks. No generating script is committed. | None. Project data. |
+| `tiny-pdrf0.laz`, `tiny-pdrf1.laz` | Added in #646 (commit 5c8ba47d). Eight points written with laspy 2.7.0 at point formats 0 and 1; the values are listed in `tests/eptLaszipDecode.test.ts`. No generating script is committed. | None. Project data. |
+| `terrain-access-utm.las` | Added in #1017 (commit 041bff11). Written by `scripts/gen-terrain-access-fixture.ts` with the app's LAS writer. | None. Project data. |
+| `tiny.pcd`, `tiny.pts`, `tiny.ptx` | In the initial public release (commit 3e24ee7d). Hand-written ASCII files of two to four points; no generating script. The PCD header comment is the format's standard first line. | None. Project data. |
+| `reference/contour/contour-gdal.geojson` | Added in #344 (commit 61a54eed). Output of GDAL 3.13.1 `gdal_contour` run on `input-dem.asc`, which `scripts/make-contour-fixture.mjs` generates. The command and environment are in the same directory. | None. Contours of a project-generated plane. |
+| `e57-pdal/pdal_sample.csv` | Added in #459 (commit 59b3cf2f). Eighteen points decoded by PDAL 2.10.2 `readers.e57` from `Finestrat_2016.e57`, with `pdal-reference.json` beside it. | Yes. The points are from "3DPC of a gypsum slope in Finestrat, Alicante (Spain)" by A. Abellan and A. Riquelme, <https://doi.org/10.5281/zenodo.7576524>, CC BY 4.0 (register id OLV-DS-040). Extracted as a small sample; credited in `docs/project/THIRD_PARTY_NOTICES.md`. |
+| `ept-tiny/ept-data/0-0-0-0.bin` | In the initial public release (commit 3e24ee7d). Written by `scripts/make-ept-fixture.py` (seeded, deterministic). | None. Project data. |

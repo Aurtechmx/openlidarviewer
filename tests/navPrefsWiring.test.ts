@@ -29,13 +29,13 @@ describe('navPrefsWiring external toggles', () => {
   it('toggleNavInvert flips only the named axis and keeps the preset', () => {
     // Seed a non-default preset via applyNavPrefsChange.
     const f0 = fakes();
-    applyNavPrefsChange({ invertOrbitX: false, invertOrbitY: false, preset: 'recap' }, f0.viewer, f0.persist);
+    applyNavPrefsChange({ invertOrbitX: false, invertOrbitY: false, preset: 'invert-vertical' }, f0.viewer, f0.persist);
 
     const f = fakes();
     const afterY = toggleNavInvert('y', f.viewer, f.inspector, f.persist);
     expect(afterY.invertOrbitY).toBe(true);
     expect(afterY.invertOrbitX).toBe(false);
-    expect(afterY.preset).toBe('recap'); // flags win, preset label preserved
+    expect(afterY.preset).toBe('invert-vertical'); // flags win, preset label preserved
     // Applied to the viewer, synced to the inspector, and persisted — all three.
     expect(f.applied.at(-1)).toEqual(afterY);
     expect(f.synced.at(-1)).toEqual(afterY);
