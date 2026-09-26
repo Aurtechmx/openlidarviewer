@@ -43,6 +43,24 @@ async function latestPose(page: Page): Promise<Pose> {
   });
 }
 
+/**
+ * The pose once the navigation loop has reported it unchanged across two
+ * reads 300 ms apart, after a report newer than `mark`. A slow runner can report the
+ * pose from before the last click for a frame or two, so a single read can
+ * be stale.
+ */
+async function settledPose(page: Page, mark: number): Promise<Pose> {
+  await page.waitForFunction((m) => (window as unknown as { __olvPoses: number[][] }).__olvPoses.length > m, mark);
+  let prev = await latestPose(page);
+  for (let i = 0; i < 40; i++) {
+    await page.waitForTimeout(300);
+    const cur = await latestPose(page);
+    if (moved(prev, cur) < 1e-9) return cur;
+    prev = cur;
+  }
+  throw new Error('the camera pose never settled');
+}
+
 function moved(a: Pose, b: Pose): number {
   return Math.max(...a.map((v, i) => Math.abs(v - b[i]) / Math.max(1, Math.abs(v))));
 }
@@ -78,10 +96,10 @@ test.describe('prefers-reduced-motion', () => {
     const toast = page.locator('.olv-lasso-toast');
     // Start from a known pose that differs from Top: the framed view after
     // open can already be at (or near) the Top pose on some viewports.
+    const beforeFront = await page.evaluate(() => (window as unknown as { __olvPoses: number[][] }).__olvPoses.length);
     await chip('Front').click();
     await expect(toast).toHaveText('View · Front.');
-    await page.waitForTimeout(300);
-    const from = await latestPose(page);
+    const from = await settledPose(page, beforeFront);
     const mark = await page.evaluate(() => (window as unknown as { __olvPoses: number[][] }).__olvPoses.length);
 
     await chip('Top').click();
