@@ -311,7 +311,7 @@ export async function openRemoteTileset(
     // for a different reason: the frame statement says whether which way is up
     // was ever established, and losing it because an unrelated module threw
     // would leave a user reading heights with nothing to warn them.
-    let streamingRows: AnalysisRow[] = [];
+    let streamingRows: AnalysisRow[] | Promise<AnalysisRow[]> = [];
     try {
       streamingRows = deps.runStreamingModules(
         reportCloud,
@@ -321,10 +321,12 @@ export async function openRemoteTileset(
       if (deps.debug) console.warn('[inspector] runStreamingModules (tileset) threw', err);
     }
     try {
-      deps.inspector.setReport([
-        ...streamingRows,
-        ...tilesetFrameReportRows(cloud.frameProvenance),
-      ]);
+      const frameRows = tilesetFrameReportRows(cloud.frameProvenance);
+      // Rows arrive as a Promise only before the report chunk has loaded; a
+      // failed load keeps the frame statement, as a throwing module does above.
+      deps.inspector.setReport(Array.isArray(streamingRows)
+        ? [...streamingRows, ...frameRows]
+        : streamingRows.then((r) => [...r, ...frameRows], () => frameRows));
     } catch (err) {
       if (deps.debug) console.warn('[inspector] setReport (tileset) threw', err);
     }

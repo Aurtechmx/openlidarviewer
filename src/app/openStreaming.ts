@@ -474,7 +474,8 @@ export interface OpenStreamingDeps {
   /** Clear any prior scan's inspector copy/JSON class-scope stamp. */
   syncInspectClassScope: () => void;
   /** Run the streaming analysis modules for the Scan Report. */
-  runStreamingModules: (cloud: StreamingReportInput, classFilterActive?: boolean) => AnalysisRow[];
+  /** Rows synchronously once the report chunk has loaded, else a Promise of them (`setReport` takes either). */
+  runStreamingModules: (cloud: StreamingReportInput, classFilterActive?: boolean) => AnalysisRow[] | Promise<AnalysisRow[]>;
 }
 
 /**

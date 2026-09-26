@@ -181,6 +181,20 @@ export const loadExporters = () => import('./io/exporters');
 export const loadExportStudio = () => import('./export');
 
 /**
+ * Load the scan-report canvas renderer (card + class-scope banner compose). The
+ * snapshot action is its only shell caller, so it stays out of the startup chunk
+ * and loads on the first saved view; the Studio chunk shares the same module.
+ */
+export const loadScanReportRenderer = () => import('./export/ScanReportRenderer');
+
+/**
+ * Load the streaming Scan Report builder. Reached only through
+ * `app/streamingReportSeam.ts`, which preloads it with the scan-open loaders
+ * and keeps the shell's call synchronous once it has resolved.
+ */
+export const loadStreamingScanReport = () => import('./app/streamingScanReport');
+
+/**
  * Load the fingerprint-keyed terrain-core cache, which reuses the heavy,
  * interval-independent computation across contour-interval changes and
  * repeated Analyse runs on the same scan. It re-exports {@link
