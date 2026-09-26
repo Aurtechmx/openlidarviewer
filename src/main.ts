@@ -4839,7 +4839,7 @@ async function saveSnapshot(): Promise<void> {
 
 // Root owner (docs/disposal-contracts.md): a non-persisted pagehide releases these, newest first.
 runtime.lifetime.own({
-  stage: () => stage.dispose(),
+  stage: () => stage.dispose(), 'nav bar': () => navBar.dispose(),
   viewer: () => { debugOverlay?.stop(); viewer?.dispose(); },
   'decode workers': () => { copcDecoder?.dispose(); eptLaszipDecoder?.dispose(); },
   'streaming session': () => streamingUi.endSession(),

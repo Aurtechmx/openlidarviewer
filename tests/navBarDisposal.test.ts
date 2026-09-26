@@ -57,3 +57,26 @@ describe('NavBar releases what it registers outside its own DOM', () => {
     expect(dom.windowEvents.removed.length).toBe(windowOnly(dom.windowEvents.added).length);
   });
 });
+
+describe('the app lifetime owns the NavBar', () => {
+  it('app dispose runs NavBar.dispose once, and a second app dispose is harmless', async () => {
+    const { createAppLifetime } = await import('../src/app/appLifetime');
+    const bar = await navbar();
+    let calls = 0;
+    const real = bar.dispose.bind(bar);
+    bar.dispose = () => { calls++; real(); };
+    const lifetime = createAppLifetime();
+    lifetime.own({ 'nav bar': () => bar.dispose() }, new EventTarget());
+    lifetime.disposeAll();
+    expect(() => lifetime.disposeAll()).not.toThrow();
+    expect(calls).toBe(1);
+    for (const t of WINDOW_EVENTS) expect(dom.windowEvents.removed).toContain(t);
+  });
+
+  it('main.ts registers the NavBar with the root owner', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+    const own = src.slice(src.indexOf('runtime.lifetime.own({'));
+    expect(own.slice(0, own.indexOf('}, window);'))).toContain("'nav bar': () => navBar.dispose()");
+  });
+});
