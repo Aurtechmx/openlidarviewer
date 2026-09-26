@@ -86,7 +86,7 @@ import { colorForMode, defaultMode, refreshClassificationColours } from './color
 import type { ColorMode, CoverageColorGrid, ColorForModeOptions } from './colorModes';
 import { computeSharedElevationRange, elevationOptsFor, applyElevationColors } from './projectElevationScale';
 import { type ActiveColorbar } from './activeColorbar';
-import { captureSnapshot, canvasToBlob, type SnapshotHost, type SnapshotOptions } from './snapshot';
+import type { SnapshotHost, SnapshotOptions } from './snapshot';
 import { runRenderFrame, feedFrameMs, governDpr, governPoints, type RenderLoopHost } from './renderLoop';
 import { type ClipBox, clipKeepsPoint, countKept } from './clip/clipBox';
 import { edlDefaultEnabled, EDL_DEFAULTS } from './edl';
@@ -290,7 +290,7 @@ import {
 // module excluded from the live-build source-transform so Vite can still emit the
 // chunks (see lazyChunks.ts). `loadExportStudio` is the export path's split
 // point; the streaming ones now load inside `streamingAttach.ts`.
-import { loadExportStudio } from '../lazyChunks';
+import { loadExportStudio, loadSnapshot } from '../lazyChunks';
 import type { ChunkDecoder, DecodedChunk } from '../io/copc/copcChunkDecode';
 import type {
   ExportMode,
@@ -4429,7 +4429,7 @@ export class Viewer {
    * {@link SnapshotHost}; this method only binds the Viewer's own state to it.
    */
   async snapshot(options?: SnapshotOptions): Promise<Blob> {
-    return captureSnapshot(this._buildSnapshotHost(), options);
+    return (await loadSnapshot()).captureSnapshot(this._buildSnapshotHost(), options);
   }
 
   /** Bind the Viewer's live render state to the {@link SnapshotHost} contract. */
@@ -4695,7 +4695,7 @@ export class Viewer {
       };
       await present();
       await present();
-      return await canvasToBlob(gl);
+      return await (await loadSnapshot()).canvasToBlob(gl);
     } finally {
       this._renderer.setPixelRatio(prevRatio);
       this._renderer.setSize(prevSize.x, prevSize.y, false);

@@ -310,6 +310,7 @@ describe('the controller routes issue writes through the model', () => {
   async function controller() {
     const { AnnotationController } = await import('../src/render/annotate/AnnotationController');
     const c = new AnnotationController();
+    await c.ensureEditor(); // the card rides its own chunk; load it first
     const card = c.editorElement as unknown as FakeEl;
     return {
       c,

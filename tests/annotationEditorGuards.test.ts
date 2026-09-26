@@ -92,6 +92,7 @@ describe('a second guarded call while a discard confirm is pending', () => {
     const openSpy = vi.spyOn(AnnotationEditor.prototype, 'open');
 
     const c = new AnnotationController();
+    await c.ensureEditor(); // the card rides its own chunk; load it first
     const card = c.editorElement as unknown as FakeEl;
 
     // Open the first draft, then dirty it with a real click (the same
@@ -120,6 +121,7 @@ describe('a deferred undo/redo stays suppressed after the caller\'s own withSupp
   it('does not let the router think annotation edits happened while a dirty draft confirm was pending', async () => {
     const { AnnotationController } = await import('../src/render/annotate/AnnotationController');
     const c = new AnnotationController();
+    await c.ensureEditor();
     // Mirror main.ts's wiring: every controller change notes the annotation
     // stack, unless the caller is inside withSuppressed; the real
     // `withSuppressed` is injected exactly as main.ts injects it, so a
@@ -186,6 +188,7 @@ describe('AnnotationEditor.dispose()', () => {
   it('is reached through AnnotationController.dispose()', async () => {
     const { AnnotationController } = await import('../src/render/annotate/AnnotationController');
     const c = new AnnotationController();
+    await c.ensureEditor();
     const before = FakeResizeObserver.instances.length;
     expect(before).toBeGreaterThan(0);
     c.dispose();

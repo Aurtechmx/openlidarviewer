@@ -36,7 +36,7 @@ const BUDGETS = [
   // gets its own ceiling so a single capability cannot bloat unnoticed under the
   // "unbudgeted chunks never fail" rule above (R5: a budget line per heavy
   // capability). Sized ~12-15 % over the current live (obfuscated) size.
-  { prefix: 'Viewer', maxKiB: 740, warnKiB: 710 },          // live ~657 KiB — render core (three binding, tools, streaming attach)
+  { prefix: 'Viewer', maxKiB: 716, warnKiB: 690 },          // render core (three binding, tools, streaming attach). Lowered 740->716 in v0.7.0 to lock in the lazy snapshot compositor (loadSnapshot) and annotation editor card (loadAnnotationEditor): Viewer measured 737 before and 713 after on build:live; 716 keeps about 3 KiB of headroom so the next eager addition goes through a recorded raise.
   { prefix: 'lazDecode', maxKiB: 700, warnKiB: 670 },       // live ~613 KiB across 2 files — laz-perf WASM + decode glue
   { prefix: 'eptLaszipWorker', maxKiB: 395, warnKiB: 380 }, // live ~343 KiB — EPT laszip streaming worker
   { prefix: 'copcWorker', maxKiB: 385, warnKiB: 370 },      // live ~334 KiB — COPC streaming worker

@@ -2,11 +2,10 @@
   "purpose": "Cross-directory coupling in src/, measured by scripts/lint-module-graph.mjs from a static scan of every non-test .ts file. These numbers are a RECORD OF THE TREE AS IT IS, not a target and not a claim that any of them is good. The gate holds them shrink-only: `runtime` may fall, never rise. `typeOnly` and `dynamic` are recorded for context and are never enforced, because neither is a runtime coupling: an `import type` is erased under verbatimModuleSyntax, and an `import()` is a lazy boundary whose whole purpose is to decouple. An edge is a distinct file pair; fan-out is distinct modules, internal files and external packages alike; a cycle is a strongly connected component of two or more files in the static value graph. Run \"node scripts/lint-module-graph.mjs --update\" to bank a reduction. There is no flag that raises a number.",
   "edges": {
     "render->ui": {
-      "runtime": 6,
-      "typeOnly": 1,
+      "runtime": 5,
+      "typeOnly": 2,
       "dynamic": 0,
       "edges": [
-        "src/render/annotate/AnnotationController.ts -> src/ui/AnnotationEditor.ts",
         "src/render/annotate/AnnotationController.ts -> src/ui/dom.ts",
         "src/render/InspectTool.ts -> src/ui/dom.ts",
         "src/render/LiveProbe.ts -> src/ui/dom.ts",
@@ -164,8 +163,8 @@
       ]
     },
     "src/render/Viewer.ts": {
-      "runtime": 76,
-      "typeOnly": 15,
+      "runtime": 75,
+      "typeOnly": 16,
       "dynamic": 1,
       "modules": [
         "src/io/coordinateBridge.ts",
@@ -224,7 +223,6 @@
         "src/render/renderLoop.ts",
         "src/render/rgbAppearance.ts",
         "src/render/skyPresetApply.ts",
-        "src/render/snapshot.ts",
         "src/render/splatShader.ts",
         "src/render/streaming/exportFrontier.ts",
         "src/render/streaming/fadeDither.ts",
@@ -458,7 +456,7 @@
       },
       {
         "file": "src/lazyChunks.ts",
-        "importers": 31
+        "importers": 32
       },
       {
         "file": "src/units/units.ts",
