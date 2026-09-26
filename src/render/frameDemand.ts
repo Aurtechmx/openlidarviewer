@@ -40,6 +40,7 @@ export type SchedulerFactory = (hooks: {
 }) => FrameScheduler;
 import { RenderActivityGate } from './renderActivityGate';
 import { navDrive, navSink } from '../perf/navProbeHook';
+import { governorSettling } from './perf/governorHook';
 import { RenderInvalidation, type RenderInvalidationReason, type ServedFrame } from './renderInvalidation';
 
 /** The live signals that run without asking each frame. */
@@ -242,7 +243,7 @@ export class FrameDemand {
     // The `?benchmark=nav` driver in fixed-step mode queues navigation steps
     // every frame; the loop stays awake for the run to integrate them.
     if (navDrive()?.fixedDtSec != null) return true;
-    return commitWork || this._signals.streamingBusy() || this._signals.fading();
+    return commitWork || this._signals.streamingBusy() || this._signals.fading() || governorSettling();
   }
 
   /**

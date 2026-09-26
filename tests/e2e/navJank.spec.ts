@@ -45,7 +45,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { closeSync, createReadStream, existsSync, openSync, readSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { release } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildNavJankRecord, validateJsonSchema, type NavJankEnv, type NavJankRun } from '../../src/perf/navJankRecord';
 import type { NavProbeSummary } from '../../src/perf/navProbe';
@@ -67,7 +67,10 @@ const ANTI_THROTTLE_ARGS = [
 const THROTTLE_FLAGS_ON = process.env.OLV_NAV_THROTTLE_FLAGS !== 'off';
 /** A frame-clock delta at least this long counts as a gap in the run's timeline. */
 const GAP_MS = 200;
-const DATASET_ID = 'OLV-DS-090-JEMEZ-SNOWOFF-2010-FOREST';
+/** OLV_NAV_DATASET_ID names the register entry OLV_NAV_DATASET is a copy of (default OLV-DS-090). */
+const DATASET_ID = process.env.OLV_NAV_DATASET_ID || 'OLV-DS-090-JEMEZ-SNOWOFF-2010-FOREST';
+/** Upper bound on the wait after the trajectory for stationary full quality (see RunMeta.fullQuality). */
+const FULL_QUALITY_WAIT_MS = 20_000;
 /** Upper bound on one load (file input to the committed cloud's first frame). */
 const LOAD_TIMEOUT_MS = 240_000;
 /** Upper bound on one trajectory; past it the run keeps what the probe saw. */
@@ -78,11 +81,20 @@ const SCHEMA = JSON.parse(readFileSync(join(ROOT, 'validation/performance/nav-ja
 /** OLV_NAV_OUT_DIR sends the merged result elsewhere (the governor A/B keeps its runs out of the committed set). */
 const OUT_DIR = process.env.OLV_NAV_OUT_DIR || join(ROOT, 'validation/performance/nav-jank');
 
-function registeredSha(): string | null {
+function registerEntry(): string | null {
   const reg = readFileSync(join(ROOT, 'validation/datasets/dataset-register.yaml'), 'utf8');
   const at = reg.indexOf(`datasetId: ${DATASET_ID}`);
   if (at < 0) return null;
-  return /sourceSha256:\s*([0-9a-f]{64})/.exec(reg.slice(at, at + 2000))?.[1] ?? null;
+  const next = reg.indexOf('- datasetId:', at + 1);
+  return reg.slice(at, next < 0 ? undefined : next);
+}
+
+function registeredSha(): string | null {
+  return /sourceSha256:\s*([0-9a-f]{64})/.exec(registerEntry() ?? '')?.[1] ?? null;
+}
+
+function registeredLicence(): string | null {
+  return /licence:\s*"?([^"\n]+)"?/.exec(registerEntry() ?? '')?.[1]?.trim() ?? null;
 }
 
 /** SHA-256 of the dataset, cached by path, size and mtime (hashing 49 MB per run is waste). */
@@ -145,6 +157,22 @@ interface RunMeta {
    * Read from the probe's columns when the build exposes them, else empty.
    */
   tail: [number, number, number, number, number][];
+  /**
+   * At the end of the run: the backing-store ratio (canvas width over CSS
+   * width) and, under `?governor=on`, the governor's two v2 outputs, the
+   * meshes still drawn below their full count, and how often each output changed.
+   */
+  presentation: { backingRatio: number | null; governor: Record<string, number> | null };
+  /**
+   * Stationary full quality, on the page's performance.now() clock in both
+   * arms: `lastInputT` is the last camera input event, `reachedT` the end of
+   * the first frame of the unbroken run of full-quality frames that closes the
+   * recording (render scale 1, point fraction 1, refinement phase
+   * 'full-refine'; with no governor installed both outputs are 1), and `ms`
+   * their difference. After the trajectory the probe keeps recording until
+   * such a frame is seen or FULL_QUALITY_WAIT_MS passes; null when never reached.
+   */
+  fullQuality: { lastInputT: number | null; reachedT: number | null; ms: number | null; frames: number };
 }
 
 interface DriveOut {
@@ -200,7 +228,7 @@ async function drive(page: Page, name: string, sceneDiagonal: number): Promise<D
   // Let the first frames after the load pass before measuring.
   await page.waitForTimeout(1_000);
   return page.evaluate(
-    async ({ name, timeoutMs, gapMs, sceneDiagonal }) => {
+    async ({ name, timeoutMs, gapMs, sceneDiagonal, fqWaitMs }) => {
       type Result = { trajectoryDigest: string; settled: boolean; unsettledAt: string | null; frames: number };
       const w = window as unknown as {
         __olvNavProbe: { stop(n?: string): NavProbeSummary; start(): void };
@@ -234,6 +262,18 @@ async function drive(page: Page, name: string, sceneDiagonal: number): Promise<D
           orig.call(sink, ms);
         };
       }
+      // Per-frame full-quality timeline, on the probe's clock (performance.now()).
+      type Gov = { presentation(): { renderScale: number; pointBudgetFraction: number } };
+      const fq: [number, boolean][] = [];
+      const origEnd = (sink as unknown as { frameEnd?: (t: number, d: boolean, e: boolean, dpr: number, ph: string) => void } | undefined)?.frameEnd;
+      if (sink && origEnd) {
+        (sink as unknown as { frameEnd: typeof origEnd }).frameEnd = (t, d, e, dpr, ph) => {
+          const g = (window as unknown as { __olvGovernor?: Gov }).__olvGovernor;
+          const p = g ? g.presentation() : null;
+          fq.push([t, ph === 'full-refine' && (p === null || (p.renderScale === 1 && p.pointBudgetFraction === 1))]);
+          origEnd.call(sink, t, d, e, dpr, ph);
+        };
+      }
       let timer = 0;
       const timeout = new Promise<null>((r) => {
         timer = window.setTimeout(() => r(null), timeoutMs);
@@ -243,9 +283,24 @@ async function drive(page: Page, name: string, sceneDiagonal: number): Promise<D
         res = await Promise.race([w.__olvNavDriver.run(name, { fixedStep: false, sceneDiagonal }), timeout]);
       } finally {
         clearTimeout(timer);
-        if (sink && orig) sink.frameMs = orig;
         for (const t of types) window.removeEventListener(t, onInput, { capture: true });
-        document.removeEventListener('visibilitychange', onVis);
+      }
+      // Keep recording until a full-quality frame after the last input, or the cap.
+      const lastIn = inputs.length ? Math.max(...inputs) : null;
+      const fullNow = (): boolean => {
+        const f = fq.at(-1);
+        return f !== undefined && f[1] && (lastIn === null || f[0] > lastIn);
+      };
+      const waitStart = performance.now();
+      while (res && !fullNow() && performance.now() - waitStart < fqWaitMs) await new Promise((r) => setTimeout(r, 50));
+      if (sink && orig) sink.frameMs = orig;
+      if (sink && origEnd) (sink as unknown as { frameEnd: typeof origEnd }).frameEnd = origEnd;
+      document.removeEventListener('visibilitychange', onVis);
+      let reachedT: number | null = null;
+      for (const [t, full] of fq) {
+        if (lastIn !== null && t <= lastIn) continue;
+        if (!full) reachedT = null;
+        else reachedT ??= t;
       }
       const summary = w.__olvNavProbe.stop(name);
       const cols = sink as unknown as {
@@ -268,6 +323,22 @@ async function drive(page: Page, name: string, sceneDiagonal: number): Promise<D
         gapsAfterInput: deltas.filter(([t]) => last !== null && t > last).length,
         quality: summary.quality.events.map((e) => [rel(e.t), e.kind, e.from, e.to] as [number, string, number | string, number | string]),
         tail: [] as [number, number, number, number, number][],
+        fullQuality: {
+          lastInputT: lastIn,
+          reachedT,
+          ms: reachedT !== null && lastIn !== null ? Math.round((reachedT - lastIn) * 10) / 10 : null,
+          frames: fq.length,
+        },
+        presentation: (() => {
+          const c = [...document.querySelectorAll('canvas')].sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)[0];
+          const g = (window as unknown as { __olvGovernor?: {
+            presentation(): Record<string, number>; renderScaleChanges: number; pointBudgetChanges: number;
+          } }).__olvGovernor;
+          return {
+            backingRatio: c && c.clientWidth > 0 ? Math.round((c.width / c.clientWidth) * 100) / 100 : null,
+            governor: g ? { ...g.presentation(), renderScaleChanges: g.renderScaleChanges, pointBudgetChanges: g.pointBudgetChanges } : null,
+          };
+        })(),
       };
       if (cols?._f && cols._tEnd && cols._drawn && cols._edl && cols._wake && cols._phase && last !== null) {
         for (let k = 0; k < cols._f.count && meta.tail.length < 200; k++) {
@@ -279,7 +350,7 @@ async function drive(page: Page, name: string, sceneDiagonal: number): Promise<D
       if (!res) return { trajectoryDigest: 'timeout', settled: false, unsettledAt: 'input', frames: 0, timedOut: true, summary, meta };
       return { ...res, timedOut: false, summary, meta };
     },
-    { name, timeoutMs: DRIVE_TIMEOUT_MS, gapMs: GAP_MS, sceneDiagonal },
+    { name, timeoutMs: DRIVE_TIMEOUT_MS, gapMs: GAP_MS, sceneDiagonal, fqWaitMs: FULL_QUALITY_WAIT_MS },
   );
 }
 
@@ -364,7 +435,7 @@ async function environment(page: Page, context: BrowserContext, info: TestInfo):
 }
 
 function partialDir(commit: string): string {
-  const dir = join(WORK_DIR, `${commit.slice(0, 12)}-${MACHINE}${GOVERNOR ? '-governor' : ''}`);
+  const dir = join(WORK_DIR, `${commit.slice(0, 12)}-${MACHINE}-${DATASET_ID.slice(0, 10)}${GOVERNOR ? '-governor' : ''}`);
   mkdirSync(dir, { recursive: true });
   return dir;
 }
@@ -450,7 +521,7 @@ test.describe('@bench navigation jank benchmark', () => {
         const result = buildNavJankResults({
           generatedAt: new Date().toISOString(),
           machine: MACHINE,
-          dataset: { id: DATASET_ID, boundsDiagonal: lasDiagonal(DATASET), licence: 'CC-BY-4.0', file: 'ot_356000_3972000_1.laz', sha256: sha, bytes: statSync(DATASET).size, registeredSha256: registered },
+          dataset: { id: DATASET_ID, boundsDiagonal: lasDiagonal(DATASET), licence: registeredLicence() ?? 'unregistered', file: basename(DATASET), sha256: sha, bytes: statSync(DATASET).size, registeredSha256: registered },
           trajectories: {
             [name]: {
               cold,

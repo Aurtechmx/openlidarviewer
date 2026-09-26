@@ -87,7 +87,7 @@ import type { ColorMode, CoverageColorGrid, ColorForModeOptions } from './colorM
 import { computeSharedElevationRange, elevationOptsFor, applyElevationColors } from './projectElevationScale';
 import { type ActiveColorbar } from './activeColorbar';
 import { captureSnapshot, canvasToBlob, type SnapshotHost, type SnapshotOptions } from './snapshot';
-import { runRenderFrame, feedFrameMs, governDpr, type RenderLoopHost } from './renderLoop';
+import { runRenderFrame, feedFrameMs, governDpr, governPoints, type RenderLoopHost } from './renderLoop';
 import { type ClipBox, clipKeepsPoint, countKept } from './clip/clipBox';
 import { edlDefaultEnabled, EDL_DEFAULTS } from './edl';
 import { angularVelocity } from './angularVelocity';
@@ -6035,7 +6035,7 @@ export class Viewer {
       edlEnabled: () => this._edlEnabled,
       navQuality: () => ({ dpr: this._renderer.getPixelRatio(), phase: this._refinementPhasesEnabled ? this._phases.phase : 'full-refine' }),
       applyAdaptiveDpr: (moving, delta, nowMs, rendered) => {
-        this._updateRefinementAndDpr(moving, delta, nowMs, rendered);
+        this._updateRefinementAndDpr(moving, delta, nowMs, rendered); governPoints(this._scene); // `?governor=on` only
         // Shared coarse-LOD gain follows the live phase — a uniform write, so
         // no material rebuilds. Reads the same tracker the scheduler does
         // (advances with DPR off); flag off means `full-refine`, the identity.
