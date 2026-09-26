@@ -419,6 +419,8 @@ export class AnalysePanel {
   private _resultScanId: string | null = null;
   /** State the on-screen result was computed under; gates every export. */
   private _resultStamp: AnalysisFreshnessStamp | null = null;
+  /** Told after every `update`, for readers that list results (the Results shelf). */
+  private readonly _resultListeners = new Set<() => void>();
   /** The "Colour 3D by confidence" toggle button + its current on/off state, so
    *  its label always shows the way back to the original colour. */
   private _confidenceColorBtn?: HTMLButtonElement;
@@ -935,6 +937,40 @@ export class AnalysePanel {
    *
    * Any export that stamps provenance must read THIS one.
    */
+  /**
+   * The result on the panel by reference, the scan it was computed on, whether
+   * it is still fresh, and the scene up-axis its grid is drawn in. Read only;
+   * for the Results shelf, which lists results without exporting them.
+   */
+  resultRef(): { readonly result: AnalyseContoursResult; readonly scanId: string | null; readonly fresh: boolean; readonly filename: string | null; readonly sceneUpAxis: 'z' | 'y' | null } | null {
+    if (!this._result) return null;
+    return {
+      result: this._result,
+      scanId: this._resultScanId,
+      fresh: this._freshnessBreach() === null,
+      filename: this._cb.getExportBasename?.() ?? null,
+      sceneUpAxis: this._cb.getMapContext?.()?.sceneUpAxis ?? null,
+    };
+  }
+
+  /**
+   * Run one of the panel's own exports from elsewhere (the Export mode's
+   * terrain lane). Goes through the same backing button, so a gated export
+   * stays gated. Returns false when the button is disabled or absent.
+   */
+  exportProduct(kind: 'dem' | 'contours'): boolean {
+    const btn = this._studioExportBtns.get(kind === 'dem' ? 'package' : 'pdf');
+    if (!btn || btn.disabled || !this._result) return false;
+    btn.click();
+    return true;
+  }
+
+  /** Subscribe to result changes (a new result, a cleared one). Returns an unsubscribe. */
+  subscribeResult(fn: () => void): () => void {
+    this._resultListeners.add(fn);
+    return () => { this._resultListeners.delete(fn); };
+  }
+
   currentResultForProvenance(): AnalyseContoursResult | null {
     return this._freshnessBreach() === null ? this._result : null;
   }
@@ -1100,6 +1136,7 @@ export class AnalysePanel {
       // control dead for the session.
       this._status.textContent = IDLE_STATUS;
       this._runBtn.disabled = false;
+      this._notifyResult();
       return;
     }
     this._renderFitness();
@@ -1112,6 +1149,13 @@ export class AnalysePanel {
     this._renderSurface();
     this._renderBody();
     this._renderExportGate();
+    this._notifyResult();
+  }
+
+  private _notifyResult(): void {
+    for (const fn of [...this._resultListeners]) {
+      try { fn(); } catch { /* a reader never breaks the panel */ }
+    }
   }
 
   /**

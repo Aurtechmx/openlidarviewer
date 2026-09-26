@@ -10972,6 +10972,155 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 .olv-tl-chip:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
 .olv-tl-chip:active:not(:disabled) { transform: var(--btn-press); }
 .olv-tl-chip:disabled { opacity: 0.55; cursor: not-allowed; }
+/* 99y2-results-shelf.css — the Results shelf (src/app/results/resultsShelf.ts).
+   Desktop: the left rail's footer, below the scrolling mode body. Phone: a row
+   at the top of the sheet's Layers tab. Empty or before a scan: not shown. */
+
+.olv-results-shelf {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--hairline);
+}
+.olv-results-shelf.is-empty,
+.olv-left-panels:not(.olv-ws-ready) .olv-results-shelf {
+  display: none;
+}
+
+.olv-results-toggle {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  min-height: 44px;
+  width: 100%;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--panel-raised);
+  color: var(--text);
+  font: 500 var(--text-xs) / 1.2 var(--font);
+  text-align: left;
+  cursor: pointer;
+  transition: background 160ms var(--ease-standard);
+}
+.olv-results-toggle:hover {
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel-raised));
+}
+.olv-results-sep,
+.olv-results-count {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.olv-results-toggle::after {
+  content: '';
+  margin-left: auto;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-135deg);
+  transition: transform 160ms var(--ease-standard);
+}
+.olv-results-shelf.is-open .olv-results-toggle::after {
+  transform: rotate(45deg);
+}
+
+/* The list opens upward from the footer and scrolls on its own, so the mode
+   body keeps its space and the canvas is never covered. */
+.olv-results-panel {
+  max-height: min(40vh, 320px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.olv-results-group {
+  margin: var(--space-xs) 0 var(--space-2xs);
+  color: var(--text-dim);
+  font: 600 var(--text-xs) / 1.2 var(--font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.olv-results-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+.olv-results-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: 44px;
+}
+.olv-results-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.olv-results-title {
+  color: var(--text);
+  font: 500 var(--text-xs) / 1.3 var(--font);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.olv-results-meta {
+  color: var(--text-dim);
+  font: 400 var(--text-xs) / 1.3 var(--font);
+  font-variant-numeric: tabular-nums;
+}
+.olv-results-row.is-other-source .olv-results-meta {
+  color: var(--warn, var(--text));
+}
+.olv-results-actions {
+  display: flex;
+  gap: var(--space-2xs);
+}
+.olv-results-focus,
+.olv-results-export {
+  appearance: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text);
+  font: 500 var(--text-xs) / 1 var(--font);
+  cursor: pointer;
+}
+.olv-results-focus:hover,
+.olv-results-export:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.olv-results-toggle:focus-visible,
+.olv-results-focus:focus-visible,
+.olv-results-export:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.olv-results-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .olv-results-toggle,
+  .olv-results-toggle::after {
+    transition: none;
+  }
+}
 /* ── Windows High Contrast / forced-colors ──────────────────────────────────
    Windows High Contrast replaces the author palette with a small system one.
    Backgrounds, borders and shadows are forced, `backdrop-filter` stops

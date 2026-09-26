@@ -1,7 +1,7 @@
 {
   "files": {
     "src/main.ts": {
-      "lines": 4692,
+      "lines": 4689,
       "goal": 2500
     },
     "src/render/Viewer.ts": {
@@ -11,7 +11,7 @@
   },
   "watch": {
     "src/ui/AnalysePanel.ts": {
-      "lines": 3061
+      "lines": 3105
     },
     "src/ui/Inspector.ts": {
       "lines": 2608

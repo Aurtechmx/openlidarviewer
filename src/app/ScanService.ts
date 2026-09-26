@@ -53,23 +53,55 @@ export interface ScanService {
    * wildcard, and a genuinely unidentified state is still null.
    */
   activeExportTargetId(): string | null;
+  /**
+   * Told after {@link activeExportTargetId} changes: a static scan selected
+   * or cleared, or a streaming scan attached or detached. Returns an
+   * unsubscribe.
+   */
+  onActiveChange(fn: () => void): () => void;
+  /**
+   * Re-read the active identity and tell listeners when it moved. The host
+   * calls this after a streaming scan attaches or detaches, which changes the
+   * identity without going through {@link setActive}.
+   */
+  syncActive(): void;
 }
 
 export function createScanService(deps: ScanServiceDeps): ScanService {
   const { getViewer, context } = deps;
   const scan = context.scan;
+  const listeners = new Set<() => void>();
+  const target = (): string | null => {
+    try { return scan.activeId ?? getViewer().streamingCloud?.id ?? null; } catch { return scan.activeId; }
+  };
+  let last: string | null = scan.activeId;
+  const syncActive = (): void => {
+    const now = target();
+    if (now === last) return;
+    last = now;
+    for (const fn of [...listeners]) fn();
+  };
+  const set = (id: string | null): void => {
+    scan.activeId = id;
+    syncActive();
+  };
   return {
     get activeId() {
       return scan.activeId;
     },
     setActive(id) {
-      scan.activeId = id;
+      set(id);
     },
     clear() {
-      scan.activeId = null;
+      set(null);
     },
     clearIf(id) {
-      if (scan.activeId === id) scan.activeId = null;
+      if (scan.activeId === id) set(null);
+    },
+    syncActive,
+    onActiveChange(fn) {
+      listeners.add(fn);
+      return () => { listeners.delete(fn); };
     },
     activeCloud() {
       const id = scan.activeId;

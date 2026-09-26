@@ -2791,7 +2791,7 @@ const clipPanel = new ClipPanel({
 // the annotation store already hold. It owns no tool state and no count.
 const toolLauncherHost = document.createElement('div');
 let toolLauncherCard: { readonly element: HTMLElement; refresh: () => void } | null = null;
-const refreshToolLauncher = (): void => { workspaceShell?.router.sync(); toolLauncherCard?.refresh(); };
+const refreshToolLauncher = (): void => { workspaceShell?.sync(); toolLauncherCard?.refresh(); };
 async function fillToolLauncher(): Promise<void> {
   const { createToolLauncher } = await loadToolLauncher();
   toolLauncherCard = createToolLauncher({
@@ -3237,9 +3237,8 @@ void viewerLoaded.then(() => {
     rightRail.id = 'olv-right-rail';
     rightRail.append(streamingPanel.element, inspector.element);
     stage.overlay.append(rightRail);
-    // The desktop rail, the phone sheet and the Tools route: workspaceShell.ts,
-    // a lazy chunk that has normally landed by the time the Viewer has. Nothing
-    // below appends to the overlay, so the paint order is unchanged.
+    // Rail, phone sheet, Tools route and Results shelf: workspaceShell.ts, a lazy
+    // chunk that lands before the Viewer. Nothing below appends to the overlay.
     void workspaceShellChunk?.then(({ mountWorkspaceShell }) => {
       const shell = mountWorkspaceShell({
         overlay: stage.overlay,
@@ -3251,15 +3250,13 @@ void viewerLoaded.then(() => {
         toolLauncher: toolLauncherHost,
         clip: clipPanel.element,
         processStudio: processStudio.panel.element,
-        export: exportPanel.element,
-        measureHint: viewer.measureElements.hint,
-        dock: dock.dock,
+        export: exportPanel,
+        measureHint: viewer.measureElements.hint, dock: dock.dock,
         overlayTail: [dock.dock, dock.backend, projectCard.element, viewer.inspectElements.card,
           viewer.annotateElements.editor, viewer.probeElements.readout, inspector.sheetToggle],
-        analysePanel: () => analysePanel,
-        objectPanel: () => objectPanel,
-        measurePanel: () => measureMount.panel,
-        setMeasureMountElement: (fn) => measureMount.setMountElement(fn),
+        analysePanel: () => analysePanel, objectPanel: () => objectPanel,
+        results: { viewer, identity: runtime.layerIdentity, scans, terrainRunner },
+        measurePanel: () => measureMount.panel, setMeasureMountElement: (fn) => measureMount.setMountElement(fn),
         hasScan,
         onModeChange: () => refreshToolLauncher(),
     });
@@ -4185,10 +4182,9 @@ function closeStreaming(): void {
     coarseStableFired = false;
   }
   if (copcDecoder) copcDecoder.onDecodeMs = undefined;
-  // Stop the status poll, abort an in-flight grade (its decode is orphaned
-  // work now) and hide the panel.
+  // Stop the status poll and any grade, hide the panel, then tell the shelf.
   streamingUi.endSession();
-  viewer.detachStreamingCloud();
+  viewer.detachStreamingCloud(); scans.syncActive();
   // Return the Inspector to its static layout — un-hide every section
   // and clear the streaming-mode positioning class.
   try { inspector.setStreamingMode(false); }
@@ -4617,6 +4613,7 @@ function clearOpenStaticLayers(): void {
   }
   layerVisible.clear();
   layers.solo = null;
+  scans.syncActive();
 }
 
 /**
