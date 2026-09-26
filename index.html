@@ -16,6 +16,10 @@
     <meta name="twitter:card" content="summary_large_image" />
 
     <!-- Icons + PWA manifest (served from public/, copied to the dist root). -->
+    <!-- Manrope 400/500 preloads are injected by the fontPreload plugin in
+         vite.config.ts: in a build they name the hashed assets/ files the
+         @fontsource CSS references, so the preload and the stylesheet fetch the
+         same bytes once (font-src 'self'). -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />

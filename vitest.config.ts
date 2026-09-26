@@ -53,6 +53,7 @@ const benchmarkExecArgv = forcedGcRequested() ? ['--expose-gc'] : [];
 
 export default defineConfig({
   define: {
+    __OLV_DEV_FLAGS__: "true",
     __APP_VERSION__: JSON.stringify(pkg.version),
     __BUILD_IDENTITY__: JSON.stringify(TEST_BUILD_IDENTITY),
   },

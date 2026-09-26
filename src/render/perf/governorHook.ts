@@ -51,7 +51,7 @@ let urlChecked = false;
 
 function requestFromUrl(): void {
   urlChecked = true;
-  if (typeof location === 'undefined') return;
+  if (!__OLV_DEV_FLAGS__ || typeof location === 'undefined') return;
   if (new URLSearchParams(location.search).get('governor') !== 'on') return;
   void loadGovernorWiring().then((m) => m.installGovernor(globalThis));
 }

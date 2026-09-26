@@ -30,6 +30,13 @@ declare const __BUILD_IDENTITY__: {
 declare const __OLV_TEST_SEAM__: boolean;
 
 /**
+ * `__OLV_DEV_FLAGS__` is true for the dev server and plain builds (the bench
+ * and preview builds maintainers A/B on) and false for the live build. It
+ * gates `?benchmark=nav`, `?governor=on` and the devFlags URL parsing.
+ */
+declare const __OLV_DEV_FLAGS__: boolean;
+
+/**
  * Inter is not part of the shipped bundle — the interface face is Manrope
  * (`--font` in style.css) with JetBrains Mono for monospace. The package is
  * kept for `scripts/make-brand-rasters.py`, which instances its variable woff2

@@ -275,7 +275,7 @@ export class DebugOverlay {
     if (this._timer !== undefined) return;
     // `?benchmark=nav` adds the navigation frame probe and its window hook.
     // It rides this diagnostics chunk, so the startup shell never carries it.
-    if (new URLSearchParams(location.search).get('benchmark') === 'nav') installNavProbe(window);
+    if (__OLV_DEV_FLAGS__ && new URLSearchParams(location.search).get('benchmark') === 'nav') installNavProbe(window);
     this._perfCollector.start();
     this._refresh();
     this._timer = window.setInterval(() => this._refresh(), REFRESH_MS);
