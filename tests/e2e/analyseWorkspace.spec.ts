@@ -156,6 +156,13 @@ test.describe('Analyse home and pages', () => {
     await back(page).click();
     await expect(row(page, 'terrain').locator('.olv-ah-badge')).toHaveText('Blocked');
     await expect(row(page, 'terrain').locator('.olv-ah-reason')).toHaveText(/Not usable/);
+    // Rows that read the DTM are capped by the same run, and their fix is Terrain.
+    for (const id of ['flow-pulse', 'terrain-access']) {
+      await expect(row(page, id).locator('.olv-ah-badge')).toHaveText('Blocked');
+      await expect(row(page, id).locator('.olv-ah-reason')).toHaveText(/^Terrain run: Not usable/);
+    }
+    await row(page, 'flow-pulse').locator('.olv-ah-remedy', { hasText: 'Prepare terrain' }).click();
+    await expect(title(page)).toHaveText('Terrain');
   });
 
   test('Contours in three clicks without a result and two with one', async ({ page }) => {

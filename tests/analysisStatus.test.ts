@@ -93,7 +93,7 @@ describe('analysisRows', () => {
     }
   });
 
-  it('a remedy is only ever offered on a blocked row', () => {
+  it('a remedy is only ever offered on a blocked row without a run cap', () => {
     for (const r of analysisRows(input({ produced: new Set<ProductId>(['dtm']) }))) {
       if (r.status !== 'blocked') expect(r.remedy).toBeNull();
     }
@@ -141,4 +141,26 @@ describe('Terrain status: the more restrictive of Process Studio and the run', (
     expect(after).toMatchObject({ status: 'blocked', reason: 'Not usable for terrain products as-is.', remedy: null });
     expect(contoursStatus(input({ terrainRun: run, produced: new Set<ProductId>(['dtm', 'contours']) })).status).toBe('blocked');
   });
+
+  const produced = new Set<ProductId>(['dtm', 'contours']);
+  for (const id of ['flow-pulse', 'terrain-access']) {
+    for (const [tier, want] of [['Good', null], ['Preview', 'review'], ['Limited', 'review'], ['Blocked', 'blocked']] as const) {
+      it(`${id} after a ${tier} run reads ${want ?? 'as Process Studio says'}`, () => {
+        const r = byId(analysisRows(input({ produced, terrainRun: { tier, verdict: 'V.' } })), id);
+        const ps = ProcessService.fromFacts([facts]).readiness('dtm');
+        if (want === null) {
+          expect(r.status).toBe(ps);
+          expect(r.reason.startsWith('Terrain run:')).toBe(false);
+        } else {
+          expect(r.status).toBe(want);
+          expect(r.reason).toBe('Terrain run: V.');
+          expect(r.remedy).toEqual(PREPARE_TERRAIN);
+        }
+        // Never better-looking than Terrain itself.
+        const t = byId(analysisRows(input({ produced, terrainRun: { tier, verdict: 'V.' } })), 'terrain');
+        const rank = { ready: 0, review: 1, blocked: 2 } as const;
+        expect(rank[r.status as 'ready']).toBeGreaterThanOrEqual(rank[t.status as 'ready']);
+      });
+    }
+  }
 });
