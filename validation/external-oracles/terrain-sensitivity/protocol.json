@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "quantity": "terrain sensitivity GeoTIFF (sensitivity_range, sensitivity_members)",
+  "candidate": "src/terrain/export/demSensitivity.ts and src/terrain/export/demGeoTiff.ts",
+  "fixture": "validation/terrain-sensitivity/fixture/terrain_sensitivity.tif with validation/terrain-sensitivity/fixture/expected.json",
+  "fixtureCheck": "tests/demSensitivity.test.ts fails when the committed fixture differs from what the writer produces",
+  "oracles": [
+    {
+      "oracleId": "olv-terrain-sensitivity-geotiff-py",
+      "role": "standard-conformance-validator",
+      "invocation": "python3 validation/terrain-sensitivity/oracle/sensitivity_geotiff.py --check",
+      "parameterEquivalence": "Reads the committed file bytes; compares band count, sample types, tags, georeferencing and every cell against expected.json."
+    },
+    {
+      "oracleId": "olv-terrain-sensitivity-geotiff-py",
+      "role": "analytic-truth",
+      "invocation": "python3 validation/terrain-sensitivity/oracle/sensitivity_geotiff.py --check",
+      "parameterEquivalence": "Recomputes the highest minus the lowest member height and the number of members with a height at every cell from the four member grids in expected.json, NoData where member 0 has no height; --check confirms a perturbed value in either band fails."
+    }
+  ]
+}

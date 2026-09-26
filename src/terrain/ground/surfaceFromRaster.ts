@@ -72,6 +72,11 @@ export interface SurfaceFromRasterParams {
    * every measured ground cell exactly as delivered.
    */
   readonly despike?: boolean;
+  /**
+   * Void-fill method. Default {@link LIVE_INTERPOLATION}. Only the DEM
+   * sensitivity ensemble (demSensitivity.ts, member 3) sets another value.
+   */
+  readonly interpolation?: 'idw' | 'geodesic';
 }
 
 export interface SurfaceFromRasterResult {
@@ -147,7 +152,7 @@ export function buildSurfaceFromRaster(
     latitudeDeg: params.latitudeDeg,
     horizontalUnitToMetres: params.horizontalUnitToMetres,
     verticalUnitToMetres: params.verticalUnitToMetres,
-    interpolation: LIVE_INTERPOLATION,
+    interpolation: params.interpolation ?? LIVE_INTERPOLATION,
     extrapolationGuard: LIVE_EXTRAPOLATION_GUARD,
   });
 

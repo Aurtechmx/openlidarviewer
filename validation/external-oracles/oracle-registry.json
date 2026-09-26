@@ -548,6 +548,37 @@
         "The distance recomputation assumes an open grid, where 8-connected steps equal the Chebyshev distance; it does not model obstacles.",
         "Says nothing about the accuracy of any height, and does not check the low-confidence rule, which depends on the confidence grid the raster does not carry."
       ]
+    },
+    {
+      "oracleId": "olv-terrain-sensitivity-geotiff-py",
+      "name": "Terrain sensitivity GeoTIFF reader (sensitivity_geotiff.py)",
+      "version": "1",
+      "executables": [
+        "validation/terrain-sensitivity/oracle/sensitivity_geotiff.py"
+      ],
+      "roleCapabilities": [
+        "standard-conformance-validator",
+        "analytic-truth"
+      ],
+      "domains": [
+        "geotiff-multiband-layout",
+        "terrain-sensitivity-raster"
+      ],
+      "lineageGroup": "olv-terrain-evidence-oracle",
+      "implementationLanguage": "Python (standard library only)",
+      "license": "AGPL-3.0-only",
+      "architecture": "any (no native dependency)",
+      "installationMethod": "in-repository; run with the interpreter .python-version pins",
+      "sourceRevision": null,
+      "independenceNotes": [
+        "Parses the written file from the TIFF 6.0, OGC GeoTIFF 1.1, GDAL_METADATA and GDAL_NODATA layouts with struct and xml.etree; it imports no viewer code and does not reuse src/terrain/export/demGeoTiff.ts or demSensitivity.ts.",
+        "Recomputes the range and the member count from the four member height grids listed in expected.json. Not external validation: the rule comes from this project's own protocol, so a shared misreading would survive agreement. Shares its lineageGroup with olv-terrain-evidence-geotiff-py, which it was modelled on."
+      ],
+      "limitations": [
+        "Checks one synthetic 5 x 4 fixture (validation/terrain-sensitivity/fixture) with hand-set member grids, not grids from terrain runs on a real scan.",
+        "Does not run the ensemble: the member grids are inputs, so the oracle checks the range rule and the file, not the terrain pipeline behind each member.",
+        "Says nothing about how close any height is to the ground."
+      ]
     }
   ]
 }

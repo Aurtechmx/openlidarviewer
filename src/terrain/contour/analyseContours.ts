@@ -263,6 +263,12 @@ export interface TerrainCoreParams {
    * reported RMSE measures the surface the user actually receives.
    */
   readonly aggregation?: DtmAggregation;
+  /**
+   * Void-fill method for the delivered surface. Default
+   * {@link LIVE_INTERPOLATION}. Set only by the DEM sensitivity ensemble
+   * (demSensitivity.ts, member 3); the interactive analysis never sets it.
+   */
+  readonly interpolation?: 'idw' | 'geodesic';
 }
 
 /**
@@ -1038,6 +1044,7 @@ export function computeTerrainCore(
     verticalDatum,
     verticalEpsg: params.verticalEpsg,
     despike: despikeApplied,
+    interpolation: params.interpolation,
     isGeographic: params.isGeographic,
     // WORLD grid-centre latitude for the confidence roughness slope's cos φ
     // E–W correction (the grid's own originH2 is render-recentred, ≈ 0).
@@ -1054,7 +1061,7 @@ export function computeTerrainCore(
   }
   // Single source of truth for the void-fill method: the README's provenance
   // reads this back off the result, so it can't drift from what actually ran.
-  const interpolation: 'idw' | 'geodesic' = LIVE_INTERPOLATION;
+  const interpolation: 'idw' | 'geodesic' = params.interpolation ?? LIVE_INTERPOLATION;
   let dtm = built.dtm;
   warnings.push(...dtm.warnings);
 
