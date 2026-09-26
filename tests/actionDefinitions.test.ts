@@ -35,6 +35,7 @@
  *    registry, so an inert entry is still a visible, dead command).
  */
 
+import { runSceneTool, type SceneTool } from '../src/app/toggleTool';
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 
 // The presentation collaborators are replaced so the handlers can be checked
@@ -257,6 +258,13 @@ function harness(opts: { getViewer?: () => FakeViewer } = {}): Harness {
     syncLassoButton: self.syncLassoButton,
     runDeriveClassification: self.runDeriveClassification,
     runFillUnclassified: self.runFillUnclassified,
+    // The shell's scene-tool command, as main.ts wires it.
+    runTool: (tool: SceneTool) => runSceneTool({
+      viewer: () => deps.getViewer() as never,
+      workflow: { capture: self.capture as never },
+      toggleClip: () => true,
+      openPage: () => undefined,
+    }, tool),
     buildCurrentStoryInputs: () => storyInputs,
     startWorkflowRecording: self.startWorkflowRecording,
     dispatchWorkflowEvent: self.dispatchWorkflowEvent,

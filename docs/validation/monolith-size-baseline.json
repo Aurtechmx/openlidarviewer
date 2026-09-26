@@ -1,7 +1,7 @@
 {
   "files": {
     "src/main.ts": {
-      "lines": 4851,
+      "lines": 4692,
       "goal": 2500
     },
     "src/render/Viewer.ts": {
@@ -20,7 +20,7 @@
       "lines": 2414
     },
     "src/ui/MeasurePanel.ts": {
-      "lines": 2214
+      "lines": 2240
     },
     "src/render/measure/profilePdf.ts": {
       "lines": 1928
@@ -29,7 +29,7 @@
       "lines": 1867
     },
     "src/terrain/contour/analyseContours.ts": {
-      "lines": 1729
+      "lines": 1736
     }
   }
 }

@@ -12,7 +12,7 @@ export function buildTestActionRegistry(): Action[] {
     getViewer: () => ({}) as never, getTour: () => null, workflowController: { capture: noop } as never, lassoVolumeTool: {} as never,
     compass: {} as never, bookmarks: {} as never, showLassoToast: noop, setTheme: noop, syncLassoButton: noop,
     runDeriveClassification: async () => undefined, saveSnapshot: noop, copyShareLink: noop, terrainAnalysisEntry: {} as never,
-    runFillUnclassified: async () => undefined, toggleClip: noop, buildCurrentStoryInputs: () => ({}) as never, startWorkflowRecording: noop,
+    runFillUnclassified: async () => undefined, runTool: noop, buildCurrentStoryInputs: () => ({}) as never, startWorkflowRecording: noop,
     dispatchWorkflowEvent: noop, ensureWorkflowConfigPanel: async () => ({}) as never, ensureShortcutSheet: async () => ({}) as never,
     hasScan: () => false, saveCurrentView: noop, applyView: noop, toggleOrbitInvert: noop, resetNavigation: noop,
     planView: { togglePlanView: noop, notePlanViewPreset: noop },

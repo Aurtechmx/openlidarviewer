@@ -46,14 +46,29 @@ export class FakeEl {
   }
   /** This node's OWN text, with no descendant text mixed in. */
   get ownText(): string { return this._text; }
-  append(...kids: FakeEl[]): void {
-    for (const k of kids) { k.parent = this; this.children.push(k); }
+  /** Inline style; only `display` is read (a panel hidden by its owner). */
+  readonly style: { display: string } = { display: '' };
+  hidden = false;
+  tabIndex = 0;
+  /** Detach from the current parent first, as the DOM does on a move. */
+  private _detach(): void {
+    const p = this.parent;
+    if (!p) return;
+    const i = p.children.indexOf(this);
+    if (i >= 0) p.children.splice(i, 1);
+    this.parent = null;
   }
+  append(...kids: FakeEl[]): void {
+    for (const k of kids) { k._detach(); k.parent = this; this.children.push(k); }
+  }
+  get firstChild(): FakeEl | null { return this.children[0] ?? null; }
   replaceChildren(...kids: FakeEl[]): void {
+    for (const c of this.children) c.parent = null;
     this.children.length = 0;
     this.append(...kids);
   }
   insertBefore(node: FakeEl, ref: FakeEl | null): void {
+    node._detach();
     node.parent = this;
     const i = ref ? this.children.indexOf(ref) : -1;
     if (i < 0) this.children.push(node);
@@ -65,6 +80,11 @@ export class FakeEl {
     const attr = /^\[([^=\]]+)="([^"]+)"\]$/.exec(sel);
     if (attr) return this.attrs[attr[1]] === attr[2];
     return false;
+  }
+  /** Minimal `querySelector`: only `button:not([disabled])`, depth first. */
+  querySelector(sel: string): FakeEl | null {
+    if (sel !== 'button:not([disabled])') return null;
+    return this.find((e) => e !== this && e.tagName === 'button' && !e.disabled) ?? null;
   }
   /** Minimal `closest`: walks up parents matching `.class` or `[attr="v"]`. */
   closest(sel: string): FakeEl | null {

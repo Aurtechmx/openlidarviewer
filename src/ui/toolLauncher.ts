@@ -55,6 +55,12 @@ export interface ToolLauncherDeps {
    * gate, the way the tool dock's `setEnabled` does.
    */
   disabledReason?: () => string | null;
+  /**
+   * Reopen a tool that is already on instead of switching it off. Returns true
+   * when it handled the row. The launcher is the Tools home, so a row there is
+   * a way back into a running tool; the palette and keys keep their toggle.
+   */
+  resume?: (actionId: string) => boolean;
 }
 
 export interface ToolLauncher {
@@ -102,7 +108,7 @@ export function createToolLauncher(deps: ToolLauncherDeps): ToolLauncher {
       button.disabled = true;
       button.title = reason;
     } else {
-      const fn = (): void => action.run();
+      const fn = (): void => { if (!deps.resume?.(action.id)) action.run(); };
       button.addEventListener('click', fn);
       bound.push({ node: button, fn });
     }

@@ -1,8 +1,8 @@
 /**
  * desktopWorkspace.test.ts
  *
- * The desktop left-rail workspace shell: a four-way Data · Work · Analyse ·
- * Output tablist over four mode-host slots the host re-parents panels into.
+ * The desktop left-rail workspace shell: a four-way Data · Tools · Analyse ·
+ * Export tablist over four mode-host slots the host re-parents panels into.
  * Runs in the node environment through the same recording DOM stub the other
  * UI tests use, asserting on state, ARIA, node identity and persistence rather
  * than pixels.
@@ -36,7 +36,7 @@ describe('DesktopWorkspace', () => {
     expect(root.id).toBe('olv-left-panels');
   });
 
-  it('renders a three-tab tablist over three mode panels wired by aria-controls', async () => {
+  it('renders a four-tab tablist over four mode panels wired by aria-controls', async () => {
     const { root } = await make();
     const tabs = root.findAll((e) => e.attrs['role'] === 'tab');
     expect(tabs.map((t) => t.dataset.mode)).toEqual(['data', 'work', 'analyse', 'output']);

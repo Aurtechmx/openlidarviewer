@@ -1,8 +1,8 @@
 /**
  * The Tools tab answers its own question: the launcher card lists the tools
  * with their keys and says what the session holds, before any tool has run.
- * Clicking Measure runs the registry action, the Measurements panel mounts,
- * and the card folds to its strip so the working panel keeps the column.
+ * Clicking Measure runs the registry action and opens the Measure page: the
+ * Measurements panel alone under a task header, the launcher out of the way.
  * Runs on the deterministic project against the committed multi-chunk LAZ.
  */
 import { test, expect } from '@playwright/test';
@@ -17,7 +17,7 @@ test.describe('tools launcher', () => {
   // test gets, so the budget follows the decode.
   test.slow();
 
-  test('lists the tools, the counts, and folds to its strip once Measure is up', async ({ page }) => {
+  test('lists the tools and the counts, then Measure replaces the card with its page', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('.olv-empty-title')).toBeVisible();
     await page.locator('.olv-file-input').first().setInputFiles(FIXTURE);
@@ -35,7 +35,7 @@ test.describe('tools launcher', () => {
 
     await rows.nth(0).click();
     await expect(page.locator('.olv-measure-panel')).toBeVisible();
-    await expect(card).toHaveClass(/is-strip/);
-    await expect(card.locator('.olv-tl-chip')).toHaveCount(4);
+    await expect(card).toBeHidden();
+    await expect(page.locator('#olv-ws-mode-work .olv-ws-task-title')).toHaveText('Measure');
   });
 });

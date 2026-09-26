@@ -75,7 +75,9 @@ export function measureKeyAction(
   drafting: boolean,
 ): MeasureKeyAction | null {
   if (isEditableTarget(e.target ?? null)) return null;
-  if (e.key === 'Enter') return 'finish';
+  // With nothing drafted there is nothing to finish, so Enter stays with the
+  // focused control (the rail's Back button, a launcher row).
+  if (e.key === 'Enter') return drafting ? 'finish' : null;
   if (e.key === 'Backspace') return 'undo';
   const chord = (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey;
   if (chord && (e.key === 'z' || e.key === 'Z')) return drafting ? 'undo' : null;
