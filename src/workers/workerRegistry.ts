@@ -89,6 +89,12 @@ export const WORKER_REGISTRY: readonly WorkerDeclaration[] = [
     pinClientChunk: true,
   },
   {
+    id: 'formatProbe',
+    workerModule: 'src/io/probe/formatProbeWorker.ts',
+    workerChunk: 'formatProbeWorker',
+    clientModule: 'src/io/probe/formatProbeWorkerClient.ts',
+  },
+  {
     id: 'localOocIndexer',
     workerModule: 'src/io/heavy/worker/localOocIndexerWorker.ts',
     workerChunk: 'localOocIndexerWorker',

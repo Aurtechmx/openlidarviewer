@@ -21,6 +21,9 @@ export class DropZone {
   private readonly _bar: HTMLElement;
   private readonly _barFill: HTMLElement;
   private readonly _cancel: HTMLButtonElement;
+  /** Copies the open failure report; shown only with an error that has one. */
+  private readonly _copy: HTMLButtonElement;
+  private _report = '';
   /** Visually-hidden polite live region — mirrors progress / preload text. */
   private readonly _srStatus: HTMLElement;
   /** Visually-hidden assertive live region — mirrors error text. */
@@ -51,6 +54,19 @@ export class DropZone {
     this._cancel.classList.add('olv-hidden');
     this._cancel.addEventListener('click', () => this._onCancel?.());
 
+    this._copy = el('button', {
+      className: 'olv-toast-cancel olv-hidden',
+      text: 'Copy report',
+      tip: 'Copy what was found in this file as plain text: size, content type and format evidence. No file name, path or coordinates.',
+    });
+    this._copy.type = 'button';
+    this._copy.addEventListener('click', () => {
+      navigator.clipboard.writeText(this._report).then(
+        () => { this._copy.textContent = 'Report copied'; },
+        () => { this._copy.textContent = 'Copy blocked by the browser'; },
+      );
+    });
+
     this._barFill = el('span', { className: 'olv-toast-bar-fill' });
     this._bar = el('div', { className: 'olv-toast-bar olv-hidden' }, [this._barFill]);
 
@@ -58,6 +74,7 @@ export class DropZone {
       el('span', { className: 'olv-toast-dot' }),
       this._text,
       this._cancel,
+      this._copy,
     ]);
     // Visibility is driven by .olv-hidden so theming + reduced-motion
     // overrides hit the toast the same way they hit every other surface.
@@ -124,6 +141,7 @@ export class DropZone {
 
   /** Cancel a pending error auto-hide so it cannot hide a newer toast state. */
   private _clearHideTimer(): void {
+    this._copy.classList.add('olv-hidden');
     if (this._hideTimer !== null) {
       window.clearTimeout(this._hideTimer);
       this._hideTimer = null;
@@ -207,9 +225,17 @@ export class DropZone {
     this._cancel.classList.toggle('olv-hidden', handler === null);
   }
 
-  /** Show an error message in the toast. Auto-hides after 6 s. */
-  setError(text: string): void {
+  /**
+   * Show an error message in the toast. Auto-hides after 6 s, or 20 s when a
+   * `report` is offered through the Copy report control.
+   */
+  setError(text: string, report?: string): void {
     this._clearHideTimer();
+    if (report) {
+      this._report = report;
+      this._copy.textContent = 'Copy report';
+      this._copy.classList.remove('olv-hidden');
+    }
     this._onCancel = null;
     this._cancel.classList.add('olv-hidden');
     this._bar.classList.add('olv-hidden');
@@ -226,6 +252,6 @@ export class DropZone {
       this._hideTimer = null;
       this.toast.classList.add('olv-hidden');
       this._srAlert.textContent = '';
-    }, 6000);
+    }, report ? 20000 : 6000);
   }
 }

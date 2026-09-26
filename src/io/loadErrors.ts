@@ -27,10 +27,17 @@ export type LoadErrorCategory =
 /** A load failure tagged with its category, so the UI can explain it clearly. */
 export class LoadError extends Error {
   readonly category: LoadErrorCategory;
-  constructor(category: LoadErrorCategory, message: string) {
+  /**
+   * A plain-text report the UI offers to copy (the open failure report for a
+   * file no format probe opens). When present, `message` is written for the
+   * user and is shown in place of the category message.
+   */
+  readonly report?: string;
+  constructor(category: LoadErrorCategory, message: string, report?: string) {
     super(message);
     this.name = 'LoadError';
     this.category = category;
+    if (report !== undefined) this.report = report;
   }
 }
 
@@ -99,7 +106,9 @@ export function classifyLoadError(message: string): LoadErrorCategory {
  * its message text. Never throws, and never returns an empty string.
  */
 export function describeLoadError(error: unknown): string {
-  if (error instanceof LoadError) return messageForCategory(error.category);
+  if (error instanceof LoadError) {
+    return error.report !== undefined ? error.message : messageForCategory(error.category);
+  }
   const message = error instanceof Error ? error.message : String(error);
   if (!message) return messageForCategory('decode-failure');
   return messageForCategory(classifyLoadError(message));

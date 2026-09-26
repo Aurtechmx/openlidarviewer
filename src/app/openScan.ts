@@ -22,7 +22,7 @@ import { isSessionFile } from '../io/sessionFile';
 import { scanFactsFromStatic } from './sessionScanFacts';
 import { detectCopc } from '../io/copc/copcDetect';
 import { formatProgress } from '../io/loadProgress';
-import { describeLoadError } from '../io/loadErrors';
+import { describeLoadError, LoadError } from '../io/loadErrors';
 import { LoadCancelledError } from '../io/loadFile';
 import { HEADER_PEEK_BYTES, openLocalHeavyLas, describeHeavyRefusal } from './openLocalHeavyLas';
 import type { OpenStreamingDeps } from './openStreaming';
@@ -374,7 +374,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       // The toast shows a clear, categorised message; the raw error still
       // reaches the console for developers under ?debug=1.
       if (deps.debug) console.error('OpenLiDARViewer — load error', err);
-      deps.dropZone.setError(describeLoadError(err));
+      deps.dropZone.setError(describeLoadError(err), err instanceof LoadError ? err.report : undefined);
       // Tidy a streaming scan that appeared during this open and no other. One
       // that was already on screen belongs to the project, not to the
       // candidate, and closing it would destroy working state for a file that
