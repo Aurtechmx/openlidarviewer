@@ -130,7 +130,7 @@ export default defineConfig({
         // Only Linux is switched: macOS and Windows produce a context in
         // headless mode already, and going headful there would just pop a
         // real window open on a developer's desktop for every test. CI
-        // wraps this leg in `xvfb-run` (see .github/workflows/browsers.yml),
+        // wraps this leg in `xvfb-run` (see .github/workflows/ci.yml),
         // which is what supplies the display.
         headless: process.platform !== 'linux',
         ...(FIREFOX_DISPLAY ? { launchOptions: { env: { ...process.env, DISPLAY: FIREFOX_DISPLAY } } } : {}),
