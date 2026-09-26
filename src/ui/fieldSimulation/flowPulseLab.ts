@@ -64,6 +64,7 @@ import type { HorizontalScale } from '../../simulation/flowPulse/dtmFlowGrid';
 import type { AnalyseContoursResult } from '../../terrain/contour/analyseContours';
 import { loadFlowPulsePackage, registerFlowOverlayInvalidator } from '../../lazyChunks';
 import { downloadBytes } from '../../io/download';
+import { publishLabRun } from '../../app/results/resultSignals';
 import type { buildFlowPulsePackage } from '../../export/flowPulsePackage';
 
 /** The analysed surface and the frame facts the Analyse panel holds for it. */
@@ -405,6 +406,8 @@ export function acquireFlowOverlay(
  * no-op.
  */
 export function disposePersistentFlowOverlay(): void {
+  // The terrain the last run read is gone, so the run is too.
+  publishLabRun('flow-pulse', null);
   if (!persistentFlowOverlay) return;
   persistentFlowOverlay.overlay.dispose();
   persistentFlowOverlay = null;
@@ -438,6 +441,9 @@ function mountFlowPulseInteractive(
 
   let conditioning: FlowConditioning = FLOW_PULSE_DEFAULTS.conditioning;
   let outcome = initialOutcome;
+  // The Results shelf lists the latest successful run by reference.
+  const publish = (): void => { if (outcome.ok) publishLabRun('flow-pulse', { outcome, layerId: input.layerId, filename: input.filename }); };
+  publish();
   let mode: ClickMode = 'pulse';
   let busy = false;
   let overlayFrame: FlowOverlayFrame | null = null;
@@ -712,6 +718,7 @@ function mountFlowPulseInteractive(
     });
     try {
       outcome = runLabFlowPulse(input, conditioning);
+      publish();
       busy = false;
       renderReady();
       announce(outcome.ok ? 'Flow Pulse run complete.' : `Flow Pulse did not run: ${outcome.reason}`);

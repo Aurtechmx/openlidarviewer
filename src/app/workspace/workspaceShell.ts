@@ -32,7 +32,7 @@ import {
 import { createWorkspaceRouter, type WorkspacePage, type WorkspaceRouter } from './workspaceRouter';
 import { createAnalyseWorkspace, type AnalyseHostPanel, type AnalysePage, type AnalyseStudio } from './analyseWorkspace';
 import { createDataHome } from './dataHome';
-import { mountResultsShelf, type ResultsShelfSources } from '../results/resultsShelfMount';
+import { mountResultsShelf, type ResultsShelfSources, type ShelfExportPanel, type ShelfTerrainPanel } from '../results/resultsShelfMount';
 
 /** The scene tools that open a page in the Tools mode. */
 export type ToolPage = 'measure' | 'annotate' | 'clip';
@@ -65,12 +65,12 @@ export interface WorkspaceShellDeps {
   showObjects: () => Promise<unknown>;
   /** Run a command-palette action by id. */
   runAction: (id: string) => void;
-  export: HTMLElement;
+  export: ShelfExportPanel;
   measureHint: HTMLElement;
   dock: HTMLElement;
   /** Overlay layers that paint above the rails, appended in this order. */
   overlayTail: readonly HTMLElement[];
-  analysePanel: () => (Panel & AnalyseHostPanel) | null;
+  analysePanel: () => (Panel & AnalyseHostPanel & ShelfTerrainPanel) | null;
   objectPanel: () => Panel | null;
   measurePanel: () => Panel | null;
   setMeasureMountElement: (fn: (el: HTMLElement) => void) => void;
@@ -180,11 +180,11 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     toolLauncher: d.toolLauncher,
     clip: d.clip,
     analyseHome: analyse.home,
-    export: d.export,
+    export: d.export.element,
   };
   workspace.layoutDesktop(workspacePanels);
   placeAnalyse();
-  d.export.classList.remove('olv-collapsed'); // one mode at a time, from first build
+  d.export.element.classList.remove('olv-collapsed'); // one mode at a time, from first build
   d.overlay.append(leftPanels);
   d.addTeardown(() => workspace.dispose());
   // Wheel ownership: a wheel over a panel scrolls the panel and never reaches
@@ -240,7 +240,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     if (sheet.getActive() !== 'view') sheet.select(sheetTabForMode(workspace.getMode()));
     d.analysePanel()?.element.classList.remove('olv-collapsed');
     if (shelf) sheet.slot('data').prepend(shelf.element); // the Results row leads the Data tab
-    d.export.classList.remove('olv-collapsed');
+    d.export.element.classList.remove('olv-collapsed');
     // The now-empty left column would still capture touches over its band.
     leftPanels.classList.add('olv-hidden');
     d.inspector.sheetToggle.classList.add('olv-hidden');
@@ -248,7 +248,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   };
   const toDesktopLayout = (): void => {
     d.analysePanel()?.element.classList.remove('olv-collapsed');
-    d.export.classList.remove('olv-collapsed');
+    d.export.element.classList.remove('olv-collapsed');
     for (const m of modes) wsBody.append(workspace.mode(m));
     leftPanels.classList.remove('olv-hidden');
     d.inspector.sheetToggle.classList.remove('olv-hidden');
@@ -260,7 +260,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   // Results shelf: the rail's footer on desktop, a row atop the phone sheet's
   // Data tab. Placed by the two layout functions above. A route change selects
   // the matching sheet tab through the mode change.
-  const shelf = d.results ? mountResultsShelf(d.results, (route) => router?.navigate(route)) : null;
+  const shelf = d.results ? mountResultsShelf(d.results, d.analysePanel, d.export, (route) => router?.navigate(route)) : null;
   if (shelf) { leftPanels.append(shelf.element); d.addTeardown(() => shelf.dispose()); }
 
   let mobileApplied = false;
@@ -320,6 +320,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
       el.classList.remove('olv-collapsed'); // constructs collapsed; hides its action
       workspace.mountInMode('analyse', el);
       placeAnalyse();
+      shelf?.refresh(); // the index subscribes to the new panel's result signal
     },
     mountObjectPanel: (el) => {
       workspace.mountInMode('analyse', el);

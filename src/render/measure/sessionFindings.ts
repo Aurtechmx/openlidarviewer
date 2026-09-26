@@ -33,6 +33,19 @@ export class SessionFindings {
    * `null` means "no findings yet"; the first `add` claims the ledger.
    */
   private _ownerId: string | null = null;
+  private readonly _listeners = new Set<() => void>();
+
+  /** Told after every change to the ledger. Returns an unsubscribe. */
+  subscribe(fn: () => void): () => void {
+    this._listeners.add(fn);
+    return () => { this._listeners.delete(fn); };
+  }
+
+  private _changed(): void {
+    for (const fn of [...this._listeners]) {
+      try { fn(); } catch { /* a reader never breaks the ledger */ }
+    }
+  }
 
   /** The scan this ledger belongs to, or null while it is empty. */
   get ownerId(): string | null {
@@ -52,11 +65,13 @@ export class SessionFindings {
     const dropped = this._findings.length;
     this._findings.length = 0;
     this._ownerId = targetId;
+    this._changed();
     return dropped;
   }
 
   add(finding: ReportFinding): void {
     this._findings.push(finding);
+    this._changed();
   }
 
   get all(): ReadonlyArray<ReportFinding> {
@@ -69,17 +84,23 @@ export class SessionFindings {
 
   /** Drop the most recent finding (e.g. the user discarded a measurement). */
   pop(): ReportFinding | undefined {
-    return this._findings.pop();
+    const f = this._findings.pop();
+    if (f) this._changed();
+    return f;
   }
 
   /** Drop the finding at `index` (a row the reviewer removed). No-op if out of range. */
   remove(index: number): void {
-    if (index >= 0 && index < this._findings.length) this._findings.splice(index, 1);
+    if (index >= 0 && index < this._findings.length) {
+      this._findings.splice(index, 1);
+      this._changed();
+    }
   }
 
   clear(): void {
     this._findings.length = 0;
     this._ownerId = null;
+    this._changed();
   }
 }
 

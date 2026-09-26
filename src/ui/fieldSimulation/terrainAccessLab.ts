@@ -68,6 +68,7 @@ import { loadTerrainAccessPackage, registerTerrainAccessOverlayInvalidator } fro
 import { downloadBytes } from '../../io/download';
 import type { buildTerrainAccessPackage } from '../../export/terrainAccessPackage';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
+import { publishLabRun } from '../../app/results/resultSignals';
 import type { SurfaceGrid } from '../../terrain/surface/buildDsm';
 
 /** The analysed surface and the frame facts a Terrain Access run needs. */
@@ -494,6 +495,8 @@ export function acquireTerrainAccessOverlay(
  * Idempotent: a second call with nothing to dispose is a no-op.
  */
 export function disposePersistentTerrainAccessOverlay(): void {
+  // The terrain the last route read is gone, so the route is too.
+  publishLabRun('terrain-access', null);
   if (!persistentTerrainAccessOverlay) return;
   persistentTerrainAccessOverlay.overlay.dispose();
   persistentTerrainAccessOverlay = null;
@@ -688,6 +691,8 @@ function mountTerrainAccessInteractive(input: TerrainAccessLabInput | null): { e
       outcome = runLabTerrainAccess(input, profile, startIndex, endIndex);
       busy = false;
       if (outcome.ok) {
+        // The Results shelf lists the latest route by reference.
+        publishLabRun('terrain-access', { outcome, layerId: input?.layerId ?? null, filename: input?.filename ?? null });
         grid.setRouteMask(maskFromIndices(readyPreview.grid.cols * readyPreview.grid.rows, outcome.path));
         if (overlay && overlayFrame) overlay.setRoute(buildTerrainAccessRouteBuffers(readyPreview.grid, outcome.path, overlayFrame));
         announce('Terrain Access route found.');

@@ -5,41 +5,61 @@
  * Part of the lazy workspace shell chunk; `main.ts` passes the owners and
  * nothing else.
  *
- * Refresh signals: the shell calls `refresh()` when a measurement changes and
- * when the mode changes. The Analyse panel and the contour service have no
- * change signal of their own, so a slow re-read (every 2 s while the page is
- * visible) picks up a finished analysis or a closed scan. The re-read only
- * lists ids and titles; it never touches a result's data.
+ * Refresh signals, no polling: the Analyse panel's result signal, the terrain
+ * runner's derived-layer signal, the Export panel's findings signal and the
+ * shared registry in `resultSignals.ts` (Observatory runner, lab runs) push
+ * into the index. Measurements reach it through the shell's `sync()`, which
+ * the host already calls on every measurement change and mode change.
  */
 
 import type { WorkspaceRoute } from '../workspace/workspaceRouter';
 import {
+  cachedDtmAim,
   contourSource,
   createResultsIndex,
+  findingsSource,
   measurementSource,
+  signalSources,
   terrainSource,
   type ContourReader,
+  type FindingsReader,
   type MeasurementReader,
+  type ResultExportProduct,
   type ResultsIndex,
   type TerrainReader,
 } from './resultsIndex';
 import { createResultsShelf, type ResultsShelf } from './resultsShelf';
+import { labRun, observatoryRunnerView, subscribeResultSignals } from './resultSignals';
 
 type Pose = { position: [number, number, number]; target: [number, number, number] };
 
+/** The Analyse panel's read side plus its own export hand-off. */
+export interface ShelfTerrainPanel extends TerrainReader {
+  exportProduct(kind: 'dem' | 'contours'): boolean;
+}
+
+/** The Export panel's read side plus its product selection. */
+export interface ShelfExportPanel extends FindingsReader {
+  readonly element: HTMLElement;
+  select(product: ResultExportProduct): boolean;
+  setTerrainExports(t: { ready(): boolean; run(kind: 'dem' | 'contours'): void } | null): void;
+}
+
+/** What the host hands the shell for the shelf: the owners, by reference. */
 export interface ResultsShelfSources {
   readonly viewer: {
+    readonly measure: MeasurementReader;
     clouds(): string[];
     getCloud(id: string): { readonly name: string } | undefined;
     getCameraPose(): Pose;
     applyCameraPose(pose: Pose): void;
   };
-  measure(): MeasurementReader | null;
-  terrain(): TerrainReader | null;
-  contours(): ContourReader | null;
-  activeLayerId(): string | null;
   /** Viewer id to stable layer id, for measurement owners. */
-  readonly layerIdentity: { stableIdFor(viewerId: string): string | null | undefined };
+  readonly identity: { stableIdFor(viewerId: string): string | null | undefined };
+  /** The active layer, read only; the shelf never sets it. */
+  readonly scans: { activeExportTargetId(): string | null };
+  /** The terrain runner: its contour layers and their change signal. */
+  readonly terrainRunner: ContourReader;
 }
 
 export interface MountedResultsShelf extends ResultsShelf {
@@ -47,48 +67,83 @@ export interface MountedResultsShelf extends ResultsShelf {
   refresh(): void;
 }
 
-/** A pose that looks at `anchor` from the current viewing offset. */
-export function poseAt(current: Pose, anchor: readonly [number, number, number]): Pose {
-  const off = [0, 1, 2].map((i) => current.position[i]! - current.target[i]!);
+/**
+ * A pose that looks at `anchor`. With `fit`, the camera backs off along its
+ * current direction until a sphere of that radius fills about the view;
+ * without, it keeps the current viewing distance.
+ */
+export function poseAt(current: Pose, anchor: readonly [number, number, number], fit: number | null = null): Pose {
+  let off = [0, 1, 2].map((i) => current.position[i]! - current.target[i]!);
+  if (fit != null && fit > 0) {
+    const len = Math.hypot(off[0]!, off[1]!, off[2]!) || 1;
+    const want = fit * 2.4;
+    off = off.map((v) => (v / len) * want);
+  }
   return {
     target: [anchor[0], anchor[1], anchor[2]],
     position: [anchor[0] + off[0]!, anchor[1] + off[1]!, anchor[2] + off[2]!],
   };
 }
 
-const REREAD_MS = 2000;
-
 export function mountResultsShelf(
-  src: ResultsShelfSources,
+  host: ResultsShelfSources,
+  analysePanel: () => ShelfTerrainPanel | null,
+  exportPanel: ShelfExportPanel | null,
   navigate: (route: WorkspaceRoute) => void,
 ): MountedResultsShelf {
+  const src = {
+    viewer: host.viewer,
+    measure: () => host.viewer.measure,
+    terrain: analysePanel,
+    activeLayerId: () => host.scans.activeExportTargetId(),
+  };
+  const terrainAim = (): ReturnType<typeof cachedDtmAim> => {
+    const ref = src.terrain()?.resultRef();
+    return ref ? cachedDtmAim(ref.result.dtm, ref.sceneUpAxis) : null;
+  };
   const index = createResultsIndex([
     measurementSource(
       src.measure,
-      (stable) => src.viewer.clouds().find((id) => src.layerIdentity.stableIdFor(id) === stable) ?? null,
+      (stable) => src.viewer.clouds().find((id) => host.identity.stableIdFor(id) === stable) ?? null,
       src.activeLayerId,
     ),
     terrainSource(src.terrain),
-    contourSource(src.contours, () => src.viewer.clouds()),
+    contourSource(() => host.terrainRunner, () => src.viewer.clouds()),
+    signalSources({ observatory: observatoryRunnerView, lab: labRun, subscribe: subscribeResultSignals }, src.activeLayerId, terrainAim),
+    findingsSource(() => exportPanel),
   ]);
-  index.refresh();
+
+  // The Export mode's terrain lane runs the Analyse panel's own exports.
+  const terrainExports = {
+    ready: () => !!src.terrain()?.resultRef(),
+    run: (kind: 'dem' | 'contours') => { src.terrain()?.exportProduct(kind); },
+  };
+  exportPanel?.setTerrainExports(terrainExports);
+  let hadTerrain = terrainExports.ready();
+
   const shelf = createResultsShelf({
     index,
     navigate,
-    aim: (anchor) => src.viewer.applyCameraPose(poseAt(src.viewer.getCameraPose(), anchor)),
+    aim: (anchor, fit) => src.viewer.applyCameraPose(poseAt(src.viewer.getCameraPose(), anchor, fit)),
+    exportTo: (product) => {
+      navigate({ mode: 'output', page: null });
+      return !!product && !!exportPanel?.select(product);
+    },
     activeLayerId: src.activeLayerId,
     layerName: (id) => src.viewer.getCloud(id)?.name ?? null,
   });
+  const offIndex = index.subscribe(() => {
+    const has = terrainExports.ready();
+    if (has !== hadTerrain) { hadTerrain = has; exportPanel?.setTerrainExports(terrainExports); }
+  });
   const refresh = (): void => { index.refresh(); shelf.sync(); };
-  const timer = setInterval(() => {
-    if (typeof document === 'undefined' || document.visibilityState === 'visible') refresh();
-  }, REREAD_MS);
+  refresh();
   const toggle = shelf.element.querySelector('.olv-results-toggle');
   toggle?.addEventListener('click', refresh, { capture: true });
   return {
     ...shelf,
     index,
     refresh,
-    dispose: () => { clearInterval(timer); shelf.dispose(); },
+    dispose: () => { offIndex(); index.dispose(); exportPanel?.setTerrainExports(null); shelf.dispose(); },
   };
 }
