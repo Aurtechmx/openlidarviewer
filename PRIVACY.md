@@ -17,7 +17,9 @@ your use of it to the project or to anyone else.
 
 The app stores some data in your browser, on your device only:
 
-- session recovery data, so an interrupted session can be restored;
+- session recovery data, so an interrupted session can be restored. Entries
+  older than 7 days are deleted, and "Clear recovery data" in Help removes them
+  at once;
 - your preferences, such as theme, navigation and panel settings;
 - local usage counts, shown in the Session Stats panel and never sent anywhere
   (the `?notelemetry=1` URL flag turns them off);
