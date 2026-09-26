@@ -840,3 +840,8 @@ export const loadDeviceNotice = () => import('./render/deviceNotice');
  * findings reports) on the first measurement export.
  */
 export const loadMeasurementExportActions = () => import('./app/measurementExportActions');
+
+/** Session recovery journal: started after boot, off the index chunk. */
+export const loadRecovery = () => import('./app/recovery/recoveryController');
+/** The live-session JSON writer shared by Save session and the recovery journal. */
+export const loadSessionSnapshot = () => import('./app/sessionSnapshot');

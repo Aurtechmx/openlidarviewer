@@ -78,14 +78,14 @@ describe('the session manifest cannot embed a foreign or stale analysis', () => 
   });
 
   it('the session manifest reads the attributable accessor', () => {
-    // Anchor on the assignment, not on the first mention of the manifest
-    // builder — that one is the destructured serialize() parameter.
-    const at = MAIN.indexOf('const analysed =');
+    // The session writer (src/app/sessionSnapshot.ts) reads the analysis
+    // through the `analysedResult` dep that main.ts binds.
+    const at = MAIN.indexOf('analysedResult: () =>');
     expect(at, 'session manifest source not found').toBeGreaterThan(-1);
     const block = MAIN.slice(at, at + 160);
     expect(block).toMatch(/currentResultForProvenance\(\)/);
     // The display accessor must never be the one that feeds provenance.
-    expect(MAIN).not.toMatch(/const analysed = analysePanel\?\.currentResult\(\)/);
+    expect(MAIN).not.toMatch(/analysedResult: \(\) => analysePanel\?\.currentResult\(\)/);
   });
 
   it('the gate and the accessor share one breach computation', () => {
