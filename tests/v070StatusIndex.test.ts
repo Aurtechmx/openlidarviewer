@@ -16,7 +16,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { readCurrentStatus, renderStatus, staleSummaryRows } from '../scripts/gen-v070-status.mjs';
+import { readCurrentStatus, renderStatus, staleSummaryRows, staleTotals } from '../scripts/gen-v070-status.mjs';
 
 /** A ledger built from `[id, status, category]` accounts, in file order. */
 const ledgerOf = (...accounts: ReadonlyArray<readonly [string, string, string]>): string =>
@@ -121,5 +121,25 @@ describe('the summary table at the head of the ledger', () => {
       '| L01 | UI | DOC | med | OPEN | new | quoted from an earlier account |\n';
     const { latest } = readCurrentStatus(text);
     expect(staleSummaryRows(text, latest)).toEqual([]);
+  });
+});
+
+describe('the Totals block under the summary table', () => {
+  const row = (id: string, status: string) => `| ${id} | UI | TEST | low | ${status} | new | x. |`;
+  const table = [row('L01', 'OPEN'), row('L02', 'PARTIAL'), row('L03', 'PARTIAL')].join('\n');
+
+  it('agrees when every count matches the rows', () => {
+    const text = `${table}\n\n## Totals\n\n- OPEN: 1\n- PARTIAL: 2\n- total: 3\n\n### L01 · OPEN · UI\n`;
+    expect(staleTotals(text)).toEqual([]);
+  });
+
+  it('names a wrong count, a missing status and a wrong total', () => {
+    const text = `${table}\n\n## Totals\n\n- PARTIAL: 1\n- FIXED: 2\n- total: 4\n\n### L01 · OPEN · UI\n`;
+    expect(staleTotals(text)).toEqual([
+      { status: 'FIXED', stated: 2, rows: 0 },
+      { status: 'OPEN', stated: null, rows: 1 },
+      { status: 'PARTIAL', stated: 1, rows: 2 },
+      { status: 'total', stated: 4, rows: 3 },
+    ]);
   });
 });

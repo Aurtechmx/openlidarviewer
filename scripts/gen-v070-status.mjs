@@ -107,6 +107,34 @@ export function staleSummaryRows(text, latest) {
   return stale;
 }
 
+/**
+ * Lines of the ledger's hand-kept Totals block that disagree with the summary
+ * table above it. Each `- STATUS: n` must equal the table's row count for that
+ * status, every status in the table must have a line, and `- total` must equal
+ * the row count.
+ */
+export function staleTotals(text) {
+  const firstHeading = text.search(/^### L\d+\b/m);
+  const head = firstHeading === -1 ? text : text.slice(0, firstHeading);
+  const rows = new Map();
+  let n = 0;
+  for (const m of head.matchAll(SUMMARY_ROW)) {
+    rows.set(m[2], (rows.get(m[2]) ?? 0) + 1);
+    n += 1;
+  }
+  const block = head.slice(head.indexOf('## Totals'));
+  const stated = new Map();
+  for (const m of block.matchAll(/^- ([A-Za-z][A-Za-z ]*): (\d+)$/gm)) stated.set(m[1], Number(m[2]));
+  const wrong = [];
+  const keys = new Set([...rows.keys(), ...stated.keys()].filter((k) => k !== 'total'));
+  for (const k of [...keys].sort()) {
+    const want = rows.get(k) ?? 0;
+    if (stated.get(k) !== want) wrong.push({ status: k, stated: stated.get(k) ?? null, rows: want });
+  }
+  if (stated.get('total') !== n) wrong.push({ status: 'total', stated: stated.get('total') ?? null, rows: n });
+  return wrong;
+}
+
 /** The document, derived entirely from the ledger. */
 export function renderStatus({ latest, revisited }) {
   const ids = [...latest.keys()].sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
@@ -181,6 +209,17 @@ function main() {
       }
       console.error('');
       console.error('Update those rows in V070_IMPLEMENTATION_LEDGER.md to the latest account.');
+      process.exit(1);
+    }
+    const totals = staleTotals(readFileSync(LEDGER, 'utf8'));
+    if (totals.length > 0) {
+      console.error('lint:v070-status FAILED');
+      console.error('');
+      for (const { status, stated, rows } of totals) {
+        console.error(`  • Totals ${status}: the block reads ${stated ?? 'nothing'}; the summary table has ${rows}.`);
+      }
+      console.error('');
+      console.error('Update the Totals block in V070_IMPLEMENTATION_LEDGER.md to the summary table.');
       process.exit(1);
     }
     console.log(`lint:v070-status OK — ${latest.size} entries, current status derived from the ledger.`);

@@ -53,7 +53,7 @@ the two entries were renumbered when the branches were integrated.
 | L23 | SEMANTICS | TEST | high | FIXED | B23 | Classification flags were never decoded anywhere in the tree. |
 | L24 | EXPORT | READ | n/a | NOT REPRODUCIBLE | B24 | Extended writer suspected of clamping classification. |
 | L25 | EVIDENCE | TEST | high | SUPERSEDED | B25 | Adding any test turned the gate red, because the evidence lint compared published v0.6.9 documents against a changed machine state. |
-| L26 | SCIENTIFIC | READ | unmeasured | PARTIAL | B26 | Withheld points entered terrain, density and stockpile as ordinary returns. The terrain gather now leaves them out and the DTM records the outcome. |
+| L26 | SCIENTIFIC | READ | unmeasured | PARTIAL | B26 | Withheld points are left out of terrain, lasso stockpile volumes, profiles and density, each recording the count. The polygon Volume tool still reads them as ordinary returns. |
 | L27 | EVIDENCE | TEST | n/a | NOT REPRODUCIBLE | B27 | Scoping the evidence figure check to untagged versions. |
 | L28 | SEMANTICS | TEST | med | PARTIAL | B28 | Classification flags survived a load but not a derivation. |
 | L29 | STATE | TEST | high | FIXED | new | A failed candidate open closed a streaming scan that belonged to the project, not to the candidate. |
@@ -73,7 +73,7 @@ the two entries were renumbered when the branches were integrated.
 | L43 | STATE | TEST | high | FIXED | new | The streaming tidy-up predicted the attach with a flag, so a throw from the heavy bridge still closed an unrelated scan. |
 | L44 | LIFECYCLE | TEST | med | FIXED | new | NavBar disposed its teardown group before clearing its timer, and the group rethrows. |
 | L45 | ARCHITECTURE | TEST | high | FIXED | new | The standards lint skipped any directory whose path contained 'dist' and all of `docs/release`. |
-| L46 | PERFORMANCE | TEST | med | PARTIAL | new | Streaming node meshes disable frustum culling. The decision and its baseline exist; the renderer is not yet wired to them. |
+| L46 | PERFORMANCE | TEST | med | PARTIAL | new | Streaming nodes are culled to the camera frustum every rendered frame. No GPU frame-time record shows what the cull saves. |
 | L47 | UI | TEST | med | PARTIAL | new | Density point sizing was read as keying a 2D grid on (x, y). It keys on the cloud's two widest axes; a scene mixing orientations is the unmeasured residual. |
 | L48 | PERFORMANCE | TEST | med | FIXED | new | Render-memory telemetry counted position and colour only, so a classified cloud was reported at three quarters of what it used. |
 | L49 | PERFORMANCE | READ | med | MEASURED | new | Compact source attributes are uploaded as Float32: RGB, classification and intensity cost 14 bytes a point more than the source carries. Without a layout change only colour can shrink, by 8 bytes a point. |
@@ -81,10 +81,11 @@ the two entries were renumbered when the branches were integrated.
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 19
+- FIXED: 25
+- MEASURED: 1
 - NOT REPRODUCIBLE: 9
-- OPEN: 12
-- PARTIAL: 5
+- OPEN: 3
+- PARTIAL: 6
 - SUPERSEDED: 1
 - total: 49
 
@@ -6611,3 +6612,32 @@ reconstruction runs is labelled `reconstructed`, not stood down.
 titled "the suspension is named but not yet performed," and pins the absent
 import with a source-text assertion. L64 separately found
 `continuityCapabilities` itself never populated by `Viewer.exportImage`.
+
+### L26 · PARTIAL · SCIENTIFIC
+
+Points flagged Withheld are left out of every analysis this row names except
+one. The terrain gather skips them (`terrainStreamSample.ts:142`), and a
+static cloud whose flags were lost to the load-time voxel reduction is
+re-decoded at full resolution for the DTM (`terrainAnalysisRunner.ts:357-372`,
+called at `:823`) up to a 750 MiB source
+(`withheldAwareTerrainGather.ts:77`); a larger source falls back to the
+display gather and the DTM records the outcome as not recorded. Lasso
+stockpile volumes skip them (`lassoVolumeCompute.ts:142`). Profiles skip them
+in the profile series (`profileSampler.ts:127-133`) and the profile workbench
+section (`profileSectionExtract.ts:187`). The Scan Report's Density and
+Spacing count only points without the flag (`scanReport.ts:228-237`), as does
+the density figure on the Inspector card (`inspectorCardRefreshers.ts:299-308`).
+Each records points read, Withheld excluded and points analysed, and reads the
+excluded count as unknown when a source has no flags channel.
+
+The polygon Volume tool does not. `Viewer.ts:1164-1193` gathers every
+visible cloud's positions and passes them to `volumeCutFill` without reading
+`classificationFlags`, so a Withheld return inside a hand-drawn polygon counts
+toward cut and fill. Closing that needs the flags carried through
+`assembleVolumePositions`, a method version change for the point-sample
+volume, and the same read, excluded and analysed counts on its record.
+
+Covered by `tests/withheldTerrainGather.test.ts`,
+`tests/terrainRunnerWithheldRecovery.test.ts`,
+`tests/lassoVolumeWithheld.test.ts`, `tests/profileWithheld.test.ts` and
+`tests/scanReportWithheld.test.ts`.

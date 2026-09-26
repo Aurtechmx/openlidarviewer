@@ -46,3 +46,16 @@ export function staleSummaryRows(
   text: string,
   latest: ReadonlyMap<string, LedgerAccount>,
 ): StaleSummaryRow[];
+
+/** One Totals line that disagrees with the summary table. */
+export interface StaleTotal {
+  /** The status named on the line, or `total`. */
+  readonly status: string;
+  /** The count the Totals block states, or null when it has no line for it. */
+  readonly stated: number | null;
+  /** The count the summary table's rows give. */
+  readonly rows: number;
+}
+
+/** Totals lines that disagree with the summary table above the first entry heading. */
+export function staleTotals(text: string): StaleTotal[];
