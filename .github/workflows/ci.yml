@@ -153,6 +153,8 @@ jobs:
         run: npm run build:live && npm run check:bundle
       - name: No test seam in the shipped build
         run: npm run check:no-test-seam
+      - name: No maintainer URL flags in the shipped build
+        run: npm run check:no-dev-flags
 
   # Test buckets as a matrix: a failure points at one bucket, output stays
   # small, and the four shards run in parallel instead of one monolithic run.
