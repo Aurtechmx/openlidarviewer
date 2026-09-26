@@ -25,6 +25,7 @@ import { rgbAutoNormalize } from '../src/render/rgbAutoNormalize';
 import { compareGrids, type GridSpec } from '../src/validation/gridAgreement';
 import { checkpointAccuracy, type Checkpoint } from '../src/validation/checkpointAccuracy';
 import { formatMegabytes } from '../src/app/offlineCopy';
+import { formatBytesIn } from '../src/io/formatByteSize';
 import {
   quantile,
   quantileSorted,
@@ -279,6 +280,17 @@ describe('consolidation: each site now calls a named variant identical to its le
       for (let pct = 0; pct <= 100; pct += 0.5) {
         expect(floorRankIndex(n, pct / 100)).toBe(legacy.elevationIdx(n, pct));
       }
+    }
+  });
+});
+
+describe('formatBytesIn matches the inline byte strings it replaced', () => {
+  it('decimal and binary fixed units', () => {
+    for (const b of [0, 1, 499, 500, 999, 1000, 54_321, 999_999, 1e6, 12_345_678, 7.25e9, 3.4e8, 32 * 1024 * 1024 + 1]) {
+      expect(formatBytesIn(b, 'MB')).toBe(`${(b / 1_000_000).toFixed(1)} MB`);
+      expect(formatBytesIn(b, 'kB')).toBe(`${(b / 1e3).toFixed(1)} kB`);
+      expect(formatBytesIn(b, 'MiB', 0)).toBe(`${Math.round(b / (1024 * 1024))} MiB`);
+      expect(formatBytesIn(b, 'MiB', 2)).toBe(`${(b / (1024 * 1024)).toFixed(2)} MiB`);
     }
   });
 });

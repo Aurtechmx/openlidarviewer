@@ -25,6 +25,32 @@ export function formatByteSize(bytes: number): string {
   return `${Math.round(v)} B`;
 }
 
+/** A byte unit {@link formatBytesIn} can print: decimal (SI) or binary (IEC). */
+export type ByteUnit = 'kB' | 'MB' | 'GB' | 'KiB' | 'MiB' | 'GiB';
+
+const BYTES_PER_UNIT: Readonly<Record<ByteUnit, number>> = {
+  kB: 1e3,
+  MB: 1e6,
+  GB: 1e9,
+  KiB: 1024,
+  MiB: 1024 ** 2,
+  GiB: 1024 ** 3,
+};
+
+/**
+ * Render a byte count in ONE fixed unit, for readouts whose unit must not
+ * change with magnitude (a size limit quoted next to the file's size, a
+ * benchmark column). The unit name says the base: `MB` is 10^6 bytes, `MiB`
+ * is 2^20. `digits = 0` rounds half up, like `Math.round`.
+ *
+ *   formatBytesIn(12_345_678, 'MB')      → "12.3 MB"
+ *   formatBytesIn(40 * 2 ** 20, 'MiB', 0) → "40 MiB"
+ */
+export function formatBytesIn(bytes: number, unit: ByteUnit, digits = 1): string {
+  const v = bytes / BYTES_PER_UNIT[unit];
+  return `${digits === 0 ? Math.round(v) : v.toFixed(digits)} ${unit}`;
+}
+
 /**
  * Render an integer with thousands separators: 4_200_000 → "4,200,000". The
  * companion count formatter to {@link formatByteSize}, kept here so the overlay

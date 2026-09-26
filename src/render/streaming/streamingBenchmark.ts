@@ -14,6 +14,7 @@
  */
 
 import { quantileSorted } from '../../terrain/quantile';
+import { formatBytesIn } from '../../io/formatByteSize';
 
 /** Aggregate stats over a sample buffer — what we care about for tick / decode / frame times. */
 export interface AggregateStats {
@@ -452,7 +453,7 @@ export function formatStreamingBenchmark(result: StreamingBenchmarkResult): stri
   const lines: string[] = [];
   const ms = (v: number | undefined): string =>
     v === undefined ? '       —' : `${v.toFixed(1).padStart(8)} ms`;
-  const mb = (n: number): string => `${(n / (1024 * 1024)).toFixed(2)} MiB`;
+  const mb = (n: number): string => formatBytesIn(n, 'MiB', 2);
   const ag = (label: string, a: AggregateStats): void => {
     if (a.count === 0) {
       lines.push(`  ${label.padEnd(14)}       —`);

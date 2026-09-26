@@ -51,6 +51,7 @@ import {
   type StreamingScanSource,
   type StaticScanCloud,
 } from './sessionScanFacts';
+import { formatBytesIn } from '../io/formatByteSize';
 
 // Re-exported so `sessionIo`'s public API is unchanged — `openScan.ts` reads
 // `scanFactsFromStatic` off `./sessionScanFacts` directly (the hot scan-open path
@@ -178,8 +179,8 @@ export async function importSession(
     // counts, per-measurement points) bound the rest once the JSON is in hand.
     if (file.size > MAX_SESSION_BYTES) {
       throw new Error(
-        `This session file is too large (${Math.round(file.size / (1024 * 1024))} MiB; ` +
-          `limit ${Math.round(MAX_SESSION_BYTES / (1024 * 1024))} MiB).`,
+        `This session file is too large (${formatBytesIn(file.size, 'MiB', 0)}; ` +
+          `limit ${formatBytesIn(MAX_SESSION_BYTES, 'MiB', 0)}).`,
       );
     }
     // The session path's imports are light (no three.js), so a session restore
