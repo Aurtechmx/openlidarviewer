@@ -185,7 +185,12 @@ export function installTipLayer(doc: Document): void {
     if (Math.hypot(pe.clientX - pressAt.x, pe.clientY - pressAt.y) > LONG_PRESS_SLOP) cancelPress();
   });
   doc.addEventListener('pointerup', cancelPress);
-  doc.addEventListener('pointercancel', cancelPress);
+  doc.addEventListener('pointercancel', () => {
+    cancelPress();
+    swallowClick = false;
+  });
+  // A keyboard activation is never the tail of the long press.
+  doc.addEventListener('keydown', () => { swallowClick = false; }, true);
   doc.addEventListener('click', (event) => {
     if (!swallowClick) return;
     swallowClick = false;
