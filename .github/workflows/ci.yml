@@ -376,20 +376,14 @@ jobs:
       # the `firefox` project in playwright.config.ts for the measurements.
       # xvfb itself already comes from `--with-deps` (Playwright's shared tools
       # list installs it), so nothing extra is needed to get the binary.
-      # Fail fast, and fail legibly. Without this the leg's failure mode is 111
-      # timeouts across 40 minutes, every one of them downstream of a missing
-      # WebGL context and none of them saying so. `glxinfo` answers before
-      # Playwright starts; the preflight spec answers before the suite does.
-      # A missing software renderer fails the job. Without it Firefox has no
-      # WebGL 2 context and the suite would only time out, so the step stops
-      # here with an error that names the cause.
+      # A missing software renderer fails the job before Playwright starts.
+      # Without it Firefox has no WebGL 2 context and the suite would only
+      # time out, so this step stops the job with an error that names the
+      # cause. The preflight spec then checks the context before the suite runs.
       - name: Verify the runner has a software OpenGL renderer
         run: |
-          # `|| true` on both probes is load-bearing: GitHub runs `run:` steps with
-          # `bash -eo pipefail`, so a failing apt-get or a glxinfo that cannot make a
-          # GL context (the exact absent-renderer case this detection exists for)
-          # would ABORT the step and paint the job red before the branch below runs.
-          # Suppress those exits so the grep is always what decides present/absent.
+          # `|| true` on both probes keeps `bash -eo pipefail` from ending the
+          # step early, so the grep below decides the result and prints the error.
           sudo apt-get install -y --no-install-recommends mesa-utils || true
           xvfb-run -a glxinfo -B > /tmp/glxinfo.txt 2>&1 || true
           if grep -Eiq "llvmpipe|softpipe|software rasterizer" /tmp/glxinfo.txt; then
