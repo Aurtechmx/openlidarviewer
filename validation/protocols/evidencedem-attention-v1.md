@@ -42,7 +42,10 @@ Each input is normalised to a score between 0 and 1, clipped at both ends.
 
 R = 0.30 m. When the vertical unit is feet, R is 0.30 m expressed in feet.
 When the vertical unit is unresolved, R has no value in the file's unit, so
-`MODEL_SENSITIVITY` and `RECONSTRUCTION_RESIDUAL` are not scored.
+`MODEL_SENSITIVITY` and `RECONSTRUCTION_RESIDUAL` are not scored. The three
+inputs that need no vertical unit (`LONG_INTERPOLATION`, `LOW_SUPPORT`,
+`EDGE_AFFECTED`) are scored as usual, and the passport and README state
+`vertical inputs not scored: vertical unit unresolved`.
 
 `TERRAIN_COMPLEXITY` and `CLASSIFICATION_AMBIGUITY` are not scored in v1.
 
@@ -65,9 +68,27 @@ this order: `LONG_INTERPOLATION`, `LOW_SUPPORT`, `EDGE_AFFECTED`,
 `MODEL_SENSITIVITY`, `RECONSTRUCTION_RESIDUAL`, `TERRAIN_COMPLEXITY`,
 `CLASSIFICATION_AMBIGUITY`, `UNRESOLVED`.
 
-A cell at level 0 has no dominant reason, except on a package whose vertical
-unit or CRS is unresolved, where a level 0 cell carries `UNRESOLVED`: the
-vertical inputs could not be scored there.
+A cell at level 0 has no dominant reason (code 0). Level 0 means that no
+scored input reached its reference. It does not mean the surface there is
+verified.
+
+## Codes
+
+| Code | Band 2 `dominant_reason` |
+| --- | --- |
+| 0 | none (level 0) |
+| 1 | `LONG_INTERPOLATION` |
+| 2 | `LOW_SUPPORT` |
+| 3 | `EDGE_AFFECTED` |
+| 4 | `MODEL_SENSITIVITY` |
+| 5 | `RECONSTRUCTION_RESIDUAL` |
+| 6 | `TERRAIN_COMPLEXITY` (reserved, not scored) |
+| 7 | `CLASSIFICATION_AMBIGUITY` (reserved, not scored) |
+| 8 | `UNRESOLVED` (reserved, not written in v1) |
+| 255 | NoData |
+
+This table is part of the method version of `olv.terrain.evidence.attention`.
+Any change to it is a new method version.
 
 ## Evidence tiers
 
@@ -81,7 +102,9 @@ actually computed.
 | T2 | T1 and the terrain evidence raster |
 | T3 | T2, the sensitivity raster and the attention raster with the residual |
 
-The sensitivity raster is off by default, so a default export is T2. T3 is
+The sensitivity raster is off by default, so a default export is T2. When
+the vertical unit is unresolved the tier is at most T2, because the
+sensitivity and residual inputs were not scored. T3 is
 reached only when the sensitivity raster was requested. The passport then
 states how many ensemble members produced a grid different from the
 canonical run, because a member can repeat the canonical run (see
@@ -90,3 +113,16 @@ stronger test than was run.
 
 T4 (independent checkpoints) is not reachable from the point cloud and is not
 part of this record.
+
+## Default and cost rule
+
+The attention raster is on by default only when its added cost is at most 10%
+of the DEM package export time, measured on OLV-DS-090 (Jemez River Basin
+snow-off tile `ot_356000_3972000_1.laz`) before merging. Otherwise it is
+written only on request. The measurement is recorded below.
+
+## Method ids
+
+The sensitivity raster's method id is `olv.terrain.evidence.sensitivity`, the
+id the specification names. It replaces `olv.terrain.sensitivity.ensemble`
+before any release shipped the old id.
