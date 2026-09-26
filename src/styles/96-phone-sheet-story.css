@@ -90,13 +90,8 @@
     cursor: pointer;
     transition: background 160ms ease, color 160ms ease;
   }
-  /* Touch target vs. visual height. The strip was deliberately slimmed to a
-     32 px chip so the collapsed chrome stays thin, which is below the 44 pt
-     guidance. Padding cannot buy the difference back: the tab's height is what
-     the strip's height IS, so padding would just push the chrome taller again.
-     An overlay pseudo-element does: it enlarges the hit area to 40 px around
-     the chip's centre line and costs zero layout height. 40, not 44, so a few
-     pixels of head remain as drag surface for the sheet gesture. */
+  /* The tab is a full 44 px touch target (--m-tab-h). The overlay keeps the
+     hit area on the tab's centre line at the same size. */
   .olv-msheet-tab::after {
     content: "";
     position: absolute;
@@ -425,4 +420,11 @@
   .olv-mobile-sheet .olv-ws-back,
   .olv-mobile-sheet .olv-tl-row { min-height: 44px; }
   .olv-mobile-sheet .olv-ws-back { padding-inline: var(--space-sm); }
+  /* An open sheet fills the lower screen, so a toast parked above the dock
+     would sit on its content. Move it to the top edge, over the scene and the
+     header, clear of the sheet body. */
+  body:has(.olv-mobile-sheet:not(.is-collapsed):not(.olv-hidden)) .olv-lasso-toast {
+    top: calc(env(safe-area-inset-top) + var(--space-xs));
+    bottom: auto;
+  }
 }
