@@ -457,6 +457,14 @@
       "graduation": "Reachable when a coordinator (O9) adds a called `lazyChunks.ts` loader and mounts it on a real resident cloud.",
       "review": "2027-03-31",
       "declaredIn": "docs/observatory/SPEC.md"
+    },
+    {
+      "path": "src/io/probe/recover/recoverPointRecords.ts",
+      "status": "staged",
+      "why": "Phase C of the open-any-point-cloud intake: recovery of headerless fixed-record binary and delimited text point records from files phase A reports as OPAQUE. It is held out of the application because it did not pass the pre-registered held-out evaluation in validation/intake-corpus/criteria.json; the recorded outcome is under validation/intake-corpus/results/. Nothing offers a recovered preview.",
+      "graduation": "A recovery revision passes all three criteria on a newly registered held-out split (the current one is spent), and the phase A open failure report offers the preview through the probe worker.",
+      "review": "2027-03-31",
+      "declaredIn": "validation/intake-corpus/protocol.md"
     }
   ]
 }
