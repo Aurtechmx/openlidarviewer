@@ -164,6 +164,13 @@ export interface DemPackageOptions {
    * no sensitivity raster. The caller runs the ensemble; this only writes it.
    */
   readonly sensitivityGrids?: readonly SensitivityMemberGrid[] | null;
+  /**
+   * Write the attention raster (demAttention.ts) beside the evidence raster.
+   * Off by default: on OLV-DS-090 it added 37.5% to the package export time,
+   * above the 10% the cost rule in
+   * validation/protocols/evidencedem-attention-v1.md allows for a default.
+   */
+  readonly attention?: boolean;
 }
 
 /**
@@ -677,12 +684,13 @@ export function buildDemPackage(
 
   // Terrain attention raster: where to inspect first, with one reason per
   // cell, from the evidence inputs, the reconstruction residual and (when
-  // requested) the sensitivity range. Written with the evidence raster.
+  // requested) the sensitivity range. Written only on request, and only
+  // beside the evidence raster.
   const attentionName = `${basename}_attention.tif`;
   let attentionBytes: Uint8Array | null = null;
   let residual: ReturnType<typeof reconstructionResidual> | null = null;
   const vRef = evVUnit === 'unknown' ? null : verticalReferenceInUnit(evFactor);
-  if (evidenceBytes && hasEvidenceArrays(dtm)) {
+  if (evidenceBytes && hasEvidenceArrays(dtm) && options.attention === true) {
     const hFactor = options.linearUnit === 'foot' ? UNIT_FACTORS.M_PER_FT
       : options.linearUnit === 'us-survey-foot' ? UNIT_FACTORS.M_PER_US_FT : 1;
     const lat = isGeographic ? yll + (dtm.rows * cellSize) / 2 : 0;
@@ -706,7 +714,6 @@ export function buildDemPackage(
       residual: residual.residual,
       sensitivityRange: sens,
       verticalReference: vRef,
-      frameResolved: evFrameResolved,
     });
     attentionBytes = writeTerrainAttentionGeoTiff(bands, dtm, {
       xllCorner: xll,
@@ -724,6 +731,7 @@ export function buildDemPackage(
       evidence: evidenceBytes != null,
       sensitivity: sensitivityBytes != null,
       attention: attentionBytes != null,
+      verticalResolved: vRef != null,
     }),
     residual: attentionBytes ? residual : null,
     verticalReference: vRef,

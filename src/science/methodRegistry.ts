@@ -197,8 +197,8 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     category: 'dtm',
     implementation: ['src/terrain/export/demEvidence.ts', 'src/terrain/ground/rasterizeDtm.ts'],
   },
-  'olv.terrain.sensitivity.ensemble': {
-    id: 'olv.terrain.sensitivity.ensemble',
+  'olv.terrain.evidence.sensitivity': {
+    id: 'olv.terrain.evidence.sensitivity',
     version: 1,
     name: 'DTM model sensitivity raster (terrain sensitivity)',
     summary:
@@ -235,7 +235,8 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'low support, edge affected, model sensitivity and reconstruction residual are ' +
       'each normalised to 0 to 1 by a fixed rule; the level is the highest score ' +
       'banded at 0.33, 0.67 and 1, and the reason is the input that set it. No ' +
-      'weighted blend. Describes where to look, not accuracy.',
+      'weighted blend. Written only on request. The reason code table is part of ' +
+      'this version. Describes where to look, not accuracy.',
     citation: 'Internal composition (rules recorded in validation/protocols/evidencedem-attention-v1.md); no single source method.',
     category: 'dtm',
     implementation: ['src/terrain/export/demAttention.ts'],
