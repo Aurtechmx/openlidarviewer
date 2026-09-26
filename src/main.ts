@@ -40,7 +40,7 @@ import type { ShortcutSheet } from './ui/ShortcutSheet';
 import type { TourHandle } from './ui/onboarding/bootTour';
 import { createTourLauncher } from './app/tourLauncher';
 import { findDuplicateIds, type Action } from './ui/actionRegistry';
-import { toggleTool } from './app/toggleTool';
+import { runSceneTool, type SceneTool } from './app/toggleTool';
 import type { SessionIoDeps } from './app/sessionIo';
 import type { SessionSnapshotDeps } from './app/sessionSnapshot';
 import { openScan, type OpenScanDeps } from './app/openScan';
@@ -1225,6 +1225,7 @@ const crsCoordinator = createCrsCoordinator({
 // the badge is mounted, and the shortcut / palette entries registered, only
 // when the flag is on.
 const workflowController = new WorkflowController();
+function runTool(tool: SceneTool): void { /* the one scene-tool command: dock, key, palette, launcher */ runSceneTool({ viewer: () => viewer, workflow: workflowController, toggleClip: () => clipPanel.toggleEnabled(), openPage: () => showWorkspaceMode?.('work') }, tool); }
 if (WORKFLOW_RECORDER_ENABLED) {
   // The recorder badge is always present when enabled; the heavier settings
   // popup is lazy-loaded on first open (v0.5.2 — keeps it out of the eager
@@ -1618,7 +1619,7 @@ function ensureActionRegistry(): Promise<Action[]> {
   syncLassoButton,
   runDeriveClassification,
   runFillUnclassified,
-  toggleClip: () => clipPanel.toggleEnabled(),
+  runTool,
   buildCurrentStoryInputs,
   startWorkflowRecording,
   dispatchWorkflowEvent,
@@ -1741,10 +1742,10 @@ const dock = new ToolDock({
   onFrameAll: () => viewer.frameAll(),
   onSnapshot: () => void saveSnapshot(),
   onShare: () => void copyShareLink(),
-  onMeasureToggle: () => { if (toggleTool(viewer, workflowController, 'measure')) showWorkspaceMode?.('work'); },
-  onInspectToggle: () => { toggleTool(viewer, workflowController, 'inspect'); },
+  onMeasureToggle: () => { runTool('measure'); },
+  onInspectToggle: () => { runTool('inspect'); },
   onProbeToggle: () => viewer.setProbeMode(!viewer.probeMode),
-  onAnnotateToggle: () => { if (toggleTool(viewer, workflowController, 'annotate')) showWorkspaceMode?.('work'); },
+  onAnnotateToggle: () => { runTool('annotate'); },
   onAnalyseToggle: () => {
     // Re-open (or hide) the terrain analysis panel; opening takes over from an
     // Object panel that demoted it. Lazy-mount aware: the panel may not exist
@@ -2886,9 +2887,8 @@ const routeCoordinator = createScanRouteCoordinator({
 // lifecycle (reveal / reset) re-evaluate whether the phone sheet should show,
 // without main.ts holding a direct reference to the sheet instance.
 let syncMobileSheet: (() => void) | null = null;
-// Presentation-only bridge: a tool activation (Measure/Annotate/Analyse) reveals
-// its workspace mode. Set once the lazy workspace exists; the tool callbacks stay
-// authoritative — this only changes which mode is shown, never tool behaviour.
+// Presentation-only bridge, set once the lazy workspace exists: runTool and Analyse
+// reveal their workspace mode. It changes which mode is shown, never a tool.
 let showWorkspaceMode: ((mode: WorkspaceMode) => void) | null = null;
 
 // Set once the desktop left-panel column (and mobile sheet) are built (full app
@@ -3442,9 +3442,9 @@ void viewerLoaded.then(() => {
     // is inert behind the help modal.
     const toolsReady = (): boolean => hasScan() && !helpOverlay.isOpen();
     globalActionHandlers = {
-      onAnnotate: () => { if (toolsReady()) toggleTool(viewer, workflowController, 'annotate'); },
-      onMeasure: () => { if (toolsReady()) toggleTool(viewer, workflowController, 'measure'); },
-      onInspect: () => { if (toolsReady()) toggleTool(viewer, workflowController, 'inspect'); },
+      onAnnotate: () => { if (toolsReady()) runTool('annotate'); },
+      onMeasure: () => { if (toolsReady()) runTool('measure'); },
+      onInspect: () => { if (toolsReady()) runTool('inspect'); },
       onSaveView: () => {
         if (toolsReady()) saveCurrentView();
       },

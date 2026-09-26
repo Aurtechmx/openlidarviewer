@@ -130,10 +130,16 @@ export class ClipPanel {
    * Tools launcher's Clip row runs this, so there is one write path and the
    * checkbox, the clip state and the viewer can never disagree.
    */
-  toggleEnabled(): void {
+  toggleEnabled(): boolean {
     this._enabled = !this._enabled;
     this._enableBox.checked = this._enabled;
     this._apply();
+    return this._enabled;
+  }
+
+  /** Whether the clip box is on. */
+  get enabled(): boolean {
+    return this._enabled;
   }
 
   setVisible(on: boolean): void {
