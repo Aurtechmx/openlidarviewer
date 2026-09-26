@@ -1,4 +1,5 @@
 import { test, expect, type Browser, type Page } from '@playwright/test';
+import { reloadSettled } from './helpers';
 
 /**
  * v0.4.3 Theme system — Dark / Light / High-contrast.
@@ -152,7 +153,7 @@ test.describe('persistence — theme survives a page reload', () => {
     await toggle.click(); // light → high-contrast
     expect(await activeIconTheme(page)).toBe('high-contrast');
 
-    await page.reload();
+    await reloadSettled(page);
     await expect(page.locator('.olv-theme-toggle')).toBeVisible();
 
     expect(await activeIconTheme(page)).toBe('high-contrast');
@@ -165,7 +166,7 @@ test.describe('persistence — theme survives a page reload', () => {
     const { page, dispose } = await newCleanPage(browser);
     await page.locator('.olv-theme-toggle').click(); // dark → light
 
-    await page.reload();
+    await reloadSettled(page);
     await expect(page.locator('.olv-theme-toggle')).toBeVisible();
 
     expect(await activeIconTheme(page)).toBe('light');

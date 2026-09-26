@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropDenseGridPly, dropTinyPly } from './helpers';
+import { dropDenseGridPly, dropTinyPly, gotoSettled, reloadSettled } from './helpers';
 
 /**
  * Session recovery: work journaled to IndexedDB survives a reload and is
@@ -53,7 +53,7 @@ async function openTiny(page: Page): Promise<void> {
 
 /** Open tiny.ply, place one distance, move the camera, and wait for the journal write. */
 async function journalWork(page: Page): Promise<Pose> {
-  await page.goto('/?test=1');
+  await gotoSettled(page, '/?test=1');
   await openTiny(page);
   await page.locator('.olv-tool', { hasText: 'Measure' }).click();
   await placeDistance(page);
@@ -71,7 +71,7 @@ async function journalWork(page: Page): Promise<Pose> {
 
 test('reload, reopen the same file, restore: measurement and camera come back', async ({ page }) => {
   const saved = await journalWork(page);
-  await page.reload();
+  await reloadSettled(page);
   const notice = page.locator('.olv-recovery-notice');
   await expect(notice).toContainText('Unsaved work found');
   await expect(notice).toContainText('1 measurement on tiny.ply');
@@ -94,7 +94,7 @@ test('reload, reopen the same file, restore: measurement and camera come back', 
 
 test('reopening a different file offers no restore', async ({ page }) => {
   await journalWork(page);
-  await page.reload();
+  await reloadSettled(page);
   const notice = page.locator('.olv-recovery-notice');
   await expect(notice).toContainText('Unsaved work found');
   await dropDenseGridPly(page);
@@ -123,19 +123,19 @@ test('an entry older than seven days is deleted and not offered; Clear removes t
         };
       }),
   );
-  await page.reload();
+  await reloadSettled(page);
   await expect.poll(() => journal(page), { timeout: 10_000 }).toEqual([]);
   await expect(page.locator('.olv-recovery-notice')).toHaveCount(0);
 
   // Fresh work, then Clear from the notice.
   await journalWork(page);
-  await page.reload();
+  await reloadSettled(page);
   const notice = page.locator('.olv-recovery-notice');
   await expect(notice).toContainText('Unsaved work found');
   await notice.getByRole('button', { name: 'Clear', exact: true }).click();
   await expect(notice).toContainText('Recovery data in this browser was deleted.');
   await expect.poll(() => journal(page)).toEqual([]);
-  await page.reload();
+  await reloadSettled(page);
   await page.waitForTimeout(1500);
   await expect(page.locator('.olv-recovery-notice')).toHaveCount(0);
 });

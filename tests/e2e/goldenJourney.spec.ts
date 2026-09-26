@@ -3,6 +3,7 @@ import { readFileSync, statSync } from 'node:fs';
 import {
   dropTerrainAccessUtmLas, firePaletteAction, openAnalysePanel, openToolPage, showWorkspaceMode,
   type MeasureTestApi,
+  reloadSettled,
 } from './helpers';
 import { isBenignPageError } from './pageErrors';
 
@@ -189,7 +190,7 @@ test.describe('golden journey', () => {
     expect(sessionText).toContain('Golden journey note');
 
     // RELOAD → reopen the scan → IMPORT SESSION
-    await page.reload();
+    await reloadSettled(page);
     await expect(page.locator('.olv-empty')).toBeVisible();
     await openFixture(page);
     await showWorkspaceMode(page, 'work');

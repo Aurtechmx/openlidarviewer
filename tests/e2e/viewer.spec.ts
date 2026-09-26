@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dropTinyPly } from './helpers';
+import { dropTinyPly, reloadSettled } from './helpers';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -149,7 +149,7 @@ test('remembers a settings change across a page reload', async ({ page }) => {
   );
 
   // Reload the page and open a scan again — the choice should have survived.
-  await page.reload();
+  await reloadSettled(page);
   await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await openRendering();
