@@ -1,0 +1,13 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`map sheet PDF scale follows the CRS linear unit > golden scale ratios per linear unit 1`] = `
+{
+  "foot": "1:16,364",
+  "metre": "1:53,686",
+  "usft": "1:16,364",
+}
+`;
+
+exports[`space report PDF dimensions match the floor-plan panel > imperial: PDF "W … x D …" equals the panel's "Overall … x …" 1`] = `"W 45.9 ft (14.0 m) x D 95.1 ft (29.0 m)"`;
+
+exports[`space report PDF dimensions match the floor-plan panel > metric: PDF "W … x D …" equals the panel's "Overall … x …" 1`] = `"W 14.0 m (45.9 ft) x D 29.0 m (95.1 ft)"`;
