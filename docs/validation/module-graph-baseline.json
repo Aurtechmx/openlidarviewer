@@ -458,16 +458,24 @@
         "importers": 70
       },
       {
+        "file": "src/units/units.ts",
+        "importers": 31
+      },
+      {
         "file": "src/lazyChunks.ts",
         "importers": 30
       },
       {
-        "file": "src/units/units.ts",
-        "importers": 26
-      },
-      {
         "file": "src/io/loadErrors.ts",
         "importers": 24
+      },
+      {
+        "file": "src/terrain/quantile.ts",
+        "importers": 22
+      },
+      {
+        "file": "src/io/formatByteSize.ts",
+        "importers": 20
       },
       {
         "file": "src/ui/Modal.ts",
@@ -502,15 +510,7 @@
         "importers": 14
       },
       {
-        "file": "src/numeric.ts",
-        "importers": 14
-      },
-      {
         "file": "src/render/colorModes.ts",
-        "importers": 14
-      },
-      {
-        "file": "src/terrain/ground/cellConfidence.ts",
         "importers": 14
       }
     ],
