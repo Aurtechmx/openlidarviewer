@@ -4,53 +4,10 @@
  */
 
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { Inspector, type InspectorCallbacks } from '../src/ui/Inspector';
-import { FakeEl, installFakeDom } from './support/measurePanelDom';
+import { Inspector } from '../src/ui/Inspector';
+import { installInspectorFakeDom, fakeCallbacks } from './helpers/inspectorLazyHarness';
 
-beforeAll(() => {
-  installFakeDom();
-  const g = globalThis as unknown as Record<string, unknown>;
-  (g.document as Record<string, unknown>).createElementNS = (_ns: string, tag: string): FakeEl =>
-    new FakeEl(tag);
-  g.window = {
-    setTimeout,
-    clearTimeout,
-    localStorage: undefined,
-    confirm: () => true,
-  };
-  g.HTMLSelectElement = class {};
-  g.HTMLTextAreaElement = class {};
-});
-
-/** Every required InspectorCallbacks member, as a no-op — only onToggleLock is read. */
-function fakeCallbacks(): InspectorCallbacks {
-  const noop = (): void => {};
-  return {
-    onColorMode: noop,
-    onHeightPercentileTrim: noop,
-    onPointSize: noop,
-    onToggleVisible: noop,
-    onRemove: noop,
-    onToggleLock: vi.fn(),
-    onSaveView: noop,
-    onApplyView: noop,
-    onRenameView: noop,
-    onDeleteView: noop,
-    onEdlToggle: noop,
-    onEdlStrength: noop,
-    onPointSizeMode: noop,
-    onAntialiasing: noop,
-    onTwoFingerTwist: noop,
-    onNavigationPrefsChange: noop,
-    onRgbAppearancePreset: noop,
-    onEdlPreset: noop,
-    onSkyPreset: noop,
-    onWhiteBalance: noop,
-    onAutoBalance: noop,
-    onSplatMode: noop,
-    onTerrainWorkflowPreset: noop,
-  };
-}
+beforeAll(installInspectorFakeDom);
 
 describe('Inspector source summary signal', () => {
   it('reports format and CRS, and fires on layer add, CRS override and clear', () => {
