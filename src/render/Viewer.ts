@@ -92,7 +92,7 @@ import { type ClipBox, clipKeepsPoint, countKept } from './clip/clipBox';
 import { edlDefaultEnabled, EDL_DEFAULTS } from './edl';
 import { angularVelocity } from './angularVelocity';
 import { refinementDprTarget, shouldApplyDpr, DPR_MOTION_FLOOR } from './adaptiveDpr';
-import { createViewerRenderCore, currentPixelRatio, DEFAULT_FOV } from './viewerRenderBootstrap';
+import { createViewerRenderCore, currentPixelRatio, disposeViewerRenderCore, DEFAULT_FOV } from './viewerRenderBootstrap';
 import { RefinementPhaseTracker } from './refinementPhaseState';
 import { evaluateRefinementReadiness } from './streaming/refinementReadiness';
 import type { RefinementReadiness } from './streaming/refinementReadiness';
@@ -4853,10 +4853,7 @@ export class Viewer {
     this._annotate.dispose();
     this._probe.dispose();
     this._controls.dispose();
-    // Release the post-processing pipeline's render targets before the renderer.
-    this._post.dispose();
-    this._scenePass.dispose();
-    this._renderer.dispose();
+    disposeViewerRenderCore({ renderer: this._renderer, pipeline: this._post, scenePass: this._scenePass });
   }
 
   // ─────────────────────────────────────────────────────────────────────────

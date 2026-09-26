@@ -54,6 +54,21 @@ export interface ViewerRenderCore {
   readonly pipeline: THREE.RenderPipeline;
 }
 
+const releasedCores = new WeakSet<object>();
+
+/**
+ * Release what a render core owns: the post pipeline's targets, the scene
+ * pass, then the renderer. Runs once per renderer; a second call is a no-op.
+ * The scene and cameras hold no GPU resources of their own here.
+ */
+export function disposeViewerRenderCore(core: Pick<ViewerRenderCore, 'renderer' | 'pipeline' | 'scenePass'>): void {
+  if (releasedCores.has(core.renderer)) return;
+  releasedCores.add(core.renderer);
+  core.pipeline.dispose();
+  core.scenePass.dispose();
+  core.renderer.dispose();
+}
+
 /** The device pixel ratio the renderer should run at right now. */
 export function currentPixelRatio(): number {
   return effectivePixelRatio(typeof window !== 'undefined' ? window.devicePixelRatio : 1, maxPixelRatio());

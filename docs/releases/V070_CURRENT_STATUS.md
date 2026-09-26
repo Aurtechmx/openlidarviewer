@@ -15,14 +15,14 @@ Entries: 166. Revisited at least once: 25.
 
 | Status | Entries |
 | --- | --- |
-| FIXED | 54 |
+| FIXED | 56 |
 | BUILT | 40 |
 | PARTIAL | 34 |
 | MEASURED | 15 |
 | NOT REPRODUCIBLE | 10 |
 | DEFERRED | 6 |
-| OPEN | 3 |
 | REFUSED | 3 |
+| OPEN | 1 |
 | SUPERSEDED | 1 |
 
 ## Entries
@@ -37,8 +37,8 @@ Entries: 166. Revisited at least once: 25.
 | L06 | PARTIAL | SCIENTIFIC | 2 |
 | L07 | FIXED | SCIENTIFIC | 2 |
 | L08 | NOT REPRODUCIBLE | SCIENTIFIC | 2 |
-| L09 | OPEN | LIFECYCLE | 1 |
-| L10 | OPEN | LIFECYCLE | 1 |
+| L09 | FIXED | LIFECYCLE | 1 |
+| L10 | FIXED | LIFECYCLE | 1 |
 | L11 | FIXED | UI | 3 |
 | L12 | FIXED | UI | 3 |
 | L13 | OPEN | EVIDENCE | 5 |

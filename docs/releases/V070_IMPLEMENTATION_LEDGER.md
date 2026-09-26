@@ -36,8 +36,8 @@ the two entries were renumbered when the branches were integrated.
 | L06 | SCIENTIFIC | READ | med | PARTIAL | B06 | Two density figures on different bases. Each states its basis; neither is the other's source. |
 | L07 | SCIENTIFIC | TEST | high | FIXED | B07 | The boundary share counted a sampling gap as a survey edge, so it rose with the thinning rather than with the geometry. |
 | L08 | SCIENTIFIC | READ | n/a | NOT REPRODUCIBLE | B08 | PCA extent presented as minimum physical dimensions. |
-| L09 | LIFECYCLE | DOC | med | OPEN | B09 | `NavBar.dispose` has no caller. |
-| L10 | LIFECYCLE | DOC | med | OPEN | B10 | `ViewerRenderCore` has no dispose seam. |
+| L09 | LIFECYCLE | DOC | med | FIXED | B09 | The app lifetime owner now runs `NavBar.dispose` on teardown; `tests/navBarDisposal.test.ts` pins it. |
+| L10 | LIFECYCLE | DOC | med | FIXED | B10 | `disposeViewerRenderCore` releases pipeline, scene pass and renderer once; `Viewer.dispose` uses it; `tests/renderCoreDisposal.test.ts` pins it. |
 | L11 | UI | TEST | med | FIXED | B11 | Between 768 and 1000 px two open rails left no top-centre gap wider than the project card. The card now narrows to the band, with a 200 px floor. |
 | L12 | UI | TEST | med | FIXED | B12 | Pinch, rotate and two-finger gestures ran end to end on Chromium only. They now run on every engine, iPhone-shaped WebKit included, as synthesized events. |
 | L13 | EVIDENCE | DOC | med | OPEN | B13 | Firefox, WebKit and Windows are advisory; only Chromium blocks. |
@@ -139,13 +139,13 @@ PCA oriented bounding box overstates length on an elongated footprint. Labelled 
 
 Section 34 requires convex hull into minimum-area rectangle for physical extent. No test covers it yet.
 
-### L09 · OPEN · LIFECYCLE
+### L09 · FIXED · LIFECYCLE
 
 `NavBar.dispose` has no caller. Still no caller. Its teardown array is now a `DisposableGroup`.
 
 Section 53: a dispose method with no owner is a misleading contract. Covered by `tests/navBarDisposal.test.ts` covers the method, not its invocation.
 
-### L10 · OPEN · LIFECYCLE
+### L10 · FIXED · LIFECYCLE
 
 `ViewerRenderCore` has no dispose seam. Unchanged.
 
