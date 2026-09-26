@@ -1,0 +1,26 @@
+{
+  "schema": "olv.intake-corpus.criteria/1",
+  "status": "pre-registered",
+  "registeredOn": "2026-09-25",
+  "registeredBefore": "Any generic fixed-record or text recovery code exists in the repository. This file is committed on its own, ahead of the corpus generator and of any recovery implementation.",
+  "frozen": true,
+  "changePolicy": "The thresholds, definitions and evaluation split below may not be changed after any result on the held-out split has been seen. A change made before that point needs its own commit that states the reason. A change made after it voids the evaluation; a new held-out split with new seeds must then be generated and registered before the next measurement.",
+  "scope": "Phase C of the open-any-point-cloud intake: generic recovery of headerless fixed-record binary point streams and delimited text point lists, shown to the user as a preview only.",
+  "evaluationSplit": "heldout",
+  "tuningSplit": "tuning",
+  "splitRule": "Recovery code may be developed and tuned against the tuning split only. The held-out split is run once per candidate release of the recovery code, and its per-sample outcomes are recorded in full.",
+  "definitions": {
+    "offered": "The recovery returns a layout and a point set that the application would show to the user as a point cloud preview. Abstaining (no offer) is always allowed and is never counted as a false positive.",
+    "falsePositive": "An offer made on a sample whose manifest label is negative.",
+    "layoutExact": "An offer on a positive sample whose layout equals the manifest truth in every field: kind, header byte count, record stride, byte order, and for each coordinate its byte offset, numeric type and scale and offset (text: delimiter, header line count and coordinate column indices). Extra attribute fields the recovery chooses not to decode do not count against it.",
+    "coordinateError": "For an offered positive, the largest absolute difference between a recovered coordinate and the truth coordinate, over all points and all three axes, divided by max(1, the largest absolute truth coordinate value in the sample). The recovered point count must equal the truth point count; a count mismatch counts as a failed coordinate check."
+  },
+  "thresholds": {
+    "negativeFalsePositiveRateMax": 0.01,
+    "positiveLayoutExactRateMin": 0.90,
+    "offeredCoordinateRelativeErrorMax": 1e-6
+  },
+  "decisionRule": "Recovery may be shown to users only when all three hold on the held-out split: (1) false positives divided by held-out negatives is at most 0.01; (2) layout-exact offers divided by held-out positives is at least 0.90, where abstentions count as not exact; (3) every offer on a held-out positive has coordinate error at most 1e-6. Failing any one blocks release of the preview.",
+  "minimumHeldOutSize": { "positives": 100, "negatives": 100 },
+  "reporting": "Report counts and rates for each threshold, the list of every false positive with its sample id, and every positive where an offer failed the coordinate check. Do not report only aggregates."
+}
