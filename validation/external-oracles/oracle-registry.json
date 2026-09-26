@@ -520,7 +520,7 @@
     {
       "oracleId": "olv-terrain-evidence-geotiff-py",
       "name": "Terrain evidence GeoTIFF reader (evidence_geotiff.py)",
-      "version": "1",
+      "version": "2",
       "executables": [
         "validation/terrain-evidence/oracle/evidence_geotiff.py"
       ],
@@ -540,10 +540,11 @@
       "sourceRevision": null,
       "independenceNotes": [
         "Parses the written file from the TIFF 6.0, OGC GeoTIFF 1.1, GDAL_METADATA and GDAL_NODATA layouts with struct and xml.etree; it imports no viewer code and does not reuse src/terrain/export/demGeoTiff.ts.",
-        "Recomputes interpolation distance as the Chebyshev distance to the nearest cell with support_count > 0 and checks the measured and edge-risk cell_state rules from the raster alone. Not external validation: the rules come from this project's own documents, so a shared misreading would survive agreement."
+        "Recomputes interpolation distance as the Chebyshev distance and nearest-support distance as the brute-force Euclidean distance to the nearest cell with support_count > 0, the survey-edge distance by its own breadth-first search, and vertical dispersion as the median absolute deviation of the fixture's listed returns; checks the measured, edge-risk and edge-affected cell_state rules. Not external validation: the rules come from this project's own documents, so a shared misreading would survive agreement."
       ],
       "limitations": [
-        "Checks one synthetic 12 x 10 fixture (validation/terrain-evidence/fixture), not a raster from a real scan.",
+        "Checks one synthetic 12 x 10 fixture (validation/terrain-evidence/fixture), not a raster from a real scan; the fixture has a resolved frame, so cell_state 6 (unresolved) is checked only by tests/demEvidence.test.ts.",
+        "Vertical dispersion is recomputed from the returns listed in expected.json, which the TypeScript test writes from the same generator that feeds the rasteriser; the oracle does not see the point cloud.",
         "The distance recomputation assumes an open grid, where 8-connected steps equal the Chebyshev distance; it does not model obstacles.",
         "Says nothing about the accuracy of any height, and does not check the low-confidence rule, which depends on the confidence grid the raster does not carry."
       ]

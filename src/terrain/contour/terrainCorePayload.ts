@@ -16,8 +16,12 @@
  */
 import type { TerrainCore } from './analyseContours';
 
-/** Bumped when the layout or the markers change so older payloads miss. */
-export const TERRAIN_CORE_PAYLOAD_VERSION = 1;
+/**
+ * Bumped when the layout, the markers or the core's fields change so older
+ * payloads miss. 2: the DTM grid carries verticalDispersion (terrain evidence
+ * band 5); a version-1 core lacks it and would export that band as NoData.
+ */
+export const TERRAIN_CORE_PAYLOAD_VERSION = 2;
 
 type GridKind = 'f32' | 'f64' | 'u8' | 'u8c' | 'u16' | 'u32' | 'i8' | 'i16' | 'i32';
 

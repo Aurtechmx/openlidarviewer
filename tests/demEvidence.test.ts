@@ -17,8 +17,13 @@ import { buildDemPackage } from '../src/terrain/export/demPackage';
 import {
   terrainEvidenceBands,
   writeTerrainEvidenceGeoTiff,
+  squaredDistanceToSeeds,
   TERRAIN_EVIDENCE_BANDS,
+  EVIDENCE_STATE_CODE,
+  EVIDENCE_STATE_PARAMS,
 } from '../src/terrain/export/demEvidence';
+import { rasterizeDtm } from '../src/terrain/ground/rasterizeDtm';
+import { computeCellMetrics } from '../src/terrain/quality/cellMetrics';
 import { buildContourDeliverableFromResult } from '../src/terrain/export/contourDeliverableBuild';
 import { buildDtmGrid, type DtmGrid } from '../src/terrain/ground/cellConfidence';
 import { classifyCellStatus, CELL_STATUS_CODE } from '../src/terrain/quality/dtmCellStatus';
@@ -84,32 +89,59 @@ function decodeFloatBands(bytes: Uint8Array): { cols: number; rows: number; band
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 
+/** Offsets (exact in binary) of the six returns in a full cell, scaled per cell. */
+const RETURN_OFFSETS = [-0.375, -0.125, 0, 0.0625, 0.25, 0.5];
+
 /**
- * A 12 x 10 grid: measured everywhere except a 6 x 4 interior hole (filled,
- * reaching edge risk at its centre), a thin-count strip (low confidence nearby)
- * and a cut-off corner far from data that the fill leaves empty.
+ * Ground returns for a 12 x 10 grid of 2 m cells: measured everywhere except
+ * an interior hole (filled, reaching edge risk inside it, with a centre too
+ * far from data that the fill leaves empty), and a one-return column (low
+ * confidence nearby, and no dispersion). Grid order, row 0 = south.
  */
-function evidenceGrid(): DtmGrid {
+function evidenceReturns(): { cols: number; rows: number; perCell: number[][] } {
   const cols = 12;
   const rows = 10;
-  const n = cols * rows;
-  const z = new Float32Array(n);
-  const counts = new Uint32Array(n);
+  const perCell: number[][] = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      const i = r * cols + c;
       const hole = c >= 3 && c <= 10 && r >= 2 && r <= 8;
-      counts[i] = hole ? 0 : (c === 0 ? 1 : 6);
-      z[i] = hole ? Number.NaN : 100 + 0.5 * c + 0.25 * r;
+      const base = 100 + 0.5 * c + 0.25 * r;
+      const scale = 1 + ((c + r) % 3);
+      if (hole) perCell.push([]);
+      else if (c === 0) perCell.push([base]);
+      else perCell.push(RETURN_OFFSETS.map((o) => base + o * scale));
     }
   }
-  let filled = 0;
-  for (const k of counts) if (k > 0) filled++;
+  return { cols, rows, perCell };
+}
+
+function evidenceGrid(): DtmGrid {
+  const { cols, rows, perCell } = evidenceReturns();
+  const points: Array<{ x: number; y: number; z: number }> = [];
+  perCell.forEach((zs, i) => {
+    const c = i % cols;
+    const r = (i - c) / cols;
+    for (const z of zs) points.push({ x: 10 + (c + 0.5) * 2, y: 20 + (r + 0.5) * 2, z });
+  });
+  const raster = rasterizeDtm(points, new Uint8Array(points.length).fill(1), {
+    grid: { originH1: 10, originH2: 20, cols, rows, cellSizeM: 2 },
+    aggregation: 'median',
+  });
   return buildDtmGrid(
-    { z, counts, cols, rows, cellSizeM: 2, originH1: 10, originH2: 20,
-      coverage: 'full', sourcePointCount: 600, analyzedPointCount: 600, filledCellCount: filled, warnings: [] },
+    raster,
     { crs: 'EPSG:32610', horizontalEpsg: 32610, verticalEpsg: 5703, verticalUnitToMetres: 1, maxInterpDistanceCells: 3 },
   );
+}
+
+/** Median absolute deviation, written out independently of the rasteriser. */
+function mad(values: number[]): number {
+  const med = (v: number[]): number => {
+    const s = [...v].sort((a, b) => a - b);
+    const h = (s.length - 1) / 2;
+    return s[Math.floor(h)] * 0.5 + s[Math.ceil(h)] * 0.5;
+  };
+  const m = med(values);
+  return med(values.map((v) => Math.abs(v - m)));
 }
 
 function resultFor(grid: DtmGrid): AnalyseContoursResult {
@@ -229,21 +261,25 @@ describe('terrain_evidence.tif in the DEM package', () => {
   const ev = extractEntry(zip, 'terrain_evidence.tif')!;
   const dtmTif = extractEntry(zip, 'terrain-dtm.tif')!;
 
-  it('the fixture exercises every cell state', () => {
+  it('the fixture exercises every cell state, and edge affected', () => {
     const states = new Set(classifyCellStatus(grid));
     for (const code of Object.values(CELL_STATUS_CODE)) expect(states.has(code), `state ${code}`).toBe(true);
+    const extended = new Set(terrainEvidenceBands(grid).cellState);
+    for (const code of [1, 2, 3, 4, 5]) expect(extended.has(code), `extended state ${code}`).toBe(true);
   });
 
-  it('is written with three Float32 bands named in GDAL_METADATA', () => {
+  it('is written with six Float32 bands named in GDAL_METADATA, ED-1 bands first', () => {
     expect(ev).not.toBeNull();
     const t = ifd(ev);
-    expect(tagValues(ev, t.get(277)!)).toEqual([3]);
-    expect(tagValues(ev, t.get(339)!)).toEqual([3, 3, 3]);
+    expect(tagValues(ev, t.get(277)!)).toEqual([6]);
+    expect(tagValues(ev, t.get(339)!)).toEqual([3, 3, 3, 3, 3, 3]);
+    expect(TERRAIN_EVIDENCE_BANDS.slice(0, 3)).toEqual(['support_count', 'interpolation_distance', 'cell_state']);
     const xml = tagText(ev, t.get(42112)!);
     TERRAIN_EVIDENCE_BANDS.forEach((name, i) => {
       expect(xml).toContain(`sample="${i}" role="description">${name}</Item>`);
     });
     expect(xml).toContain('sample="1" role="unittype">m</Item>');
+    expect(xml).toContain('sample="4" role="unittype">m</Item>');
   });
 
   it('shares the DTM grid, origin, cell size, CRS and NoData mask', () => {
@@ -260,18 +296,138 @@ describe('terrain_evidence.tif in the DEM package', () => {
     const dem = decodeFloatBands(dtmTif).bands[0];
     const bands = decodeFloatBands(ev).bands;
     for (let i = 0; i < dem.length; i++) {
-      for (const band of bands) expect(band[i] === -9999, `cell ${i}`).toBe(dem[i] === -9999);
+      // Band 5 is also NoData on a covered cell with fewer than two returns.
+      bands.forEach((band, b) => {
+        if (b === 4) { if (dem[i] === -9999) expect(band[i], `cell ${i}`).toBe(-9999); }
+        else expect(band[i] === -9999, `cell ${i} band ${b + 1}`).toBe(dem[i] === -9999);
+      });
     }
   });
 
-  it('band 1 is the ground-return count and band 3 the cell state code', () => {
+  it('band 1 is the ground-return count and band 3 the extended cell state code', () => {
     const [count, , state] = decodeFloatBands(ev).bands;
     const codes = classifyCellStatus(grid);
+    const edge = decodeFloatBands(ev).bands[5];
+    let affected = 0;
     for (let i = 0; i < grid.coverage.length; i++) {
       if (grid.coverage[i] === 0) continue;
       expect(count[i]).toBe(grid.counts[i]);
-      expect(state[i]).toBe(codes[i]);
+      const nearEdge = edge[i] <= EVIDENCE_STATE_PARAMS.edgeAffectedWithinCells * grid.cellSizeM;
+      const interp = codes[i] === CELL_STATUS_CODE.interpolated || codes[i] === CELL_STATUS_CODE.lowConfidence;
+      if (interp && nearEdge) {
+        expect(state[i]).toBe(EVIDENCE_STATE_CODE.edgeAffected);
+        affected++;
+      } else {
+        expect(state[i]).toBe(codes[i]);
+      }
     }
+    expect(affected).toBeGreaterThan(0);
+  });
+
+  it('band 4 is the straight-line distance to the nearest measured cell centre', () => {
+    const near = decodeFloatBands(ev).bands[3];
+    const { cols } = grid;
+    const measured: number[] = [];
+    grid.counts.forEach((k, i) => { if (k > 0) measured.push(i); });
+    for (let i = 0; i < grid.coverage.length; i++) {
+      if (grid.coverage[i] === 0) continue;
+      let best = Infinity;
+      for (const j of measured) {
+        const dx = (i % cols) - (j % cols);
+        const dy = Math.floor(i / cols) - Math.floor(j / cols);
+        best = Math.min(best, dx * dx + dy * dy);
+      }
+      expect(near[i]).toBe(Math.fround(Math.sqrt(best) * grid.cellSizeM));
+    }
+  });
+
+  it('the distance transform matches brute force on a scattered grid', () => {
+    const cols = 23;
+    const rows = 17;
+    const seed = new Uint8Array(cols * rows);
+    let x = 12345;
+    for (let i = 0; i < seed.length; i++) {
+      x = (x * 1103515245 + 12345) % 2147483648;
+      seed[i] = x % 11 === 0 ? 1 : 0;
+    }
+    const d2 = squaredDistanceToSeeds(seed, cols, rows);
+    for (let i = 0; i < seed.length; i++) {
+      let best = Infinity;
+      for (let j = 0; j < seed.length; j++) {
+        if (!seed[j]) continue;
+        const dx = (i % cols) - (j % cols);
+        const dy = Math.floor(i / cols) - Math.floor(j / cols);
+        best = Math.min(best, dx * dx + dy * dy);
+      }
+      expect(d2[i]).toBe(best);
+    }
+    expect(Array.from(squaredDistanceToSeeds(new Uint8Array(6), 3, 2))).toEqual(new Array(6).fill(Infinity));
+  });
+
+  it('band 5 is the median absolute deviation of the returns, NoData under two', () => {
+    const disp = decodeFloatBands(ev).bands[4];
+    const { perCell } = evidenceReturns();
+    let written = 0;
+    for (let i = 0; i < grid.coverage.length; i++) {
+      if (grid.coverage[i] === 0) continue;
+      if (perCell[i].length < 2) expect(disp[i]).toBe(-9999);
+      else {
+        expect(disp[i]).toBe(Math.fround(mad(perCell[i])));
+        written++;
+      }
+    }
+    expect(written).toBeGreaterThan(0);
+    expect(new Set(Array.from(disp).filter((v) => v !== -9999)).size).toBeGreaterThan(1);
+  });
+
+  it('band 5 is NoData everywhere when the aggregation kept no returns', () => {
+    const bare = { ...grid, verticalDispersion: undefined } as DtmGrid;
+    expect(Array.from(terrainEvidenceBands(bare).verticalDispersion).every(Number.isNaN)).toBe(true);
+  });
+
+  it('band 6 uses the boundary-share boundary', () => {
+    const edge = decodeFloatBands(ev).bands[5];
+    const metrics = computeCellMetrics(grid).metrics;
+    for (let i = 0; i < grid.coverage.length; i++) {
+      if (grid.coverage[i] !== 2) continue;
+      expect(edge[i]).toBe(Math.fround(metrics.edgeDistanceCells[i] * grid.cellSizeM));
+    }
+  });
+
+  it('marks every covered cell unresolved when the vertical unit is unresolved', () => {
+    const r = { ...resultFor(grid), verticalScaleResolved: false } as AnalyseContoursResult;
+    const z = buildDemPackage(r, PKG_OPTS);
+    const bands = decodeFloatBands(extractEntry(z, 'terrain_evidence.tif')!).bands;
+    for (let i = 0; i < grid.coverage.length; i++) {
+      expect(bands[2][i]).toBe(grid.coverage[i] === 0 ? -9999 : EVIDENCE_STATE_CODE.unresolved);
+    }
+    const t = ifd(extractEntry(z, 'terrain_evidence.tif')!);
+    expect(tagText(extractEntry(z, 'terrain_evidence.tif')!, t.get(42112)!))
+      .toContain('sample="4" role="unittype">unknown</Item>');
+    expect(new TextDecoder().decode(extractEntry(z, 'terrain-README.txt')!)).toContain('has cell_state 6');
+    // Bands other than cell_state do not depend on the frame.
+    for (const b of [0, 1, 3, 4, 5]) expect(Array.from(bands[b])).toEqual(Array.from(decodeFloatBands(ev).bands[b]));
+  });
+
+  it('leaves the DEM rasters byte-identical to a package built without the evidence arrays', () => {
+    const bare = { ...grid, counts: undefined, interpDistanceCells: undefined } as unknown as DtmGrid;
+    const z = buildDemPackage(resultFor(bare), PKG_OPTS);
+    for (const key of ['dtm', 'dsm', 'chm']) {
+      for (const ext of ['tif', 'asc']) {
+        const name = `terrain-${key}.${ext}`;
+        expect(sha256Hex(extractEntry(z, name)!), name).toBe(sha256Hex(extractEntry(zip, name)!));
+      }
+    }
+  });
+
+  it('adds no dispersion under mean aggregation and leaves the raster otherwise unchanged', () => {
+    const pts = [{ x: 0.5, y: 0.5, z: 1 }, { x: 0.5, y: 0.5, z: 3 }, { x: 1.5, y: 0.5, z: 2 }];
+    const spec = { grid: { originH1: 0, originH2: 0, cols: 2, rows: 1, cellSizeM: 1 } };
+    const mean = rasterizeDtm(pts, [1, 1, 1], spec);
+    expect(mean.dispersion).toBeUndefined();
+    const med = rasterizeDtm(pts, [1, 1, 1], { ...spec, aggregation: 'median' });
+    expect(Array.from(med.z)).toEqual([2, 2]);
+    expect(Array.from(med.dispersion!)).toEqual([1, Number.NaN]);
   });
 
   it('band 2 equals interpDistanceCells x cell size exactly', () => {
@@ -317,8 +473,8 @@ describe('terrain_evidence.tif in the DEM package', () => {
         // Support.tif: 0 unsupported, 1 interpolated, 2 measured.
         if (s === 0) expect(state[i]).toBe(-9999);
         else if (s === 2) expect(state[i]).toBe(CELL_STATUS_CODE.measured);
-        else expect([CELL_STATUS_CODE.interpolated, CELL_STATUS_CODE.lowConfidence, CELL_STATUS_CODE.edgeRisk])
-          .toContain(state[i]);
+        else expect([CELL_STATUS_CODE.interpolated, CELL_STATUS_CODE.lowConfidence, CELL_STATUS_CODE.edgeRisk,
+          EVIDENCE_STATE_CODE.edgeAffected]).toContain(state[i]);
         checked++;
       }
     }
@@ -339,7 +495,7 @@ describe('terrain_evidence.tif in the DEM package', () => {
         mediaType: 'image/tiff',
         bytes: ev.length,
         sha256: sha256Hex(ev),
-        method: 'olv.terrain.evidence.support@1',
+        method: 'olv.terrain.evidence.support@2',
       },
     ]);
     expect(verifyScientificArtifactPassport(passport, {
@@ -372,7 +528,7 @@ describe('terrain evidence oracle fixture', () => {
   const grid = evidenceGrid();
   const geo = {
     xllCorner: 600000 + grid.originH1, yllCorner: 4000000 + grid.originH2, noData: -9999,
-    epsg: 32610, isGeographic: false, horizontalUnit: 'm', demValues: grid.z,
+    epsg: 32610, isGeographic: false, horizontalUnit: 'm', verticalUnit: 'm', demValues: grid.z,
   };
   const bytes = writeTerrainEvidenceGeoTiff(grid, geo);
   const b = terrainEvidenceBands(grid);
@@ -387,11 +543,17 @@ describe('terrain evidence oracle fixture', () => {
     epsg: geo.epsg,
     noData: geo.noData,
     bandNames: [...TERRAIN_EVIDENCE_BANDS],
-    bandUnits: ['returns', 'm', 'code'],
+    bandUnits: ['returns', 'm', 'code', 'm', 'm', 'm'],
+    frameResolved: true,
+    edgeAffectedWithinCells: EVIDENCE_STATE_PARAMS.edgeAffectedWithinCells,
     supportCount: Array.from(b.supportCount, (v, i) => (cell(i) ? v : null)),
     interpolationDistance: Array.from(b.interpolationDistance, (v, i) => (cell(i) ? v : null)),
     interpDistanceCells: Array.from(grid.interpDistanceCells, (v, i) => (cell(i) ? v : null)),
     cellState: Array.from(b.cellState, (v, i) => (cell(i) ? v : null)),
+    nearestSupportDistance: Array.from(b.nearestSupportDistance, (v, i) => (cell(i) ? v : null)),
+    verticalDispersion: Array.from(b.verticalDispersion, (v, i) => (cell(i) && Number.isFinite(v) ? v : null)),
+    edgeDistance: Array.from(b.edgeDistance, (v, i) => (cell(i) && Number.isFinite(v) ? v : null)),
+    returns: evidenceReturns().perCell,
     sha256: sha256Hex(bytes),
   };
   const json = `${JSON.stringify(expected, null, 2)}\n`;

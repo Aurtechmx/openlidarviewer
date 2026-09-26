@@ -202,3 +202,37 @@ describe('terrain core store', () => {
     expect(names.sort()).toEqual(['core-1.bin', TERRAIN_CORE_INDEX_FILE].sort());
   });
 });
+
+describe('terrain core store and the evidence raster', () => {
+  it('a version-1 core (no verticalDispersion) misses and recomputes; restored and fresh evidence rasters match', async () => {
+    const { contoursFromCore } = await import('../src/terrain/contour/analyseContours');
+    const { buildDemPackage } = await import('../src/terrain/export/demPackage');
+    const { extractEntry } = await import('./helpers/zipReader');
+    const { sha256Hex } = await import('../src/terrain/export/sha256');
+    expect(core.dtm.verticalDispersion).toBeInstanceOf(Float32Array);
+    const evidence = (c: TerrainCore): string => sha256Hex(extractEntry(
+      buildDemPackage(contoursFromCore(c, { intervalM: 1 }), { basename: 't', generationDateIso: '2026-01-01T00:00:00.000Z' }),
+      't_evidence.tif',
+    )!);
+
+    const root = fakeOpfsDir();
+    const store = createTerrainCoreStore(root, { generation: 'g1' });
+    // A cache written before the payload carried verticalDispersion: version 1.
+    const v1Core = { ...core, dtm: { ...core.dtm, verticalDispersion: undefined } } as TerrainCore;
+    await store.persist(positions, SMALL_PARAMS, v1Core, EXPENSIVE);
+    const index = await readIndex(root);
+    await writeIndex(root, { ...index, entries: [{ ...index.entries[0], format: 1 }] });
+    expect(await store.lookup(positions, SMALL_PARAMS)).toEqual({ miss: 'format-mismatch' });
+    // The v1 core would have exported band 5 as NoData: it differs from a fresh run.
+    expect(evidence(v1Core)).not.toBe(evidence(core));
+
+    // Recompute and persist at version 2; the restored core exports the same bytes.
+    const fresh = computeTerrainCore(positions, SMALL_PARAMS);
+    expect(await store.persist(positions, SMALL_PARAMS, fresh, EXPENSIVE)).toBe(true);
+    const found = await store.lookup(positions, SMALL_PARAMS);
+    expect('core' in found).toBe(true);
+    const restored = (found as { core: TerrainCore }).core;
+    expect(restored.dtm.verticalDispersion).toBeInstanceOf(Float32Array);
+    expect(evidence(restored)).toBe(evidence(fresh));
+  });
+});

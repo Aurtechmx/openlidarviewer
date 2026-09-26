@@ -190,7 +190,13 @@ export function createTerrainCoreStore(root: OpfsDirHandle | null, options: Terr
       const digest = await integrityDigest(payload);
       return serial(async () => {
         const index = await readIndex(d);
-        if (index.entries.some((e) => e.key === p.key)) return false;
+        if (index.entries.some((e) => e.key === p.key && e.format === TERRAIN_CORE_PAYLOAD_VERSION)) return false;
+        // An entry of an older payload format under the same key only ever
+        // misses; replace it so the recomputed core is cached again.
+        for (const stale of index.entries.filter((e) => e.key === p.key)) {
+          index.entries = index.entries.filter((e) => e !== stale);
+          await remove(d, stale.file);
+        }
         // Make room: oldest use first, never below what this payload needs.
         let used = index.entries.reduce((n, e) => n + e.bytes, 0);
         const byUse = [...index.entries].sort((a, b) => a.lastUsed - b.lastUsed);
