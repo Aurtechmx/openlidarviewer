@@ -4,7 +4,7 @@ name: Cross-browser smoke
 # Firefox and WebKit, plus the iPhone-shaped WebKit project. The jobs fail
 # the workflow on a red result, but no ruleset requires them, so a failure
 # here does not block a merge. The full deterministic set on Firefox and
-# WebKit is in browsers.yml.
+# WebKit is in ci.yml.
 #
 # To gate merges on it, add `firefox-smoke` and `webkit-smoke` to the branch
 # protection required checks. They are kept out of ci-green so that making
@@ -61,8 +61,8 @@ jobs:
       - name: Install Playwright Firefox
         run: ./node_modules/.bin/playwright install --with-deps firefox
       # Firefox produces a WebGL 2 context on Linux only headful, and only with a
-      # software OpenGL stack present. Same setup the advisory full job uses (see
-      # browsers.yml) so the smoke runs against a real GL context, not a timeout.
+      # software OpenGL stack present. Same setup the full `e2e-firefox` job uses (see
+      # ci.yml) so the smoke runs against a real GL context, not a timeout.
       - name: Round out the software OpenGL stack for Firefox
         run: |
           sudo apt-get update
