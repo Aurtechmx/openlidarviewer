@@ -85,6 +85,7 @@ export class ColorbarOverlay {
     if (!active) {
       this._mode = null;
       this._lastKey = null;
+      this._last = null;
       // Leaving the continuous mode ends the dismissal's scope: the user
       // dismissed THIS legend for THIS selection. Coming back to the same
       // mode later (even via an rgb/classification detour) is a fresh

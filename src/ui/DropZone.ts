@@ -61,6 +61,10 @@ export class DropZone {
     });
     this._copy.type = 'button';
     this._copy.addEventListener('click', () => {
+      if (typeof navigator.clipboard?.writeText !== 'function') {
+        this._copy.textContent = 'Copy blocked by the browser';
+        return;
+      }
       navigator.clipboard.writeText(this._report).then(
         () => { this._copy.textContent = 'Report copied'; },
         () => { this._copy.textContent = 'Copy blocked by the browser'; },

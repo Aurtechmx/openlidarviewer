@@ -35,7 +35,12 @@ const flag = (name) => args.includes(`--${name}`);
 const opt = (name) => args.find((a) => a.startsWith(`--${name}=`))?.split('=').slice(1).join('=');
 
 const serial = flag('serial');
-const jobs = serial ? 1 : Math.max(1, Number(opt('jobs') ?? Math.min(8, availableParallelism())));
+const jobsOpt = opt('jobs');
+if (jobsOpt !== undefined && !/^[1-9]\d*$/.test(jobsOpt)) {
+  console.error(`run-gates: --jobs=${jobsOpt} is not a whole number of 1 or more`);
+  process.exit(2);
+}
+const jobs = serial ? 1 : Number(jobsOpt ?? Math.min(8, availableParallelism()));
 
 const gates = loadGates();
 let steps = gates.steps;
@@ -50,7 +55,17 @@ if (stopBefore !== undefined) {
   steps = steps.slice(0, at);
 }
 const onlyGroup = opt('only-group');
-if (onlyGroup !== undefined) steps = steps.filter((s) => s.group === onlyGroup);
+if (onlyGroup !== undefined) {
+  if (!gates.steps.some((s) => s.group === onlyGroup)) {
+    console.error(`run-gates: --only-group=${onlyGroup} names no group`);
+    process.exit(2);
+  }
+  steps = steps.filter((s) => s.group === onlyGroup);
+}
+if (steps.length === 0) {
+  console.error('run-gates: the flags leave no step to run');
+  process.exit(2);
+}
 
 if (flag('list')) {
   for (const s of steps) console.log(s.script);
