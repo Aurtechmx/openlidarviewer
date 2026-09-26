@@ -50,6 +50,25 @@ export async function showWorkspaceMode(
  * toggle state, keyboard focus order, …), so one change to how a panel
  * shows/collapses doesn't need to ripple through each of them.
  */
+/**
+ * Open a scene tool's page in the Tools mode through its launcher row. The
+ * Tools home shows only the launcher; each tool's panel is a page of its own.
+ */
+export async function openToolPage(page: Page, title: 'Measure' | 'Annotate' | 'Clip box'): Promise<void> {
+  await showWorkspaceMode(page, 'work');
+  const heading = page.locator('#olv-ws-mode-work .olv-ws-task-title');
+  if ((await heading.isVisible()) && (await heading.textContent()) === title) return;
+  const back = page.locator('#olv-ws-mode-work .olv-ws-back');
+  if (await back.isVisible()) await back.click();
+  await page.locator('.olv-tool-launcher .olv-tl-row', { hasText: title }).click();
+}
+
+const TOOL_PAGES: Record<string, 'Measure' | 'Annotate' | 'Clip box'> = {
+  '.olv-clip-panel': 'Clip box',
+  '.olv-measure-panel': 'Measure',
+  '.olv-anno-panel': 'Annotate',
+};
+
 export async function openExpandedPanel(
   page: Page,
   mode: 'data' | 'work' | 'analyse' | 'output',
@@ -58,7 +77,8 @@ export async function openExpandedPanel(
   await page.goto('/?test=1');
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await showWorkspaceMode(page, mode);
+  if (mode === 'work' && TOOL_PAGES[selector]) await openToolPage(page, TOOL_PAGES[selector]);
+  else await showWorkspaceMode(page, mode);
 
   const panel = page.locator(selector);
   await expect(panel).toBeVisible({ timeout: 20_000 });

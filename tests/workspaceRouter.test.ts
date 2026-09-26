@@ -52,6 +52,15 @@ async function make(store: MemStore = new MemStore()) {
 }
 
 describe('workspaceRouter', () => {
+  it('Tools home shows the launcher alone, with no task header', async () => {
+    const t = await make();
+    t.ws.setMode('work');
+    expect(t.router.route()).toEqual({ mode: 'work', page: null });
+    expect(t.off(t.launcher)).toBe(false);
+    for (const p of [t.measure, t.annotate, t.clip]) expect(t.off(p)).toBe(true);
+    expect(t.header()?.hidden ?? true).toBe(true);
+  });
+
   it('navigate shows only the chosen panel under a task header', async () => {
     const t = await make();
     t.router.navigate({ mode: 'work', page: 'measure' });

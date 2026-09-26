@@ -2800,8 +2800,8 @@ async function fillToolLauncher(): Promise<void> {
       measurements: viewerReady ? viewer.measure.getMeasurements().length : 0,
       annotations: viewerReady ? viewer.annotate.getAnnotations().length : 0,
     }),
-    isToolPanelActive: () => [measureMount.panel?.element, annotationPanel.element]
-      .some((e) => e != null && !e.classList.contains('olv-hidden')),
+    isToolPanelActive: () => false, // the card is the Tools home; a tool page replaces it
+    resume: (id) => workspaceShell?.resumeToolPage(id) ?? false,
     disabledReason: () => (viewerReady && hasScan() ? null : 'Load a scan to use the tools.'),
   });
   toolLauncherHost.append(toolLauncherCard.element);

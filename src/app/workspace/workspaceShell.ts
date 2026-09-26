@@ -66,6 +66,12 @@ export interface WorkspaceShell {
    * when it was already in the rail (a launcher click), never off the canvas.
    */
   openToolPage(page: ToolPage): void;
+  /**
+   * For a launcher row: when the tool's panel is already up (its tool on,
+   * results placed, or the clip box, which has its own switch), reopen its page
+   * and return true, so the row does not switch the tool off.
+   */
+  resumeToolPage(actionId: string): boolean;
   /** Re-evaluate the phone sheet and the rail's availability. */
   applyMobileSheet(): void;
   mountAnalysePanel(el: HTMLElement): void;
@@ -215,6 +221,13 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     router,
     mobileSheet,
     showMode: (m) => workspace.setMode(m),
+    resumeToolPage: (id) => {
+      const page = id.slice(5) as ToolPage;
+      const node = id.startsWith('tool.') ? pages[page]?.element() : null;
+      const up = !!node && !node.classList.contains('olv-hidden') && node.style.display !== 'none';
+      if (up) live.navigate({ mode: 'work', page }, leftPanels.contains(document.activeElement));
+      return up;
+    },
     openToolPage: (page) => live.navigate({ mode: 'work', page }, leftPanels.contains(document.activeElement)),
     applyMobileSheet,
     // Lazy Analyse panel: first in the mobile Analyse slot, else the Analyse mode.

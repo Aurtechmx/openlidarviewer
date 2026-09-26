@@ -13,7 +13,8 @@
  * current mode's home, which keeps it deterministic.
  *
  * While a page is shown, a task header (`<- Tools  MEASURE`) leads the host and
- * every other child of the host carries `olv-ws-off`. The rule hiding that class
+ * every other child of the host carries `olv-ws-off`; at home the page panels
+ * carry it instead, so the home (the Tools launcher) stands alone. The rule hiding that class
  * is scoped to `.olv-ws-mode`, so a panel the phone layout re-parents into its
  * sheet is never hidden by a stale route.
  */
@@ -130,8 +131,10 @@ export function createWorkspaceRouter(
           h.title.textContent = id ? pages[m]?.[id]?.title ?? '' : '';
         }
         host.classList.toggle('has-page', !!id);
+        // Home shows everything but the pages; a page shows only itself.
+        const pageEls = Object.values(pages[m] ?? {}).map((p) => p.element());
         for (const child of Array.from(host.children) as HTMLElement[]) {
-          if (child !== h?.root) child.classList.toggle('olv-ws-off', !!panel && child !== panel);
+          if (child !== h?.root) child.classList.toggle('olv-ws-off', panel ? child !== panel : pageEls.includes(child));
         }
       }
     },
