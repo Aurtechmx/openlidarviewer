@@ -197,6 +197,21 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     category: 'dtm',
     implementation: ['src/terrain/export/demEvidence.ts', 'src/terrain/ground/rasterizeDtm.ts'],
   },
+  'olv.terrain.sensitivity.ensemble': {
+    id: 'olv.terrain.sensitivity.ensemble',
+    version: 1,
+    name: 'DTM model sensitivity raster (terrain sensitivity)',
+    summary:
+      'Per-cell spread of the DTM height over a fixed four-member ensemble run on ' +
+      'the same points and grid: the canonical configuration, ground filter slope ' +
+      '0.15, ground filter slope 0.2, and inverse distance weighting void fill. ' +
+      'Band 1 is the highest minus the lowest member height, band 2 the number of ' +
+      'members with a height. Written only on request. Describes model sensitivity, ' +
+      'not accuracy.',
+    citation: 'Internal composition (ensemble recorded in validation/protocols/evidencedem-sensitivity-ensemble-v1.md); no single source method.',
+    category: 'dtm',
+    implementation: ['src/terrain/export/demSensitivity.ts', 'src/terrain/ground/surfaceFromRaster.ts'],
+  },
   'olv.validation.holdout-rmse': {
     id: 'olv.validation.holdout-rmse',
     version: 2,
