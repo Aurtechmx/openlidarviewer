@@ -277,6 +277,8 @@ function parseWorkerCount(value: string | null): number | null {
  * Never throws — malformed input degrades to the defaults, field by field.
  */
 export function parseDevFlags(search: string | URLSearchParams): DevFlags {
+  // The deployed build compiles this to `return defaults`: no URL flag reaches it.
+  if (!__OLV_DEV_FLAGS__) return { ...DEV_FLAG_DEFAULTS };
   let params: URLSearchParams;
   try {
     params = typeof search === 'string' ? new URLSearchParams(search) : search;

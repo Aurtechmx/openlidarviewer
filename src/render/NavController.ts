@@ -320,7 +320,7 @@ export class NavController {
     window.addEventListener('blur', this._onBlur);
     // `?benchmark=nav`: the scripted camera driver (`window.__olvNavDriver`),
     // loaded from this chunk so the startup shell's preload lists stay as they are.
-    if (new URLSearchParams(window.location?.search ?? '').get('benchmark') === 'nav') {
+    if (__OLV_DEV_FLAGS__ && new URLSearchParams(window.location?.search ?? '').get('benchmark') === 'nav') {
       void loadNavDriver().then((m) => m.installNavDriver(window));
     }
   }

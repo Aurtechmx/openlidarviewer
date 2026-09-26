@@ -310,7 +310,7 @@ function swPrecacheManifest() {
   };
 }
 
-function chunkEmissionGuard() {
+function chunkEmissionGuard(devFlags: boolean) {
   const required = [
     // Every lazyChunks.ts seam, derived from the module itself at config
     // time — see lazyChunkNames(). The static pins below cover only what
@@ -332,7 +332,9 @@ function chunkEmissionGuard() {
     // uncompressed `.las` files never download the decompressor.
     'lazDecode',
     // `perf/navDriverLoader.ts` lazy-imports the `?benchmark=nav` camera driver.
-    'navDriver',
+    // The live build compiles `?benchmark=nav` out (__OLV_DEV_FLAGS__), so the
+    // chunk is required only where the flag exists.
+    ...(devFlags ? ['navDriver'] : []),
     // `render/contextRecoveryLoader.ts` lazy-imports the context-restore rebuild.
     'contextRecovery',
     // Vendor chunks pinned via manualChunks. The presence of these
@@ -590,10 +592,17 @@ export default defineConfig(({ mode }) => {
     __OLV_TEST_SEAM__: JSON.stringify(
       mode === 'development' || process.env.OLV_TEST_SEAM === '1',
     ),
+    // Maintainer A/B switches: `?benchmark=nav` (scripted camera driver and
+    // frame probe), `?governor=on` and the src/perf/devFlags.ts URL flags.
+    // On for the dev server and for plain builds (the bench project and
+    // scripts/governor-ab.mjs drive `npm run build && npm run preview`); off
+    // for the deployed `live` build, where the minifier drops the handling.
+    // scripts/check-no-dev-flags.mjs asserts the live output is clean.
+    __OLV_DEV_FLAGS__: JSON.stringify(mode !== 'live'),
   },
   // The chunk-emission guard runs on every build; the live source transform only on `live`.
   plugins: [
-    chunkEmissionGuard() as PluginOption,
+    chunkEmissionGuard(mode !== 'live') as PluginOption,
     thirdPartyNotices() as PluginOption,
     creditsSourceLink(buildIdentity) as PluginOption,
     swPrecacheManifest() as PluginOption,
