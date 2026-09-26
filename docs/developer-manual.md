@@ -85,10 +85,9 @@ Scan Intelligence report describes the dataset, and the result can be exported.
 
 ### 4.1 Windows
 
-`.github/workflows/windows.yml` runs a subset of the checks on a
-`windows-latest` runner, so the first list below is measured rather than
-assumed. The job is advisory while the platform is new, so read its result as
-a report.
+The `windows` job in `.github/workflows/ci.yml` runs a subset of the checks on
+a `windows-latest` runner, so the first list below is measured rather than
+assumed. The job is blocking through `ci-green`.
 
 #### Run natively, verified in CI on Windows
 
@@ -402,9 +401,8 @@ Where WebGPU is unavailable the viewer automatically uses WebGL 2. The active ba
 ### Cross-browser end-to-end results
 
 The deterministic Playwright set (`grepInvert: /@gpu/`, 165 specs) runs on all
-three engines. Chromium is the blocking gate in `ci.yml`; Firefox and WebKit run
-in `browsers.yml` and are advisory, so a new engine difference is reported
-rather than blocking unrelated work.
+three engines. All three run in `ci.yml` and block merges
+through `ci-green`.
 
 | Engine | Passed | Skipped |
 |--------|--------|---------|

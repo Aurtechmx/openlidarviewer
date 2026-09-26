@@ -40,7 +40,7 @@ the two entries were renumbered when the branches were integrated.
 | L10 | LIFECYCLE | DOC | med | OPEN | B10 | `ViewerRenderCore` has no dispose seam. |
 | L11 | UI | TEST | med | FIXED | B11 | Between 768 and 1000 px two open rails left no top-centre gap wider than the project card. The card now narrows to the band, with a 200 px floor. |
 | L12 | UI | TEST | med | FIXED | B12 | Pinch, rotate and two-finger gestures ran end to end on Chromium only. They now run on every engine, iPhone-shaped WebKit included, as synthesized events. |
-| L13 | EVIDENCE | DOC | med | OPEN | B13 | Firefox, WebKit and Windows are advisory; only Chromium blocks. |
+| L13 | EVIDENCE | DOC | med | FIXED | B13 | Firefox, WebKit and Windows run in `ci.yml` and block through `ci-green`. |
 | L14 | ARCHITECTURE | TEST | low | PARTIAL | B14 | Far-apart mounts did not fold `renderOrigin` on the CPU per mesh. The renderer now forms model-view in float64; the analysis paths and the terrain gather still fold placement into Float32. |
 | L15 | ARCHITECTURE | DOC | n/a | DEFERRED | B15 | The registration stack ships and no user path reaches it. |
 | L16 | EVIDENCE | TEST | n/a | FIXED | B16 | The passport shipped and nothing reached it. A DEM package now emits one beside its bare-earth raster. |
@@ -81,10 +81,10 @@ the two entries were renumbered when the branches were integrated.
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 25
+- FIXED: 26
 - MEASURED: 1
 - NOT REPRODUCIBLE: 9
-- OPEN: 3
+- OPEN: 2
 - PARTIAL: 6
 - SUPERSEDED: 1
 - total: 49
@@ -6641,3 +6641,10 @@ Covered by `tests/withheldTerrainGather.test.ts`,
 `tests/terrainRunnerWithheldRecovery.test.ts`,
 `tests/lassoVolumeWithheld.test.ts`, `tests/profileWithheld.test.ts` and
 `tests/scanReportWithheld.test.ts`.
+
+### L13 · FIXED · EVIDENCE
+
+`e2e-firefox`, `e2e-webkit` and `windows` run in `ci.yml` without
+`continue-on-error` and are listed in `ci-green`'s `needs`, after 10 of 10
+green job results on main for each. `browsers.yml` and `windows.yml` are gone.
+The iOS simulator leg is outside this row and stays advisory.
