@@ -48,13 +48,13 @@ export interface ProjectInfo {
 /** How long the card lingers before fading out on its own. */
 const DISMISS_MS = 7000;
 /** Upper bound on the fade before the lane is handed on regardless. */
-const HANDOFF_FALLBACK_MS = 400;
+const FADE_WAIT_FALLBACK_MS = 400;
 /** Opacity at or above which the card still counts as painted over the lane. */
 const FADED_OPACITY = 0.05;
 /** Gap between fade checks once the fallback has fired. */
-const HANDOFF_POLL_MS = 60;
+const FADE_WAIT_POLL_MS = 60;
 /** Longest the successor waits for a fade before taking the lane regardless. */
-const HANDOFF_CEILING_MS = 2000;
+const FADE_WAIT_CEILING_MS = 2000;
 
 /**
  * A suggested navigation mode from the scan's PHYSICAL size (metres). Only shown
@@ -192,13 +192,13 @@ export class ProjectCard {
     };
     const check = (): void => {
       if (handed) return;
-      if (faded() || waited >= HANDOFF_CEILING_MS) {
+      if (faded() || waited >= FADE_WAIT_CEILING_MS) {
         hand();
         return;
       }
-      waited += HANDOFF_POLL_MS;
-      window.setTimeout(check, HANDOFF_POLL_MS);
+      waited += FADE_WAIT_POLL_MS;
+      window.setTimeout(check, FADE_WAIT_POLL_MS);
     };
-    window.setTimeout(check, HANDOFF_FALLBACK_MS);
+    window.setTimeout(check, FADE_WAIT_FALLBACK_MS);
   }
 }
