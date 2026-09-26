@@ -1082,13 +1082,14 @@ The Node record's `frameTimeMs` and `meshCreationMs` are the two blanks. Fill
 them on a real device:
 
 ```
-# Put the ~80 MB autzen COPC fixture next to package.json (or set
-# OLV_AUTZEN_FIXTURE), then, on a machine with a real GPU:
+# Point OLV_STREAMING_PERF_COPC at a large .copc.laz built from a register
+# dataset, then, on a machine with a real GPU:
+OLV_STREAMING_PERF_COPC=/path/to/scan.copc.laz \
 STREAMING_NAV_DEVICE_WRITE=1 npx playwright test \
   tests/e2e/streamingNavPerf.spec.ts --project=gpu --headed
 ```
 
-That spec (`@gpu`, opt-in, skips without the fixture) loads the scan, drives a
+That spec (`@gpu`, opt-in, skips when the variable is unset) loads the scan, drives a
 scripted orbit, samples frame times off the browser's own `requestAnimationFrame`
 cadence, and reads the `?debug=1` metrics overlay for the live streaming
 counters: writing `docs/validation/streaming-navigation-device.json`. A device

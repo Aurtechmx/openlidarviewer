@@ -1613,9 +1613,12 @@ export class Viewer {
     this._scene.add(mesh);
     this._streamingMeshes.add(mesh);
     this._streamingPickData.set(mesh, { decoded, depth, key });
+    this._noteResidency();
     const lodMaterial = mesh.material as THREE.PointsNodeMaterial;
     if (this._lodSize.register(lodMaterial)) this._applySizeMode(lodMaterial);
   }
+  /** Re-sample profiles when the stream becomes, or stops being, fully resident. */
+  private _noteResidency(): void { if (this.profileSeam.residencyChanged()) queueMicrotask(() => this._measure.resampleProfilesInPlace()); }
 
   /**
    * Remove a streaming node's mesh from the scene and free its GPU buffers.
@@ -1642,6 +1645,7 @@ export class Viewer {
     this._scene.remove(mesh);
     this._streamingMeshes.delete(mesh);
     this._streamingPickData.delete(mesh);
+    this._noteResidency();
     this._lodSize.forget(mesh.material as THREE.PointsNodeMaterial);
     mesh.geometry.dispose();
     (mesh.material as THREE.Material).dispose();
@@ -2201,11 +2205,7 @@ export class Viewer {
     // beside it: the static half being complete does not complete the streaming
     // half (audit #8). It clears only once every known octree node is resident,
     // i.e. the working set spans the whole cloud.
-    let residentOnly = streamingPoints > 0;
-    if (residentOnly && this._streaming) {
-      const totalNodes = this._streaming.cloud.octree.nodes().length;
-      if (totalNodes > 0 && this._streaming.cloud.octree.isComplete && this._streamingPickData.size >= totalNodes) residentOnly = false;
-    }
+    const residentOnly = streamingPoints > 0 && !this.profileSeam.fullyResident();
     // Normalise the buffer into the canonical Z-up survey frame BEFORE anything
     // reads it. Nine modules under `src/terrain` index positions as "X/Y
     // horizontal, Z elevation", which is wrong for the Y-up mesh formats, and a

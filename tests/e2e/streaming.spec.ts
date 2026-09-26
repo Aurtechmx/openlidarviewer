@@ -1,23 +1,18 @@
-import { test, expect } from '@playwright/test';
-import fs from 'node:fs';
+import { test, expect, type Page } from '@playwright/test';
+import { dropTinyLas } from './helpers';
+import {
+  COPC_FIXTURE,
+  EPT_FIXTURE_NODES,
+  openEptFixture,
+  routeEptFixture,
+} from './streamingFixtures';
 
 /**
- * COPC streaming end-to-end coverage. The chunks-load smoke test drives a tiny
- * in-memory fake-COPC buffer through openStreamingCopc, so it runs on any
- * machine — including CI. The full-pipeline tests below drive the real
- * `autzen-classified.copc.laz` (~80 MB) and only run when that file is present;
- * on CI runners (and any clone without the fixture) they skip cleanly.
+ * Streaming end-to-end coverage in the blocking `deterministic` project. The
+ * chunks-load test drives a tiny in-memory fake-COPC buffer through
+ * openStreamingCopc. The rest open the small in-repo COPC and EPT fixtures
+ * (see streamingFixtures.ts), so every clone and every CI runner runs them.
  */
-
-// Resolved from the OLV_AUTZEN_FIXTURE env var, falling back to the repo
-// root — never a machine-specific absolute path, so any clone that drops the
-// fixture next to package.json (or exports the env var) runs the full suite.
-const COPC_FILE =
-  process.env.OLV_AUTZEN_FIXTURE ??
-  new URL('../../autzen-classified.copc.laz', import.meta.url).pathname;
-
-/** True when the 80 MB autzen COPC fixture is on disk at COPC_FILE. */
-const hasAutzenFixture = fs.existsSync(COPC_FILE);
 
 test('the COPC streaming chunks load when a COPC file is opened', async ({ page }) => {
   // Regression guard for the v0.3.0 source-transform bug: the COPC subsystem is
@@ -79,92 +74,90 @@ test('the COPC streaming chunks load when a COPC file is opened', async ({ page 
   }
 });
 
-test.describe('autzen COPC fixture (skipped when the file is not on disk)', () => {
-  // The CI runner has no point-cloud fixtures, so these end-to-end tests skip
-  // there. A developer with the autzen file at COPC_FILE runs them normally.
-  test.skip(!hasAutzenFixture, `requires the autzen COPC fixture at ${COPC_FILE}`);
+test.describe('streaming COPC and EPT fixtures', () => {
+  test('opens a COPC file and streams it', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('.olv-empty-title')).toBeVisible();
 
-test('opens a real COPC file and streams it progressively', async ({ page }) => {
-  test.setTimeout(120_000);
-  await page.goto('/');
-  await expect(page.locator('.olv-empty-title')).toBeVisible();
+    await page.locator('.olv-file-input').first().setInputFiles(COPC_FIXTURE);
 
-  // Open the COPC file through the hidden file input.
-  await page.locator('.olv-file-input').first().setInputFiles(COPC_FILE);
+    // The streaming panel appears once metadata and hierarchy are read.
+    const panel = page.locator('.olv-streaming-panel');
+    await expect(panel).toBeVisible({ timeout: 30_000 });
+    await expect(panel).toContainText('Current view ready', { timeout: 30_000 });
 
-  // The streaming panel appears once metadata + hierarchy are read.
-  const panel = page.locator('.olv-streaming-panel');
-  await expect(panel).toBeVisible({ timeout: 60_000 });
+    // The empty state is gone and navigation is live.
+    await expect(page.locator('.olv-empty')).toBeHidden();
+    await expect(page.locator('.olv-mode-active')).toHaveText('Orbit');
 
-  // Nodes stream in — the panel reaches a refining or ready phase.
-  await expect(panel).toContainText(/Refining current view|Current view ready/, { timeout: 60_000 });
+    // The scan summary is populated from the COPC metadata.
+    await expect(panel).toContainText('COPC LAZ');
+    await expect(panel).toContainText('terrain-access-utm');
+    await expect(panel).toContainText('900');
 
-  // The empty state is gone and navigation is live.
-  await expect(page.locator('.olv-empty')).toBeHidden();
-  await expect(page.locator('.olv-mode-active')).toHaveText('Orbit');
+    // Saving a camera view adds it to the Inspector's Saved views, which serve
+    // static and streaming scans alike.
+    const inspector = page.locator('.olv-inspector');
+    await inspector.locator('summary', { hasText: 'Saved views' }).click();
+    await inspector.locator('.olv-view-save').click();
+    await expect(inspector.locator('.olv-view-name').first()).toHaveValue('View 1');
+  });
 
-  // The scan summary is populated from the COPC metadata.
-  await expect(panel).toContainText('COPC LAZ');
-  await expect(panel).toContainText(/PDRF [678]/);
+  test('opens an EPT dataset from a URL and makes every node resident', async ({ page }) => {
+    await routeEptFixture(page);
+    await page.goto('/');
+    await expect(page.locator('.olv-empty-title')).toBeVisible();
+    await openEptFixture(page);
 
-  // Saving a camera view adds it to the Inspector's Saved views. The streaming
-  // panel no longer carries its own list — saved views (with rename + delete)
-  // live in the Inspector for both static and streaming scans.
-  const inspector = page.locator('.olv-inspector');
-  await inspector.locator('summary', { hasText: 'Saved views' }).click();
-  await inspector.locator('.olv-view-save').click();
-  await expect(inspector.locator('.olv-view-name').first()).toHaveValue('View 1');
+    const panel = page.locator('.olv-streaming-panel');
+    await expect(panel).toBeVisible({ timeout: 30_000 });
+    await expect(panel).toContainText('ept-stream (EPT)');
+    await expect(panel).toContainText(
+      `${EPT_FIXTURE_NODES} / ${EPT_FIXTURE_NODES} requested nodes resident`,
+      { timeout: 30_000 },
+    );
+    await expect(panel).toContainText('Current view ready');
+  });
+
+  test('closes a streaming COPC scan back to the empty state', async ({ page }) => {
+    await page.goto('/');
+    await page.locator('.olv-file-input').first().setInputFiles(COPC_FIXTURE);
+    await expect(page.locator('.olv-streaming-panel')).toBeVisible({ timeout: 30_000 });
+
+    await page.locator('.olv-tool', { hasText: 'Close' }).click();
+    await expect(page.locator('.olv-empty-title')).toBeVisible();
+    await expect(page.locator('.olv-streaming-panel')).toBeHidden();
+  });
+
+  test('switches the active source between static and streaming', async ({ page }) => {
+    /** Class of the active static cloud's first point, or -1 with none active. */
+    const staticClassAt0 = (p: Page): Promise<number> =>
+      p.evaluate(() => {
+        const api = (window as unknown as { __OLV_TEST_API__?: { classAt: (i: number) => number } })
+          .__OLV_TEST_API__;
+        return api ? api.classAt(0) : -2;
+      });
+    const panel = page.locator('.olv-streaming-panel');
+
+    await page.goto('/?test=1');
+    await expect(page.locator('.olv-empty-title')).toBeVisible();
+
+    // Static first.
+    await dropTinyLas(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+    await expect.poll(() => staticClassAt0(page), { timeout: 20_000 }).toBeGreaterThanOrEqual(0);
+    await expect(panel).toBeHidden();
+
+    // Static to streaming: the stream replaces the static layer.
+    await page.locator('.olv-file-input').first().setInputFiles(COPC_FIXTURE);
+    await expect(panel).toBeVisible({ timeout: 30_000 });
+    await expect(panel).toContainText('Current view ready', { timeout: 30_000 });
+    await expect.poll(() => staticClassAt0(page), { timeout: 20_000 }).toBe(-1);
+
+    // Streaming back to static: the static load tears the stream down.
+    await dropTinyLas(page);
+    await expect(panel).toBeHidden({ timeout: 30_000 });
+    await expect.poll(() => staticClassAt0(page), { timeout: 20_000 }).toBeGreaterThanOrEqual(0);
+    await expect(page.locator('.olv-empty')).toBeHidden();
+  });
 });
-
-test('inspects a per-point readout on a streaming COPC node', async ({ page }) => {
-  test.setTimeout(120_000);
-  await page.goto('/');
-  await page.locator('.olv-file-input').first().setInputFiles(COPC_FILE);
-
-  const panel = page.locator('.olv-streaming-panel');
-  await expect(panel).toBeVisible({ timeout: 60_000 });
-  // Wait for resident nodes to refine so the meshes are dense enough to hit.
-  await expect(panel).toContainText(/Refining current view|Current view ready/, { timeout: 60_000 });
-  await page.waitForTimeout(2_500); // let the framing tween settle
-
-  // Enter the Inspect tool — enabled on a streaming scan in v0.3.0.
-  await page.locator('.olv-tool', { hasText: 'Inspect' }).click();
-
-  // Sweep a grid of canvas points across the framed scan; a streaming-node
-  // hit opens the point card. The grid is dense so a sparse coarse region
-  // never makes the test flake.
-  const canvas = page.locator('.olv-canvas');
-  const box = await canvas.boundingBox();
-  if (!box) throw new Error('canvas has no bounding box');
-  const card = page.locator('.olv-inspect-card');
-  const fractions = [0.5, 0.42, 0.58, 0.34, 0.66, 0.46, 0.54];
-  let hit = false;
-  for (const fx of fractions) {
-    for (const fy of fractions) {
-      await canvas.click({ position: { x: box.width * fx, y: box.height * fy } });
-      if (await card.isVisible()) {
-        hit = true;
-        break;
-      }
-    }
-    if (hit) break;
-  }
-  expect(hit, 'an Inspect click landed on a streaming node point').toBe(true);
-
-  // The card carries the per-point attribute rows decoded from the COPC node.
-  await expect(card).toBeVisible();
-  await expect(card.locator('.olv-inspect-row').first()).toBeVisible();
-});
-
-test('closes a streaming COPC scan back to the empty state', async ({ page }) => {
-  test.setTimeout(120_000);
-  await page.goto('/');
-  await page.locator('.olv-file-input').first().setInputFiles(COPC_FILE);
-  await expect(page.locator('.olv-streaming-panel')).toBeVisible({ timeout: 60_000 });
-
-  await page.locator('.olv-tool', { hasText: 'Close' }).click();
-  await expect(page.locator('.olv-empty-title')).toBeVisible();
-  await expect(page.locator('.olv-streaming-panel')).toBeHidden();
-});
-
-}); // describe('autzen COPC fixture')

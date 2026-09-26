@@ -171,12 +171,60 @@ def write_root_tile(out: Path, points: int, bounds: list[float], seed: int) -> N
             fh.write(struct.pack("<iiiHB", ix, iy, iz, intensity, classification))
 
 
+def write_ground_tile(out: Path, points: int, bounds: list[float], seed: int) -> None:
+    """
+    Emit a binary tile of ground returns (class 2) on a gentle plane inside
+    `bounds`: rising 10 m over the 100 m extent in X, with 0.2 m of noise. The
+    viewer reads this as terrain, so its terrain analysis runs on it.
+    """
+    rng = random.Random(seed)
+    min_x, min_y, _, max_x, max_y, _ = bounds
+    scale = SCHEMA[0]["scale"]
+    with out.open("wb") as fh:
+        for _ in range(points):
+            fx = rng.uniform(min_x, max_x)
+            fy = rng.uniform(min_y, max_y)
+            fz = 1_505.0 + 0.1 * (fx - 500_000.0) + rng.uniform(-0.1, 0.1)
+            intensity = rng.randint(0, 65535)
+            fh.write(struct.pack("<iiiHB", int(round(fx / scale)), int(round(fy / scale)),
+                                 int(round(fz / scale)), intensity, 2))
+
+
+def write_two_level(out: Path, points: int, bounds: list[float], seed: int) -> None:
+    """
+    Split `points` over the root and four depth-1 children, so a viewer streams
+    more than one node and the e2e suite can hold some of them back. The ground
+    sits in the lower half of the cube, so only the four `1-x-y-0` children hold
+    points. Each child gets `points // 5` inside its own quadrant; the root takes
+    the remainder. Every tile keeps its own seed, so output stays deterministic.
+    """
+    per_child = points // 5
+    hierarchy: dict[str, int] = {"0-0-0-0": points - 4 * per_child}
+    write_ground_tile(out / "ept-data" / "0-0-0-0.bin", hierarchy["0-0-0-0"], bounds, seed)
+    min_x, min_y, min_z, max_x, max_y, max_z = bounds
+    mid_x, mid_y = (min_x + max_x) / 2, (min_y + max_y) / 2
+    for i in range(4):
+        cx, cy = (i >> 1) & 1, i & 1
+        key = f"1-{cx}-{cy}-0"
+        hierarchy[key] = per_child
+        quadrant = [
+            mid_x if cx else min_x, mid_y if cy else min_y, min_z,
+            max_x if cx else mid_x, max_y if cy else mid_y, max_z,
+        ]
+        write_ground_tile(out / "ept-data" / f"{key}.bin", per_child, quadrant, seed + 1 + i)
+    (out / "ept-hierarchy" / "0-0-0-0.json").write_text(json.dumps(hierarchy, indent=2))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate a synthetic EPT fixture.")
     parser.add_argument("--out", required=True, help="Output directory (will be created).")
     parser.add_argument("--points", type=int, default=1000, help="Total point count.")
     parser.add_argument("--span", type=int, default=128, help="EPT span value.")
     parser.add_argument("--seed", type=int, default=42, help="RNG seed for deterministic output.")
+    parser.add_argument(
+        "--children", action="store_true",
+        help="Write ground returns over the root and four depth-1 child tiles.",
+    )
     args = parser.parse_args()
 
     out = resolve_under_out_root(args.out)
@@ -193,10 +241,13 @@ def main() -> int:
     ]
 
     write_manifest(out / "ept.json", args.points, args.span, bounds_cube)
-    write_root_hierarchy(out / "ept-hierarchy" / "0-0-0-0.json", args.points)
-    write_root_tile(out / "ept-data" / "0-0-0-0.bin", args.points, bounds_cube, args.seed)
+    if args.children:
+        write_two_level(out, args.points, bounds_cube, args.seed)
+    else:
+        write_root_hierarchy(out / "ept-hierarchy" / "0-0-0-0.json", args.points)
+        write_root_tile(out / "ept-data" / "0-0-0-0.bin", args.points, bounds_cube, args.seed)
 
-    total_bytes = (out / "ept-data" / "0-0-0-0.bin").stat().st_size
+    total_bytes = sum(f.stat().st_size for f in (out / "ept-data").glob("*.bin"))
     expected_bytes = args.points * POINT_BYTES
     assert total_bytes == expected_bytes, (
         f"tile size mismatch: wrote {total_bytes} bytes for {args.points} points "
