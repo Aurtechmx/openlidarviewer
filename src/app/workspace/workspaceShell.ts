@@ -25,6 +25,7 @@ import {
   RAIL_CHEVRON_RIGHT,
 } from '../../ui/panelChrome';
 import { createWorkspaceRouter, type WorkspacePage, type WorkspaceRouter } from './workspaceRouter';
+import { mountResultsShelf, type ResultsShelfSources } from '../results/resultsShelfMount';
 
 /** The scene tools that open a page in the Tools mode. */
 export type ToolPage = 'measure' | 'annotate' | 'clip';
@@ -54,6 +55,8 @@ export interface WorkspaceShellDeps {
   setMeasureMountElement: (fn: (el: HTMLElement) => void) => void;
   hasScan: () => boolean;
   onModeChange: () => void;
+  /** The owners the Results shelf reads. Absent: no shelf. */
+  results?: ResultsShelfSources;
 }
 
 export interface WorkspaceShell {
@@ -72,6 +75,8 @@ export interface WorkspaceShell {
    * and return true, so the row does not switch the tool off.
    */
   resumeToolPage(actionId: string): boolean;
+  /** Re-apply the route and re-read the Results shelf's owners. */
+  sync(): void;
   /** Re-evaluate the phone sheet and the rail's availability. */
   applyMobileSheet(): void;
   mountAnalysePanel(el: HTMLElement): void;
@@ -159,7 +164,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     mobileSheet.slot('view').append(d.inspector.element);
     if (analyse) mobileSheet.slot('analyse').append(analyse.element);
     if (object) mobileSheet.slot('analyse').append(object.element);
-    mobileSheet.slot('layers').append(dataEls.layers, dataEls.layerHealth);
+    mobileSheet.slot('layers').append(...(shelf ? [shelf.element] : []), dataEls.layers, dataEls.layerHealth);
     const layersPanels: HTMLElement[] = [d.classLegend, d.processStudio];
     if (measure) layersPanels.push(measure.element);
     layersPanels.push(d.clip, d.annotation, d.export);
@@ -183,7 +188,18 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
       object: d.objectPanel()?.element,
     });
     router?.sync();
+    if (shelf) leftPanels.append(shelf.element);
   };
+
+  // Results shelf: the rail's footer on desktop, a row atop the phone sheet's
+  // Layers tab. Placed by the two layout functions above.
+  const shelf = d.results
+    ? mountResultsShelf(d.results, (route) => {
+      router?.navigate(route);
+      if (mobileApplied) mobileSheet.setActive(route.mode === 'analyse' ? 'analyse' : 'layers');
+    })
+    : null;
+  if (shelf) { leftPanels.append(shelf.element); d.addTeardown(() => shelf.dispose()); }
 
   // Keyed to the shared mobile-layout condition so JS and CSS agree.
   const mobileMql = typeof window.matchMedia === 'function' ? window.matchMedia(MOBILE_LAYOUT_QUERY) : null;
@@ -221,6 +237,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     router,
     mobileSheet,
     showMode: (m) => workspace.setMode(m),
+    sync: () => { live.sync(); shelf?.refresh(); },
     resumeToolPage: (id) => {
       const page = id.slice(5) as ToolPage;
       const node = id.startsWith('tool.') ? pages[page]?.element() : null;
