@@ -260,6 +260,33 @@ describe('runRenderFrame — streaming cadence', () => {
   });
 });
 
+describe('runRenderFrame — streaming frustum cull', () => {
+  it('culls streaming nodes to the frustum on a rendered frame with a session attached', () => {
+    const host = makeHost({ hasStreaming: () => true });
+    runRenderFrame(host);
+
+    expect(host.cullStreamingToFrustum).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not cull when no streaming session is attached', () => {
+    const host = makeHost({ hasStreaming: () => false });
+    runRenderFrame(host);
+
+    expect(host.cullStreamingToFrustum).not.toHaveBeenCalled();
+  });
+
+  it('does not cull on a skipped frame even with a session attached', () => {
+    const host = makeHost({
+      hasStreaming: () => true,
+      shouldRenderFrame: () => false,
+      edlEnabled: () => false,
+    });
+    runRenderFrame(host);
+
+    expect(host.cullStreamingToFrustum).not.toHaveBeenCalled();
+  });
+});
+
 describe('runRenderFrame — measure cursor gating', () => {
   it('picks and sets the cursor when measuring, not dragging, pointer moved over canvas', () => {
     const host = makeHost({

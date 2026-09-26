@@ -6492,3 +6492,122 @@ and a Planning assertion in `tests/e2e/observatoryPanel.spec.ts`.
 entry chunk 823,094 bytes and Viewer 751,944 bytes, both equal to the
 baseline build; `openObservatoryRun` 20,042 to 35,860, `observatoryPanel`
 9,509 to 12,685, `observatoryPackage` 13,158 to 15,649.
+
+### L64 · PARTIAL · CORRECTNESS
+
+The labelling mechanism now exists. `BaseExportMode.ts:460` computes
+`presentation` from `context.continuityCapabilities` through
+`presentationOfCapture`, `FigureStampContext` carries `presentation` and
+`reconstructedShare`, and `tests/exportIsolation.test.ts` pins the caller to
+the honest `as-is` branch and refuses a credited stand-down.
+
+`continuityCapabilities` (`types.ts:304`) is declared and never assigned.
+`Viewer.exportImage` builds its `ExportContext` from `renderer`, `scene`,
+`camera`, `canvas`, `adapter` and `classScopeStamp` alone, so `capturedCaps` at
+`BaseExportMode.ts:459` is `undefined` on every real call and the ternary
+falls to `source` regardless of what the Continuity Field is doing.
+`reconstructedShare` is hardcoded `null` at `BaseExportMode.ts:469`; no census
+feeds it. Both wait on the same seam the render side has not opened.
+
+### L46 · PARTIAL · PERFORMANCE
+
+The renderer is wired now. `renderLoop.ts:229` calls
+`host.cullStreamingToFrustum()` on every rendered frame with a session
+attached, `Viewer._buildRenderLoopHost` binds that to
+`StreamingRenderer.cullToFrustum` (`Viewer.ts:6057`), and `cullToFrustum`
+derives the frustum planes from the live camera and calls
+`applyFrustumVisibility`, whose only write to `mesh.visible` is
+`_applyVisibility` (`StreamingRenderer.ts:430`). `tests/renderLoop.test.ts`
+now asserts the call fires on a rendered frame with streaming attached and
+does not on an idle frame or with no session, closing the gap the mock alone
+left open.
+
+What is unproven is still unproven. No record exists in
+`validation/renderer-benchmark/`; `verify-renderer-benchmark.mjs` exits clean
+on an empty directory rather than measuring anything. The prior caveats hold:
+a culled node carries no points, so a drawn-node share is not a GPU-time
+share, and the stored baseline is an orthographic four-camera snapshot, not a
+frustum.
+
+### L84 · PARTIAL · CORRECTNESS
+
+The counter this account said did not exist now does. `deviceGeneration.ts`'s
+`DeviceGeneration` is wired through `watchDeviceChanges` at `Viewer.ts:4306`
+and exposed as `viewer.deviceGeneration` (`Viewer.ts:3245-3250`). L134
+measured it against a forced `WEBGL_lose_context` on the WebGL backend: the
+context reports lost, the restore arrives, the interface survives and no page
+error is raised either side.
+
+The renderer's own resources are covered; the Continuity Field's are not.
+`ContinuityRuntime.ts:368` reads `input.display.deviceGeneration` and hands it
+straight to `HistoryTargets.resize`, but nothing in `Viewer.ts` constructs
+that `DisplayState` or calls into `ContinuityRuntime` at all, because the
+subsystem is still unreachable from `main.ts`. The generation a history
+surface would need to invalidate against exists and is measured; it has
+nowhere to be read from yet.
+
+### L103 · PARTIAL · SCIENTIFIC
+
+"There is neither" is now half right. L114 measured a real browser session
+for the Continuity Field: WebGPU creates all three history surfaces and
+WebGL 2 reports `EXT_color_buffer_float` and an R32F framebuffer complete,
+recorded in `validation/renderer-capability/`. A device to render on exists;
+`docs/continuity-field.md:63-67` and `verify-renderer-benchmark.mjs:16-20`
+both say so now, correcting the same repeated claim.
+
+What is still missing is the wiring: nothing calls the Continuity Field from
+a renderer, so no frame has ever been drawn through it and a screenshot
+corpus has nothing to screenshot. There is still no phone, tablet or WebKit
+device; the probe is one Chromium session on one laptop. The ten
+deterministic grid scenes this account built stand as they were: a rule
+check, not a substitute for either gap.
+
+### L109 · PARTIAL · SCIENTIFIC
+
+One of the three deliberate omissions rests on a claim L114 has since
+corrected. This account said no runner here exposes a WebGPU adapter;
+`docs/continuity-field.md` itself now says otherwise at lines 63-67, because
+the browser this project previews in does, and
+`validation/renderer-capability/` records it. Frame time is still unmeasured,
+but the reason is that the field is not wired into a renderer, not that no
+GPU is reachable, which is the distinction L114's own account draws.
+
+The other two omissions stand as written: no release notes while the tree is
+untested, and `limitations.md` left alone rather than describing a limitation
+of code nothing runs. There is still no phone, tablet or WebKit device; one
+Chromium session on one machine narrows nothing about them, correction or
+not.
+
+### L110 · PARTIAL · SCIENTIFIC
+
+"No runner here exposes a WebGPU adapter" is the same claim L114 corrected
+elsewhere in this programme, and it was wrong here too: the browser this
+project previews in reaches both a WebGPU adapter and a WebGL 2 context, per
+`validation/renderer-capability/`. The sixteen fields still have no record,
+and the reason still holds without that sentence: the field has never drawn
+a frame, because nothing wires it into a renderer, so every field but the
+commit hash would still have had to be invented.
+
+`verify-renderer-benchmark.mjs:16-20` states the corrected reason directly
+and exits clean on the empty directory rather than measuring anything.
+There is still no phone, tablet or WebKit device, correction or not; the
+schema, the required-scene set and the four structural checks this account
+built are unaffected and still gate the first record that appears.
+
+### L115 · PARTIAL · SCIENTIFIC
+
+The account above overstates the code. "Geometry rasters suspend
+reconstruction" is not true today: `BaseExportMode.ts:460` calls
+`presentationOfCapture(capturedCaps, 'as-is')` with the literal string
+`'as-is'`, never `capturePolicyFor`'s verdict. The comment above it says why:
+the renderer sits behind the export-to-render boundary the module-graph
+ratchet holds shrink-only, and this caller performs no suspension.
+`capturePolicyFor` (`presentationMode.ts:96`) computes the obligation and is
+imported nowhere outside its own file and its test.
+
+What ships is disclosure, not isolation. A geometry raster captured while
+reconstruction runs is labelled `reconstructed`, not stood down.
+`tests/exportIsolation.test.ts` names the gap directly, in a describe block
+titled "the suspension is named but not yet performed," and pins the absent
+import with a source-text assertion. L64 separately found
+`continuityCapabilities` itself never populated by `Viewer.exportImage`.

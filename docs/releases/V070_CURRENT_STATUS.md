@@ -9,19 +9,19 @@ entry. This is the latest account of each, which is a different question
 and the one a reader usually has. Where an entry was revisited, the last
 heading in the file wins.
 
-Entries: 166. Revisited at least once: 19.
+Entries: 166. Revisited at least once: 25.
 
 ## Totals
 
 | Status | Entries |
 | --- | --- |
 | FIXED | 54 |
-| BUILT | 41 |
-| PARTIAL | 32 |
+| BUILT | 40 |
+| PARTIAL | 34 |
 | MEASURED | 15 |
 | NOT REPRODUCIBLE | 10 |
 | DEFERRED | 6 |
-| OPEN | 4 |
+| OPEN | 3 |
 | REFUSED | 3 |
 | SUPERSEDED | 1 |
 
@@ -74,7 +74,7 @@ Entries: 166. Revisited at least once: 19.
 | L43 | FIXED | STATE | 1 |
 | L44 | FIXED | LIFECYCLE | 1 |
 | L45 | FIXED | ARCHITECTURE | 1 |
-| L46 | PARTIAL | PERFORMANCE | 2 |
+| L46 | PARTIAL | PERFORMANCE | 3 |
 | L47 | PARTIAL | UI | 4 |
 | L48 | FIXED | PERFORMANCE | 1 |
 | L49 | MEASURED | PERFORMANCE | 1 |
@@ -92,7 +92,7 @@ Entries: 166. Revisited at least once: 19.
 | L61 | PARTIAL | CORRECTNESS | 1 |
 | L62 | PARTIAL | CORRECTNESS | 1 |
 | L63 | FIXED | CORRECTNESS | 1 |
-| L64 | OPEN | CORRECTNESS | 1 |
+| L64 | PARTIAL | CORRECTNESS | 2 |
 | L65 | PARTIAL | PERFORMANCE | 1 |
 | L66 | PARTIAL | ARCHITECTURE | 1 |
 | L67 | PARTIAL | PERFORMANCE | 1 |
@@ -112,7 +112,7 @@ Entries: 166. Revisited at least once: 19.
 | L81 | PARTIAL | EVIDENCE | 1 |
 | L82 | PARTIAL | ARCHITECTURE | 1 |
 | L83 | PARTIAL | ARCHITECTURE | 1 |
-| L84 | PARTIAL | CORRECTNESS | 1 |
+| L84 | PARTIAL | CORRECTNESS | 2 |
 | L85 | FIXED | ARCHITECTURE | 1 |
 | L86 | FIXED | PERFORMANCE | 1 |
 | L87 | FIXED | SCIENTIFIC | 1 |
@@ -131,19 +131,19 @@ Entries: 166. Revisited at least once: 19.
 | L100 | REFUSED | ARCHITECTURE | 1 |
 | L101 | REFUSED | SCIENTIFIC | 1 |
 | L102 | BUILT | SCIENTIFIC | 1 |
-| L103 | PARTIAL | SCIENTIFIC | 1 |
+| L103 | PARTIAL | SCIENTIFIC | 2 |
 | L104 | MEASURED | SCIENTIFIC | 1 |
 | L105 | MEASURED | ARCHITECTURE | 1 |
 | L106 | MEASURED | ARCHITECTURE | 1 |
 | L107 | BUILT | ARCHITECTURE | 1 |
 | L108 | FIXED | SCIENTIFIC | 1 |
-| L109 | PARTIAL | SCIENTIFIC | 1 |
-| L110 | PARTIAL | SCIENTIFIC | 1 |
+| L109 | PARTIAL | SCIENTIFIC | 2 |
+| L110 | PARTIAL | SCIENTIFIC | 2 |
 | L111 | MEASURED | SCIENTIFIC | 1 |
 | L112 | MEASURED | ARCHITECTURE | 1 |
 | L113 | MEASURED | SCIENTIFIC | 1 |
 | L114 | MEASURED | SCIENTIFIC | 1 |
-| L115 | BUILT | SCIENTIFIC | 1 |
+| L115 | PARTIAL | SCIENTIFIC | 2 |
 | L116 | MEASURED | ARCHITECTURE | 1 |
 | L117 | BUILT | ARCHITECTURE | 1 |
 | L118 | MEASURED | ARCHITECTURE | 1 |
