@@ -1,0 +1,387 @@
+{
+  "$comment": "The steps of `npm run test:release:execute`, run by scripts/run-gates.mjs. Array order IS the serial order (`--serial`), and every dependency must appear earlier in the array, so the serial order is always a valid schedule. `group` names a set of independent read-only checks that run in parallel with a bounded pool; `@<group>` in `after` waits for every member of that group. `after` orders only: the step runs even if the earlier one failed. `needs` also requires success: the step is reported as skipped (and counts as a failure) when a need failed. The static group runs before anything else because the test buckets regenerate evidence records several static verifiers read, so running them concurrently would race.",
+  "steps": [
+    {
+      "script": "typecheck",
+      "group": "static"
+    },
+    {
+      "script": "lint:no-ignored-src",
+      "group": "static"
+    },
+    {
+      "script": "lint:no-tracked-ignored",
+      "group": "static"
+    },
+    {
+      "script": "lint:no-host-paths",
+      "group": "static"
+    },
+    {
+      "script": "lint:no-source-control-chars",
+      "group": "static"
+    },
+    {
+      "script": "lint:release-sync",
+      "group": "static"
+    },
+    {
+      "script": "lint:main-deferral",
+      "group": "static"
+    },
+    {
+      "script": "lint:inline-imports",
+      "group": "static"
+    },
+    {
+      "script": "lint:unsafe-html",
+      "group": "static"
+    },
+    {
+      "script": "lint:csp-html",
+      "group": "static"
+    },
+    {
+      "script": "lint:html-assets",
+      "group": "static"
+    },
+    {
+      "script": "lint:python-version",
+      "group": "static"
+    },
+    {
+      "script": "lint:layer-boundaries",
+      "group": "static"
+    },
+    {
+      "script": "lint:mono-usage",
+      "group": "static"
+    },
+    {
+      "script": "lint:editorial-language",
+      "group": "static"
+    },
+    {
+      "script": "lint:control-explanations",
+      "group": "static"
+    },
+    {
+      "script": "lint:position-access",
+      "group": "static"
+    },
+    {
+      "script": "lint:int-truncation",
+      "group": "static"
+    },
+    {
+      "script": "lint:spatial-context",
+      "group": "static"
+    },
+    {
+      "script": "lint:upload-queue-seam",
+      "group": "static"
+    },
+    {
+      "script": "lint:monolith-size",
+      "group": "static"
+    },
+    {
+      "script": "lint:palette-lightness",
+      "group": "static"
+    },
+    {
+      "script": "lint:architecture-truth",
+      "group": "static"
+    },
+    {
+      "script": "lint:standards-truth",
+      "group": "static"
+    },
+    {
+      "script": "lint:disposal-registry",
+      "group": "static"
+    },
+    {
+      "script": "lint:module-graph",
+      "group": "static"
+    },
+    {
+      "script": "lint:unreachable-modules",
+      "group": "static"
+    },
+    {
+      "script": "lint:capability-manifest",
+      "group": "static"
+    },
+    {
+      "script": "lint:worker-registry",
+      "group": "static"
+    },
+    {
+      "script": "lint:claim-register",
+      "group": "static"
+    },
+    {
+      "script": "lint:method-literals",
+      "group": "static"
+    },
+    {
+      "script": "lint:unit-factor-literals",
+      "group": "static"
+    },
+    {
+      "script": "lint:canonical-urls",
+      "group": "static"
+    },
+    {
+      "script": "lint:dataset-citations",
+      "group": "static"
+    },
+    {
+      "script": "lint:terrain-field-ids",
+      "group": "static"
+    },
+    {
+      "script": "lint:digest-manifests",
+      "group": "static"
+    },
+    {
+      "script": "lint:oracle-registry",
+      "group": "static"
+    },
+    {
+      "script": "lint:oracle-consensus",
+      "group": "static"
+    },
+    {
+      "script": "validation:datasets:verify",
+      "group": "static"
+    },
+    {
+      "script": "validation:field:verify",
+      "group": "static"
+    },
+    {
+      "script": "validation:field-simulation:verify",
+      "group": "static"
+    },
+    {
+      "script": "validation:reproduction:verify",
+      "group": "static"
+    },
+    {
+      "script": "validation:generalization:verify",
+      "group": "static"
+    },
+    {
+      "script": "validation:impact:verify",
+      "group": "static"
+    },
+    {
+      "script": "validation:impact:summary:check",
+      "group": "static"
+    },
+    {
+      "script": "validation:freeze:verify",
+      "group": "static"
+    },
+    {
+      "script": "validation:snapshot:verify",
+      "group": "static"
+    },
+    {
+      "script": "verify:renderer-benchmark",
+      "group": "static"
+    },
+    {
+      "script": "lint:tier-evidence",
+      "group": "static"
+    },
+    {
+      "script": "lint:release-truth",
+      "group": "static"
+    },
+    {
+      "script": "lint:license",
+      "group": "static"
+    },
+    {
+      "script": "lint:claim-prose-sync",
+      "group": "static"
+    },
+    {
+      "script": "lint:doc-links",
+      "group": "static"
+    },
+    {
+      "script": "lint:doc-narration",
+      "group": "static"
+    },
+    {
+      "script": "lint:v070-status",
+      "group": "static"
+    },
+    {
+      "script": "lint:claims-language",
+      "group": "static"
+    },
+    {
+      "script": "lint:archive-vocab",
+      "group": "static"
+    },
+    {
+      "script": "lint:sbom",
+      "group": "static"
+    },
+    {
+      "script": "lint:notices",
+      "group": "static"
+    },
+    {
+      "script": "lint:dataset-attribution",
+      "group": "static"
+    },
+    {
+      "script": "check:deps",
+      "group": "static"
+    },
+    {
+      "script": "test:build",
+      "after": [
+        "@static"
+      ]
+    },
+    {
+      "script": "build:live",
+      "after": [
+        "test:build"
+      ]
+    },
+    {
+      "script": "check:bundle",
+      "after": [
+        "build:live"
+      ],
+      "needs": [
+        "build:live"
+      ]
+    },
+    {
+      "script": "check:no-test-seam",
+      "after": [
+        "build:live"
+      ],
+      "needs": [
+        "build:live"
+      ]
+    },
+    {
+      "script": "check:no-dev-flags",
+      "after": [
+        "build:live"
+      ],
+      "needs": [
+        "build:live"
+      ]
+    },
+    {
+      "script": "test:buckets:verify",
+      "after": [
+        "check:bundle"
+      ]
+    },
+    {
+      "script": "benchmark:archive-portability",
+      "after": [
+        "test:buckets:verify"
+      ]
+    },
+    {
+      "script": "test:unit",
+      "after": [
+        "benchmark:archive-portability"
+      ]
+    },
+    {
+      "script": "test:export",
+      "after": [
+        "test:unit"
+      ]
+    },
+    {
+      "script": "test:terrain",
+      "after": [
+        "test:export"
+      ]
+    },
+    {
+      "script": "validation:study:verify",
+      "after": [
+        "test:terrain"
+      ]
+    },
+    {
+      "script": "validation:ground-metrics:verify",
+      "after": [
+        "validation:study:verify"
+      ]
+    },
+    {
+      "script": "validation:classifier-corpus:verify",
+      "after": [
+        "validation:ground-metrics:verify"
+      ]
+    },
+    {
+      "script": "validation:e5:manifests:verify",
+      "after": [
+        "validation:classifier-corpus:verify"
+      ]
+    },
+    {
+      "script": "test:ui",
+      "after": [
+        "validation:e5:manifests:verify"
+      ]
+    },
+    {
+      "script": "test:slow",
+      "after": [
+        "test:ui"
+      ]
+    },
+    {
+      "script": "test:smoke",
+      "after": [
+        "test:slow"
+      ],
+      "tags": [
+        "e2e"
+      ]
+    },
+    {
+      "script": "test:smoke:live",
+      "after": [
+        "test:smoke"
+      ],
+      "tags": [
+        "e2e"
+      ]
+    },
+    {
+      "script": "test:smoke:mobile",
+      "after": [
+        "test:smoke:live"
+      ],
+      "tags": [
+        "e2e"
+      ]
+    },
+    {
+      "script": "verify:reachability",
+      "after": [
+        "test:smoke:mobile"
+      ]
+    }
+  ]
+}

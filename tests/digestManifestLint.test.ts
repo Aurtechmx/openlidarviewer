@@ -14,6 +14,8 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // @ts-expect-error - plain .mjs script, no types
 import { collectDigestProblems, parseManifest, isManifestName } from '../scripts/lint-digest-manifests.mjs';
+// @ts-expect-error - plain .mjs script, no types
+import { serialOrder } from '../scripts/lib/gates.mjs';
 
 const A = 'a'.repeat(64);
 const B = 'b'.repeat(64);
@@ -108,8 +110,8 @@ describe('wiring', () => {
     const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
     expect(pkg.scripts['lint:digest-manifests']).toBe('node scripts/lint-digest-manifests.mjs');
     expect(
-      pkg.scripts['test:release:execute'].indexOf('npm run lint:digest-manifests'),
+      serialOrder(),
       'a lint outside the release chain guards nothing at release time',
-    ).toBeGreaterThan(-1);
+    ).toContain('lint:digest-manifests');
   });
 });
