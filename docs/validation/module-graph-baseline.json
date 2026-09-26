@@ -470,6 +470,10 @@
         "importers": 24
       },
       {
+        "file": "src/io/sniffFormat.ts",
+        "importers": 17
+      },
+      {
         "file": "src/ui/Modal.ts",
         "importers": 18
       },
