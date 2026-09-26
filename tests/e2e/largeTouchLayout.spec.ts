@@ -86,6 +86,35 @@ async function coveredControls(page: Page): Promise<string[]> {
   });
 }
 
+/**
+ * The colour key in both right-rail states. The scan opens coloured by height
+ * (a colour-by-value mode), so the legend must show whether the rail is open
+ * (docked, compact) or collapsed (floating, covering nothing).
+ */
+async function checkLegendBothRailStates(page: Page, tap: boolean, shot: string): Promise<void> {
+  const legend = page.locator('.olv-colorbar');
+  const rightTab = page.locator('.olv-right-rail-tab');
+  const press = async (): Promise<void> => { if (tap) await rightTab.tap(); else await rightTab.click(); };
+  await expect(legend).toBeVisible();
+  await expect(legend).toHaveClass(/olv-colorbar-docked/);
+  const docked = await legend.boundingBox();
+  expect(docked?.height ?? 999).toBeLessThanOrEqual(200);
+
+  await press();
+  await expect(rightTab).toHaveAttribute('aria-expanded', 'false');
+  await expect(legend).toBeVisible();
+  await expect(legend).toHaveClass(/olv-colorbar-floating/);
+  await page.waitForTimeout(600); // let the rail slide finish
+  expect(await coveredControls(page)).toEqual([]);
+  await page.screenshot({ path: `test-results/${shot}-collapsed.png` });
+
+  await press();
+  await expect(rightTab).toHaveAttribute('aria-expanded', 'true');
+  await expect(legend).toBeVisible();
+  await expect(legend).toHaveClass(/olv-colorbar-docked/);
+  await page.waitForTimeout(600);
+}
+
 async function noHorizontalScroll(page: Page): Promise<void> {
   const [scrollW, viewW] = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
   // What a finger can do: try to pan the page sideways and see if it moved.
@@ -169,10 +198,7 @@ for (const size of [{ width: 1280, height: 800 }, { width: 1024, height: 768 }])
       await expect(page.locator('.olv-left-panels')).not.toHaveClass(/olv-rail-collapsed/);
       const rightTab = page.locator('.olv-right-rail-tab');
       await expect(rightTab).toHaveAttribute('aria-expanded', 'true');
-      await rightTab.tap();
-      await expect(rightTab).toHaveAttribute('aria-expanded', 'false');
-      await rightTab.tap();
-      await expect(rightTab).toHaveAttribute('aria-expanded', 'true');
+      await checkLegendBothRailStates(page, true, `large-touch-${size.width}x${size.height}-${info.project.name}`);
       await page.waitForTimeout(600); // let the rail slide finish
 
       // No precise drag is required: the rail corner grip is gone.
@@ -218,11 +244,11 @@ for (const size of [{ width: 1280, height: 800 }, { width: 1024, height: 768 }])
   });
 }
 
-for (const size of [{ width: 1280, height: 800 }, { width: 1024, height: 768 }]) {
+for (const size of [{ width: 1440, height: 900 }, { width: 1280, height: 800 }, { width: 1024, height: 768 }]) {
   test.describe(`fine pointer ${size.width}x${size.height}`, () => {
     test.use({ viewport: size });
 
-    test('keeps the desktop density, and nothing sits over a control', async ({ page }) => {
+    test('keeps the desktop density, and nothing sits over a control', async ({ page }, info) => {
       await openScan(page);
       expect(await page.evaluate((q) => matchMedia(q).matches, LARGE_TOUCH_LAYOUT_QUERY)).toBe(false);
       const tab = await page.locator('.olv-rail-tab').boundingBox();
@@ -237,6 +263,9 @@ for (const size of [{ width: 1280, height: 800 }, { width: 1024, height: 768 }])
       const rail = await page.locator('.olv-right-rail').boundingBox();
       const dock = await page.locator('.olv-dock').boundingBox();
       if (rail && dock && rail.x < dock.x + dock.width) expect(rail.y + rail.height).toBeLessThanOrEqual(dock.y);
+      await expect(page.locator('.olv-lasso-toast.olv-visible')).toHaveCount(0, { timeout: 10_000 });
+      await page.screenshot({ path: `test-results/desktop-${size.width}x${size.height}-${info.project.name}-docked.png` });
+      await checkLegendBothRailStates(page, false, `desktop-${size.width}x${size.height}-${info.project.name}`);
     });
   });
 }

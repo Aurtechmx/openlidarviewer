@@ -47,6 +47,8 @@ export class ColorbarOverlay {
   private _lastKey: string | null = null;
   /** The mode whose legend the user dismissed, or null when armed. */
   private _dismissedMode: string | null = null;
+  /** The last spec drawn, to redraw when the layout switches orientation. */
+  private _last: ActiveColorbar | null = null;
   /** The mode currently on display (dismissal bookkeeping). */
   private _mode: string | null = null;
 
@@ -101,8 +103,10 @@ export class ColorbarOverlay {
       this._setVisible(false);
       return;
     }
-    const s = active.spec;
-    const key = [active.mode, s.palette, s.min, s.max, s.unit ?? '', active.note ?? ''].join('|');
+    const orientation = this._isPhone() ? 'vertical' : 'horizontal';
+    const s = { ...active.spec, orientation } as const;
+    const key = [active.mode, s.palette, s.min, s.max, s.unit ?? '', active.note ?? '', orientation].join('|');
+    this._last = active;
     if (key === this._lastKey) {
       this._setVisible(true);
       return;
@@ -132,28 +136,49 @@ export class ColorbarOverlay {
 
   /** Where the overlay was mounted, so it can go back there. */
   private _home: HTMLElement | null = null;
+  /** The rail whose collapse state is being watched, once found. */
+  private _watched: HTMLElement | null = null;
+
+  private _isPhone(): boolean {
+    return typeof matchMedia === 'function' && matchMedia(MOBILE_LAYOUT_QUERY).matches;
+  }
 
   /**
    * Wherever the workspace rails show (desktop and large-touch), the legend
    * docks at the top of the right rail beside the colour controls it
-   * explains. Floating mid-stage it landed on, or showed through, the
-   * navigation card at common tablet and laptop sizes. The phone layout keeps
-   * the floating card.
+   * explains, as a compact horizontal bar. Floating mid-stage it landed on,
+   * or showed through, the navigation card at common sizes. When that rail is
+   * collapsed the legend floats instead (`olv-colorbar-floating`, top-right
+   * of the stage, clear of the controls) so a colour-coded view always shows
+   * its key, and docks again when the rail reopens. The phone layout keeps
+   * the vertical floating card.
    */
   private _place(): void {
     if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return;
     const rail = document.querySelector<HTMLElement>('.olv-right-rail');
-    const phone = typeof matchMedia === 'function' && matchMedia(MOBILE_LAYOUT_QUERY).matches;
+    if (rail && rail !== this._watched && typeof MutationObserver !== 'undefined') {
+      this._watched = rail;
+      new MutationObserver(() => this._place()).observe(rail, { attributes: true, attributeFilter: ['class'] });
+      if (typeof matchMedia === 'function') {
+        matchMedia(MOBILE_LAYOUT_QUERY).addEventListener?.('change', () => {
+          const last = this._last;
+          this._lastKey = null;
+          if (last) this.update(last);
+        });
+      }
+    }
+    const phone = this._isPhone();
     const parent = this.element.parentElement;
-    if (rail && !phone) {
+    const dock = Boolean(rail && !phone && !rail.classList.contains('olv-right-collapsed'));
+    if (dock && rail) {
       if (parent !== rail) {
         if (parent) this._home = parent;
         rail.prepend(this.element);
       }
-      this.element.classList.add('olv-colorbar-docked');
-    } else {
-      if (this._home && parent !== this._home) this._home.append(this.element);
-      this.element.classList.remove('olv-colorbar-docked');
+    } else if (this._home && parent !== this._home) {
+      this._home.append(this.element);
     }
+    this.element.classList.toggle('olv-colorbar-docked', dock);
+    this.element.classList.toggle('olv-colorbar-floating', !dock && !phone);
   }
 }

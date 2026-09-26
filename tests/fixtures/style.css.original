@@ -9828,12 +9828,22 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
    mid-stage, where this legend floats: the legend steps aside until the toast
    times out, so neither hides the other's controls. */
 body:has(.olv-lasso-toast.olv-visible[data-lifted]) .olv-colorbar:not(.olv-colorbar-docked) { visibility: hidden; }
-/* Docked at the top of the right rail (ColorbarOverlay.ts): a card in the
-   rail's flow, not a floating overlay. */
-.olv-colorbar.olv-colorbar-docked {
-  position: static; transform: none; right: auto; top: auto; z-index: auto;
-  flex-shrink: 0;
+/* Docked at the top of the right rail (ColorbarOverlay.ts): a compact card
+   in the rail's flow, a horizontal bar rather than a floating column. */
+.olv-colorbar.olv-colorbar-docked,
+.olv-colorbar.olv-colorbar-floating {
+  transform: none; padding: 8px 12px; gap: 0;
 }
+.olv-colorbar.olv-colorbar-docked {
+  position: static; right: auto; top: auto; z-index: auto; flex-shrink: 0;
+}
+/* Right rail collapsed: the key floats at the stage's top-right corner,
+   below the header and clear of the collapsed rail tab, instead of vanishing. */
+.olv-colorbar.olv-colorbar-floating { top: 64px; right: 66px; }
+.olv-colorbar-docked .olv-colorbar-head,
+.olv-colorbar-floating .olv-colorbar-head { min-height: 0; }
+.olv-colorbar-docked .olv-colorbar-note,
+.olv-colorbar-floating .olv-colorbar-note { max-width: 240px; }
 
 /* ─── Layer Health card ──────────────────────────────────────────────
  * Per-layer spatial facts (CRS, units, datum, compatibility, frame
