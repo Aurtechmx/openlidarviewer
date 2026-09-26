@@ -180,7 +180,7 @@ test('after running on a scan: readiness, chips, recommendations, and gated expo
   await expect(complete).toBeEnabled();
 });
 
-test('the DEM package carries the sensitivity raster only when "Include sensitivity" is checked', async ({ page }) => {
+test('the DEM package carries the sensitivity and attention rasters only when their options are checked', async ({ page }) => {
   test.setTimeout(120_000);
   await page.goto('/?test=1');
   await dropDenseGridPly(page);
@@ -220,4 +220,22 @@ test('the DEM package carries the sensitivity raster only when "Include sensitiv
   await include.check();
   const on = await names();
   expect(hasSensitivity(on, baseOf(on))).toBe(true);
+  expect(extractEntry(on, `${baseOf(on)}_attention.tif`)).toBeNull();
+
+  // "Include attention" writes the attention raster on request; with the
+  // sensitivity raster beside it the passport records tier T3.
+  const attention = page.getByRole('checkbox', { name: 'Include attention' });
+  await expect(attention).not.toBeChecked();
+  await expect(page.locator('.olv-analyse-dem-sensitivity')).toContainText('Level 0 means no reason was found');
+  await include.uncheck();
+  await attention.check();
+  const att = await names();
+  expect(extractEntry(att, `${baseOf(att)}_attention.tif`)).not.toBeNull();
+  expect(hasSensitivity(att, baseOf(att))).toBe(false);
+
+  await include.check();
+  const both = await names();
+  const passport = extractEntry(both, `${baseOf(both)}-dtm.tif.olv-passport.json`);
+  expect(passport).not.toBeNull();
+  expect(JSON.parse(new TextDecoder().decode(passport!)).demEvidence.tier).toBe('T3');
 });

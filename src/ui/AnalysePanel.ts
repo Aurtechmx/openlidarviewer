@@ -534,6 +534,8 @@ export class AnalysePanel {
   /** Stops the sensitivity runs of the export in progress. Hidden when none runs. */
   private _demSensitivityCancel!: HTMLButtonElement;
   private _demSensitivityAbort: AbortController | null = null;
+  /** "Include attention" for the DEM package. Off by default: it adds about a third to the export time. */
+  private _demAttentionCheck!: HTMLInputElement;
   private readonly _legend: HTMLElement;
   /** The always-visible minimal "Planned" section. */
   private readonly _roadmap: HTMLElement;
@@ -2234,7 +2236,19 @@ export class AnalysePanel {
     this._demSensitivityCheck = check;
     this._demSensitivityStatus = status;
     this._demSensitivityCancel = cancel;
-    box.append(label, help, status, cancel);
+    const attention = document.createElement('input');
+    attention.type = 'checkbox';
+    attention.checked = false;
+    this._demAttentionCheck = attention;
+    const attentionLabel = el('label', { className: 'olv-analyse-layer-toggle' });
+    attentionLabel.append(attention, el('span', { text: 'Include attention' }));
+    const attentionHelp = el('p', {
+      className: 'olv-analyse-dem-note',
+      text:
+        'Adds a raster to the DEM package that shows where the surface most needs a check and why. '
+        + 'Level 0 means no reason was found, not that the surface is verified.',
+    });
+    box.append(label, help, attentionLabel, attentionHelp, status, cancel);
     return box;
   }
 
@@ -2332,6 +2346,7 @@ export class AnalysePanel {
         exportPermit: exportPermit ?? null,
         analysedBasis: this._contourFrame?.analysedBasis ?? null,
         sensitivityGrids,
+        attention: this._demAttentionCheck?.checked === true,
       });
       triggerDownload(new Blob([bytes as BlobPart], { type: 'application/zip' }), `${basename}-dem.zip`);
     } catch (err) {
