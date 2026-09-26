@@ -3237,9 +3237,8 @@ void viewerLoaded.then(() => {
     rightRail.id = 'olv-right-rail';
     rightRail.append(streamingPanel.element, inspector.element);
     stage.overlay.append(rightRail);
-    // The desktop rail, the phone sheet and the Tools route: workspaceShell.ts,
-    // a lazy chunk that has normally landed by the time the Viewer has. Nothing
-    // below appends to the overlay, so the paint order is unchanged.
+    // Rail, phone sheet, Tools route and Results shelf: workspaceShell.ts, a lazy
+    // chunk that lands before the Viewer. Nothing below appends to the overlay.
     void workspaceShellChunk?.then(({ mountWorkspaceShell }) => {
       const shell = mountWorkspaceShell({
         overlay: stage.overlay,
@@ -3251,13 +3250,12 @@ void viewerLoaded.then(() => {
         toolLauncher: toolLauncherHost,
         clip: clipPanel.element,
         processStudio: processStudio.panel.element,
-        export: exportPanel.element,
+        export: exportPanel,
         measureHint: viewer.measureElements.hint, dock: dock.dock,
         overlayTail: [dock.dock, dock.backend, projectCard.element, viewer.inspectElements.card,
           viewer.annotateElements.editor, viewer.probeElements.readout, inspector.sheetToggle],
         analysePanel: () => analysePanel, objectPanel: () => objectPanel,
-        results: { viewer, measure: () => viewer.measure, terrain: () => analysePanel, layerIdentity: runtime.layerIdentity,
-          contours: () => terrainRunner.getContourLayers(), activeLayerId: () => scans.activeExportTargetId() },
+        results: { viewer, identity: runtime.layerIdentity, scans, terrainRunner },
         measurePanel: () => measureMount.panel, setMeasureMountElement: (fn) => measureMount.setMountElement(fn),
         hasScan,
         onModeChange: () => refreshToolLauncher(),

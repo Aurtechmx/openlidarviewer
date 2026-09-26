@@ -18,17 +18,23 @@
 
 import {
   RESULT_TYPE_LABELS,
+  RESULT_TYPE_ORDER,
   type ResultEntry,
+  type ResultExportProduct,
   type ResultRoute,
   type ResultsIndex,
-  type ResultType,
 } from './resultsIndex';
 
 export interface ResultsShelfDeps {
   readonly index: ResultsIndex;
   navigate(route: ResultRoute): void;
-  /** Aim the camera at a render-frame point, keeping the viewing distance. */
-  aim(anchor: readonly [number, number, number]): void;
+  /**
+   * Aim the camera at a render-frame point. With `fit`, frame that radius;
+   * without, keep the viewing distance.
+   */
+  aim(anchor: readonly [number, number, number], fit: number | null): void;
+  /** Open the Export mode with `product` preselected. Returns false when it could not be marked. */
+  exportTo(product: ResultExportProduct | undefined): boolean;
   /** The active layer id, or null. Read only; the shelf never sets it. */
   activeLayerId(): string | null;
   /** A display name for a layer id, or null when it is gone. */
@@ -47,7 +53,6 @@ export interface ResultsShelf {
   dispose(): void;
 }
 
-const TYPE_ORDER: readonly ResultType[] = ['measurement', 'terrain', 'contours'];
 
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
   const n = document.createElement(tag);
@@ -60,6 +65,12 @@ function clockTime(t: number): string {
   const d = new Date(t);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
+
+const STATUS_LABEL: Readonly<Record<ResultEntry['status'], string>> = {
+  ready: 'Ready',
+  hidden: 'Hidden',
+  stale: 'Out of date',
+};
 
 let shelfSeq = 0;
 
@@ -92,7 +103,7 @@ export function createResultsShelf(deps: ResultsShelfDeps): ResultsShelf {
 
   function focusEntry(e: ResultEntry): void {
     deps.navigate(e.route);
-    if (e.anchor) deps.aim(e.anchor);
+    if (e.anchor) deps.aim(e.anchor, e.fit);
     const other = otherSource(e);
     live.textContent = other
       ? `Showing ${e.title} from ${other}. The active layer is unchanged.`
@@ -106,7 +117,7 @@ export function createResultsShelf(deps: ResultsShelfDeps): ResultsShelf {
     const text = node('div', 'olv-results-text');
     text.append(node('span', 'olv-results-title', e.title));
     const meta = node('span', 'olv-results-meta');
-    const parts = [clockTime(e.createdAt), e.status === 'hidden' ? 'Hidden' : 'Ready'];
+    const parts = [clockTime(e.createdAt), STATUS_LABEL[e.status]];
     const other = otherSource(e);
     if (other) parts.push(`From ${other}`);
     meta.textContent = parts.join(' · ');
@@ -118,14 +129,16 @@ export function createResultsShelf(deps: ResultsShelfDeps): ResultsShelf {
     focus.setAttribute('aria-label', `Focus ${e.title}`);
     focus.addEventListener('click', () => focusEntry(e));
     actions.append(focus);
-    if (e.exportRoute) {
-      const route = e.exportRoute;
+    if (e.exportProduct) {
+      const product = e.exportProduct;
       const exp = node('button', 'olv-results-export', 'Export');
       exp.type = 'button';
       exp.setAttribute('aria-label', `Export ${e.title}`);
       exp.addEventListener('click', () => {
-        deps.navigate(route);
-        live.textContent = `Export opened for ${e.title}.`;
+        const marked = deps.exportTo(product);
+        live.textContent = marked
+          ? `Export opened with ${e.title} selected.`
+          : `Export opened. ${e.title} has no export here yet.`;
       });
       actions.append(exp);
     }
@@ -145,7 +158,7 @@ export function createResultsShelf(deps: ResultsShelfDeps): ResultsShelf {
     const hadFocus = !!active && panel.contains(active);
     const focusedId = hadFocus ? (active.closest('[data-result-id]') as HTMLElement | null)?.dataset.resultId : undefined;
     panel.replaceChildren();
-    for (const type of TYPE_ORDER) {
+    for (const type of RESULT_TYPE_ORDER) {
       const group = entries.filter((e) => e.type === type);
       if (group.length === 0) continue;
       const headingId = `${listId}-${type}`;

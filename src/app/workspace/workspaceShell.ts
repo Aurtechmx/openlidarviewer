@@ -25,7 +25,7 @@ import {
   RAIL_CHEVRON_RIGHT,
 } from '../../ui/panelChrome';
 import { createWorkspaceRouter, type WorkspacePage, type WorkspaceRouter } from './workspaceRouter';
-import { mountResultsShelf, type ResultsShelfSources } from '../results/resultsShelfMount';
+import { mountResultsShelf, type ResultsShelfSources, type ShelfExportPanel, type ShelfTerrainPanel } from '../results/resultsShelfMount';
 
 /** The scene tools that open a page in the Tools mode. */
 export type ToolPage = 'measure' | 'annotate' | 'clip';
@@ -44,12 +44,12 @@ export interface WorkspaceShellDeps {
   toolLauncher: HTMLElement;
   clip: HTMLElement;
   processStudio: HTMLElement;
-  export: HTMLElement;
+  export: ShelfExportPanel;
   measureHint: HTMLElement;
   dock: HTMLElement;
   /** Overlay layers that paint above the rails, appended in this order. */
   overlayTail: readonly HTMLElement[];
-  analysePanel: () => Panel | null;
+  analysePanel: () => (Panel & ShelfTerrainPanel) | null;
   objectPanel: () => Panel | null;
   measurePanel: () => Panel | null;
   setMeasureMountElement: (fn: (el: HTMLElement) => void) => void;
@@ -114,10 +114,10 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     toolLauncher: d.toolLauncher,
     clip: d.clip,
     processStudio: d.processStudio,
-    export: d.export,
+    export: d.export.element,
   };
   workspace.layoutDesktop(workspacePanels);
-  d.export.classList.remove('olv-collapsed'); // one mode at a time, from first build
+  d.export.element.classList.remove('olv-collapsed'); // one mode at a time, from first build
   d.overlay.append(leftPanels);
   d.addTeardown(() => workspace.dispose());
   // Wheel ownership: a wheel over a panel scrolls the panel and never reaches
@@ -167,17 +167,17 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     mobileSheet.slot('layers').append(...(shelf ? [shelf.element] : []), dataEls.layers, dataEls.layerHealth);
     const layersPanels: HTMLElement[] = [d.classLegend, d.processStudio];
     if (measure) layersPanels.push(measure.element);
-    layersPanels.push(d.clip, d.annotation, d.export);
+    layersPanels.push(d.clip, d.annotation, d.export.element);
     mobileSheet.slot('layers').append(...layersPanels);
     analyse?.element.classList.remove('olv-collapsed');
-    d.export.classList.remove('olv-collapsed');
+    d.export.element.classList.remove('olv-collapsed');
     // The now-empty left column would still capture touches over its band.
     leftPanels.classList.add('olv-hidden');
     d.inspector.sheetToggle.classList.add('olv-hidden');
   };
   const toDesktopLayout = (): void => {
     d.analysePanel()?.element.classList.remove('olv-collapsed');
-    d.export.classList.remove('olv-collapsed');
+    d.export.element.classList.remove('olv-collapsed');
     leftPanels.classList.remove('olv-hidden');
     d.inspector.sheetToggle.classList.remove('olv-hidden');
     d.rightRail.append(d.inspector.element);
@@ -194,7 +194,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   // Results shelf: the rail's footer on desktop, a row atop the phone sheet's
   // Layers tab. Placed by the two layout functions above.
   const shelf = d.results
-    ? mountResultsShelf(d.results, (route) => {
+    ? mountResultsShelf(d.results, d.analysePanel, d.export, (route) => {
       router?.navigate(route);
       if (mobileApplied) mobileSheet.setActive(route.mode === 'analyse' ? 'analyse' : 'layers');
     })
@@ -256,6 +256,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
       } else {
         workspace.mountInMode('analyse', el);
       }
+      shelf?.refresh(); // the index subscribes to the new panel's result signal
     },
     // Lazy Object panel: after Analyse in the mobile slot, else the Analyse mode.
     mountObjectPanel: (el) => {

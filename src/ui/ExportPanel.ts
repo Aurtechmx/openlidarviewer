@@ -225,6 +225,9 @@ export interface ExportPanelCallbacks {
   onExportReport?: (templateId: string) => void;
 }
 
+/** A product the Products lane can mark with {@link ExportPanel.select}. */
+export type ExportProduct = 'measurements' | 'findings' | 'terrain-dem' | 'contours';
+
 export class ExportPanel {
   readonly element: HTMLElement;
   /** The moved deliverables (formats / image / report), or null when not wired. */
@@ -257,6 +260,9 @@ export class ExportPanel {
   private _findings: SessionFindings | null = null;
   private _findingsPanel: MountedFindingsPanel | null = null;
   private _findingsMountStarted = false;
+  private readonly _findingsWatchers = new Set<() => void>();
+  private _terrainExports: { ready(): boolean; run(kind: 'dem' | 'contours'): void } | null = null;
+  private _selected: ExportProduct | null = null;
 
   // LAS 1.4 is the converter's lead format (see CONVERT_FORMATS ordering) —
   // default the panel to it so the pill selection matches the recommended choice.
@@ -699,7 +705,8 @@ export class ExportPanel {
     // scan-area control surfaces even when no measurement tool is in play.
     const hasMeasureLane = Boolean(this._cb.exportMeasurements);
     const hasMapLane = Boolean(this._cb.exportKml || this._cb.exportScanFootprint);
-    if (!hasMeasureLane && !hasMapLane) return;
+    const terrain = this._terrainExports;
+    if (!hasMeasureLane && !hasMapLane && !terrain) return;
     // Defensive: this runs during construction, before the host's lazy viewer
     // resolves. A callback that throws (e.g. dereferencing a not-yet-ready
     // viewer) must degrade to 0, never take down panel/app init.
@@ -764,6 +771,7 @@ export class ExportPanel {
           count === 0
             ? NO_MEASUREMENTS_HINT
             : `${count} measurement${measurePlural} ready to export.`,
+          'measurements',
         ),
       );
       // The durable findings ledger: curate the results worth keeping (each with
@@ -777,7 +785,7 @@ export class ExportPanel {
       const ledgerHasEntries = (this._findings?.all.length ?? 0) > 0;
       if (this._cb.collectMeasurementFindings && this._cb.exportFindingsReport && (count > 0 || ledgerHasEntries)) {
         const slot = el('div', { className: 'olv-findings-slot' });
-        content.append(this._productGroup('Findings ledger', slot));
+        content.append(this._productGroup('Findings ledger', slot, undefined, 'findings'));
         if (this._findingsPanel) {
           slot.append(this._findingsPanel.element);
         } else {
@@ -829,7 +837,73 @@ export class ExportPanel {
     if (mapHints.length > 0) {
       content.append(this._productGroup('Google Earth', mapRow, mapHints.join(' ')));
     }
+
+    // The terrain lane: the Analyse panel's own DEM package and contour map
+    // sheet, run by the panel that holds the result. Shown once a result exists.
+    if (terrain) {
+      let ready = false;
+      try { ready = terrain.ready(); } catch { ready = false; }
+      if (ready) {
+        const noResult = 'Run a terrain analysis first.';
+        const demRow = el('div', { className: 'olv-export-product-actions' });
+        demRow.append(this._productButton('DEM package (ZIP)', true, () => terrain.run('dem'), noResult,
+          'Save the elevation rasters with their metadata sheet.'));
+        content.append(this._productGroup('Terrain surface', demRow, undefined, 'terrain-dem'));
+        const contourRow = el('div', { className: 'olv-export-product-actions' });
+        contourRow.append(this._productButton('Contour map sheet (PDF)', true, () => terrain.run('contours'), noResult,
+          'Open the map sheet dialog for the contours.'));
+        content.append(this._productGroup('Contours', contourRow, undefined, 'contours'));
+      }
+    }
     this._products.append(head, content);
+    if (this._selected) this._markSelected(this._selected, false);
+  }
+
+  /**
+   * Wire the terrain lane. `ready` says whether a result exists; `run` hands the
+   * export to the panel that holds it. Set by the workspace shell.
+   */
+  setTerrainExports(t: { ready(): boolean; run(kind: 'dem' | 'contours'): void } | null): void {
+    this._terrainExports = t;
+    this._renderProducts();
+  }
+
+  /**
+   * Open the Products lane with one product marked and its first action
+   * focused. Returns false when that product is not offered right now.
+   */
+  select(product: ExportProduct): boolean {
+    this._productsOpen = true;
+    this._selected = product;
+    this._renderProducts();
+    return this._markSelected(product, true);
+  }
+
+  private _markSelected(product: ExportProduct, focus: boolean): boolean {
+    let found = false;
+    for (const g of Array.from(this._products.querySelectorAll<HTMLElement>('.olv-export-product-group'))) {
+      const on = g.dataset.product === product;
+      g.classList.toggle('is-selected', on);
+      if (on) g.setAttribute('aria-current', 'true');
+      else g.removeAttribute('aria-current');
+      if (on && focus) {
+        found = true;
+        g.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus({ preventScroll: true });
+        g.scrollIntoView?.({ block: 'nearest' });
+      } else if (on) found = true;
+    }
+    return found;
+  }
+
+  /** The findings ledger once it exists, by reference. Read only. */
+  findingsLedger(): SessionFindings | null {
+    return this._findings;
+  }
+
+  /** Told when the findings ledger is built and whenever it changes. */
+  watchFindings(fn: () => void): () => void {
+    this._findingsWatchers.add(fn);
+    return () => { this._findingsWatchers.delete(fn); };
   }
 
   /**
@@ -862,6 +936,9 @@ export class ExportPanel {
     void Promise.all([loadFindingsPanel(), loadSessionFindings()]).then(
       ([{ buildFindingsPanel }, { SessionFindings }]) => {
         this._findings = new SessionFindings();
+        const notify = (): void => { for (const fn of [...this._findingsWatchers]) fn(); };
+        this._findings.subscribe(notify);
+        notify();
         this._findingsPanel = buildFindingsPanel({
           findings: this._findings,
           // Bind the ledger to the scan BEFORE anything is added to or read from
@@ -901,8 +978,9 @@ export class ExportPanel {
     return this._findings.retarget(this._cb.activeFindingsTargetId?.() ?? null);
   }
 
-  private _productGroup(label: string, actions: HTMLElement, hint?: string): HTMLElement {
+  private _productGroup(label: string, actions: HTMLElement, hint?: string, product?: ExportProduct): HTMLElement {
     const group = el('div', { className: 'olv-export-product-group' });
+    if (product) group.dataset.product = product;
     group.append(this._label(label), actions);
     if (hint) {
       group.append(el('span', { className: 'olv-export-fullres-hint', text: hint }));

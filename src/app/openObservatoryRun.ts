@@ -12,6 +12,7 @@ import { createObservatoryRunner, type ObservatoryRunner, type ObservatoryRunner
 import { loadObservatoryPanel } from '../lazyChunks';
 import type { ObservatoryOverlayHost } from '../render/ObservatoryOverlay';
 import type { ObservatoryCloudInput } from './observatoryFromCloud';
+import { announceObservatoryRunner } from './results/resultSignals';
 
 export interface ObservatoryEntryDeps {
   readonly showAnalyseMode: () => void;
@@ -34,7 +35,10 @@ let runner: ObservatoryRunner | null = null;
 
 /** The session's one Observatory runner, built on first use. Exported for tests that need to inspect/reset it between cases. */
 export function getObservatoryRunner(deps: ObservatoryRunnerDeps): ObservatoryRunner {
-  if (!runner) runner = createObservatoryRunner(deps);
+  if (!runner) {
+    runner = createObservatoryRunner(deps);
+    announceObservatoryRunner(runner);
+  }
   return runner;
 }
 

@@ -76,6 +76,13 @@ test.describe('results shelf', () => {
     await shelf(page).locator('.olv-results-export').first().click();
     await expect(page.locator('.olv-ws-tab[data-mode="output"]')).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('.olv-export-panel')).toBeVisible();
+    const group = page.locator('.olv-export-product-group[data-product="measurements"]');
+    await expect(group).toHaveAttribute('aria-current', 'true');
+    await expect(group).toHaveClass(/is-selected/);
+    await expect(page.locator('.olv-export-products-head')).toHaveAttribute('aria-expanded', 'true');
+    await expect(group.locator('button').first()).toBeFocused();
+    await expect(page.locator('.olv-export-product-group.is-selected')).toHaveCount(1);
+    await expect(shelf(page).locator('.olv-results-live')).toHaveText(/selected\.$/);
   });
 
   test('F: a result from another layer says so and Focus keeps the active layer', async ({ page }) => {
@@ -120,6 +127,17 @@ test.describe('results shelf', () => {
     await row.locator('.olv-results-focus').click();
     await expect(page.locator('.olv-ws-tab[data-mode="analyse"]')).toHaveAttribute('aria-selected', 'true');
     await expect(verdict).toBeVisible();
+    await expect(verdict).toHaveAttribute('data-e2e-mark', '1');
+
+    // Export preselects the DEM package in the Export mode's terrain lane.
+    // The list stays open after Focus.
+    await expect(shelf(page).locator('.olv-results-toggle')).toHaveAttribute('aria-expanded', 'true');
+    await row.locator('.olv-results-export').click();
+    await expect(page.locator('.olv-ws-tab[data-mode="output"]')).toHaveAttribute('aria-selected', 'true');
+    const dem = page.locator('.olv-export-product-group[data-product="terrain-dem"]');
+    await expect(dem).toHaveAttribute('aria-current', 'true');
+    await expect(dem.locator('button')).toHaveText('DEM package (ZIP)');
+    await expect(page.locator('.olv-export-product-group[data-product="contours"]')).toBeVisible();
     await expect(verdict).toHaveAttribute('data-e2e-mark', '1');
   });
 

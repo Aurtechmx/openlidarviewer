@@ -18,7 +18,6 @@ const ACCEPTED: Record<string, readonly Site[]> = {
   'src/render/frameDemand.ts': [{ kind: 'setInterval', count: 1, owner: 'VisibleHeartbeat: runs only while started and visible; Viewer stops it on detachStreamingCloud/dispose' }],
   'src/app/streamingUiCoordinator.ts': [{ kind: 'setInterval', count: 1, owner: 'streaming status poll; endSession() clears it (lifetime: streaming session)' }],
   'src/ui/DebugOverlay.ts': [{ kind: 'setInterval', count: 1, owner: '?debug=1 refresh; stop() clears it (lifetime: viewer)' }],
-  'src/app/results/resultsShelfMount.ts': [{ kind: 'setInterval', count: 1, owner: 'Results shelf re-read every 2 s while visible; the shelf dispose clears it (lifetime: workspace shell teardown)' }],
   'src/ui/WorkflowController.ts': [{ kind: 'setInterval', count: 1, owner: 'record countdown; bounded to countdownSeconds, cancelCountdown() clears it' }],
   'src/render/frameScheduler.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'the render loop; FrameDemand.dispose() cancels it (lifetime: viewer)' }],
   'src/perf/frameTelemetry.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'debug frame sampler; stop() cancels it via DebugOverlay.stop()' }],
