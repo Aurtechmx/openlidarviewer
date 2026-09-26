@@ -218,6 +218,8 @@ async function load(page: Page, cache: 'cold' | 'warm'): Promise<LoadTiming> {
   await page.waitForFunction(() => {
     const w = window as unknown as { __olvNavDriver?: unknown; __olvNavProbe?: unknown };
     return Boolean(w.__olvNavDriver && w.__olvNavProbe);
+  }, undefined, { timeout: 30_000 }).catch((e: unknown) => {
+    throw new Error('window.__olvNavDriver / __olvNavProbe never appeared: the served build does not honour ?benchmark=nav (a stale or live preview on the port?)', { cause: e });
   });
   const ttfr = /time to first render\s+([\d.]+) ms/.exec(text)?.[1];
   const points = /points rendered\s+(.+)/.exec(text)?.[1]?.trim() ?? null;
