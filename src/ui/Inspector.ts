@@ -1521,6 +1521,7 @@ export class Inspector {
     ]);
     this._layerRows.set(id, row);
     this._layerFacts.set(id, { name, stableId: stableId ?? null });
+    this._notifySource();
     this._layerVisibleBoxes.set(id, visible);
     // The group panel decides where the row goes; with no groups in play it
     // lands at the end of the flat list exactly as it always has.
@@ -1761,15 +1762,47 @@ export class Inspector {
   }
 
   /**
-   * The live Data-workspace elements — the Layers section (heading + rows) and
-   * the layer-health slot — for the desktop workspace to re-parent into its Data
-   * mode. Only these two nodes are exposed; the Inspector keeps updating them in
-   * place (addLayer, setLayerHealth, setStreamingMode all target the same live
-   * nodes), so ownership of layer state stays with the Inspector — the workspace
-   * only hosts them.
+   * The live Layers section, for the desktop workspace to re-parent into its
+   * Data mode. The Inspector keeps updating the same node (addLayer,
+   * setStreamingMode), so layer state stays here; the workspace only hosts it.
+   * Layer Health is per-scan and stays in the Inspector, under the scan summary.
    */
-  workspaceDataElements(): { layers: HTMLElement; layerHealth: HTMLElement } {
-    return { layers: this._layersSection, layerHealth: this._layerHealthSlot };
+  workspaceDataElements(): { layers: HTMLElement } {
+    return { layers: this._layersSection };
+  }
+
+  private readonly _sourceListeners = new Set<() => void>();
+  private _notifySource(): void {
+    for (const fn of this._sourceListeners) fn();
+  }
+
+  /**
+   * Called whenever the source summary may have changed: a layer added or
+   * removed, a new CRS (including a user override, which arrives through
+   * setCrs from the CRS service), or new provenance. Returns an unsubscribe.
+   */
+  onSourceChange(fn: () => void): () => void {
+    this._sourceListeners.add(fn);
+    return () => this._sourceListeners.delete(fn);
+  }
+
+  /** Format and coordinate system of the newest layer, for the Data home. */
+  sourceSummary(): string {
+    const facts = Array.from(this._layerFacts.values());
+    const name = facts[facts.length - 1]?.name ?? '';
+    const dot = name.lastIndexOf('.');
+    const format = dot > 0 ? name.slice(dot + 1).toUpperCase() : '';
+    return [format, this._pendingCrs?.name].filter(Boolean).join(', ');
+  }
+
+  /** Bring the Layer Health card into view. False while it has no data yet. */
+  focusLayerHealth(): boolean {
+    return this._layerHealthSlot.childElementCount > 0 && this._revealSection(this._layerHealthSlot, null);
+  }
+
+  /** Bring the coordinate-system section into view, the source metadata home. */
+  focusSource(): boolean {
+    return this._revealSection(this._crsSection, null);
   }
 
   /**
@@ -1855,6 +1888,7 @@ export class Inspector {
     this._layerRows.get(id)?.remove();
     this._layerRows.delete(id);
     this._layerFacts.delete(id);
+    this._notifySource();
     this._layerVisibleBoxes.delete(id);
     // A group whose last scan just closed is KEPT, empty: it is still the
     // container the user made, and removing a layer must not delete it.
@@ -2278,6 +2312,7 @@ export class Inspector {
    */
   setProvenance(fingerprint: ProvenanceFingerprint): void {
     this._pendingProvenanceForChunk = fingerprint;
+    this._notifySource();
     if (this._renderProvenanceFn) {
       this._renderProvenanceFn(this._provenanceBody, fingerprint, (type) => {
         this._onProvenanceOverride?.(type);
@@ -2440,6 +2475,7 @@ export class Inspector {
    */
   setCrs(resolved: ResolvedCrs): void {
     this._pendingCrs = resolved;
+    this._notifySource();
     if (this._renderCrsFn) {
       this._renderCrsFn(this._crsBody, resolved, (o) => this._onCrsOverride?.(o));
       this._deliverDeferredCrsFocus();
@@ -2498,6 +2534,7 @@ export class Inspector {
   /** Restore the CRS placeholder when the active scan closes. */
   clearCrs(): void {
     this._pendingCrs = null;
+    this._notifySource();
     this._showCrsPlaceholder();
   }
 

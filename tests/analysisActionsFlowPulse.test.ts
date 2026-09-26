@@ -23,6 +23,7 @@ const loadFlowPulseLab = vi.fn(() => {
 
 vi.mock('../src/lazyChunks', () => ({
   loadFlowPulseLab: () => loadFlowPulseLab(),
+  loadTerrainAccessLab: () => Promise.resolve({ openTerrainAccessLab: vi.fn() }),
 }));
 
 import { contributeAnalysisActions, type AnalysisActionDeps } from '../src/app/actions/analysisActions';
@@ -63,7 +64,8 @@ describe('Flow Pulse Lab action — toast wired', () => {
     const deps = fakeDeps({ showLassoToast: toast });
     flowPulseAction(deps).run();
     await new Promise((r) => setTimeout(r, 0));
-    expect(deps.terrainAnalysisEntry.showAnalyseMode).toHaveBeenCalledTimes(1);
+    // The lab is a modal: opening it leaves the rail's mode alone.
+    expect(deps.terrainAnalysisEntry.showAnalyseMode).not.toHaveBeenCalled();
     expect(openFlowPulseLab).toHaveBeenCalledTimes(1);
     expect(toast.calls).toEqual([]);
   });
@@ -121,5 +123,17 @@ describe('Flow Pulse Lab action — no toast wired (current actionDefinitions.ts
     flowPulseAction(fakeDeps()).run();
     await new Promise((r) => setTimeout(r, 0));
     expect(openFlowPulseLab).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Terrain Access action', () => {
+  it('does not switch the rail to Analyse, since its lab opens as a modal', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const deps = fakeDeps();
+    const action = contributeAnalysisActions(deps).find((a) => a.id === 'analyse.terrainAccess');
+    action?.run();
+    expect(action).toBeDefined();
+    expect(deps.terrainAnalysisEntry.showAnalyseMode).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });

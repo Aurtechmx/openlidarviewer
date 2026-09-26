@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
-import { dropDenseGridPly, openExpandedPanel, railChromeSettled, expectHittable } from './helpers';
+import { dropDenseGridPly, openExpandedPanel, railChromeSettled, expectHittable, openClassesPage } from './helpers';
 
 /**
  * v0.7 accessibility-audit fixes (fe/aria lane): keyboard/focus/visible-state
@@ -80,6 +80,7 @@ test.describe('reclassifyUi — lasso-arm toggle a11y state', () => {
     await expect(armBtn).toBeAttached({ timeout: 10_000 });
     await expect(armBtn).toHaveAttribute('aria-pressed', 'false');
 
+    await openClassesPage(page);
     await railChromeSettled(page);
     await expectHittable(armBtn);
     await armBtn.click();
