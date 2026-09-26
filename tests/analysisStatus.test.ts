@@ -15,6 +15,7 @@ import {
   analysisRows,
   contoursStatus,
   productVerdict,
+  capByRun,
   PREPARE_TERRAIN,
   type AnalysisStatusInput,
 } from '../src/process/analysisStatus';
@@ -102,5 +103,42 @@ describe('analysisRows', () => {
     expect(contoursStatus(input())).toMatchObject({ status: 'blocked', remedy: PREPARE_TERRAIN });
     const done = contoursStatus(input({ produced: new Set<ProductId>(['dtm', 'contours']) }));
     expect(done.status).toBe(ProcessService.fromFacts([facts]).readiness('contours'));
+  });
+
+  it('Range frames states the grid is present rather than a readiness', () => {
+    const r = byId(analysisRows(input({ hasRange: true })), 'range');
+    expect(r.status).toBe('present');
+  });
+});
+
+describe('Terrain status: the more restrictive of Process Studio and the run', () => {
+  const V = 'Run verdict.';
+  const cases: Array<[string, 'Good' | 'Preview' | 'Limited' | 'Blocked', string, boolean]> = [
+    ['ready', 'Good', 'ready', false],
+    ['ready', 'Preview', 'review', true],
+    ['ready', 'Limited', 'review', true],
+    ['ready', 'Blocked', 'blocked', true],
+    ['review', 'Good', 'review', false],
+    ['review', 'Limited', 'review', true],
+    ['review', 'Blocked', 'blocked', true],
+    ['blocked', 'Good', 'blocked', false],
+    ['blocked', 'Limited', 'blocked', false],
+    ['blocked', 'Blocked', 'blocked', true],
+  ];
+  for (const [ps, tier, want, byRun] of cases) {
+    it(`Process Studio ${ps} + run ${tier} reads ${want}`, () => {
+      const out = capByRun({ status: ps as 'ready', reason: 'Studio reason.' }, { tier, verdict: V });
+      expect(out.status).toBe(want);
+      expect(out.reason).toBe(byRun ? V : 'Studio reason.');
+    });
+  }
+
+  it('no run: Process Studio alone, and a run is ignored until a DTM is produced', () => {
+    expect(capByRun({ status: 'ready', reason: 'x' }, null)).toMatchObject({ status: 'ready', reason: 'x' });
+    const run = { tier: 'Blocked' as const, verdict: 'Not usable for terrain products as-is.' };
+    expect(byId(analysisRows(input({ terrainRun: run })), 'terrain').status).toBe(ProcessService.fromFacts([facts]).readiness('dtm'));
+    const after = byId(analysisRows(input({ terrainRun: run, produced: new Set<ProductId>(['dtm', 'contours']) })), 'terrain');
+    expect(after).toMatchObject({ status: 'blocked', reason: 'Not usable for terrain products as-is.', remedy: null });
+    expect(contoursStatus(input({ terrainRun: run, produced: new Set<ProductId>(['dtm', 'contours']) })).status).toBe('blocked');
   });
 });

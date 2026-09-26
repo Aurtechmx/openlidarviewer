@@ -29,6 +29,7 @@ import {
   type AnalysisRemedy,
   type AnalysisRow,
   type AnalysisStatusInput,
+  type TerrainRunUsability,
 } from '../../process/analysisStatus';
 import type { ProcessStudioState } from '../processStudioMount';
 import type { PreflightActionId, ToolId } from '../../process/toolPreflight';
@@ -50,6 +51,8 @@ export interface AnalyseHostPanel {
   restoreParts(): void;
   linksHost(): HTMLElement;
   setPartsListener(fn: (() => void) | null): void;
+  /** The last run's own usability, or null before a run. */
+  runUsability(): TerrainRunUsability | null;
 }
 
 export interface AnalyseWorkspaceDeps {
@@ -85,7 +88,7 @@ export interface AnalyseWorkspace {
   refresh(): void;
 }
 
-const STATUS_TEXT = { ready: 'Ready', review: 'Review', blocked: 'Blocked' } as const;
+const STATUS_TEXT = { ready: 'Ready', review: 'Review', blocked: 'Blocked', present: 'Scanner grid present' } as const;
 
 /** The labs are modals: their rows run the same entry the palette offers. */
 const LAB_ACTION: Partial<Record<AnalysisId, string>> = {
@@ -136,7 +139,8 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
     watched.add(n);
     new MutationObserver(() => api.refresh()).observe(n, { attributes: true, attributeFilter: ['style', 'class'] });
   };
-  const contoursLink = el('button', { className: 'olv-at-link', type: 'button' });
+  // The Terrain page's primary action once a run has produced a result.
+  const contoursLink = el('button', { className: 'olv-at-link is-primary', type: 'button' });
   contoursLink.addEventListener('click', () => { void api.open('contours'); });
 
   const input = (): AnalysisStatusInput => {
@@ -146,6 +150,7 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
       ...s,
       hasRange: panel?.hasPart('range') ?? false,
       hasFeatures: panel?.hasPart('features') ?? false,
+      terrainRun: panel?.runUsability() ?? null,
       canRemediate: (a, t) => d.studio.canRemediate(a, t),
     };
   };
@@ -234,7 +239,7 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
     refresh() {
       const inp = input();
       const rows = analysisRows(inp);
-      list.replaceChildren(...rows.map((row) => {
+      const items = rows.map((row) => {
         const open = el('button', { className: 'olv-ah-open', type: 'button' }, [
           el('span', { className: 'olv-ah-name', text: row.label }),
           badge(row.status),
@@ -246,10 +251,31 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
         ]);
         li.dataset.analysis = row.id;
         if (row.remedy) li.append(remedyButton(row.remedy));
+        // Before a run, the Terrain row carries the run itself: one click from home.
+        if (row.id === 'terrain' && !inp.produced.has('dtm') && row.status !== 'blocked') {
+          const run = el('button', { className: 'olv-ah-remedy', type: 'button', text: 'Run terrain analysis' });
+          run.addEventListener('click', () => d.runAction('analyse.run'));
+          li.append(run);
+        }
         return li;
-      }));
+      });
+      // With contours produced, Contours is a child row under Terrain, one click from home.
       const contours = contoursStatus(inp);
-      contoursLink.replaceChildren(el('span', { className: 'olv-ah-name', text: 'Contours' }), badge(contours.status));
+      if (inp.produced.has('contours')) {
+        const open = el('button', { className: 'olv-ah-open', type: 'button' }, [
+          el('span', { className: 'olv-ah-name', text: 'Contours' }),
+          badge(contours.status),
+        ]);
+        open.addEventListener('click', () => { void api.open('contours'); });
+        const child = el('li', { className: `olv-ah-row is-child is-${contours.status}` }, [
+          open,
+          el('p', { className: 'olv-ah-reason', text: contours.reason, title: contours.reason }),
+        ]);
+        child.dataset.analysis = 'contours';
+        items.splice(1, 0, child);
+      }
+      list.replaceChildren(...items);
+      contoursLink.replaceChildren(el('span', { className: 'olv-ah-name', text: 'Create contours' }), badge(contours.status));
       renderVerdict(shells.contours, contours);
       for (const row of rows) {
         const page = pageOf[row.id];

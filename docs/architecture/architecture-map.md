@@ -23,7 +23,7 @@ from the tree and fails when a cell drifts.
 
 | Layer | Path | Size | Role |
 |---|---|---:|---|
-| Core numerics | `src/process`, `src/numeric.ts`, `src/units` | ~2.5k | Compensated sums, Welford, unit types. No dependencies. |
+| Core numerics | `src/process`, `src/numeric.ts`, `src/units` | ~2.6k | Compensated sums, Welford, unit types. No dependencies. |
 | Model | `src/model` | ~3.6k | `PointCloud`, layer model. Plain data. |
 | Geo | `src/geo` | ~5.2k | CRS math, `ProjectSpatialFrame`, transforms. |
 | Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~48k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. UI-free by lint. |

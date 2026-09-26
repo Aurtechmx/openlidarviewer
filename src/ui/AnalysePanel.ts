@@ -172,6 +172,12 @@ import { buildScanFitness, type FitnessInputs } from '../terrain/quality/scanFit
 import { fitnessIcon, fitnessToneGlyph } from './fitnessIcons';
 
 /** Callbacks the host (main.ts) provides. */
+/** What the last terrain run says about itself, beside Process Studio's readiness. */
+export interface RunUsability {
+  readonly tier: 'Good' | 'Preview' | 'Limited' | 'Blocked';
+  readonly verdict: string;
+}
+
 /** A section of the panel a host can show as its own page. */
 export type AnalysePart = 'contours' | 'range' | 'features';
 
@@ -475,6 +481,8 @@ export class AnalysePanel {
   private readonly _contoursEmpty: HTMLElement;
   private readonly _links: HTMLElement;
   private _partsListener: (() => void) | null = null;
+  /** The last run's own usability: its surface tier and the fitness verdict line. */
+  private _runUsability: RunUsability | null = null;
   /** Host for the 3D contour derived-layer controls; empty until a layer is drawn. */
   private readonly _contourLayerControls: HTMLElement;
   /** Mount point for the generic derived-layers list (built by the runner). */
@@ -901,6 +909,11 @@ export class AnalysePanel {
     this._resultsRegion.insertBefore(this._parts.contours, this._links.nextSibling);
     this.element.insertBefore(this._parts.range, this._resultsRegion);
     this.element.insertBefore(this._parts.features, this._resultsRegion);
+  }
+
+  /** The last run's usability, or null before a run. */
+  runUsability(): RunUsability | null {
+    return this._result ? this._runUsability : null;
   }
 
   /** The slot a host fills with links to the pages it splits out. */
@@ -2896,7 +2909,11 @@ export class AnalysePanel {
   private _renderFitness(): void {
     this._fitnessRow.replaceChildren();
     const r = this._result;
-    if (!r) return;
+    this._runUsability = null;
+    if (!r) {
+      this._partsListener?.();
+      return;
+    }
     const a = terrainAssessment(r);
     const t = r.cellStatusTally;
     const covered = t.measured + t.interpolated + t.lowConfidence + t.edgeRisk;
@@ -2959,6 +2976,8 @@ export class AnalysePanel {
       assessmentLimiters: a.limiters,
     };
     const f = buildScanFitness(inputs);
+    this._runUsability = { tier: a.status, verdict: f.verdict };
+    this._partsListener?.(); // the host's status follows the run's own verdict
 
     const hero = el('div', { className: `olv-fit-verdict is-${f.overallTone}${f.provisional ? ' is-provisional' : ''}` });
     hero.append(el('span', { className: 'olv-fit-verdict-text', text: f.verdict }));
