@@ -45,6 +45,15 @@ const FIREFOX_DISPLAY = FIREFOX_DISPLAYS.length
   ? FIREFOX_DISPLAYS[Number(process.env.TEST_PARALLEL_INDEX ?? 0) % FIREFOX_DISPLAYS.length]
   : undefined;
 
+/**
+ * Specs the blocking browser projects never collect. streamingNavPerf measures
+ * frame times during a scripted fast navigation over a large streaming COPC, a
+ * timing result that only means something on a real GPU. It is tagged `@gpu`
+ * already; listing it here as well keeps it out of `deterministic`, `firefox`
+ * and `webkit` even if the tag is edited. Run it with `--project=gpu`.
+ */
+const NOT_BLOCKING = /firefoxWebglPreflight|streamingNavPerf/;
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
@@ -95,7 +104,7 @@ export default defineConfig({
   // They are ADVISORY in CI, not required: a new leg that goes red would
   // otherwise block every unrelated change while its failures are triaged.
   projects: [
-    { name: 'deterministic', use: { ...devices['Desktop Chrome'] }, grepInvert: /@gpu|@bench|@soak/, testIgnore: /firefoxWebglPreflight/ },
+    { name: 'deterministic', use: { ...devices['Desktop Chrome'] }, grepInvert: /@gpu|@bench|@soak/, testIgnore: NOT_BLOCKING },
     { name: 'gpu', use: { ...devices['Desktop Chrome'] }, grep: /@gpu/, grepInvert: /@bench|@soak/, testIgnore: /firefoxWebglPreflight/ },
     // Navigation benchmark runs. They measure frame pacing and replay whole
     // trajectories, which only means something on a real GPU and outlasts the
@@ -136,9 +145,9 @@ export default defineConfig({
         ...(FIREFOX_DISPLAY ? { launchOptions: { env: { ...process.env, DISPLAY: FIREFOX_DISPLAY } } } : {}),
       },
       grepInvert: /@gpu|@bench|@soak/,
-      testIgnore: /firefoxWebglPreflight/,
+      testIgnore: NOT_BLOCKING,
     },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] }, grepInvert: /@gpu|@bench|@soak/, testIgnore: /firefoxWebglPreflight/ },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] }, grepInvert: /@gpu|@bench|@soak/, testIgnore: NOT_BLOCKING },
     // iPhone WebKit: the same engine family as Mobile Safari, with a phone
     // viewport, a device pixel ratio of 3 and real touch events. It is the
     // closest an install-free local gate gets to an iPhone, and it is NOT an

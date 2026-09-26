@@ -104,6 +104,8 @@ ELITE_*.md
 # (the tracked tiny.las / tiny.laz fixtures are bytes, not *.copc.laz).
 *.copc.laz
 *.copc.laz.*
+# The one small COPC the streaming e2e specs open (scripts/make-copc-fixture.mjs).
+!/tests/fixtures/copc/terrain-access-utm.copc.laz
 
 # Local tooling / editor metadata (ignored via .git/info/exclude, not shipped)
 

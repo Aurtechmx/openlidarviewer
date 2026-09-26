@@ -1133,6 +1133,34 @@ export class MeasureController {
   }
 
   /**
+   * Re-sample every profile measurement with the parameters it was last
+   * sampled with. The host calls this when streaming residency changes, so a
+   * resident-only profile is re-drawn over the full stream once it is in. It
+   * writes no stored preference, unlike `resampleProfile`.
+   */
+  resampleProfilesInPlace(): void {
+    const sampler = this._profileSampler;
+    if (!sampler) return;
+    let changed = false;
+    for (const m of this._measurements) {
+      if (m.kind !== 'profile' || m.points.length < 2 || !m.profileChart) continue;
+      try {
+        const result = sampler(m.points[0], m.points[1], {
+          corridorWidth: m.profileCorridorWidth ?? null,
+          groundPercentile: m.profileGroundPercentile ?? null,
+          sampleCount: m.profileChart.length,
+        });
+        if (!result) continue;
+        this._stampProfileSample(m, result);
+        changed = true;
+      } catch {
+        // A failed re-sample keeps the previous chart, as in `resampleProfile`.
+      }
+    }
+    if (changed) this._emitChange();
+  }
+
+  /**
    * Inject the volume-sampler used when a Volume measurement commits.
    * The Viewer wires this once a cloud is attached and clears it on
    * close. Passing `null` leaves the volume record unpopulated and the

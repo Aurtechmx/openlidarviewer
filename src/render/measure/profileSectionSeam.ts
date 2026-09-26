@@ -189,6 +189,18 @@ export interface ProfileSectionRequest {
 
 /** The seam a host wires its measure controller and section workbench to. */
 export interface ProfileSectionSeam {
+  /**
+   * True when a streaming source is open and every known node is resident,
+   * read from `streamingCoverage` through `streamingIsComplete`. This is the
+   * one residency test the profile caption and the terrain analysis share.
+   */
+  fullyResident(): boolean;
+  /**
+   * Record the current residency and say whether it crossed the
+   * fully-resident line (either way) since the last call. The host calls it on
+   * every node change and re-samples its profiles when it returns true.
+   */
+  residencyChanged(): boolean;
   /** The derived height-vs-chainage series. Null when nothing is loaded. */
   sampleSeries(a: Vec3, b: Vec3, opts?: ProfileSeriesOptions): ProfileSeriesResult | null;
   /**
@@ -334,6 +346,12 @@ function walkScene(deps: ProfileSectionSeamDeps): SceneWalk {
 
 export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileSectionSeam {
   const generation = new SectionGeneration();
+  let lastFullyResident = false;
+
+  function fullyResident(): boolean {
+    const coverage = deps.streamingCoverage();
+    return coverage !== null && streamingIsComplete(coverage) === true;
+  }
 
   function sampleSeries(
     a: Vec3,
@@ -412,13 +430,16 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
       groundPercentile,
       classification,
     });
-    // "Resident-only" whenever any streaming bytes are in the walk: those
-    // nodes may still refine the profile as they stream in, and a fully-loaded
-    // static cloud beside them does not complete the streaming part (audit #8:
-    // gating on `staticPoints === 0` hid the caveat in mixed scenes).
+    // "Resident-only" whenever streaming bytes are in the walk and the source
+    // is not fully resident: those nodes may still refine the profile as they
+    // stream in, and a fully-loaded static cloud beside them does not complete
+    // the streaming part (audit #8: gating on `staticPoints === 0` hid the
+    // caveat in mixed scenes). Once every known node is resident, the walk
+    // covers the whole stream. That is the same test the terrain analysis
+    // applies (`fullyResident` below).
     return {
       samples,
-      residentOnly: streamingPoints > 0,
+      residentOnly: streamingPoints > 0 && !fullyResident(),
       corridorWidth,
       groundPercentile,
       withheld: withheldReadCounts(sourcePoints, withheldExcluded, everySourceFlagged),
@@ -559,6 +580,13 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
   }
 
   return {
+    fullyResident,
+    residencyChanged() {
+      const now = fullyResident();
+      const changed = now !== lastFullyResident;
+      lastFullyResident = now;
+      return changed;
+    },
     sampleSeries,
     sectionChunks,
     locateReturn,

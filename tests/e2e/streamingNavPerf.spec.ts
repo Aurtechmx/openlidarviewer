@@ -16,24 +16,24 @@ import path from 'node:path';
  * streaming COPC scan, with frame times sampled straight from the browser's own
  * `requestAnimationFrame` cadence.
  *
- * HOW TO RUN. Put the ~80 MB autzen COPC fixture next to package.json (or point
- * `OLV_AUTZEN_FIXTURE` at it), then:
+ * HOW TO RUN. Point `OLV_STREAMING_PERF_COPC` at a large `.copc.laz` built from a
+ * dataset in the register (docs/project/THIRD_PARTY_NOTICES.md), then:
  *
+ *     OLV_STREAMING_PERF_COPC=/path/to/scan.copc.laz \
  *     STREAMING_NAV_DEVICE_WRITE=1 npx playwright test \
  *       tests/e2e/streamingNavPerf.spec.ts --project=gpu --headed
  *
  * With `STREAMING_NAV_DEVICE_WRITE=1` it writes a device record next to the Node
  * baseline; without it, it still asserts frames were captured. It skips cleanly
- * when the fixture is absent, so a clone without it stays green.
+ * when the variable is unset. The small in-repo COPC fixture is not a stand-in:
+ * 900 points say nothing about frame pacing under streaming load.
  *
  * This is a MEASUREMENT. It drives the shipped app through its normal input and
  * reads the frame clock the browser already keeps; it changes nothing.
  */
 
-const COPC_FILE =
-  process.env.OLV_AUTZEN_FIXTURE ??
-  new URL('../../autzen-classified.copc.laz', import.meta.url).pathname;
-const hasFixture = fs.existsSync(COPC_FILE);
+const COPC_FILE = process.env.OLV_STREAMING_PERF_COPC ?? '';
+const hasFixture = COPC_FILE !== '' && fs.existsSync(COPC_FILE);
 const WRITE = process.env.STREAMING_NAV_DEVICE_WRITE === '1';
 
 /** Nearest-rank percentile — matches benchmarks/performance/frameRecord.ts. */
@@ -44,7 +44,7 @@ function percentile(sortedAscending: number[], p: number): number {
 }
 
 test.describe('@gpu streaming fast-navigation frame capture', () => {
-  test.skip(!hasFixture, `autzen COPC fixture not found at ${COPC_FILE}`);
+  test.skip(!hasFixture, 'set OLV_STREAMING_PERF_COPC to a .copc.laz on disk');
 
   test('captures frame-time p50/p95/p99 during a scripted fast navigation', async ({
     page,
