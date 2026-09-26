@@ -241,55 +241,40 @@ describe('observeBranch — measured against real history', () => {
 describe('H7 process narration', () => {
   const flagged = (s: string) => collectNarrationProblems(s).length > 0;
 
-  it('passes text that describes the software', () => {
-    for (const ok of [
-      'Pins the Info dictionary dates so two identical builds reproduce.',
-      'The reader found nine dimensions agreed exactly over 1.79 M points.',
-      'Agreement between implementations is not accuracy against surveyed truth.',
-      'GRASS computes in double and reproduces every closed-form volume.',
-      'Every case must agree with the closed form and with the reference.',
-    ]) {
-      expect(flagged(ok), ok).toBe(false);
-    }
+  // Text that describes the software, including phrases that look like
+  // narration but are not ("at first paint", "Wait on").
+  it.each([
+    'Pins the Info dictionary dates so two identical builds reproduce.',
+    'The reader found nine dimensions agreed exactly over 1.79 M points.',
+    'Agreement between implementations is not accuracy against surveyed truth.',
+    'GRASS computes in double and reproduces every closed-form volume.',
+    'Every case must agree with the closed form and with the reference.',
+    'Show the legend at first paint instead of after the first scan.',
+    'Wait on the probe before reading',
+    'Wait for the worker to settle before sampling.',
+    'Wait until the tiles load before measuring.',
+  ])('passes %s', (text) => {
+    expect(flagged(text)).toBe(false);
   });
 
-  it('flags an account of how the change was reached', () => {
-    for (const bad of [
-      'I first tried a merge, then rebased onto main.',
-      'We initially assumed the tolerance had been preregistered.',
-      'Actually the digest has to follow the file.',
-      'As requested, the gate is now stricter.',
-      'The user asked for a linear history.',
-      'Let me know whether the tolerance should move.',
-      'A sub-agent verified the reference.',
-      'Left a TODO for the landscape case.',
-    ]) {
-      expect(flagged(bad), bad).toBe(true);
-    }
-  });
-
-  it('passes "at first paint" and a subject that waits on something', () => {
-    for (const ok of [
-      'Show the legend at first paint instead of after the first scan.',
-      'Wait on the probe before reading',
-      'Wait for the worker to settle before sampling.',
-      'Wait until the tiles load before measuring.',
-    ]) {
-      expect(flagged(ok), ok).toBe(false);
-    }
-  });
-
-  it('still flags real narration near those phrases', () => {
-    for (const bad of [
-      'At first, I tried a merge.',
-      'At first the digest was stale.',
-      'Wait, that was wrong.',
-      'Wait. The digest has to follow the file.',
-      'Initially the test compared raw floats.',
-      'Initially, the gate was looser.',
-    ]) {
-      expect(flagged(bad), bad).toBe(true);
-    }
+  // An account of how the change was reached.
+  it.each([
+    'I first tried a merge, then rebased onto main.',
+    'We initially assumed the tolerance had been preregistered.',
+    'Actually the digest has to follow the file.',
+    'As requested, the gate is now stricter.',
+    'The user asked for a linear history.',
+    'Let me know whether the tolerance should move.',
+    'A sub-agent verified the reference.',
+    'Left a TODO for the landscape case.',
+    'At first, I tried a merge.',
+    'At first the digest was stale.',
+    'Wait, that was wrong.',
+    'Wait. The digest has to follow the file.',
+    'Initially the test compared raw floats.',
+    'Initially, the gate was looser.',
+  ])('flags %s', (text) => {
+    expect(flagged(text)).toBe(true);
   });
 
   it('exempts fenced code, inline code and quoted lines', () => {
