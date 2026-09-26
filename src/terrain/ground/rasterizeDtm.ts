@@ -84,6 +84,13 @@ export interface RasterizeDtmParams {
 export interface DemRaster {
   readonly z: Float32Array;
   readonly counts: Uint32Array;
+  /**
+   * Median absolute deviation of the ground returns in each cell, in source
+   * vertical units (unscaled: median of |z - median z|); NaN where fewer than
+   * two returns landed. Present only for the aggregations that keep every
+   * return of a cell (median, percentile, robust).
+   */
+  readonly dispersion?: Float32Array;
   readonly cols: number;
   readonly rows: number;
   readonly cellSizeM: number;
@@ -223,6 +230,7 @@ export function rasterizeDtm(
   // values out contiguously by cell (count, prefix, fill) once the counts are
   // known: one buffer for all cells rather than one small array per cell.
   const cellOf: Int32Array | null = needsLists ? new Int32Array(analyzed) : null;
+  const dispersion: Float32Array | null = needsLists ? new Float32Array(nCells).fill(Number.NaN) : null;
 
   // Points materially outside the grid extent are REJECTED, not edge-clamped:
   // clamping pulls a point that is physically off the raster onto its border,
@@ -286,6 +294,7 @@ export function rasterizeDtm(
       if (aggregation === 'median') z[c] = quantileSorted(cell, 0.5);
       else if (aggregation === 'percentile') z[c] = quantileSorted(cell, percentile);
       else z[c] = robustEstimateSorted(cell, scratch);
+      if (dispersion && cell.length >= 2) dispersion[c] = medianAbsDeviationSorted(cell, scratch);
     }
   }
 
@@ -304,6 +313,7 @@ export function rasterizeDtm(
   return {
     z,
     counts,
+    ...(dispersion ? { dispersion } : {}),
     cols,
     rows,
     cellSizeM,
@@ -341,6 +351,15 @@ function emptyRaster(cellSizeM: number, warnings: string[]): DemRaster {
 // Quantiles use the project-wide type-7 helper (`../quantile`) — the local
 // copy this file used to carry was one of the three conventions the v0.4.3
 // audit flagged; it is now the single shared definition.
+
+/** Median of |x - median(x)| over a sorted cell; `scratch` holds at least `sorted.length`. */
+function medianAbsDeviationSorted(sorted: Float64Array, scratch: Float64Array): number {
+  const m = quantileSorted(sorted, 0.5);
+  const dev = scratch.subarray(0, sorted.length);
+  for (let k = 0; k < sorted.length; k++) dev[k] = Math.abs(sorted[k] - m);
+  dev.sort();
+  return quantileSorted(dev, 0.5);
+}
 
 /**
  * Robust cell estimator over an ASCENDING-sorted, non-empty cell; `scratch`

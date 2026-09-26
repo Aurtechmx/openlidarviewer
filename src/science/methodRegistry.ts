@@ -184,15 +184,18 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   },
   'olv.terrain.evidence.support': {
     id: 'olv.terrain.evidence.support',
-    version: 1,
+    version: 2,
     name: 'DTM cell support raster (terrain evidence)',
     summary:
       'Per-cell support written beside the DEM on its grid: ground-return count, ' +
       'interpolation distance (8-connected steps to the nearest measured cell times ' +
-      'the cell size) and the cell evidence state code. Describes support, not accuracy.',
+      'the cell size), the cell evidence state code (v2 adds 5 edge affected and ' +
+      '6 unresolved), straight-line distance to the nearest measured cell centre, ' +
+      'the median absolute deviation of the cell\'s ground returns and the ' +
+      '4-connected distance to the survey boundary. Describes support, not accuracy.',
     citation: 'Internal composition (export of the DTM cell-confidence grid and cell status); no single source method.',
     category: 'dtm',
-    implementation: ['src/terrain/export/demEvidence.ts'],
+    implementation: ['src/terrain/export/demEvidence.ts', 'src/terrain/ground/rasterizeDtm.ts'],
   },
   'olv.validation.holdout-rmse': {
     id: 'olv.validation.holdout-rmse',

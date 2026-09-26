@@ -97,6 +97,12 @@ export interface DtmGrid {
   readonly counts: Uint32Array;
   /** Interpolation distance in cells (0 for measured cells). */
   readonly interpDistanceCells: Float32Array;
+  /**
+   * Median absolute deviation of the ground returns per cell, source vertical
+   * units; NaN under two returns. Carried from the raster when its aggregation
+   * kept every return; absent otherwise.
+   */
+  readonly verticalDispersion?: Float32Array;
   readonly cols: number;
   readonly rows: number;
   readonly cellSizeM: number;
@@ -468,6 +474,7 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
     coverage,
     counts: raster.counts,
     interpDistanceCells,
+    ...(raster.dispersion ? { verticalDispersion: raster.dispersion } : {}),
     cols,
     rows,
     cellSizeM,

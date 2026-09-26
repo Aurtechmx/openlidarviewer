@@ -33,7 +33,7 @@ the paper that specifies it.
 | `olv.class.derived-heuristic` | 3 | Derived point classification (heuristic) | Zhang et al. (2003); internal composition |
 | `olv.topology.linkage-record` | 1 | Source acquisition topology linkage record | internal (provenance record) |
 | `olv.dtm.idw-fill` | 1 | DTM raster + void fill; the shipped fill is geodesic, an Euclidean IDW prefill only seeds it (see `methodRegistry.ts`) | internal |
-| `olv.terrain.evidence.support` | 1 | DTM cell support raster: ground-return count, interpolation distance and cell evidence state on the DEM grid; describes support, not accuracy | internal (export of the DTM cell-confidence grid) |
+| `olv.terrain.evidence.support` | 2 | DTM cell support raster: ground-return count, interpolation distance, cell evidence state (v2 adds 5 edge affected, 6 unresolved), nearest-support distance, vertical dispersion (MAD of the cell's returns) and survey-edge distance on the DEM grid; describes support, not accuracy | internal (export of the DTM cell-confidence grid) |
 | `olv.validation.holdout-rmse` | 2 | Hold-out vertical accuracy (classify-inside-fold) | ASPRS (2014) formulas, hold-out basis |
 | `olv.validation.spatial-block` | 2 | Spatial-block cross-validation | Roberts et al. (2017) |
 | `olv.validation.reliability-wilson` | 1 | Measured-cell reliability | Wilson (1927) |

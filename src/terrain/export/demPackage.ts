@@ -5,7 +5,7 @@
  * bare-earth DTM, the top-surface DSM, and the canopy height model (CHM), each
  * as both an Esri ASCII Grid (.asc) and a Float32 GeoTIFF (.tif), plus an
  * optional .prj (CRS WKT) and a metadata README with the survey details, and
- * a three-band terrain evidence GeoTIFF (per-cell support on the DTM grid, see
+ * a six-band terrain evidence GeoTIFF (per-cell support on the DTM grid, see
  * demEvidence.ts) bound into the DTM passport. Bundled into a single
  * store-only ZIP.
  *
@@ -227,6 +227,10 @@ export interface DemReadmeOptions {
    * omitted when the package carries none.
    */
   readonly evidenceFilename?: string | null;
+  /** Vertical unit label of the evidence raster's dispersion band. Default 'unknown'. */
+  readonly evidenceVerticalUnit?: string;
+  /** False when the evidence raster marks every cell unresolved. Default true. */
+  readonly evidenceFrameResolved?: boolean;
 }
 
 /** Map a coverage mode to a one-line plain-English label. */
@@ -295,6 +299,15 @@ export function renderEvidenceContract(view: EvidenceContractView): string[] {
   }
   lines.push(``);
   return lines;
+}
+
+/**
+ * The vertical factor the package states heights in: the claim factor, gated
+ * on the result's own statement that a vertical scale resolved, falling back
+ * to the geometry factor only when the caller states no claim. Null = unknown.
+ */
+function resolvedVerticalFactor(result: AnalyseContoursResult, claim: number | null | undefined): number | null {
+  return result.verticalScaleResolved === false ? null : (claim ?? result.dtm.verticalUnitToMetres ?? null);
 }
 
 export function buildDemReadme(opts: DemReadmeOptions): string {
@@ -366,9 +379,7 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
   // was unverified. Read the claim, gated on the result's own statement that a
   // vertical scale resolved; fall back to the geometry factor only when the
   // caller states no claim at all (a legacy direct call).
-  const zFactor = result.verticalScaleResolved === false
-    ? null
-    : (opts.verticalUnitToMetres ?? dtm.verticalUnitToMetres ?? null);
+  const zFactor = resolvedVerticalFactor(result, opts.verticalUnitToMetres);
   const zUnit = zFactor == null
     ? 'unknown'
     : ELEVATION_UNIT_NAME[verticalUnitLabel(zFactor)];
@@ -424,7 +435,12 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     // described, which the method digest cannot answer on its own.
     `  Surface digest ${surfaceDigest}`,
     ``,
-    ...(opts.evidenceFilename ? terrainEvidenceReadmeLines(opts.evidenceFilename, hUnit) : []),
+    ...(opts.evidenceFilename ? terrainEvidenceReadmeLines(
+          opts.evidenceFilename,
+          hUnit,
+          opts.evidenceVerticalUnit ?? 'unknown',
+          opts.evidenceFrameResolved ?? true,
+        ) : []),
     `Coverage mode`,
     `  ${coverageLabel(p.coverageMode)}`,
     `  Analysed basis: ${p.analysedBasisLine}`,
@@ -578,6 +594,11 @@ export function buildDemPackage(
   // cells. Written whenever the grid carries its per-cell support arrays.
   const evidenceName = `${basename}_evidence.tif`;
   const hUnit = isGeographic ? 'degrees' : projectedUnitLabel(options.linearUnit);
+  // Band 5's unit and the unresolved state (cell_state 6) follow the README's
+  // own elevation-unit rule, plus a horizontal CRS code.
+  const evFactor = resolvedVerticalFactor(result, options.verticalUnitToMetres);
+  const evVUnit = evFactor == null || verticalUnitLabel(evFactor) === 'units' ? 'unknown' : verticalUnitLabel(evFactor);
+  const evFrameResolved = evVUnit !== 'unknown' && epsg != null;
   let evidenceBytes: Uint8Array | null = null;
   if (hasEvidenceArrays(dtm)) {
     evidenceBytes = writeTerrainEvidenceGeoTiff(dtm, {
@@ -587,6 +608,8 @@ export function buildDemPackage(
       epsg,
       isGeographic,
       horizontalUnit: hUnit,
+      verticalUnit: evVUnit,
+      frameResolved: evFrameResolved,
       demValues: grids[0].values,
     });
     entries.push({ name: evidenceName, bytes: evidenceBytes });
@@ -609,6 +632,8 @@ export function buildDemPackage(
     exportPermit: options.exportPermit ?? null,
     analysedBasis: options.analysedBasis ?? null,
     evidenceFilename: evidenceBytes ? evidenceName : null,
+    evidenceVerticalUnit: evVUnit,
+    evidenceFrameResolved: evFrameResolved,
   });
   entries.push({
     name: `${basename}-README.txt`,
