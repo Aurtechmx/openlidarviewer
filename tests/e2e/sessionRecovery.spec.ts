@@ -100,3 +100,37 @@ test('reopening a different file offers no restore', async ({ page }) => {
   // The saved work is kept for the right file.
   expect(await journal(page)).toEqual([['tiny.ply', 1]]);
 });
+
+test('an entry older than seven days is deleted and not offered; Clear removes the offer', async ({ page }) => {
+  await journalWork(page);
+  // Age the saved entry past the seven-day limit.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        const open = indexedDB.open('olv-recovery', 1);
+        open.onsuccess = () => {
+          const store = open.result.transaction('entries', 'readwrite').objectStore('entries');
+          const get = store.getAll();
+          get.onsuccess = () => {
+            for (const e of get.result as Array<{ savedAt: number }>) store.put({ ...e, savedAt: Date.now() - 8 * 24 * 60 * 60 * 1000 });
+            store.transaction.oncomplete = () => { open.result.close(); resolve(); };
+          };
+        };
+      }),
+  );
+  await page.reload();
+  await expect.poll(() => journal(page), { timeout: 10_000 }).toEqual([]);
+  await expect(page.locator('.olv-recovery-notice')).toHaveCount(0);
+
+  // Fresh work, then Clear from the notice.
+  await journalWork(page);
+  await page.reload();
+  const notice = page.locator('.olv-recovery-notice');
+  await expect(notice).toContainText('Unsaved work found');
+  await notice.getByRole('button', { name: 'Clear', exact: true }).click();
+  await expect(notice).toContainText('Recovery data in this browser was deleted.');
+  await expect.poll(() => journal(page)).toEqual([]);
+  await page.reload();
+  await page.waitForTimeout(1500);
+  await expect(page.locator('.olv-recovery-notice')).toHaveCount(0);
+});

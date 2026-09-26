@@ -23,6 +23,8 @@ export const LOCAL_STORAGE_MAX_BYTES = 512 * 1024;
 export const MAX_ENTRIES = 5;
 /** Quiet period after the last interaction before a write. */
 export const DEBOUNCE_MS = 3000;
+/** Entries older than this are deleted on boot and never offered (7 days). */
+export const MAX_ENTRY_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface RecoveryEntry {
   readonly v: 1;
@@ -182,6 +184,24 @@ export function createLocalStore(storage: Pick<Storage, 'getItem' | 'setItem' | 
       return read();
     },
   };
+}
+
+/** Whether an entry is past {@link MAX_ENTRY_AGE_MS}. A future timestamp counts as fresh. */
+export const isStale = (e: RecoveryEntry, now: number, maxAge = MAX_ENTRY_AGE_MS): boolean => now - e.savedAt > maxAge;
+
+/**
+ * Delete every entry older than the age limit and return the rest, newest
+ * first. Deletion failures are ignored here; stale entries are still never
+ * returned, so they are never offered.
+ */
+export async function pruneStale(store: RecoveryStore, now: number, maxAge = MAX_ENTRY_AGE_MS): Promise<RecoveryEntry[]> {
+  const all = await store.list();
+  const fresh: RecoveryEntry[] = [];
+  for (const e of all) {
+    if (isStale(e, now, maxAge)) await store.remove(e.key).catch(() => {});
+    else fresh.push(e);
+  }
+  return fresh;
 }
 
 const DB_NAME = 'olv-recovery';

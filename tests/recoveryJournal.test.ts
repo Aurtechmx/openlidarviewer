@@ -7,6 +7,9 @@ import {
   fingerprintKey,
   LOCAL_STORAGE_MAX_BYTES,
   MAX_ENTRIES,
+  MAX_ENTRY_AGE_MS,
+  isStale,
+  pruneStale,
   openRecoveryStore,
   type RecoveryEntry,
 } from '../src/app/recovery/recoveryJournal';
@@ -187,5 +190,52 @@ describe('recovery preference and status', () => {
     setRecoveryEnabled(true);
     expect(recoveryEnabled()).toBe(true);
     vi.unstubAllGlobals();
+  });
+});
+
+describe('age limit', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it('is seven days', () => {
+    expect(MAX_ENTRY_AGE_MS).toBe(7 * DAY);
+  });
+
+  it('deletes entries older than seven days and returns only fresh ones (fake clock)', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-09-01T00:00:00Z'));
+      const store = createLocalStore(new MemStorage());
+      const t0 = Date.now();
+      await store.put(entry('old', t0));
+      vi.setSystemTime(t0 + 6 * DAY);
+      await store.put(entry('recent', Date.now()));
+      vi.setSystemTime(t0 + 7 * DAY);
+      // Exactly at the limit is still kept.
+      expect((await pruneStale(store, Date.now())).map((e) => e.key)).toEqual(['recent', 'old']);
+      vi.setSystemTime(t0 + 7 * DAY + 1);
+      expect((await pruneStale(store, Date.now())).map((e) => e.key)).toEqual(['recent']);
+      expect((await store.list()).map((e) => e.key)).toEqual(['recent']);
+      vi.setSystemTime(t0 + 14 * DAY);
+      expect(await pruneStale(store, Date.now())).toEqual([]);
+      expect(await store.list()).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('never returns a stale entry even when deletion fails', async () => {
+    const now = 100 * DAY;
+    const stale = entry('stale', now - 8 * DAY);
+    const fresh = entry('fresh', now - DAY);
+    const store = {
+      backend: 'localstorage' as const,
+      put: async () => {},
+      clear: async () => {},
+      list: async () => [fresh, stale],
+      remove: async () => { throw new Error('nope'); },
+    };
+    expect(await pruneStale(store, now)).toEqual([fresh]);
+    expect(isStale(stale, now)).toBe(true);
+    expect(isStale(entry('future', now + DAY), now)).toBe(false);
   });
 });
