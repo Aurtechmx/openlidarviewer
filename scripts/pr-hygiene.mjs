@@ -92,7 +92,9 @@ export const NARRATION_PATTERNS = [
   // also caught ordinary prose that happened to wrap there — "whether or not a
   // finger was\nactually tracked" is a description of software behaviour, not
   // deliberation, and it failed the check on a commit that contained none.
-  { id: 'deliberation', re: /(?:^|\n)\s*(?:Actually|Wait|Hmm|Let me|Let's see|On reflection|Turns out|It turns out)\b/,
+  // "Wait on/for/until" is an imperative subject verb, not a pause, and
+  // "at first paint" (below) names a rendering milestone, not an attempt.
+  { id: 'deliberation', re: /(?:^|\n)\s*(?:Actually|Wait(?!\s+(?:on|for|until)\b)|Initially|Hmm|Let me|Let's see|On reflection|Turns out|It turns out)\b/,
     why: 'thinking-aloud opener' },
   { id: 'instruction-echo', re: /\b(?:as\s+(?:you\s+)?(?:requested|asked)|per\s+your\s+(?:request|instruction)|the\s+user\s+(?:asked|wants|requested))\b/i,
     why: 'echo of the instruction that prompted the work' },
@@ -100,7 +102,7 @@ export const NARRATION_PATTERNS = [
     why: 'reference to the authoring process rather than the software' },
   { id: 'session-artifact', re: /\b(?:in\s+this\s+session|this\s+conversation|the\s+transcript|scratchpad|TODO|FIXME|XXX)\b/,
     why: 'working-note artifact' },
-  { id: 'try-fail-narrative', re: /\b(?:at\s+first|initially,|my\s+first\s+attempt|that\s+did\s?n[o']t\s+work|second\s+attempt)\b/i,
+  { id: 'try-fail-narrative', re: /\b(?:at\s+first(?!\s+(?:paint|render|load|frame|launch|run|use|sight|glance|access|call|open)\b)|initially,|my\s+first\s+attempt|that\s+did\s?n[o']t\s+work|second\s+attempt)\b/i,
     why: 'account of attempts rather than the result' },
 ];
 
