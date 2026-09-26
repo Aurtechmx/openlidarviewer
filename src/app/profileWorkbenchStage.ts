@@ -29,6 +29,7 @@
 
 import { matchesMobileLayout } from '../ui/isMobileDevice';
 import { storageGet, storageSet } from '../ui/safeStorage';
+import { prefersReducedMotion } from '../reducedMotion';
 
 import type { ProfileWorkbenchHost, ProfileWorkbenchStorage } from '../ui/ProfileWorkbench';
 import type { ProfileWorkbenchStage } from './profileWorkbenchLauncher';
@@ -140,8 +141,6 @@ export function createStageProfileWorkbench(host: { root: HTMLElement }): Profil
     // Guarded storage: a bare localStorage read throws in a sandboxed iframe
     // (the embed path) and in some privacy modes.
     storage: { getItem: storageGet, setItem: storageSet },
-    prefersReducedMotion: () =>
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    prefersReducedMotion,
   });
 }

@@ -30,6 +30,7 @@
 import * as THREE from 'three/webgpu';
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+import { prefersReducedMotion } from '../reducedMotion';
 import {
   desiredVelocity,
   smoothVelocity,
@@ -113,17 +114,6 @@ const WHEEL_LINE_HEIGHT_PX = 16;
 const ORBIT_KEY_SPEED = 1.6;
 /** Responsiveness of the arrow-key orbit velocity (per second): it eases toward the target as exp(-rate * t). */
 const ORBIT_KEY_RATE = 8;
-
-/** The OS-level motion preference, read at tween start; false where unreadable. */
-function prefersReducedMotion(): boolean {
-  try {
-    return typeof window !== 'undefined'
-      && typeof window.matchMedia === 'function'
-      && window.matchMedia('(prefers-reduced-motion: reduce)').matches === true;
-  } catch {
-    return false;
-  }
-}
 
 export class NavController {
   private readonly _camera: THREE.PerspectiveCamera;
@@ -859,7 +849,7 @@ export class NavController {
     if (keysUp) {
       const speed = Math.hypot(this._orbitVel[0], this._orbitVel[1]);
       const distance = this._camera.position.distanceTo(this._controls.target);
-      if (speed > 0 && orbitVelocityAtRest(speed, ORBIT_KEY_RATE, distance, this._glideView())) this._orbitVel = [0, 0, 0];
+      if (speed > 0 && orbitVelocityAtRest(speed, ORBIT_KEY_RATE, distance, this._glideView(), prefersReducedMotion())) this._orbitVel = [0, 0, 0];
     }
 
     const yaw = this._orbitVel[0] * step;
@@ -1374,7 +1364,7 @@ export class NavController {
     };
     if (c.state !== -1 || !c._sphericalDelta || !c._panOffset) return;
     const distance = this._camera.position.distanceTo(this._controls.target);
-    const rest = glideAtRest(c._sphericalDelta, c._panOffset, distance, dampingFactor, this._glideView());
+    const rest = glideAtRest(c._sphericalDelta, c._panOffset, distance, dampingFactor, this._glideView(), prefersReducedMotion());
     if (rest.rotation) {
       c._sphericalDelta.theta = 0;
       c._sphericalDelta.phi = 0;
