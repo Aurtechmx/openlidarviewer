@@ -449,7 +449,7 @@
     "components": []
   },
   "context": {
-    "filesScanned": 990,
+    "filesScanned": 991,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [
@@ -467,14 +467,14 @@
       },
       {
         "file": "src/io/loadErrors.ts",
-        "importers": 19
-      },
-      {
-        "file": "src/io/sniffFormat.ts",
-        "importers": 17
+        "importers": 24
       },
       {
         "file": "src/ui/Modal.ts",
+        "importers": 18
+      },
+      {
+        "file": "src/io/sniffFormat.ts",
         "importers": 17
       },
       {
