@@ -86,6 +86,8 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
   'olv.dtm.idw-fill': ['tests/surfaceFromRaster.test.ts', 'tests/geodesicFillAccuracy.test.ts'],
   'olv.terrain.evidence.support': ['tests/demEvidence.test.ts'],
   'olv.terrain.sensitivity.ensemble': ['tests/demSensitivity.test.ts'],
+  'olv.terrain.evidence.residual': ['tests/demAttention.test.ts'],
+  'olv.terrain.evidence.attention': ['tests/demAttention.test.ts'],
   'olv.validation.holdout-rmse': ['tests/holdoutRmse.test.ts', 'tests/stratifiedRmse.test.ts'],
   'olv.validation.spatial-block': ['tests/spatialBlockHoldout.test.ts'],
   'olv.validation.reliability-wilson': ['tests/reliabilitySplit.test.ts'],
