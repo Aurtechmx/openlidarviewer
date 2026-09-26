@@ -1,4 +1,8 @@
 # OLV-DS-090 subsample: PDAL filters.decimation step 5395, first 2000 points; columns x y z intensity
+# Source: Jemez River Basin Snow-off Lidar Survey. Distributed by OpenTopography, https://opentopography.org/.
+# Tile ot_356000_3972000_1.laz, retrieved 2026-08-31. Register id OLV-DS-090-JEMEZ-SNOWOFF-2010-FOREST.
+# Licence: CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
+# Modified: subsampled for the OpenLiDARViewer intake corpus; values otherwise unchanged.
 356999.77 3972045.64 2716.80 0
 356986.59 3972033.70 2691.57 0
 356969.72 3972160.73 2666.00 0

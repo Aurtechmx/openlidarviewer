@@ -21,8 +21,8 @@
     "criteria.json": "cde1bfe4afc4b96bde52cca5ebbef264be984f3092d10481a1b63ba9a94afd42",
     "protocol.md": "13288bbbaa2b399793e3aedb777288d7b95d5cb97e8b5453cd8a1b72cc55672e",
     "generate.mjs": "78e78ed8a50f09758febd4958cba5c2cbf1fdba4308393bd93095047b0b1b9b8",
-    "seeds/OLV-DS-090-subsample.txt": "dd91facfa42008a01e0a55c8cb8bca81e9da2e0d892b8fb2a0962029a303845b",
-    "seeds/OLV-DS-093-subsample.txt": "4080b947569881b1f37b308acdb275abd797cbc8eaa3cb29f7eae930ec381b18"
+    "seeds/OLV-DS-090-subsample.txt": "4fa6ce3e8fc818ba3b90c701b9096ff0cfaa2bba026038467b2af40840f867a0",
+    "seeds/OLV-DS-093-subsample.txt": "6426761b7f55932250b952ffce5b08af270f69a5baa2d8d5dd9f7e030a6687b1"
   },
   "summary": {
     "tuning": {

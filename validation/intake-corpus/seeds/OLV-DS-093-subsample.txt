@@ -1,4 +1,7 @@
 # OLV-DS-093 subsample: PDAL filters.decimation step 11148, first 2000 points; columns x y z intensity
+# Source: USGS 3DEP Rogue River-Siskiyou National Forest 2019, tile 10TDM3449, https://www.fisheries.noaa.gov/inport/item/64356
+# Register id OLV-DS-093-ROGUE-SISKIYOU-2019-10TDM3449. Public domain (US Government work); credit: U.S. Geological Survey.
+# Modified: subsampled for the OpenLiDARViewer intake corpus; values otherwise unchanged.
 434999.91 4649975.52 870.36 48853
 434888.67 4649997.50 903.81 36849
 434176.00 4649983.22 998.36 46947
