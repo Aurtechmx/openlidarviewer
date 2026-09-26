@@ -39,6 +39,7 @@
  */
 
 import { sha256 } from '../render/measure/auditLog';
+import { UNIT_FACTORS } from '../units/units';
 
 /** The corpus revision. Bump when a scene, a seed or a label rule changes. */
 export const CORPUS_VERSION = 1;
@@ -133,7 +134,7 @@ export function lcg(seed: number): () => number {
 const q = (v: number): number => Math.round(v * 1000) / 1000;
 
 /** Metres in one US survey foot — the corpus's only unit conversion. */
-export const US_SURVEY_FOOT_M = 1200 / 3937;
+export const US_SURVEY_FOOT_M = UNIT_FACTORS.M_PER_US_FT;
 
 /** The bare-earth surfaces, in metres. Base 100 m so nothing sits near zero. */
 const SURFACES = {

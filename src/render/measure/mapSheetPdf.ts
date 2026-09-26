@@ -21,6 +21,7 @@
 
 import { PDFDocument, StandardFonts, rgb, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
 import { verticalSuffixFromLabel } from '../../units/units';
+import { metresPerLinearUnit } from '../../io/crs';
 import type { ContourFeatureModel, ContourFeature } from '../../terrain/contour/contourFeatureModel';
 import type { Annotation, AnnotationType } from '../annotate/types';
 import { buildAnnotationReport, type AnnotationReportRow } from './annotationReportTable';
@@ -1004,10 +1005,8 @@ function drawTitleBlock(
   const interval = prov?.contourIntervalM ?? input.model.intervalM;
   // World-unit→metres factor so the 1:N ratio stays a TRUE dimensionless ratio
   // on a foot CRS (the map is drawn in source units). 1 for metric / unknown.
-  let worldUnitToMetres: number;
-  if (input.linearUnit === 'foot') worldUnitToMetres = 0.3048;
-  else if (input.linearUnit === 'us-survey-foot') worldUnitToMetres = 1200 / 3937;
-  else worldUnitToMetres = 1;
+  // Same factor the panels read from `CrsInfo.linearUnitToMetres`.
+  const worldUnitToMetres = input.linearUnit ? metresPerLinearUnit(input.linearUnit) : 1;
   const scaleN =
     bbox && frame.w > 0
       ? Math.round(

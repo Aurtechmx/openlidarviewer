@@ -15,7 +15,7 @@ import { extractFloorPlan } from '../src/terrain/space/floorplan/extractFloorPla
 import { floorPlanSvg } from '../src/terrain/space/floorplan/floorPlanSvg';
 import { spaceMetrics } from '../src/terrain/spaceMetrics';
 import { classifyScanShape } from '../src/terrain/scanShape';
-import { crsFromEpsg, toMetres } from '../src/io/crs';
+import { crsFromEpsg, metresPerLinearUnit, toMetres } from '../src/io/crs';
 import type { ContourFeatureModel, ContourFeature } from '../src/terrain/contour/contourFeatureModel';
 
 function feature(value: number, isIndex: boolean, pts: Array<[number, number]>): ContourFeature {
@@ -55,6 +55,13 @@ async function scaleText(linearUnit: 'metre' | 'foot' | 'us-survey-foot'): Promi
 }
 
 describe('map sheet PDF scale follows the CRS linear unit', () => {
+  it('the sheet factor is the CRS factor the panels read', () => {
+    for (const u of ['metre', 'foot', 'us-survey-foot'] as const) {
+      expect(metresPerLinearUnit(u)).toBe(crsFromEpsg(2229, { linearUnit: u }).linearUnitToMetres);
+    }
+    expect(metresPerLinearUnit('us-survey-foot')).toBe(1200 / 3937);
+  });
+
   it('golden scale ratios per linear unit', async () => {
     expect({
       metre: await scaleText('metre'),

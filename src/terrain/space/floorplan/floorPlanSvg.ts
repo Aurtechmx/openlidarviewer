@@ -26,6 +26,7 @@
 import { OBSERVED_FRAC_MIN, type FloorPlanModel } from './extractFloorPlan';
 import { ringSignedArea, type Ring } from './vectorize';
 import { metresToFeet, sqMetresToSqFeet } from '../../spaceMetrics';
+import { UNIT_FACTORS } from '../../../units/units';
 
 /** Mirrors the measurement panel's unit system; kept local so this pure
  * terrain module never imports from the render layer. */
@@ -594,7 +595,7 @@ export function floorPlanSvg(model: FloorPlanModel, opts: FloorPlanSvgOptions = 
       let barLen: number, barM: number, barText: string;
       if (unitSystem === 'imperial') {
         barLen = niceBar(metresToFeet(maxBarM));
-        barM = barLen * 0.3048;
+        barM = barLen * UNIT_FACTORS.M_PER_FT;
         barText = `${barLen} ft`;
       } else {
         barLen = niceBar(maxBarM);

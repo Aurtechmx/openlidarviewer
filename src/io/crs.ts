@@ -365,7 +365,7 @@ export function crsFromWkt(wkt: string): CrsInfo {
     verticalDatum: vert.name,
     verticalEpsg: vert.epsg,
     verticalLinearUnit: vert.unit,
-    verticalUnitToMetres: vert.unit ? unitScaleForCode(vert.unit) : undefined,
+    verticalUnitToMetres: vert.unit ? metresPerLinearUnit(vert.unit) : undefined,
     horizontalDatum,
   };
 }
@@ -702,7 +702,7 @@ export function crsFromGeoTiff(
   const declaredButUnresolved = linearUnitCode !== undefined && mappedUnit === undefined;
   const linearUnit: CrsLinearUnit =
     mappedUnit ?? (isGeographic || declaredButUnresolved ? 'unknown' : 'metre');
-  const linearUnitToMetres = unitScaleForCode(linearUnit);
+  const linearUnitToMetres = metresPerLinearUnit(linearUnit);
 
   // A citation only names THIS CRS when it is the projected one. GeoTIFF
   // citations are free text, and a projected file that carries only a
@@ -759,7 +759,7 @@ export function crsFromGeoTiff(
   // by the Z axis's own unit — e.g. feet height over a metre grid.
   const mappedVerticalUnit = verticalUnitCode !== undefined ? GEOTIFF_LINEAR_UNITS[verticalUnitCode] : undefined;
   const verticalLinearUnit = mappedVerticalUnit;
-  const verticalUnitToMetres = mappedVerticalUnit ? unitScaleForCode(mappedVerticalUnit) : undefined;
+  const verticalUnitToMetres = mappedVerticalUnit ? metresPerLinearUnit(mappedVerticalUnit) : undefined;
 
   return {
     source: 'geotiff',
@@ -807,7 +807,7 @@ export function crsFromEpsg(horizontalEpsg: number, params: EpsgCrsParams = {}):
     name: params.name ?? `EPSG:${horizontalEpsg}`,
     epsg: horizontalEpsg,
     linearUnit,
-    linearUnitToMetres: unitScaleForCode(linearUnit),
+    linearUnitToMetres: metresPerLinearUnit(linearUnit),
     isGeographic,
     verticalEpsg,
     verticalDatum,
@@ -869,7 +869,13 @@ function readGeoTiffCitation(
 // Shared helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function unitScaleForCode(unit: CrsLinearUnit): number {
+/**
+ * Metres per one unit of a named CRS linear unit. The single mapping every
+ * panel and deliverable uses (via `CrsInfo.linearUnitToMetres`), so a sheet
+ * drawn in US survey feet converts with 1200/3937, never the international
+ * 0.3048. An unknown unit maps to the inert 1 (see {@link toMetres}).
+ */
+export function metresPerLinearUnit(unit: CrsLinearUnit): number {
   switch (unit) {
     case 'metre': return 1;
     case 'foot': return 0.3048;
