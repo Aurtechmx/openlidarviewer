@@ -83,11 +83,21 @@ export function wireDockClearance(dock: HTMLElement, column: HTMLElement): () =>
   // wires the rail once rather than remembering two calls that must agree.
   const disposeRail = wireRailScrollAffordance(column, applyClassicScrollbarClass());
   let observer: ResizeObserver | null = null;
+  let rootWrite = 0;
   if (typeof ResizeObserver !== 'undefined') {
     try {
       const ro = new ResizeObserver(() => {
         const h = dock.offsetHeight; // 0 while hidden (display: none)
-        column.style.setProperty('--olv-dock-clear', h > 0 ? `${h + 14 + 8}px` : '80px');
+        const clear = h > 0 ? `${h + 14 + 8}px` : '80px';
+        column.style.setProperty('--olv-dock-clear', clear);
+        // The right rail ends above the dock too (40-inspector.css). Written
+        // only on change and outside the observer callback: a same-frame write
+        // re-lays-out the stage and trips the ResizeObserver loop guard.
+        const root = document.documentElement.style;
+        if (root.getPropertyValue('--olv-dock-clear') !== clear) {
+          cancelAnimationFrame(rootWrite);
+          rootWrite = requestAnimationFrame(() => root.setProperty('--olv-dock-clear', clear));
+        }
       });
       ro.observe(dock);
       observer = ro;
@@ -100,6 +110,7 @@ export function wireDockClearance(dock: HTMLElement, column: HTMLElement): () =>
   return () => {
     observer?.disconnect();
     observer = null;
+    if (rootWrite) cancelAnimationFrame(rootWrite);
     disposeRail();
   };
 }
@@ -325,6 +336,36 @@ export interface ToastHost {
  * implementations because they need different a11y shapes, not because
  * nobody noticed the overlap.
  */
+/**
+ * The toast sits bottom-centre, which is also where the navigation card
+ * floats. Where the two would overlap, lift the toast so its bottom clears the
+ * card's top: the card's Pan/Walk/Fly controls stay reachable underneath.
+ * The toast only moves: it keeps its bottom-centre place when nothing overlaps.
+ */
+function liftAboveNavbar(root: HTMLElement): void {
+  if (typeof document.querySelector !== 'function' || !root.style) return; // minimal test DOM
+  for (const k of ['bottom', 'left', 'right', 'transform', 'maxWidth'] as const) root.style[k] = '';
+  root.removeAttribute('data-lifted');
+  const nav = document.querySelector('.olv-navbar');
+  if (!nav) return;
+  const n = nav.getBoundingClientRect();
+  const t = root.getBoundingClientRect();
+  if (!(n.height > 0 && t.bottom > n.top && t.top < n.bottom && t.left < n.right && t.right > n.left)) return;
+  // Lifted, it stays between the rails so it never lands on a rail's controls.
+  const l = document.querySelector('.olv-left-panels')?.getBoundingClientRect();
+  const r = document.querySelector('.olv-right-rail')?.getBoundingClientRect();
+  const w = window.innerWidth;
+  root.style.left = `${Math.round(l && l.right > 0 ? l.right + 8 : 16)}px`;
+  root.style.right = `${Math.round(r && r.left < w ? w - r.left + 8 : 16)}px`;
+  root.style.transform = 'none';
+  root.style.maxWidth = 'none';
+  root.style.bottom = `${Math.round(window.innerHeight - n.top + 8)}px`;
+  // It now lands mid-stage where the colour legend floats (and the legend can
+  // mount after the toast), so the legend steps aside until the toast goes:
+  // 98-layer-health.css.
+  root.setAttribute('data-lifted', '');
+}
+
 export function createToastHost(host: () => HTMLElement = () => document.body): ToastHost {
   let root: HTMLElement | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -350,6 +391,7 @@ export function createToastHost(host: () => HTMLElement = () => document.body): 
         root.append(btn);
       }
       root.classList.add('olv-visible');
+      liftAboveNavbar(root);
       const shown = root;
       timer = setTimeout(() => shown.classList.remove('olv-visible'), action ? 8000 : 6000);
     },

@@ -30,7 +30,9 @@
   top: 56px;
   right: 14px;
   width: var(--olv-right-rail-width);
-  max-height: calc(100% - 80px);
+  /* End above the dock (its measured height, wireDockClearance) so the dock
+     never sits over the rail's last controls. */
+  max-height: calc(100% - 56px - var(--olv-dock-clear, 24px));
   display: flex;
   flex-direction: column;
   gap: var(--space-xl);

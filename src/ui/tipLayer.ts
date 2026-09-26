@@ -12,6 +12,9 @@
  * paints above every panel — no z-index tuning can substitute for that,
  * because z-index only resolves ties *within* a stacking context.
  *
+ * On the large-touch layout (LARGE_TOUCH_LAYOUT_QUERY) a touch long-press
+ * shows the tip instead, and the release does not activate the control.
+ *
  * Shown on real pointer hover (`pointerType === 'mouse'`; `(hover: none)`
  * devices never call `showTip` from a pointer event, matching the old
  * `@media (hover: none)` suppression) and on `:focus-visible` (keyboard
@@ -27,6 +30,12 @@
  */
 
 import { computeTipPosition, type TipPosition } from './tipPositioning';
+import { LARGE_TOUCH_LAYOUT_QUERY } from './isMobileDevice';
+
+/** Hold time before a touch press shows the tip (large-touch layout only). */
+export const LONG_PRESS_MS = 500;
+/** Finger travel (CSS px) that cancels a pending long-press. */
+const LONG_PRESS_SLOP = 10;
 
 let layerEl: HTMLElement | null = null;
 // Tracked alongside `layerEl` rather than read back via `layerEl.ownerDocument`
@@ -143,9 +152,55 @@ export function installTipLayer(doc: Document): void {
     if (anchor) showTip(doc, anchor, true);
   });
 
+  // Large-touch layout: no hover exists, so a tip is reached by long-press.
+  // A press held LONG_PRESS_MS without moving shows it; the click that the
+  // release would fire is swallowed so reading a tip never activates the
+  // control. Phones keep the old behaviour (no touch tips).
+  let pressTimer: ReturnType<typeof setTimeout> | null = null;
+  let pressAt = { x: 0, y: 0 };
+  let swallowClick = false;
+  const cancelPress = (): void => {
+    if (pressTimer !== null) clearTimeout(pressTimer);
+    pressTimer = null;
+  };
+  doc.addEventListener('pointerdown', (event) => {
+    const pe = event as PointerEvent;
+    cancelPress();
+    swallowClick = false;
+    if (pe.pointerType !== 'touch') return;
+    if (activeAnchor) hideTip();
+    if (!view?.matchMedia?.(LARGE_TOUCH_LAYOUT_QUERY).matches) return;
+    const anchor = closestTipAnchor(doc, event.target);
+    if (!anchor) return;
+    pressAt = { x: pe.clientX, y: pe.clientY };
+    pressTimer = setTimeout(() => {
+      pressTimer = null;
+      showTip(doc, anchor, false);
+      swallowClick = Boolean(activeAnchor);
+    }, LONG_PRESS_MS);
+  });
+  doc.addEventListener('pointermove', (event) => {
+    if (pressTimer === null) return;
+    const pe = event as PointerEvent;
+    if (Math.hypot(pe.clientX - pressAt.x, pe.clientY - pressAt.y) > LONG_PRESS_SLOP) cancelPress();
+  });
+  doc.addEventListener('pointerup', cancelPress);
+  doc.addEventListener('pointercancel', cancelPress);
+  doc.addEventListener('click', (event) => {
+    if (!swallowClick) return;
+    swallowClick = false;
+    event.preventDefault();
+    event.stopPropagation();
+  }, true);
+  // The long-press menu would cover the tip; the tip is the answer here.
+  doc.addEventListener('contextmenu', (event) => {
+    if (swallowClick || pressTimer !== null) event.preventDefault();
+  });
+
   doc.addEventListener('pointerout', (event) => {
     if (!activeAnchor) return;
     const pe = event as PointerEvent;
+    if (pe.pointerType === 'touch') return; // a lifted finger "leaves"; a long-press tip stays until the next tap
     // Duck-typed (`.contains`) rather than `instanceof Node`: the unit-test
     // DOM shim (no jsdom in this repo) has no global `Node`.
     const target = pe.target as (Node & { contains?: (n: Node) => boolean }) | null;

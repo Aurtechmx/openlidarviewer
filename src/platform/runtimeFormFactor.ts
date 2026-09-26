@@ -23,6 +23,10 @@ export type RuntimeFormFactor = 'desktop' | 'phone' | 'large-touch' | 'embedded-
 /** Short viewport side (CSS px) from which a touch-first screen is 'large-touch'. */
 export const LARGE_TOUCH_MIN_SHORT_SIDE = 600;
 
+// The CSS condition for the large-touch LAYOUT lives beside MOBILE_LAYOUT_QUERY
+// (isMobileDevice.ts), which the eager shell may import; this module may not.
+export { LARGE_TOUCH_LAYOUT_QUERY } from '../ui/isMobileDevice';
+
 export interface FormFactorSignals {
   /** `(pointer: coarse) and (hover: none)`: the query isMobileDevice.ts owns. */
   readonly touchFirst: boolean;
