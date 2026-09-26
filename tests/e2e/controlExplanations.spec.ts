@@ -165,11 +165,24 @@ test.describe('control explanations', () => {
     await page.goto('/');
     const guide = page.locator('a.olv-github', { hasText: 'Guide' });
     await expect(guide).toHaveAttribute('data-tip', /./);
+    const guideTip = (await guide.getAttribute('data-tip')) ?? '';
     const tipLayer = page.locator('.olv-tip-layer');
+    // The header's right cluster is right-aligned and still growing after
+    // load: the Speed/Quality control mounts left of GitHub once the viewer
+    // is up, which slides Guide (and the theme toggle beside it) leftward.
+    // A pointer parked on Guide's old spot then sits over the theme toggle,
+    // so the tip correctly shows the toggle's text. Wait on the real signal
+    // (the Guide text in the layer), re-aiming at Guide's current box each
+    // attempt and nudging inside it so the pointer keeps moving on target.
     await expect(async () => {
-      await guide.hover();
-      await expect(tipLayer).toHaveClass(/olv-tip-layer--visible/);
+      const box = await guide.boundingBox();
+      if (!box) throw new Error('Guide link has no box yet');
+      const x = box.x + box.width / 2;
+      const y = box.y + box.height / 2;
+      await page.mouse.move(x - 2, y);
+      await page.mouse.move(x, y);
+      await expect(tipLayer).toHaveClass(/olv-tip-layer--visible/, { timeout: 1000 });
+      await expect(tipLayer).toHaveText(guideTip, { timeout: 1000 });
     }).toPass();
-    await expect(tipLayer).toHaveText((await guide.getAttribute('data-tip')) ?? '');
   });
 });
