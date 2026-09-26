@@ -15,6 +15,7 @@ import type { Action } from '../ui/actionRegistry';
 import type { Viewer } from '../render/Viewer';
 import type { TourHandle } from '../ui/onboarding/bootTour';
 import type { WorkflowController } from '../ui/WorkflowController';
+import type { SceneTool } from './toggleTool';
 import type { WorkflowConfigPanel } from '../ui/WorkflowConfigPanel';
 import type { WorkflowEvent } from '../render/workflow/workflowRecorder';
 import type { ShortcutSheet } from '../ui/ShortcutSheet';
@@ -54,7 +55,7 @@ export interface ActionRegistryDeps {
   terrainAnalysisEntry: TerrainAnalysisEntryDeps;
   observatoryEntry: ObservatoryEntryDeps;
   runFillUnclassified: () => Promise<void>;
-  toggleClip: () => void;
+  runTool: (tool: SceneTool) => void;
   buildCurrentStoryInputs: () => ScanStoryInputs;
   startWorkflowRecording: () => void;
   dispatchWorkflowEvent: (event: WorkflowEvent) => void;
@@ -100,7 +101,7 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
     runDeriveClassification: deps.runDeriveClassification,
     runFillUnclassified: deps.runFillUnclassified,
     showLassoToast: deps.showLassoToast,
-    toggleClip: deps.toggleClip,
+    runTool: deps.runTool,
   });
   const analysis = contributeAnalysisActions({
     terrainAnalysisEntry: deps.terrainAnalysisEntry,

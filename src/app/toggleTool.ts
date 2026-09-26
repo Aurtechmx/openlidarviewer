@@ -52,3 +52,29 @@ export function toggleTool(
   workflow.capture({ type: 'tool', tool, on: next });
   return next;
 }
+
+/** Every scene tool a dock button, a key, the palette or the launcher runs. */
+export type SceneTool = ToggleableTool | 'clip';
+
+export interface SceneToolDeps {
+  viewer: () => ToolToggleViewer;
+  workflow: Pick<WorkflowController, 'capture'>;
+  /** Flip the clip box through the Clip panel's own write path; the new state. */
+  toggleClip: () => boolean;
+  /** Reveal the tool's page in the Tools workspace. Presentation only. */
+  openPage: (page: Exclude<SceneTool, 'inspect'>) => void;
+}
+
+/**
+ * The one command behind every entry point for a scene tool. The dock, the
+ * keyboard, the command palette and the Tools launcher used to diverge: the
+ * dock toggled the tool and switched to Tools, the others only toggled it.
+ * Each now runs the registry action, whose body is this: flip the tool, record
+ * it, and when it turned on, open its page. Inspect has no panel, so it only
+ * toggles.
+ */
+export function runSceneTool(deps: SceneToolDeps, tool: SceneTool): boolean {
+  const on = tool === 'clip' ? deps.toggleClip() : toggleTool(deps.viewer(), deps.workflow, tool);
+  if (on && tool !== 'inspect') deps.openPage(tool);
+  return on;
+}
