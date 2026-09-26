@@ -26,7 +26,8 @@ import { attachIssue, setIssueStatus as applyIssueStatus } from './issueWorkflow
 import type { WorkOwnership } from '../../model/workOwnership';
 import type { AnnotationGeoref } from './pickGeoref';
 import { AnnotationOverlay } from './AnnotationOverlay';
-import { AnnotationEditor } from '../../ui/AnnotationEditor';
+import type { AnnotationEditor } from '../../ui/AnnotationEditor';
+import { loadAnnotationEditor } from '../../lazyChunks';
 import { el } from '../../ui/dom';
 
 /** A measurement the annotation editor can offer to link against. */
@@ -70,7 +71,17 @@ export class AnnotationController {
   readonly overlay: SVGSVGElement;
 
   private readonly _draw = new AnnotationOverlay();
-  private readonly _editor = new AnnotationEditor();
+  /**
+   * The inline editor card rides its own chunk: it loads when the tool is
+   * switched on (and, failing that, on the first open), so the Viewer chunk
+   * every scan open pays for does not carry it. Until it resolves,
+   * `_editorSlot` stands in for the card in the stage overlay and is swapped
+   * for the real element in place, so the mounted DOM ends up the same.
+   */
+  private _editor: AnnotationEditor | null = null;
+  private _editorLoad: Promise<AnnotationEditor> | null = null;
+  private readonly _editorSlot: HTMLElement = el('div', { className: 'olv-hidden' });
+  private _disposed = false;
   private readonly _hint: HTMLElement;
   private readonly _hintText: HTMLElement;
   private _annotations: Annotation[] = [];
@@ -137,6 +148,9 @@ export class AnnotationController {
     this._hint.classList.toggle('olv-hidden', !on);
     if (on) {
       this._setHint('Click a point on the scan to annotate it');
+      // Warm the editor chunk now so the first click opens the card at once;
+      // a failure here is reported by the open that needs it.
+      this.ensureEditor().catch(() => {});
     } else {
       this._guardedClose();
     }
@@ -149,12 +163,54 @@ export class AnnotationController {
 
   /** The inline-editor card element — mount into the stage overlay. */
   get editorElement(): HTMLElement {
-    return this._editor.element;
+    return this._editor?.element ?? this._editorSlot;
+  }
+
+  /**
+   * Load the editor card chunk, once. A failed load is forgotten so the next
+   * open retries it rather than replaying the rejection.
+   */
+  ensureEditor(): Promise<AnnotationEditor> {
+    if (this._editorLoad) return this._editorLoad;
+    const load = loadAnnotationEditor().then(({ AnnotationEditor: Editor }) => {
+      if (this._editor) return this._editor;
+      const editor = new Editor();
+      this._editor = editor;
+      if (this._disposed) editor.dispose();
+      else this._editorSlot.replaceWith(editor.element);
+      return editor;
+    });
+    this._editorLoad = load;
+    load.catch(() => {
+      if (this._editorLoad === load) this._editorLoad = null;
+    });
+    return load;
+  }
+
+  /**
+   * Run `fn` against the editor: on this tick when the chunk is already in,
+   * otherwise once it resolves. A failed load leaves the tool usable and says
+   * so in the hint, the same visible fallback the other lazy panels give.
+   */
+  private _withEditor(fn: (editor: AnnotationEditor) => void): void {
+    if (this._editor) {
+      fn(this._editor);
+      return;
+    }
+    this.ensureEditor().then(
+      (editor) => {
+        if (!this._disposed) fn(editor);
+      },
+      (err: unknown) => {
+        console.warn('[annotate] editor chunk failed to load', err);
+        this._setHint('The annotation editor could not load. Check the connection and try again');
+      },
+    );
   }
 
   /** Whether the create/edit editor card is currently open. */
   get isEditing(): boolean {
-    return this._editor.isOpen;
+    return this._editor?.isOpen ?? false;
   }
 
   /**
@@ -192,7 +248,7 @@ export class AnnotationController {
     georef: AnnotationGeoref | undefined,
   ): void {
     this._setHint('Fill in the annotation, then Save');
-    this._editor.open({
+    this._withEditor((editor) => editor.open({
       x: screenX,
       y: screenY,
       showCamera: cameraState !== undefined,
@@ -224,7 +280,7 @@ export class AnnotationController {
       onCancel: () => {
         this._setHint('Click a point on the scan to annotate it');
       },
-    });
+    }));
   }
 
   /** Register the source of measurements the editor offers as link targets. */
@@ -266,7 +322,7 @@ export class AnnotationController {
   private _openEditEditor(id: string, screenX: number, screenY: number): void {
     const a = this.get(id);
     if (!a) return;
-    this._editor.open({
+    this._withEditor((editor) => editor.open({
       x: screenX,
       y: screenY,
       heading: 'Edit annotation',
@@ -292,7 +348,7 @@ export class AnnotationController {
       onCancel: () => {
         /* editing cancelled — the annotation is left unchanged */
       },
-    });
+    }));
   }
 
   /**
@@ -316,7 +372,7 @@ export class AnnotationController {
    * repeat it after answering the confirm in front of them.
    */
   private _guardReopen(open: () => void): void {
-    if (this._editor.reopenIfPossible()) {
+    if (!this._editor || this._editor.reopenIfPossible()) {
       open();
       return;
     }
@@ -338,7 +394,7 @@ export class AnnotationController {
    * see `_guardReopen`'s re-entrancy note.
    */
   private _guardedClose(): void {
-    if (this._editor.reopenIfPossible()) return;
+    if (!this._editor || this._editor.reopenIfPossible()) return;
     if (this._editor.isConfirmPending) return;
     void this._editor.confirmDiscard();
   }
@@ -369,7 +425,7 @@ export class AnnotationController {
    */
   private _guardedRestore(run: () => void): void {
     const guarded = (): void => this._suppress(run);
-    if (this._editor.reopenIfPossible()) {
+    if (!this._editor || this._editor.reopenIfPossible()) {
       guarded();
       return;
     }
@@ -560,7 +616,9 @@ export class AnnotationController {
 
   /** Free DOM references. */
   dispose(): void {
-    this._editor.dispose();
+    this._disposed = true;
+    this._editor?.dispose();
+    this._editorSlot.remove();
     this._hint.remove();
     this._draw.dispose();
   }
@@ -597,7 +655,7 @@ export class AnnotationController {
       this._selectedId = null;
     }
     // An in-progress draft is abandoned — its target list has just changed.
-    this._editor.close();
+    this._editor?.close();
     this._sync();
     this._emit();
   }

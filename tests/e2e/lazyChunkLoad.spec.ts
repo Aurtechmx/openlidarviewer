@@ -186,3 +186,44 @@ test.describe('session import survives a failed chunk load', () => {
     ).toEqual([]);
   });
 });
+
+test.describe('lazily loaded viewer tools', () => {
+  // The snapshot compositor rides its own chunk (loadSnapshot), fetched on the
+  // first Snapshot click rather than with the Viewer. The first click has to
+  // produce the PNG, and a chunk that cannot load has to say so.
+  test('snapshot chunk loads on the first Snapshot click', async ({ page }) => {
+    const failures = watchForImportFailures(page);
+    await suppressOnboardingTour(page);
+    await page.goto('/');
+    await dropTinyPly(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 20_000 }),
+      page.locator('.olv-tool-snapshot').first().click(),
+    ]);
+    expect(download.suggestedFilename()).toBe('openlidarviewer.png');
+    expect(failures, failures.join('\n')).toEqual([]);
+  });
+
+  test('a snapshot chunk that fails to load reports a visible error', async ({ page }) => {
+    await suppressOnboardingTour(page);
+    // Pre-seed the stale-chunk cooldown so the failure takes the no-reload
+    // branch (see the session-import test above for why).
+    await page.addInitScript((key: string) => {
+      try {
+        sessionStorage.setItem(key, String(Date.now()));
+      } catch {
+        /* storage blocked: the recovery reloads once instead */
+      }
+    }, 'olv:stale-reload-at');
+    await page.route(/\/assets\/snapshot-[^/]+\.js(\?|$)|\/src\/render\/snapshot\.ts(\?|$)/, (route) => route.abort());
+    await page.goto('/');
+    await dropTinyPly(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+
+    await page.locator('.olv-tool-snapshot').first().click();
+    await expect(page.locator('.olv-toast')).toHaveClass(/olv-toast-error/, { timeout: 10_000 });
+    await expect(page.locator('.olv-toast-text')).toHaveText('Could not save the view');
+  });
+});

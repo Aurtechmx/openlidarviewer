@@ -181,6 +181,33 @@ export const loadExporters = () => import('./io/exporters');
 export const loadExportStudio = () => import('./export');
 
 /**
+ * Load the snapshot compositor (overlay burn-in, scale bar, colour bar, canvas
+ * to PNG) on the first saved view or export render. Only `Viewer.snapshot` and
+ * the figure render reach it, both already async, so it stays out of the
+ * Viewer chunk that every scan open pays for.
+ */
+const importSnapshotChunk = () => import('./render/snapshot');
+export const loadSnapshot = () =>
+  importSnapshotChunk().then((mod) => {
+    // A defaulted-out stale-chunk event resolves the import to undefined; turn
+    // that into a rejection the snapshot caller already reports.
+    if (!mod) throw new Error('Could not load the snapshot renderer.');
+    return mod;
+  });
+
+/**
+ * Load the annotation editor card. `AnnotationController` warms it when the
+ * Annotate tool is switched on and opens the card from it on the first click,
+ * so the card's markup and chip logic stay out of the Viewer chunk.
+ */
+const importAnnotationEditorChunk = () => import('./ui/AnnotationEditor');
+export const loadAnnotationEditor = () =>
+  importAnnotationEditorChunk().then((mod) => {
+    if (!mod) throw new Error('Could not load the annotation editor.');
+    return mod;
+  });
+
+/**
  * Load the scan-report canvas renderer (card + class-scope banner compose). The
  * snapshot action is its only shell caller, so it stays out of the startup chunk
  * and loads on the first saved view; the Studio chunk shares the same module.
