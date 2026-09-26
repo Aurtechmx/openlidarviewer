@@ -146,7 +146,7 @@ In embed mode the viewer posts one `ready` message to the host page once the ren
 
 ### Embedding origin and security
 
-The shipped deploy headers set `X-Frame-Options: SAMEORIGIN`, so out of the box the viewer only embeds in a page on the same origin. To embed it cross-origin, the deployer removes that header and sets a deliberate `Content-Security-Policy: frame-ancestors …` allow-list instead.
+The shipped deploy headers set `Content-Security-Policy: frame-ancestors 'self'` (which replaces the older `X-Frame-Options: SAMEORIGIN`), so out of the box the viewer only embeds in a page on the same origin. To embed it cross-origin, the deployer edits that directive to a deliberate allow-list, for example `frame-ancestors 'self' https://portal.example.org`, in both `public/.htaccess` and `public/_headers`.
 
 The bridge accepts commands only from the actual embedding parent frame. To restrict which origins may drive a cross-origin embed, pass an allow-list on the viewer URL:
 

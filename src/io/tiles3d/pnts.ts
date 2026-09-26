@@ -35,6 +35,7 @@
  * is allowed to run to the end of the buffer reads bytes that belong to another
  * tile, or to no tile at all.
  */
+import { LoadError } from '../loadErrors';
 
 const HEADER_BYTES = 28;
 const MAGIC = 0x73746e70; // 'pnts' little-endian
@@ -127,16 +128,16 @@ function decodeJsonSection(
     // that names the wrong problem.
     text = new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(buffer, start, length));
   } catch {
-    throw new Error(`PNTS: ${label} JSON is not valid UTF-8.`);
+    throw new LoadError('malformed-file', `PNTS: ${label} JSON is not valid UTF-8.`);
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new Error(`PNTS: ${label} JSON does not parse.`);
+    throw new LoadError('malformed-file', `PNTS: ${label} JSON does not parse.`);
   }
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error(`PNTS: ${label} JSON is not an object.`);
+    throw new LoadError('malformed-file', `PNTS: ${label} JSON is not an object.`);
   }
   return parsed as JsonObject;
 }
@@ -149,11 +150,11 @@ function decodeJsonSection(
  */
 function accessorByteOffset(descriptor: unknown, name: string): number {
   if (typeof descriptor !== 'object' || descriptor === null || Array.isArray(descriptor)) {
-    throw new Error(`PNTS: ${name} is not a feature-table accessor object.`);
+    throw new LoadError('malformed-file', `PNTS: ${name} is not a feature-table accessor object.`);
   }
   const byteOffset = (descriptor as { byteOffset?: unknown }).byteOffset;
   if (typeof byteOffset !== 'number' || !Number.isSafeInteger(byteOffset) || byteOffset < 0) {
-    throw new Error(`PNTS: ${name}.byteOffset is not a non-negative whole number.`);
+    throw new LoadError('malformed-file', `PNTS: ${name}.byteOffset is not a non-negative whole number.`);
   }
   return byteOffset;
 }
@@ -161,12 +162,12 @@ function accessorByteOffset(descriptor: unknown, name: string): number {
 /** Read a 3-component vector of real numbers from the feature-table JSON. */
 function vec3(value: unknown, name: string): [number, number, number] {
   if (!Array.isArray(value) || value.length !== 3) {
-    throw new Error(`PNTS: ${name} must have 3 components.`);
+    throw new LoadError('malformed-file', `PNTS: ${name} must have 3 components.`);
   }
   // JSON writes NaN and Infinity as null, so a component is checked for being a
   // number as well as for being finite.
   if (!value.every((n) => typeof n === 'number' && Number.isFinite(n))) {
-    throw new Error(`PNTS: ${name} has a component that is not a finite number.`);
+    throw new LoadError('malformed-file', `PNTS: ${name} has a component that is not a finite number.`);
   }
   return [value[0] as number, value[1] as number, value[2] as number];
 }
@@ -191,10 +192,10 @@ function arrayStart(
   // exactly-representable range, and a range check on an approximation decides
   // nothing.
   if (!Number.isSafeInteger(need) || !Number.isSafeInteger(end)) {
-    throw new Error(`PNTS: ${name} spans a byte range too large to address exactly.`);
+    throw new LoadError('malformed-file', `PNTS: ${name} spans a byte range too large to address exactly.`);
   }
   if (end > binStart + binLength) {
-    throw new Error(`PNTS: ${name} extends past the feature-table binary section.`);
+    throw new LoadError('malformed-file', `PNTS: ${name} extends past the feature-table binary section.`);
   }
   return start;
 }
@@ -225,14 +226,14 @@ function setRgb(colors: Uint8Array, point: number, r: number, g: number, b: numb
  */
 function constantRgba(value: unknown): [number, number, number, number] {
   if (!Array.isArray(value) || value.length !== 4) {
-    throw new Error('PNTS: CONSTANT_RGBA must have 4 components.');
+    throw new LoadError('malformed-file', 'PNTS: CONSTANT_RGBA must have 4 components.');
   }
   // JSON writes NaN and Infinity as null, so a component is checked for being a
   // number as well as for being a byte.
   const isByte = (n: unknown) =>
     typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= UINT8_MAX;
   if (!value.every(isByte)) {
-    throw new Error('PNTS: CONSTANT_RGBA has a component that is not a whole number in 0-255.');
+    throw new LoadError('malformed-file', 'PNTS: CONSTANT_RGBA has a component that is not a whole number in 0-255.');
   }
   return [value[0] as number, value[1] as number, value[2] as number, value[3] as number];
 }
@@ -396,7 +397,7 @@ function refuseDraco(section: JsonObject): void {
   const extensions = section.extensions;
   if (typeof extensions !== 'object' || extensions === null || Array.isArray(extensions)) return;
   if ((extensions as JsonObject)[DRACO_EXTENSION] !== undefined) {
-    throw new Error('PNTS Draco point compression is not supported in this build');
+    throw new LoadError('unsupported-format', 'PNTS Draco point compression is not supported in this build');
   }
 }
 
@@ -426,7 +427,7 @@ function decodeBatchIds(
   const bytesPerComponent =
     typeof componentType === 'string' ? BATCH_ID_COMPONENT_BYTES.get(componentType) : undefined;
   if (bytesPerComponent === undefined) {
-    throw new Error(
+    throw new LoadError('malformed-file', 
       'PNTS: BATCH_ID.componentType must be UNSIGNED_BYTE, UNSIGNED_SHORT, or UNSIGNED_INT.',
     );
   }
@@ -441,7 +442,7 @@ function decodeBatchIds(
     batchLength <= 0 ||
     batchLength > UINT32_MAX
   ) {
-    throw new Error('PNTS: BATCH_ID requires a BATCH_LENGTH that is a positive uint32.');
+    throw new LoadError('malformed-file', 'PNTS: BATCH_ID requires a BATCH_LENGTH that is a positive uint32.');
   }
 
   const start = arrayStart('BATCH_ID', byteOffset, pointsLength, bytesPerComponent, binStart, binLength);
@@ -453,7 +454,7 @@ function decodeBatchIds(
     else if (bytesPerComponent === 2) id = view.getUint16(at, true);
     else id = view.getUint32(at, true);
     if (id >= batchLength) {
-      throw new Error(
+      throw new LoadError('malformed-file', 
         `PNTS: BATCH_ID ${id} at point ${i} is not below BATCH_LENGTH ${batchLength}.`,
       );
     }
@@ -623,22 +624,22 @@ function decodedBytesPerPoint(ft: JsonObject): number {
 /** Decode a PNTS tile's header, feature table, positions, and per-point attributes. */
 export function parsePnts(buffer: ArrayBuffer, options: ParsePntsOptions = {}): PntsTile {
   if (buffer.byteLength < HEADER_BYTES) {
-    throw new Error('PNTS: buffer shorter than the 28-byte header.');
+    throw new LoadError('malformed-file', 'PNTS: buffer shorter than the 28-byte header.');
   }
   const view = new DataView(buffer);
   if (view.getUint32(0, true) !== MAGIC) {
-    throw new Error('PNTS: bad magic — not a pnts tile.');
+    throw new LoadError('malformed-file', 'PNTS: bad magic — not a pnts tile.');
   }
   const version = view.getUint32(4, true);
   if (version !== SUPPORTED_VERSION) {
-    throw new Error(`PNTS: version ${version} is not supported, only ${SUPPORTED_VERSION}.`);
+    throw new LoadError('malformed-file', `PNTS: version ${version} is not supported, only ${SUPPORTED_VERSION}.`);
   }
   const byteLength = view.getUint32(8, true);
   if (byteLength < HEADER_BYTES) {
-    throw new Error('PNTS: declared byteLength is shorter than the header.');
+    throw new LoadError('malformed-file', 'PNTS: declared byteLength is shorter than the header.');
   }
   if (byteLength > buffer.byteLength) {
-    throw new Error('PNTS: declared byteLength exceeds the buffer.');
+    throw new LoadError('malformed-file', 'PNTS: declared byteLength exceeds the buffer.');
   }
 
   const ftJsonLength = view.getUint32(12, true);
@@ -649,10 +650,10 @@ export function parsePnts(buffer: ArrayBuffer, options: ParsePntsOptions = {}): 
   // double, so this total cannot be rounded into agreement.
   const sectioned = HEADER_BYTES + ftJsonLength + ftBinLength + btJsonLength + btBinLength;
   if (sectioned > byteLength) {
-    throw new Error('PNTS: section lengths overrun the declared byteLength.');
+    throw new LoadError('malformed-file', 'PNTS: section lengths overrun the declared byteLength.');
   }
   if (sectioned < byteLength) {
-    throw new Error('PNTS: declared byteLength leaves bytes past the last section.');
+    throw new LoadError('malformed-file', 'PNTS: declared byteLength leaves bytes past the last section.');
   }
   // The sections now sum exactly to a declared length that fits the buffer, so
   // every section start and end is in range by construction, and any byte past
@@ -670,7 +671,7 @@ export function parsePnts(buffer: ArrayBuffer, options: ParsePntsOptions = {}): 
   // than after it has already run.
   const maxFtJsonBytes = options.maxFeatureTableJsonBytes ?? MAX_PNTS_FEATURE_TABLE_JSON_BYTES;
   if (ftJsonLength > maxFtJsonBytes) {
-    throw new Error(
+    throw new LoadError('malformed-file', 
       `PNTS: feature-table JSON is ${ftJsonLength} bytes, past the ${maxFtJsonBytes} byte ceiling.`,
     );
   }
@@ -685,13 +686,13 @@ export function parsePnts(buffer: ArrayBuffer, options: ParsePntsOptions = {}): 
   if (keepBatchMetadata && btJsonLength > 0) {
     const maxBtJsonBytes = options.maxBatchTableJsonBytes ?? MAX_PNTS_BATCH_TABLE_JSON_BYTES;
     if (btJsonLength > maxBtJsonBytes) {
-      throw new Error(
+      throw new LoadError('malformed-file', 
         `PNTS: batch-table JSON is ${btJsonLength} bytes, past the ${maxBtJsonBytes} byte ceiling.`,
       );
     }
     const maxBtBinBytes = options.maxBatchTableBinaryBytes ?? MAX_PNTS_BATCH_TABLE_BINARY_BYTES;
     if (btBinLength > maxBtBinBytes) {
-      throw new Error(
+      throw new LoadError('malformed-file', 
         `PNTS: batch-table binary is ${btBinLength} bytes, past the ${maxBtBinBytes} byte ceiling.`,
       );
     }
@@ -713,7 +714,7 @@ export function parsePnts(buffer: ArrayBuffer, options: ParsePntsOptions = {}): 
     pointsLength <= 0 ||
     pointsLength > UINT32_MAX
   ) {
-    throw new Error('PNTS: POINTS_LENGTH is not a positive uint32.');
+    throw new LoadError('malformed-file', 'PNTS: POINTS_LENGTH is not a positive uint32.');
   }
 
   // The magnitude ceiling, before the first allocation. The checks above bound
@@ -729,7 +730,7 @@ export function parsePnts(buffer: ArrayBuffer, options: ParsePntsOptions = {}): 
   // silently partial one.
   const maxPoints = options.maxPoints ?? MAX_PNTS_TILE_POINTS;
   if (pointsLength > maxPoints) {
-    throw new Error(
+    throw new LoadError('malformed-file', 
       `PNTS: POINTS_LENGTH ${pointsLength} exceeds the ${maxPoints} point ceiling this ` +
         `viewer decodes in one tile.`,
     );
@@ -753,7 +754,7 @@ export function parsePnts(buffer: ArrayBuffer, options: ParsePntsOptions = {}): 
   const decodedBytes = pointsLength * decodedBytesPerPoint(ft);
   const peakBytes = byteLength + decodedBytes;
   if (peakBytes > maxDecodedBytes) {
-    throw new Error(
+    throw new LoadError('malformed-file', 
       `PNTS: POINTS_LENGTH ${pointsLength} peaks at ${peakBytes} bytes ` +
         `(${byteLength}-byte tile body + ${decodedBytes} decoded bytes), past the ` +
         `${maxDecodedBytes} decoded byte ceiling this viewer holds in one tile.`,
@@ -798,10 +799,10 @@ export function parsePnts(buffer: ArrayBuffer, options: ParsePntsOptions = {}): 
     // The volume is what makes the uint16 codes mean anything. Without it the
     // codes are not coordinates at all, so neither member is defaultable.
     if (ft.QUANTIZED_VOLUME_OFFSET === undefined) {
-      throw new Error('PNTS: POSITION_QUANTIZED requires QUANTIZED_VOLUME_OFFSET.');
+      throw new LoadError('malformed-file', 'PNTS: POSITION_QUANTIZED requires QUANTIZED_VOLUME_OFFSET.');
     }
     if (ft.QUANTIZED_VOLUME_SCALE === undefined) {
-      throw new Error('PNTS: POSITION_QUANTIZED requires QUANTIZED_VOLUME_SCALE.');
+      throw new LoadError('malformed-file', 'PNTS: POSITION_QUANTIZED requires QUANTIZED_VOLUME_SCALE.');
     }
     const volumeOffset = vec3(ft.QUANTIZED_VOLUME_OFFSET, 'QUANTIZED_VOLUME_OFFSET');
     const volumeScale = vec3(ft.QUANTIZED_VOLUME_SCALE, 'QUANTIZED_VOLUME_SCALE');
@@ -825,5 +826,5 @@ export function parsePnts(buffer: ArrayBuffer, options: ParsePntsOptions = {}): 
     return { version, pointsLength, rtcCenter, positions, colors, normals, batchIds, batchTable };
   }
 
-  throw new Error('PNTS: feature table has neither POSITION nor POSITION_QUANTIZED.');
+  throw new LoadError('malformed-file', 'PNTS: feature table has neither POSITION nor POSITION_QUANTIZED.');
 }

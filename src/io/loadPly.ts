@@ -28,6 +28,56 @@ import { PLYLoader } from '@loaders.gl/ply';
 import { LOCAL_ONLY_LOADER_OPTIONS } from './loaderConfig';
 import { PointCloud } from '../model/PointCloud';
 import { sanitizeAndRecenter, withLoadWarning } from './sanitizeCloud';
+import { LoadError } from './loadErrors';
+
+const PLY_SCALAR_BYTES: Record<string, number> = {
+  char: 1, uchar: 1, int8: 1, uint8: 1,
+  short: 2, ushort: 2, int16: 2, uint16: 2,
+  int: 4, uint: 4, int32: 4, uint32: 4, float: 4, float32: 4,
+  double: 8, float64: 8,
+};
+
+/**
+ * Refuse a PLY whose element counts cannot fit in its body, before the parser
+ * sizes arrays from them. Each element needs at least its fixed-width bytes
+ * (a list at least its length prefix) in a binary body, and at least one
+ * character plus a separator per property in an ascii one. That floor is a
+ * physical bound, so an honest file always passes it.
+ */
+function assertPlyCountsPlausible(buffer: ArrayBuffer): void {
+  const probe = new TextDecoder('latin1').decode(new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 65536)));
+  const end = /end_header\r?\n/.exec(probe);
+  if (!end) return; // not ours to judge; the parser reports a missing header
+  const fail = (why: string): never => {
+    throw new LoadError('malformed-file', `malformed PLY: ${why}`);
+  };
+  const lines = probe.slice(0, end.index).split(/\r?\n/);
+  const ascii = lines.some((l) => /^format\s+ascii\b/.test(l.trim()));
+  let minBytes = 0;
+  let current: { count: number; bytes: number } | null = null;
+  const close = (): void => {
+    if (current) minBytes += current.count * current.bytes;
+  };
+  for (const raw of lines) {
+    const tok = raw.trim().split(/\s+/);
+    if (tok[0] === 'element') {
+      close();
+      const count = Number(tok[2]);
+      if (!Number.isSafeInteger(count) || count < 0) fail(`invalid ${tok[1]} count "${tok[2]}".`);
+      current = { count, bytes: 0 };
+    } else if (tok[0] === 'property' && current) {
+      if (ascii) current.bytes += 2;
+      else if (tok[1] === 'list') current.bytes += PLY_SCALAR_BYTES[tok[2]] ?? 1;
+      else current.bytes += PLY_SCALAR_BYTES[tok[1]] ?? 1;
+    }
+  }
+  close();
+  const body = buffer.byteLength - (end.index + end[0].length);
+  // The last ascii record may end without a trailing newline.
+  if (minBytes - (ascii ? 1 : 0) > body) {
+    fail(`the header declares at least ${minBytes} bytes of records, but the body holds ${body}.`);
+  }
+}
 
 /** The slice of the loaders.gl PLY header this loader relies on. */
 interface PlyHeaderData {
@@ -198,6 +248,7 @@ function readBinaryDoubleVertices(
  * @param name   Display name (defaults to `"cloud.ply"`).
  */
 export async function loadPly(buffer: ArrayBuffer, name = 'cloud.ply'): Promise<PointCloud> {
+  assertPlyCountsPlausible(buffer);
   const mesh = await parse(buffer, PLYLoader, LOCAL_ONLY_LOADER_OPTIONS);
   const attributes = mesh.attributes;
 

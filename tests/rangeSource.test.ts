@@ -402,12 +402,13 @@ test('HEAD without Content-Length falls back to the ranged-GET probe', async () 
 
 // --- URL hygiene — URL hygiene ---------------------------------------------------
 
-test('validateRemoteCopcUrl accepts a plain http(s) URL', () => {
+test('validateRemoteCopcUrl accepts https, and http only for a local dev page', () => {
   expect(validateRemoteCopcUrl('https://example.com/scan.copc.laz')).toEqual({
     ok: true,
     url: 'https://example.com/scan.copc.laz',
   });
-  expect(validateRemoteCopcUrl('http://example.com/scan.copc.laz').ok).toBe(true);
+  expect(validateRemoteCopcUrl('http://example.com/scan.copc.laz').ok).toBe(false);
+  expect(validateRemoteCopcUrl('http://example.com/scan.copc.laz', { allowHttp: true }).ok).toBe(true);
 });
 
 test('validateRemoteCopcUrl rejects empty, non-string, and unparseable input', () => {
@@ -459,7 +460,7 @@ test('validateRemoteCopcUrl blocks localhost and private/link-local hosts (SSRF)
     'http://svc.internal./scan.copc.laz',
   ];
   for (const url of blocked) {
-    const res = validateRemoteCopcUrl(url);
+    const res = validateRemoteCopcUrl(url, { allowHttp: true });
     expect(res.ok, `${url} should be blocked`).toBe(false);
     if (!res.ok) expect(res.reason).toMatch(/localhost|private/i);
   }

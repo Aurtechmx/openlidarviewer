@@ -19,6 +19,7 @@
 
 import { PCDLoader } from 'three/addons/loaders/PCDLoader.js';
 import { PointCloud } from '../model/PointCloud';
+import { LoadError } from './loadErrors';
 import type { CloudMetadata } from '../model/PointCloud';
 import {
   sanitizeAndRecenter,
@@ -435,6 +436,53 @@ function remapPcdFrame(
  * @param buffer Raw file bytes.
  * @param name   Display name (defaults to `"cloud.pcd"`).
  */
+/**
+ * LZF's best case: a three-byte back-reference emits at most 264 bytes, so no
+ * honest `binary_compressed` chunk inflates past 88 times its compressed size.
+ */
+const LZF_MAX_EXPANSION = 88;
+
+/**
+ * Refuse a PCD whose header claims more than its bytes can hold, before
+ * PCDLoader sizes anything from it. PCDLoader allocates the decompressed
+ * `binary_compressed` chunk straight from a u32 in the file and walks POINTS
+ * records of a binary body without bounds, so an 80-byte file could ask for
+ * 4 GB. Every check is a physical bound, never a heuristic: an honest file is
+ * always inside it.
+ */
+function assertPcdSizesPlausible(buffer: ArrayBuffer, facts: PcdHeaderFacts | null): void {
+  if (!facts) return;
+  const fail = (why: string): never => {
+    throw new LoadError('malformed-file', `malformed PCD: ${why}`);
+  };
+  const points = facts.points;
+  if (!Number.isSafeInteger(points) || points < 0) fail(`invalid POINTS ${points}.`);
+  const remaining = Math.max(0, buffer.byteLength - facts.bodyOffset);
+  let rowSize = 0;
+  for (let i = 0; i < facts.sizes.length; i++) rowSize += (facts.sizes[i] || 0) * (facts.counts[i] ?? 1);
+  // An ascii body is deliberately NOT refused here: a lying POINTS degrades to
+  // the rows present, and the f64 re-read bounds its buffer by the body length.
+  if (facts.data === 'binary') {
+    if (rowSize > 0 && points * rowSize > remaining) {
+      fail(`POINTS ${points} × ${rowSize}-byte records exceed the ${remaining}-byte body.`);
+    }
+  } else if (facts.data === 'binary_compressed') {
+    if (remaining < 8) fail('the compressed chunk header is missing.');
+    const view = new DataView(buffer, facts.bodyOffset, 8);
+    const compressed = view.getUint32(0, true);
+    const decompressed = view.getUint32(4, true);
+    if (compressed > remaining - 8) {
+      fail(`the compressed chunk declares ${compressed} bytes, but ${remaining - 8} are present.`);
+    }
+    if (decompressed > compressed * LZF_MAX_EXPANSION) {
+      fail(`the chunk claims to inflate ${compressed} bytes to ${decompressed}, beyond what LZF can produce.`);
+    }
+    if (rowSize > 0 && points * rowSize > decompressed) {
+      fail(`POINTS ${points} × ${rowSize}-byte records exceed the ${decompressed}-byte decompressed chunk.`);
+    }
+  }
+}
+
 export async function loadPcd(buffer: ArrayBuffer, name = 'cloud.pcd'): Promise<PointCloud> {
   let points;
   // PCDLoader.parse computes a bounding sphere internally; on a file whose x/y/z
@@ -457,6 +505,7 @@ export async function loadPcd(buffer: ArrayBuffer, name = 'cloud.pcd'): Promise<
     if (isBoundingRadiusNaN(args)) return;
     originalError.apply(console, args as []);
   };
+  assertPcdSizesPlausible(buffer, parsePcdHeaderFacts(buffer));
   try {
     points = new PCDLoader().parse(buffer);
   } catch (err) {

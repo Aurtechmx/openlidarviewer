@@ -35,6 +35,8 @@
 import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
 import { parseLasHeader } from './lasHeader';
+import { LoadError } from './loadErrors';
+import { compressedBytesPerPointFloor, validateDeclaredPointCount } from './validateCount';
 import type { LasHeader } from './lasHeader';
 import { computeOrigin } from './coordinateBridge';
 import { sanitizeLocalCloud, withLoadWarning } from './sanitizeCloud';
@@ -81,6 +83,16 @@ function decodeLas(
   const available =
     recordLength > 0 ? Math.floor((buffer.byteLength - pointsOffset) / recordLength) : 0;
   const count = Math.min(header.pointCount, Math.max(0, available));
+  // A header that declares points behind a body holding not one whole record
+  // (an inflated record length, or an offset at the end of the file) has
+  // nothing to clamp to: refuse it rather than report an empty cloud.
+  if (header.pointCount > 0 && count === 0) {
+    throw new LoadError(
+      'malformed-file',
+      `malformed LAS: the header declares ${header.pointCount} points of ${recordLength} bytes, ` +
+        `but the body holds no complete record.`,
+    );
+  }
 
   const step = Math.max(1, Math.floor(stride));
   const total = Math.ceil(count / step);
@@ -183,6 +195,14 @@ export async function loadLas(
 
   let raw: RawPoints;
   if (sourceFormat === 'laz') {
+    // Bound the declared count by the compressed bytes before any decoder,
+    // worker or output array is set up for it.
+    validateDeclaredPointCount(
+      header.pointCount,
+      buffer.byteLength - header.offsetToPointData,
+      compressedBytesPerPointFloor(header.pointDataRecordLength),
+      'LAZ',
+    );
     // Lazy chunk: pulls laz-perf + the embedded WASM only when a `.laz`
     // file is actually opened. Uncompressed `.las` files never download it.
     const { decodeLaz } = await import('./lazDecode');

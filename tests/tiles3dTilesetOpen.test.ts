@@ -139,7 +139,7 @@ describe('openTileset', () => {
 
   test('refuses a URL that fails the entry gate without fetching anything', async () => {
     const t = fakeTransport({});
-    await expect(openTileset('http://127.0.0.1/tileset.json', t)).rejects.toThrow(/private network/i);
+    await expect(openTileset('https://127.0.0.1/tileset.json', t)).rejects.toThrow(/private network/i);
     await expect(openTileset('https://h.example/scan/ept.json', t)).rejects.toThrow(/tileset\.json/);
     expect(t.requests).toEqual([]);
   });
