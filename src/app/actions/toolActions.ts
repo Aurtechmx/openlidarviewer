@@ -8,7 +8,7 @@ import type { Action } from '../../ui/actionRegistry';
 import type { Viewer } from '../../render/Viewer';
 import type { WorkflowController } from '../../ui/WorkflowController';
 import type { LassoVolumeTool } from '../../ui/LassoVolumeTool';
-import { toggleTool } from '../toggleTool';
+import type { SceneTool } from '../toggleTool';
 import { keyDisplayFor } from '../../ui/keyBindings';
 
 export interface ToolActionDeps {
@@ -19,8 +19,12 @@ export interface ToolActionDeps {
   runDeriveClassification: () => Promise<void>;
   runFillUnclassified: () => Promise<void>;
   showLassoToast: (message: string) => void;
-  /** Flip the clip box, through the Clip panel's own write path. */
-  toggleClip: () => void;
+  /**
+   * The shared scene-tool command (`runSceneTool`). The dock and the keyboard
+   * call the same function, so every entry point toggles, records and reveals
+   * the Tools page identically.
+   */
+  runTool: (tool: SceneTool) => void;
 }
 
 export function contributeToolActions(deps: ToolActionDeps): Action[] {
@@ -34,7 +38,7 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
       hint: 'Activate the measurement toolbar.',
       keywords: ['distance', 'area', 'volume'],
       run: () => {
-        toggleTool(deps.getViewer(), deps.workflowController, 'measure');
+        deps.runTool('measure');
       },
     },
     {
@@ -45,7 +49,7 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
       hint: 'Read attributes of any point under the cursor.',
       keywords: ['point info', 'attributes'],
       run: () => {
-        toggleTool(deps.getViewer(), deps.workflowController, 'inspect');
+        deps.runTool('inspect');
       },
     },
     {
@@ -56,7 +60,7 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
       hint: 'Drop notes, info, warnings, or issues on points.',
       keywords: ['note', 'comment', 'mark'],
       run: () => {
-        toggleTool(deps.getViewer(), deps.workflowController, 'annotate');
+        deps.runTool('annotate');
       },
     },
     {
@@ -69,7 +73,7 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
         summary: 'Restricts what the viewer draws to an axis-aligned box without changing the source scan. A point-cloud export made while the clip is on carries the clipped points, not the whole cloud.',
       },
       run: () => {
-        deps.toggleClip();
+        deps.runTool('clip');
       },
     },
     {
