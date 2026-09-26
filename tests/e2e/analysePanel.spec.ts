@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { dropDenseGridPly, showWorkspaceMode } from './helpers';
+import { extractEntry } from '../helpers/zipReader';
 
 /**
  * Analyse panel (v0.4.0) — the conservative surface for terrain readiness
@@ -176,4 +178,46 @@ test('after running on a scan: readiness, chips, recommendations, and gated expo
   const complete = page.locator('.olv-cs-export-btn', { hasText: /^Complete \(ZIP\)$/ });
   await expect(complete).toBeVisible();
   await expect(complete).toBeEnabled();
+});
+
+test('the DEM package carries the sensitivity raster only when "Include sensitivity" is checked', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto('/?test=1');
+  await dropDenseGridPly(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await page.waitForTimeout(1500);
+  await openAnalyse(page);
+  await page.locator('.olv-analyse-run').click();
+  const launch = page.locator('.olv-analyse-contour-launcher .olv-contour-launcher-action');
+  await expect(launch).toBeVisible({ timeout: 20_000 });
+  await launch.click();
+
+  const include = page.getByRole('checkbox', { name: 'Include sensitivity' });
+  await expect(include).toBeVisible();
+  await expect(include).not.toBeChecked();
+  await expect(page.locator('.olv-analyse-dem-sensitivity')).toContainText(
+    'Members that match the canonical settings add no spread.',
+  );
+  const dem = page.locator('.olv-cs-export-btn', { hasText: /^DEM \(ZIP\)$/ });
+
+  const names = async (): Promise<Uint8Array> => {
+    const [download] = await Promise.all([page.waitForEvent('download', { timeout: 60_000 }), dem.click()]);
+    return new Uint8Array(readFileSync((await download.path())!));
+  };
+  const hasSensitivity = (zip: Uint8Array, base: string): boolean =>
+    extractEntry(zip, `${base}_sensitivity.tif`) !== null;
+  const baseOf = (zip: Uint8Array): string => {
+    // The package names every file after the scan; the DTM GeoTIFF is always there.
+    const text = new TextDecoder('latin1').decode(zip);
+    const m = /([A-Za-z0-9._-]+)-dtm\.tif/.exec(text);
+    expect(m, 'the DTM GeoTIFF is in the package').not.toBeNull();
+    return m![1];
+  };
+
+  const off = await names();
+  expect(hasSensitivity(off, baseOf(off))).toBe(false);
+
+  await include.check();
+  const on = await names();
+  expect(hasSensitivity(on, baseOf(on))).toBe(true);
 });

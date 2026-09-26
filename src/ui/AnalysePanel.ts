@@ -28,6 +28,7 @@
  */
 
 import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
+import type { SensitivityMemberGrid, runDemSensitivity as RunDemSensitivity } from '../terrain/export/demSensitivity';
 import { SurfaceTiles } from './analyseSurfaceTiles';
 // TYPE-ONLY: `SceneOverlayHost` names only `THREE.Object3D`-shaped methods, so
 // importing it as a type never pulls three.js into this panel's own chunk —
@@ -526,6 +527,13 @@ export class AnalysePanel {
   private _reportButton!: HTMLButtonElement;
   /** One-line honesty caveat shown under the DEM button for non-full/preview data. */
   private _demNote!: HTMLElement;
+  /** "Include sensitivity" for the DEM package. Off by default: it costs three more terrain runs. */
+  private _demSensitivityCheck!: HTMLInputElement;
+  /** Progress, cancel outcome or failure of the sensitivity runs. Hidden when empty. */
+  private _demSensitivityStatus!: HTMLElement;
+  /** Stops the sensitivity runs of the export in progress. Hidden when none runs. */
+  private _demSensitivityCancel!: HTMLButtonElement;
+  private _demSensitivityAbort: AbortController | null = null;
   private readonly _legend: HTMLElement;
   /** The always-visible minimal "Planned" section. */
   private readonly _roadmap: HTMLElement;
@@ -644,7 +652,7 @@ export class AnalysePanel {
     // this note sits BELOW it; `_renderExportGate` fills + shows it whenever a
     // preview/partial DEM is exportable, keeping the one-line caveat visible in
     // the UI (not only in the exported README).
-    this._contourDeliverable.append(this._demNote);
+    this._contourDeliverable.append(this._demNote, this._buildDemSensitivityControl());
 
     // Everything that needs a result lives in one region we show/hide.
     this._resultsRegion = el('div', { className: 'olv-analyse-results' });
@@ -2198,6 +2206,71 @@ export class AnalysePanel {
     return row;
   }
 
+  /**
+   * The DEM package's "Include sensitivity" option, its help, its progress
+   * line and its cancel button. Unchecked by default.
+   */
+  private _buildDemSensitivityControl(): HTMLElement {
+    const box = el('div', { className: 'olv-analyse-dem-sensitivity' });
+    const label = el('label', { className: 'olv-analyse-layer-toggle' });
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.checked = false;
+    label.append(check, el('span', { text: 'Include sensitivity' }));
+    const help = el('p', {
+      className: 'olv-analyse-dem-note',
+      text:
+        'Adds a raster to the DEM package that shows how much the surface height changes across the '
+        + 'recorded ensemble of terrain settings. Members that match the canonical settings add no spread. '
+        + 'It runs the terrain model three more times.',
+    });
+    const status = el('p', { className: 'olv-analyse-dem-note' });
+    status.setAttribute('role', 'status');
+    status.style.display = 'none';
+    const cancel = el('button', { className: 'olv-analyse-dl', text: 'Cancel' });
+    cancel.title = 'Stop the sensitivity runs. Nothing is downloaded.';
+    cancel.style.display = 'none';
+    cancel.addEventListener('click', () => this._demSensitivityAbort?.abort());
+    this._demSensitivityCheck = check;
+    this._demSensitivityStatus = status;
+    this._demSensitivityCancel = cancel;
+    box.append(label, help, status, cancel);
+    return box;
+  }
+
+  private _setDemSensitivityStatus(text: string): void {
+    this._demSensitivityStatus.textContent = text;
+    this._demSensitivityStatus.style.display = text ? '' : 'none';
+  }
+
+  /** Run the recorded ensemble for this result, with progress and cancel. */
+  private async _runDemSensitivity(
+    r: AnalyseContoursResult,
+    run: typeof RunDemSensitivity,
+  ): Promise<SensitivityMemberGrid[]> {
+    const abort = new AbortController();
+    this._demSensitivityAbort = abort;
+    this._demSensitivityCancel.style.display = '';
+    try {
+      return await run(
+        r.dtm,
+        (k, of) => this._setDemSensitivityStatus(`Sensitivity: running member ${k} of ${of}.`),
+        abort.signal,
+      );
+    } catch (err) {
+      if (abort.signal.aborted) throw err;
+      // An AbortError the user did not ask for: a newer analysis or a closed
+      // scan stopped the terrain runs. Reported as a failure, not a cancel.
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new Error('the terrain runs were stopped by a newer analysis or a closed scan');
+      }
+      throw err;
+    } finally {
+      this._demSensitivityAbort = null;
+      this._demSensitivityCancel.style.display = 'none';
+    }
+  }
+
   /** Build and download the georeferenced DEM package (lazy raster writers). */
   private async _exportDemPackage(
     btn: HTMLButtonElement,
@@ -2214,7 +2287,28 @@ export class AnalysePanel {
     const ctx = this._cb.getMapContext?.() ?? {};
     const basename = this._cb.getExportBasename?.() ?? 'terrain';
     try {
-      const { buildDemPackage } = await loadDemPackage();
+      const { buildDemPackage, runDemSensitivity } = await loadDemPackage();
+      let sensitivityGrids: SensitivityMemberGrid[] | null = null;
+      this._setDemSensitivityStatus('');
+      if (this._demSensitivityCheck?.checked) {
+        try {
+          sensitivityGrids = await this._runDemSensitivity(r, runDemSensitivity);
+          this._setDemSensitivityStatus('');
+        } catch (err) {
+          if (err instanceof Error && err.name === 'AbortError') {
+            this._setDemSensitivityStatus('Sensitivity cancelled. Nothing was downloaded.');
+            return;
+          }
+          // eslint-disable-next-line no-console
+          console.error('OpenLiDARViewer: DEM sensitivity failed.', err);
+          const msg = err instanceof Error ? err.message : String(err);
+          this._setDemSensitivityStatus(
+            `Sensitivity raster not included: ${msg}. The rest of the DEM package was exported.`,
+          );
+        }
+        // The runs take seconds; re-check the scan before the package is written.
+        if (this._refuseForeignScanExport()) return;
+      }
       const bytes = buildDemPackage(r, {
         // Same resolved scale as the GeoJSON / DXF / sheet / report.
         verticalUnitToMetres: ctx.verticalUnitToMetres ?? null,
@@ -2237,6 +2331,7 @@ export class AnalysePanel {
         // convenience button, which keeps its own availability.
         exportPermit: exportPermit ?? null,
         analysedBasis: this._contourFrame?.analysedBasis ?? null,
+        sensitivityGrids,
       });
       triggerDownload(new Blob([bytes as BlobPart], { type: 'application/zip' }), `${basename}-dem.zip`);
     } catch (err) {
