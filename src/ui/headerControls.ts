@@ -18,6 +18,8 @@ import type { StreamingQuality } from '../render/streaming/streamingBudget';
 /** The mount surface these controls need, satisfied by `Stage`. */
 export interface HeaderControlHost {
   mountHeaderControl(element: HTMLElement): boolean;
+  /** Fill the slot reserved at first paint; optional so test hosts can omit it. */
+  fillQualitySlot?(element: HTMLElement): boolean;
 }
 
 export interface HeaderControlOptions {
@@ -84,6 +86,7 @@ export function mountQualityControl(
     },
     onPersist: writeQualityPreference,
   });
-  host.mountHeaderControl(control.element);
+  if (host.fillQualitySlot) host.fillQualitySlot(control.element);
+  else host.mountHeaderControl(control.element);
   return control;
 }

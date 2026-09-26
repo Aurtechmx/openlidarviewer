@@ -167,6 +167,12 @@ export class Stage {
   /** The GitHub link — the theme toggle inserts itself just before it. */
   private _githubLink: HTMLElement | null = null;
   /**
+   * The Speed/Quality control's slot, reserved at first paint so the right
+   * cluster does not shift left when that control mounts after the viewer is
+   * up. Empty, fixed-size, aria-hidden and not focusable until filled.
+   */
+  private _qualitySlot: HTMLElement | null = null;
+  /**
    * The header full-screen control. Held because it owns document-level
    * listeners: dropping the reference left them attached for the page's
    * lifetime with no way to reach them. Null in embed mode (no top bar).
@@ -358,14 +364,20 @@ export class Stage {
     const fullscreen = new FullscreenToggle({ announce: (m) => void announcePolite(m) });
     this._fullscreen = fullscreen;
 
+    // Same box as `.olv-quality-button` (30x30), so filling it moves nothing.
+    const slot = el('div', { className: 'olv-quality-slot' });
+    slot.setAttribute('aria-hidden', 'true');
+    slot.style.cssText = 'width:30px;height:30px;flex:none';
     const right = el('div', { className: 'olv-topbar-right' }, [
       privacy,
       fullscreen.element,
       fullscreen.status,
       credits,
       guide,
+      slot,
       github,
     ]);
+    this._qualitySlot = slot;
     this._topBarRight = right;
     this._githubLink = github;
     return el('header', { className: 'olv-topbar' }, [wordmark, right]);
@@ -387,11 +399,24 @@ export class Stage {
    */
   mountHeaderControl(element: HTMLElement): boolean {
     if (!this._topBarRight) return false;
-    if (this._githubLink) {
-      this._topBarRight.insertBefore(element, this._githubLink);
+    const anchor = this._qualitySlot ?? this._githubLink;
+    if (anchor) {
+      this._topBarRight.insertBefore(element, anchor);
     } else {
       this._topBarRight.append(element);
     }
+    return true;
+  }
+
+  /**
+   * Put the Speed/Quality control into the slot reserved for it at first
+   * paint, so the header does not move. Falls back to a plain mount.
+   */
+  fillQualitySlot(element: HTMLElement): boolean {
+    const slot = this._qualitySlot;
+    if (!slot) return this.mountHeaderControl(element);
+    this._qualitySlot = null;
+    slot.replaceWith(element);
     return true;
   }
 
