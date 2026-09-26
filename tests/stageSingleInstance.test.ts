@@ -38,7 +38,11 @@ describe('Stage lifecycle', () => {
   it('registers its rail-toggle disposers, so a teardown path would work', () => {
     // The disposers are wired even though nothing drains them, which is what
     // makes adding a teardown path a one-line change rather than an audit.
-    const registered = mainSource.match(/stage\.addTeardown\(wireRailToggle\(/g) ?? [];
+    // The rail wiring lives in the workspace shell, which main.ts hands its
+    // stage teardown to.
+    const shellSource = readFileSync(join(__dirname, '../src/app/workspace/workspaceShell.ts'), 'utf8');
+    expect(mainSource).toMatch(/addTeardown: \(fn\) => stage\.addTeardown\(fn\)/);
+    const registered = shellSource.match(/d\.addTeardown\(wireRailToggle\(/g) ?? [];
     expect(registered.length).toBeGreaterThan(0);
   });
 });

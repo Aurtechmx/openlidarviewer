@@ -4784,6 +4784,47 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border-radius: var(--radius-md);
 }
 
+
+/* Task pages (src/app/workspace/workspaceRouter.ts): while a page is open the
+   host shows only its task header and that one panel. Scoped to the mode host,
+   so a panel the phone sheet borrows is never hidden by the desktop route. */
+.olv-ws-mode > .olv-ws-off {
+  display: none;
+}
+.olv-ws-task {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md);
+  padding: 0 var(--space-2xs);
+}
+.olv-ws-task[hidden] {
+  display: none;
+}
+.olv-ws-back {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font: 500 var(--text-xs) / 1.2 var(--font);
+  padding: var(--space-xs) var(--space-2xs);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.olv-ws-back:hover {
+  color: var(--text);
+}
+.olv-ws-back:focus-visible,
+.olv-ws-task-title:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.olv-ws-task-title {
+  margin: 0;
+  color: var(--text);
+  font: 600 var(--text-xs) / 1.2 var(--font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
 /* The Inspector is the active control rail (Color By / Quality /
  * Workflow / Visuals) — RAISED so it reads as the live working
  * surface against the recessive left stack. */

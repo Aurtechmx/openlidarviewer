@@ -51,8 +51,8 @@
   },
   "fanOut": {
     "src/main.ts": {
-      "runtime": 105,
-      "typeOnly": 24,
+      "runtime": 103,
+      "typeOnly": 27,
       "dynamic": 7,
       "modules": [
         "@fontsource/jetbrains-mono/latin-400.css",
@@ -139,7 +139,6 @@
         "src/ui/ExportPanel.ts",
         "src/ui/Inspector.ts",
         "src/ui/LassoVolumeTool.ts",
-        "src/ui/MobileSheet.ts",
         "src/ui/NavBar.ts",
         "src/ui/ProjectCard.ts",
         "src/ui/RecommendedViewChip.ts",
@@ -158,7 +157,6 @@
         "src/ui/themes.ts",
         "src/ui/toolDock.ts",
         "src/ui/undoRouter.ts",
-        "src/ui/workspace/DesktopWorkspace.ts",
         "src/units/units.ts"
       ]
     },
@@ -427,7 +425,7 @@
     },
     "src/app/actionDefinitions.ts": {
       "runtime": 7,
-      "typeOnly": 14,
+      "typeOnly": 15,
       "dynamic": 0,
       "modules": [
         "src/app/actions/analysisActions.ts",
@@ -446,13 +444,13 @@
     "components": []
   },
   "context": {
-    "filesScanned": 998,
+    "filesScanned": 1000,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [
       {
         "file": "src/ui/dom.ts",
-        "importers": 70
+        "importers": 71
       },
       {
         "file": "src/lazyChunks.ts",

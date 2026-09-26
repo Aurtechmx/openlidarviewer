@@ -128,6 +128,6 @@ describe('every entry point converges on the one command', () => {
     // The registry gets the same function, and nothing else toggles a tool.
     expect(main).toMatch(/^\s+runTool,$/m);
     expect(main).not.toMatch(/\btoggleTool\(/);
-    expect(main).toMatch(/function runTool\(tool: SceneTool\): void \{[\s\S]{0,120}?runSceneTool\(/);
+    expect(main).toMatch(/function runTool\(tool: SceneTool\): void \{\s+runSceneTool\(/);
   });
 });
