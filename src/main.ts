@@ -10,7 +10,7 @@ import './styles';
 import './io/loaderConfig';
 import type { Viewer } from './render/Viewer';
 import { floorPlanPositions } from './app/floorPlanPositions';
-import { isMobileDevice, isTouchFirstDevice, MOBILE_LAYOUT_QUERY } from './ui/isMobileDevice';
+import { isMobileDevice, isTouchFirstDevice } from './ui/isMobileDevice';
 import { Stage } from './ui/Stage';
 import type { Sample } from './ui/Stage';
 import { DropZone } from './ui/DropZone';
@@ -24,12 +24,7 @@ import { NavBar } from './ui/NavBar';
 import { createNavBarWiring } from './ui/navBarWiring';
 import { ProjectCard } from './ui/ProjectCard';
 import {
-  wireMeasureBarClearance,
-  wireDockClearance,
-  wireRailToggle,
-  containPanelWheel,
-  RAIL_CHEVRON_LEFT,
-  RAIL_CHEVRON_RIGHT, createToastHost } from './ui/panelChrome';
+  wireMeasureBarClearance, createToastHost } from './ui/panelChrome';
 import {
   applyTheme,
   readPersistedTheme,
@@ -40,7 +35,7 @@ import type { ShortcutSheet } from './ui/ShortcutSheet';
 import type { TourHandle } from './ui/onboarding/bootTour';
 import { createTourLauncher } from './app/tourLauncher';
 import { findDuplicateIds, type Action } from './ui/actionRegistry';
-import { toggleTool } from './app/toggleTool';
+import { runSceneTool, type SceneTool } from './app/toggleTool';
 import type { SessionIoDeps } from './app/sessionIo';
 import type { SessionSnapshotDeps } from './app/sessionSnapshot';
 import { openScan, type OpenScanDeps } from './app/openScan';
@@ -102,8 +97,9 @@ import { classificationLabel } from './render/pointInfo';
 // and the class itself arrives through `loadObjectPanel()` (see lazyChunks import
 // above) inside `ensureObjectPanel()`.
 import type { ObjectPanel } from './ui/ObjectPanel';
-import { MobileSheet } from './ui/MobileSheet';
-import { DesktopWorkspace, type WorkspaceMode } from './ui/workspace/DesktopWorkspace';
+import type { MobileSheet } from './ui/MobileSheet';
+import type { WorkspaceMode } from './ui/workspace/DesktopWorkspace';
+import type { WorkspaceShell } from './app/workspace/workspaceShell';
 import { createScanRouteCoordinator, type SpaceExportContext } from './app/scanRouteCoordinator';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel, exportClassFacts } from './ui/ExportPanel';
@@ -233,6 +229,7 @@ import {
   loadTilesetOpen,
   loadActionRegistry,
   loadToolLauncher,
+  loadWorkspaceShell,
   loadStockpilePresenter, loadSessionIo, loadAnalysisModules, loadRecovery, loadSessionSnapshot, loadRemoteDeepLink, loadScanReportRenderer,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
@@ -528,6 +525,8 @@ let startViewer: () => void = () => {};
 const viewerStarted = new Promise<void>((resolve) => { startViewer = resolve; });
 /** Start the Viewer import if it has not started, and hand back the shared promise. */
 const ensureViewer = (): Promise<Viewer> => { startViewer(); return viewerLoaded; };
+// The rail's chunk is fetched beside the Viewer's, in the full app only.
+const workspaceShellChunk = bareMode ? null : viewerStarted.then(loadWorkspaceShell);
 const viewerLoaded: Promise<Viewer> = viewerStarted.then(async () => {
   const { Viewer: ViewerCtor, chooseRenderBackendForPage } = await importOrReload(loadViewer);
   // WebKit/iOS: navigator.gpu is present but requestAdapter() -> null; probe so
@@ -851,7 +850,7 @@ function showInstantAnswer(scanLabel: string): void {
         case 'terrain':
           // Ensure the (lazy) panel is mounted before expanding + running, so
           // the busy state and result have somewhere to land.
-          analyseExpanded = true; showWorkspaceMode?.('analyse');
+          analyseExpanded = true; showWorkspaceMode('analyse');
           void ensureAnalysePanel().then((p) => {
             p.expand();
             void terrainRunner.run();
@@ -1225,6 +1224,11 @@ const crsCoordinator = createCrsCoordinator({
 // the badge is mounted, and the shortcut / palette entries registered, only
 // when the flag is on.
 const workflowController = new WorkflowController();
+// The one scene-tool command every entry point runs (dock, key, palette, launcher).
+function runTool(tool: SceneTool): void {
+  runSceneTool({ viewer: () => viewer, workflow: workflowController, toggleClip: () => clipPanel.toggleEnabled(),
+    openPage: (page) => workspaceShell?.openToolPage(page) }, tool);
+}
 if (WORKFLOW_RECORDER_ENABLED) {
   // The recorder badge is always present when enabled; the heavier settings
   // popup is lazy-loaded on first open (v0.5.2 — keeps it out of the eager
@@ -1618,7 +1622,7 @@ function ensureActionRegistry(): Promise<Action[]> {
   syncLassoButton,
   runDeriveClassification,
   runFillUnclassified,
-  toggleClip: () => clipPanel.toggleEnabled(),
+  runTool,
   buildCurrentStoryInputs,
   startWorkflowRecording,
   dispatchWorkflowEvent,
@@ -1628,10 +1632,10 @@ function ensureActionRegistry(): Promise<Action[]> {
   saveSnapshot,
   copyShareLink,
   terrainAnalysisEntry: {
-    showAnalyseMode: () => showWorkspaceMode?.('analyse'),
+    showAnalyseMode: () => showWorkspaceMode('analyse'),
     showPanel: () => ensureAnalysePanel().then((p) => { p.setVisible(true); return { hasResult: p.currentResultForProvenance() != null, flowInput: p.flowPulseInput(), terrainAccessInput: p.terrainAccessInput() }; }),
     run: () => void terrainRunner.run(),
-  }, observatoryEntry: { showAnalyseMode: () => showWorkspaceMode?.('analyse'), runnerDeps: { getActiveCloud: () => scans.activeCloud(), getDatasetId: () => scans.activeId, getCrsRevision: () => crsService.crsRevision(), buildOptions: () => ({ filename: null, metresPerUnit: null, buildTag: __APP_VERSION__ }) }, overlayHost: () => viewer.derivedLayerHost() },
+  }, observatoryEntry: { showAnalyseMode: () => showWorkspaceMode('analyse'), runnerDeps: { getActiveCloud: () => scans.activeCloud(), getDatasetId: () => scans.activeId, getCrsRevision: () => crsService.crsRevision(), buildOptions: () => ({ filename: null, metresPerUnit: null, buildTag: __APP_VERSION__ }) }, overlayHost: () => viewer.derivedLayerHost() },
   showTouchGestures: () => navBar.flashTouchHint(),
   saveCurrentView,
   applyView,
@@ -1741,10 +1745,10 @@ const dock = new ToolDock({
   onFrameAll: () => viewer.frameAll(),
   onSnapshot: () => void saveSnapshot(),
   onShare: () => void copyShareLink(),
-  onMeasureToggle: () => { if (toggleTool(viewer, workflowController, 'measure')) showWorkspaceMode?.('work'); },
-  onInspectToggle: () => { toggleTool(viewer, workflowController, 'inspect'); },
+  onMeasureToggle: () => { runTool('measure'); },
+  onInspectToggle: () => { runTool('inspect'); },
   onProbeToggle: () => viewer.setProbeMode(!viewer.probeMode),
-  onAnnotateToggle: () => { if (toggleTool(viewer, workflowController, 'annotate')) showWorkspaceMode?.('work'); },
+  onAnnotateToggle: () => { runTool('annotate'); },
   onAnalyseToggle: () => {
     // Re-open (or hide) the terrain analysis panel; opening takes over from an
     // Object panel that demoted it. Lazy-mount aware: the panel may not exist
@@ -1755,7 +1759,7 @@ const dock = new ToolDock({
     analyseDesiredVisible = show;
     analyseProfileVisibility.clear(); // explicit toggle overrides a pending restore
     if (show) {
-      showWorkspaceMode?.('analyse');
+      showWorkspaceMode('analyse');
       void ensureAnalysePanel().then((p) => p.setVisible(true));
       // Opening Analyse demotes the Object panel: track the intent so a still-mounting one replays hidden.
       objectDesiredVisible = false;
@@ -2787,7 +2791,7 @@ const clipPanel = new ClipPanel({
 // the annotation store already hold. It owns no tool state and no count.
 const toolLauncherHost = document.createElement('div');
 let toolLauncherCard: { readonly element: HTMLElement; refresh: () => void } | null = null;
-const refreshToolLauncher = (): void => toolLauncherCard?.refresh();
+const refreshToolLauncher = (): void => { workspaceShell?.router.sync(); toolLauncherCard?.refresh(); };
 async function fillToolLauncher(): Promise<void> {
   const { createToolLauncher } = await loadToolLauncher();
   toolLauncherCard = createToolLauncher({
@@ -2796,8 +2800,8 @@ async function fillToolLauncher(): Promise<void> {
       measurements: viewerReady ? viewer.measure.getMeasurements().length : 0,
       annotations: viewerReady ? viewer.annotate.getAnnotations().length : 0,
     }),
-    isToolPanelActive: () => [measureMount.panel?.element, annotationPanel.element]
-      .some((e) => e != null && !e.classList.contains('olv-hidden')),
+    isToolPanelActive: () => false, // the card is the Tools home; a tool page replaces it
+    resume: (id) => workspaceShell?.resumeToolPage(id) ?? false,
     disabledReason: () => (viewerReady && hasScan() ? null : 'Load a scan to use the tools.'),
   });
   toolLauncherHost.append(toolLauncherCard.element);
@@ -2886,10 +2890,10 @@ const routeCoordinator = createScanRouteCoordinator({
 // lifecycle (reveal / reset) re-evaluate whether the phone sheet should show,
 // without main.ts holding a direct reference to the sheet instance.
 let syncMobileSheet: (() => void) | null = null;
-// Presentation-only bridge: a tool activation (Measure/Annotate/Analyse) reveals
-// its workspace mode. Set once the lazy workspace exists; the tool callbacks stay
-// authoritative — this only changes which mode is shown, never tool behaviour.
-let showWorkspaceMode: ((mode: WorkspaceMode) => void) | null = null;
+// The desktop rail and its route (workspaceShell.ts), set once the lazy Viewer
+// resolves. Presentation only: it changes which panel shows, never a tool.
+let workspaceShell: WorkspaceShell | null = null;
+const showWorkspaceMode = (m: WorkspaceMode): void => workspaceShell?.showMode(m);
 
 // Set once the desktop left-panel column (and mobile sheet) are built (full app
 // only). Lets the lazily-mounted Analyse panel insert itself into the DOM in its
@@ -3233,205 +3237,42 @@ void viewerLoaded.then(() => {
     rightRail.id = 'olv-right-rail';
     rightRail.append(streamingPanel.element, inspector.element);
     stage.overlay.append(rightRail);
-    // Semantic workspace: one Data/Work/Analyse/Output mode visible at a time,
-    // re-hosting the existing live panels. Root keeps `.olv-left-panels`#olv-left-panels
-    // so the rail-collapse chrome, clearance vars and wheel containment target it
-    // unchanged. measure/analyse/object lazy-mount into their modes below.
-    const workspace = new DesktopWorkspace({ onModeChange: () => refreshToolLauncher() });
-    showWorkspaceMode = (m) => workspace.setMode(m);
-    const leftPanels = workspace.element;
-    // Data mode = the live layer browser (re-parented out of the Inspector, which
-    // keeps updating the same nodes) + the class legend. Reused on mobile return.
-    const dataEls = inspector.workspaceDataElements();
-    const workspacePanels = {
-      dataLayers: dataEls.layers,
-      dataLayerHealth: dataEls.layerHealth,
-      classLegend: classLegendPanel.element,
-      annotation: annotationPanel.element,
-      toolLauncher: toolLauncherHost,
-      clip: clipPanel.element,
-      processStudio: processStudio.panel.element,
-      export: exportPanel.element,
-    };
-    workspace.layoutDesktop(workspacePanels);
-    void fillToolLauncher(); // the card fills its mounted host when its chunk lands
-    exportPanel.element.classList.remove('olv-collapsed'); // ditto, at first build
-    stage.overlay.append(leftPanels);
-    stage.addTeardown(() => workspace.dispose());
-    // P9 — wheel ownership: a wheel over a panel scrolls the panel and must never
-    // reach the camera. Stop it here (passive — this is plain scrolling, never a
-    // preventDefault), so no ancestor handler can act on a panel scroll. The
-    // canvas controller also gates on target (NavController `_handleWheel`).
-    containPanelWheel(leftPanels);
-    containPanelWheel(rightRail);
-    // Push the column below the measure toolbar whenever it is visible —
-    // see wireMeasureBarClearance for why this is measured, not static CSS.
-    stage.addTeardown(wireMeasureBarClearance(viewer.measureElements.hint, leftPanels));
-    // P11 — keep the column above the real dock height, and add the one-tap rail collapse.
-    stage.addTeardown(wireDockClearance(dock.dock, leftPanels));
-    stage.addTeardown(wireRailToggle({
-      overlay: stage.overlay,
-      panels: [leftPanels],
-      tabClass: 'olv-rail-tab',
-      chevron: RAIL_CHEVRON_LEFT,
-      collapsedClass: 'olv-rail-collapsed',
-      storageKey: 'olv.leftRail.collapsed',
-      ariaControls: 'olv-left-panels',
-    }));
-    // One grabber collapses the whole right context rail (Streaming + Inspector).
-    // Reuses the Inspector's persisted collapse key so a prior preference carries
-    // over; the obsolete per-streaming key is left unread.
-    stage.addTeardown(wireRailToggle({
-      overlay: stage.overlay,
-      panels: [rightRail],
-      tabClass: 'olv-right-rail-tab',
-      chevron: RAIL_CHEVRON_RIGHT,
-      collapsedClass: 'olv-right-collapsed',
-      storageKey: 'olv.rightRail.inspector.collapsed',
-      ariaControls: 'olv-right-rail',
-    }));
-    stage.overlay.append(dock.dock);
-    stage.overlay.append(dock.backend);
-    stage.overlay.append(projectCard.element);
-    // The point-info card sits above the panels so its Copy button is reachable.
-    stage.overlay.append(viewer.inspectElements.card);
-    // The annotation editor card floats above everything while it is open.
-    stage.overlay.append(viewer.annotateElements.editor);
-    // The live-probe readout follows the cursor above the panels.
-    stage.overlay.append(viewer.probeElements.readout);
-    // Phone-only "Scan Info" launcher — superseded by the bottom sheet on phones
-    // (CSS-hidden), unused on desktop; kept so the no-sheet path stays intact.
-    stage.overlay.append(inspector.sheetToggle);
-
-    // ── Phone bottom-sheet (design audit 1.3 follow-up) ───────────────────
-    // Below the mobile breakpoint the floating panels don't fit side-by-side,
-    // so one bottom sheet hosts them behind a View · Analyse · Layers tablist.
-    // The sheet owns only the chrome; here we RE-PARENT the existing panel
-    // elements into its slots on mobile and restore them to their desktop homes
-    // on a wider viewport. Re-parenting a live node keeps its listeners, so no
-    // panel is re-wired on a breakpoint flip. Desktop layout is untouched.
-    const mobileSheet = new MobileSheet();
-    phoneSheet = mobileSheet;
-    stage.overlay.append(mobileSheet.element);
-
-    const toMobileLayout = (): void => {
-      mobileSheet.slot('view').append(inspector.element);
-      // Lazy panels (analyse, object, measure) are re-parented only once they
-      // exist; before that each slots itself in via its mount closure on mount.
-      if (analysePanel) mobileSheet.slot('analyse').append(analysePanel.element);
-      if (objectPanel) mobileSheet.slot('analyse').append(objectPanel.element);
-      // The layer browser leads the mobile Layers tab (it lives in desktop Data).
-      mobileSheet.slot('layers').append(dataEls.layers, dataEls.layerHealth);
-      const layersPanels: HTMLElement[] = [classLegendPanel.element, processStudio.panel.element];
-      if (measureMount.panel) layersPanels.push(measureMount.panel.element);
-      layersPanels.push(clipPanel.element, annotationPanel.element, exportPanel.element);
-      mobileSheet.slot('layers').append(...layersPanels);
-      // Drop the desktop collapsed state so mobile users don't see a nested
-      // collapsed header inside the sheet's own collapse chrome.
-      analysePanel?.element.classList.remove('olv-collapsed');
-      exportPanel.element.classList.remove('olv-collapsed');
-      // The now-empty left column would still capture touches over its band —
-      // hide it. The Inspector's standalone "Scan Info" launcher is superseded.
-      leftPanels.classList.add('olv-hidden');
-      inspector.sheetToggle.classList.add('olv-hidden');
-    };
-    const toDesktopLayout = (): void => {
-      // Restore the desktop default collapsed state we dropped for the mobile
-      // sheet, so a device that crosses the breakpoint (rotate / resize) gets the
-      // compact desktop panels back rather than fully-expanded ones.
-      // One mode at a time: a collapsed lone panel would hide its main action.
-      analysePanel?.element.classList.remove('olv-collapsed');
-      exportPanel.element.classList.remove('olv-collapsed');
-      leftPanels.classList.remove('olv-hidden');
-      inspector.sheetToggle.classList.remove('olv-hidden');
-      // Inspector returns to the right context rail (below the Streaming card);
-      // the left panels return to their workspace modes (lazy ones once mounted).
-      rightRail.append(inspector.element);
-      workspace.layoutDesktop({
-        ...workspacePanels,
-        measure: measureMount.panel?.element,
-        analyse: analysePanel?.element,
-        object: objectPanel?.element,
-      });
-    };
-
-    // Layout swap stays keyed to the shared mobile-layout condition (orientation-
-    // independent, so a phone stays mobile in landscape) so JS and CSS agree.
-    const mobileMql =
-      typeof window.matchMedia === 'function'
-        ? window.matchMedia(MOBILE_LAYOUT_QUERY)
-        : null;
-    let mobileApplied = false;
-    const applyMobileSheet = (): void => {
-      const isMobile = mobileMql ? mobileMql.matches : false;
-      if (isMobile !== mobileApplied) {
-        if (isMobile) toMobileLayout();
-        else toDesktopLayout();
-        mobileApplied = isMobile;
-      }
-      // The sheet only shows on a phone WITH a scan loaded; otherwise the empty
-      // slots would float a chrome bar over the empty state.
-      mobileSheet.setVisible(isMobile && hasScan());
-      // The desktop workspace tab strip appears only once a scan is loaded, so
-      // an empty left rail stays zero-height and its grabber stays hidden.
-      workspace.setAvailable(hasScan());
-    };
-    // Expose to the scan lifecycle so reveal / reset re-evaluate visibility.
-    syncMobileSheet = applyMobileSheet;
-    mobileMql?.addEventListener('change', applyMobileSheet);
-    applyMobileSheet();
-
-    // The lazy Analyse panel inserts itself here once its chunk resolves: ahead
-    // of the object panel in the mobile Analyse slot, else the Analyse mode.
-    mountAnalysePanelElement = (el: HTMLElement): void => {
-      el.classList.remove('olv-collapsed'); // constructs collapsed; hides its action
-      if (mobileApplied) {
-        const slot = mobileSheet.slot('analyse');
-        // insertBefore(firstChild) puts Analyse first (object panel follows);
-        // acts as append when the slot is empty.
-        slot.insertBefore(el, slot.firstChild);
-      } else {
-        workspace.mountInMode('analyse', el);
-      }
-    };
-    // The lazy Object panel inserts itself here once its chunk resolves. When
-    // the mobile sheet is active it goes into the Analyse slot AFTER the Analyse
-    // panel; otherwise just before the class-legend panel in the left column.
-    // Robust to the target panel not being where we expect (falls back to
-    // append) so a mid-flip mount can never throw.
-    mountObjectPanelElement = (el: HTMLElement): void => {
-      if (mobileApplied) {
-        // append puts Object after the Analyse panel in the shared Analyse slot.
-        mobileSheet.slot('analyse').append(el);
-      } else {
-        workspace.mountInMode('analyse', el);
-      }
-    };
-    // The lazy Measurements panel inserts itself here once its chunk resolves.
-    // When the mobile sheet is active it goes into the Layers slot before the
-    // annotations panel (its canonical order); otherwise at the FRONT of the left
-    // column. Robust to the target not being where we expect (falls back to
-    // append) so a mid-flip mount can never throw.
-    // `setMountElement` also places the panel immediately if a scan's import
-    // already resolved it before this wiring ran (mirrors the analyse/object
-    // catch-up calls below).
-    measureMount.setMountElement((el: HTMLElement): void => {
-      if (mobileApplied) {
-        const slot = mobileSheet.slot('layers');
-        if (annotationPanel.element.parentElement === slot) {
-          slot.insertBefore(el, annotationPanel.element);
-        } else {
-          slot.append(el);
-        }
-      } else {
-        // Work mode — measure sits with annotations and clip, the scene-work tools.
-        workspace.mountInMode('work', el);
-      }
+    // The desktop rail, the phone sheet and the Tools route: workspaceShell.ts,
+    // a lazy chunk that has normally landed by the time the Viewer has. Nothing
+    // below appends to the overlay, so the paint order is unchanged.
+    void workspaceShellChunk?.then(({ mountWorkspaceShell }) => {
+      const shell = mountWorkspaceShell({
+        overlay: stage.overlay,
+        addTeardown: (fn) => stage.addTeardown(fn),
+        rightRail,
+        inspector,
+        classLegend: classLegendPanel.element,
+        annotation: annotationPanel.element,
+        toolLauncher: toolLauncherHost,
+        clip: clipPanel.element,
+        processStudio: processStudio.panel.element,
+        export: exportPanel.element,
+        measureHint: viewer.measureElements.hint,
+        dock: dock.dock,
+        overlayTail: [dock.dock, dock.backend, projectCard.element, viewer.inspectElements.card,
+          viewer.annotateElements.editor, viewer.probeElements.readout, inspector.sheetToggle],
+        analysePanel: () => analysePanel,
+        objectPanel: () => objectPanel,
+        measurePanel: () => measureMount.panel,
+        setMeasureMountElement: (fn) => measureMount.setMountElement(fn),
+        hasScan,
+        onModeChange: () => refreshToolLauncher(),
     });
-    // If either panel already mounted before this wiring ran (possible only if a
-    // scan's import resolved between column build and here), place it now.
+    void fillToolLauncher(); // the card fills its mounted host when its chunk lands
+    workspaceShell = shell;
+    phoneSheet = shell.mobileSheet;
+    syncMobileSheet = shell.applyMobileSheet;
+    mountAnalysePanelElement = shell.mountAnalysePanel;
+    mountObjectPanelElement = shell.mountObjectPanel;
+    // If either panel already mounted before this wiring ran, place it now.
     if (analysePanel) mountAnalysePanelElement(analysePanel.element);
     if (objectPanel) mountObjectPanelElement(objectPanel.element);
+    });
 
     // The help overlay lazy-mounts itself on first Help press (helpOverlayLazy.ts).
 
@@ -3442,9 +3283,9 @@ void viewerLoaded.then(() => {
     // is inert behind the help modal.
     const toolsReady = (): boolean => hasScan() && !helpOverlay.isOpen();
     globalActionHandlers = {
-      onAnnotate: () => { if (toolsReady()) toggleTool(viewer, workflowController, 'annotate'); },
-      onMeasure: () => { if (toolsReady()) toggleTool(viewer, workflowController, 'measure'); },
-      onInspect: () => { if (toolsReady()) toggleTool(viewer, workflowController, 'inspect'); },
+      onAnnotate: () => { if (toolsReady()) runTool('annotate'); },
+      onMeasure: () => { if (toolsReady()) runTool('measure'); },
+      onInspect: () => { if (toolsReady()) runTool('inspect'); },
       onSaveView: () => {
         if (toolsReady()) saveCurrentView();
       },
@@ -4121,7 +3962,7 @@ const openScanDeps: OpenScanDeps = {
 
 /** Load a File: land on Data up front (visibility only, not gated on the render promise), then parse/render/populate. */
 function handleFile(file: File): Promise<void> {
-  showWorkspaceMode?.('data'); return openScan(file, openScanDeps);
+  showWorkspaceMode('data'); return openScan(file, openScanDeps);
 }
 
 /**
