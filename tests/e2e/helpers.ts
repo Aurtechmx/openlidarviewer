@@ -44,6 +44,17 @@ export async function showWorkspaceMode(
 }
 
 /**
+ * Open the Data mode's Classes page, where the class legend lives. The Data
+ * home shows only a `Classes` row; the legend is one click away.
+ */
+export async function openClassesPage(page: Page): Promise<void> {
+  await showWorkspaceMode(page, 'data');
+  // Data remembers its page: when Classes is already open there is no row to click.
+  if (await page.locator('#olv-ws-mode-data .olv-ws-task-title', { hasText: 'Classes' }).isVisible()) return;
+  await page.locator('.olv-data-row', { hasText: 'Classes' }).click({ timeout: 20_000 });
+}
+
+/**
  * Drop the dense-grid fixture, switch to `mode`, and return `selector`'s
  * panel expanded — clicking its header if it opened collapsed. The setup
  * several a11y specs need before asserting on a panel's controls (ARIA
