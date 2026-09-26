@@ -29,10 +29,22 @@ export type AnalysisRemedy =
   | { readonly kind: 'page'; readonly page: 'terrain'; readonly label: string }
   | { readonly kind: 'preflight'; readonly action: PreflightActionId; readonly tool: ToolId; readonly label: string };
 
+/**
+ * A row's badge: a verdict, or `present` for an entry no verdict stands
+ * behind (the scanner grid), which states a fact rather than a readiness.
+ */
+export type AnalysisStatus = Readiness | 'present';
+
+/** What the last terrain run says about itself (its surface tier and verdict line). */
+export interface TerrainRunUsability {
+  readonly tier: 'Good' | 'Preview' | 'Limited' | 'Blocked';
+  readonly verdict: string;
+}
+
 export interface AnalysisRow {
   readonly id: AnalysisId;
   readonly label: string;
-  readonly status: Readiness;
+  readonly status: AnalysisStatus;
   /** One sentence: why the row reads as it does. */
   readonly reason: string;
   /** Offered only on a BLOCKED row, and only when something can lift it. */
@@ -47,6 +59,8 @@ export interface AnalysisStatusInput {
   /** Entries that exist only for some scans: a scanner grid, classified features. */
   readonly hasRange: boolean;
   readonly hasFeatures: boolean;
+  /** The last run's own usability, or null before a run. */
+  readonly terrainRun?: TerrainRunUsability | null;
   /** True when the app can carry out a preflight remediation. */
   readonly canRemediate?: (action: PreflightActionId, tool: ToolId) => boolean;
 }
@@ -62,6 +76,28 @@ const LABEL: Readonly<Record<AnalysisId, string>> = {
 };
 
 export const PREPARE_TERRAIN: AnalysisRemedy = { kind: 'page', page: 'terrain', label: 'Prepare terrain' };
+
+const RUN_STATUS: Readonly<Record<TerrainRunUsability['tier'], Readiness>> = {
+  Good: 'ready', Preview: 'review', Limited: 'review', Blocked: 'blocked',
+};
+const RANK: Readonly<Record<Readiness, number>> = { ready: 0, review: 1, blocked: 2 };
+
+/**
+ * Presentation rule for a terrain status: the more restrictive of Process
+ * Studio's readiness and the run's own usability. The two decisions stay
+ * separate; this only picks which one the badge shows. When the run is at
+ * least as restrictive and not usable, its verdict line is the reason, so a
+ * page never reads Ready beside a run that says it is not usable.
+ */
+export function capByRun(
+  base: { status: Readiness; reason: string | undefined },
+  run: TerrainRunUsability | null | undefined,
+): { status: Readiness; reason: string | undefined; byRun: boolean } {
+  if (!run) return { ...base, byRun: false };
+  const rs = RUN_STATUS[run.tier];
+  if (rs !== 'ready' && RANK[rs] >= RANK[base.status]) return { status: rs, reason: run.verdict, byRun: true };
+  return { ...base, byRun: false };
+}
 
 const QA_STATUS: Readonly<Record<QaCheck['status'], Readiness>> = { pass: 'ready', review: 'review', block: 'blocked' };
 
@@ -82,7 +118,8 @@ export function contoursStatus(input: AnalysisStatusInput): Omit<AnalysisRow, 'i
     return { status: 'blocked', reason: 'Contours come from a terrain run. Run terrain analysis first.', remedy: PREPARE_TERRAIN };
   }
   const v = productVerdict(input.facts, input.view, 'contours');
-  return { status: v.status, reason: v.reason ?? 'Contours from the latest terrain run.', remedy: null };
+  const c = capByRun({ status: v.status, reason: v.reason ?? 'Contours from the latest terrain run.' }, input.terrainRun);
+  return { status: c.status, reason: c.reason ?? 'Contours from the latest terrain run.', remedy: null };
 }
 
 /** One row per analysis the Analyse home lists for the loaded scan. */
@@ -96,16 +133,18 @@ export function analysisRows(input: AnalysisStatusInput): AnalysisRow[] {
   }
   const dtm = productVerdict(facts, input.view, 'dtm');
   const hasDtm = input.produced.has('dtm');
-  const row = (id: AnalysisId, status: Readiness, reason: string | undefined, remedy: AnalysisRemedy | null = null): AnalysisRow => ({
+  const row = (id: AnalysisId, status: AnalysisStatus, reason: string | undefined, remedy: AnalysisRemedy | null = null): AnalysisRow => ({
     id, label: LABEL[id], status,
     reason: reason ?? (status === 'ready' ? 'Nothing blocks this analysis for the loaded scan.' : 'Process Studio gives no reason for this verdict.'),
     remedy: status === 'blocked' ? remedy : null,
   });
   return ids.map((id) => {
     switch (id) {
-      case 'terrain':
-        return row(id, dtm.status, hasDtm && dtm.status === 'ready' ? 'The latest run produced a DTM.' : dtm.reason,
-          preflightRemedy(dtm, input.canRemediate));
+      case 'terrain': {
+        const base = { status: dtm.status, reason: hasDtm && dtm.status === 'ready' ? 'The latest run produced a DTM.' : dtm.reason };
+        const t = capByRun(base, hasDtm ? input.terrainRun : null);
+        return row(id, t.status, t.reason, t.byRun ? null : preflightRemedy(dtm, input.canRemediate));
+      }
       case 'flow-pulse':
       case 'terrain-access':
         // Both labs read the DTM of the latest terrain run and refuse without one.
@@ -126,7 +165,8 @@ export function analysisRows(input: AnalysisStatusInput): AnalysisRow[] {
         return row(id, v.status, v.reason, preflightRemedy(v, input.canRemediate));
       }
       case 'range':
-        return row(id, 'ready', 'The active layer carries a scanner grid.');
+        // No Process Studio verdict stands behind this entry, so it states the fact only.
+        return row(id, 'present', 'The active layer carries a scanner grid. No readiness check applies.');
     }
   });
 }

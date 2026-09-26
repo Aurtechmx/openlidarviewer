@@ -24,7 +24,7 @@ const facts = {
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
-async function make(produced: ProductId[] = []) {
+async function make(produced: ProductId[] = [], run: { tier: 'Good' | 'Preview' | 'Limited' | 'Blocked'; verdict: string } | null = null) {
   const { DesktopWorkspace } = await import('../src/ui/workspace/DesktopWorkspace');
   const { createWorkspaceRouter } = await import('../src/app/workspace/workspaceRouter');
   const { createAnalyseWorkspace } = await import('../src/app/workspace/analyseWorkspace');
@@ -48,6 +48,7 @@ async function make(produced: ProductId[] = []) {
     restoreParts: vi.fn(),
     linksHost: () => links as unknown as HTMLElement,
     setPartsListener: vi.fn(),
+    runUsability: () => run,
   };
   const processStudio = new FakeEl('section');
   const showTerrain = vi.fn(async () => undefined);
@@ -140,6 +141,35 @@ describe('Analyse home', () => {
     t.router.back();
     expect(t.panelEl.parent?.parent).toBe(shell('terrain'));
     expect(t.parts.contours.parent?.parent).toBe(shell('contours'));
+  });
+});
+
+describe('Analyse home shortcuts', () => {
+  it('before a run the Terrain row runs the analysis in one click', async () => {
+    const t = await make();
+    const run = t.row('terrain').find((e) => e.ownText === 'Run terrain analysis')!;
+    run.fire('click');
+    expect(t.runAction).toHaveBeenCalledWith('analyse.run');
+    expect(t.row('contours')).toBeUndefined();
+  });
+
+  it('with contours produced, a Contours child row opens the Contours page in one click', async () => {
+    const t = await make(['dtm', 'contours']);
+    expect(t.row('terrain').find((e) => e.ownText === 'Run terrain analysis')).toBeUndefined();
+    const ids = (t.aw.home as unknown as FakeEl).findAll((e) => !!e.dataset.analysis).map((e) => e.dataset.analysis);
+    expect(ids.slice(0, 2)).toEqual(['terrain', 'contours']);
+    t.row('contours').find((e) => e.hasClass('olv-ah-open'))!.fire('click');
+    await tick();
+    expect(t.router.route().page).toBe('contours');
+  });
+
+  it('a not-usable run caps the Terrain row and page header with the run verdict', async () => {
+    const t = await make(['dtm', 'contours'], { tier: 'Blocked', verdict: 'Not usable for terrain products as-is.' });
+    const r = t.row('terrain');
+    expect(r.find((e) => e.hasClass('olv-ah-badge'))?.ownText).toBe('Blocked');
+    expect(r.find((e) => e.hasClass('olv-ah-reason'))?.ownText).toBe('Not usable for terrain products as-is.');
+    const header = t.host.find((e) => e.dataset.page === 'terrain')!.find((e) => e.hasClass('olv-at-verdict'))!;
+    expect(header.find((e) => e.hasClass('olv-ah-badge'))?.ownText).toBe('Blocked');
   });
 });
 

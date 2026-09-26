@@ -11,7 +11,7 @@
  * Deterministic project; the dense-grid PLY yields an exploratory contour set.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { dropDenseGridPly, showWorkspaceMode } from './helpers';
+import { dropDenseGridPly, dropTerrainAccessUtmLas, showWorkspaceMode } from './helpers';
 
 const ANALYSE = '#olv-ws-mode-analyse';
 
@@ -140,5 +140,41 @@ test.describe('Analyse home and pages', () => {
     expect(after.tagged).toBe(count);
     // The run button never went busy again.
     await expect(page.locator('.olv-analyse-run')).toBeEnabled();
+  });
+
+  test('a not-usable run never reads Ready on the Terrain row or page', async ({ page }) => {
+    await page.goto('/?test=1');
+    await dropTerrainAccessUtmLas(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+    await showWorkspaceMode(page, 'analyse');
+    await row(page, 'terrain').locator('.olv-ah-open').click();
+    await runTerrain(page);
+    await expect(page.locator('.olv-fit-verdict-text')).toHaveText(/Not usable/);
+    const header = page.locator(`${ANALYSE} .olv-analyse-page[data-page="terrain"] .olv-at-verdict`);
+    await expect(header.locator('.olv-ah-badge')).toHaveText('Blocked');
+    await expect(header.locator('.olv-at-reason')).toHaveText(/Not usable/);
+    await back(page).click();
+    await expect(row(page, 'terrain').locator('.olv-ah-badge')).toHaveText('Blocked');
+    await expect(row(page, 'terrain').locator('.olv-ah-reason')).toHaveText(/Not usable/);
+  });
+
+  test('Contours in three clicks without a result and two with one', async ({ page }) => {
+    await page.goto('/?test=1');
+    await dropDenseGridPly(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+    await page.locator('.olv-ws-tab[data-mode="analyse"]').click(); // 1
+    await row(page, 'terrain').getByRole('button', { name: 'Run terrain analysis' }).click(); // 2
+    await expect(title(page)).toHaveText('Terrain');
+    const create = page.locator('.olv-at-link', { hasText: 'Create contours' });
+    await expect(create).toBeVisible({ timeout: 30_000 });
+    await create.click(); // 3
+    await expect(title(page)).toHaveText('Contours');
+
+    await back(page).click();
+    await back(page).click();
+    await showWorkspaceMode(page, 'data');
+    await page.locator('.olv-ws-tab[data-mode="analyse"]').click(); // 1
+    await row(page, 'contours').locator('.olv-ah-open').click(); // 2
+    await expect(title(page)).toHaveText('Contours');
   });
 });
