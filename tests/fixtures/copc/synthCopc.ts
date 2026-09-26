@@ -8,7 +8,7 @@
  * Real LAZ compression is intentionally NOT performed — node chunk bytes are
  * placeholders. Metadata and hierarchy parsing are fully exercised against this
  * fixture; chunk *decoding* is exercised separately through a fake ChunkDecoder
- * and against the real `autzen-classified.copc.laz`.
+ * and end to end against the in-repo `terrain-access-utm.copc.laz`.
  *
  * Pure — no DOM, no three.js — runs in Node for the test suite.
  */

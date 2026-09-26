@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
-import fs from 'node:fs';
 import { dropDenseGridPly, openExpandedPanel, railChromeSettled, expectHittable } from './helpers';
+import { COPC_FIXTURE } from './streamingFixtures';
 
 /**
  * v0.7 accessibility-audit fixes (fe/aria lane): keyboard/focus/visible-state
@@ -12,12 +12,6 @@ import { dropDenseGridPly, openExpandedPanel, railChromeSettled, expectHittable 
  * catalogPanelPcSearchAria, exportPanelPillsAria); this spec drives the same
  * controls as a user actually would, in a real browser.
  */
-
-// Same fixture-resolution rule as streaming.spec.ts / streamingCaveat.spec.ts.
-const COPC_FILE =
-  process.env.OLV_AUTZEN_FIXTURE ??
-  new URL('../../autzen-classified.copc.laz', import.meta.url).pathname;
-const hasAutzenFixture = fs.existsSync(COPC_FILE);
 
 test.describe('ClipPanel — Inside/Outside mode + readout a11y state', () => {
   test('mode buttons carry aria-pressed and the readout is a live region', async ({ page }) => {
@@ -114,17 +108,15 @@ test.describe('CatalogPanel — PC-search status is a live region', () => {
   });
 });
 
-test.describe('StreamingPanel — collapse toggle, chip and grade-result a11y state (autzen COPC required)', () => {
-  test.skip(!hasAutzenFixture, `requires the autzen COPC fixture at ${COPC_FILE}`);
-  test.slow();
+test.describe('StreamingPanel: collapse toggle, chip and grade-result a11y state', () => {
 
   test('collapse toggle, colour-mode chips and the grade-result live region', async ({ page }) => {
     await page.goto('/?test=1');
     await expect(page.locator('.olv-empty-title')).toBeVisible();
 
-    await page.locator('.olv-file-input').first().setInputFiles(COPC_FILE);
+    await page.locator('.olv-file-input').first().setInputFiles(COPC_FIXTURE);
     const panel = page.locator('.olv-streaming-panel');
-    await expect(panel).toBeVisible({ timeout: 60_000 });
+    await expect(panel).toBeVisible({ timeout: 30_000 });
 
     // The grade-result region is a live region from construction, before any
     // grade has run.
@@ -137,9 +129,19 @@ test.describe('StreamingPanel — collapse toggle, chip and grade-result a11y st
     // of which modes this scan's source declares.
     const chips = panel.locator('.olv-streaming-chips .olv-chip');
     await expect(chips.first()).toHaveAttribute('aria-pressed', /true|false/, { timeout: 20_000 });
-    const inactive = chips.filter({ hasNot: page.locator('[aria-pressed="true"]') }).first();
-    await inactive.click();
-    await expect(inactive).toHaveAttribute('aria-pressed', 'true');
+    // Pin the chip by its label: a filter on aria-pressed would re-resolve to
+    // another chip the moment this one flips.
+    const label = await chips.evaluateAll(
+      (els) => els.find((e) => e.getAttribute('aria-pressed') === 'false')?.textContent?.trim() ?? '',
+    );
+    expect(label, 'an unpressed colour-mode chip').not.toBe('');
+    const inactive = chips.getByText(label, { exact: true });
+    // A click can land while the panel is still rebuilding its chips on the
+    // first streamed node, so retry until the press sticks.
+    await expect(async () => {
+      await inactive.click();
+      await expect(inactive).toHaveAttribute('aria-pressed', 'true', { timeout: 2_000 });
+    }).toPass({ timeout: 20_000 });
 
     // The mobile collapse chevron: aria-expanded=true/label "Collapse panel"
     // at rest, and it flips on click. It is a real <button> the whole time —

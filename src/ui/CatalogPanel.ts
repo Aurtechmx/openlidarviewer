@@ -188,7 +188,7 @@ export class CatalogPanel {
     for (const loc of CURATED_LOCATIONS) {
       const opt = document.createElement('option');
       opt.value = loc.id;
-      // Render label + size inline (e.g. "Autzen Stadium · 77 MB" or
+      // Render label + size inline (e.g. "City block · 77 MB" or
       // "Grand Canyon NP ★ · 22.4B pts") so the user can pick by
       // network budget without opening the hint. Native <option>
       // elements can't carry styled spans, so we fold both into the

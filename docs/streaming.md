@@ -94,10 +94,11 @@ precise reason rather than stalling: see the limitation below.
 
 ## Example data
 
-The COPC 1.0 specification publishes test files, including the Autzen Stadium
-scan (`autzen-classified.copc.laz`, ~80 MB). Any conforming `.copc.laz` from
-PDAL, untwine, or another COPC writer opens the same way: locally, or from a
-range- and CORS-capable URL.
+Any conforming `.copc.laz` from PDAL, untwine, or another COPC writer opens the
+same way: locally, or from a range- and CORS-capable URL. The end-to-end suite
+uses two small in-repo fixtures: `tests/fixtures/copc/terrain-access-utm.copc.laz`
+(`scripts/make-copc-fixture.mjs`) and the EPT tree `tests/fixtures/ept-stream/`
+(`scripts/make-ept-fixture.py --children`).
 
 ## EPT (Entwine Point Tile): v0.3.3
 
