@@ -2791,7 +2791,7 @@ const clipPanel = new ClipPanel({
 // the annotation store already hold. It owns no tool state and no count.
 const toolLauncherHost = document.createElement('div');
 let toolLauncherCard: { readonly element: HTMLElement; refresh: () => void } | null = null;
-const refreshToolLauncher = (): void => { workspaceShell?.router.sync(); toolLauncherCard?.refresh(); };
+const refreshToolLauncher = (): void => { workspaceShell?.sync(); toolLauncherCard?.refresh(); };
 async function fillToolLauncher(): Promise<void> {
   const { createToolLauncher } = await loadToolLauncher();
   toolLauncherCard = createToolLauncher({
@@ -3252,13 +3252,13 @@ void viewerLoaded.then(() => {
         processStudio: processStudio.panel.element, studio: processStudio, runAction: (id) => void ensureActionRegistry().then((r) => r.find((a) => a.id === id)?.run()),
         showTerrain: () => ensureAnalysePanel().then((p) => p.setVisible(true)), showObjects: () => ensureObjectPanel().then((p) => { objectDesiredVisible = true; p.setVisible(true); }),
         export: exportPanel.element,
-        measureHint: viewer.measureElements.hint,
-        dock: dock.dock,
+        measureHint: viewer.measureElements.hint, dock: dock.dock,
         overlayTail: [dock.dock, dock.backend, projectCard.element, viewer.inspectElements.card,
           viewer.annotateElements.editor, viewer.probeElements.readout, inspector.sheetToggle],
         analysePanel: () => analysePanel, objectPanel: () => objectPanel,
-        measurePanel: () => measureMount.panel,
-        setMeasureMountElement: (fn) => measureMount.setMountElement(fn),
+        results: { viewer, measure: () => viewer.measure, terrain: () => analysePanel, layerIdentity: runtime.layerIdentity,
+          contours: () => terrainRunner.getContourLayers(), activeLayerId: () => scans.activeExportTargetId() },
+        measurePanel: () => measureMount.panel, setMeasureMountElement: (fn) => measureMount.setMountElement(fn),
         hasScan,
         onModeChange: () => refreshToolLauncher(),
     });
