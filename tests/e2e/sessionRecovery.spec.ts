@@ -14,8 +14,17 @@ type Api = {
   getCameraPose: () => Pose;
 };
 
-const api = <T>(page: Page, f: (a: Api) => T): Promise<T> =>
-  page.evaluate(`(${f.toString()})(window.__OLV_TEST_API__)`) as Promise<T>;
+const placeDistance = (page: Page): Promise<void> =>
+  page.evaluate(() => {
+    const a = (window as unknown as { __OLV_TEST_API__: Api }).__OLV_TEST_API__;
+    a.setMeasureKind('distance');
+    a.placeMeasurementPoint({ x: 0, y: 0, z: 0 });
+    a.placeMeasurementPoint({ x: 1, y: 0.5, z: 0.25 });
+  });
+const measurementCount = (page: Page): Promise<number> =>
+  page.evaluate(() => (window as unknown as { __OLV_TEST_API__: Api }).__OLV_TEST_API__.getMeasurementCount());
+const cameraPose = (page: Page): Promise<Pose> =>
+  page.evaluate(() => (window as unknown as { __OLV_TEST_API__: Api }).__OLV_TEST_API__.getCameraPose());
 
 /** Journal entries currently in IndexedDB, as `[fileName, measurements]`. */
 const journal = (page: Page): Promise<Array<[string, number]>> =>
@@ -47,12 +56,8 @@ async function journalWork(page: Page): Promise<Pose> {
   await page.goto('/?test=1');
   await openTiny(page);
   await page.locator('.olv-tool', { hasText: 'Measure' }).click();
-  await api(page, (a) => {
-    a.setMeasureKind('distance');
-    a.placeMeasurementPoint({ x: 0, y: 0, z: 0 });
-    a.placeMeasurementPoint({ x: 1, y: 0.5, z: 0.25 });
-  });
-  await expect.poll(() => api(page, (a) => a.getMeasurementCount())).toBe(1);
+  await placeDistance(page);
+  await expect.poll(() => measurementCount(page)).toBe(1);
   await page.keyboard.press('Escape');
   const box = (await page.locator('canvas').first().boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -61,7 +66,7 @@ async function journalWork(page: Page): Promise<Pose> {
   // Any interaction re-arms the debounce; the last one is the wheel above.
   await page.mouse.wheel(0, 1);
   await expect.poll(() => journal(page), { timeout: 15_000 }).toEqual([['tiny.ply', 1]]);
-  return api(page, (a) => a.getCameraPose());
+  return cameraPose(page);
 }
 
 test('reload, reopen the same file, restore: measurement and camera come back', async ({ page }) => {
@@ -72,16 +77,16 @@ test('reload, reopen the same file, restore: measurement and camera come back', 
   await expect(notice).toContainText('1 measurement on tiny.ply');
 
   await openTiny(page);
-  expect(await api(page, (a) => a.getMeasurementCount())).toBe(0);
+  expect(await measurementCount(page)).toBe(0);
   // The reopen frames the scan afresh, so the saved pose is not already in place.
-  const fresh = await api(page, (a) => a.getCameraPose());
+  const fresh = await cameraPose(page);
   expect(Math.max(...fresh.position.map((v, i) => Math.abs(v - saved.position[i])))).toBeGreaterThan(1e-3);
   await notice.getByRole('button', { name: 'Restore previous work' }).click();
   await expect(notice).toBeHidden();
-  await expect.poll(() => api(page, (a) => a.getMeasurementCount())).toBe(1);
+  await expect.poll(() => measurementCount(page)).toBe(1);
   await expect
     .poll(async () => {
-      const p = await api(page, (a) => a.getCameraPose());
+      const p = await cameraPose(page);
       return Math.max(...p.position.map((v, i) => Math.abs(v - saved.position[i])), ...p.target.map((v, i) => Math.abs(v - saved.target[i])));
     }, { timeout: 10_000 })
     .toBeLessThan(1e-3);
@@ -96,7 +101,7 @@ test('reopening a different file offers no restore', async ({ page }) => {
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await expect(notice).toContainText('differs from tiny.ply');
   await expect(notice.getByRole('button', { name: 'Restore previous work' })).toHaveCount(0);
-  expect(await api(page, (a) => a.getMeasurementCount())).toBe(0);
+  expect(await measurementCount(page)).toBe(0);
   // The saved work is kept for the right file.
   expect(await journal(page)).toEqual([['tiny.ply', 1]]);
 });

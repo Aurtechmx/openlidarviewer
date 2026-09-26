@@ -56,16 +56,28 @@ describe('evidence-aware simplification throughput', () => {
     // Warm up (JIT) so the timing reflects steady state, not first-call compile.
     for (let k = 0; k < 5; k++) { simplifyPolyline(uniform, eps); simplifyPolyline(varying, eps); }
 
+    // Interleave several paired rounds and take the median ratio, so one
+    // noisy stretch on a shared runner cannot decide the outcome.
     const iters = 60;
-    const noFoldMs = medianMs(() => { simplifyPolyline(uniform, eps); }, iters);
-    const foldMs = medianMs(() => { simplifyPolyline(varying, eps); }, iters);
-    const ratio = foldMs / Math.max(noFoldMs, 1e-6);
+    const rounds = 7;
+    const ratios: number[] = [];
+    let noFoldMs = 0;
+    let foldMs = 0;
+    for (let r = 0; r < rounds; r++) {
+      const nf = medianMs(() => { simplifyPolyline(uniform, eps); }, iters);
+      const f = medianMs(() => { simplifyPolyline(varying, eps); }, iters);
+      ratios.push(f / Math.max(nf, 1e-6));
+      noFoldMs += nf / rounds;
+      foldMs += f / rounds;
+    }
+    ratios.sort((x, y) => x - y);
+    const ratio = ratios[Math.floor(rounds / 2)];
 
     // Record the number — the fold's isolated cost over the same geometry work.
     // eslint-disable-next-line no-console
     console.log(
       `[contour-evidence-perf] fold=${foldMs.toFixed(3)}ms no-fold=${noFoldMs.toFixed(3)}ms ` +
-        `ratio=${ratio.toFixed(3)}× (n=4000, ${iters} iters)`,
+        `ratio=${ratio.toFixed(3)}× (n=4000, median of ${rounds} rounds x ${iters} iters)`,
     );
 
     // Geometry is identical regardless of provenance — folding changes only
