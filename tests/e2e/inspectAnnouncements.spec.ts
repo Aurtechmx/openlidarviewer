@@ -128,6 +128,29 @@ test.describe('recommended-view chip — hover pauses the auto-hide', () => {
     // `page.clock` is not used: it raced a `Date.now()` read and stalled an
     // rAF-gated render in this Playwright's Chromium.
     const HIDE_MS = 1_500;
+    // Hold the timer with keyboard focus the moment the chip appears. A
+    // MutationObserver installed before the app boots sees `show()` drop
+    // `olv-hidden` and focuses Apply in the same task (a microtask), so the
+    // short timer can never lapse first. A page-side poll could not promise
+    // that: under parallel load the main thread stalls for longer than
+    // HIDE_MS, the chip shows and auto-hides between two polls, and the poll
+    // then waits for a chip that never comes back. The focus is dropped
+    // again below, once the hover has landed, so the hover alone is what
+    // keeps the chip up.
+    await page.addInitScript(() => {
+      const w = window as unknown as { __rvcShown?: boolean };
+      // Observe `document` itself: an init script can run before <html> exists.
+      new MutationObserver(() => {
+        const c = document.querySelector('.olv-rvc');
+        if (w.__rvcShown || !c || c.classList.contains('olv-hidden')) return;
+        c.querySelector<HTMLElement>('.olv-rvc-apply')?.focus();
+        w.__rvcShown = true;
+      }).observe(document, {
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class'],
+      });
+    });
     await page.goto(`/?test=1&rvcHideMs=${HIDE_MS}`);
     await expect(page.locator('.olv-empty-title')).toBeVisible();
     await page.locator('.olv-file-input').first().setInputFiles(fixture);
@@ -135,38 +158,21 @@ test.describe('recommended-view chip — hover pauses the auto-hide', () => {
     await expect(card).toHaveClass(/olv-visible/, { timeout: 60_000 });
     await page.locator('.olv-pc-dismiss').click({ timeout: 5_000 }).catch(() => {});
 
-    // Hold the timer with keyboard focus the moment the chip appears (polled
-    // in-page, so no round-trip can let the short timer lapse first). The
-    // focus is dropped again below, once the hover has landed, so the hover
-    // alone is what keeps the chip up.
-    await page.waitForFunction(
-      () => {
-        const c = document.querySelector('.olv-rvc');
-        if (!c || c.classList.contains('olv-hidden')) return false;
-        c.querySelector<HTMLElement>('.olv-rvc-apply')?.focus();
-        return true;
-      },
-      undefined,
-      { timeout: 30_000, polling: 50 },
-    );
+    await page.waitForFunction(() => (window as unknown as { __rvcShown?: boolean }).__rvcShown === true, undefined, {
+      timeout: 30_000,
+    });
     const chip = page.locator('.olv-rvc');
     await expect(chip).toHaveAttribute('data-autohide', 'paused');
 
     const apply = chip.locator('.olv-rvc-apply');
     // Entrance animation settled before hovering, so the pointer targets the
-    // chip's resting position.
-    await expect
-      .poll(
-        () =>
-          apply.evaluate((el) =>
-            el
-              .closest('.olv-rvc')!
-              .getAnimations()
-              .every((a) => a.playState === 'finished'),
-          ),
-        { timeout: 20_000 },
-      )
-      .toBe(true);
+    // chip's resting position. The animation is finished outright rather
+    // than waited on: under parallel load a starved main thread can hold its
+    // 200 ms entrance at an early frame for longer than any wait budget, and
+    // the chip's motion is not what this test checks.
+    await apply.evaluate((el) => {
+      for (const a of el.closest('.olv-rvc')!.getAnimations()) a.finish();
+    });
     // Nothing else answers for the button's own point (stacking/paint guard).
     await expect
       .poll(
@@ -195,9 +201,6 @@ test.describe('recommended-view chip — hover pauses the auto-hide', () => {
     // mouseleave (relatedTarget null) that the chip rightly treats as the
     // pointer leaving. A nudge re-enters well inside one timer length, so the
     // chip can only still be up at the end if hovering keeps pausing it.
-    const box = (await apply.boundingBox())!;
-    const cx = box.x + box.width / 2;
-    const cy = box.y + box.height / 2;
     // Each 200 ms tick nudges the pointer and reads the chip's state; the
     // poll settles once three timer lengths have passed with the chip paused
     // at every tick.
@@ -206,7 +209,10 @@ test.describe('recommended-view chip — hover pauses the auto-hide', () => {
     await expect
       .poll(
         async () => {
-          await page.mouse.move(cx + (tick++ % 2 ? 2 : -2), cy);
+          // Re-read the box each tick so a nudge always lands on the button
+          // where it is now, not where it was when the hold began.
+          const box = (await apply.boundingBox())!;
+          await page.mouse.move(box.x + box.width / 2 + (tick++ % 2 ? 2 : -2), box.y + box.height / 2);
           const state = await chip.getAttribute('data-autohide');
           if (state !== 'paused') return `not paused: ${state}`;
           return Date.now() - start >= HIDE_MS * 3 ? 'held' : 'holding';
