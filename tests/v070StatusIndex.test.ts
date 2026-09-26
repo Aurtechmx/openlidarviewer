@@ -16,7 +16,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { readCurrentStatus, renderStatus } from '../scripts/gen-v070-status.mjs';
+import { readCurrentStatus, renderStatus, staleSummaryRows } from '../scripts/gen-v070-status.mjs';
 
 /** A ledger built from `[id, status, category]` accounts, in file order. */
 const ledgerOf = (...accounts: ReadonlyArray<readonly [string, string, string]>): string =>
@@ -88,5 +88,38 @@ describe('the rendered document', () => {
   it('says it is generated, so nobody edits it by hand', () => {
     const doc = renderStatus(readCurrentStatus(ledgerOf(['L01', 'OPEN', 'EXPORT'])));
     expect(doc).toContain('Generated. Do not edit.');
+  });
+});
+
+describe('the summary table at the head of the ledger', () => {
+  const table = (...rows: ReadonlyArray<readonly [string, string]>): string =>
+    '| ID | Category | Repro | Sev | Status | Was | Finding |\n|---|---|---|---|---|---|---|\n' +
+    rows.map(([id, status]) => `| ${id} | UI | DOC | med | ${status} | new | A finding. |`).join('\n') + '\n\n';
+
+  it('names a row whose status is behind the latest account', () => {
+    const text = table(['L01', 'OPEN'], ['L02', 'FIXED']) +
+      ledgerOf(['L01', 'OPEN', 'UI'], ['L02', 'FIXED', 'UI'], ['L01', 'PARTIAL', 'UI']);
+    const { latest } = readCurrentStatus(text);
+    expect(staleSummaryRows(text, latest)).toEqual([{ id: 'L01', table: 'OPEN', latest: 'PARTIAL' }]);
+  });
+
+  it('reads a status that carries a space', () => {
+    const text = table(['L07', 'NOT REPRODUCIBLE']) + ledgerOf(['L07', 'NOT REPRODUCIBLE', 'UI']);
+    const { latest } = readCurrentStatus(text);
+    expect(staleSummaryRows(text, latest)).toEqual([]);
+  });
+
+  it('names a row the ledger has no account of', () => {
+    const text = table(['L09', 'OPEN']) + ledgerOf(['L01', 'OPEN', 'UI']);
+    const { latest } = readCurrentStatus(text);
+    expect(staleSummaryRows(text, latest)).toEqual([{ id: 'L09', table: 'OPEN', latest: null }]);
+  });
+
+  it('reads only the table above the first entry, not tables inside entries', () => {
+    // Entry bodies carry their own tables; a row there is evidence, not a summary.
+    const text = table(['L01', 'FIXED']) + ledgerOf(['L01', 'FIXED', 'UI']) +
+      '| L01 | UI | DOC | med | OPEN | new | quoted from an earlier account |\n';
+    const { latest } = readCurrentStatus(text);
+    expect(staleSummaryRows(text, latest)).toEqual([]);
   });
 });

@@ -28,20 +28,20 @@ the two entries were renumbered when the branches were integrated.
 
 | ID | Category | Repro | Sev | Status | Was | Finding |
 |---|---|---|---|---|---|---|
-| L01 | EXPORT | READ | med | PARTIAL | B01 | LAS 1.2 write masks classification with 0x1f, so a class above 31 wraps to another valid class. |
+| L01 | EXPORT | READ | med | FIXED | B01 | LAS 1.2 write masks classification with 0x1f, so a class above 31 wraps to another valid class. |
 | L02 | EXPORT | TEST | med | FIXED | B02 | Scan angle rank written as constant zero. |
 | L03 | EXPORT | TEST | med | FIXED | B03 | User data written as constant zero. |
 | L04 | STANDARDS | TEST | high | FIXED | B04 | ASPRS class names defined independently in eight modules, and they disagreed. |
-| L05 | SCIENTIFIC | TEST | high | PARTIAL | B05 | One lasso, two estimators. The stored record now names which one made it; it does not yet carry the area-grid figure. |
+| L05 | SCIENTIFIC | TEST | high | FIXED | B05 | One lasso, two estimators. The stored record now names which one made it; it does not yet carry the area-grid figure. |
 | L06 | SCIENTIFIC | READ | med | PARTIAL | B06 | Two density figures on different bases. Each states its basis; neither is the other's source. |
 | L07 | SCIENTIFIC | TEST | high | FIXED | B07 | The boundary share counted a sampling gap as a survey edge, so it rose with the thinning rather than with the geometry. |
 | L08 | SCIENTIFIC | READ | n/a | NOT REPRODUCIBLE | B08 | PCA extent presented as minimum physical dimensions. |
 | L09 | LIFECYCLE | DOC | med | OPEN | B09 | `NavBar.dispose` has no caller. |
 | L10 | LIFECYCLE | DOC | med | OPEN | B10 | `ViewerRenderCore` has no dispose seam. |
-| L11 | UI | DOC | med | OPEN | B11 | Between 768 and 1000 px two open rails leave no top-centre gap wider than the project card. |
-| L12 | UI | DOC | med | OPEN | B12 | Pinch, rotate and two-finger gestures run end to end on Chromium only. |
+| L11 | UI | TEST | med | FIXED | B11 | Between 768 and 1000 px two open rails left no top-centre gap wider than the project card. The card now narrows to the band, with a 200 px floor. |
+| L12 | UI | TEST | med | FIXED | B12 | Pinch, rotate and two-finger gestures ran end to end on Chromium only. They now run on every engine, iPhone-shaped WebKit included, as synthesized events. |
 | L13 | EVIDENCE | DOC | med | OPEN | B13 | Firefox, WebKit and Windows are advisory; only Chromium blocks. |
-| L14 | ARCHITECTURE | DOC | low | OPEN | B14 | Far-apart mounts do not fold `renderOrigin` on the CPU per mesh. |
+| L14 | ARCHITECTURE | TEST | low | PARTIAL | B14 | Far-apart mounts did not fold `renderOrigin` on the CPU per mesh. The renderer now forms model-view in float64; the analysis paths and the terrain gather still fold placement into Float32. |
 | L15 | ARCHITECTURE | DOC | n/a | DEFERRED | B15 | The registration stack ships and no user path reaches it. |
 | L16 | EVIDENCE | TEST | n/a | FIXED | B16 | The passport shipped and nothing reached it. A DEM package now emits one beside its bare-earth raster. |
 | L17 | EVIDENCE | TEST | n/a | FIXED | B17 | The evidence inspector shipped and nothing reached it. The DEM README now explains the decision. |
@@ -53,7 +53,7 @@ the two entries were renumbered when the branches were integrated.
 | L23 | SEMANTICS | TEST | high | FIXED | B23 | Classification flags were never decoded anywhere in the tree. |
 | L24 | EXPORT | READ | n/a | NOT REPRODUCIBLE | B24 | Extended writer suspected of clamping classification. |
 | L25 | EVIDENCE | TEST | high | SUPERSEDED | B25 | Adding any test turned the gate red, because the evidence lint compared published v0.6.9 documents against a changed machine state. |
-| L26 | SCIENTIFIC | READ | unmeasured | OPEN | B26 | Withheld points enter terrain, density and stockpile as ordinary returns. |
+| L26 | SCIENTIFIC | READ | unmeasured | PARTIAL | B26 | Withheld points entered terrain, density and stockpile as ordinary returns. The terrain gather now leaves them out and the DTM records the outcome. |
 | L27 | EVIDENCE | TEST | n/a | NOT REPRODUCIBLE | B27 | Scoping the evidence figure check to untagged versions. |
 | L28 | SEMANTICS | TEST | med | PARTIAL | B28 | Classification flags survived a load but not a derivation. |
 | L29 | STATE | TEST | high | FIXED | new | A failed candidate open closed a streaming scan that belonged to the project, not to the candidate. |
@@ -74,9 +74,9 @@ the two entries were renumbered when the branches were integrated.
 | L44 | LIFECYCLE | TEST | med | FIXED | new | NavBar disposed its teardown group before clearing its timer, and the group rethrows. |
 | L45 | ARCHITECTURE | TEST | high | FIXED | new | The standards lint skipped any directory whose path contained 'dist' and all of `docs/release`. |
 | L46 | PERFORMANCE | TEST | med | PARTIAL | new | Streaming node meshes disable frustum culling. The decision and its baseline exist; the renderer is not yet wired to them. |
-| L47 | UI | READ | med | OPEN | new | Density point sizing keys a 2D grid on (x, y), so it is not orientation invariant. |
+| L47 | UI | TEST | med | PARTIAL | new | Density point sizing was read as keying a 2D grid on (x, y). It keys on the cloud's two widest axes; a scene mixing orientations is the unmeasured residual. |
 | L48 | PERFORMANCE | TEST | med | FIXED | new | Render-memory telemetry counted position and colour only, so a classified cloud was reported at three quarters of what it used. |
-| L49 | PERFORMANCE | READ | med | OPEN | new | Compact source attributes are uploaded as Float32: RGB, classification and intensity cost 14 bytes a point more than the source carries. |
+| L49 | PERFORMANCE | READ | med | MEASURED | new | Compact source attributes are uploaded as Float32: RGB, classification and intensity cost 14 bytes a point more than the source carries. Without a layout change only colour can shrink, by 8 bytes a point. |
 
 ## Totals
 
