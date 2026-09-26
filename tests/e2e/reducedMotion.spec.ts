@@ -9,9 +9,13 @@ import { dropTinyPly } from './helpers';
  *   - a camera preset lands at once instead of playing its ~0.8 s tween.
  *
  * The camera oracle is the `__olvNavDrive` slot (src/perf/navProbeHook.ts):
- * NavController reports the pose into it at the start of every navigation
- * update, so the spec installs a recording sink with no app-side hook and
- * no clipboard (which WebKit cannot read).
+ * NavController reports the pose into its `poseAfter` at the end of every
+ * navigation update, so the spec installs a recording sink with no app-side
+ * hook and no clipboard (which WebKit cannot read). The end of the update is
+ * the pose the camera rests at: the render loop sleeps once the scene is
+ * quiet, so a pose read at the start of an update (`pose`) can stay one
+ * update behind for as long as the loop sleeps, which read as a pose between
+ * the two presets on a loaded WebKit runner.
  */
 
 type Pose = number[];
@@ -29,7 +33,8 @@ async function loadReduced(page: Page): Promise<void> {
     w.__olvNavDrive = {
       fixedDtSec: null,
       takeSteps: () => 0,
-      pose: (p: number[], t: number[]) => { w.__olvPoses.push([...p, ...t]); },
+      pose: () => {},
+      poseAfter: (p: number[], t: number[]) => { w.__olvPoses.push([...p, ...t]); },
     };
   });
 }
@@ -74,9 +79,10 @@ async function canvasCenter(page: Page): Promise<{ x: number; y: number }> {
 test.describe('prefers-reduced-motion', () => {
   test('a released orbit drag does not glide on', async ({ page }) => {
     await loadReduced(page);
-    const before = await latestPose(page);
     const c = await canvasCenter(page);
+    // A hover wakes the sleeping loop, so it reports the resting pose.
     await page.mouse.move(c.x, c.y);
+    const before = await settledPose(page, 0);
     await page.mouse.down();
     // A fast flick: the kind of release that glides without reduced motion.
     for (let i = 1; i <= 8; i++) await page.mouse.move(c.x + i * 30, c.y + i * 4);
@@ -104,9 +110,9 @@ test.describe('prefers-reduced-motion', () => {
 
     await chip('Top').click();
     await expect(toast).toHaveText('View · Top.');
-    // The pose is reported at the START of each navigation update, so wait on
-    // the loop having reported a pose that differs from Front (the real signal
-    // the preset applied), then let it run on for well over a tween's length.
+    // Wait on the loop having reported a pose that differs from Front (the
+    // real signal the preset applied), then let it run on for well over a
+    // tween's length.
     await page.waitForFunction(
       ({ mark, from }) => {
         const p = (window as unknown as { __olvPoses: number[][] }).__olvPoses.slice(mark);

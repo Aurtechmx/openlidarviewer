@@ -67,6 +67,13 @@ export interface NavDriveSink {
   takeSteps(): number;
   /** The camera pose at the start of a navigation update. */
   pose(position: readonly number[], target: readonly number[], up: readonly number[]): void;
+  /**
+   * The camera pose at the end of a navigation update, after the update has
+   * applied tweens, damping and input. The loop can sleep right after an
+   * update, so this is the pose the camera then rests at; `pose` of the same
+   * update is the one from before it.
+   */
+  poseAfter?(position: readonly number[], target: readonly number[], up: readonly number[]): void;
 }
 
 /** The installed driver sink, or null when no trajectory is playing. */
