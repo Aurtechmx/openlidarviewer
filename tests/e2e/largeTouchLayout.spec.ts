@@ -54,7 +54,8 @@ async function smallTargets(page: Page, engine: string): Promise<string[]> {
  * Controls whose centre is covered by anything else: elementFromPoint at the
  * centre of every visible control must land on the control or a descendant.
  * A control scrolled out of its own scroll container (its centre outside a
- * clipping ancestor) is not visible, so it is skipped rather than reported.
+ * clipping ancestor's padding box) is not visible, so it is skipped rather
+ * than reported.
  */
 async function coveredControls(page: Page): Promise<string[]> {
   return page.evaluate(() => {
@@ -63,8 +64,13 @@ async function coveredControls(page: Page): Promise<string[]> {
       for (let a = c.parentElement; a; a = a.parentElement) {
         const cs = getComputedStyle(a);
         if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
+        // Clip to the padding box: content scrolled under the container's own
+        // border or scrollbar is not visible either, and elementFromPoint
+        // there returns the container.
         const r = a.getBoundingClientRect();
-        if (x < r.left || x > r.right || y < r.top || y > r.bottom) return true;
+        const left = r.left + a.clientLeft;
+        const top = r.top + a.clientTop;
+        if (x < left || x >= left + a.clientWidth || y < top || y >= top + a.clientHeight) return true;
       }
       return false;
     };
@@ -132,11 +138,11 @@ for (const size of [{ width: 1280, height: 800 }, { width: 1024, height: 768 }])
     test.use({ viewport: size, hasTouch: true, isMobile: false });
 
     test('scan, dock, rails and a measurement all work by tap with 44 px targets', async ({ page }, info) => {
-      await suppressOnboardingTour(page);
-      await page.goto('/');
+      // One navigation: Firefox aborts a second goto issued while the first
+      // page is still loading its lazy chunks (NS_BINDING_ABORTED).
+      await openScan(page);
       const matches = await page.evaluate((q) => matchMedia(q).matches, LARGE_TOUCH_LAYOUT_QUERY);
       test.skip(!matches, `${info.project.name} does not emulate a coarse, non-hovering pointer`);
-      await openScan(page);
 
       // Desktop workspace, not the phone sheet.
       await expect(page.locator('.olv-left-panels')).toBeVisible();
@@ -209,11 +215,11 @@ for (const size of [{ width: 1280, height: 800 }, { width: 1024, height: 768 }])
     });
 
     test('a long-press shows the tip and does not activate the control', async ({ page }, info) => {
-      await suppressOnboardingTour(page);
-      await page.goto('/');
+      // One navigation: Firefox aborts a second goto issued while the first
+      // page is still loading its lazy chunks (NS_BINDING_ABORTED).
+      await openScan(page);
       const matches = await page.evaluate((q) => matchMedia(q).matches, LARGE_TOUCH_LAYOUT_QUERY);
       test.skip(!matches, `${info.project.name} does not emulate a coarse, non-hovering pointer`);
-      await openScan(page);
 
       const result = await page.evaluate(async () => {
         const anchor = document.querySelector<HTMLElement>('.olv-dock [data-tip], .olv-dock [title]');
