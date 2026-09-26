@@ -276,6 +276,9 @@ export function paramsKey(params: TerrainCoreParams): string {
     // is keyed. 'u' marks a core computed without a gather declaration, kept
     // apart from `null`, which is a gather that could not read flags.
     `wh=${params.withheldExcluded === undefined ? 'u' : String(params.withheldExcluded)}:${params.withheldExcludedCount ?? 0}`,
+    // Set only by the DEM sensitivity ensemble; keyed only when set, so every
+    // key written without it stays the same.
+    ...(params.interpolation ? [`interp=${params.interpolation}`] : []),
   ].join('|');
 }
 

@@ -6,7 +6,9 @@
  * as both an Esri ASCII Grid (.asc) and a Float32 GeoTIFF (.tif), plus an
  * optional .prj (CRS WKT) and a metadata README with the survey details, and
  * a six-band terrain evidence GeoTIFF (per-cell support on the DTM grid, see
- * demEvidence.ts) bound into the DTM passport. Bundled into a single
+ * demEvidence.ts) bound into the DTM passport. On request, a two-band
+ * sensitivity GeoTIFF (model spread over a fixed ensemble, see
+ * demSensitivity.ts) is added and bound the same way. Bundled into a single
  * store-only ZIP.
  *
  * Pure-data: returns the ZIP bytes; no DOM. The DSM grid is reconstructed as
@@ -46,6 +48,12 @@ import {
   terrainEvidenceReadmeLines,
   TERRAIN_EVIDENCE_METHOD_ID,
 } from './demEvidence';
+import {
+  writeTerrainSensitivityGeoTiff,
+  terrainSensitivityReadmeLines,
+  TERRAIN_SENSITIVITY_METHOD_ID,
+  type SensitivityMemberGrid,
+} from './demSensitivity';
 import { buildZip, type ZipEntry } from '../../convert/zipStore';
 import { buildSha256Manifest } from './sha256';
 import { verticalUnitLabel, horizontalUnitLabel } from '../../units/units';
@@ -136,6 +144,12 @@ export interface DemPackageOptions {
   readonly exportPermit?: ExportPermitStamp | null;
   /** The analysed basis the frame recorded; see `ExportProvenanceOptions.analysedBasis`. */
   readonly analysedBasis?: AnalysedBasis | null;
+  /**
+   * The sensitivity ensemble's member grids (demSensitivity.ts), member 0 the
+   * canonical run this result came from. Off by default: omitted or null writes
+   * no sensitivity raster. The caller runs the ensemble; this only writes it.
+   */
+  readonly sensitivityGrids?: readonly SensitivityMemberGrid[] | null;
 }
 
 /**
@@ -231,6 +245,8 @@ export interface DemReadmeOptions {
   readonly evidenceVerticalUnit?: string;
   /** False when the evidence raster marks every cell unresolved. Default true. */
   readonly evidenceFrameResolved?: boolean;
+  /** Filename of the sensitivity raster in the same package, or null / omitted. */
+  readonly sensitivityFilename?: string | null;
 }
 
 /** Map a coverage mode to a one-line plain-English label. */
@@ -415,6 +431,9 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     ...(opts.evidenceFilename
       ? [`  ${opts.evidenceFilename.padEnd(28)} Terrain evidence: per-cell support for the DTM (see below)`]
       : []),
+    ...(opts.sensitivityFilename
+      ? [`  ${opts.sensitivityFilename.padEnd(28)} Terrain sensitivity: model spread for the DTM (see below)`]
+      : []),
     `  *.prj                        Coordinate reference system (WKT), when known`,
     `  SHA256SUMS.txt               SHA-256 of every file above (verify: sha256sum -c)`,
     ``,
@@ -441,6 +460,9 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
           opts.evidenceVerticalUnit ?? 'unknown',
           opts.evidenceFrameResolved ?? true,
         ) : []),
+    ...(opts.sensitivityFilename
+      ? terrainSensitivityReadmeLines(opts.sensitivityFilename, opts.evidenceVerticalUnit ?? 'unknown')
+      : []),
     `Coverage mode`,
     `  ${coverageLabel(p.coverageMode)}`,
     `  Analysed basis: ${p.analysedBasisLine}`,
@@ -615,6 +637,22 @@ export function buildDemPackage(
     entries.push({ name: evidenceName, bytes: evidenceBytes });
   }
 
+  // Terrain sensitivity raster: written only when the caller ran the ensemble.
+  const sensitivityName = `${basename}_sensitivity.tif`;
+  let sensitivityBytes: Uint8Array | null = null;
+  if (options.sensitivityGrids && options.sensitivityGrids.length > 0) {
+    sensitivityBytes = writeTerrainSensitivityGeoTiff(options.sensitivityGrids, {
+      xllCorner: xll,
+      yllCorner: yll,
+      noData: NO_DATA,
+      epsg,
+      isGeographic,
+      verticalUnit: evVUnit,
+      demValues: grids[0].values,
+    });
+    entries.push({ name: sensitivityName, bytes: sensitivityBytes });
+  }
+
   if (options.wkt) {
     entries.push({ name: `${basename}.prj`, bytes: new TextEncoder().encode(options.wkt) });
   }
@@ -634,6 +672,7 @@ export function buildDemPackage(
     evidenceFilename: evidenceBytes ? evidenceName : null,
     evidenceVerticalUnit: evVUnit,
     evidenceFrameResolved: evFrameResolved,
+    sensitivityFilename: sensitivityBytes ? sensitivityName : null,
   });
   entries.push({
     name: `${basename}-README.txt`,
@@ -682,15 +721,15 @@ export function buildDemPackage(
         mediaType: 'image/tiff',
         bytes: dtmTif.bytes,
       },
-      ...(evidenceBytes
+      ...(evidenceBytes || sensitivityBytes
         ? {
             companions: [
-              {
-                filename: evidenceName,
-                mediaType: 'image/tiff',
-                bytes: evidenceBytes,
-                methodId: TERRAIN_EVIDENCE_METHOD_ID,
-              },
+              ...(evidenceBytes
+                ? [{ filename: evidenceName, mediaType: 'image/tiff', bytes: evidenceBytes, methodId: TERRAIN_EVIDENCE_METHOD_ID }]
+                : []),
+              ...(sensitivityBytes
+                ? [{ filename: sensitivityName, mediaType: 'image/tiff', bytes: sensitivityBytes, methodId: TERRAIN_SENSITIVITY_METHOD_ID }]
+                : []),
             ],
           }
         : {}),
