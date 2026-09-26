@@ -1,0 +1,2409 @@
+{
+  "schema": "olv.intake-corpus.result/1",
+  "criteria": "validation/intake-corpus/criteria.json",
+  "criteriaSha256": "cde1bfe4afc4b96bde52cca5ebbef264be984f3092d10481a1b63ba9a94afd42",
+  "split": "heldout",
+  "recoveryCommit": "d3ee2c1a",
+  "recoveryModule": "src/io/probe/recover/recoverPointRecords.ts",
+  "runOn": "2026-09-26T00:55:29.263Z",
+  "elapsedMs": 4700,
+  "verdict": "FAIL",
+  "summary": {
+    "positives": 108,
+    "negatives": 108,
+    "falsePositives": 5,
+    "falsePositiveRate": 0.046296296296296294,
+    "layoutExact": 43,
+    "layoutExactRate": 0.39814814814814814,
+    "offeredPositives": 91,
+    "coordinateFailures": 48,
+    "maxCoordinateError": 48.81086319257698,
+    "pass": {
+      "falsePositiveRate": false,
+      "layoutExactRate": false,
+      "coordinateError": false
+    },
+    "verdict": "FAIL"
+  },
+  "falsePositives": [
+    "heldout-neg-f32-signal-01",
+    "heldout-neg-f32-signal-03",
+    "heldout-neg-f32-signal-07",
+    "heldout-neg-f32-signal-09",
+    "heldout-neg-f32-signal-11"
+  ],
+  "coordinateFailures": [
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-00",
+      "coordinateError": 0.9997501282896866,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-01",
+      "coordinateError": 0.999785195639565,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-02",
+      "coordinateError": 0.9638536805467577,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-03",
+      "coordinateError": 0.9979959312717744,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-04",
+      "coordinateError": 0.9956290653172875,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-05",
+      "coordinateError": 0.9992317390558154,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-06",
+      "coordinateError": 1.0000238637548229,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-07",
+      "coordinateError": 0.9982416208892827,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-08",
+      "coordinateError": 1.0000352059823518,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-09",
+      "coordinateError": null,
+      "layoutMismatch": [
+        "headerBytes",
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-10",
+      "coordinateError": 0.9780250303006653,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-11",
+      "coordinateError": 1.0000753825695208,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-00",
+      "coordinateError": 0.9997500075092614,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-01",
+      "coordinateError": 0.9997874577576119,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-02",
+      "coordinateError": 1.000149944594677,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-03",
+      "coordinateError": 0.9977702397164915,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-04",
+      "coordinateError": 0.9982157602231864,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-05",
+      "coordinateError": 1.0005061323866145,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-06",
+      "coordinateError": 0.9793808593682252,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-07",
+      "coordinateError": 0.9968416278769172,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-08",
+      "coordinateError": 0.9988995862127067,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-09",
+      "coordinateError": 1.0003539788771985,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-10",
+      "coordinateError": 1.0000186997063265,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-11",
+      "coordinateError": 0.9946482455374662,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-00",
+      "coordinateError": 0.9997371708202454,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-01",
+      "coordinateError": 0.9997765224172422,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-02",
+      "coordinateError": 3.607609517960181,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-03",
+      "coordinateError": 3.0260276556249317,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-04",
+      "coordinateError": 1.0901308674140804,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-05",
+      "coordinateError": 0.9654417530140453,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-06",
+      "coordinateError": 5.978206040012117,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-07",
+      "coordinateError": 0.9928619162308948,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-08",
+      "coordinateError": 1.0908012390504327,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-09",
+      "coordinateError": 1.072223416654408,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-10",
+      "coordinateError": 48.81086319257698,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-11",
+      "coordinateError": 0.9916586304691919,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-00",
+      "coordinateError": 0.9997486180953994,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-01",
+      "coordinateError": 0.999785195639565,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-02",
+      "coordinateError": 1.0000671185979781,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-03",
+      "coordinateError": 0.99833326756182,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-04",
+      "coordinateError": 1.0000232588133784,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-05",
+      "coordinateError": 1.0000828797963819,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-06",
+      "coordinateError": 0.9648564202832635,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-07",
+      "coordinateError": 0.9983879875832942,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-08",
+      "coordinateError": 0.9990009990057341,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-09",
+      "coordinateError": 0.9987194370158103,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-10",
+      "coordinateError": 1.0001184769060834,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-11",
+      "coordinateError": 0.9983154058287832,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ]
+    }
+  ],
+  "samples": [
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-00",
+      "label": "positive",
+      "layoutKey": "f32-xyz-s20-be-h32",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9997501282896866,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-01",
+      "label": "positive",
+      "layoutKey": "f32-xyz-s20-be-h32",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.999785195639565,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-02",
+      "label": "positive",
+      "layoutKey": "f32-xyz-s20-be-h32",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9638536805467577,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-03",
+      "label": "positive",
+      "layoutKey": "f32-xyz-s20-be-h32",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9979959312717744,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-04",
+      "label": "positive",
+      "layoutKey": "f32-xyz-s20-be-h32",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9956290653172875,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-05",
+      "label": "positive",
+      "layoutKey": "f32-xyz-s20-be-h32",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9992317390558154,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-06",
+      "label": "positive",
+      "layoutKey": "f32-xyz-s20-be-h32",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 1.0000238637548229,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-07",
+      "label": "positive",
+      "layoutKey": "f32-xyz-s20-be-h32",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9982416208892827,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-08",
+      "label": "positive",
+      "layoutKey": "f32-xyz-s20-be-h32",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 1.0000352059823518,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-09",
+      "label": "positive",
+      "layoutKey": "f32-xyz-s20-be-h32",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "headerBytes",
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": null,
+      "countMatches": false
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-10",
+      "label": "positive",
+      "layoutKey": "f32-xyz-s20-be-h32",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9780250303006653,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-s20-be-h32-11",
+      "label": "positive",
+      "layoutKey": "f32-xyz-s20-be-h32",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 1.0000753825695208,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f64-xyz-s48-le-h0-00",
+      "label": "positive",
+      "layoutKey": "f64-xyz-s48-le-h0",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f64-xyz-s48-le-h0-01",
+      "label": "positive",
+      "layoutKey": "f64-xyz-s48-le-h0",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f64-xyz-s48-le-h0-02",
+      "label": "positive",
+      "layoutKey": "f64-xyz-s48-le-h0",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f64-xyz-s48-le-h0-03",
+      "label": "positive",
+      "layoutKey": "f64-xyz-s48-le-h0",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f64-xyz-s48-le-h0-04",
+      "label": "positive",
+      "layoutKey": "f64-xyz-s48-le-h0",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-pos-f64-xyz-s48-le-h0-05",
+      "label": "positive",
+      "layoutKey": "f64-xyz-s48-le-h0",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f64-xyz-s48-le-h0-06",
+      "label": "positive",
+      "layoutKey": "f64-xyz-s48-le-h0",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f64-xyz-s48-le-h0-07",
+      "label": "positive",
+      "layoutKey": "f64-xyz-s48-le-h0",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-pos-f64-xyz-s48-le-h0-08",
+      "label": "positive",
+      "layoutKey": "f64-xyz-s48-le-h0",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-pos-f64-xyz-s48-le-h0-09",
+      "label": "positive",
+      "layoutKey": "f64-xyz-s48-le-h0",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f64-xyz-s48-le-h0-10",
+      "label": "positive",
+      "layoutKey": "f64-xyz-s48-le-h0",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-pos-f64-xyz-s48-le-h0-11",
+      "label": "positive",
+      "layoutKey": "f64-xyz-s48-le-h0",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-pos-i32m-xyz-i16-s16-be-h0-00",
+      "label": "positive",
+      "layoutKey": "i32m-xyz-i16-s16-be-h0",
+      "offered": false,
+      "reason": "the two best layouts fit equally well"
+    },
+    {
+      "id": "heldout-pos-i32m-xyz-i16-s16-be-h0-01",
+      "label": "positive",
+      "layoutKey": "i32m-xyz-i16-s16-be-h0",
+      "offered": false,
+      "reason": "the two best layouts fit equally well"
+    },
+    {
+      "id": "heldout-pos-i32m-xyz-i16-s16-be-h0-02",
+      "label": "positive",
+      "layoutKey": "i32m-xyz-i16-s16-be-h0",
+      "offered": false,
+      "reason": "the two best layouts fit equally well"
+    },
+    {
+      "id": "heldout-pos-i32m-xyz-i16-s16-be-h0-03",
+      "label": "positive",
+      "layoutKey": "i32m-xyz-i16-s16-be-h0",
+      "offered": false,
+      "reason": "the two best layouts fit equally well"
+    },
+    {
+      "id": "heldout-pos-i32m-xyz-i16-s16-be-h0-04",
+      "label": "positive",
+      "layoutKey": "i32m-xyz-i16-s16-be-h0",
+      "offered": false,
+      "reason": "the two best layouts fit equally well"
+    },
+    {
+      "id": "heldout-pos-i32m-xyz-i16-s16-be-h0-05",
+      "label": "positive",
+      "layoutKey": "i32m-xyz-i16-s16-be-h0",
+      "offered": false,
+      "reason": "the two best layouts fit equally well"
+    },
+    {
+      "id": "heldout-pos-i32m-xyz-i16-s16-be-h0-06",
+      "label": "positive",
+      "layoutKey": "i32m-xyz-i16-s16-be-h0",
+      "offered": false,
+      "reason": "the two best layouts fit equally well"
+    },
+    {
+      "id": "heldout-pos-i32m-xyz-i16-s16-be-h0-07",
+      "label": "positive",
+      "layoutKey": "i32m-xyz-i16-s16-be-h0",
+      "offered": false,
+      "reason": "the two best layouts fit equally well"
+    },
+    {
+      "id": "heldout-pos-i32m-xyz-i16-s16-be-h0-08",
+      "label": "positive",
+      "layoutKey": "i32m-xyz-i16-s16-be-h0",
+      "offered": false,
+      "reason": "the two best layouts fit equally well"
+    },
+    {
+      "id": "heldout-pos-i32m-xyz-i16-s16-be-h0-09",
+      "label": "positive",
+      "layoutKey": "i32m-xyz-i16-s16-be-h0",
+      "offered": false,
+      "reason": "the two best layouts fit equally well"
+    },
+    {
+      "id": "heldout-pos-i32m-xyz-i16-s16-be-h0-10",
+      "label": "positive",
+      "layoutKey": "i32m-xyz-i16-s16-be-h0",
+      "offered": false,
+      "reason": "the two best layouts fit equally well"
+    },
+    {
+      "id": "heldout-pos-i32m-xyz-i16-s16-be-h0-11",
+      "label": "positive",
+      "layoutKey": "i32m-xyz-i16-s16-be-h0",
+      "offered": false,
+      "reason": "the two best layouts fit equally well"
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-00",
+      "label": "positive",
+      "layoutKey": "f32-xyz-rgb-s16-be-h17",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9997500075092614,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-01",
+      "label": "positive",
+      "layoutKey": "f32-xyz-rgb-s16-be-h17",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9997874577576119,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-02",
+      "label": "positive",
+      "layoutKey": "f32-xyz-rgb-s16-be-h17",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 1.000149944594677,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-03",
+      "label": "positive",
+      "layoutKey": "f32-xyz-rgb-s16-be-h17",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9977702397164915,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-04",
+      "label": "positive",
+      "layoutKey": "f32-xyz-rgb-s16-be-h17",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9982157602231864,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-05",
+      "label": "positive",
+      "layoutKey": "f32-xyz-rgb-s16-be-h17",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 1.0005061323866145,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-06",
+      "label": "positive",
+      "layoutKey": "f32-xyz-rgb-s16-be-h17",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9793808593682252,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-07",
+      "label": "positive",
+      "layoutKey": "f32-xyz-rgb-s16-be-h17",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9968416278769172,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-08",
+      "label": "positive",
+      "layoutKey": "f32-xyz-rgb-s16-be-h17",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9988995862127067,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-09",
+      "label": "positive",
+      "layoutKey": "f32-xyz-rgb-s16-be-h17",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 1.0003539788771985,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-10",
+      "label": "positive",
+      "layoutKey": "f32-xyz-rgb-s16-be-h17",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 1.0000186997063265,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-xyz-rgb-s16-be-h17-11",
+      "label": "positive",
+      "layoutKey": "f32-xyz-rgb-s16-be-h17",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9946482455374662,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f64-xyz-i16-rgb-s29-le-h256-00",
+      "label": "positive",
+      "layoutKey": "f64-xyz-i16-rgb-s29-le-h256",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f64-xyz-i16-rgb-s29-le-h256-01",
+      "label": "positive",
+      "layoutKey": "f64-xyz-i16-rgb-s29-le-h256",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f64-xyz-i16-rgb-s29-le-h256-02",
+      "label": "positive",
+      "layoutKey": "f64-xyz-i16-rgb-s29-le-h256",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f64-xyz-i16-rgb-s29-le-h256-03",
+      "label": "positive",
+      "layoutKey": "f64-xyz-i16-rgb-s29-le-h256",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f64-xyz-i16-rgb-s29-le-h256-04",
+      "label": "positive",
+      "layoutKey": "f64-xyz-i16-rgb-s29-le-h256",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f64-xyz-i16-rgb-s29-le-h256-05",
+      "label": "positive",
+      "layoutKey": "f64-xyz-i16-rgb-s29-le-h256",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f64-xyz-i16-rgb-s29-le-h256-06",
+      "label": "positive",
+      "layoutKey": "f64-xyz-i16-rgb-s29-le-h256",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f64-xyz-i16-rgb-s29-le-h256-07",
+      "label": "positive",
+      "layoutKey": "f64-xyz-i16-rgb-s29-le-h256",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f64-xyz-i16-rgb-s29-le-h256-08",
+      "label": "positive",
+      "layoutKey": "f64-xyz-i16-rgb-s29-le-h256",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f64-xyz-i16-rgb-s29-le-h256-09",
+      "label": "positive",
+      "layoutKey": "f64-xyz-i16-rgb-s29-le-h256",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f64-xyz-i16-rgb-s29-le-h256-10",
+      "label": "positive",
+      "layoutKey": "f64-xyz-i16-rgb-s29-le-h256",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f64-xyz-i16-rgb-s29-le-h256-11",
+      "label": "positive",
+      "layoutKey": "f64-xyz-i16-rgb-s29-le-h256",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-00",
+      "label": "positive",
+      "layoutKey": "i32c-xyz-rgb-s15-le-h7",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ],
+      "coordinateError": 0.9997371708202454,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-01",
+      "label": "positive",
+      "layoutKey": "i32c-xyz-rgb-s15-le-h7",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ],
+      "coordinateError": 0.9997765224172422,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-02",
+      "label": "positive",
+      "layoutKey": "i32c-xyz-rgb-s15-le-h7",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ],
+      "coordinateError": 3.607609517960181,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-03",
+      "label": "positive",
+      "layoutKey": "i32c-xyz-rgb-s15-le-h7",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ],
+      "coordinateError": 3.0260276556249317,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-04",
+      "label": "positive",
+      "layoutKey": "i32c-xyz-rgb-s15-le-h7",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ],
+      "coordinateError": 1.0901308674140804,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-05",
+      "label": "positive",
+      "layoutKey": "i32c-xyz-rgb-s15-le-h7",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ],
+      "coordinateError": 0.9654417530140453,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-06",
+      "label": "positive",
+      "layoutKey": "i32c-xyz-rgb-s15-le-h7",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ],
+      "coordinateError": 5.978206040012117,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-07",
+      "label": "positive",
+      "layoutKey": "i32c-xyz-rgb-s15-le-h7",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ],
+      "coordinateError": 0.9928619162308948,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-08",
+      "label": "positive",
+      "layoutKey": "i32c-xyz-rgb-s15-le-h7",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ],
+      "coordinateError": 1.0908012390504327,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-09",
+      "label": "positive",
+      "layoutKey": "i32c-xyz-rgb-s15-le-h7",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ],
+      "coordinateError": 1.072223416654408,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-10",
+      "label": "positive",
+      "layoutKey": "i32c-xyz-rgb-s15-le-h7",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ],
+      "coordinateError": 48.81086319257698,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-i32c-xyz-rgb-s15-le-h7-11",
+      "label": "positive",
+      "layoutKey": "i32c-xyz-rgb-s15-le-h7",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.scale",
+        "x.origin",
+        "y.scale",
+        "y.origin",
+        "z.scale",
+        "z.origin"
+      ],
+      "coordinateError": 0.9916586304691919,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-00",
+      "label": "positive",
+      "layoutKey": "f32-i16-xyz-s14-le-h0",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9997486180953994,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-01",
+      "label": "positive",
+      "layoutKey": "f32-i16-xyz-s14-le-h0",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.999785195639565,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-02",
+      "label": "positive",
+      "layoutKey": "f32-i16-xyz-s14-le-h0",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 1.0000671185979781,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-03",
+      "label": "positive",
+      "layoutKey": "f32-i16-xyz-s14-le-h0",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.99833326756182,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-04",
+      "label": "positive",
+      "layoutKey": "f32-i16-xyz-s14-le-h0",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 1.0000232588133784,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-05",
+      "label": "positive",
+      "layoutKey": "f32-i16-xyz-s14-le-h0",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 1.0000828797963819,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-06",
+      "label": "positive",
+      "layoutKey": "f32-i16-xyz-s14-le-h0",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9648564202832635,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-07",
+      "label": "positive",
+      "layoutKey": "f32-i16-xyz-s14-le-h0",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9983879875832942,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-08",
+      "label": "positive",
+      "layoutKey": "f32-i16-xyz-s14-le-h0",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9990009990057341,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-09",
+      "label": "positive",
+      "layoutKey": "f32-i16-xyz-s14-le-h0",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9987194370158103,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-10",
+      "label": "positive",
+      "layoutKey": "f32-i16-xyz-s14-le-h0",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 1.0001184769060834,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-f32-i16-xyz-s14-le-h0-11",
+      "label": "positive",
+      "layoutKey": "f32-i16-xyz-s14-le-h0",
+      "offered": true,
+      "layoutExact": false,
+      "layoutMismatch": [
+        "x.origin",
+        "y.origin",
+        "z.origin"
+      ],
+      "coordinateError": 0.9983154058287832,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-comma-xyzi-h1-00",
+      "label": "positive",
+      "layoutKey": "text-comma-xyzi-h1",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-comma-xyzi-h1-01",
+      "label": "positive",
+      "layoutKey": "text-comma-xyzi-h1",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-comma-xyzi-h1-02",
+      "label": "positive",
+      "layoutKey": "text-comma-xyzi-h1",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-comma-xyzi-h1-03",
+      "label": "positive",
+      "layoutKey": "text-comma-xyzi-h1",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-comma-xyzi-h1-04",
+      "label": "positive",
+      "layoutKey": "text-comma-xyzi-h1",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-comma-xyzi-h1-05",
+      "label": "positive",
+      "layoutKey": "text-comma-xyzi-h1",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-comma-xyzi-h1-06",
+      "label": "positive",
+      "layoutKey": "text-comma-xyzi-h1",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-comma-xyzi-h1-07",
+      "label": "positive",
+      "layoutKey": "text-comma-xyzi-h1",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-comma-xyzi-h1-08",
+      "label": "positive",
+      "layoutKey": "text-comma-xyzi-h1",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-comma-xyzi-h1-09",
+      "label": "positive",
+      "layoutKey": "text-comma-xyzi-h1",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-comma-xyzi-h1-10",
+      "label": "positive",
+      "layoutKey": "text-comma-xyzi-h1",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-comma-xyzi-h1-11",
+      "label": "positive",
+      "layoutKey": "text-comma-xyzi-h1",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-tab-ixyz-h0-00",
+      "label": "positive",
+      "layoutKey": "text-tab-ixyz-h0",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-tab-ixyz-h0-01",
+      "label": "positive",
+      "layoutKey": "text-tab-ixyz-h0",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-tab-ixyz-h0-02",
+      "label": "positive",
+      "layoutKey": "text-tab-ixyz-h0",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-tab-ixyz-h0-03",
+      "label": "positive",
+      "layoutKey": "text-tab-ixyz-h0",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-tab-ixyz-h0-04",
+      "label": "positive",
+      "layoutKey": "text-tab-ixyz-h0",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-tab-ixyz-h0-05",
+      "label": "positive",
+      "layoutKey": "text-tab-ixyz-h0",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-tab-ixyz-h0-06",
+      "label": "positive",
+      "layoutKey": "text-tab-ixyz-h0",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-tab-ixyz-h0-07",
+      "label": "positive",
+      "layoutKey": "text-tab-ixyz-h0",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-tab-ixyz-h0-08",
+      "label": "positive",
+      "layoutKey": "text-tab-ixyz-h0",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-tab-ixyz-h0-09",
+      "label": "positive",
+      "layoutKey": "text-tab-ixyz-h0",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-tab-ixyz-h0-10",
+      "label": "positive",
+      "layoutKey": "text-tab-ixyz-h0",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-pos-text-tab-ixyz-h0-11",
+      "label": "positive",
+      "layoutKey": "text-tab-ixyz-h0",
+      "offered": true,
+      "layoutExact": true,
+      "layoutMismatch": [],
+      "coordinateError": 0,
+      "countMatches": true
+    },
+    {
+      "id": "heldout-neg-random-bytes-00",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-random-bytes-01",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-random-bytes-02",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-random-bytes-03",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-random-bytes-04",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-random-bytes-05",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-random-bytes-06",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-random-bytes-07",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-random-bytes-08",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-random-bytes-09",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-random-bytes-10",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-random-bytes-11",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-deflate-00",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-deflate-01",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-deflate-02",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-deflate-03",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-deflate-04",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-deflate-05",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-deflate-06",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-deflate-07",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-deflate-08",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-deflate-09",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-deflate-10",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-deflate-11",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-pcm-audio-00",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-pcm-audio-01",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-pcm-audio-02",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-pcm-audio-03",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-pcm-audio-04",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-pcm-audio-05",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-pcm-audio-06",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-pcm-audio-07",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-pcm-audio-08",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-pcm-audio-09",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-pcm-audio-10",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-pcm-audio-11",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-image-pixels-00",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-image-pixels-01",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-image-pixels-02",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-image-pixels-03",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-image-pixels-04",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-image-pixels-05",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-image-pixels-06",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-image-pixels-07",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-image-pixels-08",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-image-pixels-09",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-image-pixels-10",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-image-pixels-11",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-f32-signal-00",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-f32-signal-01",
+      "label": "negative",
+      "offered": true
+    },
+    {
+      "id": "heldout-neg-f32-signal-02",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-f32-signal-03",
+      "label": "negative",
+      "offered": true
+    },
+    {
+      "id": "heldout-neg-f32-signal-04",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-f32-signal-05",
+      "label": "negative",
+      "offered": false,
+      "reason": "the two best layouts fit equally well"
+    },
+    {
+      "id": "heldout-neg-f32-signal-06",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-f32-signal-07",
+      "label": "negative",
+      "offered": true
+    },
+    {
+      "id": "heldout-neg-f32-signal-08",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-f32-signal-09",
+      "label": "negative",
+      "offered": true
+    },
+    {
+      "id": "heldout-neg-f32-signal-10",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-f32-signal-11",
+      "label": "negative",
+      "offered": true
+    },
+    {
+      "id": "heldout-neg-f32-sorted-00",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-f32-sorted-01",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-f32-sorted-02",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-f32-sorted-03",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-f32-sorted-04",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-f32-sorted-05",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-f32-sorted-06",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-f32-sorted-07",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-f32-sorted-08",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-f32-sorted-09",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-f32-sorted-10",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-f32-sorted-11",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-mesh-interleaved-00",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-mesh-interleaved-01",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-mesh-interleaved-02",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-mesh-interleaved-03",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-mesh-interleaved-04",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-mesh-interleaved-05",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-mesh-interleaved-06",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-mesh-interleaved-07",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-mesh-interleaved-08",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-mesh-interleaved-09",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-mesh-interleaved-10",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-mesh-interleaved-11",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-text-log-00",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-text-log-01",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-text-log-02",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-text-log-03",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-text-log-04",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-text-log-05",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-text-log-06",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-text-log-07",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-text-log-08",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-text-log-09",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-text-log-10",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-text-log-11",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-csv-table-00",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-csv-table-01",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-csv-table-02",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-csv-table-03",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-csv-table-04",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-csv-table-05",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-csv-table-06",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-csv-table-07",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-csv-table-08",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-csv-table-09",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-csv-table-10",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    },
+    {
+      "id": "heldout-neg-csv-table-11",
+      "label": "negative",
+      "offered": false,
+      "reason": "no layout hypothesis is plausible"
+    }
+  ]
+}
