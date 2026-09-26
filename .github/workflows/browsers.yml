@@ -97,9 +97,25 @@ jobs:
         run: |
           xvfb-run -a ./node_modules/.bin/playwright test \
             --project=firefox-preflight
+      # One Xvfb per worker, not one `xvfb-run` screen for all of them. With a
+      # shared screen and no window manager the workers' Firefox windows stack
+      # on one another, and a covered window gets no animation frames and loses
+      # the pointer to real crossing events, which is what timed out clicks
+      # ("waiting for element to be ... stable"), emptied the nav probe and
+      # stole hovers. OLV_FIREFOX_DISPLAYS hands each worker its own display
+      # (see FIREFOX_DISPLAYS in playwright.config.ts); --workers must match
+      # the number of displays so no two workers share one.
       - name: Deterministic end-to-end tests on Firefox (advisory)
         if: steps.glcheck.outputs.renderer == 'present'
-        run: xvfb-run -a ./node_modules/.bin/playwright test --project=firefox
+        run: |
+          for d in 90 91; do
+            Xvfb ":$d" -screen 0 1280x1024x24 -nolisten tcp &
+          done
+          for d in 90 91; do
+            for _ in $(seq 50); do [ -e "/tmp/.X11-unix/X$d" ] && break; sleep 0.1; done
+          done
+          DISPLAY=:90 OLV_FIREFOX_DISPLAYS=:90,:91 \
+            ./node_modules/.bin/playwright test --project=firefox --workers=2
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

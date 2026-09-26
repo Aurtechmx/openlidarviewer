@@ -23,6 +23,28 @@ const SERVER_URL = process.env.OLV_DEPLOY_ROOT
   ? `http://127.0.0.1:${DEPLOY_PORT}`
   : `http://localhost:${DEPLOY_PORT}`;
 
+/**
+ * One X display per Playwright worker for the Linux Firefox leg.
+ *
+ * That leg runs Firefox headful (see the `firefox` project below), and with a
+ * single shared Xvfb screen and no window manager every worker's browser
+ * window is mapped at the same spot, stacked on the others. A window covered
+ * by another worker's newer one is fully obscured: Firefox stops handing it
+ * animation frames while its page still reports visible and focused (measured
+ * on the runner: requestAnimationFrame silent for seconds while a 250 ms
+ * timer kept firing), so Playwright's "stable" check before a click never
+ * finishes and a frame probe counts nothing. The same stacking moves the
+ * pointer: each window mapped over or taken off ours sends a real leave or
+ * enter at the parked X cursor, which is how a hovered control lost its hover
+ * mid-test. CI starts one Xvfb per worker and lists them here; each worker
+ * process launches its browser on the display of its own parallel slot, so no
+ * window ever covers another. Unset everywhere else, where it changes nothing.
+ */
+const FIREFOX_DISPLAYS = (process.env.OLV_FIREFOX_DISPLAYS ?? '').split(',').filter(Boolean);
+const FIREFOX_DISPLAY = FIREFOX_DISPLAYS.length
+  ? FIREFOX_DISPLAYS[Number(process.env.TEST_PARALLEL_INDEX ?? 0) % FIREFOX_DISPLAYS.length]
+  : undefined;
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
@@ -111,6 +133,7 @@ export default defineConfig({
         // wraps this leg in `xvfb-run` (see .github/workflows/browsers.yml),
         // which is what supplies the display.
         headless: process.platform !== 'linux',
+        ...(FIREFOX_DISPLAY ? { launchOptions: { env: { ...process.env, DISPLAY: FIREFOX_DISPLAY } } } : {}),
       },
       grepInvert: /@gpu|@bench|@soak/,
       testIgnore: /firefoxWebglPreflight/,
