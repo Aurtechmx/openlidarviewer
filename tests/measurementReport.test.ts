@@ -188,7 +188,7 @@ function gridVolume(id: string, over: Record<string, unknown> = {}): Measurement
       fill: 100, cut: 5, net: 95, referenceZ: 0, footprintArea: 50,
       pointsInPolygon: 800, densityNative: 16, confidence: 'medium',
       method: 'olv.volume.stockpile-area-grid@3', gridAuthority: 'measured', gridAuthorityReason: '',
-      crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' },
+      crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' }, // method-literal-ok: a record stored at an earlier version
       ...over,
     },
   } as unknown as Measurement;

@@ -1,5 +1,5 @@
 {
-  "total": 172,
+  "total": 173,
   "files": {
     "src/app/epochFramePrep.ts": 2,
     "src/app/featureExtractionInput.ts": 1,
@@ -44,6 +44,7 @@
     "src/render/measure/classificationEditor.ts": 1,
     "src/render/measure/lassoVolume.ts": 11,
     "src/render/measure/lassoVolumeCompute.ts": 4,
+    "src/render/measure/polygonVolumeSample.ts": 1,
     "src/render/measure/profileSampler.ts": 1,
     "src/render/measure/profileSectionSeam.ts": 3,
     "src/render/measure/snap.ts": 2,

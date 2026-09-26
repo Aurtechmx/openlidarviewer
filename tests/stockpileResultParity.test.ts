@@ -226,7 +226,7 @@ describe('one lasso result on every surface', () => {
   it('a record saved before the grid became the lasso figure is read as saved', () => {
     const old: VolumeRecord = {
       fill: 120, cut: 30, net: 90, referenceZ: 0, footprintArea: 50,
-      pointsInPolygon: 800, densityNative: 16, confidence: 'medium', method: 'olv.volume.stockpile@1',
+      pointsInPolygon: 800, densityNative: 16, confidence: 'medium', method: 'olv.volume.stockpile@1', // method-literal-ok: a record stored at an earlier version
     };
     const back = roundTrip(old);
     expect(back).toEqual(old);
