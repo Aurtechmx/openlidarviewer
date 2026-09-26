@@ -32,27 +32,32 @@ export const SLOT_FILL_MAX_PX = 1;
 export type HeaderBox = { x: number; y: number; w: number; h: number };
 export type HeaderBoxes = Record<string, HeaderBox>;
 
-/** Runs in the page. Self-contained: it is serialised into init scripts. */
-export function measureHeaderInPage(selector: string): HeaderBoxes {
-  const out: Record<string, { x: number; y: number; w: number; h: number }> = {};
-  for (const n of Array.from(document.querySelectorAll<HTMLElement>(selector))) {
-    const r = n.getBoundingClientRect();
-    if (n.offsetParent === null || (r.width === 0 && r.height === 0)) continue;
-    const key = n.getAttribute('aria-label') || (n.textContent ?? '').trim() || n.className;
-    out[key] = { x: r.x, y: r.y, w: r.width, h: r.height };
-  }
-  return out;
+/**
+ * Runs in the page. Defines `window.__olvMeasureHeader()`, which measures every
+ * visible element matching `selector`. Passed to Playwright as a function with
+ * an argument, so no script text is assembled from values.
+ */
+export function installMeasureInPage(selector: string): void {
+  (window as unknown as { __olvMeasureHeader: () => HeaderBoxes }).__olvMeasureHeader = () => {
+    const out: Record<string, { x: number; y: number; w: number; h: number }> = {};
+    for (const n of Array.from(document.querySelectorAll<HTMLElement>(selector))) {
+      const r = n.getBoundingClientRect();
+      if (n.offsetParent === null || (r.width === 0 && r.height === 0)) continue;
+      const key = n.getAttribute('aria-label') || (n.textContent ?? '').trim() || n.className;
+      out[key] = { x: r.x, y: r.y, w: r.width, h: r.height };
+    }
+    return out;
+  };
 }
 
 /** Makes `window.__olvMeasureHeader()` available from the first script on. */
 export async function installHeaderMeasure(page: Page): Promise<void> {
-  await page.addInitScript(
-    `window.__olvMeasureHeader = () => (${measureHeaderInPage.toString()})(${JSON.stringify(HEADER_CONTROLS)});`,
-  );
+  await page.addInitScript(installMeasureInPage, HEADER_CONTROLS);
 }
 
 export async function measureHeader(page: Page): Promise<HeaderBoxes> {
-  return page.evaluate(measureHeaderInPage, HEADER_CONTROLS);
+  await page.evaluate(installMeasureInPage, HEADER_CONTROLS);
+  return page.evaluate(() => (window as unknown as { __olvMeasureHeader: () => HeaderBoxes }).__olvMeasureHeader());
 }
 
 export type HeaderShift = { compared: number; horizontal: number; vertical: number; rows: string[] };
