@@ -41,7 +41,12 @@ export const TERRAIN_RESIDUAL_METHOD_ID = 'olv.terrain.evidence.residual';
 /** Band names in band order, as written to GDAL_METADATA. */
 export const TERRAIN_ATTENTION_BANDS = ['attention_level', 'dominant_reason'] as const;
 
-/** The reason vocabulary in tie-break order, with its band 2 codes. 0 = no reason. */
+/**
+ * The reason vocabulary in tie-break order, with its band 2 codes. 0 = no
+ * reason; 6 and 7 are reserved and not scored; 8 is reserved and not written
+ * in v1. This table is part of the method version: any change to it is a new
+ * version of olv.terrain.evidence.attention.
+ */
 export const ATTENTION_REASON_CODE = {
   NONE: 0,
   LONG_INTERPOLATION: 1,
@@ -139,11 +144,10 @@ export interface AttentionInputs {
   readonly sensitivityRange: ArrayLike<number> | null;
   /**
    * R in the vertical unit of the file, or null when the vertical unit is
-   * unresolved: then the two vertical inputs are not scored.
+   * unresolved: then the two vertical inputs are not scored, and the three
+   * unit-free inputs still are.
    */
   readonly verticalReference: number | null;
-  /** False when the vertical unit or CRS is unresolved. */
-  readonly frameResolved: boolean;
 }
 
 /** The band arrays. */
@@ -193,7 +197,6 @@ export function terrainAttentionBands(inp: AttentionInputs): AttentionBands {
     const lv = attentionLevel(best);
     level[i] = lv;
     if (lv > 0) reason[i] = bestCode;
-    else if (!inp.frameResolved) reason[i] = RC.UNRESOLVED;
   }
   return { level, reason };
 }
@@ -266,10 +269,12 @@ export function demEvidenceTier(has: {
   readonly evidence: boolean;
   readonly sensitivity: boolean;
   readonly attention: boolean;
+  /** False when the vertical unit is unresolved: sensitivity and residual were not scored, so at most T2. */
+  readonly verticalResolved: boolean;
 }): DemEvidenceTier {
   if (!has.passport) return 'T0';
   if (!has.evidence) return 'T1';
-  if (!has.sensitivity || !has.attention) return 'T2';
+  if (!has.sensitivity || !has.attention || !has.verticalResolved) return 'T2';
   return 'T3';
 }
 
@@ -293,6 +298,8 @@ export interface DemEvidenceRecord {
     readonly lowSupportConfidence: number;
     readonly levelCuts: readonly number[];
     readonly scoredInputs: readonly string[];
+    /** Why MODEL_SENSITIVITY and RECONSTRUCTION_RESIDUAL were not scored, or null when they were. */
+    readonly verticalInputs: string | null;
     readonly residual: {
       readonly measuredCells: number;
       readonly sampleLimit: number;
@@ -303,6 +310,9 @@ export interface DemEvidenceRecord {
   } | null;
   readonly sensitivity: { readonly members: number; readonly membersDifferingFromCanonical: number } | null;
 }
+
+/** The stated reason when the vertical unit is unresolved. */
+export const VERTICAL_NOT_SCORED = 'vertical inputs not scored: vertical unit unresolved';
 
 export const ATTENTION_PROTOCOL = 'validation/protocols/evidencedem-attention-v1.md';
 
@@ -335,6 +345,7 @@ export function demEvidenceRecord(args: {
           lowSupportConfidence: ATTENTION_PARAMS.lowSupportConfidence,
           levelCuts: [...ATTENTION_PARAMS.levelCuts],
           scoredInputs: scored,
+          verticalInputs: vertical ? null : VERTICAL_NOT_SCORED,
           residual: {
             measuredCells: r.measuredCells,
             sampleLimit: ATTENTION_PARAMS.residualSampleLimit,
@@ -371,8 +382,10 @@ export function terrainAttentionReadmeLines(
       `  Band 2 dominant_reason  The input that set the level: 1 long`,
       `                          interpolation, 2 low support, 3 edge affected,`,
       `                          4 model sensitivity, 5 reconstruction residual,`,
-      `                          8 unresolved (6 and 7 are reserved). 0 on a`,
-      `                          level 0 cell.`,
+      `                          0 on a level 0 cell. Codes 6 to 8 are reserved.`,
+      `                          This code table is part of the method version.`,
+      `  Level 0 means no scored input reached its reference. It does not mean`,
+      `  the surface there is verified.`,
       `  Each input is scored from 0 to 1 and the level is the highest score:`,
       `    long interpolation       interpolation distance / ${a.longInterpolationCells} cells`,
       `    low support              1 - confidence / ${a.lowSupportConfidence} (0 to 100 scale)`,
@@ -381,8 +394,8 @@ export function terrainAttentionReadmeLines(
       `    reconstruction residual  residual / R`,
       ref != null
         ? `  R is ${a.verticalReference.metres} m (${Number(ref.toFixed(6))} ${a.verticalReference.unit}).`
-        : `  The vertical unit is unresolved, so R has no value and the two`,
-      ...(ref != null ? [] : [`  vertical inputs are not scored. Level 0 cells carry reason 8.`]),
+        : `  ${VERTICAL_NOT_SCORED[0].toUpperCase()}${VERTICAL_NOT_SCORED.slice(1)}. R has`,
+      ...(ref != null ? [] : [`  no value in this file's unit; the other three inputs are scored.`]),
       `  Level 1 from 0.33, level 2 from 0.67, level 3 at 1. Ties go to the`,
       `  input listed first.`,
       `  Reconstruction residual: each measured cell is held out and rebuilt`,
@@ -396,6 +409,7 @@ export function terrainAttentionReadmeLines(
     );
   }
   out.push(`DEM evidence tier`, `  ${record.tier}: ${record.tierMeaning}.`);
+  if (a && a.verticalInputs) out.push(`  At most T2: ${a.verticalInputs}.`);
   if (record.sensitivity) {
     out.push(
       `  ${record.sensitivity.membersDifferingFromCanonical} of ${record.sensitivity.members - 1} ensemble members other than the`,

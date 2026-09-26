@@ -45,8 +45,7 @@
       "CLASSIFICATION_AMBIGUITY": 7,
       "UNRESOLVED": 8
     },
-    "edgeAffectedState": 5,
-    "frameResolved": true
+    "edgeAffectedState": 5
   },
   "heights": [
     null,

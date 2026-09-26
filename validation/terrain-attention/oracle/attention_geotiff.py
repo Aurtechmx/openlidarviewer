@@ -288,8 +288,6 @@ def recompute_attention(exp, residual):
         level[i] = lv
         if lv > 0:
             reason[i] = codes[best_name]
-        elif not p['frameResolved']:
-            reason[i] = codes['UNRESOLVED']
     return level, reason
 
 

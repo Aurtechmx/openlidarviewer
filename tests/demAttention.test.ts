@@ -69,7 +69,7 @@ function inputs(g: ReturnType<typeof grid>, over: Partial<AttentionInputs> = {})
     cols: g.cols, rows: g.rows, coverage: g.coverage, interpDistanceCells: g.interpDistanceCells,
     confidence: g.confidence, cellState: new Uint8Array(g.cols * g.rows).fill(1),
     residual: reconstructionResidual(g).residual, sensitivityRange: null,
-    verticalReference: 0.3, frameResolved: true, ...over,
+    verticalReference: 0.3, ...over,
   };
 }
 
@@ -274,10 +274,21 @@ describe('terrainAttentionBands', () => {
     expect(b.reason[0]).toBe(RC.LONG_INTERPOLATION);
   });
 
-  it('does not score the vertical inputs when the vertical unit is unresolved', () => {
-    const b = terrainAttentionBands(inputs(grid(step), { verticalReference: null, frameResolved: false }));
-    expect(Array.from(b.level)).toEqual(new Array(N).fill(0));
-    expect(Array.from(b.reason)).toEqual(new Array(N).fill(RC.UNRESOLVED));
+  it('scores only the unit-free inputs when the vertical unit is unresolved', () => {
+    const g = oracleGrid();
+    const sens = new Float32Array(N).fill(5);
+    const resolved = terrainAttentionBands(inputs(g));
+    const b = terrainAttentionBands(inputs(g, { sensitivityRange: sens, verticalReference: null }));
+    const reasons = new Set(b.reason);
+    expect(reasons.has(RC.MODEL_SENSITIVITY)).toBe(false);
+    expect(reasons.has(RC.RECONSTRUCTION_RESIDUAL)).toBe(false);
+    expect(reasons.has(RC.UNRESOLVED)).toBe(false);
+    // The unit-free inputs keep their levels: long interpolation, low support.
+    expect([b.level[8], b.reason[8]]).toEqual([1, RC.LONG_INTERPOLATION]);
+    expect([b.level[7], b.reason[7]]).toEqual([2, RC.LOW_SUPPORT]);
+    // A step cell flagged only by the residual falls to 0 without a reason.
+    expect(resolved.reason[3]).toBe(RC.RECONSTRUCTION_RESIDUAL);
+    expect([b.level[3], b.reason[3]]).toEqual([0, RC.NONE]);
   });
 
   it('leaves a cell without a height at 0 and writes it as NoData', () => {
@@ -295,13 +306,14 @@ describe('terrainAttentionBands', () => {
 
 describe('DEM evidence tier', () => {
   it('reflects only what the package contains', () => {
-    const t = (passport: boolean, evidence: boolean, sensitivity: boolean, attention: boolean) =>
-      demEvidenceTier({ passport, evidence, sensitivity, attention });
+    const t = (passport: boolean, evidence: boolean, sensitivity: boolean, attention: boolean, verticalResolved = true) =>
+      demEvidenceTier({ passport, evidence, sensitivity, attention, verticalResolved });
     expect(t(false, false, false, false)).toBe('T0');
     expect(t(true, false, false, false)).toBe('T1');
     expect(t(true, true, false, true)).toBe('T2');
     expect(t(true, true, true, false)).toBe('T2');
     expect(t(true, true, true, true)).toBe('T3');
+    expect(t(true, true, true, true, false)).toBe('T2');
   });
 
   it('counts ensemble members that differ from the canonical run', () => {
@@ -315,12 +327,13 @@ describe('DEM evidence tier', () => {
 
 describe('terrain_attention.tif in the DEM package', () => {
   const g = oracleGrid();
-  const def = buildDemPackage(resultFor(g), PKG_OPTS);
-  const withSens = buildDemPackage(resultFor(g), { ...PKG_OPTS, sensitivityGrids: members(g, 0.5) });
+  const ON = { ...PKG_OPTS, attention: true } as const;
+  const def = buildDemPackage(resultFor(g), ON);
+  const withSens = buildDemPackage(resultFor(g), { ...ON, sensitivityGrids: members(g, 0.5) });
   const text = (zip: Uint8Array, name: string) => new TextDecoder().decode(extractEntry(zip, name)!);
   const passportOf = (zip: Uint8Array) => JSON.parse(text(zip, 'terrain-dtm.tif.olv-passport.json'));
 
-  it('is written by default beside the evidence raster, and the package is T2', () => {
+  it('is written on request beside the evidence raster, and the package is T2', () => {
     expect(extractEntry(def, 'terrain_attention.tif')).not.toBeNull();
     const p = passportOf(def);
     expect(p.demEvidence.tier).toBe('T2');
@@ -365,13 +378,40 @@ describe('terrain_attention.tif in the DEM package', () => {
   });
 
   it('uses R in feet on a foot-vertical grid', () => {
-    const p = passportOf(buildDemPackage(resultFor(g, 0.3048), { ...PKG_OPTS, verticalUnitToMetres: 0.3048 }));
+    const p = passportOf(buildDemPackage(resultFor(g, 0.3048), { ...ON, verticalUnitToMetres: 0.3048 }));
     expect(p.demEvidence.attention.verticalReference.unit).toBe('ft');
     expect(p.demEvidence.attention.verticalReference.inFileUnit).toBeCloseTo(0.984252, 6);
   });
 
+  it('caps the tier at T2 and says why when the vertical unit is unresolved', () => {
+    const r = { ...resultFor(g), verticalScaleResolved: false } as AnalyseContoursResult;
+    const zip = buildDemPackage(r, { ...ON, sensitivityGrids: members(g, 0.5) });
+    const p = passportOf(zip);
+    expect(p.demEvidence.tier).toBe('T2');
+    expect(p.demEvidence.attention.verticalInputs).toBe('vertical inputs not scored: vertical unit unresolved');
+    expect(p.demEvidence.attention.scoredInputs).toEqual(['LONG_INTERPOLATION', 'LOW_SUPPORT', 'EDGE_AFFECTED']);
+    const readme = text(zip, 'terrain-README.txt');
+    expect(readme).toContain('Vertical inputs not scored: vertical unit unresolved');
+    expect(readme).toContain('At most T2: vertical inputs not scored: vertical unit unresolved.');
+  });
+
+  it('states that level 0 is not a verified surface, and that the code table is versioned', () => {
+    const readme = text(def, 'terrain-README.txt');
+    expect(readme).toContain('Level 0 means no scored input reached its reference');
+    expect(readme).toContain('code table is part of the method version');
+  });
+
+  it('is off by default, and T3 then needs it', () => {
+    const zip = buildDemPackage(resultFor(g), PKG_OPTS);
+    expect(extractEntry(zip, 'terrain_attention.tif')).toBeNull();
+    expect(passportOf(zip).demEvidence.tier).toBe('T2');
+    const sensOnly = buildDemPackage(resultFor(g), { ...PKG_OPTS, sensitivityGrids: members(g, 0.5) });
+    expect(passportOf(sensOnly).demEvidence.tier).toBe('T2');
+    expect(text(zip, 'terrain-README.txt')).not.toContain('Terrain attention (');
+  });
+
   it('is deterministic', () => {
-    const again = buildDemPackage(resultFor(oracleGrid()), PKG_OPTS);
+    const again = buildDemPackage(resultFor(oracleGrid()), ON);
     expect(sha256Hex(extractEntry(again, 'terrain_attention.tif')!)).toBe(sha256Hex(extractEntry(def, 'terrain_attention.tif')!));
     expect(text(again, 'terrain-dtm.tif.olv-passport.json')).toBe(text(def, 'terrain-dtm.tif.olv-passport.json'));
   });
@@ -412,7 +452,6 @@ describe('terrain attention oracle fixture', () => {
       reasonOrder: Object.keys(RC).filter((k) => k !== 'NONE'),
       reasonCodes: RC,
       edgeAffectedState: EVIDENCE_STATE_CODE.edgeAffected,
-      frameResolved: true,
     },
     heights: Array.from(g.z, (v) => num(v)),
     counts: Array.from(g.counts),

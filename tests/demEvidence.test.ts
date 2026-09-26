@@ -489,7 +489,7 @@ describe('terrain_evidence.tif in the DEM package', () => {
     expect(readme).toContain('Band 2 interpolation_distance');
     expect(readme).toContain('do not describe how accurate a height is');
     const passport = JSON.parse(new TextDecoder().decode(extractEntry(zip, 'terrain-dtm.tif.olv-passport.json')!));
-    expect(passport.companions[0]).toEqual(
+    expect(passport.companions).toEqual([
       {
         filename: 'terrain_evidence.tif',
         mediaType: 'image/tiff',
@@ -497,18 +497,13 @@ describe('terrain_evidence.tif in the DEM package', () => {
         sha256: sha256Hex(ev),
         method: 'olv.terrain.evidence.support@2',
       },
-    );
-    const attention = extractEntry(zip, 'terrain_attention.tif')!;
-    expect(passport.companions.map((c: { filename: string }) => c.filename))
-      .toEqual(['terrain_evidence.tif', 'terrain_attention.tif']);
+    ]);
     expect(verifyScientificArtifactPassport(passport, {
-      artifactBytes: dtmTif, companionBytes: { 'terrain_evidence.tif': ev, 'terrain_attention.tif': attention },
+      artifactBytes: dtmTif, companionBytes: { 'terrain_evidence.tif': ev },
     })).toBe('VERIFIED');
     const tampered = ev.slice();
     tampered[tampered.length - 1] ^= 1;
-    expect(verifyScientificArtifactPassport(passport, {
-      companionBytes: { 'terrain_evidence.tif': tampered, 'terrain_attention.tif': attention },
-    }))
+    expect(verifyScientificArtifactPassport(passport, { companionBytes: { 'terrain_evidence.tif': tampered } }))
       .toBe('ARTIFACT_CHANGED');
     expect(verifyScientificArtifactPassport(passport, { companionBytes: {} })).toBe('ARTIFACT_CHANGED');
   });

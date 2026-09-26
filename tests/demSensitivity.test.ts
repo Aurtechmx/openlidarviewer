@@ -266,9 +266,7 @@ describe('terrain_sensitivity.tif in the DEM package', () => {
 
   it('is off by default', () => {
     expect(extractEntry(off, 'terrain_sensitivity.tif')).toBeNull();
-    const readme = new TextDecoder().decode(extractEntry(off, 'terrain-README.txt')!);
-    expect(readme).not.toContain('terrain_sensitivity.tif');
-    expect(readme).not.toContain('Terrain sensitivity (');
+    expect(new TextDecoder().decode(extractEntry(off, 'terrain-README.txt')!)).not.toContain('sensitivity');
   });
 
   it('writes the golden bands with NoData where the DEM has none', () => {
@@ -277,7 +275,7 @@ describe('terrain_sensitivity.tif in the DEM package', () => {
     expect(Array.from(members, (v) => (v === -9999 ? null : v))).toEqual(GOLDEN_MEMBERS);
   });
 
-  it('leaves every other file of the package unchanged apart from the README, attention raster, passport and sums', () => {
+  it('leaves every other file of the package unchanged apart from the README, passport and sums', () => {
     for (const name of ['terrain-dtm.tif', 'terrain-dsm.tif', 'terrain-chm.tif', 'terrain-dtm.asc', 'terrain_evidence.tif']) {
       expect(sha256Hex(extractEntry(on, name)!), name).toBe(sha256Hex(extractEntry(off, name)!));
     }
@@ -304,7 +302,6 @@ describe('terrain_sensitivity.tif in the DEM package', () => {
       companionBytes: {
         'terrain_evidence.tif': extractEntry(on, 'terrain_evidence.tif')!,
         'terrain_sensitivity.tif': tif,
-        'terrain_attention.tif': extractEntry(on, 'terrain_attention.tif')!,
       },
     })).toBe('VERIFIED');
   });
