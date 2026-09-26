@@ -243,6 +243,10 @@ export interface ConfirmOptions {
   readonly confirmLabel?: string;
   /** Cancel-button label. Defaults to "Cancel". */
   readonly cancelLabel?: string;
+  /** Hover/focus explanation for the confirm button. */
+  readonly confirmTip?: string;
+  /** Hover/focus explanation for the cancel button. */
+  readonly cancelTip?: string;
   /** Element to restore focus to on close. */
   readonly returnFocusTo?: HTMLElement | null;
 }
@@ -283,13 +287,13 @@ export function openConfirm(opts: ConfirmOptions): Promise<boolean> {
       className: 'olv-confirm-cancel',
       text: opts.cancelLabel ?? 'Cancel',
       type: 'button',
-      tip: 'Close this dialog and take no action.',
+      tip: opts.cancelTip ?? 'Close this dialog and take no action.',
     });
     const confirmBtn = el('button', {
       className: 'olv-confirm-ok',
       text: opts.confirmLabel ?? 'Continue',
       type: 'button',
-      tip: opts.title ? `Proceed with: ${opts.title}` : 'Confirm and proceed.',
+      tip: opts.confirmTip ?? (opts.title ? `Proceed with: ${opts.title}` : 'Confirm and proceed.'),
     });
     const footer = el('div', { className: 'olv-confirm-actions' }, [cancelBtn, confirmBtn]);
 

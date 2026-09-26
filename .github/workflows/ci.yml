@@ -147,6 +147,8 @@ jobs:
         run: npm run test:build
       - name: Live-shell bundle budget (obfuscated build that ships)
         run: npm run build:live && npm run check:bundle
+      - name: No test seam in the shipped build
+        run: npm run check:no-test-seam
 
   # Test buckets as a matrix: a failure points at one bucket, output stays
   # small, and the four shards run in parallel instead of one monolithic run.

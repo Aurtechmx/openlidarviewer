@@ -100,14 +100,27 @@ export function clampRange(offset: number, length: number, size: number): number
 export const MAX_REMOTE_COPC_URL_LENGTH = 2048;
 
 /**
- * URL hygiene for the remote-COPC entry. The URL must parse, use
- * `http:` or `https:`, fit within {@link MAX_REMOTE_COPC_URL_LENGTH}, and
- * carry no userinfo (`user:pass@…` — never expose credentials through a
- * scan link). Returns the original URL on success and a precise reason on
- * failure for the error UX.
+ * True when the page itself is served from a loopback development host. Only
+ * then may a remote dataset URL use plain `http:`; a deployed page (always
+ * https) accepts https only, so a dataset is never read over a channel an
+ * on-path attacker can rewrite.
+ */
+export function isLocalDevPage(): boolean {
+  const host = (globalThis as { location?: { hostname?: string } }).location?.hostname ?? '';
+  return host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1';
+}
+
+/**
+ * URL hygiene for every remote-dataset entry (the URL field, the `?copc=` deep
+ * link, a catalog pick; COPC, EPT and 3D Tiles all delegate here). The URL must
+ * parse, use `https:` (`http:` only when {@link isLocalDevPage}), fit within
+ * {@link MAX_REMOTE_COPC_URL_LENGTH}, carry no userinfo (`user:pass@…`, never
+ * expose credentials through a scan link), and not name a private host.
+ * Returns the original URL on success and a precise reason on failure.
  */
 export function validateRemoteCopcUrl(
   raw: string,
+  opts: { readonly allowHttp?: boolean } = {},
 ):
   | { ok: true; url: string }
   | { ok: false; reason: string } {
@@ -126,10 +139,11 @@ export function validateRemoteCopcUrl(
   } catch {
     return { ok: false, reason: 'URL is not parseable.' };
   }
-  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+  const allowHttp = opts.allowHttp ?? isLocalDevPage();
+  if (u.protocol !== 'https:' && !(allowHttp && u.protocol === 'http:')) {
     return {
       ok: false,
-      reason: 'Only http:// and https:// URLs are accepted.',
+      reason: 'Only https:// URLs are accepted.',
     };
   }
   if (u.username !== '' || u.password !== '') {

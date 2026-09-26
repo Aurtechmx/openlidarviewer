@@ -65,8 +65,9 @@ AddType application/manifest+json .webmanifest
   # The viewer never uses these sensors; deny them outright so embedded
   # third-party content can't request them either.
   Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
-  # Clickjacking guard — the viewer is a standalone app, not an embeddable frame.
-  Header always set X-Frame-Options "SAMEORIGIN"
+  # Clickjacking guard: `frame-ancestors 'self'` in the CSP below replaces the
+  # former X-Frame-Options SAMEORIGIN (same policy). Cross-origin embedding is
+  # a deliberate deployer edit to that directive; see docs/usage.md.
 
   # ── Content-Security-Policy (ENFORCING) ──
   # script-src is strict: 'self' + 'wasm-unsafe-eval' for the embedded laz-perf
@@ -83,7 +84,7 @@ AddType application/manifest+json .webmanifest
   #     labels with inline style="" attributes. Style injection is low-risk and
   #     no user-derived string reaches the unsafeHtml/innerHTML sinks (guarded by
   #     `npm run lint:unsafe-html`), so this does not open an XSS path.
-  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https:; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self'"
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https:; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'self'"
 </IfModule>
 
 # ── Permanent move to app.openlidarviewer.org ────────────────────────────────

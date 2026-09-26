@@ -10,6 +10,7 @@
  * silently rounded quantity, so each one is range-checked before it leaves
  * this function rather than being trusted downstream.
  */
+import { LoadError } from '../loadErrors';
 
 /** The fields recovered from an E57 file header. */
 export interface E57Header {
@@ -66,7 +67,8 @@ function readUint64(view: DataView, offset: number, field: string): number {
   const raw = view.getBigUint64(offset, true);
   const value = Number(raw);
   if (!Number.isSafeInteger(value)) {
-    throw new Error(
+    throw new LoadError(
+      'malformed-file',
       `E57 file is malformed: ${field} is ${raw}, which is not a value this ` +
         'reader can represent exactly.',
     );
@@ -86,19 +88,20 @@ function readUint64(view: DataView, offset: number, field: string): number {
  */
 export function parseE57Header(buffer: ArrayBuffer, fileBytes = buffer.byteLength): E57Header {
   if (buffer.byteLength < 48) {
-    throw new Error('Not an E57 file: shorter than the 48-byte header.');
+    throw new LoadError('unsupported-format', 'Not an E57 file: shorter than the 48-byte header.');
   }
   const view = new DataView(buffer);
   let signature = '';
   for (let i = 0; i < 8; i++) signature += String.fromCharCode(view.getUint8(i));
   if (signature !== SIGNATURE) {
-    throw new Error('Not an E57 file: the "ASTM-E57" signature is missing.');
+    throw new LoadError('unsupported-format', 'Not an E57 file: the "ASTM-E57" signature is missing.');
   }
 
   const versionMajor = view.getUint32(8, true);
   const versionMinor = view.getUint32(12, true);
   if (versionMajor !== SUPPORTED_VERSION_MAJOR) {
-    throw new Error(
+    throw new LoadError(
+      'unsupported-format',
       `E57 version ${versionMajor}.${versionMinor} is not supported: this reader ` +
         `implements version ${SUPPORTED_VERSION_MAJOR}.x (ASTM E2807), and a different ` +
         'major version may lay its header, pages and XML schema out differently. ' +
@@ -108,7 +111,8 @@ export function parseE57Header(buffer: ArrayBuffer, fileBytes = buffer.byteLengt
 
   const pageSize = readUint64(view, 40, 'the page size');
   if (pageSize < MIN_PAGE_SIZE || pageSize > MAX_PAGE_SIZE) {
-    throw new Error(
+    throw new LoadError(
+      'malformed-file',
       `E57 file is malformed: invalid page size ${pageSize} ` +
         `(expected ${MIN_PAGE_SIZE}–${MAX_PAGE_SIZE} bytes).`,
     );
@@ -125,7 +129,8 @@ export function parseE57Header(buffer: ArrayBuffer, fileBytes = buffer.byteLengt
   // every page present and will reject junk on its own terms.
   const filePhysicalLength = readUint64(view, 16, 'the file length');
   if (filePhysicalLength > fileBytes) {
-    throw new Error(
+    throw new LoadError(
+      'malformed-file',
       `E57 file is truncated: the header declares ${filePhysicalLength} bytes ` +
         `but only ${fileBytes} are present.`,
     );

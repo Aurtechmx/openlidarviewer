@@ -234,7 +234,7 @@ import {
   loadTilesetOpen,
   loadActionRegistry,
   loadToolLauncher,
-  loadStockpilePresenter, loadSessionIo, loadAnalysisModules, loadRecovery, loadSessionSnapshot,
+  loadStockpilePresenter, loadSessionIo, loadAnalysisModules, loadRecovery, loadSessionSnapshot, loadRemoteDeepLink,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -3522,7 +3522,7 @@ async function startEmbedBridgeLazy(): Promise<typeof import('./ui/embedBridge')
 
 if (embed) {
   // Wire the origin allow-list off the page URL (?embedParent / ?embedOrigins):
-  // when a deployer relaxes X-Frame-Options for cross-origin embedding, inbound
+  // when a deployer relaxes frame-ancestors for cross-origin embedding, inbound
   // commands are then gated to the configured origin(s) instead of any parent.
   void startEmbedBridgeLazy().then((m) => m.startEmbedBridge({
     onLoadFile: (buffer, fileName) => void handleFile(new File([buffer], fileName)),
@@ -3538,16 +3538,14 @@ if (embedConfig.autoloadSample) {
   if (sample) void loadFromUrl(sample.url, sample.name);
 }
 
-// `?copc=<url>` — open a remote COPC scan on startup. A hosted COPC file is
-// thus a shareable, bookmarkable deep link — the format's core use case. The
-// streaming pipeline reads it progressively over HTTP range requests.
+// `?copc=<url>` deep link (COPC / EPT / 3D Tiles). The lazy gate validates it
+// and asks the user to confirm the host before any fetch; Cancel stays idle.
+// Being async, it also runs after module evaluation (no TDZ on prewarm state).
 const copcUrlParam = urlParams.get('copc');
-// Defer the deep-link open one microtask so module evaluation finishes first.
-// `handleRemoteUrl` reaches the prewarm path, which reads module-level state
-// (`_loadersPrewarmed`, the decoder singleton) declared further down this file;
-// calling it synchronously here — above those declarations — tripped a
-// temporal-dead-zone in strict ESM (dev), masked only by production bundling.
-if (copcUrlParam) queueMicrotask(() => void handleRemoteUrl(copcUrlParam));
+if (copcUrlParam) void loadRemoteDeepLink().then((m) => m.confirmDeepLinkedRemote(copcUrlParam)).then((d) => {
+  if (d.kind === 'open') void handleRemoteUrl(d.url);
+  else if (d.kind === 'invalid') dropZone.setError(d.reason);
+});
 
 // The developer performance overlay — surfaced only by `?debug=1` or
 // `?benchmark=1`. It polls the viewer for live frame stats on a throttled
@@ -4266,7 +4264,7 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
     // hasn't loaded yet or the GPU backend can't initialise.
     const check = validateRemoteCopcUrl(url);
     if (!check.ok) {
-      dropZone.setError(`${check.reason} Enter an http:// or https:// URL to a COPC (.copc.laz) file.`);
+      dropZone.setError(`${check.reason} Enter an https:// URL to a COPC (.copc.laz) file.`);
       return;
     }
     // Fire the streaming-chunk pre-warm immediately — these dynamic

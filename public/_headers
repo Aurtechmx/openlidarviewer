@@ -13,15 +13,17 @@
 # its axis labels with inline style attributes; style injection is low-risk and
 # no user-derived string reaches the unsafeHtml/innerHTML sinks (enforced by
 # `npm run lint:unsafe-html`). worker-src/blob and img blob:/data: cover the
-# worker-decoded WASM and generated thumbnails.
+# worker-decoded WASM and generated thumbnails. object-src 'none' refuses
+# plugin content outright. frame-ancestors 'self' is the clickjacking guard and
+# replaces X-Frame-Options: SAMEORIGIN (same policy, the CSP form every current
+# browser honours); a cross-origin embed is a deliberate deployer change to it.
 
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
-  X-Frame-Options: SAMEORIGIN
   Strict-Transport-Security: max-age=31536000; includeSubDomains
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https:; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https:; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'self'
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable

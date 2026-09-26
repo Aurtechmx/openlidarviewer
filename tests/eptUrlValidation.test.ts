@@ -24,8 +24,8 @@ describe('validateRemoteEptUrl — happy path', () => {
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.url).toBe('https://example.com/dataset/ept.json');
   });
-  test('accepts http (not just https)', () => {
-    expect(validateRemoteEptUrl('http://data.example.com:8080/data/ept.json').ok).toBe(true);
+  test('refuses plain http outside a local dev page', () => {
+    expect(validateRemoteEptUrl('http://data.example.com:8080/data/ept.json').ok).toBe(false);
   });
   test('accepts ept.json with a query string (e.g. CDN token)', () => {
     expect(

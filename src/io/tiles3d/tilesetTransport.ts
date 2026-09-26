@@ -196,7 +196,7 @@ export function createTilesetTransport(
       // `redirect: 'error'`: the host passed the SSRF block-list as a literal
       // string, but a 3xx could send the fetch to a private address no check
       // ever resolved. Refuse the hop rather than follow it.
-      return await fetchFn(url, { signal: composed.signal, redirect: 'error', credentials: 'omit' });
+      return await fetchFn(url, { signal: composed.signal, redirect: 'error', credentials: 'omit', referrerPolicy: 'no-referrer' });
     } catch (err) {
       if (deadline.signal.aborted && !outer?.aborted) {
         throw new TilesetTimeoutError(

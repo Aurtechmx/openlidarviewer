@@ -19,7 +19,7 @@ import { test, expect, type Page } from '@playwright/test';
  * `Range: bytes=0-0` GET fallback; src/io/range/HttpRangeSource.ts), so
  * intercepting every request to the fake host and never fulfilling parks
  * the load at the probe before any COPC bytes are needed. The fake URL
- * must pass `validateRemoteCopcUrl` (http/https, no credentials, not a
+ * must pass `validateRemoteCopcUrl` (https, no credentials, not a
  * private/loopback host — src/io/range/RangeSource.ts), which
  * https://example.com/… does.
  */

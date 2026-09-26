@@ -142,6 +142,8 @@ export async function searchByBbox(
     response = await fetcher(url.toString(), {
       method: 'GET',
       headers: { Accept: 'application/json' },
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
       signal: params.signal,
     });
   } catch (err) {
@@ -241,6 +243,8 @@ export async function signAssetUrl(
     response = await fetcher(url.toString(), {
       method: 'GET',
       headers: { Accept: 'application/json' },
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
       signal,
     });
   } catch (err) {
