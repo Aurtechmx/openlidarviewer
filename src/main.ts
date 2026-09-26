@@ -125,7 +125,6 @@ import { ClipPanel } from './ui/ClipPanel';
 import type { ClipBox } from './render/clip/clipBox';
 // Two-epoch change detection is loaded on demand (it pulls the terrain
 // ground-filter + rasteriser): see compareLoadedLayers' dynamic import.
-import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
 import { planInstantAnswer } from './intelligence/instantAnswer';
 import { decodeFull } from './convert/decodeFull';
 import { createHelpOverlayLazy, createLazySingleton, createLazySurfaceLoader, buttonLazyTrigger } from './app/helpOverlayLazy';
@@ -234,7 +233,7 @@ import {
   loadTilesetOpen,
   loadActionRegistry,
   loadToolLauncher,
-  loadStockpilePresenter, loadSessionIo, loadAnalysisModules, loadRecovery, loadSessionSnapshot, loadRemoteDeepLink,
+  loadStockpilePresenter, loadSessionIo, loadAnalysisModules, loadRecovery, loadSessionSnapshot, loadRemoteDeepLink, loadScanReportRenderer,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -255,7 +254,7 @@ import { CatalogPanel, buildCuratedDemoSample } from './ui/CatalogPanel';
 // CRS detection + override — feeds the Inspector's Coordinate System
 // section. Static clouds carry `metadata.crs` (CrsInfo from src/io/crs);
 // streaming clouds expose `.crs()` returning the same shape.
-import { runStreamingModules, type StreamingReportCloud } from './app/streamingScanReport';
+import type { StreamingReportCloud } from './app/streamingScanReport'; import { runStreamingModules, preloadStreamingReport } from './app/streamingReportSeam';
 import { CrsService } from './geo/CrsService';
 import { verticalMetresPerUnit } from './geo/SpatialContext';
 import { prepareEpochFrames, epochUnitMismatchLines } from './app/epochFramePrep';
@@ -3738,7 +3737,7 @@ function prewarmForUrl(url: string): void {
   // have produced an idle window when the picker is opened.
   if (!_loadersPrewarmed) {
     _loadersPrewarmed = true;
-    void loadStreamingPointCloud().catch(() => { _loadersPrewarmed = false; });
+    void loadStreamingPointCloud().catch(() => { _loadersPrewarmed = false; }); void preloadStreamingReport().catch(() => { /* swallow — the report call retries */ });
     void loadCopcWorkerClient()
       .then(({ CopcWorkerClient }) => {
         if (!copcDecoder) copcDecoder = new CopcWorkerClient();
@@ -3786,7 +3785,7 @@ function prewarmLoaders(): void {
     })
     .catch(() => { /* swallow — actual COPC open retries */ });
   // Static LAS/LAZ loader (the "drop a non-COPC LAZ" path).
-  void loadLasLoader().catch(() => { /* swallow */ });
+  void loadLasLoader().catch(() => { /* swallow */ }); void preloadStreamingReport().catch(() => { /* swallow — the report call retries */ });
   // The Viewer chunk pulls in three.js / WebGPU (~800 KB) — warm it too, skipping under Save-Data / 2G-3G.
   if (!_isDataSaver()) {
     void ensureViewer().catch(() => { /* swallow — open() retries */ });
@@ -4819,7 +4818,7 @@ async function saveSnapshot(): Promise<void> {
     // Scope stamp and view provenance belong to the captured pixels, so both are
     // read here rather than after the Studio chunk await below.
     const scope = currentClassScopeStamp(); const figureView = viewer.figureViewContext();
-    let stamped = await composeClassScopeBannerOntoBlob(blob, scope);
+    let stamped = await (await loadScanReportRenderer()).composeClassScopeBannerOntoBlob(blob, scope);
     // Embed figure provenance (build / CRS / colormap / camera / clip) as PNG
     // text chunks — the same chunks every Studio export carries, so a saved
     // view can answer "which build drew you, seen from where?" months later.
