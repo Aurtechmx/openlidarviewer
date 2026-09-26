@@ -730,7 +730,10 @@ button:disabled { cursor: not-allowed; }
   font-size: var(--text-xs); font-weight: 500; color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   border: 0.5px solid color-mix(in srgb, var(--accent) 38%, transparent);
-  border-radius: var(--radius-pill); padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-pill); padding: 0 var(--space-lg);
+  /* A fixed block size: the line box differs between Manrope, its fallback
+     face and whatever the browser paints before either is ready. */
+  height: 30px;
   white-space: nowrap;
 }
 /* Lock glyph — a body (::before, in flow) with a shackle arc (::after,
@@ -764,8 +767,18 @@ button:disabled { cursor: not-allowed; }
   font-size: var(--text-xs); color: var(--text-dim); text-decoration: none;
   background: transparent;
   border: none;
-  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm); padding: 0 var(--space-md);
+  /* Fixed boxes, so no font decides where the header's controls sit. The
+     first frame can paint in Manrope, in "Manrope Fallback" or (Firefox
+     resolves local() faces lazily) in the platform sans-serif, and each
+     sets different line boxes and advance widths. Each link's width holds
+     its word in any of those with room to spare; the text centres in it. */
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 28px; white-space: nowrap;
 }
+.olv-github-credits { width: 62px; }
+.olv-github-guide { width: 54px; }
+.olv-github-source { width: 60px; }
 .olv-github:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
 
 /* ── Speed ↔ Quality performance control ────────────────────────────────────

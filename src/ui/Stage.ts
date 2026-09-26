@@ -318,7 +318,7 @@ export class Stage {
     // background — so the "Private · on your device" trust signal stays the
     // dominant header element on mobile.
     const github = el('a', {
-      className: 'olv-github',
+      className: 'olv-github olv-github-source',
       text: 'GitHub',
       href: 'https://github.com/aurtechmx/openlidarviewer',
       ariaLabel: 'OpenLiDARViewer on GitHub',
@@ -330,7 +330,7 @@ export class Stage {
     // User guide — same ghost treatment as GitHub, sitting beside it so the
     // two off-site destinations read as one group.
     const guide = el('a', {
-      className: 'olv-github',
+      className: 'olv-github olv-github-guide',
       text: 'Guide',
       href: 'https://openlidarviewer.org/guide/',
       ariaLabel: 'OpenLiDARViewer user guide',
@@ -343,7 +343,7 @@ export class Stage {
     // Keeps attribution for the streamed public datasets one click away from
     // every screen without crowding the trust signal.
     const credits = el('a', {
-      className: 'olv-github',
+      className: 'olv-github olv-github-credits',
       text: 'Credits',
       href: 'credits.html',
       ariaLabel: 'Data sources and credits',
