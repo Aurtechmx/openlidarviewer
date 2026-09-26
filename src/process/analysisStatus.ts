@@ -47,7 +47,10 @@ export interface AnalysisRow {
   readonly status: AnalysisStatus;
   /** One sentence: why the row reads as it does. */
   readonly reason: string;
-  /** Offered only on a BLOCKED row, and only when something can lift it. */
+  /**
+   * Offered on a BLOCKED row when something can lift it, and on a row the
+   * Terrain run caps (review or blocked), where the fix is the Terrain page.
+   */
   readonly remedy: AnalysisRemedy | null;
 }
 
@@ -149,7 +152,12 @@ export function analysisRows(input: AnalysisStatusInput): AnalysisRow[] {
       case 'terrain-access':
         // Both labs read the DTM of the latest terrain run and refuse without one.
         if (!hasDtm) return row(id, 'blocked', 'Needs the DTM from a terrain run.', PREPARE_TERRAIN);
-        return row(id, dtm.status, dtm.status === 'ready' ? 'Reads the DTM from the latest terrain run.' : dtm.reason);
+        {
+          // A DTM-dependent row is never better than the Terrain run it reads.
+          const c = capByRun({ status: dtm.status, reason: dtm.status === 'ready' ? 'Reads the DTM from the latest terrain run.' : dtm.reason }, input.terrainRun);
+          if (c.byRun) return { id, label: LABEL[id], status: c.status, reason: `Terrain run: ${c.reason}`, remedy: PREPARE_TERRAIN };
+          return row(id, c.status, c.reason);
+        }
       case 'observatory': {
         // The run reads the resident static cloud and does nothing without one.
         const c = qa(facts, 'COVERAGE');
