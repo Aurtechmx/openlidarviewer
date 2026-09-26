@@ -448,7 +448,7 @@
     "components": []
   },
   "context": {
-    "filesScanned": 993,
+    "filesScanned": 998,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [
@@ -466,7 +466,7 @@
       },
       {
         "file": "src/io/loadErrors.ts",
-        "importers": 24
+        "importers": 25
       },
       {
         "file": "src/terrain/quantile.ts",
@@ -474,7 +474,7 @@
       },
       {
         "file": "src/io/formatByteSize.ts",
-        "importers": 20
+        "importers": 21
       },
       {
         "file": "src/ui/Modal.ts",
