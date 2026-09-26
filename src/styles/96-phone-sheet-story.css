@@ -415,3 +415,14 @@
 .olv-ta-overlay-section { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .olv-ta-overlay-unavailable { font-size: var(--text-xs); color: var(--muted, #8a8f98); text-wrap: pretty; }
 
+
+/* The sheet hosts the desktop mode containers whole (workspaceShell.ts): the
+   host's gap spaces the panels, and the task header and launcher rows are
+   touch targets like the rest of the sheet. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .olv-mobile-sheet .olv-ws-mode > * { margin-bottom: 0; }
+  .olv-mobile-sheet .olv-ws-task { align-items: center; }
+  .olv-mobile-sheet .olv-ws-back,
+  .olv-mobile-sheet .olv-tl-row { min-height: 44px; }
+  .olv-mobile-sheet .olv-ws-back { padding-inline: var(--space-sm); }
+}

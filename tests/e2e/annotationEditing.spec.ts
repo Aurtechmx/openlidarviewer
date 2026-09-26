@@ -177,12 +177,16 @@ test.describe('AnnotationPanel — mobile collapse toggle', () => {
     await placeAnnotation(page, { title: 'Mobile check', offset: 0 });
 
     await page.setViewportSize({ width: 390, height: 844 });
-    // Below the mobile breakpoint the panel is re-parented (live, listeners
-    // and all) into the bottom sheet's "Layers" tab (MobileSheet.ts) instead
-    // of the desktop left column; the sheet opens on "Analyse" and collapsed
-    // to "peek" by default, so it has to be selected before its content is
-    // actually visible rather than merely present in the DOM.
-    await page.locator('#olv-msheet-tab-layers').click();
+    // Below the mobile breakpoint the Tools mode host moves (live, listeners
+    // and all) into the bottom sheet's Tools tab (MobileSheet.ts); the sheet
+    // opens collapsed to "peek", so the tab has to be selected, and the
+    // Annotate page opened if Tools is on its home, before the panel shows.
+    await page.locator('#olv-msheet-tab-work').click();
+    if (!(await page.locator('.olv-anno-panel').isVisible())) {
+      const back = page.locator('.olv-mobile-sheet .olv-ws-back');
+      if (await back.isVisible()) await back.click();
+      await page.locator('.olv-mobile-sheet .olv-tl-row', { hasText: 'Annotate' }).click();
+    }
     const toggle = page.locator('.olv-anno-panel .olv-collapse-toggle');
     await expect(toggle).toBeVisible();
     await expect(toggle).toHaveAttribute('aria-expanded', 'true');

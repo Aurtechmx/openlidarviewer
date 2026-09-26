@@ -9557,6 +9557,17 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-ta-overlay-section { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .olv-ta-overlay-unavailable { font-size: var(--text-xs); color: var(--muted, #8a8f98); text-wrap: pretty; }
 
+
+/* The sheet hosts the desktop mode containers whole (workspaceShell.ts): the
+   host's gap spaces the panels, and the task header and launcher rows are
+   touch targets like the rest of the sheet. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .olv-mobile-sheet .olv-ws-mode > * { margin-bottom: 0; }
+  .olv-mobile-sheet .olv-ws-task { align-items: center; }
+  .olv-mobile-sheet .olv-ws-back,
+  .olv-mobile-sheet .olv-tl-row { min-height: 44px; }
+  .olv-mobile-sheet .olv-ws-back { padding-inline: var(--space-sm); }
+}
 /* ─────────────────────────────────────────────────────────────────────────
    Contour Studio (v0.5.9) — launcher + workspace
    Premium terrain-deliverable surface. Built on the app's design tokens so it
@@ -10901,13 +10912,13 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   .olv-right-rail button, .olv-right-rail summary, .olv-right-rail select,
   .olv-right-rail input:not([type='checkbox']):not([type='radio']),
   .olv-dock button, .olv-measure-bar button, .olv-mkind,
-  .olv-ws-tab, .olv-tl-chip, .olv-chip, .olv-mp-action,
+  .olv-ws-tab, .olv-chip, .olv-mp-action,
   .olv-pc-dismiss, .olv-colorbar-close, .olv-lasso-toast-action,
   .olv-modal button, .olv-help-overlay button,
   .olv-github, .olv-theme-toggle, .olv-quality-button, .olv-nav-hud-close, .olv-cam-chip, .olv-mp-del {
     min-height: 44px; min-width: 44px;
   }
-  .olv-chip, .olv-tl-chip, .olv-ws-tab, .olv-github, .olv-cam-chip { display: inline-flex; align-items: center; justify-content: center; }
+  .olv-chip, .olv-ws-tab, .olv-github, .olv-cam-chip { display: inline-flex; align-items: center; justify-content: center; }
   .olv-left-panels summary, .olv-right-rail summary { display: flex; align-items: center; }
   .olv-mp-footer { flex-wrap: wrap; }
   .olv-dock .olv-tool { min-height: 48px; padding-inline: 12px; }
@@ -10961,17 +10972,6 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   font-size: var(--text-xs); color: var(--text-dim);
 }
 .olv-tl-counts-value { font-variant-numeric: tabular-nums; color: var(--text); }
-.olv-tool-launcher.is-strip { flex-direction: column; gap: var(--space-sm); padding: var(--space-md) var(--space-xl); }
-.olv-tool-launcher.is-strip .olv-tl-rows { flex-direction: row; flex-wrap: wrap; gap: var(--space-xs); }
-.olv-tl-chip {
-  display: inline-flex; align-items: center; gap: var(--space-xs);
-  font: inherit; font-size: var(--text-xs); color: var(--text-dim); cursor: pointer;
-  background: none; border: 1px solid var(--border); border-radius: 999px;
-  padding: 2px var(--space-md);
-}
-.olv-tl-chip:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
-.olv-tl-chip:active:not(:disabled) { transform: var(--btn-press); }
-.olv-tl-chip:disabled { opacity: 0.55; cursor: not-allowed; }
 /* ── Windows High Contrast / forced-colors ──────────────────────────────────
    Windows High Contrast replaces the author palette with a small system one.
    Backgrounds, borders and shadows are forced, `backdrop-filter` stops

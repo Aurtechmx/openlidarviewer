@@ -37,14 +37,3 @@
   font-size: var(--text-xs); color: var(--text-dim);
 }
 .olv-tl-counts-value { font-variant-numeric: tabular-nums; color: var(--text); }
-.olv-tool-launcher.is-strip { flex-direction: column; gap: var(--space-sm); padding: var(--space-md) var(--space-xl); }
-.olv-tool-launcher.is-strip .olv-tl-rows { flex-direction: row; flex-wrap: wrap; gap: var(--space-xs); }
-.olv-tl-chip {
-  display: inline-flex; align-items: center; gap: var(--space-xs);
-  font: inherit; font-size: var(--text-xs); color: var(--text-dim); cursor: pointer;
-  background: none; border: 1px solid var(--border); border-radius: 999px;
-  padding: 2px var(--space-md);
-}
-.olv-tl-chip:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
-.olv-tl-chip:active:not(:disabled) { transform: var(--btn-press); }
-.olv-tl-chip:disabled { opacity: 0.55; cursor: not-allowed; }

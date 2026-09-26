@@ -331,13 +331,13 @@
   .olv-right-rail button, .olv-right-rail summary, .olv-right-rail select,
   .olv-right-rail input:not([type='checkbox']):not([type='radio']),
   .olv-dock button, .olv-measure-bar button, .olv-mkind,
-  .olv-ws-tab, .olv-tl-chip, .olv-chip, .olv-mp-action,
+  .olv-ws-tab, .olv-chip, .olv-mp-action,
   .olv-pc-dismiss, .olv-colorbar-close, .olv-lasso-toast-action,
   .olv-modal button, .olv-help-overlay button,
   .olv-github, .olv-theme-toggle, .olv-quality-button, .olv-nav-hud-close, .olv-cam-chip, .olv-mp-del {
     min-height: 44px; min-width: 44px;
   }
-  .olv-chip, .olv-tl-chip, .olv-ws-tab, .olv-github, .olv-cam-chip { display: inline-flex; align-items: center; justify-content: center; }
+  .olv-chip, .olv-ws-tab, .olv-github, .olv-cam-chip { display: inline-flex; align-items: center; justify-content: center; }
   .olv-left-panels summary, .olv-right-rail summary { display: flex; align-items: center; }
   .olv-mp-footer { flex-wrap: wrap; }
   .olv-dock .olv-tool { min-height: 48px; padding-inline: 12px; }

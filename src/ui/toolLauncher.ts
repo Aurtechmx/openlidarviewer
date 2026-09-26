@@ -13,10 +13,8 @@
  * scientific value: the counts come from the measurement controller and the
  * annotation store through `deps.counts()`.
  *
- * Two states. Resting (no tool panel mounted in the tab) shows the full card.
- * Working (a Measure or Annotation panel is up) collapses it to a one-line
- * strip of compact chips so the working panel keeps the column. `refresh()`
- * re-reads the registry, the counts and the state.
+ * The card is the Tools home; a tool's page replaces it rather than sharing
+ * the column with it. `refresh()` re-reads the registry and the counts.
  *
  * Pure DOM via {@link el}; no three.js and no app singletons, so it is
  * unit-testable against the recording document the other UI tests use.
@@ -48,8 +46,6 @@ export interface ToolLauncherDeps {
   getActions: () => Promise<readonly Action[]> | readonly Action[];
   /** Canonical session counts, read live on every refresh. */
   counts: () => ToolLauncherCounts;
-  /** True while a tool panel holds the tab, which puts the card in its strip. */
-  isToolPanelActive: () => boolean;
   /**
    * Why a tool cannot run right now, or `null` when it can. The host owns this
    * gate, the way the tool dock's `setEnabled` does.
@@ -95,14 +91,11 @@ export function createToolLauncher(deps: ToolLauncherDeps): ToolLauncher {
     rows.replaceChildren();
   }
 
-  function addRow(action: Action, strip: boolean, reason: string | null): void {
+  function addRow(action: Action, reason: string | null): void {
     const chip = action.keys ? el('kbd', { className: 'olv-tl-key', text: action.keys }) : null;
-    const button = el('button', {
-      className: strip ? 'olv-tl-chip' : 'olv-tl-row',
-      type: 'button',
-    }) as HTMLButtonElement;
+    const button = el('button', { className: 'olv-tl-row', type: 'button' }) as HTMLButtonElement;
     button.append(el('span', { className: 'olv-tl-title', text: action.title }));
-    if (!strip && action.hint) button.append(el('span', { className: 'olv-tl-hint', text: action.hint }));
+    if (action.hint) button.append(el('span', { className: 'olv-tl-hint', text: action.hint }));
     if (chip) button.append(chip);
     if (reason) {
       button.disabled = true;
@@ -117,17 +110,14 @@ export function createToolLauncher(deps: ToolLauncherDeps): ToolLauncher {
 
   function render(actions: readonly Action[]): void {
     if (disposed) return;
-    const strip = deps.isToolPanelActive();
     const reason = deps.disabledReason?.() ?? null;
-    element.classList.toggle('is-strip', strip);
     clearRows();
     for (const id of TOOL_IDS) {
       const action = actions.find((a) => a.id === id);
-      if (action) addRow(action, strip, reason);
+      if (action) addRow(action, reason);
     }
     const c = deps.counts();
     countsValue.textContent = `${plural(c.measurements, 'measurement')} · ${plural(c.annotations, 'annotation')}`;
-    counts.classList.toggle('olv-hidden', strip);
   }
 
   function refresh(): void {
