@@ -268,6 +268,30 @@ describe('H7 process narration', () => {
     }
   });
 
+  it('passes "at first paint" and a subject that waits on something', () => {
+    for (const ok of [
+      'Show the legend at first paint instead of after the first scan.',
+      'Wait on the probe before reading',
+      'Wait for the worker to settle before sampling.',
+      'Wait until the tiles load before measuring.',
+    ]) {
+      expect(flagged(ok), ok).toBe(false);
+    }
+  });
+
+  it('still flags real narration near those phrases', () => {
+    for (const bad of [
+      'At first, I tried a merge.',
+      'At first the digest was stale.',
+      'Wait, that was wrong.',
+      'Wait. The digest has to follow the file.',
+      'Initially the test compared raw floats.',
+      'Initially, the gate was looser.',
+    ]) {
+      expect(flagged(bad), bad).toBe(true);
+    }
+  });
+
   it('exempts fenced code, inline code and quoted lines', () => {
     // A pasted diff, log or quoted error legitimately contains any wording.
     // Flagging those would push authors to stop pasting the evidence that
