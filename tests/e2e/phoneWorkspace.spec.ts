@@ -43,6 +43,9 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }
       const launcher = slot(page, 'work').locator('.olv-tool-launcher');
       await expect(launcher).toBeVisible();
       await launcher.locator('.olv-tl-row', { hasText: 'Measure' }).click();
+      // Starting a tool drops the sheet to its head so the scene is usable.
+      await expect(page.locator('.olv-mobile-sheet')).toHaveAttribute('data-detent', 'peek');
+      await tab(page, 'work').click(); // opening the sheet again shows the page
       const title = slot(page, 'work').locator('.olv-ws-task-title');
       const measure = page.locator('.olv-measure-panel');
       await expect(title).toHaveText('Measure');
@@ -80,6 +83,37 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }
       await expect(page.locator('.olv-left-panels')).toBeHidden();
     });
 
+    test('the five tabs fit and are touch sized, with accessible names', async ({ page }) => {
+      await openScan(page);
+      const names = ['Data', 'Tools', 'Analyse', 'Export', 'View'];
+      for (const [i, id] of ['data', 'work', 'analyse', 'output', 'view'].entries()) {
+        const t = tab(page, id);
+        await expect(t).toHaveAccessibleName(names[i]);
+        const box = (await t.boundingBox())!;
+        expect(box.height, id).toBeGreaterThanOrEqual(44);
+        expect(box.x, id).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width, id).toBeLessThanOrEqual(viewport.width);
+        // The label is not clipped.
+        expect(await t.evaluate((e) => e.scrollWidth <= e.clientWidth + 1), id).toBe(true);
+      }
+      await tab(page, 'data').click(); // expanded too
+      expect((await tab(page, 'data').boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    });
+
+    test('the scan-ready toast does not cover the open sheet', async ({ page }) => {
+      await openScan(page);
+      const toast = page.locator('.olv-lasso-toast.olv-visible');
+      await expect(toast).toBeVisible({ timeout: 8_000 });
+      for (const id of ['data', 'output']) {
+        await tab(page, id).click();
+        const t = (await toast.boundingBox())!;
+        const body = (await page.locator('.olv-msheet-body').boundingBox())!;
+        const overlap = t.y < body.y + body.height && t.y + t.height > body.y
+          && t.x < body.x + body.width && t.x + t.width > body.x;
+        expect(overlap, `toast ${JSON.stringify(t)} body ${JSON.stringify(body)}`).toBe(false);
+      }
+    });
+
     test('each tab has one scroller, and the task controls are touch sized', async ({ page }) => {
       await openScan(page);
       for (const id of ['data', 'work', 'analyse', 'output', 'view']) {
@@ -89,6 +123,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }
       }
       await tab(page, 'work').click();
       await slot(page, 'work').locator('.olv-tl-row', { hasText: 'Measure' }).click();
+      await tab(page, 'work').click();
       expect(await sheetScrollers(page)).toEqual(['olv-msheet-body']);
       const back = await slot(page, 'work').locator('.olv-ws-back').boundingBox();
       expect(back!.height).toBeGreaterThanOrEqual(44);

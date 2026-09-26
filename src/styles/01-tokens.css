@@ -243,8 +243,8 @@
    * button and sliced the captions in half.
    *   head = vertical padding + the tab strip's inset + the tab itself
    */
-  --m-tab-h: 32px;              /* collapsed sheet tab, visual height */
-  --m-tab-hit: 40px;            /* its invisible tap area (padding-free) */
+  --m-tab-h: 44px;              /* sheet tab height, a full touch target */
+  --m-tab-hit: 44px;            /* its tap area */
   --m-tabs-pad: 2px;            /* tab-strip inset inside the head */
   --m-head-pad-y: 3px;          /* head padding, collapsed */
   --m-chrome-head-h: calc(

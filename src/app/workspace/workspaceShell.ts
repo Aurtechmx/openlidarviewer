@@ -65,6 +65,7 @@ export interface WorkspaceShell {
   /**
    * Open a scene tool's page in Tools. Focus follows to the task heading only
    * when it was already in the rail (a launcher click), never off the canvas.
+   * On a phone the sheet drops to its head so the tool can be used.
    */
   openToolPage(page: ToolPage): void;
   /**
@@ -228,7 +229,12 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
       if (up) live.navigate({ mode: 'work', page }, leftPanels.contains(document.activeElement));
       return up;
     },
-    openToolPage: (page) => live.navigate({ mode: 'work', page }, leftPanels.contains(document.activeElement)),
+    openToolPage: (page) => {
+      live.navigate({ mode: 'work', page }, leftPanels.contains(document.activeElement));
+      // A tool just started: on a phone, drop the sheet so the scene is free to
+      // tap. The Tools tab keeps the page, so opening the sheet again shows it.
+      if (mobileApplied) sheet.setDetent('peek');
+    },
     applyMobileSheet,
     mountAnalysePanel: (el) => {
       el.classList.remove('olv-collapsed'); // constructs collapsed; hides its action
