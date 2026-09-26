@@ -55,7 +55,8 @@ async function smallTargets(page: Page, engine: string): Promise<string[]> {
  * centre of every visible control must land on the control or a descendant.
  * A control scrolled out of its own scroll container (its centre outside a
  * clipping ancestor's padding box) is not visible, so it is skipped rather
- * than reported.
+ * than reported. A control with pointer-events: none is not pressable, so
+ * it is skipped too.
  */
 async function coveredControls(page: Page): Promise<string[]> {
   return page.evaluate(() => {
@@ -79,6 +80,10 @@ async function coveredControls(page: Page): Promise<string[]> {
       if (r.width === 0 || r.height === 0 || getComputedStyle(c).visibility === 'hidden') continue;
       if (c.closest('.olv-lasso-toast:not(.olv-visible), [aria-hidden="true"], [inert]')) continue;
       if (!c.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+      // pointer-events: none (the collapsed right rail while its slide-out
+      // transition runs) takes the control out of hit testing on purpose: it
+      // cannot be pressed, so nothing is covering it.
+      if (getComputedStyle(c).pointerEvents === 'none') continue;
       const x = r.left + r.width / 2;
       const y = r.top + r.height / 2;
       if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
