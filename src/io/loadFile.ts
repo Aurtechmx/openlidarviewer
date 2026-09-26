@@ -288,8 +288,8 @@ async function preflightFile(
     options.head && options.head.byteLength >= need
       ? options.head.slice(0, need)
       : await file.slice(0, HEAD_SLICE_BYTES).arrayBuffer();
-  const format = sniffFormat(headSlice, file.name);
-  if (format === 'unknown') {
+  let sniffed = sniffFormat(headSlice, file.name);
+  if (sniffed === 'unknown') {
     if (is3dTilesName(file.name)) {
       throw new LoadError(
         'unsupported-format',
@@ -299,11 +299,18 @@ async function preflightFile(
           `into the URL field to open it.`,
       );
     }
-    throw new LoadError(
-      'unsupported-format',
-      `Unrecognised file format: ${file.name}`,
-    );
+    // Nothing the fast sniff knows. The lazily loaded probe registry weighs the
+    // content itself, widening the sample off the main thread when the head is
+    // not enough, and either names a format or throws the failure report.
+    const probe = await import('./probe/formatProbeWorkerClient');
+    try {
+      sniffed = await probe.resolveUnknownFormat(file, headSlice, options.signal);
+    } catch (err) {
+      if (err instanceof probe.ProbeCancelledError) throw new LoadCancelledError();
+      throw err;
+    }
   }
+  const format: SourceFormat = sniffed;
   const preflight: FilePreflight = { format };
   if (format === 'las' || format === 'laz') {
     preflight.plan = buildLasPlan(headSlice, format, file.size, budget, options);
@@ -813,10 +820,11 @@ export async function decodeFullViaWorker(
   pointSemantics?: boolean,
 ): Promise<PointCloud> {
   if (signal?.aborted) throw new LoadCancelledError();
-  const format = sniffFormat(buffer, name);
-  if (format === 'unknown') {
-    throw new LoadError('unsupported-format', `Unrecognised file format: ${name}`);
-  }
+  const sniffed = sniffFormat(buffer, name);
+  const format: SourceFormat =
+    sniffed === 'unknown'
+      ? (await import('./probe/formatProbeWorkerClient')).resolveUnknownBuffer(buffer, name)
+      : sniffed;
 
   // No worker can be constructed here (Node/SSR) and no fake was injected —
   // decode inline. The browser always has `Worker`, so production always routes

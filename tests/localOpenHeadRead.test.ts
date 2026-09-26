@@ -38,7 +38,7 @@ describe('the generic loader takes a pre-read head', () => {
 
   it('slices the file once for its prefix when no head is supplied', async () => {
     const { file, slices } = countingFile('scan.unknownformat', junk);
-    await expect(loadFile(file, {}, {})).rejects.toThrow(/Unrecognised file format/);
+    await expect(loadFile(file, {}, {})).rejects.toThrow(/not recognised as a point cloud/);
     expect(slices).toHaveLength(1);
     expect(slices[0][0]).toBe(0);
   });
@@ -46,14 +46,14 @@ describe('the generic loader takes a pre-read head', () => {
   it('issues no slice of its own when the caller hands it the prefix', async () => {
     const { file, slices } = countingFile('scan.unknownformat', junk);
     const head = junk.buffer.slice(0) as ArrayBuffer;
-    await expect(loadFile(file, {}, { head })).rejects.toThrow(/Unrecognised file format/);
+    await expect(loadFile(file, {}, { head })).rejects.toThrow(/not recognised as a point cloud/);
     expect(slices).toHaveLength(0);
   });
 
   it('reads for itself when the supplied head is shorter than it needs', async () => {
     const { file, slices } = countingFile('scan.unknownformat', junk);
     const short = junk.buffer.slice(0, 100) as ArrayBuffer;
-    await expect(loadFile(file, {}, { head: short })).rejects.toThrow(/Unrecognised file format/);
+    await expect(loadFile(file, {}, { head: short })).rejects.toThrow(/not recognised as a point cloud/);
     expect(slices).toHaveLength(1);
   });
 });

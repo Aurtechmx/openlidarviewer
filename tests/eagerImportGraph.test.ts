@@ -20,6 +20,8 @@ const ENTRY = join(ROOT, 'src', 'main.ts');
 
 /** Paths (relative to the repo root) the eager graph must never contain. */
 export const LAZY_ONLY = [
+  // Open-any-point-cloud probe registry, failure report and probe worker.
+  'src/io/probe/',
   'src/simulation/',
   'src/ui/fieldSimulation/',
   'src/app/diagnostics/copyDiagnostics.ts',

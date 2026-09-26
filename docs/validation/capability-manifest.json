@@ -392,6 +392,19 @@
       "docTerms": [
         "classification evidence record"
       ]
+    },
+    {
+      "id": "open-any-point-cloud",
+      "title": "Open any point cloud (format probing and open failure report)",
+      "status": "preview",
+      "modules": [
+        "src/io/probe"
+      ],
+      "claims": [],
+      "uiLabel": {
+        "file": "src/ui/DropZone.ts",
+        "text": "Copy report"
+      }
     }
   ]
 }
