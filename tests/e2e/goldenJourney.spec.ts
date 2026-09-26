@@ -1,7 +1,7 @@
 import { test, expect, type Page, type Download } from '@playwright/test';
 import { readFileSync, statSync } from 'node:fs';
 import {
-  dropTerrainAccessUtmLas, firePaletteAction, openAnalysePanel, showWorkspaceMode,
+  dropTerrainAccessUtmLas, firePaletteAction, openAnalysePanel, openToolPage, showWorkspaceMode,
   type MeasureTestApi,
 } from './helpers';
 import { isBenignPageError } from './pageErrors';
@@ -179,7 +179,7 @@ test.describe('golden journey', () => {
     expect(xyzLines.length).toBeGreaterThanOrEqual(900);
 
     // SAVE SESSION
-    await showWorkspaceMode(page, 'work');
+    await openToolPage(page, 'Measure');
     const [session] = await Promise.all([
       page.waitForEvent('download'),
       page.locator('.olv-mp-action', { hasText: 'Export' }).click(),
