@@ -46,6 +46,7 @@ import {
 } from './volume';
 import type { PolygonValidity } from './polygonHygiene';
 import { WelfordStats } from '../../process/numerics';
+import { quantileSorted } from '../../terrain/quantile';
 
 /** How the base (reference) height under the pile is chosen. */
 export type BasePlaneMode =
@@ -188,17 +189,6 @@ function isZUp(up: Vec3): boolean {
   return Math.abs(up[2] - 1) < 1e-6 && Math.abs(up[0]) < 1e-6 && Math.abs(up[1]) < 1e-6;
 }
 
-/** Linear-interpolated percentile of a finite, already-sorted ascending array. */
-function percentileSorted(sorted: Float64Array, p: number): number {
-  const n = sorted.length;
-  if (n === 0) return Number.NaN;
-  if (n === 1) return sorted[0];
-  const idx = Math.max(0, Math.min(1, p)) * (n - 1);
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return sorted[lo];
-  return sorted[lo] * (1 - (idx - lo)) + sorted[hi] * (idx - lo);
-}
 
 /**
  * Compute a stockpile volume with an auditable confidence band.
@@ -255,7 +245,7 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
     baseUncertainty = 0;
   } else {
     const sorted = Float64Array.from(insideHeights).sort();
-    baseZ = percentileSorted(sorted, basePct);
+    baseZ = quantileSorted(sorted, basePct);
     // Base-plane uncertainty has TWO parts, and the band is only honest if it
     // carries both:
     //

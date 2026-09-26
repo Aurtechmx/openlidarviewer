@@ -30,6 +30,7 @@
  */
 
 import { NeumaierSum } from '../process/numerics';
+import { quantileNearestRankSorted } from '../terrain/quantile';
 
 /**
  * How a checkpoint was used. Only `independent` may enter an accuracy figure.
@@ -373,10 +374,7 @@ function isUsage(v: string): v is CheckpointUsage {
 }
 
 /** Nearest-rank quantile, so every reported value is an observed residual. */
-function quantileSorted(sorted: readonly number[], p: number): number {
-  const idx = Math.max(0, Math.ceil(p * sorted.length) - 1);
-  return sorted[Math.min(idx, sorted.length - 1)];
-}
+const quantileSorted = quantileNearestRankSorted;
 
 const EMPTY_STATS: AccuracyStats = {
   n: 0,

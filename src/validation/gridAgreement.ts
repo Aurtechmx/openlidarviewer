@@ -26,6 +26,7 @@
  */
 
 import { NeumaierSum } from '../process/numerics';
+import { quantileNearestRankSorted } from '../terrain/quantile';
 
 /** Grid geometry. Two rasters are comparable only when all five agree. */
 export interface GridSpec {
@@ -238,10 +239,7 @@ function isEmptyCell(v: number, nodata: number | null): boolean {
 }
 
 /** Nearest-rank quantile over an ascending copy. `p` is a fraction in [0,1]. */
-function quantileSorted(sorted: readonly number[], p: number): number {
-  const idx = Math.max(0, Math.ceil(p * sorted.length) - 1);
-  return sorted[Math.min(idx, sorted.length - 1)];
-}
+const quantileSorted = quantileNearestRankSorted;
 
 /**
  * Statistics over a set of signed errors.

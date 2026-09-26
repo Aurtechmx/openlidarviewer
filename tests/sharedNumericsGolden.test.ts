@@ -25,6 +25,13 @@ import { rgbAutoNormalize } from '../src/render/rgbAutoNormalize';
 import { compareGrids, type GridSpec } from '../src/validation/gridAgreement';
 import { checkpointAccuracy, type Checkpoint } from '../src/validation/checkpointAccuracy';
 import { formatMegabytes } from '../src/app/offlineCopy';
+import {
+  quantile,
+  quantileSorted,
+  quantileType7InPlace,
+  quantileNearestRankSorted,
+  floorRankIndex,
+} from '../src/terrain/quantile';
 import { sampleBudgetRefusal } from '../src/render/streaming/fullCloudGrade';
 import { formatTelemetry } from '../src/io/loadTelemetry';
 import { oversizeReportResult } from '../src/ui/reportVerifier';
@@ -218,5 +225,60 @@ describe('golden: byte-size strings', () => {
       try { assertWorkflowFileSize(b); return 'ok'; } catch (e) { return (e as Error).message; }
     });
     expect({ report: sizes.map((b) => oversizeReportResult(b)?.reason), wf }).toMatchSnapshot();
+  });
+});
+
+describe('consolidation: each site now calls a named variant identical to its legacy formula', () => {
+  const same = (a: number, b: number): boolean => Object.is(a, b);
+  const PX = [...PS, -0.25, 1.25, 0.049999, 0.500001];
+
+  it('nearest-rank (checkpointAccuracy, gridAgreement, spatialBootstrap, frameTelemetry)', () => {
+    for (const n of SIZES) {
+      const v = sample(n + 11, n, n % 2 === 0).sort((a, b) => a - b);
+      for (const p of PX) expect(same(quantileNearestRankSorted(v, p), legacy.nearestRank(v, p))).toBe(true);
+    }
+  });
+
+  it('type-7 sorted (stockpileVolume, profileSampler, streamingBenchmark)', () => {
+    for (const n of SIZES) {
+      const v = Float64Array.from(sample(n + 12, n, n % 3 === 0)).sort();
+      for (const p of PX) {
+        expect(same(quantileSorted(v, p), legacy.stockpile(v, p))).toBe(true);
+        expect(same(quantileSorted(v, p), legacy.benchmark(Array.from(v), p))).toBe(true);
+      }
+      for (let pp = -10; pp <= 110; pp += 0.5) {
+        expect(same(quantileSorted(v, pp / 100), legacy.profile(v, v.length, pp))).toBe(true);
+      }
+    }
+  });
+
+  it('type-7 in place (lassoOcclusion)', () => {
+    for (const n of SIZES) {
+      for (const p of PX) {
+        const a = Float64Array.from(sample(n + 13, n));
+        const b = Float64Array.from(a);
+        expect(same(quantileType7InPlace(a, p), legacy.occlusion(b, p))).toBe(true);
+      }
+    }
+  });
+
+  it('type-7 filtered (lassoVolume.percentile) is the shared quantile', () => {
+    for (const n of SIZES) {
+      const v = sample(n + 14, n);
+      v.push(NaN, Infinity);
+      for (const p of PX) expect(same(lassoPercentile(v, p), quantile(v, p))).toBe(true);
+    }
+  });
+
+  it('floor-rank index (rgbAutoNormalize, elevationRange)', () => {
+    for (const n of SIZES) {
+      const v = Float32Array.from(sample(n + 15, n)).sort();
+      for (const p of PX) {
+        expect(same(v[floorRankIndex(n, p)], legacy.rgb(v, p))).toBe(true);
+      }
+      for (let pct = 0; pct <= 100; pct += 0.5) {
+        expect(floorRankIndex(n, pct / 100)).toBe(legacy.elevationIdx(n, pct));
+      }
+    }
   });
 });
