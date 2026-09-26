@@ -83,6 +83,7 @@ export function wireDockClearance(dock: HTMLElement, column: HTMLElement): () =>
   // wires the rail once rather than remembering two calls that must agree.
   const disposeRail = wireRailScrollAffordance(column, applyClassicScrollbarClass());
   let observer: ResizeObserver | null = null;
+  let rootWrite = 0;
   if (typeof ResizeObserver !== 'undefined') {
     try {
       const ro = new ResizeObserver(() => {
@@ -94,7 +95,8 @@ export function wireDockClearance(dock: HTMLElement, column: HTMLElement): () =>
         // re-lays-out the stage and trips the ResizeObserver loop guard.
         const root = document.documentElement.style;
         if (root.getPropertyValue('--olv-dock-clear') !== clear) {
-          requestAnimationFrame(() => root.setProperty('--olv-dock-clear', clear));
+          cancelAnimationFrame(rootWrite);
+          rootWrite = requestAnimationFrame(() => root.setProperty('--olv-dock-clear', clear));
         }
       });
       ro.observe(dock);
@@ -108,6 +110,7 @@ export function wireDockClearance(dock: HTMLElement, column: HTMLElement): () =>
   return () => {
     observer?.disconnect();
     observer = null;
+    if (rootWrite) cancelAnimationFrame(rootWrite);
     disposeRail();
   };
 }

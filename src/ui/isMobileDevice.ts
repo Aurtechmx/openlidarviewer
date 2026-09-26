@@ -40,6 +40,16 @@ export const MOBILE_LAYOUT_QUERY =
  * Pure mirror of MOBILE_LAYOUT_QUERY, for tests and any non-matchMedia caller.
  * True when the viewport should use the mobile layout.
  */
+/**
+ * The CSS condition the large-touch LAYOUT rules use (src/styles/99-mobile-gui-refresh.css):
+ * a touch-first screen that still gets the desktop workspace. Below 768 px wide
+ * the phone layout above owns the screen; 600 px is the short-side threshold
+ * of the 'large-touch' form factor (LARGE_TOUCH_MIN_SHORT_SIDE,
+ * src/platform/runtimeFormFactor.ts, which re-exports this).
+ */
+export const LARGE_TOUCH_LAYOUT_QUERY =
+  '(pointer: coarse) and (hover: none) and (min-width: 768px) and (min-height: 600px)';
+
 export function matchesMobileLayout(vw: number, vh: number, coarse: boolean): boolean {
   return vw <= MOBILE_MAX_WIDTH || (vh <= MOBILE_LANDSCAPE_MAX_HEIGHT && coarse);
 }

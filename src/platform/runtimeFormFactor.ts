@@ -23,14 +23,9 @@ export type RuntimeFormFactor = 'desktop' | 'phone' | 'large-touch' | 'embedded-
 /** Short viewport side (CSS px) from which a touch-first screen is 'large-touch'. */
 export const LARGE_TOUCH_MIN_SHORT_SIDE = 600;
 
-/**
- * The CSS condition the large-touch LAYOUT rules use (src/styles/99-mobile-gui-refresh.css).
- * Narrower than the 'large-touch' class above: below 768 px wide the phone layout
- * (MOBILE_LAYOUT_QUERY) owns the screen, so only a touch-first screen that also
- * gets the desktop workspace takes the finger-sized variant of it.
- */
-export const LARGE_TOUCH_LAYOUT_QUERY =
-  `(pointer: coarse) and (hover: none) and (min-width: 768px) and (min-height: ${LARGE_TOUCH_MIN_SHORT_SIDE}px)`;
+// The CSS condition for the large-touch LAYOUT lives beside MOBILE_LAYOUT_QUERY
+// (isMobileDevice.ts), which the eager shell may import; this module may not.
+export { LARGE_TOUCH_LAYOUT_QUERY } from '../ui/isMobileDevice';
 
 export interface FormFactorSignals {
   /** `(pointer: coarse) and (hover: none)`: the query isMobileDevice.ts owns. */

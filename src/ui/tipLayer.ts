@@ -30,7 +30,7 @@
  */
 
 import { computeTipPosition, type TipPosition } from './tipPositioning';
-import { LARGE_TOUCH_LAYOUT_QUERY } from '../platform/runtimeFormFactor';
+import { LARGE_TOUCH_LAYOUT_QUERY } from './isMobileDevice';
 
 /** Hold time before a touch press shows the tip (large-touch layout only). */
 export const LONG_PRESS_MS = 500;

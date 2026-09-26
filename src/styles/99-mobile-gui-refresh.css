@@ -341,8 +341,9 @@
   .olv-left-panels summary, .olv-right-rail summary { display: flex; align-items: center; }
   .olv-mp-footer { flex-wrap: wrap; }
   .olv-dock .olv-tool { min-height: 48px; padding-inline: 12px; }
-  .olv-rail-tab, .olv-right-rail-tab { width: 44px; height: 88px; }
-  .olv-rail-tab:hover, .olv-right-rail-tab:hover { width: 44px; }
+  /* min-width, not width: it also holds against the desktop hover widening,
+     which a tap would otherwise trigger and leave stuck. */
+  .olv-rail-tab, .olv-right-rail-tab { width: 44px; min-width: 44px; height: 88px; }
   /* No precise drags: the rail width is fixed above, so the corner grip goes,
      and the workbench splitter gets a finger-wide strip. */
   .olv-mp-resize { display: none; }
