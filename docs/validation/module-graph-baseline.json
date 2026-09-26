@@ -52,8 +52,8 @@
   },
   "fanOut": {
     "src/main.ts": {
-      "runtime": 106,
-      "typeOnly": 23,
+      "runtime": 105,
+      "typeOnly": 24,
       "dynamic": 7,
       "modules": [
         "@fontsource/jetbrains-mono/latin-400.css",
@@ -86,7 +86,7 @@
         "src/app/reportExport.ts",
         "src/app/scanRouteCoordinator.ts",
         "src/app/staleChunkReload.ts",
-        "src/app/streamingScanReport.ts",
+        "src/app/streamingReportSeam.ts",
         "src/app/streamingUiCoordinator.ts",
         "src/app/swUrl.ts",
         "src/app/terrainAnalysisRunner.ts",
@@ -98,7 +98,6 @@
         "src/convert/decodeFull.ts",
         "src/diagnostics/captureProvenance.ts",
         "src/diagnostics/usageCounters.ts",
-        "src/export/ScanReportRenderer.ts",
         "src/export/exportScanIdentity.ts",
         "src/export/lonLatMapper.ts",
         "src/geo/CrsOverrideStore.ts",
@@ -449,7 +448,7 @@
     "components": []
   },
   "context": {
-    "filesScanned": 992,
+    "filesScanned": 993,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [
@@ -458,12 +457,12 @@
         "importers": 70
       },
       {
-        "file": "src/units/units.ts",
+        "file": "src/lazyChunks.ts",
         "importers": 31
       },
       {
-        "file": "src/lazyChunks.ts",
-        "importers": 30
+        "file": "src/units/units.ts",
+        "importers": 31
       },
       {
         "file": "src/io/loadErrors.ts",
