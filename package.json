@@ -223,9 +223,9 @@
   },
   "overrides": {
     "minimatch@3": {
-      "brace-expansion": "^1.1.16"
+      "brace-expansion": "^1.1.21"
     },
-    "qs": "^6.15.2",
+    "qs": "^6.16.0",
     "vitepress": {
       "vite": "^6.4.3"
     },

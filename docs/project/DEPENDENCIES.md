@@ -91,35 +91,24 @@ result in the attached evidence.
 
 ```
 npm audit
-5 vulnerabilities (5 high)
+found 0 vulnerabilities
 ```
 
-All five are one package reached by four paths:
-
-| Root package | Severity | Reached through | Reaches the deployed app? |
-|---|---|---|---|
-| brace-expansion | high | minimatch, multimatch, javascript-obfuscator, the obfuscator Vite plugin | No |
-
-The advisory is GHSA-mh99-v99m-4gvg, an out-of-memory crash on unbounded brace
-expansion. It covers every published version up to and including 5.0.7, so
-there is no version to move to; `npm audit` reports `fixAvailable: false`. The
-input in each of these paths is a glob pattern written in this repository, not
-anything a user supplies, and the code runs at build time on a developer
-machine or a CI runner. It will be picked up when upstream publishes a fix.
-
-The production dependency set is clean: `npm audit --omit=dev` reports zero.
+The production dependency set is clean as well: `npm audit --omit=dev` reports
+zero.
 
 ## Resolved by override
 
-Four advisories that previously sat here are closed. `package.json` pins them
+Five advisories that previously sat here are closed. `package.json` pins them
 through `overrides` rather than waiting on the packages that depend on them:
 
 | Package | Was | Now | Advisory |
 |---|---|---|---|
 | vite (under vitepress) | 5.4.21 | 6.4.3 | dev-server path traversal, `server.fs.deny` bypass, launch-editor NTLM disclosure |
 | esbuild (under vitepress) | 0.21.5 | 0.25.12 | dev-server permissive CORS |
-| qs (under typed-rest-client) | 6.15.1 | 6.15.3 | `qs.stringify` denial of service |
-| brace-expansion | 1.1.15 | 1.1.16 | CVE-2026-13149, exponential-time expansion |
+| qs (under typed-rest-client) | 6.15.1 | 6.16.0 | `qs.stringify` denial of service; array-limit bypass and `isBuffer` denial of service |
+| brace-expansion (under minimatch 3) | 1.1.15 | 1.1.21 | CVE-2026-13149, exponential-time expansion; GHSA-mh99-v99m-4gvg, unbounded expansion |
+| brace-expansion (under minimatch 10) | 5.0.8 | 5.0.12 | GHSA-mh99-v99m-4gvg, unbounded expansion; resolved inside the existing range, no override needed |
 
 One further override is not an advisory. `rolldown` is pinned to 1.2.3, the
 bundler Vite builds with. Vite accepts any 1.2.x, and 1.2.7 emits an entry chunk
