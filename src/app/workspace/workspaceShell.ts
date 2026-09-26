@@ -10,11 +10,12 @@
  * The Tools mode is one task at a time: its home is the tool launcher, and
  * each scene tool (Measure, Annotate, Clip) is a page that shows only its own
  * panel under a task header. The route is presentation only; see
- * `workspaceRouter.ts`.
+ * `workspaceRouter.ts`. On a phone the four mode hosts move into the bottom
+ * sheet's tabs whole, so the phone shows the same homes and pages.
  */
 
 import { DesktopWorkspace, type WorkspaceMode } from '../../ui/workspace/DesktopWorkspace';
-import { MobileSheet } from '../../ui/MobileSheet';
+import { MobileSheet, modeForSheetTab, sheetTabForMode } from '../../ui/MobileSheet';
 import { MOBILE_LAYOUT_QUERY } from '../../ui/isMobileDevice';
 import {
   wireMeasureBarClearance,
@@ -90,7 +91,14 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   // One Data/Tools/Analyse/Export mode visible at a time, re-hosting the live
   // panels. measure/analyse/object lazy-mount into their modes below.
   let router: WorkspaceRouter | null = null;
-  const workspace = new DesktopWorkspace({ onModeChange: () => { router?.sync(); d.onModeChange(); } });
+  let mobileSheet: MobileSheet | null = null;
+  const workspace = new DesktopWorkspace({
+    onModeChange: (m) => {
+      router?.sync();
+      mobileSheet?.select(sheetTabForMode(m));
+      d.onModeChange();
+    },
+  });
   const pages: Partial<Record<string, WorkspacePage>> = {
     measure: { title: 'Measure', element: () => d.measurePanel()?.element },
     annotate: { title: 'Annotate', element: () => d.annotation },
@@ -146,42 +154,40 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   }));
   d.overlay.append(...d.overlayTail);
 
-  // Phone bottom sheet: below the mobile breakpoint one sheet hosts the panels
-  // behind a View · Analyse · Layers tablist. The same live nodes are
-  // re-parented into its slots and restored on a wider viewport.
-  const mobileSheet = new MobileSheet();
-  d.overlay.append(mobileSheet.element);
+  // Phone bottom sheet: the same four modes plus View (the Inspector). The
+  // desktop mode hosts themselves are re-parented into the sheet's slots, so a
+  // phone tab shows exactly the home or task page the router has for that mode.
+  // One route model, two presentations; panels never leave their mode host.
+  const sheet = new MobileSheet({
+    initialTab: sheetTabForMode(workspace.getMode()),
+    onTabChange: (tab) => {
+      const m = modeForSheetTab(tab);
+      if (m) workspace.setMode(m); // the mode's remembered page comes back with it
+    },
+  });
+  mobileSheet = sheet;
+  d.overlay.append(sheet.element);
+  const modes: readonly WorkspaceMode[] = ['data', 'work', 'analyse', 'output'];
+  const wsBody = workspace.mode('data').parentElement as HTMLElement;
 
   const toMobileLayout = (): void => {
-    const analyse = d.analysePanel();
-    const object = d.objectPanel();
-    const measure = d.measurePanel();
-    mobileSheet.slot('view').append(d.inspector.element);
-    if (analyse) mobileSheet.slot('analyse').append(analyse.element);
-    if (object) mobileSheet.slot('analyse').append(object.element);
-    mobileSheet.slot('layers').append(dataEls.layers, dataEls.layerHealth);
-    const layersPanels: HTMLElement[] = [d.classLegend, d.processStudio];
-    if (measure) layersPanels.push(measure.element);
-    layersPanels.push(d.clip, d.annotation, d.export);
-    mobileSheet.slot('layers').append(...layersPanels);
-    analyse?.element.classList.remove('olv-collapsed');
+    sheet.slot('view').append(d.inspector.element);
+    for (const m of modes) sheet.slot(m).append(workspace.mode(m));
+    if (sheet.getActive() !== 'view') sheet.select(sheetTabForMode(workspace.getMode()));
+    d.analysePanel()?.element.classList.remove('olv-collapsed');
     d.export.classList.remove('olv-collapsed');
     // The now-empty left column would still capture touches over its band.
     leftPanels.classList.add('olv-hidden');
     d.inspector.sheetToggle.classList.add('olv-hidden');
+    router?.sync();
   };
   const toDesktopLayout = (): void => {
     d.analysePanel()?.element.classList.remove('olv-collapsed');
     d.export.classList.remove('olv-collapsed');
+    for (const m of modes) wsBody.append(workspace.mode(m));
     leftPanels.classList.remove('olv-hidden');
     d.inspector.sheetToggle.classList.remove('olv-hidden');
     d.rightRail.append(d.inspector.element);
-    workspace.layoutDesktop({
-      ...workspacePanels,
-      measure: d.measurePanel()?.element,
-      analyse: d.analysePanel()?.element,
-      object: d.objectPanel()?.element,
-    });
     router?.sync();
   };
 
@@ -196,30 +202,24 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
       mobileApplied = isMobile;
     }
     // The sheet shows only on a phone WITH a scan; the tab strip only with a scan.
-    mobileSheet.setVisible(isMobile && d.hasScan());
+    sheet.setVisible(isMobile && d.hasScan());
     workspace.setAvailable(d.hasScan());
   };
   mobileMql?.addEventListener('change', applyMobileSheet);
   applyMobileSheet();
 
-  // Lazy Measurements panel: before the annotations panel in the mobile Layers
-  // slot, else in Tools. Falls back to append so a mid-flip mount never throws.
+  // Lazy panels mount into their mode host on either layout; on a phone that
+  // host already sits in the sheet.
   d.setMeasureMountElement((el) => {
-    if (mobileApplied) {
-      const slot = mobileSheet.slot('layers');
-      if (d.annotation.parentElement === slot) slot.insertBefore(el, d.annotation);
-      else slot.append(el);
-    } else {
-      workspace.mountInMode('work', el);
-      router?.sync();
-    }
+    workspace.mountInMode('work', el);
+    router?.sync();
   });
   router.sync();
 
   const live = router;
   return {
     router,
-    mobileSheet,
+    mobileSheet: sheet,
     showMode: (m) => workspace.setMode(m),
     resumeToolPage: (id) => {
       const page = id.slice(5) as ToolPage;
@@ -230,20 +230,10 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     },
     openToolPage: (page) => live.navigate({ mode: 'work', page }, leftPanels.contains(document.activeElement)),
     applyMobileSheet,
-    // Lazy Analyse panel: first in the mobile Analyse slot, else the Analyse mode.
     mountAnalysePanel: (el) => {
       el.classList.remove('olv-collapsed'); // constructs collapsed; hides its action
-      if (mobileApplied) {
-        const slot = mobileSheet.slot('analyse');
-        slot.insertBefore(el, slot.firstChild);
-      } else {
-        workspace.mountInMode('analyse', el);
-      }
+      workspace.mountInMode('analyse', el);
     },
-    // Lazy Object panel: after Analyse in the mobile slot, else the Analyse mode.
-    mountObjectPanel: (el) => {
-      if (mobileApplied) mobileSheet.slot('analyse').append(el);
-      else workspace.mountInMode('analyse', el);
-    },
+    mountObjectPanel: (el) => workspace.mountInMode('analyse', el),
   };
 }

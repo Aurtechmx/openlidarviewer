@@ -14,9 +14,9 @@
  *
  * While a page is shown, a task header (`<- Tools  MEASURE`) leads the host and
  * every other child of the host carries `olv-ws-off`; at home the page panels
- * carry it instead, so the home (the Tools launcher) stands alone. The rule hiding that class
- * is scoped to `.olv-ws-mode`, so a panel the phone layout re-parents into its
- * sheet is never hidden by a stale route.
+ * carry it instead, so the home (the Tools launcher) stands alone. The phone
+ * sheet hosts these same mode containers in its tabs, so one route drives both
+ * presentations.
  */
 
 import { el } from '../../ui/dom';
