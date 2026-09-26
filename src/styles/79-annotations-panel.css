@@ -210,7 +210,8 @@
     left: calc(8px + env(safe-area-inset-left));
     right: calc(8px + env(safe-area-inset-right));
     max-height: 52vh;
-    overflow-y: auto;
+    /* The band itself does not scroll: its mode body is the one scroller
+       inside it (73-desktop-workspace.css), so the stack never nests two. */
     /* A soft fade at the bottom edge signals "more below / canvas beyond"
        so the band reads as a scrollable sheet, not a hard wall over the view. */
     -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent 100%);

@@ -144,6 +144,8 @@ const PROFILE_VEX_KEY = 'olv:measure:profile:vex:v1';
  * never dominates the dock until asked for.
  */
 const PROFILE_SUMMARY_OPEN_KEY = 'olv:measure:profile:summaryOpen:v1';
+/** Station rows shown in the panel before the `Show all N` disclosure. */
+export const STATION_ROW_CAP = 10;
 const PROFILE_STATIONS_OPEN_KEY = 'olv:measure:profile:stationsOpen:v1';
 
 /**
@@ -1544,13 +1546,18 @@ export class MeasurePanel {
       // build until the disclosure is first opened, then caches it (build
       // exactly once). The row MODEL (`stationRows`) is still computed eagerly
       // above so the summary count, the CSV and the PDF stay in lockstep.
-      const { table: stationTable, build: buildStationRows } = buildStationTable(
+      const {
+        table: stationTable,
+        build: buildStationRows,
+        showAll: stationShowAll,
+      } = buildStationTable(
         stationRows,
         unitLabel,
         s.name,
         heightHeader,
         stationCoupling,
         s.profileChart.map((sample) => sample.distance),
+        STATION_ROW_CAP,
       );
       const stationDetails = el('details', { className: 'olv-mp-stations' }, [
         el('summary', {
@@ -1559,6 +1566,7 @@ export class MeasurePanel {
           title: 'Exact station / chainage / elevation / grade values — the same rows the CSV exports.',
         }),
         el('div', { className: 'olv-mp-stations-wrap' }, [stationTable]),
+        stationShowAll,
       ]);
       // Restore the reader's last disclosure state (default CLOSED). Setting
       // `.open` directly does not always dispatch `toggle` synchronously, so the
@@ -1768,7 +1776,8 @@ function buildStationTable(
   heightHeader: string,
   coupling?: StationHoverCoupling,
   rowChainages?: readonly number[],
-): { table: HTMLElement; build: () => void } {
+  rowCap?: number,
+): { table: HTMLElement; build: () => void; showAll: HTMLButtonElement } {
   const headerCells = [
     'Station',
     `Chainage (${unitLabel})`,
@@ -1781,6 +1790,21 @@ function buildStationTable(
     return th;
   });
   const tbody = el('tbody');
+  // Past `rowCap` rows the extra rows stay hidden behind one disclosure button.
+  // The rail has a single scroller, so a long table flows in it rather than
+  // scrolling inside a bounded box of its own.
+  const capped = rowCap !== undefined && stationRows.length > rowCap;
+  const showAll = el('button', {
+    className: 'olv-mp-stations-more',
+    text: `Show all ${stationRows.length}`,
+    title: 'List every station row; the table shows the first few until asked.',
+  }) as HTMLButtonElement;
+  showAll.type = 'button';
+  showAll.hidden = true;
+  showAll.addEventListener('click', () => {
+    for (const tr of Array.from(tbody.children) as HTMLElement[]) tr.hidden = false;
+    showAll.hidden = true;
+  });
   let built = false;
   // Couple rows to scene dots only when the host wired the hover callback AND
   // the per-row chainages are available to resolve each row to its nearest dot.
@@ -1805,15 +1829,17 @@ function buildStationTable(
         tr.dataset.si = String(si);
         bindStationHover(tr, si, couple);
       }
+      if (capped && rowCap !== undefined && i >= rowCap) tr.hidden = true;
       tbody.append(tr);
     });
+    showAll.hidden = !capped;
   };
   const table = el(
     'table',
     { className: 'olv-mp-stations-table', ariaLabel: `Station table for ${name}` },
     [el('thead', {}, [el('tr', {}, headerCells)]), tbody],
   );
-  return { table, build };
+  return { table, build, showAll };
 }
 
 /**

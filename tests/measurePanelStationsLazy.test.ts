@@ -19,7 +19,7 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { MeasurePanel } from '../src/ui/MeasurePanel';
+import { MeasurePanel, STATION_ROW_CAP } from '../src/ui/MeasurePanel';
 import type { MeasurementSummary } from '../src/render/measure/MeasureController';
 import type { ProfileChartSample } from '../src/render/measure/types';
 
@@ -104,5 +104,22 @@ describe('MeasurePanel — station table rows build lazily on first open', () =>
     expect(tbody.querySelectorAll('tr')).toHaveLength(SAMPLE_COUNT);
     setOpen(details, true); // reopen — no rebuild, no duplication
     expect(tbody.querySelectorAll('tr')).toHaveLength(SAMPLE_COUNT);
+  });
+});
+
+describe('MeasurePanel — long station tables cap their rows instead of scrolling', () => {
+  it('shows the first rows and a `Show all N` button that reveals the rest', () => {
+    const { details, tbody } = mountProfilePanel();
+    setOpen(details, true);
+    const rows = tbody.querySelectorAll('tr');
+    const shown = () => rows.filter((r) => !(r as unknown as { hidden?: boolean }).hidden);
+    expect(shown()).toHaveLength(STATION_ROW_CAP);
+    const more = details.querySelector('button.olv-mp-stations-more')!;
+    expect(more).not.toBeNull();
+    expect((more as unknown as { hidden: boolean }).hidden).toBe(false);
+    expect(more.textContent).toContain(`Show all ${SAMPLE_COUNT}`);
+    more.dispatchEvent({ type: 'click' });
+    expect(shown()).toHaveLength(SAMPLE_COUNT);
+    expect((more as unknown as { hidden: boolean }).hidden).toBe(true);
   });
 });
