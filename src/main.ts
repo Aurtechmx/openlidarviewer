@@ -3246,7 +3246,7 @@ void viewerLoaded.then(() => {
         addTeardown: (fn) => stage.addTeardown(fn),
         rightRail,
         inspector,
-        classLegend: classLegendPanel.element,
+        classLegend: classLegendPanel,
         annotation: annotationPanel.element,
         toolLauncher: toolLauncherHost,
         clip: clipPanel.element,
@@ -3960,10 +3960,8 @@ const openScanDeps: OpenScanDeps = {
   getDebugOverlay: () => debugOverlay,
 };
 
-/** Load a File: land on Data up front (visibility only, not gated on the render promise), then parse/render/populate. */
-function handleFile(file: File): Promise<void> {
-  showWorkspaceMode('data'); return openScan(file, openScanDeps);
-}
+/** Load a File in place: the rail keeps its mode; the load status shows on the stage. */
+function handleFile(file: File): Promise<void> { return openScan(file, openScanDeps); }
 
 /**
  * Remote / streaming opens — thin callers over the extracted

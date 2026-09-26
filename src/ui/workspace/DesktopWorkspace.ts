@@ -55,7 +55,7 @@ interface ModeDef {
  * gain, so `work` still means the Tools tab and `output` the Export tab.
  */
 const MODES: readonly ModeDef[] = [
-  { id: 'data', label: 'Data', title: 'What the scan is: layers, their health, and the classes it carries.' },
+  { id: 'data', label: 'Data', title: 'What the scan is: its layers, the classes it carries and where it came from.' },
   { id: 'work', label: 'Tools', title: 'What you do to it: measure, inspect, annotate, clip.' },
   { id: 'analyse', label: 'Analyse', title: 'Terrain analysis, contours and the products a run yields.' },
   { id: 'output', label: 'Export', title: 'Write the scan, the rasters, the reports and the session out.' },
@@ -78,7 +78,8 @@ export interface WorkspaceStorage {
  */
 export interface WorkspacePanels {
   readonly dataLayers: HTMLElement;
-  readonly dataLayerHealth: HTMLElement;
+  /** The Data home rows (classes, source); they follow the layer list. */
+  readonly dataHome?: HTMLElement | null;
   readonly classLegend: HTMLElement;
   readonly annotation: HTMLElement;
   /** The Tools-tab launcher card; leads the work mode when present. */
@@ -205,7 +206,7 @@ export class DesktopWorkspace {
    */
   layoutDesktop(p: WorkspacePanels): void {
     this.mountInMode('data', p.dataLayers);
-    this.mountInMode('data', p.dataLayerHealth);
+    if (p.dataHome) this.mountInMode('data', p.dataHome);
     this.mountInMode('data', p.classLegend);
     // Work carries the scene-work tools: measurement, annotation, clip. The
     // launcher leads, so the tab names its tools before any of them is used.

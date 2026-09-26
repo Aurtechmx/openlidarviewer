@@ -130,7 +130,7 @@ describe('DesktopWorkspace', () => {
     const node = (): FakeEl => new FakeEl('section');
     const launcher = node(); const measure = node(); const annotation = node(); const clip = node();
     ws.layoutDesktop({
-      dataLayers: node(), dataLayerHealth: node(), classLegend: node(), processStudio: node(), export: node(),
+      dataLayers: node(), classLegend: node(), processStudio: node(), export: node(),
       toolLauncher: launcher, measure, annotation, clip,
     } as never);
     expect((ws.mode('work') as unknown as FakeEl).children).toEqual([launcher, measure, annotation, clip]);

@@ -25,6 +25,7 @@ import {
   RAIL_CHEVRON_RIGHT,
 } from '../../ui/panelChrome';
 import { createWorkspaceRouter, type WorkspacePage, type WorkspaceRouter } from './workspaceRouter';
+import { createDataHome } from './dataHome';
 
 /** The scene tools that open a page in the Tools mode. */
 export type ToolPage = 'measure' | 'annotate' | 'clip';
@@ -37,8 +38,14 @@ export interface WorkspaceShellDeps {
   overlay: HTMLElement;
   addTeardown: (fn: () => void) => void;
   rightRail: HTMLElement;
-  inspector: Panel & { readonly sheetToggle: HTMLElement; workspaceDataElements(): { layers: HTMLElement; layerHealth: HTMLElement } };
-  classLegend: HTMLElement;
+  inspector: Panel & {
+    readonly sheetToggle: HTMLElement;
+    workspaceDataElements(): { layers: HTMLElement };
+    sourceSummary(): string;
+    focusLayerHealth(): boolean;
+    focusSource(): boolean;
+  };
+  classLegend: Panel & { presentCodes(): number[] };
   annotation: HTMLElement;
   toolLauncher: HTMLElement;
   clip: HTMLElement;
@@ -90,21 +97,40 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   // One Data/Tools/Analyse/Export mode visible at a time, re-hosting the live
   // panels. measure/analyse/object lazy-mount into their modes below.
   let router: WorkspaceRouter | null = null;
-  const workspace = new DesktopWorkspace({ onModeChange: () => { router?.sync(); d.onModeChange(); } });
+  let refreshDataHome = (): void => {};
+  const workspace = new DesktopWorkspace({ onModeChange: () => { router?.sync(); refreshDataHome(); d.onModeChange(); } });
   const pages: Partial<Record<string, WorkspacePage>> = {
     measure: { title: 'Measure', element: () => d.measurePanel()?.element },
     annotate: { title: 'Annotate', element: () => d.annotation },
     clip: { title: 'Clip box', element: () => d.clip },
   };
-  router = createWorkspaceRouter(workspace, { work: pages as Record<string, WorkspacePage> }, storage());
+  const dataPages: Record<string, WorkspacePage> = {
+    classes: { title: 'Classes', element: () => d.classLegend.element },
+  };
+  router = createWorkspaceRouter(workspace, { work: pages as Record<string, WorkspacePage>, data: dataPages }, storage());
   const leftPanels = workspace.element;
-  // Data mode = the live layer browser (re-parented out of the Inspector, which
-  // keeps updating the same nodes) + the class legend. Reused on mobile return.
+  // Data home = the live layer list (re-parented out of the Inspector, which
+  // keeps updating it) + compact rows. The class legend is the Classes page;
+  // Layer Health stays in the Inspector, which is per-scan.
   const dataEls = d.inspector.workspaceDataElements();
+  const rightCollapsed = (): boolean => d.rightRail.classList.contains('olv-right-collapsed');
+  const dataHome = createDataHome({
+    hasScan: d.hasScan,
+    classCount: () => d.classLegend.presentCodes().length,
+    sourceSummary: () => d.inspector.sourceSummary(),
+    inspectorCollapsed: rightCollapsed,
+    openClasses: () => router?.navigate({ mode: 'data', page: 'classes' }, true),
+    openSource: () => { if (rightCollapsed()) expandRightRail(); d.inspector.focusSource(); },
+    openLayerHealth: () => { if (rightCollapsed()) expandRightRail(); d.inspector.focusLayerHealth(); },
+    // The empty state's own open control, so both paths share the approval gate.
+    openFile: () => document.querySelector<HTMLButtonElement>('.olv-open-btn')?.click(),
+  });
+  refreshDataHome = dataHome.refresh;
+  const expandRightRail = (): void => d.overlay.querySelector<HTMLButtonElement>('.olv-right-rail-tab')?.click();
   const workspacePanels = {
     dataLayers: dataEls.layers,
-    dataLayerHealth: dataEls.layerHealth,
-    classLegend: d.classLegend,
+    dataHome: dataHome.element,
+    classLegend: d.classLegend.element,
     annotation: d.annotation,
     toolLauncher: d.toolLauncher,
     clip: d.clip,
@@ -159,8 +185,8 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     mobileSheet.slot('view').append(d.inspector.element);
     if (analyse) mobileSheet.slot('analyse').append(analyse.element);
     if (object) mobileSheet.slot('analyse').append(object.element);
-    mobileSheet.slot('layers').append(dataEls.layers, dataEls.layerHealth);
-    const layersPanels: HTMLElement[] = [d.classLegend, d.processStudio];
+    mobileSheet.slot('layers').append(dataEls.layers);
+    const layersPanels: HTMLElement[] = [d.classLegend.element, d.processStudio];
     if (measure) layersPanels.push(measure.element);
     layersPanels.push(d.clip, d.annotation, d.export);
     mobileSheet.slot('layers').append(...layersPanels);
@@ -198,8 +224,16 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     // The sheet shows only on a phone WITH a scan; the tab strip only with a scan.
     mobileSheet.setVisible(isMobile && d.hasScan());
     workspace.setAvailable(d.hasScan());
+    dataHome.refresh();
   };
   mobileMql?.addEventListener('change', applyMobileSheet);
+  // Class counts and the rail collapse change outside any route; keep the rows current.
+  if (typeof MutationObserver === 'function') {
+    const mo = new MutationObserver(() => dataHome.refresh());
+    mo.observe(d.classLegend.element, { childList: true, subtree: true });
+    mo.observe(d.rightRail, { attributes: true, attributeFilter: ['class'] });
+    d.addTeardown(() => mo.disconnect());
+  }
   applyMobileSheet();
 
   // Lazy Measurements panel: before the annotations panel in the mobile Layers
