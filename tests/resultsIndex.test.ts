@@ -26,11 +26,13 @@ import {
   type TerrainReader,
 } from '../src/app/results/resultsIndex';
 import { createResultsShelf } from '../src/app/results/resultsShelf';
-import { poseAt } from '../src/app/results/resultsShelfMount';
+import { mountResultsShelf, poseAt } from '../src/app/results/resultsShelfMount';
+import { createScanService } from '../src/app/ScanService';
 import {
   announceObservatoryRunner,
   labRun,
   observatoryRunnerView,
+  observatorySceneTransform,
   publishLabRun,
   resetResultSignalsForTest,
   subscribeResultSignals,
@@ -88,7 +90,7 @@ function owners(active: () => string | null = () => 'a') {
     measurementSource(() => measure, (id) => id, active),
     terrainSource(() => terrain),
     contourSource(() => runner, () => scanIds),
-    signalSources({ observatory: observatoryRunnerView, lab: labRun, subscribe: subscribeResultSignals }, active, () => null),
+    signalSources({ observatory: observatoryRunnerView, observatoryToScene: observatorySceneTransform, lab: labRun, subscribe: subscribeResultSignals }, active, () => null),
     findingsSource(() => exp),
   ], () => (t += 1000));
   index.refresh();
@@ -96,7 +98,7 @@ function owners(active: () => string | null = () => 'a') {
 }
 
 function fakeObservatory() {
-  let state: { phase: string; outcome?: { status: string; record?: { id: string } } } = { phase: 'idle' };
+  let state: { phase: string; outcome?: { status: string; record?: { id: string }; domain?: { min: [number, number, number]; max: [number, number, number] } } } = { phase: 'idle' };
   const fns = new Set<() => void>();
   return {
     getState: () => state,
@@ -154,6 +156,21 @@ describe('results index: one test per owner, pushed with no timer', () => {
     expect(o.index.entries()[0]).toMatchObject({ id: 'observatory:run-1', route: { mode: 'analyse', page: 'observatory' }, sourceIdentity: 'a' });
     obs.set({ phase: 'idle' });
     expect(o.index.entries()).toHaveLength(0);
+  });
+
+  it('an Observatory run aims through the overlay transform', () => {
+    const o = owners();
+    const obs = fakeObservatory();
+    // The overlay's world-to-local: subtract the cloud's source origin.
+    const origin = [1000, 2000, 100] as const;
+    let committed = false;
+    announceObservatoryRunner(obs, () => (committed ? (p) => [p[0] - origin[0], p[1] - origin[1], p[2] - origin[2]] : null));
+    committed = true;
+    obs.set({ phase: 'committed', outcome: { status: 'ok', record: { id: 'run-2' }, domain: { min: [1000, 2000, 100], max: [1010, 2020, 104] } } });
+    const e = o.index.entries()[0]!;
+    expect(e.anchor).toEqual([5, 10, 2]);
+    expect(e.fit).toBeCloseTo(Math.hypot(10, 20, 4) / 2);
+    expect(e.exportProduct).toBeUndefined();
   });
 
   it('Flow Pulse and Terrain Access runs arrive when published and leave on invalidation', () => {
@@ -309,6 +326,28 @@ describe('results shelf actions', () => {
     active = 'b';
     shelf.sync();
     expect(row().hasClass('is-other-source')).toBe(true);
+  });
+
+  it('re-renders the other-layer notes on the active-layer signal', () => {
+    installLiveFakeDom();
+    const context = { scan: { activeId: 'a' } } as unknown as Parameters<typeof createScanService>[0]['context'];
+    const scans = createScanService({ getViewer: () => ({ streamingCloud: null }) as never, context });
+    const terrain = Object.assign(new FakeTerrain(), { exportProduct: () => true });
+    terrain.ref = { result: { dtm: grid() }, scanId: 'a', fresh: true, filename: 'north.laz', sceneUpAxis: 'z' };
+    const pose = { position: [0, 0, 10] as [number, number, number], target: [0, 0, 0] as [number, number, number] };
+    const mounted = mountResultsShelf({
+      viewer: { measure: { getMeasurements: () => [] }, clouds: () => ['a', 'b'], getCloud: (id) => ({ name: `${id}.laz` }), getCameraPose: () => pose, applyCameraPose: vi.fn() },
+      identity: { stableIdFor: (id) => id },
+      scans,
+      terrainRunner: new FakeRunner(),
+    }, () => terrain, null, vi.fn());
+    const row = () => (mounted.element as unknown as FakeEl).find((e) => e.dataset.resultId === 'terrain:a')!;
+    expect(row().hasClass('is-other-source')).toBe(false);
+    scans.setActive('b');
+    expect(row().hasClass('is-other-source')).toBe(true);
+    expect(row().textContent).toContain('From a.laz');
+    scans.setActive('a');
+    expect(row().hasClass('is-other-source')).toBe(false);
   });
 
   it('renders titles as text and shows the count', () => {

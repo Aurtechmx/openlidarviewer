@@ -53,23 +53,35 @@ export interface ScanService {
    * wildcard, and a genuinely unidentified state is still null.
    */
   activeExportTargetId(): string | null;
+  /** Told after the active scan changes. Returns an unsubscribe. */
+  onActiveChange(fn: () => void): () => void;
 }
 
 export function createScanService(deps: ScanServiceDeps): ScanService {
   const { getViewer, context } = deps;
   const scan = context.scan;
+  const listeners = new Set<() => void>();
+  const set = (id: string | null): void => {
+    if (scan.activeId === id) return;
+    scan.activeId = id;
+    for (const fn of [...listeners]) fn();
+  };
   return {
     get activeId() {
       return scan.activeId;
     },
     setActive(id) {
-      scan.activeId = id;
+      set(id);
     },
     clear() {
-      scan.activeId = null;
+      set(null);
     },
     clearIf(id) {
-      if (scan.activeId === id) scan.activeId = null;
+      if (scan.activeId === id) set(null);
+    },
+    onActiveChange(fn) {
+      listeners.add(fn);
+      return () => { listeners.delete(fn); };
     },
     activeCloud() {
       const id = scan.activeId;

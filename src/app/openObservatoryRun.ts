@@ -37,7 +37,14 @@ let runner: ObservatoryRunner | null = null;
 export function getObservatoryRunner(deps: ObservatoryRunnerDeps): ObservatoryRunner {
   if (!runner) {
     runner = createObservatoryRunner(deps);
-    announceObservatoryRunner(runner);
+    // The Results shelf aims at a committed run through the same transform
+    // the overlay is placed with, taken from the cloud the run committed on.
+    let toScene: ReturnType<typeof worldToLocalOf> | null = null;
+    runner.subscribe((st) => {
+      if (st.phase === 'committed') toScene = worldToLocalOf(deps.getActiveCloud());
+      else if (st.phase !== 'running') toScene = null;
+    });
+    announceObservatoryRunner(runner, () => toScene);
   }
   return runner;
 }

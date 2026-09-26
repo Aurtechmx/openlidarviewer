@@ -29,7 +29,7 @@ import {
   type TerrainReader,
 } from './resultsIndex';
 import { createResultsShelf, type ResultsShelf } from './resultsShelf';
-import { labRun, observatoryRunnerView, subscribeResultSignals } from './resultSignals';
+import { labRun, observatoryRunnerView, observatorySceneTransform, subscribeResultSignals } from './resultSignals';
 
 type Pose = { position: [number, number, number]; target: [number, number, number] };
 
@@ -57,7 +57,7 @@ export interface ResultsShelfSources {
   /** Viewer id to stable layer id, for measurement owners. */
   readonly identity: { stableIdFor(viewerId: string): string | null | undefined };
   /** The active layer, read only; the shelf never sets it. */
-  readonly scans: { activeExportTargetId(): string | null };
+  readonly scans: { activeExportTargetId(): string | null; onActiveChange(fn: () => void): () => void };
   /** The terrain runner: its contour layers and their change signal. */
   readonly terrainRunner: ContourReader;
 }
@@ -109,7 +109,7 @@ export function mountResultsShelf(
     ),
     terrainSource(src.terrain),
     contourSource(() => host.terrainRunner, () => src.viewer.clouds()),
-    signalSources({ observatory: observatoryRunnerView, lab: labRun, subscribe: subscribeResultSignals }, src.activeLayerId, terrainAim),
+    signalSources({ observatory: observatoryRunnerView, observatoryToScene: observatorySceneTransform, lab: labRun, subscribe: subscribeResultSignals }, src.activeLayerId, terrainAim),
     findingsSource(() => exportPanel),
   ]);
 
@@ -137,6 +137,8 @@ export function mountResultsShelf(
     if (has !== hadTerrain) { hadTerrain = has; exportPanel?.setTerrainExports(terrainExports); }
   });
   const refresh = (): void => { index.refresh(); shelf.sync(); };
+  // The other-layer notes depend on the active layer, not on the results.
+  const offActive = host.scans.onActiveChange(() => shelf.sync());
   refresh();
   const toggle = shelf.element.querySelector('.olv-results-toggle');
   toggle?.addEventListener('click', refresh, { capture: true });
@@ -144,6 +146,6 @@ export function mountResultsShelf(
     ...shelf,
     index,
     refresh,
-    dispose: () => { offIndex(); index.dispose(); exportPanel?.setTerrainExports(null); shelf.dispose(); },
+    dispose: () => { offIndex(); offActive(); index.dispose(); exportPanel?.setTerrainExports(null); shelf.dispose(); },
   };
 }
