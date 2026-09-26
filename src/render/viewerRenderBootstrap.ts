@@ -30,6 +30,8 @@ import { EDL_DEFAULTS, EDL_DEPTH_BIAS } from './edl';
 import { maxPixelRatio } from './quality/pixelRatioCeiling';
 import { makeOrthoCamera } from './camera/orthoCamera';
 import { CAMERA_FAR, CAMERA_NEAR, DEFAULT_FOV, SCENE_BACKGROUND, effectivePixelRatio, resolveDrawingBuffer, usesLogDepthOf } from './renderBootstrapPolicy';
+// The page-level backend choice rides the Viewer chunk with the renderer it picks.
+export { chooseRenderBackendForPage } from './renderBackendChoice';
 
 export { DEFAULT_FOV } from './renderBootstrapPolicy';
 

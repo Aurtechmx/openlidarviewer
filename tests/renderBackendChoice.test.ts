@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   chooseRenderBackend,
+  chooseRenderBackendForPage,
   type RenderAdapterProbe,
 } from '../src/render/renderBackendChoice';
 
@@ -53,5 +54,16 @@ describe('chooseRenderBackend', () => {
   it('never throws — every failure mode resolves to a usable choice', async () => {
     const rejecting: RenderAdapterProbe = { requestAdapter: () => Promise.reject(new Error('x')) };
     await expect(chooseRenderBackend(rejecting)).resolves.toBe('webgl2');
+  });
+});
+
+describe('chooseRenderBackendForPage', () => {
+  const real: RenderAdapterProbe = { requestAdapter: async () => ({}) };
+  it('pins WebGL 2 on ?backend=webgl2 even with a real adapter', async () => {
+    await expect(chooseRenderBackendForPage(real, '?test=1&backend=webgl2')).resolves.toBe('webgl2');
+  });
+  it('defers to the adapter probe without the flag or with another value', async () => {
+    await expect(chooseRenderBackendForPage(real, '')).resolves.toBe('webgpu');
+    await expect(chooseRenderBackendForPage(real, '?backend=webgpu')).resolves.toBe('webgpu');
   });
 });

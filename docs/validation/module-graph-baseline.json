@@ -52,7 +52,7 @@
   },
   "fanOut": {
     "src/main.ts": {
-      "runtime": 107,
+      "runtime": 106,
       "typeOnly": 22,
       "dynamic": 7,
       "modules": [
@@ -127,7 +127,6 @@
         "src/render/measure/measureIcons.ts",
         "src/render/navPrefsWiring.ts",
         "src/render/pointInfo.ts",
-        "src/render/renderBackendChoice.ts",
         "src/render/streaming/StreamingSource.ts",
         "src/render/streaming/streamingBudget.ts",
         "src/render/workflow/workflowConfig.ts",
@@ -450,7 +449,7 @@
     "components": []
   },
   "context": {
-    "filesScanned": 967,
+    "filesScanned": 982,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [
