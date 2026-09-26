@@ -189,7 +189,7 @@ export function step(sha = headSha()) {
     cwd: ROOT,
     stdio: 'inherit',
     env: {
-      ...process.env, OLV_NAV_DATASET: datasetPath(DATASET_KEY), OLV_NAV_DATASET_ID: V3_DATASETS[DATASET_KEY].id, OLV_NAV_RUNS: '1', OLV_NAV_GOVERNOR: next.cond, OLV_NAV_OUT_DIR: dir, OLV_NAV_MACHINE: MACHINE },
+      ...process.env, OLV_NAV_DATASET: datasetPath(DATASET_KEY), OLV_NAV_DATASET_ID: V3_DATASETS[DATASET_KEY].id, OLV_NAV_RUNS: '1', OLV_NAV_GOVERNOR: next.cond, OLV_NAV_OUT_DIR: dir, OLV_NAV_MACHINE: MACHINE, OLV_NO_SERVER_REUSE: '1' },
   });
   if (res.status !== 0) throw new Error(`session ${next.index} (${next.cond}) failed with exit ${res.status}`);
   return true;

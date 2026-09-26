@@ -209,7 +209,15 @@ export default defineConfig({
     // build loop and is wrong here at any cost in start-up time. With reuse
     // off, an occupied port fails the run instead of silently satisfying it —
     // and scripts/smoke-deploy-zip.mjs asks the kernel for a free port anyway.
-    reuseExistingServer: process.env.OLV_DEPLOY_ROOT ? false : !process.env.CI,
+    // Bench runs never reuse either: the nav benchmark needs the `?benchmark=nav`
+    // driver and probe from THIS checkout's plain build, and a preview left on
+    // the port by another worktree or a live build answers every request while
+    // `window.__olvNavDriver` never appears, so the run times out instead of
+    // failing on the occupied port. scripts/governor-ab.mjs sets OLV_NO_SERVER_REUSE.
+    reuseExistingServer:
+      process.env.OLV_DEPLOY_ROOT || process.env.OLV_NO_SERVER_REUSE || process.argv.includes('--project=bench')
+        ? false
+        : !process.env.CI,
     timeout: 180_000,
   },
 });
