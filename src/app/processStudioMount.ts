@@ -33,7 +33,7 @@ import type { ScanFacts, ProductId } from '../process/ProcessPlan';
 import type { CrsInfo } from '../io/crs';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { MeasurementKind } from '../render/measure/types';
-import type { PreflightInput } from '../process/toolPreflight';
+import type { PreflightActionId, PreflightInput, ToolId } from '../process/toolPreflight';
 // TYPE-ONLY, all three: the preflight model, its live-input builder and its
 // action bindings ride one lazy chunk, reached through `loadToolPreflight()`.
 // A value import here would put the whole model back in the startup shell.
@@ -262,6 +262,21 @@ export interface MountedProcessStudio {
    * verdicts from these same facts, so the panel and the file agree.
    */
   facts(): ScanFacts | null;
+  /** What the panel last rendered, for views that read the same verdicts. */
+  state(): ProcessStudioState;
+  /** Called after every repaint; returns the unsubscribe. */
+  subscribe(fn: () => void): () => void;
+  /** True when the app can carry out this remediation. */
+  canRemediate(action: PreflightActionId, tool: ToolId): boolean;
+  /** Carry out a remediation the user chose. */
+  remediate(action: PreflightActionId, tool: ToolId): void;
+}
+
+/** The inputs of the last render: facts, preflight and the produced set. */
+export interface ProcessStudioState {
+  readonly facts: ScanFacts | null;
+  readonly view: PreflightView | undefined;
+  readonly produced: ReadonlySet<ProductId>;
 }
 
 /**
@@ -277,10 +292,12 @@ export function createProcessStudio(deps: ProcessStudioDeps): MountedProcessStud
   let runtime: Awaited<ReturnType<typeof loadToolPreflight>> | null = null;
   let runner: PreflightActionRunner | null = null;
   let loading: Promise<void> | null = null;
-  const panel = new ProcessStudioPanel({
-    canRemediate: (action, tool) => runner?.canRun(action, tool) === true,
-    onRemediate: (action, tool) => { runner?.run(action, tool); },
-  });
+  const canRemediate = (action: PreflightActionId, tool: ToolId): boolean => runner?.canRun(action, tool) === true;
+  const remediate = (action: PreflightActionId, tool: ToolId): void => { runner?.run(action, tool); };
+  const panel = new ProcessStudioPanel({ canRemediate, onRemediate: remediate });
+  let last: ProcessStudioState = { facts: null, view: undefined, produced: new Set() };
+  const listeners = new Set<() => void>();
+  const notify = (): void => { for (const fn of listeners) fn(); };
 
   /**
    * Single-flight load of the preflight chunk, repainting once it is in. A
@@ -307,7 +324,16 @@ export function createProcessStudio(deps: ProcessStudioDeps): MountedProcessStud
     return runtime && deps.preflight ? runtime.preflightView(deps.preflight) : undefined;
   };
   function repaint(): void {
-    panel.update(resolveActiveScanFacts(deps), preflight());
+    const facts = resolveActiveScanFacts(deps);
+    const view = preflight();
+    panel.update(facts, view);
+    last = { facts, view, produced: facts ? last.produced : new Set() };
+    notify();
+  }
+  function setProduced(ids: readonly ProductId[]): void {
+    panel.setProduced(ids);
+    last = { ...last, produced: new Set(ids) };
+    notify();
   }
   panel.update(null);
   // Start hidden: the shell reveals it on scan load (like the class legend) and
@@ -318,13 +344,16 @@ export function createProcessStudio(deps: ProcessStudioDeps): MountedProcessStud
     refresh() {
       repaint();
     },
-    markProduced(ids) {
-      panel.setProduced(ids);
-    },
-    clearProduced() {
-      panel.setProduced([]);
-    },
+    markProduced: setProduced,
+    clearProduced: () => setProduced([]),
     facts: () => resolveActiveScanFacts(deps),
+    state: () => last,
+    subscribe(fn) {
+      listeners.add(fn);
+      return () => { listeners.delete(fn); };
+    },
+    canRemediate,
+    remediate,
   };
 }
 

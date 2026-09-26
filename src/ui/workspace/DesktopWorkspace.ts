@@ -57,7 +57,7 @@ interface ModeDef {
 const MODES: readonly ModeDef[] = [
   { id: 'data', label: 'Data', title: 'What the scan is: layers, their health, and the classes it carries.' },
   { id: 'work', label: 'Tools', title: 'What you do to it: measure, inspect, annotate, clip.' },
-  { id: 'analyse', label: 'Analyse', title: 'Terrain analysis, contours and the products a run yields.' },
+  { id: 'analyse', label: 'Analyse', title: 'Each analysis for the scan, with its status and what it needs.' },
   { id: 'output', label: 'Export', title: 'Write the scan, the rasters, the reports and the session out.' },
 ];
 
@@ -84,7 +84,8 @@ export interface WorkspacePanels {
   /** The Tools-tab launcher card; leads the work mode when present. */
   readonly toolLauncher?: HTMLElement | null;
   readonly clip: HTMLElement;
-  readonly processStudio: HTMLElement;
+  /** The Analyse home: one row per analysis, leading the Analyse mode. */
+  readonly analyseHome: HTMLElement;
   readonly export: HTMLElement;
   readonly measure?: HTMLElement | null;
   readonly analyse?: HTMLElement | null;
@@ -213,7 +214,7 @@ export class DesktopWorkspace {
     if (p.measure) this.mountInMode('work', p.measure);
     this.mountInMode('work', p.annotation);
     this.mountInMode('work', p.clip);
-    this.mountInMode('analyse', p.processStudio);
+    this.mountInMode('analyse', p.analyseHome);
     if (p.analyse) this.mountInMode('analyse', p.analyse);
     if (p.object) this.mountInMode('analyse', p.object);
     this.mountInMode('output', p.export);

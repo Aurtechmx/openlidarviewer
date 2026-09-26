@@ -23,12 +23,15 @@ export interface TerrainAnalysisEntryDeps {
     /** The analysed surface a Terrain Access run reads; see `AnalysePanel.terrainAccessInput`. */
     terrainAccessInput?: TerrainAccessLabInput | null;
   }>;
+  /** Show an Analyse page once the panel is up, when the shell has pages. */
+  readonly showPage?: (page: 'terrain' | 'contours') => void;
   /** Run terrain analysis over the active scan. */
   readonly run: () => void;
 }
 
 /**
- * Open the Analyse panel. `rerun` forces a fresh run; otherwise the run fires
+ * Open the Analyse panel on its Terrain page, or on Contours when asking for
+ * contours on an analysed scan. `rerun` forces a fresh run; otherwise the run fires
  * only when no result is on the panel, so asking for contours on an analysed
  * scan reveals what is already there instead of recomputing it.
  */
@@ -38,5 +41,7 @@ export async function openTerrainAnalysis(
 ): Promise<void> {
   deps.showAnalyseMode();
   const { hasResult } = await deps.showPanel();
+  // Contours land on their page only when a result exists; a run shows on Terrain.
+  deps.showPage?.(!rerun && hasResult ? 'contours' : 'terrain');
   if (rerun || !hasResult) deps.run();
 }

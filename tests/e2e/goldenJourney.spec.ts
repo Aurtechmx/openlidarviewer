@@ -1,7 +1,7 @@
 import { test, expect, type Page, type Download } from '@playwright/test';
 import { readFileSync, statSync } from 'node:fs';
 import {
-  dropTerrainAccessUtmLas, firePaletteAction, openAnalysePanel, openToolPage, showWorkspaceMode,
+  dropTerrainAccessUtmLas, firePaletteAction, openAnalysePage, openAnalysePanel, openToolPage, showWorkspaceMode,
   type MeasureTestApi,
 } from './helpers';
 import { isBenignPageError } from './pageErrors';
@@ -155,6 +155,7 @@ test.describe('golden journey', () => {
     await runAnalysis(page);
     const derivedList = page.locator('.olv-analyse-layer-controls', { hasText: 'Derived layers' });
     await expect(derivedList).not.toHaveClass(/olv-hidden/, { timeout: 20_000 });
+    await openAnalysePage(page, 'contours');
     await expect(page.locator('.olv-analyse-layer-controls', { hasText: /Contours/ }).first()).toBeVisible();
 
     // DATASET STORY reflects the loaded scan.

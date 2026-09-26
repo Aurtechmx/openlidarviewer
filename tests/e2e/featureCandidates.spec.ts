@@ -1,11 +1,11 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import {
   activate,
   dropTinyLas,
   dropTinyPly,
   expectHittable,
   railChromeSettled,
-  showWorkspaceMode,
+  openAnalysePage,
 } from './helpers';
 
 /**
@@ -20,21 +20,14 @@ import {
  * points" path. `tiny.ply` carries no classification, so it drives the absence
  * assertion. The extraction maths itself is pinned in the Node tests.
  */
-async function openAnalyse(page: Page): Promise<void> {
-  await showWorkspaceMode(page, 'analyse');
-  const panel = page.locator('.olv-analyse-panel');
-  await expect(panel).toBeVisible({ timeout: 20_000 });
-  if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
-    await panel.locator('.olv-panel-head').click();
-  }
-}
 
 test('offers feature candidates for a classified scan, framed as candidates', async ({ page }) => {
   await page.goto('/?test=1');
   await dropTinyLas(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await railChromeSettled(page);
-  await openAnalyse(page);
+  // Its own page, listed on the Analyse home only when the scan carries it.
+  await openAnalysePage(page, 'features');
 
   const launcher = page.locator('.olv-feature-launcher');
   await expect(launcher).toBeVisible({ timeout: 20_000 });
@@ -59,7 +52,8 @@ test('offers no feature candidates for a scan with no classification', async ({ 
   await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await railChromeSettled(page);
-  await openAnalyse(page);
+  await openAnalysePage(page, 'terrain');
+  expect(await page.locator('.olv-ah-row[data-analysis="features"]').count()).toBe(0);
 
   // tiny.ply carries RGB only, no classification channel, so the launcher
   // never appears.

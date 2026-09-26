@@ -38,7 +38,7 @@ The left rail holds four tabs, one open at a time:
 
 - Data: what the scan is: the layers you have open, how healthy each one is, and the classes it carries.
 - Tools: what you do to it: Measure, Inspect point, Annotate and the Clip box, each listed with its key.
-- Analyse: Process Studio, the terrain analysis, and the products a run produces.
+- Analyse: one row per analysis with its status (ready, review or blocked) and the reason, and a page for each task.
 - Export: writing the scan, the images and the reports out.
 
 The right rail is how the scan is drawn: Colour by, point size and rendering, with the scan's coordinate system, its scan report and your saved views below. Inspecting a point puts its readout on a card beside the point itself.
@@ -125,10 +125,12 @@ Hover the dot to see exactly why it earned its grade. The badge travels with the
 
 ## Analyse the terrain
 
-Open the Analyse tab and run the analysis. The viewer classifies the ground, builds a bare-earth surface (a DTM), and grades how trustworthy that surface is across the site. You get:
+Open the Analyse tab. Its home lists Terrain, Flow Pulse, Terrain Access, Observatory and Objects & Space, each with its status and a one-line reason. A blocked row names what would lift it: Flow Pulse and Terrain Access need a terrain run first, so their rows offer Prepare terrain, which opens the Terrain page.
+
+Choose Terrain and run the analysis. The page leads with its status, then a Why? disclosure that holds the full Process Studio view: the processing stages, each product's verdict and the quality checks. Evidence holds the detailed figures and the surface models, and Method holds the scan-type override and the planned capabilities. The viewer classifies the ground, builds a bare-earth surface (a DTM), and grades how trustworthy that surface is across the site. You get:
 
 - A terrain grade and a plain-language read on what the scan is and is not good for
-- Contours, drawn into the scene as their own layer, at the interval the analysis judges this surface can support
+- Contours, drawn into the scene as their own layer, at the interval the analysis judges this surface can support. Contours has its own page under Terrain, with Contour Studio and the layer controls; Back returns to Terrain, then to the Analyse home.
 - The Coverage and Confidence colour modes, which grade the surface in three bands: measured, where a ground return landed in that cell; interpolated, where the height was filled in from nearby data; and extrapolated or gap, where it is a guess or there is no reliable surface at all. Coverage uses green, yellow and red. Confidence says the same thing on a colourblind-safe ramp.
 
 The grade is honest about gaps. A scan that only measured part of the ground will say so rather than pretend the filled-in areas are survey-quality.
@@ -153,7 +155,7 @@ If the detection is wrong, correct it. Treat scan as switches the route between 
 A terrestrial scan does not arrive as a bare cloud. It arrives as a grid: for
 each row and column the instrument fired along a direction and recorded a
 return, or recorded that nothing came back. When a scan carries that grid,
-Open Range Frame Workbench appears in the Analyse tab.
+Range frames appears on the Analyse home, and its page holds Open Range Frame Workbench.
 
 The workbench shows one setup at a time, coloured by range or by validity, with
 the counts beside it. Click a cell and the viewer highlights the point it
@@ -209,7 +211,7 @@ The Export tab has two lanes.
 
 Point cloud. Re-save the points as LAS 1.4, LAS 1.2, XYZ or ASC. Either LAS can be gzipped to a smaller `.las.gz`. You choose whether to keep the scan's coordinate system, assign an EPSG code, or reproject, and whether to write the display sample or every point at full resolution. A live summary tells you the point count, the size and the coordinate system before you commit.
 
-Products. The things you make *from* the scan: your measurements as GeoJSON or CSV, an integrity report that pairs them with a checksum, and a Site KML and scan-area polygon for Google Earth. Image exports sit here too: height, intensity, class and normal maps, and a view capture that comes out as a georeferenced top-down image when the scan is georeferenced. The terrain products are downloaded from the Analyse tab, where the run that made them lives.
+Products. The things you make *from* the scan: your measurements as GeoJSON or CSV, an integrity report that pairs them with a checksum, and a Site KML and scan-area polygon for Google Earth. Image exports sit here too: height, intensity, class and normal maps, and a view capture that comes out as a georeferenced top-down image when the scan is georeferenced. The terrain products are downloaded from Analyse, on the Contours page under Terrain, where the run that made them lives.
 
 A product that cannot be made yet says why on hover rather than failing when you press it.
 
