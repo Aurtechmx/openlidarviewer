@@ -10,9 +10,18 @@
 
 /** The read side of the Observatory runner the shelf needs. */
 export interface ObservatoryRunnerView {
-  getState(): { readonly phase: string; readonly outcome?: { readonly status: string; readonly record?: { readonly id: string } } };
+  getState(): { readonly phase: string; readonly outcome?: { readonly status: string; readonly record?: { readonly id: string }; readonly domain?: ObservatoryDomain } };
   subscribe(fn: () => void): () => void;
 }
+
+/** World-frame bounds of an Observatory run. */
+export interface ObservatoryDomain {
+  readonly min: readonly [number, number, number];
+  readonly max: readonly [number, number, number];
+}
+
+/** World to scene, as the Observatory overlay places itself. */
+export type SceneTransform = (p: readonly [number, number, number]) => readonly [number, number, number];
 
 /** A lab run kept by reference: the outcome object and the layer it ran on. */
 export interface LabRunRef {
@@ -24,6 +33,7 @@ export interface LabRunRef {
 export type LabKind = 'flow-pulse' | 'terrain-access';
 
 let observatory: ObservatoryRunnerView | null = null;
+let observatoryToScene: () => SceneTransform | null = () => null;
 const labRuns = new Map<LabKind, LabRunRef>();
 const listeners = new Set<() => void>();
 
@@ -33,15 +43,24 @@ function notify(): void {
   }
 }
 
-/** Called once by the Observatory entry when it builds the session's runner. */
-export function announceObservatoryRunner(r: ObservatoryRunnerView): void {
+/**
+ * Called once by the Observatory entry when it builds the session's runner.
+ * `toScene` returns the world-to-scene transform the overlay used for the
+ * committed run, or null when nothing is committed.
+ */
+export function announceObservatoryRunner(r: ObservatoryRunnerView, toScene: () => SceneTransform | null = () => null): void {
   observatory = r;
+  observatoryToScene = toScene;
   r.subscribe(notify);
   notify();
 }
 
 export function observatoryRunnerView(): ObservatoryRunnerView | null {
   return observatory;
+}
+
+export function observatorySceneTransform(): SceneTransform | null {
+  return observatoryToScene();
 }
 
 /** A lab publishes its latest run, or null when that run is gone. */
@@ -65,6 +84,7 @@ export function subscribeResultSignals(fn: () => void): () => void {
 /** Test only: forget every owner. */
 export function resetResultSignalsForTest(): void {
   observatory = null;
+  observatoryToScene = () => null;
   labRuns.clear();
   listeners.clear();
 }

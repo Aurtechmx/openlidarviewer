@@ -312,7 +312,9 @@ export function contourSource(read: () => ContourReader | null, scanIds: () => r
 
 /** The shared registry for owners in lazy chunks (see `resultSignals.ts`). */
 export interface SignalsReader {
-  observatory(): { getState(): { readonly phase: string; readonly outcome?: { readonly status: string; readonly record?: { readonly id: string } } } } | null;
+  observatory(): { getState(): { readonly phase: string; readonly outcome?: { readonly status: string; readonly record?: { readonly id: string }; readonly domain?: { readonly min: ResultAnchor; readonly max: ResultAnchor } } } } | null;
+  /** World to scene for the committed Observatory run, as its overlay is placed. */
+  observatoryToScene(): ((p: ResultAnchor) => ResultAnchor) | null;
   lab(kind: 'flow-pulse' | 'terrain-access'): { readonly outcome: object; readonly layerId: string | null; readonly filename: string | null } | null;
   subscribe(fn: () => void): () => void;
 }
@@ -353,7 +355,12 @@ export function signalSources(
         });
       }
       const state = signals.observatory()?.getState();
-      const record = state?.phase === 'committed' && state.outcome?.status === 'ok' ? state.outcome.record : undefined;
+      const ok = state?.phase === 'committed' && state.outcome?.status === 'ok' ? state.outcome : undefined;
+      const record = ok?.record;
+      const toScene = signals.observatoryToScene();
+      const d = ok?.domain;
+      const lo = d && toScene ? toScene(d.min) : null;
+      const hi = d && toScene ? toScene(d.max) : null;
       const live = new Set<string>();
       if (record) {
         const id = `observatory:${record.id}`;
@@ -365,8 +372,8 @@ export function signalSources(
           sourceIdentity: seen.of(id),
           status: 'ready',
           route: { mode: 'analyse', page: 'observatory' },
-          anchor: null,
-          fit: null,
+          anchor: lo && hi ? [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2] : null,
+          fit: lo && hi ? Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2 : null,
         });
       }
       seen.prune(live);
