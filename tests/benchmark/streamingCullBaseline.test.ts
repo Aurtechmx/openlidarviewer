@@ -193,7 +193,12 @@ describe('streamed-node culling baseline', () => {
     // moved.
     const withoutRevision = (r: Record<string, unknown> | null): string =>
       r === null ? '' : JSON.stringify({ ...r, revision: null });
-    if (withoutRevision(previous) !== withoutRevision(record as unknown as Record<string, unknown>)) {
+    // The record is tracked, so a plain test run never writes it. Refresh it
+    // with OLV_UPDATE_BASELINE=1.
+    if (
+      process.env.OLV_UPDATE_BASELINE === '1' &&
+      withoutRevision(previous) !== withoutRevision(record as unknown as Record<string, unknown>)
+    ) {
       writeFileSync(abs, `${JSON.stringify(record, null, 2)}\n`);
     }
 
