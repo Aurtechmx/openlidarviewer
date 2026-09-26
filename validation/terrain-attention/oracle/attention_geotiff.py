@@ -35,7 +35,8 @@ band and one residual in memory and confirms the checks then fail.
 Agreement means the writer and this reader agree on the file format and on
 those rules. It says nothing about how close any height is to the ground.
 
-Nothing here imports OpenLiDARViewer code. Standard library only.
+Nothing here imports OpenLiDARViewer code. Standard library only; the TIFF
+and GeoTIFF tag readers are shared with validation/oracle_common/geotiff_ifd.py.
 
 Usage: attention_geotiff.py [--dir DIR] [--check]   exit 0 when every check holds.
 """
@@ -46,77 +47,19 @@ import heapq
 import json
 import math
 import os
-import struct
 import sys
 import xml.etree.ElementTree as ET
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_DIR = os.path.join(HERE, '..', 'fixture')
 TREE = os.path.realpath(os.path.join(HERE, '..'))
+sys.path.insert(0, os.path.join(HERE, '..', '..', 'oracle_common'))
+from geotiff_ifd import check_georef, confined_dir, f32, grid_size, read_ifd  # noqa: E402
 
-TYPE_SIZE = {1: 1, 2: 1, 3: 2, 4: 4, 12: 8}
-TYPE_FMT = {1: 'B', 3: 'H', 4: 'I', 12: 'd'}
 NBANDS = 2
 BAND_KEYS = ['attentionLevel', 'dominantReason']
 MAX_CELLS = 1_000_000  # far above any committed fixture; bounds every loop below
 RESIDUAL_TOL = 1e-6
-
-
-def f32(x):
-    return struct.unpack('<f', struct.pack('<f', x))[0]
-
-
-def read_ifd(data):
-    if data[:2] != b'II' or struct.unpack_from('<H', data, 2)[0] != 42:
-        raise ValueError('not a classic little-endian TIFF')
-    start = struct.unpack_from('<I', data, 4)[0]
-    (n,) = struct.unpack_from('<H', data, start)
-    tags = {}
-    prev = -1
-    for k in range(n):
-        p = start + 2 + 12 * k
-        tag, typ, count = struct.unpack_from('<HHI', data, p)
-        if tag <= prev:
-            raise ValueError('IFD tags not ascending at %d' % tag)
-        prev = tag
-        size = TYPE_SIZE[typ] * count
-        at = p + 8 if size <= 4 else struct.unpack_from('<I', data, p + 8)[0]
-        if typ == 2:
-            tags[tag] = data[at:at + count - 1].decode('ascii')
-        else:
-            tags[tag] = list(struct.unpack_from('<%d%s' % (count, TYPE_FMT[typ]), data, at))
-    if struct.unpack_from('<I', data, start + 2 + 12 * n)[0] != 0:
-        raise ValueError('more than one IFD')
-    return tags
-
-
-def geokeys(directory):
-    out = {}
-    for k in range(directory[3]):
-        key, loc, count, value = directory[4 + 4 * k: 8 + 4 * k]
-        if loc != 0 or count != 1:
-            raise ValueError('GeoKey %d not an inline SHORT' % key)
-        out[key] = value
-    return out
-
-
-def confined_dir(path):
-    """Map a CLI directory onto a directory of this oracle tree, or refuse it."""
-    wanted = os.path.realpath(path)
-    for root, dirs, _files in os.walk(TREE):
-        if os.path.realpath(root) == wanted:
-            return root
-        dirs.sort()
-    raise SystemExit('refusing to read outside %s: %s' % (TREE, wanted))
-
-
-def grid_size(exp):
-    cols, rows = exp['cols'], exp['rows']
-    if not (isinstance(cols, int) and isinstance(rows, int)):
-        raise ValueError('cols/rows are not integers')
-    if cols <= 0 or rows <= 0 or cols * rows > MAX_CELLS:
-        raise ValueError('grid %rx%r outside 1..%d cells' % (cols, rows, MAX_CELLS))
-    return cols, rows
 
 
 def check_layout(t, cols, rows, check):
@@ -142,17 +85,6 @@ def check_band_metadata(t, exp, check):
             units[sample] = item.text
     check([names.get(i) for i in range(NBANDS)] == ['attention_level', 'dominant_reason'], 'band names %r' % names)
     check([units.get(i) for i in range(NBANDS)] == exp['bandUnits'], 'band units %r' % units)
-
-
-def check_georef(t, exp, rows, check):
-    cell = exp['cellSize']
-    check(t[33550] == [cell, cell, 0.0], 'pixel scale %r' % t[33550])
-    check(t[33922] == [0.0, 0.0, 0.0, exp['xllCorner'], exp['yllCorner'] + rows * cell, 0.0],
-          'tiepoint %r' % t[33922])
-    keys = geokeys(t[34735])
-    check(keys.get(1024) == 1, 'model type is not projected')
-    check(keys.get(1025) == 1, 'raster type is not PixelIsArea')
-    check(keys.get(3072) == exp['epsg'], 'projected EPSG %r' % keys.get(3072))
 
 
 def decode_bands(data, off, cols, rows, nodata):
@@ -300,7 +232,7 @@ def run_checks(data, exp, bands_override=None, residual_override=None):
 
     check(hashlib.sha256(data).hexdigest() == exp['sha256'], 'file sha256 differs from expected.json')
     t = read_ifd(data)
-    cols, rows = grid_size(exp)
+    cols, rows = grid_size(exp, MAX_CELLS)
     n = cols * rows
     check_layout(t, cols, rows, check)
     nodata = int(float(t[42113]))
@@ -359,7 +291,7 @@ def main():
     ap.add_argument('--dir', default=DEFAULT_DIR)
     ap.add_argument('--check', action='store_true', help='also run the negative control')
     args = ap.parse_args()
-    base = confined_dir(args.dir)
+    base = confined_dir(args.dir, TREE)
 
     with open(os.path.join(base, 'terrain_attention.tif'), 'rb') as fh:
         data = fh.read()
@@ -373,7 +305,7 @@ def main():
         for f in failures:
             print('FAIL', f)
         return 1
-    cols, rows = grid_size(exp)
+    cols, rows = grid_size(exp, MAX_CELLS)
     print('OK terrain_attention.tif: %d x %d, %d bands; every cell, residual, level and reason matches and recomputes'
           % (cols, rows, NBANDS))
     return 0

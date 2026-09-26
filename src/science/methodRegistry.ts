@@ -101,6 +101,27 @@ function terrainAccessMethod(
  * The catalogue. Keys ARE the ids (kept in sync by {@link METHOD_REGISTRY}'s
  * own shape and the registry test). Ids are namespaced `olv.<area>.<method>`.
  */
+/**
+ * A version 1 DTM method whose rules are recorded in the EvidenceDEM attention
+ * protocol, an internal composition with no single source method.
+ */
+function attentionProtocolMethod(
+  id: string,
+  name: string,
+  summary: string,
+  implementation: readonly string[],
+): MethodEntry {
+  return {
+    id,
+    version: 1,
+    name,
+    summary,
+    citation: 'Internal composition (rules recorded in validation/protocols/evidencedem-attention-v1.md); no single source method.',
+    category: 'dtm',
+    implementation,
+  };
+}
+
 export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   'olv.ground.smrf': {
     id: 'olv.ground.smrf',
@@ -212,35 +233,27 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     category: 'dtm',
     implementation: ['src/terrain/export/demSensitivity.ts', 'src/terrain/ground/surfaceFromRaster.ts'],
   },
-  'olv.terrain.evidence.residual': {
-    id: 'olv.terrain.evidence.residual',
-    version: 1,
-    name: 'DTM leave-local-out reconstruction residual',
-    summary:
-      'For each measured cell, the absolute difference between its height and the ' +
+  'olv.terrain.evidence.residual': attentionProtocolMethod(
+    'olv.terrain.evidence.residual',
+    'DTM leave-local-out reconstruction residual',
+    'For each measured cell, the absolute difference between its height and the ' +
       'height rebuilt by the canonical geodesic void fill from its measured ' +
       '8-neighbours only, with the cell held out. Every measured cell up to 250,000, ' +
       'otherwise every k-th in row-major order. Shows how well neighbours predict a ' +
       'cell; not a measure of accuracy.',
-    citation: 'Internal composition (rules recorded in validation/protocols/evidencedem-attention-v1.md); no single source method.',
-    category: 'dtm',
-    implementation: ['src/terrain/export/demAttention.ts', 'src/terrain/ground/geodesicFill.ts'],
-  },
-  'olv.terrain.evidence.attention': {
-    id: 'olv.terrain.evidence.attention',
-    version: 1,
-    name: 'DTM attention raster (where to inspect first)',
-    summary:
-      'Per-cell attention level 0 to 3 and one dominant reason. Long interpolation, ' +
+    ['src/terrain/export/demAttention.ts', 'src/terrain/ground/geodesicFill.ts'],
+  ),
+  'olv.terrain.evidence.attention': attentionProtocolMethod(
+    'olv.terrain.evidence.attention',
+    'DTM attention raster (where to inspect first)',
+    'Per-cell attention level 0 to 3 and one dominant reason. Long interpolation, ' +
       'low support, edge affected, model sensitivity and reconstruction residual are ' +
       'each normalised to 0 to 1 by a fixed rule; the level is the highest score ' +
       'banded at 0.33, 0.67 and 1, and the reason is the input that set it. No ' +
       'weighted blend. Written only on request. The reason code table is part of ' +
       'this version. Describes where to look, not accuracy.',
-    citation: 'Internal composition (rules recorded in validation/protocols/evidencedem-attention-v1.md); no single source method.',
-    category: 'dtm',
-    implementation: ['src/terrain/export/demAttention.ts'],
-  },
+    ['src/terrain/export/demAttention.ts'],
+  ),
   'olv.validation.holdout-rmse': {
     id: 'olv.validation.holdout-rmse',
     version: 2,

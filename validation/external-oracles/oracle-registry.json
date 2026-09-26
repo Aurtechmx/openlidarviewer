@@ -585,7 +585,8 @@
       "name": "Terrain attention GeoTIFF reader and residual (attention_geotiff.py)",
       "version": "1",
       "executables": [
-        "validation/terrain-attention/oracle/attention_geotiff.py"
+        "validation/terrain-attention/oracle/attention_geotiff.py",
+        "validation/oracle_common/geotiff_ifd.py"
       ],
       "roleCapabilities": [
         "standard-conformance-validator",
