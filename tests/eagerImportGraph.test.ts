@@ -22,8 +22,8 @@ const ENTRY = join(ROOT, 'src', 'main.ts');
 export const LAZY_ONLY = [
   // Open-any-point-cloud probe registry, failure report and probe worker.
   'src/io/probe/',
-  // Phase C point-record recovery (listed on its own so a move out of probe/ stays guarded).
-  'src/io/probe/recover/',
+  // Phase C point-record recovery (staged; see docs/validation/unreachable-modules.json).
+  'src/io/intakeRecovery/',
   'src/simulation/',
   'src/ui/fieldSimulation/',
   'src/app/diagnostics/copyDiagnostics.ts',

@@ -4,7 +4,7 @@
   "criteriaSha256": "cde1bfe4afc4b96bde52cca5ebbef264be984f3092d10481a1b63ba9a94afd42",
   "split": "heldout",
   "recoveryCommit": "d3ee2c1a",
-  "recoveryModule": "src/io/probe/recover/recoverPointRecords.ts",
+  "recoveryModule": "src/io/intakeRecovery/recoverPointRecords.ts",
   "runOn": "2026-09-26T00:55:29.263Z",
   "elapsedMs": 4700,
   "verdict": "FAIL",

@@ -31,7 +31,7 @@ if (record) {
     criteriaSha256: JSON.parse(readFileSync(join(DIR, 'manifest.json'), 'utf8')).committedFiles['criteria.json'],
     split: 'heldout',
     recoveryCommit: record,
-    recoveryModule: 'src/io/probe/recover/recoverPointRecords.ts',
+    recoveryModule: 'src/io/intakeRecovery/recoverPointRecords.ts',
     runOn: new Date().toISOString(),
     elapsedMs: Date.now() - t0,
     verdict: v.verdict,

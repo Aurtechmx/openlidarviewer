@@ -5,7 +5,7 @@
  */
 // @ts-expect-error plain ESM generator without type declarations
 import { generateCorpus } from '../../validation/intake-corpus/generate.mjs';
-import { recoverPointRecords } from '../../src/io/probe/recover/recoverPointRecords';
+import { recoverPointRecords } from '../../src/io/intakeRecovery/recoverPointRecords';
 
 export interface SampleOutcome {
   id: string;

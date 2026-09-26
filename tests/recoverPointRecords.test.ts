@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import {
   recoverPointRecords, MAX_LAYOUT_HYPOTHESES, RECOVERY_TIME_BUDGET_MS, RECOVERY_MEMORY_BUDGET_BYTES,
   RECOVERED_PREVIEW_POINT_CAP, decodeRecovered,
-} from '../src/io/probe/recover/recoverPointRecords';
+} from '../src/io/intakeRecovery/recoverPointRecords';
 import { scoreSplit } from './helpers/intakeRecoveryScore';
 
 const tuning = scoreSplit('tuning');
