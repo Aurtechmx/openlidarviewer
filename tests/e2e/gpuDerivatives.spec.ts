@@ -31,7 +31,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { dropDenseGridPly } from './helpers';
+import { dropDenseGridPly, openAnalysePanel } from './helpers';
 import {
   buildBackendLeg,
   gpuClaimNotCredible,
@@ -118,12 +118,8 @@ test.describe('TerrainRasterEngine — real-WebGPU equivalence gate @gpu', () =>
     await dropDenseGridPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
     await page.waitForTimeout(1500);
-    // The panel is revealed collapsed once a scan loads; expand it via its head.
-    const panel = page.locator('.olv-analyse-panel');
-    await expect(panel).toBeVisible({ timeout: 20_000 });
-    if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
-      await panel.locator('.olv-panel-head').click();
-    }
+    // The run is on the Analyse > Terrain page.
+    await openAnalysePanel(page);
     await page.locator('.olv-analyse-run').click();
 
     // Not a skip. Starting the analysis is what loads the engine chunk, and

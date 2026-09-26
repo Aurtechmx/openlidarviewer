@@ -89,17 +89,33 @@ export async function openExpandedPanel(
 }
 
 /**
- * Open the Analyse panel (desktop workspace tab), expanding it if the
- * panel-head toggle left it collapsed. Shared by `flowPulseLab.spec.ts` and
- * `terrainAccessLab.spec.ts` (Sonar-flagged as a verbatim duplicate).
+ * Open an Analyse page through the Analyse home. The home lists one row per
+ * analysis; Terrain, Objects & Space, Feature candidates and Range frames are
+ * pages of their own, and Contours is a page under Terrain.
+ */
+export async function openAnalysePage(
+  page: Page,
+  target: 'terrain' | 'contours' | 'objects' | 'features' | 'range',
+): Promise<void> {
+  await showWorkspaceMode(page, 'analyse');
+  const heading = page.locator('#olv-ws-mode-analyse .olv-ws-task-title');
+  const want = { terrain: 'Terrain', contours: 'Contours', objects: 'Objects & Space', features: 'Feature candidates', range: 'Range frames' }[target];
+  if ((await heading.isVisible()) && (await heading.textContent()) === want) return;
+  const back = page.locator('#olv-ws-mode-analyse .olv-ws-back');
+  while (await back.isVisible()) await back.click();
+  const row = target === 'contours' ? 'terrain' : target;
+  await page.locator(`.olv-ah-row[data-analysis="${row}"] .olv-ah-open`).click({ timeout: 20_000 });
+  if (target === 'contours') await page.locator('.olv-at-link').click();
+  await expect(heading).toHaveText(want);
+}
+
+/**
+ * Open the Analyse panel on its Terrain page. Shared by `flowPulseLab.spec.ts`
+ * and `terrainAccessLab.spec.ts` (Sonar-flagged as a verbatim duplicate).
  */
 export async function openAnalysePanel(page: Page): Promise<void> {
-  await showWorkspaceMode(page, 'analyse');
-  const panel = page.locator('.olv-analyse-panel');
-  await expect(panel).toBeVisible({ timeout: 20_000 });
-  if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
-    await panel.locator('.olv-panel-head').click();
-  }
+  await openAnalysePage(page, 'terrain');
+  await expect(page.locator('.olv-analyse-panel')).toBeVisible({ timeout: 20_000 });
 }
 
 /**
