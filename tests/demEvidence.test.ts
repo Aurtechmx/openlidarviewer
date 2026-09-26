@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { DTM_CLAIMS, validatedDecision } from './helpers/exportDecisions';
 import { extractEntry } from './helpers/zipReader';
+import { DEM_PKG_OPTS, demResultAround } from './helpers/demPackageFixture';
 import { writeGeoTiff, gdalMetadataXml } from '../src/terrain/export/demGeoTiff';
 import { buildDemPackage } from '../src/terrain/export/demPackage';
 import {
@@ -144,32 +145,8 @@ function mad(values: number[]): number {
   return med(values.map((v) => Math.abs(v - m)));
 }
 
-function resultFor(grid: DtmGrid): AnalyseContoursResult {
-  return {
-    dtm: grid,
-    intervalM: 1,
-    surface: { canopy: { heightM: new Float32Array(grid.cols * grid.rows).fill(Number.NaN) } },
-    accuracyStandards: {
-      rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, pointDensityPerM2: 4.2,
-      densityReferenceFloorsMet: ['QL2'], densityReferenceNote: 'ref',
-    },
-    quality: {
-      readiness: 'ready', exportReadiness: 'available',
-      crsKnown: true, datumKnown: true, coverageMode: 'full', reasons: [], exportReasons: [],
-    },
-    qualityScore: { score: 85 },
-    cellMetrics: { meanDensity: 4.2, boundaryMeasuredRatio: 0.02 },
-    cellStatusTally: { measured: 0, interpolated: 0, lowConfidence: 0, edgeRisk: 0, empty: 0, total: 0 },
-    generationParams: { interpolation: 'geodesic', contourStyle: 'smooth', smoothing: true, despike: true, aggregation: 'median' },
-    warnings: [],
-  } as unknown as AnalyseContoursResult;
-}
-
-const PKG_OPTS = {
-  basename: 'terrain',
-  worldOrigin: { x: 600000, y: 4000000 },
-  generationDateIso: '2026-01-01T00:00:00.000Z',
-} as const;
+const resultFor = demResultAround;
+const PKG_OPTS = DEM_PKG_OPTS;
 
 // ── writer ──────────────────────────────────────────────────────────────────
 

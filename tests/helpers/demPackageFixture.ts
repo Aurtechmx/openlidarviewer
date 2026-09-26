@@ -9,16 +9,19 @@ import type { DtmGrid } from '../../src/terrain/ground/cellConfidence';
 
 /** An analysis result around `grid`, georeferenced in EPSG:32610. */
 export function demResultFor(grid: Record<string, unknown> & { cols: number; rows: number }, verticalUnitToMetres = 1): AnalyseContoursResult {
-  const n = grid.cols * grid.rows;
-  const dtm = {
+  return demResultAround({
     ...grid,
     crs: 'EPSG:32610', horizontalEpsg: 32610, verticalDatum: null, verticalEpsg: 5703, verticalUnitToMetres,
     coverageMode: 'full', sourcePointCount: 100, analyzedPointCount: 100, warnings: [],
-  } as unknown as DtmGrid;
+  } as unknown as DtmGrid);
+}
+
+/** An analysis result around `dtm` exactly as given. */
+export function demResultAround(dtm: DtmGrid): AnalyseContoursResult {
   return {
     dtm,
     intervalM: 1,
-    surface: { canopy: { heightM: new Float32Array(n).fill(Number.NaN) } },
+    surface: { canopy: { heightM: new Float32Array(dtm.cols * dtm.rows).fill(Number.NaN) } },
     accuracyStandards: {
       rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, pointDensityPerM2: 4.2,
       densityReferenceFloorsMet: ['QL2'], densityReferenceNote: 'ref',

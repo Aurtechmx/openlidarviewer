@@ -554,7 +554,8 @@
       "name": "Terrain sensitivity GeoTIFF reader (sensitivity_geotiff.py)",
       "version": "1",
       "executables": [
-        "validation/terrain-sensitivity/oracle/sensitivity_geotiff.py"
+        "validation/terrain-sensitivity/oracle/sensitivity_geotiff.py",
+        "validation/oracle_common/geotiff_ifd.py"
       ],
       "roleCapabilities": [
         "standard-conformance-validator",
