@@ -196,7 +196,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 105 for the shell, 76 for the renderer and 23 for the Analyse panel,
-across 999 modules with no dependency cycles.
+across 1001 modules with no dependency cycles.
 
 ## The shell has little headroom
 

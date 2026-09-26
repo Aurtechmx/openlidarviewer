@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "quantity": "terrain attention GeoTIFF (attention_level, dominant_reason) and the reconstruction residual behind it",
+  "candidate": "src/terrain/export/demAttention.ts, src/terrain/ground/geodesicFill.ts and src/terrain/export/demGeoTiff.ts",
+  "fixture": "validation/terrain-attention/fixture/terrain_attention.tif with validation/terrain-attention/fixture/expected.json",
+  "fixtureCheck": "tests/demAttention.test.ts fails when the committed fixture differs from what the writer produces",
+  "oracles": [
+    {
+      "oracleId": "olv-terrain-attention-geotiff-py",
+      "role": "standard-conformance-validator",
+      "invocation": "python3 validation/terrain-attention/oracle/attention_geotiff.py --check",
+      "parameterEquivalence": "Reads the committed file bytes; compares band count, sample types, tags, georeferencing and every cell against expected.json."
+    },
+    {
+      "oracleId": "olv-terrain-attention-geotiff-py",
+      "role": "analytic-truth",
+      "invocation": "python3 validation/terrain-attention/oracle/attention_geotiff.py --check",
+      "parameterEquivalence": "Recomputes the leave-local-out residual of every measured cell from the heights and return counts in expected.json, then the level and reason of every cell from the scores and cut-offs in validation/protocols/evidencedem-attention-v1.md; --check confirms a perturbed level, reason or residual fails."
+    }
+  ]
+}
