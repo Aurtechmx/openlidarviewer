@@ -4672,11 +4672,14 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
    inner body is the scroller now, so the rail itself must NOT reserve a
    scrollbar gutter — that gutter made the rail's content narrower than
    `--olv-rail-width` while the collapse grabber is positioned from that
-   variable, leaving a visible sliver between the panels and the handle. */
+   variable, leaving a visible sliver between the panels and the handle.
+   The rail does not scroll itself: the body is sized to fit inside it, and a
+   scroller around a scroller only traps the wheel in a box in a box. */
 .olv-left-panels {
   display: flex;
   flex-direction: column;
   scrollbar-gutter: auto;
+  overflow-y: hidden;
 }
 
 /* Tab strip — hidden until a scan loads (`olv-ws-ready`), so the empty rail
@@ -5239,10 +5242,19 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
    the panel's, and every other child of the panel is then clipped at the
    panel's edge: the chart, the corridor caption and the summary values all
    lose their right-hand end to a table that is not even open. The table
-   scrolls inside itself instead. */
+   scrolls sideways inside itself instead. Vertically it flows: the rail's
+   mode body is the one vertical scroller, and rows past the cap sit behind
+   the `Show all N` button rather than in a bounded box of their own. */
 .olv-mp-stations-wrap {
-  max-height: 220px; overflow-y: auto; overflow-x: auto; max-width: 100%;
+  overflow-x: auto; overflow-y: hidden; max-width: 100%;
 }
+.olv-mp-stations-more {
+  margin-top: var(--space-xs);
+  background: none; border: 0; padding: var(--space-2xs) 0;
+  color: var(--accent); font: inherit; cursor: pointer;
+}
+.olv-mp-stations-more:hover { text-decoration: underline; }
+.olv-mp-stations-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .olv-mp-stations-table {
   width: 100%; border-collapse: collapse;
   font-variant-numeric: tabular-nums; font-size: var(--text-2xs);
@@ -6297,7 +6309,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     left: calc(8px + env(safe-area-inset-left));
     right: calc(8px + env(safe-area-inset-right));
     max-height: 52vh;
-    overflow-y: auto;
+    /* The band itself does not scroll: its mode body is the one scroller
+       inside it (73-desktop-workspace.css), so the stack never nests two. */
     /* A soft fade at the bottom edge signals "more below / canvas beyond"
        so the band reads as a scrollable sheet, not a hard wall over the view. */
     -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent 100%);
@@ -6534,7 +6547,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em;
   color: var(--text-faint);
 }
-.olv-rf-stations-wrap { max-height: 40vh; }
+.olv-rf-stations-wrap { max-height: 40vh; overflow-y: auto; }
 .olv-rf-actions { display: flex; justify-content: flex-end; gap: var(--space-sm); }
 
 .olv-modal-form { display: flex; flex-direction: column; gap: var(--space-2xl); }

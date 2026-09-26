@@ -9,11 +9,14 @@
    inner body is the scroller now, so the rail itself must NOT reserve a
    scrollbar gutter — that gutter made the rail's content narrower than
    `--olv-rail-width` while the collapse grabber is positioned from that
-   variable, leaving a visible sliver between the panels and the handle. */
+   variable, leaving a visible sliver between the panels and the handle.
+   The rail does not scroll itself: the body is sized to fit inside it, and a
+   scroller around a scroller only traps the wheel in a box in a box. */
 .olv-left-panels {
   display: flex;
   flex-direction: column;
   scrollbar-gutter: auto;
+  overflow-y: hidden;
 }
 
 /* Tab strip — hidden until a scan loads (`olv-ws-ready`), so the empty rail

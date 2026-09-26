@@ -174,7 +174,7 @@
   font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em;
   color: var(--text-faint);
 }
-.olv-rf-stations-wrap { max-height: 40vh; }
+.olv-rf-stations-wrap { max-height: 40vh; overflow-y: auto; }
 .olv-rf-actions { display: flex; justify-content: flex-end; gap: var(--space-sm); }
 
 .olv-modal-form { display: flex; flex-direction: column; gap: var(--space-2xl); }
