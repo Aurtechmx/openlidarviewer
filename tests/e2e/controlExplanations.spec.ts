@@ -142,13 +142,26 @@ test.describe('control explanations', () => {
     expect(await frame.getAttribute('data-tip'), 'Frame has no data-tip of its own').toBeNull();
 
     const tipLayer = page.locator('.olv-tip-layer');
+    // The toolbar is still filling in after the scan loads, so Frame can slide
+    // out from under a pointer aimed at its first box, leaving the pointer over
+    // its neighbour (Oblique), whose tip is then correctly shown. Firefox
+    // headful under Xvfb also resyncs the pointer to the real, parked X cursor
+    // now and then. A visible layer alone therefore proves nothing about
+    // Frame: wait on Frame's own text in the layer and its lifted title,
+    // re-aiming at Frame's current box on every attempt and nudging inside it
+    // so the pointer keeps moving on target.
     await expect(async () => {
-      await frame.hover();
-      await expect(tipLayer).toHaveClass(/olv-tip-layer--visible/);
+      const box = await frame.boundingBox();
+      if (!box) throw new Error('Frame has no box yet');
+      const x = box.x + box.width / 2;
+      const y = box.y + box.height / 2;
+      await page.mouse.move(x - 2, y);
+      await page.mouse.move(x, y);
+      await expect(tipLayer).toHaveClass(/olv-tip-layer--visible/, { timeout: 1000 });
+      await expect(tipLayer).toHaveText(title ?? '', { timeout: 1000 });
+      // Lifted while the styled tip shows, so the browser's own tooltip can't double it.
+      await expect(frame).not.toHaveAttribute('title', /./, { timeout: 1000 });
     }).toPass();
-    await expect(tipLayer).toHaveText(title ?? '');
-    // Lifted while the styled tip shows, so the browser's own tooltip can't double it.
-    await expect(frame).not.toHaveAttribute('title', /./);
 
     await page.mouse.move(0, 0);
     await expect(tipLayer).not.toHaveClass(/olv-tip-layer--visible/);
