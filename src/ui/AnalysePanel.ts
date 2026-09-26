@@ -172,6 +172,15 @@ import { buildScanFitness, type FitnessInputs } from '../terrain/quality/scanFit
 import { fitnessIcon, fitnessToneGlyph } from './fitnessIcons';
 
 /** Callbacks the host (main.ts) provides. */
+/** What the last terrain run says about itself, beside Process Studio's readiness. */
+export interface RunUsability {
+  readonly tier: 'Good' | 'Preview' | 'Limited' | 'Blocked';
+  readonly verdict: string;
+}
+
+/** A section of the panel a host can show as its own page. */
+export type AnalysePart = 'contours' | 'range' | 'features';
+
 export interface AnalysePanelCallbacks {
   /** Run (or re-run) terrain analysis on the loaded scan. */
   onRun?: () => void;
@@ -462,6 +471,18 @@ export class AnalysePanel {
   private _featureCrsRev = -1;
   private _featureToken = 0;
   private readonly _contourLauncher: HTMLElement;
+  /**
+   * Sections a host can show as task pages of their own: the terrain products
+   * (Contour Studio and the layer controls), the Range workbench and the
+   * feature candidates. Each is a live node this panel keeps filling wherever
+   * it sits; {@link restoreParts} puts them back in place.
+   */
+  private readonly _parts: Readonly<Record<AnalysePart, HTMLElement>>;
+  private readonly _contoursEmpty: HTMLElement;
+  private readonly _links: HTMLElement;
+  private _partsListener: (() => void) | null = null;
+  /** The last run's own usability: its surface tier and the fitness verdict line. */
+  private _runUsability: RunUsability | null = null;
   /** Host for the 3D contour derived-layer controls; empty until a layer is drawn. */
   private readonly _contourLayerControls: HTMLElement;
   /** Mount point for the generic derived-layers list (built by the runner). */
@@ -648,12 +669,13 @@ export class AnalysePanel {
 
     // Everything that needs a result lives in one region we show/hide.
     this._resultsRegion = el('div', { className: 'olv-analyse-results' });
-    // The detailed metrics live behind a collapsed "Details" expander so the
+    // The detailed metrics and the surface models live behind a collapsed
+    // "Evidence" expander so the
     // Terrain Assessment hero leads and the panel reads top-down: verdict →
     // (details on demand) → surface models → exports. Native <details> keeps it
     // keyboard-accessible with no JS.
     const details = el('details', { className: 'olv-analyse-details' });
-    const summary = el('summary', { className: 'olv-analyse-details-summary', text: 'Details' });
+    const summary = el('summary', { className: 'olv-analyse-details-summary', text: 'Evidence' });
     details.append(
       summary,
       this._scoreRow,
@@ -663,6 +685,10 @@ export class AnalysePanel {
       this._qualityRow,
       section('Validation detail'),
       this._validationRow,
+      section('Surface models'),
+      this._surfaceRow,
+      this._legend,
+      this._body,
     );
 
     // Sits at the TOP of the results region so a stale verdict can never be
@@ -683,17 +709,33 @@ export class AnalysePanel {
       this._derivedLayersHost,
       this._contourDeliverable,
     );
+    this._contoursEmpty = el('p', {
+      className: 'olv-analyse-part-empty',
+      text: 'Contours come from a terrain run. Run terrain analysis first.',
+    });
+    // Links to the pages a host splits out; empty until a host fills it.
+    this._links = el('div', { className: 'olv-analyse-links' });
+    const group = (className: string, ...nodes: HTMLElement[]): HTMLElement => {
+      const g = el('div', { className });
+      g.append(...nodes);
+      return g;
+    };
+    this._parts = {
+      contours: group('olv-analyse-part olv-analyse-part-contours', this._contoursEmpty, terrainProducts),
+      range: group('olv-analyse-part olv-analyse-part-range', this._rangeLauncher, this._rangeWorkbench),
+      features: group('olv-analyse-part olv-analyse-part-features', this._featureLauncher, this._featureReview),
+    };
+    // How the run works: the planned capabilities and the scan-type override.
+    const method = el('details', { className: 'olv-analyse-method' });
+    method.append(el('summary', { className: 'olv-analyse-method-summary', text: 'Method' }), this._roadmap, this._scanTypeControl.element);
 
     this._resultsRegion.append(
       this._staleNotice,
-      terrainProducts,
+      this._links,
+      this._parts.contours,
       this._fitnessRow,
       this._assessmentRow,
       details,
-      section('Surface models'),
-      this._surfaceRow,
-      this._legend,
-      this._body,
     );
 
     this.element.append(
@@ -702,13 +744,10 @@ export class AnalysePanel {
       this._datasetStoryHost,
       this._runBtn,
       this._status,
-      this._rangeLauncher,
-      this._rangeWorkbench,
-      this._featureLauncher,
-      this._featureReview,
+      this._parts.range,
+      this._parts.features,
       this._resultsRegion,
-      this._roadmap,
-      this._scanTypeControl.element,
+      method,
       el('p', { className: 'olv-analyse-footer', text: NOT_SURVEY_GRADE }),
     );
     this._resultsRegion.style.display = 'none';
@@ -757,6 +796,7 @@ export class AnalysePanel {
           workbenchHost: this._rangeWorkbench,
           onLaunch: () => this._rangeWorkbench.classList.remove('olv-hidden'),
         });
+        this._partsListener?.();
       })
       .catch(() => {
         /* An optional inspection surface: omit it rather than break the panel. */
@@ -771,6 +811,7 @@ export class AnalysePanel {
     this._rangeLauncher.replaceChildren();
     this._rangeWorkbench.replaceChildren();
     this._rangeWorkbench.classList.add('olv-hidden');
+    this._partsListener?.();
   }
 
   /**
@@ -834,6 +875,7 @@ export class AnalysePanel {
           reviewHost: this._featureReview,
           onLaunch: () => this._featureReview.classList.remove('olv-hidden'),
         });
+        this._partsListener?.();
       })
       .catch(() => {
         /* An optional review surface: omit it rather than break the panel. */
@@ -848,6 +890,40 @@ export class AnalysePanel {
     this._featureLauncher.replaceChildren();
     this._featureReview.replaceChildren();
     this._featureReview.classList.add('olv-hidden');
+    this._partsListener?.();
+  }
+
+  /** The live section behind a page. Moving it elsewhere keeps it updating. */
+  part(name: AnalysePart): HTMLElement {
+    return this._parts[name];
+  }
+
+  /** True when the section has something to show (a launcher mounted). */
+  hasPart(name: AnalysePart): boolean {
+    if (name === 'contours') return true;
+    return (name === 'range' ? this._rangeLauncher : this._featureLauncher).childElementCount > 0;
+  }
+
+  /** Put every section back in its place inside this panel. */
+  restoreParts(): void {
+    this._resultsRegion.insertBefore(this._parts.contours, this._links.nextSibling);
+    this.element.insertBefore(this._parts.range, this._resultsRegion);
+    this.element.insertBefore(this._parts.features, this._resultsRegion);
+  }
+
+  /** The last run's usability, or null before a run. */
+  runUsability(): RunUsability | null {
+    return this._result ? this._runUsability : null;
+  }
+
+  /** The slot a host fills with links to the pages it splits out. */
+  linksHost(): HTMLElement {
+    return this._links;
+  }
+
+  /** Called when the Range or feature section appears or goes. */
+  setPartsListener(fn: (() => void) | null): void {
+    this._partsListener = fn;
   }
 
   /** Drop the registry subscription. Call when the panel is discarded. */
@@ -1082,6 +1158,7 @@ export class AnalysePanel {
     const has = !!result;
     this._status.style.display = has ? 'none' : '';
     this._resultsRegion.style.display = has ? '' : 'none';
+    this._contoursEmpty.hidden = has;
     // Once results exist the button is a quiet "Re-run", not the loud
     // primary action — visual weight follows importance.
     this._runBtn.textContent = this._runLabel();
@@ -2832,7 +2909,11 @@ export class AnalysePanel {
   private _renderFitness(): void {
     this._fitnessRow.replaceChildren();
     const r = this._result;
-    if (!r) return;
+    this._runUsability = null;
+    if (!r) {
+      this._partsListener?.();
+      return;
+    }
     const a = terrainAssessment(r);
     const t = r.cellStatusTally;
     const covered = t.measured + t.interpolated + t.lowConfidence + t.edgeRisk;
@@ -2895,6 +2976,8 @@ export class AnalysePanel {
       assessmentLimiters: a.limiters,
     };
     const f = buildScanFitness(inputs);
+    this._runUsability = { tier: a.status, verdict: f.verdict };
+    this._partsListener?.(); // the host's status follows the run's own verdict
 
     const hero = el('div', { className: `olv-fit-verdict is-${f.overallTone}${f.provisional ? ' is-provisional' : ''}` });
     hero.append(el('span', { className: 'olv-fit-verdict-text', text: f.verdict }));

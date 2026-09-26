@@ -1,11 +1,11 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import {
   activate,
   dropDenseGridPly,
   dropTinyPtx,
   expectHittable,
   railChromeSettled,
-  showWorkspaceMode,
+  openAnalysePage,
 } from './helpers';
 
 /**
@@ -20,21 +20,14 @@ import {
  * workbench — the raster, the diagnostics, the identity link — is pinned in the
  * Node tests, where the mapping and the refusals are actually decidable.
  */
-async function openAnalyse(page: Page): Promise<void> {
-  await showWorkspaceMode(page, 'analyse');
-  const panel = page.locator('.olv-analyse-panel');
-  await expect(panel).toBeVisible({ timeout: 20_000 });
-  if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
-    await panel.locator('.olv-panel-head').click();
-  }
-}
 
 test('offers the workbench for a scan that carries an acquisition grid', async ({ page }) => {
   await page.goto('/?test=1');
   await dropTinyPtx(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await railChromeSettled(page);
-  await openAnalyse(page);
+  // Its own page, listed on the Analyse home only when the scan carries it.
+  await openAnalysePage(page, 'range');
 
   const launcher = page.locator('.olv-range-launcher');
   await expect(launcher).toBeVisible({ timeout: 20_000 });
@@ -67,7 +60,8 @@ test('offers nothing for a scan that carries no acquisition grid', async ({ page
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await railChromeSettled(page);
-  await openAnalyse(page);
+  await openAnalysePage(page, 'terrain');
+  expect(await page.locator('.olv-ah-row[data-analysis="range"]').count()).toBe(0);
 
   // Not hidden, not disabled: absent. A PLY has no grid, so there is nothing to
   // launch and no explanation owed.

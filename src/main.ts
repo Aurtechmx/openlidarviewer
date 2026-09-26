@@ -850,7 +850,7 @@ function showInstantAnswer(scanLabel: string): void {
         case 'terrain':
           // Ensure the (lazy) panel is mounted before expanding + running, so
           // the busy state and result have somewhere to land.
-          analyseExpanded = true; showWorkspaceMode('analyse');
+          analyseExpanded = true; workspaceShell?.openAnalysePage('terrain');
           void ensureAnalysePanel().then((p) => {
             p.expand();
             void terrainRunner.run();
@@ -1632,7 +1632,7 @@ function ensureActionRegistry(): Promise<Action[]> {
   saveSnapshot,
   copyShareLink,
   terrainAnalysisEntry: {
-    showAnalyseMode: () => showWorkspaceMode('analyse'),
+    showAnalyseMode: () => showWorkspaceMode('analyse'), showPage: (page) => workspaceShell?.openAnalysePage(page),
     showPanel: () => ensureAnalysePanel().then((p) => { p.setVisible(true); return { hasResult: p.currentResultForProvenance() != null, flowInput: p.flowPulseInput(), terrainAccessInput: p.terrainAccessInput() }; }),
     run: () => void terrainRunner.run(),
   }, observatoryEntry: { showAnalyseMode: () => showWorkspaceMode('analyse'), runnerDeps: { getActiveCloud: () => scans.activeCloud(), getDatasetId: () => scans.activeId, getCrsRevision: () => crsService.crsRevision(), buildOptions: () => ({ filename: null, metresPerUnit: null, buildTag: __APP_VERSION__ }) }, overlayHost: () => viewer.derivedLayerHost() },
@@ -3250,14 +3250,14 @@ void viewerLoaded.then(() => {
         annotation: annotationPanel.element,
         toolLauncher: toolLauncherHost,
         clip: clipPanel.element,
-        processStudio: processStudio.panel.element,
+        processStudio: processStudio.panel.element, studio: processStudio, runAction: (id) => void ensureActionRegistry().then((r) => r.find((a) => a.id === id)?.run()),
+        showTerrain: () => ensureAnalysePanel().then((p) => p.setVisible(true)), showObjects: () => ensureObjectPanel().then((p) => { objectDesiredVisible = true; p.setVisible(true); }),
         export: exportPanel.element,
         measureHint: viewer.measureElements.hint,
         dock: dock.dock,
         overlayTail: [dock.dock, dock.backend, projectCard.element, viewer.inspectElements.card,
           viewer.annotateElements.editor, viewer.probeElements.readout, inspector.sheetToggle],
-        analysePanel: () => analysePanel,
-        objectPanel: () => objectPanel,
+        analysePanel: () => analysePanel, objectPanel: () => objectPanel,
         measurePanel: () => measureMount.panel,
         setMeasureMountElement: (fn) => measureMount.setMountElement(fn),
         hasScan,
@@ -3267,8 +3267,7 @@ void viewerLoaded.then(() => {
     workspaceShell = shell;
     phoneSheet = shell.mobileSheet;
     syncMobileSheet = shell.applyMobileSheet;
-    mountAnalysePanelElement = shell.mountAnalysePanel;
-    mountObjectPanelElement = shell.mountObjectPanel;
+    mountAnalysePanelElement = shell.mountAnalysePanel; mountObjectPanelElement = shell.mountObjectPanel;
     // If either panel already mounted before this wiring ran, place it now.
     if (analysePanel) mountAnalysePanelElement(analysePanel.element);
     if (objectPanel) mountObjectPanelElement(objectPanel.element);

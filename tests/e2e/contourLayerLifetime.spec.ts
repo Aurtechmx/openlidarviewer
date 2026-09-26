@@ -19,7 +19,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
-import { dropDenseGridPly, showWorkspaceMode } from './helpers';
+import { dropDenseGridPly, openAnalysePage, openAnalysePanel, showWorkspaceMode } from './helpers';
 
 const MULTICHUNK = fileURLToPath(new URL('../fixtures/multichunk.laz', import.meta.url));
 
@@ -27,12 +27,7 @@ test.describe('contour derived-layer lifetime', () => {
   test.slow();
 
   async function runAnalysisAndWaitForContours(page: import('@playwright/test').Page): Promise<void> {
-    await showWorkspaceMode(page, 'analyse');
-    const panel = page.locator('.olv-analyse-panel');
-    await expect(panel).toBeVisible({ timeout: 20_000 });
-    if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
-      await panel.locator('.olv-panel-head').click();
-    }
+    await openAnalysePanel(page);
     await page.locator('.olv-analyse-run').click();
     // The run completes and draws the contour layer without further input;
     // the launcher action only reveals the export surface. Two elements share
@@ -42,6 +37,9 @@ test.describe('contour derived-layer lifetime', () => {
     const derivedList = page.locator('.olv-analyse-layer-controls', { hasText: 'Derived layers' });
     await expect(derivedList).not.toHaveClass(/olv-hidden/, { timeout: 20_000 });
     await expect(derivedList.locator('.olv-analyse-layer-head')).toContainText('Derived layers');
+    // The layer controls live on the Contours page, under Terrain.
+    await openAnalysePage(page, 'contours');
+    await expect(derivedList).toBeVisible();
   }
 
   test('closing the scan removes the drawn contours and the layer control', async ({ page }) => {
