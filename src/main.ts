@@ -4179,10 +4179,9 @@ function closeStreaming(): void {
     coarseStableFired = false;
   }
   if (copcDecoder) copcDecoder.onDecodeMs = undefined;
-  // Stop the status poll, abort an in-flight grade (its decode is orphaned
-  // work now) and hide the panel.
+  // Stop the status poll and any grade, hide the panel, then tell the shelf.
   streamingUi.endSession();
-  viewer.detachStreamingCloud();
+  viewer.detachStreamingCloud(); scans.syncActive();
   // Return the Inspector to its static layout — un-hide every section
   // and clear the streaming-mode positioning class.
   try { inspector.setStreamingMode(false); }
@@ -4611,6 +4610,7 @@ function clearOpenStaticLayers(): void {
   }
   layerVisible.clear();
   layers.solo = null;
+  scans.syncActive();
 }
 
 /**

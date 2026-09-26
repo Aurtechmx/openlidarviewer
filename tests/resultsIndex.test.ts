@@ -350,6 +350,30 @@ describe('results shelf actions', () => {
     expect(row().hasClass('is-other-source')).toBe(false);
   });
 
+  it('the active-layer signal fires on a streaming attach and detach', () => {
+    const viewer = { streamingCloud: null as { id: string } | null };
+    const context = { scan: { activeId: 'a' } } as unknown as Parameters<typeof createScanService>[0]['context'];
+    const scans = createScanService({ getViewer: () => viewer as never, context });
+    const fn = vi.fn();
+    scans.onActiveChange(fn);
+    // A streaming open attaches first, then retires the static layers.
+    viewer.streamingCloud = { id: 'stream-1' };
+    scans.clearIf('a');
+    expect(scans.activeExportTargetId()).toBe('stream-1');
+    expect(fn).toHaveBeenCalledTimes(1);
+    // Streaming to streaming, with no static layer to clear.
+    viewer.streamingCloud = { id: 'stream-2' };
+    scans.syncActive();
+    expect(fn).toHaveBeenCalledTimes(2);
+    scans.syncActive();
+    expect(fn).toHaveBeenCalledTimes(2);
+    // Close: the detach alone changes the identity.
+    viewer.streamingCloud = null;
+    scans.syncActive();
+    expect(fn).toHaveBeenCalledTimes(3);
+    expect(scans.activeExportTargetId()).toBeNull();
+  });
+
   it('renders titles as text and shows the count', () => {
     const s = shelfFor('a');
     const root = s.shelf.element as unknown as FakeEl;
