@@ -52,7 +52,7 @@ export function checkDist(distDir) {
 if (isCliEntry(import.meta.url)) {
   const dist = resolve(ROOT, process.argv[2] ?? 'dist');
   if (!existsSync(join(dist, 'index.html'))) {
-    console.error(`check:no-test-seam: no build at ${relative(ROOT, dist) || dist}. Run "npm run build:live" first.`);
+    console.error(`check:no-test-seam: No build found at ${relative(ROOT, dist) || dist}. Run "npm run build:live" first.`);
     process.exit(1);
   }
   const problems = checkDist(dist);
