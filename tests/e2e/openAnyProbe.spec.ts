@@ -50,7 +50,9 @@ test.beforeEach(async ({ page }) => {
       },
     });
   });
-  await page.goto('/');
+  // One navigation per test: a second goto while the first page is still loading
+  // aborts it in Firefox (NS_BINDING_ABORTED). ?test=1 exposes the test seam.
+  await page.goto('/?test=1');
 });
 
 test('a LAS file renamed to .bin opens as LAS', async ({ page }) => {
@@ -89,7 +91,6 @@ test('a PNG is reported as not a point cloud', async ({ page }) => {
 });
 
 test('a failed open leaves the loaded project untouched', async ({ page }) => {
-  await page.goto('/?test=1');
   const bytes = readFileSync(fileURLToPath(new URL('../../public/samples/tiny.las', import.meta.url)));
   await drop(page, [...bytes], 'tiny.las');
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 30_000 });

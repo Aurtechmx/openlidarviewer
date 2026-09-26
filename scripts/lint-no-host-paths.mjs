@@ -72,6 +72,10 @@ const DESCRIBES_THE_PATTERN = new Map([
     'tests/benchmark/artifacts.test.ts',
     'asserts the redaction works, so its fixtures are the paths that must not survive',
   ],
+  [
+    'tests/formatProbes.test.ts',
+    'asserts the open failure report leaves the file path out, so its fixture is a path that must not appear',
+  ],
 ]);
 
 /**
