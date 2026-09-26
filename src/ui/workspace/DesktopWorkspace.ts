@@ -106,6 +106,11 @@ export interface DesktopWorkspaceOptions {
   readonly onModeChange?: (mode: WorkspaceMode) => void;
 }
 
+/** The visible tab label for a mode (`work` reads `Tools`). */
+export function workspaceModeLabel(m: WorkspaceMode): string {
+  return MODES.find((d) => d.id === m)?.label ?? m;
+}
+
 /** `true` when `v` is one of the four workspace modes. */
 export function isWorkspaceMode(v: unknown): v is WorkspaceMode {
   return typeof v === 'string' && (MODE_IDS as readonly string[]).includes(v);

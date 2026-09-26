@@ -700,6 +700,13 @@ export const loadActionRegistry = () => import('./app/actionDefinitions');
  */
 export const loadToolLauncher = () => import('./ui/toolLauncher');
 
+/**
+ * The desktop rail, the phone sheet and the Tools route (workspaceShell.ts).
+ * Nothing shows the rail before the Viewer resolves, so its wiring rides this
+ * chunk, fetched beside the Viewer rather than in the startup shell.
+ */
+export const loadWorkspaceShell = () => import('./app/workspace/workspaceShell');
+
 
 /**
  * The Field Simulation Lab's Flow Pulse view and the routing core behind it.
