@@ -14,7 +14,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isCliEntry } from './lib/isCliEntry.mjs';
@@ -51,10 +51,32 @@ export function collectAttributionProblems({ yaml, files, notices, credits }) {
   return problems;
 }
 
+/** Tracked files, or, in an extracted source archive with no git, a filesystem walk. */
+function listFiles(root) {
+  try {
+    return execFileSync('git', ['ls-files'], {
+      cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+    }).split('\n').filter(Boolean);
+  } catch {
+    const out = [];
+    const skip = new Set(['.git', 'node_modules', 'dist', 'release', 'test-results', 'playwright-report']);
+    const walk = (rel) => {
+      for (const e of readdirSync(join(root, rel), { withFileTypes: true })) {
+        if (skip.has(e.name)) continue;
+        const r = rel ? `${rel}/${e.name}` : e.name;
+        if (e.isDirectory()) walk(r);
+        else if (e.isFile()) out.push(r);
+      }
+    };
+    walk('');
+    return out;
+  }
+}
+
 if (isCliEntry(import.meta.url)) {
   const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const read = (p) => readFileSync(join(ROOT, p), 'utf8');
-  const files = execFileSync('git', ['ls-files'], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
+  const files = listFiles(ROOT);
   const problems = collectAttributionProblems({
     yaml: read('validation/datasets/dataset-register.yaml'),
     files,
