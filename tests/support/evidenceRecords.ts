@@ -25,6 +25,8 @@ import { expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 // @ts-expect-error - plain .mjs script, no types
 import { bucketOf } from '../../scripts/lib/testBuckets.mjs';
+// @ts-expect-error - plain .mjs script, no types
+import { serialOrder } from '../../scripts/lib/gates.mjs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -47,8 +49,13 @@ export const BUCKET_SCRIPT: Record<string, string> = {
   slow: 'test:slow',
 };
 
-/** The npm script names one `&&` chain runs, in order. */
+/**
+ * The npm script names one chain runs, in order. `test:release:execute` is
+ * driven by scripts/gates.json (see scripts/run-gates.mjs), so its order is the
+ * manifest's serial order; any other script is still an `&&` string.
+ */
 export function chainOf(scriptId: string): string[] {
+  if (scriptId === 'test:release:execute') return serialOrder();
   const chain = pkg.scripts[scriptId];
   expect(typeof chain, `package.json has no ${scriptId}`).toBe('string');
   return chain

@@ -31,6 +31,8 @@ import { fileURLToPath } from 'node:url';
 // Kept on one line: @ts-expect-error applies to the line that follows it.
 // @ts-expect-error — plain .mjs script, no types
 import { collectTerrainFieldProblems, parseRegisterIds } from '../scripts/lint-terrain-field-ids.mjs';
+// @ts-expect-error - plain .mjs script, no types
+import { serialOrder, mustPrecede } from '../scripts/lib/gates.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const LINT = resolve(ROOT, 'scripts/lint-terrain-field-ids.mjs');
@@ -233,15 +235,8 @@ describe('the CLI exit code, observed', () => {
 
 describe('the release chain runs it', () => {
   it('lint:terrain-field-ids sits in test:release:execute before the test buckets', () => {
-    const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')) as {
-      scripts: Record<string, string>;
-    };
-    const steps = pkg.scripts['test:release:execute']
-      .split('&&')
-      .map((s) => /^npm run ([\w:.-]+)/.exec(s.trim())?.[1] ?? '');
-    const mine = steps.indexOf('lint:terrain-field-ids');
-    expect(mine).toBeGreaterThan(-1);
-    expect(mine).toBeLessThan(steps.indexOf('test:unit'));
-    expect(mine).toBeLessThan(steps.indexOf('test:terrain'));
+    expect(serialOrder()).toContain('lint:terrain-field-ids');
+    expect(mustPrecede('lint:terrain-field-ids', 'test:unit')).toBe(true);
+    expect(mustPrecede('lint:terrain-field-ids', 'test:terrain')).toBe(true);
   });
 });

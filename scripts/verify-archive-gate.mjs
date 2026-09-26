@@ -55,20 +55,17 @@ const REPO_ONLY = new Map([
   ['lint:sbom', 'resolves the installed dependency tree'],
 ]);
 
-/** The lint stages of `test:release:execute`, in gate order. */
+/** The lint stages of `test:release:execute` (scripts/gates.json at HEAD), in gate order. */
 function gateLints() {
-  const pkg = JSON.parse(execSync('git show HEAD:package.json', { cwd: ROOT, encoding: 'utf8', env: GIT_ENV }));
-  const chain = pkg.scripts['test:release:execute'] ?? '';
-  return chain
-    .split('&&')
-    .map((s) => s.trim())
-    .filter((s) => s.startsWith('npm run lint:'))
-    .map((s) => s.replace(/^npm run\s+/, '').split(/\s+/)[0]);
+  const manifest = JSON.parse(execSync('git show HEAD:scripts/gates.json', { cwd: ROOT, encoding: 'utf8', env: GIT_ENV }));
+  return manifest.steps
+    .map((s) => s.script)
+    .filter((s) => s.startsWith('lint:'));
 }
 
 const stages = gateLints();
 if (stages.length === 0) {
-  console.error('verify-archive-gate FAILED\n\n  • found no lint stages in test:release:execute.');
+  console.error('verify-archive-gate FAILED\n\n  • found no lint stages in scripts/gates.json.');
   process.exit(1);
 }
 

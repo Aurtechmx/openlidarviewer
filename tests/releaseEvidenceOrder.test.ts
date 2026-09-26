@@ -37,6 +37,8 @@ import {
   generatedRecordsRead,
   nodeScriptOf,
 } from './support/evidenceRecords';
+// @ts-expect-error - plain .mjs script, no types
+import { mustPrecede } from '../scripts/lib/gates.mjs';
 
 interface Pair {
   readonly verifier: string;
@@ -117,7 +119,12 @@ describe('release chain evidence order', () => {
 
   it('runs every producing bucket before the verifier that grades its record', () => {
     const inversions = pairs()
-      .filter((p) => !(p.producerAt >= 0 && p.producerAt < p.verifierAt))
+      // Array position is the serial order; the parallel runner only honours
+      // declared dependencies, so the producer must also be one of those.
+      .filter(
+        (p) =>
+          !(p.producerAt >= 0 && p.producerAt < p.verifierAt && mustPrecede(p.producer, p.verifier)),
+      )
       .map(
         (p) =>
           `${p.verifier} runs at step ${p.verifierAt + 1} of test:release:execute and reads ` +
@@ -125,7 +132,8 @@ describe('release chain evidence order', () => {
           (p.producerAt >= 0
             ? ` at step ${p.producerAt + 1}. The verifier grades the committed record and the ` +
               `producer overwrites it afterwards, so a regression in the code under test cannot ` +
-              `fail this gate. Move ${p.verifier} after ${p.producer}.`
+              `fail this gate, or scripts/gates.json does not make ${p.verifier} wait for it. ` +
+              `Move ${p.verifier} after ${p.producer} and chain it via \`after\`.`
             : `, which the chain never runs. Add ${p.producer} to test:release:execute before ` +
               `${p.verifier}, or the record is never recomputed at all.`),
       );
