@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { showWorkspaceMode, type MeasureTestApi } from './helpers';
+import { openAnalysePanel, type MeasureTestApi } from './helpers';
 import { EPT_FIXTURE_NODES, openEptFixture, routeEptFixture } from './streamingFixtures';
 
 /**
@@ -43,19 +43,12 @@ test.describe('streaming caveats', () => {
     // software renderer, and this test runs two.
     test.setTimeout(300_000);
     const release = await openPartialStream(page);
-    // Show the Analyse panel. The dock button toggles and scan routing can
-    // settle after the first click, so retry until the panel is on screen.
+    // Open the Terrain page, where the Analyse panel lives. Scan routing can
+    // settle after the first attempt, so retry until the panel is on screen.
     const analyse = page.locator('.olv-analyse-panel');
     await expect(async () => {
-      await showWorkspaceMode(page, 'analyse');
-      if (!(await analyse.isVisible())) {
-        await page.locator('.olv-dock .olv-tool', { hasText: /^Analyse$/ }).click();
-      }
-      await expect(analyse).toBeVisible({ timeout: 3_000 });
+      await openAnalysePanel(page);
     }).toPass({ timeout: 30_000 });
-    if (await analyse.evaluate((el) => el.classList.contains('olv-collapsed'))) {
-      await analyse.locator('.olv-panel-head').click();
-    }
 
     const verdict = page.locator('.olv-fit-verdict-text');
     await page.locator('.olv-analyse-run').click();
