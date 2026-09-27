@@ -63,6 +63,7 @@ import {
 } from './helpers/scientificDigests';
 import * as tsl from 'three/tsl';
 import type { KeepNodeBuilders } from '../src/render/perf/governorHook';
+import { GovernorWiring } from '../src/render/perf/governorWiring';
 
 const TSL = tsl as unknown as KeepNodeBuilders;
 
@@ -239,5 +240,39 @@ describe('streamed scene: results follow the resident set, and say so', () => {
   it('scan-report density reads the static layer only and does not move', () => {
     const ref = scanReportDensity(scene);
     for (const rp of MATRIX) { void rp; expect(scanReportDensity(scene)).toBe(ref); }
+  });
+});
+
+describe('calibration: a level picked from warm-up frames leaves every result alone', () => {
+  it('results with the calibrated level driving the v2 outputs equal the uncalibrated ones', () => {
+    const scene = staticScene();
+    const ref = MATRIX.find((rp) => rp.settings.governor === 'nominal')!;
+    const before = [dtmOutcome(scene, ref).digest, stockpileOutcome(scene, ref, STATIC_LASSO_WORLD).digest,
+      profileOutcome(scene, ref).seriesDigest, scanReportDensity(scene)];
+    const gov = new GovernorWiring(false, true);
+    gov.uploadLimits({ maxNodes: 8 }, 4);
+    gov.frame('coverage', false, 0);
+    for (let i = 0; i < 30; i++) gov.frameMs(60);
+    expect(gov.calibratedLevel).toBe(2);
+    // Fast frames while moving: only the calibrated level holds the outputs down.
+    for (let i = 0; i < 30; i++) gov.frameMs(8);
+    gov.frame('moving', true, 0);
+    expect(gov.policy.load).toBe(0);
+    expect(gov.policy.renderScale).toBe(0.6);
+    expect(gov.policy.pointBudgetFraction).toBe(0.4);
+    const n = scene.cloud.pointCount;
+    const positions = digestOf(Array.from(scene.cloud.positions));
+    const mesh = { geometry: { isInstancedBufferGeometry: true, instanceCount: n }, material: { isNodeMaterial: true, sizeNode: null as unknown, needsUpdate: false } };
+    gov.points({ children: [mesh] }, TSL);
+    expect(mesh.geometry.instanceCount).toBe(n);
+    expect(digestOf(Array.from(scene.cloud.positions))).toBe(positions);
+    const ratio = gov.dpr(1, 0.5, 1);
+    expect(ratio).toBeLessThanOrEqual(0.6);
+    const rp = { ...ref, policy: gov.policy, backingPixelRatio: ratio, drawnPointFraction: gov.policy.pointBudgetFraction };
+    expect([dtmOutcome(scene, rp).digest, stockpileOutcome(scene, rp, STATIC_LASSO_WORLD).digest,
+      profileOutcome(scene, rp).seriesDigest, scanReportDensity(scene)]).toEqual(before);
+    // Still again: both outputs return to 1 whatever the calibration picked.
+    gov.frame('full-refine', false, 1000);
+    expect(gov.presentation()).toMatchObject({ renderScale: 1, pointBudgetFraction: 1 });
   });
 });

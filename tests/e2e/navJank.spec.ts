@@ -57,7 +57,9 @@ const RUNS = Math.max(1, Number(process.env.OLV_NAV_RUNS ?? 5));
 const MACHINE = process.env.OLV_NAV_MACHINE ?? 'local';
 const WINDOW_MODE = process.env.OLV_NAV_WINDOW ?? 'normal';
 /** OLV_NAV_GOVERNOR=on loads the page with `?governor=on` (frame budget governor wired); recorded in the flags. */
-const GOVERNOR = process.env.OLV_NAV_GOVERNOR === 'on';
+const GOVERNOR = process.env.OLV_NAV_GOVERNOR === 'on' || process.env.OLV_NAV_GOVERNOR === 'calibrate';
+/** OLV_NAV_GOVERNOR=calibrate adds the warm-up calibration (`?governor=calibrate`, flag `calibrate=on`). */
+const CALIBRATE = process.env.OLV_NAV_GOVERNOR === 'calibrate';
 /** Chromium switches that stop it throttling an occluded, unfocused or background window. */
 const ANTI_THROTTLE_ARGS = [
   '--disable-backgrounding-occluded-windows',
@@ -199,7 +201,7 @@ async function probeSnapshot(page: Page): Promise<string> {
 
 /** Open the dataset through the file input and wait for the committed cloud's first frame. */
 async function load(page: Page, cache: 'cold' | 'warm'): Promise<LoadTiming> {
-  await page.goto(GOVERNOR ? '/?benchmark=nav&governor=on' : '/?benchmark=nav');
+  await page.goto(CALIBRATE ? '/?benchmark=nav&governor=calibrate' : GOVERNOR ? '/?benchmark=nav&governor=on' : '/?benchmark=nav');
   await expect(page.locator('.olv-empty-title')).toBeVisible();
   const report = page.waitForEvent('console', {
     predicate: (m) => m.text().includes('OpenLiDARViewer — benchmark'),
@@ -334,11 +336,11 @@ async function drive(page: Page, name: string, sceneDiagonal: number): Promise<D
         presentation: (() => {
           const c = [...document.querySelectorAll('canvas')].sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)[0];
           const g = (window as unknown as { __olvGovernor?: {
-            presentation(): Record<string, number>; renderScaleChanges: number; pointBudgetChanges: number;
+            presentation(): Record<string, number>; renderScaleChanges: number; pointBudgetChanges: number; calibratedLevel?: number | null;
           } }).__olvGovernor;
           return {
             backingRatio: c && c.clientWidth > 0 ? Math.round((c.width / c.clientWidth) * 100) / 100 : null,
-            governor: g ? { ...g.presentation(), renderScaleChanges: g.renderScaleChanges, pointBudgetChanges: g.pointBudgetChanges } : null,
+            governor: g ? { ...g.presentation(), renderScaleChanges: g.renderScaleChanges, pointBudgetChanges: g.pointBudgetChanges, calibratedLevel: g.calibratedLevel ?? -1 } : null,
           };
         })(),
       };
@@ -432,12 +434,13 @@ async function environment(page: Page, context: BrowserContext, info: TestInfo):
       ...(THROTTLE_FLAGS_ON ? ANTI_THROTTLE_ARGS.map((a) => a.replace(/^--/, '')) : []),
       ...(WINDOW_MODE === 'normal' ? [] : [`window=${WINDOW_MODE}`]),
       ...(GOVERNOR ? ['governor=on'] : []),
+      ...(CALIBRATE ? ['calibrate=on'] : []),
     ],
   };
 }
 
 function partialDir(commit: string): string {
-  const dir = join(WORK_DIR, `${commit.slice(0, 12)}-${MACHINE}-${DATASET_ID.slice(0, 10)}${GOVERNOR ? '-governor' : ''}`);
+  const dir = join(WORK_DIR, `${commit.slice(0, 12)}-${MACHINE}-${DATASET_ID.slice(0, 10)}${GOVERNOR ? '-governor' : ''}${CALIBRATE ? '-calibrate' : ''}`);
   mkdirSync(dir, { recursive: true });
   return dir;
 }

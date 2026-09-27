@@ -8,10 +8,13 @@
  * gate (`allowEdl`) and the drawn instance count of each point mesh
  * (`pointBudgetFraction`).
  *
+ * `?governor=calibrate` also runs a bounded warm-up after a load and starts
+ * motion from the level its p95 asks for (`calibrationLevel`).
+ *
  * Display and upload pacing only: nothing here reaches a point, a node's
  * contents or any measurement.
  */
-import { frameBudgetPolicy, UNLOADED_POLICY, type FrameBudgetPolicy } from './frameBudgetGovernor';
+import { calibrationLevel, frameBudgetPolicy, UNLOADED_POLICY, type FrameBudgetPolicy } from './frameBudgetGovernor';
 import type { GovernorSink, KeepNodeBuilders } from './governorHook';
 import type { RefinementPhase } from '../refinementPhase';
 
@@ -93,6 +96,11 @@ export function scaledDpr(ratio: number, maxDpr: number, renderScale: number): n
   return Math.min(ratio, Math.round(maxDpr * renderScale * 100) / 100);
 }
 
+/** Warm-up bounds for calibration: frames, summed frame time, and the fewest frames worth a pick. */
+export const CALIBRATION_FRAMES = 30;
+export const CALIBRATION_MAX_MS = 2000;
+export const CALIBRATION_MIN_FRAMES = 10;
+
 export class GovernorWiring implements GovernorSink {
   private readonly _ring = new Float64Array(GOVERNOR_WINDOW);
   private readonly _sorted = new Float64Array(GOVERNOR_WINDOW);
@@ -109,9 +117,30 @@ export class GovernorWiring implements GovernorSink {
   pointBudgetChanges = 0;
 
   private readonly _mobileTier: boolean;
+  /** Calibration (`?governor=calibrate`): null when off, else the warm-up state. */
+  private readonly _warm: number[] | null;
+  private _warmStarted = false;
+  private _warmMs = 0;
+  /** The calibrated level, null until the warm-up has ended. */
+  calibratedLevel: number | null = null;
 
-  constructor(mobileTier = false) {
+  constructor(mobileTier = false, calibrate = false) {
     this._mobileTier = mobileTier;
+    this._warm = calibrate ? [] : null;
+  }
+
+  private _warmSample(ms: number): void {
+    const w = this._warm;
+    if (!w || !this._warmStarted || this.calibratedLevel !== null) return;
+    w.push(ms);
+    this._warmMs += ms;
+    if (w.length < CALIBRATION_FRAMES && this._warmMs < CALIBRATION_MAX_MS) return;
+    if (w.length < CALIBRATION_MIN_FRAMES) {
+      this.calibratedLevel = 0;
+      return;
+    }
+    const s = [...w].sort((a, b) => a - b);
+    this.calibratedLevel = calibrationLevel(s[Math.min(s.length - 1, Math.ceil(0.95 * s.length) - 1)]);
   }
 
   /** The policy applied this frame. */
@@ -124,6 +153,7 @@ export class GovernorWiring implements GovernorSink {
     this._ring[this._write] = ms;
     this._write = (this._write + 1) % GOVERNOR_WINDOW;
     if (this._count < GOVERNOR_WINDOW) this._count++;
+    this._warmSample(ms);
   }
 
   /**
@@ -131,6 +161,7 @@ export class GovernorWiring implements GovernorSink {
    * outputs follow the phase.
    */
   frame(phase: string, tweening: boolean, quietMs?: number): void {
+    if (this._warm && !this._warmStarted && (this._pending > 0 || phase !== 'full-refine')) this._warmStarted = true;
     if (this._count === 0) return;
     const s = this._sorted.subarray(0, this._count);
     s.set(this._ring.subarray(0, this._count));
@@ -148,6 +179,7 @@ export class GovernorWiring implements GovernorSink {
       continuityPending: false,
       mobileTier: this._mobileTier,
       presentationMoving: quietMs === undefined ? undefined : tweening || !(quietMs >= STILL_MS),
+      calibratedLevel: this.calibratedLevel ?? 0,
     }, prev);
     if (this._policy.renderScale !== prev.renderScale) this.renderScaleChanges++;
     if (this._policy.pointBudgetFraction !== prev.pointBudgetFraction) this.pointBudgetChanges++;
@@ -221,9 +253,9 @@ export class GovernorWiring implements GovernorSink {
 }
 
 /** Install a governor in the render path's slot and return it. */
-export function installGovernor(g: object = globalThis): GovernorWiring {
+export function installGovernor(g: object = globalThis, calibrate = false): GovernorWiring {
   const mobile = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
-  const wiring = new GovernorWiring(mobile);
+  const wiring = new GovernorWiring(mobile, calibrate);
   (g as Record<string, unknown>)[SLOT] = wiring;
   return wiring;
 }

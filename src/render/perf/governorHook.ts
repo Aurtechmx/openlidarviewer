@@ -7,7 +7,8 @@
  * value passed in comes back unchanged.
  *
  * The first call reads the URL once and, when the flag is set, starts the
- * lazy load. Frames before it lands run ungoverned.
+ * lazy load. Frames before it lands run ungoverned. `?governor=calibrate`
+ * loads the same governor with calibration.
  */
 
 import { loadGovernorWiring } from './governorLoader';
@@ -52,8 +53,9 @@ let urlChecked = false;
 function requestFromUrl(): void {
   urlChecked = true;
   if (!__OLV_DEV_FLAGS__ || typeof location === 'undefined') return;
-  if (new URLSearchParams(location.search).get('governor') !== 'on') return;
-  void loadGovernorWiring().then((m) => m.installGovernor(globalThis));
+  const mode = new URLSearchParams(location.search).get('governor');
+  if (mode !== 'on' && mode !== 'calibrate') return;
+  void loadGovernorWiring().then((m) => m.installGovernor(globalThis, mode === 'calibrate'));
 }
 
 /** The installed governor, or null (the default). */
