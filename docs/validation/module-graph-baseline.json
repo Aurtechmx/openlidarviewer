@@ -242,7 +242,7 @@
   },
   "watchFanOut": {
     "src/ui/AnalysePanel.ts": {
-      "runtime": 23,
+      "runtime": 24,
       "typeOnly": 18,
       "dynamic": 0,
       "modules": [
@@ -265,6 +265,7 @@
         "src/terrain/quality/scanFitness.ts",
         "src/ui/Modal.ts",
         "src/ui/analyseSurfaceTiles.ts",
+        "src/ui/busyScan.ts",
         "src/ui/collapsibleSection.ts",
         "src/ui/fitnessIcons.ts",
         "src/ui/scanTypeControl.ts",
@@ -441,7 +442,7 @@
     "components": []
   },
   "context": {
-    "filesScanned": 1016,
+    "filesScanned": 1017,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [
