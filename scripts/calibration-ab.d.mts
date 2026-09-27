@@ -6,4 +6,6 @@ export function judgeTrajectory(off: CalSample[], on: CalSample[], digestsIdenti
   calibratedLevels: (number | null)[];
   failed: string[];
 };
-export function pairRefusals(fixed: unknown, calibrated: unknown): string[];
+export function pairRefusals(fixed: unknown, calibrated: unknown, throttle?: number): string[];
+export const PRECONDITION_CAL_V2: Readonly<{ minNonzeroShare: number }>;
+export function precondition(levels: (number | null)[], minShare?: number): { runs: number; nonzero: number; share: number; minShare: number; met: boolean };
