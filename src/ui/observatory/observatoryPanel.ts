@@ -20,6 +20,7 @@ import { openModal, type ModalHandle } from '../Modal';
 import type { ObservatoryRunner, ObservatoryRunnerState } from '../../app/observatoryRunner';
 import { originChip, basisChip, suggestedStationChip, type ObservatoryBasis } from './stateChip';
 import type { ObservationRunRecord } from '../../observation/runRecord';
+import type { ObservationState } from '../../observation/types';
 import type { StationPlanningResult } from '../../observation/stationSuggestion';
 import type { CandidateGainTerms } from '../../observation/coverageGain';
 import type { ObservatoryOverlayHost } from '../../render/ObservatoryOverlay';
@@ -76,7 +77,30 @@ function evidenceSection(record: ObservationRunRecord | null): HTMLElement {
   return sectionCard('Evidence', body);
 }
 
-function shadowSection(record: ObservationRunRecord | null): HTMLElement {
+/**
+ * OB-PR-02's slice control: one level slider for the empty-space slice plane.
+ * The legend and the slider's starting level are filled in once the overlay
+ * chunk has drawn the plane (`drawOverlay`).
+ */
+function sliceControl(nz: number, onLevel: ((iz: number) => void) | undefined): HTMLElement {
+  const box = el('div', { className: 'olv-observatory-slice' });
+  box.append(el('p', { text: 'Slice plane: one voxel level through the field, drawn in 3D.' }));
+  box.append(el('p', { className: 'olv-observatory-slice-legend', text: '' }));
+  const label = el('span', { className: 'olv-observatory-slice-label', text: `Level 1 of ${nz}` });
+  const slider = el('input', { className: 'olv-observatory-slice-level', type: 'range', ariaLabel: 'Slice level' });
+  slider.setAttribute('min', '0');
+  slider.setAttribute('max', String(Math.max(0, nz - 1)));
+  slider.setAttribute('step', '1');
+  slider.addEventListener('input', () => {
+    const iz = Number((slider as HTMLInputElement).value);
+    label.textContent = `Level ${iz + 1} of ${nz}`;
+    onLevel?.(iz);
+  });
+  box.append(label, slider);
+  return box;
+}
+
+function shadowSection(record: ObservationRunRecord | null, nz = 0, onLevel?: (iz: number) => void): HTMLElement {
   const body = el('div', { className: 'olv-observatory-shadow' });
   if (!record || !record.frontier) {
     body.append(el('p', { text: 'No run yet.' }));
@@ -86,6 +110,7 @@ function shadowSection(record: ObservationRunRecord | null): HTMLElement {
     body.append(el('p', { text: `Shadowed voxels: ${record.stateCounts.SHADOWED}` }));
     body.append(el('p', { text: `Not addressed: ${record.stateCounts.UNADDRESSED}` }));
     body.append(el('p', { text: f.areaSquareMetres != null ? `Frontier area: ${f.areaSquareMetres.toFixed(2)} m²` : 'Frontier area: unresolved (unknown linear unit)' }));
+    if (nz > 0) body.append(sliceControl(nz, onLevel));
   }
   return sectionCard('Shadow', body);
 }
@@ -183,7 +208,7 @@ function refusedBody(reason: string): HTMLElement {
 /** Pure render: state -> DOM. No runner calls, no side effects beyond building nodes (unit-tested directly by `tests/observatoryPanel.test.ts`). */
 export function renderObservatoryPanel(
   state: ObservatoryRunnerState,
-  actions: { readonly run: () => void; readonly onExport: () => void },
+  actions: { readonly run: () => void; readonly onExport: () => void; readonly onSliceLevel?: (iz: number) => void },
 ): HTMLElement {
   const root = el('div', { className: 'olv-observatory-panel' });
   const runBtn = el('button', { className: 'olv-observatory-run', type: 'button', text: 'Run Observatory', tip: 'Build the evidence ledger over this scan’s declared stations.' });
@@ -216,7 +241,7 @@ export function renderObservatoryPanel(
   const record = outcome.record;
   root.append(sourcesSection(record));
   root.append(evidenceSection(record));
-  root.append(shadowSection(record));
+  root.append(shadowSection(record, outcome.grid.nz, actions.onSliceLevel));
   root.append(planningSection(record, outcome.planning));
   root.append(recordSection(record, actions.onExport));
   return root;
@@ -254,8 +279,28 @@ export function stationMarkerInput(
   return { observed, suggested, size, suggestedLabel: planning?.label ?? '' };
 }
 
+/** The slice level shown, kept across a redraw; `null` until a run picks its default. */
+let sliceLevel: number | null = null;
+
+function setSliceLevel(iz: number): void {
+  sliceLevel = iz;
+  overlay?.setLevel(iz);
+}
+
+/** Put the drawn level and the legend into the open panel's slice control, if there is one. */
+function syncSliceControl(nz: number, legend: string): void {
+  if (typeof document === 'undefined' || typeof document.querySelector !== 'function') return;
+  const slider = document.querySelector('.olv-observatory-slice-level') as HTMLInputElement | null;
+  if (slider && sliceLevel !== null) slider.value = String(sliceLevel);
+  const label = document.querySelector('.olv-observatory-slice-label');
+  if (label && sliceLevel !== null) label.textContent = `Level ${sliceLevel + 1} of ${nz}`;
+  const legendEl = document.querySelector('.olv-observatory-slice-legend');
+  if (legendEl) legendEl.textContent = `Shows ${legend}. Every other state is left clear.`;
+}
+
 /** Detach and release both overlays; the next committed run builds fresh ones. */
 function clearOverlays(): void {
+  sliceLevel = null;
   overlay?.dispose();
   markers?.dispose();
   overlay = null;
@@ -279,7 +324,9 @@ async function redrawAfterRestore(): Promise<void> {
   if (!input || !overlay) return;
   const state = input.runner.getState();
   if (state.phase !== 'committed' || state.outcome.status !== 'ok') return;
+  const keep = sliceLevel;
   clearOverlays();
+  sliceLevel = keep;
   await drawOverlay(input, state);
   announcePolite(OVERLAYS_REDRAWN_NOTICE);
   const note = document.querySelector('.olv-observatory-panel');
@@ -298,7 +345,7 @@ async function drawOverlay(input: ObservatoryPanelInput, state: ObservatoryRunne
     clearOverlays();
     return;
   }
-  const { ObservatoryOverlay, ObservatoryStationMarkers, stationMarkerSize } = await loadObservatoryOverlay();
+  const { ObservatoryOverlay, ObservatoryStationMarkers, stationMarkerSize, defaultSliceLevel, sliceLegendText } = await loadObservatoryOverlay();
   // A newer state may have cleared or replaced the run while the chunk loaded.
   const now = input.runner.getState();
   if (now.phase !== 'committed' || now.outcome !== state.outcome) return;
@@ -311,7 +358,15 @@ async function drawOverlay(input: ObservatoryPanelInput, state: ObservatoryRunne
   for (const [key, decision] of outcome.stateByKey) {
     if (decision.state === 'SHADOWED') shadowedKeys.push(key);
   }
-  overlay.show(shadowedKeys, outcome.grid, outcome.voxelEdge, input.worldToLocal(outcome.domain.min));
+  if (sliceLevel === null || sliceLevel >= outcome.grid.nz) sliceLevel = defaultSliceLevel(shadowedKeys, outcome.grid);
+  overlay.show({
+    stateOf: (key) => outcome.stateByKey.get(key)?.state as ObservationState | undefined,
+    frontier: new Set(outcome.frontier.frontierVoxelKeys),
+    grid: outcome.grid,
+    voxelEdge: outcome.voxelEdge,
+    domainMin: input.worldToLocal(outcome.domain.min),
+  }, sliceLevel);
+  syncSliceControl(outcome.grid.nz, sliceLegendText());
   markers.show(stationMarkerInput(outcome, input.worldToLocal, stationMarkerSize(outcome.voxelEdge)));
 }
 
@@ -328,6 +383,7 @@ export function openObservatoryPanel(input: ObservatoryPanelInput): ModalHandle 
     body.replaceChildren(renderObservatoryPanel(input.runner.getState(), {
       run: () => input.runner.run(),
       onExport: () => { void exportCurrent(input.runner.getState()); },
+      onSliceLevel: setSliceLevel,
     }));
     void drawOverlay(input, input.runner.getState());
   }
