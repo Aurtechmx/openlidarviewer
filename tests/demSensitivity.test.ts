@@ -11,6 +11,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { extractEntry } from './helpers/zipReader';
+import { DEM_PKG_OPTS, decodeBands, demResultFor } from './helpers/demPackageFixture';
 import { buildDemPackage } from '../src/terrain/export/demPackage';
 import {
   SENSITIVITY_ENSEMBLE,
@@ -23,11 +24,10 @@ import {
   writeTerrainSensitivityGeoTiff,
   type SensitivityMemberGrid,
 } from '../src/terrain/export/demSensitivity';
-import { computeTerrainCore, type AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
+import { computeTerrainCore } from '../src/terrain/contour/analyseContours';
 import { method as getMethod } from '../src/science/methodRegistry';
 import { sha256Hex } from '../src/terrain/export/sha256';
 import { verifyScientificArtifactPassport } from '../src/science/scientificArtifactPassport';
-import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 
@@ -76,67 +76,20 @@ const GOLDEN_MEMBERS = [
   4, 4, 4, 4, 4,
 ];
 
-function decodeFloatBands(bytes: Uint8Array): Float32Array[] {
-  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const start = dv.getUint32(4, true);
-  const count = dv.getUint16(start, true);
-  const tags = new Map<number, number>();
-  for (let k = 0; k < count; k++) {
-    const p = start + 2 + k * 12;
-    const type = dv.getUint16(p + 2, true);
-    tags.set(dv.getUint16(p, true), type === 3 ? dv.getUint16(p + 8, true) : dv.getUint32(p + 8, true));
-  }
-  const cols = tags.get(256)!;
-  const rows = tags.get(257)!;
-  const spp = tags.get(277)!;
-  let o = tags.get(273)!;
-  const bands = Array.from({ length: spp }, () => new Float32Array(cols * rows));
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      for (let b = 0; b < spp; b++) {
-        bands[b][(rows - 1 - r) * cols + c] = dv.getFloat32(o, true);
-        o += 4;
-      }
-    }
-  }
-  return bands;
-}
+const decodeFloatBands = (bytes: Uint8Array) =>
+  decodeBands(bytes, (n) => new Float32Array(n), 4, (dv, o) => dv.getFloat32(o, true));
 
-function resultFor(grid: SensitivityMemberGrid): AnalyseContoursResult {
+function resultFor(grid: SensitivityMemberGrid) {
   const n = grid.cols * grid.rows;
-  const dtm = {
+  return demResultFor({
     ...grid,
     confidence: new Float32Array(n).fill(1),
     counts: new Uint32Array(n).map((_, i) => (grid.coverage[i] === 1 ? 3 : 0)),
     interpDistanceCells: new Float32Array(n).map((_, i) => (grid.coverage[i] === 2 ? 1 : 0)),
-    crs: 'EPSG:32610', horizontalEpsg: 32610, verticalDatum: null, verticalEpsg: 5703, verticalUnitToMetres: 1,
-    coverageMode: 'full', sourcePointCount: 100, analyzedPointCount: 100, warnings: [],
-  } as unknown as DtmGrid;
-  return {
-    dtm,
-    intervalM: 1,
-    surface: { canopy: { heightM: new Float32Array(n).fill(Number.NaN) } },
-    accuracyStandards: {
-      rmseZM: 0.14, nvaM: 0.27, vvaM: 0.3, pointDensityPerM2: 4.2,
-      densityReferenceFloorsMet: ['QL2'], densityReferenceNote: 'ref',
-    },
-    quality: {
-      readiness: 'ready', exportReadiness: 'available',
-      crsKnown: true, datumKnown: true, coverageMode: 'full', reasons: [], exportReasons: [],
-    },
-    qualityScore: { score: 85 },
-    cellMetrics: { meanDensity: 4.2, boundaryMeasuredRatio: 0.02 },
-    cellStatusTally: { measured: 0, interpolated: 0, lowConfidence: 0, edgeRisk: 0, empty: 0, total: 0 },
-    generationParams: { interpolation: 'geodesic', contourStyle: 'smooth', smoothing: true, despike: true, aggregation: 'median' },
-    warnings: [],
-  } as unknown as AnalyseContoursResult;
+  });
 }
 
-const PKG_OPTS = {
-  basename: 'terrain',
-  worldOrigin: { x: 600000, y: 4000000 },
-  generationDateIso: '2026-01-01T00:00:00.000Z',
-} as const;
+const PKG_OPTS = DEM_PKG_OPTS;
 
 // ── the ensemble ────────────────────────────────────────────────────────────
 

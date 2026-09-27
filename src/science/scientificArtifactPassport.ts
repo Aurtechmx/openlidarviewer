@@ -158,6 +158,8 @@ export interface ScientificArtifactPassport {
   readonly artifact: PassportArtifact;
   /** Companion files bound beside the artifact; absent when there are none. */
   readonly companions?: readonly PassportCompanion[];
+  /** DEM evidence tier and the pre-registered attention parameters, when the export records them. */
+  readonly demEvidence?: Readonly<Record<string, unknown>>;
   readonly build: PassportBuild;
   /** SHA-256 over the canonical passport serialization WITHOUT this field. */
   readonly passportSha256: string;
@@ -185,6 +187,8 @@ export interface ScientificArtifactPassportInput {
     readonly bytes: Uint8Array;
     readonly methodId: string;
   }[];
+  /** DEM evidence tier record, sealed into the passport digest. */
+  readonly demEvidence?: Readonly<Record<string, unknown>>;
   /** Geoid model name for the reproducibility line, when known. */
   readonly geoid?: string | null;
   /** Build identity; default the analysis record's build. */
@@ -236,6 +240,7 @@ function passportBody(p: Omit<ScientificArtifactPassport, 'passportSha256'>): Re
     evidence: p.evidence,
     artifact: p.artifact,
     ...(p.companions !== undefined ? { companions: p.companions } : {}),
+    ...(p.demEvidence !== undefined ? { demEvidence: p.demEvidence } : {}),
     build: p.build,
   };
 }
@@ -318,6 +323,7 @@ export function buildScientificArtifactPassport(
       sha256: artifactSha256,
     },
     ...(companions !== undefined ? { companions } : {}),
+    ...(input.demEvidence !== undefined ? { demEvidence: input.demEvidence } : {}),
     build: { version: build.version, commit: build.commit, dirty: build.dirty },
   };
 

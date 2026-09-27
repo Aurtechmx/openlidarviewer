@@ -180,10 +180,42 @@ test('after running on a scan: readiness, chips, recommendations, and gated expo
   await expect(complete).toBeEnabled();
 });
 
-test('the DEM package carries the sensitivity raster only when "Include sensitivity" is checked', async ({ page }) => {
-  test.setTimeout(120_000);
+/**
+ * The dense-grid surface as a LAS 1.4 in EPSG:32633 with a NAVD88 metre
+ * vertical axis, so the vertical unit resolves and the tier can reach T3.
+ */
+async function dropDenseGridUtmLas(page: Page): Promise<void> {
+  (globalThis as Record<string, unknown>).__BUILD_IDENTITY__ ??= {
+    version: '0.0.0-test', commit: 'unknown', dirty: false, builtAt: '1970-01-01T00:00:00.000Z',
+  };
+  const { writeLas14 } = await import('../../src/convert/writeLas');
+  const { wktForEpsg } = await import('../../src/io/epsgWkt');
+  const N = 60;
+  const x = new Float64Array(N * N);
+  const y = new Float64Array(N * N);
+  const z = new Float64Array(N * N);
+  for (let k = 0; k < N * N; k++) {
+    const u = Math.floor(k / N) / (N - 1);
+    const v = (k % N) / (N - 1);
+    x[k] = 500_000 + u * 10;
+    y[k] = 5_000_000 + v * 10;
+    z[k] = 200 + Math.sin(u * Math.PI) * Math.cos(v * Math.PI) * 1.5;
+  }
+  const bytes = writeLas14({ count: N * N, x, y, z }, {
+    wkt: wktForEpsg(32633), epsg: 32633, linearUnitCode: 9001, verticalEpsg: 5703, verticalUnitCode: 9001,
+  });
+  const dt = await page.evaluateHandle((b) => {
+    const d = new DataTransfer();
+    d.items.add(new File([new Uint8Array(b)], 'dense-grid-utm.las'));
+    return d;
+  }, [...bytes]);
+  await page.dispatchEvent('body', 'drop', { dataTransfer: dt });
+}
+
+/** Load a scan, run the analysis, open Contour Studio and return a DEM download helper. */
+async function openDemExport(page: Page, drop: (page: Page) => Promise<void>) {
   await page.goto('/?test=1');
-  await dropDenseGridPly(page);
+  await drop(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await page.waitForTimeout(1500);
   await openAnalyse(page);
@@ -191,33 +223,54 @@ test('the DEM package carries the sensitivity raster only when "Include sensitiv
   const launch = page.locator('.olv-analyse-contour-launcher .olv-contour-launcher-action');
   await expect(launch).toBeVisible({ timeout: 20_000 });
   await launch.click();
+  const dem = page.locator('.olv-cs-export-btn', { hasText: /^DEM \(ZIP\)$/ });
+  return async (): Promise<{ zip: Uint8Array; entry: (suffix: string) => Uint8Array | null }> => {
+    const [download] = await Promise.all([page.waitForEvent('download', { timeout: 60_000 }), dem.click()]);
+    const zip = new Uint8Array(readFileSync((await download.path())!));
+    // The package names every file after the scan; the DTM GeoTIFF is always there.
+    const m = /([A-Za-z0-9._-]+)-dtm\.tif/.exec(new TextDecoder('latin1').decode(zip));
+    expect(m, 'the DTM GeoTIFF is in the package').not.toBeNull();
+    return { zip, entry: (suffix) => extractEntry(zip, `${m![1]}${suffix}`) };
+  };
+}
+
+test('the DEM package carries the sensitivity and attention rasters only when their options are checked', async ({ page }) => {
+  test.setTimeout(120_000);
+  const download = await openDemExport(page, dropDenseGridPly);
 
   const include = page.getByRole('checkbox', { name: 'Include sensitivity' });
+  const attention = page.getByRole('checkbox', { name: 'Include attention' });
   await expect(include).toBeVisible();
   await expect(include).not.toBeChecked();
-  await expect(page.locator('.olv-analyse-dem-sensitivity')).toContainText(
-    'Members that match the canonical settings add no spread.',
-  );
-  const dem = page.locator('.olv-cs-export-btn', { hasText: /^DEM \(ZIP\)$/ });
+  await expect(attention).not.toBeChecked();
+  const box = page.locator('.olv-analyse-dem-sensitivity');
+  await expect(box).toContainText('Members that match the canonical settings add no spread.');
+  await expect(box).toContainText('Level 0 means no reason was found');
 
-  const names = async (): Promise<Uint8Array> => {
-    const [download] = await Promise.all([page.waitForEvent('download', { timeout: 60_000 }), dem.click()]);
-    return new Uint8Array(readFileSync((await download.path())!));
-  };
-  const hasSensitivity = (zip: Uint8Array, base: string): boolean =>
-    extractEntry(zip, `${base}_sensitivity.tif`) !== null;
-  const baseOf = (zip: Uint8Array): string => {
-    // The package names every file after the scan; the DTM GeoTIFF is always there.
-    const text = new TextDecoder('latin1').decode(zip);
-    const m = /([A-Za-z0-9._-]+)-dtm\.tif/.exec(text);
-    expect(m, 'the DTM GeoTIFF is in the package').not.toBeNull();
-    return m![1];
-  };
-
-  const off = await names();
-  expect(hasSensitivity(off, baseOf(off))).toBe(false);
+  const off = await download();
+  expect(off.entry('_sensitivity.tif')).toBeNull();
+  expect(off.entry('_attention.tif')).toBeNull();
 
   await include.check();
-  const on = await names();
-  expect(hasSensitivity(on, baseOf(on))).toBe(true);
+  const on = await download();
+  expect(on.entry('_sensitivity.tif')).not.toBeNull();
+  expect(on.entry('_attention.tif')).toBeNull();
+
+  await include.uncheck();
+  await attention.check();
+  const att = await download();
+  expect(att.entry('_attention.tif')).not.toBeNull();
+  expect(att.entry('_sensitivity.tif')).toBeNull();
+});
+
+test('a DEM package with both sensitivity and attention on a projected scan is tier T3', async ({ page }) => {
+  test.setTimeout(120_000);
+  // The dense PLY has no CRS, so its vertical unit is unresolved and the tier stops at T2.
+  const download = await openDemExport(page, dropDenseGridUtmLas);
+  await page.getByRole('checkbox', { name: 'Include sensitivity' }).check();
+  await page.getByRole('checkbox', { name: 'Include attention' }).check();
+  const both = await download();
+  const passport = both.entry('-dtm.tif.olv-passport.json');
+  expect(passport).not.toBeNull();
+  expect(JSON.parse(new TextDecoder().decode(passport!)).demEvidence.tier).toBe('T3');
 });

@@ -39,6 +39,7 @@ beforeEach(() => {
 interface Internals {
   _exportDemPackage(btn: unknown): Promise<void>;
   _demSensitivityCheck: { checked: boolean };
+  _demAttentionCheck: { checked: boolean };
   _demSensitivityStatus: FakeEl;
   _demSensitivityAbort: AbortController | null;
 }
@@ -62,7 +63,7 @@ async function panel(cached = true) {
     getMapContext: () => ({ worldOrigin: { x: 0, y: 0, z: 0 }, linearUnit: 'metre' as const }),
   });
   const positions = plane();
-  const params: TerrainCoreParams = { cellSizeM: 1, crs: 'EPSG:32610' };
+  const params: TerrainCoreParams = { cellSizeM: 1, crs: 'EPSG:32610', verticalUnitToMetres: 1 };
   // The compute the runner hands the cache; the ensemble re-runs through it.
   let counting = false;
   const compute = async (i: unknown, q: TerrainCoreParams) => {
@@ -143,5 +144,41 @@ describe('DEM export: Include sensitivity', () => {
     await p._exportDemPackage(new FakeEl('button'));
     expect(hoisted.downloads).toEqual([]);
     expect(p._demSensitivityStatus.ownText).toContain('cancelled');
+  });
+});
+
+describe('DEM export: Include attention', () => {
+  const tierOf = (bytes: Uint8Array): string => {
+    const raw = extractEntry(bytes, 'site-dtm.tif.olv-passport.json');
+    expect(raw).not.toBeNull();
+    return JSON.parse(new TextDecoder().decode(raw!)).demEvidence.tier;
+  };
+
+  it('is unchecked by default and then writes no attention raster', async () => {
+    const p = await panel();
+    expect(p._demAttentionCheck.checked).toBe(false);
+    await p._exportDemPackage(new FakeEl('button'));
+    expect(extractEntry(await zip(), 'site_attention.tif')).toBeNull();
+  });
+
+  it('writes the attention raster when checked, with no extra terrain runs', async () => {
+    const p = await panel();
+    p._demAttentionCheck.checked = true;
+    await p._exportDemPackage(new FakeEl('button'));
+    const bytes = await zip();
+    expect(extractEntry(bytes, 'site_attention.tif')).not.toBeNull();
+    expect(tierOf(bytes)).toBe('T2');
+    expect(hoisted.runs).toEqual([]);
+  });
+
+  it('reaches tier T3 when both sensitivity and attention are checked', async () => {
+    const p = await panel();
+    p._demSensitivityCheck.checked = true;
+    p._demAttentionCheck.checked = true;
+    await p._exportDemPackage(new FakeEl('button'));
+    const bytes = await zip();
+    expect(extractEntry(bytes, 'site_sensitivity.tif')).not.toBeNull();
+    expect(extractEntry(bytes, 'site_attention.tif')).not.toBeNull();
+    expect(tierOf(bytes)).toBe('T3');
   });
 });

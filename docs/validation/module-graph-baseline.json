@@ -444,7 +444,7 @@
     "components": []
   },
   "context": {
-    "filesScanned": 1002,
+    "filesScanned": 1004,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [
@@ -481,15 +481,15 @@
         "importers": 17
       },
       {
+        "file": "src/terrain/ground/cellConfidence.ts",
+        "importers": 17
+      },
+      {
         "file": "src/geo/height.ts",
         "importers": 16
       },
       {
         "file": "src/science/methodRegistry.ts",
-        "importers": 16
-      },
-      {
-        "file": "src/terrain/ground/cellConfidence.ts",
         "importers": 16
       },
       {
