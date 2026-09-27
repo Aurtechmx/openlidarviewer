@@ -45,7 +45,6 @@ test.describe('streaming caveats', () => {
     const release = await openPartialStream(page);
     // Open the Terrain page, where the Analyse panel lives. Scan routing can
     // settle after the first attempt, so retry until the panel is on screen.
-    const analyse = page.locator('.olv-analyse-panel');
     await expect(async () => {
       await openAnalysePanel(page);
     }).toPass({ timeout: 30_000 });
@@ -53,14 +52,18 @@ test.describe('streaming caveats', () => {
     const verdict = page.locator('.olv-fit-verdict-text');
     await page.locator('.olv-analyse-run').click();
     await expect(verdict).toBeVisible({ timeout: 120_000 });
-    await expect(analyse).toContainText(PARTIAL, { timeout: 120_000 });
+    // The DEM caveat sits on the Contours page, under Terrain; the Analyse mode
+    // host holds both pages, as the one panel used to.
+    const analyseMode = page.locator('#olv-ws-mode-analyse');
+    await expect(analyseMode).toContainText(PARTIAL, { timeout: 120_000 });
 
     release();
     await expectFullyResident(page);
     const run = page.locator('.olv-analyse-run');
     await expect(run).toHaveText('Re-run analysis', { timeout: 120_000 });
     await run.click();
-    await expect(analyse).not.toContainText('resident-only', { timeout: 120_000 });
+    await expect(page.locator('.olv-analyse-panel')).not.toContainText('resident-only', { timeout: 120_000 });
+    await expect(page.locator('.olv-analyse-dem-note', { hasText: 'resident-only' })).toHaveCount(0);
     await expect(run).toHaveText('Re-run analysis');
     await expect(verdict).toBeVisible();
   });
