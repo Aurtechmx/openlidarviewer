@@ -33,7 +33,6 @@ async function make(over: Partial<{
   actions: readonly Action[];
   async: boolean;
   counts: () => { measurements: number; annotations: number };
-  isToolPanelActive: () => boolean;
   disabledReason: () => string | null;
 }> = {}): Promise<Harness> {
   const { createToolLauncher } = await import('../src/ui/toolLauncher');
@@ -41,11 +40,10 @@ async function make(over: Partial<{
   const launcher = createToolLauncher({
     getActions: () => (over.async ? Promise.resolve(actions) : actions),
     counts: over.counts ?? (() => ({ measurements: 0, annotations: 0 })),
-    isToolPanelActive: over.isToolPanelActive ?? (() => false),
     disabledReason: over.disabledReason,
   });
   const root = launcher.element as unknown as FakeEl;
-  const rows = (): FakeEl[] => root.findAll((e) => e.hasClass('olv-tl-row') || e.hasClass('olv-tl-chip'));
+  const rows = (): FakeEl[] => root.findAll((e) => e.hasClass('olv-tl-row'));
   return {
     root,
     refresh: launcher.refresh,
@@ -99,21 +97,10 @@ describe('tool launcher', () => {
     expect(h.countsText()).toContain('3 measurements · 2 annotations');
   });
 
-  it('folds to the strip while a tool panel holds the column, and back', async () => {
-    let active = false;
-    const h = await make({ isToolPanelActive: () => active });
+  it('always renders full rows; a tool page replaces the card instead of folding it', async () => {
+    const h = await make();
     expect(h.root.hasClass('is-strip')).toBe(false);
-    expect(h.rows()[0].hasClass('olv-tl-row')).toBe(true);
-    active = true;
-    h.refresh();
-    expect(h.root.hasClass('is-strip')).toBe(true);
-    expect(h.rows().every((r) => r.hasClass('olv-tl-chip'))).toBe(true);
-    // The strip keeps the titles and drops the descriptions and the counts.
-    expect(h.titles()).toEqual(['Measure', 'Inspect point', 'Annotate', 'Clip box']);
-    expect(h.root.findAll((e) => e.hasClass('olv-tl-hint'))).toHaveLength(0);
-    active = false;
-    h.refresh();
-    expect(h.root.hasClass('is-strip')).toBe(false);
+    expect(h.rows().every((r) => r.hasClass('olv-tl-row'))).toBe(true);
   });
 
   it('fills from an async registry', async () => {

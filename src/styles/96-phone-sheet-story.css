@@ -25,6 +25,7 @@
     height: auto;
     max-height: 92vh;
     max-height: min(92dvh, 92vh);
+    max-height: round(down, min(92dvh, 92vh), 1px);
     background: var(--panel-raised, var(--panel));
     border-top: 1px solid var(--hairline-strong, var(--hairline));
     border-radius: 16px 16px 0 0;
@@ -49,11 +50,18 @@
   .olv-mobile-sheet.olv-msheet--half {
     height: 50vh;
     height: 50dvh;
+    height: round(down, 50dvh, 1px);
   }
   .olv-mobile-sheet.olv-msheet--full {
     height: 88vh;
     height: min(88dvh, 92vh);
+    height: round(down, min(88dvh, 92vh), 1px);
   }
+  /* The sheet is pinned to the bottom edge, so a fractional detent height puts
+     its top, and every tab in the head, on a fractional pixel row. Firefox then
+     reports a 44 px tab as 43.99999 px tall. Rounding the detent down to whole
+     pixels keeps the head on the pixel grid; the lines above are the fallback
+     where round() is unsupported. */
 
   /* Head: a grip line, the segmented tablist, and the collapse handle. */
   .olv-msheet-head {
@@ -90,13 +98,8 @@
     cursor: pointer;
     transition: background 160ms ease, color 160ms ease;
   }
-  /* Touch target vs. visual height. The strip was deliberately slimmed to a
-     32 px chip so the collapsed chrome stays thin, which is below the 44 pt
-     guidance. Padding cannot buy the difference back: the tab's height is what
-     the strip's height IS, so padding would just push the chrome taller again.
-     An overlay pseudo-element does: it enlarges the hit area to 40 px around
-     the chip's centre line and costs zero layout height. 40, not 44, so a few
-     pixels of head remain as drag surface for the sheet gesture. */
+  /* The tab is a full 44 px touch target (--m-tab-h). The overlay keeps the
+     hit area on the tab's centre line at the same size. */
   .olv-msheet-tab::after {
     content: "";
     position: absolute;
@@ -218,14 +221,17 @@
   .olv-mobile-sheet {
     max-height: 82vh;
     max-height: min(82dvh, 82vh);
+    max-height: round(down, min(82dvh, 82vh), 1px);
   }
   .olv-mobile-sheet.olv-msheet--half {
     height: 58vh;
     height: 58dvh;
+    height: round(down, 58dvh, 1px);
   }
   .olv-mobile-sheet.olv-msheet--full {
     height: 82vh;
     height: min(82dvh, 82vh);
+    height: round(down, min(82dvh, 82vh), 1px);
   }
   /* Shorter head so the collapsed peek leaves more of the scene in view. */
   .olv-msheet-head { padding-top: 10px; padding-bottom: 4px; }
@@ -415,3 +421,21 @@
 .olv-ta-overlay-section { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .olv-ta-overlay-unavailable { font-size: var(--text-xs); color: var(--muted, #8a8f98); text-wrap: pretty; }
 
+
+/* The sheet hosts the desktop mode containers whole (workspaceShell.ts): the
+   host's gap spaces the panels, and the task header and launcher rows are
+   touch targets like the rest of the sheet. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .olv-mobile-sheet .olv-ws-mode > * { margin-bottom: 0; }
+  .olv-mobile-sheet .olv-ws-task { align-items: center; }
+  .olv-mobile-sheet .olv-ws-back,
+  .olv-mobile-sheet .olv-tl-row { min-height: 44px; }
+  .olv-mobile-sheet .olv-ws-back { padding-inline: var(--space-sm); }
+  /* An open sheet fills the lower screen, so a toast parked above the dock
+     would sit on its content. Move it to the top edge, over the scene and the
+     header, clear of the sheet body. */
+  body:has(.olv-mobile-sheet:not(.is-collapsed):not(.olv-hidden)) .olv-lasso-toast {
+    top: calc(env(safe-area-inset-top) + var(--space-xs));
+    bottom: auto;
+  }
+}

@@ -96,7 +96,6 @@ describe('every entry point converges on the one command', () => {
     const launcher = createToolLauncher({
       getActions: () => [{ id: 'tool.measure', title: 'Measure', section: 'Tools', run }],
       counts: () => ({ measurements: 0, annotations: 0 }),
-      isToolPanelActive: () => false,
       resume: () => false,
     });
     (launcher.element as unknown as FakeEl).find((e) => e.hasClass('olv-tl-row'))!.fire('click');
@@ -110,7 +109,6 @@ describe('every entry point converges on the one command', () => {
     const launcher = createToolLauncher({
       getActions: () => [{ id: 'tool.measure', title: 'Measure', section: 'Tools', run }],
       counts: () => ({ measurements: 0, annotations: 0 }),
-      isToolPanelActive: () => false,
       resume,
     });
     (launcher.element as unknown as FakeEl).find((e) => e.hasClass('olv-tl-row'))!.fire('click');

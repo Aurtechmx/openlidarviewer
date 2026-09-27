@@ -3,11 +3,14 @@
  *
  * The phone bottom-sheet (design audit 1.3 follow-up). Below the mobile
  * breakpoint the floating desktop panels do not fit side-by-side, so a single
- * bottom sheet hosts them all behind a three-way segmented control:
+ * bottom sheet hosts them all behind the desktop rail's own tabs:
  *
- *   View    — appearance: Color by, Point size, Rendering, Visuals (the Inspector)
- *   Analyse — the terrain verdict / products and the Space / Object report
- *   Layers  — class legend, measurements, annotations, and export
+ *   Data · Tools · Analyse · Export — one tab per workspace mode. The host
+ *     re-parents the desktop mode hosts themselves into these slots, so each
+ *     shows its home or one task page under the same task header and Back,
+ *     driven by the same router state as the desktop rail.
+ *   View — the Inspector (Color by, Point size, Rendering, Visuals), which on
+ *     desktop is the right rail rather than a mode.
  *
  * This component owns ONLY the sheet chrome — the segmented tablist, the three
  * tabpanel slots, the drag/collapse handle, and the show/hide state. It does NOT
@@ -38,9 +41,20 @@
 
 import { el } from './dom';
 import { buildTablist, type Tablist } from './tablist';
+import { workspaceModeLabel, workspaceModeTitle, type WorkspaceMode } from './workspace/DesktopWorkspace';
 
-/** The three mobile tabs, in display order. */
-export type MobileTab = 'view' | 'analyse' | 'layers';
+/** The phone tabs: the four workspace modes plus the Inspector's View. */
+export type MobileTab = WorkspaceMode | 'view';
+
+/** The workspace mode a phone tab shows, or null for View (the Inspector). */
+export function modeForSheetTab(tab: MobileTab): WorkspaceMode | null {
+  return tab === 'view' ? null : tab;
+}
+
+/** The phone tab that shows a workspace mode. */
+export function sheetTabForMode(mode: WorkspaceMode): MobileTab {
+  return mode;
+}
 
 /**
  * A snap point of the sheet, low → high:
@@ -53,10 +67,12 @@ export type SheetDetent = 'peek' | 'half' | 'full';
 /** Detents low → high; index order is used for fling stepping + clamping. */
 export const DETENTS: readonly SheetDetent[] = ['peek', 'half', 'full'];
 
-const TABS: ReadonlyArray<{ id: MobileTab; label: string; title: string }> = [
-  { id: 'view', label: 'View', title: 'How the scan is drawn: colour, quality, what is on screen.' },
-  { id: 'analyse', label: 'Analyse', title: 'Measure, run terrain analysis, and export what it produces.' },
-  { id: 'layers', label: 'Layers', title: 'The scans that are open and the classes they carry.' },
+const MODE_TABS: readonly WorkspaceMode[] = ['data', 'work', 'analyse', 'output'];
+
+/** Labels and tips come from the desktop modes, so both say the same thing. */
+export const TABS: ReadonlyArray<{ id: MobileTab; label: string; title: string }> = [
+  ...MODE_TABS.map((m) => ({ id: m, label: workspaceModeLabel(m), title: workspaceModeTitle(m) })),
+  { id: 'view', label: 'View', title: 'How the scan is drawn: colour, point size, rendering, visuals.' },
 ];
 
 /** Movement (px) below which a pointer gesture counts as a tap, not a drag. */
@@ -118,8 +134,8 @@ export interface MobileSheetOptions {
   /** Fired after the snap detent changes (drag release, tap, or programmatic). */
   readonly onDetentChange?: (detent: SheetDetent) => void;
   /**
-   * The tab shown first. Defaults to `'analyse'` so the honesty-first verdict
-   * stays the hero on phones, matching the desktop verdict-as-hero treatment.
+   * The tab shown first. Defaults to `'data'`; the host passes the current
+   * workspace mode so the phone opens where the desktop rail was.
    */
   readonly initialTab?: MobileTab;
   /**
@@ -161,7 +177,7 @@ export class MobileSheet {
     this._onTabChange = opts.onTabChange;
     this._onExpandedChange = opts.onExpandedChange;
     this._onDetentChange = opts.onDetentChange;
-    this._active = opts.initialTab ?? 'analyse';
+    this._active = opts.initialTab ?? 'data';
     // Default to 'peek' on phones so the sheet opens as just its head. An
     // explicit detent wins; otherwise initialExpanded maps true → 'full'.
     this._detent = opts.initialDetent ?? (opts.initialExpanded ? 'full' : 'peek');
@@ -255,6 +271,17 @@ export class MobileSheet {
     if (!this.isExpanded()) this.setExpanded(true);
     this._syncTabs();
     if (changed) this._onTabChange?.(tab);
+  }
+
+  /**
+   * Mirror a tab chosen elsewhere (the router moved to another mode) without
+   * opening the sheet or notifying, so a tool started from the dock never
+   * covers the scene it is about to be used on.
+   */
+  select(tab: MobileTab): void {
+    if (!this._slots.has(tab) || tab === this._active) return;
+    this._active = tab;
+    this._syncTabs();
   }
 
   /** Whether the body is expanded ('half' or 'full') vs collapsed ('peek'). */

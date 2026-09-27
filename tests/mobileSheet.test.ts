@@ -1,8 +1,8 @@
 /**
  * mobileSheet.test.ts
  *
- * The phone bottom-sheet chrome: a three-way tablist (View / Analyse / Layers)
- * over three tabpanel slots the host re-parents panels into, plus a collapse
+ * The phone bottom-sheet chrome: the four workspace modes plus View as a
+ * tablist over five tabpanel slots the host re-parents panels into, plus a collapse
  * handle. Runs in the node environment through the shared live fake DOM
  * (tests/helpers/liveFakeDom.ts), asserting on state and ARIA rather than
  * pixels.
@@ -24,21 +24,21 @@ async function makeSheet(opts = {}) {
 }
 
 describe('MobileSheet', () => {
-  it('renders a tablist with three tabs and three tabpanel slots', async () => {
+  it('renders the four modes plus View as tabs and slots', async () => {
     const { root } = await makeSheet();
     expect(root.hasClass('olv-mobile-sheet')).toBe(true);
     const tabs = root.findAll((e) => e.attrs['role'] === 'tab');
-    expect(tabs.map((t) => t.dataset.tab)).toEqual(['view', 'analyse', 'layers']);
+    expect(tabs.map((t) => t.dataset.tab)).toEqual(['data', 'work', 'analyse', 'output', 'view']);
     const panels = root.findAll((e) => e.attrs['role'] === 'tabpanel');
-    expect(panels.map((p) => p.dataset.tab)).toEqual(['view', 'analyse', 'layers']);
+    expect(panels.map((p) => p.dataset.tab)).toEqual(['data', 'work', 'analyse', 'output', 'view']);
     // Every tab points at its panel via aria-controls.
     for (const t of tabs) {
       expect(t.attrs['aria-controls']).toBe(`olv-msheet-panel-${t.dataset.tab}`);
     }
   });
 
-  it('defaults to the Analyse tab (verdict-as-hero)', async () => {
-    const { sheet, tab, slot } = await makeSheet();
+  it('defaults to the Analyse tab when the host passes it', async () => {
+    const { sheet, tab, slot } = await makeSheet({ initialTab: 'analyse' });
     expect(sheet.getActive()).toBe('analyse');
     expect(tab('analyse').attrs['aria-selected']).toBe('true');
     expect(tab('view').attrs['aria-selected']).toBe('false');
@@ -57,20 +57,20 @@ describe('MobileSheet', () => {
   it('clicking a tab selects it and fires onTabChange exactly once', async () => {
     const seen: string[] = [];
     const { tab, slot, sheet } = await makeSheet({ onTabChange: (t: string) => seen.push(t) });
-    tab('layers').fire('click');
-    expect(sheet.getActive()).toBe('layers');
-    expect(slot('layers').hasClass('is-active')).toBe(true);
+    tab('output').fire('click');
+    expect(sheet.getActive()).toBe('output');
+    expect(slot('output').hasClass('is-active')).toBe(true);
     expect(slot('analyse').hasClass('is-active')).toBe(false);
-    expect(seen).toEqual(['layers']);
+    expect(seen).toEqual(['output']);
     // Re-selecting the active tab does not re-fire.
-    tab('layers').fire('click');
-    expect(seen).toEqual(['layers']);
+    tab('output').fire('click');
+    expect(seen).toEqual(['output']);
   });
 
   it('slot() returns a stable, distinct container per tab', async () => {
     const { slot } = await makeSheet();
     expect(slot('view')).not.toBe(slot('analyse'));
-    expect(slot('analyse')).not.toBe(slot('layers'));
+    expect(slot('analyse')).not.toBe(slot('output'));
     // Re-parenting target is stable across calls.
     const { sheet } = await makeSheet();
     expect(sheet.slot('view' as never)).toBe(sheet.slot('view' as never));
@@ -165,13 +165,42 @@ describe('MobileSheet', () => {
   });
 
   it('ArrowRight moves the active tab and focuses it', async () => {
-    const { sheet, tab } = await makeSheet({ initialTab: 'view' });
-    tab('view').fire('keydown', { key: 'ArrowRight', preventDefault() {} });
-    expect(sheet.getActive()).toBe('analyse');
-    expect(tab('analyse').focused).toBe(true);
+    const { sheet, tab } = await makeSheet({ initialTab: 'analyse' });
+    tab('analyse').fire('keydown', { key: 'ArrowRight', preventDefault() {} });
+    expect(sheet.getActive()).toBe('output');
+    expect(tab('output').focused).toBe(true);
     // Wraps from the last tab back to the first.
-    tab('layers').fire('keydown', { key: 'ArrowRight', preventDefault() {} });
-    // (active was 'analyse'; ArrowRight off the focused 'layers' wraps to view)
+    tab('view').fire('keydown', { key: 'ArrowRight', preventDefault() {} });
+    expect(sheet.getActive()).toBe('data');
+  });
+
+  it('select() mirrors a tab without opening the sheet or notifying', async () => {
+    const seen: string[] = [];
+    const { sheet, slot } = await makeSheet({ onTabChange: (t: string) => seen.push(t) });
+    sheet.select('work');
+    expect(sheet.getActive()).toBe('work');
+    expect(slot('work').hasClass('is-active')).toBe(true);
+    expect(sheet.isExpanded()).toBe(false);
+    expect(seen).toEqual([]);
+  });
+});
+
+describe('phone tab and router mode mapping', () => {
+  it('maps each mode tab to its mode and View to none, both ways', async () => {
+    const { modeForSheetTab, sheetTabForMode, TABS } = await import('../src/ui/MobileSheet');
+    for (const m of ['data', 'work', 'analyse', 'output'] as const) {
+      expect(modeForSheetTab(sheetTabForMode(m))).toBe(m);
+    }
+    expect(modeForSheetTab('view')).toBeNull();
+    expect(TABS.map((t) => t.label)).toEqual(['Data', 'Tools', 'Analyse', 'Export', 'View']);
+  });
+
+  it('uses the desktop tab tips, so labels and tips name what each tab holds', async () => {
+    const { TABS } = await import('../src/ui/MobileSheet');
+    const { workspaceModeTitle } = await import('../src/ui/workspace/DesktopWorkspace');
+    for (const t of TABS.filter((x) => x.id !== 'view')) expect(t.title).toBe(workspaceModeTitle(t.id as never));
+    expect(TABS.find((t) => t.id === 'analyse')!.title).not.toMatch(/Measure|export/i);
+    expect(TABS.find((t) => t.id === 'work')!.title).toMatch(/measure/i);
   });
 
   it('setVisible(false) hides the whole sheet', async () => {

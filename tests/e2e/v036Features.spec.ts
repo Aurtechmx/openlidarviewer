@@ -175,12 +175,10 @@ test('Inspector exposes a Provenance section after a scan loads', async ({
 test.describe('mobile bottom sheet', () => {
   test.use({ viewport: { width: 390, height: 844 } }); // iPhone-class viewport
 
-  // v0.4.6 replaced the per-panel "chevron toggle on mobile" model with a single
-  // bottom sheet (MobileSheet) that re-parents every panel into one of three
-  // tabs — View / Analyse / Layers. This pins that new contract: the sheet
-  // mounts with its tablist, and selecting a tab expands the sheet and activates
-  // that tab's slot.
-  test('mounts a View / Analyse / Layers tab sheet that switches panels', async ({
+  // One bottom sheet (MobileSheet) hosts the desktop workspace modes as tabs
+  // (Data / Tools / Analyse / Export) plus View for the Inspector. Selecting a
+  // tab expands the sheet and activates that tab's slot.
+  test('mounts a Data / Tools / Analyse / Export / View tab sheet that switches panels', async ({
     page,
   }) => {
     await page.goto('/');
@@ -191,14 +189,14 @@ test.describe('mobile bottom sheet', () => {
     const sheet = page.locator('.olv-mobile-sheet');
     await expect(sheet).toBeVisible({ timeout: 8_000 });
 
-    // The three tabs are present in order.
-    for (const id of ['view', 'analyse', 'layers'] as const) {
+    // The five tabs are present in order.
+    for (const id of ['data', 'work', 'analyse', 'output', 'view'] as const) {
       await expect(sheet.locator(`.olv-msheet-tab[data-tab="${id}"]`)).toBeVisible();
     }
 
     // Selecting a tab activates its slot (and expands the sheet).
-    await sheet.locator('.olv-msheet-tab[data-tab="layers"]').click();
-    await expect(page.locator('.olv-msheet-slot[data-tab="layers"].is-active')).toBeVisible({
+    await sheet.locator('.olv-msheet-tab[data-tab="output"]').click();
+    await expect(page.locator('.olv-msheet-slot[data-tab="output"].is-active')).toBeVisible({
       timeout: 4_000,
     });
 
@@ -207,6 +205,6 @@ test.describe('mobile bottom sheet', () => {
     await expect(page.locator('.olv-msheet-slot[data-tab="view"].is-active')).toBeVisible({
       timeout: 4_000,
     });
-    await expect(page.locator('.olv-msheet-slot[data-tab="layers"].is-active')).toHaveCount(0);
+    await expect(page.locator('.olv-msheet-slot[data-tab="output"].is-active')).toHaveCount(0);
   });
 });
