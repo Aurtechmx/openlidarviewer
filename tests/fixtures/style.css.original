@@ -11323,6 +11323,13 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
     transition: none;
   }
 }
+
+/* In the phone sheet the tab already scrolls; a second scroller inside it
+   would trap the drag. The list takes its full height there. */
+.olv-mobile-sheet .olv-results-panel {
+  max-height: none;
+  overflow-y: visible;
+}
 /* 99y3-workspace-polish.css — one surface per task in the desktop left rail.
    The rail itself carries no card; the active mode host is the one task
    surface; what it holds reads as sections separated by hairlines, not as
@@ -11480,6 +11487,15 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   .olv-ws-mode.olv-ws-nav-back > :not(.olv-ws-off) {
     animation: none;
   }
+}
+
+/* The task header stays at the top of the scroller while a long page scrolls,
+   so Back and the page title are always on screen. */
+.olv-ws-task:not([hidden]) {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel);
 }
 /* ── Windows High Contrast / forced-colors ──────────────────────────────────
    Windows High Contrast replaces the author palette with a small system one.

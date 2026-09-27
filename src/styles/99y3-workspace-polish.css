@@ -156,3 +156,12 @@
     animation: none;
   }
 }
+
+/* The task header stays at the top of the scroller while a long page scrolls,
+   so Back and the page title are always on screen. */
+.olv-ws-task:not([hidden]) {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel);
+}

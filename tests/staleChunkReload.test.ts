@@ -18,6 +18,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   classifyLoadError,
+  deferredPageReload,
   installStaleChunkRecovery,
   STALE_RELOAD_MARKER_KEY,
 } from '../src/app/staleChunkReload';
@@ -294,5 +295,50 @@ describe('dispose', () => {
     const addOnly = { addEventListener: (_t: string, fn: (e: unknown) => void) => void handlers.push(fn) };
     const r = installStaleChunkRecovery({ eventTarget: addOnly, reload: () => {} });
     expect(() => r.dispose()).not.toThrow();
+  });
+});
+
+describe('deferredPageReload', () => {
+  function fakeWindow() {
+    const listeners: Record<string, Array<() => void>> = {};
+    const timers: Array<() => void> = [];
+    const win = {
+      addEventListener: (type: string, fn: () => void) => { (listeners[type] ??= []).push(fn); },
+      setTimeout: (fn: () => void) => { timers.push(fn); return timers.length; },
+      location: { reload: vi.fn() },
+    };
+    const fire = (type: string) => { for (const fn of listeners[type] ?? []) fn(); };
+    const flush = () => { for (const fn of timers.splice(0)) fn(); };
+    return { win, fire, flush };
+  }
+
+  it('reloads one task later, not synchronously', () => {
+    const { win, flush } = fakeWindow();
+    deferredPageReload(win)();
+    expect(win.location.reload).not.toHaveBeenCalled();
+    flush();
+    expect(win.location.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops the reload when the page is already leaving', () => {
+    const { win, fire, flush } = fakeWindow();
+    deferredPageReload(win)();
+    fire('pagehide');
+    flush();
+    expect(win.location.reload).not.toHaveBeenCalled();
+  });
+
+  it('reloads again after a restore from the back-forward cache', () => {
+    const { win, fire, flush } = fakeWindow();
+    const reload = deferredPageReload(win);
+    fire('pagehide');
+    fire('pageshow');
+    reload();
+    flush();
+    expect(win.location.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('is a no-op without a window', () => {
+    expect(() => deferredPageReload(null)()).not.toThrow();
   });
 });
