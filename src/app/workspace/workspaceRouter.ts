@@ -112,9 +112,29 @@ export function createWorkspaceRouter(
     return id && shown(pages[m]?.[id]?.element(), ws.mode(m)) ? id : null;
   }
 
+  /**
+   * Mark the host with the direction of a page change, for the stylesheet's
+   * short entry transition. Deeper is forward; home or a parent is back. The
+   * mark clears itself, so a later tab switch does not replay it.
+   */
+  let navTimer: ReturnType<typeof setTimeout> | undefined;
+  function markDirection(mode: WorkspaceMode, from: string | null, to: string | null): void {
+    if (from === to) return;
+    const host = ws.mode(mode);
+    const back = to === null || (from !== null && pages[mode]?.[from]?.parent === to);
+    host.classList.toggle('olv-ws-nav-forward', !back);
+    host.classList.toggle('olv-ws-nav-back', back);
+    clearTimeout(navTimer);
+    navTimer = setTimeout(() => {
+      host.classList.remove('olv-ws-nav-forward');
+      host.classList.remove('olv-ws-nav-back');
+    }, 400);
+  }
+
   const api: WorkspaceRouter = {
     route: () => ({ mode: ws.getMode(), page: active(ws.getMode()) }),
     navigate({ mode, page }, focus = false) {
+      if (ws.getMode() === mode) markDirection(mode, active(mode), page);
       memory.set(mode, page);
       try {
         storage?.setItem(WORKSPACE_PAGE_KEY, JSON.stringify(Object.fromEntries(memory)));
