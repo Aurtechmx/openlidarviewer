@@ -46,3 +46,7 @@ export class ObservatoryOverlay extends SceneLineOverlay {
     this.present();
   }
 }
+
+// The station markers ride in this same lazy chunk (`loadObservatoryOverlay`).
+export { ObservatoryStationMarkers } from './ObservatoryStationMarkers';
+export { stationMarkerSize } from './observatoryStationMarkerGeometry';

@@ -53,6 +53,10 @@ function sourcesSection(record: ObservationRunRecord | null): HTMLElement {
       row.append(basisChip(record.source.basis as ObservatoryBasis));
       body.append(row);
     }
+    body.append(el('p', {
+      className: 'olv-observatory-marker-key',
+      text: 'In 3D: a solid blue diamond marks each observed source station; a hollow dashed orange ring marks each suggested station, which was not observed.',
+    }));
   }
   return sectionCard('Sources', body);
 }
@@ -84,8 +88,6 @@ function shadowSection(record: ObservationRunRecord | null): HTMLElement {
   }
   return sectionCard('Shadow', body);
 }
-
-const SUGGESTED_LABEL = 'SUGGESTED STATION (not observed)';
 
 function fmt(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
@@ -131,7 +133,7 @@ function planningSection(record: ObservationRunRecord | null, planning: StationP
     const c = planning.candidates.find((k) => k.candidateIndex === index)!;
     const row = el('li', { className: 'olv-observatory-suggestion' });
     row.append(suggestedStationChip());
-    row.append(el('span', { text: ` ${SUGGESTED_LABEL} ${rank + 1}: candidate ${index} at (${c.position.map((v) => v.toFixed(2)).join(', ')}), gain ${fmt(s.gainAtSelection[rank]!)}` }));
+    row.append(el('span', { text: ` ${planning.label} ${rank + 1}: candidate ${index} at (${c.position.map((v) => v.toFixed(2)).join(', ')}), gain ${fmt(s.gainAtSelection[rank]!)}` }));
     row.append(el('p', { className: 'olv-observatory-candidate-terms', text: candidateTermsText(s.termsAtSelection[rank]!, planning.parameters.redundancyWeight) }));
     list.append(row);
   });
@@ -221,21 +223,57 @@ export function renderObservatoryPanel(
 
 let openHandle: ModalHandle | null = null;
 let overlay: import('../../render/ObservatoryOverlay').ObservatoryOverlay | null = null;
+let markers: import('../../render/ObservatoryOverlay').ObservatoryStationMarkers | null = null;
+
+type Committed = Extract<Extract<ObservatoryRunnerState, { phase: 'committed' }>['outcome'], { status: 'ok' }>;
+
+/**
+ * The 3D marker input for a committed run, in the render frame: every
+ * record station as an observed marker, every selected candidate as a
+ * suggested one. Read-only over the record; a suggested station is never
+ * added to `record.stations` (OB-INV-05).
+ */
+export function stationMarkerInput(
+  outcome: Pick<Committed, 'record' | 'planning' | 'voxelEdge'>,
+  worldToLocal: ObservatoryPanelInput['worldToLocal'],
+  size: number,
+): import('../../render/ObservatoryStationMarkers').StationMarkerInput {
+  const observed = outcome.record.stations.map((s) => ({
+    id: s.id,
+    position: worldToLocal(s.worldTranslation),
+    assumedOrigin: s.originStatus === 'ASSUMED',
+  }));
+  const planning = outcome.planning;
+  const suggested = planning
+    ? planning.suggestion.selectedCandidateIndices.map((index, rank) => ({
+      rank: rank + 1,
+      position: worldToLocal(planning.candidates.find((c) => c.candidateIndex === index)!.position),
+    }))
+    : [];
+  return { observed, suggested, size, suggestedLabel: planning?.label ?? '' };
+}
+
+function clearOverlays(): void {
+  overlay?.show([], { nx: 0, ny: 0 }, 1, [0, 0, 0]);
+  markers?.clear();
+}
 
 async function drawOverlay(input: ObservatoryPanelInput, state: ObservatoryRunnerState): Promise<void> {
   if (!input.overlayHost) return;
   if (state.phase !== 'committed' || state.outcome.status !== 'ok') {
-    overlay?.show([], { nx: 0, ny: 0 }, 1, [0, 0, 0]);
+    clearOverlays();
     return;
   }
-  const { ObservatoryOverlay } = await loadObservatoryOverlay();
+  const { ObservatoryOverlay, ObservatoryStationMarkers, stationMarkerSize } = await loadObservatoryOverlay();
   if (!overlay) overlay = new ObservatoryOverlay(input.overlayHost);
+  if (!markers) markers = new ObservatoryStationMarkers(input.overlayHost);
   const outcome = state.outcome;
   const shadowedKeys: number[] = [];
   for (const [key, decision] of outcome.stateByKey) {
     if (decision.state === 'SHADOWED') shadowedKeys.push(key);
   }
   overlay.show(shadowedKeys, outcome.grid, outcome.voxelEdge, input.worldToLocal(outcome.domain.min));
+  markers.show(stationMarkerInput(outcome, input.worldToLocal, stationMarkerSize(outcome.voxelEdge)));
 }
 
 /**
@@ -256,7 +294,7 @@ export function openObservatoryPanel(input: ObservatoryPanelInput): ModalHandle 
   }
   rerender();
   const unsubscribe = input.runner.subscribe(rerender);
-  input.runner.setOverlayClear(() => { overlay?.show([], { nx: 0, ny: 0 }, 1, [0, 0, 0]); });
+  input.runner.setOverlayClear(clearOverlays);
 
   openHandle?.close();
   openHandle = openModal({

@@ -40,6 +40,8 @@ test.describe('Observatory panel', () => {
     // The single declared PTX station shows a DECLARED ORIGIN badge, never
     // ASSUMED — the fixture's own header declares a real pose.
     await expect(modal.locator('.olv-observatory-station-row')).toContainText('DECLARED ORIGIN');
+    // The 3D marker key names both glyphs, so the scene markers have a text legend.
+    await expect(modal.locator('.olv-observatory-marker-key')).toContainText('hollow dashed orange ring');
     // Evidence lists every state, including a real count for at least one.
     await expect(modal.locator('.olv-observatory-state-counts')).toContainText(/SURFACE: \d+/);
     // Planning shows the Coverage Gain result, labelled preview on a

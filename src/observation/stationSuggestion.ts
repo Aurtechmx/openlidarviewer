@@ -116,6 +116,8 @@ export function suggestStations(
 
 /** Everything one planning run produced, for the panel, the probe and `candidates.csv`. */
 export interface StationPlanningResult {
+  /** {@link SUGGESTED_STATION_LABEL}, carried with the suggestions so every surface reads the one constant (OB-INV-05). */
+  readonly label: typeof SUGGESTED_STATION_LABEL;
   readonly instrumentModel: ObservationInstrumentModel;
   readonly parameters: CoverageGainParameters;
   readonly candidates: readonly CoverageCandidate[];
@@ -158,6 +160,7 @@ export function planStations(input: StationPlanningInput): StationPlanningResult
   let notReadVoxelCount = 0;
   for (const s of input.field.stateByKey.values()) if (s === 'NOT_READ') notReadVoxelCount++;
   return {
+    label: SUGGESTED_STATION_LABEL,
     instrumentModel: model,
     parameters: p,
     candidates: generation.candidates,
