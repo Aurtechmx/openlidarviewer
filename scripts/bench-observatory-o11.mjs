@@ -11,7 +11,7 @@
  *   OLV_O11_MACHINE=mbp-local node scripts/bench-observatory-o11.mjs
  *
  * Runs headed Chromium through Playwright against a Vite dev server of the
- * benchmark page (benchmarks/observatory-o11/), never the app build.
+ * benchmark page (scripts/bench/observatory-o11/), never the app build.
  */
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -52,7 +52,7 @@ const save = () => writeFileSync(outFile, `${JSON.stringify(record, null, 2)}\n`
 
 const server = await createServer({ configFile: false, root: ROOT, logLevel: 'error', server: { port: 0, host: '127.0.0.1' } });
 await server.listen();
-const url = `${server.resolvedUrls.local[0]}benchmarks/observatory-o11/index.html`;
+const url = `${server.resolvedUrls.local[0]}scripts/bench/observatory-o11/index.html`;
 const browser = await chromium.launch({
   headless: false,
   args: ['--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--enable-unsafe-webgpu'],

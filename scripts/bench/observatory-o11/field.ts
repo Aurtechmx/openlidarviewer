@@ -9,14 +9,14 @@
  * The result is dense: one state index per voxel, x fastest, plus one
  * frontier flag per voxel, which is what both overlay arms read.
  */
-import { buildO11StressStates, castO11Returns, type O11RoomScenario, type O11Scenario } from '../../scripts/lib/observatoryO11Scenarios.mjs';
-import { buildUnstructuredSourceRays } from '../../src/observation/rays';
-import { domainGrid, runObservationLedger, type ObservationDomain, type RayPartitionChunkEntry } from '../../src/observation/ledger';
-import { classifyObservationField, type ObservationFieldStation } from '../../src/observation/observationField';
-import { computeShadowFrontier } from '../../src/observation/shadowFrontier';
-import { OBSERVATION_STATES, type ObservationState } from '../../src/observation/types';
-import type { AcquisitionStation } from '../../src/model/AcquisitionStations';
-import { OBSERVATORY_PARAMETERS } from '../../src/app/observatoryFromCloud';
+import { buildO11StressStates, castO11Returns, type O11RoomScenario, type O11Scenario } from '../../../scripts/lib/observatoryO11Scenarios.mjs';
+import { buildUnstructuredSourceRays } from '../../../src/observation/rays';
+import { domainGrid, runObservationLedger, type ObservationDomain, type RayPartitionChunkEntry } from '../../../src/observation/ledger';
+import { classifyObservationField, type ObservationFieldStation } from '../../../src/observation/observationField';
+import { computeShadowFrontier } from '../../../src/observation/shadowFrontier';
+import { OBSERVATION_STATES, type ObservationState } from '../../../src/observation/types';
+import type { AcquisitionStation } from '../../../src/model/AcquisitionStations';
+import { OBSERVATORY_PARAMETERS } from '../../../src/app/observatoryFromCloud';
 
 export interface DenseField {
   readonly id: string;

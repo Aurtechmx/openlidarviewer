@@ -5,8 +5,8 @@
  */
 import * as THREE from 'three/webgpu';
 import { instancedBufferAttribute, positionLocal } from 'three/tsl';
-import { OBSERVATION_STATES } from '../../src/observation/types';
-import { OBSERVATION_STATE_RGB } from '../../src/observation/presentationLegend';
+import { OBSERVATION_STATES } from '../../../src/observation/types';
+import { OBSERVATION_STATE_RGB } from '../../../src/observation/presentationLegend';
 import type { DenseField } from './field';
 
 export const MAX_SLICE_EDGE = 1024;

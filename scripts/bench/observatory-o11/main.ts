@@ -5,7 +5,7 @@
  * `window.__o11`; never part of the app build.
  */
 import * as THREE from 'three/webgpu';
-import { buildO11Scenarios } from '../../scripts/lib/observatoryO11Scenarios.mjs';
+import { buildO11Scenarios } from '../../../scripts/lib/observatoryO11Scenarios.mjs';
 import { buildScenarioField, type DenseField } from './field';
 import { createInstanceArm, createSliceArm, instanceCountOf, type OverlayArm } from './arms';
 
