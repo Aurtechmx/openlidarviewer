@@ -86,6 +86,9 @@ test('header links do not move when fonts arrive late', async ({ page }) => {
   await expect(page.locator('header.olv-topbar')).toBeVisible();
   await expect(page.locator('.olv-empty')).toBeVisible();
   expect(await page.evaluate(manropeLoaded)).toBe(false);
+  // The Speed/Quality control mounts into its slot after the viewer loads,
+  // independent of fonts; wait for it so both measurements see the same set.
+  await expect(page.getByRole('button', { name: 'Performance settings' })).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(300);
   const before = await measureHeader(page);
 

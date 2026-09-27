@@ -61,8 +61,15 @@ test.describe('streaming caveats', () => {
     await expectFullyResident(page);
     const run = page.locator('.olv-analyse-run');
     await expect(run).toHaveText('Re-run analysis', { timeout: 120_000 });
-    await run.click();
-    await expect(page.locator('.olv-analyse-panel')).not.toContainText('resident-only', { timeout: 120_000 });
+    // The panel line counts the nodes the VIEW requested; the analysis scope
+    // clears only once every known octree node has been uploaded for picking,
+    // which can land a frame later (Firefox). Re-run until the scan scope
+    // reads full; a stale scope would never clear and still fails here.
+    await expect(async () => {
+      await run.click();
+      await expect(run).toHaveText('Re-run analysis', { timeout: 60_000 });
+      await expect(page.locator('.olv-analyse-panel')).not.toContainText('resident-only', { timeout: 5_000 });
+    }).toPass({ timeout: 120_000 });
     await expect(page.locator('.olv-analyse-dem-note', { hasText: 'resident-only' })).toHaveCount(0);
     await expect(run).toHaveText('Re-run analysis');
     await expect(verdict).toBeVisible();

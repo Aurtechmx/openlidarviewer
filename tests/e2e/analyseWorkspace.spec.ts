@@ -11,7 +11,7 @@
  * Deterministic project; the dense-grid PLY yields an exploratory contour set.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { dropDenseGridPly, dropTerrainAccessUtmLas, showWorkspaceMode } from './helpers';
+import { dropDenseGridPly, dropTerrainAccessUtmLas, showWorkspaceMode, terrainResultDigest } from './helpers';
 
 const ANALYSE = '#olv-ws-mode-analyse';
 
@@ -32,28 +32,7 @@ async function runTerrain(page: Page): Promise<void> {
   await expect(page.locator('.olv-analyse-readiness .olv-analyse-ready:not(.is-skeleton)')).toHaveCount(3, { timeout: 30_000 });
 }
 
-/**
- * A digest of what the terrain run and the contour step put on screen: the
- * evidence text, the fitness verdict, the Contour Studio launcher, and the
- * surface raster pixels. Each node is also tagged, so a re-render (which
- * replaces the nodes) reads as a missing tag even when the text matches.
- */
-async function resultDigest(page: Page, tag: string): Promise<{ digest: string; tagged: number }> {
-  return page.evaluate(async (t) => {
-    const nodes = [
-      ...document.querySelectorAll('.olv-analyse-readiness .olv-analyse-ready, .olv-fit-row, .olv-analyse-score, .olv-analyse-validation, .olv-analyse-contour-launcher > *'),
-    ] as (HTMLElement & { __probe?: string })[];
-    let tagged = 0;
-    for (const n of nodes) {
-      if (n.__probe === t) tagged++;
-      n.__probe ??= t;
-    }
-    const rasters = [...document.querySelectorAll('canvas.olv-analyse-raster')] as HTMLCanvasElement[];
-    const text = nodes.map((n) => n.textContent ?? '').join('\n') + rasters.map((c) => c.toDataURL()).join('\n');
-    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-    return { digest: [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join(''), tagged };
-  }, tag);
-}
+const resultDigest = terrainResultDigest;
 
 test.describe('Analyse home and pages', () => {
   test.slow();

@@ -7,7 +7,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
-import { dropDenseGridPly, openAnalysePanel, showWorkspaceMode } from './helpers';
+import { dropDenseGridPly, openAnalysePanel, placeTestDistance, showWorkspaceMode } from './helpers';
 
 const MULTICHUNK = fileURLToPath(new URL('../fixtures/multichunk.laz', import.meta.url));
 
@@ -17,17 +17,7 @@ async function openAndMeasure(page: Page): Promise<void> {
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await page.waitForTimeout(500); // the test API mounts on viewerLoaded
   await page.locator('.olv-tool', { hasText: 'Measure' }).click();
-  await page.evaluate(() => {
-    const api = (window as unknown as { __OLV_TEST_API__?: {
-      setMeasureKind: (k: string) => void;
-      placeMeasurementPoint: (p: { x: number; y: number; z: number }) => void;
-    } }).__OLV_TEST_API__;
-    if (!api) throw new Error('__OLV_TEST_API__ not mounted');
-    api.setMeasureKind('distance');
-    api.placeMeasurementPoint({ x: 0, y: 0, z: 0 });
-    api.placeMeasurementPoint({ x: 1, y: 0, z: 0 });
-  });
-  await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
+  await placeTestDistance(page);
 }
 
 const shelf = (page: Page) => page.locator('#olv-left-panels .olv-results-shelf');

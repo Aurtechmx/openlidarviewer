@@ -15,7 +15,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
-import { dropDenseGridPly, dropTinyLas, showWorkspaceMode } from './helpers';
+import { dropDenseGridPly, dropTinyLas, placeTestDistance, showWorkspaceMode, terrainResultDigest } from './helpers';
 
 const MULTICHUNK = fileURLToPath(new URL('../fixtures/multichunk.laz', import.meta.url));
 const shelf = (page: Page) => page.locator('#olv-left-panels .olv-results-shelf');
@@ -79,37 +79,9 @@ async function openDense(page: Page): Promise<void> {
   await page.waitForTimeout(500); // the test API mounts on viewerLoaded
 }
 
-async function placeDistance(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const api = (window as unknown as { __OLV_TEST_API__?: {
-      setMeasureKind: (k: string) => void;
-      placeMeasurementPoint: (p: { x: number; y: number; z: number }) => void;
-    } }).__OLV_TEST_API__;
-    if (!api) throw new Error('__OLV_TEST_API__ not mounted');
-    api.setMeasureKind('distance');
-    api.placeMeasurementPoint({ x: 0, y: 0, z: 0 });
-    api.placeMeasurementPoint({ x: 1, y: 0, z: 0 });
-  });
-  await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
-}
+const placeDistance = placeTestDistance;
 
-/** Text and raster digest of the terrain result, tagging each node so a rebuild shows. */
-async function terrainDigest(page: Page, tag: string): Promise<{ digest: string; tagged: number; count: number }> {
-  return page.evaluate(async (t) => {
-    const nodes = [
-      ...document.querySelectorAll('.olv-analyse-readiness .olv-analyse-ready, .olv-fit-row, .olv-analyse-score, .olv-analyse-contour-launcher > *'),
-    ] as (HTMLElement & { __probe?: string })[];
-    let tagged = 0;
-    for (const n of nodes) {
-      if (n.__probe === t) tagged++;
-      n.__probe ??= t;
-    }
-    const rasters = [...document.querySelectorAll('canvas.olv-analyse-raster')] as HTMLCanvasElement[];
-    const text = nodes.map((n) => n.textContent ?? '').join('\n') + rasters.map((c) => c.toDataURL()).join('\n');
-    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-    return { digest: [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join(''), tagged, count: nodes.length };
-  }, tag);
-}
+const terrainDigest = terrainResultDigest;
 
 test.describe('workspace journeys', () => {
   test.slow();

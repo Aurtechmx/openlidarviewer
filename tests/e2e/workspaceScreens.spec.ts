@@ -8,7 +8,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { dropDenseGridPly } from './helpers';
+import { dropDenseGridPly, placeTestDistance } from './helpers';
 
 const OUT = process.env.OLV_UX_SHOTS;
 
@@ -97,12 +97,7 @@ test.describe('workspace review screenshots', () => {
       await home(page, 'work');
       await shot('tools-home');
       await page.locator('.olv-tool-launcher .olv-tl-row', { hasText: 'Measure' }).first().click();
-      await page.evaluate(() => {
-        const api = (window as unknown as { __OLV_TEST_API__?: { setMeasureKind(k: string): void; placeMeasurementPoint(p: { x: number; y: number; z: number }): void } }).__OLV_TEST_API__;
-        api?.setMeasureKind('distance');
-        api?.placeMeasurementPoint({ x: 0, y: 0, z: 0 });
-        api?.placeMeasurementPoint({ x: 1, y: 0, z: 0 });
-      });
+      await placeTestDistance(page);
       await mode(page, 'work');
       await shot('measure');
       await home(page, 'analyse');
