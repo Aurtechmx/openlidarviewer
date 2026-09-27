@@ -31,18 +31,60 @@ describe('GovernorWiring warm-up', () => {
     expect(g.calibratedLevel).toBeNull();
   });
 
-  it('waits for a load, then picks from the first frames only', () => {
+  it('waits for a load, then picks from the first moving frames only', () => {
     const g = new GovernorWiring(false, true);
     for (let i = 0; i < 40; i++) g.frameMs(60); // empty viewer, no load yet
-    g.frame('full-refine', false, 1000);
+    g.frame('full-refine', false, 0);
     expect(g.calibratedLevel).toBeNull();
-    g.frame('coverage', false, 1000);
+    g.frame('coverage', false, 0);
     for (let i = 0; i < CALIBRATION_FRAMES - 1; i++) g.frameMs(10);
     expect(g.calibratedLevel).toBeNull();
     g.frameMs(10);
     expect(g.calibratedLevel).toBe(0);
     for (let i = 0; i < 40; i++) g.frameMs(80);
     expect(g.calibratedLevel).toBe(0);
+  });
+
+  it('skips frames drawn while the camera is still', () => {
+    const g = new GovernorWiring(false, true);
+    g.uploadLimits({ maxNodes: 4 }, 3);
+    // Loading with a still camera: fast frames, none sampled.
+    for (let i = 0; i < 100; i++) { g.frame('coverage', false, 1000); g.frameMs(8); }
+    expect(g.calibratedLevel).toBeNull();
+    // Motion: slow frames, interleaved with still ones that must not count.
+    for (let i = 0; i < CALIBRATION_FRAMES - 1; i++) {
+      g.frame('coverage', false, 0); g.frameMs(60);
+      g.frame('coverage', false, 1000); g.frameMs(8);
+    }
+    expect(g.calibratedLevel).toBeNull();
+    g.frame('moving', true, 1000); // tweening counts as moving
+    g.frameMs(60);
+    expect(g.calibratedLevel).toBe(2);
+  });
+
+  it('uses the NavController phase when no quiet time is given', () => {
+    const g = new GovernorWiring(false, true);
+    g.uploadLimits({ maxNodes: 4 }, 3);
+    for (let i = 0; i < 40; i++) { g.frame('coverage', false); g.frameMs(60); }
+    expect(g.calibratedLevel).toBeNull();
+    for (let i = 0; i < CALIBRATION_FRAMES; i++) { g.frame('moving', false); g.frameMs(30); }
+    expect(g.calibratedLevel).toBe(1);
+  });
+
+  it('has no effect on the policy before the warm-up ends', () => {
+    const cal = new GovernorWiring(false, true);
+    const fixed = new GovernorWiring(false);
+    for (const g of [cal, fixed]) g.uploadLimits({ maxNodes: 4 }, 3);
+    // Slow moving frames short of the bound: the calibrated arm must match the fixed arm frame by frame.
+    for (let i = 0; i < CALIBRATION_FRAMES - 1; i++) {
+      const moving = i % 3 !== 0;
+      for (const g of [cal, fixed]) { g.frame('coverage', false, moving ? 0 : 1000); g.frameMs(i < 10 ? 8 : 60); }
+      expect(cal.calibratedLevel).toBeNull();
+      expect(cal.policy).toEqual(fixed.policy);
+    }
+    for (const g of [cal, fixed]) { g.frame('full-refine', false, 1000); }
+    expect(cal.policy).toEqual(fixed.policy);
+    expect(cal.presentation()).toEqual(fixed.presentation());
   });
 
   it('ends on the time bound and skips a pick with too few frames', () => {

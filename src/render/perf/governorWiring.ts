@@ -8,8 +8,9 @@
  * gate (`allowEdl`) and the drawn instance count of each point mesh
  * (`pointBudgetFraction`).
  *
- * `?governor=calibrate` also runs a bounded warm-up after a load and starts
- * motion from the level its p95 asks for (`calibrationLevel`).
+ * `?governor=calibrate` also runs a bounded warm-up after a load, over frames
+ * drawn while the camera moves only, and once it ends starts motion from the
+ * level their p95 asks for (`calibrationLevel`).
  *
  * Display and upload pacing only: nothing here reaches a point, a node's
  * contents or any measurement.
@@ -96,7 +97,7 @@ export function scaledDpr(ratio: number, maxDpr: number, renderScale: number): n
   return Math.min(ratio, Math.round(maxDpr * renderScale * 100) / 100);
 }
 
-/** Warm-up bounds for calibration: frames, summed frame time, and the fewest frames worth a pick. */
+/** Warm-up bounds for calibration, over moving frames: frames, summed frame time, and the fewest frames worth a pick. */
 export const CALIBRATION_FRAMES = 30;
 export const CALIBRATION_MAX_MS = 2000;
 export const CALIBRATION_MIN_FRAMES = 10;
@@ -121,6 +122,8 @@ export class GovernorWiring implements GovernorSink {
   private readonly _warm: number[] | null;
   private _warmStarted = false;
   private _warmMs = 0;
+  /** Whether the last `frame()` found the camera moving; the next `frameMs` is that frame's time. */
+  private _moving = false;
   /** The calibrated level, null until the warm-up has ended. */
   calibratedLevel: number | null = null;
 
@@ -131,7 +134,7 @@ export class GovernorWiring implements GovernorSink {
 
   private _warmSample(ms: number): void {
     const w = this._warm;
-    if (!w || !this._warmStarted || this.calibratedLevel !== null) return;
+    if (!w || !this._warmStarted || !this._moving || this.calibratedLevel !== null) return;
     w.push(ms);
     this._warmMs += ms;
     if (w.length < CALIBRATION_FRAMES && this._warmMs < CALIBRATION_MAX_MS) return;
@@ -162,6 +165,8 @@ export class GovernorWiring implements GovernorSink {
    */
   frame(phase: string, tweening: boolean, quietMs?: number): void {
     if (this._warm && !this._warmStarted && (this._pending > 0 || phase !== 'full-refine')) this._warmStarted = true;
+    const moving = quietMs === undefined ? undefined : tweening || !(quietMs >= STILL_MS);
+    this._moving = moving ?? phase === 'moving';
     if (this._count === 0) return;
     const s = this._sorted.subarray(0, this._count);
     s.set(this._ring.subarray(0, this._count));
@@ -178,7 +183,7 @@ export class GovernorWiring implements GovernorSink {
       streamingBacklog: 0,
       continuityPending: false,
       mobileTier: this._mobileTier,
-      presentationMoving: quietMs === undefined ? undefined : tweening || !(quietMs >= STILL_MS),
+      presentationMoving: moving,
       calibratedLevel: this.calibratedLevel ?? 0,
     }, prev);
     if (this._policy.renderScale !== prev.renderScale) this.renderScaleChanges++;
