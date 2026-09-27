@@ -21,6 +21,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { cpuThrottleFlag, parseCpuThrottle } from './lib/cpuThrottle.mjs';
 import { isCliEntry } from './lib/isCliEntry.mjs';
 import { runMetrics, spread } from './lib/navJankResults.mjs';
 import { abRefusals } from './nav-jank-report.mjs';
@@ -45,9 +46,25 @@ const KEY = process.env.OLV_GOV_AB_DATASET ?? 'A';
 const MACHINE = process.env.OLV_NAV_MACHINE ?? 'mbp-local';
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const TRAJECTORY_COUNT = 5;
+/**
+ * v2 (render-budget-calibration-v2.md): OLV_CAL_AB_CPU_THROTTLE=<rate> runs both
+ * arms under Chromium CPU throttling. Unset keeps v1 exactly.
+ */
+const THROTTLE = parseCpuThrottle(process.env.OLV_CAL_AB_CPU_THROTTLE);
+const VERSION = THROTTLE > 1 ? `v2-${THROTTLE}x` : 'v1';
+
+/** Pre-registered in v2: share of calibrated warm runs that must pick a level above 0, else VOID. */
+export const PRECONDITION_CAL_V2 = Object.freeze({ minNonzeroShare: 0.6 });
+
+/** The v2 precondition over every calibrated warm run's calibrated level. */
+export function precondition(levels, minShare = PRECONDITION_CAL_V2.minNonzeroShare) {
+  const nonzero = levels.filter((l) => typeof l === 'number' && l > 0).length;
+  const share = levels.length ? nonzero / levels.length : 0;
+  return { runs: levels.length, nonzero, share, minShare, met: levels.length > 0 && share >= minShare };
+}
 
 const headSha = () => execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();
-const stateDir = (sha) => join(ROOT, 'playwright', '.cache', 'calibration-ab', `${sha.slice(0, 12)}-${MACHINE}-v1-${KEY}`);
+const stateDir = (sha) => join(ROOT, 'playwright', '.cache', 'calibration-ab', `${sha.slice(0, 12)}-${MACHINE}-${VERSION}-${KEY}`);
 const sessionDir = (sha, s) => join(stateDir(sha), `${String(s.index).padStart(2, '0')}-${ARM[s.cond]}`);
 
 function sessionResult(sha, s) {
@@ -71,6 +88,7 @@ export function step(sha = headSha()) {
     env: {
       ...process.env, OLV_NAV_DATASET: path, OLV_NAV_DATASET_ID: V3_DATASETS[KEY].id, OLV_NAV_RUNS: '1',
       OLV_NAV_GOVERNOR: next.cond === 'on' ? 'calibrate' : 'on', OLV_NAV_OUT_DIR: dir, OLV_NAV_MACHINE: MACHINE, OLV_NO_SERVER_REUSE: '1',
+      ...(THROTTLE > 1 ? { OLV_NAV_CPU_THROTTLE: String(THROTTLE) } : {}),
     },
   });
   if (res.status !== 0) throw new Error(`session ${next.index} (${ARM[next.cond]}) failed with exit ${res.status}`);
@@ -78,9 +96,14 @@ export function step(sha = headSha()) {
 }
 
 /** Why a fixed/calibrated pair is not comparable: the governor A/B rule with the calibration flag as the only difference. */
-export function pairRefusals(fixed, cal) {
+export function pairRefusals(fixed, cal, throttle = THROTTLE) {
   const out = [];
   const flags = (r) => r?.fingerprint?.flags ?? [];
+  const tf = cpuThrottleFlag(throttle);
+  for (const [arm, r] of [['fixed', fixed], ['calibrated', cal]]) {
+    const has = flags(r).filter((f) => f.startsWith('cpu-throttle='));
+    if (tf ? has.length !== 1 || has[0] !== tf : has.length !== 0) out.push(`${arm} arm CPU throttle flag wrong`);
+  }
   if (!flags(fixed).includes('governor=on') || flags(fixed).includes('calibrate=on')) out.push('fixed arm flags wrong');
   if (!flags(cal).includes('governor=on') || !flags(cal).includes('calibrate=on')) out.push('calibrated arm flags wrong');
   const as = (r, drop) => ({ ...r, fingerprint: { ...r.fingerprint, flags: flags(r).filter((f) => f !== drop) } });
@@ -178,19 +201,23 @@ export function evaluate(sha = headSha()) {
     trajectories[name] = { ...judgeTrajectory(off, on, digestsIdentical), samples: { fixed: off, calibrated: on } };
   }
   const failing = [...Object.entries(trajectories).flatMap(([n, t]) => t.failed.map((c) => `${n}: ${c}`)), ...refusals];
+  const pre = THROTTLE > 1 ? precondition(Object.values(trajectories).flatMap((t) => t.calibratedLevels)) : null;
+  const verdict = pre && !pre.met ? 'VOID' : failing.length === 0 ? 'PASS' : 'FAIL';
   const record = {
-    kind: 'olv-render-budget-calibration-ab', version: 1, protocol: 'validation/protocols/render-budget-calibration-v1.md',
+    kind: 'olv-render-budget-calibration-ab', version: THROTTLE > 1 ? 2 : 1,
+    protocol: `validation/protocols/render-budget-calibration-${THROTTLE > 1 ? 'v2' : 'v1'}.md`,
+    ...(THROTTLE > 1 ? { emulation: { cpuThrottlingRate: THROTTLE, method: 'CDP Emulation.setCPUThrottlingRate', gpu: 'not emulated', thermal: 'not emulated' }, precondition: pre } : {}),
     datasetKey: KEY, heldOut: KEY === 'B', generatedAt: new Date().toISOString(), commit: sha, machine: MACHINE,
     dataset: sessions[0].r.dataset, fingerprintFixed: sessions[0].r.fingerprint, fingerprintCalibrated: sessions[1].r.fingerprint,
     plan: { pairs: V3_PAIRS, order: plan().map((s) => ARM[s.cond]), runsPerSession: '1 cold + 1 warm per trajectory; the warm run is the sample' },
     criteria: CRITERIA_CAL_V1,
     scientificDigests: { presentationInvariance: invariance, pairRefusals: refusals },
-    trajectories, verdict: failing.length === 0 ? 'PASS' : 'FAIL', failing,
+    trajectories, verdict, failing,
     sessions: sessions.map(({ s, r }) => ({ ...s, arm: ARM[s.cond], commit: r.commit, generatedAt: r.generatedAt, fingerprint: r.fingerprint, notes: r.notes, trajectories: r.trajectories })),
   };
   const outDir = join(ROOT, 'validation', 'performance', 'render-budget-calibration');
   mkdirSync(outDir, { recursive: true });
-  const file = join(outDir, `${record.generatedAt.slice(0, 10)}-${sha.slice(0, 8)}-${MACHINE}-v1-${KEY}.json`);
+  const file = join(outDir, `${record.generatedAt.slice(0, 10)}-${sha.slice(0, 8)}-${MACHINE}-${VERSION}-${KEY}.json`);
   try {
     writeFileSync(file, JSON.stringify(record, null, 2) + '\n', { flag: 'wx' });
   } catch (err) {
@@ -211,6 +238,7 @@ export function formatVerdict(record) {
       + `  firstRender +${fmt(c.firstRender.extraMs, 0)} ms  q ${fmt(c.qualityTransitions.off.median)}/${fmt(c.qualityTransitions.on.median)}`
       + `  fullQ +${fmt(c.fullQualityFromLastInput.extraMs, 0)} ms  restored ${c.settledRestored.pass}  levels ${t.calibratedLevels.join(',')}  failed ${t.failed.join(',') || '-'}`);
   }
+  if (record.precondition) lines.push(`precondition: ${record.precondition.nonzero}/${record.precondition.runs} calibrated runs above level 0 (need ${record.precondition.minShare * 100}%): ${record.precondition.met ? 'met' : 'not met'}`);
   lines.push(`presentationInvariance: ${record.scientificDigests.presentationInvariance.summary}`, `verdict: ${record.verdict}${record.failing.length ? `\n  ${record.failing.join('\n  ')}` : ''}`);
   return lines.join('\n');
 }
@@ -221,7 +249,7 @@ if (isCliEntry(import.meta.url)) {
     if (cmd === 'step') { if (!step()) console.log('[calibration-ab] nothing pending'); }
     else if (cmd === 'run') { while (step()); }
     else if (cmd === 'status') { const sha = headSha(); for (const s of plan()) console.log(`${s.index}\tpair ${s.pair + 1}\t${ARM[s.cond]}\t${complete(sessionResult(sha, s)) ? 'done' : 'pending'}`); }
-    else if (cmd === 'evaluate') { const { file, record } = evaluate(); console.log(formatVerdict(record)); console.log(`[calibration-ab] wrote ${file}`); process.exit(record.verdict === 'PASS' ? 0 : 1); }
+    else if (cmd === 'evaluate') { const { file, record } = evaluate(); console.log(formatVerdict(record)); console.log(`[calibration-ab] wrote ${file}`); process.exit(record.verdict === 'PASS' ? 0 : record.verdict === 'VOID' ? 3 : 1); }
     else { console.error('usage: calibration-ab.mjs step | run | status | evaluate'); process.exit(2); }
   } catch (e) {
     console.error(e.message);

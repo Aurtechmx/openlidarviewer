@@ -49,6 +49,7 @@ import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildNavJankRecord, validateJsonSchema, type NavJankEnv, type NavJankRun } from '../../src/perf/navJankRecord';
 import type { NavProbeSummary } from '../../src/perf/navProbe';
+import { cpuThrottleFlag, parseCpuThrottle } from '../../scripts/lib/cpuThrottle.mjs';
 import { buildNavJankResults, mergeNavJankResults, resultFileName, type NavJankResults } from '../../scripts/lib/navJankResults.mjs';
 
 const TRAJECTORIES = ['orbit', 'flythrough', 'zoomShock', 'scrub', 'stopInspect'] as const;
@@ -60,6 +61,8 @@ const WINDOW_MODE = process.env.OLV_NAV_WINDOW ?? 'normal';
 const GOVERNOR = process.env.OLV_NAV_GOVERNOR === 'on' || process.env.OLV_NAV_GOVERNOR === 'calibrate';
 /** OLV_NAV_GOVERNOR=calibrate adds the warm-up calibration (`?governor=calibrate`, flag `calibrate=on`). */
 const CALIBRATE = process.env.OLV_NAV_GOVERNOR === 'calibrate';
+/** Emulated slower CPU (render-budget-calibration-v2.md); 1 leaves the CPU alone. */
+const CPU_THROTTLE = parseCpuThrottle(process.env.OLV_NAV_CPU_THROTTLE);
 /** Chromium switches that stop it throttling an occluded, unfocused or background window. */
 const ANTI_THROTTLE_ARGS = [
   '--disable-backgrounding-occluded-windows',
@@ -435,12 +438,13 @@ async function environment(page: Page, context: BrowserContext, info: TestInfo):
       ...(WINDOW_MODE === 'normal' ? [] : [`window=${WINDOW_MODE}`]),
       ...(GOVERNOR ? ['governor=on'] : []),
       ...(CALIBRATE ? ['calibrate=on'] : []),
+      ...(CPU_THROTTLE > 1 ? [cpuThrottleFlag(CPU_THROTTLE) as string] : []),
     ],
   };
 }
 
 function partialDir(commit: string): string {
-  const dir = join(WORK_DIR, `${commit.slice(0, 12)}-${MACHINE}-${DATASET_ID.slice(0, 10)}${GOVERNOR ? '-governor' : ''}${CALIBRATE ? '-calibrate' : ''}`);
+  const dir = join(WORK_DIR, `${commit.slice(0, 12)}-${MACHINE}-${DATASET_ID.slice(0, 10)}${GOVERNOR ? '-governor' : ''}${CALIBRATE ? '-calibrate' : ''}${CPU_THROTTLE > 1 ? `-cpu${CPU_THROTTLE}x` : ''}`);
   mkdirSync(dir, { recursive: true });
   return dir;
 }
@@ -482,10 +486,13 @@ test.describe('@bench navigation jank benchmark', () => {
       try {
         const page = await context.newPage();
         page.setDefaultTimeout(60_000);
+        const throttle = CPU_THROTTLE > 1 ? await context.newCDPSession(page) : null;
+        await throttle?.send('Emulation.setCPUThrottlingRate', { rate: CPU_THROTTLE });
         const runs: { cache: 'cold' | 'warm'; load: LoadTiming; out: DriveOut; valid: boolean }[] = [];
         let env: Omit<NavJankEnv, 'trajectoryDigest' | 'cache'> | null = null;
         for (let i = 0; i <= RUNS; i++) {
           const cache = i === 0 ? 'cold' : 'warm';
+          await throttle?.send('Emulation.setCPUThrottlingRate', { rate: CPU_THROTTLE });
           const timing = await load(page, cache);
           env ??= await environment(page, context, info);
           const cover = await applyWindowMode(page, context);
