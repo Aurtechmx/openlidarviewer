@@ -100,6 +100,12 @@ export const WORKER_REGISTRY: readonly WorkerDeclaration[] = [
     workerChunk: 'localOocIndexerWorker',
     clientModule: 'src/io/heavy/worker/localOocIndexerWorkerClient.ts',
   },
+  {
+    id: 'observatory',
+    workerModule: 'src/app/observatoryWorker.ts',
+    workerChunk: 'observatoryWorker',
+    clientModule: 'src/app/observatoryWorkerClient.ts',
+  },
 ] as const;
 
 /** Escape a string for safe embedding inside a `RegExp`. */

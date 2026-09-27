@@ -17,6 +17,7 @@
 import type { ObservatoryCloudInput, ObservatoryRunOptions, ObservatoryRunOutcome } from './observatoryFromCloud';
 import { runObservatoryOverCloud } from './observatoryFromCloud';
 import { registerObservatoryOverlayInvalidator } from '../lazyChunks';
+import { cancelObservatoryJob, computeObservatoryInWorker } from './observatoryWorkerClient';
 
 export type ObservatoryRunnerState =
   | { readonly phase: 'idle' }
@@ -87,20 +88,31 @@ export function createObservatoryRunner(deps: ObservatoryRunnerDeps): Observator
       metresPerUnit: opts.metresPerUnit,
       buildTag: opts.buildTag,
     };
-    const compute = deps.compute ?? runObservatoryOverCloud;
-    const outcome = compute(cloud, options);
+    if (!deps.compute) {
+      // OB-RT-03: the pipeline runs in a worker; the result is revalidated
+      // against the same snapshot when it arrives.
+      void computeObservatoryInWorker(cloud, options)
+        .catch(() => runObservatoryOverCloud(cloud, options))
+        .then((outcome) => { commit(myToken, datasetId, crsRevision, outcome, true); });
+      return state;
+    }
+    commit(myToken, datasetId, crsRevision, deps.compute(cloud, options));
+    return state;
+  }
 
+  function commit(myToken: number, datasetId: string | null, crsRevision: number, outcome: ObservatoryRunOutcome, late = false): void {
     // Revalidate (Snapshot -> Await -> Revalidate -> Commit): a superseding
     // run() or abortAndClearCache() bumped `token` past `myToken`, or the
     // active dataset/CRS moved on while this ran — either way, this result
     // is refused, never committed silently as if it were current.
     const stale = myToken !== token || deps.getDatasetId() !== datasetId || deps.getCrsRevision() !== crsRevision;
     if (stale) {
-      setState({ phase: 'stale' });
-      return state;
+      // A late worker result for a superseded run stays quiet, so it never
+      // overwrites the newer run's state; otherwise the run reports stale.
+      if (!late || myToken === token) setState({ phase: 'stale' });
+      return;
     }
     setState({ phase: 'committed', outcome });
-    return state;
   }
 
   function getState(): ObservatoryRunnerState {
@@ -113,6 +125,7 @@ export function createObservatoryRunner(deps: ObservatoryRunnerDeps): Observator
   }
 
   function abortAndClearCache(): void {
+    cancelObservatoryJob();
     token++; // supersede any in-flight run so it lands as stale, not committed
     setState({ phase: 'idle' });
     overlayClear?.();
