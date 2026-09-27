@@ -11370,7 +11370,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
     gap: var(--space-2xs);
   }
   .olv-left-panels .olv-ws-back {
-    min-height: 32px;
+    min-height: 44px;
     padding: var(--space-xs) var(--space-sm) var(--space-xs) 0;
   }
   .olv-left-panels .olv-ws-task-title {
@@ -11381,10 +11381,11 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 
   /* A panel whose own title repeats the page title: the task header already
      names it. Its head holds only that title (the collapse toggle is hidden on
-     desktop), so nothing interactive goes with it. */
-  .olv-left-panels .olv-ws-mode.has-page > .olv-measure-panel > .olv-panel-head,
-  .olv-left-panels .olv-ws-mode.has-page > .olv-clip-panel > .olv-panel-head,
-  .olv-left-panels .olv-ws-mode.has-page > .olv-class-panel > .olv-panel-head {
+     desktop), so nothing interactive goes with it. A panel still collapsed keeps its head,
+     which is how it opens. */
+  .olv-left-panels .olv-ws-mode.has-page > .olv-measure-panel:not(.olv-collapsed) > .olv-panel-head,
+  .olv-left-panels .olv-ws-mode.has-page > .olv-clip-panel:not(.olv-collapsed) > .olv-panel-head,
+  .olv-left-panels .olv-ws-mode.has-page > .olv-class-panel:not(.olv-collapsed) > .olv-panel-head {
     display: none;
   }
 
