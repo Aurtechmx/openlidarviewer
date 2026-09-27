@@ -168,3 +168,6 @@ export function buildF16Scene(): ObservatoryF16Scene;
 export function buildF2Scene(): ObservatoryF2Scene;
 export function buildF3Scene(): ObservatoryF3Scene;
 export function buildF7Scene(): ObservatoryF7Scene;
+
+export { buildO11Scenarios, castO11Returns, buildO11StressStates } from './lib/observatoryO11Scenarios.mjs';
+export type { O11Scenario, O11RoomScenario, O11StressScenario } from './lib/observatoryO11Scenarios.mjs';

@@ -26,6 +26,7 @@
     "vitest.config.ts",
     "benchmarks/framework",
     "benchmarks/fixtures",
-    "benchmarks/pipeline"
+    "benchmarks/pipeline",
+    "benchmarks/observatory-o11"
   ]
 }
