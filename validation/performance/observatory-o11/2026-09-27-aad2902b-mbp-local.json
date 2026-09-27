@@ -1,0 +1,352 @@
+{
+  "protocol": "validation/protocols/observatory-o11-v1.md",
+  "commit": "aad2902b",
+  "date": "2026-09-27",
+  "machine": "mbp-local",
+  "os": "darwin 25.5.0",
+  "browser": "chromium 153.0.8010.12",
+  "backend": "webgpu",
+  "runsPerArm": 3,
+  "scenarios": {
+    "small": {
+      "id": "small",
+      "grid": {
+        "nx": 120,
+        "ny": 80,
+        "nz": 24
+      },
+      "voxelEdge": 0.25,
+      "returns": 99856,
+      "notReadRays": 0,
+      "buildMs": 1254,
+      "instances": 114042,
+      "backend": "webgpu"
+    },
+    "medium": {
+      "id": "medium",
+      "grid": {
+        "nx": 120,
+        "ny": 80,
+        "nz": 16
+      },
+      "voxelEdge": 0.5,
+      "returns": 1080000,
+      "notReadRays": 0,
+      "buildMs": 2375,
+      "instances": 125912,
+      "backend": "webgpu"
+    },
+    "large": {
+      "id": "large",
+      "grid": {
+        "nx": 160,
+        "ny": 120,
+        "nz": 20
+      },
+      "voxelEdge": 0.5,
+      "returns": 2000000,
+      "notReadRays": 1500000,
+      "buildMs": 5186,
+      "instances": 306471,
+      "backend": "webgpu"
+    },
+    "stress": {
+      "id": "stress",
+      "grid": {
+        "nx": 1024,
+        "ny": 1024,
+        "nz": 8
+      },
+      "voxelEdge": 0.25,
+      "returns": 0,
+      "notReadRays": 0,
+      "buildMs": 29,
+      "instances": 3146624,
+      "backend": "webgpu"
+    }
+  },
+  "slicing": {
+    "small": {
+      "runs": [
+        {
+          "ok": true,
+          "p95Ms": 7.899999998509884,
+          "medianMs": 1.8999999985098839,
+          "uploadBytes": 2304152,
+          "frames": 600
+        },
+        {
+          "ok": true,
+          "p95Ms": 1,
+          "medianMs": 0.5,
+          "uploadBytes": 2304152,
+          "frames": 600
+        },
+        {
+          "ok": true,
+          "p95Ms": 4.700000002980232,
+          "medianMs": 0.6000000014901161,
+          "uploadBytes": 2304152,
+          "frames": 600
+        }
+      ],
+      "ok": true,
+      "p95Ms": 4.700000002980232,
+      "uploadBytes": 2304152
+    },
+    "medium": {
+      "runs": [
+        {
+          "ok": true,
+          "p95Ms": 1.0999999940395355,
+          "medianMs": 0.5,
+          "uploadBytes": 2304152,
+          "frames": 600
+        },
+        {
+          "ok": true,
+          "p95Ms": 1.1000000014901161,
+          "medianMs": 0.6000000014901161,
+          "uploadBytes": 2304152,
+          "frames": 600
+        },
+        {
+          "ok": true,
+          "p95Ms": 1.4000000059604645,
+          "medianMs": 0.6000000014901161,
+          "uploadBytes": 2304152,
+          "frames": 600
+        }
+      ],
+      "ok": true,
+      "p95Ms": 1.1000000014901161,
+      "uploadBytes": 2304152
+    },
+    "large": {
+      "runs": [
+        {
+          "ok": true,
+          "p95Ms": 2.100000001490116,
+          "medianMs": 0.6000000014901161,
+          "uploadBytes": 4608152,
+          "frames": 600
+        },
+        {
+          "ok": true,
+          "p95Ms": 3.3000000044703484,
+          "medianMs": 0.6000000014901161,
+          "uploadBytes": 4608152,
+          "frames": 600
+        },
+        {
+          "ok": true,
+          "p95Ms": 1,
+          "medianMs": 0.5,
+          "uploadBytes": 4608152,
+          "frames": 600
+        }
+      ],
+      "ok": true,
+      "p95Ms": 2.100000001490116,
+      "uploadBytes": 4608152
+    },
+    "stress": {
+      "runs": [
+        {
+          "ok": true,
+          "p95Ms": 1.2999999970197678,
+          "medianMs": 0.5999999940395355,
+          "uploadBytes": 251658392,
+          "frames": 600
+        },
+        {
+          "ok": true,
+          "p95Ms": 1.6000000014901161,
+          "medianMs": 0.6000000014901161,
+          "uploadBytes": 251658392,
+          "frames": 600
+        },
+        {
+          "ok": true,
+          "p95Ms": 1.3000000044703484,
+          "medianMs": 0.6000000014901161,
+          "uploadBytes": 251658392,
+          "frames": 600
+        }
+      ],
+      "ok": true,
+      "p95Ms": 1.3000000044703484,
+      "uploadBytes": 251658392
+    }
+  },
+  "budgets": {
+    "small": {
+      "frameMs": 5.6400000035762785,
+      "uploadMiB": 2.6368927001953124
+    },
+    "medium": {
+      "frameMs": 1.3200000017881393,
+      "uploadMiB": 2.6368927001953124
+    },
+    "large": {
+      "frameMs": 2.5200000017881394,
+      "uploadMiB": 5.273611450195312
+    },
+    "stress": {
+      "frameMs": 1.560000005364418,
+      "uploadMiB": 288.0001739501953
+    }
+  },
+  "instancing": {
+    "small": {
+      "runs": [
+        {
+          "ok": true,
+          "p95Ms": 1.5,
+          "medianMs": 1.1999999955296516,
+          "uploadBytes": 1825032,
+          "frames": 600
+        },
+        {
+          "ok": true,
+          "p95Ms": 1.6000000014901161,
+          "medianMs": 1.1999999955296516,
+          "uploadBytes": 1825032,
+          "frames": 600
+        },
+        {
+          "ok": true,
+          "p95Ms": 2.399999998509884,
+          "medianMs": 1.2000000029802322,
+          "uploadBytes": 1825032,
+          "frames": 600
+        }
+      ],
+      "ok": true,
+      "p95Ms": 1.6000000014901161,
+      "uploadBytes": 1825032
+    },
+    "medium": {
+      "runs": [
+        {
+          "ok": true,
+          "p95Ms": 1.6000000014901161,
+          "medianMs": 1.2000000029802322,
+          "uploadBytes": 2014952,
+          "frames": 600
+        },
+        {
+          "ok": true,
+          "p95Ms": 1.5,
+          "medianMs": 1.2000000029802322,
+          "uploadBytes": 2014952,
+          "frames": 600
+        },
+        {
+          "ok": true,
+          "p95Ms": 1.5,
+          "medianMs": 1.2000000029802322,
+          "uploadBytes": 2014952,
+          "frames": 600
+        }
+      ],
+      "ok": true,
+      "p95Ms": 1.5,
+      "uploadBytes": 2014952
+    },
+    "large": {
+      "runs": [
+        {
+          "ok": true,
+          "p95Ms": 2.6999999955296516,
+          "medianMs": 2.1999999955296516,
+          "uploadBytes": 4903896,
+          "frames": 600
+        },
+        {
+          "ok": true,
+          "p95Ms": 2.9000000059604645,
+          "medianMs": 2.2000000029802322,
+          "uploadBytes": 4903896,
+          "frames": 600
+        },
+        {
+          "ok": true,
+          "p95Ms": 3,
+          "medianMs": 2.2999999970197678,
+          "uploadBytes": 4903896,
+          "frames": 600
+        }
+      ],
+      "ok": true,
+      "p95Ms": 2.9000000059604645,
+      "uploadBytes": 4903896
+    },
+    "stress": {
+      "runs": [
+        {
+          "ok": true,
+          "p95Ms": 23.19999999552965,
+          "medianMs": 11.800000004470348,
+          "uploadBytes": 50346344,
+          "frames": 600
+        },
+        {
+          "ok": true,
+          "p95Ms": 18.30000000447035,
+          "medianMs": 11.899999998509884,
+          "uploadBytes": 50346344,
+          "frames": 600
+        },
+        {
+          "ok": true,
+          "p95Ms": 12.899999998509884,
+          "medianMs": 11.699999995529652,
+          "uploadBytes": 50346344,
+          "frames": 600
+        }
+      ],
+      "ok": true,
+      "p95Ms": 18.30000000447035,
+      "uploadBytes": 50346344
+    }
+  },
+  "verdict": {
+    "chosen": "slicing",
+    "scenarios": {
+      "small": {
+        "frameRatio": 0.3404255320160785,
+        "uploadRatio": 0.7920623292213361,
+        "frameTest": true,
+        "uploadTest": true,
+        "pass": true
+      },
+      "medium": {
+        "frameRatio": 1.3636363617891123,
+        "uploadRatio": 0.8744874470087043,
+        "frameTest": false,
+        "uploadTest": true,
+        "pass": false
+      },
+      "large": {
+        "frameRatio": 1.3809523828108023,
+        "uploadRatio": 1.0641784385584503,
+        "frameTest": false,
+        "uploadTest": true,
+        "pass": false
+      },
+      "stress": {
+        "frameRatio": 14.076923031955076,
+        "uploadRatio": 0.20005827582336297,
+        "frameTest": false,
+        "uploadTest": true,
+        "pass": false
+      }
+    }
+  },
+  "budgetsFixedAt": "2026-09-27T04:42:09.895Z",
+  "notes": [
+    "At the start of the run, 11 other browser or Playwright processes from other worktrees were running on this machine; timings carry that background load for both arms alike.",
+    "performance.now() resolution in the page was 0.1 ms, so p95 figures near 1 ms are coarse."
+  ]
+}

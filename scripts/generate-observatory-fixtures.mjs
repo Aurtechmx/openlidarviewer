@@ -340,6 +340,10 @@ export function buildF11Scene() {
   };
 }
 
+// O11 benchmark scenarios live in a browser-safe module (no node: imports) so the
+// benchmark page can load them; re-exported here as part of the generator.
+export { buildO11Scenarios, castO11Returns, buildO11StressStates } from './lib/observatoryO11Scenarios.mjs';
+
 if (isCliEntry(import.meta.url)) {
   const write = process.argv.includes('--write');
   if (!write) {
