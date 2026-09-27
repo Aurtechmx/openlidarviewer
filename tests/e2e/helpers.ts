@@ -466,3 +466,41 @@ export async function reloadSettled(page: Page): Promise<void> {
   await settleNavigation(page);
   await page.reload();
 }
+
+/** Place a two-point distance through the test API (needs `?test=1`). */
+export async function placeTestDistance(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const api = (window as unknown as { __OLV_TEST_API__?: {
+      setMeasureKind: (k: string) => void;
+      placeMeasurementPoint: (p: { x: number; y: number; z: number }) => void;
+    } }).__OLV_TEST_API__;
+    if (!api) throw new Error('__OLV_TEST_API__ not mounted');
+    api.setMeasureKind('distance');
+    api.placeMeasurementPoint({ x: 0, y: 0, z: 0 });
+    api.placeMeasurementPoint({ x: 1, y: 0, z: 0 });
+  });
+  await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
+}
+
+/**
+ * A digest of what the terrain run and the contour step put on screen: the
+ * evidence text, the fitness verdict, the Contour Studio launcher and the
+ * raster pixels. Each node is tagged, so a re-render (which replaces the
+ * nodes) shows as a missing tag even when the text matches.
+ */
+export async function terrainResultDigest(page: Page, tag: string): Promise<{ digest: string; tagged: number; count: number }> {
+  return page.evaluate(async (t) => {
+    const nodes = [
+      ...document.querySelectorAll('.olv-analyse-readiness .olv-analyse-ready, .olv-fit-row, .olv-analyse-score, .olv-analyse-validation, .olv-analyse-contour-launcher > *'),
+    ] as (HTMLElement & { __probe?: string })[];
+    let tagged = 0;
+    for (const n of nodes) {
+      if (n.__probe === t) tagged++;
+      n.__probe ??= t;
+    }
+    const rasters = [...document.querySelectorAll('canvas.olv-analyse-raster')] as HTMLCanvasElement[];
+    const text = nodes.map((n) => n.textContent ?? '').join('\n') + rasters.map((c) => c.toDataURL()).join('\n');
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return { digest: [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join(''), tagged, count: nodes.length };
+  }, tag);
+}

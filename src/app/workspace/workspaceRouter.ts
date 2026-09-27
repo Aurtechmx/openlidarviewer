@@ -122,6 +122,11 @@ export function createWorkspaceRouter(
     if (from === to) return;
     const host = ws.mode(mode);
     const back = to === null || (from !== null && pages[mode]?.[from]?.parent === to);
+    // A new page starts at its top, so its title and Back are on screen: the
+    // scroller (the rail body, or the phone sheet's tab) keeps the old offset.
+    for (let p = host.parentElement, i = 0; p && i < 3; p = p.parentElement, i++) {
+      if (p.scrollTop > 0) p.scrollTop = 0;
+    }
     host.classList.toggle('olv-ws-nav-forward', !back);
     host.classList.toggle('olv-ws-nav-back', back);
     clearTimeout(navTimer);

@@ -159,13 +159,7 @@ export function installStaleChunkRecovery(
 ): StaleChunkRecovery {
   const cooldownMs = opts.cooldownMs ?? DEFAULT_COOLDOWN_MS;
   const now = opts.now ?? (() => Date.now());
-  const reload =
-    opts.reload ??
-    (() => {
-      // No argument: reload() re-requests the CURRENT URL + query, so the user
-      // lands back exactly where they were.
-      if (typeof location !== 'undefined') location.reload();
-    });
+  const reload = opts.reload ?? deferredPageReload(typeof window !== 'undefined' ? window : null);
   let storage: StorageLike | null;
   if (opts.storage !== undefined) {
     storage = opts.storage;
@@ -271,6 +265,35 @@ export function installStaleChunkRecovery(
   }
 
   return { importOrReload, dispose };
+}
+
+/** The slice of a window {@link deferredPageReload} uses. */
+export interface ReloadWindowLike {
+  addEventListener(type: string, listener: () => void): void;
+  setTimeout(fn: () => void, ms: number): unknown;
+  location: { reload(): void };
+}
+
+/**
+ * A page reload that never races another navigation. When the viewer is
+ * already leaving (a link, a typed URL, a test's `goto`), Firefox aborts the
+ * in-flight module fetches and rejects them with the same "error loading
+ * dynamically imported module" a swept-away chunk gives. Reloading then would
+ * replace the navigation the viewer asked for. So the reload waits one task,
+ * and is dropped when `pagehide` has fired in between; a page restored from
+ * the back-forward cache (`pageshow`) can reload again. No argument to
+ * reload(): it keeps the current URL and query.
+ */
+export function deferredPageReload(win: ReloadWindowLike | null): () => void {
+  if (!win) return () => {};
+  let leaving = false;
+  win.addEventListener('pagehide', () => { leaving = true; });
+  win.addEventListener('pageshow', () => { leaving = false; });
+  return () => {
+    win.setTimeout(() => {
+      if (!leaving) win.location.reload();
+    }, 0);
+  };
 }
 
 /**

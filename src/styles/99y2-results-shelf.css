@@ -147,3 +147,10 @@
     transition: none;
   }
 }
+
+/* In the phone sheet the tab already scrolls; a second scroller inside it
+   would trap the drag. The list takes its full height there. */
+.olv-mobile-sheet .olv-results-panel {
+  max-height: none;
+  overflow-y: visible;
+}
