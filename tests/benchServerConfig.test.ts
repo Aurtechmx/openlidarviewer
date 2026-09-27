@@ -9,7 +9,10 @@ const runner = readFileSync('scripts/governor-ab.mjs', 'utf8');
 
 describe('bench project web server', () => {
   it('serves a plain build by default, where the nav driver is installed', () => {
-    expect(config).toContain(": 'npm run build && npm run preview',");
+    expect(config).toContain(': `npm run build && npm run preview${PREVIEW_PORT_ARGS}`,');
+  });
+  it('moves the preview port only when OLV_DEPLOY_PORT is set', () => {
+    expect(config).toContain("process.env.OLV_DEPLOY_PORT ? ` -- --port ${DEPLOY_PORT} --strictPort` : ''");
   });
   it('never reuses a server already on the port for bench runs', () => {
     expect(config).toMatch(/OLV_NO_SERVER_REUSE \|\| process\.argv\.includes\('--project=bench'\)\s*\?\s*false/);

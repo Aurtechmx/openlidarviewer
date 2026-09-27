@@ -19,6 +19,13 @@ const DEPLOY_PORT = Number(process.env.OLV_DEPLOY_PORT ?? 4173);
  * nothing there. Defined once: baseURL and webServer.url disagreeing is how the
  * whole suite ended up pointed at a dead port.
  */
+/**
+ * `vite preview` binds 4173 unless told otherwise. A set OLV_DEPLOY_PORT moves
+ * it (strictly, so an occupied port fails the run), which lets a benchmark
+ * share the machine with e2e runs on the default port.
+ */
+const PREVIEW_PORT_ARGS = process.env.OLV_DEPLOY_PORT ? ` -- --port ${DEPLOY_PORT} --strictPort` : '';
+
 const SERVER_URL = process.env.OLV_DEPLOY_ROOT
   ? `http://127.0.0.1:${DEPLOY_PORT}`
   : `http://localhost:${DEPLOY_PORT}`;
@@ -202,8 +209,8 @@ export default defineConfig({
     command: process.env.OLV_DEPLOY_ROOT
       ? 'node scripts/serve-deploy-bytes.mjs'
       : process.env.SMOKE_LIVE
-        ? 'npm run build:live && npm run preview'
-        : 'npm run build && npm run preview',
+        ? `npm run build:live && npm run preview${PREVIEW_PORT_ARGS}`
+        : `npm run build && npm run preview${PREVIEW_PORT_ARGS}`,
     // The `?test=1` seam (`window.__OLV_TEST_API__`) is compiled in only when
     // OLV_TEST_SEAM=1 is set at build time; without it the block is dropped by
     // the minifier and every spec that drives the viewer programmatically
