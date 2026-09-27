@@ -2187,7 +2187,7 @@ export class AnalysePanel {
     const label = btn?.textContent ?? '';
     if (btn) {
       btn.disabled = true;
-      btn.textContent = '…';
+      showBusyScan(btn, '…');
     }
     try {
       // Regenerate at the selected shape style (cache hit; reuses the on-screen
@@ -2424,7 +2424,7 @@ export class AnalysePanel {
     if (this._refuseForeignScanExport()) return;
     const label = btn.textContent ?? 'DEM (ZIP)';
     btn.disabled = true;
-    btn.textContent = '…';
+    showBusyScan(btn, '…');
     // Frame + name captured before the writer chunk loads, so the raster and its
     // .prj / README describe the scan this result came from.
     const ctx = this._cb.getMapContext?.() ?? {};
@@ -2579,7 +2579,7 @@ export class AnalysePanel {
     if (this._refuseForeignScanExport()) return;
     const label = btn.textContent ?? 'Intelligence report (PDF)';
     btn.disabled = true;
-    btn.textContent = '…';
+    showBusyScan(btn, '…');
     // Name + frame read before the pdf-lib chunk loads, so the report's header
     // describes the scan its verdicts were computed on.
     const basename = this._cb.getExportBasename?.() ?? 'terrain';
