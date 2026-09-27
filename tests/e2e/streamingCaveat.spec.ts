@@ -41,7 +41,7 @@ test.describe('streaming caveats', () => {
   test('the terrain analysis is resident-only until every node is resident', async ({ page }) => {
     // A terrain run over the whole fixture takes several seconds on a
     // software renderer, and this test runs two.
-    test.setTimeout(300_000);
+    test.setTimeout(900_000);
     const release = await openPartialStream(page);
     // Open the Terrain page, where the Analyse panel lives. Scan routing can
     // settle after the first attempt, so retry until the panel is on screen.
@@ -65,11 +65,17 @@ test.describe('streaming caveats', () => {
     // clears only once every known octree node has been uploaded for picking,
     // which can land a frame later (Firefox). Re-run until the scan scope
     // reads full; a stale scope would never clear and still fails here.
-    await expect(async () => {
+    // Each re-run is started only after the previous one has finished: a
+    // click while the button reads "Analysing…" restarts the run, and a
+    // software renderer can need more than a minute per run.
+    const panel = page.locator('.olv-analyse-panel');
+    let scopeFull = false;
+    for (let attempt = 0; attempt < 3 && !scopeFull; attempt++) {
       await run.click();
-      await expect(run).toHaveText('Re-run analysis', { timeout: 60_000 });
-      await expect(page.locator('.olv-analyse-panel')).not.toContainText('resident-only', { timeout: 5_000 });
-    }).toPass({ timeout: 120_000 });
+      await expect(run).toHaveText('Re-run analysis', { timeout: 180_000 });
+      scopeFull = !((await panel.textContent()) ?? '').includes('resident-only');
+    }
+    expect(scopeFull, 'scan scope still reads resident-only after three full re-runs').toBe(true);
     await expect(page.locator('.olv-analyse-dem-note', { hasText: 'resident-only' })).toHaveCount(0);
     await expect(run).toHaveText('Re-run analysis');
     await expect(verdict).toBeVisible();
