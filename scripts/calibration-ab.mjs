@@ -215,7 +215,8 @@ export function evaluate(sha = headSha()) {
   const record = {
     kind: 'olv-render-budget-calibration-ab', version: PROTOCOL,
     protocol: `validation/protocols/render-budget-calibration-v${PROTOCOL}.md`,
-    ...(LOCK ? { machineSharing: { sharedE2eLock: LOCK, heldForWholeSession: true, previewPort: Number(process.env.OLV_DEPLOY_PORT ?? 4173) } } : {}),
+    ...(process.env.OLV_CAL_AB_NOTE ? { environmentNote: process.env.OLV_CAL_AB_NOTE } : {}),
+    ...(LOCK ? { machineSharing: { sharedE2eLock: LOCK, heldForWholeSession: process.env.OLV_CAL_AB_LOCK_INTACT !== '0', previewPort: Number(process.env.OLV_DEPLOY_PORT ?? 4173) } } : {}),
     ...(THROTTLE > 1 ? { emulation: { cpuThrottlingRate: THROTTLE, method: 'CDP Emulation.setCPUThrottlingRate', gpu: 'not emulated', thermal: 'not emulated' }, precondition: pre } : {}),
     datasetKey: KEY, heldOut: KEY === 'B', generatedAt: new Date().toISOString(), commit: sha, machine: MACHINE,
     dataset: sessions[0].r.dataset, fingerprintFixed: sessions[0].r.fingerprint, fingerprintCalibrated: sessions[1].r.fingerprint,
