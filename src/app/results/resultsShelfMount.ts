@@ -29,7 +29,25 @@ import {
   type TerrainReader,
 } from './resultsIndex';
 import { createResultsShelf, type ResultsShelf } from './resultsShelf';
-import { labRun, observatoryRunnerView, observatorySceneTransform, subscribeResultSignals } from './resultSignals';
+import {
+  labRun,
+  observatoryRunnerView,
+  observatorySceneTransform,
+  requestResultReopen,
+  subscribeResultSignals,
+  takeResultReopen,
+  type ModalResultKind,
+} from './resultSignals';
+
+/** The palette actions that open each modal-owned result. */
+const MODAL_ACTION: Readonly<Record<ModalResultKind, string>> = {
+  'flow-pulse': 'analyse.flowPulse',
+  'terrain-access': 'analyse.terrainAccess',
+  observatory: 'analyse.observatory',
+};
+
+/** How long a modal has to take its reopen request before the shelf falls back. */
+export const MODAL_OPEN_FALLBACK_MS = 8_000;
 
 type Pose = { position: [number, number, number]; target: [number, number, number] };
 
@@ -90,6 +108,7 @@ export function mountResultsShelf(
   analysePanel: () => ShelfTerrainPanel | null,
   exportPanel: ShelfExportPanel | null,
   navigate: (route: WorkspaceRoute) => void,
+  runAction?: (id: string) => void,
 ): MountedResultsShelf {
   const src = {
     viewer: host.viewer,
@@ -130,6 +149,24 @@ export function mountResultsShelf(
       return !!product && !!exportPanel?.select(product);
     },
     activeLayerId: src.activeLayerId,
+    // Labs and the Observatory are modals: Focus opens the modal on the result
+    // it holds, with nothing recomputed. When the modal never takes the
+    // request (its chunk failed to load), the shelf shows the Analyse route.
+    openInModal: runAction
+      ? (e) => {
+        if (!(e.type in MODAL_ACTION)) return false;
+        const kind = e.type as ModalResultKind;
+        requestResultReopen(kind);
+        try {
+          runAction(MODAL_ACTION[kind]);
+        } catch {
+          takeResultReopen(kind);
+          return false;
+        }
+        setTimeout(() => { if (takeResultReopen(kind)) navigate(e.route); }, MODAL_OPEN_FALLBACK_MS);
+        return true;
+      }
+      : undefined,
     layerName: (id) => src.viewer.getCloud(id)?.name ?? null,
   });
   const offIndex = index.subscribe(() => {

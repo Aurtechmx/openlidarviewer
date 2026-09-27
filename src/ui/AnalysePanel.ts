@@ -1599,7 +1599,10 @@ export class AnalysePanel {
    * default-collapsed (mobile) expander so the panel reads less dense at a glance.
    */
   private _renderAssessMetrics(metrics: ReadonlyArray<SupportingMetric>): HTMLElement {
-    const wrap = el('div', { className: 'olv-analyse-assess-metricwrap' });
+    // Surface model stats are secondary to the verdict and the products, so the
+    // whole block sits behind one disclosure; the chips are all still here.
+    const wrap = el('details', { className: 'olv-analyse-assess-metricwrap' });
+    wrap.append(el('summary', { className: 'olv-analyse-assess-metrics-summary', text: 'Surface model stats' }));
     const byLabel = new Map(metrics.map((m) => [m.label, m] as const));
 
     const pill = (m: SupportingMetric): HTMLElement => {
@@ -3138,6 +3141,10 @@ export class AnalysePanel {
     if (f.tierBadge) hero.append(el('span', { className: 'olv-fit-badge', text: f.tierBadge }));
     this._fitnessRow.append(hero);
 
+    // The per-dimension checks are supporting evidence for the verdict above,
+    // so they sit behind one disclosure and the page leads with the verdict,
+    // the products and Why?. Every row stays in the DOM.
+    const checks = el('details', { className: 'olv-fit-checks' });
     const grid = el('div', { className: 'olv-fit-grid' });
     for (const d of f.dimensions) {
       const row = el('div', { className: `olv-fit-row is-${d.tone}` });
@@ -3154,7 +3161,11 @@ export class AnalysePanel {
       this._hint(row, d.hint ?? d.summary);
       grid.append(row);
     }
-    this._fitnessRow.append(grid);
+    checks.append(
+      el('summary', { className: 'olv-fit-caveats-summary', text: `Validation detail (${f.dimensions.length} checks)` }),
+      grid,
+    );
+    this._fitnessRow.append(checks);
 
     if (f.caveats.length > 0) {
       // Collapsed by default: the caveats restate the checklist dimensions above

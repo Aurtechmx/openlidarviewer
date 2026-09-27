@@ -68,7 +68,7 @@ import { loadTerrainAccessPackage, registerTerrainAccessOverlayInvalidator } fro
 import { downloadBytes } from '../../io/download';
 import type { buildTerrainAccessPackage } from '../../export/terrainAccessPackage';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
-import { publishLabRun } from '../../app/results/resultSignals';
+import { labRun, publishLabRun, takeResultReopen } from '../../app/results/resultSignals';
 import type { SurfaceGrid } from '../../terrain/surface/buildDsm';
 
 /** The analysed surface and the frame facts a Terrain Access run needs. */
@@ -765,6 +765,14 @@ function mountTerrainAccessInteractive(input: TerrainAccessLabInput | null): { e
 /** Run and show Terrain Access in a dialog. */
 export function openTerrainAccessLab(input: TerrainAccessLabInput | null): ModalHandle {
   const interactive = mountTerrainAccessInteractive(input);
+  // A shelf Focus reopens the published route on the same layer: its run
+  // card leads the lab, read from the kept outcome, with nothing recomputed.
+  const prior = takeResultReopen('terrain-access') ? labRun('terrain-access') : null;
+  if (prior && prior.layerId === (input?.layerId ?? null)) {
+    interactive.element.prepend(el('section', { className: 'olv-ta-last-run', ariaLabel: 'Latest route' }, [
+      renderTerrainAccessRunCard(prior.outcome as TerrainAccessLabOutcome),
+    ]));
+  }
   return openModal({
     title: 'Field Simulation Lab: Terrain Access',
     body: interactive.element,

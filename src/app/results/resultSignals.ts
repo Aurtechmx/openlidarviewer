@@ -75,6 +75,30 @@ export function labRun(kind: LabKind): LabRunRef | null {
   return labRuns.get(kind) ?? null;
 }
 
+/** The results a modal owns: the two labs and the Observatory. */
+export type ModalResultKind = LabKind | 'observatory';
+
+const reopenRequests = new Set<ModalResultKind>();
+
+/**
+ * The Results shelf asks the next open of this modal to show the result it
+ * already holds instead of computing a new one. The modal takes the request
+ * with {@link takeResultReopen} when it opens.
+ */
+export function requestResultReopen(kind: ModalResultKind): void {
+  reopenRequests.add(kind);
+}
+
+/** True once per request: the modal opening now should reuse its result. */
+export function takeResultReopen(kind: ModalResultKind): boolean {
+  return reopenRequests.delete(kind);
+}
+
+/** True while a request is waiting for its modal to open. */
+export function resultReopenPending(kind: ModalResultKind): boolean {
+  return reopenRequests.has(kind);
+}
+
 /** Told when any announced owner changes. Returns an unsubscribe. */
 export function subscribeResultSignals(fn: () => void): () => void {
   listeners.add(fn);
@@ -87,4 +111,5 @@ export function resetResultSignalsForTest(): void {
   observatoryToScene = () => null;
   labRuns.clear();
   listeners.clear();
+  reopenRequests.clear();
 }

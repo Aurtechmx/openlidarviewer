@@ -249,10 +249,21 @@ test.describe('workspace a11y', () => {
       await page.keyboard.press('Tab');
     }
     await expect(back).toBeFocused();
-    const ring = await back.evaluate((el) => ({ fv: el.matches(':focus-visible'), outline: getComputedStyle(el).outlineStyle }));
-    // WebKit does not treat scripted focus as keyboard focus; the other engines must.
-    if (browserName !== 'webkit') expect(ring.fv).toBe(true);
-    if (ring.fv) expect(ring.outline).not.toBe('none');
+    if (browserName === 'webkit') {
+      // WebKit does not treat scripted focus as keyboard focus, and Tab alone
+      // skips buttons. Option+Tab walks every control, as in Safari, so the
+      // ring below is a live keyboard ring there too.
+      await page.keyboard.press('Alt+Tab');
+      await page.keyboard.press('Alt+Shift+Tab');
+    }
+    await expect(back).toBeFocused();
+    const ring = await back.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { fv: el.matches(':focus-visible'), outline: cs.outlineStyle, outlineWidth: parseFloat(cs.outlineWidth), shadow: cs.boxShadow };
+    });
+    expect(ring.fv, 'keyboard focus matches :focus-visible').toBe(true);
+    const drawn = (ring.outline !== 'none' && ring.outlineWidth > 0) || (ring.shadow !== 'none' && ring.shadow !== '');
+    expect(drawn, `computed ring ${JSON.stringify(ring)}`).toBe(true);
 
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.locator('.olv-mobile-sheet')).toBeVisible({ timeout: 10_000 });
@@ -260,5 +271,60 @@ test.describe('workspace a11y', () => {
       const box = await page.locator(`.olv-mobile-sheet .olv-msheet-tab[data-tab="${id}"]`).boundingBox();
       expect(box?.height ?? 0, `${id} tab height`).toBeGreaterThanOrEqual(44);
     }
+  });
+});
+
+/** Width and height of each visible match. */
+async function targetSizes(page: Page, selector: string): Promise<Array<{ w: number; h: number }>> {
+  return page.evaluate((sel) => Array.from(document.querySelectorAll(sel))
+    .map((e) => e.getBoundingClientRect())
+    .filter((b) => b.width > 0 && b.height > 0)
+    .map((b) => ({ w: b.width, h: b.height })), selector);
+}
+
+async function expectTargets(page: Page, selector: string, min: number): Promise<void> {
+  const sizes = await targetSizes(page, selector);
+  expect(sizes.length, `${selector} is on screen`).toBeGreaterThan(0);
+  for (const s of sizes) {
+    expect(s.w, `${selector} width`).toBeGreaterThanOrEqual(min);
+    expect(s.h, `${selector} height`).toBeGreaterThanOrEqual(min);
+  }
+}
+
+test.describe('target size', () => {
+  test.slow();
+
+  test('small inline controls are at least 24 px at 1366x768', async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await openDense(page);
+    await showWorkspaceMode(page, 'data');
+    for (const sel of ['.olv-add-dataset-row', '.olv-layer-solo', '.olv-layer-lock', '.olv-layer-x']) await expectTargets(page, sel, 24);
+    await showWorkspaceMode(page, 'analyse');
+    // Run terrain analysis, Prepare terrain and the other remedies.
+    await expect(page.locator('.olv-ah-remedy', { hasText: 'Run terrain analysis' })).toBeVisible();
+    await expect(page.locator('.olv-ah-remedy', { hasText: 'Prepare terrain' }).first()).toBeVisible();
+    await expectTargets(page, '.olv-ah-remedy', 24);
+    await page.locator('.olv-ah-row[data-analysis="terrain"] .olv-ah-open').click();
+    await expectTargets(page, '.olv-analyse-run', 24);
+    await page.locator('.olv-analyse-run').click();
+    await expect(page.locator('.olv-fit-verdict-text')).toBeVisible({ timeout: 30_000 });
+    await expectTargets(page, '.olv-analyse-surface-dl', 24);
+  });
+
+  test.describe('touch layout', () => {
+    test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+    test('the same controls are at least 44 px', async ({ page }) => {
+      await openDense(page);
+      await expect(page.locator('.olv-mobile-sheet')).toBeVisible({ timeout: 10_000 });
+      await page.locator('.olv-mobile-sheet .olv-msheet-tab[data-tab="data"]').click();
+      for (const sel of ['.olv-add-dataset-row', '.olv-layer-solo', '.olv-layer-lock', '.olv-layer-x']) await expectTargets(page, sel, 44);
+      await page.locator('.olv-mobile-sheet .olv-msheet-tab[data-tab="analyse"]').click();
+      await expectTargets(page, '.olv-msheet-slot[data-tab="analyse"] .olv-ah-remedy', 44);
+      await page.locator('.olv-msheet-slot[data-tab="analyse"] .olv-ah-row[data-analysis="terrain"] .olv-ah-open').click();
+      await page.locator('.olv-msheet-slot[data-tab="analyse"] .olv-analyse-run').click();
+      await expect(page.locator('.olv-msheet-slot[data-tab="analyse"] .olv-fit-verdict-text')).toBeVisible({ timeout: 30_000 });
+      await expectTargets(page, '.olv-msheet-slot[data-tab="analyse"] .olv-analyse-surface-dl', 44);
+    });
   });
 });

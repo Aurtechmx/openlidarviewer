@@ -26,7 +26,7 @@ import {
   type TerrainReader,
 } from '../src/app/results/resultsIndex';
 import { createResultsShelf } from '../src/app/results/resultsShelf';
-import { mountResultsShelf, poseAt } from '../src/app/results/resultsShelfMount';
+import { MODAL_OPEN_FALLBACK_MS, mountResultsShelf, poseAt } from '../src/app/results/resultsShelfMount';
 import { createScanService } from '../src/app/ScanService';
 import {
   announceObservatoryRunner,
@@ -34,8 +34,11 @@ import {
   observatoryRunnerView,
   observatorySceneTransform,
   publishLabRun,
+  requestResultReopen,
   resetResultSignalsForTest,
+  resultReopenPending,
   subscribeResultSignals,
+  takeResultReopen,
 } from '../src/app/results/resultSignals';
 import { SessionFindings } from '../src/render/measure/sessionFindings';
 
@@ -393,5 +396,72 @@ describe('results shelf actions', () => {
       .toEqual({ position: [11, 2, 8], target: [1, 2, 3] });
     const fitted = poseAt({ position: [10, 0, 0], target: [0, 0, 0] }, [1, 2, 3], 5);
     expect(fitted.position).toEqual([13, 2, 3]);
+  });
+});
+
+describe('shelf Focus on a lab or Observatory result opens its modal', () => {
+  function mountWith(runAction: (id: string) => void) {
+    installLiveFakeDom();
+    resetResultSignalsForTest();
+    const context = { scan: { activeId: 'a' } } as unknown as Parameters<typeof createScanService>[0]['context'];
+    const scans = createScanService({ getViewer: () => ({ streamingCloud: null }) as never, context });
+    const pose = { position: [0, 0, 10] as [number, number, number], target: [0, 0, 0] as [number, number, number] };
+    const navigate = vi.fn();
+    const mounted = mountResultsShelf({
+      viewer: { measure: { getMeasurements: () => [] }, clouds: () => ['a'], getCloud: (id) => ({ name: `${id}.laz` }), getCameraPose: () => pose, applyCameraPose: vi.fn() },
+      identity: { stableIdFor: (id) => id },
+      scans,
+      terrainRunner: new FakeRunner(),
+    }, () => null, null, navigate, runAction);
+    return { mounted, navigate };
+  }
+
+  it('runs the lab action with a reopen request and does not route', () => {
+    const outcome = { ok: true };
+    const seen: Array<[string, boolean]> = [];
+    const { mounted, navigate } = mountWith((id) => { seen.push([id, resultReopenPending('flow-pulse')]); });
+    publishLabRun('flow-pulse', { outcome, layerId: 'a', filename: 'a.laz' });
+    mounted.refresh();
+    expect(mounted.focusResult('flow-pulse:a')).toBe(true);
+    expect(seen).toEqual([['analyse.flowPulse', true]]);
+    expect(navigate).not.toHaveBeenCalled();
+    // The modal takes the request when it opens; the kept run is the same object.
+    expect(takeResultReopen('flow-pulse')).toBe(true);
+    expect(labRun('flow-pulse')!.outcome).toBe(outcome);
+  });
+
+  it('opens the Observatory without a rerun request left behind', () => {
+    const ids: string[] = [];
+    const { mounted } = mountWith((id) => { ids.push(id); expect(takeResultReopen('observatory')).toBe(true); });
+    const obs = fakeObservatory();
+    announceObservatoryRunner(obs);
+    obs.set({ phase: 'committed', outcome: { status: 'ok', record: { id: 'r1' } } });
+    mounted.refresh();
+    expect(mounted.focusResult('observatory:r1')).toBe(true);
+    expect(ids).toEqual(['analyse.observatory']);
+    expect(resultReopenPending('observatory')).toBe(false);
+  });
+
+  it('falls back to the Analyse route when the modal never opens', () => {
+    vi.useFakeTimers();
+    try {
+      const { mounted, navigate } = mountWith(() => { /* the lab chunk failed: nothing takes the request */ });
+      publishLabRun('terrain-access', { outcome: { ok: true }, layerId: 'a', filename: null });
+      mounted.refresh();
+      mounted.focusResult('terrain-access:a');
+      expect(navigate).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(MODAL_OPEN_FALLBACK_MS);
+      expect(navigate).toHaveBeenCalledWith({ mode: 'analyse', page: 'access' });
+      expect(resultReopenPending('terrain-access')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a request is taken once', () => {
+    resetResultSignalsForTest();
+    requestResultReopen('observatory');
+    expect(takeResultReopen('observatory')).toBe(true);
+    expect(takeResultReopen('observatory')).toBe(false);
   });
 });
