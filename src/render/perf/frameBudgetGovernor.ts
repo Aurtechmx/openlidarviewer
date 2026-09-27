@@ -121,6 +121,11 @@ export interface FrameBudgetInput {
    * Defaults to the moving band.
    */
   readonly presentationMoving?: boolean;
+  /**
+   * The level a warm-up after load measured (`calibrationLevel`), or 0. While
+   * moving the v2 outputs start from it instead of from full scale.
+   */
+  readonly calibratedLevel?: number;
 }
 
 /** What the frame's optional work is allowed. Every number is in `[0, 1]`. */
@@ -184,6 +189,19 @@ export function frameLoad(input: FrameBudgetInput): number {
   const median = clamp01((input.recentMedianMs - target) / span);
   const spike = clamp01((input.recentHighMs - target) / span);
   return clamp01(Math.max(median, spike * SPIKE_WEIGHT));
+}
+
+/** The v2 presentation level a load asks for: 0, 1 or 2. */
+function levelOf(load: number): number {
+  return load > 0.5 ? 2 : load > 0 ? 1 : 0;
+}
+
+/**
+ * Calibration: the level the p95 of the warm-up frames after a load asks for,
+ * through the same load function and levels as the live policy.
+ */
+export function calibrationLevel(p95Ms: number, targetFrameMs = TARGET_FRAME_MS): number {
+  return levelOf(frameLoad({ recentMedianMs: p95Ms, recentHighMs: p95Ms, targetFrameMs } as FrameBudgetInput));
 }
 
 /**
@@ -273,7 +291,7 @@ export function frameBudgetPolicy(
 
   // v2: while moving, drop to the level the load asks for and hold the lowest
   // level reached; once still, restore both at once.
-  const loadLevel = load > 0.5 ? 2 : load > 0 ? 1 : 0;
+  const loadLevel = Math.max(levelOf(load), Math.min(2, Math.max(0, Math.floor(input.calibratedLevel ?? 0))));
   let renderScale: number;
   let pointBudgetFraction: number;
   if (input.presentationMoving ?? band === 'moving') {
