@@ -31,7 +31,7 @@ describe('export health is shown where the export happens', () => {
   it('renders the canonical model rather than re-deriving readiness', () => {
     // The panel calls the shared renderer on whatever the host's callback
     // returns. It must not compute a verdict of its own.
-    expect(PANEL).toMatch(/renderExportHealthPanel\(health\)/);
+    expect(PANEL).toMatch(/renderExportHealthPanel\(health[,)]/);
     expect(PANEL).toMatch(/const health = this\._cb\.exportHealth\?\.\(\) \?\? null;/);
     expect(PANEL).not.toMatch(/verdict\s*=\s*['"](ready|caution|blocked)['"]/);
   });

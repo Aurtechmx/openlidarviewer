@@ -41,8 +41,8 @@
 /** The set of capture types the classifier can distinguish. */
 export type CaptureType =
   | 'iphone-lidar'      // VCSEL-based handheld phone scan (also Polycam, 3D Scanner App, Scaniverse, SiteScape)
-  | 'drone-lidar'       // UAV-mounted ALS (DJI L1, RIEGL, Velodyne-on-UAV)
-  | 'terrestrial'       // TLS (FARO, Leica, RIEGL VZ)
+  | 'drone-lidar'       // UAV-mounted ALS (low-altitude drone LiDAR)
+  | 'terrestrial'       // TLS (tripod-mounted terrestrial scanner)
   | 'mobile-slam'       // Handheld SLAM scanner (NavVis, GeoSLAM)
   | 'aerial-als'        // Manned-aircraft airborne laser scanning (USGS 3DEP class)
   | 'spaceborne'        // GEDI, ICESat-2, CALIOP
@@ -567,14 +567,14 @@ function matchNumeric(signals: ScanSignals): ProvenanceFingerprint | null {
       ]);
     }
 
-    // UAV / drone ALS — modern low-altitude drone LiDAR (DJI Zenmuse L1/L2,
-    // RIEGL miniVUX) maps a site at 100–1000 pts/m²: far denser than manned ALS,
+    // UAV / drone ALS: modern low-altitude drone LiDAR maps a site at
+    // 100–1000 pts/m²: far denser than manned ALS,
     // yet spread over an open mapping footprint rather than a single TLS station.
     // This band has to come before TLS, or a dense aerial strip falls through to
     // it. Source: Ruzgienė 2025 (Frontiers in Remote Sensing) — drone-LiDAR
     // "100–1000 pts/m² depending on altitude + flight pattern".
     // No upper density cap over a mapping-scale footprint: a very dense
-    // low-altitude flight (>2000 pts/m², DJI L2 at low AGL / slow speed) is
+    // low-altitude flight (>2000 pts/m², a drone sensor at low AGL / slow speed) is
     // still drone, not TLS — a terrestrial station cannot lay down uniform
     // high density across thousands of square metres. Very high density over an
     // open footprint is the strongest low-altitude-UAV signature, so it reads

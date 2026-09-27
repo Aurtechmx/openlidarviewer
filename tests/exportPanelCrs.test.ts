@@ -92,7 +92,7 @@ describe('ExportPanel — CRS step auto-collapse', () => {
     const root = panel.element as unknown as FakeEl;
     const note = root.findByClass('olv-export-crs-note')[0];
     expect(isHidden(note)).toBe(false);
-    expect(note.textContent).toMatch(/local coordinates/i);
+    expect(note.textContent).toMatch(/No CRS recorded in the file\. Coordinates are written unchanged/);
     // The CRS pills container is hidden (the pills still exist in the DOM tree,
     // but their row carries display:none).
     const pillRows = root.findByClass('olv-bc-pills');

@@ -115,7 +115,9 @@
  * tiny subtle dot that disappeared into the triangle outline. */
 .olv-mode-reset {
   position: absolute;
-  top: 47%; left: 50%;
+  /* The centroid of the three pads (apex centre ~17px, base centres ~91px),
+     so the Orbit pad above no longer overlaps it and reads as a second icon. */
+  top: 62%; left: 50%;
   transform: translate(-50%, -50%);
   width: 44px; height: 44px;
   display: inline-flex; align-items: center; justify-content: center;

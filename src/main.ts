@@ -1753,7 +1753,7 @@ const dock = new ToolDock({
     // Re-open (or hide) the terrain analysis panel; opening takes over from an
     // Object panel that demoted it. Lazy-mount aware: the panel may not exist
     // yet, so the toggle reads the tracked desired-visibility and mounts on demand.
-    const show = analysePanel ? !analysePanel.isVisible() : !analyseDesiredVisible;
+    const show = !dock.isAnalyseActive(); // the button follows the mode shown
     // A manual toggle is a user override: stop auto-rerouting so a late streaming node cannot move the panel.
     routing.pin();
     analyseDesiredVisible = show;

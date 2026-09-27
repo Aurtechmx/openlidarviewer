@@ -1,6 +1,8 @@
 /* 99y2-results-shelf.css — the Results shelf (src/app/results/resultsShelf.ts).
-   Desktop: the left rail's footer, below the scrolling mode body. Phone: a row
-   at the top of the sheet's Data tab. Empty or before a scan: not shown. */
+   Desktop: the left rail's footer, below the scrolling mode body, on the rail's
+   surface. Phone: a row at the top of the sheet's Data tab. Either way the
+   toggle comes first and the list opens below it. Empty or before a scan: not
+   shown. */
 
 .olv-results-shelf {
   flex: 0 0 auto;
@@ -32,6 +34,7 @@
   text-align: left;
   cursor: pointer;
   transition: background 160ms var(--ease-standard);
+  order: -1;
 }
 .olv-results-toggle:hover {
   background: color-mix(in srgb, var(--accent) 12%, var(--panel-raised));
@@ -48,15 +51,15 @@
   height: 6px;
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
-  transform: rotate(-135deg);
+  transform: rotate(45deg);
   transition: transform 160ms var(--ease-standard);
 }
 .olv-results-shelf.is-open .olv-results-toggle::after {
-  transform: rotate(45deg);
+  transform: rotate(-135deg);
 }
 
-/* The list opens upward from the footer and scrolls on its own, so the mode
-   body keeps its space and the canvas is never covered. */
+/* The list opens below the toggle and its height is capped, so the mode body
+   above keeps its space and the list never runs past the rail. */
 .olv-results-panel {
   max-height: min(40vh, 320px);
   overflow-y: auto;
@@ -153,16 +156,4 @@
 .olv-mobile-sheet .olv-results-panel {
   max-height: none;
   overflow-y: visible;
-}
-
-/* The phone sheet shows the shelf as a row at the top of the Data tab, so the
-   list opens below its toggle and reads top-down. The chevron follows. */
-.olv-mobile-sheet .olv-results-toggle {
-  order: -1;
-}
-.olv-mobile-sheet .olv-results-toggle::after {
-  transform: rotate(45deg);
-}
-.olv-mobile-sheet .olv-results-shelf.is-open .olv-results-toggle::after {
-  transform: rotate(-135deg);
 }

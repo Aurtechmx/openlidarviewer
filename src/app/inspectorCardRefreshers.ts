@@ -258,7 +258,7 @@ export function createInspectorCardRefreshers(
    * Push a cheap Dataset Intelligence summary into the Inspector's
    * card from data already in hand at load time. This populates the
    * Point Density row from declared `pointCount / bbox volume` and the
-   * Streaming Coverage row from the source kind. No point iteration,
+   * Coverage row from the source kind. No point iteration,
    * no engine analysis — just stable header-derived facts the user
    * can see immediately. The Dataset Intelligence card stays
    * header-derived for now.
@@ -323,6 +323,7 @@ export function createInspectorCardRefreshers(
           // What is actually resident (and what a run can walk) — the declared
           // header total stays on `sourcePointCount`.
           analyzedPointCount: cloud.pointCount,
+          ...(strided ? { displayPointCount: cloud.pointCount } : {}),
           // v0.3.10 honesty pass — this path runs at load time from
           // header data ALONE. No terrain analysis has happened yet, so
           // we have nothing meaningful to say about confidence. The
@@ -441,7 +442,12 @@ export function createInspectorCardRefreshers(
         // The engine's 'full' means the grid spans the extent, not that every
         // source point was read: without sourceComplete the load-time reading
         // (display sample, resident nodes) stays. Any partial mode wins as-is.
-        coverage: mode === 'full' && base.sourceComplete !== true ? base.coverage : mode,
+        // A local display sample stays a display sample when the run read a
+        // sample of it: nothing streams, and the card says which points it read.
+        coverage:
+          (mode === 'full' && base.sourceComplete !== true) || (mode === 'sampled' && base.coverage === 'display-sample')
+            ? base.coverage
+            : mode,
         ...(Number.isFinite(confidence) ? { confidence } : {}),
       },
       { engineRan: true, ...(Number.isFinite(ground) ? { groundPointRatio: ground } : {}) },

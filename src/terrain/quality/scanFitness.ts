@@ -173,6 +173,11 @@ export interface ScanFitness {
   readonly provisional: boolean;
 }
 
+/** The assessment's own cause line for a sampled run (terrainAssessment caps). */
+const SAMPLED_CAUSE = /sampled, not fully walked|built from a sample/i;
+/** What to do about a sampled run, said once with the caveat. */
+export const SAMPLE_REMEDY = 'For a final grade, run terrain on a smaller tile so every point is read.';
+
 const SEVERITY: Record<FitnessTone, number> = { ready: 0, okay: 1, review: 2 };
 const worst = (a: FitnessTone, b: FitnessTone): FitnessTone => (SEVERITY[a] >= SEVERITY[b] ? a : b);
 
@@ -300,10 +305,12 @@ function densityDimension(
   // "reference" (not "floor met"/"quality level") — this is ground-return
   // density measured against a pulse-density figure, not a QL determination.
   let summary: string;
-  if (d >= QL1_DENSITY) summary = `${v} ground pts/m² — clears the ${QL1_DENSITY} pts/m² QL1 pulse-density reference.`;
-  else if (tone === 'ready') summary = `${v} ground pts/m² — clears the ${QL2_DENSITY} pts/m² QL2 pulse-density reference.`;
-  else if (tone === 'okay') summary = `${v} ground pts/m² — below the ${QL2_DENSITY} pts/m² QL2 pulse-density reference.`;
-  else summary = `${v} ground pts/m² — below the ${QL2_DENSITY} pts/m² QL2 pulse-density reference; sparse ground.`;
+  // The QL figures count aggregate pulses, so the comparison is indicative only.
+  const indicative = ' (indicative only: QL figures are an aggregate pulse-density reference, not a ground-point count).';
+  if (d >= QL1_DENSITY) summary = `${v} ground pts/m², above the ${QL1_DENSITY} pts/m² QL1 figure${indicative}`;
+  else if (tone === 'ready') summary = `${v} ground pts/m², above the ${QL2_DENSITY} pts/m² QL2 figure${indicative}`;
+  else if (tone === 'okay') summary = `${v} ground pts/m², below the ${QL2_DENSITY} pts/m² QL2 figure${indicative}`;
+  else summary = `${v} ground pts/m², sparse ground, below the ${QL2_DENSITY} pts/m² QL2 figure${indicative}`;
   // Median vs mean, when the median is supplied — a regularity signal only; the
   // tone above still buckets on the mean. Withheld when the per-cell counts are
   // too few to carry regularity information (integer-quantised at a handful of
@@ -466,7 +473,12 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
   // and poor-rated metrics that actually produced the status word, so the
   // clause names the real limiter (and "+N more" counts the real causes). The
   // scorecard-priority pick is the fallback only.
-  const causes = (inp.assessmentLimiters ?? []).filter((c) => c.trim().length > 0);
+  // A sampled run states the sample once, in its lead below, so the
+  // assessment's own "sampled" cause is not repeated in the clause.
+  const sampledLead = provisional && inp.coverageMode === 'sampled';
+  const causes = (inp.assessmentLimiters ?? []).filter(
+    (c) => c.trim().length > 0 && !(sampledLead && SAMPLED_CAUSE.test(c)),
+  );
   const leadCause = causes[0];
   const lead = reviews[0];
   let limiterClause: string;
@@ -498,10 +510,10 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
   // filling in; `sampled` is a one-shot budget decision over a file that
   // finished loading. Each gets its own lead, naming its own remedy.
   if (provisional && inp.status !== 'Blocked') {
-    const lead = inp.coverageMode === 'resident-only'
-      ? 'Still streaming'
-      : 'Terrain was built from a sample of the points, not every point';
-    verdict = `${lead} — ${verdict.charAt(0).toLowerCase()}${verdict.slice(1)}`;
+    const rest = `${verdict.charAt(0).toLowerCase()}${verdict.slice(1)}`;
+    verdict = inp.coverageMode === 'resident-only'
+      ? `Still streaming: ${rest}`
+      : `Terrain was built from a sample of the points, not every point: ${rest} ${SAMPLE_REMEDY}`;
   }
 
   // A density-reference badge is shown only when density AND accuracy both pass,

@@ -94,11 +94,32 @@ export interface ExportHealthRow {
   readonly tier: HealthTier;
 }
 
+/**
+ * One thing to review before hand-off, with its fix in the same line. `wrong`
+ * marks a condition that makes the export itself wrong (a failed gate); every
+ * other item only limits what the export can be used for.
+ */
+export interface ExportHealthItem {
+  readonly text: string;
+  readonly wrong: boolean;
+  /** The in-panel control that fixes it, when there is one. */
+  readonly remedy?: 'full-resolution';
+}
+
 export interface ExportHealth {
   readonly verdict: HealthVerdict;
   readonly rows: readonly ExportHealthRow[];
   /** Actionable "double-check this before hand-off" lines (caution/blocked only). */
   readonly blockers: readonly string[];
+  /** The same lines with their tone; `blockers` is their text. */
+  readonly items: readonly ExportHealthItem[];
+}
+
+/** The scope line by what the source really is: only a stream "streams". */
+export function scopeItem(mode: ScanStoryInputs['coverageMode']): string {
+  if (mode === 'resident-only') return 'Streamed-in part only: let the full cloud stream in before hand-off.';
+  if (mode === 'display-sample') return 'Display sample: tick Convert at full resolution to write every point.';
+  return 'Sampled analysis: figures describe a sample of the points, not every point.';
 }
 
 // ── small local formatters (kept here so the module is dependency-light) ──────
@@ -136,9 +157,6 @@ export function footprintAreaM2(
   return Number.isFinite(area) && area > 0 ? area : undefined;
 }
 
-const isPartial = (m: ScanStoryInputs['coverageMode']): boolean =>
-  m === 'resident-only' || m === 'sampled';
-
 // ── Dataset Story ─────────────────────────────────────────────────────────────
 
 /**
@@ -149,7 +167,8 @@ const isPartial = (m: ScanStoryInputs['coverageMode']): boolean =>
  */
 function primaryLimiter(i: ScanStoryInputs): string {
   if (i.surfaceTier === 'Blocked') return 'Surface quality — no usable bare-earth model';
-  if (isPartial(i.coverageMode)) return 'Partial coverage — analysis is a streaming preview';
+  if (i.coverageMode === 'resident-only') return 'Partial coverage: the analysis is a streaming preview';
+  if (i.coverageMode === 'sampled') return 'Sampled analysis: figures describe a sample of the points';
   if (i.groundVisibility === 'poor' || i.groundVisibility === 'fair') {
     return 'Ground visibility — bare earth is partly obscured';
   }
@@ -166,7 +185,8 @@ function primaryLimiter(i: ScanStoryInputs): string {
 /** The one most-useful next action, derived from the primary limiter. */
 function nextStep(i: ScanStoryInputs): string {
   if (i.surfaceTier === 'Blocked') return 'Re-capture or densify — the current surface has too little bare earth.';
-  if (isPartial(i.coverageMode)) return 'Let the full cloud stream in, then re-run the analysis for a settled grade.';
+  if (i.coverageMode === 'resident-only') return 'Let the full cloud stream in, then re-run the analysis for a settled grade.';
+  if (i.coverageMode === 'sampled') return 'Run terrain on a smaller tile so every point is read.';
   if (i.groundVisibility === 'poor' || i.groundVisibility === 'fair') {
     return 'Capture more exposed ground, or validate the surface against control points.';
   }
@@ -312,18 +332,24 @@ export function buildExportHealth(i: ScanStoryInputs): ExportHealth {
   }
   rows.push({ label: 'Terrain products', value: tprValue, tier: tprTier });
 
-  // Actionable blockers — the caution/blocked rows phrased as a checklist.
-  const blockers: string[] = [];
+  // Actionable items: the caution/blocked rows phrased as a checklist, each
+  // with its fix. Only a failed gate makes the export wrong; the rest limit it.
+  const items: ExportHealthItem[] = [];
+  const limit = (text: string): void => { items.push({ text, wrong: false }); };
   if (scope.tier === 'caution') {
-    blockers.push('Figures describe only the streamed-in part of the scan, not the full cloud.');
+    items.push({
+      text: scopeItem(i.coverageMode),
+      wrong: false,
+      ...(i.coverageMode === 'display-sample' ? { remedy: 'full-resolution' as const } : {}),
+    });
   }
-  if (i.classification === 'derived') {
-    blockers.push('Classification is heuristic, not survey-grade — validate before relying on it.');
+  if (i.classification === 'derived') limit('Classification is heuristic: validate it before relying on it.');
+  if (i.crsKnown === false) limit('No coordinate system: the file keeps its coordinates but cannot be georeferenced.');
+  if (i.datumKnown === false) limit('Vertical datum unknown: heights are not tied to a datum.');
+  if (i.density === 'sparse') limit('Sparse points: terrain products will be coarse.');
+  if (i.surfaceTier === 'Blocked') {
+    items.push({ text: 'Surface quality gate failed: terrain products cannot be exported.', wrong: true });
   }
-  if (i.crsKnown === false) blockers.push('No coordinate system — exports cannot be georeferenced.');
-  if (i.datumKnown === false) blockers.push('Vertical datum unknown — heights are not datum-referenced.');
-  if (i.density === 'sparse') blockers.push('Point density is sparse — terrain products will be coarse.');
-  if (i.surfaceTier === 'Blocked') blockers.push('Surface quality gate failed — terrain-product export is disabled.');
 
-  return { verdict: verdictOf(rows), rows, blockers };
+  return { verdict: verdictOf(rows), rows, blockers: items.map((x) => x.text), items };
 }

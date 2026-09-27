@@ -7,7 +7,7 @@
  *   - Point Density            (Sparse / Moderate / Dense / Very Dense)
  *   - Terrain Complexity       (Low / Moderate / High / Very High)
  *   - Ground Visibility        (Poor / Fair / Good / Excellent)
- *   - Streaming Coverage       (Full / Resident Nodes / Sampled)
+ *   - Coverage                 (Full / Resident Nodes / Sampled / Display sample)
  *   - Metric Stability         (0–100% with green/yellow/red band)
  *
  * Plus an expandable Details panel for coverage mode, source point
@@ -64,6 +64,11 @@ function attachTooltip(dt: HTMLElement, tooltip: string): HTMLElement {
  * a "volumetric" heading states the wrong unit. `'none'` (no reading at all)
  * keeps the volumetric wording, matching the "—" the value shows.
  */
+/** Why the density row has no reading. */
+export const DENSITY_UNKNOWN_REASON =
+  'Not computed: the extent has no known units, usually because the file records no ' +
+  'coordinate system. With a CRS the row shows points per cubic metre.';
+
 export const DENSITY_ROW = {
   volumetric: {
     label: 'Volumetric point density',
@@ -216,12 +221,12 @@ export class DatasetIntelligenceCard {
       this._complexityRow,
       this._groundRow,
       this._row(
-        'Streaming Coverage',
+        'Coverage',
         this._coverageValue,
         'Whether every source point is in memory (static load), a strided ' +
           'display sample of the file (large static loads), only the nodes ' +
           'resident in memory (streaming clouds mid-load), or a sampled ' +
-          'subset. Drives the "may refine" caveat below.',
+          'subset. Drives the note below.',
       ),
       this._stabilityRow,
       this._pending,
@@ -230,7 +235,7 @@ export class DatasetIntelligenceCard {
     this._detailsBody = el('dl', { className: 'olv-di-details-body' });
     this._details = el('details', { className: 'olv-di-details' }) as HTMLDetailsElement;
     this._details.append(
-      el('summary', { className: 'olv-di-details-summary', text: 'Details' }),
+      el('summary', { className: 'olv-di-details-summary', text: 'Point counts and engine' }),
       this._detailsBody,
     );
 
@@ -357,7 +362,12 @@ export class DatasetIntelligenceCard {
     // drives the quiet colour accent through the honest signal-tier mapping so
     // a descriptive axis (complexity) is never coloured as good/bad.
     this._applyDensityBasis(intel.density.basis);
-    this._densityValue.textContent = intel.density.label;
+    // No reading means the extent or its units are unknown: say that, with the
+    // reason on hover, instead of a bare dash.
+    const noDensity = intel.density.bucket === 'unknown';
+    this._densityValue.textContent = noDensity ? 'Needs units' : intel.density.label;
+    if (noDensity) this._densityValue.title = DENSITY_UNKNOWN_REASON;
+    else this._densityValue.removeAttribute('title');
     this._densityValue.dataset.bucket = intel.density.bucket;
     this._densityValue.dataset.tier = signalTier('density', intel.density.bucket);
 

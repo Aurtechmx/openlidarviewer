@@ -360,7 +360,7 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     // Preview / Limited: surface reason only (CRS/datum live on export, below).
     const caps: string[] = [];
     if (coverageMode === 'resident-only') caps.push('only resident streaming nodes were walked');
-    else if (coverageMode === 'sampled') caps.push('the cloud was sampled, not fully walked');
+    else if (coverageMode === 'sampled') caps.push('the surface was built from a sample of the points');
     if (interpFrac > HIGH_INTERP_FRACTION) caps.push(`${pctStr(interpFrac)} of the surface is interpolated`);
     if (emptyFrac > HIGH_EMPTY_FRACTION) caps.push(`${pctStr(emptyFrac)} of the grid has no data`);
     // `edgeFrac` is cellMetrics.boundaryMeasuredRatio: the fraction of

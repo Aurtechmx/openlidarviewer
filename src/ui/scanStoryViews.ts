@@ -62,12 +62,6 @@ export function renderDatasetStoryCard(story: ScanStory): HTMLElement {
   return card;
 }
 
-const VERDICT_LABEL: Readonly<Record<HealthVerdict, string>> = {
-  ready: 'Ready to export',
-  caution: 'Export with caution',
-  blocked: 'Export blocked',
-};
-
 /** The verdict in the shared state vocabulary, so one glyph names both. */
 const VERDICT_STATE: Readonly<Record<HealthVerdict, SciState>> = {
   ready: 'measured',
@@ -75,32 +69,58 @@ const VERDICT_STATE: Readonly<Record<HealthVerdict, SciState>> = {
   blocked: 'blocked',
 };
 
-/** The one-word form of the verdict, carried by the line itself. */
-const VERDICT_WORD: Readonly<Record<HealthVerdict, string>> = {
-  ready: 'Ready',
-  caution: 'Review',
-  blocked: 'Blocked',
-};
+/**
+ * The readiness header: calm and specific. A condition that only limits the
+ * export reads as something to review (amber); red is kept for a condition
+ * that makes the export wrong.
+ */
+export function exportHealthHeader(health: ExportHealth): { readonly text: string; readonly tone: 'ready' | 'review' | 'wrong' } {
+  const n = health.items.length;
+  const count = `${n} item${n === 1 ? '' : 's'}`;
+  if (health.verdict === 'ready') return { text: 'Ready to export', tone: 'ready' };
+  if (health.verdict === 'blocked' || health.items.some((i) => i.wrong)) {
+    return { text: n > 0 ? `Export blocked · ${count}` : 'Export blocked', tone: 'wrong' };
+  }
+  return { text: n > 0 ? `Review before hand-off · ${count}` : 'Review before hand-off', tone: 'review' };
+}
 
 /**
  * The Export Health summary — the content of the pre-export confirmation. The
  * host adds the Export / Cancel controls around it.
  */
-export function renderExportHealthPanel(health: ExportHealth): HTMLElement {
+export function renderExportHealthPanel(
+  health: ExportHealth,
+  actions: { readonly fullResolution?: () => void } = {},
+): HTMLElement {
   const panel = el('div', { className: 'olv-health' });
-
-  // The verdict states the condition in the shared vocabulary and, when there
-  // is something to act on, how many lines are waiting: "Review · 2 conditions"
-  // rather than a colour the reader has to decode.
-  const state = VERDICT_STATE[health.verdict];
-  const n = health.blockers.length;
-  const conditions = n > 0 ? ` · ${n} condition${n === 1 ? '' : 's'}` : '';
+  const head = exportHealthHeader(health);
   panel.append(
-    el('div', { className: `olv-health-verdict is-${health.verdict}` }, [
-      renderStateGlyph(state, VERDICT_LABEL[health.verdict]),
-      el('span', { text: ` ${VERDICT_WORD[health.verdict]}${conditions} · ${VERDICT_LABEL[health.verdict]}` }),
+    el('div', { className: `olv-health-verdict is-${health.verdict} is-tone-${head.tone}` }, [
+      renderStateGlyph(VERDICT_STATE[health.verdict], head.text),
+      el('span', { text: ` ${head.text}` }),
     ]),
   );
+
+  // Each item is one plain line with its fix, straight under the header.
+  if (health.items.length > 0) {
+    const list = el('ul', { className: 'olv-health-blockers' });
+    for (const item of health.items) {
+      const li = el('li', { className: item.wrong ? 'is-wrong' : 'is-limit', text: item.text });
+      const fix = item.remedy === 'full-resolution' ? actions.fullResolution : undefined;
+      if (fix) {
+        const b = el('button', {
+          className: 'olv-health-fix',
+          text: 'Use full resolution',
+          title: 'Tick Convert at full resolution so the export writes every point.',
+        });
+        b.setAttribute('type', 'button');
+        b.addEventListener('click', fix);
+        li.append(b);
+      }
+      list.append(li);
+    }
+    panel.append(list);
+  }
 
   const rows = el('div', { className: 'olv-health-rows' });
   for (const r of health.rows) {
@@ -113,14 +133,5 @@ export function renderExportHealthPanel(health: ExportHealth): HTMLElement {
     );
   }
   panel.append(rows);
-
-  if (health.blockers.length > 0) {
-    const list = el('ul', { className: 'olv-health-blockers' });
-    for (const b of health.blockers) list.append(el('li', { text: b }));
-    panel.append(
-      el('div', { className: 'olv-health-blockers-title', text: 'Before you hand this off' }),
-      list,
-    );
-  }
   return panel;
 }

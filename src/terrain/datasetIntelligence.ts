@@ -94,6 +94,8 @@ export type IntelCoverageMeta = Omit<TerrainCoverageMeta, 'coverage'> & {
    * extent. Gates that need the complete data read this, never the coverage.
    */
   readonly sourceComplete?: boolean;
+  /** Points held in memory for display when a static load was strided. */
+  readonly displayPointCount?: number;
 };
 
 /** The Dataset Intelligence rows that carry a bucket. */
@@ -589,25 +591,44 @@ export function coverageLabel(b: CoverageBucket): string {
     case 'resident-only':
       return 'Resident Nodes';
     case 'sampled':
-      return 'Sampled Analysis';
+      return 'Sampled points';
     case 'display-sample':
       return 'Full extent · display sample';
   }
 }
 
+/** Compact point count for the coverage note: "1.4 M", "850 K", "900". */
+export function compactPointCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)} M`;
+  if (n >= 10_000) return `${Math.round(n / 1_000)} K`;
+  return `${Math.round(n)}`;
+}
+
 /**
- * Streaming-warning string for the coverage row. Returns `undefined`
- * for `full` coverage — there's nothing to caveat — and a short
- * caveat for the partial modes. The exact wording is the one called
- * out in the brief and is repeated verbatim across releases so the
- * tone stays consistent.
+ * The caveat under the coverage row, worded by what the source really is.
+ * Returns `undefined` for `full` coverage. Only a streaming source
+ * (`resident-only`) talks about points still arriving; a local file reduced
+ * to a display sample says so with its numbers, and an analysis that read a
+ * sample of a finished load says that.
  */
-export function coverageStreamingWarning(b: CoverageBucket): string | undefined {
+export function coverageStreamingWarning(
+  b: CoverageBucket,
+  counts?: { readonly shown?: number; readonly total?: number },
+): string | undefined {
   if (b === 'full') return undefined;
-  if (b === 'display-sample') {
-    return 'Analysis reads the strided display sample resident in memory, not every point in the file.';
+  if (b === 'resident-only') {
+    return 'Analysis is based on currently loaded data. Results may change as additional points stream.';
   }
-  return 'Analysis is based on currently loaded data. Results may change as additional points stream.';
+  if (b === 'display-sample') {
+    const shown = counts?.shown;
+    const total = counts?.total;
+    const nums =
+      shown !== undefined && total !== undefined && Number.isFinite(shown) && Number.isFinite(total) && total > shown
+        ? ` ${compactPointCount(shown)} of ${compactPointCount(total)} points.`
+        : '';
+    return `Display sample${nums ? `:${nums}` : '.'} Figures describe the sample, not every point.`;
+  }
+  return 'Analysis read a sample of the loaded points. Figures describe the sample, not every point.';
 }
 
 /**
@@ -687,7 +708,10 @@ export function summariseDataset(input: DatasetIntelligenceInput): DatasetIntell
     coverage: {
       bucket: coverageBucket,
       label: coverageLabel(coverageBucket),
-      streamingWarning: coverageStreamingWarning(coverageBucket),
+      streamingWarning: coverageStreamingWarning(coverageBucket, {
+        shown: input.coverageMeta?.displayPointCount,
+        total: input.coverageMeta?.sourcePointCount,
+      }),
     },
     confidence: { value: confidenceValue, band, label: confidenceLabel },
     details: {

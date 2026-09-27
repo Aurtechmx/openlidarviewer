@@ -270,12 +270,18 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
         items.splice(1, 0, child);
       }
       list.replaceChildren(...items);
-      contoursLink.replaceChildren(el('span', { className: 'olv-ah-name', text: 'Create contours' }), badge(contours.status));
+      // Before contours exist the link offers to make them; after, it opens them.
+      const made = inp.produced.has('contours');
+      contoursLink.replaceChildren(el('span', { className: 'olv-ah-name', text: made ? 'Contours' : 'Create contours' }), badge(contours.status));
+      contoursLink.dataset.made = String(made);
       renderVerdict(shells.contours, contours);
       for (const row of rows) {
         const page = pageOf[row.id];
         if (!page) continue;
-        renderVerdict(shells[page], row);
+        // The Terrain page shows the run's verdict in full just below, so its
+        // header points there instead of repeating the same sentence.
+        const repeatsRun = page === 'terrain' && row.status === 'review' && !!inp.terrainRun && row.reason === inp.terrainRun.verdict;
+        renderVerdict(shells[page], repeatsRun ? { ...row, reason: 'The terrain verdict and what to do next are below.' } : row);
         // Terrain's Why? is the Process Studio panel; the others carry the full reason.
         if (page !== 'terrain') shells[page].whyBody.replaceChildren(el('p', { className: 'olv-why-reason', text: row.reason }));
       }

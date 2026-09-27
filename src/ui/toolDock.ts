@@ -427,6 +427,11 @@ export class ToolDock {
     this.setActive('tool.analyse', active);
   }
 
+  /** Whether the Analyse button reads as pressed. */
+  isAnalyseActive(): boolean {
+    return this._buttons.get('tool.analyse')?.getAttribute('aria-pressed') === 'true';
+  }
+
   /** Enable or disable the Close action — enabled once a scan is loaded. */
   setCloseEnabled(enabled: boolean): void {
     this.setEnabled('tool.close', enabled);
