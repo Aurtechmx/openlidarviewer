@@ -81,11 +81,11 @@ the two entries were renumbered when the branches were integrated.
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 28
+- FIXED: 29
 - MEASURED: 1
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
-- PARTIAL: 6
+- PARTIAL: 5
 - SUPERSEDED: 1
 - total: 49
 

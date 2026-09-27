@@ -15,7 +15,7 @@ Entries: 166. Revisited at least once: 25.
 
 | Status | Entries |
 | --- | --- |
-| FIXED | 57 |
+| FIXED | 58 |
 | BUILT | 40 |
 | PARTIAL | 33 |
 | MEASURED | 15 |
