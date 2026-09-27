@@ -31,6 +31,9 @@ export interface ObservatoryWorkerRequest {
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
 ctx.onmessage = (event: MessageEvent<ObservatoryWorkerRequest>): void => {
+  // A dedicated worker only receives messages from the page that created it,
+  // where `origin` is empty. Refuse anything that names another origin.
+  if (event.origin && event.origin !== ctx.location.origin) return;
   const msg = event.data;
   try {
     const outcome = runObservatoryOverCloud({
