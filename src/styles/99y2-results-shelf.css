@@ -1,6 +1,6 @@
 /* 99y2-results-shelf.css — the Results shelf (src/app/results/resultsShelf.ts).
    Desktop: the left rail's footer, below the scrolling mode body. Phone: a row
-   at the top of the sheet's Layers tab. Empty or before a scan: not shown. */
+   at the top of the sheet's Data tab. Empty or before a scan: not shown. */
 
 .olv-results-shelf {
   flex: 0 0 auto;

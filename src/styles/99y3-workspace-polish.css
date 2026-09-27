@@ -1,0 +1,157 @@
+/* 99y3-workspace-polish.css — one surface per task in the desktop left rail.
+   The rail itself carries no card; the active mode host is the one task
+   surface; what it holds reads as sections separated by hairlines, not as
+   cards inside a card. Cards stay only for the major result (the terrain
+   verdict) and critical statuses (the export review banner). Scoped to
+   `.olv-left-panels`, so the phone sheet, which borrows the same mode hosts,
+   keeps its own presentation. Presentation only: nothing here hides a control
+   or changes what a panel shows. */
+
+@media (min-width: 768px) {
+  /* The task surface: the visible mode host. */
+  .olv-left-panels .olv-ws-mode.is-active {
+    gap: 0;
+    padding: var(--space-lg) var(--space-xl);
+    background: var(--panel);
+    border: 0.5px solid var(--hairline);
+    border-radius: var(--radius-md);
+  }
+
+  /* Everything the host holds drops its own card chrome and inset; the host
+     supplies the inset once. Sections that follow one another are separated
+     by a hairline. */
+  .olv-left-panels .olv-ws-mode > *:not(.olv-ws-task) {
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .olv-left-panels .olv-ws-mode > *:not(.olv-ws-task):not(.olv-ws-off) ~ *:not(.olv-ws-off) {
+    margin-top: var(--space-md);
+    padding-top: var(--space-md);
+    border-top: 0.5px solid var(--hairline);
+  }
+  .olv-left-panels .olv-ws-mode > .olv-ws-task + * {
+    padding-top: 0;
+  }
+
+  /* Task header: Back, then the page title as the heading of the surface. */
+  .olv-left-panels .olv-ws-task {
+    padding: 0 0 var(--space-md);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2xs);
+  }
+  .olv-left-panels .olv-ws-back {
+    min-height: 32px;
+    padding: var(--space-xs) var(--space-sm) var(--space-xs) 0;
+  }
+  .olv-left-panels .olv-ws-task-title {
+    font: 600 var(--text-lg) / 1.25 var(--font);
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  /* A panel whose own title repeats the page title: the task header already
+     names it. Its head holds only that title (the collapse toggle is hidden on
+     desktop), so nothing interactive goes with it. */
+  .olv-left-panels .olv-ws-mode.has-page > .olv-measure-panel > .olv-panel-head,
+  .olv-left-panels .olv-ws-mode.has-page > .olv-clip-panel > .olv-panel-head,
+  .olv-left-panels .olv-ws-mode.has-page > .olv-class-panel > .olv-panel-head {
+    display: none;
+  }
+
+  /* Export is a mode home with one panel: its collapse control has nothing to
+     reclaim here. The title stays as the surface's section heading. */
+  .olv-left-panels .olv-ws-mode > .olv-export-panel .olv-collapse-toggle {
+    display: none;
+  }
+  .olv-left-panels .olv-ws-mode > .olv-export-panel > .olv-panel-head {
+    cursor: default;
+  }
+  /* The review banner is a critical status and keeps its card, inside the
+     rail's width. */
+  .olv-left-panels .olv-health {
+    min-width: 0;
+  }
+
+  /* Analyse home and pages: the host is the surface, so their own card goes. */
+  .olv-left-panels .olv-analyse-home,
+  .olv-left-panels .olv-analyse-page {
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  /* Inside a page, status chips read as label and value, not as boxes. */
+  .olv-left-panels .olv-analyse-assess-metric {
+    border: 0;
+    background: none;
+    padding-left: 0;
+    padding-right: var(--space-sm);
+  }
+  .olv-left-panels .olv-ps-stage {
+    border: 0;
+    background: none;
+    padding-left: 0;
+  }
+
+  /* Contour Studio's launcher is the Contours page's own content, not a card
+     inside it: keep its accent rule on the left, drop the box. */
+  .olv-left-panels .olv-analyse-page .olv-contour-launcher {
+    background: none;
+    border-top: 0;
+    border-right: 0;
+    border-bottom: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /* Contour Studio, once opened, is the page's task: a hairline above it,
+     not a raised card inside the page. */
+  .olv-left-panels .olv-analyse-page .olv-contour-studio-workspace {
+    padding: var(--space-md) 0 0;
+    background: none;
+    border: 0;
+    border-top: 0.5px solid var(--hairline);
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /* Data home: the layer list and the rows under it are one section list. */
+  .olv-left-panels .olv-data-home {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .olv-left-panels .olv-data-row {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+/* Route transitions: a page slides in a few pixels from the side it comes
+   from and fades up; Back plays the reverse. Short, and off when the viewer
+   asks for reduced motion. */
+@keyframes olv-ws-in-forward {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes olv-ws-in-back {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: none; }
+}
+.olv-ws-mode.olv-ws-nav-forward > :not(.olv-ws-off) {
+  animation: olv-ws-in-forward var(--dur-fast) var(--ease-standard);
+}
+.olv-ws-mode.olv-ws-nav-back > :not(.olv-ws-off) {
+  animation: olv-ws-in-back var(--dur-fast) var(--ease-standard);
+}
+@media (prefers-reduced-motion: reduce) {
+  .olv-ws-mode.olv-ws-nav-forward > :not(.olv-ws-off),
+  .olv-ws-mode.olv-ws-nav-back > :not(.olv-ws-off) {
+    animation: none;
+  }
+}
