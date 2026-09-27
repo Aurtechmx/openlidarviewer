@@ -23,12 +23,12 @@
  *
  * Off by default: it costs three extra terrain runs. This module holds no
  * terrain code of its own; {@link runSensitivityEnsemble} takes the terrain
- * run as a function, so the DEM package chunk does not pull in the pipeline.
+ * run as a function. demSensitivityRun.ts supplies the app's run.
  *
  * Pure data; deterministic.
  */
 
-import type { DtmGrid } from '../ground/cellConfidence';
+import { dtmRebuildFor, type DtmGrid } from '../ground/cellConfidence';
 import type { TerrainCoreParams } from '../contour/analyseContours';
 import { writeGeoTiff } from './demGeoTiff';
 import { demWrittenMask } from './demEvidence';
@@ -176,13 +176,52 @@ export async function runSensitivityEnsemble(
 ): Promise<SensitivityMemberGrid[]> {
   const grids: SensitivityMemberGrid[] = [canonical];
   for (const member of SENSITIVITY_ENSEMBLE.slice(1)) {
-    if (signal?.aborted) throw new DOMException('Sensitivity ensemble cancelled.', 'AbortError');
+    if (signal?.aborted) throw aborted();
     grids.push(await run(sensitivityMemberParams(baseParams, member), signal));
   }
-  if (signal?.aborted) throw new DOMException('Sensitivity ensemble cancelled.', 'AbortError');
+  if (signal?.aborted) throw aborted();
   // Refuse a mismatched member here, before any file is assembled.
   terrainSensitivityBands(grids);
   return grids;
+}
+
+/** Thrown when no rebuild was recorded for the DTM being exported. */
+export class SensitivityRebuildMissingError extends Error {
+  constructor() {
+    super('the points behind this surface are no longer held; run the analysis again, then export');
+    this.name = 'SensitivityRebuildMissingError';
+  }
+}
+
+function aborted(): DOMException {
+  return new DOMException('Sensitivity ensemble cancelled.', 'AbortError');
+}
+
+/**
+ * Run the ensemble for a DTM the terrain core cache handed out, over the
+ * points and canonical parameters recorded for it. `onMember(k, of)` is called
+ * before member k (1 to 3) runs. When `signal` is set the wait on the current
+ * member ends at once and an AbortError is thrown.
+ */
+export async function runDemSensitivity(
+  dtm: SensitivityMemberGrid,
+  onMember: (member: number, of: number) => void,
+  signal?: AbortSignal,
+): Promise<SensitivityMemberGrid[]> {
+  const rebuild = dtmRebuildFor(dtm);
+  if (!rebuild) throw new SensitivityRebuildMissingError();
+  const of = SENSITIVITY_ENSEMBLE.length - 1;
+  let member = 0;
+  return runSensitivityEnsemble(dtm, rebuild.params, (params, s) => {
+    onMember(++member, of);
+    if (!s) return rebuild.run(params);
+    return new Promise<SensitivityMemberGrid>((resolve, reject) => {
+      const stop = (): void => reject(aborted());
+      if (s.aborted) return stop();
+      s.addEventListener('abort', stop, { once: true });
+      rebuild.run(params).then(resolve, reject).finally(() => s.removeEventListener('abort', stop));
+    });
+  }, signal);
 }
 
 /** README lines describing the sensitivity raster. */

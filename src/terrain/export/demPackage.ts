@@ -62,6 +62,9 @@ import { verticalUnitLabel, horizontalUnitLabel } from '../../units/units';
 // contour package can reach it without importing a DEM module. Re-exported so
 // the callers that knew it here still do.
 export { buildSha256Manifest } from './sha256';
+// Re-exported so the export dialog reaches the ensemble through the one lazy
+// DEM chunk it already loads.
+export { runDemSensitivity } from './demSensitivity';
 
 /**
  * Resolved linear unit of a projected CRS — the SAME vocabulary the DXF

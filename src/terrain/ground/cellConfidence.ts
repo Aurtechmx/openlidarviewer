@@ -37,6 +37,7 @@
 
 import type { TerrainCoverageMode } from '../TerrainContracts';
 import type { DemRaster } from './rasterizeDtm';
+import type { TerrainCoreParams } from '../contour/analyseContours';
 import { inpaintNearest } from './groundFilter';
 import { idwFill } from './idwFill';
 import { geodesicFillWithReport, GEODESIC_NODE_BUDGET } from './geodesicFill';
@@ -630,4 +631,28 @@ function clamp01(v: number): number {
   if (v < 0) return 0;
   if (v > 1) return 1;
   return v;
+}
+
+/**
+ * How to build a DTM again: the parameters it was built with and a run that
+ * rebuilds it from the same points under other parameters. Recorded by the
+ * terrain core cache for every DTM it hands out, and read by the DEM export's
+ * sensitivity ensemble. It lives beside {@link DtmGrid} because both the core
+ * cache and the DEM package already load this module.
+ */
+export interface DtmRebuild {
+  readonly params: TerrainCoreParams;
+  readonly run: (params: TerrainCoreParams) => Promise<DtmGrid>;
+}
+
+const dtmRebuilds = new WeakMap<object, DtmRebuild>();
+
+/** Record how `dtm` can be rebuilt. */
+export function recordDtmRebuild(dtm: object, rebuild: DtmRebuild): void {
+  dtmRebuilds.set(dtm, rebuild);
+}
+
+/** How `dtm` can be rebuilt, or null when nothing was recorded for it. */
+export function dtmRebuildFor(dtm: object): DtmRebuild | null {
+  return dtmRebuilds.get(dtm) ?? null;
 }

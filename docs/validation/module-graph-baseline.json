@@ -246,7 +246,7 @@
   "watchFanOut": {
     "src/ui/AnalysePanel.ts": {
       "runtime": 23,
-      "typeOnly": 17,
+      "typeOnly": 18,
       "dynamic": 0,
       "modules": [
         "src/export/exportScanIdentity.ts",
@@ -489,6 +489,10 @@
         "importers": 16
       },
       {
+        "file": "src/terrain/ground/cellConfidence.ts",
+        "importers": 16
+      },
+      {
         "file": "src/io/download.ts",
         "importers": 15
       },
@@ -502,10 +506,6 @@
       },
       {
         "file": "src/io/lasDecodeShared.ts",
-        "importers": 14
-      },
-      {
-        "file": "src/render/colorModes.ts",
         "importers": 14
       }
     ],

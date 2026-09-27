@@ -49,6 +49,7 @@ import {
   type TerrainCoreParams,
   type TerrainPointInput,
 } from './analyseContours';
+import { recordDtmRebuild } from '../ground/cellConfidence';
 
 // Re-export the interval stage through this module so a caller that has the
 // cache chunk loaded can run the cheap contour stage WITHOUT a second dynamic
@@ -318,6 +319,22 @@ const cache = new Map<string, TerrainCore>();
 // needs no epoch.)
 let cacheEpoch = 0;
 
+// Every core handed out records how its DTM can be rebuilt from the same
+// points, so the DEM export's sensitivity ensemble can re-run it under other
+// parameters without the runner handing the points over.
+function remember(
+  core: TerrainCore,
+  positions: Float32Array,
+  params: TerrainCoreParams,
+  compute: ComputeCoreAsyncFn,
+): TerrainCore {
+  const dtm: unknown = core?.dtm;
+  if (dtm !== null && typeof dtm === 'object') {
+    recordDtmRebuild(dtm, { params, run: async (p) => (await compute(positions, p)).dtm });
+  }
+  return core;
+}
+
 /**
  * Return the cached {@link TerrainCore} for these positions + core params, or
  * compute it (via `compute`, default {@link computeTerrainCore}), store it, and
@@ -448,11 +465,11 @@ export async function getOrComputeCoreAsync(
     cache.set(key, hit);
     lastSource = 'memory';
     lastPersistenceMiss = null;
-    return hit;
+    return remember(hit, positions, params, compute);
   }
   // Coalesce concurrent misses for the same key onto one compute.
   const existing = inFlight.get(key);
-  if (existing) return existing;
+  if (existing) return existing.then((c) => remember(c, positions, params, compute));
 
   // Snapshot the cache generation BEFORE awaiting. If a clear() runs while this
   // compute is in flight (scan closed / replaced), the epoch moves and we must
@@ -487,6 +504,7 @@ export async function getOrComputeCoreAsync(
   // Store only on success (a rejection threw above and never reaches here) AND
   // only if no clear() intervened. The caller still receives the value either
   // way — a superseded run simply isn't cached.
+  remember(core, positions, params, compute);
   if (epoch !== cacheEpoch) return core;
   cache.set(key, core);
   while (cache.size > TERRAIN_CORE_CACHE_SIZE) {
