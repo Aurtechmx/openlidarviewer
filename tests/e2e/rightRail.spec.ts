@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { suppressOnboardingTour, dropTinyPly, railChromeSettled, expectHittable } from './helpers';
+import { suppressOnboardingTour, dropTinyPly, railChromeSettled, expectHittable, reloadSettled } from './helpers';
 
 /**
  * tests/e2e/rightRail.spec.ts
@@ -87,7 +87,7 @@ test('the Inspector collapsed choice persists across a reload', async ({ page })
   const stored = await page.evaluate((k) => localStorage.getItem(k), KEY);
   expect(stored).toBe('1');
 
-  await page.reload();
+  await reloadSettled(page);
   await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await railChromeSettled(page);

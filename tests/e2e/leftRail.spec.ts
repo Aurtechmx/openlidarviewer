@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { suppressOnboardingTour, dropTinyPly } from './helpers';
+import { suppressOnboardingTour, dropTinyPly, reloadSettled } from './helpers';
 
 /**
  * tests/e2e/leftRail.spec.ts
@@ -92,7 +92,7 @@ test('the collapsed choice persists across a reload', async ({ page }) => {
   expect(stored).toBe('1');
 
   // Reload and re-drop a scan; the rail must come back collapsed from storage.
-  await page.reload();
+  await reloadSettled(page);
   await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await page.waitForTimeout(600);

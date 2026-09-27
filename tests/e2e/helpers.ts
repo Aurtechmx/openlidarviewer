@@ -413,3 +413,26 @@ export async function placeProfile(page: Page): Promise<void> {
 
   await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
 }
+
+/**
+ * Wait until the current page has no requests in flight. After `load` the app
+ * still fetches its lazy chunks; navigating away while one is pending makes
+ * Firefox cancel it, and the cancelled import plus the new navigation end in
+ * NS_BINDING_ABORTED (or NS_ERROR_FAILURE) on the goto or reload.
+ */
+export async function settleNavigation(page: Page): Promise<void> {
+  if (page.url() === 'about:blank') return;
+  await page.waitForLoadState('networkidle');
+}
+
+/** page.goto that first lets the current page finish its own loading. */
+export async function gotoSettled(page: Page, url: string): Promise<void> {
+  await settleNavigation(page);
+  await page.goto(url);
+}
+
+/** page.reload that first lets the current page finish its own loading. */
+export async function reloadSettled(page: Page): Promise<void> {
+  await settleNavigation(page);
+  await page.reload();
+}

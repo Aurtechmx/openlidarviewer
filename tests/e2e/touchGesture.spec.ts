@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropTinyPly } from './helpers';
+import { dropTinyPly, reloadSettled } from './helpers';
 import { MOBILE_LAYOUT_QUERY } from '../../src/ui/isMobileDevice';
 
 /**
@@ -302,7 +302,7 @@ test.describe('mobile touch model — twist + pinch + pan decomposition', () => 
     await chip.click();
     await expect(chip).not.toHaveClass(/olv-chip-active/);
 
-    await page.reload();
+    await reloadSettled(page);
     await dropTinyPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
     await openRenderingSection(page);
