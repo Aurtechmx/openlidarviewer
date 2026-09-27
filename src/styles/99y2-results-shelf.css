@@ -154,3 +154,15 @@
   max-height: none;
   overflow-y: visible;
 }
+
+/* The phone sheet shows the shelf as a row at the top of the Data tab, so the
+   list opens below its toggle and reads top-down. The chevron follows. */
+.olv-mobile-sheet .olv-results-toggle {
+  order: -1;
+}
+.olv-mobile-sheet .olv-results-toggle::after {
+  transform: rotate(45deg);
+}
+.olv-mobile-sheet .olv-results-shelf.is-open .olv-results-toggle::after {
+  transform: rotate(-135deg);
+}

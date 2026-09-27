@@ -50,7 +50,8 @@
   content: '▸'; display: inline-block; margin-right: var(--space-2xs);
   font-size: 0.85em; transition: transform 120ms ease;
 }
-.olv-fit-caveats[open] > .olv-fit-caveats-summary::before { transform: rotate(90deg); }
+.olv-fit-caveats[open] > .olv-fit-caveats-summary::before,
+.olv-fit-checks[open] > .olv-fit-caveats-summary::before { transform: rotate(90deg); }
 
 /* Recommended grid / interval. */
 .olv-analyse-recommend-box { display: flex; flex-direction: column; gap: var(--space-2xs); margin: var(--space-sm) 0; }

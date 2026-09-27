@@ -64,7 +64,7 @@ import type { HorizontalScale } from '../../simulation/flowPulse/dtmFlowGrid';
 import type { AnalyseContoursResult } from '../../terrain/contour/analyseContours';
 import { loadFlowPulsePackage, registerFlowOverlayInvalidator } from '../../lazyChunks';
 import { downloadBytes } from '../../io/download';
-import { publishLabRun } from '../../app/results/resultSignals';
+import { labRun, publishLabRun, takeResultReopen } from '../../app/results/resultSignals';
 import type { buildFlowPulsePackage } from '../../export/flowPulsePackage';
 
 /** The analysed surface and the frame facts the Analyse panel holds for it. */
@@ -750,11 +750,14 @@ function mountFlowPulseInteractive(
 
 /** Run and show Flow Pulse in a dialog. */
 export function openFlowPulseLab(input: FlowPulseLabInput | null): ModalHandle {
+  // A shelf Focus reopens the published run on the same layer as it is.
+  const prior = takeResultReopen('flow-pulse') ? labRun('flow-pulse') : null;
   if (!input) {
     const body = el('div', { className: 'olv-flow-lab' }, [renderFlowPulseLab(runLabFlowPulse(null))]);
     return openModal({ title: 'Field Simulation Lab: Flow Pulse', body });
   }
-  const interactive = mountFlowPulseInteractive(input, runLabFlowPulse(input));
+  const reuse = prior && prior.layerId === input.layerId ? (prior.outcome as FlowPulseResult) : null;
+  const interactive = mountFlowPulseInteractive(input, reuse ?? runLabFlowPulse(input));
   return openModal({
     title: 'Field Simulation Lab: Flow Pulse',
     body: interactive.element,

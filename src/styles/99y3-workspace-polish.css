@@ -165,3 +165,45 @@
   z-index: 2;
   background: var(--panel);
 }
+
+/* Target size (WCAG 2.2 AA 2.5.8) on pointer layouts: every small inline
+   control gets a hit area of at least 24 by 24 CSS px. The text keeps its size;
+   the box grows by padding or by a centred flex box. Touch layouts already give
+   these 44 px (65-mobile-touch.css, 99-mobile-gui-refresh.css). */
+@media (pointer: fine) and (min-width: 768px) {
+  .olv-ah-remedy,
+  .olv-analyse-surface-dl,
+  .olv-add-dataset-row {
+    min-height: 24px;
+    min-width: 24px;
+  }
+  .olv-ah-remedy,
+  .olv-analyse-surface-dl {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .olv-layer-solo,
+  .olv-layer-lock,
+  .olv-layer-x {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    min-height: 24px;
+  }
+}
+
+/* Touch layouts, phone sheet and large touch screens alike: the same controls
+   meet the 44 px touch floor the rest of the sheet uses. */
+@media (pointer: coarse) {
+  .olv-ah-remedy,
+  .olv-analyse-surface-dl,
+  .olv-add-dataset-row {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    min-width: 44px;
+  }
+}

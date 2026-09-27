@@ -12,7 +12,7 @@ import { createObservatoryRunner, type ObservatoryRunner, type ObservatoryRunner
 import { loadObservatoryPanel } from '../lazyChunks';
 import type { ObservatoryOverlayHost } from '../render/ObservatoryOverlay';
 import type { ObservatoryCloudInput } from './observatoryFromCloud';
-import { announceObservatoryRunner } from './results/resultSignals';
+import { announceObservatoryRunner, takeResultReopen } from './results/resultSignals';
 
 export interface ObservatoryEntryDeps {
   readonly showAnalyseMode: () => void;
@@ -64,5 +64,7 @@ export async function openObservatoryRun(deps: ObservatoryEntryDeps, rerun = fal
   const r = getObservatoryRunner(deps.runnerDeps);
   const panel = await loadObservatoryPanel();
   panel.openObservatoryPanel({ runner: r, overlayHost: deps.overlayHost(), worldToLocal: worldToLocalOf(deps.runnerDeps.getActiveCloud()) });
+  // A shelf Focus shows the committed run as it is; nothing recomputes.
+  if (takeResultReopen('observatory')) rerun = false;
   if (rerun || r.getState().phase !== 'committed') r.run();
 }

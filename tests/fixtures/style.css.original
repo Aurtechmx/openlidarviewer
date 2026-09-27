@@ -7915,7 +7915,8 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   content: '▸'; display: inline-block; margin-right: var(--space-2xs);
   font-size: 0.85em; transition: transform 120ms ease;
 }
-.olv-fit-caveats[open] > .olv-fit-caveats-summary::before { transform: rotate(90deg); }
+.olv-fit-caveats[open] > .olv-fit-caveats-summary::before,
+.olv-fit-checks[open] > .olv-fit-caveats-summary::before { transform: rotate(90deg); }
 
 /* Recommended grid / interval. */
 .olv-analyse-recommend-box { display: flex; flex-direction: column; gap: var(--space-2xs); margin: var(--space-sm) 0; }
@@ -8446,7 +8447,8 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   content: '▸'; display: inline-block; margin-right: var(--space-2xs);
   font-size: 0.85em; transition: transform 120ms ease;
 }
-.olv-analyse-assess-metrics-all[open] > .olv-analyse-assess-metrics-summary::before {
+.olv-analyse-assess-metrics-all[open] > .olv-analyse-assess-metrics-summary::before,
+.olv-analyse-assess-metricwrap[open] > .olv-analyse-assess-metrics-summary::before {
   transform: rotate(90deg);
 }
 .olv-analyse-assess-metricgroup { margin-top: var(--space-xs); }
@@ -11330,6 +11332,18 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   max-height: none;
   overflow-y: visible;
 }
+
+/* The phone sheet shows the shelf as a row at the top of the Data tab, so the
+   list opens below its toggle and reads top-down. The chevron follows. */
+.olv-mobile-sheet .olv-results-toggle {
+  order: -1;
+}
+.olv-mobile-sheet .olv-results-toggle::after {
+  transform: rotate(45deg);
+}
+.olv-mobile-sheet .olv-results-shelf.is-open .olv-results-toggle::after {
+  transform: rotate(-135deg);
+}
 /* 99y3-workspace-polish.css — one surface per task in the desktop left rail.
    The rail itself carries no card; the active mode host is the one task
    surface; what it holds reads as sections separated by hairlines, not as
@@ -11496,6 +11510,48 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   top: 0;
   z-index: 2;
   background: var(--panel);
+}
+
+/* Target size (WCAG 2.2 AA 2.5.8) on pointer layouts: every small inline
+   control gets a hit area of at least 24 by 24 CSS px. The text keeps its size;
+   the box grows by padding or by a centred flex box. Touch layouts already give
+   these 44 px (65-mobile-touch.css, 99-mobile-gui-refresh.css). */
+@media (pointer: fine) and (min-width: 768px) {
+  .olv-ah-remedy,
+  .olv-analyse-surface-dl,
+  .olv-add-dataset-row {
+    min-height: 24px;
+    min-width: 24px;
+  }
+  .olv-ah-remedy,
+  .olv-analyse-surface-dl {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .olv-layer-solo,
+  .olv-layer-lock,
+  .olv-layer-x {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    min-height: 24px;
+  }
+}
+
+/* Touch layouts, phone sheet and large touch screens alike: the same controls
+   meet the 44 px touch floor the rest of the sheet uses. */
+@media (pointer: coarse) {
+  .olv-ah-remedy,
+  .olv-analyse-surface-dl,
+  .olv-add-dataset-row {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
 /* ── Windows High Contrast / forced-colors ──────────────────────────────────
    Windows High Contrast replaces the author palette with a small system one.

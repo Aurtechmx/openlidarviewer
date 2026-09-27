@@ -260,7 +260,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   // Results shelf: the rail's footer on desktop, a row atop the phone sheet's
   // Data tab. Placed by the two layout functions above. A route change selects
   // the matching sheet tab through the mode change.
-  const shelf = d.results ? mountResultsShelf(d.results, d.analysePanel, d.export, (route) => router?.navigate(route)) : null;
+  const shelf = d.results ? mountResultsShelf(d.results, d.analysePanel, d.export, (route) => router?.navigate(route), d.runAction) : null;
   if (shelf) { leftPanels.append(shelf.element); d.addTeardown(() => shelf.dispose()); }
 
   let mobileApplied = false;

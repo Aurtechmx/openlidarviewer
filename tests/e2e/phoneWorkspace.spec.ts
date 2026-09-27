@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropDenseGridPly } from './helpers';
+import { dropDenseGridPly, placeTestDistance } from './helpers';
 
 /**
  * tests/e2e/phoneWorkspace.spec.ts
@@ -114,6 +114,25 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }
           && t.x < body.x + body.width && t.x + t.width > body.x;
         expect(overlap, `toast ${JSON.stringify(t)} body ${JSON.stringify(body)}`).toBe(false);
       }
+    });
+
+    test('the Results list opens below its toggle and reads top-down', async ({ page }) => {
+      await openScan(page);
+      await page.waitForTimeout(500); // the test API mounts on viewerLoaded
+      await tab(page, 'work').click();
+      await slot(page, 'work').locator('.olv-tl-row', { hasText: 'Measure' }).click();
+      await placeTestDistance(page);
+      await tab(page, 'data').click();
+      const shelf = slot(page, 'data').locator('.olv-results-shelf');
+      const toggle = shelf.locator('.olv-results-toggle');
+      await expect(toggle).toBeVisible();
+      await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      const panel = shelf.locator('.olv-results-panel');
+      await expect(panel.locator('.olv-results-row')).toHaveCount(1);
+      const t = (await toggle.boundingBox())!;
+      const p = (await panel.boundingBox())!;
+      expect(p.y, `list ${JSON.stringify(p)} toggle ${JSON.stringify(t)}`).toBeGreaterThanOrEqual(t.y + t.height - 1);
     });
 
     test('each tab has one scroller, and the task controls are touch sized', async ({ page }) => {

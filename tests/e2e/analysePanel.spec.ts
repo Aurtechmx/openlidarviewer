@@ -84,7 +84,9 @@ test('after running on a scan: readiness, chips, recommendations, and gated expo
   await expect(verdict).toContainText(/Ready|Usable|Limited|Preview|Not usable|streaming/i);
   expect(await page.locator('.olv-fit-row').count()).toBe(6);
   // Georeferencing is the scorecard's "Location & height" row (it replaced the
-  // old jargon CRS/Datum chips).
+  // old jargon CRS/Datum chips). The dimension rows sit in the "Validation
+  // detail" disclosure, which opens on demand.
+  await page.locator('.olv-fit-caveats-summary', { hasText: 'Validation detail' }).click();
   await expect(page.locator('.olv-fit-label', { hasText: 'Location & height' })).toBeVisible();
 
   // Detailed metrics and the surface models are behind the Evidence expander.

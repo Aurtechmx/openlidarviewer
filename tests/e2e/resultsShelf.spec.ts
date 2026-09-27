@@ -130,6 +130,37 @@ test.describe('results shelf', () => {
     await expect(verdict).toHaveAttribute('data-e2e-mark', '1');
   });
 
+  test('lab: Focus on a Flow Pulse run opens the lab on that run, not the Analyse home', async ({ page }) => {
+    await page.goto('/?test=1');
+    await dropDenseGridPly(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+    await page.waitForTimeout(500);
+    await openAnalysePanel(page);
+    await page.locator('.olv-analyse-run').click();
+    await expect(page.locator('.olv-fit-verdict-text')).toBeVisible({ timeout: 30_000 });
+    await page.locator('#olv-ws-mode-analyse .olv-ws-back').click();
+    await page.locator('.olv-ah-row[data-analysis="flow-pulse"] .olv-ah-open').click();
+    const modal = page.locator('.olv-modal');
+    await expect(modal.locator('.olv-modal-title')).toHaveText('Field Simulation Lab: Flow Pulse', { timeout: 20_000 });
+    const card = modal.locator('.olv-modal-body');
+    await expect(card).not.toBeEmpty();
+    const first = await card.innerText();
+    await page.keyboard.press('Escape');
+    await expect(modal).toHaveCount(0);
+
+    await showWorkspaceMode(page, 'data');
+    await page.mouse.move(1, 1);
+    await shelf(page).locator('.olv-results-toggle').click();
+    const row = shelf(page).locator('.olv-results-row[data-result-type="flow-pulse"]');
+    await expect(row).toHaveCount(1, { timeout: 10_000 });
+    await row.locator('.olv-results-focus').click();
+    await expect(modal.locator('.olv-modal-title')).toHaveText('Field Simulation Lab: Flow Pulse', { timeout: 20_000 });
+    // The same run, shown as it was: the card reads the kept outcome.
+    expect(await card.innerText()).toBe(first);
+    // The modal opened over the current mode; the shelf did not route.
+    await expect(page.locator('.olv-ws-tab[data-mode="data"]')).toHaveAttribute('aria-selected', 'true');
+  });
+
   test('closing the scan empties the shelf', async ({ page }) => {
     await openAndMeasure(page);
     await expect(shelf(page).locator('.olv-results-toggle')).toBeVisible();

@@ -167,7 +167,8 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   content: '▸'; display: inline-block; margin-right: var(--space-2xs);
   font-size: 0.85em; transition: transform 120ms ease;
 }
-.olv-analyse-assess-metrics-all[open] > .olv-analyse-assess-metrics-summary::before {
+.olv-analyse-assess-metrics-all[open] > .olv-analyse-assess-metrics-summary::before,
+.olv-analyse-assess-metricwrap[open] > .olv-analyse-assess-metrics-summary::before {
   transform: rotate(90deg);
 }
 .olv-analyse-assess-metricgroup { margin-top: var(--space-xs); }
