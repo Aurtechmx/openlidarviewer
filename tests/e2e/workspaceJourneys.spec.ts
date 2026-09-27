@@ -146,6 +146,7 @@ test.describe('workspace journeys', () => {
     await expect(taskTitle(page, 'work')).toHaveText('Measure');
     await expectWorkspaceRules(page);
 
+    await page.mouse.move(1, 1); // a hover tip left by the last click would cover the toggle
     await shelf(page).locator('.olv-results-toggle').click();
     await expect(shelf(page).locator('.olv-results-row[data-result-type="measurement"]')).toHaveCount(1);
     await showWorkspaceMode(page, 'data');
@@ -190,6 +191,7 @@ test.describe('workspace journeys', () => {
     await expect(page.locator('.olv-cs-export-btn', { hasText: /^GeoJSON$/ })).toBeVisible();
     await expectWorkspaceRules(page);
 
+    await page.mouse.move(1, 1); // a hover tip left by the last click would cover the toggle
     await shelf(page).locator('.olv-results-toggle').click();
     const contours = shelf(page).locator('.olv-results-row[data-result-type="contours"]');
     await expect(contours).toHaveCount(1, { timeout: 10_000 });
@@ -226,6 +228,7 @@ test.describe('workspace journeys', () => {
     await page.locator('.olv-ah-row[data-analysis="terrain"] .olv-ah-open').click();
     await page.locator('.olv-analyse-run').click();
     await expect(page.locator('.olv-fit-verdict-text')).toBeVisible({ timeout: 30_000 });
+    await page.mouse.move(1, 1); // a hover tip left by the last click would cover the toggle
     await shelf(page).locator('.olv-results-toggle').click();
     await shelf(page).locator('.olv-results-row[data-result-type="terrain"] .olv-results-export').click();
     await expect(page.locator('.olv-ws-tab[data-mode="output"]')).toHaveAttribute('aria-selected', 'true');
@@ -246,6 +249,7 @@ test.describe('workspace journeys', () => {
     await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 60_000 });
     const activeBefore = await page.evaluate(() => document.querySelector('.olv-layer.is-active .olv-layer-name')?.textContent ?? null);
 
+    await page.mouse.move(1, 1); // a hover tip left by the last click would cover the toggle
     await shelf(page).locator('.olv-results-toggle').click();
     const row = shelf(page).locator('.olv-results-row[data-result-type="measurement"]');
     await expect(row).toHaveClass(/is-other-source/, { timeout: 5_000 });
