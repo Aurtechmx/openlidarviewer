@@ -21,6 +21,8 @@ export class FakeEl {
   download = '';
   private _text = '';
   readonly children: FakeEl[] = [];
+  parent: FakeEl | null = null;
+  readonly attrs: Record<string, string> = {};
   readonly dataset: Record<string, string> = {};
   readonly style: Record<string, string> = {};
   readonly classList = {
@@ -38,8 +40,24 @@ export class FakeEl {
   constructor(tagName: string) {
     this.tagName = tagName;
   }
-  setAttribute(): void {
-    /* no-op */
+  setAttribute(name: string, value: string): void {
+    this.attrs[name] = String(value);
+    if (name === 'class') this.className = String(value);
+  }
+  getAttribute(name: string): string | null {
+    return name in this.attrs ? this.attrs[name] : null;
+  }
+  /** Detach from the parent, as `Element.remove()` does. */
+  remove(): void {
+    const p = this.parent;
+    if (!p) return;
+    const i = p.children.indexOf(this);
+    if (i >= 0) p.children.splice(i, 1);
+    this.parent = null;
+  }
+  /** Only the `.class` form, which is all the panels use. */
+  querySelectorAll(sel: string): FakeEl[] {
+    return sel.startsWith('.') ? this.findByClass(sel.slice(1)).filter((n) => n !== this) : [];
   }
   removeAttribute(): void {
     /* no-op */
@@ -53,6 +71,9 @@ export class FakeEl {
   }
   set textContent(v: string) {
     this._text = v;
+    // Setting textContent drops every child, as in the DOM.
+    for (const c of this.children) c.parent = null;
+    this.children.length = 0;
   }
   get textContent(): string {
     return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
@@ -61,12 +82,25 @@ export class FakeEl {
   get ownText(): string {
     return this._text;
   }
-  append(...kids: FakeEl[]): void {
-    this.children.push(...kids.filter(Boolean));
+  append(...kids: (FakeEl | string)[]): void {
+    for (const k of kids) {
+      if (!k) continue;
+      const node = typeof k === 'string' ? FakeEl.text(k) : k;
+      node.parent = this;
+      this.children.push(node);
+    }
   }
-  replaceChildren(...kids: FakeEl[]): void {
+  replaceChildren(...kids: (FakeEl | string)[]): void {
+    this._text = '';
+    for (const c of this.children) c.parent = null;
     this.children.length = 0;
-    this.children.push(...kids);
+    this.append(...kids);
+  }
+  /** A text node: a childless '#text' carrying only its own text. */
+  static text(v: string): FakeEl {
+    const t = new FakeEl('#text');
+    t._text = v;
+    return t;
   }
   addEventListener(): void {
     /* no-op */

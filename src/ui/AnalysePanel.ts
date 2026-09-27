@@ -27,6 +27,7 @@
  * Mounted in `main.ts` next to the Measurements and Annotations panels.
  */
 
+import { showBusyScan, clearBusyScan } from './busyScan';
 import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
 import type { SensitivityMemberGrid, runDemSensitivity as RunDemSensitivity } from '../terrain/export/demSensitivity';
 import { SurfaceTiles } from './analyseSurfaceTiles';
@@ -970,7 +971,10 @@ export class AnalysePanel {
     this._runBtn.textContent = busy ? 'Analysing…' : this._runLabel();
     if (busy) {
       this.setStatus(text);
+      showBusyScan(this._status, text);
       this._showSkeleton();
+    } else {
+      clearBusyScan(this._status);
     }
   }
 
@@ -2869,7 +2873,7 @@ export class AnalysePanel {
         exportBtn.disabled = true;
         cancelBtn.disabled = true;
         const restoreLabel = exportBtn.textContent ?? 'Export PDF';
-        exportBtn.textContent = 'Exporting…';
+        showBusyScan(exportBtn, 'Exporting…');
         try {
           const chosenInterval = Number(intervalSel.value);
           const chosenStyle = styleSel.value as ContourShapeStyle;

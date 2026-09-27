@@ -11,6 +11,7 @@
  * consistency with the splash batch converter.
  */
 
+import { showBusyScan } from './busyScan';
 import type { ExportHealth } from '../intelligence/scanStory';
 import { renderExportHealthPanel } from './scanStoryViews';
 import { el } from './dom';
@@ -1186,7 +1187,7 @@ export class ExportPanel {
 
     this._busy = true;
     this._exportBtn.disabled = true;
-    this._exportBtn.textContent = useFull ? 'Re-decoding…' : 'Exporting…';
+    showBusyScan(this._exportBtn, useFull ? 'Re-decoding…' : 'Exporting…');
     try {
       // Full resolution re-decodes the original file; otherwise convert the
       // loaded (display-resolution) cloud.
@@ -1220,7 +1221,7 @@ export class ExportPanel {
       // box the user had set when they pressed Export (captured above).
       const clipped = clip?.enabled;
       const cloud = clipped ? clipCloud(sourceCloud, clip) : sourceCloud;
-      this._exportBtn.textContent = 'Exporting…';
+      showBusyScan(this._exportBtn, 'Exporting…');
       const { convertCloud } = await loadConvertEngine();
       // One more await stands between the gate above and the write below, so
       // the same gate is taken again on the far side of it. An edit landing in

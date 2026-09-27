@@ -20,6 +20,7 @@ import './45-dock-and-panels.css'; // Tool dock and backend indicator, developer
 import './50-navigation-bar.css'; // Navigation bar: mode-switcher triangle, speed slider, controls HUD, orthographic toggle.
 import './55-micro-interactions.css'; // Micro-interactions: keyboard focus, entrance motion, health pulse, version mark.
 import './56-inspector-panels.css'; // Inspector sub-panels: export buttons, saved views, provenance and CRS, profile card, session stats, project-ready summary.
+import './57-busy-scan.css'; // Busy scan: the shared waiting indicator for long operations.
 import './60-measure-inspect.css'; // Measure tool overlay and Inspect tool marker with its floating info card.
 import './65-mobile-touch.css'; // Mobile and touch: safe-area insets, the file-picker button, phone layout.
 import './70-measurement-panels.css'; // Measurement toolkit and toolbar: annotation markers, inline editor, hint bar, kind picker, icon controls, tooltip, panel stack.

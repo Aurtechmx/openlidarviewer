@@ -1,0 +1,63 @@
+/* Busy scan: the shared waiting indicator (src/ui/busyScan.ts).
+   A beam sweeps a 40 x 20 box and leaves returns that settle into a ground
+   profile. Transform and opacity only; one 3.2 s loop, no flashing. The mark
+   is 1em tall and inline so the host line or button keeps its height. */
+.olv-busy-scan {
+  display: inline-block;
+  width: 2em;
+  height: 1em;
+  margin-right: 0.4em;
+  vertical-align: -0.15em;
+  flex: none;
+  overflow: visible;
+  pointer-events: none;
+}
+.olv-busy-scan-beam {
+  stroke: var(--accent);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  opacity: 0;
+  animation: olv-busy-sweep 3.2s linear infinite;
+}
+.olv-busy-scan-pt {
+  fill: var(--accent);
+  opacity: 0;
+  animation: olv-busy-return 3.2s ease-out infinite;
+}
+.olv-busy-scan-pt:nth-of-type(1) { animation-delay: 0.12s; }
+.olv-busy-scan-pt:nth-of-type(2) { animation-delay: 0.28s; }
+.olv-busy-scan-pt:nth-of-type(3) { animation-delay: 0.44s; }
+.olv-busy-scan-pt:nth-of-type(4) { animation-delay: 0.60s; }
+.olv-busy-scan-pt:nth-of-type(5) { animation-delay: 0.76s; }
+.olv-busy-scan-pt:nth-of-type(6) { animation-delay: 0.92s; }
+.olv-busy-scan-pt:nth-of-type(7) { animation-delay: 1.08s; }
+.olv-busy-scan-pt:nth-of-type(8) { animation-delay: 1.24s; }
+.olv-busy-scan-pt:nth-of-type(9) { animation-delay: 1.40s; }
+.olv-busy-scan-pt:nth-of-type(10) { animation-delay: 1.52s; }
+@keyframes olv-busy-sweep {
+  0% { transform: translateX(0); opacity: 0.9; }
+  50% { transform: translateX(40px); opacity: 0.9; }
+  56% { transform: translateX(40px); opacity: 0; }
+  100% { transform: translateX(0); opacity: 0; }
+}
+@keyframes olv-busy-return {
+  0% { opacity: 0; }
+  6% { opacity: 1; }
+  82% { opacity: 1; }
+  95% { opacity: 0.15; }
+  100% { opacity: 0; }
+}
+/* Never animate out of sight. */
+[hidden] .olv-busy-scan *,
+.olv-hidden .olv-busy-scan * {
+  animation-play-state: paused;
+}
+/* Reduced motion: the finished profile, no sweep. */
+@media (prefers-reduced-motion: reduce) {
+  .olv-busy-scan-beam { animation: none; opacity: 0; }
+  .olv-busy-scan-pt { animation: none; opacity: 1; }
+}
+@media (forced-colors: active) {
+  .olv-busy-scan-beam { stroke: CanvasText; }
+  .olv-busy-scan-pt { fill: CanvasText; }
+}

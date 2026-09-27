@@ -15,6 +15,7 @@
  * sentence that equates it with OBSERVED_EMPTY) — `tests/observatoryPanelWording.test.ts`
  * renders this panel and asserts it.
  */
+import { showBusyScan } from '../busyScan';
 import { el } from '../dom';
 import { openModal, type ModalHandle } from '../Modal';
 import type { ObservatoryRunner, ObservatoryRunnerState } from '../../app/observatoryRunner';
@@ -220,7 +221,9 @@ export function renderObservatoryPanel(
     return root;
   }
   if (state.phase === 'running') {
-    root.append(el('p', { className: 'olv-observatory-status', text: 'Running…' }));
+    const status = el('p', { className: 'olv-observatory-status' });
+    showBusyScan(status, 'Running…');
+    root.append(status);
     return root;
   }
   if (state.phase === 'stale') {

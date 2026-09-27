@@ -36,18 +36,25 @@ export class RecordingEl {
   setAttribute(k: string, v: string): void { this.attrs[k] = v; }
   getAttribute(k: string): string | null { return this.attrs[k] ?? null; }
   removeAttribute(k: string): void { delete this.attrs[k]; }
-  set textContent(v: string) { this._text = v; }
+  set textContent(v: string) { this._text = v; this.children.length = 0; }
   /** This node's own text plus every descendant's, in tree order. */
   get textContent(): string {
     return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
   }
   set innerHTML(_v: string) { /* unused */ }
-  append(...kids: (RecordingEl | null)[]): void {
-    for (const k of kids) if (k) this.children.push(k);
+  append(...kids: (RecordingEl | string | null)[]): void {
+    for (const k of kids) if (k) this.children.push(typeof k === 'string' ? RecordingEl.text(k) : k);
   }
-  replaceChildren(...kids: RecordingEl[]): void {
+  replaceChildren(...kids: (RecordingEl | string)[]): void {
+    this._text = '';
     this.children.length = 0;
-    this.children.push(...kids);
+    this.append(...kids);
+  }
+  /** A text node: a childless '#text' carrying only its own text. */
+  static text(v: string): RecordingEl {
+    const t = new RecordingEl('#text');
+    t._text = v;
+    return t;
   }
   addEventListener(): void { /* no-op */ }
   blur(): void { /* no-op */ }
@@ -92,5 +99,6 @@ export class RecordingEl {
 export function installRecordingDom(): void {
   (globalThis as unknown as { document: unknown }).document = {
     createElement: (tag: string) => new RecordingEl(tag),
+    createElementNS: (_ns: string, tag: string) => new RecordingEl(tag),
   };
 }
