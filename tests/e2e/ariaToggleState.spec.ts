@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dropDenseGridPly, openExpandedPanel, railChromeSettled, expectHittable } from './helpers';
+import { dropDenseGridPly, openExpandedPanel, railChromeSettled, expectHittable, openClassesPage } from './helpers';
 import { COPC_FIXTURE } from './streamingFixtures';
 
 /**
@@ -74,6 +74,7 @@ test.describe('reclassifyUi — lasso-arm toggle a11y state', () => {
     await expect(armBtn).toBeAttached({ timeout: 10_000 });
     await expect(armBtn).toHaveAttribute('aria-pressed', 'false');
 
+    await openClassesPage(page);
     await railChromeSettled(page);
     await expectHittable(armBtn);
     await armBtn.click();

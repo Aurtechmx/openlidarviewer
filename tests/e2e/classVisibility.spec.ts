@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropTinyLas, dropTinyPly } from './helpers';
+import { dropTinyLas, dropTinyPly, openClassesPage } from './helpers';
 
 /**
  * Class-visibility (v0.4.2) — the honesty loop.
@@ -47,6 +47,7 @@ async function loadClassifiedScan(page: Page): Promise<void> {
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   // The legend is revealed once the class buffer is counted; the panel is
   // visible (not `.olv-hidden`) and shows at least one class row.
+  await openClassesPage(page);
   await expect(page.locator(LEGEND)).toBeVisible({ timeout: 20_000 });
   await page.waitForTimeout(500);
 }
@@ -154,6 +155,7 @@ test('a class-less scan shows the legend empty state', async ({ page }) => {
 
   // The panel is still revealed, but in its disabled empty state: no class
   // rows, the explanatory empty message, and a disabled "Show all".
+  await openClassesPage(page);
   await expect(page.locator(LEGEND)).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(`${LEGEND} ${EMPTY}`)).toBeVisible();
   await expect(page.locator(`${LEGEND} ${ROW}`)).toHaveCount(0);

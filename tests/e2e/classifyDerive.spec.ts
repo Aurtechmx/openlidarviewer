@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropTinyPly, dropTinyLas } from './helpers';
+import { dropTinyPly, dropTinyLas, openClassesPage } from './helpers';
 
 /**
  * Classify (derive) — unsupervised classification of an UNclassified scan.
@@ -48,6 +48,7 @@ test('deriving a classification for a class-less scan fills the legend, flagged 
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
 
   // Before: the legend is in its empty (no-classification) state.
+  await openClassesPage(page);
   await expect(page.locator(LEGEND)).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(`${LEGEND} ${EMPTY}`)).toBeVisible();
   await expect(page.locator(`${LEGEND} ${ROW}`)).toHaveCount(0);
@@ -71,6 +72,7 @@ test('a derived class is filterable from the legend (GPU mask wired)', async ({ 
   await page.goto('/');
   await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await openClassesPage(page);
   await expect(page.locator(LEGEND)).toBeVisible({ timeout: 20_000 });
 
   await runClassify(page);
@@ -95,6 +97,7 @@ test('Classify is a no-op on a scan that already carries a classification', asyn
   // and must not stamp the legend as derived.
   await dropTinyLas(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await openClassesPage(page);
   await expect(page.locator(LEGEND)).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(`${LEGEND} ${ROW}`).first()).toBeVisible({ timeout: 20_000 });
 

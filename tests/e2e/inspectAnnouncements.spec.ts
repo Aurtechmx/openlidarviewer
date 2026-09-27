@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropTinyLas, dropTinyPly, showWorkspaceMode } from './helpers';
+import { dropTinyLas, dropTinyPly, showWorkspaceMode, openClassesPage } from './helpers';
 import { fileURLToPath } from 'node:url';
 
 /**
@@ -40,6 +40,7 @@ test('hiding a class announces the filter banner through the shared live region'
   await page.goto('/');
   await dropTinyLas(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await openClassesPage(page);
   const legend = page.locator('.olv-class-panel');
   await expect(legend).toBeVisible({ timeout: 20_000 });
 

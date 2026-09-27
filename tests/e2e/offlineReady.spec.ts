@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { dropTinyPly } from './helpers';
+import { dropTinyPly, openClassesPage } from './helpers';
 
 /**
  * Offline reload after "Make available offline".
@@ -64,6 +64,7 @@ test('app shell reloads offline and opens a local file', async ({ page, context,
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 30_000 });
     // tiny.ply decoded and reached the scene: the class legend reveals in its
     // empty state only after a scan has loaded.
+    await openClassesPage(page);
     await expect(page.locator('.olv-class-panel')).toBeVisible({ timeout: 30_000 });
   } finally {
     await context.setOffline(false);
