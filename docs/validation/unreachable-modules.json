@@ -457,6 +457,13 @@
       "graduation": "Reachable when a coordinator (O9) adds a called `lazyChunks.ts` loader and mounts it on a real resident cloud.",
       "review": "2027-03-31",
       "declaredIn": "docs/observatory/SPEC.md"
+    },
+    {
+      "path": "src/classification/classificationEvidence.ts",
+      "status": "staged",
+      "why": "The per-point evidence record for a classification decision. The derived classifier that ships does not attach one, so no production module constructs or reads the record.",
+      "graduation": "The derived classifier emits this record and a consumer (export, report or the classification editor) reads it.",
+      "review": "2027-02-28"
     }
   ]
 }
