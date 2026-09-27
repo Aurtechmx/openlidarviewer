@@ -15,6 +15,7 @@
 
 import { clamp01 } from '../numeric';
 import { el, formatCount } from './dom';
+import { createBusyScanController, type BusyScanController } from './busyScan';
 import { streamingViewStatus, type StreamingViewStatus } from './streamingViewStatus';
 import { CURATED_LICENSE_LABELS, curatedCreditFor } from '../io/catalog/curatedLocations';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
@@ -293,6 +294,9 @@ export class StreamingPanel {
   private readonly _callbacks: StreamingPanelCallbacks;
   private readonly _title: HTMLElement;
   private readonly _phase: HTMLElement;
+  /** The busy scan in the phase line while a scan opens; null once its first view is ready. */
+  private _openScan: BusyScanController | null = null;
+  private _firstViewReady = false;
   private readonly _credit: HTMLElement;
   // Determinate load-progress treatment under the phase line: a thin
   // brand-gradient bar (resident/known node fraction) + a tabular pts readout.
@@ -497,6 +501,10 @@ export class StreamingPanel {
     this._paused = false;
     this._pause.textContent = 'Pause';
     // Reset the progress treatment for the next scan.
+    // Drops the busy scan too; the next open starts its own.
+    this._phase.textContent = '';
+    this._openScan = null;
+    this._firstViewReady = false;
     this._progress.classList.add('olv-hidden');
     this._progressTrack.classList.remove('olv-stream-prog-shimmer');
     this._progressFill.style.width = '0%';
@@ -540,7 +548,11 @@ export class StreamingPanel {
    * property of the current view and is revoked when that view changes.
    */
   setPhase(phase: string): void {
-    this._phase.textContent = phase;
+    // Opening stages: the busy scan stands in front of the phase text until the
+    // first view is ready.
+    if (!this._openScan && !this._firstViewReady) this._openScan = createBusyScanController();
+    if (this._openScan) this._phase.replaceChildren(this._openScan.element, phase);
+    else this._phase.textContent = phase;
   }
 
   /** Whether the user has paused streaming. */
@@ -564,7 +576,18 @@ export class StreamingPanel {
    * and a later snapshot can move the bar back down.
    */
   setViewStatus(view: StreamingViewStatus): void {
-    this._phase.textContent = view.headline;
+    // Until the first view is ready, the busy scan stays and its trail carries
+    // the resident share of the requested nodes. Settled, incomplete or paused
+    // ends the opening, and the scan goes.
+    const opening = view.state === 'loading' || view.state === 'settling' || view.state === 'unknown';
+    if (this._openScan && opening) {
+      if (view.determinate && view.fraction != null) this._openScan.setProgress(view.fraction);
+      this._phase.replaceChildren(this._openScan.element, view.headline);
+    } else {
+      if (view.state === 'settled') this._firstViewReady = true;
+      this._openScan = null;
+      this._phase.textContent = view.headline;
+    }
     this._progress.classList.remove('olv-hidden');
     this._progressNodes.textContent = view.detail;
     if (view.determinate && view.fraction != null) {

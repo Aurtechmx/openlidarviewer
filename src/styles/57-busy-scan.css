@@ -1,7 +1,15 @@
-/* Busy scan: the shared waiting indicator (src/ui/busyScan.ts).
-   A beam sweeps a 40 x 20 box and leaves returns that settle into a ground
-   profile. Transform and opacity only; one 3.2 s loop, no flashing. The mark
-   is 1em tall and inline so the host line or button keeps its height. */
+/* Busy scan: the shared waiting indicator (src/ui/busyScan.ts). A point in
+   a muted accent circles an invisible 3:1 orbit, once every 2.4 s with a sine
+   ease in and out, round a centre dot that pulses in the host's text colour
+   twice a loop. Behind the point a trail runs along the orbit, brightest at
+   the point, fading toward its tail. Its length (--olv-bs-len, hundredths of
+   the orbit) is the progress: 15 with none known, up to 95 at the end.
+   1em tall and inline, so the host keeps its height. */
+@property --olv-bs-len {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 15;
+}
 .olv-busy-scan {
   display: inline-block;
   width: 2em;
@@ -11,53 +19,103 @@
   flex: none;
   overflow: visible;
   pointer-events: none;
+  shape-rendering: geometricPrecision;
+  --olv-bs-mark: color-mix(in srgb, var(--accent) 70%, currentColor);
+  --olv-bs-len: 15;
+  /* Length changes ease; they never jump. */
+  transition: --olv-bs-len 300ms ease-out;
 }
-.olv-busy-scan-beam {
-  stroke: var(--accent);
-  stroke-width: 1.2;
-  stroke-linecap: round;
-  opacity: 0;
-  animation: olv-busy-sweep 3.2s linear infinite;
+.olv-busy-scan.is-instant { transition: none; }
+
+/* Centre: pulses twice a loop, never brighter than 0.85 so the moving point leads. */
+.olv-bs-core {
+  fill: currentColor;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: olv-bs-pulse 1.2s ease-in-out infinite;
 }
-.olv-busy-scan-pt {
-  fill: var(--accent);
-  opacity: 0;
-  animation: olv-busy-return 3.2s ease-out infinite;
+
+/* The moving point. */
+.olv-bs-point {
+  fill: var(--olv-bs-mark);
+  offset-path: path("M20 15A15 5 0 0 1 5 10A15 5 0 0 1 35 10A15 5 0 0 1 20 15");
+  offset-rotate: 0deg;
+  offset-distance: 0%;
+  animation: olv-bs-orbit 2.4s cubic-bezier(0.37, 0, 0.63, 1) infinite;
 }
-.olv-busy-scan-pt:nth-of-type(1) { animation-delay: 0.12s; }
-.olv-busy-scan-pt:nth-of-type(2) { animation-delay: 0.28s; }
-.olv-busy-scan-pt:nth-of-type(3) { animation-delay: 0.44s; }
-.olv-busy-scan-pt:nth-of-type(4) { animation-delay: 0.60s; }
-.olv-busy-scan-pt:nth-of-type(5) { animation-delay: 0.76s; }
-.olv-busy-scan-pt:nth-of-type(6) { animation-delay: 0.92s; }
-.olv-busy-scan-pt:nth-of-type(7) { animation-delay: 1.08s; }
-.olv-busy-scan-pt:nth-of-type(8) { animation-delay: 1.24s; }
-.olv-busy-scan-pt:nth-of-type(9) { animation-delay: 1.40s; }
-.olv-busy-scan-pt:nth-of-type(10) { animation-delay: 1.52s; }
-@keyframes olv-busy-sweep {
-  0% { transform: translateX(0); opacity: 0.9; }
-  50% { transform: translateX(40px); opacity: 0.9; }
-  56% { transform: translateX(40px); opacity: 0; }
-  100% { transform: translateX(0); opacity: 0; }
+
+/* The trail: six equal dashes on copies of the orbit path, laid end to end
+   behind the point, each fainter than the one ahead. Each dash offset runs on
+   the point's easing, so the head stays on the point; the dash length and
+   start follow --olv-bs-len. Units are hundredths of the path (pathLength).
+   Dashes need the path's own scale, so the stroke is in user units: 0.7 is
+   one device pixel at 2x for a 14 px host font. */
+.olv-bs-trail { transition: opacity 250ms ease-out; }
+.olv-busy-scan.is-fading .olv-bs-trail { opacity: 0; }
+.olv-bs-seg {
+  fill: none;
+  stroke: var(--olv-bs-mark);
+  stroke-width: 0.7;
+  stroke-linecap: butt;
+  stroke-dasharray: calc(var(--olv-bs-len) / 6 * 1px) calc((100 - var(--olv-bs-len) / 6) * 1px);
+  stroke-dashoffset: calc(var(--olv-bs-len) * var(--olv-bs-k) / 6 * 1px);
+  animation: olv-bs-trail 2.4s cubic-bezier(0.37, 0, 0.63, 1) infinite;
 }
-@keyframes olv-busy-return {
-  0% { opacity: 0; }
-  6% { opacity: 1; }
-  82% { opacity: 1; }
-  95% { opacity: 0.15; }
-  100% { opacity: 0; }
+.olv-bs-seg-0 { --olv-bs-k: 1; opacity: 1.00; }
+.olv-bs-seg-1 { --olv-bs-k: 2; opacity: 0.75; }
+.olv-bs-seg-2 { --olv-bs-k: 3; opacity: 0.52; }
+.olv-bs-seg-3 { --olv-bs-k: 4; opacity: 0.33; }
+.olv-bs-seg-4 { --olv-bs-k: 5; opacity: 0.17; }
+.olv-bs-seg-5 { --olv-bs-k: 6; opacity: 0.06; }
+
+/* Completion: the point rests at the front, the pulse stops and the trail
+   fades. */
+.olv-busy-scan.is-settled .olv-bs-point,
+.olv-busy-scan.is-settled .olv-bs-seg { animation-play-state: paused; }
+.olv-busy-scan.is-settled .olv-bs-trail { opacity: 0; }
+.olv-busy-scan.is-settled .olv-bs-core { animation: none; opacity: 0.85; }
+
+@keyframes olv-bs-orbit {
+  0% { offset-distance: 0%; }
+  100% { offset-distance: 100%; }
 }
+@keyframes olv-bs-trail {
+  0% { stroke-dashoffset: calc(var(--olv-bs-len) * var(--olv-bs-k) / 6 * 1px); }
+  100% { stroke-dashoffset: calc((var(--olv-bs-len) * var(--olv-bs-k) / 6 - 100) * 1px); }
+}
+@keyframes olv-bs-pulse {
+  0% { transform: scale(0.85); opacity: 0.55; }
+  50% { transform: scale(1.15); opacity: 0.85; }
+  100% { transform: scale(0.85); opacity: 0.55; }
+}
+
+/* Load toast: the scan and the status dot share one fixed slot. The scan
+   shows while a load runs (.is-busy); the dot shows on error and idle. */
+.olv-toast-mark {
+  flex: none; width: 2em; height: 1em;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.olv-toast-mark .olv-busy-scan { margin-right: 0; vertical-align: 0; }
+.olv-toast.is-busy .olv-toast-mark .olv-toast-dot,
+.olv-toast:not(.is-busy) .olv-toast-mark .olv-busy-scan { display: none; }
 /* Never animate out of sight. */
 [hidden] .olv-busy-scan *,
 .olv-hidden .olv-busy-scan * {
   animation-play-state: paused;
 }
-/* Reduced motion: the finished profile, no sweep. */
+/* Reduced motion: still. The point rests at the front, the trail shows the
+   current progress (length changes apply at once), the centre steady. */
 @media (prefers-reduced-motion: reduce) {
-  .olv-busy-scan-beam { animation: none; opacity: 0; }
-  .olv-busy-scan-pt { animation: none; opacity: 1; }
+  .olv-busy-scan { transition: none; }
+  .olv-bs-point, .olv-bs-seg { animation: none; }
+  .olv-bs-core { animation: none; opacity: 0.85; }
+}
+/* No motion paths: the point cannot travel, so nothing moves. */
+@supports not (offset-path: path("M0 0")) {
+  .olv-bs-point, .olv-bs-seg { animation: none; }
+  .olv-bs-point { transform: translate(20px, 15px); }
 }
 @media (forced-colors: active) {
-  .olv-busy-scan-beam { stroke: CanvasText; }
-  .olv-busy-scan-pt { fill: CanvasText; }
+  .olv-bs-seg { stroke: CanvasText; }
+  .olv-bs-core, .olv-bs-point { fill: CanvasText; }
 }

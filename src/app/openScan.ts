@@ -109,7 +109,7 @@ export interface OpenScanDeps {
   dropZone: Pick<
     DropZone,
     'setOpening' | 'setCancelHandler' | 'setProgress' | 'setPreload' | 'setError'
-  >;
+  > & Partial<Pick<DropZone, 'finish'>>;
   /** Open a local COPC file through the streaming pipeline (wraps the range source + `openStreamingCopc`). */
   openLocalCopc: (file: File, signal: AbortSignal) => Promise<void>;
   /** Load a dropped / opened file through the static loader (wraps `new LocalFileSource(file).load(...)`). */
@@ -313,7 +313,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     }, { head: headSlice });
     if (heavy.status === 'attached') {
       deps.dropZone.setCancelHandler(null);
-      deps.dropZone.setProgress(null);
+      finishLoad(deps);
       return;
     }
     if (heavy.status === 'cancelled') {
@@ -753,5 +753,11 @@ export async function attachStaticCloud(
     void loadLoadDiagnostics().then((m) => m.reportLoadDiagnostics(deps, cloud, telemetry, firstDraw));
   }
   deps.dropZone.setCancelHandler(null);
-  deps.dropZone.setProgress(null);
+  finishLoad(deps);
+}
+
+/** A load that succeeded: let the toast's busy scan settle before it hides. */
+function finishLoad(deps: Pick<OpenScanDeps, 'dropZone'>): void {
+  if (deps.dropZone.finish) deps.dropZone.finish();
+  else deps.dropZone.setProgress(null);
 }

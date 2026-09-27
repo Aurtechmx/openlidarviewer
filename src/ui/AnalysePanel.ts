@@ -27,7 +27,7 @@
  * Mounted in `main.ts` next to the Measurements and Annotations panels.
  */
 
-import { showBusyScan, clearBusyScan } from './busyScan';
+import { showBusyScan, clearBusyScan, createBusyScanController, type BusyScanController } from './busyScan';
 import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
 import type { SensitivityMemberGrid, runDemSensitivity as RunDemSensitivity } from '../terrain/export/demSensitivity';
 import { SurfaceTiles } from './analyseSurfaceTiles';
@@ -2381,6 +2381,9 @@ export class AnalysePanel {
     return box;
   }
 
+  /** The busy scan on the DEM package button while an export runs. */
+  private _demScan: BusyScanController | null = null;
+
   private _setDemSensitivityStatus(text: string): void {
     this._demSensitivityStatus.textContent = text;
     this._demSensitivityStatus.style.display = text ? '' : 'none';
@@ -2397,7 +2400,11 @@ export class AnalysePanel {
     try {
       return await run(
         r.dtm,
-        (k, of) => this._setDemSensitivityStatus(`Sensitivity: running member ${k} of ${of}.`),
+        (k, of) => {
+          this._setDemSensitivityStatus(`Sensitivity: running member ${k} of ${of}.`);
+          // Member k is running, so k - 1 are done.
+          this._demScan?.setProgress((k - 1) / of);
+        },
         abort.signal,
       );
     } catch (err) {
@@ -2424,7 +2431,10 @@ export class AnalysePanel {
     if (this._refuseForeignScanExport()) return;
     const label = btn.textContent ?? 'DEM (ZIP)';
     btn.disabled = true;
-    showBusyScan(btn, '…');
+    // The trail follows the sensitivity members when that option runs.
+    const scan = createBusyScanController();
+    btn.replaceChildren(scan.element, '…');
+    this._demScan = scan;
     // Frame + name captured before the writer chunk loads, so the raster and its
     // .prj / README describe the scan this result came from.
     const ctx = this._cb.getMapContext?.() ?? {};
@@ -2484,6 +2494,7 @@ export class AnalysePanel {
       // Rethrow (R3 fix) — see `_exportContourFormat` for why.
       throw err;
     } finally {
+      this._demScan = null;
       btn.disabled = false;
       btn.textContent = label;
     }

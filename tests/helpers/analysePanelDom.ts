@@ -24,7 +24,14 @@ export class FakeEl {
   parent: FakeEl | null = null;
   readonly attrs: Record<string, string> = {};
   readonly dataset: Record<string, string> = {};
-  readonly style: Record<string, string> = {};
+  readonly style: Record<string, string> & { setProperty(k: string, v: string): void } = Object.assign(
+    {} as Record<string, string>,
+    {
+      setProperty(this: Record<string, string>, k: string, v: string): void {
+        this[k] = v;
+      },
+    },
+  );
   readonly classList = {
     add(): void {
       /* no-op */
