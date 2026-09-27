@@ -1,10 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { dropDenseGridPly, showWorkspaceMode } from './helpers';
+import { dropDenseGridPly, openAnalysePage } from './helpers';
 
 /**
  * Process Studio (v0.6.5) — a display-only readiness view over the pure
  * Phase-1/2 services. It is a post-scan tool: hidden in the empty state,
- * revealed in the left rail on scan load, and re-hidden when the scan closes.
+ * revealed on scan load, and re-hidden when the scan closes. On the desktop it
+ * sits in the Terrain page's `Why?` disclosure, and its verdicts drive the
+ * status of each row on the Analyse home.
  * These specs guard the shell wiring (mount + reveal + populate) and the
  * fail-closed contract that products the scan cannot support read as blocked
  * rather than falsely ready.
@@ -19,17 +21,19 @@ test('stays hidden in the empty state before any scan is loaded', async ({ page 
   await expect(page.locator('.olv-process-studio')).toBeHidden();
 });
 
-test('reveals in the left rail and populates from live scan facts on load', async ({ page }) => {
+test('reveals behind Terrain > Why? and populates from live scan facts on load', async ({ page }) => {
   await page.goto('/?test=1');
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  // Process Studio lives in the Analyse workspace mode.
-  await showWorkspaceMode(page, 'analyse');
-
+  // Process Studio is the Terrain page's Why?: conclusion first, why second.
+  await openAnalysePage(page, 'terrain');
   const panel = page.locator('.olv-process-studio');
+  await expect(panel).toBeHidden();
+  await page.locator('.olv-analyse-page[data-page="terrain"] .olv-why-summary').click();
   await expect(panel).toBeVisible({ timeout: 20_000 });
 
   // Title + adaptive stage chips for the loaded scan.
+  // The page header names the task, so the panel's own title is not shown.
   await expect(panel.locator('.olv-ps-title')).toHaveText('Process Studio');
   expect(await panel.locator('.olv-ps-stage').count()).toBeGreaterThan(0);
 

@@ -12,6 +12,10 @@
  * panel under a task header. The route is presentation only; see
  * `workspaceRouter.ts`. On a phone the four mode hosts move into the bottom
  * sheet's tabs whole, so the phone shows the same homes and pages.
+ *
+ * The Analyse mode works the same way: its home lists the analyses with their
+ * status, and Terrain, Contours (under Terrain) and Objects & Space are pages.
+ * See `analyseWorkspace.ts`.
  */
 
 import { DesktopWorkspace, type WorkspaceMode } from '../../ui/workspace/DesktopWorkspace';
@@ -26,6 +30,7 @@ import {
   RAIL_CHEVRON_RIGHT,
 } from '../../ui/panelChrome';
 import { createWorkspaceRouter, type WorkspacePage, type WorkspaceRouter } from './workspaceRouter';
+import { createAnalyseWorkspace, type AnalyseHostPanel, type AnalysePage, type AnalyseStudio } from './analyseWorkspace';
 
 /** The scene tools that open a page in the Tools mode. */
 export type ToolPage = 'measure' | 'annotate' | 'clip';
@@ -44,12 +49,19 @@ export interface WorkspaceShellDeps {
   toolLauncher: HTMLElement;
   clip: HTMLElement;
   processStudio: HTMLElement;
+  /** The mounted Process Studio whose verdicts the Analyse home lists. */
+  studio: AnalyseStudio;
+  /** Mount and show the Analyse panel, or the Object panel. Never runs anything. */
+  showTerrain: () => Promise<unknown>;
+  showObjects: () => Promise<unknown>;
+  /** Run a command-palette action by id. */
+  runAction: (id: string) => void;
   export: HTMLElement;
   measureHint: HTMLElement;
   dock: HTMLElement;
   /** Overlay layers that paint above the rails, appended in this order. */
   overlayTail: readonly HTMLElement[];
-  analysePanel: () => Panel | null;
+  analysePanel: () => (Panel & AnalyseHostPanel) | null;
   objectPanel: () => Panel | null;
   measurePanel: () => Panel | null;
   setMeasureMountElement: (fn: (el: HTMLElement) => void) => void;
@@ -76,6 +88,8 @@ export interface WorkspaceShell {
   resumeToolPage(actionId: string): boolean;
   /** Re-evaluate the phone sheet and the rail's availability. */
   applyMobileSheet(): void;
+  /** Mount what an Analyse page needs, then show it. */
+  openAnalysePage(page: AnalysePage): void;
   mountAnalysePanel(el: HTMLElement): void;
   mountObjectPanel(el: HTMLElement): void;
 }
@@ -105,7 +119,21 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     annotate: { title: 'Annotate', element: () => d.annotation },
     clip: { title: 'Clip box', element: () => d.clip },
   };
-  router = createWorkspaceRouter(workspace, { work: pages as Record<string, WorkspacePage> }, storage());
+  // Keyed to the shared mobile-layout condition so JS and CSS agree.
+  const mobileMql = typeof window.matchMedia === 'function' ? window.matchMedia(MOBILE_LAYOUT_QUERY) : null;
+  const analyse = createAnalyseWorkspace({
+    studio: d.studio,
+    processStudio: d.processStudio,
+    analysePanel: d.analysePanel,
+    objectPanel: d.objectPanel,
+    showTerrain: d.showTerrain,
+    showObjects: d.showObjects,
+    runAction: d.runAction,
+    isMobile: () => mobileMql?.matches ?? false,
+  });
+  router = createWorkspaceRouter(workspace, { work: pages as Record<string, WorkspacePage>, analyse: analyse.pages }, storage());
+  analyse.attach(router);
+  const placeAnalyse = (): void => analyse.place(workspace.mode('analyse'));
   const leftPanels = workspace.element;
   // Data mode = the live layer browser (re-parented out of the Inspector, which
   // keeps updating the same nodes) + the class legend. Reused on mobile return.
@@ -117,10 +145,11 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     annotation: d.annotation,
     toolLauncher: d.toolLauncher,
     clip: d.clip,
-    processStudio: d.processStudio,
+    analyseHome: analyse.home,
     export: d.export,
   };
   workspace.layoutDesktop(workspacePanels);
+  placeAnalyse();
   d.export.classList.remove('olv-collapsed'); // one mode at a time, from first build
   d.overlay.append(leftPanels);
   d.addTeardown(() => workspace.dispose());
@@ -192,8 +221,6 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     router?.sync();
   };
 
-  // Keyed to the shared mobile-layout condition so JS and CSS agree.
-  const mobileMql = typeof window.matchMedia === 'function' ? window.matchMedia(MOBILE_LAYOUT_QUERY) : null;
   let mobileApplied = false;
   const applyMobileSheet = (): void => {
     const isMobile = mobileMql ? mobileMql.matches : false;
@@ -207,6 +234,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     workspace.setAvailable(d.hasScan());
   };
   mobileMql?.addEventListener('change', applyMobileSheet);
+  mobileMql?.addEventListener('change', placeAnalyse); // after the layout flip above
   applyMobileSheet();
 
   // Lazy panels mount into their mode host on either layout; on a phone that
@@ -236,10 +264,15 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
       if (mobileApplied) sheet.setDetent('peek');
     },
     applyMobileSheet,
+    openAnalysePage: (page) => { void analyse.open(page); },
     mountAnalysePanel: (el) => {
       el.classList.remove('olv-collapsed'); // constructs collapsed; hides its action
       workspace.mountInMode('analyse', el);
+      placeAnalyse();
     },
-    mountObjectPanel: (el) => workspace.mountInMode('analyse', el),
+    mountObjectPanel: (el) => {
+      workspace.mountInMode('analyse', el);
+      placeAnalyse();
+    },
   };
 }

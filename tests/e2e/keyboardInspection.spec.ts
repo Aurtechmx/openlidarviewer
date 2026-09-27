@@ -4,9 +4,10 @@ import {
   dropDenseGridPly,
   dropTinyPtx,
   expectHittable,
+  openAnalysePage,
+  openAnalysePanel,
   placeProfile,
   railChromeSettled,
-  showWorkspaceMode,
 } from './helpers';
 
 /**
@@ -46,12 +47,7 @@ async function openRangeWorkbenchGrid(page: Page): Promise<void> {
 }
 
 async function openRangeWorkbench(page: Page): Promise<void> {
-  await showWorkspaceMode(page, 'analyse');
-  const panel = page.locator('.olv-analyse-panel');
-  await expect(panel).toBeVisible({ timeout: 20_000 });
-  if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
-    await panel.locator('.olv-panel-head').click();
-  }
+  await openAnalysePage(page, 'range');
   const launcher = page.locator('.olv-range-launcher');
   await expect(launcher).toBeVisible({ timeout: 20_000 });
   const open = launcher.locator('.olv-range-launcher-action');
@@ -114,12 +110,7 @@ async function openSampledRasterTile(page: Page): Promise<void> {
 }
 
 async function openAnalyseDetails(page: Page): Promise<void> {
-  await showWorkspaceMode(page, 'analyse');
-  const panel = page.locator('.olv-analyse-panel');
-  await expect(panel).toBeVisible({ timeout: 20_000 });
-  if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
-    await panel.locator('.olv-panel-head').click();
-  }
+  await openAnalysePanel(page);
   await page.locator('.olv-analyse-run').click();
   await expect(page.locator('.olv-analyse-readiness .olv-analyse-ready:not(.is-skeleton)')).toHaveCount(3, {
     timeout: 20_000,

@@ -36,6 +36,8 @@ export interface WorkspaceRoute {
 export interface WorkspacePage {
   readonly title: string;
   readonly element: () => HTMLElement | null | undefined;
+  /** The page Back returns to. It must be a top-level page of the same mode. */
+  readonly parent?: string;
 }
 
 /** The slice of {@link DesktopWorkspace} the router drives. */
@@ -52,7 +54,7 @@ export interface WorkspaceRouter {
   route(): WorkspaceRoute;
   /** Show a route. `focus` moves focus to the task heading (or home). */
   navigate(route: WorkspaceRoute, focus?: boolean): void;
-  /** Return the current mode to its home. */
+  /** Return to the current page's parent, or to the mode's home. */
   back(focus?: boolean): void;
   /** Re-apply the route after a panel mounted or changed visibility. */
   sync(): void;
@@ -70,6 +72,14 @@ export function createWorkspaceRouter(
   pages: Pages,
   storage: WorkspaceStorage | null = null,
 ): WorkspaceRouter {
+  for (const [m, list] of Object.entries(pages)) {
+    for (const [id, p] of Object.entries(list ?? {})) {
+      const parent = p.parent === undefined ? undefined : list?.[p.parent];
+      if (p.parent !== undefined && (!parent || parent.parent !== undefined)) {
+        throw new Error(`Workspace page ${m}/${id}: a parent must be a top-level page of the same mode`);
+      }
+    }
+  }
   const memory = new Map<WorkspaceMode, string | null>();
   try {
     const saved = JSON.parse(storage?.getItem(WORKSPACE_PAGE_KEY) ?? '{}') as Record<string, unknown>;
@@ -78,19 +88,19 @@ export function createWorkspaceRouter(
     }
   } catch { /* unreadable preference: every mode starts at home */ }
 
-  const headers = new Map<WorkspaceMode, { root: HTMLElement; title: HTMLElement }>();
-  function header(m: WorkspaceMode): { root: HTMLElement; title: HTMLElement } {
+  type Header = { root: HTMLElement; title: HTMLElement; back: HTMLElement };
+  const headers = new Map<WorkspaceMode, Header>();
+  function header(m: WorkspaceMode): Header {
     let h = headers.get(m);
     if (!h) {
-      const backBtn = el('button', { className: 'olv-ws-back', type: 'button', text: `← ${workspaceModeLabel(m)}` });
-      backBtn.setAttribute('aria-label', `Back to ${workspaceModeLabel(m)}`);
+      const backBtn = el('button', { className: 'olv-ws-back', type: 'button' });
       backBtn.addEventListener('click', () => api.back(true));
       const title = el('h2', { className: 'olv-ws-task-title' });
       title.tabIndex = -1;
       title.setAttribute('aria-current', 'page');
       const root = el('nav', { className: 'olv-ws-task' }, [backBtn, title]);
       root.setAttribute('aria-label', 'Task');
-      h = { root, title };
+      h = { root, title, back: backBtn };
       headers.set(m, h);
     }
     return h;
@@ -118,7 +128,11 @@ export function createWorkspaceRouter(
       const target = active(mode) ? headers.get(mode)?.title : home?.querySelector<HTMLElement>('button:not([disabled])');
       target?.focus({ preventScroll: true });
     },
-    back: (focus = false) => api.navigate({ mode: ws.getMode(), page: null }, focus),
+    back(focus = false) {
+      const mode = ws.getMode();
+      const id = active(mode);
+      api.navigate({ mode, page: (id && pages[mode]?.[id]?.parent) ?? null }, focus);
+    },
     sync() {
       for (const m of Object.keys(pages) as WorkspaceMode[]) {
         const host = ws.mode(m);
@@ -129,6 +143,10 @@ export function createWorkspaceRouter(
           if (host.firstChild !== h.root) host.insertBefore(h.root, host.firstChild);
           h.root.hidden = !id;
           h.title.textContent = id ? pages[m]?.[id]?.title ?? '' : '';
+          const parent = id ? pages[m]?.[id]?.parent : undefined;
+          const to = parent ? pages[m]?.[parent]?.title ?? '' : workspaceModeLabel(m);
+          h.back.textContent = `← ${to}`;
+          h.back.setAttribute('aria-label', `Back to ${to}`);
         }
         host.classList.toggle('has-page', !!id);
         // Home shows everything but the pages; a page shows only itself.

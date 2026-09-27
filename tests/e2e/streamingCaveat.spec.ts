@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { showWorkspaceMode, type MeasureTestApi } from './helpers';
+import { openAnalysePanel, type MeasureTestApi } from './helpers';
 import { EPT_FIXTURE_NODES, openEptFixture, routeEptFixture } from './streamingFixtures';
 
 /**
@@ -43,31 +43,27 @@ test.describe('streaming caveats', () => {
     // software renderer, and this test runs two.
     test.setTimeout(300_000);
     const release = await openPartialStream(page);
-    // Show the Analyse panel. The dock button toggles and scan routing can
-    // settle after the first click, so retry until the panel is on screen.
-    const analyse = page.locator('.olv-analyse-panel');
+    // Open the Terrain page, where the Analyse panel lives. Scan routing can
+    // settle after the first attempt, so retry until the panel is on screen.
     await expect(async () => {
-      await showWorkspaceMode(page, 'analyse');
-      if (!(await analyse.isVisible())) {
-        await page.locator('.olv-dock .olv-tool', { hasText: /^Analyse$/ }).click();
-      }
-      await expect(analyse).toBeVisible({ timeout: 3_000 });
+      await openAnalysePanel(page);
     }).toPass({ timeout: 30_000 });
-    if (await analyse.evaluate((el) => el.classList.contains('olv-collapsed'))) {
-      await analyse.locator('.olv-panel-head').click();
-    }
 
     const verdict = page.locator('.olv-fit-verdict-text');
     await page.locator('.olv-analyse-run').click();
     await expect(verdict).toBeVisible({ timeout: 120_000 });
-    await expect(analyse).toContainText(PARTIAL, { timeout: 120_000 });
+    // The DEM caveat sits on the Contours page, under Terrain; the Analyse mode
+    // host holds both pages, as the one panel used to.
+    const analyseMode = page.locator('#olv-ws-mode-analyse');
+    await expect(analyseMode).toContainText(PARTIAL, { timeout: 120_000 });
 
     release();
     await expectFullyResident(page);
     const run = page.locator('.olv-analyse-run');
     await expect(run).toHaveText('Re-run analysis', { timeout: 120_000 });
     await run.click();
-    await expect(analyse).not.toContainText('resident-only', { timeout: 120_000 });
+    await expect(page.locator('.olv-analyse-panel')).not.toContainText('resident-only', { timeout: 120_000 });
+    await expect(page.locator('.olv-analyse-dem-note', { hasText: 'resident-only' })).toHaveCount(0);
     await expect(run).toHaveText('Re-run analysis');
     await expect(verdict).toBeVisible();
   });

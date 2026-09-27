@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { dropDenseGridPly, showWorkspaceMode } from './helpers';
+import { dropDenseGridPly, openAnalysePage, openAnalysePanel } from './helpers';
 import { extractEntry } from '../helpers/zipReader';
 
 /**
@@ -20,14 +20,7 @@ import { extractEntry } from '../helpers/zipReader';
  */
 
 async function openAnalyse(page: Page): Promise<void> {
-  // The Analyse panel lives in the Analyse workspace mode; select it first.
-  await showWorkspaceMode(page, 'analyse');
-  // The panel is revealed (collapsed) once a scan loads; expand it via its head.
-  const panel = page.locator('.olv-analyse-panel');
-  await expect(panel).toBeVisible({ timeout: 20_000 });
-  if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
-    await panel.locator('.olv-panel-head').click();
-  }
+  await openAnalysePanel(page);
 }
 
 test('stays hidden in the empty state before any scan is loaded', async ({ page }) => {
@@ -43,6 +36,8 @@ test('shows a minimal "Planned" tag row, with no dead buttons', async ({ page })
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await openAnalyse(page);
+  // The planned tags sit in the Method disclosure: how the analysis works.
+  await page.locator('.olv-analyse-method-summary').click();
   // Quiet planned-capability tags; no verbose itemised cards.
   await expect(page.locator('.olv-analyse-plan-tag').first()).toBeVisible();
   expect(await page.locator('.olv-analyse-plan-tag').count()).toBeGreaterThan(0);
@@ -92,7 +87,7 @@ test('after running on a scan: readiness, chips, recommendations, and gated expo
   // old jargon CRS/Datum chips).
   await expect(page.locator('.olv-fit-label', { hasText: 'Location & height' })).toBeVisible();
 
-  // Detailed metrics are behind the Details expander — open it, then assert.
+  // Detailed metrics and the surface models are behind the Evidence expander.
   await page.locator('.olv-analyse-details-summary').click();
   // Composite terrain quality score: a single 0–100 number (the exact score now
   // lives here, demoted out of the hero; the per-dimension breakdown is the
@@ -105,7 +100,7 @@ test('after running on a scan: readiness, chips, recommendations, and gated expo
   // DTM gate is the verdict tier — so the chips no longer duplicate them.
   expect(await page.locator('.olv-analyse-chip').count()).toBe(0);
 
-  // Surface models (outside Details): stats + raster preview tiles (canopy
+  // Surface models (inside Evidence): stats + raster preview tiles (canopy
   // height + relief), each with a click-to-sample readout and PNG export.
   await expect(page.locator('.olv-analyse-surface-stat').first()).toContainText(/height|Slope/i);
   await expect(page.locator('canvas.olv-analyse-raster').first()).toBeVisible();
@@ -135,6 +130,8 @@ test('after running on a scan: readiness, chips, recommendations, and gated expo
   // is unit-tested). The retired inline `.olv-analyse-dl` row still exists as a
   // set of DETACHED backing click-targets the workspace dispatches to, so it is
   // no longer asserted on here.
+  // Contour Studio is on the Contours page, under Terrain.
+  await openAnalysePage(page, 'contours');
   const launch = page.locator('.olv-analyse-contour-launcher .olv-contour-launcher-action');
   await expect(launch).toBeVisible({ timeout: 20_000 });
   await expect(launch).toBeEnabled();
@@ -220,6 +217,8 @@ async function openDemExport(page: Page, drop: (page: Page) => Promise<void>) {
   await page.waitForTimeout(1500);
   await openAnalyse(page);
   await page.locator('.olv-analyse-run').click();
+  // Contour Studio is on the Contours page, under Terrain.
+  await openAnalysePage(page, 'contours');
   const launch = page.locator('.olv-analyse-contour-launcher .olv-contour-launcher-action');
   await expect(launch).toBeVisible({ timeout: 20_000 });
   await launch.click();

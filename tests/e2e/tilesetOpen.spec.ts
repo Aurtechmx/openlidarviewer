@@ -5,6 +5,7 @@ import {
   TILESET_ORIGIN,
   type TilesetScene,
 } from '../fixtures/tileset3d';
+import { openAnalysePage } from './helpers';
 
 /**
  * 3D Tiles end-to-end: a `tileset.json` URL opens, streams and becomes a scan.
@@ -193,7 +194,9 @@ test.describe('3D Tiles — opening a tileset from a URL', () => {
     // preflight verdict this regression was about. Its rows are asserted
     // VISIBLE, which is what the rail reveal makes possible: the Analyse mode
     // is one tab away rather than behind a body nothing displays.
-    await rail.locator('.olv-ws-tab', { hasText: 'Analyse' }).click();
+    // On the desktop it is the Terrain page's Why? disclosure.
+    await openAnalysePage(page, 'terrain');
+    await page.locator('.olv-analyse-page[data-page="terrain"] .olv-why-summary').click();
     const studio = page.locator('.olv-process-studio');
     await expect(studio).toBeVisible();
     const tools = studio.locator('.olv-ps-tool');

@@ -444,13 +444,13 @@
     "components": []
   },
   "context": {
-    "filesScanned": 1004,
+    "filesScanned": 1007,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [
       {
         "file": "src/ui/dom.ts",
-        "importers": 71
+        "importers": 72
       },
       {
         "file": "src/lazyChunks.ts",

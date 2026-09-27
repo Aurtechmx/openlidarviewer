@@ -74,10 +74,12 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }
       await expect(page.locator('.olv-export-panel')).toBeInViewport();
     });
 
-    test('Analyse holds the terrain analysis and View holds the Inspector', async ({ page }) => {
+    test('Analyse holds the analyses home and View holds the Inspector', async ({ page }) => {
       await openScan(page);
       await tab(page, 'analyse').click();
-      await expect(slot(page, 'analyse').locator('.olv-process-studio')).toBeVisible();
+      await expect(slot(page, 'analyse').locator('.olv-ah-row[data-analysis="terrain"]')).toBeVisible();
+      await slot(page, 'analyse').locator('.olv-ah-row[data-analysis="terrain"] .olv-ah-open').click();
+      await expect(slot(page, 'analyse').locator('.olv-ws-task-title')).toHaveText('Terrain');
       await tab(page, 'view').click();
       await expect(slot(page, 'view').locator('.olv-inspector')).toBeVisible();
       await expect(page.locator('.olv-left-panels')).toBeHidden();

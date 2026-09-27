@@ -34,7 +34,7 @@
 
 import { test, expect } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-import { dropDenseGridPly } from './helpers';
+import { dropDenseGridPly, openAnalysePanel } from './helpers';
 import { legFromComputeStatus } from '../../benchmarks/backends/leg';
 import { GPU_LEG_FILE, writeComparison, writeLeg } from '../../benchmarks/backends/writer';
 import type { AdapterDescriptor, EngineReason } from '../../benchmarks/backends/record';
@@ -149,12 +149,8 @@ test.describe('backend equivalence: the GPU leg @gpu', () => {
     await dropDenseGridPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
     await page.waitForTimeout(1500);
-    // The panel is revealed collapsed once a scan loads; expand it via its head.
-    const panel = page.locator('.olv-analyse-panel');
-    await expect(panel).toBeVisible({ timeout: 20_000 });
-    if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
-      await panel.locator('.olv-panel-head').click();
-    }
+    // The run is on the Analyse > Terrain page.
+    await openAnalysePanel(page);
     await page.locator('.olv-analyse-run').click();
 
     const hookReady = await page
