@@ -97,7 +97,7 @@ describe('Analyse panel run', () => {
 });
 
 describe('busy scan stylesheet', () => {
-  const SINE = 'cubic-bezier(0.37, 0, 0.63, 1)';
+  const SINE_RE = String.raw`cubic-bezier\(0\.37, 0, 0\.63, 1\)`;
 
   it('holds everything still under reduced motion, with the point at the front', () => {
     const block = CSS.slice(CSS.indexOf('@media (prefers-reduced-motion: reduce)'));
@@ -108,8 +108,8 @@ describe('busy scan stylesheet', () => {
   });
 
   it('runs the point and every trail dash on the same 2.4 s easing', () => {
-    expect(CSS).toMatch(new RegExp(`\\.olv-bs-point \\{[^}]*animation: olv-bs-orbit 2\\.4s ${SINE.replace(/[().]/g, '\\$&')} infinite`));
-    expect(CSS).toMatch(new RegExp(`\\.olv-bs-seg \\{[^}]*animation: olv-bs-trail 2\\.4s ${SINE.replace(/[().]/g, '\\$&')} infinite`));
+    expect(CSS).toMatch(new RegExp(`\\.olv-bs-point \\{[^}]*animation: olv-bs-orbit 2\\.4s ${SINE_RE} infinite`));
+    expect(CSS).toMatch(new RegExp(`\\.olv-bs-seg \\{[^}]*animation: olv-bs-trail 2\\.4s ${SINE_RE} infinite`));
     // Each dash moves one full path length per loop, as the point does.
     expect(CSS).toMatch(/100% \{ stroke-dashoffset: calc\(\(var\(--olv-bs-len\) \* var\(--olv-bs-k\) \/ 6 - 100\) \* 1px\); \}/);
   });
