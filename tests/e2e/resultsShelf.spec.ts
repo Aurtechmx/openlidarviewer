@@ -7,7 +7,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
-import { dropDenseGridPly, showWorkspaceMode } from './helpers';
+import { dropDenseGridPly, openAnalysePanel, showWorkspaceMode } from './helpers';
 
 const MULTICHUNK = fileURLToPath(new URL('../fixtures/multichunk.laz', import.meta.url));
 
@@ -109,9 +109,8 @@ test.describe('results shelf', () => {
     await dropDenseGridPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
     await page.waitForTimeout(1500);
-    await showWorkspaceMode(page, 'analyse');
+    await openAnalysePanel(page);
     const panel = page.locator('.olv-analyse-panel');
-    if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) await panel.locator('.olv-panel-head').click();
     await page.locator('.olv-analyse-run').click();
     const verdict = page.locator('.olv-fit-verdict-text');
     await expect(verdict).toBeVisible({ timeout: 20_000 });
