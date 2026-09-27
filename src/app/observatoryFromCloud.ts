@@ -63,6 +63,16 @@ export interface ObservatoryCloudInput {
   bounds(): { readonly min: readonly [number, number, number]; readonly max: readonly [number, number, number] };
 }
 
+/**
+ * The cloud's resident positions, LOCAL (recentred) frame, Float32: the one
+ * read of the buffer in this module. The pipeline below and the worker
+ * payload both go through it, and both add `sourceOrigin` back where the
+ * kernel needs WORLD coordinates.
+ */
+export function localPositionsOf(cloud: ObservatoryCloudInput): Float32Array {
+  return cloud.positions;
+}
+
 export type ObservatoryEligibility =
   | { readonly eligible: true }
   | { readonly eligible: false; readonly reason: 'no-stations' | 'empty-domain' };
@@ -214,7 +224,7 @@ export function runObservatoryOverCloud(
   const tauAbs = options.voxelEdge / 2;
   const tauRel = 0; // resident-only: no fitted angular step to derive it from (module header).
 
-  const positions = cloud.positions;
+  const positions = localPositionsOf(cloud);
   const entries: RayPartitionChunkEntry[] = [];
   const stationList: AcquisitionStation[] = [];
   const fieldStations: ObservationFieldStation[] = [];
