@@ -1,6 +1,6 @@
 /**
  * ObservatoryStationMarkers.ts: the Observatory's 3D station markers, drawn
- * through the same `derivedLayerHost()` seam as the shadow-voxel overlay and
+ * through the same `derivedLayerHost()` seam as the empty-space slice plane and
  * loaded in the same lazy chunk (re-exported from `ObservatoryOverlay.ts`).
  *
  * Observed source stations get the solid glyph, suggested stations the

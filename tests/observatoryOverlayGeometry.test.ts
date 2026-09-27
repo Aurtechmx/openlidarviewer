@@ -1,37 +1,59 @@
 /**
- * observatoryOverlayGeometry.test.ts — pure buffer builder for the
- * Observatory's shadow-voxel overlay. PRESENTATION ONLY: this never decides
- * which voxels are shadowed, only turns already-decided keys into vertices.
+ * observatoryOverlayGeometry.test.ts: the OB-PR-02 slice plane's texels.
+ * PRESENTATION ONLY: states are read, never decided. Only OBSERVED_EMPTY,
+ * SHADOWED, UNADDRESSED and the frontier are drawn; every other state is
+ * clear, so nothing else can read as empty (OB-INV-01).
  */
 import { describe, it, expect } from 'vitest';
-import { buildShadowWireframeBuffer, MAX_SHADOW_OVERLAY_BOXES } from '../src/render/observatoryOverlayGeometry';
+import {
+  buildSliceTexels,
+  defaultSliceLevel,
+  sliceLegendText,
+  sliceSize,
+  MAX_SLICE_EDGE,
+  SLICE_STATES,
+} from '../src/render/observatoryOverlayGeometry';
 import { packVoxelKey } from '../src/observation/ledger';
+import { OBSERVATION_STATES, type ObservationState } from '../src/observation/types';
 
-const GRID = { nx: 10, ny: 10 };
+const GRID = { nx: 4, ny: 3, nz: 2 };
 
-describe('buildShadowWireframeBuffer', () => {
-  it('no keys -> an empty buffer', () => {
-    const verts = buildShadowWireframeBuffer([], GRID, 1, [0, 0, 0]);
-    expect(verts.length).toBe(0);
+describe('buildSliceTexels', () => {
+  it('draws only the slice states and the frontier; every other state is clear', () => {
+    const states = new Map<number, ObservationState>();
+    OBSERVATION_STATES.slice(0, 9).forEach((s, i) => { if (i < 12) states.set(packVoxelKey(i % 4, Math.floor(i / 4), 1, 4, 3), s); });
+    const t = buildSliceTexels((k) => states.get(k), new Set(), GRID, 1);
+    expect(t.length).toBe(4 * 3 * 4);
+    OBSERVATION_STATES.slice(0, 9).forEach((s, i) => {
+      expect(t[i * 4 + 3]! > 0, s).toBe(SLICE_STATES.includes(s));
+    });
   });
 
-  it('one key -> 12 edges * 2 vertices * 3 components', () => {
-    const key = packVoxelKey(1, 2, 3, GRID.nx, GRID.ny);
-    const verts = buildShadowWireframeBuffer([key], GRID, 1, [0, 0, 0]);
-    expect(verts.length).toBe(12 * 2 * 3);
+  it('the frontier colour wins over the state colour, and levels outside the grid are clear', () => {
+    const key = packVoxelKey(1, 1, 0, 4, 3);
+    const t = buildSliceTexels(() => 'SURFACE', new Set([key]), GRID, 0);
+    expect(t[(1 * 4 + 1) * 4 + 3]).toBeGreaterThan(0);
+    expect(t[3]).toBe(0);
+    expect(buildSliceTexels(() => 'SHADOWED', new Set(), GRID, 5).every((v) => v === 0)).toBe(true);
   });
 
-  it('the box sits at domainMin + voxel index * edge, one edge unit wide', () => {
-    const key = packVoxelKey(2, 0, 0, GRID.nx, GRID.ny);
-    const verts = buildShadowWireframeBuffer([key], GRID, 0.5, [10, 20, 30]);
-    const xs = Array.from({ length: verts.length / 3 }, (_, i) => verts[i * 3]!);
-    expect(Math.min(...xs)).toBeCloseTo(10 + 2 * 0.5, 6);
-    expect(Math.max(...xs)).toBeCloseTo(10 + 3 * 0.5, 6);
+  it('strides a field wider than the maximum slice edge', () => {
+    const s = sliceSize({ nx: MAX_SLICE_EDGE * 2 + 1, ny: 10, nz: 1 });
+    expect(s.stride).toBe(3);
+    expect(s.width).toBeLessThanOrEqual(MAX_SLICE_EDGE);
+    expect(sliceSize(GRID)).toEqual({ width: 4, height: 3, stride: 1 });
+  });
+});
+
+describe('defaultSliceLevel and the legend', () => {
+  it('opens at the level with the most shadowed voxels, lowest on a tie', () => {
+    const k = (iz: number) => packVoxelKey(0, 0, iz, 4, 3);
+    expect(defaultSliceLevel([k(1), k(1), k(0)], GRID)).toBe(1);
+    expect(defaultSliceLevel([k(0), k(1)], GRID)).toBe(0);
+    expect(defaultSliceLevel([], GRID)).toBe(0);
   });
 
-  it('caps at MAX_SHADOW_OVERLAY_BOXES even when given more keys', () => {
-    const keys = Array.from({ length: MAX_SHADOW_OVERLAY_BOXES + 500 }, (_, i) => i);
-    const verts = buildShadowWireframeBuffer(keys, { nx: 100000, ny: 1 }, 1, [0, 0, 0]);
-    expect(verts.length).toBe(MAX_SHADOW_OVERLAY_BOXES * 12 * 2 * 3);
+  it('names every drawn state by glyph and word, not colour alone (OB-PR-04)', () => {
+    expect(sliceLegendText()).toBe('○ Observed empty, ▲ Shadowed, □ Unaddressed, ◆ Frontier');
   });
 });

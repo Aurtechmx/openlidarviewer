@@ -42,6 +42,9 @@ test.describe('Observatory panel', () => {
     await expect(modal.locator('.olv-observatory-station-row')).toContainText('DECLARED ORIGIN');
     // The 3D marker key names both glyphs, so the scene markers have a text legend.
     await expect(modal.locator('.olv-observatory-marker-key')).toContainText('hollow dashed orange ring');
+    // OB-PR-02: the slice plane has a level control and a glyph legend once drawn.
+    await expect(modal.locator('.olv-observatory-slice-level')).toBeVisible();
+    await expect(modal.locator('.olv-observatory-slice-legend')).toContainText('▲ Shadowed');
     // Evidence lists every state, including a real count for at least one.
     await expect(modal.locator('.olv-observatory-state-counts')).toContainText(/SURFACE: \d+/);
     // Planning shows the Coverage Gain result, labelled preview on a

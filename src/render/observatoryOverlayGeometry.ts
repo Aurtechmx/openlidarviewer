@@ -1,66 +1,98 @@
 /**
- * observatoryOverlayGeometry.ts — pure line-segment buffers for the
- * Observatory's shadow-voxel overlay (`ObservatoryOverlay.ts`).
+ * observatoryOverlayGeometry.ts: pure texel buffers for the Observatory's
+ * empty-space slice plane (OB-PR-02, `ObservatoryOverlay.ts`).
  *
- * PRESENTATION, NOT SCIENCE, same split `flowOverlayGeometry.ts` and
- * `ContourOverlay.ts`'s own geometry helpers make: this only turns already-
- * decided voxel keys into a wireframe-box vertex buffer. It never decides
- * which voxels are `SHADOWED` — that is `classifyObservationField`'s call,
- * made once in `observatoryFromCloud.ts` and never re-derived here.
+ * The O11 benchmark (validation/protocols/observatory-o11-v1.md, record in
+ * validation/performance/observatory-o11/) kept the slice plane over
+ * instanced boxes, so the overlay is one horizontal plane through the field
+ * at one `iz` level, with one RGBA8 texel per voxel of that level.
  *
- * Capped at `MAX_BOXES` voxels: a wireframe per voxel of a fine grid is a lot
- * of geometry for very little signal once the shadow region is large, and
- * SPEC's own wording rules ban implying "every shadowed voxel is drawn" — the
- * overlay is a sample, and the panel's own count is the true total.
+ * PRESENTATION, NOT SCIENCE: this only colours already-decided states. It
+ * never decides a state, and it never changes a canonical byte (OB-INV-06).
+ * Four things are drawn: `OBSERVED_EMPTY`, `SHADOWED`, `UNADDRESSED` and the
+ * shadow frontier. Every other state is transparent, so an unaddressed or
+ * not-read voxel is never shown as empty (OB-INV-01).
  */
-import { unpackVoxelKey } from '../observation/ledger';
+import { OBSERVATION_STATE_GLYPH, OBSERVATION_STATE_LABEL, OBSERVATION_STATE_RGB } from '../observation/presentationLegend';
+import type { ObservationState } from '../observation/types';
 
-export const MAX_SHADOW_OVERLAY_BOXES = 4000;
+/** Largest slice edge in texels (the protocol's `MAX_SLICE_EDGE`). Wider fields are strided. */
+export const MAX_SLICE_EDGE = 1024;
 
-const BOX_EDGES: readonly (readonly [number, number, number])[][] = (() => {
-  // 12 edges of a unit cube, as pairs of corner indices, expanded below.
-  const corners: readonly (readonly [number, number, number])[] = [
-    [0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0],
-    [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1],
-  ];
-  const edgeIndexPairs: readonly (readonly [number, number])[] = [
-    [0, 1], [1, 2], [2, 3], [3, 0],
-    [4, 5], [5, 6], [6, 7], [7, 4],
-    [0, 4], [1, 5], [2, 6], [3, 7],
-  ];
-  return edgeIndexPairs.map(([a, b]) => [corners[a]!, corners[b]!]);
-})();
+/** The states the slice shows, in legend order. */
+export const SLICE_STATES: readonly ObservationState[] = ['OBSERVED_EMPTY', 'SHADOWED', 'UNADDRESSED'];
+
+const SLICE_ALPHA = 200;
+const FRONTIER_RGB: readonly [number, number, number] = [0.95, 0.3, 0.75];
+export const FRONTIER_GLYPH = '◆';
+const FRONTIER_ALPHA = 235;
+
+export interface SliceGrid { readonly nx: number; readonly ny: number; readonly nz: number }
+
+/** Texel stride so neither slice edge exceeds {@link MAX_SLICE_EDGE}. 1 for every field that fits. */
+export function sliceStride(grid: SliceGrid): number {
+  return Math.max(1, Math.ceil(Math.max(grid.nx, grid.ny) / MAX_SLICE_EDGE));
+}
+
+/** Texture size for `grid` after the stride. */
+export function sliceSize(grid: SliceGrid): { readonly width: number; readonly height: number; readonly stride: number } {
+  const stride = sliceStride(grid);
+  return { width: Math.ceil(grid.nx / stride), height: Math.ceil(grid.ny / stride), stride };
+}
 
 /**
- * A `Float32Array` of `[x0,y0,z0,x1,y1,z1, ...]` line-segment vertices, one
- * wireframe box per key in `keys` (capped at {@link MAX_SHADOW_OVERLAY_BOXES},
- * first-encountered order — the caller decides what "first" means, e.g. by
- * pre-sorting for determinism in a test), each box `voxelEdge` wide, centred
- * on its voxel and offset by `domainMin` — the SAME world/local frame
- * `ObservationDomain.min` already uses (`docs/coordinate-precision.md`).
+ * RGBA8 texels for level `iz`, row-major with x fastest, one per (strided)
+ * voxel. Frontier voxels take the frontier colour over their state colour.
+ * Keys are `ledger.ts#packVoxelKey`'s `ix + nx * (iy + ny * iz)`.
  */
-export function buildShadowWireframeBuffer(
-  keys: readonly number[],
-  grid: { readonly nx: number; readonly ny: number },
-  voxelEdge: number,
-  domainMin: readonly [number, number, number],
-): Float32Array {
-  const capped = keys.slice(0, MAX_SHADOW_OVERLAY_BOXES);
-  const verts = new Float32Array(capped.length * BOX_EDGES.length * 2 * 3);
-  let w = 0;
-  for (const key of capped) {
-    const { ix, iy, iz } = unpackVoxelKey(key, grid.nx, grid.ny);
-    const ox = domainMin[0] + ix * voxelEdge;
-    const oy = domainMin[1] + iy * voxelEdge;
-    const oz = domainMin[2] + iz * voxelEdge;
-    for (const [c0, c1] of BOX_EDGES) {
-      verts[w++] = ox + c0[0] * voxelEdge;
-      verts[w++] = oy + c0[1] * voxelEdge;
-      verts[w++] = oz + c0[2] * voxelEdge;
-      verts[w++] = ox + c1[0] * voxelEdge;
-      verts[w++] = oy + c1[1] * voxelEdge;
-      verts[w++] = oz + c1[2] * voxelEdge;
+export function buildSliceTexels(
+  stateOf: (key: number) => ObservationState | undefined,
+  frontier: ReadonlySet<number>,
+  grid: SliceGrid,
+  iz: number,
+  out?: Uint8Array,
+): Uint8Array {
+  const { width, height, stride } = sliceSize(grid);
+  const texels = out && out.length === width * height * 4 ? out : new Uint8Array(width * height * 4);
+  texels.fill(0);
+  if (iz < 0 || iz >= grid.nz) return texels;
+  for (let ty = 0; ty < height; ty++) {
+    const iy = ty * stride;
+    for (let tx = 0; tx < width; tx++) {
+      const ix = tx * stride;
+      const key = ix + grid.nx * (iy + grid.ny * iz);
+      const w = (ty * width + tx) * 4;
+      if (frontier.has(key)) {
+        texels[w] = Math.round(FRONTIER_RGB[0] * 255);
+        texels[w + 1] = Math.round(FRONTIER_RGB[1] * 255);
+        texels[w + 2] = Math.round(FRONTIER_RGB[2] * 255);
+        texels[w + 3] = FRONTIER_ALPHA;
+        continue;
+      }
+      const state = stateOf(key);
+      if (!state || !SLICE_STATES.includes(state)) continue;
+      const rgb = OBSERVATION_STATE_RGB[state];
+      texels[w] = Math.round(rgb[0] * 255);
+      texels[w + 1] = Math.round(rgb[1] * 255);
+      texels[w + 2] = Math.round(rgb[2] * 255);
+      texels[w + 3] = SLICE_ALPHA;
     }
   }
-  return verts;
+  return texels;
+}
+
+/** The level with the most `SHADOWED` voxels, lowest level on a tie; 0 when none. The slice opens there. */
+export function defaultSliceLevel(shadowedKeys: Iterable<number>, grid: SliceGrid): number {
+  const perLevel = new Array<number>(grid.nz).fill(0);
+  const plane = grid.nx * grid.ny;
+  for (const key of shadowedKeys) perLevel[Math.floor(key / plane)]!++;
+  let best = 0;
+  for (let iz = 1; iz < grid.nz; iz++) if (perLevel[iz]! > perLevel[best]!) best = iz;
+  return best;
+}
+
+/** The slice legend, glyph and word per shown state (OB-PR-04: colour is never the only carrier). */
+export function sliceLegendText(): string {
+  const states = SLICE_STATES.map((s) => `${OBSERVATION_STATE_GLYPH[s]} ${OBSERVATION_STATE_LABEL[s]}`);
+  return [...states, `${FRONTIER_GLYPH} Frontier`].join(', ');
 }
