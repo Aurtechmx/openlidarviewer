@@ -24,6 +24,7 @@ import type { StationPlanningResult } from '../../observation/stationSuggestion'
 import type { CandidateGainTerms } from '../../observation/coverageGain';
 import type { ObservatoryOverlayHost } from '../../render/ObservatoryOverlay';
 import { triggerDownload } from '../../io/download';
+import { announcePolite } from '../politeAnnounce';
 import { loadObservatoryOverlay, loadObservatoryPackage } from '../../lazyChunks';
 
 export interface ObservatoryPanelInput {
@@ -253,9 +254,42 @@ export function stationMarkerInput(
   return { observed, suggested, size, suggestedLabel: planning?.label ?? '' };
 }
 
+/** Detach and release both overlays; the next committed run builds fresh ones. */
 function clearOverlays(): void {
-  overlay?.show([], { nx: 0, ny: 0 }, 1, [0, 0, 0]);
-  markers?.clear();
+  overlay?.dispose();
+  markers?.dispose();
+  overlay = null;
+  markers = null;
+}
+
+/** The panel input the overlays were last drawn for, so a restored context can redraw them. */
+let lastInput: ObservatoryPanelInput | null = null;
+let restoreListening = false;
+
+export const OVERLAYS_REDRAWN_NOTICE = 'Observatory overlays were redrawn after the graphics context was restored. The run was not recomputed.';
+
+/**
+ * After the canvas's WebGL context is restored, rebuild both overlays from the
+ * run already in memory: no recompute, and a short notice says so. Listens on
+ * the document in the capture phase, because `webglcontextrestored` does not
+ * bubble, so nothing in `main.ts` or `Viewer.ts` has to forward it.
+ */
+async function redrawAfterRestore(): Promise<void> {
+  const input = lastInput;
+  if (!input || !overlay) return;
+  const state = input.runner.getState();
+  if (state.phase !== 'committed' || state.outcome.status !== 'ok') return;
+  clearOverlays();
+  await drawOverlay(input, state);
+  announcePolite(OVERLAYS_REDRAWN_NOTICE);
+  const note = document.querySelector('.olv-observatory-panel');
+  if (note) note.prepend(el('p', { className: 'olv-observatory-redrawn', text: OVERLAYS_REDRAWN_NOTICE }));
+}
+
+function listenForRestore(): void {
+  if (restoreListening || typeof document === 'undefined') return;
+  restoreListening = true;
+  document.addEventListener('webglcontextrestored', () => { void redrawAfterRestore(); }, true);
 }
 
 async function drawOverlay(input: ObservatoryPanelInput, state: ObservatoryRunnerState): Promise<void> {
@@ -265,6 +299,11 @@ async function drawOverlay(input: ObservatoryPanelInput, state: ObservatoryRunne
     return;
   }
   const { ObservatoryOverlay, ObservatoryStationMarkers, stationMarkerSize } = await loadObservatoryOverlay();
+  // A newer state may have cleared or replaced the run while the chunk loaded.
+  const now = input.runner.getState();
+  if (now.phase !== 'committed' || now.outcome !== state.outcome) return;
+  lastInput = input;
+  listenForRestore();
   if (!overlay) overlay = new ObservatoryOverlay(input.overlayHost);
   if (!markers) markers = new ObservatoryStationMarkers(input.overlayHost);
   const outcome = state.outcome;
