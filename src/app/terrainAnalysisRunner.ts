@@ -308,6 +308,11 @@ export interface TerrainAnalysisRunner {
    */
   getContourLayers(): ContourLayerService | null;
   /**
+   * Told whenever a derived layer is added, changed or removed, and once when
+   * the shared store is first built. Returns an unsubscribe.
+   */
+  subscribeDerivedLayers(fn: () => void): () => void;
+  /**
    * Build a fresh contour result at a chosen interval AND shape style for an
    * export ONLY, over the SAME cached core path as {@link run}. Generalises
    * {@link buildResultAtInterval} with the contour-shape-style picker; a cache
@@ -448,6 +453,8 @@ export function createTerrainAnalysisRunner(
   // derived layer (contours today; more as each is routed through the store) is
   // listed and toggled in one place rather than through a per-product control.
   let derivedStore: DerivedLayerStore | null = null;
+  const derivedListeners = new Set<() => void>();
+  const notifyDerived = (): void => { for (const fn of [...derivedListeners]) fn(); };
   let derivedList: DerivedLayersList | null = null;
 
   /** The contour derived-layer service, or null before the first analysis. */
@@ -520,6 +527,7 @@ export function createTerrainAnalysisRunner(
         // list, so a layer is listed the moment its service registers it.
         const store = new DerivedLayerStore();
         derivedStore = store;
+        store.subscribe(notifyDerived);
         contourLayers = createContourLayerService({
           host: viewer.derivedLayerHost(),
           store,
@@ -1083,5 +1091,6 @@ export function createTerrainAnalysisRunner(
     refreshDatasetStory,
     getLastSourceUpAxis,
     getContourLayers,
+    subscribeDerivedLayers: (fn) => { derivedListeners.add(fn); return () => { derivedListeners.delete(fn); }; },
   };
 }

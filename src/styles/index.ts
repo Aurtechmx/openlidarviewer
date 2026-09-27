@@ -46,4 +46,5 @@ import './98d-feature-candidates.css'; // Feature candidates: classified-scan la
 import './98e-observatory.css'; // Observatory panel: section layout and the origin/basis/suggested-station chip badges.
 import './99-mobile-gui-refresh.css'; // Mobile GUI refresh (v0.6.x) and the landscape-phone left rail.
 import './99y-tool-launcher.css'; // Tools-tab launcher: tool rows with their key chips, session counts, and the compact strip.
+import './99y2-results-shelf.css'; // Results shelf: the rail-footer toggle and its grouped list of session results.
 import './99z-forced-colors.css'; // Windows High Contrast / forced-colors — the final override block.
