@@ -6704,3 +6704,60 @@ Covered by `tests/lasEvlrCrs.test.ts`, `tests/reportFindings.test.ts`,
 `tests/reportMetadataUnits.test.ts` and `tests/e2e/lasEvlrCrs.spec.ts`, on the
 fixtures `tests/fixtures/evlr-crs-utm15.las` and `.laz` from
 `scripts/gen-evlr-crs-fixture.ts`.
+
+### L173 · BUILT · PERFORMANCE
+
+Observatory phase O11: hardening (`docs/observatory/SPEC.md` §10 O11,
+OB-PR-02, OB-PR-03, OB-INV-05, OB-RT-03). Observatory stays `preview` in
+`docs/validation/capability-manifest.json`.
+
+3D stations (#1111). Observed source stations draw as a solid diamond on a
+continuous mast (Okabe-Ito blue); suggested stations as a hollow dashed ring
+on a dashed mast (Okabe-Ito orange) with the label `SUGGESTED STATION (not
+observed)`; an `ASSUMED` origin carries an `ASSUMED ORIGIN` badge. The
+markers read `record.stations` and the planning result and write neither.
+The panel reads the label from `planning.label`, the one constant. This
+closes L171's "suggested stations are not drawn in the 3D view".
+
+Overlay benchmark (#1112). `validation/protocols/observatory-o11-v1.md` was
+committed before either arm ran. Four deterministic scenarios (small, 99,856
+returns; medium, 3 stations and 1,080,000 returns; large, 2,000,000 records
+at stride 4 with the rest passed as not-read rays; stress, a 1024 x 1024 x 8
+synthetic field). Record
+`validation/performance/observatory-o11/2026-09-27-aad2902b-mbp-local.json`,
+WebGPU, median of three p95s:
+
+| Scenario | Slicing | Instancing | Upload, slicing | Upload, instancing |
+| --- | --- | --- | --- | --- |
+| small | 4.7 ms | 1.6 ms | 2.20 MiB | 1.74 MiB |
+| medium | 1.1 ms | 1.5 ms | 2.20 MiB | 1.92 MiB |
+| large | 2.1 ms | 2.9 ms | 4.39 MiB | 4.68 MiB |
+| stress | 1.3 ms | 18.3 ms | 240.0 MiB | 48.0 MiB |
+
+Instancing failed the frame test on medium, large and stress, so slicing
+stays. Budgets for the slice plane (slicing + 20%): small 5.64 ms and 2.64
+MiB, medium 1.32 ms and 2.64 MiB, large 2.52 ms and 5.27 MiB, stress 1.56 ms
+and 288.0 MiB. One machine, with other worktrees' browsers running; timer
+resolution 0.1 ms.
+
+Slice plane (#1115). OB-PR-02's overlay is one plane at one voxel level,
+one RGBA8 texel per voxel, showing observed empty, shadowed, unaddressed and
+the frontier and leaving every other state clear. It replaces the capped O9
+shadow wireframe. A level slider and a glyph legend sit in the Shadow
+section; a level change re-uploads the one texture and builds no geometry.
+`presentationLegend.ts` leaves the unreachable register.
+
+Disposal and device loss (#1113). Clearing disposes the overlay and the
+markers. After a restored WebGL context both are rebuilt from the run in
+memory, without recomputing, and a notice says so.
+`tests/observatoryOverlayLifecycle.test.ts` repeats open, run and close eight
+times and finds no attached object and no live geometry or material.
+
+Worker (#1114). The benchmark measured the kernel at 1.25 s, 2.4 s and 5.2 s
+on the main thread, over the 50 ms stage threshold, so
+`runObservatoryOverCloud` runs in `observatoryWorker.ts`, registered once in
+`WORKER_REGISTRY`, with a main-thread fallback. The worker path commits the
+same `fieldDigest` as a direct call.
+
+SPEC OB-GAIN-06 now says Terrain Access exists but provides no reachability
+verdict, and the panel says the same.

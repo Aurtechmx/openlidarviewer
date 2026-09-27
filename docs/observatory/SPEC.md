@@ -331,7 +331,7 @@ The name is Coverage Gain, because it counts voxels a hypothetical station would
 - OB-GAIN-05 Basis. Planning on a field with authority below `measured` is labelled preview. `NOT_READ` voxels get weight 0, and the panel reports how many there were.
 - OB-GAIN-06 Reachability.
   - Only the interface `ReachabilityProvider` is defined. Its verdicts are `reachable`, `unreachable` and `unknown`, each with an evidence reference.
-  - There is no implementation in v0.7; Terrain Access does not exist.
+  - There is no implementation in v0.7. Terrain Access exists (the Field Simulation Lab's traversability screening and least-cost route), but it provides no reachability verdict and implements no `ReachabilityProvider`, so no suggested station is checked for reachability.
   - The panel offers no "reachable" mode until a provider with recorded evidence is registered.
 
 ---
