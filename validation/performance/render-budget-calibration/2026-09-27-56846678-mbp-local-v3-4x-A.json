@@ -4,7 +4,7 @@
   "protocol": "validation/protocols/render-budget-calibration-v3.md",
   "environmentNote": "4x A session 1 (pair 1, fixed) failed on a 181 s cold load and test timeout in the period the machine disk was reported full (environment failure, no ENOSPC line in the log); discarded and rerun as pre-registered. Completed sessions kept.",
   "machineSharing": {
-    "sharedE2eLock": "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/e2e.lock",
+    "sharedE2eLock": "<session scratch>/e2e.lock",
     "heldForWholeSession": true,
     "previewPort": 4391
   },

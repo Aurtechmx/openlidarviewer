@@ -3,7 +3,7 @@
   "version": 3,
   "protocol": "validation/protocols/render-budget-calibration-v3.md",
   "machineSharing": {
-    "sharedE2eLock": "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/e2e.lock",
+    "sharedE2eLock": "<session scratch>/e2e.lock",
     "heldForWholeSession": false,
     "previewPort": 4391,
     "note": "The lock was taken at 03:30:57 (local) before the first session. At release (04:45:13) the lock directory was already gone: another process removed it at an unknown time during the session, so other e2e runs may have overlapped part of it. Corrected by hand after evaluation; no measured value was changed."
