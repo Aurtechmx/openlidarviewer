@@ -435,14 +435,6 @@
       "declaredIn": "docs/observatory/SPEC.md"
     },
     {
-      "path": "src/observation/presentationLegend.ts",
-      "status": "staged",
-      "why": "OB-PR-01/04/05, OB-UI-03: the presentation vocabulary (per-state glyph/label/RGB legend, fixed [0,1] ranges for observationStrength/observationHitFraction, the OB-UI-03 probe-text formatter), pure and unit-tested (phase O8). No production module reads it yet: mounting a colour-mode picker, a legend panel and a voxel probe onto a live scene is the panel/coordinator phase (O9).",
-      "graduation": "Reachable when a coordinator (O9) wires a colour-mode control, a legend and a probe onto a real Observatory panel.",
-      "review": "2027-03-31",
-      "declaredIn": "docs/observatory/SPEC.md"
-    },
-    {
       "path": "src/render/observation/observationColorModes.ts",
       "status": "staged",
       "why": "OB-PR-01's per-point colour builder (buildObservationPointColors: observationState/observationStrength/observationHitFraction over a cloud's own positions and a classified field), pure and unit-tested including an OB-INV-06 digest-stability check (phase O8). No production module calls it yet: nothing in the production graph holds a resident cloud paired with a live classified field to colour, which needs a coordinator (O9).",

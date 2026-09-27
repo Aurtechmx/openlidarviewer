@@ -830,14 +830,14 @@ export const loadObservatoryPanel = () => import('./ui/observatory/observatoryPa
  */
 export const loadObservatoryRun = () => import('./app/openObservatoryRun');
 
-/** The Observatory's shadow-voxel overlay, drawn once a run commits. */
+/** The Observatory's empty-space slice plane and station markers, drawn once a run commits. */
 export const loadObservatoryOverlay = () => import('./render/ObservatoryOverlay');
 
 /** The Observatory export package builder, reached only from its Export action. */
 export const loadObservatoryPackage = () => import('./export/observatoryPackage');
 
 /**
- * The Observatory's own shadow-voxel overlay must not outlive the scan it was
+ * The Observatory's own empty-space overlay must not outlive the scan it was
  * built from, exactly the seam `registerFlowOverlayInvalidator` above already
  * documents for the Flow Pulse Lab: `terrainAnalysisRunner.ts`'s
  * `abortAndClearCache()` cannot import a lazy panel chunk directly, and the
