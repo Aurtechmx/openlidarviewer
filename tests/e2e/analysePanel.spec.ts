@@ -217,6 +217,8 @@ async function openDemExport(page: Page, drop: (page: Page) => Promise<void>) {
   await page.waitForTimeout(1500);
   await openAnalyse(page);
   await page.locator('.olv-analyse-run').click();
+  // Contour Studio is on the Contours page, under Terrain.
+  await openAnalysePage(page, 'contours');
   const launch = page.locator('.olv-analyse-contour-launcher .olv-contour-launcher-action');
   await expect(launch).toBeVisible({ timeout: 20_000 });
   await launch.click();
