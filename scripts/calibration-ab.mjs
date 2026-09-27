@@ -51,7 +51,16 @@ const TRAJECTORY_COUNT = 5;
  * arms under Chromium CPU throttling. Unset keeps v1 exactly.
  */
 const THROTTLE = parseCpuThrottle(process.env.OLV_CAL_AB_CPU_THROTTLE);
-const VERSION = THROTTLE > 1 ? `v2-${THROTTLE}x` : 'v1';
+/**
+ * v3 (render-budget-calibration-v3.md): OLV_CAL_AB_PROTOCOL=v3 with a throttle
+ * rate. The warm-up change is in the app; this only renames the record, state
+ * directory and protocol path.
+ */
+const PROTOCOL = process.env.OLV_CAL_AB_PROTOCOL === 'v3' ? 3 : THROTTLE > 1 ? 2 : 1;
+if (PROTOCOL === 3 && THROTTLE <= 1) throw new Error('OLV_CAL_AB_PROTOCOL=v3 needs OLV_CAL_AB_CPU_THROTTLE');
+const VERSION = THROTTLE > 1 ? `v${PROTOCOL}-${THROTTLE}x` : 'v1';
+/** Shared e2e lock held by the caller for the whole session (v3 machine etiquette); recorded as stated. */
+const LOCK = process.env.OLV_CAL_AB_LOCK ?? null;
 
 /** Pre-registered in v2: share of calibrated warm runs that must pick a level above 0, else VOID. */
 export const PRECONDITION_CAL_V2 = Object.freeze({ minNonzeroShare: 0.6 });
@@ -204,8 +213,9 @@ export function evaluate(sha = headSha()) {
   const pre = THROTTLE > 1 ? precondition(Object.values(trajectories).flatMap((t) => t.calibratedLevels)) : null;
   const verdict = pre && !pre.met ? 'VOID' : failing.length === 0 ? 'PASS' : 'FAIL';
   const record = {
-    kind: 'olv-render-budget-calibration-ab', version: THROTTLE > 1 ? 2 : 1,
-    protocol: `validation/protocols/render-budget-calibration-${THROTTLE > 1 ? 'v2' : 'v1'}.md`,
+    kind: 'olv-render-budget-calibration-ab', version: PROTOCOL,
+    protocol: `validation/protocols/render-budget-calibration-v${PROTOCOL}.md`,
+    ...(LOCK ? { machineSharing: { sharedE2eLock: LOCK, heldForWholeSession: true, previewPort: Number(process.env.OLV_DEPLOY_PORT ?? 4173) } } : {}),
     ...(THROTTLE > 1 ? { emulation: { cpuThrottlingRate: THROTTLE, method: 'CDP Emulation.setCPUThrottlingRate', gpu: 'not emulated', thermal: 'not emulated' }, precondition: pre } : {}),
     datasetKey: KEY, heldOut: KEY === 'B', generatedAt: new Date().toISOString(), commit: sha, machine: MACHINE,
     dataset: sessions[0].r.dataset, fingerprintFixed: sessions[0].r.fingerprint, fingerprintCalibrated: sessions[1].r.fingerprint,
