@@ -1717,8 +1717,9 @@ export class AnalysePanel {
       el('span', { className: `olv-analyse-score-band is-${qs.band}`, text: bandText }),
     );
     if (isPreview) {
-      head.title =
-        'Provisional — scored on the streamed-in sample so far. Let the full cloud stream in, then re-run for a settled grade.';
+      head.title = this._result!.dtm.coverageMode === 'resident-only'
+        ? 'Provisional: scored on the streamed-in part so far. Let the full cloud stream in, then re-run for a settled grade.'
+        : 'Provisional: scored on a preview-grade surface. Re-run on the full cloud for a settled grade.';
     }
     this._scoreRow.append(head);
     // The six weighted COMPONENTS (Coverage / Confidence / Validation / Density /

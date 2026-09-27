@@ -9,7 +9,7 @@
 }
 .olv-fit-verdict.is-ready { border-left-color: var(--rating-excellent); }
 .olv-fit-verdict.is-okay { border-left-color: var(--rating-good); }
-.olv-fit-verdict.is-review { border-left-color: var(--rating-weak); }
+.olv-fit-verdict.is-review { border-left-color: var(--warn); }
 .olv-fit-verdict-text { flex: 1 1 auto; min-width: 0; }
 .olv-fit-badge {
   flex: 0 0 auto; font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.02em;

@@ -131,7 +131,13 @@ describe('buildScanStory — primary limiter severity order', () => {
 
 describe('buildScanStory — next step + not-established', () => {
   it('streaming preview → re-run after full stream', () => {
-    expect(buildScanStory({ ...GOOD, coverageMode: 'sampled' }).nextStep).toMatch(/stream in/i);
+    expect(buildScanStory({ ...GOOD, coverageMode: 'resident-only' }).nextStep).toMatch(/stream in/i);
+  });
+
+  it('a sampled local run never tells the reader to wait for a stream', () => {
+    const s = buildScanStory({ ...GOOD, coverageMode: 'sampled' });
+    expect(s.nextStep).not.toMatch(/stream/i);
+    expect(s.primaryLimiter).not.toMatch(/stream/i);
   });
 
   it('CRS unknown → set coordinate system', () => {

@@ -14,7 +14,7 @@ import { buildScanStory, buildExportHealth, type ScanStoryInputs } from '../src/
 beforeAll(installRecordingDom);
 
 // Import AFTER the stub is installed (el() touches document at call time only).
-const { renderDatasetStoryCard, renderExportHealthPanel } = await import('../src/ui/scanStoryViews');
+const { renderDatasetStoryCard, renderExportHealthPanel, exportHealthHeader } = await import('../src/ui/scanStoryViews');
 
 const GOOD: ScanStoryInputs = {
   captureLabel: 'Aerial / airborne ALS',
@@ -83,7 +83,7 @@ describe('renderExportHealthPanel', () => {
     expect(text).toContain('Ready to export');
     expect(text).toContain('Scan scope');
     expect(text).toContain('Classification');
-    expect(node.textContent).not.toContain('Before you hand this off');
+    expect(node.textContent).not.toContain('Review before hand-off');
     expect(node.allClasses()).toContain('is-ready');
   });
 
@@ -97,10 +97,52 @@ describe('renderExportHealthPanel', () => {
     });
     const node = renderExportHealthPanel(health) as unknown as RecordingEl;
     const text = node.textContent;
-    expect(text).toContain('Export with caution');
-    expect(text).toContain('Before you hand this off');
+    expect(text).toContain('Review before hand-off · 3 items');
+    expect(text).not.toContain('Export with caution');
     expect(text).toContain('heuristic');
     expect(text).toContain('support 0.42');
     expect(node.allClasses()).toContain('is-caution');
+  });
+});
+
+describe('export readiness tone', () => {
+  const sample = { ...GOOD, coverageMode: 'display-sample' as const };
+
+  it('a limit reads as calm review, amber, never red', () => {
+    const h = buildExportHealth({ ...sample, crsKnown: false, datumKnown: false });
+    expect(exportHealthHeader(h)).toEqual({ text: 'Review before hand-off · 3 items', tone: 'review' });
+    expect(h.items.every((i) => !i.wrong)).toBe(true);
+    const node = renderExportHealthPanel(h) as unknown as RecordingEl;
+    expect(node.allClasses()).toContain('is-tone-review');
+    expect(node.allClasses()).not.toContain('is-wrong');
+  });
+
+  it('a display sample names Convert at full resolution as its fix', () => {
+    const h = buildExportHealth(sample);
+    expect(h.blockers).toEqual(['Display sample: tick Convert at full resolution to write every point.']);
+    expect(exportHealthHeader(h).text).toBe('Review before hand-off · 1 item');
+    expect(h.items[0].remedy).toBe('full-resolution');
+    const withFix = renderExportHealthPanel(h, { fullResolution: () => undefined }) as unknown as RecordingEl;
+    expect(withFix.textContent).toContain('Use full resolution');
+    const without = renderExportHealthPanel(h) as unknown as RecordingEl;
+    expect(without.textContent).not.toContain('Use full resolution');
+  });
+
+  it('only a streaming source says streamed', () => {
+    expect(buildExportHealth({ ...GOOD, coverageMode: 'resident-only' }).blockers[0]).toMatch(/Streamed-in/);
+    expect(buildExportHealth(sample).blockers[0]).not.toMatch(/stream/i);
+    expect(buildExportHealth({ ...GOOD, coverageMode: 'sampled' }).blockers[0]).not.toMatch(/stream/i);
+  });
+
+  it('a failed gate is the one red item', () => {
+    const h = buildExportHealth({ ...GOOD, surfaceTier: 'Blocked', crsKnown: false });
+    expect(exportHealthHeader(h).tone).toBe('wrong');
+    expect(h.items.filter((i) => i.wrong).map((i) => i.text)).toEqual([
+      'Surface quality gate failed: terrain products cannot be exported.',
+    ]);
+  });
+
+  it('a clean scan is simply ready', () => {
+    expect(exportHealthHeader(buildExportHealth(GOOD))).toEqual({ text: 'Ready to export', tone: 'ready' });
   });
 });

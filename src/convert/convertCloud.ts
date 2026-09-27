@@ -142,7 +142,7 @@ export function convertCloud(
   let transformProvenance: TransformProvenance | null = null;
 
   if (mode === 'keep') {
-    crsNote = sourceEpsg != null ? `kept ${epsgLabel(sourceEpsg)}` : 'no CRS (local coordinates)';
+    crsNote = sourceEpsg != null ? `kept ${epsgLabel(sourceEpsg)}` : 'no CRS recorded (coordinates unchanged)';
   } else if (mode === 'assign') {
     if (opts.targetEpsg == null) return fail('Assign mode needs a target EPSG.');
     outEpsg = opts.targetEpsg;

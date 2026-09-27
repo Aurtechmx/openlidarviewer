@@ -272,20 +272,29 @@
   background: color-mix(in srgb, currentColor 10%, transparent);
 }
 .olv-health-verdict.is-ready { color: var(--state-measured); }
-.olv-health-verdict.is-caution { color: var(--state-review); }
+.olv-health-verdict.is-caution { color: var(--warn); }
 .olv-health-verdict.is-blocked { color: var(--state-blocked); }
 .olv-health-rows { display: flex; flex-direction: column; gap: 4px; }
 /* Leading `auto` track holds the state glyph, so the tier reads without colour. */
 .olv-health-row { display: grid; grid-template-columns: auto 140px 1fr; gap: 8px; align-items: baseline; }
 .olv-health-row .olv-health-k { color: var(--muted, #8a8f98); font-size: var(--text-xs); }
 .olv-health-v { min-width: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.olv-health-row.is-caution .olv-health-v { color: var(--state-review); }
+.olv-health-row.is-caution .olv-health-v { color: var(--warn); }
+/* A limit is something to review, not an error: amber, not the review red. */
+.olv-health .olv-state.is-review { color: var(--warn); }
 .olv-health-row.is-blocked .olv-health-v { color: var(--state-blocked); }
 .olv-health-row.is-good .olv-health-v { color: var(--state-measured); }
 .olv-health-row.is-info .olv-health-v { color: var(--state-info); }
 .olv-health-blockers-title { font-weight: 600; font-size: var(--text-xs); margin-top: 2px; }
 .olv-health-blockers { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
-.olv-health-blockers li { font-size: var(--text-xs); opacity: 0.9; }
+.olv-health-blockers li { font-size: var(--text-xs); }
+.olv-health-blockers li.is-wrong { color: var(--state-blocked); }
+.olv-health-fix {
+  appearance: none; margin-left: var(--space-xs); min-height: 28px; padding: 0 var(--space-sm);
+  border: 1px solid var(--accent); border-radius: var(--radius-md);
+  background: var(--accent-soft); color: var(--text); font: 500 var(--text-xs) / 1 var(--font); cursor: pointer;
+}
+.olv-health-fix:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ── Flow Pulse Lab — conditioning, the result grid, click-to-pulse ───────── */
 .olv-flow-lab { display: flex; flex-direction: column; gap: var(--space-lg); }

@@ -263,7 +263,7 @@ export class BatchConverter {
     // The reason an unavailable format is disabled — shared between the pill's
     // (hover-only) title and the visible footnote so touch users see it too.
     const unavailableReason =
-      'In-browser LAZ compression isn’t available yet — choose LAS for an uncompressed file.';
+      'LAZ is not available: this browser build cannot write LAZ compression yet. Choose LAS, or LAS with Compress (.las.gz).';
     let anyUnavailable = false;
     (Object.keys(CONVERT_FORMATS) as ConvertFormat[]).forEach((fmt) => {
       const spec = CONVERT_FORMATS[fmt];

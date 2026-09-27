@@ -8,6 +8,18 @@
    or changes what a panel shows. */
 
 @media (min-width: 768px) {
+  /* One rail surface. The tab strip, the task, the gaps between them and the
+     Results shelf all sit on the panel colour, so no part of the loaded rail
+     reads straight over the point cloud. Before a scan the rail is empty and
+     stays transparent. */
+  .olv-left-panels.olv-ws-ready {
+    background: var(--panel);
+    border-radius: var(--radius-lg);
+  }
+  .olv-left-panels .olv-results-shelf {
+    padding: 0 var(--space-2xs) var(--space-2xs);
+  }
+
   /* The task surface: the visible mode host. */
   .olv-left-panels .olv-ws-mode.is-active {
     gap: 0;

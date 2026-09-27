@@ -196,13 +196,28 @@ describe('classifyCoverage + streaming warning', () => {
     expect(coverageStreamingWarning('full')).toBeUndefined();
   });
 
-  it('partial coverage emits the streaming warning', () => {
-    const w1 = coverageStreamingWarning('resident-only');
-    const w2 = coverageStreamingWarning('sampled');
-    expect(w1).toBeDefined();
-    expect(w2).toBeDefined();
-    expect(w1).toMatch(/currently loaded data/);
-    expect(w2).toMatch(/may change as additional points stream/);
+  it('only a streaming source talks about points still arriving', () => {
+    const streaming = coverageStreamingWarning('resident-only');
+    expect(streaming).toMatch(/currently loaded data/);
+    expect(streaming).toMatch(/additional points stream/);
+    for (const local of [
+      coverageStreamingWarning('sampled'),
+      coverageStreamingWarning('display-sample'),
+      coverageStreamingWarning('display-sample', { shown: 1_448_948, total: 7_000_000 }),
+    ]) {
+      expect(local).toBeDefined();
+      expect(local).not.toMatch(/stream/i);
+    }
+  });
+
+  it('a local display sample states its numbers', () => {
+    expect(coverageStreamingWarning('display-sample', { shown: 1_448_948, total: 7_000_000 })).toBe(
+      'Display sample: 1.4 M of 7.0 M points. Figures describe the sample, not every point.',
+    );
+    expect(coverageStreamingWarning('display-sample')).toBe(
+      'Display sample. Figures describe the sample, not every point.',
+    );
+    expect(coverageStreamingWarning('sampled')).toMatch(/^Analysis read a sample of the loaded points/);
   });
 });
 

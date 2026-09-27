@@ -100,7 +100,7 @@ export function writeAsc(
   const header: string[] = ['# OpenLiDARViewer ASC export'];
   if (opts.epsg != null) header.push(`# crs: EPSG:${opts.epsg}`);
   else if (opts.crsName) header.push(`# crs: ${opts.crsName}`);
-  else header.push('# crs: unknown (local coordinates)');
+  else header.push('# crs: none recorded (coordinates unchanged from the source)');
   const datumComment = datumTransformComment(opts.datumNote);
   if (datumComment) header.push(datumComment);
   header.push(`# columns: x y z${hasI ? ' intensity' : ''}`);

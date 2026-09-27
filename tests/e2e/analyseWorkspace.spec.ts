@@ -151,7 +151,7 @@ test.describe('Analyse home and pages', () => {
     await page.locator('.olv-ws-tab[data-mode="analyse"]').click(); // 1
     await row(page, 'terrain').getByRole('button', { name: 'Run terrain analysis' }).click(); // 2
     await expect(title(page)).toHaveText('Terrain');
-    const create = page.locator('.olv-at-link', { hasText: 'Create contours' });
+    const create = page.locator('.olv-at-link', { hasText: 'Contours' });
     await expect(create).toBeVisible({ timeout: 30_000 });
     await create.click(); // 3
     await expect(title(page)).toHaveText('Contours');

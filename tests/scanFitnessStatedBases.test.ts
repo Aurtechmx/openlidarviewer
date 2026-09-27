@@ -109,7 +109,9 @@ describe('scorecard tones share the assessment chip bands', () => {
 describe('density row discloses the returns-vs-pulses basis', () => {
   it('names ground returns vs pulses of all classes in the hint', () => {
     const d = dim(buildScanFitness(base({ groundDensityPerM2: 1.3 })), 'density');
-    expect(d.summary).toBe('1.3 ground pts/m² — below the 2 pts/m² QL2 pulse-density reference.');
+    expect(d.summary).toBe(
+      '1.3 ground pts/m², below the 2 pts/m² QL2 figure (indicative only: QL figures are an aggregate pulse-density reference, not a ground-point count).',
+    );
     expect(d.hint).toMatch(/Ground returns only; the USGS figure counts pulses of all classes/);
   });
 });

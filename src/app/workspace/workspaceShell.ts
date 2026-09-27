@@ -123,6 +123,15 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   let refreshDataHome = (): void => {};
   const workspace = new DesktopWorkspace({
     onModeChange: (m) => {
+      // The dock's Analyse button reads pressed only while Analyse is the mode
+      // shown with its panel up, so it never stays lit over another mode.
+      const a = d.dock.querySelector<HTMLElement>('.olv-tool-analyse[aria-pressed]');
+      if (a) {
+        const p = d.analysePanel()?.element;
+        const on = m === 'analyse' && !!p && p.style.display !== 'none' && !p.classList.contains('olv-hidden');
+        a.classList.toggle('olv-tool-active', on);
+        a.setAttribute('aria-pressed', String(on));
+      }
       router?.sync();
       mobileSheet?.select(sheetTabForMode(m));
       refreshDataHome();

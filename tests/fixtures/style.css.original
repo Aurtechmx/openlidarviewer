@@ -2295,7 +2295,9 @@ body.olv-theme-light .olv-empty::before {
  * tiny subtle dot that disappeared into the triangle outline. */
 .olv-mode-reset {
   position: absolute;
-  top: 47%; left: 50%;
+  /* The centroid of the three pads (apex centre ~17px, base centres ~91px),
+     so the Orbit pad above no longer overlaps it and reads as a second icon. */
+  top: 62%; left: 50%;
   transform: translate(-50%, -50%);
   width: 44px; height: 44px;
   display: inline-flex; align-items: center; justify-content: center;
@@ -3311,6 +3313,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
    hidden until the phone media query (and a loaded scan) reveal them. */
 .olv-scaninfo-btn { display: none; }
 .olv-sheet-close { display: none; }
+.olv-sheet-chevron { display: none; }
 
 /* The touch-gesture hint replaces the keyboard HUD on phones. */
 .olv-touch-hint { display: none; }
@@ -7874,7 +7877,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 }
 .olv-fit-verdict.is-ready { border-left-color: var(--rating-excellent); }
 .olv-fit-verdict.is-okay { border-left-color: var(--rating-good); }
-.olv-fit-verdict.is-review { border-left-color: var(--rating-weak); }
+.olv-fit-verdict.is-review { border-left-color: var(--warn); }
 .olv-fit-verdict-text { flex: 1 1 auto; min-width: 0; }
 .olv-fit-badge {
   flex: 0 0 auto; font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.02em;
@@ -8036,6 +8039,15 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 
 /* Each decision is its own region, separated by generous whitespace. */
 .olv-bc-section { margin-bottom: var(--space-2xl); }
+/* Why a format pill is greyed, said in words beside the pills. */
+.olv-export-laz-note {
+  flex-basis: 100%;
+  margin: var(--space-2xs) 0 0;
+  color: var(--text-dim);
+  font-size: var(--text-2xs);
+  line-height: 1.35;
+}
+
 /* Export health leads the panel. `.olv-health` carries the shared model's own
    styling; this only gives it rail spacing and a rule separating it from the
    controls below. */
@@ -9605,20 +9617,29 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   background: color-mix(in srgb, currentColor 10%, transparent);
 }
 .olv-health-verdict.is-ready { color: var(--state-measured); }
-.olv-health-verdict.is-caution { color: var(--state-review); }
+.olv-health-verdict.is-caution { color: var(--warn); }
 .olv-health-verdict.is-blocked { color: var(--state-blocked); }
 .olv-health-rows { display: flex; flex-direction: column; gap: 4px; }
 /* Leading `auto` track holds the state glyph, so the tier reads without colour. */
 .olv-health-row { display: grid; grid-template-columns: auto 140px 1fr; gap: 8px; align-items: baseline; }
 .olv-health-row .olv-health-k { color: var(--muted, #8a8f98); font-size: var(--text-xs); }
 .olv-health-v { min-width: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.olv-health-row.is-caution .olv-health-v { color: var(--state-review); }
+.olv-health-row.is-caution .olv-health-v { color: var(--warn); }
+/* A limit is something to review, not an error: amber, not the review red. */
+.olv-health .olv-state.is-review { color: var(--warn); }
 .olv-health-row.is-blocked .olv-health-v { color: var(--state-blocked); }
 .olv-health-row.is-good .olv-health-v { color: var(--state-measured); }
 .olv-health-row.is-info .olv-health-v { color: var(--state-info); }
 .olv-health-blockers-title { font-weight: 600; font-size: var(--text-xs); margin-top: 2px; }
 .olv-health-blockers { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
-.olv-health-blockers li { font-size: var(--text-xs); opacity: 0.9; }
+.olv-health-blockers li { font-size: var(--text-xs); }
+.olv-health-blockers li.is-wrong { color: var(--state-blocked); }
+.olv-health-fix {
+  appearance: none; margin-left: var(--space-xs); min-height: 28px; padding: 0 var(--space-sm);
+  border: 1px solid var(--accent); border-radius: var(--radius-md);
+  background: var(--accent-soft); color: var(--text); font: 500 var(--text-xs) / 1 var(--font); cursor: pointer;
+}
+.olv-health-fix:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ── Flow Pulse Lab — conditioning, the result grid, click-to-pulse ───────── */
 .olv-flow-lab { display: flex; flex-direction: column; gap: var(--space-lg); }
@@ -11177,8 +11198,10 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 }
 .olv-tl-counts-value { font-variant-numeric: tabular-nums; color: var(--text); }
 /* 99y2-results-shelf.css — the Results shelf (src/app/results/resultsShelf.ts).
-   Desktop: the left rail's footer, below the scrolling mode body. Phone: a row
-   at the top of the sheet's Data tab. Empty or before a scan: not shown. */
+   Desktop: the left rail's footer, below the scrolling mode body, on the rail's
+   surface. Phone: a row at the top of the sheet's Data tab. Either way the
+   toggle comes first and the list opens below it. Empty or before a scan: not
+   shown. */
 
 .olv-results-shelf {
   flex: 0 0 auto;
@@ -11210,6 +11233,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   text-align: left;
   cursor: pointer;
   transition: background 160ms var(--ease-standard);
+  order: -1;
 }
 .olv-results-toggle:hover {
   background: color-mix(in srgb, var(--accent) 12%, var(--panel-raised));
@@ -11226,15 +11250,15 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   height: 6px;
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
-  transform: rotate(-135deg);
+  transform: rotate(45deg);
   transition: transform 160ms var(--ease-standard);
 }
 .olv-results-shelf.is-open .olv-results-toggle::after {
-  transform: rotate(45deg);
+  transform: rotate(-135deg);
 }
 
-/* The list opens upward from the footer and scrolls on its own, so the mode
-   body keeps its space and the canvas is never covered. */
+/* The list opens below the toggle and its height is capped, so the mode body
+   above keeps its space and the list never runs past the rail. */
 .olv-results-panel {
   max-height: min(40vh, 320px);
   overflow-y: auto;
@@ -11332,18 +11356,6 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   max-height: none;
   overflow-y: visible;
 }
-
-/* The phone sheet shows the shelf as a row at the top of the Data tab, so the
-   list opens below its toggle and reads top-down. The chevron follows. */
-.olv-mobile-sheet .olv-results-toggle {
-  order: -1;
-}
-.olv-mobile-sheet .olv-results-toggle::after {
-  transform: rotate(45deg);
-}
-.olv-mobile-sheet .olv-results-shelf.is-open .olv-results-toggle::after {
-  transform: rotate(-135deg);
-}
 /* 99y3-workspace-polish.css — one surface per task in the desktop left rail.
    The rail itself carries no card; the active mode host is the one task
    surface; what it holds reads as sections separated by hairlines, not as
@@ -11354,6 +11366,18 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
    or changes what a panel shows. */
 
 @media (min-width: 768px) {
+  /* One rail surface. The tab strip, the task, the gaps between them and the
+     Results shelf all sit on the panel colour, so no part of the loaded rail
+     reads straight over the point cloud. Before a scan the rail is empty and
+     stays transparent. */
+  .olv-left-panels.olv-ws-ready {
+    background: var(--panel);
+    border-radius: var(--radius-lg);
+  }
+  .olv-left-panels .olv-results-shelf {
+    padding: 0 var(--space-2xs) var(--space-2xs);
+  }
+
   /* The task surface: the visible mode host. */
   .olv-left-panels .olv-ws-mode.is-active {
     gap: 0;

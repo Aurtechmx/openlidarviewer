@@ -44,6 +44,8 @@ import type { SessionFindings } from '../render/measure/sessionFindings';
 import type { MountedFindingsPanel } from './findingsPanel';
 
 /** Why the measurement deliverables are inert: shown as the group hint AND each button's tooltip. */
+/** Why the LAZ pill is greyed, shown beside it and on hover. */
+const LAZ_UNAVAILABLE = 'LAZ is not available yet: this browser build cannot write LAZ compression. Choose LAS, or tick Compress (.las.gz).';
 const NO_MEASUREMENTS_HINT = 'Place measurements, then export them as open vector formats.';
 
 /**
@@ -338,7 +340,7 @@ export class ExportPanel {
     this._crsExtra = el('div', { className: 'olv-bc-crs-extra' });
     this._crsLocalNote = el('p', {
       className: 'olv-export-crs-note',
-      text: 'Local coordinates — no real-world CRS to assign or reproject.',
+      text: 'No CRS recorded in the file. Coordinates are written unchanged from the source.',
     });
     this._crsLocalNote.style.display = 'none';
     this._fullResRow = el('div', { className: 'olv-export-fullres' });
@@ -455,7 +457,17 @@ export class ExportPanel {
     this._health.replaceChildren();
     const health = this._cb.exportHealth?.() ?? null;
     if (!health) return;
-    this._health.append(renderExportHealthPanel(health));
+    // The sample item's fix is the full-resolution box below: one click ticks it.
+    const canFullRes = this._cb.hasFullSource() && this._cb.isReduced();
+    this._health.append(renderExportHealthPanel(health, canFullRes ? { fullResolution: () => this._useFullRes() } : {}));
+  }
+
+  /** Tick Convert at full resolution and put focus on it. */
+  private _useFullRes(): void {
+    this._fullRes = true;
+    this._renderFullResRow();
+    this._renderSummary();
+    this._fullResRow.querySelector<HTMLInputElement>('.olv-export-fullres-box')?.focus();
   }
 
   /** Re-evaluate the full-resolution availability for the active cloud. */
@@ -1035,7 +1047,8 @@ export class ExportPanel {
       pill.setAttribute('aria-pressed', String(this._format === fmt));
       if (!spec.available) {
         pill.disabled = true;
-        pill.title = 'In-browser LAZ compression isn’t available yet — choose LAS for an uncompressed file.';
+        pill.title = LAZ_UNAVAILABLE;
+        pill.setAttribute('aria-describedby', 'olv-export-laz-note');
       } else {
         pill.addEventListener('click', () => {
           this._format = fmt;
@@ -1046,6 +1059,12 @@ export class ExportPanel {
       }
       this._formatRow.append(pill);
     });
+    // A greyed pill says why in words, not only on hover.
+    if ((Object.values(CONVERT_FORMATS) as { available: boolean }[]).some((f) => !f.available)) {
+      const note = el('p', { className: 'olv-export-laz-note', text: LAZ_UNAVAILABLE });
+      note.id = 'olv-export-laz-note';
+      this._formatRow.append(note);
+    }
   }
 
   private _renderCrsPills(): void {

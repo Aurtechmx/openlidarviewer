@@ -49,6 +49,7 @@
    hidden until the phone media query (and a loaded scan) reveal them. */
 .olv-scaninfo-btn { display: none; }
 .olv-sheet-close { display: none; }
+.olv-sheet-chevron { display: none; }
 
 /* The touch-gesture hint replaces the keyboard HUD on phones. */
 .olv-touch-hint { display: none; }

@@ -109,7 +109,16 @@ describe('buildScanFitness — provisional (streaming / partial) state', () => {
     expect(f.provisional).toBe(true);
     expect(f.verdict).not.toMatch(/streaming/i);
     expect(f.verdict).toMatch(/^terrain was built from a sample of the points, not every point/i);
+    expect(f.verdict).toContain('run terrain on a smaller tile');
     expect(f.tierBadge).toBeNull();
+  });
+
+  it('a sampled run names the sample once, not again in the clause', () => {
+    const f = buildScanFitness(
+      base({ coverageMode: 'sampled', assessmentLimiters: ['the surface was built from a sample of the points'] }),
+    );
+    expect(f.verdict.match(/sample/gi)?.length).toBe(1);
+    expect(f.verdict).not.toMatch(/surface was built/);
   });
 
   it('resident-only (real streaming) still says "still streaming"', () => {
@@ -208,9 +217,9 @@ describe('buildScanFitness — density reports a measurement, not a quality leve
 
   it('keeps the measured density and names the threshold it is compared against', () => {
     expect(summary(12)).toMatch(/12 ground pts\/m²/);
-    expect(summary(12)).toMatch(/clears the 8 pts\/m² QL1 pulse-density reference/i);
-    expect(summary(3)).toMatch(/clears the 2 pts\/m² QL2 pulse-density reference/i);
-    expect(summary(0.9)).toMatch(/below the 2 pts\/m² QL2 pulse-density reference/i);
+    expect(summary(12)).toMatch(/above the 8 pts\/m² QL1 figure \(indicative only/i);
+    expect(summary(3)).toMatch(/above the 2 pts\/m² QL2 figure \(indicative only/i);
+    expect(summary(0.9)).toMatch(/below the 2 pts\/m² QL2 figure \(indicative only/i);
   });
 
   it('labels the QL comparison as a pulse-density reference, not a ground-density quality level', () => {
@@ -238,7 +247,7 @@ describe('buildScanFitness — density regularity readout (median vs mean)', () 
     const f = buildScanFitness(base({ groundDensityPerM2: 12, medianGroundDensityPerM2: 11 }));
     const s = densitySummary(f);
     // The mean-based grade line is untouched…
-    expect(s).toMatch(/12 ground pts\/m² — clears the 8 pts\/m² QL1 pulse-density reference\./);
+    expect(s).toMatch(/12 ground pts\/m², above the 8 pts\/m² QL1 figure \(indicative only: QL figures are an aggregate pulse-density reference, not a ground-point count\)\./);
     // …and the median + ratio are appended as a plain figure.
     expect(s).toMatch(/Median 11 ground pts\/m² \(median\/mean 0\.92\)\./);
     // Neutral: no superlative or verdict words in the readout.

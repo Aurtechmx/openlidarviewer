@@ -44,6 +44,15 @@
 
 /* Each decision is its own region, separated by generous whitespace. */
 .olv-bc-section { margin-bottom: var(--space-2xl); }
+/* Why a format pill is greyed, said in words beside the pills. */
+.olv-export-laz-note {
+  flex-basis: 100%;
+  margin: var(--space-2xs) 0 0;
+  color: var(--text-dim);
+  font-size: var(--text-2xs);
+  line-height: 1.35;
+}
+
 /* Export health leads the panel. `.olv-health` carries the shared model's own
    styling; this only gives it rail spacing and a rule separating it from the
    controls below. */
