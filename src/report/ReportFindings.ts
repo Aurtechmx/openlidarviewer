@@ -133,6 +133,25 @@ function formatArea(areaM2: number): string {
   return `${Math.round(areaM2).toLocaleString('en-US')} m²`;
 }
 
+/**
+ * The bounding-box extent row. Confirmed units read as width x depth in metres
+ * with the area; unconfirmed units still state the spans, labelled as source
+ * units, rather than claiming the extent is unknown.
+ */
+function extentValue(metadata: MetadataInputs, areaM2: number): string {
+  const { width, depth } = metadata;
+  const spans = Number.isFinite(width) && Number.isFinite(depth) && width > 0 && depth > 0;
+  if (metadata.extentUnitStatus === 'unknown') {
+    return spans
+      ? `${width.toFixed(1)} × ${depth.toFixed(1)} source units (unit unconfirmed, not surveyed area)`
+      : 'unknown extent';
+  }
+  if (!Number.isFinite(areaM2) || areaM2 <= 0) return formatArea(areaM2);
+  const dims = spans ? `${width.toFixed(1)} m × ${depth.toFixed(1)} m, ` : '';
+  const km2 = areaM2 >= 100_000 ? ` (${(areaM2 / 1_000_000).toFixed(2)} km²)` : '';
+  return `${dims}${formatArea(areaM2)}${km2}, not surveyed area`;
+}
+
 /** "15.7 M points" / "420,000 points" — compact count. */
 function formatCount(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return 'unknown count';
@@ -150,7 +169,10 @@ function densityFinding(
     return {
       label: DENSITY_LABEL,
       value: '—',
-      detail: 'Not reported for this source.',
+      detail:
+        metadata.extentUnitStatus === 'unknown'
+          ? 'Not reported: the linear unit is unconfirmed, so a per-square-metre figure cannot be stated.'
+          : 'Not reported for this source.',
       tier: 'unknown',
     };
   }
@@ -196,18 +218,23 @@ export function buildInspectionSummary(
     metadata.sourcePointCount === null
       ? 'point count unknown from source metadata'
       : formatCount(metadata.sourcePointCount);
-  const headline = `${captureLabel} — ${formatArea(area)}, ${totalText}.`;
+  const headlineExtent =
+    metadata.extentUnitStatus === 'unknown' &&
+    Number.isFinite(metadata.width) && Number.isFinite(metadata.depth) &&
+    metadata.width > 0 && metadata.depth > 0
+      ? `${metadata.width.toFixed(1)} × ${metadata.depth.toFixed(1)} source units`
+      : formatArea(area);
+  const headline = `${captureLabel} — ${headlineExtent}, ${totalText}.`;
 
   const findings: ReportFinding[] = [];
 
   // 1. Extent / scale — the bounding box, which is not a surveyed area, and
   //    the file's record count, which is what was delivered, not what was
   //    captured.
-  const extent = formatArea(area);
   findings.push(
     {
       label: 'Bounding-box extent',
-      value: Number.isFinite(area) && area > 0 ? `${extent} (not surveyed area)` : extent,
+      value: extentValue(metadata, area),
       detail:
         metadata.sourcePointCount === null
           ? 'Point count unknown from source metadata.'

@@ -69,6 +69,18 @@ export interface LasHeader {
    * scan-report card; the parser is in `src/io/crs.ts`.
    */
   crs: CrsInfo | null;
+  /** Public header size, where the VLR block starts. */
+  headerSize?: number;
+  /** Number of VLRs declared in the header. */
+  vlrCount?: number;
+  /**
+   * LAS 1.4 only: byte offset of the first EVLR and the EVLR count. EVLRs sit
+   * after the point data, outside any head slice, so `crs` above never sees
+   * them; `resolveLasCrs` in `crs.ts` reads them with bounded range reads.
+   * Absent (or zero) for older versions and for a 1.4 file with no EVLRs.
+   */
+  evlrOffset?: number;
+  evlrCount?: number;
 }
 
 // --- ASPRS LAS public-header byte offsets (little-endian) ------------------
@@ -115,6 +127,9 @@ const OFFSET_CREATION_YEAR = 92;
 const OFFSET_HEADER_SIZE = 94;
 /** Number of variable-length records — uint32. */
 const OFFSET_NUM_VLR = 100;
+/** LAS 1.4: start of the first EVLR (uint64) and the EVLR count (uint32). */
+const OFFSET_FIRST_EVLR = 235;
+const OFFSET_EVLR_COUNT = 243;
 /** Length of the System Identifier and Generating Software char fields. */
 const CHAR_FIELD_LENGTH = 32;
 
@@ -281,9 +296,25 @@ export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
           : ('week' as const))
       : null;
 
+  let evlrOffset = 0;
+  let evlrCount = 0;
+  if (versionMinor >= LAS_1_4_MINOR) {
+    // A value past the safe-integer range cannot be a real offset; treat it
+    // as "no EVLRs" rather than refusing a file whose points read fine.
+    const rawOffset = view.getBigUint64(OFFSET_FIRST_EVLR, true);
+    if (rawOffset <= BigInt(Number.MAX_SAFE_INTEGER)) {
+      evlrOffset = Number(rawOffset);
+      evlrCount = view.getUint32(OFFSET_EVLR_COUNT, true);
+    }
+  }
+
   return {
     pointCount,
     gpsTimeType,
+    headerSize,
+    vlrCount: numVlr,
+    evlrOffset,
+    evlrCount,
     scale,
     offset,
     min,

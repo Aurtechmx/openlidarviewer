@@ -134,9 +134,9 @@ export function verticalDatumLabel(epsg: number): string | undefined {
  *   u16 record length after header
  *   u8[32] description
  *
- * EVLRs (LAS 1.4 extended VLRs) share the layout but with a u64 record
- * length — EVLRs are ignored here since COPC pins the CRS into a regular
- * VLR.
+ * EVLRs (LAS 1.4 extended VLRs) share the layout but carry a u64 record
+ * length, so their header is 60 bytes. They sit after the point data and are
+ * read by `readEvlrProjectionRecords` with bounded range reads.
  */
 const VLR_HEADER_BYTES = 54;
 const VLR_USER_ID_OFFSET = 2;
@@ -176,32 +176,58 @@ const GEOKEY_VERTICAL_UNITS = 4099;      // linear units of the vertical CRS
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Walk the VLR list starting at `vlrStartOffset` and extract CRS info if
- * any LASF_Projection VLR is present. Returns `null` when no recognisable
- * CRS VLR is found, the buffer is short, or the VLR list is malformed.
- *
- * Defensive: every uint read is bounds-checked against the buffer length
- * so a malformed VLR can't crash the loader. Caller code can safely treat
- * `null` as "CRS unknown" and proceed with the load.
+ * The LASF_Projection payloads a file carries, collected from its VLRs and
+ * (LAS 1.4) its EVLRs. The first record of each kind wins: the VLRs are
+ * collected first, so a VLR outranks an EVLR of the same record id.
  */
-export function parseCrsFromVlrs(
+export interface ProjectionRecords {
+  wkt: string | null;
+  geokeys: Uint8Array | null;
+  geoAscii: Uint8Array | null;
+  geoDouble: Uint8Array | null;
+}
+
+export function emptyProjectionRecords(): ProjectionRecords {
+  return { wkt: null, geokeys: null, geoAscii: null, geoDouble: null };
+}
+
+/** Store one LASF_Projection payload unless a record of that id is already held. */
+function addProjectionRecord(
+  records: ProjectionRecords,
+  recordId: number,
+  payload: Uint8Array,
+): void {
+  if (recordId === RECORD_ID_OGC_WKT_COORD) {
+    // 2112 is the ONLY authoritative CRS WKT. 2111 (math transform) is a
+    // supplemental parameter set, not a coordinate system, and must never
+    // be substituted in when 2112 is absent: that would silently label
+    // the file with a transform, not a CRS.
+    if (records.wkt == null) {
+      const text = readNullTerminatedBytes(payload);
+      if (text.trim().length > 0) records.wkt = text;
+    }
+  } else if (recordId === RECORD_ID_GEOKEY_DIRECTORY) {
+    records.geokeys ??= payload;
+  } else if (recordId === RECORD_ID_GEO_ASCII_PARAMS) {
+    records.geoAscii ??= payload;
+  } else if (recordId === RECORD_ID_GEO_DOUBLE_PARAMS) {
+    records.geoDouble ??= payload;
+  }
+}
+
+/**
+ * Collect the LASF_Projection payloads from the VLR list starting at
+ * `vlrStartOffset`. Every read is bounds-checked against the buffer, so a
+ * short head slice or a malformed list stops the walk instead of throwing.
+ */
+export function collectVlrProjectionRecords(
   buffer: ArrayBuffer,
   vlrStartOffset: number,
   vlrCount: number,
-): CrsInfo | null {
-  if (vlrCount === 0) return null;
-  if (vlrStartOffset + VLR_HEADER_BYTES > buffer.byteLength) return null;
-
+  records: ProjectionRecords = emptyProjectionRecords(),
+): ProjectionRecords {
+  if (vlrCount === 0 || vlrStartOffset + VLR_HEADER_BYTES > buffer.byteLength) return records;
   const view = new DataView(buffer);
-
-  // First pass: collect the LASF_Projection VLR payloads we recognise, in
-  // the order they appear. WKT wins over GeoTIFF when both are present
-  // because LAS 1.4 mandates WKT for modern files.
-  let wktPayload: string | null = null;
-  let geokeyBytes: Uint8Array | null = null;
-  let geoAsciiBytes: Uint8Array | null = null;
-  let geoDoubleBytes: Uint8Array | null = null;
-
   let cursor = vlrStartOffset;
   for (let i = 0; i < vlrCount; i++) {
     if (cursor + VLR_HEADER_BYTES > buffer.byteLength) break;
@@ -210,38 +236,30 @@ export function parseCrsFromVlrs(
     const payloadLength = view.getUint16(cursor + VLR_RECORD_LENGTH_OFFSET, true);
     const payloadStart = cursor + VLR_HEADER_BYTES;
     if (payloadStart + payloadLength > buffer.byteLength) break;
-
     if (userId === CRS_USER_ID) {
-      if (recordId === RECORD_ID_OGC_WKT_COORD) {
-        if (!wktPayload) {
-          // 2112 is the ONLY authoritative CRS WKT. 2111 (math transform) is a
-          // supplemental parameter set, not a coordinate system, and must never
-          // be substituted in when 2112 is absent — that would silently label
-          // the file with a transform, not a CRS.
-          wktPayload = readNullTerminated(buffer, payloadStart, payloadLength);
-        }
-      } else if (recordId === RECORD_ID_GEOKEY_DIRECTORY) {
-        geokeyBytes = new Uint8Array(buffer, payloadStart, payloadLength);
-      } else if (recordId === RECORD_ID_GEO_ASCII_PARAMS) {
-        geoAsciiBytes = new Uint8Array(buffer, payloadStart, payloadLength);
-      } else if (recordId === RECORD_ID_GEO_DOUBLE_PARAMS) {
-        geoDoubleBytes = new Uint8Array(buffer, payloadStart, payloadLength);
-      }
+      addProjectionRecord(records, recordId, new Uint8Array(buffer, payloadStart, payloadLength));
     }
-
     cursor = payloadStart + payloadLength;
   }
+  return records;
+}
 
+/**
+ * Turn collected LASF_Projection payloads into a CRS, or null when none of
+ * them describes one.
+ */
+export function crsFromProjectionRecords(records: ProjectionRecords): CrsInfo | null {
+  const { wkt: wktPayload, geokeys: geokeyBytes, geoAscii: geoAsciiBytes, geoDouble: geoDoubleBytes } = records;
   if (wktPayload) {
     const fromWkt = crsFromWkt(wktPayload);
     if (geokeyBytes == null) return fromWkt;
     // LAS 1.4 permits a WKT VLR and a GeoKeyDirectory VLR in the same file,
-    // and this app's own 1.4 writer uses that: most WKT — including every WKT
-    // `wktForEpsg` derives — describes the horizontal frame only, so the
+    // and this app's own 1.4 writer uses that: most WKT, including every WKT
+    // `wktForEpsg` derives, describes the horizontal frame only, so the
     // vertical datum and vertical unit travel in the GeoKeys beside it.
     // Taking the WKT and dropping the GeoKeys threw both away, and a NAVD88
     // height in feet then read back as an undeclared unit the terrain tools
-    // fall back to metres for — 3.28× wrong, provenance gone. The WKT stays
+    // fall back to metres for: 3.28x wrong, provenance gone. The WKT stays
     // the sole authority on the horizontal frame and on any vertical axis it
     // does declare; only the vertical fields it leaves empty are filled here.
     if (fromWkt.verticalEpsg != null && fromWkt.verticalLinearUnit != null) return fromWkt;
@@ -257,6 +275,135 @@ export function parseCrsFromVlrs(
   }
   if (geokeyBytes) return crsFromGeoTiff(geokeyBytes, geoAsciiBytes, geoDoubleBytes);
   return null;
+}
+
+/**
+ * Walk the VLR list starting at `vlrStartOffset` and extract CRS info if
+ * any LASF_Projection VLR is present. Returns `null` when no recognisable
+ * CRS VLR is found, the buffer is short, or the VLR list is malformed.
+ *
+ * Defensive: every uint read is bounds-checked against the buffer length
+ * so a malformed VLR can't crash the loader. Caller code can safely treat
+ * `null` as "CRS unknown" and proceed with the load.
+ *
+ * WKT wins over GeoTIFF when both are present because LAS 1.4 mandates WKT
+ * for modern files. EVLRs are not visible here; see `resolveLasCrs`.
+ */
+export function parseCrsFromVlrs(
+  buffer: ArrayBuffer,
+  vlrStartOffset: number,
+  vlrCount: number,
+): CrsInfo | null {
+  if (vlrCount === 0) return null;
+  return crsFromProjectionRecords(collectVlrProjectionRecords(buffer, vlrStartOffset, vlrCount));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LAS 1.4 extended VLRs
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** EVLR header: u16 reserved, u8[16] user id, u16 record id, u64 length, u8[32] description. */
+export const EVLR_HEADER_BYTES = 60;
+const EVLR_RECORD_LENGTH_OFFSET = 20;
+/**
+ * Most EVLRs a CRS walk visits. Real files carry one to a handful; the cap
+ * keeps a corrupt count from turning into thousands of reads.
+ */
+export const MAX_EVLRS_WALKED = 64;
+/**
+ * Largest LASF_Projection EVLR payload read. A CRS WKT is a few KiB at most;
+ * anything larger is refused rather than read. Other EVLRs (waveforms,
+ * indexes) are skipped by their header alone and never read.
+ */
+export const MAX_PROJECTION_EVLR_BYTES = 1 << 20;
+
+/** Read `length` bytes at absolute file `offset`. May return fewer at EOF. */
+export type ByteRangeReader = (offset: number, length: number) => Promise<ArrayBuffer>;
+
+/**
+ * Collect LASF_Projection payloads from the EVLRs of a LAS 1.4 file.
+ *
+ * Reads each 60-byte EVLR header, then the payload only for a
+ * LASF_Projection record no larger than {@link MAX_PROJECTION_EVLR_BYTES}.
+ * The walk stops at the file end, at {@link MAX_EVLRS_WALKED} records, or at
+ * the first header that does not fit, so a truncated or corrupt EVLR block
+ * yields what was read before it rather than an error.
+ */
+export async function readEvlrProjectionRecords(
+  read: ByteRangeReader,
+  fileSize: number,
+  firstEvlrOffset: number,
+  evlrCount: number,
+  records: ProjectionRecords = emptyProjectionRecords(),
+): Promise<ProjectionRecords> {
+  if (!(evlrCount > 0) || !(firstEvlrOffset > 0) || !Number.isSafeInteger(firstEvlrOffset)) return records;
+  let cursor = firstEvlrOffset;
+  const count = Math.min(evlrCount, MAX_EVLRS_WALKED);
+  for (let i = 0; i < count; i++) {
+    if (cursor + EVLR_HEADER_BYTES > fileSize) break;
+    const head = await read(cursor, EVLR_HEADER_BYTES);
+    if (head.byteLength < EVLR_HEADER_BYTES) break;
+    const view = new DataView(head);
+    const userId = readAscii(view, VLR_USER_ID_OFFSET, VLR_USER_ID_LENGTH);
+    const recordId = view.getUint16(VLR_RECORD_ID_OFFSET, true);
+    const length64 = view.getBigUint64(EVLR_RECORD_LENGTH_OFFSET, true);
+    const payloadStart = cursor + EVLR_HEADER_BYTES;
+    if (length64 > BigInt(fileSize - payloadStart)) break;
+    const length = Number(length64);
+    if (userId === CRS_USER_ID && length > 0 && length <= MAX_PROJECTION_EVLR_BYTES) {
+      const payload = await read(payloadStart, length);
+      if (payload.byteLength < length) break;
+      addProjectionRecord(records, recordId, new Uint8Array(payload, 0, length));
+    }
+    cursor = payloadStart + length;
+  }
+  return records;
+}
+
+/** LAS 1.4 header fields the EVLR walk needs. */
+export interface LasEvlrLocation {
+  readonly versionMinor: number;
+  readonly evlrOffset?: number;
+  readonly evlrCount?: number;
+}
+
+/**
+ * Resolve a LAS/LAZ file's CRS from both its VLRs and, for LAS 1.4, its EVLRs.
+ *
+ * LAS 1.4 lets a writer put the coordinate-system record in either block, and
+ * many current deliveries put the WKT in an EVLR after the point data. The
+ * records are merged with the VLRs first, so for each record id a VLR outranks
+ * an EVLR; the specification expects a single CRS record, so the two agreeing
+ * is the normal case and the order only settles a malformed file. WKT then
+ * outranks GeoKeys as for VLRs alone, whichever block each came from.
+ *
+ * `head` holds the file from byte 0 through at least the VLR block. EVLR bytes
+ * are fetched through `read`, never by loading the whole file. A failed EVLR
+ * read leaves the VLR result in place.
+ */
+export async function resolveLasCrs(
+  head: ArrayBuffer,
+  headerSize: number,
+  vlrCount: number,
+  location: LasEvlrLocation,
+  read: ByteRangeReader,
+  fileSize: number,
+): Promise<CrsInfo | null> {
+  const records = collectVlrProjectionRecords(head, headerSize, vlrCount);
+  if (location.versionMinor >= 4 && (location.evlrCount ?? 0) > 0 && (location.evlrOffset ?? 0) > 0) {
+    try {
+      await readEvlrProjectionRecords(read, fileSize, location.evlrOffset!, location.evlrCount!, records);
+    } catch {
+      // An unreadable EVLR block leaves the CRS to the VLRs.
+    }
+  }
+  return crsFromProjectionRecords(records);
+}
+
+/** A {@link ByteRangeReader} over bytes already in memory. */
+export function bufferRangeReader(buffer: ArrayBuffer): ByteRangeReader {
+  return (offset, length) =>
+    Promise.resolve(buffer.slice(offset, Math.min(buffer.byteLength, offset + length)));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -894,11 +1041,10 @@ function readAscii(view: DataView, offset: number, length: number): string {
   return s.trim();
 }
 
-function readNullTerminated(buffer: ArrayBuffer, offset: number, length: number): string {
-  const view = new DataView(buffer);
+function readNullTerminatedBytes(bytes: Uint8Array): string {
   let s = '';
-  for (let i = 0; i < length; i++) {
-    const c = view.getUint8(offset + i);
+  for (let i = 0; i < bytes.length; i++) {
+    const c = bytes[i];
     if (c === 0) break;
     s += String.fromCharCode(c);
   }

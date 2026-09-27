@@ -155,7 +155,7 @@ describe('buildInspectionSummary — honesty invariants', () => {
   it('names the extent as a bounding box and the count as the file record count', () => {
     const s = buildInspectionSummary(meta());
     const e = find(s, 'Bounding-box extent');
-    expect(e?.value).toBe('100.0 ha (not surveyed area)');
+    expect(e?.value).toBe('1000.0 m × 1000.0 m, 100.0 ha (1.00 km²), not surveyed area');
     expect(e?.detail).toBe('15.7 M points delivered (file record count).');
     expect(find(s, 'Coverage')).toBeUndefined();
   });
@@ -188,5 +188,36 @@ describe('buildInspectionSummary — density states the threshold, not the quali
     for (const d of [16, 4, 1]) expect(detail(d)).toMatch(/over the bounding-box footprint/);
     const s = buildInspectionSummary(meta({ density: 16 }), tlsProvenance());
     expect(find(s, 'Point density (all returns)')?.detail).toMatch(/over the bounding-box footprint/);
+  });
+});
+
+describe('buildInspectionSummary: extent and density on a metric 1000 m × 860 m tile', () => {
+  const tile: MetadataInputs = {
+    fileName: 'tile.laz',
+    format: 'LAZ',
+    sourcePointCount: 6_983_766,
+    width: 1000,
+    depth: 860,
+    height: 50,
+    density: 6_983_766 / (1000 * 860),
+    hasRgb: false,
+    hasIntensity: true,
+    hasClassification: true,
+    crsName: 'NAD83(2011) / UTM zone 15N (EPSG:6344)',
+    crsUnit: 'metre',
+    extentUnitStatus: 'confirmed',
+  };
+
+  it('states the extent in metres with the area', () => {
+    const s = buildInspectionSummary(tile);
+    const e = s.findings.find((f) => f.label === 'Bounding-box extent');
+    expect(e?.value).toBe('1000.0 m × 860.0 m, 86.0 ha (0.86 km²), not surveyed area');
+  });
+
+  it('states all-returns density over the bounding box', () => {
+    const s = buildInspectionSummary(tile);
+    const d = s.findings.find((f) => f.label === 'Point density (all returns)');
+    expect(d?.value).toBe('8.1 pts/m²');
+    expect(d?.detail).toMatch(/All-returns density 8\.1 pts\/m² over the bounding-box footprint/);
   });
 });

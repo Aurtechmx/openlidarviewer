@@ -35,6 +35,7 @@
 import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
 import { parseLasHeader } from './lasHeader';
+import { bufferRangeReader, resolveLasCrs, type ByteRangeReader } from './crs';
 import { LoadError } from './loadErrors';
 import { compressedBytesPerPointFloor, validateDeclaredPointCount } from './validateCount';
 import type { LasHeader } from './lasHeader';
@@ -187,6 +188,7 @@ export async function loadLas(
   pointSemantics?: boolean,
 ): Promise<PointCloud> {
   const header = parseLasHeader(buffer);
+  await attachEvlrCrs(header, buffer, bufferRangeReader(buffer), buffer.byteLength);
   // Origin from the floored header min — known before decoding, so records
   // are converted straight into local coordinates.
   const origin = computeOrigin(header.min);
@@ -222,6 +224,29 @@ export async function loadLas(
     raw = decodeLas(buffer, header, origin, stride, onProgress, pointSemantics);
   }
   return toCloud(raw);
+}
+
+/**
+ * Replace a LAS 1.4 header's VLR-only CRS with one that also reads the EVLRs,
+ * where the file declares any. Files without EVLRs are left untouched. The
+ * EVLRs sit after the point data, so they are fetched through `read` with
+ * bounded range reads (see `resolveLasCrs`).
+ */
+export async function attachEvlrCrs(
+  header: LasHeader,
+  head: ArrayBuffer,
+  read: ByteRangeReader,
+  fileSize: number,
+): Promise<void> {
+  if (!(header.evlrCount && header.evlrOffset)) return;
+  header.crs = await resolveLasCrs(
+    head,
+    header.headerSize ?? 0,
+    header.vlrCount ?? 0,
+    header,
+    read,
+    fileSize,
+  );
 }
 
 /** Prefix read for the header peek; the public header is 375 bytes at most. */
@@ -263,6 +288,13 @@ export async function loadLazFromFile(
   const origin = computeOrigin(header.min);
   const toCloud = (raw: RawPoints): PointCloud =>
     cloudFromRaw(raw, header, origin, 'laz', name, stride);
+  // EVLR bytes read for the CRS, recorded in the ledger below.
+  const evlrReads: Array<[number, number]> = [];
+  await attachEvlrCrs(header, head, async (offset, length) => {
+    const bytes = await file.slice(offset, offset + length).arrayBuffer();
+    evlrReads.push([offset, bytes.byteLength]);
+    return bytes;
+  }, file.size);
 
   const { decodeLazPooledFromSource } = await import('./heavy/worker/lazChunkWorkerClient');
   const { LocalFileRangeSource } = await import('./range/LocalFileRangeSource');
@@ -274,6 +306,8 @@ export async function loadLazFromFile(
   // the totals say so rather than hiding it.
   const ledger = createRangeLedger();
   ledger.record(0, head.byteLength);
+  for (const [offset, length] of evlrReads) ledger.record(offset, length);
+  const evlrBytes = evlrReads.reduce((sum, [, length]) => sum + length, 0);
   const stats = {
     fileName: file.name,
     fileBytes: file.size,
@@ -282,10 +316,10 @@ export async function loadLazFromFile(
     lazChunkCount: undefined as number | undefined,
     decodeStride: stride,
     previewBudget,
-    metadataBytes: head.byteLength,
-    rangeRequests: 1,
-    requestedBytes: head.byteLength,
-    uniqueBytesRead: head.byteLength,
+    metadataBytes: head.byteLength + evlrBytes,
+    rangeRequests: 1 + evlrReads.length,
+    requestedBytes: head.byteLength + evlrBytes,
+    uniqueBytesRead: head.byteLength + evlrBytes,
     rereadBytes: 0,
     compressedBytesBeforePreview: undefined as number | undefined,
     compressedBytesRead: 0,

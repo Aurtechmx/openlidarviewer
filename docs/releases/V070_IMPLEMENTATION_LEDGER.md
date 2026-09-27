@@ -77,17 +77,18 @@ the two entries were renumbered when the branches were integrated.
 | L47 | UI | TEST | med | PARTIAL | new | Density point sizing was read as keying a 2D grid on (x, y). It keys on the cloud's two widest axes; a scene mixing orientations is the unmeasured residual. |
 | L48 | PERFORMANCE | TEST | med | FIXED | new | Render-memory telemetry counted position and colour only, so a classified cloud was reported at three quarters of what it used. |
 | L49 | PERFORMANCE | READ | med | MEASURED | new | Compact source attributes are uploaded as Float32: RGB, classification and intensity cost 14 bytes a point more than the source carries. Without a layout change only colour can shrink, by 8 bytes a point. |
+| L172 | LOADER | TEST | high | FIXED | new | A LAS 1.4 file that stores its coordinate system in an extended VLR after the point data opened with no CRS, no units and no vertical datum, and exported with no CRS at all. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 29
+- FIXED: 30
 - MEASURED: 1
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 49
+- total: 50
 
 ## Detail
 
@@ -6670,3 +6671,36 @@ Volume tool now all leave Withheld points out, which is the scope this row
 named.
 
 Covered by `tests/polygonVolumeWithheld.test.ts`.
+
+### L172 · FIXED · LOADER
+
+LAS 1.4 lets a writer put the LASF_Projection records in extended VLRs, which
+sit after the point data, and many current airborne deliveries do exactly that:
+one WKT record, 2112, in an EVLR and nothing in the VLRs. The reader walked the
+VLRs only, so such a file opened as "CRS not established" with units and
+vertical datum unknown. Everything downstream followed from that: Analyse asked
+for a coordinate system, Export raised the CRS and vertical-datum conditions,
+the technical report said "No CRS declared" and "unknown extent", the map sheet
+had no true north, and the exported LAS carried no CRS record.
+
+The header now exposes the first-EVLR offset and count, and `resolveLasCrs` in
+`crs.ts` reads the EVLRs with bounded range reads: each 60-byte header first,
+then the payload only for a LASF_Projection record of at most 1 MiB, at most 64
+records walked, and a length past the file end stops the walk. The records go
+through the same resolution as VLRs. For each record id a VLR outranks an EVLR;
+WKT outranks GeoKeys whichever block each came from. A compound WKT resolves the
+horizontal CRS, its unit and the vertical datum and unit. Both the whole-buffer
+LAS/LAZ load and the ranged LAZ load read the EVLRs. COPC keeps its CRS in a VLR
+by specification and is unchanged.
+
+With the CRS known, the LAS 1.4 export writes it as a 2112 VLR with the WKT bit
+set and the LAS 1.2 export writes GeoKeys, so a re-read gives the same CRS.
+
+The technical report also stopped contradicting itself when units are unknown:
+the extent row states the spans in source units instead of "unknown extent", and
+the density row says the unit is unconfirmed rather than "not reported".
+
+Covered by `tests/lasEvlrCrs.test.ts`, `tests/reportFindings.test.ts`,
+`tests/reportMetadataUnits.test.ts` and `tests/e2e/lasEvlrCrs.spec.ts`, on the
+fixtures `tests/fixtures/evlr-crs-utm15.las` and `.laz` from
+`scripts/gen-evlr-crs-fixture.ts`.

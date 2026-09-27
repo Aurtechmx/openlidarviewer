@@ -86,17 +86,19 @@ describe('buildDatasetSummary — fail closed on an unconfirmed unit', () => {
 });
 
 describe('buildInspectionSummary — fail closed on an unconfirmed unit', () => {
-  it('reports unknown extent rather than a source-unit² area as m²', () => {
+  it('states the spans in source units rather than a source-unit² area as m²', () => {
     const s = buildInspectionSummary(UNCONFIRMED);
     const coverage = s.findings.find((f) => f.label === 'Bounding-box extent');
-    expect(coverage?.value).toBe('unknown extent');
-    expect(s.headline).toMatch(/unknown extent/);
+    expect(coverage?.value).toBe('100.0 × 60.0 source units (unit unconfirmed, not surveyed area)');
+    expect(coverage?.value).not.toMatch(/unknown extent|m²|ha\b/);
+    expect(s.headline).toMatch(/100\.0 × 60\.0 source units/);
   });
 
   it('reports density as unknown and draws no density bar', () => {
     const s = buildInspectionSummary(UNCONFIRMED);
     const d = s.findings.find((f) => f.label === 'Point density (all returns)');
     expect(d?.value).toBe('—');
+    expect(d?.detail).toMatch(/linear unit is unconfirmed/);
     expect(s.densityBar).toBeUndefined();
   });
 });
