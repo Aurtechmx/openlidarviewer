@@ -184,7 +184,7 @@ themselves.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,692 lines and `src/render/Viewer.ts` is 6,092, one hundred and thirty-one lines
+`src/main.ts` is 4,691 lines and `src/render/Viewer.ts` is 6,092, one hundred and thirty-one lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
