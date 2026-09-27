@@ -32,15 +32,15 @@ new pre-registration. Calibration is off.
 
 ## Raw files are not recovered
 
-The open-any-file probe describes a file it cannot open. Recovering points
-from a headerless or unknown-layout file (phase C) was held to criteria fixed
-before any result, in `validation/intake-corpus/`, and did not meet them. It
-is not in this release. [FREEZE: link the recorded phase C result.]
+Recovering point records from a headerless or unknown-layout file is not
+included in 0.7.0. An unknown file is described by the probe, not opened. A
+labelled corpus and acceptance criteria for a future attempt were committed
+before any recovery code, in `validation/intake-corpus/` (#1075).
 
-## EvidenceDEM step 5 is deferred
+## The DEM package is plain GeoTIFF
 
-ED-5 is not in this release. [FREEZE: state what ED-5 covers, from its
-protocol.] The evidence raster is written by default. The sensitivity and
+The rasters in the DEM package are plain GeoTIFF files. None is written in a
+cloud-optimised layout, and the package carries no STAC item. The evidence raster is written by default. The sensitivity and
 attention rasters are written only on request, so a default package is at
 tier T2 and never T3. Sensitivity measures agreement between a fixed set of
 settings, and attention level 0 means no reason was found. Neither is an
