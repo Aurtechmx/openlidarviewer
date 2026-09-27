@@ -89,7 +89,7 @@ describe('Classes page', () => {
     const legendToggle = new FakeEl('input');
     legend.append(legendToggle);
     ws.layoutDesktop({
-      dataLayers: layers, dataHome, classLegend: legend, annotation: n(), clip: n(), processStudio: n(), export: n(),
+      dataLayers: layers, dataHome, classLegend: legend, annotation: n(), clip: n(), analyseHome: n(), export: n(),
     } as never);
     router = createWorkspaceRouter(ws, {
       data: { classes: { title: 'Classes', element: () => legend as unknown as HTMLElement } },
