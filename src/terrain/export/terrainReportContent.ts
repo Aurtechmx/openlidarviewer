@@ -355,6 +355,8 @@ export function buildTerrainReportContent(
         value: provenance.gridExtent,
       },
       { label: 'Analysed basis', value: provenance.analysedBasisLine },
+      { label: 'Interpretation level', value: provenance.sourceInterpretation.interpretationLevel },
+      { label: 'Data basis', value: provenance.sourceInterpretation.dataBasis },
       { label: 'Horizontal CRS', value: provenance.horizontalCrs },
       { label: 'Vertical datum', value: provenance.verticalDatum },
       { label: 'Non-ground classes excluded', value: classesExcluded },

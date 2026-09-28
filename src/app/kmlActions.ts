@@ -240,6 +240,12 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
     // X/Y rectangle is not a ground outline, so it is left out rather than
     // drawn wrong; a conversion failure likewise omits the outline.
     siteOutline: siteOutlineFor(deps, toLonLat),
+    provenance: {
+      generatedAt: new Date().toISOString(),
+      source: geo.name ? deps.baseName(geo.name) : null,
+      crsName: geo.crsName ?? crs?.name ?? null,
+      interpretation: geo.interpretation,
+    },
   };
   const stem = geo.name ? deps.baseName(geo.name) : 'site';
   const { buildKml, KmlCoordinateError } = await deps.loadKmlExport();

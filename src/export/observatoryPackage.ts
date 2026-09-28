@@ -42,6 +42,7 @@
  */
 
 import { buildZip, type ZipEntry } from '../convert/zipStore';
+import { sourceInterpretationLines, sourceInterpretationOf } from '../science/sourceInterpretation';
 import { buildSha256Manifest, sha256Hex } from '../terrain/export/sha256';
 import { buildProcessingManifest, type ProcessingOpInput } from '../science/processingManifest';
 import { buildScientificAnalysisRecord } from '../science/scientificAnalysisRecord';
@@ -66,6 +67,13 @@ export interface ObservatoryPackageOptions {
   readonly softwareName?: string;
   readonly softwareVersion?: string;
   readonly build?: BuildIdentity;
+  /**
+   * The source file's probe interpretation level
+   * (`PointCloud.metadata.interpretationLevel`): null when it opened without a
+   * probe, omitted when the caller did not read it. The data basis comes from
+   * the run record.
+   */
+  readonly interpretationLevel?: string | null;
   readonly crsName?: string | null;
   readonly sourceSha256?: string | null;
   /** The run's Coverage Gain result, written to `candidates.csv` with every term; `null` or omitted writes a header-only file. */
@@ -364,6 +372,7 @@ function stationsJson(record: ObservationRunRecord): string {
 function readmeText(record: ObservationRunRecord, opts: {
   readonly basename: string; readonly generationDateIso: string; readonly build: BuildIdentity;
   readonly softwareVersion: string; readonly crsName: string | null;
+  readonly sourceInterpretation: ReturnType<typeof sourceInterpretationOf>;
 }): string {
   const f = record.frontier;
   const lines = [
@@ -395,6 +404,7 @@ function readmeText(record: ObservationRunRecord, opts: {
     'Identity',
     `  OLV version    ${opts.build.version} (${opts.build.commit}${opts.build.dirty ? '+dirty' : ''})`,
     `  Generated      ${opts.generationDateIso}`,
+    ...sourceInterpretationLines(opts.sourceInterpretation),
     `  Source file    ${record.source.filename ?? 'unknown'}`,
     `  Source digest  ${record.source.sourceDigest ?? 'unavailable'}`,
     `  Basis          ${record.source.basis}`,
@@ -462,10 +472,11 @@ export function buildObservatoryPackage(
   );
 
   const ops: ProcessingOpInput[] = record.methods.map((id) => ({ method: registeredTag(id), params: {} }));
-  const manifest = buildProcessingManifest({ build: softwareVersion, source: record.source.filename, ops });
+  const sourceInterpretation = sourceInterpretationOf(options.interpretationLevel, record.source.basis);
+  const manifest = buildProcessingManifest({ build: softwareVersion, source: record.source.filename, ops, sourceInterpretation });
   entries.push({ name: `${basename}/processing-manifest.json`, bytes: new TextEncoder().encode(`${JSON.stringify(manifest, null, 2)}\n`) });
 
-  const readme = readmeText(record, { basename, generationDateIso, build, softwareVersion, crsName: options.crsName ?? null });
+  const readme = readmeText(record, { basename, generationDateIso, build, softwareVersion, crsName: options.crsName ?? null, sourceInterpretation });
   entries.push({ name: `${basename}/README.md`, bytes: new TextEncoder().encode(readme) });
 
   const fieldBinEntry = entries.find((e) => e.name === `${basename}/field.bin`)!;

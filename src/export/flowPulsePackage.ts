@@ -41,6 +41,7 @@
 
 import { writeAsciiGrid } from '../terrain/export/demAsciiGrid';
 import { buildZip, type ZipEntry } from '../convert/zipStore';
+import { sourceInterpretationLines, sourceInterpretationOf, type SourceInterpretationRecord } from '../science/sourceInterpretation';
 import { buildSha256Manifest, sha256Hex } from '../terrain/export/sha256';
 import {
   buildProcessingManifest,
@@ -99,6 +100,11 @@ export interface FlowPulsePackageOptions {
   readonly sourceSha256?: string | null;
   /** Build identity. Default the stamped {@link BUILD_IDENTITY}. */
   readonly build?: BuildIdentity;
+  /**
+   * Interpretation level of the source file and the data basis the analysed
+   * surface was built on. Omitted records `not-recorded` / `unknown`.
+   */
+  readonly sourceInterpretation?: SourceInterpretationRecord | null;
   /** The downstream path from a click-to-pulse, when the caller ran one. */
   readonly path?: FlowPulsePathInput | null;
   /** The upstream catchment from a catchment query, when the caller ran one. */
@@ -221,6 +227,7 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
   readonly verticalUnitLabel: 'm' | 'ft' | 'units';
   readonly hasPath: boolean;
   readonly hasCatchment: boolean;
+  readonly sourceInterpretation: SourceInterpretationRecord;
 }): string {
   const r = result.record;
   const s = result.summary;
@@ -248,6 +255,7 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     'Identity',
     `  OLV version    ${opts.build.version} (${opts.build.commit}${opts.build.dirty ? '+dirty' : ''})`,
     `  Generated      ${opts.generationDateIso}`,
+    ...sourceInterpretationLines(opts.sourceInterpretation),
     `  Layer          ${r.source.layerId ?? 'unknown'}`,
     `  Source file    ${r.source.filename ?? 'unknown'}`,
     `  Source digest  ${r.source.sourceDigest ?? 'unavailable'}`,
@@ -331,6 +339,7 @@ export function buildFlowPulsePackage(
   const build = options.build ?? BUILD_IDENTITY;
   const softwareName = options.softwareName ?? 'OpenLiDARViewer';
   const softwareVersion = options.softwareVersion ?? buildIdentityProvenance(build);
+  const sourceInterpretation = options.sourceInterpretation ?? sourceInterpretationOf(undefined, undefined);
   const ox = options.worldOrigin?.x ?? 0;
   const oy = options.worldOrigin?.y ?? 0;
   const grid = result.grid;
@@ -432,6 +441,7 @@ export function buildFlowPulsePackage(
     build: softwareVersion,
     source: result.record.source.filename,
     ops: manifestOps(opsSource),
+    sourceInterpretation,
   });
   entries.push({
     name: `${basename}-processing-manifest.json`,
@@ -445,7 +455,7 @@ export function buildFlowPulsePackage(
   const readme = buildFlowReadme(result, {
     basename, generationDateIso, softwareName, softwareVersion, build,
     crsName: options.crsName ?? null, hasWkt: !!options.wkt,
-    verticalUnitLabel: options.verticalUnitLabel ?? 'units', hasPath, hasCatchment,
+    verticalUnitLabel: options.verticalUnitLabel ?? 'units', hasPath, hasCatchment, sourceInterpretation,
   });
   entries.push({
     name: `${basename}-README.txt`,

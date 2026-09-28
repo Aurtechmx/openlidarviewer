@@ -22,7 +22,12 @@ import { cancelObservatoryJob, computeObservatoryInWorker } from './observatoryW
 export type ObservatoryRunnerState =
   | { readonly phase: 'idle' }
   | { readonly phase: 'running' }
-  | { readonly phase: 'committed'; readonly outcome: ObservatoryRunOutcome }
+  | {
+      readonly phase: 'committed';
+      readonly outcome: ObservatoryRunOutcome;
+      /** The source's probe verdict at run time (null: opened without a probe), for export provenance. */
+      readonly interpretationLevel?: string | null;
+    }
   | { readonly phase: 'stale' };
 
 export interface ObservatoryRunnerDeps {
@@ -79,6 +84,7 @@ export function createObservatoryRunner(deps: ObservatoryRunnerDeps): Observator
       return state;
     }
     setState({ phase: 'running' });
+    const interpretationLevel = cloud.metadata?.interpretationLevel ?? null;
 
     const opts = deps.buildOptions();
     const options: ObservatoryRunOptions = {
@@ -93,14 +99,17 @@ export function createObservatoryRunner(deps: ObservatoryRunnerDeps): Observator
       // against the same snapshot when it arrives.
       void computeObservatoryInWorker(cloud, options)
         .catch(() => runObservatoryOverCloud(cloud, options))
-        .then((outcome) => { commit(myToken, datasetId, crsRevision, outcome, true); });
+        .then((outcome) => { commit(myToken, datasetId, crsRevision, outcome, true, interpretationLevel); });
       return state;
     }
-    commit(myToken, datasetId, crsRevision, deps.compute(cloud, options));
+    commit(myToken, datasetId, crsRevision, deps.compute(cloud, options), false, interpretationLevel);
     return state;
   }
 
-  function commit(myToken: number, datasetId: string | null, crsRevision: number, outcome: ObservatoryRunOutcome, late = false): void {
+  function commit(
+    myToken: number, datasetId: string | null, crsRevision: number, outcome: ObservatoryRunOutcome,
+    late = false, interpretationLevel: string | null = null,
+  ): void {
     // Revalidate (Snapshot -> Await -> Revalidate -> Commit): a superseding
     // run() or abortAndClearCache() bumped `token` past `myToken`, or the
     // active dataset/CRS moved on while this ran — either way, this result
@@ -112,7 +121,7 @@ export function createObservatoryRunner(deps: ObservatoryRunnerDeps): Observator
       if (!late || myToken === token) setState({ phase: 'stale' });
       return;
     }
-    setState({ phase: 'committed', outcome });
+    setState({ phase: 'committed', outcome, interpretationLevel });
   }
 
   function getState(): ObservatoryRunnerState {

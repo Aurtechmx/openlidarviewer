@@ -22,7 +22,7 @@ const PROV: ExportProvenance = {
   generated: '2026-06-05T00:00:00.000Z', source: 'site',
   horizontalCrs: 'WGS 84 / UTM zone 11N', crsKnown: true, verticalDatum: 'NAVD88', datumKnown: true,
   coverageMode: 'full',
-  gridExtent: 'full', analysedBasis: null, analysedBasisLine: 'unknown', contourIntervalM: 10, contourStyle: 'smooth', contourStyleLabel: 'Smooth',
+  gridExtent: 'full', analysedBasis: null, analysedBasisLine: 'unknown', sourceInterpretation: { interpretationLevel: 'not-recorded', dataBasis: 'unknown' }, contourIntervalM: 10, contourStyle: 'smooth', contourStyleLabel: 'Smooth',
   contourRequestedIntervalM: null,
   contourMethod: null, contourGeneralizeToleranceCells: null, deliverablePurpose: null,
   surfaceQuality: 'Good', exportReadiness: 'Ready', exportReason: '',

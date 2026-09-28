@@ -60,6 +60,8 @@ export interface ObservatoryCloudInput {
   readonly positions: Float32Array;
   readonly sourceOrigin: readonly [number, number, number];
   readonly acquisitionStations?: AcquisitionStationSet;
+  /** The loader's probe verdict, carried into the export package's provenance only. */
+  readonly metadata?: { readonly interpretationLevel?: string };
   bounds(): { readonly min: readonly [number, number, number]; readonly max: readonly [number, number, number] };
 }
 

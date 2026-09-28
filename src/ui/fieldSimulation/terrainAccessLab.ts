@@ -31,6 +31,7 @@
  * "safe", "drivable" or "passable" — see `renderTerrainAccessRunCard`.
  */
 
+import type { SourceInterpretationRecord } from '../../science/sourceInterpretation';
 import { showBusyScan } from '../busyScan';
 import { el } from '../dom';
 import { openModal, type ModalHandle } from '../Modal';
@@ -76,6 +77,8 @@ import type { SurfaceGrid } from '../../terrain/surface/buildDsm';
 
 /** The analysed surface and the frame facts a Terrain Access run needs. */
 export interface TerrainAccessLabInput {
+  /** Probe interpretation level and data basis of the analysed scan, for export provenance. */
+  readonly sourceInterpretation?: SourceInterpretationRecord;
   readonly dtm: DtmGrid;
   readonly scale: HorizontalScale;
   readonly layerId: string | null;
@@ -223,6 +226,8 @@ export type TerrainAccessExportOutcome =
  * its README.
  */
 export interface TerrainAccessGeoref {
+  /** Probe interpretation level and data basis of the analysed scan, for export provenance. */
+  readonly sourceInterpretation?: SourceInterpretationRecord;
   readonly worldOrigin: { readonly x: number; readonly y: number } | null;
   readonly crsName: string | null;
   readonly wkt: string | null;
@@ -249,6 +254,7 @@ export function buildTerrainAccessExport(
     worldOrigin: georef?.worldOrigin ?? null,
     crsName: georef?.crsName ?? null,
     wkt: georef?.wkt ?? null,
+    sourceInterpretation: georef?.sourceInterpretation ?? null,
   });
   return { ok: true, bytes, filename: `${basename}-terrain-access.zip` };
 }
@@ -678,6 +684,7 @@ function mountTerrainAccessInteractive(
             : null,
           crsName: input.crsName ?? null,
           wkt: input.wkt ?? null,
+          sourceInterpretation: input.sourceInterpretation,
         } : null,
       );
       if (!built.ok) {

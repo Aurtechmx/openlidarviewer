@@ -42,7 +42,7 @@ describe('terrainAnalysisRunner hands the facts to Contour Studio', () => {
     expect(f.capabilities?.contours?.readiness).toBe('review');
     // The basis the stamp prints: the gather's count of the declared total,
     // under the facts' coverage, never the grid's extent flag.
-    expect(f.analysedBasis).toEqual({ analysedPointCount: 400, declaredPointCount: 1_000_000, coverage: 'sampled', loadStride: 2500 });
+    expect(f.analysedBasis).toEqual({ analysedPointCount: 400, declaredPointCount: 1_000_000, coverage: 'sampled', loadStride: 2500, interpretationLevel: null });
   });
 
   it('the frame mints an authorization that is fresh now and stale after the facts change', async () => {

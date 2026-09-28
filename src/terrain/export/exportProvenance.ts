@@ -78,6 +78,7 @@ import { analysedBasisLine, type AnalysedBasis } from './analysedBasis';
 import type { TransformProvenance } from '../../convert/transformProvenance';
 import type { OrganizedRangeSet } from '../../model/OrganizedRange';
 import { sourceTopologyRecord } from '../../science/sourceTopology';
+import { sourceInterpretationOf, type SourceInterpretationRecord } from '../../science/sourceInterpretation';
 export { NOT_SURVEY_GRADE_NOTE };
 
 /**
@@ -244,6 +245,8 @@ export interface ExportProvenance {
   readonly analysedBasis: AnalysedBasis | null;
   /** The one printed sentence for {@link analysedBasis}; 'unknown' when null. */
   readonly analysedBasisLine: string;
+  /** Probe interpretation level and data basis, from {@link analysedBasis}. */
+  readonly sourceInterpretation: SourceInterpretationRecord;
   /**
    * Contour interval of the levels actually emitted (source units), or null when
    * none was chosen. Coarser than {@link contourRequestedIntervalM} when an
@@ -564,6 +567,7 @@ export function buildExportProvenance(
     coverageMode,
     analysedBasis: opts.analysedBasis ?? null,
     analysedBasisLine: analysedBasisLine(opts.analysedBasis),
+    sourceInterpretation: sourceInterpretationOf(opts.analysedBasis?.interpretationLevel, opts.analysedBasis?.coverage),
     contourIntervalM: intervalM,
     contourRequestedIntervalM:
       requestedIntervalM != null && requestedIntervalM !== intervalM ? requestedIntervalM : null,
@@ -885,6 +889,7 @@ export function processingManifestFromProvenance(
     // A cloud that never carried an acquisition grid records nothing here, which
     // is not the same as recording that its identity is intact.
     sourceTopology: sourceTopologyRecord(organizedRange),
+    sourceInterpretation: p.sourceInterpretation,
   });
 }
 
@@ -924,6 +929,8 @@ export function provenanceLines(p: ExportProvenance): string[] {
     kv('Vertical datum', p.verticalDatum),
     kv('Coverage', p.coverageMode),
     kv('Analysed basis', p.analysedBasisLine),
+    kv('Interpretation', p.sourceInterpretation.interpretationLevel),
+    kv('Data basis', p.sourceInterpretation.dataBasis),
     kv('Contour interval', contourIntervalValue),
     kv('Contour style', p.contourStyleLabel),
     kv('Surface quality', p.surfaceQuality),
@@ -1056,6 +1063,7 @@ export function provenanceJson(p: ExportProvenance): Record<string, unknown> {
     coverageMode: p.coverageMode,
     analysedBasis: p.analysedBasis,
     analysedBasisLine: p.analysedBasisLine,
+    sourceInterpretation: p.sourceInterpretation,
     contourIntervalM: p.contourIntervalM,
     contourRequestedIntervalM: p.contourRequestedIntervalM,
     contourIntervalUnit: p.contourIntervalUnit ?? null,

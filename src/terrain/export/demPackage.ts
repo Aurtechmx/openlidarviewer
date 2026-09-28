@@ -498,6 +498,8 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     `Coverage mode`,
     `  ${coverageLabel(p.coverageMode)}`,
     `  Analysed basis: ${p.analysedBasisLine}`,
+    `  Interpretation level: ${p.sourceInterpretation.interpretationLevel}`,
+    `  Data basis: ${p.sourceInterpretation.dataBasis}`,
     ``,
     `Quality gate`,
   );

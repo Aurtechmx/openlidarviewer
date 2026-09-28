@@ -84,6 +84,12 @@ export async function exportMeasurementsFile(
     // are nominal, not metres — the evidence note then says so (M1). An angular
     // frame is unverified for a stronger reason: no scalar could make it metres.
     unitsVerified: measure.crsKnown && !measure.geographicCrs,
+    provenance: {
+      generatedAt: deps.now(),
+      source: geo.name ? deps.baseName(geo.name) : null,
+      crsName: geo.crsName,
+      interpretation: geo.interpretation,
+    },
   };
   const { measurementsToGeoJSON, measurementsToCsv } = await deps.loadMeasurementExport();
   const text =

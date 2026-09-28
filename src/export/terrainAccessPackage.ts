@@ -33,6 +33,7 @@
 
 import { writeAsciiGrid } from '../terrain/export/demAsciiGrid';
 import { buildZip, type ZipEntry } from '../convert/zipStore';
+import { sourceInterpretationLines, sourceInterpretationOf, type SourceInterpretationRecord } from '../science/sourceInterpretation';
 import { buildSha256Manifest } from '../terrain/export/sha256';
 import { buildProcessingManifest, type ManifestParamValue, type ProcessingOpInput } from '../science/processingManifest';
 import { buildScientificAnalysisRecord } from '../science/scientificAnalysisRecord';
@@ -65,6 +66,11 @@ export interface TerrainAccessPackageOptions {
   /** SHA-256 of the source scan, when the loader verified one. */
   readonly sourceSha256?: string | null;
   readonly build?: BuildIdentity;
+  /**
+   * Interpretation level of the source file and the data basis the analysed
+   * surface was built on. Omitted records `not-recorded` / `unknown`.
+   */
+  readonly sourceInterpretation?: SourceInterpretationRecord | null;
 }
 
 const NO_DATA = -9999;
@@ -148,6 +154,7 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
   readonly build: BuildIdentity;
   readonly crsName: string | null;
   readonly hasWkt: boolean;
+  readonly sourceInterpretation: SourceInterpretationRecord;
 }): string {
   const r = result.record;
   const d = result.diagnostics;
@@ -175,6 +182,7 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
     'Identity',
     `  OLV version    ${opts.build.version} (${opts.build.commit}${opts.build.dirty ? '+dirty' : ''})`,
     `  Generated      ${opts.generationDateIso}`,
+    ...sourceInterpretationLines(opts.sourceInterpretation),
     `  Layer          ${r.source.layerId ?? 'unknown'}`,
     `  Source file    ${r.source.filename ?? 'unknown'}`,
     `  Source digest  ${r.source.sourceDigest ?? 'unavailable'}`,
@@ -247,6 +255,7 @@ export function buildTerrainAccessPackage(
   const generationDateIso = options.generationDateIso ?? new Date().toISOString();
   const build = options.build ?? BUILD_IDENTITY;
   const softwareVersion = options.softwareVersion ?? buildIdentityProvenance(build);
+  const sourceInterpretation = options.sourceInterpretation ?? sourceInterpretationOf(undefined, undefined);
   const ox = options.worldOrigin?.x ?? 0;
   const oy = options.worldOrigin?.y ?? 0;
   const grid = result.grid;
@@ -309,6 +318,7 @@ export function buildTerrainAccessPackage(
     build: softwareVersion,
     source: result.record.source.filename,
     ops: manifestOps(result),
+    sourceInterpretation,
   });
   entries.push({
     name: `${basename}-processing-manifest.json`,
@@ -316,7 +326,7 @@ export function buildTerrainAccessPackage(
   });
 
   const readme = buildTerrainAccessReadme(result, {
-    basename, generationDateIso, build, crsName: options.crsName ?? null, hasWkt: !!options.wkt,
+    basename, generationDateIso, build, crsName: options.crsName ?? null, hasWkt: !!options.wkt, sourceInterpretation,
   });
   entries.push({
     name: `${basename}-README.txt`,

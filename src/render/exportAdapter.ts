@@ -20,6 +20,7 @@
  * `docs/architecture/architecture-map.md`).
  */
 
+import { sourceInterpretationOf } from '../science/sourceInterpretation';
 import type { ColorMode } from './colorModes';
 import type { PointCloud } from '../model/PointCloud';
 import type { StreamingSource } from './streaming/StreamingSource';
@@ -424,6 +425,18 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       let total = 0;
       for (const { cloud } of visibleEntries()) total += cloud.pointCount;
       return total;
+    },
+    sourceInterpretation() {
+      if (host.streaming()) return sourceInterpretationOf(undefined, 'resident-only');
+      const records = visibleEntries().map(({ cloud }) => {
+        const declared = cloud.declaredPointCount;
+        const basis = declared != null && declared > cloud.pointCount ? 'sampled' : declared != null ? 'full' : null;
+        return sourceInterpretationOf(cloud.metadata?.interpretationLevel ?? null, basis);
+      });
+      if (records.length === 0) return null;
+      const same = <K extends 'interpretationLevel' | 'dataBasis'>(k: K) =>
+        records.every((r) => r[k] === records[0]![k]) ? records[0]![k] : 'mixed';
+      return { interpretationLevel: same('interpretationLevel'), dataBasis: same('dataBasis') };
     },
     crsLabel(): { name: string; unit: string; epsg?: number } | null {
       // read off the abstract `cloud.crs()` so both COPC and

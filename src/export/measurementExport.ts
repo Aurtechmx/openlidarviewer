@@ -21,6 +21,7 @@ import type { Measurement, Vec3 } from '../render/measure/types';
 import { isComplete } from '../render/measure/types';
 import { evidenceNote, evidenceStatus, unverifiedUnitsCaveat } from '../validation/exportEvidenceNote';
 import { crsUrn } from './crsIdentifier';
+import { lightProvenance, type LightProvenanceInput } from './lightProvenance';
 import {
   distance,
   polylineLength,
@@ -62,6 +63,12 @@ export interface MeasurementExportContext {
    * (pass-6 M1). Defaults to true so every georeferenced caller is unchanged.
    */
   readonly unitsVerified?: boolean;
+  /**
+   * Build, source, CRS, interpretation level and data basis for the file.
+   * Written as a `provenance` foreign member of the GeoJSON FeatureCollection
+   * (RFC 7946 section 6.1). The CSV has no metadata slot and does not carry it.
+   */
+  readonly provenance?: LightProvenanceInput;
 }
 
 /** A finite number rounded to `d` decimals, or null when not finite. */
@@ -296,6 +303,7 @@ export function measurementsToGeoJSON(
   // carry — and an `evidence: ""` member would be a field that says nothing
   // where a reader expects a statement. The key is omitted instead.
   if (evidence) fc.evidence = evidence;
+  if (ctx.provenance) fc.provenance = lightProvenance(ctx.provenance);
   return JSON.stringify(fc, null, 2);
 }
 

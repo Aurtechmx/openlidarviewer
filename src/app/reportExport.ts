@@ -31,6 +31,7 @@
  * (see `docs/architecture/architecture-map.md`).
  */
 
+import { sourceInterpretationOf, type SourceInterpretationRecord } from '../science/sourceInterpretation';
 import { footprintMetres } from '../report/reportFootprint';
 import type { Footprint } from '../report/reportFootprint';
 import { spatialContextFrom } from '../geo/SpatialContext';
@@ -133,6 +134,8 @@ export interface GeoExportContext {
   origin: readonly [number, number, number];
   crsName: string | undefined;
   name: string | null;
+  /** Probe interpretation level and data basis of the active scan, for export provenance. */
+  interpretation?: SourceInterpretationRecord;
 }
 
 /**
@@ -188,10 +191,19 @@ export function exportGeoContext(deps: ReportExportDeps): GeoExportContext {
   if (deps.scans.activeId) {
     const c = viewer.getCloud(deps.scans.activeId);
     // SOURCE frame (float64-transform.md step 2): sessions save + import here.
-    if (c) return { origin: c.sourceOrigin, crsName, name: c.name };
+    if (c) {
+      const declared = c.declaredPointCount;
+      const basis = declared != null && declared > c.pointCount ? 'sampled' : declared != null ? 'full' : null;
+      return {
+        origin: c.sourceOrigin, crsName, name: c.name,
+        interpretation: sourceInterpretationOf(c.metadata?.interpretationLevel ?? null, basis),
+      };
+    }
   }
   const sc = viewer.streamingCloud;
-  if (sc) return { origin: sc.renderOrigin, crsName, name: sc.name };
+  if (sc) {
+    return { origin: sc.renderOrigin, crsName, name: sc.name, interpretation: sourceInterpretationOf(undefined, 'resident-only') };
+  }
   return { origin: [0, 0, 0], crsName: undefined, name: null };
 }
 

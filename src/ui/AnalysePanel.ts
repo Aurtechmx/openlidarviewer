@@ -27,6 +27,7 @@
  * Mounted in `main.ts` next to the Measurements and Annotations panels.
  */
 
+import { sourceInterpretationOf, type SourceInterpretationRecord } from '../science/sourceInterpretation';
 import { showBusyScan, clearBusyScan, createBusyScan, createBusyScanController, type BusyScanController } from './busyScan';
 import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
 import type { SensitivityMemberGrid, runDemSensitivity as RunDemSensitivity } from '../terrain/export/demSensitivity';
@@ -1083,6 +1084,8 @@ export class AnalysePanel {
     readonly filename: string | null;
     readonly sceneUpAxis: 'z' | 'y' | null;
     readonly overlayHost: SceneOverlayHost | null;
+    /** Probe interpretation level and data basis of the analysed scan, for export provenance. */
+    readonly sourceInterpretation: SourceInterpretationRecord;
     readonly isStale: () => boolean;
   } | null {
     const result = this.currentResultForProvenance();
@@ -1109,6 +1112,7 @@ export class AnalysePanel {
       filename: this._cb.getExportBasename?.() ?? null,
       sceneUpAxis: ctx.sceneUpAxis ?? null,
       overlayHost: this._cb.getDerivedLayerHost?.() ?? null,
+      sourceInterpretation: sourceInterpretationOf(this._contourFrame?.analysedBasis?.interpretationLevel, this._contourFrame?.analysedBasis?.coverage),
       isStale: () => this._freshnessBreach() !== null || this._resultScanId !== scanId,
     };
   }
@@ -1133,6 +1137,8 @@ export class AnalysePanel {
     readonly filename: string | null;
     readonly sceneUpAxis: 'z' | 'y' | null;
     readonly overlayHost: SceneOverlayHost | null;
+    /** Probe interpretation level and data basis of the analysed scan, for export provenance. */
+    readonly sourceInterpretation: SourceInterpretationRecord;
     readonly isStale: () => boolean;
   } | null {
     const result = this.currentResultForProvenance();
@@ -1167,6 +1173,7 @@ export class AnalysePanel {
       filename: this._cb.getExportBasename?.() ?? null,
       sceneUpAxis: ctx.sceneUpAxis ?? null,
       overlayHost: this._cb.getDerivedLayerHost?.() ?? null,
+      sourceInterpretation: sourceInterpretationOf(this._contourFrame?.analysedBasis?.interpretationLevel, this._contourFrame?.analysedBasis?.coverage),
       isStale: () => this._freshnessBreach() !== null || this._resultScanId !== scanId,
     };
   }

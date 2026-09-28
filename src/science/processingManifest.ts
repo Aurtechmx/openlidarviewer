@@ -33,6 +33,7 @@
 
 import { canonicalize, sha256 } from '../render/measure/auditLog';
 import { methodRef, methodTag } from './methodRegistry';
+import { SOURCE_INTERPRETATION_METHOD_ID, type SourceInterpretationRecord } from './sourceInterpretation';
 
 /** The schema version of {@link ProcessingManifest}. Bump on shape change. */
 export const PROCESSING_MANIFEST_SCHEMA = 1;
@@ -147,6 +148,14 @@ export function sourceTopologyOp(record: SourceTopologyRecord): ProcessingOpInpu
   };
 }
 
+/** The processing-manifest op for the record. Shaped like any other op so every reader handles it. */
+export function sourceInterpretationOp(record: SourceInterpretationRecord): ProcessingOpInput {
+  return {
+    method: methodTag(methodRef(SOURCE_INTERPRETATION_METHOD_ID)),
+    params: { interpretationLevel: record.interpretationLevel, dataBasis: record.dataBasis },
+  };
+}
+
 /** One chained op inside a built manifest. */
 export interface ProcessingManifestOp extends ProcessingOpInput {
   /** Position in the chain, 0-based — the pipeline order. */
@@ -184,6 +193,13 @@ export interface ProcessingManifestInput {
    * to the one the same inputs produced before this field existed.
    */
   readonly sourceTopology?: SourceTopologyRecord | null;
+  /**
+   * The format probe interpretation level and the data basis of the result
+   * (see `sourceInterpretation.ts`). When supplied it becomes the first op,
+   * ahead of the topology op: it describes the file as it was read. Omitted
+   * adds no op, so a manifest built without it is byte-identical to before.
+   */
+  readonly sourceInterpretation?: SourceInterpretationRecord | null;
 }
 
 /** Result of {@link verifyProcessingManifest}. */
@@ -234,9 +250,11 @@ function foldOp(prevHash: string, seq: number, op: ProcessingOpInput): string {
  */
 export function buildProcessingManifest(input: ProcessingManifestInput): ProcessingManifest {
   let prev = envelopeGenesis(PROCESSING_MANIFEST_SCHEMA, input.build, input.source);
-  const inputOps: ProcessingOpInput[] = input.sourceTopology
-    ? [sourceTopologyOp(input.sourceTopology), ...input.ops]
-    : [...input.ops];
+  const inputOps: ProcessingOpInput[] = [
+    ...(input.sourceInterpretation ? [sourceInterpretationOp(input.sourceInterpretation)] : []),
+    ...(input.sourceTopology ? [sourceTopologyOp(input.sourceTopology)] : []),
+    ...input.ops,
+  ];
   const ops: ProcessingManifestOp[] = inputOps.map((op, seq) => {
     const hash = foldOp(prev, seq, op);
     prev = hash;
