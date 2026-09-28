@@ -473,7 +473,7 @@ export class Stage {
     this._statusBanner.setAttribute('aria-live', 'polite');
     this._statusBanner.setAttribute('aria-atomic', 'true');
 
-    // "Open scan from device" — a native file picker so a phone, which has no
+    // "Open scan" — a native file picker so a phone, which has no
     // drag-and-drop, can open a scan too. The picker accepts any file; the
     // format is sniffed and validated on load. (No `accept` filter: iOS greys
     // out files with point-cloud extensions it does not recognise.)
@@ -489,8 +489,8 @@ export class Stage {
     const openButton = el('button', {
       className: 'olv-open-btn',
       type: 'button',
-      text: 'Open scan from device',
-      title: 'Choose a point-cloud file from your device — or drag one onto the page',
+      text: 'Open scan', // registry name, held by ceNames.spec.ts
+      title: 'Choose a point-cloud file from your device, or drag one onto the page',
     });
     openButton.addEventListener('click', () => fileInput.click());
     this._emptyTitles.set(openButton, openButton.title);
@@ -668,7 +668,7 @@ export class Stage {
       ariaLabel: 'Workflow: open, move, measure, export',
     }, [stepsList]);
 
-    // Convert: a small peer chip beside the primary "Open scan from device"
+    // Convert: a small peer chip beside the primary "Open scan"
     // button (promoted from a buried text link). Clicking it opens the batch
     // converter directly — it is inherently batch, no scan needs to load.
     const convertChip = el('button', {
@@ -938,7 +938,7 @@ export class Stage {
     if (lower.includes('cors') || lower.includes('cross-origin')) {
       return (
         'This file\'s host blocks browser access. Try downloading the file ' +
-        'and using Open scan from device, or ask the host to allow CORS.'
+        'and using Open scan, or ask the host to allow CORS.'
       );
     }
     if (lower.includes('failed to fetch') || lower.includes('networkerror')) {
@@ -957,7 +957,7 @@ export class Stage {
       return 'No file found at this URL. Check the path and try again.';
     }
     if (lower.includes('403') || lower.includes('forbidden')) {
-      return 'The host refused access. Check the link or use Open scan from device.';
+      return 'The host refused access. Check the link or use Open scan.';
     }
     if (lower.includes('aborted')) {
       return 'Cancelled.';

@@ -16,11 +16,11 @@
 
 .olv-observatory-section-title {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--olv-text-muted, #9aa3ad);
+  color: var(--text-dim);
 }
 
 .olv-observatory-station-row {
@@ -36,8 +36,8 @@
   gap: 4px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(34, 220, 255, 0.12);
-  font-size: 11px;
+  background: var(--accent-soft);
+  font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.03em;
   white-space: nowrap;

@@ -329,9 +329,10 @@ export class NavBar {
     // competing for primary attention.
     const resetBtn = el('button', {
       className: 'olv-mode-reset',
-      title: 'Frame the whole scan (R) — reset the camera to fit the entire cloud',
-      ariaLabel: 'Frame the whole scan',
+      title: 'Frame all (R): fit the camera to the entire scan',
+      ariaLabel: 'Frame all', // registry name, held by actionNames.test.ts
     });
+    resetBtn.setAttribute('aria-keyshortcuts', 'R');
     resetBtn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
 <circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/>
 <circle cx="12" cy="12" r="2" fill="currentColor"/>
@@ -420,12 +421,15 @@ export class NavBar {
       // Inspect tool in v0.4.4) — skip the key chip and shortcut hint then.
       const key = CAMERA_PRESET_KEY[name];
       const label = CAMERA_PRESET_LABEL[name];
+      // The chip shows the preset word; its name is the registry name.
+      const viewName = `${label} view`; // cameraPresetTitle, held by actionNames.test.ts
       const btn = el('button', {
         className: 'olv-cam-chip',
-        title: key ? `${label} view — keyboard shortcut: ${key}` : `${label} view`,
-        ariaLabel: key ? `${label} camera view (${key})` : `${label} camera view`,
+        title: key ? `${viewName}. Key: ${key}` : viewName,
+        ariaLabel: viewName,
       });
       if (key) {
+        btn.setAttribute('aria-keyshortcuts', key);
         btn.append(el('span', { className: 'olv-cam-chip-key', text: key }));
       }
       btn.append(el('span', { className: 'olv-cam-chip-label', text: label }));
@@ -453,8 +457,8 @@ export class NavBar {
       const label = STANDARD_VIEW_LABEL[view];
       const btn = el('button', {
         className: 'olv-cam-chip',
-        title: `${label} view — look straight at the ${label.toLowerCase()} face`,
-        ariaLabel: `${label} standard view`,
+        title: `${label} view (axis aligned): look straight at the ${label.toLowerCase()} face`,
+        ariaLabel: `${label} view (axis aligned)`, // standardViewTitle, held by actionNames.test.ts
       });
       btn.append(el('span', { className: 'olv-cam-chip-label', text: label }));
       btn.addEventListener('click', () => {
@@ -468,8 +472,8 @@ export class NavBar {
     // as a mode, not another one-shot snap.
     const orthoToggle = el('button', {
       className: 'olv-cam-chip olv-ortho-toggle',
-      title: 'Orthographic (parallel) projection — removes perspective so walls and floors read flat for visual inspection (measurements are unaffected: they use the 3D points, not the projection)',
-      ariaLabel: 'Toggle orthographic projection',
+      title: 'Orthographic projection: removes perspective so walls and floors read flat. Measurements use the 3D points and are unaffected.',
+      ariaLabel: 'Orthographic projection', // registry name, held by actionNames.test.ts
     });
     orthoToggle.setAttribute('aria-pressed', 'false');
     orthoToggle.append(el('span', { className: 'olv-cam-chip-label', text: 'Ortho' }));
@@ -488,8 +492,8 @@ export class NavBar {
     // off returns the scene the user had. State lives with the caller.
     const planToggle = el('button', {
       className: 'olv-cam-chip olv-plan-toggle',
-      title: 'Plan view — look straight down in parallel projection with the hand tool on the drag; turning it off restores the view you had',
-      ariaLabel: 'Toggle plan view',
+      title: 'Plan view: look straight down in parallel projection with the hand tool on the drag. Turning it off restores your view.',
+      ariaLabel: 'Plan view', // registry name, held by actionNames.test.ts
     });
     planToggle.setAttribute('aria-pressed', 'false');
     planToggle.append(el('span', { className: 'olv-cam-chip-label', text: 'Plan' }));

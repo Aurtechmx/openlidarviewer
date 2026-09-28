@@ -194,6 +194,31 @@ The dock's Probe (`tool.probe`) has no registry descriptor, so the Tools
 launcher skips it (`ui/toolLauncher.ts:115`). It is reachable from the dock
 only and is not a duplicate.
 
+### Labels after C1
+
+C1 applied CE-NAME-01 to the rows above. The name table is
+`ui/actionNames.ts`, keyed by id in `ui/actionDescriptors.ts`. The registry
+descriptors, the canvas menu, the Data home and the Measure panel read it; the
+dock, the NavBar and the empty state write the names out and tests hold them to
+it. Actions
+with a control but no palette entry (rows 8, 14, 23, 24 and 25, plus Probe and
+Help) have a descriptor in `SURFACE_DESCRIPTORS` in `ui/actionDescriptors.ts`. No control was removed.
+
+| Action | Name | Changed copies |
+| --- | --- | --- |
+| `camera.frame-all` | Frame all | Dock "Frame" (the dock button now runs `camera.frame-all`); NavBar name "Frame the whole scan"; canvas menu "Frame scan" |
+| `tool.inspect` | Inspect | Palette and launcher "Inspect point" |
+| `tool.snapshot` | Save a snapshot | Dock "Snapshot" |
+| `camera.top` and the other presets | Top view, Iso view, Oblique view, Planar view | NavBar names "Top camera view (T)" and so on; the chips still show the first word |
+| `camera.view-*` | Top view (axis aligned) and so on | NavBar names "Top standard view" and so on; canvas menu "Top view", "Front view" |
+| `camera.orthographic` | Orthographic projection | NavBar name "Toggle orthographic projection"; the chip shows "Ortho" |
+| `camera.plan-view` | Plan view | NavBar name "Toggle plan view"; the chip shows "Plan" |
+| `scan.open` | Open scan | Empty state "Open scan from device" |
+| `session.export` | Export session | Measure panel "Export" |
+
+A chip that shows a shorter form shows the start of the name, and its
+accessible name is the full name.
+
 ## 5. Dead ends
 
 A dead end is a surface with no visible, labelled way back (CE-EXIT-03).
@@ -349,7 +374,10 @@ presentation layer (CE-STRIP-00).
 
 A second glyph collision exists besides `blocked` and `withheld` in
 `ui/stateChip.ts:43`: the three reconstructed-origin states in
-`ui/observatory/stateChip.ts:30` share one glyph and one word.
+`ui/observatory/stateChip.ts:30` share one glyph and one word. C1 gives
+`withheld` its own glyph (⊖) and colour token, and the three reconstructed
+confidences a disc filled by three quarters, a half and a quarter (◕ ◑ ◔);
+the word stays the same.
 
 ## 8. Journey baseline
 

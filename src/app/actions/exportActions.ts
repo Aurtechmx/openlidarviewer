@@ -10,6 +10,7 @@ import { renderExportHealthPanel } from '../../ui/scanStoryViews';
 import { openModal } from '../../ui/Modal';
 import { el } from '../../ui/dom';
 import { loadReportVerifier } from '../../lazyChunks';
+import { actionTitle } from '../../ui/actionDescriptors';
 
 export interface ExportActionDeps {
   /**
@@ -28,7 +29,7 @@ export function contributeExportActions(deps: ExportActionDeps): Action[] {
   actions.push(
     {
       id: 'tool.snapshot',
-      title: 'Save a snapshot',
+      title: actionTitle('tool.snapshot'),
       section: 'Export',
       hint: 'Write the current view to a PNG, with the scan and scale recorded on it.',
       keywords: ['snapshot', 'screenshot', 'png', 'image', 'capture', 'save view'],
@@ -38,7 +39,7 @@ export function contributeExportActions(deps: ExportActionDeps): Action[] {
     },
     {
       id: 'tool.share',
-      title: 'Copy view link',
+      title: actionTitle('tool.share'),
       section: 'Export',
       hint: 'Copy a link that reopens this camera position and appearance.',
       keywords: ['share', 'link', 'copy', 'url', 'view', 'permalink'],

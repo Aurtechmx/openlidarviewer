@@ -213,7 +213,8 @@ test.describe('CE wayfinding journeys', () => {
     if (!OUT) return;
     const doc = {
       spec: 'docs/ux/COMMUNITY_SPEC.md section 11.4',
-      phase: 'C0',
+      // The phase is the file's own name: ce-c1.json records C1.
+      phase: (/ce-(\w+)\.json$/.exec(OUT)?.[1] ?? 'c0').toUpperCase(),
       project: 'deterministic',
       primaryMetrics: ['clicks', 'surfaceSwitches'],
       informationalMetrics: ['timeToSuccessMs'],
@@ -249,7 +250,7 @@ test.describe('CE wayfinding journeys', () => {
     await rec.start();
     await rec.click(page.locator('.olv-ws-tab[data-mode="work"]'), 'Tools tab');
     const download = page.waitForEvent('download');
-    await rec.click(page.locator('.olv-mp-action', { hasText: /^Export$/ }), 'Export (Measure panel)');
+    await rec.click(page.locator('.olv-mp-action', { hasText: /^Export session$/ }), 'Export session (Measure panel)');
     const file = await download;
     rec.succeed();
     rec.fact('file', file.suggestedFilename().replace(/^.*\./, '*.'));

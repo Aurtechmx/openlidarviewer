@@ -81,9 +81,12 @@
   --state-preview: var(--rating-moderate);
   --state-review: var(--rating-weak);
   --state-blocked: var(--rating-blocked);
-  --state-withheld: var(--rating-blocked);
+  /* Withheld has its own hue: a value held back is not a closed gate. */
+  --state-withheld: #f472b6;
   --state-derived: var(--accent);
   --state-info: var(--text-dim);
+  /* The faint white wash a quiet top-bar control takes on hover. */
+  --hover-wash: rgba(255, 255, 255, 0.04);
   --cyan: #00f0ff;        /* Cyan */
   --teal: #00d4c8;        /* Teal */
   --ice: #c9f6ff;         /* Ice Blue */
@@ -240,6 +243,9 @@
   --m-accent-2: #29d3ff;        /* cyan end — the "active" hue on phones */
   --m-accent-grad: linear-gradient(135deg, #3ba9ff 0%, #29d3ff 100%);
   --m-edge: rgba(41, 211, 255, 0.15);       /* low-opacity cyan panel hairline */
+  --m-active-glow: rgba(41, 211, 255, 0.28); /* the soft cyan under an active phone tab */
+  --m-chrome-lift: 0 -14px 40px -14px rgba(0, 0, 0, 0.62); /* the shadow over the phone's bottom chrome */
+  --mask-opaque: #000;                        /* the kept part of a fade-out mask */
   --m-edge-strong: rgba(41, 211, 255, 0.34);/* active / focused edge */
   --m-glass: rgba(14, 20, 32, 0.86);        /* #0E1420 dark-glass panel fill */
   --m-glass-raised: rgba(17, 24, 38, 0.92); /* #111826 focal surface fill */
@@ -295,3 +301,13 @@
   --z-max: 200;           /* onboarding tour overlay, top of stack */
 }
 
+
+/* The withheld state hue on the Light and High-contrast rails, kept beside the
+ * :root value so each rail clears 4.5:1 on its own --bg and --panel
+ * (tests/stateTokenContrast.test.ts). */
+body.olv-theme-light {
+  --state-withheld: #be185d;
+}
+body.olv-theme-high-contrast {
+  --state-withheld: #f9a8d4;
+}

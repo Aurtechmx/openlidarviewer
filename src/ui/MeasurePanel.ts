@@ -72,6 +72,7 @@ import {
   UNRESOLVED_SCENE_CONTEXT,
   type MeasureSceneContext,
 } from '../render/measure/measureConfidence';
+import { actionTitle } from './actionDescriptors';
 // B7/B8 (v0.4.5) — sampler-control defaults + bounds, read from the sampler
 // module so the inputs, the controller clamp and the tests share one rule.
 import {
@@ -398,18 +399,14 @@ export class MeasurePanel {
     });
     const exportBtn = el('button', {
       className: 'olv-mp-action',
-      text: 'Export',
-      // v0.3.10 — the .olvsession file is useful
-      // standalone (it carries measurement coordinates, annotation text,
-      // and named views the recipient can read as plain JSON in any text
-      // editor or import into another tool). It is NOT a replay artefact
-      // like .olvworkflow — the recipient does not need the same scan to
-      // extract value. The tooltip below sets that expectation so users
-      // don't conflate the two export paths.
+      text: actionTitle('session.export'),
+      // The .olvsession file is useful standalone: plain JSON with measurement
+      // coordinates, annotation text and named views. It is not a replay file
+      // like .olvworkflow, and the tooltip keeps the two apart.
       title:
-        'Save this analysis as an .olvsession — measurements, annotations, ' +
-        'named views, camera, render + colour settings, and the class filter. ' +
-        'Readable JSON; nothing leaves your device.',
+        'Save measurements, annotations, named views, camera, render settings ' +
+        'and the class filter as an .olvsession. ' +
+        'Readable JSON that stays on your device.',
     });
     exportBtn.addEventListener('click', () => {
       exportBtn.blur();
@@ -419,9 +416,9 @@ export class MeasurePanel {
       className: 'olv-mp-action',
       text: 'Open',
       title:
-        'Open a saved .olvsession — restores measurements, annotations, views, ' +
-        'camera, render + colour settings. You can also just drag the ' +
-        '.olvsession onto the viewer, or use Open.',
+        'Open a saved .olvsession to restore measurements, annotations, views, ' +
+        'camera and render settings. You can also drag the ' +
+        '.olvsession onto the viewer.',
     });
     importBtn.addEventListener('click', () => {
       importBtn.blur();
@@ -509,12 +506,10 @@ export class MeasurePanel {
    *  drives the column width AND the grabber-tab offset, so the tabs and every
    *  left card widen together and the stack stays flush. */
   private _setRailWidth(w: number): void {
-    const clamped = Math.min(
-      RAIL_MAX_WIDTH_PX,
-      Math.max(RAIL_MIN_WIDTH_PX, Math.round(w)),
-    );
+    const clamped = Math.min(RAIL_MAX_WIDTH_PX, Math.max(RAIL_MIN_WIDTH_PX, Math.round(w)));
     document.documentElement.style.setProperty(RAIL_WIDTH_VAR, `${clamped}px`);
     storageSet(RAIL_WIDTH_KEY, String(clamped));
+    this.element.querySelector('.olv-mp-resize')?.setAttribute('aria-valuenow', String(clamped));
   }
 
   /**
@@ -532,6 +527,9 @@ export class MeasurePanel {
     });
     handle.setAttribute('role', 'separator');
     handle.setAttribute('aria-orientation', 'vertical');
+    // A focusable separator states its range and value, like a slider for the rail width.
+    const now = parseInt(globalThis.getComputedStyle?.(document.documentElement).getPropertyValue(RAIL_WIDTH_VAR) ?? '', 10) || RAIL_MIN_WIDTH_PX;
+    for (const [k, v] of [['aria-valuemin', RAIL_MIN_WIDTH_PX], ['aria-valuemax', RAIL_MAX_WIDTH_PX], ['aria-valuenow', now]] as const) handle.setAttribute(k, String(v));
     handle.tabIndex = 0;
 
     let startX = 0;

@@ -84,6 +84,7 @@ the two entries were renumbered when the branches were integrated.
 | L177 | UI | TEST | med | FIXED | new | Flow Pulse, Terrain Access and Observatory opened on their controls with no statement of purpose, a missing ground surface ended in a refusal code and a Retry that could not help, and a scan with no scanner setups showed the Observatory as Ready. |
 | L178 | UI | TEST | n/a | MEASURED | new | Community wayfinding C0: navigation map, 25 duplicate actions, 2 dead ends at desktop and 2 at phone, and the J1 to J7 journey baseline. |
 | L179 | UI | TEST | low | FIXED | new | An analysis run waited on the file-loading progress trail, which stands for known progress, and Terrain Access showed nothing while its route search ran. |
+| L180 | UI | TEST | med | FIXED | new | The same action had different names on the dock, the NavBar, the canvas menu and the palette, the withheld state drew the blocked glyph, and colour, tooltip and nesting rules had no gate. |
 
 ## Totals
 
@@ -6952,3 +6953,51 @@ the run ends.
 Covered by `tests/busyScanEmblem.test.ts`, `tests/busyScan.test.ts`,
 `tests/e2e/busyScan.spec.ts`, `tests/e2e/terrainAccessLab.spec.ts` and
 `tests/e2e/flowPulseLab.spec.ts`.
+
+### L180 · FIXED · UI
+
+Community wayfinding phase C1 (`docs/ux/COMMUNITY_SPEC.md` §13).
+
+One name per action (CE-NAME-01). `src/ui/actionNames.ts` holds the name of
+every action offered on more than one surface. The registry descriptors, the
+canvas menu, the Data home and the Measure panel read it; the dock, the NavBar
+and the empty state write the same names out, so the startup chunk does not
+grow, and tests hold each copy to the table. The dock's Frame button runs `camera.frame-all` and
+reads "Frame all", as the palette, Help and the NavBar now do; the canvas
+menu uses the registry names for its camera rows; "Open scan from device"
+reads "Open scan", and the Measure panel's "Export" reads "Export session".
+"Inspect point" becomes "Inspect" everywhere, so the phone dock still fits one
+row. The palette, Help, opening and closing a scan, the session file, Probe and
+the Analyse mode gained descriptors. NavBar chips keep their short text, which
+is the start of the full name they now carry as their accessible name. No
+control was removed. The dock and the rail agree on what is active
+(CE-NAME-03), checked in `tests/e2e/ceNames.spec.ts`.
+
+Glyphs (CE-STRIP-04). `withheld` draws ⊖ with its own colour token, which
+clears 4.5:1 on every theme rail, instead of the blocked ⊘ and violet. The
+three reconstructed Observatory origins draw ◕, ◑ and ◔ instead of one shared
+glyph. No export or receipt carries these glyphs.
+
+Ratchets (§11.3). `lint:style-tokens` counts colour literals and px font sizes
+outside `01-tokens.css` per file, shrink-only: 511 and 5 at main, 498 and 3
+now; the four stylesheets this change edits outside the token sheet hold
+none. `lint:tooltip-length` holds tooltips to 160 characters, shrink-only: 8
+over at main, 5 now. `lint:ux-rules` fails on a `<details>` written inside
+another (UX-D4) and documents why UX-D9 is left to review. All three run in the
+static group of `test:release`.
+
+Accessibility audit (CE-ASK-04). `@axe-core/playwright` 4.13.0 is a pinned
+development dependency. `tests/e2e/ceA11y.spec.ts` audits the empty state, a
+loaded scan, the Analyse home, the Measure page, the Observatory and the
+command palette at desktop size and 390×844. Two violations were fixed: the
+Dataset Intelligence list held non-list children, and the Measure panel's
+resize handle had no value. One is listed as known with its reason: the right
+rail's Visuals headers and elevation Reset are under 24 px at desktop size. On
+the phone, the dock's Close button is 44 px wide as well as tall.
+
+`tests/e2e/ceGlyphs.spec.ts` and `tests/e2e/ceTargets.spec.ts` cover glyph
+distinctness and the target size of every relabelled control. Journeys J1 to
+J7 are unchanged on clicks and surface switches
+(`docs/ux/metrics/ce-c1.json`). No computed value, threshold, method or export
+changes.
+

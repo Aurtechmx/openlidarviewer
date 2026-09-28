@@ -309,7 +309,12 @@ Deterministic project, six viewports where the harness supports it.
 
 ### 11.3 Ratchets (shrink-only)
 
-Neither lint exists yet. C1 creates both and adds them to `test:release`.
+Both lints run in `test:release` (the static group of `scripts/gates.json`),
+with their banked counts in `docs/validation/style-tokens-baseline.json` and
+`docs/validation/tooltip-length-baseline.json`. `--update` banks a drop and
+refuses a raise. `lint:ux-rules` checks the house rules source text can decide
+(UX-D4, no `<details>` written inside another) and states which rules it
+leaves to review.
 
 - `lint:style-tokens`: colour literals and px font sizes outside
   `01-tokens.css`, counted as in §2, starting from the C0 baseline. Files this

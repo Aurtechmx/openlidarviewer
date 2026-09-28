@@ -49,3 +49,14 @@ it('every badge word is one of SPEC OB-UI-02\'s seven', () => {
   for (const word of OBSERVATORY_BADGE_WORDS) expect(spec).toContain(word);
   for (const word of spec) expect(OBSERVATORY_BADGE_WORDS).toContain(word);
 });
+
+it('no two badges share a glyph, so the three reconstructed confidences read apart by shape (CE-STRIP-04)', () => {
+  const glyphOf = (node: HTMLElement): string => [...textOf(node)][0];
+  const chips = [
+    ...(['DECLARED', 'ASSUMED', 'RECONSTRUCTED_STRONG', 'RECONSTRUCTED_MODERATE', 'RECONSTRUCTED_WEAK'] as const).map((s) => originChip(s)),
+    ...(['full', 'resident-only', 'sampled'] as const).map((b) => basisChip(b)),
+    suggestedStationChip(),
+  ];
+  const glyphs = chips.map(glyphOf);
+  expect(new Set(glyphs).size).toBe(glyphs.length);
+});

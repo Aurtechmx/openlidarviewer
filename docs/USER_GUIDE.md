@@ -8,7 +8,7 @@ This guide walks through opening a scan and finding your way around it. Then mea
 
 ## Open a scan
 
-Drag a file onto the window, or press Open scan from device and pick one. LAS, LAZ, E57, PLY, GLB and `.pnts` are identified from their own contents, so one of those opens even under an odd name. The rest go by their extension, so keep it right on OBJ, GLTF, PTX, PTS and the plain-text formats.
+Drag a file onto the window, or press Open scan and pick one. LAS, LAZ, E57, PLY, GLB and `.pnts` are identified from their own contents, so one of those opens even under an odd name. The rest go by their extension, so keep it right on OBJ, GLTF, PTX, PTS and the plain-text formats.
 
 You can open:
 
@@ -37,7 +37,7 @@ The scan fills the window, with four places around it.
 The left rail holds four tabs, one open at a time:
 
 - Data: what the scan is: the layers you have open, how healthy each one is, and the classes it carries.
-- Tools: what you do to it: Measure, Inspect point, Annotate and the Clip box, each listed with its key.
+- Tools: what you do to it: Measure, Inspect, Annotate and the Clip box, each listed with its key.
 - Analyse: one row per analysis with its status (ready, review or blocked) and the reason, and a page for each task.
 - Export: writing the scan, the images and the reports out.
 

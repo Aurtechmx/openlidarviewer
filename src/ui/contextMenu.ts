@@ -9,6 +9,8 @@
  */
 
 import { el } from './dom';
+import { cameraPresetTitle, standardViewTitle } from './actionNames';
+import { actionTitle } from './actionDescriptors';
 
 export interface ContextMenuItem {
   readonly label: string;
@@ -163,4 +165,31 @@ export function showContextMenu(clientX: number, clientY: number, items: Context
   setTimeout(() => {
     window.addEventListener('pointerdown', onPointerDown, true);
   }, 0);
+}
+
+/** The camera calls the canvas menu runs. */
+export interface SceneMenuView {
+  focusOnScreen(ndcX: number, ndcY: number): boolean;
+  frameAll(): void;
+  setStandardView(view: 'top' | 'front'): unknown;
+  setCameraPreset(preset: 'oblique'): unknown;
+}
+
+/**
+ * The canvas menu's rows. Each row that repeats a palette action uses the
+ * action's registry name, so the menu and the palette say the same thing.
+ */
+export function sceneMenuItems(v: SceneMenuView, ndcX: number, ndcY: number): ContextMenuItem[] {
+  return [
+    { label: 'Focus here', run: () => { if (!v.focusOnScreen(ndcX, ndcY)) v.frameAll(); } },
+    { label: actionTitle('camera.frame-all'), run: () => v.frameAll() },
+    { label: standardViewTitle('Top'), run: () => void v.setStandardView('top') },
+    { label: standardViewTitle('Front'), run: () => void v.setStandardView('front') },
+    { label: cameraPresetTitle('Oblique'), run: () => void v.setCameraPreset('oblique') },
+  ];
+}
+
+/** Show the canvas menu at a pointer position. */
+export function showSceneMenu(clientX: number, clientY: number, v: SceneMenuView, ndcX: number, ndcY: number): void {
+  showContextMenu(clientX, clientY, sceneMenuItems(v, ndcX, ndcY));
 }

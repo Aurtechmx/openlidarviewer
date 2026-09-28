@@ -58,7 +58,7 @@ describe('tool launcher', () => {
   it('lists the registry tools in the card order, skipping ids the build has not got', async () => {
     const h = await make();
     // tool.probe is not a registry action, so the card lists the four that are.
-    expect(h.titles()).toEqual(['Measure', 'Inspect point', 'Annotate', 'Clip box']);
+    expect(h.titles()).toEqual(['Measure', 'Inspect', 'Annotate', 'Clip box']);
   });
 
   it('carries each row title, hint and key chip from the descriptor', async () => {
@@ -106,7 +106,7 @@ describe('tool launcher', () => {
   it('fills from an async registry', async () => {
     const h = await make({ async: true });
     await flush();
-    expect(h.titles()).toEqual(['Measure', 'Inspect point', 'Annotate', 'Clip box']);
+    expect(h.titles()).toEqual(['Measure', 'Inspect', 'Annotate', 'Clip box']);
   });
 
   it('dispose removes every row listener and stops later renders', async () => {

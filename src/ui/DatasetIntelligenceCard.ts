@@ -128,6 +128,11 @@ export class DatasetIntelligenceCard {
   /** Hidden description `aria-describedby` points at; kept updated alongside
    *  `_densityName.title` when the density basis flips volumetric/areal. */
   private readonly _densityDesc: HTMLElement;
+  /**
+   * The rows' hidden descriptions. A `<dl>` group may hold only `<dt>` and
+   * `<dd>`, so they live after the list; `aria-describedby` finds them there.
+   */
+  private readonly _descs: HTMLElement[] = [];
   private readonly _complexityValue: HTMLElement;
   private readonly _groundValue: HTMLElement;
   private readonly _coverageValue: HTMLElement;
@@ -217,7 +222,7 @@ export class DatasetIntelligenceCard {
       text: 'Terrain signals appear after a terrain analysis run.',
     });
     this._rows = el('dl', { className: 'olv-di-rows' }, [
-      el('div', { className: 'olv-di-row' }, [this._densityName, this._densityDesc, this._densityValue]),
+      el('div', { className: 'olv-di-row' }, [this._densityName, this._densityValue]),
       this._complexityRow,
       this._groundRow,
       this._row(
@@ -229,7 +234,6 @@ export class DatasetIntelligenceCard {
           'subset. Drives the note below.',
       ),
       this._stabilityRow,
-      this._pending,
     ]);
 
     this._detailsBody = el('dl', { className: 'olv-di-details-body' });
@@ -252,6 +256,9 @@ export class DatasetIntelligenceCard {
     // summary, not buried in the disclosure.
     this._body = el('div', { className: 'olv-di-body' }, [
       this._rows,
+      this._pending,
+      this._densityDesc,
+      ...this._descs,
       this._coverageWarning,
       this._details,
     ]);
@@ -348,8 +355,8 @@ export class DatasetIntelligenceCard {
   ): HTMLElement {
     const dt = el('dt', { className: 'olv-di-row-name', text: label });
     if (!tooltip) return el('div', { className: 'olv-di-row' }, [dt, value]);
-    const desc = attachTooltip(dt, tooltip);
-    return el('div', { className: 'olv-di-row' }, [dt, desc, value]);
+    this._descs.push(attachTooltip(dt, tooltip));
+    return el('div', { className: 'olv-di-row' }, [dt, value]);
   }
 
   /** Apply a fresh summary to the DOM. */

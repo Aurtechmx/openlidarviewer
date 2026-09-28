@@ -63,6 +63,11 @@ export interface ToolDockCallbacks {
  */
 interface DockToolSpec {
   id: string;
+  /**
+   * The visible name: the registry name of the action `id` runs, written out
+   * so the startup chunk carries no lookup (`actionNames.test.ts` holds each
+   * one to `src/ui/actionNames.ts`).
+   */
   label: string;
   title: string;
   enabledTitle?: string;
@@ -105,16 +110,16 @@ export class ToolDock {
     // classes, so every class here is load-bearing.
     const specs: DockToolSpec[] = [
       {
-        id: 'tool.frame',
-        label: 'Frame',
-        title: 'Fit the whole scan back in view — also the R key',
+        id: 'camera.frame-all',
+        label: 'Frame all',
+        title: 'Fit the whole scan back in view (R key)',
         icon: ICON_FRAME,
         classes: ['olv-tool-frame'],
         onClick: callbacks.onFrameAll,
       },
       {
         id: 'tool.snapshot',
-        label: 'Snapshot',
+        label: 'Save a snapshot',
         title:
           'Save the current view as a PNG image — placed measurements and annotations included',
         icon: ICON_SNAPSHOT,
@@ -200,7 +205,7 @@ export class ToolDock {
       // stable hook the phone stylesheet uses to file it under "More".
       {
         id: 'tool.share',
-        label: COPY_VIEW_LINK_LABEL,
+        label: 'Copy view link',
         title:
           'Copies the camera angle and view settings — not the scan itself. ' +
           'The recipient needs to open the same file first.',
@@ -213,7 +218,7 @@ export class ToolDock {
         },
       },
       {
-        id: 'tool.command',
+        id: 'palette.open',
         label: 'Commands',
         title: 'Open the command palette — search every action (also Cmd/Ctrl-K)',
         icon: ICON_COMMAND,
@@ -222,7 +227,7 @@ export class ToolDock {
         onClick: callbacks.onCommandPalette,
       },
       {
-        id: 'tool.help',
+        id: 'help.open',
         label: 'Help',
         title: 'Workflows, navigation and scientific states. Press ? for the shortcut sheet.',
         icon: ICON_HELP,
@@ -263,7 +268,7 @@ export class ToolDock {
       // Close is its own destructive cluster at the far right (`olv-dock-gap`),
       // keeping its rose tint. It has an enabled state but NO active state.
       {
-        id: 'tool.close',
+        id: 'scan.close',
         label: 'Close',
         title: 'Load a scan to enable',
         enabledTitle: 'Close the scan and return to the start',
@@ -308,6 +313,8 @@ export class ToolDock {
   private _build(spec: DockToolSpec): HTMLButtonElement {
     const button = spec.custom ? spec.custom() : this._tool(spec.label, spec.title, spec.disabled ?? false, spec.icon);
     for (const cls of spec.classes ?? []) button.classList.add(cls);
+    // The registry id the button runs, so a test can match its label to the name.
+    if (!spec.custom) button.setAttribute('data-action', spec.id);
     // Toggle buttons must carry aria-pressed from creation — the attribute's
     // mere presence is what tells assistive tech "this is a toggle", so it
     // cannot wait for the first setActive() call.
@@ -434,7 +441,7 @@ export class ToolDock {
 
   /** Enable or disable the Close action — enabled once a scan is loaded. */
   setCloseEnabled(enabled: boolean): void {
-    this.setEnabled('tool.close', enabled);
+    this.setEnabled('scan.close', enabled);
   }
 
   /** Briefly confirm a share link was copied, then restore the label. */

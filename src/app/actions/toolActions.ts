@@ -10,6 +10,7 @@ import type { WorkflowController } from '../../ui/WorkflowController';
 import type { LassoVolumeTool } from '../../ui/LassoVolumeTool';
 import type { SceneTool } from '../toggleTool';
 import { keyDisplayFor } from '../../ui/keyBindings';
+import { actionTitle } from '../../ui/actionDescriptors';
 
 export interface ToolActionDeps {
   getViewer: () => Viewer;
@@ -33,7 +34,7 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
     {
       id: 'tool.measure',
       keys: keyDisplayFor('tool-measure'),
-      title: 'Measure',
+      title: actionTitle('tool.measure'),
       section: 'Tools',
       hint: 'Activate the measurement toolbar.',
       keywords: ['distance', 'area', 'volume'],
@@ -44,10 +45,10 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
     {
       id: 'tool.inspect',
       keys: keyDisplayFor('tool-inspect'),
-      title: 'Inspect point',
+      title: actionTitle('tool.inspect'),
       section: 'Tools',
       hint: 'Read attributes of any point under the cursor.',
-      keywords: ['point info', 'attributes'],
+      keywords: ['point', 'point info', 'attributes'],
       run: () => {
         deps.runTool('inspect');
       },
@@ -55,7 +56,7 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
     {
       id: 'tool.annotate',
       keys: keyDisplayFor('tool-annotate'),
-      title: 'Annotate',
+      title: actionTitle('tool.annotate'),
       section: 'Tools',
       hint: 'Drop notes, info, warnings, or issues on points.',
       keywords: ['note', 'comment', 'mark'],
@@ -65,7 +66,7 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
     },
     {
       id: 'tool.clip',
-      title: 'Clip box',
+      title: actionTitle('tool.clip'),
       section: 'Tools',
       hint: 'Show only the points inside a box, or hide them.',
       keywords: ['slab', 'section', 'crop', 'box', 'hide'],

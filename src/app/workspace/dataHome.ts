@@ -9,6 +9,7 @@
  */
 
 import { el } from '../../ui/dom';
+import { actionTitle } from '../../ui/actionDescriptors';
 
 export interface DataHomeDeps {
   hasScan(): boolean;
@@ -43,7 +44,7 @@ export function createDataHome(d: DataHomeDeps): DataHome {
   const source = row('Source and metadata', () => d.openSource());
   const health = row('Layer Health', () => d.openLayerHealth());
   health.value.textContent = 'In the Inspector';
-  const openBtn = el('button', { className: 'olv-data-open', type: 'button', text: 'Open scan' });
+  const openBtn = el('button', { className: 'olv-data-open', type: 'button', text: actionTitle('scan.open') });
   openBtn.addEventListener('click', () => d.openFile());
   const empty = el('div', { className: 'olv-data-empty' }, [
     el('p', { text: 'Open a point cloud to begin' }),

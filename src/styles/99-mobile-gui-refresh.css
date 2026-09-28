@@ -21,7 +21,7 @@
     border-top: 1px solid var(--m-edge);
     border-left: 1px solid var(--m-edge);
     border-right: 1px solid var(--m-edge);
-    box-shadow: 0 -14px 40px -14px rgba(0, 0, 0, 0.62);
+    box-shadow: var(--m-chrome-lift);
   }
   /* Re-parented panels sit on the sheet's glass, so they go transparent and
      let the one backdrop carry the material (no stacked opaque cards). */
@@ -41,7 +41,7 @@
     -webkit-backdrop-filter: blur(16px) saturate(1.1);
     backdrop-filter: blur(16px) saturate(1.1);
     border-top: 1px solid var(--m-edge);
-    box-shadow: 0 -14px 40px -14px rgba(0, 0, 0, 0.62);
+    box-shadow: var(--m-chrome-lift);
   }
 
   /* Streaming COPC panel reads as the same dark glass. */
@@ -67,12 +67,17 @@
     border: 1px solid var(--m-edge);
     border-bottom-width: 0;
     border-radius: 14px 14px 0 0;
-    box-shadow: 0 -14px 40px -14px rgba(0, 0, 0, 0.62);
+    box-shadow: var(--m-chrome-lift);
   }
   /* Ghost-by-default dock tools: transparent fill, NO resting border, dim
      neutral colour so nothing competes with the cloud. Accent discipline: the
      single cyan accent lands only on the active tool (below). The dock strip
      itself carries the glass + faint cyan hairline. */
+  /* The 44 pt house target in both directions: Close, the shortest caption,
+     is not narrower than it is tall. Its group gap gives back the width, so
+     the row still fits a 390 px phone. */
+  .olv-dock .olv-tool-close { min-width: 44px; }
+  .olv-dock > .olv-dock-gap { margin-left: var(--space-2xs); }
   .olv-dock .olv-tool {
     background: transparent;
     border-color: transparent;
@@ -96,7 +101,7 @@
     background: color-mix(in srgb, var(--m-accent-2) 12%, transparent);
     border-color: var(--m-edge-strong);
     /* One quiet accent, no heavy glow: an inset cyan hairline plus a soft lift. */
-    box-shadow: 0 0 0 1px var(--m-edge) inset, 0 2px 8px -6px rgba(41, 211, 255, 0.28);
+    box-shadow: 0 0 0 1px var(--m-edge) inset, 0 2px 8px -6px var(--m-active-glow);
   }
   .olv-dock .olv-tool-active .olv-tool-ico svg { color: var(--m-accent-2); }
   .olv-dock .olv-tool-active::after {
@@ -253,8 +258,8 @@
      make the rail taller than its band. Applying it unconditionally would dim
      the first and last tool of a rail that fits perfectly well. */
   .olv-dock.olv-dock-more-open {
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
-    mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, var(--mask-opaque) 12px, var(--mask-opaque) calc(100% - 12px), transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0, var(--mask-opaque) 12px, var(--mask-opaque) calc(100% - 12px), transparent 100%);
   }
   /* Square, icon-only buttons at the full 44 pt target. A vertical rail has no
      room for captions and a squeezed caption is worse than none, so the label

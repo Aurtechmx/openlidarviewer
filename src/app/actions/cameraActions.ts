@@ -18,6 +18,8 @@ import {
   STANDARD_VIEW_LABEL,
   type CameraPresetName,
 } from '../../render/camera/cameraPresets';
+import { cameraPresetTitle, standardViewTitle } from '../../ui/actionNames';
+import { actionTitle } from '../../ui/actionDescriptors';
 
 /** The plan-mode surface the palette needs; `navBarWiring` satisfies it. */
 export interface PlanViewActions {
@@ -44,7 +46,7 @@ export function contributeCameraActions(deps: CameraActionDeps): Action[] {
     const label = CAMERA_PRESET_LABEL[name];
     actions.push({
       id: `camera.${name}`,
-      title: `${label} view`,
+      title: cameraPresetTitle(label),
       section: 'Camera',
       // Iso's advertised 'I' chip is suppressed: bare 'I' is the Inspect
       // tool shortcut (see the keydown handler above), Iso is palette /
@@ -68,7 +70,7 @@ export function contributeCameraActions(deps: CameraActionDeps): Action[] {
   // planViewController.ts, which this only pokes.
   actions.push({
     id: 'camera.plan-view',
-    title: 'Plan view',
+    title: actionTitle('camera.plan-view'),
     section: 'Camera',
     hint: 'Look straight down in parallel projection, with the hand tool on the drag.',
     keywords: ['plan', 'top', 'ortho', 'orthographic', 'parallel', '2d', 'map', 'pan'],
@@ -83,7 +85,7 @@ export function contributeCameraActions(deps: CameraActionDeps): Action[] {
     const label = STANDARD_VIEW_LABEL[view];
     actions.push({
       id: `camera.view-${view}`,
-      title: `${label} view (axis aligned)`,
+      title: standardViewTitle(label),
       section: 'Camera',
       hint: `Look straight along the ${label.toLowerCase()} axis.`,
       keywords: ['view', 'axis', 'square', 'face', 'elevation', 'plan'],
@@ -95,7 +97,7 @@ export function contributeCameraActions(deps: CameraActionDeps): Action[] {
   }
   actions.push({
     id: 'camera.orthographic',
-    title: 'Orthographic projection',
+    title: actionTitle('camera.orthographic'),
     section: 'Camera',
     hint: 'Parallel projection, so equal lengths measure equal on screen.',
     keywords: ['ortho', 'parallel', 'projection', 'perspective', '2d'],
@@ -110,7 +112,7 @@ export function contributeCameraActions(deps: CameraActionDeps): Action[] {
   // Reset / Frame All, exposed alongside the named presets.
   actions.push({
     id: 'camera.frame-all',
-    title: 'Frame all',
+    title: actionTitle('camera.frame-all'),
     section: 'Camera',
     hint: 'Fit the camera to every visible cloud.',
     keywords: ['fit', 'reset', 'center', 'centre'],

@@ -27,9 +27,11 @@ interface ChipSpec {
 const ORIGIN_CHIPS: Readonly<Record<ObservationOriginStatus, ChipSpec>> = {
   DECLARED: { glyph: '◉', word: 'DECLARED ORIGIN', tip: 'The station pose came from the file’s own declaration.' },
   ASSUMED: { glyph: '○', word: 'ASSUMED ORIGIN', tip: 'A user placed this origin; it was never measured or declared by the source.' },
-  RECONSTRUCTED_STRONG: { glyph: '◖', word: 'RECONSTRUCTED ORIGIN', tip: 'The origin was reconstructed with strong confidence, not declared by the source.' },
-  RECONSTRUCTED_MODERATE: { glyph: '◖', word: 'RECONSTRUCTED ORIGIN', tip: 'The origin was reconstructed with moderate confidence, not declared by the source.' },
-  RECONSTRUCTED_WEAK: { glyph: '◖', word: 'RECONSTRUCTED ORIGIN', tip: 'The origin was reconstructed with weak confidence, not declared by the source.' },
+  // The three reconstructed confidences fill a disc by degrees, so the glyph
+  // alone tells them apart: three quarters, half, one quarter.
+  RECONSTRUCTED_STRONG: { glyph: '◕', word: 'RECONSTRUCTED ORIGIN', tip: 'The origin was reconstructed with strong confidence, not declared by the source.' },
+  RECONSTRUCTED_MODERATE: { glyph: '◑', word: 'RECONSTRUCTED ORIGIN', tip: 'The origin was reconstructed with moderate confidence, not declared by the source.' },
+  RECONSTRUCTED_WEAK: { glyph: '◔', word: 'RECONSTRUCTED ORIGIN', tip: 'The origin was reconstructed with weak confidence, not declared by the source.' },
 };
 
 /** The three basis buckets a run's `source.basis` field can carry (`TerrainCoverageMode`-shaped, reused per SPEC §4). */
