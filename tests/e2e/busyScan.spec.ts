@@ -63,7 +63,7 @@ test('the busy scan shows during Run terrain analysis and is gone after, with no
   await expect(page.locator('.olv-analyse-panel .olv-busy-scan')).toHaveCount(0);
 });
 
-test('under reduced motion the busy scan is static', async ({ page }) => {
+test('under reduced motion the Analyse emblem is static', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/?test=1');
   await dropDenseGridPly(page);
@@ -76,11 +76,15 @@ test('under reduced motion the busy scan is static', async ({ page }) => {
     const obs = new MutationObserver(() => {
       const scan = document.querySelector('.olv-analyse-status .olv-busy-scan');
       if (!scan || w.__busyStatic) return;
-      const point = scan.querySelector('.olv-bs-point')!;
-      const core = scan.querySelector('.olv-bs-core')!;
+      const ring = scan.querySelector('.olv-bse-ring circle:not(.is-front)')!;
+      const front = scan.querySelector('.olv-bse-ring circle.is-front')!;
+      const core = scan.querySelector('.olv-bse-core')!;
+      const axis = scan.querySelector('.olv-bse-axis circle')!;
       w.__busyStatic = [
-        getComputedStyle(point).animationName, getComputedStyle(point).offsetDistance,
+        getComputedStyle(ring).animationName, getComputedStyle(ring).opacity,
+        getComputedStyle(front).animationName, getComputedStyle(front).opacity,
         getComputedStyle(core).animationName, getComputedStyle(core).opacity,
+        getComputedStyle(axis).animationName, getComputedStyle(axis).opacity,
       ];
       obs.disconnect();
     });
@@ -91,8 +95,58 @@ test('under reduced motion the busy scan is static', async ({ page }) => {
     timeout: 20_000,
   });
   const got = await page.evaluate(() => (window as unknown as { __busyStatic: string[] | null }).__busyStatic);
-  expect(got).toEqual(['none', '0%', 'none', '0.85']);
+  expect(got).toEqual(['none', '0.6', 'none', '0.95', 'none', '1', 'none', '0.9']);
   await expect(page.locator('.olv-analyse-panel .olv-busy-scan')).toHaveCount(0);
+});
+
+interface EmblemProbe {
+  statusEmblem: boolean;
+  skeletonEmblem: boolean;
+  ariaHidden: string | null;
+  running: string[];
+  statusText: string;
+}
+
+test('while the analysis runs, the emblem waits in the status line and the readiness skeleton, and stops after', async ({ page }) => {
+  await page.goto('/?test=1');
+  await dropDenseGridPly(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await openAnalysePanel(page);
+
+  await page.evaluate(() => {
+    const w = window as unknown as { __emblemProbe: EmblemProbe | null };
+    w.__emblemProbe = null;
+    const obs = new MutationObserver(() => {
+      const scan = document.querySelector<SVGElement>('.olv-analyse-status .olv-busy-scan');
+      if (!scan || w.__emblemProbe) return;
+      w.__emblemProbe = {
+        statusEmblem: scan.classList.contains('olv-busy-scan--emblem'),
+        skeletonEmblem: !!document.querySelector('.olv-analyse-ready.is-skeleton .olv-busy-scan--emblem'),
+        ariaHidden: scan.getAttribute('aria-hidden'),
+        running: [...new Set(scan.getAnimations({ subtree: true }).map((a) => (a as CSSAnimation).animationName))].sort(),
+        statusText: scan.parentElement!.textContent ?? '',
+      };
+      obs.disconnect();
+    });
+    obs.observe(document.body, { subtree: true, childList: true });
+  });
+  await page.locator('.olv-analyse-run').click();
+  await expect(page.locator('.olv-analyse-readiness .olv-analyse-ready:not(.is-skeleton)')).toHaveCount(3, {
+    timeout: 20_000,
+  });
+  const probe = await page.evaluate(() => (window as unknown as { __emblemProbe: EmblemProbe | null }).__emblemProbe);
+  expect(probe, 'the emblem mounted while the run computed').not.toBeNull();
+  expect(probe!.statusEmblem).toBe(true);
+  expect(probe!.skeletonEmblem).toBe(true);
+  expect(probe!.ariaHidden).toBe('true');
+  expect(probe!.statusText).toBe('Analysing…');
+  expect(probe!.running).toEqual(['olv-bse-axis', 'olv-bse-core', 'olv-bse-orbit', 'olv-bse-orbit-front']);
+  // Idle: no emblem left, so nothing of it animates.
+  await expect(page.locator('.olv-analyse-panel .olv-busy-scan')).toHaveCount(0);
+  const left = await page.evaluate(() =>
+    document.getAnimations().filter((a) => String((a as CSSAnimation).animationName).startsWith('olv-bse-')).length,
+  );
+  expect(left).toBe(0);
 });
 
 /** Drop a generated 90,000-point ASCII PLY, big enough to stay in the load toast for a while. */

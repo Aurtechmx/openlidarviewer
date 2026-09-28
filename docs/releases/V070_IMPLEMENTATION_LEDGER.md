@@ -83,17 +83,18 @@ the two entries were renumbered when the branches were integrated.
 | L176 | LOADER | TEST | med | FIXED | new | A text file with no point-format extension opened as XYZ from three numeric lines, and the chosen interpretation level was not recorded or shown. |
 | L177 | UI | TEST | med | FIXED | new | Flow Pulse, Terrain Access and Observatory opened on their controls with no statement of purpose, a missing ground surface ended in a refusal code and a Retry that could not help, and a scan with no scanner setups showed the Observatory as Ready. |
 | L178 | UI | TEST | n/a | MEASURED | new | Community wayfinding C0: navigation map, 25 duplicate actions, 2 dead ends at desktop and 2 at phone, and the J1 to J7 journey baseline. |
+| L179 | UI | TEST | low | FIXED | new | An analysis run waited on the file-loading progress trail, which stands for known progress, and Terrain Access showed nothing while its route search ran. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 34
+- FIXED: 35
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 55
+- total: 56
 
 ## Detail
 
@@ -6933,3 +6934,21 @@ switches, Back, Escape and time) through `tests/e2e/journeyMetrics.ts`,
 covered by `tests/journeyMetrics.test.ts`. The baseline is
 `docs/ux/metrics/ce-c0.json`; clicks and switches repeated exactly across two
 runs.
+
+### L179 · FIXED · UI
+
+Analysis waits now show the brand emblem in place of the progress trail: a
+sphere under a thin horizontal flare, two flat dotted rings with light moving
+round them in opposite directions, and a mirrored vertical axis of dots that
+lights outward from the centre. It shows in the Analyse status line and the
+readiness placeholder while a terrain run computes, and while Flow Pulse,
+Terrain Access and Observatory run. Terrain Access now paints the emblem in its
+run card for one frame before the route search starts. File loading, streaming
+and exports keep the progress trail. The emblem is decorative (`aria-hidden`);
+the status text carries the state. Under reduced motion it is a still emblem,
+under forced colours it draws in the system text colour, and it is removed when
+the run ends.
+
+Covered by `tests/busyScanEmblem.test.ts`, `tests/busyScan.test.ts`,
+`tests/e2e/busyScan.spec.ts`, `tests/e2e/terrainAccessLab.spec.ts` and
+`tests/e2e/flowPulseLab.spec.ts`.

@@ -27,7 +27,7 @@
  * Mounted in `main.ts` next to the Measurements and Annotations panels.
  */
 
-import { showBusyScan, clearBusyScan, createBusyScanController, type BusyScanController } from './busyScan';
+import { showBusyScan, clearBusyScan, createBusyScan, createBusyScanController, type BusyScanController } from './busyScan';
 import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
 import type { SensitivityMemberGrid, runDemSensitivity as RunDemSensitivity } from '../terrain/export/demSensitivity';
 import { SurfaceTiles } from './analyseSurfaceTiles';
@@ -951,12 +951,11 @@ export class AnalysePanel {
     return this._result ? 'Re-run analysis' : 'Run terrain analysis';
   }
 
-  /** Three shimmer placeholder cards while the analysis computes. */
+  /** Three shimmer placeholder cards while the analysis computes; the emblem waits in the middle one. */
   private _showSkeleton(): void {
-    this._readinessRow.replaceChildren();
-    for (let i = 0; i < 3; i++) {
-      this._readinessRow.append(el('div', { className: 'olv-analyse-ready is-skeleton' }));
-    }
+    const card = () => el('div', { className: 'olv-analyse-ready is-skeleton' });
+    this._readinessRow.replaceChildren(card(), card(), card());
+    this._readinessRow.children[1].append(createBusyScan({ variant: 'emblem' }));
   }
 
   /** Show a transient status (e.g. "Analysing…"). */
@@ -971,10 +970,10 @@ export class AnalysePanel {
     this._runBtn.textContent = busy ? 'Analysing…' : this._runLabel();
     if (busy) {
       this.setStatus(text);
-      showBusyScan(this._status, text);
+      showBusyScan(this._status, text, 'emblem');
       this._showSkeleton();
     } else {
-      clearBusyScan(this._status);
+      for (const host of [this._status, this._readinessRow]) clearBusyScan(host);
     }
   }
 
@@ -1226,6 +1225,7 @@ export class AnalysePanel {
       // writer of `disabled`, so a run that never reached its release left the
       // control dead for the session.
       this._status.textContent = IDLE_STATUS;
+      clearBusyScan(this._readinessRow);
       this._runBtn.disabled = false;
       this._notifyResult();
       return;
