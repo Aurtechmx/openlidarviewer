@@ -13,6 +13,7 @@ import { LOCAL_ONLY_LOADER_OPTIONS } from './loaderConfig';
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { PointCloud } from '../model/PointCloud';
 import { sanitizeLocalCloud, withLoadWarning } from './sanitizeCloud';
+import { authoredNormals } from './authoredNormals';
 import type { SourceFormat } from './sniffFormat';
 
 /** A postprocessed glTF node — only the fields this loader touches. */
@@ -32,7 +33,21 @@ interface GltfMesh {
 
 /** A postprocessed glTF mesh primitive with typed-array attribute values. */
 interface GltfPrimitive {
-  attributes: Record<string, { value: ArrayLike<number>; size?: number } | undefined>;
+  attributes: Record<
+    string,
+    { value: ArrayLike<number>; size?: number; components?: number } | undefined
+  >;
+}
+
+/**
+ * sRGB OETF (IEC 61966-2-1) for one linear value, clamped to [0, 1]: the
+ * inverse of the EOTF `render/colorEncode.ts` applies on upload, kept here so
+ * the loader does not import from the render layer.
+ * `tests/loadGltfColourNormals.test.ts` checks the round trip through that EOTF.
+ */
+function linearToSrgb(v: number): number {
+  const x = v < 0 ? 0 : v > 1 ? 1 : v;
+  return x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055;
 }
 
 /** Build the local transform of a node from either `matrix` or its TRS parts. */
@@ -79,6 +94,8 @@ function collectNode(
   positions: number[],
   colors: number[],
   colorSeen: { any: boolean },
+  normals: number[],
+  normalSeen: { missing: boolean },
   depth = 0,
 ): void {
   if (depth > MAX_NODE_DEPTH) {
@@ -97,22 +114,44 @@ function collectNode(
       const vertexCount = Math.floor(src.length / 3);
 
       const colAttr = primitive.attributes.COLOR_0;
-      const colSize = colAttr?.size ?? 3;
-      // glTF spec — COLOR_0 components are normalised. Float arrays
-      // carry `[0, 1]` linear values; Uint8 carries `[0, 255]`; Uint16
-      // carries `[0, 65535]`. The output buffer expects `[0, 255]`, so
-      // detect the source type once per primitive and scale the per-
-      // vertex push accordingly. Without this scale, a float-typed
-      // value of 0.5 becomes 0 when packed into `new Uint8Array(...)`
-      // and most coloured mobile scans render near-black.
+      // postProcessGLTF reports the per-element width as `components`
+      // (VEC3 = 3, VEC4 = 4); reading a VEC4 colour at a stride of 3 walks
+      // the alpha channel into the next vertex's red.
+      const colSize = colAttr?.components ?? colAttr?.size ?? 3;
+      // glTF 2.0 defines COLOR_0 as LINEAR RGB for every component type:
+      // FLOAT in [0, 1], and UNSIGNED_BYTE / UNSIGNED_SHORT, which the spec
+      // requires to be `normalized`, as fractions of their type maximum. A
+      // non-conforming integer accessor without the flag is read the same
+      // way, since no other reading of an integer colour is meaningful.
+      // Cloud colour bytes are sRGB-encoded (colorEncode.ts decodes them
+      // with the EOTF on upload), so each component is normalised to [0, 1]
+      // here and then encoded with the sRGB OETF. Storing the linear value
+      // directly as a byte made midtones render too dark (linear 0.5 showed
+      // as sRGB 128 instead of 188). Alpha is not carried.
       let colScale = 1;
       if (colAttr) {
         const cv = colAttr.value;
-        if (cv instanceof Float32Array || cv instanceof Float64Array) {
-          colScale = 255;
-        } else if (cv instanceof Uint16Array) {
-          colScale = 255 / 65535;
+        if (cv instanceof Uint8Array || cv instanceof Uint8ClampedArray) colScale = 1 / 255;
+        else if (cv instanceof Uint16Array) colScale = 1 / 65535;
+      }
+      const normAttr = primitive.attributes.NORMAL;
+      const primNormals = normAttr ? authoredNormals(normAttr.value, vertexCount, normAttr.components ?? normAttr.size ?? 3) : undefined;
+      if (primNormals) {
+        // Normals are directions: rotate by the node's upper 3x3 and
+        // renormalise, so a scaled node keeps unit normals.
+        const e = world.elements;
+        for (let i = 0; i < vertexCount; i++) {
+          const x = primNormals[i * 3];
+          const y = primNormals[i * 3 + 1];
+          const z = primNormals[i * 3 + 2];
+          const nx = e[0] * x + e[4] * y + e[8] * z;
+          const ny = e[1] * x + e[5] * y + e[9] * z;
+          const nz = e[2] * x + e[6] * y + e[10] * z;
+          const len = Math.hypot(nx, ny, nz) || 1;
+          normals.push(nx / len, ny / len, nz / len);
         }
+      } else {
+        normalSeen.missing = true;
       }
 
       for (let i = 0; i < vertexCount; i++) {
@@ -129,15 +168,12 @@ function collectNode(
 
         if (colAttr) {
           colorSeen.any = true;
-          const r = colAttr.value[i * colSize + 0] * colScale;
-          const g = colAttr.value[i * colSize + 1] * colScale;
-          const b = colAttr.value[i * colSize + 2] * colScale;
-          // Clamp before push — gamut excursions or a rogue alpha bit
-          // shouldn't overflow the Uint8 stride.
+          // linearToSrgb clamps to [0, 1], so a gamut excursion or a
+          // out-of-range value cannot overflow the Uint8 stride.
           colors.push(
-            Math.max(0, Math.min(255, Math.round(r))),
-            Math.max(0, Math.min(255, Math.round(g))),
-            Math.max(0, Math.min(255, Math.round(b))),
+            Math.round(255 * linearToSrgb(colAttr.value[i * colSize + 0] * colScale)),
+            Math.round(255 * linearToSrgb(colAttr.value[i * colSize + 1] * colScale)),
+            Math.round(255 * linearToSrgb(colAttr.value[i * colSize + 2] * colScale)),
           );
         } else {
           // Pad with opaque white so the colour buffer stays aligned even
@@ -150,7 +186,7 @@ function collectNode(
 
   if (node.children) {
     for (const child of node.children) {
-      collectNode(child, world, positions, colors, colorSeen, depth + 1);
+      collectNode(child, world, positions, colors, colorSeen, normals, normalSeen, depth + 1);
     }
   }
 }
@@ -167,7 +203,20 @@ export async function loadGltf(
   sourceFormat: 'glb' | 'gltf',
   name = `cloud.${sourceFormat}`,
 ): Promise<PointCloud> {
-  const raw = await parse(buffer, GLTFLoader, LOCAL_ONLY_LOADER_OPTIONS).catch((err: unknown) => {
+  // Nothing here touches images: the loader keeps vertex geometry only, and
+  // the image paths need the DOM `Image` constructor, which the parse worker
+  // does not have, so they failed every GLB opened in a browser with "Image is
+  // not defined". `loadImages: false` skips texture decoding. The texture
+  // format extensions are excluded because their preprocess step probes
+  // browser image support by building an `Image` even when the asset has no
+  // textures (loaders.gl excludes an extension whose key maps to `false`).
+  const raw = await parse(buffer, GLTFLoader, {
+    ...LOCAL_ONLY_LOADER_OPTIONS,
+    gltf: {
+      loadImages: false,
+      excludeExtensions: { EXT_texture_avif: false, EXT_texture_webp: false, KHR_texture_basisu: false },
+    },
+  }).catch((err: unknown) => {
     // A standard multi-file .gltf that references an external buffer (e.g.
     // buffer.bin) can't be resolved from a single in-page file — the browser
     // hands us one file, not the sibling. Surface a precise, actionable message
@@ -221,6 +270,10 @@ export async function loadGltf(
   const positions: number[] = [];
   const colors: number[] = [];
   const colorSeen = { any: false };
+  // Normals are kept only when every primitive supplies a usable set; a
+  // partial channel would misalign with the positions.
+  const normals: number[] = [];
+  const normalSeen = { missing: false };
   const identity = new Matrix4();
 
   // Walk ONE scene — the default one.
@@ -241,11 +294,11 @@ export async function loadGltf(
   const roots = defaultScene ? (defaultScene.nodes ?? []) : [];
   if (roots.length > 0) {
     for (const root of roots) {
-      collectNode(root, identity, positions, colors, colorSeen);
+      collectNode(root, identity, positions, colors, colorSeen, normals, normalSeen);
     }
   } else if (gltf.nodes) {
     for (const node of gltf.nodes) {
-      collectNode(node, identity, positions, colors, colorSeen);
+      collectNode(node, identity, positions, colors, colorSeen, normals, normalSeen);
     }
   }
 
@@ -260,6 +313,7 @@ export async function loadGltf(
   // loader answers to applies here too.
   const clean = sanitizeLocalCloud(new Float32Array(positions), {
     colors: colorSeen.any ? new Uint8Array(colors) : undefined,
+    normals: normalSeen.missing ? undefined : new Float32Array(normals),
   });
 
   const declared =
@@ -273,6 +327,7 @@ export async function loadGltf(
   return new PointCloud({
     positions: clean.positions,
     colors: clean.attributes.colors,
+    normals: clean.attributes.normals,
     origin: [0, 0, 0],
     sourceFormat: sourceFormat as SourceFormat,
     name,

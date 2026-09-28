@@ -29,6 +29,7 @@ import { LOCAL_ONLY_LOADER_OPTIONS } from './loaderConfig';
 import { PointCloud } from '../model/PointCloud';
 import { sanitizeAndRecenter, withLoadWarning } from './sanitizeCloud';
 import { LoadError } from './loadErrors';
+import { authoredNormals } from './authoredNormals';
 
 const PLY_SCALAR_BYTES: Record<string, number> = {
   char: 1, uchar: 1, int8: 1, uint8: 1,
@@ -287,11 +288,15 @@ export async function loadPly(buffer: ArrayBuffer, name = 'cloud.ply'): Promise<
 
   // Drop unplaceable vertices (a binary body can hold a NaN bit pattern; an
   // ASCII one can spell it out), then recentre about a floored-min origin.
-  const clean = sanitizeAndRecenter(global, { colors });
+  // nx/ny/nz, when the vertex element declares them, arrive as NORMAL.
+  const normalAttr = attributes.NORMAL;
+  const normals = normalAttr ? authoredNormals(normalAttr.value, pointCount, normalAttr.size ?? 3) : undefined;
+  const clean = sanitizeAndRecenter(global, { colors, normals });
 
   return new PointCloud({
     positions: clean.positions,
     colors: clean.attributes.colors,
+    normals: clean.attributes.normals,
     origin: clean.origin,
     sourceFormat: 'ply',
     name,

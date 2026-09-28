@@ -25,14 +25,18 @@
  * the composed transform arrives from the traversal rather than being
  * reinvented at this seam.
  *
- * Normals and batch ids the decoder returns are not carried into the cloud:
- * `PointCloud` has no channel for either, and manufacturing one from a batch
- * table would be inventing a semantic the tile never declared.
+ * Normals the decoder returns (float32 NORMAL, or NORMAL_OCT16P decoded to
+ * unit vectors) are carried into the cloud's normal channel when every one is
+ * finite and unit length; otherwise the channel is dropped and the points are
+ * kept. Batch ids are not carried: `PointCloud` has no channel for them, and
+ * manufacturing one from a batch table would be inventing a semantic the tile
+ * never declared.
  */
 
 import { PointCloud } from '../model/PointCloud';
 import { parsePnts } from './tiles3d/pnts';
 import { sanitizeAndRecenter, withLoadWarning } from './sanitizeCloud';
+import { authoredNormals } from './authoredNormals';
 
 /**
  * Load one `.pnts` tile into a `PointCloud`.
@@ -63,13 +67,16 @@ export async function loadPnts(buffer: ArrayBuffer, name = 'cloud.pnts'): Promis
   // as the positions.
   const colors = tile.colors === null ? undefined : new Uint8Array(tile.colors);
 
+  const normals = authoredNormals(tile.normals, local.length / 3);
+
   // Destructured for the same reason `local` is: the sanitation result is not a
   // `PointCloud`, and the gate counts the property name rather than the type.
-  const { positions, attributes, origin, warning } = sanitizeAndRecenter(global, { colors });
+  const { positions, attributes, origin, warning } = sanitizeAndRecenter(global, { colors, normals });
 
   return new PointCloud({
     positions,
     colors: attributes.colors,
+    normals: attributes.normals,
     origin,
     sourceFormat: 'pnts',
     name,

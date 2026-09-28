@@ -87,17 +87,18 @@ the two entries were renumbered when the branches were integrated.
 | L180 | UI | TEST | med | FIXED | new | The same action had different names on the dock, the NavBar, the canvas menu and the palette, the withheld state drew the blocked glyph, and colour, tooltip and nesting rules had no gate. |
 | L183 | UI | TEST | med | FIXED | new | Nothing outside the left rail said where the user was, the command palette had no close control, a collapsed rail or a lowered phone sheet hid the only Back, and each surface had its own way out. |
 | L181 | EXPORT | TEST | med | FIXED | new | No export recorded the format probe interpretation level, the single-file vector exports carried no build or source record, and the simulation packages did not state the data basis of the surface they read. |
+| L182 | LOADER | TEST | med | FIXED | new | glTF COLOR_0, which the glTF 2.0 specification defines as linear, was stored as sRGB bytes, so midtones displayed too dark; a GLB opened in the browser failed to decode; and normals declared by glTF, PLY and PNTS files were not carried into the cloud. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 38
+- FIXED: 39
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 59
+- total: 60
 
 ## Detail
 
@@ -7079,3 +7080,36 @@ Covered by `tests/exportSourceInterpretation.test.ts` and
 `tests/reproduceFromProvenance.test.ts`, which re-runs a measured distance, a
 DEM product and a Flow Pulse run from the recorded fields and gets identical
 values. Remaining gaps are listed in the audit.
+
+
+### L182 · FIXED · LOADER
+
+glTF 2.0 defines COLOR_0 as linear for every component type, and cloud colour
+bytes are sRGB-encoded (the upload path applies the sRGB EOTF). `loadGltf`
+scaled the linear value straight to a byte, so linear 0.5 was stored as 128
+and displayed as linear 0.22. It now normalises each component (FLOAT as is,
+UNSIGNED_BYTE and UNSIGNED_SHORT by their type maximum) and encodes it with
+the sRGB OETF before rounding: 0.18, 0.5 and 0.75 become 118, 188 and 225. A
+four-component colour is read at its declared width; the loader had read
+`size`, which the parsed accessor does not carry, and so stepped through a
+VEC4 colour three components at a time. Alpha is not carried. PLY, OBJ, PCD
+and PNTS colours are not defined as linear by their formats and are unchanged.
+
+Every GLB opened in the browser failed with "Image is not defined", reported
+as a decode failure: the texture-format extensions probe image support by
+building a DOM `Image`, and texture decoding does the same, and neither exists
+in the parse worker. The Node tests never saw it. The parse now sets
+`loadImages: false` and excludes `EXT_texture_avif`, `EXT_texture_webp` and
+`KHR_texture_basisu`; the loader keeps vertex geometry only, so nothing it
+reads is lost.
+
+Declared normals are carried into the cloud: glTF NORMAL (rotated by the node
+transform), PLY nx/ny/nz, and PNTS NORMAL or NORMAL_OCT16P, which the tile
+decoder already produced and the loader dropped. The channel is kept only when
+every normal is finite and unit length within 0.02; otherwise it is dropped
+and the points are kept. Nothing is estimated. Positions, classification and
+analysis inputs are unchanged.
+
+Covered by `tests/loadGltfColourNormals.test.ts`, `tests/loadPnts.test.ts`,
+`tests/loadPly.test.ts`, `tests/loaderNoCdnWorker.test.ts` and
+`tests/e2e/authoredNormals.spec.ts`.
