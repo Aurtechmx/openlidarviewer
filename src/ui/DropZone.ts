@@ -227,18 +227,23 @@ export class DropZone {
    * rest at the front, the trail fades, then the toast hides. A failure or a
    * cancel hides at once instead (`setError`, `setProgress(null)`). Any other
    * state change during the settle wins and the late hide is dropped.
+   *
+   * Resolves once the toast has left the top-centre lane: `true` when this
+   * settle hid it, `false` when a later state change took the toast over.
    */
-  finish(): void {
+  finish(): Promise<boolean> {
     if (this.toast.classList.contains('olv-hidden') || !this.toast.classList.contains('is-busy')) {
       this.setProgress(null);
-      return;
+      return Promise.resolve(true);
     }
     this._clearHideTimer();
     const token = ++this._token;
     this._onCancel = null;
     this._cancel.classList.add('olv-hidden');
-    void this._scan.complete().then(() => {
-      if (token === this._token) this.setProgress(null);
+    return this._scan.complete().then(() => {
+      if (token !== this._token) return false;
+      this.setProgress(null);
+      return true;
     });
   }
 

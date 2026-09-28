@@ -103,7 +103,7 @@ describe('load toast progress and finish', () => {
     vi.useFakeTimers();
     const { zone, toast, busy } = await freshZone();
     zone.setProgress('Decoding…', 0.5);
-    zone.finish();
+    const left = zone.finish();
     expect(toast.cls.has('olv-hidden')).toBe(false);
     await vi.advanceTimersByTimeAsync(300);
     toast.find('olv-bs-point')[0].fire('animationiteration');
@@ -112,16 +112,18 @@ describe('load toast progress and finish', () => {
     await vi.advanceTimersByTimeAsync(250);
     expect(toast.cls.has('olv-hidden')).toBe(true);
     expect(busy()).toBe(false);
+    await expect(left).resolves.toBe(true);
   });
 
   it('drops the late hide when a new load starts during the settle', async () => {
     vi.useFakeTimers();
     const { zone, toast } = await freshZone();
     zone.setProgress('Decoding…', 0.5);
-    zone.finish();
+    const left = zone.finish();
     zone.setOpening('Opening next.laz…');
     await vi.advanceTimersByTimeAsync(2000);
     expect(toast.cls.has('olv-hidden')).toBe(false);
+    await expect(left).resolves.toBe(false);
   });
 });
 

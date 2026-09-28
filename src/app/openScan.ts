@@ -719,8 +719,6 @@ export async function attachStaticCloud(
     if (deps.debug) console.warn('[inspector] syncRendering threw', err);
   }
 
-  if (!deps.bareMode) deps.showProjectCard(result.cloud, result.originalPointCount);
-
   // Reveal the Analyse panel now there's a scan to analyse. v0.4.0.
   deps.revealAnalysePanel(result.cloud.name);
 
@@ -753,11 +751,25 @@ export async function attachStaticCloud(
     void loadLoadDiagnostics().then((m) => m.reportLoadDiagnostics(deps, cloud, telemetry, firstDraw));
   }
   deps.dropZone.setCancelHandler(null);
-  finishLoad(deps);
+  const settled = finishLoad(deps);
+  // The "Project ready" card shares the top-centre lane with the load toast,
+  // so it is raised once the toast has settled away. A newer load that took
+  // the toast over during the settle drops this card.
+  if (!deps.bareMode) {
+    const { cloud, originalPointCount } = result;
+    void settled.then((done) => {
+      if (done) deps.showProjectCard(cloud, originalPointCount);
+    });
+  }
 }
 
-/** A load that succeeded: let the toast's busy scan settle before it hides. */
-function finishLoad(deps: Pick<OpenScanDeps, 'dropZone'>): void {
-  if (deps.dropZone.finish) deps.dropZone.finish();
-  else deps.dropZone.setProgress(null);
+/**
+ * A load that succeeded: let the toast's busy scan settle before it hides.
+ * Resolves `true` once the toast has left the lane, `false` if a later state
+ * change took it over first.
+ */
+function finishLoad(deps: Pick<OpenScanDeps, 'dropZone'>): Promise<boolean> {
+  if (deps.dropZone.finish) return deps.dropZone.finish();
+  deps.dropZone.setProgress(null);
+  return Promise.resolve(true);
 }
