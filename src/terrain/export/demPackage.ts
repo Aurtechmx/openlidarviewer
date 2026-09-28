@@ -715,6 +715,7 @@ export function buildDemPackage(
       confidence: dtm.confidence,
       cellState: ev.cellState,
       residual: residual.residual,
+      residualUnsampled: residual.unsampled,
       sensitivityRange: sens,
       verticalReference: vRef,
     });

@@ -289,6 +289,10 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   };
   mobileMql?.addEventListener('change', applyMobileSheet);
   mobileMql?.addEventListener('change', placeAnalyse); // after the layout flip above
+  d.addTeardown(() => {
+    mobileMql?.removeEventListener('change', applyMobileSheet);
+    mobileMql?.removeEventListener('change', placeAnalyse);
+  });
   // Class counts and the rail collapse change outside any route; keep the rows current.
   if (typeof MutationObserver === 'function') {
     const mo = new MutationObserver(() => dataHome.refresh());

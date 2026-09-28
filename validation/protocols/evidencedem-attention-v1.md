@@ -84,7 +84,7 @@ verified.
 | 5 | `RECONSTRUCTION_RESIDUAL` |
 | 6 | `TERRAIN_COMPLEXITY` (reserved, not scored) |
 | 7 | `CLASSIFICATION_AMBIGUITY` (reserved, not scored) |
-| 8 | `UNRESOLVED` (reserved, not written in v1) |
+| 8 | `UNRESOLVED`: a measured cell the residual sampling skipped, that no other input flags (band 1 NoData) |
 | 255 | NoData |
 
 This table is part of the method version of `olv.terrain.evidence.attention`.
@@ -142,3 +142,26 @@ before any release shipped the old id.
   export).
 - Decision under the rule above: 37.5% is above 10%, so the attention raster
   is written only on request. A default export has no attention raster.
+
+## Revision: cells skipped by residual sampling (2026-09-27)
+
+Reason: above the sample limit, a measured cell that was not rebuilt has no
+residual, and it scored 0 on `RECONSTRUCTION_RESIDUAL`. When no other input
+flagged it, it was written as level 0, the same as a cell whose residual was
+computed and was small. A value that was never computed must not read as a
+low one.
+
+Change, applied only when the vertical inputs are scored and the grid was
+sampled (stride above 1):
+
+- A measured cell the sampling skipped, whose other inputs give level 0, is
+  written with band 1 `attention_level` NoData (255) and band 2
+  `dominant_reason` 8 `UNRESOLVED`.
+- A skipped cell that another input already flags keeps that level and
+  reason.
+- The passport's residual record carries `unsampledCells`, the number of
+  measured cells not rebuilt, and the README states the rule.
+
+Every other value in this record is unchanged. A grid of 250,000 measured
+cells or fewer is rebuilt in full, so its raster, passport and README are
+byte-identical to before.

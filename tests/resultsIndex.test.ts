@@ -452,7 +452,63 @@ describe('shelf Focus on a lab or Observatory result opens its modal', () => {
       expect(navigate).not.toHaveBeenCalled();
       vi.advanceTimersByTime(MODAL_OPEN_FALLBACK_MS);
       expect(navigate).toHaveBeenCalledWith({ mode: 'analyse', page: 'access' });
-      expect(resultReopenPending('terrain-access')).toBe(false);
+      // The request stays for a chunk that loads late.
+      expect(resultReopenPending('terrain-access')).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a modal chunk that loads after the fallback still reopens the kept run', () => {
+    vi.useFakeTimers();
+    try {
+      let late: boolean | null = null;
+      // The lab chunk resolves after the fallback window: the modal then asks
+      // whether to reuse its run.
+      const { mounted, navigate } = mountWith(() => {
+        setTimeout(() => { late = takeResultReopen('flow-pulse'); }, MODAL_OPEN_FALLBACK_MS + 4_000);
+      });
+      publishLabRun('flow-pulse', { outcome: { ok: true }, layerId: 'a', filename: null });
+      mounted.refresh();
+      mounted.focusResult('flow-pulse:a');
+      vi.advanceTimersByTime(MODAL_OPEN_FALLBACK_MS);
+      expect(navigate).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(4_000);
+      expect(late).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a modal that takes the request cancels the fallback timer', () => {
+    vi.useFakeTimers();
+    try {
+      const { mounted, navigate } = mountWith(() => { takeResultReopen('terrain-access'); });
+      publishLabRun('terrain-access', { outcome: { ok: true }, layerId: 'a', filename: null });
+      mounted.refresh();
+      mounted.focusResult('terrain-access:a');
+      expect(vi.getTimerCount()).toBe(0);
+      vi.advanceTimersByTime(MODAL_OPEN_FALLBACK_MS);
+      expect(navigate).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('dispose cancels a pending fallback and drops the toggle listener', () => {
+    vi.useFakeTimers();
+    try {
+      const { mounted, navigate } = mountWith(() => { /* never opens */ });
+      publishLabRun('terrain-access', { outcome: { ok: true }, layerId: 'a', filename: null });
+      mounted.refresh();
+      const toggle = (mounted.element as unknown as FakeEl).find((e) => e.hasClass('olv-results-toggle'))!;
+      const before = toggle.listenerCount('click');
+      mounted.focusResult('terrain-access:a');
+      mounted.dispose();
+      expect(vi.getTimerCount()).toBe(0);
+      vi.advanceTimersByTime(MODAL_OPEN_FALLBACK_MS);
+      expect(navigate).not.toHaveBeenCalled();
+      expect(toggle.listenerCount('click')).toBe(before - 1);
     } finally {
       vi.useRealTimers();
     }
