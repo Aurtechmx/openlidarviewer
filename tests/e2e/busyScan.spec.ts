@@ -184,7 +184,17 @@ interface ToastProbe {
   statusRole: string | null;
 }
 
+/**
+ * Budgets for the two load-toast tests. On a software renderer every frame of
+ * these clouds costs the page's main thread over a second, so the load, the
+ * settle's timers and each page.evaluate after it queue behind frames. Each
+ * test's budget covers the waits it makes, with room for the reads after them.
+ */
+const LARGE_LOAD_WAIT_MS = 30_000;
+const XYZ_LOAD_WAIT_MS = 90_000;
+
 test('the busy scan shows in the load toast while a large file opens and is gone after', async ({ page }) => {
+  test.setTimeout(2 * LARGE_LOAD_WAIT_MS + 30_000);
   await page.goto('/?test=1');
   await page.evaluate(() => {
     const w = window as unknown as { __toastProbe: ToastProbe };
@@ -217,8 +227,8 @@ test('the busy scan shows in the load toast while a large file opens and is gone
   });
 
   await dropLargePly(page);
-  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 30_000 });
-  await expect(page.locator('.olv-toast')).toBeHidden({ timeout: 30_000 });
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: LARGE_LOAD_WAIT_MS });
+  await expect(page.locator('.olv-toast')).toBeHidden({ timeout: LARGE_LOAD_WAIT_MS });
 
   const probe = await page.evaluate(() => (window as unknown as { __toastProbe: ToastProbe }).__toastProbe);
   expect(probe.seen, 'the toast showed the busy scan during the load').toBe(true);
@@ -232,7 +242,7 @@ test('the busy scan shows in the load toast while a large file opens and is gone
 });
 
 test('the load toast trail grows with the load and the indicator settles away at the end', async ({ page }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(2 * XYZ_LOAD_WAIT_MS + 60_000);
   await page.goto('/?test=1');
   await page.evaluate(() => {
     const w = window as unknown as { __lens: number[]; __settled: boolean };
@@ -257,8 +267,8 @@ test('the load toast trail grows with the load and the indicator settles away at
     return dt;
   });
   await page.dispatchEvent('body', 'drop', { dataTransfer });
-  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 90_000 });
-  await expect(page.locator('.olv-toast')).toBeHidden({ timeout: 90_000 });
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: XYZ_LOAD_WAIT_MS });
+  await expect(page.locator('.olv-toast')).toBeHidden({ timeout: XYZ_LOAD_WAIT_MS });
 
   const { lens, settled } = await page.evaluate(() => {
     const w = window as unknown as { __lens: number[]; __settled: boolean };
