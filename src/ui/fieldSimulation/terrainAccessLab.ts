@@ -852,5 +852,6 @@ export function openTerrainAccessLab(input: TerrainAccessLabInput | null, opts: 
     body: interactive.element,
     onClose: () => interactive.dispose(),
   });
+  handle.element?.classList.add('olv-surface-dialog'); // the location bar gives it a named Back
   return handle;
 }

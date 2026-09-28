@@ -85,17 +85,18 @@ the two entries were renumbered when the branches were integrated.
 | L178 | UI | TEST | n/a | MEASURED | new | Community wayfinding C0: navigation map, 25 duplicate actions, 2 dead ends at desktop and 2 at phone, and the J1 to J7 journey baseline. |
 | L179 | UI | TEST | low | FIXED | new | An analysis run waited on the file-loading progress trail, which stands for known progress, and Terrain Access showed nothing while its route search ran. |
 | L180 | UI | TEST | med | FIXED | new | The same action had different names on the dock, the NavBar, the canvas menu and the palette, the withheld state drew the blocked glyph, and colour, tooltip and nesting rules had no gate. |
+| L183 | UI | TEST | med | FIXED | new | Nothing outside the left rail said where the user was, the command palette had no close control, a collapsed rail or a lowered phone sheet hid the only Back, and each surface had its own way out. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 36
+- FIXED: 37
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 57
+- total: 58
 
 ## Detail
 
@@ -7001,3 +7002,49 @@ J7 are unchanged on clicks and surface switches
 (`docs/ux/metrics/ce-c1.json`). No computed value, threshold, method or export
 changes.
 
+### L183 · FIXED · UI
+
+Community wayfinding phase C2 (`docs/ux/COMMUNITY_SPEC.md` §13).
+
+Location bar (CE-LOC-01 to 05). A line of crumbs follows the product mark in
+the top bar, for example `Analyse › Terrain › Contours › Contour Studio`. The
+crumbs come from `locationCrumbs` in `src/app/workspace/locationModel.ts`, a
+pure function of the route, the router's page titles and the registered
+workspace names; no surface sets crumb text. Every crumb but the last is a
+button whose name is its full path, and the last carries
+`aria-current="location"`. The bar stays visible with the rail collapsed and a
+workspace open, and on the phone it heads the sheet in every detent, peek
+included. A route change is announced once through the shared polite region.
+The bar and its behaviour live in `src/ui/locationBar.ts`, which the workspace
+shell chunk carries; it mounts with the first scan.
+
+Go to (CE-LOC-06). The command palette lists one Go to entry per registered
+page and workspace, read from the same registry. An entry that cannot run now
+is disabled and shows its reason. An Analyse page repeats its home row's
+reason; a workspace names the step that makes it available.
+
+One exit convention (CE-EXIT-01 to 04). Every surface below a mode home has a
+Back at the start of the location bar that names where it goes (`← Terrain`),
+and an open workspace says `Close Contour Studio`, also written at the top of
+the workspace. The Profile Workbench's close reads `Close Profile Workbench`
+and returns focus to the profile. Labs and result focus lead their header with
+a Back that names the place they return to instead of `×`. Escape is Back
+except in a text field, during a drag, while a tool is capturing, with a
+popover open or inside a dialog, which handle it first. Going back returns
+focus to the control that opened the surface. The command palette has a
+visible Close control, and opening it or a result focus closes an open
+popover. On the phone, a navigation from the bar or the palette raises a
+lowered sheet so the page is on screen.
+
+Dead ends fall from 2 to 0 at desktop and from 2 to 0 at 390×844
+(`docs/ux/NAVIGATION_MAP.md` §5). Journey J4 now reads the location from the
+bar and returns with one crumb, without touching the rail: 3 clicks and 2
+surface switches before, 1 and 1 now. Every other journey is unchanged on
+clicks and surface switches (`docs/ux/metrics/ce-c2.json`).
+
+The startup chunk does not grow: the palette, the labs and result focus load
+the shared exit pieces lazily, and the location bar rides the shell chunk.
+Covered by `tests/locationModel.test.ts`, `tests/exitConvention.test.ts`,
+`tests/e2e/ceLocation.spec.ts`, `tests/e2e/cePaletteGoTo.spec.ts` and
+`tests/e2e/ceExit.spec.ts`. No computed value, threshold, method or export
+changes.

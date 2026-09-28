@@ -1,0 +1,148 @@
+/* wayfinding.css: the location bar and the one exit convention (spec CE-1,
+   sections 3 and 4): crumbs, named Back controls, a workspace's own close,
+   the command palette's close control and its unavailable Go to rows.
+   Imported by lazyChunks.ts, so it joins the startup stylesheet without adding
+   to the startup script. Tokens only. */
+
+/* ── Location bar ───────────────────────────────────────────────────────── */
+.olv-loc {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+  font: 500 var(--text-sm) / 1.2 var(--font);
+  color: var(--text-dim);
+}
+.olv-loc[hidden] { display: none; }
+.olv-topbar > .olv-loc {
+  flex: 1 1 auto;
+  margin: 0 auto 0 var(--space-2xl);
+  padding: 0 var(--space-md);
+  min-height: 44px;
+  background: var(--panel);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  max-width: max-content;
+}
+.olv-loc-crumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+}
+.olv-loc-crumbs > li {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  white-space: nowrap;
+}
+.olv-loc-sep { color: var(--text-faint); }
+.olv-loc-crumb,
+.olv-loc-back,
+.olv-ws-close,
+.olv-palette-close {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  min-width: 24px;
+  min-height: 24px;
+  padding: var(--space-2xs) var(--space-sm);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.olv-loc-crumb:hover,
+.olv-loc-back:hover,
+.olv-ws-close:hover,
+.olv-palette-close:hover { color: var(--text); background: var(--hover-wash); }
+.olv-loc-crumb:focus-visible,
+.olv-loc-back:focus-visible,
+.olv-ws-close:focus-visible,
+.olv-palette-close:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+.olv-loc-here {
+  padding: var(--space-2xs) var(--space-sm);
+  color: var(--text);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.olv-loc-back {
+  color: var(--accent);
+  border-right: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  padding-right: var(--space-md);
+}
+.olv-loc-back[hidden] { display: none; }
+
+/* The phone shows the bar as the heading of the sheet, in every detent. */
+.olv-msheet-head:has(> .olv-loc:not([hidden])) { flex-wrap: wrap; row-gap: var(--space-2xs); }
+.olv-msheet-head > .olv-loc {
+  flex: 1 0 100%;
+  order: -1;
+  padding: 0 var(--space-md);
+  font-size: var(--text-xs);
+}
+.olv-msheet-head > .olv-loc .olv-loc-crumb,
+.olv-msheet-head > .olv-loc .olv-loc-back {
+  min-height: 44px;
+}
+
+/* A workspace's own way out, at its top. */
+.olv-ws-close {
+  margin: 0 0 var(--space-sm);
+  color: var(--accent);
+  border: 0.5px solid var(--hairline);
+  min-height: 44px;
+}
+
+/* ── Command palette: a visible close control; unavailable Go to rows ───── */
+.olv-palette-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  border-bottom: 0.5px solid var(--hairline);
+  padding-right: var(--space-lg);
+}
+.olv-palette-head > .olv-palette-input { border-bottom: 0; flex: 1 1 auto; min-width: 0; }
+.olv-palette-close {
+  flex: none;
+  min-height: 44px;
+  font: 500 var(--text-sm) / 1.2 var(--font);
+  border: 0.5px solid var(--hairline);
+}
+.olv-palette-row-unavailable { cursor: default; }
+.olv-palette-row-unavailable .olv-palette-row-title { color: var(--text-faint); }
+
+/* ── Dialogs that hold a surface: Back leads the head, like a task page ── */
+.olv-modal-x.olv-modal-back {
+  order: -1;
+  margin-right: var(--space-lg);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  min-height: 24px;
+}
+.olv-modal-head:has(.olv-modal-back) { justify-content: flex-start; }
+
+@media (forced-colors: active) {
+  .olv-topbar > .olv-loc,
+  .olv-loc-back,
+  .olv-ws-close,
+  .olv-palette-close { border: 1px solid CanvasText; }
+  .olv-loc-crumb,
+  .olv-loc-back,
+  .olv-ws-close,
+  .olv-palette-close { color: LinkText; }
+  .olv-loc-here { color: CanvasText; }
+  .olv-palette-row-unavailable .olv-palette-row-title { color: GrayText; }
+}

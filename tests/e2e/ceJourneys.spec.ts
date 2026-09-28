@@ -196,8 +196,8 @@ async function j3(page: Page, vp: Viewport, id: string): Promise<void> {
   if (!(await modal.locator('.olv-observatory-state-counts').isVisible())) await rec.click(run, 'Run Observatory');
   await expect(modal.locator('.olv-observatory-state-counts')).toContainText(/SURFACE: \d+/, { timeout: 30_000 });
   rec.fact('labRan', true);
-  // Leave by the visible close control, the one labelled way out of the lab.
-  await rec.back(modal.locator('.olv-modal-x'), 'Close dialog (×)');
+  // Leave by the lab's Back, which names where it returns.
+  await rec.back(modal.locator('.olv-modal-x'), `Back (${(await modal.locator('.olv-modal-x').innerText()).trim()})`);
   await expect(modal).toHaveCount(0);
   await rec.click(modeTab(page, vp, 'work'), 'Tools tab');
   await rec.click(modeScope(page, vp, 'work').locator('.olv-tool-launcher .olv-tl-row', { hasText: 'Measure' }).first(), 'Measure');
@@ -293,21 +293,16 @@ test.describe('CE wayfinding journeys', () => {
     });
     rec.fact('locationReadableWithoutRail', readable !== '');
     rec.fact('locationTextFound', readable || null);
-    let railInteractions = 0;
-    await rec.click(page.locator('.olv-rail-tab'), 'Expand the rail');
-    railInteractions += 1;
-    const back = page.locator('#olv-ws-mode-analyse .olv-ws-back');
-    let backs = 0;
-    while (await back.isVisible()) {
-      await rec.back(back, `Back (${await back.innerText()})`);
-      backs += 1;
-      railInteractions += 1;
-    }
-    await expect(page.locator('#olv-ws-mode-analyse .olv-analyse-home')).toBeVisible();
+    // The location bar names the place; its first crumb returns to the
+    // Analyse home, closing the workspace, without touching the rail.
+    const bar = page.locator('.olv-topbar .olv-loc');
+    rec.fact('locationBar', await bar.getAttribute('data-path'));
+    await rec.back(bar.locator('.olv-loc-crumb', { hasText: /^Analyse$/ }), 'Location bar crumb (Analyse)');
+    await expect(bar).toHaveAttribute('data-path', 'Analyse');
+    await expect(page.locator('#olv-left-panels')).toHaveClass(/olv-rail-collapsed/);
     rec.succeed();
-    rec.fact('railInteractions', railInteractions);
-    rec.fact('backLabels', backs);
-    rec.fact('succeedsWithoutRail', false);
+    rec.fact('railInteractions', 0);
+    rec.fact('succeedsWithoutRail', true);
     rec.finish();
   });
 

@@ -244,6 +244,33 @@ Weak exits, labelled but outside the convention in CE-EXIT-01 and CE-EXIT-02:
 - The phone View tab hides the right rail's `×`.
 - The Help overlay has no key to open it.
 
+### After C2
+
+C2 added the location bar and the one exit convention (CE-LOC, CE-EXIT). The
+dead-end list is empty at both sizes, checked by `tests/e2e/ceExit.spec.ts`,
+which visits every route and workspace the fixture reaches at 1440×900 and
+390×844.
+
+| # | Was | Now |
+| --- | --- | --- |
+| D1, P1 | Command palette with no close control | A visible **Close** control named "Close command palette" |
+| D2 | Rail page with the rail collapsed | The location bar in the top bar shows the path and a Back that names its destination |
+| P2 | Tool page with the sheet at peek | The location bar heads the sheet in every detent, with its Back |
+
+The weak exits above changed as follows:
+
+- On a router page Escape is Back, and going back returns focus to the
+  control that opened the page.
+- Contour Studio, the Range Workbench and Feature review each have a
+  `Close <name>` at their top and in the location bar.
+- Labs and result focus lead their header with a Back that names the place
+  they return to, for example `← Analyse`.
+- The Profile Workbench's close reads "Close Profile Workbench" and returns
+  focus to the profile.
+- The phone View tab and the Help overlay are unchanged.
+
+The desktop has 0 dead ends and the phone has 0.
+
 ## 6. Panel pressure inventory
 
 Each visible element is assigned one surface role from
@@ -430,6 +457,11 @@ What the baseline shows:
 
 The recorded journeys touch the right rail once (J5) and none of its drawing
 sections, so they give no task frequency for the section order in CE-VIEW-04.
+
+After C2 ([metrics/ce-c2.json](metrics/ce-c2.json)), J4 reads the location
+from the top bar and returns to the Analyse home with its first crumb, with
+the rail still collapsed: 1 click and 1 surface switch, against 3 and 2. Every
+other journey has the same clicks and surface switches as the baseline.
 
 ## 9. Review screenshots
 

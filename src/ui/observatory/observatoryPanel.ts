@@ -422,6 +422,7 @@ export function openObservatoryPanel(input: ObservatoryPanelInput): ModalHandle 
     body,
     onClose: () => { unsubscribe(); openHandle = null; },
   });
+  openHandle.element?.classList.add('olv-surface-dialog'); // the location bar gives it a named Back
   return openHandle;
 }
 

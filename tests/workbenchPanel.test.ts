@@ -314,7 +314,7 @@ describe('Profile Workbench — the non-modal contract', () => {
     // Opening a non-modal panel must not pull focus off the scene.
     expect(focused).toEqual([]);
 
-    const close = root.findByText('Close')[0];
+    const close = root.findByText('Close Profile Workbench')[0];
     const tab = close.dispatch('keydown', { key: 'Tab', target: close });
     expect(tab.defaultPrevented).toBe(false);
     const rootTab = root.dispatch('keydown', { key: 'Tab', target: close });
@@ -343,7 +343,7 @@ describe('Profile Workbench — the non-modal contract', () => {
   it('answers Escape from inside the panel, collapsing and then closing', async () => {
     const host = new FakeHost();
     const { handle, root } = await mount(host);
-    const inside = root.findByText('Close')[0];
+    const inside = root.findByText('Close Profile Workbench')[0];
 
     const first = root.dispatch('keydown', { key: 'Escape', target: inside });
     expect(handle.collapsed()).toBe(true);
@@ -575,7 +575,7 @@ describe('Profile Workbench — teardown', () => {
     let closes = 0;
     const { root } = await mount(host, { onClose: () => { closes++; } });
 
-    root.findByText('Close')[0].dispatch('click', {});
+    root.findByText('Close Profile Workbench')[0].dispatch('click', {});
 
     expect(closes).toBe(1);
     expect(host.root.children).toHaveLength(0);
