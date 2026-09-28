@@ -89,13 +89,13 @@ the two entries were renumbered when the branches were integrated.
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 35
+- FIXED: 36
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 56
+- total: 57
 
 ## Detail
 
