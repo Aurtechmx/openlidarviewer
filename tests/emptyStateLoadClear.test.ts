@@ -88,8 +88,16 @@ describe('empty state clear stylesheet', () => {
   const block = css.slice(css.indexOf('/* Opening a scan from the empty state.')).replace(/\/\*[\s\S]*?\*\//g, '');
 
   it('fades the splash content out and takes it out of reach', () => {
-    expect(block).toMatch(new RegExp(`${BUSY} > \\*\\s*\\{[^}]*opacity:\\s*0[^}]*visibility:\\s*hidden`));
+    expect(block).toMatch(new RegExp(`${BUSY} > :not\\(\\.olv-empty-url\\)\\s*\\{[^}]*opacity:\\s*0[^}]*visibility:\\s*hidden`));
     expect(block).toMatch(new RegExp(`${BUSY}\\s*\\{\\s*pointer-events:\\s*none`));
+  });
+
+  // The open-from-URL row holds the Cancel control for a remote load, so it
+  // must stay visible and take clicks while every other part of the splash
+  // is cleared.
+  it('keeps the open-from-URL row visible and operable during a load', () => {
+    expect(block).not.toMatch(new RegExp(`${BUSY} > \\*`));
+    expect(block).toMatch(new RegExp(`${BUSY} > \\.olv-empty-url\\s*\\{[^}]*pointer-events:\\s*auto`));
   });
 
   it('shows the toast only after the splash has gone', () => {

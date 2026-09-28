@@ -391,11 +391,14 @@ body.olv-theme-light .olv-empty::before {
  * `is-busy` class, so an error or a cancel (both drop it) brings the splash
  * straight back, and the empty state keeps its opaque backdrop throughout.
  * `visibility` hides the faded controls from pointer, focus and the
- * accessibility tree. The motion is declared only when the user has not asked
+ * accessibility tree. The open-from-URL row stays: it holds the Cancel
+ * control for a remote load, and it sits at the foot of the splash, clear of
+ * the toast lane. The motion is declared only when the user has not asked
  * for reduced motion, so there the swap is instant (a `transition: none`
  * override does not stop WebKit animating `visibility`). */
 .olv-empty:has(~ .olv-toast.is-busy:not(.olv-hidden)) { pointer-events: none; }
-.olv-empty:has(~ .olv-toast.is-busy:not(.olv-hidden)) > * {
+.olv-empty:has(~ .olv-toast.is-busy:not(.olv-hidden)) > .olv-empty-url { pointer-events: auto; }
+.olv-empty:has(~ .olv-toast.is-busy:not(.olv-hidden)) > :not(.olv-empty-url) {
   opacity: 0;
   visibility: hidden;
   animation: none;
@@ -405,7 +408,7 @@ body.olv-theme-light .olv-empty::before {
   to { opacity: 1; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .olv-empty:has(~ .olv-toast.is-busy:not(.olv-hidden)) > * {
+  .olv-empty:has(~ .olv-toast.is-busy:not(.olv-hidden)) > :not(.olv-empty-url) {
     transform: scale(0.98);
     transition:
       opacity var(--dur-base) var(--ease-standard),
