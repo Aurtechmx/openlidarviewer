@@ -136,6 +136,11 @@ describe('pre-registered attention values', () => {
     expect(getMethod(TERRAIN_ATTENTION_METHOD_ID)?.id).toBe(TERRAIN_ATTENTION_METHOD_ID);
     expect(getMethod(TERRAIN_RESIDUAL_METHOD_ID)?.id).toBe(TERRAIN_RESIDUAL_METHOD_ID);
   });
+
+  it('is attention method version 2: skipped cells are unresolved, not level 0', () => {
+    expect(getMethod(TERRAIN_ATTENTION_METHOD_ID)?.version).toBe(2);
+    expect(getMethod(TERRAIN_RESIDUAL_METHOD_ID)?.version).toBe(1);
+  });
 });
 
 // ── residual ────────────────────────────────────────────────────────────────

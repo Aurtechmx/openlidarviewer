@@ -44,8 +44,8 @@ export const TERRAIN_ATTENTION_BANDS = ['attention_level', 'dominant_reason'] as
 /**
  * The reason vocabulary in tie-break order, with its band 2 codes. 0 = no
  * reason; 6 and 7 are reserved and not scored; 8 marks a measured cell the
- * residual sampling skipped that no other input flags (see the protocol's
- * revision of 2026-09-27). This table is part of the method version: any change to it is a new
+ * residual sampling skipped that no other input flags (method version 2).
+ * This table is part of the method version: any change to it is a new
  * version of olv.terrain.evidence.attention.
  */
 export const ATTENTION_REASON_CODE = {
