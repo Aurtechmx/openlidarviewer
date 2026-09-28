@@ -41,7 +41,7 @@
 :root {
   color-scheme: dark;
   /* OpenLiDARViewer brand palette */
-  --bg: #0a0e1a;          /* Deep Navy */
+  --bg: #030817;          /* Deep Navy */
   --panel: #0f172a;       /* Midnight Blue */
   /*
    * v0.4.6 two-tier surfaces (design audit 1.2). A focal surface
@@ -56,7 +56,7 @@
   --shadow-raised: 0 8px 24px -12px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
   --hairline-strong: rgba(140, 170, 230, 0.28); /* the raised surface earns a slightly firmer edge */
   --hairline: rgba(140, 170, 230, 0.14);
-  --text: #eef3fb;
+  --text: #FFFFFF;
   --text-dim: #9aa6bd;
   --text-faint: #8a94ad; /* lightened from #6b768f to clear WCAG AA (≥4.5:1) on --bg */
   --warn: #b8860b; /* the provenance-caption amber; 5.1:1 on its own 12% fill here */
@@ -65,7 +65,7 @@
   /* Ink colour for text/glyphs ON a solid --accent fill (primary
    * action recipe, v0.4.6). Dark on the bright electric-blue here;
    * the Light theme keeps it white for WCAG AA on its deeper accent. */
-  --on-accent: #0a0e1a;
+  --on-accent: #030817;
   /* Readiness rating scale — semantic, colourblind-paired with the word. */
   --rating-excellent: #34d399;
   --rating-strong: #6ee7b7;
@@ -3087,7 +3087,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   stroke: var(--accent); stroke-width: 1.75; stroke-dasharray: 6 4;
 }
 .olv-measure-dot {
-  fill: var(--accent); stroke: #0a0e1a; stroke-width: 1.65;
+  fill: var(--accent); stroke: #030817; stroke-width: 1.65;
 }
 .olv-measure-dot-pending {
   fill: none; stroke: var(--accent); stroke-width: 2.2;
@@ -3104,7 +3104,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * the canvas without reading the tooltip.
  */
 .olv-measure-dot-snap {
-  fill: var(--cyan, #00f0ff); stroke: #0a0e1a; stroke-width: 1.65;
+  fill: var(--cyan, #00f0ff); stroke: #030817; stroke-width: 1.65;
 }
 /*
  * Profile-station markers — the small dim dots at evenly-spaced chainages
@@ -3115,10 +3115,10 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * screenshot export read identically — keep the two in sync.
  */
 .olv-measure-dot-station {
-  fill: rgba(0, 178, 255, 0.55); stroke: #0a0e1a; stroke-width: 1;
+  fill: rgba(0, 178, 255, 0.55); stroke: #030817; stroke-width: 1;
 }
 .olv-measure-dot-station.is-active {
-  fill: rgba(0, 178, 255, 0.98); stroke: #0a0e1a; stroke-width: 1.4;
+  fill: rgba(0, 178, 255, 0.98); stroke: #030817; stroke-width: 1.4;
 }
 .olv-measure-snap-ring {
   fill: none;
@@ -3138,7 +3138,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   fill: var(--accent);
   font: 600 12px var(--font); font-variant-numeric: tabular-nums;
   paint-order: stroke;
-  stroke: #0a0e1a; stroke-width: 4px; stroke-linejoin: round;
+  stroke: #030817; stroke-width: 4px; stroke-linejoin: round;
 }
 
 /* The instruction hint shown while measuring */
@@ -3208,7 +3208,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-inspect-halo { fill: var(--accent); opacity: 0.2; }
 .olv-inspect-dot {
-  fill: var(--cyan); stroke: #0a0e1a; stroke-width: 1.5;
+  fill: var(--cyan); stroke: #030817; stroke-width: 1.5;
 }
 
 .olv-inspect-card {
@@ -6267,12 +6267,12 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-tour-btn:hover { color: var(--text); }
 .olv-tour-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
 .olv-tour-btn-primary {
-  color: #0a0e1a;
+  color: #030817;
   background: #00b2ff;
   border-color: rgba(0, 178, 255, 0.85);
   font-weight: 600;
 }
-.olv-tour-btn-primary:hover { background: #1ec0ff; color: #0a0e1a; }
+.olv-tour-btn-primary:hover { background: #1ec0ff; color: #030817; }
 .olv-tour-skip {
   display: block;
   margin-top: var(--space-lg);

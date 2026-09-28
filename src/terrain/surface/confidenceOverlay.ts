@@ -26,7 +26,7 @@
  * PALETTE_CIVIDIS, from Nuñez, Anderton & Renslow 2018) — strong = t 1.0,
  * moderate = t 0.6, weak = t 0.2. Weak deliberately uses the t 0.2 stop, not
  * t 0.0: the ramp floor (0, 32, 76) is nearly indistinguishable from the
- * dark viewer background (#0a0e1a), and a weak cell must stay VISIBLE — a
+ * dark viewer background (#030817), and a weak cell must stay VISIBLE — a
  * vanished point would read as "no data" rather than "untrustworthy data".
  *
  * Pure data: no DOM, no three.js, no I/O. Deterministic.

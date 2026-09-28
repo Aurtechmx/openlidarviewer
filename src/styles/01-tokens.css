@@ -41,7 +41,7 @@
 :root {
   color-scheme: dark;
   /* OpenLiDARViewer brand palette */
-  --bg: #0a0e1a;          /* Deep Navy */
+  --bg: #030817;          /* Deep Navy */
   --panel: #0f172a;       /* Midnight Blue */
   /*
    * v0.4.6 two-tier surfaces (design audit 1.2). A focal surface
@@ -56,7 +56,7 @@
   --shadow-raised: 0 8px 24px -12px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
   --hairline-strong: rgba(140, 170, 230, 0.28); /* the raised surface earns a slightly firmer edge */
   --hairline: rgba(140, 170, 230, 0.14);
-  --text: #eef3fb;
+  --text: #FFFFFF;
   --text-dim: #9aa6bd;
   --text-faint: #8a94ad; /* lightened from #6b768f to clear WCAG AA (≥4.5:1) on --bg */
   --warn: #b8860b; /* the provenance-caption amber; 5.1:1 on its own 12% fill here */
@@ -65,7 +65,7 @@
   /* Ink colour for text/glyphs ON a solid --accent fill (primary
    * action recipe, v0.4.6). Dark on the bright electric-blue here;
    * the Light theme keeps it white for WCAG AA on its deeper accent. */
-  --on-accent: #0a0e1a;
+  --on-accent: #030817;
   /* Readiness rating scale — semantic, colourblind-paired with the word. */
   --rating-excellent: #34d399;
   --rating-strong: #6ee7b7;
