@@ -1,6 +1,6 @@
 # Documentation index
 
-`docs/` holds 166 files. This page is a curated route through them, not a
+`docs/` holds 168 files. This page is a curated route through them, not a
 complete listing. It points at the documents a reader usually wants first, and
 at the directories that hold the bulk collections (release records, validation
 evidence, audit reports) rather than naming every file inside them. Where a
@@ -35,6 +35,7 @@ If you cannot find something below, the directory listing is still the full pict
 | --- | --- |
 | [navigation.md](navigation.md) | The game-like camera model, and why a point cloud is explored rather than panned. |
 | [DESIGN_NOTES.md](DESIGN_NOTES.md) | Each interface decision tied to the need it serves and the cost it accepts. |
+| [ux/PRINCIPLES.md](ux/PRINCIPLES.md) | Interface principles and house rules, with [ux/COMMUNITY_SPEC.md](ux/COMMUNITY_SPEC.md), the 0.7 wayfinding requirements built on them. |
 | [mobile-browser-support.md](mobile-browser-support.md) | What works on phones and tablets, and what degrades. |
 
 ## Measurement and analysis
