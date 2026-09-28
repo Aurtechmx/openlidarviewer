@@ -84,6 +84,10 @@ for (const vp of VIEWPORTS) {
       test(`${surface}: no unlisted serious or critical violation`, async ({ page }) => {
         test.slow();
         await reach(page, surface, vp.touch);
+        // Axe samples colours as drawn; let open transitions settle first.
+        await page.evaluate(() => Promise.all(document.getAnimations()
+          .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity)
+          .map((a) => a.finished.catch(() => undefined))));
         const result = await new AxeBuilder({ page }).withTags(TAGS).analyze();
         const severe = result.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
         const known = KNOWN.filter((k) => k.surface === surface && k.viewport === vp.name);
