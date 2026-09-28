@@ -338,3 +338,18 @@ describe('summariseDataset — engine-derived complexity (VRM/TPI) override, v0.
     expect(signalTier('complexity', 'high')).toBe('neutral');
   });
 });
+
+describe('ground visibility states its basis when read from a terrain run', () => {
+  it('names the class exclusion behind a run-measured ground share', () => {
+    const out = summariseDataset({ pointCount: 1_000_000, groundPointRatio: 0.86 })!;
+    expect(out.groundVisibility.bucket).toBe('excellent');
+    expect(out.groundVisibility.afterClassExclusion).toBe(true);
+  });
+  it('carries no basis note for a load-time classification histogram', () => {
+    const out = summariseDataset({
+      pointCount: 1_000_000,
+      terrainSuggestion: { groundFraction: 0.8, vegetationFraction: 0 } as never,
+    })!;
+    expect(out.groundVisibility.afterClassExclusion).toBeUndefined();
+  });
+});

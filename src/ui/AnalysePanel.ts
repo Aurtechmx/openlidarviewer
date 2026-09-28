@@ -2137,6 +2137,15 @@ export class AnalysePanel {
    * panel. Returning the whole result (not just the model) lets the caller derive
    * the unified export provenance from the SAME result it serialises.
    */
+  /**
+   * World elevation of the local Z = 0 plane: the same map-context origin the
+   * map sheet adds back to its contour labels (null when the layers share no
+   * single origin), so contour levels land on round world elevations.
+   */
+  levelOriginZ(): number | null {
+    return this._cb.getMapContext?.()?.worldOrigin?.z ?? null;
+  }
+
   private async _resultForExport(): Promise<AnalyseContoursResult> {
     const r = this._result!;
     const style = this._contourStyle;
@@ -2609,11 +2618,15 @@ export class AnalysePanel {
     const intelligence = this._cb.getDatasetIntelligence?.() ?? null;
     try {
       const { buildTerrainReportPdf } = await loadTerrainReportPdf();
+      // At the selected export style, the field the map sheet also reads, so
+      // both documents state one contour style (cache hit; core unchanged).
+      const rep = await this._resultForExport();
+      if (this._refuseForeignScanExport()) return;
       // The renderer assembles the content from the SAME result the panel shows,
       // stamping the unified provenance via these options — so the report's
       // header / footer (CRS, datum, verdicts, accuracy, date) can never drift
       // from the GeoJSON / DXF / map sheet / DEM exports of this scan.
-      const bytes = await buildTerrainReportPdf(r, {
+      const bytes = await buildTerrainReportPdf(rep, {
         // The same resolved scale the GeoJSON, DXF and map sheet stamp, so the
         // report's vertical figures are labelled from one answer.
         verticalUnitToMetres: mapCtx?.verticalUnitToMetres ?? null,

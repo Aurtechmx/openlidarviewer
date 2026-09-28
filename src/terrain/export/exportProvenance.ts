@@ -362,7 +362,7 @@ export interface ExportProvenanceOptions {
   readonly classScope?: string | null;
   /**
    * Contour geometry method actually exported, as `id@version` (e.g.
-   * `olv.contour.analytical@1` or `olv.contour.generalize@1`). Set by Contour
+   * `olv.contour.analytical@2` or `olv.contour.generalize@1`). Set by Contour
    * Studio so a deliverable is self-describing; null otherwise.
    */
   readonly contourMethod?: string | null;

@@ -203,7 +203,7 @@ describe('purpose selection changes the exported contour bytes (release-notes co
 
   it('provenance records the per-purpose tolerance and the HONEST method id', () => {
     const expected: Record<string, { method: string; tol: number | null }> = {
-      'survey-review': { method: 'olv.contour.analytical@1', tol: null },
+      'survey-review': { method: 'olv.contour.analytical@2', tol: null },
       'terrain-research': { method: 'olv.contour.generalize@1', tol: 0.25 },
       'engineering-plan': { method: 'olv.contour.generalize@1', tol: 0.5 },
       'presentation-map': { method: 'olv.contour.generalize@1', tol: 1.0 },

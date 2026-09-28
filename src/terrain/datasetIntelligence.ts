@@ -193,8 +193,9 @@ export interface DatasetIntelligenceInput {
   /** Optional terrain-suggestion (classification histogram). */
   readonly terrainSuggestion?: TerrainSuggestionResult;
   /**
-   * Ground returns as a share of all returns, 0..1, as a finished terrain run
-   * measured it (`quality.groundPointRatio`). Feeds the ground-visibility
+   * Ground returns as a share of the analysed candidates left after classes
+   * 3-7/18 are excluded, 0..1, as a finished terrain run measured it
+   * (`quality.groundPointRatio`). Feeds the ground-visibility
    * bucket when no load-time classification histogram was attached.
    */
   readonly groundPointRatio?: number;
@@ -257,6 +258,11 @@ export interface DatasetIntelligence {
   readonly groundVisibility: {
     readonly bucket: GroundVisibilityBucket;
     readonly label: string;
+    /**
+     * True when the bucket was read from a terrain run's ground share, which is
+     * counted after classes 3-7/18 are excluded, not from the source's classes.
+     */
+    readonly afterClassExclusion?: boolean;
   };
   readonly coverage: {
     readonly bucket: CoverageBucket;
@@ -704,6 +710,11 @@ export function summariseDataset(input: DatasetIntelligenceInput): DatasetIntell
     groundVisibility: {
       bucket: groundBucket,
       label: groundVisibilityLabel(groundBucket),
+      // The run's ratio is counted after classes 3-7/18 were dropped, so it is
+      // not a share of all returns; say so wherever the bucket is shown.
+      ...(!input.terrainSuggestion && input.groundPointRatio != null
+        ? { afterClassExclusion: true }
+        : {}),
     },
     coverage: {
       bucket: coverageBucket,

@@ -162,6 +162,11 @@ export interface ComplexitySummaryInput {
    * Default true, matching a caller that states its scale.
    */
   readonly horizontalScaleResolved?: boolean;
+  /**
+   * Did the frame resolve a vertical scale? When false the TPI values are in
+   * the source Z unit and are labelled 'source Z units'. Default true.
+   */
+  readonly verticalScaleResolved?: boolean;
 }
 
 /**
@@ -194,7 +199,7 @@ export interface TerrainComplexitySummary {
   readonly band: ComplexityBand | null;
   /** Human label for {@link band} ('—' when null). */
   readonly bandLabel: string;
-  /** Z-unit label TPI values are expressed in ('m', 'ft', or 'z-units'). */
+  /** Z-unit label TPI values are expressed in ('m', 'ft', 'z-units' or 'source Z units'). */
   readonly zUnitLabel: string;
   /** Derived 0–100 confidence — min of the two cores' envelopes. */
   readonly confidence: number;
@@ -298,7 +303,7 @@ export function summariseTerrainComplexity(
 
   const band = vrmBand(vrm.summary.median);
   const bandLabel = complexityBandLabel(band);
-  const zUnitLabel = zUnit(input.verticalUnitToMetres);
+  const zUnitLabel = input.verticalScaleResolved === false ? 'source Z units' : zUnit(input.verticalUnitToMetres);
   const vrmWindowGroundM = cellMetres != null ? 3 * cellMetres : null;
   const tpiRadiusGroundM = cellMetres != null ? radiusCells * cellMetres : null;
   // The more conservative of the two derived envelopes — never asserted.

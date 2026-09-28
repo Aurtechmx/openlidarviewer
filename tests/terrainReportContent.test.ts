@@ -270,6 +270,15 @@ describe('buildTerrainReportContent — section presence + sourcing', () => {
     expect(row('Ground visibility')).toBe('Good');
     expect(row('Metric stability')).toBe('82%');
 
+    // A bucket read from the run's ground share states that basis.
+    const runRead = buildTerrainReportContent(readyResult(), {
+      ...OPTS,
+      intelligence: { ...intelligence, groundVisibility: { ...intelligence.groundVisibility, afterClassExclusion: true } },
+    });
+    expect(runRead.sections.find((s) => s.title === 'Dataset Statistics')!.rows
+      .find((r) => r.label === 'Ground visibility')?.value)
+      .toBe('Good (ground share after excluding classified vegetation and buildings)');
+
     // Without the summary the rows are OMITTED — never fabricated buckets.
     const without = buildTerrainReportContent(readyResult(), OPTS);
     const dsWithout = without.sections.find((s) => s.title === 'Dataset Statistics')!;
@@ -502,8 +511,8 @@ describe('buildTerrainReportContent — §19 permit stamp in provenance', () => 
       } as ReturnType<typeof readyResult>;
       const rows = coverage(r)?.rows ?? [];
       const label = (l: string) => rows.find((x) => x.label === l)?.value;
-      expect(label('Interpolated (of grid)')).toBe('37%');
-      expect(label('Interpolated (of covered surface)')).toBe('43%');
+      expect(label('Interpolated grid cells (of grid)')).toBe('37%');
+      expect(label('Interpolated grid cells (of covered surface)')).toBe('43%');
       // No bare "Interpolated" survives, which is what made the two look like
       // one contradictory figure.
       expect(rows.some((x) => x.label === 'Interpolated')).toBe(false);
@@ -511,7 +520,7 @@ describe('buildTerrainReportContent — §19 permit stamp in provenance', () => 
 
     it('states the basis of every share that sums over the grid', () => {
       const rows = coverage(readyResult())?.rows ?? [];
-      for (const l of ['Measured (of grid)', 'Empty (of grid)']) {
+      for (const l of ['Measured grid cells (of grid)', 'Empty grid cells (of grid)']) {
         expect(rows.some((x) => x.label === l)).toBe(true);
       }
     });
@@ -603,6 +612,25 @@ describe('buildTerrainReportContent — every row names its basis', () => {
     expect(blocked).toMatch(/source Z units/);
     expect(labels(c, 'Quality Metrics').join(' | '))
       .not.toMatch(/Within 1 × hold-out RMSEz \([\d.]+ m\)/);
+  });
+
+  it('#2c shows the hold-out RMSEz in the RMSEz row when no ASPRS accuracy is stamped', () => {
+    const base = readyResult();
+    const r = {
+      ...base,
+      verticalScaleResolved: false,
+      accuracyStandards: { ...base.accuracyStandards, rmseZM: null, nvaM: null, vvaM: null },
+      validation: { ...base.validation, rmse: 0.66 },
+      reliabilitySplit: {
+        measured: { n: 500, reliability: 0.76, ciLow: 0.75, ciHigh: 0.76, tolerance: 0.66 },
+        interpolated: null,
+      },
+    } as unknown as AnalyseContoursResult;
+    const c = buildTerrainReportContent(r, OPTS);
+    expect(rowValue(c, 'Quality Metrics', 'Vertical RMSEz')).toBe(
+      '0.66 source Z units (hold-out, not an NVA-grade accuracy)',
+    );
+    expect(rowValue(c, 'Quality Metrics', 'NVA-style (95%, hold-out)')).toBe('—');
   });
 
   it('#3 omits an intelligence row whose bucket is unknown instead of printing a dash', () => {

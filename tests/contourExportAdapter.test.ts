@@ -54,7 +54,7 @@ const intent = (over: Partial<ContourExportIntent> = {}): ContourExportIntent =>
   labelsIndexOnly: false,
   methodId: 'olv.contour.analytical',
   methodVersion: 1,
-  methodTag: 'olv.contour.analytical@1',
+  methodTag: 'olv.contour.analytical@2',
   deliverable: {
     label: 'Survey Review',
     statement: 'Exact analytical geometry.',
@@ -151,7 +151,7 @@ describe('ContourExportAdapter — gated dispatch', () => {
     expect(calls.vector[0].permit.ok).toBe(true);
     expect(calls.vector[0].permit.exporterId).toBe('contour.geojson.analytical');
     // The purpose provenance is threaded into the export.
-    expect(calls.vector[0].contourMethod).toBe('olv.contour.analytical@1');
+    expect(calls.vector[0].contourMethod).toBe('olv.contour.analytical@2');
     expect(calls.vector[0].deliverablePurpose).toBe('Survey Review');
     // Nothing else fired.
     expect(calls.mapPdf).toHaveLength(0);

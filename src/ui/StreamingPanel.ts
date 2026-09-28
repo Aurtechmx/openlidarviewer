@@ -158,6 +158,10 @@ function formatDim(n: number): string {
   return v >= 100 ? v.toFixed(0) : v.toFixed(1);
 }
 
+/** A COPC resolution row: the info VLR's root-node spacing, not the point spacing. */
+const copcRow = (value: string, title: string) =>
+  ({ label: 'Root node spacing (COPC)', value, title });
+
 /**
  * Label + value for the resolution row of the scan summary.
  *
@@ -193,19 +197,12 @@ export function spacingRowFor(
   if (crs?.isGeographic) {
     // Degrees of longitude are not a linear distance; a "spacing in metres"
     // would be latitude-dependent and is not defined here.
-    return {
-      label: 'Spacing',
-      value: '— (geographic CRS)',
-      title: 'Spacing is not a linear distance for a geographic (degrees) CRS.',
-    };
+    return copcRow('— (geographic CRS)', 'Spacing is not a linear distance for a geographic (degrees) CRS.');
   }
   if (crs?.linearUnit === 'metre') {
-    return {
-      label: 'Spacing',
-      value: `${spacing.toFixed(2)} m`,
-      title: 'Root-node point spacing in metres.',
-    };
+    return copcRow(`${spacing.toFixed(2)} m`, 'Root-node point spacing in metres.');
   }
+  let title = 'Linear unit unconfirmed — spacing shown in the source CRS units, not metres.';
   if (crs?.linearUnit === 'foot' || crs?.linearUnit === 'us-survey-foot') {
     // Spacing is in feet; convert to metres so the number is comparable.
     const factor = crs.linearUnitToMetres;
@@ -213,26 +210,17 @@ export function spacingRowFor(
     // the unconverted figure is feet. Returning it under " m" was the same
     // ~3.28x overstatement this function exists to stop, arrived at from the
     // other side, so the missing factor fails closed to source units instead.
-    if (factor === undefined || !Number.isFinite(factor) || factor <= 0) {
-      return {
-        label: 'Spacing',
-        value: `${spacing.toFixed(2)} (source units)`,
-        title: 'Foot CRS declares no usable metre factor — spacing shown in the source units, not metres.',
-      };
+    if (factor !== undefined && Number.isFinite(factor) && factor > 0) {
+      return copcRow(
+        `${(spacing * factor).toFixed(2)} m`,
+        'Root-node point spacing, converted from the source foot unit to metres.',
+      );
     }
-    return {
-      label: 'Spacing',
-      value: `${(spacing * factor).toFixed(2)} m`,
-      title: 'Root-node point spacing, converted from the source foot unit to metres.',
-    };
+    title = 'Foot CRS declares no usable metre factor — spacing shown in the source units, not metres.';
   }
-  // Unknown / absent linear unit — fail closed: show the raw source figure and
-  // do NOT claim metres.
-  return {
-    label: 'Spacing',
-    value: `${spacing.toFixed(2)} (source units)`,
-    title: 'Linear unit unconfirmed — spacing shown in the source CRS units, not metres.',
-  };
+  // Unknown / absent linear unit (or an unconvertible foot unit) — fail
+  // closed: show the raw source figure and do NOT claim metres.
+  return copcRow(`${spacing.toFixed(2)} (source units)`, title);
 }
 
 /**

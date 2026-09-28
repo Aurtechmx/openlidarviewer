@@ -312,3 +312,19 @@ describe('contoursAt — marching-squares saddle disambiguation (exact bilinear 
     expect(isolatedCorners(segs)).toEqual([1, 3]);
   });
 });
+
+describe('contoursAt — levels anchored to world elevation', () => {
+  it('places levels on round world values when the local frame has a vertical origin', () => {
+    // Local 0..20 over an origin of 331: world 331..351. A 5-unit interval must
+    // give world 335, 340, … (local 4, 9, …), not local 0, 5, … (world 331, 336, …).
+    const dtm = grid((x) => x, 21, 3);
+    const set = contoursAt(dtm, { intervalM: 5, levelOriginZ: 331 });
+    expect(set.levels.map((l) => l.value + 331)).toEqual([335, 340, 345, 350]);
+  });
+
+  it('keeps the local anchoring when no origin is given', () => {
+    const dtm = grid((x) => x, 21, 3);
+    const set = contoursAt(dtm, { intervalM: 5 });
+    expect(set.levels.map((l) => l.value)).toEqual([0, 5, 10, 15, 20]);
+  });
+});

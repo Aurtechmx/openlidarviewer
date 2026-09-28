@@ -510,7 +510,7 @@ describe('buildDemPackage', () => {
       basename: 'site',
       worldOrigin: { x: 600000, y: 4000000 },
       isGeographic: false,
-      contourMethod: 'olv.contour.analytical@1',
+      contourMethod: 'olv.contour.analytical@2',
       deliverablePurpose: 'survey-review',
       softwareVersion: '0.5.9',
       metricVersion: 'v0.4.1',
@@ -528,7 +528,7 @@ describe('buildDemPackage', () => {
     expect(readme).toMatch(/Cartographic\.dxf — omitted: Included only with a cartographic/);
     const prov = JSON.parse(new TextDecoder().decode(extractEntry(zip, 'site_Provenance.json')!));
     expect(prov.deliverablePurpose).toBe('survey-review');
-    expect(prov.contourMethod).toBe('olv.contour.analytical@1');
+    expect(prov.contourMethod).toBe('olv.contour.analytical@2');
   });
 
   it('includes a SHA256SUMS.txt whose digests verify every other file in the package', () => {

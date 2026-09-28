@@ -60,8 +60,15 @@
       "file": "src/app/terrainAnalysisRunner.ts",
       "symbol": "createTerrainAnalysisRunner.buildResultForExport",
       "frame": "project-local",
-      "reads": 2,
+      "reads": 1,
       "why": "gatherTerrainPositions returns one assembled sample with every layer placement already folded in, and the contour export grids it in that single frame."
+    },
+    {
+      "file": "src/app/terrainAnalysisRunner.ts",
+      "symbol": "createTerrainAnalysisRunner.coreParamsOf.deriveCoreParams",
+      "frame": "project-local",
+      "reads": 1,
+      "why": "The shared core-params helper for run() and the export builder reads the same assembled gatherTerrainPositions sample, with every layer placement folded in."
     },
     {
       "file": "src/app/terrainAnalysisRunner.ts",

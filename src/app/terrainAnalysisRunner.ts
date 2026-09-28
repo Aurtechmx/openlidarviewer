@@ -18,6 +18,7 @@
 // runner always sees current values without a top-level `viewer.*` dereference
 // in main.ts.
 import type { Viewer } from '../render/Viewer';
+import type { ComputeCoreAsyncFn } from '../terrain/contour/terrainCoreCache';
 import { ProcessService } from '../process/ProcessService';
 import type { ProductId, ScanFacts } from '../process/ProcessPlan';
 import type { AuthorizationCheck } from '../process/ProcessService';
@@ -655,6 +656,29 @@ export function createTerrainAnalysisRunner(
     return Number.isFinite(canonical[1]) ? canonical[1] : null;
   };
 
+  // The worker-backed compute both core paths hand the fingerprint cache.
+  const viaWorker = (
+    compute: (
+      p: Float32Array, n: number, c: TerrainCoreParams,
+      cls?: TerrainCoreParams['classification'], s?: AbortSignal,
+    ) => Promise<TerrainCore>,
+    signal: AbortSignal,
+  ): ComputeCoreAsyncFn => (input, params) =>
+    compute(input as Float32Array, (input as Float32Array).length / 3, params, params.classification, signal);
+
+  // The interval-independent core params for a gather; run() and the export
+  // builder derive them identically so the core-cache fingerprint never forks.
+  const coreParamsOf = (gathered: NonNullable<ReturnType<Viewer['gatherTerrainPositions']>>) =>
+    deriveCoreParams(
+      gathered.positions,
+      gathered.classification,
+      crsService,
+      gathered.totalPoints,
+      gathered.residentOnly,
+      worldOriginY(gathered.sourceUpAxis),
+      gathered,
+    );
+
   /**
    * The active scan's in-memory Float32 precision permit, or null when nothing
    * is loaded. Reads the SAME two seams as `worldOriginY` — a static cloud's
@@ -809,15 +833,7 @@ export function createTerrainAnalysisRunner(
       // hits the cache instead of recomputing the heavy half. Feeds the active
       // scan's resolved CRS + vertical datum into the analysis so the readiness
       // gate and export honesty reflect a georeferenced file.
-      const coreParams = deriveCoreParams(
-        pos,
-        gathered.classification,
-        crsService,
-        gathered.totalPoints,
-        gathered.residentOnly,
-        worldOriginY(gathered.sourceUpAxis),
-        gathered,
-      );
+      const coreParams = coreParamsOf(gathered);
       // Withheld-aware recovery (L26): the display gather above stamped
       // withheldExcluded === null exactly when some contributing buffer
       // carried no flags channel, which for a lone static cloud means it was
@@ -832,20 +848,12 @@ export function createTerrainAnalysisRunner(
         coreParams,
         runDatasetId,
         abort.signal,
-        () => getOrComputeCoreAsync(pos, coreParams, (input, params) =>
-          computeTerrainCoreAsync(
-            input as Float32Array,
-            (input as Float32Array).length / 3,
-            params,
-            params.classification,
-            abort.signal,
-          ),
-        ),
+        () => getOrComputeCoreAsync(pos, coreParams, viaWorker(computeTerrainCoreAsync, abort.signal)),
       );
       if (bail()) return;
       const coreSource: TerrainCoreSource | null = withheldRecovered ? null : lastTerrainCoreSource();
       // Cheap interval-dependent stage: contours → stitch → style → labels.
-      const result = contoursFromCore(core, { intervalM });
+      const result = contoursFromCore(core, { intervalM, levelOriginZ: analysePanel.levelOriginZ?.() });
       // Final guard before touching the panel: a newer run, a swapped/closed
       // scan, or a hidden panel means this result lost the race — drop it and
       // leave the busy/skeleton state to whoever owns it now.
@@ -917,7 +925,7 @@ export function createTerrainAnalysisRunner(
         // declares — not the count the viewer holds, which on a display sample
         // is the same number on both sides and states nothing.
         analysedBasis: facts
-          ? ((c) => analysedBasisOf(facts, pos.length / 3, c?.declaredPointCount, c ? c.metadata?.interpretationLevel ?? null : undefined))(viewer.getCloud(getActiveId() ?? ''))
+          ? ((c) => analysedBasisOf(facts, pos.length / 3, c?.declaredPointCount, c ? c.metadata?.interpretationLevel ?? null : undefined, gathered.totalPoints))(viewer.getCloud(getActiveId() ?? ''))
           : undefined,
         // The token is minted on the facts this frame was built from and
         // verified at export against the facts the scan has then, so an edit
@@ -981,15 +989,7 @@ export function createTerrainAnalysisRunner(
     // this is a side-effect-free build for an export only.
     const { getOrComputeCoreAsync, contoursFromCore } = await loadTerrainCoreCache();
     const { computeTerrainCoreAsync } = await loadComputeTerrainCoreAsync();
-    const coreParams = deriveCoreParams(
-      gathered.positions,
-      gathered.classification,
-      crsService,
-      gathered.totalPoints,
-      gathered.residentOnly,
-      worldOriginY(gathered.sourceUpAxis),
-      gathered,
-    );
+    const coreParams = coreParamsOf(gathered);
     const activeId = getActiveId();
     const crsRev = crsService.crsRevision();
     // Reuse the core the last winning run() committed for this EXACT dataset
@@ -999,6 +999,7 @@ export function createTerrainAnalysisRunner(
     // export built right after a recovered run would silently disagree with
     // the analysis the user just saw. A classification edit invalidates
     // lastCommittedCore (abortAndClearCache), so it can never go stale here.
+    const noAbort = new AbortController().signal;
     const core = lastCommittedCore
       && lastCommittedCore.datasetId === activeId
       && lastCommittedCore.crsRevision === crsRev
@@ -1008,19 +1009,12 @@ export function createTerrainAnalysisRunner(
         activeId,
         // No abort here: a cache miss (scan analysed under a different fingerprint)
         // computes once; the export awaits it. There is no superseding run to cancel.
-        new AbortController().signal,
-        () => getOrComputeCoreAsync(gathered.positions, coreParams, (input, params) =>
-          computeTerrainCoreAsync(
-            input as Float32Array,
-            (input as Float32Array).length / 3,
-            params,
-            params.classification,
-            new AbortController().signal,
-          ),
-        ),
+        noAbort,
+        () => getOrComputeCoreAsync(gathered.positions, coreParams, viaWorker(computeTerrainCoreAsync, noAbort)),
       )).core;
     return contoursFromCore(core, {
       intervalM: opts.intervalM,
+      levelOriginZ: getAnalysePanel().levelOriginZ?.(),
       shapeStyle: opts.shapeStyle,
       generalizeToleranceCells: opts.generalizeToleranceCells,
       generalizeMode: opts.generalizeMode,

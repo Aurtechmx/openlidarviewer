@@ -22,7 +22,7 @@ function baseInput(): ContourPdfInput {
       horizontalUnit: 'm',
       verticalUnit: 'm',
       grid: '10x10 @ 1 m',
-      methodIds: ['olv.contour.analytical@1'],
+      methodIds: ['olv.contour.analytical@2'],
       sourceHash: 'deadbeefcafe',
     },
     support: { measuredPct: 80, interpolatedPct: 15, unsupportedPct: 5 },

@@ -77,14 +77,14 @@ describe('buildExportProvenance — field derivation', () => {
   it('stamps the Contour Studio method + purpose when supplied, and carries them into the file JSON', () => {
     const p = buildExportProvenance(readyResult(), {
       ...OPTS,
-      contourMethod: 'olv.contour.analytical@1',
+      contourMethod: 'olv.contour.analytical@2',
       deliverablePurpose: 'survey-review',
     });
-    expect(p.contourMethod).toBe('olv.contour.analytical@1');
+    expect(p.contourMethod).toBe('olv.contour.analytical@2');
     expect(p.deliverablePurpose).toBe('survey-review');
     // The serialized provenance the writers embed must carry them too.
     const json = provenanceJson(p) as Record<string, unknown>;
-    expect(json.contourMethod).toBe('olv.contour.analytical@1');
+    expect(json.contourMethod).toBe('olv.contour.analytical@2');
     expect(json.deliverablePurpose).toBe('survey-review');
   });
 
@@ -305,7 +305,7 @@ describe('processingManifestFromProvenance — the verify-only manifest assembly
   it('binds the params the provenance actually carries and verifies intact', () => {
     const p = buildExportProvenance(complexResult(), {
       ...OPTS,
-      contourMethod: 'olv.contour.analytical@1',
+      contourMethod: 'olv.contour.analytical@2',
     });
     const m = processingManifestFromProvenance(p);
     const byMethod = new Map(m.ops.map((op) => [op.method, op]));
@@ -316,7 +316,7 @@ describe('processingManifestFromProvenance — the verify-only manifest assembly
     expect(byMethod.get('olv.terrain.tpi@1')?.params).toEqual({ radiusCells: 5, radiusGroundM: 5.5, zUnit: 'm' });
     // The contour geometry op is appended last with the interval + style.
     const last = m.ops[m.ops.length - 1];
-    expect(last.method).toBe('olv.contour.analytical@1');
+    expect(last.method).toBe('olv.contour.analytical@2');
     expect(last.params).toEqual({ intervalM: 1, style: 'smooth' });
     expect(verifyProcessingManifest(m)).toEqual({ ok: true });
   });
