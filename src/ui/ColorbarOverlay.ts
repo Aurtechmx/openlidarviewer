@@ -13,7 +13,9 @@
  * and pushes it through `update()` on every colour-context change. The
  * overlay renders three things:
  *
- *   - the generator's SVG (`buildColorbarSvg` — the SAME ramp the points use);
+ *   - a full-width ramp (`buildLegendRampSvg`, the SAME palette the points
+ *     use) with, for elevation, a distribution strip of the sample the
+ *     window was taken from and the share of it clipped below / above;
  *   - an explicit "min – max unit" range line (the requirement is that the
  *     legend SHOWS min/max; nice ticks round the ends, so the exact window
  *     endpoints get their own line);
@@ -31,8 +33,19 @@
  */
 
 import { el } from './dom';
-import { buildColorbarSvg, formatColorbarValue } from '../render/colorbar';
+import { formatColorbarValue } from '../render/colorbar';
 import type { ActiveColorbar } from '../render/activeColorbar';
+import {
+  buildElevationHistogram,
+  clipShares,
+  describeHistogram,
+  formatShare,
+  ordinal,
+  percentileOf,
+  type ElevationHistogram,
+} from '../render/elevationHistogram';
+import type { PointInfo } from '../render/pointInfo';
+import { buildLegendRampSvg } from './legendRampSvg';
 import { MOBILE_LAYOUT_QUERY } from './isMobileDevice';
 
 export class ColorbarOverlay {
@@ -42,6 +55,21 @@ export class ColorbarOverlay {
   private readonly _svgHost: HTMLElement;
   private readonly _range: HTMLElement;
   private readonly _note: HTMLElement;
+  private readonly _caps: HTMLElement;
+  private readonly _below: HTMLElement;
+  private readonly _above: HTMLElement;
+  private readonly _readout: HTMLElement;
+  private readonly _marker: HTMLElement;
+
+  /** Distribution of the current elevation sample, or null. */
+  private _hist: ElevationHistogram | null = null;
+  /** The cloud the histogram was built from (identity check). */
+  private _histSample: unknown = null;
+  /** Latest probe hover, drawn on the next animation frame. */
+  private _hover: PointInfo | null = null;
+  private _hoverFrame = 0;
+  /** Up axis of the histogram's cloud: 2 = Z, 1 = Y. */
+  private _axis: 1 | 2 = 2;
 
   /** Render key of the last spec drawn — identical specs skip the re-render. */
   private _lastKey: string | null = null;
@@ -56,6 +84,17 @@ export class ColorbarOverlay {
     this._svgHost = el('div', { className: 'olv-colorbar-svg' });
     this._range = el('div', { className: 'olv-colorbar-range' });
     this._note = el('div', { className: 'olv-colorbar-note olv-hidden' });
+    this._below = el('span', { className: 'olv-colorbar-cap' });
+    this._above = el('span', { className: 'olv-colorbar-cap' });
+    this._readout = el('span', { className: 'olv-colorbar-readout' });
+    this._caps = el('div', { className: 'olv-colorbar-caps olv-hidden' }, [this._below, this._above]);
+    this._marker = el('div', { className: 'olv-colorbar-marker olv-hidden' });
+    if (typeof addEventListener === 'function') {
+      addEventListener('olv:probe-hover', (e) => {
+        this._hover = (e as CustomEvent<PointInfo | null>).detail;
+        if (!this._hoverFrame) this._hoverFrame = requestAnimationFrame(() => this._drawHover());
+      });
+    }
     const close = el('button', {
       className: 'olv-colorbar-close',
       ariaLabel: 'Hide colour legend',
@@ -72,7 +111,8 @@ export class ColorbarOverlay {
     });
     this.element = el('div', { className: 'olv-colorbar olv-hidden' }, [
       el('div', { className: 'olv-colorbar-head' }, [this._range, close]),
-      this._svgHost,
+      el('div', { className: 'olv-colorbar-plot' }, [this._svgHost, this._marker, this._readout]),
+      this._caps,
       this._note,
     ]);
   }
@@ -104,22 +144,26 @@ export class ColorbarOverlay {
       this._setVisible(false);
       return;
     }
-    const orientation = this._isPhone() ? 'vertical' : 'horizontal';
-    const s = { ...active.spec, orientation } as const;
-    const key = [active.mode, s.palette, s.min, s.max, s.unit ?? '', active.note ?? '', orientation].join('|');
+    const s = active.spec;
+    const key = [active.mode, s.palette, s.min, s.max, s.unit ?? '', active.note ?? ''].join('|');
     this._last = active;
-    if (key === this._lastKey) {
+    if (key === this._lastKey && (active.cloud?.[0] ?? null) === this._histSample) {
       this._setVisible(true);
       return;
     }
     this._lastKey = key;
 
-    // The SVG string comes from the pure generator, which XML-escapes every
-    // text value; nothing user-derived flows in (labels / units / notes are
-    // all app-chosen constants). Routed through el()'s `unsafeHtml` funnel —
-    // the one audited innerHTML sink — rather than a raw assignment, per the
-    // unsafeHtmlGuard contract.
-    this._svgHost.replaceChildren(el('div', { unsafeHtml: buildColorbarSvg(s) }));
+    // The histogram is rebuilt only here: when the window or the cloud
+    // changed, never per frame or per hover.
+    const [cloud, axis = 2] = active.cloud ?? [];
+    this._histSample = cloud ?? null;
+    this._axis = axis;
+    // World heights on the window pass's own up axis (colorLegend.ts).
+    const xyz: [number, number, number] = [0, 0, 0];
+    this._hist = cloud
+      ? buildElevationHistogram({ count: cloud.pointCount, value: (i) => cloud.worldXYZ(i, xyz)[axis] }, s.min, s.max)
+      : null;
+    this._renderRamp(s);
     // The explicit endpoint line — nice ticks round the ends, so the exact
     // ramp window gets stated verbatim, with the unit only when known.
     const unitSuffix = s.unit ? ` ${s.unit}` : '';
@@ -128,6 +172,47 @@ export class ColorbarOverlay {
     this._note.textContent = active.note ?? '';
     this._note.classList.toggle('olv-hidden', !active.note);
     this._setVisible(true);
+  }
+
+  /**
+   * Draw the ramp, the strip (when a histogram is ready) and the clip caps.
+   * The SVG string comes from a pure generator that XML-escapes every text
+   * value; nothing user-derived flows in (labels, units and the summary are
+   * app-chosen constants and formatted numbers). Routed through el()'s
+   * `unsafeHtml` funnel, the one audited innerHTML sink, per the
+   * unsafeHtmlGuard contract.
+   */
+  private _renderRamp(s: ActiveColorbar['spec']): void {
+    const h = this._hist;
+    const summary = h ? describeHistogram(h, formatColorbarValue, s.unit ?? 'source units') : '';
+    this._svgHost.replaceChildren(el('div', { unsafeHtml: buildLegendRampSvg(s, h, summary) }));
+    if (h) {
+      const c = clipShares(h);
+      this._below.textContent = `◂ ${formatShare(c.below)} below`;
+      this._above.textContent = `${formatShare(c.above)} above ▸`;
+    }
+    this._caps.classList.toggle('olv-hidden', !h);
+    this._drawHover();
+  }
+
+  /** Place the hover marker for the latest probe pick, or clear it. */
+  private _drawHover(): void {
+    this._hoverFrame = 0;
+    const h = this._hist;
+    const info = this._hover;
+    const s = this._last?.spec;
+    if (!h || !info || !s) {
+      this._marker.classList.add('olv-hidden');
+      this._readout.textContent = '';
+      return;
+    }
+    // The hover carries world x/y/z; the legend's height is the sample's up axis.
+    const v = this._axis === 1 ? info.y : info.z;
+    const t = Math.min(1, Math.max(0, (v - s.min) / (s.max - s.min)));
+    this._marker.style.left = `${(t * 100).toFixed(2)}%`;
+    this._marker.classList.remove('olv-hidden');
+    this._readout.textContent =
+      `${formatColorbarValue(v)} ${s.unit ?? 'source units'} · ${ordinal(Math.round(percentileOf(h, v)))} pct`;
   }
 
   private _setVisible(visible: boolean): void {

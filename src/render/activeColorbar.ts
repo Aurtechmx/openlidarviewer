@@ -43,6 +43,7 @@
 import type { ColorMode } from './colorModes';
 import { DEFAULT_ELEVATION_PALETTE, DEFAULT_SCALAR_PALETTE } from './colorModes';
 import type { ColorbarSpec } from './colorbar';
+import type { PointCloud } from '../model/PointCloud';
 
 /**
  * The viewer facts the spec-builder consumes. The caller (Viewer) owns HOW
@@ -79,6 +80,12 @@ export interface ActiveColorbarSource {
    * shows bare numbers, never a guessed unit.
    */
   readonly elevationUnit?: string | null;
+  /**
+   * Elevation only: the cloud whose positions the window was computed from
+   * and its up axis (2 = Z, 1 = Y), for the legend's distribution strip. Absent when the window is not this cloud's
+   * own percentile pass (streaming, project-shared scale).
+   */
+  readonly cloud?: readonly [PointCloud, 1 | 2];
 }
 
 /** A ready-to-render colorbar: the generator spec plus the honesty note. */
@@ -89,6 +96,8 @@ export interface ActiveColorbar {
   readonly spec: ColorbarSpec;
   /** Honest sub-caption (trim window / normalisation), when one applies. */
   readonly note?: string;
+  /** Cloud behind the elevation window (see ActiveColorbarSource.cloud). */
+  readonly cloud?: readonly [PointCloud, 1 | 2];
 }
 
 /** The continuous scalar modes that carry an on-screen/burned-in colorbar. */
@@ -135,6 +144,7 @@ export function buildActiveColorbarSpec(source: ActiveColorbarSource): ActiveCol
           unit: source.elevationUnit || undefined,
         },
         note: sampleNote ?? undefined,
+        cloud: source.cloud,
       };
     }
     case 'intensity': {

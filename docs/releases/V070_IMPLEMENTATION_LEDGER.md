@@ -96,17 +96,18 @@ the two entries were renumbered when the branches were integrated.
 | L190 | EXPORT | TEST | med | FIXED | new | An Observatory run's source digest hashed only the first 3000 position values, the live run dropped the planning option and recorded no file name or unit, and the package wrote a zero grid shape in field.json and empty params for every method in its processing manifest. |
 | L191 | UI | TEST | med | FIXED | new | Flow Pulse, Terrain Access and Observatory opened as dialogs that hid the scan and the rail, the right rail was titled Scan Intelligence while it held view settings, and a mode tab could land in the middle of a page. |
 | L187 | UI | TEST | low | FIXED | new | Opening a scan from the empty state put the load toast over the brand mark, and the splash painted above the toast. |
+| L193 | UI | TEST | low | FIXED | new | The elevation legend's ramp used about two thirds of the card and showed nothing about where the points sit inside the p5–p95 window or how many it clips. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 47
+- FIXED: 48
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 68
+- total: 69
 
 ## Detail
 
@@ -7420,3 +7421,24 @@ reduced motion the swap is instant. The change is CSS in
 Covered by `tests/emptyStateLoadClear.test.ts` and
 `tests/e2e/emptyStateLoadClear.spec.ts`. No computed value, threshold, method
 or export changes.
+
+### L193 · FIXED · UI
+
+The live colour legend's ramp now spans the card's inner width at 16 px
+(`src/ui/legendRampSvg.ts`), on desktop and phone. For elevation, a strip of
+56 bins above the ramp shows the distribution of the strided sample the
+p5–p95 window is taken from (`src/render/elevationHistogram.ts`, same stride
+and 50 000 cap as `computeElevationRange`), each bar in the ramp colour at its
+height, with the share below and above the window as end caps. The strip is
+`aria-hidden`; the scale's accessible name carries a text summary. With the
+Probe tool active, a hovered point is marked on the ramp with its value and
+percentile in the sample; the unit is shown only when known, otherwise
+"source units". The histogram is rebuilt only when the window or the cloud
+changes, and the marker at most once per animation frame. Colouring and the
+snapshot burn-in are unchanged.
+
+Limits: the marker needs the Probe tool, and streamed COPC scans and the
+project-shared scale show the ramp without a strip.
+
+Covered by `tests/elevationHistogram.test.ts`, `tests/colorbarOverlay.test.ts`
+and `tests/e2e/elevationLegend.spec.ts`.

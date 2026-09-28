@@ -10509,9 +10509,36 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 }
 .olv-colorbar-close:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
 .olv-colorbar-svg { line-height: 0; }
-.olv-colorbar-note { font-size: var(--text-2xs); color: var(--text-dim); max-width: 150px; text-wrap: pretty; }
+/* The ramp fills the card's inner width; the SVG's x values are percentages. */
+.olv-colorbar-svg svg { display: block; width: 100%; }
+.olv-colorbar-plot { position: relative; }
+/* Probe-hover marker: spans the distribution strip and the ramp. */
+.olv-colorbar-marker {
+  position: absolute; top: 16px; height: 44px; width: 2px; margin-left: -1px;
+  background: var(--text); box-shadow: 0 0 0 1px var(--panel);
+  border-radius: 1px; pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .olv-colorbar-marker { transition: left var(--dur-fast) ease-out; }
+}
+.olv-colorbar-caps {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 6px;
+  font-size: var(--text-2xs); color: var(--text-dim); font-variant-numeric: tabular-nums;
+}
+.olv-colorbar-cap { white-space: nowrap; }
+/* Hover readout: right of the "Elevation" title, above the strip. */
+.olv-colorbar-readout {
+  position: absolute; top: 0; right: 0; line-height: 14px;
+  font-size: var(--text-2xs); font-weight: 600; font-variant-numeric: tabular-nums;
+  color: var(--text); white-space: nowrap;
+}
+.olv-colorbar-note { font-size: var(--text-2xs); color: var(--text-dim); text-wrap: pretty; }
+@media (forced-colors: active) {
+  .olv-colorbar-hist rect { fill: CanvasText; }
+  .olv-colorbar-marker { background: Highlight; box-shadow: none; }
+}
 @media (max-width: 767px) {
-  .olv-colorbar { right: 14px; }
+  .olv-colorbar { right: 14px; width: min(280px, calc(100vw - 28px)); box-sizing: border-box; }
 }
 /* A status toast lifted over the navigation card (panelChrome.ts) lands
    mid-stage, where this legend floats: the legend steps aside until the toast
@@ -10528,11 +10555,9 @@ body:has(.olv-lasso-toast.olv-visible[data-lifted]) .olv-colorbar:not(.olv-color
 }
 /* Right rail collapsed: the key floats at the stage's top-right corner,
    below the header and clear of the collapsed rail tab, instead of vanishing. */
-.olv-colorbar.olv-colorbar-floating { top: 64px; right: 66px; }
+.olv-colorbar.olv-colorbar-floating { top: 64px; right: 66px; width: 280px; box-sizing: border-box; }
 .olv-colorbar-docked .olv-colorbar-head,
 .olv-colorbar-floating .olv-colorbar-head { min-height: 0; }
-.olv-colorbar-docked .olv-colorbar-note,
-.olv-colorbar-floating .olv-colorbar-note { max-width: 240px; }
 
 /* ─── Layer Health card ──────────────────────────────────────────────
  * Per-layer spatial facts (CRS, units, datum, compatibility, frame
