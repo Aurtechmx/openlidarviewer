@@ -237,7 +237,7 @@ export function renderObservatoryPanel(
   }
   if (state.phase === 'running') {
     const status = el('p', { className: 'olv-observatory-status' });
-    showBusyScan(status, 'Running…');
+    showBusyScan(status, 'Running…', 'emblem');
     root.append(status);
     return root;
   }

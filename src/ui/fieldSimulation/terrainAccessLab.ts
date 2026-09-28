@@ -722,8 +722,8 @@ function mountTerrainAccessInteractive(
     renderSelection();
     applyOverlayVisibility();
     runButton.disabled = true;
-    runButton.onclick = () => {
-      if (!startCell || !goalCell || !profile) return;
+    runButton.onclick = async () => {
+      if (!startCell || !goalCell || !profile || busy) return;
       if (input?.isStale?.()) {
         outcome = { ok: false, code: 'STALE_INPUT', reason: TERRAIN_ACCESS_STALE_REASON };
         runCard.replaceChildren(renderTerrainAccessRunCard(outcome));
@@ -732,6 +732,21 @@ function mountTerrainAccessInteractive(
       }
       busy = true;
       runButton.disabled = true;
+      // The emblem waits in the run card; one frame lets it paint before the
+      // synchronous search computes.
+      const busyLine = el('p', { className: 'olv-flow-busy' });
+      showBusyScan(busyLine, 'Finding a route…', 'emblem');
+      runCard.replaceChildren(busyLine);
+      await new Promise<void>((resolve) => {
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => resolve());
+        else setTimeout(resolve, 0);
+      });
+      if (!startCell || !goalCell || !profile) {
+        busy = false;
+        runCard.replaceChildren(renderTerrainAccessRunCard(outcome));
+        renderSelection();
+        return;
+      }
       const startIndex = startCell.row * readyPreview.grid.cols + startCell.col;
       const endIndex = goalCell.row * readyPreview.grid.cols + goalCell.col;
       outcome = runLabTerrainAccess(input, profile, startIndex, endIndex);

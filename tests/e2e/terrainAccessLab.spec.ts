@@ -145,10 +145,23 @@ test('profile, start/goal by keyboard and click, run, route shown, why-not, expo
   // the deterministic happy path, not a best-effort branch.
   const runButton = modal.locator('.olv-ta-run');
   await expect(runButton).toBeEnabled();
+  await page.evaluate(() => {
+    const w = window as unknown as { __emblemSeen: string | null };
+    w.__emblemSeen = null;
+    const obs = new MutationObserver(() => {
+      const scan = document.querySelector('.olv-ta-run-card .olv-busy-scan--emblem');
+      if (!scan) return;
+      w.__emblemSeen = scan.getAttribute('aria-hidden');
+      obs.disconnect();
+    });
+    obs.observe(document.body, { subtree: true, childList: true });
+  });
   await runButton.click();
   await expect(modal.locator('.olv-ta-run-card')).toContainText('geometric traversability screening', {
     timeout: 10_000,
   });
+  expect(await page.evaluate(() => (window as unknown as { __emblemSeen: string | null }).__emblemSeen), 'the emblem waited while it ran').toBe('true');
+  await expect(modal.locator('.olv-ta-run-card .olv-busy-scan')).toHaveCount(0);
   // §22: never a safety/passability claim, win or refuse.
   await expect(modal.locator('.olv-ta-run-card')).not.toContainText(/\bis safe\b|\bis drivable\b|\bis passable\b/i);
   // The horizontal length/grade rows carry a real metric unit, guaranteed by

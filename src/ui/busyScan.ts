@@ -20,6 +20,13 @@
  * point rests at the front with the trail showing current progress. The mark
  * is 1em tall and inline, so its host keeps its height.
  *
+ * A second form, the emblem (`{ variant: 'emblem' }`), is for waits with no
+ * known progress, such as an analysis run: a sphere that pulses under a thin
+ * horizontal flare, two flat dotted rings with a band of light travelling
+ * round each (the two turn opposite ways), and a mirrored vertical axis of
+ * dots, tapering outward, that lights from the centre like a scan pulse.
+ * Under reduced motion it is the emblem at rest.
+ *
  * Built with createElementNS; no markup strings.
  */
 
@@ -51,8 +58,60 @@ export const FADE_MS = 250;
 /** Longest the completion waits for the point to come round to the front. */
 export const SETTLE_WAIT_MS = 1000;
 
-/** Create a detached busy indicator with a short fixed trail. */
-export function createBusyScan(): SVGElement {
+/** The progress trail (default) or the brand emblem for analysis waits. */
+export type BusyScanVariant = 'trail' | 'emblem';
+
+/** Class on the emblem form's root, next to BUSY_SCAN_CLASS. */
+export const BUSY_EMBLEM_CLASS = 'olv-busy-scan--emblem';
+
+/** Emblem rings as [cy, rx, ry, dot count], in the 40 x 20 view box. */
+const EMBLEM_RINGS: ReadonlyArray<readonly [number, number, number, number]> = [
+  [8.8, 15, 1.9, 26],
+  [11.2, 15, 1.9, 26],
+];
+
+/** Emblem axis dots as [distance from centre, radius]; mirrored, tapering outward. */
+const EMBLEM_AXIS: ReadonlyArray<readonly [number, number]> = [
+  [4.2, 0.95], [6.4, 0.72], [8.2, 0.5], [9.5, 0.36],
+];
+
+const f2 = (n: number): string => n.toFixed(2);
+
+function svgRoot(cls: string): SVGElement {
+  return svgEl('svg', { class: cls, viewBox: '0 0 40 20', width: '40', height: '20', 'aria-hidden': 'true', focusable: 'false' });
+}
+
+/** The emblem form. Per-dot delays live in the CSS (nth-child); no inline style. */
+function createEmblem(): SVGElement {
+  const root = svgRoot(`${BUSY_SCAN_CLASS} ${BUSY_EMBLEM_CLASS}`);
+  // Soft halo and the horizontal flare: flat low-opacity shapes, no blur.
+  root.append(svgEl('ellipse', { class: 'olv-bse-halo', cx: '20', cy: '10', rx: '6', ry: '3.6' }));
+  root.append(svgEl('rect', { class: 'olv-bse-streak', x: '4', y: '9.82', width: '32', height: '0.36', rx: '0.18' }));
+  EMBLEM_RINGS.forEach(([cy, rx, ry, n], ring) => {
+    const g = svgEl('g', { class: `olv-bse-ring olv-bse-ring-${ring + 1}` });
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const dot = svgEl('circle', { cx: f2(20 + rx * Math.cos(a)), cy: f2(cy + ry * Math.sin(a)), r: '0.48' });
+      // The front (lower) arc rests brighter, as in the emblem.
+      if (Math.sin(a) > 0.01) dot.setAttribute('class', 'is-front');
+      g.append(dot);
+    }
+    root.append(g);
+  });
+  const axis = svgEl('g', { class: 'olv-bse-axis' });
+  for (const [d, r] of EMBLEM_AXIS) {
+    axis.append(svgEl('circle', { cx: '20', cy: f2(10 - d), r: String(r) }));
+    axis.append(svgEl('circle', { cx: '20', cy: f2(10 + d), r: String(r) }));
+  }
+  root.append(axis);
+  root.append(svgEl('circle', { class: 'olv-bse-core', cx: '20', cy: '10', r: '2' }));
+  root.append(svgEl('circle', { class: 'olv-bse-glint', cx: '19.35', cy: '9.35', r: '0.7' }));
+  return root;
+}
+
+/** Create a detached busy indicator: the short fixed trail, or the emblem. */
+export function createBusyScan(options: { variant?: BusyScanVariant } = {}): SVGElement {
+  if (options.variant === 'emblem') return createEmblem();
   const root = svgEl('svg', {
     class: BUSY_SCAN_CLASS,
     viewBox: '0 0 40 20',
@@ -184,8 +243,8 @@ export function createBusyScanController(): BusyScanController {
  * Setting `host.textContent` later (as every host does when the operation ends,
  * fails or is cancelled) removes it.
  */
-export function showBusyScan(host: HTMLElement, text: string): void {
-  host.replaceChildren(createBusyScan(), text);
+export function showBusyScan(host: HTMLElement, text: string, variant: BusyScanVariant = 'trail'): void {
+  host.replaceChildren(createBusyScan({ variant }), text);
 }
 
 /** Remove any indicator inside `host`. Safe to call when none is present. */

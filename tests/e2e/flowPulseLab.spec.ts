@@ -77,10 +77,23 @@ test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overl
 
   // Switching conditioning re-runs the model: the pressed state flips and the
   // record's own method list changes to name Priority-Flood.
+  await page.evaluate(() => {
+    const w = window as unknown as { __emblemSeen: string | null };
+    w.__emblemSeen = null;
+    const obs = new MutationObserver(() => {
+      const scan = document.querySelector('.olv-flow-busy .olv-busy-scan--emblem');
+      if (!scan) return;
+      w.__emblemSeen = scan.getAttribute('aria-hidden');
+      obs.disconnect();
+    });
+    obs.observe(document.body, { subtree: true, childList: true });
+  });
   await floodBtn.click();
   await expect(floodBtn).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 });
   await expect(rawBtn).toHaveAttribute('aria-pressed', 'false');
   await expect(modal.locator('.olv-story-card')).toContainText('priority-flood', { timeout: 10_000 });
+  expect(await page.evaluate(() => (window as unknown as { __emblemSeen: string | null }).__emblemSeen), 'the emblem waited while it ran').toBe('true');
+  await expect(modal.locator('.olv-flow-busy')).toHaveCount(0);
 
   // CLICK-TO-PULSE via the keyboard-accessible result grid cursor (the
   // spec's own named alternative to a live-scan click — see FlowOverlay.ts

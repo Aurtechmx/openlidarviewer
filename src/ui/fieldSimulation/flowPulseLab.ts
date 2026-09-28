@@ -730,7 +730,7 @@ function mountFlowPulseInteractive(
     conditioningCtl.sync();
     busy = true;
     const busyLine = el('div', { className: 'olv-flow-busy' });
-    showBusyScan(busyLine, 'Running Flow Pulse…');
+    showBusyScan(busyLine, 'Running Flow Pulse…', 'emblem');
     body.replaceChildren(busyLine);
     announce('Running Flow Pulse…');
     // One frame so the busy state actually paints before the (synchronous)

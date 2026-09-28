@@ -3187,6 +3187,140 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-bs-seg { stroke: CanvasText; }
   .olv-bs-core, .olv-bs-point { fill: CanvasText; }
 }
+
+/* Emblem form (createBusyScan({ variant: 'emblem' })): waits with no known
+   progress, such as an analysis run. A sphere that pulses under a horizontal
+   flare, two flat dotted rings with a band of light travelling round each (the
+   two turn opposite ways), and a mirrored, tapering axis of dots lit outward
+   from the centre. Brand tokens: --accent for the sphere and halo, --cyan for
+   the dots, --ice for highlights; the light theme uses its own --accent for
+   the dots. Transform and opacity only; one 2.8 s loop; nothing flashes. */
+.olv-busy-scan--emblem {
+  --olv-bse-dot: var(--cyan);
+  --olv-bse-hi: var(--ice);
+}
+body.olv-theme-light .olv-busy-scan--emblem {
+  --olv-bse-dot: var(--accent);
+  --olv-bse-hi: var(--cyan);
+}
+.olv-bse-halo { fill: var(--accent); opacity: 0.16; }
+.olv-bse-streak { fill: var(--olv-bse-hi); opacity: 0.55; }
+.olv-bse-ring circle {
+  fill: var(--olv-bse-dot);
+  opacity: 0.3;
+  animation: olv-bse-orbit 2.8s linear infinite;
+}
+.olv-bse-axis circle {
+  fill: var(--olv-bse-dot);
+  opacity: 0.35;
+  animation: olv-bse-axis 2.8s ease-out infinite;
+}
+.olv-bse-core {
+  fill: var(--accent);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: olv-bse-core 2.8s ease-in-out infinite;
+}
+.olv-bse-glint { fill: var(--olv-bse-hi); opacity: 0.8; }
+.olv-bse-ring-1 circle:nth-child(1) { animation-delay: 0s; }
+.olv-bse-ring-1 circle:nth-child(2) { animation-delay: -2.69s; }
+.olv-bse-ring-1 circle:nth-child(3) { animation-delay: -2.58s; }
+.olv-bse-ring-1 circle:nth-child(4) { animation-delay: -2.48s; }
+.olv-bse-ring-1 circle:nth-child(5) { animation-delay: -2.37s; }
+.olv-bse-ring-1 circle:nth-child(6) { animation-delay: -2.26s; }
+.olv-bse-ring-1 circle:nth-child(7) { animation-delay: -2.15s; }
+.olv-bse-ring-1 circle:nth-child(8) { animation-delay: -2.05s; }
+.olv-bse-ring-1 circle:nth-child(9) { animation-delay: -1.94s; }
+.olv-bse-ring-1 circle:nth-child(10) { animation-delay: -1.83s; }
+.olv-bse-ring-1 circle:nth-child(11) { animation-delay: -1.72s; }
+.olv-bse-ring-1 circle:nth-child(12) { animation-delay: -1.62s; }
+.olv-bse-ring-1 circle:nth-child(13) { animation-delay: -1.51s; }
+.olv-bse-ring-1 circle:nth-child(14) { animation-delay: -1.40s; }
+.olv-bse-ring-1 circle:nth-child(15) { animation-delay: -1.29s; }
+.olv-bse-ring-1 circle:nth-child(16) { animation-delay: -1.18s; }
+.olv-bse-ring-1 circle:nth-child(17) { animation-delay: -1.08s; }
+.olv-bse-ring-1 circle:nth-child(18) { animation-delay: -0.97s; }
+.olv-bse-ring-1 circle:nth-child(19) { animation-delay: -0.86s; }
+.olv-bse-ring-1 circle:nth-child(20) { animation-delay: -0.75s; }
+.olv-bse-ring-1 circle:nth-child(21) { animation-delay: -0.65s; }
+.olv-bse-ring-1 circle:nth-child(22) { animation-delay: -0.54s; }
+.olv-bse-ring-1 circle:nth-child(23) { animation-delay: -0.43s; }
+.olv-bse-ring-1 circle:nth-child(24) { animation-delay: -0.32s; }
+.olv-bse-ring-1 circle:nth-child(25) { animation-delay: -0.22s; }
+.olv-bse-ring-1 circle:nth-child(26) { animation-delay: -0.11s; }
+.olv-bse-ring-2 circle:nth-child(1) { animation-delay: 0s; }
+.olv-bse-ring-2 circle:nth-child(2) { animation-delay: -0.11s; }
+.olv-bse-ring-2 circle:nth-child(3) { animation-delay: -0.22s; }
+.olv-bse-ring-2 circle:nth-child(4) { animation-delay: -0.32s; }
+.olv-bse-ring-2 circle:nth-child(5) { animation-delay: -0.43s; }
+.olv-bse-ring-2 circle:nth-child(6) { animation-delay: -0.54s; }
+.olv-bse-ring-2 circle:nth-child(7) { animation-delay: -0.65s; }
+.olv-bse-ring-2 circle:nth-child(8) { animation-delay: -0.75s; }
+.olv-bse-ring-2 circle:nth-child(9) { animation-delay: -0.86s; }
+.olv-bse-ring-2 circle:nth-child(10) { animation-delay: -0.97s; }
+.olv-bse-ring-2 circle:nth-child(11) { animation-delay: -1.08s; }
+.olv-bse-ring-2 circle:nth-child(12) { animation-delay: -1.18s; }
+.olv-bse-ring-2 circle:nth-child(13) { animation-delay: -1.29s; }
+.olv-bse-ring-2 circle:nth-child(14) { animation-delay: -1.40s; }
+.olv-bse-ring-2 circle:nth-child(15) { animation-delay: -1.51s; }
+.olv-bse-ring-2 circle:nth-child(16) { animation-delay: -1.62s; }
+.olv-bse-ring-2 circle:nth-child(17) { animation-delay: -1.72s; }
+.olv-bse-ring-2 circle:nth-child(18) { animation-delay: -1.83s; }
+.olv-bse-ring-2 circle:nth-child(19) { animation-delay: -1.94s; }
+.olv-bse-ring-2 circle:nth-child(20) { animation-delay: -2.05s; }
+.olv-bse-ring-2 circle:nth-child(21) { animation-delay: -2.15s; }
+.olv-bse-ring-2 circle:nth-child(22) { animation-delay: -2.26s; }
+.olv-bse-ring-2 circle:nth-child(23) { animation-delay: -2.37s; }
+.olv-bse-ring-2 circle:nth-child(24) { animation-delay: -2.48s; }
+.olv-bse-ring-2 circle:nth-child(25) { animation-delay: -2.58s; }
+.olv-bse-ring-2 circle:nth-child(26) { animation-delay: -2.69s; }
+.olv-bse-axis circle:nth-child(1) { animation-delay: 0s; }
+.olv-bse-axis circle:nth-child(2) { animation-delay: 0s; }
+.olv-bse-axis circle:nth-child(3) { animation-delay: 0.12s; }
+.olv-bse-axis circle:nth-child(4) { animation-delay: 0.12s; }
+.olv-bse-axis circle:nth-child(5) { animation-delay: 0.24s; }
+.olv-bse-axis circle:nth-child(6) { animation-delay: 0.24s; }
+.olv-bse-axis circle:nth-child(7) { animation-delay: 0.36s; }
+.olv-bse-axis circle:nth-child(8) { animation-delay: 0.36s; }
+/* The front arc rests brighter, as in the emblem. */
+.olv-bse-ring circle.is-front { animation-name: olv-bse-orbit-front; opacity: 0.5; }
+@keyframes olv-bse-orbit {
+  0% { opacity: 1; }
+  30% { opacity: 0.3; }
+  100% { opacity: 0.3; }
+}
+@keyframes olv-bse-orbit-front {
+  0% { opacity: 1; }
+  30% { opacity: 0.5; }
+  100% { opacity: 0.5; }
+}
+@keyframes olv-bse-axis {
+  0% { opacity: 0.35; }
+  12% { opacity: 1; }
+  45% { opacity: 0.35; }
+  100% { opacity: 0.35; }
+}
+@keyframes olv-bse-core {
+  0% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.85; }
+}
+/* Analyse readiness skeleton: the emblem centred in the middle card. */
+.olv-analyse-ready.is-skeleton { display: flex; align-items: center; justify-content: center; }
+.olv-analyse-ready.is-skeleton .olv-busy-scan { margin-right: 0; font-size: 1.25em; }
+/* Reduced motion: the emblem at rest, front arc brighter. */
+@media (prefers-reduced-motion: reduce) {
+  .olv-bse-ring circle, .olv-bse-axis circle, .olv-bse-core { animation: none; }
+  .olv-bse-ring circle { opacity: 0.6; }
+  .olv-bse-ring circle.is-front { animation: none; opacity: 0.95; }
+  .olv-bse-axis circle { opacity: 0.9; }
+  .olv-bse-core { opacity: 1; }
+}
+@media (forced-colors: active) {
+  .olv-busy-scan--emblem { --olv-bse-dot: CanvasText; --olv-bse-hi: CanvasText; }
+  .olv-bse-core { fill: CanvasText; }
+  .olv-bse-halo, .olv-bse-streak, .olv-bse-glint { display: none; }
+}
 /* ───────────────────────────────────────────────────────────────────────────
    Measure tool — active button, SVG overlay, instruction hint
    ─────────────────────────────────────────────────────────────────────────── */

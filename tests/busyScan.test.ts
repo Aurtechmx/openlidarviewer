@@ -62,7 +62,8 @@ describe('Analyse panel run', () => {
     const { panel, status, scans } = await freshPanel();
     expect(scans()).toHaveLength(0);
     panel.setBusy(true);
-    expect(scans()).toHaveLength(1);
+    // One in the status line, one in the readiness skeleton.
+    expect(scans()).toHaveLength(2);
     expect(status.textContent).toBe('Analysing…');
   });
 
@@ -92,7 +93,7 @@ describe('Analyse panel run', () => {
     const { panel, scans } = await freshPanel();
     panel.setBusy(true);
     panel.setBusy(true);
-    expect(scans()).toHaveLength(1);
+    expect(scans()).toHaveLength(2);
   });
 });
 
@@ -138,14 +139,15 @@ describe('busy scan stylesheet', () => {
 
   it('is monochrome apart from the point and its trail', () => {
     expect(CSS).toMatch(/\.olv-bs-core \{\s*fill: currentColor/);
-    const accentRules = CSS.split('}').filter((r) => r.includes('var(--accent)'));
+    const trailCss = CSS.slice(0, CSS.indexOf('/* Emblem form'));
+    const accentRules = trailCss.split('}').filter((r) => r.includes('var(--accent)'));
     expect(accentRules).toHaveLength(1);
     expect(accentRules[0]).toContain('--olv-bs-mark');
   });
 
   it('animates transform, opacity, motion-path distance and the trail dash offset only', () => {
     const frames = CSS.match(/@keyframes[^{]+\{([\s\S]*?\}\s*)\}/g) ?? [];
-    expect(frames.length).toBe(3);
+    expect(frames.length).toBe(7);
     const props = new Set(
       frames.join('\n').match(/([a-z-]+)\s*:/g)?.map((p) => p.replace(/\s*:$/, '')) ?? [],
     );
