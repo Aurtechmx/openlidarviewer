@@ -28,6 +28,15 @@ import type { ObservatoryOverlayHost } from '../../render/ObservatoryOverlay';
 import { triggerDownload } from '../../io/download';
 import { announcePolite } from '../politeAnnounce';
 import { loadObservatoryOverlay, loadObservatoryPackage } from '../../lazyChunks';
+import { howToRead, labHeader, methodDetails } from '../labGuide';
+import { NEEDS_STATIONS, OBSERVATION_PLAIN } from '../../process/labGuideCopy';
+
+/** Plain lines beside the Observatory's evidence counts. */
+export const OBSERVATORY_HOW_TO_READ: readonly string[] = [
+  'Each count is a number of small cubes (voxels) in the scan area.',
+  'Shadowed cubes sit behind something the scanner hit, so no setup saw them.',
+  'Planning below suggests where another setup would see the most of what is hidden.',
+];
 
 export interface ObservatoryPanelInput {
   readonly runner: ObservatoryRunner;
@@ -70,10 +79,14 @@ function evidenceSection(record: ObservationRunRecord | null): HTMLElement {
     body.append(el('p', { text: 'No run yet.' }));
   } else {
     const list = el('ul', { className: 'olv-observatory-state-counts' });
+    // A plain label for each state, with its code and count kept for experts.
     for (const [state, count] of Object.entries(record.stateCounts)) {
-      list.append(el('li', { text: `${state}: ${count}` }));
+      list.append(el('li', {}, [
+        el('span', { className: 'olv-observatory-state-plain', text: OBSERVATION_PLAIN[state] ?? state }),
+        el('span', { className: 'olv-observatory-state-code', text: `${state}: ${count}` }),
+      ]));
     }
-    body.append(list);
+    body.append(howToRead(OBSERVATORY_HOW_TO_READ), list);
   }
   return sectionCard('Evidence', body);
 }
@@ -185,19 +198,19 @@ function recordSection(record: ObservationRunRecord | null, onExport: () => void
   if (!record) {
     body.append(el('p', { text: 'No run yet.' }));
   } else {
-    body.append(el('p', { text: `Methods: ${record.methods.join(', ')}` }));
-    body.append(el('p', { text: `Digest: ${record.digest.slice(0, 16)}…` }));
-    const exportBtn = el('button', { className: 'olv-observatory-export', type: 'button', text: 'Export bundle', tip: 'Write the observatory/ export bundle (OB-EXP-01).' });
+    const exportBtn = el('button', { className: 'olv-observatory-export', type: 'button', text: 'Export bundle', tip: 'Write the observatory/ export bundle.' });
     exportBtn.addEventListener('click', onExport);
-    body.append(exportBtn);
+    body.append(exportBtn, methodDetails([
+      el('p', { text: `Methods: ${record.methods.join(', ')}` }),
+      el('p', { text: `Digest: ${record.digest.slice(0, 16)}…` }),
+      el('p', { text: 'Export format: OB-EXP-01' }),
+    ]));
   }
   return sectionCard('Record', body);
 }
 
 function ineligibleBody(reason: string): HTMLElement {
-  return el('div', { className: 'olv-observatory-ineligible' }, [
-    el('p', { text: `Observatory is not available for this scan: ${reason}.` }),
-  ]);
+  return el('div', { className: 'olv-observatory-ineligible' }, [el('p', { text: reason })]);
 }
 
 function refusedBody(reason: string): HTMLElement {
@@ -212,12 +225,14 @@ export function renderObservatoryPanel(
   actions: { readonly run: () => void; readonly onExport: () => void; readonly onSliceLevel?: (iz: number) => void },
 ): HTMLElement {
   const root = el('div', { className: 'olv-observatory-panel' });
+  const head = labHeader('observatory', state.phase === 'committed' && state.outcome.status === 'ok' ? 2 : 1);
+  root.append(head.element);
   const runBtn = el('button', { className: 'olv-observatory-run', type: 'button', text: 'Run Observatory', tip: 'Build the evidence ledger over this scan’s declared stations.' });
   runBtn.addEventListener('click', actions.run);
   root.append(runBtn);
 
   if (state.phase === 'idle') {
-    root.append(el('p', { className: 'olv-observatory-status', text: 'Idle. No scan, or no run yet.' }));
+    root.append(el('p', { className: 'olv-observatory-status', text: 'No run yet. Next: run Observatory.' }));
     return root;
   }
   if (state.phase === 'running') {
@@ -233,7 +248,8 @@ export function renderObservatoryPanel(
 
   const outcome = state.outcome;
   if (outcome.status === 'ineligible') {
-    root.append(ineligibleBody(outcome.reason === 'no-stations' ? 'no declared stations' : 'the scan has no measurable extent'));
+    head.setStage(0);
+    root.append(ineligibleBody(outcome.reason === 'no-stations' ? NEEDS_STATIONS : 'Observatory is not available for this scan: the scan has no measurable extent.'));
     return root;
   }
   if (outcome.status === 'refused') {

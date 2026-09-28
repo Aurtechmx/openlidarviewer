@@ -34,6 +34,8 @@ import {
 import type { ProcessStudioState } from '../processStudioMount';
 import type { PreflightActionId, ToolId } from '../../process/toolPreflight';
 import type { WorkspacePage, WorkspaceRouter } from './workspaceRouter';
+import { LAB_NAME, LAB_PURPOSE, type LabId } from '../../process/labGuideCopy';
+import { labReturn, setLabReturn } from '../labReturn';
 
 /** The slice of the mounted Process Studio the home reads. */
 export interface AnalyseStudio {
@@ -69,6 +71,8 @@ export interface AnalyseWorkspaceDeps {
   readonly runAction: (id: string) => void;
   /** True while the phone layout owns the panels. */
   readonly isMobile: () => boolean;
+  /** Whether the active scan declares scanner setups; absent when not known. */
+  readonly hasStations?: () => boolean | undefined;
 }
 
 /** The Analyse pages: Contours is the only child, under Terrain. */
@@ -109,13 +113,13 @@ interface PageShell {
   readonly body: HTMLElement;
 }
 
-function pageShell(page: AnalysePage): PageShell {
+function pageShell(page: AnalysePage, extra: HTMLElement | null = null): PageShell {
   const verdict = el('div', { className: 'olv-at-verdict' });
   verdict.setAttribute('role', 'status');
   const whyBody = el('div', { className: 'olv-why-body' });
   const why = el('details', { className: 'olv-why' }, [el('summary', { className: 'olv-why-summary', text: 'Why?' }), whyBody]);
   const body = el('div', { className: 'olv-at-body' });
-  const root = el('section', { className: 'olv-analyse-page' }, [verdict, why, body]);
+  const root = el('section', { className: 'olv-analyse-page' }, extra ? [verdict, extra, why, body] : [verdict, why, body]);
   root.dataset.page = page;
   return { root, verdict, why, whyBody, body };
 }
@@ -124,8 +128,10 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
   let router: WorkspaceRouter | null = null;
   const list = el('ul', { className: 'olv-ah-list' });
   const home = el('section', { className: 'olv-analyse-home', ariaLabel: 'Analyses' }, [list]);
+  // The way back to a lab that started the terrain run.
+  const backLink = el('div', { className: 'olv-at-back-host' });
   const shells: Record<AnalysePage, PageShell> = {
-    terrain: pageShell('terrain'),
+    terrain: pageShell('terrain', backLink),
     contours: pageShell('contours'),
     objects: pageShell('objects'),
     features: pageShell('features'),
@@ -141,6 +147,7 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
   };
   // The Terrain page's primary action once a run has produced a result.
   const contoursLink = el('button', { className: 'olv-at-link is-primary', type: 'button' });
+
   contoursLink.addEventListener('click', () => { void api.open('contours'); });
 
   const input = (): AnalysisStatusInput => {
@@ -151,6 +158,7 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
       hasRange: panel?.hasPart('range') ?? false,
       hasFeatures: panel?.hasPart('features') ?? false,
       terrainRun: panel?.runUsability() ?? null,
+      hasStations: d.hasStations?.(),
       canRemediate: (a, t) => d.studio.canRemediate(a, t),
     };
   };
@@ -245,6 +253,8 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
           el('p', { className: 'olv-ah-reason', text: row.reason, title: row.reason }),
         ]);
         li.dataset.analysis = row.id;
+        const purpose = LAB_PURPOSE[row.id as LabId];
+        if (purpose) li.append(el('p', { className: 'olv-ah-hint', text: purpose }));
         if (row.remedy) li.append(remedyButton(row.remedy));
         // Before a run, the Terrain row carries the run itself: one click from home.
         if (row.id === 'terrain' && !inp.produced.has('dtm') && row.status !== 'blocked') {
@@ -270,6 +280,14 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
         items.splice(1, 0, child);
       }
       list.replaceChildren(...items);
+      // After a terrain run a lab started, the Terrain page offers the way back.
+      const back = labReturn();
+      backLink.replaceChildren();
+      if (back && inp.produced.has('dtm')) {
+        const b = el('button', { className: 'olv-at-link olv-at-back', type: 'button', text: `Back to ${LAB_NAME[back]}`, tip: `Reopen ${LAB_NAME[back]} on the new ground surface.` });
+        b.addEventListener('click', () => { setLabReturn(null); d.runAction(LAB_ACTION[back]!); });
+        backLink.append(b);
+      }
       // Before contours exist the link offers to make them; after, it opens them.
       const made = inp.produced.has('contours');
       contoursLink.replaceChildren(el('span', { className: 'olv-ah-name', text: made ? 'Contours' : 'Create contours' }), badge(contours.status));

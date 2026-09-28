@@ -12,6 +12,7 @@ import { openModal } from '../../ui/Modal';
 import { loadFlowPulseLab, loadObservatoryRun, loadTerrainAccessLab } from '../../lazyChunks';
 import { createLazySurfaceLoader, type LazyLoadToast } from '../lazySurfaceLoad';
 import type { ObservatoryEntryDeps } from '../openObservatoryRun';
+import { setLabReturn, type ReturnLab } from '../labReturn';
 
 export interface AnalysisActionDeps {
   /** How to reach the Analyse panel and its run; see {@link openTerrainAnalysis}. */
@@ -31,6 +32,12 @@ export interface AnalysisActionDeps {
 
 export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
   const actions: Action[] = [];
+  // A lab opened without a ground surface starts the terrain run itself; the
+  // Terrain page then offers the way back to that lab.
+  const runTerrainFor = (lab: ReturnLab) => (): void => {
+    setLabReturn(lab);
+    void openTerrainAnalysis(deps.terrainAnalysisEntry, true);
+  };
   actions.push(
     {
       id: 'analyse.run',
@@ -62,7 +69,7 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
         // The lab opens as a modal over the surface, so the rail keeps its mode;
         // a scan with no analysis gets the runner's own refusal, not a silent run.
         const load = () => Promise.all([deps.terrainAnalysisEntry.showPanel(), loadFlowPulseLab()])
-          .then(([panel, lab]) => lab.openFlowPulseLab(panel.flowInput ?? null));
+          .then(([panel, lab]) => { setLabReturn(null); lab.openFlowPulseLab(panel.flowInput ?? null, { onRunTerrain: runTerrainFor('flow-pulse') }); });
         const toast = deps.showLassoToast;
         if (toast) {
           // Named so a successful "Try again" re-runs the WHOLE attempt
@@ -85,7 +92,7 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
         // The lab opens as a modal over the surface, so the rail keeps its mode;
         // a scan with no analysis gets the runner's own refusal, not a silent run.
         void Promise.all([deps.terrainAnalysisEntry.showPanel(), loadTerrainAccessLab()])
-          .then(([panel, lab]) => lab.openTerrainAccessLab(panel.terrainAccessInput ?? null))
+          .then(([panel, lab]) => { setLabReturn(null); lab.openTerrainAccessLab(panel.terrainAccessInput ?? null, { onRunTerrain: runTerrainFor('terrain-access') }); })
           .catch((err) => console.warn('[terrain-access] lab chunk failed to load', err));
       },
     },

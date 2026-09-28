@@ -18,6 +18,7 @@ import type { PreflightActionId, ToolId } from './toolPreflight';
 // TYPE-ONLY: the preflight model rides a lazy chunk.
 import type { PreflightView } from '../app/toolPreflightRuntime';
 import { productVerdict, type ProductVerdict } from './productVerdict';
+import { NEEDS_STATIONS } from './labGuideCopy';
 
 export { productVerdict, type ProductVerdict };
 
@@ -64,6 +65,11 @@ export interface AnalysisStatusInput {
   readonly hasFeatures: boolean;
   /** The last run's own usability, or null before a run. */
   readonly terrainRun?: TerrainRunUsability | null;
+  /**
+   * Whether the active scan declares scanner setups (station positions).
+   * False blocks the Observatory row; absent means not known and changes nothing.
+   */
+  readonly hasStations?: boolean;
   /** True when the app can carry out a preflight remediation. */
   readonly canRemediate?: (action: PreflightActionId, tool: ToolId) => boolean;
 }
@@ -160,6 +166,8 @@ export function analysisRows(input: AnalysisStatusInput): AnalysisRow[] {
         }
       case 'observatory': {
         // The run reads the resident static cloud and does nothing without one.
+        // A scan with no declared stations is ineligible, never Ready.
+        if (facts.kind !== 'streaming' && input.hasStations === false) return row(id, 'blocked', NEEDS_STATIONS);
         const c = qa(facts, 'COVERAGE');
         return row(id, facts.kind === 'streaming' ? 'blocked' : QA_STATUS[c?.status ?? 'review'], c?.reason);
       }

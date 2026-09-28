@@ -14,7 +14,7 @@ import { dropDenseGridPly, firePaletteAction, openAnalysePanel as openAnalyse } 
 
 async function openFlowPulse(page: Page): Promise<void> {
   await firePaletteAction(page, 'Flow Pulse', 'Flow Pulse (Field Simulation Lab)');
-  await expect(page.locator('.olv-modal-title')).toHaveText('Field Simulation Lab: Flow Pulse');
+  await expect(page.locator('.olv-modal-title')).toHaveText('Flow Pulse');
 }
 
 /** Drop the fixture scan and run terrain analysis to readiness. */
@@ -31,19 +31,31 @@ async function loadScanAndAnalyse(page: Page): Promise<void> {
   });
 }
 
-test('refuses honestly, with no interactive controls, before any terrain analysis has run', async ({ page }) => {
+test('without a ground surface: plain notice, the terrain run, and the way back', async ({ page }) => {
   await page.goto('/?test=1');
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await page.waitForTimeout(500);
 
   await openFlowPulse(page);
-  const card = page.locator('.olv-modal .olv-story-card');
-  await expect(card).toContainText('Flow Pulse did not run');
-  await expect(card).toContainText('Run terrain analysis');
+  const modal = page.locator('.olv-modal');
+  await expect(modal.locator('.olv-lab-purpose')).toContainText('Counts cells, not rainfall.');
+  await expect(modal.locator('.olv-lab-stage[aria-current="step"]')).toHaveText('1. Ground surface');
+  await expect(modal.locator('.olv-lab-ready[data-state="missing"]')).toContainText('Ground surface (terrain run)');
   // No conditioning/grid/overlay controls for a run that never happened.
   await expect(page.locator('.olv-flow-cond')).toHaveCount(0);
   await expect(page.locator('.olv-flow-grid-canvas')).toHaveCount(0);
+
+  // The fix starts the terrain run; the Terrain page then offers the way back.
+  await modal.locator('.olv-lab-fix', { hasText: 'Run terrain analysis' }).click();
+  await expect(page.locator('.olv-modal')).toHaveCount(0);
+  await expect(page.locator('.olv-analyse-readiness .olv-analyse-ready:not(.is-skeleton)')).toHaveCount(3, { timeout: 20_000 });
+  const back = page.locator('.olv-at-back', { hasText: 'Back to Flow Pulse' });
+  await expect(back).toBeVisible({ timeout: 20_000 });
+  await back.click();
+  await expect(page.locator('.olv-modal-title')).toHaveText('Flow Pulse');
+  await expect(page.locator('.olv-modal .olv-story-card')).toContainText('D8 flow routing over the analysed DTM');
+  await expect(page.locator('.olv-modal .olv-lab-ready[data-state="met"]')).toContainText('Ground surface (terrain run)');
 });
 
 test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overlay toggle', async ({ page }) => {
@@ -79,7 +91,7 @@ test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overl
   await expect(grid).toBeVisible();
   const box = await grid.boundingBox();
   if (!box) throw new Error('grid canvas has no box');
-  await expect(modal.locator('.olv-flow-selection')).toContainText('Click a cell');
+  await expect(modal.locator('.olv-flow-selection-empty')).toContainText('click a cell');
   await grid.click({ position: { x: box.width / 2, y: box.height / 2 } });
   await expect(modal.locator('.olv-flow-selection')).toContainText('Path cells', { timeout: 5_000 });
 
@@ -97,7 +109,7 @@ test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overl
   // CATCHMENT: switch mode, activate the centre cell again, get a
   // contributing-cells readout.
   await modal.locator('.olv-flow-mode-btn', { hasText: 'Set catchment outlet' }).click();
-  await expect(modal.locator('.olv-flow-selection')).toContainText('Click a cell');
+  await expect(modal.locator('.olv-flow-selection-empty')).toContainText('click a cell');
   await grid.click({ position: { x: box.width / 2, y: box.height / 2 } });
   await expect(modal.locator('.olv-flow-selection')).toContainText('Contributing cells', { timeout: 5_000 });
 

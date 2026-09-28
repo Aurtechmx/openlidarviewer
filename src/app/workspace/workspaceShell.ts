@@ -157,6 +157,12 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     showObjects: d.showObjects,
     runAction: d.runAction,
     isMobile: () => mobileMql?.matches ?? false,
+    // The Observatory needs declared scanner setups; unknown until a layer is active.
+    hasStations: () => {
+      const id = d.results?.scans.activeExportTargetId();
+      const cloud = id ? d.results?.viewer.getCloud(id) : undefined;
+      return cloud ? (cloud.acquisitionStations?.stations.length ?? 0) > 0 : undefined;
+    },
   });
   router = createWorkspaceRouter(workspace, { work: pages as Record<string, WorkspacePage>, data: dataPages, analyse: analyse.pages }, storage());
   analyse.attach(router);

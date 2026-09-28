@@ -9937,6 +9937,50 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
     bottom: auto;
   }
 }
+
+/* ── Lab guide (labGuide.ts): purpose, stages, readiness, legend, how to read ── */
+.olv-lab-head { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-lab-purpose, .olv-ah-hint { margin: 0; font-size: var(--text-sm); color: var(--text); text-wrap: pretty; }
+.olv-ah-hint { font-size: var(--text-xs); color: var(--text-dim); }
+.olv-lab-stages { display: flex; flex-wrap: wrap; gap: var(--space-xs); margin: 0; padding: 0; list-style: none; }
+.olv-lab-stage {
+  font-size: var(--text-xs); color: var(--text-faint);
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm); padding: var(--space-2xs) var(--space-sm);
+}
+.olv-lab-stage.is-done { color: var(--text-dim); }
+.olv-lab-stage.is-current { color: var(--text); border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.olv-lab-next, .olv-lab-needs-text, .olv-ta-form-intro, .olv-ta-form-blocked { margin: 0; font-size: var(--text-sm); color: var(--text); text-wrap: pretty; }
+.olv-ta-form-blocked { color: var(--state-review); }
+.olv-lab-readiness, .olv-lab-legend { display: flex; flex-direction: column; gap: var(--space-xs); margin: 0; padding: 0; list-style: none; font-size: var(--text-xs); }
+.olv-lab-legend { flex-direction: row; flex-wrap: wrap; column-gap: var(--space-lg); color: var(--text-dim); }
+.olv-lab-ready-glyph { display: inline-block; width: 1.2em; font-weight: 700; }
+.olv-lab-ready.is-met .olv-lab-ready-glyph { color: var(--state-measured); }
+.olv-lab-ready.is-missing .olv-lab-ready-glyph { color: var(--state-blocked); }
+.olv-lab-ready.is-partial .olv-lab-ready-glyph { color: var(--state-review); }
+.olv-lab-ready-label { font-weight: 600; color: var(--text); }
+.olv-lab-ready-note { color: var(--text-dim); }
+.olv-lab-legend-item { display: inline-flex; align-items: center; gap: var(--space-xs); }
+.olv-lab-swatch { width: 12px; height: 12px; border-radius: var(--space-2xs); border: 0.5px solid var(--hairline); }
+.olv-lab-legend-glyph { color: var(--text); }
+.olv-lab-needs { display: flex; flex-direction: column; gap: var(--space-md); align-items: flex-start; }
+.olv-lab-read { display: flex; flex-direction: column; gap: var(--space-2xs); font-size: var(--text-xs); color: var(--text-dim); }
+.olv-lab-read > p { margin: 0; text-wrap: pretty; }
+.olv-lab-read-title { font-weight: 600; color: var(--text); }
+.olv-lab-method, .olv-ta-advanced { font-size: var(--text-xs); color: var(--text-dim); }
+.olv-lab-method-summary, .olv-ta-advanced-summary { cursor: pointer; min-height: 24px; display: flex; align-items: center; }
+.olv-ta-advanced[open] { display: flex; flex-direction: column; gap: var(--space-lg); }
+.olv-lab-fix, .olv-at-back {
+  font: inherit; font-size: var(--text-sm); color: var(--on-accent);
+  background: var(--accent); border: none; border-radius: var(--radius-sm);
+  min-height: 24px; padding: var(--space-xs) var(--space-lg); cursor: pointer;
+}
+.olv-lab-fix:focus-visible, .olv-at-back:focus-visible, .olv-lab-method-summary:focus-visible, .olv-ta-advanced-summary:focus-visible {
+  outline: var(--focus-ring); outline-offset: var(--focus-ring-offset);
+}
+.olv-observatory-state-code { color: var(--text-faint); margin-left: var(--space-sm); font-variant-numeric: tabular-nums; }
+@media (pointer: coarse) {
+  .olv-lab-fix, .olv-at-back, .olv-lab-method-summary, .olv-ta-advanced-summary { min-height: 44px; }
+}
 /* ─────────────────────────────────────────────────────────────────────────
    Contour Studio (v0.5.9) — launcher + workspace
    Premium terrain-deliverable surface. Built on the app's design tokens so it

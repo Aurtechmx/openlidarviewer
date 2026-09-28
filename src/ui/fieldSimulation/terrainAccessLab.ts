@@ -51,7 +51,9 @@ import type { TerrainAccessProfile } from '../../simulation/terrainAccess/terrai
 import { dtmProductDigest } from '../../science/dtmProductDigest';
 import { buildIdentityProvenance } from '../../build/buildIdentity';
 import { verticalUnitLabel } from '../../units/units';
-import { TerrainAccessResultGrid, maskFromIndices } from './terrainAccessResultGrid';
+import { TerrainAccessResultGrid, maskFromIndices, terrainAccessGridLegend } from './terrainAccessResultGrid';
+import { howToRead, labHeader, methodDetails, needsGround, nextStep, readinessList } from '../labGuide';
+import { firstBlocker, labReadiness, tangentToDegrees } from '../../process/labGuideCopy';
 import {
   buildTerrainAccessMapBuffers,
   buildTerrainAccessRouteBuffers,
@@ -262,34 +264,49 @@ function row(label: string, value: string): HTMLElement {
  * §22: never a safety/passability word appears here. */
 export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | null): HTMLElement {
   const card = el('aside', { className: 'olv-story-card' });
-  if (!outcome) {
-    card.append(el('div', { className: 'olv-story-next', text: 'Choose a start and a goal cell, then run.' }));
-    return card;
-  }
+  if (!outcome) return card;
   if (!outcome.ok) {
     card.append(
-      el('div', { className: 'olv-story-headline', text: `Terrain Access did not run — ${outcome.code}` }),
+      el('div', { className: 'olv-story-headline', text: 'Terrain Access did not run' }),
       el('div', { className: 'olv-story-next', text: outcome.reason }),
+      methodDetails([row('Reason code', outcome.code)]),
     );
     return card;
   }
   const d = outcome.diagnostics;
   card.append(
     el('div', { className: 'olv-story-headline', text: 'A geometric traversability screening — not a safety or passability guarantee' }),
-    row('Method', outcome.record.methods.join(' → ')),
     row('Route cells', String(d.cellCount)),
     row('Horizontal length', `${d.horizontalLengthM.toFixed(1)} m`),
     row('Ascent / descent', `${d.totalAscentM.toFixed(1)} m / ${d.totalDescentM.toFixed(1)} m`),
-    row('Max longitudinal grade', `${d.maxLongitudinalGrade.toFixed(3)} (tangent)`),
-    row('Max cross slope', `${d.maxCrossSlope.toFixed(3)} (tangent)`),
+    row('Max longitudinal grade', `${d.maxLongitudinalGrade.toFixed(3)} (tangent), ${tangentToDegrees(d.maxLongitudinalGrade)}`),
+    row('Max cross slope', `${d.maxCrossSlope.toFixed(3)} (tangent), ${tangentToDegrees(d.maxCrossSlope)}`),
     row('Max step (limit applies here)', `${d.maxEdgeStepM.toFixed(3)} m`),
     row('Terrain relief within the footprint window', `${d.maxLocalReliefM.toFixed(3)} m`),
     row('Min terrain confidence', Number.isFinite(d.minTerrainConfidence) ? d.minTerrainConfidence.toFixed(0) : 'n/a'),
   );
   const list = el('ul', { className: 'olv-story-v' });
   for (const sentence of outcome.limitations) list.append(el('li', { text: sentence }));
-  card.append(el('span', { className: 'olv-story-k', text: 'Limitations' }), list);
+  card.append(
+    el('span', { className: 'olv-story-k', text: 'Limitations' }), list,
+    methodDetails([row('Method', outcome.record.methods.join(' → '))]),
+  );
   return card;
+}
+
+/** Plain lines beside a Terrain Access map and route. */
+export const TERRAIN_ACCESS_HOW_TO_READ: readonly string[] = [
+  'Coloured cells show where the vehicle or walker you described could go, and at what cost.',
+  'The route is the lowest-cost path between start and goal on this map.',
+  'Grades and steps come from the ground surface alone. Check the site before relying on a route.',
+];
+
+/** The readiness list for an input, or for none. The units rule is the runner's own. */
+export function terrainAccessReadiness(input: TerrainAccessLabInput | null) {
+  const s = input?.scale;
+  const v = input?.dtm.verticalUnitToMetres;
+  const units = !!s && s.resolved && (!s.isGeographic || Number.isFinite(s.latitudeDeg ?? Number.NaN)) && v != null && v > 0;
+  return labReadiness('terrain-access', !!input, units);
 }
 
 // ── interactive layer ───────────────────────────────────────────────────────
@@ -300,9 +317,9 @@ function button(text: string, className: string, tip: string): HTMLButtonElement
   return el('button', { className, text, type: 'button', tip }) as HTMLButtonElement;
 }
 
-function makeRetryButton(onRetry: () => void): HTMLButtonElement {
-  const b = button('Retry', 'olv-ta-retry', 'Retry loading the terrain surface.');
-  b.addEventListener('click', onRetry);
+function makeEditProfileButton(onEdit: () => void): HTMLButtonElement {
+  const b = button('Edit the profile', 'olv-ta-retry', 'Go back to the vehicle or walker description.');
+  b.addEventListener('click', onEdit);
   return b;
 }
 
@@ -351,7 +368,7 @@ function segmentedControl<T extends string>(
 
 /** Build the mobility-profile form. Returns the element and a live-read accessor
  * for its current values — no field is pre-filled with a number (no preset). */
-function buildProfileForm(onSubmit: () => void): {
+function buildProfileForm(onSubmit: () => void, blockedReason: string | null): {
   element: HTMLElement;
   values: () => TerrainAccessProfileFormValues;
   showProblems: (problems: readonly { field: string; reason: string }[]) => void;
@@ -418,8 +435,9 @@ function buildProfileForm(onSubmit: () => void): {
     ]);
   };
 
-  const element = el('form', { className: 'olv-ta-form' }, [
-    name.wrap, longGrade.wrap, crossSlope.wrap, stepHeight.wrap, vehicleWidth.wrap, confidence.wrap,
+  // The six required fields first; the optional constraints wait behind one disclosure.
+  const advanced = el('details', { className: 'olv-ta-advanced' }, [
+    el('summary', { className: 'olv-ta-advanced-summary', text: 'Advanced' }),
     toggleRow(ruggednessToggle, ruggedness, 'Constrain ruggedness'),
     toggleRow(lengthToggle, vehicleLength, 'Record vehicle length'),
     toggleRow(obstacleToggle, obstacleHeight, 'Constrain above-ground obstruction'),
@@ -427,9 +445,18 @@ function buildProfileForm(onSubmit: () => void): {
       el('span', { className: 'olv-ta-field-label', text: 'Weak-evidence policy' }),
       unknownPolicyCtl.element,
     ]),
+  ]);
+  const element = el('form', { className: 'olv-ta-form' }, [
+    el('p', { className: 'olv-ta-form-intro', text: 'Required. Nothing is filled in for you: enter the limits for the vehicle or walker you have in mind.' }),
+    name.wrap, longGrade.wrap, crossSlope.wrap, stepHeight.wrap, vehicleWidth.wrap, confidence.wrap,
+    advanced,
     problemsBox,
     submitBtn,
   ]);
+  if (blockedReason) {
+    submitBtn.disabled = true;
+    element.append(el('p', { className: 'olv-ta-form-blocked', text: blockedReason }));
+  }
   element.addEventListener('submit', (e) => e.preventDefault());
 
   return {
@@ -516,11 +543,17 @@ registerTerrainAccessOverlayInvalidator(disposePersistentTerrainAccessOverlay);
  * on stays drawn on the scan after the modal closes, mirroring
  * `flowPulseLab.ts`'s `mountFlowPulseInteractive` exactly.
  */
-function mountTerrainAccessInteractive(input: TerrainAccessLabInput | null): { element: HTMLElement; dispose: () => void } {
+function mountTerrainAccessInteractive(
+  input: TerrainAccessLabInput | null,
+  onRunTerrain: (() => void) | null = null,
+): { element: HTMLElement; dispose: () => void } {
   const root = el('div', { className: 'olv-ta-lab' });
   const live = liveRegion();
   const body = el('div', { className: 'olv-ta-body' });
-  root.append(live, body);
+  const readiness = terrainAccessReadiness(input);
+  const head = labHeader('terrain-access', input ? 1 : 0);
+  const stepLine = nextStep(input ? 'Next: describe the vehicle or walker, then apply the profile.' : '');
+  root.append(head.element, readinessList(readiness), live, body);
   const announce = (msg: string): void => { live.textContent = msg; };
 
   let profile: TerrainAccessProfile | null = null;
@@ -556,7 +589,7 @@ function mountTerrainAccessInteractive(input: TerrainAccessLabInput | null): { e
     [
       { value: 'start', label: 'Set start', tip: "Click a cell on the map to set the route's starting point." },
       { value: 'goal', label: 'Set goal', tip: "Click a cell on the map to set the route's destination." },
-      { value: 'inspect', label: "Why not? (inspect)", tip: 'Click a cell to see why it can or cannot be reached.' },
+      { value: 'inspect', label: 'Why is this cell blocked?', tip: 'Click a cell to see why it can or cannot be reached.' },
     ],
     () => mode,
     (value) => { mode = value; modeCtl.sync(); },
@@ -591,6 +624,18 @@ function mountTerrainAccessInteractive(input: TerrainAccessLabInput | null): { e
       row('Goal', goalCell ? `col ${goalCell.col}, row ${goalCell.row}` : 'not set'),
     );
     runButton.disabled = !(startCell && goalCell) || busy;
+    if (outcome?.ok) {
+      head.setStage(4);
+      stepLine.textContent = 'Next: read the route below, or export it.';
+    } else if (startCell && goalCell) {
+      head.setStage(3);
+      stepLine.textContent = 'Next: run Terrain Access.';
+    } else {
+      head.setStage(2);
+      stepLine.textContent = startCell
+        ? 'Next: choose Set goal, then click a cell (or move with the arrow keys and press Enter).'
+        : 'Next: click a cell to set the start (or move with the arrow keys and press Enter), then set the goal.';
+    }
   }
 
   function handleActivate(cell: GridCell): void {
@@ -655,9 +700,10 @@ function mountTerrainAccessInteractive(input: TerrainAccessLabInput | null): { e
   function renderPreview(): void {
     if (!preview) return;
     if (!preview.ok) {
+      head.setStage(1);
       body.replaceChildren(
         renderTerrainAccessRunCard(preview),
-        makeRetryButton(() => { preview = null; profile = null; renderRoot(); }),
+        makeEditProfileButton(() => { preview = null; profile = null; renderRoot(); }),
       );
       return;
     }
@@ -675,7 +721,6 @@ function mountTerrainAccessInteractive(input: TerrainAccessLabInput | null): { e
     overlay?.clearRoute();
     renderSelection();
     applyOverlayVisibility();
-
     runButton.disabled = true;
     runButton.onclick = () => {
       if (!startCell || !goalCell || !profile) return;
@@ -710,8 +755,11 @@ function mountTerrainAccessInteractive(input: TerrainAccessLabInput | null): { e
     inspectorPanel.replaceChildren();
 
     body.replaceChildren(
+      howToRead(TERRAIN_ACCESS_HOW_TO_READ),
       modeCtl.element,
+      stepLine,
       grid.element,
+      terrainAccessGridLegend(),
       selectionPanel,
       runButton,
       inspectorPanel,
@@ -724,6 +772,7 @@ function mountTerrainAccessInteractive(input: TerrainAccessLabInput | null): { e
     );
   }
 
+  const blocker = firstBlocker(readiness);
   const form = buildProfileForm(() => {
     const values = form.values();
     const parsed = parseTerrainAccessProfileForm(values);
@@ -735,11 +784,18 @@ function mountTerrainAccessInteractive(input: TerrainAccessLabInput | null): { e
     profile = parsed.profile;
     preview = buildLabPreview(input, profile);
     renderPreview();
-  });
+  }, blocker && input ? `Apply profile is off. ${blocker.note}` : null);
 
   function renderRoot(): void {
+    // No ground surface: the form waits until there is one to screen.
+    if (!input) {
+      body.replaceChildren(needsGround(onRunTerrain));
+      return;
+    }
     if (!preview) {
-      body.replaceChildren(form.element);
+      head.setStage(1);
+      body.replaceChildren(stepLine, form.element);
+      stepLine.textContent = 'Next: describe the vehicle or walker, then apply the profile.';
       return;
     }
     renderPreview();
@@ -763,9 +819,11 @@ function mountTerrainAccessInteractive(input: TerrainAccessLabInput | null): { e
   };
 }
 
-/** Run and show Terrain Access in a dialog. */
-export function openTerrainAccessLab(input: TerrainAccessLabInput | null): ModalHandle {
-  const interactive = mountTerrainAccessInteractive(input);
+/** Run and show Terrain Access in a dialog. `onRunTerrain` starts the terrain run when the ground surface is missing. */
+export function openTerrainAccessLab(input: TerrainAccessLabInput | null, opts: { readonly onRunTerrain?: () => void } = {}): ModalHandle {
+  let handle: ModalHandle | null = null;
+  const run = opts.onRunTerrain;
+  const interactive = mountTerrainAccessInteractive(input, run ? () => { handle?.close(); run(); } : null);
   // A shelf Focus reopens the published route on the same layer: its run
   // card leads the lab, read from the kept outcome, with nothing recomputed.
   const prior = takeResultReopen('terrain-access') ? labRun('terrain-access') : null;
@@ -774,9 +832,10 @@ export function openTerrainAccessLab(input: TerrainAccessLabInput | null): Modal
       renderTerrainAccessRunCard(prior.outcome as TerrainAccessLabOutcome),
     ]));
   }
-  return openModal({
-    title: 'Field Simulation Lab: Terrain Access',
+  handle = openModal({
+    title: 'Terrain Access',
     body: interactive.element,
     onClose: () => interactive.dispose(),
   });
+  return handle;
 }

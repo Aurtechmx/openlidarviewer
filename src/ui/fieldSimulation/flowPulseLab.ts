@@ -52,7 +52,9 @@ import { mayReportMetricArea } from '../../simulation/simulationInputBasis';
 import { dtmProductDigest } from '../../science/dtmProductDigest';
 import { dtmMethodDigest, resolveLiveDtmDescriptor } from '../../science/liveDtmDescriptor';
 import { buildIdentityProvenance } from '../../build/buildIdentity';
-import { FlowResultGrid, maskFromIndices } from './flowResultGrid';
+import { FlowResultGrid, flowGridLegend, maskFromIndices } from './flowResultGrid';
+import { howToRead, labHeader, methodDetails, needsGround, readinessList } from '../labGuide';
+import { labReadiness } from '../../process/labGuideCopy';
 import {
   buildFlowAccumulationBuffers,
   buildFlowCatchmentBuffers,
@@ -279,7 +281,6 @@ export function renderFlowPulseLab(outcome: FlowPulseResult | FlowRefusal): HTML
   const metric = mayReportMetricArea(outcome.basis) && s.maxContributingAreaM2 != null;
   card.append(
     el('div', { className: 'olv-story-headline', text: 'D8 flow routing over the analysed DTM' }),
-    row('Method', outcome.record.methods.join(' → ')),
     row('Cells routed', `${s.readableCells} of ${s.cells}`),
     row('Outlets', String(s.outletCount)),
     row('Sinks', String(s.sinkCount)),
@@ -292,8 +293,23 @@ export function renderFlowPulseLab(outcome: FlowPulseResult | FlowRefusal): HTML
   );
   const list = el('ul', { className: 'olv-story-v' });
   for (const sentence of outcome.limitations) list.append(el('li', { text: sentence }));
-  card.append(el('span', { className: 'olv-story-k', text: 'Limitations' }), list);
+  card.append(
+    el('span', { className: 'olv-story-k', text: 'Limitations' }), list,
+    methodDetails([row('Method', outcome.record.methods.join(' → '))]),
+  );
   return card;
+}
+
+/** Plain lines beside a Flow Pulse result. */
+export const FLOW_HOW_TO_READ: readonly string[] = [
+  'Each square is one ground cell. Water in a cell moves to its lowest neighbour.',
+  'Outlets are where flow leaves the grid. Sinks are low spots where it stops.',
+  'Upstream counts are numbers of cells, not volumes of water or rainfall.',
+];
+
+/** The readiness list for an input, or for none. */
+function flowReadiness(input: FlowPulseLabInput | null) {
+  return labReadiness('flow-pulse', !!input, !!input && flowScaleOf(input).resolved);
 }
 
 // ── interactive layer ───────────────────────────────────────────────────────
@@ -439,6 +455,7 @@ function mountFlowPulseInteractive(
   const body = el('div', { className: 'olv-flow-body' });
   root.append(live, body);
   const announce = (msg: string): void => { live.textContent = msg; };
+  const ready = readinessList(flowReadiness(input));
 
   let conditioning: FlowConditioning = FLOW_PULSE_DEFAULTS.conditioning;
   let outcome = initialOutcome;
@@ -508,6 +525,9 @@ function mountFlowPulseInteractive(
   });
 
   const selectionPanel = el('div', { className: 'olv-flow-selection' });
+  // The next step sits above the grid, where the click lands.
+  const gridHint = el('div', { className: 'olv-flow-selection-empty' });
+  const head = labHeader('flow-pulse', 1);
 
   function applyOverlayVisibility(): void {
     if (!flowOverlay) return;
@@ -531,16 +551,12 @@ function mountFlowPulseInteractive(
   function renderSelection(): void {
     selectionPanel.replaceChildren();
     if (!outcome.ok) return;
+    gridHint.textContent = mode === 'pulse'
+      ? 'Next: click a cell, or move the cursor and press Enter, to trace its downstream path.'
+      : 'Next: click a cell, or move the cursor and press Enter, to set it as a catchment outlet.';
     const current = mode === 'pulse' ? lastTrace : lastCatchment;
-    if (!current) {
-      selectionPanel.append(el('div', {
-        className: 'olv-flow-selection-empty',
-        text: mode === 'pulse'
-          ? 'Click a cell, or move the cursor and press Enter, to trace its downstream path.'
-          : 'Click a cell, or move the cursor and press Enter, to set it as a catchment outlet.',
-      }));
-      return;
-    }
+    head.setStage(current ? 3 : 2);
+    if (!current) return;
     if (!current.ok) {
       selectionPanel.append(el('div', {
         className: 'olv-flow-selection-error',
@@ -676,7 +692,8 @@ function mountFlowPulseInteractive(
   function renderReady(): void {
     const staticCard = renderFlowPulseLab(outcome);
     if (!outcome.ok) {
-      body.replaceChildren(staticCard, makeRetryButton(() => void rerun(conditioning)));
+      head.setStage(1);
+      body.replaceChildren(staticCard);
       return;
     }
 
@@ -696,9 +713,12 @@ function mountFlowPulseInteractive(
 
     body.replaceChildren(
       staticCard,
+      howToRead(FLOW_HOW_TO_READ),
       conditioningCtl.element,
       modeCtl.element,
+      gridHint,
       grid.element,
+      flowGridLegend(),
       selectionPanel,
       overlaySection,
       exportButton,
@@ -732,6 +752,7 @@ function mountFlowPulseInteractive(
   }
 
   renderReady();
+  root.prepend(head.element, ready);
 
   return {
     element: root,
@@ -751,18 +772,39 @@ function mountFlowPulseInteractive(
   };
 }
 
+/** What the host offers a lab opened without a ground surface. */
+export interface LabOpenOptions {
+  /** Start the terrain run; the lab closes first. Absent: the notice has no button. */
+  readonly onRunTerrain?: () => void;
+}
+
+/**
+ * The lab with no ground surface: the purpose, the stages, the checklist and
+ * a plain notice with the terrain run, in place of a refusal.
+ */
+export function renderFlowPulseNeedsGround(onRunTerrain: (() => void) | null): HTMLElement {
+  return el('div', { className: 'olv-flow-lab' }, [
+    labHeader('flow-pulse', 0).element,
+    readinessList(flowReadiness(null)),
+    needsGround(onRunTerrain),
+  ]);
+}
+
 /** Run and show Flow Pulse in a dialog. */
-export function openFlowPulseLab(input: FlowPulseLabInput | null): ModalHandle {
+export function openFlowPulseLab(input: FlowPulseLabInput | null, opts: LabOpenOptions = {}): ModalHandle {
   // A shelf Focus reopens the published run on the same layer as it is.
   const prior = takeResultReopen('flow-pulse') ? labRun('flow-pulse') : null;
   if (!input) {
-    const body = el('div', { className: 'olv-flow-lab' }, [renderFlowPulseLab(runLabFlowPulse(null))]);
-    return openModal({ title: 'Field Simulation Lab: Flow Pulse', body });
+    let handle: ModalHandle | null = null;
+    const run = opts.onRunTerrain;
+    const body = renderFlowPulseNeedsGround(run ? () => { handle?.close(); run(); } : null);
+    handle = openModal({ title: 'Flow Pulse', body });
+    return handle;
   }
   const reuse = prior && prior.layerId === input.layerId ? (prior.outcome as FlowPulseResult) : null;
   const interactive = mountFlowPulseInteractive(input, reuse ?? runLabFlowPulse(input));
   return openModal({
-    title: 'Field Simulation Lab: Flow Pulse',
+    title: 'Flow Pulse',
     body: interactive.element,
     onClose: () => interactive.dispose(),
   });

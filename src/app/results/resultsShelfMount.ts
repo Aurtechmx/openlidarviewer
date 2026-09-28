@@ -71,7 +71,7 @@ export interface ResultsShelfSources {
   readonly viewer: {
     readonly measure: MeasurementReader;
     clouds(): string[];
-    getCloud(id: string): { readonly name: string } | undefined;
+    getCloud(id: string): { readonly name: string; readonly acquisitionStations?: { readonly stations: readonly unknown[] } } | undefined;
     getCameraPose(): Pose;
     applyCameraPose(pose: Pose): void;
   };
