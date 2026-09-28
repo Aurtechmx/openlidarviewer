@@ -895,3 +895,9 @@ export const loadRecovery = () => import('./app/recovery/recoveryController');
 export const loadSessionSnapshot = () => import('./app/sessionSnapshot');
 /** Load the deep-link gate (validate + confirm the host) for a `?copc=` URL. */
 export const loadRemoteDeepLink = () => import('./app/remoteDeepLink');
+
+// The location bar and exit-convention rules (spec CE-1, sections 3 and 4).
+// A stylesheet import emits no script, and this module is outside the live
+// transform, so the rules join the startup stylesheet without changing the
+// startup script: the palette and dialogs are styled before any of them opens.
+import './ui/wayfinding.css';

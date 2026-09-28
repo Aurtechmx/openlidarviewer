@@ -160,7 +160,7 @@ test.describe('profile workbench', () => {
     await expect(page.locator('.olv-workbench-collapsed')).toHaveCount(1);
     await expect(page.locator('.olv-mp-row')).toHaveCount(1);
 
-    await page.locator('.olv-workbench-btn', { hasText: 'Close' }).click();
+    await page.locator('.olv-workbench-btn', { hasText: 'Close Profile Workbench' }).click();
     await expect(page.locator('.olv-workbench')).toHaveCount(0);
     await expect(page.locator('.olv-mp-row')).toHaveCount(1);
   });
@@ -170,7 +170,7 @@ test.describe('profile workbench', () => {
     // second open exercises the whole build path a first open did.
     await placeProfile(page);
     await openWorkbench(page);
-    await page.locator('.olv-workbench-btn', { hasText: 'Close' }).click();
+    await page.locator('.olv-workbench-btn', { hasText: 'Close Profile Workbench' }).click();
     await expect(page.locator('.olv-workbench')).toHaveCount(0);
 
     await openWorkbench(page);
@@ -187,7 +187,7 @@ test.describe('profile workbench', () => {
     await placeProfile(page);
     await openWorkbench(page);
     await page.locator('.olv-workbench-btn', { hasText: 'Collapse' }).click();
-    await page.locator('.olv-workbench-btn', { hasText: 'Close' }).click();
+    await page.locator('.olv-workbench-btn', { hasText: 'Close Profile Workbench' }).click();
     await openWorkbench(page);
 
     expect(errors, `console errors: ${errors.join(' | ')}`).toEqual([]);

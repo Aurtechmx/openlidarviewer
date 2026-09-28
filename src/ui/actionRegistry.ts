@@ -67,6 +67,11 @@ export interface ActionDescriptor {
 export interface Action extends ActionDescriptor {
   /** Runs the action. The palette closes after a successful fire. */
   readonly run: () => void;
+  /**
+   * Set when the action cannot run now: the one-line reason the palette shows
+   * on the disabled row.
+   */
+  readonly unavailable?: string;
 }
 
 /**

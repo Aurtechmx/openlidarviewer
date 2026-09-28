@@ -14,7 +14,11 @@ import {
  *
  *   - Opens on Cmd-K (macOS) / Ctrl-K (Windows + Linux), or via
  *     `palette.open()` from the host.
- *   - Closes on Esc or click outside.
+ *   - Closes on Esc, click outside, or its Close button.
+ *   - Lists the fixed actions plus the entries a listener hands it when it
+ *     opens: the location bar answers the `olv-palette-open` event with one
+ *     "Go to" entry per registered page and workspace, and closes any open
+ *     popover. An entry that cannot run now is shown disabled with its reason.
  *   - Search input filters the action registry through the pure
  *     `rankActions` function from commandPalette.ts.
  *   - Arrow keys move the selection; Enter fires the active row's
@@ -43,6 +47,8 @@ export class CommandPalette {
   private readonly _empty: HTMLElement;
 
   private _actions: readonly Action[] = [];
+  /** Entries handed in on open (the location bar's Go to list). */
+  private _extra: readonly Action[] = [];
   private _ranked: RankedAction[] = [];
   /** Index into `_ranked` of the currently-highlighted row, or -1. */
   private _selected = -1;
@@ -85,8 +91,16 @@ export class CommandPalette {
       el('span', { text: 'close' }),
     ]);
 
+    const closeBtn = el('button', {
+      className: 'olv-palette-close',
+      type: 'button',
+      text: 'Close',
+      ariaLabel: 'Close command palette',
+    });
+    closeBtn.addEventListener('click', () => this.close());
+
     this._card = el('div', { className: 'olv-palette-card' }, [
-      this._input,
+      el('div', { className: 'olv-palette-head' }, [this._input, closeBtn]),
       this._list,
       this._empty,
       hint,
@@ -120,6 +134,11 @@ export class CommandPalette {
   /** Open the palette and focus the search input. */
   open(): void {
     if (this._open) return;
+    this._extra = [];
+    this.element.dispatchEvent(new CustomEvent('olv-palette-open', {
+      bubbles: true,
+      detail: { add: (list: readonly Action[]) => { this._extra = list; } },
+    }));
     this._open = true;
     this.element.classList.remove('olv-hidden');
     this._input.setAttribute('aria-expanded', 'true');
@@ -156,7 +175,7 @@ export class CommandPalette {
   /** Re-rank the action list against the current input and re-render. */
   private _refresh(): void {
     const query = this._input.value;
-    this._ranked = rankActions(query, this._actions);
+    this._ranked = rankActions(query, [...this._actions, ...this._extra]);
     this._selected = this._ranked.length > 0 ? 0 : -1;
     this._render();
   }
@@ -192,10 +211,16 @@ export class CommandPalette {
         const textChildren: Node[] = [
           el('div', { className: 'olv-palette-row-title', text: action.title }),
         ];
-        if (action.hint) {
+        const hint = action.unavailable ?? action.hint;
+        if (hint) {
           textChildren.push(
-            el('div', { className: 'olv-palette-row-hint', text: action.hint }),
+            el('div', { className: 'olv-palette-row-hint', text: hint }),
           );
+        }
+        if (action.unavailable) {
+          row.setAttribute('aria-disabled', 'true');
+          row.setAttribute('aria-label', `${action.title}, unavailable: ${action.unavailable}`);
+          row.classList.add('olv-palette-row-unavailable');
         }
         row.append(el('div', { className: 'olv-palette-row-text' }, textChildren));
         if (action.keys) {
@@ -248,7 +273,7 @@ export class CommandPalette {
   /** Run the action at `idx`, then close. No-op if `idx` is out of range. */
   private _fire(idx: number): void {
     const row = this._ranked[idx];
-    if (!row) return;
+    if (!row || row.action.unavailable) return;
     // Close BEFORE firing so the action's own UI (toast, modal, etc.)
     // doesn't fight the palette overlay during the transition.
     this.close();

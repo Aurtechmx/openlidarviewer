@@ -799,13 +799,16 @@ export function openFlowPulseLab(input: FlowPulseLabInput | null, opts: LabOpenO
     const run = opts.onRunTerrain;
     const body = renderFlowPulseNeedsGround(run ? () => { handle?.close(); run(); } : null);
     handle = openModal({ title: 'Flow Pulse', body });
+    handle.element?.classList.add('olv-surface-dialog'); // the location bar gives it a named Back
     return handle;
   }
   const reuse = prior && prior.layerId === input.layerId ? (prior.outcome as FlowPulseResult) : null;
   const interactive = mountFlowPulseInteractive(input, reuse ?? runLabFlowPulse(input));
-  return openModal({
+  const lab = openModal({
     title: 'Flow Pulse',
     body: interactive.element,
     onClose: () => interactive.dispose(),
   });
+  lab.element?.classList.add('olv-surface-dialog'); // the location bar gives it a named Back
+  return lab;
 }

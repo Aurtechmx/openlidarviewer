@@ -229,6 +229,11 @@ class ProfileWorkbench {
   private readonly _teardown: (() => void)[] = [];
   private _state: DockState;
   private _closed = false;
+  /** The control that had focus when the workbench opened; focus returns to it. */
+  private readonly _opener: HTMLElement | null =
+    typeof document !== 'undefined' && typeof HTMLElement !== 'undefined' && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
   private _dragFrom: number | null = null;
   /** The last name something outside this panel is known to hold. */
   private _committedName: string;
@@ -268,8 +273,8 @@ class ProfileWorkbench {
     const closeBtn = el('button', {
       className: 'olv-workbench-btn olv-workbench-close',
       type: 'button',
-      text: 'Close',
-      ariaLabel: 'Close the profile workbench',
+      text: 'Close Profile Workbench',
+      tip: 'Close the workbench and return to the profile in Measure.',
     });
 
     // Editable only where the host offered somewhere to commit a name to. A
@@ -609,6 +614,7 @@ class ProfileWorkbench {
     for (const off of this._teardown.splice(0)) off();
     this._root.remove();
     this._options.onClose?.();
+    if (this._opener?.isConnected) this._opener.focus({ preventScroll: true });
   }
 
   private _limits(): DockLimits {

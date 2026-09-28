@@ -33,6 +33,7 @@ import { createRailIntent, createWorkspaceRouter, type WorkspacePage, type Works
 import { createAnalyseWorkspace, type AnalyseHostPanel, type AnalysePage, type AnalyseStudio } from './analyseWorkspace';
 import { createDataHome } from './dataHome';
 import { mountResultsShelf, type ResultsShelfSources, type ShelfExportPanel, type ShelfTerrainPanel } from '../results/resultsShelfMount';
+import { mountLocationBar } from '../../ui/locationBar';
 
 /** The scene tools that open a page in the Tools mode. */
 export type ToolPage = 'measure' | 'annotate' | 'clip';
@@ -164,7 +165,8 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
       return cloud ? (cloud.acquisitionStations?.stations.length ?? 0) > 0 : undefined;
     },
   });
-  router = createWorkspaceRouter(workspace, { work: pages as Record<string, WorkspacePage>, data: dataPages, analyse: analyse.pages }, storage());
+  const allPages = { work: pages as Record<string, WorkspacePage>, data: dataPages, analyse: analyse.pages };
+  router = createWorkspaceRouter(workspace, allPages, storage());
   analyse.attach(router);
   const placeAnalyse = (): void => analyse.place(workspace.mode('analyse'));
   const leftPanels = workspace.element;
@@ -281,6 +283,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   if (shelf) { leftPanels.append(shelf.element); d.addTeardown(() => shelf.dispose()); }
 
   let mobileApplied = false;
+  let located = false;
   const applyMobileSheet = (): void => {
     const isMobile = mobileMql ? mobileMql.matches : false;
     if (isMobile !== mobileApplied) {
@@ -291,6 +294,11 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     // The sheet shows only on a phone WITH a scan; the tab strip only with a scan.
     sheet.setVisible(isMobile && d.hasScan());
     workspace.setAvailable(d.hasScan());
+    // The location bar arrives with the first scan (spec CE-1, section 3).
+    if (d.hasScan() && !located) {
+      located = true;
+      d.addTeardown(mountLocationBar(router as WorkspaceRouter, allPages, d.runAction, analyse.open).dispose);
+    }
     dataHome.refresh();
   };
   mobileMql?.addEventListener('change', applyMobileSheet);
