@@ -13,6 +13,7 @@
  */
 
 import type { WorkspaceRoute } from '../workspace/workspaceRouter';
+import type { TerrainExportsLane } from '../../ui/ExportPanel';
 import {
   cachedDtmAim,
   contourSource,
@@ -33,7 +34,9 @@ import {
   labRun,
   observatoryRunnerView,
   observatorySceneTransform,
+  onResultReopenTaken,
   requestResultReopen,
+  resultReopenPending,
   subscribeResultSignals,
   takeResultReopen,
   type ModalResultKind,
@@ -60,7 +63,7 @@ export interface ShelfTerrainPanel extends TerrainReader {
 export interface ShelfExportPanel extends FindingsReader {
   readonly element: HTMLElement;
   select(product: ResultExportProduct): boolean;
-  setTerrainExports(t: { ready(): boolean; run(kind: 'dem' | 'contours'): void } | null): void;
+  setTerrainExports(t: TerrainExportsLane | null): void;
 }
 
 /** What the host hands the shell for the shelf: the owners, by reference. */
@@ -133,13 +136,20 @@ export function mountResultsShelf(
   ]);
 
   // The Export mode's terrain lane runs the Analyse panel's own exports.
-  const terrainExports = {
+  const terrainExports: TerrainExportsLane = {
     ready: () => !!src.terrain()?.resultRef(),
     run: (kind: 'dem' | 'contours') => { src.terrain()?.exportProduct(kind); },
   };
   exportPanel?.setTerrainExports(terrainExports);
   let hadTerrain = terrainExports.ready();
+  let lastRun: unknown = src.terrain()?.resultRef()?.result ?? null;
 
+  const fallbacks = new Map<ModalResultKind, ReturnType<typeof setTimeout>>();
+  const clearFallback = (kind: ModalResultKind): void => {
+    const t = fallbacks.get(kind);
+    if (t !== undefined) { clearTimeout(t); fallbacks.delete(kind); }
+  };
+  const offTaken = onResultReopenTaken(clearFallback);
   const shelf = createResultsShelf({
     index,
     navigate,
@@ -163,7 +173,14 @@ export function mountResultsShelf(
           takeResultReopen(kind);
           return false;
         }
-        setTimeout(() => { if (takeResultReopen(kind)) navigate(e.route); }, MODAL_OPEN_FALLBACK_MS);
+        // The fallback only reads the request: a chunk that loads later still
+        // takes it and shows the kept run instead of computing a new one.
+        clearFallback(kind);
+        if (!resultReopenPending(kind)) return true;
+        fallbacks.set(kind, setTimeout(() => {
+          fallbacks.delete(kind);
+          if (resultReopenPending(kind)) navigate(e.route);
+        }, MODAL_OPEN_FALLBACK_MS));
         return true;
       }
       : undefined,
@@ -171,7 +188,12 @@ export function mountResultsShelf(
   });
   const offIndex = index.subscribe(() => {
     const has = terrainExports.ready();
-    if (has !== hadTerrain) { hadTerrain = has; exportPanel?.setTerrainExports(terrainExports); }
+    // A new run re-renders the lane too, so the health row reads that run.
+    const run = src.terrain()?.resultRef()?.result ?? null;
+    if (has !== hadTerrain || run !== lastRun) {
+      hadTerrain = has; lastRun = run;
+      exportPanel?.setTerrainExports(terrainExports);
+    }
   });
   const refresh = (): void => { index.refresh(); shelf.sync(); };
   // The other-layer notes depend on the active layer, not on the results.
@@ -183,6 +205,12 @@ export function mountResultsShelf(
     ...shelf,
     index,
     refresh,
-    dispose: () => { offIndex(); offActive(); index.dispose(); exportPanel?.setTerrainExports(null); shelf.dispose(); },
+    dispose: () => {
+      offIndex(); offActive(); offTaken();
+      for (const t of fallbacks.values()) clearTimeout(t);
+      fallbacks.clear();
+      toggle?.removeEventListener('click', refresh, { capture: true });
+      index.dispose(); exportPanel?.setTerrainExports(null); shelf.dispose();
+    },
   };
 }

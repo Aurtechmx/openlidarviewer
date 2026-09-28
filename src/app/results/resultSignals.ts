@@ -91,7 +91,17 @@ export function requestResultReopen(kind: ModalResultKind): void {
 
 /** True once per request: the modal opening now should reuse its result. */
 export function takeResultReopen(kind: ModalResultKind): boolean {
-  return reopenRequests.delete(kind);
+  if (!reopenRequests.delete(kind)) return false;
+  for (const fn of reopenTaken) fn(kind);
+  return true;
+}
+
+const reopenTaken = new Set<(kind: ModalResultKind) => void>();
+
+/** Told when a modal takes its reopen request. Returns an unsubscribe. */
+export function onResultReopenTaken(fn: (kind: ModalResultKind) => void): () => void {
+  reopenTaken.add(fn);
+  return () => { reopenTaken.delete(fn); };
 }
 
 /** True while a request is waiting for its modal to open. */
@@ -112,4 +122,5 @@ export function resetResultSignalsForTest(): void {
   labRuns.clear();
   listeners.clear();
   reopenRequests.clear();
+  reopenTaken.clear();
 }

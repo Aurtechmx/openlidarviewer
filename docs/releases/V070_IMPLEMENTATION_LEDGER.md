@@ -79,17 +79,18 @@ the two entries were renumbered when the branches were integrated.
 | L49 | PERFORMANCE | READ | med | MEASURED | new | Compact source attributes are uploaded as Float32: RGB, classification and intensity cost 14 bytes a point more than the source carries. Without a layout change only colour can shrink, by 8 bytes a point. |
 | L172 | LOADER | TEST | high | FIXED | new | A LAS 1.4 file that stores its coordinate system in an extended VLR after the point data opened with no CRS, no units and no vertical datum, and exported with no CRS at all. |
 | L174 | LOADER | TEST | high | FIXED | new | A CRS read from an extended VLR was labelled as a VLR, and a large LAS/LAZ opened out of core, or a COPC with its CRS in an EVLR, showed no CRS at all. |
+| L175 | SCIENTIFIC | TEST | med | FIXED | new | A measured cell the attention raster's residual sampling skipped scored 0 on the residual and, with no other input flagging it, was written as level 0, the same as a cell whose residual was computed and small. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 31
+- FIXED: 32
 - MEASURED: 1
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 51
+- total: 52
 
 ## Detail
 
@@ -6785,3 +6786,44 @@ precedence.
 
 Covered by `tests/lasEvlrCrs.test.ts`, `tests/inspectorLazyRenderCrs.test.ts`,
 `tests/e2e/lasEvlrCrs.spec.ts` and `tests/e2e/streaming.spec.ts`.
+
+### L175 · FIXED · SCIENTIFIC
+
+The terrain attention raster rebuilds every measured cell for its
+reconstruction residual up to 250,000 measured cells, and every k-th above
+that. A skipped cell had no residual (NaN), which the level rule clipped to a
+score of 0. Where no other input flagged it, the cell was written as level 0
+with reason 0, the value that says "no scored input reached its reference",
+although the residual input was never computed there.
+
+Band semantics now, for a sampled grid with the vertical inputs scored: such a
+cell is written with band 1 NoData (255) and band 2 reason 8, `UNRESOLVED`. It
+is no longer written as 0. A skipped cell that another input already flags keeps
+that level and reason. The passport's residual record gains `unsampledCells`,
+and the README states the rule. This is version 2 of
+`olv.terrain.evidence.attention` (id unchanged, registry version 1 to 2). The
+protocol `validation/protocols/evidencedem-attention-v1.md` keeps version 1
+as written and adds a version 2 section with the reason.
+
+Package bytes change because of the method version: every DEM package with
+the attention raster names version 2 in its passport, so the passport and
+the digests that cover it differ from version 1 even where the raster bytes
+are the same.
+
+Counts. Every in-repo terrain fixture, including the oracle fixture under
+`validation/terrain-attention/fixture/` (18 measured cells, 17 with a residual,
+12 of them below the level 1 cut), is under the sample limit, so it has 0
+skipped cells and its raster and README bytes are unchanged. On a
+synthetic 1001 x 1001 grid with 834,440 measured cells (stride 4), 625,830
+cells were skipped; 115,469 of them had been written as level 0 and are now
+unresolved, and the level 1, 2 and 3 counts are unchanged. On OLV-DS-090
+(881,116 measured cells, stride 4, from this protocol's cost measurement)
+660,837 cells are not rebuilt.
+
+The per-cell score array in the band loop is replaced by inline comparisons.
+On the synthetic grid the band pass fell from 167 to 174 ms to 44 to 51 ms
+(median of 5 runs, two sessions each), with identical band bytes before the
+change above.
+
+Covered by `tests/demAttention.test.ts` ("cells the residual sampling
+skipped") and `tests/leaveLocalOut.test.ts`.

@@ -21,12 +21,14 @@ import {
   TERRAIN_ATTENTION_METHOD_ID,
   TERRAIN_RESIDUAL_METHOD_ID,
   attentionLevel,
+  demEvidenceRecord,
   demEvidenceTier,
   membersDifferingFromCanonical,
   reconstructionResidual,
   rebuildHeldOutCell,
   residualStride,
   terrainAttentionBands,
+  terrainAttentionReadmeLines,
   verticalReferenceInUnit,
   writeTerrainAttentionGeoTiff,
   type AttentionInputs,
@@ -133,6 +135,11 @@ describe('pre-registered attention values', () => {
   it('registers both methods', () => {
     expect(getMethod(TERRAIN_ATTENTION_METHOD_ID)?.id).toBe(TERRAIN_ATTENTION_METHOD_ID);
     expect(getMethod(TERRAIN_RESIDUAL_METHOD_ID)?.id).toBe(TERRAIN_RESIDUAL_METHOD_ID);
+  });
+
+  it('is attention method version 2: skipped cells are unresolved, not level 0', () => {
+    expect(getMethod(TERRAIN_ATTENTION_METHOD_ID)?.version).toBe(2);
+    expect(getMethod(TERRAIN_RESIDUAL_METHOD_ID)?.version).toBe(1);
   });
 });
 
@@ -247,6 +254,49 @@ describe('terrainAttentionBands', () => {
     const [lv, rs] = decodeByteBands(tif);
     expect(lv[0]).toBe(ATTENTION_NO_DATA);
     expect(rs[0]).toBe(ATTENTION_NO_DATA);
+  });
+});
+
+describe('cells the residual sampling skipped', () => {
+  // Above the sample limit only every k-th measured cell is rebuilt. A skipped
+  // cell has no residual, and must not read as level 0 ("no input reached its
+  // reference") on the strength of an input that was never computed.
+  const g = grid(flat);
+  g.confidence[1] = 0; // a skipped cell another input already flags
+  const res = reconstructionResidual(g, {}, 10);
+  const b = terrainAttentionBands(inputs(g, { residual: res.residual, residualUnsampled: res.unsampled }));
+
+  it('marks each skipped cell unresolved, NoData in band 1', () => {
+    expect(res.stride).toBe(3);
+    for (let i = 0; i < N; i++) {
+      if (i % 3 === 0) {
+        expect([b.level[i], b.reason[i]], `sampled ${i}`).toEqual([0, RC.NONE]);
+      } else if (i === 1) {
+        expect([b.level[i], b.reason[i]], 'flagged by support').toEqual([3, RC.LOW_SUPPORT]);
+      } else {
+        expect([b.level[i], b.reason[i]], `skipped ${i}`).toEqual([ATTENTION_NO_DATA, RC.UNRESOLVED]);
+      }
+    }
+  });
+
+  it('leaves skipped cells unmarked when the vertical inputs are not scored', () => {
+    const u = terrainAttentionBands(inputs(g, { residual: res.residual, residualUnsampled: res.unsampled, verticalReference: null }));
+    expect(u.level[2]).toBe(0);
+    expect(u.reason[2]).toBe(RC.NONE);
+  });
+
+  it('records the skipped cells in the passport and the README only when sampled', () => {
+    const rec = demEvidenceRecord({ tier: 'T2', residual: res, verticalReference: 0.3, verticalUnit: 'metre', sensitivityGrids: null });
+    expect(rec.attention!.residual.unsampledCells).toBe(res.measuredCells - res.sampledCells);
+    const text = terrainAttentionReadmeLines('a.tif', rec).join('\n');
+    expect(text).toContain('8 unresolved');
+    const full = demEvidenceRecord({ tier: 'T2', residual: reconstructionResidual(g), verticalReference: 0.3, verticalUnit: 'metre', sensitivityGrids: null });
+    expect('unsampledCells' in full.attention!.residual).toBe(false);
+    expect(terrainAttentionReadmeLines('a.tif', full).join('\n')).toContain('Codes 6 to 8 are reserved.');
+  });
+
+  it('has no mask, and changes nothing, when every cell was rebuilt', () => {
+    expect(reconstructionResidual(g).unsampled).toBeNull();
   });
 });
 

@@ -231,6 +231,12 @@ export interface ExportPanelCallbacks {
 /** A product the Products lane can mark with {@link ExportPanel.select}. */
 export type ExportProduct = 'measurements' | 'findings' | 'terrain-dem' | 'contours';
 
+/** The terrain lane: whether a result exists, and the export run by its owner. */
+export interface TerrainExportsLane {
+  ready(): boolean;
+  run(kind: 'dem' | 'contours'): void;
+}
+
 export class ExportPanel {
   readonly element: HTMLElement;
   /** The moved deliverables (formats / image / report), or null when not wired. */
@@ -264,8 +270,10 @@ export class ExportPanel {
   private _findingsPanel: MountedFindingsPanel | null = null;
   private _findingsMountStarted = false;
   private readonly _findingsWatchers = new Set<() => void>();
-  private _terrainExports: { ready(): boolean; run(kind: 'dem' | 'contours'): void } | null = null;
+  private _terrainExports: TerrainExportsLane | null = null;
   private _selected: ExportProduct | null = null;
+  /** The scan the mark was set for; a different active scan drops it. */
+  private _selectedScan: string | null = null;
 
   // LAS 1.4 is the converter's lead format (see CONVERT_FORMATS ordering) —
   // default the panel to it so the pill selection matches the recommended choice.
@@ -869,6 +877,7 @@ export class ExportPanel {
       }
     }
     this._products.append(head, content);
+    if (this._selected && (this._cb.getActiveScanId?.() ?? null) !== this._selectedScan) this._selected = null;
     if (this._selected) this._markSelected(this._selected, false);
   }
 
@@ -876,8 +885,10 @@ export class ExportPanel {
    * Wire the terrain lane. `ready` says whether a result exists; `run` hands the
    * export to the panel that holds it. Set by the workspace shell.
    */
-  setTerrainExports(t: { ready(): boolean; run(kind: 'dem' | 'contours'): void } | null): void {
+  setTerrainExports(t: TerrainExportsLane | null): void {
     this._terrainExports = t;
+    // The health block's terrain row reads the same run.
+    this._renderHealth();
     this._renderProducts();
   }
 
@@ -888,11 +899,12 @@ export class ExportPanel {
   select(product: ExportProduct): boolean {
     this._productsOpen = true;
     this._selected = product;
+    this._selectedScan = this._cb.getActiveScanId?.() ?? null;
     this._renderProducts();
     return this._markSelected(product, true);
   }
 
-  private _markSelected(product: ExportProduct, focus: boolean): boolean {
+  private _markSelected(product: ExportProduct | null, focus: boolean): boolean {
     let found = false;
     for (const g of Array.from(this._products.querySelectorAll<HTMLElement>('.olv-export-product-group'))) {
       const on = g.dataset.product === product;
@@ -1028,7 +1040,11 @@ export class ExportPanel {
     if (!enabled && reason) btn.title = reason;
     else if (enabled && enabledTitle) btn.title = enabledTitle;
     else btn.title = `${label}: export this product for the current scan.`;
-    btn.addEventListener('click', onClick);
+    btn.addEventListener('click', () => {
+      // The shelf's mark is for one hand-off: using any product ends it.
+      if (this._selected) { this._selected = null; this._markSelected(null, false); }
+      onClick();
+    });
     return btn;
   }
 

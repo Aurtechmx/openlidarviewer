@@ -84,7 +84,7 @@ verified.
 | 5 | `RECONSTRUCTION_RESIDUAL` |
 | 6 | `TERRAIN_COMPLEXITY` (reserved, not scored) |
 | 7 | `CLASSIFICATION_AMBIGUITY` (reserved, not scored) |
-| 8 | `UNRESOLVED` (reserved, not written in v1) |
+| 8 | `UNRESOLVED`: version 1, reserved and not written (superseded); version 2, a measured cell the residual sampling skipped that no other input flags (band 1 NoData) |
 | 255 | NoData |
 
 This table is part of the method version of `olv.terrain.evidence.attention`.
@@ -142,3 +142,32 @@ before any release shipped the old id.
   export).
 - Decision under the rule above: 37.5% is above 10%, so the attention raster
   is written only on request. A default export has no attention raster.
+
+## Version 2 (2026-09-27): cells skipped by residual sampling
+
+Version 2 of `olv.terrain.evidence.attention` supersedes version 1. The id is
+unchanged; the method version in the registry and in every passport that
+names it is 2. Everything above this section is version 1 and still holds,
+except where this section replaces it.
+
+Reason: above the sample limit, a measured cell that was not rebuilt has no
+residual, and version 1 scored it 0 on `RECONSTRUCTION_RESIDUAL`. When no
+other input flagged it, it was written as level 0, the same as a cell whose
+residual was computed and was small. A value that was never computed must
+not read as a low one.
+
+Change, applied when the vertical inputs are scored and the grid was sampled
+(stride above 1):
+
+- A measured cell the sampling skipped, whose other inputs give level 0, is
+  written with band 1 `attention_level` NoData (255) and band 2
+  `dominant_reason` 8 `UNRESOLVED`. Version 1 wrote level 0 and reason 0.
+- A skipped cell that another input already flags keeps that level and
+  reason.
+- The passport's residual record carries `unsampledCells`, the number of
+  measured cells not rebuilt, and the README states the rule.
+
+Every other value in this record is unchanged. Rasters for a grid of 250,000
+measured cells or fewer have the same bytes as version 1. The package
+passport and the files that record method versions change, because they name
+version 2.

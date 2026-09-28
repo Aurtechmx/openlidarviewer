@@ -43,8 +43,9 @@ export const TERRAIN_ATTENTION_BANDS = ['attention_level', 'dominant_reason'] as
 
 /**
  * The reason vocabulary in tie-break order, with its band 2 codes. 0 = no
- * reason; 6 and 7 are reserved and not scored; 8 is reserved and not written
- * in v1. This table is part of the method version: any change to it is a new
+ * reason; 6 and 7 are reserved and not scored; 8 marks a measured cell the
+ * residual sampling skipped that no other input flags (method version 2).
+ * This table is part of the method version: any change to it is a new
  * version of olv.terrain.evidence.attention.
  */
 export const ATTENTION_REASON_CODE = {
@@ -91,6 +92,11 @@ export interface ReconstructionResidual {
   readonly sampledCells: number;
   /** Sampled cells that had a measured neighbour and so received a residual. */
   readonly residualCells: number;
+  /**
+   * 1 on each measured cell the sampling skipped, so it has no residual
+   * because none was computed. Null when every measured cell was rebuilt.
+   */
+  readonly unsampled: Uint8Array | null;
 }
 
 /** The sampling stride for `measured` measured cells. */
@@ -109,6 +115,7 @@ export function reconstructionResidual(
   let measuredCells = 0;
   for (let i = 0; i < n; i++) if (isMeasuredCell(g, i)) measuredCells++;
   const stride = residualStride(measuredCells, sampleLimit);
+  const unsampled = stride > 1 ? new Uint8Array(n) : null;
   let seen = 0;
   let sampledCells = 0;
   let residualCells = 0;
@@ -116,14 +123,17 @@ export function reconstructionResidual(
     if (!isMeasuredCell(g, i)) continue;
     const take = seen % stride === 0;
     seen++;
-    if (!take) continue;
+    if (!take) {
+      if (unsampled) unsampled[i] = 1;
+      continue;
+    }
     sampledCells++;
     const rebuilt = rebuildHeldOutCell(g, i, scale);
     if (!Number.isFinite(rebuilt)) continue;
     residual[i] = Math.abs(g.z[i] - rebuilt);
     residualCells++;
   }
-  return { residual, measuredCells, stride, sampledCells, residualCells };
+  return { residual, measuredCells, stride, sampledCells, residualCells, unsampled };
 }
 
 // ── attention ───────────────────────────────────────────────────────────────
@@ -140,6 +150,12 @@ export interface AttentionInputs {
   readonly cellState: ArrayLike<number>;
   /** Vertical unit; NaN where none. */
   readonly residual: ArrayLike<number>;
+  /**
+   * 1 on each measured cell the residual sampling skipped. Such a cell that no
+   * other input flags is written UNRESOLVED with NoData in band 1, never as
+   * level 0. Absent or null: every measured cell was rebuilt.
+   */
+  readonly residualUnsampled?: ArrayLike<number> | null;
   /** Sensitivity range, vertical unit; null when sensitivity was not requested. */
   readonly sensitivityRange: ArrayLike<number> | null;
   /**
@@ -176,25 +192,30 @@ export function terrainAttentionBands(inp: AttentionInputs): AttentionBands {
   const vertical = R != null && Number.isFinite(R) && R > 0;
   const P = ATTENTION_PARAMS;
   const RC = ATTENTION_REASON_CODE;
+  const unsampled = inp.residualUnsampled ?? null;
   for (let i = 0; i < n; i++) {
     if (inp.coverage[i] === 0) continue;
     // Scores in vocabulary order; strict > keeps the earlier input on a tie.
-    const scores: [number, number][] = [
-      [RC.LONG_INTERPOLATION, clip01(inp.interpDistanceCells[i] / P.longInterpolationCells)],
-      [RC.LOW_SUPPORT, clip01(1 - inp.confidence[i] / P.lowSupportConfidence)],
-      [RC.EDGE_AFFECTED, inp.cellState[i] === EVIDENCE_STATE_CODE.edgeAffected ? 1 : 0],
-      [RC.MODEL_SENSITIVITY, vertical && inp.sensitivityRange ? clip01(inp.sensitivityRange[i] / (R as number)) : 0],
-      [RC.RECONSTRUCTION_RESIDUAL, vertical ? clip01(inp.residual[i] / (R as number)) : 0],
-    ];
+    // Compared inline: this loop runs once per DEM cell on the export path.
     let best = 0;
     let bestCode: number = RC.NONE;
-    for (const [code, s] of scores) {
-      if (s > best) {
-        best = s;
-        bestCode = code;
-      }
-    }
+    let s = clip01(inp.interpDistanceCells[i] / P.longInterpolationCells);
+    if (s > best) { best = s; bestCode = RC.LONG_INTERPOLATION; }
+    s = clip01(1 - inp.confidence[i] / P.lowSupportConfidence);
+    if (s > best) { best = s; bestCode = RC.LOW_SUPPORT; }
+    s = inp.cellState[i] === EVIDENCE_STATE_CODE.edgeAffected ? 1 : 0;
+    if (s > best) { best = s; bestCode = RC.EDGE_AFFECTED; }
+    s = vertical && inp.sensitivityRange ? clip01(inp.sensitivityRange[i] / (R as number)) : 0;
+    if (s > best) { best = s; bestCode = RC.MODEL_SENSITIVITY; }
+    s = vertical ? clip01(inp.residual[i] / (R as number)) : 0;
+    if (s > best) { best = s; bestCode = RC.RECONSTRUCTION_RESIDUAL; }
     const lv = attentionLevel(best);
+    if (lv === 0 && vertical && unsampled && unsampled[i] === 1) {
+      // The residual was never computed here, so level 0 would overstate it.
+      level[i] = ATTENTION_NO_DATA;
+      reason[i] = RC.UNRESOLVED;
+      continue;
+    }
     level[i] = lv;
     if (lv > 0) reason[i] = bestCode;
   }
@@ -306,6 +327,8 @@ export interface DemEvidenceRecord {
       readonly stride: number;
       readonly sampledCells: number;
       readonly residualCells: number;
+      /** Measured cells the sampling skipped, written UNRESOLVED unless another input flags them. Present only when sampled. */
+      readonly unsampledCells?: number;
     };
   } | null;
   readonly sensitivity: { readonly members: number; readonly membersDifferingFromCanonical: number } | null;
@@ -352,6 +375,7 @@ export function demEvidenceRecord(args: {
             stride: r.stride,
             sampledCells: r.sampledCells,
             residualCells: r.residualCells,
+            ...(r.stride > 1 ? { unsampledCells: r.measuredCells - r.sampledCells } : {}),
           },
         }
       : null,
@@ -382,7 +406,10 @@ export function terrainAttentionReadmeLines(
       `  Band 2 dominant_reason  The input that set the level: 1 long`,
       `                          interpolation, 2 low support, 3 edge affected,`,
       `                          4 model sensitivity, 5 reconstruction residual,`,
-      `                          0 on a level 0 cell. Codes 6 to 8 are reserved.`,
+      a.residual.unsampledCells && ref != null
+        ? `                          0 on a level 0 cell, 8 unresolved (below).`
+        : `                          0 on a level 0 cell. Codes 6 to 8 are reserved.`,
+      ...(a.residual.unsampledCells && ref != null ? [`                          Codes 6 and 7 are reserved.`] : []),
       `                          This code table is part of the method version.`,
       `  Level 0 means no scored input reached its reference. It does not mean`,
       `  the surface there is verified.`,
@@ -403,6 +430,13 @@ export function terrainAttentionReadmeLines(
       `  the absolute difference. It shows how well neighbours predict a cell.`,
       `  ${a.residual.sampledCells} of ${a.residual.measuredCells} measured cells rebuilt, sampling stride`,
       `  ${a.residual.stride}; ${a.residual.residualCells} had a measured neighbour.`,
+      ...(a.residual.unsampledCells && ref != null
+        ? [
+            `  The ${a.residual.unsampledCells} measured cells not rebuilt have no residual. Where no`,
+            `  other input flags one, band 1 is NoData and band 2 is 8 (unresolved):`,
+            `  it was not assessed, so it is not written as level 0.`,
+          ]
+        : []),
       `  Rules fixed before any result: ${record.protocol}`,
       `  Method ${a.method}, ${a.residualMethod}`,
       ``,

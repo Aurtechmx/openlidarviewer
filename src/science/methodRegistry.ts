@@ -243,17 +243,24 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'cell; not a measure of accuracy.',
     ['src/terrain/export/demAttention.ts', 'src/terrain/ground/geodesicFill.ts'],
   ),
-  'olv.terrain.evidence.attention': attentionProtocolMethod(
-    'olv.terrain.evidence.attention',
-    'DTM attention raster (where to inspect first)',
-    'Per-cell attention level 0 to 3 and one dominant reason. Long interpolation, ' +
+  'olv.terrain.evidence.attention': {
+    id: 'olv.terrain.evidence.attention',
+    // v2: a measured cell the residual sampling skipped, that no other input
+    // flags, is written NoData with reason 8 UNRESOLVED instead of level 0.
+    version: 2,
+    name: 'DTM attention raster (where to inspect first)',
+    summary:
+      'Per-cell attention level 0 to 3 and one dominant reason. Long interpolation, ' +
       'low support, edge affected, model sensitivity and reconstruction residual are ' +
       'each normalised to 0 to 1 by a fixed rule; the level is the highest score ' +
       'banded at 0.33, 0.67 and 1, and the reason is the input that set it. No ' +
-      'weighted blend. Written only on request. The reason code table is part of ' +
-      'this version. Describes where to look, not accuracy.',
-    ['src/terrain/export/demAttention.ts'],
-  ),
+      'weighted blend. A measured cell the residual sampling skipped, that no other ' +
+      'input flags, is NoData with reason 8 (unresolved). Written only on request. ' +
+      'The reason code table is part of this version. Describes where to look, not accuracy.',
+    citation: 'Internal composition (rules recorded in validation/protocols/evidencedem-attention-v1.md, version 2 section); no single source method.',
+    category: 'dtm',
+    implementation: ['src/terrain/export/demAttention.ts'],
+  },
   'olv.validation.holdout-rmse': {
     id: 'olv.validation.holdout-rmse',
     version: 2,

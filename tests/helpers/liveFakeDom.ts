@@ -39,6 +39,7 @@ export class FakeEl {
   hasClass(c: string): boolean { return this._classes.has(c); }
   setAttribute(k: string, v: string): void { this.attrs[k] = v; }
   getAttribute(k: string): string | null { return this.attrs[k] ?? null; }
+  removeAttribute(k: string): void { delete this.attrs[k]; }
   set textContent(v: string) { this._text = v; }
   /** This node's own text plus every descendant's, in tree order. */
   get textContent(): string {
@@ -61,6 +62,8 @@ export class FakeEl {
   append(...kids: FakeEl[]): void {
     for (const k of kids) { k._detach(); k.parent = this; this.children.push(k); }
   }
+  /** Detach from the parent, as `Element.remove()` does. */
+  remove(): void { this._detach(); }
   get firstChild(): FakeEl | null { return this.children[0] ?? null; }
   replaceChildren(...kids: FakeEl[]): void {
     for (const c of this.children) c.parent = null;
@@ -81,10 +84,14 @@ export class FakeEl {
     if (attr) return this.attrs[attr[1]] === attr[2];
     return false;
   }
-  /** Minimal `querySelector`: only `button:not([disabled])`, depth first. */
+  /** Minimal `querySelector`: `button:not([disabled])`, `.class` or `[attr="v"]`, depth first. */
   querySelector(sel: string): FakeEl | null {
-    if (sel !== 'button:not([disabled])') return null;
+    if (sel !== 'button:not([disabled])') return this.find((e) => e !== this && e._matches(sel)) ?? null;
     return this.find((e) => e !== this && e.tagName === 'button' && !e.disabled) ?? null;
+  }
+  /** Minimal `querySelectorAll`: `.class` or `[attr="v"]`, descendants only. */
+  querySelectorAll(sel: string): FakeEl[] {
+    return this.findAll((e) => e !== this && e._matches(sel));
   }
   /** Minimal `closest`: walks up parents matching `.class` or `[attr="v"]`. */
   closest(sel: string): FakeEl | null {

@@ -333,12 +333,18 @@ async function redrawAfterRestore(): Promise<void> {
   await drawOverlay(input, state);
   announcePolite(OVERLAYS_REDRAWN_NOTICE);
   const note = document.querySelector('.olv-observatory-panel');
-  if (note) note.prepend(el('p', { className: 'olv-observatory-redrawn', text: OVERLAYS_REDRAWN_NOTICE }));
+  if (note) {
+    // One notice however many restores: replace, never stack.
+    note.querySelectorAll('.olv-observatory-redrawn').forEach((n) => n.remove());
+    note.prepend(el('p', { className: 'olv-observatory-redrawn', text: OVERLAYS_REDRAWN_NOTICE }));
+  }
 }
 
 function listenForRestore(): void {
   if (restoreListening || typeof document === 'undefined') return;
   restoreListening = true;
+  // Registered once for the page's lifetime and never removed: the overlays
+  // outlive the modal, and the handler does nothing while none is drawn.
   document.addEventListener('webglcontextrestored', () => { void redrawAfterRestore(); }, true);
 }
 
