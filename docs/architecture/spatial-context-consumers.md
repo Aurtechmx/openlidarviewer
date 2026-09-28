@@ -50,7 +50,7 @@ has re-opened the divergence this closes.
   `carrier` path must be free of the deprecated predicates listed below.
 - Reads: the context fields it now uses.
 
-## Inventory (17 consumers)
+## Inventory (18 consumers)
 
 | # | Consumer | Status | Routes through | Reads |
 |---|----------|--------|----------------|-------|
@@ -71,6 +71,7 @@ has re-opened the divergence this closes.
 | 15 | Streaming scan report | migrated | `src/analysis/streamingExtentRows.ts`, `src/app/streamingScanReport.ts`, `src/app/streamingReportSeam.ts` | `linearUnitKnown`, `linearUnitToMetres`, `verticalMetresPerUnit`, `isGeographic` |
 | 16 | Tool preflight | migrated | `src/process/toolPreflight.ts` | `metricClaimsPermitted`, `verticalReferenceKnown`, `crsName` |
 | 17 | Cross-CRS project placement | migrated | `src/geo/projectPlacement.ts` | vertical verdict delegated to `src/geo/frameCompatibility.ts` |
+| 18 | State strip providers | migrated | `src/process/stateProviders.ts` | `crsName`, `epsg`, `linearUnit`, `linearUnitKnown`, `metricSeverity`, `verticalReference`, `verticalReferenceKnown`, `verticalDatum`, `verticalEpsg` |
 
 ## Deprecated predicates
 

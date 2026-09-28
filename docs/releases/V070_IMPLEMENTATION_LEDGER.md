@@ -7357,3 +7357,25 @@ and `Inspector.ts` is smaller. Covered by
 `tests/e2e/ceModeHome.spec.ts`; the lab specs open by route with their
 scientific assertions unchanged. No computed value, threshold, method or
 export changes.
+
+### L192 · BUILT · UI
+
+Community wayfinding phase C4, providers (`docs/ux/COMMUNITY_SPEC.md` §9,
+CE-STRIP-00 and CE-SCOPE-05).
+
+`src/process/stateProviders.ts` holds one provider per state strip item. Each
+is a pure function of the state its owner already holds and returns
+`{ value, source, validity }`, where validity is a state from `SciState`. The
+dataset name reads the streaming source's name, else the active cloud's. The
+horizontal CRS and unit read `CrsService.context()` and the source of
+`CrsService.current()`, so an EVLR-sourced CRS reports `las-evlr`. The vertical
+reference reads the same context and says `Vertical: unknown` when the
+reference is not known. The layer basis reads `ScanFacts.coverage`. The review
+and blocked item counts Analyse rows at review or blocked and stale results,
+with the worst state as its validity. Processing has no provider: no single
+owner holds the running task and its progress. The duplicates found and left
+in place are listed in `docs/ux/NAVIGATION_MAP.md` §7.1. No computed value,
+threshold or export changes, and nothing renders yet.
+
+Covered by `tests/stateProviders.test.ts` on unknown-vertical, feet-unit,
+resident-only and stale fixtures, with every input frozen.
