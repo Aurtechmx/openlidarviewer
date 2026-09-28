@@ -88,17 +88,18 @@ the two entries were renumbered when the branches were integrated.
 | L183 | UI | TEST | med | FIXED | new | Nothing outside the left rail said where the user was, the command palette had no close control, a collapsed rail or a lowered phone sheet hid the only Back, and each surface had its own way out. |
 | L181 | EXPORT | TEST | med | FIXED | new | No export recorded the format probe interpretation level, the single-file vector exports carried no build or source record, and the simulation packages did not state the data basis of the surface they read. |
 | L182 | LOADER | TEST | med | FIXED | new | glTF COLOR_0, which the glTF 2.0 specification defines as linear, was stored as sRGB bytes, so midtones displayed too dark; a GLB opened in the browser failed to decode; and normals declared by glTF, PLY and PNTS files were not carried into the cloud. |
+| L185 | UI | TEST | low | FIXED | new | Hiding the load toast after a finished load emptied the shared polite live region, erasing an announcement another panel had made during the settle. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 39
+- FIXED: 40
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 60
+- total: 61
 
 ## Detail
 
@@ -7081,7 +7082,6 @@ Covered by `tests/exportSourceInterpretation.test.ts` and
 DEM product and a Flow Pulse run from the recorded fields and gets identical
 values. Remaining gaps are listed in the audit.
 
-
 ### L182 · FIXED · LOADER
 
 glTF 2.0 defines COLOR_0 as linear for every component type, and cloud colour
@@ -7113,3 +7113,16 @@ analysis inputs are unchanged.
 Covered by `tests/loadGltfColourNormals.test.ts`, `tests/loadPnts.test.ts`,
 `tests/loadPly.test.ts`, `tests/loaderNoCdnWorker.test.ts` and
 `tests/e2e/authoredNormals.spec.ts`.
+
+### L185 · FIXED · UI
+
+The load toast and the rest of the app share one polite live region
+(`src/ui/politeAnnounce.ts`). Since the progress trail settles before the toast
+hides, the hide runs up to about one and a half seconds after a load finishes, and it emptied
+that region whatever it held. An announcement made in that window, such as the
+Classes legend's filter banner, was erased before a screen reader read it. The
+toast now empties the region only while it still holds the toast's own text;
+a newer announcement stays.
+
+Covered by `tests/dropZoneBusyScan.test.ts` and
+`tests/e2e/inspectAnnouncements.spec.ts`.

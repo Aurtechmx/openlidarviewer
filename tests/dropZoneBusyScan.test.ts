@@ -125,6 +125,31 @@ describe('load toast progress and finish', () => {
     expect(toast.cls.has('olv-hidden')).toBe(false);
     await expect(left).resolves.toBe(false);
   });
+
+  it('keeps a later announcement in the shared status node when the settle hides the toast', async () => {
+    vi.useFakeTimers();
+    const { zone, toast } = await freshZone();
+    const status = (zone as unknown as { _srStatus: { textContent: string } })._srStatus;
+    zone.setProgress('Decoding…', 0.5);
+    const left = zone.finish();
+    // Another part of the app announces through the same node during the settle.
+    status.textContent = '';
+    status.textContent = 'Filtered — showing 4 of 5 classes';
+    await vi.advanceTimersByTimeAsync(300);
+    toast.find('olv-bs-point')[0].fire('animationiteration');
+    await vi.advanceTimersByTimeAsync(300);
+    await expect(left).resolves.toBe(true);
+    expect(toast.cls.has('olv-hidden')).toBe(true);
+    expect(status.textContent).toBe('Filtered — showing 4 of 5 classes');
+  });
+
+  it('still empties its own text from the status node when the toast hides', async () => {
+    const { zone } = await freshZone();
+    const status = (zone as unknown as { _srStatus: { textContent: string } })._srStatus;
+    zone.setProgress('Decoding…');
+    zone.setProgress(null);
+    expect(status.textContent).toBe('');
+  });
 });
 
 describe('load toast stylesheet', () => {

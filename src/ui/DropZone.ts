@@ -201,7 +201,10 @@ export class DropZone {
       this._bar.classList.add('olv-hidden');
       // Empty both live regions on hide so a re-shown toast re-announces
       // (live regions only fire on content CHANGE) and no stale text lingers.
-      this._srStatus.textContent = '';
+      // The polite region is shared (`announcePolite`), so it is emptied only
+      // while it still holds the toast's own text: a hide that lands after the
+      // settle must not erase a newer announcement from another panel.
+      this._clearOwnStatus();
       this._srAlert.textContent = '';
       return;
     }
@@ -294,17 +297,24 @@ export class DropZone {
     this._bar.classList.add('olv-hidden');
     this.toast.classList.remove('is-opening', 'is-busy');
     this.toast.classList.add('olv-toast-error');
+    // The status node is emptied (when it holds the toast's text) so the
+    // failure isn't double-read.
+    this._clearOwnStatus();
     this._text.textContent = text;
     // The alert node announces immediately (role=alert is implicitly
     // assertive) — a load failure should interrupt; routine progress should
-    // not. The status node is emptied so the failure isn't double-read.
+    // not.
     this._srAlert.textContent = text;
-    this._srStatus.textContent = '';
     this.toast.classList.remove('olv-hidden');
     this._hideTimer = window.setTimeout(() => {
       this._hideTimer = null;
       this.toast.classList.add('olv-hidden');
       this._srAlert.textContent = '';
     }, report ? 20000 : 6000);
+  }
+
+  /** Empty the shared polite region if it still holds the toast's text. */
+  private _clearOwnStatus(): void {
+    if (this._srStatus.textContent === this._text.textContent) this._srStatus.textContent = '';
   }
 }
