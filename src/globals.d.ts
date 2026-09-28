@@ -37,10 +37,8 @@ declare const __OLV_TEST_SEAM__: boolean;
 declare const __OLV_DEV_FLAGS__: boolean;
 
 /**
- * Inter is not part of the shipped bundle — the interface face is Manrope
- * (`--font` in style.css) with JetBrains Mono for monospace. The package is
- * kept for `scripts/make-brand-rasters.py`, which instances its variable woff2
- * out of node_modules to typeset the OG-card tagline. This declaration exists
- * so a side-effect CSS import of it would still type-check.
+ * Inter is not part of the shipped bundle — the interface face is Olv Font
+ * (`--font` in styles/01-tokens.css) with JetBrains Mono for monospace. This
+ * declaration exists so a side-effect CSS import of it would still type-check.
  */
 declare module '@fontsource-variable/inter';

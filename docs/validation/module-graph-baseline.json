@@ -51,15 +51,12 @@
   },
   "fanOut": {
     "src/main.ts": {
-      "runtime": 103,
+      "runtime": 100,
       "typeOnly": 27,
       "dynamic": 7,
       "modules": [
         "@fontsource/jetbrains-mono/latin-400.css",
         "@fontsource/jetbrains-mono/latin-500.css",
-        "@fontsource/manrope/latin-400.css",
-        "@fontsource/manrope/latin-500.css",
-        "@fontsource/manrope/latin-600.css",
         "src/app/AppRuntime.ts",
         "src/app/LayerService.ts",
         "src/app/ScanRouteService.ts",

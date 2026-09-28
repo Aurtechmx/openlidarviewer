@@ -1,259 +1,274 @@
 #!/usr/bin/env python3
 """
-make-brand-rasters.py — rasterise every identity surface from the OFFICIAL
-OpenLiDARViewer logo file, design/brand-logo.svg (kept out of public/ so the
-530 KB master is not shipped; only the small derived assets ship).
+make-brand-rasters.py: write every identity surface from one vector emblem.
 
-    public/favicon.svg          the official mark (downscaled crop of the
-                                logo's own pixels) on the #0a0e1a brand
-                                plate — written here so the vector favicon
-                                and the rasters always derive from the
-                                same source
-    public/icon-192.png         web-manifest icon (rounded brand-dark
-                                plate carrying the official mark)
-    public/icon-512.png         web-manifest icon, same design
-    public/apple-touch-icon.png 180 px, full-bleed #0a0e1a (iOS composites
-                                transparency on white, so no alpha)
-    public/favicon.ico          16 / 32 / 48 multi-size legacy favicon —
-                                each size downscaled independently from
-                                the high-resolution master
-    public/og-card.jpg          1200x630 Open Graph / Twitter share card —
-                                the full official logo lockup (mark +
-                                wordmark, as delivered) on the deep-navy
-                                brand field, tagline in cyan below
+    design/brand-logo.svg       horizontal lockup: emblem, wordmark and
+                                tagline as outlined vector paths (master)
+    public/brand-mark.svg       the emblem (top bar, empty-state hero)
+    public/brand-mark-light.svg the emblem in deeper blues for the light theme
+    public/favicon.svg          simplified emblem on a rounded #030817 plate
+    public/icon-192.png         web-manifest icons, full-bleed plate with the
+    public/icon-512.png         emblem inside the maskable safe zone
+    public/apple-touch-icon.png 180 px, full-bleed (iOS needs no alpha)
+    public/favicon.ico          16 / 32 / 48, from the simplified emblem
+    public/og-card.jpg          1200x630 share card: emblem, wordmark,
+                                tagline and a dotted terrain field
 
-RASTERISE, DON'T REDRAW. This script replaces scripts/make-manifest-icons.py
-(retired 2026-06-10), which *drew* placeholder geometry with Pillow. Nothing
-here draws logo artwork: every output is produced by cropping, scaling and
-compositing the pixels of the official asset. The only painted elements are
-background plates (#0a0e1a squares / rounded squares, needed for contrast on
-light UI and required without alpha by iOS) and the og-card tagline text —
-neither is logo artwork.
+The emblem is geometry: a central sphere with a short horizontal flare, four
+flat dotted elliptical rings and a mirror-symmetric vertical axis of dots.
+Palette #030817 #0F172A #00B2FF #00F0FF #C9F6FF #FFFFFF.
 
-HOW THE SOURCE IS READ. design/brand-logo.svg, as delivered, is an SVG
-wrapper around a single full-resolution embedded PNG (910x706, RGBA) — so
-"rasterising the SVG" reduces, losslessly, to decoding that embedded PNG and
-resampling it (Lanczos). If a future revision of the logo arrives as true
-vector art, switch the `load_logo()` step to a real SVG rasteriser
-(resvg / headless Chromium) and keep everything downstream unchanged.
-
-MARK CROP. The lockup carries the point-cloud-orb mark in its upper region
-and a raster wordmark in its lower band. Icon surfaces use the mark-only
-square crop at PNG pixels x 138..772, y -52..582 (negative rows padded
-transparent). The shipped public/brand-mark.svg is this crop DOWNSCALED to
-256 px and re-embedded (it renders at the 28 px header / 104 px hero), so the
-deploy carries a ~82 KB mark, not the full-resolution master.
+Text is set in Olv Font (src/fonts/olv-font), Medium for the wordmark with
+-0.02em tracking and the font's own pair kerning, Regular for the tagline.
+Glyphs are converted to paths with fontTools, so no output needs the font.
 
     python3 scripts/make-brand-rasters.py
 
-Requires: Pillow. The og-card tagline prefers the app's own Inter face
-(instanced to Bold from the variable woff2 in node_modules via fontTools,
-when available) and falls back to DejaVu Sans Bold. Output is committed,
-so end users / CI never need to run this.
+Requires: fontTools, Pillow, and rsvg-convert (librsvg) on PATH. Output is
+committed, so CI never runs this.
 """
 
 from __future__ import annotations
 
-import base64
+import io
+import math
 import pathlib
-import re
-from io import BytesIO
+import subprocess
 
-from PIL import Image, ImageDraw, ImageFont
+from fontTools.pens.svgPathPen import SVGPathPen
+from fontTools.pens.transformPen import TransformPen
+from fontTools.ttLib import TTFont
+from PIL import Image
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-OUT_DIR = ROOT / "public"
-# The 530 KB master lives in design/ (not public/) so it is never shipped.
-LOGO_SVG = ROOT / "design" / "brand-logo.svg"
+PUBLIC = ROOT / "public"
+FONTS = ROOT / "src" / "fonts" / "olv-font"
 
-BRAND_DARK = (0x0A, 0x0E, 0x1A)
-CYAN = (0x00, 0xF0, 0xFF)
+NIGHT = "#030817"
+MIDNIGHT = "#0F172A"
+BLUE = "#00B2FF"
+CYAN = "#00F0FF"
+ICE = "#C9F6FF"
+WHITE = "#FFFFFF"
 
-# ── Mark-only crop, in source-PNG pixel coordinates ─────────────────────────
-# Must stay in lockstep with public/brand-mark.svg's viewBox (which is in
-# SVG units = PNG pixels + the wrapper's 40,40 image offset).
-MARK_X0, MARK_Y0, MARK_SIDE = 138, -52, 634
+WORDMARK = "OpenLiDARViewer"
+TAGLINE = "Local-first browser-based point-cloud exploration"
 
-# ── Tile design (icon surfaces): 64-unit canvas, plate + centred mark ──────
-TILE_UNITS = 64.0
-TILE_RADIUS = 14.0  # matches the previous favicon plate / app theme tiles
-MARK_INSET = 5.0    # mark square spans units 5..59 (~84% — glow pads it)
-
-
-def load_logo() -> Image.Image:
-    """Decode the official logo's embedded full-resolution PNG (RGBA)."""
-    svg = LOGO_SVG.read_text()
-    m = re.search(r'xlink:href="data:image/png;base64,\s*([A-Za-z0-9+/=\s]+)"', svg)
-    if not m:
-        raise SystemExit(f"no embedded PNG found in {LOGO_SVG}")
-    png = base64.b64decode(re.sub(r"\s", "", m.group(1)))
-    img = Image.open(BytesIO(png)).convert("RGBA")
-    return img
+# (centre offset, rx, ry) in a 100-unit box centred on the sphere.
+RINGS = [(-18, 30, 5.5), (-6.5, 44, 7.5), (5, 48, 8.5), (16, 46, 8.0)]
+# (offset from centre, radius), mirrored above and below the sphere.
+AXIS = [(19, 3.0), (28, 2.2), (37, 1.2), (44.5, 0.85)]
 
 
-def crop_mark(logo: Image.Image) -> Image.Image:
-    """The mark-only square crop, padded transparent where it overhangs."""
-    side = MARK_SIDE
-    out = Image.new("RGBA", (side, side), (0, 0, 0, 0))
-    src_y0 = max(MARK_Y0, 0)
-    region = logo.crop((MARK_X0, src_y0, MARK_X0 + side, min(MARK_Y0 + side, logo.height)))
-    out.paste(region, (0, src_y0 - MARK_Y0))
-    return out
+# The light-background lockup: the same emblem in deeper blues, so it holds on
+# near-white surfaces.
+LIGHT = {"blue": "#0A6FD6", "cyan": "#0091E6", "ice": "#7FD3FF", "core": "#0057B8"}
 
 
-def render_tile(mark: Image.Image, master_px: int = 2048, *, rounded: bool,
-                opaque: bool) -> Image.Image:
-    """
-    The icon tile: the #0a0e1a brand plate (rounded with transparent corners,
-    or full-bleed opaque) carrying the official mark, centred. The plate is
-    background, not logo artwork — the mark pixels come solely from `mark`.
-    """
-    ss = 4  # supersample the plate's rounded corners
-    size = master_px * ss
-    s = size / TILE_UNITS
-
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    if rounded and not opaque:
-        draw.rounded_rectangle([0, 0, size - 1, size - 1],
-                               radius=TILE_RADIUS * s, fill=BRAND_DARK + (255,))
-    else:
-        draw.rectangle([0, 0, size, size], fill=BRAND_DARK + (255,))
-
-    mark_px = round((TILE_UNITS - 2 * MARK_INSET) * s)
-    placed = mark.resize((mark_px, mark_px), Image.LANCZOS)
-    off = round(MARK_INSET * s)
-    img.alpha_composite(placed, (off, off))
-
-    return img.resize((master_px, master_px), Image.LANCZOS)
+def emblem_defs(p: str, light: bool = False) -> str:
+    if light:
+        return (
+            f'<radialGradient id="{p}s" cx="0.38" cy="0.34" r="0.7">'
+            f'<stop offset="0" stop-color="{WHITE}"/><stop offset="0.3" stop-color="{LIGHT["ice"]}"/>'
+            f'<stop offset="0.65" stop-color="{LIGHT["cyan"]}"/><stop offset="1" stop-color="{LIGHT["core"]}"/></radialGradient>'
+            f'<radialGradient id="{p}g"><stop offset="0" stop-color="{LIGHT["cyan"]}" stop-opacity="0.25"/>'
+            f'<stop offset="1" stop-color="{LIGHT["cyan"]}" stop-opacity="0"/></radialGradient>'
+            f'<linearGradient id="{p}f"><stop offset="0" stop-color="{LIGHT["blue"]}" stop-opacity="0"/>'
+            f'<stop offset="0.5" stop-color="{LIGHT["cyan"]}"/><stop offset="1" stop-color="{LIGHT["blue"]}" stop-opacity="0"/></linearGradient>'
+        )
+    return (
+        f'<radialGradient id="{p}s" cx="0.38" cy="0.34" r="0.7">'
+        f'<stop offset="0" stop-color="{WHITE}"/><stop offset="0.35" stop-color="{ICE}"/>'
+        f'<stop offset="0.7" stop-color="{CYAN}"/><stop offset="1" stop-color="{BLUE}"/></radialGradient>'
+        f'<radialGradient id="{p}g"><stop offset="0" stop-color="{CYAN}" stop-opacity="0.55"/>'
+        f'<stop offset="1" stop-color="{BLUE}" stop-opacity="0"/></radialGradient>'
+        f'<linearGradient id="{p}f"><stop offset="0" stop-color="{BLUE}" stop-opacity="0"/>'
+        f'<stop offset="0.5" stop-color="{ICE}"/><stop offset="1" stop-color="{BLUE}" stop-opacity="0"/></linearGradient>'
+    )
 
 
-# ── og-card tagline: Inter Bold (the app's own face) with DejaVu fallback ──
-
-def load_tagline_font(size: int) -> ImageFont.FreeTypeFont:
-    """
-    Prefer Inter Bold, instanced via fontTools from the variable woff2 in
-    node_modules/@fontsource-variable/inter. That package is a build-time
-    asset source only; the app bundle ships Manrope and JetBrains Mono, not
-    Inter. Falls back to DejaVu Sans Bold (present wherever Pillow is).
-    """
-    import tempfile
-
-    cache = pathlib.Path(tempfile.gettempdir()) / "olv-inter-bold.ttf"
-    if not cache.exists():
-        try:
-            from fontTools.ttLib import TTFont
-            from fontTools.varLib.instancer import instantiateVariableFont
-
-            woff2 = (
-                ROOT / "node_modules" / "@fontsource-variable" / "inter"
-                / "files" / "inter-latin-wght-normal.woff2"
-            )
-            font = TTFont(str(woff2))
-            font.flavor = None  # decompress woff2 → plain ttf
-            instantiateVariableFont(font, {"wght": 700}, inplace=True)
-            font.save(str(cache))
-        except Exception as exc:  # noqa: BLE001 — any failure means fallback
-            print(f"  (Inter unavailable: {exc!r} — falling back to DejaVu Sans Bold)")
-    if cache.exists():
-        return ImageFont.truetype(str(cache), size)
-    return ImageFont.truetype("DejaVuSans-Bold.ttf", size)
+def emblem_body(p: str, dot: float = 1.5, gap: float = 3.1, light: bool = False) -> str:
+    """The emblem in a 100x100 box. Dotted rings are dashed strokes with round
+    caps; the far half of each ring is dimmer so the stack reads as depth."""
+    blue, cyan = (LIGHT["blue"], LIGHT["cyan"]) if light else (BLUE, CYAN)
+    out = [f'<circle cx="50" cy="50" r="15" fill="url(#{p}g)"/>']
+    dash = f'stroke-width="{dot}" stroke-linecap="round" stroke-dasharray="0 {gap}" fill="none"'
+    for dy, rx, ry in RINGS:
+        cy = 50 + dy
+        back = f"M{50 - rx} {cy}A{rx} {ry} 0 0 1 {50 + rx} {cy}"
+        front = f"M{50 + rx} {cy}A{rx} {ry} 0 0 1 {50 - rx} {cy}"
+        out.append(f'<path d="{back}" stroke="{blue}" opacity="0.7" {dash}/>')
+        out.append(f'<path d="{front}" stroke="{cyan}" {dash}/>')
+    for off, r in AXIS:
+        fill = cyan if r > 1.5 else blue
+        out.append(f'<circle cx="50" cy="{50 - off}" r="{r}" fill="{fill}"/>')
+        out.append(f'<circle cx="50" cy="{50 + off}" r="{r}" fill="{fill}"/>')
+    out.append(f'<rect x="22" y="49.4" width="56" height="1.2" rx="0.6" fill="url(#{p}f)"/>')
+    out.append(f'<circle cx="50" cy="50" r="7" fill="url(#{p}s)"/>')
+    return "".join(out)
 
 
-def make_og_card(logo: Image.Image) -> Image.Image:
-    """
-    1200x630 share card: the FULL official lockup (mark + the asset's own
-    raster wordmark — near-white, designed for dark fields, so it reads
-    perfectly on the deep-navy brand background) centred, with the tagline
-    in cyan below. Layout carried over from the previous card; the typeset
-    Inter wordmark it used is replaced by the logo's own.
-    """
+def brand_mark_svg(light: bool = False) -> str:
+    return (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="256" height="256">'
+        f"<defs>{emblem_defs('m', light)}</defs>{emblem_body('m', 2.8, 3.4, light) if light else emblem_body('m', 2.3, 4.0)}</svg>\n"
+    )
+
+
+def favicon_svg() -> str:
+    """Simplified for 16-32 px: two solid rings and four axis dots."""
+    return (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">'
+        f"<defs>{emblem_defs('f')}</defs>"
+        f'<rect width="32" height="32" rx="7" fill="{NIGHT}"/>'
+        f'<ellipse cx="16" cy="13.2" rx="11.5" ry="3" fill="none" stroke="{BLUE}" stroke-width="1.3"/>'
+        f'<ellipse cx="16" cy="18.8" rx="11.5" ry="3" fill="none" stroke="{CYAN}" stroke-width="1.3"/>'
+        f'<circle cx="16" cy="5" r="1.3" fill="{CYAN}"/><circle cx="16" cy="27" r="1.3" fill="{CYAN}"/>'
+        f'<circle cx="16" cy="1.9" r="0.8" fill="{BLUE}"/><circle cx="16" cy="30.1" r="0.8" fill="{BLUE}"/>'
+        f'<circle cx="16" cy="16" r="4.6" fill="url(#fs)"/></svg>\n'
+    )
+
+
+def app_icon_svg(px: int, safe: float) -> str:
+    """Full-bleed plate; the emblem fills `safe` of the side (maskable safe zone)."""
+    s = px * safe
+    o = (px - s) / 2
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {px} {px}" width="{px}" height="{px}">'
+        f"<defs>{emblem_defs('a')}"
+        f'<radialGradient id="ap" cx="0.5" cy="0.45" r="0.75"><stop offset="0" stop-color="{MIDNIGHT}"/>'
+        f'<stop offset="1" stop-color="{NIGHT}"/></radialGradient></defs>'
+        f'<rect width="{px}" height="{px}" fill="url(#ap)"/>'
+        f'<g transform="translate({o} {o}) scale({s / 100})">{emblem_body("a", 1.9, 3.3)}</g></svg>\n'
+    )
+
+
+# ── text as paths ─────────────────────────────────────────────────────────
+
+
+def load_font(weight: str) -> TTFont:
+    return TTFont(str(FONTS / f"OlvFont-{weight}-Latin.woff2"))
+
+
+def pair_kerning(font: TTFont) -> dict[tuple[str, str], int]:
+    """Glyph-pair x-advance adjustments from the GPOS kern feature (PairPos)."""
+    kern: dict[tuple[str, str], int] = {}
+    gpos = font["GPOS"].table
+    idx = {i for fr in gpos.FeatureList.FeatureRecord if fr.FeatureTag == "kern" for i in fr.Feature.LookupListIndex}
+    for i in sorted(idx):
+        lk = gpos.LookupList.Lookup[i]
+        subs = [s.ExtSubTable for s in lk.SubTable] if lk.LookupType == 9 else lk.SubTable
+        for st in subs:
+            if not hasattr(st, "Coverage") or not (hasattr(st, "PairSet") or hasattr(st, "Class1Record")):
+                continue
+            first = st.Coverage.glyphs
+            if st.Format == 1:
+                for g1, ps in zip(first, st.PairSet):
+                    for pvr in ps.PairValueRecord:
+                        v = getattr(pvr.Value1, "XAdvance", 0) if pvr.Value1 else 0
+                        kern.setdefault((g1, pvr.SecondGlyph), v)
+            elif st.Format == 2:
+                c1 = st.ClassDef1.classDefs
+                c2 = st.ClassDef2.classDefs
+                for g1 in first:
+                    rec = st.Class1Record[c1.get(g1, 0)]
+                    for g2, k2 in c2.items():
+                        v = rec.Class2Record[k2].Value1
+                        x = getattr(v, "XAdvance", 0) if v else 0
+                        if x:
+                            kern.setdefault((g1, g2), x)
+    return kern
+
+
+def text_path(font: TTFont, text: str, size: float, x: float, baseline: float, tracking_em: float = 0.0) -> tuple[str, float]:
+    """SVG path data for `text` and its advance width, in output units."""
+    cmap = font.getBestCmap()
+    gs = font.getGlyphSet()
+    upm = font["head"].unitsPerEm
+    kern = pair_kerning(font)
+    scale = size / upm
+    pen = SVGPathPen(gs)
+    cx = 0.0
+    names = [cmap[ord(c)] for c in text]
+    for i, g in enumerate(names):
+        gs[g].draw(TransformPen(pen, (scale, 0, 0, -scale, x + cx * scale, baseline)))
+        cx += gs[g].width
+        if i + 1 < len(names):
+            cx += kern.get((g, names[i + 1]), 0) + tracking_em * upm
+    return pen.getCommands(), cx * scale
+
+
+def brand_logo_svg() -> str:
+    """Horizontal lockup on the #030817 field, all vector."""
+    w, h = 1200, 360
+    word, _ = text_path(load_font("Medium"), WORDMARK, 118, 330, 190, -0.02)
+    tag, _ = text_path(load_font("Regular"), TAGLINE, 38, 334, 262)
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}">'
+        f"<defs>{emblem_defs('l')}</defs>"
+        f'<rect width="{w}" height="{h}" fill="{NIGHT}"/>'
+        f'<g transform="translate(40 30) scale(3)">{emblem_body("l")}</g>'
+        f'<path d="{word}" fill="{WHITE}"/><path d="{tag}" fill="{CYAN}"/></svg>\n'
+    )
+
+
+def terrain_dots(w: int, h: int) -> str:
+    """A dotted wave field across the lower card, perspective-foreshortened."""
+    out = []
+    rows = 34
+    for r in range(rows):
+        t = r / (rows - 1)
+        y0 = 430 + t * t * 230
+        spacing = 3 + t * 13
+        rad = 0.6 + t * 1.6
+        op = 0.25 + 0.6 * t
+        for c in range(int(w / spacing) + 2):
+            x = c * spacing - spacing
+            u = x / w
+            y = y0 - (38 - 26 * t) * (math.sin(u * 5.2 + t * 2.1) * 0.6 + math.sin(u * 11.0 - t * 3.0) * 0.25 + (u**3) * 1.3)
+            if y > h + 4 or y < 330:
+                continue
+            col = CYAN if (c + r) % 5 == 0 else BLUE
+            out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{rad:.2f}" fill="{col}" opacity="{op:.2f}"/>')
+    return "".join(out)
+
+
+def og_card_svg() -> str:
     w, h = 1200, 630
-    card = Image.new("RGB", (w, h), BRAND_DARK)
-    draw = ImageDraw.Draw(card)
-
-    tagline = "Visualize. Explore. Understand."
-    tag_font = load_tagline_font(36)
-    g_bbox = draw.textbbox((0, 0), tagline, font=tag_font)
-    g_w, g_h = g_bbox[2] - g_bbox[0], g_bbox[3] - g_bbox[1]
-
-    gap = 26
-    logo_w = 600
-    logo_h = round(logo_w * logo.height / logo.width)
-    block_h = logo_h + gap + g_h
-    y = (h - block_h) // 2
-
-    lockup = logo.resize((logo_w, logo_h), Image.LANCZOS)
-    card.paste(lockup, ((w - logo_w) // 2, y), lockup)
-    draw.text(((w - g_w) // 2 - g_bbox[0], y + logo_h + gap - g_bbox[1]),
-              tagline, font=tag_font, fill="#%02x%02x%02x" % CYAN)
-    return card
+    word, _ = text_path(load_font("Medium"), WORDMARK, 92, 392, 272, -0.02)
+    tag, _ = text_path(load_font("Regular"), TAGLINE, 31, 396, 330)
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}">'
+        f"<defs>{emblem_defs('o')}"
+        f'<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{NIGHT}"/>'
+        f'<stop offset="1" stop-color="{MIDNIGHT}"/></linearGradient></defs>'
+        f'<rect width="{w}" height="{h}" fill="url(#bg)"/>{terrain_dots(w, h)}'
+        f'<g transform="translate(70 115) scale(2.8)">{emblem_body("o")}</g>'
+        f'<path d="{word}" fill="{WHITE}"/><path d="{tag}" fill="{CYAN}"/></svg>\n'
+    )
 
 
-FAVICON_SVG_TEMPLATE = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!--
-    OpenLiDARViewer favicon — the OFFICIAL brand mark on the brand-dark
-    plate. GENERATED FILE: written by scripts/make-brand-rasters.py, which
-    crops the mark region out of design/brand-logo.svg's full-resolution
-    pixels and downscales it (Lanczos, {px} px) for embedding — the mark is
-    the real asset's pixels, not redrawn artwork. The #0a0e1a rounded plate
-    (matching theme-color / the app background) sits behind it for contrast
-    on light browser chrome. Regenerate with:
-
-        python3 scripts/make-brand-rasters.py
-  -->
-  <rect width="64" height="64" rx="14" fill="#0a0e1a"/>
-  <image x="5" y="5" width="54" height="54" href="data:image/png;base64,{b64}"/>
-</svg>
-"""
-
-
-def make_favicon_svg(mark: Image.Image, px: int = 256) -> str:
-    """favicon.svg: brand plate + an embedded downscale of the real mark."""
-    small = mark.resize((px, px), Image.LANCZOS)
-    buf = BytesIO()
-    small.save(buf, format="PNG", optimize=True)
-    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-    return FAVICON_SVG_TEMPLATE.format(px=px, b64=b64)
+def rasterise(svg: str, px_w: int, px_h: int | None = None) -> Image.Image:
+    args = ["rsvg-convert", "-w", str(px_w)] + (["-h", str(px_h)] if px_h else []) + ["-f", "png"]
+    png = subprocess.run(args, input=svg.encode(), capture_output=True, check=True).stdout
+    return Image.open(io.BytesIO(png)).convert("RGBA")
 
 
 def main() -> None:
-    logo = load_logo()
-    mark = crop_mark(logo)
-
-    # favicon.svg — vector wrapper: plate + the real mark, downscaled.
-    out = OUT_DIR / "favicon.svg"
-    out.write_text(make_favicon_svg(mark))
-    print(f"wrote {out} ({out.stat().st_size} bytes)")
-
-    # Manifest icons — rounded plate, transparency in the corners.
-    plate = render_tile(mark, rounded=True, opaque=False)
-    for size in (512, 192):
-        out = OUT_DIR / f"icon-{size}.png"
-        plate.resize((size, size), Image.LANCZOS).save(out, optimize=True)
-        print(f"wrote {out} ({size}x{size})")
-
-    # apple-touch-icon — 180 px, FULL-BLEED #0a0e1a (iOS composites alpha
-    # on white, so the corners must be filled — no transparency).
-    flat = render_tile(mark, rounded=False, opaque=True)
-    out = OUT_DIR / "apple-touch-icon.png"
-    flat.convert("RGB").resize((180, 180), Image.LANCZOS).save(out, optimize=True)
-    print(f"wrote {out} (180x180, full-bleed)")
-
-    # favicon.ico — 48/32/16, each downscaled from the 2048 master (not from
-    # each other). At 16 px the dotted orbits blur into the glowing-orb
-    # silhouette — that is the real asset downscaled, which is the contract;
-    # nothing is redrawn to "help" legibility.
-    ico_imgs = [plate.resize((s, s), Image.LANCZOS) for s in (48, 32, 16)]
-    out = OUT_DIR / "favicon.ico"
-    ico_imgs[0].save(out, format="ICO", append_images=ico_imgs[1:],
-                     sizes=[(48, 48), (32, 32), (16, 16)])
-    print(f"wrote {out} (48/32/16)")
-
-    # og-card — 1200x630 share image: the full official lockup + tagline.
-    out = OUT_DIR / "og-card.jpg"
-    make_og_card(logo).save(out, quality=90, optimize=True, progressive=True)
-    print(f"wrote {out} (1200x630)")
+    (ROOT / "design" / "brand-logo.svg").write_text(brand_logo_svg())
+    (PUBLIC / "brand-mark.svg").write_text(brand_mark_svg())
+    (PUBLIC / "brand-mark-light.svg").write_text(brand_mark_svg(light=True))
+    fav = favicon_svg()
+    (PUBLIC / "favicon.svg").write_text(fav)
+    for size in (192, 512):
+        rasterise(app_icon_svg(size, 0.62), size).convert("RGB").save(PUBLIC / f"icon-{size}.png", optimize=True)
+    rasterise(app_icon_svg(180, 0.74), 180).convert("RGB").save(PUBLIC / "apple-touch-icon.png", optimize=True)
+    ico = [rasterise(fav, s) for s in (48, 32, 16)]
+    ico[0].save(PUBLIC / "favicon.ico", format="ICO", sizes=[(48, 48), (32, 32), (16, 16)], append_images=ico[1:])
+    rasterise(og_card_svg(), 1200, 630).convert("RGB").save(PUBLIC / "og-card.jpg", quality=88, optimize=True, progressive=True)
+    for f in ("brand-mark.svg", "brand-mark-light.svg", "favicon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png", "favicon.ico", "og-card.jpg"):
+        print(f"{f}: {(PUBLIC / f).stat().st_size} bytes")
+    print(f"design/brand-logo.svg: {(ROOT / 'design' / 'brand-logo.svg').stat().st_size} bytes")
 
 
 if __name__ == "__main__":

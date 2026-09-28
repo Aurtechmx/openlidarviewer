@@ -307,12 +307,12 @@
 .olv-tour-btn:hover { color: var(--text); }
 .olv-tour-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
 .olv-tour-btn-primary {
-  color: #0a0e1a;
+  color: #030817;
   background: #00b2ff;
   border-color: rgba(0, 178, 255, 0.85);
   font-weight: 600;
 }
-.olv-tour-btn-primary:hover { background: #1ec0ff; color: #0a0e1a; }
+.olv-tour-btn-primary:hover { background: #1ec0ff; color: #030817; }
 .olv-tour-skip {
   display: block;
   margin-top: var(--space-lg);

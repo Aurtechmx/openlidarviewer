@@ -22,6 +22,8 @@ are not release-authoritative.
 ### Changed
 
 - Class names follow the ASPRS spelling, which changes label text in the inspector, the legend, the profile views and the profile returns CSV.
+- The interface typeface is Olv Font (SIL OFL 1.1, a modified Poppins), self-hosted as three Latin subsets of about 11 KB each, in place of Manrope. A metric-matched fallback face keeps the header still while the font loads, and coordinate readouts use tabular figures with a slashed zero.
+- The brand emblem, favicons, app icons and share card are redrawn as vector artwork, with a deeper-blue emblem on the light theme. The page and manifest description is "Local-first browser-based point-cloud exploration".
 
 ## [0.6.9] - 2026-09-17
 

@@ -32,17 +32,17 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 const SNAPSHOT_CSS = [
   '.olv-measure-line{stroke:#00b2ff;stroke-width:1.75;stroke-dasharray:6 4}',
   '.olv-m-preview{opacity:0.5}',
-  '.olv-measure-dot{fill:#00b2ff;stroke:#0a0e1a;stroke-width:1.65}',
+  '.olv-measure-dot{fill:#00b2ff;stroke:#030817;stroke-width:1.65}',
   '.olv-measure-dot-pending{fill:none;stroke:#00b2ff;stroke-width:2.2}',
-  '.olv-measure-dot-snap{fill:#00f0ff;stroke:#0a0e1a;stroke-width:1.65}',
-  '.olv-measure-dot-station{fill:rgba(0,178,255,0.55);stroke:#0a0e1a;stroke-width:1}',
-  '.olv-measure-dot-station.is-active{fill:rgba(0,178,255,0.98);stroke:#0a0e1a;stroke-width:1.4}',
+  '.olv-measure-dot-snap{fill:#00f0ff;stroke:#030817;stroke-width:1.65}',
+  '.olv-measure-dot-station{fill:rgba(0,178,255,0.55);stroke:#030817;stroke-width:1}',
+  '.olv-measure-dot-station.is-active{fill:rgba(0,178,255,0.98);stroke:#030817;stroke-width:1.4}',
   '.olv-measure-snap-ring{fill:none;stroke:#00f0ff;stroke-width:1.4;stroke-dasharray:3 3;opacity:0.85}',
   '.olv-m-fill{fill:rgba(0,178,255,0.14);stroke:#00b2ff;stroke-width:1.45;stroke-dasharray:5 4}',
   '.olv-m-leader{stroke:rgba(0,178,255,0.5);stroke-width:1.1}',
   '.olv-m-handle{fill:transparent}',
   '.olv-measure-label{fill:#00b2ff;font:600 12px ui-monospace,"SF Mono",Menlo,Consolas,monospace;',
-  'paint-order:stroke;stroke:#0a0e1a;stroke-width:4px;stroke-linejoin:round}',
+  'paint-order:stroke;stroke:#030817;stroke-width:4px;stroke-linejoin:round}',
   '.olv-m-label-primary{font-size:13px}',
 ].join('');
 

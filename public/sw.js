@@ -39,6 +39,7 @@ const SHELL = [
   './manifest.webmanifest',
   './favicon.svg',
   './brand-mark.svg',
+  './brand-mark-light.svg',
   './favicon.ico',
   './apple-touch-icon.png',
   './icon-192.png',
@@ -190,7 +191,7 @@ function isShellNavigation(url) {
  * A build-emitted, content-hashed application bundle: `<name>-<hash>.<ext>` under
  * `assets/`, where `<ext>` is a known application asset type. Vite fingerprints
  * every bundle it emits (`Viewer-BdLwXtsu.js`, `index-DaDnDjF_.css`,
- * `manrope-latin-400-normal-8tf8FM3T.woff2`), so this shape is what an immutable
+ * `OlvFont-Regular-Latin-8tf8FM3T.woff2`), so this shape is what an immutable
  * app asset looks like — and, crucially, what a user's DATASET never looks like.
  */
 const HASHED_APP_ASSET = /(^|\/)assets\/[^/]+-[A-Za-z0-9_-]{8,}\.(?:js|mjs|css|wasm|woff2?)$/i;

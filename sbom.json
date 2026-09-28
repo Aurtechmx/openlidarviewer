@@ -247,58 +247,6 @@
     },
     {
       "type": "library",
-      "name": "manrope",
-      "group": "@fontsource",
-      "version": "5.3.0",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|@fontsource/manrope@5.3.0",
-      "author": "Google Inc.",
-      "description": "Self-host the Manrope font in a neatly bundled NPM package.",
-      "licenses": [
-        {
-          "license": {
-            "id": "OFL-1.1",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/%40fontsource/manrope@5.3.0",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/fontsource/font-files.git#fonts/google/manrope",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\" and \"repository.directory\""
-        },
-        {
-          "url": "https://fontsource.org/fonts/manrope",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/fontsource/font-files/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/@fontsource/manrope/-/manrope-5.3.0.tgz",
-          "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "a1b2750efdfeb8203a1e51e05bcbb8046631251f489f61d6ee08c98657e512f92b8f55f5892130bb47d3a0bf896060bf1442857c8cf5b01b8f76ebdc2f680800"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/@fontsource/manrope"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "core",
       "group": "@loaders.gl",
       "version": "4.5.2",
@@ -2129,7 +2077,6 @@
       "dependsOn": [
         "openlidarviewer@0.7.0-alpha.1|@fontsource-variable/inter@5.3.0",
         "openlidarviewer@0.7.0-alpha.1|@fontsource/jetbrains-mono@5.3.0",
-        "openlidarviewer@0.7.0-alpha.1|@fontsource/manrope@5.3.0",
         "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.5.2",
         "openlidarviewer@0.7.0-alpha.1|@loaders.gl/gltf@4.5.2",
         "openlidarviewer@0.7.0-alpha.1|@loaders.gl/obj@4.5.2",
@@ -2145,9 +2092,6 @@
     },
     {
       "ref": "openlidarviewer@0.7.0-alpha.1|@fontsource/jetbrains-mono@5.3.0"
-    },
-    {
-      "ref": "openlidarviewer@0.7.0-alpha.1|@fontsource/manrope@5.3.0"
     },
     {
       "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/core@4.5.2",

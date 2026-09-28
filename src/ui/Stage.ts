@@ -88,9 +88,9 @@ const MOBILE_MEMORY_WARN_BYTES = 1_200_000_000;
 const CELLULAR_WARN_BYTES = 250_000_000;
 
 /**
- * The official OpenLiDARViewer brand mark — `public/brand-mark.svg`, the
- * delivered logo asset cropped (via its root viewBox, nothing redrawn) to
- * the point-cloud-orb mark region. Rendered with `<img src>` rather than
+ * The OpenLiDARViewer brand emblem, `public/brand-mark.svg` (vector, written
+ * by scripts/make-brand-rasters.py; the light theme paints
+ * `brand-mark-light.svg` in its place from CSS). Rendered with `<img src>` rather than
  * inline SVG so the asset ships byte-faithful and never enters the
  * `unsafeHtml` escape hatch. `BASE_URL` keeps the reference correct under
  * the relative-base (`./`) production build.
@@ -296,10 +296,8 @@ export class Stage {
   }
 
   private _buildTopBar(): HTMLElement {
-    // The official brand mark (public/brand-mark.svg, via <img>) beside the
-    // text wordmark. The mark is the delivered logo asset — the asset's own
-    // raster wordmark band stays cropped out here because it is near-white
-    // and sized for dark hero fields, not a 28 px light-theme top bar.
+    // The brand emblem (public/brand-mark.svg, via <img>) beside the text
+    // wordmark, which is set in the interface face.
     const wordmark = el('div', { className: 'olv-wordmark' });
     wordmark.append(
       brandMarkImg('olv-wordmark-mark'),
@@ -425,8 +423,7 @@ export class Stage {
     // instruction is meaningless (iOS Safari has no drag-and-drop), so the
     // mobile variant leads with the pick-from-device action.
     const mobile = isMobileDevice();
-    // Hero: the official brand mark (public/brand-mark.svg, via <img> —
-    // the delivered logo asset, mark-only crop). The product name already
+    // Hero: the brand emblem (public/brand-mark.svg, via <img>). The product name already
     // reads in the top-left nav wordmark; repeating it here made the hero
     // carry the brand twice before saying anything, so the mark stands
     // alone and the headline below is the first text. The image itself is

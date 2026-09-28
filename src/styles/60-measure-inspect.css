@@ -19,7 +19,7 @@
   stroke: var(--accent); stroke-width: 1.75; stroke-dasharray: 6 4;
 }
 .olv-measure-dot {
-  fill: var(--accent); stroke: #0a0e1a; stroke-width: 1.65;
+  fill: var(--accent); stroke: #030817; stroke-width: 1.65;
 }
 .olv-measure-dot-pending {
   fill: none; stroke: var(--accent); stroke-width: 2.2;
@@ -36,7 +36,7 @@
  * the canvas without reading the tooltip.
  */
 .olv-measure-dot-snap {
-  fill: var(--cyan, #00f0ff); stroke: #0a0e1a; stroke-width: 1.65;
+  fill: var(--cyan, #00f0ff); stroke: #030817; stroke-width: 1.65;
 }
 /*
  * Profile-station markers — the small dim dots at evenly-spaced chainages
@@ -47,10 +47,10 @@
  * screenshot export read identically — keep the two in sync.
  */
 .olv-measure-dot-station {
-  fill: rgba(0, 178, 255, 0.55); stroke: #0a0e1a; stroke-width: 1;
+  fill: rgba(0, 178, 255, 0.55); stroke: #030817; stroke-width: 1;
 }
 .olv-measure-dot-station.is-active {
-  fill: rgba(0, 178, 255, 0.98); stroke: #0a0e1a; stroke-width: 1.4;
+  fill: rgba(0, 178, 255, 0.98); stroke: #030817; stroke-width: 1.4;
 }
 .olv-measure-snap-ring {
   fill: none;
@@ -70,7 +70,7 @@
   fill: var(--accent);
   font: 600 12px var(--font); font-variant-numeric: tabular-nums;
   paint-order: stroke;
-  stroke: #0a0e1a; stroke-width: 4px; stroke-linejoin: round;
+  stroke: #030817; stroke-width: 4px; stroke-linejoin: round;
 }
 
 /* The instruction hint shown while measuring */
@@ -140,7 +140,7 @@
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-inspect-halo { fill: var(--accent); opacity: 0.2; }
 .olv-inspect-dot {
-  fill: var(--cyan); stroke: #0a0e1a; stroke-width: 1.5;
+  fill: var(--cyan); stroke: #030817; stroke-width: 1.5;
 }
 
 .olv-inspect-card {

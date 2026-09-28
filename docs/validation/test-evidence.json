@@ -5,9 +5,9 @@
   "releaseChannel": "development",
   "releaseAuthoritative": false,
   "tag": null,
-  "commit": "58754e7facfd99da5154518f4aa491c6a58ae305",
+  "commit": "9857dcfafd752a62d6013b084147c6bfd9849459",
   "repository": null,
-  "generatedAt": "2026-09-26T17:36:59.751Z",
+  "generatedAt": "2026-09-28T02:40:33.805Z",
   "nodeVersion": "v22.23.2",
   "npmVersion": "10.9.8",
   "platform": "darwin-arm64",
@@ -17,7 +17,7 @@
   "workflowSha": null,
   "gateExit": 0,
   "gateLog": "release/gate.log",
-  "gateLogSha256": "b06305744b9a062eee5260702c3983916f15ebe638a8677c34d39365999a5d92",
+  "gateLogSha256": "b515d1e554241ea5c1d471510e9263c8194a6da2d34bc116f66fdb0f38921c6b",
   "stages": {
     "mutation": "not-executed"
   },
@@ -52,46 +52,46 @@
   },
   "buckets": {
     "unit": {
-      "passed": 11795,
+      "passed": 11953,
       "skipped": 43,
       "runs": 3
     },
     "export": {
-      "passed": 1183,
+      "passed": 1185,
       "skipped": 0,
       "runs": 1
     },
     "terrain": {
-      "passed": 3376,
+      "passed": 3473,
       "skipped": 1,
       "runs": 2
     },
     "ui": {
-      "passed": 1034,
+      "passed": 1040,
       "skipped": 0,
       "runs": 1
     },
     "slow": {
-      "passed": 1438,
+      "passed": 1443,
       "skipped": 6,
       "runs": 2
     }
   },
   "total": {
-    "passed": 18826,
+    "passed": 19094,
     "skipped": 50
   },
   "bundle": {
-    "liveEntryKiB": 793,
+    "liveEntryKiB": 784,
     "ceilingKiB": 795
   },
-  "packageLockSha256": "be9381623bc71c1bac2852d1b82fb160f8ea5b6e776ba15c9c9b90798ca8bcc4",
+  "packageLockSha256": "323ce9ae69663540c19e5193c31103bd09e988f6a718e42423a74d0e8fd3daf3",
   "sbom": {
-    "sha256": "ff3d38e84cd8f9e95d0faa3a5cb9ca4747a9b617d7cb5f93297e9dcfcfecea8a",
+    "sha256": "e0ad98969a9f4560bc9c637220cf46bef0f19918d734073cd37544a9ee412369",
     "rootName": "openlidarviewer",
     "rootVersion": "0.7.0-alpha.1",
     "bomRef": "openlidarviewer@0.7.0-alpha.1",
-    "components": 37
+    "components": 36
   },
   "science": {
     "e4ClaimCount": 17,

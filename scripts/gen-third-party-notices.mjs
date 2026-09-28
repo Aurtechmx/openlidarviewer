@@ -58,6 +58,23 @@ freely, subject to the following restrictions:
    misrepresented as being the original software.
 3. This notice may not be removed or altered from any source distribution.`;
 
+/**
+ * Assets committed to the repository rather than installed from npm, bundled
+ * like a package. `dir` holds the licence file; `modified` is the modification
+ * notice the licence asks a derivative to carry, as the font's own name table
+ * states it.
+ */
+export const VENDORED = [
+  {
+    name: 'Olv Font',
+    version: '2.000',
+    licence: 'OFL-1.1',
+    dir: 'src/fonts/olv-font',
+    modified:
+      'Modified in 2026 for the Olv Font project: horizontal proportions, spacing, additional glyphs and OpenType features. A derivative of Poppins, renamed as the OFL requires.',
+  },
+];
+
 const LICENCE_FILE = /^(licen[cs]e|copying)(\.(md|txt))?$/i;
 const NOTICE_FILE = /^notice(\.(md|txt))?$/i;
 
@@ -129,6 +146,7 @@ export function buildBlock(components, readPkg) {
       if (/Apache-2\.0/.test(p.licence) && apacheCanonical) refs.push(addText('Apache-2.0', apacheCanonical, user));
     }
     if (/Zlib/.test(p.licence)) refs.push(addText('Zlib', ZLIB_TEXT, user));
+    if (p.modified) copyright.add(p.modified);
     if (!copyright.size && FALLBACK_COPYRIGHT[p.name]) {
       copyright.add(`${FALLBACK_COPYRIGHT[p.name]} (from the upstream repository; the package names no holder)`);
     }
@@ -143,7 +161,7 @@ export function buildBlock(components, readPkg) {
   const ids = new Map([...texts.keys()].map((h, i) => [h, `T${i + 1}`]));
   const out = [BEGIN, '', '## Copyright notices and full licence texts', ''];
   out.push(
-    'This section is generated from the installed packages by',
+    'This section is generated from the installed packages and the vendored fonts by',
     '`scripts/gen-third-party-notices.mjs`. Each bundled package is listed with',
     'the copyright lines from its own licence and NOTICE files and the licence text',
     'that applies to it; each distinct text is reproduced once at the end.',
@@ -208,7 +226,16 @@ if (isCliEntry(import.meta.url)) {
   const roots = [join(ROOT, 'node_modules')];
   if (process.env.OLV_NOTICES_EXTRA_MODULES) roots.push(resolve(process.env.OLV_NOTICES_EXTRA_MODULES));
   const components = sbomComponents(JSON.parse(readFileSync(join(ROOT, 'sbom.json'), 'utf8')));
-  const { block, missing } = buildBlock(components, readFromDisk(roots));
+  const fromDisk = readFromDisk(roots);
+  const vendoredRead = (name) => {
+    const v = VENDORED.find((x) => x.name === name);
+    if (!v) return fromDisk(name);
+    const dir = join(ROOT, v.dir);
+    const files = readdirSync(dir).sort();
+    const read = (f) => ({ file: f, text: readFileSync(join(dir, f), 'utf8') });
+    return { licences: files.filter((f) => LICENCE_FILE.test(f) || /^OFL\.txt$/i.test(f)).map(read), notices: [] };
+  };
+  const { block, missing } = buildBlock([...components, ...VENDORED], vendoredRead);
   if (missing.length) {
     console.error(`notices: not installed, cannot read licence files: ${missing.join(', ')}. Run npm ci, or set OLV_NOTICES_EXTRA_MODULES.`);
     process.exit(1);
@@ -221,7 +248,7 @@ if (isCliEntry(import.meta.url)) {
       console.error(`notices: ${NOTICES_PATH} is stale. Run node scripts/gen-third-party-notices.mjs.`);
       process.exit(1);
     }
-    console.log(`notices OK: ${components.length} bundled packages, licence texts current.`);
+    console.log(`notices OK: ${components.length} bundled packages and ${VENDORED.length} vendored font, licence texts current.`);
   } else {
     writeFileSync(path, next);
     console.log(`notices: wrote ${components.length} bundled packages to ${NOTICES_PATH}.`);

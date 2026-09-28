@@ -8,7 +8,7 @@ excellence on top of the app's existing design system, not a new look.
 ## Rule 0: Extend the existing system, don't reinvent it
 
 OpenLiDARViewer already makes deliberate design choices: a tinted-dark theme
-(not `#000`), Manrope / Inter display + JetBrains Mono for numerics, a restrained
+(not `#000`), Olv Font display + JetBrains Mono for numerics, a restrained
 palette driven by CSS tokens (`--accent`, `--hairline`, `--text`, `--text-dim`,
 `--text-faint`, the `--space-*` scale), and an established chip pattern
 (`.olv-prov-confidence`). Design excellence here = **reuse those tokens and the
