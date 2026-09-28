@@ -44,6 +44,7 @@
     "test-results",
     ".claude"
   ],
-  "dryRunTimeoutMinutes": 10,
+  "_dryRunTimeout_comment": "The instrumented dry run of the whole unit suite took 9 min 18 s on the CI runner before it stopped at a failing test, against a 10 min limit. 20 min leaves room for the suite to grow; a hung run still stops.",
+  "dryRunTimeoutMinutes": 20,
   "_ts7_comment": "tsconfigFile names a path the project does not carry, so Stryker skips its tsconfig rewrite. That rewrite calls ts.parseConfigFileTextToJson, which TypeScript 7 removed. Nothing here needs the rewrite: the sandbox resolves through the copied tree. Remove this once Stryker supports TypeScript 7."
 }
