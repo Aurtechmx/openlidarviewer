@@ -95,17 +95,18 @@ the two entries were renumbered when the branches were integrated.
 | L184 | DOCS | TEST | med | FIXED | new | The known-limitations document still called the polygon Volume tool Withheld-blind, the browser matrix advisory and the shell 799 of 812 KiB, and no lint read those sentences. |
 | L190 | EXPORT | TEST | med | FIXED | new | An Observatory run's source digest hashed only the first 3000 position values, the live run dropped the planning option and recorded no file name or unit, and the package wrote a zero grid shape in field.json and empty params for every method in its processing manifest. |
 | L191 | UI | TEST | med | FIXED | new | Flow Pulse, Terrain Access and Observatory opened as dialogs that hid the scan and the rail, the right rail was titled Scan Intelligence while it held view settings, and a mode tab could land in the middle of a page. |
+| L187 | UI | TEST | low | FIXED | new | Opening a scan from the empty state put the load toast over the brand mark, and the splash painted above the toast. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 46
+- FIXED: 47
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 67
+- total: 68
 
 ## Detail
 
@@ -7401,3 +7402,21 @@ Covered by `tests/stateProviders.test.ts` (unknown-vertical, feet-unit,
 resident-only and stale fixtures, every input frozen),
 `tests/stateStripLive.test.ts` and `tests/e2e/ceStrip.spec.ts` (each fact
 visible without hover on the four fixtures, at desktop size and 390 px).
+
+### L187 · FIXED · UI
+
+Opening a scan from the empty state showed the load toast in the top-centre
+lane over the hero: at 1280×720 the hero sat at y 24 to 120 and the toast lane
+at 56 to 101, and the splash painted above the toast. While the toast is busy
+the splash content now fades and scales out over `--dur-base`, and the toast
+fades in after it, so nothing overlaps. The empty state keeps its opaque
+backdrop, and hidden controls leave pointer, focus and the accessibility tree.
+The open-from-URL row at the foot of the splash stays visible and operable,
+since it holds the Cancel control for a remote load.
+An error or a cancel drops the busy state and brings the splash back. Under
+reduced motion the swap is instant. The change is CSS in
+`src/styles/30-empty-state.css`.
+
+Covered by `tests/emptyStateLoadClear.test.ts` and
+`tests/e2e/emptyStateLoadClear.spec.ts`. No computed value, threshold, method
+or export changes.
