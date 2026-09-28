@@ -321,7 +321,12 @@ export function buildTerrainReportContent(
           ? [{ label: 'Terrain complexity', value: intel.complexity.label }]
           : []),
         ...(intel.groundVisibility.bucket !== 'unknown'
-          ? [{ label: 'Ground visibility', value: intel.groundVisibility.label }]
+          ? [{
+            label: 'Ground visibility',
+            value: intel.groundVisibility.afterClassExclusion
+              ? `${intel.groundVisibility.label} (ground share after excluding classified vegetation and buildings)`
+              : intel.groundVisibility.label,
+          }]
           : []),
         ...(intel.confidence.band !== 'unknown'
           ? [{ label: 'Metric stability', value: intel.confidence.label }]
@@ -414,11 +419,11 @@ export function buildTerrainReportContent(
       // it is. dtmQualityGate documents that the two are not interchangeable,
       // and a reader comparing an unlabelled 37% against an unlabelled 43%
       // cannot tell that they are different questions.
-      { label: 'Measured (of grid)', value: fmtPct(q?.measuredCellRatio) },
-      { label: 'Interpolated (of grid)', value: fmtPct(q?.interpolatedCellRatio) },
-      { label: 'Empty (of grid)', value: fmtPct(q?.emptyCellRatio) },
+      { label: 'Measured grid cells (of grid)', value: fmtPct(q?.measuredCellRatio) },
+      { label: 'Interpolated grid cells (of grid)', value: fmtPct(q?.interpolatedCellRatio) },
+      { label: 'Empty grid cells (of grid)', value: fmtPct(q?.emptyCellRatio) },
       {
-        label: 'Interpolated (of covered surface)',
+        label: 'Interpolated grid cells (of covered surface)',
         value: fmtPct(q?.interpolatedOfSurfaceRatio),
       },
       { label: 'Edge risk (interpolated far from any measurement)', value: fmtPct(q?.edgeRiskRatio) },
@@ -519,6 +524,10 @@ export function buildTerrainReportContent(
       ? `${blockedTreatmentContrast(randomScope, blockedScope)} `
       : '';
   const rmseText = hasAcc ? fmtM(provenance.accuracy?.rmseZM) : null;
+  const holdoutRmse = result.validation?.rmse;
+  const holdoutRmseText = holdoutRmse != null && Number.isFinite(holdoutRmse)
+    ? `${fmtZ(holdoutRmse)} (hold-out, not an NVA-grade accuracy)`
+    : DASH;
   const accuracyBases =
     rmseText != null && rmseText !== DASH
       ? `Random hold-out RMSEz (${rmseText}) tests interpolation between neighbouring ground points and feeds NVA/VVA. ` +
@@ -536,7 +545,9 @@ export function buildTerrainReportContent(
   const qualitySection: TerrainReportSection = {
     title: 'Quality Metrics',
     rows: [
-      { label: 'Vertical RMSEz', value: hasAcc ? fmtM(provenance.accuracy?.rmseZM) : DASH },
+      // No stamped ASPRS figure: show the hold-out RMSEz the tolerance row
+      // below already quotes, labelled as hold-out, so the two rows agree.
+      { label: 'Vertical RMSEz', value: rmseText != null && rmseText !== DASH ? rmseText : holdoutRmseText },
       // "-style (hold-out)" / "(estimated)": the report carries the same
       // qualifiers as the Analyse panel and the provenance stamp — hold-out
       // figures via the ASPRS formulas, never a checkpoint assessment.

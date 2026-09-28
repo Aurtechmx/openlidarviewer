@@ -22,14 +22,14 @@ const UNKNOWN = { linearUnit: 'unknown' as const, linearUnitToMetres: 1, isGeogr
 
 test('COPC + metre CRS: spacing renders as a metric distance under "Spacing"', () => {
   const r = spacingRowFor('copc', 1.2, METRE);
-  expect(r.label).toBe('Spacing');
+  expect(r.label).toBe('Root node spacing (COPC)');
   expect(r.value).toBe('1.20 m');
 });
 
 test('COPC + foot CRS: spacing is converted from feet to metres', () => {
   // 4 ft root spacing ≈ 1.22 m — not "4.00 m".
   const r = spacingRowFor('copc', 4, FOOT);
-  expect(r.label).toBe('Spacing');
+  expect(r.label).toBe('Root node spacing (COPC)');
   expect(r.value).toBe(`${(4 * 0.3048).toFixed(2)} m`);
   expect(r.value).toBe('1.22 m');
 });
@@ -41,7 +41,7 @@ test('COPC + US-survey-foot CRS: also converted to metres', () => {
 
 test('COPC + geographic CRS: no linear spacing (degrees are not a distance)', () => {
   const r = spacingRowFor('copc', 0.00001, GEOGRAPHIC);
-  expect(r.label).toBe('Spacing');
+  expect(r.label).toBe('Root node spacing (COPC)');
   expect(r.value).not.toMatch(/\bm\b/);
   expect(r.value).toMatch(/geographic/i);
 });
@@ -88,3 +88,4 @@ test('COPC + foot CRS with no usable metre factor: FAILS CLOSED, never "m"', () 
     expect(r.value).not.toMatch(/\bm\b/);
   }
 });
+

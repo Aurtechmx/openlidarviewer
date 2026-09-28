@@ -9,6 +9,8 @@ import {
   readinessNote,
   wrapTextToWidth,
   scaleBarUnit,
+  mapScaleLabel,
+  interpolatedLengthLine,
   mapLinearUnitLabel,
 } from '../src/render/measure/mapSheetPdf';
 import type { ContourFeatureModel, ContourFeature } from '../src/terrain/contour/contourFeatureModel';
@@ -473,5 +475,22 @@ describe('buildMapSheetPdf — the density reference names its basis', () => {
     const column = (612 - 36 - 4) - (36 + (612 - 72) * 0.72);
     const longest = 'Ground-return density ref:  >= USGS QL0';
     expect(font.widthOfTextAtSize(longest, 7.5)).toBeLessThan(column);
+  });
+});
+
+describe('mapScaleLabel — no numeric ratio without a known ground unit', () => {
+  it('prints units unknown when the linear unit is unknown or unresolved', () => {
+    expect(mapScaleLabel(2400, 'unknown')).toBe('units unknown');
+    expect(mapScaleLabel(2400, undefined)).toBe('units unknown');
+  });
+  it('prints the ratio for a resolved unit', () => {
+    expect(mapScaleLabel(2400, 'metre')).toBe(`1:${(2400).toLocaleString()}`);
+    expect(mapScaleLabel(2400, 'us-survey-foot')).toBe(`1:${(2400).toLocaleString()}`);
+  });
+});
+
+describe('interpolatedLengthLine — names its basis', () => {
+  it('says the share is by contour length', () => {
+    expect(interpolatedLengthLine(0.99)).toMatch(/% interpolated or uncertain \(by contour length\)$/);
   });
 });

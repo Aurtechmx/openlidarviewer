@@ -54,6 +54,17 @@ describe('analysed basis', () => {
     expect(analysedBasisLine(null)).toBe('unknown');
   });
 
+  it('a strided subsample of the resident set says so, with both counts', () => {
+    const b = analysedBasisOf({ coverage: 'resident-only', pointCount: null }, 296_445, 47_170_656, undefined, 1_185_780);
+    expect(b.residentPointCount).toBe(1_185_780);
+    expect(analysedBasisLine(b)).toBe(
+      '296,445 of 47,170,656 points (analysed subsample of the resident streaming set, 1,185,780 resident); whole-dataset support not claimed',
+    );
+    // The whole resident set analysed keeps the plain wording.
+    const whole = analysedBasisOf({ coverage: 'resident-only', pointCount: null }, 640, null, undefined, 640);
+    expect(whole.residentPointCount).toBeUndefined();
+  });
+
   it('the stamp carries the basis beside the grid extent, with the deprecated alias', () => {
     const basis = analysedBasisOf({ coverage: 'sampled', pointCount: 1_000_000 }, 200_000);
     const p = buildExportProvenance(result, { generatedAt: '2026-09-14T00:00:00.000Z', verticalUnitToMetres: 1, analysedBasis: basis });

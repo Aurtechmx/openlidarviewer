@@ -6,7 +6,7 @@
  * on-screen summary. This is what makes the purposes "real":
  *
  *   - Survey Review keeps smoothing off and emits exact analytical isolines, so
- *     it exports the CRISP geometry stamped `olv.contour.analytical@1`.
+ *     it exports the CRISP geometry stamped `olv.contour.analytical@2`.
  *   - Presentation Map / Engineering Plan / Terrain Research apply cartographic
  *     generalization, so they export the GENERALIZED geometry (honesty-gated
  *     simplify + smooth — never the panel's on-screen default style), each at its

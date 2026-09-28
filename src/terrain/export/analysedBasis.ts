@@ -25,6 +25,11 @@ export interface AnalysedBasis {
    * record it.
    */
   readonly interpretationLevel?: string | null;
+  /**
+   * Streaming only: points resident when the analysis ran, recorded when the
+   * analysed set is a strided subsample of them. Absent otherwise.
+   */
+  readonly residentPointCount?: number;
 }
 
 /**
@@ -42,6 +47,7 @@ export function analysedBasisOf(
   analysedPointCount: number,
   declaredPointCount?: number | null,
   interpretationLevel?: string | null,
+  residentPointCount?: number,
 ): AnalysedBasis {
   const stated = declaredPointCount ?? facts.pointCount;
   const declared = stated != null && Number.isFinite(stated) && stated > 0 ? stated : null;
@@ -57,6 +63,7 @@ export function analysedBasisOf(
   return {
     analysedPointCount, declaredPointCount: declared, coverage: facts.coverage, loadStride,
     ...(interpretationLevel !== undefined ? { interpretationLevel } : {}),
+    ...(facts.coverage === 'resident-only' && (residentPointCount ?? 0) > analysedPointCount ? { residentPointCount } : {}),
   };
 }
 
@@ -67,9 +74,10 @@ export function analysedBasisLine(b: AnalysedBasis | null | undefined): string {
   if (!b) return 'unknown';
   const of = b.declaredPointCount != null ? ` of ${fmt(b.declaredPointCount)}` : '';
   if (b.coverage === 'full') return `${fmt(b.analysedPointCount)}${of} points (full read)`;
-  if (b.coverage === 'resident-only') {
-    return `${fmt(b.analysedPointCount)}${of} points (resident streaming set); whole-dataset support not claimed`;
-  }
-  const stride = b.loadStride != null ? `, stride ${b.loadStride}` : '';
-  return `${fmt(b.analysedPointCount)}${of} points (display sample${stride}); whole-dataset support not claimed`;
+  const set = 'resident streaming set';
+  const r = b.residentPointCount;
+  const how = b.coverage === 'resident-only'
+    ? (r ? `analysed subsample of the ${set}, ${fmt(r)} resident` : set)
+    : `display sample${b.loadStride != null ? `, stride ${b.loadStride}` : ''}`;
+  return `${fmt(b.analysedPointCount)}${of} points (${how}); whole-dataset support not claimed`;
 }

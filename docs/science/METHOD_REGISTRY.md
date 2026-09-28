@@ -26,7 +26,7 @@ the paper that specifies it.
 | `olv.terrain.slope-horn` | 1 | Horn slope & aspect | Horn (1981) |
 | `olv.terrain.vrm` | 1 | Vector Ruggedness Measure | Sappington et al. (2007) |
 | `olv.terrain.tpi` | 1 | Topographic Position Index | Weiss (2001) |
-| `olv.contour.analytical` | 1 | Analytical iso-contour geometry | internal (grid contour extraction) |
+| `olv.contour.analytical` | 2 | Analytical iso-contour geometry; v2 places levels on multiples of the interval in world elevation (local origin added back) where v1 used the recentred local frame | internal (grid contour extraction) |
 | `olv.contour.generalize` | 1 | Uniform contour generalization; the shipped pass is Douglas to Peucker followed by Chaikin corner-cutting, which also moves vertices (see `methodRegistry.ts`) | Douglas & Peucker (1973); Chaikin (1974) |
 | `olv.contour.generalize.dp` | 1 | Douglas to Peucker contour simplification | Douglas & Peucker (1973) |
 | `olv.contour.generalize.terrain-adaptive` | 1 | Terrain-adaptive contour generalization; feature-scaled Douglas to Peucker followed by the same Chaikin corner-cutting | internal (feature-scaled DP, then Chaikin) |

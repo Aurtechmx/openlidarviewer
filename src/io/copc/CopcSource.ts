@@ -79,24 +79,6 @@ export class CopcSource {
     }
 
     const metadata = parseCopcMetadata(head);
-    // A LAS 1.4 writer may put the CRS in an EVLR after the point data; read
-    // those records by bounded range reads and let a VLR keep precedence. The
-    // walk is skipped when a VLR WKT already decides the CRS, and when the one
-    // EVLR is the COPC hierarchy itself, so a plain COPC open costs no read.
-    const location = readLasCrsLocation(head);
-    const evlrCount = location?.evlrCount ?? 0;
-    const onlyHierarchy =
-      evlrCount === 1 && (location?.evlrOffset ?? 0) < metadata.info.rootHierOffset;
-    if (location && evlrCount > 0 && !onlyHierarchy && !metadata.header.crs?.wkt) {
-      metadata.header.crs = await resolveLasCrs(
-        head,
-        location.headerSize,
-        location.vlrCount,
-        location,
-        (offset, length) => range.readRange(offset, length, signal),
-        size,
-      );
-    }
     const cube: OctreeCube = {
       center: metadata.info.center,
       halfsize: metadata.info.halfsize,
@@ -114,11 +96,40 @@ export class CopcSource {
       );
     }
 
-    const rootBuffer = await range.readRange(
-      metadata.info.rootHierOffset,
-      metadata.info.rootHierSize,
-      signal,
-    );
+    // A LAS 1.4 writer may put the CRS in an EVLR after the point data; read
+    // those records by bounded range reads and let a VLR keep precedence. The
+    // walk is skipped when a VLR WKT already decides the CRS, and when the one
+    // EVLR is the COPC hierarchy itself. That is decided from the EVLR's own
+    // header (user id "copc", record 1000), read beside the root page, since
+    // an offset test alone takes a lone WKT EVLR for the hierarchy.
+    const location = readLasCrsLocation(head);
+    const evlrCount = location?.evlrCount ?? 0;
+    const needsCrs = location != null && evlrCount > 0 && !metadata.header.crs?.wkt;
+    const { rootHierOffset: rootAt, rootHierSize: rootLen } = metadata.info;
+    const evlrAt = needsCrs && evlrCount === 1 ? location.evlrOffset : undefined;
+    let rootBuffer: ArrayBuffer;
+    let onlyHierarchy = false;
+    if (evlrAt != null && rootAt - evlrAt >= 60 && rootAt - evlrAt <= 4096) {
+      // The usual layout: the root page follows the EVLR header, so one read covers both.
+      const span = await range.readRange(evlrAt, rootAt + rootLen - evlrAt, signal);
+      onlyHierarchy = isCopcHierarchyEvlr(span);
+      rootBuffer = span.slice(rootAt - evlrAt);
+    } else {
+      [rootBuffer, onlyHierarchy] = await Promise.all([
+        range.readRange(rootAt, rootLen, signal),
+        evlrAt != null ? range.readRange(evlrAt, 60, signal).then(isCopcHierarchyEvlr, () => false) : false,
+      ]);
+    }
+    if (needsCrs && !onlyHierarchy) {
+      metadata.header.crs = await resolveLasCrs(
+        head,
+        location.headerSize,
+        location.vlrCount,
+        location,
+        (offset, length) => range.readRange(offset, length, signal),
+        size,
+      );
+    }
     const rootPage = parseHierarchyPage(rootBuffer, cube, metadata.info.spacing);
 
     return new CopcSource(range, metadata, cube, rootPage, size);
@@ -182,4 +193,13 @@ export class CopcSource {
   async close(): Promise<void> {
     await this._range.close?.();
   }
+}
+
+/** True when a 60-byte EVLR header names the COPC hierarchy (user id "copc", record 1000). */
+function isCopcHierarchyEvlr(h: ArrayBuffer): boolean {
+  if (h.byteLength < 20) return false;
+  const v = new DataView(h);
+  let id = '';
+  for (let i = 2; i < 18 && v.getUint8(i) !== 0; i++) id += String.fromCharCode(v.getUint8(i));
+  return id === 'copc' && v.getUint16(18, true) === 1000;
 }

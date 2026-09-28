@@ -357,6 +357,20 @@ export function scaleBarUnit(
  * "0.5 m" rather than a hedged form. That put a metre claim on the same page as
  * "Horizontal CRS: not georeferenced". An unresolved frame now reads 'units'.
  */
+/**
+ * The title-block scale value. A 1:N ratio needs the ground unit in metres; with
+ * no resolved linear unit there is no honest N, so none is printed.
+ */
+export function mapScaleLabel(scaleN: number, linearUnit: MapSheetInput['linearUnit']): string {
+  if (linearUnit == null || linearUnit === 'unknown') return 'units unknown';
+  return scaleN > 0 ? `1:${scaleN.toLocaleString()}` : '—';
+}
+
+/** The sheet's interpolated share, named by its basis (contour length, not grid cells). */
+export function interpolatedLengthLine(fraction: number): string {
+  return `${gradePercent(fraction)}% interpolated or uncertain (by contour length)`;
+}
+
 export function mapLinearUnitLabel(linearUnit: MapSheetInput['linearUnit']): string {
   if (linearUnit === 'foot' || linearUnit === 'us-survey-foot') return 'ft';
   return linearUnit === 'metre' ? 'm' : 'units';
@@ -1004,7 +1018,7 @@ function drawTitleBlock(
   });
   const interval = prov?.contourIntervalM ?? input.model.intervalM;
   // World-unit→metres factor so the 1:N ratio stays a TRUE dimensionless ratio
-  // on a foot CRS (the map is drawn in source units). 1 for metric / unknown.
+  // on a foot CRS (the map is drawn in source units). Unknown prints no ratio.
   // Same factor the panels read from `CrsInfo.linearUnitToMetres`.
   const worldUnitToMetres = input.linearUnit ? metresPerLinearUnit(input.linearUnit) : 1;
   const scaleN =
@@ -1029,7 +1043,7 @@ function drawTitleBlock(
         ? `${interval}${verticalSuffixFromLabel(prov?.verticalUnitLabel ?? prov?.contourIntervalUnit ?? prov?.complexity?.zUnit)}`
         : '—',
     ],
-    ['Approx. scale', scaleN > 0 ? `1:${scaleN.toLocaleString()}` : '—'],
+    ['Approx. scale', mapScaleLabel(scaleN, input.linearUnit)],
     ['Generated', generatedStr],
     ['Prepared by', input.preparedBy ?? '—'],
   ];
@@ -1087,7 +1101,7 @@ function drawTitleBlock(
   // any solid line can say.
   const interpFraction = input.model.interpolatedFraction;
   const interpLine = Number.isFinite(interpFraction)
-    ? `${gradePercent(interpFraction)}% interpolated or uncertain (by length)`
+    ? interpolatedLengthLine(interpFraction)
     : 'Interpolated fraction — not measured (no contours)';
   text(interpLine, mxx, topY - 88, 6.5, font, DIM);
   // Honest stamp of the shape style applied to the plotted contours, sourced

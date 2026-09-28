@@ -456,11 +456,14 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   },
   'olv.contour.analytical': {
     id: 'olv.contour.analytical',
-    version: 1,
+    // v2: derived levels sit on multiples of the interval in world elevation
+    // (local origin added back) instead of in the recentred local frame.
+    version: 2,
     name: 'Analytical iso-contour geometry',
     summary:
       'Exact iso-contours extracted from the terrain grid by linear interpolation ' +
-      'along cell edges, emitted without cartographic simplification.',
+      'along cell edges, emitted without cartographic simplification. Levels are ' +
+      'multiples of the interval in world elevation when the local origin is known.',
     citation:
       'Internal implementation of grid iso-contour extraction by edge linear interpolation; no single source method. Cross-checked against GDAL gdal_contour.',
     category: 'contour',

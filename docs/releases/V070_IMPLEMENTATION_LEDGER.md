@@ -91,17 +91,18 @@ the two entries were renumbered when the branches were integrated.
 | L185 | UI | TEST | low | FIXED | new | Hiding the load toast after a finished load emptied the shared polite live region, erasing an announcement another panel had made during the settle. |
 | L186 | UI | TEST | high | FIXED | new | On a Z-up survey the orbit turned about world Y, so a vertical drag slid the scene sideways or tilted it backwards depending on the view; a pinch zoomed about the pivot instead of the fingers; wheel streams of a few pixels per event lost part or all of their zoom. |
 | L188 | UI | TEST | medium | FIXED | new | A tween replayed the orbit, pan and wheel glides it froze once it landed; a wheel zoom after an orbit flick kept rotating and slid the point under the cursor; a grab inherited the orbit glide and an orbit inside a dolly tail had its pivot moved. |
+| L189 | EXPORT | TEST | med | FIXED | new | Map sheets and terrain reports for a streamed tile with no linear unit placed contour levels off round elevations, printed a metre-based scale ratio and a metre TPI, called the COPC root-node spacing the point spacing, and stated RMSEz, contour style, analysed basis, interpolated share and ground visibility on bases that contradicted each other. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 42
+- FIXED: 43
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 63
+- total: 64
 
 ## Detail
 
@@ -7182,3 +7183,61 @@ to 2 km across, at normal speed and with the CPU slowed four times
 (`tests/navMotionOwnership.test.ts`).
 
 No computed value, threshold, method or export changes.
+
+### L189 · FIXED · EXPORT
+
+A map sheet and a terrain report exported from a streamed COPC tile with no
+resolved linear unit disagreed with the data and with each other.
+
+- Contour levels were multiples of the interval in the recentred local frame,
+  whose origin is the floored minimum, so a 5-unit interval drew 334, 339, …
+  instead of 335, 340, …. `contoursAt` now takes the world elevation of local
+  Z = 0 (`levelOriginZ`) and places levels on multiples in world elevation; the
+  terrain runner passes the map-context origin the map sheet adds back to its
+  labels (none when the layers share no single origin). This moves contour
+  geometry, so `olv.contour.analytical` is version 2 in the registry, the
+  method table and `docs/validation/METHOD_VERSIONS.md`. The `@1` tags in
+  `tests/contourExportIntent.test.ts`, `tests/contourGeometryProduct.test.ts`,
+  `tests/contourPurposeExportBytes.test.ts`, `tests/contourExportAdapter.test.ts`,
+  `tests/contourStudioPdf.test.ts`, `tests/demExport.test.ts` and
+  `tests/exportProvenance.test.ts` are now `@2`, because the stamp follows the
+  registry and the method-literal lint checks written tags against it. No
+  geometry golden changed: the cross-check and analytic fixtures run with no
+  origin.
+- The map sheet printed a 1:N ratio computed as if the unit were metres. With
+  no linear unit it now prints "units unknown"; the scale bar already read
+  "units".
+- The streaming panel labelled the COPC info VLR root-node spacing "Spacing".
+  It is now "Root node spacing (COPC)". The mean spacing from extent area and
+  header point count stays in the scan report's extent rows.
+- The TPI summary said "m" on a frame with no vertical scale. It now says
+  "source Z units", the same resolution the other vertical figures use.
+- The report's Vertical RMSEz row read "—" while the tolerance row two lines
+  down quoted a hold-out RMSEz. With no stamped ASPRS figure the row now shows
+  that hold-out RMSEz, labelled "hold-out, not an NVA-grade accuracy"; NVA and
+  VVA stay "—".
+- The map sheet stated the style it was regenerated at, the report the
+  on-screen style. The report is now built from the result at the selected
+  export style, the field the map sheet also reads.
+- The analysed basis called a strided subsample "resident streaming set". When
+  the analysed set is smaller than the resident set, the basis records
+  `residentPointCount` and reads "N of D points (analysed subsample of the
+  resident streaming set, M resident)". The terrain runner's two core paths
+  share one params and one worker-compute helper.
+- The map's interpolated share now says "by contour length" and the report's
+  coverage rows say "grid cells".
+- Ground visibility read "Excellent" from a ground share counted after classes
+  3-7/18 were removed. The rule is unchanged; the bucket now records that it was
+  read from that share, and the report prints the basis beside it.
+
+A COPC open skipped the EVLR CRS walk whenever the one EVLR started before the
+root hierarchy page, which also matches a file whose only EVLR is a WKT with the
+hierarchy stored outside an EVLR. The open now reads that EVLR's 60-byte header
+(in the same request as the root page when the two are within 4 KiB) and skips
+the walk only when it names the COPC hierarchy.
+
+Covered by `tests/contoursAt.test.ts`, `tests/mapSheetPdf.test.ts`,
+`tests/streamingSpacingLabel.test.ts`, `tests/terrainComplexity.test.ts`,
+`tests/terrainReportContent.test.ts`, `tests/terrainReportContourStyle.test.ts`,
+`tests/analysedBasisStamp.test.ts`, `tests/datasetIntelligence.test.ts` and
+`tests/lasEvlrCrs.test.ts`.

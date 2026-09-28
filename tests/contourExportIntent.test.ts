@@ -21,7 +21,7 @@ describe('contourExportIntentFromState', () => {
     const intent = forPurpose('survey-review');
     expect(intent.shapeStyle).toBe('crisp');
     expect(intent.methodId).toBe('olv.contour.analytical');
-    expect(intent.methodTag).toBe('olv.contour.analytical@1');
+    expect(intent.methodTag).toBe('olv.contour.analytical@2');
     expect(intent.generalizeToleranceCells).toBe(0); // exact — no generalization
   });
 

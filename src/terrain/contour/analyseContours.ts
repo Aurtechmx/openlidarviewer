@@ -337,6 +337,11 @@ export interface IntervalContourParams {
   readonly smooth?: boolean;
   /** Label spacing along index contours, source units. Default 25×cellSize. */
   readonly labelSpacingM?: number;
+  /**
+   * World elevation of the local Z = 0 plane, so contour levels fall on
+   * round world elevations (see `contoursAt`).
+   */
+  readonly levelOriginZ?: number | null;
 }
 
 /** Options for {@link analyseContours} — the union of the two halves. */
@@ -1462,6 +1467,7 @@ export function computeTerrainCore(
         },
         groundDensityPerM2: cellMetrics.meanDensity,
         horizontalScaleResolved: gridGeometry.unitResolved,
+        verticalScaleResolved,
       })
     : null;
 
@@ -1648,7 +1654,7 @@ export function contoursFromCore(
     };
   }
 
-  const contours = contoursAt(dtm, { intervalM });
+  const contours = contoursAt(dtm, { intervalM, levelOriginZ: intervalParams.levelOriginZ });
   warnings.push(...contours.warnings);
   // The interval of the levels that were actually emitted. Thinning (an
   // over-fine request against the level cap) makes this coarser than

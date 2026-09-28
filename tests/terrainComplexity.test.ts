@@ -712,3 +712,27 @@ describe('TPI classes on a cell with no finite slope', () => {
     expect(out.classes!.some((c) => c !== 0)).toBe(true);
   });
 });
+
+describe('TPI unit on a frame with no resolved vertical scale', () => {
+  const run = (verticalScaleResolved?: boolean) => {
+    const cols = 24; const rows = 24;
+    const z = new Float32Array(cols * rows);
+    const coverage = new Uint8Array(cols * rows).fill(2);
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) z[y * cols + x] = x * 0.4 + Math.sin(y * 0.7) * 1.5;
+    const sa = hornSlopeAspect(z, cols, rows, 2, 2, 1);
+    return summariseTerrainComplexity({
+      z, coverage, cols, rows, slope: sa.slope, aspect: sa.aspect,
+      cellMetresX: 2, cellMetresY: 2, verticalUnitToMetres: 1, verticalScaleResolved,
+    })!;
+  };
+  it('states source Z units, not metres, when the vertical scale is unresolved', () => {
+    const s = run(false);
+    expect(s.zUnitLabel).toBe('source Z units');
+    expect(s.tpiText).toContain('source Z units');
+    expect(s.tpiText).not.toMatch(/\] m,/);
+  });
+  it('keeps metres when the scale resolved', () => {
+    expect(run(true).zUnitLabel).toBe('m');
+    expect(run().zUnitLabel).toBe('m');
+  });
+});

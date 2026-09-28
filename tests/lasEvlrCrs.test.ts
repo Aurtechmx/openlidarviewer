@@ -271,3 +271,41 @@ describe('CRS over a range source (out-of-core and COPC opens)', () => {
     expect(source.metadata.header.crs?.record).toBe('evlr');
   });
 });
+
+describe('COPC open: a single EVLR is only skipped when it is the hierarchy', () => {
+  it('reads a CRS from the only EVLR when that EVLR is a WKT, not the hierarchy', async () => {
+    // Layout: points, one WKT EVLR, then the hierarchy page with no EVLR of its
+    // own. The EVLR still starts before the root page, so an offset test alone
+    // would take it for the hierarchy and never read the CRS.
+    const synth = buildSyntheticCopc();
+    const base = new Uint8Array(synth.buffer);
+    const evlrStart = synth.rootHierOffset - 60;
+    const wkt = evlr('LASF_Projection', 2112, ascii(WKT_A));
+    const pages = base.slice(synth.rootHierOffset);
+    const out = new Uint8Array(evlrStart + wkt.length + pages.length);
+    out.set(base.subarray(0, evlrStart));
+    out.set(wkt, evlrStart);
+    out.set(pages, evlrStart + wkt.length);
+    const view = new DataView(out.buffer);
+    expect(Number(view.getBigUint64(235, true))).toBe(evlrStart);
+    expect(view.getUint32(243, true)).toBe(1);
+    // COPC info VLR payload starts at byte 429; rootHierOffset is at +40.
+    view.setBigUint64(429 + 40, BigInt(evlrStart + wkt.length), true);
+    const source = await CopcSource.open(new ArrayBufferRangeSource(out.buffer));
+    expect(source.metadata.header.crs?.epsg).toBe(6344);
+    expect(source.metadata.header.crs?.record).toBe('evlr');
+  });
+
+  it('still skips the walk for a plain COPC file whose one EVLR is the hierarchy', async () => {
+    const synth = buildSyntheticCopc();
+    const reads: Array<[number, number]> = [];
+    const inner = new ArrayBufferRangeSource(synth.buffer);
+    const spy = {
+      size: () => inner.size(),
+      readRange: (o: number, l: number, sig?: AbortSignal) => { reads.push([o, l]); return inner.readRange(o, l, sig); },
+    } as unknown as ArrayBufferRangeSource;
+    await CopcSource.open(spy);
+    // The head, then the EVLR header with the root page: no EVLR walk.
+    expect(reads.length).toBeLessThanOrEqual(3);
+  });
+});

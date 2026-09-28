@@ -105,6 +105,13 @@ export interface ContoursAtParams {
   readonly levels?: ReadonlyArray<number>;
   /** Safety cap on number of levels. Default 200. */
   readonly maxLevels?: number;
+  /**
+   * World elevation of the grid's local Z = 0, when known. Derived levels are
+   * placed on multiples of the interval in WORLD elevation (then expressed
+   * back in the local frame), so a 5-unit interval reads 335, 340, … rather
+   * than following the floored local origin. Omitted = local anchoring.
+   */
+  readonly levelOriginZ?: number | null;
 }
 
 /**
@@ -270,7 +277,9 @@ export function contoursAt(dtm: DtmGrid, params: ContoursAtParams): ContourSet {
     levelValues = [];
     // Compute levels as `first + k*interval` (not repeated `+=`) so float
     // error cannot accumulate and shift later levels off their interval.
-    const first = Math.ceil(minZ / interval) * interval;
+    // Anchored in world elevation when the local origin is known.
+    const oz = Number.isFinite(params.levelOriginZ) ? (params.levelOriginZ as number) : 0;
+    const first = Math.ceil((minZ + oz) / interval) * interval - oz;
     const count = Math.floor((maxZ - first) / interval + 1e-9) + 1;
     for (let k = 0; k < count; k++) levelValues.push(first + k * interval);
   }
