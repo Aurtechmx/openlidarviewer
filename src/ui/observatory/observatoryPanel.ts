@@ -175,7 +175,7 @@ function planningSection(record: ObservationRunRecord | null, planning: StationP
   if (s.stopReason === 'no-positive-gain' && s.selectedCandidateIndices.length > 0) {
     body.append(el('p', { text: `Stopped after ${s.selectedCandidateIndices.length} of ${s.declaredStationCount}: no remaining candidate adds coverage.` }));
   }
-  body.append(el('p', { text: 'Reachability is not checked: no terrain access model exists in this release.' }));
+  body.append(el('p', { text: 'Reachability is not checked: Terrain Access gives no reachability verdict for suggested stations in this release.' }));
   return sectionCard('Planning', body);
 }
 
