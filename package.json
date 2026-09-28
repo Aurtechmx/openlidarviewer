@@ -144,6 +144,9 @@
     "lint:positions-reads": "node scripts/lint-positions-reads.mjs",
     "lint:monolith-size": "node scripts/lint-monolith-size.mjs",
     "lint:palette-lightness": "node scripts/lint-palette-lightness.mjs",
+    "lint:style-tokens": "node scripts/lint-style-tokens.mjs",
+    "lint:tooltip-length": "node scripts/lint-tooltip-length.mjs",
+    "lint:ux-rules": "node scripts/lint-ux-rules.mjs",
     "lint:module-graph": "node scripts/lint-module-graph.mjs",
     "lint:unreachable-modules": "node scripts/lint-unreachable-modules.mjs",
     "lint:capability-manifest": "node scripts/lint-capability-manifest.mjs",
@@ -206,6 +209,7 @@
     "three": "^0.186.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@loaders.gl/las": "^4.5.2",
     "@playwright/test": "^1.63.0",
     "@stryker-mutator/core": "^10.0.0",

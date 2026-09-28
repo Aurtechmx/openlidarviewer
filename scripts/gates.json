@@ -90,6 +90,18 @@
       "group": "static"
     },
     {
+      "script": "lint:style-tokens",
+      "group": "static"
+    },
+    {
+      "script": "lint:tooltip-length",
+      "group": "static"
+    },
+    {
+      "script": "lint:ux-rules",
+      "group": "static"
+    },
+    {
       "script": "lint:architecture-truth",
       "group": "static"
     },

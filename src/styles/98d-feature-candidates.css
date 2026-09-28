@@ -118,5 +118,5 @@
 .olv-feature-chip.is-active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #0b0b0d;
+  color: var(--on-accent);
 }

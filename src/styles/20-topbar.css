@@ -97,7 +97,7 @@ body.olv-theme-light .olv-empty-hero-mark {
 .olv-github-credits { width: 62px; }
 .olv-github-guide { width: 54px; }
 .olv-github-source { width: 60px; }
-.olv-github:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
+.olv-github:hover { color: var(--text); background: var(--hover-wash); }
 
 /* ── Speed ↔ Quality performance control ────────────────────────────────────
    A header ghost button (same vocabulary as .olv-recenter) plus a panel
@@ -113,7 +113,7 @@ body.olv-theme-light .olv-empty-hero-mark {
   cursor: pointer;
 }
 .olv-quality-button svg { width: 18px; height: 18px; }
-.olv-quality-button:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
+.olv-quality-button:hover { color: var(--text); background: var(--hover-wash); }
 .olv-quality-button-open { color: var(--accent); background: var(--accent-soft); }
 /* Pending cue while the panel chunk fetches (LOAD-1) — same convention as `.olv-quality-follow:disabled` above. */
 .olv-quality-button:disabled { opacity: 0.5; cursor: not-allowed; }

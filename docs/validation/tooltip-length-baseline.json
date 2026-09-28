@@ -1,0 +1,10 @@
+{
+  "$comment": "Shrink-only. Tooltips longer than 160 characters, per source file; see scripts/lint-tooltip-length.mjs. Bank a drop with `node scripts/lint-tooltip-length.mjs --update`.",
+  "limit": 160,
+  "total": 5,
+  "files": {
+    "src/ui/Inspector.ts": 3,
+    "src/ui/MeasurePanel.ts": 1,
+    "src/ui/analyseSurfaceTiles.ts": 1
+  }
+}

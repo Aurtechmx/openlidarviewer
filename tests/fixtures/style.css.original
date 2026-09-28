@@ -81,9 +81,12 @@
   --state-preview: var(--rating-moderate);
   --state-review: var(--rating-weak);
   --state-blocked: var(--rating-blocked);
-  --state-withheld: var(--rating-blocked);
+  /* Withheld has its own hue: a value held back is not a closed gate. */
+  --state-withheld: #f472b6;
   --state-derived: var(--accent);
   --state-info: var(--text-dim);
+  /* The faint white wash a quiet top-bar control takes on hover. */
+  --hover-wash: rgba(255, 255, 255, 0.04);
   --cyan: #00f0ff;        /* Cyan */
   --teal: #00d4c8;        /* Teal */
   --ice: #c9f6ff;         /* Ice Blue */
@@ -240,6 +243,9 @@
   --m-accent-2: #29d3ff;        /* cyan end — the "active" hue on phones */
   --m-accent-grad: linear-gradient(135deg, #3ba9ff 0%, #29d3ff 100%);
   --m-edge: rgba(41, 211, 255, 0.15);       /* low-opacity cyan panel hairline */
+  --m-active-glow: rgba(41, 211, 255, 0.28); /* the soft cyan under an active phone tab */
+  --m-chrome-lift: 0 -14px 40px -14px rgba(0, 0, 0, 0.62); /* the shadow over the phone's bottom chrome */
+  --mask-opaque: #000;                        /* the kept part of a fade-out mask */
   --m-edge-strong: rgba(41, 211, 255, 0.34);/* active / focused edge */
   --m-glass: rgba(14, 20, 32, 0.86);        /* #0E1420 dark-glass panel fill */
   --m-glass-raised: rgba(17, 24, 38, 0.92); /* #111826 focal surface fill */
@@ -295,6 +301,16 @@
   --z-max: 200;           /* onboarding tour overlay, top of stack */
 }
 
+
+/* The withheld state hue on the Light and High-contrast rails, kept beside the
+ * :root value so each rail clears 4.5:1 on its own --bg and --panel
+ * (tests/stateTokenContrast.test.ts). */
+body.olv-theme-light {
+  --state-withheld: #be185d;
+}
+body.olv-theme-high-contrast {
+  --state-withheld: #f9a8d4;
+}
 /*
  * The top-centre lane. One band hosts the transient centred surfaces — the
  * progress toast, the "Project ready" card, the recommended-view chip, the
@@ -802,7 +818,7 @@ body.olv-theme-light .olv-empty-hero-mark {
 .olv-github-credits { width: 62px; }
 .olv-github-guide { width: 54px; }
 .olv-github-source { width: 60px; }
-.olv-github:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
+.olv-github:hover { color: var(--text); background: var(--hover-wash); }
 
 /* ── Speed ↔ Quality performance control ────────────────────────────────────
    A header ghost button (same vocabulary as .olv-recenter) plus a panel
@@ -818,7 +834,7 @@ body.olv-theme-light .olv-empty-hero-mark {
   cursor: pointer;
 }
 .olv-quality-button svg { width: 18px; height: 18px; }
-.olv-quality-button:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
+.olv-quality-button:hover { color: var(--text); background: var(--hover-wash); }
 .olv-quality-button-open { color: var(--accent); background: var(--accent-soft); }
 /* Pending cue while the panel chunk fetches (LOAD-1) — same convention as `.olv-quality-follow:disabled` above. */
 .olv-quality-button:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -11065,7 +11081,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 .olv-feature-chip.is-active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #0b0b0d;
+  color: var(--on-accent);
 }
 /* Observatory panel (docs/observatory/SPEC.md OB-UI-01): section layout and
    the stateChip badge (origin/basis/suggested-station). */
@@ -11085,11 +11101,11 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 
 .olv-observatory-section-title {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--olv-text-muted, #9aa3ad);
+  color: var(--text-dim);
 }
 
 .olv-observatory-station-row {
@@ -11105,8 +11121,8 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   gap: 4px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(34, 220, 255, 0.12);
-  font-size: 11px;
+  background: var(--accent-soft);
+  font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.03em;
   white-space: nowrap;
@@ -11125,6 +11141,18 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 .olv-observatory-run,
 .olv-observatory-export {
   align-self: flex-start;
+}
+
+/* Opaque accent fill with --on-accent text: the pair clears 4.5:1 on every
+ * theme rail without depending on how an engine blends a translucent fill. */
+.olv-observatory-run {
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 0.5px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-md);
+  font-size: var(--text-xs);
+  font-weight: 600;
 }
 /* ═══════════════════════════════════════════════════════════════════════════
    MOBILE GUI REFRESH (v0.6.x) — hero-console material + accent on phones
@@ -11149,7 +11177,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
     border-top: 1px solid var(--m-edge);
     border-left: 1px solid var(--m-edge);
     border-right: 1px solid var(--m-edge);
-    box-shadow: 0 -14px 40px -14px rgba(0, 0, 0, 0.62);
+    box-shadow: var(--m-chrome-lift);
   }
   /* Re-parented panels sit on the sheet's glass, so they go transparent and
      let the one backdrop carry the material (no stacked opaque cards). */
@@ -11169,7 +11197,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
     -webkit-backdrop-filter: blur(16px) saturate(1.1);
     backdrop-filter: blur(16px) saturate(1.1);
     border-top: 1px solid var(--m-edge);
-    box-shadow: 0 -14px 40px -14px rgba(0, 0, 0, 0.62);
+    box-shadow: var(--m-chrome-lift);
   }
 
   /* Streaming COPC panel reads as the same dark glass. */
@@ -11195,12 +11223,17 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
     border: 1px solid var(--m-edge);
     border-bottom-width: 0;
     border-radius: 14px 14px 0 0;
-    box-shadow: 0 -14px 40px -14px rgba(0, 0, 0, 0.62);
+    box-shadow: var(--m-chrome-lift);
   }
   /* Ghost-by-default dock tools: transparent fill, NO resting border, dim
      neutral colour so nothing competes with the cloud. Accent discipline: the
      single cyan accent lands only on the active tool (below). The dock strip
      itself carries the glass + faint cyan hairline. */
+  /* The 44 pt house target in both directions: Close, the shortest caption,
+     is not narrower than it is tall. Its group gap gives back the width, so
+     the row still fits a 390 px phone. */
+  .olv-dock .olv-tool-close { min-width: 44px; }
+  .olv-dock > .olv-dock-gap { margin-left: var(--space-2xs); }
   .olv-dock .olv-tool {
     background: transparent;
     border-color: transparent;
@@ -11224,7 +11257,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
     background: color-mix(in srgb, var(--m-accent-2) 12%, transparent);
     border-color: var(--m-edge-strong);
     /* One quiet accent, no heavy glow: an inset cyan hairline plus a soft lift. */
-    box-shadow: 0 0 0 1px var(--m-edge) inset, 0 2px 8px -6px rgba(41, 211, 255, 0.28);
+    box-shadow: 0 0 0 1px var(--m-edge) inset, 0 2px 8px -6px var(--m-active-glow);
   }
   .olv-dock .olv-tool-active .olv-tool-ico svg { color: var(--m-accent-2); }
   .olv-dock .olv-tool-active::after {
@@ -11381,8 +11414,8 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
      make the rail taller than its band. Applying it unconditionally would dim
      the first and last tool of a rail that fits perfectly well. */
   .olv-dock.olv-dock-more-open {
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
-    mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, var(--mask-opaque) 12px, var(--mask-opaque) calc(100% - 12px), transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0, var(--mask-opaque) 12px, var(--mask-opaque) calc(100% - 12px), transparent 100%);
   }
   /* Square, icon-only buttons at the full 44 pt target. A vertical rail has no
      room for captions and a squeezed caption is worse than none, so the label
@@ -11899,6 +11932,10 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
     min-width: 44px;
   }
 }
+
+/* The Measure panel's session buttons keep one line: "Export session" takes
+   the width it needs and the shorter captions give way. */
+.olv-mp-action { flex: 1 0 auto; white-space: nowrap; }
 /* ── Windows High Contrast / forced-colors ──────────────────────────────────
    Windows High Contrast replaces the author palette with a small system one.
    Backgrounds, borders and shadows are forced, `backdrop-filter` stops

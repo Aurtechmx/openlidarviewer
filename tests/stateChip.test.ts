@@ -26,13 +26,10 @@ describe('the state vocabulary', () => {
     }
   });
 
-  it('separates the states that mean different things by shape', () => {
-    // 'withheld' deliberately shares the closed-gate mark with 'blocked': both
-    // say the value is not available to claim. Every other state is distinct.
-    const distinct = new Set(
-      Object.entries(STATE_GLYPH).filter(([s]) => s !== 'withheld').map(([, g]) => g),
-    );
-    expect(distinct.size).toBe(Object.keys(STATE_GLYPH).length - 1);
+  it('gives every state its own shape, withheld included (CE-STRIP-04)', () => {
+    const distinct = new Set(Object.values(STATE_GLYPH));
+    expect(distinct.size).toBe(Object.keys(STATE_GLYPH).length);
+    expect(STATE_GLYPH.withheld).not.toBe(STATE_GLYPH.blocked);
   });
 
   it('names the state in words for a screen reader, with the caller context', () => {

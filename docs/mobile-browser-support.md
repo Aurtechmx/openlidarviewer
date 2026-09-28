@@ -19,7 +19,7 @@ To open a scan on an iPhone:
 
 1. Save a compatible file to device storage or iCloud Drive.
 2. Open OpenLiDARViewer in a mobile browser.
-3. Tap "Open scan from device."
+3. Tap "Open scan."
 4. Select the file in the native file picker.
 5. Wait for parsing and rendering to finish.
 

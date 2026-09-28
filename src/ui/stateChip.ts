@@ -34,14 +34,15 @@ export type SciState =
 /**
  * The state as a shape. Filled disc for a measured value, half disc for a
  * preview of one, triangle for something to look at, slashed circle for a
- * closed gate, diamond for a computed product, circled i for context.
+ * closed gate, circled minus for a value held back, diamond for a computed
+ * product, circled i for context. No two states share a shape.
  */
 export const STATE_GLYPH: Record<SciState, string> = {
   measured: '●',
   preview: '◐',
   review: '▲',
   blocked: '⊘',
-  withheld: '⊘',
+  withheld: '⊖',
   derived: '◇',
   info: 'ⓘ',
 };

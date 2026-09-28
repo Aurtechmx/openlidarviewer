@@ -68,8 +68,8 @@ describe('ToolDock manifest', () => {
   it('renders all 12 buttons in the exact contract order', () => {
     const b = buttons(makeDock());
     expect(b.map((x) => x.querySelector('.olv-tool-label')?.textContent ?? x.textContent)).toEqual([
-      'Frame',
-      'Snapshot',
+      'Frame all',
+      'Save a snapshot',
       'Measure',
       'Inspect',
       'Probe',
@@ -180,11 +180,11 @@ describe('ToolDock manifest', () => {
   it('Close has an enable but no active variant', () => {
     const dock = makeDock();
     const close = buttons(dock)[11];
-    dock.setEnabled('tool.close', true);
+    dock.setEnabled('scan.close', true);
     expect(close.disabled).toBe(false);
     expect(close.title).toBe('Close the scan and return to the start');
     // setActive is a silent no-op for Close.
-    dock.setActive('tool.close', true);
+    dock.setActive('scan.close', true);
     expect(close.classList.contains('olv-tool-active')).toBe(false);
     expect(close.hasAttribute('aria-pressed')).toBe(false);
   });

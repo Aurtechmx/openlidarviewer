@@ -751,24 +751,12 @@ stage.canvas.addEventListener('contextmenu', (e) => {
   const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
   const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
   const v = viewer;
-  // Reading `.showContextMenu` off the awaited module (not passing
+  // Reading `.showSceneMenu` off the awaited module (not passing
   // `loadContextMenu` straight through) is what makes a stale-chunk resolve
   // to `undefined` throw here and reach the toast, instead of silently
   // succeeding with nothing to call.
-  void createLazySurfaceLoader({ show: showLassoToast })(async () => (await loadContextMenu()).showContextMenu, 'context menu').then((showContextMenu) => {
-    if (!showContextMenu) return; // already reported; right-click again to retry.
-    showContextMenu(e.clientX, e.clientY, [
-      {
-        label: 'Focus here',
-        run: () => {
-          if (!v.focusOnScreen(ndcX, ndcY)) v.frameAll();
-        },
-      },
-      { label: 'Frame scan', run: () => v.frameAll() },
-      { label: 'Top view', run: () => void v.setStandardView('top') },
-      { label: 'Front view', run: () => void v.setStandardView('front') },
-      { label: 'Oblique view', run: () => void v.setCameraPreset('oblique') },
-    ]);
+  void createLazySurfaceLoader({ show: showLassoToast })(async () => (await loadContextMenu()).showSceneMenu, 'context menu').then((show) => {
+    show?.(e.clientX, e.clientY, v, ndcX, ndcY); // undefined: already reported; right-click again to retry.
   });
 });
 

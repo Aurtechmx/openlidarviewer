@@ -119,7 +119,7 @@ test.describe('control explanations', () => {
     await page.locator('.olv-file-input').first().setInputFiles(FIXTURE);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 60_000 });
 
-    const frame = page.getByRole('button', { name: /^Frame$/ });
+    const frame = page.getByRole('button', { name: 'Frame all', exact: true }).and(page.locator('.olv-tool'));
     await expect(frame).toBeVisible();
     await expect(frame).toHaveAttribute('title', /./);
 
@@ -135,7 +135,7 @@ test.describe('control explanations', () => {
     await page.locator('.olv-file-input').first().setInputFiles(FIXTURE);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 60_000 });
 
-    const frame = page.getByRole('button', { name: /^Frame$/ });
+    const frame = page.getByRole('button', { name: 'Frame all', exact: true }).and(page.locator('.olv-tool'));
     await expect(frame).toBeVisible();
     const title = await frame.getAttribute('title');
     expect(title, 'Frame carries a native title').toBeTruthy();
