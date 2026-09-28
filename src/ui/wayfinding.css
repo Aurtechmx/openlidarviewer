@@ -5,6 +5,13 @@
    to the startup script. Tokens only. */
 
 /* ── Location bar ───────────────────────────────────────────────────────── */
+:root { --loc-bar-h: 44px; }
+/* The bar joins the header row after the first scan, --loc-bar-h tall. The row
+   holds that height from first paint, so the bar arriving never moves the
+   right cluster. Desktop only: on a phone the bar heads the bottom sheet. */
+@media (min-width: 768px) and (not ((max-height: 500px) and (pointer: coarse))) {
+  .olv-topbar-right { min-height: var(--loc-bar-h); }
+}
 .olv-loc {
   display: flex;
   align-items: center;
@@ -18,7 +25,7 @@
   flex: 1 1 auto;
   margin: 0 auto 0 var(--space-2xl);
   padding: 0 var(--space-md);
-  min-height: 44px;
+  height: var(--loc-bar-h);
   background: var(--panel);
   border: 0.5px solid var(--hairline);
   border-radius: var(--radius-pill);
