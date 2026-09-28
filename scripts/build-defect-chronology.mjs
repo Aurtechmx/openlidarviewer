@@ -38,6 +38,7 @@ export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DEFECT_DIR = resolve(ROOT, 'validation/defects');
 const REGISTRY = resolve(DEFECT_DIR, 'defect-registry.json');
 const REPLAY_RAW = resolve(DEFECT_DIR, 'replay/raw');
+const REPLAY_RAW_REL = ['validation/defects/replay/raw'];
 const MUTATIONS = resolve(ROOT, 'validation/mutations/results.json');
 
 export const OUT_JSON = resolve(DEFECT_DIR, 'chronology.json');
@@ -89,30 +90,68 @@ function git(args) {
   }).trim();
 }
 
-/** Resolve a rev to {sha, shortSha, committedAt}, or null if it does not exist. */
+const resolved = new Map();
+
+/**
+ * Resolve a rev to {sha, shortSha, committedAt}, or null if it does not exist.
+ * Memoized, since the same fix and baseline commits recur across records.
+ */
 export function resolveCommit(rev) {
   if (!rev || rev === UNKNOWN) return null;
+  if (resolved.has(rev)) return resolved.get(rev);
+  let commit = null;
   try {
     const line = git(['log', '-1', '--format=%H%x00%h%x00%cI', `${rev}^{commit}`]);
     const [sha, shortSha, committedAt] = line.split('\0');
-    return { sha, shortSha, committedAt };
+    commit = { sha, shortSha, committedAt };
   } catch {
-    return null;
+    commit = null;
+  }
+  resolved.set(rev, commit);
+  return commit;
+}
+
+let firstAdds = new Map();
+
+/**
+ * Index the oldest commit that ADDED each of `paths`, from one `git log` walk.
+ * Asking git once per path walked the full history once per replay file.
+ * `dirs` are passed to git in place of the individual paths under them, since
+ * git matches every pathspec against every commit. git lists newest first,
+ * so the last commit seen for a path is the one that first added it.
+ */
+function indexFirstAdds(dirs, paths) {
+  firstAdds = new Map();
+  const loose = paths.filter((p) => !dirs.some((d) => p.startsWith(`${d}/`)));
+  let out;
+  try {
+    out = git([
+      'log',
+      '--diff-filter=A',
+      '--name-only',
+      '--format=%x01%H%x00%h%x00%cI',
+      '--',
+      ...dirs,
+      ...loose,
+    ]);
+  } catch {
+    return;
+  }
+  const wanted = new Set(paths);
+  for (const block of out.split('\x01')) {
+    const [header, ...names] = block.split('\n');
+    if (!header) continue;
+    const [sha, shortSha, committedAt] = header.split('\0');
+    for (const name of names) {
+      if (wanted.has(name)) firstAdds.set(name, { sha, shortSha, committedAt });
+    }
   }
 }
 
 /** First commit that ADDED a path, or null. `--follow` is deliberately not
  * used: a rename would report a date earlier than the path itself existed. */
 function firstAddCommit(path) {
-  let out;
-  try {
-    out = git(['log', '--diff-filter=A', '--format=%H', '--', path]);
-  } catch {
-    return null;
-  }
-  if (!out) return null;
-  const lines = out.split('\n').filter(Boolean);
-  return resolveCommit(lines[lines.length - 1]);
+  return firstAdds.get(path) ?? null;
 }
 
 /** True when `ancestor` is reachable from `descendant`. */
@@ -153,7 +192,7 @@ function readReplayEvidence() {
         probeCase: record.probeCase ?? UNKNOWN,
       };
     }
-    if (!entry.addedIn) entry.addedIn = firstAddCommit(`validation/defects/replay/raw/${file}`);
+    if (!entry.addedIn) entry.addedIn = firstAddCommit(`${REPLAY_RAW_REL[0]}/${file}`);
     perDefect.set(id, entry);
   }
   return perDefect;
@@ -196,6 +235,18 @@ function discoverySourceOf(defect) {
 
 export function buildModel() {
   const registry = JSON.parse(readFileSync(REGISTRY, 'utf8'));
+  let replayFiles = [];
+  try {
+    replayFiles = readdirSync(REPLAY_RAW).filter((f) => f.endsWith('.json'));
+  } catch {
+    replayFiles = [];
+  }
+  indexFirstAdds(REPLAY_RAW_REL, [
+    ...replayFiles.map((f) => `${REPLAY_RAW_REL[0]}/${f}`),
+    'validation/mutations/results.json',
+    KNOWN_LIMITATIONS,
+    ...registry.defects.map((d) => d.regressionTest?.file).filter(Boolean),
+  ]);
   const replay = readReplayEvidence();
   const mutations = readMutationIndex();
   const knownLimitations = firstAddCommit(KNOWN_LIMITATIONS);
