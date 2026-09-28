@@ -68,8 +68,8 @@ linked views and Compare; a density preference; expanded undo.
 | Tool activation navigates the rail | `workspaceShell.openToolPage`, `resumeToolPage` | Already one route per tool |
 | Action registry feeding launcher, palette and Help | `ui/actionRegistry.ts`, `toolLauncher.ts`, `HelpOverlay.ts` | One name per action (§6) |
 | Frame: dock label "Frame" (`ui/toolDock.ts:109`), NavBar name "Frame the whole scan" (`ui/NavBar.ts:333`), registry title "Frame all" for `camera.frame-all` (`app/actions/cameraActions.ts:113`) | as listed | One name per action (§6) |
-| Right rail title "Scan Intelligence" (`ui/Inspector.ts:1023`); tour step title "Inspector" (`ui/onboarding/tourSteps.ts:85`); phone tab "View" with title "How the scan is drawn" (`ui/MobileSheet.ts:75`) | as listed | Rename (§8) |
-| State grammar, and the `blocked`/`withheld` glyph collision (same glyph, same colour alias) | `ui/stateChip.ts`, `styles/01-tokens.css` | Strip (§9), glyph fix |
+| Right rail title "Scan Intelligence" (`ui/Inspector.ts:1023`); tour step title "Inspector" (`ui/onboarding/tourSteps.ts:85`); phone tab "View" with title "How the scan is drawn: colour, point size, rendering, visuals." (`ui/MobileSheet.ts:75`) | as listed | Rename (§8) |
+| State grammar, and the `blocked`/`withheld` glyph collision (same glyph, same colour alias); the three reconstructed-origin states in `ui/observatory/stateChip.ts` also share one glyph | `ui/stateChip.ts`, `ui/observatory/stateChip.ts`, `styles/01-tokens.css` | Strip (§9), glyph fix |
 | Modal primitive with Escape, focus trap and restore; `ResultFocus` is built on it | `ui/Modal.ts`, `ui/ResultFocus.ts` | Exit convention |
 | Polite announcements through `announcePolite` | `ui/politeAnnounce.ts` | CE-LOC-05 |
 | Screenshot harness at six viewports (`OLV_UX_SHOTS`); 95 e2e specs, including `goldenJourney`, `workspaceJourneys`, `workspaceScreens`, `workspaceRouter`, `phoneWorkspace`, `flowPulseLab`, `terrainAccessLab`, `observatoryPanel`, `resultsShelf`, `commandPalette` | `tests/e2e/` | Proof |
@@ -81,7 +81,10 @@ except `01-tokens.css`, with `/* … */` comments removed. A colour literal is a
 hex colour (`#` plus 3 to 8 hex digits) or an `rgb()`, `rgba()`, `hsl()` or
 `hsla()` call; unique values are compared lowercased with whitespace removed.
 A px font size is a `font` or `font-size` declaration containing a px length.
-C0 re-baselines both numbers with the lint that C1 adds.
+C0 re-counted both numbers and the e2e spec count on main and found them
+unchanged. C1 re-baselines the colour and font numbers with the lint it adds.
+The surfaces, duplicates and dead ends behind this table are in
+[NAVIGATION_MAP.md](NAVIGATION_MAP.md).
 
 The top bar has no back-to-centre control. The header comment in
 `ui/headerControls.ts:4` still mentions one and is stale.

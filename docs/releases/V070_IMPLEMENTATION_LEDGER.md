@@ -82,17 +82,18 @@ the two entries were renumbered when the branches were integrated.
 | L175 | SCIENTIFIC | TEST | med | FIXED | new | A measured cell the attention raster's residual sampling skipped scored 0 on the residual and, with no other input flagging it, was written as level 0, the same as a cell whose residual was computed and small. |
 | L176 | LOADER | TEST | med | FIXED | new | A text file with no point-format extension opened as XYZ from three numeric lines, and the chosen interpretation level was not recorded or shown. |
 | L177 | UI | TEST | med | FIXED | new | Flow Pulse, Terrain Access and Observatory opened on their controls with no statement of purpose, a missing ground surface ended in a refusal code and a Retry that could not help, and a scan with no scanner setups showed the Observatory as Ready. |
+| L178 | UI | TEST | n/a | MEASURED | new | Community wayfinding C0: navigation map, 25 duplicate actions, 2 dead ends at desktop and 2 at phone, and the J1 to J7 journey baseline. |
 
 ## Totals
 
 - DEFERRED: 4
 - FIXED: 34
-- MEASURED: 1
+- MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 54
+- total: 55
 
 ## Detail
 
@@ -6907,3 +6908,28 @@ No run value, threshold, method or export changes. Covered by
 `tests/labFirstUse.test.ts`, `tests/analyseWorkspace.test.ts`,
 `tests/e2e/flowPulseLab.spec.ts`, `tests/e2e/terrainAccessLab.spec.ts` and
 `tests/e2e/observatoryPanel.spec.ts`.
+
+### L178 · MEASURED · UI
+
+Community wayfinding phase C0 (`docs/ux/COMMUNITY_SPEC.md` §13). Audit only;
+no runtime code changes.
+
+`docs/ux/NAVIGATION_MAP.md` records every navigation surface with how it is
+entered and left, its names, 25 actions reachable from more than one
+persistent surface, and the dead ends: 2 at desktop (the command palette; a
+rail page with the rail collapsed) and 2 at 390×844 (the command palette; a
+tool page with the sheet at peek). It also holds the panel pressure inventory
+and the strip provider check: dataset name, processing state and the review
+count have no canonical provider yet, and layer basis is owned by a right
+rail card.
+
+The spec's §2 counts were re-checked on main and are unchanged: 511 colour
+literals (199 unique, 35 files), 5 px font sizes and 95 e2e specs. The
+phone View title and a second glyph collision in `ui/observatory/stateChip.ts`
+were added to §2.
+
+`tests/e2e/ceJourneys.spec.ts` records journeys J1 to J7 (clicks, surface
+switches, Back, Escape and time) through `tests/e2e/journeyMetrics.ts`,
+covered by `tests/journeyMetrics.test.ts`. The baseline is
+`docs/ux/metrics/ce-c0.json`; clicks and switches repeated exactly across two
+runs.
