@@ -234,3 +234,17 @@ export interface ObservationParameters {
   /** Hit-window range-proportional half-width term in the same formula (dimensionless, metres per metre of range). */
   readonly tau_rel: number;
 }
+
+/**
+ * Every station's angular and range envelope on the resident-only basis: the
+ * full sphere, no range limit. An unstructured build carries no narrower
+ * declared domain to test against.
+ */
+export const RESIDENT_ONLY_STATION_ENVELOPE: {
+  readonly azimuthDeg: readonly [number, number];
+  readonly elevationDeg: readonly [number, number];
+  readonly rangeLimit: null;
+} = Object.freeze({ azimuthDeg: [0, 360] as const, elevationDeg: [-90, 90] as const, rangeLimit: null });
+
+/** The preregistered protocol the state table's constants and boundary rules come from. */
+export const OBSERVATION_STATE_RULE_SET = 'OB-ST-THRESHOLDS';

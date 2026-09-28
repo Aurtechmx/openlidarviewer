@@ -93,17 +93,18 @@ the two entries were renumbered when the branches were integrated.
 | L188 | UI | TEST | medium | FIXED | new | A tween replayed the orbit, pan and wheel glides it froze once it landed; a wheel zoom after an orbit flick kept rotating and slid the point under the cursor; a grab inherited the orbit glide and an orbit inside a dolly tail had its pivot moved. |
 | L189 | EXPORT | TEST | med | FIXED | new | Map sheets and terrain reports for a streamed tile with no linear unit placed contour levels off round elevations, printed a metre-based scale ratio and a metre TPI, called the COPC root-node spacing the point spacing, and stated RMSEz, contour style, analysed basis, interpolated share and ground visibility on bases that contradicted each other. |
 | L184 | DOCS | TEST | med | FIXED | new | The known-limitations document still called the polygon Volume tool Withheld-blind, the browser matrix advisory and the shell 799 of 812 KiB, and no lint read those sentences. |
+| L190 | EXPORT | TEST | med | FIXED | new | An Observatory run's source digest hashed only the first 3000 position values, the live run dropped the planning option and recorded no file name or unit, and the package wrote a zero grid shape in field.json and empty params for every method in its processing manifest. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 44
+- FIXED: 45
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 65
+- total: 66
 
 ## Detail
 
@@ -7264,3 +7265,47 @@ Chromium, Firefox, WebKit or Windows leg advisory or blocking against
 `ci-green`'s `needs` in `ci.yml`, any ledger id cited as open against this
 table, and a declared list of phrases that must not appear while their entry
 reads FIXED. Covered by `tests/knownLimitationsLint.test.ts`.
+
+### L190 · FIXED · EXPORT
+
+Observatory run provenance and package contents.
+
+Resident positions digest. `source.sourceDigest` in the Observatory run record
+was the SHA-256 of the first 3000 position values, so two clouds equal in those
+values and different later got the same digest. It is now the SHA-256 of every
+resident position the run read, each written as a little-endian float32, hashed
+in fixed-size chunks through `IncrementalSha256` so memory stays bounded
+(`src/app/residentPositionsDigest.ts`). It identifies the resident point set,
+not the source file. No whole-file hash exists in the load path, so the
+passport's `source.sha256` stays null and the package README says the source
+file hash is unavailable.
+
+Run options. The runner now passes `planning` from its options through to the
+run. The live app records the scan's base file name (never a directory) and
+the resolved CRS's metres per linear unit, or null when the unit is not known
+(`src/app/observatoryLiveDeps.ts`). Before this, every live run recorded
+`filename: null` and `metresPerUnit: null`, so the planning instrument model
+read its metre defaults (1.5 m height, 0.5 m minimum range) as source units.
+For a scan in a known non-metre unit those defaults are now converted, which
+changes the suggested stations for that scan. Candidate spacing does not
+depend on the unit. The evidence field is unchanged: `fieldDigest` is the same
+with or without a unit factor.
+
+Package. `field.json` and the `field.bin` header carry the grid shape from
+`domainGrid(domain, voxelEdge)` instead of zeros. Each method in
+`processing-manifest.json` carries its params, in canonical key order: the
+ledger's domain, voxel edge, `tauAbs` (voxel edge / 2), `tauRel` and declared
+step budget; the state table's `OB-ST-THRESHOLDS` constants; the resident-only
+station envelope (full sphere, no range limit); the planning instrument model,
+candidate cap and spacing, weights and floors; and the suggested station
+count. Re-running the Observatory with the ledger params from the manifest
+gives the same `fieldDigest`.
+
+Pinned values. The resident positions digest of every run changes, and with it
+the run record digest. `fieldDigest`, the state counts and the run id (derived
+from `fieldDigest`) do not change. The processing manifest's op hashes and
+head, the passport and `SHA256SUMS.txt` change for every package because the
+params and the field header are no longer empty. No existing test pinned any
+of these values.
+
+Covered by `tests/observatoryProvenance.test.ts`.

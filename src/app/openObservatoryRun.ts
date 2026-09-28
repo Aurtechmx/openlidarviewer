@@ -12,18 +12,22 @@ import { createObservatoryRunner, type ObservatoryRunner, type ObservatoryRunner
 import { loadObservatoryPanel } from '../lazyChunks';
 import type { ObservatoryOverlayHost } from '../render/ObservatoryOverlay';
 import type { ObservatoryCloudInput } from './observatoryFromCloud';
+import { observatoryLiveDeps, type ObservatoryLiveCrs, type ObservatoryLiveScans } from './observatoryLiveDeps';
 import { announceObservatoryRunner, takeResultReopen } from './results/resultSignals';
 
 export interface ObservatoryEntryDeps {
   readonly showAnalyseMode: () => void;
-  readonly runnerDeps: ObservatoryRunnerDeps;
+  /** The live scan list and CRS service; the runner's options (base file name, metres per unit) are read from them in this lazy chunk. */
+  readonly scans: ObservatoryLiveScans;
+  readonly crs: ObservatoryLiveCrs;
+  readonly buildTag: string;
   readonly overlayHost: () => ObservatoryOverlayHost | null;
 }
 
 /**
  * WORLD -> LOCAL (render) frame: subtract the active cloud's own
- * `sourceOrigin`. Computed HERE, in the lazy chunk, from `runnerDeps`'s own
- * `getActiveCloud` — not threaded in from `main.ts` as a separate closure —
+ * `sourceOrigin`. Computed HERE, in the lazy chunk, from the live scan list's own
+ * `activeCloud` — not threaded in from `main.ts` as a separate closure —
  * so the eager entry only ever hands over primitive accessors, never a
  * second bespoke frame-conversion function to inline there.
  */
@@ -61,9 +65,9 @@ export function resetObservatoryRunnerForTest(): void {
  */
 export async function openObservatoryRun(deps: ObservatoryEntryDeps, rerun = false): Promise<void> {
   deps.showAnalyseMode();
-  const r = getObservatoryRunner(deps.runnerDeps);
+  const r = getObservatoryRunner(observatoryLiveDeps(deps.scans, deps.crs, deps.buildTag));
   const panel = await loadObservatoryPanel();
-  panel.openObservatoryPanel({ runner: r, overlayHost: deps.overlayHost(), worldToLocal: worldToLocalOf(deps.runnerDeps.getActiveCloud()) });
+  panel.openObservatoryPanel({ runner: r, overlayHost: deps.overlayHost(), worldToLocal: worldToLocalOf(deps.scans.activeCloud()) });
   // A shelf Focus shows the committed run as it is; nothing recomputes.
   if (takeResultReopen('observatory')) rerun = false;
   if (rerun || r.getState().phase !== 'committed') r.run();

@@ -411,16 +411,16 @@ The name is Coverage Gain, because it counts voxels a hypothetical station would
   ```text
   observation-record.json   (run record, parameters, methods, basis, digests)
   stations.json             (origins with status)
-  field.bin + field.json    (header: voxel edge, domain, key layout, counter columns, little-endian; SHA-256 per column)
+  field.bin + field.json    (header: voxel edge, domain, grid shape, key layout, counter columns, little-endian; SHA-256 per column)
   state-summary.csv
   frontier.csv
   candidates.csv            (every term)
-  processing-manifest.json
+  processing-manifest.json  (each method's params in canonical key order; the ledger params re-run to the same fieldDigest)
   scientific-passport.json
   README.md                 (states defined in the §2.2 words)
   ```
 
-  It is written through the existing zip and manifest modules. Screenshots are not part of the record.
+  It is written through the existing zip and manifest modules. Screenshots are not part of the record. The run record's `source.sourceDigest` is the SHA-256 of every resident position the run read (little-endian float32, array order); it identifies the resident point set, not the source file. No whole-file hash is computed, so the passport's `source.sha256` is null and the README says the source file hash is unavailable.
 - OB-EXP-02 Round trip. The exported `field.bin` re-hashes to `fieldDigest`, and re-deriving states from the exported counters matches the exported state summary.
 - OB-SES-01 Session. A session stores the parameters and the `fieldDigest`, not the field. On reload it offers a rerun, and marks the result current only when the rerun digest matches.
 
