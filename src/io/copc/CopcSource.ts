@@ -15,6 +15,7 @@ import type { RangeSource, RangeSourceKind } from '../range/RangeSource';
 import { LoadError } from '../loadErrors';
 import { detectCopc } from './copcDetect';
 import { parseCopcMetadata } from './copcHeader';
+import { readLasCrsLocation, resolveLasCrs } from '../crs';
 import { parseHierarchyPage } from './copcHierarchy';
 import type { HierarchyPage } from './copcHierarchy';
 import type {
@@ -78,6 +79,24 @@ export class CopcSource {
     }
 
     const metadata = parseCopcMetadata(head);
+    // A LAS 1.4 writer may put the CRS in an EVLR after the point data; read
+    // those records by bounded range reads and let a VLR keep precedence. The
+    // walk is skipped when a VLR WKT already decides the CRS, and when the one
+    // EVLR is the COPC hierarchy itself, so a plain COPC open costs no read.
+    const location = readLasCrsLocation(head);
+    const evlrCount = location?.evlrCount ?? 0;
+    const onlyHierarchy =
+      evlrCount === 1 && (location?.evlrOffset ?? 0) < metadata.info.rootHierOffset;
+    if (location && evlrCount > 0 && !onlyHierarchy && !metadata.header.crs?.wkt) {
+      metadata.header.crs = await resolveLasCrs(
+        head,
+        location.headerSize,
+        location.vlrCount,
+        location,
+        (offset, length) => range.readRange(offset, length, signal),
+        size,
+      );
+    }
     const cube: OctreeCube = {
       center: metadata.info.center,
       halfsize: metadata.info.halfsize,

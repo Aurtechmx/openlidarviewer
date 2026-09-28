@@ -16,6 +16,8 @@ import {
   emptyProjectionRecords,
   readEvlrProjectionRecords,
   resolveLasCrs,
+  resolveLasCrsFromRange,
+  readLasCrsLocation,
   MAX_EVLRS_WALKED,
   MAX_PROJECTION_EVLR_BYTES,
 } from '../src/io/crs';
@@ -23,6 +25,10 @@ import { parseLasHeader } from '../src/io/lasHeader';
 import { loadLas, loadLazFromFile } from '../src/io/loadLas';
 import { convertCloud } from '../src/convert/convertCloud';
 import { writeLas14 } from '../src/convert/writeLas';
+import { resolvedFromCrsInfo } from '../src/geo/CoordinateTypes';
+import { CopcSource } from '../src/io/copc/CopcSource';
+import { ArrayBufferRangeSource } from '../src/io/range/ArrayBufferRangeSource';
+import { buildSyntheticCopc } from './fixtures/copc/synthCopc';
 
 const fixture = (name: string): ArrayBuffer => {
   const b = readFileSync(new URL(`./fixtures/${name}`, import.meta.url));
@@ -197,5 +203,71 @@ describe('export round trip: read, export, re-read gives the same CRS', () => {
     expect(crs?.epsg).toBe(6344);
     expect(crs?.linearUnit).toBe('metre');
     expect(crs?.verticalEpsg).toBe(5703);
+  });
+});
+
+describe('the record kind that carried the CRS', () => {
+  it('marks a CRS read from an EVLR and leaves a VLR CRS unmarked', async () => {
+    const cloud = await loadLas(fixture('evlr-crs-utm15.las'), 'las', 'evlr.las');
+    expect(cloud.metadata?.crs?.record).toBe('evlr');
+    const las = writeLas14(
+      { count: 1, x: Float64Array.of(500000), y: Float64Array.of(4100000), z: Float64Array.of(1) },
+      { epsg: 32613, isGeographic: false, linearUnitCode: 9001 },
+    );
+    const h = parseLasHeader(las.buffer as ArrayBuffer);
+    expect(h.crs?.epsg).toBe(32613);
+    expect(h.crs?.record).toBeUndefined();
+  });
+
+  it('a VLR WKT that outranks an EVLR WKT stays a VLR CRS', async () => {
+    const records = emptyProjectionRecords();
+    records.wkt = WKT_B;
+    const file = concat(new Uint8Array(100), evlr('LASF_Projection', 2112, ascii(WKT_A)));
+    await readEvlrProjectionRecords(bufferRangeReader(file), file.byteLength, 100, 1, records);
+    expect(crsFromProjectionRecords(records)?.record).toBeUndefined();
+  });
+
+  it('resolves an EVLR CRS to the las-evlr source; other sources are unchanged', async () => {
+    const cloud = await loadLas(fixture('evlr-crs-utm15.las'), 'las', 'evlr.las');
+    const info = cloud.metadata?.crs ?? undefined;
+    expect(resolvedFromCrsInfo(info, 'las-vlr')?.source).toBe('las-evlr');
+    expect(resolvedFromCrsInfo(info, 'copc-meta')?.source).toBe('copc-meta');
+    expect(resolvedFromCrsInfo({ ...info!, record: undefined }, 'las-vlr')?.source).toBe('las-vlr');
+  });
+});
+
+describe('CRS over a range source (out-of-core and COPC opens)', () => {
+  it('resolves the EVLR CRS from a LAZ without reading the point data', async () => {
+    const bytes = fixture('evlr-crs-utm15.laz');
+    const h = parseLasHeader(bytes);
+    const reads: Array<[number, number]> = [];
+    const read = bufferRangeReader(bytes);
+    const crs = await resolveLasCrsFromRange((o, l) => { reads.push([o, l]); return read(o, l); }, bytes.byteLength);
+    expectUtm15Navd88(crs);
+    expect(crs?.record).toBe('evlr');
+    for (const [o, l] of reads) {
+      const inPointData = o < h.evlrOffset! && o + l > h.offsetToPointData;
+      expect(inPointData).toBe(false);
+    }
+  });
+
+  it('returns null for bytes that are not LAS and for a failing reader', async () => {
+    expect(readLasCrsLocation(new ArrayBuffer(400))).toBeNull();
+    expect(await resolveLasCrsFromRange(bufferRangeReader(new ArrayBuffer(400)), 400)).toBeNull();
+    expect(await resolveLasCrsFromRange(() => Promise.reject(new Error('io')), 400)).toBeNull();
+  });
+
+  it('a COPC file with its CRS in an EVLR after the hierarchy gets that CRS', async () => {
+    const synth = buildSyntheticCopc();
+    const base = new Uint8Array(synth.buffer);
+    const extra = evlr('LASF_Projection', 2112, ascii(WKT_A));
+    const out = new Uint8Array(base.length + extra.length);
+    out.set(base);
+    out.set(extra, base.length);
+    const view = new DataView(out.buffer);
+    view.setUint32(243, view.getUint32(243, true) + 1, true);
+    const source = await CopcSource.open(new ArrayBufferRangeSource(out.buffer));
+    expect(source.metadata.header.crs?.epsg).toBe(6344);
+    expect(source.metadata.header.crs?.record).toBe('evlr');
   });
 });

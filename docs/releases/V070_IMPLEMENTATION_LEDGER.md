@@ -78,17 +78,18 @@ the two entries were renumbered when the branches were integrated.
 | L48 | PERFORMANCE | TEST | med | FIXED | new | Render-memory telemetry counted position and colour only, so a classified cloud was reported at three quarters of what it used. |
 | L49 | PERFORMANCE | READ | med | MEASURED | new | Compact source attributes are uploaded as Float32: RGB, classification and intensity cost 14 bytes a point more than the source carries. Without a layout change only colour can shrink, by 8 bytes a point. |
 | L172 | LOADER | TEST | high | FIXED | new | A LAS 1.4 file that stores its coordinate system in an extended VLR after the point data opened with no CRS, no units and no vertical datum, and exported with no CRS at all. |
+| L174 | LOADER | TEST | high | FIXED | new | A CRS read from an extended VLR was labelled as a VLR, and a large LAS/LAZ opened out of core, or a COPC with its CRS in an EVLR, showed no CRS at all. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 30
+- FIXED: 31
 - MEASURED: 1
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 50
+- total: 51
 
 ## Detail
 
@@ -6761,3 +6762,26 @@ same `fieldDigest` as a direct call.
 
 SPEC OB-GAIN-06 now says Terrain Access exists but provides no reachability
 verdict, and the panel says the same.
+
+### L174 · FIXED · LOADER
+
+Two gaps left by L172. First, the Inspector named every LAS CRS source "LAS /
+LAZ georeference VLR", including one read from an extended VLR. `CrsInfo` now
+carries `record: 'evlr'` when the record that decided the CRS (the WKT, or the
+GeoKeys when there is no WKT) came from an EVLR, and `resolvedFromCrsInfo` maps
+that to a new `las-evlr` source. The Inspector shows "LAS / LAZ georeference
+EVLR (extended VLR)", the layer health card shows "extended VLR", and session
+files accept the new source. A VLR that outranks an EVLR stays a VLR source.
+
+Second, the out-of-core route for a large LAS/LAZ built its tile store without
+a CRS, so the scan showed none and exports raised the coordinate-system
+caution. `resolveLasCrsFromRange` in `crs.ts` reads the public header, the VLR
+block up to the point data (at most 4 MiB) and the EVLRs through the same
+bounded walk, over the open's range source, and never reads the point data.
+The out-of-core open resolves it once and passes it to the tile source on both
+a fresh build and a cache reopen. A COPC opened over a range source now also
+reads its EVLRs, so a CRS stored after the hierarchy is found; a VLR keeps
+precedence.
+
+Covered by `tests/lasEvlrCrs.test.ts`, `tests/inspectorLazyRenderCrs.test.ts`,
+`tests/e2e/lasEvlrCrs.spec.ts` and `tests/e2e/streaming.spec.ts`.

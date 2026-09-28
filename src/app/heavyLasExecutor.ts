@@ -69,6 +69,7 @@ import { sweepAbandonedOocStores, sweepPromotedOrphans } from '../io/heavy/opfsS
 import { LocalFileRangeSource } from '../io/range/LocalFileRangeSource';
 import type { RangeSource } from '../io/range/RangeSource';
 import { LoadError } from '../io/loadErrors';
+import { resolveLasCrsFromRange, type CrsInfo } from '../io/crs';
 import { LoadCancelledError } from '../io/loadFile';
 import type {
   HeavyLasBridgeDeps,
@@ -207,6 +208,7 @@ async function reopenFromCache(
   root: OpfsDirHandle,
   storeName: string,
   file: File,
+  crs: CrsInfo | null,
 ): Promise<{ source: OlvTileSource; decoder: TileChunkDecoder } | null> {
   // RESIDENCY IS TAKEN FIRST, before the directory is even looked up. Taken
   // after the reads, it left a window: an evictor in another tab could win the
@@ -249,6 +251,7 @@ async function reopenFromCache(
   const source = new OlvTileSource({
     id: `ooc-${storeName}`,
     name: file.name,
+    crs,
     store: reader,
     tiles: tileBytesReader(spill),
     // RETAIN: a reused store is kept for the next open. Release the tile handles
@@ -276,6 +279,7 @@ async function tryReopen(
   deps: HeavyLasBridgeDeps,
   signal: AbortSignal,
   locks: ReturnType<typeof resolveLockManager>,
+  crs: CrsInfo | null,
 ): Promise<HeavyOpenResult | null> {
   const map = await readCacheMap(root);
   // Reuse is authorised by the whole-file content digest, not the quick locator:
@@ -283,7 +287,7 @@ async function tryReopen(
   // windows) is not returned, so a stale source can never receive a hit.
   const entry = verifiedEntry(map, generation, sourceContentSha256);
   if (!entry) return null;
-  const opened = await reopenFromCache(root, entry.storeName, file);
+  const opened = await reopenFromCache(root, entry.storeName, file, crs);
   if (!opened) {
     // The map named a store that is no longer usable; drop the stale entry so a
     // later open does not keep chasing it, then build fresh.
@@ -414,6 +418,16 @@ export async function executeHeavyLasBuild(
   const root = await getOpfsRoot();
   if (root === null) return { status: 'unavailable', heavy: true, reason: 'no OPFS root' };
 
+  // The tile store keeps no projection, so the CRS is read here from the source
+  // file: the header, the VLR block and any LAS 1.4 EVLRs, by bounded range
+  // reads that never touch the point data.
+  const crsRange = openRange(file);
+  const crs = await resolveLasCrsFromRange(
+    (offset, length) => crsRange.readRange(offset, length, signal),
+    facts.fileBytes,
+  );
+  if (signal.aborted) return { status: 'cancelled' };
+
   // Persistent cache. The quick locator (a sampled fingerprint) finds a
   // CANDIDATE cheaply; the authoritative whole-file source-content digest then
   // AUTHORISES reuse, so a file edited outside the sampled windows can never
@@ -445,7 +459,7 @@ export async function executeHeavyLasBuild(
       const digest = await sourceDigest();
       if (signal.aborted) return { status: 'cancelled' };
       if (digest) {
-        const reopened = await tryReopen(root, generation, digest, file, deps, signal, resolveLockManager());
+        const reopened = await tryReopen(root, generation, digest, file, deps, signal, resolveLockManager(), crs);
         if (reopened) return reopened;
       }
     }
@@ -552,6 +566,7 @@ export async function executeHeavyLasBuild(
     const source = new OlvTileSource({
       id: `ooc-${built.storeName}`,
       name: file.name,
+      crs,
       store: reader,
       tiles: tileBytesReader(spill),
       // Release the tile handles FIRST (so a close racing a read unlocks before

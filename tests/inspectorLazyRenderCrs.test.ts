@@ -125,4 +125,21 @@ describe('Inspector.setCrs — lazy renderCrs chunk', () => {
     await resolveNextImport();
     expect(crsBody.querySelectorAll('.olv-crs-select')).toHaveLength(1);
   });
+
+  it('names the record kind: a VLR CRS and an EVLR CRS get different source labels', async () => {
+    for (const [source, label] of [
+      ['las-vlr', 'Source: LAS / LAZ georeference VLR'],
+      ['las-evlr', 'Source: LAS / LAZ georeference EVLR (extended VLR)'],
+    ] as const) {
+      state.pending.length = 0;
+      const inspector = new Inspector(fakeCallbacks());
+      const crsBody = byClass(
+        (inspector as unknown as { element: FakeEl }).element,
+        'olv-crs',
+      )!;
+      inspector.setCrs(makeCrs({ source }));
+      await resolveNextImport();
+      expect(findContaining(crsBody, label)).toBeTruthy();
+    }
+  });
 });
