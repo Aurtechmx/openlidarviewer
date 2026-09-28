@@ -404,7 +404,9 @@ jobs:
       # ("waiting for element to be ... stable"), emptied the nav probe and
       # stole hovers. OLV_FIREFOX_DISPLAYS hands each worker its own display
       # (see FIREFOX_DISPLAYS in playwright.config.ts); --workers must match
-      # the number of displays so no two workers share one.
+      # the number of displays so no two workers share one. `firefox-solo` runs
+      # its tests after `firefox` has finished (see FIREFOX_SOLO in
+      # playwright.config.ts).
       - name: Deterministic end-to-end tests on Firefox
         run: |
           for d in 90 91; do
@@ -414,7 +416,7 @@ jobs:
             for _ in $(seq 50); do [ -e "/tmp/.X11-unix/X$d" ] && break; sleep 0.1; done
           done
           DISPLAY=:90 OLV_FIREFOX_DISPLAYS=:90,:91 \
-            ./node_modules/.bin/playwright test --project=firefox --workers=2
+            ./node_modules/.bin/playwright test --project=firefox --project=firefox-solo --workers=2
       - name: The suite ran a non-zero number of tests
         shell: bash
         run: node scripts/assert-playwright-ran.mjs playwright-results/results.json

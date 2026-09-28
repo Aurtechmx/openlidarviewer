@@ -61,6 +61,48 @@ const FIREFOX_DISPLAY = FIREFOX_DISPLAYS.length
  */
 const NOT_BLOCKING = /firefoxWebglPreflight|streamingNavPerf/;
 
+/**
+ * Firefox tests that run alone, after the rest of the Firefox suite. The
+ * streaming terrain test runs up to four whole-scan terrain analyses on a
+ * software renderer and takes about seven minutes on a CI runner. With two
+ * workers, whatever shares the runner with it is starved: the terrain run in
+ * terrainAccessLab's blank-profile test then missed its 20 s readiness window,
+ * and the streaming test itself took 7.1 min against 2.6 min alone. The
+ * `firefox-solo` project runs these once `firefox` is done, one at a time.
+ */
+const FIREFOX_SOLO = /the terrain analysis is resident-only until every node is resident/;
+
+/** The `firefox` browser settings, shared with `firefox-solo`. */
+const FIREFOX_USE = {
+  ...devices['Desktop Firefox'],
+  // Firefox's HEADLESS widget on Linux has no GL compositor, so
+  // `canvas.getContext('webgl2')` returns null no matter how much of
+  // Mesa is installed. That single fact caused every one of the 111
+  // failures this leg reported: the viewer logs "GPU backend
+  // initialisation failed. Neither WebGPU nor WebGL 2 produced a
+  // usable context", the smoke specs trip their no-console-error
+  // assertion, and everything that loads a scan waits for a frame
+  // that never arrives.
+  //
+  // Measured on ubuntu 24.04 with a full Mesa stack present:
+  //   headless, default prefs .................. webgl2 = null
+  //   headless + webgl.force-enabled ........... webgl2 = null
+  //   headless + LIBGL_ALWAYS_SOFTWARE=1 ....... webgl2 = null
+  //   HEADFUL under Xvfb, default prefs ........ webgl2 = llvmpipe ✓
+  // No pref makes headless work, and no pref is needed once it is
+  // headful — so the fix is the window, not the configuration. Adding
+  // Mesa packages on their own does nothing either; that was measured
+  // too, and headless stayed null with the full stack installed.
+  //
+  // Only Linux is switched: macOS and Windows produce a context in
+  // headless mode already, and going headful there would just pop a
+  // real window open on a developer's desktop for every test. CI
+  // wraps this leg in `xvfb-run` (see .github/workflows/ci.yml),
+  // which is what supplies the display.
+  headless: process.platform !== 'linux',
+  ...(FIREFOX_DISPLAY ? { launchOptions: { env: { ...process.env, DISPLAY: FIREFOX_DISPLAY } } } : {}),
+};
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
@@ -126,37 +168,19 @@ export default defineConfig({
     { name: 'soak', use: { ...devices['Desktop Chrome'] }, grep: /@soak/, testIgnore: /firefoxWebglPreflight/ },
     {
       name: 'firefox',
-      use: {
-        ...devices['Desktop Firefox'],
-        // Firefox's HEADLESS widget on Linux has no GL compositor, so
-        // `canvas.getContext('webgl2')` returns null no matter how much of
-        // Mesa is installed. That single fact caused every one of the 111
-        // failures this leg reported: the viewer logs "GPU backend
-        // initialisation failed. Neither WebGPU nor WebGL 2 produced a
-        // usable context", the smoke specs trip their no-console-error
-        // assertion, and everything that loads a scan waits for a frame
-        // that never arrives.
-        //
-        // Measured on ubuntu 24.04 with a full Mesa stack present:
-        //   headless, default prefs .................. webgl2 = null
-        //   headless + webgl.force-enabled ........... webgl2 = null
-        //   headless + LIBGL_ALWAYS_SOFTWARE=1 ....... webgl2 = null
-        //   HEADFUL under Xvfb, default prefs ........ webgl2 = llvmpipe ✓
-        // No pref makes headless work, and no pref is needed once it is
-        // headful — so the fix is the window, not the configuration. Adding
-        // Mesa packages on their own does nothing either; that was measured
-        // too, and headless stayed null with the full stack installed.
-        //
-        // Only Linux is switched: macOS and Windows produce a context in
-        // headless mode already, and going headful there would just pop a
-        // real window open on a developer's desktop for every test. CI
-        // wraps this leg in `xvfb-run` (see .github/workflows/ci.yml),
-        // which is what supplies the display.
-        headless: process.platform !== 'linux',
-        ...(FIREFOX_DISPLAY ? { launchOptions: { env: { ...process.env, DISPLAY: FIREFOX_DISPLAY } } } : {}),
-      },
+      use: FIREFOX_USE,
+      grepInvert: [/@gpu|@bench|@soak/, FIREFOX_SOLO],
+      testIgnore: NOT_BLOCKING,
+    },
+    // FIREFOX_SOLO, on the same browser settings, started only after `firefox`
+    // has finished. CI names both projects; the tests run one at a time.
+    {
+      name: 'firefox-solo',
+      use: FIREFOX_USE,
+      grep: FIREFOX_SOLO,
       grepInvert: /@gpu|@bench|@soak/,
       testIgnore: NOT_BLOCKING,
+      dependencies: ['firefox'],
     },
     { name: 'webkit', use: { ...devices['Desktop Safari'] }, grepInvert: /@gpu|@bench|@soak/, testIgnore: NOT_BLOCKING },
     // iPhone WebKit: the same engine family as Mobile Safari, with a phone
