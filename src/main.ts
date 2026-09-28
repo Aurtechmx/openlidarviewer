@@ -4293,7 +4293,7 @@ function showProjectCard(cloud: PointCloud, totalCount: number): void {
   });
   projectCard.show({
     name: cloud.name,
-    format: cloud.sourceFormat,
+    format: cloud.sourceFormat, interpretationLevel: cloud.metadata?.interpretationLevel,
     shownCount: cloud.pointCount,
     totalCount,
     ...describeProjectSize(b.min, b.max, { upAxis: c.upAxis, linearUnitKnown: c.linearUnitKnown, linearUnitToMetres: c.linearUnitToMetres, verticalUnitToMetres: verticalMetresPerUnit(c, 'horizontal') ?? undefined }),

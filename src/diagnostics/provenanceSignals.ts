@@ -55,6 +55,8 @@ export interface StaticCloudShape {
   readonly metadata?: {
     readonly captureSensor?: string;
     readonly sourceSoftware?: string;
+    /** The level the content probe chose the format at, when it chose it. */
+    readonly interpretationLevel?: string;
     /** Horizontal CRS unit → metres, for converting raw-unit extent/density. */
     readonly crs?: { readonly linearUnitToMetres?: number };
     /**
@@ -273,6 +275,7 @@ export function signalsForStaticCloud(
     softwareString: cloud.metadata?.sourceSoftware,
     declaredCapture: cloud.metadata?.declaredCapture,
     declaredGroundInstrument: declaredGroundInstrument(cloud),
+    interpretationLevel: cloud.metadata?.interpretationLevel,
   };
 }
 

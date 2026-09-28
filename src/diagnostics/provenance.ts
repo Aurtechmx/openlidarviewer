@@ -89,6 +89,11 @@ export interface ScanSignals {
   readonly sourceFormat: string;
   /** Total point count (source-declared). */
   readonly pointCount: number;
+  /**
+   * The level the content probe chose the source format at, when the format
+   * was read from the content rather than recognised. Stated, never weighed.
+   */
+  readonly interpretationLevel?: string;
   /** Bounding box extent in metres — [width, depth, height]. May be unknown. */
   readonly extent?: readonly [number, number, number];
   /** Inferred point density in points per square metre, if computable. */
@@ -190,10 +195,16 @@ export function classify(signals: ScanSignals): ProvenanceFingerprint {
   //    statement in the source metadata, the verdict quotes it verbatim and
   //    the heuristic guess is demoted to a secondary, low-confidence signal
   //    line — never asserted as the primary capture type.
-  if (signals.declaredCapture) {
-    return declaredFingerprint(signals.declaredCapture, heuristic);
-  }
-  return heuristic;
+  const verdict = signals.declaredCapture ? declaredFingerprint(signals.declaredCapture, heuristic) : heuristic;
+  return signals.interpretationLevel
+    ? {
+        ...verdict,
+        signals: [
+          ...verdict.signals,
+          `Format ${signals.sourceFormat.toUpperCase()} read from the file content, interpretation level ${signals.interpretationLevel}`,
+        ],
+      }
+    : verdict;
 }
 
 /** Airborne capture types the ground guards rule out. */

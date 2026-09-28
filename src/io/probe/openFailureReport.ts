@@ -107,6 +107,7 @@ const BOUND_TEXT: Record<ProbeBound, string> = {
   'max-bytes': 'Only the first 1 MiB was examined; the probe reads no further than that.',
   'time-cap': 'The probe stopped at its time limit, so only the start of the file was examined.',
   'read-failed': 'The browser could not read more of the file, so only the start of it was examined.',
+  'worker-failed': 'The background format check could not start, so only the start of the file was examined.',
 };
 
 function article(word: string): string {

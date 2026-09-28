@@ -38,6 +38,11 @@ export function announceProjectReady(name: string, shownCount: number, totalCoun
 export interface ProjectInfo {
   name: string;
   format: string;
+  /**
+   * The level the content probe chose the format at, when it chose it. At
+   * PROBABLE the card adds a one-line notice to check the columns and units.
+   */
+  interpretationLevel?: string;
   /** Points shown after downsampling. */
   shownCount: number;
   /** Points decoded from the file (before downsampling). */
@@ -131,6 +136,10 @@ export class ProjectCard {
       ? formatCount(info.totalCount)
       : `${formatCount(info.shownCount)} / ${formatCount(info.totalCount)}`;
 
+    const notice = info.interpretationLevel === 'PROBABLE'
+      ? `Opened as ${info.format.toUpperCase()} text from its content. Check the columns and units.`
+      : null;
+
     const dismiss = el('button', {
       className: 'olv-pc-dismiss',
       text: '×',
@@ -145,6 +154,7 @@ export class ProjectCard {
         dismiss,
       ]),
       el('div', { className: 'olv-pc-name', text: info.name }),
+      ...(notice ? [el('div', { className: 'olv-pc-notice olv-stats-note', text: notice })] : []),
       el('div', { className: 'olv-pc-grid' }, [
         row('Format', info.format.toUpperCase()),
         row('Points', points),
@@ -161,7 +171,8 @@ export class ProjectCard {
     // in a few seconds — a screen-reader user gets one chance to hear it, so
     // announce it through the app's shared live region (see politeAnnounce.ts)
     // rather than minting a second one on the card root.
-    const message = projectReadyMessage(info.name, info.shownCount, info.totalCount);
+    const message = projectReadyMessage(info.name, info.shownCount, info.totalCount)
+      + (notice ? ` ${notice}` : '');
     if (message !== preAnnounced) announce(message);
     preAnnounced = null;
     if (this._timer !== null) clearTimeout(this._timer);

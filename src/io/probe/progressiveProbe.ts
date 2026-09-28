@@ -28,7 +28,7 @@ export const PROBE_WINDOWS = [16 * 1024, 64 * 1024, 256 * 1024, MAX_PROBE_BYTES]
 export type HeadReader = (length: number) => Promise<Uint8Array>;
 
 /** Why a probe stopped without a decision, when a bound was the reason. */
-export type ProbeBound = 'max-bytes' | 'time-cap' | 'read-failed';
+export type ProbeBound = 'max-bytes' | 'time-cap' | 'read-failed' | 'worker-failed';
 
 export interface ProgressiveProbeResult {
   readonly decision: ProbeDecision;

@@ -4,7 +4,8 @@
  * "Open any point cloud", phase A, end to end: a dropped file is identified by
  * its content, not its name. A LAS renamed to .bin opens as LAS; random bytes
  * get the open failure report with a Copy report control; a PNG is named as an
- * image, not a point cloud.
+ * image, not a point cloud; an extension-less XYZ text file opens at PROBABLE
+ * with a notice, and the Inspector's Provenance section states the level.
  */
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
@@ -108,4 +109,19 @@ test('a failed open leaves the loaded project untouched', async ({ page }) => {
 
   await expect(page.locator('.olv-empty')).toBeHidden();
   expect(await points()).toBe(before);
+});
+
+test('an extension-less XYZ text file opens with the PROBABLE notice and level', async ({ page }) => {
+  const rows = Array.from({ length: 40 }, (_, i) => `${(i % 8) * 1.5} ${Math.floor(i / 8) * 2.25} ${(i % 5) * 0.4}`);
+  const text = rows.join('\n') + '\n';
+  await drop(page, [...new TextEncoder().encode(text)], 'points');
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 30_000 });
+  await expect(page.locator('.olv-toast-error')).toHaveCount(0);
+  await expect(page.locator('.olv-pc-notice')).toHaveText(
+    'Opened as XYZ text from its content. Check the columns and units.',
+    { timeout: 10_000 },
+  );
+  await page.locator('summary', { hasText: 'Provenance' }).click();
+  await expect(page.locator('.olv-provenance .olv-prov-signal').filter({ hasText: 'interpretation level PROBABLE' }))
+    .toBeVisible({ timeout: 10_000 });
 });
