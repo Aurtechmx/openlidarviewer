@@ -18,7 +18,7 @@ export const HEADER_CONTROLS = 'header.olv-topbar a, header.olv-topbar button';
  * Thresholds, one set for both specs.
  *
  * FONT_SHIFT_MAX_PX: the header's text links and badge have fixed boxes
- * (src/styles/20-topbar.css), so which face paints them (Manrope, "Manrope
+ * (src/styles/20-topbar.css), so which face paints them (Olv Font, "Olv Font
  * Fallback", or the platform sans-serif Firefox paints before it resolves a
  * local() face) cannot move a control. Half a pixel absorbs layout rounding.
  *

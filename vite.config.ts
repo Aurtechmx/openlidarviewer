@@ -311,16 +311,15 @@ function swPrecacheManifest() {
 }
 
 /**
- * Preload Manrope 400/500 (the header and empty-state weights) so the first
- * paint is already in Manrope and the header does not shift on the swap.
+ * Preload Olv Font 400/500 (the header and empty-state weights) so the first
+ * paint is already in Olv Font and the header does not shift on the swap.
  *
- * The preload must name the exact file the @fontsource CSS loads, or the font
+ * The preload must name the exact file the @font-face rule loads, or the font
  * downloads twice. In a build that is the content-hashed asset Vite emitted
- * for the CSS url(), found in the bundle; in dev it is the node_modules path
- * the dev server serves the CSS url() from. Source index.html names neither,
- * so it references nothing that a source archive without node_modules lacks.
+ * for the CSS url(), found in the bundle; in dev it is the source path the
+ * dev server serves the CSS url() from.
  */
-const PRELOAD_FONTS = ['manrope-latin-400-normal', 'manrope-latin-500-normal'];
+const PRELOAD_FONTS = ['OlvFont-Regular-Latin', 'OlvFont-Medium-Latin'];
 
 function fontPreload() {
   const tag = (href: string) => ({
@@ -334,7 +333,7 @@ function fontPreload() {
       order: 'post' as const,
       handler(_html: string, ctx: { bundle?: Record<string, { fileName: string }> }) {
         if (!ctx.bundle) {
-          return PRELOAD_FONTS.map((n) => tag(`/node_modules/@fontsource/manrope/files/${n}.woff2`));
+          return PRELOAD_FONTS.map((n) => tag(`/src/fonts/olv-font/${n}.woff2`));
         }
         const files = Object.values(ctx.bundle).map((o) => o.fileName);
         return PRELOAD_FONTS.map((n) => {

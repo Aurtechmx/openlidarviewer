@@ -69,12 +69,12 @@ describe('importSpecifiers', () => {
   it('finds static, side-effect, re-export, dynamic and require forms', () => {
     const src = [
       "import { A } from 'three';",
-      "import '@fontsource/manrope/latin-400.css';",
+      "import '@fontsource/jetbrains-mono/latin-400.css';",
       "export { B } from './b';",
       "const m = await import('proj4');",
       "const p = require('pdf-lib');",
     ].join('\n');
-    expect(importSpecifiers(src)).toEqual(['three', '@fontsource/manrope/latin-400.css', './b', 'proj4', 'pdf-lib']);
+    expect(importSpecifiers(src)).toEqual(['three', '@fontsource/jetbrains-mono/latin-400.css', './b', 'proj4', 'pdf-lib']);
   });
 
   it('does not mistake prose for an import', () => {

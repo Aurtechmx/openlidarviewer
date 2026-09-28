@@ -1,7 +1,7 @@
 {
   "name": "OpenLiDARViewer",
   "short_name": "OpenLiDAR",
-  "description": "Open any 3D scan — drone LiDAR or phone scan — instantly and privately, in a browser tab.",
+  "description": "Local-first browser-based point-cloud exploration",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

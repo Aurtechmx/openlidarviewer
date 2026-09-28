@@ -1,8 +1,4 @@
-// Self-hosted type pairing — Manrope (grotesk labels) + JetBrains Mono (tabular
-// figures). Latin subsets only, served same-origin so nothing leaves the device.
-import '@fontsource/manrope/latin-400.css';
-import '@fontsource/manrope/latin-500.css';
-import '@fontsource/manrope/latin-600.css';
+// Self-hosted type: Olv Font (@font-face in styles/01-tokens.css) + JetBrains Mono.
 import '@fontsource/jetbrains-mono/latin-400.css';
 import '@fontsource/jetbrains-mono/latin-500.css';
 import './styles';

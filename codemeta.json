@@ -85,18 +85,6 @@
     },
     {
       "@type": "SoftwareApplication",
-      "identifier": "@fontsource/manrope",
-      "name": "@fontsource/manrope",
-      "version": "^5.3.0",
-      "provider": {
-        "@type": "Organization",
-        "name": "npm",
-        "url": "https://www.npmjs.com"
-      },
-      "downloadUrl": "https://www.npmjs.com/package/@fontsource/manrope"
-    },
-    {
-      "@type": "SoftwareApplication",
       "identifier": "@loaders.gl/core",
       "name": "@loaders.gl/core",
       "version": "^4.5.2",

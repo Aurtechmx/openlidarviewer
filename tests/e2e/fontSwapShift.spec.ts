@@ -8,11 +8,11 @@ import {
 } from './headerBoxes';
 
 /**
- * The Manrope swap does not move the header.
+ * The Olv Font swap does not move the header.
  *
- * Manrope is served `font-display: swap`. The build preloads the 400/500
- * weights, a metric-matched "Manrope Fallback" face (src/styles/01-tokens.css)
- * keeps text close to Manrope when a first paint beats the font, and the
+ * Olv Font is served `font-display: swap`. The build preloads the 400/500
+ * weights, a metric-matched "Olv Font Fallback" face (src/styles/01-tokens.css)
+ * keeps text close to Olv Font when a first paint beats the font, and the
  * header's text links and badge have fixed boxes, so none of those faces can
  * move a control. headerLayoutShift.spec.ts covers the third case, fonts that
  * never arrive, with the same measurement (./headerBoxes.ts).
@@ -23,8 +23,8 @@ import {
  * measured without them, then releases them: fonts slower than first paint.
  */
 
-const manropeLoaded = (): boolean =>
-  Array.from(document.fonts).some((f) => f.family.replace(/"/g, '') === 'Manrope' && f.status === 'loaded');
+const olvFontLoaded = (): boolean =>
+  Array.from(document.fonts).some((f) => f.family.replace(/"/g, '') === 'Olv Font' && f.status === 'loaded');
 
 type Frame = { fontLoaded: boolean; boxes: HeaderBoxes };
 
@@ -39,7 +39,7 @@ test('header links do not move while the page and its fonts load', async ({ page
       if (Object.keys(boxes).length > 0) {
         frames.push({
           fontLoaded: Array.from(document.fonts).some(
-            (f) => f.family.replace(/"/g, '') === 'Manrope' && f.status === 'loaded',
+            (f) => f.family.replace(/"/g, '') === 'Olv Font' && f.status === 'loaded',
           ),
           boxes,
         });
@@ -51,7 +51,7 @@ test('header links do not move while the page and its fonts load', async ({ page
 
   await page.goto('/');
   await expect(page.locator('.olv-empty')).toBeVisible();
-  await page.waitForFunction(manropeLoaded, undefined, { timeout: 15_000 });
+  await page.waitForFunction(olvFontLoaded, undefined, { timeout: 15_000 });
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(500);
 
@@ -85,7 +85,7 @@ test('header links do not move when fonts arrive late', async ({ page }) => {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('header.olv-topbar')).toBeVisible();
   await expect(page.locator('.olv-empty')).toBeVisible();
-  expect(await page.evaluate(manropeLoaded)).toBe(false);
+  expect(await page.evaluate(olvFontLoaded)).toBe(false);
   // The Speed/Quality control mounts into its slot after the viewer loads,
   // independent of fonts; wait for it so both measurements see the same set.
   await expect(page.getByRole('button', { name: 'Performance settings' })).toBeVisible({ timeout: 15_000 });
@@ -94,7 +94,7 @@ test('header links do not move when fonts arrive late', async ({ page }) => {
 
   release = true;
   for (const go of held.splice(0)) await go();
-  await page.waitForFunction(manropeLoaded, undefined, { timeout: 15_000 });
+  await page.waitForFunction(olvFontLoaded, undefined, { timeout: 15_000 });
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(300);
   const after = await measureHeader(page);

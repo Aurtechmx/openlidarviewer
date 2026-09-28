@@ -288,6 +288,6 @@
   border-radius: var(--radius-md); padding: var(--space-md) var(--space-lg);
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
 }
-.olv-probe-coords { font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--text); }
+.olv-probe-coords { font-size: var(--text-xs); font-variant-numeric: tabular-nums slashed-zero; color: var(--text); }
 .olv-probe-attr { font-size: var(--text-2xs); color: var(--text-dim); margin-top: var(--space-xs); }
 

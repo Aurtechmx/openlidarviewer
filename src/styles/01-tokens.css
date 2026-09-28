@@ -1,27 +1,42 @@
 /*
- * Metric-matched fallback for Manrope, for a first paint that beats the font
- * (index.html preloads 400/500, so normally none does). The overrides give the
- * local face Manrope's vertical box (hhea 2132/600 per 2000 upm, divided by
- * size-adjust), so a swap never changes line boxes, and Manrope's advance
- * widths as closely as one scale factor per weight allows against Arial over
- * the header strings (per-string ratios differ, so widths stay within ~1.5px
- * rather than exact). Liberation Sans is metric-compatible with Arial.
- * Measured by tests/e2e/fontSwapShift.spec.ts.
+ * Olv Font, the interface face (SIL OFL 1.1, a Poppins derivative; licence in
+ * src/fonts/olv-font/OFL.txt and THIRD_PARTY_NOTICES.md). Latin subsets,
+ * served same-origin; index.html preloads 400/500.
  */
 @font-face {
-  font-family: "Manrope Fallback"; font-weight: 400;
-  src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("LiberationSans");
-  size-adjust: 103.5%; ascent-override: 103%; descent-override: 28.99%; line-gap-override: 0%;
+  font-family: "Olv Font"; font-weight: 400; font-style: normal; font-display: swap;
+  src: url("../fonts/olv-font/OlvFont-Regular-Latin.woff2") format("woff2");
 }
 @font-face {
-  font-family: "Manrope Fallback"; font-weight: 500;
-  src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("LiberationSans");
-  size-adjust: 103.28%; ascent-override: 103.22%; descent-override: 29.05%; line-gap-override: 0%;
+  font-family: "Olv Font"; font-weight: 500; font-style: normal; font-display: swap;
+  src: url("../fonts/olv-font/OlvFont-Medium-Latin.woff2") format("woff2");
 }
 @font-face {
-  font-family: "Manrope Fallback"; font-weight: 600;
+  font-family: "Olv Font"; font-weight: 600; font-style: normal; font-display: swap;
+  src: url("../fonts/olv-font/OlvFont-SemiBold-Latin.woff2") format("woff2");
+}
+/*
+ * Metric-matched fallback for Olv Font, for a first paint that beats the font.
+ * The overrides give the local face Olv Font's vertical box (hhea 1050/350/100
+ * per 1000 upm, divided by size-adjust), so a swap never changes line boxes,
+ * and size-adjust is the ratio of Olv Font's advance widths to Arial's over
+ * the header strings, per weight (Arial Bold for 600). Liberation Sans is
+ * metric-compatible with Arial. Measured by tests/e2e/fontSwapShift.spec.ts.
+ */
+@font-face {
+  font-family: "Olv Font Fallback"; font-weight: 400;
   src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("LiberationSans");
-  size-adjust: 103.69%; ascent-override: 102.81%; descent-override: 28.93%; line-gap-override: 0%;
+  size-adjust: 105.4%; ascent-override: 99.62%; descent-override: 33.21%; line-gap-override: 9.49%;
+}
+@font-face {
+  font-family: "Olv Font Fallback"; font-weight: 500;
+  src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("LiberationSans");
+  size-adjust: 106.48%; ascent-override: 98.61%; descent-override: 32.87%; line-gap-override: 9.39%;
+}
+@font-face {
+  font-family: "Olv Font Fallback"; font-weight: 600;
+  src: local("Arial Bold"), local("Arial-BoldMT"), local("Liberation Sans Bold"), local("LiberationSans-Bold");
+  size-adjust: 101.02%; ascent-override: 103.94%; descent-override: 34.65%; line-gap-override: 9.9%;
 }
 :root {
   color-scheme: dark;
@@ -73,7 +88,7 @@
   --teal: #00d4c8;        /* Teal */
   --ice: #c9f6ff;         /* Ice Blue */
   --brand-gradient: linear-gradient(90deg, #00b2ff 0%, #00f0ff 52%, #00d4c8 100%);
-  --font: "Manrope", "Manrope Fallback", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font: "Olv Font", "Olv Font Fallback", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   /*
    * Spacing scale — a 2px base stepping up to a 4px rhythm. Every padding,

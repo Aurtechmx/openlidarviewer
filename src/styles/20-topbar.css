@@ -21,9 +21,17 @@
 .olv-topbar-popover-open { z-index: var(--z-popover); }
 .olv-topbar > * { pointer-events: auto; }
 .olv-wordmark { display: flex; align-items: center; gap: var(--space-md); font-size: var(--text-lg); font-weight: 500; }
-/* The official brand mark (public/brand-mark.svg, via <img>) beside the
- * top-bar text wordmark. */
+/* The brand emblem (public/brand-mark.svg, via <img>) beside the top-bar
+ * wordmark, set in Olv Font Medium with the brand tracking. */
 .olv-wordmark-mark { display: block; width: 28px; height: 28px; flex: none; }
+.olv-wordmark-text { letter-spacing: -0.02em; font-kerning: normal; }
+/* Light theme: the light-background lockup. The <img> keeps its box and the
+ * deeper-blue emblem paints as its background in place of the default one. */
+body.olv-theme-light .olv-wordmark-mark,
+body.olv-theme-light .olv-empty-hero-mark {
+  object-position: -9999px 0;
+  background: url("/brand-mark-light.svg") center / contain no-repeat;
+}
 .olv-topbar-right { display: flex; align-items: center; gap: var(--space-lg); }
 /*
  * v0.4.6 trust signal (design audit 2.4). "Private · on your device"
@@ -41,7 +49,7 @@
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   border: 0.5px solid color-mix(in srgb, var(--accent) 38%, transparent);
   border-radius: var(--radius-pill); padding: 0 var(--space-lg);
-  /* A fixed block size: the line box differs between Manrope, its fallback
+  /* A fixed block size: the line box differs between Olv Font, its fallback
      face and whatever the browser paints before either is ready. */
   height: 30px;
   white-space: nowrap;
@@ -79,7 +87,7 @@
   border: none;
   border-radius: var(--radius-sm); padding: 0 var(--space-md);
   /* Fixed boxes, so no font decides where the header's controls sit. The
-     first frame can paint in Manrope, in "Manrope Fallback" or (Firefox
+     first frame can paint in Olv Font, in "Olv Font Fallback" or (Firefox
      resolves local() faces lazily) in the platform sans-serif, and each
      sets different line boxes and advance widths. Each link's width holds
      its word in any of those with room to spare; the text centres in it. */

@@ -255,7 +255,7 @@ describe('sw.js — asset cache stores ONLY content-hashed app bundles, never da
     '/assets/index-DaDnDjF_.css',
     '/assets/three.core-BR74sD8Y.js',
     '/assets/vendor-three-webgpu-BI7fE5Nu.js',
-    '/assets/manrope-latin-400-normal-8tf8FM3T.woff2',
+    '/assets/OlvFont-Regular-Latin-8tf8FM3T.woff2',
     '/assets/jetbrains-mono-latin-400-normal-6-qcROiO.woff',
   ];
   // Datasets a self-hoster might place anywhere — must NEVER be cached, even
