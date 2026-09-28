@@ -1,4 +1,5 @@
 import { el } from './dom';
+import { createBusyScanController, type BusyScanController } from './busyScan';
 import { clamp01 } from '../numeric';
 
 /**
@@ -40,10 +41,15 @@ export class DropZone {
   /** Fired once, on the first drag over the drop target, to warm lazy loaders. */
   private _onDragIntent?: () => void;
   private _dragIntentFired = false;
+  /** The busy scan in the toast; its trail carries the load's progress. */
+  private readonly _scan: BusyScanController;
+  /** Bumped by every state change, so a finishing settle knows it was superseded. */
+  private _token = 0;
 
   constructor(target: HTMLElement, onFile: (file: File) => void | Promise<void>, onDragIntent?: () => void) {
     this._onDragIntent = onDragIntent;
     this._text = el('span', { className: 'olv-toast-text' });
+    this._scan = createBusyScanController();
 
     this._cancel = el('button', {
       className: 'olv-toast-cancel',
@@ -75,7 +81,13 @@ export class DropZone {
     this._bar = el('div', { className: 'olv-toast-bar olv-hidden' }, [this._barFill]);
 
     const row = el('div', { className: 'olv-toast-row' }, [
-      el('span', { className: 'olv-toast-dot' }),
+      // One fixed-width slot holds the status dot and the busy scan. While a
+      // load runs the scan shows; on error or idle the dot shows. The slot
+      // keeps its width either way, so the text never moves.
+      el('span', { className: 'olv-toast-mark' }, [
+        el('span', { className: 'olv-toast-dot' }),
+        this._scan.element as unknown as HTMLElement,
+      ]),
       this._text,
       this._cancel,
       this._copy,
@@ -161,8 +173,11 @@ export class DropZone {
    */
   setOpening(text: string): void {
     this._clearHideTimer();
+    this._token++;
+    // A new load starts from the short trail.
+    this._scan.reset();
     this.toast.classList.remove('olv-toast-error');
-    this.toast.classList.add('is-opening');
+    this.toast.classList.add('is-opening', 'is-busy');
     this._bar.classList.add('olv-hidden');
     this._text.textContent = text;
     this._srStatus.textContent = text;
@@ -176,9 +191,12 @@ export class DropZone {
    */
   setProgress(text: string | null, fraction?: number): void {
     this._clearHideTimer();
+    this._token++;
     // Staged progress supersedes the blue "Opening …" pulse.
     this.toast.classList.remove('is-opening');
     if (text === null) {
+      this.toast.classList.remove('is-busy');
+      this._scan.reset();
       this.toast.classList.add('olv-hidden');
       this._bar.classList.add('olv-hidden');
       // Empty both live regions on hide so a re-shown toast re-announces
@@ -188,10 +206,13 @@ export class DropZone {
       return;
     }
     this.toast.classList.remove('olv-toast-error');
+    this.toast.classList.add('is-busy');
     this._text.textContent = text;
     this._srStatus.textContent = text;
     this._srAlert.textContent = '';
     this.toast.classList.remove('olv-hidden');
+    // The trail grows with the bar; a stage without a fraction leaves it.
+    if (fraction !== undefined) this._scan.setProgress(fraction);
     if (fraction === undefined) {
       this._bar.classList.add('olv-hidden');
     } else {
@@ -199,6 +220,31 @@ export class DropZone {
       this._barFill.style.width = `${pct}%`;
       this._bar.classList.remove('olv-hidden');
     }
+  }
+
+  /**
+   * End a load that succeeded: the trail closes to full, the point comes to
+   * rest at the front, the trail fades, then the toast hides. A failure or a
+   * cancel hides at once instead (`setError`, `setProgress(null)`). Any other
+   * state change during the settle wins and the late hide is dropped.
+   *
+   * Resolves once the toast has left the top-centre lane: `true` when this
+   * settle hid it, `false` when a later state change took the toast over.
+   */
+  finish(): Promise<boolean> {
+    if (this.toast.classList.contains('olv-hidden') || !this.toast.classList.contains('is-busy')) {
+      this.setProgress(null);
+      return Promise.resolve(true);
+    }
+    this._clearHideTimer();
+    const token = ++this._token;
+    this._onCancel = null;
+    this._cancel.classList.add('olv-hidden');
+    return this._scan.complete().then(() => {
+      if (token !== this._token) return false;
+      this.setProgress(null);
+      return true;
+    });
   }
 
   /**
@@ -212,6 +258,7 @@ export class DropZone {
       return;
     }
     this.toast.classList.remove('olv-toast-error', 'is-opening');
+    this.toast.classList.add('is-busy');
     const text = lines.join('\n');
     this._text.textContent = text;
     this._srStatus.textContent = text;
@@ -235,6 +282,8 @@ export class DropZone {
    */
   setError(text: string, report?: string): void {
     this._clearHideTimer();
+    this._token++;
+    this._scan.reset();
     if (report) {
       this._report = report;
       this._copy.textContent = 'Copy report';
@@ -243,7 +292,7 @@ export class DropZone {
     this._onCancel = null;
     this._cancel.classList.add('olv-hidden');
     this._bar.classList.add('olv-hidden');
-    this.toast.classList.remove('is-opening');
+    this.toast.classList.remove('is-opening', 'is-busy');
     this.toast.classList.add('olv-toast-error');
     this._text.textContent = text;
     // The alert node announces immediately (role=alert is implicitly

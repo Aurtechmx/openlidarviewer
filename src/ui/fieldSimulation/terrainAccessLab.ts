@@ -31,6 +31,7 @@
  * "safe", "drivable" or "passable" — see `renderTerrainAccessRunCard`.
  */
 
+import { showBusyScan } from '../busyScan';
 import { el } from '../dom';
 import { openModal, type ModalHandle } from '../Modal';
 import {
@@ -621,7 +622,7 @@ function mountTerrainAccessInteractive(input: TerrainAccessLabInput | null): { e
     const label = exportButton.textContent ?? 'Export package (ZIP)';
     exportBusy = true;
     exportButton.disabled = true;
-    exportButton.textContent = 'Building…';
+    showBusyScan(exportButton, 'Building…');
     try {
       const { buildTerrainAccessPackage } = await loadTerrainAccessPackage();
       const built = buildTerrainAccessExport(

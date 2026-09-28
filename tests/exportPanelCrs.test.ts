@@ -38,6 +38,7 @@ vi.mock('../src/lazyChunks', async (orig) => ({
 beforeAll(() => {
   (globalThis as unknown as { document: unknown }).document = {
     createElement: (tag: string) => new FakeEl(tag),
+    createElementNS: (_ns: string, tag: string) => new FakeEl(tag),
   };
   // `dom.el()` guards its href/type assignment with `instanceof` checks against
   // these globals; define them so the bare `instanceof` doesn't ReferenceError

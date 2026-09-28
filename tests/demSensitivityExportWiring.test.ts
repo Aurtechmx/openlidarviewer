@@ -110,6 +110,22 @@ describe('DEM export: Include sensitivity', () => {
     expect(hoisted.runs.every((r) => r.crs === 'EPSG:32610' && r.cellSizeM === 1)).toBe(true);
   });
 
+  it('grows the busy scan trail on the button as the members run, then clears it', async () => {
+    const p = await panel();
+    p._demSensitivityCheck.checked = true;
+    const btn = new FakeEl('button');
+    const lengths: number[] = [];
+    hoisted.onRun = () => {
+      const scan = btn.findByClass('olv-busy-scan')[0];
+      lengths.push(Number(scan.style['--olv-bs-len']));
+    };
+    await p._exportDemPackage(btn);
+    expect(lengths).toHaveLength(3);
+    expect(lengths[1]).toBeGreaterThan(lengths[0]);
+    expect(lengths[2]).toBeGreaterThan(lengths[1]);
+    expect(btn.findByClass('olv-busy-scan')).toHaveLength(0);
+  });
+
   it('still exports the rest of the package and says why when the ensemble fails', async () => {
     const p = await panel();
     p._demSensitivityCheck.checked = true;

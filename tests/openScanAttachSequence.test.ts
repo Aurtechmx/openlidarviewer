@@ -383,6 +383,49 @@ describe('a Cancel dispatched inside the attach gap', () => {
   });
 });
 
+describe('the top-centre lane after a load', () => {
+  it('raises the project card only once the load toast has settled away', async () => {
+    const h = harness();
+    let settle!: (done: boolean) => void;
+    const finish = vi.fn(() => new Promise<boolean>((resolve) => { settle = resolve; }));
+    h.deps.dropZone = { ...h.deps.dropZone, finish };
+
+    await openScan(fakeFile(), h.deps);
+
+    expect(finish).toHaveBeenCalledTimes(1);
+    expect(h.deps.showProjectCard).not.toHaveBeenCalled();
+    settle(true);
+    await Promise.resolve();
+    expect(h.deps.showProjectCard).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops the card when a newer load took the toast over during the settle', async () => {
+    const h = harness();
+    h.deps.dropZone = { ...h.deps.dropZone, finish: vi.fn(async () => false) };
+
+    await openScan(fakeFile(), h.deps);
+    await Promise.resolve();
+
+    expect(h.deps.showProjectCard).not.toHaveBeenCalled();
+  });
+
+  it('leaves the lane to a picking tool armed during the settle', async () => {
+    const h = harness();
+    let settle!: (done: boolean) => void;
+    h.deps.dropZone = {
+      ...h.deps.dropZone,
+      finish: vi.fn(() => new Promise<boolean>((resolve) => { settle = resolve; })),
+    };
+
+    await openScan(fakeFile(), h.deps);
+    (h.deps.getViewer() as unknown as { measureMode: boolean }).measureMode = true;
+    settle(true);
+    await Promise.resolve();
+
+    expect(h.deps.showProjectCard).not.toHaveBeenCalled();
+  });
+});
+
 describe('what the completed attach leaves behind', () => {
   it('attaches the cloud, makes it active, and clears saved work on a fresh project', async () => {
     const h = harness();

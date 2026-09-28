@@ -43,6 +43,7 @@ import type { ToolDock } from '../ui/toolDock';
 import type { NavBar } from '../ui/NavBar';
 import type { DebugOverlay } from '../ui/DebugOverlay';
 import type { DropZone } from '../ui/DropZone';
+import { announceProjectReady } from '../ui/ProjectCard';
 import type { Stage } from '../ui/Stage';
 import type { ScanService } from './ScanService';
 import type { LayerService } from './LayerService';
@@ -109,7 +110,7 @@ export interface OpenScanDeps {
   dropZone: Pick<
     DropZone,
     'setOpening' | 'setCancelHandler' | 'setProgress' | 'setPreload' | 'setError'
-  >;
+  > & Partial<Pick<DropZone, 'finish'>>;
   /** Open a local COPC file through the streaming pipeline (wraps the range source + `openStreamingCopc`). */
   openLocalCopc: (file: File, signal: AbortSignal) => Promise<void>;
   /** Load a dropped / opened file through the static loader (wraps `new LocalFileSource(file).load(...)`). */
@@ -313,7 +314,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     }, { head: headSlice });
     if (heavy.status === 'attached') {
       deps.dropZone.setCancelHandler(null);
-      deps.dropZone.setProgress(null);
+      finishLoad(deps);
       return;
     }
     if (heavy.status === 'cancelled') {
@@ -719,8 +720,6 @@ export async function attachStaticCloud(
     if (deps.debug) console.warn('[inspector] syncRendering threw', err);
   }
 
-  if (!deps.bareMode) deps.showProjectCard(result.cloud, result.originalPointCount);
-
   // Reveal the Analyse panel now there's a scan to analyse. v0.4.0.
   deps.revealAnalysePanel(result.cloud.name);
 
@@ -753,5 +752,29 @@ export async function attachStaticCloud(
     void loadLoadDiagnostics().then((m) => m.reportLoadDiagnostics(deps, cloud, telemetry, firstDraw));
   }
   deps.dropZone.setCancelHandler(null);
+  const settled = finishLoad(deps);
+  // The "Project ready" card shares the top-centre lane with the load toast,
+  // so it is raised once the toast has settled away. A newer load that took
+  // the toast over during the settle drops this card, and so does a picking
+  // tool armed meanwhile: arming one hides the card, so that tool keeps the lane.
+  if (!deps.bareMode) {
+    const { cloud, originalPointCount } = result;
+    announceProjectReady(cloud.name, cloud.pointCount, originalPointCount);
+    void settled.then((done) => {
+      const v = deps.getViewer();
+      const armed = v.measureMode || v.inspectMode || v.probeMode || v.annotateMode;
+      if (done && !armed) deps.showProjectCard(cloud, originalPointCount);
+    });
+  }
+}
+
+/**
+ * A load that succeeded: let the toast's busy scan settle before it hides.
+ * Resolves `true` once the toast has left the lane, `false` if a later state
+ * change took it over first.
+ */
+function finishLoad(deps: Pick<OpenScanDeps, 'dropZone'>): Promise<boolean> {
+  if (deps.dropZone.finish) return deps.dropZone.finish();
   deps.dropZone.setProgress(null);
+  return Promise.resolve(true);
 }

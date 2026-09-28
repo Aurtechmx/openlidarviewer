@@ -13,6 +13,27 @@ function announce(message: string): void {
   }
 }
 
+/** The live-region text for a freshly opened scan. */
+function projectReadyMessage(name: string, shownCount: number, totalCount: number): string {
+  const points = shownCount === totalCount
+    ? formatCount(totalCount)
+    : `${formatCount(shownCount)} / ${formatCount(totalCount)}`;
+  return `Project ready: ${name}, ${points} points.`;
+}
+
+/** A summary already announced ahead of its card, consumed by the matching `show`. */
+let preAnnounced: string | null = null;
+
+/**
+ * Announce a scan's summary when it attaches, ahead of its card. The card is
+ * raised later, once the load toast has settled away, and by then a newer
+ * announcement may hold the live region; the card then leaves it alone.
+ */
+export function announceProjectReady(name: string, shownCount: number, totalCount: number): void {
+  preAnnounced = projectReadyMessage(name, shownCount, totalCount);
+  announce(preAnnounced);
+}
+
 /** The facts a freshly-opened scan presents in its summary card. */
 export interface ProjectInfo {
   name: string;
@@ -140,7 +161,9 @@ export class ProjectCard {
     // in a few seconds — a screen-reader user gets one chance to hear it, so
     // announce it through the app's shared live region (see politeAnnounce.ts)
     // rather than minting a second one on the card root.
-    announce(`Project ready: ${info.name}, ${points} points.`);
+    const message = projectReadyMessage(info.name, info.shownCount, info.totalCount);
+    if (message !== preAnnounced) announce(message);
+    preAnnounced = null;
     if (this._timer !== null) clearTimeout(this._timer);
     this._onDismiss = info.onDismiss ?? null;
     this._timer = window.setTimeout(() => this._dismiss(), DISMISS_MS);

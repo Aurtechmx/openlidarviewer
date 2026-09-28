@@ -29,6 +29,7 @@
  * `FlowPulseParams` carries none of it.
  */
 
+import { showBusyScan } from '../busyScan';
 import { el } from '../dom';
 import { openModal, type ModalHandle } from '../Modal';
 import {
@@ -614,7 +615,7 @@ function mountFlowPulseInteractive(
     const exportLabel = exportButton.textContent ?? 'Export package (ZIP)';
     exportBusy = true;
     exportButton.disabled = true;
-    exportButton.textContent = 'Building…';
+    showBusyScan(exportButton, 'Building…');
     try {
       const { buildFlowPulsePackage } = await loadFlowPulsePackage();
       const built = buildFlowPulseExport(
@@ -708,7 +709,9 @@ function mountFlowPulseInteractive(
     conditioning = next;
     conditioningCtl.sync();
     busy = true;
-    body.replaceChildren(el('div', { className: 'olv-flow-busy', text: 'Running Flow Pulse…' }));
+    const busyLine = el('div', { className: 'olv-flow-busy' });
+    showBusyScan(busyLine, 'Running Flow Pulse…');
+    body.replaceChildren(busyLine);
     announce('Running Flow Pulse…');
     // One frame so the busy state actually paints before the (synchronous)
     // run computes — matters most on the largest grids this feature allows.

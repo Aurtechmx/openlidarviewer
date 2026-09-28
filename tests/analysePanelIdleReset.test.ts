@@ -20,7 +20,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { FakeEl, installAnalysePanelDom } from './helpers/analysePanelDom';
 
 beforeAll(() => {
-  installAnalysePanelDom({});
+  installAnalysePanelDom({ ns: true });
 });
 
 /** The panel plus handles on the two elements these tests are about. */
@@ -45,7 +45,7 @@ describe('the Analyse panel returns to rest when its result is cleared', () => {
   it('puts the prompt back after a busy run is cleared', async () => {
     const { panel, status } = await freshPanel();
     panel.setBusy(true);
-    expect(status.ownText).toBe('Analysing…');
+    expect(status.textContent).toBe('Analysing…');
 
     panel.update(null);
     // The pre-fix panel showed the status again without rewriting it, so this

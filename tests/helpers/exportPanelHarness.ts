@@ -41,15 +41,27 @@ export class FakeEl {
   };
   readonly tagName: string;
   constructor(tagName: string) { this.tagName = tagName.toUpperCase(); }
-  set textContent(v: string) { this._text = v; }
+  set textContent(v: string) { this._text = v; this.children.length = 0; }
   get textContent(): string {
     return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
   }
   set innerHTML(_v: string) { /* icons only */ }
   setAttribute(k: string, v: string): void { this.attrs[k] = v; }
   removeAttribute(k: string): void { delete this.attrs[k]; }
-  append(...kids: FakeEl[]): void { this.children.push(...kids.filter(Boolean)); }
-  replaceChildren(...kids: FakeEl[]): void { this.children.length = 0; this.children.push(...kids); }
+  append(...kids: (FakeEl | string)[]): void {
+    for (const k of kids) if (k) this.children.push(typeof k === 'string' ? FakeEl.text(k) : k);
+  }
+  replaceChildren(...kids: (FakeEl | string)[]): void {
+    this._text = '';
+    this.children.length = 0;
+    this.append(...kids);
+  }
+  /** A text node: a childless '#text' carrying only its own text. */
+  static text(v: string): FakeEl {
+    const t = new FakeEl('#text');
+    t._text = v;
+    return t;
+  }
   addEventListener(type: string, fn: () => void): void {
     (this._listeners[type] ??= []).push(fn);
   }
@@ -72,6 +84,7 @@ export class FakeEl {
 export function installFakeDom(): void {
   (globalThis as unknown as { document: unknown }).document = {
     createElement: (tag: string) => new FakeEl(tag),
+    createElementNS: (_ns: string, tag: string) => new FakeEl(tag),
   };
   const g = globalThis as unknown as Record<string, unknown>;
   g.HTMLInputElement = class {};
