@@ -90,17 +90,18 @@ the two entries were renumbered when the branches were integrated.
 | L182 | LOADER | TEST | med | FIXED | new | glTF COLOR_0, which the glTF 2.0 specification defines as linear, was stored as sRGB bytes, so midtones displayed too dark; a GLB opened in the browser failed to decode; and normals declared by glTF, PLY and PNTS files were not carried into the cloud. |
 | L185 | UI | TEST | low | FIXED | new | Hiding the load toast after a finished load emptied the shared polite live region, erasing an announcement another panel had made during the settle. |
 | L186 | UI | TEST | high | FIXED | new | On a Z-up survey the orbit turned about world Y, so a vertical drag slid the scene sideways or tilted it backwards depending on the view; a pinch zoomed about the pivot instead of the fingers; wheel streams of a few pixels per event lost part or all of their zoom. |
+| L188 | UI | TEST | medium | FIXED | new | A tween replayed the orbit, pan and wheel glides it froze once it landed; a wheel zoom after an orbit flick kept rotating and slid the point under the cursor; a grab inherited the orbit glide and an orbit inside a dolly tail had its pivot moved. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 41
+- FIXED: 42
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 62
+- total: 63
 
 ## Detail
 
@@ -7159,5 +7160,25 @@ stream of 1 to 6 px events did not zoom at all; in a browser, where updates
 often take in more than one event, part of the travel was lost. The rest rule
 now applies the travel it ends, so the zoom follows the sum of the stream
 (`tests/wheelSmallDeltas.test.ts`, `tests/e2e/trackpadWheel.spec.ts`).
+
+No computed value, threshold, method or export changes.
+
+### L188 · FIXED · UI
+
+Residual motion. A released orbit or pan glide, the wheel-dolly tail and the
+arrow-key orbit each decay on their own, and two of them could run at once.
+A tween froze the others while it played and replayed them when it landed:
+after an orbit flick of 0.3 rad the camera left the tween's end pose by 51
+units on a 300-unit view, 147 units after a dolly tail, and a pan tail moved
+the target by 29 units. A wheel zoom right after an orbit flick kept rotating,
+and the point under the cursor slid by up to 39 px. A hand-tool grab inherited
+the orbit glide (16 degrees of rotation during a pan), and an orbit started
+inside a dolly tail had its pivot moved by 44 units. `NavController` now gives
+each input ownership of the motion: a wheel keeps only the dolly, an
+OrbitControls drag keeps only its own glide, and a grab or a tween starts from
+rest. Damping is unchanged. In the browser, the rotation measured after a wheel
+that followed a flick went from 0.2 to 4.3 degrees to 0 on four scans from 10 m
+to 2 km across, at normal speed and with the CPU slowed four times
+(`tests/navMotionOwnership.test.ts`).
 
 No computed value, threshold, method or export changes.
