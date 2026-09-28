@@ -12,8 +12,8 @@ import { dropDenseGridPly } from './helpers';
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
-async function openScan(page: Page): Promise<void> {
-  await page.goto('/?test=1');
+async function openScan(page: Page, navigate = true): Promise<void> {
+  if (navigate) await page.goto('/?test=1');
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await expect(page.locator('.olv-dock [data-action="tool.measure"]')).toBeEnabled({ timeout: 20_000 });
@@ -24,7 +24,7 @@ const dock = (page: Page, id: string) => page.locator(`.olv-dock [data-action="$
 test('the dock, the palette and the launcher use the same names', async ({ page }) => {
   await page.goto('/?test=1');
   await expect(page.locator('.olv-open-btn')).toHaveAccessibleName('Open scan');
-  await openScan(page);
+  await openScan(page, false);
   const names: Record<string, string> = {
     'camera.frame-all': 'Frame all',
     'tool.snapshot': 'Save a snapshot',
