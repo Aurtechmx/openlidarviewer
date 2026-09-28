@@ -27,6 +27,7 @@ import {
   type TerrainAccessCellReport,
 } from '../../simulation/terrainAccess/terrainAccessGridCursor';
 import { buildResultGridDom } from './resultGridDom';
+import { legend } from '../labGuide';
 import { maskFromIndices as sharedMaskFromIndices } from './gridMask';
 import type { TraversabilityMapCell } from '../../simulation/terrainAccess/traversabilityCost';
 import type { TerrainAccessGrid } from '../../simulation/terrainAccess/terrainAccessTypes';
@@ -56,6 +57,20 @@ const STATE_COLOR: Record<TraversabilityMapCell['state'], string> = {
 const START_COLOR = '#5b9dc2';
 const GOAL_COLOR = '#c25bb0';
 const ROUTE_COLOR = 'rgba(250, 243, 89, 0.9)';
+
+/** The map's legend, in the colours `_redraw` paints, each with a glyph and a word. */
+export function terrainAccessGridLegend(): HTMLElement {
+  return legend('Map legend', [
+    { glyph: '■', label: 'Eligible, low cost', color: STATE_COLOR['low-cost'] },
+    { glyph: '◧', label: 'Higher cost', color: STATE_COLOR['moderate-cost'] },
+    { glyph: '◼', label: 'Highest cost', color: STATE_COLOR['high-cost'] },
+    { glyph: '✕', label: 'Blocked', color: STATE_COLOR.blocked },
+    { glyph: '?', label: 'Withheld (not enough evidence)', color: STATE_COLOR.unknown },
+    { glyph: '━', label: 'Route', color: ROUTE_COLOR },
+    { glyph: 'S', label: 'Start', color: START_COLOR },
+    { glyph: 'G', label: 'Goal', color: GOAL_COLOR },
+  ]);
+}
 
 export class TerrainAccessResultGrid {
   readonly element: HTMLElement;

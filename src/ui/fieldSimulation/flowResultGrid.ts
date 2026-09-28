@@ -32,6 +32,7 @@ import {
 } from '../../simulation/flowPulse/flowGridCursor';
 import { CELL_NODATA, CELL_OUTLET, CELL_SINK } from '../../simulation/flowPulse/flowTypes';
 import { buildResultGridDom } from './resultGridDom';
+import { legend } from '../labGuide';
 import { maskFromIndices as sharedMaskFromIndices } from './gridMask';
 import type { AccumulationResult } from '../../simulation/flowPulse/flowAccumulation';
 import type { D8Result } from '../../simulation/flowPulse/d8Flow';
@@ -61,6 +62,20 @@ const STATUS_COLOR: Record<number, string> = {
 };
 const ROUTED_COLOR = '#3a4a3a';
 const FLAT_COLOR = '#8a7d3a';
+const CATCHMENT_COLOR = 'rgba(255, 165, 60, 0.55)';
+const PATH_COLOR = 'rgba(250, 243, 89, 0.9)';
+
+/** The grid's legend, in the colours `_redraw` paints, each with a glyph and a word. */
+export function flowGridLegend(): HTMLElement {
+  return legend('Grid legend', [
+    { glyph: '■', label: 'Ground cell', color: ROUTED_COLOR },
+    { glyph: '━', label: 'Path', color: PATH_COLOR },
+    { glyph: '▦', label: 'Catchment', color: CATCHMENT_COLOR },
+    { glyph: '▲', label: 'Outlet (flow leaves the grid)', color: STATUS_COLOR[CELL_OUTLET]! },
+    { glyph: '▼', label: 'Sink (flow stops)', color: STATUS_COLOR[CELL_SINK]! },
+    { glyph: '▬', label: 'Flat', color: FLAT_COLOR },
+  ]);
+}
 
 export class FlowResultGrid {
   readonly element: HTMLElement;
@@ -204,7 +219,7 @@ export class FlowResultGrid {
       }
     }
     if (this._catchmentMask) {
-      ctx.fillStyle = 'rgba(255, 165, 60, 0.55)';
+      ctx.fillStyle = CATCHMENT_COLOR;
       for (let i = 0; i < this._catchmentMask.length; i++) {
         if (this._catchmentMask[i] !== 1) continue;
         const col = i % grid.cols, row = Math.floor(i / grid.cols);
@@ -212,7 +227,7 @@ export class FlowResultGrid {
       }
     }
     if (this._pathMask) {
-      ctx.fillStyle = 'rgba(250, 243, 89, 0.9)';
+      ctx.fillStyle = PATH_COLOR;
       for (let i = 0; i < this._pathMask.length; i++) {
         if (this._pathMask[i] !== 1) continue;
         const col = i % grid.cols, row = Math.floor(i / grid.cols);

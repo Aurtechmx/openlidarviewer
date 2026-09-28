@@ -141,7 +141,7 @@ test.describe('results shelf', () => {
     await page.locator('#olv-ws-mode-analyse .olv-ws-back').click();
     await page.locator('.olv-ah-row[data-analysis="flow-pulse"] .olv-ah-open').click();
     const modal = page.locator('.olv-modal');
-    await expect(modal.locator('.olv-modal-title')).toHaveText('Field Simulation Lab: Flow Pulse', { timeout: 20_000 });
+    await expect(modal.locator('.olv-modal-title')).toHaveText('Flow Pulse', { timeout: 20_000 });
     const card = modal.locator('.olv-modal-body');
     await expect(card).not.toBeEmpty();
     const first = await card.innerText();
@@ -154,7 +154,7 @@ test.describe('results shelf', () => {
     const row = shelf(page).locator('.olv-results-row[data-result-type="flow-pulse"]');
     await expect(row).toHaveCount(1, { timeout: 10_000 });
     await row.locator('.olv-results-focus').click();
-    await expect(modal.locator('.olv-modal-title')).toHaveText('Field Simulation Lab: Flow Pulse', { timeout: 20_000 });
+    await expect(modal.locator('.olv-modal-title')).toHaveText('Flow Pulse', { timeout: 20_000 });
     // The same run, shown as it was: the card reads the kept outcome.
     expect(await card.innerText()).toBe(first);
     // The modal opened over the current mode; the shelf did not route.

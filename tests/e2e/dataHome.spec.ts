@@ -57,7 +57,7 @@ test.describe('Data home', () => {
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
     await showWorkspaceMode(page, 'work');
     await firePaletteAction(page, 'Flow Pulse', 'Flow Pulse (Field Simulation Lab)');
-    await expect(page.locator('.olv-modal-title')).toHaveText('Field Simulation Lab: Flow Pulse');
+    await expect(page.locator('.olv-modal-title')).toHaveText('Flow Pulse');
     await expect(page.locator('.olv-ws-tab[data-mode="work"]')).toHaveAttribute('aria-selected', 'true');
   });
 });

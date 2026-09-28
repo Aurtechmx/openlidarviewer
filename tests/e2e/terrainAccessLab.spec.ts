@@ -19,10 +19,10 @@ import {
 
 async function openTerrainAccess(page: Page): Promise<void> {
   await firePaletteAction(page, 'Terrain Access', 'Terrain Access (Field Simulation Lab)');
-  await expect(page.locator('.olv-modal-title')).toHaveText('Field Simulation Lab: Terrain Access');
+  await expect(page.locator('.olv-modal-title')).toHaveText('Terrain Access');
 }
 
-test('refuses honestly, with no interactive controls, before any terrain analysis has run', async ({ page }) => {
+test('without a ground surface: no form, the terrain run, the way back, and Apply off with its reason', async ({ page }) => {
   await page.goto('/?test=1');
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
@@ -30,29 +30,41 @@ test('refuses honestly, with no interactive controls, before any terrain analysi
 
   await openTerrainAccess(page);
   const modal = page.locator('.olv-modal');
-  // No terrain analysis has run yet, so the form appears (the Lab is opened
-  // whether or not a surface exists — see `openTerrainAccessLab`), but
-  // applying any profile against it refuses with NO_DTM rather than a run.
+  // The ground surface is checked before the form: no form, a plain notice.
+  await expect(modal.locator('.olv-lab-purpose')).toContainText('Not a safety guarantee.');
+  await expect(modal.locator('.olv-lab-ready[data-state="missing"]')).toContainText('Ground surface (terrain run)');
+  await expect(modal.locator('.olv-ta-form')).toHaveCount(0);
+  await expect(modal).not.toContainText('NO_DTM');
+
+  await modal.locator('.olv-lab-fix', { hasText: 'Run terrain analysis' }).click();
+  await expect(page.locator('.olv-modal')).toHaveCount(0);
+  await expect(page.locator('.olv-analyse-readiness .olv-analyse-ready:not(.is-skeleton)')).toHaveCount(3, { timeout: 20_000 });
+  const back = page.locator('.olv-at-back', { hasText: 'Back to Terrain Access' });
+  await expect(back).toBeVisible({ timeout: 20_000 });
+  await back.click();
+  await expect(page.locator('.olv-modal-title')).toHaveText('Terrain Access');
+
+  // This local fixture has no known units: the form shows, Apply is off and says why.
   await expect(modal.locator('.olv-ta-form')).toBeVisible();
-  await modal.locator('input[type=text]').nth(0).fill('Illustrative — confirm for your platform');
-  await modal.locator('input[type=text]').nth(1).fill('20');
-  await modal.locator('input[type=text]').nth(2).fill('15');
-  await modal.locator('input[type=text]').nth(3).fill('0.3');
-  await modal.locator('input[type=text]').nth(4).fill('1.8');
-  await modal.locator('input[type=text]').nth(5).fill('50');
-  await modal.locator('.olv-ta-form-submit').click();
-  await expect(modal).toContainText('Terrain Access did not run');
-  await expect(modal).toContainText('NO_DTM');
+  await expect(modal.locator('.olv-ta-form-submit')).toBeDisabled();
+  await expect(modal.locator('.olv-ta-form-blocked')).toContainText('grades and distances need known units');
 });
 
 test('blank profile refuses with named field problems, per field', async ({ page }) => {
   await page.goto('/?test=1');
-  await dropDenseGridPly(page);
+  await dropTerrainAccessUtmLas(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await expect(page.locator('.olv-dock .olv-tool', { hasText: /^Analyse$/ })).toBeEnabled({ timeout: 20_000 });
+  await openAnalyse(page);
+  await page.locator('.olv-analyse-run').click();
+  await expect(page.locator('.olv-analyse-readiness .olv-analyse-ready:not(.is-skeleton)')).toHaveCount(3, {
+    timeout: 20_000,
+  });
 
   await openTerrainAccess(page);
   const modal = page.locator('.olv-modal');
+  // The six required fields come first; the optional ones wait under Advanced.
+  await expect(modal.locator('.olv-ta-advanced > summary')).toHaveText('Advanced');
   await modal.locator('.olv-ta-form-submit').click();
   const problems = modal.locator('.olv-ta-form-problems-list');
   await expect(problems).toContainText('Profile name is required');
@@ -102,7 +114,7 @@ test('profile, start/goal by keyboard and click, run, route shown, why-not, expo
 
   // WHY-NOT INSPECTOR: default mode is 'start'; switch to inspect and read a
   // sentence naming a concrete reason (eligible or blocked), never a vague answer.
-  await modal.locator('.olv-ta-segmented-btn', { hasText: /Why not\?/ }).click();
+  await modal.locator('.olv-ta-segmented-btn', { hasText: 'Why is this cell blocked?' }).click();
   await grid.click({ position: { x: box.width / 2, y: box.height / 2 } });
   await expect(modal.locator('.olv-ta-inspector')).toContainText(/eligible|blocked|withheld/, { timeout: 5_000 });
   // The inspector's cell readout is a real elevation with its unit, or an

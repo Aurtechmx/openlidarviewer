@@ -81,17 +81,18 @@ the two entries were renumbered when the branches were integrated.
 | L174 | LOADER | TEST | high | FIXED | new | A CRS read from an extended VLR was labelled as a VLR, and a large LAS/LAZ opened out of core, or a COPC with its CRS in an EVLR, showed no CRS at all. |
 | L175 | SCIENTIFIC | TEST | med | FIXED | new | A measured cell the attention raster's residual sampling skipped scored 0 on the residual and, with no other input flagging it, was written as level 0, the same as a cell whose residual was computed and small. |
 | L176 | LOADER | TEST | med | FIXED | new | A text file with no point-format extension opened as XYZ from three numeric lines, and the chosen interpretation level was not recorded or shown. |
+| L177 | UI | TEST | med | FIXED | new | Flow Pulse, Terrain Access and Observatory opened on their controls with no statement of purpose, a missing ground surface ended in a refusal code and a Retry that could not help, and a scan with no scanner setups showed the Observatory as Ready. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 33
+- FIXED: 34
 - MEASURED: 1
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 53
+- total: 54
 
 ## Detail
 
@@ -6871,3 +6872,38 @@ Covered by `tests/formatProbes.test.ts`, `tests/formatProbeFuzz.test.ts`
 (2,400 seeded random, truncated and bit-flipped heads from the in-repo
 fixtures: no throw, a known level, no read past 1 MiB for a 5 GB size),
 `tests/intakeCorpusProbeLock.test.ts` and `tests/e2e/openAnyProbe.spec.ts`.
+
+### L177 · FIXED · UI
+
+Flow Pulse, Terrain Access and Observatory opened on their controls with no
+statement of what they are for. Each lab now opens with a one-line purpose, the
+same line its Analyse home row shows, and three to five numbered stages with
+the current one marked. The line under the stages states only the next step,
+and the "click a cell" instruction sits above the grid it refers to.
+
+Flow Pulse and Terrain Access list their prerequisites (ground surface from a
+terrain run, known units) before the controls. Without a ground surface they
+show a plain notice and a "Run terrain analysis" button in place of the
+refusal code and the Retry button; the terrain run then offers "Back to Flow
+Pulse" or "Back to Terrain Access" on the Terrain page. Terrain Access checks
+for the ground surface before it shows the profile form, and with unknown units
+the Apply button is off and says why, the same rule its runner applies.
+
+A scan with no declared stations no longer reads Ready on the Analyse home:
+the Observatory row and the panel's refusal both say it needs scanner setups
+(station positions), for example from PTX files.
+
+Both result grids carry a legend in the colours they draw, each with a glyph
+and a word. Each result has a short "How to read this" note. Observatory state
+codes keep their counts and gain a plain label. Method IDs, digests, refusal
+codes and internal format IDs move into a collapsed "Method details" section.
+The Terrain Access form groups the six required fields first and puts
+ruggedness, vehicle length, obstruction height and the weak-evidence policy
+under "Advanced", still with no preset values. Route grades show degrees next
+to the tangent. The inspect mode reads "Why is this cell blocked?", and the
+dialog titles drop the "Field Simulation Lab:" prefix.
+
+No run value, threshold, method or export changes. Covered by
+`tests/labFirstUse.test.ts`, `tests/analyseWorkspace.test.ts`,
+`tests/e2e/flowPulseLab.spec.ts`, `tests/e2e/terrainAccessLab.spec.ts` and
+`tests/e2e/observatoryPanel.spec.ts`.

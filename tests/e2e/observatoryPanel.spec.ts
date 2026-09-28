@@ -6,7 +6,7 @@
  * overlay must not outlive the scan it was drawn from.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { dropTinyPtx, showWorkspaceMode } from './helpers';
+import { dropDenseGridPly, dropTinyPtx, showWorkspaceMode } from './helpers';
 
 async function firePaletteAction(page: Page, query: string, rowText: string): Promise<void> {
   await page.keyboard.press('ControlOrMeta+KeyK');
@@ -78,5 +78,21 @@ test.describe('Observatory panel', () => {
     const modal = page.locator('.olv-modal');
     await expect(modal).not.toContainText('DECLARED ORIGIN');
     await expect(modal.locator('.olv-observatory-status')).toBeVisible();
+  });
+
+  test('a scan with no scanner setups: the Analyse row is not Ready and the panel says what it needs', async ({ page }) => {
+    const needs = 'Needs scanner setups (station positions), for example from PTX files.';
+    await page.goto('/?test=1');
+    await dropDenseGridPly(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+
+    await showWorkspaceMode(page, 'analyse');
+    const row = page.locator('.olv-ah-row[data-analysis="observatory"]');
+    await expect(row.locator('.olv-ah-reason')).toHaveText(needs, { timeout: 20_000 });
+    await expect(row.locator('.olv-ah-badge')).not.toHaveText('Ready');
+    await expect(row.locator('.olv-ah-hint')).toContainText('what the scanner saw from each setup');
+
+    await openObservatory(page);
+    await expect(page.locator('.olv-modal .olv-observatory-ineligible')).toHaveText(needs, { timeout: 20_000 });
   });
 });

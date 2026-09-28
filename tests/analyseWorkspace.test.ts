@@ -184,3 +184,28 @@ describe('workspace router depth limit', () => {
     expect(() => createWorkspaceRouter(ws, { analyse: { b: page('missing') } })).toThrow(/top-level/);
   });
 });
+
+describe('Analyse home: lab first use', () => {
+  it('each lab row carries its purpose line', async () => {
+    const { LAB_PURPOSE } = await import('../src/process/labGuideCopy');
+    const t = await make();
+    for (const id of ['flow-pulse', 'terrain-access', 'observatory'] as const) {
+      expect(t.row(id).find((e) => e.hasClass('olv-ah-hint'))?.ownText).toBe(LAB_PURPOSE[id]);
+    }
+    expect(t.row('terrain').find((e) => e.hasClass('olv-ah-hint'))).toBeUndefined();
+  });
+
+  it('after a terrain run a lab started, the Terrain page offers the way back', async () => {
+    const { setLabReturn, labReturn } = await import('../src/app/labReturn');
+    const t = await make();
+    setLabReturn('terrain-access');
+    const back = () => t.host.find((e) => e.hasClass('olv-at-back'));
+    t.setState({ facts, view: undefined, produced: new Set<ProductId>() });
+    expect(back()).toBeUndefined();
+    t.setState({ facts, view: undefined, produced: new Set<ProductId>(['dtm']) });
+    expect(back()?.ownText).toBe('Back to Terrain Access');
+    back()!.fire('click');
+    expect(t.runAction).toHaveBeenLastCalledWith('analyse.terrainAccess');
+    expect(labReturn()).toBeNull();
+  });
+});
