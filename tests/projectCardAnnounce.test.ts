@@ -65,4 +65,21 @@ describe('ProjectCard — live announcement', () => {
     card.show({ ...INFO, name: 'tunnel.e57' });
     expect(textOf()).toContain('tunnel.e57');
   });
+
+  it('leaves a newer announcement in place when the card follows an early announcement', async () => {
+    const { textOf } = withLiveRegion();
+    const { ProjectCard, announceProjectReady } = await import('../src/ui/ProjectCard');
+    const card = new ProjectCard();
+
+    announceProjectReady(INFO.name, INFO.shownCount, INFO.totalCount);
+    expect(textOf()).toContain('campus.laz');
+    const region = document.querySelector('.olv-visually-hidden[role="status"]')!;
+    region.textContent = 'Filtered — showing 3 of 4 classes';
+
+    card.show(INFO);
+    expect(textOf()).toBe('Filtered — showing 3 of 4 classes');
+
+    card.show({ ...INFO, name: 'tunnel.e57' });
+    expect(textOf()).toContain('tunnel.e57');
+  });
 });

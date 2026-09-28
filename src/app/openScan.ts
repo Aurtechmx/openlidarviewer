@@ -43,6 +43,7 @@ import type { ToolDock } from '../ui/toolDock';
 import type { NavBar } from '../ui/NavBar';
 import type { DebugOverlay } from '../ui/DebugOverlay';
 import type { DropZone } from '../ui/DropZone';
+import { announceProjectReady } from '../ui/ProjectCard';
 import type { Stage } from '../ui/Stage';
 import type { ScanService } from './ScanService';
 import type { LayerService } from './LayerService';
@@ -758,6 +759,7 @@ export async function attachStaticCloud(
   // tool armed meanwhile: arming one hides the card, so that tool keeps the lane.
   if (!deps.bareMode) {
     const { cloud, originalPointCount } = result;
+    announceProjectReady(cloud.name, cloud.pointCount, originalPointCount);
     void settled.then((done) => {
       const v = deps.getViewer();
       const armed = v.measureMode || v.inspectMode || v.probeMode || v.annotateMode;
