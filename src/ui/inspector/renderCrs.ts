@@ -49,6 +49,7 @@ export function renderCrs(
   };
   const sourceLabel: Record<typeof c.source, string> = {
     'las-vlr': 'LAS / LAZ georeference VLR',
+    'las-evlr': 'LAS / LAZ georeference EVLR (extended VLR)',
     'copc-meta': 'COPC metadata',
     'ept-srs': 'EPT srs.wkt',
     'tileset-region': '3D Tiles region bounding volume',

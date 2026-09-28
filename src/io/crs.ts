@@ -92,6 +92,11 @@ export interface CrsInfo {
   /** Z-unit conversion to metres (1 metre, 0.3048 foot, …). Absent ⇒ unknown. */
   readonly verticalUnitToMetres?: number;
   /**
+   * Set to `'evlr'` when the record that decided the CRS was a LAS 1.4
+   * extended VLR rather than a VLR in the header block. Absent for a VLR.
+   */
+  readonly record?: 'evlr';
+  /**
    * Horizontal geodetic datum name as the WKT declares it — the GEOGCS/GEOGCRS
    * (geographic base) name, e.g. "NAD83", "NAD83(2011)", "WGS 84", "ETRS89".
    * This is the realization-PRESERVING name (NAD83(2011) ≠ NAD83 by ~1–2 m), so
@@ -185,6 +190,10 @@ export interface ProjectionRecords {
   geokeys: Uint8Array | null;
   geoAscii: Uint8Array | null;
   geoDouble: Uint8Array | null;
+  /** True when the held WKT record came from an EVLR. */
+  wktFromEvlr?: boolean;
+  /** True when the held GeoKeyDirectory record came from an EVLR. */
+  geokeysFromEvlr?: boolean;
 }
 
 export function emptyProjectionRecords(): ProjectionRecords {
@@ -196,6 +205,7 @@ function addProjectionRecord(
   records: ProjectionRecords,
   recordId: number,
   payload: Uint8Array,
+  fromEvlr = false,
 ): void {
   if (recordId === RECORD_ID_OGC_WKT_COORD) {
     // 2112 is the ONLY authoritative CRS WKT. 2111 (math transform) is a
@@ -204,10 +214,16 @@ function addProjectionRecord(
     // the file with a transform, not a CRS.
     if (records.wkt == null) {
       const text = readNullTerminatedBytes(payload);
-      if (text.trim().length > 0) records.wkt = text;
+      if (text.trim().length > 0) {
+        records.wkt = text;
+        if (fromEvlr) records.wktFromEvlr = true;
+      }
     }
   } else if (recordId === RECORD_ID_GEOKEY_DIRECTORY) {
-    records.geokeys ??= payload;
+    if (records.geokeys == null) {
+      records.geokeys = payload;
+      if (fromEvlr) records.geokeysFromEvlr = true;
+    }
   } else if (recordId === RECORD_ID_GEO_ASCII_PARAMS) {
     records.geoAscii ??= payload;
   } else if (recordId === RECORD_ID_GEO_DOUBLE_PARAMS) {
@@ -249,6 +265,13 @@ export function collectVlrProjectionRecords(
  * them describes one.
  */
 export function crsFromProjectionRecords(records: ProjectionRecords): CrsInfo | null {
+  const crs = crsFromHeldRecords(records);
+  if (!crs) return null;
+  const fromEvlr = records.wkt ? records.wktFromEvlr : records.geokeysFromEvlr;
+  return fromEvlr ? { ...crs, record: 'evlr' } : crs;
+}
+
+function crsFromHeldRecords(records: ProjectionRecords): CrsInfo | null {
   const { wkt: wktPayload, geokeys: geokeyBytes, geoAscii: geoAsciiBytes, geoDouble: geoDoubleBytes } = records;
   if (wktPayload) {
     const fromWkt = crsFromWkt(wktPayload);
@@ -353,7 +376,7 @@ export async function readEvlrProjectionRecords(
     if (userId === CRS_USER_ID && length > 0 && length <= MAX_PROJECTION_EVLR_BYTES) {
       const payload = await read(payloadStart, length);
       if (payload.byteLength < length) break;
-      addProjectionRecord(records, recordId, new Uint8Array(payload, 0, length));
+      addProjectionRecord(records, recordId, new Uint8Array(payload, 0, length), true);
     }
     cursor = payloadStart + length;
   }
@@ -398,6 +421,70 @@ export async function resolveLasCrs(
     }
   }
   return crsFromProjectionRecords(records);
+}
+
+/** Where a LAS public header places the CRS-bearing records. */
+export interface LasCrsLocation extends LasEvlrLocation {
+  readonly headerSize: number;
+  readonly vlrCount: number;
+  readonly offsetToPointData: number;
+}
+
+/** Bytes of the LAS 1.4 public header, which holds the EVLR offset and count. */
+const LAS_14_PUBLIC_HEADER_BYTES = 375;
+/**
+ * Largest header-plus-VLR block read when resolving a CRS over a range source.
+ * The VLR block of a real file is a few KiB; the cap bounds a corrupt offset.
+ */
+export const MAX_RANGE_VLR_BLOCK_BYTES = 4 << 20;
+
+/**
+ * Read the header fields a CRS walk needs from the start of a LAS/LAZ/COPC
+ * file. Returns null when the bytes are too short or do not start with `LASF`.
+ */
+export function readLasCrsLocation(head: ArrayBuffer): LasCrsLocation | null {
+  if (head.byteLength < 104) return null;
+  const view = new DataView(head);
+  if (readAscii(view, 0, 4) !== 'LASF') return null;
+  const versionMinor = view.getUint8(25);
+  let evlrOffset = 0;
+  let evlrCount = 0;
+  if (versionMinor >= 4 && head.byteLength >= 247) {
+    const raw = view.getBigUint64(235, true);
+    if (raw <= BigInt(Number.MAX_SAFE_INTEGER)) evlrOffset = Number(raw);
+    evlrCount = view.getUint32(243, true);
+  }
+  return {
+    versionMinor,
+    headerSize: view.getUint16(94, true),
+    offsetToPointData: view.getUint32(96, true),
+    vlrCount: view.getUint32(100, true),
+    evlrOffset,
+    evlrCount,
+  };
+}
+
+/**
+ * Resolve a LAS/LAZ file's CRS through range reads alone: the public header,
+ * the VLR block up to the point data (capped at
+ * {@link MAX_RANGE_VLR_BLOCK_BYTES}), and for LAS 1.4 the EVLR walk of
+ * {@link resolveLasCrs}. The point data is never read. A failed read or a
+ * header that is not LAS resolves to null.
+ */
+export async function resolveLasCrsFromRange(
+  read: ByteRangeReader,
+  fileSize: number,
+): Promise<CrsInfo | null> {
+  try {
+    const pub = await read(0, Math.min(fileSize, LAS_14_PUBLIC_HEADER_BYTES));
+    const location = readLasCrsLocation(pub);
+    if (!location) return null;
+    const blockBytes = Math.min(fileSize, location.offsetToPointData, MAX_RANGE_VLR_BLOCK_BYTES);
+    const head = blockBytes <= pub.byteLength ? pub : await read(0, blockBytes);
+    return await resolveLasCrs(head, location.headerSize, location.vlrCount, location, read, fileSize);
+  } catch {
+    return null;
+  }
 }
 
 /** A {@link ByteRangeReader} over bytes already in memory. */

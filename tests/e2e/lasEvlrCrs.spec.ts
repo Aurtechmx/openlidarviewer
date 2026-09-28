@@ -38,6 +38,9 @@ for (const name of ['evlr-crs-utm15.las', 'evlr-crs-utm15.laz']) {
     await expect(crs).toBeVisible({ timeout: 15_000 });
     await expect(page.locator('.olv-crs-name').first()).toContainText('UTM zone 15N');
     await expect(page.locator('.olv-crs-epsg').first()).toHaveText('EPSG:6344');
+    await expect(page.locator('.olv-crs-meta').first()).toContainText(
+      'Source: LAS / LAZ georeference EVLR (extended VLR)',
+    );
 
     await showWorkspaceMode(page, 'output');
     const panel = page.locator('.olv-export-panel');

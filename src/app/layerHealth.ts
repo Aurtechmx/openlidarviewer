@@ -119,6 +119,7 @@ export interface CompatibilityReport {
 /** Human labels for the `CrsSource` union (`src/geo/CoordinateTypes.ts`). */
 const CRS_SOURCE_LABELS: Readonly<Record<string, string>> = {
   'las-vlr': 'file header',
+  'las-evlr': 'extended VLR',
   'copc-meta': 'COPC metadata',
   'ept-srs': 'EPT metadata',
   'catalog-tile': 'catalog',

@@ -39,6 +39,7 @@ export type CrsKind = 'local' | 'projected' | 'geographic' | 'unknown';
  * report's Methods appendix.
  *
  * `las-vlr` — LAS/LAZ georeference VLR (WKT or GeoTIFF).
+ * `las-evlr` — the same record read from a LAS 1.4 extended VLR (EVLR).
  * `copc-meta` — COPC info VLR (LAS-VLR-equivalent on COPC files).
  * `ept-srs` — EPT manifest `srs.wkt` field.
  * `catalog-tile` — Public-catalog tile metadata (USGS 3DEP, etc.).
@@ -49,6 +50,7 @@ export type CrsKind = 'local' | 'projected' | 'geographic' | 'unknown';
  */
 export type CrsSource =
   | 'las-vlr'
+  | 'las-evlr'
   | 'copc-meta'
   | 'ept-srs'
   // A 3D Tiles `region` bounding volume, which the spec fixes as EPSG:4979.
@@ -225,7 +227,8 @@ export function resolvedFromCrsInfo(
     epsg: info.epsg,
     linearUnit: info.linearUnit,
     linearUnitToMetres: info.linearUnitToMetres,
-    source,
+    // A LAS CRS read from an EVLR is labelled as such, not as a header VLR.
+    source: source === 'las-vlr' && info.record === 'evlr' ? 'las-evlr' : source,
     confidence,
     userConfirmed: false,
     wkt: info.wkt,

@@ -23,6 +23,7 @@ export type SerializedResolvedCrs = ResolvedCrs;
 const CRS_KINDS = ['local', 'projected', 'geographic', 'unknown'] as const;
 const CRS_SOURCES = [
   'las-vlr',
+  'las-evlr',
   'copc-meta',
   'ept-srs',
   'catalog-tile',

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { dropTinyLas } from './helpers';
 import {
   COPC_FIXTURE,
@@ -101,6 +102,52 @@ test.describe('streaming COPC and EPT fixtures', () => {
     await inspector.locator('summary', { hasText: 'Saved views' }).click();
     await inspector.locator('.olv-view-save').click();
     await expect(inspector.locator('.olv-view-name').first()).toHaveValue('View 1');
+  });
+
+  test('a streamed COPC whose CRS is only in an EVLR shows that CRS', async ({ page }) => {
+    // The fixture with its LASF_Projection VLR renamed so the VLRs carry no
+    // CRS, and the same WKT appended as an extended VLR after the hierarchy.
+    const src = new Uint8Array(readFileSync(COPC_FIXTURE));
+    const view = new DataView(src.buffer, src.byteOffset, src.byteLength);
+    const headerSize = view.getUint16(94, true);
+    const vlrCount = view.getUint32(100, true);
+    let cursor = headerSize;
+    let wkt: Uint8Array | null = null;
+    for (let i = 0; i < vlrCount; i++) {
+      const userId = Buffer.from(src.subarray(cursor + 2, cursor + 18)).toString('latin1').replace(/\0+$/, '');
+      const length = view.getUint16(cursor + 20, true);
+      if (userId === 'LASF_Projection') {
+        wkt = src.slice(cursor + 54, cursor + 54 + length);
+        src[cursor + 2] = 'X'.charCodeAt(0);
+      }
+      cursor += 54 + length;
+    }
+    expect(wkt).not.toBeNull();
+    const evlr = new Uint8Array(60 + wkt!.length);
+    evlr.set(Buffer.from('LASF_Projection', 'latin1'), 2);
+    new DataView(evlr.buffer).setUint16(18, 2112, true);
+    new DataView(evlr.buffer).setBigUint64(20, BigInt(wkt!.length), true);
+    evlr.set(wkt!, 60);
+    const out = new Uint8Array(src.length + evlr.length);
+    out.set(src);
+    out.set(evlr, src.length);
+    const outView = new DataView(out.buffer);
+    outView.setUint32(243, outView.getUint32(243, true) + 1, true);
+
+    await page.goto('/');
+    await expect(page.locator('.olv-empty-title')).toBeVisible();
+    await page.locator('.olv-file-input').first().setInputFiles({
+      name: 'evlr-crs.copc.laz',
+      mimeType: 'application/octet-stream',
+      buffer: Buffer.from(out),
+    });
+    const panel = page.locator('.olv-streaming-panel');
+    await expect(panel).toBeVisible({ timeout: 30_000 });
+    await expect(panel).toContainText('Current view ready', { timeout: 30_000 });
+
+    await page.locator('summary', { hasText: 'Coordinate system' }).first().click();
+    await expect(page.locator('.olv-crs-name').first()).toContainText('UTM zone 13N', { timeout: 15_000 });
+    await expect(page.locator('.olv-crs-epsg').first()).toHaveText('EPSG:32613');
   });
 
   test('opens an EPT dataset from a URL and makes every node resident', async ({ page }) => {
