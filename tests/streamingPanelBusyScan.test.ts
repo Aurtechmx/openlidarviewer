@@ -68,4 +68,22 @@ describe('streaming panel busy scan', () => {
       expect(scan()).toBeUndefined();
     }
   });
+
+  it('keeps the same scan in the line across status polls, changing only the text', async () => {
+    const { panel, phase, scan } = await freshPanel();
+    panel.setPhase('Streaming coarse geometry…');
+    const first = scan();
+    // Re-inserting the scan restarts its CSS animation, so the line must not
+    // be rebuilt on each poll.
+    let rebuilt = 0;
+    const replace = phase.replaceChildren.bind(phase);
+    phase.replaceChildren = (...kids) => { rebuilt++; replace(...kids); };
+    panel.setViewStatus(view('loading', 0.2));
+    panel.setViewStatus({ ...view('loading', 0.4), headline: 'Loading view' });
+    expect(scan()).toBe(first);
+    expect(rebuilt).toBe(0);
+    expect(phase.find('olv-busy-scan')).toHaveLength(1);
+    expect(phase.text).toContain('Loading view');
+    expect(phase.text).not.toContain('Streaming coarse geometry…');
+  });
 });

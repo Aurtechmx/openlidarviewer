@@ -297,6 +297,9 @@ export class StreamingPanel {
   /** The busy scan in the phase line while a scan opens; null once its first view is ready. */
   private _openScan: BusyScanController | null = null;
   private _firstViewReady = false;
+  /** The scan and text node the phase line holds while it shows the scan. */
+  private _lineScan: SVGElement | null = null;
+  private _phaseText: HTMLElement | null = null;
   private readonly _credit: HTMLElement;
   // Determinate load-progress treatment under the phase line: a thin
   // brand-gradient bar (resident/known node fraction) + a tabular pts readout.
@@ -502,7 +505,7 @@ export class StreamingPanel {
     this._pause.textContent = 'Pause';
     // Reset the progress treatment for the next scan.
     // Drops the busy scan too; the next open starts its own.
-    this._phase.textContent = '';
+    this._setPlainLine('');
     this._openScan = null;
     this._firstViewReady = false;
     this._progress.classList.add('olv-hidden');
@@ -551,8 +554,29 @@ export class StreamingPanel {
     // Opening stages: the busy scan stands in front of the phase text until the
     // first view is ready.
     if (!this._openScan && !this._firstViewReady) this._openScan = createBusyScanController();
-    if (this._openScan) this._phase.replaceChildren(this._openScan.element, phase);
-    else this._phase.textContent = phase;
+    if (this._openScan) this._setOpeningLine(this._openScan.element, phase);
+    else this._setPlainLine(phase);
+  }
+
+  /**
+   * Show the busy scan before `text`. A scan already in the line stays put and
+   * only the text changes: re-inserting it on every status poll would restart
+   * its animation each time.
+   */
+  private _setOpeningLine(scan: SVGElement, text: string): void {
+    if (!this._phaseText || this._lineScan !== scan) {
+      this._phaseText = el('span');
+      this._phase.replaceChildren(scan, this._phaseText);
+      this._lineScan = scan;
+    }
+    if (this._phaseText.textContent !== text) this._phaseText.textContent = text;
+  }
+
+  /** Set the phase line to plain text, dropping any busy scan. */
+  private _setPlainLine(text: string): void {
+    this._lineScan = null;
+    this._phaseText = null;
+    this._phase.textContent = text;
   }
 
   /** Whether the user has paused streaming. */
@@ -582,11 +606,11 @@ export class StreamingPanel {
     const opening = view.state === 'loading' || view.state === 'settling' || view.state === 'unknown';
     if (this._openScan && opening) {
       if (view.determinate && view.fraction != null) this._openScan.setProgress(view.fraction);
-      this._phase.replaceChildren(this._openScan.element, view.headline);
+      this._setOpeningLine(this._openScan.element, view.headline);
     } else {
       if (view.state === 'settled') this._firstViewReady = true;
       this._openScan = null;
-      this._phase.textContent = view.headline;
+      this._setPlainLine(view.headline);
     }
     this._progress.classList.remove('olv-hidden');
     this._progressNodes.textContent = view.detail;
