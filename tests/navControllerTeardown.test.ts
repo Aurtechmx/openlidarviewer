@@ -61,8 +61,9 @@ function makeCanvas(): TargetStub & { style: Record<string, string> } {
   } as TargetStub & { style: Record<string, string> };
 }
 
-function makeControls(): OrbitControls {
+function makeControls(): OrbitControls & TargetStub {
   return {
+    ...makeTarget(),
     enabled: true,
     enableZoom: true,
     minDistance: 0,
@@ -71,7 +72,7 @@ function makeControls(): OrbitControls {
     mouseButtons: { LEFT: 0, MIDDLE: 1, RIGHT: 2 },
     touches: { ONE: 0, TWO: 1 },
     update: () => {},
-  } as unknown as OrbitControls;
+  } as unknown as OrbitControls & TargetStub;
 }
 
 /**
@@ -95,18 +96,20 @@ describe('NavController listener teardown', () => {
   let win: TargetStub;
   let docTarget: TargetStub;
   let canvas: TargetStub & { style: Record<string, string> };
+  let controls: OrbitControls & TargetStub;
   let nav: NavController | null = null;
 
   beforeEach(() => {
     win = makeTarget();
     docTarget = makeTarget();
     canvas = makeCanvas();
+    controls = makeControls();
     globalThis.window = win as unknown as Window & typeof globalThis;
     globalThis.document = docTarget as unknown as Document;
     nav = new NavController(
       new THREE.PerspectiveCamera(),
       canvas as unknown as HTMLCanvasElement,
-      makeControls(),
+      controls,
     );
   });
 
@@ -126,6 +129,8 @@ describe('NavController listener teardown', () => {
     expect(unmatched(win)).toEqual([]);
     expect(unmatched(docTarget)).toEqual([]);
     expect(unmatched(canvas)).toEqual([]);
+    expect(controls.added.map((r) => r.type)).toEqual(['start']);
+    expect(unmatched(controls)).toEqual([]);
   });
 
   it('still resets the Ctrl flag on focus loss', () => {

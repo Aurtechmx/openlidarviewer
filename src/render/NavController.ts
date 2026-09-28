@@ -237,6 +237,7 @@ export class NavController {
   private readonly _onOrbitPointerMove: (e: PointerEvent) => void;
   private readonly _onOrbitPointerUp: (e: PointerEvent) => void;
   private readonly _onWheel: (e: WheelEvent) => void;
+  private readonly _onOrbitStart = (): void => this._cancelMotionExcept('orbit');
   /**
    * Whether a physical Control key is down.
    *
@@ -277,26 +278,7 @@ export class NavController {
       this._ctrlHeld = e.type === 'keyup' ? false : e.ctrlKey;
     };
 
-    window.addEventListener('keydown', this._onKeyDown);
-    window.addEventListener('keydown', this._onCtrlKeyChange);
-    window.addEventListener('keyup', this._onCtrlKeyChange);
-    window.addEventListener('keyup', this._onKeyUp);
-    canvas.addEventListener('click', this._onCanvasClick);
-    document.addEventListener('pointerlockchange', this._onPointerLockChange);
-    document.addEventListener('mousemove', this._onMouseMove);
-    canvas.addEventListener('pointerdown', this._onPanPointerDown);
-    canvas.addEventListener('pointermove', this._onPanPointerMove);
-    canvas.addEventListener('pointerup', this._onPanPointerUp);
-    canvas.addEventListener('pointercancel', this._onPanPointerUp);
-    // Custom orbit takeover (invert X / Y). Registered AFTER the pan listeners
-    // so the pan down handler's touch-count bookkeeping (`_panTouches`) is
-    // already updated when the orbit handler reads it. Both see every pointer
-    // event but grab mutually exclusively — the pan tool ignores left-drag /
-    // one-finger touch in orbit mode, and the orbit handler ignores pan mode.
-    canvas.addEventListener('pointerdown', this._onOrbitPointerDown);
-    canvas.addEventListener('pointermove', this._onOrbitPointerMove);
-    canvas.addEventListener('pointerup', this._onOrbitPointerUp);
-    canvas.addEventListener('pointercancel', this._onOrbitPointerUp);
+    for (const [t, type, fn] of this._listeners()) t.addEventListener(type, fn);
     // Middle-mouse is the temporary grab in ANY mode (program §P1). Take the
     // middle button away from OrbitControls' default drag-dolly so the two
     // handlers can't fight over the same gesture; wheel dolly is unaffected.
@@ -313,11 +295,6 @@ export class NavController {
       this._controls.enableZoom = false;
       canvas.addEventListener('wheel', this._onWheel, { passive: false });
     }
-    // A held key is released only by `keyup`, which the window receives only
-    // while focused. On any focus loss (alt-tab, OS shortcut, switching apps)
-    // the `keyup` is dropped, so without this the camera would keep orbiting
-    // or moving indefinitely on return. Reset all input when focus is lost.
-    window.addEventListener('blur', this._onBlur);
     // `?benchmark=nav`: the scripted camera driver (`window.__olvNavDriver`),
     // loaded from this chunk so the startup shell's preload lists stay as they are.
     if (__OLV_DEV_FLAGS__ && new URLSearchParams(window.location?.search ?? '').get('benchmark') === 'nav') {
@@ -529,6 +506,7 @@ export class NavController {
     // A user who asked the OS for less motion gets the destination on the next
     // frame, through the same tween so every completion path stays one path.
     const d = prefersReducedMotion() ? 0 : duration;
+    this._cancelMotionExcept(null);
     this._tween = {
       fromPos: this._camera.position.clone(),
       fromTarget: this._currentLookTarget(),
@@ -672,6 +650,7 @@ export class NavController {
     // wheel with `ctrlKey: true` and must still drive the camera.
     if (e.ctrlKey && this._ctrlHeld) return;
     e.preventDefault();
+    this._cancelMotionExcept('dolly');
     // Capture the pointer in NDC so the cursor-centred dolly keeps driving toward
     // where the wheel happened for the whole inertial tail, not just this frame.
     const w = Math.max(1, this._canvas.clientWidth);
@@ -756,22 +735,39 @@ export class NavController {
     this._endOrbitDrag();
     this._releaseCursor();
     this._canvas.removeEventListener('wheel', this._onWheel);
-    window.removeEventListener('keydown', this._onKeyDown);
-    window.removeEventListener('keydown', this._onCtrlKeyChange);
-    window.removeEventListener('keyup', this._onCtrlKeyChange);
-    window.removeEventListener('keyup', this._onKeyUp);
-    this._canvas.removeEventListener('click', this._onCanvasClick);
-    document.removeEventListener('pointerlockchange', this._onPointerLockChange);
-    document.removeEventListener('mousemove', this._onMouseMove);
-    window.removeEventListener('blur', this._onBlur);
-    this._canvas.removeEventListener('pointerdown', this._onPanPointerDown);
-    this._canvas.removeEventListener('pointermove', this._onPanPointerMove);
-    this._canvas.removeEventListener('pointerup', this._onPanPointerUp);
-    this._canvas.removeEventListener('pointercancel', this._onPanPointerUp);
-    this._canvas.removeEventListener('pointerdown', this._onOrbitPointerDown);
-    this._canvas.removeEventListener('pointermove', this._onOrbitPointerMove);
-    this._canvas.removeEventListener('pointerup', this._onOrbitPointerUp);
-    this._canvas.removeEventListener('pointercancel', this._onOrbitPointerUp);
+    for (const [t, type, fn] of this._listeners()) t.removeEventListener(type, fn);
+  }
+
+  /**
+   * Every listener the controller owns except the wheel, in registration
+   * order. The custom orbit (invert X / Y) comes AFTER the pan listeners so
+   * the pan down handler's touch-count bookkeeping (`_panTouches`) is already
+   * updated when the orbit handler reads it; both see every pointer event but
+   * grab mutually exclusively. `blur`: a held key is released only by `keyup`,
+   * which a window that lost focus never receives, so all input resets then.
+   * `start` on the controls is an OrbitControls drag taking ownership.
+   */
+  private _listeners(): [EventTarget, string, EventListener][] {
+    const c = this._canvas;
+    return [
+      [window, 'keydown', this._onKeyDown],
+      [window, 'keydown', this._onCtrlKeyChange],
+      [window, 'keyup', this._onCtrlKeyChange],
+      [window, 'keyup', this._onKeyUp],
+      [c, 'click', this._onCanvasClick],
+      [document, 'pointerlockchange', this._onPointerLockChange],
+      [document, 'mousemove', this._onMouseMove],
+      [c, 'pointerdown', this._onPanPointerDown],
+      [c, 'pointermove', this._onPanPointerMove],
+      [c, 'pointerup', this._onPanPointerUp],
+      [c, 'pointercancel', this._onPanPointerUp],
+      [c, 'pointerdown', this._onOrbitPointerDown],
+      [c, 'pointermove', this._onOrbitPointerMove],
+      [c, 'pointerup', this._onOrbitPointerUp],
+      [c, 'pointercancel', this._onOrbitPointerUp],
+      [window, 'blur', this._onBlur],
+      [this._controls, 'start', this._onOrbitStart],
+    ] as unknown as [EventTarget, string, EventListener][];
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1203,6 +1199,7 @@ export class NavController {
     this._canvas.style.cursor = 'grabbing';
     this._ownsCursor = true;
     this._tween = null; // grabbing the scene cancels an in-flight tween
+    this._cancelMotionExcept(null);
   }
 
   private _handlePanPointerMove(e: PointerEvent): void {
@@ -1323,6 +1320,7 @@ export class NavController {
       // Pointer already gone (device quirk) — the drag ends on the natural up.
     }
     this._tween = null; // a manual orbit cancels an in-flight tween
+    this._cancelMotionExcept('orbit');
   }
 
   private _handleOrbitPointerMove(e: PointerEvent): void {
@@ -1364,6 +1362,24 @@ export class NavController {
     return this._canvas.clientHeight > 0
       ? { heightPx: this._canvas.clientHeight, fovYRad: THREE.MathUtils.degToRad(this._camera.fov) }
       : null;
+  }
+
+  /**
+   * Motion ownership: a new input or a tween drops every other glide still
+   * decaying, so two never run at once. A wheel keeps only the dolly (an orbit
+   * tail would slide the point under the cursor), an orbit keeps only its own
+   * glide (a dolly tail would move the pivot), and a grab or a tween (`null`)
+   * starts from rest; a tween otherwise froze the tails and replayed them on
+   * landing.
+   */
+  private _cancelMotionExcept(keep: 'orbit' | 'dolly' | null): void {
+    const c = this._controls as unknown as { _sphericalDelta?: THREE.Spherical; _panOffset?: THREE.Vector3 };
+    if (keep !== 'orbit') {
+      c._sphericalDelta?.set(0, 0, 0);
+      c._panOffset?.set(0, 0, 0);
+      this._orbitVel = [0, 0, 0];
+    }
+    if (keep !== 'dolly') this._dollyVelocity = 0;
   }
 
   /**
