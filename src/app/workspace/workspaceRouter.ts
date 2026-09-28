@@ -184,3 +184,50 @@ export function createWorkspaceRouter(
   };
   return api;
 }
+
+/**
+ * Whether a navigation was started from inside the rail, so the router should
+ * move focus to the new task heading.
+ *
+ * Focus alone is not enough: Safari does not focus a button on mouse click,
+ * so after a click in the rail `document.activeElement` is still <body>. The
+ * last pointerdown or keydown target is recorded as well, and a navigation
+ * that follows it within the same interaction counts as started in the rail.
+ * A focused text field is never taken over.
+ */
+const WINDOW_MS = 1000;
+
+const NON_TEXT = ['button', 'checkbox', 'radio', 'range', 'color', 'file', 'submit', 'reset', 'image'];
+
+function editable(node: Element | null): boolean {
+  if (!node) return false;
+  const tag = node.tagName;
+  if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (tag === 'INPUT') return !NON_TEXT.includes(((node as HTMLInputElement).type ?? '').toLowerCase());
+  return (node as HTMLElement).isContentEditable === true;
+}
+
+export function createRailIntent(
+  rail: HTMLElement,
+  doc: Document = document,
+  now: () => number = () => Date.now(),
+): { startedInRail(): boolean; dispose(): void } {
+  let last: { target: Node; at: number } | null = null;
+  const record = (e: Event): void => {
+    last = e.target ? { target: e.target as Node, at: now() } : null;
+  };
+  doc.addEventListener('pointerdown', record, true);
+  doc.addEventListener('keydown', record, true);
+  return {
+    startedInRail() {
+      const active = doc.activeElement;
+      if (editable(active)) return false;
+      if (active && rail.contains(active)) return true;
+      return !!last && now() - last.at <= WINDOW_MS && rail.contains(last.target);
+    },
+    dispose() {
+      doc.removeEventListener('pointerdown', record, true);
+      doc.removeEventListener('keydown', record, true);
+    },
+  };
+}

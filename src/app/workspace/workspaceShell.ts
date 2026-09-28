@@ -29,7 +29,7 @@ import {
   RAIL_CHEVRON_LEFT,
   RAIL_CHEVRON_RIGHT,
 } from '../../ui/panelChrome';
-import { createWorkspaceRouter, type WorkspacePage, type WorkspaceRouter } from './workspaceRouter';
+import { createRailIntent, createWorkspaceRouter, type WorkspacePage, type WorkspaceRouter } from './workspaceRouter';
 import { createAnalyseWorkspace, type AnalyseHostPanel, type AnalysePage, type AnalyseStudio } from './analyseWorkspace';
 import { createDataHome } from './dataHome';
 import { mountResultsShelf, type ResultsShelfSources, type ShelfExportPanel, type ShelfTerrainPanel } from '../results/resultsShelfMount';
@@ -162,6 +162,8 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   analyse.attach(router);
   const placeAnalyse = (): void => analyse.place(workspace.mode('analyse'));
   const leftPanels = workspace.element;
+  const railIntent = createRailIntent(leftPanels);
+  d.addTeardown(railIntent.dispose);
   // Data home = the live layer list (re-parented out of the Inspector, which
   // keeps updating it) + compact rows. The class legend is the Classes page;
   // Layer Health stays in the Inspector, which is per-scan.
@@ -314,11 +316,11 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
       const page = id.slice(5) as ToolPage;
       const node = id.startsWith('tool.') ? pages[page]?.element() : null;
       const up = !!node && !node.classList.contains('olv-hidden') && node.style.display !== 'none';
-      if (up) live.navigate({ mode: 'work', page }, leftPanels.contains(document.activeElement));
+      if (up) live.navigate({ mode: 'work', page }, railIntent.startedInRail());
       return up;
     },
     openToolPage: (page) => {
-      live.navigate({ mode: 'work', page }, leftPanels.contains(document.activeElement));
+      live.navigate({ mode: 'work', page }, railIntent.startedInRail());
       // A tool just started: on a phone, drop the sheet so the scene is free to
       // tap. The Tools tab keeps the page, so opening the sheet again shows it.
       if (mobileApplied) sheet.setDetent('peek');
