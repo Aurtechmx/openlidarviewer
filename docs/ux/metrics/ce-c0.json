@@ -1,0 +1,244 @@
+{
+  "spec": "docs/ux/COMMUNITY_SPEC.md section 11.4",
+  "phase": "C0",
+  "project": "deterministic",
+  "primaryMetrics": [
+    "clicks",
+    "surfaceSwitches"
+  ],
+  "informationalMetrics": [
+    "timeToSuccessMs"
+  ],
+  "notes": [
+    "Clicks and surface switches depend only on the route and are the same on every machine.",
+    "timeToSuccessMs depends on the machine and build and is informational only.",
+    "A measurement point placed through the test seam counts as one canvas click.",
+    "A surface is the active mode, its page, and any open modal, workspace or palette."
+  ],
+  "journeys": [
+    {
+      "id": "J1",
+      "viewport": "1440x900",
+      "success": true,
+      "clicks": 4,
+      "surfaceSwitches": 2,
+      "backPresses": 0,
+      "escapePresses": 0,
+      "keyPresses": 0,
+      "fieldEntries": 0,
+      "revisits": 0,
+      "timeToSuccessMs": 1381,
+      "facts": {
+        "valueText": "1.0000 m · 270° ● ×"
+      },
+      "path": [
+        "data / home",
+        "work / home",
+        "work / Measure"
+      ]
+    },
+    {
+      "id": "J2",
+      "viewport": "1440x900",
+      "success": true,
+      "clicks": 2,
+      "surfaceSwitches": 1,
+      "backPresses": 0,
+      "escapePresses": 0,
+      "keyPresses": 0,
+      "fieldEntries": 0,
+      "revisits": 0,
+      "timeToSuccessMs": 400,
+      "facts": {
+        "file": "*.olvsession",
+        "landedOnMeasure": true
+      },
+      "path": [
+        "data / home",
+        "work / Measure"
+      ]
+    },
+    {
+      "id": "J3",
+      "viewport": "1440x900",
+      "success": true,
+      "clicks": 5,
+      "surfaceSwitches": 5,
+      "backPresses": 1,
+      "escapePresses": 0,
+      "keyPresses": 0,
+      "fieldEntries": 0,
+      "revisits": 1,
+      "timeToSuccessMs": 1765,
+      "facts": {
+        "labRan": true
+      },
+      "path": [
+        "data / home",
+        "analyse / home",
+        "analyse / home / modal:Observatory",
+        "analyse / home",
+        "work / home",
+        "work / Measure"
+      ]
+    },
+    {
+      "id": "J4",
+      "viewport": "1440x900",
+      "success": true,
+      "clicks": 3,
+      "surfaceSwitches": 2,
+      "backPresses": 2,
+      "escapePresses": 0,
+      "keyPresses": 0,
+      "fieldEntries": 0,
+      "revisits": 0,
+      "timeToSuccessMs": 937,
+      "facts": {
+        "locationReadableWithoutRail": false,
+        "locationTextFound": null,
+        "railInteractions": 3,
+        "backLabels": 2,
+        "succeedsWithoutRail": false
+      },
+      "path": [
+        "analyse / Contours / ws:Contour Studio",
+        "analyse / Terrain",
+        "analyse / home"
+      ]
+    },
+    {
+      "id": "J5",
+      "viewport": "1440x900",
+      "success": true,
+      "clicks": 0,
+      "surfaceSwitches": 0,
+      "backPresses": 0,
+      "escapePresses": 0,
+      "keyPresses": 0,
+      "fieldEntries": 0,
+      "revisits": 0,
+      "timeToSuccessMs": 241,
+      "facts": {
+        "foundIn": "Scan Intelligence (right rail), layer health card",
+        "visibleWithoutHover": true
+      },
+      "path": [
+        "data / home"
+      ]
+    },
+    {
+      "id": "J6-J1",
+      "viewport": "390x844",
+      "success": true,
+      "clicks": 5,
+      "surfaceSwitches": 2,
+      "backPresses": 0,
+      "escapePresses": 0,
+      "keyPresses": 0,
+      "fieldEntries": 0,
+      "revisits": 0,
+      "timeToSuccessMs": 983,
+      "facts": {
+        "sheetLoweredOnToolStart": true,
+        "valueText": "1.0000 m · 270° ● ×"
+      },
+      "path": [
+        "data / home",
+        "work / home",
+        "work / Measure"
+      ]
+    },
+    {
+      "id": "J6-J3",
+      "viewport": "390x844",
+      "success": true,
+      "clicks": 5,
+      "surfaceSwitches": 5,
+      "backPresses": 1,
+      "escapePresses": 0,
+      "keyPresses": 0,
+      "fieldEntries": 0,
+      "revisits": 1,
+      "timeToSuccessMs": 1629,
+      "facts": {
+        "labRan": true
+      },
+      "path": [
+        "data / home",
+        "analyse / home",
+        "analyse / home / modal:Observatory",
+        "analyse / home",
+        "work / home",
+        "work / Measure"
+      ]
+    },
+    {
+      "id": "J7-flow-pulse",
+      "viewport": "1440x900",
+      "success": true,
+      "clicks": 5,
+      "surfaceSwitches": 4,
+      "backPresses": 1,
+      "escapePresses": 0,
+      "keyPresses": 0,
+      "fieldEntries": 0,
+      "revisits": 1,
+      "timeToSuccessMs": 2195,
+      "facts": {
+        "statusAtStart": "BLOCKED",
+        "remedy": "Prepare terrain"
+      },
+      "path": [
+        "data / home",
+        "analyse / home",
+        "analyse / Terrain",
+        "analyse / home",
+        "analyse / home / modal:Field Simulation Lab: Flow Pulse"
+      ]
+    },
+    {
+      "id": "J7-terrain-access",
+      "viewport": "1440x900",
+      "success": true,
+      "clicks": 10,
+      "surfaceSwitches": 4,
+      "backPresses": 1,
+      "escapePresses": 0,
+      "keyPresses": 3,
+      "fieldEntries": 6,
+      "revisits": 1,
+      "timeToSuccessMs": 7012,
+      "facts": {
+        "statusAtStart": "BLOCKED",
+        "remedy": "Prepare terrain"
+      },
+      "path": [
+        "data / home",
+        "analyse / home",
+        "analyse / Terrain",
+        "analyse / home",
+        "analyse / home / modal:Field Simulation Lab: Terrain Access"
+      ]
+    },
+    {
+      "id": "J7-observatory",
+      "viewport": "1440x900",
+      "success": true,
+      "clicks": 2,
+      "surfaceSwitches": 2,
+      "backPresses": 0,
+      "escapePresses": 0,
+      "keyPresses": 0,
+      "fieldEntries": 0,
+      "revisits": 0,
+      "timeToSuccessMs": 1236,
+      "facts": {},
+      "path": [
+        "data / home",
+        "analyse / home",
+        "analyse / home / modal:Observatory"
+      ]
+    }
+  ]
+}
