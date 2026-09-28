@@ -4,17 +4,19 @@ In development. This document is written from the final state at freeze. What
 follows is the state so far, and every entry is reproduced rather than carried
 forward from v0.6.9 by default.
 
-## Withheld points are excluded from terrain, profiles and density only
+## Withheld points are excluded from terrain, volumes, profiles and density only
 
 The decoder keeps Synthetic, Key-Point, Withheld and Overlap, and both LAS
-writers emit them. Terrain analysis, lasso stockpile volumes, profiles (the
-profile chart and the profile workbench section) and point density (the scan report's Density and
-Spacing, and the density tier) leave Withheld points out and record how many
-points they read, how many were Withheld and how many they analysed. Overlap
-points are kept. When the flags cannot be read, as on a voxel-reduced load or
-where density uses the file header's total, the Withheld count is recorded as
-unknown. The polygon Volume tool and the other analyses still read a Withheld point
-as an ordinary return. ASPRS says a producer generally sets Withheld on overlap
+writers emit them. Terrain analysis, both volume tools (the lasso stockpile and
+the polygon Volume tool), profiles (the profile chart and the profile workbench
+section) and point density (the scan report's Density and Spacing, and the
+density tier) leave Withheld points out and record how many points they read,
+how many were Withheld and how many they analysed. Overlap points are kept.
+When the flags cannot be read, as on a voxel-reduced load or where density
+uses the file header's total, the Withheld count is recorded as unknown.
+Terrain analysis first decodes the source file again when it can, and then
+records the counts from that decode. Elevation comparison between two epochs
+and feature extraction read Withheld points like any other return. ASPRS says a producer generally sets Withheld on overlap
 points culled during flight-line merging, so this matters on conforming files.
 
 ## Flags do not survive every derivation
@@ -39,7 +41,7 @@ guess.
 Every v0.6.9 limitation was reproduced or cleared rather than carried forward.
 The implementation ledger records each one with how it was established and the
 test that proves its status. Of the inherited set, the boundary share was fixed,
-the stockpile split was half closed, and two turned out not to reproduce: the
+the stockpile split was closed, and two turned out not to reproduce: the
 oriented extent is presented as a principal-axis estimate with its failure mode
 named, and truncation is reported rather than hidden.
 
@@ -89,9 +91,10 @@ downstream-path trace, an upstream-catchment trace, and a log-scaled
 accumulation overlay (cell counts, not water) drawn on the grid and, when the
 caller supplies scene membership, in the 3D scene as well.
 
-Each run lists its limitations beside its figures. Whether Withheld points were
-excluded is not recorded for the terrain behind it, so no run can state it
-either way. A terrain built from a streamed subset or a sample is named as
+Each run lists its limitations beside its figures. A run states whether
+Withheld points were left out of the terrain behind it, as the terrain analysis
+recorded it; when a contributing source carried no flags, the run says the
+exclusion is not recorded. A terrain built from a streamed subset or a sample is named as
 such. With the horizontal scale unresolved, contributing area in square metres
 is withheld and cell counts remain. A geographic frame whose latitude is
 unknown is refused, including a scene whose contributing layers do not share
@@ -111,11 +114,10 @@ fill depth in the conditioning limitation carries the same unit, failing
 closed to "in source units" when it did not resolve. The exported ASCII
 rasters carry the real lower-left corner and a `.prj` sidecar when the CRS
 resolves, rather than a fixed local (0, 0) origin. The accumulation overlay
-now stays drawn on the scan after the lab closes, until the user turns it
-off or the terrain/CRS it was built from goes stale; that staleness is only
-re-checked the next time the lab is reopened, not the moment the change
-happens, so a dataset swapped while the lab stays closed can leave a stale
-overlay on screen until it is reopened once.
+stays drawn on the scan after the lab closes, until the user turns it off. It
+is removed when the terrain or CRS it was built from goes stale: another scan
+loads, the scan closes, the CRS changes or a classification edit invalidates
+the terrain.
 
 ## Terrain Access is a geometry screening, never a safety guarantee
 
@@ -166,21 +168,28 @@ the `TERRAIN-ACCESS` claim sits at E3.
 
 Six modules implement alignment. No user path reaches them.
 
+Compare elevation, which needs exactly two loaded layers, aligns the second
+epoch to the first with its own planar fit, applying a yaw and a horizontal
+shift with Z locked, before it differences them. That fit lives in the change
+detection code and does not reach the six modules.
+
 A half-wired alignment tool is worse than none, and the workflow it would need
 is not built.
 
-## The browser matrix is advisory
+## Four legs block a merge; the iOS simulator is advisory
 
-Chromium blocks a release; Firefox, WebKit and Windows do not, and no ruleset
-requires the cross-browser smoke workflow. Touch gestures run end to end on all
-three engines, and in the iPhone-shaped WebKit project, as synthesized pointer
-events. Multi-touch on a real device is unverified. An advisory iOS simulator
-check drives real Mobile Safari on a pinned simulator (iOS 26.5,
-iPhone 17e) and has passed end to end, including a two-finger pinch. It
-stays advisory until 20 consecutive passes, counted by `scripts/ios-streak.mjs`
-under the rule in ledger L13. No matrix is
-recorded for this development cut: that evidence comes from the engines
-themselves.
+Chromium, Firefox, WebKit and Windows block a merge. The `e2e-firefox`,
+`e2e-webkit` and `windows` jobs run in `ci.yml` and are listed in `ci-green`'s
+`needs`, which the ruleset for `main` requires (ledger L13). Windows runs
+Chromium. The iPhone-shaped WebKit project runs in the cross-browser smoke
+workflow, which sits outside `ci-green` and which no ruleset requires. Touch
+gestures run end to end on all three engines, and in the iPhone-shaped WebKit
+project, as synthesized pointer events. Multi-touch on a real device is
+unverified. An iOS simulator check drives real Mobile Safari on a pinned
+simulator (iOS 26.5, iPhone 17e) and has passed end to end, including a
+two-finger pinch. It runs only when started by hand and is advisory until 20
+consecutive passes, counted by `scripts/ios-streak.mjs`. No matrix is recorded
+for this development cut: that evidence comes from the engines themselves.
 
 ## The two monoliths are still monoliths
 
@@ -202,8 +211,17 @@ across 1028 modules with no dependency cycles.
 
 ## The shell has little headroom
 
-The eager bundle measures about 799 KiB against an 812 KiB ceiling. New work
+The eager bundle measures about 789 KiB against a 795 KiB ceiling. New work
 goes behind a lazy seam rather than being paid for by a raise.
+
+## An idle scene still draws four frames a second
+
+When nothing asks for a frame the render loop sleeps, but it still draws one
+heartbeat frame every 250 ms (`IDLE_HEARTBEAT_MS` in
+`src/render/frameScheduler.ts`) so that a change nobody announced reaches the
+screen. On a machine without GPU rendering the browser draws those frames in
+software, so an idle scene holding a large cloud keeps using CPU while nothing
+on screen moves.
 
 ## Multi-layer mounting is enabled, with a precision refinement outstanding
 

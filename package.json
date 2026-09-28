@@ -104,6 +104,7 @@
     "gen:claim-registry": "node scripts/generate-claim-registry.mjs",
     "lint:release-sync": "node scripts/lint-release-sync.mjs",
     "lint:release-truth": "node scripts/lint-release-truth.mjs",
+    "lint:known-limitations": "node scripts/lint-known-limitations.mjs",
     "gen:provenance": "node scripts/sync-provenance.mjs",
     "lint:sbom": "node scripts/lint-sbom.mjs",
     "lint:notices": "node scripts/gen-third-party-notices.mjs --check",
