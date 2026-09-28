@@ -78,18 +78,19 @@ the two entries were renumbered when the branches were integrated.
 | L48 | PERFORMANCE | TEST | med | FIXED | new | Render-memory telemetry counted position and colour only, so a classified cloud was reported at three quarters of what it used. |
 | L49 | PERFORMANCE | READ | med | MEASURED | new | Compact source attributes are uploaded as Float32: RGB, classification and intensity cost 14 bytes a point more than the source carries. Without a layout change only colour can shrink, by 8 bytes a point. |
 | L172 | LOADER | TEST | high | FIXED | new | A LAS 1.4 file that stores its coordinate system in an extended VLR after the point data opened with no CRS, no units and no vertical datum, and exported with no CRS at all. |
+| L174 | LOADER | TEST | high | FIXED | new | A CRS read from an extended VLR was labelled as a VLR, and a large LAS/LAZ opened out of core, or a COPC with its CRS in an EVLR, showed no CRS at all. |
 | L175 | SCIENTIFIC | TEST | med | FIXED | new | A measured cell the attention raster's residual sampling skipped scored 0 on the residual and, with no other input flagging it, was written as level 0, the same as a cell whose residual was computed and small. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 31
+- FIXED: 32
 - MEASURED: 1
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 51
+- total: 52
 
 ## Detail
 
@@ -6785,8 +6786,6 @@ precedence.
 
 Covered by `tests/lasEvlrCrs.test.ts`, `tests/inspectorLazyRenderCrs.test.ts`,
 `tests/e2e/lasEvlrCrs.spec.ts` and `tests/e2e/streaming.spec.ts`.
-
-### L174 · FIXED · SCIENTIFIC
 
 ### L175 · FIXED · SCIENTIFIC
 
