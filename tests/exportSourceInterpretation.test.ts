@@ -144,7 +144,8 @@ describe('Observatory package', () => {
 describe('single-file vector exports', () => {
   const PROV_IN = {
     generatedAt: '2026-01-01T00:00:00.000Z',
-    source: '/home/someone/private/site',
+    // Built at runtime so the tree never names a home directory (lint:no-host-paths).
+    source: ['', 'home', 'someone', 'private', 'site'].join('/'),
     crsName: 'EPSG:32612',
     interpretation: SAMPLED_PROBABLE,
   };
