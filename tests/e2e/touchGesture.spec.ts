@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropTinyPly, reloadSettled } from './helpers';
+import { dropTinyLas, dropTinyPly, reloadSettled } from './helpers';
+import { DEFAULT_FOV } from '../../src/render/renderBootstrapPolicy';
 import { MOBILE_LAYOUT_QUERY } from '../../src/ui/isMobileDevice';
 
 /**
@@ -309,6 +310,120 @@ test.describe('mobile touch model — twist + pinch + pan decomposition', () => 
 
     const chipAfter = page.locator('.olv-chip', { hasText: 'Touch twist' });
     await expect(chipAfter).not.toHaveClass(/olv-chip-active/);
+  });
+});
+
+/**
+ * Screen-space motion checks on a Z-up survey. The pose oracle gives the
+ * camera position and orbit pivot; with the survey's Z up and the default
+ * field of view, a world point projects to canvas pixels the same way the
+ * viewer draws it. Directions are what these tests read, so a small error in
+ * the field of view would not change a sign.
+ */
+type Pose = { position: number[]; target: number[] };
+type V3 = [number, number, number];
+const sub = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const dot = (a: V3, b: V3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const unit = (a: V3): V3 => { const l = Math.hypot(...a); return [a[0] / l, a[1] / l, a[2] / l]; };
+
+function basis(p: Pose): { eye: V3; fwd: V3; right: V3; up: V3 } {
+  const eye = p.position as V3;
+  const fwd = unit(sub(p.target as V3, eye));
+  const right = unit(cross(fwd, [0, 0, 1]));
+  return { eye, fwd, right, up: cross(right, fwd) };
+}
+
+function project(p: Pose, w: number, h: number, q: V3): { x: number; y: number } {
+  const { eye, fwd, right, up } = basis(p);
+  const t = Math.tan((DEFAULT_FOV * Math.PI) / 360);
+  const d = sub(q, eye);
+  const z = dot(d, fwd);
+  return { x: w / 2 + (dot(d, right) / (z * t * (w / h))) * (w / 2), y: h / 2 - (dot(d, up) / (z * t)) * (h / 2) };
+}
+
+/** The point at the pivot's height under canvas pixel (x, y). */
+function groundUnder(p: Pose, w: number, h: number, x: number, y: number): V3 {
+  const { eye, fwd, right, up } = basis(p);
+  const t = Math.tan((DEFAULT_FOV * Math.PI) / 360);
+  const nx = ((x / w) * 2 - 1) * t * (w / h);
+  const ny = (1 - (y / h) * 2) * t;
+  const dir: V3 = [fwd[0] + right[0] * nx + up[0] * ny, fwd[1] + right[1] * nx + up[1] * ny, fwd[2] + right[2] * nx + up[2] * ny];
+  const k = (p.target[2] - eye[2]) / dir[2];
+  return [eye[0] + dir[0] * k, eye[1] + dir[1] * k, eye[2] + dir[2] * k];
+}
+
+/**
+ * A one-finger drag. It reuses pointer id 1, which the browser always knows
+ * (the mouse), so OrbitControls' pointer capture accepts a synthetic event.
+ */
+async function oneFingerDrag(page: Page, from: { x: number; y: number }, to: { x: number; y: number }, steps = 12): Promise<void> {
+  await page.evaluate(
+    async ([from, to, steps]) => {
+      const canvas = document.querySelector('.olv-canvas') as HTMLElement;
+      const rect = canvas.getBoundingClientRect();
+      const fire = (type: string, x: number, y: number) => {
+        const ev = new PointerEvent(type, {
+          bubbles: true, cancelable: true, pointerId: 1, pointerType: 'touch', isPrimary: true,
+          clientX: rect.left + x, clientY: rect.top + y, buttons: type === 'pointerup' ? 0 : 1,
+        });
+        Object.defineProperty(ev, 'offsetX', { get: () => x });
+        Object.defineProperty(ev, 'offsetY', { get: () => y });
+        canvas.dispatchEvent(ev);
+      };
+      fire('pointerdown', from.x, from.y);
+      for (let i = 1; i <= steps; i++) {
+        fire('pointermove', from.x + ((to.x - from.x) * i) / steps, from.y + ((to.y - from.y) * i) / steps);
+        await new Promise((r) => requestAnimationFrame(r));
+      }
+      fire('pointerup', to.x, to.y);
+    },
+    [from, to, steps] as const,
+  );
+}
+
+test.describe('touch moves the scene the way the fingers move (Z-up survey)', () => {
+  test('a one-finger drag up carries the ground under the finger up', async ({ page, browserName }) => {
+    // Desktop Firefox does not start OrbitControls' drag from a synthetic touch
+    // pointer. The mouse and finger share one orbit path, which
+    // tests/orbitScreenDirection.test.ts drives with both.
+    test.skip(browserName === 'firefox', 'synthetic touch pointer does not reach OrbitControls on desktop Firefox');
+    await page.goto('/?test=1');
+    await dropTinyLas(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+    const before = JSON.parse(await settledPose(page)) as Pose;
+    const box = await page.locator('.olv-canvas').boundingBox();
+    if (!box) throw new Error('no canvas bounding box');
+    const { width: w, height: h } = box;
+    const start = { x: w / 2, y: h * 0.7 };
+    const grabbed = groundUnder(before, w, h, start.x, start.y);
+    await oneFingerDrag(page, start, { x: start.x, y: start.y - 60 });
+    const after = JSON.parse(await settledPose(page)) as Pose;
+    const a = project(before, w, h, grabbed);
+    const b = project(after, w, h, grabbed);
+    // Up on screen, and not sideways.
+    expect(b.y - a.y).toBeLessThan(-2);
+    expect(Math.abs(b.x - a.x)).toBeLessThan(0.2 * Math.abs(b.y - a.y));
+  });
+
+  test('a pinch zooms toward the fingers, not the screen centre', async ({ page }) => {
+    await page.goto('/?test=1');
+    await dropTinyLas(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+    const before = JSON.parse(await settledPose(page)) as Pose;
+    const box = await page.locator('.olv-canvas').boundingBox();
+    if (!box) throw new Error('no canvas bounding box');
+    const cx = box.width * 0.75;
+    const cy = box.height / 2;
+    const r0 = Math.min(40, box.width * 0.08);
+    const r1 = r0 * 2;
+    await twoFingerGesture(page, { x: cx - r0, y: cy }, { x: cx + r0, y: cy }, { x: cx - r1, y: cy }, { x: cx + r1, y: cy });
+    const after = JSON.parse(await settledPose(page)) as Pose;
+    const dist = (p: Pose) => Math.hypot(...sub(p.position as V3, p.target as V3));
+    expect(dist(after)).toBeLessThan(dist(before));
+    // The pivot moved toward the right half, where the fingers are.
+    const shift = dot(sub(after.target as V3, before.target as V3), basis(before).right);
+    expect(shift).toBeGreaterThan(0);
   });
 });
 

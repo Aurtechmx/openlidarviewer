@@ -89,17 +89,18 @@ the two entries were renumbered when the branches were integrated.
 | L181 | EXPORT | TEST | med | FIXED | new | No export recorded the format probe interpretation level, the single-file vector exports carried no build or source record, and the simulation packages did not state the data basis of the surface they read. |
 | L182 | LOADER | TEST | med | FIXED | new | glTF COLOR_0, which the glTF 2.0 specification defines as linear, was stored as sRGB bytes, so midtones displayed too dark; a GLB opened in the browser failed to decode; and normals declared by glTF, PLY and PNTS files were not carried into the cloud. |
 | L185 | UI | TEST | low | FIXED | new | Hiding the load toast after a finished load emptied the shared polite live region, erasing an announcement another panel had made during the settle. |
+| L186 | UI | TEST | high | FIXED | new | On a Z-up survey the orbit turned about world Y, so a vertical drag slid the scene sideways or tilted it backwards depending on the view; a pinch zoomed about the pivot instead of the fingers; wheel streams of a few pixels per event lost part or all of their zoom. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 40
+- FIXED: 41
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 61
+- total: 62
 
 ## Detail
 
@@ -7126,3 +7127,37 @@ a newer announcement stays.
 
 Covered by `tests/dropZoneBusyScan.test.ts` and
 `tests/e2e/inspectAnnouncements.spec.ts`.
+
+### L186 · FIXED · UI
+
+Orbit pole. OrbitControls stores the rotation from `camera.up` to +Y once,
+when it is built, and orbits about that axis. The camera is built with three's
+default Y up, and a LAS, LAZ, XYZ, E57 or COPC survey is Z-up, so orbit turned
+about world Y. Seen from the opening view, a drag down moved the ground under
+the pointer 120 px up for a 60 px drag, the reverse of the drag. Seen from 90°
+or 270° of azimuth, the same drag moved it 132 px sideways and 51 px vertically.
+Mouse and one-finger touch share the path and were affected alike.
+`NavController.setWorldUp` now sets `camera.up` and re-derives the orbit pole
+from the world up, so a vertical drag moves the scene along screen Y at every
+azimuth and elevation. Y-up phone scans were not affected and are unchanged.
+`tests/orbitScreenDirection.test.ts` drives a real OrbitControls through the
+NavController at four azimuths and two elevations with a mouse and a finger;
+`tests/e2e/touchGesture.spec.ts` checks a one-finger drag up on the tiny LAS
+fixture, including on the iPhone WebKit project. The invert-orbit preferences
+keep their meaning.
+
+Pinch anchor. The two-finger pinch scaled the camera distance about the orbit
+pivot, so the part of the scan between the fingers slid away while zooming.
+The pinch now keeps the point under the fingers' midpoint, at pivot depth,
+under the fingers, as the wheel already does for the cursor
+(`tests/e2e/touchGesture.spec.ts`).
+
+Wheel streams. A trackpad scroll or pinch arrives as many wheel events of a
+few pixels. When a single event's dolly fell under the glide rest floor, the
+floor dropped its travel instead of ending it. With one event per update, a
+stream of 1 to 6 px events did not zoom at all; in a browser, where updates
+often take in more than one event, part of the travel was lost. The rest rule
+now applies the travel it ends, so the zoom follows the sum of the stream
+(`tests/wheelSmallDeltas.test.ts`, `tests/e2e/trackpadWheel.spec.ts`).
+
+No computed value, threshold, method or export changes.

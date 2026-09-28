@@ -184,14 +184,16 @@ themselves.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,670 lines and `src/render/Viewer.ts` is 6,092, one hundred and thirty-one lines
+`src/main.ts` is 4,670 lines and `src/render/Viewer.ts` is 6,056, one hundred and sixty-seven lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
 expressions. Making the loop request-driven then took another thirty-one out:
 the activity deadlines, the reasons a frame is wanted and the scheduler left
 together as one object, which is fewer lines here and one thing to reach for
-there. The frame gained a decision while the file lost lines. A shrink-only lint
+there. The frame gained a decision while the file lost lines. The two-finger
+pinch and pan now share one screen-space shift, which took another
+thirty-six out. A shrink-only lint
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.

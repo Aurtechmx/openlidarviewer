@@ -355,6 +355,14 @@ export class NavController {
    */
   setWorldUp(up: THREE.Vector3): void {
     this._worldUp.copy(up).normalize();
+    // OrbitControls fixes its orbit pole from `camera.up` once, when it is
+    // built, and the camera is built Y-up. Re-derive it here: on a Z-up survey
+    // a Y pole turned a vertical drag into a sideways slide or a reversed tilt,
+    // depending on which way the camera faced.
+    this._camera.up.copy(this._worldUp);
+    const oc = this._controls as unknown as { _quat: THREE.Quaternion; _quatInverse: THREE.Quaternion };
+    oc._quat.setFromUnitVectors(this._worldUp, this._vTmp.set(0, 1, 0));
+    oc._quatInverse.copy(oc._quat).invert();
     // Build a stable horizontal reference frame perpendicular to up.
     const seed = Math.abs(this._worldUp.x) < 0.9
       ? new THREE.Vector3(1, 0, 0)
@@ -418,7 +426,7 @@ export class NavController {
     if (!enabled) {
       this._clearMovementKeys();
       this._clearOrbitKeys();
-      this._cancelPanGesture();
+      this._endPanGesture();
       this._endOrbitDrag();
       this._releaseCursor();
       this._controls.enabled = false;
@@ -443,7 +451,7 @@ export class NavController {
     // unfinished hand-tool drag must cancel safely, never carry over.
     this._clearMovementKeys();
     this._clearOrbitKeys();
-    this._cancelPanGesture();
+    this._endPanGesture();
     this._endOrbitDrag();
 
     // Orbit and pan are both OrbitControls-driven: pan keeps the controls
@@ -696,12 +704,13 @@ export class NavController {
    */
   private _stepWheelDolly(dt: number): void {
     if (!this._wheelDolly || isDollySettled(this._dollyVelocity)) return;
-    // The friction never reaches zero; stop the tail by the shared rest rule.
-    if (dollyVelocityAtRest(this._dollyVelocity, WHEEL_FRICTION, this._glideView())) {
-      this._dollyVelocity = 0;
-      return;
-    }
-    const s = stepDolly(this._dollyVelocity, dt, WHEEL_FRICTION);
+    // The friction never reaches zero; the shared rest rule ends the tail. The
+    // travel it ends is applied in this frame, not dropped: a trackpad scroll
+    // or pinch arrives as many wheel events of a few pixels, each under the
+    // rest floor on its own, and dropping them left the camera still.
+    const s = dollyVelocityAtRest(this._dollyVelocity, WHEEL_FRICTION, this._glideView())
+      ? { scale: Math.exp(this._dollyVelocity / WHEEL_FRICTION), velocity: 0 }
+      : stepDolly(this._dollyVelocity, dt, WHEEL_FRICTION);
     this._dollyVelocity = s.velocity;
     if (s.scale === 1) return;
     const target = this._controls.target;
@@ -743,7 +752,7 @@ export class NavController {
 
   /** Remove every event listener. Call when tearing the viewer down. */
   dispose(): void {
-    this._cancelPanGesture();
+    this._endPanGesture();
     this._endOrbitDrag();
     this._releaseCursor();
     this._canvas.removeEventListener('wheel', this._onWheel);
@@ -1004,7 +1013,7 @@ export class NavController {
     this._ctrlHeld = false;
     // A grab in flight when focus is lost would never see its pointerup —
     // cancel it (and restore the idle cursor) rather than strand it.
-    this._cancelPanGesture();
+    this._endPanGesture();
     this._endOrbitDrag();
   }
 
@@ -1147,7 +1156,7 @@ export class NavController {
     if (!this._inputEnabled || this._locked) return;
     // A second finger while a one-finger grab is live: hand off cleanly.
     if (e.pointerType === 'touch' && this._panTouches.size > 1) {
-      this._cancelPanGesture();
+      this._endPanGesture();
       return;
     }
     if (this._panPointerId !== null) return; // one grab at a time
@@ -1199,7 +1208,7 @@ export class NavController {
   private _handlePanPointerMove(e: PointerEvent): void {
     if (this._panPointerId !== e.pointerId) return;
     if (!this._inputEnabled) {
-      this._cancelPanGesture();
+      this._endPanGesture();
       return;
     }
     let delta: Vec3 | null = null;
@@ -1249,7 +1258,11 @@ export class NavController {
     this._endPanGesture();
   }
 
-  /** End the active grab: release capture and restore the idle cursor. */
+  /**
+   * End the active grab: release capture and restore the idle cursor. Also
+   * the safe cancel (mode change, tool activation, focus loss, a second
+   * finger): the camera stays where the last applied step left it.
+   */
   private _endPanGesture(): void {
     if (this._panPointerId === null) return;
     try {
@@ -1260,15 +1273,6 @@ export class NavController {
     this._panPointerId = null;
     this._panFallback = false;
     this._applyIdleCursor();
-  }
-
-  /**
-   * Cancel an unfinished grab safely — mode change, tool activation, focus
-   * loss, or a second finger. The camera simply stays where the last applied
-   * step left it (the drag is direct 1:1 — there is no inertia in P1).
-   */
-  private _cancelPanGesture(): void {
-    this._endPanGesture();
   }
 
   /** The pointer's world-space ray direction (normalized). */
