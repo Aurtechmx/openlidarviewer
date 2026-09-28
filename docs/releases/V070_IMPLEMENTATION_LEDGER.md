@@ -7360,22 +7360,42 @@ export changes.
 
 ### L192 · BUILT · UI
 
-Community wayfinding phase C4, providers (`docs/ux/COMMUNITY_SPEC.md` §9,
-CE-STRIP-00 and CE-SCOPE-05).
+Community wayfinding phase C4, the scientific state strip
+(`docs/ux/COMMUNITY_SPEC.md` §9, CE-STRIP-00 to 05).
 
-`src/process/stateProviders.ts` holds one provider per state strip item. Each
-is a pure function of the state its owner already holds and returns
+Providers. `src/process/stateProviders.ts` holds one provider per strip item.
+Each is a pure function of the state its owner already holds and returns
 `{ value, source, validity }`, where validity is a state from `SciState`. The
 dataset name reads the streaming source's name, else the active cloud's. The
 horizontal CRS and unit read `CrsService.context()` and the source of
 `CrsService.current()`, so an EVLR-sourced CRS reports `las-evlr`. The vertical
 reference reads the same context and says `Vertical: unknown` when the
-reference is not known. The layer basis reads `ScanFacts.coverage`. The review
-and blocked item counts Analyse rows at review or blocked and stale results,
-with the worst state as its validity. Processing has no provider: no single
-owner holds the running task and its progress. The duplicates found and left
-in place are listed in `docs/ux/NAVIGATION_MAP.md` §7.1. No computed value,
-threshold or export changes, and nothing renders yet.
+reference is not known. The layer basis reads `ScanFacts.coverage`. Processing
+reads the task-activity store. The review count counts Analyse rows at review
+or blocked and stale results, with the worst state as its validity.
 
-Covered by `tests/stateProviders.test.ts` on unknown-vertical, feet-unit,
-resident-only and stale fixtures, with every input frozen.
+Owners added. `src/process/taskActivity.ts` records the running tasks.
+`src/app/stateStrip/busyTasks.ts` registers every busy indicator the hosts
+already draw (file opening, streaming, the Analyse run and its exports, the
+labs, the Observatory), so no host changed; the label is the status text the
+host shows. `src/process/analysisRowsFeed.ts` holds the Analyse home's last
+`analysisRows`, published from the home's refresh, so the count is not
+computed twice. `src/app/stateStrip/stripReads.ts` gathers the inputs.
+
+Strip. One row across the foot of the viewport on desktop; the overlay gives up
+a 24 px band so the dock and rails keep their offsets above it. On the phone it
+is a compact row, at most two lines of 24 px targets, on top of the dock, and the scan prompt
+moves up by its height. It shows while a scan is open. Each item is a button
+with an accessible name stating the fact and its destination: the dataset and
+basis open Data, the CRS and vertical reference open the coordinate system in
+Data, processing and the review count open the Analyse list of affected
+items. A caution shows its state glyph beside the fact. The strip raises no
+toast or modal. The strip and its stylesheet load with the workspace shell
+chunk; the index chunk, `main.ts` and `Viewer.ts` do not grow. The duplicates
+found and left in place are listed in `docs/ux/NAVIGATION_MAP.md` §7.1. No
+computed value, threshold or export changes.
+
+Covered by `tests/stateProviders.test.ts` (unknown-vertical, feet-unit,
+resident-only and stale fixtures, every input frozen),
+`tests/stateStripLive.test.ts` and `tests/e2e/ceStrip.spec.ts` (each fact
+visible without hover on the four fixtures, at desktop size and 390 px).

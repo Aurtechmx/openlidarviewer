@@ -443,8 +443,8 @@ returns `{ value, source, validity }`. Tests: `tests/stateProviders.test.ts`.
 | Horizontal CRS and unit | `horizontalCrsProvider` | `CrsService.context()` and the `source` of `CrsService.current()`; validity from `metricSeverity` | Source labels are worded twice: `ui/inspector/renderCrs.ts:52` and `app/layerHealth.ts:122` |
 | Vertical reference | `verticalReferenceProvider` | `SpatialContext.verticalReferenceKnown`, `verticalReference`, `verticalDatum`, `verticalEpsg`; label from `heightLabel` | `main.ts:1550` and `:1563` re-derive `datumKnown` from raw metadata |
 | Layer basis | `layerBasisProvider` | `ScanFacts.coverage` from `deriveScanFacts(signalsFromLive(...))` (`app/processStudioMount.ts:145`) | The Dataset Intelligence card holds its own `classifyCoverage` result (`terrain/datasetIntelligence.ts:578`) |
-| Review and blocked | `reviewStateProvider` | `analysisRows` statuses and `ResultEntry.status === 'stale'` | `analysisRows` runs only inside the lazy Analyse home (`app/workspace/analyseWorkspace.ts:244`); the strip needs the last rows published from there |
-| Processing | None | | No owner holds the running task and its progress. Each host drives its own `BusyScanController` (`ui/AnalysePanel.ts`, `ui/StreamingPanel.ts`, `ui/DropZone.ts`) and the labs and Observatory keep their own run state |
+| Review and blocked | `reviewStateProvider` | `analysisRows` statuses as the Analyse home publishes them (`process/analysisRowsFeed.ts`) and `ResultEntry.status === 'stale'` | None |
+| Processing | `processingProvider` | `process/taskActivity.ts`, fed by `app/stateStrip/busyTasks.ts` from every busy indicator on screen | Hosts still hold their own run state; the store reads only what their indicator and status text show, so progress is null unless the host states it in that text |
 
 ## 8. Journey baseline
 

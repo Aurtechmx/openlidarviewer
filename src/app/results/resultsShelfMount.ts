@@ -74,11 +74,17 @@ export interface ResultsShelfSources {
     getCloud(id: string): { readonly name: string; readonly acquisitionStations?: { readonly stations: readonly unknown[] } } | undefined;
     getCameraPose(): Pose;
     applyCameraPose(pose: Pose): void;
+    /** The mounted streaming source, read by the state strip for its name. */
+    readonly streamingCloud?: { readonly name: string } | null;
   };
   /** Viewer id to stable layer id, for measurement owners. */
   readonly identity: { stableIdFor(viewerId: string): string | null | undefined };
   /** The active layer, read only; the shelf never sets it. */
-  readonly scans: { activeExportTargetId(): string | null; onActiveChange(fn: () => void): () => void };
+  readonly scans: {
+    activeExportTargetId(): string | null;
+    onActiveChange(fn: () => void): () => void;
+    activeCloud?(): { readonly name: string } | null;
+  };
   /** The terrain runner: its contour layers and their change signal. */
   readonly terrainRunner: ContourReader;
 }

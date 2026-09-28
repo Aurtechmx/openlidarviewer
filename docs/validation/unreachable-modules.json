@@ -449,14 +449,6 @@
       "graduation": "Reachable when a coordinator (O9) adds a called `lazyChunks.ts` loader and mounts it on a real resident cloud.",
       "review": "2027-03-31",
       "declaredIn": "docs/observatory/SPEC.md"
-    },
-    {
-      "path": "src/process/stateProviders.ts",
-      "status": "staged",
-      "why": "The scientific state strip's providers (CE-STRIP-00, CE-SCOPE-05). They land before the strip that reads them so each provider can be tested against the state its owner holds.",
-      "graduation": "Reachable when the state strip (COMMUNITY_SPEC C4) mounts and reads them.",
-      "review": "2027-03-31",
-      "declaredIn": "docs/ux/COMMUNITY_SPEC.md"
     }
   ]
 }

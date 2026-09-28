@@ -16,11 +16,10 @@
  *   • vertical reference← the same `SpatialContext`
  *   • layer basis       ← `ScanFacts.coverage`, as `deriveScanFacts` settles it
  *                          from `signalsFromLive`
- *   • review and blocked← the Analyse home's `analysisRows` statuses and the
- *                          results index's `stale` entries
- *
- * Processing has no provider here: no single owner holds the running task and
- * its progress (see docs/ux/NAVIGATION_MAP.md §7).
+ *   • processing         ← the task-activity store (`taskActivity.ts`)
+ *   • review and blocked← the Analyse home's `analysisRows` statuses (as
+ *                          published to `analysisRowsFeed.ts`) and the results
+ *                          index's `stale` entries
  */
 
 import type { SpatialContext } from '../geo/SpatialContext';
@@ -31,6 +30,7 @@ import type { Coverage, ScanFacts } from './ProcessPlan';
 import type { AnalysisRow } from './analysisStatus';
 import type { ResultEntry } from '../app/results/resultsIndex';
 import type { SciState } from '../ui/stateChip';
+import type { TaskActivity } from './taskActivity';
 
 /** What every strip provider returns. */
 export interface StripFact<V = string> {
@@ -104,7 +104,7 @@ export function horizontalCrsProvider(
 // ── Vertical reference ──────────────────────────────────────────────────────
 
 export interface VerticalRef {
-  /** `heightLabel` of the reference, or `Vertical: unknown`. */
+  /** `Vertical:` and the datum (else `heightLabel` of the reference), or `Vertical: unknown`. */
   readonly label: string;
   readonly reference: SpatialContext['verticalReference'];
   readonly datum: string | undefined;
@@ -118,7 +118,7 @@ export function verticalReferenceProvider(context: SpatialContext): StripFact<Ve
   const known = context.verticalReferenceKnown;
   return {
     value: {
-      label: known ? heightLabel(context.verticalReference) : VERTICAL_UNKNOWN,
+      label: known ? `Vertical: ${context.verticalDatum ?? heightLabel(context.verticalReference)}` : VERTICAL_UNKNOWN,
       reference: context.verticalReference,
       datum: context.verticalDatum,
       epsg: context.verticalEpsg,
@@ -174,4 +174,24 @@ export function reviewStateProvider(
     ? 'blocked'
     : items.length > 0 ? 'review' : 'measured';
   return { value: { count: items.length, items }, source: 'analysis-rows+results-index', validity: worst };
+}
+
+// ── Processing ──────────────────────────────────────────────────────────────
+
+export type Processing =
+  | { readonly state: 'idle' }
+  | { readonly state: 'running'; readonly label: string; readonly progress: number | null; readonly more: number };
+
+/**
+ * Idle, or the oldest live task with its label and progress as its host
+ * states them; `more` counts the other live tasks.
+ */
+export function processingProvider(tasks: readonly TaskActivity[]): StripFact<Processing> {
+  const first = tasks[0];
+  if (!first) return { value: { state: 'idle' }, source: 'task-activity', validity: 'info' };
+  return {
+    value: { state: 'running', label: first.label, progress: first.progress, more: tasks.length - 1 },
+    source: 'task-activity',
+    validity: 'info',
+  };
 }

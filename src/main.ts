@@ -1050,8 +1050,8 @@ const visuals = createInspectorVisualCoordinator({
   },
   activeScanId: () => scans.activeId,
   colorMode: { get: () => currentColorMode, set: (mode) => { currentColorMode = mode; } },
-  afterColorModeChange: () => syncColorModeForActive(),
-  onPreferenceChanged: () => persistPrefs(),
+  afterColorModeChange: syncColorModeForActive,
+  onPreferenceChanged: persistPrefs,
 });
 
 const layerService = createLayerService({
@@ -1102,7 +1102,7 @@ const inspector = new Inspector({
   onToggleLock: (id, locked) => viewer.setCloudLocked(id, locked),
   onCompareLayers: () => compareLoadedLayers(),
   onExportDifference: () => exportDifferenceRaster(),
-  onSaveView: () => saveCurrentView(),
+  onSaveView: saveCurrentView,
   onApplyView: (index) => applyView(index),
   onRenameView: (index, name) => {
     bookmarks.rename(index, name);
@@ -3241,15 +3241,15 @@ void viewerLoaded.then(() => {
         analysePanel: () => analysePanel, objectPanel: () => objectPanel,
         results: { viewer, identity: runtime.layerIdentity, scans, terrainRunner },
         measurePanel: () => measureMount.panel, setMeasureMountElement: (fn) => measureMount.setMountElement(fn),
-        hasScan,
-        onModeChange: () => refreshToolLauncher(),
+        hasScan, crsService,
+        onModeChange: refreshToolLauncher,
     });
     void fillToolLauncher(); // the card fills its mounted host when its chunk lands
     workspaceShell = shell;
     phoneSheet = shell.mobileSheet;
     syncMobileSheet = shell.applyMobileSheet;
     mountAnalysePanelElement = shell.mountAnalysePanel; mountObjectPanelElement = shell.mountObjectPanel;
-    // If either panel already mounted before this wiring ran, place it now.
+    // If either panel mounted before this wiring ran, place it now.
     if (analysePanel) mountAnalysePanelElement(analysePanel.element);
     if (objectPanel) mountObjectPanelElement(objectPanel.element);
     });

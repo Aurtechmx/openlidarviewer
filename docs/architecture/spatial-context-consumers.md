@@ -71,7 +71,7 @@ has re-opened the divergence this closes.
 | 15 | Streaming scan report | migrated | `src/analysis/streamingExtentRows.ts`, `src/app/streamingScanReport.ts`, `src/app/streamingReportSeam.ts` | `linearUnitKnown`, `linearUnitToMetres`, `verticalMetresPerUnit`, `isGeographic` |
 | 16 | Tool preflight | migrated | `src/process/toolPreflight.ts` | `metricClaimsPermitted`, `verticalReferenceKnown`, `crsName` |
 | 17 | Cross-CRS project placement | migrated | `src/geo/projectPlacement.ts` | vertical verdict delegated to `src/geo/frameCompatibility.ts` |
-| 18 | State strip providers | migrated | `src/process/stateProviders.ts` | `crsName`, `epsg`, `linearUnit`, `linearUnitKnown`, `metricSeverity`, `verticalReference`, `verticalReferenceKnown`, `verticalDatum`, `verticalEpsg` |
+| 18 | State strip providers | migrated | `src/process/stateProviders.ts`, `src/app/stateStrip/stripReads.ts`, `src/app/stateStrip/stateStripMount.ts` | `crsName`, `epsg`, `linearUnit`, `linearUnitKnown`, `metricSeverity`, `verticalReference`, `verticalReferenceKnown`, `verticalDatum`, `verticalEpsg` |
 
 ## Deprecated predicates
 
