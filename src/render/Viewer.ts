@@ -215,6 +215,7 @@ import {
 import { getEdlPreset, type EdlPresetId } from './edlPresets';
 import type { Vec3, VolumeRecord } from './measure/types';
 import { TouchTracker } from './touchTracker';
+import type { GestureDelta } from './touchGesture';
 import { TouchTapGate } from './touchTapGate';
 import { CameraPoseWatch, DampingSettleGate, FrameDemand, VisibleHeartbeat } from './frameDemand';
 import { resolveStreamingCompatibility } from './streamingCompatibility';
@@ -4064,10 +4065,10 @@ export class Viewer {
     // the framing adapts to the scan's shape. 1.05 leaves a small margin so the
     // edge points sit just inside the frame rather than on its border.
     const dist = fitBoxDistance({
-      boxMin: { x: box.min.x, y: box.min.y, z: box.min.z },
-      boxMax: { x: box.max.x, y: box.max.y, z: box.max.z },
+      boxMin: box.min,
+      boxMax: box.max,
       look: { x: -dir.x, y: -dir.y, z: -dir.z },
-      worldUp: { x: this._worldUp.x, y: this._worldUp.y, z: this._worldUp.z },
+      worldUp: this._worldUp,
       fovDeg: this._camera.fov,
       aspect: this._camera.aspect,
       pad: 1.05,
@@ -4097,10 +4098,10 @@ export class Viewer {
     if (!sphere) return false;
     const horiz = this._horizontalAxis();
     const pose = cameraPresetPose(name, {
-      center: { x: sphere.center.x, y: sphere.center.y, z: sphere.center.z },
+      center: sphere.center,
       radius: sphere.radius,
-      worldUp: { x: this._worldUp.x, y: this._worldUp.y, z: this._worldUp.z },
-      horizontal: { x: horiz.x, y: horiz.y, z: horiz.z },
+      worldUp: this._worldUp,
+      horizontal: horiz,
       fovDeg: this._camera.fov,
     });
     const pos = new THREE.Vector3(pose.position.x, pose.position.y, pose.position.z);
@@ -4144,10 +4145,10 @@ export class Viewer {
     this._nav.setMode('orbit');
     const horiz = this._horizontalAxis();
     const pose = standardViewPose(view, {
-      center: { x: sphere.center.x, y: sphere.center.y, z: sphere.center.z },
+      center: sphere.center,
       radius: sphere.radius,
-      worldUp: { x: this._worldUp.x, y: this._worldUp.y, z: this._worldUp.z },
-      horizontal: { x: horiz.x, y: horiz.y, z: horiz.z },
+      worldUp: this._worldUp,
+      horizontal: horiz,
       fovDeg: this._camera.fov,
     });
     const target = new THREE.Vector3(pose.target.x, pose.target.y, pose.target.z);
@@ -5286,9 +5287,9 @@ export class Viewer {
    * Apply a decomposed 2-pointer touch-gesture delta to the camera. Each
    * channel touches a different bit of the OrbitControls state:
    *
-   *   - **dPinch** scales the (camera → target) vector by `1 + dPinch`,
-   *     dollying the camera in (negative dPinch) or out (positive). Bounded
-   *     by `controls.minDistance` / `maxDistance`.
+   *   - **dPinch** dollies in on a spread and out on a pinch, bounded by
+   *     `controls.minDistance` / `maxDistance`, keeping the point under the
+   *     fingers' midpoint under them.
    *   - **dTwist** rotates the (camera → target) vector around the world
    *     up axis by Δangle radians, which OrbitControls reads back as a
    *     yaw change next `update()`. This is the Maps "rotate bearing"
@@ -5301,38 +5302,28 @@ export class Viewer {
    * After applying, `controls.update()` repopulates the spherical state so
    * inertia damping resumes from the new pose.
    */
-  private _applyTouchGesture(delta: {
-    dPinch: number;
-    dTwist: number;
-    dPan: { x: number; y: number };
-  }): void {
-    const cam = this._camera;
-    const tgt = this._controls.target;
+  private _applyTouchGesture(delta: GestureDelta): void {
+    const cam = this._camera, tgt = this._controls.target, e = cam.matrix.elements;
+    const h = Math.max(1, this._canvas?.clientHeight ?? 1);
+    // World size of one CSS pixel at pivot depth (OrbitControls' pan idiom).
+    const px = () => (2 * Math.tan(((cam.fov ?? 60) * Math.PI) / 360) * cam.position.distanceTo(tgt)) / h;
+    // Move pivot and camera together by a screen-basis offset in world units.
+    const shift = (x: number, y: number): void => {
+      TWIST_OFFSET.set(e[0] * x + e[4] * y, e[1] * x + e[5] * y, e[2] * x + e[6] * y);
+      tgt.add(TWIST_OFFSET);
+      cam.position.add(TWIST_OFFSET);
+    };
 
     // ── pinch / dolly ───────────────────────────────────────────────────
+    // Spread (dPinch > 0) dollies in, pinch out, within the controls' distance
+    // bounds. The point under the fingers' midpoint at pivot depth stays under
+    // it: pivot and camera shift by (1 − f) of its offset from the pivot.
     if (delta.dPinch !== 0) {
-      // dPinch is the ratio (cur − prev) / mid from the pure-data
-      // decomposer: positive when fingers spread, negative when they
-      // pinch together. We invert the sign here so the camera follows
-      // the standard mobile convention every user already learned from
-      // Maps / Photos / Procreate / browsers: spread = zoom IN (closer),
-      // pinch = zoom OUT (further). The pure-data module keeps its
-      // mathematically natural sign so its unit tests don't have to
-      // know about user-facing conventions.
-      const ox = cam.position.x - tgt.x;
-      const oy = cam.position.y - tgt.y;
-      const oz = cam.position.z - tgt.z;
-      const scale = 1 - delta.dPinch;
-      const distNow = Math.hypot(ox, oy, oz);
-      let distNext = distNow * scale;
-      // Honour the OrbitControls bounds so the gesture can't drag the
-      // camera past min / max distance.
-      const minD = this._controls.minDistance;
-      const maxD = this._controls.maxDistance;
-      if (distNext < minD) distNext = minD;
-      if (distNext > maxD) distNext = maxD;
-      const f = distNow > 1e-9 ? distNext / distNow : 1;
-      cam.position.set(tgt.x + ox * f, tgt.y + oy * f, tgt.z + oz * f);
+      const k = px(), d = cam.position.distanceTo(tgt);
+      const c = this._controls, f = d > 1e-9 ? Math.min(Math.max(d * (1 - delta.dPinch), c.minDistance), c.maxDistance) / d : 1;
+      TWIST_OFFSET.copy(cam.position).sub(tgt).multiplyScalar(f);
+      cam.position.copy(tgt).add(TWIST_OFFSET);
+      if (delta.at) shift((delta.at.x - (h * cam.aspect) / 2) * k * (1 - f), (h / 2 - delta.at.y) * k * (1 - f));
     }
 
     // ── twist / yaw around world up ────────────────────────────────────
@@ -5347,36 +5338,9 @@ export class Viewer {
     }
 
     // ── pan / centroid drift ───────────────────────────────────────────
-    if (delta.dPan.x !== 0 || delta.dPan.y !== 0) {
-      // Translate the target in screen-X / screen-Y. The world-units-per-
-      // pixel scale derives from the visible vertical extent at the orbit
-      // distance — same idiom OrbitControls' own `pan` uses.
-      const cw = this._canvas?.clientHeight ?? 1;
-      const fov = (cam.fov ?? 60) * (Math.PI / 180);
-      const dist = cam.position.distanceTo(tgt);
-      const worldPerPx = (2 * Math.tan(fov / 2) * dist) / Math.max(1, cw);
-      // Right vector = +X of the camera basis. Up vector = +Y of the
-      // camera basis. We build them from the camera's matrix without
-      // touching its private internals.
-      const m = cam.matrix.elements;
-      const rightX = m[0];
-      const rightY = m[1];
-      const rightZ = m[2];
-      const upX = m[4];
-      const upY = m[5];
-      const upZ = m[6];
-      // dPan.x positive → fingers moved right → world target moves LEFT,
-      // matching the OrbitControls drag-to-pan direction users expect.
-      const tx = -delta.dPan.x * worldPerPx;
-      // dPan.y positive → fingers moved DOWN (canvas Y grows downward) →
-      // world target moves UP.
-      const ty = delta.dPan.y * worldPerPx;
-      const wx = rightX * tx + upX * ty;
-      const wy = rightY * tx + upY * ty;
-      const wz = rightZ * tx + upZ * ty;
-      tgt.set(tgt.x + wx, tgt.y + wy, tgt.z + wz);
-      cam.position.set(cam.position.x + wx, cam.position.y + wy, cam.position.z + wz);
-    }
+    // The pivot moves against the fingers, so the cloud tracks them 1:1 at
+    // pivot depth (canvas Y grows downward).
+    if (delta.dPan.x !== 0 || delta.dPan.y !== 0) shift(-delta.dPan.x * px(), delta.dPan.y * px());
 
     // Refresh the OrbitControls spherical state so the next damping tick
     // resumes from the new pose instead of fighting the gesture.

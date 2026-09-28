@@ -161,6 +161,8 @@ export class TouchTracker {
       // Only a component that fired re-anchors; the others keep accumulating.
       if (fired) base[c] = new Map([[id, { ...cur }], [otherId, { ...other }]]);
     }
-    return isZero(out) ? null : out;
+    if (isZero(out)) return null;
+    out.at = { x: (cur.x + other.x) / 2, y: (cur.y + other.y) / 2 };
+    return out;
   }
 }

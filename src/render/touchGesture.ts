@@ -51,6 +51,8 @@ export interface GestureDelta {
   dTwist: number;
   /** Centroid pan in screen pixels — `{ x, y }` since the last frame. */
   dPan: { x: number; y: number };
+  /** Where the fingers are now (their midpoint, canvas pixels): the pinch anchor. */
+  at?: { x: number; y: number };
 }
 
 /** Tunable thresholds. The defaults are the recommendation from D.7. */
