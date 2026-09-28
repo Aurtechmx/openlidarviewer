@@ -412,6 +412,20 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     category: 'provenance',
     implementation: ['src/science/sourceTopology.ts'],
   },
+  'olv.provenance.source-interpretation': {
+    id: 'olv.provenance.source-interpretation',
+    version: 1,
+    name: 'Source interpretation and data basis record',
+    summary:
+      'Records the format probe interpretation level the source file was opened at ' +
+      '(or that the probe did not run) and the part of the source a result was ' +
+      'computed on: full read, display sample or resident streaming set. A record ' +
+      'about the pipeline input, not a computation over the scene: it produces no figure.',
+    citation:
+      'Internal composition (provenance record over the loader interpretation level and the capability coverage); no single source method.',
+    category: 'provenance',
+    implementation: ['src/science/sourceInterpretation.ts'],
+  },
   'olv.feature.building-footprint': {
     id: 'olv.feature.building-footprint',
     version: 1,

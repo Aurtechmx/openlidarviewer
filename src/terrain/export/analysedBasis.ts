@@ -18,6 +18,13 @@ export interface AnalysedBasis {
   readonly coverage: Coverage;
   /** Decimation stride of a sampled read when the counts resolve one; else null. */
   readonly loadStride: number | null;
+  /**
+   * The format probe verdict the source was opened at
+   * (`PointCloud.metadata.interpretationLevel`); null when the file opened on
+   * its signature without a probe. Absent when the producing path did not
+   * record it.
+   */
+  readonly interpretationLevel?: string | null;
 }
 
 /**
@@ -34,6 +41,7 @@ export function analysedBasisOf(
   facts: Pick<ScanFacts, 'coverage' | 'pointCount'>,
   analysedPointCount: number,
   declaredPointCount?: number | null,
+  interpretationLevel?: string | null,
 ): AnalysedBasis {
   const stated = declaredPointCount ?? facts.pointCount;
   const declared = stated != null && Number.isFinite(stated) && stated > 0 ? stated : null;
@@ -46,7 +54,10 @@ export function analysedBasisOf(
     // not a stride and is not reported as one.
     if (whole >= 2 && Math.abs(ratio - whole) * analysedPointCount <= 1) loadStride = whole;
   }
-  return { analysedPointCount, declaredPointCount: declared, coverage: facts.coverage, loadStride };
+  return {
+    analysedPointCount, declaredPointCount: declared, coverage: facts.coverage, loadStride,
+    ...(interpretationLevel !== undefined ? { interpretationLevel } : {}),
+  };
 }
 
 const fmt = (n: number): string => n.toLocaleString('en-US');

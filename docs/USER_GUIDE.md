@@ -215,6 +215,20 @@ Products. The things you make *from* the scan: your measurements as GeoJSON or C
 
 A product that cannot be made yet says why on hover rather than failing when you press it.
 
+### How to reproduce a result
+
+Every export that carries provenance records the fields below. To get the same numbers again, open the same input file in the same app version and repeat the run with the recorded settings.
+
+- **App version and build.** `OLV version` in a package README, `version` and `commit` in the GeoJSON `provenance` member, the `olv:build` chunk of a PNG, or the `build` field of `processing-manifest.json`. A different commit, or `+dirty`, may give different numbers.
+- **Input file.** `Source` or `source` names the file by its base name only. When a package lists a `Source digest`, check your copy against it.
+- **Interpretation level.** How the file's bytes were read. `VERIFIED`, `COMPATIBLE` or `PROBABLE` come from the format probe; `not-probed` means the file opened on its signature; `not-recorded` means the producing path did not look. Open the file the same way before you compare.
+- **Data basis.** `full` means every point was read; `sampled` means a display sample; `resident-only` means the streaming set in memory at the time. A result computed on a display sample or on a resident streaming set can move once more of the file is read, so load the file the same way, with the same point budget and the same streaming state, before you compare the two runs.
+- **Coordinate system.** `Horizontal CRS`, `Vertical datum` or `crs`. Resolve to it first.
+- **Methods and settings.** The ordered `ops` in `processing-manifest.json` name each method as `id@version` with its parameters. Flow Pulse and Terrain Access packages also ship `*.olv-field-sim.json`: re-running it on the same surface gives the same `fieldDigest`. For a terrain product, use the cell size and contour interval printed in the README.
+- **Time.** `Generated` or `generatedAt` dates the export. It is not an input.
+
+A measurement CSV, a point cloud re-save (LAS, XYZ, ASC) and a world file do not carry this record. Export the GeoJSON alongside a CSV when you need the record to travel with the numbers.
+
 ---
 
 ## Save and share

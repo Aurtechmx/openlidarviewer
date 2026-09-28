@@ -42,6 +42,8 @@ export interface FigureProvenanceInput {
   readonly palette?: string | null;
   readonly camera?: FigureCameraPose | null;
   readonly clip?: FigureClipSummary | null;
+  /** Probe interpretation level and data basis of the rendered source(s). */
+  readonly sourceInterpretation?: { readonly interpretationLevel: string; readonly dataBasis: string } | null;
 }
 
 /** Fixed-precision triple: `1.000,-5.250,3.000`. 3 decimals ≈ mm at metre
@@ -87,6 +89,13 @@ export function buildFigureProvenance(input: FigureProvenanceInput): PngTextEntr
       keyword: 'olv:clip',
       text: `${input.clip.mode} · min ${fmtTriple(input.clip.min)} · max ${fmtTriple(input.clip.max)}`,
     });
+  }
+
+  if (input.sourceInterpretation) {
+    entries.push(
+      { keyword: 'olv:interpretation-level', text: input.sourceInterpretation.interpretationLevel },
+      { keyword: 'olv:data-basis', text: input.sourceInterpretation.dataBasis },
+    );
   }
 
   return entries;

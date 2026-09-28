@@ -86,17 +86,18 @@ the two entries were renumbered when the branches were integrated.
 | L179 | UI | TEST | low | FIXED | new | An analysis run waited on the file-loading progress trail, which stands for known progress, and Terrain Access showed nothing while its route search ran. |
 | L180 | UI | TEST | med | FIXED | new | The same action had different names on the dock, the NavBar, the canvas menu and the palette, the withheld state drew the blocked glyph, and colour, tooltip and nesting rules had no gate. |
 | L183 | UI | TEST | med | FIXED | new | Nothing outside the left rail said where the user was, the command palette had no close control, a collapsed rail or a lowered phone sheet hid the only Back, and each surface had its own way out. |
+| L181 | EXPORT | TEST | med | FIXED | new | No export recorded the format probe interpretation level, the single-file vector exports carried no build or source record, and the simulation packages did not state the data basis of the surface they read. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 37
+- FIXED: 38
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 58
+- total: 59
 
 ## Detail
 
@@ -7048,3 +7049,33 @@ Covered by `tests/locationModel.test.ts`, `tests/exitConvention.test.ts`,
 `tests/e2e/ceLocation.spec.ts`, `tests/e2e/cePaletteGoTo.spec.ts` and
 `tests/e2e/ceExit.spec.ts`. No computed value, threshold, method or export
 changes.
+
+
+### L181 · FIXED · EXPORT
+
+Reproducibility audit of every export path, recorded in
+`docs/validation/REPRODUCIBILITY_AUDIT.md`. Before this change no export
+carried `metadata.interpretationLevel`, the measurement GeoJSON and site KML
+carried no build, source or time record, and the Flow Pulse, Terrain Access and
+Observatory packages did not state which part of the source the surface came
+from.
+
+A new registered method, `olv.provenance.source-interpretation@1`
+(`src/science/sourceInterpretation.ts`), records the probe level (or
+`not-probed`, or `not-recorded` when the producing path did not look) and the
+data basis (`full`, `sampled`, `resident-only`, `unknown`). It is the first op
+of the processing manifest in the terrain provenance, the DEM package, the
+contour deliverables, the terrain report, session files and the three
+simulation packages, and it is printed in their README and provenance lines.
+The measurement GeoJSON gains a `provenance` foreign member and the site KML a
+provenance line in the document description; PNG figures gain
+`olv:interpretation-level` and `olv:data-basis` chunks. No computed value,
+geometry or raster changes. Manifest heads and provenance line counts in
+`tests/exportProvenance.test.ts` and the analysed basis in
+`tests/terrainRunnerCapabilityWiring.test.ts` change because the record is new
+provenance content; no data part of any golden changed.
+
+Covered by `tests/exportSourceInterpretation.test.ts` and
+`tests/reproduceFromProvenance.test.ts`, which re-runs a measured distance, a
+DEM product and a Flow Pulse run from the recorded fields and gets identical
+values. Remaining gaps are listed in the audit.

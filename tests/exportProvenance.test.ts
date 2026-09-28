@@ -291,13 +291,15 @@ describe('processingManifestFromProvenance — the verify-only manifest assembly
     expect(m.build).toBe(p.build);
     expect(m.source).toBe('site');
     // Accuracy present, complexity absent, no contour method supplied:
-    // ground → grid → hold-out validation, and nothing fabricated beyond that.
+    // the source interpretation record leads, then ground → grid → hold-out
+    // validation, and nothing fabricated beyond that.
     expect(m.ops.map((op) => op.method)).toEqual([
+      'olv.provenance.source-interpretation@1',
       'olv.ground.smrf@1',
       'olv.dtm.idw-fill@1',
       'olv.validation.holdout-rmse@2',
     ]);
-    expect(m.ops.map((op) => op.seq)).toEqual([0, 1, 2]);
+    expect(m.ops.map((op) => op.seq)).toEqual([0, 1, 2, 3]);
   });
 
   it('binds the params the provenance actually carries and verifies intact', () => {
@@ -366,7 +368,7 @@ describe('processingManifestFromProvenance — the verify-only manifest assembly
     const manifestLines = provenanceLines(p).filter((l) => l.startsWith('Manifest'));
     expect(manifestLines).toHaveLength(1);
     expect(manifestLines[0]).toBe(
-      `Manifest          schema 1 · ${m.head.slice(0, 12)} · 3 ops · verifiable`,
+      `Manifest          schema 1 · ${m.head.slice(0, 12)} · 4 ops · verifiable`,
     );
   });
 

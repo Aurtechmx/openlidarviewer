@@ -31,6 +31,7 @@ export interface FigureStampContext {
   readonly palette?: string | null;
   readonly camera?: FigureCameraPose | null;
   readonly clip?: FigureClipSummary | null;
+  readonly sourceInterpretation?: { readonly interpretationLevel: string; readonly dataBasis: string } | null;
   /**
    * How the pixels in THIS capture were produced.
    *
@@ -66,6 +67,7 @@ export async function stampFigureProvenanceOntoBlob(
       palette: context.palette ?? null,
       camera: context.camera ?? null,
       clip: context.clip ?? null,
+      sourceInterpretation: context.sourceInterpretation ?? null,
     });
     entries.push(
       ...buildPresentationProvenance(

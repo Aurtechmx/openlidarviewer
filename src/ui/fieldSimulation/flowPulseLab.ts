@@ -29,6 +29,7 @@
  * `FlowPulseParams` carries none of it.
  */
 
+import type { SourceInterpretationRecord } from '../../science/sourceInterpretation';
 import { showBusyScan } from '../busyScan';
 import { el } from '../dom';
 import { openModal, type ModalHandle } from '../Modal';
@@ -72,6 +73,8 @@ import type { buildFlowPulsePackage } from '../../export/flowPulsePackage';
 
 /** The analysed surface and the frame facts the Analyse panel holds for it. */
 export interface FlowPulseLabInput {
+  /** Probe interpretation level and data basis of the analysed scan, for export provenance. */
+  readonly sourceInterpretation?: SourceInterpretationRecord;
   readonly result: AnalyseContoursResult;
   readonly isGeographic: boolean;
   /** World Y of the load-time recentring origin; null when the scene has no single one. */
@@ -212,6 +215,8 @@ export type FlowPulseExportOutcome =
  * (0, 0) origin and no .prj, and says so in its README.
  */
 export interface FlowPulseGeoref {
+  /** Probe interpretation level and data basis of the analysed scan, for export provenance. */
+  readonly sourceInterpretation?: SourceInterpretationRecord;
   readonly worldOrigin: { readonly x: number; readonly y: number } | null;
   readonly crsName: string | null;
   readonly wkt: string | null;
@@ -255,6 +260,7 @@ export function buildFlowPulseExport(
     crsName: georef?.crsName ?? null,
     wkt: georef?.wkt ?? null,
     verticalUnitLabel: georef?.verticalUnitLabel ?? 'units',
+    sourceInterpretation: georef?.sourceInterpretation ?? null,
   });
   return { ok: true, bytes, filename: `${basename}-flow-pulse.zip` };
 }
@@ -649,6 +655,7 @@ function mountFlowPulseInteractive(
           crsName: input.crsName ?? null,
           wkt: input.wkt ?? null,
           verticalUnitLabel: flowElevationReference(input).unitLabel,
+          sourceInterpretation: input.sourceInterpretation,
         },
       );
       if (!built.ok) {

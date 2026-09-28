@@ -21,6 +21,7 @@
  * content is XML-escaped (& < > " ').
  */
 
+import { lightProvenance, lightProvenanceLine, type LightProvenanceInput } from './lightProvenance';
 import type { Annotation } from '../render/annotate/types';
 import type { Measurement, Vec3 } from '../render/measure/types';
 import { isComplete } from '../render/measure/types';
@@ -83,6 +84,8 @@ export interface KmlExportInput {
   readonly toLonLat: LocalToLonLatSourceZ;
   /** The "not survey-grade" caveat, embedded in every description. */
   readonly notSurveyGradeNote: string;
+  /** Provenance for the document description (build, source, CRS, interpretation, data basis). */
+  readonly provenance?: LightProvenanceInput;
   /**
    * Declared vertical datum of the source heights, or null when undeclared.
    * Decides the geometry's `<altitudeMode>`: KML's `absolute` means metres
@@ -464,6 +467,7 @@ export function buildKml(input: KmlExportInput): string {
   const docDesc = description([
     `OpenLiDARViewer export. CRS: ${crs}. Units: ${input.unitLabel}.`,
     input.notSurveyGradeNote,
+    ...(input.provenance ? [lightProvenanceLine(lightProvenance(input.provenance))] : []),
   ]);
 
   return [

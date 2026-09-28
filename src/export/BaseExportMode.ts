@@ -465,6 +465,7 @@ export async function runStudioExport(
     palette: paletteLabelOfOptions(options as Readonly<Record<string, unknown>>),
     camera: view?.camera ?? null,
     clip: view?.clip ?? null,
+    sourceInterpretation: context.adapter.sourceInterpretation?.() ?? null,
     presentation,
     reconstructedShare: null,
   });

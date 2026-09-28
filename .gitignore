@@ -96,6 +96,8 @@ RESEARCH DOCUMENTS/
 *WORKPLAN*.md
 *WHITEPAPER*.md
 *AUDIT*.md
+# The public export reproducibility audit is a published validation document.
+!/docs/validation/REPRODUCIBILITY_AUDIT.md
 TECH_EVALUATION*.md
 QUALITYREVISION*.md
 GITHUB_RELEASE_*.md

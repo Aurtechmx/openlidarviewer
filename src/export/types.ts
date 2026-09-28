@@ -145,6 +145,11 @@ export interface ExportSceneAdapter {
    * `[minX, minY, minZ, maxX, maxY, maxZ]` in render coordinates, or `null`
    * when no clouds are loaded.
    */
+  /**
+   * Probe interpretation level and data basis of the visible source(s), for
+   * the figure's provenance chunks. Optional: adapters without it stamp none.
+   */
+  sourceInterpretation?(): { readonly interpretationLevel: string; readonly dataBasis: string } | null;
   localBoundsAabb(): readonly [number, number, number, number, number, number] | null;
   /**
    * Which component of the AABB is the HEIGHT: 2 for survey sources, 1 for a

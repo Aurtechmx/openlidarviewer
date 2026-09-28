@@ -104,6 +104,7 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
   ],
   'olv.volume.stockpile-area-grid': ['tests/stockpileAreaGrid.test.ts'],
   'olv.topology.linkage-record': ['tests/sourceTopologyManifest.test.ts'],
+  'olv.provenance.source-interpretation': ['tests/exportSourceInterpretation.test.ts'],
   'olv.change.dtm-difference': [
     'tests/changeDetection.test.ts',
     'tests/compareDtms.test.ts',
