@@ -19,7 +19,7 @@ import {
 
 async function openTerrainAccess(page: Page): Promise<void> {
   await firePaletteAction(page, 'Terrain Access', 'Terrain Access (Field Simulation Lab)');
-  await expect(page.locator('.olv-modal-title')).toHaveText('Terrain Access');
+  await expect(page.locator('.olv-analyse-page[data-page="terrain-access"]')).toBeVisible();
 }
 
 test('without a ground surface: no form, the terrain run, the way back, and Apply off with its reason', async ({ page }) => {
@@ -29,25 +29,25 @@ test('without a ground surface: no form, the terrain run, the way back, and Appl
   await expect(page.locator('.olv-dock .olv-tool', { hasText: /^Analyse$/ })).toBeEnabled({ timeout: 20_000 });
 
   await openTerrainAccess(page);
-  const modal = page.locator('.olv-modal');
+  const labPage = page.locator('.olv-analyse-page[data-page="terrain-access"]');
   // The ground surface is checked before the form: no form, a plain notice.
-  await expect(modal.locator('.olv-lab-purpose')).toContainText('Not a safety guarantee.');
-  await expect(modal.locator('.olv-lab-ready[data-state="missing"]')).toContainText('Ground surface (terrain run)');
-  await expect(modal.locator('.olv-ta-form')).toHaveCount(0);
-  await expect(modal).not.toContainText('NO_DTM');
+  await expect(labPage.locator('.olv-lab-purpose')).toContainText('Not a safety guarantee.');
+  await expect(labPage.locator('.olv-lab-ready[data-state="missing"]')).toContainText('Ground surface (terrain run)');
+  await expect(labPage.locator('.olv-ta-form')).toHaveCount(0);
+  await expect(labPage).not.toContainText('NO_DTM');
 
-  await modal.locator('.olv-lab-fix', { hasText: 'Run terrain analysis' }).click();
-  await expect(page.locator('.olv-modal')).toHaveCount(0);
+  await labPage.locator('.olv-lab-fix', { hasText: 'Run terrain analysis' }).click();
+  await expect(page.locator('.olv-analyse-page[data-page="terrain-access"]')).toBeHidden();
   await expect(page.locator('.olv-analyse-readiness .olv-analyse-ready:not(.is-skeleton)')).toHaveCount(3, { timeout: 20_000 });
   const back = page.locator('.olv-at-back', { hasText: 'Back to Terrain Access' });
   await expect(back).toBeVisible({ timeout: 20_000 });
   await back.click();
-  await expect(page.locator('.olv-modal-title')).toHaveText('Terrain Access');
+  await expect(page.locator('.olv-analyse-page[data-page="terrain-access"]')).toBeVisible();
 
   // This local fixture has no known units: the form shows, Apply is off and says why.
-  await expect(modal.locator('.olv-ta-form')).toBeVisible();
-  await expect(modal.locator('.olv-ta-form-submit')).toBeDisabled();
-  await expect(modal.locator('.olv-ta-form-blocked')).toContainText('grades and distances need known units');
+  await expect(labPage.locator('.olv-ta-form')).toBeVisible();
+  await expect(labPage.locator('.olv-ta-form-submit')).toBeDisabled();
+  await expect(labPage.locator('.olv-ta-form-blocked')).toContainText('grades and distances need known units');
 });
 
 test('blank profile refuses with named field problems, per field', async ({ page }) => {
@@ -62,16 +62,16 @@ test('blank profile refuses with named field problems, per field', async ({ page
   });
 
   await openTerrainAccess(page);
-  const modal = page.locator('.olv-modal');
+  const labPage = page.locator('.olv-analyse-page[data-page="terrain-access"]');
   // The six required fields come first; the optional ones wait under Advanced.
-  await expect(modal.locator('.olv-ta-advanced > summary')).toHaveText('Advanced');
-  await modal.locator('.olv-ta-form-submit').click();
-  const problems = modal.locator('.olv-ta-form-problems-list');
+  await expect(labPage.locator('.olv-ta-advanced > summary')).toHaveText('Advanced');
+  await labPage.locator('.olv-ta-form-submit').click();
+  const problems = labPage.locator('.olv-ta-form-problems-list');
   await expect(problems).toContainText('Profile name is required');
   await expect(problems).toContainText('Max longitudinal grade is required');
   await expect(problems).not.toContainText('maxLongitudinalGradeDeg');
   // The form is still on screen: a refusal never silently discards the form.
-  await expect(modal.locator('.olv-ta-form')).toBeVisible();
+  await expect(labPage.locator('.olv-ta-form')).toBeVisible();
 });
 
 test('profile, start/goal by keyboard and click, run, route shown, why-not, export', async ({ page }) => {
@@ -93,57 +93,57 @@ test('profile, start/goal by keyboard and click, run, route shown, why-not, expo
   });
 
   await openTerrainAccess(page);
-  const modal = page.locator('.olv-modal');
+  const labPage = page.locator('.olv-analyse-page[data-page="terrain-access"]');
 
   // MOBILITY PROFILE: a permissive, explicit profile — no preset, every
   // field typed. Field order matches `buildProfileForm` in terrainAccessLab.ts.
-  await modal.locator('input[type=text]').nth(0).fill('Illustrative — confirm for your platform');
-  await modal.locator('input[type=text]').nth(1).fill('80');
-  await modal.locator('input[type=text]').nth(2).fill('80');
-  await modal.locator('input[type=text]').nth(3).fill('50');
-  await modal.locator('input[type=text]').nth(4).fill('0');
-  await modal.locator('input[type=text]').nth(5).fill('0');
-  await modal.locator('.olv-ta-form-submit').click();
+  await labPage.locator('input[type=text]').nth(0).fill('Illustrative — confirm for your platform');
+  await labPage.locator('input[type=text]').nth(1).fill('80');
+  await labPage.locator('input[type=text]').nth(2).fill('80');
+  await labPage.locator('input[type=text]').nth(3).fill('50');
+  await labPage.locator('input[type=text]').nth(4).fill('0');
+  await labPage.locator('input[type=text]').nth(5).fill('0');
+  await labPage.locator('.olv-ta-form-submit').click();
 
   // PREVIEW reached: the georeferenced fixture resolves a horizontal scale,
   // so the traversability grid replaces the form rather than refusing.
-  const grid = modal.locator('.olv-ta-grid-canvas');
+  const grid = labPage.locator('.olv-ta-grid-canvas');
   await expect(grid).toBeVisible({ timeout: 10_000 });
   const box = await grid.boundingBox();
   if (!box) throw new Error('grid canvas has no box');
 
   // WHY-NOT INSPECTOR: default mode is 'start'; switch to inspect and read a
   // sentence naming a concrete reason (eligible or blocked), never a vague answer.
-  await modal.locator('.olv-ta-segmented-btn', { hasText: 'Why is this cell blocked?' }).click();
+  await labPage.locator('.olv-ta-segmented-btn', { hasText: 'Why is this cell blocked?' }).click();
   await grid.click({ position: { x: box.width / 2, y: box.height / 2 } });
-  await expect(modal.locator('.olv-ta-inspector')).toContainText(/eligible|blocked|withheld/, { timeout: 5_000 });
+  await expect(labPage.locator('.olv-ta-inspector')).toContainText(/eligible|blocked|withheld/, { timeout: 5_000 });
   // The inspector's cell readout is a real elevation with its unit, or an
   // honest "unknown" — never the grid-local z printed bare.
-  const inspectorText = await modal.locator('.olv-ta-inspector').innerText();
+  const inspectorText = await labPage.locator('.olv-ta-inspector').innerText();
   expect(inspectorText.length).toBeGreaterThan(0);
 
   // START by CLICK, GOAL by KEYBOARD: exercises both input paths. The exact
   // cell a corner click lands on depends on the canvas's rendered size
   // (device pixel ratio/CSS scaling differ per browser), so this checks that
   // a start was actually set rather than pinning one browser's coordinates.
-  await modal.locator('.olv-ta-segmented-btn', { hasText: 'Set start' }).click();
+  await labPage.locator('.olv-ta-segmented-btn', { hasText: 'Set start' }).click();
   await grid.click({ position: { x: 4, y: 4 } });
-  await expect(modal.locator('.olv-ta-selection')).not.toContainText('Startnot set');
-  await expect(modal.locator('.olv-ta-selection')).toContainText(/Start\s*col \d+, row \d+/);
+  await expect(labPage.locator('.olv-ta-selection')).not.toContainText('Startnot set');
+  await expect(labPage.locator('.olv-ta-selection')).toContainText(/Start\s*col \d+, row \d+/);
 
-  await modal.locator('.olv-ta-segmented-btn', { hasText: 'Set goal' }).click();
+  await labPage.locator('.olv-ta-segmented-btn', { hasText: 'Set goal' }).click();
   await grid.focus();
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
-  await expect(modal.locator('.olv-ta-selection')).toContainText('Goal');
-  await expect(modal.locator('.olv-ta-selection')).not.toContainText('Goal: not set');
+  await expect(labPage.locator('.olv-ta-selection')).toContainText('Goal');
+  await expect(labPage.locator('.olv-ta-selection')).not.toContainText('Goal: not set');
 
   // RUN: the button is enabled once both endpoints are set. The gentle
   // sinusoidal fixture surface and a permissive profile are chosen so a
   // route between two nearby corner cells is expected to be found — this is
   // the deterministic happy path, not a best-effort branch.
-  const runButton = modal.locator('.olv-ta-run');
+  const runButton = labPage.locator('.olv-ta-run');
   await expect(runButton).toBeEnabled();
   await page.evaluate(() => {
     const w = window as unknown as { __emblemSeen: string | null };
@@ -157,20 +157,20 @@ test('profile, start/goal by keyboard and click, run, route shown, why-not, expo
     obs.observe(document.body, { subtree: true, childList: true });
   });
   await runButton.click();
-  await expect(modal.locator('.olv-ta-run-card')).toContainText('geometric traversability screening', {
+  await expect(labPage.locator('.olv-ta-run-card')).toContainText('geometric traversability screening', {
     timeout: 10_000,
   });
   expect(await page.evaluate(() => (window as unknown as { __emblemSeen: string | null }).__emblemSeen), 'the emblem waited while it ran').toBe('true');
-  await expect(modal.locator('.olv-ta-run-card .olv-busy-scan')).toHaveCount(0);
+  await expect(labPage.locator('.olv-ta-run-card .olv-busy-scan')).toHaveCount(0);
   // §22: never a safety/passability claim, win or refuse.
-  await expect(modal.locator('.olv-ta-run-card')).not.toContainText(/\bis safe\b|\bis drivable\b|\bis passable\b/i);
+  await expect(labPage.locator('.olv-ta-run-card')).not.toContainText(/\bis safe\b|\bis drivable\b|\bis passable\b/i);
   // The horizontal length/grade rows carry a real metric unit, guaranteed by
   // the runner's own UNITS_UNRESOLVED refusal gate (see terrainAccessRunner.ts).
-  await expect(modal.locator('.olv-ta-run-card')).toContainText(/Horizontal length\s*[\d.]+ m/);
+  await expect(labPage.locator('.olv-ta-run-card')).toContainText(/Horizontal length\s*[\d.]+ m/);
 
   // TRAVERSABILITY OVERLAY: offered (real scene membership wired through),
-  // toggles, and stays drawn on the scan after the modal closes.
-  const overlayToggle = modal.locator('.olv-ta-overlay-toggle');
+  // toggles, and stays drawn on the scan after the page is left.
+  const overlayToggle = labPage.locator('.olv-ta-overlay-toggle');
   await expect(overlayToggle).toBeVisible();
   await expect(overlayToggle).toHaveAttribute('aria-pressed', 'false');
   await overlayToggle.click();
@@ -178,7 +178,7 @@ test('profile, start/goal by keyboard and click, run, route shown, why-not, expo
 
   // EXPORT: downloads a ZIP whose raster/route carry real, georeferenced
   // coordinates in the dataset CRS, not a local (0, 0) origin.
-  const exportBtn = modal.locator('.olv-ta-export');
+  const exportBtn = labPage.locator('.olv-ta-export');
   await expect(exportBtn).toBeVisible();
   const downloadPromise = page.waitForEvent('download');
   await exportBtn.click();
@@ -197,20 +197,20 @@ test('profile, start/goal by keyboard and click, run, route shown, why-not, expo
   }
 
   // LIVE REGION: present and polite.
-  const live = modal.locator('.olv-ta-live');
+  const live = labPage.locator('.olv-ta-live');
   await expect(live).toHaveAttribute('aria-live', 'polite');
 
-  // Closing the modal — which covers the scene, the only place a user could
+  // Leaving the page — which covers the scene, the only place a user could
   // otherwise see the overlay — must not tear it down (mirrors Flow Pulse's
   // persisted-overlay behaviour): reopening the Lab shows the toggle already
   // pressed, because it is the SAME persisted overlay still attached to the
   // scan, not a fresh one reset to off.
-  await page.locator('.olv-modal-x').click();
-  await expect(page.locator('.olv-modal')).toHaveCount(0);
+  await page.locator('#olv-ws-mode-analyse > .olv-ws-task .olv-ws-back').click();
+  await expect(page.locator('.olv-analyse-page[data-page="terrain-access"]')).toBeHidden();
   await openTerrainAccess(page);
   // A prior preview is not remembered across opens (only the overlay is),
   // so the Lab reopens on the blank profile form.
-  await expect(page.locator('.olv-modal .olv-ta-form')).toBeVisible();
+  await expect(page.locator('.olv-analyse-page[data-page="terrain-access"] .olv-ta-form')).toBeVisible();
 });
 
 /** Find a ZIP entry's exact stored name by a suffix, from the local file headers. */

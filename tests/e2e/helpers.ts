@@ -134,15 +134,17 @@ export async function openAnalysePanel(page: Page): Promise<void> {
 
 /**
  * Open the command palette, type `query`, wait for a row containing
- * `rowText`, then press Enter to run it. Shared by `flowPulseLab.spec.ts`
+ * `rowText`, then click that row to run it. Shared by `flowPulseLab.spec.ts`
  * and `terrainAccessLab.spec.ts` (Sonar-flagged as a verbatim duplicate).
  */
 export async function firePaletteAction(page: Page, query: string, rowText: string): Promise<void> {
   await page.keyboard.press('ControlOrMeta+KeyK');
   await expect(page.locator('.olv-palette')).toBeVisible();
   await page.locator('.olv-palette-input').fill(query);
-  await expect(page.locator('.olv-palette-row', { hasText: rowText })).toBeVisible();
-  await page.locator('.olv-palette-input').press('Enter');
+  const row = page.locator('.olv-palette-row', { hasText: rowText }).first();
+  await expect(row).toBeVisible();
+  // The row itself: a Go to entry for the same page can rank first.
+  await row.click();
   await expect(page.locator('.olv-palette')).toBeHidden();
 }
 

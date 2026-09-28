@@ -30,7 +30,9 @@ export const POLITE_REGION_SELECTOR = '.olv-visually-hidden[role="status"]';
  * the case a user needs told twice.
  */
 export function announcePolite(message: string, doc: Document = document): boolean {
-  const region = doc.querySelector(POLITE_REGION_SELECTOR);
+  // The body-level node first: a lab page in the rail carries its own status
+  // region earlier in the document, and this must never write into that one.
+  const region = doc.querySelector(`body > ${POLITE_REGION_SELECTOR}`) ?? doc.querySelector(POLITE_REGION_SELECTOR);
   if (!region) return false;
   region.textContent = '';
   region.textContent = message;

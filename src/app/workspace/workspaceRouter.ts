@@ -3,8 +3,9 @@
  *
  * Route state for the desktop left rail: `{ mode, page }`. A mode is one of the
  * workspace tabs; a page is one task inside it (the Measure panel inside Tools).
- * `page: null` is the mode's home. Each mode remembers its own page, so leaving
- * Tools for Data and coming back returns to the tool that was open.
+ * `page: null` is the mode's home. Each mode remembers its last page: going
+ * home keeps it, and the home offers it back as a Continue row
+ * (`modeHome.ts`). A mode tab opens the home (spec CE-1, CE-MODE-01).
  *
  * Presentation only. Navigating toggles classes on panels that are already
  * live in the mode host; it never creates, moves or refreshes a panel and never
@@ -58,6 +59,8 @@ export interface WorkspaceRouter {
   back(focus?: boolean): void;
   /** Re-apply the route after a panel mounted or changed visibility. */
   sync(): void;
+  /** The page a mode remembers, shown or not; null when it has none. */
+  remembered(mode: WorkspaceMode): string | null;
 }
 
 type Pages = Partial<Record<WorkspaceMode, Record<string, WorkspacePage>>>;
@@ -71,6 +74,7 @@ export function createWorkspaceRouter(
   ws: RouterWorkspace,
   pages: Pages,
   storage: WorkspaceStorage | null = null,
+  onSync?: () => void,
 ): WorkspaceRouter {
   for (const [m, list] of Object.entries(pages)) {
     for (const [id, p] of Object.entries(list ?? {})) {
@@ -81,6 +85,8 @@ export function createWorkspaceRouter(
     }
   }
   const memory = new Map<WorkspaceMode, string | null>();
+  /** Modes showing their home while they still remember a page. */
+  const atHome = new Set<WorkspaceMode>();
   try {
     const saved = JSON.parse(storage?.getItem(WORKSPACE_PAGE_KEY) ?? '{}') as Record<string, unknown>;
     for (const [m, p] of Object.entries(saved)) {
@@ -108,7 +114,7 @@ export function createWorkspaceRouter(
 
   /** The page actually on screen for a mode, or null when its home shows. */
   function active(m: WorkspaceMode): string | null {
-    const id = memory.get(m);
+    const id = atHome.has(m) ? null : memory.get(m);
     return id && shown(pages[m]?.[id]?.element(), ws.mode(m)) ? id : null;
   }
 
@@ -140,7 +146,9 @@ export function createWorkspaceRouter(
     route: () => ({ mode: ws.getMode(), page: active(ws.getMode()) }),
     navigate({ mode, page }, focus = false) {
       if (ws.getMode() === mode) markDirection(mode, active(mode), page);
-      memory.set(mode, page);
+      // Home keeps the remembered page (and its stored key) for Continue.
+      if (page === null) atHome.add(mode);
+      else { atHome.delete(mode); memory.set(mode, page); }
       try {
         storage?.setItem(WORKSPACE_PAGE_KEY, JSON.stringify(Object.fromEntries(memory)));
       } catch { /* preference only */ }
@@ -149,14 +157,18 @@ export function createWorkspaceRouter(
       if (!focus) return;
       // The heading of the page, or the first control of the home (past the header).
       const home = (Array.from(ws.mode(mode).children) as HTMLElement[])
-        .find((c) => c !== headers.get(mode)?.root && !c.classList.contains('olv-ws-off'));
-      const target = active(mode) ? headers.get(mode)?.title : home?.querySelector<HTMLElement>('button:not([disabled])');
+        .find((c) => c !== headers.get(mode)?.root && !c.classList.contains('olv-ws-off') && !c.hidden);
+      const target = active(mode) ? headers.get(mode)?.title : home?.tagName === 'BUTTON' ? home : home?.querySelector<HTMLElement>('button:not([disabled])');
       target?.focus({ preventScroll: true });
     },
     back(focus = false) {
       const mode = ws.getMode();
       const id = active(mode);
       api.navigate({ mode, page: (id && pages[mode]?.[id]?.parent) ?? null }, focus);
+    },
+    remembered: (m) => {
+      const id = memory.get(m) ?? null;
+      return id && pages[m]?.[id] ? id : null;
     },
     sync() {
       for (const m of Object.keys(pages) as WorkspaceMode[]) {
@@ -180,6 +192,7 @@ export function createWorkspaceRouter(
           if (child !== h?.root) child.classList.toggle('olv-ws-off', panel ? child !== panel : pageEls.includes(child));
         }
       }
+      onSync?.();
     },
   };
   return api;

@@ -27,6 +27,10 @@ file.
   (`workspaceRouter.ts:150`).
 - Forward navigation from the rail moves focus to the page title
   (`workspaceRouter.ts:153`, `createRailIntent` at 210).
+- After C3 a mode tab that switches mode opens that mode's home. Going home
+  keeps the remembered page, and the home's first row reads
+  `Continue: <page> · <state>`, for example `Continue: Measure · 1 measurement`
+  (`app/workspace/modeHome.ts`). The stored key keeps its meaning.
 - No rail surface handles Escape. The global Escape binding cancels a lasso or
   a measurement in progress and shows "Back to navigation."
   (`ui/keyBindings.ts:395`).
@@ -93,6 +97,19 @@ row, the palette, or a results shelf **Focus** (`app/results/resultsShelfMount.t
 A backdrop click also closes each lab. The modal hides the rail and most of
 the scan.
 
+After C3 the labs are Analyse pages (CE-LAB-01 to 05). Flow Pulse and Terrain
+Access are pages under Terrain (`Analyse › Terrain › Flow Pulse`) and
+Observatory is a top-level page (`Analyse › Observatory`). Each lab places its
+body on its page through `ui/labSurface.ts`, which the Analyse workspace
+registers as the page host; the lab components are unchanged. The scene stays
+in view and takes pointer input beside the page, and lab overlays still draw in
+the viewport. The home rows, the palette entries, Go to and the Results shelf's
+Focus all open the page; Focus shows the kept run and computes nothing new. Back
+names the lab's parent (`← Terrain`, `← Analyse`), Escape is Back, and leaving
+the page keeps the lab as it was until it is opened again or the scan closes.
+With no scan open there is no workspace to hold a page, so a lab opened from
+the palette then takes a dialog. Short questions inside a lab stay dialogs.
+
 ### 2.4 Workspaces
 
 | Surface | Entered by | Back | Esc | Focus on leaving | Visible names |
@@ -150,6 +167,15 @@ point size, rendering, visuals." (`:75`).
 | Measure page | Page "Measure", panel "Measurements" |
 | Objects page | Page "Objects & Space", panel "Object scan" |
 | Rail grabbers | Both "Hide panel" / "Show panel" |
+
+After C3 the right rail reads **View** everywhere a user sees it: its title,
+the subtitle "How the scan is drawn" (the phone tab's wording), its grabber
+("Hide View" / "Show View"), the phone launcher, the tour step and the Data
+home row ("In View"). Ids, classes, storage keys and the `Inspector` module
+keep their names. Its sections run appearance (Color by, Visuals Studio,
+Rendering with its navigation group), filters, saved views, then the scan
+facts, and a link row reads "Two-epoch change detection → Analyse".
+
 | Top view | Palette "Top view" is the `camera.top` preset; context menu "Top view" is the axis-aligned standard view |
 
 ## 4. Duplicates
@@ -462,6 +488,21 @@ After C2 ([metrics/ce-c2.json](metrics/ce-c2.json)), J4 reads the location
 from the top bar and returns to the Analyse home with its first crumb, with
 the rail still collapsed: 1 click and 1 surface switch, against 3 and 2. Every
 other journey has the same clicks and surface switches as the baseline.
+
+After C3 ([metrics/ce-c3.json](metrics/ce-c3.json)), clicks and surface
+switches against C2:
+
+| Journey | Clicks | Switches | Why |
+| --- | --- | --- | --- |
+| J2 measurement to export | 2 → 3 | 1 → 2 | The Tools tab opens the Tools home; its Continue row returns to Measure |
+| J3 lab and back | 5 → 4 | 5 → 4 | The Observatory page sits beside the scene, so the Tools tab is one click away with no Back first |
+| J6 phone J3 | 5 → 4 | 5 → 4 | As J3 |
+| J7 Flow Pulse | 5 → 4 | 4 → 4 | The lab page offers the terrain run, and Terrain offers the way back to the lab |
+| J7 Terrain Access | 10 → 9 | 4 → 4 | As J7 Flow Pulse |
+
+J1, J4, J5, J6 phone J1 and J7 Observatory are unchanged. J2 is the one
+journey that costs more: it returns to a remembered page through a mode tab,
+which CE-MODE-01 now answers with the mode home.
 
 ## 9. Review screenshots
 

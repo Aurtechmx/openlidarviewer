@@ -147,19 +147,26 @@ const modeTab = (page: Page, vp: Viewport, mode: string): Locator =>
 const modeScope = (page: Page, vp: Viewport, mode: string): Locator =>
   vp.touch ? page.locator(`.olv-msheet-slot[data-tab="${mode}"]`) : page.locator(`#olv-ws-mode-${mode}`);
 
+/** A lab's Analyse page. */
+const labPage = (page: Page, id: string): Locator => page.locator(`.olv-analyse-page[data-page="${id}"]`);
+
 /**
- * A lab row that needs a terrain run offers a remedy. Follow it the way a
- * first-time user would: the remedy, Run on the Terrain page, then Back.
+ * Open a lab from its Analyse home row. A lab page without a ground surface
+ * offers the terrain run itself; follow it the way a first-time user would:
+ * the run, then the Terrain page's way back to the lab.
  */
-async function prepareTerrainIfAsked(rec: Recorder, page: Page, row: Locator): Promise<void> {
-  const remedy = row.locator('.olv-ah-remedy').first();
+async function openLabFromHome(rec: Recorder, page: Page, id: string, name: string): Promise<void> {
+  const row = page.locator(`#olv-ws-mode-analyse .olv-ah-row[data-analysis="${id}"]`);
   rec.fact('statusAtStart', (await row.locator('.olv-ah-badge').innerText()).trim());
-  if (!(await remedy.isVisible())) return;
-  rec.fact('remedy', (await remedy.innerText()).trim());
-  await rec.click(remedy, 'Remedy');
-  await rec.click(page.locator('.olv-analyse-run'), 'Run terrain analysis');
-  await expect(page.locator('.olv-fit-verdict-text')).toBeVisible({ timeout: 60_000 });
-  await rec.back(page.locator('#olv-ws-mode-analyse .olv-ws-back'), 'Back (← Analyse)');
+  await rec.click(row.locator('.olv-ah-open'), `${name} row`);
+  await expect(labPage(page, id)).toBeVisible({ timeout: 20_000 });
+  const fix = labPage(page, id).locator('.olv-lab-fix', { hasText: 'Run terrain analysis' });
+  if (!(await fix.isVisible())) return;
+  rec.fact('remedy', 'Run terrain analysis (lab page)');
+  await rec.click(fix, 'Run terrain analysis');
+  const back = page.locator('.olv-at-back', { hasText: `Back to ${name}` });
+  await expect(back).toBeVisible({ timeout: 60_000 });
+  await rec.click(back, `Back to ${name}`);
 }
 
 async function j1(page: Page, vp: Viewport, id: string): Promise<void> {
@@ -190,15 +197,13 @@ async function j3(page: Page, vp: Viewport, id: string): Promise<void> {
   await rec.start();
   await rec.click(modeTab(page, vp, 'analyse'), 'Analyse tab');
   await rec.click(modeScope(page, vp, 'analyse').locator('.olv-ah-row[data-analysis="observatory"] .olv-ah-open'), 'Observatory row');
-  const modal = page.locator('.olv-modal');
-  await expect(page.locator('.olv-modal-title')).toHaveText('Observatory');
-  const run = modal.locator('.olv-observatory-run');
-  if (!(await modal.locator('.olv-observatory-state-counts').isVisible())) await rec.click(run, 'Run Observatory');
-  await expect(modal.locator('.olv-observatory-state-counts')).toContainText(/SURFACE: \d+/, { timeout: 30_000 });
+  const lab = labPage(page, 'observatory');
+  await expect(lab).toBeVisible({ timeout: 20_000 });
+  const run = lab.locator('.olv-observatory-run');
+  if (!(await lab.locator('.olv-observatory-state-counts').isVisible())) await rec.click(run, 'Run Observatory');
+  await expect(lab.locator('.olv-observatory-state-counts')).toContainText(/SURFACE: \d+/, { timeout: 30_000 });
   rec.fact('labRan', true);
-  // Leave by the lab's Back, which names where it returns.
-  await rec.back(modal.locator('.olv-modal-x'), `Back (${(await modal.locator('.olv-modal-x').innerText()).trim()})`);
-  await expect(modal).toHaveCount(0);
+  // The lab is a page beside the scene: the Tools tab is one click away, with no Back first.
   await rec.click(modeTab(page, vp, 'work'), 'Tools tab');
   await rec.click(modeScope(page, vp, 'work').locator('.olv-tool-launcher .olv-tl-row', { hasText: 'Measure' }).first(), 'Measure');
   await expect(modeScope(page, vp, 'work').locator('.olv-ws-task-title')).toHaveText('Measure');
@@ -249,6 +254,11 @@ test.describe('CE wayfinding journeys', () => {
     const rec = new Recorder(page, 'J2', DESKTOP);
     await rec.start();
     await rec.click(page.locator('.olv-ws-tab[data-mode="work"]'), 'Tools tab');
+    // The tab opens the Tools home; its Continue row returns to Measure.
+    await page.mouse.move(1, 1); // the tab's hover tip sits over the row below it
+    const cont = page.locator('#olv-ws-mode-work .olv-mode-continue');
+    rec.fact('continueRow', (await cont.innerText()).trim());
+    await rec.click(cont, 'Continue row');
     const download = page.waitForEvent('download');
     await rec.click(page.locator('.olv-mp-action', { hasText: /^Export session$/ }), 'Export session (Measure panel)');
     const file = await download;
@@ -319,7 +329,7 @@ test.describe('CE wayfinding journeys', () => {
     await expect(row).toBeVisible({ timeout: 20_000 });
     await expect(row).toContainText(/Vertical datum\s*not established/);
     rec.succeed();
-    rec.fact('foundIn', 'Scan Intelligence (right rail), layer health card');
+    rec.fact('foundIn', 'View (right rail), layer health card');
     rec.fact('visibleWithoutHover', true);
     rec.finish();
   });
@@ -333,59 +343,54 @@ test.describe('CE wayfinding journeys', () => {
   });
 
   test('J7 first lab use: Flow Pulse from the Analyse home', async ({ page }) => {
-    const home = page.locator('#olv-ws-mode-analyse');
-    const modal = page.locator('.olv-modal');
+    const lab = labPage(page, 'flow-pulse');
     await openPage(page, DESKTOP, dropDenseGridPly);
     const rec = new Recorder(page, 'J7-flow-pulse', DESKTOP);
     await rec.start();
     await rec.click(page.locator('.olv-ws-tab[data-mode="analyse"]'), 'Analyse tab');
-    await prepareTerrainIfAsked(rec, page, home.locator('.olv-ah-row[data-analysis="flow-pulse"]'));
-    await rec.click(home.locator('.olv-ah-row[data-analysis="flow-pulse"] .olv-ah-open'), 'Flow Pulse row');
-    await expect(modal.locator('.olv-story-card')).toContainText('D8 flow routing', { timeout: 30_000 });
+    await openLabFromHome(rec, page, 'flow-pulse', 'Flow Pulse');
+    await expect(lab.locator('.olv-story-card')).toContainText('D8 flow routing', { timeout: 30_000 });
     rec.succeed();
     rec.finish();
   });
 
   test('J7 first lab use: Terrain Access from the Analyse home', async ({ page }) => {
-    const home = page.locator('#olv-ws-mode-analyse');
-    const modal = page.locator('.olv-modal');
+    const lab = labPage(page, 'terrain-access');
     await openPage(page, DESKTOP, dropTerrainAccessUtmLas);
     const rec = new Recorder(page, 'J7-terrain-access', DESKTOP);
     await rec.start();
     await rec.click(page.locator('.olv-ws-tab[data-mode="analyse"]'), 'Analyse tab');
-    await prepareTerrainIfAsked(rec, page, home.locator('.olv-ah-row[data-analysis="terrain-access"]'));
-    await rec.click(home.locator('.olv-ah-row[data-analysis="terrain-access"] .olv-ah-open'), 'Terrain Access row');
-    await expect(modal.locator('.olv-ta-form')).toBeVisible({ timeout: 20_000 });
-    const fields = modal.locator('input[type=text]');
+    await openLabFromHome(rec, page, 'terrain-access', 'Terrain Access');
+    await expect(lab.locator('.olv-ta-form')).toBeVisible({ timeout: 20_000 });
+    const fields = lab.locator('input[type=text]');
     const values = ['Illustrative', '80', '80', '50', '0', '0'];
     for (let i = 0; i < values.length; i += 1) await rec.type(fields.nth(i), values[i], `profile field ${i + 1}`);
-    await rec.click(modal.locator('.olv-ta-form-submit'), 'Apply profile');
-    const grid = modal.locator('.olv-ta-grid-canvas');
+    await rec.click(lab.locator('.olv-ta-form-submit'), 'Apply profile');
+    const grid = lab.locator('.olv-ta-grid-canvas');
     await expect(grid).toBeVisible({ timeout: 20_000 });
-    await rec.click(modal.locator('.olv-ta-segmented-btn', { hasText: 'Set start' }), 'Set start');
+    await rec.click(lab.locator('.olv-ta-segmented-btn', { hasText: 'Set start' }), 'Set start');
     await rec.canvasClick(grid, { x: 4, y: 4 }, 'start cell');
-    await rec.click(modal.locator('.olv-ta-segmented-btn', { hasText: 'Set goal' }), 'Set goal');
+    await rec.click(lab.locator('.olv-ta-segmented-btn', { hasText: 'Set goal' }), 'Set goal');
     await grid.focus();
     await rec.key('ArrowRight', 'move goal cursor');
     await rec.key('ArrowDown', 'move goal cursor');
     await rec.key('Enter', 'set goal');
-    await rec.click(modal.locator('.olv-ta-run'), 'Run Terrain Access');
-    await expect(modal.locator('.olv-ta-run-card')).toContainText('geometric traversability screening', { timeout: 20_000 });
+    await rec.click(lab.locator('.olv-ta-run'), 'Run Terrain Access');
+    await expect(lab.locator('.olv-ta-run-card')).toContainText('geometric traversability screening', { timeout: 20_000 });
     rec.succeed();
     rec.finish();
   });
 
   test('J7 first lab use: Observatory from the Analyse home', async ({ page }) => {
-    const home = page.locator('#olv-ws-mode-analyse');
-    const modal = page.locator('.olv-modal');
+    const lab = labPage(page, 'observatory');
     await openPage(page, DESKTOP, dropTinyPtx);
     const rec = new Recorder(page, 'J7-observatory', DESKTOP);
     await rec.start();
     await rec.click(page.locator('.olv-ws-tab[data-mode="analyse"]'), 'Analyse tab');
-    await rec.click(home.locator('.olv-ah-row[data-analysis="observatory"] .olv-ah-open'), 'Observatory row');
-    await expect(page.locator('.olv-modal-title')).toHaveText('Observatory');
-    if (!(await modal.locator('.olv-observatory-state-counts').isVisible())) await rec.click(modal.locator('.olv-observatory-run'), 'Run Observatory');
-    await expect(modal.locator('.olv-observatory-state-counts')).toContainText(/SURFACE: \d+/, { timeout: 30_000 });
+    await openLabFromHome(rec, page, 'observatory', 'Observatory');
+    await expect(lab).toBeVisible();
+    if (!(await lab.locator('.olv-observatory-state-counts').isVisible())) await rec.click(lab.locator('.olv-observatory-run'), 'Run Observatory');
+    await expect(lab.locator('.olv-observatory-state-counts')).toContainText(/SURFACE: \d+/, { timeout: 30_000 });
     rec.succeed();
     rec.finish();
   });

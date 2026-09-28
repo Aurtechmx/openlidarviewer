@@ -69,10 +69,13 @@ export const DETENTS: readonly SheetDetent[] = ['peek', 'half', 'full'];
 
 const MODE_TABS: readonly WorkspaceMode[] = ['data', 'work', 'analyse', 'output'];
 
+/** What the View tab and the desktop right rail hold, in one line. */
+export const VIEW_SUBTITLE = 'How the scan is drawn';
+
 /** Labels and tips come from the desktop modes, so both say the same thing. */
 export const TABS: ReadonlyArray<{ id: MobileTab; label: string; title: string }> = [
   ...MODE_TABS.map((m) => ({ id: m, label: workspaceModeLabel(m), title: workspaceModeTitle(m) })),
-  { id: 'view', label: 'View', title: 'How the scan is drawn: colour, point size, rendering, visuals.' },
+  { id: 'view', label: 'View', title: `${VIEW_SUBTITLE}: colour, point size, rendering, visuals.` },
 ];
 
 /** Movement (px) below which a pointer gesture counts as a tap, not a drag. */

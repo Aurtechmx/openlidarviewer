@@ -3,7 +3,8 @@
  *
  * The Analyse home and its pages over the real router and workspace: one row
  * per analysis from Process Studio's state, a blocked lab row whose fix lands
- * on the Terrain page, lab rows that open their modal without a page change,
+ * on the Terrain page, lab rows that run their entry, labs registered as pages
+ * (Flow Pulse and Terrain Access under Terrain, Observatory on its own),
  * Contours as the one child page (Back returns to Terrain, then home), the
  * depth limit, and that the live panels are moved, never rebuilt.
  */
@@ -100,12 +101,61 @@ describe('Analyse home', () => {
     expect(title.focused).toBe(true);
   });
 
-  it('a lab row opens its modal through the palette action, with no page change', async () => {
+  it('a lab row runs its palette entry; the lab then places itself on its page', async () => {
     const t = await make(['dtm', 'contours']);
     t.row('flow-pulse').find((e) => e.hasClass('olv-ah-open'))!.fire('click');
     t.row('observatory').find((e) => e.hasClass('olv-ah-open'))!.fire('click');
     expect(t.runAction.mock.calls.map((c) => c[0])).toEqual(['analyse.flowPulse', 'analyse.observatory']);
     expect(t.router.route().page).toBeNull();
+  });
+
+  it('labs are registered pages: Flow Pulse and Terrain Access under Terrain, Observatory top level', async () => {
+    const t = await make(['dtm']);
+    expect(t.aw.pages['flow-pulse']).toMatchObject({ title: 'Flow Pulse', parent: 'terrain' });
+    expect(t.aw.pages['terrain-access']).toMatchObject({ title: 'Terrain Access', parent: 'terrain' });
+    expect(t.aw.pages.observatory.title).toBe('Observatory');
+    expect(t.aw.pages.observatory.parent).toBeUndefined();
+  });
+
+  it('a lab body opens on its page, Back returns to Terrain, and close empties the page once', async () => {
+    const { openLabSurface } = await import('../src/ui/labSurface');
+    const t = await make(['dtm']);
+    await t.aw.open('terrain');
+    const body = new FakeEl('div');
+    const onClose = vi.fn();
+    const handle = openLabSurface('flow-pulse', 'Flow Pulse', body as unknown as HTMLElement, onClose);
+    expect(t.router.route().page).toBe('flow-pulse');
+    const shell = t.host.find((e) => e.dataset.page === 'flow-pulse')!;
+    expect(shell.find((e) => e === body)).toBe(body);
+    expect(shell.hasClass('olv-hidden')).toBe(false);
+    const back = t.host.find((e) => e.hasClass('olv-ws-back'))!;
+    expect(back.ownText).toBe('← Terrain');
+    back.fire('click');
+    expect(t.router.route().page).toBe('terrain');
+    // Leaving the page keeps the lab: the palette's Go to shows it as it was.
+    await t.aw.open('flow-pulse');
+    expect(t.runAction).not.toHaveBeenCalled();
+    expect(t.router.route().page).toBe('flow-pulse');
+    handle.close();
+    handle.close();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(shell.hasClass('olv-hidden')).toBe(true);
+    // An empty lab page is opened through its entry, which loads the lab.
+    await t.aw.open('observatory');
+    expect(t.runAction).toHaveBeenCalledWith('analyse.observatory');
+  });
+
+  it('reopening a lab replaces its body and closes the previous one', async () => {
+    const { openLabSurface } = await import('../src/ui/labSurface');
+    const t = await make(['dtm']);
+    const first = vi.fn();
+    openLabSurface('observatory', 'Observatory', new FakeEl('div') as unknown as HTMLElement, first);
+    const second = new FakeEl('div');
+    openLabSurface('observatory', 'Observatory', second as unknown as HTMLElement);
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(t.router.route()).toEqual({ mode: 'analyse', page: 'observatory' });
+    const shell = t.host.find((e) => e.dataset.page === 'observatory')!;
+    expect(shell.find((e) => e === second)).toBe(second);
   });
 
   it('repaints when Process Studio repaints: a terrain run unblocks the labs', async () => {

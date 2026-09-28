@@ -87,7 +87,7 @@ test.describe('state glyphs', () => {
     // The Observatory's origin and basis badges on the same scan.
     await showWorkspaceMode(page, 'analyse');
     await firePaletteAction(page, 'Observatory', 'Observatory (observation evidence)');
-    const chips = page.locator('.olv-modal .olv-observatory-chip');
+    const chips = page.locator('.olv-analyse-page[data-page="observatory"] .olv-observatory-chip');
     await expect(chips.first()).toBeVisible({ timeout: 20_000 });
     const badges = await chips.evaluateAll((nodes) => nodes.map((n) => ({
       glyph: n.querySelector('.olv-observatory-chip-glyph')?.textContent ?? '',

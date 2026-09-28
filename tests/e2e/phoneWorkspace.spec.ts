@@ -37,7 +37,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }
   test.describe(`phone workspace ${viewport.width}x${viewport.height}`, () => {
     test.use({ viewport, hasTouch: true, isMobile: true });
 
-    test('Tools -> Measure -> Data -> Tools keeps Measure, and Back returns home', async ({ page }) => {
+    test('Tools -> Measure -> Data -> Tools offers Measure to continue, and Back returns home', async ({ page }) => {
       await openScan(page);
       await tab(page, 'work').click();
       const launcher = slot(page, 'work').locator('.olv-tool-launcher');
@@ -57,6 +57,10 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }
       await expect(measure).toBeHidden();
 
       await tab(page, 'work').click();
+      // The tab opens the Tools home; its Continue row returns to Measure.
+      await expect(launcher).toBeVisible();
+      await page.mouse.move(1, 1);
+      await slot(page, 'work').locator('.olv-mode-continue').click();
       await expect(title).toHaveText('Measure');
       await expect(measure).toBeVisible();
       // The same live node came back, not a rebuilt one.

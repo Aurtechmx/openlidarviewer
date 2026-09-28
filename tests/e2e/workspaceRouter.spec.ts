@@ -22,7 +22,7 @@ async function openScan(page: Page): Promise<void> {
 test.describe('workspace route', () => {
   test.slow();
 
-  test('Tools -> Measure -> Data -> Tools shows Measure -> Back shows the launcher', async ({ page }) => {
+  test('Tools -> Measure -> Data -> Tools shows the home -> Continue shows Measure -> Back shows the launcher', async ({ page }) => {
     await openScan(page);
     await showWorkspaceMode(page, 'work');
     const launcher = page.locator('.olv-tool-launcher');
@@ -44,6 +44,9 @@ test.describe('workspace route', () => {
     await showWorkspaceMode(page, 'data');
     await expect(panel).toBeHidden();
     await showWorkspaceMode(page, 'work');
+    await expect(launcher).toBeVisible();
+    await page.mouse.move(1, 1);
+    await page.locator('#olv-ws-mode-work .olv-mode-continue').click();
     await expect(panel).toBeVisible();
     await expect(title).toHaveText('Measure');
     await expect(launcher).toBeHidden();

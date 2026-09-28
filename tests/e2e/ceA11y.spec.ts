@@ -26,10 +26,7 @@ type Surface = 'empty' | 'scan' | 'analyse' | 'measure' | 'lab' | 'palette';
  * surface and rule id, each with the reason it is not fixed here. An entry
  * that no longer fires fails the run, so the list only shrinks.
  */
-const RIGHT_RAIL = 'The right rail (Inspector). Its Visuals section headers and the elevation Reset link are under 24 px; the rail is reworked as View in C3 (CE-VIEW).';
-const KNOWN: ReadonlyArray<{ viewport: 'desktop' | 'phone'; surface: Surface; rule: string; why: string }> = [
-  ...(['scan', 'analyse', 'measure', 'lab', 'palette'] as const).map((surface) => ({ viewport: 'desktop' as const, surface, rule: 'target-size', why: RIGHT_RAIL })),
-];
+const KNOWN: ReadonlyArray<{ viewport: 'desktop' | 'phone'; surface: Surface; rule: string; why: string }> = [];
 
 const VIEWPORTS = [
   { name: 'desktop', size: { width: 1440, height: 900 }, touch: false },
@@ -67,7 +64,7 @@ async function reach(page: Page, surface: Surface, phone: boolean): Promise<void
     await expect(page.locator('.olv-measure-panel')).toBeVisible();
   } else if (surface === 'lab') {
     await firePaletteAction(page, 'Observatory', 'Observatory (observation evidence)');
-    await expect(page.locator('.olv-modal .olv-observatory-section-title').first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('.olv-analyse-page[data-page="observatory"] .olv-observatory-section-title').first()).toBeVisible({ timeout: 20_000 });
   } else if (surface === 'palette') {
     await page.keyboard.press('ControlOrMeta+KeyK');
     await expect(page.locator('.olv-palette')).toBeVisible();

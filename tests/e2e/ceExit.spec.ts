@@ -4,7 +4,7 @@
  * Every route and workspace this fixture reaches is visited at 1440x900 and at
  * 390x844, through the palette's Go to entries, and each must show a visible
  * Back that names its destination. Labs, the command palette and result focus
- * are checked the same way. The count of dead ends must be zero.
+ * are checked the same way; labs are pages under Analyse. The count of dead ends must be zero.
  *
  * Escape follows the order in CE-EXIT-02: a popover first, then a tool that is
  * capturing, then the surface; a text field keeps its Escape; a dialog closes
@@ -110,18 +110,18 @@ async function sweep(page: Page, size: { width: number; height: number }): Promi
   await check('Command palette');
   await page.locator('.olv-palette-close').click();
   await expect(page.locator('.olv-palette')).toBeHidden();
-  // A lab dialog leads with a Back that names where it returns.
+  // A lab is a page under Terrain, and its Back names Terrain.
   // The first crumb goes to the Analyse home from anywhere under it.
   await bar(page).locator('.olv-loc-crumb', { hasText: /^Analyse$/ }).click();
   await expect(bar(page)).toHaveAttribute('data-path', 'Analyse');
   await page.locator('.olv-ah-row[data-analysis="flow-pulse"] .olv-ah-open:visible').click();
-  const labBack = page.locator('.olv-modal-backdrop .olv-modal-back');
-  await expect(labBack).toHaveText('← Analyse');
-  await expect(labBack).toHaveAttribute('aria-label', 'Back to Analyse');
+  await expect(bar(page)).toHaveAttribute('data-path', 'Analyse › Terrain › Flow Pulse', { timeout: 20_000 });
+  const labBack = bar(page).locator('.olv-loc-back');
+  await expect(labBack).toHaveText('← Terrain');
+  await expect(labBack).toHaveAttribute('aria-label', 'Back to Terrain');
   await check('Flow Pulse');
   await labBack.click();
-  await expect(page.locator('.olv-modal-backdrop')).toHaveCount(0);
-  await expect(bar(page)).toHaveAttribute('data-path', 'Analyse');
+  await expect(bar(page)).toHaveAttribute('data-path', 'Analyse › Terrain');
   return { visited, deadEnds };
 }
 
@@ -218,16 +218,16 @@ test.describe('one exit convention', () => {
     await expect(bar(page)).toHaveAttribute('data-path', 'Tools › Clip box');
   });
 
-  test('a lab closes on Escape without moving the route, and focus returns to its row', async ({ page }) => {
+  test('a lab page goes back on Escape, and focus returns to its row', async ({ page }) => {
     await openScan(page, DESKTOP, dropTinyPtx);
     await showWorkspaceMode(page, 'analyse');
     const open = page.locator('.olv-ah-row[data-analysis="observatory"] .olv-ah-open');
     await open.click();
-    await expect(page.locator('.olv-modal-back')).toHaveText('← Analyse');
+    await expect(bar(page)).toHaveAttribute('data-path', 'Analyse › Observatory', { timeout: 20_000 });
+    await expect(bar(page).locator('.olv-loc-back')).toHaveText('← Analyse');
     await page.keyboard.press('Escape');
-    await expect(page.locator('.olv-modal-backdrop')).toHaveCount(0);
-    await page.waitForTimeout(250);
     await expect(bar(page)).toHaveAttribute('data-path', 'Analyse');
+    await expect(page.locator('.olv-modal-backdrop')).toHaveCount(0);
     await expect(open).toBeFocused();
   });
 

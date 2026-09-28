@@ -34,6 +34,8 @@ import { createAnalyseWorkspace, type AnalyseHostPanel, type AnalysePage, type A
 import { createDataHome } from './dataHome';
 import { mountResultsShelf, type ResultsShelfSources, type ShelfExportPanel, type ShelfTerrainPanel } from '../results/resultsShelfMount';
 import { mountLocationBar } from '../../ui/locationBar';
+import { decorateViewRail } from './viewRail';
+import { createModeHome, type ModeHome } from './modeHome';
 
 /** The scene tools that open a page in the Tools mode. */
 export type ToolPage = 'measure' | 'annotate' | 'clip';
@@ -84,7 +86,7 @@ export interface WorkspaceShellDeps {
 export interface WorkspaceShell {
   readonly router: WorkspaceRouter;
   readonly mobileSheet: MobileSheet;
-  /** Switch mode; the mode's remembered page comes back with it. */
+  /** Switch mode; the mode's remembered page comes back with it (not a tab click). */
   showMode(m: WorkspaceMode): void;
   /**
    * Open a scene tool's page in Tools. Focus follows to the task heading only
@@ -158,6 +160,9 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     showObjects: d.showObjects,
     runAction: d.runAction,
     isMobile: () => mobileMql?.matches ?? false,
+    hasScan: d.hasScan,
+    // A lab opened on a phone raises a lowered sheet so its page is on screen.
+    reveal: () => { if (mobileSheet && mobileSheet.getDetent() === 'peek' && mobileMql?.matches) mobileSheet.setDetent('half'); },
     // The Observatory needs declared scanner setups; unknown until a layer is active.
     hasStations: () => {
       const id = d.results?.scans.activeExportTargetId();
@@ -166,8 +171,34 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     },
   });
   const allPages = { work: pages as Record<string, WorkspacePage>, data: dataPages, analyse: analyse.pages };
-  router = createWorkspaceRouter(workspace, allPages, storage());
+  let modeHome: ModeHome | null = null;
+  router = createWorkspaceRouter(workspace, allPages, storage(), () => modeHome?.refresh());
   analyse.attach(router);
+  const shown = (n: HTMLElement | null | undefined): boolean => !!n && !n.classList.contains('olv-hidden') && n.style.display !== 'none';
+  modeHome = createModeHome({
+    router,
+    pages: allPages,
+    host: (m) => workspace.mode(m),
+    open: (m, page) => {
+      if (m === 'analyse') void analyse.open(page as AnalysePage);
+      else if (m === 'work' && !shown(pages[page]?.element())) d.runAction(`tool.${page}`);
+      else router?.navigate({ mode: m, page }, true);
+    },
+    stateOf: (m, page) => {
+      if (m === 'work' && page === 'measure') {
+        const n = d.results?.viewer.measure.getMeasurements().length ?? 0;
+        return n ? `${n} measurement${n === 1 ? '' : 's'}` : null;
+      }
+      if (m === 'analyse') return analyse.home.querySelector(`.olv-ah-row[data-analysis="${page}"] .olv-ah-badge`)?.textContent ?? null;
+      return null;
+    },
+  });
+  // A tab that switches mode opens that mode's home, which offers the
+  // remembered page back. Captured before the tab's own handler switches.
+  workspace.element.addEventListener('click', (e) => {
+    const m = (e.target as Element | null)?.closest?.<HTMLElement>('.olv-ws-tab')?.dataset.mode;
+    if (m && m !== workspace.getMode()) router?.navigate({ mode: m as WorkspaceMode, page: null });
+  }, true);
   const placeAnalyse = (): void => analyse.place(workspace.mode('analyse'));
   const leftPanels = workspace.element;
   const railIntent = createRailIntent(leftPanels);
@@ -190,6 +221,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   });
   refreshDataHome = dataHome.refresh;
   d.addTeardown(d.inspector.onSourceChange(dataHome.refresh));
+  decorateViewRail(d.inspector.element, () => router?.navigate({ mode: 'analyse', page: null }, true));
   const expandRightRail = (): void => d.overlay.querySelector<HTMLButtonElement>('.olv-right-rail-tab')?.click();
   const workspacePanels = {
     dataLayers: dataEls.layers,
@@ -234,6 +266,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     collapsedClass: 'olv-right-collapsed',
     storageKey: 'olv.rightRail.inspector.collapsed',
     ariaControls: 'olv-right-rail',
+    label: 'View',
   }));
   d.overlay.append(...d.overlayTail);
 
@@ -245,7 +278,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     initialTab: sheetTabForMode(workspace.getMode()),
     onTabChange: (tab) => {
       const m = modeForSheetTab(tab);
-      if (m) workspace.setMode(m); // the mode's remembered page comes back with it
+      if (m) router?.navigate({ mode: m, page: null }); // the mode's home, with Continue
     },
   });
   mobileSheet = sheet;
@@ -294,6 +327,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     // The sheet shows only on a phone WITH a scan; the tab strip only with a scan.
     sheet.setVisible(isMobile && d.hasScan());
     workspace.setAvailable(d.hasScan());
+    if (!d.hasScan()) analyse.refresh(); // a closed scan ends its labs
     // The location bar arrives with the first scan (spec CE-1, section 3).
     if (d.hasScan() && !located) {
       located = true;

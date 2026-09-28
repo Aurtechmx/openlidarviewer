@@ -337,8 +337,8 @@ export function signalSources(
     list: () => {
       const out: ResultDraft[] = [];
       for (const [kind, name, page] of [
-        ['flow-pulse', 'Flow Pulse run', 'flow'],
-        ['terrain-access', 'Terrain Access route', 'access'],
+        ['flow-pulse', 'Flow Pulse run', 'flow-pulse'],
+        ['terrain-access', 'Terrain Access route', 'terrain-access'],
       ] as const) {
         const run = signals.lab(kind);
         if (!run) continue;

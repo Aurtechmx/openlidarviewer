@@ -509,7 +509,7 @@ export function removalClosesScan(layerCount: number): boolean {
 export class Inspector {
   readonly element: HTMLElement;
   /**
-   * The floating "Scan Info" launcher — append to the overlay. It opens the
+   * The floating "View" launcher — append to the overlay. It opens the
    * Inspector as a bottom sheet; styling shows it on phones only, once a scan
    * has loaded.
    */
@@ -994,23 +994,14 @@ export class Inspector {
     const sheetClose = el('button', {
       className: 'olv-sheet-close',
       text: '×',
-      ariaLabel: 'Close scan info',
-      tip: 'Close scan info.',
+      ariaLabel: 'Close View',
+      tip: 'Close View.',
     });
     sheetClose.addEventListener('click', (ev) => {
       ev.stopPropagation();
       this.closeSheet();
     });
-    // v0.4.3 — the theme picker moved OUT of this panel into a single
-    // shape-morphing button in the top-right header (ThemeToggle.ts).
-    // The Scan Intelligence panel no longer carries the Dark / Light /
-    // High-contrast chip rail.
-    // The chevron is a CSS-only `▾` glyph; it rotates 180° when the sheet
-    // is open. Together with the grip handle and the new tap-the-head
-    // behaviour this signals to phone users that the bar at the bottom of
-    // the screen is interactive — previously they saw "Scan Intelligence"
-    // and a `×` close button but nothing told them tapping the title would
-    // open the panel, so the bar read as a status pill, not a handle.
+    // The chevron rotates when the sheet is open, so the phone bar reads as a handle.
     const sheetChevron = el('span', {
       className: 'olv-sheet-chevron',
       text: '▾',
@@ -1018,9 +1009,9 @@ export class Inspector {
     sheetChevron.setAttribute('aria-hidden', 'true');
     const head = el('div', {
       className: 'olv-panel-head',
-      tip: 'Tap to expand or collapse the scan info panel.',
+      tip: 'Tap to expand or collapse View.',
     }, [
-      el('div', { className: 'olv-panel-title', text: 'Scan Intelligence' }),
+      el('div', { className: 'olv-panel-title', text: 'View' }),
       sheetChevron,
       sheetClose,
     ]);
@@ -1318,30 +1309,27 @@ export class Inspector {
       collapsibleSection('Rendering', renderingBody),
     );
 
-    // Dataset Intelligence — informational summary of the Terrain
-    // Foundation outputs. Lives directly under the Scan Intelligence
-    // title and above the Visuals Studio preset rail. Empty-state by
-    // default so the panel never lies on first paint.
+    // Dataset Intelligence: a summary of the Terrain Foundation outputs,
+    // empty until data arrives so the panel never lies on first paint.
     this._datasetIntelligence = new DatasetIntelligenceCard(this._cb.onOpenDatasetStory);
     // Empty slot; the card class loads on first data (never lies on first
     // paint — it simply is not there yet).
     this._layerHealthSlot = el('div');
 
     this._crsSection = collapsibleSection('Coordinate system', this._crsBody);
+    // Task frequency order: appearance (Rendering holds the navigation
+    // group), filters, saved views, then the scan facts.
     this.element = el('aside', { className: 'olv-inspector' }, [
       head,
+      this._colorBySection,
+      visualsStudioSection,
+      this._renderingSection,
+      this._elevFilter.section,
+      this._intenFilter.section,
+      this._persistSection('savedViews', collapsibleSection('Saved views', views)),
       this._datasetIntelligence.element,
       this._layersSection,
       this._layerHealthSlot,
-      this._colorBySection,
-      this._elevFilter.section,
-      this._intenFilter.section,
-      // Visuals Studio (presets, curator's tool) → Rendering (raw,
-      // technician's tool). Point size is folded into Rendering as a
-      // sub-group, so the panel keeps one slot per intent instead of
-      // three overlapping ones.
-      visualsStudioSection,
-      this._renderingSection,
       this._persistSection('detail', collapsibleSection('Detail', this._detail)),
       this._persistSection(
         'provenance',
@@ -1355,7 +1343,6 @@ export class Inspector {
       ),
       this._crsSection,
       this._persistSection('scanReport', collapsibleSection('Scan report', this._report)),
-      this._persistSection('savedViews', collapsibleSection('Saved views', views)),
       sessionStats,
     ]);
     this._showReportPlaceholder();
@@ -1365,8 +1352,8 @@ export class Inspector {
     this.sheetToggle = el('button', {
       className: 'olv-scaninfo-btn',
       type: 'button',
-      text: 'Scan Info',
-      ariaLabel: 'Show scan information',
+      text: 'View',
+      ariaLabel: 'Show View',
     });
     this.sheetToggle.addEventListener('click', () => this.toggleSheet());
   }

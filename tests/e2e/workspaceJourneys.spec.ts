@@ -131,9 +131,12 @@ test.describe('workspace journeys', () => {
     await expect(page.locator('.olv-mp-row')).toHaveCount(1);
     await expectWorkspaceRules(page);
 
-    // The tab alone also returns to the remembered page.
+    // The tab opens the Tools home; its Continue row returns to the remembered page.
     await showWorkspaceMode(page, 'data');
     await showWorkspaceMode(page, 'work');
+    await page.mouse.move(1, 1);
+    await expect(page.locator('#olv-ws-mode-work .olv-mode-continue')).toHaveText('Continue: Measure · 1 measurement');
+    await page.locator('#olv-ws-mode-work .olv-mode-continue').click();
     await expect(taskTitle(page, 'work')).toHaveText('Measure');
     await expect(page.locator('.olv-mp-row')).toHaveCount(1);
   });

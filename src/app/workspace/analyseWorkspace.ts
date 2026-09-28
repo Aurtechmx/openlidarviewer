@@ -6,9 +6,10 @@
  * read from the verdicts Process Studio already renders
  * (`process/analysisStatus.ts`). A blocked row that something can lift shows
  * that fix as a button. Terrain, its Contours, Objects & Space and the
- * scan-dependent Feature candidates and Range frames are router pages; the
- * Flow Pulse, Terrain Access and Observatory labs stay modals, opened from
- * their rows.
+ * scan-dependent Feature candidates and Range frames are router pages. The
+ * Flow Pulse and Terrain Access labs are pages under Terrain and Observatory
+ * is a page of its own: each lab places its body here through
+ * `ui/labSurface.ts`, so the scene stays in view while it is open.
  *
  * Every page leads with its conclusion (status and reason), then a `Why?`
  * disclosure with the full reasons (on Terrain, the whole Process Studio
@@ -36,6 +37,7 @@ import type { PreflightActionId, ToolId } from '../../process/toolPreflight';
 import type { WorkspacePage, WorkspaceRouter } from './workspaceRouter';
 import { LAB_NAME, LAB_PURPOSE, type LabId } from '../../process/labGuideCopy';
 import { labReturn, setLabReturn } from '../labReturn';
+import { setLabPageHost } from '../../ui/labSurface';
 
 /** The slice of the mounted Process Studio the home reads. */
 export interface AnalyseStudio {
@@ -73,10 +75,14 @@ export interface AnalyseWorkspaceDeps {
   readonly isMobile: () => boolean;
   /** Whether the active scan declares scanner setups; absent when not known. */
   readonly hasStations?: () => boolean | undefined;
+  /** Whether a scan is open; without one the labs have no page to show. */
+  readonly hasScan?: () => boolean;
+  /** Bring the Analyse pages on screen (the phone sheet, when lowered). */
+  readonly reveal?: () => void;
 }
 
-/** The Analyse pages: Contours is the only child, under Terrain. */
-export type AnalysePage = 'terrain' | 'contours' | 'objects' | 'features' | 'range';
+/** The Analyse pages: Contours, Flow Pulse and Terrain Access sit under Terrain. */
+export type AnalysePage = 'terrain' | 'contours' | 'objects' | 'features' | 'range' | LabId;
 
 export interface AnalyseWorkspace {
   /** The home, mounted as the first child of the Analyse mode. */
@@ -94,7 +100,7 @@ export interface AnalyseWorkspace {
 
 const STATUS_TEXT = { ready: 'Ready', review: 'Review', blocked: 'Blocked', present: 'Scanner grid present' } as const;
 
-/** The labs are modals: their rows run the same entry the palette offers. */
+/** A lab row runs the same entry the palette offers; the lab then shows its page. */
 const LAB_ACTION: Partial<Record<AnalysisId, string>> = {
   'flow-pulse': 'analyse.flowPulse',
   'terrain-access': 'analyse.terrainAccess',
@@ -136,7 +142,34 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
     objects: pageShell('objects'),
     features: pageShell('features'),
     range: pageShell('range'),
+    'flow-pulse': pageShell('flow-pulse'),
+    'terrain-access': pageShell('terrain-access'),
+    observatory: pageShell('observatory'),
   };
+  const scanOpen = (): boolean => (d.hasScan ? d.hasScan() : !!d.studio.state().facts);
+  // Each open lab's close, run when the lab is replaced or closed.
+  const labClose: Partial<Record<LabId, () => void>> = {};
+  setLabPageHost((lab, body, onClose) => {
+    // With no scan the workspace is not on screen: the lab takes a dialog.
+    if (!scanOpen()) return null;
+    labClose[lab]?.();
+    const shell = shells[lab];
+    shell.body.replaceChildren(body);
+    let closed = false;
+    const close = (): void => {
+      if (closed) return;
+      closed = true;
+      if (labClose[lab] === close) delete labClose[lab];
+      body.remove();
+      onClose?.();
+      api.refresh();
+    };
+    labClose[lab] = close;
+    api.refresh();
+    router?.navigate({ mode: 'analyse', page: lab }, true);
+    d.reveal?.();
+    return { element: shell.root, close };
+  });
   // A panel shown or hidden by its owner (the scan route, the dock toggle)
   // changes which pages exist, so the home and the route follow it.
   const watched = new WeakSet<HTMLElement>();
@@ -173,6 +206,7 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
       case 'objects': return shown(d.objectPanel()?.element);
       case 'features': return !!panel?.hasPart('features');
       case 'range': return !!panel?.hasPart('range');
+      default: return !!shells[page].body.firstChild;
     }
   }
 
@@ -199,6 +233,7 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
 
   const pageOf: Partial<Record<AnalysisId, AnalysePage>> = {
     terrain: 'terrain', objects: 'objects', features: 'features', range: 'range',
+    'flow-pulse': 'flow-pulse', 'terrain-access': 'terrain-access', observatory: 'observatory',
   };
 
   const api: AnalyseWorkspace = {
@@ -209,6 +244,9 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
       objects: { title: 'Objects & Space', element: () => shells.objects.root },
       features: { title: 'Feature candidates', element: () => shells.features.root },
       range: { title: 'Range frames', element: () => shells.range.root },
+      'flow-pulse': { title: LAB_NAME['flow-pulse'], element: () => shells['flow-pulse'].root, parent: 'terrain' },
+      'terrain-access': { title: LAB_NAME['terrain-access'], element: () => shells['terrain-access'].root, parent: 'terrain' },
+      observatory: { title: LAB_NAME.observatory, element: () => shells.observatory.root },
     },
     attach(r) {
       router = r;
@@ -235,11 +273,17 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
       api.refresh();
     },
     async open(page) {
+      // A lab already on its page is shown as it is; otherwise its entry
+      // loads the chunk and the lab places itself on the page.
+      const lab = LAB_ACTION[page as AnalysisId];
+      if (lab && !available(page)) { d.runAction(lab); return; }
       if (page === 'terrain' || page === 'contours') await d.showTerrain();
       if (page === 'objects') await d.showObjects();
       router?.navigate({ mode: 'analyse', page }, true);
     },
     refresh() {
+      // Closing the scan ends every open lab; a new scan starts them afresh.
+      if (!scanOpen()) for (const close of Object.values(labClose)) close?.();
       const inp = input();
       const rows = analysisRows(inp);
       const items = rows.map((row) => {

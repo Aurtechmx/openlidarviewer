@@ -40,11 +40,11 @@ export interface ResultsShelfDeps {
   /** A display name for a layer id, or null when it is gone. */
   layerName(id: string): string | null;
   /**
-   * Open a result that lives in a modal (a lab or the Observatory) on the
-   * result it already holds. Returns false when it cannot, and the shelf then
+   * Open a lab result (Flow Pulse, Terrain Access, Observatory) on its
+   * Analyse page, showing the run it already holds. Returns false when it cannot, and the shelf then
    * navigates to the result's route instead.
    */
-  openInModal?(entry: ResultEntry): boolean;
+  openLabPage?(entry: ResultEntry): boolean;
   /** Clock for row times; injectable for tests. */
   now?: () => number;
 }
@@ -108,7 +108,7 @@ export function createResultsShelf(deps: ResultsShelfDeps): ResultsShelf {
   }
 
   function focusEntry(e: ResultEntry): void {
-    if (!deps.openInModal?.(e)) deps.navigate(e.route);
+    if (!deps.openLabPage?.(e)) deps.navigate(e.route);
     if (e.anchor) deps.aim(e.anchor, e.fit);
     const other = otherSource(e);
     live.textContent = other

@@ -43,7 +43,7 @@ export function createDataHome(d: DataHomeDeps): DataHome {
   const classes = row('Classes', () => d.openClasses());
   const source = row('Source and metadata', () => d.openSource());
   const health = row('Layer Health', () => d.openLayerHealth());
-  health.value.textContent = 'In the Inspector';
+  health.value.textContent = 'In View';
   const openBtn = el('button', { className: 'olv-data-open', type: 'button', text: actionTitle('scan.open') });
   openBtn.addEventListener('click', () => d.openFile());
   const empty = el('div', { className: 'olv-data-empty' }, [
