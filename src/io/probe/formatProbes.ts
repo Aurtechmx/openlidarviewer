@@ -24,11 +24,15 @@
  * Each result also carries an internal 0 to 100 confidence used only to rank
  * results of the same level. It is not calibrated and is never shown to users.
  *
- * The extension is weak evidence. It still breaks ties the way `sniffFormat`
- * always did, so every file sniffFormat recognises keeps its format (the
- * fixture regression test runs both), but it never overrides contradicting
- * content: a non point cloud signature, or binary bytes under a text-only
- * format's extension.
+ * The extension is weak evidence, but it is evidence: an extension that names
+ * a format opens the file at PROBABLE when the content does not contradict it,
+ * even with no structure match. For a text point format (.xyz, .csv, .asc,
+ * .txt, .pts) that means a text file under that extension opens at PROBABLE
+ * and the text decoder has the final word. This keeps the tie-break
+ * `sniffFormat` always made, so every file sniffFormat recognises keeps its
+ * format (the fixture regression test runs both). The extension never
+ * overrides contradicting content: a non point cloud signature, or binary
+ * bytes under a text-only format's extension.
  *
  * Pure: no DOM, no File, no worker. Lazily loaded only when sniffFormat gives
  * up, so none of this is in the entry bundle.
@@ -187,10 +191,30 @@ function numericCols(line: string): number {
   return parts.length;
 }
 
-const MIN_ROWS = 3;
+/**
+ * Minimum complete numeric rows for a text table (pre-registered, ledger L176).
+ *
+ * With an extension that names the text point format, 3 rows are enough: the
+ * extension is the main evidence and the rows only have to not contradict it.
+ * With no such extension the rows are the only evidence, and three short
+ * numeric lines turn up in many text files that are not point lists (a log
+ * excerpt, a small matrix, a settings block). A real point export holds far
+ * more than ten rows in its first 16 KiB, so content alone needs 10. Only
+ * complete lines count: `textLines` drops a line cut at the window edge.
+ */
+const MIN_ROWS_WITH_EXTENSION = 3;
+const MIN_ROWS_FROM_CONTENT = 10;
+
+/** Vertex lines an OBJ structure match needs. */
+const MIN_OBJ_VERTICES = 3;
+
+/** The row minimum for a probe, given whether the extension names its format. */
+function minRows(inp: ProbeInput, exts: readonly string[]): number {
+  return exts.includes(inp.ext) ? MIN_ROWS_WITH_EXTENSION : MIN_ROWS_FROM_CONTENT;
+}
 
 /** Rows of 3+ numeric columns with one stable column count, after optional headers. */
-function numericTable(lines: string[], skipHead: number): { rows: number; cols: number } | null {
+function numericTable(lines: string[], skipHead: number, min: number): { rows: number; cols: number } | null {
   let cols = 0;
   let rows = 0;
   let nonNumeric = 0;
@@ -209,7 +233,7 @@ function numericTable(lines: string[], skipHead: number): { rows: number; cols: 
     else if (n !== cols) return null;
     rows++;
   }
-  return rows >= MIN_ROWS ? { rows, cols } : null;
+  return rows >= min ? { rows, cols } : null;
 }
 
 // ── Non point cloud signatures ──────────────────────────────────────────────
@@ -248,9 +272,18 @@ const FOREIGN: ReadonlyArray<{ bytes: number[]; at?: number; sig: ForeignSignatu
   { bytes: [0x0a, 0x0d, 0x0d, 0x0a], sig: { name: 'packet capture (PCAPNG)', kind: 'capture' } },
 ];
 
+/**
+ * Signatures shorter than this are skipped when the head reads as text: two or
+ * three printable letters (`MZ`, `BZh`) start ordinary text lines too often to
+ * prove anything about a text file.
+ */
+const MIN_SIGNATURE_BYTES_FOR_TEXT = 4;
+
 /** The first non point cloud signature at the head of `bytes`, if any. */
 export function foreignSignature(bytes: Uint8Array): ForeignSignature | null {
+  const text = looksLikeText(bytes.subarray(0, 4096));
   outer: for (const f of FOREIGN) {
+    if (text && f.bytes.length < MIN_SIGNATURE_BYTES_FOR_TEXT) continue;
     const at = f.at ?? 0;
     if (bytes.length < at + f.bytes.length) continue;
     for (let i = 0; i < f.bytes.length; i++) if (bytes[at + i] !== f.bytes[i]) continue outer;
@@ -265,6 +298,8 @@ export function provesNotPointCloud(sig: ForeignSignature | null): boolean {
 }
 
 // ── The registry ────────────────────────────────────────────────────────────
+
+const XYZ_EXTS: readonly string[] = ['xyz', 'csv', 'asc', 'txt'];
 
 const sig = (ok: boolean, evidence: string, validated = true): Signature => (ok ? { validated, evidence } : null);
 
@@ -344,7 +379,7 @@ const PROBES: readonly Probe[] = [
     structure: (i) => {
       const l = textLines(i).filter((s) => s.trim() !== '');
       if (l.length < 2 || !/^\d+$/.test(l[0].trim())) return null;
-      return numericTable(l, 1) ? 'point count line followed by numeric point rows' : null;
+      return numericTable(l, 1, minRows(i, ['pts'])) ? 'point count line followed by numeric point rows' : null;
     },
   },
   {
@@ -361,7 +396,7 @@ const PROBES: readonly Probe[] = [
           v++;
         } else if (!/^(vn|vt|vp|f|l|p|o|g|s|usemtl|mtllib)\b/.test(t)) return null;
       }
-      return v >= MIN_ROWS ? 'vertex lines with three coordinates' : null;
+      return v >= MIN_OBJ_VERTICES ? 'vertex lines with three coordinates' : null;
     },
   },
   {
@@ -375,10 +410,10 @@ const PROBES: readonly Probe[] = [
   },
   {
     decoderId: 'xyz',
-    exts: ['xyz', 'csv', 'asc', 'txt'],
+    exts: XYZ_EXTS,
     textOnly: true,
     structure: (i) => {
-      const t = numericTable(textLines(i), 0);
+      const t = numericTable(textLines(i), 0, minRows(i, XYZ_EXTS));
       return t ? `text rows of ${t.cols} numeric columns` : null;
     },
   },

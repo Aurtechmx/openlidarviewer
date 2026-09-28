@@ -4,6 +4,7 @@ import type { SourceFormat } from './sniffFormat';
 import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
 import type { LoadResult } from './parseBuffer';
+import type { InterpretationLevel } from './probe/formatProbes';
 import { POINT_BUDGET, parseBuffer } from './parseBuffer';
 import { parseLasHeader, lasDecodedAttributes } from './lasHeader';
 import {
@@ -231,6 +232,8 @@ async function buildE57Preflight(
  */
 interface FilePreflight {
   format: SourceFormat;
+  /** Set when the content probe chose the format: the level it was chosen at. */
+  interpretationLevel?: InterpretationLevel;
   plan?: LoadPlan;
   /** E57 only — the declaration and decode plan `buildE57Preflight` produced. */
   e57?: E57FilePreflight;
@@ -289,6 +292,7 @@ async function preflightFile(
       ? options.head.slice(0, need)
       : await file.slice(0, HEAD_SLICE_BYTES).arrayBuffer();
   let sniffed = sniffFormat(headSlice, file.name);
+  let level: InterpretationLevel | undefined;
   if (sniffed === 'unknown') {
     if (is3dTilesName(file.name)) {
       throw new LoadError(
@@ -304,14 +308,16 @@ async function preflightFile(
     // not enough, and either names a format or throws the failure report.
     const probe = await import('./probe/formatProbeWorkerClient');
     try {
-      sniffed = await probe.resolveUnknownFormat(file, headSlice, options.signal);
+      const resolved = await probe.resolveUnknownFormat(file, headSlice, options.signal);
+      sniffed = resolved.format;
+      level = resolved.level;
     } catch (err) {
       if (err instanceof probe.ProbeCancelledError) throw new LoadCancelledError();
       throw err;
     }
   }
   const format: SourceFormat = sniffed;
-  const preflight: FilePreflight = { format };
+  const preflight: FilePreflight = level ? { format, interpretationLevel: level } : { format };
   if (format === 'las' || format === 'laz') {
     preflight.plan = buildLasPlan(headSlice, format, file.size, budget, options);
   } else if (format === 'e57') {
@@ -708,8 +714,11 @@ export async function loadFile(
         );
         return;
       }
+      const level = preflight.interpretationLevel;
       resolve({
-        cloud: new PointCloud(msg.cloud),
+        cloud: new PointCloud(
+          level ? { ...msg.cloud, metadata: { ...msg.cloud.metadata, interpretationLevel: level } } : msg.cloud,
+        ),
         originalPointCount: msg.originalPointCount,
         downsampled: msg.downsampled,
         telemetry: {
@@ -823,7 +832,7 @@ export async function decodeFullViaWorker(
   const sniffed = sniffFormat(buffer, name);
   const format: SourceFormat =
     sniffed === 'unknown'
-      ? (await import('./probe/formatProbeWorkerClient')).resolveUnknownBuffer(buffer, name)
+      ? (await (await import('./probe/formatProbeWorkerClient')).resolveUnknownBuffer(buffer, name)).format
       : sniffed;
 
   // No worker can be constructed here (Node/SSR) and no fake was injected —

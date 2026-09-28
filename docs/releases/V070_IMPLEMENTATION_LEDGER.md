@@ -80,17 +80,18 @@ the two entries were renumbered when the branches were integrated.
 | L172 | LOADER | TEST | high | FIXED | new | A LAS 1.4 file that stores its coordinate system in an extended VLR after the point data opened with no CRS, no units and no vertical datum, and exported with no CRS at all. |
 | L174 | LOADER | TEST | high | FIXED | new | A CRS read from an extended VLR was labelled as a VLR, and a large LAS/LAZ opened out of core, or a COPC with its CRS in an EVLR, showed no CRS at all. |
 | L175 | SCIENTIFIC | TEST | med | FIXED | new | A measured cell the attention raster's residual sampling skipped scored 0 on the residual and, with no other input flagging it, was written as level 0, the same as a cell whose residual was computed and small. |
+| L176 | LOADER | TEST | med | FIXED | new | A text file with no point-format extension opened as XYZ from three numeric lines, and the chosen interpretation level was not recorded or shown. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 32
+- FIXED: 33
 - MEASURED: 1
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 52
+- total: 53
 
 ## Detail
 
@@ -6827,3 +6828,46 @@ change above.
 
 Covered by `tests/demAttention.test.ts` ("cells the residual sampling
 skipped") and `tests/leaveLocalOut.test.ts`.
+
+### L176 · FIXED · LOADER
+
+Universal Intake probe hardening (`src/io/probe/`).
+
+Pre-registered minimum for a text table read from content alone. When the
+extension gives no evidence for a text point format, the XYZ and PTS structure
+probes need at least 10 complete numeric rows of one stable column count
+(three or more columns) before they report PROBABLE. With an extension that
+names the format (`.xyz`, `.csv`, `.asc`, `.txt`, `.pts`) the previous
+minimum of 3 rows stays. Rationale: three short numeric lines occur in many
+text files that are not point lists (a log excerpt, a small matrix, a
+settings block), and a real point export holds far more than ten rows in its
+first 16 KiB. The probe never reads past the last complete line, so a cut
+final row does not count. Checked against the intake corpus with no
+extension: every one of the 32 text positives still opens as PROBABLE xyz,
+and none of the 162 negatives is offered a decoder
+(`tests/intakeCorpusProbeLock.test.ts`).
+
+The interpretation level now travels with the chosen decoder: the probe
+worker reply, `resolveUnknownFormat` and `resolveUnknownBuffer` return the
+format and its level, and `loadFile` records it on the cloud as
+`metadata.interpretationLevel`. It is a read-only fact. The Inspector's
+Provenance section and the report list it next to the source format. For a
+file opened at PROBABLE the "Project ready" card adds the line "Opened as XYZ
+text from its content. Check the columns and units.", which is also read out
+through the polite live region. No gating depends on it.
+
+The header comment of `formatProbes.ts` now says that a text point format's
+extension can open a file at PROBABLE when the content does not contradict
+it, which is the existing behaviour.
+
+The inline probe path and `resolveUnknownBuffer` run under the same time cap
+as the worker path. A probe worker that fails to load reports the new
+`worker-failed` limit with its own text instead of `read-failed`. Signatures
+shorter than 4 bytes (`MZ`, `BZh`, gzip) are not matched when the head reads
+as text, so a text file starting with those letters is not refused as an
+executable or a compressed file.
+
+Covered by `tests/formatProbes.test.ts`, `tests/formatProbeFuzz.test.ts`
+(2,400 seeded random, truncated and bit-flipped heads from the in-repo
+fixtures: no throw, a known level, no read past 1 MiB for a 5 GB size),
+`tests/intakeCorpusProbeLock.test.ts` and `tests/e2e/openAnyProbe.spec.ts`.

@@ -19,7 +19,7 @@ ctx.onmessage = async (event: MessageEvent<ProbeWorkerRequest>): Promise<void> =
   const read = async (n: number): Promise<Uint8Array> => new Uint8Array(await file.slice(0, n).arrayBuffer());
   const { decision, sample, bound } = await probeProgressively(read, file.size, file.name);
   const reply: ProbeWorkerReply = decision.decoderId
-    ? { type: 'format', decoderId: decision.decoderId }
+    ? { type: 'format', decoderId: decision.decoderId, level: decision.level }
     : { type: 'failure', facts: buildOpenFailureFacts(decision, sample, file.size, file.name, bound) };
   ctx.postMessage(reply);
 };

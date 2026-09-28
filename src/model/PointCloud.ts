@@ -1,4 +1,5 @@
 import type { SourceFormat } from '../io/sniffFormat';
+import type { InterpretationLevel } from '../io/probe/formatProbes';
 import type { CrsInfo } from '../io/crs';
 import type { CloudFrameProvenance } from '../geo/frame/frameProvenance';
 import type { OrganizedRangeSet } from './OrganizedRange';
@@ -108,6 +109,13 @@ export interface CloudMetadata {
    * cleanly-loaded one.
    */
   loadWarnings?: readonly string[];
+  /**
+   * The interpretation level the content probe chose the format at, set only
+   * when the file was opened by content rather than by `sniffFormat`
+   * (`src/io/probe/formatProbes.ts`). A read-only fact shown with the source
+   * format; nothing gates on it.
+   */
+  interpretationLevel?: InterpretationLevel;
   /**
    * Declared-only source metadata read from the file itself (standard +
    * extension-namespace fields, ordered). Declared, not verified — display

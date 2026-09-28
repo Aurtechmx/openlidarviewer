@@ -334,7 +334,9 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     const ext = footprintToMetadataExtent(fp);
     metadata = {
       fileName: staticCloud.name,
-      format: staticCloud.sourceFormat.toUpperCase(),
+      format: staticCloud.metadata?.interpretationLevel
+        ? `${staticCloud.sourceFormat.toUpperCase()} (${staticCloud.metadata.interpretationLevel}, read from content)`
+        : staticCloud.sourceFormat.toUpperCase(),
       sourcePointCount: fileN,
       ...ext,
       hasRgb: !!staticCloud.colors,

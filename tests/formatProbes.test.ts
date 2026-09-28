@@ -35,6 +35,8 @@ import {
   resolveUnknownFormat,
 } from '../src/io/probe/formatProbeWorkerClient';
 import { LoadError, describeLoadError } from '../src/io/loadErrors';
+import { classify } from '../src/diagnostics/provenance';
+import { signalsForStaticCloud } from '../src/diagnostics/provenanceSignals';
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 const inp = (bytes: Uint8Array, ext = '', complete = true): ProbeInput => ({ bytes, ext, complete });
@@ -85,7 +87,7 @@ describe('probe registry: each probe', () => {
 
   it('finds compatible content structure for text formats', () => {
     expect(levelOf(enc(xyzText), 'xyz')).toBe('PROBABLE');
-    expect(levelOf(enc('3\n1 2 3 4 5 6 7\n1 2 3 4 5 6 7\n1 2 3 4 5 6 7\n'), 'pts')).toBe('PROBABLE');
+    expect(levelOf(enc('3\n1 2 3 4 5 6 7\n1 2 3 4 5 6 7\n1 2 3 4 5 6 7\n'), 'pts', 'pts')).toBe('PROBABLE');
     expect(levelOf(enc('# mesh\nv 1 2 3\nv 4 5 6\nv 7 8 9\nf 1 2 3\n'), 'obj')).toBe('PROBABLE');
     expect(levelOf(enc('{ "asset": { "version": "2.0" } }'), 'gltf')).toBe('PROBABLE');
     const ptx = ['2', '1', '0 0 0', '1 0 0', '0 1 0', '0 0 1', '1 0 0 0', '0 1 0 0', '0 0 1 0', '0 0 0 1', '1 2 3 0.5', '1 2 3 0.5'].join('\n') + '\n';
@@ -362,7 +364,7 @@ describe('resolving an unknown file', () => {
     __setProbeWorkerFactoryForTests(null);
     try {
       const t = enc(xyzText);
-      await expect(resolveUnknownFormat(fileOf(t, 'a.dat'), t.slice().buffer)).resolves.toBe('xyz');
+      await expect(resolveUnknownFormat(fileOf(t, 'a.dat'), t.slice().buffer)).resolves.toMatchObject({ format: 'xyz' });
       const big = noise(300 * 1024);
       const err = await resolveUnknownFormat(fileOf(big, 'a.bin'), big.slice(0, 16384).buffer).catch((e) => e);
       expect(err).toBeInstanceOf(LoadError);
@@ -374,9 +376,9 @@ describe('resolving an unknown file', () => {
     }
   });
 
-  it('decides on a buffer already in memory', () => {
-    expect(resolveUnknownBuffer(enc(xyzText).slice().buffer, 'a.dat')).toBe('xyz');
-    expect(() => resolveUnknownBuffer(noise(1000).slice().buffer, 'a.bin')).toThrow(LoadError);
+  it('decides on a buffer already in memory', async () => {
+    await expect(resolveUnknownBuffer(enc(xyzText).slice().buffer, 'a.dat')).resolves.toMatchObject({ format: 'xyz' });
+    await expect(resolveUnknownBuffer(noise(1000).slice().buffer, 'a.bin')).rejects.toThrow(LoadError);
   });
 
   it('keeps the canned message for a LoadError without a report', () => {
@@ -403,7 +405,7 @@ describe('phase A fixture matrix', () => {
   async function outcome(b: Uint8Array, name: string): Promise<string> {
     const { file } = fileOf(b, name);
     try {
-      return await resolveUnknownFormat(file, b.slice(0, 16384).buffer);
+      return (await resolveUnknownFormat(file, b.slice(0, 16384).buffer)).format;
     } catch (e) {
       return `refused: ${(e as LoadError).report?.match(/Verdict: (\w+)/)?.[1]}`;
     }
@@ -492,5 +494,84 @@ describe('phase A fixture matrix', () => {
       if (!hadWorker) delete (globalThis as { Worker?: unknown }).Worker;
       __setProbeWorkerFactoryForTests();
     }
+  });
+});
+
+describe('intake hardening', () => {
+  const fileOf = (bytes: Uint8Array, name: string): File =>
+    ({ name, size: bytes.length, slice: (s = 0, e = bytes.length) => ({ arrayBuffer: async () => bytes.slice(s, e).buffer }) }) as unknown as File;
+  const rows = (n: number): string => Array.from({ length: n }, (_, i) => `${i}.5 ${i * 3}.25 ${i}.75`).join('\n') + '\n';
+
+  it('carries the interpretation level with the chosen decoder', async () => {
+    __setProbeWorkerFactoryForTests(null);
+    try {
+      const t = enc(xyzText);
+      await expect(resolveUnknownFormat(fileOf(t, 'points'), t.slice().buffer)).resolves.toEqual({ format: 'xyz', level: 'PROBABLE' });
+      const las = lasHeader(false);
+      await expect(resolveUnknownFormat(fileOf(las, 'scan.bin'), las.slice().buffer)).resolves.toEqual({ format: 'las', level: 'COMPATIBLE' });
+    } finally {
+      __setProbeWorkerFactoryForTests();
+    }
+  });
+
+  it('needs 10 numeric rows before content alone opens a text table', () => {
+    expect(chooseFormat(inp(enc(rows(3)), ''))).toMatchObject({ decoderId: null, level: 'OPAQUE' });
+    expect(chooseFormat(inp(enc(rows(9)), 'dat'))).toMatchObject({ decoderId: null, level: 'OPAQUE' });
+    expect(chooseFormat(inp(enc(rows(10)), ''))).toMatchObject({ decoderId: 'xyz', level: 'PROBABLE' });
+    // An extension that names a text point format keeps the short minimum.
+    expect(chooseFormat(inp(enc(rows(3)), 'xyz'))).toMatchObject({ decoderId: 'xyz', level: 'PROBABLE' });
+  });
+
+  it('does not read text that starts with MZ or BZh as a binary signature', () => {
+    expect(chooseFormat(inp(enc('MZ survey export\n' + rows(12)), '')).level).not.toBe('NOT_POINT_CLOUD');
+    expect(chooseFormat(inp(enc('BZh points\n' + rows(12)), ''))).toMatchObject({ decoderId: 'xyz', level: 'PROBABLE' });
+    // Binary content with the same magic is still refused.
+    const mz = new Uint8Array(512); mz.set(enc('MZ')); mz[60] = 0x80;
+    expect(chooseFormat(inp(mz, '')).level).toBe('NOT_POINT_CLOUD');
+  });
+
+  it('caps the inline probe at the time limit', async () => {
+    __setProbeWorkerFactoryForTests(null, 20);
+    try {
+      const b = noise(200 * 1024);
+      const stalled = { name: 'x.bin', size: b.length, slice: () => ({ arrayBuffer: () => new Promise<ArrayBuffer>(() => {}) }) } as unknown as File;
+      const err = await resolveUnknownFormat(stalled, b.slice(0, 16384).buffer).catch((e) => e);
+      expect(err).toBeInstanceOf(LoadError);
+      expect(err.report).toMatch(/Probe limit reached: time-cap/);
+    } finally {
+      __setProbeWorkerFactoryForTests();
+    }
+  });
+
+  it('names a worker that failed to load, not a failed read', async () => {
+    let w: { onerror: ((e: unknown) => void) | null; postMessage(): void; terminate(): void; onmessage: null } | null = null;
+    __setProbeWorkerFactoryForTests(() => {
+      w = { onerror: null, onmessage: null, postMessage() { queueMicrotask(() => w?.onerror?.(new Event('error'))); }, terminate() {} };
+      return w as unknown as Worker;
+    });
+    const hadWorker = 'Worker' in globalThis;
+    (globalThis as { Worker?: unknown }).Worker ??= class {};
+    try {
+      const b = noise(200 * 1024);
+      const err = await resolveUnknownFormat(fileOf(b, 'x.bin'), b.slice(0, 16384).buffer).catch((e) => e);
+      expect(err.report).toMatch(/Probe limit reached: worker-failed/);
+      expect(err.report).toMatch(/format check could not start/);
+      expect(err.report).not.toMatch(/could not read more of the file/);
+    } finally {
+      if (!hadWorker) delete (globalThis as { Worker?: unknown }).Worker;
+      __setProbeWorkerFactoryForTests();
+    }
+  });
+
+  it('decides on an in-memory buffer with the level', async () => {
+    await expect(resolveUnknownBuffer(enc(xyzText).slice().buffer, 'a.dat')).resolves.toEqual({ format: 'xyz', level: 'PROBABLE' });
+    await expect(resolveUnknownBuffer(noise(1000).slice().buffer, 'a.bin')).rejects.toBeInstanceOf(LoadError);
+  });
+
+  it('states the interpretation level in the provenance signals', () => {
+    const signals = signalsForStaticCloud({ sourceFormat: 'xyz', pointCount: 20, metadata: { interpretationLevel: 'PROBABLE' } });
+    expect(classify(signals).signals.at(-1)).toBe('Format XYZ read from the file content, interpretation level PROBABLE');
+    const plain = classify(signalsForStaticCloud({ sourceFormat: 'xyz', pointCount: 20 }));
+    expect(plain.signals.some((l) => l.includes('interpretation level'))).toBe(false);
   });
 });

@@ -82,4 +82,16 @@ describe('ProjectCard — live announcement', () => {
     card.show({ ...INFO, name: 'tunnel.e57' });
     expect(textOf()).toContain('tunnel.e57');
   });
+
+  it('adds the content-read notice for a file opened at PROBABLE', async () => {
+    const { textOf } = withLiveRegion();
+    const { ProjectCard } = await import('../src/ui/ProjectCard');
+    const card = new ProjectCard();
+
+    card.show({ ...INFO, name: 'points', format: 'xyz', interpretationLevel: 'PROBABLE' });
+    expect(textOf()).toContain('Opened as XYZ text from its content. Check the columns and units.');
+
+    card.show({ ...INFO, name: 'points', format: 'xyz', interpretationLevel: 'VERIFIED' });
+    expect(textOf()).not.toContain('Opened as');
+  });
 });
