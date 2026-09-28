@@ -372,3 +372,17 @@ describe('loadPly — binary double body decodes at full precision (v0.7 D5 Part
     expect(firstPointWorldError(pc)).toBeGreaterThan(WORLD_ERROR_BOUND_M);
   });
 });
+
+describe('loadPly: authored normals', () => {
+  test('nx/ny/nz are carried into the cloud', async () => {
+    const pc = await loadPly(
+      asciiPly(['x', 'y', 'z', 'nx', 'ny', 'nz'], ['0 0 0 0 0 1', '1 2 3 0.6 0.8 0']),
+    );
+    expect(pc.normals).toBeDefined();
+    expect(Array.from(pc.normals!)).toEqual([0, 0, 1, expect.closeTo(0.6, 6), expect.closeTo(0.8, 6), 0]);
+  });
+
+  test('a PLY without normals has none', async () => {
+    expect((await loadPly(asciiPly(['x', 'y', 'z'], ['0 0 0']))).normals).toBeUndefined();
+  });
+});

@@ -22,7 +22,11 @@ const PNTS_MAGIC = 0x73746e70; // 'pnts', little-endian
 /** Build a PNTS tile with float32 POSITION, an optional RTC_CENTER and RGB. */
 function makePnts(
   points: readonly (readonly number[])[],
-  opts: { rtc?: readonly [number, number, number]; rgb?: readonly (readonly number[])[] } = {},
+  opts: {
+    rtc?: readonly [number, number, number];
+    rgb?: readonly (readonly number[])[];
+    normals?: readonly (readonly number[])[];
+  } = {},
 ): ArrayBuffer {
   const ft: Record<string, unknown> = {
     POINTS_LENGTH: points.length,
@@ -31,11 +35,13 @@ function makePnts(
   if (opts.rtc) ft.RTC_CENTER = opts.rtc;
   const positionBytes = points.length * 3 * 4;
   if (opts.rgb) ft.RGB = { byteOffset: positionBytes };
+  const rgbBytes = opts.rgb ? Math.ceil((points.length * 3) / 4) * 4 : 0;
+  if (opts.normals) ft.NORMAL = { byteOffset: positionBytes + rgbBytes };
 
   let json = JSON.stringify(ft);
   while (json.length % 8 !== 0) json += ' '; // sections are 8-byte aligned
   const jsonBytes = new TextEncoder().encode(json);
-  const binBytes = positionBytes + (opts.rgb ? points.length * 3 : 0);
+  const binBytes = positionBytes + rgbBytes + (opts.normals ? points.length * 12 : 0);
   const total = 28 + jsonBytes.length + binBytes;
 
   const buf = new ArrayBuffer(total);
@@ -56,6 +62,11 @@ function makePnts(
     const rgb = new Uint8Array(buf, binStart + positionBytes, points.length * 3);
     let j = 0;
     for (const c of opts.rgb) for (const channel of c) rgb[j++] = channel;
+  }
+  if (opts.normals) {
+    let n = 0;
+    const at = binStart + positionBytes + rgbBytes;
+    for (const v of opts.normals) for (const c of v) view.setFloat32(at + n++ * 4, c, true);
   }
   return buf;
 }
@@ -177,5 +188,23 @@ describe('pnts detection and registry wiring', () => {
     const cloud = await loaderFor('pnts')(makePnts([[1, 2, 3]], { rtc: [100, 200, 300] }), 'a.pnts');
     expect(cloud.sourceFormat).toBe('pnts');
     expect(pointAt(cloud, 0)).toEqual([101, 202, 303]);
+  });
+});
+
+describe('loadPnts: authored normals', () => {
+  test('float32 NORMAL is carried into the cloud', async () => {
+    const cloud = await loadPnts(
+      makePnts([[0, 0, 0], [1, 0, 0]], { normals: [[0, 0, 1], [0.6, 0, 0.8]] }),
+    );
+    expect(cloud.normals).toBeDefined();
+    expect(cloud.normals!.length).toBe(6);
+    expect(Array.from(cloud.normals!)).toEqual([0, 0, 1, expect.closeTo(0.6, 6), 0, expect.closeTo(0.8, 6)]);
+  });
+
+  test('a tile without normals has none, and a non-unit normal drops the channel only', async () => {
+    expect((await loadPnts(makePnts([[0, 0, 0]]))).normals).toBeUndefined();
+    const bad = await loadPnts(makePnts([[0, 0, 0], [1, 1, 1]], { normals: [[0, 0, 1], [0, 0, 5]] }));
+    expect(bad.pointCount).toBe(2);
+    expect(bad.normals).toBeUndefined();
   });
 });

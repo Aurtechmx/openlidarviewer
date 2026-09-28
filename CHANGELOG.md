@@ -2,6 +2,14 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [Unreleased]
+
+### Fixed
+
+- glTF and GLB vertex colours read as linear, as the glTF 2.0 specification defines COLOR_0, and are encoded to sRGB before display. They were stored as if already sRGB, so midtones showed too dark: linear 0.5 displayed as sRGB 128 instead of 188. Existing glTF scans with vertex colour now look brighter in the midtones. Four-component colours are read at the right stride, where the alpha value had shifted into the next point's red.
+- A GLB or glTF opened in the browser failed with "Decoding failed": the parser probed image-format support and decoded textures with the DOM `Image` constructor, which the parse worker does not have. Textures and texture-format extensions are now skipped, since only vertex geometry is kept.
+- Normals that a file declares are kept: glTF NORMAL, PLY nx/ny/nz and 3D Tiles PNTS NORMAL or NORMAL_OCT16P. The Normal colour mode and the point inspector's normal row now work for these formats. A set with any non-finite or non-unit normal is dropped as a whole and the points are kept; nothing is estimated.
+
 ## [0.7.0-alpha.1] - 2026-09-18
 
 A development cut on the way to v0.7.0. It carries no DOI, and its test figures

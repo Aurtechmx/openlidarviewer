@@ -54,6 +54,17 @@ describe('loaders.gl call sites', () => {
   it('passes the options to the glTF parse', async () => {
     const { loadGltf } = await import('../src/io/loadGltf');
     await loadGltf(new ArrayBuffer(8), 'glb').catch(() => {});
-    expect(parse).toHaveBeenCalledWith(expect.anything(), expect.anything(), LOCAL_ONLY_LOADER_OPTIONS);
+    // The glTF parse adds its own `gltf` block on top of the shared options:
+    // no image decoding and no image-format probes, both of which build a DOM
+    // `Image` that the parse worker does not have.
+    expect(parse).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ ...LOCAL_ONLY_LOADER_OPTIONS, gltf: expect.objectContaining({
+          loadImages: false,
+          excludeExtensions: expect.objectContaining({ EXT_texture_avif: false, EXT_texture_webp: false }),
+        }),
+      }),
+    );
   });
 });
