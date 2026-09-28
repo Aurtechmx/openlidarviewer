@@ -408,6 +408,22 @@ describe('the top-centre lane after a load', () => {
 
     expect(h.deps.showProjectCard).not.toHaveBeenCalled();
   });
+
+  it('leaves the lane to a picking tool armed during the settle', async () => {
+    const h = harness();
+    let settle!: (done: boolean) => void;
+    h.deps.dropZone = {
+      ...h.deps.dropZone,
+      finish: vi.fn(() => new Promise<boolean>((resolve) => { settle = resolve; })),
+    };
+
+    await openScan(fakeFile(), h.deps);
+    (h.deps.getViewer() as unknown as { measureMode: boolean }).measureMode = true;
+    settle(true);
+    await Promise.resolve();
+
+    expect(h.deps.showProjectCard).not.toHaveBeenCalled();
+  });
 });
 
 describe('what the completed attach leaves behind', () => {

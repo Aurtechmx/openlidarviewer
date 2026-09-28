@@ -754,11 +754,14 @@ export async function attachStaticCloud(
   const settled = finishLoad(deps);
   // The "Project ready" card shares the top-centre lane with the load toast,
   // so it is raised once the toast has settled away. A newer load that took
-  // the toast over during the settle drops this card.
+  // the toast over during the settle drops this card, and so does a picking
+  // tool armed meanwhile: arming one hides the card, so that tool keeps the lane.
   if (!deps.bareMode) {
     const { cloud, originalPointCount } = result;
     void settled.then((done) => {
-      if (done) deps.showProjectCard(cloud, originalPointCount);
+      const v = deps.getViewer();
+      const armed = v.measureMode || v.inspectMode || v.probeMode || v.annotateMode;
+      if (done && !armed) deps.showProjectCard(cloud, originalPointCount);
     });
   }
 }
