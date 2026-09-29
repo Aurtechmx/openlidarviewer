@@ -7382,8 +7382,10 @@ host shows. `src/process/analysisRowsFeed.ts` holds the Analyse home's last
 `analysisRows`, published from the home's refresh, so the count is not
 computed twice. `src/app/stateStrip/stripReads.ts` gathers the inputs.
 
-Strip. One row across the foot of the viewport on desktop; the overlay gives up
-a 24 px band so the dock and rails keep their offsets above it. On the phone it
+Strip. One row, 24 px tall, across the foot of the viewport on desktop. It
+takes the dock's 14 px foot gap and the overlay gives up the remaining 10 px,
+so the dock rests on the strip and the navigation card, and the scan prompt
+lifted above it, move up by 10 px only, clear of the scene beside a lab page. On the phone it
 is a compact row, at most two lines of 24 px targets, on top of the dock, and the scan prompt
 moves up by its height. It shows while a scan is open. Each item is a button
 with an accessible name stating the fact and its destination: the dataset and

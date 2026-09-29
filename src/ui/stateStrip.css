@@ -2,17 +2,18 @@
    Desktop: one row across the foot of the viewport, between the rails.
    Phone: a compact row above the dock. Only shown while a scan is open. */
 
-/* Desktop: the overlay gives up its bottom band to the strip, so the dock, the
-   rails and every other bottom-anchored control keep their offsets and sit
-   above it. The canvas keeps its full size. */
-:root { --olv-strip-h: 24px; }
-.olv-overlay:has(> .olv-state-strip:not(.olv-hidden)) { bottom: var(--olv-strip-h); }
+/* Desktop: the strip takes the dock's 14px foot gap and the overlay gives up
+   only the rest of its height, so the dock rests on the strip and the navigation
+   card and anything placed above it move by as little as possible. The canvas
+   keeps its full size. */
+:root { --olv-strip-h: 24px; --olv-strip-yield: calc(var(--olv-strip-h) - 14px); }
+.olv-overlay:has(> .olv-state-strip:not(.olv-hidden)) { bottom: var(--olv-strip-yield); }
 
 .olv-state-strip {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: calc(-1 * var(--olv-strip-h));
+  bottom: calc(-1 * var(--olv-strip-yield));
   height: var(--olv-strip-h);
   z-index: var(--z-hud);
   display: flex;
