@@ -49,7 +49,9 @@ export interface ObservationRunStation {
 
 /** What the run read (SPEC §1.1's basis vocabulary, reused per the module header). */
 export interface ObservationRunSource {
+  /** The source's base file name (never a directory), or null when not known. */
   readonly filename: string | null;
+  /** SHA-256 of every resident position the run read (little-endian float32, array order): identifies the resident point set, not the source file. */
   readonly sourceDigest: string | null;
   /** `TerrainCoverageMode`-shaped ('full' | 'resident-only' | 'sampled'), carried as a plain string so this module stays import-free of `TerrainContracts`. */
   readonly basis: string;

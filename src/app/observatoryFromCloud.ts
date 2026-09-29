@@ -28,7 +28,7 @@
  * skipped: SPEC's own eligibility table (§1.3) requires an honest per-format
  * statement, not a default run over an invented single station.
  */
-import { sha256, canonicalize } from '../render/measure/auditLog';
+import { residentPositionsDigest } from './residentPositionsDigest';
 import type { AcquisitionStation, AcquisitionStationSet } from '../model/AcquisitionStations';
 import { buildUnstructuredSourceRays } from '../observation/rays';
 import {
@@ -43,7 +43,7 @@ import {
 import { classifyObservationField, type ObservationFieldStation, type ObservationStateCounts } from '../observation/observationField';
 import { computeShadowFrontier, type ShadowFrontierResult } from '../observation/shadowFrontier';
 import { sealObservationRunRecord, type ObservationRunRecord } from '../observation/runRecord';
-import type { ObservationParameters, ObservationState } from '../observation/types';
+import { RESIDENT_ONLY_STATION_ENVELOPE, type ObservationParameters, type ObservationState } from '../observation/types';
 import { VoxelMomentAccumulator } from '../observation/incidence';
 import { DEFAULT_COVERAGE_GAIN_PARAMETERS, type ObservationInstrumentModel, type PlanningField } from '../observation/coverageGain';
 import { planStations, type StationPlanningResult } from '../observation/stationSuggestion';
@@ -192,6 +192,8 @@ export type ObservatoryRunOutcome =
       readonly rows: readonly import('../observation/ledger').ObservationLedgerRow[];
       /** Coverage Gain candidates and suggested stations, or `null` when planning was skipped. */
       readonly planning?: StationPlanningResult | null;
+      /** The traversal step budget the run declared, for the package's processing manifest. */
+      readonly declaredStepBudget?: number;
     }
   | { readonly status: 'ineligible'; readonly reason: 'no-stations' | 'empty-domain' }
   | { readonly status: 'refused'; readonly reason: ObservationLedgerRunResult extends { status: 'refused'; reason: infer R } ? R : never };
@@ -239,8 +241,8 @@ export function runObservatoryOverCloud(
     fieldStations.push({
       sourceIndex,
       origin: station.pose.worldTranslation,
-      azimuthDeg: [0, 360],
-      elevationDeg: [-90, 90],
+      azimuthDeg: RESIDENT_ONLY_STATION_ENVELOPE.azimuthDeg,
+      elevationDeg: RESIDENT_ONLY_STATION_ENVELOPE.elevationDeg,
     });
   });
 
@@ -264,7 +266,7 @@ export function runObservatoryOverCloud(
     id: `obs-${ledgerResult.fieldDigest.slice(0, 12)}`,
     generatedAt: new Date().toISOString(),
     build: options.buildTag,
-    source: { filename: options.filename, sourceDigest: sha256(canonicalize(Array.from(positions.subarray(0, Math.min(positions.length, 3000))))), basis: 'resident-only', metresPerUnit: options.metresPerUnit },
+    source: { filename: options.filename, sourceDigest: residentPositionsDigest(positions), basis: 'resident-only', metresPerUnit: options.metresPerUnit },
     domain,
     voxelEdge: options.voxelEdge,
     stations: stationList.map((s, i) => ({ id: s.id, source: s.source, originStatus: s.originStatus, worldTranslation: s.pose.worldTranslation, sourceIndex: i, tauAbs, tauRel })),
@@ -300,5 +302,6 @@ export function runObservatoryOverCloud(
     frontier,
     rows: ledgerResult.rows,
     planning,
+    declaredStepBudget: options.declaredStepBudget,
   };
 }

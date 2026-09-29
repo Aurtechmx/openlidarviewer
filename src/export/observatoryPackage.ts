@@ -44,18 +44,19 @@
 import { buildZip, type ZipEntry } from '../convert/zipStore';
 import { sourceInterpretationLines, sourceInterpretationOf } from '../science/sourceInterpretation';
 import { buildSha256Manifest, sha256Hex } from '../terrain/export/sha256';
-import { buildProcessingManifest, type ProcessingOpInput } from '../science/processingManifest';
+import { buildProcessingManifest, type ManifestParamValue, type ProcessingOpInput } from '../science/processingManifest';
 import { buildScientificAnalysisRecord } from '../science/scientificAnalysisRecord';
 import { buildScientificArtifactPassport, type PassportEvidence } from '../science/scientificArtifactPassport';
 import { methodRef, methodTag } from '../science/methodRegistry';
 import { BUILD_IDENTITY, buildIdentityProvenance, type BuildIdentity } from '../build/buildIdentity';
 import {
   computeFieldDigest,
+  domainGrid,
   type ObservationDomain,
   type ObservationLedgerRow,
   type RayPartitionChunkEntry,
 } from '../observation/ledger';
-import { presenceMaskWordCount } from '../observation/types';
+import { OBSERVATION_STATE_RULE_SET, RESIDENT_ONLY_STATION_ENVELOPE, presenceMaskWordCount } from '../observation/types';
 import type { ObservationRunRecord, ObservationRunStation } from '../observation/runRecord';
 import { buildObservationConfig } from '../observation/runRecord';
 import type { StationPlanningResult } from '../observation/stationSuggestion';
@@ -76,6 +77,8 @@ export interface ObservatoryPackageOptions {
   readonly interpretationLevel?: string | null;
   readonly crsName?: string | null;
   readonly sourceSha256?: string | null;
+  /** The traversal step budget the run declared (`ObservatoryRunOutcome.declaredStepBudget`); omitted records null in the manifest. */
+  readonly declaredStepBudget?: number | null;
   /** The run's Coverage Gain result, written to `candidates.csv` with every term; `null` or omitted writes a header-only file. */
   readonly planning?: StationPlanningResult | null;
 }
@@ -406,7 +409,9 @@ function readmeText(record: ObservationRunRecord, opts: {
     `  Generated      ${opts.generationDateIso}`,
     ...sourceInterpretationLines(opts.sourceInterpretation),
     `  Source file    ${record.source.filename ?? 'unknown'}`,
-    `  Source digest  ${record.source.sourceDigest ?? 'unavailable'}`,
+    `  Resident positions digest  ${record.source.sourceDigest ?? 'unavailable'}`,
+    '                 SHA-256 of every resident position the run read (little-endian float32), not of the source file',
+    '  Source file hash  unavailable (the load path computes no whole-file hash)',
     `  Basis          ${record.source.basis}`,
     `  CRS            ${opts.crsName ?? 'not recorded by this package'}`,
     `  Metres/unit    ${record.source.metresPerUnit ?? 'unknown (metric figures withheld, OB-INV-10)'}`,
@@ -427,7 +432,7 @@ function readmeText(record: ObservationRunRecord, opts: {
     '',
     'Reproduction',
     `  1. Load ${opts.basename}.olv-observation.json's domain/voxelEdge/parameters/stations against the identical`,
-    `     source and station set (source digest ${record.source.sourceDigest ?? 'unavailable'}).`,
+    `     source and station set (resident positions digest ${record.source.sourceDigest ?? 'unavailable'}).`,
     `  2. Re-run. The result's fieldDigest must equal ${record.fieldDigest}.`,
     '  3. A different digest means the source, the ROI, the stations or the parameters changed.',
     '',
@@ -437,6 +442,73 @@ function readmeText(record: ObservationRunRecord, opts: {
     '',
   ];
   return lines.join('\n');
+}
+
+type Params = Record<string, ManifestParamValue>;
+
+/** A JSON value with object keys in code-unit order, so the manifest bytes do not depend on construction order. */
+function canonicalParams(value: unknown): ManifestParamValue {
+  if (Array.isArray(value)) return value.map(canonicalParams);
+  if (value === null || typeof value !== 'object') return value as ManifestParamValue;
+  const obj = value as Record<string, unknown>;
+  const out: Record<string, ManifestParamValue> = {};
+  for (const k of Object.keys(obj).filter((key) => obj[key] !== undefined).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))) {
+    out[k] = canonicalParams(obj[k]);
+  }
+  return out;
+}
+
+/**
+ * Each method's manifest params, from the run record (and, for the ledger's
+ * step budget and the planning methods, the run's own outcome). Enough to
+ * re-run the same evidence field: the ledger params plus the source's
+ * resident positions and stations reproduce `fieldDigest`.
+ */
+function observationManifestOps(
+  record: ObservationRunRecord,
+  planning: StationPlanningResult | null,
+  declaredStepBudget: number | null,
+): ProcessingOpInput[] {
+  const envelope = {
+    azimuthDeg: [...RESIDENT_ONLY_STATION_ENVELOPE.azimuthDeg],
+    elevationDeg: [...RESIDENT_ONLY_STATION_ENVELOPE.elevationDeg],
+    rangeLimit: RESIDENT_ONLY_STATION_ENVELOPE.rangeLimit,
+  };
+  const p = record.parameters;
+  const planningParams: Params | null = planning
+    ? {
+        instrumentModel: canonicalParams(planning.instrumentModel),
+        candidateCap: planning.parameters.candidateCap,
+        candidateSpacing: planning.parameters.candidateSpacing,
+        stateWeights: canonicalParams(planning.parameters.stateWeights),
+        redundancyWeight: planning.parameters.redundancyWeight,
+        weakSurfaceFloors: canonicalParams(planning.parameters.weakSurfaceFloors),
+        p_solid: planning.parameters.p_solid,
+        maxNormalAngleFromVerticalDegrees: planning.parameters.maxNormalAngleFromVerticalDegrees,
+        metresPerUnit: record.source.metresPerUnit,
+      }
+    : null;
+  const byId: Record<string, Params> = {
+    'olv.observation.rays': { basis: record.source.basis, stationCount: record.stations.length, stationEnvelope: envelope },
+    'olv.observation.ledger': {
+      domain: canonicalParams(record.domain),
+      voxelEdge: record.voxelEdge,
+      tauAbs: p.tau_abs,
+      tauRel: p.tau_rel,
+      declaredStepBudget,
+    },
+    'olv.observation.states': { ruleSet: OBSERVATION_STATE_RULE_SET, p_solid: p.p_solid, p_empty: p.p_empty, n_min: p.n_min, stationEnvelope: envelope },
+    'olv.observation.shadow-frontier': { adjacency: 6, metresPerUnit: record.source.metresPerUnit },
+    'olv.observation.coverage-gain': planningParams ?? { planning: 'not recorded by this package' },
+    'olv.observation.station-suggestion': planning
+      ? { stationCount: planning.suggestion.declaredStationCount, candidateCap: planning.candidateCap, tieBreak: 'lower candidate index' }
+      : { planning: 'not recorded by this package' },
+  };
+  return record.methods.map((id) => {
+    const method = registeredTag(id);
+    const params = byId[method.split('@')[0]!];
+    return { method, params: params ? (canonicalParams(params) as Params) : {} };
+  });
 }
 
 /** Build the Observatory ZIP package from a sealed run record and its rows. */
@@ -459,7 +531,7 @@ export function buildObservatoryPackage(
 
   const { bytes: fieldBytes, header: fieldHeader } = writeObservationFieldBinary(
     record.domain, record.voxelEdge,
-    { nx: 0, ny: 0, nz: 0 }, // grid shape is derivable from domain/voxelEdge (domainGrid); recorded for a reader's convenience only
+    domainGrid(record.domain, record.voxelEdge),
     record.stations.length, rows,
   );
   entries.push({ name: `${basename}/field.bin`, bytes: fieldBytes });
@@ -471,7 +543,7 @@ export function buildObservatoryPackage(
     { name: `${basename}/candidates.csv`, bytes: new TextEncoder().encode(candidatesCsv(options.planning ?? null)) },
   );
 
-  const ops: ProcessingOpInput[] = record.methods.map((id) => ({ method: registeredTag(id), params: {} }));
+  const ops = observationManifestOps(record, options.planning ?? null, options.declaredStepBudget ?? null);
   const sourceInterpretation = sourceInterpretationOf(options.interpretationLevel, record.source.basis);
   const manifest = buildProcessingManifest({ build: softwareVersion, source: record.source.filename, ops, sourceInterpretation });
   entries.push({ name: `${basename}/processing-manifest.json`, bytes: new TextEncoder().encode(`${JSON.stringify(manifest, null, 2)}\n`) });

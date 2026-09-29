@@ -93,6 +93,7 @@ export function createObservatoryRunner(deps: ObservatoryRunnerDeps): Observator
       filename: opts.filename,
       metresPerUnit: opts.metresPerUnit,
       buildTag: opts.buildTag,
+      ...(opts.planning !== undefined ? { planning: opts.planning } : {}),
     };
     if (!deps.compute) {
       // OB-RT-03: the pipeline runs in a worker; the result is revalidated

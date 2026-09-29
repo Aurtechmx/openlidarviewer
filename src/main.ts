@@ -1619,7 +1619,7 @@ function ensureActionRegistry(): Promise<Action[]> {
     showAnalyseMode: () => showWorkspaceMode('analyse'), showPage: (page) => workspaceShell?.openAnalysePage(page),
     showPanel: () => ensureAnalysePanel().then((p) => { p.setVisible(true); return { hasResult: p.currentResultForProvenance() != null, flowInput: p.flowPulseInput(), terrainAccessInput: p.terrainAccessInput() }; }),
     run: () => void terrainRunner.run(),
-  }, observatoryEntry: { showAnalyseMode: () => showWorkspaceMode('analyse'), runnerDeps: { getActiveCloud: () => scans.activeCloud(), getDatasetId: () => scans.activeId, getCrsRevision: () => crsService.crsRevision(), buildOptions: () => ({ filename: null, metresPerUnit: null, buildTag: __APP_VERSION__ }) }, overlayHost: () => viewer.derivedLayerHost() },
+  }, observatoryEntry: { showAnalyseMode: () => showWorkspaceMode('analyse'), scans, crs: crsService, buildTag: __APP_VERSION__, overlayHost: () => viewer.derivedLayerHost() },
   showTouchGestures: () => navBar.flashTouchHint(),
   saveCurrentView,
   applyView,

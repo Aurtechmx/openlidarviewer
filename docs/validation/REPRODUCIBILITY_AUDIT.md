@@ -98,9 +98,8 @@ not bound in the manifest, and no export records H or CS.
 
 | Gap | Where | Reason left open |
 | --- | --- | --- |
-| No source content hash | every export | No production caller computes a file hash; `sourceSha256` is wired but unset. The Observatory digest covers the first 3,000 positions only. |
+| No source content hash | every export | No production caller computes a file hash; `sourceSha256` is wired but unset. The Observatory package records a resident positions digest (SHA-256 of every resident position the run read), which identifies the resident point set, not the file. |
 | CRS source (VLR, EVLR, user) not recorded | every export | The resolved CRS is recorded, not where it came from. Needs a field on the resolved CRS. |
-| Observatory source name | Observatory package | The run options pass `filename: null` from `main.ts`, which may not grow. |
 | Measurement CSV | measurement export | No metadata slot; a comment line breaks spreadsheet readers. Export the GeoJSON beside it. |
 | Measurement methods | GeoJSON, KML, integrity report | Measurement geometry has no registered method id. The record says so. |
 | Contour map sheet PDF | Contour Studio | The title block has no free row; the record is in the GeoJSON, DXF, SVG and the deliverable ZIP made from the same run. |
