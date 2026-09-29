@@ -1100,8 +1100,8 @@ const inspector = new Inspector({
   onRemove: (id) => removeCloud(id),
   onToggleSolo: (id) => layerService.toggleSolo(id),
   onToggleLock: (id, locked) => viewer.setCloudLocked(id, locked),
-  onCompareLayers: () => compareLoadedLayers(),
-  onExportDifference: () => exportDifferenceRaster(),
+  onCompareLayers: compareLoadedLayers,
+  onExportDifference: exportDifferenceRaster,
   onSaveView: saveCurrentView,
   onApplyView: (index) => applyView(index),
   onRenameView: (index, name) => {
@@ -1712,11 +1712,11 @@ const keyBindingDeps: KeyBindingDeps = {
     },
     setCameraPreset: (preset) => viewer?.setCameraPreset(preset),
     toast: (message) => showLassoToast(message),
-    openCommandPalette: () => openCommandPalette(),
+    openCommandPalette: openCommandPalette,
     toggleShortcutSheet: () => void ensureShortcutSheet((sheet) => sheet.toggle()).catch(() => {}), // already reported via the toast
     workflowRecorderEnabled: WORKFLOW_RECORDER_ENABLED,
     matchesWorkflowShortcut: (e) => matchesShortcut(e, workflowController.config.shortcut),
-    toggleWorkflowRecord: () => toggleWorkflowRecord(),
+    toggleWorkflowRecord: toggleWorkflowRecord,
     globalActions: () => globalActionHandlers,
 };
 stage.addTeardown(installKeyDispatch(buildViewerKeyBindings(keyBindingDeps), keyBindingDeps));
@@ -1755,8 +1755,8 @@ const dock = new ToolDock({
     dock.setAnalyseActive(show);
   },
   onHelp: () => helpOverlay.open(),
-  onCommandPalette: () => openCommandPalette(),
-  onClose: () => closeScan(),
+  onCommandPalette: openCommandPalette,
+  onClose: closeScan,
 });
 // Start the dock hidden — the empty state shows no scan-dependent tools.
 // `setEmpty(false)` is called from every successful attach path.
