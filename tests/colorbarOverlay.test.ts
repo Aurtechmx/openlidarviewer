@@ -17,6 +17,7 @@
 
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { buildActiveColorbarSpec, type ActiveColorbar } from '../src/render/activeColorbar';
+import type { PointCloud } from '../src/model/PointCloud';
 
 class FakeEl {
   readonly tagName: string;
@@ -252,5 +253,38 @@ describe('ColorbarOverlay — dismissal scope ends when the mode leaves', () => 
     overlay.update(null);
     overlay.update(elevationBar());
     expect(root.classList.contains('olv-hidden')).toBe(false);
+  });
+});
+
+describe('ColorbarOverlay — distribution strip', () => {
+  it('draws the strip and the clipped shares when the spec carries a sample', async () => {
+    const { ColorbarOverlay } = await import('../src/ui/ColorbarOverlay');
+    const overlay = new ColorbarOverlay();
+    const root = overlay.element as unknown as FakeEl;
+    const cloud = { pointCount: 100, worldXYZ: (i: number, out: number[]) => ((out[0] = 0), (out[1] = 0), (out[2] = i), out) };
+    const bar = buildActiveColorbarSpec({
+      mode: 'elevation',
+      range: { min: 5, max: 94 },
+      trimPercent: 5,
+      elevationUnit: null,
+      cloud: [cloud as unknown as PointCloud, 2],
+    })!;
+    overlay.update(bar);
+    const html = root.findByClass('olv-colorbar-svg')[0].deepHtml;
+    expect(html).toContain('olv-colorbar-hist');
+    expect(html).toContain('Half the sampled points lie between 25 and 75 source units');
+    const caps = root.findByClass('olv-colorbar-caps')[0];
+    expect(caps.classList.contains('olv-hidden')).toBe(false);
+    expect(caps.textContent).toContain('5% below');
+    expect(caps.textContent).toContain('5% above');
+  });
+
+  it('shows no strip without a sample (streaming, shared scale)', async () => {
+    const { ColorbarOverlay } = await import('../src/ui/ColorbarOverlay');
+    const overlay = new ColorbarOverlay();
+    const root = overlay.element as unknown as FakeEl;
+    overlay.update(elevationBar());
+    expect(root.findByClass('olv-colorbar-svg')[0].deepHtml).not.toContain('olv-colorbar-hist');
+    expect(root.findByClass('olv-colorbar-caps')[0].classList.contains('olv-hidden')).toBe(true);
   });
 });

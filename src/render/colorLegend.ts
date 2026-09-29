@@ -171,6 +171,7 @@ export function buildColorLegend(host: ColorLegendHost): ColorLegend {
         // sample count does not describe it.
         sampleCount: shared ? undefined : range.sampleCount,
         elevationUnit: host.elevationUnitLabel(),
+        cloud: shared ? undefined : [cloud, upAxis],
       });
     },
 

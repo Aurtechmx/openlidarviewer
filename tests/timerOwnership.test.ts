@@ -27,6 +27,7 @@ const ACCEPTED: Record<string, readonly Site[]> = {
   'src/ui/onboarding/bootTour.ts': [{ kind: 'requestAnimationFrame', count: 2, owner: 'one-shot double-frame deferral of tour start' }],
   'src/ui/fieldSimulation/flowPulseLab.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot yield to the next frame' }],
   'src/ui/fieldSimulation/terrainAccessLab.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot yield so the run card paints before the route search' }],
+  'src/ui/ColorbarOverlay.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot coalesced hover-marker redraw, at most one pending frame' }],
   'src/app/profileWorkbenchSection.ts': [{ kind: 'requestAnimationFrame', count: 2, owner: 'one-shot deferred run' }],
   'src/render/snapshot.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot frame await' }],
   'src/render/drawSignal.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot frame await' }],

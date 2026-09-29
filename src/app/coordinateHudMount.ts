@@ -38,6 +38,8 @@ export function wireCoordinateHud(deps: CoordinateHudDeps): (info: PointInfo | n
   const hud = buildCoordinateHud();
   deps.mount(hud.element);
   return (info: PointInfo | null): void => {
+    // The colour legend marks the hovered point's height on its ramp.
+    globalThis.dispatchEvent?.(new CustomEvent('olv:probe-hover', { detail: info }));
     if (!info) {
       hud.update(null);
       return;
