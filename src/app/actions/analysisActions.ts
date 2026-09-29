@@ -66,7 +66,7 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
       hint: 'Route flow over the analysed DTM with D8 and list what the run cannot claim.',
       keywords: ['flow', 'drainage', 'd8', 'routing', 'accumulation', 'simulation', 'lab', 'pulse'],
       run: () => {
-        // The lab opens as a modal over the surface, so the rail keeps its mode;
+        // The lab opens as its Analyse page beside the scene;
         // a scan with no analysis gets the runner's own refusal, not a silent run.
         const load = () => Promise.all([deps.terrainAnalysisEntry.showPanel(), loadFlowPulseLab()])
           .then(([panel, lab]) => { setLabReturn(null); lab.openFlowPulseLab(panel.flowInput ?? null, { onRunTerrain: runTerrainFor('flow-pulse') }); });
@@ -89,7 +89,7 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
       hint: 'Screen a route over the analysed DTM against a declared mobility profile. Never a safety or passability guarantee.',
       keywords: ['terrain', 'access', 'route', 'mobility', 'traversability', 'astar', 'a*', 'simulation', 'lab'],
       run: () => {
-        // The lab opens as a modal over the surface, so the rail keeps its mode;
+        // The lab opens as its Analyse page beside the scene;
         // a scan with no analysis gets the runner's own refusal, not a silent run.
         void Promise.all([deps.terrainAnalysisEntry.showPanel(), loadTerrainAccessLab()])
           .then(([panel, lab]) => { setLabReturn(null); lab.openTerrainAccessLab(panel.terrainAccessInput ?? null, { onRunTerrain: runTerrainFor('terrain-access') }); })

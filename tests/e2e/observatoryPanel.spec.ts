@@ -12,14 +12,16 @@ async function firePaletteAction(page: Page, query: string, rowText: string): Pr
   await page.keyboard.press('ControlOrMeta+KeyK');
   await expect(page.locator('.olv-palette')).toBeVisible();
   await page.locator('.olv-palette-input').fill(query);
-  await expect(page.locator('.olv-palette-row', { hasText: rowText })).toBeVisible();
-  await page.locator('.olv-palette-input').press('Enter');
+  const row = page.locator('.olv-palette-row', { hasText: rowText }).first();
+  await expect(row).toBeVisible();
+  // The row itself: a Go to entry for the same page can rank first.
+  await row.click();
   await expect(page.locator('.olv-palette')).toBeHidden();
 }
 
 async function openObservatory(page: Page): Promise<void> {
   await firePaletteAction(page, 'Observatory', 'Observatory (observation evidence)');
-  await expect(page.locator('.olv-modal-title')).toHaveText('Observatory');
+  await expect(page.locator('.olv-analyse-page[data-page="observatory"]')).toBeVisible();
 }
 
 test.describe('Observatory panel', () => {
@@ -33,23 +35,23 @@ test.describe('Observatory panel', () => {
     await showWorkspaceMode(page, 'analyse');
     await openObservatory(page);
 
-    const modal = page.locator('.olv-modal');
-    const sections = modal.locator('.olv-observatory-section-title');
+    const labPage = page.locator('.olv-analyse-page[data-page="observatory"]');
+    const sections = labPage.locator('.olv-observatory-section-title');
     await expect(sections).toHaveText(['Sources', 'Evidence', 'Shadow', 'Planning', 'Record'], { timeout: 20_000 });
 
     // The single declared PTX station shows a DECLARED ORIGIN badge, never
     // ASSUMED — the fixture's own header declares a real pose.
-    await expect(modal.locator('.olv-observatory-station-row')).toContainText('DECLARED ORIGIN');
+    await expect(labPage.locator('.olv-observatory-station-row')).toContainText('DECLARED ORIGIN');
     // The 3D marker key names both glyphs, so the scene markers have a text legend.
-    await expect(modal.locator('.olv-observatory-marker-key')).toContainText('hollow dashed orange ring');
+    await expect(labPage.locator('.olv-observatory-marker-key')).toContainText('hollow dashed orange ring');
     // OB-PR-02: the slice plane has a level control and a glyph legend once drawn.
-    await expect(modal.locator('.olv-observatory-slice-level')).toBeVisible();
-    await expect(modal.locator('.olv-observatory-slice-legend')).toContainText('▲ Shadowed');
+    await expect(labPage.locator('.olv-observatory-slice-level')).toBeVisible();
+    await expect(labPage.locator('.olv-observatory-slice-legend')).toContainText('▲ Shadowed');
     // Evidence lists every state, including a real count for at least one.
-    await expect(modal.locator('.olv-observatory-state-counts')).toContainText(/SURFACE: \d+/);
+    await expect(labPage.locator('.olv-observatory-state-counts')).toContainText(/SURFACE: \d+/);
     // Planning shows the Coverage Gain result, labelled preview on a
     // resident-only field, with the instrument model it ran under.
-    const planning = modal.locator('.olv-observatory-planning');
+    const planning = labPage.locator('.olv-observatory-planning');
     await expect(planning).toContainText('Authority: preview (basis resident-only)');
     await expect(planning).toContainText('Instrument model: height');
     await expect(planning).toContainText('Reachability is not checked');
@@ -64,7 +66,7 @@ test.describe('Observatory panel', () => {
     await showWorkspaceMode(page, 'analyse');
     await openObservatory(page);
     await expect(page.locator('.olv-observatory-section-title')).toHaveCount(5, { timeout: 20_000 });
-    await page.keyboard.press('Escape'); // close the modal; the overlay (if drawn) stays in the scene
+    await page.keyboard.press('Escape'); // leave the page; the overlay (if drawn) stays in the scene
 
     await page.locator('.olv-tool-close').click();
     await expect(page.locator('.olv-empty')).toBeVisible({ timeout: 20_000 });
@@ -74,10 +76,11 @@ test.describe('Observatory panel', () => {
     // close (`abortAndClearCache`), same seam contours and Flow Pulse use.
     // The empty state has no workspace tabs to click; the palette action
     // itself calls `showAnalyseMode()`, so it is opened directly.
-    await openObservatory(page);
-    const modal = page.locator('.olv-modal');
-    await expect(modal).not.toContainText('DECLARED ORIGIN');
-    await expect(modal.locator('.olv-observatory-status')).toBeVisible();
+    // With no scan there is no workspace to hold the page, so it is a dialog.
+    await firePaletteAction(page, 'Observatory', 'Observatory (observation evidence)');
+    const labPage = page.locator('.olv-modal');
+    await expect(labPage).not.toContainText('DECLARED ORIGIN');
+    await expect(labPage.locator('.olv-observatory-status')).toBeVisible();
   });
 
   test('a scan with no scanner setups: the Analyse row is not Ready and the panel says what it needs', async ({ page }) => {
@@ -93,6 +96,6 @@ test.describe('Observatory panel', () => {
     await expect(row.locator('.olv-ah-hint')).toContainText('what the scanner saw from each setup');
 
     await openObservatory(page);
-    await expect(page.locator('.olv-modal .olv-observatory-ineligible')).toHaveText(needs, { timeout: 20_000 });
+    await expect(page.locator('.olv-analyse-page[data-page="observatory"] .olv-observatory-ineligible')).toHaveText(needs, { timeout: 20_000 });
   });
 });

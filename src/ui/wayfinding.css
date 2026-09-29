@@ -153,3 +153,58 @@
   .olv-loc-here { color: CanvasText; }
   .olv-palette-row-unavailable .olv-palette-row-title { color: GrayText; }
 }
+
+/* ── Mode home Continue row (CE-MODE-01) ────────────────────────────────── */
+.olv-mode-continue {
+  appearance: none;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 24px;
+  margin: 0 0 var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  font: 600 var(--text-xs) / 1.3 var(--font);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.olv-mode-continue[hidden] { display: none; }
+.olv-mode-continue:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── Right rail as View (CE-VIEW) ───────────────────────────────────────── */
+.olv-view-subtitle {
+  margin: calc(-1 * var(--space-md)) 0 var(--space-md);
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+}
+.olv-view-link {
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-height: 24px;
+  margin: var(--space-sm) 0;
+  padding: var(--space-xs) var(--space-md);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font: 500 var(--text-xs) / 1.3 var(--font);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.olv-view-link:hover { border-color: var(--accent); }
+/* View's Visuals sub-section headers and the filter "Show all" control meet
+   the 24 px pointer target (WCAG 2.2 SC 2.5.8). Zero specificity, so the
+   44 px large-touch rule in 99-mobile-gui-refresh.css still wins on touch. */
+:where(.olv-inspector .olv-visuals-body .olv-section-summary),
+:where(.olv-inspector .olv-elev-reset) { min-height: 24px; }
+:where(.olv-inspector .olv-elev-reset) { display: inline-flex; align-items: center; }
+/* The measurement row's delete control was the other sub-24 px target the
+   audit's rule-wide exception hid. */
+:where(.olv-mp-del) { min-width: 24px; min-height: 24px; }

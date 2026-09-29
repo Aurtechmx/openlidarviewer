@@ -130,7 +130,7 @@ test.describe('results shelf', () => {
     await expect(verdict).toHaveAttribute('data-e2e-mark', '1');
   });
 
-  test('lab: Focus on a Flow Pulse run opens the lab on that run, not the Analyse home', async ({ page }) => {
+  test('lab: Focus on a Flow Pulse run opens the lab page on that run, not the Analyse home', async ({ page }) => {
     await page.goto('/?test=1');
     await dropDenseGridPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
@@ -140,13 +140,13 @@ test.describe('results shelf', () => {
     await expect(page.locator('.olv-fit-verdict-text')).toBeVisible({ timeout: 30_000 });
     await page.locator('#olv-ws-mode-analyse .olv-ws-back').click();
     await page.locator('.olv-ah-row[data-analysis="flow-pulse"] .olv-ah-open').click();
-    const modal = page.locator('.olv-modal');
-    await expect(modal.locator('.olv-modal-title')).toHaveText('Flow Pulse', { timeout: 20_000 });
-    const card = modal.locator('.olv-modal-body');
+    const labPage = page.locator('.olv-analyse-page[data-page="flow-pulse"]');
+    await expect(labPage).toBeVisible({ timeout: 20_000 });
+    const card = labPage.locator('.olv-at-body');
     await expect(card).not.toBeEmpty();
     const first = await card.innerText();
     await page.keyboard.press('Escape');
-    await expect(modal).toHaveCount(0);
+    await expect(labPage).toBeHidden();
 
     await showWorkspaceMode(page, 'data');
     await page.mouse.move(1, 1);
@@ -154,11 +154,12 @@ test.describe('results shelf', () => {
     const row = shelf(page).locator('.olv-results-row[data-result-type="flow-pulse"]');
     await expect(row).toHaveCount(1, { timeout: 10_000 });
     await row.locator('.olv-results-focus').click();
-    await expect(modal.locator('.olv-modal-title')).toHaveText('Flow Pulse', { timeout: 20_000 });
+    await expect(labPage).toBeVisible({ timeout: 20_000 });
     // The same run, shown as it was: the card reads the kept outcome.
     expect(await card.innerText()).toBe(first);
-    // The modal opened over the current mode; the shelf did not route.
-    await expect(page.locator('.olv-ws-tab[data-mode="data"]')).toHaveAttribute('aria-selected', 'true');
+    // The shelf routed to the lab's page, not a dialog over the current mode.
+    await expect(page.locator('.olv-ws-tab[data-mode="analyse"]')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.olv-modal-backdrop')).toHaveCount(0);
   });
 
   test('closing the scan empties the shelf', async ({ page }) => {

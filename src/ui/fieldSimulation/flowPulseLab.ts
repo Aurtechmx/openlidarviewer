@@ -32,7 +32,8 @@
 import type { SourceInterpretationRecord } from '../../science/sourceInterpretation';
 import { showBusyScan } from '../busyScan';
 import { el } from '../dom';
-import { openModal, type ModalHandle } from '../Modal';
+import type { ModalHandle } from '../Modal';
+import { openLabSurface } from '../labSurface';
 import {
   FLOW_PULSE_DEFAULTS,
   runFlowPulse,
@@ -797,7 +798,7 @@ export function renderFlowPulseNeedsGround(onRunTerrain: (() => void) | null): H
   ]);
 }
 
-/** Run and show Flow Pulse in a dialog. */
+/** Run and show Flow Pulse on its Analyse page. */
 export function openFlowPulseLab(input: FlowPulseLabInput | null, opts: LabOpenOptions = {}): ModalHandle {
   // A shelf Focus reopens the published run on the same layer as it is.
   const prior = takeResultReopen('flow-pulse') ? labRun('flow-pulse') : null;
@@ -805,17 +806,10 @@ export function openFlowPulseLab(input: FlowPulseLabInput | null, opts: LabOpenO
     let handle: ModalHandle | null = null;
     const run = opts.onRunTerrain;
     const body = renderFlowPulseNeedsGround(run ? () => { handle?.close(); run(); } : null);
-    handle = openModal({ title: 'Flow Pulse', body });
-    handle.element?.classList.add('olv-surface-dialog'); // the location bar gives it a named Back
+    handle = openLabSurface('flow-pulse', 'Flow Pulse', body);
     return handle;
   }
   const reuse = prior && prior.layerId === input.layerId ? (prior.outcome as FlowPulseResult) : null;
   const interactive = mountFlowPulseInteractive(input, reuse ?? runLabFlowPulse(input));
-  const lab = openModal({
-    title: 'Flow Pulse',
-    body: interactive.element,
-    onClose: () => interactive.dispose(),
-  });
-  lab.element?.classList.add('olv-surface-dialog'); // the location bar gives it a named Back
-  return lab;
+  return openLabSurface('flow-pulse', 'Flow Pulse', interactive.element, () => interactive.dispose());
 }

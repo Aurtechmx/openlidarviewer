@@ -208,6 +208,8 @@ export interface RailToggleConfig {
   collapsedClass: string;
   storageKey: string;
   ariaControls: string;
+  /** What the grabber names: "Hide <label>". Default "panel". */
+  label?: string;
 }
 /**
  * Returns a disposer, same contract as wireRailScrollAffordance: it disconnects
@@ -222,12 +224,10 @@ export function wireRailToggle(cfg: RailToggleConfig): () => void {
 
   const apply = (collapsed: boolean): void => {
     for (const p of cfg.panels) p.classList.toggle(cfg.collapsedClass, collapsed);
-    // The tab carries its own collapsed state so it can snap to the screen edge
-    // independently — several tabs can share one edge (right column: one per
-    // panel) without a sibling selector confusing them.
+    // The tab carries its own collapsed state, so tabs sharing an edge snap independently.
     tab.classList.toggle('is-collapsed', collapsed);
     tab.setAttribute('aria-expanded', String(!collapsed));
-    const label = collapsed ? 'Show panel' : 'Hide panel';
+    const label = `${collapsed ? 'Show' : 'Hide'} ${cfg.label ?? 'panel'}`;
     tab.setAttribute('aria-label', label);
     tab.title = label;
   };

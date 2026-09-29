@@ -4431,7 +4431,7 @@ function resetToEmptyState(): void {
   navWiring.resetPlanView();
   navBar.hideTouchHint();
   projectCard.hide();
-  // Hides the phone-only Scan Info launcher; the sheet is closed by clear().
+  // Hides the phone-only View launcher; the sheet is closed by clear().
   document.body.classList.remove('olv-has-scan');
   scans.clear();
   bookmarks.clear();

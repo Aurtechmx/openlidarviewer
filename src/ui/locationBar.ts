@@ -45,7 +45,7 @@ import { closeTransients, labelModalBack, SURFACE_DIALOGS } from './exitConventi
 import { MOBILE_LAYOUT_QUERY } from './isMobileDevice';
 
 type Pages = Partial<Record<WorkspaceMode, Record<string, WorkspacePage>>>;
-type AnalysePageId = 'terrain' | 'contours' | 'objects' | 'features' | 'range';
+type AnalysePageId = 'terrain' | 'contours' | 'objects' | 'features' | 'range' | 'flow-pulse' | 'terrain-access' | 'observatory';
 
 export interface LocationBarDeps {
   readonly router: WorkspaceRouter;
@@ -91,7 +91,8 @@ const WORKSPACE_DOM: Readonly<Record<string, { root: string; launcher: string; c
   'profile-workbench': { root: '.olv-workbench', launcher: '.olv-mp-chart-wrap', close: '.olv-workbench-close' },
 };
 
-const ANALYSE_PAGES = new Set(['terrain', 'contours', 'objects', 'features', 'range']);
+const LAB_PAGES = new Set(['flow-pulse', 'terrain-access', 'observatory']);
+const ANALYSE_PAGES = new Set(['terrain', 'contours', 'objects', 'features', 'range', ...LAB_PAGES]);
 
 /** Text fields keep Escape for themselves. */
 function editable(node: Element | null): boolean {
@@ -231,13 +232,14 @@ export function createLocationBar(d: LocationBarDeps): LocationBar {
   function onMoved(from: string, to: string): void {
     const deeper = to.startsWith(`${from}${CRUMB_SEPARATOR}`);
     if (deeper) {
-      if (lastTarget?.isConnected) openers.set(to, lastTarget);
+      if (lastTarget) openers.set(to, lastTarget); // a repainted row is found again on the way back
       return;
     }
     const viaBack = returning || !!lastTarget?.closest('.olv-ws-back, .olv-loc-back, .olv-loc-crumb, .olv-ws-close, .olv-workbench-close');
     returning = false;
     // The opener of the place just left, or of the deepest place above where we are now.
-    const opener = openers.get(from);
+    // A home that repainted its rows while away holds a new node for the same row.
+    const opener = current(openers.get(from));
     for (const k of Array.from(openers.keys())) if (!to.startsWith(k) || k === to) openers.delete(k);
     if (!viaBack) return;
     if (visible(opener) && !opener.closest('[aria-hidden="true"]')) {
@@ -247,6 +249,13 @@ export function createLocationBar(d: LocationBarDeps): LocationBar {
     // The opener is out of view (a collapsed rail, a lowered sheet): keep focus on the bar.
     const bar = d.isMobile() ? phone : top;
     bar.nav.querySelector<HTMLElement>('.olv-loc-back:not([hidden])')?.focus({ preventScroll: true });
+  }
+
+  /** The live node for an opener: itself, or the same Analyse row's button after a repaint. */
+  function current(node: HTMLElement | undefined): HTMLElement | undefined {
+    if (!node || node.isConnected) return node;
+    const id = node.closest<HTMLElement>('[data-analysis]')?.dataset.analysis;
+    return (id && doc.querySelector<HTMLElement>(`.olv-ah-row[data-analysis="${id}"] .olv-ah-open`)) || node;
   }
 
   // ── navigation ────────────────────────────────────────────────────────────
@@ -327,7 +336,8 @@ export function createLocationBar(d: LocationBarDeps): LocationBar {
     if (mode === 'analyse') {
       const row = doc.querySelector<HTMLElement>(`.olv-ah-row[data-analysis="${page}"]`);
       const reason = row?.querySelector('.olv-ah-reason')?.textContent?.trim();
-      if (row?.classList.contains('is-blocked')) return reason || 'Not available for this scan yet.';
+      // A lab page opens even when blocked: it says what it needs and offers the fix.
+      if (row?.classList.contains('is-blocked') && !LAB_PAGES.has(page)) return reason || 'Not available for this scan yet.';
       // Feature candidates and Range frames exist only when the scan carries their data.
       const shell = doc.querySelector(`.olv-analyse-page[data-page="${page}"]`);
       if ((page === 'features' || page === 'range') && shell?.classList.contains('olv-hidden')) return reason || 'Not available for this scan.';

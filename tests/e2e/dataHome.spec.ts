@@ -1,8 +1,8 @@
 /**
  * The Data home: the layer list plus a `Classes` row and a `Source and
  * metadata` row. The class legend is a page under Data; Layer Health lives in
- * the right-rail Inspector. Running a Field Simulation Lab from the palette
- * opens a modal and leaves the rail mode alone.
+ * the right rail (View). Running a Field Simulation Lab from the palette
+ * opens its Analyse page.
  * Deterministic project, committed classified `tiny.las` and the dense grid.
  */
 import { test, expect } from '@playwright/test';
@@ -51,13 +51,13 @@ test.describe('Data home', () => {
     await expect(check).not.toBeChecked();
   });
 
-  test('Flow Pulse from the palette while in Tools keeps the Tools mode', async ({ page }) => {
+  test('Flow Pulse from the palette while in Tools opens its Analyse page', async ({ page }) => {
     await page.goto('/?test=1');
     await dropDenseGridPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
     await showWorkspaceMode(page, 'work');
     await firePaletteAction(page, 'Flow Pulse', 'Flow Pulse (Field Simulation Lab)');
-    await expect(page.locator('.olv-modal-title')).toHaveText('Flow Pulse');
-    await expect(page.locator('.olv-ws-tab[data-mode="work"]')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.olv-analyse-page[data-page="flow-pulse"]')).toBeVisible();
+    await expect(page.locator('.olv-ws-tab[data-mode="analyse"]')).toHaveAttribute('aria-selected', 'true');
   });
 });

@@ -77,14 +77,12 @@ export const DEFAULT_TOUR: readonly TourStep[] = [
     placement: 'bottom',
   },
   {
-    // Copy verified v0.4.5: the Inspector really does carry all five —
-    // the CRS section, the "N / M points" count, the Dataset Intelligence
-    // density row, the "Color by" section and the Visuals Studio rails.
+    // The right rail is named View on every surface (spec CE-1, CE-VIEW-01).
     id: 'inspector',
     target: '.olv-inspector',
-    title: 'Inspector',
+    title: 'View',
     body:
-      'CRS, point count, density, *colour mode*, and the *Visuals Studio* all live here. Sections collapse to keep the first paint clean.',
+      'How the scan is drawn: *colour mode*, the *Visuals Studio*, filters and saved views. The CRS, density and other scan facts follow below.',
     placement: 'left',
   },
   {

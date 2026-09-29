@@ -42,15 +42,15 @@ import {
   type ModalResultKind,
 } from './resultSignals';
 
-/** The palette actions that open each modal-owned result. */
-const MODAL_ACTION: Readonly<Record<ModalResultKind, string>> = {
+/** The palette actions that open each lab result on its page. */
+const LAB_PAGE_ACTION: Readonly<Record<ModalResultKind, string>> = {
   'flow-pulse': 'analyse.flowPulse',
   'terrain-access': 'analyse.terrainAccess',
   observatory: 'analyse.observatory',
 };
 
-/** How long a modal has to take its reopen request before the shelf falls back. */
-export const MODAL_OPEN_FALLBACK_MS = 8_000;
+/** How long a lab has to take its reopen request before the shelf shows its route. */
+export const LAB_OPEN_FALLBACK_MS = 8_000;
 
 type Pose = { position: [number, number, number]; target: [number, number, number] };
 
@@ -159,16 +159,16 @@ export function mountResultsShelf(
       return !!product && !!exportPanel?.select(product);
     },
     activeLayerId: src.activeLayerId,
-    // Labs and the Observatory are modals: Focus opens the modal on the result
-    // it holds, with nothing recomputed. When the modal never takes the
-    // request (its chunk failed to load), the shelf shows the Analyse route.
-    openInModal: runAction
+    // Labs and the Observatory are Analyse pages: Focus opens the page on the
+    // run it holds, with nothing recomputed. When the lab never takes the
+    // request (its chunk failed to load), the shelf shows the page's route.
+    openLabPage: runAction
       ? (e) => {
-        if (!(e.type in MODAL_ACTION)) return false;
+        if (!(e.type in LAB_PAGE_ACTION)) return false;
         const kind = e.type as ModalResultKind;
         requestResultReopen(kind);
         try {
-          runAction(MODAL_ACTION[kind]);
+          runAction(LAB_PAGE_ACTION[kind]);
         } catch {
           takeResultReopen(kind);
           return false;
@@ -180,7 +180,7 @@ export function mountResultsShelf(
         fallbacks.set(kind, setTimeout(() => {
           fallbacks.delete(kind);
           if (resultReopenPending(kind)) navigate(e.route);
-        }, MODAL_OPEN_FALLBACK_MS));
+        }, LAB_OPEN_FALLBACK_MS));
         return true;
       }
       : undefined,

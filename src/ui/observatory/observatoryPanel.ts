@@ -17,7 +17,8 @@
  */
 import { showBusyScan } from '../busyScan';
 import { el } from '../dom';
-import { openModal, type ModalHandle } from '../Modal';
+import type { ModalHandle } from '../Modal';
+import { openLabSurface } from '../labSurface';
 import type { ObservatoryRunner, ObservatoryRunnerState } from '../../app/observatoryRunner';
 import { originChip, basisChip, suggestedStationChip, type ObservatoryBasis } from './stateChip';
 import type { ObservationRunRecord } from '../../observation/runRecord';
@@ -360,7 +361,7 @@ function listenForRestore(): void {
   if (restoreListening || typeof document === 'undefined') return;
   restoreListening = true;
   // Registered once for the page's lifetime and never removed: the overlays
-  // outlive the modal, and the handler does nothing while none is drawn.
+  // outlive the panel, and the handler does nothing while none is drawn.
   document.addEventListener('webglcontextrestored', () => { void redrawAfterRestore(); }, true);
 }
 
@@ -396,11 +397,11 @@ async function drawOverlay(input: ObservatoryPanelInput, state: ObservatoryRunne
 }
 
 /**
- * Open the modal panel, subscribing to `input.runner` so it re-renders on
+ * Open the panel on its Analyse page, subscribing to `input.runner` so it re-renders on
  * every state change and draws (or clears) the shadow overlay through
  * `input.overlayHost` — visible in the 3D scene the moment a run commits, per
  * SPEC's own "not only behind a modal" requirement; the overlay's host add()
- * happens independently of whether this modal stays open.
+ * happens independently of whether this panel stays open.
  */
 export function openObservatoryPanel(input: ObservatoryPanelInput): ModalHandle {
   const body = el('div');
@@ -417,13 +418,9 @@ export function openObservatoryPanel(input: ObservatoryPanelInput): ModalHandle 
   input.runner.setOverlayClear(clearOverlays);
 
   openHandle?.close();
-  openHandle = openModal({
-    title: 'Observatory',
-    body,
-    onClose: () => { unsubscribe(); openHandle = null; },
-  });
-  openHandle.element?.classList.add('olv-surface-dialog'); // the location bar gives it a named Back
-  return openHandle;
+  const handle = openLabSurface('observatory', 'Observatory', body, () => { unsubscribe(); if (openHandle === handle) openHandle = null; });
+  openHandle = handle;
+  return handle;
 }
 
 async function exportCurrent(state: ObservatoryRunnerState): Promise<void> {

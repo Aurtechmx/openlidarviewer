@@ -34,7 +34,8 @@
 import type { SourceInterpretationRecord } from '../../science/sourceInterpretation';
 import { showBusyScan } from '../busyScan';
 import { el } from '../dom';
-import { openModal, type ModalHandle } from '../Modal';
+import type { ModalHandle } from '../Modal';
+import { openLabSurface } from '../labSurface';
 import {
   TERRAIN_ACCESS_DEFAULTS,
   runTerrainAccess,
@@ -841,7 +842,7 @@ function mountTerrainAccessInteractive(
   };
 }
 
-/** Run and show Terrain Access in a dialog. `onRunTerrain` starts the terrain run when the ground surface is missing. */
+/** Run and show Terrain Access on its Analyse page. `onRunTerrain` starts the terrain run when the ground surface is missing. */
 export function openTerrainAccessLab(input: TerrainAccessLabInput | null, opts: { readonly onRunTerrain?: () => void } = {}): ModalHandle {
   let handle: ModalHandle | null = null;
   const run = opts.onRunTerrain;
@@ -854,11 +855,6 @@ export function openTerrainAccessLab(input: TerrainAccessLabInput | null, opts: 
       renderTerrainAccessRunCard(prior.outcome as TerrainAccessLabOutcome),
     ]));
   }
-  handle = openModal({
-    title: 'Terrain Access',
-    body: interactive.element,
-    onClose: () => interactive.dispose(),
-  });
-  handle.element?.classList.add('olv-surface-dialog'); // the location bar gives it a named Back
+  handle = openLabSurface('terrain-access', 'Terrain Access', interactive.element, () => interactive.dispose());
   return handle;
 }

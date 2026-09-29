@@ -1,7 +1,7 @@
 /**
  * The Analyse mode as a home and its task pages. The home lists one row per
  * analysis with its Process Studio status; Terrain and Objects & Space are
- * pages, Contours is a page under Terrain, and the labs stay modals.
+ * pages, Contours is a page under Terrain, and the labs are pages too.
  *
  * Journey C: Analyse -> Terrain -> Run -> Why? -> Contours -> generate -> Back
  * -> Back. Journey D: Terrain Access is BLOCKED before a run, and its Prepare
@@ -89,6 +89,7 @@ test.describe('Analyse home and pages', () => {
     await expect(page.locator('.olv-analyse-run')).toBeVisible();
     // No lab opened on the way.
     await expect(page.locator('.olv-modal')).toHaveCount(0);
+    await expect(page.locator('.olv-analyse-page[data-page="terrain-access"]')).toBeHidden();
   });
 
   test('navigation never recomputes: results and contours are unchanged across pages and modes', async ({ page }) => {
@@ -108,7 +109,10 @@ test.describe('Analyse home and pages', () => {
     await page.locator('.olv-at-link').click();
     await showWorkspaceMode(page, 'data');
     await showWorkspaceMode(page, 'analyse');
-    await expect(title(page)).toHaveText('Contours'); // the mode remembers its page
+    // The tab opens the home; its Continue row returns to the remembered page.
+    await page.mouse.move(1, 1);
+    await page.locator('#olv-ws-mode-analyse .olv-mode-continue').click();
+    await expect(title(page)).toHaveText('Contours');
     await back(page).click();
     await back(page).click();
 

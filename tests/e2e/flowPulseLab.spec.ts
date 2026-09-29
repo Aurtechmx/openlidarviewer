@@ -14,7 +14,7 @@ import { dropDenseGridPly, firePaletteAction, openAnalysePanel as openAnalyse } 
 
 async function openFlowPulse(page: Page): Promise<void> {
   await firePaletteAction(page, 'Flow Pulse', 'Flow Pulse (Field Simulation Lab)');
-  await expect(page.locator('.olv-modal-title')).toHaveText('Flow Pulse');
+  await expect(page.locator('.olv-analyse-page[data-page="flow-pulse"]')).toBeVisible();
 }
 
 /** Drop the fixture scan and run terrain analysis to readiness. */
@@ -38,24 +38,24 @@ test('without a ground surface: plain notice, the terrain run, and the way back'
   await page.waitForTimeout(500);
 
   await openFlowPulse(page);
-  const modal = page.locator('.olv-modal');
-  await expect(modal.locator('.olv-lab-purpose')).toContainText('Counts cells, not rainfall.');
-  await expect(modal.locator('.olv-lab-stage[aria-current="step"]')).toHaveText('1. Ground surface');
-  await expect(modal.locator('.olv-lab-ready[data-state="missing"]')).toContainText('Ground surface (terrain run)');
+  const labPage = page.locator('.olv-analyse-page[data-page="flow-pulse"]');
+  await expect(labPage.locator('.olv-lab-purpose')).toContainText('Counts cells, not rainfall.');
+  await expect(labPage.locator('.olv-lab-stage[aria-current="step"]')).toHaveText('1. Ground surface');
+  await expect(labPage.locator('.olv-lab-ready[data-state="missing"]')).toContainText('Ground surface (terrain run)');
   // No conditioning/grid/overlay controls for a run that never happened.
   await expect(page.locator('.olv-flow-cond')).toHaveCount(0);
   await expect(page.locator('.olv-flow-grid-canvas')).toHaveCount(0);
 
   // The fix starts the terrain run; the Terrain page then offers the way back.
-  await modal.locator('.olv-lab-fix', { hasText: 'Run terrain analysis' }).click();
-  await expect(page.locator('.olv-modal')).toHaveCount(0);
+  await labPage.locator('.olv-lab-fix', { hasText: 'Run terrain analysis' }).click();
+  await expect(page.locator('.olv-analyse-page[data-page="flow-pulse"]')).toBeHidden();
   await expect(page.locator('.olv-analyse-readiness .olv-analyse-ready:not(.is-skeleton)')).toHaveCount(3, { timeout: 20_000 });
   const back = page.locator('.olv-at-back', { hasText: 'Back to Flow Pulse' });
   await expect(back).toBeVisible({ timeout: 20_000 });
   await back.click();
-  await expect(page.locator('.olv-modal-title')).toHaveText('Flow Pulse');
-  await expect(page.locator('.olv-modal .olv-story-card')).toContainText('D8 flow routing over the analysed DTM');
-  await expect(page.locator('.olv-modal .olv-lab-ready[data-state="met"]')).toContainText('Ground surface (terrain run)');
+  await expect(page.locator('.olv-analyse-page[data-page="flow-pulse"]')).toBeVisible();
+  await expect(page.locator('.olv-analyse-page[data-page="flow-pulse"] .olv-story-card')).toContainText('D8 flow routing over the analysed DTM');
+  await expect(page.locator('.olv-analyse-page[data-page="flow-pulse"] .olv-lab-ready[data-state="met"]')).toContainText('Ground surface (terrain run)');
 });
 
 test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overlay toggle', async ({ page }) => {
@@ -63,15 +63,15 @@ test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overl
   await loadScanAndAnalyse(page);
 
   await openFlowPulse(page);
-  const modal = page.locator('.olv-modal');
+  const labPage = page.locator('.olv-analyse-page[data-page="flow-pulse"]');
 
   // SUCCESS state: the run summary, naming the method it used.
-  await expect(modal.locator('.olv-story-card')).toContainText('D8 flow routing over the analysed DTM');
-  await expect(modal.locator('.olv-story-card')).toContainText('olv.simulation.terrain-flow.d8');
+  await expect(labPage.locator('.olv-story-card')).toContainText('D8 flow routing over the analysed DTM');
+  await expect(labPage.locator('.olv-story-card')).toContainText('olv.simulation.terrain-flow.d8');
 
   // CONDITIONING: raw is the default, both options offered, raw is pressed.
-  const rawBtn = modal.locator('.olv-flow-cond-btn', { hasText: 'Raw terrain' });
-  const floodBtn = modal.locator('.olv-flow-cond-btn', { hasText: 'Priority-Flood conditioned' });
+  const rawBtn = labPage.locator('.olv-flow-cond-btn', { hasText: 'Raw terrain' });
+  const floodBtn = labPage.locator('.olv-flow-cond-btn', { hasText: 'Priority-Flood conditioned' });
   await expect(rawBtn).toHaveAttribute('aria-pressed', 'true');
   await expect(floodBtn).toHaveAttribute('aria-pressed', 'false');
 
@@ -91,22 +91,22 @@ test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overl
   await floodBtn.click();
   await expect(floodBtn).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 });
   await expect(rawBtn).toHaveAttribute('aria-pressed', 'false');
-  await expect(modal.locator('.olv-story-card')).toContainText('priority-flood', { timeout: 10_000 });
+  await expect(labPage.locator('.olv-story-card')).toContainText('priority-flood', { timeout: 10_000 });
   expect(await page.evaluate(() => (window as unknown as { __emblemSeen: string | null }).__emblemSeen), 'the emblem waited while it ran').toBe('true');
-  await expect(modal.locator('.olv-flow-busy')).toHaveCount(0);
+  await expect(labPage.locator('.olv-flow-busy')).toHaveCount(0);
 
   // CLICK-TO-PULSE via the keyboard-accessible result grid cursor (the
   // spec's own named alternative to a live-scan click — see FlowOverlay.ts
   // and flowResultGrid.ts for why). A click at the CENTRE of the raster lands
   // on the best-covered cell of this dense synthetic surface, so the mouse
   // path is exercised against a cell certain to trace.
-  const grid = modal.locator('.olv-flow-grid-canvas');
+  const grid = labPage.locator('.olv-flow-grid-canvas');
   await expect(grid).toBeVisible();
   const box = await grid.boundingBox();
   if (!box) throw new Error('grid canvas has no box');
-  await expect(modal.locator('.olv-flow-selection-empty')).toContainText('click a cell');
+  await expect(labPage.locator('.olv-flow-selection-empty')).toContainText('click a cell');
   await grid.click({ position: { x: box.width / 2, y: box.height / 2 } });
-  await expect(modal.locator('.olv-flow-selection')).toContainText('Path cells', { timeout: 5_000 });
+  await expect(labPage.locator('.olv-flow-selection')).toContainText('Path cells', { timeout: 5_000 });
 
   // KEYBOARD PATH: the click above also focused the canvas. Arrow keys move
   // the cursor (the status line names the new cell — proof keyboard
@@ -115,20 +115,20 @@ test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overl
   // an honest refusal is accepted here — both are real, tested outcomes.
   await page.keyboard.press('ArrowLeft');
   await page.keyboard.press('ArrowUp');
-  await expect(modal.locator('.olv-flow-grid-status')).not.toContainText('Selected');
+  await expect(labPage.locator('.olv-flow-grid-status')).not.toContainText('Selected');
   await page.keyboard.press('Enter');
-  await expect(modal.locator('.olv-flow-selection')).toContainText(/Path cells|not drawn/, { timeout: 5_000 });
+  await expect(labPage.locator('.olv-flow-selection')).toContainText(/Path cells|not drawn/, { timeout: 5_000 });
 
   // CATCHMENT: switch mode, activate the centre cell again, get a
   // contributing-cells readout.
-  await modal.locator('.olv-flow-mode-btn', { hasText: 'Set catchment outlet' }).click();
-  await expect(modal.locator('.olv-flow-selection-empty')).toContainText('click a cell');
+  await labPage.locator('.olv-flow-mode-btn', { hasText: 'Set catchment outlet' }).click();
+  await expect(labPage.locator('.olv-flow-selection-empty')).toContainText('click a cell');
   await grid.click({ position: { x: box.width / 2, y: box.height / 2 } });
-  await expect(modal.locator('.olv-flow-selection')).toContainText('Contributing cells', { timeout: 5_000 });
+  await expect(labPage.locator('.olv-flow-selection')).toContainText('Contributing cells', { timeout: 5_000 });
 
   // EXPORT: the package button downloads a ZIP built from the current run,
   // including the path just traced above.
-  const exportBtn = modal.locator('.olv-flow-export');
+  const exportBtn = labPage.locator('.olv-flow-export');
   await expect(exportBtn).toBeVisible();
   const downloadPromise = page.waitForEvent('download');
   await exportBtn.click();
@@ -138,35 +138,35 @@ test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overl
   // ACCUMULATION OVERLAY: offered (the Analyse panel wired real scene
   // membership through to the Lab), toggles, and states its own honesty
   // limit rather than implying discharge.
-  const overlayToggle = modal.locator('.olv-flow-overlay-toggle');
+  const overlayToggle = labPage.locator('.olv-flow-overlay-toggle');
   await expect(overlayToggle).toBeVisible();
-  await expect(modal.locator('.olv-flow-overlay-legend')).toContainText('counts cells, not water');
+  await expect(labPage.locator('.olv-flow-overlay-legend')).toContainText('counts cells, not water');
   await expect(overlayToggle).toHaveAttribute('aria-pressed', 'false');
   await overlayToggle.click();
   await expect(overlayToggle).toHaveAttribute('aria-pressed', 'true');
 
   // LIVE REGION: present, and carries a status announcement (not empty).
-  const live = modal.locator('.olv-flow-live');
+  const live = labPage.locator('.olv-flow-live');
   await expect(live).toHaveAttribute('aria-live', 'polite');
   await expect(live).not.toHaveText('');
 
-  // The overlay was left ON. Closing the modal — which covers the scene,
+  // The overlay was left ON. Leaving the page — which covers the scene,
   // the only place a user could otherwise see it — must not tear
   // it down; the toggle in the reopened Lab reads back "on" because the
   // SAME persisted overlay is still attached to the scan, not a fresh one
-  // reset to off. (Before the fix this always came back "false": the modal
+  // reset to off. (Before the fix this always came back "false": the lab
   // disposed the overlay unconditionally on close.)
-  await page.locator('.olv-modal-x').click();
-  await expect(page.locator('.olv-modal')).toHaveCount(0);
+  await page.locator('#olv-ws-mode-analyse > .olv-ws-task .olv-ws-back').click();
+  await expect(page.locator('.olv-analyse-page[data-page="flow-pulse"]')).toBeHidden();
   await openFlowPulse(page);
-  await expect(page.locator('.olv-modal .olv-story-card')).toContainText('D8 flow routing over the analysed DTM');
+  await expect(page.locator('.olv-analyse-page[data-page="flow-pulse"] .olv-story-card')).toContainText('D8 flow routing over the analysed DTM');
   await expect(page.locator('.olv-flow-overlay-toggle')).toHaveAttribute('aria-pressed', 'true');
 
   // Turning it off is the visible way out, and it stays off across a close/reopen.
   await page.locator('.olv-flow-overlay-toggle').click();
   await expect(page.locator('.olv-flow-overlay-toggle')).toHaveAttribute('aria-pressed', 'false');
-  await page.locator('.olv-modal-x').click();
-  await expect(page.locator('.olv-modal')).toHaveCount(0);
+  await page.locator('#olv-ws-mode-analyse > .olv-ws-task .olv-ws-back').click();
+  await expect(page.locator('.olv-analyse-page[data-page="flow-pulse"]')).toBeHidden();
   await openFlowPulse(page);
   await expect(page.locator('.olv-flow-overlay-toggle')).toHaveAttribute('aria-pressed', 'false');
 });
@@ -184,14 +184,14 @@ test('closing the scan tears down the persisted overlay without reopening the La
   await loadScanAndAnalyse(page);
 
   await openFlowPulse(page);
-  const modal = page.locator('.olv-modal');
-  await expect(modal.locator('.olv-story-card')).toContainText('D8 flow routing over the analysed DTM');
-  const overlayToggle = modal.locator('.olv-flow-overlay-toggle');
+  const labPage = page.locator('.olv-analyse-page[data-page="flow-pulse"]');
+  await expect(labPage.locator('.olv-story-card')).toContainText('D8 flow routing over the analysed DTM');
+  const overlayToggle = labPage.locator('.olv-flow-overlay-toggle');
   await expect(overlayToggle).toBeVisible();
   await overlayToggle.click();
   await expect(overlayToggle).toHaveAttribute('aria-pressed', 'true');
-  await page.locator('.olv-modal-x').click();
-  await expect(page.locator('.olv-modal')).toHaveCount(0);
+  await page.locator('#olv-ws-mode-analyse > .olv-ws-task .olv-ws-back').click();
+  await expect(page.locator('.olv-analyse-page[data-page="flow-pulse"]')).toBeHidden();
 
   // Close the scan — no Lab reopen in between. Before the fix, nothing
   // disposed the persisted overlay on this path at all.
@@ -203,6 +203,6 @@ test('closing the scan tears down the persisted overlay without reopening the La
   // torn down by the close, not merely hidden behind a stale "on" record.
   await loadScanAndAnalyse(page);
   await openFlowPulse(page);
-  await expect(page.locator('.olv-modal .olv-story-card')).toContainText('D8 flow routing over the analysed DTM');
+  await expect(page.locator('.olv-analyse-page[data-page="flow-pulse"] .olv-story-card')).toContainText('D8 flow routing over the analysed DTM');
   await expect(page.locator('.olv-flow-overlay-toggle')).toHaveAttribute('aria-pressed', 'false');
 });

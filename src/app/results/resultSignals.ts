@@ -75,21 +75,21 @@ export function labRun(kind: LabKind): LabRunRef | null {
   return labRuns.get(kind) ?? null;
 }
 
-/** The results a modal owns: the two labs and the Observatory. */
+/** The results a lab page owns: the two labs and the Observatory. */
 export type ModalResultKind = LabKind | 'observatory';
 
 const reopenRequests = new Set<ModalResultKind>();
 
 /**
- * The Results shelf asks the next open of this modal to show the result it
- * already holds instead of computing a new one. The modal takes the request
+ * The Results shelf asks the next open of this lab to show the result it
+ * already holds instead of computing a new one. The lab takes the request
  * with {@link takeResultReopen} when it opens.
  */
 export function requestResultReopen(kind: ModalResultKind): void {
   reopenRequests.add(kind);
 }
 
-/** True once per request: the modal opening now should reuse its result. */
+/** True once per request: the lab opening now should reuse its result. */
 export function takeResultReopen(kind: ModalResultKind): boolean {
   if (!reopenRequests.delete(kind)) return false;
   for (const fn of reopenTaken) fn(kind);
@@ -98,13 +98,13 @@ export function takeResultReopen(kind: ModalResultKind): boolean {
 
 const reopenTaken = new Set<(kind: ModalResultKind) => void>();
 
-/** Told when a modal takes its reopen request. Returns an unsubscribe. */
+/** Told when a lab takes its reopen request. Returns an unsubscribe. */
 export function onResultReopenTaken(fn: (kind: ModalResultKind) => void): () => void {
   reopenTaken.add(fn);
   return () => { reopenTaken.delete(fn); };
 }
 
-/** True while a request is waiting for its modal to open. */
+/** True while a request is waiting for its lab to open. */
 export function resultReopenPending(kind: ModalResultKind): boolean {
   return reopenRequests.has(kind);
 }

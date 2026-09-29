@@ -94,17 +94,18 @@ the two entries were renumbered when the branches were integrated.
 | L189 | EXPORT | TEST | med | FIXED | new | Map sheets and terrain reports for a streamed tile with no linear unit placed contour levels off round elevations, printed a metre-based scale ratio and a metre TPI, called the COPC root-node spacing the point spacing, and stated RMSEz, contour style, analysed basis, interpolated share and ground visibility on bases that contradicted each other. |
 | L184 | DOCS | TEST | med | FIXED | new | The known-limitations document still called the polygon Volume tool Withheld-blind, the browser matrix advisory and the shell 799 of 812 KiB, and no lint read those sentences. |
 | L190 | EXPORT | TEST | med | FIXED | new | An Observatory run's source digest hashed only the first 3000 position values, the live run dropped the planning option and recorded no file name or unit, and the package wrote a zero grid shape in field.json and empty params for every method in its processing manifest. |
+| L191 | UI | TEST | med | FIXED | new | Flow Pulse, Terrain Access and Observatory opened as dialogs that hid the scan and the rail, the right rail was titled Scan Intelligence while it held view settings, and a mode tab could land in the middle of a page. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 45
+- FIXED: 46
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 66
+- total: 67
 
 ## Detail
 
@@ -7309,3 +7310,50 @@ params and the field header are no longer empty. No existing test pinned any
 of these values.
 
 Covered by `tests/observatoryProvenance.test.ts`.
+
+### L191 · FIXED · UI
+
+Community wayfinding phase C3 (`docs/ux/COMMUNITY_SPEC.md` §13).
+
+Labs as Analyse pages (CE-LAB-01 to 05). Flow Pulse and Terrain Access are
+router pages under Terrain and Observatory is a top-level Analyse page, so
+each has crumbs, a named Back and a palette Go to entry from the same page
+registry. The lab components are not rewritten: each places its body through
+`src/ui/labSurface.ts`, and the Analyse workspace registers the page host that
+puts it in a page shell. The scene stays in view and takes pointer input while
+a lab page is open, and lab overlays draw in the viewport as before. The
+Analyse home rows open the pages. The Results shelf sends a lab result to its
+page, and the reopen request from the shelf still makes the lab show the kept
+run instead of computing a new one. "Run terrain analysis" inside a lab
+returns to the lab page through the Terrain page's `Back to <lab>`. A short
+question inside a lab stays a dialog, and with no scan open a lab takes a
+dialog because there is no workspace to hold its page. Lab code still loads
+through `src/lazyChunks.ts`. Closing the scan closes open lab pages.
+
+View (CE-VIEW-01 to 04). The right rail reads View, with the subtitle "How
+the scan is drawn" shared with the phone tab, on its title, grabber, phone
+launcher, tour step and Data home row. Ids, classes, storage keys and the
+`Inspector` module name are unchanged. Sections run appearance, filters, saved
+views, then the scan facts, and a link row reads "Two-epoch change detection
+→ Analyse". The Visuals sub-section headers and the filter "Show all" control
+meet the 24 px target, so the accessibility audit has no known exceptions left.
+
+Mode home (CE-MODE-01, 02). A mode tab that switches mode opens that mode's
+home. When the mode remembers a page, the home's first row reads
+`Continue: <page> · <state>` and opens the page with focus on its heading.
+`olv.workspace.left.page` keeps its meaning.
+
+Journeys against C2 (`docs/ux/metrics/ce-c3.json`): J3 5 → 4 clicks and 5 → 4
+surface switches, the same on the phone; J7 Flow Pulse 5 → 4 clicks and J7
+Terrain Access 10 → 9. J2 goes from 2 clicks and 1 switch to 3 and 2, because
+the Tools tab now opens the Tools home and its Continue row returns to
+Measure. The other journeys are unchanged.
+
+In the live build the startup chunk is 105 bytes smaller and the Viewer chunk
+is the same size. `src/main.ts` and `src/render/Viewer.ts` keep their size
+and `Inspector.ts` is smaller. Covered by
+`tests/analyseWorkspace.test.ts`, `tests/modeHome.test.ts`,
+`tests/e2e/ceLabsAsPages.spec.ts`, `tests/e2e/ceLabGuidance.spec.ts` and
+`tests/e2e/ceModeHome.spec.ts`; the lab specs open by route with their
+scientific assertions unchanged. No computed value, threshold, method or
+export changes.

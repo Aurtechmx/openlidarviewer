@@ -26,7 +26,7 @@ import {
   type TerrainReader,
 } from '../src/app/results/resultsIndex';
 import { createResultsShelf } from '../src/app/results/resultsShelf';
-import { MODAL_OPEN_FALLBACK_MS, mountResultsShelf, poseAt } from '../src/app/results/resultsShelfMount';
+import { LAB_OPEN_FALLBACK_MS, mountResultsShelf, poseAt } from '../src/app/results/resultsShelfMount';
 import { createScanService } from '../src/app/ScanService';
 import {
   announceObservatoryRunner,
@@ -183,7 +183,7 @@ describe('results index: one test per owner, pushed with no timer', () => {
     publishLabRun('terrain-access', { outcome: { ok: true }, layerId: 'a', filename: null });
     const types = o.index.entries().map((e) => e.type).sort();
     expect(types).toEqual(['flow-pulse', 'terrain-access']);
-    expect(o.index.entries().find((e) => e.type === 'flow-pulse')).toMatchObject({ title: 'Flow Pulse run, site.laz', route: { mode: 'analyse', page: 'flow' } });
+    expect(o.index.entries().find((e) => e.type === 'flow-pulse')).toMatchObject({ title: 'Flow Pulse run, site.laz', route: { mode: 'analyse', page: 'flow-pulse' } });
     expect(labRun('flow-pulse')!.outcome).toBe(outcome);
     publishLabRun('flow-pulse', null);
     publishLabRun('terrain-access', null);
@@ -442,7 +442,7 @@ describe('shelf Focus on a lab or Observatory result opens its modal', () => {
     expect(resultReopenPending('observatory')).toBe(false);
   });
 
-  it('falls back to the Analyse route when the modal never opens', () => {
+  it('falls back to the lab page route when the lab never opens', () => {
     vi.useFakeTimers();
     try {
       const { mounted, navigate } = mountWith(() => { /* the lab chunk failed: nothing takes the request */ });
@@ -450,8 +450,8 @@ describe('shelf Focus on a lab or Observatory result opens its modal', () => {
       mounted.refresh();
       mounted.focusResult('terrain-access:a');
       expect(navigate).not.toHaveBeenCalled();
-      vi.advanceTimersByTime(MODAL_OPEN_FALLBACK_MS);
-      expect(navigate).toHaveBeenCalledWith({ mode: 'analyse', page: 'access' });
+      vi.advanceTimersByTime(LAB_OPEN_FALLBACK_MS);
+      expect(navigate).toHaveBeenCalledWith({ mode: 'analyse', page: 'terrain-access' });
       // The request stays for a chunk that loads late.
       expect(resultReopenPending('terrain-access')).toBe(true);
     } finally {
@@ -466,12 +466,12 @@ describe('shelf Focus on a lab or Observatory result opens its modal', () => {
       // The lab chunk resolves after the fallback window: the modal then asks
       // whether to reuse its run.
       const { mounted, navigate } = mountWith(() => {
-        setTimeout(() => { late = takeResultReopen('flow-pulse'); }, MODAL_OPEN_FALLBACK_MS + 4_000);
+        setTimeout(() => { late = takeResultReopen('flow-pulse'); }, LAB_OPEN_FALLBACK_MS + 4_000);
       });
       publishLabRun('flow-pulse', { outcome: { ok: true }, layerId: 'a', filename: null });
       mounted.refresh();
       mounted.focusResult('flow-pulse:a');
-      vi.advanceTimersByTime(MODAL_OPEN_FALLBACK_MS);
+      vi.advanceTimersByTime(LAB_OPEN_FALLBACK_MS);
       expect(navigate).toHaveBeenCalledTimes(1);
       vi.advanceTimersByTime(4_000);
       expect(late).toBe(true);
@@ -488,7 +488,7 @@ describe('shelf Focus on a lab or Observatory result opens its modal', () => {
       mounted.refresh();
       mounted.focusResult('terrain-access:a');
       expect(vi.getTimerCount()).toBe(0);
-      vi.advanceTimersByTime(MODAL_OPEN_FALLBACK_MS);
+      vi.advanceTimersByTime(LAB_OPEN_FALLBACK_MS);
       expect(navigate).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
@@ -506,7 +506,7 @@ describe('shelf Focus on a lab or Observatory result opens its modal', () => {
       mounted.focusResult('terrain-access:a');
       mounted.dispose();
       expect(vi.getTimerCount()).toBe(0);
-      vi.advanceTimersByTime(MODAL_OPEN_FALLBACK_MS);
+      vi.advanceTimersByTime(LAB_OPEN_FALLBACK_MS);
       expect(navigate).not.toHaveBeenCalled();
       expect(toggle.listenerCount('click')).toBe(before - 1);
     } finally {
