@@ -17,6 +17,7 @@
 import type { ObservatoryCloudInput, ObservatoryRunOptions, ObservatoryRunOutcome } from './observatoryFromCloud';
 import { runObservatoryOverCloud } from './observatoryFromCloud';
 import { registerObservatoryOverlayInvalidator } from '../lazyChunks';
+import type { CrsOriginInput } from '../science/crsOrigin';
 import { cancelObservatoryJob, computeObservatoryInWorker } from './observatoryWorkerClient';
 
 export type ObservatoryRunnerState =
@@ -27,6 +28,8 @@ export type ObservatoryRunnerState =
       readonly outcome: ObservatoryRunOutcome;
       /** The source's probe verdict at run time (null: opened without a probe), for export provenance. */
       readonly interpretationLevel?: string | null;
+      /** The resolved CRS at run time (null: none resolved), for export provenance. */
+      readonly crs?: CrsOriginInput | null;
     }
   | { readonly phase: 'stale' };
 
@@ -34,6 +37,8 @@ export interface ObservatoryRunnerDeps {
   readonly getActiveCloud: () => ObservatoryCloudInput | null;
   readonly getDatasetId: () => string | null;
   readonly getCrsRevision: () => number;
+  /** The resolved CRS, recorded with the run for export provenance. */
+  readonly getCrs?: () => CrsOriginInput | null;
   readonly buildOptions: () => Omit<ObservatoryRunOptions, 'declaredStepBudget' | 'voxelEdge'> & {
     readonly voxelEdge?: number;
     readonly declaredStepBudget?: number;
@@ -85,6 +90,7 @@ export function createObservatoryRunner(deps: ObservatoryRunnerDeps): Observator
     }
     setState({ phase: 'running' });
     const interpretationLevel = cloud.metadata?.interpretationLevel ?? null;
+    const crs = deps.getCrs ? deps.getCrs() : undefined;
 
     const opts = deps.buildOptions();
     const options: ObservatoryRunOptions = {
@@ -100,16 +106,16 @@ export function createObservatoryRunner(deps: ObservatoryRunnerDeps): Observator
       // against the same snapshot when it arrives.
       void computeObservatoryInWorker(cloud, options)
         .catch(() => runObservatoryOverCloud(cloud, options))
-        .then((outcome) => { commit(myToken, datasetId, crsRevision, outcome, true, interpretationLevel); });
+        .then((outcome) => { commit(myToken, datasetId, crsRevision, outcome, true, interpretationLevel, crs); });
       return state;
     }
-    commit(myToken, datasetId, crsRevision, deps.compute(cloud, options), false, interpretationLevel);
+    commit(myToken, datasetId, crsRevision, deps.compute(cloud, options), false, interpretationLevel, crs);
     return state;
   }
 
   function commit(
     myToken: number, datasetId: string | null, crsRevision: number, outcome: ObservatoryRunOutcome,
-    late = false, interpretationLevel: string | null = null,
+    late = false, interpretationLevel: string | null = null, crs?: CrsOriginInput | null,
   ): void {
     // Revalidate (Snapshot -> Await -> Revalidate -> Commit): a superseding
     // run() or abortAndClearCache() bumped `token` past `myToken`, or the
@@ -122,7 +128,7 @@ export function createObservatoryRunner(deps: ObservatoryRunnerDeps): Observator
       if (!late || myToken === token) setState({ phase: 'stale' });
       return;
     }
-    setState({ phase: 'committed', outcome, interpretationLevel });
+    setState({ phase: 'committed', outcome, interpretationLevel, ...(crs !== undefined ? { crs } : {}) });
   }
 
   function getState(): ObservatoryRunnerState {

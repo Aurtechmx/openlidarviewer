@@ -92,14 +92,26 @@ The level is `not-probed` when the file opened on its signature and
 Summary after, on the same count: full 2 (Flow Pulse and Terrain Access
 packages), partial 17, none 2. Twelve rows now carry both I and D. The DEM and
 contour exports stay partial because the cell size is printed in the README but
-not bound in the manifest, and no export records H or CS.
+not bound in the manifest, and no export records H.
+
+### Where the CRS came from (CS), L194
+
+| Export | CS | Where |
+| --- | --- | --- |
+| Measurement GeoJSON | yes | `provenance.crsOrigin` |
+| Site KML | yes | `CRS source ...` in the provenance line |
+| Observatory package ZIP | yes | `crsOrigin` param of the interpretation op; README line |
+
+`crsOrigin` is copied from the resolved CRS: the source token (`las-vlr`,
+`las-evlr`, `user-override`, ...), name, EPSG, vertical datum and the source
+that declared it. Each field reads `unknown` when no CRS was resolved.
 
 ## Remaining gaps
 
 | Gap | Where | Reason left open |
 | --- | --- | --- |
 | No source content hash | every export | No production caller computes a file hash; `sourceSha256` is wired but unset. The Observatory package records a resident positions digest (SHA-256 of every resident position the run read), which identifies the resident point set, not the file. |
-| CRS source (VLR, EVLR, user) not recorded | every export | The resolved CRS is recorded, not where it came from. Needs a field on the resolved CRS. |
+| CRS source not recorded | DEM, contour, Flow Pulse, Terrain Access packages; figure and image PNG; scan and integrity reports; session file; point cloud re-save | These paths receive a CRS label from the shell, not the resolved CRS; carrying the record there means wiring it through `main.ts` or the renderer chunk. The record type and README line are ready for them. |
 | Measurement CSV | measurement export | No metadata slot; a comment line breaks spreadsheet readers. Export the GeoJSON beside it. |
 | Measurement methods | GeoJSON, KML, integrity report | Measurement geometry has no registered method id. The record says so. |
 | Contour map sheet PDF | Contour Studio | The title block has no free row; the record is in the GeoJSON, DXF, SVG and the deliverable ZIP made from the same run. |

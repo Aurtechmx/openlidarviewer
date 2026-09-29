@@ -89,6 +89,7 @@ export async function exportMeasurementsFile(
       source: geo.name ? deps.baseName(geo.name) : null,
       crsName: geo.crsName,
       interpretation: geo.interpretation,
+      crs: geo.crs,
     },
   };
   const { measurementsToGeoJSON, measurementsToCsv } = await deps.loadMeasurementExport();

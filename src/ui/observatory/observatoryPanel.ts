@@ -427,6 +427,6 @@ async function exportCurrent(state: ObservatoryRunnerState): Promise<void> {
   if (state.phase !== 'committed' || state.outcome.status !== 'ok') return;
   const outcome = state.outcome;
   const { buildObservatoryPackage } = await loadObservatoryPackage();
-  const pkg = buildObservatoryPackage(outcome.record, outcome.rows, outcome.frontier.frontierVoxelKeys, { planning: outcome.planning ?? null, declaredStepBudget: outcome.declaredStepBudget ?? null, interpretationLevel: state.interpretationLevel });
+  const pkg = buildObservatoryPackage(outcome.record, outcome.rows, outcome.frontier.frontierVoxelKeys, { planning: outcome.planning ?? null, declaredStepBudget: outcome.declaredStepBudget ?? null, interpretationLevel: state.interpretationLevel, ...(state.crs !== undefined ? { crs: state.crs } : {}) });
   triggerDownload(new Blob([pkg as unknown as BlobPart], { type: 'application/zip' }), `observatory-${outcome.record.id}.zip`);
 }

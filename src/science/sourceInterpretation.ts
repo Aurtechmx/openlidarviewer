@@ -13,7 +13,7 @@
  *     (`'full'`, `'sampled'`, `'resident-only'`), or `'unknown'` when the
  *     producing layer did not record one.
  *
- * Pure data and a leaf: no DOM, no three.js, no I/O and no imports, so any
+ * Pure data and a leaf: no DOM, no three.js, no I/O and no runtime imports, so any
  * export path (eager or lazy) can reach it without pulling a chunk. The
  * manifest op for the record lives in `processingManifest.ts`.
  */
@@ -23,10 +23,14 @@ export const SOURCE_INTERPRETATION_METHOD_ID = 'olv.provenance.source-interpreta
 
 export type SourceDataBasis = 'full' | 'sampled' | 'resident-only' | 'unknown';
 
+import type { CrsOriginRecord } from './crsOrigin';
+
 export interface SourceInterpretationRecord {
   /** Probe verdict (e.g. `'VERIFIED'`, `'PROBABLE'`), `'not-probed'` or `'not-recorded'`. */
   readonly interpretationLevel: string;
   readonly dataBasis: SourceDataBasis;
+  /** Where the coordinate system came from (`crsOrigin.ts`), when the export path read it. */
+  readonly crsOrigin?: CrsOriginRecord;
 }
 
 const BASES: ReadonlySet<string> = new Set(['full', 'sampled', 'resident-only']);
