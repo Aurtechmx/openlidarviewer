@@ -92,17 +92,18 @@ the two entries were renumbered when the branches were integrated.
 | L186 | UI | TEST | high | FIXED | new | On a Z-up survey the orbit turned about world Y, so a vertical drag slid the scene sideways or tilted it backwards depending on the view; a pinch zoomed about the pivot instead of the fingers; wheel streams of a few pixels per event lost part or all of their zoom. |
 | L188 | UI | TEST | medium | FIXED | new | A tween replayed the orbit, pan and wheel glides it froze once it landed; a wheel zoom after an orbit flick kept rotating and slid the point under the cursor; a grab inherited the orbit glide and an orbit inside a dolly tail had its pivot moved. |
 | L189 | EXPORT | TEST | med | FIXED | new | Map sheets and terrain reports for a streamed tile with no linear unit placed contour levels off round elevations, printed a metre-based scale ratio and a metre TPI, called the COPC root-node spacing the point spacing, and stated RMSEz, contour style, analysed basis, interpolated share and ground visibility on bases that contradicted each other. |
+| L184 | DOCS | TEST | med | FIXED | new | The known-limitations document still called the polygon Volume tool Withheld-blind, the browser matrix advisory and the shell 799 of 812 KiB, and no lint read those sentences. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 43
+- FIXED: 44
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 64
+- total: 65
 
 ## Detail
 
@@ -7241,3 +7242,25 @@ Covered by `tests/contoursAt.test.ts`, `tests/mapSheetPdf.test.ts`,
 `tests/terrainReportContent.test.ts`, `tests/terrainReportContourStyle.test.ts`,
 `tests/analysedBasisStamp.test.ts`, `tests/datasetIntelligence.test.ts` and
 `tests/lasEvlrCrs.test.ts`.
+
+### L184 · FIXED · DOCS
+
+`docs/releases/KNOWN_LIMITATIONS_v0.7.0-alpha.1.md` now matches the tree. The
+polygon Volume tool leaves Withheld points out (L26); Firefox, WebKit and
+Windows block through `ci-green` (L13); the eager bundle is about 789 KiB
+against a 795 KiB ceiling; the Analyse panel's fan-out is 24; a Flow Pulse run
+states the Withheld exclusion the terrain recorded; the Flow Pulse overlay is
+removed when its terrain goes stale; the lasso stockpile split is closed (L05);
+Compare elevation's own planar alignment is named beside the unreachable
+registration stack. One limitation is added: an idle scene draws a heartbeat
+frame every 250 ms (`IDLE_HEARTBEAT_MS`), which costs CPU on a machine without
+GPU rendering.
+
+`scripts/lint-known-limitations.mjs` (`npm run lint:known-limitations`, static
+gate group) checks any "N KiB against an M KiB ceiling" sentence against the
+`index` ceiling in `scripts/check-bundle-budget.mjs` and `bundle.liveEntryKiB`
+in `docs/validation/test-evidence.json` (within 2 KiB), any clause calling a
+Chromium, Firefox, WebKit or Windows leg advisory or blocking against
+`ci-green`'s `needs` in `ci.yml`, any ledger id cited as open against this
+table, and a declared list of phrases that must not appear while their entry
+reads FIXED. Covered by `tests/knownLimitationsLint.test.ts`.

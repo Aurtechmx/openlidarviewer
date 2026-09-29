@@ -214,6 +214,10 @@
       "group": "static"
     },
     {
+      "script": "lint:known-limitations",
+      "group": "static"
+    },
+    {
       "script": "lint:license",
       "group": "static"
     },
