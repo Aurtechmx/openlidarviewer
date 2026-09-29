@@ -1050,8 +1050,8 @@ const visuals = createInspectorVisualCoordinator({
   },
   activeScanId: () => scans.activeId,
   colorMode: { get: () => currentColorMode, set: (mode) => { currentColorMode = mode; } },
-  afterColorModeChange: () => syncColorModeForActive(),
-  onPreferenceChanged: () => persistPrefs(),
+  afterColorModeChange: syncColorModeForActive,
+  onPreferenceChanged: persistPrefs,
 });
 
 const layerService = createLayerService({
@@ -1100,9 +1100,9 @@ const inspector = new Inspector({
   onRemove: (id) => removeCloud(id),
   onToggleSolo: (id) => layerService.toggleSolo(id),
   onToggleLock: (id, locked) => viewer.setCloudLocked(id, locked),
-  onCompareLayers: () => compareLoadedLayers(),
-  onExportDifference: () => exportDifferenceRaster(),
-  onSaveView: () => saveCurrentView(),
+  onCompareLayers: compareLoadedLayers,
+  onExportDifference: exportDifferenceRaster,
+  onSaveView: saveCurrentView,
   onApplyView: (index) => applyView(index),
   onRenameView: (index, name) => {
     bookmarks.rename(index, name);
@@ -1712,11 +1712,11 @@ const keyBindingDeps: KeyBindingDeps = {
     },
     setCameraPreset: (preset) => viewer?.setCameraPreset(preset),
     toast: (message) => showLassoToast(message),
-    openCommandPalette: () => openCommandPalette(),
+    openCommandPalette: openCommandPalette,
     toggleShortcutSheet: () => void ensureShortcutSheet((sheet) => sheet.toggle()).catch(() => {}), // already reported via the toast
     workflowRecorderEnabled: WORKFLOW_RECORDER_ENABLED,
     matchesWorkflowShortcut: (e) => matchesShortcut(e, workflowController.config.shortcut),
-    toggleWorkflowRecord: () => toggleWorkflowRecord(),
+    toggleWorkflowRecord: toggleWorkflowRecord,
     globalActions: () => globalActionHandlers,
 };
 stage.addTeardown(installKeyDispatch(buildViewerKeyBindings(keyBindingDeps), keyBindingDeps));
@@ -1755,8 +1755,8 @@ const dock = new ToolDock({
     dock.setAnalyseActive(show);
   },
   onHelp: () => helpOverlay.open(),
-  onCommandPalette: () => openCommandPalette(),
-  onClose: () => closeScan(),
+  onCommandPalette: openCommandPalette,
+  onClose: closeScan,
 });
 // Start the dock hidden — the empty state shows no scan-dependent tools.
 // `setEmpty(false)` is called from every successful attach path.
@@ -3241,15 +3241,15 @@ void viewerLoaded.then(() => {
         analysePanel: () => analysePanel, objectPanel: () => objectPanel,
         results: { viewer, identity: runtime.layerIdentity, scans, terrainRunner },
         measurePanel: () => measureMount.panel, setMeasureMountElement: (fn) => measureMount.setMountElement(fn),
-        hasScan,
-        onModeChange: () => refreshToolLauncher(),
+        hasScan, crsService,
+        onModeChange: refreshToolLauncher,
     });
     void fillToolLauncher(); // the card fills its mounted host when its chunk lands
     workspaceShell = shell;
     phoneSheet = shell.mobileSheet;
     syncMobileSheet = shell.applyMobileSheet;
     mountAnalysePanelElement = shell.mountAnalysePanel; mountObjectPanelElement = shell.mountObjectPanel;
-    // If either panel already mounted before this wiring ran, place it now.
+    // If either panel mounted before this wiring ran, place it now.
     if (analysePanel) mountAnalysePanelElement(analysePanel.element);
     if (objectPanel) mountObjectPanelElement(objectPanel.element);
     });

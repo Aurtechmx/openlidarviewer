@@ -32,6 +32,7 @@ import {
 import { createRailIntent, createWorkspaceRouter, type WorkspacePage, type WorkspaceRouter } from './workspaceRouter';
 import { createAnalyseWorkspace, type AnalyseHostPanel, type AnalysePage, type AnalyseStudio } from './analyseWorkspace';
 import { createDataHome } from './dataHome';
+import { mountStateStrip, type StateStripCrs } from '../stateStrip/stateStripMount';
 import { mountResultsShelf, type ResultsShelfSources, type ShelfExportPanel, type ShelfTerrainPanel } from '../results/resultsShelfMount';
 import { mountLocationBar } from '../../ui/locationBar';
 import { decorateViewRail } from './viewRail';
@@ -81,6 +82,8 @@ export interface WorkspaceShellDeps {
   onModeChange: () => void;
   /** The owners the Results shelf reads. Absent: no shelf. */
   results?: ResultsShelfSources;
+  /** The CRS service the state strip reads. Absent: no strip. */
+  crsService?: StateStripCrs;
 }
 
 export interface WorkspaceShell {
@@ -315,6 +318,28 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   const shelf = d.results ? mountResultsShelf(d.results, d.analysePanel, d.export, (route) => router?.navigate(route), d.runAction) : null;
   if (shelf) { leftPanels.append(shelf.element); d.addTeardown(() => shelf.dispose()); }
 
+  // The state strip: one row at the foot of the viewport, above the dock on a
+  // phone. It reads the owners through its providers and only navigates.
+  const results = d.results;
+  const strip = d.crsService && results ? mountStateStrip({
+    crs: d.crsService,
+    streamingName: () => results.viewer.streamingCloud?.name,
+    activeCloudName: () => results.scans.activeCloud?.()?.name,
+    onActiveChange: (fn) => results.scans.onActiveChange(fn),
+    studio: d.studio,
+    results: shelf?.index ?? null,
+    hasScan: d.hasScan,
+    open: (item) => {
+      if (item === 'processing' || item === 'review') { router?.navigate({ mode: 'analyse', page: null }, true); return; }
+      router?.navigate({ mode: 'data', page: null }, item === 'dataset');
+      if (item === 'dataset') return;
+      if (rightCollapsed()) expandRightRail();
+      if (item === 'basis') d.inspector.focusLayerHealth() || d.inspector.focusSource();
+      else d.inspector.focusSource();
+    },
+  }) : null;
+  if (strip) { d.overlay.insertBefore(strip.element, d.dock); d.addTeardown(() => strip.dispose()); }
+
   let mobileApplied = false;
   let located = false;
   const applyMobileSheet = (): void => {
@@ -334,6 +359,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
       d.addTeardown(mountLocationBar(router as WorkspaceRouter, allPages, d.runAction, analyse.open).dispose);
     }
     dataHome.refresh();
+    strip?.refresh();
   };
   mobileMql?.addEventListener('change', applyMobileSheet);
   mobileMql?.addEventListener('change', placeAnalyse); // after the layout flip above

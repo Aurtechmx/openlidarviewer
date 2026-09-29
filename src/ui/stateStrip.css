@@ -1,0 +1,87 @@
+/* stateStrip.css — the scientific state strip (stateStrip.ts), loaded with its lazy chunk.
+   Desktop: one row across the foot of the viewport, between the rails.
+   Phone: a compact row above the dock. Only shown while a scan is open. */
+
+/* Desktop: the strip takes the dock's 14px foot gap and the overlay gives up
+   only the rest of its height, so the dock rests on the strip and the navigation
+   card and anything placed above it move by as little as possible. The canvas
+   keeps its full size. */
+:root { --olv-strip-h: 24px; --olv-strip-yield: calc(var(--olv-strip-h) - 14px); }
+.olv-overlay:has(> .olv-state-strip:not(.olv-hidden)) { bottom: var(--olv-strip-yield); }
+
+.olv-state-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(-1 * var(--olv-strip-yield));
+  height: var(--olv-strip-h);
+  z-index: var(--z-hud);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  justify-content: center;
+  padding: 0 var(--space-2xl);
+  border-top: 1px solid var(--hairline);
+  background: var(--panel);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.olv-state-strip.olv-hidden { display: none; }
+
+.olv-ss-item {
+  appearance: none;
+  flex: 0 1 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+  min-height: 24px;
+  padding: 0 var(--space-sm);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  font: 500 var(--text-xs) / 1.2 var(--font);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.olv-ss-item[hidden] { display: none; }
+.olv-ss-item + .olv-ss-item { border-left: 1px solid var(--hairline); border-radius: 0; }
+.olv-ss-item:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.olv-ss-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.olv-ss-text { overflow: hidden; text-overflow: ellipsis; max-width: 36ch; }
+.olv-ss-dataset .olv-ss-text { color: var(--text); }
+.olv-ss-glyph { flex: none; }
+.olv-ss-short { display: none; }
+.olv-ss-glyph.is-review { color: var(--state-review); }
+.olv-ss-glyph.is-blocked { color: var(--state-blocked); }
+.olv-ss-glyph.is-preview { color: var(--state-preview); }
+.olv-ss-glyph.is-withheld { color: var(--state-withheld); }
+
+/* Phone: a compact row just above the dock, full width between the gutters. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .olv-overlay:has(> .olv-state-strip:not(.olv-hidden)) { bottom: 0; }
+  .olv-state-strip {
+    left: var(--space-2xl);
+    right: var(--space-2xl);
+    /* --olv-dock-clear is the dock's height + 14px + 8px (panelChrome.ts); the
+       phone dock sits on the sheet head, so the strip sits on the dock. */
+    bottom: calc(var(--m-chrome-head-h) + var(--olv-dock-clear, 71px) - 22px + var(--space-xs) + env(safe-area-inset-bottom));
+    height: auto;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    row-gap: 0;
+    padding: 0 var(--space-xs);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-md);
+  }
+  :root { --olv-strip-h: 50px; }
+  .olv-ss-item { min-height: 24px; max-width: 100%; padding: 0 var(--space-xs); gap: var(--space-2xs); }
+  .olv-ss-item + .olv-ss-item { border-left: 0; }
+  .olv-ss-text { max-width: 100%; }
+  .olv-ss-dataset .olv-ss-text { max-width: 14ch; }
+  .olv-ss-long:has(+ .olv-ss-short) { display: none; }
+  .olv-ss-short { display: inline; }
+  /* A prompt parked above the dock moves up by the strip's height. */
+  body:has(.olv-state-strip:not(.olv-hidden)) .olv-lasso-toast { margin-bottom: var(--olv-strip-h); }
+}

@@ -38,6 +38,7 @@ import type { WorkspacePage, WorkspaceRouter } from './workspaceRouter';
 import { LAB_NAME, LAB_PURPOSE, type LabId } from '../../process/labGuideCopy';
 import { labReturn, setLabReturn } from '../labReturn';
 import { setLabPageHost } from '../../ui/labSurface';
+import { publishAnalysisRows } from '../../process/analysisRowsFeed';
 
 /** The slice of the mounted Process Studio the home reads. */
 export interface AnalyseStudio {
@@ -286,6 +287,7 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
       if (!scanOpen()) for (const close of Object.values(labClose)) close?.();
       const inp = input();
       const rows = analysisRows(inp);
+      publishAnalysisRows(rows);
       const items = rows.map((row) => {
         const open = el('button', { className: 'olv-ah-open', type: 'button' }, [
           el('span', { className: 'olv-ah-name', text: row.label }),

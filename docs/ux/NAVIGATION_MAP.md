@@ -432,6 +432,20 @@ A second glyph collision exists besides `blocked` and `withheld` in
 confidences a disc filled by three quarters, a half and a quarter (◕ ◑ ◔);
 the word stays the same.
 
+### 7.1 Providers in `src/process/stateProviders.ts`
+
+Each provider is a pure function of the state its owner already holds and
+returns `{ value, source, validity }`. Tests: `tests/stateProviders.test.ts`.
+
+| Item | Provider | Reads | Duplicates left in place |
+| --- | --- | --- | --- |
+| Dataset name | `datasetNameProvider` | `viewer.streamingCloud?.name`, else `ScanService.activeCloud()?.name` (the precedence of `signalsFromLive`) | Same precedence inlined at `main.ts:3845`, `app/sessionSnapshot.ts:54`, `app/exportImageAction.ts:72`, `app/reportExport.ts:292`; `Inspector.sourceSummary()` (`ui/Inspector.ts:1790`) derives a format from the last layer fact instead |
+| Horizontal CRS and unit | `horizontalCrsProvider` | `CrsService.context()` and the `source` of `CrsService.current()`; validity from `metricSeverity` | Source labels are worded twice: `ui/inspector/renderCrs.ts:52` and `app/layerHealth.ts:122` |
+| Vertical reference | `verticalReferenceProvider` | `SpatialContext.verticalReferenceKnown`, `verticalReference`, `verticalDatum`, `verticalEpsg`; label from `heightLabel` | `main.ts:1550` and `:1563` re-derive `datumKnown` from raw metadata |
+| Layer basis | `layerBasisProvider` | `ScanFacts.coverage` from `deriveScanFacts(signalsFromLive(...))` (`app/processStudioMount.ts:145`) | The Dataset Intelligence card holds its own `classifyCoverage` result (`terrain/datasetIntelligence.ts:578`) |
+| Review and blocked | `reviewStateProvider` | `analysisRows` statuses as the Analyse home publishes them (`process/analysisRowsFeed.ts`) and `ResultEntry.status === 'stale'` | None |
+| Processing | `processingProvider` | `process/taskActivity.ts`, fed by `app/stateStrip/busyTasks.ts` from every busy indicator on screen | Hosts still hold their own run state; the store reads only what their indicator and status text show, so progress is null unless the host states it in that text |
+
 ## 8. Journey baseline
 
 The recorder is `tests/e2e/ceJourneys.spec.ts` with its bookkeeping in
