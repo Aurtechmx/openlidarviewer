@@ -5,6 +5,7 @@
  */
 import type { ObservatoryCloudInput } from './observatoryFromCloud';
 import type { ObservatoryRunnerDeps } from './observatoryRunner';
+import type { CrsOriginInput } from '../science/crsOrigin';
 
 /** The file name's last path segment: a run record never carries a directory. */
 function baseName(name: string | undefined): string | null {
@@ -25,6 +26,8 @@ export interface ObservatoryLiveScans {
 export interface ObservatoryLiveCrs {
   crsRevision(): number;
   context(): { readonly linearUnitToMetres: number; readonly linearUnitKnown: boolean };
+  /** The resolved CRS, read for export provenance (where the CRS came from). */
+  current?(): CrsOriginInput | null;
 }
 
 export function observatoryLiveDeps(scans: ObservatoryLiveScans, crs: ObservatoryLiveCrs, buildTag: string): ObservatoryRunnerDeps {
@@ -32,6 +35,7 @@ export function observatoryLiveDeps(scans: ObservatoryLiveScans, crs: Observator
     getActiveCloud: () => scans.activeCloud(),
     getDatasetId: () => scans.activeId,
     getCrsRevision: () => crs.crsRevision(),
+    getCrs: () => crs.current?.() ?? null,
     buildOptions: () => {
       const ctx = crs.context();
       return { filename: baseName(scans.activeCloud()?.name), metresPerUnit: ctx.linearUnitKnown ? ctx.linearUnitToMetres : null, buildTag };

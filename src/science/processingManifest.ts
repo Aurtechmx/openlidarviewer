@@ -152,7 +152,11 @@ export function sourceTopologyOp(record: SourceTopologyRecord): ProcessingOpInpu
 export function sourceInterpretationOp(record: SourceInterpretationRecord): ProcessingOpInput {
   return {
     method: methodTag(methodRef(SOURCE_INTERPRETATION_METHOD_ID)),
-    params: { interpretationLevel: record.interpretationLevel, dataBasis: record.dataBasis },
+    params: {
+      interpretationLevel: record.interpretationLevel,
+      dataBasis: record.dataBasis,
+      ...(record.crsOrigin ? { crsOrigin: { ...record.crsOrigin } } : {}),
+    },
   };
 }
 

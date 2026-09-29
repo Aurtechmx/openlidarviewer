@@ -136,6 +136,8 @@ export interface GeoExportContext {
   name: string | null;
   /** Probe interpretation level and data basis of the active scan, for export provenance. */
   interpretation?: SourceInterpretationRecord;
+  /** The resolved CRS the frame came from (`CrsService.current()`), for export provenance. */
+  crs?: ResolvedCrs | null;
 }
 
 /**
@@ -187,7 +189,8 @@ export function exportGeoContext(deps: ReportExportDeps): GeoExportContext {
   // streaming scan reaches the resolved authority now that EPT publishes its CRS
   // to CrsService on commit (blocker 2). Source A, when wanted, belongs only in a
   // field explicitly labelled source-declared, never in the active CRS label.
-  const crsName = effectiveCrsName(deps.crsCurrent());
+  const crs = deps.crsCurrent();
+  const crsName = effectiveCrsName(crs);
   if (deps.scans.activeId) {
     const c = viewer.getCloud(deps.scans.activeId);
     // SOURCE frame (float64-transform.md step 2): sessions save + import here.
@@ -195,14 +198,14 @@ export function exportGeoContext(deps: ReportExportDeps): GeoExportContext {
       const declared = c.declaredPointCount;
       const basis = declared != null && declared > c.pointCount ? 'sampled' : declared != null ? 'full' : null;
       return {
-        origin: c.sourceOrigin, crsName, name: c.name,
+        origin: c.sourceOrigin, crsName, name: c.name, crs,
         interpretation: sourceInterpretationOf(c.metadata?.interpretationLevel ?? null, basis),
       };
     }
   }
   const sc = viewer.streamingCloud;
   if (sc) {
-    return { origin: sc.renderOrigin, crsName, name: sc.name, interpretation: sourceInterpretationOf(undefined, 'resident-only') };
+    return { origin: sc.renderOrigin, crsName, name: sc.name, crs, interpretation: sourceInterpretationOf(undefined, 'resident-only') };
   }
   return { origin: [0, 0, 0], crsName: undefined, name: null };
 }

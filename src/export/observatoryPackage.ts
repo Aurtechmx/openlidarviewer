@@ -43,6 +43,7 @@
 
 import { buildZip, type ZipEntry } from '../convert/zipStore';
 import { sourceInterpretationLines, sourceInterpretationOf } from '../science/sourceInterpretation';
+import { crsOriginLine, crsOriginOf, type CrsOriginInput } from '../science/crsOrigin';
 import { buildSha256Manifest, sha256Hex } from '../terrain/export/sha256';
 import { buildProcessingManifest, type ManifestParamValue, type ProcessingOpInput } from '../science/processingManifest';
 import { buildScientificAnalysisRecord } from '../science/scientificAnalysisRecord';
@@ -76,6 +77,8 @@ export interface ObservatoryPackageOptions {
    */
   readonly interpretationLevel?: string | null;
   readonly crsName?: string | null;
+  /** The resolved CRS at run time, recorded as where the CRS came from; omitted when the caller did not read it. */
+  readonly crs?: CrsOriginInput | null;
   readonly sourceSha256?: string | null;
   /** The traversal step budget the run declared (`ObservatoryRunOutcome.declaredStepBudget`); omitted records null in the manifest. */
   readonly declaredStepBudget?: number | null;
@@ -408,6 +411,7 @@ function readmeText(record: ObservationRunRecord, opts: {
     `  OLV version    ${opts.build.version} (${opts.build.commit}${opts.build.dirty ? '+dirty' : ''})`,
     `  Generated      ${opts.generationDateIso}`,
     ...sourceInterpretationLines(opts.sourceInterpretation),
+    ...(opts.sourceInterpretation.crsOrigin ? [`  ${crsOriginLine(opts.sourceInterpretation.crsOrigin)}`] : []),
     `  Source file    ${record.source.filename ?? 'unknown'}`,
     `  Resident positions digest  ${record.source.sourceDigest ?? 'unavailable'}`,
     '                 SHA-256 of every resident position the run read (little-endian float32), not of the source file',
@@ -544,7 +548,10 @@ export function buildObservatoryPackage(
   );
 
   const ops = observationManifestOps(record, options.planning ?? null, options.declaredStepBudget ?? null);
-  const sourceInterpretation = sourceInterpretationOf(options.interpretationLevel, record.source.basis);
+  const sourceInterpretation = {
+    ...sourceInterpretationOf(options.interpretationLevel, record.source.basis),
+    ...(options.crs !== undefined ? { crsOrigin: crsOriginOf(options.crs) } : {}),
+  };
   const manifest = buildProcessingManifest({ build: softwareVersion, source: record.source.filename, ops, sourceInterpretation });
   entries.push({ name: `${basename}/processing-manifest.json`, bytes: new TextEncoder().encode(`${JSON.stringify(manifest, null, 2)}\n`) });
 

@@ -97,17 +97,18 @@ the two entries were renumbered when the branches were integrated.
 | L191 | UI | TEST | med | FIXED | new | Flow Pulse, Terrain Access and Observatory opened as dialogs that hid the scan and the rail, the right rail was titled Scan Intelligence while it held view settings, and a mode tab could land in the middle of a page. |
 | L187 | UI | TEST | low | FIXED | new | Opening a scan from the empty state put the load toast over the brand mark, and the splash painted above the toast. |
 | L193 | UI | TEST | low | FIXED | new | The elevation legend's ramp used about two thirds of the card and showed nothing about where the points sit inside the p5–p95 window or how many it clips. |
+| L194 | EXPORT | TEST | low | FIXED | new | Export provenance named the resolved CRS but not where it came from (LAS VLR, EVLR, user choice or none). |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 48
+- FIXED: 49
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 69
+- total: 70
 
 ## Detail
 
@@ -7442,3 +7443,29 @@ project-shared scale show the ramp without a strip.
 
 Covered by `tests/elevationHistogram.test.ts`, `tests/colorbarOverlay.test.ts`
 and `tests/e2e/elevationLegend.spec.ts`.
+
+### L194 · FIXED · EXPORT
+
+Where the CRS came from, in export provenance.
+
+The provenance record now carries `crsOrigin`, copied from the resolved CRS
+(`CrsService.current()`): `source` is the resolved CRS's own token (`las-vlr`,
+`las-evlr`, `user-override`, ...), `name`, `epsg` (`EPSG:<code>`), the
+vertical datum and the source that declared it. Every field reads `unknown`
+when no CRS was resolved. Nothing is recomputed and no computed value changes.
+
+Where it is written:
+
+- Measurement GeoJSON: `provenance.crsOrigin`.
+- Site KML: the provenance line in the document description gains
+  `CRS source <token> (<name>, <epsg>); vertical datum <datum> from <token>`.
+- Observatory package: the `olv.provenance.source-interpretation@1` op gains a
+  `crsOrigin` param and the README gains the same line. The CRS is read when
+  the run starts, beside the interpretation level.
+
+The op and the README line are added only when the producing path read the
+CRS, so a manifest built without it is byte-identical to before. The DEM,
+contour, Flow Pulse, Terrain Access, figure PNG and scan report exports do not
+carry it yet; `docs/validation/REPRODUCIBILITY_AUDIT.md` lists them.
+
+Covered by `tests/exportCrsOrigin.test.ts` (VLR, EVLR and no-CRS fixtures).

@@ -245,6 +245,7 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
       source: geo.name ? deps.baseName(geo.name) : null,
       crsName: geo.crsName ?? crs?.name ?? null,
       interpretation: geo.interpretation,
+      crs,
     },
   };
   const stem = geo.name ? deps.baseName(geo.name) : 'site';
