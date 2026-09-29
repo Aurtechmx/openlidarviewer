@@ -1272,6 +1272,42 @@ body.olv-theme-light .olv-empty::before {
 }
 .olv-catalog-result-detail { font-size: var(--text-xs); color: var(--text-faint); }
 
+
+/* Opening a scan from the empty state. The load toast shares the top-centre
+ * lane with the hero, so while a load is busy the splash clears first: its
+ * content fades and settles back out (--dur-base), then the toast fades in on
+ * its own. Nothing stacks on the brand mark. The state is the toast's own
+ * `is-busy` class, so an error or a cancel (both drop it) brings the splash
+ * straight back, and the empty state keeps its opaque backdrop throughout.
+ * `visibility` hides the faded controls from pointer, focus and the
+ * accessibility tree. The open-from-URL row stays: it holds the Cancel
+ * control for a remote load, and it sits at the foot of the splash, clear of
+ * the toast lane. The motion is declared only when the user has not asked
+ * for reduced motion, so there the swap is instant (a `transition: none`
+ * override does not stop WebKit animating `visibility`). */
+.olv-empty:has(~ .olv-toast.is-busy:not(.olv-hidden)) { pointer-events: none; }
+.olv-empty:has(~ .olv-toast.is-busy:not(.olv-hidden)) > .olv-empty-url { pointer-events: auto; }
+.olv-empty:has(~ .olv-toast.is-busy:not(.olv-hidden)) > :not(.olv-empty-url) {
+  opacity: 0;
+  visibility: hidden;
+  animation: none;
+}
+@keyframes olv-toast-after-clear {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .olv-empty:has(~ .olv-toast.is-busy:not(.olv-hidden)) > :not(.olv-empty-url) {
+    transform: scale(0.98);
+    transition:
+      opacity var(--dur-base) var(--ease-standard),
+      transform var(--dur-base) var(--ease-standard),
+      visibility 0s linear var(--dur-base);
+  }
+  .olv-empty:not(.olv-hidden) ~ .olv-toast.is-busy {
+    animation: olv-toast-after-clear var(--dur-fast) var(--ease-standard) var(--dur-base) backwards;
+  }
+}
 /* Inspector */
 .olv-inspector {
   position: absolute; top: 56px; right: 14px; width: 232px;
