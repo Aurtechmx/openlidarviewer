@@ -8151,7 +8151,7 @@ signature. `PRIVACY.md` lists the requests the app makes, including the tile-sig
 user guide and the known-limitations document state the layer contract from
 `openScan.ts` and `openStreaming.ts`. Static layers stack. One COPC, EPT or 3D
 Tiles stream is open at a time, and opening one closes every other layer. A
-static open closes the stream. A local LAS too heavy for memory streams from
+static open closes the stream. A local LAS or LAZ too heavy for memory streams from
 disk through `heavyLasExecutor.ts`: it replaces an open stream and keeps the
 static layers.
 
