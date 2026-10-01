@@ -126,22 +126,23 @@ export interface EmbedBridgeOptions {
  * Returns `{}` when neither parameter is present.
  */
 export function embedBridgeOptionsFromUrl(search: string): EmbedBridgeOptions {
-  let allowedOrigins: string[] | undefined;
+  const params = new URLSearchParams(search);
+  const raw = params.get('embedOrigins')?.split(',') ?? [params.get('embedParent') ?? ''];
+  const allowedOrigins = raw.map(toOrigin).filter((o): o is string => o !== null);
+  return allowedOrigins.length > 0 ? { allowedOrigins } : {};
+}
+
+/**
+ * The origin of an http(s) URL, or null for `*`, an opaque origin or anything
+ * that does not parse.
+ */
+function toOrigin(s: string): string | null {
   try {
-    const params = new URLSearchParams(search);
-    const parent = params.get('embedParent');
-    if (parent) allowedOrigins = [parent];
-    const origins = params.get('embedOrigins');
-    if (origins) {
-      allowedOrigins = origins
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-    }
+    const u = new URL(s.trim());
+    return u.protocol === 'https:' || u.protocol === 'http:' ? u.origin : null;
   } catch {
-    /* URL parsing failure → fall back to defaults */
+    return null;
   }
-  return allowedOrigins ? { allowedOrigins } : {};
 }
 
 /**

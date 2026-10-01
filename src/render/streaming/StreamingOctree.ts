@@ -74,6 +74,12 @@ export class StreamingOctree {
   private _fullyLoaded = false;
 
   private readonly _maxNodes: number;
+  private _capNotice: string | undefined;
+
+  /** A user-facing notice when the node cap stopped the walk. */
+  get capNotice(): string | undefined {
+    return this._capNotice;
+  }
 
   constructor(source: CopcSource, maxNodes: number = MAX_HIERARCHY_NODES) {
     this._source = source;
@@ -195,6 +201,9 @@ export class StreamingOctree {
         pagesLoaded++;
         if (this.store.size + page.nodes.length > this._maxNodes) {
           this._errors.push(`hierarchy exceeded ${this._maxNodes} nodes; stopped`);
+          this._capNotice =
+            `This COPC hierarchy has more than ${this._maxNodes.toLocaleString('en-US')} nodes. ` +
+            'Only those were read, so part of the scene is missing.';
           next.length = 0;
           break;
         }

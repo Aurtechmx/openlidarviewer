@@ -79,6 +79,14 @@ describe('COPC hierarchy caps', () => {
     expect(octree.store.size).toBe(1);
     expect(octree.errors.some((e) => /nodes/.test(e))).toBe(true);
     expect(octree.isComplete).toBe(false);
+    expect(octree.capNotice).toMatch(/part of the scene is missing/);
+  });
+
+  it('carries no notice when the walk finishes under the cap', async () => {
+    const source = await CopcSource.open(new ArrayBufferRangeSource(buildSyntheticCopc().buffer));
+    const octree = new StreamingOctree(source);
+    await octree.loadFullHierarchy();
+    expect(octree.capNotice).toBeUndefined();
   });
 });
 

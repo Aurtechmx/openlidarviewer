@@ -546,6 +546,7 @@ export async function openStreamingCopc(
 
   const cloud = await StreamingPointCloud.open(range, displayName, signal);
   if (signal.aborted) throw new LoadCancelledError();
+  if (cloud.octree.capNotice) deps.showToast(cloud.octree.capNotice);
 
   let copcDecoder = deps.getCopcDecoder();
   if (!copcDecoder) {

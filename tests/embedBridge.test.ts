@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, test, vi } from 'vitest';
 import {
+  embedBridgeOptionsFromUrl,
   interpretEmbedMessage,
   startEmbedBridge,
   MAX_EMBED_FILE_BYTES,
@@ -284,5 +285,24 @@ describe('startEmbedBridge — only the true embedding parent may drive the view
     if (shouldRun) expect(calls.onToggleLayer).toHaveBeenCalledWith('cloud_0', true);
     else expect(calls.onToggleLayer).not.toHaveBeenCalled();
     dispose();
+  });
+});
+
+describe('embedBridgeOptionsFromUrl', () => {
+  it('normalises each entry to its origin', () => {
+    expect(embedBridgeOptionsFromUrl('?embedOrigins=https://a.example/path/, https://B.example:443')).toEqual({
+      allowedOrigins: ['https://a.example', 'https://b.example'],
+    });
+    expect(embedBridgeOptionsFromUrl('?embedParent=https://host.example/page?x=1')).toEqual({
+      allowedOrigins: ['https://host.example'],
+    });
+  });
+
+  it('drops *, null, non-http and malformed entries without throwing', () => {
+    expect(embedBridgeOptionsFromUrl('?embedOrigins=*,null,javascript:alert(1),not a url,https://ok.example')).toEqual({
+      allowedOrigins: ['https://ok.example'],
+    });
+    expect(embedBridgeOptionsFromUrl('?embedParent=*')).toEqual({});
+    expect(embedBridgeOptionsFromUrl('')).toEqual({});
   });
 });
