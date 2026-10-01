@@ -1,20 +1,20 @@
 {
   "files": {
     "src/main.ts": {
-      "lines": 4658,
+      "lines": 4508,
       "goal": 2500
     },
     "src/render/Viewer.ts": {
-      "lines": 6056,
+      "lines": 6046,
       "goal": 2000
     }
   },
   "watch": {
     "src/ui/AnalysePanel.ts": {
-      "lines": 3325
+      "lines": 3345
     },
     "src/ui/Inspector.ts": {
-      "lines": 2645
+      "lines": 2632
     },
     "src/render/measure/MeasureController.ts": {
       "lines": 2442
@@ -29,7 +29,7 @@
       "lines": 1867
     },
     "src/terrain/contour/analyseContours.ts": {
-      "lines": 1736
+      "lines": 1742
     }
   }
 }

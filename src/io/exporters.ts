@@ -47,6 +47,7 @@
  * point is dropped without an in-file note.
  */
 
+import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
 import type { PointCloud, SourceMetadata, DeclaredMetadataField } from '../model/PointCloud';
 import { sourcePositions } from '../model/pointFrames';
 
@@ -279,11 +280,13 @@ export function toXyz(cloud: PointCloud, delimiter = ' ', resolvedIsGeographic?:
   // downstream reader never mistakes derived codes for a producer's
   // survey-grade classification. Kept to the XYZ path (a leading `#` comment),
   // matching the column-header convention; CSV's first line must be the header.
+  const prov = classification ? cloud.classificationProvenance : 'none';
   const derivedNote =
-    classification && cloud.classificationIsDerived
-      ? '# classification: DERIVED (heuristic ground/vegetation/building — ' +
+    prov === 'derived'
+      ? '# classification: DERIVED (heuristic ground/vegetation/building' +
+        `${cloud.derivedMethod ? `, ${cloud.derivedMethod}` : ''} — ` +
         'not survey-grade; validate before relying on it)'
-      : null;
+      : prov === 'cleared' ? `# classification: CLEARED (${CLEARED_CLASS_NOTE})` : null;
   if (csv) lines.push(columns.join(','));
   else {
     for (const l of provenanceLines(cloud)) lines.push(`# ${l}`);

@@ -9,6 +9,11 @@ import type { AcquisitionStationSet } from './AcquisitionStations';
  * One source-metadata field exactly as the file declared it. `value` is
  * verbatim; nothing here is inferred, normalised, or verified by the viewer.
  */
+/** Provenance of a cloud's live classification codes. */
+export type ClassState = 'source' | 'cleared' | 'derived';
+/** {@link ClassState}, or 'none' when the cloud carries no classification. */
+export type ClassificationState = ClassState | 'none';
+
 export interface DeclaredMetadataField {
   /** Local field name as declared, e.g. "sensorModel" or "datasetType". */
   readonly name: string;
@@ -254,7 +259,12 @@ export class PointCloud {
    */
   private _classification?: Uint8Array;
   private readonly _classificationFlags?: Uint8Array;
-  private _classificationDerived = false;
+  /** Where the live codes came from; meaningful only while `_classification` exists. */
+  private _classState: ClassState = 'source';
+  /** Copy of the codes held before the first whole-scan replace (clear / derive). */
+  private _originalClassification?: Uint8Array;
+  /** `methodRegistry` id@version of the classifier behind DERIVED codes. */
+  derivedMethod?: string;
   private _derivedClassFrameInvalid = false;
   readonly normals?: Float32Array;
   readonly returnNumber?: Uint8Array;
@@ -410,7 +420,39 @@ export class PointCloud {
    * classification (legend badge, export provenance).
    */
   get classificationIsDerived(): boolean {
-    return this._classificationDerived;
+    return this.classificationProvenance === 'derived';
+  }
+
+  /**
+   * Where the live classification came from: the source file, the source
+   * codes cleared in the viewer (every point class 1), the viewer's heuristic
+   * classifier, or nothing at all.
+   */
+  get classificationProvenance(): ClassificationState {
+    return this._classification ? this._classState : 'none';
+  }
+
+  /**
+   * The codes held before the first whole-scan replace (clear or derive) in
+   * this session, kept so "Restore original classes" can bring them back.
+   * Costs one byte per point once taken; undefined until then.
+   */
+  get originalClassification(): Uint8Array | undefined {
+    return this._originalClassification;
+  }
+
+  /**
+   * Move the live codes to a new provenance (an undoable whole-scan edit or its
+   * undo/redo). The first move away from the source keeps a copy of the source
+   * codes as {@link originalClassification}. Entering 'derived' starts current
+   * under the frame in force now.
+   */
+  setClassificationState(state: ClassState): void {
+    if (!this._originalClassification && this._classState === 'source' && state !== 'source') {
+      this._originalClassification = this._classification?.slice();
+    }
+    if (state === 'derived') this._derivedClassFrameInvalid = false;
+    this._classState = state;
   }
 
   /**
@@ -426,7 +468,7 @@ export class PointCloud {
       );
     }
     this._classification = codes;
-    this._classificationDerived = true;
+    this._classState = 'derived';
     // A fresh derive is BY DEFINITION current: it ran under the frame in force
     // now, so whatever invalidated the previous codes no longer applies.
     this._derivedClassFrameInvalid = false;
@@ -454,7 +496,7 @@ export class PointCloud {
    * change costs them nothing.
    */
   markDerivedClassificationFrameInvalid(): void {
-    if (this._classificationDerived) this._derivedClassFrameInvalid = true;
+    if (this.classificationIsDerived) this._derivedClassFrameInvalid = true;
   }
 
   /**

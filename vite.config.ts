@@ -163,6 +163,9 @@ function liveSourceTransformPlugin() {
       //     ray-plane math run on every captured pointermove of a grab
       //     (120+ Hz pointers); sibling of navMath.ts, excluded for the
       //     same per-event Math-wrapper reason.
+      //   - measure/classEditHistory.ts: the undo diff walks every point
+      //     twice per class edit (snapshot compare + delta build), and Clear
+      //     classifications / Auto-classify make that a whole-scan edit.
       /analysis\/modules\/healthCheck\.ts/,
       /model\/PointCloud\.ts/,
       /render\/colorEncode\.ts/,
@@ -170,6 +173,7 @@ function liveSourceTransformPlugin() {
       /render\/panMath\.ts/,
       /render\/Viewer\.ts/,
       /render\/measure\/snap\.ts/,
+      /render\/measure\/classEditHistory\.ts/,
     ],
     options: {
       // A fixed RNG seed makes the transform deterministic — every

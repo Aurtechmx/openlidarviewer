@@ -90,11 +90,14 @@ describe('source geometry stays byte-identical', () => {
       'classification',
       'classificationFlags',
       'classificationIsDerived',
+      'classificationProvenance',
       'derivedClassificationFrameInvalid',
       'markDerivedClassificationFrameInvalid',
+      'originalClassification',
       'pointCount',
       'projectXYZ',
       'rebaseQuantum',
+      'setClassificationState',
       'worldXYZ',
     ]);
 
@@ -105,6 +108,9 @@ describe('source geometry stays byte-identical', () => {
     void c.classification;
     void c.classificationFlags;
     void c.classificationIsDerived;
+    void c.classificationProvenance;
+    c.setClassificationState('cleared');
+    void c.originalClassification;
     void c.pointCount;
     c.projectXYZ(0, { sourceToProject: [1_000, -2_000, 30] });
     c.rebaseQuantum([616_000, 4_644_000, 70]);

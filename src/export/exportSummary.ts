@@ -26,9 +26,10 @@ import {
   FULL_RES_CLASS_EDITS_REFUSAL,
 } from './fullResClassGuard';
 import type { LegacyClassWrapNote } from '../convert/legacyClassGuard';
+import { CLEARED_CLASS_NOTE } from './clearedClassNote';
 
 /** Where the active classification came from. */
-export type ClassificationProvenance = 'none' | 'source' | 'derived';
+export type ClassificationProvenance = 'none' | 'source' | 'cleared' | 'derived';
 
 export interface ExportSummaryInput {
   /** Points that will be written (full-res count when `fullRes`, else loaded). */
@@ -196,7 +197,7 @@ export function buildExportSummary(input: ExportSummaryInput): ExportSummary {
           : '';
       classificationLabel = `Classification included (derived${conf})`;
     } else {
-      classificationLabel = 'Classification included (source)';
+      classificationLabel = `Classification included (${provenance === 'cleared' ? CLEARED_CLASS_NOTE : provenance})`;
     }
   }
 
@@ -210,6 +211,9 @@ export function buildExportSummary(input: ExportSummaryInput): ExportSummary {
           ? 'Choose a target EPSG to reproject into before exporting.'
           : 'Enter the EPSG code to assign before exporting.',
     });
+  }
+  if (includeClass && provenance === 'cleared') {
+    warnings.push({ level: 'warn', message: `Classification: ${CLEARED_CLASS_NOTE}. Restore the original classes to write them.` });
   }
   if (includeClass && provenance === 'derived') {
     warnings.push({

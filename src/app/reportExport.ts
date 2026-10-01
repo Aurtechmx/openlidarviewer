@@ -234,14 +234,17 @@ function classificationShare(cloud: {
   readonly pointCount: number;
   readonly declaredPointCount?: number;
   readonly classificationIsDerived?: boolean;
-}): Pick<MetadataInputs, 'unclassifiedFraction' | 'unclassifiedOfDisplaySample' | 'classificationDerived'> {
+  readonly classificationProvenance?: string;
+  readonly derivedMethod?: string;
+}): Pick<MetadataInputs, 'unclassifiedFraction' | 'unclassifiedOfDisplaySample' | 'classificationDerived' | 'classificationCleared' | 'classificationMethod'> {
   if (!cloud.classification || !(cloud.pointCount > 0)) return {};
   const { unclassified } = classificationCoverage(cloud.classification, cloud.pointCount);
   return {
     unclassifiedFraction: unclassified / cloud.pointCount,
     unclassifiedOfDisplaySample:
       cloud.declaredPointCount !== undefined && cloud.declaredPointCount > cloud.pointCount,
-    ...(cloud.classificationIsDerived ? { classificationDerived: true } : {}),
+    ...(cloud.classificationIsDerived ? { classificationDerived: true, classificationMethod: cloud.derivedMethod } : {}),
+    ...(cloud.classificationProvenance === 'cleared' ? { classificationCleared: true } : {}),
   };
 }
 
@@ -427,6 +430,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
       datumName: activeCrs?.verticalDatum ?? null,
       hasClassification,
       classificationDerived: hasClassification && staticCloud.classificationIsDerived,
+      classificationCleared: staticCloud.classificationProvenance === 'cleared',
       attributes: [
         { name: 'RGB colour', present: staticCloud.colors !== undefined },
         { name: 'Intensity', present: staticCloud.intensity !== undefined },

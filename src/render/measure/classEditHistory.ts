@@ -14,6 +14,8 @@
  * calls these helpers to capture an edit and to replay prev/next on undo/redo.
  */
 
+import type { ClassState } from '../../model/PointCloud';
+
 /** The points one edit changed: parallel arrays, all the same length. */
 export interface ClassDelta {
   /** Indices of the points whose class changed. */
@@ -22,6 +24,12 @@ export interface ClassDelta {
   readonly prev: Uint8Array;
   /** Class code AFTER the edit, aligned to {@link indices}. */
   readonly next: Uint8Array;
+  /**
+   * Provenance before and after, for a whole-scan edit (clear, derive,
+   * restore) that also moves where the codes came from. Undo restores [0],
+   * redo re-applies [1].
+   */
+  readonly prov?: readonly [ClassState, ClassState];
 }
 
 /**
@@ -134,10 +142,50 @@ export function recordEdit(
   history: ClassEditHistory,
   buf: Uint8Array,
   edit: () => void,
+  prov?: readonly [ClassState, ClassState],
 ): ClassDelta | null {
   const before = buf.slice();
   edit();
-  const delta = diffClassification(before, buf);
+  let delta = diffClassification(before, buf);
+  // A provenance move is an edit even when no code changed (clearing a scan
+  // that was already all class 1), so Undo can still step back over it.
+  if (prov) delta = { ...(delta ?? { indices: new Uint32Array(0), prev: new Uint8Array(0), next: new Uint8Array(0) }), prov };
   if (delta) history.push(delta);
   return delta;
+}
+
+/** The cloud surface a recorded class edit reads and moves. */
+export interface ClassEditTarget {
+  readonly classification?: Uint8Array;
+  readonly classificationProvenance: ClassState | 'none';
+  setClassificationState(state: ClassState): void;
+}
+
+/**
+ * Record one in-place edit of `cloud`'s classification. `to` marks a
+ * whole-scan replace (clear, derive, restore) that also moves the codes'
+ * provenance, recorded on the delta so undo/redo move it back exactly.
+ * Null without a classification or when nothing changed.
+ */
+export function recordClassEdit(
+  history: ClassEditHistory,
+  cloud: ClassEditTarget,
+  edit: (buf: Uint8Array) => void,
+  to?: ClassState,
+): ClassDelta | null {
+  const buf = cloud.classification;
+  if (!buf) return null;
+  const from = cloud.classificationProvenance as ClassState;
+  // Moved BEFORE the edit: the first move off the source keeps a copy of the
+  // codes as they are now, which the edit is about to overwrite.
+  if (to) cloud.setClassificationState(to);
+  return recordEdit(history, buf, () => edit(buf), to && [from, to]);
+}
+
+/** Undo or redo one recorded edit on `cloud`, codes and provenance together. */
+export function stepClassEdit(history: ClassEditHistory, cloud: ClassEditTarget, dir: 'undo' | 'redo'): ClassDelta | null {
+  const buf = cloud.classification;
+  const d = buf ? history[dir](buf) : null;
+  if (d?.prov) cloud.setClassificationState(d.prov[dir === 'undo' ? 0 : 1]);
+  return d;
 }

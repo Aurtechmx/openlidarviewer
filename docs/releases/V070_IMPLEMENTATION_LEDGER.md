@@ -101,9 +101,11 @@ the two entries were renumbered when the branches were integrated.
 | L195 | LOADER | TEST | high | FIXED | new | The curated swissSURFACE3D tile streamed with no CRS: the file carries no CRS record, and the catalogue's stated frame was never applied, so georeferenced exports were refused and lengths read as source units. |
 | L196 | LOADER | TEST | low | FIXED | new | The curated swisstopo and GURS records carried lat/lon bboxes that did not contain their tiles. |
 | L199 | UI | TEST | med | FIXED | new | A lazy panel whose loader threw at once stayed busy, a second Try again started a second build, a throwing ready callback rejected, and one load re-enabled a button another still held; Tab from outside a dialog stayed outside, a fading modal took input, one Escape closed every stacked dialog, and Cmd-K and ? opened over a modal; Stop and save confirmed a save before it ran, and a failed workflow settings load was dropped and then cached. |
+| L197 | UI | TEST | med | BUILT | new | A scan with producer classes could not be auto-classified, because nothing let the user set those classes aside, and an auto-classify could not be undone. |
 
 ## Totals
 
+- BUILT: 1
 - DEFERRED: 4
 - FIXED: 52
 - MEASURED: 2
@@ -111,7 +113,7 @@ the two entries were renumbered when the branches were integrated.
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 73
+- total: 74
 
 ## Detail
 
@@ -7574,3 +7576,53 @@ Covered by `tests/lazySurfaceLoad.test.ts`,
 `tests/modalConfirm.test.ts`, `tests/workflowActions.test.ts`,
 `tests/actionDefinitions.test.ts`, `tests/docNarration.test.ts`,
 `tests/e2e/commandPalette.spec.ts` and `tests/e2e/workflowRecorder.spec.ts`.
+
+### L197 · BUILT · UI
+
+Clear classifications, suggested by A. Ballesteros (ORCID 0009-0003-3394-0699).
+
+Auto-classify refused any scan carrying a producer class (ASPRS 2 or above),
+and nothing in the viewer let a user set those classes aside to try the
+heuristic instead. The derive also replaced the class buffer outside the undo
+history, so it could not be undone.
+
+Clear classes, in the Edit classes panel beside Auto-classify, sets every
+point to class 1 through the same recorded edit the lasso uses
+(`Viewer.editClassification`), so Undo restores the producer codes exactly.
+The edit carries the provenance move with the codes (`ClassDelta.prov`), and
+the cloud now states one of four provenances: none, source, cleared or derived
+(`PointCloud.classificationProvenance`). The first whole-scan replace keeps a
+copy of the codes it replaced, one byte per point, and Restore original
+classes writes it back as another recorded edit. A level-1 inline note under
+the buttons offers Undo and Restore; there is no modal, because every step is
+undoable. Classification flags stay read-only, so Withheld points stay
+Withheld.
+
+Auto-classify now runs on a cleared scan by an explicit provenance check, and
+the derive goes through the recorded edit when the scan already has codes, so
+Undo steps back over it. The classifier's `methodRegistry` id and version
+(`olv.class.derived-heuristic@3`) travel with derived codes into the XYZ
+comment and the report. The panel, the tooltip and the result toast state what
+it does not find: wires, poles, water, bridges and noise.
+
+'cleared' reaches the export summary and its warning, the Export panel class
+row, the XYZ comment, the report's Scan QA note and dataset summary, the
+Export Health row, the Process Studio capability model and the Classes legend
+caption, all with the wording "source classes cleared in viewer; all points
+class 1". Terrain takes the producer-ground path only for source class 2, so
+cleared or derived ground stays exploratory. A streaming scan says that both
+actions need a fully loaded scan.
+
+Classify, Fill unclassified and the shared derive moved out of `main.ts` into
+the lazy `src/app/classifyActions.ts`; the index chunk measures 801,633 bytes
+against 806,888 before. The Viewer chunk measures 731,360 bytes against
+732,166: swap, polygon and lasso edits share the recorded edit, and
+`classEditHistory.ts` joins the obfuscator's per-point exclusions because a
+whole-scan edit diffs every point twice. No computed result changes for a
+scan nobody clears or derives.
+
+Covered by `tests/clearClassifications.test.ts` (clear, undo, redo, restore,
+derive after clear, flags and Withheld count, terrain ground),
+`tests/clearedProvenanceSurfaces.test.ts` (every export surface) and
+`tests/e2e/clearClassifications.spec.ts` (tiny.las: clear, legend, note, undo,
+auto-classify, export panel wording, restore).

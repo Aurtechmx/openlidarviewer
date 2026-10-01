@@ -210,7 +210,13 @@ describe('a late frame still paints every Viewer mutation that changed the pictu
   const method = (name: string) => (): string => {
     const at = source.search(new RegExp(`\\n  (?:private )?(?:async )?${name}\\s*\\(`));
     expect(at, `${name} is not a method on Viewer`).toBeGreaterThan(-1);
-    return source.slice(at, source.indexOf('\n  }\n', at));
+    let text = source.slice(at, source.indexOf('\n  }\n', at));
+    // A class edit hands its repaint to the recorded-edit seams; their demand
+    // calls are the caller's, so a late frame must still paint them.
+    for (const d of ['editClassification', '_afterClassEdit']) {
+      if (d !== name && text.includes(`this.${d}(`)) text += method(d)();
+    }
+    return text;
   };
 
   /** The callback that runs once the GPU backend is up, inside the constructor. */
@@ -238,6 +244,7 @@ describe('a late frame still paints every Viewer mutation that changed the pictu
     ['reclassifyLasso', method('reclassifyLasso')],
     ['undoClassification', method('undoClassification')],
     ['redoClassification', method('redoClassification')],
+    ['editClassification', method('editClassification')],
     ['_setToolMode', method('_setToolMode')],
     ['_onResize', method('_onResize')],
     ['_renderAtSize', method('_renderAtSize')],

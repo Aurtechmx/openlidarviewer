@@ -321,6 +321,8 @@ export const loadFloorPlan = () =>
  * so the live source-transform never sees the import literal.
  */
 export const loadReclassifyUi = () => import('./ui/reclassifyUi');
+/** Whole-scan class actions (classify, fill, clear, restore) and the classifier client. */
+export const loadClassifyActions = () => import('./app/classifyActions');
 
 /**
  * Load the Analyse panel (terrain readiness + contour/DEM export UI) on the

@@ -36,10 +36,10 @@ export type ClassPresence = 'none' | 'partial' | 'full';
  * presence flag: a class-2 point the producer surveyed is trusted ground; a
  * class-2 point OLV derived from geometry is a heuristic estimate; a manually
  * edited class carries the editor's judgement. The capability model treats them
- * differently — only producer classes back a `ready` verdict; derived, manual
+ * differently — only producer classes back a `ready` verdict; derived, cleared, manual
  * or unknown provenance can at most reach `review`.
  */
-export type ClassificationProvenance = 'producer' | 'derived' | 'manual' | 'unknown' | 'none';
+export type ClassificationProvenance = 'producer' | 'derived' | 'manual' | 'cleared' | 'unknown' | 'none';
 
 /** The products the capability model reasons about in Phase 1. */
 export type ProductId =

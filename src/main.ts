@@ -80,11 +80,8 @@ import type { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
-import { afterClassEdit, classCountsOf, noteClassificationEdited, reportClassifyFailure, wireFrameChange } from './app/classLegendRefresh';
-import { deriveClassificationAsync } from './render/class/deriveClassificationAsync';
-import { classifierOptions } from './render/class/classifierCues';
-import { classificationCoverage } from './render/class/classificationCoverage';
-import type { DeriveClassificationOptions } from './render/class/deriveClassification';
+import { afterClassEdit, classCountsOf, noteClassificationEdited, wireFrameChange } from './app/classLegendRefresh';
+import type { ClassifyActionsDeps } from './app/classifyActions';
 import { buildExportHealth, densityStoryFields, footprintAreaM2, type ScanStoryInputs } from './intelligence/scanStory';
 import { fullScope, scopeFrom, scopeStamp, type ClassScope } from './render/class/classScope';
 import { classificationLabel } from './render/pointInfo';
@@ -201,7 +198,7 @@ import {
   loadRgbAutoNormalize,
   loadEmbedBridge,
   loadLasLoader,
-  loadReclassifyUi,
+  loadReclassifyUi, loadClassifyActions,
   loadContextMenu,
   loadWorkflowConfigPanel,
   loadCommandPalette,
@@ -1340,164 +1337,17 @@ function dispatchWorkflowEvent(event: WorkflowEvent): void {
   }
 }
 
-/**
- * Derive a heuristic classification for the active cloud when it has none.
- * Runs the unsupervised classifier OFF the main thread (with a safe fallback),
- * applies the codes, colours the cloud by class, rebuilds the legend, and
- * reports the result with the honest "derived, not survey-grade" caveat.
- */
-let classifyRunning = false;
 /** Confidence (0..1) of the most recent derive, for the Dataset Story / Export
  *  Health synthesis. Null when the active scan carries no derived classification. */
 let lastDerivedConfidence: number | null = null;
-/**
- * Shared inner loop for {@link runDeriveClassification} and
- * {@link runFillUnclassified}: run the (possibly off-thread) derive, bail if
- * the active scan/frame changed underneath it, then apply the result and
- * refresh the classes legend. Callers stay responsible for their own
- * before/after toast copy and post-apply refreshes, since those differ.
- */
-async function performClassificationDerive(
-  cloud: NonNullable<ReturnType<typeof viewer.getCloud>>,
-  activeId: string,
-  deriveOptions: DeriveClassificationOptions,
-  label: string,
-): Promise<{ result: Awaited<ReturnType<typeof deriveClassificationAsync>>; confPct: number | null } | null> {
-  const deriveCrsRevision = crsService.crsRevision();
-  const result = await deriveClassificationAsync(
-    cloud.positions,
-    cloud.pointCount,
-    deriveOptions,
-    undefined,
-    undefined,
-    // Live phase in the toast so a multi-second derive reads as progress,
-    // not a hang. (Off-thread, so the UI repaints between phases.)
-    (phase) => showLassoToast(`${label} · ${phase}…`),
-  );
-  if (activeId !== scans.activeId || viewer.getCloud(activeId) !== cloud || crsService.crsRevision() !== deriveCrsRevision) return null;
-  viewer.applyDerivedClassification(activeId, result.codes);
-  noteEdit('classification');
-  lastDerivedConfidence = Number.isFinite(result.confidence) ? result.confidence : null;
-  classLegendPanel.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount }, cloud.metadata?.pointFormat);
-  // Surface the run's honest confidence + caveats in the legend caption, not
-  // just a flat "derived" tag — so the user sees WHEN to trust it.
-  const confPct = Number.isFinite(result.confidence) ? Math.round(result.confidence * 100) : null;
-  classLegendPanel.setDerivedProvenance(true, { confidencePct: confPct, warnings: result.warnings });
-  classLegendPanel.show();
-  return { result, confPct };
-}
-
-async function runDeriveClassification(): Promise<void> {
-  if (classifyRunning) return;
-  if (!scans.activeId) {
-    showLassoToast('Classify · open a scan first.');
-    return;
-  }
-  const cloud = viewer.getCloud(scans.activeId);
-  if (!cloud) {
-    showLassoToast('Classify · this works on a loaded (non-streaming) scan.');
-    return;
-  }
-  // Only derive when there is no producer classification to disturb. A scan that
-  // is entirely Created(0)/Unclassified(1) — or carries no classification at all
-  // — is fully derivable (this is the v0.4.8 unblock: an all-class-0 file, like a
-  // raw photogrammetry export, is functionally unclassified and should classify).
-  // A previous DERIVE is also re-derivable (its heuristic codes aren't producer
-  // truth). But a real producer classification (any ASPRS code ≥ 2) is left
-  // intact — we never overwrite a surveyor's classes.
-  const isDerived = cloud.classificationIsDerived;
-  const cov = isDerived
-    ? { unclassified: cloud.pointCount, producer: 0 }
-    : classificationCoverage(cloud.classification, cloud.pointCount);
-  if (cov.producer > 0) {
-    showLassoToast('Classify · this scan already carries a producer classification — left untouched.');
-    return;
-  }
-  // RGB (when present) sharpens vegetation on photogrammetry, where geometry
-  // alone is noisy — a green, locally-smooth canopy isn't mistaken for a roof.
-  const deriveOptions = classifierOptions(cloud, crsService.context());
-
-  classifyRunning = true;
-  showLassoToast('Classify · deriving ground / vegetation / building…');
-  try {
-    const id = scans.activeId;
-    const outcome = await performClassificationDerive(cloud, id, deriveOptions, 'Classify');
-    if (!outcome) return;
-    const { result, confPct } = outcome;
-    processStudio.refresh(); // new classes change what's producible — re-evaluate the plan
-    void showReclassifyUi();
-    // Honest one-line breakdown of the top classes derived.
-    const total = cloud.pointCount || 1;
-    const top = Object.entries(result.counts)
-      .map(([code, n]) => ({ code: Number(code), n }))
-      .sort((a, b) => b.n - a.n)
-      .slice(0, 3)
-      .map((e) => `${classificationLabel(e.code)} ${Math.round((e.n / total) * 100)}%`)
-      .join(' · ');
-    const confText = confPct !== null ? ` Support ${(confPct / 100).toFixed(2)}.` : '';
-    const warnText = result.warnings.length > 0 ? ` ⚠ ${result.warnings[0]}` : '';
-    showLassoToast(`Classify · derived (heuristic, not survey-grade): ${top}.${confText}${warnText}`);
-  } catch (err) {
-    // A refusal also lands on the Classes caption, which outlives the toast.
-    reportClassifyFailure(err, showLassoToast, classLegendPanel);
-  } finally { classifyRunning = false; }
-}
-
-/**
- * Fill ONLY the unclassified points of a partially-classified cloud, preserving
- * every producer class. Where {@link runDeriveClassification} declines a scan
- * that already carries producer classes (≥ 2), this is the deliberate surface
- * for them: it passes the existing classification to the deriver, which derives
- * the class-0/1 gaps and leaves the surveyor's classes untouched. The result is
- * tagged derived (heuristic) overall, because the filled points are guesses.
- */
-async function runFillUnclassified(): Promise<void> {
-  if (classifyRunning) return;
-  if (!scans.activeId) {
-    showLassoToast('Fill unclassified · open a scan first.');
-    return;
-  }
-  const cloud = viewer.getCloud(scans.activeId);
-  if (!cloud) {
-    showLassoToast('Fill unclassified · this works on a loaded (non-streaming) scan.');
-    return;
-  }
-  if (cloud.classificationIsDerived || !cloud.classification) {
-    showLassoToast('Fill unclassified · no producer classification to preserve — use Classify (derive).');
-    return;
-  }
-  const cov = classificationCoverage(cloud.classification, cloud.pointCount);
-  if (cov.producer === 0) {
-    showLassoToast('Fill unclassified · no producer classes here — use Classify (derive) for the whole scan.');
-    return;
-  }
-  if (cov.unclassified === 0) {
-    showLassoToast('Fill unclassified · every point already carries a class — nothing to fill.');
-    return;
-  }
-  // Preserve the producer classes; RGB (when present) sharpens the filled gaps.
-  const deriveOptions: DeriveClassificationOptions = {
-    existingClassification: cloud.classification,
-    ...classifierOptions(cloud, crsService.context()),
-  };
-  classifyRunning = true;
-  showLassoToast(`Fill unclassified · deriving ${cov.unclassified.toLocaleString()} points (producer classes kept)…`);
-  try {
-    const id = scans.activeId;
-    const outcome = await performClassificationDerive(cloud, id, deriveOptions, 'Fill unclassified');
-    if (!outcome) return;
-    const { confPct } = outcome;
-    processStudio.refresh(); // filled classes can enable ground/building products
-    void showReclassifyUi();
-    const confText = confPct !== null ? ` Support ${(confPct / 100).toFixed(2)}.` : '';
-    showLassoToast(`Fill unclassified · filled ${cov.unclassified.toLocaleString()} points (heuristic); producer classes kept.${confText}`);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (!/abort/i.test(msg)) showLassoToast(`Fill unclassified · failed: ${msg}`);
-  } finally {
-    classifyRunning = false;
-  }
-}
+/** Deps for the lazy whole-scan class actions (classify, fill, clear, restore). */
+const classifyDeps = (): ClassifyActionsDeps => ({
+  viewer, activeId: () => scans.activeId, crsService, toast: showLassoToast, legend: classLegendPanel,
+  setDerivedConfidence: (c) => { lastDerivedConfidence = c; },
+  afterDerive: () => { processStudio.refresh(); void showReclassifyUi(); }, // new classes change what's producible
+});
+const runDeriveClassification = async (): Promise<void> => (await loadClassifyActions()).runDeriveClassification(classifyDeps());
+const runFillUnclassified = async (): Promise<void> => (await loadClassifyActions()).runFillUnclassified(classifyDeps());
 
 /**
  * Gather the facts the fitness-for-use synthesis ({@link buildScanStory} /
@@ -1527,7 +1377,7 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
   // the Story / Health never disagree with the panel's own CRS / Datum chips.
   let metaCrsKnown: boolean | undefined;
   let metaDatumKnown: boolean | undefined;
-  let classification: 'none' | 'source' | 'derived' | undefined;
+  let classification: ScanStoryInputs['classification'];
   try {
     if (cloud) {
       const b = cloud.bounds();
@@ -1536,7 +1386,7 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
       const crs = cloud.metadata?.crs as { name?: string; verticalDatum?: unknown } | undefined;
       metaCrsKnown = !!crs?.name;
       metaDatumKnown = !!crs?.verticalDatum;
-      classification = cloud.classificationIsDerived ? 'derived' : cloud.classification ? 'source' : 'none';
+      classification = cloud.classificationProvenance;
     } else if (streaming) {
       // Tight data AABB, not the octree cube — the cube overstates footprint
       // area (and understates density) for a partial-footprint scan.
@@ -2481,12 +2331,12 @@ const terrainRunner = createTerrainAnalysisRunner({
 // screen, and recount the legend. The recount stops a landed edit reading as a
 // refusal on a height-coloured scan, where the legend is the only place it shows.
 void viewerLoaded.then((v) => {
-  v.onClassificationEdited = (id) => noteClassificationEdited({
-    classification: v.getCloud(id)?.classification,
+  v.onClassificationEdited = (id) => { noteClassificationEdited({
+    classification: v.getCloud(id)?.classification, provenance: v.getCloud(id)?.classificationProvenance,
     legend: classLegendPanel,
     clearTerrainCache: () => terrainRunner.abortAndClearCache(),
     noteStale: (m) => analysePanel?.setStaleNotice(m),
-  });
+  }); reclassifyUi?.refresh(); processStudio.refresh(); exportPanel.refresh(); }; // provenance moves with whole-scan edits
 });
 
 // Per-cloud source files + reduced flags, so the Export panel can re-decode a

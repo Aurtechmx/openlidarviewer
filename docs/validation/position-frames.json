@@ -8,6 +8,13 @@
   },
   "entries": [
     {
+      "file": "src/app/classifyActions.ts",
+      "symbol": "performClassificationDerive",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "The heuristic ground classifier scores a single layer against itself, so it works in that layer own frame. Shared by the derive and fill-unclassified paths."
+    },
+    {
       "file": "src/app/epochFramePrep.ts",
       "symbol": "prepareEpochFrames",
       "frame": "world",
@@ -251,13 +258,6 @@
       "frame": "world",
       "reads": 1,
       "why": "The before epoch's buffer paired with its sourceOrigin measures the horizontal span for the ICP residual gate, in the common world frame the two epochs are gridded in."
-    },
-    {
-      "file": "src/main.ts",
-      "symbol": "performClassificationDerive",
-      "frame": "source-local",
-      "reads": 1,
-      "why": "The heuristic ground classifier scores a single layer against itself, so it works in that layer own frame. Shared by the derive and fill-unclassified paths."
     },
     {
       "file": "src/main.ts",

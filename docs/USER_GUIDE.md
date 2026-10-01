@@ -203,6 +203,16 @@ You can solo a single class, hide several, and switch to a colourblind-safe pale
 
 You can also correct classes by hand. Pick a target class in Edit classes, press Reclassify (lasso), and draw around the points to change. Undo and Redo take the change back, and your source file is never modified.
 
+To replace the surveyor's classes, press Clear classes in Edit classes. Every point becomes class 1 (Unclassified) for this session, and the file on disk keeps its classes. A note under the buttons offers Undo and Restore original classes. Auto-classify scan then runs on the cleared scan, and Undo steps back over it to the cleared classes.
+
+Auto-classify finds ground, vegetation and buildings. Buildings come from a height and roughness heuristic. It does not find wires, poles, water, bridges or noise.
+
+Clearing leaves the classification flags alone, so a Withheld point stays Withheld. Exports and the report name the cleared classes as cleared, and name the classifier and its version beside derived classes.
+
+The first clear or auto-classify keeps a copy of the original codes, one byte per point, until the scan closes. Each clear also stores its undo step at six bytes per changed point. On a 20 million point scan that is 20 MB for the copy and about 120 MB for one clear.
+
+Clear and Auto-classify need a fully loaded scan. A streaming scan says so and offers neither.
+
 ---
 
 ## Export
@@ -257,5 +267,5 @@ A scan too large to hold in memory is indexed into private browser storage on yo
 - Lengths don't look like metres: the scan has no coordinate system, so the viewer cannot confirm the scale. Measurements still work, but they are flagged yellow.
 - Coverage / Confidence colours are greyed out: run the terrain analysis first; those modes describe its result.
 - A session opened but the scene is empty: open the matching scan file too. A session carries your measurements and views, not the points and not the terrain analysis, so re-run the analysis after the scan is back.
-- Classify says it will not run: the scan already carries classes from the surveyor, or it is streaming rather than fully loaded.
+- Classify says it will not run: the scan already carries classes from the surveyor (press Clear classes first), or it is streaming rather than fully loaded.
 - A huge file is slow to appear: COPC and EPT scans stream in detail-first, so the view sharpens as you look around. A large local LAZ shows a preview first and fills in behind it.

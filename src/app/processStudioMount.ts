@@ -88,6 +88,8 @@ export interface LiveScanAccessors {
   /** True when the present classification was DERIVED by OLV (heuristic), not
    *  carried by the producer. Distinguishes trusted vs derived ground/buildings. */
   getClassificationDerived(): boolean;
+  /** True when the source classes were cleared in the viewer (all class 1). */
+  getClassificationCleared?(): boolean;
   /**
    * The active STATIC cloud's raw positions (local, source units) and the point
    * total its header declared, for the one cheap probe this module runs: median
@@ -154,7 +156,7 @@ export function signalsFromLive(a: LiveScanAccessors): RawScanSignals | null {
   // from reading as surveyed ground in the capability model.
   const classificationProvenance = !hasClasses
     ? 'none'
-    : (a.getClassificationDerived() ? 'derived' : 'producer');
+    : a.getClassificationCleared?.() ? 'cleared' : (a.getClassificationDerived() ? 'derived' : 'producer');
   // Presence: `full` needs a static cloud, a producer classification and no
   // class 0 / class 1 in the legend, i.e. every loaded point carries a real
   // class. Anything weaker stays at the `partial` floor as before.
@@ -400,6 +402,7 @@ export interface ProcessStudioShell {
         readonly pointCount: number;
         readonly positions?: Float32Array;
         readonly declaredPointCount?: number;
+        readonly classificationProvenance?: string;
   /** Loader stride; > 1 means the resident points are a display sample. */
   readonly loadStride?: number;
       }
@@ -470,6 +473,7 @@ export function createProcessStudioFromShell(shell: ProcessStudioShell): Mounted
     getResolvedCrs: () => shell.crsService.current(),
     getPresentClassCodes: () => shell.classLegend.presentCodes(),
     getClassificationDerived: () => shell.classLegend.classificationIsDerived(),
+    getClassificationCleared: () => shell.getActiveCloud()?.classificationProvenance === 'cleared',
     // The spacing probe's input: the active static cloud's own buffer and its
     // header-declared total. A cloud without positions (or no cloud) is "no
     // data", and the spacing signal stays unstated.

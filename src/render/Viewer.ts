@@ -55,7 +55,7 @@ import {
   positionGeometry,
 } from 'three/tsl';
 
-import type { PointCloud } from '../model/PointCloud';
+import type { ClassState, PointCloud } from '../model/PointCloud';
 import { buildExportAdapter } from './exportAdapter';
 import type { ExportAdapterCloud, ExportCloudCrs } from './exportAdapter';
 import { imageExportModeAvailability, type ExportModeAvailability } from './exportModeAvailability';
@@ -185,7 +185,7 @@ import {
 } from './measure/profileSectionSeam';
 import { samplePolygonVolume, POINT_SAMPLE_VOLUME_METHOD, type PlacedVolumeBuffer, type VolumeResult } from './measure/polygonVolumeSample';
 import {
-  integrableClouds, integrableEntries, streamingMayCombine, sourceClassifiesGround,
+  integrableClouds, integrableEntries, streamingMayCombine, producerClassifiesGround,
   analysisClassification,
 } from './integrableClouds';
 import type { LayerCompatibility } from '../model/layerCompatibility';
@@ -201,7 +201,7 @@ import {
   applyIndexReclassify,
   type ClassEditResult,
 } from './measure/classificationEditor';
-import { ClassEditHistory, recordEdit } from './measure/classEditHistory';
+import { ClassEditHistory, recordClassEdit, stepClassEdit } from './measure/classEditHistory';
 import { ClassificationEpochs } from './measure/classificationEpoch';
 import type { PresetId, SkyPreset, SkyPreset as SkyPresetId } from './inspectionPresets';
 import { applySkyPreset } from './skyPresetApply';
@@ -2116,9 +2116,7 @@ export class Viewer {
         const cls = analysisClassification(cloud, cloud.positions.length);
         if (cls) {
           anyClass = true;
-          if (!cloud.classificationIsDerived && sourceClassifiesGround(cls)) {
-            sourceGround = true;
-          }
+          if (producerClassifiesGround(cloud, cls)) sourceGround = true;
         }
         staticBuffers.push({ pos: cloud.positions, cls, flags: cloud.classificationFlags, placement });
         staticPoints += cloud.positions.length / 3;
@@ -2819,18 +2817,31 @@ export class Viewer {
     if (!entry?.cloud.classification) {
       return { changedCount: 0, pointCount: 0 };
     }
-    const buf = entry.cloud.classification;
-    // Record the edit as a delta so it can be undone independently of any
-    // prior edit (real multi-step history, not a single coalesced snapshot).
-    let result: ClassEditResult = { changedCount: 0, pointCount: buf.length };
-    recordEdit(this._historyFor(id), buf, () => {
-      result = applyClassSwap(buf, fromClass, toClass);
-    });
-    if (result.changedCount > 0) {
-      refreshClassificationColours(entry);
-      this._markClassificationEdited(id);
-    }
+    let result: ClassEditResult = { changedCount: 0, pointCount: entry.cloud.pointCount };
+    this.editClassification(id, (buf) => { result = applyClassSwap(buf, fromClass, toClass); });
     return result;
+  }
+
+  /**
+   * Run one in-place classification edit through the per-cloud undo history:
+   * snapshot, `edit`, record the delta, then recolour and bump the edit epoch
+   * when anything changed. `to` marks a whole-scan replace (clear, derive,
+   * restore) that also moves the codes' provenance; Undo steps it back exactly.
+   * Returns the number of points whose code changed (0 without classification).
+   */
+  editClassification(id: string, edit: (buf: Uint8Array) => void, to?: ClassState): number {
+    const entry = this._clouds.get(id);
+    const d = entry && recordClassEdit(this._historyFor(id), entry.cloud, edit, to);
+    if (d) this._afterClassEdit(id, entry, d.prov);
+    return d ? d.indices.length : 0;
+  }
+
+  private _afterClassEdit(id: string, entry: CloudEntry, whole: unknown): void {
+    // A whole-scan edit rewrites every code, so the GPU class filter re-reads them.
+    if (whole) this._attachClassAttribute(entry, entry.cloud.classification!);
+    refreshClassificationColours(entry);
+    this._demand.changed('filter');
+    this._markClassificationEdited(id);
   }
 
   /**
@@ -2862,9 +2873,8 @@ export class Viewer {
     if (!entry?.cloud.classification) {
       return { changedCount: 0, pointCount: 0 };
     }
-    const buf = entry.cloud.classification;
-    let result: ClassEditResult = { changedCount: 0, pointCount: buf.length };
-    recordEdit(this._historyFor(id), buf, () => {
+    let result: ClassEditResult = { changedCount: 0, pointCount: entry.cloud.pointCount };
+    this.editClassification(id, (buf) => {
       result = applyPolygonReclassify({
         classification: buf,
         positions: copyPlacedPositions(entry.cloud, 1, entry.placement),
@@ -2874,10 +2884,6 @@ export class Viewer {
         up,
       });
     });
-    if (result.changedCount > 0) {
-      refreshClassificationColours(entry);
-      this._markClassificationEdited(id);
-    }
     return result;
   }
 
@@ -2929,19 +2935,10 @@ export class Viewer {
         this._currentFilterWindow(this._elevLayerOf(entry.cloud)),
       ),
     });
-    const buf = entry.cloud.classification;
-    let result: ClassEditResult = { changedCount: 0, pointCount: buf.length };
-    recordEdit(this._historyFor(id), buf, () => {
-      result = applyIndexReclassify(buf, indices, newClass);
-    });
-    if (result.changedCount > 0) {
-      refreshClassificationColours(entry);
-      // A recolour is a `once` reason of its own: the edit already happened
-      // by the time this returns, so `input()`'s 350 ms holdover cannot be
-      // trusted to still be open when the next frame runs.
-      this._demand.changed('filter');
-      this._markClassificationEdited(id);
-    }
+    // The recolour inside is a `once` reason of its own (`filter`): the edit has
+    // happened by the time this returns, so `input()`'s holdover cannot be trusted.
+    let result: ClassEditResult = { changedCount: 0, pointCount: entry.cloud.pointCount };
+    this.editClassification(id, (buf) => { result = applyIndexReclassify(buf, indices, newClass); });
     return { ...result, hiddenByFilters: inside - indices.length, selectedCount: inside };
   }
 
@@ -2953,11 +2950,9 @@ export class Viewer {
   undoClassification(id: string): boolean {
     const entry = this._clouds.get(id);
     const h = this._classHistory.get(id);
-    if (!entry?.cloud.classification || !h?.canUndo) return false;
-    h.undo(entry.cloud.classification);
-    refreshClassificationColours(entry);
-    this._demand.changed('filter');
-    this._markClassificationEdited(id);
+    const d = entry && h && stepClassEdit(h, entry.cloud, 'undo');
+    if (!d) return false;
+    this._afterClassEdit(id, entry, d.prov);
     return true;
   }
 
@@ -2969,11 +2964,9 @@ export class Viewer {
   redoClassification(id: string): boolean {
     const entry = this._clouds.get(id);
     const h = this._classHistory.get(id);
-    if (!entry?.cloud.classification || !h?.canRedo) return false;
-    h.redo(entry.cloud.classification);
-    refreshClassificationColours(entry);
-    this._demand.changed('filter');
-    this._markClassificationEdited(id);
+    const d = entry && h && stepClassEdit(h, entry.cloud, 'redo');
+    if (!d) return false;
+    this._afterClassEdit(id, entry, d.prov);
     return true;
   }
 
@@ -3000,20 +2993,17 @@ export class Viewer {
    * Returns false when the id is unknown; throws on a code/point length
    * mismatch (a caller bug worth surfacing, not swallowing).
    */
-  applyDerivedClassification(id: string, codes: Uint8Array): boolean {
+  applyDerivedClassification(id: string, codes: Uint8Array, method?: string): boolean {
     const entry = this._clouds.get(id);
     if (!entry) return false;
-    entry.cloud.attachDerivedClassification(codes);
-    // Give the mesh the same GPU class-filter wiring a cloud loaded WITH
-    // classification gets: an `aClass` per-instance attribute plus the
-    // class-mask multiply folded into the size node. Without this the legend
-    // could colour the derived classes but not hide them.
-    this._attachClassAttribute(entry, codes);
-    // The class-filter wiring above hides classes without recolouring; the
-    // recolour itself is a no-op unless class colours are already shown.
-    refreshClassificationColours(entry);
-    this._markClassificationEdited(id); // a derive replaces the classification
-    this._demand.changed('filter');
+    const cloud = entry.cloud;
+    // Codes already present (source, cleared or an earlier derive) are
+    // replaced in place through the undo history, so Undo brings them back.
+    // A cloud with none gets the derived buffer plus the same GPU class-filter
+    // wiring (`aClass` + class-mask multiply) a classified load gets.
+    cloud.derivedMethod = method;
+    if (codes.length === cloud.pointCount && cloud.classification) this.editClassification(id, (buf) => buf.set(codes), 'derived');
+    else { cloud.attachDerivedClassification(codes); this._afterClassEdit(id, entry, 1); }
     return true;
   }
 

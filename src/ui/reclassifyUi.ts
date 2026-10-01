@@ -18,6 +18,22 @@ import { LassoVolumeTool } from './LassoVolumeTool';
 import { reclassifyOutcome } from './reclassifyOutcome';
 import { noteEdit } from './undoRouter';
 import type { Viewer } from '../render/Viewer';
+import {
+  AUTO_CLASSIFY_LIMITS,
+  NEEDS_LOADED_SCAN,
+  canRestoreOriginal,
+  clearClassification,
+  restoreOriginalClassification,
+  type ClassLayerOutcome,
+} from '../render/class/classLayer';
+
+/** Why Clear / Restore did nothing, in the user's words. */
+const NOT_RUN: Readonly<Record<Exclude<ClassLayerOutcome, 'ok'>, string>> = {
+  'not-loaded': `Clear classifications ${NEEDS_LOADED_SCAN}`,
+  'no-classification': 'This scan carries no classification to clear.',
+  already: 'Classes are already cleared. Undo or Restore original classes brings them back.',
+  'no-original': 'No original classes to restore: the classes have not been cleared or replaced.',
+};
 
 /** Common ASPRS classes offered as reclassify targets. */
 const CLASSES: ReadonlyArray<readonly [number, string]> = [
@@ -101,7 +117,7 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
     : null;
   if (autoBtn) {
     autoBtn.title =
-      'Derive ground / vegetation / building for the whole scan (heuristic, not survey-grade).';
+      `Derive ground / vegetation / building for the whole scan (heuristic, not survey-grade). ${AUTO_CLASSIFY_LIMITS}`;
     // Reflect the in-flight derive: disable + spinner while it runs, restore on
     // settle. Awaits the promise the host returns, so a slow whole-scan classify
     // reads as working rather than frozen.
@@ -120,6 +136,50 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
   }
 
   const toast = (m: string): void => opts.onToast?.(m);
+
+  // Clear classifications: every point to class 1 for this session, recorded
+  // so Undo restores the codes exactly. Undoable, so no confirmation modal; the
+  // level-1 inline note below carries Undo and Restore original classes.
+  const clearBtn = mkBtn('Clear classes', 'reclass-clear');
+  clearBtn.title = 'Set every point to class 1 (Unclassified) for this session. The source file is not changed; Undo brings the classes back.';
+  const limits = el('div', { className: 'olv-reclass-hint', text: `Auto-classify: ${AUTO_CLASSIFY_LIMITS}` });
+  const linkBtn = (text: string, testid: string, tip: string): HTMLButtonElement => {
+    const b = el('button', { className: 'olv-reclass-link', text }) as HTMLButtonElement;
+    b.type = 'button';
+    b.title = tip;
+    b.setAttribute('data-testid', testid);
+    return b;
+  };
+  const noteText = el('span', { text: '' });
+  const noteUndo = linkBtn('Undo', 'reclass-note-undo', 'Take back the last class change.');
+  const noteRestore = linkBtn('Restore original classes', 'reclass-restore', 'Put back the classes the scan had before the first clear or auto-classify. Undo takes this back too.');
+  const restoreSep = el('span', { text: ' · ' });
+  const note = el('div', { className: 'olv-reclass-note' }, [noteText, el('span', { text: ' · ' }), noteUndo, restoreSep, noteRestore]);
+  note.setAttribute('role', 'status');
+  note.setAttribute('data-testid', 'reclass-cleared-note');
+  const streamNote = el('div', {
+    className: 'olv-reclass-note',
+    text: `Clear classes and Auto-classify need a fully loaded scan; streaming scans are not supported yet.`,
+  });
+  streamNote.setAttribute('data-testid', 'reclass-needs-loaded');
+  const wholeScan = (run: () => ClassLayerOutcome | null, done: string): void => {
+    const r = run();
+    if (r === 'ok') {
+      noteEdit('classification');
+      toast(done);
+    } else if (r) toast(NOT_RUN[r]);
+    refresh();
+  };
+  const withActive = (fn: (v: Viewer, id: string) => ClassLayerOutcome): (() => ClassLayerOutcome | null) => () => {
+    const v = opts.getViewer();
+    const id = opts.getActiveId();
+    return v && id ? fn(v, id) : v?.streamingCloud ? 'not-loaded' : null;
+  };
+  clearBtn.addEventListener('click', () => wholeScan(withActive(clearClassification),
+    'Classes cleared: every point is class 1 for this session. Undo or Restore original classes brings them back.'));
+  noteRestore.addEventListener('click', () => wholeScan(withActive(restoreOriginalClassification),
+    'Original classes restored.'));
+  noteUndo.addEventListener('click', () => undoBtn.click());
 
   const tool = new LassoVolumeTool(opts.canvas, {
     onCommit: (lasso) => {
@@ -175,6 +235,21 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
     const id = opts.getActiveId();
     undoBtn.disabled = !(v && id && v.canUndoClassification(id));
     redoBtn.disabled = !(v && id && v.canRedoClassification(id));
+    noteUndo.disabled = undoBtn.disabled;
+    const cloud = v && id ? v.getCloud(id) : undefined;
+    const prov = cloud?.classificationProvenance;
+    // A streaming scan has no resident class buffer to clear or derive over.
+    const streaming = !cloud && !!v?.streamingCloud;
+    streamNote.classList.toggle('olv-hidden', !streaming);
+    clearBtn.disabled = streaming || !cloud?.classification || prov === 'cleared';
+    if (autoBtn && !autoBtn.classList.contains('olv-reclass-auto-loading')) autoBtn.disabled = streaming;
+    const restorable = canRestoreOriginal(cloud);
+    noteRestore.classList.toggle('olv-hidden', !restorable);
+    restoreSep.classList.toggle('olv-hidden', !restorable);
+    note.classList.toggle('olv-hidden', prov !== 'cleared' && !restorable);
+    noteText.textContent = prov === 'cleared'
+      ? `${cloud?.originalClassification ? 'Producer classes' : 'Classes'} cleared for this session`
+      : 'Classes derived for this session (heuristic)';
   }
 
   // Full-width rows: header, the target-class select, the primary reclassify
@@ -182,8 +257,11 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
   // with the wide select (which clipped it in the cramped left dock).
   const element = el('div', { className: 'olv-reclass-panel' }, [
     el('div', { className: 'olv-reclass-head', text: 'Edit classes' }),
-    // Primary: derive the whole scan. Manual class + lasso follow it.
-    ...(autoBtn ? [autoBtn] : []),
+    // Primary: derive the whole scan, or clear it. Manual class + lasso follow.
+    el('div', { className: 'olv-reclass-actions olv-reclass-whole' }, [...(autoBtn ? [autoBtn] : []), clearBtn]),
+    note,
+    streamNote,
+    ...(autoBtn ? [limits] : []),
     select,
     armBtn,
     el('div', { className: 'olv-reclass-actions' }, [undoBtn, redoBtn]),
