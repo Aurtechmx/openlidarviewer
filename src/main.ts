@@ -836,7 +836,7 @@ function showInstantAnswer(scanLabel: string): void {
           });
           break;
         case 'compare':
-          void compareLoadedLayers();
+          compareLoadedLayers();
           break;
         case 'volume':
           lassoVolumeTool.enable();

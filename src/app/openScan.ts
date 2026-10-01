@@ -316,7 +316,8 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     }, { head: headSlice });
     if (heavy.status === 'attached') {
       deps.dropZone.setCancelHandler(null);
-      finishLoad(deps);
+      // The settle only drives the drop zone's exit; a failure there leaves nothing to undo.
+      finishLoad(deps).catch(() => false);
       return;
     }
     if (heavy.status === 'cancelled') {

@@ -68,8 +68,12 @@ export class FakeEl {
   get classList() {
     const classes = this._classes;
     return {
-      add: (...c: string[]): void => void c.forEach((x) => classes.add(x)),
-      remove: (...c: string[]): void => void c.forEach((x) => classes.delete(x)),
+      add: (...c: string[]): void => {
+        for (const x of c) classes.add(x);
+      },
+      remove: (...c: string[]): void => {
+        for (const x of c) classes.delete(x);
+      },
       contains: (c: string): boolean => classes.has(c),
       toggle: (c: string, force?: boolean): boolean => {
         const want = force === undefined ? !classes.has(c) : force;
@@ -184,10 +188,19 @@ export class FakeEl {
     for (const fn of [...(this.handlers.get(evt.type) ?? [])]) fn(evt);
     return true;
   }
-  focus(): void {}
-  blur(): void {}
-  setPointerCapture(): void {}
-  releasePointerCapture(): void {}
+  /** Focus, blur and pointer capture are no-ops: no suite reads focus or capture state off this stub. */
+  focus(): void {
+    // no-op
+  }
+  blur(): void {
+    // no-op
+  }
+  setPointerCapture(): void {
+    // no-op
+  }
+  releasePointerCapture(): void {
+    // no-op
+  }
   getContext(): null {
     return null;
   }
@@ -240,9 +253,15 @@ export class FakeEl {
 
 /** No-op observer so the panel's resize-persistence path never fires. */
 class FakeResizeObserver {
-  observe(): void {}
-  unobserve(): void {}
-  disconnect(): void {}
+  observe(): void {
+    // no-op
+  }
+  unobserve(): void {
+    // no-op
+  }
+  disconnect(): void {
+    // no-op
+  }
 }
 
 /** Extra globals a given suite's `dom.ts` call sites need beyond the base set. */

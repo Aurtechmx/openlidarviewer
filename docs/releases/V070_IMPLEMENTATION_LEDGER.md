@@ -113,18 +113,19 @@ the two entries were renumbered when the branches were integrated.
 | L209 | EXPORT | TEST | med | FIXED | new | No export recorded the SHA-256 of the source file or of the points an analysis read, and most exports did not record where the CRS came from. |
 | L211 | ARCHITECTURE | TEST | high | FIXED | new | With no origin allow-list, any page that framed the viewer could move the camera, toggle layers and focus annotations, and the ready message went to any parent; index.html carried no CSP of its own; COPC hierarchy pages, key depth and node totals had no ceiling; recovery entries were capped only on write; parse worker messages were read without a shape check. |
 | L211 | ARCHITECTURE | TEST | high | FIXED | new | With no origin allow-list, any page that framed the viewer could move the camera, toggle layers and focus annotations, and the ready message went to any parent; index.html carried no CSP of its own and style-src allowed inline styles; COPC hierarchy pages, key depth and node totals had no ceiling; recovery entries were capped only on write; parse worker messages were read without a shape check. |
+| L212 | ARCHITECTURE | TEST | low | FIXED | new | Static analysis on main reported a constructor that started an async load, promises left floating, async functions with no await, shared object-literal defaults, a rejection with a non-Error value, assertions outside a test, tests with no assertion and stub methods with no body. |
 
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 63
+- FIXED: 64
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 85
+- total: 86
 
 ## Detail
 
@@ -8104,3 +8105,30 @@ a malformed message ends the load with an error.
 
 Covered by `tests/embedBridge.test.ts`, `tests/indexCspMeta.test.ts` and
 `tests/untrustedInputCaps.test.ts`.
+
+### L212 · FIXED · ARCHITECTURE
+
+Static analysis findings on main.
+
+- `NavController`: the `?benchmark=nav` driver load moved out of the
+  constructor into a module function.
+- `openScan`: the settle after a heavy attach ends with a `.catch`.
+- `recoveryJournal`: the localStorage store returns promises without `async`;
+  a storage throw is still a rejection (`src/app/settle.ts`). The IndexedDB request helper rejects
+  with an `Error`. The debouncer's default timers are a shared constant.
+- `workspaceShell.openLogPage`, `PreviewCloudSource.readNodeChunk` and
+  `TileChunkDecoder.decode` are no longer `async`; an abort or decode fault is
+  still a rejection.
+- `estimateGpuBytes` and `terrainEvidenceBands` use shared constants as
+  defaults. `orderStatistic` tests NaN with `Number.isNaN`.
+- `void` on values and on non-promise calls removed; an unused focal constant
+  removed from the ortho RGB exporter; `LayerGroupStore._mintId` counts
+  attempts in a `while` loop.
+- Tests: describe-level assertions moved into tests, tests gated on local data
+  use `it.runIf`, two oracle tests and one diagnostics test gained a direct
+  assertion, and the fake DOM's no-op methods say so.
+
+Tests: `tests/settle.test.ts` (runs at once, a throw becomes a rejection),
+`tests/recoveryJournal.test.ts` (a storage throw rejects, not throws),
+`tests/heavyLasPreviewFirst.test.ts` (an aborted preview read rejects),
+`tests/tileChunkDecoder.test.ts` (abort and truncation reject).

@@ -26,8 +26,6 @@ import type {
 import type { ColorMode } from '../render/colorModes';
 import { runStudioExport } from './BaseExportMode';
 
-/** Fallback focal distance — retained for the legacy ortho-projection helper. */
-const FALLBACK_FOCAL_DISTANCE_M = 10;
 
 /**
  * Legacy helper exported for backward compatibility + unit tests. Builds a
@@ -144,10 +142,6 @@ export const orthographicRgbExporter: ExportFactory = {
     // (Height Map, Intensity, Class Map) override this; Ortho RGB is the
     // pass-through that exports the live view as-is.
     const currentMode: ColorMode = context.adapter.currentColorMode();
-    // `FALLBACK_FOCAL_DISTANCE_M` is referenced via the legacy
-    // `orthoCameraForPerspective` export above; tagged here so tree-shakers
-    // don't drop the helper from the public surface.
-    void FALLBACK_FOCAL_DISTANCE_M;
     return runStudioExport(
       context,
       'orthographic-rgb',

@@ -347,10 +347,12 @@ export class LayerGroupStore {
    */
   private _mintId(): string {
     let id = this._gen();
-    for (let attempt = 0; this._byId.has(id); attempt++) {
+    let attempt = 0;
+    while (this._byId.has(id)) {
       if (attempt >= 64) {
         throw new Error('LayerGroupStore: the id generator produced no free id.');
       }
+      attempt++;
       id = this._gen();
     }
     return id;

@@ -359,7 +359,7 @@ export class Stage {
     // FullscreenToggle.ts). Held so dispose() can detach its listeners.
     // The refusal has to reach the application's one polite region; a second
     // region would give a screen reader two competing queues.
-    const fullscreen = new FullscreenToggle({ announce: (m) => void announcePolite(m) });
+    const fullscreen = new FullscreenToggle({ announce: (m) => { announcePolite(m); } });
     this._fullscreen = fullscreen;
 
     // Same box as `.olv-quality-button` (30x30), so filling it moves nothing.

@@ -46,7 +46,7 @@ export class ObservatoryOverlay {
   show(field: SliceField, iz: number): void {
     if (this.disposed) return;
     this.release();
-    const { width, height, stride } = sliceSize(field.grid);
+    const { width, height } = sliceSize(field.grid);
     const texture = new THREE.DataTexture(new Uint8Array(width * height * 4), width, height, THREE.RGBAFormat, THREE.UnsignedByteType);
     texture.magFilter = THREE.NearestFilter;
     texture.minFilter = THREE.NearestFilter;
@@ -57,8 +57,7 @@ export class ObservatoryOverlay {
     mesh.name = 'olv-observatory-slice';
     mesh.renderOrder = 5;
     mesh.frustumCulled = false;
-    // Strided texels cover `stride` voxels each; the plane keeps the field's true extent.
-    void stride;
+    // Strided texels may cover several voxels each; the plane keeps the field's true extent.
     this.mesh = mesh;
     this.texture = texture;
     this.field = field;

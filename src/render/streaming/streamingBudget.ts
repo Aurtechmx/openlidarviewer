@@ -1,4 +1,4 @@
-import { bytesPerPoint, gpuAttributeBytes, type UploadedAttributes } from '../pointAttributeLayout';
+import { bytesPerPoint, gpuAttributeBytes, NO_OPTIONAL_CHANNELS, type UploadedAttributes } from '../pointAttributeLayout';
 /**
  * streamingBudget.ts
  *
@@ -334,7 +334,7 @@ function greedyFill(sorted: readonly ScoredCandidate[], pointBudget: number): Se
  */
 export function estimateGpuBytes(
   residentPointCount: number,
-  present: UploadedAttributes = { classification: false, intensity: false },
+  present: UploadedAttributes = NO_OPTIONAL_CHANNELS,
 ): number {
   return gpuAttributeBytes(residentPointCount, present);
 }

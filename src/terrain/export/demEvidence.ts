@@ -248,10 +248,12 @@ export function extendCellState(
   return out;
 }
 
+const RESOLVED_FRAME: EvidenceFrame = { frameResolved: true };
+
 /** Compute the band arrays from a DTM grid. */
 export function terrainEvidenceBands(
   dtm: EvidenceGrid,
-  frame: EvidenceFrame = { frameResolved: true },
+  frame: EvidenceFrame = RESOLVED_FRAME,
 ): TerrainEvidenceBands {
   const { cols, rows, cellSizeM } = dtm;
   const n = cols * rows;

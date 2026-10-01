@@ -137,10 +137,8 @@ const print = (line: string) => process.stdout.write(line + '\n');
 
 describe('OOC rebuild cost (decode + index, in-memory spill)', () => {
   const PDAL = ENABLED ? pdalPath() : null;
-  const runLas = ENABLED ? it : it.skip;
-  const runLaz = ENABLED && PDAL !== null ? it : it.skip;
 
-  runLas(
+  it.runIf(ENABLED)(
     'LAS: measures full rebuild across a size ladder',
     async () => {
       print(`\nOOC rebuild — LAS — cores=${cpus().length}, sizes=${SIZES_M.join(',')}M`);
@@ -197,7 +195,7 @@ describe('OOC rebuild cost (decode + index, in-memory spill)', () => {
     600_000,
   );
 
-  runLaz(
+  it.runIf(ENABLED && PDAL !== null)(
     'LAZ: measures full rebuild across a size ladder',
     async () => {
       const dir = mkdtempSync(join(tmpdir(), 'olv-ooc-rebuild-bench-'));

@@ -28,31 +28,34 @@ export class TileChunkDecoder implements ChunkDecoder {
     this.recordBytes = recordBytes;
   }
 
-  async decode(
+  decode(
     chunk: ArrayBuffer,
     meta: ChunkDecodeMetadata,
     signal?: AbortSignal,
   ): Promise<DecodedChunk> {
-    signal?.throwIfAborted();
-    // `meta.pointCount` is the EXACT count the store hierarchy records for this
-    // tile, so decodeTile enforces `byteLength === pointCount * recordBytes` and
-    // throws TileTruncationError on a truncated or corrupt tile. That throw
-    // propagates as a decode fault (the scheduler's normal failure path), never a
-    // silently-sparse tile.
-    const tile = decodeTile(new Uint8Array(chunk), this.schema, this.recordBytes, meta.pointCount);
-    return {
-      pointCount: tile.pointCount,
-      positions: tile.positions,
-      intensity: tile.intensity,
-      classification: tile.classification,
-      returnNumber: tile.returnNumber,
-      returnCount: tile.returnCount,
-      gpsTime: tile.gpsTime,
-      pointSourceId: tile.pointSourceId,
-      rgb: tile.rgb ?? undefined,
-      // Tile RGB was narrowed to 8-bit by finalizeRawColors at build time, so it
-      // copies verbatim; undefined when the tile carries no colour.
-      rgbEightBit: this.schema.hasRgb ? true : undefined,
-    };
+    // An abort or a decode fault rejects rather than throws.
+    return new Promise((resolve) => {
+      signal?.throwIfAborted();
+      // `meta.pointCount` is the EXACT count the store hierarchy records for this
+      // tile, so decodeTile enforces `byteLength === pointCount * recordBytes` and
+      // throws TileTruncationError on a truncated or corrupt tile. That throw
+      // propagates as a decode fault (the scheduler's normal failure path), never a
+      // silently-sparse tile.
+      const tile = decodeTile(new Uint8Array(chunk), this.schema, this.recordBytes, meta.pointCount);
+      resolve({
+        pointCount: tile.pointCount,
+        positions: tile.positions,
+        intensity: tile.intensity,
+        classification: tile.classification,
+        returnNumber: tile.returnNumber,
+        returnCount: tile.returnCount,
+        gpsTime: tile.gpsTime,
+        pointSourceId: tile.pointSourceId,
+        rgb: tile.rgb ?? undefined,
+        // Tile RGB was narrowed to 8-bit by finalizeRawColors at build time, so it
+        // copies verbatim; undefined when the tile carries no colour.
+        rgbEightBit: this.schema.hasRgb ? true : undefined,
+      });
+    });
   }
 }

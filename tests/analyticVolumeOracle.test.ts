@@ -873,6 +873,8 @@ describe('elevated reference plane', () => {
       // the two.
       assertAgainstOracle(r.fill, fillTruth, 1e-5, `ramp fill (z0=${z0}, n=${n})`);
       assertAgainstOracle(r.cut, cutTruth, 1e-5, `ramp cut (z0=${z0}, n=${n})`);
+      // The two parts together make up the whole column above and below z0.
+      expect(Math.abs(r.fill + r.cut - (fillTruth + cutTruth)) / (fillTruth + cutTruth)).toBeLessThanOrEqual(1e-5);
     }
   });
 });
@@ -941,6 +943,7 @@ describe('stockpileVolume with an explicit base plane', () => {
       base: { mode: 'explicit', z: z0 },
     });
     assertAgainstOracle(s.volume, fillTruth, 5e-4, 'stockpile raised-plane pyramid');
+    expect(s.volume).toBeLessThan(AREA * PYR_H / 3);
   });
 });
 

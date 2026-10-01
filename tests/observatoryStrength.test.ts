@@ -89,7 +89,9 @@ function expectMatchesNullableNaN(actual: number, expectedValue: number | null):
 }
 
 describe('OB-STR-01 component oracle — strength-lattice.json vs strength.py', () => {
-  expect(lattice.cases.length).toBe(expected.results.length);
+  it('the lattice and the frozen oracle results list the same number of cases', () => {
+    expect(lattice.cases).toHaveLength(expected.results.length);
+  });
 
   for (let i = 0; i < lattice.cases.length; i++) {
     const c = lattice.cases[i]!;
@@ -206,8 +208,11 @@ describe('F1 end-to-end — real ray builder + real ledger feed real strength co
   const { frame } = buildRepeatedRayCells(wallEntryRange);
   const coverage: GriddedRayCoverage = { azimuth0: azimuth, azimuthStep: 0, polar0: polar, polarStep: 0 };
   const build = buildGriddedSourceRays(frame, station('station-1', origin), 0, coverage, { kind: 'none' });
-  expect(build.returnedChunks.length).toBe(1);
   const chunk = build.returnedChunks[0]!;
+
+  it('the ray build returns one chunk', () => {
+    expect(build.returnedChunks).toHaveLength(1);
+  });
 
   const tauAbs = voxelEdge / 2;
   const tauRel = 0;

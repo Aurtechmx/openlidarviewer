@@ -50,7 +50,7 @@ const slScan = (groundClassified: boolean): ScanFacts => ({
 });
 
 describe('ground-label degradation thins DTM support on real survey data', () => {
-  (hasStreamLab() ? it : it.skip)('as class-2 labels are removed, retained ground and DTM coverage fall and error grows', () => {
+  it.runIf(hasStreamLab())('as class-2 labels are removed, retained ground and DTM coverage fall and error grows', () => {
     const { xyz, cls } = readStreamLab();
     const fullGround = groundPoints(xyz, cls);
     const base = dtm(fullGround);
@@ -79,7 +79,7 @@ describe('ground-label degradation thins DTM support on real survey data', () =>
     expect(capabilityFor(evaluateCapabilities({ scans: [slScan(true)] }), 'dtm')!.readiness).toBe('ready');
   });
 
-  (hasStreamLab() ? it : it.skip)('removing ALL ground drops the DTM to a derived-ground review, not a silent pass', () => {
+  it.runIf(hasStreamLab())('removing ALL ground drops the DTM to a derived-ground review, not a silent pass', () => {
     // The capability model's fail-safe: no trusted ground → the DTM must be
     // derived first (review), never reported as ready over absent ground.
     const v = capabilityFor(evaluateCapabilities({ scans: [slScan(false)] }), 'dtm')!;

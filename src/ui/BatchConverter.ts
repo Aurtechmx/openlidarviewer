@@ -204,7 +204,7 @@ export class BatchConverter {
     input.multiple = true;
     input.accept = ACCEPT;
     input.addEventListener('change', () => {
-      if (input.files) void this._addFiles(input.files);
+      if (input.files) this._addFiles(input.files);
       input.value = '';
     });
     drop.append(
@@ -217,7 +217,7 @@ export class BatchConverter {
     drop.addEventListener('drop', (e) => {
       e.preventDefault();
       drop.classList.remove('is-drag');
-      if (e.dataTransfer?.files) void this._addFiles(e.dataTransfer.files);
+      if (e.dataTransfer?.files) this._addFiles(e.dataTransfer.files);
     });
     wrap.append(drop, this._fileList);
     return wrap;

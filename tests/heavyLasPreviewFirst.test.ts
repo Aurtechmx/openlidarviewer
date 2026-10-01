@@ -394,6 +394,15 @@ describe('buildPreviewSample — stratified, bounded, honest', () => {
     expect(src.sourcePointCount).toBe(sample.pointCount);
     expect(src.octree.isComplete).toBe(false);
 
+    // The chunk read rejects on an aborted signal instead of throwing.
+    const node = src.octree.nodes().find((x) => x.record.pointCount > 0)!;
+    const ctrl = new AbortController();
+    ctrl.abort();
+    let read: Promise<ArrayBuffer> | undefined;
+    expect(() => { read = src.readNodeChunk(node.record, ctrl.signal); }).not.toThrow();
+    await expect(read).rejects.toThrow();
+    expect((await src.readNodeChunk(node.record)).byteLength).toBe(sample.records.byteLength);
+
     // Spread: reads reach deep into the file, not just the front.
     const pointReads = range.reads.filter((r) => r.offset >= 375);
     const spread = Math.max(...pointReads.map((r) => r.offset)) - Math.min(...pointReads.map((r) => r.offset));

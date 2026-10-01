@@ -565,13 +565,16 @@ export class PreviewCloudSource implements StreamingSource {
     return this._crs;
   }
 
-  async readNodeChunk(_record: StreamingNodeRecord, signal?: AbortSignal): Promise<ArrayBuffer> {
-    signal?.throwIfAborted();
-    // The scheduler transfers the buffer to a worker. The preview's records are
-    // retained for the life of the source, so a view into them must be copied;
-    // but a records array that owns its whole backing buffer can be transferred
-    // directly. `ownedBuffer` makes exactly that distinction.
-    return ownedBuffer(this._sample.records);
+  readNodeChunk(_record: StreamingNodeRecord, signal?: AbortSignal): Promise<ArrayBuffer> {
+    // An aborted signal rejects rather than throws, as an async read would.
+    return new Promise((resolve) => {
+      signal?.throwIfAborted();
+      // The scheduler transfers the buffer to a worker. The preview's records are
+      // retained for the life of the source, so a view into them must be copied;
+      // but a records array that owns its whole backing buffer can be transferred
+      // directly. `ownedBuffer` makes exactly that distinction.
+      resolve(ownedBuffer(this._sample.records));
+    });
   }
 
   decodeMeta(record: StreamingNodeRecord): ChunkDecodeMetadata {

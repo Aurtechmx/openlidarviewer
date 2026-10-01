@@ -59,7 +59,7 @@ function readAsc(path: string): { cols: number; rows: number; cell: number; noda
 describe('OLV slope/aspect on real steep terrain (Coconino forest)', () => {
   const hasSpot = existsSync(DTM) && existsSync(SPOT);
 
-  (hasSpot ? it : it.skip)('matches an independent NumPy Horn reference at 735 frozen cells', () => {
+  it.runIf(hasSpot)('matches an independent NumPy Horn reference at 735 frozen cells', () => {
     const { cols, rows, cell, z } = readAsc(DTM);
     const zf = Float32Array.from(z, (v) => (v <= -9998 ? NaN : v));
     const ref = JSON.parse(readFileSync(SPOT, 'utf8')) as {
@@ -85,7 +85,7 @@ describe('OLV slope/aspect on real steep terrain (Coconino forest)', () => {
 
   const hasGdal = existsSync(DTM) && existsSync(GDAL_SLOPE);
 
-  (hasGdal ? it : it.skip)('agrees with gdaldem 3.13.1 slope within 0.5 degrees on real steep terrain', () => {
+  it.runIf(hasGdal)('agrees with gdaldem 3.13.1 slope within 0.5 degrees on real steep terrain', () => {
     const { cols, rows, cell, z } = readAsc(DTM);
     const zf = Float32Array.from(z, (v) => (v <= -9998 ? NaN : v));
     const der = hornSlopeAspect(zf, cols, rows, cell);

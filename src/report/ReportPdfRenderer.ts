@@ -323,7 +323,7 @@ function startNewPage(
   doc: PDFDocument,
   accent: ParsedColor,
   theme: ReportThemePalette,
-  organisation: string | undefined,
+  _organisation: string | undefined,
 ): PageCursor {
   const page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
   // Paint the theme's page background first so dark themes render legibly.
@@ -347,10 +347,8 @@ function startNewPage(
     width: CONTENT_WIDTH, height: 0.5,
     color: rgb(theme.rule.r, theme.rule.g, theme.rule.b),
   });
-  // Footer text — organisation (left) + "OpenLiDARViewer" (right).
-  // Stamped here so newly-added pages get the footer even before the
-  // page-number pass at the end.
-  void organisation; // tagged below in renderFooterText
+  // Footer text (organisation left, "OpenLiDARViewer" right) is drawn by
+  // renderFooterText in the page-number pass at the end.
   return { page, y: PAGE_HEIGHT - MARGIN };
 }
 

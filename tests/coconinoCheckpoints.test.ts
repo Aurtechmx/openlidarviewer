@@ -51,7 +51,7 @@ const BOUND: Record<string, number> = { NVA: 0.3, VVA: 0.6 };
 describe('OLV DTM vs independent USGS checkpoints (Coconino, NAVD88↔NAVD88)', () => {
   const has = existsSync(GROUND) && existsSync(MATCHED);
 
-  (has ? it : it.skip)('agrees with surveyed ground truth within each checkpoint\'s USGS accuracy class', () => {
+  it.runIf(has)('agrees with surveyed ground truth within each checkpoint\'s USGS accuracy class', () => {
     const cps = readMatched();
 
     // No control points may enter the accuracy set: every matched checkpoint is
@@ -91,7 +91,7 @@ describe('OLV DTM vs independent USGS checkpoints (Coconino, NAVD88↔NAVD88)', 
   });
 
   const hasUni = existsSync(UNIVERSE) && existsSync(MATCHED);
-  (hasUni ? it : it.skip)('the frozen universe and the matched crop agree, and E5 is not falsely claimed', () => {
+  it.runIf(hasUni)('the frozen universe and the matched crop agree, and E5 is not falsely claimed', () => {
     const uni = JSON.parse(readFileSync(UNIVERSE, 'utf8'));
     const matched = readMatched();
     // The crop covers exactly the frozen matched universe — deterministic membership.

@@ -157,6 +157,16 @@ describe('local storage fallback', () => {
     const store = createLocalStore(new MemStorage());
     await expect(store.put(entry('big', 1, 'x'.repeat(LOCAL_STORAGE_MAX_BYTES + 1)))).rejects.toThrow();
   });
+  it('turns a storage write failure into a rejection, not a synchronous throw', async () => {
+    const s = new MemStorage();
+    s.setItem = () => { throw new Error('QuotaExceededError'); };
+    const store = createLocalStore(s);
+    let pending: Promise<void> | undefined;
+    expect(() => { pending = store.put(entry('k', 1)); }).not.toThrow();
+    await expect(pending).rejects.toThrow('QuotaExceededError');
+    expect(() => { pending = store.remove('k'); }).not.toThrow();
+    await expect(pending).resolves.toBeUndefined();
+  });
   it('reads a corrupt value as empty', async () => {
     const s = new MemStorage();
     s.setItem('olv:recovery:journal', '{broken');
