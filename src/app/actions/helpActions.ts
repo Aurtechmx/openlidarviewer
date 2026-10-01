@@ -74,7 +74,7 @@ export function contributeHelpActions(deps: HelpActionDeps): Action[] {
           /* no document: the page cannot open, and the note below says so */
         }
         void opening.catch(() => false).then((opened) => {
-          if (!opened) (deps.notify ?? (() => {}))('Open a scan first. The session log opens under Data.');
+          if (!opened) (deps.notify ?? (() => {}))('Nothing is logged yet. The session log starts with the first file you open.');
         });
       },
     },

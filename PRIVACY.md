@@ -30,6 +30,9 @@ The app stores some data in your browser, on your device only:
 
 You can remove all of it by clearing the site data for the app in your browser.
 
+The Session log is not stored: it lives in this tab's memory, a reload clears
+it, and it leaves your device only if you copy or export it.
+
 ## Remote datasets and samples
 
 When you open a remote dataset, a sample, or search a public data catalogue,

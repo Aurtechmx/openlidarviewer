@@ -74,32 +74,124 @@ export const SESSION_LOG_CAP = 2000;
 /** Longest text kept per entry, so one runaway message cannot fill the log. */
 const MAX_TEXT = 400;
 
-/** The last segment of a path or link, without query or fragment. */
-export function baseName(value: string): string {
-  const noQuery = value.split(/[?#]/)[0] ?? '';
-  const parts = noQuery.split(/[\\/]/).filter((p) => p.length > 0);
-  const last = parts[parts.length - 1] ?? '';
-  try {
-    return decodeURIComponent(last);
-  } catch {
-    return last;
-  }
+const LINK = /^[a-z][a-z0-9+.-]{0,31}:\/\//i;
+const OPAQUE = /^(data|blob):/i;
+
+/** What a link keeps: its origin and, when it names a file, that file's name. */
+interface LinkParts {
+  /** `scheme://host[:port]`, or '' for a local `file:` link. */
+  readonly origin: string;
+  /** The last path segment when it looks like a file name, else ''. */
+  readonly name: string;
+  /** Whether the path had more than the one segment shown. */
+  readonly deeper: boolean;
 }
 
-// A link (any scheme), a home-relative path, a POSIX path with at least two
-// segments, or a Windows drive or UNC path. Group 1 is the character before a
-// POSIX path, which is kept.
-const PATH_PATTERN =
-  /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>)]+|~\/[^\s"'<>)]+|(^|[\s("'=])(\/[^\s"'<>)/]+\/[^\s"'<>)]+)|\b[A-Za-z]:\\[^\s"'<>)]+|\\\\[^\s"'<>)]+/gi;
+function linkParts(raw: string): LinkParts | null {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  const segs = url.pathname.split('/').filter((x) => x.length > 0);
+  let name = (segs[segs.length - 1] ?? '').split(';')[0] ?? '';
+  try {
+    name = decodeURIComponent(name);
+  } catch {
+    /* keep the encoded form */
+  }
+  // Decoding can bring back a `?` or `#`; nothing after one is a file name.
+  name = name.split(/[?#;]/)[0] ?? '';
+  // A segment with no file extension can be an access token: drop it.
+  if (!/\.[a-z0-9]{1,8}$/i.test(name)) name = '';
+  // `host` carries the port and never the user name or password.
+  const origin = url.protocol === 'file:' ? '' : `${url.protocol}//${url.host}`;
+  return { origin, name, deeper: segs.length > 1 || (segs.length === 1 && !name) };
+}
 
-/** Replace every path or link in `text` with its base name. */
+/**
+ * The last segment of a file name, path or link. A local name keeps `#`, `?`
+ * and `%`; only a link (`scheme://`) is parsed, and from a link only the file
+ * name is kept.
+ */
+export function baseName(value: string): string {
+  const v = value.trim();
+  if (OPAQUE.test(v)) return `${v.slice(0, 4).toLowerCase()}:…`;
+  if (LINK.test(v)) {
+    const parts = linkParts(v);
+    if (parts) return parts.name || parts.origin.replace(/^[a-z0-9+.-]+:\/\//i, '');
+  }
+  const segs = v.split(/[\\/]/).filter((x) => x.length > 0);
+  return segs[segs.length - 1] ?? '';
+}
+
+function linkText(raw: string): string {
+  if (OPAQUE.test(raw)) return `${raw.slice(0, 4).toLowerCase()}:…`;
+  const parts = linkParts(raw);
+  if (!parts) return '(link)';
+  if (!parts.origin) return parts.name || '(file)';
+  if (!parts.name) return parts.deeper ? `${parts.origin}/…` : parts.origin;
+  return `${parts.origin}/${parts.deeper ? '…/' : ''}${parts.name}`;
+}
+
+/** Split sentence punctuation (and an unmatched closing bracket) off a link's end. */
+function trimTail(m: string): [string, string] {
+  let end = m.length;
+  const count = (c: string, upTo: number): number => {
+    let n = 0;
+    for (let i = 0; i < upTo; i++) if (m[i] === c) n++;
+    return n;
+  };
+  while (end > 0) {
+    const ch = m[end - 1]!;
+    if ('.,;:!?\'"'.includes(ch)) end--;
+    else if (ch === ')' && count('(', end) < count(')', end)) end--;
+    else if (ch === ']' && count('[', end) < count(']', end)) end--;
+    else break;
+  }
+  return [m.slice(0, end), m.slice(end)];
+}
+
+// One pass, so a replacement is never scanned again. Groups, in order:
+// 1 an opaque data: or blob: link, 2 a link with a scheme, 3 the folders of a
+// Windows drive path (either slash), 4 the folders of a UNC path, 5 the folders
+// of a home-relative path, 6 the character before a POSIX path and 7 that
+// path's folders. A folder name may hold single spaces. Every quantifier is
+// bounded by the next separator, so a crafted line costs linear time.
+const WIN_SEG = String.raw`[^\\/\s:*?"<>|]+(?: [^\\/\s:*?"<>|]+)*`;
+const POSIX_SEG = String.raw`[^/\s"'<>]+(?: [^/\s"'<>]+)*`;
+const PATH_PATTERN = new RegExp(
+  [
+    String.raw`(\b(?:data|blob):[^\s"'<>]+)`,
+    String.raw`(\b[a-z][a-z0-9+.-]{0,31}:\/\/[^\s"'<>]+)`,
+    String.raw`(\b[a-z]:[\\/](?:${WIN_SEG}[\\/])*)`,
+    String.raw`(\\\\(?:${WIN_SEG}[\\/])+)`,
+    String.raw`(~[\\/](?:${POSIX_SEG}[\\/])*)`,
+    String.raw`(^|[\s("'=:\[\x60])(\/(?:${POSIX_SEG}\/)+)`,
+  ].join('|'),
+  'gi',
+);
+
+/** Replace every link with its origin and file name, and drop the folders of every local path. */
 export function redactPaths(text: string): string {
-  return text.replace(PATH_PATTERN, (m: string, lead?: string, posix?: string) =>
-    posix ? `${lead ?? ''}${baseName(posix) || '(path)'}` : baseName(m) || '(link)');
+  return text.replace(PATH_PATTERN, (_m: string, opaque?: string, link?: string, win?: string, unc?: string, home?: string, lead?: string) => {
+    if (opaque) {
+      const [body, tail] = trimTail(opaque);
+      return linkText(body) + tail;
+    }
+    if (link) {
+      const [body, tail] = trimTail(link);
+      return linkText(body) + tail;
+    }
+    if (win || unc || home) return '';
+    return lead ?? '';
+  });
 }
 
 function clean(text: string): string {
-  const one = redactPaths(text).replace(/\s+/g, ' ').trim();
+  // Cut first: redaction is linear, but a megabyte message is still a megabyte.
+  const one = redactPaths(text.slice(0, MAX_TEXT * 4)).replace(/\s+/g, ' ').trim();
   return one.length > MAX_TEXT ? `${one.slice(0, MAX_TEXT - 1)}…` : one;
 }
 

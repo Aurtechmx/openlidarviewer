@@ -15,6 +15,7 @@ import type { ResultEntry } from '../src/app/results/resultsIndex';
 import type { ResolvedCrs } from '../src/geo/CoordinateTypes';
 import { contributeHelpActions } from '../src/app/actions/helpActions';
 import { rankActions } from '../src/ui/actionRegistry';
+import { loggedAction } from '../src/app/actionDefinitions';
 
 function clock(start = Date.UTC(2026, 8, 30, 12, 0, 0)): () => number {
   let t = start;
@@ -89,7 +90,7 @@ describe('session log store', () => {
     expect(baseName('C:\\data\\north.laz')).toBe('north.laz');
     expect(baseName('https://example.org/tiles/site%201.copc.laz?sig=abc')).toBe('site 1.copc.laz');
     expect(redactPaths('Could not read /srv/a/scans/x.laz: bad header')).toBe('Could not read x.laz: bad header');
-    expect(redactPaths('Opened https://bucket.example.org/a/b/c.copc.laz')).toBe('Opened c.copc.laz');
+    expect(redactPaths('Opened https://bucket.example.org/a/b/c.copc.laz')).toBe('Opened https://bucket.example.org/…/c.copc.laz');
     expect(redactPaths('Saved to C:\\data\\a\\out.csv')).toBe('Saved to out.csv');
     expect(redactPaths('Grade 1/20 and 3/4')).toBe('Grade 1/20 and 3/4');
     const log = createSessionLog();
@@ -97,6 +98,57 @@ describe('session log store', () => {
     const out = sessionLogText(log) + sessionLogCsv(log) + sessionLogJson(log, 'x');
     expect(out).not.toContain('/srv/a');
     expect(out).toContain('scan.e57');
+  });
+
+  it.each([
+    // [input, expected]
+    ['Opened https://h.example/data/scan%20(1).laz?X-Amz-Signature=deadbeef&X-Amz-Credential=AKIA1', 'Opened https://h.example/…/scan (1).laz'],
+    ['See (https://h.example/a/b.laz).', 'See (https://h.example/…/b.laz).'],
+    ['From https://user:secret@example.com', 'From https://example.com'],
+    ['From https://user:secret@example.com/', 'From https://example.com'],
+    ['Link https://h.example/dl/SECRETTOKEN123/ failed', 'Link https://h.example/… failed'],
+    ['Link https://h.example/x/b.laz;jsessionid=SECRET ok', 'Link https://h.example/…/b.laz ok'],
+    ['Link https://h.example/x/b.laz#frag ok', 'Link https://h.example/…/b.laz ok'],
+    ['Link https://h.example/x/a%3Ftoken%3Dabc.laz ok', 'Link https://h.example/… ok'],
+    ['Image data:image/png;base64,iVBORw0KGgo= done', 'Image data:… done'],
+    ['Blob blob:https://app.example/9f1c-uuid done', 'Blob blob:… done'],
+    ['Open file:///srv/a/private/scan.e57 now', 'Open scan.e57 now'],
+    ['Read C:\\Users\\Alex Smith\\Documents\\scan.laz: bad header', 'Read scan.laz: bad header'],
+    ['Read C:/Data/alex/Documents/scan.laz', 'Read scan.laz'],
+    ['Read \\\\server\\share\\survey\\tile.laz', 'Read tile.laz'],
+    ['path:/srv/alex/private/site.laz', 'path:site.laz'],
+    ['[/srv/alex/private/site.laz]', '[site.laz]'],
+    ['Saved /srv/Alex Smith/out/a.csv and /tmp/b.csv', 'Saved a.csv and b.csv'],
+    ['Opened ~/scans/site.laz', 'Opened site.laz'],
+    ['Grade 1/20 and 3/4, and/or 50 m/s', 'Grade 1/20 and 3/4, and/or 50 m/s'],
+  ])('redacts %s', (input, expected) => {
+    expect(redactPaths(input)).toBe(expected);
+  });
+
+  it('keeps local file names whole: no cut at # or ?, no percent decoding', () => {
+    expect(baseName('Block #3.laz')).toBe('Block #3.laz');
+    expect(baseName('site-a#b-profile.csv')).toBe('site-a#b-profile.csv');
+    expect(baseName('what?.laz')).toBe('what?.laz');
+    expect(baseName('a%20b.laz')).toBe('a%20b.laz');
+    expect(baseName('/srv/data/Block #3.laz')).toBe('Block #3.laz');
+    expect(createSessionLog().append({ kind: 'scan', text: 'Opened Block #3.laz', scan: 'Block #3.laz' })?.scan).toBe('Block #3.laz');
+  });
+
+  it('redacts a long crafted line in linear time', () => {
+    const log = createSessionLog();
+    for (const unit of ['a.', 'a.a:', '/a ', 'C:\\a ', 'https://a/', 'a a/']) {
+      const text = unit.repeat(Math.ceil(65536 / unit.length));
+      const t0 = performance.now();
+      log.append({ kind: 'message', text });
+      expect(performance.now() - t0, unit).toBeLessThan(60);
+    }
+    expect(log.entries().every((e) => e.text.length <= 400)).toBe(true);
+  });
+
+  it('dates the copied text', () => {
+    const log = createSessionLog({ now: () => Date.UTC(2026, 9, 1, 12, 0, 0) });
+    log.append({ kind: 'command', text: 'Frame all', scan: null });
+    expect(sessionLogText(log)).toMatch(/^2026-10-0[12] \d{2}:\d{2}:\d{2}  Command  Frame all$/);
   });
 
   it('neutralises formula characters in CSV cells', () => {
@@ -123,7 +175,7 @@ describe('session log recorder', () => {
       onActiveChange: active.on,
       activeName: () => clouds[clouds.length - 1]?.name ?? null,
     };
-    const dispose = installSessionLogRecorder({
+    const rec = installSessionLogRecorder({
       log,
       doc,
       scans,
@@ -131,7 +183,7 @@ describe('session log recorder', () => {
       results: { entries: () => results, subscribe: resSig.on },
     });
     return {
-      log, doc, dispose,
+      log, doc, dispose: () => rec.dispose(),
       open(id: string, name: string, sourceFormat?: string) { clouds = [...clouds, { id, name, sourceFormat }]; active.fire(); },
       close(id: string) { clouds = clouds.filter((c) => c.id !== id); active.fire(); },
       setCrs(c: ResolvedCrs | null) { current = c; crsSig.fire(); },
@@ -225,9 +277,37 @@ describe('session log in the palette', () => {
       doc.removeEventListener('olv-session-log-open', on);
       a.run();
       await new Promise((r) => setTimeout(r, 0));
-      expect(notify).toHaveBeenCalledWith('Open a scan first. The session log opens under Data.');
+      expect(notify).toHaveBeenCalledWith('Nothing is logged yet. The session log starts with the first file you open.');
     } finally {
       vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('registry runs in the log', () => {
+  function capture(): { details: unknown[]; restore(): void } {
+    const details: unknown[] = [];
+    const doc = new EventTarget();
+    doc.addEventListener(SESSION_LOG_EVENT, (e) => details.push((e as CustomEvent).detail));
+    vi.stubGlobal('document', doc);
+    return { details, restore: () => vi.unstubAllGlobals() };
+  }
+
+  it('logs a command after it ran, and as failed when it threw', () => {
+    const c = capture();
+    try {
+      const order: string[] = [];
+      c.details.length = 0;
+      const ok = loggedAction({ id: 'a', title: 'Frame all', section: 'Camera', run: () => { order.push('ran'); } });
+      ok.run();
+      const bad = loggedAction({ id: 'b', title: 'Export LAS', section: 'Export', run: () => { throw new Error('no scan'); } });
+      expect(() => bad.run()).toThrow('no scan');
+      expect(c.details).toEqual([
+        { kind: 'command', text: 'Frame all', detail: 'Camera', status: 'done' },
+        { kind: 'command', text: 'Export LAS', detail: 'Export', status: 'failed' },
+      ]);
+    } finally {
+      c.restore();
     }
   });
 });

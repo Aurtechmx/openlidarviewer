@@ -143,7 +143,8 @@ export function createResultsShelf(deps: ResultsShelfDeps): ResultsShelf {
       const id = e.workbench;
       const wb = node('button', 'olv-results-workbench', 'Workbench');
       wb.type = 'button';
-      wb.setAttribute('aria-label', `Open ${e.title} in the Profile Workbench`);
+      wb.setAttribute('aria-label', `Workbench: ${e.title}`);
+      wb.title = `Open ${e.title} in the Profile Workbench`;
       wb.addEventListener('click', () => {
         live.textContent = openWorkbench(id)
           ? `Opening ${e.title} in the Profile Workbench.`

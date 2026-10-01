@@ -1197,7 +1197,7 @@ export class MeasurePanel {
       className: `olv-mp-open-workbench${primary ? ' olv-primary-action' : ''}`,
       type: 'button',
       text: 'Open in Profile Workbench',
-      ariaLabel: `Open ${s.name} in the Profile Workbench`,
+      ariaLabel: `Open in Profile Workbench: ${s.name}`,
     }) as HTMLButtonElement;
     b.dataset.measurementId = s.id;
     b.addEventListener('click', () => this._openProfileFocus(s, b));

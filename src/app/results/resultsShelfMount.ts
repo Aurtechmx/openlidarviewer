@@ -76,6 +76,8 @@ export interface ResultsShelfSources {
     applyCameraPose(pose: Pose): void;
     /** The mounted streaming source, read by the state strip for its name. */
     readonly streamingCloud?: { readonly name: string } | null;
+    /** The annotation store, read by the Session log. */
+    readonly annotate?: { getSummaries(): readonly { readonly id: string; readonly title: string }[] };
   };
   /** Viewer id to stable layer id, for measurement owners. */
   readonly identity: { stableIdFor(viewerId: string): string | null | undefined };

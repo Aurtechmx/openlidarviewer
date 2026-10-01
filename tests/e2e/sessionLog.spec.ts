@@ -12,7 +12,7 @@
  * Screenshots go to `OLV_SHOT_DIR` when it is set.
  */
 import { test, expect, type Page, type Locator } from '@playwright/test';
-import { placeProfile } from './helpers';
+import { dropDenseGridPly, placeProfile, showWorkspaceMode } from './helpers';
 
 const SHOT_DIR = process.env.OLV_SHOT_DIR;
 
@@ -41,6 +41,7 @@ test.describe('profile workbench button', () => {
     await expect(cta).toBeVisible();
     await expect(cta).toHaveText('Open in Profile Workbench');
     await expect(cta).toHaveClass(/olv-primary-action/);
+    await expect(cta).toHaveAccessibleName(/^Open in Profile Workbench: /);
     const box = await cta.boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(24);
     // One primary action in the panel for this state.
@@ -58,7 +59,7 @@ test.describe('profile workbench button', () => {
     await page.locator('.olv-results-toggle').click();
     const wb = page.locator('.olv-results-row[data-result-type="measurement"] .olv-results-workbench');
     await expect(wb).toHaveCount(1);
-    await expect(wb).toHaveAccessibleName(/Open .* in the Profile Workbench/);
+    await expect(wb).toHaveAccessibleName(/^Workbench: /);
     await wb.click();
     await expect(page.locator('.olv-workbench')).toBeVisible({ timeout: 10_000 });
   });
@@ -112,12 +113,77 @@ test.describe('session log', () => {
     await expect(logPage.locator('.olv-sl-text', { hasText: /^Frame all$/ })).toHaveCount(1);
 
     const json = page.waitForEvent('download');
-    await logPage.getByRole('button', { name: 'Export the session log as JSON' }).click();
+    await logPage.getByRole('button', { name: 'Export JSON', exact: true }).click();
     expect((await json).suggestedFilename()).toMatch(/^session-log-\d{8}-\d{4}\.json$/);
     const csv = page.waitForEvent('download');
-    await logPage.getByRole('button', { name: 'Export the session log as CSV' }).click();
+    await logPage.getByRole('button', { name: 'Export CSV', exact: true }).click();
     expect((await csv).suggestedFilename()).toMatch(/\.csv$/);
     // Each export is itself a line in the log.
     await expect(logPage.locator('.olv-sl-text', { hasText: /^Exported session-log-/ })).toHaveCount(2);
+  });
+});
+
+const CANDIDATE_POINTS = [
+  { x: 0.5, y: 0.5 }, { x: 0.46, y: 0.46 }, { x: 0.54, y: 0.54 }, { x: 0.5, y: 0.42 }, { x: 0.5, y: 0.58 },
+];
+
+/** Click the canvas near its centre until the annotation editor opens, then save `title`. */
+async function placeAnnotation(page: Page, title: string, offset: number): Promise<void> {
+  const box = await page.locator('canvas').first().boundingBox();
+  if (!box) throw new Error('scene canvas has no bounding box');
+  const editor = page.locator('.olv-anno-editor');
+  let opened = false;
+  for (let i = 0; i < CANDIDATE_POINTS.length && !opened; i++) {
+    const p = CANDIDATE_POINTS[(i + offset) % CANDIDATE_POINTS.length]!;
+    await page.mouse.click(box.x + box.width * p.x, box.y + box.height * p.y);
+    opened = await editor.waitFor({ state: 'visible', timeout: 2_000 }).then(() => true, () => false);
+  }
+  if (!opened) throw new Error('no canvas point opened the annotation editor');
+  await page.locator('.olv-anno-editor-title').fill(title);
+  await page.locator('.olv-anno-editor-save').click();
+  await expect(editor).toBeHidden();
+}
+
+test.describe('session log sources', () => {
+  test('filtering the annotation list adds no create or delete lines', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    await dropDenseGridPly(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+    await page.locator('.olv-tool', { hasText: 'Annotate' }).click();
+    await showWorkspaceMode(page, 'work');
+    await placeAnnotation(page, 'First note', 0);
+    await placeAnnotation(page, 'Second note', 1);
+    const search = page.locator('.olv-ap-search');
+    await search.fill('First');
+    await expect(page.locator('.olv-anno-panel .olv-ap-row')).toHaveCount(1);
+    await search.fill('');
+    await expect(page.locator('.olv-anno-panel .olv-ap-row')).toHaveCount(2);
+    await page.keyboard.press('Escape');
+
+    await openFromPalette(page, 'actions');
+    const texts = page.locator('.olv-session-log .olv-sl-text');
+    await expect(texts.filter({ hasText: /^Annotation created: / })).toHaveCount(2);
+    await expect(texts.filter({ hasText: /^Annotation deleted: / })).toHaveCount(0);
+  });
+
+  test('with no scan open, the palette shows the log of a failed open in a dialog', async ({ page }) => {
+    await page.goto('/?test=1');
+    const dt = await page.evaluateHandle(() => {
+      const d = new DataTransfer();
+      d.items.add(new File([new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])], 'broken #1.laz'));
+      return d;
+    });
+    await page.dispatchEvent('body', 'drop', { dataTransfer: dt });
+    await expect(page.locator('body > .olv-visually-hidden[role="alert"]')).not.toHaveText('', { timeout: 20_000 });
+    await expect(page.locator('.olv-left-panels')).toBeAttached({ timeout: 20_000 });
+
+    await openFromPalette(page, 'actions');
+    const dialog = page.getByRole('dialog', { name: 'Session log' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('.olv-sl-row.is-error')).not.toHaveCount(0);
+    await shot(page, 'session-log-no-scan');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
   });
 });

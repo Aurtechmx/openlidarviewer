@@ -7780,34 +7780,52 @@ Profile Workbench button. A finished profile in the Measure panel shows
 panel's one primary action (UX-D2); older profiles keep the same control in the
 secondary style. It is a native button, so Tab and Enter reach it, and it opens
 the dock the chart's Expand opens, with the same fallback to the focus view.
-A profile row in the Results shelf gains a Workbench control that shows the
-Measure page and opens the same dock. Both controls stand at least 32 px tall,
-44 px on a coarse pointer.
+Its accessible name starts with its visible label. A profile row in the
+Results shelf gains a Workbench control that shows the Measure page and opens
+the same dock. The Measure button is at least 32 px tall and 44 px on a coarse
+pointer; the shelf control is 44 px, like its Focus and Export neighbours.
 
-Session log. A page under Data lists what was done in the tab: scans opened and
+Session log. A Data page lists what was done in the tab: scans opened and
 closed with name and source format, each CRS the scan took and where it came
 from, analysis results and when they go out of date, measurements and
 annotations created and deleted, class filter changes, exports with file type,
-palette and dock commands, and the messages and errors the app announced.
-Each line carries its time and the scan it applied to. The palette opens it as
-"Session log"; "actions" and "/actions" find it. No free conventional key
-exists, so it has no shortcut. The page has the location bar crumb, Back and
-Escape of every Data page, Copy as text, and Export as JSON or CSV.
+palette commands with their outcome, and the messages and errors the app
+announced. Each line carries its time and the scan it applied to; a result
+names the scan it was computed on, not the active one. The palette opens it as
+"Session log", and "actions" and "/actions" find it. It has no shortcut. The
+page has the location bar crumb, Back and Escape of every Data page, Copy as
+text (dated lines), and Export as JSON or CSV. With no scan open it shows in a
+dialog, so the lines of a failed open can be read.
 
 Sources. `src/app/sessionLog/sessionLogRecorder.ts` adds no hook to any owner.
-It subscribes to the scan service's active-layer signal, the CRS service and
-the Results index, and watches the live regions, the class filter banner, the
-annotation list and the download anchors every export goes through. Registry
-runs arrive as a document event from the action registry chunk. The store
-(`sessionLog.ts`) keeps the newest 2,000 entries in memory, counts the ones it
-dropped and says so in the page, the text, the CSV and the JSON. Nothing is
-stored or sent. File locations shrink to base names on the way in.
+Scans come from the scan service's active-layer signal and the Inspector's
+layer list signal; the CRS from the CRS service; results and measurements from
+the Results index; annotations from the annotation store's summaries on every
+shell sync; the class filter from the set of hidden classes, so a class that
+streaming finds adds no line. Messages come from the polite and alert regions
+and the toast, each observed on its own. Registry runs arrive as a document
+event once they have run, marked failed when they threw. Dock buttons and keys
+call their handlers directly and are not logged as commands.
 
-The recorder, the page and their stylesheet load with the workspace shell
-chunk. The index chunk, the Viewer chunk, `main.ts` and `Viewer.ts` do not
-grow (live build compared with `origin/main` built the same way).
+Store. `sessionLog.ts` keeps the newest 2,000 entries in memory, counts the ones
+it drops and says so in the page, the text, the CSV and the JSON. Nothing is
+stored or sent. Text is cut to 1,600 characters before redaction and 400 after.
+A link keeps its scheme, host and file name only: no user name, password,
+query, fragment or `;` parameters, and a last segment with no file extension is
+dropped. `data:` and `blob:` links become `data:…` and `blob:…`. A local path
+loses its folders, with either slash and with spaces in folder names. A local
+file name keeps `#`, `?` and `%`.
 
-Covered by `tests/sessionLog.test.ts` (each source, order, the 2,000 cap and its
-note, base names, palette search) and `tests/e2e/sessionLog.spec.ts` (the
-button opens the dock, the shelf row opens it, the palette opens the log after
-a scan and a measurement, Back and Escape leave it, both exports download).
+The page renders only while on screen and adds one row per new entry. The
+recorder, the page and their stylesheet load with the workspace shell chunk.
+The index chunk, the Viewer chunk, `main.ts` and `Viewer.ts` do not grow (live
+build compared with `origin/main` built the same way).
+
+Covered by `tests/sessionLog.test.ts` (store, cap, redaction table, linear-time
+redaction, palette search, registry outcome), `tests/sessionLogRecorder.test.ts`
+(each source, scan naming with two scans, file names with `#`, regions only,
+one filter line per change), `tests/sessionLogPage.test.ts` (table, order,
+off-screen rendering, incremental rows, copy, exports, dialog) and
+`tests/e2e/sessionLog.spec.ts` (the button and the shelf row open the dock, the
+palette opens the log after a scan and a measurement, filtering annotations adds
+no lines, the no-scan dialog, Back and Escape, both exports).

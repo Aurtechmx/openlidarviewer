@@ -20,7 +20,6 @@ export const SESSION_LOG_KIND_LABEL: Readonly<Record<SessionLogKind, string>> = 
   error: 'Error',
 };
 
-
 // ── text, CSV and JSON ──────────────────────────────────────────────────────
 
 function pad(n: number, w = 2): string {
@@ -33,6 +32,12 @@ export function clockTime(t: number): string {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
+/** Local date and time, YYYY-MM-DD HH:MM:SS, for text read outside the app. */
+export function dateTime(t: number): string {
+  const d = new Date(t);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${clockTime(t)}`;
+}
+
 export function droppedNote(n: number): string {
   return `${n} older ${n === 1 ? 'entry' : 'entries'} dropped`;
 }
@@ -41,7 +46,7 @@ export function sessionLogText(log: Pick<SessionLog, 'entries' | 'dropped'>): st
   const lines: string[] = [];
   if (log.dropped() > 0) lines.push(`(${droppedNote(log.dropped())})`);
   for (const e of log.entries()) {
-    const parts = [clockTime(e.time), SESSION_LOG_KIND_LABEL[e.kind]];
+    const parts = [dateTime(e.time), SESSION_LOG_KIND_LABEL[e.kind]];
     if (e.scan) parts.push(e.scan);
     let line = `${parts.join('  ')}  ${e.text}`;
     if (e.detail) line += ` (${e.detail})`;

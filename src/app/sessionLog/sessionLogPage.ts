@@ -1,18 +1,19 @@
 /**
  * sessionLogPage.ts
  *
- * The Session log page under Data: a read-only table of the session's log,
- * with Copy as text and Export as JSON or CSV. It ships in the workspace
- * shell's chunk and builds its DOM on first open. The router owns the page
- * header, the location bar crumb, Back and Escape.
+ * The Session log page: a read-only table of the session's log, with Copy as
+ * text and Export as JSON or CSV. With a scan open it is the Data page whose
+ * header, location bar crumb, Back and Escape the router owns. With none open
+ * it shows in a dialog, so the lines of a failed open can still be read.
+ *
+ * The page does no work while it is off screen. Once shown, a new entry adds
+ * one row and the rows already on screen stay as they are.
  *
  * Every cell is set through `textContent`: the entries carry file and layer
  * names.
- *
- * The download repeats the steps of `io/download.ts`: importing that module
- * here would add its chunk to the shell's preload list in the startup bundle.
  */
 
+import './sessionLog.css';
 import type { SessionLog, SessionLogEntry } from './sessionLog';
 import {
   clockTime,
@@ -24,9 +25,21 @@ import {
 } from './sessionLogFormat';
 
 export interface SessionLogPage {
-  /** Re-read the log; the page also follows it while mounted. */
+  /** Rebuild the table from the log. */
   refresh(): void;
+  /** Rebuild only if entries arrived while the page was off screen. */
+  refreshIfDirty(): void;
+  /** Stop following the log and empty the host. */
   dispose(): void;
+}
+
+export interface SessionLogPageOptions {
+  readonly version?: string;
+  readonly now?: () => number;
+  /** Clipboard to copy into; null when the browser has none. Defaults to the browser's. */
+  readonly clipboard?: Pick<Clipboard, 'writeText'> | null;
+  /** How a repaint is deferred; one frame by default. */
+  readonly schedule?: (fn: () => void) => void;
 }
 
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
@@ -36,6 +49,19 @@ function node<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, 
   return n;
 }
 
+function button(className: string, text: string): HTMLButtonElement {
+  const b = node('button', className, text);
+  b.type = 'button';
+  return b;
+}
+
+function stamp(t: number): string {
+  const d = new Date(t);
+  const p = (n: number): string => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+}
+
+/** The steps of `io/download.ts`, repeated so this chunk loads no other. */
 function download(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -47,33 +73,24 @@ function download(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function stamp(t: number): string {
-  const d = new Date(t);
-  const p = (n: number): string => String(n).padStart(2, '0');
-  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+function defaultSchedule(fn: () => void): void {
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => fn());
+  else setTimeout(fn, 16);
 }
 
-export function mountSessionLogPage(
-  host: HTMLElement,
-  log: SessionLog,
-  opts: { version?: string; now?: () => number; clipboard?: Pick<Clipboard, 'writeText'> | null } = {},
-): SessionLogPage {
+export function mountSessionLogPage(host: HTMLElement, log: SessionLog, opts: SessionLogPageOptions = {}): SessionLogPage {
   const now = opts.now ?? (() => Date.now());
+  const schedule = opts.schedule ?? defaultSchedule;
   host.replaceChildren();
   host.classList.add('olv-session-log');
 
   const intro = node('p', 'olv-sl-intro', 'What you did to the scans in this tab, and the result. The log lives in this tab\'s memory, and a reload clears it. It names each file by its base name.');
   const bar = node('div', 'olv-sl-actions');
-  const copy = node('button', 'olv-sl-btn', 'Copy as text');
-  copy.type = 'button';
-  const json = node('button', 'olv-sl-btn', 'Export JSON');
-  json.type = 'button';
-  json.setAttribute('aria-label', 'Export the session log as JSON');
-  const csv = node('button', 'olv-sl-btn', 'Export CSV');
-  csv.type = 'button';
-  csv.setAttribute('aria-label', 'Export the session log as CSV');
-  const order = node('button', 'olv-sl-btn olv-sl-order');
-  order.type = 'button';
+  const copy = button('olv-sl-btn', 'Copy as text');
+  const json = button('olv-sl-btn', 'Export JSON');
+  const csv = button('olv-sl-btn', 'Export CSV');
+  const order = button('olv-sl-btn olv-sl-order', 'Newest first');
+  order.title = 'Reverse the order of the table';
   bar.append(copy, json, csv, order);
 
   const status = node('p', 'olv-sl-status');
@@ -93,10 +110,19 @@ export function mountSessionLogPage(
   const body = node('tbody', '');
   table.append(caption, head, body);
   const empty = node('p', 'olv-sl-empty', 'Nothing recorded yet. Opening a scan, measuring, running an analysis or exporting adds a line here.');
+  const marker = node('tr', 'olv-sl-dropped');
+  const markerCell = node('td', '');
+  markerCell.colSpan = 2;
+  marker.append(markerCell);
 
   host.append(intro, bar, status, table, empty);
 
   let newestFirst = true;
+  /** Rows on screen, oldest first, beside the seq of the entry each shows. */
+  let rows: Array<{ seq: number; tr: HTMLTableRowElement }> = [];
+  let dirty = false;
+  let queued = false;
+  let disposed = false;
 
   function row(e: SessionLogEntry): HTMLTableRowElement {
     const tr = node('tr', `olv-sl-row is-${e.kind} is-${e.status}`);
@@ -111,28 +137,54 @@ export function mountSessionLogPage(
     return tr;
   }
 
-  function render(): void {
-    const list = log.entries();
+  /** Caption, buttons, empty note and the dropped row: everything but the entry rows. */
+  function frame(): void {
+    const count = log.entries().length;
     const dropped = log.dropped();
-    caption.textContent = `${list.length} ${list.length === 1 ? 'entry' : 'entries'}${dropped ? `, ${droppedNote(dropped)}` : ''}`;
+    caption.textContent = `${count} ${count === 1 ? 'entry' : 'entries'}${dropped ? `, ${droppedNote(dropped)}` : ''}`;
     order.textContent = newestFirst ? 'Newest first' : 'Oldest first';
-    order.setAttribute('aria-label', `Order: ${newestFirst ? 'newest first' : 'oldest first'}. Activate to reverse.`);
     thTime.setAttribute('aria-sort', newestFirst ? 'descending' : 'ascending');
-    const rows = list.map(row);
-    if (newestFirst) rows.reverse();
-    const marker = dropped
-      ? (() => {
-        const tr = node('tr', 'olv-sl-row olv-sl-dropped');
-        const td = node('td', '', droppedNote(dropped));
-        td.colSpan = 2;
-        tr.append(td);
-        return tr;
-      })()
-      : null;
-    body.replaceChildren(...(marker && !newestFirst ? [marker] : []), ...rows, ...(marker && newestFirst ? [marker] : []));
-    table.hidden = list.length === 0;
-    empty.hidden = list.length > 0;
-    for (const b of [copy, json, csv]) b.disabled = list.length === 0;
+    table.hidden = count === 0;
+    empty.hidden = count > 0;
+    for (const b of [copy, json, csv]) b.disabled = count === 0;
+    if (dropped) {
+      markerCell.textContent = droppedNote(dropped);
+      if (newestFirst) body.append(marker);
+      else body.insertBefore(marker, body.firstChild);
+    } else {
+      marker.remove();
+    }
+  }
+
+  function render(): void {
+    dirty = false;
+    rows = log.entries().map((e) => ({ seq: e.seq, tr: row(e) }));
+    const trs = rows.map((r) => r.tr);
+    if (newestFirst) trs.reverse();
+    body.replaceChildren(...trs);
+    frame();
+  }
+
+  /** Add rows for entries newer than the last one shown; drop rows past the cap. */
+  function update(): void {
+    const list = log.entries();
+    const first = list[0]?.seq ?? Infinity;
+    while (rows.length && rows[0]!.seq < first) rows.shift()!.tr.remove();
+    const last = rows.length ? rows[rows.length - 1]!.seq : 0;
+    let i = list.length;
+    while (i > 0 && list[i - 1]!.seq > last) i--;
+    for (const e of list.slice(i)) {
+      const tr = row(e);
+      rows.push({ seq: e.seq, tr });
+      if (newestFirst) body.insertBefore(tr, body.firstChild);
+      else if (marker.parentElement === body) body.insertBefore(tr, null);
+      else body.append(tr);
+    }
+    frame();
+  }
+
+  function visible(): boolean {
+    return host.isConnected && !host.closest('.olv-ws-off') && !host.closest('.olv-hidden');
   }
 
   order.addEventListener('click', () => {
@@ -159,21 +211,86 @@ export function mountSessionLogPage(
     status.textContent = 'Session log exported as CSV.';
   });
 
-  // Follow the log while mounted, one repaint per frame at most.
-  let queued = false;
   const off = log.subscribe(() => {
-    if (queued) return;
+    if (queued || disposed) return;
     queued = true;
-    const later = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn: () => void) => setTimeout(fn, 16);
-    later(() => { queued = false; render(); });
+    schedule(() => {
+      queued = false;
+      if (disposed) return;
+      if (!visible()) dirty = true;
+      else if (dirty) render();
+      else update();
+    });
   });
   render();
 
   return {
     refresh: render,
+    refreshIfDirty() {
+      if (dirty && visible()) render();
+    },
     dispose() {
+      disposed = true;
       off();
       host.replaceChildren();
     },
   };
+}
+
+let dialogSeq = 0;
+
+/**
+ * The page in a dialog, for when no scan is open and the Data rail is hidden.
+ * Escape and its Close button dismiss it, Tab stays inside it, and focus goes
+ * back to where it was. It uses the shared modal styles; the Modal chunk is
+ * not imported, so the startup bundle's preload lists do not change.
+ */
+export function openSessionLogDialog(log: SessionLog, opts: SessionLogPageOptions = {}): { close(): void } {
+  const restore = document.activeElement as HTMLElement | null;
+  const titleId = `olv-session-log-title-${++dialogSeq}`;
+  const title = node('h2', 'olv-modal-title', 'Session log');
+  title.id = titleId;
+  const close = button('olv-modal-x olv-sl-close', 'Close');
+  close.setAttribute('aria-label', 'Close Session log');
+  const host = node('section', '');
+  const dialog = node('div', 'olv-modal olv-sl-dialog');
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-labelledby', titleId);
+  const head = node('div', 'olv-modal-head');
+  head.append(title, close);
+  const bodyWrap = node('div', 'olv-modal-body');
+  bodyWrap.append(host);
+  dialog.append(head, bodyWrap);
+  const backdrop = node('div', 'olv-modal-backdrop');
+  backdrop.append(dialog);
+  document.body.append(backdrop);
+  const page = mountSessionLogPage(host, log, opts);
+
+  let closed = false;
+  const done = (): void => {
+    if (closed) return;
+    closed = true;
+    page.dispose();
+    backdrop.remove();
+    restore?.focus?.();
+  };
+  close.addEventListener('click', done);
+  backdrop.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      done();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const stops = Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled])'));
+    if (!stops.length) return;
+    const first = stops[0]!;
+    const last = stops[stops.length - 1]!;
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+  close.focus();
+  return { close: done };
 }
