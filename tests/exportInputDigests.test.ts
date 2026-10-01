@@ -304,7 +304,7 @@ describe('analysis packages', () => {
     if (out.status !== 'ok') throw new Error('fixture refused');
     const zip = buildObservatoryPackage(out.record, out.rows, [], { basename: 'o', crs: CRS, sourceSha256: SHA });
     const readme = textOf(zip, 'o/README.md');
-    expect(readme).toContain(`Analysis input SHA-256  ${out.record.source.sourceDigest}`);
+    expect(readme).toContain(`Analysis input SHA-256  ${out.record.source.analysisInputSha256}`);
     expect(readme).toContain(`Source SHA-256  ${SHA}`);
     expect(readme).toContain(ORIGIN_LINE);
     expect(jsonOf<{ source: { sha256: string } }>(zip, 'o/scientific-passport.json').source.sha256).toBe(SHA);
@@ -423,5 +423,56 @@ describe('point re-save (convert)', () => {
     const snap = {};
     markStreamedCloud(snap);
     expect(await sourceDigestOf({ key: snap, streamed: false })).toEqual({ sha256: null, note: STREAMED_SOURCE_NOTE });
+  });
+});
+
+describe('multi-source, cancellation and record names', () => {
+  const bytesOf = (s: string) => new TextEncoder().encode(s);
+
+  it('H1: a terrain analysis over several inputs records no single source digest', async () => {
+    const { sampleStridedTerrain } = await import('../src/render/terrainStreamSample');
+    const { contoursFromCore: fromCache } = await import('../src/terrain/contour/terrainCoreCache');
+    const { analysisSourceDigest, MULTIPLE_SOURCES_NOTE } = await import('../src/export/exportDigests');
+    const a = hill(); const b = hill().map((v) => v + 100);
+    rememberCloudFile({}, new File([bytesOf('a')], 'a.las'), a);
+    rememberCloudFile({}, new File([bytesOf('b')], 'b.las'), b);
+    const one = sampleStridedTerrain([{ pos: a }], [], a.length / 3, 1e6, false)!;
+    const two = sampleStridedTerrain([{ pos: a }, { pos: b }], [], (a.length + b.length) / 3, 1e6, false)!;
+    const mixed = sampleStridedTerrain([{ pos: a }], [{ key: '0-0-0-0', pos: b }], (a.length + b.length) / 3, 1e6, false)!;
+    const resultOf = (positions: Float32Array) => fromCache(computeTerrainCoreFor(positions), PARAMS);
+    function computeTerrainCoreFor(positions: Float32Array) {
+      const core = computeTerrainCore(positions, PARAMS);
+      return registerCoreFor(core, positions);
+    }
+    const { registerCoreInputs: registerCoreFor } = await import('../src/terrain/contour/terrainCoreCache');
+    expect(await analysisSourceDigest(resultOf(one.positions), null)).toEqual({ sha256: createHash('sha256').update('a').digest('hex'), note: null });
+    expect(await analysisSourceDigest(resultOf(two.positions), null)).toEqual({ sha256: null, note: MULTIPLE_SOURCES_NOTE(2, false) });
+    expect((await analysisSourceDigest(resultOf(mixed.positions), null)).note).toBe(MULTIPLE_SOURCES_NOTE(2, true));
+  }, 60_000);
+
+  it('L2: no recorded inputs and no cloud is "not computed", never "streamed"', async () => {
+    const { analysisSourceDigest } = await import('../src/export/exportDigests');
+    expect(await analysisSourceDigest({}, null)).toEqual({ sha256: null, note: SOURCE_NOT_COMPUTED_NOTE });
+  });
+
+  it('L1: an aborted hash is not computed and is not cached', async () => {
+    const key = {};
+    rememberCloudFile(key, new File([bytesOf('source bytes')], 'x.las'));
+    const ac = new AbortController(); ac.abort();
+    expect((await sourceDigestOf({ key, streamed: false }, undefined, ac.signal)).note).toBe(SOURCE_NOT_COMPUTED_NOTE);
+    expect((await sourceDigestOf({ key, streamed: false })).sha256).toBe(SHA);
+  });
+
+  it('N1: the Observatory record names its digest analysisInputSha256; an old record still reads', () => {
+    const out = runObservatoryOverCloud(wallAndGroundCloud(), {
+      voxelEdge: 0.5, declaredStepBudget: 50_000_000, filename: 'wall.ptx', metresPerUnit: 1, buildTag: 't', planning: false,
+    });
+    if (out.status !== 'ok') throw new Error('fixture refused');
+    const src = out.record.source as unknown as Record<string, unknown>;
+    expect(src.analysisInputSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect('sourceDigest' in src).toBe(false);
+    const old = { ...out.record, source: { filename: 'w', sourceDigest: 'f'.repeat(64), basis: 'resident-only', metresPerUnit: 1 } };
+    const zip = buildObservatoryPackage(old as unknown as typeof out.record, out.rows, [], { basename: 'o' });
+    expect(textOf(zip, 'o/README.md')).toContain(`Analysis input SHA-256  ${'f'.repeat(64)}`);
   });
 });

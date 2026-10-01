@@ -6,8 +6,10 @@
  * (`IncrementalSha256`), so memory stays bounded and the array is never copied
  * whole. The same points in the same order always give the same digest.
  *
- * Export provenance records this as the analysis-input digest: the exact
- * points an analysis read after filters, Withheld exclusion and clipping.
+ * Export provenance records this as the analysis-input digest: the terrain
+ * sample (strided to at most 300k points, in the viewer's scene frame, after
+ * Withheld exclusion and clipping, before class exclusion). It identifies the
+ * input between runs of this app; it is not recomputable from the file alone.
  */
 import { IncrementalSha256 } from '../io/heavy/incrementalSha256';
 

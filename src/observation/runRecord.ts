@@ -52,7 +52,9 @@ export interface ObservationRunSource {
   /** The source's base file name (never a directory), or null when not known. */
   readonly filename: string | null;
   /** SHA-256 of every resident position the run read (little-endian float32, array order): identifies the resident point set, not the source file. */
-  readonly sourceDigest: string | null;
+  readonly analysisInputSha256: string | null;
+  /** The same digest under its earlier name, in records written before `analysisInputSha256`. */
+  readonly sourceDigest?: string | null;
   /** `TerrainCoverageMode`-shaped ('full' | 'resident-only' | 'sampled'), carried as a plain string so this module stays import-free of `TerrainContracts`. */
   readonly basis: string;
   /** Metres per source linear unit, or `null` when unknown (OB-INV-10: every metric figure downstream is withheld when this is null). */
@@ -179,4 +181,9 @@ export function buildObservationConfig(record: ObservationRunRecord): Record<str
     parameters: record.parameters,
     stations: record.stations.map((s) => ({ id: s.id, sourceIndex: s.sourceIndex, tauAbs: s.tauAbs, tauRel: s.tauRel })),
   };
+}
+
+/** The run's analysis-input digest, from a current record or one that predates the rename. */
+export function observationInputDigest(source: ObservationRunSource): string | null {
+  return source.analysisInputSha256 ?? source.sourceDigest ?? null;
 }

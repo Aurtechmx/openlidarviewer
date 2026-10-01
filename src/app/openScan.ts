@@ -18,6 +18,7 @@
  * v0.6 decomposition (see `docs/architecture/architecture-map.md`).
  */
 
+import { sourcePositions } from '../model/pointFrames';
 import { isSessionFile } from '../io/sessionFile';
 import { scanFactsFromStatic } from './sessionScanFacts';
 import { rememberCloudFile } from '../io/sourceFiles';
@@ -543,7 +544,7 @@ export async function attachStaticCloud(
   deps.inspector.setCoverageAvailable(false);
   // Retain the source file + whether the display cloud was reduced, so the
   // Export panel can offer a full-resolution re-decode.
-  if (source.file) { deps.rememberSourceFile(id, source.file); rememberCloudFile(result.cloud, source.file); }
+  if (source.file) { deps.rememberSourceFile(id, source.file); rememberCloudFile(result.cloud, source.file, sourcePositions(result.cloud)); }
   deps.rememberReduced(id, result.downsampled);
   // Local-first counter — categorical source format only; never the file name.
   try { recordUsage('scan-open', result.cloud.sourceFormat); }

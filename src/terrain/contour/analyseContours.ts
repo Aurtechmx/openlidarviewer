@@ -668,6 +668,18 @@ function positionsToPoints(positions: Float32Array): TerrainPoint[] {
  */
 export type TerrainPointInput = Float32Array | ReadonlyArray<TerrainPoint>;
 
+/** XYZ of `points` as one Float32Array, for the input digest. */
+function pointsXyz(points: ReadonlyArray<TerrainPoint>): Float32Array {
+  const out = new Float32Array(points.length * 3);
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i]!;
+    out[i * 3] = p.x;
+    out[i * 3 + 1] = p.y;
+    out[i * 3 + 2] = p.z;
+  }
+  return out;
+}
+
 /** Normalise either accepted input form to the `TerrainPoint[]` the stages need. */
 function normalisePoints(input: TerrainPointInput): ReadonlyArray<TerrainPoint> {
   return input instanceof Float32Array ? positionsToPoints(input) : input;
@@ -1512,7 +1524,7 @@ export function computeTerrainCore(
     cellSizeM: params.cellSizeM,
     gridGeometry,
     coreWarnings: warnings,
-    inputSha256: pointsSha256(input instanceof Float32Array ? input : points.flatMap((p) => [p.x, p.y, p.z])),
+    inputSha256: pointsSha256(input instanceof Float32Array ? input : pointsXyz(points)),
   };
 }
 

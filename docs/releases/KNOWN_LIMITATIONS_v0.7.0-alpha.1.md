@@ -299,8 +299,10 @@ Some surfaces cannot carry every field:
   passport in the same package carry the digests.
 - A figure PNG rendered from several visible layers has no single source file
   and carries neither the source digest nor the CRS origin chunk.
-- A terrain analysis over several layers records the digest of the active
-  layer's file; the analysis-input digest covers every gathered point.
+- A terrain analysis over several layers, or over a static layer and a
+  stream, records no single source digest and states how many sources it
+  combined. The analysis-input digest covers the whole sample, which is
+  strided and in the viewer's scene frame, so only this app can reproduce it.
 - Flow Pulse and Terrain Access packages read a DTM, not points: their input
   digest is the DTM product digest.
 - The batch converter hashes each input file, but records the CRS origin as

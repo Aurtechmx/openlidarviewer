@@ -8051,10 +8051,15 @@ Every provenance-carrying export now records three fields the same way:
   records `not available for streamed sources`, a scan whose File is not held
   records `not available: the original file bytes are not held`, and a failed
   read records `not computed`. No export writes a stand-in value.
-- `analysisInputSha256`: SHA-256 over the exact XYZ the terrain core read
-  (`pointsSha256`, little-endian float32, in order), after class filters,
-  Withheld exclusion and clipping. The core computes it in the terrain worker
-  and carries it through the cache and the persisted payload (format 3).
+- `analysisInputSha256`: SHA-256 over the terrain sample the core read
+  (`pointsSha256`, little-endian float32, in order): strided to at most 300k
+  points, in the scene frame, after Withheld exclusion and clipping, before
+  class exclusion. The core computes it in the terrain worker and carries it
+  through the cache and the persisted payload (format 3). The Observatory
+  record names its resident-positions digest the same way.
+- A terrain export over several inputs, or a static layer and a stream,
+  records no single source digest and states the count. A long first hash is
+  cancelled by the next export.
 - `crsOrigin`: where the CRS came from (L194).
 
 Surfaces: point XYZ, PLY, OBJ; LAS, XYZ and ASC re-saves; measurement GeoJSON;

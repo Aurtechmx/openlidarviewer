@@ -22,7 +22,7 @@ function fakeRecord() {
     id: 'obs-test',
     generatedAt: '2026-01-01T00:00:00.000Z',
     build: 'test',
-    source: { filename: 'fixture.ptx', sourceDigest: 'abc', basis: 'resident-only', metresPerUnit: 1 },
+    source: { filename: 'fixture.ptx', analysisInputSha256: 'abc', basis: 'resident-only', metresPerUnit: 1 },
     domain: { min: [0, 0, 0] as const, max: [1, 1, 1] as const },
     voxelEdge: 0.5,
     stations: [{ id: 'station-1', source: 'ptx-block', originStatus: 'DECLARED', worldTranslation: [0, 0, 0] as const, sourceIndex: 0, tauAbs: 0.25, tauRel: 0 }],

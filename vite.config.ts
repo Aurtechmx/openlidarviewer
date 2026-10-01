@@ -617,7 +617,7 @@ export default defineConfig(({ mode }) => {
           // The export digest record, its resolver, the CRS-origin leaf and the
           // points hasher are shared by every provenance-carrying export chunk.
           // One chunk keeps the shell's preload list to one more entry.
-          if (/\/(export\/exportDigests|science\/exportDigestRecord|science\/crsOrigin|science\/pointsSha256|io\/streamedClouds|io\/heavy\/worker\/localOocIndexerWorkerClient)\./.test(id)) {
+          if (/\/(export\/exportDigests|science\/exportDigestRecord|science\/crsOrigin|science\/pointsSha256|io\/heavy\/worker\/localOocIndexerWorkerClient)\./.test(id)) {
             return 'exportDigests';
           }
           return undefined;

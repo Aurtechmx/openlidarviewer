@@ -68,9 +68,9 @@ describe('resident positions digest', () => {
     const rb = runObservatoryOverCloud(cloudOf(b), OPTS);
     const ra2 = runObservatoryOverCloud(cloudOf(a.slice()), OPTS);
     if (ra.status !== 'ok' || rb.status !== 'ok' || ra2.status !== 'ok') throw new Error('run not ok');
-    expect(ra.record.source.sourceDigest).not.toBe(rb.record.source.sourceDigest);
-    expect(ra.record.source.sourceDigest).toBe(ra2.record.source.sourceDigest);
-    expect(ra.record.source.sourceDigest).toBe(residentPositionsDigest(a));
+    expect(ra.record.source.analysisInputSha256).not.toBe(rb.record.source.analysisInputSha256);
+    expect(ra.record.source.analysisInputSha256).toBe(ra2.record.source.analysisInputSha256);
+    expect(ra.record.source.analysisInputSha256).toBe(residentPositionsDigest(a));
   });
 
   it('hashes 10M floats in bounded time and matches chunk-free hashing', () => {

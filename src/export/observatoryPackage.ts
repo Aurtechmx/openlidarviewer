@@ -41,6 +41,7 @@
  * Pure-data: returns ZIP bytes; no DOM.
  */
 
+import { observationInputDigest } from '../observation/runRecord';
 import { INPUT_NOT_RECORDED_NOTE, SOURCE_NOT_SUPPLIED_NOTE, sourceSha256Text } from '../science/exportDigestRecord';
 import { buildZip, type ZipEntry } from '../convert/zipStore';
 import { sourceInterpretationLines, sourceInterpretationOf } from '../science/sourceInterpretation';
@@ -417,7 +418,7 @@ function readmeText(record: ObservationRunRecord, opts: {
     ...sourceInterpretationLines(opts.sourceInterpretation),
     ...(opts.sourceInterpretation.crsOrigin ? [`  ${crsOriginLine(opts.sourceInterpretation.crsOrigin)}`] : []),
     `  Source file    ${record.source.filename ?? 'unknown'}`,
-    `  Analysis input SHA-256  ${record.source.sourceDigest ?? INPUT_NOT_RECORDED_NOTE}`,
+    `  Analysis input SHA-256  ${observationInputDigest(record.source) ?? INPUT_NOT_RECORDED_NOTE}`,
     '                 SHA-256 of every resident position the run read (little-endian float32), not of the source file',
     `  Source SHA-256  ${sourceSha256Text({ sourceSha256: opts.sourceSha256, sourceSha256Note: opts.sourceSha256Note })}`,
     `  Basis          ${record.source.basis}`,
@@ -440,7 +441,7 @@ function readmeText(record: ObservationRunRecord, opts: {
     '',
     'Reproduction',
     `  1. Load ${opts.basename}.olv-observation.json's domain/voxelEdge/parameters/stations against the identical`,
-    `     source and station set (resident positions digest ${record.source.sourceDigest ?? 'unavailable'}).`,
+    `     source and station set (analysis input SHA-256 ${observationInputDigest(record.source) ?? 'unavailable'}).`,
     `  2. Re-run. The result's fieldDigest must equal ${record.fieldDigest}.`,
     '  3. A different digest means the source, the ROI, the stations or the parameters changed.',
     '',

@@ -131,9 +131,11 @@ The source digest is SHA-256 over the original file bytes, hashed in a worker
 the first time a scan is exported and cached per file. A streamed scan records
 `not available for streamed sources`; a scan whose file is not held records
 that; no export writes a stand-in value. The analysis-input digest is SHA-256
-over the gathered XYZ the terrain core read, each value a little-endian
-float32, in order; it is computed inside the core, in the terrain worker, and
-is carried by the cached and persisted core.
+over the terrain sample the core read (strided to at most 300k points, in the
+scene frame, before class exclusion), each value a little-endian float32, in
+order. It is computed in the terrain worker and carried by the cached and
+persisted core; it is not recomputable from the file alone. A terrain export
+over several inputs records no single source digest and names the count.
 
 ## Remaining gaps
 

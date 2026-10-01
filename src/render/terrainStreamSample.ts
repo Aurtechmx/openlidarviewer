@@ -13,6 +13,7 @@
  * so they keep their given order and lead the walk.
  */
 
+import { recordAnalysisInputs } from '../io/streamedClouds';
 import type { LayerSpatialTransform } from '../geo/ProjectSpatialFrame';
 import { accumulatorOffset } from './layerPlacement';
 import { excludesWithheld, isWithheld } from '../science/withheldPolicy';
@@ -168,8 +169,10 @@ export function sampleStridedTerrain(
   if (classification) {
     sampledClassification = oi === cap ? classification : classification.subarray(0, oi);
   }
+  const out = oi * 3 === positions.length ? positions : positions.subarray(0, oi * 3);
+  recordAnalysisInputs(out, { files: staticBuffers.map((b) => b.pos), streamed: sortedStreaming.length > 0 });
   return {
-    positions: oi * 3 === positions.length ? positions : positions.subarray(0, oi * 3),
+    positions: out,
     classification: sampledClassification,
     sampled: stride > 1,
     withheldExcluded: withheldOutcome(excluding, everyBufferFlagged),

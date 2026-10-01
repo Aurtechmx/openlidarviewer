@@ -6,8 +6,10 @@
  */
 const files = new WeakMap<object, File>();
 
-export function rememberCloudFile(cloud: object, file: File): void {
+/** `positions`, when given, identifies the cloud inside a terrain sample. */
+export function rememberCloudFile(cloud: object, file: File, positions?: object): void {
   files.set(cloud, file);
+  if (positions) files.set(positions, file);
 }
 
 export function cloudFileOf(cloud: object): File | undefined {
