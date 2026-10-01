@@ -20,7 +20,7 @@
  * / body / listener surface the modal chrome touches.
  */
 
-import { describe, it, expect, beforeAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 
 type Handler = (e: unknown) => void;
 
@@ -40,6 +40,11 @@ class FakeEl {
   /** Always "visible" so the focus-trap's offsetParent filter keeps buttons. */
   readonly offsetParent: FakeEl | null = FAKE_VISIBLE;
   focused = false;
+  inert = false;
+  readonly classList = {
+    add: (c: string): void => { this._classes.add(c); },
+    contains: (c: string): boolean => this._classes.has(c),
+  };
 
   constructor(tagName: string) {
     this.tagName = tagName;
@@ -160,6 +165,7 @@ beforeAll(() => {
       const i = list.indexOf(fn);
       if (i >= 0) list.splice(i, 1);
     },
+    setTimeout: (fn: () => void, ms: number) => setTimeout(fn, ms),
   };
 });
 
@@ -239,5 +245,31 @@ describe('openConfirm', () => {
     const body = backdrop.find('olv-confirm-body')!;
     const paras = body.children.filter((c) => c.className.includes('olv-confirm-line'));
     expect(paras.map((p) => p.textContent)).toEqual(['Reason one.', 'Reason two.']);
+  });
+});
+
+describe('openModal over another dialog', () => {
+  it('one Escape dismisses the confirm on top and leaves the dialog underneath open', async () => {
+    const { wireDialogA11y, openConfirm } = await import('../src/ui/Modal');
+    const underneathEscape = vi.fn();
+    const underneath = wireDialogA11y(new FakeEl('div') as unknown as HTMLElement, { onEscape: underneathEscape });
+    const answer = openConfirm({ title: 'Open large file?', message: 'Big.' });
+    winKeydown('Escape');
+    await expect(answer).resolves.toBe(false);
+    expect(underneathEscape).not.toHaveBeenCalled();
+    underneath.teardown();
+  });
+});
+
+describe('openModal exit fade', () => {
+  it('makes the backdrop inert while it stays mounted for the fade', async () => {
+    const { openModal } = await import('../src/ui/Modal');
+    const handle = openModal({ title: 'Result', body: new FakeEl('div') as unknown as HTMLElement, exitMs: 130 });
+    const backdrop = handle.element as unknown as FakeEl;
+    expect(backdrop.inert).toBe(false);
+    handle.close();
+    expect(backdrop.classList.contains('olv-modal-closing')).toBe(true);
+    expect(BODY.contains(backdrop)).toBe(true);
+    expect(backdrop.inert).toBe(true);
   });
 });

@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { isBenignPageError } from './pageErrors';
+import { seedStaleReloadCooldown } from './helpers';
 
 /**
  * v0.3.9 workflow recorder — Cmd-Shift-U / Ctrl-Shift-U
@@ -141,5 +142,46 @@ test.describe('workflow recorder — capture into a live session', () => {
     });
     await pressRecordToggle(page);
     expect(errors).toEqual([]);
+  });
+});
+
+test.describe('workflow recorder: settings chunk failure', () => {
+  const SETTINGS_CHUNK = '**/WorkflowConfigPanel-*.js';
+  const TRY_AGAIN = '.olv-lasso-toast-action';
+
+  async function openSettings(page: Page): Promise<void> {
+    await page.keyboard.press('ControlOrMeta+KeyK');
+    await page.locator('.olv-palette-input').fill('Workflow recorder settings');
+    await page.locator('.olv-palette-row', { hasText: 'Workflow recorder settings' }).click();
+  }
+
+  test('a failed settings chunk reports through the toast with a Try again action', async ({ page }) => {
+    await seedStaleReloadCooldown(page);
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => { if (!isBenignPageError(String(err))) pageErrors.push(String(err)); });
+    await page.goto('/');
+    await page.route(SETTINGS_CHUNK, (route) => route.abort());
+    await openSettings(page);
+    await expect(page.locator(TRY_AGAIN)).toHaveText('Try again', { timeout: 10_000 });
+    await expect(page.locator('.olv-wfc-card')).toBeHidden();
+    // An unhandled rejection fires its pageerror before two more paints land.
+    await page.evaluate(() => new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    }));
+    expect(pageErrors).toEqual([]);
+  });
+
+  // Firefox re-fetches a specifier that failed once; Chromium and WebKit keep
+  // the failure in the module map, so only this leg reaches the network again.
+  test('firefox: Try again after a failed settings load opens the panel', async ({ page, browserName }) => {
+    test.skip(browserName !== 'firefox', 'Chromium/WebKit cannot re-fetch a failed specifier without a full navigation.');
+    await seedStaleReloadCooldown(page);
+    await page.goto('/');
+    let attempts = 0;
+    await page.route(SETTINGS_CHUNK, (route) => (++attempts === 1 ? route.abort() : route.continue()));
+    await openSettings(page);
+    await expect(page.locator(TRY_AGAIN)).toHaveText('Try again', { timeout: 10_000 });
+    await page.locator(TRY_AGAIN).click();
+    await expect(page.locator('.olv-wfc-card')).toBeVisible({ timeout: 10_000 });
   });
 });

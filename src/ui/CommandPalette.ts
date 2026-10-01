@@ -1,5 +1,5 @@
 import { el } from './dom';
-import { wireDialogA11y, wireBackdropDismiss, type DialogA11yHandle } from './Modal';
+import { wireDialogA11y, wireBackdropDismiss, dialogOpen, type DialogA11yHandle } from './Modal';
 import {
   groupBySection,
   rankActions,
@@ -164,10 +164,10 @@ export class CommandPalette {
     this._a11y = null;
   }
 
-  /** Open if closed; close if open. */
+  /** Open if closed; close if open. Never opens over another open dialog. */
   toggle(): void {
     if (this._open) this.close();
-    else this.open();
+    else if (!dialogOpen()) this.open();
   }
 
   // ── internals ───────────────────────────────────────────────────

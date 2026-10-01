@@ -738,12 +738,14 @@ describe.runIf(WORKFLOW_RECORDER_ENABLED)('buildActionRegistry — workflow reco
     expect(h.startWorkflowRecording).toHaveBeenCalledTimes(1);
   });
 
-  it('saves the stopped workflow and states what the recipient needs', () => {
+  it('saves the stopped workflow and, once saved, states what the recipient needs', async () => {
     const h = harness();
     const workflow = { events: [] };
     h.stopRecording.mockReturnValue(workflow);
     h.run('workflow.stop-save');
     expect(h.save).toHaveBeenCalledWith(workflow);
+    expect(h.toast).not.toHaveBeenCalled();
+    await flush();
     expect(h.toast).toHaveBeenCalledWith(
       'Workflow saved. Replay needs the same scan open on the other end.',
     );

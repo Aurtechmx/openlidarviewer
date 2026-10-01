@@ -182,3 +182,31 @@ test.describe('command palette keyboard navigation', () => {
     await expect(page.locator('.olv-palette')).toBeHidden();
   });
 });
+
+test.describe('command palette over another dialog', () => {
+  test('Cmd-K and ? do not open the palette or the shortcut sheet over an open dialog', async ({ page }) => {
+    await page.goto('/');
+    // Load the sheet first, so the check below is a toggle rather than a chunk fetch.
+    await page.keyboard.press('Shift+Slash');
+    await expect(page.locator('.olv-shortcuts')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.olv-shortcuts')).toBeHidden();
+    await page.keyboard.press('ControlOrMeta+KeyK');
+    await page.locator('.olv-palette-input').fill('Workflow recorder settings');
+    await page.locator('.olv-palette-row', { hasText: 'Workflow recorder settings' }).click();
+    const settings = page.locator('.olv-wfc-card');
+    await expect(settings).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('.olv-wfc-close')).toBeFocused();
+    await page.keyboard.press('ControlOrMeta+KeyK');
+    await page.keyboard.press('Shift+Slash');
+    await page.evaluate(() => new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    }));
+    await expect(page.locator('.olv-palette')).toBeHidden();
+    await expect(page.locator('.olv-shortcuts')).toBeHidden();
+    await page.keyboard.press('Escape');
+    await expect(settings).toBeHidden();
+    await page.keyboard.press('ControlOrMeta+KeyK');
+    await expect(page.locator('.olv-palette')).toBeVisible();
+  });
+});

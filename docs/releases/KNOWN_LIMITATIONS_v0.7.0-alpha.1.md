@@ -70,6 +70,20 @@ hides its basis: on a strided load the report says in the value itself that it
 is the declared count over the display-sample footprint. What is missing is one
 record rather than two computations.
 
+## The ground filter rejects ground the reference keeps
+
+`tests/groundFilterPdalAgreement.test.ts` compares the built-in ground filter,
+label for label, with an independent reference implementation on five
+synthetic scenes, and writes the figures to
+`validation/cross-implementation/pdal-pipeline/results-ground-filter-metrics.json`.
+Pooled over the five, the filter labels 73.94% of the reference's ground
+returns as ground. The rolling scene reaches 44.79%, and the flat scene with
+low blunders 0.99%. The disagreement runs one way: of the 27,833 returns the
+filter calls ground, the reference agrees on all but three. These figures
+measure agreement with one other implementation and say nothing about accuracy
+against surveyed ground. Both can misjudge the same return, and no one
+surveyed a synthetic surface.
+
 ## Flow Pulse is topographic routing only
 
 Flow Pulse opens from the command palette and routes flow over the analysed DTM
@@ -193,7 +207,7 @@ for this development cut: that evidence comes from the engines themselves.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,670 lines and `src/render/Viewer.ts` is 6,056, one hundred and sixty-seven lines
+`src/main.ts` is 4,658 lines and `src/render/Viewer.ts` is 6,056, one hundred and sixty-seven lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more

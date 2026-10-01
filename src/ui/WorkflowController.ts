@@ -386,3 +386,17 @@ export class WorkflowController {
     this.badge.classList.toggle('olv-workflow-badge-playing', this._state === 'playing');
   }
 }
+
+/**
+ * Save a finished workflow, then say what happened: saved, or cancelled when
+ * the user dismissed the save picker. The message waits for the save, so it
+ * never claims a file that was not written.
+ */
+export async function saveWorkflowWithToast(
+  controller: Pick<WorkflowController, 'save'>,
+  workflow: Workflow,
+  toast: (message: string) => void,
+): Promise<void> {
+  const name = await controller.save(workflow);
+  toast(name === null ? 'Workflow · save cancelled.' : 'Workflow saved. Replay needs the same scan open on the other end.');
+}

@@ -95,6 +95,7 @@ beforeAll(() => {
 
 let loadResult: 'success' | 'reject' | 'undefined' | 'pending' = 'success';
 let releasePending: (() => void) | null = null;
+let chunkRequests = 0;
 const QualityPanelCtor = vi.fn(function (this: { element: FakeEl; render: () => void }) {
   this.element = new FakeEl('div');
   this.element.className = 'olv-quality-pop';
@@ -102,6 +103,7 @@ const QualityPanelCtor = vi.fn(function (this: { element: FakeEl; render: () => 
 });
 vi.mock('../src/lazyChunks', () => ({
   loadQualityPanel: () => {
+    chunkRequests += 1;
     if (loadResult === 'reject') return Promise.reject(new Error('chunk failed'));
     if (loadResult === 'undefined') return Promise.resolve(undefined);
     if (loadResult === 'pending') {
@@ -193,6 +195,23 @@ describe('QualityControl — failure path (LAZY-1)', () => {
 
     loadResult = 'success';
     toast.calls[0].action?.onClick();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(control.isOpen).toBe(true);
+    expect(root.findByClass('olv-quality-pop')).toHaveLength(1);
+  });
+
+  it('a second "Try again" while the retry is loading joins it instead of loading the chunk twice', async () => {
+    loadResult = 'reject';
+    const toast = fakeToast();
+    const { root, control } = await makeControl(toast);
+    await control.open();
+    loadResult = 'pending';
+    chunkRequests = 0;
+    const tryAgain = toast.calls[0].action!.onClick;
+    tryAgain();
+    tryAgain(); // the toast is still on screen while the retry runs
+    expect(chunkRequests).toBe(1);
+    releasePending?.();
     await new Promise((r) => setTimeout(r, 0));
     expect(control.isOpen).toBe(true);
     expect(root.findByClass('olv-quality-pop')).toHaveLength(1);

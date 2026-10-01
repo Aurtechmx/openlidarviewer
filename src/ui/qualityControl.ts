@@ -206,8 +206,9 @@ export class QualityControl {
       trigger: buttonLazyTrigger(this._button),
       // A successful retry must actually SHOW the panel, not just refetch
       // bytes nothing then consumes, so this re-enters the whole `open()`
-      // flow rather than `_ensurePanel()` alone.
-      retry: () => { this._loading = null; void this.open(); },
+      // flow rather than `_ensurePanel()` alone. A second click while that
+      // retry is loading joins its in-flight `_loading`.
+      retry: () => { void this.open(); },
     }).then((QualityPanelCtor) => {
       this._loading = null;
       if (!QualityPanelCtor) return undefined;

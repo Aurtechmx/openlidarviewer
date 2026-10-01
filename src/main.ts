@@ -48,7 +48,7 @@ import {
   type GeoExportContext,
   type ReportExportDeps,
 } from './app/reportExport';
-import { WorkflowController, WORKFLOW_RECORDER_ENABLED } from './ui/WorkflowController';
+import { WorkflowController, WORKFLOW_RECORDER_ENABLED, saveWorkflowWithToast } from './ui/WorkflowController';
 import type { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
 import { RecommendedViewChip } from './ui/RecommendedViewChip';
 import { recommendCameraPreset, flatnessFromBounds, describeProjectSize } from './render/camera/recommendView';
@@ -1241,21 +1241,9 @@ function ensureWorkflowConfigPanel(): Promise<WorkflowConfigPanel> {
       if (pendingWorkflowConfig !== undefined) panel.setConfig(pendingWorkflowConfig);
       workflowConfigPanel = panel;
       return panel;
-    });
+    }).catch((err: unknown) => { workflowConfigPanelLoading = null; throw err; }); // a failed load is retried on the next call
   }
   return workflowConfigPanelLoading;
-}
-
-/** Save a finished workflow and confirm (or report a cancelled picker). */
-async function saveWorkflowWithToast(
-  workflow: import('./render/workflow/workflowRecorder').Workflow,
-): Promise<void> {
-  const name = await workflowController.save(workflow);
-  if (name === null) {
-    showLassoToast('Workflow · save cancelled.');
-    return;
-  }
-  showLassoToast('Workflow saved. Replay needs the same scan open on the other end.');
 }
 
 /** Start (with the configured countdown) the right toast. */
@@ -1273,7 +1261,7 @@ function startWorkflowRecording(): void {
 function toggleWorkflowRecord(): void {
   if (workflowController.state === 'recording') {
     const workflow = workflowController.stopRecording();
-    if (workflow) void saveWorkflowWithToast(workflow);
+    if (workflow) void saveWorkflowWithToast(workflowController, workflow, showLassoToast);
     else showLassoToast('Workflow · nothing recorded yet.');
   } else {
     startWorkflowRecording();

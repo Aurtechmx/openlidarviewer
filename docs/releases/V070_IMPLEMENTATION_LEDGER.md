@@ -100,17 +100,18 @@ the two entries were renumbered when the branches were integrated.
 | L194 | EXPORT | TEST | low | FIXED | new | Export provenance named the resolved CRS but not where it came from (LAS VLR, EVLR, user choice or none). |
 | L195 | LOADER | TEST | high | FIXED | new | The curated swissSURFACE3D tile streamed with no CRS: the file carries no CRS record, and the catalogue's stated frame was never applied, so georeferenced exports were refused and lengths read as source units. |
 | L196 | LOADER | TEST | low | FIXED | new | The curated swisstopo and GURS records carried lat/lon bboxes that did not contain their tiles. |
+| L199 | UI | TEST | med | FIXED | new | A lazy panel whose loader threw at once stayed busy, a second Try again started a second build, a throwing ready callback rejected, and one load re-enabled a button another still held; Tab from outside a dialog stayed outside, a fading modal took input, one Escape closed every stacked dialog, and Cmd-K and ? opened over a modal; Stop and save confirmed a save before it ran, and a failed workflow settings load was dropped and then cached. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 51
+- FIXED: 52
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 72
+- total: 73
 
 ## Detail
 
@@ -7517,3 +7518,59 @@ record (EPSG:3857) already contains the centre of its manifest's
 The bbox is not read by the app at runtime, so nothing else changes.
 
 Covered by `tests/curatedBboxTileCentre.test.ts`.
+
+### L199 · FIXED · UI
+
+Lazy panels, dialogs and the workflow recorder's palette commands.
+
+Lazy loading (`src/app/lazySurfaceLoad.ts`):
+
+- `run()` awaits `load()` inside `try`/`catch`/`finally`, so a loader that
+  throws before it returns a promise reaches the toast and releases its
+  trigger.
+- The singleton's Try again calls `ensure()` and leaves the in-flight load in
+  place, so a second click on the same toast joins the running retry. The
+  Speed and Quality panel's retry in `src/ui/qualityControl.ts` works the same
+  way.
+- A ready callback that throws is reported through the same toast. The built
+  value stays cached and `ensure()` resolves to it.
+- `buttonLazyTrigger` counts overlapping busy calls. The button stays disabled
+  until the last load settles, then returns to the `disabled` state it had
+  before the first.
+
+Dialogs (`src/ui/Modal.ts`):
+
+- Tab from outside a dialog moves focus to its first control, as Shift+Tab
+  moves it to the last.
+- A closing modal sets `inert` on its backdrop for the length of the fade.
+- Open dialogs form one stack, and only the topmost answers Escape and Tab.
+  The command palette and the shortcut sheet do not open while another dialog
+  is open, so Cmd-K and ? cannot raise them over a modal; each still closes
+  itself.
+
+Workflow recorder:
+
+- Stop and save calls `saveWorkflowWithToast` in
+  `src/ui/WorkflowController.ts`, the save the record shortcut uses, so the
+  toast waits for the save and names a dismissed picker as cancelled.
+- A failed settings load clears the cached promise in `src/main.ts`, and the
+  settings command reports the failure through the shared lazy-load toast
+  with Try again.
+- The hidden replay input leaves the document on `cancel` as well as on
+  `change`.
+
+Docs and tests:
+
+- `tests/docNarration.test.ts` compares the lint's document count with the
+  Markdown files on disk. A fixed floor of 120 failed in the source archive,
+  which ships 116.
+- The known-limitations document states the ground filter's agreement with an
+  independent reference implementation on five synthetic scenes.
+
+The live index measures 806,607 bytes, against 806,659 on main.
+
+Covered by `tests/lazySurfaceLoad.test.ts`,
+`tests/qualityControlLazyFailure.test.ts`, `tests/modalDialogA11y.test.ts`,
+`tests/modalConfirm.test.ts`, `tests/workflowActions.test.ts`,
+`tests/actionDefinitions.test.ts`, `tests/docNarration.test.ts`,
+`tests/e2e/commandPalette.spec.ts` and `tests/e2e/workflowRecorder.spec.ts`.
