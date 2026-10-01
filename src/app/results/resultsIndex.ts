@@ -75,6 +75,8 @@ export interface ResultEntry {
   readonly fit: number | null;
   /** The Export mode product to preselect, when the result has one. */
   readonly exportProduct?: ResultExportProduct;
+  /** For a profile measurement: its id, which the Profile Workbench opens. */
+  readonly workbench?: string;
 }
 
 /** What an adapter returns: an entry before the index stamps its time. */
@@ -188,6 +190,7 @@ export interface MeasurementReader {
   getMeasurements(): readonly {
     readonly id: string;
     readonly name: string;
+    readonly kind?: string;
     readonly points: readonly ResultAnchor[];
     readonly owner?: { readonly layerId?: string };
   }[];
@@ -222,6 +225,7 @@ export function measurementSource(
           anchor: centroid(m.points),
           fit: null,
           exportProduct: 'measurements' as const,
+          ...(m.kind === 'profile' ? { workbench: m.id } : {}),
         };
       });
     },

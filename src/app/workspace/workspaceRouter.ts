@@ -39,6 +39,8 @@ export interface WorkspacePage {
   readonly element: () => HTMLElement | null | undefined;
   /** The page Back returns to. It must be a top-level page of the same mode. */
   readonly parent?: string;
+  /** False when the palette reaches the page through its own action, not Go to. */
+  readonly palette?: boolean;
 }
 
 /** The slice of {@link DesktopWorkspace} the router drives. */

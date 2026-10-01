@@ -7769,3 +7769,45 @@ Covered by `tests/openScanAttachSequence.test.ts` (a static open keeps the
 stream until its cloud is in the scene), `tests/openStreaming.test.ts` (a
 Cancel stops the open before the manifest request) and
 `tests/recoveryControllerWrites.test.ts`.
+
+### L197 · BUILT · UI
+
+Two beta-testing requests from A. Ballesteros
+([ORCID 0009-0003-3394-0699](https://orcid.org/0009-0003-3394-0699)).
+
+Profile Workbench button. A finished profile in the Measure panel shows
+"Open in Profile Workbench" under its chart. The newest profile's button is the
+panel's one primary action (UX-D2); older profiles keep the same control in the
+secondary style. It is a native button, so Tab and Enter reach it, and it opens
+the dock the chart's Expand opens, with the same fallback to the focus view.
+A profile row in the Results shelf gains a Workbench control that shows the
+Measure page and opens the same dock. Both controls stand at least 32 px tall,
+44 px on a coarse pointer.
+
+Session log. A page under Data lists what was done in the tab: scans opened and
+closed with name and source format, each CRS the scan took and where it came
+from, analysis results and when they go out of date, measurements and
+annotations created and deleted, class filter changes, exports with file type,
+palette and dock commands, and the messages and errors the app announced.
+Each line carries its time and the scan it applied to. The palette opens it as
+"Session log"; "actions" and "/actions" find it. No free conventional key
+exists, so it has no shortcut. The page has the location bar crumb, Back and
+Escape of every Data page, Copy as text, and Export as JSON or CSV.
+
+Sources. `src/app/sessionLog/sessionLogRecorder.ts` adds no hook to any owner.
+It subscribes to the scan service's active-layer signal, the CRS service and
+the Results index, and watches the live regions, the class filter banner, the
+annotation list and the download anchors every export goes through. Registry
+runs arrive as a document event from the action registry chunk. The store
+(`sessionLog.ts`) keeps the newest 2,000 entries in memory, counts the ones it
+dropped and says so in the page, the text, the CSV and the JSON. Nothing is
+stored or sent. File locations shrink to base names on the way in.
+
+The recorder, the page and their stylesheet load with the workspace shell
+chunk. The index chunk, the Viewer chunk, `main.ts` and `Viewer.ts` do not
+grow (live build compared with `origin/main` built the same way).
+
+Covered by `tests/sessionLog.test.ts` (each source, order, the 2,000 cap and its
+note, base names, palette search) and `tests/e2e/sessionLog.spec.ts` (the
+button opens the dock, the shelf row opens it, the palette opens the log after
+a scan and a measurement, Back and Escape leave it, both exports download).

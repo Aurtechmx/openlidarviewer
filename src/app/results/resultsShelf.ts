@@ -16,6 +16,7 @@
  * through `textContent`.
  */
 
+import './resultsWorkbench.css';
 import {
   RESULT_TYPE_LABELS,
   RESULT_TYPE_ORDER,
@@ -45,6 +46,8 @@ export interface ResultsShelfDeps {
    * navigates to the result's route instead.
    */
   openLabPage?(entry: ResultEntry): boolean;
+  /** Open a profile measurement in the Profile Workbench. False when it cannot. */
+  openWorkbench?(measurementId: string): boolean;
   /** Clock for row times; injectable for tests. */
   now?: () => number;
 }
@@ -135,6 +138,19 @@ export function createResultsShelf(deps: ResultsShelfDeps): ResultsShelf {
     focus.setAttribute('aria-label', `Focus ${e.title}`);
     focus.addEventListener('click', () => focusEntry(e));
     actions.append(focus);
+    const openWorkbench = deps.openWorkbench;
+    if (e.workbench && openWorkbench) {
+      const id = e.workbench;
+      const wb = node('button', 'olv-results-workbench', 'Workbench');
+      wb.type = 'button';
+      wb.setAttribute('aria-label', `Open ${e.title} in the Profile Workbench`);
+      wb.addEventListener('click', () => {
+        live.textContent = openWorkbench(id)
+          ? `Opening ${e.title} in the Profile Workbench.`
+          : `${e.title} cannot open in the Profile Workbench now.`;
+      });
+      actions.append(wb);
+    }
     if (e.exportProduct) {
       const product = e.exportProduct;
       const exp = node('button', 'olv-results-export', 'Export');

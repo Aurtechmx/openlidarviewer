@@ -1168,6 +1168,42 @@ export class MeasurePanel {
     if (this._chainOn) this._recomputeChain();
   }
 
+  /**
+   * Open one profile in the Profile Workbench, the way its own button does.
+   * False when `id` is not a plotted profile in this panel.
+   */
+  openInWorkbench(id: string): boolean {
+    const s = this._summaries.find((x) => x.id === id);
+    if (!s || s.kind !== 'profile' || !s.profileChart || s.profileChart.length < 2) return false;
+    const trigger =
+      Array.from(this._list.querySelectorAll<HTMLElement>('.olv-mp-open-workbench')).find((b) => b.dataset.measurementId === id) ??
+      this.element;
+    this._openProfileFocus(s, trigger);
+    return true;
+  }
+
+  /** The newest plotted profile, whose Workbench button is the primary action. */
+  private _newestProfileId(): string | null {
+    for (let i = this._summaries.length - 1; i >= 0; i--) {
+      const s = this._summaries[i];
+      if (s && s.kind === 'profile' && s.profileChart && s.profileChart.length >= 2) return s.id;
+    }
+    return null;
+  }
+
+  private _workbenchButton(s: MeasurementSummary): HTMLButtonElement {
+    const primary = s.id === this._newestProfileId();
+    const b = el('button', {
+      className: `olv-mp-open-workbench${primary ? ' olv-primary-action' : ''}`,
+      type: 'button',
+      text: 'Open in Profile Workbench',
+      ariaLabel: `Open ${s.name} in the Profile Workbench`,
+    }) as HTMLButtonElement;
+    b.dataset.measurementId = s.id;
+    b.addEventListener('click', () => this._openProfileFocus(s, b));
+    return b;
+  }
+
   /** Internal — rebuild the list DOM from `_summaries`. */
   private _renderList(): void {
     // Drop any live station-hover highlight BEFORE the old chart/table nodes are
@@ -1599,11 +1635,16 @@ export class MeasurePanel {
         storageSet(PROFILE_SUMMARY_OPEN_KEY, summaryDetails.open ? '1' : '0');
       });
 
+      // The finished profile's next step, named and in plain sight: the chart's
+      // own Expand is easy to miss. The newest profile's button is the one
+      // primary action; older profiles keep the same control, quieter.
+      const workbenchCta = this._cb.openProfileWorkbench ? this._workbenchButton(s) : null;
       const children: HTMLElement[] = [
         headRow,
         confLine,
         chartWrap,
         vexStrip,
+        ...(workbenchCta ? [workbenchCta] : []),
         ...(samplerBlock ? [samplerBlock] : []),
         summaryDetails,
         stationDetails,

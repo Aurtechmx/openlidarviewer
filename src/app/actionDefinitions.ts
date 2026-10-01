@@ -129,5 +129,22 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
   // The theme rows sit between the camera rows and the tools, as before.
   const theme = view.filter((a) => a.section === 'Theme');
   const rest = view.filter((a) => a.section !== 'Theme');
-  return [...camera, ...theme, ...tools, ...analysis, ...exports_, ...workflow, ...rest, ...help];
+  // Every run through the registry (palette, dock, sheet) is one Session log line.
+  return [...camera, ...theme, ...tools, ...analysis, ...exports_, ...workflow, ...rest, ...help].map(logged);
+}
+
+function logged(a: Action): Action {
+  return {
+    ...a,
+    run: () => {
+      // Handed to the Session log as an event, so this chunk does not carry it.
+      // A log that cannot be reached never stops the action.
+      try {
+        globalThis.document.dispatchEvent(new CustomEvent('olv-session-log', { detail: { kind: 'command', text: a.title, detail: a.section } }));
+      } catch {
+        /* no document here (a test host); nothing to log to */
+      }
+      a.run();
+    },
+  };
 }

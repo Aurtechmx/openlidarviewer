@@ -362,6 +362,7 @@ export function createLocationBar(d: LocationBarDeps): LocationBar {
     const out: Action[] = [];
     for (const [mode, list] of Object.entries(d.pages) as [WorkspaceMode, Record<string, WorkspacePage>][]) {
       for (const [page, p] of Object.entries(list)) {
+        if (p.palette === false) continue;
         const unavailable = reasonFor(mode, page);
         out.push({
           id: `goto.${mode}.${page}`,

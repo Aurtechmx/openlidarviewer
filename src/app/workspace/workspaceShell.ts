@@ -37,6 +37,9 @@ import { mountResultsShelf, type ResultsShelfSources, type ShelfExportPanel, typ
 import { mountLocationBar } from '../../ui/locationBar';
 import { decorateViewRail } from './viewRail';
 import { createModeHome, type ModeHome } from './modeHome';
+import { sessionLog, SESSION_LOG_OPEN_EVENT } from '../sessionLog/sessionLog';
+import { installSessionLogRecorder } from '../sessionLog/sessionLogRecorder';
+import { mountSessionLogPage, type SessionLogPage } from '../sessionLog/sessionLogPage';
 
 /** The scene tools that open a page in the Tools mode. */
 export type ToolPage = 'measure' | 'annotate' | 'clip';
@@ -76,7 +79,7 @@ export interface WorkspaceShellDeps {
   overlayTail: readonly HTMLElement[];
   analysePanel: () => (Panel & AnalyseHostPanel & ShelfTerrainPanel) | null;
   objectPanel: () => Panel | null;
-  measurePanel: () => Panel | null;
+  measurePanel: () => (Panel & { openInWorkbench?(id: string): boolean }) | null;
   setMeasureMountElement: (fn: (el: HTMLElement) => void) => void;
   hasScan: () => boolean;
   onModeChange: () => void;
@@ -149,8 +152,15 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     annotate: { title: 'Annotate', element: () => d.annotation },
     clip: { title: 'Clip box', element: () => d.clip },
   };
+  // The Session log page's host is built now and filled on first open. The
+  // palette reaches it through its registry action, so it has no Go to entry.
+  const logHost = document.createElement('section');
+  // Hidden until its page has loaded, so a remembered route never shows it empty.
+  logHost.className = 'olv-session-log-host olv-hidden';
+  logHost.setAttribute('aria-label', 'Session log');
   const dataPages: Record<string, WorkspacePage> = {
     classes: { title: 'Classes', element: () => d.classLegend.element },
+    'session-log': { title: 'Session log', element: () => logHost, palette: false },
   };
   // Keyed to the shared mobile-layout condition so JS and CSS agree.
   const mobileMql = typeof window.matchMedia === 'function' ? window.matchMedia(MOBILE_LAYOUT_QUERY) : null;
@@ -184,6 +194,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     host: (m) => workspace.mode(m),
     open: (m, page) => {
       if (m === 'analyse') void analyse.open(page as AnalysePage);
+      else if (m === 'data' && page === 'session-log') void openLogPage();
       else if (m === 'work' && !shown(pages[page]?.element())) d.runAction(`tool.${page}`);
       else router?.navigate({ mode: m, page }, true);
     },
@@ -237,6 +248,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     export: d.export.element,
   };
   workspace.layoutDesktop(workspacePanels);
+  workspace.mountInMode('data', logHost);
   placeAnalyse();
   d.export.element.classList.remove('olv-collapsed'); // one mode at a time, from first build
   d.overlay.append(leftPanels);
@@ -315,7 +327,15 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   // Results shelf: the rail's footer on desktop, a row atop the phone sheet's
   // Data tab. Placed by the two layout functions above. A route change selects
   // the matching sheet tab through the mode change.
-  const shelf = d.results ? mountResultsShelf(d.results, d.analysePanel, d.export, (route) => router?.navigate(route), d.runAction) : null;
+  // A profile's Workbench control shows the Measure page, then opens the dock
+  // the way the profile's own button does.
+  const openWorkbench = (id: string): boolean => {
+    const panel = d.measurePanel();
+    if (!panel?.openInWorkbench || !shown(panel.element)) return false;
+    router?.navigate({ mode: 'work', page: 'measure' });
+    return panel.openInWorkbench(id);
+  };
+  const shelf = d.results ? mountResultsShelf(d.results, d.analysePanel, d.export, (route) => router?.navigate(route), d.runAction, openWorkbench) : null;
   if (shelf) { leftPanels.append(shelf.element); d.addTeardown(() => shelf.dispose()); }
 
   // The state strip: one row at the foot of the viewport, above the dock on a
@@ -339,6 +359,37 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     },
   }) : null;
   if (strip) { d.overlay.insertBefore(strip.element, d.dock); d.addTeardown(() => strip.dispose()); }
+
+  // The Session log: recorded from the signals the owners already emit, shown
+  // on its Data page, which loads on first open.
+  d.addTeardown(installSessionLogRecorder({
+    log: sessionLog,
+    scans: results ? {
+      clouds: () => results.viewer.clouds(),
+      getCloud: (id) => results.viewer.getCloud(id) as { readonly name: string; readonly sourceFormat?: string } | undefined,
+      get streamingCloud() { return results.viewer.streamingCloud ?? null; },
+      onActiveChange: (fn) => results.scans.onActiveChange(fn),
+      activeName: () => results.scans.activeCloud?.()?.name ?? results.viewer.streamingCloud?.name ?? null,
+    } : undefined,
+    crs: d.crsService,
+    results: shelf?.index ?? null,
+    classLegend: d.classLegend.element,
+    annotation: d.annotation,
+  }));
+  let logPage: SessionLogPage | null = null;
+  async function openLogPage(): Promise<boolean> {
+    if (!d.hasScan() || !router) return false;
+    logPage ??= mountSessionLogPage(logHost, sessionLog, { version: __APP_VERSION__ });
+    logHost.classList.remove('olv-hidden');
+    if (mobileApplied && sheet.getDetent() === 'peek') sheet.setDetent('half');
+    router.navigate({ mode: 'data', page: 'session-log' }, true);
+    return true;
+  }
+  const onOpenLog = (e: Event): void => {
+    (e as CustomEvent<{ respond?: (p: Promise<boolean>) => void }>).detail?.respond?.(openLogPage());
+  };
+  document.addEventListener(SESSION_LOG_OPEN_EVENT, onOpenLog);
+  d.addTeardown(() => document.removeEventListener(SESSION_LOG_OPEN_EVENT, onOpenLog));
 
   let mobileApplied = false;
   let located = false;

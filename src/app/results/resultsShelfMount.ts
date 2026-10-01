@@ -118,6 +118,7 @@ export function mountResultsShelf(
   exportPanel: ShelfExportPanel | null,
   navigate: (route: WorkspaceRoute) => void,
   runAction?: (id: string) => void,
+  openWorkbench?: (measurementId: string) => boolean,
 ): MountedResultsShelf {
   const src = {
     viewer: host.viewer,
@@ -191,6 +192,7 @@ export function mountResultsShelf(
       }
       : undefined,
     layerName: (id) => src.viewer.getCloud(id)?.name ?? null,
+    ...(openWorkbench ? { openWorkbench } : {}),
   });
   const offIndex = index.subscribe(() => {
     const has = terrainExports.ready();

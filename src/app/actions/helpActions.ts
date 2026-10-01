@@ -57,6 +57,28 @@ export function contributeHelpActions(deps: HelpActionDeps): Action[] {
       },
     },
     {
+      id: 'help.session-log',
+      title: 'Session log',
+      section: 'Help',
+      hint: 'What you did to the scans in this tab and the result, with times. Copy it, or export it as JSON or CSV.',
+      keywords: ['/actions', 'actions', 'history', 'activity', 'log', 'events', 'what happened', 'audit', 'session'],
+      run: () => {
+        // The workspace shell answers this event with the page's opener; the
+        // log itself is in the shell's chunk, not this one.
+        let opening: Promise<boolean> = Promise.resolve(false);
+        try {
+          globalThis.document.dispatchEvent(new CustomEvent('olv-session-log-open', {
+            detail: { respond: (p: Promise<boolean>) => { opening = p; } },
+          }));
+        } catch {
+          /* no document: the page cannot open, and the note below says so */
+        }
+        void opening.catch(() => false).then((opened) => {
+          if (!opened) (deps.notify ?? (() => {}))('Open a scan first. The session log opens under Data.');
+        });
+      },
+    },
+    {
       id: 'help.offline-save',
       title: 'Make available offline',
       section: 'Help',
