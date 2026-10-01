@@ -145,7 +145,7 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
   };
 
   const clearAll = (): void => {
-    void wipe()?.then(() => {
+    void (wipe() ?? Promise.resolve()).then(() => {
       // Confirm in place of the notice, then let it go.
       showNotice('Recovery data in this browser was deleted.', []);
       const shown = notice;

@@ -1716,7 +1716,7 @@ export class Viewer {
     });
   }
 
-  /** Size navigation, clip planes and the orbit pivot again for the static clouds alone. */
+  /** Size navigation, clip planes and the orbit pivot again from every visible cloud, with the up axis from the last-added one. */
   reconfigureForClouds(): void { const last = [...this._clouds.values()].pop(); if (last) this._configureForClouds(last.cloud); }
 
   /** Detach and fully dispose the current streaming cloud, if any. */

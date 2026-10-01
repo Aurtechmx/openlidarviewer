@@ -509,4 +509,14 @@ describe('a clear asked for before the journal is ready', () => {
     expect(app.buttons()).toEqual([]);
     expect(s.entries.size).toBe(0);
   });
+
+  it('the Clear button confirms the deletion', async () => {
+    const s = fakeStore([entryFor(session(2))]);
+    const app = await start(s.store);
+
+    await app.click('Clear');
+
+    expect(s.entries.size).toBe(0);
+    expect(app.noticeText()).toBe('Recovery data in this browser was deleted.');
+  });
 });
