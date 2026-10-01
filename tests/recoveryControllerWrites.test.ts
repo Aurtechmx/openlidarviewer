@@ -6,8 +6,8 @@
  * lazy imports. The user can Clear, close the scan, open another one or turn
  * recovery off inside that wait. A snapshot taken before any of those no
  * longer describes work the user wants kept, so it must not be stored once it
- * resolves. Writes and clears also run one at a time, so a slow snapshot taken
- * earlier cannot land on top of a later one or after a clear.
+ * resolves. Writes run one at a time, so a slow snapshot taken earlier cannot
+ * land on top of a later one. Clears go out at once and never wait on a write.
  *
  * The store, the serializer and the restore are fakes driven by deferred
  * promises, so every interleaving here is chosen by the test rather than by a
@@ -66,28 +66,40 @@ function entryFor(json: string): RecoveryEntry {
   return built.entry;
 }
 
-/** A store that logs every call and can hold a put open until the test releases it. */
+/**
+ * A store that logs every call when it is made and can hold a put or a list
+ * open until the test releases it. Like IndexedDB, it applies the changes in
+ * the order the calls were made, so a held put also holds every change after it.
+ */
 function fakeStore(initial: RecoveryEntry[] = []) {
   const entries = new Map(initial.map((e) => [e.key, e]));
   const log: string[] = [];
   let heldPut: Deferred<void> | null = null;
+  let heldList: Deferred<void> | null = null;
+  let tail: Promise<void> = Promise.resolve();
+  const inOrder = (apply: () => Promise<void> | void): Promise<void> => (tail = tail.then(apply));
   const store: RecoveryStore = {
     backend: 'indexeddb',
-    async put(e) {
+    put(e) {
       log.push(`put ${e.fileName} ${e.measurements}`);
-      if (heldPut) await heldPut.promise;
-      entries.set(e.key, e);
+      const held = heldPut;
+      return inOrder(async () => {
+        if (held) await held.promise;
+        entries.set(e.key, e);
+      });
     },
-    async remove(key) {
+    remove(key) {
       log.push(`remove ${key.split('|')[0]}`);
-      entries.delete(key);
+      return inOrder(() => { entries.delete(key); });
     },
-    async clear() {
+    clear() {
       log.push('clear');
-      entries.clear();
+      return inOrder(() => { entries.clear(); });
     },
     async list() {
-      return [...entries.values()];
+      const read = [...entries.values()];
+      if (heldList) await heldList.promise;
+      return read;
     },
   };
   return {
@@ -97,6 +109,10 @@ function fakeStore(initial: RecoveryEntry[] = []) {
     holdPuts(): Deferred<void> {
       heldPut = deferred<void>();
       return heldPut;
+    },
+    holdLists(): Deferred<void> {
+      heldList = deferred<void>();
+      return heldList;
     },
   };
 }
@@ -149,12 +165,12 @@ afterEach(() => {
 });
 
 /** Start the controller over `store` with a serializer and a restore the test drives. */
-async function start(store: RecoveryStore) {
+async function start(store: RecoveryStore | Promise<RecoveryStore>) {
   fake.store = store;
   const lifetime = new AbortController();
   const host = new FakeElement();
   const snapshots: Array<Deferred<string | null>> = [];
-  const restores: Array<Deferred<void>> = [];
+  const restores: Array<Deferred<boolean>> = [];
   let loading = false;
   const handle: RecoveryHandle = startRecovery({
     lifetime: { signal: lifetime.signal, register: () => () => {} } as never,
@@ -164,7 +180,7 @@ async function start(store: RecoveryStore) {
       return d.promise;
     },
     restore: () => {
-      const d = deferred<void>();
+      const d = deferred<boolean>();
       restores.push(d);
       return d.promise;
     },
@@ -288,8 +304,35 @@ describe('a recovery snapshot that went out of date while it was being taken is 
   });
 });
 
-describe('recovery writes and clears run in the order they were asked for', () => {
-  it('a Clear asked for while a put is in flight runs after that put', async () => {
+describe('clears go out at once, and writes run in the order they were asked for', () => {
+  it('Clear deletes the journal while a snapshot is still being taken', async () => {
+    const s = fakeStore([entryFor(session(2, OTHER))]);
+    const app = await start(s.store);
+    await app.editAndHide();
+    expect(app.snapshots).toHaveLength(1);
+
+    app.handle.clear();
+    await drain();
+    expect(s.log).toEqual(['clear']);
+    expect(s.entries.size).toBe(0);
+
+    app.snapshots[0].resolve(session(1));
+    await drain();
+    expect(s.log).toEqual(['clear']);
+    expect(s.entries.size).toBe(0);
+  });
+
+  it('Turn off deletes the journal while a snapshot is still being taken', async () => {
+    const s = fakeStore([entryFor(session(2, OTHER))]);
+    const app = await start(s.store);
+    await app.editAndHide();
+
+    await app.click('Turn off recovery');
+    expect(s.log).toEqual(['clear']);
+    expect(s.entries.size).toBe(0);
+  });
+
+  it('a Clear asked for while a put is in flight goes out at once and is applied after that put', async () => {
     const s = fakeStore();
     const app = await start(s.store);
     const put = s.holdPuts();
@@ -300,11 +343,10 @@ describe('recovery writes and clears run in the order they were asked for', () =
 
     app.handle.clear();
     await drain();
-    expect(s.log).toEqual(['put site.las 1']);
+    expect(s.log).toEqual(['put site.las 1', 'clear']);
 
     put.resolve();
     await drain();
-    expect(s.log).toEqual(['put site.las 1', 'clear']);
     expect(s.entries.size).toBe(0);
   });
 
@@ -362,9 +404,7 @@ describe('the restore offer stays until the saved work is back on screen', () =>
     const { s, app } = await offered();
 
     await app.click('Restore previous work');
-    app.restores[0].resolve();
-    await drain();
-    app.snapshots.at(-1)!.resolve(session(0));
+    app.restores[0].resolve(false);
     await drain();
 
     expect(app.buttons()).toContain('Restore previous work');
@@ -386,9 +426,7 @@ describe('the restore offer stays until the saved work is back on screen', () =>
     const { s, app } = await offered();
 
     await app.click('Restore previous work');
-    app.restores[0].resolve();
-    await drain();
-    app.snapshots.at(-1)!.resolve(session(2));
+    app.restores[0].resolve(true);
     await drain();
     expect(app.buttons()).toEqual([]);
 
@@ -396,6 +434,40 @@ describe('the restore offer stays until the saved work is back on screen', () =>
     app.snapshots.at(-1)!.resolve(session(3));
     await drain();
     expect(s.log).toEqual(['put site.las 3']);
+  });
+
+  it('a refused restore keeps the entry when the file already holds work of its own', async () => {
+    const { s, app, saved } = await offered();
+
+    await app.click('Restore previous work');
+    app.restores[0].resolve(false);
+    await drain();
+    // The user measured once before clicking Restore. That session has work and
+    // the same source key, which is not the saved work coming back.
+    app.snapshots.at(-1)!.resolve(session(1));
+    await drain();
+    expect(app.buttons()).toContain('Restore previous work');
+
+    await app.editAndHide();
+    app.snapshots.at(-1)!.resolve(session(1));
+    await drain();
+    expect(s.log).toEqual([]);
+    expect(s.entries.get(SITE_KEY)).toBe(saved);
+  });
+
+  it('a file that finishes opening during a restore does not offer it again', async () => {
+    const { app } = await offered();
+
+    await app.click('Restore previous work');
+    app.handle.onSourceLoaded();
+    app.snapshots.at(-1)!.resolve(session(0));
+    await drain();
+    expect(app.buttons()).toEqual([]);
+
+    app.restores[0].resolve(true);
+    await drain();
+    expect(app.buttons()).toEqual([]);
+    expect(app.restores).toHaveLength(1);
   });
 
   it('never overwrites an entry that is waiting to be restored', async () => {
@@ -407,5 +479,44 @@ describe('the restore offer stays until the saved work is back on screen', () =>
 
     expect(s.log).toEqual([]);
     expect(s.entries.get(SITE_KEY)).toBe(saved);
+  });
+});
+
+describe('a clear asked for before the journal is ready', () => {
+  it('is applied when the store opens, and nothing is offered', async () => {
+    const s = fakeStore([entryFor(session(2))]);
+    const opening = deferred<RecoveryStore>();
+    const app = await start(opening.promise);
+
+    app.handle.clear();
+    opening.resolve(s.store);
+    await drain();
+
+    expect(app.buttons()).toEqual([]);
+    expect(s.log).toEqual(['clear']);
+    expect(s.entries.size).toBe(0);
+  });
+
+  it('during the startup read keeps the entry it read from being offered', async () => {
+    const s = fakeStore([entryFor(session(2))]);
+    const list = s.holdLists();
+    const app = await start(s.store);
+
+    app.handle.clear();
+    list.resolve();
+    await drain();
+
+    expect(app.buttons()).toEqual([]);
+    expect(s.entries.size).toBe(0);
+  });
+
+  it('the Clear button confirms the deletion', async () => {
+    const s = fakeStore([entryFor(session(2))]);
+    const app = await start(s.store);
+
+    await app.click('Clear');
+
+    expect(s.entries.size).toBe(0);
+    expect(app.noticeText()).toBe('Recovery data in this browser was deleted.');
   });
 });

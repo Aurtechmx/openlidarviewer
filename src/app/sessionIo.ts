@@ -171,7 +171,9 @@ export async function importSession(
   file: File,
   opts: { skipScanConfirm?: boolean },
   deps: SessionIoDeps,
-): Promise<void> {
+): Promise<boolean> {
+  // Set once the session's work is in the scene, so a later failure still reports it applied.
+  let applied = false;
   try {
     // A shared `.olvsession` is untrusted; reject an over-large file up front,
     // before it is read, so `JSON.parse` of the whole text can't exhaust memory.
@@ -239,7 +241,7 @@ export async function importSession(
             `This session was captured over a different scan (${why}) — it was not applied. ` +
               (want ? `Load “${want}” to restore it on its own scan.` : 'Load its source scan to restore it.'),
           );
-          return;
+          return false;
         }
         if (match.verdict === 'partial' && !opts.skipScanConfirm) {
           // Not a clear conflict, but not a confirmed match — don't touch the
@@ -252,7 +254,7 @@ export async function importSession(
               'Applying it may place its measurements on the wrong scan.',
             { label: 'Apply anyway', onClick: () => void importSession(file, { skipScanConfirm: true }, deps) },
           );
-          return;
+          return false;
         }
       }
       // Roadmap P1 #5 — validate the session's spatial FRAME here, in the SAME
@@ -298,7 +300,7 @@ export async function importSession(
             `This session's spatial metadata conflicts with this scan (${why}) — it was not applied. ` +
               `The scan's own frame is kept; load the session on its own scan to restore it.`,
           );
-          return;
+          return false;
         }
       }
     }
@@ -329,7 +331,7 @@ export async function importSession(
         (targetId ? viewer.getCloud(targetId) : undefined) !== targetStaticCloud);
     if (targetChanged()) {
       deps.showToast('Session not applied — the active scan changed while it was importing.');
-      return;
+      return false;
     }
     // Commit the author's CRS override HERE — after every preflight and the
     // active-scan guard, but BEFORE any state that derives physical units is
@@ -381,7 +383,7 @@ export async function importSession(
     // MUTATES the viewer. Refuse rather than attach one scan's work to another.
     if (targetChanged()) {
       deps.showToast('Session not applied — the active scan changed while it was importing.');
-      return;
+      return false;
     }
     const ownership = migrateSessionOwnership(session, {
       loadedLayerId: deps.getActiveLayerId() ?? undefined,
@@ -398,6 +400,7 @@ export async function importSession(
     );
     viewer.measure.loadMeasurements(ownedMeasurements);
     viewer.annotate.loadAnnotations(ownedAnnotations);
+    applied = true;
     // v7 — a view may carry a display bundle beyond its camera; hydrate it
     // into the in-memory shape so restoring by name reapplies the lot. A
     // v6 file's views have no bundle fields, so `buildViewState` returns
@@ -488,4 +491,5 @@ export async function importSession(
   } catch (err) {
     deps.setDropError(err instanceof Error ? err.message : 'Could not import the session');
   }
+  return applied;
 }

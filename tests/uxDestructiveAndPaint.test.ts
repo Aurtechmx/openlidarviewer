@@ -98,7 +98,7 @@ describe('the attach phase yields so its status lines can paint', () => {
   const readyAt = lineOf('await viewer.ready;');
   const uploadingAt = lineOf("formatProgress({ stage: 'uploading' })");
   const renderingAt = lineOf("formatProgress({ stage: 'rendering' })");
-  const addAt = lineOf('let id = viewer.addCloud(result.cloud);');
+  const addAt = lineOf('const id = viewer.addCloud(result.cloud);');
   const clearAt = lineOfAfter('deps.dropZone.setProgress(null);', renderingAt);
 
   /** Does a `setTimeout` yield appear within `window` lines after `from`? */

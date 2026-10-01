@@ -96,7 +96,7 @@ export interface OpenScanDeps {
   /** The live Viewer (a late-bound `let` in the shell). */
   getViewer: () => Viewer;
   /** Route an `.olvsession` to the session loader (the shell's `importSession`). */
-  importSession: (file: File) => Promise<void>;
+  importSession: (file: File) => Promise<unknown>;
   /** True while a load is in flight — the one-load-at-a-time guard. */
   isLoading: () => boolean;
   /** Claim / release the load flag. Claimed synchronously; released in `finally`. */
@@ -505,16 +505,14 @@ export async function attachStaticCloud(
   // over the scene the user has. For this one call the stream's resident
   // nodes and the new cloud are both in memory; the stream's point budget
   // caps that overlap.
-  let id = viewer.addCloud(result.cloud);
+  const id = viewer.addCloud(result.cloud);
   source.preview?.dispose();
   if (viewer.hasStreamingCloud) {
-    // addCloud sizes walk speed, clip planes, point attenuation and the orbit
-    // pivot over every cloud in the scene, the stream included. Take the cloud
-    // out, close the stream, and add it again so those settings describe this
-    // scan alone.
-    viewer.removeCloud(id);
+    // addCloud sized walk speed, clip planes, point attenuation and the orbit
+    // pivot over the stream as well. Close the stream, then size them again
+    // for the static clouds that remain.
     deps.closeStreaming();
-    id = viewer.addCloud(result.cloud);
+    viewer.reconfigureForClouds();
   }
   deps.stage.hideEmptyState();
   // COMMIT BOUNDARY. The cloud is in the scene and nothing below rolls that

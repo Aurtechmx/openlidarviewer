@@ -54,6 +54,7 @@ import {
   publishStreamingDetail,
   resetClassificationUi,
   shouldDropCandidateOnPostCommitCancel,
+  shouldTidyFailedStreamingOpen,
   type OpenStreamingDeps,
   type StreamingReportInput,
 } from './openStreaming';
@@ -157,8 +158,12 @@ export async function openRemoteTileset(
   deps.dropZone.setOpening('Opening tileset…');
   deps.dropZone.setCancelHandler(() => controller.abort());
   let committed = false;
+  // Whether a stream was on screen before this open. The attach is
+  // transactional, so a failure before the commit leaves that stream intact.
+  let hadStreamingScene = false;
   try {
     await deps.viewerReady;
+    hadStreamingScene = deps.getViewer().hasStreamingCloud;
     // The entry URL is the ROOT of every trust decision below it. Tile URLs are
     // validated against a base derived from this one, and part of that check is
     // that a tile stays on the entry's own origin, so an unchecked entry lets
@@ -440,9 +445,10 @@ export async function openRemoteTileset(
       deps.dropZone.setError(
         err instanceof TilesetRefusal ? err.message : describeLoadError(err),
       );
-      // Only tear down when nothing was committed: after the commit this scene
-      // is the valid one, and a later failure must not blank the viewer.
-      if (!committed) deps.closeStreaming();
+      // Tidy up only when this open left nothing valid behind: a committed
+      // candidate is the scene now, and a stream that was on screen before the
+      // open survives a candidate that failed before the commit.
+      if (shouldTidyFailedStreamingOpen(committed, hadStreamingScene)) deps.closeStreaming();
     }
   } finally {
     unlinkAbort();
