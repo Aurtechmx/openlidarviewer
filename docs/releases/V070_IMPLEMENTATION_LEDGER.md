@@ -101,7 +101,7 @@ the two entries were renumbered when the branches were integrated.
 | L195 | LOADER | TEST | high | FIXED | new | The curated swissSURFACE3D tile streamed with no CRS: the file carries no CRS record, and the catalogue's stated frame was never applied, so georeferenced exports were refused and lengths read as source units. |
 | L196 | LOADER | TEST | low | FIXED | new | The curated swisstopo and GURS records carried lat/lon bboxes that did not contain their tiles. |
 | L199 | UI | TEST | med | FIXED | new | A lazy panel whose loader threw at once stayed busy, a second Try again started a second build, a throwing ready callback rejected, and one load re-enabled a button another still held; Tab from outside a dialog stayed outside, a fading modal took input, one Escape closed every stacked dialog, and Cmd-K and ? opened over a modal; Stop and save confirmed a save before it ran, and a failed workflow settings load was dropped and then cached. |
-| L197 | UI | TEST | med | BUILT | new | A scan with producer classes could not be auto-classified, because nothing let the user set those classes aside, and an auto-classify could not be undone. |
+| L201 | UI | TEST | med | BUILT | new | A scan with producer classes could not be auto-classified, because nothing let the user set those classes aside, and an auto-classify could not be undone. |
 
 ## Totals
 
@@ -7577,7 +7577,7 @@ Covered by `tests/lazySurfaceLoad.test.ts`,
 `tests/actionDefinitions.test.ts`, `tests/docNarration.test.ts`,
 `tests/e2e/commandPalette.spec.ts` and `tests/e2e/workflowRecorder.spec.ts`.
 
-### L197 · BUILT · UI
+### L201 · BUILT · UI
 
 Clear classifications, suggested by A. Ballesteros (ORCID 0009-0003-3394-0699).
 
@@ -7588,41 +7588,68 @@ history, so it could not be undone.
 
 Clear classes, in the Edit classes panel beside Auto-classify, sets every
 point to class 1 through the same recorded edit the lasso uses
-(`Viewer.editClassification`), so Undo restores the producer codes exactly.
-The edit carries the provenance move with the codes (`ClassDelta.prov`), and
-the cloud now states one of four provenances: none, source, cleared or derived
-(`PointCloud.classificationProvenance`). The first whole-scan replace keeps a
-copy of the codes it replaced, one byte per point, and Restore original
-classes writes it back as another recorded edit. A level-1 inline note under
-the buttons offers Undo and Restore; there is no modal, because every step is
-undoable. Classification flags stay read-only, so Withheld points stay
-Withheld.
+(`Viewer.editClassification`), so Undo restores the producer codes byte for
+byte. Each whole-scan step records the provenance before and after it as a
+`ClassMark` on `ClassDelta.prov`, and the cloud states one of four
+provenances: none, source, cleared or derived
+(`PointCloud.classificationProvenance`). The provenance moves after the edit
+returns, so an edit that throws records nothing. The first whole-scan replace
+keeps a copy of the codes it replaced, one byte per point, and Restore earlier
+classes writes it back as another recorded edit. Hand edits made before the
+first clear sit in that copy, which is why the link names the earlier classes
+and makes no claim about the file's. A level-1 inline note under the buttons
+offers Undo and Restore; there is no modal, because every step is undoable.
+Classification flags stay read-only, so Withheld points stay Withheld.
 
-Auto-classify now runs on a cleared scan by an explicit provenance check, and
-the derive goes through the recorded edit when the scan already has codes, so
-Undo steps back over it. The classifier's `methodRegistry` id and version
-(`olv.class.derived-heuristic@3`) travel with derived codes into the XYZ
-comment and the report. The panel, the tooltip and the result toast state what
-it does not find: wires, poles, water, bridges and noise.
+Auto-classify runs on a cleared scan by an explicit provenance check, and the
+derive goes through the recorded edit when the scan already has codes, so
+Undo steps back over it. An Undo, Clear, Restore or lasso during a derive
+moves the class-edit epoch; the derive then leaves the classes as they are and
+says so. The classifier's `methodRegistry` id and version
+(`olv.class.derived-heuristic@3`) ride on the step, so undoing a re-derive
+brings the earlier method back with the earlier codes. The panel, the tooltip
+and the result toast state what Auto-classify does not find: wires, poles,
+water, bridges and noise.
 
-'cleared' reaches the export summary and its warning, the Export panel class
-row, the XYZ comment, the report's Scan QA note and dataset summary, the
-Export Health row, the Process Studio capability model and the Classes legend
-caption, all with the wording "source classes cleared in viewer; all points
-class 1". Terrain takes the producer-ground path only for source class 2, so
-cleared or derived ground stays exploratory. A streaming scan says that both
-actions need a fully loaded scan.
+A frame change advances a count on every cloud
+(`markDerivedClassificationFrameInvalid`), and each derived step records the
+count it ran under. Derived codes that an undo or redo brings back from a
+replaced frame read as stale, and terrain and footprint extraction withhold
+them as they withhold live stale codes.
+
+The cleared note reads "source classes cleared in viewer; class 1 unless
+reclassified by hand since". A lasso, polygon or swap on the cleared layer
+keeps the cleared provenance, so the note does not claim that every point is
+class 1. It reaches the Export panel class row, summary and warning, the
+Classes legend caption, the Export Health row and the Process Studio
+capability model. Two outputs carry it inside the file: the header comment of
+the quick XYZ export and the PDF report (Scan QA note and dataset summary).
+LAS 1.2 and 1.4, the converter's XYZ and ASC, CSV and PNG image exports carry
+no in-file marker, as Known limitations records. A clipped export subset keeps
+the cleared or derived provenance and the classifier method. Terrain takes the
+producer-ground path for source class 2 alone, so cleared or derived ground
+stays exploratory.
+
+A whole-scan undo step keeps one dense byte per point and swaps it with the
+live buffer on each undo and redo; the sparse form a lasso uses costs six
+bytes per changed point. The history drops its oldest steps past 50 steps or
+128 MB per cloud and keeps the newest step whatever its size. Ten clear and
+restore cycles on a 100,000-point cloud hold 2,000,000 bytes.
 
 Classify, Fill unclassified and the shared derive moved out of `main.ts` into
-the lazy `src/app/classifyActions.ts`; the index chunk measures 801,633 bytes
-against 806,888 before. The Viewer chunk measures 731,360 bytes against
-732,166: swap, polygon and lasso edits share the recorded edit, and
-`classEditHistory.ts` joins the obfuscator's per-point exclusions because a
-whole-scan edit diffs every point twice. No computed result changes for a
-scan nobody clears or derives.
+the lazy `src/app/classifyActions.ts`. On `build:live` the index chunk
+measures 801,568 bytes against 806,607 on main, and the Viewer chunk
+731,705 against 732,166. Swap, polygon and lasso edits share the
+recorded edit, and `classEditHistory.ts` joins the obfuscator's per-point
+exclusions because a whole-scan step touches every point. No computed result
+changes for a scan nobody clears or derives.
 
 Covered by `tests/clearClassifications.test.ts` (clear, undo, redo, restore,
-derive after clear, flags and Withheld count, terrain ground),
-`tests/clearedProvenanceSurfaces.test.ts` (every export surface) and
-`tests/e2e/clearClassifications.spec.ts` (tiny.las: clear, legend, note, undo,
-auto-classify, export panel wording, restore).
+derive after clear, stale frames through undo and redo, the method on the
+step, a throwing edit, history bytes and the byte cap, a derive whose classes
+changed, flags and Withheld count, terrain ground),
+`tests/clearedProvenanceSurfaces.test.ts` (summary, panel facts, XYZ comment,
+report, Export Health and capability model, with a hand edit on the cleared
+layer), `tests/clipCloudProvenance.test.ts` (cleared provenance and the
+method through a clip) and `tests/e2e/clearClassifications.spec.ts` (tiny.las:
+clear, legend, note, undo, auto-classify, export panel wording, restore).

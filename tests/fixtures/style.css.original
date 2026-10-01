@@ -6174,8 +6174,8 @@ body.olv-theme-light .olv-busy-scan--emblem {
 /* Auto-classify and Clear classes share one row; the auto button drops its
    own full-width + bottom gap there. */
 .olv-reclass-whole .olv-reclass-auto { width: auto; margin-bottom: 0; }
-/* Level-1 inline notes (UX-D10): the cleared / derived working layer with its
-   Undo and Restore links, and the streaming "needs a fully loaded scan" line. */
+/* Level-1 inline note (UX-D10): the cleared / derived working layer with its
+   Undo and Restore links. */
 .olv-reclass-note {
   font-size: var(--text-xs); line-height: 1.4; color: var(--text-dim);
   background: var(--accent-soft); border: 0.5px solid var(--hairline);

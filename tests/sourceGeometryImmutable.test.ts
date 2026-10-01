@@ -87,11 +87,13 @@ describe('source geometry stays byte-identical', () => {
     expect(surface).toEqual([
       'attachDerivedClassification',
       'bounds',
+      'classMark',
       'classification',
       'classificationFlags',
       'classificationIsDerived',
       'classificationProvenance',
       'derivedClassificationFrameInvalid',
+      'derivedMethod',
       'markDerivedClassificationFrameInvalid',
       'originalClassification',
       'pointCount',
@@ -110,6 +112,8 @@ describe('source geometry stays byte-identical', () => {
     void c.classificationIsDerived;
     void c.classificationProvenance;
     c.setClassificationState('cleared');
+    c.classMark = c.classMark;
+    void c.derivedMethod;
     void c.originalClassification;
     void c.pointCount;
     c.projectXYZ(0, { sourceToProject: [1_000, -2_000, 30] });

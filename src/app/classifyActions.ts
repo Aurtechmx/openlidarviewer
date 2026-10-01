@@ -1,9 +1,9 @@
 /**
  * classifyActions.ts
  *
- * The whole-scan classification actions behind the Classes panel: Classify
- * (derive), Fill unclassified, Clear classifications and Restore original
- * classes. Lazy-loaded on first use, so the classifier client and its option
+ * The derive actions behind the Classes panel: Classify (derive) and Fill
+ * unclassified. Clear and Restore live in `render/class/classLayer.ts`.
+ * Lazy-loaded on first use, so the classifier client and its option
  * builders never enter the startup shell. The host hands in a small deps
  * object; nothing here reaches into module state of the composition root.
  *
@@ -27,7 +27,7 @@ import { AUTO_CLASSIFY_LIMITS, NEEDS_LOADED_SCAN } from '../render/class/classLa
 type ViewerCloud = NonNullable<ReturnType<Viewer['getCloud']>>;
 
 export interface ClassifyActionsDeps {
-  readonly viewer: Pick<Viewer, 'getCloud' | 'applyDerivedClassification'>;
+  readonly viewer: Pick<Viewer, 'getCloud' | 'applyDerivedClassification' | 'classificationEpoch'>;
   activeId(): string | null;
   readonly crsService: Pick<CrsService, 'crsRevision' | 'context'>;
   toast(message: string): void;
@@ -46,9 +46,9 @@ let classifyRunning = false;
 /**
  * Shared inner loop for {@link runDeriveClassification} and
  * {@link runFillUnclassified}: run the (possibly off-thread) derive, bail if
- * the active scan/frame changed underneath it, then apply the result and
- * refresh the classes legend. Callers stay responsible for their own
- * before/after toast copy and post-apply refreshes, since those differ.
+ * the active scan, its frame or its classes changed underneath it, then apply
+ * the result and refresh the classes legend. Callers stay responsible for their
+ * own before/after toast copy and post-apply refreshes, since those differ.
  */
 async function performClassificationDerive(
   d: ClassifyActionsDeps,
@@ -58,6 +58,9 @@ async function performClassificationDerive(
   label: string,
 ): Promise<{ result: Awaited<ReturnType<typeof deriveClassificationAsync>>; confPct: number | null } | null> {
   const deriveCrsRevision = d.crsService.crsRevision();
+  // An Undo, Clear, Restore or lasso while the derive runs moves the epoch; the
+  // result would then overwrite classes it never saw.
+  const epoch = d.viewer.classificationEpoch(activeId);
   const result = await deriveClassificationAsync(
     cloud.positions,
     cloud.pointCount,
@@ -69,6 +72,10 @@ async function performClassificationDerive(
     (phase) => d.toast(`${label} · ${phase}…`),
   );
   if (activeId !== d.activeId() || d.viewer.getCloud(activeId) !== cloud || d.crsService.crsRevision() !== deriveCrsRevision) return null;
+  if (d.viewer.classificationEpoch(activeId) !== epoch) {
+    d.toast(`${label} · the classes changed while it ran, so it left them as they are. Run it again.`);
+    return null;
+  }
   // The registry id@version travels with the codes into every export.
   d.viewer.applyDerivedClassification(activeId, result.codes, result.classifier.method);
   noteEdit('classification');
@@ -146,7 +153,7 @@ export async function runDeriveClassification(d: ClassifyActionsDeps): Promise<v
       .join(' · ');
     const confText = confPct !== null ? ` Support ${(confPct / 100).toFixed(2)}.` : '';
     const warnText = result.warnings.length > 0 ? ` ⚠ ${result.warnings[0]}` : '';
-    d.toast(`Classify · derived (heuristic, not survey-grade): ${top}.${confText} ${AUTO_CLASSIFY_LIMITS}${warnText}`);
+    d.toast(`Classify · derived (heuristic, not survey-grade): ${top}.${confText} Auto-classify ${AUTO_CLASSIFY_LIMITS}${warnText}`);
   } catch (err) {
     // A refusal also lands on the Classes caption, which outlives the toast.
     reportClassifyFailure(err, d.toast, d.legend);

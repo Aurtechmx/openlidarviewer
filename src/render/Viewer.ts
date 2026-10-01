@@ -2789,10 +2789,10 @@ export class Viewer {
     this.onClassificationEdited?.(id);
   }
 
-  /** Mark DERIVED classifications stale after a frame change (see CLASS_FRAME_STALE_NOTICE). */
+  /** Count a frame change on every cloud; derived codes it leaves stale (see CLASS_FRAME_STALE_NOTICE) bump their epoch. */
   invalidateDerivedClassificationsForFrame(): string[] {
     const marked: string[] = [];
-    for (const [id, e] of this._clouds) if (e.cloud.classificationIsDerived) { e.cloud.markDerivedClassificationFrameInvalid(); this._classEpochs.bump(id); marked.push(id); }
+    for (const [id, e] of this._clouds) { e.cloud.markDerivedClassificationFrameInvalid(); if (e.cloud.classificationIsDerived) { this._classEpochs.bump(id); marked.push(id); } }
     return marked;
   }
 
@@ -2826,17 +2826,16 @@ export class Viewer {
    * Run one in-place classification edit through the per-cloud undo history:
    * snapshot, `edit`, record the delta, then recolour and bump the edit epoch
    * when anything changed. `to` marks a whole-scan replace (clear, derive,
-   * restore) that also moves the codes' provenance; Undo steps it back exactly.
-   * Returns the number of points whose code changed (0 without classification).
+   * restore) that also moves the codes' provenance, and `method` names the
+   * classifier behind derived codes; Undo steps both back exactly.
    */
-  editClassification(id: string, edit: (buf: Uint8Array) => void, to?: ClassState): number {
+  editClassification(id: string, edit: (buf: Uint8Array) => void, to?: ClassState, method?: string): void {
     const entry = this._clouds.get(id);
-    const d = entry && recordClassEdit(this._historyFor(id), entry.cloud, edit, to);
-    if (d) this._afterClassEdit(id, entry, d.prov);
-    return d ? d.indices.length : 0;
+    const d = entry && recordClassEdit(this._historyFor(id), entry.cloud, edit, to, method);
+    if (d) this._afterClassEdit(id, entry, !!d.prov);
   }
 
-  private _afterClassEdit(id: string, entry: CloudEntry, whole: unknown): void {
+  private _afterClassEdit(id: string, entry: CloudEntry, whole: boolean): void {
     // A whole-scan edit rewrites every code, so the GPU class filter re-reads them.
     if (whole) this._attachClassAttribute(entry, entry.cloud.classification!);
     refreshClassificationColours(entry);
@@ -2952,7 +2951,7 @@ export class Viewer {
     const h = this._classHistory.get(id);
     const d = entry && h && stepClassEdit(h, entry.cloud, 'undo');
     if (!d) return false;
-    this._afterClassEdit(id, entry, d.prov);
+    this._afterClassEdit(id, entry, !!d.prov);
     return true;
   }
 
@@ -2966,7 +2965,7 @@ export class Viewer {
     const h = this._classHistory.get(id);
     const d = entry && h && stepClassEdit(h, entry.cloud, 'redo');
     if (!d) return false;
-    this._afterClassEdit(id, entry, d.prov);
+    this._afterClassEdit(id, entry, !!d.prov);
     return true;
   }
 
@@ -3001,9 +3000,8 @@ export class Viewer {
     // replaced in place through the undo history, so Undo brings them back.
     // A cloud with none gets the derived buffer plus the same GPU class-filter
     // wiring (`aClass` + class-mask multiply) a classified load gets.
-    cloud.derivedMethod = method;
-    if (codes.length === cloud.pointCount && cloud.classification) this.editClassification(id, (buf) => buf.set(codes), 'derived');
-    else { cloud.attachDerivedClassification(codes); this._afterClassEdit(id, entry, 1); }
+    if (codes.length === cloud.pointCount && cloud.classification) this.editClassification(id, (buf) => buf.set(codes), 'derived', method);
+    else { cloud.attachDerivedClassification(codes, method); this._afterClassEdit(id, entry, true); }
     return true;
   }
 
@@ -3011,9 +3009,9 @@ export class Viewer {
    * Attach (or replace) the `aClass` instanced attribute on a cloud's mesh and
    * fold the class-mask multiply into its size node — the same wiring
    * `_buildPointsMesh` does at load for a classified cloud, applied after the
-   * fact for a derived classification. Idempotent: re-deriving rewrites the
-   * attribute and re-applies the size mode. `material.needsUpdate` forces the
-   * node graph + new attribute to recompile.
+   * fact for a derived classification. Idempotent: a later whole-scan step
+   * refills the attribute in place. Only a new attribute re-applies the size
+   * mode and sets `material.needsUpdate`, which recompiles the node graph.
    */
   private _attachClassAttribute(entry: CloudEntry, codes: Uint8Array): void {
     const instanceCount = entry.cloud.pointCount;
@@ -3033,10 +3031,10 @@ export class Viewer {
       const classData = new Float32Array(instanceCount);
       for (let i = 0; i < n; i++) classData[i] = codes[i];
       entry.mesh.geometry.setAttribute('aClass', new THREE.InstancedBufferAttribute(classData, 1));
+      this._materialsWithClass.add(entry.material);
+      this._applySizeMode(entry.material);
+      entry.material.needsUpdate = true;
     }
-    this._materialsWithClass.add(entry.material);
-    this._applySizeMode(entry.material);
-    entry.material.needsUpdate = true;
   }
 
   /**

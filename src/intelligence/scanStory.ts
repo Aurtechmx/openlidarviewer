@@ -277,7 +277,7 @@ export function buildExportHealth(i: ScanStoryInputs): ExportHealth {
   } else if (i.classification === 'source') {
     rows.push({ label: 'Classification', value: 'Source (producer)', tier: 'good' });
   } else if (i.classification === 'cleared') {
-    rows.push({ label: 'Classification', value: 'Cleared in viewer (all class 1)', tier: 'caution' });
+    rows.push({ label: 'Classification', value: 'Cleared in viewer', tier: 'caution' });
   } else {
     rows.push({ label: 'Classification', value: 'None', tier: 'info' });
   }

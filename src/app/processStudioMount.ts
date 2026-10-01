@@ -88,7 +88,7 @@ export interface LiveScanAccessors {
   /** True when the present classification was DERIVED by OLV (heuristic), not
    *  carried by the producer. Distinguishes trusted vs derived ground/buildings. */
   getClassificationDerived(): boolean;
-  /** True when the source classes were cleared in the viewer (all class 1). */
+  /** True when the source classes were cleared in the viewer. */
   getClassificationCleared?(): boolean;
   /**
    * The active STATIC cloud's raw positions (local, source units) and the point

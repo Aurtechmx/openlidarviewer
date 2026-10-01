@@ -1,7 +1,7 @@
 /**
  * clearClassifications.test.ts
  *
- * Clear classifications, Restore original classes, and Auto-classify after a
+ * Clear classifications, Restore earlier classes, and Auto-classify after a
  * clear, driven through the same recorded edit the Viewer uses
  * (`recordClassEdit` / `stepClassEdit` over a real `PointCloud` and a real
  * `ClassEditHistory`). The Viewer method is a three-line wrapper over these
@@ -9,6 +9,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { PointCloud } from '../src/model/PointCloud';
 import {
   ClassEditHistory,
@@ -47,16 +49,15 @@ function host(pc: PointCloud) {
     undo(): boolean;
     redo(): boolean;
     derive(codes: Uint8Array, method?: string): void;
+    readonly history: ClassEditHistory;
   } = {
     getCloud: (id) => (id === 'a' ? pc : undefined),
-    editClassification: (_id, edit, to?: ClassState) => recordClassEdit(history, pc, edit, to)?.indices.length ?? 0,
+    editClassification: (_id, edit, to?: ClassState) => { recordClassEdit(history, pc, edit, to); },
     undo: () => stepClassEdit(history, pc, 'undo') !== null,
     redo: () => stepClassEdit(history, pc, 'redo') !== null,
     // Viewer.applyDerivedClassification on a cloud that already has codes.
-    derive: (codes, method) => {
-      pc.derivedMethod = method;
-      recordClassEdit(history, pc, (buf) => buf.set(codes), 'derived');
-    },
+    derive: (codes, method) => { recordClassEdit(history, pc, (buf) => buf.set(codes), 'derived', method); },
+    history,
   };
   return h;
 }
@@ -128,7 +129,7 @@ describe('Clear classifications', () => {
   });
 });
 
-describe('Restore original classes', () => {
+describe('Restore earlier classes', () => {
   it('writes the kept codes back, recorded so Undo returns to cleared', () => {
     const pc = cloud();
     const h = host(pc);
@@ -193,6 +194,139 @@ describe('Auto-classify after a clear', () => {
   });
 });
 
+describe('derived codes from a replaced frame stay stale through undo and redo', () => {
+  const DERIVED = Uint8Array.from(SOURCE.map(() => 2));
+
+  it('Undo of a restore brings back stale derived codes as stale', () => {
+    const pc = cloud();
+    const h = host(pc);
+    clearClassification(h, 'a');
+    h.derive(DERIVED);
+    pc.markDerivedClassificationFrameInvalid(); // the frame is replaced
+    expect(analysisClassification(pc, pc.positions.length)).toBeUndefined();
+    restoreOriginalClassification(h, 'a');
+    h.undo();
+    expect(pc.classificationProvenance).toBe('derived');
+    expect(pc.derivedClassificationFrameInvalid).toBe(true);
+    expect(analysisClassification(pc, pc.positions.length)).toBeUndefined();
+  });
+
+  it('a frame change while cleared makes the derive behind it stale', () => {
+    const pc = cloud([0, 1, 1, 0, 1, 1, 0, 1, 1, 0]);
+    const h = host(pc);
+    h.derive(DERIVED);
+    clearClassification(h, 'a');
+    pc.markDerivedClassificationFrameInvalid(); // the frame is replaced while cleared
+    h.undo();
+    expect(pc.classificationProvenance).toBe('derived');
+    expect(pc.derivedClassificationFrameInvalid).toBe(true);
+    expect(analysisClassification(pc, pc.positions.length)).toBeUndefined();
+  });
+
+  it('Redo into an older derive is stale; a fresh derive is current, and Undo returns to the stale one', () => {
+    const pc = cloud();
+    const h = host(pc);
+    clearClassification(h, 'a');
+    h.derive(DERIVED);
+    h.undo();
+    pc.markDerivedClassificationFrameInvalid();
+    h.redo();
+    expect(pc.derivedClassificationFrameInvalid).toBe(true);
+    h.derive(DERIVED);
+    expect(pc.derivedClassificationFrameInvalid).toBe(false);
+    h.undo();
+    expect(pc.classificationProvenance).toBe('derived');
+    expect(pc.derivedClassificationFrameInvalid).toBe(true);
+    h.redo();
+    expect(pc.derivedClassificationFrameInvalid).toBe(false);
+  });
+
+  it('the Viewer counts a frame change on every cloud, derived or not', () => {
+    const src = readFileSync(resolve(__dirname, '../src/render/Viewer.ts'), 'utf8');
+    const at = src.indexOf('  invalidateDerivedClassificationsForFrame(');
+    expect(at).toBeGreaterThan(-1);
+    const body = src.slice(at, src.indexOf('\n  }\n', at));
+    // The mark runs before, not behind, the "derived now" check.
+    expect(body).toMatch(/markDerivedClassificationFrameInvalid\(\);\s*if \(e\.cloud\.classificationIsDerived\)/);
+  });
+});
+
+describe('the classifier method moves with its step', () => {
+  it('Undo of a re-derive brings back the earlier method, Redo the later one', () => {
+    const pc = cloud();
+    const h = host(pc);
+    clearClassification(h, 'a');
+    // Two stand-in ids, so the step carries whatever the classifier reports.
+    h.derive(Uint8Array.from(SOURCE.map(() => 2)), 'fixture.classifier-a@1');
+    h.derive(Uint8Array.from(SOURCE.map(() => 3)), 'fixture.classifier-b@1');
+    expect(pc.derivedMethod).toBe('fixture.classifier-b@1');
+    h.undo();
+    expect(pc.derivedMethod).toBe('fixture.classifier-a@1');
+    h.redo();
+    expect(pc.derivedMethod).toBe('fixture.classifier-b@1');
+  });
+});
+
+describe('a whole-scan edit that throws', () => {
+  it('leaves the provenance, the kept original and the history as they were', () => {
+    const pc = cloud();
+    const history = new ClassEditHistory();
+    expect(() => recordClassEdit(history, pc, () => { throw new Error('edit failed'); }, 'cleared')).toThrow('edit failed');
+    expect(pc.classificationProvenance).toBe('source');
+    expect(pc.originalClassification).toBeUndefined();
+    expect(history.canUndo).toBe(false);
+  });
+});
+
+describe('undo history memory', () => {
+  const N = 100_000;
+  const big = (): PointCloud => new PointCloud({
+    positions: new Float32Array(N * 3), origin: [0, 0, 0], sourceFormat: 'las', name: 'big',
+    classification: new Uint8Array(N).fill(2),
+  });
+
+  it('a whole-scan step holds one byte per point', () => {
+    const pc = big();
+    const h = host(pc);
+    for (let i = 0; i < 10; i++) {
+      clearClassification(h, 'a');
+      restoreOriginalClassification(h, 'a');
+    }
+    expect(h.history.depth).toBe(20);
+    expect(h.history.bytes).toBe(20 * N);
+    h.undo();
+    h.undo();
+    expect(pc.classificationProvenance).toBe('source');
+    expect(pc.classification!.every((c) => c === 2)).toBe(true);
+  });
+
+  it('drops the oldest steps past the byte cap and always keeps the newest', () => {
+    const pc = big();
+    const history = new ClassEditHistory(50, 2.5 * N);
+    const host2: ClassLayerHost = {
+      getCloud: () => pc,
+      editClassification: (_id, edit, to) => { recordClassEdit(history, pc, edit, to); },
+    };
+    clearClassification(host2, 'a');
+    restoreOriginalClassification(host2, 'a');
+    expect(history.depth).toBe(2);
+    clearClassification(host2, 'a');
+    expect(history.depth).toBe(2);
+    expect(history.bytes).toBeLessThanOrEqual(2.5 * N);
+    stepClassEdit(history, pc, 'undo');
+    stepClassEdit(history, pc, 'undo');
+    expect(pc.classificationProvenance).toBe('cleared');
+    expect(stepClassEdit(history, pc, 'undo')).toBeNull();
+    // Restore still reaches the codes the dropped step held.
+    expect(restoreOriginalClassification(host2, 'a')).toBe('ok');
+    expect(pc.classification!.every((c) => c === 2)).toBe(true);
+
+    const tight = new ClassEditHistory(50, N / 2);
+    recordClassEdit(tight, big(), (b) => b.fill(1), 'cleared');
+    expect(tight.depth).toBe(1);
+  });
+});
+
 describe('terrain never reads cleared or derived ground as producer ground', () => {
   it('only source class 2 is producer ground', () => {
     const pc = cloud();
@@ -224,13 +358,14 @@ vi.mock('../src/render/class/classifierCues', () => ({ classifierOptions: () => 
 describe('runDeriveClassification', () => {
   beforeEach(() => derive.mockReset());
 
-  async function run(pc: PointCloud | undefined, streaming = false) {
+  async function run(pc: PointCloud | undefined, streaming = false, epoch = () => 0) {
     const { runDeriveClassification } = await import('../src/app/classifyActions');
     const toasts: string[] = [];
     const applied: { codes: Uint8Array; method?: string }[] = [];
     await runDeriveClassification({
       viewer: {
         getCloud: (id: string) => (id === 'a' ? pc : undefined),
+        classificationEpoch: () => epoch(),
         applyDerivedClassification: (_id: string, codes: Uint8Array, method?: string) => {
           applied.push({ codes, method });
           return true;
@@ -277,6 +412,17 @@ describe('runDeriveClassification', () => {
   it('says a streaming scan needs a fully loaded scan', async () => {
     const { toasts } = await run(undefined, true);
     expect(derive).not.toHaveBeenCalled();
-    expect(toasts[0]).toBe('Classify needs a fully loaded scan; streaming scans are not supported yet.');
+    expect(toasts[0]).toBe('Classify needs a fully loaded scan and does not run on a streaming one.');
+  });
+
+  it('drops the result when the classes changed while it ran', async () => {
+    const pc = cloud();
+    clearClassification(host(pc), 'a');
+    let epoch = 3;
+    // An Undo (or a lasso, or Restore) lands while the derive is off-thread.
+    derive.mockImplementation(async () => { epoch++; return result; });
+    const { toasts, applied } = await run(pc, false, () => epoch);
+    expect(applied).toHaveLength(0);
+    expect(toasts.at(-1)).toBe('Classify · the classes changed while it ran, so it left them as they are. Run it again.');
   });
 });

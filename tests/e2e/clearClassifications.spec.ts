@@ -6,7 +6,8 @@ import { dropTinyLas, openClassesPage, railChromeSettled, expectHittable, showWo
  * real Classes-page controls: Clear sets every point to class 1, the legend
  * and an inline note say so, Undo restores the producer codes exactly, and
  * Auto-classify then runs on the cleared layer, carrying the heuristic caption
- * and its limits. The Export panel states 'cleared' and then 'derived'.
+ * and its limits. The Export panel states 'cleared' and then 'derived', and
+ * Restore earlier classes brings the codes from before the clear back.
  *
  * tiny.las carries ASPRS classes 1, 2, 3, 5 and 6.
  */
@@ -73,7 +74,7 @@ test('Clear, Undo, then Clear and Auto-classify on a classified scan', async ({ 
   await expect(note).toContainText('Producer classes cleared for this session');
   await expect(note.locator('[data-testid="reclass-note-undo"]')).toBeEnabled();
   await expect(note.locator('[data-testid="reclass-restore"]')).toBeVisible();
-  await expect(page.locator(CAPTION)).toContainText('source classes cleared in viewer; all points class 1');
+  await expect(page.locator(CAPTION)).toContainText('source classes cleared in viewer; class 1 unless reclassified by hand since');
   await expect(clear).toBeDisabled();
   await page.mouse.move(1, 1);
   await shot(page, '01-cleared-legend-and-note');
@@ -89,8 +90,8 @@ test('Clear, Undo, then Clear and Auto-classify on a classified scan', async ({ 
   // Clear again; the Export panel says the classes were cleared.
   await clear.click();
   await expect(page.locator(ROW)).toHaveCount(1);
-  expect(await exportClassHint(page)).toContain('source classes cleared in viewer; all points class 1');
-  await expect(page.locator('.olv-export-panel')).toContainText('Classification included (source classes cleared in viewer; all points class 1)');
+  expect(await exportClassHint(page)).toContain('source classes cleared in viewer; class 1 unless reclassified by hand since');
+  await expect(page.locator('.olv-export-panel')).toContainText('Classification included (source classes cleared in viewer; class 1 unless reclassified by hand since)');
   await shot(page, '03-export-cleared');
 
   // Auto-classify now runs on the cleared layer: derived classes, heuristic caption.
@@ -110,12 +111,15 @@ test('Clear, Undo, then Clear and Auto-classify on a classified scan', async ({ 
   expect(await exportClassHint(page)).toMatch(/Derived \(heuristic\).*not survey-grade/);
   await shot(page, '05-export-derived');
 
-  // Undo steps back over the derive to the cleared layer; Restore brings the file codes back.
+  // Undo steps back over the derive to the cleared layer. Restore earlier
+  // classes brings back the codes held before the first clear: the file's,
+  // since nothing was edited before it.
   await openClassesPage(page);
   await railChromeSettled(page);
   await page.locator('[data-testid="reclass-note-undo"]').click();
   expect(await codes(page, N)).toEqual(source.map(() => 1));
   await expect(page.locator(CAPTION)).toContainText('source classes cleared in viewer');
+  await expect(page.locator('[data-testid="reclass-restore"]')).toHaveText('Restore earlier classes');
   await page.locator('[data-testid="reclass-restore"]').click();
   expect(await codes(page, N)).toEqual(source);
   await expect(page.locator(ROW)).toHaveCount(sourceRows);

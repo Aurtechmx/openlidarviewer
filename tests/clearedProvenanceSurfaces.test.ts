@@ -41,7 +41,7 @@ describe('export summary', () => {
   it('labels a cleared classification and warns before it is written', () => {
     const s = buildExportSummary({ pointCount: 3, format: 'las14', crsMode: 'keep', classification: 'cleared' });
     expect(s.classificationLabel).toBe(`Classification included (${CLEARED_CLASS_NOTE})`);
-    expect(s.warnings.map((w) => w.message).join(' ')).toMatch(/source classes cleared in viewer; all points class 1/);
+    expect(s.warnings.map((w) => w.message).join(' ')).toMatch(CLEARED_CLASS_NOTE);
   });
 
   it('leaves the source and derived wording unchanged', () => {
@@ -68,8 +68,7 @@ describe('XYZ comment', () => {
 
   it('stamps DERIVED with the registry method id@version', () => {
     const pc = cleared();
-    pc.derivedMethod = 'olv.class.derived-heuristic@3';
-    recordClassEdit(new ClassEditHistory(), pc, (b) => b.set([2, 2, 2]), 'derived');
+    recordClassEdit(new ClassEditHistory(), pc, (b) => b.set([2, 2, 2]), 'derived', 'olv.class.derived-heuristic@3');
     expect(exportCloud(pc, 'xyz')).toMatch(/# classification: DERIVED \(heuristic ground\/vegetation\/building, olv\.class\.derived-heuristic@3/);
   });
 });
@@ -100,7 +99,7 @@ describe('report', () => {
 describe('Export Health', () => {
   it('rates a cleared classification as caution', () => {
     const r = buildExportHealth({ classification: 'cleared' }).rows.find((x) => x.label === 'Classification');
-    expect(r).toEqual({ label: 'Classification', value: 'Cleared in viewer (all class 1)', tier: 'caution' });
+    expect(r).toEqual({ label: 'Classification', value: 'Cleared in viewer', tier: 'caution' });
   });
 });
 
@@ -120,5 +119,47 @@ describe('Process Studio capability model', () => {
   });
   it('a source classification is still the producer', () => {
     expect(signalsFromLive(live)!.classificationProvenance).toBe('producer');
+  });
+});
+
+describe('a hand edit on the cleared layer', () => {
+  // Clear, then a lasso sets one point to Building: the codes now hold class 6,
+  // so no surface may still say that every point is class 1.
+  const ALL_ONE = /all points class 1|all class 1|every point (is )?class 1/i;
+
+  function clearedThenEdited(): PointCloud {
+    const pc = classified();
+    const history = new ClassEditHistory();
+    recordClassEdit(history, pc, (b) => b.fill(1), 'cleared');
+    recordClassEdit(history, pc, (b) => { b[0] = 6; });
+    return pc;
+  }
+
+  it('the XYZ header keeps CLEARED without claiming every point is class 1', () => {
+    const pc = clearedThenEdited();
+    expect([...pc.classification!]).toEqual([6, 1, 1]);
+    expect(pc.classificationProvenance).toBe('cleared');
+    const header = exportCloud(pc, 'xyz').split('\n').filter((l) => l.startsWith('#')).join('\n');
+    expect(header).toMatch(/# classification: CLEARED/);
+    expect(header).not.toMatch(ALL_ONE);
+    expect(header).toMatch(/by hand/);
+  });
+
+  it('the report, the export summary and Export Health say the same', () => {
+    const qa = buildScanQuality({
+      coordinateHeadline: 'h', positionLabel: 'p', heightLabel: 'z', positionKnown: true, heightKnown: true,
+      hasClassification: true, classificationDerived: false, classificationCleared: true, attributes: [],
+    }).classificationNote;
+    const meta = buildDatasetSummary({
+      fileName: 'tile.las', format: 'LAS', sourcePointCount: 3, width: 1, depth: 1, height: 1, density: 1,
+      hasRgb: false, hasIntensity: false, hasClassification: true, classificationCleared: true,
+    }).find((r) => r.label === 'Classification')?.value ?? '';
+    const s = buildExportSummary({ pointCount: 3, format: 'las14', crsMode: 'keep', classification: 'cleared' });
+    const health = buildExportHealth({ classification: 'cleared' }).rows.find((x) => x.label === 'Classification')?.value ?? '';
+    for (const text of [qa, meta, s.classificationLabel, ...s.warnings.map((w) => w.message), health]) {
+      expect(text).not.toMatch(ALL_ONE);
+    }
+    expect(qa).toMatch(/by hand/);
+    expect(meta).toMatch(/by hand/);
   });
 });

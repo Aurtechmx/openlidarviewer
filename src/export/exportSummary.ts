@@ -213,7 +213,7 @@ export function buildExportSummary(input: ExportSummaryInput): ExportSummary {
     });
   }
   if (includeClass && provenance === 'cleared') {
-    warnings.push({ level: 'warn', message: `Classification: ${CLEARED_CLASS_NOTE}. Restore the original classes to write them.` });
+    warnings.push({ level: 'warn', message: `Classification: ${CLEARED_CLASS_NOTE}. Restore earlier classes to write the classes held before the clear.` });
   }
   if (includeClass && provenance === 'derived') {
     warnings.push({

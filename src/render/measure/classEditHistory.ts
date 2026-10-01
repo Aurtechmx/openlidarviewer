@@ -10,27 +10,46 @@
  * each edit records only the points it actually changed — `{index, prev, next}`
  * — so a deep history costs bytes proportional to the EDITS, not the cloud.
  *
+ * A whole-scan step (clear, derive, restore) changes nearly every point, where
+ * that sparse form would cost six bytes a point. It keeps one dense byte per
+ * point instead: the codes that are not live, swapped with the live buffer on
+ * each undo and redo. The history also holds a byte budget, so repeated
+ * whole-scan steps on a large scan drop the oldest steps rather than grow
+ * without bound.
+ *
  * Pure data. The Viewer owns the live `Uint8Array` classification buffer and
  * calls these helpers to capture an edit and to replay prev/next on undo/redo.
  */
 
-import type { ClassState } from '../../model/PointCloud';
+import type { ClassMark, ClassState } from '../../model/PointCloud';
 
-/** The points one edit changed: parallel arrays, all the same length. */
+/** Bytes the undo history of one cloud may hold before its oldest steps drop. */
+export const CLASS_HISTORY_MAX_BYTES = 128e6;
+
+/**
+ * The points one edit changed: parallel arrays, all the same length. A
+ * whole-scan step (`prov` set) leaves `indices` and `next` empty and keeps
+ * every point's code in `prev`.
+ */
 export interface ClassDelta {
   /** Indices of the points whose class changed. */
   readonly indices: Uint32Array;
-  /** Class code BEFORE the edit, aligned to {@link indices}. */
+  /**
+   * Class code BEFORE the edit, aligned to {@link indices}. On a whole-scan
+   * step, one code per point: the codes that are not live, swapped with the
+   * live buffer on each undo and redo.
+   */
   readonly prev: Uint8Array;
   /** Class code AFTER the edit, aligned to {@link indices}. */
   readonly next: Uint8Array;
   /**
-   * Provenance before and after, for a whole-scan edit (clear, derive,
-   * restore) that also moves where the codes came from. Undo restores [0],
-   * redo re-applies [1].
+   * Provenance before and after a whole-scan edit (clear, derive, restore),
+   * which also moves where the codes came from. Undo puts back [0], redo [1].
    */
-  readonly prov?: readonly [ClassState, ClassState];
+  readonly prov?: readonly [ClassMark, ClassMark];
 }
+
+const deltaBytes = (d: ClassDelta): number => d.indices.byteLength + d.prev.byteLength + d.next.byteLength;
 
 /**
  * Diff two equal-length classification buffers into a {@link ClassDelta}, or
@@ -64,6 +83,12 @@ export function diffClassification(
 }
 
 function applyDelta(buf: Uint8Array, delta: ClassDelta, dir: 'undo' | 'redo'): void {
+  if (delta.prov) {
+    // Dense: swap, so `prev` then holds the codes this step took off the buffer.
+    const held = delta.prev;
+    for (let i = 0; i < held.length; i++) { const c = buf[i]; buf[i] = held[i]; held[i] = c; }
+    return;
+  }
   const src = dir === 'undo' ? delta.prev : delta.next;
   const idx = delta.indices;
   for (let i = 0; i < idx.length; i++) buf[idx[i]] = src[i];
@@ -72,22 +97,36 @@ function applyDelta(buf: Uint8Array, delta: ClassDelta, dir: 'undo' | 'redo'): v
 /**
  * A bounded undo/redo stack of classification deltas for one cloud. Pushing a
  * new edit clears the redo branch (standard linear-history semantics); the
- * oldest edit is evicted once `limit` is exceeded.
+ * oldest edit is evicted once `limit` edits or `maxBytes` bytes are exceeded.
+ * The newest edit always stays, however large, so it can be undone.
  */
 export class ClassEditHistory {
   private readonly _undo: ClassDelta[] = [];
   private readonly _redo: ClassDelta[] = [];
   private readonly _limit: number;
+  private readonly _maxBytes: number;
 
-  constructor(limit = 50) {
+  constructor(limit = 50, maxBytes = CLASS_HISTORY_MAX_BYTES) {
     this._limit = Math.max(1, Math.floor(limit));
+    this._maxBytes = maxBytes;
   }
 
   /** Record a committed edit. Clears the redo branch. */
   push(delta: ClassDelta): void {
     this._undo.push(delta);
-    if (this._undo.length > this._limit) this._undo.shift();
     this._redo.length = 0;
+    let bytes = this.bytes;
+    while (this._undo.length > 1 && (this._undo.length > this._limit || bytes > this._maxBytes)) {
+      bytes -= deltaBytes(this._undo.shift()!);
+    }
+  }
+
+  /** Bytes the recorded edits hold, undo and redo branches together. */
+  get bytes(): number {
+    let n = 0;
+    for (const d of this._undo) n += deltaBytes(d);
+    for (const d of this._redo) n += deltaBytes(d);
+    return n;
   }
 
   get canUndo(): boolean {
@@ -142,14 +181,10 @@ export function recordEdit(
   history: ClassEditHistory,
   buf: Uint8Array,
   edit: () => void,
-  prov?: readonly [ClassState, ClassState],
 ): ClassDelta | null {
   const before = buf.slice();
   edit();
-  let delta = diffClassification(before, buf);
-  // A provenance move is an edit even when no code changed (clearing a scan
-  // that was already all class 1), so Undo can still step back over it.
-  if (prov) delta = { ...(delta ?? { indices: new Uint32Array(0), prev: new Uint8Array(0), next: new Uint8Array(0) }), prov };
+  const delta = diffClassification(before, buf);
   if (delta) history.push(delta);
   return delta;
 }
@@ -157,35 +192,46 @@ export function recordEdit(
 /** The cloud surface a recorded class edit reads and moves. */
 export interface ClassEditTarget {
   readonly classification?: Uint8Array;
-  readonly classificationProvenance: ClassState | 'none';
-  setClassificationState(state: ClassState): void;
+  classMark: ClassMark;
+  setClassificationState(state: ClassState, method?: string, before?: Uint8Array): void;
 }
+
+const NO_INDICES = new Uint32Array(0);
+const NO_CODES = new Uint8Array(0);
 
 /**
  * Record one in-place edit of `cloud`'s classification. `to` marks a
  * whole-scan replace (clear, derive, restore) that also moves the codes'
- * provenance, recorded on the delta so undo/redo move it back exactly.
- * Null without a classification or when nothing changed.
+ * provenance, with `method` naming the classifier behind derived codes. The
+ * provenance moves only after `edit` returns, so a throwing edit records
+ * nothing; the step keeps the marks before and after so undo and redo move
+ * them back exactly. Null without a classification or when nothing changed.
  */
 export function recordClassEdit(
   history: ClassEditHistory,
   cloud: ClassEditTarget,
   edit: (buf: Uint8Array) => void,
   to?: ClassState,
+  method?: string,
 ): ClassDelta | null {
   const buf = cloud.classification;
   if (!buf) return null;
-  const from = cloud.classificationProvenance as ClassState;
-  // Moved BEFORE the edit: the first move off the source keeps a copy of the
-  // codes as they are now, which the edit is about to overwrite.
-  if (to) cloud.setClassificationState(to);
-  return recordEdit(history, buf, () => edit(buf), to && [from, to]);
+  if (!to) return recordEdit(history, buf, () => edit(buf));
+  const from = cloud.classMark;
+  const before = buf.slice();
+  edit(buf);
+  cloud.setClassificationState(to, method, before);
+  // Recorded even when no code changed (clearing a scan that was already all
+  // class 1): the provenance moved, and Undo has to step back over that.
+  const delta: ClassDelta = { indices: NO_INDICES, prev: before, next: NO_CODES, prov: [from, cloud.classMark] };
+  history.push(delta);
+  return delta;
 }
 
 /** Undo or redo one recorded edit on `cloud`, codes and provenance together. */
 export function stepClassEdit(history: ClassEditHistory, cloud: ClassEditTarget, dir: 'undo' | 'redo'): ClassDelta | null {
   const buf = cloud.classification;
   const d = buf ? history[dir](buf) : null;
-  if (d?.prov) cloud.setClassificationState(d.prov[dir === 'undo' ? 0 : 1]);
+  if (d?.prov) cloud.classMark = d.prov[dir === 'undo' ? 0 : 1];
   return d;
 }

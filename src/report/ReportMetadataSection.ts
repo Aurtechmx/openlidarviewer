@@ -38,7 +38,7 @@ export interface MetadataInputs {
   readonly unclassifiedOfDisplaySample?: boolean;
   /** The classification was derived in the viewer (heuristic), not supplied. */
   readonly classificationDerived?: boolean;
-  /** The source classes were cleared in the viewer (every point class 1). */
+  /** The source classes were cleared in the viewer. */
   readonly classificationCleared?: boolean;
   /** `methodRegistry` id@version of the classifier behind derived codes. */
   readonly classificationMethod?: string;

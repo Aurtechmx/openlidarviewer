@@ -1,7 +1,7 @@
 /**
  * classLayer.ts
  *
- * Clear classifications and Restore original classes: the two whole-scan
+ * Clear classifications and Restore earlier classes: the two whole-scan
  * edits of the working class layer. Both run through the Viewer's recorded
  * edit, so a single Undo brings back exactly the codes held before, and both
  * move the layer's provenance with the codes ('cleared' / 'source').
@@ -11,20 +11,23 @@
  * read-only on the cloud, so a withheld point stays withheld.
  *
  * The first whole-scan replace keeps a copy of the codes it replaced (one byte
- * per point, see `PointCloud.originalClassification`); Restore writes that copy
- * back. Lives in the lazy class-edit chunk; the Viewer holds only the generic
- * recorded edit.
+ * per point, see `PointCloud.originalClassification`), hand edits made before
+ * it included; Restore earlier classes writes that copy back. Lives in the lazy
+ * class-edit chunk; the Viewer holds only the generic recorded edit.
  */
 
 import type { ClassState, ClassificationState } from '../../model/PointCloud';
 
-/** What the heuristic classifier does and does not find, stated wherever it runs. */
+/**
+ * What the heuristic classifier does and does not find, stated wherever it
+ * runs. A predicate: callers put "Auto-classify" or "It" in front.
+ */
 export const AUTO_CLASSIFY_LIMITS =
-  'Finds ground, vegetation and buildings only (buildings by a heuristic); ' +
+  'finds ground, vegetation and buildings only (buildings by a heuristic); ' +
   'no wires, poles, water, bridges or noise.';
 
-/** Said when a whole-scan class action is asked of a streaming scan. */
-export const NEEDS_LOADED_SCAN = 'needs a fully loaded scan; streaming scans are not supported yet.';
+/** Said when a whole-scan class action is asked of a scan that is not resident. */
+export const NEEDS_LOADED_SCAN = 'needs a fully loaded scan and does not run on a streaming one.';
 
 /** ASPRS class 1, Unclassified: what Clear writes to every point. */
 export const UNCLASSIFIED = 1;
@@ -39,7 +42,7 @@ export interface ClassLayerCloud {
 /** The host surface: the Viewer's cloud lookup and its recorded edit. */
 export interface ClassLayerHost {
   getCloud(id: string): ClassLayerCloud | undefined;
-  editClassification(id: string, edit: (buf: Uint8Array) => void, to?: ClassState): number;
+  editClassification(id: string, edit: (buf: Uint8Array) => void, to?: ClassState): void;
 }
 
 /** Why a whole-scan class action did not run, or 'ok' when it did. */
@@ -55,7 +58,7 @@ export function clearClassification(host: ClassLayerHost, id: string): ClassLaye
   return 'ok';
 }
 
-/** Whether Restore original classes has something to bring back. */
+/** Whether Restore earlier classes has something to bring back. */
 export function canRestoreOriginal(cloud: ClassLayerCloud | undefined): boolean {
   return !!cloud?.originalClassification && cloud.classificationProvenance !== 'source';
 }

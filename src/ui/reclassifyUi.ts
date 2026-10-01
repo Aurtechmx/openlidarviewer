@@ -31,8 +31,8 @@ import {
 const NOT_RUN: Readonly<Record<Exclude<ClassLayerOutcome, 'ok'>, string>> = {
   'not-loaded': `Clear classifications ${NEEDS_LOADED_SCAN}`,
   'no-classification': 'This scan carries no classification to clear.',
-  already: 'Classes are already cleared. Undo or Restore original classes brings them back.',
-  'no-original': 'No original classes to restore: the classes have not been cleared or replaced.',
+  already: 'Classes are already cleared. Undo or Restore earlier classes brings them back.',
+  'no-original': 'No earlier classes to restore: the classes have not been cleared or replaced.',
 };
 
 /** Common ASPRS classes offered as reclassify targets. */
@@ -117,7 +117,7 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
     : null;
   if (autoBtn) {
     autoBtn.title =
-      `Derive ground / vegetation / building for the whole scan (heuristic, not survey-grade). ${AUTO_CLASSIFY_LIMITS}`;
+      `Derive ground / vegetation / building for the whole scan (heuristic, not survey-grade). It ${AUTO_CLASSIFY_LIMITS}`;
     // Reflect the in-flight derive: disable + spinner while it runs, restore on
     // settle. Awaits the promise the host returns, so a slow whole-scan classify
     // reads as working rather than frozen.
@@ -139,10 +139,10 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
 
   // Clear classifications: every point to class 1 for this session, recorded
   // so Undo restores the codes exactly. Undoable, so no confirmation modal; the
-  // level-1 inline note below carries Undo and Restore original classes.
+  // level-1 inline note below carries Undo and Restore earlier classes.
   const clearBtn = mkBtn('Clear classes', 'reclass-clear');
   clearBtn.title = 'Set every point to class 1 (Unclassified) for this session. The source file is not changed; Undo brings the classes back.';
-  const limits = el('div', { className: 'olv-reclass-hint', text: `Auto-classify: ${AUTO_CLASSIFY_LIMITS}` });
+  const limits = el('div', { className: 'olv-reclass-hint', text: `Auto-classify ${AUTO_CLASSIFY_LIMITS}` });
   const linkBtn = (text: string, testid: string, tip: string): HTMLButtonElement => {
     const b = el('button', { className: 'olv-reclass-link', text }) as HTMLButtonElement;
     b.type = 'button';
@@ -152,16 +152,11 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
   };
   const noteText = el('span', { text: '' });
   const noteUndo = linkBtn('Undo', 'reclass-note-undo', 'Take back the last class change.');
-  const noteRestore = linkBtn('Restore original classes', 'reclass-restore', 'Put back the classes the scan had before the first clear or auto-classify. Undo takes this back too.');
+  const noteRestore = linkBtn('Restore earlier classes', 'reclass-restore', 'Put back the classes held before the first clear or auto-classify since the scan opened, hand edits made before then included. Undo takes this back too.');
   const restoreSep = el('span', { text: ' · ' });
   const note = el('div', { className: 'olv-reclass-note' }, [noteText, el('span', { text: ' · ' }), noteUndo, restoreSep, noteRestore]);
   note.setAttribute('role', 'status');
   note.setAttribute('data-testid', 'reclass-cleared-note');
-  const streamNote = el('div', {
-    className: 'olv-reclass-note',
-    text: `Clear classes and Auto-classify need a fully loaded scan; streaming scans are not supported yet.`,
-  });
-  streamNote.setAttribute('data-testid', 'reclass-needs-loaded');
   const wholeScan = (run: () => ClassLayerOutcome | null, done: string): void => {
     const r = run();
     if (r === 'ok') {
@@ -173,12 +168,12 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
   const withActive = (fn: (v: Viewer, id: string) => ClassLayerOutcome): (() => ClassLayerOutcome | null) => () => {
     const v = opts.getViewer();
     const id = opts.getActiveId();
-    return v && id ? fn(v, id) : v?.streamingCloud ? 'not-loaded' : null;
+    return v && id ? fn(v, id) : null;
   };
   clearBtn.addEventListener('click', () => wholeScan(withActive(clearClassification),
-    'Classes cleared: every point is class 1 for this session. Undo or Restore original classes brings them back.'));
+    'Classes cleared: every point is class 1 for this session. Undo or Restore earlier classes brings them back.'));
   noteRestore.addEventListener('click', () => wholeScan(withActive(restoreOriginalClassification),
-    'Original classes restored.'));
+    'Earlier classes restored.'));
   noteUndo.addEventListener('click', () => undoBtn.click());
 
   const tool = new LassoVolumeTool(opts.canvas, {
@@ -238,11 +233,7 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
     noteUndo.disabled = undoBtn.disabled;
     const cloud = v && id ? v.getCloud(id) : undefined;
     const prov = cloud?.classificationProvenance;
-    // A streaming scan has no resident class buffer to clear or derive over.
-    const streaming = !cloud && !!v?.streamingCloud;
-    streamNote.classList.toggle('olv-hidden', !streaming);
-    clearBtn.disabled = streaming || !cloud?.classification || prov === 'cleared';
-    if (autoBtn && !autoBtn.classList.contains('olv-reclass-auto-loading')) autoBtn.disabled = streaming;
+    clearBtn.disabled = !cloud?.classification || prov === 'cleared';
     const restorable = canRestoreOriginal(cloud);
     noteRestore.classList.toggle('olv-hidden', !restorable);
     restoreSep.classList.toggle('olv-hidden', !restorable);
@@ -260,7 +251,6 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
     // Primary: derive the whole scan, or clear it. Manual class + lasso follow.
     el('div', { className: 'olv-reclass-actions olv-reclass-whole' }, [...(autoBtn ? [autoBtn] : []), clearBtn]),
     note,
-    streamNote,
     ...(autoBtn ? [limits] : []),
     select,
     armBtn,

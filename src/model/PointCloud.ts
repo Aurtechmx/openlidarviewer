@@ -5,15 +5,27 @@ import type { CloudFrameProvenance } from '../geo/frame/frameProvenance';
 import type { OrganizedRangeSet } from './OrganizedRange';
 import type { AcquisitionStationSet } from './AcquisitionStations';
 
-/**
- * One source-metadata field exactly as the file declared it. `value` is
- * verbatim; nothing here is inferred, normalised, or verified by the viewer.
- */
 /** Provenance of a cloud's live classification codes. */
 export type ClassState = 'source' | 'cleared' | 'derived';
 /** {@link ClassState}, or 'none' when the cloud carries no classification. */
 export type ClassificationState = ClassState | 'none';
 
+/**
+ * Where the live codes came from, as one value an undo step can hold and put
+ * back. `frame` and `method` describe derived codes only: the frame change
+ * count ({@link PointCloud.markDerivedClassificationFrameInvalid}) when they
+ * were derived, and the classifier's `methodRegistry` id@version.
+ */
+export interface ClassMark {
+  readonly state: ClassState;
+  readonly frame: number;
+  readonly method?: string;
+}
+
+/**
+ * One source-metadata field exactly as the file declared it. `value` is
+ * verbatim; nothing here is inferred, normalised, or verified by the viewer.
+ */
 export interface DeclaredMetadataField {
   /** Local field name as declared, e.g. "sensorModel" or "datasetType". */
   readonly name: string;
@@ -260,12 +272,11 @@ export class PointCloud {
   private _classification?: Uint8Array;
   private readonly _classificationFlags?: Uint8Array;
   /** Where the live codes came from; meaningful only while `_classification` exists. */
-  private _classState: ClassState = 'source';
+  private _classMark: ClassMark = { state: 'source', frame: 0 };
   /** Copy of the codes held before the first whole-scan replace (clear / derive). */
   private _originalClassification?: Uint8Array;
-  /** `methodRegistry` id@version of the classifier behind DERIVED codes. */
-  derivedMethod?: string;
-  private _derivedClassFrameInvalid = false;
+  /** Frame changes this cloud has seen; derived codes from an earlier count are stale. */
+  private _frameChanges = 0;
   readonly normals?: Float32Array;
   readonly returnNumber?: Uint8Array;
   readonly returnCount?: Uint8Array;
@@ -425,34 +436,54 @@ export class PointCloud {
 
   /**
    * Where the live classification came from: the source file, the source
-   * codes cleared in the viewer (every point class 1), the viewer's heuristic
-   * classifier, or nothing at all.
+   * codes cleared in the viewer (class 1, plus any later hand edits), the
+   * viewer's heuristic classifier, or nothing at all.
    */
   get classificationProvenance(): ClassificationState {
-    return this._classification ? this._classState : 'none';
+    return this._classification ? this._classMark.state : 'none';
+  }
+
+  /**
+   * The live provenance as a {@link ClassMark}, for an undo step to keep.
+   * Undo and redo assign a recorded mark back, frame count included, so
+   * derived codes from a replaced frame come back stale rather than current.
+   */
+  get classMark(): ClassMark {
+    return this._classMark;
+  }
+
+  set classMark(mark: ClassMark) {
+    this._classMark = mark;
+  }
+
+  /** `methodRegistry` id@version of the classifier behind DERIVED codes. */
+  get derivedMethod(): string | undefined {
+    return this._classMark.method;
   }
 
   /**
    * The codes held before the first whole-scan replace (clear or derive) in
-   * this session, kept so "Restore original classes" can bring them back.
-   * Costs one byte per point once taken; undefined until then.
+   * this session, hand edits made before it included, kept so "Restore earlier
+   * classes" can bring them back. Costs one byte per point once taken;
+   * undefined until then.
    */
   get originalClassification(): Uint8Array | undefined {
     return this._originalClassification;
   }
 
   /**
-   * Move the live codes to a new provenance (an undoable whole-scan edit or its
-   * undo/redo). The first move away from the source keeps a copy of the source
-   * codes as {@link originalClassification}. Entering 'derived' starts current
-   * under the frame in force now.
+   * Move the live codes to a new provenance after a whole-scan edit (clear,
+   * derive, restore). The new state is current under the frame in force now,
+   * and `method` names the classifier behind derived codes. `before` holds the
+   * codes the edit replaced: the first move away from the source keeps a copy
+   * of them as {@link originalClassification}. Undo and redo assign a
+   * recorded {@link classMark} instead.
    */
-  setClassificationState(state: ClassState): void {
-    if (!this._originalClassification && this._classState === 'source' && state !== 'source') {
-      this._originalClassification = this._classification?.slice();
+  setClassificationState(state: ClassState, method?: string, before?: Uint8Array): void {
+    if (before && !this._originalClassification && this._classMark.state === 'source' && state !== 'source') {
+      this._originalClassification = before.slice();
     }
-    if (state === 'derived') this._derivedClassFrameInvalid = false;
-    this._classState = state;
+    this._classMark = { state, frame: this._frameChanges, method };
   }
 
   /**
@@ -460,7 +491,7 @@ export class PointCloud {
    * replace a prior derived one). Marks the cloud as carrying DERIVED codes.
    * Rejects a length mismatch rather than silently misaligning codes to points.
    */
-  attachDerivedClassification(codes: Uint8Array): void {
+  attachDerivedClassification(codes: Uint8Array, method?: string): void {
     if (codes.length !== this.pointCount) {
       throw new Error(
         `attachDerivedClassification: ${codes.length} codes for ` +
@@ -468,10 +499,9 @@ export class PointCloud {
       );
     }
     this._classification = codes;
-    this._classState = 'derived';
     // A fresh derive is BY DEFINITION current: it ran under the frame in force
     // now, so whatever invalidated the previous codes no longer applies.
-    this._derivedClassFrameInvalid = false;
+    this.setClassificationState('derived', method);
   }
 
   /**
@@ -485,18 +515,19 @@ export class PointCloud {
    * any new analytical computation until a re-derive succeeds.
    */
   get derivedClassificationFrameInvalid(): boolean {
-    return this._derivedClassFrameInvalid;
+    return this.classificationIsDerived && this._classMark.frame !== this._frameChanges;
   }
 
   /**
-   * Record that the frame these DERIVED codes were produced under is gone.
+   * Record that the frame changed. Derived codes made before this call belong
+   * to the replaced frame: the live ones, and any that an undo or redo brings
+   * back later, so the count advances whatever the live codes are.
    *
-   * A no-op on a producer's classification: those thresholds are the
-   * producer's, not a restatement of metres in this frame's units, so a frame
-   * change costs them nothing.
+   * It costs a producer's classification nothing: those thresholds are the
+   * producer's, not a restatement of metres in this frame's units.
    */
   markDerivedClassificationFrameInvalid(): void {
-    if (this.classificationIsDerived) this._derivedClassFrameInvalid = true;
+    this._frameChanges++;
   }
 
   /**

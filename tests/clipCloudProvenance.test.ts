@@ -16,6 +16,7 @@ import { describe, it, expect } from 'vitest';
 import { PointCloud } from '../src/model/PointCloud';
 import { clipCloud } from '../src/render/clip/clipCloud';
 import type { ClipBox } from '../src/render/clip/clipBox';
+import { ClassEditHistory, recordClassEdit } from '../src/render/measure/classEditHistory';
 
 /** Keeps the first point of the fixture, drops the second. */
 const KEEP_FIRST: ClipBox = {
@@ -114,6 +115,21 @@ describe('clipping a classified cloud', () => {
     expect(Array.from(out.returnNumber!)).toEqual([1]);
     expect(Array.from(out.gpsTime!)).toEqual([100]);
     expect(Array.from(out.classification!)).toEqual([2]);
+  });
+
+  it('keeps cleared classes cleared, without a second kept original', () => {
+    const c = source();
+    recordClassEdit(new ClassEditHistory(), c, (b) => b.fill(1), 'cleared');
+    const out = clipCloud(c, KEEP_FIRST);
+    expect(Array.from(out.classification!)).toEqual([1]);
+    expect(out.classificationProvenance).toBe('cleared');
+    expect(out.originalClassification).toBeUndefined();
+  });
+
+  it('carries the classifier method of derived classes', () => {
+    const c = bare();
+    c.attachDerivedClassification(codes(), 'olv.class.derived-heuristic@3');
+    expect(clipCloud(c, KEEP_FIRST).derivedMethod).toBe('olv.class.derived-heuristic@3');
   });
 
   it('carries no classification when the cloud had none', () => {

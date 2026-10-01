@@ -33,7 +33,7 @@ export interface ScanQualityFacts {
   readonly datumName: string | null;
   readonly hasClassification: boolean;
   readonly classificationDerived: boolean;
-  /** The source classes were cleared in the viewer (every point class 1). */
+  /** The source classes were cleared in the viewer. */
   readonly classificationCleared?: boolean;
   readonly attributes: readonly { readonly name: string; readonly present: boolean }[];
 }
@@ -75,7 +75,7 @@ export interface ScanQualityInput {
   readonly hasClassification: boolean;
   /** Whether that classification was DERIVED in the viewer vs producer-supplied. */
   readonly classificationDerived: boolean;
-  /** Whether the source classes were cleared in the viewer (all class 1). */
+  /** Whether the source classes were cleared in the viewer. */
   readonly classificationCleared?: boolean;
   /** Which point attributes the cloud carries. */
   readonly attributes: readonly { readonly name: string; readonly present: boolean }[];

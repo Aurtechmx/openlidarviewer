@@ -41,12 +41,20 @@ guess.
 Clear classes sets every point to class 1 in the viewer. The working classes
 are not saved in a session file, so reopening the scan brings back the file's
 classes. Streaming COPC and EPT scans can be neither cleared nor
-auto-classified; both actions need a fully loaded scan. Undo steps back over a
-clear, a restore and an auto-classify, but an auto-classify on a scan that
-carried no classes at all is not undoable. The classifier's id and version
-reach the XYZ comment and the report; a LAS export does not record them. The
-original codes take one byte per point once the first clear or auto-classify
-runs.
+auto-classified: both actions need a fully loaded scan, and Edit classes stays
+hidden on a streaming scan. Undo steps back over a clear, a restore and an
+auto-classify, but an auto-classify on a scan that carried no classes at all
+is not undoable. Restore earlier classes brings back the codes held before the
+first clear or auto-classify, hand edits made before it included, so it can
+differ from the file's codes. The kept codes take one byte per point once the
+first clear or auto-classify runs, and the undo history drops its oldest steps
+past 128 MB per scan.
+
+Two outputs carry a cleared or derived marker inside the file: the header
+comment of the quick XYZ export and the PDF report. Both name the classifier's
+id and version beside derived classes. LAS 1.2 and 1.4, the converter's XYZ
+and ASC, CSV and the PNG image exports write the classes with no marker. The
+Export panel states the provenance on screen; those files do not.
 
 Auto-classify finds ground, vegetation and buildings only, and buildings come
 from a height and roughness heuristic. It does not find wires, poles, water,
@@ -223,7 +231,7 @@ for this development cut: that evidence comes from the engines themselves.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,508 lines and `src/render/Viewer.ts` is 6,046, one hundred and seventy-seven lines
+`src/main.ts` is 4,508 lines and `src/render/Viewer.ts` is 6,044, one hundred and seventy-nine lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
