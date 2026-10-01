@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { dropDenseGridPly, showWorkspaceMode } from './helpers';
+import { createHash } from 'node:crypto';
+import { denseGridPlyBytes, dropDenseGridPly, showWorkspaceMode } from './helpers';
 
 /**
  * Products lane → "Integrity report" — places a measurement via the test seam,
@@ -67,4 +68,7 @@ test('the Products lane exports an integrity report after a measurement is place
   expect(manifest.version).toBe(3);
   // v0.5.2 — the producing app version is stamped (and digest-covered).
   expect(typeof manifest.software).toBe('string');
+  // The source file digest, hashed in a worker from the dropped bytes.
+  expect(manifest.dataset.sourceSha256).toBe(createHash('sha256').update(denseGridPlyBytes()).digest('hex'));
+  expect(typeof manifest.dataset.crsOrigin.source).toBe('string');
 });

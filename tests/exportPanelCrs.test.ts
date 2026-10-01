@@ -32,6 +32,7 @@ vi.mock('../src/lazyChunks', async (orig) => ({
         report: { source: 'scan', ok: true, pointCount: 1, crsNote: '—', log: [] },
       };
     },
+    resolveExportDigests: async () => null,
   }),
 }));
 

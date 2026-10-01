@@ -30,6 +30,8 @@ export type ObservatoryRunnerState =
       readonly interpretationLevel?: string | null;
       /** The resolved CRS at run time (null: none resolved), for export provenance. */
       readonly crs?: CrsOriginInput | null;
+      /** The cloud the run read, for the source-file digest in export provenance. */
+      readonly source?: { readonly key: object; readonly streamed: boolean };
     }
   | { readonly phase: 'stale' };
 
@@ -106,16 +108,16 @@ export function createObservatoryRunner(deps: ObservatoryRunnerDeps): Observator
       // against the same snapshot when it arrives.
       void computeObservatoryInWorker(cloud, options)
         .catch(() => runObservatoryOverCloud(cloud, options))
-        .then((outcome) => { commit(myToken, datasetId, crsRevision, outcome, true, interpretationLevel, crs); });
+        .then((outcome) => { commit(myToken, datasetId, crsRevision, outcome, true, interpretationLevel, crs, cloud); });
       return state;
     }
-    commit(myToken, datasetId, crsRevision, deps.compute(cloud, options), false, interpretationLevel, crs);
+    commit(myToken, datasetId, crsRevision, deps.compute(cloud, options), false, interpretationLevel, crs, cloud);
     return state;
   }
 
   function commit(
     myToken: number, datasetId: string | null, crsRevision: number, outcome: ObservatoryRunOutcome,
-    late = false, interpretationLevel: string | null = null, crs?: CrsOriginInput | null,
+    late = false, interpretationLevel: string | null = null, crs?: CrsOriginInput | null, cloud?: object,
   ): void {
     // Revalidate (Snapshot -> Await -> Revalidate -> Commit): a superseding
     // run() or abortAndClearCache() bumped `token` past `myToken`, or the
@@ -128,7 +130,7 @@ export function createObservatoryRunner(deps: ObservatoryRunnerDeps): Observator
       if (!late || myToken === token) setState({ phase: 'stale' });
       return;
     }
-    setState({ phase: 'committed', outcome, interpretationLevel, ...(crs !== undefined ? { crs } : {}) });
+    setState({ phase: 'committed', outcome, interpretationLevel, ...(crs !== undefined ? { crs } : {}), ...(cloud ? { source: { key: cloud, streamed: false } } : {}) });
   }
 
   function getState(): ObservatoryRunnerState {

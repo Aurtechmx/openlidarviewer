@@ -266,7 +266,7 @@ export function runObservatoryOverCloud(
     id: `obs-${ledgerResult.fieldDigest.slice(0, 12)}`,
     generatedAt: new Date().toISOString(),
     build: options.buildTag,
-    source: { filename: options.filename, sourceDigest: residentPositionsDigest(positions), basis: 'resident-only', metresPerUnit: options.metresPerUnit },
+    source: { filename: options.filename, analysisInputSha256: residentPositionsDigest(positions), basis: 'resident-only', metresPerUnit: options.metresPerUnit },
     domain,
     voxelEdge: options.voxelEdge,
     stations: stationList.map((s, i) => ({ id: s.id, source: s.source, originStatus: s.originStatus, worldTranslation: s.pose.worldTranslation, sourceIndex: i, tauAbs, tauRel })),

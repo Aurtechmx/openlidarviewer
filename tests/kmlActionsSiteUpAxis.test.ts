@@ -10,6 +10,7 @@
  * the ground moves 3 m north, and the output is still a well-formed KML full of
  * plausible coordinates, which is what makes it worth refusing.
  */
+import { resolveExportDigests } from '../src/export/exportDigests';
 import { describe, it, expect } from 'vitest';
 import { exportSiteKml, siteKmlStatus, type KmlActionDeps } from '../src/app/kmlActions';
 import type { KmlExportInput } from '../src/export/kmlExport';
@@ -44,6 +45,7 @@ function harness(upAxis: SpatialUpAxis) {
     loadKmlExport: async () => ({
       buildKml: (_input: KmlExportInput) => '<kml/>',
       KmlCoordinateError: class extends Error {},
+      resolveExportDigests,
     }),
   } as unknown as KmlActionDeps;
   return { deps, written, errors };

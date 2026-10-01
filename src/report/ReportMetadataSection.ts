@@ -12,6 +12,7 @@
 
 import type { ReportDatasetRow } from './types';
 import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
+import { sourceSha256Text, type ExportDigests } from '../science/exportDigestRecord';
 
 /** What `buildDatasetSummary` needs to know about the scan. */
 export interface MetadataInputs {
@@ -45,6 +46,8 @@ export interface MetadataInputs {
   /** CRS label + linear unit when the source carries projection metadata. */
   readonly crsName?: string;
   readonly crsUnit?: string;
+  /** Source-file digest and CRS origin; absent rows when the caller resolved none. */
+  readonly digests?: ExportDigests;
   /**
    * Whether the extent figures above are in confirmed metres. Absent (or
    * `'confirmed'`) means `width`/`depth`/`height` are metres and `density` is
@@ -273,6 +276,13 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
   // status, so skip the redundant `crsUnit` row (which would read "unknown").
   if (!unitsUnconfirmed && inputs.crsUnit) {
     rows.push({ label: 'Units', value: inputs.crsUnit });
+  }
+  if (inputs.digests) {
+    const o = inputs.digests.crsOrigin;
+    rows.push(
+      { label: 'Source SHA-256', value: sourceSha256Text(inputs.digests) },
+      { label: 'CRS origin', value: `${o.source}, ${o.epsg}; vertical ${o.verticalDatum} from ${o.verticalSource}` },
+    );
   }
   return rows;
 }

@@ -19,6 +19,7 @@
  * what the standalone export would produce.
  */
 
+import type { ExportDigests } from '../../science/exportDigestRecord';
 import type { AnalysedBasis } from './analysedBasis';
 import type { AnalyseContoursResult } from '../contour/analyseContours';
 import type { ExportPermitStamp } from './exportProvenance';
@@ -49,6 +50,8 @@ const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 const NO_DATA = -9999;
 
 export interface DeliverableBuildOptions {
+  /** Source-file digest and CRS origin for the provenance record. */
+  readonly digests?: ExportDigests | null;
   /** The granted export decision (from the §19 permit). */
   readonly decision: ScientificExportDecision;
   /** Project / basename stem for the files. */
@@ -147,6 +150,7 @@ function gatherDeliverable(
 ): GatheredDeliverable {
   const basename = opts.basename || 'contour-deliverable';
   const provenance = buildExportProvenance(result, {
+    digests: opts.digests ?? null,
     basename,
     generatedAt: opts.generatedAt,
     softwareVersion: opts.softwareVersion,

@@ -31,6 +31,8 @@
  * Pure-data: returns ZIP bytes; no DOM.
  */
 
+import { SOURCE_NOT_SUPPLIED_NOTE, sourceSha256Text, type ExportDigests } from '../science/exportDigestRecord';
+import { crsOriginLine } from '../science/crsOrigin';
 import { writeAsciiGrid } from '../terrain/export/demAsciiGrid';
 import { buildZip, type ZipEntry } from '../convert/zipStore';
 import { sourceInterpretationLines, sourceInterpretationOf, type SourceInterpretationRecord } from '../science/sourceInterpretation';
@@ -65,6 +67,8 @@ export interface TerrainAccessPackageOptions {
   readonly wkt?: string | null;
   /** SHA-256 of the source scan, when the loader verified one. */
   readonly sourceSha256?: string | null;
+  /** Source-file digest and CRS origin (`exportDigestRecord.ts`). */
+  readonly digests?: ExportDigests | null;
   readonly build?: BuildIdentity;
   /**
    * Interpretation level of the source file and the data basis the analysed
@@ -155,6 +159,7 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
   readonly crsName: string | null;
   readonly hasWkt: boolean;
   readonly sourceInterpretation: SourceInterpretationRecord;
+  readonly sourceSha256Text: string;
 }): string {
   const r = result.record;
   const d = result.diagnostics;
@@ -185,11 +190,12 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
     ...sourceInterpretationLines(opts.sourceInterpretation),
     `  Layer          ${r.source.layerId ?? 'unknown'}`,
     `  Source file    ${r.source.filename ?? 'unknown'}`,
-    `  Source digest  ${r.source.sourceDigest ?? 'unavailable'}`,
+    `  Source SHA-256 ${opts.sourceSha256Text}`,
     `  Input digest   ${r.source.analysisInputDigest}`,
     `  Input coverage ${r.source.basis.coverage} (${r.source.basis.complete ? 'complete' : 'partial'})`,
     `  Cells read     ${r.source.basis.measuredCells} of ${r.source.basis.totalCells}`,
     `  CRS            ${opts.crsName ?? 'not georeferenced — the raster uses a local (0, 0) origin'}`,
+    ...(opts.sourceInterpretation.crsOrigin ? [`  ${crsOriginLine(opts.sourceInterpretation.crsOrigin)}`] : []),
     '',
     'Grid',
     `  Size           ${grid.cols} x ${grid.rows} cells`,
@@ -255,7 +261,10 @@ export function buildTerrainAccessPackage(
   const generationDateIso = options.generationDateIso ?? new Date().toISOString();
   const build = options.build ?? BUILD_IDENTITY;
   const softwareVersion = options.softwareVersion ?? buildIdentityProvenance(build);
-  const sourceInterpretation = options.sourceInterpretation ?? sourceInterpretationOf(undefined, undefined);
+  const sourceInterpretation = {
+    ...(options.sourceInterpretation ?? sourceInterpretationOf(undefined, undefined)),
+    ...(options.digests ? { crsOrigin: options.digests.crsOrigin } : {}),
+  };
   const ox = options.worldOrigin?.x ?? 0;
   const oy = options.worldOrigin?.y ?? 0;
   const grid = result.grid;
@@ -327,6 +336,7 @@ export function buildTerrainAccessPackage(
 
   const readme = buildTerrainAccessReadme(result, {
     basename, generationDateIso, build, crsName: options.crsName ?? null, hasWkt: !!options.wkt, sourceInterpretation,
+    sourceSha256Text: options.sourceSha256 ?? (options.digests ? sourceSha256Text(options.digests) : (result.record.source.sourceDigest ?? SOURCE_NOT_SUPPLIED_NOTE)),
   });
   entries.push({
     name: `${basename}-README.txt`,
@@ -370,7 +380,7 @@ export function buildTerrainAccessPackage(
       applicabilityVerdict: 'Geometry-based screening result; not a claim scored on the evidence ladder, and never a safety/passability guarantee.',
     };
     const passport = buildScientificArtifactPassport({
-      source: { name: result.record.source.filename, sha256: options.sourceSha256 ?? null },
+      source: { name: result.record.source.filename, sha256: options.sourceSha256 ?? options.digests?.sourceSha256 ?? null },
       analysis,
       processing: manifest,
       evidence,

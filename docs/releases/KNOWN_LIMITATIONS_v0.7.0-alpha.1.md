@@ -234,7 +234,7 @@ for this development cut: that evidence comes from the engines themselves.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,450 lines and `src/render/Viewer.ts` is 6,043, one hundred and eighty lines
+`src/main.ts` is 4,444 lines and `src/render/Viewer.ts` is 6,022, two hundred and one lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
@@ -243,12 +243,13 @@ the activity deadlines, the reasons a frame is wanted and the scheduler left
 together as one object, which is fewer lines here and one thing to reach for
 there. The frame gained a decision while the file lost lines. The two-finger
 pinch and pan now share one screen-space shift, which took another
-thirty-six out. A shrink-only lint
+thirty-six out. The figure view context moved into the export adapter, which
+took twenty-one more. A shrink-only lint
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 97 for the shell, 75 for the renderer and 23 for the Analyse panel,
-across 1053 modules with no dependency cycles.
+across 1059 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -280,6 +281,33 @@ refuses a placement whose Float32 step would pass 1 mm, which on a metre grid is
 a placed reach of 16,384 m or more, and those paths stay under 1 mm inside the
 gate. Picking and distance are computed in Float64 and are exact, as are
 exports.
+
+## Export digests that some surfaces cannot carry
+
+Provenance-carrying exports record the source file SHA-256, the CRS origin and,
+for an export that comes from an analysis, the SHA-256 of the points it read.
+Some surfaces cannot carry every field:
+
+- A streamed scan (COPC, EPT, 3D Tiles, a local LAS opened out of core) records
+  "not available for streamed sources" in place of a source digest. Only a part
+  of the file is ever read.
+- A scan opened without a retained File (a session restore, a link) records
+  that the original bytes are not held.
+- Point CSV and measurement CSV have no comment slot and carry none of the
+  three. Export the GeoJSON or XYZ beside them.
+- The GeoTIFF rasters carry band names and units only; the README and the
+  passport in the same package carry the digests.
+- A figure PNG rendered from several visible layers has no single source file
+  and carries neither the source digest nor the CRS origin chunk.
+- A terrain analysis over several layers, or over a static layer and a
+  stream, records no single source digest and states how many sources it
+  combined. The analysis-input digest covers the whole sample, which is
+  strided and in the viewer's scene frame, so only this app can reproduce it.
+- Flow Pulse and Terrain Access packages read a DTM, not points: their input
+  digest is the DTM product digest.
+- The batch converter hashes each input file, but records the CRS origin as
+  unknown, because it does not resolve a CRS per file.
+- The session file is unchanged and carries none of the three.
 
 ## No cross-CRS reprojection
 

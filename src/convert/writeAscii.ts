@@ -53,10 +53,12 @@ export function writeXyz(
   precision = 3,
   geographic?: boolean,
   datumNote?: string | null,
+  provenance?: readonly string[] | null,
 ): string {
   const lines: string[] = [];
   const note = datumTransformComment(datumNote);
   if (note) lines.push(note);
+  for (const l of provenance ?? []) lines.push(`# ${l}`);
   const c = g.colors;
   const h = horizontalPrecision(precision, geographic);
   for (let i = 0; i < g.count; i++) {
@@ -92,6 +94,8 @@ export function writeAsc(
      * byte-clean).
      */
     datumNote?: string | null;
+    /** Provenance lines (source SHA-256, CRS origin), each written as a `#` comment. */
+    provenance?: readonly string[] | null;
   } = {},
 ): string {
   const precision = opts.precision ?? 3;
@@ -103,6 +107,7 @@ export function writeAsc(
   else header.push('# crs: none recorded (coordinates unchanged from the source)');
   const datumComment = datumTransformComment(opts.datumNote);
   if (datumComment) header.push(datumComment);
+  for (const l of opts.provenance ?? []) header.push(`# ${l}`);
   header.push(`# columns: x y z${hasI ? ' intensity' : ''}`);
 
   const lines: string[] = [header.join('\n')];

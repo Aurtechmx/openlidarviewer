@@ -25,7 +25,7 @@ const PROV: ExportProvenance = {
   verticalDatum: 'EPSG:5703',
   datumKnown: true,
   coverageMode: 'full',
-  gridExtent: 'full', analysedBasis: null, analysedBasisLine: 'unknown', sourceInterpretation: { interpretationLevel: 'not-recorded', dataBasis: 'unknown' },
+  gridExtent: 'full', analysedBasis: null, analysedBasisLine: 'unknown', sourceInterpretation: { interpretationLevel: 'not-recorded', dataBasis: 'unknown' }, sourceSha256: null, sourceSha256Note: 'not recorded by this export path', analysisInputSha256: null, crsOrigin: { source: 'unknown', name: 'unknown', epsg: 'unknown', verticalDatum: 'unknown', verticalSource: 'unknown' },
   contourIntervalM: 1,
   contourRequestedIntervalM: null,
   contourStyle: 'smooth',

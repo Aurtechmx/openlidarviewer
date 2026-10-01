@@ -466,6 +466,7 @@ export async function runStudioExport(
     camera: view?.camera ?? null,
     clip: view?.clip ?? null,
     sourceInterpretation: context.adapter.sourceInterpretation?.() ?? null,
+    provenanceSource: context.adapter.provenanceSource?.() ?? null,
     presentation,
     reconstructedShare: null,
   });

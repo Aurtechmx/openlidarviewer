@@ -491,3 +491,6 @@ export function measurementsToCsv(
   }
   return rows.join('\n');
 }
+
+/** Source-file digest and CRS origin for this export's provenance, resolved off the main thread. */
+export { resolveExportDigests } from './exportDigests';

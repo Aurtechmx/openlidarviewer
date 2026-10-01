@@ -43,6 +43,8 @@
  * which it does exactly.
  */
 
+import { contoursFromCore as baseContoursFromCore } from './analyseContours';
+import { analysisInputsOf, recordAnalysisInputs } from '../../io/streamedClouds';
 import {
   computeTerrainCore,
   type TerrainCore,
@@ -54,7 +56,18 @@ import { recordDtmRebuild } from '../ground/cellConfidence';
 // Re-export the interval stage through this module so a caller that has the
 // cache chunk loaded can run the cheap contour stage WITHOUT a second dynamic
 // import of the analysis module — both live in the same lazy chunk.
-export { contoursFromCore } from './analyseContours';
+/** The interval stage, carrying the core's recorded inputs onto the result. */
+export function contoursFromCore(core: TerrainCore, params?: Parameters<typeof baseContoursFromCore>[1]): ReturnType<typeof baseContoursFromCore> {
+  const result = baseContoursFromCore(core, params);
+  recordAnalysisInputs(result, analysisInputsOf(core));
+  return result;
+}
+
+/** Record which inputs the sample `positions` came from on the core built from it. */
+export function registerCoreInputs(core: TerrainCore, positions: Float32Array): TerrainCore {
+  recordAnalysisInputs(core, analysisInputsOf(positions));
+  return core;
+}
 export type {
   TerrainCore,
   TerrainCoreParams,
@@ -328,6 +341,7 @@ function remember(
   params: TerrainCoreParams,
   compute: ComputeCoreAsyncFn,
 ): TerrainCore {
+  registerCoreInputs(core, positions);
   const dtm: unknown = core?.dtm;
   if (dtm !== null && typeof dtm === 'object') {
     recordDtmRebuild(dtm, { params, run: async (p) => (await compute(positions, p)).dtm });

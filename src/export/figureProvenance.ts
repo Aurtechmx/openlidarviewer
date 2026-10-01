@@ -25,6 +25,8 @@
  * Pure data + string formatting: no DOM, no three.js, no I/O.
  */
 
+import { sourceSha256Text, type ExportDigests } from '../science/exportDigestRecord';
+import { crsOriginLine } from '../science/crsOrigin';
 import type { PngTextEntry } from './pngTextChunks';
 import type { FigureCameraPose, FigureClipSummary } from './types';
 
@@ -44,6 +46,8 @@ export interface FigureProvenanceInput {
   readonly clip?: FigureClipSummary | null;
   /** Probe interpretation level and data basis of the rendered source(s). */
   readonly sourceInterpretation?: { readonly interpretationLevel: string; readonly dataBasis: string } | null;
+  /** Source-file digest and CRS origin; a figure does not come from an analysis. */
+  readonly digests?: ExportDigests | null;
 }
 
 /** Fixed-precision triple: `1.000,-5.250,3.000`. 3 decimals ≈ mm at metre
@@ -95,6 +99,13 @@ export function buildFigureProvenance(input: FigureProvenanceInput): PngTextEntr
     entries.push(
       { keyword: 'olv:interpretation-level', text: input.sourceInterpretation.interpretationLevel },
       { keyword: 'olv:data-basis', text: input.sourceInterpretation.dataBasis },
+    );
+  }
+
+  if (input.digests) {
+    entries.push(
+      { keyword: 'olv:source-sha256', text: sourceSha256Text(input.digests) },
+      { keyword: 'olv:crs-origin', text: crsOriginLine(input.digests.crsOrigin) },
     );
   }
 

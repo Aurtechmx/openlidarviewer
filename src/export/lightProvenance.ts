@@ -14,6 +14,7 @@
 
 import { BUILD_IDENTITY, type BuildIdentity } from '../build/buildIdentity';
 import { crsOriginLine, crsOriginOf, type CrsOriginInput, type CrsOriginRecord } from '../science/crsOrigin';
+import { sourceSha256Text, SOURCE_NOT_SUPPLIED_NOTE, type ExportDigests } from '../science/exportDigestRecord';
 import { sourceInterpretationOf, type SourceInterpretationRecord } from '../science/sourceInterpretation';
 
 export interface LightProvenance {
@@ -23,6 +24,9 @@ export interface LightProvenance {
   readonly dirty: boolean;
   readonly generatedAt: string;
   readonly source: string | null;
+  /** SHA-256 of the source file bytes, or null with the reason in `sourceSha256Note`. */
+  readonly sourceSha256: string | null;
+  readonly sourceSha256Note: string | null;
   readonly crs: string;
   /** Where the CRS came from; every field `'unknown'` when the caller did not resolve one. */
   readonly crsOrigin: CrsOriginRecord;
@@ -40,6 +44,8 @@ export interface LightProvenanceInput {
   readonly interpretation?: SourceInterpretationRecord | null;
   /** The resolved CRS (`CrsService.current()`), or null when none resolved. */
   readonly crs?: CrsOriginInput | null;
+  /** Source-file digest and CRS origin (`export/exportDigests.ts`), when the export path resolved them. */
+  readonly digests?: ExportDigests | null;
   readonly build?: BuildIdentity;
 }
 
@@ -60,6 +66,8 @@ export function lightProvenance(input: LightProvenanceInput): LightProvenance {
     dirty: b.dirty,
     generatedAt: input.generatedAt,
     source: basenameOnly(input.source),
+    sourceSha256: input.digests?.sourceSha256 ?? null,
+    sourceSha256Note: input.digests ? input.digests.sourceSha256Note : SOURCE_NOT_SUPPLIED_NOTE,
     crs: input.crsName ?? 'unknown',
     crsOrigin: interp.crsOrigin ?? crsOriginOf(input.crs),
     interpretationLevel: interp.interpretationLevel,
@@ -72,5 +80,5 @@ export function lightProvenance(input: LightProvenanceInput): LightProvenance {
 /** One plain-text line for formats whose only slot is a description. */
 export function lightProvenanceLine(p: LightProvenance): string {
   return `Provenance: ${p.software} ${p.version} (${p.commit}${p.dirty ? '+dirty' : ''}); generated ${p.generatedAt}; `
-    + `source ${p.source ?? 'unknown'}; CRS ${p.crs}; ${crsOriginLine(p.crsOrigin)}; interpretation level ${p.interpretationLevel}; data basis ${p.dataBasis}.`;
+    + `source ${p.source ?? 'unknown'}; source SHA-256 ${sourceSha256Text(p)}; CRS ${p.crs}; ${crsOriginLine(p.crsOrigin)}; interpretation level ${p.interpretationLevel}; data basis ${p.dataBasis}.`;
 }

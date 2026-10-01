@@ -19,6 +19,8 @@
  * lazy chunk. The caller triggers the download.
  */
 
+import { INPUT_NOT_RECORDED_NOTE, sourceSha256Text } from '../../science/exportDigestRecord';
+import { crsOriginLine } from '../../science/crsOrigin';
 import { PDFDocument, StandardFonts, rgb, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
 import { verticalSuffixFromLabel } from '../../units/units';
 import { metresPerLinearUnit } from '../../io/crs';
@@ -390,6 +392,12 @@ export async function buildMapSheetPdf(input: MapSheetInput): Promise<Uint8Array
   doc.setTitle(input.title ?? 'Contour Map', { showInWindowTitleBar: true });
   doc.setLanguage('en-US');
   doc.setAuthor('OpenLiDARViewer');
+  // The title block has no room for the digests, so the Info dictionary
+  // carries them.
+  if (input.provenance) {
+    const p = input.provenance;
+    doc.setSubject(`Source SHA-256: ${sourceSha256Text(p)}; Input SHA-256: ${p.analysisInputSha256 ?? INPUT_NOT_RECORDED_NOTE}; ${crsOriginLine(p.crsOrigin)}`);
+  }
   // Pin the document's Info-dictionary dates. pdf-lib defaults CreationDate and
   // ModDate to the wall clock at `create()`, so two otherwise-identical sheets
   // built either side of a second boundary embed different timestamps and cease

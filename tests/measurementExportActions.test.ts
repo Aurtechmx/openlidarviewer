@@ -15,6 +15,7 @@
 //  - The integrity report built with a live clock instead of the injected one,
 //    which makes the signed report non-reproducible.
 
+import { resolveExportDigests } from '../src/export/exportDigests';
 import { describe, it, expect, vi } from 'vitest';
 import {
   exportMeasurementsFile,
@@ -72,9 +73,11 @@ function deps(over: Partial<MeasurementExportActionDeps> = {}): Recorded {
           csvCalls.push({ measurements, ctx });
           return 'id,name\n';
         },
+        resolveExportDigests,
       };
     },
     loadMeasurementReport: async () => ({
+      resolveExportDigests,
       integrityReportFile: (...args: unknown[]) => {
         reportArgs.push(args);
         return { filename: 'scan-integrity.json', text: '{"report":true}' };

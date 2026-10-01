@@ -143,9 +143,7 @@ import type { ColorbarOverlay } from './ui/ColorbarOverlay';
 import { estimateDecodedBytes, estimateGpuBytes } from './render/streaming/streamingBudget';
 import { streamingHasGpsTime } from './render/streaming/StreamingSource';
 import { isZUpFormat } from './io/sniffFormat';
-// `exportCloud` is dynamically imported via `loadExporters` in the onExport
-// callback — the PLY/OBJ/XYZ/CSV encoders stay in their own chunk and never
-// weigh on the initial payload of a session that never exports.
+// The PLY/OBJ/XYZ/CSV encoders load on first export (`loadExporters`).
 // Only the tiny file-router predicate is eager; the (large) serializer/parser
 // is dynamically imported in exportSession/importSession so it stays off the
 // initial bundle.
@@ -1824,7 +1822,7 @@ function newAnalysePanel(
         title: `${lastCloudName} — Contours`,
         sheet: 'letter',
         isGeographic: ctx.isGeographic, sceneUpAxis: upAxis,
-        wkt: cur?.wkt ?? null, // ACTIVE resolved CRS (override applied); Local → no WKT, never the rejected declared one (1A)
+        crs: cur, wkt: cur?.wkt ?? null, // ACTIVE resolved CRS (override applied); Local → no WKT, never the rejected declared one (1A)
         // The resolved CRS's linear unit (same seam every other unit consumer
         // reads) so a foot-based CRS stamps DXF $INSUNITS = feet and the SVG
         // scale note says ft — and a local/unresolved frame stamps an honest
@@ -2387,12 +2385,8 @@ const measurementExportActionDeps = (v: Viewer): MeasurementExportActionDeps => 
 const exportPanel = new ExportPanel({
   exportHealth: () => (hasScan() ? buildExportHealth(buildCurrentStoryInputs()) : null),
   onExport: (format) => {
-    const cloud = scans.activeCloud() ?? undefined;
-    if (!cloud) return;
-    // The exporter is a lazy chunk; fetched on first export of the session.
-    void loadExporters().then(({ exportCloud }) => {
-      downloadText(`${baseName(cloud.name)}.${format}`, exportCloud(cloud, format, crsService.context().isGeographic));
-    });
+    const cloud = scans.activeCloud();
+    if (cloud) void loadExporters().then(async (m) => downloadText(`${baseName(cloud.name)}.${format}`, await m.exportCloudWithDigests(cloud, format, crsService.context().isGeographic, exportGeoContext())));
   },
   onExportImage: (mode) =>
     exportImageAction(mode, {

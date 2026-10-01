@@ -93,7 +93,7 @@ function buildFarOriginRun(): {
     id: 'run-far-utm-1',
     generatedAt: '2026-09-24T00:00:00.000Z',
     build: 'test-build',
-    source: { filename: 'far-utm.ptx', sourceDigest: 'sha256:source', basis: 'full', metresPerUnit: 1 },
+    source: { filename: 'far-utm.ptx', analysisInputSha256: 'sha256:source', basis: 'full', metresPerUnit: 1 },
     domain, voxelEdge,
     stations: [runStation],
     parameters: PARAMS,

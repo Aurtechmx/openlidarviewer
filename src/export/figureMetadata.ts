@@ -22,7 +22,15 @@ import { buildIdentityProvenance } from '../build/buildIdentity';
 import { buildFigureProvenance } from './figureProvenance';
 import { encodePngTextChunks } from './pngTextChunks';
 import { buildPresentationProvenance, type PresentationMode } from './presentationMode';
-import type { FigureCameraPose, FigureClipSummary } from './types';
+import type { FigureCameraPose, FigureClipSummary, FigureProvenanceSource } from './types';
+import { exportDigests, type ExportDigests } from '../science/exportDigestRecord';
+import { sourceDigestOf } from './exportDigests';
+
+/** Source digest and CRS origin for a single-source figure; none for a multi-layer one. */
+async function figureDigests(p: FigureProvenanceSource | null | undefined): Promise<ExportDigests | null> {
+  if (!p) return null;
+  return exportDigests(await sourceDigestOf(p.source), p.crs);
+}
 
 /** The per-figure facts a caller supplies; build identity is filled here. */
 export interface FigureStampContext {
@@ -45,6 +53,8 @@ export interface FigureStampContext {
    * counted them. Absent when nothing counted, which is not the same as zero.
    */
   readonly reconstructedShare?: number | null;
+  /** The rendered source and CRS origin; null when several layers are visible. */
+  readonly provenanceSource?: FigureProvenanceSource | null;
 }
 
 /**
@@ -68,6 +78,7 @@ export async function stampFigureProvenanceOntoBlob(
       camera: context.camera ?? null,
       clip: context.clip ?? null,
       sourceInterpretation: context.sourceInterpretation ?? null,
+      digests: await figureDigests(context.provenanceSource),
     });
     entries.push(
       ...buildPresentationProvenance(

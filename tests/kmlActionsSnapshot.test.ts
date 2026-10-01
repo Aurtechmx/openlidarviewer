@@ -12,6 +12,7 @@
  * export was requested, not a blend of both.
  */
 
+import { resolveExportDigests } from '../src/export/exportDigests';
 import { describe, it, expect } from 'vitest';
 import { exportSiteKml, type KmlActionDeps } from '../src/app/kmlActions';
 import type { KmlExportInput } from '../src/export/kmlExport';
@@ -67,6 +68,7 @@ describe('exportSiteKml — one reading of the session, then the write', () => {
         return {
           buildKml: (input: KmlExportInput) => { built = input; return '<kml/>'; },
           KmlCoordinateError: class extends Error {},
+          resolveExportDigests,
         };
       },
     } as unknown as KmlActionDeps;

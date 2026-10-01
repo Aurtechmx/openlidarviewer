@@ -279,14 +279,8 @@ export async function dropTinyPtx(page: Page): Promise<void> {
   await page.dispatchEvent('body', 'drop', { dataTransfer });
 }
 
-/**
- * Drop a denser synthesised PLY — a 60×60 grid of 3 600 points across a small
- * 3D surface (sinusoidal Z) so the framing puts the cloud in an orbit-friendly
- * pose and the picker has a dense canopy to hit. Built inline so the bundled
- * fixtures stay small; the 10-point `tiny.ply` is too sparse for a centre-of-
- * canvas click to land on a point.
- */
-export async function dropDenseGridPly(page: Page): Promise<void> {
+/** The exact bytes `dropDenseGridPly` drops. */
+export function denseGridPlyBytes(): Uint8Array {
   const N = 60;
   const points: string[] = [];
   for (let i = 0; i < N; i++) {
@@ -314,7 +308,18 @@ export async function dropDenseGridPly(page: Page): Promise<void> {
     `property uchar alpha\n` +
     `end_header\n`;
   const text = header + points.join('\n') + '\n';
-  const bytes = new TextEncoder().encode(text);
+  return new TextEncoder().encode(text);
+}
+
+/**
+ * Drop a denser synthesised PLY — a 60×60 grid of 3 600 points across a small
+ * 3D surface (sinusoidal Z) so the framing puts the cloud in an orbit-friendly
+ * pose and the picker has a dense canopy to hit. Built inline so the bundled
+ * fixtures stay small; the 10-point `tiny.ply` is too sparse for a centre-of-
+ * canvas click to land on a point.
+ */
+export async function dropDenseGridPly(page: Page): Promise<void> {
+  const bytes = denseGridPlyBytes();
   const dataTransfer = await page.evaluateHandle((b) => {
     const dt = new DataTransfer();
     dt.items.add(new File([new Uint8Array(b)], 'dense-grid.ply'));

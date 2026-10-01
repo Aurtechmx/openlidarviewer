@@ -23,6 +23,7 @@
  * a prominent PRELIMINARY caveat whenever the data is not full + ready.
  */
 
+import type { ExportDigests } from '../../science/exportDigestRecord';
 import {
   buildEvidenceContractView,
   type EvidenceContractView,
@@ -130,6 +131,8 @@ export interface DemPackageOptions {
    * than as an absent field that might have held one.
    */
   readonly sourceSha256?: string | null;
+  /** Source-file digest and CRS origin for the README provenance and the passport. */
+  readonly digests?: ExportDigests | null;
   /** Base filename (no extension) for the entries. Default 'terrain'. */
   readonly basename?: string;
   /** Metres per source vertical unit, or null when the frame resolved none. */
@@ -239,6 +242,8 @@ export function reconstructDsmChm(
 /** Options for {@link buildDemReadme}. */
 export interface DemReadmeOptions {
   readonly result: AnalyseContoursResult;
+  /** Source-file digest and CRS origin for the provenance block. */
+  readonly digests?: ExportDigests | null;
   readonly basename: string;
   readonly isGeographic: boolean;
   /** Metres per source vertical unit, or null when the frame resolved none. */
@@ -367,6 +372,7 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     // word identical" to the other exports if it is stamped from the same
     // resolved scale they are.
     verticalUnitToMetres: opts.verticalUnitToMetres ?? null,
+    digests: opts.digests ?? null,
     basename,
     generatedAt: opts.generationDateIso,
     softwareVersion: opts.softwareVersion,
@@ -761,6 +767,7 @@ export function buildDemPackage(
     metricVersion: options.metricVersion ?? 'unknown',
     exportPermit: options.exportPermit ?? null,
     analysedBasis: options.analysedBasis ?? null,
+    digests: options.digests ?? null,
     evidenceFilename: evidenceBytes ? evidenceName : null,
     evidenceVerticalUnit: evVUnit,
     evidenceFrameResolved: evFrameResolved,
@@ -787,6 +794,7 @@ export function buildDemPackage(
   if (dtmTif) {
     const passportProvenance = buildExportProvenance(result, {
       verticalUnitToMetres: options.verticalUnitToMetres ?? null,
+      digests: options.digests ?? null,
       basename,
       generatedAt: generationDateIso,
       softwareVersion: options.softwareVersion ?? 'unknown',
@@ -799,7 +807,7 @@ export function buildDemPackage(
       // The source digest is recorded when the loader verified one and left
       // null when it did not. Null reads as unavailable rather than as a
       // digest that happens to be missing.
-      source: { name: passportProvenance.source, sha256: options.sourceSha256 ?? null },
+      source: { name: passportProvenance.source, sha256: options.sourceSha256 ?? options.digests?.sourceSha256 ?? null },
       analysis: analysisRecordFromProvenance(passportProvenance),
       processing: processingManifestFromProvenance(passportProvenance),
       evidence: {
