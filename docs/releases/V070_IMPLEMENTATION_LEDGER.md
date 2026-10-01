@@ -104,18 +104,19 @@ the two entries were renumbered when the branches were integrated.
 | L200 | UI | TEST | high | FIXED | new | A terrain run on a scan over the display budget computed its ground surface on the main thread, holding the page for 17 s (5.8M points, 4x CPU slowdown), long enough for Chrome to offer "Page unresponsive"; long tasks showed no elapsed time. |
 | L201 | UI | TEST | med | BUILT | new | A scan with producer classes could not be auto-classified, because nothing let the user set those classes aside, and an auto-classify could not be undone. |
 | L198 | LOADER | TEST | med | FIXED | new | Three opens let an async step outlive the decision that should have stopped it: a static open closed the stream before its cloud attached, a cancelled EPT open still sent its manifest request, and a recovery write landed after Clear, a source change or Turn off. |
+| L204 | SCIENTIFIC | TEST | low | FIXED | new | The PDAL ground-filter and DTM results files said eight synthetic scenes while listing five and three. |
 
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 54
+- FIXED: 55
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 76
+- total: 77
 
 ## Detail
 
@@ -7829,3 +7830,20 @@ off-screen rendering, incremental rows, copy, exports, dialog) and
 `tests/e2e/sessionLog.spec.ts` (the button and the shelf row open the dock, the
 palette opens the log after a scan and a measurement, filtering annotations adds
 no lines, the no-scan dialog, Back and Escape, both exports).
+
+### L204 · FIXED · SCIENTIFIC
+
+`results-ground-filter.json`, `results-ground-filter-metrics.json` and
+`results-dtm.json` in `validation/cross-implementation/pdal-pipeline/` each
+carried the caveat "Eight synthetic scenes are not survey data". The ground
+files list five scenes (pc-01 to pc-05) and the DTM file lists three (pc-06 to
+pc-08).
+
+`tests/groundFilterPdalAgreement.test.ts` now writes the count from the legs
+each file lists. The three files were regenerated; only the caveat sentence
+changed, and every measured value is byte-identical. The `derivedArtifacts`
+digests in `GROUND-FILTER-PDAL-SMRF.study.json` and
+`DTM-PDAL-WRITERS-GDAL.study.json` are re-pinned to the new files.
+
+Covered by the "names as many scenes as it lists" cases in
+`tests/groundFilterPdalAgreement.test.ts`, which read each file back from disk.

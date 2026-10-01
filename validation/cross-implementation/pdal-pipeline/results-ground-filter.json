@@ -158,7 +158,7 @@
   ],
   "boundaries": [
     "Agreement with PDAL is not accuracy against ground truth. Both implementations can be wrong about the same ground in the same way, and on a synthetic scene they were both handed a surface nobody surveyed.",
-    "Eight synthetic scenes are not survey data: uniform-random returns in plan, no sensor geometry, no scan pattern, no range noise, no multiple returns, and objects that are boxes and clumps of points.",
+    "Five synthetic scenes are not survey data: uniform-random returns in plan, no sensor geometry, no scan pattern, no range noise, no multiple returns, and objects that are boxes and clumps of points.",
     "One parameter set. Nothing here says anything about a different cell size, a different window ladder, a non-zero slope-scaled term, or the 2.5 m threshold cap our filter applies by default and that this study switches off to match the reference.",
     "floorPercentile is 0, matching the reference's per-cell minimum. The pipeline orchestrator enables a small despike floor by default, so the low-blunder scene here exercises the leaf as the reference runs it and not as the product ships it."
   ]

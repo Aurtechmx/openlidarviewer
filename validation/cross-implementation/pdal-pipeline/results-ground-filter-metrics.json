@@ -232,7 +232,7 @@
   ],
   "boundaries": [
     "Agreement with PDAL is not accuracy against ground truth. Both implementations can be wrong about the same ground in the same way, and on a synthetic scene they were both handed a surface nobody surveyed.",
-    "Eight synthetic scenes are not survey data: uniform-random returns in plan, no sensor geometry, no scan pattern, no range noise, no multiple returns, and objects that are boxes and clumps of points.",
+    "Five synthetic scenes are not survey data: uniform-random returns in plan, no sensor geometry, no scan pattern, no range noise, no multiple returns, and objects that are boxes and clumps of points.",
     "recall, specificity and MCC here compare OLV against PDAL, not against surveyed ground; a low recall means OLV keeps less of what PDAL calls ground and does not say which side is right."
   ]
 }

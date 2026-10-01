@@ -66,7 +66,7 @@
   ],
   "boundaries": [
     "Agreement with PDAL is not accuracy against ground truth. Both implementations can be wrong about the same ground in the same way, and on a synthetic scene they were both handed a surface nobody surveyed.",
-    "Eight synthetic scenes are not survey data: uniform-random returns in plan, no sensor geometry, no scan pattern, no range noise, no multiple returns, and objects that are boxes and clumps of points.",
+    "Three synthetic scenes are not survey data: uniform-random returns in plan, no sensor geometry, no scan pattern, no range noise, no multiple returns, and objects that are boxes and clumps of points.",
     "The input is one return per cell at the cell centre, because PDAL writes rasters with a radius estimator and rasterizeDtm is a cell estimator. This study therefore tests grid origin, cell indexing and row order, and not aggregation over a realistic cloud.",
     "Every cell receives exactly one return, so nothing here says anything about how either side marks or fills a cell with no data.",
     "One aggregation and one cell size. Nothing here says anything about mean, median, percentile or robust aggregation, or about any cell size other than 1 m."

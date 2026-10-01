@@ -930,10 +930,17 @@ writeFileSync(resolve(PIPELINE_DIR, 'olv-dsm-SHA256SUMS'), olvDsmSums.join('\n')
  * derived from one study's inputs while also holding the other study's legs.
  * Splitting them keeps each derivation true.
  */
-const SHARED_BOUNDARIES = [
-  'Agreement with PDAL is not accuracy against ground truth. Both implementations can be wrong about the same ground in the same way, and on a synthetic scene they were both handed a surface nobody surveyed.',
-  'Eight synthetic scenes are not survey data: uniform-random returns in plan, no sensor geometry, no scan pattern, no range noise, no multiple returns, and objects that are boxes and clumps of points.',
-];
+const NOT_ACCURACY =
+  'Agreement with PDAL is not accuracy against ground truth. Both implementations can be wrong about the same ground in the same way, and on a synthetic scene they were both handed a surface nobody surveyed.';
+const NOT_SURVEY_DATA =
+  'synthetic scenes are not survey data: uniform-random returns in plan, no sensor geometry, no scan pattern, no range noise, no multiple returns, and objects that are boxes and clumps of points.';
+
+/** Sentence-initial number words, for a caveat that counts the scenes a file lists. */
+const COUNT_WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve'];
+const sceneCaveat = (scenes: number): string => `${COUNT_WORDS[scenes] ?? scenes} ${NOT_SURVEY_DATA}`;
+
+/** The shared caveats, with the scene count taken from the legs the file lists. */
+const sharedBoundaries = (legs: readonly unknown[]): string[] => [NOT_ACCURACY, sceneCaveat(legs.length)];
 
 const writeResults = (name: string, body: Record<string, unknown>): void => {
   writeFileSync(resolve(PIPELINE_DIR, name), JSON.stringify(body, null, 2) + '\n', 'utf8');
@@ -955,7 +962,7 @@ writeResults('results-ground-filter.json', {
   },
   legs: groundLegs,
   boundaries: [
-    ...SHARED_BOUNDARIES,
+    ...sharedBoundaries(groundLegs),
     'One parameter set. Nothing here says anything about a different cell size, a different window ladder, a non-zero slope-scaled term, or the 2.5 m threshold cap our filter applies by default and that this study switches off to match the reference.',
     'floorPercentile is 0, matching the reference\'s per-cell minimum. The pipeline orchestrator enables a small despike floor by default, so the low-blunder scene here exercises the leaf as the reference runs it and not as the product ships it.',
   ],
@@ -985,7 +992,7 @@ writeResults('results-ground-filter-metrics.json', {
   byCategory: groundMetricCategories,
   legs: groundMetricLegs,
   boundaries: [
-    ...SHARED_BOUNDARIES,
+    ...sharedBoundaries(groundMetricLegs),
     'recall, specificity and MCC here compare OLV against PDAL, not against surveyed ground; a low recall means OLV keeps less of what PDAL calls ground and does not say which side is right.',
   ],
 });
@@ -1018,7 +1025,7 @@ writeResults('results-dtm.json', {
   },
   legs: dtmLegs,
   boundaries: [
-    ...SHARED_BOUNDARIES,
+    ...sharedBoundaries(dtmLegs),
     'The input is one return per cell at the cell centre, because PDAL writes rasters with a radius estimator and rasterizeDtm is a cell estimator. This study therefore tests grid origin, cell indexing and row order, and not aggregation over a realistic cloud.',
     'Every cell receives exactly one return, so nothing here says anything about how either side marks or fills a cell with no data.',
     'One aggregation and one cell size. Nothing here says anything about mean, median, percentile or robust aggregation, or about any cell size other than 1 m.',
@@ -1131,6 +1138,20 @@ describe('PDAL cross-implementation studies', () => {
       `ground pooled: ${((groundPooledFraction ?? 0) * 100).toFixed(3)} % over ${groundEvaluated} returns ` +
         `(gate ${(GROUND_GATE.requiredWithinToleranceFraction * 100).toFixed(1)} %)\n`,
     );
+  });
+
+  it.each([
+    'results-ground-filter.json',
+    'results-ground-filter-metrics.json',
+    'results-dtm.json',
+  ])('%s names as many scenes as it lists', (name) => {
+    // Read back from disk, so this checks the file a reader opens.
+    const written = JSON.parse(readFileSync(resolve(PIPELINE_DIR, name), 'utf8')) as {
+      legs: unknown[];
+      boundaries: string[];
+    };
+    const caveats = written.boundaries.filter((b) => b.includes(NOT_SURVEY_DATA));
+    expect(caveats).toEqual([sceneCaveat(written.legs.length)]);
   });
 
   it('records per-scene ground recall and MCC, which the agreement fraction hides', () => {

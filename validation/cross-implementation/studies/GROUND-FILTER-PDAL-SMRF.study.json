@@ -234,7 +234,7 @@
   "derivedArtifacts": [
     {
       "path": "validation/cross-implementation/pdal-pipeline/results-ground-filter.json",
-      "sha256": "18686e241e8ba1bff975b47c33953e0857c7fdb00cc26c2cbfe2a6f123efea87",
+      "sha256": "d633c8d72c646ca0d465bfa5c49013a586d4ef354e5108f224f8b784b70c2af0",
       "derivedFrom": [
         "validation/cross-implementation/pdal-pipeline/fixtures/pc-01-plane-buildings.csv",
         "validation/cross-implementation/pdal-pipeline/fixtures/pc-02-rolling-buildings.csv",
