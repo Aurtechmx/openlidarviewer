@@ -490,20 +490,33 @@ export async function attachStaticCloud(
   // `hideEmptyState` so the frame it buys shows the empty state the user is
   // already looking at, not a blank stage with no cloud in it yet.
   await new Promise((resolve) => setTimeout(resolve, 0));
-  // A static load replaces any open streaming scan — but only now that the
-  // file parsed. A failed or cancelled parse above must leave the current
-  // scene intact rather than clearing it for a scan that never arrived. The
-  // check sits AHEAD of `hideEmptyState` because the yield above is a real
-  // task boundary: a Cancel click queued during the decode's tail is
-  // dispatched inside it, and hiding the empty state on the way out of a
-  // cancelled load would strand the user on a blank stage (nothing outside
-  // `resetToEmptyState` puts it back).
+  // A static load replaces any open streaming scan once the replacement
+  // exists. A failed or cancelled parse above leaves the current scene as it
+  // stood. The abort check sits AHEAD of the first scene change
+  // because the yield above is a real task boundary: a Cancel click queued
+  // during the decode's tail is dispatched inside it, and hiding the empty
+  // state on the way out of a cancelled load would strand the user on a blank
+  // stage (nothing outside `resetToEmptyState` puts it back).
   if (source.signal.aborted) throw new LoadCancelledError();
-  deps.stage.hideEmptyState();
-  if (viewer.hasStreamingCloud) deps.closeStreaming();
   const uploadStartedAt = performance.now();
-  const id = viewer.addCloud(result.cloud);
+  // The add runs while any stream is attached. An allocation failure
+  // throws here with the stream, the active scan, the measurements, the
+  // annotations and the camera as they were, and openScan's catch reports it
+  // over the scene the user has. For this one call the stream's resident
+  // nodes and the new cloud are both in memory; the stream's point budget
+  // caps that overlap.
+  let id = viewer.addCloud(result.cloud);
   source.preview?.dispose();
+  if (viewer.hasStreamingCloud) {
+    // addCloud sizes walk speed, clip planes, point attenuation and the orbit
+    // pivot over every cloud in the scene, the stream included. Take the cloud
+    // out, close the stream, and add it again so those settings describe this
+    // scan alone.
+    viewer.removeCloud(id);
+    deps.closeStreaming();
+    id = viewer.addCloud(result.cloud);
+  }
+  deps.stage.hideEmptyState();
   // COMMIT BOUNDARY. The cloud is in the scene and nothing below rolls that
   // back, so cancelling is no longer a thing this load can honour: retire the
   // control rather than leave a button that would abandon a half-revealed

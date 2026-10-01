@@ -706,6 +706,10 @@ export async function handleRemoteEpt(
     // malformed URL always surfaces an error toast, even if the Viewer chunk
     // hasn't loaded yet or the GPU backend can't initialise.
     eptUrlMod = await deps.loadEpt();
+    // A Cancel can land during any await here, the chunk import included. The
+    // open reads the signal after each one, so a cancelled open stops at the
+    // next step and sends no manifest request.
+    controller.signal.throwIfAborted();
     const check = eptUrlMod.validateRemoteEptUrl(url);
     if (!check.ok) {
       deps.dropZone.setError(`${check.reason} Enter the full https://…/ept.json URL.`);
@@ -720,6 +724,7 @@ export async function handleRemoteEpt(
     // The actual streaming open touches viewer state — defer until the lazy
     // Viewer chunk is up.
     await deps.viewerReady;
+    controller.signal.throwIfAborted();
     const viewer = deps.getViewer();
     // The prior scene state, read before any teardown: if a valid streaming A is
     // on screen, a failed candidate B must leave it intact (blocker #4A).
@@ -739,8 +744,9 @@ export async function handleRemoteEpt(
     const MANIFEST_TIMEOUT_MS = 20_000;
     const manifestTimeout = new AbortController();
     const manifestTimer = setTimeout(() => manifestTimeout.abort(), MANIFEST_TIMEOUT_MS);
-    const onOuterAbort = () => manifestTimeout.abort();
-    controller.signal.addEventListener('abort', onOuterAbort, { once: true });
+    // An 'abort' listener added to a signal that has aborted never runs.
+    // linkAbortSignals carries an earlier load-cancel across to the request.
+    const unlinkManifest = linkAbortSignals(controller.signal, manifestTimeout);
     let manifestResponse: Response;
     try {
       // `redirect: 'error'`: the host was validated against the SSRF block-list,
@@ -766,7 +772,7 @@ export async function handleRemoteEpt(
       throw err;
     } finally {
       clearTimeout(manifestTimer);
-      controller.signal.removeEventListener('abort', onOuterAbort);
+      unlinkManifest();
     }
     if (!manifestResponse.ok) {
       throw new Error(
@@ -796,6 +802,7 @@ export async function handleRemoteEpt(
     }
 
     await viewer.ready;
+    controller.signal.throwIfAborted();
     deps.streamingPanel.setPhase('Building hierarchy…');
     deps.streamingPanel.show();
     // Inspector stays visible during streaming — same rationale as the

@@ -103,18 +103,19 @@ the two entries were renumbered when the branches were integrated.
 | L199 | UI | TEST | med | FIXED | new | A lazy panel whose loader threw at once stayed busy, a second Try again started a second build, a throwing ready callback rejected, and one load re-enabled a button another still held; Tab from outside a dialog stayed outside, a fading modal took input, one Escape closed every stacked dialog, and Cmd-K and ? opened over a modal; Stop and save confirmed a save before it ran, and a failed workflow settings load was dropped and then cached. |
 | L200 | UI | TEST | high | FIXED | new | A terrain run on a scan over the display budget computed its ground surface on the main thread, holding the page for 17 s (5.8M points, 4x CPU slowdown), long enough for Chrome to offer "Page unresponsive"; long tasks showed no elapsed time. |
 | L201 | UI | TEST | med | BUILT | new | A scan with producer classes could not be auto-classified, because nothing let the user set those classes aside, and an auto-classify could not be undone. |
+| L198 | LOADER | TEST | med | FIXED | new | Three opens let an async step outlive the decision that should have stopped it: a static open closed the stream before its cloud attached, a cancelled EPT open still sent its manifest request, and a recovery write landed after Clear, a source change or Turn off. |
 
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 53
+- FIXED: 54
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 75
+- total: 76
 
 ## Detail
 
@@ -7724,3 +7725,47 @@ report, Export Health and capability model, with a hand edit on the cleared
 layer), `tests/clipCloudProvenance.test.ts` (cleared provenance and the
 method through a clip) and `tests/e2e/clearClassifications.spec.ts` (tiny.las:
 clear, legend, note, undo, auto-classify, export panel wording, restore).
+
+### L198 · FIXED · LOADER
+
+Three opens let an async step outlive the decision that should have stopped it.
+
+A static open over a stream. `attachStaticCloud` hid the empty state and
+closed the open stream before `addCloud` ran. When `addCloud` threw (a
+typed-array allocation failing on a large file), the stream
+was gone and the stage was blank. The catch in `openScan` could not help: it
+closes a stream that appeared during the open, and this one was there before.
+The add now runs first, with the stream attached. A throw leaves the stream,
+the active scan, the measurements, the annotations and the camera as they were,
+and the error reports over them. The stream closes and the empty state hides
+after the add succeeds. For that one call both clouds are in memory, and the
+stream's point budget caps the overlap. `addCloud` sizes walk speed, clip
+planes, point attenuation and the orbit pivot over every cloud in the scene,
+the stream included, so the open then removes the cloud, closes the stream and
+adds the cloud again, and those settings describe the new scan alone.
+
+A cancelled EPT open. `handleRemoteEpt` linked the load's controller to the
+manifest request's timeout controller with an `abort` listener. A listener
+added to a signal that has already aborted never runs, so an open cancelled
+before the link, during the EPT chunk import or while the Viewer loaded still
+sent the manifest request with a live signal and could wait out the 20 s
+timer. The link now goes through `linkAbortSignals`, which carries an earlier
+abort across and clears with the timer, and the open reads the signal after
+each await. A cancelled open sends no request.
+
+A recovery write after Clear. A journal write serializes the session first,
+and that waits on two or three lazy imports. `clear()` did not reach a write in
+that wait, so the older snapshot landed after Clear, a closed or replaced
+source, or Turn off. A generation counter now moves on Clear, Clear recovery
+data, Turn off, a source load and a source close. The write records it before
+serializing and checks it again before the store call, together with the on/off
+preference, a load in progress and app teardown. Writes and clears run one at
+a time in the order they were asked for, so a slow snapshot cannot land after a
+later write or a clear. Restore keeps the entry pending, and out of reach of
+writes, until the restored work is on screen; a restore that fails or applies
+nothing puts the offer back.
+
+Covered by `tests/openScanAttachSequence.test.ts` (a static open keeps the
+stream until its cloud is in the scene), `tests/openStreaming.test.ts` (a
+Cancel stops the open before the manifest request) and
+`tests/recoveryControllerWrites.test.ts`.
