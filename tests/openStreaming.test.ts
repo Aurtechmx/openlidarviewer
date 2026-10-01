@@ -776,3 +776,51 @@ describe('no streaming open path passes a source total as both figures', () => {
     }
   });
 });
+
+describe('handleRemoteEpt: a committed open resets the classification surfaces', () => {
+  // A COPC open empties and hides the legend, hides Edit classes and clears the
+  // class-scope stamp. The EPT open skipped that, so the legend and the
+  // reclassify panel of the scan open before it stayed on screen.
+  it('empties the legend, hides it and hides Edit classes', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}')));
+    try {
+      const { deps, calls } = makeCopcDeps({ priorStreamingCloud: true });
+      const cloud = {
+        kind: 'ept' as const,
+        name: 'site',
+        dataType: 'binary',
+        sourcePointCount: 10,
+        availableColorModes: () => [],
+        defaultColorMode: () => 'elevation',
+        maxDepth: () => 1,
+        octree: { nodes: () => [] as unknown[] },
+        crs: () => null,
+      };
+      const loadEpt = vi.fn(async () => ({
+        validateRemoteEptUrl: (url: string) => ({ ok: true, url }),
+        describeRemoteEptError: () => 'EPT error',
+        parseEptMetadata: () => ({
+          isEpt: true,
+          metadata: { bounds: { conforming: [0, 0, 0, 1, 1, 1] }, dataType: 'binary', schema: [], span: 128 },
+        }),
+        EptStreamingPointCloud: { open: async () => cloud },
+        EptChunkDecoder: class {},
+        EptTimeoutError,
+        eptUrlSearch: () => '',
+        createEptTransport: () => ({}),
+      }));
+      const open: OpenStreamingDeps = { ...deps, loadEpt: loadEpt as unknown as OpenStreamingDeps['loadEpt'] };
+
+      await handleRemoteEpt('https://example.com/ept.json', undefined, open);
+
+      expect(calls.attachStreamingCloud).toHaveBeenCalledTimes(1);
+      expect(open.dropZone.setError).not.toHaveBeenCalled();
+      expect(open.classLegendPanel.setClasses).toHaveBeenCalledWith(new Map());
+      expect(open.classLegendPanel.hide).toHaveBeenCalled();
+      expect(open.hideReclassifyUi).toHaveBeenCalled();
+      expect(open.syncInspectClassScope).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

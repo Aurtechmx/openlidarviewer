@@ -328,6 +328,48 @@ describe('heavy open — preview-first attach and swap', () => {
   });
 });
 
+describe('heavy open over a stream that is already on screen', () => {
+  // The preview attaches as a stream, and a stream attach disposes the one on
+  // screen. A build that then failed or was cancelled detached the preview and
+  // left nothing, so the stream the user had was gone for a file that never
+  // opened. Over a live stream the open shows no preview.
+  it('leaves the stream in place when the open is cancelled during the index', async () => {
+    const n = 400_000;
+    const buffer = lasBytes(n);
+    const range = new RecordingRange(new ArrayBufferRangeSource(buffer));
+    const { file } = spyFile('heavy.las', buffer.byteLength);
+    const { deps, viewer, attachStreamingCloud, detachStreamingCloud } = makeDeps();
+    viewer.hasStreamingCloud = true;
+    const controller = new AbortController();
+    const { env } = makeEnv({
+      range,
+      onBuildStart: () => controller.abort(),
+    });
+
+    const result = await openLocalHeavyLas(file, controller.signal, deps, env);
+
+    expect(result.status).toBe('cancelled');
+    expect(attachStreamingCloud).not.toHaveBeenCalled();
+    expect(detachStreamingCloud).not.toHaveBeenCalled();
+  });
+
+  it('attaches only the full source when the build completes', async () => {
+    const n = 400_000;
+    const buffer = lasBytes(n);
+    const range = new RecordingRange(new ArrayBufferRangeSource(buffer));
+    const { file } = spyFile('heavy.las', buffer.byteLength);
+    const { deps, viewer, attachStreamingCloud, attached } = makeDeps();
+    viewer.hasStreamingCloud = true;
+    const { env } = makeEnv({ range });
+
+    const result = await openLocalHeavyLas(file, new AbortController().signal, deps, env);
+
+    expect(result.status).toBe('attached');
+    expect(attachStreamingCloud).toHaveBeenCalledTimes(1);
+    expect(attached[0]).toBeInstanceOf(OlvTileSource);
+  });
+});
+
 describe('buildPreviewSample — stratified, bounded, honest', () => {
   it('reports the sample size, not the file total, and spans the file', async () => {
     const n = 400_000;

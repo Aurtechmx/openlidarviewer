@@ -106,18 +106,19 @@ the two entries were renumbered when the branches were integrated.
 | L198 | LOADER | TEST | med | FIXED | new | Three opens let an async step outlive the decision that should have stopped it: a static open closed the stream before its cloud attached, a cancelled EPT open still sent its manifest request, and a recovery write landed after Clear, a source change or Turn off. |
 | L204 | SCIENTIFIC | TEST | low | FIXED | new | The PDAL ground-filter and DTM results files said eight synthetic scenes while listing five and three. |
 | L208 | SCIENTIFIC | TEST | med | FIXED | new | Elevation comparison between two epochs and feature extraction read points the producer marked Withheld. |
+| L203 | LOADER | TEST | med | FIXED | new | A static open over a stream built its mesh twice, a failed tileset open or a heavy LAS preview could remove the stream on screen, a remote EPT open kept the previous legend, and recovery could release unrestored work, wait on a stalled write before a clear, or offer work just cleared. |
 
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 56
+- FIXED: 57
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 78
+- total: 79
 
 ## Detail
 
@@ -7741,10 +7742,8 @@ The add now runs first, with the stream attached. A throw leaves the stream,
 the active scan, the measurements, the annotations and the camera as they were,
 and the error reports over them. The stream closes and the empty state hides
 after the add succeeds. For that one call both clouds are in memory, and the
-stream's point budget caps the overlap. `addCloud` sizes walk speed, clip
-planes, point attenuation and the orbit pivot over every cloud in the scene,
-the stream included, so the open then removes the cloud, closes the stream and
-adds the cloud again, and those settings describe the new scan alone.
+stream's point budget caps the overlap. L203 records how the open sizes
+navigation once the stream has closed.
 
 A cancelled EPT open. `handleRemoteEpt` linked the load's controller to the
 manifest request's timeout controller with an `abort` listener. A listener
@@ -7763,9 +7762,9 @@ data, Turn off, a source load and a source close. The write records it before
 serializing and checks it again before the store call, together with the on/off
 preference, a load in progress and app teardown. Writes and clears run one at
 a time in the order they were asked for, so a slow snapshot cannot land after a
-later write or a clear. Restore keeps the entry pending, and out of reach of
-writes, until the restored work is on screen; a restore that fails or applies
-nothing puts the offer back.
+later write. Restore keeps the entry pending, and out of reach of writes, until
+the restored work is on screen. L203 records how clears and the restore outcome
+work now.
 
 Covered by `tests/openScanAttachSequence.test.ts` (a static open keeps the
 stream until its cloud is in the scene), `tests/openStreaming.test.ts` (a
@@ -7875,3 +7874,49 @@ and `tests/e2e/featureCandidates.spec.ts`. On `withheld-flags.las` an
 epoch reads 9 of 12 points and the difference against the unfiltered epoch
 changes; extraction reads 7 of 10 building points; the export records
 `{ sourcePoints: 10, withheldExcluded: 3, analysedPoints: 7 }`.
+
+### L203 · FIXED · LOADER
+
+A static open over a stream. `addCloud` sizes walk speed, the far plane, point
+attenuation, EDL density and the orbit pivot over every cloud in the scene,
+the stream included. The open removed the new cloud, closed the stream and
+added the cloud a second time to size them for the scan alone. That built the
+mesh twice: about 23 bytes a point allocated again, and an upload span of
+94 to 112 ms against 59 to 60 ms on a 3M-point LAZ. The second add had no
+guard, so a throw there left no stream, no scan and the scan chrome showing.
+`Viewer.reconfigureForClouds()` now re-runs the sizing over the static clouds.
+The open adds the cloud once with the stream attached, closes the stream and
+calls it. The settings match the same open with no stream.
+
+A tileset open that failed before its commit closed streaming, so a stream that
+was on screen before the open went with it. The open now records whether a
+stream was there and tidies up only when none was, as the EPT open does. A
+heavy LAS open attached its preview as a stream, which disposed the stream on
+screen before the full build had run; a cancelled or failed build then left
+nothing. Over a live stream the heavy open shows no preview, and the stream
+stays until the full source commits.
+
+A remote EPT open did not reset the classification surfaces. The legend and
+Edit classes of the previous scan stayed on screen, and the Scan Report read
+the old legend's filter. It now resets them as the COPC open does.
+
+Recovery. Restore counted any saved work on the source as success. The entry
+key is the source fingerprint, so a measurement added before Restore made a
+refused import read as restored, released the entry, and let the next write
+replace it. The session import now reports whether it applied the work, and
+only that releases the entry. Clear, Turn off and closing a source queued
+behind writes, so a stalled snapshot held back the deletion and Turn off could
+leave the journal in IndexedDB. Clears now run at once. A write still
+serializing sees the generation move and stores nothing; a put already sent
+was created first, so IndexedDB applies it before the clear. A file that
+finished opening during a restore offered it again, and that notice outlived
+the restore; the offer now waits for the restore to finish. A clear asked for
+before the store opened did nothing, and startup offered the cleared entry. It
+is now applied when the store opens, and a clear during the startup read
+withdraws the offer.
+
+Covered by `tests/openScanAttachSequence.test.ts` (a static open over a stream
+sizes navigation for the new scan alone), `tests/tilesetOpenFailureKeepsStream.test.ts`,
+`tests/heavyLasPreviewFirst.test.ts` (heavy open over a stream that is already
+on screen), `tests/openStreaming.test.ts` (a committed open resets the
+classification surfaces) and `tests/recoveryControllerWrites.test.ts`.

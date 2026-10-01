@@ -27,7 +27,8 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 
 import { openScan, type OpenScanDeps } from '../src/app/openScan';
-import type { Viewer } from '../src/render/Viewer';
+import * as THREE from 'three/webgpu';
+import { Viewer } from '../src/render/Viewer';
 import type { Inspector } from '../src/ui/Inspector';
 import type { PointCloud } from '../src/model/PointCloud';
 import type { AnalysisRow } from '../src/analysis/ModuleApi';
@@ -666,7 +667,7 @@ describe('a failed candidate leaves an open project alone', () => {
 
 describe('a static open keeps the stream until its cloud is in the scene', () => {
   // addCloud is where a large static open can fail late: the decode finished,
-  // and then the typed-array allocation or the GPU attach throws. The stream it
+  // and then a typed-array allocation throws. The stream it
   // was about to replace, the empty state and the user's work must all still be
   // there when it does.
 
@@ -677,9 +678,11 @@ describe('a static open keeps the stream until its cloud is in the scene', () =>
     const viewer = h.deps.getViewer() as unknown as {
       hasStreamingCloud: boolean;
       removeCloud: (id: string) => void;
+      reconfigureForClouds: () => void;
     };
     viewer.hasStreamingCloud = true;
     viewer.removeCloud = (id) => { h.trace.push(`removeCloud:${id}`); };
+    viewer.reconfigureForClouds = () => { h.trace.push('reconfigureForClouds'); };
     h.calls.closeStreaming.mockImplementation(() => {
       h.trace.push('closeStreaming');
       viewer.hasStreamingCloud = false;
@@ -716,29 +719,105 @@ describe('a static open keeps the stream until its cloud is in the scene', () =>
     expect(h.calls.setError).toHaveBeenCalledTimes(1);
   });
 
-  it('closes the stream after the add succeeds, then adds the cloud again on its own', async () => {
-    // The second add sizes navigation, clip planes and point attenuation over
-    // the new cloud alone rather than over the stream it replaces.
+  it('adds the cloud once, closes the stream, then sizes the scene for the cloud alone', async () => {
     const h = harness();
     withStream(h);
-    let added = 0;
-    h.calls.addCloud.mockImplementation(() => {
-      added += 1;
-      h.trace.push(`addCloud:cloud-${added}`);
-      return `cloud-${added}`;
-    });
 
     await openScan(fakeFile('field.las'), h.deps);
 
-    expect(h.trace.filter((t) => /^(addCloud|removeCloud|closeStreaming|hideEmptyState)/.test(t))).toEqual([
-      'addCloud:cloud-1',
-      'removeCloud:cloud-1',
+    expect(h.trace.filter((t) => /^(addCloud|removeCloud|closeStreaming|reconfigureForClouds|hideEmptyState)/.test(t))).toEqual([
+      'addCloud',
       'closeStreaming',
-      'addCloud:cloud-2',
+      'reconfigureForClouds',
       'hideEmptyState',
     ]);
-    expect(h.calls.setActive).toHaveBeenCalledWith('cloud-2');
+    expect(h.calls.setActive).toHaveBeenCalledWith('cloud-1');
     expect(h.calls.setError).not.toHaveBeenCalled();
-    expect(h.at('reveal')).toBeGreaterThan(h.at('addCloud:cloud-2'));
+    expect(h.at('reveal')).toBeGreaterThan(h.at('addCloud'));
+  });
+});
+
+/**
+ * The navigation settings `_configureForClouds` writes, read back from a Viewer
+ * whose sizing methods are the real ones. Everything that needs a GPU (the mesh
+ * build, the scene graph, the colour pass) is a stub, so `addCloud`,
+ * `detachStreamingCloud` and `reconfigureForClouds` run as shipped.
+ */
+function sizingViewer(h: ReturnType<typeof harness>, withStream: boolean) {
+  const v = Object.create(Viewer.prototype) as Record<string, unknown>;
+  const own = (fields: Record<string, unknown>): void => {
+    for (const [k, value] of Object.entries(fields)) {
+      Object.defineProperty(v, k, { value, writable: true, configurable: true });
+    }
+  };
+  const base = { ...(h.deps.getViewer() as unknown as Record<string, unknown>) };
+  delete base.hasStreamingCloud;
+  own(base);
+  const speeds: number[] = [];
+  const controls = { target: new THREE.Vector3(), update: () => {}, minDistance: 0, maxDistance: 0 };
+  own({
+    _clouds: new Map(),
+    _nextId: 1,
+    _resetGpuErrorHistory: () => {},
+    _meshForCloud: () => ({ mesh: { visible: true }, material: {}, colorAttr: {} }),
+    _scene: { add: () => {} },
+    _organized: { register: () => {} },
+    refreshProjectSharedElevation: () => {},
+    _notifyColorContextChanged: () => {},
+    _refreshMeasureDatum: () => {},
+    _demand: { changed: () => {} },
+    _worldUp: new THREE.Vector3(),
+    _nav: { setWorldUp: () => {}, setBaseSpeed: (s: number) => { speeds.push(s); }, setHasCloud: () => {} },
+    _camera: new THREE.PerspectiveCamera(50, 1, 0.1, 1000),
+    _edlNear: { value: 0 },
+    _edlFar: { value: 0 },
+    _attnRef: { value: 0 },
+    _controls: controls,
+    _orbitClampAabb: null,
+    _currentDensityPtsPerM2: null,
+    _streamingHeartbeat: { stop: () => {} },
+    _lastStreamingCenter: null,
+    // A COPC stream 10 km across, far larger than the 10 m scan dropped over it.
+    _streaming: withStream
+      ? {
+          scheduler: { stop: () => {} },
+          renderer: { dispose: () => {} },
+          cloud: { localBounds: () => [-5000, -5000, -100, 5000, 5000, 400], close: async () => {} },
+        }
+      : null,
+    removeCloud(this: { _clouds: Map<string, unknown> }, id: string) { this._clouds.delete(id); },
+  });
+  const sizing = () => ({
+    far: (v._camera as THREE.PerspectiveCamera).far,
+    attenuation: (v._attnRef as { value: number }).value,
+    walkSpeed: speeds.at(-1),
+    pivot: controls.target.toArray(),
+  });
+  (h.calls.addCloud as unknown as { mockImplementation(fn: (c: PointCloud) => string): void })
+    .mockImplementation((c) => Viewer.prototype.addCloud.call(v as unknown as Viewer, c));
+  (h.deps as { getViewer: () => Viewer }).getViewer = () => v as unknown as Viewer;
+  return { v, sizing };
+}
+
+describe('a static open over a stream sizes navigation for the new scan alone', () => {
+  it('matches the same open with no stream, with one addCloud', async () => {
+    const alone = harness();
+    const a = sizingViewer(alone, false);
+    await openScan(fakeFile('field.las'), alone.deps);
+
+    const over = harness();
+    const b = sizingViewer(over, true);
+    let whileStreaming: ReturnType<typeof b.sizing> | null = null;
+    over.calls.closeStreaming.mockImplementation(() => {
+      whileStreaming = b.sizing();
+      Viewer.prototype.detachStreamingCloud.call(b.v as unknown as Viewer);
+    });
+    await openScan(fakeFile('field.las'), over.deps);
+
+    // The add sized everything over the stream; the open must not keep that.
+    expect(whileStreaming!.far).toBeGreaterThan(a.sizing().far);
+    expect(over.calls.addCloud).toHaveBeenCalledTimes(1);
+    expect(over.calls.setError).not.toHaveBeenCalled();
+    expect(b.sizing()).toEqual(a.sizing());
   });
 });

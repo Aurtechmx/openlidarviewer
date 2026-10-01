@@ -29,8 +29,8 @@ export interface RecoveryDeps {
   readonly lifetime: AppLifetime;
   /** The current session JSON, or null when no source is open. */
   serialize(): Promise<string | null>;
-  /** Restore a session JSON through the normal import path. */
-  restore(json: string): Promise<void>;
+  /** Restore a session JSON through the normal import path. Resolves true once its work is applied. */
+  restore(json: string): Promise<boolean | void>;
   /** True while a source is loading; writes wait until it settles. */
   isLoading(): boolean;
   /** Where the notice mounts. */
@@ -70,11 +70,18 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
   let pending: RecoveryEntry | null = null;
   let notice: HTMLElement | null = null;
   let off = false;
+  // True while a restore runs, so a source that finishes loading meanwhile does not offer it again.
+  let restoring = false;
+  // Set by the first clear. A clear asked for before the store opens is applied once it does.
+  let cleared = false;
   // Clear, Turn off, closing a source and loading one each move this on. A
   // write reads it before it serializes and stores nothing once it has moved.
   let generation = 0;
-  // Writes and clears run one at a time in the order they were asked for, so
-  // a slow snapshot taken earlier cannot land after a later write or a clear.
+  // Writes run one at a time in the order they were asked for, so a slow
+  // snapshot taken earlier cannot land after a later write. Clears skip the
+  // queue: a write still serializing sees the generation move and stores
+  // nothing, and a put already sent reaches IndexedDB first, so it is applied
+  // before the clear and then deleted by it.
   let queue: Promise<void> = Promise.resolve();
   const enqueue = (op: () => Promise<unknown> | undefined): void => {
     queue = queue.then(op).then(() => {}, () => {});
@@ -130,14 +137,20 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
     if (e) enqueue(() => store?.remove(e.key).catch(() => disable('remove-failed')));
   };
 
-  const clearAll = (): void => {
+  /** Delete the whole journal now, without waiting on queued writes. */
+  const wipe = (): Promise<void> | undefined => {
     invalidate();
-    enqueue(() => store?.clear().then(() => {
+    cleared = true;
+    return store?.clear();
+  };
+
+  const clearAll = (): void => {
+    void wipe()?.then(() => {
       // Confirm in place of the notice, then let it go.
       showNotice('Recovery data in this browser was deleted.', []);
       const shown = notice;
       setTimeout(() => { if (notice === shown) hideNotice(); }, 4000);
-    }, () => disable('clear-failed')));
+    }, () => disable('clear-failed'));
   };
 
   const DISCARD_TIP = 'Delete this unsaved work from the browser.';
@@ -145,8 +158,7 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
 
   const turnOff = (): void => {
     setRecoveryEnabled(false);
-    invalidate();
-    enqueue(() => store?.clear().catch(() => {}));
+    void wipe()?.catch(() => {});
     disable('user');
   };
 
@@ -213,9 +225,12 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
         if (!s) return disable('storage-unavailable');
         store = s;
         setRecoveryStatus(`on:${s.backend}`);
+        // A clear asked for while the store was opening had nothing to delete yet.
+        if (cleared) return void s.clear().catch(() => {});
         // Entries past the age limit are deleted before anything is offered.
         const [latest] = await pruneStale(s, Date.now());
-        if (latest && !off) {
+        // A clear during the prune deleted what it read.
+        if (latest && !off && !cleared) {
           pending = latest;
           offerReopen(latest);
         }
@@ -232,14 +247,16 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
 
   const restoreEntry = async (e: RecoveryEntry): Promise<void> => {
     hideNotice();
-    // The entry stays pending, so no write can replace or delete it, until its
-    // work is on screen. The session import reports its own errors and
-    // resolves, so this reads the outcome from the session it leaves behind.
-    const json = await deps.restore(e.json).then(() => deps.serialize()).catch(() => null);
+    // The entry stays pending, so no write can replace or delete it, until the
+    // import reports that it applied the saved work.
+    restoring = true;
+    const applied = await deps.restore(e.json).catch(() => false);
+    restoring = false;
     if (pending !== e) return;
-    const built = json ? buildEntry(json, 0, Infinity) : null;
-    if (built && 'entry' in built && built.entry.key === e.key) pending = null;
-    else offerRestore(e);
+    if (applied === true) {
+      pending = null;
+      hideNotice();
+    } else offerRestore(e);
   };
 
   activeHandle = {
@@ -248,7 +265,7 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
       const e = pending;
       if (!e || off) return;
       void deps.serialize().then((json) => {
-        if (pending !== e) return;
+        if (pending !== e || restoring) return;
         const loaded = json ? summaryOf(json) : undefined;
         if (entryMatchesSource(e, loaded, matchSessionToScan)) {
           offerRestore(e);
@@ -263,7 +280,7 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
     clear() {
       invalidate();
       debounce.cancel();
-      enqueue(() => store?.clear().catch(() => {}));
+      void wipe()?.catch(() => {});
     },
   };
   return activeHandle;

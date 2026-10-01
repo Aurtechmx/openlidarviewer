@@ -514,7 +514,6 @@ const GPU_HARD_POINT_CEILING = 8_000_000;
  */
 const FRAME_SAMPLE_COUNT = 60;
 
-
 /*
  * TSL (three.js Shading Language) is a dynamically-typed embedded DSL: its
  * node chains (`.mul`, `.negate`, `.sample`, `.addAssign`, …) are not tracked
@@ -686,7 +685,6 @@ export class Viewer {
   private readonly _streamingPickData = new Map<THREE.Mesh, StreamingPickEntry>();
   /** The scheduler/renderer/cloud, present only while a COPC is streaming. */
   private _streaming: StreamingSession | null = null;
-  /** The stand-in a load shows before its cloud commits. Never a layer. */
   /**
    * Streaming heartbeat — ticks the scheduler independently of the render
    * loop, which is cancelled while idle, so node fetch/decode keeps flowing
@@ -695,7 +693,6 @@ export class Viewer {
    * Started on attach, stopped on detach (and so on dispose).
    */
   private readonly _streamingHeartbeat = new VisibleHeartbeat(() => this._tickStreaming(), 200);
-  /** Frames since the streaming scheduler last ran — for throttling. */
   /**
    * Last-observed centre of the streaming cloud's bounds. The streaming
    * pipeline returns the COPC / EPT octree's *full* extent up front, so this
@@ -1718,6 +1715,9 @@ export class Viewer {
       origin: origin ? [origin[0], origin[1], origin[2]] : null,
     });
   }
+
+  /** Size navigation, clip planes and the orbit pivot again for the static clouds alone. */
+  reconfigureForClouds(): void { const last = [...this._clouds.values()].pop(); if (last) this._configureForClouds(last.cloud); }
 
   /** Detach and fully dispose the current streaming cloud, if any. */
   detachStreamingCloud(): void {
@@ -5035,7 +5035,6 @@ export class Viewer {
     this._initOrbitCenterFromVisibleClouds();
   }
 
-  /** Combined bounding sphere of every visible cloud, or null if none. */
   /** The AABB of every visible cloud (+ the streaming octree extent), or null. */
   private _visibleBoundingBox(): THREE.Box3 | null {
     // A streaming COPC contributes its whole octree extent so framing works

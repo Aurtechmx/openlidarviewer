@@ -899,6 +899,9 @@ export async function handleRemoteEpt(
     );
     deps.streamingPanel.setQuality(deps.getStreamingQuality());
     deps.streamingPanel.setPhase('Streaming coarse geometry…');
+    // The same fresh-scan legend and reclassify state the COPC path sets, before
+    // the Scan Report reads the legend's filter.
+    resetClassificationUi(deps);
     // Same streaming-mode layout and image-export gate the COPC path uses.
     // Per-mode gating comes off the live viewer — EPT streams almost never
     // carry normals.

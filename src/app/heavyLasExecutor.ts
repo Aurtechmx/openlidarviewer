@@ -504,7 +504,14 @@ export async function executeHeavyLasBuild(
   // build then completes, `attachStreamingCloud` replaces (and disposes) it.
   let previewAttached = false;
   try {
-    const sample = await buildPreviewSample(openRange(file), facts, { signal });
+    // The preview attaches as a stream, and that attach disposes a stream
+    // already on screen. Over a live stream there is no preview: the stream
+    // stays until the full source commits, so a failed or cancelled build
+    // leaves it as it was.
+    await deps.viewerReady;
+    const sample = deps.getViewer().hasStreamingCloud
+      ? null
+      : await buildPreviewSample(openRange(file), facts, { signal });
     if (sample && !signal.aborted) {
       const previewSource = new PreviewCloudSource({
         id: `preview-${storeName}`,
