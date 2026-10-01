@@ -52,6 +52,7 @@
 .olv-ss-text { overflow: hidden; text-overflow: ellipsis; max-width: 36ch; }
 .olv-ss-dataset .olv-ss-text { color: var(--text); }
 .olv-ss-glyph { flex: none; }
+.olv-ss-wait { flex: none; font-variant-numeric: tabular-nums; }
 .olv-ss-short { display: none; }
 .olv-ss-glyph.is-review { color: var(--state-review); }
 .olv-ss-glyph.is-blocked { color: var(--state-blocked); }
@@ -84,4 +85,14 @@
   .olv-ss-short { display: inline; }
   /* A prompt parked above the dock moves up by the strip's height. */
   body:has(.olv-state-strip:not(.olv-hidden)) .olv-lasso-toast { margin-bottom: var(--olv-strip-h); }
+}
+
+/* Elapsed time (and the estimate left) a host shows beside its busy
+   indicator. Written by the strip's busy-task adapter, so it ships here. */
+.olv-busy-wait {
+  margin-inline-start: var(--space-xs);
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }

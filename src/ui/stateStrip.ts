@@ -15,6 +15,7 @@ import { STATE_GLYPH, STATE_LABEL, type SciState } from './stateChip';
 import { linearUnitLabel } from '../io/crs';
 import type { StripSnapshot } from '../app/stateStrip/stripReads';
 import type { Coverage } from '../process/ProcessPlan';
+import { formatWait, WAIT_SHOWN_AFTER_MS } from '../process/waitClock';
 
 export type StripItemId = 'dataset' | 'crs' | 'vertical' | 'basis' | 'processing' | 'review';
 
@@ -70,9 +71,9 @@ export function createStateStrip(host: StateStripHost): StateStrip {
     element.append(b);
   }
 
-  const paint = (id: StripItemId, text: string | null, validity: SciState | null, short?: string): void => {
+  const paint = (id: StripItemId, text: string | null, validity: SciState | null, short?: string, wait?: string): void => {
     const b = buttons.get(id)!;
-    const key = `${text}|${validity}|${short}`;
+    const key = `${text}|${validity}|${short}|${wait}`;
     if (b.dataset.key === key) return;
     b.dataset.key = key;
     if (text === null) {
@@ -89,10 +90,16 @@ export function createStateStrip(host: StateStripHost): StateStrip {
     parts.push(el('span', { className: short ? 'olv-ss-text olv-ss-long' : 'olv-ss-text', text }));
     // The phone's compact row shows the short form of a long value.
     if (short) parts.push(el('span', { className: 'olv-ss-text olv-ss-short', text: short }));
+    // The time a task has run sits in its own span that never shrinks, so a
+    // long label is cut before it. It stays out of the accessible name: that
+    // would change every second on a focused control, and the busy-task
+    // adapter speaks the time every 30 s instead.
+    if (wait) parts.push(el('span', { className: 'olv-ss-wait', text: `· ${wait}` }));
     b.replaceChildren(...parts);
     b.dataset.validity = validity ?? '';
     const state = validity && caution(validity) ? ` (${STATE_LABEL[validity]})` : '';
-    b.setAttribute('aria-label', `${ITEM_NAME[id]}: ${text}${state}. ${ITEM_TARGET[id]}`);
+    const name = `${ITEM_NAME[id]}: ${text}${state}. ${ITEM_TARGET[id]}`;
+    if (b.getAttribute('aria-label') !== name) b.setAttribute('aria-label', name);
   };
 
   return {
@@ -115,6 +122,8 @@ export function createStateStrip(host: StateStripHost): StateStrip {
         'processing',
         !p ? null : p.state === 'idle' ? 'Idle' : `${p.label || 'Working'}${p.progress != null ? ` ${Math.round(p.progress * 100)}%` : ''}${p.more > 0 ? ` +${p.more}` : ''}`,
         null,
+        undefined,
+        p?.state === 'running' && p.elapsedMs >= WAIT_SHOWN_AFTER_MS ? formatWait(p) : undefined,
       );
       const r = s.review;
       paint('review', r ? (r.value.count === 0 ? 'Nothing to review' : `${r.value.count} to review`) : null, r?.validity ?? null);

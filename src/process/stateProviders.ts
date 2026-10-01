@@ -183,17 +183,31 @@ export function reviewStateProvider(
 
 export type Processing =
   | { readonly state: 'idle' }
-  | { readonly state: 'running'; readonly label: string; readonly progress: number | null; readonly more: number };
+  | {
+    readonly state: 'running';
+    readonly label: string;
+    readonly progress: number | null;
+    readonly more: number;
+    readonly elapsedMs: number;
+    readonly remainingMs: number | null;
+  };
 
 /**
  * Idle, or the oldest live task with its label and progress as its host
- * states them; `more` counts the other live tasks.
+ * states them and the store's timing; `more` counts the other live tasks.
  */
 export function processingProvider(tasks: readonly TaskActivity[]): StripFact<Processing> {
   const first = tasks[0];
   if (!first) return { value: { state: 'idle' }, source: 'task-activity', validity: 'info' };
   return {
-    value: { state: 'running', label: first.label, progress: first.progress, more: tasks.length - 1 },
+    value: {
+      state: 'running',
+      label: first.label,
+      progress: first.progress,
+      more: tasks.length - 1,
+      elapsedMs: first.elapsedMs,
+      remainingMs: first.remainingMs,
+    },
     source: 'task-activity',
     validity: 'info',
   };

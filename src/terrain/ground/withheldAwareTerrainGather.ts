@@ -66,7 +66,7 @@ import {
   type StridedTerrainSample,
   type TerrainStreamBuffer,
 } from '../../render/terrainStreamSample';
-import { computeTerrainCore, type TerrainCore, type TerrainCoreParams } from '../contour/analyseContours';
+import type { TerrainCore, TerrainCoreParams } from '../contour/analyseContours';
 import type { PointCloud } from '../../model/PointCloud';
 
 /**
@@ -110,6 +110,16 @@ export interface WithheldAwareGatherOptions {
   readonly signal?: AbortSignal;
   /** Injected re-decode function (tests); defaults to the real {@link decodeFull}. */
   readonly decodeFn?: DecodeFullFn;
+}
+
+export interface WithheldAwareCoreOptions extends WithheldAwareGatherOptions {
+  /**
+   * Builds the core from the recovered sample. The app passes its terrain
+   * worker bridge, so the page keeps painting while the core computes; a
+   * caller with no worker (a test, Node) passes `computeTerrainCore`. This
+   * module stays free of the app's chunk loading.
+   */
+  readonly computeCore: (positions: Float32Array, params: TerrainCoreParams) => Promise<TerrainCore>;
 }
 
 export interface WithheldAwareGatherResult {
@@ -207,7 +217,8 @@ export interface WithheldAwareTerrainCoreResult {
 /**
  * {@link gatherWithheldAwareTerrainSource}, then rasterise the recovered
  * sample into a `TerrainCore` through the same `computeTerrainCore` path
- * every other DTM in this application is built with, so a recovered DTM's
+ * every other DTM in this application is built with (in the terrain worker
+ * when the caller passes the bridge as `computeCore`), so a recovered DTM's
  * cells are byte-identical to what a direct gather over the same
  * non-Withheld source points would produce, not a parallel computation that
  * merely agrees by construction.
@@ -222,12 +233,12 @@ export async function gatherWithheldAwareTerrainCore(
   buffer: ArrayBuffer,
   name: string,
   coreParams: Omit<TerrainCoreParams, 'classification' | 'withheldExcluded' | 'withheldExcludedCount'>,
-  options: WithheldAwareGatherOptions = {},
+  options: WithheldAwareCoreOptions,
 ): Promise<WithheldAwareTerrainCoreResult | null> {
   const gathered = await gatherWithheldAwareTerrainSource(buffer, name, options);
   if (!gathered) return null;
   const { sample, totalPoints } = gathered;
-  const core = computeTerrainCore(sample.positions, {
+  const core = await options.computeCore(sample.positions, {
     ...coreParams,
     classification: sample.classification,
     withheldExcluded: sample.withheldExcluded,
