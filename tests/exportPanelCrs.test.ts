@@ -369,6 +369,7 @@ describe('ExportPanel — the findings ledger appears with the measurement deliv
     const root = await panelWith(0);
     expect(root.findByClass('olv-findings-slot')).toHaveLength(0);
     expect(root.textContent).toMatch(/Place measurements, then export them/);
+    expect(root.textContent).toMatch(/Unavailable: no measurements yet/);
   });
 
   it('appears once a measurement exists', async () => {

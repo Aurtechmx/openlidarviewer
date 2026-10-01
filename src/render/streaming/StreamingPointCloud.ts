@@ -11,6 +11,7 @@
 
 import type { RangeSource } from '../../io/range/RangeSource';
 import { CopcSource } from '../../io/copc/CopcSource';
+import { catalogueCrsFor } from '../../io/catalog/catalogueCrs';
 import { StreamingOctree } from './StreamingOctree';
 import { nextStreamingScanId } from './streamingScanId';
 import type {
@@ -86,6 +87,11 @@ export class StreamingPointCloud implements StreamingSource {
     signal?: AbortSignal,
   ): Promise<StreamingPointCloud> {
     const source = await CopcSource.open(range, signal);
+    // A curated tile published without a CRS record takes the frame its
+    // product specification states, labelled as a catalogue assertion.
+    if (!source.metadata.header.crs && range.kind() === 'http-range') {
+      source.metadata.header.crs = catalogueCrsFor(range.id());
+    }
     const octree = new StreamingOctree(source);
     await octree.loadFullHierarchy(signal);
     const renderOrigin = pickRenderOrigin(source.metadata.info.center);

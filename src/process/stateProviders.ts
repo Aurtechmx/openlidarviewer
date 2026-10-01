@@ -77,6 +77,8 @@ export interface HorizontalCrs {
   readonly epsg: number | undefined;
   readonly linearUnit: SpatialContext['linearUnit'];
   readonly linearUnitKnown: boolean;
+  /** The catalogue assertion the CRS came from, when it did not come from the file. */
+  readonly assertedBy?: string;
 }
 
 /**
@@ -95,6 +97,7 @@ export function horizontalCrsProvider(
       epsg: context.epsg,
       linearUnit: context.linearUnit,
       linearUnitKnown: context.linearUnitKnown,
+      assertedBy: resolved?.source === 'catalog-tile' ? resolved.assertedBy : undefined,
     },
     source,
     validity: SEVERITY_STATE[context.metricSeverity],

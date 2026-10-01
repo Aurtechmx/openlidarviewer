@@ -60,7 +60,7 @@ export function renderCrs(
   body.append(
     el('div', { className: 'olv-crs-meta' }, [
       el('span', { className: 'olv-crs-meta-row', text: `Confidence: ${confidenceLabel[c.confidence]}` }),
-      el('span', { className: 'olv-crs-meta-row', text: `Source: ${sourceLabel[c.source]}` }),
+      el('span', { className: 'olv-crs-meta-row', text: `Source: ${c.assertedBy ? `catalogue (${c.assertedBy}), not the file` : sourceLabel[c.source]}` }),
     ]),
   );
 

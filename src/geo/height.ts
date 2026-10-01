@@ -103,6 +103,7 @@ const ORTHOMETRIC_EPSG: ReadonlySet<number> = new Set([
   6647, // CGVD2013
   5705, // Baltic 1977
   5612, // EGM84 geoid height
+  5728, // LN02 (Swiss levelling heights)
 ]);
 
 /** Depth (downward) vertical CRS codes. */

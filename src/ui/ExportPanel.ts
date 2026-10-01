@@ -47,7 +47,7 @@ import type { MountedFindingsPanel } from './findingsPanel';
 /** Why the measurement deliverables are inert: shown as the group hint AND each button's tooltip. */
 /** Why the LAZ pill is greyed, shown beside it and on hover. */
 const LAZ_UNAVAILABLE = 'LAZ is not available yet: this browser build cannot write LAZ compression. Choose LAS, or tick Compress (.las.gz).';
-const NO_MEASUREMENTS_HINT = 'Place measurements, then export them as open vector formats.';
+const NO_MEASUREMENTS_HINT = 'Unavailable: no measurements yet. Place measurements, then export them as open vector formats.';
 
 /**
  * Shown once, in place of the LAS 1.2 class-wrap preview, when the chunk that

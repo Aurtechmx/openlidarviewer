@@ -104,7 +104,8 @@ These pieces of the release are on main and are not rebuilt:
   `Tools › Measure`, `Analyse › Terrain › Contours`, `Analyse › Observatory`,
   `Data`. When a workspace is open it is appended:
   `Analyse › Terrain › Contour Studio`. A modal decision leaves the bar
-  unchanged.
+  unchanged. At a mode home the single crumb only repeats the active mode
+  tab, so it is shown as plain dimmed text without the bar's pill.
 - **CE-LOC-02 Single source.** Crumbs are derived only from router state and
   page titles, plus a registered name for each workspace. No surface sets crumb
   text directly.

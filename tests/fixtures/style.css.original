@@ -1361,6 +1361,9 @@ body.olv-theme-light .olv-empty::before {
   inset: auto;
   width: 100%;
   max-height: none;
+  /* A flex item that is a scroll container may shrink to min-height 0, which
+     made a card scroll inside the rail and clip its top controls. */
+  flex-shrink: 0;
 }
 /* Desktop collapse — slide the whole rail past the right edge (GPU transform). */
 @media (min-width: 768px) {

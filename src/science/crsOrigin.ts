@@ -4,7 +4,8 @@
  *
  * The record is copied from the resolved CRS (`CrsService.current()`); nothing
  * is recomputed. `source` is the resolved CRS's own token (`las-vlr`,
- * `las-evlr`, `user-override`, ...). Every field is `'unknown'` when no CRS was
+ * `las-evlr`, `user-override`, ...), with a catalogue assertion's label
+ * appended (`catalog-tile (swisstopo LV95)`). Every field is `'unknown'` when no CRS was
  * resolved.
  *
  * Pure data and a leaf: no DOM, no I/O and no imports, so only the lazy export
@@ -26,18 +27,20 @@ export interface CrsOriginInput {
   readonly epsg?: number;
   readonly verticalEpsg?: number;
   readonly verticalDatum?: string;
+  readonly assertedBy?: string;
 }
 
 export function crsOriginOf(resolved: CrsOriginInput | null | undefined): CrsOriginRecord {
   const u = 'unknown';
   if (!resolved) return { source: u, name: u, epsg: u, verticalDatum: u, verticalSource: u };
   const vertical = resolved.verticalEpsg != null ? `EPSG:${resolved.verticalEpsg}` : resolved.verticalDatum;
+  const source = resolved.assertedBy ? `${resolved.source} (${resolved.assertedBy})` : resolved.source;
   return {
-    source: resolved.source,
+    source,
     name: resolved.name,
     epsg: resolved.epsg != null ? `EPSG:${resolved.epsg}` : u,
     verticalDatum: vertical ?? u,
-    verticalSource: vertical ? resolved.source : u,
+    verticalSource: vertical ? source : u,
   };
 }
 
