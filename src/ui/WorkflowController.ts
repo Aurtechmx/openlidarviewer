@@ -16,6 +16,7 @@ import {
   type WorkflowRecorderConfig,
 } from '../render/workflow/workflowConfig';
 import { formatBytesIn } from '../io/formatByteSize';
+import type { LazyLoadToast } from '../app/lazySurfaceLoad';
 
 /**
  * Whole-file ceiling for a workflow read into a single string. A workflow is a
@@ -390,13 +391,23 @@ export class WorkflowController {
 /**
  * Save a finished workflow, then say what happened: saved, or cancelled when
  * the user dismissed the save picker. The message waits for the save, so it
- * never claims a file that was not written.
+ * never claims a file that was not written. A save that throws reports the
+ * reason, and its Try again saves the same recording.
  */
 export async function saveWorkflowWithToast(
   controller: Pick<WorkflowController, 'save'>,
   workflow: Workflow,
-  toast: (message: string) => void,
+  toast: LazyLoadToast['show'],
 ): Promise<void> {
-  const name = await controller.save(workflow);
+  let name: string | null;
+  try {
+    name = await controller.save(workflow);
+  } catch (err) {
+    toast(`Workflow · couldn't save: ${err instanceof Error ? err.message : err}`, {
+      label: 'Try again',
+      onClick: () => void saveWorkflowWithToast(controller, workflow, toast),
+    });
+    return;
+  }
   toast(name === null ? 'Workflow · save cancelled.' : 'Workflow saved. Replay needs the same scan open on the other end.');
 }

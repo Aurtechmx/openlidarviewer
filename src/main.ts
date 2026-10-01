@@ -116,7 +116,7 @@ import type { ClipBox } from './render/clip/clipBox';
 // ground-filter + rasteriser): see compareLoadedLayers' dynamic import.
 import { planInstantAnswer } from './intelligence/instantAnswer';
 import { decodeFull } from './convert/decodeFull';
-import { createHelpOverlayLazy, createLazySingleton, createLazySurfaceLoader, buttonLazyTrigger } from './app/helpOverlayLazy';
+import { createHelpOverlayLazy, createLazySingleton, createLazySurfaceLoader, buttonLazyTrigger, dialogOpen, retryableOnce, mountPanelOnce } from './app/helpOverlayLazy';
 import {
   buildViewerKeyBindings,
   installKeyDispatch,
@@ -453,7 +453,7 @@ const catalogPanel = new CatalogPanel({
 // v0.3.9 onboarding tour, offered from the splash chip and the command
 // palette, imposed never. Deferred: the chunk boots on first start or
 // replay (app/tourLauncher.ts); boot logic lives in ui/onboarding/bootTour.ts.
-const tour: TourHandle = createTourLauncher(loadTour);
+const tour: TourHandle = createTourLauncher(loadTour, { show: (message, action) => showLassoToast(message, action) });
 
 const runtime = createAppRuntime();
 const stage = new Stage(app, {
@@ -966,27 +966,21 @@ interface DiagnosticsRuntime {
   InstrumentedRangeSource: typeof import('./io/range/InstrumentedRangeSource').InstrumentedRangeSource;
 }
 let diagnostics: DiagnosticsRuntime | null = null;
-let diagnosticsPending: Promise<DiagnosticsRuntime> | null = null;
-function loadDiagnostics(): Promise<DiagnosticsRuntime> {
-  if (diagnostics) return Promise.resolve(diagnostics);
-  if (diagnosticsPending) return diagnosticsPending;
-  diagnosticsPending = (async () => {
-    const [overlayMod, benchMod, instrMod] = await Promise.all([
-      loadDebugOverlay(),
-      loadStreamingBenchmark(),
-      loadInstrumentedRangeSource(),
-    ]);
-    diagnostics = {
-      DebugOverlay: overlayMod.DebugOverlay,
-      StreamingBenchmark: benchMod.StreamingBenchmark,
-      formatStreamingBenchmark: benchMod.formatStreamingBenchmark,
-      InstrumentedRangeSource: instrMod.InstrumentedRangeSource,
-    };
-    diagnosticsPending = null;
-    return diagnostics;
-  })();
-  return diagnosticsPending;
-}
+// One load for every caller; the next call retries a failed one.
+const loadDiagnostics = retryableOnce(async (): Promise<DiagnosticsRuntime> => {
+  const [overlayMod, benchMod, instrMod] = await Promise.all([
+    loadDebugOverlay(),
+    loadStreamingBenchmark(),
+    loadInstrumentedRangeSource(),
+  ]);
+  diagnostics = {
+    DebugOverlay: overlayMod.DebugOverlay,
+    StreamingBenchmark: benchMod.StreamingBenchmark,
+    formatStreamingBenchmark: benchMod.formatStreamingBenchmark,
+    InstrumentedRangeSource: instrMod.InstrumentedRangeSource,
+  };
+  return diagnostics;
+});
 
 /**
  * A viewer state decoded from a `#s=` share link, applied once the next scan
@@ -1223,25 +1217,19 @@ if (WORKFLOW_RECORDER_ENABLED) {
 // `pendingWorkflowConfig` and applies it when (if) the popup first loads; the
 // functional config goes to `workflowController.setConfig` eagerly regardless.
 let workflowConfigPanel: WorkflowConfigPanel | null = null;
-let workflowConfigPanelLoading: Promise<WorkflowConfigPanel> | null = null;
 let pendingWorkflowConfig: Parameters<typeof workflowController.setConfig>[0] | undefined;
-function ensureWorkflowConfigPanel(): Promise<WorkflowConfigPanel> {
-  if (workflowConfigPanel) return Promise.resolve(workflowConfigPanel);
-  if (!workflowConfigPanelLoading) {
-    workflowConfigPanelLoading = loadWorkflowConfigPanel().then(({ WorkflowConfigPanel }) => {
-      const panel = new WorkflowConfigPanel();
-      stage.overlay.append(panel.element);
-      panel.onChange((cfg) => {
-        workflowController.setConfig(cfg);
-        persistPrefs();
-      });
-      if (pendingWorkflowConfig !== undefined) panel.setConfig(pendingWorkflowConfig);
-      workflowConfigPanel = panel;
-      return panel;
-    }).catch((err: unknown) => { workflowConfigPanelLoading = null; throw err; }); // a failed load is retried on the next call
-  }
-  return workflowConfigPanelLoading;
-}
+// One load for every caller; the next call retries a failed one.
+const ensureWorkflowConfigPanel = retryableOnce(() => loadWorkflowConfigPanel().then(({ WorkflowConfigPanel }) => {
+  const panel = new WorkflowConfigPanel();
+  stage.overlay.append(panel.element);
+  panel.onChange((cfg) => {
+    workflowController.setConfig(cfg);
+    persistPrefs();
+  });
+  if (pendingWorkflowConfig !== undefined) panel.setConfig(pendingWorkflowConfig);
+  workflowConfigPanel = panel;
+  return panel;
+}));
 
 /** Start (with the configured countdown) the right toast. */
 function startWorkflowRecording(): void {
@@ -1273,8 +1261,8 @@ function toggleWorkflowRecord(): void {
 const commandPaletteSingleton = createLazySingleton(async () => {
   const { CommandPalette } = await loadCommandPalette();
   const palette = new CommandPalette();
-  stage.overlay.append(palette.element);
   palette.setActions(await ensureActionRegistry());
+  stage.overlay.append(palette.element); // mounted once its actions arrive, so a failed registry leaves nothing behind
   return palette;
 }, 'command palette', { show: showLassoToast }, buttonLazyTrigger(() => dock.dock.querySelector<HTMLButtonElement>('.olv-tool-command')));
 function openCommandPalette(): void {
@@ -1428,10 +1416,9 @@ const navWiring = createNavBarWiring({
 });
 // The action registry is built on the first surface that needs it (palette,
 // sheet, a Dataset Story click) from the lazy `actionDefinitions` chunk; a
-// duplicate id is a copy-paste bug and throws on that first build.
-let actionRegistry: Promise<Action[]> | null = null;
-function ensureActionRegistry(): Promise<Action[]> {
-  actionRegistry ??= loadActionRegistry().then(({ buildActionRegistry }) => {
+// duplicate id is a copy-paste bug and throws on that first build. The next
+// call retries a failed build.
+const ensureActionRegistry = retryableOnce((): Promise<Action[]> => loadActionRegistry().then(({ buildActionRegistry }) => {
     const actions = buildActionRegistry({
   getViewer: () => viewer,
   getTour: () => tour,
@@ -1467,9 +1454,7 @@ function ensureActionRegistry(): Promise<Action[]> {
     const dupes = findDuplicateIds(actions);
     if (dupes.length > 0) throw new Error(`Command palette: duplicate action ids: ${dupes.join(', ')}`);
     return actions;
-  });
-  return actionRegistry;
-}
+}));
 
 // Cmd-K / Ctrl-K (palette, binding 300) and bare `?` (shortcut sheet, binding
 // 400) were window keydown listeners here. They are now in the dispatch table
@@ -1735,8 +1720,6 @@ let analysePanel: AnalysePanel = null as unknown as AnalysePanel;
 let analyseDesiredVisible = false;
 let analyseExpanded = false;
 let analyseScanTypeArgs: Parameters<AnalysePanel['setScanType']> | null = null;
-// Memoised first-mount promise so concurrent first-loads share one construction.
-let _analyseReady: Promise<AnalysePanel> | null = null;
 
 /**
  * Construct the Analyse panel with the SAME callbacks the eager version used.
@@ -1879,28 +1862,13 @@ function newAnalysePanel(
 /**
  * Construct + mount the Analyse panel exactly once, pulling its chunk through
  * `loadAnalysePanel()`. Idempotent and memoised: concurrent first-mounts share
- * the single in-flight promise, and the double-construct guard means only one
- * panel is ever built. After construction it inserts into the DOM (desktop left
- * column, or the mobile sheet when that layout is active) and hydrates the
- * tracked state.
+ * the single in-flight promise, the next call retries a failed load, and the
+ * double-construct guard means only one panel is ever built. After
+ * construction it inserts into the DOM (desktop left column, or the mobile
+ * sheet when that layout is active) and hydrates the tracked state.
  */
-function ensureAnalysePanel(): Promise<AnalysePanel> {
-  if (analysePanel) return Promise.resolve(analysePanel);
-  if (_analyseReady) return _analyseReady;
-  _analyseReady = loadAnalysePanel().then(({ AnalysePanel: Ctor }) => {
-    // A concurrent caller may have won the race while the import was in flight.
-    if (!analysePanel) {
-      analysePanel = newAnalysePanel(Ctor);
-      // Insert into the DOM in its canonical spot; no-op in bare/embed mode
-      // where no left column was built.
-      mountAnalysePanelElement?.(analysePanel.element);
-      // Replay whatever state the (already-run) scan route asked for.
-      hydrateAnalysePanel();
-    }
-    return analysePanel;
-  });
-  return _analyseReady;
-}
+const ensureAnalysePanel = retryableOnce(() => loadAnalysePanel().then(({ AnalysePanel: Ctor }) =>
+  mountPanelOnce(analysePanel, () => (analysePanel = newAnalysePanel(Ctor)), mountAnalysePanelElement, hydrateAnalysePanel)));
 
 /**
  * Replay the tracked Analyse-panel state onto the freshly-mounted panel — the
@@ -1938,31 +1906,29 @@ const processStudio = createProcessStudioFromShell({
 
 // Manual classification-edit panel — lazy-loaded below the legend on first
 // classification. `showReclassifyUi()` on availability; `hideReclassifyUi()` on detach.
-let reclassifyUi: ReclassifyUi | null = null, reclassifyUiLoading: Promise<void> | null = null;
+let reclassifyUi: ReclassifyUi | null = null;
+// Concurrent first mounts share one load, so only one panel is ever created; the next call retries a failed load.
+const mountReclassifyUi = retryableOnce(async () => {
+  const { createReclassifyUi } = await loadReclassifyUi();
+  const ui = createReclassifyUi({
+    canvas: stage.canvas,
+    getViewer: () => viewer,
+    getActiveId: () => scans.activeId,
+    onToast: showLassoToast,
+    onAutoClassify: () => runDeriveClassification(),
+    onReclassified: (cls) => afterClassEdit(classLegendPanel, cls),
+  });
+  classLegendPanel.element.append(ui.element); // rides with the legend onto the Classes page
+  reclassifyUi = ui;
+});
 async function showReclassifyUi(): Promise<void> {
   if (reclassifyUi) {
     reclassifyUi.setVisible(true);
     reclassifyUi.refresh();
     return;
   }
-  // Dedupe concurrent first-mounts so the panel is only ever created once.
-  if (!reclassifyUiLoading) {
-    reclassifyUiLoading = (async () => {
-      const { createReclassifyUi } = await loadReclassifyUi();
-      const ui = createReclassifyUi({
-        canvas: stage.canvas,
-        getViewer: () => viewer,
-        getActiveId: () => scans.activeId,
-        onToast: showLassoToast,
-        onAutoClassify: () => runDeriveClassification(),
-        onReclassified: (cls) => afterClassEdit(classLegendPanel, cls),
-      });
-      classLegendPanel.element.append(ui.element); // rides with the legend onto the Classes page
-      reclassifyUi = ui;
-    })();
-  }
-  await reclassifyUiLoading;
-  // Cast: TS can't see the async IIFE reassign the outer `let` across the await.
+  await mountReclassifyUi();
+  // Cast: TS can't see the load reassign the outer `let` across the await.
   (reclassifyUi as ReclassifyUi | null)?.setVisible(true);
 }
 function hideReclassifyUi(): void { reclassifyUi?.setVisible(false); }
@@ -2134,8 +2100,6 @@ let objectContent:
   | { readonly kind: 'space'; readonly args: Parameters<ObjectPanel['showSpace']> }
   | { readonly kind: 'object'; readonly args: Parameters<ObjectPanel['showObject']> }
   | null = null;
-// Memoised first-mount promise so concurrent first-loads share one construction.
-let _objectReady: Promise<ObjectPanel> | null = null;
 
 /**
  * Construct the Object/Space panel with the SAME callbacks the eager version
@@ -2229,28 +2193,14 @@ function newObjectPanel(
 /**
  * Construct + mount the Object panel exactly once, pulling its chunk through
  * `loadObjectPanel()`. Idempotent and memoised: concurrent first-mounts share
- * the single in-flight promise, and the double-construct guard means only one
- * panel is ever built. After construction it inserts into the DOM (desktop left
- * column, or the mobile sheet when that layout is active) and hydrates the
- * tracked state. Mirrors `ensureAnalysePanel`.
+ * the single in-flight promise, the next call retries a failed load, and the
+ * double-construct guard means only one panel is ever built. After
+ * construction it inserts into the DOM (desktop left column, or the mobile
+ * sheet when that layout is active) and hydrates the tracked state. Mirrors
+ * `ensureAnalysePanel`.
  */
-function ensureObjectPanel(): Promise<ObjectPanel> {
-  if (objectPanel) return Promise.resolve(objectPanel);
-  if (_objectReady) return _objectReady;
-  _objectReady = loadObjectPanel().then(({ ObjectPanel: Ctor }) => {
-    // A concurrent caller may have won the race while the import was in flight.
-    if (!objectPanel) {
-      objectPanel = newObjectPanel(Ctor);
-      // Insert into the DOM in its canonical spot; no-op in bare/embed mode
-      // where no left column was built.
-      mountObjectPanelElement?.(objectPanel.element);
-      // Replay whatever state the (already-run) scan route asked for.
-      hydrateObjectPanel();
-    }
-    return objectPanel;
-  });
-  return _objectReady;
-}
+const ensureObjectPanel = retryableOnce(() => loadObjectPanel().then(({ ObjectPanel: Ctor }) =>
+  mountPanelOnce(objectPanel, () => (objectPanel = newObjectPanel(Ctor)), mountObjectPanelElement, hydrateObjectPanel)));
 
 /**
  * Replay the tracked Object-panel state onto the freshly-mounted panel — the
@@ -2801,7 +2751,7 @@ void viewerLoaded.then(() => {
   viewer.setNavListeners({
     onModeChange: (mode) => navBar.setMode(mode),
     onPointerLockChange: (locked) => navBar.setLocked(locked),
-    onToggleHelp: () => navBar.toggleHelp(),
+    onToggleHelp: () => { if (!dialogOpen()) navBar.toggleHelp(); }, // H leaves the navigation help alone behind an open dialog
   });
   // The hand tool (v0.5.5 P1) is flag-gated (?handPan=off). The flag lives
   // in the lazy Viewer chunk (devFlags must stay out of the startup shell),
@@ -3098,8 +3048,8 @@ void viewerLoaded.then(() => {
     // typing. Only wired for the full app, never the minimal embed view: this
     // populates the dispatch table's `globalActions` slot (null until now, so
     // embed leaves these keys unbound). A tool shortcut needs a loaded scan and
-    // is inert behind the help modal.
-    const toolsReady = (): boolean => hasScan() && !helpOverlay.isOpen();
+    // is inert behind any open dialog, Help included.
+    const toolsReady = (): boolean => hasScan() && !dialogOpen();
     globalActionHandlers = {
       onAnnotate: () => { if (toolsReady()) runTool('annotate'); },
       onMeasure: () => { if (toolsReady()) runTool('measure'); },

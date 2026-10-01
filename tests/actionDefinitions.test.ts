@@ -718,16 +718,14 @@ describe('buildActionRegistry — verify integrity report', () => {
     expect(verifyAndShow).not.toHaveBeenCalled();
   });
 
-  it('warns instead of leaving an unhandled rejection when verification fails', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  it('reports a failed verification through the toast, with Try again, instead of an unhandled rejection', async () => {
     verifyAndShow.mockRejectedValue(new Error('chunk gone'));
     const h = harness();
     h.run('report.verify');
     const input = appended[0];
     input.files = [{ name: 'report.json' }];
     input.fire('change');
-    await vi.waitFor(() => expect(warn).toHaveBeenCalled());
-    warn.mockRestore();
+    await vi.waitFor(() => expect(h.toast).toHaveBeenCalledWith('chunk gone', expect.objectContaining({ label: 'Try again' })));
   });
 });
 

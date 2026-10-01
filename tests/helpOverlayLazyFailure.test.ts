@@ -92,4 +92,15 @@ describe('createHelpOverlayLazy — failure path', () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(toast.calls.length).toBeGreaterThan(0);
   });
+
+  it('a first toggle, before the overlay exists, toggles the new overlay rather than forcing it open', async () => {
+    // HelpOverlay.toggle refuses to open over another dialog; open() does not ask.
+    const toast = fakeToast();
+    const overlay = createHelpOverlayLazy(host, { getActions: () => Promise.resolve([]), toast });
+    overlay.toggle();
+    await new Promise((r) => setTimeout(r, 0));
+    const created = HelpOverlay.mock.instances[0] as unknown as { open: ReturnType<typeof vi.fn>; toggle: ReturnType<typeof vi.fn> };
+    expect(created.toggle).toHaveBeenCalledTimes(1);
+    expect(created.open).not.toHaveBeenCalled();
+  });
 });

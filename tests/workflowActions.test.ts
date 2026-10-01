@@ -7,9 +7,10 @@
  * retry, and the hidden replay input leaves the document whether the picker
  * returns a file or is dismissed.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, expectTypeOf, vi, afterEach } from 'vitest';
 import { contributeWorkflowActions, type WorkflowActionDeps } from '../src/app/actions/workflowActions';
 import type { Workflow } from '../src/render/workflow/workflowRecorder';
+import type { LazyLoadToast } from '../src/app/lazySurfaceLoad';
 
 const SAVED = 'Workflow saved. Replay needs the same scan open on the other end.';
 const CANCELLED = 'Workflow · save cancelled.';
@@ -21,7 +22,7 @@ function actionsWith(overrides: Partial<WorkflowActionDeps>) {
     startWorkflowRecording: vi.fn(),
     dispatchWorkflowEvent: vi.fn(),
     ensureWorkflowConfigPanel: vi.fn(),
-    showLassoToast: ((message: string, action?: { label: string; onClick: () => void }) => { toasts.push({ message, action }); }) as (m: string) => void,
+    showLassoToast: (message, action) => { toasts.push({ message, action }); },
     ...overrides,
   };
   const actions = contributeWorkflowActions(deps);
@@ -58,10 +59,41 @@ describe('workflow.stop-save', () => {
     expect(messages()).toEqual([CANCELLED]);
   });
 
+  it('reports a save that throws, with the reason and a Try again that saves the same recording', async () => {
+    const workflow = { events: [] } as unknown as Workflow;
+    const save = vi.fn()
+      .mockImplementationOnce(() => Promise.reject(new Error('download blocked')))
+      .mockImplementation(() => Promise.resolve('session.olvworkflow'));
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => { unhandled.push(reason); };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const { run, toasts, messages } = actionsWith({ workflowController: { stopRecording: () => workflow, save } as never });
+      run('workflow.stop-save');
+      await settle();
+      expect(messages()).toEqual(["Workflow · couldn't save: download blocked"]);
+      expect(toasts[0].action?.label).toBe('Try again');
+      toasts[0].action!.onClick();
+      await settle();
+      expect(save).toHaveBeenCalledTimes(2);
+      expect(save).toHaveBeenLastCalledWith(workflow);
+      expect(messages().at(-1)).toBe(SAVED);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+    expect(unhandled).toEqual([]);
+  });
+
   it('still says nothing was recorded when the recorder was idle', () => {
     const { run, messages } = actionsWith({ workflowController: { stopRecording: () => null } as never });
     run('workflow.stop-save');
     expect(messages()).toEqual(['Workflow · nothing recorded yet.']);
+  });
+});
+
+describe('the toast dependency', () => {
+  it('takes the action argument the lazy-load toast passes, so Try again reaches the user', () => {
+    expectTypeOf<WorkflowActionDeps['showLassoToast']>().toEqualTypeOf<LazyLoadToast['show']>();
   });
 });
 

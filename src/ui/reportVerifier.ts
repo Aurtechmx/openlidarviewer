@@ -10,7 +10,7 @@
  */
 
 import { verifyReportFile, type VerifyReportResult } from '../export/verifyReport';
-import { focusableIn, trapTab } from './Modal';
+import { focusableIn, wireDialogA11y, type DialogA11yHandle } from './Modal';
 import { formatBytesIn } from '../io/formatByteSize';
 
 function row(label: string, value: string): HTMLElement {
@@ -108,29 +108,24 @@ export function showReportVerification(result: VerifyReportResult): void {
   close.style.cssText =
     'align-self:flex-end;margin-top:6px;padding:6px 14px;border:0;border-radius:8px;cursor:pointer;' +
     'font:600 12px system-ui,sans-serif;color:var(--on-accent);background:var(--accent);';
-  // Escape dismisses; Tab / Shift+Tab cycle inside the card. The card claims
-  // `aria-modal`, so Tab must not walk out into the page behind it. The trap is
-  // the shared one from Modal.ts, so the two dialogs cannot drift apart.
-  const onKey = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape') {
-      dismiss();
-      return;
-    }
-    trapTab(card, e);
-  };
-  // dismiss tears down BOTH the node and the document-level key listener, so
-  // closing via Close / backdrop / Escape never leaves a stale handler attached.
+  // The card joins the shared dialog stack (Modal.ts) once it is in the page;
+  // dismiss removes the node and takes the card off the stack, so closing via
+  // Close / backdrop / Escape never leaves a stale handler attached.
+  let a11y: DialogA11yHandle | null = null;
   const dismiss = (): void => {
     backdrop.remove();
-    document.removeEventListener('keydown', onKey);
+    a11y?.teardown();
   };
   close.addEventListener('click', dismiss);
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) dismiss(); });
-  document.addEventListener('keydown', onKey);
   card.append(close);
 
   backdrop.append(card);
   document.body.append(backdrop);
+  // Escape dismisses, Tab / Shift+Tab cycle inside it, and the palette, the
+  // shortcut sheet and Help do not open over it. A dialog opened above it
+  // takes those keys until it closes.
+  a11y = wireDialogA11y(card, { onEscape: dismiss });
   // Land focus inside the dialog so the trap has somewhere to cycle from.
   (focusableIn(card)[0] ?? close).focus();
 }

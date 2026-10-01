@@ -14,7 +14,9 @@ import { createLazySingleton, type LazyLoadToast, type LazyLoadTrigger } from '.
 // already-imported module rather than adding a second direct edge to
 // `lazySurfaceLoad.ts` (lint:module-graph's static fan-out on main.ts is
 // shrink-only and counts DIRECT imports only).
-export { createLazySingleton, createLazySurfaceLoader, buttonLazyTrigger, type LazyLoadToast, type LazyLoadTrigger } from './lazySurfaceLoad';
+export { createLazySingleton, createLazySurfaceLoader, buttonLazyTrigger, retryableOnce, mountPanelOnce, type LazyLoadToast, type LazyLoadTrigger } from './lazySurfaceLoad';
+// The same route for the dialog stack's open check, which gates the tool shortcuts.
+export { dialogOpen } from '../ui/Modal';
 
 export interface HelpOverlayLazy {
   /** `false` before the first mount: the overlay cannot be open yet. */
@@ -25,7 +27,7 @@ export interface HelpOverlayLazy {
   openTopic(topicId: string): void;
   /** Open on the topic that lists an action. */
   openForAction(actionId: string): void;
-  /** Toggle the overlay; a call before the first mount opens it. */
+  /** Toggle the overlay; a call before the first mount opens it unless another dialog is open. */
   toggle(): void;
 }
 
@@ -62,7 +64,7 @@ export function createHelpOverlayLazy(overlayHost: HTMLElement, deps: HelpOverla
     toggle: () => {
       const existing = singleton.current();
       if (existing) existing.toggle();
-      else void singleton.ensure((o) => o.open());
+      else void singleton.ensure((o) => o.toggle());
     },
   };
 }

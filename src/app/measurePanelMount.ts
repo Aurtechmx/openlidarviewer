@@ -20,6 +20,7 @@
 import { aggregate as aggregateMeasurements } from '../render/measure/measurementChains';
 import { buildMeasureConfidenceContext } from './measureConfidenceContext';
 import { loadMeasurePanel, loadProfileWorkbenchRuntime } from '../lazyChunks';
+import { retryableOnce, mountPanelOnce } from './lazySurfaceLoad';
 
 // Re-exported here so the shell reaches it through the cluster that owns the
 // profile-workbench close signal, without adding a main.ts fan-out edge.
@@ -108,7 +109,6 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
   let launcher: ProfileWorkbenchLauncher | null = null;
   // The measurement the open dock is plotting, or null when none is.
   let dockedId: string | null = null;
-  let ready: Promise<MeasurePanel> | null = null;
   let mountElement: ((el: HTMLElement) => void) | null = null;
   // Desired panel state, mirrored so a panel mounted a beat AFTER a scan event
   // (the dynamic import resolves later) replays the correct state on hydrate.
@@ -334,6 +334,14 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
     if (desiredVisible) panel.setVisible(true);
   }
 
+  // The panel's one load, shared by concurrent first mounts. retryableOnce
+  // drops a failed load, so the next reveal fetches the chunk again.
+  const mount = retryableOnce(() =>
+    // No mount hook in bare/embed mode; the force path mounts it directly.
+    loadMeasurePanel().then(({ MeasurePanel: Ctor }) =>
+      mountPanelOnce(panel, () => (panel = construct(Ctor)), mountElement, hydrate)),
+  );
+
   /**
    * Construct + mount the Measurements panel exactly once, pulling its chunk
    * through `loadMeasurePanel()`. Idempotent and memoised: concurrent
@@ -346,20 +354,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
    */
   function ensure(): Promise<MeasurePanel> {
     closeWorkbench();
-    if (panel) return Promise.resolve(panel);
-    if (ready) return ready;
-    ready = loadMeasurePanel().then(({ MeasurePanel: Ctor }) => {
-      // A concurrent caller may have won the race while the import was in flight.
-      if (!panel) {
-        panel = construct(Ctor);
-        // Insert into the DOM in its canonical spot; no-op in bare/embed mode
-        // where no left column was built (the force path mounts it directly).
-        mountElement?.(panel.element);
-        hydrate();
-      }
-      return panel;
-    });
-    return ready;
+    return panel ? Promise.resolve(panel) : mount();
   }
 
   return {

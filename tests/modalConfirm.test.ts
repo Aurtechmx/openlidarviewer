@@ -115,6 +115,10 @@ class FakeEl {
     this._collect(token, acc);
     return acc[0] ?? null;
   }
+  /** Mounted under the fake body, as `Node.isConnected` reports for a real node. */
+  get isConnected(): boolean {
+    return BODY.contains(this);
+  }
   contains(node: FakeEl | null): boolean {
     if (node === null) return false;
     if (node === this) return true;

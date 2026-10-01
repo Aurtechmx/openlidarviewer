@@ -76,6 +76,49 @@ export function createLazySurfaceLoader(toast: LazyLoadToast) {
   return run;
 }
 
+/**
+ * Share one load between every caller, and forget it if it fails. The first
+ * call starts `load`; later calls get the same promise while it runs and once
+ * it resolves. A rejection reaches the callers that shared it, and then this
+ * drops it, so the next call (a Try again, or the same gesture repeated) starts
+ * a fresh load rather than replaying the failure until the page reloads.
+ */
+export function retryableOnce<T>(load: () => Promise<T>): () => Promise<T> {
+  let attempt: Promise<T> | null = null;
+  return () => (attempt ??= load().catch((err: unknown) => { attempt = null; throw err; }));
+}
+
+/**
+ * Run `load` through a lazy-load toast whose Try again runs it again, for a
+ * one-off action that has no singleton to cache.
+ */
+export function runWithRetry(toast: LazyLoadToast, load: () => Promise<unknown>, label: string): void {
+  const run = createLazySurfaceLoader(toast);
+  const attempt = (): void => void run(load, label, { retry: attempt });
+  attempt();
+}
+
+/**
+ * The lazy panel mount shared by the Analyse, Object and Measurements panels:
+ * a concurrent caller may have built the panel while the import was in
+ * flight, so `existing` wins; otherwise `build` makes it (and stores it where
+ * `hydrate` reads it), `mount` places it in the DOM (absent in bare and embed
+ * layouts), and `hydrate` replays what the scan route already asked for.
+ */
+export function mountPanelOnce<P extends { element: HTMLElement }>(
+  existing: P | null,
+  build: () => P,
+  mount: ((el: HTMLElement) => void) | null,
+  hydrate: () => void,
+): P {
+  if (!existing) {
+    existing = build();
+    mount?.(existing.element);
+    hydrate();
+  }
+  return existing as P;
+}
+
 /** Show a failure: the error's own message, or a fallback naming the surface. */
 function report(toast: LazyLoadToast, err: unknown, label: string, retry?: () => void): void {
   toast.show(err instanceof Error ? err.message : `Could not load the ${label}.`, retry ? { label: 'Try again', onClick: retry } : undefined);

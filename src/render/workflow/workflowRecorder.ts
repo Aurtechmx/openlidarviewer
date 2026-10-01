@@ -107,8 +107,13 @@ export class WorkflowSession {
     this._startedAt = this._now();
   }
 
-  /** Append an event at the current offset. */
+  /**
+   * Append an event at the current offset. A recording stops taking events
+   * at {@link MAX_WORKFLOW_EVENTS}, the count `parseWorkflow` accepts, so a
+   * saved file always replays.
+   */
   push(event: WorkflowEventDraft): void {
+    if (this._events.length >= MAX_WORKFLOW_EVENTS) return;
     const tMs = Math.max(0, Math.round(this._now() - this._startedAt));
     this._events.push({ ...event, tMs } as WorkflowEvent);
   }
@@ -125,6 +130,23 @@ export class WorkflowSession {
 }
 
 // ── file format ────────────────────────────────────────────────────
+
+/**
+ * The most events a workflow file may carry. A recording holds one event per
+ * camera preset, theme or tool click. Replay schedules one timer per event,
+ * and a file at the 32 MiB read cap can list about 1.2 million of them, so
+ * `parseWorkflow` refuses a file past this count before it reads any event.
+ */
+export const MAX_WORKFLOW_EVENTS = 10_000;
+
+/**
+ * A value read from the file, as JSON, cut to 60 characters, so an error
+ * message never repeats a whole file.
+ */
+function echo(value: unknown): string {
+  const text = JSON.stringify(value) ?? String(value);
+  return text.length > 60 ? `${text.slice(0, 60)}…` : text;
+}
 
 /** Result of parsing a workflow file. */
 export type ParseResult =
@@ -173,13 +195,13 @@ export function parseWorkflow(input: string): ParseResult {
   if (obj.kind !== 'olvworkflow') {
     return {
       ok: false,
-      error: `Expected kind="olvworkflow"; got ${JSON.stringify(obj.kind)}.`,
+      error: `Expected kind="olvworkflow"; got ${echo(obj.kind)}.`,
     };
   }
   if (obj.version !== 1) {
     return {
       ok: false,
-      error: `Unsupported workflow version ${JSON.stringify(obj.version)}; this build reads v1.`,
+      error: `Unsupported workflow version ${echo(obj.version)}; this build reads v1.`,
     };
   }
   if (typeof obj.recordedAt !== 'string') {
@@ -190,6 +212,9 @@ export function parseWorkflow(input: string): ParseResult {
   }
   if (!Array.isArray(obj.events)) {
     return { ok: false, error: 'events must be an array.' };
+  }
+  if (obj.events.length > MAX_WORKFLOW_EVENTS) {
+    return { ok: false, error: `Too many events: ${obj.events.length}; the limit is ${MAX_WORKFLOW_EVENTS}.` };
   }
   const events: WorkflowEvent[] = [];
   for (let i = 0; i < obj.events.length; i++) {
@@ -247,7 +272,7 @@ function parseEvent(
     default:
       return {
         ok: false,
-        error: `events[${i}] has unknown type ${JSON.stringify(e.type)}.`,
+        error: `events[${i}] has unknown type ${echo(e.type)}.`,
       };
   }
 }

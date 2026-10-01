@@ -11,6 +11,7 @@ import { openModal } from '../../ui/Modal';
 import { el } from '../../ui/dom';
 import { loadReportVerifier } from '../../lazyChunks';
 import { actionTitle } from '../../ui/actionDescriptors';
+import { runWithRetry, type LazyLoadToast } from '../lazySurfaceLoad';
 
 export interface ExportActionDeps {
   /**
@@ -22,6 +23,8 @@ export interface ExportActionDeps {
   saveSnapshot: () => void | Promise<void>;
   copyShareLink: () => void | Promise<void>;
   buildCurrentStoryInputs: () => ScanStoryInputs;
+  /** Where a failed verifier load shows, with a Try again action. */
+  showLassoToast: LazyLoadToast['show'];
 }
 
 export function contributeExportActions(deps: ExportActionDeps): Action[] {
@@ -67,14 +70,14 @@ export function contributeExportActions(deps: ExportActionDeps): Action[] {
         const input = el('input', { className: 'olv-hidden' });
         input.type = 'file';
         input.accept = '.json,application/json';
+        // A dismissed picker fires `cancel` and no `change`.
+        input.addEventListener('cancel', () => input.remove());
         input.addEventListener('change', () => {
           const file = input.files?.[0];
           input.remove();
           if (!file) return;
-          void loadReportVerifier()
-            .then(({ verifyAndShow }) => verifyAndShow(file))
-            // A chunk-load failure must not surface as an unhandled rejection.
-            .catch((err) => console.warn('[verify] report-verifier chunk failed to load', err));
+          // A failed chunk reaches the shared lazy-load toast, whose Try again verifies the same file.
+          runWithRetry({ show: deps.showLassoToast }, () => loadReportVerifier().then(({ verifyAndShow }) => verifyAndShow(file)), 'report verifier');
         });
         document.body.append(input);
         input.click();

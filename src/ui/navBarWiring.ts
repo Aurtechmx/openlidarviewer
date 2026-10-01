@@ -23,6 +23,7 @@ import type { CameraPresetName } from '../render/camera/cameraPresets';
 import type { Viewer } from '../render/Viewer';
 import type { PlanViewController } from '../render/camera/planViewController';
 import { loadPlanViewController } from '../lazyChunks';
+import { retryableOnce } from '../app/lazySurfaceLoad';
 
 export interface NavBarWiringDeps {
   /** Null until the lazy render chunk resolves. */
@@ -56,10 +57,10 @@ const titleCase = (name: string): string => name[0].toUpperCase() + name.slice(1
 export function createNavBarWiring(deps: NavBarWiringDeps): NavBarWiring {
   /** The controller once its chunk has landed; null before the first press. */
   let plan: PlanViewController | null = null;
-  let loading: Promise<PlanViewController> | null = null;
 
-  function planController(): Promise<PlanViewController> {
-    loading ??= loadPlanViewController().then(({ createPlanViewController }) => {
+  // One load shared by every press; the next press retries a failed one.
+  const planController = retryableOnce(() =>
+    loadPlanViewController().then(({ createPlanViewController }) => {
       plan = createPlanViewController({
         viewport: () => deps.getViewer(),
         defer: deps.defer,
@@ -80,9 +81,8 @@ export function createNavBarWiring(deps: NavBarWiringDeps): NavBarWiring {
         },
       });
       return plan;
-    });
-    return loading;
-  }
+    }),
+  );
 
   const togglePlanView = async (): Promise<void> => {
     (await planController()).toggle();

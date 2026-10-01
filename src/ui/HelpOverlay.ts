@@ -14,7 +14,7 @@
  */
 
 import { el } from './dom';
-import { wireDialogA11y, type DialogA11yHandle } from './Modal';
+import { wireDialogA11y, dialogOpen, type DialogA11yHandle } from './Modal';
 import type { ActionDescriptor } from './actionRegistry';
 import type { ShortcutDescriptor } from './keyBindings';
 import { formatShortcutKeys } from './ShortcutSheet';
@@ -162,10 +162,10 @@ export class HelpOverlay {
     this._a11y = null;
   }
 
-  /** Toggle the overlay open or closed. */
+  /** Toggle the overlay open or closed. Never opens over another open dialog. */
   toggle(): void {
     if (this._open) this.close();
-    else this.open();
+    else if (!dialogOpen()) this.open();
   }
 
   /** Free DOM references and any live listener. */

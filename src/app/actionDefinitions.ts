@@ -112,6 +112,7 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
     saveSnapshot: deps.saveSnapshot,
     copyShareLink: deps.copyShareLink,
     buildCurrentStoryInputs: deps.buildCurrentStoryInputs,
+    showLassoToast: deps.showLassoToast,
   });
   const workflow = contributeWorkflowActions({
     workflowController: deps.workflowController,
