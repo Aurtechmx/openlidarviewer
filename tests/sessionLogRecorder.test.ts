@@ -201,6 +201,49 @@ describe('announcement regions', () => {
   });
 });
 
+describe('progress steps', () => {
+  it('skips steps that name a file or detect and optimize, and keeps the errors among them', () => {
+    const alert = new SNode('span');
+    alert.className = 'olv-visually-hidden';
+    alert.setAttribute('role', 'alert');
+    const status = new SNode('span');
+    status.className = 'olv-visually-hidden';
+    status.setAttribute('role', 'status');
+    doc.body.append(status, alert);
+    const log = createSessionLog();
+    let t = 0;
+    const rec = installSessionLogRecorder({ log, doc: doc as unknown as Document, now: () => (t += 5000) } as SessionLogRecorderDeps);
+    const say = (n: SNode, text: string): void => { n.textContent = text; SMutationObserver.touch(n); };
+    say(status, 'Opening alpha.ply…');
+    say(status, 'Reading site.v2.copc.laz...');
+    say(status, 'Detecting ground…');
+    say(status, 'Optimizing point budget…');
+    say(alert, 'Opening alpha.ply failed: bad header. Retrying…');
+    say(alert, 'Detecting ground could not finish…');
+    say(status, 'Loading stopped. Try again…');
+    expect(log.entries().map((e) => `${e.kind}|${e.text}`)).toEqual([
+      'error|Opening alpha.ply failed: bad header. Retrying…',
+      'error|Detecting ground could not finish…',
+      'message|Loading stopped. Try again…',
+    ]);
+    rec.dispose();
+  });
+});
+
+describe('scan names', () => {
+  it('keeps a scan name with a slash whole, and a path to its file name', () => {
+    const log = createSessionLog();
+    const s = scansFixture();
+    const rec = installSessionLogRecorder({ log, doc: doc as unknown as Document, scans: s.scans });
+    s.add('c1', 'Area 1/2 (EPT)');
+    s.add('c2', '/srv/alex/scans/site.laz');
+    s.activate('c1');
+    log.append({ kind: 'message', text: 'Hello' });
+    expect(texts(log)).toEqual(['Opened Area 1/2 (EPT)|Area 1/2 (EPT)', 'Opened site.laz|site.laz', 'Hello|Area 1/2 (EPT)']);
+    rec.dispose();
+  });
+});
+
 describe('class filter', () => {
   it('writes one line per change of the hidden set and none when streaming finds a class', () => {
     const status = new SNode('span');

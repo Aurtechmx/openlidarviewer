@@ -109,7 +109,8 @@ export class SNode {
   removeEventListener(type: string, fn: Listener): void { this._listeners.set(type, (this._listeners.get(type) ?? []).filter((f) => f !== fn)); }
   fire(type: string, ev: unknown = {}): void { for (const fn of this._listeners.get(type) ?? []) fn(ev); }
   click(): void { if (!this.disabled) this.fire('click', { target: this }); }
-  focus(): void {}
+  id = '';
+  focus(): void { const d = (globalThis as unknown as { document?: SDoc }).document; if (d) d.activeElement = this; }
 }
 
 /** A document: `createElement`, a connected body, and listener bookkeeping. */
@@ -118,8 +119,11 @@ export class SDoc {
   /** Every anchor a download appended to the body, in order. */
   readonly downloads: SNode[] = [];
   private readonly _listeners = new Map<string, Listener[]>();
+  /** The node `focus()` last moved to. */
+  activeElement: SNode | null = null;
   constructor() {
     this.body.isRoot = true;
+    this.activeElement = this.body;
     const append = this.body.appendChild.bind(this.body);
     this.body.appendChild = (k: SNode): SNode => {
       if (k.tagName === 'a' && k.download) this.downloads.push(k);
@@ -127,6 +131,12 @@ export class SDoc {
     };
   }
   createElement(tag: string): SNode { return new SNode(tag); }
+  contains(n: SNode | null): boolean { return !!n && n.isConnected; }
+  querySelector(sel: string): SNode | null { return this.body.querySelector(sel); }
+  getElementById(id: string): SNode | null {
+    const walk = (n: SNode): SNode | null => { for (const c of n.children) { if (c.id === id) return c; const f = walk(c); if (f) return f; } return null; };
+    return walk(this.body);
+  }
   addEventListener(type: string, fn: Listener): void { this._listeners.set(type, [...(this._listeners.get(type) ?? []), fn]); }
   removeEventListener(type: string, fn: Listener): void { this._listeners.set(type, (this._listeners.get(type) ?? []).filter((f) => f !== fn)); }
   listenerCount(type: string): number { return (this._listeners.get(type) ?? []).length; }
@@ -167,6 +177,8 @@ export function installSessionLogDom(): SDoc {
   const g = globalThis as unknown as Record<string, unknown>;
   g.document = doc;
   g.MutationObserver = SMutationObserver;
+  g.window = new SDoc();
+  g.HTMLElement = SNode;
   SMutationObserver.live = [];
   return doc;
 }
@@ -175,5 +187,7 @@ export function uninstallSessionLogDom(): void {
   const g = globalThis as unknown as Record<string, unknown>;
   delete g.document;
   delete g.MutationObserver;
+  delete g.window;
+  delete g.HTMLElement;
   SMutationObserver.live = [];
 }

@@ -23,6 +23,7 @@ import {
   sessionLogText,
   SESSION_LOG_KIND_LABEL,
 } from './sessionLogFormat';
+import { wireDialogA11y } from '../../ui/Modal';
 
 export interface SessionLogPage {
   /** Rebuild the table from the log. */
@@ -84,7 +85,7 @@ export function mountSessionLogPage(host: HTMLElement, log: SessionLog, opts: Se
   host.replaceChildren();
   host.classList.add('olv-session-log');
 
-  const intro = node('p', 'olv-sl-intro', 'What you did to the scans in this tab, and the result. The log lives in this tab\'s memory, and a reload clears it. It names each file by its base name.');
+  const intro = node('p', 'olv-sl-intro', 'What you did to the scans in this tab, and the result. The log lives in this tab\'s memory, and a reload clears it. It names a local file by its name alone, and a link by its host and file name.');
   const bar = node('div', 'olv-sl-actions');
   const copy = button('olv-sl-btn', 'Copy as text');
   const json = button('olv-sl-btn', 'Export JSON');
@@ -238,15 +239,33 @@ export function mountSessionLogPage(host: HTMLElement, log: SessionLog, opts: Se
 }
 
 let dialogSeq = 0;
+/** The dialog on screen, if any: a second open focuses it instead. */
+let openDialog: { close(): void; focus(): void } | null = null;
+
+/** Where focus goes after the dialog: the opener while it is still on the page, else the app's first control. */
+function focusAfter(opener: HTMLElement | null): void {
+  const doc = document as Document;
+  if (opener && opener !== doc.body && opener.isConnected) {
+    opener.focus?.();
+    return;
+  }
+  const app = doc.getElementById('app');
+  const first = app ? Array.from(app.querySelectorAll<HTMLButtonElement>('button')).find((b) => !b.disabled) : undefined;
+  first?.focus?.();
+}
 
 /**
  * The page in a dialog, for when no scan is open and the Data rail is hidden.
- * Escape and its Close button dismiss it, Tab stays inside it, and focus goes
- * back to where it was. It uses the shared modal styles; the Modal chunk is
- * not imported, so the startup bundle's preload lists do not change.
+ * It joins the shared dialog stack, so Escape closes it, Tab stays inside it,
+ * and the palette and shortcut keys wait until it closes. One opens at a
+ * time; a second open focuses the first.
  */
 export function openSessionLogDialog(log: SessionLog, opts: SessionLogPageOptions = {}): { close(): void } {
-  const restore = document.activeElement as HTMLElement | null;
+  if (openDialog) {
+    openDialog.focus();
+    return openDialog;
+  }
+  const opener = document.activeElement as HTMLElement | null;
   const titleId = `olv-session-log-title-${++dialogSeq}`;
   const title = node('h2', 'olv-modal-title', 'Session log');
   title.id = titleId;
@@ -271,26 +290,16 @@ export function openSessionLogDialog(log: SessionLog, opts: SessionLogPageOption
   const done = (): void => {
     if (closed) return;
     closed = true;
+    if (openDialog === handle) openDialog = null;
     page.dispose();
     backdrop.remove();
-    restore?.focus?.();
+    a11y.teardown();
+    focusAfter(opener);
   };
+  const a11y = wireDialogA11y(dialog, { onEscape: done, returnFocusTo: opener });
+  const handle = { close: done, focus: () => close.focus() };
+  openDialog = handle;
   close.addEventListener('click', done);
-  backdrop.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      done();
-      return;
-    }
-    if (e.key !== 'Tab') return;
-    const stops = Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled])'));
-    if (!stops.length) return;
-    const first = stops[0]!;
-    const last = stops[stops.length - 1]!;
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-  });
   close.focus();
-  return { close: done };
+  return handle;
 }
