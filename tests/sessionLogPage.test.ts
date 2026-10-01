@@ -221,6 +221,35 @@ describe('session log dialog', () => {
     openSessionLogDialog(createSessionLog()).close();
     expect(doc.activeElement).toBe(first);
   });
+
+  it('skips hidden buttons when it gives focus to the app', async () => {
+    const { openSessionLogDialog } = await import('../src/app/sessionLog/sessionLogPage');
+    const app = new SNode('div');
+    app.id = 'app';
+    const hidden = new SNode('button');
+    hidden.hidden = true;
+    const panel = new SNode('div');
+    panel.className = 'olv-hidden';
+    const inPanel = new SNode('button');
+    panel.append(inPanel);
+    const shown = new SNode('button');
+    app.append(hidden, panel, shown);
+    doc.body.append(app);
+    doc.activeElement = doc.body;
+    openSessionLogDialog(createSessionLog()).close();
+    expect(doc.activeElement).toBe(shown);
+  });
+
+  it('leaves the dialog stack even when the page fails to tear down', async () => {
+    const { openSessionLogDialog } = await import('../src/app/sessionLog/sessionLogPage');
+    const { dialogOpen } = await import('../src/ui/Modal');
+    const log = createSessionLog();
+    log.subscribe = () => () => { throw new Error('gone'); };
+    const d = openSessionLogDialog(log);
+    expect(() => d.close()).toThrow('gone');
+    expect(dialogOpen()).toBe(false);
+    expect(doc.body.querySelector('.olv-modal-backdrop')).toBeNull();
+  });
 });
 
 describe('session log page, default repaint', () => {

@@ -134,7 +134,14 @@ export class SDoc {
   contains(n: SNode | null): boolean { return !!n && n.isConnected; }
   querySelector(sel: string): SNode | null { return this.body.querySelector(sel); }
   getElementById(id: string): SNode | null {
-    const walk = (n: SNode): SNode | null => { for (const c of n.children) { if (c.id === id) return c; const f = walk(c); if (f) return f; } return null; };
+    const walk = (n: SNode): SNode | null => {
+      for (const c of n.children) {
+        if (c.id === id) return c;
+        const f = walk(c);
+        if (f) return f;
+      }
+      return null;
+    };
     return walk(this.body);
   }
   addEventListener(type: string, fn: Listener): void { this._listeners.set(type, [...(this._listeners.get(type) ?? []), fn]); }

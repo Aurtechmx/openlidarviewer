@@ -130,6 +130,9 @@ describe('session log store', () => {
     ['Write to mailto:alex@example.com today', 'Write to mailto:… today'],
     ['Ran javascript:alert(document.cookie) once', 'Ran javascript:… once'],
     ['Call tel:+15550100', 'Call tel:…'],
+    ['Get https://h.com/my folder/SECRETDIR/f.laz tail', 'Get https://h.com/…/f.laz tail'],
+    ['Get https://h.com/a key=SECRET/f.laz', 'Get https://h.com/…/f.laz'],
+    ['Get https://h.com/x/eyJhbGciOi.eyJzdWIi.c2ln.laz ok', 'Get https://h.com/… ok'],
   ])('redacts %s', (input, expected) => {
     expect(redactPaths(input)).toBe(expected);
   });
@@ -300,6 +303,8 @@ describe('scan display names', () => {
     ['/srv/alex/site.laz', 'site.laz'],
     ['C:\\data\\north.laz', 'north.laz'],
     ['scans/site.laz', 'site.laz'],
+    ['SECRETDIR/sub/a', 'a'],
+    ['part 3/4.laz', 'part 3/4.laz'],
     ['https://h.example/a/b.copc.laz?sig=x', 'b.copc.laz'],
     ['mailto:alex@example.com', 'mailto:…'],
   ])('shows %s as %s', (input, expected) => {

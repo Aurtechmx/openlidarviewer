@@ -8022,16 +8022,18 @@ The Session log had five gaps.
   since a dot ended the step. "Detecting" and "Optimizing" steps reached it as
   well. A dot inside a word no longer ends a step, both verbs are skipped, and
   a line that reports a failure is kept.
-- A link with a space before its query kept the query, a last segment shaped
-  like a JWT or holding `=` or `&` was kept as a file name, and `mailto:`,
-  `javascript:`, `vbscript:`, `tel:` and `sms:` text passed through. The link
-  pattern now runs past spaces to a query that holds `=`, those segments are
-  dropped, and those schemes become `mailto:…` and so on. The page intro now
-  says a link keeps its host.
+- A link with a space in its path or before its query kept the folders or the
+  query after the space, a last segment shaped like a JWT or holding `=` or `&`
+  was kept as a file name, and `mailto:`, `javascript:`, `vbscript:`, `tel:`
+  and `sms:` text passed through. The link pattern now runs past spaces to a
+  word that holds `/` or `=`, those segments are dropped, and those schemes
+  become `mailto:…` and so on. The page intro now says a link keeps its host.
 - A scan named "Area 1/2 (EPT)" showed as "2 (EPT)". A scan name keeps its
-  slashes unless it is a link or a path to a file.
+  slashes unless it is a link or a path: absolute, or relative with folders
+  that hold no space ("data/sub/a" shows as "a").
 
 Covered by `tests/sessionLog.test.ts` (redaction table, scan display names,
 async command outcomes), `tests/sessionLogRecorder.test.ts` (progress steps,
-scan names with a slash) and `tests/sessionLogPage.test.ts` (dialog stack, one
-dialog, focus return).
+scan names with a slash), `tests/sessionLogPage.test.ts` (dialog stack, one
+dialog, focus return past hidden buttons, teardown when the page throws) and
+`tests/commandPalette.test.ts` (a rejected run is not left unhandled).

@@ -221,10 +221,12 @@ describe('progress steps', () => {
     say(alert, 'Opening alpha.ply failed: bad header. Retrying…');
     say(alert, 'Detecting ground could not finish…');
     say(status, 'Loading stopped. Try again…');
+    say(status, 'Reading tile! Wait…');
     expect(log.entries().map((e) => `${e.kind}|${e.text}`)).toEqual([
       'error|Opening alpha.ply failed: bad header. Retrying…',
       'error|Detecting ground could not finish…',
       'message|Loading stopped. Try again…',
+      'message|Reading tile! Wait…',
     ]);
     rec.dispose();
   });

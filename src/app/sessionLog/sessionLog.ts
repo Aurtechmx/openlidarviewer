@@ -79,7 +79,7 @@ const LINK = /^[a-z][a-z0-9+.-]{0,31}:\/\//i;
 const OPAQUE = /^(data|blob|mailto|javascript|vbscript|tel|sms):/i;
 const opaqueText = (v: string): string => `${OPAQUE.exec(v)![1]!.toLowerCase()}:…`;
 /** A last segment that carries a credential: a query pair, or a JWT's three parts. */
-const TOKEN_NAME = /[=&]|^eyJ[\w-]*\.[\w-]+\.[\w-]+$/;
+const TOKEN_NAME = /[=&]|^eyJ[\w-]*\.[\w-]+\./;
 
 /** What a link keeps: its origin and, when it names a file, that file's name. */
 interface LinkParts {
@@ -159,7 +159,8 @@ function trimTail(m: string): [string, string] {
 
 // One pass, so a replacement is never scanned again. Groups, in order:
 // 1 an opaque link (data:, blob:, mailto:, javascript: and the like), 2 a link
-// with a scheme, which runs on past a space when a query follows the words, 3 the folders of a
+// with a scheme, which runs on past a space to a word that holds `/` or `=`,
+// with up to three plain words between, 3 the folders of a
 // Windows drive path (either slash), 4 the folders of a UNC path, 5 the folders
 // of a home-relative path, 6 the character before a POSIX path and 7 that
 // path's folders. A folder name may hold single spaces. Every quantifier is
@@ -169,7 +170,7 @@ const POSIX_SEG = String.raw`[^/\s"'<>]+(?: [^/\s"'<>]+)*`;
 const PATH_PATTERN = new RegExp(
   [
     String.raw`(\b(?:data|blob|mailto|javascript|vbscript|tel|sms):[^\s"'<>]+)`,
-    String.raw`(\b[a-z][a-z0-9+.-]{0,31}:\/\/(?:[^\s"'<>?#]+(?: [^\s"'<>?#]+)*[?#][^\s"'<>]*=[^\s"'<>]*|[^\s"'<>]+))`,
+    String.raw`(\b[a-z][a-z0-9+.-]{0,31}:\/\/[^\s"'<>]+(?:(?: [^\s"'<>/=]+){0,3} [^\s"'<>/=]*[/=][^\s"'<>]*)*)`,
     String.raw`(\b[a-z]:[\\/](?:${WIN_SEG}[\\/])*)`,
     String.raw`(\\\\(?:${WIN_SEG}[\\/])+)`,
     String.raw`(~[\\/](?:${POSIX_SEG}[\\/])*)`,
@@ -208,8 +209,16 @@ function safeScan(fn: (() => string | null) | null): string | null {
   }
 }
 
-/** A path with folders, as opposed to a name such as "Area 1/2 (EPT)". */
-const PATHLIKE = /^(?:[\\/~]|[a-z]:[\\/])|\\|\/[^/]*\.[a-z0-9]{1,8}$/i;
+/**
+ * Whether a name is a path with folders. An absolute, home, drive or UNC path
+ * is one; so is a relative one whose folders hold no space ("data/sub/a").
+ * "Area 1/2 (EPT)" and "part 3/4.laz" are names.
+ */
+function isPath(v: string): boolean {
+  if (v.includes('\\') || /^[/~]/.test(v) || /^[a-z]:[\\/]/i.test(v)) return true;
+  const segs = v.split('/');
+  return segs.length > 1 && segs.slice(0, -1).every((s) => s.length > 0 && !/\s/.test(s));
+}
 
 /**
  * A scan's display name. A link or a path keeps only its file name; any other
@@ -217,7 +226,7 @@ const PATHLIKE = /^(?:[\\/~]|[a-z]:[\\/])|\\|\/[^/]*\.[a-z0-9]{1,8}$/i;
  */
 export function scanName(name: string): string {
   const v = name.trim();
-  return (OPAQUE.test(v) || LINK.test(v) || PATHLIKE.test(v) ? baseName(v) : '') || v;
+  return (OPAQUE.test(v) || LINK.test(v) || isPath(v) ? baseName(v) : '') || v;
 }
 
 function scanOf(name: string | null): string | null {

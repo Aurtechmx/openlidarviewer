@@ -250,7 +250,7 @@ function focusAfter(opener: HTMLElement | null): void {
     return;
   }
   const app = doc.getElementById('app');
-  const first = app ? Array.from(app.querySelectorAll<HTMLButtonElement>('button')).find((b) => !b.disabled) : undefined;
+  const first = app ? Array.from(app.querySelectorAll<HTMLButtonElement>('button')).find((b) => !b.disabled && !b.hidden && !b.closest('.olv-hidden, [hidden]')) : undefined;
   first?.focus?.();
 }
 
@@ -291,10 +291,13 @@ export function openSessionLogDialog(log: SessionLog, opts: SessionLogPageOption
     if (closed) return;
     closed = true;
     if (openDialog === handle) openDialog = null;
-    page.dispose();
-    backdrop.remove();
     a11y.teardown();
-    focusAfter(opener);
+    try {
+      page.dispose();
+    } finally {
+      backdrop.remove();
+      focusAfter(opener);
+    }
   };
   const a11y = wireDialogA11y(dialog, { onEscape: done, returnFocusTo: opener });
   const handle = { close: done, focus: () => close.focus() };

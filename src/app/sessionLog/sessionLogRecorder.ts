@@ -77,8 +77,17 @@ const CRS_SOURCE: Readonly<Record<string, string>> = {
  * ("Opening alpha.ply…"): a dot inside a word does not end it. A line that
  * reports a failure is always kept.
  */
-const SKIP =
-  /\d+\s?%|^Location: |^(?:Loading|Opening|Reading|Decoding|Parsing|Preparing|Streaming|Fetching|Downloading|Building|Computing|Sampling|Indexing|Saving|Exporting|Generating|Rendering|Detecting|Optimizing)\b(?:[^.!?]|\.(?=[^\s.]))*(?:…|\.\.\.)$/i;
+const STEP_VERB =
+  /^(?:Loading|Opening|Reading|Decoding|Parsing|Preparing|Streaming|Fetching|Downloading|Building|Computing|Sampling|Indexing|Saving|Exporting|Generating|Rendering|Detecting|Optimizing)\b/i;
+const STEP_END = /(?:…|\.\.\.)$/;
+/** A sentence end before the closing ellipsis: `!`, `?`, or a dot not inside a word. */
+const SENTENCE_END = /[!?]|\.(?![^\s.])/;
+
+function isProgress(t: string): boolean {
+  if (/\d+\s?%/.test(t) || t.startsWith('Location: ')) return true;
+  const end = STEP_END.exec(t);
+  return !!end && STEP_VERB.test(t) && !SENTENCE_END.test(t.slice(0, end.index));
+}
 const FAILURE = /\b(?:fail(?:ed|s|ure)?|error|could not|cannot|can't|unable|refused|invalid)\b/i;
 /** The class legend announces its banner; the filter line already says it. */
 const FILTER_BANNER = /^Filtered — showing \d+ of \d+ classes$/;
@@ -255,7 +264,7 @@ export function installSessionLogRecorder(d: SessionLogRecorderDeps): SessionLog
   const message = (region: Element): void => {
     const node = region.matches('.olv-lasso-toast') ? region.querySelector('.olv-lasso-toast-msg') : region;
     const t = (node?.textContent ?? '').replace(/\s+/g, ' ').trim();
-    if (!t || (SKIP.test(t) && !FAILURE.test(t)) || FILTER_BANNER.test(t)) return;
+    if (!t || (isProgress(t) && !FAILURE.test(t)) || FILTER_BANNER.test(t)) return;
     const at = now();
     if (t === lastMessage && at - lastAt < REPEAT_MS) return;
     lastMessage = t;
