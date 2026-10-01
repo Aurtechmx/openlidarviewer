@@ -30,6 +30,8 @@ import type { Vec3 } from '../features/conductors';
 import { knownUnit, unknownUnit, type LinearUnitScale } from '../units/units';
 import { defaultCellSizeForSpacing } from '../render/densityColors';
 import { isZUpFormat } from '../io/sniffFormat';
+import { isWithheld } from '../science/withheldPolicy';
+import { alignedFlags, withheldReadCounts, type WithheldReadCounts } from '../science/withheldCounts';
 
 /** ASPRS classification codes the feature cores consume. */
 const ASPRS_BUILDING = 6;
@@ -54,6 +56,13 @@ export interface FeatureExtractionInput {
    * it: a candidate over derived classes is a candidate about a guess.
    */
   readonly classificationIsDerived: boolean;
+  /**
+   * Building and wire points offered, Withheld left out, and points read.
+   * Extraction is scientific processing, so a point the producer marked
+   * Withheld is not read (`withheldPolicy.ts`); 'unknown' when the cloud
+   * carried no flags channel.
+   */
+  readonly withheld: WithheldReadCounts;
 }
 
 /** Nominal point spacing in source units, from a horizontal bbox and count. */
@@ -146,9 +155,17 @@ export function buildFeatureExtractionInput(
   let maxH2 = -Infinity;
 
   const n = Math.min(classification.length, positions.length / 3);
+  const flags = alignedFlags(cloud.classificationFlags, positions.length / 3);
+  let offered = 0;
+  let excluded = 0;
   for (let i = 0; i < n; i++) {
     const code = classification[i];
     if (code !== ASPRS_BUILDING && code !== ASPRS_WIRE_CONDUCTOR) continue;
+    offered += 1;
+    if (flags && isWithheld(flags[i])) {
+      excluded += 1;
+      continue;
+    }
     const b = i * 3;
     const x = positions[b];
     const y = positions[b + 1];
@@ -184,5 +201,6 @@ export function buildFeatureExtractionInput(
     verticalUnit,
     up: zUp ? [0, 0, 1] : [0, 1, 0],
     classificationIsDerived: cloud.classificationIsDerived,
+    withheld: withheldReadCounts(offered, excluded, flags !== undefined),
   };
 }

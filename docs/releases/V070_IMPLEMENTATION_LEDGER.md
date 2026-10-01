@@ -105,18 +105,19 @@ the two entries were renumbered when the branches were integrated.
 | L201 | UI | TEST | med | BUILT | new | A scan with producer classes could not be auto-classified, because nothing let the user set those classes aside, and an auto-classify could not be undone. |
 | L198 | LOADER | TEST | med | FIXED | new | Three opens let an async step outlive the decision that should have stopped it: a static open closed the stream before its cloud attached, a cancelled EPT open still sent its manifest request, and a recovery write landed after Clear, a source change or Turn off. |
 | L204 | SCIENTIFIC | TEST | low | FIXED | new | The PDAL ground-filter and DTM results files said eight synthetic scenes while listing five and three. |
+| L208 | SCIENTIFIC | TEST | med | FIXED | new | Elevation comparison between two epochs and feature extraction read points the producer marked Withheld. |
 
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 55
+- FIXED: 56
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 77
+- total: 78
 
 ## Detail
 
@@ -7847,3 +7848,30 @@ digests in `GROUND-FILTER-PDAL-SMRF.study.json` and
 
 Covered by the "names as many scenes as it lists" cases in
 `tests/groundFilterPdalAgreement.test.ts`, which read each file back from disk.
+
+### L208 · FIXED · SCIENTIFIC
+
+Compare elevation and feature extraction leave Withheld points out, as terrain,
+both volume tools, profiles and density do (L26). `excludeWithheldEpoch` in
+`src/terrain/change/compareEpochs.ts` removes them from each epoch before the
+alignment, both ground filters and the difference, and the alignment's
+residual gate is scaled by the filtered before epoch's span. The compare panel adds a
+line per epoch with the points read, the Withheld count and the points
+analysed, or 'unknown' when an epoch carries no flags. The lines appear only
+when an epoch had a Withheld point to leave out, including beside the "no
+ground points" refusal when every point was Withheld. `buildFeatureExtractionInput`
+skips Withheld building and wire points and records the same counts. The
+review lists them, and the GeoJSON export of accepted footprints carries them
+as `metadata.withheld`. The ESRI ASCII difference has no metadata block and
+carries no count.
+
+A scan with no Withheld point runs the same computation as before: the epoch
+object passes through unchanged, and the extraction reads the same points.
+The difference raster and the footprint GeoJSON from `terrain-access-utm.las`
+hash to the same values as on main.
+
+Covered by `tests/withheldChangeFeatures.test.ts`, `tests/e2e/withheldCompare.spec.ts`
+and `tests/e2e/featureCandidates.spec.ts`. On `withheld-flags.las` an
+epoch reads 9 of 12 points and the difference against the unfiltered epoch
+changes; extraction reads 7 of 10 building points; the export records
+`{ sourcePoints: 10, withheldExcluded: 3, analysedPoints: 7 }`.

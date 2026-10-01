@@ -162,7 +162,7 @@ describe('the audit this policy records', () => {
     return out;
   }
 
-  it('only terrain, the volume walks, the profile walks and the scan report density consult the Withheld bit', () => {
+  it('only terrain, change, the volume walks, the profile walks and the scan report density consult the Withheld bit', () => {
     // This pins the audit rather than the intent. When a product starts
     // applying the policy, this fails: update the list here and record the
     // before-and-after for that product, because its numbers moved.
@@ -186,7 +186,9 @@ describe('the audit this policy records', () => {
     // (analysis/scanReport.ts) leaves Withheld points out of its density
     // count; see tests/scanReportWithheld.test.ts. The polygon Volume tool's
     // buffer assembly (render/measure/volume.ts) routes Withheld points out of
-    // its cut/fill; see tests/polygonVolumeWithheld.test.ts.
+    // its cut/fill; see tests/polygonVolumeWithheld.test.ts. Compare
+    // elevation filters each epoch (terrain/change/compareEpochs.ts); see
+    // tests/withheldChangeFeatures.test.ts.
     const reading = SCIENTIFIC_DIRS.flatMap(filesReadingFlags);
     expect(reading.sort()).toEqual([
       'analysis/scanReport.ts',
@@ -196,6 +198,7 @@ describe('the audit this policy records', () => {
       'render/measure/profileSectionExtract.ts',
       'render/measure/profileSectionSeam.ts',
       'render/measure/volume.ts',
+      'terrain/compareEpochs.ts', // terrain/change/compareEpochs.ts; the walk keeps only the top directory
       'terrain/withheldAwareTerrainGather.ts',
     ]);
   });
