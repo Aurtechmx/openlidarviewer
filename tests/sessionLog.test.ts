@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { baseName, createSessionLog, redactPaths, SESSION_LOG_CAP, SESSION_LOG_EVENT } from '../src/app/sessionLog/sessionLog';
+import { baseName, createSessionLog, redactPaths, scanName, SESSION_LOG_CAP, SESSION_LOG_EVENT } from '../src/app/sessionLog/sessionLog';
 import { droppedNote, sessionLogCsv, sessionLogJson, sessionLogText } from '../src/app/sessionLog/sessionLogFormat';
 import { crsText, installSessionLogRecorder, type SessionLogScans } from '../src/app/sessionLog/sessionLogRecorder';
 import type { ResultEntry } from '../src/app/results/resultsIndex';
@@ -121,6 +121,18 @@ describe('session log store', () => {
     ['Saved /srv/Alex Smith/out/a.csv and /tmp/b.csv', 'Saved a.csv and b.csv'],
     ['Opened ~/scans/site.laz', 'Opened site.laz'],
     ['Grade 1/20 and 3/4, and/or 50 m/s', 'Grade 1/20 and 3/4, and/or 50 m/s'],
+    ['Opened https://h.example/data/my scan.laz?sig=SECRET ok', 'Opened https://h.example/…/my scan.laz ok'],
+    ['Opened https://h.example/my scan.laz?X-Amz-Signature=SECRET', 'Opened https://h.example/my scan.laz'],
+    ['Opened https://h.example/a.laz, is it ok? Yes', 'Opened https://h.example/a.laz, is it ok? Yes'],
+    ['Link https://h.example/dl/eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig ok', 'Link https://h.example/… ok'],
+    ['Link https://h.example/dl/sig=ABC.laz ok', 'Link https://h.example/… ok'],
+    ['Link https://h.example/dl/a=1&b=2.laz ok', 'Link https://h.example/… ok'],
+    ['Write to mailto:alex@example.com today', 'Write to mailto:… today'],
+    ['Ran javascript:alert(document.cookie) once', 'Ran javascript:… once'],
+    ['Call tel:+15550100', 'Call tel:…'],
+    ['Get https://h.com/my folder/SECRETDIR/f.laz tail', 'Get https://h.com/…/f.laz tail'],
+    ['Get https://h.com/a key=SECRET/f.laz', 'Get https://h.com/…/f.laz'],
+    ['Get https://h.com/x/eyJhbGciOi.eyJzdWIi.c2ln.laz ok', 'Get https://h.com/… ok'],
   ])('redacts %s', (input, expected) => {
     expect(redactPaths(input)).toBe(expected);
   });
@@ -284,6 +296,23 @@ describe('session log in the palette', () => {
   });
 });
 
+describe('scan display names', () => {
+  it.each([
+    ['Area 1/2 (EPT)', 'Area 1/2 (EPT)'],
+    ['North / South', 'North / South'],
+    ['/srv/alex/site.laz', 'site.laz'],
+    ['C:\\data\\north.laz', 'north.laz'],
+    ['scans/site.laz', 'site.laz'],
+    ['SECRETDIR/sub/a', 'a'],
+    ['part 3/4.laz', 'part 3/4.laz'],
+    ['https://h.example/a/b.copc.laz?sig=x', 'b.copc.laz'],
+    ['mailto:alex@example.com', 'mailto:…'],
+  ])('shows %s as %s', (input, expected) => {
+    expect(scanName(input)).toBe(expected);
+    expect(createSessionLog().append({ kind: 'scan', text: 'x', scan: input })!.scan).toBe(expected);
+  });
+});
+
 describe('registry runs in the log', () => {
   function capture(): { details: unknown[]; restore(): void } {
     const details: unknown[] = [];
@@ -304,6 +333,22 @@ describe('registry runs in the log', () => {
       expect(() => bad.run()).toThrow('no scan');
       expect(c.details).toEqual([
         { kind: 'command', text: 'Frame all', detail: 'Camera', status: 'done' },
+        { kind: 'command', text: 'Export LAS', detail: 'Export', status: 'failed' },
+      ]);
+    } finally {
+      c.restore();
+    }
+  });
+
+  it('logs an async command when it settles, and as failed when it rejected', async () => {
+    const c = capture();
+    try {
+      const ok = loggedAction({ id: 'a', title: 'Open demo', section: 'File', run: (() => Promise.resolve()) as () => void });
+      await (ok.run() as unknown as Promise<void>);
+      const bad = loggedAction({ id: 'b', title: 'Export LAS', section: 'Export', run: (() => Promise.reject(new Error('no scan'))) as () => void });
+      await expect(bad.run() as unknown as Promise<void>).rejects.toThrow('no scan');
+      expect(c.details).toEqual([
+        { kind: 'command', text: 'Open demo', detail: 'File', status: 'done' },
         { kind: 'command', text: 'Export LAS', detail: 'Export', status: 'failed' },
       ]);
     } finally {

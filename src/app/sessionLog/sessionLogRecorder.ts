@@ -21,7 +21,7 @@
  */
 
 import type { SessionLog, SessionLogInput } from './sessionLog';
-import { baseName, SESSION_LOG_EVENT } from './sessionLog';
+import { baseName, scanName, SESSION_LOG_EVENT } from './sessionLog';
 import type { ResolvedCrs } from '../../geo/CoordinateTypes';
 import type { ResultEntry } from '../results/resultsIndex';
 import { RESULT_TYPE_LABELS } from '../results/resultsIndex';
@@ -73,10 +73,22 @@ const CRS_SOURCE: Readonly<Record<string, string>> = {
 
 /**
  * Lines left out: a percentage, a running step ("Loading tiles…"), and the
- * location bar's "Location: …" narration. An error that ends in "…" is kept.
+ * location bar's "Location: …" narration. A step may name a file
+ * ("Opening alpha.ply…"): a dot inside a word does not end it. A line that
+ * reports a failure is always kept.
  */
-const SKIP =
-  /\d+\s?%|^Location: |^(?:Loading|Opening|Reading|Decoding|Parsing|Preparing|Streaming|Fetching|Downloading|Building|Computing|Sampling|Indexing|Saving|Exporting|Generating|Rendering)\b[^.!?]*(?:…|\.\.\.)$/i;
+const STEP_VERB =
+  /^(?:Loading|Opening|Reading|Decoding|Parsing|Preparing|Streaming|Fetching|Downloading|Building|Computing|Sampling|Indexing|Saving|Exporting|Generating|Rendering|Detecting|Optimizing)\b/i;
+const STEP_END = /(?:…|\.\.\.)$/;
+/** A sentence end before the closing ellipsis: `!`, `?`, or a dot not inside a word. */
+const SENTENCE_END = /[!?]|\.(?![^\s.])/;
+
+function isProgress(t: string): boolean {
+  if (/\d+\s?%/.test(t) || t.startsWith('Location: ')) return true;
+  const end = STEP_END.exec(t);
+  return !!end && STEP_VERB.test(t) && !SENTENCE_END.test(t.slice(0, end.index));
+}
+const FAILURE = /\b(?:fail(?:ed|s|ure)?|error|could not|cannot|can't|unable|refused|invalid)\b/i;
 /** The class legend announces its banner; the filter line already says it. */
 const FILTER_BANNER = /^Filtered — showing \d+ of \d+ classes$/;
 /** A message repeated within this window is one line. */
@@ -124,7 +136,7 @@ export function installSessionLogRecorder(d: SessionLogRecorderDeps): SessionLog
       if (open.has(id)) continue;
       const c = s.getCloud(id);
       if (!c) continue;
-      const name = baseName(c.name) || c.name;
+      const name = scanName(c.name);
       open.add(id);
       names.set(id, name);
       const stable = s.stableIdFor?.(id);
@@ -137,7 +149,7 @@ export function installSessionLogRecorder(d: SessionLogRecorderDeps): SessionLog
       const name = names.get(id) ?? id;
       log.append({ kind: 'scan', text: `Closed ${name}`, scan: name, status: 'removed' });
     }
-    const live = s.streamingCloud?.name ? baseName(s.streamingCloud.name) || s.streamingCloud.name : null;
+    const live = s.streamingCloud?.name ? scanName(s.streamingCloud.name) : null;
     if (live !== streaming) {
       if (streaming) log.append({ kind: 'scan', text: `Closed ${streaming}`, scan: streaming, status: 'removed', detail: 'source: streaming' });
       if (live) log.append({ kind: 'scan', text: `Opened ${live}`, scan: live, detail: 'source: streaming' });
@@ -252,7 +264,7 @@ export function installSessionLogRecorder(d: SessionLogRecorderDeps): SessionLog
   const message = (region: Element): void => {
     const node = region.matches('.olv-lasso-toast') ? region.querySelector('.olv-lasso-toast-msg') : region;
     const t = (node?.textContent ?? '').replace(/\s+/g, ' ').trim();
-    if (!t || SKIP.test(t) || FILTER_BANNER.test(t)) return;
+    if (!t || (isProgress(t) && !FAILURE.test(t)) || FILTER_BANNER.test(t)) return;
     const at = now();
     if (t === lastMessage && at - lastAt < REPEAT_MS) return;
     lastMessage = t;

@@ -103,6 +103,7 @@ the two entries were renumbered when the branches were integrated.
 | L199 | UI | TEST | med | FIXED | new | A lazy panel whose loader threw at once stayed busy, a second Try again started a second build, a throwing ready callback rejected, and one load re-enabled a button another still held; Tab from outside a dialog stayed outside, a fading modal took input, one Escape closed every stacked dialog, and Cmd-K and ? opened over a modal; Stop and save confirmed a save before it ran, and a failed workflow settings load was dropped and then cached. |
 | L200 | UI | TEST | high | FIXED | new | A terrain run on a scan over the display budget computed its ground surface on the main thread, holding the page for 17 s (5.8M points, 4x CPU slowdown), long enough for Chrome to offer "Page unresponsive"; long tasks showed no elapsed time. |
 | L201 | UI | TEST | med | BUILT | new | A scan with producer classes could not be auto-classified, because nothing let the user set those classes aside, and an auto-classify could not be undone. |
+| L206 | UI | TEST | med | FIXED | new | The Session log dialog sat outside the shared dialog stack and could open twice, a rejected palette command logged as done, progress steps naming a file reached the log, some links kept a query, token or address, and a scan named with a slash lost its first part. |
 | L198 | LOADER | TEST | med | FIXED | new | Three opens let an async step outlive the decision that should have stopped it: a static open closed the stream before its cloud attached, a cancelled EPT open still sent its manifest request, and a recovery write landed after Clear, a source change or Turn off. |
 | L204 | SCIENTIFIC | TEST | low | FIXED | new | The PDAL ground-filter and DTM results files said eight synthetic scenes while listing five and three. |
 | L208 | SCIENTIFIC | TEST | med | FIXED | new | Elevation comparison between two epochs and feature extraction read points the producer marked Withheld. |
@@ -114,13 +115,13 @@ the two entries were renumbered when the branches were integrated.
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 59
+- FIXED: 60
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 81
+- total: 82
 
 ## Detail
 
@@ -8003,3 +8004,36 @@ Covered by `tests/lazyLoadRetry.test.ts`, `tests/tourLauncher.test.ts`,
 `tests/helpOverlayLazyFailure.test.ts`, `tests/workflowActions.test.ts`,
 `tests/workflowRecorder.test.ts`, `tests/e2e/commandPalette.spec.ts` and
 `tests/e2e/dialogFocus.spec.ts`.
+
+### L206 · FIXED · UI
+
+The Session log had five gaps.
+
+- The dialog shown with no scan open kept its own Escape and Tab handling, so
+  Cmd-K and ? opened the palette and the shortcut sheet over it, and a second
+  open stacked a second dialog. It now joins the shared dialog stack in
+  `src/ui/Modal.ts`, one opens at a time (a second open focuses the first), and
+  on close focus returns to the opener, or to the app's first enabled button
+  when the opener has left the page.
+- A palette command whose run returns a promise logged as done before it
+  settled, and as done when it rejected. `loggedAction` now logs it when the
+  promise settles and hands the promise back.
+- A progress step that named a file ("Opening alpha.ply…") reached the log,
+  since a dot ended the step. "Detecting" and "Optimizing" steps reached it as
+  well. A dot inside a word no longer ends a step, both verbs are skipped, and
+  a line that reports a failure is kept.
+- A link with a space in its path or before its query kept the folders or the
+  query after the space, a last segment shaped like a JWT or holding `=` or `&`
+  was kept as a file name, and `mailto:`, `javascript:`, `vbscript:`, `tel:`
+  and `sms:` text passed through. The link pattern now runs past spaces to a
+  word that holds `/` or `=`, those segments are dropped, and those schemes
+  become `mailto:…` and so on. The page intro now says a link keeps its host.
+- A scan named "Area 1/2 (EPT)" showed as "2 (EPT)". A scan name keeps its
+  slashes unless it is a link or a path: absolute, or relative with folders
+  that hold no space ("data/sub/a" shows as "a").
+
+Covered by `tests/sessionLog.test.ts` (redaction table, scan display names,
+async command outcomes), `tests/sessionLogRecorder.test.ts` (progress steps,
+scan names with a slash), `tests/sessionLogPage.test.ts` (dialog stack, one
+dialog, focus return past hidden buttons, teardown when the page throws) and
+`tests/commandPalette.test.ts` (a rejected run is not left unhandled).

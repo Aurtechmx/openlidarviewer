@@ -226,3 +226,20 @@ describe('callback wiring', () => {
     expect(fired).toBe(true);
   });
 });
+
+describe('a palette run that returns a promise', () => {
+  it('swallows its rejection, so it never reaches the page as unhandled', async () => {
+    const { settle } = await import('../src/ui/CommandPalette');
+    const seen: unknown[] = [];
+    const on = (r: unknown): void => { seen.push(r); };
+    process.on('unhandledRejection', on);
+    try {
+      settle(Promise.reject(new Error('no scan')));
+      settle(undefined);
+      await new Promise((r) => setTimeout(r, 10));
+      expect(seen).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', on);
+    }
+  });
+});

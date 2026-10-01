@@ -278,7 +278,7 @@ export class CommandPalette {
     // doesn't fight the palette overlay during the transition.
     this.close();
     try {
-      row.action.run();
+      settle(row.action.run() as unknown);
     } catch {
       // Swallow — the host's actions are expected to be defensive,
       // and a thrown action shouldn't bubble back into the palette
@@ -308,5 +308,15 @@ export class CommandPalette {
       this._selected = Math.max(this._selected - 1, 0);
       this._paintSelection();
     }
+  }
+}
+
+/**
+ * Swallow the rejection of an action that returned a promise. The Session log
+ * records the failure; the palette has already closed.
+ */
+export function settle(result: unknown): void {
+  if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
+    Promise.resolve(result).catch(() => {});
   }
 }

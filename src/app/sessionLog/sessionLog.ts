@@ -7,8 +7,8 @@
  *
  * The store holds display text only. Every text that could carry a file
  * location goes through {@link redactPaths} on the way in, so a log copied
- * into a bug report names files by their base name and never by a folder or a
- * full link.
+ * into a bug report names a local file by its name alone and a link by its
+ * host and file name, never by a folder, a query or a token.
  *
  * The log keeps the newest {@link SESSION_LOG_CAP} entries. Older ones are
  * dropped and counted, and every view and export says how many were dropped.
@@ -75,7 +75,11 @@ export const SESSION_LOG_CAP = 2000;
 const MAX_TEXT = 400;
 
 const LINK = /^[a-z][a-z0-9+.-]{0,31}:\/\//i;
-const OPAQUE = /^(data|blob):/i;
+/** Schemes whose whole body is data, an address or code: only the scheme is kept. */
+const OPAQUE = /^(data|blob|mailto|javascript|vbscript|tel|sms):/i;
+const opaqueText = (v: string): string => `${OPAQUE.exec(v)![1]!.toLowerCase()}:…`;
+/** A last segment that carries a credential: a query pair, or a JWT's three parts. */
+const TOKEN_NAME = /[=&]|^eyJ[\w-]*\.[\w-]+\./;
 
 /** What a link keeps: its origin and, when it names a file, that file's name. */
 interface LinkParts {
@@ -104,7 +108,7 @@ function linkParts(raw: string): LinkParts | null {
   // Decoding can bring back a `?` or `#`; nothing after one is a file name.
   name = name.split(/[?#;]/)[0] ?? '';
   // A segment with no file extension can be an access token: drop it.
-  if (!/\.[a-z0-9]{1,8}$/i.test(name)) name = '';
+  if (!/\.[a-z0-9]{1,8}$/i.test(name) || TOKEN_NAME.test(name)) name = '';
   // `host` carries the port and never the user name or password.
   const origin = url.protocol === 'file:' ? '' : `${url.protocol}//${url.host}`;
   return { origin, name, deeper: segs.length > 1 || (segs.length === 1 && !name) };
@@ -117,7 +121,7 @@ function linkParts(raw: string): LinkParts | null {
  */
 export function baseName(value: string): string {
   const v = value.trim();
-  if (OPAQUE.test(v)) return `${v.slice(0, 4).toLowerCase()}:…`;
+  if (OPAQUE.test(v)) return opaqueText(v);
   if (LINK.test(v)) {
     const parts = linkParts(v);
     if (parts) return parts.name || parts.origin.replace(/^[a-z0-9+.-]+:\/\//i, '');
@@ -127,7 +131,7 @@ export function baseName(value: string): string {
 }
 
 function linkText(raw: string): string {
-  if (OPAQUE.test(raw)) return `${raw.slice(0, 4).toLowerCase()}:…`;
+  if (OPAQUE.test(raw)) return opaqueText(raw);
   const parts = linkParts(raw);
   if (!parts) return '(link)';
   if (!parts.origin) return parts.name || '(file)';
@@ -154,7 +158,9 @@ function trimTail(m: string): [string, string] {
 }
 
 // One pass, so a replacement is never scanned again. Groups, in order:
-// 1 an opaque data: or blob: link, 2 a link with a scheme, 3 the folders of a
+// 1 an opaque link (data:, blob:, mailto:, javascript: and the like), 2 a link
+// with a scheme, which runs on past a space to a word that holds `/` or `=`,
+// with up to three plain words between, 3 the folders of a
 // Windows drive path (either slash), 4 the folders of a UNC path, 5 the folders
 // of a home-relative path, 6 the character before a POSIX path and 7 that
 // path's folders. A folder name may hold single spaces. Every quantifier is
@@ -163,8 +169,8 @@ const WIN_SEG = String.raw`[^\\/\s:*?"<>|]+(?: [^\\/\s:*?"<>|]+)*`;
 const POSIX_SEG = String.raw`[^/\s"'<>]+(?: [^/\s"'<>]+)*`;
 const PATH_PATTERN = new RegExp(
   [
-    String.raw`(\b(?:data|blob):[^\s"'<>]+)`,
-    String.raw`(\b[a-z][a-z0-9+.-]{0,31}:\/\/[^\s"'<>]+)`,
+    String.raw`(\b(?:data|blob|mailto|javascript|vbscript|tel|sms):[^\s"'<>]+)`,
+    String.raw`(\b[a-z][a-z0-9+.-]{0,31}:\/\/[^\s"'<>]+(?:(?: [^\s"'<>/=]+){0,3} [^\s"'<>/=]*[/=][^\s"'<>]*)*)`,
     String.raw`(\b[a-z]:[\\/](?:${WIN_SEG}[\\/])*)`,
     String.raw`(\\\\(?:${WIN_SEG}[\\/])+)`,
     String.raw`(~[\\/](?:${POSIX_SEG}[\\/])*)`,
@@ -203,8 +209,28 @@ function safeScan(fn: (() => string | null) | null): string | null {
   }
 }
 
+/**
+ * Whether a name is a path with folders. An absolute, home, drive or UNC path
+ * is one; so is a relative one whose folders hold no space ("data/sub/a").
+ * "Area 1/2 (EPT)" and "part 3/4.laz" are names.
+ */
+function isPath(v: string): boolean {
+  if (v.includes('\\') || /^[/~]/.test(v) || /^[a-z]:[\\/]/i.test(v)) return true;
+  const segs = v.split('/');
+  return segs.length > 1 && segs.slice(0, -1).every((s) => s.length > 0 && !/\s/.test(s));
+}
+
+/**
+ * A scan's display name. A link or a path keeps only its file name; any other
+ * name is kept whole, slashes and all.
+ */
+export function scanName(name: string): string {
+  const v = name.trim();
+  return (OPAQUE.test(v) || LINK.test(v) || isPath(v) ? baseName(v) : '') || v;
+}
+
 function scanOf(name: string | null): string | null {
-  return name ? clean(baseName(name) || name) : null;
+  return name ? clean(scanName(name)) : null;
 }
 
 export function createSessionLog(opts: { cap?: number; now?: () => number } = {}): SessionLog {

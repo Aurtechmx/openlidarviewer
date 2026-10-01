@@ -145,16 +145,30 @@ function emitCommand(a: Action, status: 'done' | 'failed'): void {
   }
 }
 
-/** `a`, logged once it has run: done, or failed when it threw. */
+/**
+ * `a`, logged once it has run: done, or failed when it threw. A run that
+ * returns a promise is logged when the promise settles, and the promise is
+ * handed back so its rejection still reaches the caller.
+ */
 export function loggedAction(a: Action): Action {
   return {
     ...a,
     run: () => {
+      let out: unknown;
       try {
-        a.run();
+        out = a.run();
       } catch (error) {
         emitCommand(a, 'failed');
         throw error;
+      }
+      if (out && typeof (out as PromiseLike<unknown>).then === 'function') {
+        return Promise.resolve(out).then(
+          () => emitCommand(a, 'done'),
+          (error: unknown) => {
+            emitCommand(a, 'failed');
+            throw error;
+          },
+        ) as unknown as void;
       }
       emitCommand(a, 'done');
     },

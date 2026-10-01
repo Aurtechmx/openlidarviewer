@@ -152,6 +152,10 @@ describe('session log page', () => {
 });
 
 describe('session log dialog', () => {
+  const key = (k: string): void => {
+    (globalThis as unknown as { window: SDoc }).window.fire('keydown', { key: k, preventDefault() {}, stopPropagation() {} });
+  };
+
   it('shows the log in a labelled dialog that Escape and Close dismiss', async () => {
     const { openSessionLogDialog } = await import('../src/app/sessionLog/sessionLogPage');
     const log = createSessionLog();
@@ -159,15 +163,91 @@ describe('session log dialog', () => {
     const first = openSessionLogDialog(log, { schedule: (fn) => fn() });
     const dialog = doc.body.querySelector('[role="dialog"]')!;
     const titleId = dialog.getAttribute('aria-labelledby')!;
-    expect(dialog.querySelectorAll('h2').find((h) => h.attrs.id === titleId || (h as unknown as { id: string }).id === titleId)?.textContent).toBe('Session log');
+    expect(dialog.querySelectorAll('h2').find((h) => h.id === titleId)?.textContent).toBe('Session log');
     expect(dialog.querySelectorAll('.olv-sl-row')).toHaveLength(1);
-    const backdrop = doc.body.querySelector('.olv-modal-backdrop')!;
-    backdrop.fire('keydown', { key: 'Escape', preventDefault() {}, stopPropagation() {} });
+    key('Escape');
     expect(doc.body.querySelector('.olv-modal-backdrop')).toBeNull();
     first.close();
 
     openSessionLogDialog(log);
     doc.body.querySelector('.olv-sl-close')!.click();
+    expect(doc.body.querySelector('.olv-modal-backdrop')).toBeNull();
+  });
+
+  it('joins the shared dialog stack, so the palette and the shortcut sheet wait', async () => {
+    const { openSessionLogDialog } = await import('../src/app/sessionLog/sessionLogPage');
+    const { dialogOpen } = await import('../src/ui/Modal');
+    const d = openSessionLogDialog(createSessionLog());
+    expect(dialogOpen()).toBe(true);
+    d.close();
+    expect(dialogOpen()).toBe(false);
+  });
+
+  it('opens one dialog at a time and focuses the open one', async () => {
+    const { openSessionLogDialog } = await import('../src/app/sessionLog/sessionLogPage');
+    const log = createSessionLog();
+    const a = openSessionLogDialog(log);
+    doc.activeElement = doc.body;
+    const b = openSessionLogDialog(log);
+    expect(doc.body.querySelectorAll('.olv-modal-backdrop')).toHaveLength(1);
+    expect(doc.activeElement).toBe(doc.body.querySelector('.olv-sl-close'));
+    b.close();
+    a.close();
+    expect(doc.body.querySelectorAll('.olv-modal-backdrop')).toHaveLength(0);
+  });
+
+  it('gives focus back to the opener, or to the first control of the app when the opener is gone', async () => {
+    const { openSessionLogDialog } = await import('../src/app/sessionLog/sessionLogPage');
+    const app = new SNode('div');
+    app.id = 'app';
+    const first = new SNode('button');
+    const opener = new SNode('button');
+    app.append(first, opener);
+    doc.body.append(app);
+
+    opener.focus();
+    openSessionLogDialog(createSessionLog()).close();
+    expect(doc.activeElement).toBe(opener);
+
+    const gone = new SNode('input');
+    doc.body.append(gone);
+    gone.focus();
+    const d = openSessionLogDialog(createSessionLog());
+    gone.remove();
+    d.close();
+    expect(doc.activeElement).toBe(first);
+
+    doc.activeElement = doc.body;
+    openSessionLogDialog(createSessionLog()).close();
+    expect(doc.activeElement).toBe(first);
+  });
+
+  it('skips hidden buttons when it gives focus to the app', async () => {
+    const { openSessionLogDialog } = await import('../src/app/sessionLog/sessionLogPage');
+    const app = new SNode('div');
+    app.id = 'app';
+    const hidden = new SNode('button');
+    hidden.hidden = true;
+    const panel = new SNode('div');
+    panel.className = 'olv-hidden';
+    const inPanel = new SNode('button');
+    panel.append(inPanel);
+    const shown = new SNode('button');
+    app.append(hidden, panel, shown);
+    doc.body.append(app);
+    doc.activeElement = doc.body;
+    openSessionLogDialog(createSessionLog()).close();
+    expect(doc.activeElement).toBe(shown);
+  });
+
+  it('leaves the dialog stack even when the page fails to tear down', async () => {
+    const { openSessionLogDialog } = await import('../src/app/sessionLog/sessionLogPage');
+    const { dialogOpen } = await import('../src/ui/Modal');
+    const log = createSessionLog();
+    log.subscribe = () => () => { throw new Error('gone'); };
+    const d = openSessionLogDialog(log);
+    expect(() => d.close()).toThrow('gone');
+    expect(dialogOpen()).toBe(false);
     expect(doc.body.querySelector('.olv-modal-backdrop')).toBeNull();
   });
 });
