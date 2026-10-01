@@ -37,7 +37,7 @@ describe('task activity', () => {
     expect(seen).toHaveBeenCalledTimes(1);
     expect(liveTasks(1000)).toEqual([{ id: t.id, label: 'Opening scan', progress: 0.4, elapsedMs: 0, remainingMs: null }]);
     live = false;
-    expect(liveTasks(2000)).toEqual([]);
+    expect(liveTasks(2000)).toMatchObject([{ id: t.id, elapsedMs: 1000 }]);
     gone = true;
     live = true;
     expect(liveTasks()).toEqual([]);
@@ -65,14 +65,39 @@ describe('task activity', () => {
     expect(liveTasks(12_000)[0]).toMatchObject({ elapsedMs: 0, remainingMs: null });
   });
 
+  it('keeps a running task listed while it is hidden, until it settles', () => {
+    let live = true;
+    let settled = false;
+    registerTask({ label: () => 'Opening', progress: () => null, live: () => live && !settled, settled: () => settled });
+    liveTasks(0);
+    live = false;
+    expect(liveTasks(5000)).toMatchObject([{ label: 'Opening', elapsedMs: 5000 }]);
+    settled = true;
+    expect(liveTasks(6000)).toEqual([]);
+    settled = false;
+    expect(liveTasks(7000)).toEqual([]);
+  });
+
+  it('never carries a hidden task into the next run of its indicator', () => {
+    let live = true;
+    let run = '1';
+    registerTask({ label: () => 'Opening', progress: () => null, live: () => live, run: () => run });
+    liveTasks(0);
+    live = false;
+    run = '2';
+    expect(liveTasks(30_000)).toEqual([]);
+    live = true;
+    expect(liveTasks(31_000)).toMatchObject([{ elapsedMs: 0 }]);
+  });
+
   it('keeps the clock while a task is hidden and shown again', () => {
-    // A steady 40 s task, hidden from 20 s to 24 s.
+    // A steady 40 s task, hidden from 20 s to 24 s, listed throughout.
     let live = true;
     let now = 0;
     registerTask({ label: () => 'Export', progress: () => now / 40_000, live: () => live });
     for (; now <= 19_000; now += 1000) liveTasks(now);
     live = false;
-    for (; now < 24_000; now += 1000) expect(liveTasks(now)).toEqual([]);
+    for (; now < 24_000; now += 1000) expect(liveTasks(now)[0].elapsedMs).toBe(now);
     live = true;
     for (; now <= 36_000; now += 1000) {
       const t = liveTasks(now)[0];

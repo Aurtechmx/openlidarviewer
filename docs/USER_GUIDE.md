@@ -38,7 +38,7 @@ The left rail holds four tabs, one open at a time:
 
 - Data: what the scan is: the layers you have open, how healthy each one is, and the classes it carries.
 - Tools: what you do to it: Measure, Inspect, Annotate and the Clip box, each listed with its key.
-- Analyse: one row per analysis with its status (ready, review or blocked) and the reason, and a page for each task.
+- Analyse: one row per analysis with its status (ready, review, blocked, or what the step needs) and the reason, and a page for each task.
 - Export: writing the scan, the images and the reports out.
 
 The right rail is how the scan is drawn: Colour by, point size and rendering, with the scan's coordinate system, its scan report and your saved views below. Inspecting a point puts its readout on a card beside the point itself.
@@ -125,7 +125,7 @@ Hover the dot to see exactly why it earned its grade. The badge travels with the
 
 ## Analyse the terrain
 
-Open the Analyse tab. Its home lists Terrain, Flow Pulse, Terrain Access, Observatory and Objects & Space, each with its status and a one-line reason. A blocked row names what would lift it: Flow Pulse and Terrain Access need a terrain run first, so their rows offer Prepare terrain, which opens the Terrain page. Before a run the Terrain row also offers Run terrain analysis, which opens Terrain and starts the run. Once a run has made contours, a Contours row sits under Terrain and opens them in one click. After a run the Terrain status is the stricter of Process Studio's readiness and the run's own verdict, so a run that says it is not usable never shows as Ready. Flow Pulse and Terrain Access read that surface, so they are never shown as better than Terrain: their reason starts with "Terrain run:" and their fix opens the Terrain page. Range frames shows Scanner grid present, since no readiness check applies to it.
+Open the Analyse tab. Its home lists Terrain, Flow Pulse, Terrain Access, Observatory and Objects & Space, each with its status and a one-line reason. A row missing a routine prerequisite names it in place of a status, such as Needs a loaded scan or Needs terrain, and offers the fix: Flow Pulse and Terrain Access need a terrain run first, so their rows read Needs terrain and offer Prepare terrain, which opens the Terrain page. Blocked is kept for a run that is not usable or a check that fails. Before a run the Terrain row also offers Run terrain analysis, which opens Terrain and starts the run. Once a run has made contours, a Contours row sits under Terrain and opens them in one click. After a run the Terrain status is the stricter of Process Studio's readiness and the run's own verdict, so a run that says it is not usable never shows as Ready. Flow Pulse and Terrain Access read that surface, so they are never shown as better than Terrain: their reason starts with "Terrain run:" and their fix opens the Terrain page. Range frames shows Scanner grid present, since no readiness check applies to it.
 
 Choose Terrain and run the analysis. After a run, Create contours opens the Contours page. The page leads with its status, then a Why? disclosure that holds the full Process Studio view: the processing stages, each product's verdict and the quality checks. Evidence holds the detailed figures and the surface models, and Method holds the scan-type override and the planned capabilities. The viewer classifies the ground, builds a bare-earth surface (a DTM), and grades how trustworthy that surface is across the site. You get:
 

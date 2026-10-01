@@ -65,7 +65,7 @@ test.describe('mode home and Continue', () => {
     await expect(bar(page)).toHaveAttribute('data-path', 'Analyse');
     await page.mouse.move(1, 1);
     const cont = page.locator('#olv-ws-mode-analyse .olv-mode-continue');
-    await expect(cont).toHaveText(/^Continue: Terrain · (Ready|Review|Blocked)$/);
+    await expect(cont).toHaveText(/^Continue: Terrain · (Ready|Review|Blocked|Needs .+)$/);
     await cont.click();
     await expect(bar(page)).toHaveAttribute('data-path', 'Analyse › Terrain');
     await expect(page.locator('#olv-ws-mode-analyse .olv-ws-task-title')).toBeFocused();

@@ -164,3 +164,31 @@ describe('Terrain status: the more restrictive of Process Studio and the run', (
     }
   }
 });
+
+describe('routine prerequisites read as what the step needs', () => {
+  it('names the missing scan, terrain or stations, with the verdict unchanged', () => {
+    for (const r of analysisRows(input({ facts: null }))) expect(r).toMatchObject({ status: 'blocked', needs: 'Needs a loaded scan' });
+    const rows = analysisRows(input({ hasStations: false }));
+    expect(byId(rows, 'flow-pulse')).toMatchObject({ status: 'blocked', needs: 'Needs terrain', remedy: PREPARE_TERRAIN });
+    expect(byId(rows, 'terrain-access')).toMatchObject({ status: 'blocked', needs: 'Needs terrain' });
+    expect(byId(rows, 'observatory')).toMatchObject({ status: 'blocked', needs: 'Needs scanner stations' });
+    expect(contoursStatus(input())).toMatchObject({ status: 'blocked', needs: 'Needs terrain' });
+    const streaming = byId(analysisRows(input({ facts: { ...facts, kind: 'streaming', coverage: 'resident-only' } })), 'observatory');
+    expect(streaming).toMatchObject({ status: 'blocked', needs: 'Needs a local scan' });
+  });
+
+  it('keeps Blocked for a run that is not usable', () => {
+    const produced = new Set<ProductId>(['dtm', 'contours']);
+    const run = { tier: 'Blocked' as const, verdict: 'Not usable for terrain products as-is.' };
+    for (const r of analysisRows(input({ produced, terrainRun: run })).filter((x) => x.status === 'blocked')) {
+      expect(r.needs).toBeUndefined();
+    }
+    expect(contoursStatus(input({ produced, terrainRun: run })).needs).toBeUndefined();
+  });
+
+  it('never adds a need to a row that is not blocked', () => {
+    for (const r of analysisRows(input({ produced: new Set<ProductId>(['dtm', 'contours']) }))) {
+      if (r.status !== 'blocked') expect(r.needs).toBeUndefined();
+    }
+  });
+});

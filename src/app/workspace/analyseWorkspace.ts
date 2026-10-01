@@ -108,8 +108,11 @@ const LAB_ACTION: Partial<Record<AnalysisId, string>> = {
   observatory: 'analyse.observatory',
 };
 
-function badge(status: AnalysisRow['status']): HTMLElement {
-  return el('span', { className: `olv-ah-badge is-${status}`, text: STATUS_TEXT[status] });
+/** A routine missing prerequisite reads as what the step needs, not as Blocked. */
+const tone = (r: Pick<AnalysisRow, 'status' | 'needs'>): string => (r.needs ? 'needs' : r.status);
+
+function badge(r: Pick<AnalysisRow, 'status' | 'needs'>): HTMLElement {
+  return el('span', { className: `olv-ah-badge is-${tone(r)}`, text: r.needs ?? STATUS_TEXT[r.status] });
 }
 
 interface PageShell {
@@ -226,9 +229,9 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
     else void api.open(id as AnalysePage);
   }
 
-  function renderVerdict(shell: PageShell, v: Pick<AnalysisRow, 'status' | 'reason' | 'remedy'>): void {
-    shell.verdict.className = `olv-at-verdict is-${v.status}`;
-    shell.verdict.replaceChildren(badge(v.status), el('span', { className: 'olv-at-reason', text: v.reason }));
+  function renderVerdict(shell: PageShell, v: Pick<AnalysisRow, 'status' | 'reason' | 'remedy' | 'needs'>): void {
+    shell.verdict.className = `olv-at-verdict is-${tone(v)}`;
+    shell.verdict.replaceChildren(badge(v), el('span', { className: 'olv-at-reason', text: v.reason }));
     if (v.remedy) shell.verdict.append(remedyButton(v.remedy));
   }
 
@@ -291,10 +294,10 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
       const items = rows.map((row) => {
         const open = el('button', { className: 'olv-ah-open', type: 'button' }, [
           el('span', { className: 'olv-ah-name', text: row.label }),
-          badge(row.status),
+          badge(row),
         ]);
         open.addEventListener('click', () => openRow(row.id));
-        const li = el('li', { className: `olv-ah-row is-${row.status}` }, [
+        const li = el('li', { className: `olv-ah-row is-${tone(row)}` }, [
           open,
           el('p', { className: 'olv-ah-reason', text: row.reason, title: row.reason }),
         ]);
@@ -315,10 +318,10 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
       if (inp.produced.has('contours')) {
         const open = el('button', { className: 'olv-ah-open', type: 'button' }, [
           el('span', { className: 'olv-ah-name', text: 'Contours' }),
-          badge(contours.status),
+          badge(contours),
         ]);
         open.addEventListener('click', () => { void api.open('contours'); });
-        const child = el('li', { className: `olv-ah-row is-child is-${contours.status}` }, [
+        const child = el('li', { className: `olv-ah-row is-child is-${tone(contours)}` }, [
           open,
           el('p', { className: 'olv-ah-reason', text: contours.reason, title: contours.reason }),
         ]);
@@ -336,7 +339,7 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
       }
       // Before contours exist the link offers to make them; after, it opens them.
       const made = inp.produced.has('contours');
-      contoursLink.replaceChildren(el('span', { className: 'olv-ah-name', text: made ? 'Contours' : 'Create contours' }), badge(contours.status));
+      contoursLink.replaceChildren(el('span', { className: 'olv-ah-name', text: made ? 'Contours' : 'Create contours' }), badge(contours));
       contoursLink.dataset.made = String(made);
       renderVerdict(shells.contours, contours);
       for (const row of rows) {

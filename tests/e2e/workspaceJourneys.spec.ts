@@ -185,11 +185,11 @@ test.describe('workspace journeys', () => {
     await expectWorkspaceRules(page);
   });
 
-  test('D: a blocked lab, Prepare terrain, the Terrain page', async ({ page }) => {
+  test('D: a lab that needs terrain, Prepare terrain, the Terrain page', async ({ page }) => {
     await openDense(page);
     await showWorkspaceMode(page, 'analyse');
     const access = page.locator('.olv-ah-row[data-analysis="terrain-access"]');
-    await expect(access.locator('.olv-ah-badge')).toHaveText('Blocked');
+    await expect(access.locator('.olv-ah-badge')).toHaveText('Needs terrain');
     await access.locator('.olv-ah-remedy', { hasText: 'Prepare terrain' }).click();
     await expect(taskTitle(page, 'analyse')).toHaveText('Terrain');
     await expect(page.locator('.olv-analyse-run')).toBeVisible();

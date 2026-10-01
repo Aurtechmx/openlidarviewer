@@ -250,3 +250,32 @@ describe('showBusyWaits', () => {
     });
   }
 });
+
+describe('a running task in the strip', () => {
+  const labels = (now: number): string[] => {
+    collectBusyTasks(body as unknown as ParentNode);
+    return liveTasks(now).map((t) => t.label);
+  };
+
+  it('stays listed after its panel closes, until it settles or goes', () => {
+    const svg = indicator(null);
+    const panel = host('section', svg, 'Analysing…');
+    expect(labels(0)).toEqual(['Analysing…']);
+    panel.classList.add('olv-hidden');
+    expect(labels(5000)).toEqual(['Analysing…']);
+    svg.classList.add('is-settled');
+    expect(labels(6000)).toEqual([]);
+    svg.classList.remove('is-settled');
+    svg.remove();
+    expect(labels(7000)).toEqual([]);
+  });
+
+  it('is listed when it starts inside a lowered sheet the layout hides', () => {
+    const svg = indicator(0.2);
+    (svg as unknown as { checkVisibility: () => boolean }).checkVisibility = () => false;
+    const sheet = host('div', svg, 'Opening EPT…');
+    expect(labels(0)).toEqual(['Opening EPT…']);
+    showBusyWaits(liveTasks(5000));
+    expect(waitOf(sheet)).toBeUndefined();
+  });
+});

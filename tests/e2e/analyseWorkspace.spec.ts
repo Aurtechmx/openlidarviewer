@@ -41,7 +41,7 @@ test.describe('Analyse home and pages', () => {
     await loadScan(page);
     // The home stands alone: one row per analysis, each with a status.
     for (const id of ['terrain', 'flow-pulse', 'terrain-access', 'observatory', 'objects']) {
-      await expect(row(page, id).locator('.olv-ah-badge')).toHaveText(/^(Ready|Review|Blocked)$/);
+      await expect(row(page, id).locator('.olv-ah-badge')).toHaveText(/^(Ready|Review|Blocked|Needs .+)$/);
     }
     await expect(page.locator(`${ANALYSE} .olv-process-studio`)).toBeHidden();
 
@@ -76,13 +76,14 @@ test.describe('Analyse home and pages', () => {
     await expect(page.locator(`${ANALYSE} .olv-analyse-home`)).toBeVisible();
     await expect(page.locator(`${ANALYSE} .olv-ws-task`)).toBeHidden();
     // The run is reflected on the home: the labs are no longer blocked on it.
-    await expect(row(page, 'flow-pulse')).not.toHaveClass(/is-blocked/);
+    await expect(row(page, 'flow-pulse')).not.toHaveClass(/is-blocked|is-needs/);
   });
 
-  test('Journey D: Terrain Access is BLOCKED and Prepare terrain lands on Terrain', async ({ page }) => {
+  test('Journey D: Terrain Access needs terrain and Prepare terrain lands on Terrain', async ({ page }) => {
     await loadScan(page);
     const access = row(page, 'terrain-access');
-    await expect(access.locator('.olv-ah-badge')).toHaveText('Blocked');
+    await expect(access.locator('.olv-ah-badge')).toHaveText('Needs terrain');
+    await expect(access).toHaveClass(/is-needs/);
     await expect(access.locator('.olv-ah-reason')).toHaveText(/terrain run/);
     await access.locator('.olv-ah-remedy', { hasText: 'Prepare terrain' }).click();
     await expect(title(page)).toHaveText('Terrain');

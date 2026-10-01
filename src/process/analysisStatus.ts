@@ -53,6 +53,12 @@ export interface AnalysisRow {
    * Terrain run caps (review or blocked), where the fix is the Terrain page.
    */
   readonly remedy: AnalysisRemedy | null;
+  /**
+   * On a blocked row whose only gap is a routine missing prerequisite: what
+   * the step needs, shown in place of the Blocked badge. The verdict stays
+   * blocked; only its label changes.
+   */
+  readonly needs?: string;
 }
 
 export interface AnalysisStatusInput {
@@ -83,6 +89,23 @@ const LABEL: Readonly<Record<AnalysisId, string>> = {
   features: 'Feature candidates',
   range: 'Range frames',
 };
+
+const NEEDS_SCAN = 'Needs a loaded scan';
+const NEEDS_TERRAIN = 'Needs terrain';
+
+/** What a preflight fix supplies, as the prerequisite a blocked row needs. */
+const NEEDS_FOR: Partial<Record<PreflightActionId, string>> = {
+  'set-coordinate-system': 'Needs a projected CRS',
+  'load-second-scan': 'Needs a second scan',
+  'align-scans': 'Needs aligned scans',
+  'classify-scan': 'Needs classification',
+  'await-full-coverage': 'Needs full coverage',
+};
+
+function needsOf(remedy: AnalysisRemedy | null): string | undefined {
+  if (!remedy) return undefined;
+  return remedy.kind === 'page' ? NEEDS_TERRAIN : NEEDS_FOR[remedy.action];
+}
 
 export const PREPARE_TERRAIN: AnalysisRemedy = { kind: 'page', page: 'terrain', label: 'Prepare terrain' };
 
@@ -122,9 +145,9 @@ function preflightRemedy(v: ProductVerdict, can: AnalysisStatusInput['canRemedia
 
 /** The contours status shown on the Terrain page link and the Contours page. */
 export function contoursStatus(input: AnalysisStatusInput): Omit<AnalysisRow, 'id' | 'label'> {
-  if (!input.facts) return { status: 'blocked', reason: 'Load a scan first.', remedy: null };
+  if (!input.facts) return { status: 'blocked', reason: 'Load a scan first.', remedy: null, needs: NEEDS_SCAN };
   if (!input.produced.has('contours')) {
-    return { status: 'blocked', reason: 'Contours come from a terrain run. Run terrain analysis first.', remedy: PREPARE_TERRAIN };
+    return { status: 'blocked', reason: 'Contours come from a terrain run. Run terrain analysis first.', remedy: PREPARE_TERRAIN, needs: NEEDS_TERRAIN };
   }
   const v = productVerdict(input.facts, input.view, 'contours');
   const c = capByRun({ status: v.status, reason: v.reason ?? 'Contours from the latest terrain run.' }, input.terrainRun);
@@ -138,15 +161,19 @@ export function analysisRows(input: AnalysisStatusInput): AnalysisRow[] {
   if (input.hasRange) ids.push('range');
   const { facts } = input;
   if (!facts) {
-    return ids.map((id) => ({ id, label: LABEL[id], status: 'blocked', reason: 'Load a scan first.', remedy: null }));
+    return ids.map((id) => ({ id, label: LABEL[id], status: 'blocked', reason: 'Load a scan first.', remedy: null, needs: NEEDS_SCAN }));
   }
   const dtm = productVerdict(facts, input.view, 'dtm');
   const hasDtm = input.produced.has('dtm');
-  const row = (id: AnalysisId, status: AnalysisStatus, reason: string | undefined, remedy: AnalysisRemedy | null = null): AnalysisRow => ({
-    id, label: LABEL[id], status,
-    reason: reason ?? (status === 'ready' ? 'Nothing blocks this analysis for the loaded scan.' : 'Process Studio gives no reason for this verdict.'),
-    remedy: status === 'blocked' ? remedy : null,
-  });
+  const row = (id: AnalysisId, status: AnalysisStatus, reason: string | undefined, remedy: AnalysisRemedy | null = null, needs?: string): AnalysisRow => {
+    const r: AnalysisRow = {
+      id, label: LABEL[id], status,
+      reason: reason ?? (status === 'ready' ? 'Nothing blocks this analysis for the loaded scan.' : 'Process Studio gives no reason for this verdict.'),
+      remedy: status === 'blocked' ? remedy : null,
+    };
+    const n = status === 'blocked' ? needs ?? needsOf(r.remedy) : undefined;
+    return n ? { ...r, needs: n } : r;
+  };
   return ids.map((id) => {
     switch (id) {
       case 'terrain': {
@@ -167,9 +194,10 @@ export function analysisRows(input: AnalysisStatusInput): AnalysisRow[] {
       case 'observatory': {
         // The run reads the resident static cloud and does nothing without one.
         // A scan with no declared stations is ineligible, never Ready.
-        if (facts.kind !== 'streaming' && input.hasStations === false) return row(id, 'blocked', NEEDS_STATIONS);
+        if (facts.kind !== 'streaming' && input.hasStations === false) return row(id, 'blocked', NEEDS_STATIONS, null, 'Needs scanner stations');
         const c = qa(facts, 'COVERAGE');
-        return row(id, facts.kind === 'streaming' ? 'blocked' : QA_STATUS[c?.status ?? 'review'], c?.reason);
+        if (facts.kind === 'streaming') return row(id, 'blocked', c?.reason, null, 'Needs a local scan');
+        return row(id, QA_STATUS[c?.status ?? 'review'], c?.reason);
       }
       case 'objects': {
         // Sizes are only metric with a known unit; the panel still measures in scan units.

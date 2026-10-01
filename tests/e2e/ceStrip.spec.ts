@@ -7,7 +7,8 @@
  *   • resident-only: the COPC fixture, streamed
  *   • stale: a terrain run made stale by a CRS override
  * Each item is a labelled button that opens where the fact is explained. At
- * 390 px the strip sits above the dock without overlapping it.
+ * 390 px the strip sits above the dock without overlapping it. A running task
+ * stays in the strip while its panel is hidden, and leaves it once it settles.
  *
  * With OLV_CE_SHOTS set to a directory, each fixture is also photographed at
  * desktop and phone size.
@@ -17,7 +18,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { dropTerrainAccessUtmLas, showWorkspaceMode, suppressOnboardingTour } from './helpers';
-import { COPC_FIXTURE } from './streamingFixtures';
+import { COPC_FIXTURE, openEptFixture, routeEptFixture } from './streamingFixtures';
 
 const SHOTS = process.env.OLV_CE_SHOTS;
 const strip = (page: Page) => page.locator('.olv-state-strip');
@@ -150,5 +151,39 @@ test.describe('state strip', () => {
     await expect(page.locator('.olv-crs-summary').first()).toBeVisible({ timeout: 10_000 });
     // No toast or modal of its own (CE-STRIP-05).
     await expect(page.locator('[role="dialog"]:visible')).toHaveCount(0);
+  });
+
+  test('a running task stays listed while its panel is hidden, then leaves', async ({ page }) => {
+    test.setTimeout(60_000);
+    await suppressOnboardingTour(page);
+    const { release } = await routeEptFixture(page, { holdChildren: true });
+    await page.goto('/?test=1');
+    await openEptFixture(page);
+    const processing = item(page, 'processing');
+    await expect(processing).toContainText('Loading current view', { timeout: 20_000 });
+    // Close the panel that hosts the indicator, the way a panel hides itself.
+    await page.locator('.olv-streaming-phase').evaluate((e) => e.parentElement!.classList.add('olv-hidden'));
+    await expect(page.locator('.olv-streaming-phase')).toBeHidden();
+    await page.waitForTimeout(2_000);
+    await expect(processing).toContainText('Loading current view');
+    release();
+    await expect(processing).toHaveText(/Idle/, { timeout: 30_000 });
+  });
+
+  test('phone: a task in a lowered sheet is listed during an EPT open', async ({ page }) => {
+    test.setTimeout(60_000);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await suppressOnboardingTour(page);
+    const { release } = await routeEptFixture(page, { holdChildren: true });
+    await page.goto('/?test=1');
+    await openEptFixture(page);
+    await expect(page.locator('.olv-mobile-sheet')).toHaveAttribute('data-detent', 'peek');
+    await expect(page.locator('.olv-streaming-phase')).toBeHidden();
+    const processing = item(page, 'processing');
+    await expect(processing).toContainText('Loading current view', { timeout: 20_000 });
+    await page.waitForTimeout(2_000);
+    await expect(processing).toContainText('Loading current view');
+    release();
+    await expect(processing).toHaveText(/Idle/, { timeout: 30_000 });
   });
 });

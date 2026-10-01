@@ -6,7 +6,8 @@
  * indicator from `ui/busyScan.ts`, carrying `BUSY_SCAN_CLASS`. This adapter
  * finds those indicators and registers each once, so the hosts report without
  * a line of their own and the eager shell does not grow. A task is live while
- * its indicator is rendered and not settled; the label is the status text the
+ * its indicator is rendered and not settled, and stays listed while its
+ * panel is hidden until it settles or goes; the label is the status text the
  * host shows beside it. Progress is the fraction a progress controller last
  * drew, read back from its trail, and null for an indicator with no progress.
  *
@@ -72,6 +73,15 @@ export function indicatorLive(indicator: Element): boolean {
   return typeof check === 'function' ? check.call(indicator) : true;
 }
 
+/**
+ * True while the indicator stands for running work: connected, not settled and
+ * not hidden by its host. A layout that hides an ancestor (a lowered phone
+ * sheet, a closed panel) does not end the work, so it does not count here.
+ */
+export function indicatorRunning(indicator: Element): boolean {
+  return indicator.isConnected && !indicator.classList.contains('is-settled') && !indicator.closest('.olv-hidden, [hidden]');
+}
+
 /** Register every indicator in `root` not seen before. Cheap: one query. */
 export function collectBusyTasks(root: ParentNode = document): void {
   for (const indicator of Array.from(root.querySelectorAll(`.${BUSY_SCAN_CLASS}`))) {
@@ -81,7 +91,7 @@ export function collectBusyTasks(root: ParentNode = document): void {
     const { id } = registerTask({
       label: () => hostText(indicator),
       progress: () => trailFraction(parseFloat((indicator as SVGElement).style?.getPropertyValue('--olv-bs-len') ?? '')),
-      live: () => indicatorLive(indicator),
+      live: () => indicatorRunning(indicator),
       settled: () => indicator.classList.contains('is-settled'),
       run: () => (indicator as SVGElement).dataset?.run ?? '',
       gone: () => {
@@ -143,7 +153,7 @@ export function showBusyWaits(tasks: readonly TaskActivity[], announce: (message
       announce(`${spokenLabel(t.label)}: ${text}.`);
     }
     const host = indicator.parentElement;
-    if (!host || t.elapsedMs < WAIT_SHOWN_AFTER_MS || !ownText(host, indicator)) continue;
+    if (!host || !indicatorLive(indicator) || t.elapsedMs < WAIT_SHOWN_AFTER_MS || !ownText(host, indicator)) continue;
     live.add(t.id);
     let wait = waits.get(t.id);
     if (!wait || wait.parentElement !== host) {
