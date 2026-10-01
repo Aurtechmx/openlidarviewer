@@ -4,19 +4,22 @@ In development. This document is written from the final state at freeze. What
 follows is the state so far, and every entry is reproduced rather than carried
 forward from v0.6.9 by default.
 
-## Withheld points are excluded from terrain, volumes, profiles and density only
+## Withheld points are excluded from scientific products, not from registration, classification or measurement
 
 The decoder keeps Synthetic, Key-Point, Withheld and Overlap, and both LAS
 writers emit them. Terrain analysis, both volume tools (the lasso stockpile and
 the polygon Volume tool), profiles (the profile chart and the profile workbench
-section) and point density (the scan report's Density and Spacing, and the
-density tier) leave Withheld points out and record how many points they read,
+section), point density (the scan report's Density and Spacing, and the
+density tier), elevation comparison between two epochs and feature extraction
+leave Withheld points out and record how many points they read,
 how many were Withheld and how many they analysed. Overlap points are kept.
 When the flags cannot be read, as on a voxel-reduced load or where density
 uses the file header's total, the Withheld count is recorded as unknown.
 Terrain analysis first decodes the source file again when it can, and then
-records the counts from that decode. Elevation comparison between two epochs
-and feature extraction read Withheld points like any other return. ASPRS says a producer generally sets Withheld on overlap
+records the counts from that decode. The ground filter outside terrain, the
+classifier, registration and measurement read Withheld points like any other
+return. The elevation difference raster has no metadata block, so its counts
+appear in the compare panel only. ASPRS says a producer generally sets Withheld on overlap
 points culled during flight-line merging, so this matters on conforming files.
 
 ## Flags do not survive every derivation
@@ -231,7 +234,7 @@ for this development cut: that evidence comes from the engines themselves.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,508 lines and `src/render/Viewer.ts` is 6,044, one hundred and seventy-nine lines
+`src/main.ts` is 4,503 lines and `src/render/Viewer.ts` is 6,044, one hundred and seventy-nine lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more

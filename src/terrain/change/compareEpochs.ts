@@ -25,6 +25,13 @@ import { METRES_PER_DEGREE } from '../ground/horizontalScale';
 import type { DtmGrid } from '../ground/cellConfidence';
 import type { TerrainPoint } from '../TerrainContracts';
 import { compareDtms, type CompareDtmsOptions, type EpochComparison } from './compareDtms';
+import { isWithheld } from '../../science/withheldPolicy';
+import {
+  alignedFlags,
+  describeWithheldRead,
+  withheldReadCounts,
+  type WithheldReadCounts,
+} from '../../science/withheldCounts';
 
 /** One epoch: its render-local xyz positions (z up) and declared CRS / datum. */
 export interface EpochCloud {
@@ -268,4 +275,78 @@ export function compareEpochClouds(
     isGeographic:
       options.isGeographic ?? (before.isGeographic === true || after.isGeographic === true),
   });
+}
+
+/** An epoch with its Withheld points left out, and the record of what was read. */
+export interface WithheldFilteredEpoch<T extends { readonly positions: Float32Array }> {
+  /** The same object when nothing was excluded; a copy with fewer positions otherwise. */
+  readonly cloud: T;
+  readonly withheld: WithheldReadCounts;
+}
+
+/**
+ * Leave the points the producer marked Withheld out of one epoch, as the
+ * terrain gather and the lasso volume do (`withheldPolicy.ts`). Change detection
+ * is scientific processing, so the alignment, both ground filters and the
+ * difference read only the rest.
+ *
+ * `flags` indexes the epoch's own position buffer. A missing or misaligned
+ * channel excludes nothing and records the count as 'unknown'. When no point is
+ * Withheld the input object is returned as it was, so the comparison is the
+ * same computation it was before.
+ */
+export function excludeWithheldEpoch<T extends { readonly positions: Float32Array }>(
+  cloud: T,
+  flags: ArrayLike<number> | null | undefined,
+): WithheldFilteredEpoch<T> {
+  const n = (cloud.positions.length / 3) | 0;
+  const f = alignedFlags(flags, n);
+  if (!f) return { cloud, withheld: withheldReadCounts(n, 0, false) };
+  let kept = 0;
+  for (let i = 0; i < n; i++) if (!isWithheld(f[i])) kept += 1;
+  const withheld = withheldReadCounts(n, n - kept, true);
+  if (kept === n) return { cloud, withheld };
+  const src = cloud.positions;
+  const out = new Float32Array(kept * 3);
+  let w = 0;
+  for (let i = 0; i < n; i++) {
+    if (isWithheld(f[i])) continue;
+    out[w++] = src[i * 3];
+    out[w++] = src[i * 3 + 1];
+    out[w++] = src[i * 3 + 2];
+  }
+  return { cloud: { ...cloud, positions: out }, withheld };
+}
+
+/**
+ * Compare-panel lines naming what each epoch read, or none when neither epoch
+ * had a Withheld point to leave out.
+ */
+export function epochWithheldLines(before: WithheldReadCounts, after: WithheldReadCounts): string[] {
+  const hit = (c: WithheldReadCounts): boolean => typeof c.withheldExcluded === 'number' && c.withheldExcluded > 0;
+  if (!hit(before) && !hit(after)) return [];
+  return [`Before points: ${describeWithheldRead(before)}`, `After points: ${describeWithheldRead(after)}`];
+}
+
+/**
+ * A prepared comparison with both epochs' Withheld points left out, and the
+ * compare-panel lines that say so. `a` and `b` are the loaded clouds whose
+ * flags index the prepared epochs' buffers; every other field passes through.
+ */
+export function withheldEpochs<
+  T extends { readonly positions: Float32Array },
+  P extends { readonly beforeCloud: T; readonly afterCloud: T },
+>(
+  prepared: P,
+  a: { readonly classificationFlags?: ArrayLike<number> },
+  b: { readonly classificationFlags?: ArrayLike<number> },
+): P & { readonly lines: string[] } {
+  const before = excludeWithheldEpoch(prepared.beforeCloud, a.classificationFlags);
+  const after = excludeWithheldEpoch(prepared.afterCloud, b.classificationFlags);
+  return {
+    ...prepared,
+    beforeCloud: before.cloud,
+    afterCloud: after.cloud,
+    lines: epochWithheldLines(before.withheld, after.withheld),
+  };
 }

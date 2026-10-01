@@ -55,9 +55,14 @@
  *     extent rows) cannot be inspected, so it is used whole and its Withheld
  *     share is recorded as 'unknown'.
  *
+ *   - change: each epoch of an elevation comparison (`excludeWithheldEpoch`),
+ *     before the alignment and both ground filters.
+ *   - feature extraction (`buildFeatureExtractionInput`), whose footprint
+ *     GeoJSON records the counts.
+ *
  * The other scientific paths still read every point the cloud holds: the
- * ground filter outside terrain, the polygon volume tool, the classifier,
- * registration and change, and measurement. Each carries recorded evidence
+ * ground filter outside terrain, the classifier, registration, and
+ * measurement. Each carries recorded evidence
  * of its own, so each is applied as its own change.
  *
  * Pure: no DOM, no GPU, no cloud. Flags in, decisions out.

@@ -18,6 +18,7 @@
  */
 
 import type { Pt2 } from './footprintTrace';
+import type { WithheldReadCounts } from '../science/withheldCounts';
 
 export interface FootprintFeatureInput {
   /**
@@ -53,6 +54,11 @@ export interface FootprintGeoJsonOptions {
   readonly sourceCrsLabel?: string | null;
   /** Method/version stamp for the extraction. */
   readonly method?: string;
+  /**
+   * Building and wire points read, with the Withheld exclusion. Recorded in
+   * the collection metadata only when a Withheld point was left out.
+   */
+  readonly withheld?: WithheldReadCounts;
 }
 
 /**
@@ -65,7 +71,7 @@ export function footprintsToGeoJson(
   options: FootprintGeoJsonOptions = {},
 ): {
   type: 'FeatureCollection';
-  metadata: { extractedFromCrs?: string; product: string; note: string };
+  metadata: { extractedFromCrs?: string; product: string; note: string; withheld?: WithheldReadCounts };
   features: Array<Record<string, unknown>>;
 } {
   const features = footprints
@@ -100,6 +106,9 @@ export function footprintsToGeoJson(
       ...(options.sourceCrsLabel ? { extractedFromCrs: options.sourceCrsLabel } : {}),
       product: 'building-footprint-candidates',
       note: 'Derived footprint candidates from classified building points; not surveyed outlines. Coordinates are WGS 84 longitude/latitude per RFC 7946.',
+      ...(options.withheld && typeof options.withheld.withheldExcluded === 'number' && options.withheld.withheldExcluded > 0
+        ? { withheld: { ...options.withheld } }
+        : {}),
     },
     features,
   };

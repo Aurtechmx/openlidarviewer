@@ -38,6 +38,7 @@ import {
 } from '../features/FeatureExtractionService';
 import { CandidateReviewStore, type CandidateStatus } from '../features/candidateReview';
 import { footprintsToGeoJson } from '../features/footprintGeoJson';
+import { describeWithheldRead, type WithheldReadCounts } from '../science/withheldCounts';
 import { methodRef, methodTag } from '../science/methodRegistry';
 import { triggerDownload } from '../io/download';
 import type { LocalToLonLatSourceZ } from '../export/lonLatMapper';
@@ -209,7 +210,11 @@ function buildReview(
   );
   const conductors = conductor ? [conductor] : [];
 
-  root.append(renderBuildingSection(buildings, review, crsLabel, toLonLat, axisRefusal));
+  const w = input.withheld;
+  if (typeof w.withheldExcluded === 'number' && w.withheldExcluded > 0) {
+    root.append(el('p', { className: 'olv-feature-note olv-feature-withheld', text: `Building and wire points: ${describeWithheldRead(w)}` }));
+  }
+  root.append(renderBuildingSection(buildings, review, crsLabel, toLonLat, axisRefusal, w));
   root.append(renderConductorSection(conductors, input.conductorPoints.length, review));
   return root;
 }
@@ -262,6 +267,7 @@ function renderBuildingSection(
   crsLabel: string | null,
   toLonLat: LocalToLonLatSourceZ | null,
   axisRefusal: string | null,
+  withheld?: WithheldReadCounts,
 ): HTMLElement {
   const section = el('div', { className: 'olv-feature-section' });
   section.append(
@@ -289,7 +295,7 @@ function renderBuildingSection(
     row.append(statusChips(b.id, review, row));
     section.append(row);
   }
-  section.append(buildFootprintExport(buildings, review, crsLabel, toLonLat, axisRefusal));
+  section.append(buildFootprintExport(buildings, review, crsLabel, toLonLat, axisRefusal, withheld));
   return section;
 }
 
@@ -305,6 +311,8 @@ export function acceptedFootprintGeoJson(
   review: CandidateReviewStore,
   crsLabel: string | null,
   toLonLat: LocalToLonLatSourceZ | null,
+  /** What extraction read; recorded in the file when a Withheld point was left out. */
+  withheld?: WithheldReadCounts,
 ): ReturnType<typeof footprintsToGeoJson> | null {
   const accepted = review.accepted(buildings);
   if (accepted.length === 0) return null;
@@ -327,7 +335,7 @@ export function acceptedFootprintGeoJson(
       centroidY: ll(b.centroid[0], b.centroid[1]).y,
       id: b.id,
     })),
-    { sourceCrsLabel: crsLabel, method: methodTag(methodRef('olv.feature.building-footprint')) },
+    { sourceCrsLabel: crsLabel, method: methodTag(methodRef('olv.feature.building-footprint')), withheld },
   );
 }
 
@@ -344,6 +352,7 @@ function buildFootprintExport(
   toLonLat: LocalToLonLatSourceZ | null,
   /** Why no geographic export is possible, when the reason is the up-axis. */
   axisRefusal: string | null,
+  withheld?: WithheldReadCounts,
 ): HTMLElement {
   const wrap = el('div', { className: 'olv-feature-export' });
   const status = el('div', { className: 'olv-feature-export-status', text: '' });
@@ -367,7 +376,7 @@ function buildFootprintExport(
           + 'in WGS 84. Assign or correct the CRS, then export.';
       return;
     }
-    const geojson = acceptedFootprintGeoJson(buildings, review, crsLabel, toLonLat);
+    const geojson = acceptedFootprintGeoJson(buildings, review, crsLabel, toLonLat, withheld);
     if (!geojson) {
       status.textContent = 'No accepted footprints to export — accept at least one candidate first.';
       return;

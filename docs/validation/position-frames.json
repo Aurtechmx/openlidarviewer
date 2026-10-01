@@ -603,6 +603,13 @@
     },
     {
       "file": "src/terrain/change/compareEpochs.ts",
+      "symbol": "excludeWithheldEpoch",
+      "frame": "source-local",
+      "reads": 2,
+      "why": "Triples are copied unchanged and indexed against the epoch's own flags channel, so the filter keeps the loader's frame and the origin travels with the epoch."
+    },
+    {
+      "file": "src/terrain/change/compareEpochs.ts",
       "symbol": "sharedGrid",
       "frame": "world",
       "reads": 2,

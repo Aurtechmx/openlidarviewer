@@ -4302,7 +4302,7 @@ function compareLoadedLayers(): void {
   void (async () => {
     // Load the change-detection code on demand, then yield a frame so the
     // "working" line paints before the synchronous ground-filter compute.
-    const [{ buildSharedEpochDtms }, { alignEpochClouds, summarizeAlignment, buildRegistrationArtifact, summarizeRegistration }, { compareDtms, summarizeChange }, { changeToEsriAscii }] =
+    const [{ buildSharedEpochDtms, withheldEpochs }, { alignEpochClouds, summarizeAlignment, buildRegistrationArtifact, summarizeRegistration }, { compareDtms, summarizeChange }, { changeToEsriAscii }] =
       await Promise.all([
         loadCompareEpochs(),
         loadAlignEpochs(),
@@ -4311,7 +4311,7 @@ function compareLoadedLayers(): void {
       ]);
     await new Promise((resolve) => setTimeout(resolve, 16));
     try {
-      const { ctxA, comparable, reason, frames, beforeCloud, afterCloud } = prepareEpochFrames(crsService, a, b);
+      const { ctxA, comparable, reason, frames, beforeCloud, afterCloud, lines } = withheldEpochs(prepareEpochFrames(crsService, a, b), a, b);
       if (!comparable) {
         inspector.setCompareResult(
           epochUnitMismatchLines(`${baseName(a.name)} (before) → ${baseName(b.name)} (after)`, reason ?? 'vertical-unit'),
@@ -4345,15 +4345,10 @@ function compareLoadedLayers(): void {
         verticalUnitToMetres: ctxA.verticalUnitToMetres, // Z keeps its OWN declared scale; the horizontal verdict never stands in for it
       });
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
-      inspector.setCompareResult([header, summarizeAlignment(alignment), summarizeRegistration(buildRegistrationArtifact(alignment, { targetId: ids[0], targetName: a.name, sourceId: ids[1], sourceName: b.name }, Date.now())), ...summarizeChange(cmp, { registrationSigmaM: alignment.applied ? alignment.rmsResidualM : 0, horizontalUnitToMetres: frames.horizontalUnitToMetres })]);
-      // A georeferenced .asc of the signed difference. The shared grid is built
-      // in the common world frame, so its origin IS the scan's projected corner.
-      // The .asc grid geometry (cellsize + corners) is in the source LINEAR
-      // unit, but detectChange returns Δz in metres. Express the cell values in
-      // that same linear unit so the raster is internally consistent (a foot-CRS
-      // export otherwise carries foot geometry with metre values, and any GIS
-      // volume mixes ft² with m). Metre / compound-metre-horizontal CRS ⇒ 1, a
-      // byte-identical no-op; OLV never reprojects, so the grid unit stays source.
+      inspector.setCompareResult([header, summarizeAlignment(alignment), summarizeRegistration(buildRegistrationArtifact(alignment, { targetId: ids[0], targetName: a.name, sourceId: ids[1], sourceName: b.name }, Date.now())), ...lines, ...summarizeChange(cmp, { registrationSigmaM: alignment.applied ? alignment.rmsResidualM : 0, horizontalUnitToMetres: frames.horizontalUnitToMetres })]);
+      // A georeferenced .asc of the signed difference, origin at the world-frame
+      // corner. Cell values are converted from metres to the source linear unit so
+      // they match the grid geometry (1 for a metre CRS: a byte-identical no-op).
       // The whole co-registration verdict, not just a proven frame clash: see
       // EpochComparison.coregistered for why the file is stricter than the panel.
       if (!cmp.coregistered || cmp.result.stats.comparable === 0) {
