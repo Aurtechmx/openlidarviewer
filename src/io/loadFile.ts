@@ -32,6 +32,7 @@ import type { LoadErrorCategory } from './loadErrors';
 import type { OrganizedRangeSet } from '../model/OrganizedRange';
 import type { AcquisitionStationSet } from '../model/AcquisitionStations';
 import type { PreviewChunk } from './loadLas';
+import { isParseReply } from './parseMessages';
 
 export type { LoadResult, LoaderFn } from './parseBuffer';
 export { POINT_BUDGET, MOBILE_POINT_BUDGET, pickLoader, parseBuffer } from './parseBuffer';
@@ -136,6 +137,8 @@ interface CloudPayload {
   declaredPointCount?: number;
   metadata?: CloudMetadata;
 }
+
+const MALFORMED_REPLY = 'Parse worker sent a malformed reply.';
 
 type WorkerReply =
   | ({ type: 'progress' } & ProgressUpdate)
@@ -691,6 +694,11 @@ export async function loadFile(
     worker.onmessage = (event: MessageEvent): void => {
       if (settled) return;
       const msg = event.data as WorkerReply;
+      if (!isParseReply(msg)) {
+        detach();
+        reject(new Error(MALFORMED_REPLY));
+        return;
+      }
       if (msg.type === 'progress') {
         // The first reply marks the buffer transfer + worker spin-up cost.
         transferMs ??= performance.now() - postedAt;
@@ -881,6 +889,11 @@ export async function decodeFullViaWorker(
       worker.onmessage = (event: MessageEvent): void => {
         if (settled) return;
         const msg = event.data as WorkerReply;
+        if (!isParseReply(msg)) {
+          detach();
+          reject(new Error(MALFORMED_REPLY));
+          return;
+        }
         // A full-res decode surfaces no UI progress — drop the progress frames.
         if (msg.type === 'progress' || msg.type === 'previewChunk') return;
         detach();

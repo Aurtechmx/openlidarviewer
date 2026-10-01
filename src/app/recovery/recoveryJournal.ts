@@ -138,7 +138,7 @@ export function createDebouncer(
 
 function isEntry(x: unknown): x is RecoveryEntry {
   const e = x as RecoveryEntry;
-  return !!e && e.v === 1 && typeof e.key === 'string' && typeof e.json === 'string' && Number.isFinite(e.savedAt) && !!e.summary;
+  return !!e && e.v === 1 && typeof e.key === 'string' && typeof e.json === 'string' && e.json.length <= MAX_ENTRY_BYTES && Number.isFinite(e.savedAt) && !!e.summary;
 }
 
 const newestFirst = (a: RecoveryEntry, b: RecoveryEntry): number => b.savedAt - a.savedAt;
@@ -150,7 +150,7 @@ export function createLocalStore(storage: Pick<Storage, 'getItem' | 'setItem' | 
     if (!raw) return [];
     try {
       const parsed: unknown = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed.filter(isEntry).sort(newestFirst) : [];
+      return Array.isArray(parsed) ? parsed.filter(isEntry).sort(newestFirst).slice(0, MAX_ENTRIES) : [];
     } catch {
       return [];
     }
@@ -223,13 +223,14 @@ export async function openIndexedDbStore(idb: IDBFactory): Promise<RecoveryStore
   const db = await req(open);
   const tx = <T>(mode: IDBTransactionMode, f: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> =>
     req(f(db.transaction(STORE, mode).objectStore(STORE)));
-  const list = async (): Promise<RecoveryEntry[]> =>
+  const all = async (): Promise<RecoveryEntry[]> =>
     ((await tx('readonly', (s) => s.getAll())) as unknown[]).filter(isEntry).sort(newestFirst);
+  const list = async (): Promise<RecoveryEntry[]> => (await all()).slice(0, MAX_ENTRIES);
   return {
     backend: 'indexeddb',
     async put(entry) {
       await tx('readwrite', (s) => s.put(entry));
-      for (const old of (await list()).slice(MAX_ENTRIES)) await tx('readwrite', (s) => s.delete(old.key));
+      for (const old of (await all()).slice(MAX_ENTRIES)) await tx('readwrite', (s) => s.delete(old.key));
     },
     async remove(key) {
       await tx('readwrite', (s) => s.delete(key));

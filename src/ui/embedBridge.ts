@@ -109,50 +109,28 @@ export function interpretEmbedMessage(data: unknown): EmbedCommand | null {
 /** Options for `startEmbedBridge`. */
 export interface EmbedBridgeOptions {
   /**
-   * Target origin for the outbound `ready` ping. The default is `'*'`
-   * (broadcast to any parent) because the message payload is just
-   * the source tag and version only. Stricter deployments
-   * should pass a configured parent origin (e.g.
-   * `'https://embed.example.com'`) so the ping is only delivered to
-   * the expected host.
-   *
-   * Per spec, `'*'` is the wildcard; any other value is a literal
-   * origin match. The browser drops the message if the parent's
-   * actual origin doesn't match.
-   */
-  readonly readyTargetOrigin?: string;
-  /**
-   * Allow-list of origins that may issue inbound commands. When non-
-   * empty, messages from any origin not in this list are dropped
-   * BEFORE shape validation. Empty / undefined preserves the legacy
-   * "shape-validation only" behaviour for backward compat with
-   * existing embeds that don't configure an origin.
+   * Origins that may drive the viewer. The `ready` message goes to each of
+   * them, and inbound commands from any other origin are dropped. When the
+   * list is empty or unset, the bridge sends nothing and accepts nothing.
    */
   readonly allowedOrigins?: readonly string[];
 }
 
 /**
- * Read the embed-bridge configuration off the page URL. Two
- * URL-parameter conventions are supported:
+ * Read the embed-bridge allow-list off the page URL:
  *
- *   - `?embedParent=https://embed.example.com` — sets BOTH the
- *     outbound ready target AND the inbound allow-list to the
- *     single host. Convenient for the common case.
- *   - `?embedOrigins=https://a.example.com,https://b.example.com` —
- *     comma-separated allow-list for the inbound side only.
+ *   - `?embedParent=https://embed.example.com` allows one origin.
+ *   - `?embedOrigins=https://a.example.com,https://b.example.com` allows a
+ *     comma-separated list and takes precedence over `embedParent`.
  *
- * Returns `{}` when no params are present.
+ * Returns `{}` when neither parameter is present.
  */
 export function embedBridgeOptionsFromUrl(search: string): EmbedBridgeOptions {
-  let readyTargetOrigin: string | undefined;
   let allowedOrigins: string[] | undefined;
   try {
     const params = new URLSearchParams(search);
     const parent = params.get('embedParent');
-    if (parent) {
-      readyTargetOrigin = parent;
-      allowedOrigins = [parent];
-    }
+    if (parent) allowedOrigins = [parent];
     const origins = params.get('embedOrigins');
     if (origins) {
       allowedOrigins = origins
@@ -163,39 +141,30 @@ export function embedBridgeOptionsFromUrl(search: string): EmbedBridgeOptions {
   } catch {
     /* URL parsing failure → fall back to defaults */
   }
-  const opts: EmbedBridgeOptions = {};
-  if (readyTargetOrigin) (opts as { readyTargetOrigin?: string }).readyTargetOrigin = readyTargetOrigin;
-  if (allowedOrigins) (opts as { allowedOrigins?: string[] }).allowedOrigins = allowedOrigins;
-  return opts;
+  return allowedOrigins ? { allowedOrigins } : {};
 }
 
 /**
- * Start the embed bridge: announce readiness to the embedding parent and
- * listen for the four documented commands. Returns a disposer that removes the
- * listener.
- *
- * `options.readyTargetOrigin` controls the outbound `ready` ping's
- * target — `'*'` (default) sends to any parent; a literal origin
- * only delivers when the parent's origin matches.
- *
- * `options.allowedOrigins` (when non-empty) gates inbound commands:
- * messages from any origin not in the list are dropped before shape
- * validation. Empty / undefined preserves backward compatibility for
- * existing embeds.
+ * Start the embed bridge: announce readiness to each allowed origin and
+ * listen for the documented commands from the embedding parent on one of
+ * those origins. With no allow-list the bridge is inert. Returns a disposer
+ * that removes the listener.
  */
 export function startEmbedBridge(
   handlers: EmbedBridgeHandlers,
   options: EmbedBridgeOptions = {},
 ): () => void {
-  const readyTarget = options.readyTargetOrigin ?? '*';
-  const allow = options.allowedOrigins;
+  const allow = options.allowedOrigins ?? [];
 
-  // Announce readiness to the embedding parent, if there is one.
+  // Announce readiness to the embedding parent on each allowed origin; the
+  // browser delivers only the one matching the parent's actual origin.
   if (window.parent && window.parent !== window) {
-    window.parent.postMessage(
-      { source: SOURCE, type: 'ready', version: __APP_VERSION__ },
-      readyTarget,
-    );
+    for (const origin of allow) {
+      window.parent.postMessage(
+        { source: SOURCE, type: 'ready', version: __APP_VERSION__ },
+        origin,
+      );
+    }
   }
 
   const onMessage = (event: MessageEvent): void => {
@@ -208,25 +177,11 @@ export function startEmbedBridge(
     // opener that did `window.open('…?embed=1')` then postMessage drive the app.
     // A genuine iframe embed is unaffected: `event.source === window.parent` still.
     if (event.source !== window.parent) return;
-    if (allow && allow.length > 0 && !allow.includes(event.origin)) return;
+    if (!allow.includes(event.origin)) return;
     const command = interpretEmbedMessage(event.data);
     if (!command) return;
     switch (command.kind) {
       case 'load-file':
-        // `load-file` is the one PRIVILEGED command: it hands the viewer an
-        // arbitrary buffer to allocate and decode. Require an explicitly
-        // configured trusted origin for it, even though the side-effect-free
-        // local commands below stay origin-agnostic for back-compat. Without an
-        // allow-list that names this origin, drop it (a cross-origin embed that
-        // wants to push files must opt in via `embedOrigins` / `allowedOrigins`).
-        if (!allow || allow.length === 0 || !allow.includes(event.origin)) {
-          if (import.meta.env?.DEV) {
-            console.warn(
-              '[embed] load-file refused: configure allowedOrigins to permit this origin to push files.',
-            );
-          }
-          return;
-        }
         handlers.onLoadFile(command.buffer, command.name);
         return;
       case 'jump-camera':

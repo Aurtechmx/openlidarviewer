@@ -158,7 +158,7 @@ describe('startEmbedBridge — only the true embedding parent may drive the view
   it('ACCEPTS a command from the genuine embedding parent (iframe case unaffected)', () => {
     const { handlers, calls } = makeHandlers();
     const env = withWindow(false);
-    const dispose = startEmbedBridge(handlers);
+    const dispose = startEmbedBridge(handlers, { allowedOrigins: ['https://host.example'] });
     env.dispatch({
       source: env.parent,
       origin: 'https://host.example',
@@ -186,7 +186,7 @@ describe('startEmbedBridge — only the true embedding parent may drive the view
   it('DROPS an oversized load-file even from the genuine parent (byte cap)', () => {
     const { handlers, calls } = makeHandlers();
     const env = withWindow(false);
-    const dispose = startEmbedBridge(handlers);
+    const dispose = startEmbedBridge(handlers, { allowedOrigins: ['https://host.example'] });
     env.dispatch({
       source: env.parent,
       origin: 'https://host.example',
@@ -224,16 +224,33 @@ describe('startEmbedBridge — only the true embedding parent may drive the view
     dispose();
   });
 
-  it('still runs the side-effect-free commands without an allow-list (back-compat)', () => {
+  it.each([
+    ['jump-camera', { type: 'jump-camera', camera: { position: [1, 2, 3], target: [0, 0, 0] } }, 'onJumpCamera'],
+    ['toggle-layer', { type: 'toggle-layer', id: 'cloud_0', visible: false }, 'onToggleLayer'],
+    ['focus-annotation', { type: 'focus-annotation', id: 'a1' }, 'onFocusAnnotation'],
+  ] as const)('REFUSES %s when no origin allow-list is configured', (_label, data, handler) => {
     const { handlers, calls } = makeHandlers();
     const env = withWindow(false);
     const dispose = startEmbedBridge(handlers); // no allowedOrigins
-    env.dispatch({
-      source: env.parent,
-      origin: 'https://host.example',
-      data: { type: 'jump-camera', camera: { position: [1, 2, 3], target: [0, 0, 0] } },
-    });
-    expect(calls.onJumpCamera).toHaveBeenCalled();
+    env.dispatch({ source: env.parent, origin: 'https://host.example', data });
+    expect(calls[handler]).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('sends no ready message when no origin is configured', () => {
+    const { handlers } = makeHandlers();
+    const env = withWindow(false);
+    const dispose = startEmbedBridge(handlers);
+    expect((env.parent as { postMessage: ReturnType<typeof vi.fn> }).postMessage).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('sends ready only to each configured origin', () => {
+    const { handlers } = makeHandlers();
+    const env = withWindow(false);
+    const dispose = startEmbedBridge(handlers, { allowedOrigins: ['https://a.example', 'https://b.example'] });
+    const post = (env.parent as { postMessage: ReturnType<typeof vi.fn> }).postMessage;
+    expect(post.mock.calls.map((c) => c[1])).toEqual(['https://a.example', 'https://b.example']);
     dispose();
   });
 

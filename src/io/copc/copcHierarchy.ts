@@ -54,6 +54,9 @@ function readKey(view: DataView, pos: number): VoxelKey {
  * multiple of 32 is parsed up to its last whole entry — a clean way to absorb
  * a hierarchy page that a clamped range read returned short.
  */
+/** Largest hierarchy page read, root or child: 524,288 entries. */
+export const MAX_COPC_HIERARCHY_PAGE_BYTES = 16 * 1024 * 1024;
+
 export function parseHierarchyPage(
   pageBuffer: ArrayBuffer,
   cube: OctreeCube,
@@ -96,7 +99,12 @@ export function parseHierarchyPage(
 
     if (pointCount === -1) {
       // Child hierarchy page reference.
-      if (!offsetOk || byteSize <= 0 || byteSize % HIERARCHY_ENTRY_SIZE !== 0) {
+      if (
+        !offsetOk ||
+        byteSize <= 0 ||
+        byteSize % HIERARCHY_ENTRY_SIZE !== 0 ||
+        byteSize > MAX_COPC_HIERARCHY_PAGE_BYTES
+      ) {
         errors.push(`entry ${i} (${keyId(key)}): malformed child-page reference`);
         continue;
       }

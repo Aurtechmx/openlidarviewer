@@ -15,6 +15,7 @@
 import { LoadError } from '../loadErrors';
 import { readSafeUint64 } from '../lasHeader';
 import { parseCrsFromVlrs } from '../crs';
+import { MAX_COPC_HIERARCHY_PAGE_BYTES } from './copcHierarchy';
 import type { CopcMetadata, CopcHeaderInfo, CopcInfo } from './copcTypes';
 
 /** Offset of the COPC `info` VLR payload: 375 header + 54 VLR header. */
@@ -150,7 +151,8 @@ export function parseCopcMetadata(headSlice: ArrayBuffer): CopcMetadata {
     info.rootHierOffset <= 0 ||
     !Number.isFinite(info.rootHierSize) ||
     info.rootHierSize <= 0 ||
-    info.rootHierSize % 32 !== 0
+    info.rootHierSize % 32 !== 0 ||
+    info.rootHierSize > MAX_COPC_HIERARCHY_PAGE_BYTES
   ) {
     throw new LoadError('malformed-file', 'COPC root hierarchy location is invalid.');
   }

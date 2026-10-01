@@ -21,6 +21,9 @@ import type { StreamingNode } from './StreamingNode';
 /** A hard cap on hierarchy pages, so a malformed file cannot loop forever. */
 const MAX_HIERARCHY_PAGES = 4096;
 
+/** A hard cap on data nodes across the hierarchy. */
+export const MAX_HIERARCHY_NODES = 2_000_000;
+
 /**
  * The named reason pushed into {@link StreamingOctree.errors} when the resolved
  * hierarchy's point total does not equal the LAS header's declared count. A
@@ -70,8 +73,11 @@ export class StreamingOctree {
   private readonly _errors: string[] = [];
   private _fullyLoaded = false;
 
-  constructor(source: CopcSource) {
+  private readonly _maxNodes: number;
+
+  constructor(source: CopcSource, maxNodes: number = MAX_HIERARCHY_NODES) {
     this._source = source;
+    this._maxNodes = maxNodes;
     this._ingestPage(source.rootPage, source.metadata.info.rootHierOffset);
   }
 
@@ -187,6 +193,12 @@ export class StreamingOctree {
           continue;
         }
         pagesLoaded++;
+        if (this.store.size + page.nodes.length > this._maxNodes) {
+          this._errors.push(`hierarchy exceeded ${this._maxNodes} nodes; stopped`);
+          frontier = [];
+          next.length = 0;
+          break;
+        }
         this._ingestPage(page, ref.pageOffset);
         next.push(...page.childPages);
       }

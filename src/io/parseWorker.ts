@@ -17,6 +17,7 @@ import { primeDevFlags, parseDevFlags } from '../perf/devFlags';
 import { primeDecodePoolEnvironment } from './workerPool/decodePoolSize';
 import type { LazLoadStats, PreviewChunkSink } from './loadLas';
 import type { DecodePoolPolicy } from './heavy/worker/lazChunkWorkerClient';
+import { isParseRequest } from './parseMessages';
 
 interface ParseRequest {
   /** The file's bytes, transferred; absent when `file` is sent instead. */
@@ -59,6 +60,10 @@ interface ParseRequest {
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
 ctx.onmessage = (event: MessageEvent): void => {
+  if (!isParseRequest(event.data)) {
+    ctx.postMessage({ type: 'error', error: 'Malformed parse request.' });
+    return;
+  }
   const {
     buffer, file, format, name, budget, plan, e57Plan, search, device, previewBudget, pointSemantics,
   } = event.data as ParseRequest;

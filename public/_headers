@@ -17,6 +17,7 @@
 # plugin content outright. frame-ancestors 'self' is the clickjacking guard and
 # replaces X-Frame-Options: SAMEORIGIN (same policy, the CSP form every current
 # browser honours); a cross-origin embed is a deliberate deployer change to it.
+# index.html carries the same policy as a meta tag, minus frame-ancestors.
 
 /*
   X-Content-Type-Options: nosniff

@@ -111,18 +111,19 @@ the two entries were renumbered when the branches were integrated.
 | L210 | UI | TEST | med | FIXED | new | The Analyse home marked a routine missing prerequisite (no scan, no terrain run, no stations) with the red Blocked badge, and the task strip dropped a running task whose panel was closed or hidden, reading Idle during real work. |
 | L202 | UI | TEST | med | FIXED | new | A failed load of the action registry, a lazy panel, the plan view controller or the tour stayed cached, so Try again failed until a reload and each failed palette attempt left a palette element behind; the report verifier and the tour kept key handling of their own outside the dialog stack, and a dialog removed without its teardown blocked Tab, Cmd-K and ?; H and the tool keys acted behind an open dialog; a workflow save that threw lost the recording; a workflow file could list any number of events and echoed a bad value at any length. |
 | L209 | EXPORT | TEST | med | FIXED | new | No export recorded the SHA-256 of the source file or of the points an analysis read, and most exports did not record where the CRS came from. |
+| L211 | ARCHITECTURE | TEST | high | FIXED | new | With no origin allow-list, any page that framed the viewer could move the camera, toggle layers and focus annotations, and the ready message went to any parent; index.html carried no CSP of its own; COPC hierarchy pages, key depth and node totals had no ceiling; recovery entries were capped only on write; parse worker messages were read without a shape check. |
 
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 61
+- FIXED: 62
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 83
+- total: 84
 
 ## Detail
 
@@ -8077,3 +8078,26 @@ run off the main thread. The terrain gather is capped at 300k points (about
 Covered by `tests/exportInputDigests.test.ts` (each surface, determinism,
 streamed and not-held sources, chunk boundary, payload round trip).
 
+### L211 · FIXED · ARCHITECTURE
+
+The embed bridge acts only for origins on the `?embedParent` or
+`?embedOrigins` allow-list. With no list it sends no `ready` message and
+ignores every command; with one, `ready` goes to each listed origin and a
+command from any other origin is dropped. `docs/usage.md` states this.
+
+`index.html` carries the `public/_headers` Content-Security-Policy as a meta
+tag, without `frame-ancestors`, which a meta tag cannot set.
+
+COPC hierarchy pages are capped at 16 MiB, root and child
+(`MAX_COPC_HIERARCHY_PAGE_BYTES`). A voxel key must have a depth of at most 32
+and x, y, z inside its level. The hierarchy walk stops at 2,000,000 data nodes
+and records the stop as an error, so the octree does not read as complete.
+
+The recovery journal drops a stored entry whose session is over 4 MiB and
+returns at most five entries when read. Inspector section preferences ignore
+the keys `__proto__`, `constructor` and `prototype`. The parse worker checks
+each request, and the page checks each reply, with `src/io/parseMessages.ts`;
+a malformed message ends the load with an error.
+
+Covered by `tests/embedBridge.test.ts`, `tests/indexCspMeta.test.ts` and
+`tests/untrustedInputCaps.test.ts`.
