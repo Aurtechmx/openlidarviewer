@@ -308,6 +308,31 @@ describe('results shelf actions', () => {
     expect(root.find((e) => e.hasClass('olv-results-live'))!.ownText).toBe('Export opened with Terrain surface, north.laz selected.');
   });
 
+  it('a profile row opens the Profile Workbench, and says when it cannot', () => {
+    const o = owners(() => 'a');
+    o.measurements.push({ id: 'p1', name: 'Profile 1', kind: 'profile', points: [[0, 0, 0], [1, 0, 0]], owner: { layerId: 'a' } });
+    o.measurements.push({ id: 'd1', name: 'Distance 1', kind: 'distance', points: [[0, 0, 0], [1, 0, 0]], owner: { layerId: 'a' } });
+    o.index.refresh();
+    let ok = true;
+    const openWorkbench = vi.fn(() => ok);
+    const shelf = createResultsShelf({
+      index: o.index, navigate: vi.fn(), aim: vi.fn(), exportTo: vi.fn(() => true),
+      activeLayerId: () => 'a', layerName: () => 'north.laz', openWorkbench,
+    });
+    const root = shelf.element as unknown as FakeEl;
+    const button = (id: string) => root.find((e) => e.dataset.resultId === id)!.find((e) => e.hasClass('olv-results-workbench'));
+    expect(button('measurement:d1')).toBeUndefined();
+    const wb = button('measurement:p1')!;
+    expect(wb.getAttribute('aria-label')).toBe('Workbench: Profile 1');
+    wb.fire('click');
+    expect(openWorkbench).toHaveBeenCalledWith('p1');
+    const live = root.find((e) => e.hasClass('olv-results-live'))!;
+    expect(live.ownText).toBe('Opening Profile 1 in the Profile Workbench.');
+    ok = false;
+    wb.fire('click');
+    expect(live.ownText).toBe('Profile 1 cannot open in the Profile Workbench now.');
+  });
+
   it('names another source and leaves the active layer alone', () => {
     const s = shelfFor('b');
     const root = s.shelf.element as unknown as FakeEl;

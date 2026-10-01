@@ -129,5 +129,33 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
   // The theme rows sit between the camera rows and the tools, as before.
   const theme = view.filter((a) => a.section === 'Theme');
   const rest = view.filter((a) => a.section !== 'Theme');
-  return [...camera, ...theme, ...tools, ...analysis, ...exports_, ...workflow, ...rest, ...help];
+  // Every run through the registry (a palette row, or an action the shell runs
+  // by id) is one Session log line. Dock buttons and keys call their handlers
+  // directly and are not logged as commands.
+  return [...camera, ...theme, ...tools, ...analysis, ...exports_, ...workflow, ...rest, ...help].map(loggedAction);
+}
+
+/** Hand one line to the Session log as an event, so this chunk does not carry the log. */
+function emitCommand(a: Action, status: 'done' | 'failed'): void {
+  try {
+    globalThis.document.dispatchEvent(new CustomEvent('olv-session-log', { detail: { kind: 'command', text: a.title, detail: a.section, status } }));
+  } catch {
+    /* no document here (a test host); nothing to log to */
+  }
+}
+
+/** `a`, logged once it has run: done, or failed when it threw. */
+export function loggedAction(a: Action): Action {
+  return {
+    ...a,
+    run: () => {
+      try {
+        a.run();
+      } catch (error) {
+        emitCommand(a, 'failed');
+        throw error;
+      }
+      emitCommand(a, 'done');
+    },
+  };
 }

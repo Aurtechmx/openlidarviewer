@@ -76,6 +76,8 @@ export interface ResultsShelfSources {
     applyCameraPose(pose: Pose): void;
     /** The mounted streaming source, read by the state strip for its name. */
     readonly streamingCloud?: { readonly name: string } | null;
+    /** The annotation store, read by the Session log. */
+    readonly annotate?: { getSummaries(): readonly { readonly id: string; readonly title: string }[] };
   };
   /** Viewer id to stable layer id, for measurement owners. */
   readonly identity: { stableIdFor(viewerId: string): string | null | undefined };
@@ -118,6 +120,7 @@ export function mountResultsShelf(
   exportPanel: ShelfExportPanel | null,
   navigate: (route: WorkspaceRoute) => void,
   runAction?: (id: string) => void,
+  openWorkbench?: (measurementId: string) => boolean,
 ): MountedResultsShelf {
   const src = {
     viewer: host.viewer,
@@ -191,6 +194,7 @@ export function mountResultsShelf(
       }
       : undefined,
     layerName: (id) => src.viewer.getCloud(id)?.name ?? null,
+    ...(openWorkbench ? { openWorkbench } : {}),
   });
   const offIndex = index.subscribe(() => {
     const has = terrainExports.ready();

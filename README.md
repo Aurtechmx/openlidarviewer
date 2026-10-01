@@ -409,6 +409,8 @@ Built on [three.js](https://github.com/mrdoob/three.js) (rendering), [loaders.gl
 
 The streamed sample datasets are limited to sources with a confirmed open licence: [USGS 3DEP](https://www.usgs.gov/3d-elevation-program) (public domain) and the swisstopo and GURS national programmes (via FLAI). Providers and terms are listed in [docs/credits.md](docs/credits.md).
 
+Beta testing: A. Ballesteros ([ORCID 0009-0003-3394-0699](https://orcid.org/0009-0003-3394-0699)).
+
 Format specifications OLV builds against (no conformance claimed): ASPRS (LAS/LAZ), the Khronos Group (glTF/GLB), ASTM (E57), and OGC / IOGP-EPSG (coordinate systems). Particular thanks to Howard Butler and Hobu, Inc., whose work on laz-perf, COPC, and Entwine this viewer relies on.
 
 ## Citation & research collaboration

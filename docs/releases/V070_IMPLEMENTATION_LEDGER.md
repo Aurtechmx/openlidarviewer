@@ -7769,3 +7769,63 @@ Covered by `tests/openScanAttachSequence.test.ts` (a static open keeps the
 stream until its cloud is in the scene), `tests/openStreaming.test.ts` (a
 Cancel stops the open before the manifest request) and
 `tests/recoveryControllerWrites.test.ts`.
+
+### L197 · BUILT · UI
+
+Two beta-testing requests from A. Ballesteros
+([ORCID 0009-0003-3394-0699](https://orcid.org/0009-0003-3394-0699)).
+
+Profile Workbench button. A finished profile in the Measure panel shows
+"Open in Profile Workbench" under its chart. The newest profile's button is the
+panel's one primary action (UX-D2); older profiles keep the same control in the
+secondary style. It is a native button, so Tab and Enter reach it, and it opens
+the dock the chart's Expand opens, with the same fallback to the focus view.
+Its accessible name starts with its visible label. A profile row in the
+Results shelf gains a Workbench control that shows the Measure page and opens
+the same dock. The Measure button is at least 32 px tall and 44 px on a coarse
+pointer; the shelf control is 44 px, like its Focus and Export neighbours.
+
+Session log. A Data page lists what was done in the tab: scans opened and
+closed with name and source format, each CRS the scan took and where it came
+from, analysis results and when they go out of date, measurements and
+annotations created and deleted, class filter changes, exports with file type,
+palette commands with their outcome, and the messages and errors the app
+announced. Each line carries its time and the scan it applied to; a result
+names the scan it was computed on, not the active one. The palette opens it as
+"Session log", and "actions" and "/actions" find it. It has no shortcut. The
+page has the location bar crumb, Back and Escape of every Data page, Copy as
+text (dated lines), and Export as JSON or CSV. With no scan open it shows in a
+dialog, so the lines of a failed open can be read.
+
+Sources. `src/app/sessionLog/sessionLogRecorder.ts` adds no hook to any owner.
+Scans come from the scan service's active-layer signal and the Inspector's
+layer list signal; the CRS from the CRS service; results and measurements from
+the Results index; annotations from the annotation store's summaries on every
+shell sync; the class filter from the set of hidden classes, so a class that
+streaming finds adds no line. Messages come from the polite and alert regions
+and the toast, each observed on its own. Registry runs arrive as a document
+event once they have run, marked failed when they threw. Dock buttons and keys
+call their handlers directly and are not logged as commands.
+
+Store. `sessionLog.ts` keeps the newest 2,000 entries in memory, counts the ones
+it drops and says so in the page, the text, the CSV and the JSON. Nothing is
+stored or sent. Text is cut to 1,600 characters before redaction and 400 after.
+A link keeps its scheme, host and file name only: no user name, password,
+query, fragment or `;` parameters, and a last segment with no file extension is
+dropped. `data:` and `blob:` links become `data:…` and `blob:…`. A local path
+loses its folders, with either slash and with spaces in folder names. A local
+file name keeps `#`, `?` and `%`.
+
+The page renders only while on screen and adds one row per new entry. The
+recorder, the page and their stylesheet load with the workspace shell chunk.
+The index chunk, the Viewer chunk, `main.ts` and `Viewer.ts` do not grow (live
+build compared with `origin/main` built the same way).
+
+Covered by `tests/sessionLog.test.ts` (store, cap, redaction table, linear-time
+redaction, palette search, registry outcome), `tests/sessionLogRecorder.test.ts`
+(each source, scan naming with two scans, file names with `#`, regions only,
+one filter line per change), `tests/sessionLogPage.test.ts` (table, order,
+off-screen rendering, incremental rows, copy, exports, dialog) and
+`tests/e2e/sessionLog.spec.ts` (the button and the shelf row open the dock, the
+palette opens the log after a scan and a measurement, filtering annotations adds
+no lines, the no-scan dialog, Back and Escape, both exports).

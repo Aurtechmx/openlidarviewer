@@ -22,6 +22,7 @@ const ACCEPTED: Record<string, readonly Site[]> = {
   'src/ui/WorkflowController.ts': [{ kind: 'setInterval', count: 1, owner: 'record countdown; bounded to countdownSeconds, cancelCountdown() clears it' }],
   'src/render/frameScheduler.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'the render loop; FrameDemand.dispose() cancels it (lifetime: viewer)' }],
   'src/perf/frameTelemetry.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'debug frame sampler; stop() cancels it via DebugOverlay.stop()' }],
+  'src/app/sessionLog/sessionLogPage.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot repaint per batch of log entries; skipped once the page is disposed' }],
   'src/render/Viewer.ts': [{ kind: 'requestAnimationFrame', count: 2, owner: 'one-shot: resize debounce (cancelled on dispose) and a single-frame await' }],
   'src/ui/analyseSurfaceTiles.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot coalesced repaint; cancelled on tile teardown' }],
   'src/ui/onboarding/bootTour.ts': [{ kind: 'requestAnimationFrame', count: 2, owner: 'one-shot double-frame deferral of tour start' }],

@@ -1,0 +1,111 @@
+/* The Session log page (Data › Session log) and its no-scan dialog. Tokens only. */
+.olv-session-log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-md) 0;
+  color: var(--text);
+  font: 400 var(--text-body) / 1.4 var(--font);
+}
+.olv-sl-intro,
+.olv-sl-empty {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+}
+.olv-sl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+.olv-sl-btn {
+  appearance: none;
+  min-height: 24px;
+  padding: var(--space-xs) var(--space-md);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text);
+  font: 500 var(--text-xs) / 1.2 var(--font);
+  cursor: pointer;
+}
+.olv-sl-btn:not(:disabled):hover {
+  background: var(--hover-wash);
+}
+.olv-sl-btn:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+.olv-sl-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (pointer: coarse) {
+  .olv-sl-btn {
+    min-height: 44px;
+  }
+}
+.olv-sl-status {
+  margin: 0;
+  min-height: 1em;
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+}
+.olv-sl-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.olv-sl-caption {
+  caption-side: top;
+  text-align: left;
+  padding-bottom: var(--space-xs);
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+}
+.olv-sl-table th {
+  text-align: left;
+  padding: var(--space-xs);
+  border-bottom: 1px solid var(--hairline-strong);
+  color: var(--text-dim);
+  font: 600 var(--text-xs) / 1.2 var(--font);
+}
+.olv-sl-th-time {
+  width: 96px;
+}
+.olv-sl-table td {
+  vertical-align: top;
+  padding: var(--space-xs);
+  border-bottom: 1px solid var(--hairline);
+  overflow-wrap: anywhere;
+}
+.olv-sl-clock,
+.olv-sl-kind {
+  display: block;
+}
+.olv-sl-clock {
+  font: 400 var(--text-xs) / 1.3 var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.olv-sl-kind,
+.olv-sl-meta {
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+}
+.olv-sl-text,
+.olv-sl-meta {
+  display: block;
+}
+.olv-sl-row.is-failed .olv-sl-text,
+.olv-sl-row.is-refused .olv-sl-text {
+  color: var(--rating-weak);
+}
+.olv-sl-dropped td {
+  color: var(--text-dim);
+  font-style: italic;
+  text-align: center;
+}
+
+.olv-sl-dialog {
+  width: min(560px, calc(100vw - 32px));
+}

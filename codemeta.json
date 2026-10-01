@@ -54,6 +54,14 @@
       }
     }
   ],
+  "contributor": [
+    {
+      "@type": "Person",
+      "givenName": "A.",
+      "familyName": "Ballesteros",
+      "@id": "https://orcid.org/0009-0003-3394-0699"
+    }
+  ],
   "maintainer": {
     "@type": "Person",
     "@id": "https://orcid.org/0009-0007-3147-323X"

@@ -37,6 +37,9 @@ import { mountResultsShelf, type ResultsShelfSources, type ShelfExportPanel, typ
 import { mountLocationBar } from '../../ui/locationBar';
 import { decorateViewRail } from './viewRail';
 import { createModeHome, type ModeHome } from './modeHome';
+import { sessionLog, SESSION_LOG_OPEN_EVENT } from '../sessionLog/sessionLog';
+import { installSessionLogRecorder } from '../sessionLog/sessionLogRecorder';
+import { mountSessionLogPage, openSessionLogDialog, type SessionLogPage } from '../sessionLog/sessionLogPage';
 
 /** The scene tools that open a page in the Tools mode. */
 export type ToolPage = 'measure' | 'annotate' | 'clip';
@@ -57,7 +60,7 @@ export interface WorkspaceShellDeps {
     focusSource(): boolean;
     onSourceChange(fn: () => void): () => void;
   };
-  classLegend: Panel & { presentCodes(): number[] };
+  classLegend: Panel & { presentCodes(): number[]; getVisibility?(): { hiddenCodes(): number[] } };
   annotation: HTMLElement;
   toolLauncher: HTMLElement;
   clip: HTMLElement;
@@ -76,7 +79,7 @@ export interface WorkspaceShellDeps {
   overlayTail: readonly HTMLElement[];
   analysePanel: () => (Panel & AnalyseHostPanel & ShelfTerrainPanel) | null;
   objectPanel: () => Panel | null;
-  measurePanel: () => Panel | null;
+  measurePanel: () => (Panel & { openInWorkbench?(id: string): boolean }) | null;
   setMeasureMountElement: (fn: (el: HTMLElement) => void) => void;
   hasScan: () => boolean;
   onModeChange: () => void;
@@ -127,6 +130,9 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   let router: WorkspaceRouter | null = null;
   let mobileSheet: MobileSheet | null = null;
   let refreshDataHome = (): void => {};
+  // Set once the Session log is wired below; the router and `sync` call them earlier.
+  let refreshLogPage = (): void => {};
+  let syncLog = (): void => {};
   const workspace = new DesktopWorkspace({
     onModeChange: (m) => {
       // The dock's Analyse button reads pressed only while Analyse is the mode
@@ -149,8 +155,15 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     annotate: { title: 'Annotate', element: () => d.annotation },
     clip: { title: 'Clip box', element: () => d.clip },
   };
+  // The Session log page's host is built now and filled on first open. The
+  // palette reaches it through its registry action, so it has no Go to entry.
+  const logHost = document.createElement('section');
+  // Hidden until its page has loaded, so a remembered route never shows it empty.
+  logHost.className = 'olv-session-log-host olv-hidden';
+  logHost.setAttribute('aria-label', 'Session log');
   const dataPages: Record<string, WorkspacePage> = {
     classes: { title: 'Classes', element: () => d.classLegend.element },
+    'session-log': { title: 'Session log', element: () => logHost, palette: false },
   };
   // Keyed to the shared mobile-layout condition so JS and CSS agree.
   const mobileMql = typeof window.matchMedia === 'function' ? window.matchMedia(MOBILE_LAYOUT_QUERY) : null;
@@ -175,7 +188,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   });
   const allPages = { work: pages as Record<string, WorkspacePage>, data: dataPages, analyse: analyse.pages };
   let modeHome: ModeHome | null = null;
-  router = createWorkspaceRouter(workspace, allPages, storage(), () => modeHome?.refresh());
+  router = createWorkspaceRouter(workspace, allPages, storage(), () => { modeHome?.refresh(); refreshLogPage(); });
   analyse.attach(router);
   const shown = (n: HTMLElement | null | undefined): boolean => !!n && !n.classList.contains('olv-hidden') && n.style.display !== 'none';
   modeHome = createModeHome({
@@ -184,6 +197,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     host: (m) => workspace.mode(m),
     open: (m, page) => {
       if (m === 'analyse') void analyse.open(page as AnalysePage);
+      else if (m === 'data' && page === 'session-log') void openLogPage();
       else if (m === 'work' && !shown(pages[page]?.element())) d.runAction(`tool.${page}`);
       else router?.navigate({ mode: m, page }, true);
     },
@@ -237,6 +251,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     export: d.export.element,
   };
   workspace.layoutDesktop(workspacePanels);
+  workspace.mountInMode('data', logHost);
   placeAnalyse();
   d.export.element.classList.remove('olv-collapsed'); // one mode at a time, from first build
   d.overlay.append(leftPanels);
@@ -315,7 +330,15 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   // Results shelf: the rail's footer on desktop, a row atop the phone sheet's
   // Data tab. Placed by the two layout functions above. A route change selects
   // the matching sheet tab through the mode change.
-  const shelf = d.results ? mountResultsShelf(d.results, d.analysePanel, d.export, (route) => router?.navigate(route), d.runAction) : null;
+  // A profile's Workbench control shows the Measure page, then opens the dock
+  // the way the profile's own button does.
+  const openWorkbench = (id: string): boolean => {
+    const panel = d.measurePanel();
+    if (!panel?.openInWorkbench || !shown(panel.element)) return false;
+    router?.navigate({ mode: 'work', page: 'measure' });
+    return panel.openInWorkbench(id);
+  };
+  const shelf = d.results ? mountResultsShelf(d.results, d.analysePanel, d.export, (route) => router?.navigate(route), d.runAction, openWorkbench) : null;
   if (shelf) { leftPanels.append(shelf.element); d.addTeardown(() => shelf.dispose()); }
 
   // The state strip: one row at the foot of the viewport, above the dock on a
@@ -339,6 +362,52 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     },
   }) : null;
   if (strip) { d.overlay.insertBefore(strip.element, d.dock); d.addTeardown(() => strip.dispose()); }
+
+  // The Session log: recorded from the signals the owners already emit. With
+  // a scan open it is a Data page; with none it shows in a dialog.
+  const classLegend = d.classLegend;
+  const recorder = installSessionLogRecorder({
+    log: sessionLog,
+    scans: results ? {
+      clouds: () => results.viewer.clouds(),
+      getCloud: (id) => results.viewer.getCloud(id) as { readonly name: string; readonly sourceFormat?: string } | undefined,
+      get streamingCloud() { return results.viewer.streamingCloud ?? null; },
+      onActiveChange: (fn) => results.scans.onActiveChange(fn),
+      onLayersChange: (fn) => d.inspector.onSourceChange(fn),
+      activeName: () => results.scans.activeCloud?.()?.name ?? results.viewer.streamingCloud?.name ?? null,
+      stableIdFor: (id) => results.identity.stableIdFor(id),
+    } : undefined,
+    crs: d.crsService,
+    results: shelf?.index ?? null,
+    annotations: results ? () => results.viewer.annotate?.getSummaries() ?? [] : undefined,
+    classLegend: classLegend.element,
+    classFilter: classLegend.getVisibility
+      ? { hidden: () => classLegend.getVisibility?.().hiddenCodes() ?? [], present: () => classLegend.presentCodes() }
+      : undefined,
+  });
+  syncLog = () => recorder.sync();
+  d.addTeardown(() => recorder.dispose());
+  let logPage: SessionLogPage | null = null;
+  d.addTeardown(() => logPage?.dispose());
+  refreshLogPage = () => logPage?.refreshIfDirty();
+  async function openLogPage(): Promise<boolean> {
+    if (!router) return false;
+    if (!d.hasScan()) {
+      openSessionLogDialog(sessionLog, { version: __APP_VERSION__ });
+      return true;
+    }
+    if (logPage) logPage.refresh();
+    else logPage = mountSessionLogPage(logHost, sessionLog, { version: __APP_VERSION__ });
+    logHost.classList.remove('olv-hidden');
+    if (mobileApplied && sheet.getDetent() === 'peek') sheet.setDetent('half');
+    router.navigate({ mode: 'data', page: 'session-log' }, true);
+    return true;
+  }
+  const onOpenLog = (e: Event): void => {
+    (e as CustomEvent<{ respond?: (p: Promise<boolean>) => void }>).detail?.respond?.(openLogPage());
+  };
+  document.addEventListener(SESSION_LOG_OPEN_EVENT, onOpenLog);
+  d.addTeardown(() => document.removeEventListener(SESSION_LOG_OPEN_EVENT, onOpenLog));
 
   let mobileApplied = false;
   let located = false;
@@ -389,7 +458,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     router,
     mobileSheet: sheet,
     showMode: (m) => workspace.setMode(m),
-    sync: () => { live.sync(); shelf?.refresh(); },
+    sync: () => { live.sync(); shelf?.refresh(); syncLog(); },
     resumeToolPage: (id) => {
       const page = id.slice(5) as ToolPage;
       const node = id.startsWith('tool.') ? pages[page]?.element() : null;
