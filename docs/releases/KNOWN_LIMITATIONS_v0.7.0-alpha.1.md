@@ -28,9 +28,10 @@ Clipping carries them. Voxel downsampling leaves them undefined on the points it
 produces. Each output point sits at the centroid of its voxel's members, so a
 voxel mixing a Withheld return with an ordinary one has no single true Withheld
 state to give it. A reduced-view LAS export writes that flag byte as zero; the
-source-faithful export decodes the file again and keeps the flags. EPT and COPC
-decode on their own path and produce no flags, which reads as absent rather
-than as false zeros.
+source-faithful export decodes the file again and keeps the flags. COPC tiles
+always carry the flags byte. An EPT dataset carries it in laszip tiles or in a
+`ClassFlags` schema dimension; a binary EPT schema without that dimension has
+no flags channel, which reads as absent rather than as false zeros.
 
 ## Class names are exact only when the format is known
 
@@ -308,6 +309,13 @@ Some surfaces cannot carry every field:
 - The batch converter hashes each input file, but records the CRS origin as
   unknown, because it does not resolve a CRS per file.
 - The session file is unchanged and carries none of the three.
+
+## One streamed source at a time
+
+Many static layers can be open at once. A streamed COPC, EPT or 3D Tiles
+tileset source is open one at a time: opening one closes the stream already
+open and every static layer, and opening a static file while a stream is open
+closes the stream.
 
 ## No cross-CRS reprojection
 

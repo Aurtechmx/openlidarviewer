@@ -114,18 +114,19 @@ the two entries were renumbered when the branches were integrated.
 | L211 | ARCHITECTURE | TEST | high | FIXED | new | With no origin allow-list, any page that framed the viewer could move the camera, toggle layers and focus annotations, and the ready message went to any parent; index.html carried no CSP of its own; COPC hierarchy pages, key depth and node totals had no ceiling; recovery entries were capped only on write; parse worker messages were read without a shape check. |
 | L211 | ARCHITECTURE | TEST | high | FIXED | new | With no origin allow-list, any page that framed the viewer could move the camera, toggle layers and focus annotations, and the ready message went to any parent; index.html carried no CSP of its own and style-src allowed inline styles; COPC hierarchy pages, key depth and node totals had no ceiling; recovery entries were capped only on write; parse worker messages were read without a shape check. |
 | L212 | ARCHITECTURE | TEST | low | FIXED | new | Static analysis on main reported a constructor that started an async load, promises left floating, async functions with no await, shared object-literal defaults, a rejection with a non-Error value, assertions outside a test, tests with no assertion and stub methods with no body. |
+| L207 | DOCS | READ | med | FIXED | new | Release documents disagreed with the tree: COPC and EPT were said to produce no classification flags, the Withheld policy listed the polygon volume as reading every point, the developer manual named three runtime dependencies of ten, SECURITY.md described maintainer-signed commits on `main`, PRIVACY.md did not list the requests the app makes, the layer contract was unstated, and the production audit ran outside `ci-green`. |
 
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 64
+- FIXED: 65
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 86
+- total: 87
 
 ## Detail
 
@@ -8132,3 +8133,26 @@ Tests: `tests/settle.test.ts` (runs at once, a throw becomes a rejection),
 `tests/recoveryJournal.test.ts` (a storage throw rejects, not throws),
 `tests/heavyLasPreviewFirst.test.ts` (an aborted preview read rejects),
 `tests/tileChunkDecoder.test.ts` (abort and truncation reject).
+
+### L207 · FIXED · DOCS
+
+COPC chunks always decode the classification flags byte, and EPT decodes it
+from laszip tiles or a `ClassFlags` schema dimension
+(`src/io/copc/copcChunkDecode.ts`, `src/io/ept/eptLaszipDecode.ts`,
+`src/io/ept/eptBinaryDecode.ts`); the known-limitations document and
+`docs/copc.md` now say so. The comment in `src/science/withheldPolicy.ts` lists
+the polygon cut/fill volume (`assembleVolumePositions`) among the callers that
+exclude Withheld points. The developer manual lists the ten `package.json`
+runtime dependencies with their roles, names three.js 0.186, and lists the jobs
+`ci-green` needs. `.github/SECURITY.md` states that merge commits on `main` are
+signed by GitHub's web-flow key, that archives and the SBOM carry a build
+provenance attestation, and that `SHA256SUMS` and the manifest carry no
+signature. `PRIVACY.md` lists the three kinds of request the app makes. The
+user guide and the known-limitations document state the layer contract from
+`openScan.ts` and `openStreaming.ts`. Static layers stack. One COPC, EPT or 3D
+Tiles stream is open at a time, and opening one closes every other layer. A
+static open closes the stream.
+
+`ci.yml` gains an `npm-audit` job (`npm audit --omit=dev --audit-level=high`)
+in `ci-green`'s `needs`; `security.yml` keeps the weekly scheduled run.
+Checked by `npm run lint:known-limitations`, which reads `ci-green`'s `needs`.

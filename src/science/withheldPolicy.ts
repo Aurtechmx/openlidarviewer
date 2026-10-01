@@ -40,6 +40,9 @@
  *     flags channel.
  *   - the lasso volume walk (`lassoVolumeCompute.ts`), which records how many
  *     it dropped.
+ *   - the polygon cut/fill volume (`volume.ts`, `assembleVolumePositions`),
+ *     which counts the Withheld points it leaves out, or records the count as
+ *     unknown when a source has no flags channel.
  *   - the profile series (`profileSectionSeam.sampleSeries`, via
  *     `dropWithheld`) and the raw section the profile workbench draws
  *     (`extractProfileSectionChunks`). Both record points read, Withheld

@@ -20,6 +20,8 @@ You can open:
 
 COPC, EPT and 3D Tiles tilesets usually live on a web server rather than on your disk. Paste the address into the URL field beside the open button and press Open.
 
+Static scans stack. Each file you open joins the scene as its own layer, and many can be open at once. A streamed COPC, EPT or 3D Tiles tileset source is open one at a time. Opening one closes the stream already open and every static layer, and opening a static file while a stream is open closes the stream.
+
 An eligible local LAZ opens progressively: the viewer reads the header and the chunk table first, shows a bounded preview within moments, and fills in the full cloud behind it. Ordinary LAS and the static formats are read in one pass, and a source too heavy for memory is indexed and streamed from disk instead.
 
 The moment a scan lands, you get a one-line summary and the most useful next step as one button: analyse the terrain, measure a volume, or compare two scans once a second one is open. Nothing runs until you ask, and nothing leaves your device.

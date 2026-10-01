@@ -289,6 +289,27 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
+  # Production dependency audit. Fails on a high or critical advisory in a
+  # shipped (non-dev) dependency. ci-green needs it, so a merge cannot land
+  # with one open.
+  npm-audit:
+    name: npm audit (runtime deps)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+      # No dependency lifecycle script runs during install. The audit reads the
+      # resolved tree.
+      - run: npm ci --ignore-scripts
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
   # ── Coverage, reported not enforced ───────────────────────────────────────
   # Deliberately absent from ci-green's `needs`. The release gate already runs
   # coverage as a mandatory stage and refuses an evidence record without it, so
@@ -550,7 +571,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    needs: [verify, test, smoke, e2e-deterministic, e2e-firefox, e2e-webkit, windows]
+    needs: [verify, test, smoke, e2e-deterministic, e2e-firefox, e2e-webkit, windows, npm-audit]
     if: always()
     steps:
       - name: Every blocking job succeeded
