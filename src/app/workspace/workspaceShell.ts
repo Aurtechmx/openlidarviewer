@@ -197,7 +197,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     host: (m) => workspace.mode(m),
     open: (m, page) => {
       if (m === 'analyse') void analyse.open(page as AnalysePage);
-      else if (m === 'data' && page === 'session-log') void openLogPage();
+      else if (m === 'data' && page === 'session-log') openLogPage();
       else if (m === 'work' && !shown(pages[page]?.element())) d.runAction(`tool.${page}`);
       else router?.navigate({ mode: m, page }, true);
     },
@@ -390,7 +390,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   let logPage: SessionLogPage | null = null;
   d.addTeardown(() => logPage?.dispose());
   refreshLogPage = () => logPage?.refreshIfDirty();
-  async function openLogPage(): Promise<boolean> {
+  function openLogPage(): boolean {
     if (!router) return false;
     if (!d.hasScan()) {
       openSessionLogDialog(sessionLog, { version: __APP_VERSION__ });
@@ -404,7 +404,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     return true;
   }
   const onOpenLog = (e: Event): void => {
-    (e as CustomEvent<{ respond?: (p: Promise<boolean>) => void }>).detail?.respond?.(openLogPage());
+    (e as CustomEvent<{ respond?: (p: Promise<boolean>) => void }>).detail?.respond?.(new Promise<boolean>((resolve) => resolve(openLogPage())));
   };
   document.addEventListener(SESSION_LOG_OPEN_EVENT, onOpenLog);
   d.addTeardown(() => document.removeEventListener(SESSION_LOG_OPEN_EVENT, onOpenLog));

@@ -53,7 +53,7 @@ function apply(R: Mat3, t: Vec3, p: Vec3): Vec3 {
 describe('ICP on real terrestrial slope geometry (Finestrat gypsum slope)', () => {
   const has = existsSync(FIX);
 
-  (has ? it : it.skip)('recovers a known rigid transform from identity on real slope points', () => {
+  it.runIf(has)('recovers a known rigid transform from identity on real slope points', () => {
     const src = readCloud();
     expect(src.length).toBeGreaterThan(5000);
     const R = rotAxis(0.2, -0.5, 1, 0.02); // ~1.1°
@@ -74,7 +74,7 @@ describe('ICP on real terrestrial slope geometry (Finestrat gypsum slope)', () =
     expect(res.inlierFraction).toBeGreaterThan(0.8);
   });
 
-  (has ? it : it.skip)('is idempotent on an already-aligned scan (identity, near-zero residual)', () => {
+  it.runIf(has)('is idempotent on an already-aligned scan (identity, near-zero residual)', () => {
     const src = readCloud();
     const res = generalIcp(src, src, { searchRadius: 1.0 });
     expect(res.ok).toBe(true);

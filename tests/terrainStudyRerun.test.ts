@@ -78,7 +78,7 @@ function runStudy() {
 }
 
 describe('deterministic re-run of a complete terrain study', () => {
-  (hasWhiteSands() ? it : it.skip)('two runs agree byte-for-byte on grids, topology, metrics, plan, evidence and manifest', () => {
+  it.runIf(hasWhiteSands())('two runs agree byte-for-byte on grids, topology, metrics, plan, evidence and manifest', () => {
     const a = runStudy();
     const b = runStudy();
     // Numeric grids: byte-exact via content hash.

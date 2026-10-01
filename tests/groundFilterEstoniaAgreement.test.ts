@@ -41,7 +41,7 @@ const EPS = 1e-3; // row-alignment tolerance in metres
 describe('OLV ground filter vs PDAL SMRF on real low-relief terrain (Estonia)', () => {
   const has = existsSync(FIX) && existsSync(REF);
 
-  (has ? it : it.skip)('agrees on ≥ 0.99 of returns over a balanced real crop', () => {
+  it.runIf(has)('agrees on ≥ 0.99 of returns over a balanced real crop', () => {
     const fx = readFileSync(FIX, 'utf8').trim().split('\n').slice(1);
     const rf = readFileSync(REF, 'utf8').trim().split('\n').slice(1);
     expect(rf.length).toBe(fx.length);

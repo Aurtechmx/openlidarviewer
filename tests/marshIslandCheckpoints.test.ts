@@ -56,7 +56,7 @@ function readGround(): TerrainPoint[] {
 describe('OLV DTM vs 104 independent RTK checkpoints (Marsh Island, NAVD88↔NAVD88)', () => {
   const has = existsSync(GROUND) && existsSync(CKPTS);
 
-  (has ? it : it.skip)('agrees with surveyed ground truth within the product accuracy budget', () => {
+  it.runIf(has)('agrees with surveyed ground truth within the product accuracy budget', () => {
     const pts = readGround();
     // Grid the ground over the checkpoint area (relative coords, origin 0,0).
     let maxX = 0, maxY = 0;

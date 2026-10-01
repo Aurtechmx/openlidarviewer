@@ -92,7 +92,7 @@ function compare(refPath: string, toleranceAbs: number, withinTolThreshold = 1) 
 describe('OLV DTM vs real USGS 3DEP ground (White Sands dune crop)', () => {
   const hasGround = existsSync(GROUND);
 
-  (hasGround ? it : it.skip)('grids real bare-earth ground into a DTM with true NAVD88 elevations', () => {
+  it.runIf(hasGround)('grids real bare-earth ground into a DTM with true NAVD88 elevations', () => {
     const z = olvDtm();
     let zmin = Infinity, zmax = -Infinity, filled = 0;
     for (const v of z) if (Number.isFinite(v)) { zmin = Math.min(zmin, v); zmax = Math.max(zmax, v); filled++; }
@@ -105,7 +105,7 @@ describe('OLV DTM vs real USGS 3DEP ground (White Sands dune crop)', () => {
   // SAME point-in-cell mean in a separate codebase; agreement to a few mm proves
   // OLV bins and averages real UTM coordinates correctly. The small residual is
   // the Float32 crop fixture + the reference's 4-decimal rounding, not method.
-  (existsSync(REF_BINCELL) && hasGround ? it : it.skip)(
+  it.runIf(existsSync(REF_BINCELL) && hasGround)(
     'agrees with an independent point-in-cell mean (scipy) to sub-cm',
     () => {
       const { r } = compare(REF_BINCELL, 0.005);
@@ -121,7 +121,7 @@ describe('OLV DTM vs real USGS 3DEP ground (White Sands dune crop)', () => {
   // point-in-cell mean by the local slope across the window — measured here at
   // ~3 cm RMSE, far inside USGS 3DEP's stated vertical accuracy (~10 cm). The
   // tolerance is that data accuracy, set from the product spec, not the result.
-  (existsSync(REF_PDAL) && hasGround ? it : it.skip)(
+  it.runIf(existsSync(REF_PDAL) && hasGround)(
     'agrees with PDAL (windowed mean) within USGS 3DEP vertical accuracy',
     () => {
       const { r } = compare(REF_PDAL, 0.10, 0.98);
@@ -169,7 +169,7 @@ describe('OLV on survey-classified drone data (StREAM Lab riparian crop)', () =>
   // recall), and when OLV calls a point vegetation it really is vegetation
   // (high precision). RGB and return counts are supplied, the same cues the
   // survey classifier had.
-  (has ? it : it.skip)('catches survey ground and does not over-call vegetation', () => {
+  it.runIf(has)('catches survey ground and does not over-call vegetation', () => {
     const { n, xyz, rgb, rn, nr, cls } = readSl();
     const res = deriveClassification(new Float32Array(xyz), n, { colors: new Uint16Array(rgb), returnNumber: new Uint8Array(rn), returnCount: new Uint8Array(nr) });
     const codes = res.codes;
@@ -192,7 +192,7 @@ describe('OLV on survey-classified drone data (StREAM Lab riparian crop)', () =>
   // independent point-in-cell mean. Confirms OLV's gridding on ultra-dense drone
   // data at a different UTM zone (17N) matches the reference the way it does on
   // the sparse airborne desert.
-  (existsSync(SL_REF_BINCELL) && has ? it : it.skip)(
+  it.runIf(existsSync(SL_REF_BINCELL) && has)(
     'grids survey ground into a DTM matching an independent point-in-cell mean',
     () => {
       const { n, xyz, cls } = readSl();
@@ -260,7 +260,7 @@ function decimate(pts: TerrainPoint[], k: number): TerrainPoint[] {
  */
 describe('OLV DTM vs the survey team\'s published 0.1 m DTM (StREAM Lab)', () => {
   const has = existsSync(SL_BIN);
-  (has ? it : it.skip)(
+  it.runIf(has)(
     'tracks the published product to within a decimetre on co-measured ground',
     () => {
       const { n, xyz, cls } = readSl();
@@ -306,7 +306,7 @@ describe('perturbation — density reduction degrades coverage and accuracy toge
   const hasGround = existsSync(GROUND);
   const hasRef = existsSync(REF_BINCELL);
 
-  (hasGround && hasRef ? it : it.skip)(
+  it.runIf(hasGround && hasRef)(
     'coverage falls and RMSE rises monotonically as ground density drops',
     () => {
       const full = readGround();
@@ -332,7 +332,7 @@ describe('perturbation — density reduction degrades coverage and accuracy toge
     },
   );
 
-  (hasGround && hasRef ? it : it.skip)('is deterministic — same decimation reproduces the same metrics', () => {
+  it.runIf(hasGround && hasRef)('is deterministic — same decimation reproduces the same metrics', () => {
     const full = readGround();
     const ref = readAsciiSouthUp(REF_BINCELL);
     const refArr = Array.from(ref.z, (v) => (v === ref.nodata ? NaN : v));
@@ -359,7 +359,7 @@ describe('perturbation — density reduction degrades coverage and accuracy toge
 describe('OLV DTM vs real Estonia National LiDAR ground (Lambert Conformal Conic)', () => {
   const has = hasEstonia();
 
-  (existsSync(EST_REF_BINCELL) && has ? it : it.skip)(
+  it.runIf(existsSync(EST_REF_BINCELL) && has)(
     'grids real class-2 ground into a DTM matching an independent point-in-cell mean (scipy)',
     () => {
       const pts = readEstoniaGround();
@@ -375,7 +375,7 @@ describe('OLV DTM vs real Estonia National LiDAR ground (Lambert Conformal Conic
     },
   );
 
-  (has ? it : it.skip)('carries the real EH2000 elevation range of the crop', () => {
+  it.runIf(has)('carries the real EH2000 elevation range of the crop', () => {
     const z = rasterizeDtm(readEstoniaGround(), new Uint8Array(readEstoniaGround().length).fill(1), { grid: EST_GRID, aggregation: 'mean' }).z;
     let zmin = Infinity, zmax = -Infinity, filled = 0;
     for (const v of z) if (Number.isFinite(v)) { zmin = Math.min(zmin, v); zmax = Math.max(zmax, v); filled++; }

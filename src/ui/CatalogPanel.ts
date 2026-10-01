@@ -232,7 +232,7 @@ export class CatalogPanel {
     ]);
     form.addEventListener('submit', (event) => {
       event.preventDefault();
-      void this._open();
+      this._open();
     });
     // Enable the Open button + update the hint as soon as a real
     // location is picked. Auto-fire would feel jumpy on accidental

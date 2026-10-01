@@ -48,8 +48,8 @@ export const SOURCE_FORMATS = [
   'gltf',
 ] as const satisfies readonly SourceFormat[];
 type _EveryFormatListed = SourceFormat extends (typeof SOURCE_FORMATS)[number] ? true : never;
-const _sourceFormatsExhaustive: _EveryFormatListed = true;
-void _sourceFormatsExhaustive;
+/** Compile-time proof that {@link SOURCE_FORMATS} lists every {@link SourceFormat}. */
+export const SOURCE_FORMATS_EXHAUSTIVE: _EveryFormatListed = true;
 
 /**
  * Extensions accepted as SPELLINGS of the xyz family — plain ASCII point

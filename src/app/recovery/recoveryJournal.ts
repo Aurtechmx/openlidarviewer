@@ -102,14 +102,21 @@ export function entryMatchesSource(
   return match(entry.summary, loaded).verdict === 'strong';
 }
 
+interface DebounceTimers {
+  set: (fn: () => void, ms: number) => unknown;
+  clear: (h: unknown) => void;
+}
+
+const REAL_TIMERS: DebounceTimers = {
+  set: (fn, t) => setTimeout(fn, t),
+  clear: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+};
+
 /** A trailing-edge debounce with injectable timers. One pending one-shot timeout at most. */
 export function createDebouncer(
   run: () => void,
   ms: number,
-  timers: { set: (fn: () => void, ms: number) => unknown; clear: (h: unknown) => void } = {
-    set: (fn, t) => setTimeout(fn, t),
-    clear: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
-  },
+  timers: DebounceTimers = REAL_TIMERS,
 ): { schedule(): void; flush(): void; cancel(): void; readonly pending: boolean } {
   let handle: unknown = null;
   const fire = (): void => {
@@ -141,6 +148,11 @@ function isEntry(x: unknown): x is RecoveryEntry {
   return !!e && e.v === 1 && typeof e.key === 'string' && typeof e.json === 'string' && e.json.length <= MAX_ENTRY_BYTES && Number.isFinite(e.savedAt) && !!e.summary;
 }
 
+/** Run `fn` and hand back its result as a promise; a throw becomes a rejection. */
+function settle<T>(fn: () => T): Promise<T> {
+  return new Promise((resolve) => resolve(fn()));
+}
+
 const newestFirst = (a: RecoveryEntry, b: RecoveryEntry): number => b.savedAt - a.savedAt;
 
 /** The localStorage fallback: one JSON array under one key. */
@@ -161,7 +173,7 @@ export function createLocalStore(storage: Pick<Storage, 'getItem' | 'setItem' | 
   };
   return {
     backend: 'localstorage',
-    async put(entry) {
+    put: (entry) => settle(() => {
       if (entry.json.length > LOCAL_STORAGE_MAX_BYTES) throw new Error('too-large-for-localstorage');
       const rest = read().filter((e) => e.key !== entry.key);
       // Keep only what fits: the newest entry first, then older ones while the total stays under the cap.
@@ -173,16 +185,10 @@ export function createLocalStore(storage: Pick<Storage, 'getItem' | 'setItem' | 
         total += e.json.length;
       }
       write(kept);
-    },
-    async remove(k) {
-      write(read().filter((e) => e.key !== k));
-    },
-    async clear() {
-      storage.removeItem(key);
-    },
-    async list() {
-      return read();
-    },
+    }),
+    remove: (k) => settle(() => write(read().filter((e) => e.key !== k))),
+    clear: () => settle(() => storage.removeItem(key)),
+    list: () => settle(read),
   };
 }
 
@@ -210,7 +216,7 @@ const STORE = 'entries';
 function req<T>(r: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     r.onsuccess = () => resolve(r.result);
-    r.onerror = () => reject(r.error);
+    r.onerror = () => reject(r.error ?? new Error('IndexedDB request failed'));
   });
 }
 

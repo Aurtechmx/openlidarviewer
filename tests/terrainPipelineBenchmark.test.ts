@@ -67,7 +67,7 @@ function perf(): number {
 describe('full terrain pipeline on the White Sands ground crop', () => {
   const has = existsSync(GROUND);
 
-  (has ? it : it.skip)('runs points → DTM → slope/aspect → contours and each stage is well-formed', () => {
+  it.runIf(has)('runs points → DTM → slope/aspect → contours and each stage is well-formed', () => {
     const { pts, dtm, der, contours, t } = runPipeline();
 
     // DTM: a well-covered grid at the crop's size.
@@ -96,7 +96,7 @@ describe('full terrain pipeline on the White Sands ground crop', () => {
     );
   });
 
-  (has ? it : it.skip)('is deterministic — two full runs produce identical grids and contour topology', () => {
+  it.runIf(has)('is deterministic — two full runs produce identical grids and contour topology', () => {
     const a = runPipeline();
     const b = runPipeline();
     // DTM elevations byte-identical.

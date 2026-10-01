@@ -268,8 +268,10 @@ describe('Help: Copy diagnostics action', () => {
   });
 
   it('swallows a shortcut-sheet load failure', async () => {
-    const actions = contributeHelpActions({ ...baseDeps, ensureShortcutSheet: () => Promise.reject(new Error('x')) });
-    actions.find((a) => a.id !== 'help.copy-diagnostics' && /shortcut/i.test(a.title))!.run();
+    const notify = vi.fn();
+    const actions = contributeHelpActions({ ...baseDeps, notify, ensureShortcutSheet: () => Promise.reject(new Error('x')) });
+    expect(() => actions.find((a) => a.id !== 'help.copy-diagnostics' && /shortcut/i.test(a.title))!.run()).not.toThrow();
     await flush();
+    expect(notify).not.toHaveBeenCalled();
   });
 });

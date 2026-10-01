@@ -40,7 +40,7 @@ const wsScan: ScanFacts = {
 };
 
 describe('vertical-noise perturbation degrades DTM/slope/aspect, reproducibly', () => {
-  (hasWhiteSands() ? it : it.skip)('RMSE and slope/aspect error grow with σz; ProcessPlan authority is unchanged', () => {
+  it.runIf(hasWhiteSands())('RMSE and slope/aspect error grow with σz; ProcessPlan authority is unchanged', () => {
     const base = readWhiteSandsGround();
     const baseZ = dtmZ(base);
     const baseDer = hornSlopeAspect(baseZ, WS_GRID.cols, WS_GRID.rows, WS_GRID.cellSizeM);
@@ -69,7 +69,7 @@ describe('vertical-noise perturbation degrades DTM/slope/aspect, reproducibly', 
     expect(afterReadiness).toBe(baseReadiness);
   });
 
-  (hasWhiteSands() ? it : it.skip)('the same seed reproduces identical perturbed data and metrics', () => {
+  it.runIf(hasWhiteSands())('the same seed reproduces identical perturbed data and metrics', () => {
     const base = readWhiteSandsGround();
     const a = perturbVertical(base, SEED, 0.05);
     const b = perturbVertical(base, SEED, 0.05);

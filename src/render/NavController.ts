@@ -57,6 +57,13 @@ import { dollyVelocityAtRest, glideAtRest, orbitVelocityAtRest, perFrameToDt, ty
 import { navDrive } from '../perf/navProbeHook';
 import { loadNavDriver } from '../perf/navDriverLoader';
 
+/** Under `?benchmark=nav`, load and install the scripted camera driver. */
+function installNavDriverIfRequested(): void {
+  if (__OLV_DEV_FLAGS__ && new URLSearchParams(window.location?.search ?? '').get('benchmark') === 'nav') {
+    void loadNavDriver().then((m) => m.installNavDriver(window));
+  }
+}
+
 /** The four navigation modes ('pan' is the v0.5.5 hand tool, program §P1). */
 export type NavMode = 'orbit' | 'walk' | 'fly' | 'pan';
 
@@ -297,9 +304,7 @@ export class NavController {
     }
     // `?benchmark=nav`: the scripted camera driver (`window.__olvNavDriver`),
     // loaded from this chunk so the startup shell's preload lists stay as they are.
-    if (__OLV_DEV_FLAGS__ && new URLSearchParams(window.location?.search ?? '').get('benchmark') === 'nav') {
-      void loadNavDriver().then((m) => m.installNavDriver(window));
-    }
+    installNavDriverIfRequested();
   }
 
   // ─────────────────────────────────────────────────────────────────────────

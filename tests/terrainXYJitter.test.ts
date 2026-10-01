@@ -25,7 +25,7 @@ function dtmZ(pts: { x: number; y: number; z: number }[]): Float32Array {
 const arr = (z: Float32Array): number[] => Array.from(z, (v) => (Number.isFinite(v) ? v : NaN));
 
 describe('XY-jitter perturbation moves the DTM/slope/aspect, reproducibly', () => {
-  (hasWhiteSands() ? it : it.skip)('records seed/magnitude/hashes/metrics and grows the DTM change with σxy', () => {
+  it.runIf(hasWhiteSands())('records seed/magnitude/hashes/metrics and grows the DTM change with σxy', () => {
     const base = readWhiteSandsGround();
     const inputHash = hashPoints(base);
     const baseZ = dtmZ(base);
@@ -52,7 +52,7 @@ describe('XY-jitter perturbation moves the DTM/slope/aspect, reproducibly', () =
     expect(records[1].dtmRmse).toBeGreaterThan(records[0].dtmRmse);
   });
 
-  (hasWhiteSands() ? it : it.skip)('same seed + magnitude reproduces the identical perturbed hash', () => {
+  it.runIf(hasWhiteSands())('same seed + magnitude reproduces the identical perturbed hash', () => {
     const base = readWhiteSandsGround();
     expect(hashPoints(perturbXY(base, SEED, 0.15))).toBe(hashPoints(perturbXY(base, SEED, 0.15)));
   });

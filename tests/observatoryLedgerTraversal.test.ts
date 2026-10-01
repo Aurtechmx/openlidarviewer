@@ -214,7 +214,10 @@ describe('F9 — mergePartialLedgers is order-independent under chunk-order perm
   const tauRel = Math.tan(angularStepRad / 2);
 
   const chunks = buildF9Chunks(rays, 5);
-  expect(chunks.length).toBe(5);
+
+  it('the ray set splits into five chunks', () => {
+    expect(chunks).toHaveLength(5);
+  });
 
   function partitionInputFor(chunkGroup: readonly ObservationRayChunk[]): RayPartitionInput {
     const returnedChunks: RayPartitionChunkEntry[] = chunkGroup.map((chunk) => ({ sourceIndex: 0, chunk, tauAbs, tauRel }));

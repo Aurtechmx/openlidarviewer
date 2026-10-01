@@ -22,7 +22,7 @@ import { readWhiteSandsGround, WS_GRID, hasWhiteSands } from './support/terrainF
 const M = 20; // interior crop margin (cells)
 
 describe('Horn slope/aspect boundary behaviour on real White Sands terrain', () => {
-  (hasWhiteSands() ? it : it.skip)('interior matches the full surface; only the edge ring carries the clamp error', () => {
+  it.runIf(hasWhiteSands())('interior matches the full surface; only the edge ring carries the clamp error', () => {
     const pts = readWhiteSandsGround();
     const raster = rasterizeDtm(pts, new Uint8Array(pts.length).fill(1), { grid: WS_GRID, aggregation: 'mean' });
     const dtm = buildDtmGrid(raster); // filled, complete grid

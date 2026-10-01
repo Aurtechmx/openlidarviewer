@@ -14,7 +14,7 @@ function parkNaNs(a: Float64Array): number {
   let m = 0;
   for (let i = 0; i < a.length; i++) {
     const v = a[i];
-    if (v === v) {
+    if (!Number.isNaN(v)) {
       a[i] = a[m];
       a[m++] = v;
     }
@@ -102,7 +102,7 @@ export function medianOf(a: Float64Array): number {
   const mid = n >>> 1;
   const upper = sortedValueAt(a, mid);
   if (n % 2 === 1) return upper;
-  if (upper !== upper) return NaN;
+  if (Number.isNaN(upper)) return NaN;
   // Selection left every value below index mid at or under a[mid]; the
   // largest of them is the sorted value at mid - 1.
   let lower = a[0];

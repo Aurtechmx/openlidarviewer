@@ -32,7 +32,7 @@ function circRad(a: number, b: number): number {
 describe('OLV slope/aspect vs an independent NumPy reference (White Sands DTM)', () => {
   const has = existsSync(WS_REF_BINCELL) && existsSync(REF);
 
-  (has ? it : it.skip)('agrees at the frozen spot-check cells within tolerance', () => {
+  it.runIf(has)('agrees at the frozen spot-check cells within tolerance', () => {
     const ref = JSON.parse(readFileSync(REF, 'utf8')) as {
       grid: { cols: number; rows: number; cellSizeM: number };
       tolerance: { slopeAbs: number; aspectRad: number };
