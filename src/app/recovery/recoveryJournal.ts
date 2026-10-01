@@ -230,7 +230,8 @@ export async function openIndexedDbStore(idb: IDBFactory): Promise<RecoveryStore
     backend: 'indexeddb',
     async put(entry) {
       await tx('readwrite', (s) => s.put(entry));
-      for (const old of (await all()).slice(MAX_ENTRIES)) await tx('readwrite', (s) => s.delete(old.key));
+      const stale = (await all()).slice(MAX_ENTRIES);
+      await Promise.all(stale.map((old) => tx('readwrite', (s) => s.delete(old.key))));
     },
     async remove(key) {
       await tx('readwrite', (s) => s.delete(key));

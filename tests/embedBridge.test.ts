@@ -123,6 +123,7 @@ function withWindow(topLevel: boolean) {
     },
     removeEventListener: vi.fn(),
     postMessage: vi.fn(),
+    location: { origin: 'https://viewer.example' },
   };
   const parent = topLevel ? win : { postMessage: vi.fn() };
   win.parent = parent;
@@ -237,11 +238,24 @@ describe('startEmbedBridge — only the true embedding parent may drive the view
     dispose();
   });
 
-  it('sends no ready message when no origin is configured', () => {
+  it('accepts the page\'s own origin with no allow-list, and refuses others', () => {
+    const { handlers, calls } = makeHandlers();
+    const env = withWindow(false);
+    const dispose = startEmbedBridge(handlers);
+    env.dispatch({ source: env.parent, origin: 'https://viewer.example', data: { type: 'focus-annotation', id: 'a1' } });
+    env.dispatch({ source: env.parent, origin: 'https://host.example', data: { type: 'focus-annotation', id: 'a2' } });
+    expect(calls.onFocusAnnotation).toHaveBeenCalledTimes(1);
+    expect(calls.onFocusAnnotation).toHaveBeenCalledWith('a1');
+    expect((env.parent as { postMessage: ReturnType<typeof vi.fn> }).postMessage.mock.calls.map((c) => c[1])).toEqual(['https://viewer.example']);
+    dispose();
+  });
+
+  it('sends no ready message to a foreign origin when none is configured', () => {
     const { handlers } = makeHandlers();
     const env = withWindow(false);
     const dispose = startEmbedBridge(handlers);
-    expect((env.parent as { postMessage: ReturnType<typeof vi.fn> }).postMessage).not.toHaveBeenCalled();
+    const post = (env.parent as { postMessage: ReturnType<typeof vi.fn> }).postMessage;
+    expect(post.mock.calls.map((c) => c[1])).toEqual(['https://viewer.example']);
     dispose();
   });
 
@@ -250,7 +264,7 @@ describe('startEmbedBridge — only the true embedding parent may drive the view
     const env = withWindow(false);
     const dispose = startEmbedBridge(handlers, { allowedOrigins: ['https://a.example', 'https://b.example'] });
     const post = (env.parent as { postMessage: ReturnType<typeof vi.fn> }).postMessage;
-    expect(post.mock.calls.map((c) => c[1])).toEqual(['https://a.example', 'https://b.example']);
+    expect(post.mock.calls.map((c) => c[1])).toEqual(['https://viewer.example', 'https://a.example', 'https://b.example']);
     dispose();
   });
 

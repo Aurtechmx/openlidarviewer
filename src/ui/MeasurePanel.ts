@@ -1932,7 +1932,7 @@ export function profileXLabelSpansHtml(
   return candidates
     .map((cand, k) =>
       keep[k]
-        ? `<span class="olv-mp-axis olv-mp-axis-x" style="left:${cand.pct.toFixed(2)}%;top:${topPct}%;transform:translateX(${cand.anchor})">${cand.text}</span>`
+        ? `<span class="olv-mp-axis olv-mp-axis-x" data-pos="left:${cand.pct.toFixed(2)}%;top:${topPct}%;transform:translateX(${cand.anchor})">${cand.text}</span>`
         : '',
     )
     .join('');
@@ -1952,6 +1952,16 @@ export function profileXLabelFitWidth(overlayClientWidth: number): number {
       ? overlayClientWidth
       : MIN_CHART_PX,
   );
+}
+
+/**
+ * Position the axis labels from their `data-pos` through the CSSOM. The page
+ * CSP refuses inline style attributes, so the markup carries none.
+ */
+function applyAxisPositions(root: Element): void {
+  for (const n of Array.from(root.querySelectorAll<HTMLElement>('[data-pos]'))) {
+    n.style.cssText = n.dataset.pos ?? '';
+  }
 }
 
 /** A profile chart element carrying its post-mount x-label re-fit. */
@@ -2233,7 +2243,7 @@ function renderProfileChart(
   const yLabelHtml = yTicks
     .map(
       (v) =>
-        `<span class="olv-mp-axis olv-mp-axis-y" style="top:${yPct(v).toFixed(2)}%">${elevTickLabel(v)}</span>`,
+        `<span class="olv-mp-axis olv-mp-axis-y" data-pos="top:${yPct(v).toFixed(2)}%">${elevTickLabel(v)}</span>`,
     )
     .join('');
   // Honest badge (B3): "VEX 5:1" implied a true paper ratio the resizable,
@@ -2251,6 +2261,7 @@ function renderProfileChart(
     `station interval ${formatChainage(stationInterval)} · vertical ${vexLabel} · ` +
     `drag bottom-right to resize`;
   const chartEl = el('div', { className: 'olv-mp-chart', unsafeHtml: svg + overlay, title });
+  applyAxisPositions(chartEl);
   if (hitParts) {
     // The zones live in the just-assigned innerHTML; bind each to its `data-si`.
     for (const hit of Array.from(chartEl.querySelectorAll('.olv-mp-chart-hit'))) {
@@ -2273,6 +2284,7 @@ function renderProfileChart(
     const html = profileXLabelSpansHtml(xCandidates, containerPx, xLabelTop, AXIS_FONT_PX);
     for (const old of Array.from(overlayEl.querySelectorAll('.olv-mp-axis-x'))) old.remove();
     overlayEl.insertAdjacentHTML('beforeend', html);
+    applyAxisPositions(overlayEl);
   };
   return chartEl;
 }

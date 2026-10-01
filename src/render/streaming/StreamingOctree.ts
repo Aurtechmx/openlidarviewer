@@ -195,7 +195,6 @@ export class StreamingOctree {
         pagesLoaded++;
         if (this.store.size + page.nodes.length > this._maxNodes) {
           this._errors.push(`hierarchy exceeded ${this._maxNodes} nodes; stopped`);
-          frontier = [];
           next.length = 0;
           break;
         }

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
@@ -22,6 +23,21 @@ describe('index.html CSP meta', () => {
       .filter((d) => d && !d.startsWith('frame-ancestors'))
       .join('; ');
     expect(metaCsp()).toBe(expected);
+  });
+
+  it('allows no inline script or style', () => {
+    expect(metaCsp()).not.toContain("'unsafe-inline'");
+    expect(headerCsp()).not.toContain("'unsafe-inline'");
+  });
+
+  it('names the sha256 of every inline <style> in index.html', () => {
+    const blocks = [...read('index.html').matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1]!);
+    expect(blocks.length).toBeGreaterThan(0);
+    for (const b of blocks) {
+      const hash = `'sha256-${createHash('sha256').update(b).digest('base64')}'`;
+      expect(metaCsp()).toContain(hash);
+      expect(headerCsp()).toContain(hash);
+    }
   });
 
   it('comes before any script or stylesheet', () => {

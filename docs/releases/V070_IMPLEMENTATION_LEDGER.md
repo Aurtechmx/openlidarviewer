@@ -112,18 +112,19 @@ the two entries were renumbered when the branches were integrated.
 | L202 | UI | TEST | med | FIXED | new | A failed load of the action registry, a lazy panel, the plan view controller or the tour stayed cached, so Try again failed until a reload and each failed palette attempt left a palette element behind; the report verifier and the tour kept key handling of their own outside the dialog stack, and a dialog removed without its teardown blocked Tab, Cmd-K and ?; H and the tool keys acted behind an open dialog; a workflow save that threw lost the recording; a workflow file could list any number of events and echoed a bad value at any length. |
 | L209 | EXPORT | TEST | med | FIXED | new | No export recorded the SHA-256 of the source file or of the points an analysis read, and most exports did not record where the CRS came from. |
 | L211 | ARCHITECTURE | TEST | high | FIXED | new | With no origin allow-list, any page that framed the viewer could move the camera, toggle layers and focus annotations, and the ready message went to any parent; index.html carried no CSP of its own; COPC hierarchy pages, key depth and node totals had no ceiling; recovery entries were capped only on write; parse worker messages were read without a shape check. |
+| L211 | ARCHITECTURE | TEST | high | FIXED | new | With no origin allow-list, any page that framed the viewer could move the camera, toggle layers and focus annotations, and the ready message went to any parent; index.html carried no CSP of its own and style-src allowed inline styles; COPC hierarchy pages, key depth and node totals had no ceiling; recovery entries were capped only on write; parse worker messages were read without a shape check. |
 
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 62
+- FIXED: 63
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 84
+- total: 85
 
 ## Detail
 
@@ -8080,13 +8081,15 @@ streamed and not-held sources, chunk boundary, payload round trip).
 
 ### L211 · FIXED · ARCHITECTURE
 
-The embed bridge acts only for origins on the `?embedParent` or
-`?embedOrigins` allow-list. With no list it sends no `ready` message and
-ignores every command; with one, `ready` goes to each listed origin and a
-command from any other origin is dropped. `docs/usage.md` states this.
+The embed bridge acts only for the page's own origin and origins on the
+`?embedParent` or `?embedOrigins` allow-list. `ready` goes to each allowed
+origin, and a command from any other origin is dropped. `docs/usage.md`
+states this.
 
 `index.html` carries the `public/_headers` Content-Security-Policy as a meta
-tag, without `frame-ancestors`, which a meta tag cannot set.
+tag, without `frame-ancestors`, which a meta tag cannot set. `style-src` allows
+no inline style except the `<style>` in `index.html`, by its sha256; the
+profile chart positions its axis labels through the CSSOM.
 
 COPC hierarchy pages are capped at 16 MiB, root and child
 (`MAX_COPC_HIERARCHY_PAGE_BYTES`). A voxel key must have a depth of at most 32

@@ -33,7 +33,7 @@ describe('COPC hierarchy caps', () => {
   it('drops a child page reference larger than the page cap', () => {
     const page = parseHierarchyPage(hierarchyEntry(1, 0, MAX_COPC_HIERARCHY_PAGE_BYTES + 32, -1), CUBE, 1);
     expect(page.childPages).toEqual([]);
-    expect(page.errors.length).toBe(1);
+    expect(page.errors).toHaveLength(1);
   });
 
   it('keeps a child page reference at the cap', () => {

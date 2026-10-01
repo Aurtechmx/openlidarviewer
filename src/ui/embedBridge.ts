@@ -109,9 +109,9 @@ export function interpretEmbedMessage(data: unknown): EmbedCommand | null {
 /** Options for `startEmbedBridge`. */
 export interface EmbedBridgeOptions {
   /**
-   * Origins that may drive the viewer. The `ready` message goes to each of
-   * them, and inbound commands from any other origin are dropped. When the
-   * list is empty or unset, the bridge sends nothing and accepts nothing.
+   * Origins, besides the page's own, that may drive the viewer. The `ready`
+   * message goes to each allowed origin, and inbound commands from any other
+   * origin are dropped.
    */
   readonly allowedOrigins?: readonly string[];
 }
@@ -147,14 +147,16 @@ export function embedBridgeOptionsFromUrl(search: string): EmbedBridgeOptions {
 /**
  * Start the embed bridge: announce readiness to each allowed origin and
  * listen for the documented commands from the embedding parent on one of
- * those origins. With no allow-list the bridge is inert. Returns a disposer
+ * those origins. The page's own origin is always allowed. Returns a disposer
  * that removes the listener.
  */
 export function startEmbedBridge(
   handlers: EmbedBridgeHandlers,
   options: EmbedBridgeOptions = {},
 ): () => void {
-  const allow = options.allowedOrigins ?? [];
+  // The page's own origin is always allowed, so a same-origin embed works
+  // without configuration.
+  const allow = [...new Set([window.location.origin, ...(options.allowedOrigins ?? [])])];
 
   // Announce readiness to the embedding parent on each allowed origin; the
   // browser delivers only the one matching the parent's actual origin.
