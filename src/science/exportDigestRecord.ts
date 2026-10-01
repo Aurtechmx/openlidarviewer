@@ -18,6 +18,7 @@ import { crsOriginLine, crsOriginOf, type CrsOriginInput, type CrsOriginRecord }
 export const STREAMED_SOURCE_NOTE = 'not available for streamed sources';
 export const SOURCE_NOT_HELD_NOTE = 'not available: the original file bytes are not held';
 export const SOURCE_NOT_COMPUTED_NOTE = 'not computed: the source file could not be read in full';
+export const SOURCE_CANCELLED_NOTE = 'not computed: the hash was cancelled';
 export const SOURCE_NOT_SUPPLIED_NOTE = 'not recorded by this export path';
 export const NO_ANALYSIS_NOTE = 'not applicable: this export does not come from an analysis';
 export const INPUT_NOT_RECORDED_NOTE = 'not recorded for this analysis';

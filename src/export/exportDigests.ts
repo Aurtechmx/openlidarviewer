@@ -9,6 +9,7 @@
 import type { CrsOriginInput } from '../science/crsOrigin';
 import {
   exportDigests,
+  SOURCE_CANCELLED_NOTE,
   SOURCE_NOT_COMPUTED_NOTE,
   SOURCE_NOT_HELD_NOTE,
   STREAMED_SOURCE_NOTE,
@@ -56,15 +57,19 @@ export function sourceDigestOf(
   if (ref && (ref.streamed || isStreamedCloud(ref.key))) return Promise.resolve({ sha256: null, note: STREAMED_SOURCE_NOTE });
   const file = ref ? cloudFileOf(ref.key) : undefined;
   if (!file) return Promise.resolve({ sha256: null, note: SOURCE_NOT_HELD_NOTE });
+  if (signal?.aborted) return Promise.resolve({ sha256: null, note: SOURCE_CANCELLED_NOTE });
   let pending = cache.get(file);
   if (!pending) {
-    pending = signal?.aborted ? Promise.resolve(null) : digest(file, signal);
-    cache.set(file, pending);
+    const own = digest(file, signal);
+    pending = own;
+    cache.set(file, own);
+    // Drop a cancelled hash at once, so the next export starts its own.
+    signal?.addEventListener('abort', () => { if (cache.get(file) === own) cache.delete(file); }, { once: true });
   }
   return pending.then((sha256) => {
     if (sha256) return { sha256, note: null };
     if (cache.get(file) === pending) cache.delete(file);
-    return { sha256: null, note: SOURCE_NOT_COMPUTED_NOTE };
+    return { sha256: null, note: signal?.aborted ? SOURCE_CANCELLED_NOTE : SOURCE_NOT_COMPUTED_NOTE };
   });
 }
 

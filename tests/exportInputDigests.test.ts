@@ -439,16 +439,14 @@ describe('multi-source, cancellation and record names', () => {
     const one = sampleStridedTerrain([{ pos: a }], [], a.length / 3, 1e6, false)!;
     const two = sampleStridedTerrain([{ pos: a }, { pos: b }], [], (a.length + b.length) / 3, 1e6, false)!;
     const mixed = sampleStridedTerrain([{ pos: a }], [{ key: '0-0-0-0', pos: b }], (a.length + b.length) / 3, 1e6, false)!;
-    const resultOf = (positions: Float32Array) => fromCache(computeTerrainCoreFor(positions), PARAMS);
-    function computeTerrainCoreFor(positions: Float32Array) {
-      const core = computeTerrainCore(positions, PARAMS);
-      return registerCoreFor(core, positions);
-    }
-    const { registerCoreInputs: registerCoreFor } = await import('../src/terrain/contour/terrainCoreCache');
+    const { registerCoreInputs } = await import('../src/terrain/contour/terrainCoreCache');
+    // One core, copied per sample so each copy carries its own inputs.
+    const core = computeTerrainCore(hill(), PARAMS);
+    const resultOf = (positions: Float32Array) => fromCache(registerCoreInputs({ ...core }, positions), PARAMS);
     expect(await analysisSourceDigest(resultOf(one.positions), null)).toEqual({ sha256: createHash('sha256').update('a').digest('hex'), note: null });
     expect(await analysisSourceDigest(resultOf(two.positions), null)).toEqual({ sha256: null, note: MULTIPLE_SOURCES_NOTE(2, false) });
     expect((await analysisSourceDigest(resultOf(mixed.positions), null)).note).toBe(MULTIPLE_SOURCES_NOTE(2, true));
-  }, 60_000);
+  });
 
   it('L2: no recorded inputs and no cloud is "not computed", never "streamed"', async () => {
     const { analysisSourceDigest } = await import('../src/export/exportDigests');
@@ -459,8 +457,21 @@ describe('multi-source, cancellation and record names', () => {
     const key = {};
     rememberCloudFile(key, new File([bytesOf('source bytes')], 'x.las'));
     const ac = new AbortController(); ac.abort();
-    expect((await sourceDigestOf({ key, streamed: false }, undefined, ac.signal)).note).toBe(SOURCE_NOT_COMPUTED_NOTE);
+    expect((await sourceDigestOf({ key, streamed: false }, undefined, ac.signal)).note).toBe('not computed: the hash was cancelled');
     expect((await sourceDigestOf({ key, streamed: false })).sha256).toBe(SHA);
+  });
+
+  it('a cancelled hash is not reused: the next export gets the digest', async () => {
+    const { SOURCE_CANCELLED_NOTE } = await import('../src/science/exportDigestRecord');
+    const key = {};
+    rememberCloudFile(key, new File([bytesOf('source bytes')], 'y.las'));
+    const ac = new AbortController();
+    const slow = (_f: File, signal?: AbortSignal) => new Promise<string | null>((res) => signal?.addEventListener('abort', () => res(null)));
+    const first = sourceDigestOf({ key, streamed: false }, slow, ac.signal);
+    ac.abort();
+    const second = sourceDigestOf({ key, streamed: false });
+    expect(await first).toEqual({ sha256: null, note: SOURCE_CANCELLED_NOTE });
+    expect((await second).sha256).toBe(SHA);
   });
 
   it('N1: the Observatory record names its digest analysisInputSha256; an old record still reads', () => {
