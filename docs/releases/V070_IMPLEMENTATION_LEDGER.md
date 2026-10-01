@@ -7854,10 +7854,12 @@ Covered by the "names as many scenes as it lists" cases in
 Compare elevation and feature extraction leave Withheld points out, as terrain,
 both volume tools, profiles and density do (L26). `excludeWithheldEpoch` in
 `src/terrain/change/compareEpochs.ts` removes them from each epoch before the
-alignment, both ground filters and the difference. The compare panel adds a
+alignment, both ground filters and the difference, and the alignment's
+residual gate is scaled by the filtered before epoch's span. The compare panel adds a
 line per epoch with the points read, the Withheld count and the points
 analysed, or 'unknown' when an epoch carries no flags. The lines appear only
-when an epoch had a Withheld point to leave out. `buildFeatureExtractionInput`
+when an epoch had a Withheld point to leave out, including beside the "no
+ground points" refusal when every point was Withheld. `buildFeatureExtractionInput`
 skips Withheld building and wire points and records the same counts. The
 review lists them, and the GeoJSON export of accepted footprints carries them
 as `metadata.withheld`. The ESRI ASCII difference has no metadata block and
@@ -7868,7 +7870,8 @@ object passes through unchanged, and the extraction reads the same points.
 The difference raster and the footprint GeoJSON from `terrain-access-utm.las`
 hash to the same values as on main.
 
-Covered by `tests/withheldChangeFeatures.test.ts`. On `withheld-flags.las` an
+Covered by `tests/withheldChangeFeatures.test.ts`, `tests/e2e/withheldCompare.spec.ts`
+and `tests/e2e/featureCandidates.spec.ts`. On `withheld-flags.las` an
 epoch reads 9 of 12 points and the difference against the unfiltered epoch
 changes; extraction reads 7 of 10 building points; the export records
 `{ sourcePoints: 10, withheldExcluded: 3, analysedPoints: 7 }`.

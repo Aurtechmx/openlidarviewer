@@ -254,13 +254,6 @@
     },
     {
       "file": "src/main.ts",
-      "symbol": "compareLoadedLayers",
-      "frame": "world",
-      "reads": 1,
-      "why": "The before epoch's buffer paired with its sourceOrigin measures the horizontal span for the ICP residual gate, in the common world frame the two epochs are gridded in."
-    },
-    {
-      "file": "src/main.ts",
       "symbol": "revealAnalysePanel",
       "frame": "source-local",
       "reads": 1,
@@ -614,6 +607,13 @@
       "frame": "world",
       "reads": 2,
       "why": "The grid must span both epochs, so each buffer bounds are taken in world coordinates rather than in its own local frame."
+    },
+    {
+      "file": "src/terrain/change/compareEpochs.ts",
+      "symbol": "withheldEpochs",
+      "frame": "world",
+      "reads": 1,
+      "why": "The residual gate's span is measured on the filtered before epoch lifted by its own origin, as the alignment it gates reads that epoch."
     },
     {
       "file": "src/terrain/ground/withheldAwareTerrainGather.ts",

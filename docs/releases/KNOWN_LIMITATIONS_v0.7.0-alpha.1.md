@@ -17,8 +17,8 @@ When the flags cannot be read, as on a voxel-reduced load or where density
 uses the file header's total, the Withheld count is recorded as unknown.
 Terrain analysis first decodes the source file again when it can, and then
 records the counts from that decode. The ground filter outside terrain, the
-classifier, registration and measurement read Withheld points like any other
-return. The elevation difference raster has no metadata block, so its counts
+classifier, registration, measurement, the health check and the Process
+Studio spacing probe read Withheld points like any other return. The elevation difference raster has no metadata block, so its counts
 appear in the compare panel only. ASPRS says a producer generally sets Withheld on overlap
 points culled during flight-line merging, so this matters on conforming files.
 
@@ -234,7 +234,7 @@ for this development cut: that evidence comes from the engines themselves.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,503 lines and `src/render/Viewer.ts` is 6,044, one hundred and seventy-nine lines
+`src/main.ts` is 4,500 lines and `src/render/Viewer.ts` is 6,044, one hundred and seventy-nine lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more

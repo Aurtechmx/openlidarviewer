@@ -255,7 +255,7 @@ import { createInspectorCardRefreshers } from './app/inspectorCardRefreshers';
 import { installStaleChunkRecovery } from './app/staleChunkReload';
 import { createCrsCoordinator } from './app/crsCoordinator';
 import { remoteCopcName, describeRemoteCopcError } from './app/remoteSourceNaming';
-import { deriveVolumeRecord, horizontalSpanXY } from './render/measure/measureDerivations';
+import { deriveVolumeRecord } from './render/measure/measureDerivations';
 import { serviceWorkerUrl } from './app/swUrl';
 import { createTerrainAnalysisRunner } from './app/terrainAnalysisRunner';
 import { placedWorldOrigin } from './terrain/canonicalFrame';
@@ -4311,7 +4311,7 @@ function compareLoadedLayers(): void {
       ]);
     await new Promise((resolve) => setTimeout(resolve, 16));
     try {
-      const { ctxA, comparable, reason, frames, beforeCloud, afterCloud, lines } = withheldEpochs(prepareEpochFrames(crsService, a, b), a, b);
+      const { ctxA, comparable, reason, frames, beforeCloud, afterCloud, lines, span } = withheldEpochs(prepareEpochFrames(crsService, a, b), a, b);
       if (!comparable) {
         inspector.setCompareResult(
           epochUnitMismatchLines(`${baseName(a.name)} (before) → ${baseName(b.name)} (after)`, reason ?? 'vertical-unit'),
@@ -4324,17 +4324,14 @@ function compareLoadedLayers(): void {
       // small horizontal misregistration between epochs is not read as movement.
       // Refuse a fit whose residual exceeds 10% of the scene span: that means the
       // two clouds never registered, so it's compared as-is rather than shifted.
-      // The span is measured in SOURCE units (horizontalSpanXY is unit-agnostic)
-      // while the gate option is metres, so convert by the CRS's linear factor —
-      // geographic frames don't have one, but alignment refuses those outright.
-      const span = horizontalSpanXY(a.positions, a.sourceOrigin);
+      // `span` is the before epoch's in SOURCE units; the gate is metres.
       const spanUnitToM = frames.horizontalUnitToMetres ?? 1;
       const { after: alignedAfter, alignment } = alignEpochClouds(beforeCloud, afterCloud, {
         maxResidualM: span > 0 ? span * 0.1 * spanUnitToM : undefined, horizontalUnitKnown: frames.horizontalUnitKnown, // one shared verdict: the alignment and the difference below read the SAME frame facts, so a shift reported in metres is never followed by a difference that refuses metres
       });
       const dtms = buildSharedEpochDtms(beforeCloud, alignedAfter);
       if (!dtms) {
-        inspector.setCompareResult(['Could not compare — a layer has no ground points.']);
+        inspector.setCompareResult([...lines, 'Could not compare — a layer has no ground points.']);
         return;
       }
       // Unit factors so cut/fill is m³ and Δz/LoD metres, not source units; a

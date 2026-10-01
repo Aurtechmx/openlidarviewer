@@ -30,7 +30,7 @@
     "src/io/loadXyz.ts": 1,
     "src/io/parseWorker.ts": 3,
     "src/io/tiles3d/pntsDecode.ts": 1,
-    "src/main.ts": 4,
+    "src/main.ts": 3,
     "src/model/PointCloud.ts": 17,
     "src/model/pointFrames.ts": 2,
     "src/render/ContourOverlay.ts": 1,
@@ -56,7 +56,7 @@
     "src/render/previewCloudLayer.ts": 1,
     "src/render/recordSelection.ts": 4,
     "src/terrain/change/alignEpochs.ts": 3,
-    "src/terrain/change/compareEpochs.ts": 5,
+    "src/terrain/change/compareEpochs.ts": 6,
     "src/terrain/ground/withheldAwareTerrainGather.ts": 2,
     "src/terrain/worker/terrainCoreWorker.ts": 1
   }

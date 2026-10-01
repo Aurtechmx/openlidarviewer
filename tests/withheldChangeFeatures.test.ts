@@ -21,6 +21,7 @@ import {
   buildSharedEpochDtms,
   epochWithheldLines,
   excludeWithheldEpoch,
+  withheldEpochs,
 } from '../src/terrain/change/compareEpochs';
 import { compareDtms } from '../src/terrain/change/compareDtms';
 import { changeToEsriAscii } from '../src/terrain/change/changeRaster';
@@ -29,6 +30,7 @@ import { extractBuildingCandidates } from '../src/features/FeatureExtractionServ
 import { CandidateReviewStore } from '../src/features/candidateReview';
 import { acceptedFootprintGeoJson } from '../src/ui/featureCandidatesMount';
 import { isWithheld } from '../src/science/withheldPolicy';
+import { horizontalSpanXY } from '../src/render/measure/measureDerivations';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const IDENTITY_LL = (p: readonly [number, number, number]): [number, number, number] => [p[0], p[1], p[2]];
@@ -133,6 +135,34 @@ describe('change detection leaves Withheld points out', () => {
     expect(b.cloud).toBe(shifted);
     expect(epochWithheldLines(a.withheld, b.withheld)).toEqual([]);
     expect(sha(differenceAsc(a.cloud, b.cloud))).toBe(ASC_HASH);
+  });
+});
+
+describe('the alignment gate and an all-Withheld epoch', () => {
+  const WITHHELD = 0b0100;
+
+  it('measures the residual-gate span on the filtered before epoch', () => {
+    // A Withheld point 1 km out stretched the span the 10% residual gate is
+    // scaled by; the read points span 10 units.
+    const positions = new Float32Array([0, 0, 0, 10, 0, 0, 0, 10, 0, 1000, 1000, 0]);
+    const flags = new Uint8Array([0, 0, 0, WITHHELD]);
+    const prepared = { beforeCloud: { positions }, afterCloud: { positions } };
+    const everyPoint = horizontalSpanXY(positions);
+    const { span } = withheldEpochs(prepared, { classificationFlags: flags }, {});
+    expect(everyPoint).toBe(1000);
+    expect(span).toBe(10);
+    // Nothing withheld: the same span as before.
+    expect(withheldEpochs(prepared, {}, {}).span).toBe(everyPoint);
+  });
+
+  it('leaves no points and still names the counts when every point is Withheld', async () => {
+    const cloud = await load('withheld-flags.las');
+    const epoch = { positions: cloud.positions, origin: cloud.sourceOrigin };
+    const all = new Uint8Array(12).fill(WITHHELD);
+    const r = withheldEpochs({ beforeCloud: epoch, afterCloud: epoch }, { classificationFlags: all }, {});
+    expect(r.beforeCloud.positions).toHaveLength(0);
+    expect(buildSharedEpochDtms(r.beforeCloud, r.afterCloud)).toBeNull();
+    expect(r.lines[0]).toBe('Before points: 0 of 12 analysed; Withheld excluded: 12');
   });
 });
 

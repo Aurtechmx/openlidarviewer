@@ -26,6 +26,7 @@ import type { DtmGrid } from '../ground/cellConfidence';
 import type { TerrainPoint } from '../TerrainContracts';
 import { compareDtms, type CompareDtmsOptions, type EpochComparison } from './compareDtms';
 import { isWithheld } from '../../science/withheldPolicy';
+import { horizontalSpanXY } from '../../render/measure/measureDerivations';
 import {
   alignedFlags,
   describeWithheldRead,
@@ -328,19 +329,21 @@ export function epochWithheldLines(before: WithheldReadCounts, after: WithheldRe
   return [`Before points: ${describeWithheldRead(before)}`, `After points: ${describeWithheldRead(after)}`];
 }
 
+/** An epoch buffer with its origin. */
+type PlacedEpoch = { readonly positions: Float32Array; readonly origin?: readonly [number, number, number] };
+
 /**
  * A prepared comparison with both epochs' Withheld points left out, and the
  * compare-panel lines that say so. `a` and `b` are the loaded clouds whose
  * flags index the prepared epochs' buffers; every other field passes through.
+ * `span` is the filtered before epoch's horizontal span in source units, for
+ * the alignment's residual gate.
  */
-export function withheldEpochs<
-  T extends { readonly positions: Float32Array },
-  P extends { readonly beforeCloud: T; readonly afterCloud: T },
->(
+export function withheldEpochs<T extends PlacedEpoch, P extends { readonly beforeCloud: T; readonly afterCloud: T }>(
   prepared: P,
   a: { readonly classificationFlags?: ArrayLike<number> },
   b: { readonly classificationFlags?: ArrayLike<number> },
-): P & { readonly lines: string[] } {
+): P & { readonly lines: string[]; readonly span: number } {
   const before = excludeWithheldEpoch(prepared.beforeCloud, a.classificationFlags);
   const after = excludeWithheldEpoch(prepared.afterCloud, b.classificationFlags);
   return {
@@ -348,5 +351,6 @@ export function withheldEpochs<
     beforeCloud: before.cloud,
     afterCloud: after.cloud,
     lines: epochWithheldLines(before.withheld, after.withheld),
+    span: horizontalSpanXY(before.cloud.positions, before.cloud.origin),
   };
 }

@@ -61,9 +61,10 @@
  *     GeoJSON records the counts.
  *
  * The other scientific paths still read every point the cloud holds: the
- * ground filter outside terrain, the classifier, registration, and
- * measurement. Each carries recorded evidence
- * of its own, so each is applied as its own change.
+ * ground filter outside terrain, the classifier, registration, measurement,
+ * the health check (`analysis/modules/healthCheck.ts`) and the Process Studio
+ * spacing probe (`processStudioMount.ts`, `medianNeighbourSpacing`). Each
+ * carries recorded evidence of its own, so each is applied as its own change.
  *
  * Pure: no DOM, no GPU, no cloud. Flags in, decisions out.
  */
