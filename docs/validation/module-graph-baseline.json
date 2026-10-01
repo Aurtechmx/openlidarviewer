@@ -240,12 +240,12 @@
   "watchFanOut": {
     "src/ui/AnalysePanel.ts": {
       "runtime": 26,
-      "typeOnly": 20,
-      "dynamic": 0,
+      "typeOnly": 18,
+      "dynamic": 1,
       "modules": [
-        "src/export/exportDigests.ts",
         "src/export/exportScanIdentity.ts",
         "src/export/permitStamp.ts",
+        "src/export/terrainExportDigests.ts",
         "src/io/download.ts",
         "src/lazyChunks.ts",
         "src/model/organizedRangeLink.ts",
@@ -443,7 +443,7 @@
     "components": []
   },
   "context": {
-    "filesScanned": 1058,
+    "filesScanned": 1059,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [
@@ -472,6 +472,10 @@
         "importers": 21
       },
       {
+        "file": "src/ui/Modal.ts",
+        "importers": 19
+      },
+      {
         "file": "src/geo/height.ts",
         "importers": 17
       },
@@ -484,11 +488,11 @@
         "importers": 17
       },
       {
-        "file": "src/science/methodRegistry.ts",
+        "file": "src/model/pointFrames.ts",
         "importers": 16
       },
       {
-        "file": "src/ui/Modal.ts",
+        "file": "src/science/methodRegistry.ts",
         "importers": 16
       },
       {
@@ -497,10 +501,6 @@
       },
       {
         "file": "src/model/PointCloud.ts",
-        "importers": 15
-      },
-      {
-        "file": "src/model/pointFrames.ts",
         "importers": 15
       },
       {

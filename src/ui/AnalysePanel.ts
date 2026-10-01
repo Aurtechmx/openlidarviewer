@@ -27,10 +27,7 @@
  * Mounted in `main.ts` next to the Measurements and Annotations panels.
  */
 
-import { analysisSourceDigest } from '../export/exportDigests';
-import { exportDigests } from '../science/exportDigestRecord';
-import type { CrsOriginInput } from '../science/crsOrigin';
-import type { ExportDigests } from '../science/exportDigestRecord';
+import { terrainExportDigests, type TerrainExportDigests } from '../export/terrainExportDigests';
 import { sourceInterpretationOf, type SourceInterpretationRecord } from '../science/sourceInterpretation';
 import { showBusyScan, clearBusyScan, createBusyScan, createBusyScanController, type BusyScanController } from './busyScan';
 import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
@@ -322,8 +319,7 @@ export interface AnalysePanelCallbacks {
      * shown in an honest "unverified" form, NEVER falsely asserted as metres.
      */
     verticalUnitToMetres?: number | null;
-    /** The resolved CRS, for the CRS-origin record in export provenance. */
-    crs?: CrsOriginInput | null;
+    crs?: import('../science/crsOrigin').CrsOriginInput | null; // resolved CRS, for the CRS-origin record
     /**
      * The RAW scene up-axis of the loaded scan — the gather's own `sourceUpAxis`
      * — so the map sheet can rotate an annotation's local position into the same
@@ -1092,7 +1088,7 @@ export class AnalysePanel {
     readonly overlayHost: SceneOverlayHost | null;
     /** Probe interpretation level and data basis of the analysed scan, for export provenance. */
     readonly sourceInterpretation: SourceInterpretationRecord;
-    readonly exportDigests: () => Promise<ExportDigests>;
+    readonly exportDigests: TerrainExportDigests;
     readonly isStale: () => boolean;
   } | null {
     const result = this.currentResultForProvenance();
@@ -1120,7 +1116,7 @@ export class AnalysePanel {
       sceneUpAxis: ctx.sceneUpAxis ?? null,
       overlayHost: this._cb.getDerivedLayerHost?.() ?? null,
       sourceInterpretation: sourceInterpretationOf(this._contourFrame?.analysedBasis?.interpretationLevel, this._contourFrame?.analysedBasis?.coverage),
-      exportDigests: () => this._exportDigests(result),
+      exportDigests: () => terrainExportDigests(this._cb, result),
       isStale: () => this._freshnessBreach() !== null || this._resultScanId !== scanId,
     };
   }
@@ -1147,7 +1143,7 @@ export class AnalysePanel {
     readonly overlayHost: SceneOverlayHost | null;
     /** Probe interpretation level and data basis of the analysed scan, for export provenance. */
     readonly sourceInterpretation: SourceInterpretationRecord;
-    readonly exportDigests: () => Promise<ExportDigests>;
+    readonly exportDigests: TerrainExportDigests;
     readonly isStale: () => boolean;
   } | null {
     const result = this.currentResultForProvenance();
@@ -1183,7 +1179,7 @@ export class AnalysePanel {
       sceneUpAxis: ctx.sceneUpAxis ?? null,
       overlayHost: this._cb.getDerivedLayerHost?.() ?? null,
       sourceInterpretation: sourceInterpretationOf(this._contourFrame?.analysedBasis?.interpretationLevel, this._contourFrame?.analysedBasis?.coverage),
-      exportDigests: () => this._exportDigests(result),
+      exportDigests: () => terrainExportDigests(this._cb, result),
       isStale: () => this._freshnessBreach() !== null || this._resultScanId !== scanId,
     };
   }
@@ -2156,22 +2152,6 @@ export class AnalysePanel {
     return this._cb.getMapContext?.()?.worldOrigin?.z ?? null;
   }
 
-  /**
-   * Source-file digest and CRS origin for a terrain export of `result`: the
-   * file the analysis sampled, or no single digest when it combined several
-   * inputs. A newer export cancels a hash still running for an older one; the
-   * export button keeps its busy text meanwhile.
-   */
-  private _digestAbort: AbortController | null = null;
-  private async _exportDigests(result: AnalyseContoursResult): Promise<ExportDigests> {
-    this._digestAbort?.abort();
-    const abort = (this._digestAbort = new AbortController());
-    const id = this._cb.getActiveScanId?.() ?? null;
-    const cloud = id ? this._cb.getFeatureCloud?.(id) ?? null : null;
-    const crs = this._cb.getMapContext?.()?.crs ?? null;
-    return exportDigests(await analysisSourceDigest(result, cloud, abort.signal), crs);
-  }
-
   private async _resultForExport(): Promise<AnalyseContoursResult> {
     const r = this._result!;
     const style = this._contourStyle;
@@ -2239,13 +2219,11 @@ export class AnalysePanel {
       const [{ serializeContours, triggerBrowserDownload }, { buildExportProvenance, contourArtifactClaims }] =
         await Promise.all([loadContourDownload(), loadExportProvenance()]);
       // Re-verify after the regeneration: the captured context is the right one
-      // for `basename`/`mapCtx`, but a scan opened during the rebuild means the
-      // user is no longer looking at this analysis, and publishing it now would
-      // hand them a file for a scan they have moved on from.
+      // for `basename`/`mapCtx`, but a scan opened during the rebuild is not one
+      // this file may describe.
       if (this._refuseForeignScanExport()) return;
-      const digests = await this._exportDigests(result);
       const provenance = buildExportProvenance(result, {
-        digests,
+        digests: await terrainExportDigests(this._cb, result),
         basename,
         generatedAt: new Date(),
         softwareVersion: __APP_VERSION__,
@@ -2254,13 +2232,8 @@ export class AnalysePanel {
         // exported (analytical vs generalized) + the purpose that chose it.
         contourMethod: provenanceExtra?.contourMethod,
         deliverablePurpose: provenanceExtra?.deliverablePurpose,
-        // The vertical scale the geometry was actually resolved under, which
-        // this path used to omit. Without it the provenance fell to "unknown"
-        // while the SAME file carried `elevationUnit: metre` on every feature
-        // and `zUnit: m` in its complexity block — one deliverable answering
-        // the same question two ways, because one of two sibling export paths
-        // passed the scale and this one did not. Undefined still means unknown,
-        // which is what an unresolved frame must say.
+        // The resolved vertical scale, so the provenance and the features state
+        // one unit. Undefined still means unknown, as an unresolved frame must.
         verticalUnitToMetres: mapCtx?.verticalUnitToMetres ?? null,
         // §19: stamp the evidence-gate permit that authorised this file, so the
         // artifact records the decision (validated / exploratory + watermark).
@@ -2506,9 +2479,8 @@ export class AnalysePanel {
         // The runs take seconds; re-check the scan before the package is written.
         if (this._refuseForeignScanExport()) return;
       }
-      const digests = await this._exportDigests(r);
       const bytes = buildDemPackage(r, {
-        digests,
+        digests: await terrainExportDigests(this._cb, r),
         // Same resolved scale as the GeoJSON / DXF / sheet / report.
         verticalUnitToMetres: ctx.verticalUnitToMetres ?? null,
         worldOrigin: ctx.worldOrigin ?? null,
@@ -2586,7 +2558,7 @@ export class AnalysePanel {
       // rebuild means this bundle is no longer the one the user is looking at.
       if (this._refuseForeignScanExport()) return;
       const bytes = await buildContourDeliverableFromResultAsync(result, {
-        digests: await this._exportDigests(result),
+        digests: await terrainExportDigests(this._cb, result),
         decision: permit.decision,
         basename,
         worldOrigin: ctx.worldOrigin ?? null,
@@ -2658,7 +2630,7 @@ export class AnalysePanel {
       // header / footer (CRS, datum, verdicts, accuracy, date) can never drift
       // from the GeoJSON / DXF / map sheet / DEM exports of this scan.
       const bytes = await buildTerrainReportPdf(rep, {
-        digests: await this._exportDigests(rep),
+        digests: await terrainExportDigests(this._cb, rep),
         // The same resolved scale the GeoJSON, DXF and map sheet stamp, so the
         // report's vertical figures are labelled from one answer.
         verticalUnitToMetres: mapCtx?.verticalUnitToMetres ?? null,
@@ -3033,21 +3005,15 @@ export class AnalysePanel {
     const mapCtx = this._cb.getMapContext?.();
     const linearUnit = mapCtx?.linearUnit;
     const sheetBasename = this._cb.getExportBasename?.() ?? undefined;
-    // Annotation layer inputs, only gathered when the user opted in. The list is
-    // read straight from the host (same order as the Annotations panel, so the
-    // marker index matches) — and read here, alongside the rest of the sheet's
-    // inputs, so the whole sheet comes from one instant. The up-axis MUST be the
-    // gather's own — see the frame reasoning in annotationMapProjection.ts.
+    // Annotations only when opted in, in the panel's order, read with the rest of
+    // the sheet's inputs; the up-axis is the gather's own (annotationMapProjection.ts).
     const annotations = opts.includeAnnotations ? this._cb.getAnnotations?.() ?? [] : [];
     const sceneUpAxis = mapCtx?.sceneUpAxis ?? 'z';
     const { buildMapSheetPdf } = await loadMapSheetPdf();
     const { buildExportProvenance, contourArtifactClaims } = await loadExportProvenance();
-    // The unified provenance, derived from the SAME result the sheet plots, so
-    // the title block's CRS / datum / style / accuracy / readiness / date can't
-    // drift from the GeoJSON / DXF / SVG / DEM exports of this scan.
-    const digests = await this._exportDigests(result);
+    // The unified provenance, from the SAME result the sheet plots.
     const provenance = buildExportProvenance(result, {
-      digests,
+      digests: await terrainExportDigests(this._cb, result),
       basename: sheetBasename,
       generatedAt: opts.generatedAt,
       softwareVersion: __APP_VERSION__,
