@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { suppressOnboardingTour, dropTinyPly, railChromeSettled } from './helpers';
+import { suppressOnboardingTour, dropTinyPly, railChromeSettled, firePaletteAction } from './helpers';
 
 /**
  * dialogFocus.spec.ts
@@ -287,4 +287,62 @@ test.describe('canvas context menu — keyboard operability', () => {
     await expect(page.locator('.olv-ctxmenu')).toBeHidden();
     await expect(page.locator('.olv-canvas')).toBeFocused();
   });
+});
+
+test.describe('single-key shortcuts behind an open dialog', () => {
+  /** Two paints: a key handler that was going to act has acted by then. */
+  const twoFrames = (page: Page): Promise<void> =>
+    page.evaluate(() => new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    }));
+
+  test('H leaves the navigation help and M leaves the Measure tool alone until the dialog closes', async ({ page }) => {
+    await suppressOnboardingTour(page);
+    await page.goto('/');
+    await dropTinyPly(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+    const hud = page.locator('.olv-nav-hud');
+    const measure = page.locator('.olv-dock-measure');
+    await expect(measure).toHaveAttribute('aria-pressed', 'false');
+    const hudBefore = await hud.getAttribute('class');
+
+    await firePaletteAction(page, 'Export health', 'Export health check');
+    await expect(page.locator('.olv-modal')).toBeVisible();
+    await page.keyboard.press('h');
+    await page.keyboard.press('m');
+    await twoFrames(page);
+    await expect(hud).toHaveAttribute('class', hudBefore ?? '');
+    await expect(measure).toHaveAttribute('aria-pressed', 'false');
+
+    // The same keys act once the dialog has closed.
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.olv-modal')).toBeHidden();
+    await page.keyboard.press('h');
+    await expect(hud).not.toHaveAttribute('class', hudBefore ?? '');
+    await page.keyboard.press('m');
+    await expect(measure).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+test.describe('onboarding tour: the shortcuts its last step names', () => {
+  // A first visit: nothing marks the tour as seen.
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  for (const [name, key, sel] of [
+    ['Cmd-K / Ctrl-K opens the palette', 'ControlOrMeta+KeyK', '.olv-palette'],
+    ['? opens the shortcut sheet', 'Shift+Slash', '.olv-shortcuts'],
+  ] as const) {
+    test(`at the last step, ${name} and ends the tour`, async ({ page }) => {
+      await page.goto('/');
+      await page.locator('.olv-tour-chip').click();
+      const card = page.locator('.olv-tour-card');
+      await expect(card).not.toHaveClass(/olv-hidden/, { timeout: 5_000 });
+      const next = page.locator('.olv-tour-btn-primary');
+      while ((await next.textContent()) !== 'Done') await next.click();
+      await expect(page.locator('.olv-tour-title')).toHaveText('Command palette');
+      await page.keyboard.press(key);
+      await expect(page.locator(sel)).toBeVisible({ timeout: 10_000 });
+      await expect(page.locator('.olv-tour-root')).toHaveClass(/olv-hidden/);
+    });
+  }
 });

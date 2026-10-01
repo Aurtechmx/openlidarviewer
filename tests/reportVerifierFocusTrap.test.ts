@@ -33,10 +33,22 @@ class FakeEl {
     this.tagName = tagName.toUpperCase();
     this.offsetParent = this;
   }
+  parent: FakeEl | null = null;
   setAttribute(k: string, v: string): void { this.attrs[k] = v; }
   getAttribute(k: string): string | null { return this.attrs[k] ?? null; }
-  append(...kids: FakeEl[]): void { this.children.push(...kids); }
-  remove(): void { /* detach is not observed here */ }
+  append(...kids: FakeEl[]): void {
+    for (const k of kids) k.parent = this;
+    this.children.push(...kids);
+  }
+  remove(): void {
+    if (!this.parent) return;
+    this.parent.children.splice(this.parent.children.indexOf(this), 1);
+    this.parent = null;
+  }
+  /** Mounted under the fake body, as `Node.isConnected` reports for a real node. */
+  get isConnected(): boolean {
+    return doc.body.contains(this);
+  }
   focus(): void { this.focused += 1; doc.activeElement = this; }
   addEventListener(type: string, fn: Handler): void {
     const list = this.listeners.get(type) ?? [];
@@ -66,24 +78,30 @@ const doc = {
   activeElement: null as FakeEl | null,
   body: new FakeEl('body'),
   createElement: (tag: string): FakeEl => new FakeEl(tag),
+  contains: (n: FakeEl | null): boolean => doc.body.contains(n),
+};
+
+/** Window keydown listeners: where the dialog stack listens. */
+const win = {
   listeners: new Map<string, Handler[]>(),
   addEventListener(type: string, fn: Handler): void {
-    const list = doc.listeners.get(type) ?? [];
+    const list = win.listeners.get(type) ?? [];
     list.push(fn);
-    doc.listeners.set(type, list);
+    win.listeners.set(type, list);
   },
   removeEventListener(type: string, fn: Handler): void {
-    const list = doc.listeners.get(type) ?? [];
-    doc.listeners.set(type, list.filter((f) => f !== fn));
+    const list = win.listeners.get(type) ?? [];
+    win.listeners.set(type, list.filter((f) => f !== fn));
   },
 };
 
-function keyEvent(key: string, shiftKey = false): { key: string; shiftKey: boolean; prevented: number; preventDefault(): void } {
+function keyEvent(key: string, shiftKey = false): { key: string; shiftKey: boolean; prevented: number; preventDefault(): void; stopPropagation(): void } {
   return {
     key,
     shiftKey,
     prevented: 0,
     preventDefault(): void { this.prevented += 1; },
+    stopPropagation(): void {},
   };
 }
 
@@ -93,6 +111,8 @@ let showReportVerification: typeof import('../src/ui/reportVerifier')['showRepor
 
 beforeAll(async () => {
   (globalThis as { document?: unknown }).document = doc;
+  (globalThis as { window?: unknown }).window = win;
+  (globalThis as { HTMLElement?: unknown }).HTMLElement = FakeEl;
   const modal = await import('../src/ui/Modal');
   trapTab = modal.trapTab;
   focusableIn = modal.focusableIn;
@@ -101,7 +121,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   doc.activeElement = null;
-  doc.listeners.clear();
+  win.listeners.clear();
   doc.body.children.length = 0;
 });
 
@@ -167,11 +187,21 @@ describe('showReportVerification', () => {
     // Focus landed inside the card, so the trap has somewhere to cycle from.
     expect(card.contains(doc.activeElement)).toBe(true);
 
-    const onKey = doc.listeners.get('keydown')![0];
+    const onKey = win.listeners.get('keydown')![0];
     const e = keyEvent('Tab');
     onKey(e);
     // Tab did not escape: it was swallowed and focus stayed in the dialog.
     expect(e.prevented).toBe(1);
     expect(card.contains(doc.activeElement)).toBe(true);
+  });
+
+  it('sits on the dialog stack: dialogOpen() sees it, and Escape closes it and clears the stack', async () => {
+    const { dialogOpen } = await import('../src/ui/Modal');
+    showReportVerification(result as never);
+    expect(dialogOpen()).toBe(true);
+    win.listeners.get('keydown')![0](keyEvent('Escape'));
+    expect(doc.body.children).toHaveLength(0);
+    expect(dialogOpen()).toBe(false);
+    expect(win.listeners.get('keydown')).toEqual([]);
   });
 });

@@ -216,6 +216,57 @@ describe('parseWorkflow — file shape validation', () => {
   });
 });
 
+// ── hostile files ──────────────────────────────────────────────────
+
+describe('parseWorkflow: hostile files', () => {
+  const header = { kind: 'olvworkflow', version: 1, recordedAt: '2026-06-01T00:00:00.000Z' };
+  const frames = (n: number): WorkflowEvent[] => Array.from({ length: n }, () => ({ type: 'frame-all', tMs: 0 }));
+
+  it('refuses a file with more events than replay may schedule, and says how many', () => {
+    // 10,001 zero-delay events: past the cap by one.
+    const r = parseWorkflow(JSON.stringify({ ...header, events: frames(10_001) }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('Too many events: 10001; the limit is 10000.');
+  });
+
+  it('a recording stops taking events at the cap, so its file still replays', () => {
+    const session = new WorkflowSession(() => 0);
+    for (let i = 0; i < 10_001; i++) session.push({ type: 'frame-all' });
+    expect(session.events()).toHaveLength(10_000);
+    const r = parseWorkflow(serializeWorkflow(buildWorkflow(session.events(), { recordedAt: '2026-06-01T00:00:00.000Z' })));
+    expect(r.ok).toBe(true);
+  });
+
+  it('still reads a file at the cap', () => {
+    const r = parseWorkflow(JSON.stringify({ ...header, events: frames(10_000) }));
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.workflow.events).toHaveLength(10_000);
+  });
+
+  it('cuts a long kind, version or event type to 60 characters in the error', () => {
+    const long = 'x'.repeat(100_000);
+    const cases = [
+      { ...header, kind: long },
+      { ...header, version: long },
+      { ...header, events: [{ type: long, tMs: 0 }] },
+    ];
+    for (const file of cases) {
+      const r = parseWorkflow(JSON.stringify(file));
+      expect(r.ok).toBe(false);
+      if (r.ok) continue;
+      // The quoted value is the JSON string: its opening quote and 59 x's, then the ellipsis.
+      expect(r.error).toContain(`"${'x'.repeat(59)}…`);
+      expect(r.error.length).toBeLessThan(140);
+    }
+  });
+
+  it('leaves a short value whole', () => {
+    const r = parseWorkflow(JSON.stringify({ ...header, kind: 'olvsession' }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('Expected kind="olvworkflow"; got "olvsession".');
+  });
+});
+
 // ── scheduleReplay against a fake clock ────────────────────────────
 
 interface FakeTimer {

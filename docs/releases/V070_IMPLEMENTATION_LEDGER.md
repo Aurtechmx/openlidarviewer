@@ -108,18 +108,19 @@ the two entries were renumbered when the branches were integrated.
 | L208 | SCIENTIFIC | TEST | med | FIXED | new | Elevation comparison between two epochs and feature extraction read points the producer marked Withheld. |
 | L203 | LOADER | TEST | med | FIXED | new | A static open over a stream built its mesh twice, a failed tileset open or a heavy LAS preview could remove the stream on screen, a remote EPT open kept the previous legend, and recovery could release unrestored work, wait on a stalled write before a clear, or offer work just cleared. |
 | L210 | UI | TEST | med | FIXED | new | The Analyse home marked a routine missing prerequisite (no scan, no terrain run, no stations) with the red Blocked badge, and the task strip dropped a running task whose panel was closed or hidden, reading Idle during real work. |
+| L202 | UI | TEST | med | FIXED | new | A failed load of the action registry, a lazy panel, the plan view controller or the tour stayed cached, so Try again failed until a reload and each failed palette attempt left a palette element behind; the report verifier and the tour kept key handling of their own outside the dialog stack, and a dialog removed without its teardown blocked Tab, Cmd-K and ?; H and the tool keys acted behind an open dialog; a workflow save that threw lost the recording; a workflow file could list any number of events and echoed a bad value at any length. |
 
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 58
+- FIXED: 59
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 80
+- total: 81
 
 ## Detail
 
@@ -7946,3 +7947,59 @@ is visible.
 
 Covered by `tests/analysisStatus.test.ts`, `tests/analyseWorkspace.test.ts`,
 `tests/stateStripLive.test.ts` and `tests/busyWaitsDom.test.ts`.
+
+### L202 · FIXED · UI
+
+Lazy-load retries, the dialog stack's coverage and hostile workflow files.
+
+Lazy loads (`src/app/lazySurfaceLoad.ts`):
+
+- `retryableOnce(load)` shares one load between its callers and drops a
+  rejection, so the next call loads again. The action registry, the workflow
+  settings panel, the Analyse, Object and reclassify panels and the
+  diagnostics runtime in `src/main.ts`, the plan view controller in
+  `src/ui/navBarWiring.ts`, the Measurements panel in
+  `src/app/measurePanelMount.ts` and the tour in `src/app/tourLauncher.ts`
+  load through it. In Firefox, Try again on the palette, the shortcut sheet
+  and Help fetches the chunk again. Chromium and WebKit keep a failed module
+  in their module map until the page reloads.
+- The command palette joins the overlay once its actions arrive, so a failed
+  registry build leaves no palette element behind.
+- `runWithRetry` runs a one-off load through the same toast and Try again;
+  the tour, the workflow settings command and the verifier use it.
+  `mountPanelOnce` builds, mounts and hydrates the Analyse, Object and
+  Measurements panels.
+- A failed tour load reaches the toast with Try again.
+- "Verify integrity report…" removes its hidden input on `cancel`, and a
+  failed verifier load reaches the toast, whose Try again verifies the file
+  already chosen.
+
+Dialogs (`src/ui/Modal.ts`):
+
+- The stack drops a dialog that left the document without its teardown, so a
+  removed dialog cannot hold Tab, Cmd-K or ?.
+- The report verifier card and the onboarding tour card sit on the stack:
+  the topmost dialog answers Escape and Tab, `dialogOpen()` counts both, and
+  Tab from outside the tour card lands on its first control. Cmd-K / Ctrl-K
+  and ? end the tour and open the palette or the shortcut sheet, as the last
+  step tells the user to.
+- While another dialog is open, a Help toggle leaves Help closed, H leaves
+  the navigation help as it is, and M, A, I and V leave their tools alone.
+
+Workflow recorder:
+
+- A save that throws shows "Workflow · couldn't save:" with the reason, and
+  its Try again saves the same recording.
+- A recording stops taking events at 10,000, and `parseWorkflow` refuses a
+  file that lists more than 10,000 events before it reads any event. A
+  kind, version or event type quoted in an error is cut to 60 characters.
+- `WorkflowActionDeps.showLassoToast` takes the toast's action argument.
+
+The live index measures 801,802 bytes, against 801,436 on main.
+
+Covered by `tests/lazyLoadRetry.test.ts`, `tests/tourLauncher.test.ts`,
+`tests/exportActionsVerify.test.ts`, `tests/actionDefinitions.test.ts`,
+`tests/dialogStackCoverage.test.ts`, `tests/reportVerifierFocusTrap.test.ts`,
+`tests/helpOverlayLazyFailure.test.ts`, `tests/workflowActions.test.ts`,
+`tests/workflowRecorder.test.ts`, `tests/e2e/commandPalette.spec.ts` and
+`tests/e2e/dialogFocus.spec.ts`.

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { seedStaleReloadCooldown } from './helpers';
 
 /**
  * v0.3.9 command palette — Cmd-K / Ctrl-K.
@@ -208,5 +209,40 @@ test.describe('command palette over another dialog', () => {
     await expect(settings).toBeHidden();
     await page.keyboard.press('ControlOrMeta+KeyK');
     await expect(page.locator('.olv-palette')).toBeVisible();
+  });
+});
+
+test.describe('command palette: action registry chunk failure', () => {
+  const REGISTRY_CHUNK = '**/actionDefinitions-*.js';
+  const TRY_AGAIN = '.olv-lasso-toast-action';
+
+  test('a failed action registry leaves no palette element behind, attempt after attempt', async ({ page }) => {
+    await seedStaleReloadCooldown(page);
+    await page.route(REGISTRY_CHUNK, (route) => route.abort());
+    await page.goto('/');
+    await page.keyboard.press('ControlOrMeta+KeyK');
+    await expect(page.locator(TRY_AGAIN)).toHaveText('Try again', { timeout: 10_000 });
+    await expect(page.locator('.olv-palette')).toHaveCount(0);
+    // Mark this report's button, so the next report can be told apart from it.
+    await page.locator(TRY_AGAIN).evaluate((b) => { (b as HTMLElement).dataset.seen = '1'; });
+    await page.locator(TRY_AGAIN).click();
+    await expect(page.locator(`${TRY_AGAIN}:not([data-seen])`)).toHaveText('Try again', { timeout: 10_000 });
+    await expect(page.locator('.olv-palette')).toHaveCount(0);
+  });
+
+  // Firefox re-fetches a specifier that failed once; Chromium and WebKit keep
+  // the failure in the module map, so only this leg reaches the network again.
+  test('firefox: Try again after a failed action registry opens the palette', async ({ page, browserName }) => {
+    test.skip(browserName !== 'firefox', 'Chromium/WebKit cannot re-fetch a failed specifier without a full navigation.');
+    await seedStaleReloadCooldown(page);
+    let attempts = 0;
+    await page.route(REGISTRY_CHUNK, (route) => (++attempts === 1 ? route.abort() : route.continue()));
+    await page.goto('/');
+    await page.keyboard.press('ControlOrMeta+KeyK');
+    await expect(page.locator(TRY_AGAIN)).toHaveText('Try again', { timeout: 10_000 });
+    await page.locator(TRY_AGAIN).click();
+    await expect(page.locator('.olv-palette')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('.olv-palette')).toHaveCount(1);
+    expect(attempts).toBe(2);
   });
 });

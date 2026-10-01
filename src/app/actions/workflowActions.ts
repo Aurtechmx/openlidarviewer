@@ -10,14 +10,14 @@ import type { WorkflowConfigPanel } from '../../ui/WorkflowConfigPanel';
 import type { WorkflowEvent } from '../../render/workflow/workflowRecorder';
 import { keyDisplayFor } from '../../ui/keyBindings';
 import { el } from '../../ui/dom';
-import { createLazySurfaceLoader } from '../lazySurfaceLoad';
+import { runWithRetry, type LazyLoadToast } from '../lazySurfaceLoad';
 
 export interface WorkflowActionDeps {
   workflowController: WorkflowController;
   startWorkflowRecording: () => void;
   dispatchWorkflowEvent: (event: WorkflowEvent) => void;
   ensureWorkflowConfigPanel: () => Promise<WorkflowConfigPanel>;
-  showLassoToast: (message: string) => void;
+  showLassoToast: LazyLoadToast['show'];
 }
 
 export function contributeWorkflowActions(deps: WorkflowActionDeps): Action[] {
@@ -101,14 +101,7 @@ export function contributeWorkflowActions(deps: WorkflowActionDeps): Action[] {
       keywords: ['config', 'options', 'preferences', 'shortcut', 'speed'],
       run: () => {
         // A failed load reaches the shared lazy-load toast, whose Try again runs the whole open again.
-        const attempt = (): void => {
-          void createLazySurfaceLoader({ show: deps.showLassoToast })(
-            () => deps.ensureWorkflowConfigPanel().then((p) => p.open()),
-            'workflow settings',
-            { retry: attempt },
-          );
-        };
-        attempt();
+        runWithRetry({ show: deps.showLassoToast }, () => deps.ensureWorkflowConfigPanel().then((p) => p.open()), 'workflow settings');
       },
     },
   );

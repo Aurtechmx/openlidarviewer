@@ -37,6 +37,10 @@ class FakeEl {
   constructor(tagName: string) {
     this.tagName = tagName;
   }
+  /** Mounted under the fake body, as `Node.isConnected` reports for a real node. */
+  get isConnected(): boolean {
+    return BODY.contains(this);
+  }
   append(...kids: FakeEl[]): void {
     for (const k of kids) {
       k.parent = this;
@@ -129,6 +133,7 @@ describe('wireDialogA11y', () => {
   it('calls onEscape when Escape reaches the window, not just a per-input listener', async () => {
     const { wireDialogA11y } = await import('../src/ui/Modal');
     const dialog = new FakeEl('div');
+    BODY.append(dialog);
     const trigger = new FakeEl('button');
     trigger.focus();
     let escaped = false;
@@ -147,6 +152,7 @@ describe('wireDialogA11y', () => {
     const first = new FakeEl('button');
     const last = new FakeEl('button');
     dialog.append(first, last);
+    BODY.append(dialog);
     first.focus();
     wireDialogA11y(dialog as unknown as HTMLElement, { onEscape: () => {} });
     let prevented = false;
@@ -159,6 +165,7 @@ describe('wireDialogA11y', () => {
   it('teardown() stops listening — a later Escape no longer fires onEscape', async () => {
     const { wireDialogA11y } = await import('../src/ui/Modal');
     const dialog = new FakeEl('div');
+    BODY.append(dialog);
     let calls = 0;
     const handle = wireDialogA11y(dialog as unknown as HTMLElement, { onEscape: () => { calls += 1; } });
     winKeydown('Escape');

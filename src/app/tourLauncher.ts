@@ -16,16 +16,18 @@
  * did when the tour booted at startup.
  */
 import type { TourHandle } from '../ui/onboarding/bootTour';
+import { retryableOnce, runWithRetry, type LazyLoadToast } from './lazySurfaceLoad';
 
 /** The shape of the lazy module the launcher boots. */
 type TourModule = { bootTour: () => TourHandle };
 
-/** A real TourHandle that defers the tour chunk until start or replay. */
-export function createTourLauncher(load: () => Promise<TourModule>): TourHandle {
-  let booted: Promise<TourHandle> | null = null;
-  const ensure = (): Promise<TourHandle> => (booted ??= load().then((m) => m.bootTour()));
-  return {
-    start: () => void ensure().then((t) => t.start()),
-    replay: () => void ensure().then((t) => t.replay()),
-  };
+/**
+ * A real TourHandle that defers the tour chunk until start or replay. A failed
+ * load reaches `toast` with a Try again that repeats the call, and the failure
+ * is not kept: the next start or replay fetches the chunk again.
+ */
+export function createTourLauncher(load: () => Promise<TourModule>, toast: LazyLoadToast): TourHandle {
+  const ensure = retryableOnce(() => load().then((m) => m.bootTour()));
+  const call = (method: keyof TourHandle): void => runWithRetry(toast, () => ensure().then((t) => t[method]()), 'tour');
+  return { start: () => call('start'), replay: () => call('replay') };
 }

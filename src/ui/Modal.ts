@@ -82,20 +82,37 @@ export function trapTab(dialog: HTMLElement, e: KeyboardEvent): void {
   }
 }
 
+/** One open dialog and the keydown handler it listens with. */
+type StackedDialog = readonly [dialog: HTMLElement, onKeyDown: (e: KeyboardEvent) => void];
+
 /**
- * The keydown handler of every open dialog, topmost last. Each one listens
- * on `window` in the capture phase, but only the topmost acts, so one Escape
- * closes one dialog and Tab stays inside the dialog on top.
+ * Every open dialog, topmost last. Each handler listens on `window` in the
+ * capture phase, but only the topmost acts, so one Escape closes one dialog
+ * and Tab stays inside the dialog on top.
  */
-const openDialogs: unknown[] = [];
+const openDialogs: StackedDialog[] = [];
+
+/**
+ * The topmost open dialog. On the way it drops any dialog that left the
+ * document without its teardown, so a removed dialog cannot keep Tab, Cmd-K
+ * or ? blocked.
+ */
+function topDialog(): StackedDialog | undefined {
+  let top;
+  while ((top = openDialogs.at(-1)) && !top[0].isConnected) {
+    openDialogs.pop();
+    window.removeEventListener('keydown', top[1], true);
+  }
+  return top;
+}
 
 /** Whether a dialog wired through this module is open. */
-export const dialogOpen = (): boolean => openDialogs.length > 0;
+export const dialogOpen = (): boolean => topDialog() !== undefined;
 
 /** Put `dialog` on top of the stack with its Escape and Tab handling. Returns the remover. */
 function stackDialog(dialog: HTMLElement, onEscape: () => void): () => void {
   const onKeyDown = (e: KeyboardEvent): void => {
-    if (openDialogs.at(-1) !== onKeyDown) return;
+    if (topDialog()?.[1] !== onKeyDown) return;
     if (e.key === 'Escape') {
       e.stopPropagation();
       e.preventDefault();
@@ -104,10 +121,11 @@ function stackDialog(dialog: HTMLElement, onEscape: () => void): () => void {
     }
     trapTab(dialog, e);
   };
-  openDialogs.push(onKeyDown);
+  const entry: StackedDialog = [dialog, onKeyDown];
+  openDialogs.push(entry);
   window.addEventListener('keydown', onKeyDown, true);
   return () => {
-    const i = openDialogs.indexOf(onKeyDown);
+    const i = openDialogs.indexOf(entry);
     if (i >= 0) openDialogs.splice(i, 1);
     window.removeEventListener('keydown', onKeyDown, true);
   };

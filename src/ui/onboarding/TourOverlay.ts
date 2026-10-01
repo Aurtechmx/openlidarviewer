@@ -15,10 +15,11 @@
  *
  * Accessibility (v0.4.5): the card is a `role="dialog"` with
  * `aria-modal`, labelled by its title and described by its body; focus
- * moves to the Next button on every step change and Tab cycles within
- * the card's buttons (the Modal.ts trap pattern, specialised to the
- * card's three fixed buttons). The step text (progress + title + body)
- * is one polite, atomic live region so each step's copy is announced
+ * moves to the Next button on every step change. While a step shows, the
+ * card sits on the shared dialog stack (Modal.ts): Tab cycles within its
+ * buttons and comes back in from outside. Cmd-K / Ctrl-K and ? end the tour
+ * and open the palette or the shortcut sheet. The step text (progress + title +
+ * body) is one polite, atomic live region so each step's copy is announced
  * even though focus stays parked on Next. Keyboard: → / Enter advance,
  * ← steps back, Esc skips — the same outcome the "Skip tour" button
  * persists, which is what the welcome copy ("Press Esc any time to
@@ -28,6 +29,7 @@
 
 import { clamp } from '../../numeric';
 import { el } from '../dom';
+import { wireDialogA11y, type DialogA11yHandle } from '../Modal';
 import {
   TourSession,
   splitEmphasis,
@@ -53,7 +55,10 @@ export class TourOverlay {
   private _detach: (() => void) | null = null;
   private _onKey: ((e: KeyboardEvent) => void) | null = null;
   private _onResize: (() => void) | null = null;
+  private _onPaletteKey: ((e: KeyboardEvent) => void) | null = null;
   private _currentSnapshot: TourSnapshot | null = null;
+  /** The card's place on the dialog stack while a step shows. */
+  private _a11y: DialogA11yHandle | null = null;
 
   constructor(session: TourSession) {
     this._session = session;
@@ -137,25 +142,6 @@ export class TourOverlay {
     this._card.setAttribute('aria-modal', 'true');
     this._card.setAttribute('aria-labelledby', this._title.id);
     this._card.setAttribute('aria-describedby', this._body.id);
-    // Focus trap — the Modal.ts pattern specialised to the card's three
-    // fixed buttons (Back / Next / Skip; Back drops out while disabled).
-    this._card.addEventListener('keydown', (e) => {
-      if (e.key !== 'Tab') return;
-      const items = [this._backBtn, this._nextBtn, this._skipBtn].filter(
-        (b) => !b.disabled,
-      );
-      if (items.length === 0) return;
-      const first = items[0];
-      const last = items.at(-1)!;
-      const active = document.activeElement;
-      if (e.shiftKey && (active === first || !this._card.contains(active))) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && active === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    });
 
     this.element = el('div', { className: 'olv-tour-root olv-hidden' }, [
       this._backdrop as unknown as HTMLElement,
@@ -170,18 +156,11 @@ export class TourOverlay {
     this._detach = this._session.subscribe((snap) => this._render(snap));
     this._onKey = (e) => {
       if (this._session.state !== 'running') return;
-      if (e.key === 'Escape') {
-        // Esc SKIPS (persisting the seen-flag) — the welcome copy promises
-        // "Press Esc any time to skip", and before v0.4.5 it silently
-        // dismissed instead, re-showing the tour every session.
-        e.preventDefault();
-        this._session.skip();
-        return;
-      }
-      // Keyboard stepping (v0.4.5): → advances, ← steps back. Enter also
-      // advances, but ONLY when focus is not already on one of the card's
-      // buttons — a focused button fires its own click on Enter, and a
-      // second session call here would double-step.
+      // Esc belongs to the dialog stack (see _render). Keyboard stepping
+      // (v0.4.5): → advances, ← steps back. Enter also advances, but ONLY
+      // when focus is not already on one of the card's buttons: a focused
+      // button fires its own click on Enter, and a second session call here
+      // would double-step.
       if (e.key === 'ArrowRight') {
         e.preventDefault();
         this._session.next();
@@ -202,12 +181,23 @@ export class TourOverlay {
     this._onResize = () => {
       if (this._currentSnapshot) this._render(this._currentSnapshot);
     };
+    // Cmd-K / Ctrl-K and ? end the tour before the shortcut dispatcher sees
+    // the key, so the palette or the shortcut sheet opens where the last step
+    // tells the user to press it. Capture phase runs ahead of the dispatcher.
+    this._onPaletteKey = (e) => {
+      if (this._session.state !== 'running') return;
+      const palette = (e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K');
+      if (palette || (e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey)) this._session.skip();
+    };
     window.addEventListener('keydown', this._onKey);
+    window.addEventListener('keydown', this._onPaletteKey, true);
     window.addEventListener('resize', this._onResize);
   }
 
   /** Unmount and tear down listeners. */
   unmount(): void {
+    this._a11y?.teardown();
+    this._a11y = null;
     if (this._detach) {
       this._detach();
       this._detach = null;
@@ -215,6 +205,10 @@ export class TourOverlay {
     if (this._onKey) {
       window.removeEventListener('keydown', this._onKey);
       this._onKey = null;
+    }
+    if (this._onPaletteKey) {
+      window.removeEventListener('keydown', this._onPaletteKey, true);
+      this._onPaletteKey = null;
     }
     if (this._onResize) {
       window.removeEventListener('resize', this._onResize);
@@ -231,9 +225,15 @@ export class TourOverlay {
     this._currentSnapshot = snap;
     if (snap.state !== 'running' || !snap.step) {
       this.element.classList.add('olv-hidden');
+      this._a11y?.teardown();
+      this._a11y = null;
       return;
     }
     this.element.classList.remove('olv-hidden');
+    // On the stack before Next takes focus, so the teardown hands focus back
+    // to where it was. Esc SKIPS and persists the seen flag, which is what the
+    // welcome copy's "Press Esc any time to skip" promises.
+    this._a11y ??= wireDialogA11y(this._card, { onEscape: () => this._session.skip() });
     this._title.textContent = snap.step.title;
     // Body copy renders `*key terms*` as themed <mark> elements. Built as
     // real DOM nodes from the pure splitter — copy can never inject HTML.
