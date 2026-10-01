@@ -93,8 +93,13 @@ export function liveTasks(nowMs: number = performance.now()): readonly TaskActiv
         clocks.delete(id);
         continue;
       }
-      if (!s.live()) continue;
       const run = s.run?.();
+      // A task already running in this run stays listed while its host is
+      // hidden (panel closed, sheet lowered); a hidden one not yet seen is not.
+      if (!s.live() && (!clocks.has(id) || runs.get(id) !== run)) {
+        clocks.delete(id);
+        continue;
+      }
       if (runs.get(id) !== run) clocks.delete(id);
       runs.set(id, run);
       let clock = clocks.get(id);

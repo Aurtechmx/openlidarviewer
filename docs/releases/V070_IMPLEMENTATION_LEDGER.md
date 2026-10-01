@@ -107,18 +107,19 @@ the two entries were renumbered when the branches were integrated.
 | L204 | SCIENTIFIC | TEST | low | FIXED | new | The PDAL ground-filter and DTM results files said eight synthetic scenes while listing five and three. |
 | L208 | SCIENTIFIC | TEST | med | FIXED | new | Elevation comparison between two epochs and feature extraction read points the producer marked Withheld. |
 | L203 | LOADER | TEST | med | FIXED | new | A static open over a stream built its mesh twice, a failed tileset open or a heavy LAS preview could remove the stream on screen, a remote EPT open kept the previous legend, and recovery could release unrestored work, wait on a stalled write before a clear, or offer work just cleared. |
+| L210 | UI | TEST | med | FIXED | new | The Analyse home marked a routine missing prerequisite (no scan, no terrain run, no stations) with the red Blocked badge, and the task strip dropped a running task whose panel was closed or hidden, reading Idle during real work. |
 
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 57
+- FIXED: 58
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 79
+- total: 80
 
 ## Detail
 
@@ -7920,3 +7921,28 @@ sizes navigation for the new scan alone), `tests/tilesetOpenFailureKeepsStream.t
 `tests/heavyLasPreviewFirst.test.ts` (heavy open over a stream that is already
 on screen), `tests/openStreaming.test.ts` (a committed open resets the
 classification surfaces) and `tests/recoveryControllerWrites.test.ts`.
+
+### L210 · FIXED · UI
+
+The Analyse home showed a red Blocked badge for routine missing prerequisites:
+no scan loaded, no terrain run behind Flow Pulse, Terrain Access or Contours,
+no scanner stations or a streamed scan behind Observatory, and a preflight gap
+with a fix (a coordinate system, classification, a second or aligned scan,
+full coverage). These rows now name what the step needs ("Needs a loaded
+scan", "Needs terrain", "Needs scanner stations", "Needs a local scan", "Needs a
+projected CRS") in the warning style, with the same fix button. The verdict
+underneath is still blocked and the preflight is unchanged. A terrain run that
+says it is not usable, a failed coverage check and a preflight refusal with no
+fix keep the red Blocked badge.
+
+The task strip found running tasks from the visible page, so a task whose
+panel was closed, whose phone sheet was lowered, or which started inside a
+hidden sheet dropped out, and the strip read Idle during real work. A task
+seen running now stays listed through hiding until its indicator settles or is
+removed, and a task that starts inside a sheet the layout hides is listed from
+the start. A new run of a reused indicator never inherits the clock of the
+last one. The elapsed time beside an indicator is still written only while it
+is visible.
+
+Covered by `tests/analysisStatus.test.ts`, `tests/analyseWorkspace.test.ts`,
+`tests/stateStripLive.test.ts` and `tests/busyWaitsDom.test.ts`.

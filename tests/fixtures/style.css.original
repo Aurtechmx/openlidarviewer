@@ -5220,7 +5220,8 @@ body.olv-theme-light .olv-busy-scan--emblem {
   white-space: nowrap;
 }
 .olv-ah-badge.is-ready { background: var(--good-bg, rgba(52, 168, 83, 0.18)); color: var(--good, #6ee7a0); }
-.olv-ah-badge.is-review { background: var(--warn-bg, rgba(230, 180, 40, 0.18)); color: var(--warn, #e9d16b); }
+.olv-ah-badge.is-review,
+.olv-ah-badge.is-needs { background: var(--warn-bg, rgba(230, 180, 40, 0.18)); color: var(--warn, #e9d16b); }
 .olv-ah-badge.is-blocked { background: var(--bad-bg, rgba(224, 64, 72, 0.18)); color: var(--bad, #f08a92); }
 .olv-ah-badge.is-present { background: var(--accent-soft); color: var(--text); }
 .olv-ah-row.is-child { margin-left: var(--space-xl); }

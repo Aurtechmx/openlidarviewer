@@ -82,10 +82,12 @@ describe('Analyse home', () => {
     for (const id of ['terrain', 'flow-pulse', 'terrain-access', 'observatory', 'objects']) {
       const r = t.row(id);
       expect(r).toBeDefined();
-      expect(r.find((e) => e.hasClass('olv-ah-badge'))?.ownText).toMatch(/^(Ready|Review|Blocked)$/);
+      expect(r.find((e) => e.hasClass('olv-ah-badge'))?.ownText).toMatch(/^(Ready|Review|Blocked|Needs .+)$/);
       expect(r.find((e) => e.hasClass('olv-ah-reason'))?.ownText.length).toBeGreaterThan(0);
     }
-    expect(t.row('terrain-access').hasClass('is-blocked')).toBe(true);
+    const access = t.row('terrain-access');
+    expect(access.hasClass('is-needs')).toBe(true);
+    expect(access.find((e) => e.hasClass('olv-ah-badge'))?.ownText).toBe('Needs terrain');
   });
 
   it('a BLOCKED lab row offers Prepare terrain, which lands on the Terrain page', async () => {
@@ -160,8 +162,9 @@ describe('Analyse home', () => {
 
   it('repaints when Process Studio repaints: a terrain run unblocks the labs', async () => {
     const t = await make();
-    expect(t.row('flow-pulse').hasClass('is-blocked')).toBe(true);
+    expect(t.row('flow-pulse').hasClass('is-needs')).toBe(true);
     t.setState({ facts, view: undefined, produced: new Set<ProductId>(['dtm', 'contours']) });
+    expect(t.row('flow-pulse').hasClass('is-needs')).toBe(false);
     expect(t.row('flow-pulse').hasClass('is-blocked')).toBe(false);
   });
 
