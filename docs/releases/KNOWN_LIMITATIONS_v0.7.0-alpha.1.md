@@ -315,7 +315,8 @@ Some surfaces cannot carry every field:
 Many static layers can be open at once. A streamed COPC, EPT or 3D Tiles
 tileset source is open one at a time: opening one closes the stream already
 open and every static layer, and opening a static file while a stream is open
-closes the stream.
+closes the stream. A local file too heavy for memory streams from disk; it
+replaces an open stream and leaves the static layers open.
 
 ## No cross-CRS reprojection
 

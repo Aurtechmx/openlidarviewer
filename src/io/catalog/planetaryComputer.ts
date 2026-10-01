@@ -24,9 +24,10 @@
  * Pure — no DOM, no three.js. Tests live in `tests/planetaryComputer.test.ts`.
  *
  * Privacy contract — the endpoint is a public, unauthenticated STAC API
- * hosted by Microsoft Planetary Computer. The only request made on the
- * user's behalf is a bbox-scoped GET to the public catalog; no API key,
- * no personal identifier. The user gates the request explicitly by
+ * hosted by Microsoft Planetary Computer. Two requests are made on the
+ * user's behalf: a bbox-scoped GET to the public catalog, and, when a
+ * result is opened, a GET to the SAS `/sign` endpoint carrying that
+ * asset's blob URL (`signAssetUrl`). No API key, no personal identifier. The user gates the request explicitly by
  * typing a location and pressing Search; `?notelemetry=1` suppresses the
  * surface entirely. No PII leaves the device.
  */

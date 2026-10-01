@@ -391,7 +391,9 @@ matching `tests/myModule.test.ts`.
   the browser and are not uploaded: there is no backend to send them to.
 - No telemetry, no accounts. The network requests OpenLiDARViewer makes are:
   its own static assets; a remote dataset you open (fetched from that provider's
-  host); and the location search you initiate (Microsoft Planetary Computer).
+  host); the location search you initiate (Microsoft Planetary Computer); and, when you
+  open a search result, a request to Planetary Computer's signing service with
+  that tile's address.
 - Runtime dependencies, as `package.json` lists them:
 
   | Package | Role |

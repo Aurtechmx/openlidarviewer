@@ -8147,12 +8147,13 @@ runtime dependencies with their roles, names three.js 0.186, and lists the jobs
 `ci-green` needs. `.github/SECURITY.md` states that merge commits on `main` are
 signed by GitHub's web-flow key, that archives and the SBOM carry a build
 provenance attestation, and that `SHA256SUMS` and the manifest carry no
-signature. `PRIVACY.md` lists the three kinds of request the app makes. The
+signature. `PRIVACY.md` lists the requests the app makes, including the tile-signing request a catalogue result sends. The
 user guide and the known-limitations document state the layer contract from
 `openScan.ts` and `openStreaming.ts`. Static layers stack. One COPC, EPT or 3D
 Tiles stream is open at a time, and opening one closes every other layer. A
-static open closes the stream.
+static open closes the stream. A local LAS too heavy for memory streams from
+disk through `heavyLasExecutor.ts`: it replaces an open stream and keeps the
+static layers.
 
 `ci.yml` gains an `npm-audit` job (`npm audit --omit=dev --audit-level=high`)
 in `ci-green`'s `needs`; `security.yml` keeps the weekly scheduled run.
-Checked by `npm run lint:known-limitations`, which reads `ci-green`'s `needs`.

@@ -40,8 +40,10 @@
  *   network activity is the EPT manifest GET (for EPT URLs) or COPC
  *   HEAD + range read (for COPC URLs) — the same requests the
  *   open-from-URL field has always made.
- * - The location search is the one provider request, and only when the
- *   user runs it: a bbox query to Planetary Computer's public STAC.
+ * - The location search sends a bbox query to Planetary Computer's
+ *   public STAC, only when the user runs it. Opening a result sends one
+ *   more request, to Planetary Computer's SAS `/sign` endpoint with that
+ *   asset's blob URL, before the streaming open.
  * - The `?notelemetry=1` URL flag disables the whole lookup — curated
  *   dropdown and location search — since a per-tile fetch is a
  *   categorical access event the user may opt out of.

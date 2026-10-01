@@ -18,7 +18,8 @@ are these:
   if you ask for one;
 - a remote dataset or sample you open, from the server that hosts it;
 - a location search in the public LiDAR catalogue, sent to Microsoft Planetary
-  Computer, only when you run one.
+  Computer, only when you run one, and, when you open a result, a request to
+  its signing service carrying that tile's address.
 
 The `?notelemetry=1` URL flag turns off the public LiDAR catalogue, including
 its location search.
