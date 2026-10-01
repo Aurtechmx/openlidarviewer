@@ -104,6 +104,12 @@ export interface CrsInfo {
    * downgraded to a registry generic. Absent when the source carried no WKT.
    */
   readonly horizontalDatum?: string;
+  /**
+   * Set when the CRS is not from the file but asserted by a catalogue source's
+   * product specification (`src/io/catalog/catalogueCrs.ts`); names the
+   * assertion, e.g. "swisstopo LV95".
+   */
+  readonly catalogue?: string;
 }
 
 /** Common vertical-datum EPSG codes → readable names. */

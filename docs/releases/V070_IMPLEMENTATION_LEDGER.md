@@ -98,17 +98,18 @@ the two entries were renumbered when the branches were integrated.
 | L187 | UI | TEST | low | FIXED | new | Opening a scan from the empty state put the load toast over the brand mark, and the splash painted above the toast. |
 | L193 | UI | TEST | low | FIXED | new | The elevation legend's ramp used about two thirds of the card and showed nothing about where the points sit inside the p5–p95 window or how many it clips. |
 | L194 | EXPORT | TEST | low | FIXED | new | Export provenance named the resolved CRS but not where it came from (LAS VLR, EVLR, user choice or none). |
+| L195 | LOADER | TEST | high | FIXED | new | The curated swissSURFACE3D tile streamed with no CRS: the file carries no CRS record, and the catalogue's stated frame was never applied, so georeferenced exports were refused and lengths read as source units. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 49
+- FIXED: 50
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 70
+- total: 71
 
 ## Detail
 
@@ -7469,3 +7470,29 @@ contour, Flow Pulse, Terrain Access, figure PNG and scan report exports do not
 carry it yet; `docs/validation/REPRODUCIBILITY_AUDIT.md` lists them.
 
 Covered by `tests/exportCrsOrigin.test.ts` (VLR, EVLR and no-CRS fixtures).
+
+### L195 · FIXED · LOADER
+
+A curated swisstopo tile opened with no coordinate system.
+
+`2485_1109.copc.laz` (swissSURFACE3D, served by FLAI) is LAS 1.4, PDRF 6,
+global encoding 17 (WKT bit set), with two VLRs (`copc` 1, `laszip encoded`
+22204) and one EVLR (`copc` 1000, the hierarchy). No WKT (2112) or GeoKey
+(34735) record exists in either block, so the reader correctly found no CRS.
+The curated record names EPSG:2056 as the frame, but nothing applied it to the
+streamed scan.
+
+`src/io/catalog/catalogueCrs.ts` now carries the frame swisstopo's product page
+states for the product (LV95 / LN02): the record's own `nativeEpsg` in metres,
+vertical datum EPSG:5728 (LN02). A curated COPC stream whose file has no CRS
+takes it, labelled as a catalogue assertion: the CRS source is `catalog-tile`
+with the label `swisstopo LV95`, shown in the Inspector, the state strip and
+export provenance (`catalog-tile (swisstopo LV95)`). A file CRS and a user-set
+CRS both take precedence. EPSG:2056 gains a proj4 definition so lon/lat exports
+can place it; the tile centre (2485500 / 1109500) lands within 3 m of
+swisstopo's approximate conversion formulas.
+
+Covered by `tests/catalogueCrs.test.ts` (a synthetic COPC with the tile's header
+structure) and `tests/e2e/swisstopoCatalogueCrs.spec.ts` (the in-repo COPC
+fixture given that structure, streamed from the curated URL).
+

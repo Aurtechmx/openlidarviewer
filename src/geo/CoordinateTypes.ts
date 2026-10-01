@@ -42,7 +42,8 @@ export type CrsKind = 'local' | 'projected' | 'geographic' | 'unknown';
  * `las-evlr` — the same record read from a LAS 1.4 extended VLR (EVLR).
  * `copc-meta` — COPC info VLR (LAS-VLR-equivalent on COPC files).
  * `ept-srs` — EPT manifest `srs.wkt` field.
- * `catalog-tile` — Public-catalog tile metadata (USGS 3DEP, etc.).
+ * `catalog-tile` — the frame a catalogue source's product specification
+ *                   states, for a tile that carries no CRS record.
  * `user-override` — User explicitly chose a CRS in the override panel.
  * `default-assumption` — None of the above; the viewer is operating
  *                         on the documented default for the source
@@ -107,6 +108,8 @@ export interface ResolvedCrs {
   readonly linearUnit: CrsLinearUnit;
   readonly linearUnitToMetres: number;
   readonly source: CrsSource;
+  /** The catalogue assertion behind a `catalog-tile` source, e.g. "swisstopo LV95". */
+  readonly assertedBy?: string;
   readonly confidence: CrsConfidence;
   /**
    * Whether the user has explicitly confirmed or overridden this CRS.
@@ -227,8 +230,10 @@ export function resolvedFromCrsInfo(
     epsg: info.epsg,
     linearUnit: info.linearUnit,
     linearUnitToMetres: info.linearUnitToMetres,
-    // A LAS CRS read from an EVLR is labelled as such, not as a header VLR.
-    source: source === 'las-vlr' && info.record === 'evlr' ? 'las-evlr' : source,
+    // A LAS CRS read from an EVLR is labelled as such, not as a header VLR,
+    // and a catalogue assertion as the catalogue's, not the file's.
+    source: info.catalogue ? 'catalog-tile' : source === 'las-vlr' && info.record === 'evlr' ? 'las-evlr' : source,
+    assertedBy: info.catalogue,
     confidence,
     userConfirmed: false,
     wkt: info.wkt,

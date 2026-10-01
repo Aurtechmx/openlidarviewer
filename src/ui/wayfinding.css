@@ -91,6 +91,15 @@
   padding-right: var(--space-md);
 }
 .olv-loc-back[hidden] { display: none; }
+/* A mode home: the one crumb repeats the active mode tab, so no pill. */
+.olv-topbar > .olv-loc.is-mode-home {
+  background: transparent;
+  border-color: transparent;
+}
+.olv-loc.is-mode-home .olv-loc-here {
+  color: var(--text-dim);
+  font-weight: 500;
+}
 
 /* The phone shows the bar as the heading of the sheet, in every detent. */
 .olv-msheet-head:has(> .olv-loc:not([hidden])) { flex-wrap: wrap; row-gap: var(--space-2xs); }

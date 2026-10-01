@@ -173,6 +173,9 @@ export function createLocationBar(d: LocationBarDeps): LocationBar {
     const here = crumbs[crumbs.length - 1];
     bar.nav.dataset.path = here?.path ?? '';
     bar.nav.dataset.here = here?.label ?? '';
+    // A mode home's single crumb repeats the active mode tab, so it reads as
+    // plain text rather than a second pill beside the tab (CE-LOC-01).
+    bar.nav.classList.toggle('is-mode-home', crumbs.length === 1);
     const b = backTarget(route, registry, ws);
     bar.back.hidden = !b;
     if (b) {

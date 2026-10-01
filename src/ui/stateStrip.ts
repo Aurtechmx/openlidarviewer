@@ -104,7 +104,7 @@ export function createStateStrip(host: StateStripHost): StateStrip {
       const h = s.horizontal;
       paint(
         'crs',
-        h ? `${h.value.crsName} · ${linearUnitLabel(h.value.linearUnit)}` : null,
+        h ? `${h.value.crsName} · ${linearUnitLabel(h.value.linearUnit)}${h.value.assertedBy ? ` · catalogue (${h.value.assertedBy})` : ''}` : null,
         h?.validity ?? null,
         h && h.value.epsg !== undefined ? `EPSG:${h.value.epsg} · ${linearUnitLabel(h.value.linearUnit)}` : undefined,
       );
