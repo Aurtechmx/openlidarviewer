@@ -55,6 +55,7 @@ import {
   setColorblindSafeClasses,
   colorblindSafeClasses,
 } from '../render/colorModes';
+import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
 import { classificationLabel } from '../render/pointInfo';
 
 /** Shown under class 1 when it holds more than half the counted points. */
@@ -392,6 +393,20 @@ export class ClassLegendPanel {
       }
     }
     this._provenance.textContent = text;
+  }
+
+  /**
+   * Bring the provenance caption in step with the cloud after a whole-scan
+   * edit or its undo/redo: plain "Derived" when the codes became derived (a
+   * richer derive caption already shown is kept), the cleared line when the
+   * source classes were cleared, hidden for the source's own classes.
+   */
+  syncProvenance(state: string): void {
+    if (state !== 'derived' || !this._derived) this.setDerivedProvenance(state === 'derived');
+    if (state === 'cleared') {
+      this._provenance.textContent = `Classification: ${CLEARED_CLASS_NOTE}.`;
+      this._provenance.classList.remove('olv-hidden');
+    }
   }
 
   /**

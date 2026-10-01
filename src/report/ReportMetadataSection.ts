@@ -11,6 +11,7 @@
  */
 
 import type { ReportDatasetRow } from './types';
+import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
 
 /** What `buildDatasetSummary` needs to know about the scan. */
 export interface MetadataInputs {
@@ -37,6 +38,10 @@ export interface MetadataInputs {
   readonly unclassifiedOfDisplaySample?: boolean;
   /** The classification was derived in the viewer (heuristic), not supplied. */
   readonly classificationDerived?: boolean;
+  /** The source classes were cleared in the viewer. */
+  readonly classificationCleared?: boolean;
+  /** `methodRegistry` id@version of the classifier behind derived codes. */
+  readonly classificationMethod?: string;
   /** CRS label + linear unit when the source carries projection metadata. */
   readonly crsName?: string;
   readonly crsUnit?: string;
@@ -164,7 +169,10 @@ function formatCompactCount(n: number): string {
 function classificationValue(inputs: MetadataInputs): string {
   if (!inputs.hasClassification) return 'No';
   const parts: string[] = [];
-  if (inputs.classificationDerived) parts.push('derived by the viewer (heuristic)');
+  if (inputs.classificationCleared) parts.push(CLEARED_CLASS_NOTE);
+  if (inputs.classificationDerived) {
+    parts.push(`derived by the viewer (heuristic${inputs.classificationMethod ? `, ${inputs.classificationMethod}` : ''})`);
+  }
   const u = inputs.unclassifiedFraction;
   if (u !== undefined && Number.isFinite(u)) {
     if (u <= 0) {

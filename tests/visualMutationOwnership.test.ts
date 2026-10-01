@@ -44,6 +44,21 @@ function bodyOf(name: string): string {
   return source.slice(at, source.indexOf('\n  }\n', at));
 }
 
+/**
+ * The class-edit seams a mutator hands its invalidation to. A method that
+ * calls one owns what that seam asks for, so its text is read as part of the
+ * caller's: every whole-scan and lasso class edit runs through
+ * `editClassification`, and every class repaint through `_afterClassEdit`.
+ */
+const DELEGATES = ['editClassification', '_afterClassEdit'];
+
+/** A method's text plus the text of every class-edit seam it calls. */
+function ownedBody(name: string): string {
+  let text = bodyOf(name);
+  for (const d of DELEGATES) if (d !== name && text.includes(`this.${d}(`)) text += ownedBody(d);
+  return text;
+}
+
 /** Every public method name on Viewer, in source order. */
 function publicMethods(): string[] {
   const names: string[] = [];
@@ -107,11 +122,16 @@ const OWNERS: ReadonlyArray<readonly [string, RenderInvalidationReason]> = [
   ['reclassifyLasso', 'filter'],
   ['undoClassification', 'filter'],
   ['redoClassification', 'filter'],
+  // The recorded class edit those run through, and the two editors that now
+  // share it (Clear classifications rides it too, from the lazy panel).
+  ['editClassification', 'filter'],
+  ['swapClassification', 'filter'],
+  ['reclassifyInPolygon', 'filter'],
 ];
 
 describe('every visual mutation has a redraw owner', () => {
   it.each(OWNERS)('%s invalidates with %s', (name, owner) => {
-    expect(bodyOf(name)).toContain(`_demand.changed('${owner}')`);
+    expect(ownedBody(name)).toContain(`_demand.changed('${owner}')`);
   });
 
   it('names a once reason the table declares, so a late frame cannot drop it', () => {
@@ -128,7 +148,7 @@ describe('every visual mutation has a redraw owner', () => {
     // listener wiring invalidates too and is not a mutation surface.
     const invalidating = new Set<string>();
     for (const name of publicMethods()) {
-      if (/_demand\.(input|changed|cameraMoved)\(/.test(bodyOf(name))) invalidating.add(name);
+      if (/_demand\.(input|changed|cameraMoved)\(/.test(ownedBody(name))) invalidating.add(name);
     }
     const listed = new Set(OWNERS.map(([name]) => name));
     expect([...invalidating].filter((n) => !listed.has(n)), 'invalidates but is unlisted').toEqual([]);

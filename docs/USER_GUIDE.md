@@ -203,6 +203,18 @@ You can solo a single class, hide several, and switch to a colourblind-safe pale
 
 You can also correct classes by hand. Pick a target class in Edit classes, press Reclassify (lasso), and draw around the points to change. Undo and Redo take the change back, and your source file is never modified.
 
+To replace the surveyor's classes, press Clear classes in Edit classes. Every point becomes class 1 (Unclassified) for this session, and the file on disk keeps its classes. A note under the buttons offers Undo and Restore earlier classes. Auto-classify scan then runs on the cleared scan, and Undo steps back over it to the cleared classes.
+
+Restore earlier classes puts back the classes the scan held before its first clear or auto-classify since you opened it. Hand edits you made before that point come back with them.
+
+Auto-classify finds ground, vegetation and buildings. Buildings come from a height and roughness heuristic. It does not find wires, poles, water, bridges or noise.
+
+Clearing leaves the classification flags alone, so a Withheld point stays Withheld. The Export panel warns before you write cleared or derived classes. Two outputs record the state inside the file: the header comment of the quick XYZ button and the PDF report. Both also name the classifier and its version beside derived classes. LAS, the converter's XYZ and ASC, CSV and PNG image exports carry no such note.
+
+The first clear or auto-classify keeps a copy of the codes it replaced, one byte per point, until the scan closes. Each clear, auto-classify or restore stores its undo step at one byte per point, and a hand edit stores six bytes per changed point. On a 20 million point scan that is 20 MB for the copy and 20 MB for each clear. Undo keeps up to 50 steps and 128 MB per scan, and drops the oldest step first. Restore earlier classes reads the kept copy, so a dropped step does not affect it.
+
+Clear and Auto-classify need a fully loaded scan, so Edit classes stays hidden on a streaming scan.
+
 ---
 
 ## Export
@@ -257,5 +269,5 @@ A scan too large to hold in memory is indexed into private browser storage on yo
 - Lengths don't look like metres: the scan has no coordinate system, so the viewer cannot confirm the scale. Measurements still work, but they are flagged yellow.
 - Coverage / Confidence colours are greyed out: run the terrain analysis first; those modes describe its result.
 - A session opened but the scene is empty: open the matching scan file too. A session carries your measurements and views, not the points and not the terrain analysis, so re-run the analysis after the scan is back.
-- Classify says it will not run: the scan already carries classes from the surveyor, or it is streaming rather than fully loaded.
+- Classify says it will not run: the scan already carries classes from the surveyor (press Clear classes first), or it is streaming rather than fully loaded.
 - A huge file is slow to appear: COPC and EPT scans stream in detail-first, so the view sharpens as you look around. A large local LAZ shows a preview first and fills in behind it.

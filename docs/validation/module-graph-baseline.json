@@ -51,9 +51,9 @@
   },
   "fanOut": {
     "src/main.ts": {
-      "runtime": 100,
+      "runtime": 97,
       "typeOnly": 27,
-      "dynamic": 7,
+      "dynamic": 6,
       "modules": [
         "@fontsource/jetbrains-mono/latin-400.css",
         "@fontsource/jetbrains-mono/latin-500.css",
@@ -113,9 +113,6 @@
         "src/render/camera/recommendView.ts",
         "src/render/class/classHistogram.ts",
         "src/render/class/classScope.ts",
-        "src/render/class/classificationCoverage.ts",
-        "src/render/class/classifierCues.ts",
-        "src/render/class/deriveClassificationAsync.ts",
         "src/render/colorModes.ts",
         "src/render/deviceProfile.ts",
         "src/render/measure/measureDerivations.ts",
@@ -159,7 +156,7 @@
     },
     "src/render/Viewer.ts": {
       "runtime": 75,
-      "typeOnly": 16,
+      "typeOnly": 17,
       "dynamic": 1,
       "modules": [
         "src/io/coordinateBridge.ts",
@@ -242,7 +239,7 @@
   },
   "watchFanOut": {
     "src/ui/AnalysePanel.ts": {
-      "runtime": 24,
+      "runtime": 25,
       "typeOnly": 18,
       "dynamic": 0,
       "modules": [
@@ -253,6 +250,7 @@
         "src/model/organizedRangeLink.ts",
         "src/render/measure/mapSheetExportOptions.ts",
         "src/science/analysisFreshness.ts",
+        "src/science/sourceInterpretation.ts",
         "src/terrain/contour/contourCopy.ts",
         "src/terrain/contour/contourShapeStyle.ts",
         "src/terrain/contour/evidenceGrade.ts",
@@ -317,7 +315,7 @@
       ]
     },
     "src/ui/MeasurePanel.ts": {
-      "runtime": 18,
+      "runtime": 19,
       "typeOnly": 1,
       "dynamic": 0,
       "modules": [
@@ -333,6 +331,7 @@
         "src/render/measure/profileSummary.ts",
         "src/render/measure/profileVerticalReference.ts",
         "src/ui/ResultFocus.ts",
+        "src/ui/actionDescriptors.ts",
         "src/ui/dockIcons.ts",
         "src/ui/dom.ts",
         "src/ui/measureBreakdownRow.ts",
@@ -442,13 +441,13 @@
     "components": []
   },
   "context": {
-    "filesScanned": 1017,
+    "filesScanned": 1047,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [
       {
         "file": "src/ui/dom.ts",
-        "importers": 73
+        "importers": 78
       },
       {
         "file": "src/lazyChunks.ts",
@@ -471,8 +470,8 @@
         "importers": 21
       },
       {
-        "file": "src/ui/Modal.ts",
-        "importers": 18
+        "file": "src/geo/height.ts",
+        "importers": 17
       },
       {
         "file": "src/io/sniffFormat.ts",
@@ -483,11 +482,11 @@
         "importers": 17
       },
       {
-        "file": "src/geo/height.ts",
+        "file": "src/science/methodRegistry.ts",
         "importers": 16
       },
       {
-        "file": "src/science/methodRegistry.ts",
+        "file": "src/ui/Modal.ts",
         "importers": 16
       },
       {

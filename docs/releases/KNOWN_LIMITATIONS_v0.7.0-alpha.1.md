@@ -36,6 +36,30 @@ streaming source declares none here, and the four codes whose meaning differs
 between the legacy and extended tables report both readings rather than one
 guess.
 
+## Clear classifications holds for one session on a loaded scan
+
+Clear classes sets every point to class 1 in the viewer. The working classes
+are not saved in a session file, so reopening the scan brings back the file's
+classes. Streaming COPC and EPT scans can be neither cleared nor
+auto-classified: both actions need a fully loaded scan, and Edit classes stays
+hidden on a streaming scan. Undo steps back over a clear, a restore and an
+auto-classify, but an auto-classify on a scan that carried no classes at all
+is not undoable. Restore earlier classes brings back the codes held before the
+first clear or auto-classify, hand edits made before it included, so it can
+differ from the file's codes. The kept codes take one byte per point once the
+first clear or auto-classify runs, and the undo history drops its oldest steps
+past 128 MB per scan.
+
+Two outputs carry a cleared or derived marker inside the file: the header
+comment of the quick XYZ export and the PDF report. Both name the classifier's
+id and version beside derived classes. LAS 1.2 and 1.4, the converter's XYZ
+and ASC, CSV and the PNG image exports write the classes with no marker. The
+Export panel states the provenance on screen; those files do not.
+
+Auto-classify finds ground, vegetation and buildings only, and buildings come
+from a height and roughness heuristic. It does not find wires, poles, water,
+bridges or noise, and its result is heuristic, not survey-grade.
+
 ## What the ledger settled, and what it did not
 
 Every v0.6.9 limitation was reproduced or cleared rather than carried forward.
@@ -207,7 +231,7 @@ for this development cut: that evidence comes from the engines themselves.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,658 lines and `src/render/Viewer.ts` is 6,056, one hundred and sixty-seven lines
+`src/main.ts` is 4,508 lines and `src/render/Viewer.ts` is 6,044, one hundred and seventy-nine lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
@@ -220,8 +244,8 @@ thirty-six out. A shrink-only lint
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
-Fan-out is 100 for the shell, 75 for the renderer and 23 for the Analyse panel,
-across 1044 modules with no dependency cycles.
+Fan-out is 97 for the shell, 75 for the renderer and 23 for the Analyse panel,
+across 1047 modules with no dependency cycles.
 
 ## The shell has little headroom
 

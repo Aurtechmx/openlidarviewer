@@ -55,23 +55,22 @@ export function clipCloud(cloud: PointCloud, clip: ClipBox): PointCloud {
     if (clipKeepsPoint(clip, [pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]])) keep[k++] = i;
   }
 
-  // A DERIVED classification cannot travel through the constructor: classes
-  // supplied there are a PRODUCER's, so a subset of viewer-derived codes came
-  // out claiming the file had classified those points, and a subset of codes
-  // known to belong to a replaced frame came out looking current. Clipping is
-  // on the export path, so that is provenance invented at the moment of export.
-  // Source classes still go through the constructor, because that is what they
-  // are.
+  // Classes supplied to the constructor read as the PRODUCER's, so the subset
+  // takes the cloud's provenance right after construction: a subset of
+  // viewer-derived or viewer-cleared codes otherwise came out claiming the
+  // file had classified those points, and a subset of codes known to belong
+  // to a replaced frame came out looking current. Clipping is on the export
+  // path, so that is provenance invented at the moment of export.
   const classification = filterChannel(cloud.classification, keep, n);
-  const derived = cloud.classificationIsDerived;
+  const prov = cloud.classificationProvenance;
   const subset = new PointCloud({
     positions: filterChannel(pos, keep, n) ?? new Float32Array(0),
     colors: filterChannel(cloud.colors, keep, n),
     intensity: filterChannel(cloud.intensity, keep, n),
-    classification: derived ? undefined : classification,
-    // Flags are the producer's, never the viewer's, so they travel even when a
-    // derived classification does not. Dropping them here made a withheld
-    // point indistinguishable from an ordinary one after a clip.
+    classification,
+    // Flags are the producer's, never the viewer's, so they travel whatever
+    // the codes' provenance. Dropping them here made a withheld point
+    // indistinguishable from an ordinary one after a clip.
     classificationFlags: filterChannel(cloud.classificationFlags, keep, n),
     normals: filterChannel(cloud.normals, keep, n),
     returnNumber: filterChannel(cloud.returnNumber, keep, n),
@@ -90,13 +89,12 @@ export function clipCloud(cloud: PointCloud, clip: ClipBox): PointCloud {
     // the export/analysis subsetting path, not a loader, and nothing reads
     // either sidecar off a clipped cloud today.
   });
-  if (derived && classification) {
-    // `classification` is the fresh buffer filterChannel just allocated and
-    // attach stores by reference, so copying it again doubled the channel's
-    // peak memory on a full-resolution export for nothing.
-    subset.attachDerivedClassification(classification);
-    // Order matters: attaching marks the codes freshly derived, which is right
-    // for a new derive and wrong for a copy. A subset of stale codes is stale.
+  if (prov === 'cleared' || prov === 'derived') {
+    // No `before` codes, so the subset keeps no second original: Restore is
+    // for the live cloud, not an export copy.
+    subset.setClassificationState(prov, cloud.derivedMethod);
+    // Order matters: the state starts current, which is right for a new derive
+    // and wrong for a copy. A subset of stale codes is stale.
     if (cloud.derivedClassificationFrameInvalid) {
       subset.markDerivedClassificationFrameInvalid();
     }

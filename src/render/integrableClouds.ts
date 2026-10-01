@@ -131,6 +131,18 @@ export function sourceClassifiesGround(cls: ArrayLike<number> | undefined | null
 }
 
 /**
+ * Whether `cls` gives the terrain PRODUCER ground: class 2 read from the source
+ * file. Ground the viewer derived, or set after the source classes were
+ * cleared, is exploratory and never takes the producer-ground path.
+ */
+export function producerClassifiesGround(
+  cloud: { readonly classificationProvenance: string },
+  cls: ArrayLike<number> | undefined | null,
+): boolean {
+  return cloud.classificationProvenance === 'source' && sourceClassifiesGround(cls);
+}
+
+/**
  * Which classification a terrain gather may hand to a NEW analytical
  * computation. Two independent reasons to withhold an array that exists:
  *

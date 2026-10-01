@@ -6171,6 +6171,23 @@ body.olv-theme-light .olv-busy-scan--emblem {
 }
 .olv-reclass-actions { display: flex; gap: var(--space-sm); }
 .olv-reclass-actions .olv-bc-pill { flex: 1; text-align: center; }
+/* Auto-classify and Clear classes share one row; the auto button drops its
+   own full-width + bottom gap there. */
+.olv-reclass-whole .olv-reclass-auto { width: auto; margin-bottom: 0; }
+/* Level-1 inline note (UX-D10): the cleared / derived working layer with its
+   Undo and Restore links. */
+.olv-reclass-note {
+  font-size: var(--text-xs); line-height: 1.4; color: var(--text-dim);
+  background: var(--accent-soft); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
+}
+.olv-reclass-hint { font-size: var(--text-xs); line-height: 1.4; color: var(--text-faint); }
+.olv-reclass-link {
+  font: inherit; color: var(--accent); background: none; border: 0; padding: 0;
+  cursor: pointer; text-decoration: underline;
+}
+.olv-reclass-link:disabled { color: var(--text-faint); cursor: default; text-decoration: none; }
+.olv-reclass-link:focus-visible { outline: var(--focus-ring); outline-offset: 2px; }
 /* The "Filtered — showing N of M classes" banner — persistent while filtered. */
 .olv-cl-banner {
   font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--accent);

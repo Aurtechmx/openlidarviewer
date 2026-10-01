@@ -1,6 +1,7 @@
 {
   "total": 173,
   "files": {
+    "src/app/classifyActions.ts": 1,
     "src/app/epochFramePrep.ts": 2,
     "src/app/featureExtractionInput.ts": 1,
     "src/app/floorPlanPositions.ts": 4,
@@ -29,7 +30,7 @@
     "src/io/loadXyz.ts": 1,
     "src/io/parseWorker.ts": 3,
     "src/io/tiles3d/pntsDecode.ts": 1,
-    "src/main.ts": 5,
+    "src/main.ts": 4,
     "src/model/PointCloud.ts": 17,
     "src/model/pointFrames.ts": 2,
     "src/render/ContourOverlay.ts": 1,

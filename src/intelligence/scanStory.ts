@@ -68,7 +68,7 @@ export interface ScanStoryInputs {
   readonly crsKnown?: boolean;
   readonly datumKnown?: boolean;
   /** Classification provenance + (for derived) its 0..1 confidence. */
-  readonly classification?: 'none' | 'source' | 'derived';
+  readonly classification?: 'none' | 'source' | 'cleared' | 'derived';
   readonly classConfidence?: number | null;
 }
 
@@ -276,6 +276,8 @@ export function buildExportHealth(i: ScanStoryInputs): ExportHealth {
     rows.push({ label: 'Classification', value: `Derived (heuristic)${pct}`, tier: 'caution' });
   } else if (i.classification === 'source') {
     rows.push({ label: 'Classification', value: 'Source (producer)', tier: 'good' });
+  } else if (i.classification === 'cleared') {
+    rows.push({ label: 'Classification', value: 'Cleared in viewer', tier: 'caution' });
   } else {
     rows.push({ label: 'Classification', value: 'None', tier: 'info' });
   }

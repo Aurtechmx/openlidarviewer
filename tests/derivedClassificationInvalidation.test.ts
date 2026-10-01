@@ -29,7 +29,13 @@ function methodBody(name: string): string {
   expect(at, `${name} not found`).toBeGreaterThan(-1);
   const rest = SRC.slice(at);
   const end = rest.indexOf('\n  }\n');
-  return rest.slice(0, end === -1 ? 2000 : end);
+  let text = rest.slice(0, end === -1 ? 2000 : end);
+  // Class edits run through the recorded-edit seams, which do the bump; a
+  // mutator that calls one bumps through it.
+  for (const d of ['editClassification', '_afterClassEdit']) {
+    if (d !== name && text.includes(`this.${d}(`)) text += methodBody(d);
+  }
+  return text;
 }
 
 describe('every classification mutator bumps the edit epoch', () => {
@@ -38,7 +44,7 @@ describe('every classification mutator bumps the edit epoch', () => {
   });
 
   it('the sibling mutators still do, so the contract is uniform', () => {
-    for (const m of ['swapClassification', 'reclassifyInPolygon', 'reclassifyLasso']) {
+    for (const m of ['swapClassification', 'reclassifyInPolygon', 'reclassifyLasso', 'editClassification', 'undoClassification', 'redoClassification']) {
       expect(methodBody(m), m).toMatch(/_markClassificationEdited\(/);
     }
   });

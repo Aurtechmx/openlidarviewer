@@ -17,6 +17,7 @@
 
 import type { ReportScanQuality } from './types';
 import { georefStatus } from '../geo/georefStatus';
+import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
 
 /**
  * The raw facts the caller reads off the cloud, as primitives only. Kept
@@ -32,6 +33,8 @@ export interface ScanQualityFacts {
   readonly datumName: string | null;
   readonly hasClassification: boolean;
   readonly classificationDerived: boolean;
+  /** The source classes were cleared in the viewer. */
+  readonly classificationCleared?: boolean;
   readonly attributes: readonly { readonly name: string; readonly present: boolean }[];
 }
 
@@ -53,6 +56,7 @@ export function scanQualityFromFacts(facts: ScanQualityFacts): ReportScanQuality
     heightKnown: gs.heightKnown,
     hasClassification: facts.hasClassification,
     classificationDerived: facts.classificationDerived,
+    classificationCleared: facts.classificationCleared,
     attributes: facts.attributes,
   });
 }
@@ -71,13 +75,16 @@ export interface ScanQualityInput {
   readonly hasClassification: boolean;
   /** Whether that classification was DERIVED in the viewer vs producer-supplied. */
   readonly classificationDerived: boolean;
+  /** Whether the source classes were cleared in the viewer. */
+  readonly classificationCleared?: boolean;
   /** Which point attributes the cloud carries. */
   readonly attributes: readonly { readonly name: string; readonly present: boolean }[];
 }
 
 /** How the classification arose, stated so a reader knows what to trust. */
-function classificationNote(hasClassification: boolean, derived: boolean): string {
+function classificationNote(hasClassification: boolean, derived: boolean, cleared?: boolean): string {
   if (!hasClassification) return 'No classification present.';
+  if (cleared) return `Classification: ${CLEARED_CLASS_NOTE}.`;
   return derived
     ? 'Classification derived in the viewer (heuristic) — review before trusting.'
     : 'Classification supplied by the producer, carried through unchanged.';
@@ -110,7 +117,7 @@ export function buildScanQuality(input: ScanQualityInput): ReportScanQuality {
     coordinateHeadline: input.coordinateHeadline,
     positionLabel: input.positionLabel,
     heightLabel: input.heightLabel,
-    classificationNote: classificationNote(input.hasClassification, input.classificationDerived),
+    classificationNote: classificationNote(input.hasClassification, input.classificationDerived, input.classificationCleared),
     attributes: input.attributes.map((a) => ({ name: a.name, present: a.present })),
     caveats: buildCaveats(input),
   };

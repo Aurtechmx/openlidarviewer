@@ -29,7 +29,8 @@ import type { CrsInfo } from '../io/crs';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { PointCloud } from '../model/PointCloud';
 import { gzipConvertedFile, gzipAvailable } from '../convert/gzip';
-import { buildExportSummary, type ExportSummaryInput } from '../export/exportSummary';
+import { buildExportSummary, type ClassificationProvenance, type ExportSummaryInput } from '../export/exportSummary';
+import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
 import {
   evaluateFullResClassExport,
   FULL_RES_CLASS_EDITS_MID_EXPORT_REFUSAL,
@@ -77,7 +78,7 @@ export interface ExportCloudSummary {
    * Classification provenance as scalar metadata, so the class row can render
    * without materializing a streaming snapshot to inspect a `PointCloud`.
    */
-  classProvenance: 'none' | 'source' | 'derived';
+  classProvenance: ClassificationProvenance;
   /**
    * The resident class buffer, by reference and never copied, so the LAS 1.2
    * preview can find classes above 31. Absent for a streaming scan, whose
@@ -94,15 +95,7 @@ export interface ExportCloudSummary {
 export function exportClassFacts(
   cloud: PointCloud,
 ): Pick<ExportCloudSummary, 'classProvenance' | 'classification'> {
-  let classProvenance: ExportCloudSummary['classProvenance'];
-  if (cloud.classificationIsDerived) {
-    classProvenance = 'derived';
-  } else if (cloud.classification != null) {
-    classProvenance = 'source';
-  } else {
-    classProvenance = 'none';
-  }
-  return { classProvenance, classification: cloud.classification };
+  return { classProvenance: cloud.classificationProvenance, classification: cloud.classification };
 }
 
 /** Fallback: derive a summary from an already-materialized cloud (no host summaryInfo). */
@@ -579,7 +572,7 @@ export class ExportPanel {
   }
 
   /** Where the active cloud's classification came from. */
-  private _classProvenance(): 'none' | 'source' | 'derived' {
+  private _classProvenance(): ClassificationProvenance {
     // Read the allocation-free summary — materializing a streaming snapshot just
     // to inspect its classification (which the class row is rendered from on
     // panel construction) concatenated every resident node into a PointCloud
@@ -610,7 +603,7 @@ export class ExportPanel {
 
     const hint = provenance === 'derived'
       ? 'Derived (heuristic) — not survey-grade. Untick to omit it from the file.'
-      : 'From the source file.';
+      : provenance === 'cleared' ? `Cleared: ${CLEARED_CLASS_NOTE}.` : 'From the source file.';
     this._classRow.append(label, el('span', { className: 'olv-export-fullres-hint', text: hint }));
   }
 

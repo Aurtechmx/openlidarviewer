@@ -38,12 +38,16 @@ export function classCountsOf(classification: ArrayLike<number>): Map<number, nu
 /** The Classes panel surface this needs: replace counts, keep the filter. */
 export interface ClassCountSink {
   replaceCounts(counts: Map<number, number>): void;
+  /** Re-state where the codes came from (source / cleared / derived). */
+  syncProvenance?(state: string): void;
 }
 
 /** The live reads and effects one class edit fans out to. */
 export interface ClassEditNotifyDeps {
   /** The edited cloud's classification buffer, or null when it has none. */
   readonly classification: ArrayLike<number> | null | undefined;
+  /** The edited cloud's classification provenance, when known. */
+  readonly provenance?: string;
   readonly legend: ClassCountSink;
   /** Drop the cached terrain core and abort any in-flight compute. */
   readonly clearTerrainCache: () => void;
@@ -89,6 +93,7 @@ export function noteClassificationEdited(deps: ClassEditNotifyDeps): void {
   deps.noteStale(CLASS_EDIT_STALE_NOTICE);
   const cls = deps.classification;
   if (cls && cls.length > 0) deps.legend.replaceCounts(classCountsOf(cls));
+  if (deps.provenance) deps.legend.syncProvenance?.(deps.provenance);
 }
 
 /** What a frame change owes a derived classification. See the notice above. */
