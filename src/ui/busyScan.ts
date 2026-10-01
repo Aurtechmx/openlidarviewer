@@ -164,6 +164,7 @@ export function createBusyScanController(): BusyScanController {
   let length = TRAIL_IDLE;
   let determinate = false;
   let generation = 0;
+  let runs = 0;
   const apply = (value: number): void => {
     length = value;
     element.style.setProperty('--olv-bs-len', value.toFixed(2));
@@ -208,6 +209,9 @@ export function createBusyScanController(): BusyScanController {
     },
     reset() {
       determinate = false;
+      // Each run gets its own number, so a reader of a reused indicator can
+      // tell one run from the next.
+      element.dataset.run = String(++runs);
       cls('is-settled', false);
       if (length !== TRAIL_IDLE) fadeTo(TRAIL_IDLE);
       else ++generation;

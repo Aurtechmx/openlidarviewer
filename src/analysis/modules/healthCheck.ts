@@ -1,14 +1,7 @@
 import type { AnalysisModule, AnalysisResult, AnalysisRow } from '../ModuleApi';
 import type { PointCloud } from '../../model/PointCloud';
 import { sourcePositions } from '../../model/pointFrames';
-
-/** Compute the median of a sorted numeric array. */
-function medianSorted(sorted: Float64Array): number {
-  const n = sorted.length;
-  if (n === 0) return 0;
-  const mid = Math.floor(n / 2);
-  return n % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-}
+import { medianOf } from './orderStatistic';
 
 /**
  * Compute per-axis median and MAD (median absolute deviation) for the
@@ -20,16 +13,13 @@ function computeMedianAndMAD(positions: Float32Array, pointCount: number): {
 } {
   // ONE scratch buffer for all three axes, reused twice per axis. The earlier
   // shape allocated nine Float64Arrays of N (three axis copies, a `.slice()` per
-  // axis, an `absDevs` per axis) where two passes over one buffer suffice — on a
-  // multi-million-point cloud that is hundreds of megabytes of garbage for a
-  // number that is thrown away after the row is rendered.
+  // axis, an `absDevs` per axis) where two passes over one buffer suffice.
   //
-  // The in-place reuse is sound because a median does not care about order: the
-  // absolute deviations are the same MULTISET whether they are derived from the
-  // axis values in file order or from the already-sorted copy, so folding
-  // `|v - median|` over the sorted buffer and re-sorting yields the identical
-  // MAD. NaNs ride along unchanged — `TypedArray.sort` parks them at the end
-  // both times, exactly as the two-array version did.
+  // `medianOf` selects the middle value instead of sorting the axis. It returns
+  // exactly what the sorted form did (NaN last, -0 before +0) and leaves the
+  // scratch holding the same multiset, so folding `|v - median|` over it gives
+  // the identical MAD. Six full sorts of a multi-million-point axis held the
+  // page for seconds on open; selection runs in linear time.
   const scratch = new Float64Array(pointCount);
 
   const median: [number, number, number] = [0, 0, 0];
@@ -39,15 +29,13 @@ function computeMedianAndMAD(positions: Float32Array, pointCount: number): {
     for (let i = 0; i < pointCount; i++) {
       scratch[i] = positions[i * 3 + axis];
     }
-    scratch.sort();
-    const med = medianSorted(scratch);
+    const med = medianOf(scratch);
     median[axis] = med;
 
     for (let i = 0; i < pointCount; i++) {
       scratch[i] = Math.abs(scratch[i] - med);
     }
-    scratch.sort();
-    mad[axis] = medianSorted(scratch);
+    mad[axis] = medianOf(scratch);
   }
 
   return { median, mad };

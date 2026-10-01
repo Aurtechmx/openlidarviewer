@@ -101,19 +101,20 @@ the two entries were renumbered when the branches were integrated.
 | L195 | LOADER | TEST | high | FIXED | new | The curated swissSURFACE3D tile streamed with no CRS: the file carries no CRS record, and the catalogue's stated frame was never applied, so georeferenced exports were refused and lengths read as source units. |
 | L196 | LOADER | TEST | low | FIXED | new | The curated swisstopo and GURS records carried lat/lon bboxes that did not contain their tiles. |
 | L199 | UI | TEST | med | FIXED | new | A lazy panel whose loader threw at once stayed busy, a second Try again started a second build, a throwing ready callback rejected, and one load re-enabled a button another still held; Tab from outside a dialog stayed outside, a fading modal took input, one Escape closed every stacked dialog, and Cmd-K and ? opened over a modal; Stop and save confirmed a save before it ran, and a failed workflow settings load was dropped and then cached. |
+| L200 | UI | TEST | high | FIXED | new | A terrain run on a scan over the display budget computed its ground surface on the main thread, holding the page for 17 s (5.8M points, 4x CPU slowdown), long enough for Chrome to offer "Page unresponsive"; long tasks showed no elapsed time. |
 | L201 | UI | TEST | med | BUILT | new | A scan with producer classes could not be auto-classified, because nothing let the user set those classes aside, and an auto-classify could not be undone. |
 
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 52
+- FIXED: 53
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 74
+- total: 75
 
 ## Detail
 
@@ -7576,6 +7577,76 @@ Covered by `tests/lazySurfaceLoad.test.ts`,
 `tests/modalConfirm.test.ts`, `tests/workflowActions.test.ts`,
 `tests/actionDefinitions.test.ts`, `tests/docNarration.test.ts`,
 `tests/e2e/commandPalette.spec.ts` and `tests/e2e/workflowRecorder.spec.ts`.
+
+### L200 · FIXED · UI
+
+A beta tester saw Chrome's "Page unresponsive" dialog while an analysis ran,
+and asked how long a run would take.
+
+Each user-started process was timed on synthetic LAS scans of 1.2M, 2.35M and
+5.8M points (in-repo fixtures are 900 points or fewer), in Chromium with a
+hardware GPU, at a 4x CPU slowdown to stand in for a laptop slower than the
+measuring machine. The longest main-thread block per process, 5.8M points:
+
+| Process | Before | After |
+|---|---|---|
+| Terrain run (Analyse) | 17.1 s | 0.49 s |
+| Open (scan health check) | 4.8 s | 1.5 s |
+| Flow Pulse, raw / Priority-Flood | 0.24 s / 0.30 s | 0.27 s / 0.33 s |
+| Terrain Access preview / route | 0.36 s / 0.51 s | 0.40 s / 0.59 s |
+| DEM package export | 0.59 s | 0.56 s |
+
+A scan over the 4,000,000-point display budget is voxel-reduced for display,
+which drops its Withheld flags (L28), so the terrain run re-decodes the source
+and builds the core from that (L26). `gatherWithheldAwareTerrainCore` computed
+that core with `computeTerrainCore` on the main thread. The runner now passes
+its terrain worker bridge (`computeTerrainCoreAsync`) as the gather's
+`computeCore`, the same bridge and main-thread fallback limits a plain run
+uses. The worker runs the same function, so the core is unchanged. A
+recovered sample is far above the 25,000-point fallback ceiling, so with no
+worker the recovery refuses and the run uses the display core, as a plain run
+on a large scan does.
+
+On open, the scan health check took the per-axis median and MAD with six full
+sorts. `src/analysis/modules/orderStatistic.ts` selects the value a sort would
+put at index k instead, in linear expected time, and returns it bit for bit
+(NaN last, -0 before +0). The pivot comes from a fixed-seed generator, and a
+range still unresolved after 4 log2(n) + 8 rounds is sorted, which bounds the
+worst case at a sort.
+
+While a scan is open, the task-activity store times each busy indicator from
+the moment the state strip's one-second poll first sees it until it settles or
+is removed, through any time it spends hidden (`src/process/waitClock.ts`).
+After a second, a host with a status line of its own shows the elapsed time
+beside the indicator; a compact button, a placeholder card and the load
+toast's icon slot show none, and before a scan is open nothing is timed. The
+state strip's Processing item shows the time in a span of its own after the
+task label, so a long label is cut first, and the time stays out of the
+item's accessible name. A host that reports progress also gets an estimate of
+the time left, once the task has moved 5% past the clock's first reading and
+1.5 s have passed. The estimate counts down with the clock and moves toward
+spent * (1 - f) / (f - f0) with a 3 s time constant, so a stall stops it
+falling. A host with no progress, such as the terrain run, shows elapsed time
+only. Screen readers hear one polite update every 30 s. The load toast reuses
+one indicator for every open, so each `reset()` gives the indicator a new run
+number (`data-run`), and a new number starts the clock and the spoken count
+again even when no poll saw the previous run settle.
+
+With no hardware acceleration (Chrome's software renderer), drawing a
+400,000-point scan held the main thread for 5 to 12 s per frame, in the canvas
+readback (`GLES2::ReadPixels` under `Commit`), with or without an analysis
+running. That needs a renderer change and stays open. The time left appears
+only where a host reports progress, and the terrain run's worker reports none
+yet.
+
+Covered by `tests/orderStatistic.test.ts`, `tests/waitClock.test.ts`,
+`tests/busyWaits.test.ts`, `tests/busyWaitsDom.test.ts`,
+`tests/stateStripLive.test.ts`, `tests/withheldAwareTerrainGather.test.ts`,
+`tests/terrainRunnerWithheldRecovery.test.ts`,
+`tests/e2e/longTaskResponsiveness.spec.ts`,
+`tests/e2e/longTaskEstimate.spec.ts`,
+`tests/e2e/longTaskReusedToast.spec.ts` and
+`tests/e2e/longTaskOverBudget.spec.ts` (`@gpu`).
 
 ### L201 · BUILT · UI
 

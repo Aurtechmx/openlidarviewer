@@ -358,11 +358,14 @@ export interface TerrainAnalysisRunner {
  *
  * `signal` is the run's OWN AbortController, the same one a superseded run or
  * a closed scan already aborts. Passing it through is what lets the existing
- * analysis-cancellation discipline reach the re-decode.
+ * analysis-cancellation discipline reach the re-decode. `computeCore` is the
+ * run's terrain worker bridge, so the recovered core is computed off the main
+ * thread like any other.
  */
 async function recoverWithheldAwareCore(
   file: File,
   coreParams: TerrainCoreParams,
+  computeCore: ComputeCoreAsyncFn,
   signal: AbortSignal,
 ): Promise<TerrainCore | null> {
   try {
@@ -370,9 +373,10 @@ async function recoverWithheldAwareCore(
     // The gather refuses `buffer.byteLength` over this ceiling; checking
     // `file.size` first refuses an oversized source before it is read at all.
     if (signal.aborted || file.size > WITHHELD_GATHER_MAX_SOURCE_BYTES) return null;
+    // An abort during the read is caught by the gather, which refuses an
+    // aborted signal before it decodes anything.
     const buffer = await file.arrayBuffer();
-    if (signal.aborted) return null;
-    const recovered = await gatherWithheldAwareTerrainCore(buffer, file.name, coreParams, { signal });
+    const recovered = await gatherWithheldAwareTerrainCore(buffer, file.name, coreParams, { signal, computeCore });
     return recovered?.core ?? null;
   } catch {
     return null;
@@ -706,8 +710,9 @@ export function createTerrainAnalysisRunner(
   /**
    * Resolve the interval-independent core for `coreParams`: the Withheld-
    * aware recovery first when the display gather could not say "excluded",
-   * falling back to `computeFallback` (the cached/computed core over the
-   * display sample) on any refusal. Shared by run() and buildResultForExport
+   * falling back to the cached or computed core over `positions`, the
+   * display sample, on any refusal. `compute` is the run's terrain worker
+   * bridge and builds either core. Shared by run() and buildResultForExport
    * so an export can never disagree with the analysis the user saw about
    * which points a DTM rests on.
    */
@@ -715,16 +720,18 @@ export function createTerrainAnalysisRunner(
     coreParams: TerrainCoreParams,
     datasetId: string | null,
     signal: AbortSignal,
-    computeFallback: () => Promise<TerrainCore>,
+    compute: ComputeCoreAsyncFn,
+    positions: Float32Array,
   ): Promise<{ core: TerrainCore; recovered: boolean }> {
     if (coreParams.withheldExcluded === null) {
       const recoveryFile = getRecoverySource?.(datasetId ?? '') ?? null;
       if (recoveryFile) {
-        const recoveredCore = await recoverWithheldAwareCore(recoveryFile, coreParams, signal);
+        const recoveredCore = await recoverWithheldAwareCore(recoveryFile, coreParams, compute, signal);
         if (recoveredCore) return { core: recoveredCore, recovered: true };
       }
     }
-    return { core: await computeFallback(), recovered: false };
+    const { getOrComputeCoreAsync } = await loadTerrainCoreCache();
+    return { core: await getOrComputeCoreAsync(positions, coreParams, compute), recovered: false };
   }
 
   async function run(intervalM?: number): Promise<void> {
@@ -814,7 +821,7 @@ export function createTerrainAnalysisRunner(
       // change (or a re-opened panel, or a re-run on the same scan) reuses it and
       // only the cheap contour stage reruns. The cache rides the same lazy chunk
       // as the analysis pipeline, so there is no extra dynamic import.
-      const { getOrComputeCoreAsync, contoursFromCore, clearTerrainCoreCache, lastTerrainCoreSource } =
+      const { contoursFromCore, clearTerrainCoreCache, lastTerrainCoreSource } =
         await loadTerrainCoreCache();
       await armTerrainCorePersistence();
       // The worker-backed async compute bridge: it runs the heavy core OFF the
@@ -848,7 +855,8 @@ export function createTerrainAnalysisRunner(
         coreParams,
         runDatasetId,
         abort.signal,
-        () => getOrComputeCoreAsync(pos, coreParams, viaWorker(computeTerrainCoreAsync, abort.signal)),
+        viaWorker(computeTerrainCoreAsync, abort.signal),
+        pos,
       );
       if (bail()) return;
       const coreSource: TerrainCoreSource | null = withheldRecovered ? null : lastTerrainCoreSource();
@@ -870,9 +878,10 @@ export function createTerrainAnalysisRunner(
       lastCommittedCore = { core, datasetId: runDatasetId, crsRevision: runCrsRevision };
       refreshDatasetStory(analysePanel);
       if (withheldRecovered) {
-        // getLastTerrainComputePath() is not checked here: the worker/fallback
-        // bridge never ran this turn, so it would report whatever the LAST
-        // computed core (a prior run, possibly a different scan) took.
+        // The recovered core went through the worker bridge too. Its
+        // main-thread fallback only runs under the sync-fallback ceiling, and a
+        // recovered sample is normally far above it, so a failed worker makes
+        // the recovery refuse and the display core take over instead.
         analysePanel.setStatus(
           'Points flagged Withheld were excluded from this surface. The display was reduced to fit the '
           + 'point budget, so the surface was rebuilt from a full-resolution re-decode of the source file.',
@@ -987,7 +996,7 @@ export function createTerrainAnalysisRunner(
     // interval-dependent contour stage reruns (now also re-picking the contour
     // shape style). We deliberately do NOT touch the panel or the run token:
     // this is a side-effect-free build for an export only.
-    const { getOrComputeCoreAsync, contoursFromCore } = await loadTerrainCoreCache();
+    const { contoursFromCore } = await loadTerrainCoreCache();
     const { computeTerrainCoreAsync } = await loadComputeTerrainCoreAsync();
     const coreParams = coreParamsOf(gathered);
     const activeId = getActiveId();
@@ -1010,7 +1019,8 @@ export function createTerrainAnalysisRunner(
         // No abort here: a cache miss (scan analysed under a different fingerprint)
         // computes once; the export awaits it. There is no superseding run to cancel.
         noAbort,
-        () => getOrComputeCoreAsync(gathered.positions, coreParams, viaWorker(computeTerrainCoreAsync, noAbort)),
+        viaWorker(computeTerrainCoreAsync, noAbort),
+        gathered.positions,
       )).core;
     return contoursFromCore(core, {
       intervalM: opts.intervalM,

@@ -69,6 +69,10 @@ const fresh = (): ArrayBuffer => LAS_BUFFER.slice(0);
 
 const NAME = 'big-static-file.las';
 
+/** The core computed in place, as a caller with no worker passes it. */
+const inline = (positions: Float32Array, params: Parameters<typeof computeTerrainCore>[1]) =>
+  Promise.resolve(computeTerrainCore(positions, params));
+
 describe('the scenario: a display cloud with no flags channel', () => {
   it('the source has 20 points, 4 of them Withheld', async () => {
     const { cloud } = await parseBuffer(fresh(), 'las', NAME);
@@ -136,7 +140,7 @@ describe('gatherWithheldAwareTerrainSource', () => {
 
 describe('gatherWithheldAwareTerrainCore: DTM cells match a gather over the non-Withheld source points', () => {
   it('produces a DTM identical to computeTerrainCore run directly over the manually-filtered source', async () => {
-    const recovered = await gatherWithheldAwareTerrainCore(fresh(), NAME, { cellSizeM: 1 });
+    const recovered = await gatherWithheldAwareTerrainCore(fresh(), NAME, { cellSizeM: 1 }, { computeCore: inline });
     expect(recovered).not.toBeNull();
     expect(recovered!.core.dtm.withheldExcluded).toBe(true);
     expect(recovered!.core.dtm.withheldExcludedCount).toBe(WITHHELD_INDICES.size);
@@ -167,6 +171,21 @@ describe('gatherWithheldAwareTerrainCore: DTM cells match a gather over the non-
   });
 });
 
+describe('the recovered core is computed by the compute the caller passes', () => {
+  it('hands the recovered sample to the async core compute and returns its core unchanged', async () => {
+    const calls: { n: number; withheldExcluded: boolean | null | undefined; sampled: boolean | undefined }[] = [];
+    const recovered = await gatherWithheldAwareTerrainCore(fresh(), NAME, { cellSizeM: 1 }, {
+      computeCore: async (positions, params) => {
+        calls.push({ n: positions.length / 3, withheldExcluded: params.withheldExcluded, sampled: params.sampled });
+        return computeTerrainCore(positions, params);
+      },
+    });
+    expect(calls).toEqual([{ n: POINT_COUNT - WITHHELD_INDICES.size, withheldExcluded: true, sampled: false }]);
+    const direct = await gatherWithheldAwareTerrainCore(fresh(), NAME, { cellSizeM: 1 }, { computeCore: inline });
+    expect(Buffer.from(recovered!.core.dtm.z.buffer)).toEqual(Buffer.from(direct!.core.dtm.z.buffer));
+  });
+});
+
 const scale: HorizontalScale = { isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: true };
 
 function identity(analysisInputDigest: string): FlowRunIdentity {
@@ -179,7 +198,7 @@ function identity(analysisInputDigest: string): FlowRunIdentity {
 
 describe('Flow Pulse reads the recovered outcome as excluded, not not-recorded', () => {
   it('the recovered DTM: the run record and limitations state exclusion, recorded', async () => {
-    const recovered = await gatherWithheldAwareTerrainCore(fresh(), NAME, { cellSizeM: 1 });
+    const recovered = await gatherWithheldAwareTerrainCore(fresh(), NAME, { cellSizeM: 1 }, { computeCore: inline });
     expect(recovered).not.toBeNull();
     const outcome = runFlowPulse(recovered!.core.dtm, scale, FLOW_PULSE_DEFAULTS, identity('recovered'));
     expect(outcome.ok).toBe(true);
@@ -211,7 +230,7 @@ describe('a strided re-decode states the true coverage, agreeing with the rest o
     // maxPoints below the 20-point source forces `sampleStridedTerrain` to
     // stride, so `sample.sampled` is true.
     const recovered = await gatherWithheldAwareTerrainCore(
-      fresh(), NAME, { cellSizeM: 1 }, { maxPoints: 8 },
+      fresh(), NAME, { cellSizeM: 1 }, { maxPoints: 8, computeCore: inline },
     );
     expect(recovered).not.toBeNull();
     expect(recovered!.sample.sampled).toBe(true);
@@ -229,7 +248,7 @@ describe('a strided re-decode states the true coverage, agreeing with the rest o
   it('keeps coverageMode "full" when the re-decode reads every point (no stride)', async () => {
     // maxPoints above the source's point count: stride collapses to 1.
     const recovered = await gatherWithheldAwareTerrainCore(
-      fresh(), NAME, { cellSizeM: 1 }, { maxPoints: 1_000_000 },
+      fresh(), NAME, { cellSizeM: 1 }, { maxPoints: 1_000_000, computeCore: inline },
     );
     expect(recovered).not.toBeNull();
     expect(recovered!.sample.sampled).toBe(false);

@@ -35,9 +35,9 @@ describe('task activity', () => {
     subscribeTaskActivity(seen);
     const t = registerTask({ label: () => 'Opening scan', progress: () => 0.4, live: () => live, gone: () => gone });
     expect(seen).toHaveBeenCalledTimes(1);
-    expect(liveTasks()).toEqual([{ id: t.id, label: 'Opening scan', progress: 0.4 }]);
+    expect(liveTasks(1000)).toEqual([{ id: t.id, label: 'Opening scan', progress: 0.4, elapsedMs: 0, remainingMs: null }]);
     live = false;
-    expect(liveTasks()).toEqual([]);
+    expect(liveTasks(2000)).toEqual([]);
     gone = true;
     live = true;
     expect(liveTasks()).toEqual([]);
@@ -51,10 +51,50 @@ describe('task activity', () => {
     expect(liveTasks()).toEqual([]);
   });
 
+  it('times a task from when it is first seen live, and restarts the clock after it settles', () => {
+    let settled = false;
+    let fraction = 0.1;
+    registerTask({ label: () => 'Export', progress: () => fraction, live: () => !settled, settled: () => settled });
+    expect(liveTasks(5000)[0].elapsedMs).toBe(0);
+    fraction = 0.2;
+    expect(liveTasks(7000)[0]).toMatchObject({ elapsedMs: 2000, remainingMs: 16_000 });
+    settled = true;
+    expect(liveTasks(10_000)).toEqual([]);
+    settled = false;
+    fraction = 0;
+    expect(liveTasks(12_000)[0]).toMatchObject({ elapsedMs: 0, remainingMs: null });
+  });
+
+  it('keeps the clock while a task is hidden and shown again', () => {
+    // A steady 40 s task, hidden from 20 s to 24 s.
+    let live = true;
+    let now = 0;
+    registerTask({ label: () => 'Export', progress: () => now / 40_000, live: () => live });
+    for (; now <= 19_000; now += 1000) liveTasks(now);
+    live = false;
+    for (; now < 24_000; now += 1000) expect(liveTasks(now)).toEqual([]);
+    live = true;
+    for (; now <= 36_000; now += 1000) {
+      const t = liveTasks(now)[0];
+      expect(t.elapsedMs).toBe(now);
+      const left = 40_000 - now;
+      expect(Math.abs(t.remainingMs! - left), `at ${now} ms`).toBeLessThan(1500);
+    }
+  });
+
+  it('a task with no progress gets elapsed time and never an estimate', () => {
+    registerTask({ label: () => 'Analysing', progress: () => null, live: () => true });
+    liveTasks(0);
+    expect(liveTasks(30_000)[0]).toMatchObject({ elapsedMs: 30_000, remainingMs: null });
+  });
+
   it('processing provider: idle, or the oldest task and a count of the rest', () => {
     expect(processingProvider([]).value).toEqual({ state: 'idle' });
-    const p = processingProvider([{ id: 1, label: 'Terrain', progress: 0.5 }, { id: 2, label: 'Export', progress: null }]);
-    expect(p.value).toEqual({ state: 'running', label: 'Terrain', progress: 0.5, more: 1 });
+    const p = processingProvider([
+      { id: 1, label: 'Terrain', progress: 0.5, elapsedMs: 4000, remainingMs: 4000 },
+      { id: 2, label: 'Export', progress: null, elapsedMs: 0, remainingMs: null },
+    ]);
+    expect(p.value).toEqual({ state: 'running', label: 'Terrain', progress: 0.5, more: 1, elapsedMs: 4000, remainingMs: 4000 });
     expect(p.source).toBe('task-activity');
   });
 });
@@ -111,5 +151,26 @@ describe('strip UI', () => {
     expect(btn('processing').textContent).toBe('Idle');
     btn('crs').fire('click');
     expect(open).toHaveBeenCalledWith('crs');
+  });
+
+  it('shows the elapsed time and the estimate in their own span, out of the accessible name', async () => {
+    const { createStateStrip } = await import('../src/ui/stateStrip');
+    const strip = createStateStrip({ open: vi.fn() });
+    const root = strip.element as unknown as FakeEl;
+    const btn = () => root.querySelector('.olv-ss-processing')!;
+    const task = (t: Partial<{ label: string; progress: number | null; elapsedMs: number; remainingMs: number | null }>) =>
+      readStrip(reads({ tasks: () => [{ id: 1, label: 'Analysing…', progress: null, elapsedMs: 0, remainingMs: null, ...t }] }));
+    strip.render(task({ elapsedMs: 500 }));
+    expect(btn().querySelector('.olv-ss-wait')).toBeNull();
+    strip.render(task({ elapsedMs: 12_000 }));
+    expect(btn().querySelector('.olv-ss-text')!.textContent).toBe('Analysing…');
+    expect(btn().querySelector('.olv-ss-wait')!.textContent).toBe('· 12 s elapsed');
+    const name = btn().getAttribute('aria-label');
+    expect(name).toBe('Processing: Analysing…. Opens Analyse');
+    strip.render(task({ elapsedMs: 13_000 }));
+    expect(btn().getAttribute('aria-label')).toBe(name);
+    strip.render(task({ label: 'Exporting', progress: 0.25, elapsedMs: 6000, remainingMs: 18_000 }));
+    expect(btn().querySelector('.olv-ss-text')!.textContent).toBe('Exporting 25%');
+    expect(btn().querySelector('.olv-ss-wait')!.textContent).toBe('· 6 s elapsed, about 20 s left');
   });
 });

@@ -29,6 +29,8 @@ import type { CrsService } from '../src/geo/CrsService';
 import type { AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
 
 import { WITHHELD_GATHER_MAX_SOURCE_BYTES } from '../src/terrain/ground/withheldAwareTerrainGather';
+import { setTerrainCoreClientFactory } from '../src/terrain/worker/computeTerrainCoreAsync';
+import { computeTerrainCore, type TerrainCoreParams } from '../src/terrain/contour/analyseContours';
 
 const gatherModule = await import('../src/terrain/ground/withheldAwareTerrainGather');
 
@@ -135,6 +137,30 @@ describe('the real path: a synthetic over-budget LAS with Withheld points', () =
     expect(updates[0].dtm.withheldExcluded).toBe(true);
     expect(updates[0].dtm.withheldExcludedCount).toBeGreaterThan(0);
     expect(statuses.some((s) => s.includes(RECOVERED_STATUS_FRAGMENT))).toBe(true);
+  }, 120_000);
+
+  it('computes the recovered core in the terrain worker, not on the main thread', async () => {
+    // A stand-in worker client that records each job and computes it inline.
+    const jobs: { n: number; withheldExcluded: TerrainCoreParams['withheldExcluded'] }[] = [];
+    setTerrainCoreClientFactory(async () => ({
+      computeCore: async (positions, n, params, classification) => {
+        jobs.push({ n, withheldExcluded: params.withheldExcluded });
+        return computeTerrainCore(positions, { ...params, classification });
+      },
+    }));
+    try {
+      const file = buildLasFile('big.las', 400, 5); // 400 points, 80 of them Withheld
+      const { runner, updates } = harness({
+        getActiveId: () => 'scan-1',
+        getRecoverySource: (id) => (id === 'scan-1' ? file : null),
+      });
+      await runner.run();
+      expect(updates).toHaveLength(1);
+      expect(updates[0].dtm.withheldExcluded).toBe(true);
+      expect(jobs).toEqual([{ n: 320, withheldExcluded: true }]);
+    } finally {
+      setTerrainCoreClientFactory(null);
+    }
   }, 120_000);
 
   it('never attempts recovery when no source File is retained for the active cloud', async () => {

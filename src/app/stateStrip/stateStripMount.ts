@@ -4,9 +4,9 @@
  * Mounted by the workspace shell (a lazy chunk), so nothing here reaches the
  * startup chunk. The strip repaints when an owner says something changed: the
  * CRS service, the active layer, Process Studio, the Analyse home's rows, the
- * results index and the task-activity store. Busy indicators are collected
- * once a second while a scan is open; the timer stops when the scan closes or
- * the strip is disposed.
+ * results index and the task-activity store. Busy indicators are collected,
+ * and their elapsed time shown, once a second while a scan is open; the timer
+ * stops when the scan closes or the strip is disposed.
  */
 
 import type { SpatialContext } from '../../geo/SpatialContext';
@@ -15,7 +15,7 @@ import type { ScanFacts } from '../../process/ProcessPlan';
 import type { ResultsIndex } from '../results/resultsIndex';
 import { lastAnalysisRows, subscribeAnalysisRows } from '../../process/analysisRowsFeed';
 import { liveTasks, subscribeTaskActivity } from '../../process/taskActivity';
-import { collectBusyTasks } from './busyTasks';
+import { clearBusyWaits, collectBusyTasks, showBusyWaits } from './busyTasks';
 import { readStrip } from './stripReads';
 import { createStateStrip, type StripItemId } from '../../ui/stateStrip';
 
@@ -52,7 +52,14 @@ export function mountStateStrip(d: StateStripMountDeps): MountedStateStrip {
   const refresh = (): void => {
     if (disposed) return;
     const open = d.hasScan();
-    if (open) collectBusyTasks();
+    let tasks: ReturnType<typeof liveTasks> = [];
+    if (open) {
+      collectBusyTasks();
+      tasks = liveTasks();
+      showBusyWaits(tasks);
+    } else {
+      clearBusyWaits();
+    }
     strip.render(
       open
         ? readStrip({
@@ -63,7 +70,7 @@ export function mountStateStrip(d: StateStripMountDeps): MountedStateStrip {
           scanFacts: () => d.studio.state().facts,
           analysisRows: lastAnalysisRows,
           results: () => d.results?.entries() ?? [],
-          tasks: liveTasks,
+          tasks: () => tasks,
         })
         : null,
     );
@@ -91,6 +98,7 @@ export function mountStateStrip(d: StateStripMountDeps): MountedStateStrip {
     refresh,
     dispose() {
       disposed = true;
+      clearBusyWaits();
       if (timer !== null) clearTimeout(timer);
       timer = null;
       for (const off of offs) off();
