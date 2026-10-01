@@ -35,18 +35,17 @@ export function keyFromId(id: string): VoxelKey | null {
   return isValidKey(key) ? key : null;
 }
 
-/** Whether a key is structurally valid (non-negative integers). */
+/** Deepest octree level a key may name. */
+export const MAX_KEY_DEPTH = 32;
+
+/**
+ * Whether a key is structurally valid: a depth in [0, 32] and integer
+ * x, y, z inside that level's 2^depth cells.
+ */
 export function isValidKey(key: VoxelKey): boolean {
-  return (
-    Number.isInteger(key.depth) &&
-    Number.isInteger(key.x) &&
-    Number.isInteger(key.y) &&
-    Number.isInteger(key.z) &&
-    key.depth >= 0 &&
-    key.x >= 0 &&
-    key.y >= 0 &&
-    key.z >= 0
-  );
+  if (!Number.isInteger(key.depth) || key.depth < 0 || key.depth > MAX_KEY_DEPTH) return false;
+  const cells = 2 ** key.depth;
+  return [key.x, key.y, key.z].every((c) => Number.isInteger(c) && c >= 0 && c < cells);
 }
 
 /**

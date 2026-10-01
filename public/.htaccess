@@ -80,11 +80,9 @@ AddType application/manifest+json .webmanifest
   #   - connect-src needs https: for remote dataset streaming (COPC/EPT range
   #     requests to arbitrary user-supplied hosts; the SSRF host blocklist in
   #     RangeSource.ts is the in-app complement).
-  #   - style-src carries 'unsafe-inline': the profile chart positions its axis
-  #     labels with inline style="" attributes. Style injection is low-risk and
-  #     no user-derived string reaches the unsafeHtml/innerHTML sinks (guarded by
-  #     `npm run lint:unsafe-html`), so this does not open an XSS path.
-  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https:; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'self'"
+  #   - style-src allows no inline style except the one <style> in index.html,
+  #     by its sha256; the app sets styles through the CSSOM.
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https:; img-src 'self' blob: data:; style-src 'self' 'sha256-ShrcU9kMa0tV1vNe5uQDsOz8tiOrPwVCvPtdLjMn19Q='; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'self'"
 </IfModule>
 
 # ── Permanent move to app.openlidarviewer.org ────────────────────────────────

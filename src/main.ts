@@ -3123,15 +3123,13 @@ async function startEmbedBridgeLazy(): Promise<typeof import('./ui/embedBridge')
 }
 
 if (embed) {
-  // Wire the origin allow-list off the page URL (?embedParent / ?embedOrigins):
-  // when a deployer relaxes frame-ancestors for cross-origin embedding, inbound
-  // commands are then gated to the configured origin(s) instead of any parent.
-  void startEmbedBridgeLazy().then((m) => m.startEmbedBridge({
+  // Commands are accepted from the page's own origin and ?embedParent / ?embedOrigins.
+  startEmbedBridgeLazy().then((m) => m.startEmbedBridge({
     onLoadFile: (buffer, fileName) => void handleFile(new File([buffer], fileName)),
     onJumpCamera: (camera) => viewer.applyCameraState(camera),
     onToggleLayer: (id, visible) => viewer.setCloudVisible(id, visible),
     onFocusAnnotation: (id) => viewer.jumpToAnnotation(id),
-  }, m.embedBridgeOptionsFromUrl(window.location.search)));
+  }, m.embedBridgeOptionsFromUrl(window.location.search))).catch((e: unknown) => console.warn(e));
 }
 
 // `?autoload=sample:<id>` — open a built-in sample on startup (embed demos).

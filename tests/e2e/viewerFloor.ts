@@ -40,7 +40,8 @@ export async function reportedBackend(page: Page): Promise<string> {
 export async function drawnPixelCount(page: Page): Promise<number> {
   const png = await page.locator('.olv-canvas').screenshot();
   return page.evaluate(async (b64) => {
-    const blob = await (await fetch(`data:image/png;base64,${b64}`)).blob();
+    // Decoded in place: the page CSP's connect-src refuses a data: fetch.
+    const blob = new Blob([Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0))], { type: 'image/png' });
     const bmp = await createImageBitmap(blob);
     const c = document.createElement('canvas');
     c.width = bmp.width;

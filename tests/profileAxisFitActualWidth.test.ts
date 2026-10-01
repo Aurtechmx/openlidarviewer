@@ -77,6 +77,11 @@ describe('the x-label fit reasons against the real width, not the 180px floor', 
     expect(html).toContain('left:100.00%');
     expect(html).toContain('top:88.00%');
   });
+
+  it('carries no style attribute, which the page CSP refuses', () => {
+    const html = profileXLabelSpansHtml(evenCandidates(3, 50), 400, '88.00', AXIS_FONT_PX);
+    expect(html).not.toContain('style=');
+  });
 });
 
 describe('profileXLabelFitWidth floors the re-fit at MIN_CHART_PX', () => {

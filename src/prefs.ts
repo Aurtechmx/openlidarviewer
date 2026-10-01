@@ -141,7 +141,7 @@ export function parsePrefs(raw: string): Partial<ViewerPrefs> {
   if (typeof o.inspectorSections === 'object' && o.inspectorSections !== null) {
     const sections: Record<string, boolean> = {};
     for (const [k, v] of Object.entries(o.inspectorSections as Record<string, unknown>)) {
-      if (typeof v === 'boolean') sections[k] = v;
+      if (typeof v === 'boolean' && k !== '__proto__' && k !== 'constructor' && k !== 'prototype') sections[k] = v;
     }
     out.inspectorSections = sections;
   }

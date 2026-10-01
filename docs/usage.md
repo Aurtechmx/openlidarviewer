@@ -135,7 +135,7 @@ Append `?embed=1` to the URL to strip the chrome down to a bare canvas for use i
 
 ### postMessage bridge
 
-In embed mode the viewer posts one `ready` message to the host page once the renderer has initialised: `{ source: 'openlidarviewer', type: 'ready', version }`. The host page may then send commands with `iframe.contentWindow.postMessage(...)`. Each command is validated against a small, closed set of verbs; anything unrecognised or malformed is ignored:
+In embed mode the viewer posts one `ready` message to the host page once the renderer has initialised: `{ source: 'openlidarviewer', type: 'ready', version }`, to each allowed origin (see below). The host page may then send commands with `iframe.contentWindow.postMessage(...)`. Each command is validated against a small, closed set of verbs; anything unrecognised or malformed is ignored:
 
 | Command | Shape |
 |---|---|
@@ -148,12 +148,12 @@ In embed mode the viewer posts one `ready` message to the host page once the ren
 
 The shipped deploy headers set `Content-Security-Policy: frame-ancestors 'self'` (which replaces the older `X-Frame-Options: SAMEORIGIN`), so out of the box the viewer only embeds in a page on the same origin. To embed it cross-origin, the deployer edits that directive to a deliberate allow-list, for example `frame-ancestors 'self' https://portal.example.org`, in both `public/.htaccess` and `public/_headers`.
 
-The bridge accepts commands only from the actual embedding parent frame. To restrict which origins may drive a cross-origin embed, pass an allow-list on the viewer URL:
+The bridge accepts commands only from the actual embedding parent frame, and only when that frame's origin is the viewer's own or is on an allow-list passed on the viewer URL:
 
-- `?embedParent=https://host.example.com`: sets both the `ready` target and the inbound allow-list to that one origin.
-- `?embedOrigins=https://a.example.com,https://b.example.com`: a comma-separated inbound allow-list.
+- `?embedParent=https://host.example.com`: allows one origin.
+- `?embedOrigins=https://a.example.com,https://b.example.com`: allows a comma-separated list.
 
-Without an allow-list the bridge still shape-validates every message and rejects any not sent by the parent frame. It does not filter by origin, so configure one for any cross-origin deployment.
+The viewer's own origin is always allowed, so a same-origin embed needs no list. The `ready` message goes only to allowed origins, and commands from any other origin are ignored.
 
 ## Developer diagnostics
 
