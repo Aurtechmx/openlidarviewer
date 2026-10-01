@@ -99,17 +99,18 @@ the two entries were renumbered when the branches were integrated.
 | L193 | UI | TEST | low | FIXED | new | The elevation legend's ramp used about two thirds of the card and showed nothing about where the points sit inside the p5–p95 window or how many it clips. |
 | L194 | EXPORT | TEST | low | FIXED | new | Export provenance named the resolved CRS but not where it came from (LAS VLR, EVLR, user choice or none). |
 | L195 | LOADER | TEST | high | FIXED | new | The curated swissSURFACE3D tile streamed with no CRS: the file carries no CRS record, and the catalogue's stated frame was never applied, so georeferenced exports were refused and lengths read as source units. |
+| L196 | LOADER | TEST | low | FIXED | new | The curated swisstopo and GURS records carried lat/lon bboxes that did not contain their tiles. |
 
 ## Totals
 
 - DEFERRED: 4
-- FIXED: 50
+- FIXED: 51
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 71
+- total: 72
 
 ## Detail
 
@@ -7496,3 +7497,23 @@ Covered by `tests/catalogueCrs.test.ts` (a synthetic COPC with the tile's header
 structure) and `tests/e2e/swisstopoCatalogueCrs.spec.ts` (the in-repo COPC
 fixture given that structure, streamed from the curated URL).
 
+### L196 · FIXED · LOADER
+
+Two curated records had a lat/lon bbox that missed their own tile.
+
+| Record | Tile (native) | Old bbox | New bbox |
+| --- | --- | --- | --- |
+| `flai-ch-swisssurface3d-2022` | LV95 E 2485000 to 2486000, N 1109000 to 1110000 | 6.10, 46.20, 6.15, 46.25 | 5.9506, 46.1226, 5.9638, 46.1319 |
+| `flai-si-clss-2023` | D96/TM E 433000 to 434000, N 100000 to 101000 | 14.50, 46.00, 14.60, 46.10 | 14.1342, 46.0365, 14.1474, 46.0457 |
+
+Each new bbox is the four tile corners projected to WGS84 and rounded outward
+to four decimals. The LV95 corners use the app's EPSG:2056 definition in
+`src/convert/epsg.ts`; they agree with swisstopo's approximate conversion
+formulas to within 0.00003 degrees. The D96/TM corners use the EPSG:3794
+parameters, which the app's proj4 table does not carry. The Golden Gate EPT
+record (EPSG:3857) already contains the centre of its manifest's
+`boundsConforming`. The other records have no stated native CRS.
+
+The bbox is not read by the app at runtime, so nothing else changes.
+
+Covered by `tests/curatedBboxTileCentre.test.ts`.

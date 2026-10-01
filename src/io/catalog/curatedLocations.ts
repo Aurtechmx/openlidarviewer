@@ -183,7 +183,7 @@ export const CURATED_LOCATIONS: readonly CuratedLocation[] = [
     label: 'Switzerland — swisssurface3D (2022)',
     sizeLabel: '83.8 MB',
     hint: 'FLAI Open LiDAR Data · swissSURFACE3D · © swisstopo, free geodata terms.',
-    bbox: [6.10, 46.20, 6.15, 46.25],
+    bbox: [5.9506, 46.1226, 5.9638, 46.1319],
     displayName: 'swisssurface3D 2022',
     streamUrl:
       'https://open-lidar-data.s3.eu-central-1.amazonaws.com/data/CH/Swiss_federal_authorities/swisssurface3d_2022/copc/2485_1109.copc.laz',
@@ -207,7 +207,7 @@ export const CURATED_LOCATIONS: readonly CuratedLocation[] = [
     label: 'Slovenia — GURS CLSS (2023)',
     sizeLabel: '202 MB',
     hint: 'FLAI Open LiDAR Data · Slovenian GURS national classified · CC BY 4.0.',
-    bbox: [14.50, 46.00, 14.60, 46.10],
+    bbox: [14.1342, 46.0365, 14.1474, 46.0457],
     displayName: 'Slovenia GURS CLSS 2023',
     streamUrl:
       'https://open-lidar-data.s3.eu-central-1.amazonaws.com/data/SI/GURS/CLSS_2023/copc/GKOT_433_100.copc.laz',
