@@ -663,3 +663,82 @@ describe('a failed candidate leaves an open project alone', () => {
     expect(h.calls.closeStreaming).not.toHaveBeenCalled();
   });
 });
+
+describe('a static open keeps the stream until its cloud is in the scene', () => {
+  // addCloud is where a large static open can fail late: the decode finished,
+  // and then the typed-array allocation or the GPU attach throws. The stream it
+  // was about to replace, the empty state and the user's work must all still be
+  // there when it does.
+
+  const outOfMemory = (): never => { throw new RangeError('Array buffer allocation failed'); };
+
+  /** Put a streaming scan on screen; closing it takes it out of the viewer. */
+  function withStream(h: ReturnType<typeof harness>): { hasStreamingCloud: boolean } {
+    const viewer = h.deps.getViewer() as unknown as {
+      hasStreamingCloud: boolean;
+      removeCloud: (id: string) => void;
+    };
+    viewer.hasStreamingCloud = true;
+    viewer.removeCloud = (id) => { h.trace.push(`removeCloud:${id}`); };
+    h.calls.closeStreaming.mockImplementation(() => {
+      h.trace.push('closeStreaming');
+      viewer.hasStreamingCloud = false;
+    });
+    return viewer;
+  }
+
+  it('keeps the stream, the scene and the saved work when the cloud cannot be added', async () => {
+    const h = harness();
+    const viewer = withStream(h);
+    h.calls.addCloud.mockImplementation(outOfMemory);
+
+    await openScan(fakeFile('large.las'), h.deps);
+
+    expect(h.calls.closeStreaming).not.toHaveBeenCalled();
+    expect(viewer.hasStreamingCloud).toBe(true);
+    expect(h.calls.hideEmptyState).not.toHaveBeenCalled();
+    expect(h.calls.setActive).not.toHaveBeenCalled();
+    expect(h.calls.bookmarksClear).not.toHaveBeenCalled();
+    expect(h.calls.annotateClear).not.toHaveBeenCalled();
+    expect(h.calls.frameAll).not.toHaveBeenCalled();
+    expect(h.at('reveal')).toBe(-1);
+    expect(h.calls.setError).toHaveBeenCalledTimes(1);
+    expect(h.calls.setLoading).toHaveBeenLastCalledWith(false);
+  });
+
+  it('leaves the empty state on screen when the first cloud cannot be added', async () => {
+    const h = harness();
+    h.calls.addCloud.mockImplementation(outOfMemory);
+
+    await openScan(fakeFile('large.las'), h.deps);
+
+    expect(h.calls.hideEmptyState).not.toHaveBeenCalled();
+    expect(h.calls.setError).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the stream after the add succeeds, then adds the cloud again on its own', async () => {
+    // The second add sizes navigation, clip planes and point attenuation over
+    // the new cloud alone rather than over the stream it replaces.
+    const h = harness();
+    withStream(h);
+    let added = 0;
+    h.calls.addCloud.mockImplementation(() => {
+      added += 1;
+      h.trace.push(`addCloud:cloud-${added}`);
+      return `cloud-${added}`;
+    });
+
+    await openScan(fakeFile('field.las'), h.deps);
+
+    expect(h.trace.filter((t) => /^(addCloud|removeCloud|closeStreaming|hideEmptyState)/.test(t))).toEqual([
+      'addCloud:cloud-1',
+      'removeCloud:cloud-1',
+      'closeStreaming',
+      'addCloud:cloud-2',
+      'hideEmptyState',
+    ]);
+    expect(h.calls.setActive).toHaveBeenCalledWith('cloud-2');
+    expect(h.calls.setError).not.toHaveBeenCalled();
+    expect(h.at('reveal')).toBeGreaterThan(h.at('addCloud:cloud-2'));
+  });
+});

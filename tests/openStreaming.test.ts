@@ -360,6 +360,114 @@ describe('handleRemoteEpt — the guarded remote-open decisions', () => {
   });
 });
 
+describe('handleRemoteEpt: a Cancel stops the open before the manifest request', () => {
+  // The manifest request takes its own timeout controller, linked to the load's.
+  // A listener added to a signal that has already aborted never runs, so a
+  // Cancel that landed before the link (or during the chunk import, or while the
+  // Viewer loaded) used to reach `fetch` with a live signal and wait out the
+  // 20 s manifest timer.
+
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((res) => { resolve = res; });
+    return { promise, resolve };
+  }
+
+  /** The lazy EPT module, complete enough to reach the manifest request. */
+  const eptModule = (calls: ReturnType<typeof makeDeps>['calls']) => ({
+    validateRemoteEptUrl: calls.validateRemoteEptUrl,
+    describeRemoteEptError: calls.describeRemoteEptError,
+    parseEptMetadata: vi.fn(),
+    EptStreamingPointCloud: vi.fn(),
+    EptChunkDecoder: vi.fn(),
+    EptTimeoutError,
+    eptUrlSearch: vi.fn(() => ''),
+    createEptTransport: vi.fn(),
+  });
+
+  /** A fetch that records whether its signal was live, then rejects as aborted. */
+  function recordingFetch() {
+    const requests: Array<{ aborted: boolean }> = [];
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      requests.push({ aborted: init?.signal?.aborted ?? false });
+      return Promise.reject(new DOMException('Aborted', 'AbortError'));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return requests;
+  }
+
+  /** A cancelled open is quiet: no error, no "Opening" line, no teardown, flag released. */
+  function expectQuietCancel(calls: ReturnType<typeof makeDeps>['calls']): void {
+    expect(calls.setError).not.toHaveBeenCalled();
+    expect(calls.setOpening).not.toHaveBeenCalled();
+    expect(calls.closeStreaming).not.toHaveBeenCalled();
+    expect(calls.setLoading).toHaveBeenLastCalledWith(false);
+  }
+
+  it('sends no request when the Cancel fired before the open began', async () => {
+    const requests = recordingFetch();
+    try {
+      const { deps, calls } = makeDeps({ validate: { ok: true } });
+      calls.loadEpt.mockResolvedValueOnce(eptModule(calls) as never);
+      const outer = new AbortController();
+      outer.abort();
+
+      await handleRemoteEpt('https://example.com/ept.json', outer.signal, deps);
+
+      expect(requests).toEqual([]);
+      expectQuietCancel(calls);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('sends no request when Cancel lands while the EPT chunk is loading', async () => {
+    const requests = recordingFetch();
+    try {
+      const { deps, calls } = makeDeps({ validate: { ok: true } });
+      const chunk = deferred<ReturnType<typeof eptModule>>();
+      calls.loadEpt.mockReturnValueOnce(chunk.promise as never);
+      const outer = new AbortController();
+
+      const open = handleRemoteEpt('https://example.com/ept.json', outer.signal, deps);
+      outer.abort();
+      chunk.resolve(eptModule(calls));
+      await open;
+
+      expect(requests).toEqual([]);
+      expect(calls.validateRemoteEptUrl).not.toHaveBeenCalled();
+      expectQuietCancel(calls);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('sends no request when Cancel lands while the Viewer is loading', async () => {
+    const requests = recordingFetch();
+    try {
+      const { deps: base, calls } = makeDeps({ validate: { ok: true } });
+      calls.loadEpt.mockResolvedValueOnce(eptModule(calls) as never);
+      const viewer = deferred<void>();
+      const deps: OpenStreamingDeps = { ...base, viewerReady: viewer.promise };
+      const outer = new AbortController();
+
+      const open = handleRemoteEpt('https://example.com/ept.json', outer.signal, deps);
+      // Let the chunk import settle so the open is parked on the Viewer.
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+      expect(calls.validateRemoteEptUrl).toHaveBeenCalledTimes(1);
+      outer.abort();
+      viewer.resolve();
+      await open;
+
+      expect(requests).toEqual([]);
+      expect(calls.getViewer).not.toHaveBeenCalled();
+      expectQuietCancel(calls);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // openStreamingCopc — transactional replacement (gate F4). A COPC candidate
 // that clears the range probe but fails to PARSE (StreamingPointCloud.open
