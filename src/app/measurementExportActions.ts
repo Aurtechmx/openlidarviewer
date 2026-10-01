@@ -42,12 +42,12 @@ export interface MeasurementExportActionDeps {
   readonly baseName: (name: string) => string;
   readonly downloadText: (filename: string, text: string) => void;
   readonly loadMeasurementExport: () => Promise<
-    Pick<typeof import('../export/measurementExport'), 'measurementsToGeoJSON' | 'measurementsToCsv'>
+    Pick<typeof import('../export/measurementExport'), 'measurementsToGeoJSON' | 'measurementsToCsv' | 'resolveExportDigests'>
   >;
   readonly loadMeasurementReport: () => Promise<
     Pick<
       typeof import('../export/measurementReport'),
-      'integrityReportFile' | 'measurementsToFindings' | 'findingsReportFile'
+      'integrityReportFile' | 'measurementsToFindings' | 'findingsReportFile' | 'resolveExportDigests'
     >
   >;
   /** Active scan's classification epoch (0 when none), for the report manifest. */
@@ -71,6 +71,8 @@ export async function exportMeasurementsFile(
   // render-frame coordinates. Resolved BEFORE the import below, so the frame and
   // the measurements come from one instant, not two.
   const geo = deps.geo();
+  const { measurementsToGeoJSON, measurementsToCsv, resolveExportDigests } = await deps.loadMeasurementExport();
+  const digests = await resolveExportDigests(geo.source, geo.crs);
   const ctx: MeasurementExportContext = {
     toOutput: (p) => [p[0] + geo.origin[0], p[1] + geo.origin[1], p[2] + geo.origin[2]],
     up: measure.worldUp,
@@ -90,9 +92,9 @@ export async function exportMeasurementsFile(
       crsName: geo.crsName,
       interpretation: geo.interpretation,
       crs: geo.crs,
+      digests,
     },
   };
-  const { measurementsToGeoJSON, measurementsToCsv } = await deps.loadMeasurementExport();
   const text =
     format === 'geojson' ? measurementsToGeoJSON(measurements, ctx) : measurementsToCsv(measurements, ctx);
   const stem = geo.name ? deps.baseName(geo.name) : 'measurements';
@@ -122,7 +124,8 @@ export async function exportMeasurementIntegrityReport(
   // by. The CSV/GeoJSON action next door has always read it this way; this
   // path read the bare `crsKnown` and so called a lon/lat scan unit-verified.
   const crsKnown = measure.crsKnown && !measure.geographicCrs;
-  const { integrityReportFile } = await deps.loadMeasurementReport();
+  const { integrityReportFile, resolveExportDigests } = await deps.loadMeasurementReport();
+  const digests = await resolveExportDigests(geo.source, geo.crs);
   const f = integrityReportFile(
     ms,
     worldUp,
@@ -134,6 +137,8 @@ export async function exportMeasurementIntegrityReport(
     classificationEpoch,
     deps.appVersion,
     crsKnown,
+    undefined,
+    digests,
   );
   deps.downloadText(f.filename, f.text);
 }
@@ -169,7 +174,8 @@ export async function exportFindingsReport(
   const classificationEpoch = deps.activeClassificationEpoch();
   // Geographic reads as unverified here too — see `exportIntegrityReport`.
   const crsKnown = deps.measure.crsKnown && !deps.measure.geographicCrs;
-  const { findingsReportFile } = await deps.loadMeasurementReport();
+  const { findingsReportFile, resolveExportDigests } = await deps.loadMeasurementReport();
+  const digests = await resolveExportDigests(geo.source, geo.crs);
   const f = findingsReportFile(
     findings,
     geo.name ? deps.baseName(geo.name) : 'scan',
@@ -178,6 +184,8 @@ export async function exportFindingsReport(
     classificationEpoch,
     deps.appVersion,
     crsKnown,
+    undefined,
+    digests,
   );
   deps.downloadText(f.filename, f.text);
 }

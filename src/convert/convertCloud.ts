@@ -9,6 +9,7 @@
  * `reproject.ts`; everything else is dependency-free.
  */
 
+import { exportDigestLines } from '../science/exportDigestRecord';
 import type { PointCloud } from '../model/PointCloud';
 import { sourcePositions } from '../model/pointFrames';
 import { classifyScanShape } from '../terrain/scanShape';
@@ -87,6 +88,7 @@ export function convertCloud(
 
   function run(): { file: ConvertedFile | null; report: ConvertReport } {
   const mode = opts.crsMode ?? 'keep';
+  const provenance = opts.digests ? exportDigestLines(opts.digests) : null;
   // The RESOLVED source CRS (CrsService), when the caller supplies it, is the
   // authority — it honours any user override, so `cloud.metadata.crs` stays
   // source-declared PROVENANCE only. Given a resolved value we never consult
@@ -285,6 +287,7 @@ export function convertCloud(
         verticalUnitCode,
         wkt,
         description: datumNote,
+        provenance,
       });
     } else {
       // LAS 1.2 stores the classification in 5 bits and the writer masks
@@ -329,13 +332,14 @@ export function convertCloud(
         verticalEpsg: srcCtx.verticalEpsg ?? null,
         verticalUnitCode,
         description: datumNote,
+        provenance,
       });
     }
   } else {
     const text =
       opts.format === 'asc'
-        ? writeAsc(g, { precision: opts.asciiPrecision, epsg: outEpsg, crsName: sourceCrs?.name ?? null, geographic: geo, datumNote })
-        : writeXyz(g, opts.asciiPrecision ?? 3, geo, datumNote);
+        ? writeAsc(g, { precision: opts.asciiPrecision, epsg: outEpsg, crsName: sourceCrs?.name ?? null, geographic: geo, datumNote, provenance })
+        : writeXyz(g, opts.asciiPrecision ?? 3, geo, datumNote, provenance);
     bytes = new TextEncoder().encode(text);
   }
 
@@ -354,3 +358,6 @@ export function convertCloud(
   };
   }
 }
+
+/** Source-file digest and CRS origin for this export's provenance, resolved off the main thread. */
+export { resolveExportDigests } from '../export/exportDigests';

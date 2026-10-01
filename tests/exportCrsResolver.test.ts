@@ -34,7 +34,9 @@ describe('makeExportCrsResolver (C10)', () => {
       resolveForCloud: () => projected(9999, 'SHOULD-NOT-BE-USED'),
       activeCloud: () => active,
     });
-    expect(resolve(active)).toEqual({ wkt: 'RESOLVED-12N', key: 'epsg:32612', name: 'EPSG:32612', unit: 'metres', epsg: 32612 });
+    expect(resolve(active)).toMatchObject({ wkt: 'RESOLVED-12N', key: 'epsg:32612', name: 'EPSG:32612', unit: 'metres', epsg: 32612 });
+    // The resolved CRS rides along for the figure's CRS-origin record.
+    expect(resolve(active).resolved?.epsg).toBe(32612);
   });
 
   it('resolves a non-active cloud via its own declared CRS', () => {
@@ -43,7 +45,7 @@ describe('makeExportCrsResolver (C10)', () => {
       resolveForCloud: () => projected(32611, 'OTHER-11N'),
       activeCloud: () => active,
     });
-    expect(resolve(other)).toEqual({ wkt: 'OTHER-11N', key: 'epsg:32611', name: 'EPSG:32611', unit: 'metres', epsg: 32611 });
+    expect(resolve(other)).toMatchObject({ wkt: 'OTHER-11N', key: 'epsg:32611', name: 'EPSG:32611', unit: 'metres', epsg: 32611 });
   });
 
   it('a local override georeferences nothing — null wkt AND null key (C10)', () => {
@@ -52,7 +54,7 @@ describe('makeExportCrsResolver (C10)', () => {
       resolveForCloud: () => local(),
       activeCloud: () => active,
     });
-    expect(resolve(active)).toEqual({ wkt: null, key: null, name: null, unit: null, epsg: null });
+    expect(resolve(active)).toMatchObject({ wkt: null, key: null, name: null, unit: null, epsg: null });
   });
 
   it('a null resolved CRS (no scan) georeferences nothing', () => {
@@ -61,6 +63,6 @@ describe('makeExportCrsResolver (C10)', () => {
       resolveForCloud: () => local(),
       activeCloud: () => null,
     });
-    expect(resolve(active)).toEqual({ wkt: null, key: null, name: null, unit: null, epsg: null });
+    expect(resolve(active)).toMatchObject({ wkt: null, key: null, name: null, unit: null, epsg: null });
   });
 });

@@ -13,6 +13,7 @@
  * DOM, no three.js, and no Viewer reference (only a narrow adapter interface).
  */
 
+import type { CrsOriginInput } from '../science/crsOrigin';
 import type * as THREE from 'three/webgpu';
 import type { ColorMode } from '../render/colorModes';
 import type { ContinuityCapabilities } from '../render/continuity/continuityField';
@@ -67,6 +68,19 @@ export interface FigureViewContext {
   readonly colorMode: string;
   readonly camera: FigureCameraPose | null;
   readonly clip: FigureClipSummary | null;
+  /** The rendered source and its CRS origin, for the digest chunks. */
+  readonly provenanceSource?: FigureProvenanceSource | null;
+}
+
+/**
+ * The one source a figure renders, for the source-digest and CRS-origin
+ * chunks. Null when several layers are visible: the figure has no single
+ * source file.
+ */
+export interface FigureProvenanceSource {
+  readonly source: { readonly key: object; readonly streamed: boolean };
+  /** The resolved CRS, or null when none resolved. */
+  readonly crs: CrsOriginInput | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -150,6 +164,8 @@ export interface ExportSceneAdapter {
    * the figure's provenance chunks. Optional: adapters without it stamp none.
    */
   sourceInterpretation?(): { readonly interpretationLevel: string; readonly dataBasis: string } | null;
+  /** The single rendered source, or null when several are visible. Optional: adapters without it stamp no digest. */
+  provenanceSource?(): FigureProvenanceSource | null;
   localBoundsAabb(): readonly [number, number, number, number, number, number] | null;
   /**
    * Which component of the AABB is the HEIGHT: 2 for survey sources, 1 for a

@@ -34,6 +34,7 @@ const hoisted = vi.hoisted(() => ({
 
 vi.mock('../src/lazyChunks', () => ({
   loadConvertEngine: async () => ({
+    resolveExportDigests: async () => ({ sourceSha256: 'a'.repeat(64), sourceSha256Note: null, crsOrigin: { source: 'unknown', name: 'unknown', epsg: 'unknown', verticalDatum: 'unknown', verticalSource: 'unknown' } }),
     convertCloud: (cloud: { pointCount: number }, options: Record<string, unknown>) => {
       hoisted.converted.push(cloud);
       hoisted.options.push(options);
@@ -291,6 +292,8 @@ describe('ExportPanel — full-resolution export re-verifies before it writes', 
 
     expect(hoisted.downloads).toEqual(['scan.las']);
     expect(hoisted.converted[0].pointCount).toBe(2);
+    // The source digest rides into the converter for the LAS provenance record.
+    expect((hoisted.options[0].digests as { sourceSha256: string }).sourceSha256).toBe('a'.repeat(64));
   });
 
   it('still exports when the host supplies no scan identity (older wiring)', async () => {

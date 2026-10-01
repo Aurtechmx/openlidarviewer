@@ -232,14 +232,15 @@ A product that cannot be made yet says why on hover rather than failing when you
 Every export that carries provenance records the fields below. To get the same numbers again, open the same input file in the same app version and repeat the run with the recorded settings.
 
 - **App version and build.** `OLV version` in a package README, `version` and `commit` in the GeoJSON `provenance` member, the `olv:build` chunk of a PNG, or the `build` field of `processing-manifest.json`. A different commit, or `+dirty`, may give different numbers.
-- **Input file.** `Source` or `source` names the file by its base name only. When a package lists a `Source digest`, check your copy against it.
+- **Input file.** `Source` or `source` names the file by its base name only. `Source SHA-256` (`sourceSha256` in JSON, `olv:source-sha256` in a PNG) is the SHA-256 of the original file bytes: check your copy with `shasum -a 256`. A streamed scan records `not available for streamed sources` instead, because only part of the file is ever read.
+- **Analysis input.** `Input SHA-256` or `Analysis input SHA-256` (`analysisInputSha256`) is the SHA-256 of the exact points the analysis read, after class filters, Withheld exclusion and clipping, each coordinate as a little-endian float32. The same points in the same order give the same digest.
 - **Interpretation level.** How the file's bytes were read. `VERIFIED`, `COMPATIBLE` or `PROBABLE` come from the format probe; `not-probed` means the file opened on its signature; `not-recorded` means the producing path did not look. Open the file the same way before you compare.
 - **Data basis.** `full` means every point was read; `sampled` means a display sample; `resident-only` means the streaming set in memory at the time. A result computed on a display sample or on a resident streaming set can move once more of the file is read, so load the file the same way, with the same point budget and the same streaming state, before you compare the two runs.
 - **Coordinate system.** `Horizontal CRS`, `Vertical datum` or `crs`. Resolve to it first. Where it is recorded, `crsOrigin` or the `CRS source` line says where the CRS came from: `las-vlr` (a LAS header record), `las-evlr` (an extended record after the points), `user-override` (chosen in the app), or `unknown`. Open the file so the CRS resolves from the same place, or set the same override.
 - **Methods and settings.** The ordered `ops` in `processing-manifest.json` name each method as `id@version` with its parameters. Flow Pulse and Terrain Access packages also ship `*.olv-field-sim.json`: re-running it on the same surface gives the same `fieldDigest`. For a terrain product, use the cell size and contour interval printed in the README.
 - **Time.** `Generated` or `generatedAt` dates the export. It is not an input.
 
-A measurement CSV, a point cloud re-save (LAS, XYZ, ASC) and a world file do not carry this record. Export the GeoJSON alongside a CSV when you need the record to travel with the numbers.
+A point re-save (LAS, XYZ, ASC) carries the source digest and CRS origin only: LAS in its Text Area Description record, XYZ and ASC as `#` lines. A measurement CSV, a point CSV and a world file do not carry this record. Export the GeoJSON alongside a CSV when you need the record to travel with the numbers.
 
 ---
 

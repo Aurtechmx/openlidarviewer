@@ -65,3 +65,6 @@ export type { ReportThemePalette } from './ReportBranding';
 
 export { generateReport } from './ReportEngine';
 export { renderReportPdf } from './ReportPdfRenderer';
+
+/** Source-file digest and CRS origin for this export's provenance, resolved off the main thread. */
+export { resolveExportDigests } from '../export/exportDigests';

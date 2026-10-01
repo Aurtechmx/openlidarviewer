@@ -66,8 +66,9 @@ describe('resolvedExportCrs — the shared authority rule', () => {
     expect(rc.wkt).toBe('WKT-B-2225');
   });
   it('Case B: Local / no-CRS yields every field null — no false frame', () => {
-    expect(resolvedExportCrs(LOCAL)).toEqual({ wkt: null, key: null, name: null, unit: null, epsg: null });
-    expect(resolvedExportCrs(null)).toEqual({ wkt: null, key: null, name: null, unit: null, epsg: null });
+    expect(resolvedExportCrs(LOCAL)).toMatchObject({ wkt: null, key: null, name: null, unit: null, epsg: null });
+    expect(resolvedExportCrs(null)).toMatchObject({ wkt: null, key: null, name: null, unit: null, epsg: null });
+    expect(resolvedExportCrs(null).resolved).toBeNull();
   });
 });
 

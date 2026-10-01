@@ -56,7 +56,7 @@ import {
 } from 'three/tsl';
 
 import type { ClassState, PointCloud } from '../model/PointCloud';
-import { buildExportAdapter } from './exportAdapter';
+import { buildExportAdapter, figureViewContextOf } from './exportAdapter';
 import type { ExportAdapterCloud, ExportCloudCrs } from './exportAdapter';
 import { imageExportModeAvailability, type ExportModeAvailability } from './exportModeAvailability';
 import { buildColorLegend, type ColorLegend } from './colorLegend';
@@ -4713,28 +4713,7 @@ export class Viewer {
    * `saveSnapshot` in main.ts through the lazy Studio chunk.
    */
   figureViewContext(): FigureViewContext {
-    const adapter = this._buildExportAdapter();
-    const cam = this._camera;
-    const target = this._controls.target;
-    const clip = this._clip;
-    return {
-      crs: adapter.crsLabel(),
-      colorMode: adapter.currentColorMode(),
-      camera: {
-        position: [cam.position.x, cam.position.y, cam.position.z],
-        target: [target.x, target.y, target.z],
-        fovDeg: cam.fov,
-      },
-      // Only an ENABLED clip is a fact about the rendered pixels — a
-      // dormant box changes nothing and therefore records nothing.
-      clip: clip?.enabled
-        ? {
-            mode: clip.mode,
-            min: [clip.box.min[0], clip.box.min[1], clip.box.min[2]],
-            max: [clip.box.max[0], clip.box.max[1], clip.box.max[2]],
-          }
-        : null,
-    };
+    return figureViewContextOf(this._buildExportAdapter(), this._camera, this._controls.target, this._clip);
   }
 
   /**

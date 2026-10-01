@@ -29,6 +29,7 @@ import type { ObservatoryOverlayHost } from '../../render/ObservatoryOverlay';
 import { triggerDownload } from '../../io/download';
 import { announcePolite } from '../politeAnnounce';
 import { loadObservatoryOverlay, loadObservatoryPackage } from '../../lazyChunks';
+import { sourceDigestOf } from '../../export/exportDigests';
 import { howToRead, labHeader, methodDetails } from '../labGuide';
 import { NEEDS_STATIONS, OBSERVATION_PLAIN } from '../../process/labGuideCopy';
 
@@ -427,6 +428,7 @@ async function exportCurrent(state: ObservatoryRunnerState): Promise<void> {
   if (state.phase !== 'committed' || state.outcome.status !== 'ok') return;
   const outcome = state.outcome;
   const { buildObservatoryPackage } = await loadObservatoryPackage();
-  const pkg = buildObservatoryPackage(outcome.record, outcome.rows, outcome.frontier.frontierVoxelKeys, { planning: outcome.planning ?? null, declaredStepBudget: outcome.declaredStepBudget ?? null, interpretationLevel: state.interpretationLevel, ...(state.crs !== undefined ? { crs: state.crs } : {}) });
+  const source = await sourceDigestOf(state.source);
+  const pkg = buildObservatoryPackage(outcome.record, outcome.rows, outcome.frontier.frontierVoxelKeys, { planning: outcome.planning ?? null, declaredStepBudget: outcome.declaredStepBudget ?? null, interpretationLevel: state.interpretationLevel, ...(state.crs !== undefined ? { crs: state.crs } : {}), sourceSha256: source.sha256, sourceSha256Note: source.note });
   triggerDownload(new Blob([pkg as unknown as BlobPart], { type: 'application/zip' }), `observatory-${outcome.record.id}.zip`);
 }

@@ -7,6 +7,7 @@
  * output formats. Everything here is deterministic and unit-testable.
  */
 
+import type { ExportDigests } from '../science/exportDigestRecord';
 import type { TransformProvenance } from './transformProvenance';
 import type { CrsInfo } from '../io/crs';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
@@ -80,6 +81,11 @@ export interface ConvertOptions {
    * user does not want to ship as if it were authoritative.
    */
   readonly omitClassification?: boolean;
+  /**
+   * Source-file digest and CRS origin. LAS writes them into the Text Area
+   * Description VLR; XYZ and ASC as `#` comment lines.
+   */
+  readonly digests?: ExportDigests | null;
   /**
    * Write LAS 1.2 even when classes above 31 wrap into its 5-bit field. Off by
    * default, and such a write is refused: each wrapped class lands on another

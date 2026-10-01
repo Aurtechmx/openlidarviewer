@@ -1231,7 +1231,9 @@ export class ExportPanel {
       const clipped = clip?.enabled;
       const cloud = clipped ? clipCloud(sourceCloud, clip) : sourceCloud;
       showBusyScan(this._exportBtn, 'Exporting…');
-      const { convertCloud } = await loadConvertEngine();
+      // The loaded cloud names the source File; a full-resolution re-decode reads the same one.
+      const { convertCloud, resolveExportDigests } = await loadConvertEngine();
+      const digests = await resolveExportDigests({ key: this._cb.getCloud() ?? {}, streamed: false }, resolvedSourceCrs);
       // One more await stands between the gate above and the write below, so
       // the same gate is taken again on the far side of it. An edit landing in
       // that window would otherwise reach the file unjudged.
@@ -1244,6 +1246,7 @@ export class ExportPanel {
         return;
       }
       const options: ConvertOptions = {
+        digests,
         format,
         crsMode,
         targetEpsg: target,

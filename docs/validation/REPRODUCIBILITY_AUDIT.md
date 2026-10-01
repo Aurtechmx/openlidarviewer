@@ -106,20 +106,46 @@ not bound in the manifest, and no export records H.
 `las-evlr`, `user-override`, ...), name, EPSG, vertical datum and the source
 that declared it. Each field reads `unknown` when no CRS was resolved.
 
+### Source and analysis-input digests (H), L209
+
+| Export | Source SHA-256 | Analysis input SHA-256 | CRS origin |
+| --- | --- | --- | --- |
+| Point XYZ, PLY, OBJ | `# Source SHA-256:` / `comment` line | not an analysis | `CRS source ...` line |
+| Point CSV | no slot | not an analysis | no slot |
+| LAS re-save | Text Area Description VLR | not an analysis | same VLR |
+| XYZ, ASC re-save | `#` line | not an analysis | `#` line |
+| Measurement GeoJSON | `provenance.sourceSha256` | not an analysis | `provenance.crsOrigin` |
+| Site KML | provenance line | not an analysis | provenance line |
+| Integrity and findings report JSON | `dataset.sourceSha256` | not an analysis | `dataset.crsOrigin` |
+| Figure and snapshot PNG | `olv:source-sha256` | not an analysis | `olv:crs-origin` |
+| Scan report PDF | Dataset summary row | not an analysis | Dataset summary row |
+| Contour GeoJSON, DXF, SVG | provenance block | `Input SHA-256` | `CRS origin` |
+| Contour map sheet PDF | Info dictionary Subject | Subject | Subject |
+| DEM package | README; DTM passport | README | README; manifest op |
+| Complete deliverable ZIP | `Provenance.json`; README | same | same |
+| Terrain report PDF | provenance footer | footer | footer |
+| Observatory package | README; passport | README (resident positions) | README; manifest op |
+| Flow Pulse, Terrain Access packages | README; passport | README (`Input digest`, the DTM product digest) | README; manifest op |
+
+The source digest is SHA-256 over the original file bytes, hashed in a worker
+the first time a scan is exported and cached per file. A streamed scan records
+`not available for streamed sources`; a scan whose file is not held records
+that; no export writes a stand-in value. The analysis-input digest is SHA-256
+over the gathered XYZ the terrain core read, each value a little-endian
+float32, in order; it is computed inside the core, in the terrain worker, and
+is carried by the cached and persisted core.
+
 ## Remaining gaps
 
 | Gap | Where | Reason left open |
 | --- | --- | --- |
-| No source content hash | every export | No production caller computes a file hash; `sourceSha256` is wired but unset. The Observatory package records a resident positions digest (SHA-256 of every resident position the run read), which identifies the resident point set, not the file. |
-| CRS source not recorded | DEM, contour, Flow Pulse, Terrain Access packages; figure and image PNG; scan and integrity reports; session file; point cloud re-save | These paths receive a CRS label from the shell, not the resolved CRS; carrying the record there means wiring it through `main.ts` or the renderer chunk. The record type and README line are ready for them. |
+| No source content hash for streamed scans | COPC, EPT, 3D Tiles, out-of-core LAS | Only part of the file is read. The record states it. |
+| Digests and CRS origin | session file; point and measurement CSV; multi-layer figure PNG | No slot, or no single source file. |
 | Measurement CSV | measurement export | No metadata slot; a comment line breaks spreadsheet readers. Export the GeoJSON beside it. |
 | Measurement methods | GeoJSON, KML, integrity report | Measurement geometry has no registered method id. The record says so. |
 | Contour map sheet PDF | Contour Studio | The title block has no free row; the record is in the GeoJSON, DXF, SVG and the deliverable ZIP made from the same run. |
-| Integrity report, scan report PDF | report exports | Not changed in this pass; the scan report already states the level. |
-| Studio figure PNG | figure studio | Stamped from `main.ts`, which may not grow. |
 | Session file | `.olvsession` | The session manifest is built without the analysed basis, so its op reads `not-recorded` / `unknown`. |
-| LAS re-save | point cloud export | The Description VLR slot exists but carries the datum note only. |
-| XYZ, ASC re-save; world file | point cloud and image export | No slot, and the export is not a ZIP. |
+| World file | image export | No slot. |
 | Cell size and interval in the terrain manifest | terrain exports | The DTM op notes the cell size is not captured; the README prints it. |
 
 ## How reproduction is tested

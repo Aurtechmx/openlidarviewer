@@ -239,10 +239,11 @@
   },
   "watchFanOut": {
     "src/ui/AnalysePanel.ts": {
-      "runtime": 25,
-      "typeOnly": 18,
+      "runtime": 26,
+      "typeOnly": 20,
       "dynamic": 0,
       "modules": [
+        "src/export/exportDigests.ts",
         "src/export/exportScanIdentity.ts",
         "src/export/permitStamp.ts",
         "src/io/download.ts",
@@ -380,10 +381,11 @@
       ]
     },
     "src/terrain/contour/analyseContours.ts": {
-      "runtime": 34,
+      "runtime": 35,
       "typeOnly": 4,
       "dynamic": 0,
       "modules": [
+        "src/science/pointsSha256.ts",
         "src/terrain/complexity/complexitySummary.ts",
         "src/terrain/contour/contourFeatureModel.ts",
         "src/terrain/contour/contourShapeStyle.ts",
@@ -441,7 +443,7 @@
     "components": []
   },
   "context": {
-    "filesScanned": 1047,
+    "filesScanned": 1058,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [

@@ -29,6 +29,7 @@
  * `FlowPulseParams` carries none of it.
  */
 
+import type { ExportDigests } from '../../science/exportDigestRecord';
 import type { SourceInterpretationRecord } from '../../science/sourceInterpretation';
 import { showBusyScan } from '../busyScan';
 import { el } from '../dom';
@@ -74,6 +75,8 @@ import type { buildFlowPulsePackage } from '../../export/flowPulsePackage';
 
 /** The analysed surface and the frame facts the Analyse panel holds for it. */
 export interface FlowPulseLabInput {
+  /** Source-file digest and CRS origin for the export package, resolved on export. */
+  readonly exportDigests?: () => Promise<ExportDigests>;
   /** Probe interpretation level and data basis of the analysed scan, for export provenance. */
   readonly sourceInterpretation?: SourceInterpretationRecord;
   readonly result: AnalyseContoursResult;
@@ -216,6 +219,7 @@ export type FlowPulseExportOutcome =
  * (0, 0) origin and no .prj, and says so in its README.
  */
 export interface FlowPulseGeoref {
+  readonly digests?: ExportDigests | null;
   /** Probe interpretation level and data basis of the analysed scan, for export provenance. */
   readonly sourceInterpretation?: SourceInterpretationRecord;
   readonly worldOrigin: { readonly x: number; readonly y: number } | null;
@@ -262,6 +266,7 @@ export function buildFlowPulseExport(
     wkt: georef?.wkt ?? null,
     verticalUnitLabel: georef?.verticalUnitLabel ?? 'units',
     sourceInterpretation: georef?.sourceInterpretation ?? null,
+    digests: georef?.digests ?? null,
   });
   return { ok: true, bytes, filename: `${basename}-flow-pulse.zip` };
 }
@@ -641,6 +646,7 @@ function mountFlowPulseInteractive(
     showBusyScan(exportButton, 'Building…');
     try {
       const { buildFlowPulsePackage } = await loadFlowPulsePackage();
+      const digests = (await input?.exportDigests?.()) ?? null;
       const built = buildFlowPulseExport(
         outcome,
         input.isStale?.() ?? false,
@@ -657,6 +663,7 @@ function mountFlowPulseInteractive(
           wkt: input.wkt ?? null,
           verticalUnitLabel: flowElevationReference(input).unitLabel,
           sourceInterpretation: input.sourceInterpretation,
+          digests,
         },
       );
       if (!built.ok) {

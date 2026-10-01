@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import { resolveExportDigests } from '../src/export/exportDigests';
 import {
   effectiveCrsName,
   reportPointCount,
@@ -259,6 +260,7 @@ function makeReportDeps(opts: {
   });
   const reportStub = {
     normalizeReportTemplateId: (id: string) => (opts.normalizeToNull ? null : id),
+    resolveExportDigests,
     DEFAULT_TEMPLATE_ID: 'engineering-inspection',
     getReportTemplate: (id: string) => ({ label: `Template ${id}` }),
     composeReportInputs,

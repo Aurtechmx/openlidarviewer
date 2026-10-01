@@ -79,6 +79,8 @@ import type { TransformProvenance } from '../../convert/transformProvenance';
 import type { OrganizedRangeSet } from '../../model/OrganizedRange';
 import { sourceTopologyRecord } from '../../science/sourceTopology';
 import { sourceInterpretationOf, type SourceInterpretationRecord } from '../../science/sourceInterpretation';
+import { crsOriginLine, crsOriginOf, type CrsOriginRecord } from '../../science/crsOrigin';
+import { INPUT_NOT_RECORDED_NOTE, SOURCE_NOT_SUPPLIED_NOTE, sourceSha256Text, type ExportDigests } from '../../science/exportDigestRecord';
 export { NOT_SURVEY_GRADE_NOTE };
 
 /**
@@ -247,6 +249,13 @@ export interface ExportProvenance {
   readonly analysedBasisLine: string;
   /** Probe interpretation level and data basis, from {@link analysedBasis}. */
   readonly sourceInterpretation: SourceInterpretationRecord;
+  /** SHA-256 of the source file bytes, or null with the reason in {@link sourceSha256Note}. */
+  readonly sourceSha256: string | null;
+  readonly sourceSha256Note: string | null;
+  /** SHA-256 of the exact points the analysis read (`TerrainCore.inputSha256`), or null when not recorded. */
+  readonly analysisInputSha256: string | null;
+  /** Where the CRS came from; every field 'unknown' when the export path resolved none. */
+  readonly crsOrigin: CrsOriginRecord;
   /**
    * Contour interval of the levels actually emitted (source units), or null when
    * none was chosen. Coarser than {@link contourRequestedIntervalM} when an
@@ -437,6 +446,8 @@ export interface ExportProvenanceOptions {
    * reads 'full' for a strided read.
    */
   readonly analysedBasis?: AnalysedBasis | null;
+  /** Source-file digest and CRS origin (`export/exportDigests.ts`). */
+  readonly digests?: ExportDigests | null;
 }
 
 /** Resolve the generation timestamp to an ISO string. */
@@ -567,7 +578,14 @@ export function buildExportProvenance(
     coverageMode,
     analysedBasis: opts.analysedBasis ?? null,
     analysedBasisLine: analysedBasisLine(opts.analysedBasis),
-    sourceInterpretation: sourceInterpretationOf(opts.analysedBasis?.interpretationLevel, opts.analysedBasis?.coverage),
+    sourceInterpretation: {
+      ...sourceInterpretationOf(opts.analysedBasis?.interpretationLevel, opts.analysedBasis?.coverage),
+      ...(opts.digests ? { crsOrigin: opts.digests.crsOrigin } : {}),
+    },
+    sourceSha256: opts.digests?.sourceSha256 ?? null,
+    sourceSha256Note: opts.digests ? opts.digests.sourceSha256Note : SOURCE_NOT_SUPPLIED_NOTE,
+    analysisInputSha256: result.inputSha256 ?? null,
+    crsOrigin: opts.digests?.crsOrigin ?? crsOriginOf(null),
     contourIntervalM: intervalM,
     contourRequestedIntervalM:
       requestedIntervalM != null && requestedIntervalM !== intervalM ? requestedIntervalM : null,
@@ -931,6 +949,9 @@ export function provenanceLines(p: ExportProvenance): string[] {
     kv('Analysed basis', p.analysedBasisLine),
     kv('Interpretation', p.sourceInterpretation.interpretationLevel),
     kv('Data basis', p.sourceInterpretation.dataBasis),
+    kv('Source SHA-256', sourceSha256Text(p)),
+    kv('Input SHA-256', p.analysisInputSha256 ?? INPUT_NOT_RECORDED_NOTE),
+    kv('CRS origin', crsOriginLine(p.crsOrigin)),
     kv('Contour interval', contourIntervalValue),
     kv('Contour style', p.contourStyleLabel),
     kv('Surface quality', p.surfaceQuality),
@@ -1064,6 +1085,10 @@ export function provenanceJson(p: ExportProvenance): Record<string, unknown> {
     analysedBasis: p.analysedBasis,
     analysedBasisLine: p.analysedBasisLine,
     sourceInterpretation: p.sourceInterpretation,
+    sourceSha256: p.sourceSha256,
+    sourceSha256Note: p.sourceSha256Note,
+    analysisInputSha256: p.analysisInputSha256,
+    crsOrigin: p.crsOrigin,
     contourIntervalM: p.contourIntervalM,
     contourRequestedIntervalM: p.contourRequestedIntervalM,
     contourIntervalUnit: p.contourIntervalUnit ?? null,

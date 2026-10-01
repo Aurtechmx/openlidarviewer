@@ -47,7 +47,7 @@ function crsKeyOf(resolved: ResolvedCrs): string {
  */
 export function resolvedExportCrs(resolved: ResolvedCrs | null): ExportCloudCrs {
   if (!resolved || !crsIsKnown(resolved)) {
-    return { wkt: null, key: null, name: null, unit: null, epsg: null };
+    return { wkt: null, key: null, name: null, unit: null, epsg: null, resolved };
   }
   return {
     wkt: resolved.wkt ?? null,
@@ -55,6 +55,7 @@ export function resolvedExportCrs(resolved: ResolvedCrs | null): ExportCloudCrs 
     name: resolved.name,
     unit: linearUnitLabel(resolved.linearUnit),
     epsg: resolved.epsg ?? null,
+    resolved,
   };
 }
 

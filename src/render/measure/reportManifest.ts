@@ -30,6 +30,7 @@
  * from the clock, so the core stays pure and testable.
  */
 
+import type { CrsOriginRecord } from '../../science/crsOrigin';
 import { canonicalize, sha256, type HashFn } from './auditLog';
 
 export const REPORT_MANIFEST_VERSION = 3;
@@ -64,6 +65,10 @@ export interface ReportManifestInput {
     readonly id: string;
     readonly crs?: string;
     readonly pointCount?: number;
+    /** SHA-256 of the source file bytes, or null with the reason in `sourceSha256Note`. */
+    readonly sourceSha256?: string | null;
+    readonly sourceSha256Note?: string | null;
+    readonly crsOrigin?: CrsOriginRecord;
   };
   /** ISO timestamp, supplied by the caller (keeps the core deterministic). */
   readonly generatedAt: string;

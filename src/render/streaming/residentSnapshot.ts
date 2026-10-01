@@ -17,6 +17,7 @@
  * Pure — no DOM, no three.js, no GPU. Unit-testable in Node.
  */
 
+import { markStreamedCloud } from '../../io/streamedClouds';
 import type { DecodedChunk } from '../../io/copc/copcChunkDecode';
 import { PointCloud, type CloudMetadata } from '../../model/PointCloud';
 import { renderLocalPositions } from '../../model/pointFrames';
@@ -132,7 +133,7 @@ export function buildResidentSnapshot(
     p += n;
   }
 
-  return new PointCloud({
+  const snapshot = new PointCloud({
     positions,
     ...(intensity ? { intensity } : {}),
     ...(classification ? { classification } : {}),
@@ -161,4 +162,7 @@ export function buildResidentSnapshot(
       : {}),
     ...(opts.metadata ? { metadata: opts.metadata } : {}),
   });
+  // Exports of this snapshot record that the source digest is not available.
+  markStreamedCloud(snapshot);
+  return snapshot;
 }

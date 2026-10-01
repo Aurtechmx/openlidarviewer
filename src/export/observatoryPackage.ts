@@ -41,6 +41,7 @@
  * Pure-data: returns ZIP bytes; no DOM.
  */
 
+import { INPUT_NOT_RECORDED_NOTE, SOURCE_NOT_SUPPLIED_NOTE, sourceSha256Text } from '../science/exportDigestRecord';
 import { buildZip, type ZipEntry } from '../convert/zipStore';
 import { sourceInterpretationLines, sourceInterpretationOf } from '../science/sourceInterpretation';
 import { crsOriginLine, crsOriginOf, type CrsOriginInput } from '../science/crsOrigin';
@@ -80,6 +81,8 @@ export interface ObservatoryPackageOptions {
   /** The resolved CRS at run time, recorded as where the CRS came from; omitted when the caller did not read it. */
   readonly crs?: CrsOriginInput | null;
   readonly sourceSha256?: string | null;
+  /** Why `sourceSha256` is null, when it is. */
+  readonly sourceSha256Note?: string | null;
   /** The traversal step budget the run declared (`ObservatoryRunOutcome.declaredStepBudget`); omitted records null in the manifest. */
   readonly declaredStepBudget?: number | null;
   /** The run's Coverage Gain result, written to `candidates.csv` with every term; `null` or omitted writes a header-only file. */
@@ -379,6 +382,7 @@ function readmeText(record: ObservationRunRecord, opts: {
   readonly basename: string; readonly generationDateIso: string; readonly build: BuildIdentity;
   readonly softwareVersion: string; readonly crsName: string | null;
   readonly sourceInterpretation: ReturnType<typeof sourceInterpretationOf>;
+  readonly sourceSha256: string | null; readonly sourceSha256Note: string | null;
 }): string {
   const f = record.frontier;
   const lines = [
@@ -413,9 +417,9 @@ function readmeText(record: ObservationRunRecord, opts: {
     ...sourceInterpretationLines(opts.sourceInterpretation),
     ...(opts.sourceInterpretation.crsOrigin ? [`  ${crsOriginLine(opts.sourceInterpretation.crsOrigin)}`] : []),
     `  Source file    ${record.source.filename ?? 'unknown'}`,
-    `  Resident positions digest  ${record.source.sourceDigest ?? 'unavailable'}`,
+    `  Analysis input SHA-256  ${record.source.sourceDigest ?? INPUT_NOT_RECORDED_NOTE}`,
     '                 SHA-256 of every resident position the run read (little-endian float32), not of the source file',
-    '  Source file hash  unavailable (the load path computes no whole-file hash)',
+    `  Source SHA-256  ${sourceSha256Text({ sourceSha256: opts.sourceSha256, sourceSha256Note: opts.sourceSha256Note })}`,
     `  Basis          ${record.source.basis}`,
     `  CRS            ${opts.crsName ?? 'not recorded by this package'}`,
     `  Metres/unit    ${record.source.metresPerUnit ?? 'unknown (metric figures withheld, OB-INV-10)'}`,
@@ -555,7 +559,7 @@ export function buildObservatoryPackage(
   const manifest = buildProcessingManifest({ build: softwareVersion, source: record.source.filename, ops, sourceInterpretation });
   entries.push({ name: `${basename}/processing-manifest.json`, bytes: new TextEncoder().encode(`${JSON.stringify(manifest, null, 2)}\n`) });
 
-  const readme = readmeText(record, { basename, generationDateIso, build, softwareVersion, crsName: options.crsName ?? null, sourceInterpretation });
+  const readme = readmeText(record, { basename, generationDateIso, build, softwareVersion, crsName: options.crsName ?? null, sourceInterpretation, sourceSha256: options.sourceSha256 ?? null, sourceSha256Note: options.sourceSha256 ? null : (options.sourceSha256Note ?? SOURCE_NOT_SUPPLIED_NOTE) });
   entries.push({ name: `${basename}/README.md`, bytes: new TextEncoder().encode(readme) });
 
   const fieldBinEntry = entries.find((e) => e.name === `${basename}/field.bin`)!;

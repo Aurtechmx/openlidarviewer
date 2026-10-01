@@ -89,6 +89,12 @@ export interface WriteLasOptions {
    * exact-transform path stays byte-clean.
    */
   readonly description?: string | null;
+  /**
+   * Provenance lines (source SHA-256, CRS origin) appended to the same Text
+   * Area Description, one per line after the datum note. Present ⇒ the VLR
+   * description field reads `OpenLiDARViewer provenance`.
+   */
+  readonly provenance?: readonly string[] | null;
 }
 
 /** LAS 1.4 options: everything LAS 1.2 takes, plus the OGC WKT CRS payload. */
@@ -324,18 +330,26 @@ function textAreaPayload(description: string | null | undefined): string | null 
   return ascii;
 }
 
+/** The Text Area text and its VLR description label: the datum note, then any provenance lines. */
+function textArea(opts: WriteLasOptions): { text: string | null; label: string } {
+  const lines = opts.provenance?.length ? [opts.description?.trim() ?? '', ...opts.provenance].filter((l) => l !== '') : null;
+  return lines
+    ? { text: textAreaPayload(lines.join('\n')), label: 'OpenLiDARViewer provenance' }
+    : { text: textAreaPayload(opts.description), label: 'OpenLiDARViewer datum note' };
+}
+
 /**
  * Write a LASF_Spec Text Area Description VLR (header + NUL-terminated payload)
  * starting at byte `p`. `text` is already folded to ASCII by {@link
  * textAreaPayload}, so the `& 0x7f` here is a no-op guard, and the trailing NUL
  * is the buffer's zero-init (exactly like the OGC WKT VLR).
  */
-function writeTextAreaVlr(view: DataView, bytes: Uint8Array, p: number, text: string): void {
+function writeTextAreaVlr(view: DataView, bytes: Uint8Array, p: number, text: string, label = 'OpenLiDARViewer datum note'): void {
   view.setUint16(p, 0, true); // reserved
   writeFixedString(bytes, p + 2, 16, 'LASF_Spec'); // user id
   view.setUint16(p + 18, TEXT_AREA_DESCRIPTION_RECORD_ID, true); // record id 3
   view.setUint16(p + 20, text.length + 1, true); // record length after header (+NUL)
-  writeFixedString(bytes, p + 22, 32, 'OpenLiDARViewer datum note');
+  writeFixedString(bytes, p + 22, 32, label);
   for (let i = 0; i < text.length; i++) {
     bytes[p + VLR_HEADER_SIZE + i] = text.charCodeAt(i) & 0x7f;
   }
@@ -414,7 +428,7 @@ export function writeLas(g: GlobalPoints, opts: WriteLasOptions = {}): Uint8Arra
   const geoKeyVlrBytes = geoKeyDataBytes > 0 ? VLR_HEADER_SIZE + geoKeyDataBytes : 0;
   // Optional provenance/caveat VLR (Text Area Description) — the CRS GeoKey VLR
   // stays first so readers that assume the GeoKeys lead still find them.
-  const descText = textAreaPayload(opts.description);
+  const { text: descText, label: descLabel } = textArea(opts);
   const descVlrBytes = descText != null ? VLR_HEADER_SIZE + descText.length + 1 : 0;
   const vlrCount = (geoKeys.length > 0 ? 1 : 0) + (descText != null ? 1 : 0);
   const pointDataOffset = HEADER_SIZE + geoKeyVlrBytes + descVlrBytes;
@@ -460,7 +474,7 @@ export function writeLas(g: GlobalPoints, opts: WriteLasOptions = {}): Uint8Arra
   }
   // ── Text Area Description VLR (datum caveat), after the GeoKeys ─────────
   if (descText != null) {
-    writeTextAreaVlr(view, bytes, HEADER_SIZE + geoKeyVlrBytes, descText);
+    writeTextAreaVlr(view, bytes, HEADER_SIZE + geoKeyVlrBytes, descText, descLabel);
   }
 
   // ── Point records ──────────────────────────────────────────────────────
@@ -557,7 +571,7 @@ export function writeLas14(g: GlobalPoints, opts: WriteLas14Options = {}): Uint8
   const geoKeyVlrBytes = geoKeys.length > 0 ? VLR_HEADER_SIZE + geoKeyDataBytes : 0;
   // Optional provenance/caveat VLR (Text Area Description), placed after the CRS
   // VLR(s) so nothing that navigates by the leading WKT/GeoKey VLR is disturbed.
-  const descText = textAreaPayload(opts.description);
+  const { text: descText, label: descLabel } = textArea(opts);
   const descVlrBytes = descText != null ? VLR_HEADER_SIZE + descText.length + 1 : 0;
   const vlrCount =
     (wkt != null ? 1 : 0) + (geoKeys.length > 0 ? 1 : 0) + (descText != null ? 1 : 0);
@@ -625,7 +639,7 @@ export function writeLas14(g: GlobalPoints, opts: WriteLas14Options = {}): Uint8
   }
   // ── Text Area Description VLR (datum caveat), after the CRS VLR(s) ──────
   if (descText != null) {
-    writeTextAreaVlr(view, bytes, HEADER_SIZE_14 + wktVlrBytes + geoKeyVlrBytes, descText);
+    writeTextAreaVlr(view, bytes, HEADER_SIZE_14 + wktVlrBytes + geoKeyVlrBytes, descText, descLabel);
   }
 
   // ── Point records (extended layout, 30/36 bytes) ───────────────────────

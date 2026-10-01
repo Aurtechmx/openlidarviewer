@@ -26,7 +26,8 @@ import type { PointCloud } from '../model/PointCloud';
 import type { StreamingSource } from './streaming/StreamingSource';
 import type { LayerSpatialTransform } from '../geo/ProjectSpatialFrame';
 import { placeAabb } from './layerPlacement';
-import type { ExportSceneAdapter, FigureViewContext, ExportColorModeSnapshot } from '../export/types';
+import type { ExportSceneAdapter, FigureViewContext, ExportColorModeSnapshot, FigureProvenanceSource, FigureClipSummary } from '../export/types';
+import type { CrsOriginInput } from '../science/crsOrigin';
 import { linearUnitLabel } from '../io/crs';
 // The shared capture verdict for `captureLabel`. It surfaces capture-type plus
 // confidence into every exported image's scan-report card, from the same store
@@ -73,6 +74,8 @@ export interface ExportCloudCrs {
   readonly name: string | null;
   readonly unit: string | null;
   readonly epsg: number | null;
+  /** The resolved CRS itself, for the CRS-origin record; absent when no resolver is wired. */
+  readonly resolved?: CrsOriginInput | null;
 }
 
 export interface ExportAdapterHost {
@@ -438,6 +441,16 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
         records.every((r) => r[k] === records[0]![k]) ? records[0]![k] : 'mixed';
       return { interpretationLevel: same('interpretationLevel'), dataBasis: same('dataBasis') };
     },
+    provenanceSource(): FigureProvenanceSource | null {
+      const streaming = host.streaming();
+      if (streaming) {
+        return { source: { key: streaming.cloud, streamed: true }, crs: host.resolvedActiveCrs?.().resolved ?? null };
+      }
+      const visible = visibleEntries();
+      if (visible.length !== 1) return null;
+      const cloud = visible[0]!.cloud;
+      return { source: { key: cloud, streamed: false }, crs: host.resolveCloudCrs?.(cloud).resolved ?? null };
+    },
     crsLabel(): { name: string; unit: string; epsg?: number } | null {
       // read off the abstract `cloud.crs()` so both COPC and
       // EPT surface consistently. COPC pulls from the LAS VLRs the
@@ -639,5 +652,32 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
     figureViewContext(): FigureViewContext {
       return host.figureViewContext();
     },
+  };
+}
+
+/**
+ * The live-view facts a figure's PNG provenance records: CRS, colour mode,
+ * camera pose, active clip and the rendered source. A fact the Viewer cannot
+ * vouch for is null and the provenance builder omits its chunk.
+ */
+export function figureViewContextOf(
+  adapter: ExportSceneAdapter,
+  camera: { readonly position: { x: number; y: number; z: number }; readonly fov: number },
+  target: { x: number; y: number; z: number },
+  clip: { readonly enabled: boolean; readonly mode: FigureClipSummary['mode']; readonly box: { readonly min: readonly number[]; readonly max: readonly number[] } } | null,
+): FigureViewContext {
+  return {
+    crs: adapter.crsLabel(),
+    colorMode: adapter.currentColorMode(),
+    camera: {
+      position: [camera.position.x, camera.position.y, camera.position.z],
+      target: [target.x, target.y, target.z],
+      fovDeg: camera.fov,
+    },
+    // Only an ENABLED clip is a fact about the rendered pixels.
+    clip: clip?.enabled
+      ? { mode: clip.mode, min: [clip.box.min[0]!, clip.box.min[1]!, clip.box.min[2]!], max: [clip.box.max[0]!, clip.box.max[1]!, clip.box.max[2]!] }
+      : null,
+    provenanceSource: adapter.provenanceSource?.() ?? null,
   };
 }

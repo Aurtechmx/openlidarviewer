@@ -15,6 +15,7 @@
  * up-axis, unit factor, and provenance.
  */
 
+import type { ExportDigests } from '../science/exportDigestRecord';
 import type { Measurement, Vec3 } from '../render/measure/types';
 import { measurementMetrics } from './measurementExport';
 import {
@@ -47,6 +48,8 @@ export interface ReportProvenance {
   readonly software?: string;
   /** Statements qualifying every figure; see {@link reportNotes}. */
   readonly notes?: readonly string[];
+  /** Source-file digest and CRS origin (`exportDigestRecord.ts`). */
+  readonly digests?: ExportDigests;
 }
 
 /** Match the 3-dp rounding `measurementMetrics` applies to every other value. */
@@ -252,6 +255,7 @@ export function integrityReportFile(
    */
   unitsVerified: boolean = true,
   claimId: string = INTEGRITY_REPORT_CLAIM,
+  digests?: ExportDigests,
 ): IntegrityReportFile {
   const gate = exportGate(claimId);
   // A product the register disables entirely never leaves — not even as an
@@ -267,6 +271,7 @@ export function integrityReportFile(
     classificationEpoch,
     software,
     notes: reportNotes(unitsVerified, crsName),
+    digests,
   }, verticalToMetres);
   return {
     filename: `${datasetId}-report.json`,
@@ -293,13 +298,14 @@ export function findingsReportFile(
   software?: string,
   unitsVerified: boolean = true,
   claimId: string = INTEGRITY_REPORT_CLAIM,
+  digests?: ExportDigests,
 ): IntegrityReportFile {
   const gate = exportGate(claimId);
   if (!gate.allowed && !gate.exploratoryOnly) {
     throw new Error(`Findings report refused: ${gate.reason}`);
   }
   const manifest = buildReportManifest({
-    dataset: { id: datasetId, crs: crsName },
+    dataset: { id: datasetId, crs: crsName, ...digestFields(digests) },
     generatedAt,
     software,
     classificationEpoch,
@@ -340,6 +346,11 @@ function reportNotes(unitsVerified: boolean, crsName: string | undefined): strin
   return notes;
 }
 
+/** The dataset fields a digest record adds; none when the caller resolved none. */
+function digestFields(d: ExportDigests | undefined) {
+  return d ? { sourceSha256: d.sourceSha256, sourceSha256Note: d.sourceSha256Note, crsOrigin: d.crsOrigin } : {};
+}
+
 /** Build (and sign) a report manifest from the placed measurements. */
 export function measurementsToReportManifest(
   measurements: readonly Measurement[],
@@ -355,6 +366,7 @@ export function measurementsToReportManifest(
         id: provenance.datasetId,
         crs: provenance.crsName,
         pointCount: provenance.pointCount,
+        ...digestFields(provenance.digests),
       },
       generatedAt: provenance.generatedAt,
       software: provenance.software,
@@ -365,3 +377,6 @@ export function measurementsToReportManifest(
     hashFn,
   );
 }
+
+/** Source-file digest and CRS origin for this export's provenance, resolved off the main thread. */
+export { resolveExportDigests } from './exportDigests';

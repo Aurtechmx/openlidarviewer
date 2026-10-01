@@ -11,6 +11,7 @@
  * progress.
  */
 
+import { exportDigests } from '../science/exportDigestRecord';
 import type { PointCloud } from '../model/PointCloud';
 import { convertCloud } from './convertCloud';
 import type { ConvertOptions, ConvertedFile, ConvertReport } from './types';
@@ -114,6 +115,12 @@ export function dedupeName(name: string, seen: Set<string>): string {
   return candidate;
 }
 
+/** Lower-case hex SHA-256 of a source file's bytes, by the platform's native digest. */
+async function bufferSha256(buffer: ArrayBuffer): Promise<string> {
+  const d = new Uint8Array(await crypto.subtle.digest('SHA-256', buffer));
+  return Array.from(d, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 /**
  * Convert every input. Resolves with one result per input (in order). Never
  * rejects — failures are captured in each item's report.
@@ -146,9 +153,11 @@ export async function runBatch(
       // Read this file's bytes only now, and let `buffer` fall out of scope at
       // the end of the iteration so it's collected before the next file is read.
       const buffer = await input.bytes();
+      // The digest of these exact bytes, before the decode can drop them.
+      const sha256 = await bufferSha256(buffer);
       const cloud = await decode(buffer, input.name, signal);
       emit('converting');
-      const { file, report } = convertCloud(cloud, options);
+      const { file, report } = convertCloud(cloud, { ...options, digests: exportDigests({ sha256, note: null }, null) });
       const finalFile = file
         ? { ...file, filename: dedupeName(file.filename, seen) }
         : null;

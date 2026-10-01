@@ -21,6 +21,7 @@
  * content is XML-escaped (& < > " ').
  */
 
+import type { ExportDigests } from '../science/exportDigestRecord';
 import { lightProvenance, lightProvenanceLine, type LightProvenanceInput } from './lightProvenance';
 import type { Annotation } from '../render/annotate/types';
 import type { Measurement, Vec3 } from '../render/measure/types';
@@ -452,7 +453,8 @@ function siteOutlinePlacemark(outline: KmlSiteOutline): string {
 }
 
 /** Serialise the full input to a complete KML 2.2 document string. */
-export function buildKml(input: KmlExportInput): string {
+export function buildKml(input: KmlExportInput, digests?: ExportDigests): string {
+  if (digests && input.provenance) input = { ...input, provenance: { ...input.provenance, digests } };
   const placemarks: string[] = [];
   for (const a of input.annotations) placemarks.push(annotationPlacemark(a, input));
   for (const m of input.measurements) {
@@ -572,3 +574,6 @@ export function buildFootprintKml(input: KmlFootprintInput): string {
     '</kml>',
   ].join('\n');
 }
+
+/** Source-file digest and CRS origin for this export's provenance, resolved off the main thread. */
+export { resolveExportDigests } from './exportDigests';

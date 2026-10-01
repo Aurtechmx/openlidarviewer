@@ -20,6 +20,7 @@
 
 import { isSessionFile } from '../io/sessionFile';
 import { scanFactsFromStatic } from './sessionScanFacts';
+import { rememberCloudFile } from '../io/sourceFiles';
 import { detectCopc } from '../io/copc/copcDetect';
 import { formatProgress } from '../io/loadProgress';
 import { describeLoadError, LoadError } from '../io/loadErrors';
@@ -542,7 +543,7 @@ export async function attachStaticCloud(
   deps.inspector.setCoverageAvailable(false);
   // Retain the source file + whether the display cloud was reduced, so the
   // Export panel can offer a full-resolution re-decode.
-  if (source.file) deps.rememberSourceFile(id, source.file);
+  if (source.file) { deps.rememberSourceFile(id, source.file); rememberCloudFile(result.cloud, source.file); }
   deps.rememberReduced(id, result.downsampled);
   // Local-first counter — categorical source format only; never the file name.
   try { recordUsage('scan-open', result.cloud.sourceFormat); }

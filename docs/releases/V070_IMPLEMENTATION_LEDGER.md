@@ -110,18 +110,19 @@ the two entries were renumbered when the branches were integrated.
 | L203 | LOADER | TEST | med | FIXED | new | A static open over a stream built its mesh twice, a failed tileset open or a heavy LAS preview could remove the stream on screen, a remote EPT open kept the previous legend, and recovery could release unrestored work, wait on a stalled write before a clear, or offer work just cleared. |
 | L210 | UI | TEST | med | FIXED | new | The Analyse home marked a routine missing prerequisite (no scan, no terrain run, no stations) with the red Blocked badge, and the task strip dropped a running task whose panel was closed or hidden, reading Idle during real work. |
 | L202 | UI | TEST | med | FIXED | new | A failed load of the action registry, a lazy panel, the plan view controller or the tour stayed cached, so Try again failed until a reload and each failed palette attempt left a palette element behind; the report verifier and the tour kept key handling of their own outside the dialog stack, and a dialog removed without its teardown blocked Tab, Cmd-K and ?; H and the tool keys acted behind an open dialog; a workflow save that threw lost the recording; a workflow file could list any number of events and echoed a bad value at any length. |
+| L209 | EXPORT | TEST | med | FIXED | new | No export recorded the SHA-256 of the source file or of the points an analysis read, and most exports did not record where the CRS came from. |
 
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 60
+- FIXED: 61
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 82
+- total: 83
 
 ## Detail
 
@@ -8037,3 +8038,37 @@ async command outcomes), `tests/sessionLogRecorder.test.ts` (progress steps,
 scan names with a slash), `tests/sessionLogPage.test.ts` (dialog stack, one
 dialog, focus return past hidden buttons, teardown when the page throws) and
 `tests/commandPalette.test.ts` (a rejected run is not left unhandled).
+
+### L209 · FIXED · EXPORT
+
+Source and analysis-input digests in export provenance.
+
+Every provenance-carrying export now records three fields the same way:
+
+- `sourceSha256`: SHA-256 of the original source file bytes. It is hashed in a
+  worker (`LocalOocIndexerClient.digest`) the first time a scan is exported and
+  cached per File, so a large scan never holds the page. A streamed scan
+  records `not available for streamed sources`, a scan whose File is not held
+  records `not available: the original file bytes are not held`, and a failed
+  read records `not computed`. No export writes a stand-in value.
+- `analysisInputSha256`: SHA-256 over the exact XYZ the terrain core read
+  (`pointsSha256`, little-endian float32, in order), after class filters,
+  Withheld exclusion and clipping. The core computes it in the terrain worker
+  and carries it through the cache and the persisted payload (format 3).
+- `crsOrigin`: where the CRS came from (L194).
+
+Surfaces: point XYZ, PLY, OBJ; LAS, XYZ and ASC re-saves; measurement GeoJSON;
+site KML; integrity and findings reports; figure and snapshot PNG; scan report
+PDF; contour GeoJSON, DXF, SVG; contour map sheet PDF (Info dictionary);
+DEM package and its DTM passport; complete deliverable ZIP; terrain report
+PDF; Observatory, Flow Pulse and Terrain Access packages. The per-surface table
+is in `docs/validation/REPRODUCIBILITY_AUDIT.md`; the surfaces that cannot
+carry a field are in the known limitations.
+
+Hashing 3M points takes about 0.8 s and a 102 MB file about 2.3 s in Node; both
+run off the main thread. The terrain gather is capped at 300k points (about
+90 ms).
+
+Covered by `tests/exportInputDigests.test.ts` (each surface, determinism,
+streamed and not-held sources, chunk boundary, payload round trip).
+

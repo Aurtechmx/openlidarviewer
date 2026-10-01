@@ -39,6 +39,8 @@
  * Pure-data: returns ZIP bytes; no DOM.
  */
 
+import { SOURCE_NOT_SUPPLIED_NOTE, sourceSha256Text, type ExportDigests } from '../science/exportDigestRecord';
+import { crsOriginLine } from '../science/crsOrigin';
 import { writeAsciiGrid } from '../terrain/export/demAsciiGrid';
 import { buildZip, type ZipEntry } from '../convert/zipStore';
 import { sourceInterpretationLines, sourceInterpretationOf, type SourceInterpretationRecord } from '../science/sourceInterpretation';
@@ -98,6 +100,8 @@ export interface FlowPulsePackageOptions {
   readonly verticalUnitLabel?: 'm' | 'ft' | 'units';
   /** SHA-256 of the source scan, when the loader verified one. */
   readonly sourceSha256?: string | null;
+  /** Source-file digest and CRS origin (`exportDigestRecord.ts`). */
+  readonly digests?: ExportDigests | null;
   /** Build identity. Default the stamped {@link BUILD_IDENTITY}. */
   readonly build?: BuildIdentity;
   /**
@@ -228,6 +232,7 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
   readonly hasPath: boolean;
   readonly hasCatchment: boolean;
   readonly sourceInterpretation: SourceInterpretationRecord;
+  readonly sourceSha256Text: string;
 }): string {
   const r = result.record;
   const s = result.summary;
@@ -258,12 +263,13 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     ...sourceInterpretationLines(opts.sourceInterpretation),
     `  Layer          ${r.source.layerId ?? 'unknown'}`,
     `  Source file    ${r.source.filename ?? 'unknown'}`,
-    `  Source digest  ${r.source.sourceDigest ?? 'unavailable'}`,
+    `  Source SHA-256 ${opts.sourceSha256Text}`,
     `  Input digest   ${r.source.analysisInputDigest}`,
     `  Input coverage ${r.source.basis.coverage} (${r.source.basis.complete ? 'complete' : 'partial'})`,
     `  Cells read     ${r.source.basis.measuredCells} of ${r.source.basis.totalCells}`,
     `  Withheld excluded   ${r.source.basis.withheldExcluded === null ? 'not recorded' : String(r.source.basis.withheldExcluded)}`,
     `  CRS            ${opts.crsName ?? 'not georeferenced — rasters use a local (0, 0) origin'}`,
+    ...(opts.sourceInterpretation.crsOrigin ? [`  ${crsOriginLine(opts.sourceInterpretation.crsOrigin)}`] : []),
     `  Vertical unit  ${opts.verticalUnitLabel === 'units' ? 'unresolved — every fill-depth/elevation figure below is in source units' : opts.verticalUnitLabel}`,
     '',
     'Grid',
@@ -339,7 +345,10 @@ export function buildFlowPulsePackage(
   const build = options.build ?? BUILD_IDENTITY;
   const softwareName = options.softwareName ?? 'OpenLiDARViewer';
   const softwareVersion = options.softwareVersion ?? buildIdentityProvenance(build);
-  const sourceInterpretation = options.sourceInterpretation ?? sourceInterpretationOf(undefined, undefined);
+  const sourceInterpretation = {
+    ...(options.sourceInterpretation ?? sourceInterpretationOf(undefined, undefined)),
+    ...(options.digests ? { crsOrigin: options.digests.crsOrigin } : {}),
+  };
   const ox = options.worldOrigin?.x ?? 0;
   const oy = options.worldOrigin?.y ?? 0;
   const grid = result.grid;
@@ -456,6 +465,7 @@ export function buildFlowPulsePackage(
     basename, generationDateIso, softwareName, softwareVersion, build,
     crsName: options.crsName ?? null, hasWkt: !!options.wkt,
     verticalUnitLabel: options.verticalUnitLabel ?? 'units', hasPath, hasCatchment, sourceInterpretation,
+    sourceSha256Text: options.sourceSha256 ?? (options.digests ? sourceSha256Text(options.digests) : (result.record.source.sourceDigest ?? SOURCE_NOT_SUPPLIED_NOTE)),
   });
   entries.push({
     name: `${basename}-README.txt`,
@@ -497,7 +507,7 @@ export function buildFlowPulsePackage(
       applicabilityVerdict: 'Simulated result; not a claim scored on the evidence ladder.',
     };
     const passport = buildScientificArtifactPassport({
-      source: { name: result.record.source.filename, sha256: options.sourceSha256 ?? null },
+      source: { name: result.record.source.filename, sha256: options.sourceSha256 ?? options.digests?.sourceSha256 ?? null },
       analysis,
       processing: manifest,
       evidence,

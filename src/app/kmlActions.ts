@@ -249,10 +249,11 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
     },
   };
   const stem = geo.name ? deps.baseName(geo.name) : 'site';
-  const { buildKml, KmlCoordinateError } = await deps.loadKmlExport();
+  const { buildKml, KmlCoordinateError, resolveExportDigests } = await deps.loadKmlExport();
+  const digests = await resolveExportDigests(geo.source, crs);
   let text: string;
   try {
-    text = buildKml(input);
+    text = buildKml(input, digests);
   } catch (err) {
     // Every KML coordinate is geographic by specification, so one unconvertible
     // point makes the whole file wrong. Decline it. Both refusals mean the same

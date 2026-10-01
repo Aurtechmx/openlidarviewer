@@ -106,6 +106,7 @@ import {
 import type { ContourGeneralizeMode } from './terrainAwareTolerance';
 import { placeLabels, type ContourLabel } from './labelPlacement';
 import { computeVerticalAccuracy, type VerticalAccuracy } from '../validate/verticalAccuracy';
+import { pointsSha256 } from '../../science/pointsSha256';
 import {
   summariseTerrainComplexity,
   type TerrainComplexitySummary,
@@ -519,6 +520,12 @@ export interface TerrainCore {
   /** Ordered core warnings (classification, ground, despike, void-fill). The
    *  contour stage appends its interval-dependent warnings after these. */
   readonly coreWarnings: ReadonlyArray<string>;
+  /**
+   * SHA-256 over the exact XYZ the core read (`pointsSha256`), after the
+   * gather's filters, Withheld exclusion and clipping. Absent on a core
+   * restored from an older payload.
+   */
+  readonly inputSha256?: string;
 }
 
 /**
@@ -556,6 +563,8 @@ export interface AnalyseContoursResult {
   readonly blockedAccuracy: SpatialBlockResult | null;
   /** Passed through from the core. */
   readonly verticalScaleResolved: TerrainCore['verticalScaleResolved'];
+  /** Passed through from the core: SHA-256 of the exact points the analysis read. */
+  readonly inputSha256?: string;
   /**
    * Did a HORIZONTAL scale resolve? Densities and areas are per source unit
    * squared until one does, so a consumer that compares a density against a
@@ -1503,6 +1512,7 @@ export function computeTerrainCore(
     cellSizeM: params.cellSizeM,
     gridGeometry,
     coreWarnings: warnings,
+    inputSha256: pointsSha256(input instanceof Float32Array ? input : points.flatMap((p) => [p.x, p.y, p.z])),
   };
 }
 
@@ -1523,9 +1533,10 @@ function coreResultFields(
   | 'horizontalScaleResolved' | 'confidenceOrdering' | 'confidenceCalibrationApplied'
   | 'confidenceToleranceM' | 'quality' | 'qualityScore' | 'cellMetrics' | 'surface'
   | 'unclassifiedFraction' | 'excludedByClassification' | 'accuracyStandards'
-  | 'cellStatusTally' | 'complexity' | 'gridRecommendation' | 'gate'
+  | 'cellStatusTally' | 'complexity' | 'gridRecommendation' | 'gate' | 'inputSha256'
 > {
   return {
+    ...(core.inputSha256 ? { inputSha256: core.inputSha256 } : {}),
     dtm,
     validation: core.validation,
     reliabilitySplit: core.reliabilitySplit,

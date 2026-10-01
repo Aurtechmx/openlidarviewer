@@ -31,6 +31,7 @@
  * reach because they load one layer at a time.
  */
 
+import { resolveExportDigests } from '../src/export/exportDigests';
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { captureProvenance } from '../src/diagnostics/captureProvenance';
 import { createInspectorCardRefreshers } from '../src/app/inspectorCardRefreshers';
@@ -117,6 +118,7 @@ async function reportProvenance(cloud: typeof templeCloud) {
   const composeReportInputs = vi.fn((x: Record<string, unknown>) => x);
   const reportStub = {
     normalizeReportTemplateId: (id: string) => id,
+    resolveExportDigests,
     DEFAULT_TEMPLATE_ID: 'technical-report',
     getReportTemplate: (id: string) => ({ label: `Template ${id}` }),
     composeReportInputs,

@@ -138,6 +138,8 @@ export interface GeoExportContext {
   interpretation?: SourceInterpretationRecord;
   /** The resolved CRS the frame came from (`CrsService.current()`), for export provenance. */
   crs?: ResolvedCrs | null;
+  /** The scan the export describes, for the source-file digest. */
+  source?: { readonly key: object; readonly streamed: boolean };
 }
 
 /**
@@ -198,14 +200,14 @@ export function exportGeoContext(deps: ReportExportDeps): GeoExportContext {
       const declared = c.declaredPointCount;
       const basis = declared != null && declared > c.pointCount ? 'sampled' : declared != null ? 'full' : null;
       return {
-        origin: c.sourceOrigin, crsName, name: c.name, crs,
+        origin: c.sourceOrigin, crsName, name: c.name, crs, source: { key: c, streamed: false },
         interpretation: sourceInterpretationOf(c.metadata?.interpretationLevel ?? null, basis),
       };
     }
   }
   const sc = viewer.streamingCloud;
   if (sc) {
-    return { origin: sc.renderOrigin, crsName, name: sc.name, crs, interpretation: sourceInterpretationOf(undefined, 'resident-only') };
+    return { origin: sc.renderOrigin, crsName, name: sc.name, crs, source: { key: sc, streamed: true }, interpretation: sourceInterpretationOf(undefined, 'resident-only') };
   }
   return { origin: [0, 0, 0], crsName: undefined, name: null };
 }
@@ -370,6 +372,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
   } else {
     throw new Error('Load a scan first.');
   }
+  metadata = { ...metadata, digests: await report.resolveExportDigests({ key: (streamingCloud ?? staticCloud)!, streamed: !!streamingCloud }, activeCrs) };
 
   // Derive the cover title from the actual template so each template
   // produces a distinct, recognisable PDF. The user-reported bug — "all
@@ -489,3 +492,4 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     );
   }
 }
+

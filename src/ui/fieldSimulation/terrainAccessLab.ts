@@ -31,6 +31,7 @@
  * "safe", "drivable" or "passable" — see `renderTerrainAccessRunCard`.
  */
 
+import type { ExportDigests } from '../../science/exportDigestRecord';
 import type { SourceInterpretationRecord } from '../../science/sourceInterpretation';
 import { showBusyScan } from '../busyScan';
 import { el } from '../dom';
@@ -78,6 +79,8 @@ import type { SurfaceGrid } from '../../terrain/surface/buildDsm';
 
 /** The analysed surface and the frame facts a Terrain Access run needs. */
 export interface TerrainAccessLabInput {
+  /** Source-file digest and CRS origin for the export package, resolved on export. */
+  readonly exportDigests?: () => Promise<ExportDigests>;
   /** Probe interpretation level and data basis of the analysed scan, for export provenance. */
   readonly sourceInterpretation?: SourceInterpretationRecord;
   readonly dtm: DtmGrid;
@@ -227,6 +230,7 @@ export type TerrainAccessExportOutcome =
  * its README.
  */
 export interface TerrainAccessGeoref {
+  readonly digests?: ExportDigests | null;
   /** Probe interpretation level and data basis of the analysed scan, for export provenance. */
   readonly sourceInterpretation?: SourceInterpretationRecord;
   readonly worldOrigin: { readonly x: number; readonly y: number } | null;
@@ -256,6 +260,7 @@ export function buildTerrainAccessExport(
     crsName: georef?.crsName ?? null,
     wkt: georef?.wkt ?? null,
     sourceInterpretation: georef?.sourceInterpretation ?? null,
+    digests: georef?.digests ?? null,
   });
   return { ok: true, bytes, filename: `${basename}-terrain-access.zip` };
 }
@@ -677,6 +682,7 @@ function mountTerrainAccessInteractive(
     showBusyScan(exportButton, 'Building…');
     try {
       const { buildTerrainAccessPackage } = await loadTerrainAccessPackage();
+      const digests = (await input?.exportDigests?.()) ?? null;
       const built = buildTerrainAccessExport(
         outcome, input?.isStale?.() ?? false, input?.filename ?? null, input?.layerId ?? null, buildTerrainAccessPackage,
         input ? {
@@ -686,6 +692,7 @@ function mountTerrainAccessInteractive(
           crsName: input.crsName ?? null,
           wkt: input.wkt ?? null,
           sourceInterpretation: input.sourceInterpretation,
+          digests,
         } : null,
       );
       if (!built.ok) {
