@@ -13,6 +13,7 @@
  * {@link LOCAL_STORAGE_MAX_BYTES}. Any failure disables the journal; it never
  * throws into the app.
  */
+import { settle } from '../settle';
 import type { ScanMatch, SessionScanSummary } from '../../io/session';
 
 /** Largest session JSON the journal keeps. A larger session is skipped with a note. */
@@ -146,11 +147,6 @@ export function createDebouncer(
 function isEntry(x: unknown): x is RecoveryEntry {
   const e = x as RecoveryEntry;
   return !!e && e.v === 1 && typeof e.key === 'string' && typeof e.json === 'string' && e.json.length <= MAX_ENTRY_BYTES && Number.isFinite(e.savedAt) && !!e.summary;
-}
-
-/** Run `fn` and hand back its result as a promise; a throw becomes a rejection. */
-function settle<T>(fn: () => T): Promise<T> {
-  return new Promise((resolve) => resolve(fn()));
 }
 
 const newestFirst = (a: RecoveryEntry, b: RecoveryEntry): number => b.savedAt - a.savedAt;

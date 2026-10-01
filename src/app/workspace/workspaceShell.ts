@@ -18,6 +18,7 @@
  * See `analyseWorkspace.ts`.
  */
 
+import { settle } from '../settle';
 import { DesktopWorkspace, type WorkspaceMode } from '../../ui/workspace/DesktopWorkspace';
 import { MobileSheet, modeForSheetTab, sheetTabForMode } from '../../ui/MobileSheet';
 import { MOBILE_LAYOUT_QUERY } from '../../ui/isMobileDevice';
@@ -404,7 +405,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     return true;
   }
   const onOpenLog = (e: Event): void => {
-    (e as CustomEvent<{ respond?: (p: Promise<boolean>) => void }>).detail?.respond?.(new Promise<boolean>((resolve) => resolve(openLogPage())));
+    (e as CustomEvent<{ respond?: (p: Promise<boolean>) => void }>).detail?.respond?.(settle(openLogPage));
   };
   document.addEventListener(SESSION_LOG_OPEN_EVENT, onOpenLog);
   d.addTeardown(() => document.removeEventListener(SESSION_LOG_OPEN_EVENT, onOpenLog));

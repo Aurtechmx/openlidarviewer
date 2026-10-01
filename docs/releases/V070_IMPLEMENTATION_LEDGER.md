@@ -8114,7 +8114,7 @@ Static analysis findings on main.
   constructor into a module function.
 - `openScan`: the settle after a heavy attach ends with a `.catch`.
 - `recoveryJournal`: the localStorage store returns promises without `async`;
-  a storage throw is still a rejection. The IndexedDB request helper rejects
+  a storage throw is still a rejection (`src/app/settle.ts`). The IndexedDB request helper rejects
   with an `Error`. The debouncer's default timers are a shared constant.
 - `workspaceShell.openLogPage`, `PreviewCloudSource.readNodeChunk` and
   `TileChunkDecoder.decode` are no longer `async`; an abort or decode fault is
@@ -8128,6 +8128,7 @@ Static analysis findings on main.
   use `it.runIf`, two oracle tests and one diagnostics test gained a direct
   assertion, and the fake DOM's no-op methods say so.
 
-Tests: `tests/recoveryJournal.test.ts` (a storage throw rejects, not throws),
+Tests: `tests/settle.test.ts` (runs at once, a throw becomes a rejection),
+`tests/recoveryJournal.test.ts` (a storage throw rejects, not throws),
 `tests/heavyLasPreviewFirst.test.ts` (an aborted preview read rejects),
 `tests/tileChunkDecoder.test.ts` (abort and truncation reject).
