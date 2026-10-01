@@ -96,6 +96,16 @@ describe('createLazySurfaceLoader', () => {
     await run(() => Promise.reject(new Error('x')), 'thing', { trigger });
     expect(trigger.states).toEqual([true, false]);
   });
+
+  it('reports a load that throws before returning a promise, and releases the trigger', async () => {
+    const toast = fakeToast();
+    const trigger = fakeTrigger();
+    const run = createLazySurfaceLoader(toast);
+    const result = await run(() => { throw new Error('sync builder failure'); }, 'thing', { trigger });
+    expect(result).toBeUndefined();
+    expect(trigger.states).toEqual([true, false]);
+    expect(toast.calls.map((c) => c.message)).toEqual(['sync builder failure']);
+  });
 });
 
 describe('createLazySingleton', () => {
@@ -179,6 +189,53 @@ describe('createLazySingleton', () => {
     expect(onReady).toHaveBeenCalledTimes(1);
     expect(onReady).toHaveBeenCalledWith({ id: 3 });
   });
+
+  it('a second "Try again" while the retry is still loading joins it instead of building twice', async () => {
+    const toast = fakeToast();
+    let attempt = 0;
+    let release: (v: { id: number }) => void = () => {};
+    const build = vi.fn(() => {
+      attempt += 1;
+      if (attempt === 1) return Promise.reject(new Error('chunk 404'));
+      return new Promise<{ id: number }>((resolve) => { release = resolve; });
+    });
+    const singleton = createLazySingleton(build, 'command palette', toast);
+    await singleton.ensure();
+    const tryAgain = toast.calls[0].action!.onClick;
+    tryAgain();
+    tryAgain(); // the toast is still on screen while the retry runs
+    expect(build).toHaveBeenCalledTimes(2);
+    release({ id: 4 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(singleton.current()).toEqual({ id: 4 });
+  });
+
+  it('a ready callback that throws on the first build is reported, and the value stays cached', async () => {
+    const toast = fakeToast();
+    const build = vi.fn(() => Promise.resolve({ id: 5 }));
+    const singleton = createLazySingleton(build, 'shortcut sheet', toast);
+    await expect(singleton.ensure(() => { throw new Error('mount failed'); })).resolves.toEqual({ id: 5 });
+    expect(singleton.current()).toEqual({ id: 5 });
+    expect(toast.calls.map((c) => c.message)).toEqual(['mount failed']);
+  });
+
+  it('a ready callback that throws on the cached value is reported the same way', async () => {
+    const toast = fakeToast();
+    const build = vi.fn(() => Promise.resolve({ id: 6 }));
+    const singleton = createLazySingleton(build, 'shortcut sheet', toast);
+    await singleton.ensure();
+    let threw = false;
+    let result: { id: number } | undefined;
+    try {
+      result = await singleton.ensure(() => { throw new Error('toggle failed'); });
+    } catch {
+      threw = true;
+    }
+    expect(threw).toBe(false);
+    expect(result).toEqual({ id: 6 });
+    expect(toast.calls.map((c) => c.message)).toEqual(['toggle failed']);
+    expect(build).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('buttonLazyTrigger', () => {
@@ -206,5 +263,30 @@ describe('buttonLazyTrigger', () => {
     trigger.setBusy(true);
     expect(button.disabled).toBe(true);
     expect(button.setAttribute).toHaveBeenCalledWith('aria-busy', 'true');
+  });
+
+  it('leaves a button that was disabled before the load disabled after it', () => {
+    const button = { disabled: true, setAttribute: vi.fn() } as unknown as HTMLButtonElement;
+    const trigger = buttonLazyTrigger(button);
+    trigger.setBusy(true);
+    trigger.setBusy(false);
+    expect(button.disabled).toBe(true);
+    expect(button.setAttribute).toHaveBeenLastCalledWith('aria-busy', 'false');
+  });
+
+  it('stays busy until the last of two overlapping loads settles', async () => {
+    const button = { disabled: false, setAttribute: vi.fn() } as unknown as HTMLButtonElement;
+    const trigger = buttonLazyTrigger(button);
+    const run = createLazySurfaceLoader(fakeToast());
+    let releaseSecond: (v: string) => void = () => {};
+    const first = run(() => Promise.resolve('a'), 'first', { trigger });
+    const second = run(() => new Promise<string>((resolve) => { releaseSecond = resolve; }), 'second', { trigger });
+    await first;
+    expect(button.disabled).toBe(true);
+    expect(button.setAttribute).toHaveBeenLastCalledWith('aria-busy', 'true');
+    releaseSecond('b');
+    await second;
+    expect(button.disabled).toBe(false);
+    expect(button.setAttribute).toHaveBeenLastCalledWith('aria-busy', 'false');
   });
 });

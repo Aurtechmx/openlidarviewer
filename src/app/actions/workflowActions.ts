@@ -5,11 +5,12 @@
  * Absent from the registry when the feature flag is off, not merely inert.
  */
 import type { Action } from '../../ui/actionRegistry';
-import { WORKFLOW_RECORDER_ENABLED, type WorkflowController } from '../../ui/WorkflowController';
+import { WORKFLOW_RECORDER_ENABLED, saveWorkflowWithToast, type WorkflowController } from '../../ui/WorkflowController';
 import type { WorkflowConfigPanel } from '../../ui/WorkflowConfigPanel';
 import type { WorkflowEvent } from '../../render/workflow/workflowRecorder';
 import { keyDisplayFor } from '../../ui/keyBindings';
 import { el } from '../../ui/dom';
+import { createLazySurfaceLoader } from '../lazySurfaceLoad';
 
 export interface WorkflowActionDeps {
   workflowController: WorkflowController;
@@ -53,14 +54,10 @@ export function contributeWorkflowActions(deps: WorkflowActionDeps): Action[] {
       keywords: ['export', 'finish', 'save'],
       run: () => {
         const workflow = deps.workflowController.stopRecording();
-        if (workflow) {
-          void deps.workflowController.save(workflow);
-          deps.showLassoToast(
-            'Workflow saved. Replay needs the same scan open on the other end.',
-          );
-        } else {
-          deps.showLassoToast('Workflow · nothing recorded yet.');
-        }
+        // The same save the record shortcut uses: it reports saved or
+        // cancelled once the picker or download has finished.
+        if (workflow) void saveWorkflowWithToast(deps.workflowController, workflow, deps.showLassoToast);
+        else deps.showLassoToast('Workflow · nothing recorded yet.');
       },
     },
     {
@@ -73,6 +70,8 @@ export function contributeWorkflowActions(deps: WorkflowActionDeps): Action[] {
         const input = el('input', { className: 'olv-hidden' });
         input.type = 'file';
         input.accept = '.olvworkflow,application/json';
+        // A dismissed picker fires `cancel` and no `change`.
+        input.addEventListener('cancel', () => input.remove());
         input.addEventListener('change', () => {
           const file = input.files?.[0];
           input.remove();
@@ -100,7 +99,17 @@ export function contributeWorkflowActions(deps: WorkflowActionDeps): Action[] {
       section: 'Workflow',
       hint: 'Format, save location, shortcut, replay speed, capture scope.',
       keywords: ['config', 'options', 'preferences', 'shortcut', 'speed'],
-      run: () => void deps.ensureWorkflowConfigPanel().then((p) => p.open()),
+      run: () => {
+        // A failed load reaches the shared lazy-load toast, whose Try again runs the whole open again.
+        const attempt = (): void => {
+          void createLazySurfaceLoader({ show: deps.showLassoToast })(
+            () => deps.ensureWorkflowConfigPanel().then((p) => p.open()),
+            'workflow settings',
+            { retry: attempt },
+          );
+        };
+        attempt();
+      },
     },
   );
   return actions;

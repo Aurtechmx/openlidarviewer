@@ -161,6 +161,21 @@ export async function suppressOnboardingTour(page: Page): Promise<void> {
 }
 
 /**
+ * Pre-seed the stale-chunk recovery cooldown (staleChunkReload.ts), so the
+ * first aborted chunk in a test takes the no-reload branch and reaches the
+ * failure toast instead of reloading the page.
+ */
+export async function seedStaleReloadCooldown(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    try {
+      sessionStorage.setItem('olv:stale-reload-at', String(Date.now()));
+    } catch {
+      // Storage may be blocked; the failure path still runs, through one reload.
+    }
+  });
+}
+
+/**
  * Drop the bundled `tiny.ply` fixture onto the page body via a synthesised
  * DataTransfer. Exercises the same load → render → validate path a real
  * dragged file takes, and works whether or not the empty-state sample

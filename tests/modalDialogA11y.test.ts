@@ -19,7 +19,7 @@
  * minimal recording DOM stub used by modalConfirm.test.ts.
  */
 
-import { describe, it, expect, beforeAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 
 type Handler = (e: unknown) => void;
 
@@ -213,5 +213,98 @@ describe('wireDialogA11y', () => {
     });
     handle.teardown();
     expect(ACTIVE.el).toBe(explicit);
+  });
+
+  it('forward Tab from outside the dialog lands on its first control, as Shift+Tab lands on its last', async () => {
+    const { wireDialogA11y } = await import('../src/ui/Modal');
+    const outside = new FakeEl('button');
+    const dialog = new FakeEl('div');
+    const first = new FakeEl('button');
+    const last = new FakeEl('button');
+    dialog.append(first, last);
+    BODY.append(outside, dialog);
+    const handle = wireDialogA11y(dialog as unknown as HTMLElement, { onEscape: () => {} });
+    outside.focus(); // a pointer click on the page behind moved focus out
+    expect(winKey('Tab', true)).toBe(true);
+    expect(ACTIVE.el).toBe(last);
+    outside.focus();
+    expect(winKey('Tab')).toBe(true);
+    expect(ACTIVE.el).toBe(first);
+    handle.teardown();
+  });
+});
+
+/** Fire a window keydown and report whether a listener called preventDefault. */
+function winKey(key: string, shiftKey = false): boolean {
+  let prevented = false;
+  const e = { key, shiftKey, stopPropagation() {}, preventDefault() { prevented = true; } };
+  for (const fn of [...(WIN_LISTENERS.get('keydown') ?? [])]) fn(e);
+  return prevented;
+}
+
+describe('stacked dialogs', () => {
+  // A fresh Modal module per case, so the dialog stack starts empty.
+  beforeEach(() => { vi.resetModules(); });
+
+  /** A dialog card holding `n` buttons, mounted on the body. */
+  function dialogWith(n: number): { dialog: HTMLElement; buttons: FakeEl[] } {
+    const card = new FakeEl('div');
+    const buttons = Array.from({ length: n }, () => new FakeEl('button'));
+    card.append(...buttons);
+    BODY.append(card);
+    return { dialog: card as unknown as HTMLElement, buttons };
+  }
+
+  it('one Escape dismisses only the topmost dialog', async () => {
+    const { wireDialogA11y } = await import('../src/ui/Modal');
+    const lowerEscape = vi.fn();
+    const upperEscape = vi.fn();
+    const lower = wireDialogA11y(dialogWith(1).dialog, { onEscape: lowerEscape });
+    const upper = wireDialogA11y(dialogWith(1).dialog, { onEscape: () => { upperEscape(); upper.teardown(); } });
+    winKeydown('Escape');
+    expect(upperEscape).toHaveBeenCalledTimes(1);
+    expect(lowerEscape).not.toHaveBeenCalled();
+    winKeydown('Escape');
+    expect(lowerEscape).toHaveBeenCalledTimes(1);
+    lower.teardown();
+  });
+
+  it('Tab is trapped by the topmost dialog only', async () => {
+    const { wireDialogA11y } = await import('../src/ui/Modal');
+    const lower = dialogWith(1);
+    const upper = dialogWith(2);
+    const a = wireDialogA11y(lower.dialog, { onEscape: () => {} });
+    const b = wireDialogA11y(upper.dialog, { onEscape: () => {} });
+    upper.buttons[0].focus();
+    expect(winKey('Tab', true)).toBe(true);
+    expect(ACTIVE.el).toBe(upper.buttons[1]);
+    expect(lower.buttons[0].focused, 'the dialog underneath moved focus too').toBe(false);
+    b.teardown();
+    a.teardown();
+  });
+
+  it('closing the lower dialog first leaves the upper one answering Escape', async () => {
+    const { wireDialogA11y } = await import('../src/ui/Modal');
+    const lowerEscape = vi.fn();
+    const upperEscape = vi.fn();
+    const lower = wireDialogA11y(dialogWith(1).dialog, { onEscape: lowerEscape });
+    const upper = wireDialogA11y(dialogWith(1).dialog, { onEscape: upperEscape });
+    lower.teardown();
+    winKeydown('Escape');
+    expect(upperEscape).toHaveBeenCalledTimes(1);
+    expect(lowerEscape).not.toHaveBeenCalled();
+    upper.teardown();
+  });
+
+  it('dialogOpen() holds while any dialog is wired and clears when the last one closes', async () => {
+    const { wireDialogA11y, dialogOpen } = await import('../src/ui/Modal');
+    expect(dialogOpen()).toBe(false);
+    const a = wireDialogA11y(dialogWith(1).dialog, { onEscape: () => {} });
+    const b = wireDialogA11y(dialogWith(1).dialog, { onEscape: () => {} });
+    expect(dialogOpen()).toBe(true);
+    a.teardown();
+    expect(dialogOpen()).toBe(true);
+    b.teardown();
+    expect(dialogOpen()).toBe(false);
   });
 });

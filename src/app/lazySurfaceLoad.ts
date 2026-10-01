@@ -60,21 +60,25 @@ export interface LazyLoadOpts {
  * wrapping the call in their own try/catch.
  */
 export function createLazySurfaceLoader(toast: LazyLoadToast) {
-  function run<T>(load: () => Promise<T>, label: string, opts: LazyLoadOpts = {}): Promise<T | undefined> {
+  async function run<T>(load: () => Promise<T>, label: string, opts: LazyLoadOpts = {}): Promise<T | undefined> {
     opts.trigger?.setBusy(true);
-    return load()
-      .then((result) => {
-        opts.trigger?.setBusy(false);
-        return result;
-      })
-      .catch((err: unknown) => {
-        opts.trigger?.setBusy(false);
-        const message = err instanceof Error ? err.message : `Could not load the ${label}.`;
-        toast.show(message, opts.retry ? { label: 'Try again', onClick: opts.retry } : undefined);
-        return undefined;
-      });
+    try {
+      // Awaited inside the try, so a `load` that throws before it returns a
+      // promise is reported the same way as one that rejects.
+      return await load();
+    } catch (err) {
+      report(toast, err, label, opts.retry);
+      return undefined;
+    } finally {
+      opts.trigger?.setBusy(false);
+    }
   }
   return run;
+}
+
+/** Show a failure: the error's own message, or a fallback naming the surface. */
+function report(toast: LazyLoadToast, err: unknown, label: string, retry?: () => void): void {
+  toast.show(err instanceof Error ? err.message : `Could not load the ${label}.`, retry ? { label: 'Try again', onClick: retry } : undefined);
 }
 
 /** A lazily-built, cached-once value with the same busy/retry contract. */
@@ -103,6 +107,11 @@ export interface LazySingleton<T> {
  * `ensure()` calls share the same in-flight attempt, and a failure clears
  * the in-flight state so the next call — from the toast's retry action, or
  * from the user simply repeating the gesture — starts a fresh attempt.
+ * The retry action is a plain `ensure()`, so a second click on the same toast
+ * while that attempt runs joins it rather than starting another build.
+ *
+ * An `onReady` that throws is reported through the same toast; the built
+ * value stays cached and `ensure()` still resolves to it.
  */
 export function createLazySingleton<T>(
   build: () => Promise<T>,
@@ -114,26 +123,28 @@ export function createLazySingleton<T>(
   let loading: Promise<T | undefined> | null = null;
   let pending: ((v: T) => void) | null = null;
   const run = createLazySurfaceLoader(toast);
+  const ready = (fn: (v: T) => void, v: T): void => {
+    try {
+      fn(v);
+    } catch (err) {
+      report(toast, err, label);
+    }
+  };
   const ensure = (onReady?: (v: T) => void): Promise<T | undefined> => {
     if (value) {
-      onReady?.(value);
+      if (onReady) ready(onReady, value);
       return Promise.resolve(value);
     }
     if (onReady) pending = onReady;
-    loading ??= run(build, label, {
-      trigger,
-      retry: () => {
-        loading = null;
-        void ensure();
-      },
-    }).then((built) => {
+    loading ??= run(build, label, { trigger, retry: () => void ensure() }).then((built) => {
       loading = null;
       // `pending` survives a failure — cleared only once actually consumed —
       // so a later retry (with no `onReady` of its own) still replays it.
       if (built) {
         value = built;
-        pending?.(built);
+        const fn = pending;
         pending = null;
+        if (fn) ready(fn, built);
       }
       return built;
     });
@@ -155,12 +166,21 @@ export function buttonLazyTrigger(
   button: HTMLButtonElement | null | (() => HTMLButtonElement | null),
 ): LazyLoadTrigger {
   const resolve = (): HTMLButtonElement | null => (typeof button === 'function' ? button() : button);
+  // Overlapping loads share one button: the first records whether it was
+  // already disabled, and only the last to settle restores that state.
+  let depth = 0;
+  let wasDisabled = false;
   return {
     setBusy(busy) {
       const el = resolve();
       if (!el) return;
-      el.disabled = busy;
-      el.setAttribute('aria-busy', busy ? 'true' : 'false');
+      if (busy) {
+        if (depth++ === 0) wasDisabled = el.disabled;
+      } else if (depth > 0 && --depth > 0) {
+        return;
+      }
+      el.disabled = busy || wasDisabled;
+      el.setAttribute('aria-busy', String(busy));
     },
   };
 }

@@ -12,6 +12,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
+import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { narrationIn } from '../scripts/lint-doc-narration.mjs';
@@ -86,9 +87,24 @@ describe('the whole docs tree', () => {
     });
     expect(out).toContain('lint:doc-narration OK');
     // Reads, not merely lists. An earlier version reported a confident count
-    // while a bad pathspec skipped every top-level document.
+    // while a bad pathspec skipped every top-level document. The count must
+    // match the Markdown files on disk, so a walk that skips a directory fails
+    // here. A fixed floor would fail in the source archive, which ships fewer
+    // documents than the repository.
     const m = /(\d+) document\(s\) read under docs\//.exec(out);
     expect(m, out).not.toBeNull();
-    expect(Number(m![1])).toBeGreaterThan(120);
+    const read = Number(m![1]);
+    expect(read).toBeGreaterThan(0);
+    expect(read).toBe(markdownFilesUnder(join(ROOT, 'docs')));
   });
 });
+
+/** Markdown files under `dir` at any depth, counted independently of the lint's own walk. */
+function markdownFilesUnder(dir: string): number {
+  let n = 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) n += markdownFilesUnder(join(dir, entry.name));
+    else if (entry.name.endsWith('.md')) n += 1;
+  }
+  return n;
+}

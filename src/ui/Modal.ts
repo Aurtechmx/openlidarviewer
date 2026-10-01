@@ -74,13 +74,43 @@ export function trapTab(dialog: HTMLElement, e: KeyboardEvent): void {
   const first = items[0];
   const last = items.at(-1)!;
   const active = document.activeElement;
-  if (e.shiftKey && (active === first || !dialog.contains(active))) {
+  // Focus outside the dialog (a click on the page behind) comes back in at
+  // the end Tab is heading for: the first control forward, the last reverse.
+  if (!dialog.contains(active) || active === (e.shiftKey ? first : last)) {
     e.preventDefault();
-    last.focus();
-  } else if (!e.shiftKey && active === last) {
-    e.preventDefault();
-    first.focus();
+    (e.shiftKey ? last : first).focus();
   }
+}
+
+/**
+ * The keydown handler of every open dialog, topmost last. Each one listens
+ * on `window` in the capture phase, but only the topmost acts, so one Escape
+ * closes one dialog and Tab stays inside the dialog on top.
+ */
+const openDialogs: unknown[] = [];
+
+/** Whether a dialog wired through this module is open. */
+export const dialogOpen = (): boolean => openDialogs.length > 0;
+
+/** Put `dialog` on top of the stack with its Escape and Tab handling. Returns the remover. */
+function stackDialog(dialog: HTMLElement, onEscape: () => void): () => void {
+  const onKeyDown = (e: KeyboardEvent): void => {
+    if (openDialogs.at(-1) !== onKeyDown) return;
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      e.preventDefault();
+      onEscape();
+      return;
+    }
+    trapTab(dialog, e);
+  };
+  openDialogs.push(onKeyDown);
+  window.addEventListener('keydown', onKeyDown, true);
+  return () => {
+    const i = openDialogs.indexOf(onKeyDown);
+    if (i >= 0) openDialogs.splice(i, 1);
+    window.removeEventListener('keydown', onKeyDown, true);
+  };
 }
 
 export interface DialogA11yOptions {
@@ -115,7 +145,8 @@ export function wireBackdropDismiss(backdrop: HTMLElement, card: HTMLElement, cl
  * without duplicating the wiring. Installs a window-level, capture-phase
  * keydown listener so Escape and Tab work even once focus has left the
  * dialog (the failure mode a per-element listener cannot catch), and records
- * the previously-focused element to restore on `teardown()`.
+ * the previously-focused element to restore on `teardown()`. With dialogs
+ * stacked, only the one opened last answers Escape and Tab.
  *
  * The caller still owns opening/closing and initial focus; call `teardown()`
  * from the dialog's own `close()`.
@@ -126,23 +157,14 @@ export function wireDialogA11y(dialog: HTMLElement, opts: DialogA11yOptions): Di
     (document.activeElement instanceof HTMLElement ? document.activeElement : null);
 
   let torn = false;
-  const onKeyDown = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape') {
-      e.stopPropagation();
-      e.preventDefault();
-      opts.onEscape();
-      return;
-    }
-    trapTab(dialog, e);
-  };
-  window.addEventListener('keydown', onKeyDown, true);
+  const unstack = stackDialog(dialog, opts.onEscape);
 
   return {
     restoreTo,
     teardown(): void {
       if (torn) return;
       torn = true;
-      window.removeEventListener('keydown', onKeyDown, true);
+      unstack();
       if (restoreTo && document.contains(restoreTo)) restoreTo.focus();
     },
   };
@@ -188,12 +210,13 @@ export function openModal(opts: ModalOptions): ModalHandle {
   const close = (): void => {
     if (closed) return;
     closed = true;
-    window.removeEventListener('keydown', onKeyDown, true);
+    unstack();
     const exitMs = opts.exitMs ?? 0;
     if (exitMs > 0) {
       // Keep the surface painted for the exit transition, but immediately inert
       // so it cannot take input while it fades; drop it once the wait elapses.
       backdrop.classList.add('olv-modal-closing');
+      backdrop.inert = true;
       window.setTimeout(() => backdrop.remove(), exitMs);
     } else {
       backdrop.remove();
@@ -203,29 +226,17 @@ export function openModal(opts: ModalOptions): ModalHandle {
     opts.onClose?.();
   };
 
-  const focusable = (): HTMLElement[] => focusableIn(dialog);
-
-  const onKeyDown = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape') {
-      e.stopPropagation();
-      e.preventDefault();
-      close();
-      return;
-    }
-    // Focus trap — keep Tab / Shift+Tab cycling within the dialog.
-    trapTab(dialog, e);
-  };
-
   closeBtn.addEventListener('click', () => close());
   backdrop.addEventListener('click', (e) => {
     if (e.target === backdrop) close();
   });
-  window.addEventListener('keydown', onKeyDown, true);
+  // Escape closes; Tab / Shift+Tab cycle within the dialog.
+  const unstack = stackDialog(dialog, close);
 
   document.body.append(backdrop);
 
   // Move focus into the dialog: the first field, else the dialog itself.
-  const initial = focusable()[0] ?? dialog;
+  const initial = focusableIn(dialog)[0] ?? dialog;
   initial.focus();
 
   return { element: backdrop, close };
