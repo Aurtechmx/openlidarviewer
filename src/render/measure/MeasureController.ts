@@ -98,6 +98,7 @@ import {
 import { storageGet, storageSet } from '../../ui/safeStorage';
 import { autoReferenceZ } from './volume';
 import { MeasureOverlay } from './MeasureOverlay';
+import { TOUCH_SLOP_PX } from '../touchTapGate';
 import type {
   OverlayModel,
   OverlayVertex,
@@ -107,6 +108,23 @@ import type {
 } from './MeasureOverlay';
 
 /** Touch devices say "Tap" rather than "Click" in the instruction hint. */
+/** A press that travels further than this before release is a drag, not a click (CSS px). */
+const CLICK_SLOP_PX = 4;
+/** Clicking within this radius of a closable draft's first vertex finishes it (CSS px). */
+const CLOSE_RADIUS_PX = 16;
+
+/** Whether two box corners sit at one height along `up`, so the box has no volume. */
+function flatBox(a: Vec3, b: Vec3, up: Vec3): boolean {
+  return Math.abs((b[0] - a[0]) * up[0] + (b[1] - a[1]) * up[1] + (b[2] - a[2]) * up[2]) < 1e-6;
+}
+
+/** A deleted measurement and where it sat, for an Undo. */
+export interface RemovedMeasurement {
+  readonly measurement: Measurement;
+  readonly index: number;
+  readonly epoch: number;
+}
+
 const COARSE_POINTER =
   typeof window !== 'undefined' &&
   typeof window.matchMedia === 'function' &&
@@ -444,7 +462,14 @@ export class MeasureController {
    */
   private _ownerProvider: (() => WorkOwnership | undefined) | null = null;
   /** The handle being dragged: a measurement id and vertex index. */
-  private _drag: { id: string; vi: number } | null = null;
+  // `x`/`y` are where the press began; `moved` turns true past the drag slop,
+  // and only then does the press edit the vertex. A press released inside the
+  // slop is a click on the vertex, which places a point there.
+  private _drag: { id: string; vi: number; x: number; y: number; moved: boolean } | null = null;
+  /** Where the last canvas press began, so a click that ended a drag places nothing. */
+  private _press: { x: number; y: number; slop: number } | null = null;
+  /** Bumped by every whole-list replace, so an Undo never restores into another list. */
+  private _epoch = 0;
   /** Overlay rect captured at drag start — fixed for the drag, so it isn't
    *  re-read (a forced reflow) on every pointermove. */
   private _dragRect: DOMRect | null = null;
@@ -452,7 +477,7 @@ export class MeasureController {
   private _dragNdcY = 0;
   private _dragDirty = false;
   private readonly _onDragMove: (e: PointerEvent) => void;
-  private readonly _onDragUp: () => void;
+  private readonly _onDragUp: (e: PointerEvent) => void;
 
   /** Completed measurements. */
   private _measurements: Measurement[] = [];
@@ -755,7 +780,7 @@ export class MeasureController {
 
     // Handle dragging: a pointerdown on a vertex handle starts an edit drag.
     this._onDragMove = (e) => this._handleDragMove(e);
-    this._onDragUp = () => this._endDrag();
+    this._onDragUp = (e) => this._endDrag(e);
     this._draw.element.addEventListener('pointerdown', (e) => this._handlePointerDown(e));
   }
 
@@ -938,6 +963,7 @@ export class MeasureController {
 
   /** Replace all measurements — used when importing a session. */
   loadMeasurements(measurements: Measurement[]): void {
+    this._epoch++;
     this._measurements = measurements;
     this._draft = null;
     this._endDrag();
@@ -1226,11 +1252,76 @@ export class MeasureController {
     return this._drag !== null;
   }
 
-  /** Delete a measurement by id. */
-  removeMeasurement(id: string): void {
-    this._measurements = this._measurements.filter((m) => m.id !== id);
+  /** Delete a measurement by id; the result restores it through {@link restoreMeasurement}. */
+  removeMeasurement(id: string): RemovedMeasurement | null {
+    const index = this._measurements.findIndex((m) => m.id === id);
+    if (index < 0) return null;
+    const [measurement] = this._measurements.splice(index, 1);
     this._updateHint();
     this._emitChange();
+    return { measurement, index, epoch: this._epoch };
+  }
+
+  /**
+   * Put a deleted measurement back at its old place in the list, with its id,
+   * name and owner. False when the list was replaced or cleared since, or the
+   * id is back already.
+   */
+  restoreMeasurement(r: RemovedMeasurement): boolean {
+    if (r.epoch !== this._epoch || this._measurements.some((m) => m.id === r.measurement.id)) return false;
+    this._measurements.splice(Math.min(r.index, this._measurements.length), 0, r.measurement);
+    this._updateHint();
+    this._emitChange();
+    return true;
+  }
+
+  /** Record where a canvas press began; `touch` widens the slop to the tap slop. */
+  notePress(x: number, y: number, touch: boolean): void {
+    this._press = { x, y, slop: touch ? TOUCH_SLOP_PX : CLICK_SLOP_PX };
+  }
+
+  /**
+   * A canvas click while measuring, in canvas pixels. A click that ended a
+   * drag (an orbit) places nothing. A click on the first vertex of a closable
+   * draft finishes it; any other click places the point under the cursor.
+   */
+  clickAt(x: number, y: number): void {
+    const press = this._press;
+    this._press = null;
+    if (press && Math.hypot(x - press.x, y - press.y) > press.slop) return;
+    const canvas = this._lastCanvas;
+    if (!canvas || canvas.clientWidth === 0 || canvas.clientHeight === 0) return;
+    if (this._closesAt(x, y)) return;
+    const hit = this._picker?.((x / canvas.clientWidth) * 2 - 1, -(y / canvas.clientHeight) * 2 + 1) ?? null;
+    this.addPoint(hit?.point ?? null, hit?.layer);
+  }
+
+  /** Finish the draft when (x, y) lands on its first vertex. */
+  private _closesAt(x: number, y: number): boolean {
+    const first = this.firstVertexForClose();
+    const cam = this._lastCamera;
+    const canvas = this._lastCanvas;
+    if (!first || !cam || !canvas) return false;
+    const s = this._draw.project(first, cam, canvas.clientWidth, canvas.clientHeight);
+    if (Math.hypot(x - s.x, y - s.y) > CLOSE_RADIUS_PX) return false;
+    this.finishCurrent();
+    return true;
+  }
+
+  /** A click on an existing vertex handle: place a point exactly on that vertex. */
+  private _placeOnVertex(id: string, vi: number, clientX: number, clientY: number): void {
+    const m = this._measurements.find((x) => x.id === id);
+    let p: Vec3 | undefined;
+    if (m?.kind === 'box' && m.points.length >= 2) p = boxCorners(boxFromCorners(m.points[0], m.points[1]), this._worldUp)[vi];
+    else p = m?.points[vi];
+    if (!p) return;
+    const r = this._lastCanvas?.getBoundingClientRect();
+    if (!this._active || (r && this._closesAt(clientX - r.left, clientY - r.top))) return;
+    this._draft ??= this._newDraft();
+    this._lastSnap = { kind: 'endpoint', position: [p[0], p[1], p[2]], distance: 0 };
+    this._draft.points.push([p[0], p[1], p[2]]);
+    if (isFull(this._draft)) this._commitDraft();
+    this._updateHint();
   }
 
   /**
@@ -1545,6 +1636,7 @@ export class MeasureController {
 
   /** Remove every measurement. */
   clear(): void {
+    this._epoch++;
     this._measurements = [];
     this._draft = null;
     this._updateHint();
@@ -1753,7 +1845,7 @@ export class MeasureController {
     const viAttr = target?.dataset.vi ?? null;
     if (mid === null || viAttr === null) return;
     e.preventDefault();
-    this._drag = { id: mid, vi: Number(viAttr) };
+    this._drag = { id: mid, vi: Number(viAttr), x: e.clientX, y: e.clientY, moved: false };
     this._dragRect = this._draw.element.getBoundingClientRect();
     this._cursor = null;
     window.addEventListener('pointermove', this._onDragMove);
@@ -1762,7 +1854,13 @@ export class MeasureController {
 
   /** Track the drag pointer; the actual re-pick is coalesced into `render`. */
   private _handleDragMove(e: PointerEvent): void {
-    if (!this._drag) return;
+    const drag = this._drag;
+    if (!drag) return;
+    if (!drag.moved) {
+      const slop = e.pointerType === 'touch' ? TOUCH_SLOP_PX : CLICK_SLOP_PX;
+      if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) <= slop) return;
+      drag.moved = true;
+    }
     // Reuse the rect captured at drag start; re-reading per pointermove forces a
     // synchronous reflow. Fall back if it was somehow not captured.
     const rect = this._dragRect ?? this._draw.element.getBoundingClientRect();
@@ -1805,14 +1903,20 @@ export class MeasureController {
   }
 
   /** End a handle drag, detaching the window listeners. */
-  private _endDrag(): void {
-    if (!this._drag) return;
-    const draggedId = this._drag.id;
+  private _endDrag(e?: PointerEvent): void {
+    const drag = this._drag;
+    if (!drag) return;
+    const draggedId = drag.id;
     this._drag = null;
     this._dragRect = null;
     this._dragDirty = false;
     window.removeEventListener('pointermove', this._onDragMove);
     window.removeEventListener('pointerup', this._onDragUp);
+    // Released without moving: a click on the vertex, not an edit.
+    if (!drag.moved) {
+      if (e) this._placeOnVertex(draggedId, drag.vi, e.clientX, e.clientY);
+      return;
+    }
     // A dragged endpoint changes the support under it — re-grade so the trust
     // badge can't keep claiming "well supported" after a vertex moved into a void.
     const m = this._measurements.find((x) => x.id === draggedId);
@@ -2015,10 +2119,14 @@ export class MeasureController {
       case 'slope':
       case 'profile':
         return n === 1 ? `${VERB} the second point` : `${VERB} the first point`;
-      case 'box':
-        return n === 1
-          ? `${VERB} the opposite corner of the box`
-          : `${VERB} one corner of the box`;
+      case 'box': {
+        if (n === 1) return `${VERB} the opposite corner. The box spans the height between the two corners`;
+        const last = this._measurements[this._measurements.length - 1];
+        if (last?.kind === 'box' && last.points.length >= 2 && flatBox(last.points[0], last.points[1], this._worldUp)) {
+          return `That box is flat: both corners are at one height, so its volume is 0. ${VERB} the second corner on a higher surface`;
+        }
+        return `${VERB} one corner of the box`;
+      }
       case 'angle':
         if (n === 1) return `${VERB} the angle vertex`;
         if (n === 2) return `${VERB} the third point`;

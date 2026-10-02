@@ -178,6 +178,21 @@ describe('strip UI', () => {
     expect(open).toHaveBeenCalledWith('crs');
   });
 
+  it('shows an active clip with its kept count, and hides the item when no clip is on', async () => {
+    const { createStateStrip } = await import('../src/ui/stateStrip');
+    const open = vi.fn();
+    const strip = createStateStrip({ open });
+    const root = strip.element as unknown as FakeEl;
+    const btn = () => root.querySelector('.olv-ss-clip')!;
+    strip.render(readStrip(reads()));
+    expect(btn().hidden).toBe(true);
+    strip.render(readStrip(reads({ clip: () => ({ kept: 16739, total: 31839 }) })));
+    expect(btn().hidden).toBe(false);
+    expect(btn().textContent).toContain(`Clipped: ${(16739).toLocaleString()} of ${(31839).toLocaleString()} points`);
+    btn().fire('click');
+    expect(open).toHaveBeenCalledWith('clip');
+  });
+
   it('shows the elapsed time and the estimate in their own span, out of the accessible name', async () => {
     const { createStateStrip } = await import('../src/ui/stateStrip');
     const strip = createStateStrip({ open: vi.fn() });

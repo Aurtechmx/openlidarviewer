@@ -358,6 +358,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     hasScan: d.hasScan,
     open: (item) => {
       if (item === 'processing' || item === 'review') { router?.navigate({ mode: 'analyse', page: null }, true); return; }
+      if (item === 'clip') { router?.navigate({ mode: 'work', page: 'clip' }, true); return; }
       router?.navigate({ mode: 'data', page: null }, item === 'dataset');
       if (item === 'dataset') return;
       if (rightCollapsed()) expandRightRail();

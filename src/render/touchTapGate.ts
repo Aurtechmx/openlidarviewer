@@ -12,7 +12,9 @@
 
 import { DoubleTapDetector } from './doubleTapDetector';
 
-const DRAG_SLOP_SQ = 100; // (10 px)^2 — beyond this a touch is a drag, not a tap
+/** Beyond this a touch is a drag, not a tap (CSS px). */
+export const TOUCH_SLOP_PX = 10;
+const DRAG_SLOP_SQ = TOUCH_SLOP_PX * TOUCH_SLOP_PX;
 
 export interface TapPoint {
   readonly x: number;

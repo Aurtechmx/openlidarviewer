@@ -17,6 +17,7 @@ import { lastAnalysisRows, subscribeAnalysisRows } from '../../process/analysisR
 import { liveTasks, subscribeTaskActivity } from '../../process/taskActivity';
 import { clearBusyWaits, collectBusyTasks, showBusyWaits } from './busyTasks';
 import { readStrip } from './stripReads';
+import { clipScope, subscribeClipScope } from '../../render/clip/clipScope';
 import { createStateStrip, type StripItemId } from '../../ui/stateStrip';
 
 export interface StateStripCrs {
@@ -71,6 +72,7 @@ export function mountStateStrip(d: StateStripMountDeps): MountedStateStrip {
           analysisRows: lastAnalysisRows,
           results: () => d.results?.entries() ?? [],
           tasks: () => tasks,
+          clip: clipScope,
         })
         : null,
     );
@@ -89,6 +91,7 @@ export function mountStateStrip(d: StateStripMountDeps): MountedStateStrip {
     d.studio.subscribe(refresh),
     subscribeAnalysisRows(refresh),
     subscribeTaskActivity(refresh),
+    subscribeClipScope(refresh),
     d.results?.subscribe(refresh) ?? (() => {}),
   ];
   refresh();

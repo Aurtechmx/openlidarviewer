@@ -90,7 +90,7 @@ export function exportHealthHeader(health: ExportHealth): { readonly text: strin
  */
 export function renderExportHealthPanel(
   health: ExportHealth,
-  actions: { readonly fullResolution?: () => void } = {},
+  actions: { readonly fullResolution?: () => void; readonly scope?: string } = {},
 ): HTMLElement {
   const panel = el('div', { className: 'olv-health' });
   const head = exportHealthHeader(health);
@@ -128,7 +128,7 @@ export function renderExportHealthPanel(
       el('div', { className: `olv-health-row is-${r.tier}` }, [
         renderStateGlyph(stateFromHealthTier(r.tier), r.label),
         el('span', { className: 'olv-health-k', text: r.label }),
-        el('span', { className: 'olv-health-v', text: r.value }),
+        el('span', { className: 'olv-health-v', text: r.label === 'Scan scope' && actions.scope ? actions.scope : r.value }),
       ]),
     );
   }

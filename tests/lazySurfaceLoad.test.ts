@@ -250,6 +250,23 @@ describe('buttonLazyTrigger', () => {
     expect(button.setAttribute).toHaveBeenCalledWith('aria-busy', 'false');
   });
 
+  it('keeps a focused button enabled, so focus stays on it while the chunk loads', () => {
+    const button = { disabled: false, setAttribute: vi.fn(), getAttribute: vi.fn() } as unknown as HTMLButtonElement;
+    const g = globalThis as { document?: unknown };
+    const saved = g.document;
+    g.document = { activeElement: button };
+    try {
+      const trigger = buttonLazyTrigger(button);
+      trigger.setBusy(true);
+      expect(button.disabled).toBe(false);
+      expect(button.setAttribute).toHaveBeenCalledWith('aria-busy', 'true');
+      trigger.setBusy(false);
+      expect(button.disabled).toBe(false);
+    } finally {
+      g.document = saved;
+    }
+  });
+
   it('is a harmless no-op when the button lookup found nothing', () => {
     const trigger = buttonLazyTrigger(null);
     expect(() => { trigger.setBusy(true); trigger.setBusy(false); }).not.toThrow();

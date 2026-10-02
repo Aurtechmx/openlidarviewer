@@ -88,7 +88,8 @@ export function convertCloud(
 
   function run(): { file: ConvertedFile | null; report: ConvertReport } {
   const mode = opts.crsMode ?? 'keep';
-  const provenance = opts.digests ? exportDigestLines(opts.digests) : null;
+  const lines = [...(opts.digests ? exportDigestLines(opts.digests) : []), ...(opts.scopeNote ? [opts.scopeNote] : [])];
+  const provenance = lines.length > 0 ? lines : null;
   // The RESOLVED source CRS (CrsService), when the caller supplies it, is the
   // authority — it honours any user override, so `cloud.metadata.crs` stays
   // source-declared PROVENANCE only. Given a resolved value we never consult

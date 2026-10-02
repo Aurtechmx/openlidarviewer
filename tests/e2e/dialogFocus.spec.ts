@@ -346,3 +346,22 @@ test.describe('onboarding tour: the shortcuts its last step names', () => {
     });
   }
 });
+
+test.describe('dock dialogs: focus on close', () => {
+  for (const [label, dialog] of [['Help', '.olv-help-backdrop'], ['Commands', '.olv-palette']] as const) {
+    test(`Escape on ${label} returns focus to its dock button`, async ({ page }) => {
+      await suppressOnboardingTour(page);
+      await page.goto('/');
+      await dropTinyPly(page);
+      await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+      await railChromeSettled(page);
+      const btn = page.locator('.olv-dock .olv-tool', { hasText: label }).first();
+      await btn.focus();
+      await page.keyboard.press('Enter');
+      await expect(page.locator(dialog)).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(page.locator(dialog)).toBeHidden();
+      await expect(btn).toBeFocused();
+    });
+  }
+});

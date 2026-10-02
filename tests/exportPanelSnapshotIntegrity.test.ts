@@ -272,7 +272,7 @@ describe('ExportPanel — full-resolution export re-verifies before it writes', 
     expect(hoisted.downloads).toEqual(['scan.las']);
     expect(hoisted.converted.length).toBe(1);
     expect(hoisted.converted[0].pointCount, 'the post-await clip was used').toBe(1);
-    expect(statusText(root)).toMatch(/clipped to box/);
+    expect(statusText(root)).toMatch(/Clipped: 1 of [\d,]+ points/);
   });
 
   it('exports normally when nothing moved during the decode', async () => {

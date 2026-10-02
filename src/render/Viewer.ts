@@ -1243,7 +1243,7 @@ export class Viewer {
       // While paused (hold-Space to re-orient), the click belongs to camera
       // navigation, not the tool — don't place a point / pick / annotation.
       if (this._toolPaused) return;
-      if (this._toolMode === 'measure') this._handleMeasureClick(e, canvas);
+      if (this._toolMode === 'measure') this._measure.clickAt(e.offsetX, e.offsetY);
       else if (this._toolMode === 'inspect') this._handleInspectClick(e, canvas);
       else if (this._toolMode === 'annotate') this._handleAnnotateClick(e, canvas);
     };
@@ -1278,6 +1278,7 @@ export class Viewer {
     // 2-finger measurement drag isn't hijacked.
     this._onCanvasPointerDown = (e) => {
       this._demand.input();
+      this._measure.notePress(e.offsetX, e.offsetY, e.pointerType === 'touch');
       if (e.pointerType !== 'touch') return;
       if (this._toolMode !== 'none') return;
       this._touchTracker.down(e.pointerId, e.offsetX, e.offsetY);
@@ -5624,35 +5625,6 @@ export class Viewer {
     const ndcY = -(e.offsetY / this._canvas.clientHeight) * 2 + 1;
     const point = this._pickPoint(ndcX, ndcY);
     if (point) this._nav.focusOn(point);
-  }
-
-  /** While measuring, a canvas click picks the point under the cursor. */
-  private _handleMeasureClick(e: MouseEvent, canvas: HTMLCanvasElement): void {
-    // Click-first-vertex snap close — when a polygon-kind draft has
-    // enough vertices to close, project the first vertex to screen
-    // and check whether this click landed within the snap radius.
-    // If yes, finish the polygon instead of adding a new vertex.
-    const first = this._measure.firstVertexForClose();
-    if (first !== null) {
-      const w = canvas.clientWidth;
-      const h = canvas.clientHeight;
-      const v = new THREE.Vector3(first[0], first[1], first[2]).project(
-        this._camera,
-      );
-      const sx = (v.x * 0.5 + 0.5) * w;
-      const sy = (-v.y * 0.5 + 0.5) * h;
-      const dx = e.offsetX - sx;
-      const dy = e.offsetY - sy;
-      const CLOSE_RADIUS_PX = 16;
-      if (dx * dx + dy * dy <= CLOSE_RADIUS_PX * CLOSE_RADIUS_PX) {
-        this._measure.finishCurrent();
-        return;
-      }
-    }
-    const ndcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
-    const ndcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
-    const hit = this._pickDetailed(ndcX, ndcY), p = hit?.point ?? this._pickStreaming(ndcX, ndcY);
-    this._measure.addPoint(p ? [p.x, p.y, p.z] : null, hit?.cloud);
   }
 
   /**
