@@ -98,27 +98,17 @@ describe('buildExportDeliverables — duplicate-click guard (OUTPUT-F5)', () => 
     vi.useRealTimers();
   });
 
-  it('does not protect a void callback whose real async work outlives the fixed window', () => {
-    // Reproduces main.ts's actual onExportReport shape: a void arrow function
-    // that starts the real async work with `void ....then(...)` (main.ts:2651)
-    // and returns nothing for guardDuplicateClicks to await, so the button
-    // only ever guards for the fixed DUPLICATE_CLICK_GUARD_MS window, whatever
-    // the real work's own duration turns out to be. A cold pdf-lib chunk load
-    // plus multi-page render can outlast that window; this proves a click
-    // after the window re-enables, but before the real work resolves, starts
-    // a second, concurrent, genuine run.
+  it('holds the Report PDF guard until a slow report settles, past the fixed window', async () => {
     vi.useFakeTimers();
-    let realRuns = 0;
-    const startReal = (): void => {
-      realRuns++;
-      // Never resolves within this test — stands in for a report generation
-      // still in flight when the fixed window elapses.
-      void new Promise<void>(() => {}).then(() => {});
-    };
+    let calls = 0;
+    let finish: () => void = () => {};
     const { element, setImageExportEnabled } = buildExportDeliverables({
       onExport: noop,
       onExportImage: noop,
-      onExportReport: () => { startReal(); }, // void: nothing returned
+      onExportReport: () => {
+        calls++;
+        return new Promise<void>((resolve) => { finish = resolve; });
+      },
     });
     setImageExportEnabled(true);
     const select = q(element, '.olv-report-select');
@@ -126,17 +116,53 @@ describe('buildExportDeliverables — duplicate-click guard (OUTPUT-F5)', () => 
     const reportBtn = qAll(element, '.olv-export-btn').find((b) => b.textContent === 'Report PDF');
 
     reportBtn.click();
-    expect(realRuns).toBe(1);
+    vi.advanceTimersByTime(10_000); // far past the fixed window; the report is still running
     expect(reportBtn.disabled).toBe(true);
+    reportBtn.click();
+    expect(calls, 'a click while the report runs must not start a second one').toBe(1);
 
-    vi.runAllTimers(); // the fixed window elapses; the real work is still running
-    expect(reportBtn.disabled, 'the guard releases on its timer regardless of the real work').toBe(false);
-
-    reportBtn.click(); // a second, genuine click while report #1 is still in flight
-    expect(
-      realRuns,
-      'a void callback whose real work outlives the fixed window gets no duplicate-click protection once the window elapses',
-    ).toBe(2);
+    finish();
+    await vi.runAllTimersAsync();
+    expect(reportBtn.disabled).toBe(false);
+    expect(select.disabled).toBe(false);
     vi.useRealTimers();
+  });
+
+  it('re-enables the control when the export fails, so the user can retry', async () => {
+    let calls = 0;
+    const { element } = buildExportDeliverables({
+      onExport: () => { calls++; return Promise.reject(new Error('disk full')); },
+      onExportImage: noop,
+      onExportReport: noop,
+    });
+    const plyBtn = q(element, '.olv-export-btn');
+    plyBtn.click();
+    expect(plyBtn.disabled).toBe(true);
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+    expect(plyBtn.disabled).toBe(false);
+    plyBtn.click();
+    expect(calls).toBe(2);
+  });
+
+  it('drops a second click on an image export while the first is still running', async () => {
+    let calls = 0;
+    let finish: () => void = () => {};
+    const { element, setImageExportEnabled } = buildExportDeliverables({
+      onExport: noop,
+      onExportImage: () => {
+        calls++;
+        return new Promise<void>((resolve) => { finish = resolve; });
+      },
+      onExportReport: noop,
+    });
+    setImageExportEnabled(true);
+    const heightBtn = qAll(element, '.olv-export-btn').find((b) => b.textContent === 'Height map');
+    heightBtn.click();
+    heightBtn.click();
+    expect(calls, 'a double click must start one image export').toBe(1);
+    expect(heightBtn.disabled).toBe(true);
+    finish();
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+    expect(heightBtn.disabled).toBe(false);
   });
 });

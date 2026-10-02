@@ -214,11 +214,11 @@ export interface ExportPanelCallbacks {
    */
   isStreamingPending?: () => boolean;
   /** Export the active cloud to a point-cloud file format (ply / obj / xyz / csv). */
-  onExport?: (format: ExportFormat) => void;
+  onExport?: (format: ExportFormat) => void | PromiseLike<unknown>;
   /** Render the live scan in one Visual Export Studio mode and download a PNG. */
-  onExportImage?: (mode: ExportMode) => void;
+  onExportImage?: (mode: ExportMode) => void | PromiseLike<unknown>;
   /** Generate a PDF report from the live scan using the named template. */
-  onExportReport?: (templateId: string) => void;
+  onExportReport?: (templateId: string) => void | PromiseLike<unknown>;
 }
 
 /** A product the Products lane can mark with {@link ExportPanel.select}. */
