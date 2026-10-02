@@ -85,6 +85,7 @@
   .olv-ss-short { display: inline; }
   /* A prompt parked above the dock moves up by the strip's height. */
   body:has(.olv-state-strip:not(.olv-hidden)) .olv-lasso-toast { margin-bottom: var(--olv-strip-h); }
+  body:has(.olv-state-strip:not(.olv-hidden)) .olv-measure-bar { margin-bottom: calc(var(--olv-strip-h) + var(--space-2xl)); }
 }
 
 /* Elapsed time (and the estimate left) a host shows beside its busy

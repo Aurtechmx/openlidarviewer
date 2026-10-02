@@ -8293,8 +8293,13 @@ location bar keeps each part at its width and shortens the current page,
 and between 768 and 1023 px the privacy pill shows its lock while a page is
 open. The landing content starts below the header. The stage overlay clips
 horizontally, so a collapsed rail no longer widens the page.
+The measure toolbar, the phone tool rail and the toast use the `--panel`
+surface, so their text meets WCAG AA in the light theme. On a phone the tool
+rail ends above the state strip.
 
 `tests/e2e/ceJourneys.spec.ts` runs J1 and J3 at 768 × 1024, 800 × 470 and
 1280 × 720 and checks that the toolbar, its buttons, the hint, Done and the
 location bar sit inside the viewport and clear of the side panels.
-`tests/e2e/responsiveLayout.spec.ts` checks the landing mark at 800 px wide.
+`tests/e2e/responsiveLayout.spec.ts` checks the landing mark at 800 px wide
+and the hint and toast contrast in both themes. The phone J1 journey checks
+that the tool rail ends above the state strip.

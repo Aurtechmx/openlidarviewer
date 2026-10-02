@@ -1651,7 +1651,7 @@ body.olv-theme-light .olv-empty::before {
   font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
   color: var(--text);
-  background: rgba(11, 17, 33, 0.92);
+  background: var(--panel);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border: 0.5px solid rgba(0, 178, 255, 0.42);
@@ -4338,7 +4338,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
   position: absolute; top: var(--olv-lane-top); left: 50%; transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center;
   gap: var(--space-sm); z-index: calc(var(--z-float) + 1);
-  background: rgba(11, 17, 33, 0.82);
+  background: var(--panel);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   border: 0.5px solid rgba(0, 178, 255, 0.28);
   border-radius: var(--radius-lg); padding: var(--space-sm) var(--space-lg);
@@ -7352,8 +7352,8 @@ body.olv-theme-light .olv-busy-scan--emblem {
     max-width: 72px;
     padding: var(--space-sm) var(--space-2xs);
     border-radius: var(--radius-lg);
-    /* Glass — translucent, blurred, hairline-bordered, soft-shadowed. */
-    background: rgba(11, 17, 33, 0.72);
+    /* Panel surface, blurred, hairline-bordered, soft-shadowed. */
+    background: var(--panel);
     -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
     border: 0.5px solid rgba(0, 178, 255, 0.22);
     box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);

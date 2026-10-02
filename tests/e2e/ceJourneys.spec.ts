@@ -237,6 +237,15 @@ async function j1(page: Page, vp: Viewport, id: string): Promise<void> {
   await expect(row).toBeVisible({ timeout: 5_000 });
   await expect(row).toContainText(/\d\s?(m|ft|units?)\b/);
   if (NARROW.includes(vp)) await expectMeasureLayoutClear(page);
+  if (vp.touch) {
+    // The phone toolbar ends above the state strip.
+    const gap = await page.evaluate(() => {
+      const bar = document.querySelector('.olv-measure-bar')!.getBoundingClientRect();
+      const strip = document.querySelector('.olv-state-strip')!.getBoundingClientRect();
+      return strip.top - bar.bottom;
+    });
+    expect(gap).toBeGreaterThanOrEqual(0);
+  }
   rec.succeed();
   rec.fact('valueText', (await row.innerText()).replace(/\s+/g, ' ').trim().slice(0, 80));
   rec.finish();

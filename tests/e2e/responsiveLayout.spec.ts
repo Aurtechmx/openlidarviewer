@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dropTinyLas } from './helpers';
+import { dropTinyLas, dropTerrainAccessUtmLas } from './helpers';
 
 /**
  * responsiveLayout.spec.ts — the v0.7 layout-lane audit's own regression
@@ -303,3 +303,39 @@ test('the landing mark stays below the header at 800 px wide', async ({ page }) 
     expect(top, `mark top at 800x${height}`).toBeGreaterThanOrEqual(header);
   }
 });
+
+/** WCAG contrast ratio of two computed `rgb()` colours. */
+function contrast(a: string, b: string): number {
+  const lum = (c: string): number => {
+    const [r, g, bl] = (c.match(/[\d.]+/g) ?? []).slice(0, 3).map((v) => {
+      const x = Number(v) / 255;
+      return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+for (const theme of ['light', 'dark']) {
+  test(`the measure hint and the scan-ready toast meet AA in the ${theme} theme`, async ({ page }) => {
+    await page.addInitScript((t) => localStorage.setItem('olv-theme', t), theme);
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('/?test=1');
+    await dropTerrainAccessUtmLas(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 30_000 });
+    await page.locator('.olv-ws-tab[data-mode="work"]').click();
+    await page.locator('#olv-ws-mode-work .olv-tool-launcher .olv-tl-row', { hasText: 'Measure' }).click();
+    await expect(page.locator('.olv-measure-bar .olv-measure-hint-text')).toBeVisible();
+    // The Lasso button raises the same toast the scan-ready message uses.
+    await page.locator('.olv-mkind-aux').click();
+    await expect(page.locator('.olv-lasso-toast.olv-visible')).toBeVisible();
+    for (const [text, box] of [['.olv-measure-bar .olv-measure-hint-text', '.olv-measure-bar'], ['.olv-lasso-toast-msg', '.olv-lasso-toast']]) {
+      const [fg, bg] = await page.evaluate(([t, b]) => [
+        getComputedStyle(document.querySelector(t)!).color,
+        getComputedStyle(document.querySelector(b)!).backgroundColor,
+      ], [text, box]);
+      expect(contrast(fg, bg), `${text} on ${box}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+}

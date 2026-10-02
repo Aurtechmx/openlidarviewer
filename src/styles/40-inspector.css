@@ -339,7 +339,7 @@
   font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
   color: var(--text);
-  background: rgba(11, 17, 33, 0.92);
+  background: var(--panel);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border: 0.5px solid rgba(0, 178, 255, 0.42);
