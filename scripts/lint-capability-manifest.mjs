@@ -18,12 +18,14 @@
  *       capability. A qualifying sentence that names no hidden capability also
  *       counts when the paragraph names only that one hidden capability. A
  *       qualifier elsewhere in the document, or about another capability,
- *       excuses nothing. Headings are not read as claims.
+ *       excuses nothing. Each table row and each list item is its own
+ *       paragraph. A negated qualifier ("is not staged") does not count.
+ *       Headings are not read as claims.
  *   M8  every document in CURRENT_DOCS exists
  *
  * CURRENT_DOCS is the explicit list M7 reads. Release notes, the changelog and
- * the implementation ledger (docs/releases/, docs/release/, CHANGELOG.md)
- * record past states and are left out. A new current document is added here.
+ * the implementation ledger (docs/releases/, docs/release/, docs-site/releases/,
+ * CHANGELOG.md) record past states and are left out. A new current document is added here.
  *
  * Flags, for tests: --manifest <file>, --unreachable <file>, --claims <file>,
  * --docs <file,file,...> (replaces the document set).
@@ -87,14 +89,66 @@ export const CURRENT_DOCS = [
   'docs/science/METHOD_REGISTRY.md',
   'src/observation/README.md',
   'validation/control-network/README.md',
+  'REVIEWER_QUICKSTART.md',
+  'ARTIFACT_EVALUATION.md',
+  'docs-site/index.md',
+  'docs-site/guide/contour-studio.md',
+  'docs-site/guide/index.md',
+  'docs-site/guide/measurement-analysis.md',
+  'docs-site/guide/mobile.md',
+  'docs-site/guide/navigation.md',
+  'docs-site/guide/streaming.md',
+  'docs-site/guide/terrain-intelligence.md',
+  'docs-site/guide/user-guide.md',
+  'docs-site/reference/architecture.md',
+  'docs-site/reference/embed-session.md',
+  'docs-site/reference/limitations.md',
+  'docs-site/reference/performance.md',
+  'docs/architecture/adr-worker-obfuscation.md',
+  'docs/architecture/architecture-map.md',
+  'docs/architecture/edge-aware-kernel.md',
+  'docs/architecture/float64-transform.md',
+  'docs/architecture/heavy-cloud-native.md',
+  'docs/architecture/oriented-footprints.md',
+  'docs/architecture/project-spatial-frame.md',
+  'docs/architecture/spatial-context-consumers.md',
+  'docs/architecture/temporal-block-buffers.md',
+  'docs/ux/COMMUNITY_SPEC.md',
+  'docs/ux/NAVIGATION_MAP.md',
+  'docs/ux/PRINCIPLES.md',
 ];
 
-/** Paragraphs split on blank lines, each split into sentences. Headings name a topic and make no claim, so they are dropped. */
+const TABLE_ROW = /^\s*\|/;
+const LIST_ITEM = /^\s*([-*+]|\d+[.)])\s/;
+const NEGATION = /\b(not|no longer|never|isn't|aren't|wasn't|weren't)\s+(\w+\s+)?$/i;
+
+/** True when the text carries a qualifier that is not itself negated ("is not staged"). */
+export function qualifies(text) {
+  for (const m of text.matchAll(new RegExp(QUALIFIER.source, 'gi'))) {
+    if (!NEGATION.test(text.slice(Math.max(0, m.index - 40), m.index))) return true;
+  }
+  return false;
+}
+
+/**
+ * Units split on blank lines, each split into sentences. Each table row and
+ * each list item (with its continuation lines) is its own unit. Headings name
+ * a topic and make no claim, so they are dropped.
+ */
 function sentencesByParagraph(text) {
-  return text
-    .replace(/^#{1,6}\s.*$/gm, '')
-    .split(/\n\s*\n/)
-    .map((p) => p.replace(/\s+/g, ' ').split(/(?<=[.!?;:])\s+(?=[^a-z])/).filter((s) => s.trim() !== ''));
+  const units = [];
+  for (const para of text.replace(/^#{1,6}\s.*$/gm, '').split(/\n\s*\n/)) {
+    let cur = null;
+    for (const line of para.split('\n')) {
+      if (TABLE_ROW.test(line) || LIST_ITEM.test(line) || cur === null || cur.row) {
+        cur = { row: TABLE_ROW.test(line), lines: [] };
+        units.push(cur);
+      }
+      cur.lines.push(line);
+    }
+  }
+  return units.map((u) => u.lines.join(' ').replace(/\s+/g, ' ')
+    .split(/(?<=[.!?;:])\s+(?=[^a-z])/).filter((s) => s.trim() !== ''));
 }
 
 /** Hidden capabilities whose docTerms the sentence names. */
@@ -115,7 +169,7 @@ export function unqualifiedClaims(text, hidden) {
     for (let i = 0; i < sentences.length; i++) {
       for (const cap of named[i]) {
         if (out.has(cap.id)) continue;
-        const qualified = sentences.some((s, j) => QUALIFIER.test(s) && (
+        const qualified = sentences.some((s, j) => qualifies(s) && (
           named[j].includes(cap) || (named[j].length === 0 && inParagraph.size === 1)
         ));
         if (qualified) continue;

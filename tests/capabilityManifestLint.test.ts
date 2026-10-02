@@ -162,6 +162,37 @@ describe('lint:capability-manifest', () => {
     expect(r.stderr).toContain('tie-point-registration');
   });
 
+  it('M7 reads each table row as its own unit', () => {
+    const file = doc('| Feature | State |\n|---|---|\n| observation overlay | available |\n| tie-point alignment | not reachable |\n');
+    const r = run('--docs', file);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('observation-overlay');
+    expect(r.stderr).not.toContain('tie-point-registration');
+  });
+
+  it('M7 reads each list item as its own unit', () => {
+    const file = doc('Tools:\n- Tie-point registration aligns two scans.\n- Export to PDF is staged.\n');
+    const r = run('--docs', file);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('tie-point-registration');
+  });
+
+  it('M7 accepts a qualified table row and a qualified list item', () => {
+    const file = doc('| Feature | State |\n|---|---|\n| observation overlay | staged |\n\n- Tie-point registration aligns scans,\n  and is not reachable in this build.\n');
+    expect(run('--docs', file).status).toBe(0);
+  });
+
+  it('M7 does not let a negated qualifier excuse a claim', () => {
+    for (const text of [
+      'Tie-point registration is not staged; it ships today.\n',
+      'The QA service is no longer hidden from users.\n',
+    ]) {
+      const r = run('--docs', doc(text));
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('M7');
+    }
+  });
+
   it('M7 reads headings as names, not claims', () => {
     const file = doc('# Tie-point registration\n\nTie-point registration is not reachable in this build.\n');
     expect(run('--docs', file).status).toBe(0);
@@ -179,8 +210,12 @@ describe('lint:capability-manifest', () => {
     expect(CURRENT_DOCS).toContain('README.md');
     expect(CURRENT_DOCS).toContain('docs/observatory/methods.md');
     expect(CURRENT_DOCS).toContain('src/observation/README.md');
+    for (const d of ['docs-site/index.md', 'docs-site/guide/user-guide.md', 'docs-site/reference/limitations.md',
+      'REVIEWER_QUICKSTART.md', 'ARTIFACT_EVALUATION.md', 'docs/architecture/architecture-map.md', 'docs/ux/PRINCIPLES.md']) {
+      expect(CURRENT_DOCS).toContain(d);
+    }
     for (const d of CURRENT_DOCS) {
-      expect(d.startsWith('docs/releases/') || d.startsWith('docs/release/') || d === 'CHANGELOG.md').toBe(false);
+      expect(['docs/releases/', 'docs/release/', 'docs-site/releases/'].some((p) => d.startsWith(p)) || d === 'CHANGELOG.md').toBe(false);
     }
   });
 

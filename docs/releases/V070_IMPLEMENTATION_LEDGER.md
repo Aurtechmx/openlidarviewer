@@ -8136,7 +8136,9 @@ and `scripts/check-no-dev-flags.mjs` on a fresh `npm run build:live`;
 `scripts/lint-capability-manifest.mjs` M7 reads an explicit list of current
 documents (`CURRENT_DOCS`), with release notes, the changelog and this ledger
 left out. A qualifier excuses a claim only in the same sentence, or in another
-sentence of the same paragraph that names the same hidden capability. M8 fails
+sentence of the same paragraph that names the same hidden capability. Each
+table row and list item is its own paragraph, and a negated qualifier does not
+count. M8 fails
 a listed document that does not exist. The stricter rule found two true
 violations, reworded here: `docs/architecture/continuity-bundle-strategy.md`
 and `validation/control-network/README.md`. The manifest lists station
