@@ -26,7 +26,7 @@ only the direct entry points.
 
 | Package | Declared range | Resolved | License | Upstream |
 | --- | --- | --- | --- | --- |
-| three | ^0.186.1 | 0.186.0 | MIT | https://github.com/mrdoob/three.js |
+| three | ^0.186.1 | 0.186.1 | MIT | https://github.com/mrdoob/three.js |
 | @loaders.gl/core | ^4.5.2 | 4.5.2 | MIT | https://github.com/visgl/loaders.gl |
 | @loaders.gl/gltf | ^4.5.2 | 4.5.2 | MIT | https://github.com/visgl/loaders.gl |
 | @loaders.gl/obj | ^4.5.2 | 4.5.2 | MIT | https://github.com/visgl/loaders.gl |
@@ -595,7 +595,7 @@ Licence: MIT. Text: T16.
 
 - Copyright (c) 2014, Mike Adair, Richard Greenwood, Didier Richard, Stephen Irons, Olivier Terral and Calvin Metcalf
 
-#### three 0.186.0
+#### three 0.186.1
 
 Licence: MIT. Text: T17.
 
@@ -1501,7 +1501,7 @@ Copyright (c) 2014, Mike Adair, Richard Greenwood, Didier Richard, Stephen Irons
 
 #### T17: MIT
 
-Applies to: three 0.186.0.
+Applies to: three 0.186.1.
 
 ```
 The MIT License

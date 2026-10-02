@@ -699,8 +699,8 @@
     {
       "type": "library",
       "name": "three",
-      "version": "0.186.0",
-      "bom-ref": "openlidarviewer@0.7.0-alpha.1|three@0.186.0",
+      "version": "0.186.1",
+      "bom-ref": "openlidarviewer@0.7.0-alpha.1|three@0.186.1",
       "author": "mrdoob",
       "description": "JavaScript 3D library",
       "licenses": [
@@ -711,7 +711,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/three@0.186.0",
+      "purl": "pkg:npm/three@0.186.1",
       "externalReferences": [
         {
           "url": "git+https://github.com/mrdoob/three.js.git",
@@ -729,12 +729,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/three/-/three-0.186.0.tgz",
+          "url": "https://registry.npmjs.org/three/-/three-0.186.1.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "72bfdf20cd9d74c4956d856091f0f88cb26fec587ff194e3be8fbb8107925465191f1a71f450f0a0be620bb854cff2e2440f3031ba9f9dbf74c4a7e6d7f1c791"
+              "content": "6e515ea9be3dc110921941a3ee0b697e74861f2da5c0393de11854992d5cfe14dbcbbd24bc285b5a9909e0f9b5dfdd0bab3cef4e6ce05ca1cf11a7c9c026fc8c"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -2084,7 +2084,7 @@
         "openlidarviewer@0.7.0-alpha.1|laz-perf@0.0.7",
         "openlidarviewer@0.7.0-alpha.1|pdf-lib@1.17.1",
         "openlidarviewer@0.7.0-alpha.1|proj4@2.22.0",
-        "openlidarviewer@0.7.0-alpha.1|three@0.186.0"
+        "openlidarviewer@0.7.0-alpha.1|three@0.186.1"
       ]
     },
     {
@@ -2160,7 +2160,7 @@
       ]
     },
     {
-      "ref": "openlidarviewer@0.7.0-alpha.1|three@0.186.0"
+      "ref": "openlidarviewer@0.7.0-alpha.1|three@0.186.1"
     },
     {
       "ref": "openlidarviewer@0.7.0-alpha.1|@loaders.gl/loader-utils@4.5.2",
