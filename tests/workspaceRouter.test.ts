@@ -189,3 +189,66 @@ describe('workspaceRouter', () => {
     expect(t.host.findAll((e) => e.hasClass('olv-ws-task'))).toHaveLength(1);
   });
 });
+
+describe('workspaceRouter direction marks and dispose', () => {
+  async function two() {
+    const { DesktopWorkspace } = await import('../src/ui/workspace/DesktopWorkspace');
+    const { createWorkspaceRouter } = await import('../src/app/workspace/workspaceRouter');
+    const ws = new DesktopWorkspace({ storage: new MemStore() });
+    const panels = { home: new FakeEl('section'), measure: new FakeEl('aside'), home2: new FakeEl('section'), classes: new FakeEl('div') };
+    ws.mountInMode('work', panels.home as unknown as HTMLElement);
+    ws.mountInMode('work', panels.measure as unknown as HTMLElement);
+    ws.mountInMode('data', panels.home2 as unknown as HTMLElement);
+    ws.mountInMode('data', panels.classes as unknown as HTMLElement);
+    const router = createWorkspaceRouter(ws, {
+      work: { measure: { title: 'Measure', element: () => panels.measure as unknown as HTMLElement } },
+      data: { classes: { title: 'Classes', element: () => panels.classes as unknown as HTMLElement } },
+    });
+    router.sync();
+    const work = ws.mode('work') as unknown as FakeEl;
+    const data = ws.mode('data') as unknown as FakeEl;
+    const marked = (h: FakeEl): boolean => h.hasClass('olv-ws-nav-forward') || h.hasClass('olv-ws-nav-back');
+    return { ws, router, work, data, marked };
+  }
+
+  it('a page change in a second mode clears the mark on the first host', async () => {
+    vi.useFakeTimers();
+    try {
+      const t = await two();
+      t.router.navigate({ mode: 'work', page: null });
+      t.router.navigate({ mode: 'work', page: 'measure' });
+      expect(t.marked(t.work)).toBe(true);
+      t.router.navigate({ mode: 'data', page: null });
+      t.router.navigate({ mode: 'data', page: 'classes' });
+      expect(t.marked(t.data)).toBe(true);
+      expect(t.marked(t.work)).toBe(false);
+      vi.advanceTimersByTime(400);
+      expect(t.marked(t.work)).toBe(false);
+      expect(t.marked(t.data)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('dispose during the entry transition removes marks and headers, and a second dispose does nothing', async () => {
+    vi.useFakeTimers();
+    try {
+      const t = await two();
+      t.router.navigate({ mode: 'work', page: null });
+      t.router.navigate({ mode: 'work', page: 'measure' });
+      expect(t.marked(t.work)).toBe(true);
+      t.router.dispose();
+      expect(t.marked(t.work)).toBe(false);
+      expect(t.work.find((e) => e.hasClass('olv-ws-task'))).toBeFalsy();
+      expect(vi.getTimerCount()).toBe(0);
+      t.router.dispose();
+      t.router.navigate({ mode: 'work', page: null });
+      t.router.sync();
+      vi.advanceTimersByTime(400);
+      expect(t.marked(t.work)).toBe(false);
+      expect(t.work.find((e) => e.hasClass('olv-ws-task'))).toBeFalsy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

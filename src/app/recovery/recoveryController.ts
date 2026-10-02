@@ -5,7 +5,8 @@
  * a few seconds after the last interaction and when the page is hidden. On
  * boot, a saved entry shows a small notice; once the user reopens a source,
  * the notice offers "Restore previous work" only if that source matches the
- * entry's fingerprint, and says the file differs otherwise. Restoring goes
+ * entry's fingerprint, and says the file differs otherwise. The journal keeps
+ * several sources; the newest entry for the reopened one is offered. Restoring goes
  * through the normal session import, which checks the match again.
  *
  * Storage failures turn the journal off and record why for Copy diagnostics.
@@ -16,7 +17,8 @@ import {
   buildEntry,
   createDebouncer,
   DEBOUNCE_MS,
-  entryMatchesSource,
+  isStale,
+  newestMatch,
   fingerprintKey,
   openRecoveryStore,
   pruneStale,
@@ -68,6 +70,13 @@ let activeHandle: RecoveryHandle | null = null;
 export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
   let store: RecoveryStore | null = null;
   let pending: RecoveryEntry | null = null;
+  // Fresh entries read on boot, newest first, not yet restored or discarded.
+  // Writes never replace or delete one of these, and pass their keys to the
+  // store so its count and byte caps never evict one.
+  let saved: RecoveryEntry[] = [];
+  const held = (key: string | null): boolean => saved.some((e) => e.key === key);
+  // A source finished opening. The store may still be opening.
+  let sourceOpen = false;
   let notice: HTMLElement | null = null;
   let off = false;
   // True while a restore runs, so a source that finishes loading meanwhile does not offer it again.
@@ -127,6 +136,7 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
   const invalidate = (): void => {
     generation += 1;
     pending = null;
+    saved = [];
     hideNotice();
   };
 
@@ -134,6 +144,7 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
     const e = pending;
     pending = null;
     hideNotice();
+    saved = saved.filter((x) => x !== e);
     if (e) enqueue(() => store?.remove(e.key).catch(() => disable('remove-failed')));
   };
 
@@ -191,15 +202,17 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
       if (built.skip === 'too-large') setRecoveryStatus(`on:${s.backend}:skipped-too-large`);
       // Work cleared on this source: drop its entry so an empty session is never offered.
       const key = built.skip === 'no-work' ? fingerprintKey(summaryOf(json)) : null;
-      if (key && key !== pending?.key) await s.remove(key).catch(() => {});
+      if (key && !held(key)) await s.remove(key).catch(() => {});
       return;
     }
     // Never overwrite work that is waiting to be restored or discarded.
-    if (built.entry.key === pending?.key) return;
+    if (held(built.entry.key)) return;
     try {
-      await s.put(built.entry);
+      await s.put(built.entry, saved.map((e) => e.key));
       setRecoveryStatus(`on:${s.backend}`);
     } catch (err) {
+      // The journal is full of work waiting to be restored: skip this write.
+      if (err instanceof Error && err.message === 'held-full') return setRecoveryStatus(`on:${s.backend}:skipped-full`);
       disable(`write-failed:${err instanceof Error ? err.name : 'error'}`);
     }
   };
@@ -228,11 +241,13 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
         // A clear asked for while the store was opening had nothing to delete yet.
         if (cleared) return void s.clear().catch(() => {});
         // Entries past the age limit are deleted before anything is offered.
-        const [latest] = await pruneStale(s, Date.now());
+        const fresh = await pruneStale(s, Date.now());
         // A clear during the prune deleted what it read.
-        if (latest && !off && !cleared) {
-          pending = latest;
-          offerReopen(latest);
+        if (fresh.length && !off && !cleared) {
+          saved = fresh;
+          pending = fresh[0];
+          if (sourceOpen) matchSource();
+          else offerReopen(fresh[0]);
         }
       })
       .catch(() => disable('storage-unavailable'));
@@ -245,6 +260,27 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
       ['Clear', clearAll, CLEAR_TIP],
     ]);
 
+  /** Offer the newest saved work for the open source, or say it differs. */
+  const matchSource = (): void => {
+    const gen = generation;
+    if (!saved.length || off) return;
+    void deps.serialize().then((json) => {
+      // Another load, a clear, Turn off or shutdown since: this answer is out of date.
+      if (gen !== generation || restoring || off || deps.lifetime.signal.aborted) return;
+      const now = Date.now();
+      const e = newestMatch(saved, json ? summaryOf(json) : undefined, now, matchSessionToScan);
+      const newest = saved.find((x) => !isStale(x, now));
+      pending = e ?? newest ?? null;
+      if (e) offerRestore(e);
+      else if (newest) {
+        showNotice(
+          `The open file differs from ${newest.fileName}, so the unsaved work (${describe(newest)}) was not restored. Open ${newest.fileName} to restore it.`,
+          [['Discard', discard, DISCARD_TIP], ['Clear', clearAll, CLEAR_TIP]],
+        );
+      } else hideNotice();
+    }, () => {});
+  };
+
   const restoreEntry = async (e: RecoveryEntry): Promise<void> => {
     hideNotice();
     // The entry stays pending, so no write can replace or delete it, until the
@@ -255,6 +291,7 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
     if (pending !== e) return;
     if (applied === true) {
       pending = null;
+      saved = saved.filter((x) => x !== e);
       hideNotice();
     } else offerRestore(e);
   };
@@ -262,22 +299,11 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
   activeHandle = {
     onSourceLoaded() {
       generation += 1;
-      const e = pending;
-      if (!e || off) return;
-      void deps.serialize().then((json) => {
-        if (pending !== e || restoring) return;
-        const loaded = json ? summaryOf(json) : undefined;
-        if (entryMatchesSource(e, loaded, matchSessionToScan)) {
-          offerRestore(e);
-        } else {
-          showNotice(
-            `The open file differs from ${e.fileName}, so the unsaved work (${describe(e)}) was not restored. Open ${e.fileName} to restore it.`,
-            [['Discard', discard, DISCARD_TIP], ['Clear', clearAll, CLEAR_TIP]],
-          );
-        }
-      }, () => {});
+      sourceOpen = true;
+      matchSource();
     },
     clear() {
+      sourceOpen = false;
       invalidate();
       debounce.cancel();
       void wipe()?.catch(() => {});

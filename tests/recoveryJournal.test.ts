@@ -9,8 +9,10 @@ import {
   MAX_ENTRIES,
   MAX_ENTRY_AGE_MS,
   isStale,
+  newestMatch,
   pruneStale,
   openRecoveryStore,
+  openIndexedDbStore,
   type RecoveryEntry,
 } from '../src/app/recovery/recoveryJournal';
 import { matchSessionToScan, serializeSession, type SessionScanSummary } from '../src/io/session';
@@ -247,5 +249,74 @@ describe('age limit', () => {
     expect(await pruneStale(store, now)).toEqual([fresh]);
     expect(isStale(stale, now)).toBe(true);
     expect(isStale(entry('future', now + DAY), now)).toBe(false);
+  });
+});
+
+describe('newestMatch', () => {
+  const other: SessionScanSummary = { fileName: 'other.ply', sourcePoints: 900, width: 10, depth: 10, height: 3 };
+  const at = (sum: SessionScanSummary, savedAt: number, n = 1): RecoveryEntry => {
+    const b = buildEntry(session({ scanSummary: sum, measurements: n }), savedAt);
+    if (!('entry' in b)) throw new Error('expected an entry');
+    return b.entry;
+  };
+  const now = 10 * MAX_ENTRY_AGE_MS;
+
+  it('finds the entry for the open source behind a newer one for another source', () => {
+    const a = at(summary, now - 2);
+    const b = at(other, now - 1);
+    expect(newestMatch([b, a], { ...summary }, now, matchSessionToScan)).toBe(a);
+    expect(newestMatch([b, a], { ...other }, now, matchSessionToScan)).toBe(b);
+  });
+
+  it('returns null when nothing matches, the match is weak, or the entry expired', () => {
+    const a = at(summary, now - 2);
+    expect(newestMatch([at(other, now)], { ...summary }, now, matchSessionToScan)).toBeNull();
+    expect(newestMatch([a], undefined, now, matchSessionToScan)).toBeNull();
+    expect(newestMatch([a], { ...summary, fileName: 'TINY.ply', sourcePoints: 11 }, now, matchSessionToScan)).toBeNull();
+    expect(newestMatch([a], { ...summary }, now - 2 + MAX_ENTRY_AGE_MS + 1, matchSessionToScan)).toBeNull();
+    const partial = () => ({ verdict: 'partial' as const, reasons: [] });
+    expect(newestMatch([a], { ...summary }, now, partial)).toBeNull();
+  });
+});
+
+/** A minimal IndexedDB: one object store keyed by `key`, requests settle on a microtask. */
+function fakeIdb(): IDBFactory {
+  const rows = new Map<string, RecoveryEntry>();
+  const request = <T>(run: () => T) => {
+    const r = { result: undefined as T | undefined, error: null, onsuccess: null as null | (() => void), onerror: null, onupgradeneeded: null };
+    queueMicrotask(() => { r.result = run(); r.onsuccess?.(); });
+    return r;
+  };
+  const objectStore = {
+    getAll: () => request(() => [...rows.values()]),
+    put: (e: RecoveryEntry) => request(() => { rows.set(e.key, e); }),
+    delete: (k: string) => request(() => { rows.delete(k); }),
+    clear: () => request(() => { rows.clear(); }),
+  };
+  const db = { objectStoreNames: { contains: () => true }, transaction: () => ({ objectStore: () => objectStore }) };
+  return { open: () => request(() => db) } as unknown as IDBFactory;
+}
+
+describe('eviction keeps entries waiting to be restored', () => {
+  const held = ['k0', 'k1', 'k2', 'k3', 'k4'];
+
+  it('IndexedDB: a sixth source never evicts a held entry', async () => {
+    const store = await openIndexedDbStore(fakeIdb());
+    for (const [i, k] of held.entries()) await store.put(entry(k, i));
+    await expect(store.put(entry('new', 100), held)).rejects.toThrow('held-full');
+    expect((await store.list()).map((e) => e.key).sort()).toEqual(held);
+    await store.put(entry('new', 100), held.slice(1));
+    expect((await store.list()).map((e) => e.key).sort()).toEqual(['k1', 'k2', 'k3', 'k4', 'new']);
+  });
+
+  it('localStorage: the byte cap drops unheld entries first and never a held one', async () => {
+    const store = createLocalStore(new MemStorage());
+    const part = 'x'.repeat(Math.floor(LOCAL_STORAGE_MAX_BYTES * 0.4));
+    await store.put(entry('held', 1, part));
+    await store.put(entry('free', 2, part));
+    await store.put(entry('new', 3, part), ['held']);
+    expect((await store.list()).map((e) => e.key)).toEqual(['new', 'held']);
+    await expect(store.put(entry('big', 4, 'x'.repeat(Math.floor(LOCAL_STORAGE_MAX_BYTES * 0.3))), ['held', 'new'])).rejects.toThrow('held-full');
+    expect((await store.list()).map((e) => e.key)).toEqual(['new', 'held']);
   });
 });

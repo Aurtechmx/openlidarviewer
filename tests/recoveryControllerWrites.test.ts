@@ -520,3 +520,145 @@ describe('a clear asked for before the journal is ready', () => {
     expect(app.noticeText()).toBe('Recovery data in this browser was deleted.');
   });
 });
+
+describe('reopening a source offers the newest saved work for that source', () => {
+  const OTHER_KEY = fingerprintKey(OTHER)!;
+  const at = (json: string, savedAt: number): RecoveryEntry => {
+    const built = buildEntry(json, savedAt);
+    if (!('entry' in built)) throw new Error('fixture has no work');
+    return built.entry;
+  };
+
+  it('save A then B, reopen A: offers A and keeps B', async () => {
+    const a = at(session(2), Date.now() - 2000);
+    const b = at(session(4, OTHER), Date.now() - 1000);
+    const s = fakeStore([b, a]);
+    const app = await start(s.store);
+    expect(app.noticeText()).toContain('other.las');
+
+    app.handle.onSourceLoaded();
+    app.snapshots[0].resolve(session(0));
+    await drain();
+    expect(app.noticeText()).toContain('This file matches your unsaved work: 2 measurements on site.las');
+
+    await app.click('Restore previous work');
+    app.restores[0].resolve(true);
+    await drain();
+    expect(s.entries.get(OTHER_KEY)).toBe(b);
+  });
+
+  it('a source with no saved work says the file differs', async () => {
+    const s = fakeStore([at(session(4, OTHER), Date.now())]);
+    const app = await start(s.store);
+    app.handle.onSourceLoaded();
+    app.snapshots[0].resolve(session(0));
+    await drain();
+    expect(app.noticeText()).toContain('The open file differs from other.las');
+    expect(app.buttons()).not.toContain('Restore previous work');
+  });
+
+  it('an entry that expired after boot is not offered', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(1_000_000_000_000);
+      const a = at(session(2), Date.now());
+      const s = fakeStore([a]);
+      const app = await start(s.store);
+      vi.setSystemTime(Date.now() + 8 * 24 * 60 * 60 * 1000);
+      app.handle.onSourceLoaded();
+      app.snapshots[0].resolve(session(0));
+      await drain();
+      expect(app.buttons()).not.toContain('Restore previous work');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a source that loads before the journal is ready is matched once it opens', async () => {
+    const a = at(session(2), Date.now() - 2000);
+    const s = fakeStore([at(session(4, OTHER), Date.now()), a]);
+    const opening = deferred<RecoveryStore>();
+    const app = await start(opening.promise);
+    app.handle.onSourceLoaded();
+    opening.resolve(s.store);
+    await drain();
+    app.snapshots.at(-1)!.resolve(session(0));
+    await drain();
+    expect(app.noticeText()).toContain('2 measurements on site.las');
+    expect(app.buttons()).toContain('Restore previous work');
+  });
+
+  it('opening B while A is still being matched shows the match for B', async () => {
+    const a = at(session(2), Date.now() - 2000);
+    const b = at(session(4, OTHER), Date.now() - 1000);
+    const s = fakeStore([b, a]);
+    const app = await start(s.store);
+    app.handle.onSourceLoaded();
+    app.handle.onSourceLoaded();
+    app.snapshots[1].resolve(session(0, OTHER));
+    await drain();
+    app.snapshots[0].resolve(session(0));
+    await drain();
+    expect(app.noticeText()).toContain('This file matches your unsaved work: 4 measurements on other.las');
+  });
+
+  it('a failed restore keeps the entry and Discard removes that entry and keeps B', async () => {
+    const a = at(session(2), Date.now() - 2000);
+    const b = at(session(4, OTHER), Date.now() - 1000);
+    const s = fakeStore([b, a]);
+    const app = await start(s.store);
+    app.handle.onSourceLoaded();
+    app.snapshots[0].resolve(session(0));
+    await drain();
+    await app.click('Restore previous work');
+    app.restores[0].resolve(false);
+    await drain();
+    expect(s.entries.get(SITE_KEY)).toBe(a);
+    await app.click('Discard');
+    expect(s.log).toEqual(['remove site.las']);
+    expect(s.entries.get(OTHER_KEY)).toBe(b);
+  });
+
+  it('writes on A never replace or delete the saved entry for A while B is the newest', async () => {
+    const a = at(session(2), Date.now() - 2000);
+    const s = fakeStore([at(session(4, OTHER), Date.now()), a]);
+    const app = await start(s.store);
+    app.handle.onSourceLoaded();
+    app.snapshots[0].resolve(session(0));
+    await drain();
+    await app.editAndHide();
+    app.snapshots.at(-1)!.resolve(session(0));
+    await drain();
+    expect(s.log).toEqual([]);
+    expect(s.entries.get(SITE_KEY)).toBe(a);
+  });
+});
+
+describe('a write for another source never evicts saved work', () => {
+  it('passes every entry waiting to be restored to the store, and a full journal skips the write', async () => {
+    const keys: RecoveryEntry[] = [];
+    for (let i = 0; i < 5; i++) {
+      keys.push(entryFor(session(1, { ...SITE, fileName: `s${i}.las` })));
+    }
+    const s = fakeStore(keys);
+    let passed: readonly string[] = [];
+    s.store.put = ((orig) => (e: RecoveryEntry, keep?: readonly string[]) => {
+      passed = keep ?? [];
+      if ((keep ?? []).length >= 5) { s.log.push('skipped'); return Promise.reject(new Error('held-full')); }
+      return orig(e, keep);
+    })(s.store.put.bind(s.store));
+    const app = await start(s.store);
+    app.handle.onSourceLoaded();
+    app.snapshots[0].resolve(session(0, OTHER));
+    await drain();
+    await app.editAndHide();
+    app.snapshots.at(-1)!.resolve(session(3, OTHER));
+    await drain();
+    expect([...passed].sort()).toEqual(keys.map((e) => e.key).sort());
+    expect(s.log).toContain('skipped');
+    expect(s.entries.size).toBe(5);
+    // A full journal is not a storage failure: later writes still go out.
+    await app.editAndHide();
+    expect(app.snapshots.length).toBeGreaterThan(2);
+  });
+});

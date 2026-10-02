@@ -29,3 +29,9 @@ describe('workspace shell session log route', () => {
     for (const before of uses) expect(before).toBe('settle(');
   });
 });
+
+describe('workspace shell router lifetime', () => {
+  it('disposes the router in a teardown', () => {
+    expect(SHELL).toMatch(/addTeardown\(\(\) => router\?\.dispose\(\)\)/);
+  });
+});

@@ -122,17 +122,18 @@ the two entries were renumbered when the branches were integrated.
 | L215 | ARCHITECTURE | TEST | med | FIXED | new | A heavy local LAS or LAZ that replaced an open COPC, EPT or 3D Tiles stream kept that stream's class tally, report cloud and confidence, so the class legend could merge counts across sources and the report could describe the previous source. |
 | L216 | ARCHITECTURE | TEST | med | FIXED | new | A heavy local LAS or LAZ that replaced an open COPC, EPT or 3D Tiles stream kept that stream's class tally, report cloud and confidence, so the class legend could merge counts across sources and the report could describe the previous source. |
 | L218 | ARCHITECTURE | TEST | med | FIXED | new | The capability lint let a qualifier anywhere in a document's first 15 lines excuse every claim in it, and the manifest listed live station suggestion under the hidden overlay. The release gates accepted a step that waited for its own group or a later member, and the runner then polled forever. |
+| L219 | ARCHITECTURE | TEST | med | FIXED | new | The workspace router kept one direction timer for every mode host, so a page change in a second mode within 400 ms left the first host's entry animation class in place, and the router had no dispose. Recovery compared a reopened source with the newest journal entry alone, so after work on A and then B, reopening A said it differed and never offered A's work. |
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 71
+- FIXED: 72
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 93
+- total: 94
 
 ## Detail
 
@@ -8153,6 +8154,26 @@ fails with a deadlock error naming each stuck step when nothing runs and
 nothing can start. The shipped `scripts/gates.json` lists the same order.
 
 Tests: `tests/capabilityManifestLint.test.ts`, `tests/gateSchedule.test.ts`.
+
+### L219 · FIXED · ARCHITECTURE
+
+`createWorkspaceRouter` in `src/app/workspace/workspaceRouter.ts` clears the
+direction classes on the host that holds them before it marks another, and its
+timer clears that host. `WorkspaceRouter.dispose` clears the timer and the
+marks, removes the task headers and stops later navigation and sync; a second
+call does nothing. `workspaceShell.ts` registers it as a teardown.
+
+`startRecovery` in `src/app/recovery/recoveryController.ts` keeps every fresh
+entry read on boot. When a source finishes opening, `newestMatch` in
+`recoveryJournal.ts` picks the newest fresh entry that passes
+`entryMatchesSource`, and that entry is offered. A source that opens before the
+store is ready is matched once it opens. A match is dropped when another load,
+a clear, Turn off or shutdown moves on first. Writes never replace or delete an
+entry that is still waiting to be restored or discarded. Discard removes the
+offered entry; Clear still deletes the whole journal.
+
+Tests: `tests/workspaceRouter.test.ts`, `tests/workspaceShellTeardown.test.ts`,
+`tests/recoveryControllerWrites.test.ts`, `tests/recoveryJournal.test.ts`.
 
 ### L216 · FIXED · ARCHITECTURE
 
