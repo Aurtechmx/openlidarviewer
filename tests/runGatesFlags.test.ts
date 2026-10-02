@@ -19,6 +19,13 @@ describe('run-gates flag checks', () => {
     expect(run('--stop-before=typecheck').status).toBe(2);
   });
 
+  it('lists without running a step in serial mode', () => {
+    const r = spawnSync(process.execPath, ['scripts/run-gates.mjs', '--serial', '--list'], { encoding: 'utf8', timeout: 10_000 });
+    expect(r.status).toBe(0);
+    expect(r.stdout).not.toContain('run-gates:');
+    expect(r.stdout.split('\n')[0]).toBe('typecheck');
+  });
+
   it('lists a known group', () => {
     const r = run('--only-group=static', '--jobs=4');
     expect(r.status).toBe(0);

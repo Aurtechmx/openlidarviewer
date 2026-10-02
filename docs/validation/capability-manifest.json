@@ -359,17 +359,30 @@
     },
     {
       "id": "observation-overlay",
-      "title": "Observation point overlay and scan-station suggestion",
+      "title": "Observation point overlay",
       "status": "hidden",
       "modules": [
-        "src/render/observation/ObservationPointOverlay.ts",
-        "src/observation/stationSuggestion.ts"
+        "src/render/observation/ObservationPointOverlay.ts"
       ],
       "docTerms": [
-        "station suggestion",
-        "suggested scan station",
-        "observation overlay"
+        "observation overlay",
+        "observation point overlay"
       ]
+    },
+    {
+      "id": "station-suggestion",
+      "title": "Suggested scan stations in the Observatory Planning section",
+      "status": "preview",
+      "modules": [
+        "src/observation/stationSuggestion.ts",
+        "src/observation/coverageGain.ts",
+        "src/ui/observatory/observatoryPanel.ts"
+      ],
+      "uiLabel": {
+        "file": "src/ui/observatory/observatoryPanel.ts",
+        "text": "Planning below suggests where another setup would see the most of what is hidden."
+      },
+      "note": "Shown inside the Observatory preview. Reachability is not checked: no ReachabilityProvider implementation exists."
     },
     {
       "id": "qa-service",

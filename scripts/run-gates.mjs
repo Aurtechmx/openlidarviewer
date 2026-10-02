@@ -26,7 +26,8 @@
 
 import { spawn } from 'node:child_process';
 import { availableParallelism } from 'node:os';
-import { ROOT, loadGates, directDeps } from './lib/gates.mjs';
+import { ROOT, loadGates } from './lib/gates.mjs';
+import { runSchedule } from './lib/gateScheduler.mjs';
 
 const TAIL_LINES = 40;
 // Lines collect-evidence.mjs reads from the gate log. A passing step's output
@@ -45,7 +46,13 @@ if (jobsOpt !== undefined && !/^[1-9]\d*$/.test(jobsOpt)) {
 }
 const jobs = serial ? 1 : Number(jobsOpt ?? Math.min(8, availableParallelism()));
 
-const gates = loadGates();
+let gates;
+try {
+  gates = loadGates();
+} catch (err) {
+  console.error(`run-gates: ${err.message}`);
+  process.exit(2);
+}
 let steps = gates.steps;
 
 const stopBefore = opt('stop-before');
@@ -75,22 +82,8 @@ if (flag('list')) {
   process.exit(0);
 }
 
-const included = new Set(steps.map((s) => s.script));
-/** script -> 'pending' | 'running' | 'passed' | 'failed' | 'skipped' */
-const state = new Map(steps.map((s) => [s.script, 'pending']));
-const results = new Map();
 const t0 = Date.now();
-
 const fmt = (ms) => `${(ms / 1000).toFixed(1)}s`;
-const done = (st) => st === 'passed' || st === 'failed' || st === 'skipped';
-
-/** Dependencies inside this run; ones filtered out by a flag are treated as met. */
-function depsOf(step, kind) {
-  const deps = kind === 'needs'
-    ? directDeps({ after: [], needs: step.needs }, gates)
-    : directDeps(step, gates);
-  return [...deps].filter((d) => included.has(d));
-}
 
 function runStep(step) {
   return new Promise((resolveStep) => {
@@ -119,46 +112,25 @@ async function main() {
   console.log(
     `run-gates: ${steps.length} step(s), ${serial ? 'serial (chain order)' : `parallel, ${jobs} job(s)`}`,
   );
-  const running = new Set();
-  await new Promise((finish) => {
-    const pump = () => {
-      // Serial mode walks the array strictly in order.
-      for (const step of steps) {
-        if (running.size >= jobs) break;
-        if (state.get(step.script) !== 'pending') continue;
-        const waits = depsOf(step, 'all');
-        if (!waits.every((d) => done(state.get(d)))) {
-          if (serial) break;
-          continue;
-        }
-        const failedNeed = depsOf(step, 'needs').find((d) => state.get(d) !== 'passed');
-        if (failedNeed !== undefined) {
-          state.set(step.script, 'skipped');
-          results.set(step.script, { code: null, ms: 0, output: `skipped: needs ${failedNeed}, which did not pass\n` });
-          console.log(`  SKIP ${step.script} (needs ${failedNeed})`);
-          continue;
-        }
-        state.set(step.script, 'running');
-        running.add(step.script);
-        runStep(step).then((r) => {
-          running.delete(step.script);
-          results.set(step.script, r);
-          state.set(step.script, r.code === 0 ? 'passed' : 'failed');
-          console.log(`  ${r.code === 0 ? 'ok  ' : 'FAIL'} ${step.script} ${fmt(r.ms)}${r.code === 0 ? '' : ` exit=${r.code}`}`);
-          for (const line of r.output.split('\n')) if (EVIDENCE_LINE.test(line)) console.log(line);
-          pump();
-        });
-        if (serial) break;
-      }
-      if (running.size === 0 && [...state.values()].every(done)) finish();
-      else if (running.size === 0) {
-        // Nothing running and nothing startable: only possible if pump skipped
-        // something above; loop again so skips propagate.
-        setImmediate(pump);
-      }
-    };
-    pump();
-  });
+  let outcome;
+  try {
+    outcome = await runSchedule({
+      steps,
+      gates,
+      jobs,
+      serial,
+      runStep,
+      onSkip: (step, need) => console.log(`  SKIP ${step.script} (needs ${need})`),
+      onDone: (step, r) => {
+        console.log(`  ${r.code === 0 ? 'ok  ' : 'FAIL'} ${step.script} ${fmt(r.ms)}${r.code === 0 ? '' : ` exit=${r.code}`}`);
+        for (const line of r.output.split('\n')) if (EVIDENCE_LINE.test(line)) console.log(line);
+      },
+    });
+  } catch (err) {
+    console.error(err.message);
+    process.exit(1);
+  }
+  const { state, results } = outcome;
 
   const failed = steps.filter((s) => state.get(s.script) !== 'passed');
   for (const s of failed) {

@@ -16,10 +16,7 @@ export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 export const MANIFEST = resolve(ROOT, 'scripts/gates.json');
 
 /**
- * Load the manifest and reject anything the runner could not schedule: an
- * unknown or duplicated script, a dependency that is not declared EARLIER in
- * the array (array order is the serial order, so it must be a valid schedule),
- * or a group reference that names no group.
+ * Load scripts/gates.json and check it with {@link validateGates}.
  *
  * @param {Record<string,string>} [scripts] package.json scripts, for the
  *   existence check; omitted, it is read from ROOT.
@@ -29,9 +26,28 @@ export function loadGates(scripts) {
   const raw = JSON.parse(readFileSync(MANIFEST, 'utf8'));
   const pkgScripts =
     scripts ?? JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')).scripts;
+  return validateGates(raw, pkgScripts);
+}
+
+/**
+ * Reject a manifest the runner could not schedule: an unknown or duplicated
+ * script, a group reference that names no group, or a dependency that is not
+ * an EARLIER step. Array order is the serial order, so every dependency must
+ * come before its dependent.
+ *
+ * The earlier-step check runs after `@group` is expanded with
+ * {@link directDeps}, the same expansion the scheduler and mustPrecede use. A
+ * step that waits for its own group, or for a group with a member at or after
+ * it, would otherwise wait on itself or form a cycle. Checking after the
+ * expansion also rejects every cycle, since a cycle needs a dependency on a
+ * step at or after its dependent.
+ *
+ * @param {{steps: Array<object>}} raw the parsed manifest
+ * @param {Record<string,string>} pkgScripts package.json scripts
+ */
+export function validateGates(raw, pkgScripts) {
   const problems = [];
   const seen = new Set();
-  const groups = new Set();
   const steps = raw.steps.map((s, i) => {
     const step = {
       script: s.script,
@@ -43,21 +59,35 @@ export function loadGates(scripts) {
     if (typeof step.script !== 'string') problems.push(`step ${i + 1} has no script`);
     else if (!(step.script in pkgScripts)) problems.push(`${step.script} is not a package.json script`);
     if (seen.has(step.script)) problems.push(`${step.script} is listed twice`);
-    for (const dep of [...step.after, ...step.needs]) {
-      if (dep.startsWith('@')) {
-        if (!groups.has(dep.slice(1))) problems.push(`${step.script} waits for group ${dep}, which no earlier step belongs to`);
-      } else if (!seen.has(dep)) {
-        problems.push(`${step.script} depends on ${dep}, which is not an earlier step`);
+    seen.add(step.script);
+    return step;
+  });
+  const gates = { steps };
+  const position = new Map(steps.map((s, i) => [s.script, i]));
+  const groups = new Set(steps.map((s) => s.group).filter(Boolean));
+  steps.forEach((step, i) => {
+    for (const ref of new Set([...step.after, ...step.needs])) {
+      const group = ref.startsWith('@') ? ref.slice(1) : null;
+      if (group !== null && !groups.has(group)) {
+        problems.push(`${step.script} waits for group ${ref}, which no step belongs to`);
+        continue;
+      }
+      if (group === null && !position.has(ref)) {
+        problems.push(`${step.script} depends on ${ref}, which is not a step`);
+        continue;
+      }
+      const via = group === null ? '' : ` through group ${ref}`;
+      for (const dep of directDeps({ after: [ref], needs: [] }, gates)) {
+        const at = position.get(dep);
+        if (dep === step.script) problems.push(`${step.script} depends on itself${via}`);
+        else if (at > i) problems.push(`${step.script} depends on ${dep}${via}, which is a later step`);
       }
     }
-    seen.add(step.script);
-    if (step.group) groups.add(step.group);
-    return step;
   });
   if (problems.length > 0) {
     throw new Error(`scripts/gates.json is not schedulable:\n  ${problems.join('\n  ')}`);
   }
-  return { steps };
+  return gates;
 }
 
 /** Script names in serial (`--serial`) order. */
