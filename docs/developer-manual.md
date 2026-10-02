@@ -71,8 +71,8 @@ Scan Intelligence report describes the dataset, and the result can be exported.
 |-------|--------|-----|
 | Language | TypeScript (strict) | Type safety across the IO, model, render, and UI layers. |
 | Build / dev | Vite 8 | Fast dev server, first-class Web Worker and WASM handling. |
-| Rendering | three.js 0.184 (`three/webgpu`, `three/tsl`) | WebGPU renderer with a built-in WebGL 2 fallback; `three/tsl` node graphs drive the point material and the Eye Dome Lighting post-processing pass on both backends. |
-| Parsing | loaders.gl (`las`, `ply`, `obj`, `gltf`) + `laz-perf` + a from-scratch E57 parser | Well-established open-source loaders; `laz-perf` WASM decodes LAZ; E57 is parsed by an in-repo TypeScript module set. |
+| Rendering | three.js 0.186 (`three/webgpu`, `three/tsl`) | WebGPU renderer with a built-in WebGL 2 fallback; `three/tsl` node graphs drive the point material and the Eye Dome Lighting post-processing pass on both backends. |
+| Parsing | loaders.gl (`ply`, `obj`, `gltf`) + `laz-perf` + in-repo LAS and E57 parsers | loaders.gl reads PLY, OBJ and glTF; LAS point records are decoded in-repo; `laz-perf` WASM decodes LAZ; E57 is parsed by an in-repo TypeScript module set. |
 | Unit tests | Vitest | Fast, ESM-native, Node environment for the algorithmic core. |
 | E2E tests | Playwright | Drives the built app in a real browser. |
 
@@ -328,13 +328,22 @@ A `?debug=1` URL parameter logs a per-stage load-timing breakdown (read, decode,
 
 ## 10. Quality gates (CI)
 
-`.github/workflows/ci.yml` runs on every push and pull request:
+`.github/workflows/ci.yml` runs on every pull request, every push to `main` and
+every release tag. The `ci-green` job is the required check, and it passes only
+when each of these jobs succeeds:
 
-- build-and-test: `npm ci` -> `npm run typecheck` -> `npm test` -> `npm run build`. The hard gate.
-- e2e: installs Chromium and runs `npm run test:e2e`. Advisory: it drives a headless browser, so a GPU-related failure is reported but does not block the build.
+- `verify`: typecheck, static lints and both build contracts.
+- `test`: the Vitest suite, sharded.
+- `smoke`: smoke tests of the built app in Chromium, at desktop and phone widths.
+- `e2e-deterministic`, `e2e-firefox`, `e2e-webkit`: Playwright suites.
+- `windows`: the Node and browser checks on a Windows runner.
+- `npm-audit`: `npm audit --omit=dev --audit-level=high` over the runtime
+  dependencies.
 
-Pre-merge checklist for any PR into `main`: all review threads resolved, the
-build-and-test job green, branch rebased on the latest `main`.
+`e2e-gpu` and `coverage` report results without blocking a merge.
+
+Pre-merge checklist for any PR into `main`: all review threads resolved,
+`ci-green` passing, branch rebased on the latest `main`.
 
 ---
 
@@ -382,9 +391,27 @@ matching `tests/myModule.test.ts`.
   the browser and are not uploaded: there is no backend to send them to.
 - No telemetry, no accounts. The network requests OpenLiDARViewer makes are:
   its own static assets; a remote dataset you open (fetched from that provider's
-  host); and the location search you initiate (Microsoft Planetary Computer).
-- Dependency surface is limited to three.js, loaders.gl, and `laz-perf`.
-  CI runs against pinned versions; `npm audit` is recommended before a release.
+  host); the location search you initiate (Microsoft Planetary Computer); and, when you
+  open a search result, a request to Planetary Computer's signing service with
+  that tile's address.
+- Runtime dependencies, as `package.json` lists them:
+
+  | Package | Role |
+  |---------|------|
+  | `three` | WebGPU and WebGL 2 rendering |
+  | `@loaders.gl/core` | Loader entry point for the loaders.gl parsers |
+  | `@loaders.gl/ply` | PLY parsing |
+  | `@loaders.gl/obj` | OBJ parsing |
+  | `@loaders.gl/gltf` | glTF and GLB parsing |
+  | `laz-perf` | LAZ decompression (WASM) |
+  | `pdf-lib` | PDF report rendering |
+  | `proj4` | Coordinate reprojection |
+  | `@fontsource/jetbrains-mono` | Monospace typeface |
+  | `@fontsource-variable/inter` | Listed, with no module importing it |
+
+- CI installs from the lockfile. `npm audit --omit=dev --audit-level=high`
+  runs on every pull request, every push to `main` and every release tag, and
+  `ci-green` requires it.
 
 ---
 

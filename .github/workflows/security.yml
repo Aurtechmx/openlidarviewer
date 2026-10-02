@@ -1,22 +1,14 @@
-# Security CI — dependency vulnerabilities.
-# Complements ci.yml (typecheck / build / tests, which already run the
-# unsafeHtml + bundle guards). Kept as a separate workflow so it can run on a
-# schedule and surface independently of the build matrix.
+# Security CI: scheduled dependency audit.
+# The same audit runs in ci.yml as the `npm-audit` job on every pull request,
+# every push to main and every release tag, and ci-green requires it. This
+# workflow repeats it weekly so a newly disclosed advisory in a pinned
+# dependency surfaces without a push.
 name: Security audit
 
 on:
-  push:
-    branches: ["**"]
-    # Tags too. The audit ran on every branch push and on a weekly schedule
-    # but not on the ref that actually gets published, so a tag could be cut
-    # and released without the production dependency tree ever being checked
-    # at that commit — the one moment the answer is load-bearing.
-    tags:
-      - 'v*'
-  pull_request:
   schedule:
-    # Weekly, so newly-disclosed CVEs in pinned deps surface even without a push.
     - cron: "0 6 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read

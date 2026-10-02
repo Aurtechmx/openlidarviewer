@@ -20,31 +20,33 @@ affected.
 
 ## Verifying what you received
 
-Commits on `main` are signed with an SSH key registered to the maintainer's
-GitHub account, so a commit carries evidence of who wrote it rather than only
-a name and address that anyone can set. To check one locally:
+Pull requests merge into `main` as squash commits that GitHub creates and
+signs with its web-flow key. GitHub shows a Verified badge beside each one. The
+signature records that GitHub made the merge commit; the author named on it is
+the pull request author. To check one locally:
 
 ```bash
+curl -s https://github.com/web-flow.gpg | gpg --import
 git verify-commit <sha>
 ```
-
-GitHub shows the same result as a Verified badge beside the commit. An
-unsigned commit, or one signed by a key the account does not hold, will not
-carry that badge.
 
 Release assets are verified as a set rather than one file at a time:
 
 ```bash
 shasum -a 256 -c SHA256SUMS
 npm run release:verify -- --dir <downloaded-assets>
+gh attestation verify <archive>.zip --repo Aurtechmx/openlidarviewer
 ```
 
 `release:verify` walks the chain the release manifest records, from the tag to
-the commit to each asset digest, and fails if any link disagrees. Release tags
-cannot be moved or deleted once published, so a published citation keeps
-pointing at the bytes it was issued against. If you are checking a release for
-the first time, run both commands: the checksums prove the files arrived
-intact, and `release:verify` proves they belong to the release they claim.
+the commit to each asset digest, and fails if any link disagrees. The checksums
+prove the files arrived intact, and `release:verify` proves they belong to the
+release they claim. The release workflow attests build provenance for each
+archive and for the SBOM through Sigstore, so `gh attestation verify` shows
+that an archive came from that workflow at the tagged commit. `SHA256SUMS` and
+the release manifest carry no signature of their own. Release tags cannot be
+moved or deleted once published, so a published citation keeps pointing at the
+bytes it was issued against.
 
 ## Local-first data handling
 
@@ -66,8 +68,11 @@ least-privilege `permissions`.
 
 ## Dependency and code scanning
 
-Every push and pull request runs software-composition analysis (`npm audit` over
-the runtime dependencies) and static analysis (CodeQL and SonarCloud). Findings
+Every pull request, every push to `main` and every release tag runs
+software-composition analysis (`npm audit --omit=dev --audit-level=high` over
+the runtime dependencies), and the required `ci-green` check fails on a high or
+critical advisory. The same audit runs weekly on a schedule. Static analysis
+(CodeQL and SonarCloud) runs on pull requests and on `main`. Findings
 are triaged: a High or Critical result is remediated, or documented as not
 exploitable, before the next release, and the maintainer does not cut a release
 with an open High or Critical dependency or code-scanning alert. Lower-severity

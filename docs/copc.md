@@ -48,7 +48,7 @@ requirements behind its "Connection requirements" disclosure.
 ## What arrives, and what does not
 
 Each decoded node carries position, intensity and classification, plus
-return number/count and GPS time; RGB and point-source id are used when every
+return number/count, GPS time and the classification flags byte; RGB and point-source id are used when every
 resident node carries them. A missing attribute degrades the related
 feature rather than failing the load: nothing assumes RGB or intensity
 exist. The CRS comes from the file's own metadata (WKT), with the same

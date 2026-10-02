@@ -8,10 +8,21 @@ your data.
 Files you open from your device are read and processed on your device. They
 are not uploaded to any server.
 
-## No analytics or telemetry
+## What leaves your device
 
 The app contains no analytics and no telemetry. It sends nothing about you or
-your use of it to the project or to anyone else.
+your use of it to the project or to anyone else. The network requests it makes
+are these:
+
+- the app's own files, from the site that serves it, and the full offline copy
+  if you ask for one;
+- a remote dataset or sample you open, from the server that hosts it;
+- a location search in the public LiDAR catalogue, sent to Microsoft Planetary
+  Computer, only when you run one, and, when you open a result, a request to
+  its signing service carrying that tile's address.
+
+The `?notelemetry=1` URL flag turns off the public LiDAR catalogue, including
+its location search.
 
 ## Browser storage
 
@@ -22,7 +33,7 @@ The app stores some data in your browser, on your device only:
   at once;
 - your preferences, such as theme, navigation and panel settings;
 - local usage counts, shown in the Session Stats panel and never sent anywhere
-  (the `?notelemetry=1` URL flag turns them off);
+  (the `?notelemetry=1` URL flag turns them off as well);
 - a cache of the app's own files, kept by its service worker so the app loads
   faster;
 - the full offline copy of the app, only if you choose to make it available
