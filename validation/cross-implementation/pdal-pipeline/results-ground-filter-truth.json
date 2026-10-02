@@ -27,7 +27,8 @@
       "elevationThresholdM": 0.5,
       "maxElevationThresholdM": 2.5,
       "floorPercentile": 5,
-      "verticalAxis": "z"
+      "verticalAxis": "z",
+      "note": "Evaluated at a 1 m cell. The app takes the cell size from each cloud's grid, and does not run the filter when a cloud already has usable class-2 ground."
     }
   },
   "legs": [

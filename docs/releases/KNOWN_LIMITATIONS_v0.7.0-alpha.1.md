@@ -116,8 +116,10 @@ They are not accuracy.
 shipped settings against the ground labels each scene was built with, and
 writes the figures to
 `validation/cross-implementation/pdal-pipeline/results-ground-filter-truth.json`.
-The shipped settings are window 8, slope 0.2, threshold 0.5 m, a 2.5 m cap and
-a 5th-percentile despike floor.
+In the table, shipped means window 8, slope 0.2, threshold 0.5 m, a 2.5 m cap
+and a 5th-percentile despike floor, at a 1 m cell. The app takes the cell size
+from each cloud's grid, and does not run the filter when a cloud already has
+usable class-2 ground.
 
 | Scene | Shipped recall / precision | Study recall / precision | PDAL recall / precision |
 | --- | --- | --- | --- |
@@ -131,14 +133,16 @@ The low-blunder scene holds 30 returns 4 m below the ground. With the despike
 floor off, each one sets the minimum of its cell. Opening removes peaks, not
 pits, so the surface stays down at the blunders and the true ground above it is
 rejected. Under the study settings the filter calls only the 30 blunders
-ground. The shipped 5th-percentile floor ignores them and keeps 98.6% of the
-ground.
+ground. The shipped 5th-percentile floor stops the blunders dragging the
+surface down, so 98.6% of the ground is kept, but the 30 blunders are still
+labelled ground.
 
 The remaining limit is curved terrain. The filter tests each return against an
 opened surface that cuts through convex ground, so ground on a curve is
 rejected. With the shipped settings the rolling scene keeps 69.0% of its
-ground. With the shipped settings, precision is at least 99.7% in every scene:
-the filter rejects ground, it does not invent it.
+ground. With the shipped settings, precision is 99.67% or higher on every
+scene, and the only false ground calls are the 30 low blunders on the
+low-blunder scene.
 
 The truth labels come from this project's own scene generator. Five synthetic
 scenes are not survey data, and these figures say nothing beyond them.

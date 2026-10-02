@@ -8,7 +8,9 @@
  *   slope 0.15, threshold 0.5 m, no cap, floorPercentile 0).
  * - `shipped`: classifyGroundSmrf with the settings the app runs
  *   (resolveGroundFilterParams in src/terrain/contour/analyseContours.ts:
- *   window 8, slope 0.2, threshold 0.5 m, cap 2.5 m, floorPercentile 5).
+ *   window 8, slope 0.2, threshold 0.5 m, cap 2.5 m, floorPercentile 5),
+ *   at a 1 m cell. The app takes the cell size from each cloud's grid, and
+ *   does not run the filter when a cloud already has usable class-2 ground.
  *
  * Ground is the positive class and the .truth file is the truth argument. The
  * truth labels come from this project's own generator, so this is E3.
@@ -122,7 +124,10 @@ writeFileSync(
       configurations: {
         pdal: 'PDAL filters.smrf output under pdal/, cell 1, window 16, slope 0.15, threshold 0.5, scalar 0, cut 0',
         study: { function: 'classifyGroundSmrf', ...CONFIGS.study, maxElevationThresholdM: 'Infinity' },
-        shipped: { function: 'classifyGroundSmrf', source: 'resolveGroundFilterParams defaults', ...CONFIGS.shipped },
+        shipped: { function: 'classifyGroundSmrf', source: 'resolveGroundFilterParams defaults',
+          ...CONFIGS.shipped,
+          note: "Evaluated at a 1 m cell. The app takes the cell size from each cloud's grid, and does not run the filter when a cloud already has usable class-2 ground.",
+        },
       },
       legs: scenes,
       boundaries: [
