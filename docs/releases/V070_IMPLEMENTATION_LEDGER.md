@@ -124,17 +124,18 @@ the two entries were renumbered when the branches were integrated.
 | L218 | ARCHITECTURE | TEST | med | FIXED | new | The capability lint let a qualifier anywhere in a document's first 15 lines excuse every claim in it, and the manifest listed live station suggestion under the hidden overlay. The release gates accepted a step that waited for its own group or a later member, and the runner then polled forever. |
 | L219 | ARCHITECTURE | TEST | med | FIXED | new | The workspace router kept one direction timer for every mode host, so a page change in a second mode within 400 ms left the first host's entry animation class in place, and the router had no dispose. Recovery compared a reopened source with the newest journal entry alone, so after work on A and then B, reopening A said it differed and never offered A's work. |
 | L217 | UI | TEST | med | FIXED | new | Below 1024 px the measure toolbar wrapped into a column taller than the stage: at 800 × 470 Distance sat out of reach and the toolbar ran into the state strip; at 768 × 1024 the hint was one word per line and Done sat under the View rail. The Navigation panel and the View rail opened over the scan, the location bar overlapped itself, and the landing mark sat under the header pill on short windows. |
+| L220 | UI | TEST | low | FIXED | new | With a scan open the side rails started at 56 px, under the 58 px lower edge of the location bar, so the workspace tabs touched it. Between 768 and 1023 px the bar clipped the current page to nothing. The page title was 14 px in the desktop rail and 11 px uppercase in the phone sheet. Status badges sat centred against a two-line name and used a 5 px radius outside the scale. Styles asked for weight 700, which Olv Font does not ship. The type scale comment listed sizes the tokens no longer have. |
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 73
+- FIXED: 74
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 95
+- total: 96
 
 ## Detail
 
@@ -8306,3 +8307,19 @@ location bar sit inside the viewport and clear of the side panels.
 `tests/e2e/responsiveLayout.spec.ts` checks the landing mark at 800 px wide
 and the hint and toast contrast in both themes. The phone J1 journey checks
 that the tool rail ends above the state strip.
+
+### L220 · FIXED · UI
+
+The side rails start one spacing step below the header row through
+`--olv-rail-top`, which follows the location bar height where the header holds
+it. Between 768 and 1023 px the location bar shows Back and the current page;
+the parent crumb stays in the DOM. The page title has one role, 600 weight at
+`--text-lg`, in the rail and in the phone sheet. Status badges align to the
+first line of their row and use `--radius-xs` and the spacing scale. Weight
+700 requests are 600, the heaviest Olv Font weight. The workspace tabs take
+`--control-h` with a 1.2 line height. The tokens sheet documents the type
+roles and control sizes.
+
+`tests/e2e/responsiveLayout.spec.ts` checks at 1280 × 720, 1023 × 768 and
+768 × 1024 that the tab strip and the View rail start below the location bar
+and that the bar keeps the current page visible.

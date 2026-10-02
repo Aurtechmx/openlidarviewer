@@ -117,34 +117,22 @@
   --space-3xl: 20px;
   --space-4xl: 24px;
 
-  /*
-   * Type scale — seven steps drawn from the most common existing
-   * font-sizes so the bulk of the UI maps onto a token with no
-   * change. The body of the interface lives at --text-xs (11px),
-   * the single most-used size, with smaller meta text at 10px and
-   * progressively larger steps for headings and display numbers.
-   *   --text-2xs 10  dense meta / captions
-   *   --text-xs  11  default UI text (most common)
-   *   --text-sm  12  comfortable body / labels
-   *   --text-md  13  emphasised body
-   *   --text-lg  14  sub-headings
-   *   --text-xl  16  section headings
-   *   --text-2xl 20  panel titles
-   *   --text-3xl 28  display figures
-   */
-  /* Type scale. Eight names, but only the DISTINCT values below are steps a
-   * reader can actually see. 10/11 differ by 1.10 and 12/13/14 by 1.08 — under
-   * the threshold of perception, so those were three names for one level, not
-   * three levels. Adjacent steps now differ by at least 1.14.
-   *
-   * 2xs and md are kept as ALIASES so ~150 call sites did not have to churn in
-   * a release branch; they resolve to the neighbouring real step. Prefer the
-   * canonical names in new code.
-   *
-   * Being fixed in steps: --text-body is the 12px the read-me side of the
-   * interface wants, and panel row VALUES now take it while their labels stay
-   * at 11px, so a number outranks the word naming it. Chips, badges, keycaps
-   * and table cells stay on the 11px floor, where a bump would overflow. */
+  /* Type scale. Only distinct values are steps a reader can see; adjacent
+   * steps differ by at least 1.14. --text-2xs and --text-md are aliases of
+   * their neighbours, kept for existing call sites; new code uses the
+   * canonical names. Roles:
+   *   --text-micro 10  keycaps and superscripts only
+   *   --text-xs    11  labels, badges, chips, table cells, helper text
+   *   --text-sm    12  body rows, controls (alias --text-body)
+   *   --text-lg    14  page title in the rail, emphasis (alias --text-md)
+   *   --text-xl    16  panel and dialog titles; --text-value, result values
+   *   --text-2xl   20  section headings, verdict figures
+   *   --text-3xl   28  display
+   * Olv Font ships 400, 500 and 600 only: 600 is the heaviest weight. */
+  /* Control sizes: equivalent controls share one height. 44px is the touch
+   * target for primary controls on coarse pointers. */
+  --control-h: 28px;
+  --target-touch: 44px;
   --text-body: 12px; /* readable body + panel row values */
   --text-2xs: 11px; /* alias of --text-xs */
   --text-xs: 11px; /* dense chips, badges, table cells */
@@ -322,6 +310,13 @@ body.olv-theme-high-contrast {
  * redefines it for the notch instead of overriding each surface's own `top`.
  */
 :root { --olv-lane-top: calc(56px + env(safe-area-inset-top)); }
+/* The top edge of the side rails, one step below the header row. Where the
+   header row holds the location bar (wayfinding.css), that row is the header's
+   14px top padding plus --loc-bar-h. */
+:root { --olv-rail-top: 56px; }
+@media (min-width: 768px) and (not ((max-height: 500px) and (pointer: coarse))) {
+  :root { --olv-rail-top: calc(14px + var(--loc-bar-h, 44px) + var(--space-md)); }
+}
 
 /*
  * v0.3.9 workflow recorder badge — fixed pill on the top edge of
@@ -1343,12 +1338,12 @@ body.olv-theme-light .olv-empty::before {
    collapsible surface; the panels flow inside it. */
 .olv-right-rail {
   position: absolute;
-  top: calc(56px + var(--olv-measure-bar-clear, 0px));
+  top: calc(var(--olv-rail-top) + var(--olv-measure-bar-clear, 0px));
   right: 14px;
   width: var(--olv-right-rail-width);
   /* End above the dock (its measured height, wireDockClearance) so the dock
      never sits over the rail's last controls. */
-  max-height: calc(100% - 56px - var(--olv-measure-bar-clear, 0px) - var(--olv-dock-clear, 24px));
+  max-height: calc(100% - var(--olv-rail-top) - var(--olv-measure-bar-clear, 0px) - var(--olv-dock-clear, 24px));
   display: flex;
   flex-direction: column;
   gap: var(--space-xl);
@@ -2422,7 +2417,7 @@ body.olv-theme-light .olv-empty::before {
   top: -22px;
   left: 50%;
   font-size: var(--text-2xs);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: rgba(0, 178, 255, 1);
@@ -4222,7 +4217,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
 .olv-anno-halo { fill: rgba(8, 13, 20, 0.82); }
 .olv-anno-disc { stroke: rgba(8, 13, 20, 0.9); stroke-width: 1; }
 .olv-anno-num {
-  font-size: var(--text-sm); font-weight: 700; user-select: none;
+  font-size: var(--text-sm); font-weight: 600; user-select: none;
 }
 /* Type colours — note (blue), info (cyan), warning (amber), issue (red). */
 .olv-anno-note .olv-anno-disc { fill: #5b9bd5; }
@@ -4332,7 +4327,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
   border-radius: var(--radius-md); padding: var(--space-md) var(--space-2xl);
 }
 .olv-anno-hint-badge {
-  font-size: var(--text-2xs); font-weight: 700; text-transform: uppercase;
+  font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.05em; color: var(--accent);
 }
 .olv-anno-hint-text { font-size: var(--text-sm); color: var(--text); }
@@ -4565,7 +4560,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
  * keeps both fully visible at every viewport width, including phones where
  * the wrapped toolbar is tall and spans the full row. */
 .olv-left-panels {
-  position: absolute; top: calc(56px + var(--olv-measure-bar-clear, 0px)); left: 14px;
+  position: absolute; top: calc(var(--olv-rail-top) + var(--olv-measure-bar-clear, 0px)); left: 14px;
   display: flex; flex-direction: column; gap: var(--space-md);
   max-height: calc(100% - 80px - var(--olv-measure-bar-clear, 0px)); overflow-y: auto;
   pointer-events: none;
@@ -4605,7 +4600,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
    wireDockClearance(); the 80px fallback preserves prior behaviour if it never fires. */
 .olv-left-panels {
   width: var(--olv-rail-width);
-  max-height: calc(100% - 56px
+  max-height: calc(100% - var(--olv-rail-top)
     - var(--olv-measure-bar-clear, 0px)
     - var(--olv-dock-clear, 80px));
   transition: transform var(--dur-slow) var(--ease-spring), opacity var(--dur-slow) var(--ease-standard);
@@ -5075,10 +5070,11 @@ body.olv-theme-light .olv-busy-scan--emblem {
   border: 0;
   background: transparent;
   color: var(--text-dim);
-  font: 500 var(--text-xs) / 1 var(--font);
+  min-height: var(--control-h);
+  font: 500 var(--text-xs) / 1.2 var(--font);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: var(--space-sm) var(--space-xs);
+  padding: var(--space-xs);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: color 160ms var(--ease-standard), background 160ms var(--ease-standard);
@@ -5180,12 +5176,11 @@ body.olv-theme-light .olv-busy-scan--emblem {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* The page title role, the same in the rail and in the phone sheet. */
 .olv-ws-task-title {
   margin: 0;
   color: var(--text);
-  font: 600 var(--text-xs) / 1.2 var(--font);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font: 600 var(--text-lg) / 1.25 var(--font);
 }
 
 /* Analyse home and task pages (src/app/workspace/analyseWorkspace.ts). The
@@ -5241,8 +5236,9 @@ body.olv-theme-light .olv-busy-scan--emblem {
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  padding: 0.05rem 0.5rem;
-  border-radius: 5px;
+  line-height: 1.4;
+  padding: 0 var(--space-md);
+  border-radius: var(--radius-xs);
   white-space: nowrap;
 }
 .olv-ah-badge.is-ready { background: var(--good-bg, rgba(52, 168, 83, 0.18)); color: var(--good, #6ee7a0); }
@@ -6735,7 +6731,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
 .olv-ap-badge {
   flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: var(--text-2xs); font-weight: 700;
+  font-size: var(--text-2xs); font-weight: 600;
 }
 .olv-ap-badge.olv-anno-note { background: #5b9bd5; color: #06121a; }
 .olv-ap-badge.olv-anno-info { background: #22dcff; color: #06121a; }
@@ -8259,7 +8255,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-fit-verdict.is-review { border-left-color: var(--warn); }
 .olv-fit-verdict-text { flex: 1 1 auto; min-width: 0; }
 .olv-fit-badge {
-  flex: 0 0 auto; font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.02em;
+  flex: 0 0 auto; font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em;
   color: var(--accent); background: var(--accent-soft);
   padding: 1px var(--space-xs); border-radius: var(--radius-sm);
 }
@@ -8409,7 +8405,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 }
 
 .olv-bc-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2xl); }
-.olv-bc-title { font-size: var(--text-xl); font-weight: 700; margin: 0; }
+.olv-bc-title { font-size: var(--text-xl); font-weight: 600; margin: 0; }
 .olv-bc-close {
   background: none; border: none; color: var(--text-dim); font-size: var(--text-lg);
   cursor: pointer; padding: var(--space-xs); border-radius: var(--radius-sm); line-height: 1;
@@ -8487,7 +8483,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 /* Single primary action; the hint sits beside it and turns muted-red when blocked. */
 .olv-bc-actions { display: flex; align-items: center; gap: var(--space-xl); margin-bottom: var(--space-2xl); flex-wrap: wrap; }
 .olv-bc-convert {
-  font: inherit; font-size: var(--text-md); font-weight: 700; color: #04121f;
+  font: inherit; font-size: var(--text-md); font-weight: 600; color: #04121f;
   background: var(--brand-gradient); border: none; border-radius: var(--radius-md);
   padding: var(--space-xl) var(--space-4xl); cursor: pointer;
   /* This CTA also carries `.olv-export-btn`, whose `flex: 1` is meant for the
@@ -8622,7 +8618,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-export-products-head {
   display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm);
   width: 100%; background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
-  font: inherit; font-size: var(--text-sm); font-weight: 700; color: var(--text);
+  font: inherit; font-size: var(--text-sm); font-weight: 600; color: var(--text);
   letter-spacing: 0.01em;
 }
 .olv-export-products-head:hover { color: var(--accent); }
@@ -8702,7 +8698,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em; color: var(--text-faint);
 }
 /* The hero word — large, the unmistakable focal point of the panel. */
-.olv-analyse-assess-verdict { font-size: var(--text-2xl); font-weight: 700; line-height: 1.05; letter-spacing: -0.01em; }
+.olv-analyse-assess-verdict { font-size: var(--text-2xl); font-weight: 600; line-height: 1.05; letter-spacing: -0.01em; }
 .olv-analyse-assess-reason { font-size: var(--text-xs); color: var(--text-dim); margin-top: var(--space-sm); overflow-wrap: anywhere; }
 .olv-analyse-assess-use { font-size: var(--text-xs); color: var(--text-faint); margin-top: 3px; }
 .olv-analyse-assess-caution { font-size: var(--text-xs); color: var(--text-faint); margin-top: var(--space-2xs); }
@@ -8763,7 +8759,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-assess-export-label {
   font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em; color: var(--text-faint);
 }
-.olv-analyse-assess-export-verdict { font-size: var(--text-sm); font-weight: 700; }
+.olv-analyse-assess-export-verdict { font-size: var(--text-sm); font-weight: 600; }
 .olv-analyse-assess-export-reason { font-size: var(--text-xs); color: var(--text-dim); overflow-wrap: anywhere; }
 .olv-analyse-assess-export.is-good .olv-analyse-assess-export-verdict { color: var(--rating-excellent); }
 .olv-analyse-assess-export.is-preview .olv-analyse-assess-export-verdict { color: var(--rating-moderate); }
@@ -8869,7 +8865,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-workflow-list { display: flex; flex-direction: column; gap: var(--space-2xs); }
 .olv-analyse-workflow-row { display: flex; align-items: baseline; gap: var(--space-sm); }
 .olv-analyse-workflow-glyph {
-  flex: 0 0 auto; width: 1em; text-align: center; font-weight: 700; line-height: 1;
+  flex: 0 0 auto; width: 1em; text-align: center; font-weight: 600; line-height: 1;
 }
 .olv-analyse-workflow-main {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-xs); min-width: 0;
@@ -8906,7 +8902,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   display: grid; grid-template-columns: 1em auto 1fr;
   align-items: baseline; column-gap: var(--space-sm); min-width: 0;
 }
-.olv-analyse-product-glyph { text-align: center; font-weight: 700; line-height: 1; }
+.olv-analyse-product-glyph { text-align: center; font-weight: 600; line-height: 1; }
 .olv-analyse-product-label { font-size: var(--text-xs); color: var(--text-dim); white-space: nowrap; }
 .olv-analyse-product-status {
   font-size: var(--text-2xs); font-weight: 600;
@@ -9029,7 +9025,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 
 .olv-analyse-score { margin-bottom: var(--space-xl); }
 .olv-analyse-score-head { display: flex; align-items: baseline; gap: var(--space-sm); margin-bottom: var(--space-md); }
-.olv-analyse-score-num { font-size: var(--text-2xl); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.olv-analyse-score-num { font-size: var(--text-2xl); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
 .olv-analyse-score-num.is-excellent { color: var(--rating-excellent); }
 .olv-analyse-score-num.is-good { color: var(--rating-good); }
 .olv-analyse-score-num.is-fair { color: var(--rating-moderate); }
@@ -9108,7 +9104,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   margin-top: var(--space-lg);
 }
 .olv-analyse-layer-head {
-  font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.02em; color: var(--text-faint);
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em; color: var(--text-faint);
 }
 .olv-analyse-layer-row { display: flex; align-items: center; gap: var(--space-lg); flex-wrap: wrap; }
 .olv-analyse-layer-toggle {
@@ -10188,7 +10184,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-ta-form-blocked { color: var(--state-review); }
 .olv-lab-readiness, .olv-lab-legend { display: flex; flex-direction: column; gap: var(--space-xs); margin: 0; padding: 0; list-style: none; font-size: var(--text-xs); }
 .olv-lab-legend { flex-direction: row; flex-wrap: wrap; column-gap: var(--space-lg); color: var(--text-dim); }
-.olv-lab-ready-glyph { display: inline-block; width: 1.2em; font-weight: 700; }
+.olv-lab-ready-glyph { display: inline-block; width: 1.2em; font-weight: 600; }
 .olv-lab-ready.is-met .olv-lab-ready-glyph { color: var(--state-measured); }
 .olv-lab-ready.is-missing .olv-lab-ready-glyph { color: var(--state-blocked); }
 .olv-lab-ready.is-partial .olv-lab-ready-glyph { color: var(--state-review); }
@@ -10344,7 +10340,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-cs-body { display: flex; flex-direction: column; gap: 16px; }
 .olv-cs-section-head {
   font-size: var(--text-2xs);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--text-faint);
   margin-bottom: 8px;
@@ -10425,7 +10421,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   width: 18px; height: 18px;
   border-radius: 50%;
   font-size: var(--text-xs);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-faint);
   background: var(--panel-recessive);
   border: 1px solid var(--hairline);
@@ -10440,7 +10436,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 /* Launcher eyebrow label ("Terrain Products") sits above the title */
 .olv-contour-launcher-head {
   font-size: var(--text-2xs);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--accent);
   margin-bottom: 2px;
@@ -10476,7 +10472,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-cs-ladder-claim.is-blocked { border-left-color: var(--rating-blocked, #d24b4b); }
 .olv-cs-ladder-claim-label {
   font-size: var(--text-2xs);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.8px;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -10745,7 +10741,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 /* Name and status badge share one line; the reason sits beneath, one
  * disclosure away. */
 .olv-ps-line {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: first baseline; justify-content: space-between;
   gap: var(--space-sm);
 }
 /* Compact by default: the reason lives in a native <details>, so a dozen
@@ -10753,6 +10749,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
  * the name+badge line; keyboard toggles it (Enter/Space) and a screen reader
  * announces the expanded reason — reachable without hover, unlike the old
  * measure-bar-scoped data-tip. */
+.olv-ps-line > .olv-ps-name { min-width: 0; }
 .olv-ps-verdict > summary {
   list-style: none;
   cursor: pointer;
@@ -10786,8 +10783,8 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 .olv-ps-blocked .olv-ps-reason, .olv-ps-block .olv-ps-reason { border-left-color: var(--bad, #f08a92); }
 .olv-ps-badge {
   font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em;
-  font-weight: 600; padding: 0.05rem 0.5rem; border-radius: 5px;
-  white-space: nowrap;
+  font-weight: 600; line-height: 1.4; padding: 0 var(--space-md); border-radius: var(--radius-xs);
+  white-space: nowrap; flex: none;
 }
 .olv-ps-ready .olv-ps-badge, .olv-ps-pass .olv-ps-badge {
   background: var(--good-bg, rgba(52, 168, 83, 0.18)); color: var(--good, #6ee7a0);
@@ -11882,11 +11879,6 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   .olv-left-panels .olv-ws-back {
     min-height: 44px;
     padding: var(--space-xs) var(--space-sm) var(--space-xs) 0;
-  }
-  .olv-left-panels .olv-ws-task-title {
-    font: 600 var(--text-lg) / 1.25 var(--font);
-    letter-spacing: 0;
-    text-transform: none;
   }
 
   /* A panel whose own title repeats the page title: the task header already

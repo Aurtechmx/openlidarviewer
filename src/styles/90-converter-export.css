@@ -35,7 +35,7 @@
 }
 
 .olv-bc-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2xl); }
-.olv-bc-title { font-size: var(--text-xl); font-weight: 700; margin: 0; }
+.olv-bc-title { font-size: var(--text-xl); font-weight: 600; margin: 0; }
 .olv-bc-close {
   background: none; border: none; color: var(--text-dim); font-size: var(--text-lg);
   cursor: pointer; padding: var(--space-xs); border-radius: var(--radius-sm); line-height: 1;
@@ -113,7 +113,7 @@
 /* Single primary action; the hint sits beside it and turns muted-red when blocked. */
 .olv-bc-actions { display: flex; align-items: center; gap: var(--space-xl); margin-bottom: var(--space-2xl); flex-wrap: wrap; }
 .olv-bc-convert {
-  font: inherit; font-size: var(--text-md); font-weight: 700; color: #04121f;
+  font: inherit; font-size: var(--text-md); font-weight: 600; color: #04121f;
   background: var(--brand-gradient); border: none; border-radius: var(--radius-md);
   padding: var(--space-xl) var(--space-4xl); cursor: pointer;
   /* This CTA also carries `.olv-export-btn`, whose `flex: 1` is meant for the
@@ -248,7 +248,7 @@
 .olv-export-products-head {
   display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm);
   width: 100%; background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
-  font: inherit; font-size: var(--text-sm); font-weight: 700; color: var(--text);
+  font: inherit; font-size: var(--text-sm); font-weight: 600; color: var(--text);
   letter-spacing: 0.01em;
 }
 .olv-export-products-head:hover { color: var(--accent); }

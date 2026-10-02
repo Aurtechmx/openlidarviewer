@@ -464,7 +464,7 @@
 .olv-ta-form-blocked { color: var(--state-review); }
 .olv-lab-readiness, .olv-lab-legend { display: flex; flex-direction: column; gap: var(--space-xs); margin: 0; padding: 0; list-style: none; font-size: var(--text-xs); }
 .olv-lab-legend { flex-direction: row; flex-wrap: wrap; column-gap: var(--space-lg); color: var(--text-dim); }
-.olv-lab-ready-glyph { display: inline-block; width: 1.2em; font-weight: 700; }
+.olv-lab-ready-glyph { display: inline-block; width: 1.2em; font-weight: 600; }
 .olv-lab-ready.is-met .olv-lab-ready-glyph { color: var(--state-measured); }
 .olv-lab-ready.is-missing .olv-lab-ready-glyph { color: var(--state-blocked); }
 .olv-lab-ready.is-partial .olv-lab-ready-glyph { color: var(--state-review); }

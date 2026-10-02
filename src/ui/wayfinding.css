@@ -38,6 +38,9 @@
    location bar has room. */
 @media (min-width: 768px) and (max-width: 1023px) {
   .olv-topbar:has(.olv-loc:not([hidden], .is-mode-home)) .olv-badge { font-size: 0; gap: 0; }
+  /* Back already names the level above, so the bar keeps Back and the current
+     page, which no longer gets clipped to nothing. */
+  .olv-topbar > .olv-loc > .olv-loc-back:not([hidden]) + .olv-loc-crumbs > li:not(:last-child) { display: none; }
 }
 .olv-loc-crumbs {
   display: flex;

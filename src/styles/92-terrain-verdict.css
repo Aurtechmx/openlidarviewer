@@ -31,7 +31,7 @@
   font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em; color: var(--text-faint);
 }
 /* The hero word — large, the unmistakable focal point of the panel. */
-.olv-analyse-assess-verdict { font-size: var(--text-2xl); font-weight: 700; line-height: 1.05; letter-spacing: -0.01em; }
+.olv-analyse-assess-verdict { font-size: var(--text-2xl); font-weight: 600; line-height: 1.05; letter-spacing: -0.01em; }
 .olv-analyse-assess-reason { font-size: var(--text-xs); color: var(--text-dim); margin-top: var(--space-sm); overflow-wrap: anywhere; }
 .olv-analyse-assess-use { font-size: var(--text-xs); color: var(--text-faint); margin-top: 3px; }
 .olv-analyse-assess-caution { font-size: var(--text-xs); color: var(--text-faint); margin-top: var(--space-2xs); }
@@ -92,7 +92,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-assess-export-label {
   font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em; color: var(--text-faint);
 }
-.olv-analyse-assess-export-verdict { font-size: var(--text-sm); font-weight: 700; }
+.olv-analyse-assess-export-verdict { font-size: var(--text-sm); font-weight: 600; }
 .olv-analyse-assess-export-reason { font-size: var(--text-xs); color: var(--text-dim); overflow-wrap: anywhere; }
 .olv-analyse-assess-export.is-good .olv-analyse-assess-export-verdict { color: var(--rating-excellent); }
 .olv-analyse-assess-export.is-preview .olv-analyse-assess-export-verdict { color: var(--rating-moderate); }
@@ -198,7 +198,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-workflow-list { display: flex; flex-direction: column; gap: var(--space-2xs); }
 .olv-analyse-workflow-row { display: flex; align-items: baseline; gap: var(--space-sm); }
 .olv-analyse-workflow-glyph {
-  flex: 0 0 auto; width: 1em; text-align: center; font-weight: 700; line-height: 1;
+  flex: 0 0 auto; width: 1em; text-align: center; font-weight: 600; line-height: 1;
 }
 .olv-analyse-workflow-main {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-xs); min-width: 0;
@@ -235,7 +235,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   display: grid; grid-template-columns: 1em auto 1fr;
   align-items: baseline; column-gap: var(--space-sm); min-width: 0;
 }
-.olv-analyse-product-glyph { text-align: center; font-weight: 700; line-height: 1; }
+.olv-analyse-product-glyph { text-align: center; font-weight: 600; line-height: 1; }
 .olv-analyse-product-label { font-size: var(--text-xs); color: var(--text-dim); white-space: nowrap; }
 .olv-analyse-product-status {
   font-size: var(--text-2xs); font-weight: 600;
@@ -358,7 +358,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 
 .olv-analyse-score { margin-bottom: var(--space-xl); }
 .olv-analyse-score-head { display: flex; align-items: baseline; gap: var(--space-sm); margin-bottom: var(--space-md); }
-.olv-analyse-score-num { font-size: var(--text-2xl); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.olv-analyse-score-num { font-size: var(--text-2xl); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
 .olv-analyse-score-num.is-excellent { color: var(--rating-excellent); }
 .olv-analyse-score-num.is-good { color: var(--rating-good); }
 .olv-analyse-score-num.is-fair { color: var(--rating-moderate); }
@@ -437,7 +437,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   margin-top: var(--space-lg);
 }
 .olv-analyse-layer-head {
-  font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.02em; color: var(--text-faint);
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em; color: var(--text-faint);
 }
 .olv-analyse-layer-row { display: flex; align-items: center; gap: var(--space-lg); flex-wrap: wrap; }
 .olv-analyse-layer-toggle {

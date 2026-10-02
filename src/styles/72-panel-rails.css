@@ -19,7 +19,7 @@
    wireDockClearance(); the 80px fallback preserves prior behaviour if it never fires. */
 .olv-left-panels {
   width: var(--olv-rail-width);
-  max-height: calc(100% - 56px
+  max-height: calc(100% - var(--olv-rail-top)
     - var(--olv-measure-bar-clear, 0px)
     - var(--olv-dock-clear, 80px));
   transition: transform var(--dur-slow) var(--ease-spring), opacity var(--dur-slow) var(--ease-standard);

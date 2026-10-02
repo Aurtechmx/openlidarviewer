@@ -27,12 +27,12 @@
    collapsible surface; the panels flow inside it. */
 .olv-right-rail {
   position: absolute;
-  top: calc(56px + var(--olv-measure-bar-clear, 0px));
+  top: calc(var(--olv-rail-top) + var(--olv-measure-bar-clear, 0px));
   right: 14px;
   width: var(--olv-right-rail-width);
   /* End above the dock (its measured height, wireDockClearance) so the dock
      never sits over the rail's last controls. */
-  max-height: calc(100% - 56px - var(--olv-measure-bar-clear, 0px) - var(--olv-dock-clear, 24px));
+  max-height: calc(100% - var(--olv-rail-top) - var(--olv-measure-bar-clear, 0px) - var(--olv-dock-clear, 24px));
   display: flex;
   flex-direction: column;
   gap: var(--space-xl);
