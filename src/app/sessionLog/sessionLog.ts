@@ -159,18 +159,22 @@ function trimTail(m: string): [string, string] {
 
 // One pass, so a replacement is never scanned again. Groups, in order:
 // 1 an opaque link (data:, blob:, mailto:, javascript: and the like), 2 a link
-// with a scheme, which runs on past a space to a word that holds `/` or `=`,
-// with up to three plain words between, 3 the folders of a
+// with a scheme, which runs on past a space, over up to three plain words, to a
+// word that holds a query (`?` or `=`) or ends a path in a file name with an
+// extension, 3 the folders of a
 // Windows drive path (either slash), 4 the folders of a UNC path, 5 the folders
 // of a home-relative path, 6 the character before a POSIX path and 7 that
 // path's folders. A folder name may hold single spaces. Every quantifier is
 // bounded by the next separator, so a crafted line costs linear time.
 const WIN_SEG = String.raw`[^\\/\s:*?"<>|]+(?: [^\\/\s:*?"<>|]+)*`;
 const POSIX_SEG = String.raw`[^/\s"'<>]+(?: [^/\s"'<>]+)*`;
+// A word after a space that still belongs to a link: a query, or a path whose
+// last segment is a file name with an extension.
+const LINK_TAIL = String.raw`[^\s"'<>]*(?:\?[^\s"'<>]|=|\/[^\s"'<>/]*\.[a-z0-9]{1,8}[.,;:!)\]]*(?=[\s"'<>]|$))[^\s"'<>]*`;
 const PATH_PATTERN = new RegExp(
   [
     String.raw`(\b(?:data|blob|mailto|javascript|vbscript|tel|sms):[^\s"'<>]+)`,
-    String.raw`(\b[a-z][a-z0-9+.-]{0,31}:\/\/[^\s"'<>]+(?:(?: [^\s"'<>/=]+){0,3} [^\s"'<>/=]*[/=][^\s"'<>]*)*)`,
+    String.raw`(\b[a-z][a-z0-9+.-]{0,31}:\/\/[^\s"'<>]+(?:(?: [^\s"'<>/=]+){0,3} ${LINK_TAIL})*)`,
     String.raw`(\b[a-z]:[\\/](?:${WIN_SEG}[\\/])*)`,
     String.raw`(\\\\(?:${WIN_SEG}[\\/])+)`,
     String.raw`(~[\\/](?:${POSIX_SEG}[\\/])*)`,

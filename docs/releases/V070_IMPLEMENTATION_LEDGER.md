@@ -115,19 +115,20 @@ the two entries were renumbered when the branches were integrated.
 | L211 | ARCHITECTURE | TEST | high | FIXED | new | With no origin allow-list, any page that framed the viewer could move the camera, toggle layers and focus annotations, and the ready message went to any parent; index.html carried no CSP of its own and style-src allowed inline styles; COPC hierarchy pages, key depth and node totals had no ceiling; recovery entries were capped only on write; parse worker messages were read without a shape check. |
 | L212 | ARCHITECTURE | TEST | low | FIXED | new | Static analysis on main reported a constructor that started an async load, promises left floating, async functions with no await, shared object-literal defaults, a rejection with a non-Error value, assertions outside a test, tests with no assertion and stub methods with no body. |
 | L207 | DOCS | READ | med | FIXED | new | Release documents disagreed with the tree: COPC and EPT were said to produce no classification flags, the Withheld policy listed the polygon volume as reading every point, the developer manual named three runtime dependencies of ten, SECURITY.md described maintainer-signed commits on `main`, PRIVACY.md did not list the requests the app makes, the layer contract was unstated, and the production audit ran outside `ci-green`. |
+| L214 | UI | TEST | low | FIXED | new | A workflow recording stopped taking events at 10,000 with no notice; no check compared the built index.html styles with the CSP hashes; the session log redacted plain words after a link, such as "from a 1/2 tile"; a throw while opening the Session log page from the Data home escaped the router; the `needs` comment on Analyse rows overstated what it meant. |
 
 | L213 | PERFORMANCE | TEST | med | FIXED | new | The live build's index chunk sat at 783 of 795 KiB and Viewer at 715 of 716 KiB. Most of that was the source transform: base64 string tables, a rotation call that kept every transformed module from being tree-shaken, and the literals of build-time-disabled branches. Those literals also reached the shipped table, encoded, so the test-seam and dev-flag gates could not see them. |
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 66
+- FIXED: 67
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 88
+- total: 89
 
 ## Detail
 
@@ -8176,3 +8177,26 @@ static layers.
 
 `ci.yml` gains an `npm-audit` job (`npm audit --omit=dev --audit-level=high`)
 in `ci-green`'s `needs`; `security.yml` keeps the weekly scheduled run.
+
+### L214 · FIXED · UI
+
+Workflow cap notice, built CSP check, link redaction, Session log route.
+
+- `WorkflowSession.push` returns false once the recording holds
+  `MAX_WORKFLOW_EVENTS`. `WorkflowController` then shows one toast, and the
+  recording still saves with the events it took.
+- `scripts/check-built-csp.mjs` (`npm run check:built-csp`, run in CI after
+  `build:live`) hashes each inline `<style>` in `dist/index.html` and checks
+  the hash against `style-src` in `index.html`, `public/_headers` and
+  `public/.htaccess`.
+- `redactPaths` continues a link past a space only to a word that holds a
+  query or ends in a file name with an extension. "from a 1/2 tile" after a
+  link is kept.
+- The Data home opens the Session log page through the `help.session-log`
+  action, so a throw in mount or navigate goes through `settle` and the
+  action's notice.
+- The `needs` comment in `src/process/analysisStatus.ts` states that it
+  names the first remedy the app can apply.
+
+Tests: `tests/workflowRecorderCap.test.ts`, `tests/builtCspStyle.test.ts`,
+`tests/sessionLog.test.ts`, `tests/workspaceShellTeardown.test.ts`.

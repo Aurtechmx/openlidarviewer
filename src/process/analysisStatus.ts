@@ -54,9 +54,10 @@ export interface AnalysisRow {
    */
   readonly remedy: AnalysisRemedy | null;
   /**
-   * On a blocked row whose only gap is a routine missing prerequisite: what
-   * the step needs, shown in place of the Blocked badge. The verdict stays
-   * blocked; only its label changes.
+   * On a blocked row: the prerequisite named by the first remedy the app can
+   * apply (or a loaded scan when none is open), shown in place of the Blocked
+   * badge. Other gaps may remain. The verdict stays blocked; only its label
+   * changes.
    */
   readonly needs?: string;
 }

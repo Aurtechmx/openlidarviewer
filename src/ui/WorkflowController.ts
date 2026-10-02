@@ -123,7 +123,11 @@ export class WorkflowController {
   private readonly _badgeStop: HTMLButtonElement;
   private _onStateChange: ((state: WorkflowControllerState) => void) | null = null;
 
-  constructor() {
+  private readonly _toast: ((message: string) => void) | undefined;
+
+  /** `toast` shows the one notice when a recording reaches the event limit. */
+  constructor(toast?: (message: string) => void) {
+    this._toast = toast;
     this._badgeLabel = el('span', { className: 'olv-workflow-badge-label' });
     this._badgeStop = el('button', {
       className: 'olv-workflow-badge-stop',
@@ -221,7 +225,7 @@ export class WorkflowController {
     if (this._state !== 'recording' || !this._session) return;
     // Honour the capture scope — a family the user switched off is not recorded.
     if (!this._config.capture[eventFamily(event.type)]) return;
-    this._session.push(event);
+    if (this._session.push(event) === 1) this._toast?.('Workflow · recording full at 10,000 events. Stop to save it.');
   }
 
   /**

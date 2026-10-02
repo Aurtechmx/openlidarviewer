@@ -133,6 +133,8 @@ describe('session log store', () => {
     ['Get https://h.com/my folder/SECRETDIR/f.laz tail', 'Get https://h.com/…/f.laz tail'],
     ['Get https://h.com/a key=SECRET/f.laz', 'Get https://h.com/…/f.laz'],
     ['Get https://h.com/x/eyJhbGciOi.eyJzdWIi.c2ln.laz ok', 'Get https://h.com/… ok'],
+    ['Opened https://h.com/x.laz from a 1/2 tile', 'Opened https://h.com/x.laz from a 1/2 tile'],
+    ['Opened https://h.com/x.laz at 3/4 speed', 'Opened https://h.com/x.laz at 3/4 speed'],
   ])('redacts %s', (input, expected) => {
     expect(redactPaths(input)).toBe(expected);
   });
