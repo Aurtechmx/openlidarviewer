@@ -130,6 +130,7 @@ the two entries were renumbered when the branches were integrated.
 | L221 | SCIENTIFIC | TEST | high | FIXED | new | With two scans open, the GeoJSON and CSV measurement exports placed every measurement through the active scan's origin and named the file after it, so scan A's points were written 100 m east and 49 m down on scan B. A truncated LAS opened as a full dataset with no warning. A scan with no CRS showed its measurements in metres beside "datum resolved". |
 | L225 | UI | TEST | low | FIXED | new | With the right rail collapsed, the project card centred into the freed band and its close button sat under the floating colour key's header at 1024 px wide. |
 | L221 | UI | TEST | high | FIXED | new | One click on a measurement's delete control removed it with no Undo. A click on an existing measurement's vertex while placing was taken by the vertex handle and placed nothing. A drag to orbit while measuring placed a point. An active clip box showed only on the Clip page, and Export read "Scan scope: Full cloud" while it wrote the clipped points. |
+| L222 | UI | TEST | high | FIXED | new | One click on a measurement's delete control removed it with no Undo. A click on an existing measurement's vertex while placing was taken by the vertex handle and placed nothing. A drag to orbit while measuring placed a point. An active clip box showed only on the Clip page, and Export read "Scan scope: Full cloud" while it wrote the clipped points. |
 ## Totals
 
 - BUILT: 1
@@ -8425,13 +8426,16 @@ key, and no control sits under another).
 
 ### L221 · FIXED · UI
 
+### L222 · FIXED · UI
+
 Measuring and clipping defects.
 
 - Deleting a measurement shows a toast with Undo. Undo, or Ctrl+Z / Cmd+Z
   while the toast shows, puts the measurement back with its id, name, owner
   and place in the list. `MeasureController.removeMeasurement` returns the
   removed record and `restoreMeasurement` refuses it once the list was
-  cleared or replaced.
+  cleared or replaced. Once a new measurement is being drafted the offer
+  ends, so Ctrl+Z removes the last draft point.
 - While a tool is placing, a press and release on an existing vertex handle
   places a point on that vertex. A press that moves more than 4 CSS px still
   drags the vertex.

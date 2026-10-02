@@ -107,7 +107,6 @@ import type {
   OverlayLabel,
 } from './MeasureOverlay';
 
-/** Touch devices say "Tap" rather than "Click" in the instruction hint. */
 /** A press that travels further than this before release is a drag, not a click (CSS px). */
 const CLICK_SLOP_PX = 4;
 /** Clicking within this radius of a closable draft's first vertex finishes it (CSS px). */
@@ -125,6 +124,7 @@ export interface RemovedMeasurement {
   readonly epoch: number;
 }
 
+/** Touch devices say "Tap" rather than "Click" in the instruction hint. */
 const COARSE_POINTER =
   typeof window !== 'undefined' &&
   typeof window.matchMedia === 'function' &&

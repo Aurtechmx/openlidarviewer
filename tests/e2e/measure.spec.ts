@@ -292,6 +292,24 @@ test('deleting a measurement offers Undo, and Ctrl+Z or Cmd+Z restores it', asyn
   await expect(page.locator('.olv-mp-name')).toHaveValue(name);
 });
 
+test('Ctrl+Z while drafting after a delete removes the draft point, not the delete', async ({ page }) => {
+  await denseMeasure(page);
+  await placeTestDistance(page);
+  await page.locator('.olv-mp-del').click();
+  await expect(page.locator('.olv-mp-row')).toHaveCount(0);
+  await expect(page.locator('.olv-lasso-toast.olv-visible')).toBeVisible();
+
+  const hint = page.locator('.olv-measure-hint-text:visible');
+  await expect(hint).toContainText('first point');
+  const box = (await page.locator('canvas').first().boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(hint).toContainText('second point');
+
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(hint).toContainText('first point');
+  await expect(page.locator('.olv-mp-row')).toHaveCount(0);
+});
+
 test('a drag while measuring orbits and places no point; a click still places one', async ({ page }) => {
   await denseMeasure(page);
   const hint = page.locator('.olv-measure-hint-text:visible');

@@ -174,5 +174,41 @@ describe('a canvas click records the scan it picked on', () => {
     const [m] = measure.getMeasurements();
     expect(m).toBeDefined();
     expect(m!.pickLayers).toEqual(['scan-a', 'scan-b']);
+
+describe('the delete Undo offer and a new draft', () => {
+  it('leaves Ctrl+Z to the draft once a new measurement is being drafted', async () => {
+    const { MeasurePanel } = await import('../src/ui/MeasurePanel');
+    const listeners: Array<(e: unknown) => void> = [];
+    const w = globalThis as unknown as { window: { addEventListener: unknown; removeEventListener: unknown } };
+    const saved = { add: w.window.addEventListener, remove: w.window.removeEventListener };
+    w.window.addEventListener = (_t: string, fn: (e: unknown) => void) => listeners.push(fn);
+    w.window.removeEventListener = (_t: string, fn: (e: unknown) => void) => {
+      const i = listeners.indexOf(fn);
+      if (i >= 0) listeners.splice(i, 1);
+    };
+    try {
+      let drafting = false;
+      let undone = 0;
+      const host = { _undoOff: null } as unknown as InstanceType<typeof MeasurePanel>;
+      MeasurePanel.prototype.offerUndo.call(host, 'Deleted A.', () => undone++, undefined, () => drafting);
+      expect(listeners).toHaveLength(1);
+      drafting = true;
+      let stopped = false;
+      let prevented = false;
+      const key = {
+        key: 'z', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false, target: null,
+        preventDefault: () => { prevented = true; },
+        stopImmediatePropagation: () => { stopped = true; },
+      };
+      listeners[0]!(key);
+      expect(undone).toBe(0);
+      expect(stopped).toBe(false);
+      expect(prevented).toBe(false);
+      // The offer is over: a later Ctrl+Z with no draft does not restore either.
+      expect(listeners).toHaveLength(0);
+    } finally {
+      w.window.addEventListener = saved.add;
+      w.window.removeEventListener = saved.remove;
+    }
   });
 });

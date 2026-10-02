@@ -217,7 +217,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
   function offerUndo(removed: RemovedMeasurement): void {
     panel?.offerUndo(`Deleted ${removed.measurement.name}.`, () => {
       if (deps.getViewer().measure.restoreMeasurement(removed)) refresh();
-    }, deps.toast);
+    }, deps.toast, () => deps.getViewer().measure.drafting);
   }
 
   /** Construct the panel; the controller drives its measurement list. */

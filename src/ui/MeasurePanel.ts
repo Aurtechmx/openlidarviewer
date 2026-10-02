@@ -1219,13 +1219,23 @@ export class MeasurePanel {
   /**
    * Offer Undo for a delete: a toast action, and Ctrl+Z / Cmd+Z while the
    * toast shows (8 s, the toast's time with an action). A newer delete
-   * replaces the offer.
+   * replaces the offer. Once a new measurement is being drafted the offer
+   * ends, so Ctrl+Z goes back to removing the last draft point.
    */
-  offerUndo(message: string, undo: () => void, toast?: (m: string, a: { label: string; onClick: () => void }) => void): void {
+  offerUndo(
+    message: string,
+    undo: () => void,
+    toast?: (m: string, a: { label: string; onClick: () => void }) => void,
+    isDrafting?: () => boolean,
+  ): void {
     this._undoOff?.();
     const run = (): void => { this._undoOff?.(); undo(); };
     const onKey = (e: KeyboardEvent): void => {
       if (e.key.toLowerCase() !== 'z' || !(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+      if (isDrafting?.()) {
+        this._undoOff?.();
+        return;
+      }
       if ((e.target as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
       e.preventDefault();
       e.stopImmediatePropagation();
