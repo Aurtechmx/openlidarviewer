@@ -191,6 +191,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   let modeHome: ModeHome | null = null;
   router = createWorkspaceRouter(workspace, allPages, storage(), () => { modeHome?.refresh(); refreshLogPage(); });
   analyse.attach(router);
+  d.addTeardown(() => router?.dispose());
   const shown = (n: HTMLElement | null | undefined): boolean => !!n && !n.classList.contains('olv-hidden') && n.style.display !== 'none';
   modeHome = createModeHome({
     router,

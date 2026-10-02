@@ -63,6 +63,8 @@ export interface WorkspaceRouter {
   sync(): void;
   /** The page a mode remembers, shown or not; null when it has none. */
   remembered(mode: WorkspaceMode): string | null;
+  /** Stop the router: clear its timer, marks and headers. Safe to call twice. */
+  dispose(): void;
 }
 
 type Pages = Partial<Record<WorkspaceMode, Record<string, WorkspacePage>>>;
@@ -123,9 +125,18 @@ export function createWorkspaceRouter(
   /**
    * Mark the host with the direction of a page change, for the stylesheet's
    * short entry transition. Deeper is forward; home or a parent is back. The
-   * mark clears itself, so a later tab switch does not replay it.
+   * mark clears itself, so a later tab switch does not replay it. One host at
+   * most carries a mark.
    */
   let navTimer: ReturnType<typeof setTimeout> | undefined;
+  let navHost: HTMLElement | null = null;
+  let disposed = false;
+  const unmark = (): void => {
+    clearTimeout(navTimer);
+    navHost?.classList.remove('olv-ws-nav-forward');
+    navHost?.classList.remove('olv-ws-nav-back');
+    navHost = null;
+  };
   function markDirection(mode: WorkspaceMode, from: string | null, to: string | null): void {
     if (from === to) return;
     const host = ws.mode(mode);
@@ -135,18 +146,17 @@ export function createWorkspaceRouter(
     for (let p = host.parentElement, i = 0; p && i < 3; p = p.parentElement, i++) {
       if (p.scrollTop > 0) p.scrollTop = 0;
     }
+    unmark();
     host.classList.toggle('olv-ws-nav-forward', !back);
     host.classList.toggle('olv-ws-nav-back', back);
-    clearTimeout(navTimer);
-    navTimer = setTimeout(() => {
-      host.classList.remove('olv-ws-nav-forward');
-      host.classList.remove('olv-ws-nav-back');
-    }, 400);
+    navHost = host;
+    navTimer = setTimeout(unmark, 400);
   }
 
   const api: WorkspaceRouter = {
     route: () => ({ mode: ws.getMode(), page: active(ws.getMode()) }),
     navigate({ mode, page }, focus = false) {
+      if (disposed) return;
       if (ws.getMode() === mode) markDirection(mode, active(mode), page);
       // Home keeps the remembered page (and its stored key) for Continue.
       if (page === null) atHome.add(mode);
@@ -172,7 +182,14 @@ export function createWorkspaceRouter(
       const id = memory.get(m) ?? null;
       return id && pages[m]?.[id] ? id : null;
     },
+    dispose() {
+      disposed = true;
+      unmark();
+      for (const h of headers.values()) h.root.remove();
+      headers.clear();
+    },
     sync() {
+      if (disposed) return;
       for (const m of Object.keys(pages) as WorkspaceMode[]) {
         const host = ws.mode(m);
         const id = active(m);

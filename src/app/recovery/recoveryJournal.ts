@@ -191,6 +191,14 @@ export function createLocalStore(storage: Pick<Storage, 'getItem' | 'setItem' | 
 /** Whether an entry is past {@link MAX_ENTRY_AGE_MS}. A future timestamp counts as fresh. */
 export const isStale = (e: RecoveryEntry, now: number, maxAge = MAX_ENTRY_AGE_MS): boolean => now - e.savedAt > maxAge;
 
+/** The newest fresh entry that may be restored onto the open source, or null. Entries are newest first. */
+export const newestMatch = (
+  entries: readonly RecoveryEntry[],
+  loaded: SessionScanSummary | undefined,
+  now: number,
+  match: (summary: SessionScanSummary, loaded: SessionScanSummary) => ScanMatch,
+): RecoveryEntry | null => entries.find((e) => !isStale(e, now) && entryMatchesSource(e, loaded, match)) ?? null;
+
 /**
  * Delete every entry older than the age limit and return the rest, newest
  * first. Deletion failures are ignored here; stale entries are still never
