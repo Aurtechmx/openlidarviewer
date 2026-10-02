@@ -304,8 +304,8 @@ test('the landing mark stays below the header at 800 px wide', async ({ page }) 
   }
 });
 
-test('the side rails start below the location bar, and a narrow bar keeps the current page', async ({ page }) => {
-  for (const [width, height] of [[1280, 720], [1023, 768], [768, 1024]]) {
+for (const [width, height] of [[1280, 720], [1023, 768], [768, 1024]]) {
+  test(`the side rails start below the location bar, and the bar keeps the current page at ${width}x${height}`, async ({ page }) => {
     await page.setViewportSize({ width, height });
     await page.goto('/?test=1');
     await dropTerrainAccessUtmLas(page);
@@ -319,10 +319,12 @@ test('the side rails start below the location bar, and a narrow bar keeps the cu
       const top = await page.locator(rail).evaluate((e) => e.getBoundingClientRect().top);
       expect(top, `${rail} top at ${width}x${height}`).toBeGreaterThanOrEqual(barBottom);
     }
-    const here = await bar.locator('.olv-loc-here').evaluate((e) => e.getBoundingClientRect().width);
-    expect(here, `current page width at ${width}x${height}`).toBeGreaterThan(24);
-  }
-});
+    await expect(bar.locator('.olv-loc-here')).toHaveText(/Terrain$/);
+    await expect
+      .poll(() => bar.locator('.olv-loc-here').evaluate((e) => e.getBoundingClientRect().width), { message: `current page width at ${width}x${height}` })
+      .toBeGreaterThan(24);
+  });
+}
 
 /**
  * Contrast of each `[text, label]` element's colour on what is painted behind
