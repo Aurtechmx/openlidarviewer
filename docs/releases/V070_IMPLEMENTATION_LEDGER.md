@@ -8298,6 +8298,7 @@ surface, so their text meets WCAG AA in the light theme. On a phone the tool
 rail ends above the state strip. In the light theme the active tool caption
 and Done use `--accent-text` (#005f8c), and the phone sheet and dock use the
 theme surface. On a phone a toast starts right of the tool rail.
+rail ends above the state strip.
 
 `tests/e2e/ceJourneys.spec.ts` runs J1 and J3 at 768 × 1024, 800 × 470 and
 1280 × 720 and checks that the toolbar, its buttons, the hint, Done and the
