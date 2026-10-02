@@ -71,7 +71,8 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
   let store: RecoveryStore | null = null;
   let pending: RecoveryEntry | null = null;
   // Fresh entries read on boot, newest first, not yet restored or discarded.
-  // Writes never replace or delete one of these.
+  // Writes never replace or delete one of these, and pass their keys to the
+  // store so its count and byte caps never evict one.
   let saved: RecoveryEntry[] = [];
   const held = (key: string | null): boolean => saved.some((e) => e.key === key);
   // A source finished opening. The store may still be opening.
@@ -207,9 +208,11 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
     // Never overwrite work that is waiting to be restored or discarded.
     if (held(built.entry.key)) return;
     try {
-      await s.put(built.entry);
+      await s.put(built.entry, saved.map((e) => e.key));
       setRecoveryStatus(`on:${s.backend}`);
     } catch (err) {
+      // The journal is full of work waiting to be restored: skip this write.
+      if (err instanceof Error && err.message === 'held-full') return setRecoveryStatus(`on:${s.backend}:skipped-full`);
       disable(`write-failed:${err instanceof Error ? err.name : 'error'}`);
     }
   };

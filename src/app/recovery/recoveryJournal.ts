@@ -42,11 +42,36 @@ export interface RecoveryEntry {
 
 export interface RecoveryStore {
   readonly backend: 'indexeddb' | 'localstorage';
-  put(entry: RecoveryEntry): Promise<void>;
+  /**
+   * Store an entry and evict past the caps. Entries whose keys are in `keep`
+   * are never evicted; when they and the new entry do not fit, the put
+   * rejects with `held-full` and changes nothing.
+   */
+  put(entry: RecoveryEntry, keep?: readonly string[]): Promise<void>;
   remove(key: string): Promise<void>;
   clear(): Promise<void>;
   /** All entries, newest first. */
   list(): Promise<RecoveryEntry[]>;
+}
+
+/**
+ * The entries to keep after storing `entry` over `rest` (newest first): the new
+ * entry and every kept key first, then the newest others while the count and
+ * byte caps allow. Throws `held-full` when the kept entries alone do not fit.
+ */
+export function evict(entry: RecoveryEntry, rest: readonly RecoveryEntry[], keep: readonly string[] = [], maxBytes = Infinity): RecoveryEntry[] {
+  const others = rest.filter((e) => e.key !== entry.key);
+  const held = others.filter((e) => keep.includes(e.key));
+  const kept = [entry, ...held];
+  let total = kept.reduce((n, e) => n + e.json.length, 0);
+  if (kept.length > MAX_ENTRIES || total > maxBytes) throw new Error('held-full');
+  for (const e of others) {
+    if (kept.length >= MAX_ENTRIES) break;
+    if (held.includes(e) || total + e.json.length > maxBytes) continue;
+    kept.push(e);
+    total += e.json.length;
+  }
+  return kept.sort(newestFirst);
 }
 
 const fmt = (n: number | undefined): string => (Number.isFinite(n) ? (n as number).toPrecision(9) : '');
@@ -169,18 +194,9 @@ export function createLocalStore(storage: Pick<Storage, 'getItem' | 'setItem' | 
   };
   return {
     backend: 'localstorage',
-    put: (entry) => settle(() => {
+    put: (entry, keep) => settle(() => {
       if (entry.json.length > LOCAL_STORAGE_MAX_BYTES) throw new Error('too-large-for-localstorage');
-      const rest = read().filter((e) => e.key !== entry.key);
-      // Keep only what fits: the newest entry first, then older ones while the total stays under the cap.
-      const kept: RecoveryEntry[] = [entry];
-      let total = entry.json.length;
-      for (const e of rest) {
-        if (kept.length >= MAX_ENTRIES || total + e.json.length > LOCAL_STORAGE_MAX_BYTES) break;
-        kept.push(e);
-        total += e.json.length;
-      }
-      write(kept);
+      write(evict(entry, read(), keep, LOCAL_STORAGE_MAX_BYTES));
     }),
     remove: (k) => settle(() => write(read().filter((e) => e.key !== k))),
     clear: () => settle(() => storage.removeItem(key)),
@@ -238,9 +254,10 @@ export async function openIndexedDbStore(idb: IDBFactory): Promise<RecoveryStore
   const list = async (): Promise<RecoveryEntry[]> => (await all()).slice(0, MAX_ENTRIES);
   return {
     backend: 'indexeddb',
-    async put(entry) {
+    async put(entry, keep) {
+      const kept = evict(entry, await all(), keep).map((e) => e.key);
       await tx('readwrite', (s) => s.put(entry));
-      const stale = (await all()).slice(MAX_ENTRIES);
+      const stale = (await all()).filter((e) => !kept.includes(e.key));
       await Promise.all(stale.map((old) => tx('readwrite', (s) => s.delete(old.key))));
     },
     async remove(key) {

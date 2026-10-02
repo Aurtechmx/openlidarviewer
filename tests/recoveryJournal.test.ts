@@ -12,6 +12,7 @@ import {
   newestMatch,
   pruneStale,
   openRecoveryStore,
+  openIndexedDbStore,
   type RecoveryEntry,
 } from '../src/app/recovery/recoveryJournal';
 import { matchSessionToScan, serializeSession, type SessionScanSummary } from '../src/io/session';
@@ -275,5 +276,47 @@ describe('newestMatch', () => {
     expect(newestMatch([a], { ...summary }, now - 2 + MAX_ENTRY_AGE_MS + 1, matchSessionToScan)).toBeNull();
     const partial = () => ({ verdict: 'partial' as const, reasons: [] });
     expect(newestMatch([a], { ...summary }, now, partial)).toBeNull();
+  });
+});
+
+/** A minimal IndexedDB: one object store keyed by `key`, requests settle on a microtask. */
+function fakeIdb(): IDBFactory {
+  const rows = new Map<string, RecoveryEntry>();
+  const request = <T>(run: () => T) => {
+    const r = { result: undefined as T | undefined, error: null, onsuccess: null as null | (() => void), onerror: null, onupgradeneeded: null };
+    queueMicrotask(() => { r.result = run(); r.onsuccess?.(); });
+    return r;
+  };
+  const objectStore = {
+    getAll: () => request(() => [...rows.values()]),
+    put: (e: RecoveryEntry) => request(() => { rows.set(e.key, e); }),
+    delete: (k: string) => request(() => { rows.delete(k); }),
+    clear: () => request(() => { rows.clear(); }),
+  };
+  const db = { objectStoreNames: { contains: () => true }, transaction: () => ({ objectStore: () => objectStore }) };
+  return { open: () => request(() => db) } as unknown as IDBFactory;
+}
+
+describe('eviction keeps entries waiting to be restored', () => {
+  const held = ['k0', 'k1', 'k2', 'k3', 'k4'];
+
+  it('IndexedDB: a sixth source never evicts a held entry', async () => {
+    const store = await openIndexedDbStore(fakeIdb());
+    for (const [i, k] of held.entries()) await store.put(entry(k, i));
+    await expect(store.put(entry('new', 100), held)).rejects.toThrow('held-full');
+    expect((await store.list()).map((e) => e.key).sort()).toEqual(held);
+    await store.put(entry('new', 100), held.slice(1));
+    expect((await store.list()).map((e) => e.key).sort()).toEqual(['k1', 'k2', 'k3', 'k4', 'new']);
+  });
+
+  it('localStorage: the byte cap drops unheld entries first and never a held one', async () => {
+    const store = createLocalStore(new MemStorage());
+    const part = 'x'.repeat(Math.floor(LOCAL_STORAGE_MAX_BYTES * 0.4));
+    await store.put(entry('held', 1, part));
+    await store.put(entry('free', 2, part));
+    await store.put(entry('new', 3, part), ['held']);
+    expect((await store.list()).map((e) => e.key)).toEqual(['new', 'held']);
+    await expect(store.put(entry('big', 4, 'x'.repeat(Math.floor(LOCAL_STORAGE_MAX_BYTES * 0.3))), ['held', 'new'])).rejects.toThrow('held-full');
+    expect((await store.list()).map((e) => e.key)).toEqual(['new', 'held']);
   });
 });

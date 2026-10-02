@@ -633,3 +633,32 @@ describe('reopening a source offers the newest saved work for that source', () =
     expect(s.entries.get(SITE_KEY)).toBe(a);
   });
 });
+
+describe('a write for another source never evicts saved work', () => {
+  it('passes every entry waiting to be restored to the store, and a full journal skips the write', async () => {
+    const keys: RecoveryEntry[] = [];
+    for (let i = 0; i < 5; i++) {
+      keys.push(entryFor(session(1, { ...SITE, fileName: `s${i}.las` })));
+    }
+    const s = fakeStore(keys);
+    let passed: readonly string[] = [];
+    s.store.put = ((orig) => (e: RecoveryEntry, keep?: readonly string[]) => {
+      passed = keep ?? [];
+      if ((keep ?? []).length >= 5) { s.log.push('skipped'); return Promise.reject(new Error('held-full')); }
+      return orig(e, keep);
+    })(s.store.put.bind(s.store));
+    const app = await start(s.store);
+    app.handle.onSourceLoaded();
+    app.snapshots[0].resolve(session(0, OTHER));
+    await drain();
+    await app.editAndHide();
+    app.snapshots.at(-1)!.resolve(session(3, OTHER));
+    await drain();
+    expect([...passed].sort()).toEqual(keys.map((e) => e.key).sort());
+    expect(s.log).toContain('skipped');
+    expect(s.entries.size).toBe(5);
+    // A full journal is not a storage failure: later writes still go out.
+    await app.editAndHide();
+    expect(app.snapshots.length).toBeGreaterThan(2);
+  });
+});
