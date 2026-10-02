@@ -84,14 +84,14 @@ describe('two-scan measurement export', () => {
     const fc = JSON.parse(fromA.downloads[0].text);
     expect(fc.features[0].geometry.coordinates).toEqual([[500004, 4000002, 100], [500007, 4000002, 100]]);
     expect(fc.features[1].geometry.coordinates).toEqual([[500101, 4000001, 50], [500104, 4000005, 50]]);
-    expect(fc.features.map((f: { properties: { source: string } }) => f.properties.source)).toEqual(['geom-a.las', 'geom-b.las']);
+    expect(fc.features.map((f: { properties: { source: string } }) => f.properties.source)).toEqual(['geom-a', 'geom-b']);
     // Active scan changes nothing about the geometry or the sources.
     const fcB = JSON.parse(fromB.downloads[0].text);
     expect(fcB.features).toEqual(fc.features);
     expect(fromB.downloads[1].text).toBe(fromA.downloads[1].text);
     const [head, r1, r2] = fromA.downloads[1].text.split('\n');
     const col = head.split(',').indexOf('source');
-    expect([r1.split(',')[col], r2.split(',')[col]]).toEqual(['geom-a.las', 'geom-b.las']);
+    expect([r1.split(',')[col], r2.split(',')[col]]).toEqual(['geom-a', 'geom-b']);
   });
 
   it('names the file after the one scan it holds', async () => {
@@ -104,6 +104,7 @@ describe('two-scan measurement export', () => {
     const out = await run([...ms, owned('x', undefined, [[0, 0, 0], [1, 0, 0]])], GEO('geom-b.las', B_ORIGIN), layers);
     expect(out.downloads).toEqual([]);
     expect(out.refusals[0]).toContain('1 of 3 measurements have no recorded scan');
+    expect(out.refusals[0]).toContain('Close every scan but the one');
   });
 
   it('refuses a set spanning scans with different coordinate systems', async () => {
@@ -135,6 +136,62 @@ describe('single-scan measurement export', () => {
     const col = csv[0].split(',').indexOf('source');
     const drop = (line: string): string => line.split(',').filter((_, i) => i !== col).join(',');
     expect(csv.map(drop)).toEqual(prev.map(drop));
-    expect(csv[1].split(',')[col]).toBe('geom-a.las');
+    expect(csv[1].split(',')[col]).toBe('geom-a');
+  });
+});
+
+describe('a point picked on a scan that is not the active one', () => {
+  const A_LOCAL: V3[] = [[4, 2, 1], [7, 2, 1]];
+  const B_LOCAL: V3[] = [[1, 1, 0], [4, 5, 0]];
+  const A_WORLD = [[500004, 4000002, 100], [500007, 4000002, 100]];
+  const B_WORLD = [[500101, 4000001, 50], [500104, 4000005, 50]];
+  const add = (p: V3, d: V3 | null): V3 => (d ? [p[0] + d[0], p[1] + d[1], p[2] + d[2]] : p);
+  // Offsets into the project frame, for each anchor and placement kind.
+  const PLACEMENTS = {
+    verified: { anchorA: { a: null, b: [100, 0, -49] }, anchorB: { a: [-100, 0, 49], b: null } },
+    'horizontal-only': { anchorA: { a: null, b: [100, 0, 0] }, anchorB: { a: [-100, 0, 0], b: null } },
+    unmounted: { anchorA: { a: null, b: null }, anchorB: { a: null, b: null } },
+  } as const;
+
+  for (const [kind, anchors] of Object.entries(PLACEMENTS)) {
+    it(`B picked while A is active is placed on B (${kind})`, async () => {
+      const off = anchors.anchorA as Record<'a' | 'b', V3 | null>;
+      const m: Measurement = { ...owned('b1', 'layer-a', B_LOCAL.map((p) => add(p, off.b))), pickLayers: ['layer-b'] };
+      const out = await run([m], GEO('geom-a.las', A_ORIGIN), { view: view({ cloud_0: off.a, cloud_1: off.b }), stableIdFor });
+      const f = JSON.parse(out.downloads[0].text).features[0];
+      expect(f.geometry.coordinates).toEqual(B_WORLD);
+      expect(f.properties.source).toBe('geom-b');
+      expect(out.downloads[0].filename).toBe('geom-b-measurements.geojson');
+    });
+
+    it(`A picked while B is active is placed on A (${kind})`, async () => {
+      const off = anchors.anchorB as Record<'a' | 'b', V3 | null>;
+      const m: Measurement = { ...owned('a1', 'layer-b', A_LOCAL.map((p) => add(p, off.a))), pickLayers: ['layer-a'] };
+      const out = await run([m], GEO('geom-b.las', B_ORIGIN), { view: view({ cloud_0: off.a, cloud_1: off.b }), stableIdFor });
+      const f = JSON.parse(out.downloads[0].text).features[0];
+      expect(f.geometry.coordinates).toEqual(A_WORLD);
+      expect(f.properties.source).toBe('geom-a');
+    });
+  }
+
+  it('refuses one measurement whose points sit on scans placed differently', async () => {
+    const m: Measurement = { ...owned('x', 'layer-a', [[4, 2, 1], [101, 1, 0]]), name: 'Distance x', pickLayers: ['layer-a', 'layer-b'] };
+    const out = await run([m], GEO('geom-a.las', A_ORIGIN), { view: view({ cloud_0: null, cloud_1: [100, 0, 0] }), stableIdFor });
+    expect(out.downloads).toEqual([]);
+    expect(out.refusals[0]).toContain('Distance x has points on scans whose heights are not in one frame');
+  });
+
+  it('exports a measurement across scans that share one frame', async () => {
+    const m: Measurement = { ...owned('x', 'layer-a', [[4, 2, 1], [101, 1, -49]]), pickLayers: ['layer-a', 'layer-b'] };
+    const out = await run([m], GEO('geom-a.las', A_ORIGIN), { view: view({ cloud_0: null, cloud_1: [100, 0, -49] }), stableIdFor });
+    const f = JSON.parse(out.downloads[0].text).features[0];
+    expect(f.geometry.coordinates).toEqual([[500004, 4000002, 100], [500101, 4000001, 50]]);
+    expect(f.properties.source).toBe('geom-a+geom-b');
+  });
+
+  it('places a restored source-local measurement through its own scan without a placement', async () => {
+    const m: Measurement = { id: 'r', kind: 'distance', name: 'R', points: B_LOCAL, owner: { layerId: 'layer-b', frame: 'source-local', inferred: true } };
+    const out = await run([m], GEO('geom-a.las', A_ORIGIN), { view: view({ cloud_0: null, cloud_1: [100, 0, 0] }), stableIdFor });
+    expect(JSON.parse(out.downloads[0].text).features[0].geometry.coordinates).toEqual(B_WORLD);
   });
 });

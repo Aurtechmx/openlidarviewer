@@ -545,6 +545,12 @@ export async function attachStaticCloud(
   // this one's frame.
   const soleId = prior.length === 1 ? deps.layerIdentity.stableIdFor(prior[0]!) : null;
   if (soleId) viewer.measure.claimUnowned(soleId);
+  // Each picked point records the layer it landed on, once two layers are open.
+  viewer.measure.setLayerResolver((cloud) => {
+    const ids = viewer.clouds();
+    const hit = ids.length > 1 ? ids.find((i) => viewer.getCloud(i) === cloud) : undefined;
+    return hit ? deps.layerIdentity.stableIdFor(hit) : null;
+  });
   // A freshly opened scan has no terrain analysis yet — drop any prior grid so
   // the Coverage colour chip starts disabled until this scan is analysed.
   viewer.setCoverageGrid(null);

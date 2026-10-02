@@ -2880,13 +2880,13 @@ stage.overlay.append(dropZone.toast);
 // programmatically, bypassing the raycast headless CI cannot pretend at.
 if (__OLV_TEST_SEAM__ && testApi) {
   void ensureViewer().then((v) => {
-    const placePoint = (x: number, y: number, z: number): void => {
+    const placePoint = (x: number, y: number, z: number, layer?: string): void => {
       if (![x, y, z].every((c) => typeof c === 'number' && Number.isFinite(c))) {
         throw new Error(
           'placeMeasurementPoint: { x, y, z } must all be finite numbers',
         );
       }
-      v.measure.addPoint([x, y, z]);
+      v.measure.addPoint([x, y, z], layer ? v.getCloud(v.clouds().find((id) => v.getCloud(id)?.name === layer) ?? '') : undefined);
     };
     (window as unknown as { __OLV_TEST_API__: unknown }).__OLV_TEST_API__ = {
       version: '1',
@@ -2897,8 +2897,8 @@ if (__OLV_TEST_SEAM__ && testApi) {
         // level so the test sees a precise failure.
         v.measure.setKind(kind as Parameters<typeof v.measure.setKind>[0]);
       },
-      placeMeasurementPoint: (p: { x: number; y: number; z: number }) => {
-        placePoint(p.x, p.y, p.z);
+      placeMeasurementPoint: (p: { x: number; y: number; z: number; layer?: string }) => {
+        placePoint(p.x, p.y, p.z, p.layer);
       },
       finishMeasurement: () => v.measure.finishCurrent(),
       clearMeasurements: () => v.clearMeasurements(),

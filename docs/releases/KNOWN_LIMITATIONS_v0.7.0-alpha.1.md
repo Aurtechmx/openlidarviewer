@@ -324,11 +324,13 @@ exports.
 
 The GeoJSON and CSV measurement exports place each measurement through the
 scan it belongs to and name that scan in a `source` field and in the file
-name. A measurement takes the scan that was active when it was finished. When
-the points were picked on another scan whose heights are not mounted in the
-shared frame, its height is read in the active scan's vertical frame. A
-measurement with no recorded scan, or a set spanning scans that declare
-different coordinate systems, is refused rather than exported. The integrity
+name. Each point is placed through the scan it was picked on. A measurement placed
+without a pick (a restored session) uses the scan it was recorded on. A
+measurement with no recorded scan, one whose points sit on scans whose heights
+are not in one frame, or a set spanning scans that declare different coordinate
+systems is refused rather than exported. A session saved with one scan and
+restored with two open is placed through the scan it matches; when that scan
+cannot be identified, close the other scans and export again. The integrity
 and findings reports name the active scan; they carry lengths and areas, not
 coordinates. The site KML is written only while one scan is open.
 
@@ -336,7 +338,7 @@ coordinates. The site KML is written only while one scan is open.
 
 A LAS file whose body ends before its declared records opens with the records
 it holds and reads as partial coverage: "Truncated: N of M points read".
-Truncation is recorded for uncompressed LAS only. When the horizontal unit is
+Truncation is recorded for uncompressed LAS only; a truncated LAZ is not marked partial. When the horizontal unit is
 unknown, measurement rows, the measure hint, the profile chart, summary and PDF,
 and the Profile Workbench state the unit is unverified.
 

@@ -8142,12 +8142,16 @@ and `scripts/check-no-dev-flags.mjs` on a fresh `npm run build:live`;
 Measurements finished while one scan was open now take that scan as owner when
 a second scan is added (`MeasureController.claimUnowned`, from `openScan`), and
 a draft keeps that owner when it is finished later. With more than one scan
-open, `exportMeasurementsFile` places each point through its owner's frame:
-the point less that scan's placement offset, plus its file origin. GeoJSON
-features carry a `source` property and the CSV a `source` column; the file is
-named after the sources it holds (`geom-a+geom-b-measurements.csv`). A
-measurement with no owner, or owners in different declared CRSs, refuses the
-export with a message. The site KML is refused while more than one scan is
+open, each picked point records the layer it landed on (`pickLayers`, from
+the pick result), and `exportMeasurementsFile` places the points through that
+layer: the point less its placement offset, plus its file origin. A
+measurement placed without a pick uses its owner; a `source-local` owner from
+a restored session adds only the file origin. GeoJSON features carry a
+`source` property and the CSV a `source` column, the same extension-free name
+the provenance and the file name use (`geom-a+geom-b-measurements.csv`). The
+export is refused, with a message, for a measurement with no recorded layer,
+one whose points sit on layers placed differently, or layers in different
+declared CRSs. The site KML is refused while more than one scan is
 open. A single-scan export is unchanged apart from the new field.
 
 `loadLas` records a body shorter than the declared count as

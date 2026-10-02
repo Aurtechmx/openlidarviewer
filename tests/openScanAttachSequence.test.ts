@@ -140,7 +140,7 @@ function harness(opts: HarnessOptions = {}) {
     hasStreamingCloud: false,
     addCloud: calls.addCloud,
     clouds: () => [cloud],
-    measure: {},
+    measure: { setLayerResolver: () => {}, claimUnowned: () => {} },
     annotate: { clear: calls.annotateClear },
     setCoverageGrid: () => {},
     setMode: () => {},

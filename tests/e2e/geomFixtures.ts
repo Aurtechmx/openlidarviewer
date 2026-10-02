@@ -48,13 +48,17 @@ function grid(nx: number, ny: number, dx: number, z: (x: number, y: number) => n
 const pit = (x: number, y: number): number => (x >= 32 && x <= 35 && y >= 4 && y <= 7 ? -0.5 : 0);
 const UTM13N = { epsg: 32613, isGeographic: false, linearUnitCode: 9001 } as const;
 
-export async function geomFixtures(): Promise<Record<'geomA' | 'geomB' | 'geomNoCrs' | 'broken', Uint8Array>> {
+export async function geomFixtures(): Promise<Record<'geomA' | 'geomB' | 'geomAVert' | 'geomBVert' | 'geomNoCrs' | 'broken', Uint8Array>> {
   const writeLas = await writer();
   const a = grid(200, 150, 0, pit);
   const b = grid(50, 50, 100, () => -50);
   return {
     geomA: writeLas(a, UTM13N),
     geomB: writeLas(b, UTM13N),
+    // The same scans with a declared vertical datum (NAVD88, metres), so they
+    // mount in height as well as in plan.
+    geomAVert: writeLas(a, { ...UTM13N, verticalEpsg: 5703, verticalUnitCode: 9001 }),
+    geomBVert: writeLas(b, { ...UTM13N, verticalEpsg: 5703, verticalUnitCode: 9001 }),
     geomNoCrs: writeLas(a, {}),
     broken: writeLas(b, { epsg: 32613 }).slice(0, 400),
   };

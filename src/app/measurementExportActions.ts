@@ -95,26 +95,54 @@ export function exportLayersOf(v: ExportLayerView, stableIdFor: (viewerId: strin
   return out;
 }
 
+/** Where one measurement's points leave: the world offset to add, and its scans. */
+interface Placed {
+  readonly base: readonly [number, number, number];
+  readonly names: readonly string[];
+}
+
 /**
- * With several layers open, each measurement's layer: the one its owner names.
- * A measurement whose layer is unknown, or a set spanning layers that declare
- * different CRSs, has no single honest frame, so the export is refused.
+ * With several layers open, each measurement is placed through the layers its
+ * points were picked on, or through its owner when no pick was recorded (a
+ * restored or programmatic measurement). A point leaves as the point less its
+ * layer's placement offset plus its file origin; a `source-local` owner's
+ * points are already in that layer's frame. A measurement whose layer is
+ * unknown, one whose points sit on layers that place it differently (heights
+ * not in one frame, or an unmounted layer), or a set across different declared
+ * CRSs has no single honest position, so the export is refused.
  */
 function ownLayers(
   measurements: readonly Measurement[],
   layers: readonly ExportLayer[],
-): { byId: Map<string, ExportLayer> } | { refused: string } {
-  const byId = new Map<string, ExportLayer>();
+): { byId: Map<string, Placed> } | { refused: string } {
+  const byId = new Map<string, Placed>();
   let unknown = 0;
+  const split: string[] = [];
+  const crs = new Set<string | null>();
   for (const m of measurements) {
-    const l = m.owner?.layerId ? layers.find((x) => x.stableId === m.owner!.layerId) : undefined;
-    if (l) byId.set(m.id, l);
-    else unknown++;
+    const picked = m.pickLayers && m.pickLayers.length > 0;
+    const ids = picked ? m.pickLayers! : m.owner?.layerId ? [m.owner.layerId] : [];
+    const ls = ids.map((id) => layers.find((x) => x.stableId === id));
+    if (ls.length === 0 || ls.some((l) => !l)) {
+      unknown++;
+      continue;
+    }
+    const local = !picked && m.owner?.frame === 'source-local';
+    const bases = (ls as ExportLayer[]).map((l): [number, number, number] => {
+      const d = local ? [0, 0, 0] : l.projectOffset ?? [0, 0, 0];
+      return [l.sourceOrigin[0] - d[0], l.sourceOrigin[1] - d[1], l.sourceOrigin[2] - d[2]];
+    });
+    if (bases.some((v) => v.some((c, i) => Math.abs(c - bases[0]![i]!) > 1e-6))) split.push(m.name);
+    for (const l of ls) crs.add(l!.crsName);
+    byId.set(m.id, { base: bases[0]!, names: [...new Set(ls.map((l) => l!.name))].sort() });
   }
   if (unknown > 0) {
-    return { refused: `Not exported: ${unknown} of ${measurements.length} measurements have no recorded scan, so their coordinates cannot be placed. Close the other scans and export again.` };
+    return { refused: `Not exported: ${unknown} of ${measurements.length} measurements have no recorded scan, so their coordinates cannot be placed. Close every scan but the one the measurements were taken on, then export again.` };
   }
-  if (new Set([...byId.values()].map((l) => l.crsName)).size > 1) {
+  if (split.length > 0) {
+    return { refused: `Not exported: ${split.join(', ')} has points on scans whose heights are not in one frame. Delete it or measure on one scan, then export again.` };
+  }
+  if (crs.size > 1) {
     return { refused: 'Not exported: the measurements come from scans with different coordinate systems. Export them one scan at a time.' };
   }
   return { byId };
@@ -144,21 +172,20 @@ export async function exportMeasurementsFile(
   // layer's placement and adding its file origin. The file names the sources
   // it holds; the digest and data basis describe the active scan, so they are
   // stated only when it is the one source.
-  const sources = own ? [...new Set([...own.byId.values()].map((l) => l.name))].sort() : null;
+  const sources = own ? [...new Set([...own.byId.values()].flatMap((p) => p.names))].sort() : null;
   const activeOnly = !sources || (sources.length === 1 && sources[0] === geo.name);
   const stems = sources ? sources.map(deps.baseName) : geo.name ? [deps.baseName(geo.name)] : [];
   const { measurementsToGeoJSON, measurementsToCsv, resolveExportDigests } = await deps.loadMeasurementExport();
   const digests = await resolveExportDigests(activeOnly ? geo.source : undefined, geo.crs);
+  // `source` is the same extension-free name the provenance and file name use.
   const ctx: MeasurementExportContext = {
     toOutput: own
       ? (p, m) => {
-          const l = own.byId.get(m!.id)!;
-          const d = l.projectOffset ?? [0, 0, 0];
-          const o = l.sourceOrigin;
-          return [p[0] - d[0] + o[0], p[1] - d[1] + o[1], p[2] - d[2] + o[2]];
+          const b = own.byId.get(m!.id)!.base;
+          return [p[0] + b[0], p[1] + b[1], p[2] + b[2]];
         }
       : (p) => [p[0] + geo.origin[0], p[1] + geo.origin[1], p[2] + geo.origin[2]],
-    sourceOf: own ? (m) => own.byId.get(m.id)!.name : () => geo.name,
+    sourceOf: own ? (m) => own.byId.get(m.id)!.names.map(deps.baseName).join('+') : () => (geo.name ? deps.baseName(geo.name) : null),
     up: measure.worldUp,
     unitToMetres: measure.unitToMetres,
     verticalUnitToMetres: measure.verticalUnitToMetres,

@@ -258,6 +258,12 @@ export interface ProfileResampleParams {
 }
 
 /** A compact, display-ready summary of one measurement, for the panel. */
+/** A picked point and the cloud it was picked on, when it came from one. */
+export interface PickedPoint {
+  readonly point: Vec3;
+  readonly layer?: unknown;
+}
+
 export interface MeasurementSummary {
   id: string;
   kind: MeasurementKind;
@@ -382,7 +388,9 @@ export class MeasureController {
   private _onKindChange: ((kind: MeasurementKind) => void) | null = null;
 
   /** Re-picks a cloud point at the given NDC — injected by the Viewer. */
-  private _picker: ((ndcX: number, ndcY: number) => Vec3 | null) | null = null;
+  private _picker: ((ndcX: number, ndcY: number) => PickedPoint | null) | null = null;
+  /** Stable layer id of a picked cloud, or null for a single-layer scene. */
+  private _layerOf: ((layer: unknown) => string | null) | null = null;
   /**
    * Profile sampler — injected by the Viewer once a cloud is attached.
    * The controller calls this when a Profile measurement commits, and
@@ -1080,7 +1088,7 @@ export class MeasureController {
   }
 
   /** Inject the cloud-point picker used while dragging a vertex handle. */
-  setPicker(pick: (ndcX: number, ndcY: number) => Vec3 | null): void {
+  setPicker(pick: (ndcX: number, ndcY: number) => PickedPoint | null): void {
     this._picker = pick;
   }
 
@@ -1344,7 +1352,23 @@ export class MeasureController {
   }
 
   /** Place a vertex at a picked point. `null` means a click that missed. */
-  addPoint(point: Vec3 | null): void {
+  /**
+   * Resolve a picked cloud to its stable layer id. The id is recorded on the
+   * measurement so its export places each point through the layer it was
+   * picked on, not the active one.
+   */
+  setLayerResolver(resolve: ((layer: unknown) => string | null) | null): void {
+    this._layerOf = resolve;
+  }
+
+  private _notePick(m: Measurement, layer: unknown): void {
+    const id = layer !== undefined && this._layerOf ? this._layerOf(layer) : null;
+    if (!id) return;
+    if (!m.pickLayers) m.pickLayers = [id];
+    else if (!m.pickLayers.includes(id)) m.pickLayers.push(id);
+  }
+
+  addPoint(point: Vec3 | null, layer?: unknown): void {
     if (!this._active) return;
     if (!point) {
       this._setHintText(`No point there — ${VERB_LOWER} directly on the scan`);
@@ -1358,6 +1382,7 @@ export class MeasureController {
     this._lastSnap = snap;
     const placed = snap ? snap.position : point;
     this._draft.points.push([placed[0], placed[1], placed[2]]);
+    this._notePick(this._draft, layer);
     if (isFull(this._draft)) this._commitDraft();
     this._updateHint();
   }
@@ -1749,10 +1774,12 @@ export class MeasureController {
     const drag = this._drag;
     if (!drag || !this._dragDirty || !this._picker) return;
     this._dragDirty = false;
-    const point = this._picker(this._dragNdcX, this._dragNdcY);
-    if (!point) return;
+    const picked = this._picker(this._dragNdcX, this._dragNdcY);
+    if (!picked) return;
+    const point = picked.point;
     const m = this._measurements.find((x) => x.id === drag.id);
     if (!m) return;
+    this._notePick(m, picked.layer);
     if (m.kind === 'box' && m.points.length >= 2 && drag.vi >= 0 && drag.vi <= 7) {
       // A box handle names a wireframe corner, not a stored point. Resizing
       // keeps the diagonally opposite corner fixed and re-normalises, so the
