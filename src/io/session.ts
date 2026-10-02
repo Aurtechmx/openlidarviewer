@@ -1231,7 +1231,7 @@ function parsePickLayers(v: unknown): string[] | undefined {
 }
 
 /**
- * Keep only pick layers the file's frame records. A file with no frame names
+ * Keep pick layers only when the file's frame records every one. A file with no frame names
  * its layers only by id; the export then matches those ids against the open
  * layers and refuses any it cannot find.
  */
@@ -1239,9 +1239,9 @@ function knownPickLayers(measurements: Measurement[], frame: SessionProjectFrame
   if (!frame) return;
   for (const m of measurements) {
     if (!m.pickLayers) continue;
-    const kept = m.pickLayers.filter((id) => frameLayer(frame, id));
-    if (kept.length > 0) m.pickLayers = kept;
-    else delete m.pickLayers;
+    // One unknown id makes the whole record untrustworthy; the measurement
+    // then takes the stricter path for work with no pick record.
+    if (!m.pickLayers.every((id) => frameLayer(frame, id))) delete m.pickLayers;
   }
 }
 

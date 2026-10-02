@@ -91,6 +91,8 @@ test.beforeEach(async ({ page }) => {
 
 for (const order of ['A then B', 'B then A'] as const) {
   test(`two-scan measurement export uses each measurement's own scan (${order})`, async ({ page }) => {
+    // Two scan loads, six placements and two exports.
+    test.slow();
     const fx = await geomFixtures();
     const first = order === 'A then B' ? { bytes: fx.geomA, name: 'geom-a.las', key: 'a' } : { bytes: fx.geomB, name: 'geom-b.las', key: 'b' };
     const second = order === 'A then B' ? { bytes: fx.geomB, name: 'geom-b.las', key: 'b' } : { bytes: fx.geomA, name: 'geom-a.las', key: 'a' };
@@ -167,6 +169,7 @@ test('a one-scan export names that scan and keeps its coordinates', async ({ pag
 for (const vertical of [false, true]) {
   for (const order of ['A then B', 'B then A'] as const) {
     test(`a point picked on the inactive scan exports on that scan (${vertical ? 'verified' : 'horizontal-only'}, ${order})`, async ({ page }) => {
+      test.slow();
       const fx = await geomFixtures();
       const a = vertical ? fx.geomAVert : fx.geomA;
       const b = vertical ? fx.geomBVert : fx.geomB;
@@ -186,6 +189,7 @@ for (const vertical of [false, true]) {
       const f = Object.values(byName(geo.text))[0];
       expect(f.geometry.coordinates).toEqual(aFirst ? WORLD.aDist : WORLD.bDist);
       expect(f.properties.source).toBe(aFirst ? 'geom-a' : 'geom-b');
+      expect(geo.name).toBe(aFirst ? 'geom-a-measurements.geojson' : 'geom-b-measurements.geojson');
     });
   }
 }

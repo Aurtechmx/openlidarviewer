@@ -515,10 +515,16 @@ describe('pick layers in a session', () => {
     expect(parseSession(text).measurements[0]!.pickLayers).toEqual(['layer_b']);
   });
 
-  it('keeps only layers the frame records, distinct and bounded', () => {
+  it('keeps distinct, bounded ids the frame records', () => {
     const doc = JSON.parse(serializeSession(session({ measurements: [measurement('m1')], projectFrame: FRAME })));
-    doc.measurements[0].pickLayers = ['layer_b', 'layer_b', 'nowhere', 7, '', 'x'.repeat(200), ...Array(40).fill('layer_a')];
+    doc.measurements[0].pickLayers = ['layer_b', 'layer_b', 7, '', 'x'.repeat(200), ...Array(40).fill('layer_a')];
     expect(parseSession(JSON.stringify(doc)).measurements[0]!.pickLayers).toEqual(['layer_b', 'layer_a']);
+  });
+
+  it('drops the whole list when the frame does not record one of its ids', () => {
+    const doc = JSON.parse(serializeSession(session({ measurements: [measurement('m1')], projectFrame: FRAME })));
+    doc.measurements[0].pickLayers = ['layer_b', 'nowhere'];
+    expect(parseSession(JSON.stringify(doc)).measurements[0]!.pickLayers).toBeUndefined();
   });
 
   it('keeps bounded pick layers in a session without a frame, for the export to match against open layers', () => {

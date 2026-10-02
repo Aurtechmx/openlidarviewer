@@ -8147,8 +8147,8 @@ the pick result), and `exportMeasurementsFile` places the points through that
 layer: the point less its placement offset, plus its file origin. A
 measurement placed without a pick uses its owner; a `source-local` owner from
 a restored session adds only the file origin. Sessions write and read
-`pickLayers`: at most 16 distinct ids, kept only where the file's project
-frame records them, and matched against the open layers on export. A
+`pickLayers`: at most 16 distinct ids, dropped whole when the file's project
+frame does not record every one, and matched against the open layers on export. A
 measurement with no pick record is refused whenever the open layers place a
 point differently. GeoJSON features carry a
 `source` property and the CSV a `source` column, the same extension-free name

@@ -48,7 +48,16 @@ function grid(nx: number, ny: number, dx: number, z: (x: number, y: number) => n
 const pit = (x: number, y: number): number => (x >= 32 && x <= 35 && y >= 4 && y <= 7 ? -0.5 : 0);
 const UTM13N = { epsg: 32613, isGeographic: false, linearUnitCode: 9001 } as const;
 
-export async function geomFixtures(): Promise<Record<'geomA' | 'geomB' | 'geomAVert' | 'geomBVert' | 'geomNoCrs' | 'broken', Uint8Array>> {
+type Fixtures = Record<'geomA' | 'geomB' | 'geomAVert' | 'geomBVert' | 'geomNoCrs' | 'broken', Uint8Array>;
+let built: Promise<Fixtures> | null = null;
+
+/** The fixtures, written once per worker. */
+export function geomFixtures(): Promise<Fixtures> {
+  built ??= buildFixtures();
+  return built;
+}
+
+async function buildFixtures(): Promise<Fixtures> {
   const writeLas = await writer();
   const a = grid(200, 150, 0, pit);
   const b = grid(50, 50, 100, () => -50);
@@ -64,15 +73,22 @@ export async function geomFixtures(): Promise<Record<'geomA' | 'geomB' | 'geomAV
   };
 }
 
-/** Drop bytes on the page as a file named `name`. */
+/**
+ * Drop bytes on the page as a file named `name`. The bytes cross as one base64
+ * string: a 600 KB scan sent as a number array is a JSON array of 600,000
+ * elements, slow enough to use most of a test's budget on a loaded machine.
+ */
 export async function dropBytes(page: Page, bytes: Uint8Array, name: string): Promise<void> {
   const dt = await page.evaluateHandle(
-    ({ b, n }) => {
+    ({ b64, n }) => {
+      const bin = atob(b64);
+      const b = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
       const d = new DataTransfer();
-      d.items.add(new File([new Uint8Array(b)], n));
+      d.items.add(new File([b], n));
       return d;
     },
-    { b: [...bytes], n: name },
+    { b64: Buffer.from(bytes).toString('base64'), n: name },
   );
   await page.dispatchEvent('body', 'drop', { dataTransfer: dt });
 }
