@@ -155,6 +155,8 @@ jobs:
         run: npm run check:no-test-seam
       - name: No maintainer URL flags in the shipped build
         run: npm run check:no-dev-flags
+      - name: Inline styles in the shipped build match the CSP hashes
+        run: npm run check:built-csp
 
   # Test buckets as a matrix: a failure points at one bucket, output stays
   # small, and the four shards run in parallel instead of one monolithic run.

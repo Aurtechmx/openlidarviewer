@@ -21,3 +21,11 @@ describe('workspace shell media-query listeners', () => {
     }
   });
 });
+
+describe('workspace shell session log route', () => {
+  it('opens the page only through settle, so a throw becomes a rejection', () => {
+    const uses = [...SHELL.matchAll(/(.{0,7})openLogPage\b(?!\(\): boolean)/g)].map((m) => m[1]);
+    expect(uses.length).toBeGreaterThan(0);
+    for (const before of uses) expect(before).toBe('settle(');
+  });
+});

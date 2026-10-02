@@ -98,6 +98,7 @@ export class WorkflowSession {
   private readonly _events: WorkflowEvent[] = [];
   private readonly _startedAt: number;
   private readonly _now: () => number;
+  private _refused = 0;
 
   /** `nowFn` defaults to `performance.now()` when available. */
   constructor(nowFn?: () => number) {
@@ -110,12 +111,14 @@ export class WorkflowSession {
   /**
    * Append an event at the current offset. A recording stops taking events
    * at {@link MAX_WORKFLOW_EVENTS}, the count `parseWorkflow` accepts, so a
-   * saved file always replays.
+   * saved file always replays. Returns how many events the cap has refused,
+   * so 0 when this one was taken.
    */
-  push(event: WorkflowEventDraft): void {
-    if (this._events.length >= MAX_WORKFLOW_EVENTS) return;
+  push(event: WorkflowEventDraft): number {
+    if (this._events.length >= MAX_WORKFLOW_EVENTS) return ++this._refused;
     const tMs = Math.max(0, Math.round(this._now() - this._startedAt));
     this._events.push({ ...event, tMs } as WorkflowEvent);
+    return 0;
   }
 
   /** Read the current event list (a defensive copy). */

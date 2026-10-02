@@ -37,6 +37,7 @@
     "check:bundle": "node scripts/check-bundle-budget.mjs",
     "check:no-test-seam": "node scripts/check-no-test-seam.mjs",
     "check:no-dev-flags": "node scripts/check-no-dev-flags.mjs",
+    "check:built-csp": "node scripts/check-built-csp.mjs",
     "check:deps": "node scripts/check-dep-singletons.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",

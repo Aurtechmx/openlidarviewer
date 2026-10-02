@@ -198,7 +198,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     host: (m) => workspace.mode(m),
     open: (m, page) => {
       if (m === 'analyse') void analyse.open(page as AnalysePage);
-      else if (m === 'data' && page === 'session-log') openLogPage();
+      else if (m === 'data' && page === 'session-log') d.runAction('help.session-log');
       else if (m === 'work' && !shown(pages[page]?.element())) d.runAction(`tool.${page}`);
       else router?.navigate({ mode: m, page }, true);
     },

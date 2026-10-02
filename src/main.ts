@@ -1191,12 +1191,10 @@ const crsCoordinator = createCrsCoordinator({
 // capture from every action handler in one place and dispatch back
 // through the same handlers on replay.
 //
-// v0.4.5 — gated on WORKFLOW_RECORDER_ENABLED (WorkflowController.ts carries
-// the product rationale). The controller is always constructed so the
-// unconditional `capture()` calls in the action handlers below stay valid;
-// the badge is mounted, and the shortcut / palette entries registered, only
-// when the flag is on.
-const workflowController = new WorkflowController();
+// Gated on WORKFLOW_RECORDER_ENABLED (see WorkflowController.ts). The controller
+// is always constructed so the `capture()` calls below stay valid; the badge,
+// shortcut and palette entries come only when the flag is on.
+const workflowController = new WorkflowController(showLassoToast);
 // The one scene-tool command every entry point runs (dock, key, palette, launcher).
 function runTool(tool: SceneTool): void {
   runSceneTool({ viewer: () => viewer, workflow: workflowController, toggleClip: () => clipPanel.toggleEnabled(),

@@ -133,6 +133,14 @@ describe('session log store', () => {
     ['Get https://h.com/my folder/SECRETDIR/f.laz tail', 'Get https://h.com/…/f.laz tail'],
     ['Get https://h.com/a key=SECRET/f.laz', 'Get https://h.com/…/f.laz'],
     ['Get https://h.com/x/eyJhbGciOi.eyJzdWIi.c2ln.laz ok', 'Get https://h.com/… ok'],
+    ['Opened https://h.com/x.laz from a 1/2 tile', 'Opened https://h.com/x.laz from a 1/2 tile'],
+    ['Opened https://h.com/x.laz at 3/4 speed', 'Opened https://h.com/x.laz at 3/4 speed'],
+    ['Opened https://h.com/x.laz in EPSG:32614 / WGS 84', 'Opened https://h.com/x.laz in EPSG:32614 / WGS 84'],
+    ['Get https://h.com/my folder/SECRET DIR/f.laz tail', 'Get https://h.com/…/f.laz tail'],
+    ['Saved https://h.com/Client Acme/Survey 2026/tile.laz', 'Saved https://h.com/…/tile.laz'],
+    ['Listed https://h.com/a/Client Acme/tiles done', 'Listed https://h.com/… done'],
+    ['Read https://host/a b/c d/scan file.laz', 'Read https://host/… file.laz'],
+    ['Link https://h.com/dl/ eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2ln ok', 'Link https://h.com/… ok'],
   ])('redacts %s', (input, expected) => {
     expect(redactPaths(input)).toBe(expected);
   });
