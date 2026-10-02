@@ -488,5 +488,7 @@ describe('the streaming Scan Report assembler', () => {
     };
     expect(fnBody('clearOpenStaticLayers')).toContain('resetStreamState();');
     expect(fnBody('resetStreamState')).toContain('lastStreamingReportCloud = null');
+    expect(fnBody('resetStreamState')).toContain('runtime.streamingClasses.reset()');
+    expect(fnBody('resetStreamState')).toContain('lastDerivedConfidence = null');
   });
 });
