@@ -167,7 +167,16 @@
   border-radius: var(--radius-lg); padding: var(--space-sm) var(--space-lg);
   /* Stay clear of the side panels (~300 px each) so it never overlaps them. */
   width: max-content; max-width: calc(100vw - 680px);
-  overflow: visible;
+  /* Fit between the header and the dock; scroll inside when it does not. */
+  max-height: calc(100% - var(--olv-lane-top) - 72px); overflow-y: auto;
+}
+/* Below 1024 px the side columns leave no centre lane. The bar takes the top of
+   the stage and the columns move down under it (wireMeasureBarClearance). */
+@media (max-width: 1023px) {
+  .olv-measure-bar {
+    inset-inline: var(--space-3xl); margin-inline: auto;
+    transform: none; width: auto; max-width: 560px;
+  }
 }
 .olv-mkinds {
   display: flex; flex-direction: row; flex-wrap: wrap; justify-content: center;

@@ -265,6 +265,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   // Push the column below the measure toolbar whenever it is visible; see
   // wireMeasureBarClearance for why this is measured, not static CSS.
   d.addTeardown(wireMeasureBarClearance(d.measureHint, leftPanels));
+  d.addTeardown(wireMeasureBarClearance(d.measureHint, d.rightRail));
   // Keep the column above the real dock height, and add the one-tap rail collapse.
   d.addTeardown(wireDockClearance(d.dock, leftPanels));
   d.addTeardown(wireRailToggle({
@@ -287,6 +288,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     storageKey: 'olv.rightRail.inspector.collapsed',
     ariaControls: 'olv-right-rail',
     label: 'View',
+    narrowCollapsed: true,
   }));
   d.overlay.append(...d.overlayTail);
 

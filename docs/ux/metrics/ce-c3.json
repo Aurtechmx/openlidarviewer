@@ -27,7 +27,7 @@
       "keyPresses": 0,
       "fieldEntries": 0,
       "revisits": 0,
-      "timeToSuccessMs": 1162,
+      "timeToSuccessMs": 852,
       "facts": {
         "valueText": "1.0000 m · 270° ● ×"
       },
@@ -48,7 +48,7 @@
       "keyPresses": 0,
       "fieldEntries": 0,
       "revisits": 0,
-      "timeToSuccessMs": 969,
+      "timeToSuccessMs": 915,
       "facts": {
         "continueRow": "Continue: Measure · 1 measurement",
         "file": "*.olvsession",
@@ -71,7 +71,139 @@
       "keyPresses": 0,
       "fieldEntries": 0,
       "revisits": 0,
-      "timeToSuccessMs": 2466,
+      "timeToSuccessMs": 1630,
+      "facts": {
+        "labRan": true
+      },
+      "path": [
+        "data / home",
+        "analyse / home",
+        "analyse / Observatory",
+        "work / home",
+        "work / Measure"
+      ]
+    },
+    {
+      "id": "J1-768x1024",
+      "viewport": "768x1024",
+      "success": true,
+      "clicks": 4,
+      "surfaceSwitches": 2,
+      "backPresses": 0,
+      "escapePresses": 0,
+      "keyPresses": 0,
+      "fieldEntries": 0,
+      "revisits": 0,
+      "timeToSuccessMs": 901,
+      "facts": {
+        "valueText": "1.0000 m · 270° ● ×"
+      },
+      "path": [
+        "data / home",
+        "work / home",
+        "work / Measure"
+      ]
+    },
+    {
+      "id": "J3-768x1024",
+      "viewport": "768x1024",
+      "success": true,
+      "clicks": 4,
+      "surfaceSwitches": 4,
+      "backPresses": 0,
+      "escapePresses": 0,
+      "keyPresses": 0,
+      "fieldEntries": 0,
+      "revisits": 0,
+      "timeToSuccessMs": 1585,
+      "facts": {
+        "labRan": true
+      },
+      "path": [
+        "data / home",
+        "analyse / home",
+        "analyse / Observatory",
+        "work / home",
+        "work / Measure"
+      ]
+    },
+    {
+      "id": "J1-800x470",
+      "viewport": "800x470",
+      "success": true,
+      "clicks": 4,
+      "surfaceSwitches": 2,
+      "backPresses": 0,
+      "escapePresses": 0,
+      "keyPresses": 0,
+      "fieldEntries": 0,
+      "revisits": 0,
+      "timeToSuccessMs": 871,
+      "facts": {
+        "valueText": "1.0000 m · 270° ● ×"
+      },
+      "path": [
+        "data / home",
+        "work / home",
+        "work / Measure"
+      ]
+    },
+    {
+      "id": "J3-800x470",
+      "viewport": "800x470",
+      "success": true,
+      "clicks": 4,
+      "surfaceSwitches": 4,
+      "backPresses": 0,
+      "escapePresses": 0,
+      "keyPresses": 0,
+      "fieldEntries": 0,
+      "revisits": 0,
+      "timeToSuccessMs": 1440,
+      "facts": {
+        "labRan": true
+      },
+      "path": [
+        "data / home",
+        "analyse / home",
+        "analyse / Observatory",
+        "work / home",
+        "work / Measure"
+      ]
+    },
+    {
+      "id": "J1-1280x720",
+      "viewport": "1280x720",
+      "success": true,
+      "clicks": 4,
+      "surfaceSwitches": 2,
+      "backPresses": 0,
+      "escapePresses": 0,
+      "keyPresses": 0,
+      "fieldEntries": 0,
+      "revisits": 0,
+      "timeToSuccessMs": 1127,
+      "facts": {
+        "valueText": "1.0000 m · 270° ● ×"
+      },
+      "path": [
+        "data / home",
+        "work / home",
+        "work / Measure"
+      ]
+    },
+    {
+      "id": "J3-1280x720",
+      "viewport": "1280x720",
+      "success": true,
+      "clicks": 4,
+      "surfaceSwitches": 4,
+      "backPresses": 0,
+      "escapePresses": 0,
+      "keyPresses": 0,
+      "fieldEntries": 0,
+      "revisits": 0,
+      "timeToSuccessMs": 1578,
       "facts": {
         "labRan": true
       },
@@ -94,7 +226,7 @@
       "keyPresses": 0,
       "fieldEntries": 0,
       "revisits": 0,
-      "timeToSuccessMs": 192,
+      "timeToSuccessMs": 186,
       "facts": {
         "locationReadableWithoutRail": true,
         "locationTextFound": "olv-loc-back: Close Contour Studio",
@@ -118,7 +250,7 @@
       "keyPresses": 0,
       "fieldEntries": 0,
       "revisits": 0,
-      "timeToSuccessMs": 1420,
+      "timeToSuccessMs": 182,
       "facts": {
         "foundIn": "View (right rail), layer health card",
         "visibleWithoutHover": true
@@ -138,7 +270,7 @@
       "keyPresses": 0,
       "fieldEntries": 0,
       "revisits": 0,
-      "timeToSuccessMs": 2365,
+      "timeToSuccessMs": 1226,
       "facts": {
         "sheetLoweredOnToolStart": true,
         "valueText": "1.0000 m · 270° ● ×"
@@ -160,7 +292,7 @@
       "keyPresses": 0,
       "fieldEntries": 0,
       "revisits": 0,
-      "timeToSuccessMs": 2154,
+      "timeToSuccessMs": 1433,
       "facts": {
         "labRan": true
       },
@@ -183,9 +315,9 @@
       "keyPresses": 0,
       "fieldEntries": 0,
       "revisits": 1,
-      "timeToSuccessMs": 3365,
+      "timeToSuccessMs": 1406,
       "facts": {
-        "statusAtStart": "BLOCKED",
+        "statusAtStart": "NEEDS TERRAIN",
         "remedy": "Run terrain analysis (lab page)"
       },
       "path": [
@@ -207,9 +339,9 @@
       "keyPresses": 3,
       "fieldEntries": 6,
       "revisits": 1,
-      "timeToSuccessMs": 8770,
+      "timeToSuccessMs": 6732,
       "facts": {
-        "statusAtStart": "BLOCKED",
+        "statusAtStart": "NEEDS TERRAIN",
         "remedy": "Run terrain analysis (lab page)"
       },
       "path": [
@@ -231,7 +363,7 @@
       "keyPresses": 0,
       "fieldEntries": 0,
       "revisits": 0,
-      "timeToSuccessMs": 2337,
+      "timeToSuccessMs": 1143,
       "facts": {
         "statusAtStart": "READY"
       },

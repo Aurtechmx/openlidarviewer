@@ -98,7 +98,7 @@
     top: 88px; bottom: 96px; left: 8px; right: auto; transform: none;
     flex-direction: column;
     align-items: center;
-    justify-content: center;            /* float the tools at the rail's middle */
+    justify-content: safe center;       /* float the tools at the rail's middle */
     gap: var(--space-sm);
     width: max-content;
     max-width: 72px;

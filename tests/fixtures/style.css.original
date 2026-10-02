@@ -709,7 +709,7 @@ button:disabled { cursor: not-allowed; }
 /* Overlay sits above the vignette so panels read crisp against the
  * darkened corners — the vignette is decorative scene framing, not a
  * dimming layer for the UI. */
-.olv-overlay { position: absolute; inset: 0; pointer-events: none; z-index: var(--z-scene-overlay); }
+.olv-overlay { position: absolute; inset: 0; pointer-events: none; z-index: var(--z-scene-overlay); overflow-x: clip; }
 .olv-overlay > * { pointer-events: auto; }
 .olv-dragging::after {
   content: "";
@@ -951,6 +951,8 @@ body.olv-theme-light .olv-empty::before {
    * as a direct caption to the hero, and the CTA sits as the obvious
    * answer to the question the title poses. */
   gap: 10px; text-align: center; padding: var(--space-4xl);
+  /* Start below the header so a short window never puts the mark under it. */
+  padding-top: calc(var(--olv-lane-top) + var(--space-md));
 }
 /* Hero — the official brand mark (public/brand-mark.svg, via <img>).
  * The wordmark text was dropped: the nav already carries the name, and a
@@ -1337,12 +1339,12 @@ body.olv-theme-light .olv-empty::before {
    collapsible surface; the panels flow inside it. */
 .olv-right-rail {
   position: absolute;
-  top: 56px;
+  top: calc(56px + var(--olv-measure-bar-clear, 0px));
   right: 14px;
   width: var(--olv-right-rail-width);
   /* End above the dock (its measured height, wireDockClearance) so the dock
      never sits over the rail's last controls. */
-  max-height: calc(100% - 56px - var(--olv-dock-clear, 24px));
+  max-height: calc(100% - 56px - var(--olv-measure-bar-clear, 0px) - var(--olv-dock-clear, 24px));
   display: flex;
   flex-direction: column;
   gap: var(--space-xl);
@@ -4342,7 +4344,16 @@ body.olv-theme-light .olv-busy-scan--emblem {
   border-radius: var(--radius-lg); padding: var(--space-sm) var(--space-lg);
   /* Stay clear of the side panels (~300 px each) so it never overlaps them. */
   width: max-content; max-width: calc(100vw - 680px);
-  overflow: visible;
+  /* Fit between the header and the dock; scroll inside when it does not. */
+  max-height: calc(100% - var(--olv-lane-top) - 72px); overflow-y: auto;
+}
+/* Below 1024 px the side columns leave no centre lane. The bar takes the top of
+   the stage and the columns move down under it (wireMeasureBarClearance). */
+@media (max-width: 1023px) {
+  .olv-measure-bar {
+    inset-inline: var(--space-3xl); margin-inline: auto;
+    transform: none; width: auto; max-width: 560px;
+  }
 }
 .olv-mkinds {
   display: flex; flex-direction: row; flex-wrap: wrap; justify-content: center;
@@ -7335,7 +7346,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
     top: 88px; bottom: 96px; left: 8px; right: auto; transform: none;
     flex-direction: column;
     align-items: center;
-    justify-content: center;            /* float the tools at the rail's middle */
+    justify-content: safe center;       /* float the tools at the rail's middle */
     gap: var(--space-sm);
     width: max-content;
     max-width: 72px;

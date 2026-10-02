@@ -283,3 +283,23 @@ test.describe('responsive layout — findings the generic sweep cannot trigger',
     expect(lockBox!.height, 'lock button height').toBeGreaterThanOrEqual(44);
   });
 });
+
+test('the landing mark stays below the header at 800 px wide', async ({ page }) => {
+  for (const height of [470, 900]) {
+    await page.setViewportSize({ width: 800, height });
+    await page.goto('/');
+    const mark = page.locator('.olv-empty-hero');
+    await expect(mark).toBeVisible();
+    await page.waitForTimeout(600); // the splash enter animation
+    const header = await page.locator('.olv-topbar').evaluate((t) => {
+      let bottom = 0;
+      t.querySelectorAll('.olv-badge, .olv-wordmark, a, button').forEach((e) => {
+        const r = e.getBoundingClientRect();
+        if (r.height > 0) bottom = Math.max(bottom, r.bottom);
+      });
+      return bottom;
+    });
+    const top = (await mark.boundingBox())!.y;
+    expect(top, `mark top at 800x${height}`).toBeGreaterThanOrEqual(header);
+  }
+});
