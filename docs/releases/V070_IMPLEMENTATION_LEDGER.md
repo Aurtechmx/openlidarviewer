@@ -8295,7 +8295,9 @@ open. The landing content starts below the header. The stage overlay clips
 horizontally, so a collapsed rail no longer widens the page.
 The measure toolbar, the phone tool rail and the toast use the `--panel`
 surface, so their text meets WCAG AA in the light theme. On a phone the tool
-rail ends above the state strip.
+rail ends above the state strip. In the light theme the active tool caption
+and Done use `--accent-text` (#005f8c), and the phone sheet and dock use the
+theme surface. On a phone a toast starts right of the tool rail.
 
 `tests/e2e/ceJourneys.spec.ts` runs J1 and J3 at 768 × 1024, 800 × 470 and
 1280 × 720 and checks that the toolbar, its buttons, the hint, Done and the
