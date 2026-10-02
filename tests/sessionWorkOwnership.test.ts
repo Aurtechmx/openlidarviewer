@@ -505,3 +505,31 @@ describe('legacy sessions: imported intact, assignment marked inferred', () => {
     expect(resolveSessionAnchorLayerId(back)).toBe('layer_a');
   });
 });
+
+describe('pick layers in a session', () => {
+  const picked = (ids: unknown): Measurement =>
+    ({ ...measurement('m1', projectFrameOwnership({ layerId: 'layer_a' })), pickLayers: ids } as unknown as Measurement);
+
+  it('round-trips the layers a measurement was picked on', () => {
+    const text = serializeSession(session({ measurements: [picked(['layer_b'])], projectFrame: FRAME }));
+    expect(parseSession(text).measurements[0]!.pickLayers).toEqual(['layer_b']);
+  });
+
+  it('keeps only layers the frame records, distinct and bounded', () => {
+    const doc = JSON.parse(serializeSession(session({ measurements: [measurement('m1')], projectFrame: FRAME })));
+    doc.measurements[0].pickLayers = ['layer_b', 'layer_b', 'nowhere', 7, '', 'x'.repeat(200), ...Array(40).fill('layer_a')];
+    expect(parseSession(JSON.stringify(doc)).measurements[0]!.pickLayers).toEqual(['layer_b', 'layer_a']);
+  });
+
+  it('keeps bounded pick layers in a session without a frame, for the export to match against open layers', () => {
+    const doc = JSON.parse(serializeSession(session({ measurements: [measurement('m1')] })));
+    doc.measurements[0].pickLayers = ['layer_b', 3, ''];
+    expect(parseSession(JSON.stringify(doc)).measurements[0]!.pickLayers).toEqual(['layer_b']);
+  });
+
+  it('leaves an old session without the field unchanged', () => {
+    const text = serializeSession(session({ measurements: [measurement('m1')], projectFrame: FRAME }));
+    expect(text).not.toContain('pickLayers');
+    expect(parseSession(text).measurements[0]!.pickLayers).toBeUndefined();
+  });
+});

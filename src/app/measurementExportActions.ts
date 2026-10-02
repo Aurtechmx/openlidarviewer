@@ -119,8 +119,17 @@ function ownLayers(
   let unknown = 0;
   const split: string[] = [];
   const crs = new Set<string | null>();
+  // A measurement with no recorded pick (restored, or placed without one) is
+  // placed through its owner only when every open layer places a point the same
+  // way; otherwise its layer would be a guess.
+  const baseOf = (l: ExportLayer): number[] => l.sourceOrigin.map((o, i) => o - (l.projectOffset?.[i] ?? 0));
+  const oneFrame = layers.every((l) => baseOf(l).every((c, i) => Math.abs(c - baseOf(layers[0]!)[i]!) <= 1e-6));
   for (const m of measurements) {
     const picked = m.pickLayers && m.pickLayers.length > 0;
+    if (!picked && !oneFrame) {
+      unknown++;
+      continue;
+    }
     const ids = picked ? m.pickLayers! : m.owner?.layerId ? [m.owner.layerId] : [];
     const ls = ids.map((id) => layers.find((x) => x.stableId === id));
     if (ls.length === 0 || ls.some((l) => !l)) {
@@ -134,10 +143,10 @@ function ownLayers(
     });
     if (bases.some((v) => v.some((c, i) => Math.abs(c - bases[0]![i]!) > 1e-6))) split.push(m.name);
     for (const l of ls) crs.add(l!.crsName);
-    byId.set(m.id, { base: bases[0]!, names: [...new Set(ls.map((l) => l!.name))].sort() });
+    byId.set(m.id, { base: bases[0]!, names: [...new Set(ls.map((l) => l!.name))].sort((a, b) => a.localeCompare(b)) });
   }
   if (unknown > 0) {
-    return { refused: `Not exported: ${unknown} of ${measurements.length} measurements have no recorded scan, so their coordinates cannot be placed. Close every scan but the one the measurements were taken on, then export again.` };
+    return { refused: `Not exported: ${unknown} of ${measurements.length} measurements have no record of the scan their points were picked on, so their coordinates cannot be placed. Close every scan but the one the measurements were taken on, then export again.` };
   }
   if (split.length > 0) {
     return { refused: `Not exported: ${split.join(', ')} has points on scans whose heights are not in one frame. Delete it or measure on one scan, then export again.` };
@@ -172,7 +181,7 @@ export async function exportMeasurementsFile(
   // layer's placement and adding its file origin. The file names the sources
   // it holds; the digest and data basis describe the active scan, so they are
   // stated only when it is the one source.
-  const sources = own ? [...new Set([...own.byId.values()].flatMap((p) => p.names))].sort() : null;
+  const sources = own ? [...new Set([...own.byId.values()].flatMap((p) => p.names))].sort((a, b) => a.localeCompare(b)) : null;
   const activeOnly = !sources || (sources.length === 1 && sources[0] === geo.name);
   const stems = sources ? sources.map(deps.baseName) : geo.name ? [deps.baseName(geo.name)] : [];
   const { measurementsToGeoJSON, measurementsToCsv, resolveExportDigests } = await deps.loadMeasurementExport();

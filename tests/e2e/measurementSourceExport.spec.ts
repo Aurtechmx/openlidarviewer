@@ -113,10 +113,10 @@ for (const order of ['A then B', 'B then A'] as const) {
     if (first.key === 'a') {
       // The area started on A is finished with B open and active.
       await place(page, 'area', [], true);
-      await place(page, 'distance', B_DIST.map((p) => add(p, off.b)));
+      await place(page, 'distance', B_DIST.map((p) => add(p, off.b)), false, 'geom-b.las');
     } else {
-      await place(page, 'distance', A_DIST.map((p) => add(p, off.a)));
-      await place(page, 'area', A_AREA.map((p) => add(p, off.a)), true);
+      await place(page, 'distance', A_DIST.map((p) => add(p, off.a)), false, 'geom-a.las');
+      await place(page, 'area', A_AREA.map((p) => add(p, off.a)), true, 'geom-a.las');
     }
     await expect(page.locator('.olv-mp-row')).toHaveCount(3, { timeout: 5_000 });
 
@@ -189,3 +189,43 @@ for (const vertical of [false, true]) {
     });
   }
 }
+
+// Save, close both scans, reopen them and the session: the record of where each
+// point was picked survives, so the export still places it on its own scan.
+test('a session saved and reopened with two scans keeps each point on the scan it was picked on', async ({ page }) => {
+  test.setTimeout(90_000);
+  const fx = await geomFixtures();
+  await dropBytes(page, fx.geomA, 'geom-a.las');
+  await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
+  await armMeasure(page);
+  await dropBytes(page, fx.geomB, 'geom-b.las');
+  await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 20_000 });
+  const off = await offsets(page, ['a', 'b']);
+  // B is active; the distance is picked on A.
+  await place(page, 'distance', A_DIST.map((p) => add(p, off.a)), false, 'geom-a.las');
+  await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
+  await showWorkspaceMode(page, 'work');
+  const [saved] = await Promise.all([page.waitForEvent('download'), page.locator('.olv-mp-action', { hasText: 'Export' }).click()]);
+  const sessionText = readFileSync((await saved.path())!, 'utf8');
+  expect(sessionText).toContain('pickLayers');
+
+  await showWorkspaceMode(page, 'data');
+  await page.getByRole('button', { name: 'Remove geom-b.las' }).click();
+  await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
+  // Removing the last scan closes it, after a confirmation.
+  await page.getByRole('button', { name: 'Remove geom-a.las' }).click();
+  await page.getByRole('button', { name: 'Remove and close' }).click();
+  await expect(page.locator('.olv-layer')).toHaveCount(0, { timeout: 20_000 });
+  await dropBytes(page, fx.geomA, 'geom-a.las');
+  await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
+  await dropBytes(page, fx.geomB, 'geom-b.las');
+  await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 20_000 });
+  await expect(page.locator('.olv-project-card')).toContainText('geom-b.las');
+  await dropBytes(page, new TextEncoder().encode(sessionText), 'geom-b.olvsession');
+  await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 10_000 });
+
+  const geo = await exportFile(page, 'GeoJSON');
+  const f = Object.values(byName(geo.text))[0];
+  expect(f.geometry.coordinates).toEqual(WORLD.aDist);
+  expect(f.properties.source).toBe('geom-a');
+});

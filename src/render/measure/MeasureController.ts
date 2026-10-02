@@ -1209,8 +1209,11 @@ export class MeasureController {
    */
   claimUnowned(layerId: string): void {
     const owner: WorkOwnership = { layerId, frame: 'project' };
-    for (const m of this._measurements) if (!m.owner) m.owner = owner;
-    if (this._draft && !this._draft.owner) this._draft.owner = owner;
+    // Every point placed while one layer was open was picked on that layer.
+    for (const m of [...this._measurements, ...(this._draft ? [this._draft] : [])]) {
+      if (!m.owner) m.owner = owner;
+      if (!m.pickLayers) m.pickLayers = [layerId];
+    }
   }
 
   /** The owner to stamp on a freshly created measurement, when one is provided. */

@@ -35,10 +35,10 @@ const view = (offsets: Record<string, V3 | null>): ExportLayerView => ({
 });
 const stableIdFor = (id: string): string => (id === 'cloud_0' ? 'layer-a' : 'layer-b');
 
-function owned(id: string, layerId: string | undefined, pts: V3[]): Measurement {
+function owned(id: string, layerId: string | undefined, pts: V3[], picked = true): Measurement {
   return {
     id, kind: 'distance', name: `Distance ${id}`, points: pts,
-    ...(layerId ? { owner: { layerId, frame: 'project' as const } } : {}),
+    ...(layerId ? { owner: { layerId, frame: 'project' as const }, ...(picked ? { pickLayers: [layerId] } : {}) } : {}),
   };
 }
 
@@ -103,7 +103,7 @@ describe('two-scan measurement export', () => {
   it('refuses rather than guess the scan of an unowned measurement', async () => {
     const out = await run([...ms, owned('x', undefined, [[0, 0, 0], [1, 0, 0]])], GEO('geom-b.las', B_ORIGIN), layers);
     expect(out.downloads).toEqual([]);
-    expect(out.refusals[0]).toContain('1 of 3 measurements have no recorded scan');
+    expect(out.refusals[0]).toContain('1 of 3 measurements have no record of the scan');
     expect(out.refusals[0]).toContain('Close every scan but the one');
   });
 
@@ -189,9 +189,19 @@ describe('a point picked on a scan that is not the active one', () => {
     expect(f.properties.source).toBe('geom-a+geom-b');
   });
 
-  it('places a restored source-local measurement through its own scan without a placement', async () => {
-    const m: Measurement = { id: 'r', kind: 'distance', name: 'R', points: B_LOCAL, owner: { layerId: 'layer-b', frame: 'source-local', inferred: true } };
-    const out = await run([m], GEO('geom-a.las', A_ORIGIN), { view: view({ cloud_0: null, cloud_1: [100, 0, 0] }), stableIdFor });
+  // A restored measurement carries no record of where its points were picked.
+  for (const [kind, offB] of [['horizontal-only', [100, 0, 0]], ['unmounted', null]] as [string, V3 | null][]) {
+    it(`refuses a measurement with no pick record when the open scans place points differently (${kind})`, async () => {
+      const m = owned('r', 'layer-a', B_LOCAL.map((p) => add(p, offB)), false);
+      const out = await run([m], GEO('geom-a.las', A_ORIGIN), { view: view({ cloud_0: null, cloud_1: offB }), stableIdFor });
+      expect(out.downloads).toEqual([]);
+      expect(out.refusals[0]).toContain('no record of the scan their points were picked on');
+    });
+  }
+
+  it('places a measurement with no pick record through its owner when the scans share one frame', async () => {
+    const m = owned('r', 'layer-b', B_LOCAL.map((p) => add(p, [100, 0, -49])), false);
+    const out = await run([m], GEO('geom-a.las', A_ORIGIN), { view: view({ cloud_0: null, cloud_1: [100, 0, -49] }), stableIdFor });
     expect(JSON.parse(out.downloads[0].text).features[0].geometry.coordinates).toEqual(B_WORLD);
   });
 });

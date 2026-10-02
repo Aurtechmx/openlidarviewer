@@ -324,8 +324,10 @@ exports.
 
 The GeoJSON and CSV measurement exports place each measurement through the
 scan it belongs to and name that scan in a `source` field and in the file
-name. Each point is placed through the scan it was picked on. A measurement placed
-without a pick (a restored session) uses the scan it was recorded on. A
+name. Each point is placed through the scan it was picked on. A session keeps
+that record. A measurement with no pick record, such as one from an older
+session, is placed through the scan it was recorded on only when the open
+scans place a point the same way, and is refused otherwise. A
 measurement with no recorded scan, one whose points sit on scans whose heights
 are not in one frame, or a set spanning scans that declare different coordinate
 systems is refused rather than exported. A session saved with one scan and
