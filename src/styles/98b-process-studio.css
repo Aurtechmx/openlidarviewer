@@ -40,7 +40,7 @@
 /* Name and status badge share one line; the reason sits beneath, one
  * disclosure away. */
 .olv-ps-line {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: first baseline; justify-content: space-between;
   gap: var(--space-sm);
 }
 /* Compact by default: the reason lives in a native <details>, so a dozen
@@ -48,6 +48,7 @@
  * the name+badge line; keyboard toggles it (Enter/Space) and a screen reader
  * announces the expanded reason — reachable without hover, unlike the old
  * measure-bar-scoped data-tip. */
+.olv-ps-line > .olv-ps-name { min-width: 0; }
 .olv-ps-verdict > summary {
   list-style: none;
   cursor: pointer;
@@ -81,8 +82,8 @@
 .olv-ps-blocked .olv-ps-reason, .olv-ps-block .olv-ps-reason { border-left-color: var(--bad, #f08a92); }
 .olv-ps-badge {
   font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em;
-  font-weight: 600; padding: 0.05rem 0.5rem; border-radius: 5px;
-  white-space: nowrap;
+  font-weight: 600; line-height: 1.4; padding: 0 var(--space-md); border-radius: var(--radius-xs);
+  white-space: nowrap; flex: none;
 }
 .olv-ps-ready .olv-ps-badge, .olv-ps-pass .olv-ps-badge {
   background: var(--good-bg, rgba(52, 168, 83, 0.18)); color: var(--good, #6ee7a0);

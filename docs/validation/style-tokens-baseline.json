@@ -1,7 +1,7 @@
 {
   "$comment": "Shrink-only. Colour literals and px font sizes per stylesheet outside 01-tokens.css; see scripts/lint-style-tokens.mjs. Bank a drop with `node scripts/lint-style-tokens.mjs --update`.",
   "totals": {
-    "colours": 498,
+    "colours": 495,
     "pxFonts": 3
   },
   "files": {
@@ -22,7 +22,7 @@
       "pxFonts": 0
     },
     "src/styles/40-inspector.css": {
-      "colours": 21,
+      "colours": 20,
       "pxFonts": 0
     },
     "src/styles/45-dock-and-panels.css": {
@@ -50,7 +50,7 @@
       "pxFonts": 1
     },
     "src/styles/70-measurement-panels.css": {
-      "colours": 33,
+      "colours": 32,
       "pxFonts": 0
     },
     "src/styles/72-panel-rails.css": {
@@ -82,7 +82,7 @@
       "pxFonts": 0
     },
     "src/styles/83-mobile-audit.css": {
-      "colours": 23,
+      "colours": 22,
       "pxFonts": 1
     },
     "src/styles/86-dataset-intel-analyse.css": {

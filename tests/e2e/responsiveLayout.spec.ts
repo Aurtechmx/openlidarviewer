@@ -304,6 +304,28 @@ test('the landing mark stays below the header at 800 px wide', async ({ page }) 
   }
 });
 
+for (const [width, height] of [[1280, 720], [1023, 768], [768, 1024]]) {
+  test(`the side rails start below the location bar, and the bar keeps the current page at ${width}x${height}`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await page.goto('/?test=1');
+    await dropTerrainAccessUtmLas(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 30_000 });
+    await page.locator('.olv-ws-tab[data-mode="analyse"]').click();
+    await page.locator('.olv-ah-row[data-analysis="terrain"] .olv-ah-open').click();
+    const bar = page.locator('.olv-topbar > .olv-loc');
+    await expect(bar).toBeVisible();
+    const barBottom = await bar.evaluate((e) => e.getBoundingClientRect().bottom);
+    for (const rail of ['.olv-ws-tabs', '.olv-right-rail']) {
+      const top = await page.locator(rail).evaluate((e) => e.getBoundingClientRect().top);
+      expect(top, `${rail} top at ${width}x${height}`).toBeGreaterThanOrEqual(barBottom);
+    }
+    await expect(bar.locator('.olv-loc-here')).toHaveText(/Terrain$/);
+    await expect
+      .poll(() => bar.locator('.olv-loc-here').evaluate((e) => e.getBoundingClientRect().width), { message: `current page width at ${width}x${height}` })
+      .toBeGreaterThan(24);
+  });
+}
+
 /**
  * Contrast of each `[text, label]` element's colour on what is painted behind
  * it: the element's own and its ancestors' backgrounds, alpha composited.

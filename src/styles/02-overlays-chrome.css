@@ -7,6 +7,13 @@
  * redefines it for the notch instead of overriding each surface's own `top`.
  */
 :root { --olv-lane-top: calc(56px + env(safe-area-inset-top)); }
+/* The top edge of the side rails, one step below the header row. Where the
+   header row holds the location bar (wayfinding.css), that row is the header's
+   14px top padding plus --loc-bar-h. */
+:root { --olv-rail-top: 56px; }
+@media (min-width: 768px) and (not ((max-height: 500px) and (pointer: coarse))) {
+  :root { --olv-rail-top: calc(14px + var(--loc-bar-h, 44px) + var(--space-md)); }
+}
 
 /*
  * v0.3.9 workflow recorder badge — fixed pill on the top edge of

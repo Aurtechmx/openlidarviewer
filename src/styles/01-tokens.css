@@ -117,34 +117,22 @@
   --space-3xl: 20px;
   --space-4xl: 24px;
 
-  /*
-   * Type scale — seven steps drawn from the most common existing
-   * font-sizes so the bulk of the UI maps onto a token with no
-   * change. The body of the interface lives at --text-xs (11px),
-   * the single most-used size, with smaller meta text at 10px and
-   * progressively larger steps for headings and display numbers.
-   *   --text-2xs 10  dense meta / captions
-   *   --text-xs  11  default UI text (most common)
-   *   --text-sm  12  comfortable body / labels
-   *   --text-md  13  emphasised body
-   *   --text-lg  14  sub-headings
-   *   --text-xl  16  section headings
-   *   --text-2xl 20  panel titles
-   *   --text-3xl 28  display figures
-   */
-  /* Type scale. Eight names, but only the DISTINCT values below are steps a
-   * reader can actually see. 10/11 differ by 1.10 and 12/13/14 by 1.08 — under
-   * the threshold of perception, so those were three names for one level, not
-   * three levels. Adjacent steps now differ by at least 1.14.
-   *
-   * 2xs and md are kept as ALIASES so ~150 call sites did not have to churn in
-   * a release branch; they resolve to the neighbouring real step. Prefer the
-   * canonical names in new code.
-   *
-   * Being fixed in steps: --text-body is the 12px the read-me side of the
-   * interface wants, and panel row VALUES now take it while their labels stay
-   * at 11px, so a number outranks the word naming it. Chips, badges, keycaps
-   * and table cells stay on the 11px floor, where a bump would overflow. */
+  /* Type scale. Only distinct values are steps a reader can see; adjacent
+   * steps differ by at least 1.14. --text-2xs and --text-md are aliases of
+   * their neighbours, kept for existing call sites; new code uses the
+   * canonical names. Roles:
+   *   --text-micro 10  keycaps and superscripts only
+   *   --text-xs    11  labels, badges, chips, table cells, helper text
+   *   --text-sm    12  body rows, controls (alias --text-body)
+   *   --text-lg    14  page title in the rail, emphasis (alias --text-md)
+   *   --text-xl    16  panel and dialog titles; --text-value, result values
+   *   --text-2xl   20  section headings, verdict figures
+   *   --text-3xl   28  display
+   * Olv Font ships 400, 500 and 600 only: 600 is the heaviest weight. */
+  /* Control sizes: equivalent controls share one height. 44px is the touch
+   * target for primary controls on coarse pointers. */
+  --control-h: 28px;
+  --target-touch: 44px;
   --text-body: 12px; /* readable body + panel row values */
   --text-2xs: 11px; /* alias of --text-xs */
   --text-xs: 11px; /* dense chips, badges, table cells */

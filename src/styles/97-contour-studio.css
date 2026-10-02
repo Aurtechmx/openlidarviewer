@@ -126,7 +126,7 @@
 .olv-cs-body { display: flex; flex-direction: column; gap: 16px; }
 .olv-cs-section-head {
   font-size: var(--text-2xs);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--text-faint);
   margin-bottom: 8px;
@@ -207,7 +207,7 @@
   width: 18px; height: 18px;
   border-radius: 50%;
   font-size: var(--text-xs);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-faint);
   background: var(--panel-recessive);
   border: 1px solid var(--hairline);
@@ -222,7 +222,7 @@
 /* Launcher eyebrow label ("Terrain Products") sits above the title */
 .olv-contour-launcher-head {
   font-size: var(--text-2xs);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--accent);
   margin-bottom: 2px;
@@ -258,7 +258,7 @@
 .olv-cs-ladder-claim.is-blocked { border-left-color: var(--rating-blocked, #d24b4b); }
 .olv-cs-ladder-claim-label {
   font-size: var(--text-2xs);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.8px;
   text-transform: uppercase;
   color: var(--text-faint);

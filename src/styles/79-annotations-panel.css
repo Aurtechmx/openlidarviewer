@@ -39,7 +39,7 @@
 .olv-ap-badge {
   flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: var(--text-2xs); font-weight: 700;
+  font-size: var(--text-2xs); font-weight: 600;
 }
 .olv-ap-badge.olv-anno-note { background: #5b9bd5; color: #06121a; }
 .olv-ap-badge.olv-anno-info { background: #22dcff; color: #06121a; }

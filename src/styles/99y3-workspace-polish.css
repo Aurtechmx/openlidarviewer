@@ -60,11 +60,6 @@
     min-height: 44px;
     padding: var(--space-xs) var(--space-sm) var(--space-xs) 0;
   }
-  .olv-left-panels .olv-ws-task-title {
-    font: 600 var(--text-lg) / 1.25 var(--font);
-    letter-spacing: 0;
-    text-transform: none;
-  }
 
   /* A panel whose own title repeats the page title: the task header already
      names it. Its head holds only that title (the collapse toggle is hidden on
