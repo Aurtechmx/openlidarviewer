@@ -98,14 +98,14 @@
     top: 88px; bottom: 96px; left: 8px; right: auto; transform: none;
     flex-direction: column;
     align-items: center;
-    justify-content: center;            /* float the tools at the rail's middle */
+    justify-content: safe center;       /* float the tools at the rail's middle */
     gap: var(--space-sm);
     width: max-content;
     max-width: 72px;
     padding: var(--space-sm) var(--space-2xs);
     border-radius: var(--radius-lg);
-    /* Glass — translucent, blurred, hairline-bordered, soft-shadowed. */
-    background: rgba(11, 17, 33, 0.72);
+    /* Panel surface, blurred, hairline-bordered, soft-shadowed. */
+    background: var(--panel);
     -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
     border: 0.5px solid rgba(0, 178, 255, 0.22);
     box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
@@ -113,6 +113,8 @@
     scrollbar-width: none;
   }
   .olv-measure-bar::-webkit-scrollbar { display: none; }
+  /* A toast starts right of the tool rail so the rail's actions stay reachable. */
+  body:has(.olv-measure-bar:not(.olv-hidden)) .olv-lasso-toast { left: 88px; }
   /* Kind icons stack vertically; the scroll mask + horizontal rules drop. */
   .olv-mkinds {
     flex-direction: column;

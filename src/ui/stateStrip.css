@@ -85,6 +85,10 @@
   .olv-ss-short { display: inline; }
   /* A prompt parked above the dock moves up by the strip's height. */
   body:has(.olv-state-strip:not(.olv-hidden)) .olv-lasso-toast { margin-bottom: var(--olv-strip-h); }
+  /* The tool rail ends above the strip, wherever the measured dock puts it. */
+  body:has(.olv-state-strip:not(.olv-hidden)) .olv-measure-bar {
+    bottom: calc(var(--m-chrome-head-h) + var(--olv-dock-clear, 71px) - 22px + var(--space-xs) + env(safe-area-inset-bottom) + var(--olv-strip-h) + var(--space-sm));
+  }
 }
 
 /* Elapsed time (and the estimate left) a host shows beside its busy

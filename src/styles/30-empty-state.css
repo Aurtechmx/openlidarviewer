@@ -62,6 +62,8 @@ body.olv-theme-light .olv-empty::before {
    * as a direct caption to the hero, and the CTA sits as the obvious
    * answer to the question the title poses. */
   gap: 10px; text-align: center; padding: var(--space-4xl);
+  /* Start below the header so a short window never puts the mark under it. */
+  padding-top: calc(var(--olv-lane-top) + var(--space-md));
 }
 /* Hero — the official brand mark (public/brand-mark.svg, via <img>).
  * The wordmark text was dropped: the nav already carries the name, and a

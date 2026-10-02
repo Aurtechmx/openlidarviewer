@@ -11,6 +11,11 @@ import { el } from './dom';
 import { applyClassicScrollbarClass } from './classicScrollbars';
 import { storageGet, storageSet } from './safeStorage';
 
+/** Below 1024 px the side rails leave no free centre for an unrequested panel. */
+export function narrowStage(): boolean {
+  return typeof window !== 'undefined' && window.innerWidth < 1024;
+}
+
 /**
  * Keep the left panel column clear of the measure toolbar (v0.4.5 overlap
  * fix). The toolbar (`.olv-measure-bar`) is centred at the same `top: 56px`
@@ -210,6 +215,8 @@ export interface RailToggleConfig {
   ariaControls: string;
   /** What the grabber names: "Hide <label>". Default "panel". */
   label?: string;
+  /** Start collapsed on a narrow stage when the user has not chosen yet. */
+  narrowCollapsed?: boolean;
 }
 /**
  * Returns a disposer, same contract as wireRailScrollAffordance: it disconnects
@@ -232,7 +239,8 @@ export function wireRailToggle(cfg: RailToggleConfig): () => void {
     tab.title = label;
   };
 
-  let collapsed = storageGet(cfg.storageKey) === '1';
+  const stored = storageGet(cfg.storageKey);
+  let collapsed = stored === null ? !!cfg.narrowCollapsed && narrowStage() : stored === '1';
   apply(collapsed);
 
   // Named so the disposer can detach it. The tab is removed too, but a host

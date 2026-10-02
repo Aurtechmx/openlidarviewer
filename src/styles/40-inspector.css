@@ -27,12 +27,12 @@
    collapsible surface; the panels flow inside it. */
 .olv-right-rail {
   position: absolute;
-  top: 56px;
+  top: calc(56px + var(--olv-measure-bar-clear, 0px));
   right: 14px;
   width: var(--olv-right-rail-width);
   /* End above the dock (its measured height, wireDockClearance) so the dock
      never sits over the rail's last controls. */
-  max-height: calc(100% - 56px - var(--olv-dock-clear, 24px));
+  max-height: calc(100% - 56px - var(--olv-measure-bar-clear, 0px) - var(--olv-dock-clear, 24px));
   display: flex;
   flex-direction: column;
   gap: var(--space-xl);
@@ -311,6 +311,13 @@
   box-shadow: var(--shadow-floating);
   animation: olv-rvc-in 200ms var(--ease-standard, ease);
 }
+/* With the desktop rails up, the chip centres in the band they leave free, and
+   a collapsed rail gives its width back to that band. */
+@media (min-width: 768px) {
+  .olv-rvc { left: calc(50vw + (var(--olv-rail-width) - var(--olv-right-rail-width)) / 2); }
+  body:has(.olv-right-rail.olv-right-collapsed) .olv-rvc { --olv-right-rail-width: 0px; }
+  body:has(.olv-left-panels.olv-rail-collapsed) .olv-rvc { --olv-rail-width: 0px; }
+}
 @keyframes olv-rvc-in { from { opacity: 0; transform: translate(-50%, -6px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .olv-rvc-apply {
   display: inline-flex; align-items: center; gap: 6px;
@@ -339,7 +346,7 @@
   font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
   color: var(--text);
-  background: rgba(11, 17, 33, 0.92);
+  background: var(--panel);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border: 0.5px solid rgba(0, 178, 255, 0.42);

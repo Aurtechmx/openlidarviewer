@@ -307,6 +307,8 @@
  * (tests/stateTokenContrast.test.ts). */
 body.olv-theme-light {
   --state-withheld: #be185d;
+  /* Accent for small text on white, where --accent reads 3.9:1. */
+  --accent-text: #005f8c;
 }
 body.olv-theme-high-contrast {
   --state-withheld: #f9a8d4;
@@ -581,6 +583,8 @@ body.olv-theme-light {
   --warn: #7d5b07; /* darkened from #b8860b, which read 2.9:1 on the near-white caption fill */
   --accent: #0088c8;
   --accent-soft: rgba(0, 136, 200, 0.18);
+  /* The phone sheet and dock follow the theme surface. */
+  --m-glass-raised: var(--panel);
   /* Deeper violet so the blocked verdict stays legible on the near-white panel. */
   --rating-blocked: #7c3aed;
   /* The rest of the readiness scale, darkened the same way as --rating-blocked
@@ -709,7 +713,7 @@ button:disabled { cursor: not-allowed; }
 /* Overlay sits above the vignette so panels read crisp against the
  * darkened corners — the vignette is decorative scene framing, not a
  * dimming layer for the UI. */
-.olv-overlay { position: absolute; inset: 0; pointer-events: none; z-index: var(--z-scene-overlay); }
+.olv-overlay { position: absolute; inset: 0; pointer-events: none; z-index: var(--z-scene-overlay); overflow-x: clip; }
 .olv-overlay > * { pointer-events: auto; }
 .olv-dragging::after {
   content: "";
@@ -951,6 +955,8 @@ body.olv-theme-light .olv-empty::before {
    * as a direct caption to the hero, and the CTA sits as the obvious
    * answer to the question the title poses. */
   gap: 10px; text-align: center; padding: var(--space-4xl);
+  /* Start below the header so a short window never puts the mark under it. */
+  padding-top: calc(var(--olv-lane-top) + var(--space-md));
 }
 /* Hero — the official brand mark (public/brand-mark.svg, via <img>).
  * The wordmark text was dropped: the nav already carries the name, and a
@@ -1337,12 +1343,12 @@ body.olv-theme-light .olv-empty::before {
    collapsible surface; the panels flow inside it. */
 .olv-right-rail {
   position: absolute;
-  top: 56px;
+  top: calc(56px + var(--olv-measure-bar-clear, 0px));
   right: 14px;
   width: var(--olv-right-rail-width);
   /* End above the dock (its measured height, wireDockClearance) so the dock
      never sits over the rail's last controls. */
-  max-height: calc(100% - 56px - var(--olv-dock-clear, 24px));
+  max-height: calc(100% - 56px - var(--olv-measure-bar-clear, 0px) - var(--olv-dock-clear, 24px));
   display: flex;
   flex-direction: column;
   gap: var(--space-xl);
@@ -1621,6 +1627,13 @@ body.olv-theme-light .olv-empty::before {
   box-shadow: var(--shadow-floating);
   animation: olv-rvc-in 200ms var(--ease-standard, ease);
 }
+/* With the desktop rails up, the chip centres in the band they leave free, and
+   a collapsed rail gives its width back to that band. */
+@media (min-width: 768px) {
+  .olv-rvc { left: calc(50vw + (var(--olv-rail-width) - var(--olv-right-rail-width)) / 2); }
+  body:has(.olv-right-rail.olv-right-collapsed) .olv-rvc { --olv-right-rail-width: 0px; }
+  body:has(.olv-left-panels.olv-rail-collapsed) .olv-rvc { --olv-rail-width: 0px; }
+}
 @keyframes olv-rvc-in { from { opacity: 0; transform: translate(-50%, -6px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .olv-rvc-apply {
   display: inline-flex; align-items: center; gap: 6px;
@@ -1649,7 +1662,7 @@ body.olv-theme-light .olv-empty::before {
   font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
   color: var(--text);
-  background: rgba(11, 17, 33, 0.92);
+  background: var(--panel);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border: 0.5px solid rgba(0, 178, 255, 0.42);
@@ -3069,6 +3082,10 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   opacity: 0; pointer-events: none;
   transition: opacity var(--dur-slow) var(--ease-standard), transform var(--dur-slow) var(--ease-standard);
 }
+/* A collapsed rail gives its width back to the band, so the card centres on
+   what is actually free. */
+.olv-overlay:has(.olv-right-rail.olv-right-collapsed) .olv-project-card { --olv-right-rail-width: 0px; }
+.olv-overlay:has(.olv-left-panels.olv-rail-collapsed) .olv-project-card { --olv-rail-width: 0px; }
 .olv-project-card.olv-visible {
   opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto;
 }
@@ -3503,7 +3520,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
   border-color: rgba(255, 120, 120, 0.7);
 }
 .olv-measure-done {
-  color: var(--accent);
+  color: var(--accent-text, var(--accent));
   background: var(--accent-soft);
   border: 0.5px solid rgba(0, 178, 255, 0.3);
 }
@@ -4336,13 +4353,22 @@ body.olv-theme-light .olv-busy-scan--emblem {
   position: absolute; top: var(--olv-lane-top); left: 50%; transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center;
   gap: var(--space-sm); z-index: calc(var(--z-float) + 1);
-  background: rgba(11, 17, 33, 0.82);
+  background: var(--panel);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   border: 0.5px solid rgba(0, 178, 255, 0.28);
   border-radius: var(--radius-lg); padding: var(--space-sm) var(--space-lg);
   /* Stay clear of the side panels (~300 px each) so it never overlaps them. */
   width: max-content; max-width: calc(100vw - 680px);
-  overflow: visible;
+  /* Fit between the header and the dock; scroll inside when it does not. */
+  max-height: calc(100% - var(--olv-lane-top) - 72px); overflow-y: auto;
+}
+/* Below 1024 px the side columns leave no centre lane. The bar takes the top of
+   the stage and the columns move down under it (wireMeasureBarClearance). */
+@media (max-width: 1023px) {
+  .olv-measure-bar {
+    inset-inline: var(--space-3xl); margin-inline: auto;
+    transform: none; width: auto; max-width: 560px;
+  }
 }
 .olv-mkinds {
   display: flex; flex-direction: row; flex-wrap: wrap; justify-content: center;
@@ -4359,7 +4385,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
 .olv-mkind:hover { color: var(--text); }
 .olv-mkind:active { transform: scale(0.96); }
 .olv-mkind-active {
-  color: var(--accent); background: var(--accent-soft);
+  color: var(--accent-text, var(--accent)); background: var(--accent-soft);
   border-color: rgba(0, 178, 255, 0.4);
 }
 /* Auxiliary kind button (Lasso volume).
@@ -7335,14 +7361,14 @@ body.olv-theme-light .olv-busy-scan--emblem {
     top: 88px; bottom: 96px; left: 8px; right: auto; transform: none;
     flex-direction: column;
     align-items: center;
-    justify-content: center;            /* float the tools at the rail's middle */
+    justify-content: safe center;       /* float the tools at the rail's middle */
     gap: var(--space-sm);
     width: max-content;
     max-width: 72px;
     padding: var(--space-sm) var(--space-2xs);
     border-radius: var(--radius-lg);
-    /* Glass — translucent, blurred, hairline-bordered, soft-shadowed. */
-    background: rgba(11, 17, 33, 0.72);
+    /* Panel surface, blurred, hairline-bordered, soft-shadowed. */
+    background: var(--panel);
     -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
     border: 0.5px solid rgba(0, 178, 255, 0.22);
     box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
@@ -7350,6 +7376,8 @@ body.olv-theme-light .olv-busy-scan--emblem {
     scrollbar-width: none;
   }
   .olv-measure-bar::-webkit-scrollbar { display: none; }
+  /* A toast starts right of the tool rail so the rail's actions stay reachable. */
+  body:has(.olv-measure-bar:not(.olv-hidden)) .olv-lasso-toast { left: 88px; }
   /* Kind icons stack vertically; the scroll mask + horizontal rules drop. */
   .olv-mkinds {
     flex-direction: column;

@@ -27,7 +27,57 @@ const results: JourneyResult[] = [];
 
 const DESKTOP = { name: '1440x900', width: 1440, height: 900, touch: false } as const;
 const PHONE = { name: '390x844', width: 390, height: 844, touch: true } as const;
-type Viewport = typeof DESKTOP | typeof PHONE;
+interface Viewport { name: string; width: number; height: number; touch: boolean }
+/** Desktop sizes where the side rails leave little or no centre lane. */
+const NARROW: Viewport[] = [
+  { name: '768x1024', width: 768, height: 1024, touch: false },
+  { name: '800x470', width: 800, height: 470, touch: false },
+  { name: '1280x720', width: 1280, height: 720, touch: false },
+];
+
+/**
+ * Every visible measure control sits inside the viewport and on top at its
+ * centre, and the location bar's parts neither overlap each other nor the
+ * header pill.
+ */
+async function expectMeasureLayoutClear(page: Page): Promise<void> {
+  const problems = await page.evaluate(() => {
+    const out: string[] = [];
+    const vw = innerWidth;
+    const vh = innerHeight;
+    const shown = (e: Element): boolean => {
+      const r = e.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden';
+    };
+    const name = (e: Element): string => `${e.className} "${(e.textContent ?? '').trim().slice(0, 20)}"`;
+    const meet = (a: DOMRect, b: DOMRect): boolean =>
+      a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;
+    const panels = Array.from(document.querySelectorAll('.olv-right-rail:not(.olv-right-collapsed), .olv-nav-hud, .olv-left-panels:not(.olv-rail-collapsed) > *')).filter(shown);
+    const sel = '.olv-measure-bar, .olv-measure-bar button, .olv-measure-hint-text, .olv-measure-done, .olv-topbar > .olv-loc';
+    for (const e of Array.from(document.querySelectorAll(sel)).filter(shown)) {
+      e.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      const r = e.getBoundingClientRect();
+      if (r.left < 0 || r.top < 0 || r.right > vw || r.bottom > vh) out.push(`outside viewport: ${name(e)}`);
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      if (hit && !e.contains(hit) && !hit.contains(e)) out.push(`covered: ${name(e)} by ${name(hit)}`);
+      if (!e.matches('.olv-loc')) for (const p of panels) if (!p.contains(e) && meet(r, p.getBoundingClientRect())) out.push(`under a panel: ${name(e)} / ${name(p)}`);
+    }
+    const hint = document.querySelector('.olv-measure-hint-text');
+    if (hint && shown(hint) && hint.getBoundingClientRect().width < 120) out.push('measure hint squeezed');
+    const loc = document.querySelector('.olv-topbar > .olv-loc');
+    if (loc && shown(loc)) {
+      const parts = Array.from(loc.querySelectorAll('.olv-loc-back, .olv-loc-crumbs > li')).filter(shown);
+      parts.slice(0, -1).forEach((a) => { if (a.scrollWidth > a.clientWidth + 1) out.push(`location part clipped: ${name(a)}`); });
+      parts.forEach((a, i) => parts.slice(i + 1).forEach((b) => {
+        if (meet(a.getBoundingClientRect(), b.getBoundingClientRect())) out.push(`location parts overlap: ${name(a)} / ${name(b)}`);
+      }));
+      const pill = document.querySelector('.olv-badge');
+      if (pill && meet(loc.getBoundingClientRect(), pill.getBoundingClientRect())) out.push('location bar overlaps the header pill');
+    }
+    return out;
+  });
+  expect(problems).toEqual([]);
+}
 
 /** Read where the user is from the DOM. Presentation only; nothing is changed. */
 async function readSurface(page: Page): Promise<SurfaceState> {
@@ -186,6 +236,16 @@ async function j1(page: Page, vp: Viewport, id: string): Promise<void> {
   }
   await expect(row).toBeVisible({ timeout: 5_000 });
   await expect(row).toContainText(/\d\s?(m|ft|units?)\b/);
+  if (NARROW.includes(vp)) await expectMeasureLayoutClear(page);
+  if (vp.touch) {
+    // The phone toolbar ends above the state strip.
+    const gap = await page.evaluate(() => {
+      const bar = document.querySelector('.olv-measure-bar')!.getBoundingClientRect();
+      const strip = document.querySelector('.olv-state-strip')!.getBoundingClientRect();
+      return strip.top - bar.bottom;
+    });
+    expect(gap).toBeGreaterThanOrEqual(0);
+  }
   rec.succeed();
   rec.fact('valueText', (await row.innerText()).replace(/\s+/g, ' ').trim().slice(0, 80));
   rec.finish();
@@ -207,6 +267,7 @@ async function j3(page: Page, vp: Viewport, id: string): Promise<void> {
   await rec.click(modeTab(page, vp, 'work'), 'Tools tab');
   await rec.click(modeScope(page, vp, 'work').locator('.olv-tool-launcher .olv-tl-row', { hasText: 'Measure' }).first(), 'Measure');
   await expect(modeScope(page, vp, 'work').locator('.olv-ws-task-title')).toHaveText('Measure');
+  if (NARROW.includes(vp)) await expectMeasureLayoutClear(page);
   rec.succeed();
   rec.finish();
 }
@@ -271,6 +332,15 @@ test.describe('CE wayfinding journeys', () => {
   test('J3 lab and back', async ({ page }) => {
     await j3(page, DESKTOP, 'J3');
   });
+
+  for (const vp of NARROW) {
+    test(`J1 at ${vp.name}`, async ({ page }) => {
+      await j1(page, vp, `J1-${vp.name}`);
+    });
+    test(`J3 at ${vp.name}`, async ({ page }) => {
+      await j3(page, vp, `J3-${vp.name}`);
+    });
+  }
 
   test('J4 recover orientation with the rail collapsed and a workspace open', async ({ page }) => {
     await openPage(page, DESKTOP, dropDenseGridPly);

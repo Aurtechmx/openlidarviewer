@@ -35,7 +35,7 @@
 /* Overlay sits above the vignette so panels read crisp against the
  * darkened corners — the vignette is decorative scene framing, not a
  * dimming layer for the UI. */
-.olv-overlay { position: absolute; inset: 0; pointer-events: none; z-index: var(--z-scene-overlay); }
+.olv-overlay { position: absolute; inset: 0; pointer-events: none; z-index: var(--z-scene-overlay); overflow-x: clip; }
 .olv-overlay > * { pointer-events: auto; }
 .olv-dragging::after {
   content: "";

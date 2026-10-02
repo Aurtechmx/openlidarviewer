@@ -317,6 +317,10 @@
   opacity: 0; pointer-events: none;
   transition: opacity var(--dur-slow) var(--ease-standard), transform var(--dur-slow) var(--ease-standard);
 }
+/* A collapsed rail gives its width back to the band, so the card centres on
+   what is actually free. */
+.olv-overlay:has(.olv-right-rail.olv-right-collapsed) .olv-project-card { --olv-right-rail-width: 0px; }
+.olv-overlay:has(.olv-left-panels.olv-rail-collapsed) .olv-project-card { --olv-rail-width: 0px; }
 .olv-project-card.olv-visible {
   opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto;
 }

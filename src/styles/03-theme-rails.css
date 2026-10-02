@@ -24,6 +24,8 @@ body.olv-theme-light {
   --warn: #7d5b07; /* darkened from #b8860b, which read 2.9:1 on the near-white caption fill */
   --accent: #0088c8;
   --accent-soft: rgba(0, 136, 200, 0.18);
+  /* The phone sheet and dock follow the theme surface. */
+  --m-glass-raised: var(--panel);
   /* Deeper violet so the blocked verdict stays legible on the near-white panel. */
   --rating-blocked: #7c3aed;
   /* The rest of the readiness scale, darkened the same way as --rating-blocked

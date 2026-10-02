@@ -30,6 +30,14 @@
   border: 0.5px solid var(--hairline);
   border-radius: var(--radius-pill);
   max-width: max-content;
+  overflow: hidden;
+}
+/* The current page shrinks; the rest keep their width instead of overlapping. */
+.olv-loc-back, .olv-loc-crumbs > li:not(:last-child) { flex-shrink: 0; }
+/* 768 to 1023 px: the privacy pill keeps its lock and accessible text, so the
+   location bar has room. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .olv-topbar:has(.olv-loc:not([hidden], .is-mode-home)) .olv-badge { font-size: 0; gap: 0; }
 }
 .olv-loc-crumbs {
   display: flex;

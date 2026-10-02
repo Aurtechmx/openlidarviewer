@@ -161,13 +161,22 @@
   position: absolute; top: var(--olv-lane-top); left: 50%; transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: center;
   gap: var(--space-sm); z-index: calc(var(--z-float) + 1);
-  background: rgba(11, 17, 33, 0.82);
+  background: var(--panel);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   border: 0.5px solid rgba(0, 178, 255, 0.28);
   border-radius: var(--radius-lg); padding: var(--space-sm) var(--space-lg);
   /* Stay clear of the side panels (~300 px each) so it never overlaps them. */
   width: max-content; max-width: calc(100vw - 680px);
-  overflow: visible;
+  /* Fit between the header and the dock; scroll inside when it does not. */
+  max-height: calc(100% - var(--olv-lane-top) - 72px); overflow-y: auto;
+}
+/* Below 1024 px the side columns leave no centre lane. The bar takes the top of
+   the stage and the columns move down under it (wireMeasureBarClearance). */
+@media (max-width: 1023px) {
+  .olv-measure-bar {
+    inset-inline: var(--space-3xl); margin-inline: auto;
+    transform: none; width: auto; max-width: 560px;
+  }
 }
 .olv-mkinds {
   display: flex; flex-direction: row; flex-wrap: wrap; justify-content: center;
@@ -184,7 +193,7 @@
 .olv-mkind:hover { color: var(--text); }
 .olv-mkind:active { transform: scale(0.96); }
 .olv-mkind-active {
-  color: var(--accent); background: var(--accent-soft);
+  color: var(--accent-text, var(--accent)); background: var(--accent-soft);
   border-color: rgba(0, 178, 255, 0.4);
 }
 /* Auxiliary kind button (Lasso volume).

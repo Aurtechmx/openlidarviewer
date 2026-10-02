@@ -1,6 +1,7 @@
 import { DisposableGroup } from '../disposableGroup';
 import { el } from './dom';
 import { storageGet, storageSet } from './safeStorage';
+import { narrowStage } from './panelChrome';
 import type { NavMode } from '../render/NavController';
 import {
   CAMERA_PRESET_KEY,
@@ -148,7 +149,8 @@ function hasStoredHelpPinned(): boolean {
 
 function readStoredHelpPinned(): boolean {
   const stored = storageGet(HELP_PINNED_KEY);
-  return stored === null ? true : stored === '1';
+  // A first-time user gets it open where the stage has room for it.
+  return stored === null ? !narrowStage() : stored === '1';
 }
 
 /** Storage key for the legend's own open/closed state, independent of the panel. */
@@ -768,7 +770,7 @@ export class NavBar {
       this._render();
       return;
     }
-    this._helpPinned = true;
+    this._helpPinned = readStoredHelpPinned();
     if (this._hintTimer !== null) {
       clearTimeout(this._hintTimer);
       this._hintTimer = null;

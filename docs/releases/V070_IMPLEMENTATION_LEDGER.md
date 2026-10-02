@@ -123,17 +123,18 @@ the two entries were renumbered when the branches were integrated.
 | L216 | ARCHITECTURE | TEST | med | FIXED | new | A heavy local LAS or LAZ that replaced an open COPC, EPT or 3D Tiles stream kept that stream's class tally, report cloud and confidence, so the class legend could merge counts across sources and the report could describe the previous source. |
 | L218 | ARCHITECTURE | TEST | med | FIXED | new | The capability lint let a qualifier anywhere in a document's first 15 lines excuse every claim in it, and the manifest listed live station suggestion under the hidden overlay. The release gates accepted a step that waited for its own group or a later member, and the runner then polled forever. |
 | L219 | ARCHITECTURE | TEST | med | FIXED | new | The workspace router kept one direction timer for every mode host, so a page change in a second mode within 400 ms left the first host's entry animation class in place, and the router had no dispose. Recovery compared a reopened source with the newest journal entry alone, so after work on A and then B, reopening A said it differed and never offered A's work. |
+| L217 | UI | TEST | med | FIXED | new | Below 1024 px the measure toolbar wrapped into a column taller than the stage: at 800 × 470 Distance sat out of reach and the toolbar ran into the state strip; at 768 × 1024 the hint was one word per line and Done sat under the View rail. The Navigation panel and the View rail opened over the scan, the location bar overlapped itself, and the landing mark sat under the header pill on short windows. |
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 72
+- FIXED: 73
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 94
+- total: 95
 
 ## Detail
 
@@ -8280,3 +8281,27 @@ labels the PDAL figures as agreement under the study settings, gives the
 truth-based table, explains the low-blunder case and states the curved-terrain
 limit. `groundFilter.ts`, its defaults and the existing results files are
 unchanged.
+
+### L217 · FIXED · UI
+
+Below 1024 px the measure toolbar spans the stage under the header, at most
+560 px wide, and both side columns start below it. The toolbar is capped to
+the space above the dock and scrolls inside itself. The phone rail centres its
+tools when they fit. The Navigation panel and the View rail start closed
+below 1024 px until the user opens them; a stored choice still wins. The
+location bar keeps each part at its width and shortens the current page,
+and between 768 and 1023 px the privacy pill shows its lock while a page is
+open. The landing content starts below the header. The stage overlay clips
+horizontally, so a collapsed rail no longer widens the page.
+The measure toolbar, the phone tool rail and the toast use the `--panel`
+surface, so their text meets WCAG AA in the light theme. On a phone the tool
+rail ends above the state strip. In the light theme the active tool caption
+and Done use `--accent-text` (#005f8c), and the phone sheet and dock use the
+theme surface. On a phone a toast starts right of the tool rail.
+
+`tests/e2e/ceJourneys.spec.ts` runs J1 and J3 at 768 × 1024, 800 × 470 and
+1280 × 720 and checks that the toolbar, its buttons, the hint, Done and the
+location bar sit inside the viewport and clear of the side panels.
+`tests/e2e/responsiveLayout.spec.ts` checks the landing mark at 800 px wide
+and the hint and toast contrast in both themes. The phone J1 journey checks
+that the tool rail ends above the state strip.

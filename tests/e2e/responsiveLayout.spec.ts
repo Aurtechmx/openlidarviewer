@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dropTinyLas } from './helpers';
+import { dropTinyLas, dropTerrainAccessUtmLas } from './helpers';
 
 /**
  * responsiveLayout.spec.ts — the v0.7 layout-lane audit's own regression
@@ -283,3 +283,102 @@ test.describe('responsive layout — findings the generic sweep cannot trigger',
     expect(lockBox!.height, 'lock button height').toBeGreaterThanOrEqual(44);
   });
 });
+
+test('the landing mark stays below the header at 800 px wide', async ({ page }) => {
+  for (const height of [470, 900]) {
+    await page.setViewportSize({ width: 800, height });
+    await page.goto('/');
+    const mark = page.locator('.olv-empty-hero');
+    await expect(mark).toBeVisible();
+    await page.waitForTimeout(600); // the splash enter animation
+    const header = await page.locator('.olv-topbar').evaluate((t) => {
+      let bottom = 0;
+      t.querySelectorAll('.olv-badge, .olv-wordmark, a, button').forEach((e) => {
+        const r = e.getBoundingClientRect();
+        if (r.height > 0) bottom = Math.max(bottom, r.bottom);
+      });
+      return bottom;
+    });
+    const top = (await mark.boundingBox())!.y;
+    expect(top, `mark top at 800x${height}`).toBeGreaterThanOrEqual(header);
+  }
+});
+
+/**
+ * Contrast of each `[text, label]` element's colour on what is painted behind
+ * it: the element's own and its ancestors' backgrounds, alpha composited.
+ */
+async function contrasts(page: Page, selectors: string[]): Promise<Record<string, number>> {
+  return page.evaluate((sels) => {
+    type C = [number, number, number, number];
+    const parse = (c: string): C => {
+      const v = (c.match(/[\d.]+/g) ?? []).map(Number);
+      return [v[0], v[1], v[2], v[3] ?? 1];
+    };
+    const over = (top: C, under: C): C => [0, 1, 2].map((i) => top[i] * top[3] + under[i] * (1 - top[3])).concat(1) as C;
+    const lum = (c: C): number => {
+      const [r, g, b] = c.slice(0, 3).map((x) => {
+        const s = x / 255;
+        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const out: Record<string, number> = {};
+    for (const sel of sels) {
+      const el = document.querySelector(sel);
+      if (!el) { out[sel] = 0; continue; }
+      const layers: C[] = [];
+      for (let e: Element | null = el; e; e = e.parentElement) {
+        const c = parse(getComputedStyle(e).backgroundColor);
+        if (c[3] > 0) layers.push(c);
+        if (c[3] >= 1) break;
+      }
+      let bg: C = [255, 255, 255, 1];
+      for (const l of layers.reverse()) bg = over(l, bg);
+      const fg = over(parse(getComputedStyle(el).color), bg);
+      const [hi, lo] = [lum(fg), lum(bg)].sort((x, y) => y - x);
+      out[sel] = (hi + 0.05) / (lo + 0.05);
+    }
+    return out;
+  }, selectors);
+}
+
+for (const theme of ['light', 'dark']) {
+  test(`measure text and the toast meet AA in the ${theme} theme`, async ({ page }) => {
+    await page.addInitScript((t) => localStorage.setItem('olv-theme', t), theme);
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('/?test=1');
+    await dropTerrainAccessUtmLas(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 30_000 });
+    await page.locator('.olv-ws-tab[data-mode="work"]').click();
+    await page.locator('#olv-ws-mode-work .olv-tool-launcher .olv-tl-row', { hasText: 'Measure' }).click();
+    await expect(page.locator('.olv-measure-bar .olv-measure-hint-text')).toBeVisible();
+    // The Lasso button raises the same toast the scan-ready message uses.
+    await page.locator('.olv-mkind-aux').click();
+    await expect(page.locator('.olv-lasso-toast.olv-visible')).toBeVisible();
+    const c = await contrasts(page, ['.olv-measure-bar .olv-measure-hint-text', '.olv-lasso-toast-msg', '.olv-mkind-active .olv-mkind-name', '.olv-measure-done']);
+    for (const [sel, ratio] of Object.entries(c)) expect(ratio, sel).toBeGreaterThanOrEqual(4.5);
+  });
+
+  test(`phone measure rail, toast and sheet crumb at 390x844 in the ${theme} theme`, async ({ page }) => {
+    await page.addInitScript((t) => localStorage.setItem('olv-theme', t), theme);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/?test=1');
+    await dropTerrainAccessUtmLas(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 30_000 });
+    await page.locator('.olv-mobile-sheet .olv-msheet-tab[data-tab="work"]').click();
+    await page.locator('.olv-msheet-slot[data-tab="work"] .olv-tool-launcher .olv-tl-row', { hasText: 'Measure' }).click();
+    await expect(page.locator('.olv-measure-bar')).toBeVisible();
+    await page.locator('.olv-mkind-aux').click();
+    const toast = page.locator('.olv-lasso-toast.olv-visible');
+    await expect(toast).toBeVisible();
+    // The toast leaves the rail's actions uncovered.
+    const [barRight, toastLeft] = await page.evaluate(() => [
+      document.querySelector('.olv-measure-bar')!.getBoundingClientRect().right,
+      document.querySelector('.olv-lasso-toast')!.getBoundingClientRect().left,
+    ]);
+    expect(toastLeft, 'toast left edge').toBeGreaterThanOrEqual(barRight);
+    const c = await contrasts(page, ['.olv-mkind-active .olv-mkind-name', '.olv-measure-done', '.olv-msheet-head .olv-loc-here', '.olv-lasso-toast-msg']);
+    for (const [sel, ratio] of Object.entries(c)) expect(ratio, sel).toBeGreaterThanOrEqual(4.5);
+  });
+}

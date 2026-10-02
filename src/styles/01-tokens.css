@@ -307,6 +307,8 @@
  * (tests/stateTokenContrast.test.ts). */
 body.olv-theme-light {
   --state-withheld: #be185d;
+  /* Accent for small text on white, where --accent reads 3.9:1. */
+  --accent-text: #005f8c;
 }
 body.olv-theme-high-contrast {
   --state-withheld: #f9a8d4;
