@@ -58,6 +58,7 @@ import {
   formatArea,
   formatGrade,
   formatLength,
+  formatUnitUnverified,
   GEOGRAPHIC_CRS_MEASURE_NOTICE,
   VOLUME_ESTIMATE_NOTICE,
 } from '../render/measure/format';
@@ -1147,7 +1148,8 @@ export class MeasurePanel {
       prev &&
       prev.datumResolved === scene.datumResolved &&
       prev.layers === scene.layers &&
-      prev.verticalReferenceKnown === scene.verticalReferenceKnown
+      prev.verticalReferenceKnown === scene.verticalReferenceKnown &&
+      prev.unitVerified === scene.unitVerified
     ) {
       return;
     }
@@ -1326,7 +1328,10 @@ export class MeasurePanel {
     const breakdown = breakdownParts(
       s,
       this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric',
-      { formatLength, formatArea, formatGrade, formatAngle },
+      // An unknown horizontal unit prints the source number marked unverified.
+      s.unitUnverified
+        ? { formatLength: formatUnitUnverified, formatArea: formatUnitUnverified, formatGrade, formatAngle }
+        : { formatLength, formatArea, formatGrade, formatAngle },
     );
     const breakdownLine = breakdown
       ? el('div', {

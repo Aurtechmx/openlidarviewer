@@ -51,6 +51,11 @@ export interface MeasureSceneContext {
   readonly layers: MeasureLayerContext;
   /** True when the vertical reference (datum) is positively known. */
   readonly verticalReferenceKnown: boolean;
+  /**
+   * False when the horizontal unit is unknown: values are source units, not
+   * metres, and no measurement reads as datum resolved. Omitted counts as known.
+   */
+  readonly unitVerified?: boolean;
 }
 
 /** The per-measurement input: the scene facts plus the kind's height dependency. */
@@ -93,6 +98,9 @@ export function measureConfidence(ctx: MeasureConfidenceContext): MeasureConfide
   }
 
   const reasons: string[] = [];
+  if (ctx.unitVerified === false) {
+    reasons.push('unit unverified (source units, not metres)');
+  }
   if (!ctx.datumResolved) {
     reasons.push('shared datum unresolved — coordinates are scene-local');
   }

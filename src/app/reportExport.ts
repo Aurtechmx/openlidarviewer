@@ -49,6 +49,7 @@ import type { ScanService } from './ScanService';
 import type { loadReportEngine } from '../lazyChunks';
 import { streamingFormatToken } from '../render/streaming/StreamingSource';
 import { classificationCoverage } from '../render/class/classificationCoverage';
+import { truncationNote } from '../io/truncation';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure decisions the extraction exposes — decidable without a Viewer, the report
@@ -198,10 +199,11 @@ export function exportGeoContext(deps: ReportExportDeps): GeoExportContext {
     // SOURCE frame (float64-transform.md step 2): sessions save + import here.
     if (c) {
       const declared = c.declaredPointCount;
-      const basis = declared != null && declared > c.pointCount ? 'sampled' : declared != null ? 'full' : null;
+      const coverageNote = truncationNote(c);
+      const basis = coverageNote ? 'partial' : declared != null && declared > c.pointCount ? 'sampled' : declared != null ? 'full' : null;
       return {
         origin: c.sourceOrigin, crsName, name: c.name, crs, source: { key: c, streamed: false },
-        interpretation: sourceInterpretationOf(c.metadata?.interpretationLevel ?? null, basis),
+        interpretation: { ...sourceInterpretationOf(c.metadata?.interpretationLevel ?? null, basis), coverageNote },
       };
     }
   }

@@ -25,8 +25,11 @@ import type { ResolvedCrs } from '../geo/CoordinateTypes';
 /** How ready a derivable product is, given the loaded data. */
 export type Readiness = 'ready' | 'review' | 'blocked';
 
-/** How much of a scan the operation can actually see. */
-export type Coverage = 'full' | 'sampled' | 'resident-only';
+/**
+ * How much of a scan the operation can actually see. `partial` is a file whose
+ * body ends before the records its header declares.
+ */
+export type Coverage = 'full' | 'sampled' | 'resident-only' | 'partial';
 
 /** Whether a scan carries classification, and how completely. */
 export type ClassPresence = 'none' | 'partial' | 'full';

@@ -320,6 +320,27 @@ a placed reach of 16,384 m or more, and those paths stay under 1 mm inside the
 gate. Picking and distance are computed in Float64 and are exact, as are
 exports.
 
+## Measurement exports with more than one scan open
+
+The GeoJSON and CSV measurement exports place each measurement through the
+scan it belongs to and name that scan in a `source` field and in the file
+name. A measurement takes the scan that was active when it was finished. When
+the points were picked on another scan whose heights are not mounted in the
+shared frame, its height is read in the active scan's vertical frame. A
+measurement with no recorded scan, or a set spanning scans that declare
+different coordinate systems, is refused rather than exported. The integrity
+and findings reports name the active scan; they carry lengths and areas, not
+coordinates. The site KML is written only while one scan is open.
+
+## Truncated files and unknown units
+
+A LAS file whose body ends before its declared records opens with the records
+it holds and reads as partial coverage: "Truncated: N of M points read".
+Truncation is recorded for uncompressed LAS only. When the horizontal unit is
+unknown, measurement rows, their breakdown line and the measure hint state the
+unit is unverified. The profile chart axes, the profile summary and the Profile
+Workbench still label their values in metres.
+
 ## Export digests that some surfaces cannot carry
 
 Provenance-carrying exports record the source file SHA-256, the CRS origin and,

@@ -50,11 +50,74 @@ export interface MeasurementExportActionDeps {
       'integrityReportFile' | 'measurementsToFindings' | 'findingsReportFile' | 'resolveExportDigests'
     >
   >;
+  /**
+   * Every open layer, for placing each measurement through the layer it was
+   * taken on. Omitted or a single layer: the active frame from `geo()`.
+   */
+  readonly layers?: { readonly view: ExportLayerView; readonly stableIdFor: (viewerId: string) => string | null };
+  /** Shown when the export is refused rather than written. */
+  readonly refuse?: (message: string) => void;
   /** Active scan's classification epoch (0 when none), for the report manifest. */
   readonly activeClassificationEpoch: () => number;
   readonly appVersion: string;
   /** ISO timestamp source — injected so the report build stays deterministic. */
   readonly now: () => string;
+}
+
+/** One open layer, as the measurement export places points through it. */
+export interface ExportLayer {
+  /** Stable layer id (`model/layerIdentity`), or null when none was bound. */
+  readonly stableId: string | null;
+  /** Display name: the file name. */
+  readonly name: string;
+  readonly sourceOrigin: readonly [number, number, number];
+  /** source-local to project-local offset, or null when the layer is unplaced. */
+  readonly projectOffset: readonly [number, number, number] | null;
+  /** The CRS the layer's file declares, or null. */
+  readonly crsName: string | null;
+}
+
+/** The slice of the viewer the layer read needs. */
+export interface ExportLayerView {
+  clouds(): readonly string[];
+  getCloud(id: string): { readonly name: string; readonly sourceOrigin: readonly [number, number, number]; readonly metadata?: { readonly crs?: { readonly name?: string } | null } | null } | undefined;
+  layerProjectOffset(id: string): readonly [number, number, number] | null;
+}
+
+/** The open layers of a viewer, read once for an export. */
+export function exportLayersOf(v: ExportLayerView, stableIdFor: (viewerId: string) => string | null): ExportLayer[] {
+  const out: ExportLayer[] = [];
+  for (const id of v.clouds()) {
+    const c = v.getCloud(id);
+    if (!c) continue;
+    out.push({ stableId: stableIdFor(id), name: c.name, sourceOrigin: c.sourceOrigin, projectOffset: v.layerProjectOffset(id), crsName: c.metadata?.crs?.name ?? null });
+  }
+  return out;
+}
+
+/**
+ * With several layers open, each measurement's layer: the one its owner names.
+ * A measurement whose layer is unknown, or a set spanning layers that declare
+ * different CRSs, has no single honest frame, so the export is refused.
+ */
+function ownLayers(
+  measurements: readonly Measurement[],
+  layers: readonly ExportLayer[],
+): { byId: Map<string, ExportLayer> } | { refused: string } {
+  const byId = new Map<string, ExportLayer>();
+  let unknown = 0;
+  for (const m of measurements) {
+    const l = m.owner?.layerId ? layers.find((x) => x.stableId === m.owner!.layerId) : undefined;
+    if (l) byId.set(m.id, l);
+    else unknown++;
+  }
+  if (unknown > 0) {
+    return { refused: `Not exported: ${unknown} of ${measurements.length} measurements have no recorded scan, so their coordinates cannot be placed. Close the other scans and export again.` };
+  }
+  if (new Set([...byId.values()].map((l) => l.crsName)).size > 1) {
+    return { refused: 'Not exported: the measurements come from scans with different coordinate systems. Export them one scan at a time.' };
+  }
+  return { byId };
 }
 
 /** Export the placed measurements as an open GeoJSON or CSV file. */
@@ -65,16 +128,37 @@ export async function exportMeasurementsFile(
   const { measure } = deps;
   const measurements = measure.getMeasurements();
   if (measurements.length === 0) return;
+  const layers = deps.layers ? exportLayersOf(deps.layers.view, deps.layers.stableIdFor) : [];
+  const own = layers.length > 1 ? ownLayers(measurements, layers) : null;
+  if (own && 'refused' in own) {
+    deps.refuse?.(own.refused);
+    return;
+  }
   // Measurement points are LOCAL (recentered); add the origin back to land them
   // in the source projected/local frame. `geo()` resolves the origin for
   // streaming scans too (renderOrigin) — a static-only read would export at
   // render-frame coordinates. Resolved BEFORE the import below, so the frame and
   // the measurements come from one instant, not two.
   const geo = deps.geo();
+  // Several layers: each point leaves through its own layer, undoing that
+  // layer's placement and adding its file origin. The file names the sources
+  // it holds; the digest and data basis describe the active scan, so they are
+  // stated only when it is the one source.
+  const sources = own ? [...new Set([...own.byId.values()].map((l) => l.name))].sort() : null;
+  const activeOnly = !sources || (sources.length === 1 && sources[0] === geo.name);
+  const stems = sources ? sources.map(deps.baseName) : geo.name ? [deps.baseName(geo.name)] : [];
   const { measurementsToGeoJSON, measurementsToCsv, resolveExportDigests } = await deps.loadMeasurementExport();
-  const digests = await resolveExportDigests(geo.source, geo.crs);
+  const digests = await resolveExportDigests(activeOnly ? geo.source : undefined, geo.crs);
   const ctx: MeasurementExportContext = {
-    toOutput: (p) => [p[0] + geo.origin[0], p[1] + geo.origin[1], p[2] + geo.origin[2]],
+    toOutput: own
+      ? (p, m) => {
+          const l = own.byId.get(m!.id)!;
+          const d = l.projectOffset ?? [0, 0, 0];
+          const o = l.sourceOrigin;
+          return [p[0] - d[0] + o[0], p[1] - d[1] + o[1], p[2] - d[2] + o[2]];
+        }
+      : (p) => [p[0] + geo.origin[0], p[1] + geo.origin[1], p[2] + geo.origin[2]],
+    sourceOf: own ? (m) => own.byId.get(m.id)!.name : () => geo.name,
     up: measure.worldUp,
     unitToMetres: measure.unitToMetres,
     verticalUnitToMetres: measure.verticalUnitToMetres,
@@ -88,16 +172,16 @@ export async function exportMeasurementsFile(
     unitsVerified: measure.crsKnown && !measure.geographicCrs,
     provenance: {
       generatedAt: deps.now(),
-      source: geo.name ? deps.baseName(geo.name) : null,
+      source: stems.length > 0 ? stems.join('+') : null,
       crsName: geo.crsName,
-      interpretation: geo.interpretation,
+      interpretation: activeOnly ? geo.interpretation : undefined,
       crs: geo.crs,
       digests,
     },
   };
   const text =
     format === 'geojson' ? measurementsToGeoJSON(measurements, ctx) : measurementsToCsv(measurements, ctx);
-  const stem = geo.name ? deps.baseName(geo.name) : 'measurements';
+  const stem = stems.length > 0 ? stems.join('+') : 'measurements';
   deps.downloadText(`${stem}-measurements.${format === 'geojson' ? 'geojson' : 'csv'}`, text);
 }
 

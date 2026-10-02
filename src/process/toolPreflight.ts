@@ -38,6 +38,7 @@ import { confidenceForKind, layerContextOf } from '../render/measure/measureConf
 import type { MeasurementKind } from '../render/measure/types';
 import type { Coverage, ProductId, Readiness, ScanFacts } from './ProcessPlan';
 import { ProcessService } from './ProcessService';
+import { TRUNCATED_REASON } from '../io/truncation';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Vocabulary
@@ -336,6 +337,7 @@ const COVERAGE_RANK: Readonly<Record<Coverage, number>> = {
   full: 0,
   sampled: 1,
   'resident-only': 2,
+  partial: 3,
 };
 
 /**
@@ -356,6 +358,14 @@ function coverageShortfall(scans: readonly ScanFacts[]): Coverage | null {
 function coverageReason(scans: readonly ScanFacts[]): CandidateReason | null {
   const shortfall = coverageShortfall(scans);
   if (shortfall === null) return null;
+  if (shortfall === 'partial') {
+    return {
+      status: 'review',
+      code: 'PARTIAL_COVERAGE',
+      message: TRUNCATED_REASON,
+      actions: ['continue-resident-only'],
+    };
+  }
   return shortfall === 'resident-only'
     ? {
         status: 'review',

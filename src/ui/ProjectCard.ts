@@ -1,5 +1,6 @@
 import { el, formatCount } from './dom';
 import { announcePolite } from './politeAnnounce';
+import { truncationText, type Truncation } from '../io/truncation';
 
 /**
  * Route a message to the app's single polite live region (see
@@ -43,6 +44,8 @@ export interface ProjectInfo {
    * PROBABLE the card adds a one-line notice to check the columns and units.
    */
   interpretationLevel?: string;
+  /** Set when the file ends before its declared records; the scan is then partial. */
+  truncation?: Truncation;
   /** Points shown after downsampling. */
   shownCount: number;
   /** Points decoded from the file (before downsampling). */
@@ -136,7 +139,7 @@ export class ProjectCard {
       ? formatCount(info.totalCount)
       : `${formatCount(info.shownCount)} / ${formatCount(info.totalCount)}`;
 
-    const notice = info.interpretationLevel === 'PROBABLE'
+    const notice = info.truncation ? truncationText(info.truncation) : info.interpretationLevel === 'PROBABLE'
       ? `Opened as ${info.format.toUpperCase()} text from its content. Check the columns and units.`
       : null;
 

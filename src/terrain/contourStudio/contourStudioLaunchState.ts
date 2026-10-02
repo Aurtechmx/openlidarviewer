@@ -22,6 +22,8 @@
  * former until the launcher lands.
  */
 
+import { TRUNCATED_REASON } from '../../io/truncation';
+
 /**
  * The facts the launcher needs, lifted out of the analysis result. Every field
  * is something the v0.5.8 pipeline already knows; nothing here is fabricated.
@@ -67,7 +69,7 @@ export interface ContourStudioPrerequisites {
    * Optional so a caller with no coverage fact states nothing; the export
    * permit treats a missing capability verdict as a shortfall regardless.
    */
-  readonly coverage?: 'full' | 'sampled' | 'resident-only';
+  readonly coverage?: 'full' | 'sampled' | 'resident-only' | 'partial';
   /**
    * The ground the surface stands on was derived by the filter, not read from
    * a producer class. The capability model rates that product `review`; the
@@ -149,6 +151,7 @@ const REASON = {
   noInterval: 'No contour interval could be recommended for this surface.',
   sampled:
     'Only a sample of the scan was read; a whole-dataset deliverable cannot be claimed until the full cloud is analysed.',
+  partial: TRUNCATED_REASON,
   residentOnly:
     'Only the resident streaming set is loaded; a whole-dataset deliverable cannot be claimed until the full cloud is graded.',
   derivedGround:
@@ -216,6 +219,7 @@ export function evaluateContourStudioLaunchState(
   const exploratoryReasons: string[] = [];
   if (prereqs.streaming) exploratoryReasons.push(REASON.streaming);
   if (prereqs.coverage === 'sampled') exploratoryReasons.push(REASON.sampled);
+  if (prereqs.coverage === 'partial') exploratoryReasons.push(REASON.partial);
   if (prereqs.coverage === 'resident-only') exploratoryReasons.push(REASON.residentOnly);
   if (prereqs.groundIsDerived) exploratoryReasons.push(REASON.derivedGround);
   if (!prereqs.verticalUnitsKnown) exploratoryReasons.push(REASON.unknownVertical);

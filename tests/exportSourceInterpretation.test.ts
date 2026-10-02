@@ -38,7 +38,8 @@ describe('sourceInterpretationOf', () => {
     expect(sourceInterpretationOf(null, 'full')).toEqual({ interpretationLevel: 'not-probed', dataBasis: 'full' });
     expect(sourceInterpretationOf(undefined, undefined)).toEqual({ interpretationLevel: 'not-recorded', dataBasis: 'unknown' });
     expect(sourceInterpretationOf('VERIFIED', 'resident-only').dataBasis).toBe('resident-only');
-    expect(sourceInterpretationOf('VERIFIED', 'partial').dataBasis).toBe('unknown');
+    expect(sourceInterpretationOf('VERIFIED', 'partial').dataBasis).toBe('partial');
+    expect(sourceInterpretationOf('VERIFIED', 'truncated').dataBasis).toBe('unknown');
   });
 
   it('prints two fixed README lines', () => {

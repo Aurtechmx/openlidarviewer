@@ -10,7 +10,8 @@
  *     format, so a file opened on its signature records `'not-probed'`; that
  *     is a statement about the probe, not a weaker reading.
  *   - `dataBasis`: which part of the source the result was computed on
- *     (`'full'`, `'sampled'`, `'resident-only'`), or `'unknown'` when the
+ *     (`'full'`, `'sampled'`, `'resident-only'`, `'partial'` for a truncated
+ *     file), or `'unknown'` when the
  *     producing layer did not record one.
  *
  * Pure data and a leaf: no DOM, no three.js, no I/O and no runtime imports, so any
@@ -21,7 +22,7 @@
 /** The registered method the manifest op is stamped with. */
 export const SOURCE_INTERPRETATION_METHOD_ID = 'olv.provenance.source-interpretation';
 
-export type SourceDataBasis = 'full' | 'sampled' | 'resident-only' | 'unknown';
+export type SourceDataBasis = 'full' | 'sampled' | 'resident-only' | 'partial' | 'unknown';
 
 import type { CrsOriginRecord } from './crsOrigin';
 
@@ -31,9 +32,11 @@ export interface SourceInterpretationRecord {
   readonly dataBasis: SourceDataBasis;
   /** Where the coordinate system came from (`crsOrigin.ts`), when the export path read it. */
   readonly crsOrigin?: CrsOriginRecord;
+  /** With a `partial` basis: "Truncated: N of M points read". */
+  readonly coverageNote?: string;
 }
 
-const BASES: ReadonlySet<string> = new Set(['full', 'sampled', 'resident-only']);
+const BASES: ReadonlySet<string> = new Set(['full', 'sampled', 'resident-only', 'partial']);
 
 /**
  * Build the record from the loader's level and the coverage the result was

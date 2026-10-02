@@ -38,8 +38,14 @@ import {
 } from '../render/measure/geometry';
 
 export interface MeasurementExportContext {
-  /** Map a LOCAL render-space point into the output frame (lon/lat/alt or x/y/z). */
-  readonly toOutput: (p: Vec3) => [number, number, number];
+  /**
+   * Map a LOCAL render-space point into the output frame (lon/lat/alt or
+   * x/y/z). The measurement is passed so a point leaves through the frame of
+   * the scan it was taken on.
+   */
+  readonly toOutput: (p: Vec3, m?: Measurement) => [number, number, number];
+  /** The source file a measurement was taken on, written as `source`; null when unknown. */
+  readonly sourceOf?: (m: Measurement) => string | null;
   /** World up vector, for the height / grade / slope derivations. */
   readonly up: Vec3;
   /** Render-units → metres (1 for metric scans; e.g. 0.3048 for US-foot scans). */
@@ -216,7 +222,7 @@ function geometryFor(
   m: Measurement,
   ctx: MeasurementExportContext,
 ): { type: 'LineString' | 'Polygon' | 'Point'; coordinates: unknown } | null {
-  const t = (p: Vec3): [number, number, number] => ctx.toOutput(p);
+  const t = (p: Vec3): [number, number, number] => ctx.toOutput(p, m);
   switch (m.kind) {
     case 'distance':
     case 'polyline':
@@ -261,6 +267,7 @@ export function measurementsToGeoJSON(
         id: m.id,
         name: m.name,
         kind: m.kind,
+        ...(ctx.sourceOf ? { source: ctx.sourceOf(m) } : {}),
         ...(unitsKnown
           ? measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres)
           : inSourceUnits(measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres))),
@@ -418,7 +425,7 @@ function inSourceUnits<T>(metrics: Record<string, T>): Record<string, T> {
 }
 
 const CSV_COLUMNS = [
-  'id', 'name', 'kind', 'vertices',
+  'id', 'name', 'kind', 'source', 'vertices',
   'length_m', 'horizontal_m', 'vertical_m', 'rise_m', 'run_m',
   'grade_pct', 'angle_deg', 'area_m2', 'horizontal_area_m2', 'perimeter_m',
   'width_m', 'depth_m', 'height_m', 'volume_m3', 'cut_m3', 'fill_m3', 'net_m3',
@@ -480,6 +487,7 @@ export function measurementsToCsv(
       id: m.id,
       name: m.name,
       kind: m.kind,
+      ...(ctx.sourceOf ? { source: ctx.sourceOf(m) ?? '' } : {}),
       vertices: m.points.length,
       ...metrics,
       evidence: evidenceFor(m),

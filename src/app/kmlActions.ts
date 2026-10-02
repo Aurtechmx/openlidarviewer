@@ -80,6 +80,11 @@ export interface KmlActionDeps {
   readonly annotations: () => readonly Annotation[];
   /** Placed measurements, in LOCAL render space. */
   readonly measurements: () => readonly Measurement[];
+  /**
+   * Open static layers. The site file places every feature through the active
+   * scan's origin, so it is written only while one scan is open.
+   */
+  readonly layerCount?: () => number;
   /** Saved camera views, in LOCAL render space. */
   readonly viewpoints: () => readonly KmlViewpoint[];
   /** World up vector for the measurement metrics. */
@@ -162,6 +167,7 @@ export function siteKmlStatus(deps: KmlActionDeps): KmlActionStatus {
   if (!deps.hasViewer()) return { ready: false, reason: 'Open a scan first.' };
   const geo = deps.geo();
   if (geo.name === null) return { ready: false, reason: 'KML needs a loaded, georeferenced scan.' };
+  if ((deps.layerCount?.() ?? 1) > 1) return { ready: false, reason: 'Site KML needs one open scan.' };
   // The scan outline is always a placemark, so the site file has content with
   // no feature placed; only a scan with neither an outline nor a feature has
   // nothing to write.

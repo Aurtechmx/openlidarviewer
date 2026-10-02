@@ -27,6 +27,9 @@ import { FT_PER_M as FEET_PER_METRE } from '../../units/units';
  * persistent caveat, and each affected measurement's trust grade. ONE
  * string, shared by all three, so the wording cannot fork.
  */
+/** Hint caveat while the horizontal unit is unknown: values are not metres. */
+export const UNIT_UNVERIFIED_MEASURE_NOTICE = 'unit unverified (source units, not metres)';
+
 export const GEOGRAPHIC_CRS_MEASURE_NOTICE =
   'Geographic CRS (degrees): X/Y are in degrees, not metres, so lengths, ' +
   'areas, grades and profiles are NOT reliable distances. Reproject to a ' +
@@ -227,9 +230,10 @@ export function formatProfileHeadline(
   verticalDrop: number,
   gradePercent: number,
   system: UnitSystem,
+  fmtLen: (v: number) => string = (v) => formatLength(v, system),
 ): string {
-  const len = formatLength(length3d, system);
-  const drop = formatLength(Math.abs(verticalDrop), system);
+  const len = fmtLen(length3d);
+  const drop = fmtLen(Math.abs(verticalDrop));
   const grade = formatGrade(gradePercent);
   let sign: string;
   if (verticalDrop < 0) sign = '−';
@@ -308,10 +312,24 @@ export function formatBoxHeadline(
   height: number,
   volume: number,
   system: UnitSystem,
+  fmtLen: (v: number) => string = (v) => formatLength(v, system),
+  fmtVol: (v: number) => string = (v) => formatVolume(v, system),
 ): string {
-  const w = formatLength(width, system);
-  const d = formatLength(depth, system);
-  const h = formatLength(height, system);
-  const v = formatVolume(volume, system);
+  const w = fmtLen(width);
+  const d = fmtLen(depth);
+  const h = fmtLen(height);
+  const v = fmtVol(volume);
   return `${w} × ${d} × ${h}  · ${v}`;
+}
+
+/** The suffix a value carries when the scan's horizontal unit is unknown. */
+export const UNIT_UNVERIFIED = '(unit unverified)';
+
+/**
+ * A length, area or volume in the source's own unknown unit: the number at
+ * display precision and no unit, e.g. "10.737 (unit unverified)". Never metres.
+ */
+export function formatUnitUnverified(sourceValue: number): string {
+  if (!Number.isFinite(sourceValue)) return '—';
+  return `${Number(sourceValue.toPrecision(DISPLAY_SIG_FIGS))} ${UNIT_UNVERIFIED}`;
 }

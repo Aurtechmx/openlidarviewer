@@ -72,6 +72,8 @@ import {
   formatProfileHeadline,
   formatBoxHeadline,
   formatVolume,
+  formatUnitUnverified,
+  UNIT_UNVERIFIED_MEASURE_NOTICE,
   GEOGRAPHIC_CRS_MEASURE_NOTICE,
   VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE,
 } from './format';
@@ -261,6 +263,8 @@ export interface MeasurementSummary {
   kind: MeasurementKind;
   name: string;
   value: string;
+  /** True when the horizontal unit is unknown, so no value may be read as metres. */
+  unitUnverified?: boolean;
   /**
    * The per-measurement honesty grade (red/yellow/green + reasons + refusal
    * flag). The Measurements panel renders it as a trust dot, a "why?" detail,
@@ -893,6 +897,7 @@ export class MeasureController {
     // stale "no CRS — scale unverified" caption once it becomes known (or
     // gain one if a known CRS is later cleared). Mirrors the drag-end re-grade.
     for (const m of this._measurements) m.trust = this._gradeMeasurement(m);
+    this._updateHint();
     this._emitChange();
   }
 
@@ -947,6 +952,7 @@ export class MeasureController {
       kind: m.kind,
       name: m.name,
       value: this._headlineText(m),
+      ...(this._unitUnverified() ? { unitUnverified: true } : {}),
       profileChart: m.profileChart
         ? scaleProfileSamples(m.profileChart, f, this._originUp, this._effVertical())
         : undefined,
@@ -1186,6 +1192,17 @@ export class MeasureController {
    */
   setOwnerProvider(provider: (() => WorkOwnership | undefined) | null): void {
     this._ownerProvider = provider;
+  }
+
+  /**
+   * Give every measurement without an owner, and an open draft, this owner.
+   * Called when a second layer joins: work placed while one layer was open
+   * was taken on that layer, in the frame it still anchors.
+   */
+  claimUnowned(layerId: string): void {
+    const owner: WorkOwnership = { layerId, frame: 'project' };
+    for (const m of this._measurements) if (!m.owner) m.owner = owner;
+    if (this._draft && !this._draft.owner) this._draft.owner = owner;
   }
 
   /** The owner to stamp on a freshly created measurement, when one is provided. */
@@ -1637,7 +1654,7 @@ export class MeasureController {
     // layer's source-local frame. Undefined for a single-layer scene, so the
     // pre-identity byte shape is preserved exactly (see LayerIdentityService).
     const owner = this._newOwner();
-    if (owner) m.owner = owner;
+    if (owner && !m.owner) m.owner = owner;
     this._measurements.push(m);
     this._draft = null;
     this._emitChange();
@@ -1779,7 +1796,17 @@ export class MeasureController {
   // factor is applied exactly once per readout and can't be missed by a
   // future call site.
 
+  /**
+   * No resolved horizontal unit (and not a geographic frame, which carries its
+   * own caveat): the factor is an inert 1, so values print in source units
+   * marked unverified rather than as metres.
+   */
+  private _unitUnverified(): boolean {
+    return !this._crsKnown && !this._geographicCrs;
+  }
+
   private _fmtLen(renderUnits: number): string {
+    if (this._unitUnverified()) return formatUnitUnverified(renderUnits);
     return formatLengthRender(renderUnits, this._unitToMetres, this._units);
   }
 
@@ -1789,6 +1816,7 @@ export class MeasureController {
    * on a compound CRS it honours the height unit the horizontal factor can't.
    */
   private _fmtVertical(renderUnits: number): string {
+    if (this._unitUnverified()) return formatUnitUnverified(renderUnits);
     return formatLengthRender(renderUnits, this._effVertical(), this._units);
   }
 
@@ -1799,11 +1827,13 @@ export class MeasureController {
    * uniform `f³` an equal vertical factor collapses to.
    */
   private _fmtCutFill(renderUnitsCu: number): string {
+    if (this._unitUnverified()) return formatUnitUnverified(renderUnitsCu);
     const f = this._unitToMetres;
     return formatVolume(renderUnitsCu * f * f * this._effVertical(), this._units);
   }
 
   private _fmtArea(renderUnitsSq: number): string {
+    if (this._unitUnverified()) return formatUnitUnverified(renderUnitsSq);
     return formatAreaRender(renderUnitsSq, this._unitToMetres, this._units);
   }
 
@@ -1845,6 +1875,7 @@ export class MeasureController {
           pm.verticalDrop * this._effVertical(),
           pm.gradePercent,
           this._units,
+          ...(this._unitUnverified() ? [formatUnitUnverified] as const : []),
         );
       }
       case 'box': {
@@ -1858,6 +1889,7 @@ export class MeasureController {
           m.height * this._effVertical(),
           m.volume * this._unitToMetres * this._unitToMetres * this._effVertical(),
           this._units,
+          ...(this._unitUnverified() ? [formatUnitUnverified, formatUnitUnverified] as const : []),
         );
       }
       case 'volume': {
@@ -1896,6 +1928,8 @@ export class MeasureController {
       // reads as a trustworthy distance without its caveat.
       if (this._geographicCrs) {
         hint = `${hint} — ${GEOGRAPHIC_CRS_MEASURE_NOTICE}`;
+      } else if (this._unitUnverified()) {
+        hint = `${hint} · ${UNIT_UNVERIFIED_MEASURE_NOTICE}`;
       } else if (this._verticalUnitMismatch()) {
         hint = `${hint} — ${VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE}`;
       }

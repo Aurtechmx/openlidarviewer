@@ -2309,13 +2309,7 @@ function streamingExportCloud(): PointCloud | null {
   return viewer.snapshotResidentCloud();
 }
 
-/**
- * Origin + CRS + name for the ACTIVE scan, static OR streaming — a thin caller
- * over the extracted `src/app/reportExport.ts`. The origin-resolution rule (static
- * `sourceOrigin`, else streaming `renderOrigin`, else zero) and the CRS-label
- * honesty rule (`effectiveCrsName`) live in that module; here we bind the shell's
- * running state through `reportExportDeps`.
- */
+/** Origin + CRS + name for the active scan; the rules live in `src/app/reportExport.ts`. */
 function exportGeoContext(): GeoExportContext { return runExportGeoContext(reportExportDeps); }
 
 /**
@@ -2329,7 +2323,7 @@ const kmlDeps: KmlActionDeps = {
   crsCurrent: () => crsService.current(),
   upAxis: () => crsService.context().upAxis, // RESOLVED axis
   annotations: () => viewer?.annotate.getAnnotations() ?? [],
-  measurements: () => viewer?.measure.getMeasurements() ?? [],
+  measurements: () => viewer?.measure.getMeasurements() ?? [], layerCount: () => viewer?.clouds().length ?? 0,
   viewpoints: () => viewBookmarks.savedViews.map(
     (v) => ({ name: v.name, position: v.pose.position, target: v.pose.target }),
   ),
@@ -2371,6 +2365,7 @@ const kmlDeps: KmlActionDeps = {
 const measurementExportActionDeps = (v: Viewer): MeasurementExportActionDeps => ({
   measure: v.measure,
   geo: exportGeoContext,
+  layers: { view: v, stableIdFor: runtime.layerIdentity.stableIdFor }, refuse: (m) => dropZone.setError(m),
   baseName,
   downloadText,
   loadMeasurementExport,
@@ -4060,7 +4055,7 @@ function showProjectCard(cloud: PointCloud, totalCount: number): void {
   });
   projectCard.show({
     name: cloud.name,
-    format: cloud.sourceFormat, interpretationLevel: cloud.metadata?.interpretationLevel,
+    format: cloud.sourceFormat, interpretationLevel: cloud.metadata?.interpretationLevel, truncation: cloud.metadata?.truncation,
     shownCount: cloud.pointCount,
     totalCount,
     ...describeProjectSize(b.min, b.max, { upAxis: c.upAxis, linearUnitKnown: c.linearUnitKnown, linearUnitToMetres: c.linearUnitToMetres, verticalUnitToMetres: verticalMetresPerUnit(c, 'horizontal') ?? undefined }),

@@ -31,6 +31,7 @@ import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { CrsInfo } from '../io/crs';
 import type { AppContext } from './appContext';
 import type { ProjectFrameService, ProjectFrameLayer } from './projectFrame';
+import { truncationNote } from '../io/truncation';
 
 export interface LayerServiceDeps {
   /** The lazily-assigned viewer — read through a getter, never captured. */
@@ -481,9 +482,9 @@ function verticalUnitName(crs: CrsInfo | null | undefined): string | null {
 
 /** Resident-vs-source counts for the Layer Health Loading row (null = no declared total). */
 function residencyOf(
-  c: { pointCount: number; declaredPointCount?: number; sourceDeclaredPointCount?: number } | undefined,
-): { resident: number; source: number } | null {
+  c: { pointCount: number; declaredPointCount?: number; sourceDeclaredPointCount?: number } & Parameters<typeof truncationNote>[0] | undefined,
+): { resident: number; source: number; truncated?: string } | null {
   if (!c) return null;
   const source = c.sourceDeclaredPointCount ?? c.declaredPointCount;
-  return source === undefined ? null : { resident: c.pointCount, source };
+  return source === undefined ? null : { resident: c.pointCount, source, truncated: truncationNote(c) };
 }

@@ -32,6 +32,8 @@ export interface LightProvenance {
   readonly crsOrigin: CrsOriginRecord;
   readonly interpretationLevel: string;
   readonly dataBasis: string;
+  /** Present only for a partial read: "Truncated: N of M points read". */
+  readonly coverageNote?: string;
   readonly methods: readonly string[];
   readonly methodNote: string;
 }
@@ -72,6 +74,7 @@ export function lightProvenance(input: LightProvenanceInput): LightProvenance {
     crsOrigin: interp.crsOrigin ?? crsOriginOf(input.crs),
     interpretationLevel: interp.interpretationLevel,
     dataBasis: interp.dataBasis,
+    ...(interp.coverageNote ? { coverageNote: interp.coverageNote } : {}),
     methods: [],
     methodNote: 'Measurement geometry is computed from the placed vertices; it is not a registered method id.',
   };

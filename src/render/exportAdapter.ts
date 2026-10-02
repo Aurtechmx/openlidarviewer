@@ -35,6 +35,7 @@ import { linearUnitLabel } from '../io/crs';
 import { captureProvenance } from '../diagnostics/captureProvenance';
 import { classificationCoverage } from './class/classificationCoverage';
 import { DERIVED_COLOR_NOTE, isDerivedColorMode } from './colorModeProvenance';
+import { truncationOf } from '../io/truncation';
 
 /**
  * The per-cloud slice the adapter reads — a structural subset of the Viewer's
@@ -433,7 +434,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       if (host.streaming()) return sourceInterpretationOf(undefined, 'resident-only');
       const records = visibleEntries().map(({ cloud }) => {
         const declared = cloud.declaredPointCount;
-        const basis = declared != null && declared > cloud.pointCount ? 'sampled' : declared != null ? 'full' : null;
+        const basis = truncationOf(cloud) ? 'partial' : declared != null && declared > cloud.pointCount ? 'sampled' : declared != null ? 'full' : null;
         return sourceInterpretationOf(cloud.metadata?.interpretationLevel ?? null, basis);
       });
       if (records.length === 0) return null;

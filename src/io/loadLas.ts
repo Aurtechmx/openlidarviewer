@@ -41,6 +41,7 @@ import { compressedBytesPerPointFloor, validateDeclaredPointCount } from './vali
 import type { LasHeader } from './lasHeader';
 import { computeOrigin } from './coordinateBridge';
 import { sanitizeLocalCloud, withLoadWarning } from './sanitizeCloud';
+import { truncationText, type Truncation } from './truncation';
 import { makePrng, pickInBucket, STRIDE_SAMPLE_SEED } from './strideSample';
 import type { ProgressUpdate } from './loadProgress';
 import type { RangeSource } from './range/RangeSource';
@@ -80,10 +81,9 @@ function decodeLas(
 
   // Clamp the count to what the file can actually hold. A header that claims
   // more points than the file contains would otherwise read past the buffer
-  // and throw an opaque RangeError partway through the decode.
-  const available =
-    recordLength > 0 ? Math.floor((buffer.byteLength - pointsOffset) / recordLength) : 0;
-  const count = Math.min(header.pointCount, Math.max(0, available));
+  // and throw an opaque RangeError partway through the decode. The caller
+  // records the shortfall as a truncation.
+  const count = recordsHeld(buffer, header);
   // A header that declares points behind a body holding not one whole record
   // (an inflated record length, or an offset at the end of the file) has
   // nothing to clamp to: refuse it rather than report an empty cloud.
@@ -109,6 +109,13 @@ function decodeLas(
   }
   finalizeRawColors(out); // narrow staged 16-bit RGB once, per-file
   return out;
+}
+
+/** Whole point records the body holds, capped at the declared count. */
+function recordsHeld(buffer: ArrayBuffer, header: LasHeader): number {
+  const len = header.pointDataRecordLength;
+  const available = len > 0 ? Math.floor((buffer.byteLength - header.offsetToPointData) / len) : 0;
+  return Math.min(header.pointCount, Math.max(0, available));
 }
 
 /**
@@ -192,8 +199,9 @@ export async function loadLas(
   // Origin from the floored header min — known before decoding, so records
   // are converted straight into local coordinates.
   const origin = computeOrigin(header.min);
+  let truncation: Truncation | undefined;
   const toCloud = (raw: RawPoints): PointCloud =>
-    cloudFromRaw(raw, header, origin, sourceFormat, name, stride);
+    cloudFromRaw(raw, header, origin, sourceFormat, name, stride, truncation);
 
   let raw: RawPoints;
   if (sourceFormat === 'laz') {
@@ -222,6 +230,8 @@ export async function loadLas(
     raw = pooled ?? (await decodeLaz(buffer, header, origin, stride, onProgress, pointSemantics));
   } else {
     raw = decodeLas(buffer, header, origin, stride, onProgress, pointSemantics);
+    const held = recordsHeld(buffer, header);
+    if (held < header.pointCount) truncation = { read: held, declared: header.pointCount };
   }
   return toCloud(raw);
 }
@@ -471,6 +481,7 @@ function cloudFromRaw(
   sourceFormat: 'las' | 'laz',
   name: string,
   stride: number,
+  truncation?: Truncation,
 ): PointCloud {
   const decodedPointCount = raw.positions.length / 3;
 
@@ -520,6 +531,11 @@ function cloudFromRaw(
     // Record the DELIBERATE decode stride (the display-sample cap) so the
     // Health Check can tell a capped load from genuine decode loss.
     loadStride: Math.max(1, Math.floor(stride)),
-    metadata: withLoadWarning(lasMetadata(header), clean.warning),
+    metadata: truncated(withLoadWarning(lasMetadata(header), clean.warning), truncation),
   });
+}
+
+/** Metadata with the truncation and its warning, when the body fell short. */
+function truncated(metadata: CloudMetadata | undefined, t: Truncation | undefined): CloudMetadata | undefined {
+  return t ? { ...withLoadWarning(metadata, truncationText(t)), truncation: t } : metadata;
 }
