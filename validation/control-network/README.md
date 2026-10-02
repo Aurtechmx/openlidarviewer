@@ -44,7 +44,7 @@ Two scanner-local scans of one site, three shared surveyed targets:
 
 The distance agreement is the survey's own consistency, reproduced by OLV's
 measurement path; the registration residual is what a tie-point alignment of the
-two clouds would achieve. Both are at the millimetre level on real survey data.
+two clouds would achieve, which is not yet offered in the viewer. Both are at the millimetre level on real survey data.
 
 ## Status and scope
 

@@ -35,7 +35,7 @@ The remaining seven kilobytes are the four modules, which is the whole margin.
 
 ## Everything is lazy, including the tier decision
 
-The reason this is available is that the Continuity Field ships disabled. A
+The reason this is available is that the Continuity Field ships switched off. A
 device that cannot carry the field renders exactly as it does today, so there is
 no rung to choose before the first frame, and nothing to load before it either.
 

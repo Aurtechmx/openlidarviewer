@@ -11,12 +11,22 @@
  *   M4  every referenced claimId exists in the claim register
  *   M5  a declared interface label appears verbatim in the named file
  *   M6  a hidden capability declares docTerms, the phrases M7 searches for
- *   M7  no public document (README.md, docs/*.md) describes a hidden capability
- *       as available: a paragraph naming a docTerm must say, in that paragraph
- *       or in the document's opening lines, that the code is not reachable
+ *   M7  no current public document describes a hidden capability as available.
+ *       Every sentence naming one of a hidden capability's docTerms must be
+ *       qualified (QUALIFIER, e.g. "staged", "not reachable") by that sentence
+ *       or by another sentence in the same paragraph that names the same
+ *       capability. A qualifying sentence that names no hidden capability also
+ *       counts when the paragraph names only that one hidden capability. A
+ *       qualifier elsewhere in the document, or about another capability,
+ *       excuses nothing. Headings are not read as claims.
+ *   M8  every document in CURRENT_DOCS exists
+ *
+ * CURRENT_DOCS is the explicit list M7 reads. Release notes, the changelog and
+ * the implementation ledger (docs/releases/, docs/release/, CHANGELOG.md)
+ * record past states and are left out. A new current document is added here.
  *
  * Flags, for tests: --manifest <file>, --unreachable <file>, --claims <file>,
- * --docs <file,file,...> (replaces the public document set).
+ * --docs <file,file,...> (replaces the document set).
  */
 
 import { readFileSync, existsSync, statSync, readdirSync } from 'node:fs';
@@ -34,12 +44,87 @@ function arg(argv, name) {
   return i >= 0 ? argv[i + 1] : undefined;
 }
 
-function defaultDocs() {
-  const docs = [resolve(ROOT, 'README.md')];
-  for (const f of readdirSync(resolve(ROOT, 'docs'))) {
-    if (f.endsWith('.md')) docs.push(resolve(ROOT, 'docs', f));
+export const CURRENT_DOCS = [
+  'README.md',
+  'docs/AUTHORS.md',
+  'docs/CLA.md',
+  'docs/CONTRIBUTORS.md',
+  'docs/DESIGN_NOTES.md',
+  'docs/README.md',
+  'docs/USER_GUIDE.md',
+  'docs/acquisition-grid.md',
+  'docs/analysis-architecture.md',
+  'docs/architecture.md',
+  'docs/benchmarks.md',
+  'docs/continuity-field.md',
+  'docs/contour-studio.md',
+  'docs/coordinate-precision.md',
+  'docs/copc.md',
+  'docs/credits.md',
+  'docs/developer-manual.md',
+  'docs/disposal-contracts.md',
+  'docs/limitations.md',
+  'docs/mobile-browser-support.md',
+  'docs/navigation.md',
+  'docs/performance.md',
+  'docs/public-lidar-catalog.md',
+  'docs/research-impact.md',
+  'docs/research-notes.md',
+  'docs/screenshots.md',
+  'docs/streaming.md',
+  'docs/supported-formats.md',
+  'docs/terrain-access.md',
+  'docs/terrain-flow-pulse.md',
+  'docs/terrain-intelligence.md',
+  'docs/threat-model.md',
+  'docs/usage.md',
+  'docs/architecture/continuity-bundle-strategy.md',
+  'docs/observatory/SPEC.md',
+  'docs/observatory/methods.md',
+  'docs/project/CLAIMS_AND_LIMITATIONS.md',
+  'docs/project/STABILITY_POLICY.md',
+  'docs/project/SUPPORT.md',
+  'docs/science/METHOD_REGISTRY.md',
+  'src/observation/README.md',
+  'validation/control-network/README.md',
+];
+
+/** Paragraphs split on blank lines, each split into sentences. Headings name a topic and make no claim, so they are dropped. */
+function sentencesByParagraph(text) {
+  return text
+    .replace(/^#{1,6}\s.*$/gm, '')
+    .split(/\n\s*\n/)
+    .map((p) => p.replace(/\s+/g, ' ').split(/(?<=[.!?;:])\s+(?=[^a-z])/).filter((s) => s.trim() !== ''));
+}
+
+/** Hidden capabilities whose docTerms the sentence names. */
+function namedIn(sentence, hidden) {
+  const low = sentence.toLowerCase();
+  return hidden.filter((c) => c.docTerms.some((t) => low.includes(t.toLowerCase())));
+}
+
+/**
+ * M7 for one document: the hidden capabilities it describes as available, each
+ * with the first unqualified term.
+ */
+export function unqualifiedClaims(text, hidden) {
+  const out = new Map();
+  for (const sentences of sentencesByParagraph(text)) {
+    const named = sentences.map((s) => namedIn(s, hidden));
+    const inParagraph = new Set(named.flat());
+    for (let i = 0; i < sentences.length; i++) {
+      for (const cap of named[i]) {
+        if (out.has(cap.id)) continue;
+        const qualified = sentences.some((s, j) => QUALIFIER.test(s) && (
+          named[j].includes(cap) || (named[j].length === 0 && inParagraph.size === 1)
+        ));
+        if (qualified) continue;
+        const low = sentences[i].toLowerCase();
+        out.set(cap.id, cap.docTerms.find((t) => low.includes(t.toLowerCase())));
+      }
+    }
   }
-  return docs;
+  return out;
 }
 
 function filesUnder(rel) {
@@ -59,7 +144,7 @@ export function lintCapabilityManifest(argv = []) {
   const unreachablePath = resolve(arg(argv, '--unreachable') ?? resolve(ROOT, 'docs/validation/unreachable-modules.json'));
   const claimsPath = resolve(arg(argv, '--claims') ?? resolve(ROOT, 'docs/validation/claim-register.yaml'));
   const docsArg = arg(argv, '--docs');
-  const docs = docsArg ? docsArg.split(',').map((d) => resolve(d)) : defaultDocs();
+  const docs = docsArg ? docsArg.split(',').map((d) => resolve(d)) : CURRENT_DOCS.map((d) => resolve(ROOT, d));
 
   const errors = [];
   const fail = (rule, msg) => errors.push(`${rule} ${msg}`);
@@ -112,21 +197,9 @@ export function lintCapabilityManifest(argv = []) {
   }
 
   for (const doc of docs) {
-    if (!existsSync(doc)) continue;
-    const text = readFileSync(doc, 'utf8');
-    const headerQualified = QUALIFIER.test(text.split('\n').slice(0, 15).join('\n'));
-    if (headerQualified) continue;
-    const paragraphs = text.split(/\n\s*\n/);
-    for (const cap of hidden) {
-      for (const term of cap.docTerms) {
-        const needle = term.toLowerCase();
-        for (const p of paragraphs) {
-          if (p.toLowerCase().includes(needle) && !QUALIFIER.test(p)) {
-            fail('M7', `${relative(ROOT, doc)}: describes hidden capability ${cap.id} ("${term}") as available`);
-            break;
-          }
-        }
-      }
+    if (!existsSync(doc)) { fail('M8', `${relative(ROOT, doc)}: listed document does not exist`); continue; }
+    for (const [id, term] of unqualifiedClaims(readFileSync(doc, 'utf8'), hidden)) {
+      fail('M7', `${relative(ROOT, doc)}: describes hidden capability ${id} ("${term}") as available`);
     }
   }
 

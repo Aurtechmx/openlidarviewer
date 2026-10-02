@@ -121,17 +121,18 @@ the two entries were renumbered when the branches were integrated.
 | L215 | SCIENTIFIC | TEST | med | FIXED | new | Known limitations gave the ground filter's agreement with PDAL under study settings, with the despike floor off, as its ground recall; the app runs other settings, and no figure scored either against the scenes' truth labels. |
 | L215 | ARCHITECTURE | TEST | med | FIXED | new | A heavy local LAS or LAZ that replaced an open COPC, EPT or 3D Tiles stream kept that stream's class tally, report cloud and confidence, so the class legend could merge counts across sources and the report could describe the previous source. |
 | L216 | ARCHITECTURE | TEST | med | FIXED | new | A heavy local LAS or LAZ that replaced an open COPC, EPT or 3D Tiles stream kept that stream's class tally, report cloud and confidence, so the class legend could merge counts across sources and the report could describe the previous source. |
+| L218 | ARCHITECTURE | TEST | med | FIXED | new | The capability lint let a qualifier anywhere in a document's first 15 lines excuse every claim in it, and the manifest listed live station suggestion under the hidden overlay. The release gates accepted a step that waited for its own group or a later member, and the runner then polled forever. |
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 70
+- FIXED: 71
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 92
+- total: 93
 
 ## Detail
 
@@ -8129,6 +8130,27 @@ Tests: `scripts/check-bundle-budget.mjs`, `scripts/check-no-test-seam.mjs`
 and `scripts/check-no-dev-flags.mjs` on a fresh `npm run build:live`;
 `tests/e2e/lazyChunkLoad.spec.ts` and `tests/e2e/smoke.spec.ts` with
 `SMOKE_LIVE=1`.
+
+### L218 · FIXED · ARCHITECTURE
+
+`scripts/lint-capability-manifest.mjs` M7 reads an explicit list of current
+documents (`CURRENT_DOCS`), with release notes, the changelog and this ledger
+left out. A qualifier excuses a claim only in the same sentence, or in another
+sentence of the same paragraph that names the same hidden capability. M8 fails
+a listed document that does not exist. The stricter rule found two true
+violations, reworded here: `docs/architecture/continuity-bundle-strategy.md`
+and `validation/control-network/README.md`. The manifest lists station
+suggestion as its own preview capability and keeps the observation overlay
+hidden. `src/observation/README.md` describes the shipped state.
+
+`validateGates` in `scripts/lib/gates.mjs` checks every dependency after
+`@group` expansion and rejects a self-dependency, a dependency on the same or a
+later step, and an unknown step or group, naming the step and group before
+anything spawns. The scheduler moved to `scripts/lib/gateScheduler.mjs` and
+fails with a deadlock error naming each stuck step when nothing runs and
+nothing can start. The shipped `scripts/gates.json` lists the same order.
+
+Tests: `tests/capabilityManifestLint.test.ts`, `tests/gateSchedule.test.ts`.
 
 ### L216 · FIXED · ARCHITECTURE
 
