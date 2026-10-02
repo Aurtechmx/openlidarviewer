@@ -125,7 +125,7 @@
   border-color: rgba(255, 120, 120, 0.7);
 }
 .olv-measure-done {
-  color: var(--accent);
+  color: var(--accent-text, var(--accent));
   background: var(--accent-soft);
   border: 0.5px solid rgba(0, 178, 255, 0.3);
 }

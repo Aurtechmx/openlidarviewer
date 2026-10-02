@@ -307,6 +307,8 @@
  * (tests/stateTokenContrast.test.ts). */
 body.olv-theme-light {
   --state-withheld: #be185d;
+  /* Accent for small text on white, where --accent reads 3.9:1. */
+  --accent-text: #005f8c;
 }
 body.olv-theme-high-contrast {
   --state-withheld: #f9a8d4;
@@ -581,6 +583,8 @@ body.olv-theme-light {
   --warn: #7d5b07; /* darkened from #b8860b, which read 2.9:1 on the near-white caption fill */
   --accent: #0088c8;
   --accent-soft: rgba(0, 136, 200, 0.18);
+  /* The phone sheet and dock follow the theme surface. */
+  --m-glass-raised: var(--panel);
   /* Deeper violet so the blocked verdict stays legible on the near-white panel. */
   --rating-blocked: #7c3aed;
   /* The rest of the readiness scale, darkened the same way as --rating-blocked
@@ -3505,7 +3509,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
   border-color: rgba(255, 120, 120, 0.7);
 }
 .olv-measure-done {
-  color: var(--accent);
+  color: var(--accent-text, var(--accent));
   background: var(--accent-soft);
   border: 0.5px solid rgba(0, 178, 255, 0.3);
 }
@@ -4370,7 +4374,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
 .olv-mkind:hover { color: var(--text); }
 .olv-mkind:active { transform: scale(0.96); }
 .olv-mkind-active {
-  color: var(--accent); background: var(--accent-soft);
+  color: var(--accent-text, var(--accent)); background: var(--accent-soft);
   border-color: rgba(0, 178, 255, 0.4);
 }
 /* Auxiliary kind button (Lasso volume).
@@ -7361,6 +7365,8 @@ body.olv-theme-light .olv-busy-scan--emblem {
     scrollbar-width: none;
   }
   .olv-measure-bar::-webkit-scrollbar { display: none; }
+  /* A toast starts right of the tool rail so the rail's actions stay reachable. */
+  body:has(.olv-measure-bar:not(.olv-hidden)) .olv-lasso-toast { left: 88px; }
   /* Kind icons stack vertically; the scroll mask + horizontal rules drop. */
   .olv-mkinds {
     flex-direction: column;

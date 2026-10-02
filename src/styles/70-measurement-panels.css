@@ -193,7 +193,7 @@
 .olv-mkind:hover { color: var(--text); }
 .olv-mkind:active { transform: scale(0.96); }
 .olv-mkind-active {
-  color: var(--accent); background: var(--accent-soft);
+  color: var(--accent-text, var(--accent)); background: var(--accent-soft);
   border-color: rgba(0, 178, 255, 0.4);
 }
 /* Auxiliary kind button (Lasso volume).
