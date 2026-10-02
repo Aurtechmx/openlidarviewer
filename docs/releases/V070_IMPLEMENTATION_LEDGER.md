@@ -116,17 +116,18 @@ the two entries were renumbered when the branches were integrated.
 | L212 | ARCHITECTURE | TEST | low | FIXED | new | Static analysis on main reported a constructor that started an async load, promises left floating, async functions with no await, shared object-literal defaults, a rejection with a non-Error value, assertions outside a test, tests with no assertion and stub methods with no body. |
 | L207 | DOCS | READ | med | FIXED | new | Release documents disagreed with the tree: COPC and EPT were said to produce no classification flags, the Withheld policy listed the polygon volume as reading every point, the developer manual named three runtime dependencies of ten, SECURITY.md described maintainer-signed commits on `main`, PRIVACY.md did not list the requests the app makes, the layer contract was unstated, and the production audit ran outside `ci-green`. |
 
+| L213 | PERFORMANCE | TEST | med | FIXED | new | The live build's index chunk sat at 783 of 795 KiB and Viewer at 715 of 716 KiB. Most of that was the source transform: base64 string tables, a rotation call that kept every transformed module from being tree-shaken, and the literals of build-time-disabled branches. Those literals also reached the shipped table, encoded, so the test-seam and dev-flag gates could not see them. |
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 65
+- FIXED: 66
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 87
+- total: 88
 
 ## Detail
 
@@ -8106,6 +8107,24 @@ a malformed message ends the load with an error.
 
 Covered by `tests/embedBridge.test.ts`, `tests/indexCspMeta.test.ts` and
 `tests/untrustedInputCaps.test.ts`.
+
+### L213 · FIXED · PERFORMANCE
+
+Live build, before and after (`npm run check:bundle`): index 783 KiB to
+576 KiB, Viewer 715 KiB to 628 KiB. Ceilings unchanged.
+
+- `vite.config.ts`: string-array entries are no longer base64-encoded and the
+  array is no longer rotated (`stringArrayEncoding: []`,
+  `stringArrayRotate: false`). Literals still move into the array.
+- Each module is folded with the build's `define` values and minifier before
+  the transform reads it, so a disabled branch leaves no literal behind.
+- `governorHook.ts` returns no governor when the dev flags are compiled out,
+  and is kept out of the transform so its slot name is dropped with it.
+
+Tests: `scripts/check-bundle-budget.mjs`, `scripts/check-no-test-seam.mjs`
+and `scripts/check-no-dev-flags.mjs` on a fresh `npm run build:live`;
+`tests/e2e/lazyChunkLoad.spec.ts` and `tests/e2e/smoke.spec.ts` with
+`SMOKE_LIVE=1`.
 
 ### L212 · FIXED · ARCHITECTURE
 

@@ -254,8 +254,10 @@ across 1061 modules with no dependency cycles.
 
 ## The shell has little headroom
 
-The eager bundle measures about 789 KiB against a 795 KiB ceiling. New work
-goes behind a lazy seam rather than being paid for by a raise.
+`npm run check:bundle` on the live build reports the index chunk at 576 KiB
+of its 795 KiB ceiling and the Viewer chunk at 628 KiB of 716 KiB. The
+ceilings are unchanged. New work still goes behind a lazy seam rather than
+being paid for by a raise.
 
 ## An idle scene still draws four frames a second
 
