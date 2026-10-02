@@ -17,13 +17,13 @@
       "lines": 2652
     },
     "src/render/measure/MeasureController.ts": {
-      "lines": 2475
+      "lines": 2503
     },
     "src/ui/MeasurePanel.ts": {
-      "lines": 2296
+      "lines": 2305
     },
     "src/render/measure/profilePdf.ts": {
-      "lines": 1928
+      "lines": 1929
     },
     "src/render/streaming/StreamingScheduler.ts": {
       "lines": 1867

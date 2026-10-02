@@ -2871,13 +2871,10 @@ void viewerLoaded.then(() => {
 const dropZone = new DropZone(document.body, (file) => handleFile(file), prewarmLoaders);
 stage.overlay.append(dropZone.toast);
 
-// v0.3.10 trust-pass: install the Playwright seam under `?test=1`.
-// `__OLV_TEST_SEAM__` is a build-time constant (see vite.config.ts). It is
-// true for the dev server and for a build run with OLV_TEST_SEAM=1, which is
-// what playwright.config.ts sets for its webServer build. Any other build
-// substitutes `false` and the minifier drops this whole block, so a shipped
-// artifact contains no API surface. The seam drives a measurement
-// programmatically, bypassing the raycast headless CI cannot pretend at.
+// The Playwright seam under `?test=1`. `__OLV_TEST_SEAM__` (vite.config.ts) is
+// true for the dev server and an OLV_TEST_SEAM=1 build (playwright.config.ts);
+// any other build drops this block, so a shipped artifact has no API surface.
+// The seam drives a measurement without the raycast headless CI cannot do.
 if (__OLV_TEST_SEAM__ && testApi) {
   void ensureViewer().then((v) => {
     const placePoint = (x: number, y: number, z: number, layer?: string): void => {
