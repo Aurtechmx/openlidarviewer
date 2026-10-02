@@ -482,8 +482,13 @@ describe('the streaming Scan Report assembler', () => {
     // committed, including a streaming→streaming swap, which never passes
     // through `closeStreaming`.
     const shell = readFileSync(resolve(ROOT, 'src/main.ts'), 'utf8');
-    const body = shell.slice(shell.indexOf('function clearOpenStaticLayers()'));
-    const end = body.indexOf('\n}');
-    expect(body.slice(0, end)).toContain('lastStreamingReportCloud = null');
+    const fnBody = (name: string): string => {
+      const body = shell.slice(shell.indexOf(`function ${name}()`));
+      return body.slice(0, body.indexOf('\n}'));
+    };
+    expect(fnBody('clearOpenStaticLayers')).toContain('resetStreamState();');
+    expect(fnBody('resetStreamState')).toContain('lastStreamingReportCloud = null');
+    expect(fnBody('resetStreamState')).toContain('runtime.streamingClasses.reset()');
+    expect(fnBody('resetStreamState')).toContain('lastDerivedConfidence = null');
   });
 });

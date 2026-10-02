@@ -22,8 +22,6 @@
  * process against that fake OPFS.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { writeLas14 } from '../src/convert/writeLas';
-import type { GlobalPoints } from '../src/convert/globalPoints';
 import { ArrayBufferRangeSource } from '../src/io/range/ArrayBufferRangeSource';
 import type { RangeSource } from '../src/io/range/RangeSource';
 import { fakeOpfs } from './support/fakeOpfs';
@@ -36,26 +34,8 @@ import {
 } from '../src/app/openLocalHeavyLas';
 import type { StorageEstimateReading } from '../src/io/heavy/storagePreflight';
 import type { Viewer } from '../src/render/Viewer';
+import { lasBytes } from './support/heavyLasFakes';
 
-const WORLD_MIN = [400000, 5200000, 55] as const;
-
-function lasBytes(n: number): ArrayBuffer {
-  const x = new Float64Array(n);
-  const y = new Float64Array(n);
-  const z = new Float64Array(n);
-  const intensity = new Uint16Array(n);
-  const classification = new Uint8Array(n);
-  for (let i = 0; i < n; i++) {
-    x[i] = WORLD_MIN[0] + (i % 200) * 1.5;
-    y[i] = WORLD_MIN[1] + Math.floor(i / 200) * 1.5;
-    z[i] = WORLD_MIN[2] + (i % 13) * 0.4;
-    intensity[i] = i & 0xffff;
-    classification[i] = 2;
-  }
-  const cloud: GlobalPoints = { count: n, x, y, z, intensity, classification };
-  const bytes = writeLas14(cloud);
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
-}
 
 function spyFile(name: string, size: number): File {
   return { name, size, arrayBuffer: vi.fn(async () => new ArrayBuffer(size)) } as unknown as File;
@@ -110,6 +90,7 @@ function fakeStreaming(viewer: unknown) {
     refreshViewsUI: vi.fn(),
     runStreamingModules: vi.fn(() => []),
     setLastStreamingReportCloud: vi.fn(),
+    resetStreamState: vi.fn(),
   } as unknown as HeavyLasBridgeDeps['streaming'];
 }
 

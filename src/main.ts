@@ -3764,6 +3764,7 @@ const openStreamingDeps: OpenStreamingDeps = {
   isPhone,
   closeStreaming,
   clearOpenStaticLayers,
+  resetStreamState,
   startStreamingStatusPolling: () => streamingUi.startPolling(),
   revealStreamingChrome: () => revealStreamingScanChrome({
     dock, inspector, navBar, backend: viewer.activeBackend(), body: document.body,
@@ -4342,19 +4343,18 @@ function removeCloud(id: string): void {
   }
 }
 
+function resetStreamState(): void {
+  lastDerivedConfidence = null;
+  lastStreamingReportCloud = null; // a streaming swap never reaches `closeStreaming`
+  runtime.streamingClasses.reset(); // node ids are unique only within one source
+}
 /**
- * Free every currently-open static cloud before a new scan takes over — the
- * mesh's GPU buffers (geometry + material + colour/class attributes) AND the
- * retained source-file + reduced-flag map entries. A new open (static OR
- * streaming) replaces the previous scan, so without this the prior cloud's GPU
- * memory and File reference leak on every reopen (`scans.activeId` is overwritten, so
- * `removeCloud` could never reach the old id). Does NOT reset to the empty
- * state — the caller adds the replacement immediately.
+ * Free every open static cloud (GPU buffers, source-file and reduced-flag map
+ * entries) before a new scan takes over, so the prior cloud cannot leak on a
+ * reopen (`scans.activeId` is overwritten). The caller adds the replacement.
  */
 function clearOpenStaticLayers(): void {
-  lastDerivedConfidence = null;
-  lastStreamingReportCloud = null; // every streaming open commits before calling this, so a streaming→streaming swap retires the previous scan's report here too; that path never reaches `closeStreaming`
-  runtime.streamingClasses.reset(); // and its streamed class tally with it, so B's node ids start clean
+  resetStreamState();
   for (const id of viewer.clouds()) {
     viewer.removeCloud(id);
     inspector.removeCloud(id);

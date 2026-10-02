@@ -119,17 +119,19 @@ the two entries were renumbered when the branches were integrated.
 
 | L213 | PERFORMANCE | TEST | med | FIXED | new | The live build's index chunk sat at 783 of 795 KiB and Viewer at 715 of 716 KiB. Most of that was the source transform: base64 string tables, a rotation call that kept every transformed module from being tree-shaken, and the literals of build-time-disabled branches. Those literals also reached the shipped table, encoded, so the test-seam and dev-flag gates could not see them. |
 | L215 | SCIENTIFIC | TEST | med | FIXED | new | Known limitations gave the ground filter's agreement with PDAL under study settings, with the despike floor off, as its ground recall; the app runs other settings, and no figure scored either against the scenes' truth labels. |
+| L215 | ARCHITECTURE | TEST | med | FIXED | new | A heavy local LAS or LAZ that replaced an open COPC, EPT or 3D Tiles stream kept that stream's class tally, report cloud and confidence, so the class legend could merge counts across sources and the report could describe the previous source. |
+| L216 | ARCHITECTURE | TEST | med | FIXED | new | A heavy local LAS or LAZ that replaced an open COPC, EPT or 3D Tiles stream kept that stream's class tally, report cloud and confidence, so the class legend could merge counts across sources and the report could describe the previous source. |
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 68
+- FIXED: 70
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 90
+- total: 92
 
 ## Detail
 
@@ -8127,6 +8129,19 @@ Tests: `scripts/check-bundle-budget.mjs`, `scripts/check-no-test-seam.mjs`
 and `scripts/check-no-dev-flags.mjs` on a fresh `npm run build:live`;
 `tests/e2e/lazyChunkLoad.spec.ts` and `tests/e2e/smoke.spec.ts` with
 `SMOKE_LIVE=1`.
+
+### L216 · FIXED · ARCHITECTURE
+
+`attachHeavyStream` in `src/app/heavyLasExecutor.ts` calls the new
+`resetStreamState` dep after the attach commits and before the scan reveal. It
+clears the streamed class tally, the streaming report cloud and the derived
+confidence, the same state `clearOpenStaticLayers` clears on a COPC, EPT or 3D
+Tiles open. A cancelled or failed attach keeps that state. Static layers stay
+open on this path.
+
+Tests: `tests/heavyLasStreamReset.test.ts` (the reset runs on commit and not on
+cancel or failure; after a COPC scan and a heavy LAS that reuses its node id,
+the tally holds only the heavy file's classes).
 
 ### L212 · FIXED · ARCHITECTURE
 

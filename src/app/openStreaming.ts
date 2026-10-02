@@ -457,6 +457,8 @@ export interface OpenStreamingDeps {
   closeStreaming: () => void;
   /** Free the open static layers — a streaming scan is exclusive. */
   clearOpenStaticLayers: () => void;
+  /** Drop the previous stream's class tally, report cloud and confidence. */
+  resetStreamState: () => void;
   /** Start the ~4 Hz streaming-status poll that drives the panel. */
   startStreamingStatusPolling: () => void;
   /** Reveal the scan-dependent chrome (dock, inspector, nav bar, `olv-has-scan`) for a streaming cloud. */
