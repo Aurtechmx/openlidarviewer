@@ -1,19 +1,8 @@
 /**
- * heavyLasFullReveal.test.ts — a committed out-of-core LAS opens with the full
- * streaming surface, not just the dock and inspector chrome.
- *
- * The bridge (`#657`) attached an `OlvTileSource` and turned on the dock, the
- * nav bar and the `olv-has-scan` body class through `revealStreamingScanChrome`,
- * but stopped there: the streaming panel never showed, the Inspector kept its
- * static layout, image export stayed dark, the Analyse rail never opened and no
- * streaming Scan Report was published. COPC, EPT and 3D Tiles all reveal those
- * after their commit. These cases pin that an out-of-core LAS now reveals the
- * same surfaces, routed through the shared helpers, and — the anti-blind-copy
- * guard — that the two surfaces this source cannot honestly fill are omitted.
- *
- * The build path is faked exactly as `heavyLasBridgeStreaming.test.ts` fakes it:
- * a real in-process build against `fakeOpfs`, driven through a counting range.
- * The streaming reveal deps are spies, so each reveal call is asserted directly.
+ * heavyLasStreamReset.test.ts: a heavy local LAS/LAZ that replaces an open
+ * COPC, EPT or 3D Tiles stream drops that stream's class tally, report cloud
+ * and confidence once its attach commits, and keeps them on cancel or failure.
+ * Static layers are not cleared on this path.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { writeLas14 } from '../src/convert/writeLas';
@@ -31,6 +20,8 @@ import {
 import type { OpenStreamingDeps, StreamingReportInput } from '../src/app/openStreaming';
 import type { StorageEstimateReading } from '../src/io/heavy/storagePreflight';
 import type { Viewer } from '../src/render/Viewer';
+import { createStreamingClassLedger } from '../src/app/streamingClassLedger';
+import { LoadCancelledError } from '../src/io/loadFile';
 
 const WORLD_MIN = [400000, 5200000, 55] as const;
 
@@ -70,12 +61,13 @@ function fakeViewer() {
     setMode: vi.fn(),
     frameAll: vi.fn(),
     clouds: () => [],
+    // A stream is already on screen (the COPC scan), so no preview attaches.
+    hasStreamingCloud: true,
   };
   return viewer;
 }
 
-/** A spy `OpenStreamingDeps`: every surface the reveal touches is a spy so the
- *  reveal's calls (and its deliberate omissions) can be asserted directly. */
+/** A spy `OpenStreamingDeps` whose reset clears a real class ledger. */
 function fakeStreaming(viewer: ReturnType<typeof fakeViewer>) {
   const reportRows = [{ label: 'Points', value: '1', status: 'info' as const }];
   const streamingPanel = {
@@ -109,6 +101,8 @@ function fakeStreaming(viewer: ReturnType<typeof fakeViewer>) {
   const revealAnalysePanel = vi.fn();
   const startStreamingStatusPolling = vi.fn();
   const setLastStreamingReportCloud = vi.fn((c: StreamingReportInput) => { lastReport = c; });
+  const ledger = createStreamingClassLedger();
+  const resetStreamState = vi.fn(() => { ledger.reset(); });
   const streaming = {
     getViewer: () => viewer as unknown as Viewer,
     getStreamingQuality: () => 'balanced',
@@ -132,7 +126,7 @@ function fakeStreaming(viewer: ReturnType<typeof fakeViewer>) {
     refreshViewsUI: vi.fn(),
     runStreamingModules,
     setLastStreamingReportCloud,
-    resetStreamState: vi.fn(),
+    resetStreamState,
   } as unknown as OpenStreamingDeps;
   return {
     streaming,
@@ -145,6 +139,8 @@ function fakeStreaming(viewer: ReturnType<typeof fakeViewer>) {
     revealAnalysePanel,
     startStreamingStatusPolling,
     setLastStreamingReportCloud,
+    resetStreamState,
+    ledger,
     getLastReport: () => lastReport,
   };
 }
@@ -199,86 +195,54 @@ function makeEnv(range: RangeSource): HeavyLasBridgeEnv {
   };
 }
 
-async function openHeavy(n = 200_000) {
-  const range = counting(new ArrayBufferRangeSource(lasBytes(n)));
-  const { deps, s } = makeDeps();
+async function openHeavy(attach?: (signal: AbortSignal, ctl: AbortController) => Promise<void>) {
+  const range = counting(new ArrayBufferRangeSource(lasBytes(50_000)));
+  const { deps, viewer, s } = makeDeps();
+  const ctl = new AbortController();
+  if (attach) viewer.attachStreamingCloud.mockImplementation(() => attach(ctl.signal, ctl));
+  // A COPC stream is open: its node ids and classes are in the tally.
+  s.ledger.record('0-0-0-0', new Uint8Array([6, 6, 5]));
   const file = spyFile('heavy.las', 999_999_999);
-  const result = await openLocalHeavyLas(file, new AbortController().signal, deps, makeEnv(range));
-  return { result, s, n };
+  const result = await openLocalHeavyLas(file, ctl.signal, deps, makeEnv(range));
+  return { result, s };
 }
 
-describe('heavy-LAS full streaming reveal', () => {
-  it('reveals the streaming panel and publishes a streaming Scan Report', async () => {
+describe('heavy LAS over an open stream', () => {
+  it('drops the previous stream state once the attach commits', async () => {
     const { result, s } = await openHeavy();
     expect(result.status).toBe('attached');
-
-    // The streaming panel is shown with its live controls populated.
-    expect(s.streamingPanel.show).toHaveBeenCalledTimes(1);
-    expect(s.streamingPanel.setColorModes).toHaveBeenCalledTimes(1);
-    expect(s.streamingPanel.setQuality).toHaveBeenCalledTimes(1);
-
-    // The Inspector and Export panel switch to streaming layout and image
-    // export opens.
-    expect(s.inspector.setStreamingMode).toHaveBeenCalledWith(true);
-    expect(s.exportPanel.setStreamingMode).toHaveBeenCalledWith(true);
-    expect(s.exportPanel.setImageExportEnabled).toHaveBeenCalledWith(true);
-    expect(s.exportPanel.setImageExportAvailability).toHaveBeenCalled();
-
-    // A streaming Scan Report is built and published for THIS scan.
-    expect(s.runStreamingModules).toHaveBeenCalledTimes(1);
-    expect(s.inspector.setReport).toHaveBeenCalledTimes(1);
-    expect(s.setLastStreamingReportCloud).toHaveBeenCalledTimes(1);
-
-    // The Analyse rail, export pre-warm and status poll all start.
-    expect(s.revealAnalysePanel).toHaveBeenCalledTimes(1);
-    expect(s.prewarmExportStudio).toHaveBeenCalledTimes(1);
-    expect(s.startStreamingStatusPolling).toHaveBeenCalledTimes(1);
+    expect(s.resetStreamState).toHaveBeenCalledTimes(1);
+    // The reset runs before the new scan publishes its report.
+    expect(s.resetStreamState.mock.invocationCallOrder[0]).toBeLessThan(
+      s.setLastStreamingReportCloud.mock.invocationCallOrder[0],
+    );
   });
 
-  it('states the REAL point total in the Scan Report and the detail row', async () => {
-    const { result, s, n } = await openHeavy();
-    expect(result.status).toBe('attached');
-
-    // Unlike a 3D Tiles tileset (which states no total), an OlvTileSource states
-    // its tile-store total, so the report cloud carries the measured count and
-    // the Inspector detail row shows it — not "not stated by the source".
-    const report = s.getLastReport();
-    expect(report).not.toBeNull();
-    expect(report?.sourcePointCount).toBe(n);
-    expect(report?.sourcePointCount).not.toBeNull();
-    // The total is the SOURCE figure. What is resident is a separate count off
-    // the same store, so the readout can state residency instead of claiming
-    // the whole store is on the GPU.
-    expect(s.inspector.setStreamingDetail).toHaveBeenCalledWith({
-      residentPointCount: 0,
-      sourcePointCount: n,
-      sourcePointCountKnown: true,
+  it('keeps the previous stream state when the open is cancelled', async () => {
+    const { result, s } = await openHeavy(async (_signal, ctl) => {
+      ctl.abort();
+      throw new LoadCancelledError();
     });
-    expect(s.inspector.setDetail).not.toHaveBeenCalled();
+    expect(result.status).toBe('cancelled');
+    expect(s.resetStreamState).not.toHaveBeenCalled();
+    expect(s.ledger.size()).toBe(1);
   });
 
-  it('omits the two surfaces a local out-of-core store cannot honestly fill', async () => {
-    const { result, s } = await openHeavy();
-    expect(result.status).toBe('attached');
-
-    // No publisher URL: the store is built from a LOCAL file, so the credited
-    // Source row is not offered (COPC guards the same call behind http-range).
-    expect(s.streamingPanel.setSourceUrl).not.toHaveBeenCalled();
-
-    // No honest format tag: the panel's summary vocabulary is copc|ept|3dtiles,
-    // none of which names a decoded out-of-core LAS store, so the summary row is
-    // omitted rather than mislabelled. The real count still reaches the user via
-    // the Scan Report and the detail row.
-    expect(s.streamingPanel.setSummary).not.toHaveBeenCalled();
+  it('keeps the previous stream state when the attach fails', async () => {
+    const { result, s } = await openHeavy(async () => {
+      throw new Error('attach failed');
+    });
+    expect(result.status).not.toBe('attached');
+    expect(s.resetStreamState).not.toHaveBeenCalled();
+    expect(s.ledger.size()).toBe(1);
   });
 
-  it('resets the classification UI as a fillable legend, not an inapplicable one', async () => {
-    // Classification IS a real channel on an out-of-core store (every tile record
-    // carries it by layout), so the reset is the empty-and-waiting COPC case,
-    // seeded lazily as classified nodes stream in.
+  it('shows only the heavy file classes in the legend tally after COPC', async () => {
     const { result, s } = await openHeavy();
     expect(result.status).toBe('attached');
-    expect(s.classLegendPanel.setClasses).toHaveBeenCalledTimes(1);
-    expect(s.classLegendPanel.hide).toHaveBeenCalledTimes(1);
+    // The heavy store reuses the node id the COPC scan used.
+    const fresh = s.ledger.record('0-0-0-0', new Uint8Array([2, 2]));
+    expect(fresh).not.toBeNull();
+    expect([...s.ledger.aggregate()]).toEqual([[2, 2]]);
   });
 });

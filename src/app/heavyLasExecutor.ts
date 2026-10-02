@@ -675,6 +675,9 @@ async function attachHeavyStream(
   signal: AbortSignal,
 ): Promise<void> {
   await attachStreamingScan(source, decoder, deps, signal);
+  // The attach has committed: drop the previous stream's state, as the COPC,
+  // EPT and 3D Tiles opens do. Static layers stay open on this path.
+  deps.streaming.resetStreamState();
   revealHeavyStreamingSurfaces(source, deps.streaming);
 }
 

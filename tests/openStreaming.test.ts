@@ -208,6 +208,7 @@ function makeDeps(
     isPhone: () => false,
     closeStreaming: calls.closeStreaming,
     clearOpenStaticLayers: vi.fn(),
+    resetStreamState: vi.fn(),
     startStreamingStatusPolling: vi.fn(),
     revealStreamingChrome: vi.fn(),
     revealAnalysePanel: vi.fn(),
@@ -525,6 +526,7 @@ function makeCopcDeps(over: { openRejects?: boolean; attachRejects?: boolean; pr
     attachStreamingCloud,
     closeStreaming: vi.fn(),
     clearOpenStaticLayers: vi.fn(),
+    resetStreamState: vi.fn(),
     // Post-commit activation spies (blockers #2/#3): a failed open must never fire these.
     hideEmptyState: vi.fn(),
     refreshProvenance: vi.fn(),
@@ -607,6 +609,7 @@ function makeCopcDeps(over: { openRejects?: boolean; attachRejects?: boolean; pr
     isPhone: () => false,
     closeStreaming: calls.closeStreaming,
     clearOpenStaticLayers: calls.clearOpenStaticLayers,
+    resetStreamState: vi.fn(),
     startStreamingStatusPolling: vi.fn(),
     revealStreamingChrome: vi.fn(),
     revealAnalysePanel: vi.fn(),

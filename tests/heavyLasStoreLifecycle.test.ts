@@ -97,6 +97,7 @@ function fakeStreaming(viewer: unknown) {
     refreshViewsUI: vi.fn(),
     runStreamingModules: vi.fn(() => []),
     setLastStreamingReportCloud: vi.fn(),
+    resetStreamState: vi.fn(),
   } as unknown as HeavyLasBridgeDeps['streaming'];
 }
 
