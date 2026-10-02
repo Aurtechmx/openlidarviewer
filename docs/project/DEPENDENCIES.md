@@ -57,7 +57,7 @@ These ship in the deploy archive.
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT |
 | proj4 | ^2.22.0 | 2.22.0 | MIT |
-| three | ^0.186.0 | 0.186.0 | MIT |
+| three | ^0.186.1 | 0.186.1 | MIT |
 
 ## Direct development dependencies
 

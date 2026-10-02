@@ -179,7 +179,7 @@
       "@type": "SoftwareApplication",
       "identifier": "three",
       "name": "three",
-      "version": "^0.186.0",
+      "version": "^0.186.1",
       "provider": {
         "@type": "Organization",
         "name": "npm",
