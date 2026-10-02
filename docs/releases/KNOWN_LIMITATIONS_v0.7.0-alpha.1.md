@@ -98,19 +98,54 @@ hides its basis: on a strided load the report says in the value itself that it
 is the declared count over the display-sample footprint. What is missing is one
 record rather than two computations.
 
-## The ground filter rejects ground the reference keeps
+## The ground filter loses ground on curved terrain
 
-`tests/groundFilterPdalAgreement.test.ts` compares the built-in ground filter,
-label for label, with an independent reference implementation on five
-synthetic scenes, and writes the figures to
+The ground filter is measured on five synthetic scenes in two ways.
+
+`tests/groundFilterPdalAgreement.test.ts` compares it, label for label, with
+PDAL's `filters.smrf` under the study settings: window 16, slope 0.15,
+threshold 0.5 m, no threshold cap, and the despike floor off
+(`floorPercentile` 0). The app does not run these settings. Under them the
+filter labels 73.94% of PDAL's ground returns as ground, pooled over the five
+scenes, with 44.79% on the rolling scene and 0.99% on the low-blunder scene.
+These figures are agreement with PDAL, written to
 `validation/cross-implementation/pdal-pipeline/results-ground-filter-metrics.json`.
-Pooled over the five, the filter labels 73.94% of the reference's ground
-returns as ground. The rolling scene reaches 44.79%, and the flat scene with
-low blunders 0.99%. The disagreement runs one way: of the 27,833 returns the
-filter calls ground, the reference agrees on all but three. These figures
-measure agreement with one other implementation and say nothing about accuracy
-against surveyed ground. Both can misjudge the same return, and no one
-surveyed a synthetic surface.
+They are not accuracy.
+
+`tests/groundFilterTruthRecall.test.ts` scores PDAL, the study settings and the
+shipped settings against the ground labels each scene was built with, and
+writes the figures to
+`validation/cross-implementation/pdal-pipeline/results-ground-filter-truth.json`.
+In the table, shipped means window 8, slope 0.2, threshold 0.5 m, a 2.5 m cap
+and a 5th-percentile despike floor, at a 1 m cell. The app takes the cell size
+from each cloud's grid, and does not run the filter when a cloud already has
+usable class-2 ground.
+
+| Scene | Shipped recall / precision | Study recall / precision | PDAL recall / precision |
+| --- | --- | --- | --- |
+| Plane with buildings | 100.0% / 100.0% | 100.0% / 100.0% | 100.0% / 100.0% |
+| Rolling with buildings | 69.0% / 100.0% | 38.5% / 100.0% | 86.0% / 100.0% |
+| Ridge with buildings | 91.9% / 100.0% | 69.2% / 100.0% | 96.6% / 100.0% |
+| Plane with low blunders | 98.6% / 99.7% | 0.0% / 0.0% | 31.5% / 99.0% |
+| Plane with gap | 100.0% / 100.0% | 100.0% / 100.0% | 100.0% / 100.0% |
+
+The low-blunder scene holds 30 returns 4 m below the ground. With the despike
+floor off, each one sets the minimum of its cell. Opening removes peaks, not
+pits, so the surface stays down at the blunders and the true ground above it is
+rejected. Under the study settings the filter calls only the 30 blunders
+ground. The shipped 5th-percentile floor stops the blunders dragging the
+surface down, so 98.6% of the ground is kept, but the 30 blunders are still
+labelled ground.
+
+The remaining limit is curved terrain. The filter tests each return against an
+opened surface that cuts through convex ground, so ground on a curve is
+rejected. With the shipped settings the rolling scene keeps 69.0% of its
+ground. With the shipped settings, precision is 99.67% or higher on every
+scene, and the only false ground calls are the 30 low blunders on the
+low-blunder scene.
+
+The truth labels come from this project's own scene generator. Five synthetic
+scenes are not survey data, and these figures say nothing beyond them.
 
 ## Flow Pulse is topographic routing only
 
