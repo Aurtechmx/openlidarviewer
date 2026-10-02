@@ -1,4 +1,4 @@
-import { defineConfig, type PluginOption } from 'vite';
+import { defineConfig, minifySync, transformWithOxc, type Plugin, type PluginOption, type TransformResult } from 'vite';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -88,8 +88,8 @@ function resolveBuildIdentity(mode: string): {
  * breakage, and (debug-protection) are anti-DevTools theatre that does not
  * actually protect anything.
  */
-function liveSourceTransformPlugin() {
-  return liveSourceTransform({
+function liveSourceTransformPlugin(): Plugin {
+  const transform = liveSourceTransform({
     apply: 'build',
     // POSITIVE allow-list: only this project's own TypeScript is transformed.
     //
@@ -135,6 +135,10 @@ function liveSourceTransformPlugin() {
       /contextRecoveryLoader\.ts/,
       /parseBuffer\.ts/,
       /loaderRegistry\.ts/,
+      // `governorHook.ts` exports the `?governor=on` slot name for its tests.
+      // The string array would keep that name in the shipped table after the
+      // export itself is dropped, so the module stays out of the transform.
+      /render\/perf\/governorHook\.ts/,
       // ── Performance exclusions (v0.5.3) ────────────────────────────────
       // The stringArray pass rewrites property access (`obj.prop` →
       // `obj[decode(n)]`) and built-in calls (`Math.hypot` →
@@ -186,9 +190,14 @@ function liveSourceTransformPlugin() {
       deadCodeInjection: false,
       debugProtection: false,
       selfDefending: false,
+      // The string array keeps literals out of the code that reads them.
+      // Its entries stay plain text: base64 encoding them hid nothing the
+      // public source does not show, and the decoder plus the encoded table
+      // cost about 124 KiB on the index chunk and 48 KiB on Viewer.
       stringArray: true,
       stringArrayThreshold: 0.75,
-      stringArrayEncoding: ['base64'],
+      stringArrayEncoding: [],
+      stringArrayRotate: false,
       identifierNamesGenerator: 'hexadecimal',
       numbersToExpressions: false,
       simplify: true,
@@ -196,7 +205,32 @@ function liveSourceTransformPlugin() {
       transformObjectKeys: false,
       unicodeEscapeSequence: false,
     },
-  });
+  }) as Plugin & { transform: (this: unknown, code: string, id: string) => TransformResult | undefined };
+  const obfuscate = transform.transform;
+  let define: Record<string, string> = {};
+  return {
+    ...transform,
+    configResolved(config) {
+      define = Object.fromEntries(
+        Object.entries(config.define ?? {}).map(([k, v]) => [k, typeof v === 'string' ? v : JSON.stringify(v)]),
+      );
+    },
+    // Apply the build's `define` values and fold each module with the
+    // bundle's own minifier before the transform reads it. A branch the build
+    // turns off (the `__OLV_TEST_SEAM__` seam, the maintainer flags) is then
+    // gone before the string array is built, so none of its literals reach
+    // the shipped string table.
+    async transform(code: string, id: string) {
+      if (!/src\/.*\.ts$/.test(id) || /node_modules/.test(id)) return undefined;
+      const defined = await transformWithOxc(code, `${id}.js`, { lang: 'js', define });
+      const folded = minifySync(id, defined.code, {
+        compress: true,
+        mangle: false,
+        codegen: { removeWhitespace: false },
+      });
+      return obfuscate.call(this, folded.errors.length > 0 ? code : folded.code, id);
+    },
+  };
 }
 
 /**

@@ -9,13 +9,13 @@ entry. This is the latest account of each, which is a different question
 and the one a reader usually has. Where an entry was revisited, the last
 heading in the file wins.
 
-Entries: 206. Revisited at least once: 25.
+Entries: 207. Revisited at least once: 25.
 
 ## Totals
 
 | Status | Entries |
 | --- | --- |
-| FIXED | 93 |
+| FIXED | 94 |
 | BUILT | 44 |
 | PARTIAL | 33 |
 | MEASURED | 16 |
@@ -234,3 +234,4 @@ Entries: 206. Revisited at least once: 25.
 | L210 | FIXED | UI | 1 |
 | L211 | FIXED | ARCHITECTURE | 1 |
 | L212 | FIXED | ARCHITECTURE | 1 |
+| L213 | FIXED | PERFORMANCE | 1 |

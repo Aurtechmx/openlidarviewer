@@ -60,6 +60,8 @@ function requestFromUrl(): void {
 
 /** The installed governor, or null (the default). */
 export function governor(): GovernorSink | null {
+  // Only the flag path installs a governor; the live build has none to read.
+  if (!__OLV_DEV_FLAGS__) return null;
   if (!urlChecked) requestFromUrl();
   return ((globalThis as Record<string, unknown>)[GOVERNOR_SLOT] as GovernorSink | undefined) ?? null;
 }
