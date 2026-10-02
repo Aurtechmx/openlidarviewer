@@ -8187,11 +8187,14 @@ Workflow cap notice, built CSP check, link redaction, Session log route.
   recording still saves with the events it took.
 - `scripts/check-built-csp.mjs` (`npm run check:built-csp`, run in CI after
   `build:live`) hashes each inline `<style>` in `dist/index.html` and checks
-  the hash against `style-src` in `index.html`, `public/_headers` and
-  `public/.htaccess`.
-- `redactPaths` continues a link past a space only to a word that holds a
-  query or ends in a file name with an extension. "from a 1/2 tile" after a
-  link is kept.
+  the hash against `style-src` in every enforcing CSP line of `index.html`,
+  `public/_headers` and `public/.htaccess`. It fails when the built page
+  has no inline style or a different count from the source, and reports a
+  missing build the way the other post-build checks do.
+- `redactPaths` continues a link past a space to a word that holds `/`, `=`
+  or a query, except a bare fraction or a lone slash, and to a token shaped
+  like a JWT. "from a 1/2 tile" and "EPSG:32614 / WGS 84" after a link are
+  kept; folder names with spaces stay redacted.
 - The Data home opens the Session log page through the `help.session-log`
   action, so a throw in mount or navigate goes through `settle` and the
   action's notice.
