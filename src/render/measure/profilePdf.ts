@@ -85,7 +85,8 @@ import {
   type PDFFont,
   type PDFPage,
 } from 'pdf-lib';
-import type { ProfileChartSample, UnitSystem } from './types';
+import type { ProfileChartSample } from './types';
+import { unitToken, type DisplayUnits } from './format';
 import {
   computeCivilProfileStats,
   formatGradePercent,
@@ -173,7 +174,7 @@ export interface ProfilePdfInput {
    * height axis + summary + station schedule and US 100-ft stationing on
    * the chainage axis. Defaults to metric (the pre-v0.4.5 sheet).
    */
-  readonly unitSystem?: UnitSystem;
+  readonly unitSystem?: DisplayUnits;
   /**
    * Whether the scene could assert a vertical datum at all. False when the
    * loaded clouds hold conflicting render origins, in which case the samples
@@ -922,9 +923,9 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   const when = input.generatedAt;
   // Unit system (B9): every printed number converts ONCE through `k`; the
   // underlying samples/stats stay metres so the geometry math is untouched.
-  const system: UnitSystem = input.unitSystem ?? 'metric';
-  const k = system === 'metric' ? 1 : FEET_PER_METRE;
-  const unit = system === 'metric' ? 'm' : 'ft';
+  const system: DisplayUnits = input.unitSystem ?? 'metric';
+  const k = system === 'imperial' ? FEET_PER_METRE : 1;
+  const unit = unitToken(system);
   const datumKnown = input.datumKnown !== false;
   const record = input.provenance ?? null;
   const reference = resolveVerticalReference(input);
@@ -1236,7 +1237,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       `Vertical exaggeration ${vex.toFixed(1)}:1   |   PRINT AT 100% ON ${SHEET_SIZE}`;
     put(page, scaleLine, M, scaleLineY, T_SCALE, f.bold, INK);
     const axisTitle =
-      system === 'metric' ? 'Chainage (station km+m)' : 'Chainage (100 ft stations)';
+      system === 'unverified' ? 'Chainage (unit unverified)' : system === 'metric' ? 'Chainage (station km+m)' : 'Chainage (100 ft stations)';
     put(
       page,
       axisTitle,
@@ -1522,7 +1523,7 @@ interface CalloutInput {
   readonly plotBotY: number;
   readonly plotLeft: number;
   readonly plotRight: number;
-  readonly system: UnitSystem;
+  readonly system: DisplayUnits;
 }
 
 /**
@@ -1850,12 +1851,12 @@ function renderStationSchedule(
   f: Faces,
   sheets: EmittedSheet[],
   stations: ReturnType<typeof computeCivilProfileStats>['stations'],
-  system: UnitSystem,
+  system: DisplayUnits,
   reference: VerticalReference,
 ): void {
   // B9: the schedule prints in the display unit; geometry stays metres.
-  const k = system === 'metric' ? 1 : FEET_PER_METRE;
-  const unit = system === 'metric' ? 'm' : 'ft';
+  const k = system === 'imperial' ? FEET_PER_METRE : 1;
+  const unit = unitToken(system);
   const colCount = 4;
   const colGap = 22;
   const usableW = PAGE_W - 2 * M;

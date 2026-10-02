@@ -133,8 +133,9 @@ export function displayDecimals(
 }
 
 /** Format a length given in metres for the active unit system. */
-export function formatLength(metres: number, system: UnitSystem): string {
+export function formatLength(metres: number, system: DisplayUnits): string {
   if (!Number.isFinite(metres)) return '—';
+  if (system === 'unverified') return formatUnitUnverified(metres);
   if (system === 'metric') {
     const abs = Math.abs(metres);
     // Band by magnitude (not sign): a signed reading — a downward delta, an
@@ -170,8 +171,9 @@ export function formatLength(metres: number, system: UnitSystem): string {
  * not "40.0 cm". Holding one unit is also what makes a column of elevations
  * comparable at a glance, which is the whole point of printing them.
  */
-export function formatElevation(metres: number, system: UnitSystem): string {
+export function formatElevation(metres: number, system: DisplayUnits): string {
   if (!Number.isFinite(metres)) return '—';
+  if (system === 'unverified') return formatUnitUnverified(metres);
   if (system === 'metric') return `${metres.toFixed(2)} m`;
   return `${(metres * FEET_PER_METRE).toFixed(2)} ft`;
 }
@@ -332,4 +334,15 @@ export const UNIT_UNVERIFIED = '(unit unverified)';
 export function formatUnitUnverified(sourceValue: number): string {
   if (!Number.isFinite(sourceValue)) return '—';
   return `${Number(sourceValue.toPrecision(DISPLAY_SIG_FIGS))} ${UNIT_UNVERIFIED}`;
+}
+
+/**
+ * A unit system for display, or `unverified` when the horizontal unit is
+ * unknown: values are then source numbers marked unverified, never metres.
+ */
+export type DisplayUnits = UnitSystem | 'unverified';
+
+/** The column or label token for a display unit: m, ft, or source. */
+export function unitToken(system: DisplayUnits): 'm' | 'ft' | 'source' {
+  return system === 'imperial' ? 'ft' : system === 'metric' ? 'm' : 'source';
 }

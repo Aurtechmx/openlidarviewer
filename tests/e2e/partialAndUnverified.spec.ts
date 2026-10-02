@@ -88,3 +88,28 @@ test('a scan with no CRS shows its measurements as unit unverified, not metres',
   expect(header).not.toContain('length_m');
   expect(line).toContain('units-unverified');
 });
+
+test('a profile on a scan with no CRS labels its chart, summary and workbench as unit unverified', async ({ page }) => {
+  const fx = await geomFixtures();
+  await dropBytes(page, fx.geomNoCrs, 'geom-nocrs.las');
+  await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
+  if (!(await page.locator('.olv-measure-bar').isVisible())) await page.locator('.olv-tool', { hasText: 'Measure' }).click();
+  await page.evaluate(() => {
+    const api = (window as unknown as { __OLV_TEST_API__: Api & { finishMeasurement(): void } }).__OLV_TEST_API__;
+    api.setMeasureKind('profile');
+    api.placeMeasurementPoint({ x: 2, y: 5, z: 1 });
+    api.placeMeasurementPoint({ x: 30, y: 5, z: 1 });
+    api.finishMeasurement();
+  });
+  await expect(page.locator('.olv-mp-chart-wrap').first()).toBeVisible({ timeout: 10_000 });
+  const metric = /\d\s?(m|km|ft|mi)\b/;
+  const panel = page.locator('.olv-measure-panel');
+  await expect(panel).toContainText('unit unverified');
+  expect(await panel.innerText()).not.toMatch(metric);
+
+  await page.locator('.olv-mp-chart-wrap').first().click();
+  const detail = page.locator('.olv-workbench-detail');
+  await expect(page.locator('.olv-workbench-detail-row').first()).toBeVisible({ timeout: 10_000 });
+  await expect(detail).toContainText('unit unverified');
+  expect(await detail.innerText()).not.toMatch(metric);
+});

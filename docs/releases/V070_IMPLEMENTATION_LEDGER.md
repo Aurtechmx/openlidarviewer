@@ -8158,8 +8158,9 @@ Loading row show the truncation, export provenance states data basis
 `partial` with the same text, and the coverage gates in the capability model,
 tool preflight, QA checks and contour launch treat it as short of full.
 
-When the horizontal unit is unknown, measurement rows, the breakdown line and
-the measure hint print the source number marked "(unit unverified)", and the
+When the horizontal unit is unknown, measurement rows, the breakdown line,
+the measure hint, the profile chart, summary, CSV and PDF, and the Profile
+Workbench print the source number marked "(unit unverified)", and the
 confidence line reads approximate with that reason instead of "datum
 resolved".
 

@@ -19,9 +19,9 @@
  * the PDF and the CSV all read from one tested source of truth.
  */
 
-import type { ProfileChartSample, UnitSystem } from './types';
+import type { ProfileChartSample } from './types';
 import { formatStationing, formatGradePercent, profileSampleCovered } from './civilProfileStats';
-import { formatElevation, formatLength } from './format';
+import { formatElevation, formatLength, formatUnitUnverified, unitToken, type DisplayUnits } from './format';
 // Height headings come from one vocabulary, where "Elevation" is earned by an
 // orthometric reference and by nothing else. The panel, the station table, the
 // CSV and the sheet all label from here, so no two of them can name the same
@@ -204,8 +204,9 @@ export function computeProfileSummary(
  * convention (`1+13.45` = 113.45 ft). Matching what each drawing culture
  * expects beats forcing one notation on both.
  */
-export function formatStation(chainageM: number, system: UnitSystem): string {
+export function formatStation(chainageM: number, system: DisplayUnits): string {
   if (!Number.isFinite(chainageM)) return '—';
+  if (system === 'unverified') return formatUnitUnverified(chainageM);
   if (system === 'metric') return formatStationing(chainageM);
   const ft = Math.abs(chainageM) * FEET_PER_METRE;
   const sign = chainageM < 0 ? '-' : '';
@@ -222,7 +223,7 @@ export function formatStation(chainageM: number, system: UnitSystem): string {
  * reading, and treating it as a magnitude is what once printed a 418 m ground
  * as "-41186.5 cm".
  */
-export function formatProfileExtreme(e: ProfileExtreme | null, system: UnitSystem): string {
+export function formatProfileExtreme(e: ProfileExtreme | null, system: DisplayUnits): string {
   if (e == null) return '—';
   return `${formatElevation(e.elevation, system)} @ ${formatStation(e.chainage, system)}`;
 }
@@ -245,7 +246,7 @@ export interface ProfileSummaryRow {
  */
 export function profileSummaryRows(
   s: ProfileSummaryData,
-  system: UnitSystem,
+  system: DisplayUnits,
   reference: VerticalReference,
 ): ProfileSummaryRow[] {
   // The two absolute rows are the only ones that need a reference, and they
@@ -305,9 +306,9 @@ export interface ProfileStationRow {
  */
 export function profileStationRows(
   samples: ReadonlyArray<ProfileChartSample>,
-  system: UnitSystem,
+  system: DisplayUnits,
 ): ProfileStationRow[] {
-  const k = system === 'metric' ? 1 : FEET_PER_METRE;
+  const k = system === 'imperial' ? FEET_PER_METRE : 1;
   const rows: ProfileStationRow[] = [];
   for (let i = 0; i < samples.length; i++) {
     const s = samples[i];
@@ -371,10 +372,10 @@ function heightColumnToken(reference: VerticalReference): string {
  */
 export function buildProfileCsv(
   samples: ReadonlyArray<ProfileChartSample>,
-  system: UnitSystem,
+  system: DisplayUnits,
   reference: VerticalReference,
 ): string {
-  const unit = system === 'metric' ? 'm' : 'ft';
+  const unit = unitToken(system);
   // An unearned reference renames the column; it must NOT blank it. A blank
   // already means "the corridor saw no points here", and spending that signal
   // on a different problem would trade one silent wrong answer for another.

@@ -337,9 +337,8 @@ coordinates. The site KML is written only while one scan is open.
 A LAS file whose body ends before its declared records opens with the records
 it holds and reads as partial coverage: "Truncated: N of M points read".
 Truncation is recorded for uncompressed LAS only. When the horizontal unit is
-unknown, measurement rows, their breakdown line and the measure hint state the
-unit is unverified. The profile chart axes, the profile summary and the Profile
-Workbench still label their values in metres.
+unknown, measurement rows, the measure hint, the profile chart, summary and PDF,
+and the Profile Workbench state the unit is unverified.
 
 ## Export digests that some surfaces cannot carry
 
