@@ -311,6 +311,13 @@
   box-shadow: var(--shadow-floating);
   animation: olv-rvc-in 200ms var(--ease-standard, ease);
 }
+/* With the desktop rails up, the chip centres in the band they leave free, and
+   a collapsed rail gives its width back to that band. */
+@media (min-width: 768px) {
+  .olv-rvc { left: calc(50vw + (var(--olv-rail-width) - var(--olv-right-rail-width)) / 2); }
+  body:has(.olv-right-rail.olv-right-collapsed) .olv-rvc { --olv-right-rail-width: 0px; }
+  body:has(.olv-left-panels.olv-rail-collapsed) .olv-rvc { --olv-rail-width: 0px; }
+}
 @keyframes olv-rvc-in { from { opacity: 0; transform: translate(-50%, -6px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .olv-rvc-apply {
   display: inline-flex; align-items: center; gap: 6px;
