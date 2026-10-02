@@ -94,8 +94,10 @@ export function liveTasks(nowMs: number = performance.now()): readonly TaskActiv
         continue;
       }
       const run = s.run?.();
-      // A task already running in this run stays listed while its host is
-      // hidden (panel closed, sheet lowered); a hidden one not yet seen is not.
+      // `live()` is false only when the host ends or hides the task itself; a
+      // layout hide (a closed panel, a lowered sheet) leaves it live, so such a
+      // task is listed from the start. A task already running in this run stays
+      // listed while its host hides it; one the host hid before it was seen is not.
       if (!s.live() && (!clocks.has(id) || runs.get(id) !== run)) {
         clocks.delete(id);
         continue;
