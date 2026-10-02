@@ -72,6 +72,7 @@ function mountHarness(clouds: Record<string, PointCloud>, multiLayerMount: boole
     setLayerCrsFlags: () => {},
     setLayerHealth: () => {},
     setLayerCompareAvailable: () => {},
+    setCompareChoices: () => {},
     setProjectSharedElevationAvailable: () => {},
   } as unknown as Inspector;
   const service = createLayerService({

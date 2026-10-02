@@ -438,8 +438,10 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
       // would only say so. The card drops the block entirely instead.
       inspector.setLayerHealth(healthLayers, infos.length <= 1 ? null : report);
     }
-    // The two-epoch compare needs exactly two loaded layers.
-    inspector.setLayerCompareAvailable(getViewer().clouds().length === 2);
+    // The two-epoch compare runs on a chosen Before/After pair of the loaded layers.
+    const compareIds = getViewer().clouds();
+    inspector.setCompareChoices(compareIds.map((id) => ({ id, name: getViewer().getCloud(id)?.name ?? id })));
+    inspector.setLayerCompareAvailable(compareIds.length >= 2);
     // Mount changes move which layers share the project frame — re-run the
     // shared elevation recolor and re-gate the Inspector toggle.
     const v = getViewer();

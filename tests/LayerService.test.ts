@@ -150,6 +150,7 @@ function setup(
     setLayerHealth: (layers: unknown[], report: unknown) => {
       healthCalls.push({ n: layers.length, report });
     },
+    setCompareChoices: () => {},
     setLayerCompareAvailable: (b: boolean) => {
       compareCalls.push(b);
     },
@@ -248,7 +249,7 @@ describe('LayerService — applyVisibility / setVisible / toggleSolo', () => {
 });
 
 describe('LayerService — refreshCrsFlags', () => {
-  it('marks compare available only with exactly two layers and refreshes the compass', () => {
+  it('marks compare available only with two or more layers and refreshes the compass', () => {
     const two = setup(twoClouds);
     two.service.refreshCrsFlags();
     expect(two.compareCalls.at(-1)).toBe(true);

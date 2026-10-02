@@ -125,17 +125,18 @@ the two entries were renumbered when the branches were integrated.
 | L219 | ARCHITECTURE | TEST | med | FIXED | new | The workspace router kept one direction timer for every mode host, so a page change in a second mode within 400 ms left the first host's entry animation class in place, and the router had no dispose. Recovery compared a reopened source with the newest journal entry alone, so after work on A and then B, reopening A said it differed and never offered A's work. |
 | L217 | UI | TEST | med | FIXED | new | Below 1024 px the measure toolbar wrapped into a column taller than the stage: at 800 × 470 Distance sat out of reach and the toolbar ran into the state strip; at 768 × 1024 the hint was one word per line and Done sat under the View rail. The Navigation panel and the View rail opened over the scan, the location bar overlapped itself, and the landing mark sat under the header pill on short windows. |
 | L220 | UI | TEST | low | FIXED | new | With a scan open the side rails started at 56 px, under the 58 px lower edge of the location bar, so the workspace tabs touched it. Between 768 and 1023 px the bar clipped the current page to nothing. The page title was 14 px in the desktop rail and 11 px uppercase in the phone sheet. Status badges sat centred against a two-line name and used a 5 px radius outside the scale. Styles asked for weight 700, which Olv Font does not ship. The type scale comment listed sizes the tokens no longer have. |
+| L223 | SCIENTIFIC | TEST | med | FIXED | new | Compare elevation took before and after from load order, did nothing unless exactly two clouds were loaded, gave no reason with fewer than two, and an older run's result could replace a newer one. |
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 74
+- FIXED: 75
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 96
+- total: 97
 
 ## Detail
 
@@ -8323,3 +8324,20 @@ roles and control sizes.
 `tests/e2e/responsiveLayout.spec.ts` checks at 1280 × 720, 1023 × 768 and
 768 × 1024 that the tab strip and the View rail start below the location bar
 and that the bar keeps the current page visible.
+
+### L223 · FIXED · SCIENTIFIC
+
+The Layers section lists the loaded clouds in Before and After selectors
+(`createComparePairPicker` in `src/app/comparePair.ts`). They default to load
+order, so two clouds compare as before, and any two of three or more can be
+chosen. `resolveComparePair` refuses the same cloud for both and, with fewer
+than two clouds, returns a message that says to load another scan.
+`CompareRunGuard` takes a token and a snapshot of the two layers when a run
+starts; the result is dropped if a newer run started or either layer was
+removed or replaced. The comparison math, the alignment refusal and the sign
+convention are unchanged.
+
+Tests: `tests/comparePair.test.ts` (selection overrides load order and a swap
+flips the sign, a stale run is dropped, fewer than two clouds gives the
+message, the same cloud is refused), `tests/e2e/compareExplicitPair.spec.ts`
+(three clouds, first and third compared).

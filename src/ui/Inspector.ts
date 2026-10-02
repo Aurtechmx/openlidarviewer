@@ -1,4 +1,5 @@
 import { el, iconButton, formatCount } from './dom';
+import { createComparePairPicker, beginCompareRun, CompareRunGuard, type ComparePairPicker, type CompareChoice, type CompareRunStart } from '../app/comparePair';
 import {
   renderStreamingDetail,
   clearStreamingDetail,
@@ -705,6 +706,8 @@ export class Inspector {
   private _layerNote: HTMLElement | null = null;
   /** Lazily-created two-epoch compare button + result, shown with exactly 2 layers. */
   private _compareBtn: HTMLButtonElement | null = null;
+  private _comparePicker: ComparePairPicker | null = null;
+  private readonly _compareRuns = new CompareRunGuard<unknown>();
   private _compareResult: HTMLElement | null = null;
   private _diffBtn: HTMLButtonElement | null = null;
   // ── Rendering controls ──
@@ -1672,7 +1675,7 @@ export class Inspector {
       className: 'olv-bc-pill olv-layer-compare',
       type: 'button',
       text: 'Compare elevation',
-      title: 'Difference the two loaded layers as before → after (two-epoch change detection)',
+      title: 'Difference the chosen Before and After layers (two-epoch change detection)',
     }) as HTMLButtonElement;
     btn.style.display = 'none';
     btn.addEventListener('click', () => this._cb.onCompareLayers?.());
@@ -1689,10 +1692,11 @@ export class Inspector {
     this._compareBtn = btn;
     this._compareResult = result;
     this._diffBtn = diff;
-    this._layersSection.append(btn, result, diff);
+    this._comparePicker = createComparePairPicker();
+    this._layersSection.append(this._comparePicker.element, btn, result, diff);
   }
 
-  /** Show the "Compare elevation" action only when exactly two layers are loaded. */
+  /** Show the "Compare elevation" action when two or more layers are loaded. */
   setLayerCompareAvailable(on: boolean): void {
     this._ensureCompareUi();
     if (this._compareBtn) this._compareBtn.style.display = on ? '' : 'none';
@@ -1700,6 +1704,22 @@ export class Inspector {
       if (this._compareResult) this._compareResult.style.display = 'none';
       if (this._diffBtn) this._diffBtn.style.display = 'none';
     }
+  }
+
+  /** List the loaded clouds in the Before and After selectors. */
+  setCompareChoices(choices: readonly CompareChoice[]): void {
+    this._ensureCompareUi();
+    this._comparePicker?.setChoices(choices);
+  }
+
+  /**
+   * Start a compare run on the chosen Before/After pair (load order by default).
+   * `current()` turns false once a newer run starts or either layer is removed
+   * or replaced, so a stale result is dropped.
+   */
+  beginCompareRun(ids: readonly string[], lookup: (id: string) => unknown): CompareRunStart {
+    const selection = this._comparePicker?.selection() ?? { before: null, after: null };
+    return beginCompareRun(this._compareRuns, ids, selection, lookup);
   }
 
   /** Show the "Download difference" action once a comparison has produced a grid. */
