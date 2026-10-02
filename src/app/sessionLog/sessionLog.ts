@@ -79,7 +79,7 @@ const LINK = /^[a-z][a-z0-9+.-]{0,31}:\/\//i;
 const OPAQUE = /^(data|blob|mailto|javascript|vbscript|tel|sms):/i;
 const opaqueText = (v: string): string => `${OPAQUE.exec(v)![1]!.toLowerCase()}:…`;
 /** A last segment that carries a credential: a query pair, or a JWT's three parts. */
-const TOKEN_NAME = /[=&]|^eyJ[\w-]*\.[\w-]+\./;
+const TOKEN_NAME = /[=&]|(?:^|\s)eyJ[\w-]*\.[\w-]+\./;
 
 /** What a link keeps: its origin and, when it names a file, that file's name. */
 interface LinkParts {
@@ -160,17 +160,17 @@ function trimTail(m: string): [string, string] {
 // One pass, so a replacement is never scanned again. Groups, in order:
 // 1 an opaque link (data:, blob:, mailto:, javascript: and the like), 2 a link
 // with a scheme, which runs on past a space, over up to three plain words, to a
-// word that holds a query (`?` or `=`) or ends a path in a file name with an
-// extension, 3 the folders of a
+// word that still belongs to it (LINK_TAIL), 3 the folders of a
 // Windows drive path (either slash), 4 the folders of a UNC path, 5 the folders
 // of a home-relative path, 6 the character before a POSIX path and 7 that
 // path's folders. A folder name may hold single spaces. Every quantifier is
 // bounded by the next separator, so a crafted line costs linear time.
 const WIN_SEG = String.raw`[^\\/\s:*?"<>|]+(?: [^\\/\s:*?"<>|]+)*`;
 const POSIX_SEG = String.raw`[^/\s"'<>]+(?: [^/\s"'<>]+)*`;
-// A word after a space that still belongs to a link: a query, or a path whose
-// last segment is a file name with an extension.
-const LINK_TAIL = String.raw`[^\s"'<>]*(?:\?[^\s"'<>]|=|\/[^\s"'<>/]*\.[a-z0-9]{1,8}[.,;:!)\]]*(?=[\s"'<>]|$))[^\s"'<>]*`;
+// A word after a space that still belongs to a link: one that holds `/`, `=`
+// or a query, other than a bare fraction ("1/2") or a lone slash, or a token
+// shaped like a JWT.
+const LINK_TAIL = String.raw`(?:(?!\d+\/\d+[.,;:!?)\]]*(?:[\s"'<>]|$)|\/(?:[\s"'<>]|$))[^\s"'<>]*(?:[/=]|\?[^\s"'<>])[^\s"'<>]*|eyJ[\w-]*\.[\w-]+\.[\w-]+)`;
 const PATH_PATTERN = new RegExp(
   [
     String.raw`(\b(?:data|blob|mailto|javascript|vbscript|tel|sms):[^\s"'<>]+)`,
