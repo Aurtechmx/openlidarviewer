@@ -264,6 +264,28 @@
         "validation/cross-implementation/pdal-pipeline/reference-runs.json"
       ],
       "inputsDigest": "sha256:d5fa9f48bef27ea8eb5ab52e256a7be178bee0debf92f3ce1f595c54c0cad9c4"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/results-ground-filter-truth.json",
+      "sha256": "18cb8c52f20d06280e93bf7d36c8fe4e36ea4238b97d63112da2d4afc45e5127",
+      "derivedFrom": [
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-01-plane-buildings.csv",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-02-rolling-buildings.csv",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-03-ridge-buildings.csv",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-04-plane-lowblunders.csv",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-05-plane-gap.csv",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-01-plane-buildings.truth",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-02-rolling-buildings.truth",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-03-ridge-buildings.truth",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-04-plane-lowblunders.truth",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-05-plane-gap.truth",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-01-plane-buildings__smrf.csv",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-02-rolling-buildings__smrf.csv",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-03-ridge-buildings__smrf.csv",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-04-plane-lowblunders__smrf.csv",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-05-plane-gap__smrf.csv"
+      ],
+      "inputsDigest": "sha256:29454c502f3fd1bc8f1da0349b4125719b441d25c2a599627a78438e47e01bf5"
     }
   ],
   "scope": {

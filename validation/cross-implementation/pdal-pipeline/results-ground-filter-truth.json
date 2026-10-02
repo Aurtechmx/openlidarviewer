@@ -1,0 +1,169 @@
+{
+  "generatedBy": "tests/groundFilterTruthRecall.test.ts",
+  "manifest": "validation/cross-implementation/studies/GROUND-FILTER-PDAL-SMRF.study.json",
+  "promotes": "nothing",
+  "positiveClass": "ground",
+  "truth": "fixtures/<scene>.truth, written by scripts/generate-point-cloud-fixtures.mjs",
+  "evidenceNote": "E3. Each label source is scored against the ground membership the scene generator assigned. Recall is the share of truth-ground a source calls ground; precision is the share of its ground calls that are truth-ground. A metric with no denominator is null.",
+  "configurations": {
+    "pdal": "PDAL filters.smrf output under pdal/, cell 1, window 16, slope 0.15, threshold 0.5, scalar 0, cut 0",
+    "study": {
+      "function": "classifyGroundSmrf",
+      "cellSizeM": 1,
+      "maxWindowCells": 16,
+      "slope": 0.15,
+      "elevationThresholdM": 0.5,
+      "scalingFactorM": 0,
+      "maxElevationThresholdM": "Infinity",
+      "floorPercentile": 0,
+      "verticalAxis": "z"
+    },
+    "shipped": {
+      "function": "classifyGroundSmrf",
+      "source": "resolveGroundFilterParams defaults",
+      "cellSizeM": 1,
+      "maxWindowCells": 8,
+      "slope": 0.2,
+      "elevationThresholdM": 0.5,
+      "maxElevationThresholdM": 2.5,
+      "floorPercentile": 5,
+      "verticalAxis": "z"
+    }
+  },
+  "legs": [
+    {
+      "fixtureId": "pc-01-plane-buildings",
+      "surface": "plane",
+      "returns": 11138,
+      "pdal": {
+        "truthGround": 9196,
+        "predictedGround": 9196,
+        "truePositive": 9196,
+        "groundRecall": 1,
+        "groundPrecision": 1
+      },
+      "study": {
+        "truthGround": 9196,
+        "predictedGround": 9196,
+        "truePositive": 9196,
+        "groundRecall": 1,
+        "groundPrecision": 1
+      },
+      "shipped": {
+        "truthGround": 9196,
+        "predictedGround": 9196,
+        "truePositive": 9196,
+        "groundRecall": 1,
+        "groundPrecision": 1
+      }
+    },
+    {
+      "fixtureId": "pc-02-rolling-buildings",
+      "surface": "rolling",
+      "returns": 11156,
+      "pdal": {
+        "truthGround": 9228,
+        "predictedGround": 7937,
+        "truePositive": 7937,
+        "groundRecall": 0.8601,
+        "groundPrecision": 1
+      },
+      "study": {
+        "truthGround": 9228,
+        "predictedGround": 3557,
+        "truePositive": 3557,
+        "groundRecall": 0.385457,
+        "groundPrecision": 1
+      },
+      "shipped": {
+        "truthGround": 9228,
+        "predictedGround": 6364,
+        "truePositive": 6364,
+        "groundRecall": 0.68964,
+        "groundPrecision": 1
+      }
+    },
+    {
+      "fixtureId": "pc-03-ridge-buildings",
+      "surface": "ridge",
+      "returns": 11176,
+      "pdal": {
+        "truthGround": 9234,
+        "predictedGround": 8924,
+        "truePositive": 8924,
+        "groundRecall": 0.966428,
+        "groundPrecision": 1
+      },
+      "study": {
+        "truthGround": 9234,
+        "predictedGround": 6392,
+        "truePositive": 6392,
+        "groundRecall": 0.692224,
+        "groundPrecision": 1
+      },
+      "shipped": {
+        "truthGround": 9234,
+        "predictedGround": 8483,
+        "truePositive": 8483,
+        "groundRecall": 0.91867,
+        "groundPrecision": 1
+      }
+    },
+    {
+      "fixtureId": "pc-04-plane-lowblunders",
+      "surface": "plane",
+      "returns": 11137,
+      "pdal": {
+        "truthGround": 9193,
+        "predictedGround": 2925,
+        "truePositive": 2896,
+        "groundRecall": 0.315022,
+        "groundPrecision": 0.990085
+      },
+      "study": {
+        "truthGround": 9193,
+        "predictedGround": 30,
+        "truePositive": 0,
+        "groundRecall": 0,
+        "groundPrecision": 0
+      },
+      "shipped": {
+        "truthGround": 9193,
+        "predictedGround": 9093,
+        "truePositive": 9063,
+        "groundRecall": 0.985859,
+        "groundPrecision": 0.996701
+      }
+    },
+    {
+      "fixtureId": "pc-05-plane-gap",
+      "surface": "plane",
+      "returns": 10544,
+      "pdal": {
+        "truthGround": 8658,
+        "predictedGround": 8658,
+        "truePositive": 8658,
+        "groundRecall": 1,
+        "groundPrecision": 1
+      },
+      "study": {
+        "truthGround": 8658,
+        "predictedGround": 8658,
+        "truePositive": 8658,
+        "groundRecall": 1,
+        "groundPrecision": 1
+      },
+      "shipped": {
+        "truthGround": 8658,
+        "predictedGround": 8658,
+        "truePositive": 8658,
+        "groundRecall": 1,
+        "groundPrecision": 1
+      }
+    }
+  ],
+  "boundaries": [
+    "Five synthetic scenes are not survey data: uniform-random returns in plan, no sensor geometry, no scan pattern, no range noise, no multiple returns, and objects that are boxes and clumps of points.",
+    "The truth labels come from a generator this project wrote. The figures describe these scenes and settings only."
+  ]
+}

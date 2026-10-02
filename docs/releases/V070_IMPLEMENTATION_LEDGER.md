@@ -118,17 +118,18 @@ the two entries were renumbered when the branches were integrated.
 | L214 | UI | TEST | low | FIXED | new | A workflow recording stopped taking events at 10,000 with no notice; no check compared the built index.html styles with the CSP hashes; the session log redacted plain words after a link, such as "from a 1/2 tile"; a throw while opening the Session log page from the Data home escaped the router; the `needs` comment on Analyse rows overstated what it meant. |
 
 | L213 | PERFORMANCE | TEST | med | FIXED | new | The live build's index chunk sat at 783 of 795 KiB and Viewer at 715 of 716 KiB. Most of that was the source transform: base64 string tables, a rotation call that kept every transformed module from being tree-shaken, and the literals of build-time-disabled branches. Those literals also reached the shipped table, encoded, so the test-seam and dev-flag gates could not see them. |
+| L215 | SCIENTIFIC | TEST | med | FIXED | new | Known limitations gave the ground filter's agreement with PDAL under study settings, with the despike floor off, as its ground recall; the app runs other settings, and no figure scored either against the scenes' truth labels. |
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 67
+- FIXED: 68
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 89
+- total: 90
 
 ## Detail
 
@@ -8203,3 +8204,19 @@ Workflow cap notice, built CSP check, link redaction, Session log route.
 
 Tests: `tests/workflowRecorderCap.test.ts`, `tests/builtCspStyle.test.ts`,
 `tests/sessionLog.test.ts`, `tests/workspaceShellTeardown.test.ts`.
+
+### L215 · FIXED · SCIENTIFIC
+
+`tests/groundFilterTruthRecall.test.ts` scores PDAL, the study settings and
+the shipped settings against each scene's `.truth` labels and writes
+`validation/cross-implementation/pdal-pipeline/results-ground-filter-truth.json`,
+pinned as a derived artifact in
+`validation/cross-implementation/studies/GROUND-FILTER-PDAL-SMRF.study.json`.
+Shipped settings, recall / precision: plane 100.0 / 100.0, rolling 69.0 /
+100.0, ridge 91.9 / 100.0, low blunders 98.6 / 99.7, gap 100.0 / 100.0.
+
+The ground-filter section of `docs/releases/KNOWN_LIMITATIONS_v0.7.0-alpha.1.md`
+labels the PDAL figures as agreement under the study settings, gives the
+truth-based table, explains the low-blunder case and states the curved-terrain
+limit. `groundFilter.ts`, its defaults and the existing results files are
+unchanged.
