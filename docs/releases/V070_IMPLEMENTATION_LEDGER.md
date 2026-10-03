@@ -139,13 +139,13 @@ the two entries were renumbered when the branches were integrated.
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 83
+- FIXED: 84
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 105
+- total: 106
 
 ## Detail
 
