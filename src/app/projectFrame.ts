@@ -29,6 +29,8 @@ import {
   type ProjectSpatialFrame,
   type LayerSpatialTransform,
 } from '../geo/ProjectSpatialFrame';
+import { isZUpFormat, type SourceFormat } from '../io/sniffFormat';
+import type { SessionFrameInput } from '../io/sessionFrame';
 import type { AppContext } from './appContext';
 
 type Vec3 = readonly [number, number, number];
@@ -243,4 +245,41 @@ export function createProjectFrameService(context: AppContext): ProjectFrameServ
       return state.unknownCrs;
     },
   };
+}
+
+/** What {@link projectFrameInputFrom} reads from the running app. */
+export interface ProjectFrameSources {
+  readonly frame: { readonly projectOrigin: readonly [number, number, number] } | null;
+  readonly layerIds: readonly string[];
+  cloud(id: string): { readonly sourceOrigin?: readonly [number, number, number]; readonly sourceFormat: SourceFormat } | null | undefined;
+  record(id: string): { readonly layerId: string; readonly fingerprint: string; readonly displayName: string } | null;
+  placement(id: string): { readonly vertical: boolean } | null;
+}
+
+/**
+ * The frame input for a session save: null unless two or more static layers
+ * are open, each with a source origin and a proven identity. A partial frame
+ * is never written; the single-origin reading applies instead.
+ */
+export function projectFrameInputFrom(src: ProjectFrameSources): SessionFrameInput | null {
+  if (!src.frame || src.layerIds.length < 2) return null;
+  const layers: SessionFrameInput['layers'][number][] = [];
+  for (const id of src.layerIds) {
+    const cloud = src.cloud(id);
+    const record = src.record(id);
+    if (!cloud?.sourceOrigin || !record) return null;
+    const placement = src.placement(id);
+    const o = cloud.sourceOrigin;
+    layers.push({
+      layerId: record.layerId,
+      sourceFingerprint: record.fingerprint,
+      sourceName: record.displayName,
+      sourceOrigin: [o[0], o[1], o[2]],
+      upAxis: isZUpFormat(cloud.sourceFormat) ? 'z' : 'y',
+      placed: placement != null,
+      placedVertically: placement?.vertical ?? true,
+    });
+  }
+  const p = src.frame.projectOrigin;
+  return { projectOrigin: [p[0], p[1], p[2]], layers };
 }

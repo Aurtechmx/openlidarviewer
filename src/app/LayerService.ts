@@ -77,6 +77,11 @@ export interface LayerService {
    * second use must not silently un-isolate the layer it just isolated.
    */
   soloOnly(id: string): void;
+  /**
+   * How the last frame sync placed a layer: null when it is not mounted in the
+   * project frame, else whether its Z shares the project's vertical origin.
+   */
+  placementOf(id: string): { readonly vertical: boolean } | null;
 }
 
 /**
@@ -235,6 +240,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
   let lastCompatibility = new Map<string, LayerCompatibility>();
   let lastUnmounted: string[] = [];
   /** Per-layer mount-precision result from the last frame pass — health card input. */
+  let lastPlacement = new Map<string, { readonly vertical: boolean }>();
   let lastPrecision = new Map<string, { errorMetres: number | null; basis: string }>();
   /** Lazy health builders (lazyChunks.loadLayerHealth) — wording stays out of the shell. */
   let healthMod: typeof import('./layerHealth') | null = null;
@@ -306,6 +312,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
     // while nothing works — the same silent exclusion the compatibility note
     // exists to prevent, arriving through the other half of the rule.
     const unmounted: string[] = [];
+    lastPlacement = new Map();
     for (const info of infos) {
       const state = stateOf(info.id);
       const cloud = viewer.getCloud(info.id);
@@ -348,6 +355,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
         // its panel disclaims — the trap the old in-place rebase had.
         const so = cloud.sourceOrigin;
         const dz = alignsVertically(state) ? so[2] - frame!.projectOrigin[2] : 0;
+        lastPlacement.set(info.id, { vertical: alignsVertically(state) });
         const dx = so[0] - frame!.projectOrigin[0];
         const dy = so[1] - frame!.projectOrigin[1];
         viewer.setLayerPlacement(info.id, {
@@ -478,7 +486,8 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
     applyVisibility();
   }
 
-  return { buildLayerInfos, applyVisibility, refreshCrsFlags, setVisible, toggleSolo, soloOnly };
+  const placementOf = (id: string) => lastPlacement.get(id) ?? null;
+  return { buildLayerInfos, applyVisibility, refreshCrsFlags, setVisible, toggleSolo, soloOnly, placementOf };
 }
 
 /** The declared vertical linear-unit name, or null when the CRS carries none. */
