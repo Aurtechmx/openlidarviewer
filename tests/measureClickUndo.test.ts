@@ -214,3 +214,50 @@ describe('the delete Undo offer and a new draft', () => {
     }
   });
 });
+
+describe('a point snapped onto another scan\'s measurement records that scan', () => {
+  const scanA = { name: 'a' };
+  const scanB = { name: 'b' };
+  const resolver = (l: unknown) => (l === scanA ? 'scan-a' : l === scanB ? 'scan-b' : null);
+
+  it('a vertex handle from a measurement picked on B adds B to the draft', async () => {
+    const { measure, inner } = await makeController();
+    measure.setLayerResolver(resolver);
+    measure.setKind('distance');
+    measure.addPoint([100, 0, 0], scanB);
+    measure.addPoint([110, 0, 0], scanB);
+    const onB = measure.getMeasurements()[0]!;
+    measure.addPoint([0, 0, 0], scanA);
+    pressHandle(inner, onB.id, 1);
+    const d = measure.getMeasurements()[1]!;
+    expect(d.points[1]).toEqual([110, 0, 0]);
+    expect(d.pickLayers).toEqual(['scan-a', 'scan-b']);
+  });
+
+  it('falls back to the owner when the source has no pick record', async () => {
+    const { measure, inner } = await makeController();
+    measure.setLayerResolver(resolver);
+    measure.setKind('distance');
+    measure.addPoint([100, 0, 0]);
+    measure.addPoint([110, 0, 0]);
+    const src = measure.getMeasurements()[0]!;
+    src.owner = { layerId: 'scan-b', frame: 'project' } as unknown as typeof src.owner;
+    measure.addPoint([0, 0, 0], scanA);
+    pressHandle(inner, src.id, 0);
+    expect(measure.getMeasurements()[1]!.pickLayers).toEqual(['scan-a', 'scan-b']);
+  });
+
+  it('a geometry snap records the measurement under it, not the cloud clicked', async () => {
+    const { measure } = await makeController();
+    measure.setLayerResolver(resolver);
+    measure.setKind('distance');
+    measure.addPoint([100, 0, 0], scanB);
+    measure.addPoint([110, 0, 0], scanB);
+    measure.addPoint([0, 0, 0], scanA);
+    (measure as unknown as { _resolveSnap: () => unknown })._resolveSnap = () => ({ kind: 'midpoint', position: [105, 0, 0], distance: 0.1 });
+    measure.addPoint([105, 0.1, 0], scanA);
+    const d = measure.getMeasurements()[1]!;
+    expect(d.points[1]).toEqual([105, 0, 0]);
+    expect(d.pickLayers).toEqual(['scan-a', 'scan-b']);
+  });
+});

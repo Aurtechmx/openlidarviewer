@@ -1320,6 +1320,7 @@ export class MeasureController {
     this._draft ??= this._newDraft();
     this._lastSnap = { kind: 'endpoint', position: [p[0], p[1], p[2]], distance: 0 };
     this._draft.points.push([p[0], p[1], p[2]]);
+    if (m) this._noteSourceOf(this._draft, m);
     if (isFull(this._draft)) this._commitDraft();
     this._updateHint();
   }
@@ -1462,6 +1463,32 @@ export class MeasureController {
     else if (!m.pickLayers.includes(id)) m.pickLayers.push(id);
   }
 
+  /** Record the scans `src`'s points were picked on (or its owner's) on `m`. */
+  private _noteSourceOf(m: Measurement, src: Measurement): void {
+    const ids = src.pickLayers && src.pickLayers.length > 0 ? src.pickLayers : src.owner?.layerId ? [src.owner.layerId] : [];
+    for (const id of ids) {
+      if (!m.pickLayers) m.pickLayers = [id];
+      else if (!m.pickLayers.includes(id)) m.pickLayers.push(id);
+    }
+  }
+
+  /** Committed measurements with a vertex or segment through `p`. */
+  private _measurementsAt(p: Vec3): Measurement[] {
+    const near = (a: Vec3, b: Vec3): boolean => {
+      const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+      const len2 = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
+      const t = len2 > 0 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * ab[0] + (p[1] - a[1]) * ab[1] + (p[2] - a[2]) * ab[2]) / len2)) : 0;
+      const d = Math.hypot(a[0] + ab[0] * t - p[0], a[1] + ab[1] * t - p[1], a[2] + ab[2] * t - p[2]);
+      return d <= 1e-6 * Math.max(1, Math.hypot(p[0], p[1], p[2]));
+    };
+    return this._measurements.filter((m) => {
+      const pts = m.points;
+      if (pts.length === 1) return near(pts[0], pts[0]);
+      for (let i = 1; i < pts.length; i++) if (near(pts[i - 1], pts[i])) return true;
+      return m.closed === true && pts.length > 2 && near(pts[pts.length - 1], pts[0]);
+    });
+  }
+
   addPoint(point: Vec3 | null, layer?: unknown): void {
     if (!this._active) return;
     if (!point) {
@@ -1476,7 +1503,11 @@ export class MeasureController {
     this._lastSnap = snap;
     const placed = snap ? snap.position : point;
     this._draft.points.push([placed[0], placed[1], placed[2]]);
-    this._notePick(this._draft, layer);
+    // A snap onto measurement geometry takes its point from the measurements
+    // under it, so it records their scans rather than the cloud clicked.
+    const sources = snap && snap.kind !== 'point' ? this._measurementsAt(placed) : [];
+    if (sources.length > 0) for (const src of sources) this._noteSourceOf(this._draft, src);
+    else this._notePick(this._draft, layer);
     if (isFull(this._draft)) this._commitDraft();
     this._updateHint();
   }
