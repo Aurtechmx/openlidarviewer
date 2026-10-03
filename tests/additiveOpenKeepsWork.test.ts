@@ -61,9 +61,10 @@ describe('the load path applies that rule', () => {
     // Matching the guard rather than the bare calls: an unguarded
     // `bookmarks.clear()` on this path is the defect, so the test has to see
     // the condition, not just the presence of a clear. The gate is the pure
-    // `shouldResetSavedWork(viewer.clouds().length)` after the extraction.
+    // `shouldResetSavedWork(viewer.clouds().length)` after the extraction; a
+    // session waiting for this scan is applied again instead of cleared.
     const guarded =
-      /if \(shouldResetSavedWork\(viewer\.clouds\(\)\.length\)\) \{[^}]*bookmarks\.clear\(\);[^}]*viewer\.annotate\.clear\(\);[^}]*\}/;
+      /const freshProject = shouldResetSavedWork\(viewer\.clouds\(\)\.length\);\s*if \(freshProject && !pendingSession\) \{[^}]*bookmarks\.clear\(\);[^}]*viewer\.annotate\.clear\(\);[^}]*\}/;
     expect(
       guarded.test(loadSource),
       'The reset must stay gated on there being at most one cloud. An ' +
