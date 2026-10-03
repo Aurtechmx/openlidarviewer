@@ -92,7 +92,7 @@ const FIXTURES: Record<string, (page: Page) => Promise<void>> = {
   'resident-only': async (page) => {
     await page.locator('.olv-file-input').first().setInputFiles(COPC_FIXTURE);
     await loaded(page);
-    await expect(item(page, 'basis')).toHaveText(/Resident only/);
+    await expect(item(page, 'basis')).toHaveText(/Currently loaded points/);
   },
   stale: async (page) => {
     await dropTerrainAccessUtmLas(page);

@@ -133,17 +133,18 @@ the two entries were renumbered when the branches were integrated.
 | L227 | UI | TEST | low | FIXED | new | With both rails expanded and the colour key docked, the project card overlapped the left rail's collapse tab at 768 to 900 px wide, and both rails at 768 px. |
 | L226 | UI | TEST | low | FIXED | new | On a phone, a scan-ready prompt that wrapped to three or four lines covered the state strip at 320 and 375 px wide, and without the strip it covered the dock. |
 | L228 | EXPORT | TEST | high | FIXED | new | A measurement taken on a scan that was then closed exported through the open scan's origin under its name, and a scan or unit change while the measurement export loaded mixed one scan's geometry with another's scale. |
+| L229 | UI | TEST | med | FIXED | new | The findings panel read "Exported a report" even when the export was refused or failed, opening another scan and adding measurements discarded the first scan's findings with no warning, Clear all emptied the list in one click with no Undo, and a findings report could take the next scan's name, CRS and epoch when the scan changed while the export loaded. |
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 82
+- FIXED: 83
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 104
+- total: 105
 
 ## Detail
 
@@ -8513,3 +8514,38 @@ is refused with nothing downloaded and nothing of the open scan written, picked
 and restored, and for the integrity report; a restored measurement owned by the open scan still exports; a
 scan swap, unit change and in-place edit during the import leave the file on
 the pre-await values).
+
+### L229 · FIXED · UI
+
+`src/ui/findingsPanel.ts` called the export and then wrote "Exported a report
+of N finding(s)." whatever the host did, so a refusal in the Export panel's
+status sat beside a success line. The export now returns `downloaded`,
+`refused` or `failed`; the panel writes "Report download started." only on
+`downloaded`, adds nothing on a refusal, keeps the findings and offers a retry
+on a failure, and disables the button while the export runs.
+
+`SessionFindings.retarget` emptied the list whenever the active scan changed,
+and "Add current measurements" retargets first, so findings curated on one
+scan were lost after opening another. `src/render/measure/sessionFindings.ts`
+now keeps a list per scan id and shows the active scan's; the report still
+holds only that scan's findings, and a scan's list is dropped when the scan is
+removed. Clear all offers Undo in the panel status, matching the measurement
+delete Undo, and Undo does not restore into a removed scan.
+
+The report read the scan name, CRS and classification epoch after the export
+chunk loaded, so a scan change during that load signed the findings with the
+next scan's identity. `runFindingsExport` in `src/export/exportScanIdentity.ts`
+reads them and copies the findings at click time, and refuses when the owning
+scan is closed or no longer active once the chunk has loaded. Measurements
+collected while their scan closes are not added.
+
+The section and button labels read "Saved findings" and "Report with
+verification checksum", the palette entry reads "Verify report with
+verification checksum" and is still found by "verify integrity", and the state
+strip's resident basis reads "Currently loaded points", with the exact meaning
+in the tooltips.
+
+Tests: `tests/findingsLedgerSafety.test.ts`, `tests/findingsExportScanPin.test.ts`,
+`tests/exportPanelFindingsScanSwitch.test.ts`, `tests/sessionFindingsOwner.test.ts`,
+`tests/findingsPanel.test.ts`, `tests/exportActionsVerify.test.ts`,
+`tests/stateStripLive.test.ts`.

@@ -1,7 +1,7 @@
 /**
  * exportActionsVerify.test.ts
  *
- * "Verify integrity report…" opens a hidden file input and loads the
+ * "Verify report with verification checksum…" opens a hidden file input and loads the
  * verifier chunk once the user picks a file. A dismissed picker must not leave
  * the input in the document, and a chunk that fails to load must reach the
  * toast with a Try again that verifies the file the user picked.
@@ -86,5 +86,18 @@ describe('report.verify', () => {
     await settle();
     expect(loadReportVerifier).toHaveBeenCalledTimes(2);
     expect(verifyAndShow).toHaveBeenCalledWith(file);
+  });
+});
+
+describe('report.verify palette search', () => {
+  it('is still found by the old "verify integrity" search', async () => {
+    const { rankActions } = await import('../src/ui/actionRegistry');
+    const actions = contributeExportActions({
+      saveSnapshot: vi.fn(),
+      copyShareLink: vi.fn(),
+      buildCurrentStoryInputs: () => ({}) as never,
+      showLassoToast: () => {},
+    });
+    expect(rankActions('verify integrity', actions)[0]?.action.id).toBe('report.verify');
   });
 });

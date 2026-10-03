@@ -171,7 +171,7 @@ describe('strip UI', () => {
     const btn = (id: string) => root.querySelector(`.olv-ss-${id}`)!;
     expect(btn('vertical').textContent).toContain('Vertical: unknown');
     expect(btn('vertical').getAttribute('aria-label')).toMatch(/^Vertical reference: Vertical: unknown \(Review\)\. Opens/);
-    expect(btn('basis').textContent).toContain('Resident only');
+    expect(btn('basis').textContent).toContain('Currently loaded points');
     expect(btn('review').textContent).toContain('2 to review');
     expect(btn('processing').textContent).toBe('Idle');
     btn('crs').fire('click');

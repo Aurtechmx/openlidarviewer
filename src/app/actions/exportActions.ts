@@ -62,10 +62,10 @@ export function contributeExportActions(deps: ExportActionDeps): Action[] {
     },
     {
       id: 'report.verify',
-      title: 'Verify integrity report…',
+      title: 'Verify report with verification checksum…',
       section: 'Export',
       hint: 'Check a report JSON — confirm its digest still matches its contents.',
-      keywords: ['integrity', 'digest', 'tamper', 'check', 'sha', 'validate', 'verify'],
+      keywords: ['verify integrity report', 'integrity', 'digest', 'checksum', 'tamper', 'check', 'sha', 'validate', 'verify'],
       run: () => {
         const input = el('input', { className: 'olv-hidden' });
         input.type = 'file';

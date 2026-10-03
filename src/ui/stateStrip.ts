@@ -35,7 +35,7 @@ export interface StateStrip {
 
 const BASIS_TEXT: Readonly<Record<Coverage, string>> = {
   full: 'Full dataset',
-  'resident-only': 'Resident only',
+  'resident-only': 'Currently loaded points',
   sampled: 'Sampled',
   partial: 'Partial: truncated file',
 };
@@ -152,6 +152,9 @@ export function createStateStrip(host: StateStripHost): StateStrip {
       );
       paint('vertical', s.vertical?.value.label ?? null, s.vertical?.validity ?? null);
       paint('basis', s.basis ? BASIS_TEXT[s.basis.value] : null, s.basis?.validity ?? null);
+      buttons.get('basis')!.title = s.basis?.value === 'resident-only'
+        ? 'Only the points currently in memory, not the whole file.'
+        : '';
       paint('clip', s.clip ? clipScopeText(s.clip) : null, s.clip ? 'info' : null);
       const p = s.processing?.value;
       paint(

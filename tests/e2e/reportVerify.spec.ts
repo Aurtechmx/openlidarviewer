@@ -59,13 +59,13 @@ async function exportReport(page: Page): Promise<string> {
   return path;
 }
 
-/** Open the palette and run the "Verify integrity report" action with `file`. */
+/** Open the palette and run the "Verify report with verification checksum" action with `file`. */
 async function verifyWith(page: Page, file: string): Promise<void> {
   const chooserPromise = page.waitForEvent('filechooser');
   await page.keyboard.press('ControlOrMeta+KeyK');
   await expect(page.locator('.olv-palette')).toBeVisible();
   await page.locator('.olv-palette-input').fill('verify integrity');
-  await page.locator('.olv-palette-row').filter({ hasText: 'Verify integrity report' }).first().click();
+  await page.locator('.olv-palette-row').filter({ hasText: 'Verify report with verification checksum' }).first().click();
   const chooser = await chooserPromise;
   await chooser.setFiles(file);
 }
