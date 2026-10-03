@@ -25,6 +25,7 @@
  * unit-testable without a Viewer or a panel.
  */
 
+export { classificationDiffersFromSource } from '../export/fullResClassGuard';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import { countClasses } from '../render/class/classHistogram';
 import { toClassBuffer } from '../render/class/classBuffer';

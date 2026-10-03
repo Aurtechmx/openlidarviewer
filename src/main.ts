@@ -80,7 +80,7 @@ import type { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
-import { afterClassEdit, classCountsOf, noteClassificationEdited, wireFrameChange } from './app/classLegendRefresh';
+import { afterClassEdit, classCountsOf, classificationDiffersFromSource, noteClassificationEdited, wireFrameChange } from './app/classLegendRefresh';
 import type { ClassifyActionsDeps } from './app/classifyActions';
 import { buildExportHealth, densityStoryFields, footprintAreaM2, type ScanStoryInputs } from './intelligence/scanStory';
 import { fullScope, scopeFrom, scopeStamp, type ClassScope } from './render/class/classScope';
@@ -2284,7 +2284,7 @@ void viewerLoaded.then((v) => {
     legend: classLegendPanel,
     clearTerrainCache: () => terrainRunner.abortAndClearCache(),
     noteStale: (m) => analysePanel?.setStaleNotice(m),
-  }); reclassifyUi?.refresh(); processStudio.refresh(); exportPanel.refresh(); }; // provenance moves with whole-scan edits
+  }); if (id === scans.activeId && !v.getCloud(id)?.classification) { refreshClassLegend(); syncColorModeForActive(); } reclassifyUi?.refresh(); processStudio.refresh(); exportPanel.refresh(); }; // undo of a first attach drops the classes
 });
 
 // Per-cloud source files + reduced flags, so the Export panel can re-decode a
@@ -2464,7 +2464,7 @@ const exportPanel = new ExportPanel({
   isStreamingPending: () => viewer?.streamingCloud != null && viewer.exportFrontierPointTotal() === 0,
   getActiveClip: () => viewer.getClip(), getActiveClipOffset: () => (scans.activeId ? viewer.layerProjectOffset(scans.activeId) : null), getActiveScanId: () => scans.activeExportTargetId(),
   hasFullSource: () => scans.activeId != null && sourceFileById.has(scans.activeId),
-  hasClassEdits: () => scans.activeId != null && (viewer?.canUndoClassification(scans.activeId) ?? false),
+  hasClassEdits: () => scans.activeId != null && classificationDiffersFromSource(viewer?.getCloud(scans.activeId)?.classificationProvenance ?? 'none', viewer?.classificationEpoch(scans.activeId) ?? 0),
   // A streaming snapshot exports only resident points, so it is a reduced subset
   // until the whole cloud lands — flagged so the status reads "reduced view".
   isReduced: () => {

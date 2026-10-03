@@ -94,6 +94,7 @@ describe('source geometry stays byte-identical', () => {
       'classificationProvenance',
       'derivedClassificationFrameInvalid',
       'derivedMethod',
+      'detachClassification',
       'markDerivedClassificationFrameInvalid',
       'originalClassification',
       'pointCount',
