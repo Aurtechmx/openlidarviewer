@@ -103,8 +103,10 @@ test('an angle placed on the vertices of an existing polyline uses those vertice
   await page.locator('.olv-mkind', { hasText: /^Angle$/ }).click();
   for (const vi of [1, 0, 2]) {
     const handle = page.locator(`.olv-m-handle[data-vi="${vi}"]`).first();
-    const b = (await handle.boundingBox())!;
-    await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+    // The overlay redraws its handles on every rendered frame, so the node can
+    // be replaced between a lookup and a read. Clicking through the locator
+    // resolves the current node at the moment of the click.
+    await handle.click();
   }
   await expect(page.locator('.olv-mp-row')).toHaveCount(2);
   await expect(page.locator('.olv-mp-row').nth(1).locator('.olv-mp-value')).toContainText('90');
