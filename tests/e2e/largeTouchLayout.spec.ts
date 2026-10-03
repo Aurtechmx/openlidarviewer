@@ -304,3 +304,33 @@ for (const size of [{ width: 1440, height: 900 }, { width: 1280, height: 800 }, 
     });
   });
 }
+
+for (const width of [768, 800, 880, 900, 1024, 1280]) {
+  for (const left of ['expanded', 'collapsed'] as const) {
+    test(`fine pointer ${width}x800, left rail ${left}: the project card clears the rails and the floating key`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await openScan(page);
+      const leftTab = page.locator('.olv-rail-tab');
+      const rightTab = page.locator('.olv-right-rail-tab');
+      if ((await leftTab.getAttribute('aria-expanded')) !== (left === 'expanded' ? 'true' : 'false')) await leftTab.click();
+      await expect(leftTab).toHaveAttribute('aria-expanded', left === 'expanded' ? 'true' : 'false');
+      if ((await rightTab.getAttribute('aria-expanded')) !== 'false') await rightTab.click();
+      await expect(page.locator('.olv-colorbar')).toHaveClass(/olv-colorbar-floating/);
+      await page.waitForTimeout(600); // let the rails slide finish
+      await holdProjectCard(page);
+      const hits = await page.evaluate(() => {
+        const card = document.querySelector('.olv-project-card')!.getBoundingClientRect();
+        const out: string[] = [];
+        for (const sel of ['.olv-left-panels', '.olv-rail-tab', '.olv-colorbar', '.olv-right-rail-tab']) {
+          const e = document.querySelector(sel) as HTMLElement | null;
+          if (!e || !e.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+          const b = e.getBoundingClientRect();
+          if (b.right > 0 && card.left < b.right && b.left < card.right && card.top < b.bottom && b.top < card.bottom) out.push(sel);
+        }
+        return out;
+      });
+      expect(hits).toEqual([]);
+      expect(await coveredControls(page)).toEqual([]);
+    });
+  }
+}

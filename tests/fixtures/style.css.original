@@ -3082,13 +3082,19 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-overlay:has(.olv-right-rail.olv-right-collapsed) .olv-project-card { --olv-right-rail-width: 0px; }
 .olv-overlay:has(.olv-left-panels.olv-rail-collapsed) .olv-project-card { --olv-rail-width: 0px; }
 /* With the right rail collapsed the colour key floats at the stage's top-right
-   (98-layer-health.css: right 66px, 280px wide). The card's right edge stays
-   8px left of the key, so the key header never covers the card's close button. */
+   (98-layer-health.css: right 66px, 280px wide). The card then fits the band
+   between the left rail's collapse tab (72-panel-rails.css: 22px wide, from
+   1px inside the rail) and the key, 8px clear of each. Where that band is
+   under the 200px floor (left rail open, below 882px
+   wide) the key steps aside while the card is up (98-layer-health.css). */
 body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
-  --olv-pc-width: clamp(200px, calc(100vw - 44px - var(--olv-rail-width) - var(--olv-right-rail-width)), 290px);
+  --olv-pc-band-left: calc(14px + var(--olv-rail-width) - 1px + 22px + var(--space-md));
+  --olv-pc-band: calc(100vw - var(--olv-pc-band-left) - 66px - 280px - var(--space-md));
+  --olv-pc-width: clamp(200px, var(--olv-pc-band), 290px);
   width: var(--olv-pc-width);
-  left: min(calc(50vw + (var(--olv-rail-width) - var(--olv-right-rail-width)) / 2),
-            calc(100vw - 66px - 280px - var(--space-md) - var(--olv-pc-width) / 2));
+  left: clamp(calc(var(--olv-pc-band-left) + var(--olv-pc-width) / 2),
+              calc(50vw + (var(--olv-rail-width) - var(--olv-right-rail-width)) / 2),
+              calc(var(--olv-pc-band-left) + var(--olv-pc-band) - var(--olv-pc-width) / 2));
 }
 .olv-project-card.olv-visible {
   opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto;
@@ -10598,6 +10604,12 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
    mid-stage, where this legend floats: the legend steps aside until the toast
    times out, so neither hides the other's controls. */
 body:has(.olv-lasso-toast.olv-visible[data-lifted]) .olv-colorbar:not(.olv-colorbar-docked) { visibility: hidden; }
+/* Below 882px with the left rail open there is no room for the project card
+   between that rail and the floating key (56-inspector-panels.css), so the
+   key steps aside the same way until the card is dismissed. */
+@media (max-width: 881px) {
+  body:has(.olv-project-card.olv-visible):not(:has(.olv-left-panels.olv-rail-collapsed)) .olv-colorbar.olv-colorbar-floating { visibility: hidden; }
+}
 /* Docked at the top of the right rail (ColorbarOverlay.ts): a compact card
    in the rail's flow, a horizontal bar rather than a floating column. */
 .olv-colorbar.olv-colorbar-docked,

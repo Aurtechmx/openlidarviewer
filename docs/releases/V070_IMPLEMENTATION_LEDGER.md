@@ -8408,11 +8408,16 @@ promise).
 ### L225 · FIXED · UI
 
 While the colour key floats (right rail collapsed), `.olv-project-card` in
-`src/styles/56-inspector-panels.css` keeps its band centre but caps it so the
-card's right edge stays 8 px left of the key (right 66 px, 280 px wide, from
-`src/styles/98-layer-health.css`). With the rail expanded the card is
-unchanged.
+`src/styles/56-inspector-panels.css` fits the band between the left rail's
+collapse tab and the key (right 66 px, 280 px wide, from
+`src/styles/98-layer-health.css`), 8 px clear of each, keeping its usual
+centre where the band allows. Below 882 px with the left rail open that band
+is under the card's 200 px floor, so the floating key steps aside while the
+card is up, as it already does for the lifted lasso toast. With the right
+rail expanded the card is unchanged.
 
 Tests: `tests/e2e/largeTouchLayout.spec.ts` (fine pointer 1440, 1280 and
-1024 px: the project card is held open with the key floating and with it
-docked, and no control sits under another).
+1024 px: the project card is held open with the key floating and docked;
+768, 800, 880, 900, 1024 and 1280 px with the left rail expanded and
+collapsed and the key floating: the card meets neither rail, its tab nor the
+key, and no control sits under another).
