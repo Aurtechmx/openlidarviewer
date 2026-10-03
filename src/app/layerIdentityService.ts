@@ -73,6 +73,8 @@ export interface LayerIdentityService {
   ): LayerRecord | null;
   /** The stable id bound to a viewer id, or null when none was bound. */
   stableIdFor(viewerId: string): string | null;
+  /** The full record bound to a viewer id (id and source fingerprint), or null. */
+  recordFor(viewerId: string): LayerRecord | null;
   /**
    * The owner to stamp on a newly created measurement / annotation, or
    * undefined to leave it unowned. Undefined for a single (or empty) scene —
@@ -166,5 +168,7 @@ export function createLayerIdentityService(
     for (const store of stores) store.setOwnerProvider(provider);
   };
 
-  return { bindOnLoad, stableIdFor, ownerForNewWork, ensureStoresWired };
+  const recordFor = (viewerId: string): LayerRecord | null => byViewerId.get(viewerId) ?? null;
+
+  return { bindOnLoad, stableIdFor, recordFor, ownerForNewWork, ensureStoresWired };
 }

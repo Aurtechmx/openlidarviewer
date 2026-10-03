@@ -154,6 +154,13 @@ export interface SessionScanSummary {
   epsg?: number;
   /** Linear unit label, when known. */
   crsUnit?: string;
+  /**
+   * The scan's absolute bounds minimum (source origin plus the local minimum),
+   * in source-CRS units. Two tiles with one name and one size differ here.
+   */
+  boundsMin?: [number, number, number];
+  /** SHA-256 of the source bytes, when known at save time. */
+  sha256?: string;
 }
 
 /** Inclusive `[min, max]` point-filter windows persisted with a session. */
@@ -670,6 +677,12 @@ export interface RebasedSessionGeometry {
    * Empty for every pre-v8 session, where all work shares the one frame.
    */
   unrebased: readonly string[];
+  /**
+   * Ids of the measurements and annotations NOT returned because the file marks
+   * them project-frame but records no project frame, so the origin they are
+   * local to is unknown. The caller says so rather than placing them.
+   */
+  refused: readonly string[];
 }
 
 /**
@@ -694,18 +707,19 @@ export function rebaseSessionGeometry(
   const dx = session.origin[0] - (cloudOrigin[0] ?? 0);
   const dy = session.origin[1] - (cloudOrigin[1] ?? 0);
   const dz = session.origin[2] - (cloudOrigin[2] ?? 0);
+  const shiftBy = (d: Vec3) => (v: readonly [number, number, number]): Vec3 => [
+    v[0] + d[0],
+    v[1] + d[1],
+    v[2] + d[2],
+  ];
   // Elevation-only scalars (profile-chart heights, a volume reference plane)
   // move by the UP-axis component of the shift, not the full vector.
-  const elevDelta = session.upAxis === 'z' ? dz : dy;
-  const shiftVec = (v: readonly [number, number, number]): Vec3 => [
-    v[0] + dx,
-    v[1] + dy,
-    v[2] + dz,
-  ];
-  const shiftCamera = (c: SavedCameraState): SavedCameraState => ({
+  const elevOf = (d: Vec3): number => (session.upAxis === 'z' ? d[2] : d[1]);
+  const shiftVec = shiftBy([dx, dy, dz]);
+  const shiftCamera = (c: SavedCameraState, shift = shiftVec): SavedCameraState => ({
     ...c,
-    position: shiftVec(c.position),
-    target: shiftVec(c.target),
+    position: shift(c.position),
+    target: shift(c.target),
   });
   const shiftClip = (c: ClipBox): ClipBox => ({
     ...c,
@@ -714,25 +728,48 @@ export function rebaseSessionGeometry(
   const copyVec = (v: readonly [number, number, number]): Vec3 => [v[0], v[1], v[2]];
 
   // `session.origin` is the frame of ONE layer, the anchor. Work owned by any
-  // other layer, or already declared project-frame, is in a different frame and
-  // this delta does not describe it. Pre-v8 work carries no owner and is in the
-  // session's single frame by construction, so it rebases exactly as before.
+  // other layer is in a different frame and this delta does not describe it.
+  // Pre-v8 work carries no owner and is in the session's single frame by
+  // construction, so it rebases exactly as before.
   const anchorLayerId = session.projectFrame
     ? frameAnchorLayerId(session.projectFrame)
     : (session.layerId ?? null);
   const unrebased: string[] = [];
-  const inSessionFrame = (owner: WorkOwnership | undefined): boolean => {
-    if (!owner) return true;
-    if (owner.frame === 'project') return false;
-    return anchorLayerId !== null && owner.layerId === anchorLayerId;
+  const refused: string[] = [];
+  // Project-frame work is local to the PROJECT origin the file records, which
+  // need not be any single layer's origin, so it moves by its own delta into
+  // the target frame. A file that marks work project-frame but records no
+  // frame cannot say where that origin was, and placing the work anyway would
+  // put it wherever the target happens to be anchored. That work is refused.
+  const projectOrigin = session.projectFrame?.projectOrigin ?? null;
+  const projectDelta: Vec3 | null = projectOrigin
+    ? [
+      projectOrigin[0] - (cloudOrigin[0] ?? 0),
+      projectOrigin[1] - (cloudOrigin[1] ?? 0),
+      projectOrigin[2] - (cloudOrigin[2] ?? 0),
+    ]
+    : null;
+  /** The delta to apply, null to leave in place, or 'refuse'. */
+  const deltaFor = (owner: WorkOwnership | undefined): Vec3 | null | 'refuse' => {
+    if (!owner) return [dx, dy, dz];
+    if (owner.frame === 'project') return projectDelta ?? 'refuse';
+    return anchorLayerId !== null && owner.layerId === anchorLayerId ? [dx, dy, dz] : null;
   };
 
-  const measurements = session.measurements.map((m) => {
-    if (!inSessionFrame(m.owner)) {
-      unrebased.push(m.id);
-      return { ...m, points: m.points.map(copyVec) };
+  const measurements: Measurement[] = [];
+  for (const m of session.measurements) {
+    const d = deltaFor(m.owner);
+    if (d === 'refuse') {
+      refused.push(m.id);
+      continue;
     }
-    const next: Measurement = { ...m, points: m.points.map(shiftVec) };
+    if (d === null) {
+      unrebased.push(m.id);
+      measurements.push({ ...m, points: m.points.map(copyVec) });
+      continue;
+    }
+    const elevDelta = elevOf(d);
+    const next: Measurement = { ...m, points: m.points.map(shiftBy(d)) };
     if (m.profileChart) {
       next.profileChart = m.profileChart.map((s) => ({
         ...s,
@@ -743,38 +780,50 @@ export function rebaseSessionGeometry(
     if (m.volume) {
       next.volume = { ...m.volume, referenceZ: m.volume.referenceZ + elevDelta };
     }
-    return next;
-  });
-  const annotations = session.annotations.map((a) => {
-    if (!inSessionFrame(a.owner)) {
+    measurements.push(next);
+  }
+  const annotations: Annotation[] = [];
+  for (const a of session.annotations) {
+    const d = deltaFor(a.owner);
+    if (d === 'refuse') {
+      refused.push(a.id);
+      continue;
+    }
+    if (d === null) {
       unrebased.push(a.id);
-      return { ...a, localPosition: { ...a.localPosition } };
+      annotations.push({ ...a, localPosition: { ...a.localPosition } });
+      continue;
     }
     // The world (survey) position is frame-INVARIANT: a render-frame rebase
     // shifts the local anchor by `delta` and the active origin by `-delta`, so
     // `local + origin` is unchanged. Honour the "recomputed on load" contract on
     // annotate/types.ts by (re)deriving it here — keep a stored value, else
-    // compute it from the OLD local plus the session's capture origin (which
+    // compute it from the OLD local plus the frame it was captured in (which
     // equals the rebased local plus the new cloud origin). This is what lets a
     // deliverable report state a real survey coordinate after a reopen.
+    const captured = [
+      (cloudOrigin[0] ?? 0) + d[0],
+      (cloudOrigin[1] ?? 0) + d[1],
+      (cloudOrigin[2] ?? 0) + d[2],
+    ];
     const world = a.worldPosition ?? {
-      x: a.localPosition.x + session.origin[0],
-      y: a.localPosition.y + session.origin[1],
-      z: a.localPosition.z + session.origin[2],
+      x: a.localPosition.x + captured[0]!,
+      y: a.localPosition.y + captured[1]!,
+      z: a.localPosition.z + captured[2]!,
     };
     const next: Annotation = {
       ...a,
       localPosition: {
-        x: a.localPosition.x + dx,
-        y: a.localPosition.y + dy,
-        z: a.localPosition.z + dz,
+        x: a.localPosition.x + d[0],
+        y: a.localPosition.y + d[1],
+        z: a.localPosition.z + d[2],
       },
       worldPosition: { x: world.x, y: world.y, z: world.z },
     };
     // The jump-to-view camera is in the same local frame as the vertices.
-    if (a.cameraState) next.cameraState = shiftCamera(a.cameraState);
-    return next;
-  });
+    if (a.cameraState) next.cameraState = shiftCamera(a.cameraState, shiftBy(d));
+    annotations.push(next);
+  }
   const views = session.views.map((v) => {
     const next: SavedView = { ...v, camera: shiftCamera(v.camera) };
     if (v.clip) next.clip = shiftClip(v.clip);
@@ -788,6 +837,7 @@ export function rebaseSessionGeometry(
     clip: session.clip ? shiftClip(session.clip) : undefined,
     delta: [dx, dy, dz],
     unrebased,
+    refused,
   };
 }
 
@@ -807,7 +857,35 @@ export interface ScanFacts {
   readonly crs?: string;
   /** Horizontal EPSG code, when known — canonical where the label is not. */
   readonly epsg?: number;
+  /** The loaded file's absolute source origin. */
+  readonly origin?: readonly [number, number, number];
+  /** The loaded scan's absolute bounds minimum. */
+  readonly boundsMin?: readonly [number, number, number];
+  /** SHA-256 of the loaded source bytes, when known. */
+  readonly sha256?: string;
 }
+
+/**
+ * The origin a session stored for the scan its summary describes. A multi-scan
+ * v8 file records each layer's own source origin in its project frame, and the
+ * top-level origin there is the project origin, so the layer named like the
+ * summary's file is used. Null when that layer cannot be told apart.
+ */
+export function sessionScanOrigin(session: InspectionSession): readonly [number, number, number] | null {
+  const frame = session.projectFrame;
+  if (!frame) return session.origin;
+  const name = session.scanSummary?.fileName.toLowerCase();
+  const hits = name ? frame.layers.filter((l) => l.sourceName.toLowerCase() === name) : [];
+  return hits.length === 1 ? hits[0]!.sourceOrigin : null;
+}
+
+/** Largest per-axis distance between two positions. */
+function shiftBetween(a: readonly number[], b: readonly number[]): number {
+  return Math.max(Math.abs(a[0]! - b[0]!), Math.abs(a[1]! - b[1]!), Math.abs(a[2]! - b[2]!));
+}
+
+/** A shift at or below this many source units is the same position. */
+const POSITION_TOLERANCE = 1e-3;
 
 /**
  * How confidently a session's stored scan fingerprint matches the loaded cloud.
@@ -849,15 +927,18 @@ function extentRelDiff(a: ScanFacts, b: ScanFacts): number | null {
  * cloud to a device, so a spans mismatch beyond a tolerance is a genuine
  * conflict. Point count corroborates but is NOT a standalone conflict — the same
  * scan reduced for a smaller device legitimately reports fewer points — so a
- * point mismatch only downgrades a would-be strong match to partial. File name
- * and CRS label are softer still (renames and equivalent CRS spellings are
- * common), contributing disclosure reasons but never a verdict on their own.
+ * point mismatch only downgrades a would-be strong match to partial. A file
+ * name that differs, a position that moved, or differing source digests also
+ * downgrade to partial, which asks before applying; a position that moved by
+ * more than the scan's own spans is a conflict. The CRS label is disclosure
+ * only (equivalent spellings are common).
  *
  * Pure — no DOM, no cloud objects — so it is fully unit-tested in Node.
  */
 export function matchSessionToScan(
   summary: SessionScanSummary | undefined,
   loaded: ScanFacts,
+  storedOrigin?: readonly [number, number, number] | null,
 ): ScanMatch {
   if (!summary) {
     return {
@@ -869,7 +950,7 @@ export function matchSessionToScan(
   const reasons: string[] = [];
   const rel = extentRelDiff(summary, loaded);
 
-  // File name / CRS are disclosure-only signals.
+  // File name and CRS label give the reasons; the name also gates 'strong' below.
   if (
     summary.fileName &&
     loaded.fileName &&
@@ -914,6 +995,22 @@ export function matchSessionToScan(
     }
   }
 
+  // Position. Two tiles of one survey share a name, a count and spans; where
+  // they sit is what tells them apart. The stored bounds minimum is compared
+  // when the file has one, else the origin it stored for this scan.
+  const nameDiffers = !!summary.fileName && !!loaded.fileName && summary.fileName.toLowerCase() !== loaded.fileName.toLowerCase();
+  let shift: number | null = null;
+  if (summary.boundsMin && loaded.boundsMin) shift = shiftBetween(summary.boundsMin, loaded.boundsMin);
+  else if (storedOrigin && loaded.origin) shift = shiftBetween(storedOrigin, loaded.origin);
+  const span = Math.max(summary.width, summary.depth, summary.height);
+  if (shift !== null && shift > POSITION_TOLERANCE) {
+    reasons.unshift(`the session's scan sits ${shift.toFixed(3)} units from the loaded scan`);
+    if (shift > span) return { verdict: 'conflict', reasons };
+  }
+  const moved = shift !== null && shift > POSITION_TOLERANCE;
+  const digestDiffers = !!summary.sha256 && !!loaded.sha256 && summary.sha256.toLowerCase() !== loaded.sha256.toLowerCase();
+  if (digestDiffers) reasons.push('the source file contents differ');
+
   if (crsCodeConflict) {
     return { verdict: 'conflict', reasons };
   }
@@ -925,7 +1022,7 @@ export function matchSessionToScan(
     reasons.unshift(`scan extents differ by ${(rel * 100).toFixed(0)}%`);
     return { verdict: 'conflict', reasons };
   }
-  if (rel <= 0.01 && !pointsDiffer) {
+  if (rel <= 0.01 && !pointsDiffer && !nameDiffers && !moved && !digestDiffers) {
     return { verdict: 'strong', reasons };
   }
   // Extents agree loosely (1–5%), or agree tightly but the point count moved —
@@ -1750,6 +1847,10 @@ function parseScanSummary(v: unknown): SessionScanSummary | null {
   if (typeof v.crs === 'string' && v.crs.length > 0) out.crs = v.crs;
   if (isFiniteNumber(v.epsg)) out.epsg = v.epsg;
   if (typeof v.crsUnit === 'string' && v.crsUnit.length > 0) out.crsUnit = v.crsUnit;
+  if (Array.isArray(v.boundsMin) && v.boundsMin.length === 3 && v.boundsMin.every(isFiniteNumber)) {
+    out.boundsMin = [v.boundsMin[0], v.boundsMin[1], v.boundsMin[2]];
+  }
+  if (typeof v.sha256 === 'string' && /^[0-9a-f]{64}$/i.test(v.sha256)) out.sha256 = v.sha256.toLowerCase();
   return out;
 }
 

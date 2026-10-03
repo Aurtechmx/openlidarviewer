@@ -34,7 +34,7 @@ import { findDuplicateIds, type Action } from './ui/actionRegistry';
 import { runSceneTool, type SceneTool } from './app/toggleTool';
 import type { SessionIoDeps } from './app/sessionIo';
 import type { SessionSnapshotDeps } from './app/sessionSnapshot';
-import { openScan, type OpenScanDeps } from './app/openScan';
+import { openScan, clearPendingSessionRestore, type OpenScanDeps } from './app/openScan';
 import {
   openStreamingCopc as runOpenStreamingCopc,
   handleRemoteEpt as runHandleRemoteEpt,
@@ -263,7 +263,7 @@ import { createLayerService } from './app/LayerService';
 import { createViewBookmarks } from './app/viewBookmarks';
 import { createScanService } from './app/ScanService';
 import { createScanRouteService } from './app/ScanRouteService';
-import { createProjectFrameService } from './app/projectFrame';
+import { createProjectFrameService, projectFrameInputFrom, sceneOriginFor } from './app/projectFrame';
 
 /**
  * The centralised CRS service. Owns the active scan's resolved CRS
@@ -3541,7 +3541,7 @@ const sessionSnapshotDeps: SessionSnapshotDeps = {
   verticalUnitToMetres: () => verticalMetresPerUnit(crsService.context(), 'horizontal-when-known') ?? null,
   captureViewState, savedViews: () => viewBookmarks.savedViews, origin: () => exportGeoContext().origin,
   crs: () => crsService.current(), layerGroups: () => inspector.layerGroupsForSession(), appVersion: __APP_VERSION__,
-};
+  projectFrame: () => projectFrameInputFrom({ frame: projectFrame.frame, layerIds: layerService.buildLayerInfos().map((i) => i.id), cloud: (id) => viewer?.getCloud(id), record: (id) => runtime.layerIdentity.recordFor(id), placement: layerService.placementOf }) };
 
 /**
  * Session import — a thin caller over the extracted `src/app/sessionIo.ts`.
@@ -3556,7 +3556,7 @@ const sessionIoDeps: SessionIoDeps = {
   getActiveScanId: () => scans.activeId,
   getActiveLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null),
   getActiveCloud: () => scans.activeCloud(),
-  exportOrigin: () => exportGeoContext().origin,
+  exportOrigin: () => { const c = scans.activeCloud(); return c?.sourceOrigin && scans.activeId ? sceneOriginFor(projectFrame.frame?.projectOrigin, c.sourceOrigin, layerService.placementOf(scans.activeId)) : exportGeoContext().origin; },
   bookmarks,
   setInspectorViews: (names) => inspector.setViews(names),
   restoreLayerGroups: (groups) => inspector.restoreLayerGroups(groups),
@@ -4019,7 +4019,7 @@ async function loadFromUrl(url: string, name: string): Promise<void> {
 function resetToEmptyState(): void {
   viewer.setMeasureMode(false);
   viewer.setInspectMode(false);
-  viewer.clearMeasurements();
+  viewer.clearMeasurements(); clearPendingSessionRestore();
   // No scan open → take the compass down (nothing to orient).
   compass.refresh();
   // Hiding the clip panel also clears the active clip (see ClipPanel.setVisible).
