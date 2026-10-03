@@ -895,6 +895,12 @@ export const loadMeasurementExportActions = () => import('./app/measurementExpor
 export const loadRecovery = () => import('./app/recovery/recoveryController');
 /** The live-session JSON writer shared by Save session and the recovery journal. */
 export const loadSessionSnapshot = () => import('./app/sessionSnapshot');
+/**
+ * The `?test=1` Playwright seam. Its `import()` lives in its own excluded
+ * loader, so a build with `__OLV_TEST_SEAM__` false (the only caller compiled
+ * out) emits no seam chunk.
+ */
+export { loadTestSeamMount } from './app/testSeam/testSeamLoader';
 /** Load the deep-link gate (validate + confirm the host) for a `?copc=` URL. */
 export const loadRemoteDeepLink = () => import('./app/remoteDeepLink');
 
