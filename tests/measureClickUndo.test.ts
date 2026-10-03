@@ -174,6 +174,8 @@ describe('a canvas click records the scan it picked on', () => {
     const [m] = measure.getMeasurements();
     expect(m).toBeDefined();
     expect(m!.pickLayers).toEqual(['scan-a', 'scan-b']);
+  });
+});
 
 describe('the delete Undo offer and a new draft', () => {
   it('leaves Ctrl+Z to the draft once a new measurement is being drafted', async () => {
