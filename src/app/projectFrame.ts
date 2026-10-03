@@ -166,7 +166,7 @@ export function createProjectFrameService(context: AppContext): ProjectFrameServ
     // describes neither layer.
     //
     // The anchor persists while it still DESCRIBES this set — that is, while
-    // some layer it was chosen from is still here, unchanged. Layers are seeded
+    // some layer that has been in the frame is still here, unchanged. Layers are seeded
     // from their FILE origins, so recomputing the minimum on every change would
     // walk the anchor whenever a sibling closed, and nothing compensates the
     // camera for a rebase: already-mounted data would visibly jump for no
@@ -191,9 +191,13 @@ export function createProjectFrameService(context: AppContext): ProjectFrameServ
       stillDescribed && state.frame
         ? state.frame.projectOrigin
         : ([horizontal[0], horizontal[1], vertical[2]] as Vec3);
-    if (!stillDescribed) {
-      anchoredFrom = new Map(aligned.map((l) => [l.id, originKey(l.sourceOrigin)]));
-    }
+    // Every layer that has shared the frame describes it from then on, so the
+    // origin holds while ANY of them is still open. Closing the layer that
+    // chose the minimum must not move the origin: measurements, annotations,
+    // the clip box, saved views and the camera all stay in the project frame
+    // and nothing rebases them. Only an empty set or a wholesale replace (no
+    // surviving member) re-anchors.
+    anchoredFrom = new Map(aligned.map((l) => [l.id, originKey(l.sourceOrigin)]));
     state.frame = createProjectFrame(origin, { crs: frameCrsLabel(aligned) ?? undefined });
 
     for (const layer of state.sources.values()) {

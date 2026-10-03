@@ -98,14 +98,38 @@ describe('project frame — two layers at different origins', () => {
 });
 
 describe('project frame — the layer set changing', () => {
-  it('re-anchors when the layer holding the minimum is removed', () => {
+  it('keeps the origin when the layer holding the minimum is removed', () => {
     const s = svc();
     s.register({ id: 'low', sourceOrigin: [500_000, 4_500_000, 100] });
     s.register({ id: 'high', sourceOrigin: [501_000, 4_500_500, 120] });
+    const before = s.transformFor('high')!.sourceToProject;
     s.unregister('low');
-    expect(s.frame?.projectOrigin).toEqual([501_000, 4_500_500, 120]);
-    // The survivor is now the anchor, so it is back to identity.
-    expect(s.transformFor('high')!.sourceToProject).toEqual([0, 0, 0]);
+    // Measurements, annotations, clip and views live in the project frame and
+    // nothing rebases them, so the survivor must keep its placement.
+    expect(s.frame?.projectOrigin).toEqual([500_000, 4_500_000, 100]);
+    expect(s.transformFor('high')!.sourceToProject).toEqual(before);
+    expect(before).toEqual([1_000, 500, 20]);
+  });
+
+  it('keeps the origin through reconcile when a member survives', () => {
+    const s = svc();
+    s.reconcile([
+      { id: 'a', sourceOrigin: [500_000, 0, 0] },
+      { id: 'b', sourceOrigin: [500_100, 0, 0] },
+    ]);
+    s.reconcile([{ id: 'b', sourceOrigin: [500_100, 0, 0] }]);
+    expect(s.frame?.projectOrigin).toEqual([500_000, 0, 0]);
+    expect(s.transformFor('b')!.sourceToProject).toEqual([100, 0, 0]);
+  });
+
+  it('re-anchors on a wholesale replace and after the set empties', () => {
+    const s = svc();
+    s.register({ id: 'a', sourceOrigin: [500_000, 0, 0] });
+    s.reconcile([{ id: 'c', sourceOrigin: [600_000, 0, 0] }]);
+    expect(s.frame?.projectOrigin).toEqual([600_000, 0, 0]);
+    s.unregister('c');
+    s.register({ id: 'd', sourceOrigin: [700_000, 0, 0] });
+    expect(s.frame?.projectOrigin).toEqual([700_000, 0, 0]);
   });
 
   it('drops the transform of an unregistered layer', () => {
@@ -226,7 +250,8 @@ describe('project frame — reconcile replaces the whole set', () => {
     s.register({ id: 'b', sourceOrigin: [200, 0, 0] });
     s.reconcile([{ id: 'b', sourceOrigin: [200, 0, 0] }]);
     expect(s.transformFor('a')).toBeNull();
-    expect(s.frame?.projectOrigin).toEqual([200, 0, 0]);
+    // b was a member, so the origin does not move with a's departure.
+    expect(s.frame?.projectOrigin).toEqual([100, 0, 0]);
   });
 
   it('an empty set clears the frame', () => {

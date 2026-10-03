@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { integrableClouds, isIntegrable, streamingMayCombine, sourceClassifiesGround } from '../src/render/integrableClouds';
+import { integrableClouds, integrableEntries, isIntegrable, streamingMayCombine, sourceClassifiesGround } from '../src/render/integrableClouds';
 
 const entry = (visible: boolean, locked?: boolean) => ({
   mesh: { visible },
@@ -288,5 +288,32 @@ describe('streaming must share a MOUNTED frame, not just a CRS', () => {
     // The rule is about frames, not about the alpha. When mounting returns,
     // a verified AND mounted stream joins without this needing to change.
     expect(streamingMayCombine(1, 'verified', true)).toBe(true);
+  });
+});
+
+describe('integrableEntries (the lasso volume walk) applies the mount rule', () => {
+  const layer = (mounted?: boolean, compatibility = 'verified') => ({
+    mesh: { visible: true },
+    compatibility: compatibility as never,
+    mounted,
+  });
+
+  it('drops an unmounted layer when several are combined', () => {
+    const out = integrableEntries(new Map([['a', layer(true)], ['b', layer(false)]]));
+    expect(out.map(([id]) => id)).toEqual(['a']);
+  });
+
+  it('keeps a lone unmounted layer in its own frame', () => {
+    const out = integrableEntries(new Map([['a', layer(false)]]));
+    expect(out.map(([id]) => id)).toEqual(['a']);
+  });
+
+  it('still skips hidden and locked layers', () => {
+    const out = integrableEntries(new Map<string, ReturnType<typeof layer> & { locked?: boolean }>([
+      ['a', layer(true)],
+      ['b', { ...layer(true), mesh: { visible: false } }],
+      ['c', { ...layer(true), locked: true }],
+    ]));
+    expect(out.map(([id]) => id)).toEqual(['a']);
   });
 });

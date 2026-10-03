@@ -329,6 +329,67 @@ describe('LayerService seeds the shared project frame', () => {
     expect(t.projectFrame.transformFor('low')).toBeNull();
   });
 
+  it('keeps a later layer in place when the scan that set the origin closes', () => {
+    // Open A alone, then add B, measure on B, close A. The measurement is
+    // stored in the project frame and nothing rebases it, so B must stay
+    // exactly where it was when the measurement was taken.
+    const withDatum = { epsg: 32612, verticalDatum: 'EPSG:5703' };
+    const clouds: Record<string, FakeCloud> = {
+      a: { origin: [500_000, 4_500_000, 100], metadata: { crs: withDatum } },
+    };
+    const t = setup(clouds);
+    t.service.refreshCrsFlags();
+    clouds.b = {
+      origin: [500_100, 4_500_000, 100],
+      sourceOrigin: [500_100, 4_500_000, 100],
+      metadata: { crs: withDatum },
+    };
+    t.service.refreshCrsFlags();
+    const local: [number, number, number] = [2, 3, 4];
+    // The rendered project-local position of a B-local point is the point
+    // plus B's placement offset (sourceOrigin minus the origin it sits on).
+    const toProject = (id: string) => {
+      const so = clouds[id]!.sourceOrigin!;
+      const eff = t.rebaseCalls.get(id)!;
+      return [0, 1, 2].map((k) => local[k]! + so[k]! - eff[k]!);
+    };
+    const measured = toProject('b');
+    expect(measured).toEqual([102, 3, 4]);
+    delete clouds.a;
+    t.service.refreshCrsFlags();
+    expect(t.projectFrame.frame?.projectOrigin).toEqual([500_000, 4_500_000, 100]);
+    expect(t.rebaseCalls.get('b')).toEqual([500_000, 4_500_000, 100]);
+    expect(t.projectFrame.transformFor('b')!.sourceToProject).toEqual([100, 0, 0]);
+    expect(toProject('b')).toEqual(measured);
+    // Float32 is unaffected: B sits exactly as far from the origin as it did
+    // while A was open, so the precision gate gives the same answer.
+    expect(t.compatCalls.get('b')).toBe('verified');
+  });
+
+  it('keeps a horizontal-only survivor placed when the scan that set the origin closes', () => {
+    // No vertical datum: the pair shares X/Y only. Judged alone, the survivor
+    // would be `verified` and need a vertical unit it does not have, which
+    // cleared its placement and moved it off its measurements.
+    const noDatum = { epsg: 32612 };
+    const clouds: Record<string, FakeCloud> = {
+      a: { origin: [500_000, 4_500_000, 100], metadata: { crs: noDatum } },
+    };
+    const t = setup(clouds);
+    t.service.refreshCrsFlags();
+    clouds.b = {
+      origin: [500_100, 4_500_000, 100],
+      sourceOrigin: [500_100, 4_500_000, 100],
+      metadata: { crs: noDatum },
+    };
+    t.service.refreshCrsFlags();
+    const before = t.rebaseCalls.get('b');
+    const stateBefore = t.compatCalls.get('b');
+    delete clouds.a;
+    t.service.refreshCrsFlags();
+    expect(t.compatCalls.get('b')).toBe(stateBefore);
+    expect(t.rebaseCalls.get('b')).toEqual(before);
+  });
+
   it('places a DIFFERENT-VERTICAL-DATUM layer in X/Y and leaves its height alone', () => {
     // Same horizontal CRS, different vertical datum. The horizontal agreement
     // is real and worth using; the heights are not comparable — NAVD88 and
@@ -472,7 +533,7 @@ describe('LayerService rebases each aligned layer onto the project origin', () =
     expect(t.rebaseCalls.get('scan')).toEqual([500_000, 4_500_000, 100]);
   });
 
-  it('re-anchors survivors when the anchor layer is removed', () => {
+  it('leaves the survivor where it was when the anchor layer is removed', () => {
     const clouds: Record<string, FakeCloud> = {
       low: { origin: [500_000, 4_500_000, 100], metadata: { crs: utm } },
       high: { origin: [501_000, 4_500_000, 120], metadata: { crs: utm } },
@@ -482,9 +543,11 @@ describe('LayerService rebases each aligned layer onto the project origin', () =
     // Both now sit at the shared anchor (the harness mirrors the origin move).
     delete clouds.low;
     t.service.refreshCrsFlags();
-    // The survivor's origin IS the old anchor now; the new frame anchors there,
-    // so the rebase is the identity — no spurious movement on layer close.
-    expect(t.rebaseCalls.get('high')).toEqual([500_000, 4_500_000, 100]);
+    // The project origin holds and the survivor keeps the horizontal-only
+    // placement it had beside `low`: X/Y on the shared origin, Z on its own.
+    // Re-judging it alone as `verified` moved its Z by the 20 m between the
+    // two origins.
+    expect(t.rebaseCalls.get('high')).toEqual([500_000, 4_500_000, 120]);
   });
 });
 
