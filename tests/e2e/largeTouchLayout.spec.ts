@@ -116,6 +116,11 @@ async function checkLegendBothRailStates(page: Page, tap: boolean, shot: string)
   await expect(legend).toBeVisible();
   await expect(legend).toHaveClass(/olv-colorbar-floating/);
   await page.waitForTimeout(600); // let the rail slide finish
+  // The project card dismisses itself on a timer; hold it open so the floating
+  // key and the card are checked together on every run. The touch walk-through
+  // has run a measurement by now, which owns the lane, so only the desktop
+  // check holds it.
+  if (!tap) await holdProjectCard(page);
   expect(await coveredControls(page)).toEqual([]);
   await page.screenshot({ path: `test-results/${shot}-collapsed.png` });
 
@@ -124,6 +129,25 @@ async function checkLegendBothRailStates(page: Page, tap: boolean, shot: string)
   await expect(legend).toBeVisible();
   await expect(legend).toHaveClass(/olv-colorbar-docked/);
   await page.waitForTimeout(600);
+  if (!tap) {
+    await holdProjectCard(page);
+    expect(await coveredControls(page)).toEqual([]);
+  }
+}
+
+/**
+ * Shows the project card and waits out its fade-in. The recommended-view chip
+ * only enters the lane after the card is dismissed, so it is removed here to
+ * match the lane as it is while the card is up.
+ */
+async function holdProjectCard(page: Page): Promise<void> {
+  const card = page.locator('.olv-project-card');
+  await expect(card).toHaveCount(1);
+  await card.evaluate((el) => {
+    document.querySelector('.olv-rvc')?.remove();
+    el.classList.add('olv-visible');
+  });
+  await expect(card).toHaveCSS('opacity', '1');
 }
 
 async function noHorizontalScroll(page: Page): Promise<void> {
@@ -279,4 +303,34 @@ for (const size of [{ width: 1440, height: 900 }, { width: 1280, height: 800 }, 
       await checkLegendBothRailStates(page, false, `desktop-${size.width}x${size.height}-${info.project.name}`);
     });
   });
+}
+
+for (const width of [768, 800, 880, 900, 1024, 1280]) {
+  for (const left of ['expanded', 'collapsed'] as const) {
+    test(`fine pointer ${width}x800, left rail ${left}: the project card clears the rails and the floating key`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await openScan(page);
+      const leftTab = page.locator('.olv-rail-tab');
+      const rightTab = page.locator('.olv-right-rail-tab');
+      if ((await leftTab.getAttribute('aria-expanded')) !== (left === 'expanded' ? 'true' : 'false')) await leftTab.click();
+      await expect(leftTab).toHaveAttribute('aria-expanded', left === 'expanded' ? 'true' : 'false');
+      if ((await rightTab.getAttribute('aria-expanded')) !== 'false') await rightTab.click();
+      await expect(page.locator('.olv-colorbar')).toHaveClass(/olv-colorbar-floating/);
+      await page.waitForTimeout(600); // let the rails slide finish
+      await holdProjectCard(page);
+      const hits = await page.evaluate(() => {
+        const card = document.querySelector('.olv-project-card')!.getBoundingClientRect();
+        const out: string[] = [];
+        for (const sel of ['.olv-left-panels', '.olv-rail-tab', '.olv-colorbar', '.olv-right-rail-tab']) {
+          const e = document.querySelector(sel) as HTMLElement | null;
+          if (!e || !e.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+          const b = e.getBoundingClientRect();
+          if (b.right > 0 && card.left < b.right && b.left < card.right && card.top < b.bottom && b.top < card.bottom) out.push(sel);
+        }
+        return out;
+      });
+      expect(hits).toEqual([]);
+      expect(await coveredControls(page)).toEqual([]);
+    });
+  }
 }

@@ -75,6 +75,12 @@
    mid-stage, where this legend floats: the legend steps aside until the toast
    times out, so neither hides the other's controls. */
 body:has(.olv-lasso-toast.olv-visible[data-lifted]) .olv-colorbar:not(.olv-colorbar-docked) { visibility: hidden; }
+/* Below 882px with the left rail open there is no room for the project card
+   between that rail and the floating key (56-inspector-panels.css), so the
+   key steps aside the same way until the card is dismissed. */
+@media (max-width: 881px) {
+  body:has(.olv-project-card.olv-visible):not(:has(.olv-left-panels.olv-rail-collapsed)) .olv-colorbar.olv-colorbar-floating { visibility: hidden; }
+}
 /* Docked at the top of the right rail (ColorbarOverlay.ts): a compact card
    in the rail's flow, a horizontal bar rather than a floating column. */
 .olv-colorbar.olv-colorbar-docked,
