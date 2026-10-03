@@ -8351,10 +8351,14 @@ image export buttons the way it already guarded the format and report
 buttons. The host callbacks in `src/main.ts` now return the promise of their
 work, and `exportImageAction` returns its own, so each control stays disabled
 until the export succeeds or fails rather than for a fixed 1.5 s. A failed
-export gives the control back for a retry and reports the failure.
+export gives the control back for a retry and reports the failure. A failed
+point-cloud file export goes through `settleFileExport`, which shows the error,
+counts it and records it in the diagnostics error ledger.
 
 Tests: `tests/exportDeliverables.test.ts` (a report held past the fixed
 window still drops a second click, a failed export re-enables its button, a
 double click on an image export starts one), `tests/exportImageActionSettles.test.ts`
 (the image export settles after the download, and on failure reports the error
-with no download).
+with no download; a failed file export is shown and recorded in the error
+ledger; the format, image and report callbacks in `src/main.ts` return their
+promise).
