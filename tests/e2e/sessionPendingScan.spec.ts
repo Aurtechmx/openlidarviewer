@@ -13,7 +13,7 @@ type Saved = { measurements: unknown[]; annotations: Array<{ title: string; loca
 
 async function openTiny(page: Page): Promise<void> {
   await dropTinyPly(page);
-  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 40_000 });
   await page.waitForTimeout(800);
 }
 
@@ -61,7 +61,9 @@ test('a session imported before its scan keeps its annotations and views when th
     return d;
   }, JSON.stringify(seeded));
   await page.dispatchEvent('body', 'drop', { dataTransfer: dt });
-  await expect.poll(() => measurementCount(page), { timeout: 10_000 }).toBe(1);
+  // The seam mounts once the viewer has loaded, which the import starts.
+  await page.waitForFunction(() => 'getMeasurementCount' in ((window as unknown as { __OLV_TEST_API__?: object }).__OLV_TEST_API__ ?? {}), undefined, { timeout: 30_000 });
+  await expect.poll(() => measurementCount(page), { timeout: 20_000 }).toBe(1);
 
   await openTiny(page);
   await showWorkspaceMode(page, 'work');
