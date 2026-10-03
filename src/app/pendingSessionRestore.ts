@@ -30,9 +30,11 @@ export function clearPendingSessionRestore(): void {
 
 /**
  * A streamed scan opened while a session waited. The streamed path does not
- * run the session match, so the session is dropped and the user is told.
+ * run the session match, so the session is dropped, the work it restored in
+ * its own frame is cleared (as on a refused match), and the user is told.
  */
-export function dropPendingSessionForStream(showToast: (message: string) => void): void {
+export function dropPendingSessionForStream(showToast: (message: string) => void, clearRestoredWork: () => void): void {
   if (!takePendingSessionRestore()) return;
-  showToast('The imported session was not applied to this streamed scan. Import it again to check it against this scan.');
+  clearRestoredWork();
+  showToast('The imported session was not applied to this streamed scan, so its work was cleared. Import it again to check it against this scan.');
 }

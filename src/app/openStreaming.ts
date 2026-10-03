@@ -205,7 +205,10 @@ export function activateCommittedStreamingCloud(
   deps: OpenStreamingDeps,
 ): void {
   deps.stage.hideEmptyState();
-  dropPendingSessionForStream(deps.showToast);
+  dropPendingSessionForStream(deps.showToast, () => {
+    const v = deps.getViewer();
+    v.measure.clear(); v.annotate.clear(); deps.bookmarks.clear(); deps.refreshViewsUI();
+  });
   // Local-first counter — the categorical source kind, never the URL. Only a
   // COMMITTED open is counted now, not an attempt that failed to build.
   recordUsage('scan-open', cloud.kind);
