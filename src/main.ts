@@ -4221,21 +4221,16 @@ function resetToEmptyState(): void {
   refreshAnnotationPanel();
 }
 
-/** Remove a cloud from the scene and the Inspector. */
-
 /**
- * Two-epoch change detection over the two loaded layers (first = before,
- * second = after). Runs the shared-grid DTM comparison and shows the cut/fill
- * + co-registration summary. The work (two ground filters) runs on the main
- * thread, so it's deferred a frame to let the "working" line paint; large
- * clouds may take a moment.
+ * Two-epoch change detection over the chosen Before/After pair (load order by
+ * default). The ground filters run on the main thread, deferred a frame so the
+ * "working" line paints. A run whose token or layers changed is dropped.
  */
-
 function compareLoadedLayers(): void {
-  const ids = viewer.clouds();
-  if (ids.length !== 2) return;
-  const a = viewer.getCloud(ids[0]) ?? null;
-  const b = viewer.getCloud(ids[1]) ?? null;
+  const run = inspector.beginCompareRun(viewer.clouds(), (id) => viewer.getCloud(id));
+  if (!run.ok) { inspector.setDifferenceAvailable(false); inspector.setCompareResult([run.message]); return; }
+  const { current } = run, ids = [run.beforeId, run.afterId] as const;
+  const a = viewer.getCloud(ids[0]), b = viewer.getCloud(ids[1]);
   if (!a || !b) return;
   inspector.setCompareResult(['Comparing elevations… running ground filters, one moment.']);
   inspector.setDifferenceAvailable(false);
@@ -4251,6 +4246,7 @@ function compareLoadedLayers(): void {
         loadChangeRaster(),
       ]);
     await new Promise((resolve) => setTimeout(resolve, 16));
+    if (!current()) return;
     try {
       const { ctxA, comparable, reason, frames, beforeCloud, afterCloud, lines, span } = withheldEpochs(prepareEpochFrames(crsService, a, b), a, b);
       if (!comparable) {
@@ -4282,6 +4278,7 @@ function compareLoadedLayers(): void {
         ...frames, // isGeographic + horizontalUnitKnown + horizontalUnitToMetres, from the two contexts
         verticalUnitToMetres: ctxA.verticalUnitToMetres, // Z keeps its OWN declared scale; the horizontal verdict never stands in for it
       });
+      if (!current()) return;
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
       inspector.setCompareResult([header, summarizeAlignment(alignment), summarizeRegistration(buildRegistrationArtifact(alignment, { targetId: ids[0], targetName: a.name, sourceId: ids[1], sourceName: b.name }, Date.now())), ...lines, ...summarizeChange(cmp, { registrationSigmaM: alignment.applied ? alignment.rmsResidualM : 0, horizontalUnitToMetres: frames.horizontalUnitToMetres })]);
       // A georeferenced .asc of the signed difference, origin at the world-frame
@@ -4313,7 +4310,7 @@ function compareLoadedLayers(): void {
       };
       inspector.setDifferenceAvailable(true);
     } catch (err) {
-      inspector.setCompareResult([`Compare failed: ${err instanceof Error ? err.message : String(err)}`]);
+      if (current()) inspector.setCompareResult([`Compare failed: ${err instanceof Error ? err.message : String(err)}`]);
     }
   })();
 }
