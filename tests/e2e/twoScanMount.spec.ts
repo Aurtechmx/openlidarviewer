@@ -130,6 +130,32 @@ function parseCoords(text: string): [number, number, number] | null {
 const MULTI_LAYER_MOUNT_ENABLED = /MULTI_LAYER_MOUNT_ENABLED\s*=\s*true\b/.test(
   readFileSync(resolve(process.cwd(), 'src/app/LayerService.ts'), 'utf8'),
 );
+/** Console and page errors the page raises, minus the known benign ones. */
+function collectPageErrors(page: Page): string[] {
+  const errors: string[] = [];
+  page.on('console', (m) => {
+    if (m.type() === 'error' && !isBenignPageError(m.text())) errors.push(m.text());
+  });
+  page.on('pageerror', (e) => { if (!isBenignPageError(String(e))) errors.push(String(e)); });
+  return errors;
+}
+
+/**
+ * Open tile A (the lower easting, so it sets the project origin), then add
+ * tile B SEP_M away, and wait until Layer Health lists both.
+ */
+async function openTwoTiles(page: Page, url: string): Promise<void> {
+  const w = await loadLasWriter();
+  await page.goto(url);
+  await expect(page.locator('.olv-empty-title')).toBeVisible();
+  await dropBytes(page, georefLas(w, 500000, 4100000), 'utm33-a.las');
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
+  await dropBytes(page, georefLas(w, 500000 + SEP_M, 4100000 + SEP_M), 'utm33-b.las');
+  await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 20_000 });
+  await expect(page.locator('.olv-layerhealth-layer')).toHaveCount(2, { timeout: 20_000 });
+}
+
 test.beforeEach(() => {
   test.skip(
     !MULTI_LAYER_MOUNT_ENABLED,
@@ -138,28 +164,9 @@ test.beforeEach(() => {
 });
 
 test('two georeferenced tiles mount into one frame at their real separation', async ({ page }) => {
-  const errors: string[] = [];
-  page.on('console', (m) => {
-    if (m.type() === 'error' && !isBenignPageError(m.text())) errors.push(m.text());
-  });
-  page.on('pageerror', (e) => { if (!isBenignPageError(String(e))) errors.push(String(e)); });
+  const errors = collectPageErrors(page);
 
-  const w = await loadLasWriter();
-  const bytesA = georefLas(w, 500000, 4100000);
-  const bytesB = georefLas(w, 500000 + SEP_M, 4100000 + SEP_M);
-
-  await page.goto('/');
-  await expect(page.locator('.olv-empty-title')).toBeVisible();
-
-  await dropBytes(page, bytesA, 'utm33-a.las');
-  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
-
-  await dropBytes(page, bytesB, 'utm33-b.las');
-  await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 20_000 });
-  // Layer Health renders its own rows off the reconciled frame, so wait for
-  // both cards rather than for a duration.
-  await expect(page.locator('.olv-layerhealth-layer')).toHaveCount(2, { timeout: 20_000 });
+  await openTwoTiles(page, '/');
   await railChromeSettled(page);
 
   const layers = await readLayerHealth(page);
@@ -194,25 +201,9 @@ function isZeroDisplacement(offsetText: string): boolean {
 }
 
 test('the surviving layer does not move when a sibling is added or removed (#2)', async ({ page }) => {
-  const errors: string[] = [];
-  page.on('console', (m) => {
-    if (m.type() === 'error' && !isBenignPageError(m.text())) errors.push(m.text());
-  });
-  page.on('pageerror', (e) => { if (!isBenignPageError(String(e))) errors.push(String(e)); });
+  const errors = collectPageErrors(page);
 
-  const w = await loadLasWriter();
-  // A's origin is the lower easting, so A anchors the frame at offset zero.
-  const bytesA = georefLas(w, 500000, 4100000);
-  const bytesB = georefLas(w, 500000 + SEP_M, 4100000 + SEP_M);
-
-  await page.goto('/');
-  await expect(page.locator('.olv-empty-title')).toBeVisible();
-
-  await dropBytes(page, bytesA, 'utm33-a.las');
-  await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
-  await dropBytes(page, bytesB, 'utm33-b.las');
-  await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 20_000 });
-  await expect(page.locator('.olv-layerhealth-layer')).toHaveCount(2, { timeout: 20_000 });
+  await openTwoTiles(page, '/');
   await railChromeSettled(page);
 
   const withBoth = await readLayerHealth(page);
@@ -268,24 +259,9 @@ test('the surviving layer does not move when a sibling is added or removed (#2)'
  * transform a pick resolves through, not the screen-to-ray mapping.
  */
 test('a coordinate read from the mounted non-anchor layer is in the project frame', async ({ page }) => {
-  const errors: string[] = [];
-  page.on('console', (m) => {
-    if (m.type() === 'error' && !isBenignPageError(m.text())) errors.push(m.text());
-  });
-  page.on('pageerror', (e) => { if (!isBenignPageError(String(e))) errors.push(String(e)); });
+  const errors = collectPageErrors(page);
 
-  const w = await loadLasWriter();
-  const bytesA = georefLas(w, 500000, 4100000);
-  const bytesB = georefLas(w, 500000 + SEP_M, 4100000 + SEP_M);
-
-  await page.goto('/?test=1');
-  await expect(page.locator('.olv-empty-title')).toBeVisible();
-  await dropBytes(page, bytesA, 'utm33-a.las');
-  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
-  await dropBytes(page, bytesB, 'utm33-b.las');
-  await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 20_000 });
-  await expect(page.locator('.olv-layerhealth-layer')).toHaveCount(2, { timeout: 20_000 });
+  await openTwoTiles(page, '/?test=1');
   await railChromeSettled(page);
 
   // Point 0 of each tile is its own origin corner: tileAt puts i=0 at (ox, oy).
@@ -343,23 +319,9 @@ test('a coordinate read from the mounted non-anchor layer is in the project fram
  * nothing rebases it, so B's point and the measurement have to stay together.
  */
 test('closing the scan that set the origin leaves the other scan and its measurement in place', async ({ page }) => {
-  const errors: string[] = [];
-  page.on('console', (m) => {
-    if (m.type() === 'error' && !isBenignPageError(m.text())) errors.push(m.text());
-  });
-  page.on('pageerror', (e) => { if (!isBenignPageError(String(e))) errors.push(String(e)); });
+  const errors = collectPageErrors(page);
 
-  const w = await loadLasWriter();
-  const bytesA = georefLas(w, 500000, 4100000);
-  const bytesB = georefLas(w, 500000 + SEP_M, 4100000 + SEP_M);
-
-  await page.goto('/?test=1');
-  await expect(page.locator('.olv-empty-title')).toBeVisible();
-  await dropBytes(page, bytesA, 'utm33-a.las');
-  await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
-  await dropBytes(page, bytesB, 'utm33-b.las');
-  await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 20_000 });
-  await expect(page.locator('.olv-layerhealth-layer')).toHaveCount(2, { timeout: 20_000 });
+  await openTwoTiles(page, '/?test=1');
   await railChromeSettled(page);
 
   type Api = {
