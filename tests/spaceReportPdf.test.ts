@@ -188,3 +188,27 @@ describe('buildSpaceReportPdf', () => {
     expect(page).not.toMatch(/completeness/i);
   });
 });
+
+describe('space report coverage note for a truncated file', () => {
+  const build = async (coverageNote?: string) => {
+    const pos = cubeShell();
+    const space = spaceMetrics(pos, { upAxis: 'z', spaceKind: 'object', hasRgb: false });
+    const bytes = await buildSpaceReportPdf({
+      space, object: objectMetrics(pos), name: 'Sculpture',
+      softwareVersion: '0.4.3', metricVersion: 'v0.4.1',
+      ...(coverageNote ? { coverageNote } : {}),
+    });
+    return (await extractTextOps(bytes)).map((o) => o.text).join('\n');
+  };
+
+  it('prints a Coverage row when the source is truncated', async () => {
+    const text = await build('Truncated: 4 of 2,601 points read');
+    expect(text).toMatch(/Coverage\s+Truncated: 4 of 2,601 points read/);
+  });
+
+  it('prints no Coverage row for a complete source', async () => {
+    const text = await build();
+    expect(text).not.toContain('Coverage ');
+    expect(text).not.toContain('Truncated');
+  });
+});

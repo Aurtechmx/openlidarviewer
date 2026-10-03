@@ -44,6 +44,8 @@ export interface SpaceReportPdfInput {
    * feet first. Default 'metric'.
    */
   readonly unitSystem?: PlanUnitSystem;
+  /** Truncation note for a truncated source file; printed as a Coverage row. */
+  readonly coverageNote?: string | null;
 }
 
 const INK = rgb(0.12, 0.14, 0.18);

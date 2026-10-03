@@ -854,7 +854,7 @@ export class MeasurePanel {
   private _exportProfileCsv(s: MeasurementSummary): void {
     if (!s.profileChart || s.profileChart.length < 2) return;
     const system = this._displayUnits(s);
-    const csv = buildProfileCsv(s.profileChart, system, this._verticalReference(s));
+    const csv = buildProfileCsv(s.profileChart, system, this._verticalReference(s), s.profileCoverageNote);
     triggerDownload(new Blob([csv], { type: 'text/csv' }), `${safeFileName(s.name)}-profile.csv`);
   }
 

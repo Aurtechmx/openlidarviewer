@@ -53,15 +53,16 @@ export type SourceClassificationProvenance = 'producer' | 'derived' | 'absent';
 export type SectionClassificationProvenance = SourceClassificationProvenance | 'mixed';
 
 /** How a source's points were read for this walk. */
-export type SourceReadKind = 'static' | 'streaming-resident';
+export type SourceReadKind = 'static' | 'static-truncated' | 'streaming-resident';
 
 /**
  * The section's read scope. `resident-snapshot` and `partial-resident` both
  * mean the walk did not see every point the sources hold; `unknown` is the
  * empty-section answer, since "full static" would be a claim about a read
- * that never happened.
+ * that never happened. `partial-static` is a static read of a truncated file:
+ * only the points the file held were sampled.
  */
-export type SectionReadScope = 'full-static' | 'resident-snapshot' | 'partial-resident' | 'unknown';
+export type SectionReadScope = 'full-static' | 'partial-static' | 'resident-snapshot' | 'partial-resident' | 'unknown';
 
 /** Whether the class-exclusion policy could reach the whole section. */
 export type ExclusionScope = 'every-source' | 'partial' | 'none';
@@ -184,11 +185,13 @@ function summariseRead(sources: readonly DerivedSurfaceSource[]): SectionReadSco
   if (sources.length === 0) return 'unknown';
   let statics = 0;
   let resident = 0;
+  let truncated = 0;
   for (const s of sources) {
     if (s.read === 'streaming-resident') resident++;
     else statics++;
+    if (s.read === 'static-truncated') truncated++;
   }
-  if (resident === 0) return 'full-static';
+  if (resident === 0) return truncated > 0 ? 'partial-static' : 'full-static';
   if (statics === 0) return 'resident-snapshot';
   return 'partial-resident';
 }
@@ -240,6 +243,8 @@ function readLine(scope: SectionReadScope): string {
   switch (scope) {
     case 'full-static':
       return 'Read: the full static sources.';
+    case 'partial-static':
+      return 'Read: a truncated static source. The file holds fewer points than its header declares, so only the points read were sampled.';
     case 'resident-snapshot':
       return 'Read: a resident streaming snapshot, not the full sources. Points outside the resident set were never sampled.';
     case 'partial-resident':

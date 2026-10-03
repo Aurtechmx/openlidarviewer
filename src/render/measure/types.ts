@@ -271,6 +271,11 @@ export interface Measurement {
   /** Profile only — the method tag; absent on a profile sampled under v1. */
   profileMethod?: string;
   /**
+   * Profile only: the truncation note ("Truncated: 4 of 2,601 points read")
+   * when the profile was sampled from a truncated file. Absent otherwise.
+   */
+  profileCoverageNote?: string;
+  /**
    * Volume only — the cut/fill record from `volumeCutFill`. Optional so
    * a volume measurement loaded from a session file that pre-dates the
    * sampler (or one with no cloud loaded) still validates; the panel

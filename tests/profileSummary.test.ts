@@ -642,3 +642,17 @@ describe('the station CSV column names the reference it actually has', () => {
     expect(body('unknown')).toBe(body('orthometric'));
   });
 });
+
+describe('buildProfileCsv coverage note for a truncated file', () => {
+  it('leads with the truncation note when the profile came from a truncated file', () => {
+    const csv = buildProfileCsv(FIXTURE, 'metric', 'orthometric', 'Truncated: 4 of 2,601 points read');
+    expect(csv.split('\n')[0]).toBe('# Truncated: 4 of 2,601 points read. Profile sampled from the points read.');
+    expect(csv.split('\n')[1]).toBe(buildProfileCsv(FIXTURE, 'metric', 'orthometric').split('\n')[0]);
+  });
+
+  it('is unchanged for a complete source', () => {
+    const csv = buildProfileCsv(FIXTURE, 'metric', 'orthometric', undefined);
+    expect(csv).toBe(buildProfileCsv(FIXTURE, 'metric', 'orthometric'));
+    expect(csv.startsWith('station,')).toBe(true);
+  });
+});

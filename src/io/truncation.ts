@@ -31,6 +31,18 @@ export function truncationText(t: Truncation): string {
   return `Truncated: ${t.read.toLocaleString('en-US')} of ${t.declared.toLocaleString('en-US')} points read`;
 }
 
+/**
+ * One note for several sources: the truncation text of each truncated one,
+ * joined. Undefined when none is truncated.
+ */
+export function combinedTruncationNote(
+  truncations: Iterable<Truncation | null | undefined>,
+): string | undefined {
+  const parts: string[] = [];
+  for (const t of truncations) if (t && t.read < t.declared) parts.push(truncationText(t));
+  return parts.length > 0 ? parts.join('; ') : undefined;
+}
+
 /** The truncation text for a cloud, or undefined for a complete read. */
 export function truncationNote(
   cloud: Parameters<typeof truncationOf>[0],

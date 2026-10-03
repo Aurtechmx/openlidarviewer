@@ -64,6 +64,7 @@ export function profilePdfInputFor(
     // the word elevation against them.
     datumKnown: s.profileDatumKnown !== false,
     provenance: s.profileProvenance ?? null,
+    coverageNote: s.profileCoverageNote ?? null,
     generatedAt: options.generatedAt,
   };
 }

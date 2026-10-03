@@ -248,6 +248,8 @@ export interface ProfileSamplerResult {
   withheld?: WithheldReadCounts;
   /** Method tag the series was sampled under. */
   method?: string;
+  /** Truncation note when a static source read was truncated. */
+  coverageNote?: string;
 }
 
 /**
@@ -344,6 +346,8 @@ export interface MeasurementSummary {
   profileWithheld?: WithheldReadCounts;
   /** Profile only — the method tag; absent on a profile sampled under v1. */
   profileMethod?: string;
+  /** Profile only: the truncation note when a source file was truncated. */
+  profileCoverageNote?: string;
   /**
    * Profile only — the cumulative chainages (in METRES, through the same B2
    * factor the chart/table read) of the intermediate station dots drawn on the
@@ -998,6 +1002,7 @@ export class MeasureController {
       profileProvenance: m.profileProvenance,
       profileWithheld: m.profileWithheld,
       profileMethod: m.profileMethod,
+      ...(m.profileCoverageNote ? { profileCoverageNote: m.profileCoverageNote } : {}),
       // Station-dot chainages in metres (× the same B2 factor as the samples),
       // in dot order, so the panel can couple a hovered tick/row to the scene
       // dot at the matching index. Only meaningful for profiles.
@@ -1731,6 +1736,7 @@ export class MeasureController {
     // Assigned, not only set: a resample replaces the counts with its own.
     m.profileWithheld = Array.isArray(result) ? undefined : result.withheld;
     m.profileMethod = Array.isArray(result) ? undefined : result.method;
+    m.profileCoverageNote = Array.isArray(result) ? undefined : result.coverageNote;
     if (!Array.isArray(result)) {
       if (
         typeof result.corridorWidth === 'number' &&
