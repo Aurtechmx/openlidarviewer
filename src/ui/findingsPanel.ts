@@ -161,13 +161,9 @@ export function buildFindingsPanel(deps: FindingsPanelDeps): MountedFindingsPane
       }
       setStatus('Could not export the findings report. Your findings are kept. Try again.');
     };
-    let result: Promise<FindingsExportResult>;
-    try {
-      result = Promise.resolve(deps.exportReport(findings.all));
-    } catch (err) {
-      result = Promise.reject(err);
-    }
-    void result
+    // Called at once; an async wrapper turns a synchronous throw into a rejection.
+    const runExport = async (): Promise<FindingsExportResult> => deps.exportReport(findings.all);
+    void runExport()
       .then((r) => {
         if (r === 'downloaded') setStatus('Report download started.');
         else if (r === 'failed') fail();
