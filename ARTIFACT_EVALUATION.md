@@ -40,4 +40,4 @@ No proprietary dataset is required. Bundled fixtures are synthetic or explicitly
 
 ## Scope of evaluation
 
-Evaluable in this artifact: build, type safety, the full unit/integration suite, deterministic analytic reproduction, bundle budget, and the honesty lints. Not evaluable here without a device or external reference data: GPU performance figures, the full browser end-to-end suite, and cross-implementation / field accuracy comparisons.
+With this artifact alone you can evaluate the build and type safety, the full unit/integration suite, the deterministic analytic reproduction, the bundle budget and the honesty lints. GPU performance figures, the full browser end-to-end suite, and cross-implementation / field accuracy comparisons need a device or external reference data, so you cannot evaluate them here.

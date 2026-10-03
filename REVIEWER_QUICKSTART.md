@@ -1,9 +1,9 @@
 # Reviewer quickstart
 
-Bootstrapping needs the network once — `npm ci` fetches the pinned Node
+You need the network once, to bootstrap: `npm ci` fetches the pinned Node
 dependencies, and the optional figure step installs matplotlib. After that, the
-tests and the evaluation run offline on commodity hardware. No accounts, no data
-upload, no external datasets.
+tests and the evaluation run offline on commodity hardware. You need no account
+and no external dataset, and you upload no data.
 
 ## 1. Install and test (~2 min)
 
@@ -22,15 +22,15 @@ This runs the real analysis cores over deterministic synthetic fixtures with
 analytic ground truth and writes:
 
 - `benchmarks/out/metrics.md`: the evaluation table
-- `benchmarks/out/metrics.json` — the raw numbers
-- `benchmarks/out/registration_bias.{png,pdf}` — vertical-change preservation
-- `benchmarks/out/calibration.{png,pdf}` — uncertainty-band coverage
+- `benchmarks/out/metrics.json`: the raw numbers
+- `benchmarks/out/registration_bias.{png,pdf}`: vertical-change preservation
+- `benchmarks/out/calibration.{png,pdf}`: uncertainty-band coverage
 
 The metrics and the figures are separable, so a missing Python environment never
 fails the numbers:
 
-- `npm run repro:metrics` — the evaluation table + JSON. JavaScript only, no Python.
-- `npm run repro:figures` — the PNG/PDF figures. Needs Python 3.11 + matplotlib:
+- `npm run repro:metrics`: the evaluation table + JSON. JavaScript only, no Python.
+- `npm run repro:figures`: the PNG/PDF figures. Needs Python 3.11 + matplotlib:
   `pip install -r requirements-repro.txt`. It exits with that instruction if
   matplotlib is absent, and never touches the numbers.
 - `npm run repro` runs both in order.
@@ -38,17 +38,17 @@ fails the numbers:
 The figures visualise the metrics; the scientific values are the JSON from the
 metrics step.
 
-What the metrics show:
+The four metrics measure the following.
 
-- **M1** — a full-3D rigid registration absorbs a true uniform vertical change
+- M1: a full-3D rigid registration absorbs a true uniform vertical change
   into its z-shift (detected-change error grows with the change), while the
-  horizontal-only constraint preserves it (≈ 0 error). This is the change-detection
-  design choice, measured.
-- **M2** — planar alignment recovers a known horizontal misregistration.
+  horizontal-only constraint preserves it (≈ 0 error). M1 measures the effect of
+  the horizontal-only design choice in change detection.
+- M2: planar alignment recovers a known horizontal misregistration.
 - M3: over seeded noise realisations the reported stockpile ±1σ band reaches
-  empirical coverage near its nominal 0.68. That is coverage against a known
-  synthetic noise model, not calibration against field data.
-- **M4** — the integrity-report digest is deterministic and tamper-evident.
+  empirical coverage near its nominal 0.68. The coverage is measured against a
+  known synthetic noise model; M3 does not calibrate against field data.
+- M4: the integrity-report digest is deterministic and tamper-evident.
 
 ## 3. Run the application (~1 min)
 
@@ -74,8 +74,8 @@ development default: it runs the static gate only, so it is quicker but does not
 reproduce coverage or the e2e counts. Either way, read the verdict from the
 `GATE EXIT:` line.
 
-If you downloaded the release assets, check the set itself — this rebuilds
-nothing:
+If you downloaded the release assets, check the set itself. This command
+rebuilds nothing:
 
 ```bash
 npm run release:verify -- --dir <downloaded-assets>
