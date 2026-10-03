@@ -106,6 +106,25 @@ export function createStateStrip(host: StateStripHost): StateStrip {
     if (b.getAttribute('aria-label') !== name) b.setAttribute('aria-label', name);
   };
 
+  // The phone strip wraps to a third row on the narrowest screens, so the
+  // surfaces parked above it read its real height rather than the two-row
+  // token. Written on change, a frame later: a same-frame write re-lays-out
+  // the stage and trips the ResizeObserver loop guard.
+  if (typeof ResizeObserver !== 'undefined') {
+    let write = 0;
+    new ResizeObserver(() => {
+      const h = element.offsetHeight;
+      const root = document.documentElement.style;
+      const next = h > 0 ? `${h}px` : '';
+      if (root.getPropertyValue('--olv-strip-measured') === next) return;
+      cancelAnimationFrame(write);
+      write = requestAnimationFrame(() => {
+        if (next) root.setProperty('--olv-strip-measured', next);
+        else root.removeProperty('--olv-strip-measured');
+      });
+    }).observe(element);
+  }
+
   return {
     element,
     render(s) {

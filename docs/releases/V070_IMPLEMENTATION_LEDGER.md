@@ -131,17 +131,18 @@ the two entries were renumbered when the branches were integrated.
 | L225 | UI | TEST | low | FIXED | new | With the right rail collapsed, the project card centred into the freed band and its close button sat under the floating colour key's header at 1024 px wide. |
 | L222 | UI | TEST | high | FIXED | new | One click on a measurement's delete control removed it with no Undo. A click on an existing measurement's vertex while placing was taken by the vertex handle and placed nothing. A drag to orbit while measuring placed a point. An active clip box showed only on the Clip page, and Export read "Scan scope: Full cloud" while it wrote the clipped points. |
 | L227 | UI | TEST | low | FIXED | new | With both rails expanded and the colour key docked, the project card overlapped the left rail's collapse tab at 768 to 900 px wide, and both rails at 768 px. |
+| L226 | UI | TEST | low | FIXED | new | On a phone, a scan-ready prompt that wrapped to three or four lines covered the state strip at 320 and 375 px wide, and without the strip it covered the dock. |
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 80
+- FIXED: 81
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 102
+- total: 103
 
 ## Detail
 
@@ -8469,3 +8470,20 @@ Tests: `tests/e2e/largeTouchLayout.spec.ts` (768, 800, 880, 900, 1024 and
 1280 px with both rails expanded: at 880 px and wider the card meets neither
 rail nor either tab and no control sits under another; at 768 and 800 px the
 card is hidden and shows once the right rail is collapsed).
+
+### L226 · FIXED · UI
+
+On a phone the prompt toast (`.olv-lasso-toast`) sat 120 px above the screen
+bottom plus the strip's 50 px token, so a message that wrapped to three or four
+lines reached down over the state strip at 320 and 375 px, and over the dock
+with the strip hidden. `src/ui/stateStrip.css` now names the strip's bottom
+edge (`--olv-strip-bottom`, from `--olv-dock-clear`) and the line above it
+(`--olv-strip-clear`); the toast and the tool rail both end on that line, and
+without the strip the toast ends above the dock. The strip wraps to a third row
+at 320 px, so `src/ui/stateStrip.ts` writes its measured height to
+`--olv-strip-measured`, and the clearance reads it in place of the two-row
+token.
+
+Tests: `tests/e2e/responsiveLayout.spec.ts` (320, 375, 390 and 430 px: a short
+and a long toast end above the strip's top edge; with the strip hidden the toast
+ends above the dock).
