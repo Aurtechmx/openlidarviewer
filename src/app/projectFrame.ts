@@ -283,3 +283,18 @@ export function projectFrameInputFrom(src: ProjectFrameSources): SessionFrameInp
   const p = src.frame.projectOrigin;
   return { projectOrigin: [p[0], p[1], p[2]], layers };
 }
+
+/**
+ * The origin the active layer's scene coordinates are local to. An unplaced
+ * layer is in its own file frame. A placed layer shares the project origin in
+ * X/Y, and in Z only when its vertical datum is verified; otherwise its Z
+ * stays on the file origin.
+ */
+export function sceneOriginFor(
+  projectOrigin: readonly [number, number, number] | null | undefined,
+  sourceOrigin: readonly [number, number, number],
+  placement: { readonly vertical: boolean } | null,
+): [number, number, number] {
+  if (!projectOrigin || !placement) return [sourceOrigin[0], sourceOrigin[1], sourceOrigin[2]];
+  return [projectOrigin[0], projectOrigin[1], placement.vertical ? projectOrigin[2] : sourceOrigin[2]];
+}

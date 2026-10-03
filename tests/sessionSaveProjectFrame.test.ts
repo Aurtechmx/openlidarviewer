@@ -11,7 +11,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as sessionIo from '../src/io/session';
 import { parseSession, rebaseSessionGeometry } from '../src/io/session';
 import { serializeActiveSession, type SessionSnapshotDeps } from '../src/app/sessionSnapshot';
-import { projectFrameInputFrom, type ProjectFrameSources } from '../src/app/projectFrame';
+import { projectFrameInputFrom, sceneOriginFor, type ProjectFrameSources } from '../src/app/projectFrame';
 
 type V3 = [number, number, number];
 
@@ -107,5 +107,18 @@ describe('single-scan and older sessions', () => {
     expect(rebased.refused).toEqual([]);
     expect(rebased.unrebased).toEqual([]);
     expect(rebased.measurements[0]!.points[0]).toEqual([2, 0, 0]);
+  });
+});
+
+describe('the origin a session import rebases onto', () => {
+  it('is the file origin for a lone scan whose vertical datum is not verified', () => {
+    const file: V3 = [500_100, 4_600_000, 50];
+    // Never placed: the scan's own frame.
+    expect(sceneOriginFor(null, file, null)).toEqual(file);
+    expect(sceneOriginFor(file, file, null)).toEqual(file);
+    // Placed in X/Y only: Z stays on the file origin.
+    expect(sceneOriginFor([500_000, 4_600_000, 120], file, { vertical: false })).toEqual([500_000, 4_600_000, 50]);
+    // Placed with a verified datum: the project origin in all three axes.
+    expect(sceneOriginFor([500_000, 4_600_000, 120], file, { vertical: true })).toEqual([500_000, 4_600_000, 120]);
   });
 });
