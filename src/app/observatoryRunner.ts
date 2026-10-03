@@ -15,7 +15,6 @@
  * result is discarded even if the compute step still finishes.
  */
 import type { ObservatoryCloudInput, ObservatoryRunOptions, ObservatoryRunOutcome } from './observatoryFromCloud';
-import { runObservatoryOverCloud } from './observatoryFromCloud';
 import { registerObservatoryOverlayInvalidator } from '../lazyChunks';
 import type { CrsOriginInput } from '../science/crsOrigin';
 import { cancelObservatoryJob, computeObservatoryInWorker } from './observatoryWorkerClient';
@@ -33,7 +32,11 @@ export type ObservatoryRunnerState =
       /** The cloud the run read, for the source-file digest in export provenance. */
       readonly source?: { readonly key: object; readonly streamed: boolean };
     }
-  | { readonly phase: 'stale' };
+  | { readonly phase: 'stale' }
+  | { readonly phase: 'failed'; readonly message: string };
+
+/** The one message a failed run shows; the underlying error is never surfaced. */
+export const OBSERVATORY_FAILED_MESSAGE = 'Observatory could not finish on this scan. Try again.';
 
 export interface ObservatoryRunnerDeps {
   readonly getActiveCloud: () => ObservatoryCloudInput | null;
@@ -106,12 +109,17 @@ export function createObservatoryRunner(deps: ObservatoryRunnerDeps): Observator
     if (!deps.compute) {
       // OB-RT-03: the pipeline runs in a worker; the result is revalidated
       // against the same snapshot when it arrives.
-      void computeObservatoryInWorker(cloud, options)
-        .catch(() => runObservatoryOverCloud(cloud, options))
-        .then((outcome) => { commit(myToken, datasetId, crsRevision, outcome, true, interpretationLevel, crs, cloud); });
+      // The client already falls back to the main thread once; a rejection
+      // here is final and lands as `failed`, not a second in-thread attempt.
+      void computeObservatoryInWorker(cloud, options).then(
+        (outcome) => { commit(myToken, datasetId, crsRevision, outcome, true, interpretationLevel, crs, cloud); },
+        () => { fail(myToken); },
+      );
       return state;
     }
-    commit(myToken, datasetId, crsRevision, deps.compute(cloud, options), false, interpretationLevel, crs, cloud);
+    let outcome: ObservatoryRunOutcome;
+    try { outcome = deps.compute(cloud, options); } catch { fail(myToken); return state; }
+    commit(myToken, datasetId, crsRevision, outcome, false, interpretationLevel, crs, cloud);
     return state;
   }
 
@@ -131,6 +139,11 @@ export function createObservatoryRunner(deps: ObservatoryRunnerDeps): Observator
       return;
     }
     setState({ phase: 'committed', outcome, interpretationLevel, ...(crs !== undefined ? { crs } : {}), ...(cloud ? { source: { key: cloud, streamed: false } } : {}) });
+  }
+
+  /** A failure for a superseded or aborted run stays quiet, like a late stale result. */
+  function fail(myToken: number): void {
+    if (myToken === token) setState({ phase: 'failed', message: OBSERVATORY_FAILED_MESSAGE });
   }
 
   function getState(): ObservatoryRunnerState {
