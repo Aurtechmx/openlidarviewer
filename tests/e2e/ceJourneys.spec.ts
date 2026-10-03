@@ -235,7 +235,10 @@ async function j1(page: Page, vp: Viewport, id: string): Promise<void> {
     await rec.click(page.locator('.olv-msheet-handle'), 'Expand panel (sheet handle)');
   }
   await expect(row).toBeVisible({ timeout: 5_000 });
-  await expect(row).toContainText(/\d\s?(m|ft|units?)\b/);
+  // The dense-grid PLY declares no CRS, so the value carries no unit: it is
+  // marked unverified and must never read as metres or feet.
+  await expect(row).toContainText(/\d \(unit unverified\)/);
+  expect(await row.innerText()).not.toMatch(/\d\s?(m|cm|km|ft)\b/);
   if (NARROW.includes(vp)) await expectMeasureLayoutClear(page);
   if (vp.touch) {
     // The phone toolbar ends above the state strip.
