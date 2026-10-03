@@ -62,7 +62,7 @@ export function contributeExportActions(deps: ExportActionDeps): Action[] {
     },
     {
       id: 'report.verify',
-      title: 'Verify integrity report…',
+      title: 'Verify report with verification checksum…',
       section: 'Export',
       hint: 'Check a report JSON — confirm its digest still matches its contents.',
       keywords: ['integrity', 'digest', 'tamper', 'check', 'sha', 'validate', 'verify'],

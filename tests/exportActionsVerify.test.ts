@@ -1,7 +1,7 @@
 /**
  * exportActionsVerify.test.ts
  *
- * "Verify integrity report…" opens a hidden file input and loads the
+ * "Verify report with verification checksum…" opens a hidden file input and loads the
  * verifier chunk once the user picks a file. A dismissed picker must not leave
  * the input in the document, and a chunk that fails to load must reach the
  * toast with a Try again that verifies the file the user picked.

@@ -97,7 +97,7 @@ import { createScanRouteCoordinator, type SpaceExportContext } from './app/scanR
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel, exportClassFacts } from './ui/ExportPanel';
 import { makeLocalToLonLat } from './export/lonLatMapper';
-import { writeScanScopedExport, spaceContextStillCurrent, SPACE_CONTEXT_MOVED, SESSION_EXPORT_SCAN_CHANGED_REFUSAL } from './export/exportScanIdentity';
+import { runFindingsExport, writeScanScopedExport, spaceContextStillCurrent, SPACE_CONTEXT_MOVED, SESSION_EXPORT_SCAN_CHANGED_REFUSAL } from './export/exportScanIdentity';
 import {
   crsIsKnown,
   exportScanFootprintKml,
@@ -2506,10 +2506,7 @@ const exportPanel = new ExportPanel({
     return (await loadMeasurementExportActions()).collectMeasurementFindings(measurementExportActionDeps(viewer));
   },
   activeFindingsTargetId: () => scans.activeExportTargetId(), // ledger owner
-  exportFindingsReport: async (findings) => {
-    if (!viewer) return;
-    await (await loadMeasurementExportActions()).exportFindingsReport(measurementExportActionDeps(viewer), findings);
-  },
+  exportFindingsReport: (findings, isCurrent) => (viewer ? runFindingsExport(loadMeasurementExportActions, measurementExportActionDeps(viewer), findings, isCurrent) : Promise.resolve('stale' as const)),
   exportKml: () => void exportSiteKml(kmlDeps),
   kmlStatus: () => siteKmlStatus(kmlDeps),
   exportScanFootprint: () => void exportScanFootprintKml(kmlDeps),

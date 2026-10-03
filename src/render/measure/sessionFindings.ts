@@ -38,6 +38,8 @@ export class SessionFindings {
    * `null` means no scan has claimed the ledger yet.
    */
   private _ownerId: string | null = null;
+  /** Scans removed this session; Undo never restores findings into one. */
+  private readonly _forgotten = new Set<string>();
   private readonly _listeners = new Set<() => void>();
 
   /** Told after every change to the ledger. Returns an unsubscribe. */
@@ -81,6 +83,7 @@ export class SessionFindings {
 
   /** Drop the findings kept for a scan that has been removed. */
   forget(ownerId: string): void {
+    this._forgotten.add(ownerId);
     const had = this._byOwner.get(ownerId);
     if (!this._byOwner.delete(ownerId)) return;
     if (ownerId === this._ownerId && had && had.length > 0) this._changed();
@@ -129,6 +132,7 @@ export class SessionFindings {
    */
   restore(cleared: ClearedFindings): void {
     if (cleared.findings.length === 0) return;
+    if (cleared.ownerId !== null && this._forgotten.has(cleared.ownerId)) return;
     const list = this._list(cleared.ownerId);
     list.unshift(...cleared.findings);
     if (cleared.ownerId === this._ownerId) this._changed();

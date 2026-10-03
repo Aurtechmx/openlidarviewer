@@ -32,6 +32,9 @@
  * effect is injected by the caller, so this module itself does no DOM, no I/O.
  */
 
+import type { MeasurementExportActionDeps } from '../app/measurementExportActions';
+import type { ReportFinding } from '../render/measure/reportManifest';
+
 /**
  * Whether two readings of "which scan is this" name the same target.
  *
@@ -155,4 +158,66 @@ export function spaceContextStillCurrent(
 ): boolean {
   return sameExportTarget(stamp.targetId, now.targetId)
     && stamp.crsRevision === now.crsRevision;
+}
+
+/**
+ * ── Findings report export ───────────────────────────────────────────────────
+ *
+ * The export chunk loads lazily, and the report reads the dataset name, CRS,
+ * source digest and classification epoch. Read after that load, they describe
+ * whatever scan is active by then. So the scan context is read before the first
+ * await, and the export is refused if the active scan changed in between.
+ */
+
+type FindingsExportActions = Pick<typeof import('../app/measurementExportActions'), 'exportFindingsReport'>;
+
+/** Freeze the scan-dependent reads of `deps` at this moment. */
+export function pinFindingsExportDeps(deps: MeasurementExportActionDeps): MeasurementExportActionDeps {
+  const geo = deps.geo();
+  const epoch = deps.activeClassificationEpoch();
+  const measure = Object.create(deps.measure, {
+    crsKnown: { value: deps.measure.crsKnown },
+    geographicCrs: { value: deps.measure.geographicCrs },
+  }) as MeasurementExportActionDeps['measure'];
+  return { ...deps, measure, geo: () => geo, activeClassificationEpoch: () => epoch };
+}
+
+/**
+ * Export `findings` as the report. `isCurrent` says whether the scan the
+ * findings belong to is still active; it is checked after the chunk loads.
+ */
+export async function runFindingsExport(
+  load: () => Promise<FindingsExportActions>,
+  deps: MeasurementExportActionDeps,
+  findings: readonly ReportFinding[],
+  isCurrent: () => boolean,
+): Promise<'done' | 'stale'> {
+  const pinned = pinFindingsExportDeps(deps);
+  const copy = [...findings];
+  const actions = await load();
+  if (!isCurrent()) return 'stale';
+  await actions.exportFindingsReport(pinned, copy);
+  return 'done';
+}
+
+/**
+ * True while the scan that owns the findings is open and still the active one.
+ * Findings with no owning scan never reach a report.
+ */
+export function findingsScanOpen(owner: string | null, activeId: () => string | null): boolean {
+  return owner !== null && activeId() === owner;
+}
+
+/**
+ * Collect measurement findings for `owner`, dropping the result when that scan
+ * closed or stopped being active while the converter chunk loaded.
+ */
+export async function collectForOpenScan(
+  owner: string | null,
+  activeId: () => string | null,
+  collect: () => Promise<readonly ReportFinding[]>,
+): Promise<readonly ReportFinding[]> {
+  if (!findingsScanOpen(owner, activeId)) return [];
+  const found = await collect();
+  return findingsScanOpen(owner, activeId) ? found : [];
 }

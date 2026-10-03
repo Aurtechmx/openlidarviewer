@@ -35,7 +35,7 @@ import {
   evaluateFullResClassExport,
   FULL_RES_CLASS_EDITS_MID_EXPORT_REFUSAL,
 } from '../export/fullResClassGuard';
-import { sameExportTarget, EXPORT_SCAN_CHANGED_REFUSAL } from '../export/exportScanIdentity';
+import { collectForOpenScan, findingsScanOpen, sameExportTarget, EXPORT_SCAN_CHANGED_REFUSAL } from '../export/exportScanIdentity';
 import { clipCloud } from '../render/clip/clipCloud';
 import type { ClipBox } from '../render/clip/clipBox';
 import { clipScope, clipScopeText, subscribeClipScope } from '../render/clip/clipScope';
@@ -173,7 +173,11 @@ export interface ExportPanelCallbacks {
    */
   activeFindingsTargetId?: () => string | null;
   /** Export the curated findings ledger as the signed integrity report (JSON). */
-  exportFindingsReport?: (findings: readonly ReportFinding[]) => void | Promise<void>;
+  exportFindingsReport?: (
+    findings: readonly ReportFinding[],
+    /** Whether the scan the findings belong to is still active; checked after any load. */
+    isCurrent: () => boolean,
+  ) => Promise<'done' | 'stale'>;
   /**
    * Export a site KML (annotations + measurements + viewpoints) for Google
    * Earth / QGIS. Wired only when the host can supply a lat/lon transform.
@@ -972,10 +976,15 @@ export class ExportPanel {
           // scan's numbers has no honest representation in it.
           collectMeasurements: () => {
             this._retargetFindings();
-            return this._cb.collectMeasurementFindings?.() ?? Promise.resolve([]);
+            const collect = this._cb.collectMeasurementFindings;
+            if (!collect) return Promise.resolve([]);
+            return collectForOpenScan(this._findings?.ownerId ?? null, this._activeFindingsId, collect);
           },
-          exportReport: async (f) => {
-            if (this._retargetFindings() > 0 || f.length === 0) {
+          exportReport: async (live) => {
+            // Captured at click time: the owner and a copy of its findings.
+            const owner = this._findings?.ownerId ?? null;
+            const f = [...live];
+            const refuse = (): 'refused' => {
               // The active scan changed since the list was shown. Its own
               // findings are now on screen and the previous scan's are kept, so
               // refuse rather than sign them as this scan's.
@@ -986,10 +995,15 @@ export class ExportPanel {
               );
               this._findingsPanel?.refresh();
               return 'refused';
-            }
+            };
+            if (this._retargetFindings() > 0 || f.length === 0) return refuse();
             const run = this._cb.exportFindingsReport;
             if (!run) return 'failed';
-            await run(f);
+            const isCurrent = (): boolean => findingsScanOpen(owner, this._activeFindingsId);
+            if ((await run(f, isCurrent)) === 'stale') {
+              this._retargetFindings();
+              return refuse();
+            }
             return 'downloaded';
           },
         });
@@ -1008,9 +1022,11 @@ export class ExportPanel {
     this._findings?.forget(scanId);
   }
 
+  private readonly _activeFindingsId = (): string | null => this._cb.activeFindingsTargetId?.() ?? null;
+
   private _retargetFindings(): number {
     if (!this._findings) return 0;
-    return this._findings.retarget(this._cb.activeFindingsTargetId?.() ?? null);
+    return this._findings.retarget(this._activeFindingsId());
   }
 
   private _productGroup(label: string, actions: HTMLElement, hint?: string, product?: ExportProduct): HTMLElement {

@@ -109,4 +109,15 @@ describe('Clear all', () => {
     expect(findings.all.map((x) => x.label)).toEqual(['one', 'two']);
     expect(q(element, '.olv-findings-list').querySelectorAll('.olv-findings-row')).toHaveLength(2);
   });
+
+  it('Undo does not restore findings for a scan that has since been removed', () => {
+    const f = new SessionFindings();
+    f.retarget('scan-A');
+    f.add(finding('on A'));
+    const cleared = f.clear();
+    f.forget('scan-A');
+    f.restore(cleared);
+    f.retarget('scan-A');
+    expect(f.all).toEqual([]);
+  });
 });
