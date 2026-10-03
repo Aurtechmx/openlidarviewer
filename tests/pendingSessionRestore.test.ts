@@ -41,24 +41,32 @@ describe('pending session restore', () => {
 });
 
 describe('a streamed open while a session waits', () => {
+  const cleared = { measure: vi.fn(), annotate: vi.fn(), bookmarks: vi.fn(), views: vi.fn() };
   const deps = (showToast: (m: string) => void): OpenStreamingDeps => {
     const any = () => vi.fn();
-    return new Proxy({ showToast, stage: { hideEmptyState: any() }, inspectorCards: { refreshProvenanceFromStreaming: any() } } as Record<string, unknown>, {
+    const viewer = { measure: { clear: cleared.measure }, annotate: { clear: cleared.annotate } };
+    return new Proxy({ showToast, getViewer: () => viewer, bookmarks: { clear: cleared.bookmarks }, refreshViewsUI: cleared.views, stage: { hideEmptyState: any() }, inspectorCards: { refreshProvenanceFromStreaming: any() } } as Record<string, unknown>, {
       get: (t, k) => (k in t ? t[k as string] : new Proxy(vi.fn(), { get: () => vi.fn() })),
     }) as unknown as OpenStreamingDeps;
   };
 
-  it('drops the session and says it was not applied', () => {
+  it('drops the session, clears its restored work and says so', () => {
     markPendingSessionRestore(file());
     const toast = vi.fn();
     activateCommittedStreamingCloud({ kind: 'copc', name: 'scan.copc.laz', sourcePointCount: 1, crs: () => null }, deps(toast));
     expect(takePendingSessionRestore()).toBeNull();
-    expect(toast).toHaveBeenCalledWith(expect.stringContaining('was not applied'));
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining('its work was cleared'));
+    expect(cleared.measure).toHaveBeenCalledTimes(1);
+    expect(cleared.annotate).toHaveBeenCalledTimes(1);
+    expect(cleared.bookmarks).toHaveBeenCalledTimes(1);
+    expect(cleared.views).toHaveBeenCalledTimes(1);
   });
 
   it('says nothing when no session waits', () => {
     const toast = vi.fn();
-    dropPendingSessionForStream(toast);
+    const clear = vi.fn();
+    dropPendingSessionForStream(toast, clear);
     expect(toast).not.toHaveBeenCalled();
+    expect(clear).not.toHaveBeenCalled();
   });
 });
