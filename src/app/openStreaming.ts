@@ -26,6 +26,7 @@
  */
 
 import { LoadCancelledError } from '../io/loadFile';
+import { dropPendingSessionForStream } from './pendingSessionRestore';
 import { describeLoadError } from '../io/loadErrors';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
 import { remoteCopcName, remoteEptName } from './remoteSourceNaming';
@@ -204,6 +205,7 @@ export function activateCommittedStreamingCloud(
   deps: OpenStreamingDeps,
 ): void {
   deps.stage.hideEmptyState();
+  dropPendingSessionForStream(deps.showToast);
   // Local-first counter — the categorical source kind, never the URL. Only a
   // COMMITTED open is counted now, not an attempt that failed to build.
   recordUsage('scan-open', cloud.kind);

@@ -22,3 +22,17 @@ export function takePendingSessionRestore(): File | null {
   pending = null;
   return file;
 }
+
+/** Forget the waiting session: the scene was reset or closed. */
+export function clearPendingSessionRestore(): void {
+  pending = null;
+}
+
+/**
+ * A streamed scan opened while a session waited. The streamed path does not
+ * run the session match, so the session is dropped and the user is told.
+ */
+export function dropPendingSessionForStream(showToast: (message: string) => void): void {
+  if (!takePendingSessionRestore()) return;
+  showToast('The imported session was not applied to this streamed scan. Import it again to check it against this scan.');
+}
