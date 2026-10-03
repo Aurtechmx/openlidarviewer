@@ -59,3 +59,38 @@ test('reclassify a lasso, then undo and redo, changes the live classification', 
   expect(result.redone).toBe(true);
   expect(result.afterRedo).toBe(6); // redo re-applied it
 });
+
+test('hiding the new class after a lasso reclassify stops drawing the edited points', async ({ page }) => {
+  await page.goto('/?test=1');
+  await dropDenseGridPly(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+
+  const r = await page.evaluate(() => {
+    const api = (
+      window as unknown as {
+        __OLV_TEST_API__: {
+          seedUniformClass: (cls: number) => number;
+          reclassifyLasso: (lasso: ReadonlyArray<{ x: number; y: number }>, cls: number) => number;
+          undoClass: () => boolean;
+          redoClass: () => boolean;
+          gpuDrawnCount: (hidden: number[]) => number;
+        };
+      }
+    ).__OLV_TEST_API__;
+    const n = api.seedUniformClass(2);
+    const lasso = [{ x: 0, y: 0 }, { x: 5000, y: 0 }, { x: 5000, y: 5000 }, { x: 0, y: 5000 }];
+    const changed = api.reclassifyLasso(lasso, 6);
+    const afterEdit = api.gpuDrawnCount([6]);
+    api.undoClass();
+    const afterUndo = api.gpuDrawnCount([6]);
+    api.redoClass();
+    const afterRedo = api.gpuDrawnCount([6]);
+    api.gpuDrawnCount([]);
+    return { n, changed, afterEdit, afterUndo, afterRedo };
+  });
+
+  expect(r.changed).toBeGreaterThan(0);
+  expect(r.afterEdit).toBe(r.n - r.changed);
+  expect(r.afterUndo).toBe(r.n);
+  expect(r.afterRedo).toBe(r.n - r.changed);
+});

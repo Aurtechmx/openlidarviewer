@@ -14,6 +14,7 @@
 
 import { loadEptLaszipWorkerClient } from '../../lazyChunks';
 import type { Viewer } from '../../render/Viewer';
+import { ClassVisibility } from '../../render/class/classVisibility';
 
 /** Accessor functions closing over the shell's late-bound state. */
 export interface TestSeamDeps {
@@ -84,6 +85,15 @@ export function mountTestSeam(deps: TestSeamDeps): void {
     redoClass: (): boolean => {
       const id = deps.getActiveScanId();
       return id ? v.redoClassification(id) : false;
+    },
+    // Hide `hidden` class codes through the GPU class filter, then count the
+    // points it still draws from the uploaded classification attribute.
+    gpuDrawnCount: (hidden: number[]): number => {
+      const visibility = new ClassVisibility();
+      for (const code of hidden) visibility.setVisible(code, false);
+      v.applyClassVisibility(visibility);
+      const id = deps.getActiveScanId();
+      return id ? v.classFilterDrawnCount(id) : -1;
     },
     classAt: (i: number): number => {
       const id = deps.getActiveScanId();
