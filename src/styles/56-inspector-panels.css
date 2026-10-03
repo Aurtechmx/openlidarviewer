@@ -321,6 +321,15 @@
    what is actually free. */
 .olv-overlay:has(.olv-right-rail.olv-right-collapsed) .olv-project-card { --olv-right-rail-width: 0px; }
 .olv-overlay:has(.olv-left-panels.olv-rail-collapsed) .olv-project-card { --olv-rail-width: 0px; }
+/* With the right rail collapsed the colour key floats at the stage's top-right
+   (98-layer-health.css: right 66px, 280px wide). The card's right edge stays
+   8px left of the key, so the key header never covers the card's close button. */
+body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
+  --olv-pc-width: clamp(200px, calc(100vw - 44px - var(--olv-rail-width) - var(--olv-right-rail-width)), 290px);
+  width: var(--olv-pc-width);
+  left: min(calc(50vw + (var(--olv-rail-width) - var(--olv-right-rail-width)) / 2),
+            calc(100vw - 66px - 280px - var(--space-md) - var(--olv-pc-width) / 2));
+}
 .olv-project-card.olv-visible {
   opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto;
 }

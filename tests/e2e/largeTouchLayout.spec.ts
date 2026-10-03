@@ -116,6 +116,11 @@ async function checkLegendBothRailStates(page: Page, tap: boolean, shot: string)
   await expect(legend).toBeVisible();
   await expect(legend).toHaveClass(/olv-colorbar-floating/);
   await page.waitForTimeout(600); // let the rail slide finish
+  // The project card dismisses itself on a timer; hold it open so the floating
+  // key and the card are checked together on every run. The touch walk-through
+  // has run a measurement by now, which owns the lane, so only the desktop
+  // check holds it.
+  if (!tap) await holdProjectCard(page);
   expect(await coveredControls(page)).toEqual([]);
   await page.screenshot({ path: `test-results/${shot}-collapsed.png` });
 
@@ -124,6 +129,25 @@ async function checkLegendBothRailStates(page: Page, tap: boolean, shot: string)
   await expect(legend).toBeVisible();
   await expect(legend).toHaveClass(/olv-colorbar-docked/);
   await page.waitForTimeout(600);
+  if (!tap) {
+    await holdProjectCard(page);
+    expect(await coveredControls(page)).toEqual([]);
+  }
+}
+
+/**
+ * Shows the project card and waits out its fade-in. The recommended-view chip
+ * only enters the lane after the card is dismissed, so it is removed here to
+ * match the lane as it is while the card is up.
+ */
+async function holdProjectCard(page: Page): Promise<void> {
+  const card = page.locator('.olv-project-card');
+  await expect(card).toHaveCount(1);
+  await card.evaluate((el) => {
+    document.querySelector('.olv-rvc')?.remove();
+    el.classList.add('olv-visible');
+  });
+  await expect(card).toHaveCSS('opacity', '1');
 }
 
 async function noHorizontalScroll(page: Page): Promise<void> {

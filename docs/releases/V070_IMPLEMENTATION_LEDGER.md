@@ -128,17 +128,18 @@ the two entries were renumbered when the branches were integrated.
 | L223 | SCIENTIFIC | TEST | med | FIXED | new | Compare elevation took before and after from load order, did nothing unless exactly two clouds were loaded, gave no reason with fewer than two, and an older run's result could replace a newer one. |
 | L224 | EXPORT | TEST | med | FIXED | new | An image export button had no guard, so a double click or Enter started two exports, and the point-cloud and Report PDF buttons came back after a fixed 1.5 s while a slow export could still be running. |
 | L221 | SCIENTIFIC | TEST | high | FIXED | new | With two scans open, the GeoJSON and CSV measurement exports placed every measurement through the active scan's origin and named the file after it, so scan A's points were written 100 m east and 49 m down on scan B. A truncated LAS opened as a full dataset with no warning. A scan with no CRS showed its measurements in metres beside "datum resolved". |
+| L225 | UI | TEST | low | FIXED | new | With the right rail collapsed, the project card centred into the freed band and its close button sat under the floating colour key's header at 1024 px wide. |
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 77
+- FIXED: 78
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 99
+- total: 100
 
 ## Detail
 
@@ -8403,3 +8404,15 @@ double click on an image export starts one), `tests/exportImageActionSettles.tes
 with no download; a failed file export is shown and recorded in the error
 ledger; the format, image and report callbacks in `src/main.ts` return their
 promise).
+
+### L225 · FIXED · UI
+
+While the colour key floats (right rail collapsed), `.olv-project-card` in
+`src/styles/56-inspector-panels.css` keeps its band centre but caps it so the
+card's right edge stays 8 px left of the key (right 66 px, 280 px wide, from
+`src/styles/98-layer-health.css`). With the rail expanded the card is
+unchanged.
+
+Tests: `tests/e2e/largeTouchLayout.spec.ts` (fine pointer 1440, 1280 and
+1024 px: the project card is held open with the key floating and with it
+docked, and no control sits under another).
