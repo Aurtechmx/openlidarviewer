@@ -845,3 +845,50 @@ describe('BUG 1 — signed MAX GRADE KPI', () => {
     expect(signed).toBe(total);
   });
 });
+
+describe('truncated static source (partial-static read scope)', () => {
+  const truncatedRecord = (truncation: { read: number; declared: number } | null) =>
+    buildProfileProvenance({
+      capturedAt: '2026-01-01T00:00:00.000Z',
+      up: [0, 0, 1],
+      sources: [{ slot: 0, layerId: 'scan-a', displayName: 'Scan A', classification: 'producer', streaming: false, truncation }],
+      accepted: { count: 3, sourceSlot: [0, 0, 0] },
+      excludedClasses: NON_GROUND_CLASSES,
+      units: { linearUnit: 'metre', verticalReference: 'orthometric', verticalMetresPerUnit: 1 },
+    });
+
+  it('records the truncation, calls the read incomplete and partial-static', () => {
+    const rec = truncatedRecord({ read: 4, declared: 2601 });
+    expect(rec.sources[0]!.truncation).toEqual({ read: 4, declared: 2601 });
+    expect(rec.complete).toBe(false);
+    expect(describeProfileProvenance(rec)).toMatch(/^Truncated static source, incomplete read/);
+    const legend = buildDerivedSurfaceLegend({
+      samples: ramp(8),
+      sources: [{ classification: 'producer', read: 'static-truncated' }],
+    });
+    expect(legend.readScope).toBe('partial-static');
+  });
+
+  it('prints the truncation note on the sheet, from the record or the live note', async () => {
+    const fromRecord = drawnPdfProse(await buildProfilePdf({
+      name: 'P', samples: ramp(16), generatedAt: FIXED_DATE, provenance: truncatedRecord({ read: 4, declared: 2601 }),
+    }));
+    expect(fromRecord).toContain('Truncated: 4 of 2,601 points read');
+    expect(fromRecord).toContain('a truncated static source');
+    const fromLive = drawnPdfProse(await buildProfilePdf({
+      name: 'P', samples: ramp(16), generatedAt: FIXED_DATE, coverageNote: 'Truncated: 4 of 2,601 points read',
+    }));
+    expect(fromLive).toContain('Truncated: 4 of 2,601 points read');
+  });
+
+  it('leaves a complete static source unchanged', async () => {
+    const rec = truncatedRecord(null);
+    expect('truncation' in rec.sources[0]!).toBe(false);
+    expect(rec.complete).toBe(true);
+    expect(describeProfileProvenance(rec)).toMatch(/^Full static source, complete read/);
+    const legend = buildDerivedSurfaceLegend({ samples: ramp(8), sources: [{ classification: 'producer', read: 'static' }] });
+    expect(legend.readScope).toBe('full-static');
+    const text = drawnPdfProse(await buildProfilePdf({ name: 'P', samples: ramp(16), generatedAt: FIXED_DATE, provenance: rec }));
+    expect(text).not.toContain('Truncated');
+  });
+});

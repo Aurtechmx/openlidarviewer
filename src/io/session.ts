@@ -1311,6 +1311,9 @@ function parseMeasurements(v: unknown): Measurement[] {
       const withheld = parseWithheldReadCounts(item.profileWithheld);
       if (withheld) m.profileWithheld = withheld;
       if (typeof item.profileMethod === 'string') m.profileMethod = item.profileMethod;
+      if (typeof item.profileCoverageNote === 'string' && item.profileCoverageNote !== '') {
+        m.profileCoverageNote = item.profileCoverageNote;
+      }
     } else if (k === 'volume') {
       const volume = parseVolumeRecord(item.volume);
       if (volume) m.volume = volume;
@@ -1428,6 +1431,12 @@ function parseProfileProvenance(v: unknown): ProfileProvenance | undefined {
       contributed: raw.contributed === true,
       // Unknown residency is null, never false: see `streamingIsComplete`.
       residency: raw.residency === true ? true : raw.residency === false ? false : null,
+      ...(raw.truncation && typeof raw.truncation === 'object' &&
+        isFiniteNum((raw.truncation as { read?: unknown }).read) &&
+        isFiniteNum((raw.truncation as { declared?: unknown }).declared) &&
+        (raw.truncation as { read: number }).read < (raw.truncation as { declared: number }).declared
+        ? { truncation: { read: (raw.truncation as { read: number }).read, declared: (raw.truncation as { declared: number }).declared } }
+        : {}),
     });
   }
   return {

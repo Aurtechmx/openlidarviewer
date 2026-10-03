@@ -116,6 +116,7 @@ import { buildDerivedSurfaceLegend } from './profileDerivedLegend';
 import type { DerivedSurfaceLegend, DerivedSurfaceSource } from './profileDerivedLegend';
 // What shaped the estimate, as the record the app keeps beside the sample.
 import { describeProfileProvenance } from './profileProvenance';
+import { combinedTruncationNote } from '../../io/truncation';
 import type { ProfileProvenance } from './profileProvenance';
 import { describeWithheldRead, type WithheldReadCounts } from '../../science/withheldCounts';
 // Height headings. `Elevation` is earned by an orthometric reference and by
@@ -190,6 +191,12 @@ export interface ProfilePdfInput {
    * provenance page rather than implying a read that was never recorded.
    */
   readonly provenance?: ProfileProvenance | null;
+  /**
+   * Truncation note for a profile sampled from a truncated file, e.g.
+   * "Truncated: 4 of 2,601 points read". Printed in the sheet notes. When
+   * absent, the record's truncated sources (if any) supply it.
+   */
+  readonly coverageNote?: string | null;
 }
 
 /**
@@ -435,7 +442,11 @@ function legendSources(record: ProfileProvenance | null | undefined): DerivedSur
     .map((s) => ({
       label: s.displayName !== '' ? s.displayName : s.layerId,
       classification: s.classification,
-      read: s.streaming ? ('streaming-resident' as const) : ('static' as const),
+      read: s.streaming
+        ? ('streaming-resident' as const)
+        : s.truncation != null
+          ? ('static-truncated' as const)
+          : ('static' as const),
     }));
 }
 
@@ -941,6 +952,9 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     sources: legendSources(record),
     excludedClasses: record?.classPolicy.excludedClasses,
   });
+  const coverage =
+    input.coverageNote?.trim() ||
+    combinedTruncationNote((record?.sources ?? []).filter((s) => s.contributed).map((s) => s.truncation));
   const lenStr = (m: number | null): string => (m == null ? '—' : formatLength(m, system));
   // A datum reading is not a magnitude — see `formatElevation`.
   const elevStr = (m: number | null): string => (m == null ? '—' : formatElevation(m, system));
@@ -956,6 +970,9 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       ? 'Provenance: no record of the sources read was attached to this export, so the ' +
         'contributing sources and the read scope are not recorded on this drawing.'
       : `Provenance: ${describeProfileProvenance(record)}`,
+    ...(coverage
+      ? [`Coverage: ${coverage}. The profile is sampled from the points read, not the whole file.`]
+      : []),
     input.withheld
       ? `Points: ${describeWithheldRead(input.withheld)} (${input.method ?? 'method not recorded'}).`
       : 'Points: Withheld handling not recorded; sampled before Withheld points were excluded.',

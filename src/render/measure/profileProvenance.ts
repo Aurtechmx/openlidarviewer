@@ -53,6 +53,7 @@ import { resolveSectionScope, streamingIsComplete } from './profileSectionSnapsh
 import type { ProfileSectionScope, StreamingCoverage } from './profileSectionSnapshot';
 import type { CrsLinearUnit } from '../../io/crs';
 import type { VerticalReference } from '../../geo/height';
+import type { Truncation } from '../../io/truncation';
 
 /**
  * Schema version of the provenance record itself.
@@ -119,6 +120,12 @@ export interface ProfileProvenanceSource {
    * node set to be complete over.
    */
   readonly residency: boolean | null;
+  /**
+   * For a static source read from a truncated file, the records read and the
+   * count the header declares. Absent for a complete read, so a record for a
+   * complete source serialises as it did before.
+   */
+  readonly truncation?: Truncation;
 }
 
 /** The class-exclusion policy the sample was taken under. */
@@ -199,6 +206,8 @@ export interface ProfileProvenanceSourceInput {
    * refuses to turn into a claim.
    */
   readonly coverage?: StreamingCoverage | null;
+  /** A static source's truncation, or null / absent for a complete read. */
+  readonly truncation?: Truncation | null;
 }
 
 /**
@@ -277,6 +286,9 @@ export function buildProfileProvenance(input: ProfileProvenanceInput): ProfilePr
       contributed: acceptedCount > 0,
       residency:
         s.streaming === true && s.coverage != null ? streamingIsComplete(s.coverage) : null,
+      ...(s.streaming !== true && s.truncation && s.truncation.read < s.truncation.declared
+        ? { truncation: { read: s.truncation.read, declared: s.truncation.declared } }
+        : {}),
     };
   });
   // Stable order: by layer id, then by accepted count, so the bytes do not
@@ -356,7 +368,9 @@ export function describeProfileProvenance(record: ProfileProvenance): string {
     ? 'Resident snapshot'
     : record.scope === 'mixed-full-and-resident'
       ? 'Mixed static and resident sources'
-      : 'Full static source';
+      : record.sources.some((s) => s.contributed && s.truncation != null)
+        ? 'Truncated static source'
+        : 'Full static source';
   const coverage =
     record.complete === true
       ? 'complete read'
@@ -423,6 +437,8 @@ function resolveCompleteness(
   contributing: readonly ProfileProvenanceSource[],
 ): boolean | null {
   if (scope === 'empty') return null;
+  // A truncated static source is a partial read, whatever the stream did.
+  if (contributing.some((s) => s.truncation != null)) return false;
   const streaming = contributing.filter((s) => s.streaming);
   if (streaming.length === 0) return true;
   if (streaming.some((s) => s.residency === false)) return false;

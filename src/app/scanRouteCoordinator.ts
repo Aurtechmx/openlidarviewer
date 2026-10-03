@@ -19,6 +19,7 @@
  * Viewer, a panel or a service wholesale, so the whole route runs in Node
  * against fakes.
  */
+import { truncationOf, truncationText, type Truncation } from '../io/truncation';
 import { classifyScanShape, type ScanShape, type SpaceKind } from '../terrain/scanShape';
 import {
   planScanRoute,
@@ -76,6 +77,8 @@ export interface ScanRouteFramePort {
   crsRevision(): number;
   /** The export basename for the current scan. */
   basename(): string;
+  /** The active scan's truncation record, or null for a complete read. */
+  truncation?(): Truncation | null | undefined;
 }
 
 /** The composed capture verdict the Inspector, report and exports state. */
@@ -124,6 +127,8 @@ export interface SpaceExportContext {
   readonly crsRevision: number;
   readonly upAxis: SpaceMetrics['up'];
   readonly basename: string;
+  /** Truncation note for the routed scan; absent for a complete read. */
+  readonly coverageNote?: string;
 }
 
 /** What a settled streaming poll can tell the route about the resident cloud. */
@@ -304,6 +309,7 @@ export function createScanRouteCoordinator(deps: ScanRouteCoordinatorDeps): Scan
         unitKnown,
         upAxis: shape.up,
         basename: frame.basename() || 'scan',
+        ...((t) => (t ? { coverageNote: truncationText(t) } : {}))(truncationOf({ metadata: { truncation: frame.truncation?.() ?? undefined } })),
       };
     } else if (plan.showObjectPanel) {
       // A forced non-terrain route with no usable geometry right now: the

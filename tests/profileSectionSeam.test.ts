@@ -475,3 +475,18 @@ describe('profile section seam — the two products walk one corridor', () => {
     expect(residentOnly()).toBe(true);
   });
 });
+
+describe('profile section seam — truncated static source', () => {
+  it('carries the truncation note on the series from a truncated layer', () => {
+    const l = { ...layer({ id: 't', points: [2, 0, 5, 4, 0, 6] }), truncation: { read: 4, declared: 2601 } };
+    const series = createProfileSectionSeam(deps({ layers: () => [l] })).sampleSeries(A, B, { corridorWidth: 1 })!;
+    expect(series.coverageNote).toBe('Truncated: 4 of 2,601 points read');
+  });
+
+  it('carries no note for a complete layer', () => {
+    const l = layer({ id: 'c', points: [2, 0, 5, 4, 0, 6] });
+    const series = createProfileSectionSeam(deps({ layers: () => [l] })).sampleSeries(A, B, { corridorWidth: 1 })!;
+    expect(series.coverageNote).toBeUndefined();
+    expect('coverageNote' in series).toBe(false);
+  });
+});

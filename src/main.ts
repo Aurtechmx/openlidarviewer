@@ -2147,7 +2147,7 @@ function newObjectPanel(
       softwareVersion: __APP_VERSION__,
       metricVersion: TERRAIN_METRIC_VERSION,
       generatedAt: new Date(),
-      unitToMetres: ctx.unitToMetres,
+      unitToMetres: ctx.unitToMetres, coverageNote: ctx.coverageNote,
       floorPlan,
       // The embedded plan's dimension line follows the live measurement unit
       // system, exactly like the standalone SVG sheet below.
@@ -2588,7 +2588,7 @@ const routeCoordinator = createScanRouteCoordinator({
     verticalUnitToMetres: () => { const c = crsService.context(); return verticalMetresPerUnit(c, 'horizontal') ?? c.linearUnitToMetres; },
     linearUnitKnown: () => crsService.context().linearUnitKnown,
     exportTargetId: () => scans.activeExportTargetId(), crsRevision: () => crsService.crsRevision(),
-    basename: () => lastCloudName,
+    basename: () => lastCloudName, truncation: () => scans.activeCloud()?.metadata?.truncation ?? null,
   },
   verdict: {
     get: () => captureProvenance.verdict(),

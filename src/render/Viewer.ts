@@ -1132,7 +1132,7 @@ export class Viewer {
             normals: e.cloud.normals,
             classificationFlags: e.cloud.classificationFlags,
           },
-          bounds: null,
+          bounds: null, truncation: e.cloud.metadata?.truncation ?? null,
         })),
       residentNodes: () =>
         [...this._streamingPickData.values()].map((e) => ({

@@ -60,6 +60,7 @@ import { integrableClouds, type IntegrableEntry } from '../integrableClouds';
 import { accumulatorOffset } from '../layerPlacement';
 import type { LayerSpatialTransform } from '../../geo/ProjectSpatialFrame';
 import type { ProfileChartSample, Vec3 } from './types';
+import { combinedTruncationNote, type Truncation } from '../../io/truncation';
 
 /**
  * One loaded static layer offered to the seam.
@@ -79,6 +80,8 @@ export interface ProfileSeamLayer extends IntegrableEntry {
   readonly bounds: ProfileSourceBounds | null;
   /** Float64 placement into the project frame; null/absent = identity. */
   readonly placement?: LayerSpatialTransform | null;
+  /** The source file's truncation, or null / absent for a complete read. */
+  readonly truncation?: Truncation | null;
 }
 
 /** One resident streaming node offered to the seam. */
@@ -125,6 +128,8 @@ export interface ProfileSeriesResult {
   withheld: WithheldReadCounts;
   /** The method tag the series was sampled under. */
   method: string;
+  /** Truncation note when a static source read was truncated; absent otherwise. */
+  coverageNote?: string;
 }
 
 /** User overrides for the derived series. Absent fields take the defaults. */
@@ -406,6 +411,7 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
       take({ pos, cls }, node.channels, true);
     }
     if (total === 0) return null;
+    const coverageNote = combinedTruncationNote(statics.map(({ layer }) => layer.truncation));
     // Flatten — cheap because only the resident set is walked. The assembler
     // folds each layer's Float64 placement into the project frame as it
     // copies (identity while mounting is off = the same bytes as before).
@@ -444,6 +450,7 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
       groundPercentile,
       withheld: withheldReadCounts(sourcePoints, withheldExcluded, everySourceFlagged),
       method: PROFILE_SERIES_METHOD_TAG,
+      ...(coverageNote ? { coverageNote } : {}),
     };
   }
 

@@ -374,13 +374,18 @@ export function buildProfileCsv(
   samples: ReadonlyArray<ProfileChartSample>,
   system: DisplayUnits,
   reference: VerticalReference,
+  coverageNote?: string | null,
 ): string {
   const unit = unitToken(system);
   // An unearned reference renames the column; it must NOT blank it. A blank
   // already means "the corridor saw no points here", and spending that signal
   // on a different problem would trade one silent wrong answer for another.
   const heightCol = `${heightColumnToken(reference)}_${unit}`;
+  // A truncated source gets one leading comment line; a complete read is
+  // byte-identical to before.
+  const note = coverageNote?.trim().replace(/[\r\n]+/g, ' ');
   const lines: string[] = [
+    ...(note ? [`# ${note}. Profile sampled from the points read.`] : []),
     `station,chainage_${unit},${heightCol},points,grade_to_next_pct`,
   ];
   for (const r of profileStationRows(samples, system)) {

@@ -88,6 +88,8 @@ export interface SpaceReportProvenance {
    * when absent, for the same reason as {@link measuredPointCount}.
    */
   readonly loadedPointCount: number | null;
+  /** Truncation note for a truncated source file; null for a complete read. */
+  readonly coverage?: string | null;
   readonly notSurveyGrade: string;
 }
 
@@ -103,6 +105,11 @@ export interface SpaceReportContent {
 }
 
 export interface SpaceReportInput {
+  /**
+   * Truncation note when the scan's file is truncated, e.g. "Truncated: 4 of
+   * 2,601 points read". Printed as a Coverage row; absent for a complete read.
+   */
+  readonly coverageNote?: string | null;
   /** Interior / object space metrics (capture quality + reasons live here). */
   readonly space: SpaceMetrics | null;
   /** Object metrics — required for the object branch; ignored for interior. */
@@ -408,6 +415,7 @@ function assemble(
     units: unitsLabel(scale),
     measuredPointCount: space?.quality.sampledPointCount ?? null,
     loadedPointCount: space?.quality.sourcePointCount ?? null,
+    coverage: input.coverageNote?.trim() || null,
     notSurveyGrade: NOT_SURVEY_GRADE_NOTE,
   };
   return {
@@ -460,6 +468,7 @@ export function spaceProvenanceLines(p: SpaceReportProvenance): string[] {
     kv('Scan type', p.scanType),
     kv('Units', p.units),
     kv('Points', `${i0(p.measuredPointCount)} measured / ${i0(p.loadedPointCount)} loaded in viewer`),
+    ...(p.coverage ? [kv('Coverage', `${p.coverage}. Figures are from the points read.`)] : []),
     kv('Note', p.notSurveyGrade),
     kv('Evidence', SPACE_REPORT_EVIDENCE_NOTE),
   ];
