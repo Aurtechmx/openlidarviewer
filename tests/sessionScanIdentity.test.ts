@@ -76,11 +76,12 @@ describe('matchSessionToScan', () => {
     expect(m.verdict).toBe('partial');
   });
 
-  test('a renamed file with identical geometry stays strong — geometry outranks the name', () => {
-    // Extents + point count match exactly; a rename alone cannot demote a scan
-    // that is spatially identical, so the verdict holds at strong.
+  test('a renamed file with identical geometry asks before applying', () => {
+    // Extents and point count match, but a different file name is not proof of
+    // the same scan, so the user confirms (partial), never a refusal.
     const m = matchSessionToScan(SCAN_A, loaded({ fileName: 'site-a-copy.laz' }));
-    expect(m.verdict).toBe('strong');
+    expect(m.verdict).toBe('partial');
+    expect(m.reasons.some((r) => /site-a-copy/.test(r))).toBe(true);
   });
 
   test('a differing CRS label is disclosure only, never a standalone verdict', () => {

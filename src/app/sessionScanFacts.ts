@@ -48,6 +48,8 @@ export interface StaticScanCloud {
     readonly min: readonly [number, number, number];
     readonly max: readonly [number, number, number];
   };
+  /** The file's absolute source origin; `bounds()` is relative to it. */
+  readonly sourceOrigin?: readonly [number, number, number];
   /** Source file format — drives the file's own up-axis (`isZUpFormat`). */
   readonly sourceFormat?: SourceFormat;
   readonly metadata?: {
@@ -108,6 +110,7 @@ export function scanFactsFromStreaming(cloud: StreamingScanSource): ScanFacts {
  */
 export function scanFactsFromStatic(cloud: StaticScanCloud): ScanFacts {
   const b = cloud.bounds();
+  const o = cloud.sourceOrigin;
   return {
     fileName: cloud.name,
     sourcePoints: cloud.declaredPointCount ?? cloud.decodedPointCount ?? cloud.pointCount,
@@ -116,6 +119,7 @@ export function scanFactsFromStatic(cloud: StaticScanCloud): ScanFacts {
     height: b.max[2] - b.min[2],
     crs: cloud.metadata?.crs?.name,
     epsg: cloud.metadata?.crs?.epsg,
+    ...(o ? { origin: [o[0], o[1], o[2]] as const, boundsMin: [o[0] + b.min[0], o[1] + b.min[1], o[2] + b.min[2]] as const } : {}),
   };
 }
 

@@ -573,7 +573,7 @@ describe('importSession — per-scan spatial-metadata guard (roadmap P1 #5)', ()
       },
     });
     await importSession(
-      asFile(sessionJson({ upAxis: 'z', scanSummary: strongSummary() })),
+      asFile(sessionJson({ upAxis: 'z', scanSummary: { ...strongSummary(), fileName: 'loaded.glb' } })),
       {},
       deps,
     );
@@ -616,7 +616,7 @@ describe('importSession — per-scan spatial-metadata guard (roadmap P1 #5)', ()
         sourceFormat: 'las',
       },
     });
-    await importSession(asFile(sessionJson({ upAxis: 'z', scanSummary: strongSummary() })), {}, deps);
+    await importSession(asFile(sessionJson({ upAxis: 'z', scanSummary: { ...strongSummary(), fileName: 'loaded.las' } })), {}, deps);
     expect(calls.loadMeasurements).toHaveBeenCalledTimes(1);
     expect(calls.showToast.mock.calls.every((c) => !/conflicts with this scan/.test(c[0] as string))).toBe(true);
   });
@@ -698,7 +698,7 @@ describe('importSession — persisted user CRS override round-trip (FIX 2)', () 
     const { deps, calls } = makeDeps({
       static: { name: 'loaded.glb', scanId: 'scan-1', pointCount: 1000, bounds: { min: [0, 0, 0], max: [10, 10, 3] }, sourceFormat: 'glb', crs: { epsg: 32614 } },
     });
-    await importSession(asFile(sessionJson({ upAxis: 'z', crs: userOverride({ epsg: 32613 }), scanSummary: strongSummary() })), {}, deps);
+    await importSession(asFile(sessionJson({ upAxis: 'z', crs: userOverride({ epsg: 32613 }), scanSummary: { ...strongSummary(), fileName: 'loaded.glb' } })), {}, deps);
     expect(calls.setCrsOverride).not.toHaveBeenCalled();
     expect(noConflict(calls)).toBe(false);
   });

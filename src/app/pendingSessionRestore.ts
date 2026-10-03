@@ -1,0 +1,24 @@
+/**
+ * pendingSessionRestore.ts: a session imported with no scan open.
+ *
+ * Its work is restored verbatim, in the frame of the scan it was saved over,
+ * and waits for that scan. The import records the file here; the next fresh
+ * scan open takes it and applies the session again through the scan match and
+ * the rebase, instead of clearing the restored annotations and views. Kept out
+ * of `sessionIo.ts` so the eager scan-open path does not load the session
+ * importer.
+ */
+
+let pending: File | null = null;
+
+/** Record (or with null, forget) the session waiting for its scan. */
+export function markPendingSessionRestore(file: File | null): void {
+  pending = file;
+}
+
+/** The session waiting for its scan, removed so it is applied once. */
+export function takePendingSessionRestore(): File | null {
+  const file = pending;
+  pending = null;
+  return file;
+}

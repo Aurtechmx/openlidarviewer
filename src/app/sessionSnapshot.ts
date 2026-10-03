@@ -39,6 +39,8 @@ export interface SessionSnapshotDeps {
    * applies exactly as before.
    */
   projectFrame?(): SessionFrameInput | null;
+  /** SHA-256 of the active scan's source bytes, when already computed. */
+  sourceSha256?(): string | null;
   readonly appVersion: string;
 }
 
@@ -99,6 +101,8 @@ export function serializeActiveSession(
       depth: b.max[1] - b.min[1],
       height: b.max[2] - b.min[2],
       ...(crs ? { crs: crs.name, crsUnit: crs.linearUnit, ...(crs.epsg != null ? { epsg: crs.epsg } : {}) } : {}),
+      boundsMin: [cloud.sourceOrigin[0] + b.min[0], cloud.sourceOrigin[1] + b.min[1], cloud.sourceOrigin[2] + b.min[2]],
+      ...(deps.sourceSha256?.() ? { sha256: deps.sourceSha256()! } : {}),
     };
   }
 

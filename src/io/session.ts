@@ -154,6 +154,13 @@ export interface SessionScanSummary {
   epsg?: number;
   /** Linear unit label, when known. */
   crsUnit?: string;
+  /**
+   * The scan's absolute bounds minimum (source origin plus the local minimum),
+   * in source-CRS units. Two tiles with one name and one size differ here.
+   */
+  boundsMin?: [number, number, number];
+  /** SHA-256 of the source bytes, when known at save time. */
+  sha256?: string;
 }
 
 /** Inclusive `[min, max]` point-filter windows persisted with a session. */
@@ -850,7 +857,35 @@ export interface ScanFacts {
   readonly crs?: string;
   /** Horizontal EPSG code, when known — canonical where the label is not. */
   readonly epsg?: number;
+  /** The loaded file's absolute source origin. */
+  readonly origin?: readonly [number, number, number];
+  /** The loaded scan's absolute bounds minimum. */
+  readonly boundsMin?: readonly [number, number, number];
+  /** SHA-256 of the loaded source bytes, when known. */
+  readonly sha256?: string;
 }
+
+/**
+ * The origin a session stored for the scan its summary describes. A multi-scan
+ * v8 file records each layer's own source origin in its project frame, and the
+ * top-level origin there is the project origin, so the layer named like the
+ * summary's file is used. Null when that layer cannot be told apart.
+ */
+export function sessionScanOrigin(session: InspectionSession): readonly [number, number, number] | null {
+  const frame = session.projectFrame;
+  if (!frame) return session.origin;
+  const name = session.scanSummary?.fileName.toLowerCase();
+  const hits = name ? frame.layers.filter((l) => l.sourceName.toLowerCase() === name) : [];
+  return hits.length === 1 ? hits[0]!.sourceOrigin : null;
+}
+
+/** Largest per-axis distance between two positions. */
+function shiftBetween(a: readonly number[], b: readonly number[]): number {
+  return Math.max(Math.abs(a[0]! - b[0]!), Math.abs(a[1]! - b[1]!), Math.abs(a[2]! - b[2]!));
+}
+
+/** A shift at or below this many source units is the same position. */
+const POSITION_TOLERANCE = 1e-3;
 
 /**
  * How confidently a session's stored scan fingerprint matches the loaded cloud.
@@ -892,15 +927,18 @@ function extentRelDiff(a: ScanFacts, b: ScanFacts): number | null {
  * cloud to a device, so a spans mismatch beyond a tolerance is a genuine
  * conflict. Point count corroborates but is NOT a standalone conflict — the same
  * scan reduced for a smaller device legitimately reports fewer points — so a
- * point mismatch only downgrades a would-be strong match to partial. File name
- * and CRS label are softer still (renames and equivalent CRS spellings are
- * common), contributing disclosure reasons but never a verdict on their own.
+ * point mismatch only downgrades a would-be strong match to partial. A file
+ * name that differs, a position that moved, or differing source digests also
+ * downgrade to partial, which asks before applying; a position that moved by
+ * more than the scan's own spans is a conflict. The CRS label is disclosure
+ * only (equivalent spellings are common).
  *
  * Pure — no DOM, no cloud objects — so it is fully unit-tested in Node.
  */
 export function matchSessionToScan(
   summary: SessionScanSummary | undefined,
   loaded: ScanFacts,
+  storedOrigin?: readonly [number, number, number] | null,
 ): ScanMatch {
   if (!summary) {
     return {
@@ -912,7 +950,7 @@ export function matchSessionToScan(
   const reasons: string[] = [];
   const rel = extentRelDiff(summary, loaded);
 
-  // File name / CRS are disclosure-only signals.
+  // File name and CRS label give the reasons; the name also gates 'strong' below.
   if (
     summary.fileName &&
     loaded.fileName &&
@@ -957,6 +995,22 @@ export function matchSessionToScan(
     }
   }
 
+  // Position. Two tiles of one survey share a name, a count and spans; where
+  // they sit is what tells them apart. The stored bounds minimum is compared
+  // when the file has one, else the origin it stored for this scan.
+  const nameDiffers = !!summary.fileName && !!loaded.fileName && summary.fileName.toLowerCase() !== loaded.fileName.toLowerCase();
+  let shift: number | null = null;
+  if (summary.boundsMin && loaded.boundsMin) shift = shiftBetween(summary.boundsMin, loaded.boundsMin);
+  else if (storedOrigin && loaded.origin) shift = shiftBetween(storedOrigin, loaded.origin);
+  const span = Math.max(summary.width, summary.depth, summary.height);
+  if (shift !== null && shift > POSITION_TOLERANCE) {
+    reasons.unshift(`the session's scan sits ${shift.toFixed(3)} units from the loaded scan`);
+    if (shift > span) return { verdict: 'conflict', reasons };
+  }
+  const moved = shift !== null && shift > POSITION_TOLERANCE;
+  const digestDiffers = !!summary.sha256 && !!loaded.sha256 && summary.sha256.toLowerCase() !== loaded.sha256.toLowerCase();
+  if (digestDiffers) reasons.push('the source file contents differ');
+
   if (crsCodeConflict) {
     return { verdict: 'conflict', reasons };
   }
@@ -968,7 +1022,7 @@ export function matchSessionToScan(
     reasons.unshift(`scan extents differ by ${(rel * 100).toFixed(0)}%`);
     return { verdict: 'conflict', reasons };
   }
-  if (rel <= 0.01 && !pointsDiffer) {
+  if (rel <= 0.01 && !pointsDiffer && !nameDiffers && !moved && !digestDiffers) {
     return { verdict: 'strong', reasons };
   }
   // Extents agree loosely (1–5%), or agree tightly but the point count moved —
@@ -1793,6 +1847,10 @@ function parseScanSummary(v: unknown): SessionScanSummary | null {
   if (typeof v.crs === 'string' && v.crs.length > 0) out.crs = v.crs;
   if (isFiniteNumber(v.epsg)) out.epsg = v.epsg;
   if (typeof v.crsUnit === 'string' && v.crsUnit.length > 0) out.crsUnit = v.crsUnit;
+  if (Array.isArray(v.boundsMin) && v.boundsMin.length === 3 && v.boundsMin.every(isFiniteNumber)) {
+    out.boundsMin = [v.boundsMin[0], v.boundsMin[1], v.boundsMin[2]];
+  }
+  if (typeof v.sha256 === 'string' && /^[0-9a-f]{64}$/i.test(v.sha256)) out.sha256 = v.sha256.toLowerCase();
   return out;
 }
 
