@@ -34,8 +34,10 @@ test('the reclassify panel mounts and its undo/redo buttons drive class edits', 
   await expect(armBtn).toBeAttached({ timeout: 10_000 });
   await expect(page.locator('[data-testid="reclass-class"]')).toBeAttached();
 
-  // No edits yet → undo and redo are disabled (state bound to the history).
-  await expect(undoBtn).toBeDisabled();
+  // The fill gave a scan with no classes its first codes, so Undo can take
+  // them off again; nothing is undone yet, so Redo stays disabled.
+  await page.evaluate(() => (window as unknown as { __OLV_TEST_API__: { refreshReclassify: () => void } }).__OLV_TEST_API__.refreshReclassify());
+  await expect(undoBtn).toBeEnabled();
   await expect(redoBtn).toBeDisabled();
 
   // Make an edit through the engine seam, then refresh the panel: undo enables.
@@ -81,4 +83,42 @@ test('the reclassify panel mounts and its undo/redo buttons drive class edits', 
   await expectHittable(redoBtn);
   await redoBtn.click();
   expect(await page.evaluate(() => (window as unknown as { __OLV_TEST_API__: { classAt: (i: number) => number } }).__OLV_TEST_API__.classAt(0))).toBe(6);
+});
+
+test('undoing the first classification of a scan returns it to no classes', async ({ page }) => {
+  await page.goto('/?test=1');
+  await dropDenseGridPly(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  type Api = {
+    seedUniformClass: (cls: number) => number;
+    showReclassify: () => Promise<void>;
+    refreshReclassify: () => void;
+    classAt: (i: number) => number;
+  };
+  expect(await page.evaluate(() => (window as unknown as { __OLV_TEST_API__: Api }).__OLV_TEST_API__.classAt(0))).toBe(-1);
+  await page.evaluate(async () => {
+    const a = (window as unknown as { __OLV_TEST_API__: Api }).__OLV_TEST_API__;
+    a.seedUniformClass(2);
+    await a.showReclassify();
+    a.refreshReclassify();
+  });
+  const undoBtn = page.locator('[data-testid="reclass-undo"]');
+  const redoBtn = page.locator('[data-testid="reclass-redo"]');
+  await expect(undoBtn).toBeEnabled({ timeout: 10_000 });
+
+  await openClassesPage(page);
+  await railChromeSettled(page);
+  await expectHittable(undoBtn);
+  await undoBtn.click();
+  expect(await page.evaluate(() => (window as unknown as { __OLV_TEST_API__: Api }).__OLV_TEST_API__.classAt(0))).toBe(-1);
+  await expect(undoBtn).toBeDisabled();
+  await expect(redoBtn).toBeEnabled();
+  // The Classes legend is back in its no-classification empty state.
+  await expect(page.locator('.olv-class-panel .olv-cl-empty')).toBeVisible();
+  await expect(page.locator('.olv-class-panel .olv-cl-row')).toHaveCount(0);
+
+  await page.mouse.move(1, 1);
+  await expectHittable(redoBtn);
+  await redoBtn.click();
+  expect(await page.evaluate(() => (window as unknown as { __OLV_TEST_API__: Api }).__OLV_TEST_API__.classAt(0))).toBe(2);
 });
