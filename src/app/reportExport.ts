@@ -49,7 +49,7 @@ import type { ScanService } from './ScanService';
 import type { loadReportEngine } from '../lazyChunks';
 import { streamingFormatToken } from '../render/streaming/StreamingSource';
 import { classificationCoverage } from '../render/class/classificationCoverage';
-import { truncationNote } from '../io/truncation';
+import { truncationNote, truncationOf, truncationText } from '../io/truncation';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure decisions the extraction exposes — decidable without a Viewer, the report
@@ -335,7 +335,12 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     // `pointCount` is the rendered subset. The client PDF must describe the
     // FILE — use the declared total (and the density that follows from it) when
     // striding reduced the in-memory count, matching the Scan Report panel.
-    const fileN = reportPointCount(staticCloud.declaredPointCount, staticCloud.pointCount);
+    // A TRUNCATED file is different: the body held fewer records than the
+    // header declares, so the bounds describe only the points read. Pairing the
+    // declared total with those bounds would inflate the density, so the read
+    // count drives density + footprint and the report states it as partial.
+    const trunc = truncationOf(staticCloud);
+    const fileN = trunc ? trunc.read : reportPointCount(staticCloud.declaredPointCount, staticCloud.pointCount);
     // Same one-context rule as the streaming path above — RESOLVED active CRS,
     // not the file's declared metadata, so an override drives the report's units.
     // Footprint + density in metres / pts·m⁻² (see reportFootprint): a foot-CRS
@@ -369,6 +374,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
       // Class-filter honesty — when a filter narrows the live view, disclose
       // it so the PDF's full-cloud figures aren't read as filter-scoped.
       ...(deps.classScopeStamp() ? { classScopeNote: deps.classScopeStamp() } : {}),
+      ...(trunc ? { coverageNote: truncationText(trunc), declaredPointCount: trunc.declared } : {}),
     };
     exportFileStem = deps.baseName(staticCloud.name);
   } else {

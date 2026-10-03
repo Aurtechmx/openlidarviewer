@@ -134,17 +134,18 @@ the two entries were renumbered when the branches were integrated.
 | L226 | UI | TEST | low | FIXED | new | On a phone, a scan-ready prompt that wrapped to three or four lines covered the state strip at 320 and 375 px wide, and without the strip it covered the dock. |
 | L228 | EXPORT | TEST | high | FIXED | new | A measurement taken on a scan that was then closed exported through the open scan's origin under its name, and a scan or unit change while the measurement export loaded mixed one scan's geometry with another's scale. |
 | L229 | UI | TEST | med | FIXED | new | The findings panel read "Exported a report" even when the export was refused or failed, opening another scan and adding measurements discarded the first scan's findings with no warning, Clear all emptied the list in one click with no Undo, and a findings report could take the next scan's name, CRS and epoch when the scan changed while the export loaded. |
+| L230 | EXPORT | TEST | medium | FIXED | new | The scan report PDF for a truncated file divided the header's declared point total by the extent of the points read, which inflated the density, and printed no truncation note. |
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 83
+- FIXED: 84
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 105
+- total: 106
 
 ## Detail
 
@@ -8549,3 +8550,21 @@ Tests: `tests/findingsLedgerSafety.test.ts`, `tests/findingsExportScanPin.test.t
 `tests/exportPanelFindingsScanSwitch.test.ts`, `tests/sessionFindingsOwner.test.ts`,
 `tests/findingsPanel.test.ts`, `tests/exportActionsVerify.test.ts`,
 `tests/stateStripLive.test.ts`.
+
+### L230 · FIXED · EXPORT
+
+The static-cloud path of `src/app/reportExport.ts` took the declared total
+whenever it exceeded the in-memory count. That is right for a strided display
+subset, where the whole file was read, and wrong for a truncated file
+(`metadata.truncation.read < declared`): the declared total was divided by the
+extent of the partial data, so a file with 4 of 2,601 points read reported a
+density about 650 times too high. The report now uses the read count for the
+density and footprint when `truncationOf` is set. The dataset summary states
+the points as read of declared and adds a Coverage row with the truncation
+text, the density finding says it is from the points read, and the inspection
+caveats carry the same note. A strided file is unchanged.
+
+Tests: `tests/reportExport.test.ts` (a truncated cloud of 4 of 2,601 points:
+density from 4 points, the Points and Coverage rows and the caveat; a strided
+cloud keeps the declared 2,000).
+
