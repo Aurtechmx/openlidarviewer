@@ -28,7 +28,7 @@ from the tree and fails when a cell drifts.
 | Geo | `src/geo` | ~5.2k | CRS math, `ProjectSpatialFrame`, transforms. |
 | Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~49k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. UI-free by lint. |
 | I/O | `src/io` | ~38k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
-| Render | `src/render` | ~75k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
+| Render | `src/render` | ~76k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
 | Export / report | `src/export`, `src/report`, `src/convert` | ~15k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~24k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~39k | Panels, Inspector, Studio surfaces, onboarding. |
@@ -250,7 +250,7 @@ that must touch nothing but the pose (`tests/viewStateCoordinator.test.ts`). The
 field order and the present/absent guards stay in `src/io/viewState.ts`.
 `main.ts` keeps five thin delegates and the deps object.
 
-`src/render/Viewer.ts` (6,022): the constructor and a handful of large
+`src/render/Viewer.ts` (5,994): the constructor and a handful of large
 methods dominate:
 
 Done: the renderer, scene, cameras and EDL pipeline are built by

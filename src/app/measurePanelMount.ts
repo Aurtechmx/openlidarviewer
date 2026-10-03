@@ -33,7 +33,7 @@ export type {
 import type { MeasurePanel } from '../ui/MeasurePanel';
 import type { Viewer } from '../render/Viewer';
 import type { CrsService } from '../geo/CrsService';
-import type { MeasurementSummary } from '../render/measure/MeasureController';
+import type { MeasurementSummary, RemovedMeasurement } from '../render/measure/MeasureController';
 import type { ProfileWorkbenchLauncher } from './profileWorkbenchLauncher';
 import type { WorkbenchSectionScene } from './profileWorkbenchSection';
 
@@ -53,6 +53,8 @@ export interface MeasurePanelMountDeps {
   exportSession: () => unknown;
   handleFile: (file: File) => unknown;
   recordUsage: (category: 'measurement', kind: string) => void;
+  /** The app's one toast; a delete offers its Undo there. */
+  toast?: (message: string, action?: { label: string; onClick: () => void }) => void;
   /**
    * The stage the docked Profile Workbench shares its box with. Absent — the
    * bare and embed layouts, which build no stage — leaves the profile Expand
@@ -212,6 +214,12 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
     );
   }
 
+  function offerUndo(removed: RemovedMeasurement): void {
+    panel?.offerUndo(`Deleted ${removed.measurement.name}.`, () => {
+      if (deps.getViewer().measure.restoreMeasurement(removed)) refresh();
+    }, deps.toast, () => deps.getViewer().measure.drafting);
+  }
+
   /** Construct the panel; the controller drives its measurement list. */
   function construct(Ctor: MeasurePanelCtor): MeasurePanel {
     const viewer = deps.getViewer();
@@ -220,7 +228,8 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
         // The dock plots THIS measurement's corridor, and a deleted
         // measurement has none left to plot.
         if (id === dockedId) closeWorkbench();
-        viewer.measure.removeMeasurement(id);
+        const removed = viewer.measure.removeMeasurement(id);
+        if (removed) offerUndo(removed);
       },
       onRename: (id, name) => viewer.measure.renameMeasurement(id, name),
       onExport: () => void deps.exportSession(),

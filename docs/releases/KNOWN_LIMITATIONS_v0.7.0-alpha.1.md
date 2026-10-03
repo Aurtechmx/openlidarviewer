@@ -270,7 +270,7 @@ for this development cut: that evidence comes from the engines themselves.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,429 lines and `src/render/Viewer.ts` is 6,022, two hundred and one lines
+`src/main.ts` is 4,429 lines and `src/render/Viewer.ts` is 5,994, two hundred and twenty-nine lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
@@ -280,12 +280,13 @@ together as one object, which is fewer lines here and one thing to reach for
 there. The frame gained a decision while the file lost lines. The two-finger
 pinch and pan now share one screen-space shift, which took another
 thirty-six out. The figure view context moved into the export adapter, which
-took twenty-one more. A shrink-only lint
+took twenty-one more. The measure click handling moved into the
+measurement controller, which took twenty-eight more. A shrink-only lint
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 97 for the shell, 75 for the renderer and 23 for the Analyse panel,
-across 1063 modules with no dependency cycles.
+across 1064 modules with no dependency cycles.
 
 ## The shell has little headroom
 

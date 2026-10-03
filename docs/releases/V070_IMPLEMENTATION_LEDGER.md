@@ -129,17 +129,18 @@ the two entries were renumbered when the branches were integrated.
 | L224 | EXPORT | TEST | med | FIXED | new | An image export button had no guard, so a double click or Enter started two exports, and the point-cloud and Report PDF buttons came back after a fixed 1.5 s while a slow export could still be running. |
 | L221 | SCIENTIFIC | TEST | high | FIXED | new | With two scans open, the GeoJSON and CSV measurement exports placed every measurement through the active scan's origin and named the file after it, so scan A's points were written 100 m east and 49 m down on scan B. A truncated LAS opened as a full dataset with no warning. A scan with no CRS showed its measurements in metres beside "datum resolved". |
 | L225 | UI | TEST | low | FIXED | new | With the right rail collapsed, the project card centred into the freed band and its close button sat under the floating colour key's header at 1024 px wide. |
+| L222 | UI | TEST | high | FIXED | new | One click on a measurement's delete control removed it with no Undo. A click on an existing measurement's vertex while placing was taken by the vertex handle and placed nothing. A drag to orbit while measuring placed a point. An active clip box showed only on the Clip page, and Export read "Scan scope: Full cloud" while it wrote the clipped points. |
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 78
+- FIXED: 79
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 100
+- total: 101
 
 ## Detail
 
@@ -8421,3 +8422,32 @@ Tests: `tests/e2e/largeTouchLayout.spec.ts` (fine pointer 1440, 1280 and
 768, 800, 880, 900, 1024 and 1280 px with the left rail expanded and
 collapsed and the key floating: the card meets neither rail, its tab nor the
 key, and no control sits under another).
+
+### L222 · FIXED · UI
+
+Measuring and clipping defects.
+
+- Deleting a measurement shows a toast with Undo. Undo, or Ctrl+Z / Cmd+Z
+  while the toast shows, puts the measurement back with its id, name, owner
+  and place in the list. `MeasureController.removeMeasurement` returns the
+  removed record and `restoreMeasurement` refuses it once the list was
+  cleared or replaced. Once a new measurement is being drafted the offer
+  ends, so Ctrl+Z removes the last draft point.
+- While a tool is placing, a press and release on an existing vertex handle
+  places a point on that vertex. A press that moves more than 4 CSS px still
+  drags the vertex.
+- A canvas click whose press moved more than 4 CSS px (10 px for touch, the
+  tap slop) places nothing, so a drag to orbit leaves the measurement as it
+  was. The click handling moved from `Viewer.ts` into `MeasureController.clickAt`.
+- An active clip shows on the state strip as "Clipped: N of M points" and
+  opens the Clip page. The Export panel's scan scope and summary state the
+  kept count, and the written file's provenance lines carry the same line.
+  Which points an export writes is unchanged.
+- A Box whose two corners sit at one height says why its volume is 0.
+- Help and Commands opened from the dock with the keyboard return focus to
+  their dock button on close. The six clip extents have accessible names.
+
+Tests: `tests/measureClickUndo.test.ts`, `tests/stateStripLive.test.ts`,
+`tests/exportInputDigests.test.ts`, `tests/e2e/measure.spec.ts`,
+`tests/e2e/measurePicker.spec.ts`, `tests/e2e/clip.spec.ts`,
+`tests/e2e/dialogFocus.spec.ts`.

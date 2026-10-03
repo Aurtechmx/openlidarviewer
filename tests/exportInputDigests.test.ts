@@ -409,6 +409,14 @@ describe('point re-save (convert)', () => {
     expect(dec(convertCloud(cloud(), { format: 'xyz' }).file!).startsWith('#')).toBe(false);
   });
 
+  it('a clipped export states the clip after the digests', () => {
+    const note = 'Clipped: 2 of 5 points';
+    const las = convertCloud(cloud(), { format: 'las', digests: D, scopeNote: note }).file!;
+    expect(textArea(las.bytes)?.text).toBe(`Source SHA-256: ${SHA}\n${ORIGIN_LINE}\n${note}`);
+    const xyz = new TextDecoder().decode(convertCloud(cloud(), { format: 'xyz', scopeNote: note }).file!.bytes);
+    expect(xyz.startsWith(`# ${note}\n`)).toBe(true);
+  });
+
   it('the batch converter hashes each input file\'s own bytes', async () => {
     const bytes = new TextEncoder().encode('source bytes');
     const [r] = await runBatch(

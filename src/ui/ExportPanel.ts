@@ -38,6 +38,7 @@ import {
 import { sameExportTarget, EXPORT_SCAN_CHANGED_REFUSAL } from '../export/exportScanIdentity';
 import { clipCloud } from '../render/clip/clipCloud';
 import type { ClipBox } from '../render/clip/clipBox';
+import { clipScope, clipScopeText, subscribeClipScope } from '../render/clip/clipScope';
 import type { ExportFormat } from '../io/exporters';
 import type { ExportMode } from '../export/types';
 import { buildExportDeliverables, type ExportDeliverables } from './export/exportDeliverables';
@@ -423,6 +424,7 @@ export class ExportPanel {
     this._renderClassRow();
     this._renderSummary();
     this._renderProducts();
+    subscribeClipScope(() => { this._renderHealth(); this._renderSummary(); });
   }
 
   setVisible(on: boolean): void {
@@ -461,7 +463,12 @@ export class ExportPanel {
     if (!health) return;
     // The sample item's fix is the full-resolution box below: one click ticks it.
     const canFullRes = this._cb.hasFullSource() && this._cb.isReduced();
-    this._health.append(renderExportHealthPanel(health, canFullRes ? { fullResolution: () => this._useFullRes() } : {}));
+    // An active clip limits what the point-cloud export writes, so the scope says so.
+    const clip = clipScope();
+    this._health.append(renderExportHealthPanel(health, {
+      fullResolution: canFullRes ? () => this._useFullRes() : undefined,
+      scope: clip ? clipScopeText(clip) : undefined,
+    }));
   }
 
   /** Tick Convert at full resolution and put focus on it. */
@@ -631,8 +638,9 @@ export class ExportPanel {
       this._summaryNote.classList.add('olv-hidden');
       return;
     }
+    const clip = this._fullRes ? null : clipScope();
     const input: ExportSummaryInput = {
-      pointCount: info.pointCount,
+      pointCount: clip ? clip.kept : info.pointCount,
       format: this._format,
       hasRgb: info.hasRgb,
       hasGpsTime: info.hasGpsTime,
@@ -1230,6 +1238,8 @@ export class ExportPanel {
       // box the user had set when they pressed Export (captured above).
       const clipped = clip?.enabled;
       const cloud = clipped ? clipCloud(sourceCloud, clip) : sourceCloud;
+      const scopeNote = cloud === sourceCloud ? null
+        : clipScopeText({ kept: cloud.pointCount, total: sourceCloud.pointCount });
       showBusyScan(this._exportBtn, 'Exporting…');
       // The loaded cloud names the source File; a full-resolution re-decode reads the same one.
       const { convertCloud, resolveExportDigests } = await loadConvertEngine();
@@ -1260,6 +1270,7 @@ export class ExportPanel {
         resolvedSourceCrs,
         omitClassification: !includeClass,
         allowLegacyClassWrap: allowClassWrap,
+        scopeNote,
       };
       const { file, report } = convertCloud(cloud, options);
       if (file) {
@@ -1280,7 +1291,7 @@ export class ExportPanel {
         }
         const warn = report.log.find((l) => l.level === 'warn');
         const reducedNote = !useFull && this._cb.isReduced() ? ' · reduced view' : '';
-        const clipNote = clipped ? ' · clipped to box' : '';
+        const clipNote = scopeNote ? ` · ${scopeNote}` : '';
         this._setStatus(
           warn ? warn.message : `Exported ${report.pointCount.toLocaleString()} points${reducedNote}${clipNote} · ${report.crsNote}`,
           warn || reducedNote ? 'warn' : 'info',

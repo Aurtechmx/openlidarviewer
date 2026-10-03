@@ -1624,7 +1624,7 @@ const measureMount = createMeasurePanelMount({
   getViewer: () => viewer,
   crsService,
   getExportPanel: () => exportPanel,
-  exportSession, handleFile,
+  exportSession, handleFile, toast: showLassoToast,
   recordUsage,
   workbenchStage: stage,
   onWorkbenchClose: () => analyseProfileVisibility.restore(),

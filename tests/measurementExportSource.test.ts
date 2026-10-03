@@ -181,6 +181,14 @@ describe('a point picked on a scan that is not the active one', () => {
     expect(out.refusals[0]).toContain('Distance x has points on scans whose heights are not in one frame');
   });
 
+  it('refuses a Distance on A whose second point was snapped to a vertex picked on B, when B is placed differently', async () => {
+    // pickLayers as MeasureController records a snap onto a measurement taken on B.
+    const m: Measurement = { ...owned('s', 'layer-a', [[4, 2, 1], [104, 5, 0]]), name: 'Distance s', pickLayers: ['layer-a', 'layer-b'] };
+    const out = await run([m], GEO('geom-a.las', A_ORIGIN), { view: view({ cloud_0: null, cloud_1: [100, 0, 0] }), stableIdFor });
+    expect(out.downloads).toEqual([]);
+    expect(out.refusals[0]).toContain('Distance s has points on scans whose heights are not in one frame');
+  });
+
   it('exports a measurement across scans that share one frame', async () => {
     const m: Measurement = { ...owned('x', 'layer-a', [[4, 2, 1], [101, 1, -49]]), pickLayers: ['layer-a', 'layer-b'] };
     const out = await run([m], GEO('geom-a.las', A_ORIGIN), { view: view({ cloud_0: null, cloud_1: [100, 0, -49] }), stableIdFor });

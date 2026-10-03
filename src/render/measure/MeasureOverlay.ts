@@ -155,7 +155,7 @@ export class MeasureOverlay {
 
     // Filled polygons sit behind everything else.
     for (const poly of model.polygons) {
-      const pts = poly.points.map((p) => this._project(p, camera, w, h));
+      const pts = poly.points.map((p) => this.project(p, camera, w, h));
       if (pts.length < 3 || pts.some((p) => !p.visible)) continue;
       kids.push(
         svg('polygon', {
@@ -167,8 +167,8 @@ export class MeasureOverlay {
 
     // Edges.
     for (const e of model.edges) {
-      const a = this._project(e.a, camera, w, h);
-      const b = this._project(e.b, camera, w, h);
+      const a = this.project(e.a, camera, w, h);
+      const b = this.project(e.b, camera, w, h);
       if (!a.visible || !b.visible) continue;
       kids.push(
         svg('line', {
@@ -186,7 +186,7 @@ export class MeasureOverlay {
     // polygon) render with a pulsing cyan ring BEHIND the dot so the
     // user sees the "click here to finish" affordance at a glance.
     for (const vx of model.vertices) {
-      const p = this._project(vx.p, camera, w, h);
+      const p = this.project(vx.p, camera, w, h);
       if (!p.visible) continue;
       if (vx.role === 'snap-target') {
         kids.push(
@@ -222,7 +222,7 @@ export class MeasureOverlay {
 
     // Labels — projected, then nudged apart so values never overlap.
     const onScreen = model.labels
-      .map((l) => ({ l, p: this._project(l.anchor, camera, w, h) }))
+      .map((l) => ({ l, p: this.project(l.anchor, camera, w, h) }))
       .filter((x) => x.p.visible);
     const boxes: LabelBox[] = onScreen.map((x) => ({
       x: x.p.x,
@@ -278,7 +278,7 @@ export class MeasureOverlay {
   }
 
   /** Project a world point to canvas pixels; `visible` is false when behind. */
-  private _project(
+  project(
     p: Vec3,
     camera: THREE.PerspectiveCamera,
     w: number,

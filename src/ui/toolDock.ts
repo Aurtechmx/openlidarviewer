@@ -324,8 +324,10 @@ export class ToolDock {
     }
     if (spec.onClick) {
       const handler = spec.onClick;
-      button.addEventListener('click', () => {
-        if (spec.blur) button.blur();
+      button.addEventListener('click', (e) => {
+        // A pointer click drops focus; a keyboard press keeps it, so a dialog
+        // the press opens can hand focus back here when it closes.
+        if (spec.blur && e.detail !== 0) button.blur();
         handler();
       });
     }

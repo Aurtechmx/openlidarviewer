@@ -15,6 +15,7 @@ import type { ScanFacts, Coverage } from '../../process/ProcessPlan';
 import type { AnalysisRow } from '../../process/analysisStatus';
 import type { ResultEntry } from '../results/resultsIndex';
 import type { TaskActivity } from '../../process/taskActivity';
+import type { ClipScope } from '../../render/clip/clipScope';
 import {
   datasetNameProvider,
   horizontalCrsProvider,
@@ -46,6 +47,8 @@ export interface StripLiveReads {
   results(): readonly Pick<ResultEntry, 'id' | 'status'>[];
   /** Live tasks from the task-activity store. */
   tasks(): readonly TaskActivity[];
+  /** The clip box's kept count, or null when no clip is on. */
+  clip?(): ClipScope | null;
 }
 
 export interface StripSnapshot {
@@ -53,6 +56,7 @@ export interface StripSnapshot {
   readonly horizontal: StripFact<HorizontalCrs> | null;
   readonly vertical: StripFact<VerticalRef> | null;
   readonly basis: StripFact<Coverage> | null;
+  readonly clip?: ClipScope | null;
   readonly processing: StripFact<Processing> | null;
   readonly review: StripFact<ReviewSummary> | null;
 }
@@ -79,6 +83,7 @@ export function readStrip(r: StripLiveReads): StripSnapshot | null {
     horizontal: context ? horizontalCrsProvider(context, resolved) : null,
     vertical: context ? verticalReferenceProvider(context) : null,
     basis: safely(() => layerBasisProvider(r.scanFacts()), null),
+    clip: safely(() => r.clip?.() ?? null, null),
     processing: safely(() => processingProvider(r.tasks()), null),
     review: safely(() => reviewStateProvider(r.analysisRows(), r.results()), null),
   };

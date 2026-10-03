@@ -12,6 +12,7 @@
 import { el } from './dom';
 import type { ClipBox, ClipMode } from '../render/clip/clipBox';
 import type { BoxBounds } from '../render/measure/geometry';
+import { setClipScope } from '../render/clip/clipScope';
 
 export interface ClipPanelCallbacks {
   /** Apply the clip (or `null`/disabled to clear it) to the viewer. */
@@ -91,6 +92,8 @@ export class ClipPanel {
       const mx = this._numInput((v) => { this._max[axis] = v; this._applyDebounced(); });
       this._minInputs[axis] = mn;
       this._maxInputs[axis] = mx;
+      mn.setAttribute('aria-label', `${label} min`);
+      mx.setAttribute('aria-label', `${label} max`);
       grid.append(
         el('span', { className: 'olv-clip-axis', text: label }),
         mn,
@@ -150,6 +153,7 @@ export class ClipPanel {
       this._enabled = false;
       this._enableBox.checked = false;
       this._cb.onApply(null);
+      setClipScope(null);
     }
   }
 
@@ -189,8 +193,10 @@ export class ClipPanel {
       this._readout.textContent = c
         ? `${c.kept.toLocaleString()} of ${c.total.toLocaleString()} points kept.`
         : '';
+      setClipScope(c);
     } else {
       this._readout.textContent = 'Enable to clip the scan to the box above.';
+      setClipScope(null);
     }
   }
 
@@ -252,8 +258,10 @@ export class ClipPanel {
       this._readout.textContent = c
         ? `${c.kept.toLocaleString()} of ${c.total.toLocaleString()} points kept.`
         : '';
+      setClipScope(c);
     } else {
       this._readout.textContent = 'Enable to clip the scan to the box above.';
+      setClipScope(null);
     }
   }
 }

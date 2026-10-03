@@ -13,11 +13,12 @@ import './stateStrip.css';
 import { el } from './dom';
 import { STATE_GLYPH, STATE_LABEL, type SciState } from './stateChip';
 import { linearUnitLabel } from '../io/crs';
+import { clipScopeText } from '../render/clip/clipScope';
 import type { StripSnapshot } from '../app/stateStrip/stripReads';
 import type { Coverage } from '../process/ProcessPlan';
 import { formatWait, WAIT_SHOWN_AFTER_MS } from '../process/waitClock';
 
-export type StripItemId = 'dataset' | 'crs' | 'vertical' | 'basis' | 'processing' | 'review';
+export type StripItemId = 'dataset' | 'crs' | 'vertical' | 'basis' | 'clip' | 'processing' | 'review';
 
 export interface StateStripHost {
   /** Open the place that explains the item. */
@@ -42,6 +43,7 @@ const ITEM_NAME: Readonly<Record<StripItemId, string>> = {
   crs: 'Horizontal CRS',
   vertical: 'Vertical reference',
   basis: 'Basis',
+  clip: 'Clip box',
   processing: 'Processing',
   review: 'Review and blocked',
 };
@@ -51,6 +53,7 @@ const ITEM_TARGET: Readonly<Record<StripItemId, string>> = {
   crs: 'Opens the coordinate system in Data',
   vertical: 'Opens the coordinate system in Data',
   basis: 'Opens Data',
+  clip: 'Opens the Clip box',
   processing: 'Opens Analyse',
   review: 'Opens the Analyse list of affected items',
 };
@@ -63,7 +66,7 @@ function caution(v: SciState): boolean {
 export function createStateStrip(host: StateStripHost): StateStrip {
   const element = el('nav', { className: 'olv-state-strip olv-hidden', ariaLabel: 'Scan state' });
   const buttons = new Map<StripItemId, HTMLButtonElement>();
-  const ids: StripItemId[] = ['dataset', 'crs', 'vertical', 'basis', 'processing', 'review'];
+  const ids: StripItemId[] = ['dataset', 'crs', 'vertical', 'basis', 'clip', 'processing', 'review'];
   for (const id of ids) {
     const b = el('button', { className: `olv-ss-item olv-ss-${id}`, type: 'button', tip: ITEM_TARGET[id] });
     b.dataset.item = id;
@@ -118,6 +121,7 @@ export function createStateStrip(host: StateStripHost): StateStrip {
       );
       paint('vertical', s.vertical?.value.label ?? null, s.vertical?.validity ?? null);
       paint('basis', s.basis ? BASIS_TEXT[s.basis.value] : null, s.basis?.validity ?? null);
+      paint('clip', s.clip ? clipScopeText(s.clip) : null, s.clip ? 'info' : null);
       const p = s.processing?.value;
       paint(
         'processing',

@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropTinyPly, dropDenseGridPly, showWorkspaceMode } from './helpers';
+import { dropTinyPly, dropDenseGridPly, showWorkspaceMode, placeTestDistance } from './helpers';
 
 /**
  * Measurement toolkit coverage — the toolbar, kind picker, and units toggle
@@ -260,4 +260,70 @@ test('exporting produces a session download', async ({ page }) => {
   // The export uses the current scan's name with an `.olvsession` suffix —
   // the canonical v3 session-file extension.
   expect(download.suggestedFilename()).toMatch(/\.olvsession$/);
+});
+
+/** The dense grid open with Measure on, through `?test=1` for the setup seam. */
+async function denseMeasure(page: Page): Promise<void> {
+  await page.goto('/?test=1');
+  await dropDenseGridPly(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await page.waitForTimeout(1500);
+  await page.locator('.olv-tool', { hasText: 'Measure' }).click();
+  await expect(page.locator('.olv-measure-bar')).toBeVisible();
+}
+
+test('deleting a measurement offers Undo, and Ctrl+Z or Cmd+Z restores it', async ({ page }) => {
+  await denseMeasure(page);
+  await placeTestDistance(page);
+  const name = await page.locator('.olv-mp-name').inputValue();
+  const toast = page.locator('.olv-lasso-toast.olv-visible');
+
+  await page.locator('.olv-mp-del').click();
+  await expect(page.locator('.olv-mp-row')).toHaveCount(0);
+  await expect(toast).toContainText(`Deleted ${name}.`);
+  await toast.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.locator('.olv-mp-row')).toHaveCount(1);
+  await expect(page.locator('.olv-mp-name')).toHaveValue(name);
+
+  await page.locator('.olv-mp-del').click();
+  await expect(page.locator('.olv-mp-row')).toHaveCount(0);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(page.locator('.olv-mp-row')).toHaveCount(1);
+  await expect(page.locator('.olv-mp-name')).toHaveValue(name);
+});
+
+test('Ctrl+Z while drafting after a delete removes the draft point, not the delete', async ({ page }) => {
+  await denseMeasure(page);
+  await placeTestDistance(page);
+  await page.locator('.olv-mp-del').click();
+  await expect(page.locator('.olv-mp-row')).toHaveCount(0);
+  await expect(page.locator('.olv-lasso-toast.olv-visible')).toBeVisible();
+
+  const hint = page.locator('.olv-measure-hint-text:visible');
+  await expect(hint).toContainText('first point');
+  const box = (await page.locator('canvas').first().boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(hint).toContainText('second point');
+
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(hint).toContainText('first point');
+  await expect(page.locator('.olv-mp-row')).toHaveCount(0);
+});
+
+test('a drag while measuring orbits and places no point; a click still places one', async ({ page }) => {
+  await denseMeasure(page);
+  const hint = page.locator('.olv-measure-hint-text:visible');
+  await expect(hint).toContainText('first point');
+  const box = (await page.locator('canvas').first().boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 6; i++) await page.mouse.move(x + i * 10, y + i * 4);
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  await expect(hint).toContainText('first point');
+
+  await page.mouse.click(x, y);
+  await expect(hint).toContainText('second point');
 });

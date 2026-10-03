@@ -1214,6 +1214,43 @@ export class MeasurePanel {
     return b;
   }
 
+  private _undoOff: (() => void) | null = null;
+
+  /**
+   * Offer Undo for a delete: a toast action, and Ctrl+Z / Cmd+Z while the
+   * toast shows (8 s, the toast's time with an action). A newer delete
+   * replaces the offer. Once a new measurement is being drafted the offer
+   * ends, so Ctrl+Z goes back to removing the last draft point.
+   */
+  offerUndo(
+    message: string,
+    undo: () => void,
+    toast?: (m: string, a: { label: string; onClick: () => void }) => void,
+    isDrafting?: () => boolean,
+  ): void {
+    this._undoOff?.();
+    const run = (): void => { this._undoOff?.(); undo(); };
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key.toLowerCase() !== 'z' || !(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+      if (isDrafting?.()) {
+        this._undoOff?.();
+        return;
+      }
+      if ((e.target as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      run();
+    };
+    const timer = setTimeout(() => this._undoOff?.(), 8000);
+    window.addEventListener('keydown', onKey, true);
+    this._undoOff = () => {
+      clearTimeout(timer);
+      window.removeEventListener('keydown', onKey, true);
+      this._undoOff = null;
+    };
+    toast?.(message, { label: 'Undo', onClick: run });
+  }
+
   /** Internal — rebuild the list DOM from `_summaries`. */
   private _renderList(): void {
     // Drop any live station-hover highlight BEFORE the old chart/table nodes are
