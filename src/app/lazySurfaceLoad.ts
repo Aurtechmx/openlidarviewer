@@ -214,9 +214,10 @@ export function buttonLazyTrigger(
   let depth = 0;
   let wasDisabled = false;
   // Disabling a focused button drops focus to the page, and a dialog the load
-  // opens then has nowhere to return it on close. A focused trigger stays
-  // enabled and states busy through aria-busy alone.
-  let keepFocus = false;
+  // opens then has nowhere to return it on close. A trigger that held focus
+  // when the load began gets it back when the load settles, before the
+  // surface opens, if nothing else took focus meanwhile.
+  let hadFocus = false;
   return {
     setBusy(busy) {
       const el = resolve();
@@ -224,12 +225,17 @@ export function buttonLazyTrigger(
       if (busy) {
         if (depth++ === 0) {
           wasDisabled = el.disabled;
-          keepFocus = typeof document !== 'undefined' && document.activeElement === el;
+          hadFocus = typeof document !== 'undefined' && document.activeElement === el;
         }
       } else if (depth > 0 && --depth > 0) {
         return;
       }
-      el.disabled = (busy && !keepFocus) || wasDisabled;
+      el.disabled = busy || wasDisabled;
+      if (!busy && hadFocus) {
+        hadFocus = false;
+        const active = typeof document !== 'undefined' ? document.activeElement : null;
+        if (!el.disabled && (!active || active === document.body)) el.focus?.();
+      }
       el.setAttribute('aria-busy', String(busy));
     },
   };

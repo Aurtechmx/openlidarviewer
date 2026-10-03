@@ -250,18 +250,41 @@ describe('buttonLazyTrigger', () => {
     expect(button.setAttribute).toHaveBeenCalledWith('aria-busy', 'false');
   });
 
-  it('keeps a focused button enabled, so focus stays on it while the chunk loads', () => {
-    const button = { disabled: false, setAttribute: vi.fn(), getAttribute: vi.fn() } as unknown as HTMLButtonElement;
+  it('disables a focused button while the chunk loads and gives focus back when it settles', () => {
+    const focus = vi.fn();
+    const button = { disabled: false, setAttribute: vi.fn(), getAttribute: vi.fn(), focus } as unknown as HTMLButtonElement;
+    const body = {};
     const g = globalThis as { document?: unknown };
     const saved = g.document;
-    g.document = { activeElement: button };
+    const doc = { activeElement: button as unknown, body };
+    g.document = doc;
     try {
       const trigger = buttonLazyTrigger(button);
       trigger.setBusy(true);
-      expect(button.disabled).toBe(false);
+      expect(button.disabled).toBe(true);
       expect(button.setAttribute).toHaveBeenCalledWith('aria-busy', 'true');
+      doc.activeElement = body; // a disabled button loses focus to the page
       trigger.setBusy(false);
       expect(button.disabled).toBe(false);
+      expect(focus).toHaveBeenCalledTimes(1);
+    } finally {
+      g.document = saved;
+    }
+  });
+
+  it('leaves focus alone when something else took it during the load', () => {
+    const focus = vi.fn();
+    const button = { disabled: false, setAttribute: vi.fn(), getAttribute: vi.fn(), focus } as unknown as HTMLButtonElement;
+    const g = globalThis as { document?: unknown };
+    const saved = g.document;
+    const doc = { activeElement: button as unknown, body: {} };
+    g.document = doc;
+    try {
+      const trigger = buttonLazyTrigger(button);
+      trigger.setBusy(true);
+      doc.activeElement = { other: true };
+      trigger.setBusy(false);
+      expect(focus).not.toHaveBeenCalled();
     } finally {
       g.document = saved;
     }
