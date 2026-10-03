@@ -32,9 +32,6 @@
  * effect is injected by the caller, so this module itself does no DOM, no I/O.
  */
 
-import type { MeasurementExportActionDeps } from '../app/measurementExportActions';
-import type { ReportFinding } from '../render/measure/reportManifest';
-
 /**
  * Whether two readings of "which scan is this" name the same target.
  *
@@ -169,16 +166,21 @@ export function spaceContextStillCurrent(
  * await, and the export is refused if the active scan changed in between.
  */
 
-type FindingsExportActions = Pick<typeof import('../app/measurementExportActions'), 'exportFindingsReport'>;
+/** The scan-dependent reads a findings report export makes. */
+export interface PinnableExportDeps {
+  readonly geo: () => unknown;
+  readonly activeClassificationEpoch: () => number;
+  readonly measure: { readonly crsKnown: boolean; readonly geographicCrs: boolean };
+}
 
 /** Freeze the scan-dependent reads of `deps` at this moment. */
-export function pinFindingsExportDeps(deps: MeasurementExportActionDeps): MeasurementExportActionDeps {
+export function pinFindingsExportDeps<D extends PinnableExportDeps>(deps: D): D {
   const geo = deps.geo();
   const epoch = deps.activeClassificationEpoch();
   const measure = Object.create(deps.measure, {
     crsKnown: { value: deps.measure.crsKnown },
     geographicCrs: { value: deps.measure.geographicCrs },
-  }) as MeasurementExportActionDeps['measure'];
+  }) as D['measure'];
   return { ...deps, measure, geo: () => geo, activeClassificationEpoch: () => epoch };
 }
 
@@ -186,10 +188,10 @@ export function pinFindingsExportDeps(deps: MeasurementExportActionDeps): Measur
  * Export `findings` as the report. `isCurrent` says whether the scan the
  * findings belong to is still active; it is checked after the chunk loads.
  */
-export async function runFindingsExport(
-  load: () => Promise<FindingsExportActions>,
-  deps: MeasurementExportActionDeps,
-  findings: readonly ReportFinding[],
+export async function runFindingsExport<D extends PinnableExportDeps, F>(
+  load: () => Promise<{ exportFindingsReport(deps: D, findings: readonly F[]): Promise<void> }>,
+  deps: D,
+  findings: readonly F[],
   isCurrent: () => boolean,
 ): Promise<'done' | 'stale'> {
   const pinned = pinFindingsExportDeps(deps);
@@ -212,11 +214,11 @@ export function findingsScanOpen(owner: string | null, activeId: () => string | 
  * Collect measurement findings for `owner`, dropping the result when that scan
  * closed or stopped being active while the converter chunk loaded.
  */
-export async function collectForOpenScan(
+export async function collectForOpenScan<F>(
   owner: string | null,
   activeId: () => string | null,
-  collect: () => Promise<readonly ReportFinding[]>,
-): Promise<readonly ReportFinding[]> {
+  collect: () => Promise<readonly F[]>,
+): Promise<readonly F[]> {
   if (!findingsScanOpen(owner, activeId)) return [];
   const found = await collect();
   return findingsScanOpen(owner, activeId) ? found : [];

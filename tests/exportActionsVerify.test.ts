@@ -88,3 +88,16 @@ describe('report.verify', () => {
     expect(verifyAndShow).toHaveBeenCalledWith(file);
   });
 });
+
+describe('report.verify palette search', () => {
+  it('is still found by the old "verify integrity" search', async () => {
+    const { rankActions } = await import('../src/ui/actionRegistry');
+    const actions = contributeExportActions({
+      saveSnapshot: vi.fn(),
+      copyShareLink: vi.fn(),
+      buildCurrentStoryInputs: () => ({}) as never,
+      showLassoToast: () => {},
+    });
+    expect(rankActions('verify integrity', actions)[0]?.action.id).toBe('report.verify');
+  });
+});
