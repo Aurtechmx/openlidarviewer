@@ -129,19 +129,18 @@ the two entries were renumbered when the branches were integrated.
 | L224 | EXPORT | TEST | med | FIXED | new | An image export button had no guard, so a double click or Enter started two exports, and the point-cloud and Report PDF buttons came back after a fixed 1.5 s while a slow export could still be running. |
 | L221 | SCIENTIFIC | TEST | high | FIXED | new | With two scans open, the GeoJSON and CSV measurement exports placed every measurement through the active scan's origin and named the file after it, so scan A's points were written 100 m east and 49 m down on scan B. A truncated LAS opened as a full dataset with no warning. A scan with no CRS showed its measurements in metres beside "datum resolved". |
 | L225 | UI | TEST | low | FIXED | new | With the right rail collapsed, the project card centred into the freed band and its close button sat under the floating colour key's header at 1024 px wide. |
-| L221 | UI | TEST | high | FIXED | new | One click on a measurement's delete control removed it with no Undo. A click on an existing measurement's vertex while placing was taken by the vertex handle and placed nothing. A drag to orbit while measuring placed a point. An active clip box showed only on the Clip page, and Export read "Scan scope: Full cloud" while it wrote the clipped points. |
 | L222 | UI | TEST | high | FIXED | new | One click on a measurement's delete control removed it with no Undo. A click on an existing measurement's vertex while placing was taken by the vertex handle and placed nothing. A drag to orbit while measuring placed a point. An active clip box showed only on the Clip page, and Export read "Scan scope: Full cloud" while it wrote the clipped points. |
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 80
+- FIXED: 79
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 102
+- total: 101
 
 ## Detail
 
@@ -8423,8 +8422,6 @@ Tests: `tests/e2e/largeTouchLayout.spec.ts` (fine pointer 1440, 1280 and
 768, 800, 880, 900, 1024 and 1280 px with the left rail expanded and
 collapsed and the key floating: the card meets neither rail, its tab nor the
 key, and no control sits under another).
-
-### L221 · FIXED · UI
 
 ### L222 · FIXED · UI
 
