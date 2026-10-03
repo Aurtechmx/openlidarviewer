@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { isBenignPageError } from './pageErrors';
 import { openToolPage, showWorkspaceMode } from './helpers';
-import type { GlobalPoints } from '../../src/convert/globalPoints';
+import { tileAt } from './georefTile';
 
 /**
  * A clip box is in the project frame. With two georeferenced tiles mounted
@@ -16,18 +16,6 @@ const SEP_M = 2000;
 const A = [500000, 4100000] as const;
 const B = [A[0] + SEP_M, A[1] + SEP_M] as const;
 
-function tileAt(ox: number, oy: number): GlobalPoints {
-  const n = 16;
-  const x = new Float64Array(n);
-  const y = new Float64Array(n);
-  const z = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
-    x[i] = ox + (i % 4);
-    y[i] = oy + Math.floor(i / 4);
-    z[i] = 195 + (i % 10);
-  }
-  return { count: n, x, y, z };
-}
 
 async function lasAt(ox: number, oy: number): Promise<number[]> {
   (globalThis as Record<string, unknown>).__BUILD_IDENTITY__ ??= {

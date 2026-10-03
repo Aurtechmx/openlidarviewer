@@ -3,7 +3,7 @@ import { isBenignPageError } from './pageErrors';
 import { railChromeSettled, expectHittable, showWorkspaceMode } from './helpers';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { GlobalPoints } from '../../src/convert/globalPoints';
+import { tileAt } from './georefTile';
 
 /**
  * `src/convert/writeLas` transitively imports `buildIdentity`, which reads the
@@ -49,19 +49,6 @@ async function loadLasWriter(): Promise<{ writeLas14: WriteLas14; wktForEpsg: Wk
 const EPSG_UTM33N = 32633;
 const SEP_M = 2000; // 2 km east and north — inside the 1 mm precision budget
 
-/** A 4×4 grid of points climbing 195→204 m, at the given global origin. */
-function tileAt(ox: number, oy: number): GlobalPoints {
-  const n = 16;
-  const x = new Float64Array(n);
-  const y = new Float64Array(n);
-  const z = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
-    x[i] = ox + (i % 4);
-    y[i] = oy + Math.floor(i / 4);
-    z[i] = 195 + (i % 10);
-  }
-  return { count: n, x, y, z };
-}
 
 function georefLas(
   w: { writeLas14: WriteLas14; wktForEpsg: WktForEpsg },
