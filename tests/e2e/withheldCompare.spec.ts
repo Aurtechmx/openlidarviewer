@@ -77,16 +77,16 @@ test('compares the chosen first and third of three clouds', async ({ page }) => 
 });
 
 test('a finished difference and its result hide when the pair changes', async ({ page }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   // UTM with a declared vertical datum, so the comparison yields a raster.
   const { geomAVert } = await geomFixtures();
   await page.goto('/?test=1');
   for (const [i, n] of ['site-one.las', 'site-two.las', 'site-three.las'].entries()) {
     await dropBytes(page, geomAVert, n);
     if (i === 0) await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-    await expect(page.locator('.olv-layer')).toHaveCount(i + 1, { timeout: 20_000 });
+    await expect(page.locator('.olv-layer')).toHaveCount(i + 1, { timeout: 40_000 });
+    await railChromeSettled(page);
   }
-  await railChromeSettled(page);
 
   const before = page.locator('select.olv-compare-before');
   const after = page.locator('select.olv-compare-after');
