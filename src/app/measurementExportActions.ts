@@ -200,6 +200,19 @@ function closedScanCount(measurements: readonly Measurement[], layers: readonly 
   return n;
 }
 
+/**
+ * Refuse (and say why) when any measurement was taken on a scan that is no
+ * longer open. True when refused.
+ */
+function refusedForClosedScan(measurements: readonly Measurement[], deps: MeasurementExportActionDeps): boolean {
+  const layers = deps.layers ? exportLayersOf(deps.layers.view, deps.layers.stableIdFor) : [];
+  if (layers.length === 0) return false;
+  const closed = closedScanCount(measurements, layers);
+  if (closed === 0) return false;
+  deps.refuse?.(`Not exported: ${closed} ${closed === 1 ? 'measurement was' : 'measurements were'} taken on a scan that is no longer open. Reopen it or delete them, then export again.`);
+  return true;
+}
+
 /** Export the placed measurements as an open GeoJSON or CSV file. */
 export async function exportMeasurementsFile(
   format: 'geojson' | 'csv',
@@ -210,13 +223,7 @@ export async function exportMeasurementsFile(
   const measurements = snap.measurements;
   if (measurements.length === 0) return;
   const layers = deps.layers ? exportLayersOf(deps.layers.view, deps.layers.stableIdFor) : [];
-  if (layers.length > 0) {
-    const closed = closedScanCount(measurements, layers);
-    if (closed > 0) {
-      deps.refuse?.(`Not exported: ${closed} ${closed === 1 ? 'measurement was' : 'measurements were'} taken on a scan that is no longer open. Reopen it or delete them, then export again.`);
-      return;
-    }
-  }
+  if (refusedForClosedScan(measurements, deps)) return;
   const own = layers.length > 1 ? ownLayers(measurements, layers) : null;
   if (own && 'refused' in own) {
     deps.refuse?.(own.refused);
@@ -282,6 +289,7 @@ export async function exportMeasurementIntegrityReport(
   const snap = snapshotMeasure(deps.measure);
   const ms = snap.measurements;
   if (ms.length === 0) return;
+  if (refusedForClosedScan(ms, deps)) return;
   const geo = deps.geo();
   // Every scan-bound fact is read BEFORE the lazy import, so the report is one
   // scan's account of itself. The frame, unit scales, class epoch and

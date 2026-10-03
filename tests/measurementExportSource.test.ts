@@ -10,6 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   exportMeasurementsFile,
+  exportMeasurementIntegrityReport,
   type ExportLayerView,
   type MeasurementExportActionDeps,
 } from '../src/app/measurementExportActions';
@@ -233,6 +234,29 @@ describe('a measurement whose scan was closed', () => {
     expect(out.refusals).toHaveLength(2);
     expect(out.refusals[0]).toBe('Not exported: 1 measurement was taken on a scan that is no longer open. Reopen it or delete them, then export again.');
     expect(out.refusals.join(' ')).not.toMatch(/geom-b|500|600/);
+  });
+
+  it('refuses the signed integrity report too, before anything is loaded or written', async () => {
+    const m = owned('a1', 'layer-a', [[0, 0, 0], [1, 0, 0]]);
+    const downloads: string[] = [];
+    const refusals: string[] = [];
+    let loaded = false;
+    await exportMeasurementIntegrityReport({
+      measure: { getMeasurements: () => [m], worldUp: [0, 0, 1], unitToMetres: 1, verticalUnitToMetres: 1, crsKnown: true, geographicCrs: false },
+      geo: () => GEO('geom-b.las', [500, 600, 0]),
+      layers: bOnly,
+      refuse: (t) => refusals.push(t),
+      baseName: (n) => n.replace(/\.[^.]+$/, ''),
+      downloadText: (f) => downloads.push(f),
+      loadMeasurementExport: async () => { throw new Error('unused'); },
+      loadMeasurementReport: async () => { loaded = true; throw new Error('must not load'); },
+      activeClassificationEpoch: () => 0,
+      appVersion: '0.0.0',
+      now: () => '2026-01-01T00:00:00.000Z',
+    });
+    expect(loaded).toBe(false);
+    expect(downloads).toEqual([]);
+    expect(refusals).toEqual(['Not exported: 1 measurement was taken on a scan that is no longer open. Reopen it or delete them, then export again.']);
   });
 
   it('still exports a restored measurement owned by the one open scan', async () => {

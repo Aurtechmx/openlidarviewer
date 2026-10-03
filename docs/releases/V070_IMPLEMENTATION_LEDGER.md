@@ -8496,7 +8496,8 @@ Measurements survive closing their scan. `exportMeasurementsFile` in
 taken on only when two or more scans were open, so a measurement taken on scan
 A, with A closed and scan B open, was written through B's origin and named
 after B. The export now refuses whenever a measurement's pick record or owner
-names a scan that is not open, and says how to recover. A restored measurement
+names a scan that is not open, and says how to recover. The signed
+integrity report applies the same refusal before it is built. A restored measurement
 with no pick record still exports on the one open scan when its owner is that
 scan or it has no owner.
 
@@ -8509,6 +8510,6 @@ the first await and read only that afterwards.
 
 Tests: `tests/measurementExportSource.test.ts` (a measurement on a closed scan
 is refused with nothing downloaded and nothing of the open scan written, picked
-and restored; a restored measurement owned by the open scan still exports; a
+and restored, and for the integrity report; a restored measurement owned by the open scan still exports; a
 scan swap, unit change and in-place edit during the import leave the file on
 the pre-await values).
