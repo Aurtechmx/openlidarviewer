@@ -18,7 +18,7 @@ import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-/** Strings that exist only inside the guarded test-seam block of src/main.ts. */
+/** Strings that exist only in the guarded test seam (src/app/testSeam/testSeamMount.ts). */
 export const TEST_SEAM_MARKERS = [
   '__OLV_TEST_API__',
   '__OLV_TEST_SEAM__',

@@ -177,6 +177,7 @@ import {
   loadStreamingPointCloud,
   loadCopcWorkerClient,
   loadEptLaszipWorkerClient,
+  loadTestSeamMount,
   loadStreamingColors,
   loadLocalFileRangeSource,
   loadHttpRangeSource,
@@ -2873,91 +2874,12 @@ stage.overlay.append(dropZone.toast);
 // any other build drops this block, so a shipped artifact has no API surface.
 // The seam drives a measurement without the raycast headless CI cannot do.
 if (__OLV_TEST_SEAM__ && testApi) {
-  void ensureViewer().then((v) => {
-    const placePoint = (x: number, y: number, z: number, layer?: string): void => {
-      if (![x, y, z].every((c) => typeof c === 'number' && Number.isFinite(c))) {
-        throw new Error(
-          'placeMeasurementPoint: { x, y, z } must all be finite numbers',
-        );
-      }
-      v.measure.addPoint([x, y, z], layer ? v.getCloud(v.clouds().find((id) => v.getCloud(id)?.name === layer) ?? '') : undefined);
-    };
-    (window as unknown as { __OLV_TEST_API__: unknown }).__OLV_TEST_API__ = {
-      version: '1',
-      setMeasureMode: (on: boolean) => v.setMeasureMode(on),
-      setMeasureKind: (kind: string) => {
-        // The MeasureController validates the kind itself; we just pass
-        // through. Invalid kinds throw a clear error at the controller
-        // level so the test sees a precise failure.
-        v.measure.setKind(kind as Parameters<typeof v.measure.setKind>[0]);
-      },
-      placeMeasurementPoint: (p: { x: number; y: number; z: number; layer?: string }) => {
-        placePoint(p.x, p.y, p.z, p.layer);
-      },
-      finishMeasurement: () => v.measure.finishCurrent(),
-      clearMeasurements: () => v.clearMeasurements(),
-      getMeasurementCount: () => v.measure.getMeasurements().length,
-      layerProjectPoints: (i: number) => v.layerProjectPoints(i), getCameraPose: () => v.getCameraPose(),
-      // Elevation filter (v0.5.6) device-verify seam: pass a world-space
-      // [min, max] window (or null to clear) and confirm points outside it hide.
-      setElevationFilter: (range: [number, number] | null) =>
-        v.setElevationFilter(range ?? undefined),
-      // Intensity filter (v0.5.6) device-verify seam: pass a raw-intensity
-      // [min, max] window (or null to clear) and confirm points outside it hide.
-      setIntensityFilter: (range: [number, number] | null) =>
-        v.setIntensityFilter(range ?? undefined),
-      // Classification edit seam — seed a uniform class, reclassify a screen
-      // lasso, undo/redo, and read a point's class, so the reclassify tool's
-      // full flow is e2e-verifiable without running the heavy classifier.
-      seedUniformClass: (cls: number): number => {
-        if (!scans.activeId) return 0;
-        const cloud = v.getCloud(scans.activeId);
-        if (!cloud) return 0;
-        const n = cloud.positions.length / 3;
-        v.applyDerivedClassification(scans.activeId, new Uint8Array(n).fill(cls));
-        return n;
-      },
-      reclassifyLasso: (lasso: ReadonlyArray<{ x: number; y: number }>, newClass: number): number =>
-        scans.activeId ? v.reclassifyLasso(scans.activeId, lasso, newClass).changedCount : 0,
-      undoClass: (): boolean => (scans.activeId ? v.undoClassification(scans.activeId) : false),
-      redoClass: (): boolean => (scans.activeId ? v.redoClassification(scans.activeId) : false),
-      classAt: (i: number): number => {
-        const c = scans.activeId ? v.getCloud(scans.activeId)?.classification : undefined;
-        return c ? c[i] : -1;
-      },
-      // Mount/show the reclassify panel (normally triggered when a
-      // classification appears) and re-sync its undo/redo enabled state, so the
-      // visible controls are e2e-drivable without running the full classifier.
-      showReclassify: () => showReclassifyUi(),
-      refreshReclassify: () => reclassifyUi?.refresh(),
-      // EPT laszip decode-worker round-trip — the one path no other e2e
-      // exercises end-to-end in a real browser: the lazy worker-client chunk
-      // load, `new Worker(new URL(...))` URL resolution (the seam the live
-      // source-transform can scramble), laz-perf WASM init inside the worker,
-      // decode of a complete LAZ tile, and the zero-copy transfer back.
-      // Returns the decoded point count so the spec can assert against the
-      // known fixture. Owns and disposes its own worker — never touches
-      // viewer state.
-      decodeEptLaszipTileInWorker: async (tile: ArrayBuffer): Promise<number> => {
-        const { EptLaszipWorkerClient } = await loadEptLaszipWorkerClient();
-        const client = new EptLaszipWorkerClient();
-        try {
-          const decoded = await client.decodeTile(tile, [0, 0, 0]);
-          return decoded.pointCount;
-        } finally {
-          client.dispose();
-        }
-      },
-    };
-    // Diagnostic so a stray production page with the flag still shows
-    // up in the console — discourages anyone from depending on it
-    // outside the e2e suite.
-    console.warn(
-      'OpenLiDARViewer: ?test=1 enabled — window.__OLV_TEST_API__ ' +
-        'is mounted. This is for Playwright only; do not ship URLs ' +
-        'with this flag to end users.',
-    );
-  });
+  void loadTestSeamMount().then(({ mountTestSeam }) => mountTestSeam({
+    getViewer: ensureViewer,
+    getActiveScanId: () => scans.activeId,
+    showReclassify: () => showReclassifyUi(),
+    refreshReclassify: () => reclassifyUi?.refresh(),
+  }));
 }
 
 // The nav bar is core interaction — shown in embed mode too. Hidden until a

@@ -30,9 +30,9 @@ from the tree and fails when a cell drifts.
 | I/O | `src/io` | ~38k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
 | Render | `src/render` | ~76k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
 | Export / report | `src/export`, `src/report`, `src/convert` | ~15k | Studio exporters, PDF/report builders, batch conversion. |
-| Application services | `src/app` | ~24k | Composition root and the services that own shared state. |
+| Application services | `src/app` | ~25k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~39k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 4,426 | Wiring. A monolith under decomposition. |
+| Shell | `src/main.ts` | 4,348 | Wiring. A monolith under decomposition. |
 
 ## Composition root
 
@@ -102,7 +102,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-`src/main.ts` (4,426): the largest blocks, which are the extraction
+`src/main.ts` (4,348): the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` is a thin assembler in `src/app/actionDefinitions.ts` over
@@ -249,6 +249,15 @@ gate, the no-scan point-filter skip, the shell's restored-window write-back, the
 that must touch nothing but the pose (`tests/viewStateCoordinator.test.ts`). The
 field order and the present/absent guards stay in `src/io/viewState.ts`.
 `main.ts` keeps five thin delegates and the deps object.
+
+Done: the `?test=1` Playwright seam (`window.__OLV_TEST_API__`, ~78 lines) now
+lives in `src/app/testSeam/testSeamMount.ts`, driven through a `TestSeamDeps`
+object of accessor functions (`getViewer`, the active scan id and the reclassify
+panel hooks). The `__OLV_TEST_SEAM__` compile-time guard stays at the call site
+in `main.ts`, which reaches the module through `loadTestSeamMount()` in
+`src/app/testSeam/testSeamLoader.ts`, so a shipped build drops both the call
+and the chunk
+(`npm run check:no-test-seam`). `main.ts` went from 4,426 to 4,348 lines.
 
 `src/render/Viewer.ts` (5,994): the constructor and a handful of large
 methods dominate:

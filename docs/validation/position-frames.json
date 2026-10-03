@@ -267,8 +267,8 @@
       "why": "The active static cloud's resident buffer feeds the KML footprint's convex-hull outline, which is traced in the cloud's own source-local XY — the same frame the bounding-rectangle extent is read in."
     },
     {
-      "file": "src/main.ts",
-      "symbol": "seedUniformClass",
+      "file": "src/app/testSeam/testSeamMount.ts",
+      "symbol": "mountTestSeam.seedUniformClass",
       "frame": "source-local",
       "reads": 1,
       "why": "Reads only the buffer length to size a class array. The frame is still named because the length must match the layer this class array will be attached to."

@@ -114,6 +114,7 @@ function liveSourceTransformPlugin(): Plugin {
     // carry an `import()` specifier Vite must read statically:
     //   - `lazyChunks.ts`      — the COPC/streaming `import()` split points
     //   - `perf/navDriverLoader.ts` — the `?benchmark=nav` camera driver
+    //   - `app/testSeam/testSeamLoader.ts`: the `?test=1` Playwright seam
     //   - `render/perf/governorLoader.ts` — the `?governor=on` frame budget governor
     //   - `render/contextRecoveryLoader.ts` — the WebGL context-restore rebuild
     //   - `parseBuffer.ts` / `loaderRegistry.ts` — the loader chain reached
@@ -131,6 +132,7 @@ function liveSourceTransformPlugin(): Plugin {
       ...workerExcludePatterns(),
       /lazyChunks\.ts/,
       /navDriverLoader\.ts/,
+      /testSeamLoader\.ts/,
       /governorLoader\.ts/,
       /contextRecoveryLoader\.ts/,
       /parseBuffer\.ts/,
@@ -384,7 +386,7 @@ function fontPreload() {
   };
 }
 
-function chunkEmissionGuard(devFlags: boolean) {
+function chunkEmissionGuard(devFlags: boolean, testSeam: boolean) {
   const required = [
     // Every lazyChunks.ts seam, derived from the module itself at config
     // time — see lazyChunkNames(). The static pins below cover only what
@@ -409,6 +411,9 @@ function chunkEmissionGuard(devFlags: boolean) {
     // The live build compiles `?benchmark=nav` out (__OLV_DEV_FLAGS__), so the
     // chunk is required only where the flag exists.
     ...(devFlags ? ['navDriver'] : []),
+    // `app/testSeam/testSeamLoader.ts` lazy-imports the `?test=1` Playwright
+    // seam, compiled in only where `__OLV_TEST_SEAM__` is true.
+    ...(testSeam ? ['testSeamMount'] : []),
     // `render/contextRecoveryLoader.ts` lazy-imports the context-restore rebuild.
     'contextRecovery',
     // Vendor chunks pinned via manualChunks. The presence of these
@@ -682,7 +687,10 @@ export default defineConfig(({ mode }) => {
   },
   // The chunk-emission guard runs on every build; the live source transform only on `live`.
   plugins: [
-    chunkEmissionGuard(mode !== 'live') as PluginOption,
+    chunkEmissionGuard(
+      mode !== 'live',
+      mode === 'development' || process.env.OLV_TEST_SEAM === '1',
+    ) as PluginOption,
     thirdPartyNotices() as PluginOption,
     creditsSourceLink(buildIdentity) as PluginOption,
     fontPreload() as PluginOption,
