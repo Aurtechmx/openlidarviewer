@@ -239,8 +239,9 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
    */
   let lastCompatibility = new Map<string, LayerCompatibility>();
   let lastUnmounted: string[] = [];
-  /** Per-layer mount-precision result from the last frame pass — health card input. */
+  /** Per-layer placement from the last frame pass: null when unmounted, else whether Z is shared. */
   let lastPlacement = new Map<string, { readonly vertical: boolean }>();
+  /** Per-layer mount-precision result from the last frame pass — health card input. */
   let lastPrecision = new Map<string, { errorMetres: number | null; basis: string }>();
   /** Lazy health builders (lazyChunks.loadLayerHealth) — wording stays out of the shell. */
   let healthMod: typeof import('./layerHealth') | null = null;
