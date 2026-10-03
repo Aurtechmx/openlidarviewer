@@ -34,6 +34,7 @@ const BASIS_TEXT: Readonly<Record<Coverage, string>> = {
   full: 'Full dataset',
   'resident-only': 'Resident only',
   sampled: 'Sampled',
+  partial: 'Partial: truncated file',
 };
 
 const ITEM_NAME: Readonly<Record<StripItemId, string>> = {

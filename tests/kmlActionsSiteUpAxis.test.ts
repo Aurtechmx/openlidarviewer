@@ -85,3 +85,11 @@ describe('site KML — a Y-up source is refused, not silently placed', () => {
     expect(h.written).toEqual(['site.kml']);
   });
 });
+
+describe('site KML with two scans open', () => {
+  it('is not offered, because every feature would be placed through the active scan', () => {
+    const h = harness('z');
+    const deps = { ...h.deps, layerCount: () => 2 } as KmlActionDeps;
+    expect(siteKmlStatus(deps)).toMatchObject({ ready: false, reason: 'Site KML needs one open scan.' });
+  });
+});

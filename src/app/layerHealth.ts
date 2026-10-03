@@ -72,7 +72,7 @@ export interface LayerHealthInput {
    * "fully loaded". Undefined keeps the legacy wording (callers that do not
    * know the counts).
    */
-  readonly residency?: { readonly resident: number; readonly source: number } | null;
+  readonly residency?: { readonly resident: number; readonly source: number; readonly truncated?: string } | null;
 }
 
 /** One rendered fact. `mono` marks numeric values (coordinates, offsets, mm). */
@@ -327,6 +327,8 @@ function loadingRow(residency: LayerHealthInput['residency']): LayerHealthRow {
     return { label: 'Loading', value: 'fully loaded (no source count declared)', status: 'info' };
   }
   const { resident, source } = residency;
+  // A file that ends early is partial, not a display sample.
+  if (residency.truncated) return { label: 'Loading', value: residency.truncated, status: 'warn' };
   if (resident < source) {
     return {
       label: 'Loading',

@@ -43,6 +43,7 @@ import type { PreflightActionRunner, PreflightView } from './toolPreflightRuntim
 import { loadToolPreflight } from '../lazyChunks';
 import { isLinearUnitKnown } from '../geo/CoordinateTypes';
 import { medianNeighbourSpacing } from '../terrain/objectMetrics';
+import { truncationOf } from '../io/truncation';
 
 /** LAS standard classification codes the panel keys ground/building on. */
 const CLASS_GROUND = 2;
@@ -98,7 +99,7 @@ export interface LiveScanAccessors {
    * cloud-quality check reads as review ("not measured yet"), never a figure.
    */
   getActiveCloudData?():
-    | { readonly positions: Float32Array; readonly declaredPointCount?: number | null }
+    | { readonly positions: Float32Array; readonly declaredPointCount?: number | null; readonly truncated?: boolean }
     | null
     | undefined;
 }
@@ -167,8 +168,11 @@ export function signalsFromLive(a: LiveScanAccessors): RawScanSignals | null {
   // Guarded: the data read is allowed to throw (a buffer released mid-refresh),
   // and an unstated total must degrade to "cannot tell", never lose the scan.
   let declaredTotal: number | null = null;
+  let truncated = false;
   try {
-    declaredTotal = a.getActiveCloudData?.()?.declaredPointCount ?? null;
+    const data = a.getActiveCloudData?.();
+    declaredTotal = data?.declaredPointCount ?? null;
+    truncated = data?.truncated === true;
   } catch {
     declaredTotal = null;
   }
@@ -211,7 +215,8 @@ export function signalsFromLive(a: LiveScanAccessors): RawScanSignals | null {
     kind: isStreaming ? 'streaming' : 'static',
     // Streaming keeps its own default ('resident-only'); a static sample is
     // named here rather than falling through to 'full'.
-    ...(sampled ? { coverage: 'sampled' as const } : {}),
+    // A truncated file is partial: the records past the cut were never read.
+    ...(!isStreaming && truncated ? { coverage: 'partial' as const } : sampled ? { coverage: 'sampled' as const } : {}),
     // Omitted, not zeroed, when the source states no total: `RawScanSignals`
     // leaves `pointCount` optional precisely so an unstated size stays unstated.
     ...(pointCount == null ? {} : { pointCount }),
@@ -403,6 +408,7 @@ export interface ProcessStudioShell {
         readonly positions?: Float32Array;
         readonly declaredPointCount?: number;
         readonly classificationProvenance?: string;
+        readonly metadata?: { readonly truncation?: { readonly read: number; readonly declared: number } };
   /** Loader stride; > 1 means the resident points are a display sample. */
   readonly loadStride?: number;
       }
@@ -480,7 +486,7 @@ export function createProcessStudioFromShell(shell: ProcessStudioShell): Mounted
     getActiveCloudData: () => {
       const cloud = shell.getActiveCloud();
       return cloud?.positions
-        ? { positions: cloud.positions, declaredPointCount: cloud.declaredPointCount ?? null }
+        ? { positions: cloud.positions, declaredPointCount: cloud.declaredPointCount ?? null, truncated: truncationOf(cloud) !== null }
         : null;
     },
   };

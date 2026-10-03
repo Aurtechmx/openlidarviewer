@@ -270,7 +270,7 @@ for this development cut: that evidence comes from the engines themselves.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,437 lines and `src/render/Viewer.ts` is 6,022, two hundred and one lines
+`src/main.ts` is 4,429 lines and `src/render/Viewer.ts` is 6,022, two hundred and one lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
@@ -285,7 +285,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 97 for the shell, 75 for the renderer and 23 for the Analyse panel,
-across 1062 modules with no dependency cycles.
+across 1063 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -319,6 +319,30 @@ refuses a placement whose Float32 step would pass 1 mm, which on a metre grid is
 a placed reach of 16,384 m or more, and those paths stay under 1 mm inside the
 gate. Picking and distance are computed in Float64 and are exact, as are
 exports.
+
+## Measurement exports with more than one scan open
+
+The GeoJSON and CSV measurement exports place each measurement through the
+scan it belongs to and name that scan in a `source` field and in the file
+name. Each point is placed through the scan it was picked on. A session keeps
+that record. A measurement with no pick record, such as one from an older
+session, is placed through the scan it was recorded on only when the open
+scans place a point the same way, and is refused otherwise. A
+measurement with no recorded scan, one whose points sit on scans whose heights
+are not in one frame, or a set spanning scans that declare different coordinate
+systems is refused rather than exported. A session saved with one scan and
+restored with two open is placed through the scan it matches; when that scan
+cannot be identified, close the other scans and export again. The integrity
+and findings reports name the active scan; they carry lengths and areas, not
+coordinates. The site KML is written only while one scan is open.
+
+## Truncated files and unknown units
+
+A LAS file whose body ends before its declared records opens with the records
+it holds and reads as partial coverage: "Truncated: N of M points read".
+Truncation is recorded for uncompressed LAS only; a truncated LAZ is not marked partial. When the horizontal unit is
+unknown, measurement rows, the measure hint, the profile chart, summary and PDF,
+and the Profile Workbench state the unit is unverified.
 
 ## Export digests that some surfaces cannot carry
 

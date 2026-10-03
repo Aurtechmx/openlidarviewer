@@ -741,10 +741,10 @@ describe('the span figures describe the corridor, not the drawn subset', () => {
     // The cap really did bite, so the two sets genuinely differ here.
     expect(figure(rows, 'Returns in corridor')).toBe('120002');
     expect(figure(rows, 'Drawn')).toBe('120000');
-    expect(figure(rows, 'Chainage span')).toBe(axisSpanCaption(100, null));
-    expect(figure(rows, 'Height span')).toBe(axisSpanCaption(50, null));
+    expect(figure(rows, 'Chainage span')).toBe(axisSpanCaption(100, 'unit unverified'));
+    expect(figure(rows, 'Height span')).toBe(axisSpanCaption(50, 'unit unverified'));
     // What the drawn subset alone would have claimed.
-    expect(figure(rows, 'Chainage span')).not.toBe(axisSpanCaption(0, null));
+    expect(figure(rows, 'Chainage span')).not.toBe(axisSpanCaption(0, 'unit unverified'));
   });
 });
 

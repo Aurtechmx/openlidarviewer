@@ -26,6 +26,7 @@ import type {
   ScanFacts,
 } from './ProcessPlan';
 import { isLinearUnitKnown } from '../geo/CoordinateTypes';
+import { TRUNCATED_REASON } from '../io/truncation';
 
 /** Build one capability verdict. */
 function cap(
@@ -188,6 +189,9 @@ function partialCoverage(
   sampledMessage: string,
   residentCode: 'RESIDENT_ONLY' | 'PARTIAL_COVERAGE' = 'RESIDENT_ONLY',
 ): ProductCapability {
+  if (scan.coverage === 'partial') {
+    return cap(p, status, 'TRUNCATED', TRUNCATED_REASON);
+  }
   return scan.coverage === 'resident-only'
     ? cap(p, status, residentCode, residentMessage)
     : cap(p, status, 'SAMPLED', sampledMessage);

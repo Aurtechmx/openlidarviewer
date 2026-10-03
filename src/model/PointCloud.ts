@@ -127,6 +127,12 @@ export interface CloudMetadata {
    */
   loadWarnings?: readonly string[];
   /**
+   * Set when the body holds fewer point records than the header declares: the
+   * records read and the declared count. The cloud then covers part of the
+   * source, and coverage reads partial (`io/truncation.ts`).
+   */
+  truncation?: { readonly read: number; readonly declared: number };
+  /**
    * The interpretation level the content probe chose the format at, set only
    * when the file was opened by content rather than by `sniffFormat`
    * (`src/io/probe/formatProbes.ts`). A read-only fact shown with the source

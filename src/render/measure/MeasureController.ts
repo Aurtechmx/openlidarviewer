@@ -72,6 +72,8 @@ import {
   formatProfileHeadline,
   formatBoxHeadline,
   formatVolume,
+  formatUnitUnverified,
+  UNIT_UNVERIFIED_MEASURE_NOTICE,
   GEOGRAPHIC_CRS_MEASURE_NOTICE,
   VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE,
 } from './format';
@@ -256,11 +258,19 @@ export interface ProfileResampleParams {
 }
 
 /** A compact, display-ready summary of one measurement, for the panel. */
+/** A picked point and the cloud it was picked on, when it came from one. */
+export interface PickedPoint {
+  readonly point: Vec3;
+  readonly layer?: unknown;
+}
+
 export interface MeasurementSummary {
   id: string;
   kind: MeasurementKind;
   name: string;
   value: string;
+  /** True when the horizontal unit is unknown, so no value may be read as metres. */
+  unitUnverified?: boolean;
   /**
    * The per-measurement honesty grade (red/yellow/green + reasons + refusal
    * flag). The Measurements panel renders it as a trust dot, a "why?" detail,
@@ -378,7 +388,9 @@ export class MeasureController {
   private _onKindChange: ((kind: MeasurementKind) => void) | null = null;
 
   /** Re-picks a cloud point at the given NDC — injected by the Viewer. */
-  private _picker: ((ndcX: number, ndcY: number) => Vec3 | null) | null = null;
+  private _picker: ((ndcX: number, ndcY: number) => PickedPoint | null) | null = null;
+  /** Stable layer id of a picked cloud, or null for a single-layer scene. */
+  private _layerOf: ((layer: unknown) => string | null) | null = null;
   /**
    * Profile sampler — injected by the Viewer once a cloud is attached.
    * The controller calls this when a Profile measurement commits, and
@@ -893,6 +905,7 @@ export class MeasureController {
     // stale "no CRS — scale unverified" caption once it becomes known (or
     // gain one if a known CRS is later cleared). Mirrors the drag-end re-grade.
     for (const m of this._measurements) m.trust = this._gradeMeasurement(m);
+    this._updateHint();
     this._emitChange();
   }
 
@@ -947,6 +960,7 @@ export class MeasureController {
       kind: m.kind,
       name: m.name,
       value: this._headlineText(m),
+      ...(this._unitUnverified() ? { unitUnverified: true } : {}),
       profileChart: m.profileChart
         ? scaleProfileSamples(m.profileChart, f, this._originUp, this._effVertical())
         : undefined,
@@ -1074,7 +1088,7 @@ export class MeasureController {
   }
 
   /** Inject the cloud-point picker used while dragging a vertex handle. */
-  setPicker(pick: (ndcX: number, ndcY: number) => Vec3 | null): void {
+  setPicker(pick: (ndcX: number, ndcY: number) => PickedPoint | null): void {
     this._picker = pick;
   }
 
@@ -1186,6 +1200,20 @@ export class MeasureController {
    */
   setOwnerProvider(provider: (() => WorkOwnership | undefined) | null): void {
     this._ownerProvider = provider;
+  }
+
+  /**
+   * Give every measurement without an owner, and an open draft, this owner.
+   * Called when a second layer joins: work placed while one layer was open
+   * was taken on that layer, in the frame it still anchors.
+   */
+  claimUnowned(layerId: string): void {
+    const owner: WorkOwnership = { layerId, frame: 'project' };
+    // Every point placed while one layer was open was picked on that layer.
+    for (const m of [...this._measurements, ...(this._draft ? [this._draft] : [])]) {
+      if (!m.owner) m.owner = owner;
+      if (!m.pickLayers) m.pickLayers = [layerId];
+    }
   }
 
   /** The owner to stamp on a freshly created measurement, when one is provided. */
@@ -1327,7 +1355,23 @@ export class MeasureController {
   }
 
   /** Place a vertex at a picked point. `null` means a click that missed. */
-  addPoint(point: Vec3 | null): void {
+  /**
+   * Resolve a picked cloud to its stable layer id. The id is recorded on the
+   * measurement so its export places each point through the layer it was
+   * picked on, not the active one.
+   */
+  setLayerResolver(resolve: ((layer: unknown) => string | null) | null): void {
+    this._layerOf = resolve;
+  }
+
+  private _notePick(m: Measurement, layer: unknown): void {
+    const id = layer !== undefined && this._layerOf ? this._layerOf(layer) : null;
+    if (!id) return;
+    if (!m.pickLayers) m.pickLayers = [id];
+    else if (!m.pickLayers.includes(id)) m.pickLayers.push(id);
+  }
+
+  addPoint(point: Vec3 | null, layer?: unknown): void {
     if (!this._active) return;
     if (!point) {
       this._setHintText(`No point there — ${VERB_LOWER} directly on the scan`);
@@ -1341,6 +1385,7 @@ export class MeasureController {
     this._lastSnap = snap;
     const placed = snap ? snap.position : point;
     this._draft.points.push([placed[0], placed[1], placed[2]]);
+    this._notePick(this._draft, layer);
     if (isFull(this._draft)) this._commitDraft();
     this._updateHint();
   }
@@ -1637,7 +1682,7 @@ export class MeasureController {
     // layer's source-local frame. Undefined for a single-layer scene, so the
     // pre-identity byte shape is preserved exactly (see LayerIdentityService).
     const owner = this._newOwner();
-    if (owner) m.owner = owner;
+    if (owner && !m.owner) m.owner = owner;
     this._measurements.push(m);
     this._draft = null;
     this._emitChange();
@@ -1732,10 +1777,12 @@ export class MeasureController {
     const drag = this._drag;
     if (!drag || !this._dragDirty || !this._picker) return;
     this._dragDirty = false;
-    const point = this._picker(this._dragNdcX, this._dragNdcY);
-    if (!point) return;
+    const picked = this._picker(this._dragNdcX, this._dragNdcY);
+    if (!picked) return;
+    const point = picked.point;
     const m = this._measurements.find((x) => x.id === drag.id);
     if (!m) return;
+    this._notePick(m, picked.layer);
     if (m.kind === 'box' && m.points.length >= 2 && drag.vi >= 0 && drag.vi <= 7) {
       // A box handle names a wireframe corner, not a stored point. Resizing
       // keeps the diagonally opposite corner fixed and re-normalises, so the
@@ -1779,7 +1826,17 @@ export class MeasureController {
   // factor is applied exactly once per readout and can't be missed by a
   // future call site.
 
+  /**
+   * No resolved horizontal unit (and not a geographic frame, which carries its
+   * own caveat): the factor is an inert 1, so values print in source units
+   * marked unverified rather than as metres.
+   */
+  private _unitUnverified(): boolean {
+    return !this._crsKnown && !this._geographicCrs;
+  }
+
   private _fmtLen(renderUnits: number): string {
+    if (this._unitUnverified()) return formatUnitUnverified(renderUnits);
     return formatLengthRender(renderUnits, this._unitToMetres, this._units);
   }
 
@@ -1789,6 +1846,7 @@ export class MeasureController {
    * on a compound CRS it honours the height unit the horizontal factor can't.
    */
   private _fmtVertical(renderUnits: number): string {
+    if (this._unitUnverified()) return formatUnitUnverified(renderUnits);
     return formatLengthRender(renderUnits, this._effVertical(), this._units);
   }
 
@@ -1799,11 +1857,13 @@ export class MeasureController {
    * uniform `f³` an equal vertical factor collapses to.
    */
   private _fmtCutFill(renderUnitsCu: number): string {
+    if (this._unitUnverified()) return formatUnitUnverified(renderUnitsCu);
     const f = this._unitToMetres;
     return formatVolume(renderUnitsCu * f * f * this._effVertical(), this._units);
   }
 
   private _fmtArea(renderUnitsSq: number): string {
+    if (this._unitUnverified()) return formatUnitUnverified(renderUnitsSq);
     return formatAreaRender(renderUnitsSq, this._unitToMetres, this._units);
   }
 
@@ -1845,6 +1905,7 @@ export class MeasureController {
           pm.verticalDrop * this._effVertical(),
           pm.gradePercent,
           this._units,
+          ...(this._unitUnverified() ? [formatUnitUnverified] as const : []),
         );
       }
       case 'box': {
@@ -1858,6 +1919,7 @@ export class MeasureController {
           m.height * this._effVertical(),
           m.volume * this._unitToMetres * this._unitToMetres * this._effVertical(),
           this._units,
+          ...(this._unitUnverified() ? [formatUnitUnverified, formatUnitUnverified] as const : []),
         );
       }
       case 'volume': {
@@ -1896,6 +1958,8 @@ export class MeasureController {
       // reads as a trustworthy distance without its caveat.
       if (this._geographicCrs) {
         hint = `${hint} — ${GEOGRAPHIC_CRS_MEASURE_NOTICE}`;
+      } else if (this._unitUnverified()) {
+        hint = `${hint} · ${UNIT_UNVERIFIED_MEASURE_NOTICE}`;
       } else if (this._verticalUnitMismatch()) {
         hint = `${hint} — ${VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE}`;
       }

@@ -305,6 +305,12 @@ export interface Measurement {
    * layer with the assignment marked inferred rather than asserted.
    */
   owner?: WorkOwnership;
+  /**
+   * Stable ids of the layers this measurement's points were picked on, set
+   * only while more than one layer is open. The export places the points
+   * through these layers rather than the owner.
+   */
+  pickLayers?: string[];
 }
 
 /** Minimum vertex count for a measurement of each kind to be meaningful. */

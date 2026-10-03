@@ -43,6 +43,7 @@ import { parseResolvedCrs } from './sessionCrs';
 import {
   assertOwnershipWithinFrame,
   frameAnchorLayerId,
+  frameLayer,
   parseSessionProjectFrame,
   serializeSessionProjectFrame,
 } from './sessionFrame';
@@ -636,6 +637,7 @@ export function parseSession(text: string): InspectionSession {
     assertOwnershipWithinFrame(out.projectFrame, out.measurements, 'measurements');
     assertOwnershipWithinFrame(out.projectFrame, out.annotations, 'annotations');
   }
+  knownPickLayers(out.measurements, out.projectFrame);
   return out;
 }
 
@@ -1216,6 +1218,33 @@ function parseViews(v: unknown): SavedView[] {
   return out;
 }
 
+/** Most layers one measurement's points may name. */
+const MAX_PICK_LAYERS = 16;
+
+/** Distinct non-empty layer ids, bounded in count and length, or undefined. */
+function parsePickLayers(v: unknown): string[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const ids = [...new Set(v.slice(0, MAX_PICK_LAYERS).filter(
+    (id): id is string => typeof id === 'string' && id.length > 0 && id.length <= 128,
+  ))];
+  return ids.length > 0 ? ids : undefined;
+}
+
+/**
+ * Keep pick layers only when the file's frame records every one. A file with no frame names
+ * its layers only by id; the export then matches those ids against the open
+ * layers and refuses any it cannot find.
+ */
+function knownPickLayers(measurements: Measurement[], frame: SessionProjectFrame | undefined): void {
+  if (!frame) return;
+  for (const m of measurements) {
+    if (!m.pickLayers) continue;
+    // One unknown id makes the whole record untrustworthy; the measurement
+    // then takes the stricter path for work with no pick record.
+    if (!m.pickLayers.every((id) => frameLayer(frame, id))) delete m.pickLayers;
+  }
+}
+
 function parseMeasurements(v: unknown): Measurement[] {
   if (!Array.isArray(v)) return [];
   const out: Measurement[] = [];
@@ -1249,6 +1278,13 @@ function parseMeasurements(v: unknown): Measurement[] {
     // same way it attributes legacy work, marked inferred rather than asserted.
     const owner = parseWorkOwnership(item.owner);
     if (owner) m.owner = owner;
+    // The layers the points were picked on, checked against the file's own
+    // project frame when it has one (see `parseSession`); an old or malformed
+    // field is dropped,
+    // and the export then refuses the measurement where the open layers'
+    // placements differ.
+    const pickLayers = parsePickLayers(item.pickLayers);
+    if (pickLayers) m.pickLayers = pickLayers;
     // Kind-specific specialised data. Serialised as part of the Measurement
     // object; parsed here so a round-tripped profile/volume keeps its chart,
     // corridor width, ground percentile, cut/fill record, and resident-only

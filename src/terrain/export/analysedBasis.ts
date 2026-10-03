@@ -76,7 +76,7 @@ export function analysedBasisLine(b: AnalysedBasis | null | undefined): string {
   if (b.coverage === 'full') return `${fmt(b.analysedPointCount)}${of} points (full read)`;
   const set = 'resident streaming set';
   const r = b.residentPointCount;
-  const how = b.coverage === 'resident-only'
+  const how = b.coverage === 'partial' ? 'truncated file' : b.coverage === 'resident-only'
     ? (r ? `analysed subsample of the ${set}, ${fmt(r)} resident` : set)
     : `display sample${b.loadStride != null ? `, stride ${b.loadStride}` : ''}`;
   return `${fmt(b.analysedPointCount)}${of} points (${how}); whole-dataset support not claimed`;

@@ -508,6 +508,7 @@ export async function attachStaticCloud(
   // over the scene the user has. For this one call the stream's resident
   // nodes and the new cloud are both in memory; the stream's point budget
   // caps that overlap.
+  const prior = viewer.clouds();
   const id = viewer.addCloud(result.cloud);
   source.preview?.dispose();
   if (viewer.hasStreamingCloud) {
@@ -539,6 +540,13 @@ export async function attachStaticCloud(
     () => deps.scans.activeId,
     () => viewer.clouds().length,
   );
+  // Measurements placed while one layer was open belong to that layer. Record
+  // it now, before the active layer changes, so their export does not borrow
+  // this one's frame.
+  const soleId = prior.length === 1 ? deps.layerIdentity.stableIdFor(prior[0]!) : null;
+  if (soleId) viewer.measure.claimUnowned(soleId);
+  // Each picked point records the layer it landed on, once two layers are open.
+  viewer.measure.setLayerResolver((c) => viewer.clouds().length > 1 ? deps.layerIdentity.stableIdFor(viewer.clouds().find((i) => viewer.getCloud(i) === c) ?? '') : null);
   // A freshly opened scan has no terrain analysis yet — drop any prior grid so
   // the Coverage colour chip starts disabled until this scan is analysed.
   viewer.setCoverageGrid(null);

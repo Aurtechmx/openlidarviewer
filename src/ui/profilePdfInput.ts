@@ -19,7 +19,7 @@
 
 import type { ProfilePdfInput } from '../render/measure/profilePdf';
 import type { MeasurementSummary } from '../render/measure/MeasureController';
-import type { UnitSystem } from '../render/measure/types';
+import type { DisplayUnits } from '../render/measure/format';
 
 /** CRS provenance for the sheet header, as the host resolves it at export time. */
 export interface ProfileExportContext {
@@ -31,7 +31,7 @@ export interface ProfileExportContext {
 export interface ProfilePdfInputOptions {
   /** Resolved frame, or null when the host could not state one. */
   readonly context: ProfileExportContext | null;
-  readonly unitSystem: UnitSystem;
+  readonly unitSystem: DisplayUnits;
   /** Read at the app boundary, never inside the builder. */
   readonly generatedAt: Date;
 }

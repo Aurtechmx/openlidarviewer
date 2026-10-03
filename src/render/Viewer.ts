@@ -1102,8 +1102,8 @@ export class Viewer {
       onExit: () => this.setMeasureMode(false),
     });
     this._measure.setPicker((ndcX, ndcY) => {
-      const hit = this._pickPoint(ndcX, ndcY);
-      return hit ? [hit.x, hit.y, hit.z] : null;
+      const hit = this._pickDetailed(ndcX, ndcY), p = hit?.point ?? this._pickStreaming(ndcX, ndcY);
+      return p ? { point: [p.x, p.y, p.z], layer: hit?.cloud } : null;
     });
     // Profile seam — the chart half of a Profile measurement and the raw
     // section behind it. Both read the scene through one eligibility decision,
@@ -5651,8 +5651,8 @@ export class Viewer {
     }
     const ndcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
     const ndcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
-    const hit = this._pickPoint(ndcX, ndcY);
-    this._measure.addPoint(hit ? [hit.x, hit.y, hit.z] : null);
+    const hit = this._pickDetailed(ndcX, ndcY), p = hit?.point ?? this._pickStreaming(ndcX, ndcY);
+    this._measure.addPoint(p ? [p.x, p.y, p.z] : null, hit?.cloud);
   }
 
   /**

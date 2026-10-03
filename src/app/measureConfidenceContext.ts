@@ -10,7 +10,7 @@ import type { MeasureSceneContext } from '../render/measure/measureConfidence';
 export function buildMeasureConfidenceContext(
   viewer: {
     /** The measure controller; datumResolved = the shared datum held. */
-    measure: { readonly datumResolved: boolean };
+    measure: { readonly datumResolved: boolean; readonly crsKnown?: boolean; readonly geographicCrs?: boolean };
     /** Loaded static clouds. */
     clouds(): ReadonlyArray<unknown>;
   },
@@ -42,5 +42,8 @@ export function buildMeasureConfidenceContext(
     // until the compatibility ladder upgrades it (layerContextOf).
     layers: viewer.clouds().length <= 1 ? 'single' : 'mixed',
     verticalReferenceKnown: reference !== 'unknown',
+    // An unknown horizontal unit is not metres. A geographic frame carries its
+    // own caveat and is graded elsewhere.
+    unitVerified: viewer.measure.crsKnown !== false || !!viewer.measure.geographicCrs,
   };
 }

@@ -12,6 +12,7 @@
 
 import type { ScanFacts } from '../process/ProcessPlan';
 import { isLinearUnitKnown } from '../geo/CoordinateTypes';
+import { TRUNCATED_REASON } from '../io/truncation';
 
 export type QaStatus = 'pass' | 'review' | 'block';
 
@@ -71,6 +72,9 @@ function cloudQuality(f: ScanFacts): QaCheck {
 function coverage(f: ScanFacts): QaCheck {
   if (f.coverage === 'full') {
     return { id: 'COVERAGE', label: 'Coverage', status: 'pass', reason: 'The whole cloud is available to the operation.' };
+  }
+  if (f.coverage === 'partial') {
+    return { id: 'COVERAGE', label: 'Coverage', status: 'review', reason: TRUNCATED_REASON };
   }
   if (f.coverage === 'sampled') {
     return { id: 'COVERAGE', label: 'Coverage', status: 'review', reason: 'Only a sampled subset is available; whole-dataset products are limited.' };

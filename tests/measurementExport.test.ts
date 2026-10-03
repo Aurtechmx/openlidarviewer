@@ -240,7 +240,7 @@ describe('measurementsToCsv', () => {
   it('header lists every column; one row per measurement', () => {
     const csv = measurementsToCsv([DISTANCE, AREA], CTX);
     const lines = csv.split('\n');
-    expect(lines[0]).toContain('id,name,kind,vertices');
+    expect(lines[0]).toContain('id,name,kind,source,vertices');
     expect(lines).toHaveLength(3); // header + 2 rows
   });
 

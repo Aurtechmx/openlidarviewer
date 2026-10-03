@@ -127,17 +127,18 @@ the two entries were renumbered when the branches were integrated.
 | L220 | UI | TEST | low | FIXED | new | With a scan open the side rails started at 56 px, under the 58 px lower edge of the location bar, so the workspace tabs touched it. Between 768 and 1023 px the bar clipped the current page to nothing. The page title was 14 px in the desktop rail and 11 px uppercase in the phone sheet. Status badges sat centred against a two-line name and used a 5 px radius outside the scale. Styles asked for weight 700, which Olv Font does not ship. The type scale comment listed sizes the tokens no longer have. |
 | L223 | SCIENTIFIC | TEST | med | FIXED | new | Compare elevation took before and after from load order, did nothing unless exactly two clouds were loaded, gave no reason with fewer than two, and an older run's result could replace a newer one. |
 | L224 | EXPORT | TEST | med | FIXED | new | An image export button had no guard, so a double click or Enter started two exports, and the point-cloud and Report PDF buttons came back after a fixed 1.5 s while a slow export could still be running. |
+| L221 | SCIENTIFIC | TEST | high | FIXED | new | With two scans open, the GeoJSON and CSV measurement exports placed every measurement through the active scan's origin and named the file after it, so scan A's points were written 100 m east and 49 m down on scan B. A truncated LAS opened as a full dataset with no warning. A scan with no CRS showed its measurements in metres beside "datum resolved". |
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 76
+- FIXED: 77
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 98
+- total: 99
 
 ## Detail
 
@@ -8135,6 +8136,46 @@ Tests: `scripts/check-bundle-budget.mjs`, `scripts/check-no-test-seam.mjs`
 and `scripts/check-no-dev-flags.mjs` on a fresh `npm run build:live`;
 `tests/e2e/lazyChunkLoad.spec.ts` and `tests/e2e/smoke.spec.ts` with
 `SMOKE_LIVE=1`.
+
+### L221 · FIXED · SCIENTIFIC
+
+Measurements finished while one scan was open now take that scan as owner when
+a second scan is added (`MeasureController.claimUnowned`, from `openScan`), and
+a draft keeps that owner when it is finished later. With more than one scan
+open, each picked point records the layer it landed on (`pickLayers`, from
+the pick result), and `exportMeasurementsFile` places the points through that
+layer: the point less its placement offset, plus its file origin. A
+measurement placed without a pick uses its owner; a `source-local` owner from
+a restored session adds only the file origin. Sessions write and read
+`pickLayers`: at most 16 distinct ids, dropped whole when the file's project
+frame does not record every one, and matched against the open layers on export. A
+measurement with no pick record is refused whenever the open layers place a
+point differently. GeoJSON features carry a
+`source` property and the CSV a `source` column, the same extension-free name
+the provenance and the file name use (`geom-a+geom-b-measurements.csv`). The
+export is refused, with a message, for a measurement with no recorded layer,
+one whose points sit on layers placed differently, or layers in different
+declared CRSs. The site KML is refused while more than one scan is
+open. A single-scan export is unchanged apart from the new field.
+
+`loadLas` records a body shorter than the declared count as
+`metadata.truncation` with the warning "Truncated: N of M points read"
+(`src/io/truncation.ts`). Coverage gains `partial`: the state strip reads
+"Partial: truncated file", the Project ready card and the Layer Health
+Loading row show the truncation, export provenance states data basis
+`partial` with the same text, and the coverage gates in the capability model,
+tool preflight, QA checks and contour launch treat it as short of full.
+
+When the horizontal unit is unknown, measurement rows, the breakdown line,
+the measure hint, the profile chart, summary, CSV and PDF, and the Profile
+Workbench print the source number marked "(unit unverified)", and the
+confidence line reads approximate with that reason instead of "datum
+resolved".
+
+Tests: `tests/measurementExportSource.test.ts`,
+`tests/partialCoverageAndUnits.test.ts`, `tests/kmlActionsSiteUpAxis.test.ts`,
+`tests/e2e/measurementSourceExport.spec.ts`,
+`tests/e2e/partialAndUnverified.spec.ts`.
 
 ### L218 · FIXED · ARCHITECTURE
 

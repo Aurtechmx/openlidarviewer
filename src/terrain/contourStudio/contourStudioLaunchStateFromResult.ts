@@ -44,7 +44,7 @@ export interface LaunchFrameContext {
    * not from the grid's extent: a strided static read is `sampled` while its
    * DTM grid reads `full`.
    */
-  readonly coverage?: 'full' | 'sampled' | 'resident-only';
+  readonly coverage?: 'full' | 'sampled' | 'resident-only' | 'partial';
   /**
    * The capability verdicts for `contours` and `dtm`, from the same facts the
    * coverage came from. The export permit reads the one its product exports

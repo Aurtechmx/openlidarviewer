@@ -137,6 +137,7 @@ const COVERAGE_STATE: Readonly<Record<Coverage, SciState>> = {
   full: 'measured',
   'resident-only': 'preview',
   sampled: 'preview',
+  partial: 'review',
 };
 
 /** The active layer's basis (full, resident-only or sampled), or null with no scan. */

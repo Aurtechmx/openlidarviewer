@@ -941,7 +941,7 @@ export function presentWorkbenchSection(
       rawFilter: currentRawFilter,
       canvas: handle.canvas as unknown as WorkbenchCanvas,
       devicePixelRatio: scene.devicePixelRatio(),
-      unitSuffix: metres === null ? null : 'm',
+      unitSuffix: metres === null ? 'unit unverified' : 'm',
       unitScale: metres ?? 1,
       // The SAME reference the detail card's height row is worded from, so the
       // axis title and the row beside it cannot name two different surfaces.

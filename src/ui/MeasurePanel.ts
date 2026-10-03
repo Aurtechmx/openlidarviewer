@@ -58,6 +58,9 @@ import {
   formatArea,
   formatGrade,
   formatLength,
+  formatUnitUnverified,
+  unitToken,
+  type DisplayUnits,
   GEOGRAPHIC_CRS_MEASURE_NOTICE,
   VOLUME_ESTIMATE_NOTICE,
 } from '../render/measure/format';
@@ -791,7 +794,7 @@ export class MeasurePanel {
     // after the chunk await, so a scan swap while pdf-lib loaded labelled this
     // profile's geometry with the next scan's CRS and unit system.
     const context = this._cb.getProfileExportContext ? this._cb.getProfileExportContext() : null;
-    const unitSystem = this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric';
+    const unitSystem = this._displayUnits(s);
     const { buildProfilePdf } = await loadProfilePdf();
     // Assembled in ONE place, shared with the docked workbench's own export
     // control. What a second assembly drops is the CRS, the unit system and
@@ -842,9 +845,15 @@ export class MeasurePanel {
    * PDF there is no chunk to load and no busy state to manage. v0.4.5,
    * closing the "no profile CSV, station table PDF-only" audit gap.
    */
+  /** The panel's unit system, or `unverified` when the scan's horizontal unit is unknown. */
+  private _displayUnits(s: MeasurementSummary): DisplayUnits {
+    if (s.unitUnverified) return 'unverified';
+    return this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric';
+  }
+
   private _exportProfileCsv(s: MeasurementSummary): void {
     if (!s.profileChart || s.profileChart.length < 2) return;
-    const system = this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric';
+    const system = this._displayUnits(s);
     const csv = buildProfileCsv(s.profileChart, system, this._verticalReference(s));
     triggerDownload(new Blob([csv], { type: 'text/csv' }), `${safeFileName(s.name)}-profile.csv`);
   }
@@ -889,7 +898,7 @@ export class MeasurePanel {
   private _openResultFocus(s: MeasurementSummary, trigger: HTMLElement): void {
     if (!s.profileChart || s.profileChart.length < 2) return;
     const samples = s.profileChart;
-    const system = this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric';
+    const system = this._displayUnits(s);
     const datumKnown = s.profileDatumKnown !== false;
     const reference = this._verticalReference(s);
     const storedVex = Number(storageGet(PROFILE_VEX_KEY));
@@ -919,7 +928,7 @@ export class MeasurePanel {
 
         // Station table — the same builder, materialised eagerly (the reader
         // opened the focus view precisely to read the whole table).
-        const unitLabel = system === 'metric' ? 'm' : 'ft';
+        const unitLabel = unitToken(system);
         const stationRows = profileStationRows(samples, system);
         const { table, build } = buildStationTable(
           stationRows,
@@ -992,7 +1001,7 @@ export class MeasurePanel {
    */
   private _buildSamplerControls(
     s: MeasurementSummary,
-    system: 'metric' | 'imperial',
+    system: DisplayUnits,
   ): HTMLElement | null {
     const resample = this._cb.onProfileResample;
     if (!resample || !s.profileChart || s.profileChart.length < 2) return null;
@@ -1007,7 +1016,7 @@ export class MeasurePanel {
       `Corridor ±${corrM != null ? formatLength(corrM, system) : 'auto'} · ` +
       `p${pct} of corridor · ${nSamples} samples`;
 
-    const unitLabel = imperial ? 'ft' : 'm';
+    const unitLabel = system === 'unverified' ? 'units' : imperial ? 'ft' : 'm';
     const toDisplay = (m: number): number => (imperial ? m * FT_PER_M : m);
     const corrInput = el('input', {
       className: 'olv-mp-sampler-input',
@@ -1147,7 +1156,8 @@ export class MeasurePanel {
       prev &&
       prev.datumResolved === scene.datumResolved &&
       prev.layers === scene.layers &&
-      prev.verticalReferenceKnown === scene.verticalReferenceKnown
+      prev.verticalReferenceKnown === scene.verticalReferenceKnown &&
+      prev.unitVerified === scene.unitVerified
     ) {
       return;
     }
@@ -1326,7 +1336,10 @@ export class MeasurePanel {
     const breakdown = breakdownParts(
       s,
       this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric',
-      { formatLength, formatArea, formatGrade, formatAngle },
+      // An unknown horizontal unit prints the source number marked unverified.
+      s.unitUnverified
+        ? { formatLength: formatUnitUnverified, formatArea: formatUnitUnverified, formatGrade, formatAngle }
+        : { formatLength, formatArea, formatGrade, formatAngle },
     );
     const breakdownLine = breakdown
       ? el('div', {
@@ -1348,7 +1361,7 @@ export class MeasurePanel {
       const vex = PROFILE_VEX_OPTIONS.includes(storedVex as 1 | 2 | 5 | 10)
         ? storedVex
         : 1;
-      const system = this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric';
+      const system = this._displayUnits(s);
       // Hover coupling: a chart tick or table row highlights the scene dot at
       // the nearest chainage. Built once and shared by the chart and the table
       // so both speak the same dot index. Absent (inert) when the host wired no
@@ -1571,7 +1584,7 @@ export class MeasurePanel {
       // This is also what makes the chart's aria-hidden honest: there is now
       // a real table in the DOM acting as the accessible source of truth.
       const stationRows = profileStationRows(s.profileChart, system);
-      const unitLabel = system === 'metric' ? 'm' : 'ft';
+      const unitLabel = unitToken(system);
       const heightHeader = heightLabel(reference);
       // Lazy <tbody> (v0.6 perf): the station table is collapsed by default and
       // most measurements are never expanded, yet a dense profile carries one
@@ -1972,7 +1985,7 @@ interface ProfileChartEl extends HTMLElement {
 function renderProfileChart(
   samples: readonly { distance: number; height: number }[],
   vex: number,
-  system: 'metric' | 'imperial',
+  system: DisplayUnits,
   coupling?: StationHoverCoupling,
 ): HTMLElement {
   // viewBox proportioned to the (taller-than-wide) chart box so that
@@ -2099,6 +2112,7 @@ function renderProfileChart(
       const ft = m * FT_PER_M;
       return ft >= 5280 ? `${(ft / 5280).toFixed(1)} mi` : `${Math.round(ft)} ft`;
     }
+    if (system === 'unverified') return `${Math.round(m)}`;
     return m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`;
   };
   // Imperial tick decimals (B9): rounding to whole feet collapsed adjacent
@@ -2119,7 +2133,7 @@ function renderProfileChart(
   // `formatElevation` — a name it once shadowed by coincidence.
   const elevTickLabel = (m: number): string => {
     if (system === 'imperial') return `${(m * FT_PER_M).toFixed(elevDecimalsFt)} ft`;
-    return `${m.toFixed(elevDecimals)} m`;
+    return system === 'unverified' ? m.toFixed(elevDecimals) : `${m.toFixed(elevDecimals)} m`;
   };
 
   // viewBox → box-fraction helpers (preserveAspectRatio="none" stretches the

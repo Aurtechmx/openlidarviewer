@@ -2309,13 +2309,7 @@ function streamingExportCloud(): PointCloud | null {
   return viewer.snapshotResidentCloud();
 }
 
-/**
- * Origin + CRS + name for the ACTIVE scan, static OR streaming — a thin caller
- * over the extracted `src/app/reportExport.ts`. The origin-resolution rule (static
- * `sourceOrigin`, else streaming `renderOrigin`, else zero) and the CRS-label
- * honesty rule (`effectiveCrsName`) live in that module; here we bind the shell's
- * running state through `reportExportDeps`.
- */
+/** Origin + CRS + name for the active scan; the rules live in `src/app/reportExport.ts`. */
 function exportGeoContext(): GeoExportContext { return runExportGeoContext(reportExportDeps); }
 
 /**
@@ -2329,7 +2323,7 @@ const kmlDeps: KmlActionDeps = {
   crsCurrent: () => crsService.current(),
   upAxis: () => crsService.context().upAxis, // RESOLVED axis
   annotations: () => viewer?.annotate.getAnnotations() ?? [],
-  measurements: () => viewer?.measure.getMeasurements() ?? [],
+  measurements: () => viewer?.measure.getMeasurements() ?? [], layerCount: () => viewer?.clouds().length ?? 0,
   viewpoints: () => viewBookmarks.savedViews.map(
     (v) => ({ name: v.name, position: v.pose.position, target: v.pose.target }),
   ),
@@ -2371,6 +2365,7 @@ const kmlDeps: KmlActionDeps = {
 const measurementExportActionDeps = (v: Viewer): MeasurementExportActionDeps => ({
   measure: v.measure,
   geo: exportGeoContext,
+  layers: { view: v, stableIdFor: runtime.layerIdentity.stableIdFor }, refuse: (m) => dropZone.setError(m),
   baseName,
   downloadText,
   loadMeasurementExport,
@@ -2876,22 +2871,19 @@ void viewerLoaded.then(() => {
 const dropZone = new DropZone(document.body, (file) => handleFile(file), prewarmLoaders);
 stage.overlay.append(dropZone.toast);
 
-// v0.3.10 trust-pass: install the Playwright seam under `?test=1`.
-// `__OLV_TEST_SEAM__` is a build-time constant (see vite.config.ts). It is
-// true for the dev server and for a build run with OLV_TEST_SEAM=1, which is
-// what playwright.config.ts sets for its webServer build. Any other build
-// substitutes `false` and the minifier drops this whole block, so a shipped
-// artifact contains no API surface. The seam drives a measurement
-// programmatically, bypassing the raycast headless CI cannot pretend at.
+// The Playwright seam under `?test=1`. `__OLV_TEST_SEAM__` (vite.config.ts) is
+// true for the dev server and an OLV_TEST_SEAM=1 build (playwright.config.ts);
+// any other build drops this block, so a shipped artifact has no API surface.
+// The seam drives a measurement without the raycast headless CI cannot do.
 if (__OLV_TEST_SEAM__ && testApi) {
   void ensureViewer().then((v) => {
-    const placePoint = (x: number, y: number, z: number): void => {
+    const placePoint = (x: number, y: number, z: number, layer?: string): void => {
       if (![x, y, z].every((c) => typeof c === 'number' && Number.isFinite(c))) {
         throw new Error(
           'placeMeasurementPoint: { x, y, z } must all be finite numbers',
         );
       }
-      v.measure.addPoint([x, y, z]);
+      v.measure.addPoint([x, y, z], layer ? v.getCloud(v.clouds().find((id) => v.getCloud(id)?.name === layer) ?? '') : undefined);
     };
     (window as unknown as { __OLV_TEST_API__: unknown }).__OLV_TEST_API__ = {
       version: '1',
@@ -2902,8 +2894,8 @@ if (__OLV_TEST_SEAM__ && testApi) {
         // level so the test sees a precise failure.
         v.measure.setKind(kind as Parameters<typeof v.measure.setKind>[0]);
       },
-      placeMeasurementPoint: (p: { x: number; y: number; z: number }) => {
-        placePoint(p.x, p.y, p.z);
+      placeMeasurementPoint: (p: { x: number; y: number; z: number; layer?: string }) => {
+        placePoint(p.x, p.y, p.z, p.layer);
       },
       finishMeasurement: () => v.measure.finishCurrent(),
       clearMeasurements: () => v.clearMeasurements(),
@@ -4060,7 +4052,7 @@ function showProjectCard(cloud: PointCloud, totalCount: number): void {
   });
   projectCard.show({
     name: cloud.name,
-    format: cloud.sourceFormat, interpretationLevel: cloud.metadata?.interpretationLevel,
+    format: cloud.sourceFormat, interpretationLevel: cloud.metadata?.interpretationLevel, truncation: cloud.metadata?.truncation,
     shownCount: cloud.pointCount,
     totalCount,
     ...describeProjectSize(b.min, b.max, { upAxis: c.upAxis, linearUnitKnown: c.linearUnitKnown, linearUnitToMetres: c.linearUnitToMetres, verticalUnitToMetres: verticalMetresPerUnit(c, 'horizontal') ?? undefined }),
