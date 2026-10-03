@@ -29,6 +29,8 @@ export interface StateStrip {
   readonly element: HTMLElement;
   /** Repaint from a snapshot; null hides the strip. */
   render(snapshot: StripSnapshot | null): void;
+  /** Stop measuring the strip and clear the height it published. */
+  dispose(): void;
 }
 
 const BASIS_TEXT: Readonly<Record<Coverage, string>> = {
@@ -106,8 +108,37 @@ export function createStateStrip(host: StateStripHost): StateStrip {
     if (b.getAttribute('aria-label') !== name) b.setAttribute('aria-label', name);
   };
 
+  // The phone strip wraps to a third row on the narrowest screens, so the
+  // surfaces parked above it read its real height rather than the two-row
+  // token. Written on change, a frame later: a same-frame write re-lays-out
+  // the stage and trips the ResizeObserver loop guard.
+  let write = 0;
+  let observer: ResizeObserver | null = null;
+  if (typeof ResizeObserver !== 'undefined') {
+    observer = new ResizeObserver(() => {
+      const h = element.offsetHeight;
+      const root = document.documentElement.style;
+      const next = h > 0 ? `${h}px` : '';
+      if (root.getPropertyValue('--olv-strip-measured') === next) return;
+      cancelAnimationFrame(write);
+      write = requestAnimationFrame(() => {
+        write = 0;
+        if (next) root.setProperty('--olv-strip-measured', next);
+        else root.removeProperty('--olv-strip-measured');
+      });
+    });
+    observer.observe(element);
+  }
+
   return {
     element,
+    dispose() {
+      observer?.disconnect();
+      observer = null;
+      if (write) cancelAnimationFrame(write);
+      write = 0;
+      document.documentElement.style.removeProperty('--olv-strip-measured');
+    },
     render(s) {
       element.classList.toggle('olv-hidden', s === null);
       if (!s) return;

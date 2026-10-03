@@ -34,6 +34,7 @@ const ACCEPTED: Record<string, readonly Site[]> = {
   'src/render/drawSignal.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot frame await' }],
   'src/perf/navDriver.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one frame per trajectory step; bounded by the trajectory, ?benchmark=nav only' }],
   'src/ui/panelChrome.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot deferred write of the dock clearance, only when the dock height changes; superseded by the next change and cancelled by the wireDockClearance disposer' }],
+  'src/ui/stateStrip.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot deferred write of the measured strip height, only when the strip height changes; superseded by the next change' }],
   'src/ui/ProjectCard.ts': [{ kind: 'setTimeout-rearm', count: 1, owner: 'fade hand-off poll; bounded by FADE_WAIT_CEILING_MS' }],
 };
 

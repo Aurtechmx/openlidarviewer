@@ -404,3 +404,34 @@ for (const theme of ['light', 'dark']) {
     for (const [sel, ratio] of Object.entries(c)) expect(ratio, sel).toBeGreaterThanOrEqual(4.5);
   });
 }
+
+// The phone toast parks above the dock and the state strip sits on the dock.
+// A message that wraps to three or four lines grew the toast down over the
+// strip, so the toast anchors its bottom edge to the strip's top edge.
+for (const [width, height] of [[320, 700], [375, 812], [390, 844], [430, 932]] as const) {
+  test(`a long phone toast stays above the state strip at ${width}x${height}`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await page.goto('/?test=1');
+    await dropTerrainAccessUtmLas(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 30_000 });
+    const strip = page.locator('.olv-state-strip');
+    await expect(strip).toBeVisible();
+    const toast = page.locator('.olv-lasso-toast.olv-visible');
+    await expect(toast).toBeVisible({ timeout: 15_000 });
+    for (const text of ['Saved.', 'Terrain scan ready — grade the surface and build contours? Nothing uploaded. '.repeat(3)]) {
+      await page.evaluate((t) => { document.querySelector('.olv-lasso-toast-msg')!.textContent = t; }, text);
+      const [t, s] = await page.evaluate(() => [
+        document.querySelector('.olv-lasso-toast')!.getBoundingClientRect().toJSON(),
+        document.querySelector('.olv-state-strip')!.getBoundingClientRect().toJSON(),
+      ]);
+      expect(t.bottom, `toast bottom vs strip top (${text.length} chars)`).toBeLessThanOrEqual(s.top);
+    }
+    // Without the strip the toast falls back to its place above the dock.
+    await page.evaluate(() => document.querySelector('.olv-state-strip')!.classList.add('olv-hidden'));
+    const [toastBottom, dockTop] = await page.evaluate(() => [
+      document.querySelector('.olv-lasso-toast')!.getBoundingClientRect().bottom,
+      document.querySelector('.olv-dock')!.getBoundingClientRect().top,
+    ]);
+    expect(toastBottom, 'toast bottom vs dock top, no strip').toBeLessThanOrEqual(dockTop);
+  });
+}

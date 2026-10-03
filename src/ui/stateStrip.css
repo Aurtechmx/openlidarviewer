@@ -67,7 +67,7 @@
     right: var(--space-2xl);
     /* --olv-dock-clear is the dock's height + 14px + 8px (panelChrome.ts); the
        phone dock sits on the sheet head, so the strip sits on the dock. */
-    bottom: calc(var(--m-chrome-head-h) + var(--olv-dock-clear, 71px) - 22px + var(--space-xs) + env(safe-area-inset-bottom));
+    bottom: var(--olv-strip-bottom);
     height: auto;
     flex-wrap: wrap;
     justify-content: flex-start;
@@ -83,12 +83,18 @@
   .olv-ss-dataset .olv-ss-text { max-width: 14ch; }
   .olv-ss-long:has(+ .olv-ss-short) { display: none; }
   .olv-ss-short { display: inline; }
-  /* A prompt parked above the dock moves up by the strip's height. */
-  body:has(.olv-state-strip:not(.olv-hidden)) .olv-lasso-toast { margin-bottom: var(--olv-strip-h); }
-  /* The tool rail ends above the strip, wherever the measured dock puts it. */
-  body:has(.olv-state-strip:not(.olv-hidden)) .olv-measure-bar {
-    bottom: calc(var(--m-chrome-head-h) + var(--olv-dock-clear, 71px) - 22px + var(--space-xs) + env(safe-area-inset-bottom) + var(--olv-strip-h) + var(--space-sm));
+  /* The strip's bottom edge, and the line above it where the tool rail and a
+     prompt parked above the dock end, wherever the measured dock puts it. The
+     strip height is measured (it wraps to a third row at 320 px). One formula
+     for all three, so they cannot drift apart. */
+  :root {
+    --olv-strip-bottom: calc(var(--m-chrome-head-h) + var(--olv-dock-clear, 71px) - 22px + var(--space-xs) + env(safe-area-inset-bottom));
+    --olv-strip-clear: calc(var(--olv-strip-bottom) + var(--olv-strip-measured, var(--olv-strip-h)) + var(--space-sm));
   }
+  /* Without the strip a long prompt still ends above the dock. */
+  .olv-lasso-toast { bottom: calc(var(--olv-strip-bottom) + var(--space-sm)); }
+  body:has(.olv-state-strip:not(.olv-hidden)) .olv-lasso-toast { bottom: var(--olv-strip-clear); }
+  body:has(.olv-state-strip:not(.olv-hidden)) .olv-measure-bar { bottom: var(--olv-strip-clear); }
 }
 
 /* Elapsed time (and the estimate left) a host shows beside its busy

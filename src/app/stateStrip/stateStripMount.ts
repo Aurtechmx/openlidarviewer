@@ -105,6 +105,7 @@ export function mountStateStrip(d: StateStripMountDeps): MountedStateStrip {
       if (timer !== null) clearTimeout(timer);
       timer = null;
       for (const off of offs) off();
+      strip.dispose();
     },
   };
 }
