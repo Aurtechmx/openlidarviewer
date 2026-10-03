@@ -1719,7 +1719,7 @@ export class Inspector {
    */
   beginCompareRun(ids: readonly string[], lookup: (id: string) => unknown): CompareRunStart {
     const selection = this._comparePicker?.selection() ?? { before: null, after: null };
-    return beginCompareRun(this._compareRuns, ids, selection, lookup);
+    return beginCompareRun(this._compareRuns, ids, selection, lookup, () => this.setCompareResult([]));
   }
 
   /** Show the "Download difference" action once a comparison has produced a grid. */

@@ -29,9 +29,11 @@ export const COMPARE_SAME_CLOUD =
  * falls back to load order (first = before, second = after), so two clouds with
  * no explicit choice compare exactly as before.
  */
+const NO_SELECTION: ComparePairSelection = { before: null, after: null };
+
 export function resolveComparePair(
   ids: readonly string[],
-  selection: ComparePairSelection = { before: null, after: null },
+  selection: ComparePairSelection = NO_SELECTION,
 ): ComparePairResolution {
   if (ids.length < 2) return { ok: false, message: COMPARE_NEEDS_TWO };
   const pick = (id: string | null, fallback: string): string =>
@@ -59,6 +61,11 @@ export class CompareRunGuard<T> {
       ids.every((id, i) => snapshot[i] !== undefined && lookup(id) === snapshot[i]);
   }
 
+  /** The token of the most recent run. */
+  get token(): number {
+    return this._token;
+  }
+
   /** Retire any run in flight (its result will be dropped). */
   invalidate(): void {
     this._token++;
@@ -69,19 +76,37 @@ export type CompareRunStart =
   | { readonly ok: true; readonly beforeId: string; readonly afterId: string; readonly current: () => boolean }
   | { readonly ok: false; readonly message: string };
 
-/** Resolve the pair, then open a guarded run over it. A refused pair also retires any run in flight. */
+/**
+ * Resolve the pair, then open a guarded run over it. A refused pair also
+ * retires any run in flight. When a run is dropped while it is still the
+ * latest (its own cloud was removed or replaced), `onOrphaned` runs once so
+ * the caller can clear the run's status line; a run replaced by a newer one
+ * leaves the status to that run.
+ */
 export function beginCompareRun<T>(
   guard: CompareRunGuard<T>,
   ids: readonly string[],
   selection: ComparePairSelection,
   lookup: (id: string) => T | undefined,
+  onOrphaned: () => void = () => {},
 ): CompareRunStart {
   const pair = resolveComparePair(ids, selection);
   if (!pair.ok) {
     guard.invalidate();
     return pair;
   }
-  return { ...pair, current: guard.begin([pair.beforeId, pair.afterId], lookup) };
+  const live = guard.begin([pair.beforeId, pair.afterId], lookup);
+  const token = guard.token;
+  let orphanHandled = false;
+  const current = (): boolean => {
+    if (live()) return true;
+    if (!orphanHandled && guard.token === token) {
+      orphanHandled = true;
+      onOrphaned();
+    }
+    return false;
+  };
+  return { ...pair, current };
 }
 
 export interface ComparePairPicker {

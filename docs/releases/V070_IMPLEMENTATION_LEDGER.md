@@ -8334,10 +8334,11 @@ chosen. `resolveComparePair` refuses the same cloud for both and, with fewer
 than two clouds, returns a message that says to load another scan.
 `CompareRunGuard` takes a token and a snapshot of the two layers when a run
 starts; the result is dropped if a newer run started or either layer was
-removed or replaced. The comparison math, the alignment refusal and the sign
+removed or replaced. A run dropped because its own cloud went away clears
+its status line. The comparison math, the alignment refusal and the sign
 convention are unchanged.
 
 Tests: `tests/comparePair.test.ts` (selection overrides load order and a swap
 flips the sign, a stale run is dropped, fewer than two clouds gives the
-message, the same cloud is refused), `tests/e2e/compareExplicitPair.spec.ts`
+message, the same cloud is refused), `tests/e2e/withheldCompare.spec.ts`
 (three clouds, first and third compared).

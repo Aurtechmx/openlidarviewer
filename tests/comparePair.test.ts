@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   resolveComparePair,
   CompareRunGuard,
+  beginCompareRun,
   COMPARE_NEEDS_TWO,
   COMPARE_SAME_CLOUD,
 } from '../src/app/comparePair';
@@ -84,5 +85,43 @@ describe('CompareRunGuard', () => {
     const replaced = guard.begin(['a', 'b'], (id) => clouds.get(id));
     clouds.set('a', {});
     expect(replaced()).toBe(false);
+  });
+});
+
+describe('beginCompareRun', () => {
+  it('clears the status once when its own cloud is removed mid-run', () => {
+    const clouds = new Map<string, object>([['a', {}], ['b', {}]]);
+    const guard = new CompareRunGuard<object>();
+    let cleared = 0;
+    const run = beginCompareRun(guard, ['a', 'b'], { before: null, after: null }, (id) => clouds.get(id), () => { cleared++; });
+    if (!run.ok) throw new Error(run.message);
+    expect(run.current()).toBe(true);
+    clouds.delete('a');
+    expect(run.current()).toBe(false);
+    expect(run.current()).toBe(false);
+    expect(cleared).toBe(1);
+  });
+
+  it('leaves the status to a newer run', () => {
+    const clouds = new Map<string, object>([['a', {}], ['b', {}]]);
+    const guard = new CompareRunGuard<object>();
+    let cleared = 0;
+    const lookup = (id: string) => clouds.get(id);
+    const first = beginCompareRun(guard, ['a', 'b'], { before: null, after: null }, lookup, () => { cleared++; });
+    beginCompareRun(guard, ['a', 'b'], { before: 'b', after: 'a' }, lookup, () => { cleared++; });
+    if (!first.ok) throw new Error(first.message);
+    expect(first.current()).toBe(false);
+    expect(cleared).toBe(0);
+  });
+
+  it('refuses a bad pair and retires the run in flight', () => {
+    const clouds = new Map<string, object>([['a', {}], ['b', {}]]);
+    const guard = new CompareRunGuard<object>();
+    const lookup = (id: string) => clouds.get(id);
+    const first = beginCompareRun(guard, ['a', 'b'], { before: null, after: null }, lookup);
+    const refused = beginCompareRun(guard, ['a', 'b'], { before: 'a', after: 'a' }, lookup);
+    expect(refused).toEqual({ ok: false, message: COMPARE_SAME_CLOUD });
+    if (!first.ok) throw new Error(first.message);
+    expect(first.current()).toBe(false);
   });
 });

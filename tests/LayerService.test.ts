@@ -77,6 +77,7 @@ function setup(
   const soloCalls: Array<string | null> = [];
   const crsFlagCalls: Array<{ ids: string[]; summary: unknown }> = [];
   const compareCalls: boolean[] = [];
+  const choiceCalls: string[][] = [];
   let compassRefreshes = 0;
 
   const rebaseCalls = new Map<string, readonly [number, number, number]>();
@@ -150,7 +151,9 @@ function setup(
     setLayerHealth: (layers: unknown[], report: unknown) => {
       healthCalls.push({ n: layers.length, report });
     },
-    setCompareChoices: () => {},
+    setCompareChoices: (c: readonly { id: string; name: string }[]) => {
+      choiceCalls.push(c.map((x) => `${x.id}:${x.name}`));
+    },
     setLayerCompareAvailable: (b: boolean) => {
       compareCalls.push(b);
     },
@@ -185,6 +188,7 @@ function setup(
     soloCalls,
     crsFlagCalls,
     compareCalls,
+    choiceCalls,
     compassRefreshes: () => compassRefreshes,
   };
 }
@@ -259,6 +263,13 @@ describe('LayerService — refreshCrsFlags', () => {
     const one = setup({ a: twoClouds.a });
     one.service.refreshCrsFlags();
     expect(one.compareCalls.at(-1)).toBe(false);
+  });
+
+  it('keeps compare available with three layers and lists all three as choices', () => {
+    const three = setup({ ...twoClouds, c: { ...twoClouds.a, name: 'C' } });
+    three.service.refreshCrsFlags();
+    expect(three.compareCalls.at(-1)).toBe(true);
+    expect(three.choiceCalls.at(-1)).toEqual(['a:A', 'b:B', 'c:C']);
   });
 });
 
