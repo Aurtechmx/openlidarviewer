@@ -77,7 +77,7 @@ describe('LayerIdentityService — binding a loaded cloud to a stable id', () =>
     const svc = createLayerIdentityService({ generateId: counter() });
     // Desktop: full budget. Mobile: tight budget, far fewer display points.
     const desktop = svc.bindOnLoad('cloud_0', scanFactsFromStatic(cloudAtStride(1_000_000)), 'survey.laz');
-    const mobile = svc.bindOnLoad('cloud_1', scanFactsFromStatic(cloudAtStride(120_000)), 'survey.laz');
+    const mobile = svc.bindOnLoad('cloud_1', scanFactsFromStatic(cloudAtStride(120_000)), 'survey.laz', []);
     expect(desktop!.layerId).toBe(mobile!.layerId);
   });
 
@@ -92,7 +92,7 @@ describe('LayerIdentityService — binding a loaded cloud to a stable id', () =>
     const svc = createLayerIdentityService({ generateId: counter() });
     const first = svc.bindOnLoad('cloud_0', FACTS_A, 'survey.laz');
     // A reopen mints a new viewer id; identity comes back through the fingerprint.
-    const reopened = svc.bindOnLoad('cloud_7', { ...FACTS_A }, 'renamed after reopen.laz');
+    const reopened = svc.bindOnLoad('cloud_7', { ...FACTS_A }, 'renamed after reopen.laz', []);
     expect(reopened!.layerId).toBe(first!.layerId);
     expect(svc.stableIdFor('cloud_7')).toBe(first!.layerId);
   });

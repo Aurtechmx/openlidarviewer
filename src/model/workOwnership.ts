@@ -27,7 +27,7 @@
  * Pure: no DOM, no three.js, no io. Unit-tested in Node.
  */
 
-import { fingerprintKey, type LayerFingerprint } from './layerIdentity';
+import { fingerprintKey, hasPlacementFacts, legacyFingerprintKey, type LayerFingerprint } from './layerIdentity';
 
 /** Which frame a piece of work's stored coordinates are expressed in. */
 export type OwnershipGeometryFrame = 'source-local' | 'project';
@@ -193,8 +193,11 @@ export function resolveOwnerLayer(
   if (!hasDistinguishingSourceFacts(facts)) {
     return { kind: 'unresolved', reason: 'filename-only' };
   }
-  const key = fingerprintKey(facts);
-  const matches = candidates.filter((c) => fingerprintKey(c.facts) === key);
+  // Facts stored without a position or digest (older files) are compared on
+  // the facts they carry; an ambiguity among the candidates still refuses.
+  const keyOf = hasPlacementFacts(facts) ? fingerprintKey : legacyFingerprintKey;
+  const key = keyOf(facts);
+  const matches = candidates.filter((c) => keyOf(c.facts) === key);
   if (matches.length === 0) return { kind: 'unresolved', reason: 'no-match' };
   if (matches.length > 1) return { kind: 'unresolved', reason: 'ambiguous' };
   return { kind: 'resolved', layerId: matches[0].layerId };

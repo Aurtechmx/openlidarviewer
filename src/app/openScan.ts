@@ -534,7 +534,7 @@ export async function attachStaticCloud(
   // the work stores — once — so new measurements/annotations record their
   // owning layer as soon as a second layer joins. Additive: a single-layer
   // scene keeps its exact byte shape, because the provider returns no owner.
-  deps.layerIdentity.bindOnLoad(id, scanFactsFromStatic(result.cloud), result.cloud.name);
+  deps.layerIdentity.bindOnLoad(id, { ...scanFactsFromStatic(result.cloud), origin: result.cloud.sourceOrigin }, result.cloud.name, prior);
   deps.layerIdentity.ensureStoresWired(
     [viewer.measure, viewer.annotate],
     () => deps.scans.activeId,

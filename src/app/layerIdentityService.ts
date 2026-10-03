@@ -70,6 +70,7 @@ export interface LayerIdentityService {
     viewerId: string,
     facts: LayerFingerprint,
     displayName: string,
+    openViewerIds?: readonly string[],
   ): LayerRecord | null;
   /** The stable id bound to a viewer id, or null when none was bound. */
   stableIdFor(viewerId: string): string | null;
@@ -113,7 +114,20 @@ export function createLayerIdentityService(
     viewerId: string,
     facts: LayerFingerprint,
     displayName: string,
+    openViewerIds?: readonly string[],
   ): LayerRecord | null => {
+    // Release the layers that have closed since the last load, so a reopened
+    // scan gets its id back while an id still held by an open layer is never
+    // handed to a second one.
+    if (openViewerIds) {
+      const open = new Set(openViewerIds);
+      for (const [vid, rec] of byViewerId) {
+        if (vid !== viewerId && !open.has(vid)) {
+          byViewerId.delete(vid);
+          if (![...byViewerId.values()].some((r) => r.layerId === rec.layerId)) registry.remove(rec.layerId);
+        }
+      }
+    }
     // A filename alone is not identity: two captures are routinely dropped
     // under one name, and their fingerprints would collide. Refuse the
     // binding — honour the same fail-closed rule the ownership resolver uses —
