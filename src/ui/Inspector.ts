@@ -1730,6 +1730,7 @@ export class Inspector {
       selection: () => this._comparePicker?.selection() ?? { before: null, after: null },
       setDifferenceAvailable: (on) => this.setDifferenceAvailable(on),
       setCompareResult: (lines) => this.setCompareResult(lines),
+      retireRun: () => this._compareRuns.invalidate(),
     });
     return this._compareDifference;
   }

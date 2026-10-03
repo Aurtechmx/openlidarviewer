@@ -6,7 +6,7 @@
 //  - A raster that comes back after its scan was closed and reopened.
 
 import { describe, it, expect } from 'vitest';
-import { createCompareDifference, createComparePairPicker, type ComparePairSelection, type HeldDifference } from '../src/app/comparePair';
+import { beginCompareRun, CompareRunGuard, createCompareDifference, createComparePairPicker, type ComparePairSelection, type HeldDifference } from '../src/app/comparePair';
 
 function scene(names: string[]) {
   const layers = new Map<string, object>(names.map((n) => [n, { n }]));
@@ -114,6 +114,32 @@ class El {
     return undefined;
   }
 }
+
+describe('a comparison still running when the pair changes', () => {
+  it('is retired, so it never publishes a result for the old pair', () => {
+    const layers = new Map<string, object>([['A', {}], ['B', {}], ['C', {}]]);
+    const guard = new CompareRunGuard<unknown>();
+    let selection: ComparePairSelection = { before: 'A', after: 'B' };
+    const ui = { available: false, result: [] as readonly string[] };
+    const diff = createCompareDifference({
+      slot: { lastDifference: null },
+      ids: () => [...layers.keys()],
+      selection: () => selection,
+      lookup: (id) => layers.get(id),
+      stableIdFor: (id) => id,
+      setDifferenceAvailable: (on) => (ui.available = on),
+      setCompareResult: (l) => (ui.result = l),
+      retireRun: () => guard.invalidate(),
+    });
+    const run = beginCompareRun(guard, [...layers.keys()], selection, (id) => layers.get(id));
+    if (!run.ok) throw new Error('pair refused');
+    diff.begin([run.beforeId, run.afterId], layers.get('A'), layers.get('B'));
+    expect(run.current()).toBe(true);
+    selection = { before: 'A', after: 'C' };
+    diff.dropStale();
+    expect(run.current()).toBe(false);
+  });
+});
 
 describe('a shown comparison with no raster', () => {
   it('has its result text cleared when the pair changes', () => {

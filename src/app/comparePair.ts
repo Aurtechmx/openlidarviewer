@@ -217,6 +217,8 @@ export interface CompareDifferenceDeps {
   readonly stableIdFor: (id: string) => string | null;
   readonly setDifferenceAvailable: (on: boolean) => void;
   readonly setCompareResult: (lines: readonly string[]) => void;
+  /** Retire the run in flight, so a run on a pair no longer named never publishes. */
+  readonly retireRun?: () => void;
 }
 
 /**
@@ -242,6 +244,7 @@ export function createCompareDifference(deps: CompareDifferenceDeps) {
     dropStale(): void {
       if (!shown || compareResultCurrent(shown, deps.ids(), deps.selection(), deps.lookup, deps.stableIdFor)) return;
       shown = null;
+      deps.retireRun?.();
       deps.slot.lastDifference = null;
       deps.setDifferenceAvailable(false);
       deps.setCompareResult([]);
