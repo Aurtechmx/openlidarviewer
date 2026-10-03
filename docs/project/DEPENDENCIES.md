@@ -75,7 +75,7 @@ Build, test, docs, and mutation tooling. None reaches the deployed app.
 | @vitest/coverage-v8 | ^5.0.1 | 5.0.1 | MIT |
 | rollup-plugin-visualizer | ^7.1.1 | 7.1.1 | MIT |
 | typescript | ~7.0.2 | 7.0.2 | Apache-2.0 |
-| vite | ^8.3.0 | 8.3.0 | MIT |
+| vite | ^8.3.1 | 8.3.1 | MIT |
 | vite-plugin-javascript-obfuscator | ^3.1.0 | 3.1.0 | MIT |
 | vitepress | 1.6.4 | 1.6.4 | MIT |
 | vitest | ^5.0.0 | 5.0.1 | MIT |
