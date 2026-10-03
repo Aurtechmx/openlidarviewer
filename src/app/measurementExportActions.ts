@@ -157,15 +157,73 @@ function ownLayers(
   return { byId };
 }
 
+/**
+ * The measure state an export reads, copied at one instant. Taken before the
+ * first await, so a scan swap or unit change while the serializer chunk loads
+ * cannot pair one scan's geometry with another scan's scale or up axis.
+ */
+interface MeasureSnapshot {
+  readonly measurements: readonly Measurement[];
+  readonly worldUp: Vec3;
+  readonly unitToMetres: number;
+  readonly verticalUnitToMetres: number;
+  readonly geographicCrs: boolean;
+  /** Linear scale known and the frame not angular: the metre columns are real metres. */
+  readonly unitsVerified: boolean;
+}
+
+function snapshotMeasure(measure: MeasureExportView): MeasureSnapshot {
+  const measurements = measure.getMeasurements().map((m) => structuredClone(m));
+  const w = measure.worldUp;
+  return {
+    measurements,
+    worldUp: [w[0], w[1], w[2]],
+    unitToMetres: measure.unitToMetres,
+    verticalUnitToMetres: measure.verticalUnitToMetres,
+    geographicCrs: measure.geographicCrs,
+    unitsVerified: measure.crsKnown && !measure.geographicCrs,
+  };
+}
+
+/**
+ * Count the measurements that name a scan (by pick record or owner) that is no
+ * longer open. Measurements survive closing their scan, so without this check
+ * they would be placed through whichever scan is open now, under its name.
+ */
+function closedScanCount(measurements: readonly Measurement[], layers: readonly ExportLayer[]): number {
+  const open = new Set(layers.map((l) => l.stableId).filter((id): id is string => id !== null));
+  let n = 0;
+  for (const m of measurements) {
+    const ids = [...(m.pickLayers ?? []), ...(m.owner?.layerId ? [m.owner.layerId] : [])];
+    if (ids.some((id) => !open.has(id))) n++;
+  }
+  return n;
+}
+
+/**
+ * Refuse (and say why) when any measurement was taken on a scan that is no
+ * longer open. True when refused.
+ */
+function refusedForClosedScan(measurements: readonly Measurement[], deps: MeasurementExportActionDeps): boolean {
+  const layers = deps.layers ? exportLayersOf(deps.layers.view, deps.layers.stableIdFor) : [];
+  if (layers.length === 0) return false;
+  const closed = closedScanCount(measurements, layers);
+  if (closed === 0) return false;
+  deps.refuse?.(`Not exported: ${closed} ${closed === 1 ? 'measurement was' : 'measurements were'} taken on a scan that is no longer open. Reopen it or delete them, then export again.`);
+  return true;
+}
+
 /** Export the placed measurements as an open GeoJSON or CSV file. */
 export async function exportMeasurementsFile(
   format: 'geojson' | 'csv',
   deps: MeasurementExportActionDeps,
 ): Promise<void> {
-  const { measure } = deps;
-  const measurements = measure.getMeasurements();
+  // Everything the file is built from is read here, before the first await.
+  const snap = snapshotMeasure(deps.measure);
+  const measurements = snap.measurements;
   if (measurements.length === 0) return;
   const layers = deps.layers ? exportLayersOf(deps.layers.view, deps.layers.stableIdFor) : [];
+  if (refusedForClosedScan(measurements, deps)) return;
   const own = layers.length > 1 ? ownLayers(measurements, layers) : null;
   if (own && 'refused' in own) {
     deps.refuse?.(own.refused);
@@ -174,9 +232,10 @@ export async function exportMeasurementsFile(
   // Measurement points are LOCAL (recentered); add the origin back to land them
   // in the source projected/local frame. `geo()` resolves the origin for
   // streaming scans too (renderOrigin) — a static-only read would export at
-  // render-frame coordinates. Resolved BEFORE the import below, so the frame and
-  // the measurements come from one instant, not two.
+  // render-frame coordinates.
   const geo = deps.geo();
+  const origin: [number, number, number] = [geo.origin[0], geo.origin[1], geo.origin[2]];
+  const generatedAt = deps.now();
   // Several layers: each point leaves through its own layer, undoing that
   // layer's placement and adding its file origin. The file names the sources
   // it holds; the digest and data basis describe the active scan, so they are
@@ -184,30 +243,32 @@ export async function exportMeasurementsFile(
   const sources = own ? [...new Set([...own.byId.values()].flatMap((p) => p.names))].sort((a, b) => a.localeCompare(b)) : null;
   const activeOnly = !sources || (sources.length === 1 && sources[0] === geo.name);
   const stems = sources ? sources.map(deps.baseName) : geo.name ? [deps.baseName(geo.name)] : [];
+  const singleSource = geo.name ? deps.baseName(geo.name) : null;
+  const sourceOfId = own ? new Map([...own.byId].map(([id, p]) => [id, p.names.map(deps.baseName).join('+')])) : null;
   const { measurementsToGeoJSON, measurementsToCsv, resolveExportDigests } = await deps.loadMeasurementExport();
   const digests = await resolveExportDigests(activeOnly ? geo.source : undefined, geo.crs);
-  // `source` is the same extension-free name the provenance and file name use.
+  // From here on only the snapshot is read.
   const ctx: MeasurementExportContext = {
     toOutput: own
       ? (p, m) => {
           const b = own.byId.get(m!.id)!.base;
           return [p[0] + b[0], p[1] + b[1], p[2] + b[2]];
         }
-      : (p) => [p[0] + geo.origin[0], p[1] + geo.origin[1], p[2] + geo.origin[2]],
-    sourceOf: own ? (m) => own.byId.get(m.id)!.names.map(deps.baseName).join('+') : () => (geo.name ? deps.baseName(geo.name) : null),
-    up: measure.worldUp,
-    unitToMetres: measure.unitToMetres,
-    verticalUnitToMetres: measure.verticalUnitToMetres,
+      : (p) => [p[0] + origin[0], p[1] + origin[1], p[2] + origin[2]],
+    sourceOf: sourceOfId ? (m) => sourceOfId.get(m.id)! : () => singleSource,
+    up: snap.worldUp,
+    unitToMetres: snap.unitToMetres,
+    verticalUnitToMetres: snap.verticalUnitToMetres,
     crsName: geo.crsName,
     // The RESOLVED frame's own answer, not a literal. A geographic frame has no
     // scalar metres-per-unit at all, so it is neither verified nor convertible.
-    geographic: measure.geographicCrs,
+    geographic: snap.geographicCrs,
     // A local / unknown-unit scan has an inert factor of 1, so the `_m` columns
     // are nominal, not metres — the evidence note then says so (M1). An angular
     // frame is unverified for a stronger reason: no scalar could make it metres.
-    unitsVerified: measure.crsKnown && !measure.geographicCrs,
+    unitsVerified: snap.unitsVerified,
     provenance: {
-      generatedAt: deps.now(),
+      generatedAt,
       source: stems.length > 0 ? stems.join('+') : null,
       crsName: geo.crsName,
       interpretation: activeOnly ? geo.interpretation : undefined,
@@ -225,25 +286,25 @@ export async function exportMeasurementsFile(
 export async function exportMeasurementIntegrityReport(
   deps: MeasurementExportActionDeps,
 ): Promise<void> {
-  const { measure } = deps;
-  const ms = measure.getMeasurements();
+  const snap = snapshotMeasure(deps.measure);
+  const ms = snap.measurements;
   if (ms.length === 0) return;
+  if (refusedForClosedScan(ms, deps)) return;
   const geo = deps.geo();
   // Every scan-bound fact is read BEFORE the lazy import, so the report is one
   // scan's account of itself. The frame, unit scales, class epoch and
   // unit-known flag were read AFTER the await, so a scan swap while the chunk
   // loaded signed A's geometry and name with B's up vector, unit scale and
   // classification epoch — inside a file called an integrity report.
-  const worldUp = measure.worldUp;
-  const unitToMetres = measure.unitToMetres;
-  const verticalUnitToMetres = measure.verticalUnitToMetres;
+  const { worldUp, unitToMetres, verticalUnitToMetres } = snap;
   const classificationEpoch = deps.activeClassificationEpoch();
   // Local / unknown-unit scan → the findings' metre labels are nominal (M1).
   // A GEOGRAPHIC frame is unverified for a stronger reason than an unknown
   // one: no scalar metres-per-degree exists, so there is nothing to convert
   // by. The CSV/GeoJSON action next door has always read it this way; this
   // path read the bare `crsKnown` and so called a lon/lat scan unit-verified.
-  const crsKnown = measure.crsKnown && !measure.geographicCrs;
+  const crsKnown = snap.unitsVerified;
+  const generatedAt = deps.now();
   const { integrityReportFile, resolveExportDigests } = await deps.loadMeasurementReport();
   const digests = await resolveExportDigests(geo.source, geo.crs);
   const f = integrityReportFile(
@@ -253,7 +314,7 @@ export async function exportMeasurementIntegrityReport(
     verticalUnitToMetres,
     geo.name ? deps.baseName(geo.name) : 'scan',
     geo.crsName,
-    deps.now(),
+    generatedAt,
     classificationEpoch,
     deps.appVersion,
     crsKnown,

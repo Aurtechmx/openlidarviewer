@@ -132,17 +132,18 @@ the two entries were renumbered when the branches were integrated.
 | L222 | UI | TEST | high | FIXED | new | One click on a measurement's delete control removed it with no Undo. A click on an existing measurement's vertex while placing was taken by the vertex handle and placed nothing. A drag to orbit while measuring placed a point. An active clip box showed only on the Clip page, and Export read "Scan scope: Full cloud" while it wrote the clipped points. |
 | L227 | UI | TEST | low | FIXED | new | With both rails expanded and the colour key docked, the project card overlapped the left rail's collapse tab at 768 to 900 px wide, and both rails at 768 px. |
 | L226 | UI | TEST | low | FIXED | new | On a phone, a scan-ready prompt that wrapped to three or four lines covered the state strip at 320 and 375 px wide, and without the strip it covered the dock. |
+| L228 | EXPORT | TEST | high | FIXED | new | A measurement taken on a scan that was then closed exported through the open scan's origin under its name, and a scan or unit change while the measurement export loaded mixed one scan's geometry with another's scale. |
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 81
+- FIXED: 82
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 103
+- total: 104
 
 ## Detail
 
@@ -8487,3 +8488,28 @@ token.
 Tests: `tests/e2e/responsiveLayout.spec.ts` (320, 375, 390 and 430 px: a short
 and a long toast end above the strip's top edge; with the strip hidden the toast
 ends above the dock).
+
+### L228 · FIXED · EXPORT
+
+Measurements survive closing their scan. `exportMeasurementsFile` in
+`src/app/measurementExportActions.ts` checked which scan a measurement was
+taken on only when two or more scans were open, so a measurement taken on scan
+A, with A closed and scan B open, was written through B's origin and named
+after B. The export now refuses whenever a measurement's pick record or owner
+names a scan that is not open, and says how to recover. The signed
+integrity report applies the same refusal before it is built. A restored measurement
+with no pick record still exports on the one open scan when its owner is that
+scan or it has no owner.
+
+The same export read the measurements before its lazy import but the up axis,
+unit scales and verification flags after it, so a scan swap or unit change
+while the chunk loaded mixed scan A's geometry with scan B's scale. Both the
+file export and the integrity report now build one snapshot (a copy of the
+measurements, the up axis, both unit scales and the verification flags) before
+the first await and read only that afterwards.
+
+Tests: `tests/measurementExportSource.test.ts` (a measurement on a closed scan
+is refused with nothing downloaded and nothing of the open scan written, picked
+and restored, and for the integrity report; a restored measurement owned by the open scan still exports; a
+scan swap, unit change and in-place edit during the import leave the file on
+the pre-await values).

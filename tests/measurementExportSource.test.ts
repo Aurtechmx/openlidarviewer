@@ -10,6 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   exportMeasurementsFile,
+  exportMeasurementIntegrityReport,
   type ExportLayerView,
   type MeasurementExportActionDeps,
 } from '../src/app/measurementExportActions';
@@ -211,5 +212,113 @@ describe('a point picked on a scan that is not the active one', () => {
     const m = owned('r', 'layer-b', B_LOCAL.map((p) => add(p, [100, 0, -49])), false);
     const out = await run([m], GEO('geom-a.las', A_ORIGIN), { view: view({ cloud_0: null, cloud_1: [100, 0, -49] }), stableIdFor });
     expect(JSON.parse(out.downloads[0].text).features[0].geometry.coordinates).toEqual(B_WORLD);
+  });
+});
+
+describe('a measurement whose scan was closed', () => {
+  // Measured on A; A then closed and B opened. B is the only open layer.
+  const onlyB: ExportLayerView = {
+    clouds: () => ['cloud_1'],
+    getCloud: () => ({ name: 'geom-b.las', sourceOrigin: [500, 600, 0], metadata: { crs: { name: 'WGS 84 / UTM zone 13N' } } }),
+    layerProjectOffset: () => null,
+  };
+  const bOnly = { view: onlyB, stableIdFor: () => 'layer-b' };
+
+  it.each([
+    ['picked and owned', true],
+    ['owned only (restored)', false],
+  ])('is refused, with nothing downloaded and nothing of B written (%s)', async (_k, picked) => {
+    const m = owned('a1', 'layer-a', [[0, 0, 0], [1, 0, 0]], picked);
+    const out = await run([m], GEO('geom-b.las', [500, 600, 0]), bOnly);
+    expect(out.downloads).toEqual([]);
+    expect(out.refusals).toHaveLength(2);
+    expect(out.refusals[0]).toBe('Not exported: 1 measurement was taken on a scan that is no longer open. Reopen it or delete them, then export again.');
+    expect(out.refusals.join(' ')).not.toMatch(/geom-b|500|600/);
+  });
+
+  it('refuses the signed integrity report too, before anything is loaded or written', async () => {
+    const m = owned('a1', 'layer-a', [[0, 0, 0], [1, 0, 0]]);
+    const downloads: string[] = [];
+    const refusals: string[] = [];
+    let loaded = false;
+    await exportMeasurementIntegrityReport({
+      measure: { getMeasurements: () => [m], worldUp: [0, 0, 1], unitToMetres: 1, verticalUnitToMetres: 1, crsKnown: true, geographicCrs: false },
+      geo: () => GEO('geom-b.las', [500, 600, 0]),
+      layers: bOnly,
+      refuse: (t) => refusals.push(t),
+      baseName: (n) => n.replace(/\.[^.]+$/, ''),
+      downloadText: (f) => downloads.push(f),
+      loadMeasurementExport: async () => { throw new Error('unused'); },
+      loadMeasurementReport: async () => { loaded = true; throw new Error('must not load'); },
+      activeClassificationEpoch: () => 0,
+      appVersion: '0.0.0',
+      now: () => '2026-01-01T00:00:00.000Z',
+    });
+    expect(loaded).toBe(false);
+    expect(downloads).toEqual([]);
+    expect(refusals).toEqual(['Not exported: 1 measurement was taken on a scan that is no longer open. Reopen it or delete them, then export again.']);
+  });
+
+  it('still exports a restored measurement owned by the one open scan', async () => {
+    const m = owned('b1', 'layer-b', [[0, 0, 0], [1, 0, 0]], false);
+    const out = await run([m], GEO('geom-b.las', [500, 600, 0]), bOnly);
+    expect(out.refusals).toEqual([]);
+    expect(JSON.parse(out.downloads[0].text).features[0].geometry.coordinates[0]).toEqual([500, 600, 0]);
+  });
+});
+
+describe('a change while the serializer chunk loads', () => {
+  it('builds the file from the values read before the await', async () => {
+    const A: Measurement = owned('a1', undefined, [[0, 0, 0], [10, 0, 0]]);
+    const B: Measurement = owned('b1', undefined, [[0, 0, 0], [99, 0, 0]]);
+    const live = { ms: [A], unit: 1, name: 'geom-a.las', origin: A_ORIGIN as V3 };
+    const one: ExportLayerView = {
+      clouds: () => ['cloud_0'],
+      getCloud: () => ({ name: live.name, sourceOrigin: live.origin, metadata: null }),
+      layerProjectOffset: () => null,
+    };
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const downloads: { filename: string; text: string }[] = [];
+    const deps: MeasurementExportActionDeps = {
+      measure: {
+        getMeasurements: () => live.ms,
+        get worldUp() { return [0, 0, 1] as V3; },
+        get unitToMetres() { return live.unit; },
+        get verticalUnitToMetres() { return live.unit; },
+        crsKnown: true,
+        geographicCrs: false,
+      },
+      geo: () => ({ origin: live.origin, crsName: 'WGS 84 / UTM zone 13N', name: live.name }),
+      layers: { view: one, stableIdFor: () => 'layer-x' },
+      refuse: () => undefined,
+      baseName: (n) => n.replace(/\.[^.]+$/, ''),
+      downloadText: (filename, text) => downloads.push({ filename, text }),
+      loadMeasurementExport: async () => {
+        await gate;
+        return { ...serializers, resolveExportDigests: async () => ({ sourceSha256: null, sourceSha256Note: 'not supplied', crsOrigin: null } as never) };
+      },
+      loadMeasurementReport: async () => { throw new Error('unused'); },
+      activeClassificationEpoch: () => 0,
+      appVersion: '0.0.0',
+      now: () => '2026-01-01T00:00:00.000Z',
+    };
+    const pending = exportMeasurementsFile('csv', deps);
+    // Swap the scan and the unit scale mid-export, and mutate the original in place.
+    live.ms = [B];
+    live.unit = 0.3048;
+    live.name = 'geom-b.las';
+    live.origin = [1, 2, 3];
+    (A.points as V3[])[1] = [77, 0, 0];
+    release();
+    await pending;
+    expect(downloads).toHaveLength(1);
+    expect(downloads[0].filename).toBe('geom-a-measurements.csv');
+    const [head, row] = downloads[0].text.split('\n');
+    const cols = head.split(',');
+    const cell = (k: string): string => row.split(',')[cols.indexOf(k)]!;
+    expect(cell('source')).toBe('geom-a');
+    expect(Number(cell(cols.find((c) => /length|value|distance/i.test(c) && c.endsWith('_m'))!))).toBeCloseTo(10, 6);
+    expect(downloads[0].text).not.toMatch(/geom-b|0\.3048|\b99\b|\b77\b/);
   });
 });
