@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { isBenignPageError } from './pageErrors';
-import { railChromeSettled, expectHittable } from './helpers';
+import { railChromeSettled, expectHittable, showWorkspaceMode } from './helpers';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { GlobalPoints } from '../../src/convert/globalPoints';
@@ -335,4 +335,75 @@ test('a coordinate read from the mounted non-anchor layer is in the project fram
     * ((row ?? '').includes('km') ? 1000 : 1);
   expect(metres, `measurement row read "${row}"`).toBeGreaterThan(2820);
   expect(metres, `measurement row read "${row}"`).toBeLessThan(2835);
+});
+
+/**
+ * Open A, add B, measure on B, close A. Closing the scan that set the project
+ * origin must not move B: the measurement sits in the project frame and
+ * nothing rebases it, so B's point and the measurement have to stay together.
+ */
+test('closing the scan that set the origin leaves the other scan and its measurement in place', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('console', (m) => {
+    if (m.type() === 'error' && !isBenignPageError(m.text())) errors.push(m.text());
+  });
+  page.on('pageerror', (e) => { if (!isBenignPageError(String(e))) errors.push(String(e)); });
+
+  const w = await loadLasWriter();
+  const bytesA = georefLas(w, 500000, 4100000);
+  const bytesB = georefLas(w, 500000 + SEP_M, 4100000 + SEP_M);
+
+  await page.goto('/?test=1');
+  await expect(page.locator('.olv-empty-title')).toBeVisible();
+  await dropBytes(page, bytesA, 'utm33-a.las');
+  await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
+  await dropBytes(page, bytesB, 'utm33-b.las');
+  await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 20_000 });
+  await expect(page.locator('.olv-layerhealth-layer')).toHaveCount(2, { timeout: 20_000 });
+  await railChromeSettled(page);
+
+  type Api = {
+    layerProjectPoints: (i: number) => { id: string; project: [number, number, number] }[];
+    setMeasureKind: (k: string) => void;
+    placeMeasurementPoint: (q: { x: number; y: number; z: number }) => void;
+  };
+  const corners = () => page.evaluate(() =>
+    (window as unknown as { __OLV_TEST_API__: Api }).__OLV_TEST_API__.layerProjectPoints(0));
+
+  const before = await corners();
+  expect(before).toHaveLength(2);
+  const bBefore = before.reduce((m, p) => (p.project[0] > m.project[0] ? p : m));
+  expect(bBefore.project[0], 'B sits 2 km from the origin A set').toBeCloseTo(SEP_M, 1);
+
+  // Measure on B: a 3 m line starting at B's corner point.
+  await page.locator('.olv-tool', { hasText: 'Measure' }).click();
+  await expect(page.locator('.olv-measure-bar')).toBeVisible();
+  await page.evaluate((p) => {
+    const api = (window as unknown as { __OLV_TEST_API__: Api }).__OLV_TEST_API__;
+    api.setMeasureKind('distance');
+    api.placeMeasurementPoint({ x: p[0], y: p[1], z: p[2] });
+    api.placeMeasurementPoint({ x: p[0] + 3, y: p[1], z: p[2] });
+  }, bBefore.project);
+  await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
+  await page.keyboard.press('Escape');
+  await showWorkspaceMode(page, 'data');
+
+  const removeA = page.getByRole('button', { name: 'Remove utm33-a.las' });
+  await railChromeSettled(page);
+  await expectHittable(removeA);
+  await removeA.click();
+  await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
+  await expect(page.locator('.olv-layerhealth-layer')).toHaveCount(1, { timeout: 20_000 });
+  await railChromeSettled(page);
+
+  const after = await corners();
+  expect(after).toHaveLength(1);
+  // B's point is where the measurement was placed on it, to the millimetre.
+  for (let k = 0; k < 3; k++) {
+    expect(after[0].project[k], `axis ${k} after closing A`).toBeCloseTo(bBefore.project[k], 3);
+  }
+  const health = await readLayerHealth(page);
+  const offset = parseCoords(health[0].offsetToProject);
+  expect(offset?.[0], `B offset after A closed was "${health[0].offsetToProject}"`).toBeCloseTo(SEP_M, 1);
+  expect(errors, `console/page errors: ${errors.join(' | ')}`).toEqual([]);
 });

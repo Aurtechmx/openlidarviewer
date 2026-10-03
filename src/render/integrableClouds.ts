@@ -195,7 +195,10 @@ export function analysisClassification(
 export function integrableEntries<E extends IntegrableEntry>(
   clouds: ReadonlyMap<string, E>,
 ): Array<readonly [string, E]> {
-  const out: Array<readonly [string, E]> = [];
-  for (const [id, entry] of clouds) if (isIntegrable(entry)) out.push([id, entry]);
-  return out;
+  // Same two-stage rule as integrableClouds: a lone layer is analysed in its
+  // own frame; once several are combined, each must be compatible AND mounted,
+  // or an unplaced layer would be merged at the wrong offset.
+  const ids = new Map<E, string>();
+  for (const [id, entry] of clouds) ids.set(entry, id);
+  return integrableClouds(clouds.values()).map((e) => [ids.get(e)!, e] as const);
 }

@@ -257,6 +257,13 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
         verticalDatum: i.verticalDatum, verticalEpsg: i.verticalEpsg,
       })),
     );
+    // A sole layer classifies as `verified` by convention, but a survivor of a
+    // close was judged against its siblings. Keeping that judgement keeps its
+    // placement: re-judging it alone demanded a vertical unit the pair never
+    // needed, cleared the placement and moved the layer off its measurements.
+    if (infos.length === 1 && lastCompatibility.has(infos[0]!.id)) {
+      compat.set(infos[0]!.id, lastCompatibility.get(infos[0]!.id)!);
+    }
     lastCompatibility = compat;
     const stateOf = (id: string): LayerCompatibility => compat.get(id) ?? 'unknown';
     const layers: ProjectFrameLayer[] = [];
