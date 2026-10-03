@@ -32,7 +32,7 @@ export interface LayerViewState {
    * The most recent elevation-difference raster, ready to download, or null
    * when no comparison has produced one this session.
    */
-  lastDifference: { readonly stem: string; readonly asc: () => string } | null;
+  lastDifference: import('./comparePair').HeldDifference | null;
 }
 
 /** The active-scan selection state. */

@@ -1,5 +1,5 @@
 import { el, iconButton, formatCount } from './dom';
-import { createComparePairPicker, beginCompareRun, CompareRunGuard, type ComparePairPicker, type CompareChoice, type CompareRunStart } from '../app/comparePair';
+import { createComparePairPicker, createCompareDifference, beginCompareRun, CompareRunGuard, type ComparePairPicker, type CompareDifferenceDeps, type CompareChoice, type CompareRunStart } from '../app/comparePair';
 import {
   renderStreamingDetail,
   clearStreamingDetail,
@@ -127,6 +127,8 @@ export interface InspectorCallbacks {
   onCompareLayers?: () => void;
   /** Download the most recent comparison's signed difference as a georeferenced raster. */
   onExportDifference?: () => void;
+  /** The loaded scans, for binding a finished comparison to the pair it was computed from. */
+  compareScene?: Pick<CompareDifferenceDeps, 'slot' | 'ids' | 'lookup' | 'stableIdFor'>;
   /** Save the current camera viewpoint. */
   onSaveView: () => void;
   /** Fly to a saved viewpoint by index. */
@@ -707,6 +709,7 @@ export class Inspector {
   /** Lazily-created two-epoch compare button + result, shown with exactly 2 layers. */
   private _compareBtn: HTMLButtonElement | null = null;
   private _comparePicker: ComparePairPicker | null = null;
+  private _compareDifference: ReturnType<typeof createCompareDifference> | null = null;
   private readonly _compareRuns = new CompareRunGuard<unknown>();
   private _compareResult: HTMLElement | null = null;
   private _diffBtn: HTMLButtonElement | null = null;
@@ -1693,6 +1696,7 @@ export class Inspector {
     this._compareResult = result;
     this._diffBtn = diff;
     this._comparePicker = createComparePairPicker();
+    this._comparePicker.onChange(() => this.compareDifference.dropStale());
     this._layersSection.append(this._comparePicker.element, btn, result, diff);
   }
 
@@ -1710,6 +1714,25 @@ export class Inspector {
   setCompareChoices(choices: readonly CompareChoice[]): void {
     this._ensureCompareUi();
     this._comparePicker?.setChoices(choices);
+    this.compareDifference.dropStale();
+  }
+
+  /**
+   * The finished comparison and its difference raster, bound to their pair:
+   * both are dropped when the selection or a participating scan changes.
+   */
+  get compareDifference(): ReturnType<typeof createCompareDifference> {
+    this._compareDifference ??= createCompareDifference({
+      slot: this._cb.compareScene?.slot ?? { lastDifference: null },
+      ids: () => this._cb.compareScene?.ids() ?? [],
+      lookup: (id) => this._cb.compareScene?.lookup(id),
+      stableIdFor: (id) => this._cb.compareScene?.stableIdFor(id) ?? null,
+      selection: () => this._comparePicker?.selection() ?? { before: null, after: null },
+      setDifferenceAvailable: (on) => this.setDifferenceAvailable(on),
+      setCompareResult: (lines) => this.setCompareResult(lines),
+      retireRun: () => this._compareRuns.invalidate(),
+    });
+    return this._compareDifference;
   }
 
   /**
