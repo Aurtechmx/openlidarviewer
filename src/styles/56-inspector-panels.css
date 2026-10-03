@@ -336,6 +336,25 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
               calc(50vw + (var(--olv-rail-width) - var(--olv-right-rail-width)) / 2),
               calc(var(--olv-pc-band-left) + var(--olv-pc-band) - var(--olv-pc-width) / 2));
 }
+/* With both rails open the card fits the band between the two rail tabs
+   (72-panel-rails.css: each 22px wide, from 1px inside its rail), 8px clear of
+   each, the same clamp as for the floating key above. Below 859px that band is
+   under the card's 200px floor, so the card stays out of view until a rail is
+   collapsed. Desktop rails only; the phone layout places the card itself. */
+@media (min-width: 768px) and (min-height: 501px), (min-width: 768px) and (pointer: fine) {
+  .olv-overlay:not(:has(.olv-right-rail.olv-right-collapsed)):not(:has(.olv-left-panels.olv-rail-collapsed)) .olv-project-card {
+    --olv-pc-band-left: calc(14px + var(--olv-rail-width) - 1px + 22px + var(--space-md));
+    --olv-pc-band: calc(100vw - var(--olv-pc-band-left) - (14px + var(--olv-right-rail-width) - 1px + 22px + var(--space-md)));
+    --olv-pc-width: clamp(200px, var(--olv-pc-band), 290px);
+    width: var(--olv-pc-width);
+    left: clamp(calc(var(--olv-pc-band-left) + var(--olv-pc-width) / 2),
+                calc(50vw + (var(--olv-rail-width) - var(--olv-right-rail-width)) / 2),
+                calc(var(--olv-pc-band-left) + var(--olv-pc-band) - var(--olv-pc-width) / 2));
+  }
+}
+@media (min-width: 768px) and (max-width: 858px) and (min-height: 501px), (min-width: 768px) and (max-width: 858px) and (pointer: fine) {
+  .olv-overlay:not(:has(.olv-right-rail.olv-right-collapsed)):not(:has(.olv-left-panels.olv-rail-collapsed)) .olv-project-card { visibility: hidden; }
+}
 .olv-project-card.olv-visible {
   opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto;
 }

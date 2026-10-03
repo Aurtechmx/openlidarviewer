@@ -130,17 +130,18 @@ the two entries were renumbered when the branches were integrated.
 | L221 | SCIENTIFIC | TEST | high | FIXED | new | With two scans open, the GeoJSON and CSV measurement exports placed every measurement through the active scan's origin and named the file after it, so scan A's points were written 100 m east and 49 m down on scan B. A truncated LAS opened as a full dataset with no warning. A scan with no CRS showed its measurements in metres beside "datum resolved". |
 | L225 | UI | TEST | low | FIXED | new | With the right rail collapsed, the project card centred into the freed band and its close button sat under the floating colour key's header at 1024 px wide. |
 | L222 | UI | TEST | high | FIXED | new | One click on a measurement's delete control removed it with no Undo. A click on an existing measurement's vertex while placing was taken by the vertex handle and placed nothing. A drag to orbit while measuring placed a point. An active clip box showed only on the Clip page, and Export read "Scan scope: Full cloud" while it wrote the clipped points. |
+| L227 | UI | TEST | low | FIXED | new | With both rails expanded and the colour key docked, the project card overlapped the left rail's collapse tab at 768 to 900 px wide, and both rails at 768 px. |
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 79
+- FIXED: 80
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 101
+- total: 102
 
 ## Detail
 
@@ -8451,3 +8452,20 @@ Tests: `tests/measureClickUndo.test.ts`, `tests/stateStripLive.test.ts`,
 `tests/exportInputDigests.test.ts`, `tests/e2e/measure.spec.ts`,
 `tests/e2e/measurePicker.spec.ts`, `tests/e2e/clip.spec.ts`,
 `tests/e2e/dialogFocus.spec.ts`.
+
+### L227 · FIXED · UI
+
+With both rails expanded (the colour key docked in the right rail), the
+project card was centred between the rails at a width that did not account for
+their collapse tabs, so it overlapped the left rail's tab at 768 to 900 px and
+both rails at 768 px. `src/styles/56-inspector-panels.css` now fits the card to
+the band between the two rail tabs, 8 px clear of each, with the same clamp
+L225 uses for the floating key. Below 859 px that band is under the card's
+200 px floor, so the card stays out of view while both rails are open and
+appears once either rail is collapsed. Desktop rails only; the phone layout is
+unchanged.
+
+Tests: `tests/e2e/largeTouchLayout.spec.ts` (768, 800, 880, 900, 1024 and
+1280 px with both rails expanded: at 880 px and wider the card meets neither
+rail nor either tab and no control sits under another; at 768 and 800 px the
+card is hidden and shows once the right rail is collapsed).
