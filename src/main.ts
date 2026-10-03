@@ -263,7 +263,7 @@ import { createLayerService } from './app/LayerService';
 import { createViewBookmarks } from './app/viewBookmarks';
 import { createScanService } from './app/ScanService';
 import { createScanRouteService } from './app/ScanRouteService';
-import { createProjectFrameService } from './app/projectFrame';
+import { createProjectFrameService, projectFrameInputFrom } from './app/projectFrame';
 
 /**
  * The centralised CRS service. Owns the active scan's resolved CRS
@@ -3542,7 +3542,7 @@ const sessionSnapshotDeps: SessionSnapshotDeps = {
   verticalUnitToMetres: () => verticalMetresPerUnit(crsService.context(), 'horizontal-when-known') ?? null,
   captureViewState, savedViews: () => viewBookmarks.savedViews, origin: () => exportGeoContext().origin,
   crs: () => crsService.current(), layerGroups: () => inspector.layerGroupsForSession(), appVersion: __APP_VERSION__,
-};
+  projectFrame: () => projectFrameInputFrom({ frame: projectFrame.frame, layerIds: layerService.buildLayerInfos().map((i) => i.id), cloud: (id) => viewer?.getCloud(id), record: (id) => runtime.layerIdentity.recordFor(id), placement: layerService.placementOf }) };
 
 /**
  * Session import — a thin caller over the extracted `src/app/sessionIo.ts`.
@@ -3557,7 +3557,7 @@ const sessionIoDeps: SessionIoDeps = {
   getActiveScanId: () => scans.activeId,
   getActiveLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null),
   getActiveCloud: () => scans.activeCloud(),
-  exportOrigin: () => exportGeoContext().origin,
+  exportOrigin: () => (scans.activeCloud() && projectFrame.frame?.projectOrigin) || exportGeoContext().origin,
   bookmarks,
   setInspectorViews: (names) => inspector.setViews(names),
   restoreLayerGroups: (groups) => inspector.restoreLayerGroups(groups),
