@@ -34,7 +34,7 @@ import { findDuplicateIds, type Action } from './ui/actionRegistry';
 import { runSceneTool, type SceneTool } from './app/toggleTool';
 import type { SessionIoDeps } from './app/sessionIo';
 import type { SessionSnapshotDeps } from './app/sessionSnapshot';
-import { openScan, type OpenScanDeps } from './app/openScan';
+import { openScan, clearPendingSessionRestore, type OpenScanDeps } from './app/openScan';
 import {
   openStreamingCopc as runOpenStreamingCopc,
   handleRemoteEpt as runHandleRemoteEpt,
@@ -4020,7 +4020,7 @@ async function loadFromUrl(url: string, name: string): Promise<void> {
 function resetToEmptyState(): void {
   viewer.setMeasureMode(false);
   viewer.setInspectMode(false);
-  viewer.clearMeasurements();
+  viewer.clearMeasurements(); clearPendingSessionRestore();
   // No scan open → take the compass down (nothing to orient).
   compass.refresh();
   // Hiding the clip panel also clears the active clip (see ClipPanel.setVisible).
