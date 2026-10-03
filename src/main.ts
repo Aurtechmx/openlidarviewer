@@ -109,7 +109,7 @@ import {
 import { makeExportCrsResolver, resolvedExportCrs } from './app/exportCrsResolver';
 import { createInspectorVisualCoordinator } from './app/inspectorVisualCoordinator';
 import type { MeasurementExportActionDeps } from './app/measurementExportActions';
-import { exportImageAction } from './app/exportImageAction';
+import { exportImageAction, settleFileExport } from './app/exportImageAction';
 import { ClipPanel } from './ui/ClipPanel';
 import type { ClipBox } from './render/clip/clipBox';
 // Two-epoch change detection is loaded on demand (it pulls the terrain
@@ -2384,7 +2384,7 @@ const exportPanel = new ExportPanel({
   exportHealth: () => (hasScan() ? buildExportHealth(buildCurrentStoryInputs()) : null),
   onExport: (format) => {
     const cloud = scans.activeCloud();
-    if (cloud) void loadExporters().then(async (m) => downloadText(`${baseName(cloud.name)}.${format}`, await m.exportCloudWithDigests(cloud, format, crsService.context().isGeographic, exportGeoContext())));
+    if (cloud) return settleFileExport(loadExporters().then(async (m) => downloadText(`${baseName(cloud.name)}.${format}`, await m.exportCloudWithDigests(cloud, format, crsService.context().isGeographic, exportGeoContext()))), dropZone);
   },
   onExportImage: (mode) =>
     exportImageAction(mode, {
@@ -2404,7 +2404,7 @@ const exportPanel = new ExportPanel({
     // renders; failures route through the same toast UI as every other
     // export.
     dropZone.setProgress('Generating report…');
-    generateReportPdf(templateId)
+    return generateReportPdf(templateId)
       .then(() => {
         recordUsage('report', templateId);
         dropZone.setProgress(null);

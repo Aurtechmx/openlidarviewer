@@ -20,6 +20,7 @@ import { increment as recordUsage } from '../diagnostics/usageCounters';
 import { loadPngWorldFile } from '../lazyChunks';
 import { triggerDownload } from '../io/download';
 import { sameExportTarget, EXPORT_SCAN_CHANGED_REFUSAL } from '../export/exportScanIdentity';
+import { recordErrorLedger } from './staleChunkReload';
 
 /** The progress surface the action drives (a `DropZone`, structurally). */
 export interface ExportImageProgress {
@@ -58,9 +59,9 @@ const MODE_LABEL: Record<string, string> = {
 };
 
 /** Render and download an image export for `mode`. */
-export function exportImageAction(mode: ExportMode, deps: ExportImageActionDeps): void {
+export function exportImageAction(mode: ExportMode, deps: ExportImageActionDeps): Promise<void> {
   const viewer = deps.getViewer();
-  if (!viewer) return;
+  if (!viewer) return Promise.resolve();
   const progress = deps.getProgress();
   // The target this export was ASKED for. The Studio chunk loads across an
   // await and the scene adapter reads live state through closures, so nothing
@@ -73,7 +74,7 @@ export function exportImageAction(mode: ExportMode, deps: ExportImageActionDeps)
   const base = sourceName ? deps.baseName(sourceName) : 'openlidarviewer';
   const label = MODE_LABEL[mode] ?? mode;
   progress.setProgress(`Exporting ${label}…`);
-  viewer
+  return viewer
     // Thread the active class-scope stamp so a filtered export carries the
     // "showing N of M classes" banner; empty when nothing is hidden.
     .exportImage(mode, {}, deps.currentClassScopeStamp())
@@ -124,4 +125,23 @@ export function exportImageAction(mode: ExportMode, deps: ExportImageActionDeps)
       console.error('[image-export]', err);
       progress.setError(`Image export failed: ${msg}`);
     });
+}
+
+/**
+ * Settle a point-cloud file export for the button that started it. A failure
+ * is shown through the shared error toast, counted, and recorded in the
+ * diagnostics error ledger as a rejection (kind 1), then the returned promise
+ * resolves so the button comes back for a retry. Success is never reported
+ * for a failed export.
+ */
+export function settleFileExport(work: PromiseLike<unknown>, progress: ExportImageProgress): Promise<void> {
+  return Promise.resolve(work).then(
+    () => undefined,
+    (err: unknown) => {
+      recordUsage('error', 'export');
+      recordErrorLedger(1, err);
+      console.error('[export]', err);
+      progress.setError(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
+    },
+  );
 }

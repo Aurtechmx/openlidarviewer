@@ -304,13 +304,15 @@ export function deferredPageReload(win: ReloadWindowLike | null): () => void {
  * startup chunk more than the code does; the ledger itself is lazy and turns
  * the tuples into sanitized entries when it is read. No message is kept.
  */
-export function captureWindowErrors(target: Pick<Window, 'addEventListener'>): void {
+export function recordErrorLedger(kind: number, err: unknown): void {
   const g = globalThis as { __olvErrorLedger?: unknown[] };
-  const push = (kind: number, err: unknown): void => {
-    const b = (g.__olvErrorLedger ??= []);
-    b.push([performance.now(), kind, err instanceof Error ? err.name : 0]);
-    if (b.length > 50) b.shift();
-  };
+  const b = (g.__olvErrorLedger ??= []);
+  b.push([performance.now(), kind, err instanceof Error ? err.name : 0]);
+  if (b.length > 50) b.shift();
+}
+
+export function captureWindowErrors(target: Pick<Window, 'addEventListener'>): void {
+  const push = recordErrorLedger;
   target.addEventListener('error', (e) => push(0, (e as ErrorEvent).error));
   target.addEventListener('unhandledrejection', (e) => push(1, (e as PromiseRejectionEvent).reason));
 }

@@ -30,33 +30,18 @@ const EXPORT_FORMATS: ExportFormat[] = ['ply', 'obj', 'xyz', 'csv'];
 
 /**
  * Milliseconds a duplicate-trigger guard holds its controls disabled when the
- * callback gives back nothing to await. `onExport`/`onExportReport` are typed
- * `void` — the host (main.ts) fires its real async work and forgets — so this
- * module has no promise of its own to await; the fixed window instead covers
- * the literal rapid-double-click case (R1: two clicks before the first run
- * even starts reacting). A callback that DOES return a thenable is awaited
- * for real instead of waiting out the timer — see {@link guardDuplicateClicks}.
+ * callback gives back nothing to await. The host's callbacks return the
+ * promise of their real work, which is awaited instead; this window only
+ * covers a callback that returns nothing.
  */
 const DUPLICATE_CLICK_GUARD_MS = 1500;
 
 /**
- * Disable `controls` for the duration of `run`'s own promise, when `run`
- * hands one back, so a second click on an in-flight export is dropped
- * instead of firing a duplicate, concurrent export. A click while already
- * disabled is a no-op.
- *
- * Today, `run` never hands one back: `cb.onExport`/`cb.onExportReport` are
- * void arrow functions in main.ts that start their async work with `void
- * ....then(...)` / call `.then().catch()` without a `return`, so `run()`
- * always evaluates to `undefined` here and this always falls through to the
- * fixed {@link DUPLICATE_CLICK_GUARD_MS} window below, whatever the real
- * work's own duration turns out to be — the promise branch is reachable code
- * with no current production caller. That is a real gap for the report
- * button specifically: a cold-chunk pdf-lib load plus multi-page render can
- * outlast the window, so a second click after it re-enables can start a
- * genuine concurrent report build. Closing it needs main.ts's two callbacks
- * to `return` their promise chains instead of discarding them; this module
- * cannot make that change on its own.
+ * Disable `controls` until `run`'s promise settles (resolved or rejected), so
+ * a second click or Enter on an in-flight export is dropped instead of firing
+ * a duplicate, concurrent export, and a failed export gives the control back
+ * for a retry. A click while already disabled is a no-op. A `run` that returns
+ * nothing holds the controls for {@link DUPLICATE_CLICK_GUARD_MS}.
  */
 function guardDuplicateClicks(
   controls: ReadonlyArray<HTMLButtonElement | HTMLSelectElement>,
@@ -132,11 +117,11 @@ const IMAGE_EXPORT_BUTTONS: ReadonlyArray<{
 /** The callbacks the deliverables fire; main.ts owns the lazy engines behind them. */
 export interface ExportDeliverablesCallbacks {
   /** Export the active cloud to a point-cloud file format. */
-  readonly onExport: (format: ExportFormat) => void;
+  readonly onExport: (format: ExportFormat) => void | PromiseLike<unknown>;
   /** Render the live scan in one Studio mode and download it as a PNG. */
-  readonly onExportImage: (mode: ExportMode) => void;
+  readonly onExportImage: (mode: ExportMode) => void | PromiseLike<unknown>;
   /** Generate a PDF report from the live scan using the named template. */
-  readonly onExportReport: (templateId: string) => void;
+  readonly onExportReport: (templateId: string) => void | PromiseLike<unknown>;
 }
 
 /** The mounted deliverables plus the gating controller the shell drives. */
@@ -196,7 +181,7 @@ export function buildExportDeliverables(cb: ExportDeliverablesCallbacks): Export
     button.title = `${title} (load a scan first)`;
     button.addEventListener('click', () => {
       button.blur();
-      cb.onExportImage(mode);
+      guardDuplicateClicks([button], () => cb.onExportImage(mode));
     });
     imageExportButtons.set(mode, button);
     imageExportTitles.set(mode, title);

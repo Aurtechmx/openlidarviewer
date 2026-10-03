@@ -126,17 +126,18 @@ the two entries were renumbered when the branches were integrated.
 | L217 | UI | TEST | med | FIXED | new | Below 1024 px the measure toolbar wrapped into a column taller than the stage: at 800 × 470 Distance sat out of reach and the toolbar ran into the state strip; at 768 × 1024 the hint was one word per line and Done sat under the View rail. The Navigation panel and the View rail opened over the scan, the location bar overlapped itself, and the landing mark sat under the header pill on short windows. |
 | L220 | UI | TEST | low | FIXED | new | With a scan open the side rails started at 56 px, under the 58 px lower edge of the location bar, so the workspace tabs touched it. Between 768 and 1023 px the bar clipped the current page to nothing. The page title was 14 px in the desktop rail and 11 px uppercase in the phone sheet. Status badges sat centred against a two-line name and used a 5 px radius outside the scale. Styles asked for weight 700, which Olv Font does not ship. The type scale comment listed sizes the tokens no longer have. |
 | L223 | SCIENTIFIC | TEST | med | FIXED | new | Compare elevation took before and after from load order, did nothing unless exactly two clouds were loaded, gave no reason with fewer than two, and an older run's result could replace a newer one. |
+| L224 | EXPORT | TEST | med | FIXED | new | An image export button had no guard, so a double click or Enter started two exports, and the point-cloud and Report PDF buttons came back after a fixed 1.5 s while a slow export could still be running. |
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 75
+- FIXED: 76
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 97
+- total: 98
 
 ## Detail
 
@@ -8342,3 +8343,22 @@ Tests: `tests/comparePair.test.ts` (selection overrides load order and a swap
 flips the sign, a stale run is dropped, fewer than two clouds gives the
 message, the same cloud is refused), `tests/e2e/withheldCompare.spec.ts`
 (three clouds, first and third compared).
+
+### L224 · FIXED · EXPORT
+
+`buildExportDeliverables` in `src/ui/export/exportDeliverables.ts` guards the
+image export buttons the way it already guarded the format and report
+buttons. The host callbacks in `src/main.ts` now return the promise of their
+work, and `exportImageAction` returns its own, so each control stays disabled
+until the export succeeds or fails rather than for a fixed 1.5 s. A failed
+export gives the control back for a retry and reports the failure. A failed
+point-cloud file export goes through `settleFileExport`, which shows the error,
+counts it and records it in the diagnostics error ledger.
+
+Tests: `tests/exportDeliverables.test.ts` (a report held past the fixed
+window still drops a second click, a failed export re-enables its button, a
+double click on an image export starts one), `tests/exportImageActionSettles.test.ts`
+(the image export settles after the download, and on failure reports the error
+with no download; a failed file export is shown and recorded in the error
+ledger; the format, image and report callbacks in `src/main.ts` return their
+promise).
