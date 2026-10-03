@@ -35,7 +35,7 @@ describe('SessionFindings ownership', () => {
     expect(f.count).toBe(2);
   });
 
-  it('drops another scan\'s findings and reports how many, rather than losing them silently', () => {
+  it('sets another scan\'s findings aside and reports how many, keeping them for that scan', () => {
     const f = new SessionFindings();
     f.retarget('scan-A');
     f.add(finding('measured on A'));
@@ -44,6 +44,8 @@ describe('SessionFindings ownership', () => {
     expect(f.retarget('scan-B')).toBe(2);
     expect(f.count).toBe(0);
     expect(f.ownerId).toBe('scan-B');
+    f.retarget('scan-A');
+    expect(f.count).toBe(2);
   });
 
   it('treats closing the scan as a change too', () => {
@@ -54,13 +56,13 @@ describe('SessionFindings ownership', () => {
     expect(f.ownerId).toBeNull();
   });
 
-  it('clear() releases the owner as well as the rows', () => {
+  it('clear() empties the active scan\'s rows and keeps the owner', () => {
     const f = new SessionFindings();
     f.retarget('scan-A');
     f.add(finding('on A'));
     f.clear();
     expect(f.count).toBe(0);
-    expect(f.ownerId).toBeNull();
+    expect(f.ownerId).toBe('scan-A');
     // A fresh scan can then claim it without anything being reported as dropped.
     expect(f.retarget('scan-B')).toBe(0);
   });

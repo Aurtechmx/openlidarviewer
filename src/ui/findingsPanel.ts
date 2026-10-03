@@ -16,8 +16,14 @@
  */
 
 import type { ReportFinding } from '../render/measure/reportManifest';
-import type { SessionFindings } from '../render/measure/sessionFindings';
+import type { ClearedFindings, SessionFindings } from '../render/measure/sessionFindings';
 import { el } from './dom';
+
+/**
+ * What an export attempt did. `refused` means the host declined and has
+ * already explained why in its own status, so the panel adds nothing.
+ */
+export type FindingsExportResult = 'downloaded' | 'refused' | 'failed';
 
 export interface FindingsPanelDeps {
   /** The session ledger this panel renders and mutates. */
@@ -32,9 +38,9 @@ export interface FindingsPanelDeps {
   /**
    * Export the ledger as the integrity report. The host builds the manifest
    * (SHA-256) and triggers the download; the panel only decides WHEN and passes
-   * the current ledger snapshot.
+   * the current ledger snapshot, and reports only what the host says happened.
    */
-  readonly exportReport: (findings: readonly ReportFinding[]) => void;
+  readonly exportReport: (findings: readonly ReportFinding[]) => Promise<FindingsExportResult>;
 }
 
 export interface MountedFindingsPanel {
@@ -63,19 +69,27 @@ export function buildFindingsPanel(deps: FindingsPanelDeps): MountedFindingsPane
 
   const addBtn = el('button', { className: 'olv-bc-pill olv-export-product-btn olv-findings-add', text: 'Add current measurements' });
   addBtn.type = 'button';
-  addBtn.title = 'Append the placed measurements to the findings ledger, each with its band and caveats.';
+  addBtn.title = 'Append the placed measurements to the saved findings, each with its band and caveats.';
   const exportBtn = el('button', { className: 'olv-bc-pill olv-export-product-btn olv-findings-export', text: 'Export findings report' });
   exportBtn.type = 'button';
-  exportBtn.title = 'Export the whole ledger as the tamper-evident integrity report (JSON, SHA-256 digest).';
+  exportBtn.title = 'Export the saved findings as the tamper-evident report (JSON, SHA-256 digest).';
   const clearBtn = el('button', { className: 'olv-bc-pill olv-export-product-btn olv-findings-clear', text: 'Clear all' });
   clearBtn.type = 'button';
-  clearBtn.title = 'Empty the findings ledger for this session. Exported reports are unaffected.';
+  clearBtn.title = 'Empty the saved findings for this scan. Undo is offered afterwards. Exported reports are unaffected.';
   const status = el('div', { className: 'olv-findings-status', text: '' });
   // Every write below (add / nothing-to-add / remove / export / clear) lands
   // here, so assistive tech needs one live-region wiring for all of them.
   status.setAttribute('role', 'status');
   status.setAttribute('aria-live', 'polite');
   actions.append(addBtn, exportBtn, clearBtn);
+
+  let exporting = false;
+  let undoOffer: ClearedFindings | null = null;
+  const setStatus = (text: string): void => {
+    undoOffer = null;
+    status.replaceChildren();
+    status.textContent = text;
+  };
 
   const render = (): void => {
     const all = findings.all;
@@ -100,7 +114,7 @@ export function buildFindingsPanel(deps: FindingsPanelDeps): MountedFindingsPane
         remove.setAttribute('aria-label', `Remove ${f.label}`);
         remove.addEventListener('click', () => {
           findings.remove(i);
-          status.textContent = '';
+          setStatus('');
           render();
         });
         row.append(remove);
@@ -108,7 +122,7 @@ export function buildFindingsPanel(deps: FindingsPanelDeps): MountedFindingsPane
       });
     }
     // Export only means something with at least one finding.
-    exportBtn.disabled = all.length === 0;
+    exportBtn.disabled = exporting || all.length === 0;
     clearBtn.disabled = all.length === 0;
   };
 
@@ -118,17 +132,17 @@ export function buildFindingsPanel(deps: FindingsPanelDeps): MountedFindingsPane
       .collectMeasurements()
       .then((toAdd) => {
         if (toAdd.length === 0) {
-          status.textContent = 'No placed measurements to add.';
+          setStatus('No placed measurements to add.');
           return;
         }
         for (const f of toAdd) findings.add(f);
-        status.textContent = `Added ${toAdd.length} measurement finding(s).`;
+        setStatus(`Added ${toAdd.length} measurement finding(s).`);
         render();
       })
       .catch((err: unknown) => {
         // eslint-disable-next-line no-console
         console.error('OpenLiDARViewer: could not collect the current measurements.', err);
-        status.textContent = 'Could not read the current measurements. Try again.';
+        setStatus('Could not read the current measurements. Try again.');
       })
       .finally(() => {
         addBtn.disabled = false;
@@ -136,15 +150,52 @@ export function buildFindingsPanel(deps: FindingsPanelDeps): MountedFindingsPane
   });
 
   exportBtn.addEventListener('click', () => {
-    if (findings.all.length === 0) return;
-    deps.exportReport(findings.all);
-    status.textContent = `Exported a report of ${findings.all.length} finding(s).`;
+    if (exporting || findings.all.length === 0) return;
+    exporting = true;
+    exportBtn.disabled = true;
+    setStatus('');
+    const fail = (err?: unknown): void => {
+      if (err !== undefined) {
+        // eslint-disable-next-line no-console
+        console.error('OpenLiDARViewer: could not export the findings report.', err);
+      }
+      setStatus('Could not export the findings report. Your findings are kept. Try again.');
+    };
+    let result: Promise<FindingsExportResult>;
+    try {
+      result = Promise.resolve(deps.exportReport(findings.all));
+    } catch (err) {
+      result = Promise.reject(err);
+    }
+    void result
+      .then((r) => {
+        if (r === 'downloaded') setStatus('Report download started.');
+        else if (r === 'failed') fail();
+        // 'refused': the host has already said why; say nothing contradictory.
+      })
+      .catch(fail)
+      .finally(() => {
+        exporting = false;
+        render();
+      });
   });
 
   clearBtn.addEventListener('click', () => {
-    findings.clear();
-    status.textContent = 'Cleared the findings ledger.';
+    const cleared = findings.clear();
     render();
+    if (cleared.findings.length === 0) return;
+    setStatus(`Cleared ${cleared.findings.length} finding(s). `);
+    const undo = el('button', { className: 'olv-findings-undo', text: 'Undo' });
+    undo.type = 'button';
+    undo.title = 'Restore the findings you just cleared.';
+    undo.addEventListener('click', () => {
+      if (undoOffer !== cleared) return;
+      findings.restore(cleared);
+      setStatus(`Restored ${cleared.findings.length} finding(s).`);
+      render();
+    });
+    status.append(undo);
+    undoOffer = cleared;
   });
 
   render();

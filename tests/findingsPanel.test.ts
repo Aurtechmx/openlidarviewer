@@ -33,7 +33,7 @@ describe('buildFindingsPanel', () => {
     const { element } = buildFindingsPanel({
       findings,
       collectMeasurements: () => Promise.resolve([]),
-      exportReport: () => {},
+      exportReport: () => Promise.resolve('downloaded'),
     });
     expect(q(element, '.olv-findings-empty')).not.toBeNull();
     expect(q(element, '.olv-findings-export').disabled).toBe(true);
@@ -45,7 +45,7 @@ describe('buildFindingsPanel', () => {
     const { element } = buildFindingsPanel({
       findings,
       collectMeasurements: () => Promise.resolve([finding('Distance AB', 43.28), finding('Stockpile A', 612.4)]),
-      exportReport: () => {},
+      exportReport: () => Promise.resolve('downloaded'),
     });
     q(element, '.olv-findings-add').click();
     await Promise.resolve();
@@ -63,7 +63,7 @@ describe('buildFindingsPanel', () => {
     const { element } = buildFindingsPanel({
       findings,
       collectMeasurements: () => Promise.resolve([]),
-      exportReport: () => {},
+      exportReport: () => Promise.resolve('downloaded'),
     });
     q(element, '.olv-findings-add').click();
     await Promise.resolve();
@@ -81,7 +81,7 @@ describe('buildFindingsPanel', () => {
     const { element } = buildFindingsPanel({
       findings,
       collectMeasurements: () => Promise.resolve([]),
-      exportReport: () => {},
+      exportReport: () => Promise.resolve('downloaded'),
     });
     const status = q(element, '.olv-findings-status');
     expect(status.getAttribute('role')).toBe('status');
@@ -93,7 +93,7 @@ describe('buildFindingsPanel', () => {
     const { element } = buildFindingsPanel({
       findings,
       collectMeasurements: () => Promise.reject(new Error('chunk load failed')),
-      exportReport: () => {},
+      exportReport: () => Promise.resolve('downloaded'),
     });
     const addBtn = q(element, '.olv-findings-add');
     addBtn.click();
@@ -117,7 +117,7 @@ describe('buildFindingsPanel', () => {
     const { element } = buildFindingsPanel({
       findings,
       collectMeasurements: () => Promise.resolve([]),
-      exportReport: () => {},
+      exportReport: () => Promise.resolve('downloaded'),
     });
     // Remove the first row.
     q(element, '.olv-findings-list').querySelectorAll('.olv-findings-remove')[0].click();
@@ -134,6 +134,7 @@ describe('buildFindingsPanel', () => {
       collectMeasurements: () => Promise.resolve([]),
       exportReport: (f) => {
         exported = f;
+        return Promise.resolve('downloaded');
       },
     });
     q(element, '.olv-findings-export').click();

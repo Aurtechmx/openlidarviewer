@@ -173,7 +173,7 @@ export interface ExportPanelCallbacks {
    */
   activeFindingsTargetId?: () => string | null;
   /** Export the curated findings ledger as the signed integrity report (JSON). */
-  exportFindingsReport?: (findings: readonly ReportFinding[]) => void;
+  exportFindingsReport?: (findings: readonly ReportFinding[]) => void | Promise<void>;
   /**
    * Export a site KML (annotations + measurements + viewpoints) for Google
    * Earth / QGIS. Wired only when the host can supply a lat/lon transform.
@@ -776,11 +776,11 @@ export class ExportPanel {
       // edits; not a cryptographic signature). The honest deliverable.
       if (this._cb.exportIntegrityReport) {
         const btn = this._productButton(
-          'Integrity report',
+          'Report with verification checksum',
           count > 0,
           () => this._cb.exportIntegrityReport?.(),
           NO_MEASUREMENTS_HINT,
-          'Save the measurements with a checksum, so a later edit to the file shows up.',
+          'Save the measurements with a SHA-256 digest, so a later edit to the file shows up.',
         );
         btn.setAttribute('data-testid', 'export-integrity-report');
         measureRow.append(btn);
@@ -807,7 +807,7 @@ export class ExportPanel {
       const ledgerHasEntries = (this._findings?.all.length ?? 0) > 0;
       if (this._cb.collectMeasurementFindings && this._cb.exportFindingsReport && (count > 0 || ledgerHasEntries)) {
         const slot = el('div', { className: 'olv-findings-slot' });
-        content.append(this._productGroup('Findings ledger', slot, undefined, 'findings'));
+        content.append(this._productGroup('Saved findings', slot, undefined, 'findings'));
         if (this._findingsPanel) {
           slot.append(this._findingsPanel.element);
         } else {
@@ -974,19 +974,23 @@ export class ExportPanel {
             this._retargetFindings();
             return this._cb.collectMeasurementFindings?.() ?? Promise.resolve([]);
           },
-          exportReport: (f) => {
-            if (this._retargetFindings() > 0) {
-              // The ledger has just been emptied, so `f` describes a scan that is
-              // no longer active. Refuse rather than sign it as this one.
+          exportReport: async (f) => {
+            if (this._retargetFindings() > 0 || f.length === 0) {
+              // The active scan changed since the list was shown. Its own
+              // findings are now on screen and the previous scan's are kept, so
+              // refuse rather than sign them as this scan's.
               this._setStatus(
-                'Report not written — the findings were measured on a different scan than the one '
-                + 'now open, and a report describes a single dataset. Re-collect on this scan.',
+                'Report not written. The active scan changed, so the panel now shows this scan\'s '
+                + 'saved findings. The other scan\'s findings are kept. Review and export again.',
                 'error',
               );
               this._findingsPanel?.refresh();
-              return;
+              return 'refused';
             }
-            this._cb.exportFindingsReport?.(f);
+            const run = this._cb.exportFindingsReport;
+            if (!run) return 'failed';
+            await run(f);
+            return 'downloaded';
           },
         });
         slot.append(this._findingsPanel.element);
@@ -999,6 +1003,11 @@ export class ExportPanel {
    * were discarded because they belonged to another scan (0 in the normal case,
    * so an idle call is free).
    */
+  /** Drop the saved findings kept for a scan that has been removed. */
+  forgetFindingsFor(scanId: string): void {
+    this._findings?.forget(scanId);
+  }
+
   private _retargetFindings(): number {
     if (!this._findings) return 0;
     return this._findings.retarget(this._cb.activeFindingsTargetId?.() ?? null);

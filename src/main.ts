@@ -4321,7 +4321,7 @@ function removeCloud(id: string): void {
   layerVisible.delete(id);
   if (layers.solo === id) layers.solo = null;
   scans.clearIf(id);
-  captureProvenance.clearIf(id);
+  captureProvenance.clearIf(id); exportPanel.forgetFindingsFor(id); // a removed scan's saved findings go with it
   if (viewer.clouds().length === 0) resetToEmptyState();
   else {
     layerService.refreshCrsFlags();

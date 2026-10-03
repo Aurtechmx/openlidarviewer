@@ -18,19 +18,24 @@ import type { ReportFinding } from './reportManifest';
 import type { StockpileVolumeResult } from './stockpileVolume';
 import type { ChangeVolumeUncertainty } from '../../terrain/change/changeUncertainty';
 
+/** What {@link SessionFindings.clear} removed, so the caller can offer Undo. */
+export interface ClearedFindings {
+  readonly ownerId: string | null;
+  readonly findings: ReadonlyArray<ReportFinding>;
+}
+
 export class SessionFindings {
-  private readonly _findings: ReportFinding[] = [];
   /**
-   * The scan every finding in this ledger was measured on.
-   *
-   * The ledger deliberately outlives a panel re-render, and nothing bounded it
-   * to a scan. Findings measured on A therefore survived opening B, and the
-   * report they were exported into took its dataset name, CRS and
-   * classification epoch from B — one manifest describing one dataset, filled
-   * with another dataset's numbers. The report schema has no way to express
-   * that, so the ledger must not be able to reach that state.
-   *
-   * `null` means "no findings yet"; the first `add` claims the ledger.
+   * Findings kept per owner scan id. Only the active owner's list is visible
+   * through `all`; switching scans changes which list that is and never
+   * deletes another scan's findings. Scan ids are unique for the session, so a
+   * kept list can never reattach to a different dataset.
+   */
+  private readonly _byOwner = new Map<string | null, ReportFinding[]>();
+  /**
+   * The scan the visible findings were measured on. A report describes one
+   * dataset, so `all` only ever returns findings measured on this scan.
+   * `null` means no scan has claimed the ledger yet.
    */
   private _ownerId: string | null = null;
   private readonly _listeners = new Set<() => void>();
@@ -47,60 +52,86 @@ export class SessionFindings {
     }
   }
 
-  /** The scan this ledger belongs to, or null while it is empty. */
+  private _list(owner: string | null = this._ownerId): ReportFinding[] {
+    let list = this._byOwner.get(owner);
+    if (!list) {
+      list = [];
+      this._byOwner.set(owner, list);
+    }
+    return list;
+  }
+
+  /** The scan the visible findings belong to, or null before any scan claims it. */
   get ownerId(): string | null {
     return this._ownerId;
   }
 
   /**
-   * Bind the ledger to the active scan, dropping findings measured on another.
-   *
-   * Called when the export target changes. Returns the number of findings
-   * discarded so the caller can tell the user rather than silently losing work.
-   * Re-asserting the SAME owner keeps everything, so an idle re-render costs
-   * nothing.
+   * Show the findings of the active scan. The previous scan's findings are kept
+   * and come back when that scan is active again. Returns how many findings
+   * were set aside (0 when the owner is unchanged, so an idle call is free).
    */
   retarget(targetId: string | null): number {
     if (targetId === this._ownerId) return 0;
-    const dropped = this._findings.length;
-    this._findings.length = 0;
+    const setAside = this._list().length;
     this._ownerId = targetId;
     this._changed();
-    return dropped;
+    return setAside;
+  }
+
+  /** Drop the findings kept for a scan that has been removed. */
+  forget(ownerId: string): void {
+    const had = this._byOwner.get(ownerId);
+    if (!this._byOwner.delete(ownerId)) return;
+    if (ownerId === this._ownerId && had && had.length > 0) this._changed();
   }
 
   add(finding: ReportFinding): void {
-    this._findings.push(finding);
+    this._list().push(finding);
     this._changed();
   }
 
   get all(): ReadonlyArray<ReportFinding> {
-    return this._findings;
+    return this._byOwner.get(this._ownerId) ?? [];
   }
 
   get count(): number {
-    return this._findings.length;
+    return this.all.length;
   }
 
   /** Drop the most recent finding (e.g. the user discarded a measurement). */
   pop(): ReportFinding | undefined {
-    const f = this._findings.pop();
+    const f = this._list().pop();
     if (f) this._changed();
     return f;
   }
 
   /** Drop the finding at `index` (a row the reviewer removed). No-op if out of range. */
   remove(index: number): void {
-    if (index >= 0 && index < this._findings.length) {
-      this._findings.splice(index, 1);
+    const list = this._list();
+    if (index >= 0 && index < list.length) {
+      list.splice(index, 1);
       this._changed();
     }
   }
 
-  clear(): void {
-    this._findings.length = 0;
-    this._ownerId = null;
+  /** Empty the active scan's findings. Returns what was removed, for Undo. */
+  clear(): ClearedFindings {
+    const cleared: ClearedFindings = { ownerId: this._ownerId, findings: [...this.all] };
+    this._byOwner.delete(this._ownerId);
     this._changed();
+    return cleared;
+  }
+
+  /**
+   * Put back findings removed by {@link clear}, ahead of anything added since.
+   * They return to the scan they were measured on, whichever scan is active.
+   */
+  restore(cleared: ClearedFindings): void {
+    if (cleared.findings.length === 0) return;
+    const list = this._list(cleared.ownerId);
+    list.unshift(...cleared.findings);
+    if (cleared.ownerId === this._ownerId) this._changed();
   }
 }
 

@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { denseGridPlyBytes, dropDenseGridPly, showWorkspaceMode } from './helpers';
 
 /**
- * Products lane → "Integrity report" — places a measurement via the test seam,
+ * Products lane → "Report with verification checksum" — places a measurement via the test seam,
  * exports the JSON report, and asserts the download is a real manifest
  * (content digest + findings + provenance). The digest's verification is
  * covered by the reportManifest unit tests; this proves the UI wiring assembles
