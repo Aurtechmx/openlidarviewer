@@ -40,19 +40,35 @@ function filterChannel<T extends TypedArray>(
 /**
  * The cloud restricted to the points the clip keeps. Returns the input
  * unchanged when the clip is disabled or keeps everything.
+ *
+ * The clip box is in the project frame, the one the viewer draws and counts
+ * in. `offset` is the layer's source-local to project-local translation; each
+ * point is placed by it (rounded to Float32, as the viewer's placed buffer is)
+ * before the test, so the subset is exactly the set shown inside the box. The
+ * subset's positions stay source-local.
  */
-export function clipCloud(cloud: PointCloud, clip: ClipBox): PointCloud {
+export function clipCloud(
+  cloud: PointCloud,
+  clip: ClipBox,
+  offset?: readonly [number, number, number] | null,
+): PointCloud {
   if (!clip.enabled) return cloud;
   const pos = sourcePositions(cloud);
   const n = (pos.length / 3) | 0;
-  const kept = countKept(clip, pos);
+  const [dx, dy, dz] = offset ?? [0, 0, 0];
+  const placed = dx !== 0 || dy !== 0 || dz !== 0;
+  const keeps = (i: number): boolean => clipKeepsPoint(clip, placed
+    ? [Math.fround(pos[i * 3] + dx), Math.fround(pos[i * 3 + 1] + dy), Math.fround(pos[i * 3 + 2] + dz)]
+    : [pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]]);
+  let kept = 0;
+  if (placed) { for (let i = 0; i < n; i++) if (keeps(i)) kept++; } else kept = countKept(clip, pos);
   if (kept >= n) return cloud;
 
   // Indices of the points that survive the clip.
   const keep = new Uint32Array(kept);
   let k = 0;
   for (let i = 0; i < n; i++) {
-    if (clipKeepsPoint(clip, [pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]])) keep[k++] = i;
+    if (keeps(i)) keep[k++] = i;
   }
 
   // Classes supplied to the constructor read as the PRODUCER's, so the subset

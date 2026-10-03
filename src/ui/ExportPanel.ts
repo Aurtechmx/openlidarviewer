@@ -204,6 +204,12 @@ export interface ExportPanelCallbacks {
   /** The active clip box, if any — when enabled, the cloud export is restricted to it. */
   getActiveClip?: () => ClipBox | null;
   /**
+   * The active layer's source-local to project-local offset, or null when it
+   * is unplaced. The clip box is in the project frame, so the export places
+   * each point by this before testing it.
+   */
+  getActiveClipOffset?: () => readonly [number, number, number] | null;
+  /**
    * Which scan the panel is exporting, as the shell's own active-scan id (null
    * for a streaming scan). Read once before the export's first await and again
    * before the bytes are written: a full-resolution re-decode takes seconds
@@ -233,6 +239,23 @@ export type ExportProduct = 'measurements' | 'findings' | 'terrain-dem' | 'conto
 export interface TerrainExportsLane {
   ready(): boolean;
   run(kind: 'dem' | 'contours'): void;
+}
+
+/**
+ * The offset that places `cloud` in the project frame. The layer's offset is
+ * stated against the displayed cloud's source origin; a full-resolution
+ * re-decode may carry a different one, and the difference is folded in.
+ */
+export function clipFrameOffset(
+  offset: readonly [number, number, number] | null,
+  displayOrigin: readonly [number, number, number] | null,
+  cloud: PointCloud,
+): readonly [number, number, number] | null {
+  const o = cloud.sourceOrigin;
+  const d = displayOrigin ?? o;
+  const t = offset ?? [0, 0, 0];
+  const out: [number, number, number] = [t[0] + o[0] - d[0], t[1] + o[1] - d[1], t[2] + o[2] - d[2]];
+  return out.every((v) => v === 0) ? null : out;
 }
 
 export class ExportPanel {
@@ -1203,6 +1226,8 @@ export class ExportPanel {
     // decode runs — reading it afterwards would filter the export by a box that
     // was never part of the request. `scanId` is the identity re-verified below.
     const clip = this._cb.getActiveClip?.() ?? null;
+    const clipOffset = this._cb.getActiveClipOffset?.() ?? null;
+    const displayOrigin = this._cb.getCloud()?.sourceOrigin ?? null;
     const scanId = this._cb.getActiveScanId?.() ?? null;
     // Snapshot the resolved source CRS with the other request inputs, so the
     // whole export — the converted data, its metadata, and the ASCII `.prj`
@@ -1262,7 +1287,7 @@ export class ExportPanel {
       // Respect an active clip: export only the points inside (or outside) the
       // box the user had set when they pressed Export (captured above).
       const clipped = clip?.enabled;
-      const cloud = clipped ? clipCloud(sourceCloud, clip) : sourceCloud;
+      const cloud = clipped ? clipCloud(sourceCloud, clip, clipFrameOffset(clipOffset, displayOrigin, sourceCloud)) : sourceCloud;
       const scopeNote = cloud === sourceCloud ? null
         : clipScopeText({ kept: cloud.pointCount, total: sourceCloud.pointCount });
       showBusyScan(this._exportBtn, 'Exporting…');
