@@ -132,18 +132,20 @@ the two entries were renumbered when the branches were integrated.
 | L222 | UI | TEST | high | FIXED | new | One click on a measurement's delete control removed it with no Undo. A click on an existing measurement's vertex while placing was taken by the vertex handle and placed nothing. A drag to orbit while measuring placed a point. An active clip box showed only on the Clip page, and Export read "Scan scope: Full cloud" while it wrote the clipped points. |
 | L227 | UI | TEST | low | FIXED | new | With both rails expanded and the colour key docked, the project card overlapped the left rail's collapse tab at 768 to 900 px wide, and both rails at 768 px. |
 | L226 | UI | TEST | low | FIXED | new | On a phone, a scan-ready prompt that wrapped to three or four lines covered the state strip at 320 and 375 px wide, and without the strip it covered the dock. |
-| L228 | ARCHITECTURE | TEST | low | FIXED | new | The `?test=1` Playwright seam sat inline in `src/main.ts`. It now lives in `src/app/testSeam/testSeamMount.ts` behind the same compile-time guard, and the shipped build still carries none of it. |
+| L228 | EXPORT | TEST | high | FIXED | new | A measurement taken on a scan that was then closed exported through the open scan's origin under its name, and a scan or unit change while the measurement export loaded mixed one scan's geometry with another's scale. |
+| L229 | UI | TEST | med | FIXED | new | The findings panel read "Exported a report" even when the export was refused or failed, opening another scan and adding measurements discarded the first scan's findings with no warning, Clear all emptied the list in one click with no Undo, and a findings report could take the next scan's name, CRS and epoch when the scan changed while the export loaded. |
+| L230 | EXPORT | TEST | medium | FIXED | new | The scan report PDF for a truncated file divided the header's declared point total by the extent of the points read, which inflated the density, and printed no truncation note. |
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 82
+- FIXED: 84
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 104
+- total: 106
 
 ## Detail
 
@@ -8489,17 +8491,80 @@ Tests: `tests/e2e/responsiveLayout.spec.ts` (320, 375, 390 and 430 px: a short
 and a long toast end above the strip's top edge; with the strip hidden the toast
 ends above the dock).
 
-### L228 · FIXED · ARCHITECTURE
+### L228 · FIXED · EXPORT
 
-The `?test=1` Playwright seam (`window.__OLV_TEST_API__`) moved out of
-`src/main.ts` into `src/app/testSeam/testSeamMount.ts`, driven through a
-`TestSeamDeps` object of accessors (`getViewer`, the active scan id, the
-reclassify panel hooks). The `__OLV_TEST_SEAM__` guard stays at the call site
-and the module loads through `loadTestSeamMount()` in
-`src/app/testSeam/testSeamLoader.ts`, so a build with the constant false drops the call and the chunk. The API surface and
-every method body are unchanged. `src/main.ts` went from 4,429 to 4,351 lines.
+Measurements survive closing their scan. `exportMeasurementsFile` in
+`src/app/measurementExportActions.ts` checked which scan a measurement was
+taken on only when two or more scans were open, so a measurement taken on scan
+A, with A closed and scan B open, was written through B's origin and named
+after B. The export now refuses whenever a measurement's pick record or owner
+names a scan that is not open, and says how to recover. The signed
+integrity report applies the same refusal before it is built. A restored measurement
+with no pick record still exports on the one open scan when its owner is that
+scan or it has no owner.
 
-Tests: `npm run check:no-test-seam` after `npm run build:live` (no seam marker
-in the shipped bundle); `tests/e2e/measure.spec.ts`,
-`tests/e2e/exportPanel.spec.ts` and `tests/e2e/lazyChunkLoad.spec.ts` drive the
-seam under `?test=1`.
+The same export read the measurements before its lazy import but the up axis,
+unit scales and verification flags after it, so a scan swap or unit change
+while the chunk loaded mixed scan A's geometry with scan B's scale. Both the
+file export and the integrity report now build one snapshot (a copy of the
+measurements, the up axis, both unit scales and the verification flags) before
+the first await and read only that afterwards.
+
+Tests: `tests/measurementExportSource.test.ts` (a measurement on a closed scan
+is refused with nothing downloaded and nothing of the open scan written, picked
+and restored, and for the integrity report; a restored measurement owned by the open scan still exports; a
+scan swap, unit change and in-place edit during the import leave the file on
+the pre-await values).
+
+### L229 · FIXED · UI
+
+`src/ui/findingsPanel.ts` called the export and then wrote "Exported a report
+of N finding(s)." whatever the host did, so a refusal in the Export panel's
+status sat beside a success line. The export now returns `downloaded`,
+`refused` or `failed`; the panel writes "Report download started." only on
+`downloaded`, adds nothing on a refusal, keeps the findings and offers a retry
+on a failure, and disables the button while the export runs.
+
+`SessionFindings.retarget` emptied the list whenever the active scan changed,
+and "Add current measurements" retargets first, so findings curated on one
+scan were lost after opening another. `src/render/measure/sessionFindings.ts`
+now keeps a list per scan id and shows the active scan's; the report still
+holds only that scan's findings, and a scan's list is dropped when the scan is
+removed. Clear all offers Undo in the panel status, matching the measurement
+delete Undo, and Undo does not restore into a removed scan.
+
+The report read the scan name, CRS and classification epoch after the export
+chunk loaded, so a scan change during that load signed the findings with the
+next scan's identity. `runFindingsExport` in `src/export/exportScanIdentity.ts`
+reads them and copies the findings at click time, and refuses when the owning
+scan is closed or no longer active once the chunk has loaded. Measurements
+collected while their scan closes are not added.
+
+The section and button labels read "Saved findings" and "Report with
+verification checksum", the palette entry reads "Verify report with
+verification checksum" and is still found by "verify integrity", and the state
+strip's resident basis reads "Currently loaded points", with the exact meaning
+in the tooltips.
+
+Tests: `tests/findingsLedgerSafety.test.ts`, `tests/findingsExportScanPin.test.ts`,
+`tests/exportPanelFindingsScanSwitch.test.ts`, `tests/sessionFindingsOwner.test.ts`,
+`tests/findingsPanel.test.ts`, `tests/exportActionsVerify.test.ts`,
+`tests/stateStripLive.test.ts`.
+
+### L230 · FIXED · EXPORT
+
+The static-cloud path of `src/app/reportExport.ts` took the declared total
+whenever it exceeded the in-memory count. That is right for a strided display
+subset, where the whole file was read, and wrong for a truncated file
+(`metadata.truncation.read < declared`): the declared total was divided by the
+extent of the partial data, so a file with 4 of 2,601 points read reported a
+density about 650 times too high. The report now uses the read count for the
+density and footprint when `truncationOf` is set. The dataset summary states
+the points as read of declared and adds a Coverage row with the truncation
+text, the density finding says it is from the points read, and the inspection
+caveats carry the same note. A strided file is unchanged.
+
+Tests: `tests/reportExport.test.ts` (a truncated cloud of 4 of 2,601 points:
+density from 4 points, the Points and Coverage rows and the caveat; a strided
+cloud keeps the declared 2,000).
+
