@@ -1091,7 +1091,8 @@ const inspector = new Inspector({
   onToggleSolo: (id) => layerService.toggleSolo(id),
   onToggleLock: (id, locked) => viewer.setCloudLocked(id, locked),
   onCompareLayers: compareLoadedLayers,
-  onExportDifference: exportDifferenceRaster,
+  onExportDifference: () => inspector.compareDifference.download(downloadText),
+  compareScene: { slot: layers, ids: () => viewer.clouds(), lookup: (id) => viewer.getCloud(id), stableIdFor: (id) => runtime.layerIdentity.stableIdFor(id) },
   onSaveView: saveCurrentView,
   onApplyView: (index) => applyView(index),
   onRenameView: (index, name) => {
@@ -4145,7 +4146,7 @@ function compareLoadedLayers(): void {
   if (!a || !b) return;
   inspector.setCompareResult(['Comparing elevations… running ground filters, one moment.']);
   inspector.setDifferenceAvailable(false);
-  layers.lastDifference = null;
+  inspector.compareDifference.begin(ids, a, b);
   void (async () => {
     // Load the change-detection code on demand, then yield a frame so the
     // "working" line paints before the synchronous ground-filter compute.
@@ -4207,7 +4208,7 @@ function compareLoadedLayers(): void {
         gridUnitToMetres === 1
           ? cmp.result.diff
           : cmp.result.diff.map((v) => v / gridUnitToMetres);
-      layers.lastDifference = {
+      inspector.compareDifference.hold({
         stem: `${baseName(a.name)}-to-${baseName(b.name)}-difference`,
         asc: () =>
           changeToEsriAscii({
@@ -4218,7 +4219,7 @@ function compareLoadedLayers(): void {
             xllCorner: dtms.before.originH1,
             yllCorner: dtms.before.originH2,
           }),
-      };
+      });
       inspector.setDifferenceAvailable(true);
     } catch (err) {
       if (current()) inspector.setCompareResult([`Compare failed: ${err instanceof Error ? err.message : String(err)}`]);
@@ -4226,11 +4227,6 @@ function compareLoadedLayers(): void {
   })();
 }
 
-/** Download the most recent elevation difference as an ESRI ASCII grid. */
-function exportDifferenceRaster(): void {
-  const diff = layers.lastDifference;
-  if (diff) downloadText(`${diff.stem}.asc`, diff.asc());
-}
 
 function removeCloud(id: string): void {
   viewer.removeCloud(id);
@@ -4239,7 +4235,7 @@ function removeCloud(id: string): void {
   reducedById.delete(id);
   layerVisible.delete(id);
   if (layers.solo === id) layers.solo = null;
-  scans.clearIf(id);
+  scans.clearIf(id); inspector.compareDifference.dropStale(); // a comparison on this scan goes with it
   captureProvenance.clearIf(id); exportPanel.forgetFindingsFor(id); // a removed scan's saved findings go with it
   if (viewer.clouds().length === 0) resetToEmptyState();
   else {

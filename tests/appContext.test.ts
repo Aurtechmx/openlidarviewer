@@ -23,7 +23,7 @@ describe('createAppContext — layer cluster defaults', () => {
     const ctx = createAppContext();
     ctx.layers.visible.set('cloud-a', false);
     ctx.layers.solo = 'cloud-a';
-    ctx.layers.lastDifference = { stem: 'a-to-b-difference', asc: () => 'ncols 1' };
+    ctx.layers.lastDifference = { stem: 'a-to-b-difference', asc: () => 'ncols 1', before: { viewerId: 'cloud-a', stableId: null, layer: null }, after: { viewerId: 'cloud-b', stableId: null, layer: null } };
     expect(ctx.layers.visible.get('cloud-a')).toBe(false);
     expect(ctx.layers.solo).toBe('cloud-a');
     expect(ctx.layers.lastDifference?.stem).toBe('a-to-b-difference');

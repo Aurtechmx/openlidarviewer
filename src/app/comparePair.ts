@@ -113,6 +113,38 @@ export interface ComparePairPicker {
   readonly element: HTMLElement;
   setChoices(choices: readonly CompareChoice[]): void;
   selection(): ComparePairSelection;
+  /** Called when the user changes the Before or After selection. */
+  onChange(cb: () => void): void;
+}
+
+/** One scan a finished comparison was computed from. */
+export interface CompareParticipant {
+  /** Viewer id the scan had when compared. */
+  readonly viewerId: string;
+  /** Stable layer id, or null when none was bound. */
+  readonly stableId: string | null;
+  /** The loaded layer object, so a replaced scan in the same slot does not match. */
+  readonly layer: unknown;
+}
+
+/**
+ * True while a finished comparison still describes the pair the panel names:
+ * the selection resolves to the same two viewer ids, and both are still the
+ * same loaded layers with the same stable ids. Anything else (a pair change, a
+ * participant closed or replaced) makes the result stale.
+ */
+export function compareResultCurrent(
+  held: { readonly before: CompareParticipant; readonly after: CompareParticipant },
+  ids: readonly string[],
+  selection: ComparePairSelection,
+  lookup: (id: string) => unknown,
+  stableIdFor: (id: string) => string | null,
+): boolean {
+  const pair = resolveComparePair(ids, selection);
+  if (!pair.ok || pair.beforeId !== held.before.viewerId || pair.afterId !== held.after.viewerId) return false;
+  return [held.before, held.after].every(
+    (p) => ids.includes(p.viewerId) && lookup(p.viewerId) === p.layer && stableIdFor(p.viewerId) === p.stableId,
+  );
 }
 
 /** Before and After selectors over the loaded clouds. Text is set with textContent only. */
@@ -133,6 +165,8 @@ export function createComparePairPicker(doc: Document = document): ComparePairPi
   };
   const before = make('Before', 'olv-compare-before');
   const after = make('After', 'olv-compare-after');
+  const listeners: (() => void)[] = [];
+  for (const s of [before, after]) s.addEventListener('change', () => listeners.forEach((cb) => cb()));
 
   const fill = (select: HTMLSelectElement, choices: readonly CompareChoice[], keep: string, fallback: string): void => {
     select.replaceChildren(
@@ -160,6 +194,62 @@ export function createComparePairPicker(doc: Document = document): ComparePairPi
     },
     selection() {
       return { before: before.value || null, after: after.value || null };
+    },
+    onChange(cb) {
+      listeners.push(cb);
+    },
+  };
+}
+
+/** A finished difference raster, bound to the two scans it was computed from. */
+export interface HeldDifference {
+  readonly stem: string;
+  readonly asc: () => string;
+  readonly before: CompareParticipant;
+  readonly after: CompareParticipant;
+}
+
+export interface CompareDifferenceDeps {
+  readonly slot: { lastDifference: HeldDifference | null };
+  readonly ids: () => readonly string[];
+  readonly selection: () => ComparePairSelection;
+  readonly lookup: (id: string) => unknown;
+  readonly stableIdFor: (id: string) => string | null;
+  readonly setDifferenceAvailable: (on: boolean) => void;
+  readonly setCompareResult: (lines: readonly string[]) => void;
+}
+
+/**
+ * Binds the shown comparison and its difference raster to the pair they were
+ * computed from, and drops both (the download button and the result text too)
+ * once the panel names another pair or a participating scan is closed or
+ * replaced. Restoring the pair does not bring them back.
+ */
+export function createCompareDifference(deps: CompareDifferenceDeps) {
+  const participant = (viewerId: string, layer: unknown): CompareParticipant => ({ viewerId, stableId: deps.stableIdFor(viewerId), layer });
+  // The pair whose result the panel shows, from the start of its run.
+  let shown: { before: CompareParticipant; after: CompareParticipant } | null = null;
+  return {
+    /** A run starts on this pair: forget any earlier difference. */
+    begin(ids: readonly [string, string], before: unknown, after: unknown): void {
+      deps.slot.lastDifference = null;
+      shown = { before: participant(ids[0], before), after: participant(ids[1], after) };
+    },
+    /** The run's difference raster is ready to download. */
+    hold(file: { readonly stem: string; readonly asc: () => string }): void {
+      if (shown) deps.slot.lastDifference = { ...file, ...shown };
+    },
+    dropStale(): void {
+      if (!shown || compareResultCurrent(shown, deps.ids(), deps.selection(), deps.lookup, deps.stableIdFor)) return;
+      shown = null;
+      deps.slot.lastDifference = null;
+      deps.setDifferenceAvailable(false);
+      deps.setCompareResult([]);
+    },
+    /** Download the held difference as an ESRI ASCII grid. */
+    download(downloadText: (filename: string, text: string) => void): void {
+      const held = deps.slot.lastDifference;
+      if (held) downloadText(`${held.stem}.asc`, held.asc());
     },
   };
 }

@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { activate, railChromeSettled } from './helpers';
+import { geomFixtures, dropBytes } from './geomFixtures';
 
 /**
  * Compare elevation leaves Withheld points out of both epochs and says so.
@@ -73,4 +74,41 @@ test('compares the chosen first and third of three clouds', async ({ page }) => 
   await after.selectOption(ids[2]);
   await activate(compare);
   await expect(result).toContainText('epoch-one (before) → epoch-three (after)', { timeout: 20_000 });
+});
+
+test('a finished difference and its result hide when the pair changes', async ({ page }) => {
+  test.setTimeout(120_000);
+  // UTM with a declared vertical datum, so the comparison yields a raster.
+  const { geomAVert } = await geomFixtures();
+  await page.goto('/?test=1');
+  for (const [i, n] of ['site-one.las', 'site-two.las', 'site-three.las'].entries()) {
+    await dropBytes(page, geomAVert, n);
+    if (i === 0) await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+    await expect(page.locator('.olv-layer')).toHaveCount(i + 1, { timeout: 20_000 });
+  }
+  await railChromeSettled(page);
+
+  const before = page.locator('select.olv-compare-before');
+  const after = page.locator('select.olv-compare-after');
+  await expect(before.locator('option')).toHaveCount(3);
+  const ids = await before.locator('option').evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value));
+  const compare = page.locator('.olv-layer-compare', { hasText: 'Compare elevation' });
+  const result = page.locator('.olv-layer-compare-result');
+  const download = page.locator('.olv-layer-compare', { hasText: 'Download difference' });
+
+  await before.selectOption(ids[0]);
+  await after.selectOption(ids[2]);
+  await compare.scrollIntoViewIfNeeded();
+  await activate(compare);
+  await expect(result).toContainText('site-one (before) → site-three (after)', { timeout: 20_000 });
+  await expect(download).toBeVisible({ timeout: 20_000 });
+
+  await after.selectOption(ids[1]);
+  await expect(download).toBeHidden();
+  await expect(result).toBeHidden();
+
+  // Choosing the original pair again does not bring the old result back.
+  await after.selectOption(ids[2]);
+  await expect(download).toBeHidden();
+  await expect(result).toBeHidden();
 });
