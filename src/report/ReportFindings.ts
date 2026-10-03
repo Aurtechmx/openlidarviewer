@@ -180,12 +180,14 @@ function densityFinding(
   // pushed 2.586 pts/m² to "3", overstating density in a report whose header
   // promise is honest provenance (and disagreeing with the panel's "2.6").
   const value = `${d.toFixed(1)} pts/m²`;
+  // A truncated file: the density and the QL context are from the points read.
+  const partial = metadata.coverageNote?.trim() ? ' From the points read; the file is truncated.' : '';
   if (!qlApplies) {
     // No capture-type density standard applies — state the number, claim nothing.
     return {
       label: DENSITY_LABEL,
       value,
-      detail: `All-returns density ${value} ${DENSITY_BASIS}. No capture-type density standard applied to this scan.`,
+      detail: `All-returns density ${value} ${DENSITY_BASIS}. No capture-type density standard applied to this scan.${partial}`,
       tier: 'info',
     };
   }
@@ -194,7 +196,7 @@ function densityFinding(
   return {
     label: DENSITY_LABEL,
     value,
-    detail: `All-returns density ${value} ${DENSITY_BASIS}. ${QL_NOT_EVALUATED}`,
+    detail: `All-returns density ${value} ${DENSITY_BASIS}. ${QL_NOT_EVALUATED}${partial}`,
     tier: 'info',
     source: USGS_DENSITY_SOURCE,
   };
@@ -290,6 +292,12 @@ export function buildInspectionSummary(
 
   // Caveats — always at least the validation reminder.
   const caveats: string[] = [];
+  const coverage = metadata.coverageNote?.trim();
+  if (coverage) {
+    caveats.push(
+      `${coverage}. The point density and extents describe the points read, not the whole file.`,
+    );
+  }
   const scope = metadata.classScopeNote?.trim();
   if (scope) {
     caveats.push(

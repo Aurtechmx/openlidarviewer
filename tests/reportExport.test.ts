@@ -1,3 +1,5 @@
+import { buildInspectionSummary } from '../src/report/ReportFindings';
+import { buildDatasetSummary, type MetadataInputs } from '../src/report/ReportMetadataSection';
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { resolveExportDigests } from '../src/export/exportDigests';
 import {
@@ -241,6 +243,12 @@ const streamingCloud = {
   counts: () => ({ resident: 12, known: 40 }),
 };
 
+// A resolved projected metre CRS so the footprint yields a confirmed density.
+const metreCrs = {
+  kind: 'projected', name: 'NAD83 / UTM zone 15N', epsg: 26915,
+  linearUnit: 'metre', linearUnitToMetres: 1, verticalUnitToMetres: 1,
+};
+
 type ReportInputs = { templateId: string; subtitle: string; metadata: Record<string, unknown> };
 
 /** Assemble a fake deps + a recording report-engine stub for generateReportPdf. */
@@ -251,6 +259,7 @@ function makeReportDeps(opts: {
   failedSections?: string[];
   generateReject?: boolean;
   normalizeToNull?: boolean;
+  crs?: unknown;
 }) {
   const setError = vi.fn();
   const composeReportInputs = vi.fn((x: ReportInputs) => x);
@@ -280,7 +289,7 @@ function makeReportDeps(opts: {
       activeId: opts.staticCloud ? 'a' : null,
       activeCloud: () => opts.staticCloud ?? null,
     },
-    crsCurrent: () => null,
+    crsCurrent: () => opts.crs ?? null,
     classScopeStamp: () => opts.classScopeStamp ?? '',
     baseName: (n: string) => n.replace(/\.[^.]+$/, ''),
     loadReportEngine: vi.fn(async () => reportStub),
@@ -308,6 +317,38 @@ describe('generateReportPdf — the report assembly body', () => {
     expect(inputs.metadata).toBeDefined();
     expect(generateReport).toHaveBeenCalledTimes(1);
     expect(setError).not.toHaveBeenCalled();
+  });
+
+  it('computes density from the points read on a truncated file and carries the coverage note', async () => {
+    const truncated = {
+      ...staticCloud,
+      declaredPointCount: 2601,
+      pointCount: 4,
+      metadata: { ...staticCloud.metadata, truncation: { read: 4, declared: 2601 } },
+    };
+    const { deps, composeReportInputs } = makeReportDeps({ staticCloud: truncated as unknown as typeof staticCloud, crs: metreCrs });
+    await generateReportPdf('survey-summary', deps);
+    const md = (composeReportInputs.mock.calls[0]![0] as ReportInputs).metadata;
+    // 30 x 20 m footprint: 4 read points, not the 2,601 declared.
+    expect(md.sourcePointCount).toBe(4);
+    expect(md.density).toBeCloseTo(4 / 600, 6);
+    expect(md.declaredPointCount).toBe(2601);
+    expect(md.coverageNote).toBe('Truncated: 4 of 2,601 points read');
+    const rows = buildDatasetSummary(md as unknown as MetadataInputs);
+    expect(rows.find((r) => r.label === 'Points')!.value).toBe('4 read of 2,601 declared');
+    expect(rows.find((r) => r.label === 'Coverage')!.value).toContain('Truncated: 4 of 2,601 points read');
+    const summary = buildInspectionSummary(md as unknown as MetadataInputs);
+    expect(summary.caveats.some((c) => c.startsWith('Truncated: 4 of 2,601 points read'))).toBe(true);
+  });
+
+  it('keeps the declared total for a strided (not truncated) file', async () => {
+    const { deps, composeReportInputs } = makeReportDeps({ staticCloud, crs: metreCrs });
+    await generateReportPdf('survey-summary', deps);
+    const md = (composeReportInputs.mock.calls[0]![0] as ReportInputs).metadata;
+    expect(md.sourcePointCount).toBe(2000);
+    expect(md.density).toBeCloseTo(2000 / 600, 6);
+    expect(md.coverageNote).toBeUndefined();
+    expect(md.declaredPointCount).toBeUndefined();
   });
 
   it('carries the unclassified share (ASPRS 0/1) and the derived flag, scoped to the display sample', async () => {

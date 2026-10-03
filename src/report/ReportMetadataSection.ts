@@ -72,6 +72,15 @@ export interface MetadataInputs {
    */
   readonly classScopeNote?: string;
   /**
+   * Coverage note for a truncated source file, e.g. `"Truncated: 4 of 2,601
+   * points read"`. When set, `sourcePointCount` is the count read, the Points
+   * row states it against `declaredPointCount`, and a Coverage row says the
+   * density and extents come from the points read. Absent for a complete read.
+   */
+  readonly coverageNote?: string;
+  /** The header's declared total, stated beside the read count when truncated. */
+  readonly declaredPointCount?: number;
+  /**
    * Streaming-preview accounting for COPC / EPT scans. When the report is
    * generated mid-stream, every figure in the PDF describes the FULL source
    * cloud, but only a resident subset has actually been decoded into memory.
@@ -198,6 +207,7 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
   // Class-filter honesty row — prepended so it reads before the figures it
   // qualifies. Present only while a filter is active; an unfiltered export
   // omits it entirely, keeping the row list byte-identical to before.
+  const coverage = inputs.coverageNote?.trim();
   const scopeNote = inputs.classScopeNote?.trim();
   if (scopeNote) {
     rows.push({
@@ -214,9 +224,17 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
       // stated that it is empty.
       value: inputs.sourcePointCount === null
         ? 'Unknown from source metadata'
-        : formatInt(inputs.sourcePointCount),
+        : coverage && inputs.declaredPointCount != null
+          ? `${formatInt(inputs.sourcePointCount)} read of ${formatInt(inputs.declaredPointCount)} declared`
+          : formatInt(inputs.sourcePointCount),
     },
   );
+  if (coverage) {
+    rows.push({
+      label: 'Coverage',
+      value: `${coverage}. Density and extents are from the points read.`,
+    });
+  }
   // Streaming-preview disclosure — for a COPC / EPT scan exported mid-stream,
   // surface how much of the cloud is actually resident. Reads directly below
   // the full-cloud "Points" total so the relationship is unambiguous, and
