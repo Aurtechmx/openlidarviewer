@@ -94,13 +94,14 @@ describe('session import never attaches one scan’s work to another', () => {
     const src = SESSION;
     const guardAt = src.indexOf('const targetChanged = ()');
     expect(guardAt, 'shared predicate missing').toBeGreaterThan(-1);
-    // Two assertion sites: one before the CRS commit, one after the ownership
-    // import — which yields again immediately before the viewer is mutated.
-    expect((src.match(/if \(targetChanged\(\)\)/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    // The ownership import is the last await before the scene is touched, so
+    // one check after it guards the CRS commit and every restore below it.
     const afterOwnership = src.slice(src.indexOf('await loadSessionOwnership()'));
     const mutateAt = afterOwnership.indexOf('viewer.measure.loadMeasurements(');
+    const crsAt = afterOwnership.indexOf('deps.setCrsOverride(');
     const checkAt = afterOwnership.indexOf('if (targetChanged())');
     expect(checkAt, 'no check after the ownership await').toBeGreaterThan(-1);
+    expect(checkAt, 'check must precede the CRS commit').toBeLessThan(crsAt);
     expect(checkAt, 'check must precede the mutation').toBeLessThan(mutateAt);
   });
 });
