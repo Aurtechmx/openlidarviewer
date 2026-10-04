@@ -32,11 +32,17 @@ const hoisted = vi.hoisted(() => ({
   options: [] as Record<string, unknown>[],
   /** Filenames that reached the browser download helper. */
   downloads: [] as string[],
+  /** Runs while the convert engine loads, the way a scan swap lands then. */
+  onEngineLoad: null as (() => void) | null,
+  /** The object each digest was resolved from. */
+  digestKeys: [] as unknown[],
 }));
 
 vi.mock('../src/lazyChunks', () => ({
-  loadConvertEngine: async () => ({
-    resolveExportDigests: async () => ({ sourceSha256: 'a'.repeat(64), sourceSha256Note: null, crsOrigin: { source: 'unknown', name: 'unknown', epsg: 'unknown', verticalDatum: 'unknown', verticalSource: 'unknown' } }),
+  loadConvertEngine: async () => {
+    hoisted.onEngineLoad?.();
+    return {
+    resolveExportDigests: async (src: { key: unknown }) => (hoisted.digestKeys.push(src.key), { sourceSha256: 'a'.repeat(64), sourceSha256Note: null, crsOrigin: { source: 'unknown', name: 'unknown', epsg: 'unknown', verticalDatum: 'unknown', verticalSource: 'unknown' } }),
     convertCloud: (cloud: { pointCount: number }, options: Record<string, unknown>) => {
       hoisted.converted.push(cloud);
       hoisted.options.push(options);
@@ -45,7 +51,8 @@ vi.mock('../src/lazyChunks', () => ({
         report: { pointCount: cloud.pointCount, crsNote: 'CRS kept', log: [] },
       };
     },
-  }),
+    };
+  },
 }));
 
 vi.mock('../src/io/download', () => ({
@@ -132,6 +139,8 @@ beforeEach(() => {
   hoisted.converted.length = 0;
   hoisted.options.length = 0;
   hoisted.downloads.length = 0;
+  hoisted.digestKeys.length = 0;
+  hoisted.onEngineLoad = null;
 });
 
 /** Two points one unit apart on x, so a clip box can keep exactly one of them. */
@@ -245,6 +254,30 @@ describe('ExportPanel — full-resolution export re-verifies before it writes', 
     enableFullRes(root);
     await pressExport(root);
 
+    expect(hoisted.downloads).toEqual([]);
+    expect(statusText(root)).toBe(EXPORT_SCAN_CHANGED_REFUSAL);
+  });
+
+  it('refuses when the active scan changes while the converter loads', async () => {
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    const { EXPORT_SCAN_CHANGED_REFUSAL } = await import('../src/export/exportScanIdentity');
+    const cloudA = twoPointCloud('a.las');
+    const cloudB = twoPointCloud('b.las');
+    let active = { id: 'scan-a', cloud: cloudA };
+    const panel = new ExportPanel({
+      getCloud: () => active.cloud,
+      hasFullSource: () => false,
+      isReduced: () => false,
+      getFullCloud: async () => active.cloud,
+      getActiveScanId: () => active.id,
+    });
+    hoisted.onEngineLoad = () => { active = { id: 'scan-b', cloud: cloudB }; };
+    const root = panel.element as unknown as FakeEl;
+    await pressExport(root);
+
+    // The digest describes the scan whose points were captured, and the
+    // export refuses rather than writing a file once the scan has moved.
+    expect(hoisted.digestKeys).not.toContain(cloudB);
     expect(hoisted.downloads).toEqual([]);
     expect(statusText(root)).toBe(EXPORT_SCAN_CHANGED_REFUSAL);
   });

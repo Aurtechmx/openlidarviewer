@@ -1229,6 +1229,9 @@ export class ExportPanel {
     const clipOffset = this._cb.getActiveClipOffset?.() ?? null;
     const displayOrigin = this._cb.getCloud()?.sourceOrigin ?? null;
     const scanId = this._cb.getActiveScanId?.() ?? null;
+    // The loaded cloud names the source File the digest is computed from. It is
+    // taken with `scanId` so the digest belongs to the scan being exported.
+    const digestKey = this._cb.getCloud() ?? {};
     // Snapshot the resolved source CRS with the other request inputs, so the
     // whole export — the converted data, its metadata, and the ASCII `.prj`
     // sidecar — describes ONE frame even if the user changes the CRS picker
@@ -1291,9 +1294,15 @@ export class ExportPanel {
       const scopeNote = cloud === sourceCloud ? null
         : clipScopeText({ kept: cloud.pointCount, total: sourceCloud.pointCount });
       showBusyScan(this._exportBtn, 'Exporting…');
-      // The loaded cloud names the source File; a full-resolution re-decode reads the same one.
+      // A full-resolution re-decode reads the same File as the captured cloud.
       const { convertCloud, resolveExportDigests } = await loadConvertEngine();
-      const digests = await resolveExportDigests({ key: this._cb.getCloud() ?? {}, streamed: false }, resolvedSourceCrs);
+      const digests = await resolveExportDigests({ key: digestKey, streamed: false }, resolvedSourceCrs);
+      // The converter load and the hashing both yield, so the scan can change
+      // here too. Check again before anything is converted or written.
+      if (!sameExportTarget(this._cb.getActiveScanId?.() ?? null, scanId)) {
+        this._setStatus(EXPORT_SCAN_CHANGED_REFUSAL, 'error');
+        return;
+      }
       // One more await stands between the gate above and the write below, so
       // the same gate is taken again on the far side of it. An edit landing in
       // that window would otherwise reach the file unjudged.
@@ -1327,6 +1336,10 @@ export class ExportPanel {
         // Gzip the written LAS to `.las.gz` when requested (binary LAS only).
         const wantGzip = gzip && (format === 'las' || format === 'las14');
         const out = wantGzip ? await gzipConvertedFile(file, true) : file;
+        if (!sameExportTarget(this._cb.getActiveScanId?.() ?? null, scanId)) {
+          this._setStatus(EXPORT_SCAN_CHANGED_REFUSAL, 'error');
+          return;
+        }
         downloadBytes(out.filename, out.bytes, out.mime);
         // ASCII keep-mode: also emit a `.prj` sidecar. It carries the RESOLVED
         // WKT from the same request-time snapshot the converted data used, so the

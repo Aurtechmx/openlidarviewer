@@ -753,3 +753,39 @@ describe('importSession — a committed restore survives a disclosure that canno
     }
   });
 });
+
+describe('importSession — a scan opened into an empty scene mid-import', () => {
+  it('matches the session against that scan instead of attaching it verbatim', async () => {
+    const mod = await import('../src/lazyChunks');
+    const { deps, calls } = makeDeps();
+    // The scene starts empty; a scan unrelated to the session (far larger
+    // extents) opens while the ownership chunk is loading.
+    const scanB = {
+      name: 'other.laz',
+      pointCount: 1000,
+      bounds: () => ({ min: [0, 0, 0] as const, max: [500, 500, 50] as const }),
+      sourceFormat: 'laz',
+      metadata: { crs: null },
+    };
+    let opened = false;
+    const viewer = deps.getViewer() as unknown as Record<string, unknown>;
+    viewer.clouds = () => (opened ? ['b'] : []);
+    viewer.getCloud = (id: string) => (opened && id === 'b' ? scanB : undefined);
+    deps.getActiveScanId = () => (opened ? 'b' : null);
+    deps.getActiveCloud = () => (opened ? scanB : null) as unknown as ReturnType<SessionIoDeps['getActiveCloud']>;
+    const real = mod.loadSessionOwnership;
+    const spy = vi.spyOn(mod, 'loadSessionOwnership').mockImplementationOnce(async () => {
+      const m = await real();
+      opened = true;
+      return m;
+    });
+    try {
+      await importSession(asFile(sessionJson({ scanSummary: summary() })), {}, deps);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(calls.loadMeasurements).not.toHaveBeenCalled();
+    expect(calls.setCrsOverride).not.toHaveBeenCalled();
+    expect(calls.showToast).toHaveBeenCalledWith(expect.stringContaining('different scan'));
+  });
+});
