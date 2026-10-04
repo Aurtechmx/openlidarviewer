@@ -298,3 +298,19 @@ export function sceneOriginFor(
   if (!projectOrigin || !placement) return [sourceOrigin[0], sourceOrigin[1], sourceOrigin[2]];
   return [projectOrigin[0], projectOrigin[1], placement.vertical ? projectOrigin[2] : sourceOrigin[2]];
 }
+
+/** What {@link layerSceneOrigin} reads from the running app. */
+export interface LayerOriginSources {
+  readonly projectOrigin: readonly [number, number, number] | null | undefined;
+  readonly viewerIds: readonly string[];
+  stableIdFor(viewerId: string): string | null;
+  sourceOrigin(viewerId: string): readonly [number, number, number] | null | undefined;
+  placement(viewerId: string): { readonly vertical: boolean } | null;
+}
+
+/** The scene origin of the open layer with stable id `layerId`, or null when it is not open. */
+export function layerSceneOrigin(layerId: string, src: LayerOriginSources): [number, number, number] | null {
+  const id = src.viewerIds.find((v) => src.stableIdFor(v) === layerId);
+  const so = id ? src.sourceOrigin(id) : null;
+  return id && so ? sceneOriginFor(src.projectOrigin, so, src.placement(id)) : null;
+}

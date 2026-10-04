@@ -263,7 +263,7 @@ import { createLayerService } from './app/LayerService';
 import { createViewBookmarks } from './app/viewBookmarks';
 import { createScanService } from './app/ScanService';
 import { createScanRouteService } from './app/ScanRouteService';
-import { createProjectFrameService, projectFrameInputFrom, sceneOriginFor } from './app/projectFrame';
+import { createProjectFrameService, projectFrameInputFrom, sceneOriginFor, layerSceneOrigin } from './app/projectFrame';
 
 /**
  * The centralised CRS service. Owns the active scan's resolved CRS
@@ -3557,7 +3557,7 @@ const sessionIoDeps: SessionIoDeps = {
   getActiveScanId: () => scans.activeId,
   getActiveLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null),
   getActiveCloud: () => scans.activeCloud(),
-  exportOrigin: () => { const c = scans.activeCloud(); return c?.sourceOrigin && scans.activeId ? sceneOriginFor(projectFrame.frame?.projectOrigin, c.sourceOrigin, layerService.placementOf(scans.activeId)) : exportGeoContext().origin; },
+  exportOrigin: () => { const c = scans.activeCloud(); return c?.sourceOrigin && scans.activeId ? sceneOriginFor(projectFrame.frame?.projectOrigin, c.sourceOrigin, layerService.placementOf(scans.activeId)) : exportGeoContext().origin; }, layerOrigin: (layerId) => layerSceneOrigin(layerId, { projectOrigin: projectFrame.frame?.projectOrigin, viewerIds: viewer?.clouds() ?? [], stableIdFor: (v) => runtime.layerIdentity.stableIdFor(v), sourceOrigin: (v) => viewer?.getCloud(v)?.sourceOrigin, placement: layerService.placementOf }),
   bookmarks,
   setInspectorViews: (names) => inspector.setViews(names),
   restoreLayerGroups: (groups) => inspector.restoreLayerGroups(groups),

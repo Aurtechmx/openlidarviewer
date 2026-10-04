@@ -696,6 +696,12 @@ export interface RebasedSessionGeometry {
 export function rebaseSessionGeometry(
   session: InspectionSession,
   cloudOrigin: readonly number[],
+  /**
+   * The origin a layer's scene coordinates are local to in the reopened scene,
+   * or null when the layer is not open. A layer placed in X/Y only keeps its
+   * own Z, so its frame differs from the active layer's.
+   */
+  targetOriginFor?: (layerId: string) => readonly number[] | null,
 ): RebasedSessionGeometry {
   const dx = session.origin[0] - (cloudOrigin[0] ?? 0);
   const dy = session.origin[1] - (cloudOrigin[1] ?? 0);
@@ -742,10 +748,21 @@ export function rebaseSessionGeometry(
       projectOrigin[2] - (cloudOrigin[2] ?? 0),
     ]
     : null;
+  // A project-frame point is local to the project origin in every axis the
+  // owning layer was placed on, and to the layer's own origin on the rest:
+  // a layer placed in X/Y only kept its own Z. Its record says which, as
+  // `sourceOrigin - sourceToProject`. The same holds in the reopened scene.
+  const projectDeltaFor = (layerId: string | undefined): Vec3 | null => {
+    if (!projectDelta || !session.projectFrame) return projectDelta;
+    const rec = frameLayer(session.projectFrame, layerId);
+    const target = layerId ? targetOriginFor?.(layerId) ?? null : null;
+    if (!rec || !target) return projectDelta;
+    return [0, 1, 2].map((k) => rec.sourceOrigin[k]! - rec.sourceToProject[k]! - (target[k] ?? 0)) as Vec3;
+  };
   /** The delta to apply, null to leave in place, or 'refuse'. */
   const deltaFor = (owner: WorkOwnership | undefined): Vec3 | null | 'refuse' => {
     if (!owner) return [dx, dy, dz];
-    if (owner.frame === 'project') return projectDelta ?? 'refuse';
+    if (owner.frame === 'project') return projectDeltaFor(owner.layerId) ?? 'refuse';
     return anchorLayerId !== null && owner.layerId === anchorLayerId ? [dx, dy, dz] : null;
   };
 

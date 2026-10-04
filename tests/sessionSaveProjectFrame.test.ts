@@ -122,3 +122,37 @@ describe('the origin a session import rebases onto', () => {
     expect(sceneOriginFor([500_000, 4_600_000, 120], file, { vertical: true })).toEqual([500_000, 4_600_000, 120]);
   });
 });
+
+describe('project-frame work on a layer placed in X/Y only', () => {
+  // A and B share a horizontal CRS but no vertical datum, so each keeps its
+  // own Z: a point picked on A is project-local in X/Y and A-local in Z.
+  const A_SO: V3 = [500_000, 4_000_000, 99];
+  const B_SO: V3 = [500_100, 4_000_000, 50];
+  const P: V3 = [500_000, 4_000_000, 99];
+  const session = () => parseSession(JSON.stringify({
+    app: 'OpenLiDARViewer', kind: 'measurement-session', version: 8,
+    upAxis: 'z', origin: P, unitSystem: 'metric', views: [], annotations: [],
+    projectFrame: {
+      projectOrigin: P,
+      layers: [
+        { layerId: 'layer_a', sourceFingerprint: 'fa', sourceName: 'a.las', sourceOrigin: A_SO, sourceToProject: [0, 0, 0], upAxis: 'z' },
+        { layerId: 'layer_b', sourceFingerprint: 'fb', sourceName: 'b.las', sourceOrigin: B_SO, sourceToProject: [100, 0, 0], upAxis: 'z' },
+      ],
+    },
+    measurements: [{
+      id: 'm1', kind: 'distance', name: 'D1',
+      points: [[4, 2, 1], [7, 2, 1]],
+      owner: { layerId: 'layer_a', frame: 'project' },
+    }],
+  }));
+
+  it('keeps the Z of a point picked on A when B anchors the reopened scene', () => {
+    // Reopened with both scans, B active. B's scene origin keeps B's own Z;
+    // A's scene frame is the project X/Y with A's own Z.
+    const target = (id: string): V3 | null =>
+      id === 'layer_a' ? [500_000, 4_000_000, 99] : id === 'layer_b' ? [500_000, 4_000_000, 50] : null;
+    const rebased = rebaseSessionGeometry(session(), [500_000, 4_000_000, 50], target);
+    const p = rebased.measurements[0]!.points[0]!;
+    expect([p[0] + 500_000, p[1] + 4_000_000, p[2] + 99]).toEqual([500_004, 4_000_002, 100]);
+  });
+});

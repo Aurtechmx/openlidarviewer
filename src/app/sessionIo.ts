@@ -83,6 +83,7 @@ export interface SessionModule {
   rebaseSessionGeometry: (
     session: InspectionSession,
     cloudOrigin: readonly [number, number, number],
+    targetOriginFor?: (layerId: string) => readonly number[] | null,
   ) => RebasedSessionGeometry;
   matchSessionToScan: (summary: SessionScanSummary | undefined, loaded: ScanFacts) => ScanMatch;
   detectSessionSpatialConflict: (
@@ -119,6 +120,8 @@ export interface SessionIoDeps {
   getActiveCloud: () => PointCloud | null;
   /** The source-frame origin the session's geometry is rebased against (`exportGeoContext().origin`). */
   exportOrigin: () => readonly [number, number, number];
+  /** The scene origin of the open layer with this stable id, or null when it is not open. */
+  layerOrigin?: (layerId: string) => readonly [number, number, number] | null;
   /** Saved-view store: `restore` replaces the list, `names` feeds the Inspector. */
   bookmarks: Pick<ViewBookmarksService, 'restore' | 'names'>;
   /** Push the restored view names into the Inspector panel. */
@@ -305,7 +308,7 @@ export async function importSession(
       }
     }
     const geo = haveCloud
-      ? rebaseSessionGeometry(session, deps.exportOrigin())
+      ? rebaseSessionGeometry(session, deps.exportOrigin(), deps.layerOrigin)
       : {
           measurements: session.measurements,
           annotations: session.annotations,
