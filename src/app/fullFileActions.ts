@@ -159,8 +159,7 @@ export function reviewSampleTip(id?: string): string {
  * Run the action. Opens the Export panel on that layer with full resolution
  * ticked; a refusal is shown there before any decode starts.
  */
-export function useFullFile(kind: 'export', id?: string, device: FullFileDevice = currentDevice()): FullFileAvailability {
-  void kind;
+export function useFullFile(id?: string, device: FullFileDevice = currentDevice()): FullFileAvailability {
   const target = id ?? host?.activeId() ?? null;
   const a = fullFileAvailability(target ?? undefined, device);
   if (!host || !target || !a.show) return a;
@@ -179,7 +178,7 @@ export function fullFileLink(id?: string): HTMLButtonElement | null {
   if (id) b.dataset.layer = id;
   b.textContent = a.label;
   b.title = a.allowed ? a.hint : `${a.hint} ${a.reason ?? ''}`.trim();
-  b.addEventListener('click', (e) => { e.stopPropagation(); useFullFile('export', id); });
+  b.addEventListener('click', (e) => { e.stopPropagation(); useFullFile(id); });
   return b;
 }
 

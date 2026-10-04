@@ -127,7 +127,7 @@ describe('useFullFile through the bound host', () => {
     const a = synth('strided', { id: 'a' });
     const b = synth('strided', { id: 'b', resident: 900_000, declared: 5_200_000 });
     const open = bind([a, b], 'a');
-    const r = useFullFile('export', 'b', desktop16);
+    const r = useFullFile('b', desktop16);
     expect(r.label).toBe(fullFileLabel(5_200_000));
     expect(open).toHaveBeenCalledWith('b', undefined);
     expect(fullFileAvailability(undefined, desktop16).label).toBe(fullFileLabel(a.declared!));
@@ -135,13 +135,13 @@ describe('useFullFile through the bound host', () => {
 
   it('passes the class-edit refusal before any decode', () => {
     const open = bind([synth('strided', { id: 'x', hasClassEdits: true })], 'x');
-    useFullFile('export', undefined, desktop16);
+    useFullFile(undefined, desktop16);
     expect(open).toHaveBeenCalledWith('x', FULL_RES_CLASS_EDITS_REFUSAL);
   });
 
   it('does nothing for a complete load', () => {
     const open = bind([synth('small', { id: 's' })], 's');
-    expect(useFullFile('export', undefined, desktop16).show).toBe(false);
+    expect(useFullFile(undefined, desktop16).show).toBe(false);
     expect(open).not.toHaveBeenCalled();
     expect(reviewSampleTip()).toBe('');
   });

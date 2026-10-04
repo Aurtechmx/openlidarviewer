@@ -35,6 +35,7 @@ import { buildExportSummary, displaySampleOf, displaySampleStatus, type Classifi
 import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
 import { layerFacts, pointBasisLine, type FullFileLayerFacts } from '../app/fullFileActions';
 import {
+  classificationDiffersFromSource,
   evaluateFullResClassExport,
   FULL_RES_CLASS_EDITS_MID_EXPORT_REFUSAL,
 } from '../export/fullResClassGuard';
@@ -1426,3 +1427,29 @@ function parseEpsg(v: string): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
+/** The app state {@link exportLayerHooks} reads. */
+export interface ExportLayerState {
+  readonly scans: { readonly activeId: string | null; setActive(id: string): void };
+  readonly viewer: () => { getCloud(id: string): PointCloud | null | undefined; classificationEpoch(id: string): number } | null | undefined;
+  readonly sourceFiles: ReadonlyMap<string, File>;
+  readonly reduced: ReadonlyMap<string, boolean>;
+}
+
+/** The panel's per-layer callbacks: `hasFullSource`, `activateLayer` and `layerSource`. */
+export function exportLayerHooks(state: ExportLayerState): Pick<ExportPanelCallbacks, 'hasFullSource' | 'activateLayer' | 'layerSource'> {
+  return {
+    hasFullSource: () => state.scans.activeId != null && state.sourceFiles.has(state.scans.activeId),
+    activateLayer: (id) => state.scans.setActive(id),
+    layerSource: (id) => {
+      const viewer = state.viewer();
+      const cloud = viewer?.getCloud(id);
+      if (!viewer || !cloud) return null;
+      return {
+        cloud,
+        file: state.sourceFiles.get(id) ?? null,
+        reduced: state.reduced.get(id) === true,
+        hasClassEdits: classificationDiffersFromSource(cloud.classificationProvenance ?? 'none', viewer.classificationEpoch(id)),
+      };
+    },
+  };
+}

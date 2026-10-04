@@ -95,7 +95,7 @@ import type { WorkspaceMode } from './ui/workspace/DesktopWorkspace';
 import type { WorkspaceShell } from './app/workspace/workspaceShell';
 import { createScanRouteCoordinator, type SpaceExportContext } from './app/scanRouteCoordinator';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
-import { ExportPanel, exportClassFacts } from './ui/ExportPanel';
+import { ExportPanel, exportClassFacts, exportLayerHooks } from './ui/ExportPanel';
 import { makeLocalToLonLat } from './export/lonLatMapper';
 import { runFindingsExport, writeScanScopedExport, spaceContextStillCurrent, SPACE_CONTEXT_MOVED, SESSION_EXPORT_SCAN_CHANGED_REFUSAL } from './export/exportScanIdentity';
 import {
@@ -2463,7 +2463,7 @@ const exportPanel = new ExportPanel({
   // snapshot just to test it for null.
   isStreamingPending: () => viewer?.streamingCloud != null && viewer.exportFrontierPointTotal() === 0,
   getActiveClip: () => viewer.getClip(), getActiveClipOffset: () => (scans.activeId ? viewer.layerProjectOffset(scans.activeId) : null), getActiveScanId: () => scans.activeExportTargetId(),
-  hasFullSource: () => scans.activeId != null && sourceFileById.has(scans.activeId), activateLayer: (id) => scans.setActive(id), layerSource: (id) => { const c = viewer?.getCloud(id); return c ? { cloud: c, file: sourceFileById.get(id) ?? null, reduced: reducedById.get(id) === true, hasClassEdits: classificationDiffersFromSource(c.classificationProvenance ?? 'none', viewer.classificationEpoch(id)) } : null; },
+  ...exportLayerHooks({ scans, viewer: () => viewer, sourceFiles: sourceFileById, reduced: reducedById }),
   hasClassEdits: () => scans.activeId != null && classificationDiffersFromSource(viewer?.getCloud(scans.activeId)?.classificationProvenance ?? 'none', viewer?.classificationEpoch(scans.activeId) ?? 0),
   // A streaming snapshot exports only resident points, so it is a reduced subset
   // until the whole cloud lands — flagged so the status reads "reduced view".
