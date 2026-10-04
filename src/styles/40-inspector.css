@@ -54,6 +54,13 @@
   /* A flex item that is a scroll container may shrink to min-height 0, which
      made a card scroll inside the rail and clip its top controls. */
   flex-shrink: 0;
+  /* Not a scroll container inside the rail. The panel's own `overflow-y: auto`
+     plus `overscroll-behavior: contain` made it a scroller that could never
+     scroll: a wheel or trackpad gesture latched onto it and was not passed on
+     to the rail. `clip` keeps x from overflowing while y stays visible. */
+  overflow-x: clip;
+  overflow-y: visible;
+  overscroll-behavior: auto;
 }
 /* Desktop collapse — slide the whole rail past the right edge (GPU transform). */
 @media (min-width: 768px) {
