@@ -466,3 +466,27 @@ describe('cover accent — per-template design DNA reaches the PDF', () => {
     expect(p1.some((c) => near(c, ...TECHNICAL_BLUE))).toBe(false);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Empty-section copy is written for the report's reader
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('technical-report layout — empty-section copy', () => {
+  const DEVELOPER_PHRASES = [
+    /notes string/i,
+    /when generating the report/i,
+    /\bpass an?\b/i,
+    /\bInspector\b/,
+    /\b(param(eter)?|argument|callback|undefined|null|TODO)\b/i,
+  ];
+
+  it('renders no developer-facing wording when notes and visuals are empty', async () => {
+    const { runs } = await renderRuns(tikalInputs());
+    const text = runs.filter((r) => !isFooter(r)).map((r) => r.text).join(' ');
+    expect(text).toContain('Technical notes');
+    expect(text).toContain('Visuals');
+    for (const phrase of DEVELOPER_PHRASES) expect(text).not.toMatch(phrase);
+    expect(text).toContain('No technical notes were recorded for this scan.');
+    expect(text).toMatch(/Image export in the Export \/ Convert/);
+  });
+});
