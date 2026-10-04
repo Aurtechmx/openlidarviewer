@@ -201,7 +201,7 @@ import {
   applyIndexReclassify,
   type ClassEditResult,
 } from './measure/classificationEditor';
-import { ClassEditHistory, recordClassEdit, stepClassEdit } from './measure/classEditHistory';
+import { ClassEditHistory, recordClassAttach, recordClassEdit, stepClassEdit } from './measure/classEditHistory';
 import { ClassificationEpochs } from './measure/classificationEpoch';
 import type { PresetId, SkyPreset, SkyPreset as SkyPresetId } from './inspectionPresets';
 import { applySkyPreset } from './skyPresetApply';
@@ -2754,13 +2754,6 @@ export class Viewer {
   }
 
   // ── B.3 — classification editor ─────────────────────────────────────────
-  /**
-   * Per-cloud snapshot of the classification buffer taken before the last
-   * mutation. Indexed by cloud id. `undoClassification()` reads from here.
-   * One snapshot per cloud — repeated edits coalesce: undo always returns
-   * to the state before the FIRST unconfirmed edit, which matches the
-   * undo semantics for the measurement tools.
-   */
   /** Per-cloud multi-step classification undo/redo history (delta-based). */
   private readonly _classHistory = new Map<string, ClassEditHistory>();
 
@@ -2999,22 +2992,27 @@ export class Viewer {
     const cloud = entry.cloud;
     // Codes already present (source, cleared or an earlier derive) are
     // replaced in place through the undo history, so Undo brings them back.
-    // A cloud with none gets the derived buffer plus the same GPU class-filter
-    // wiring (`aClass` + class-mask multiply) a classified load gets.
+    // A cloud with none gets the codes as one undoable step, plus `aClass`.
     if (codes.length === cloud.pointCount && cloud.classification) this.editClassification(id, (buf) => buf.set(codes), 'derived', method);
-    else { cloud.attachDerivedClassification(codes, method); this._afterClassEdit(id, entry, true); }
+    else { recordClassAttach(this._historyFor(id), cloud, codes, method); this._afterClassEdit(id, entry, true); }
     return true;
   }
 
   /**
-   * Attach (or replace) the `aClass` instanced attribute on a cloud's mesh and
-   * fold the class-mask multiply into its size node — the same wiring
-   * `_buildPointsMesh` does at load for a classified cloud, applied after the
-   * fact for a derived classification. Idempotent: a later whole-scan step
-   * refills the attribute in place. Only a new attribute re-applies the size
-   * mode and sets `material.needsUpdate`, which recompiles the node graph.
+   * Attach (or replace) `aClass` and fold the class-mask multiply into the size
+   * node, as `_buildPointsMesh` does for a classified load. A later whole-scan
+   * step refills it in place; only a new attribute recompiles the node graph.
+   * No codes (undo of a first attach) removes both and leaves class colours.
    */
-  private _attachClassAttribute(entry: CloudEntry, codes: Uint8Array): void {
+  private _attachClassAttribute(entry: CloudEntry, codes: Uint8Array | undefined): void {
+    if (!codes) {
+      entry.mesh.geometry.deleteAttribute('aClass');
+      this._materialsWithClass.delete(entry.material);
+      this._applySizeMode(entry.material);
+      entry.material.needsUpdate = true;
+      for (const [id, e] of this._clouds) if (e === entry && e.mode === 'classification') this.setColorMode(id, defaultMode(e.cloud));
+      return;
+    }
     const instanceCount = entry.cloud.pointCount;
     const n = Math.min(instanceCount, codes.length);
     // Re-deriving a cloud reuses the existing aClass buffer in place rather

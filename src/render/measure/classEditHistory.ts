@@ -47,6 +47,11 @@ export interface ClassDelta {
    * which also moves where the codes came from. Undo puts back [0], redo [1].
    */
   readonly prov?: readonly [ClassMark, ClassMark];
+  /**
+   * Set on the step that attached codes to a cloud that had none. `prev` then
+   * holds the attached buffer itself: undo detaches it, redo attaches it again.
+   */
+  readonly attached?: true;
 }
 
 const deltaBytes = (d: ClassDelta): number => d.indices.byteLength + d.prev.byteLength + d.next.byteLength;
@@ -83,6 +88,7 @@ export function diffClassification(
 }
 
 function applyDelta(buf: Uint8Array, delta: ClassDelta, dir: 'undo' | 'redo'): void {
+  if (delta.attached) return; // the caller detaches or re-attaches the buffer
   if (delta.prov) {
     // Dense: swap, so `prev` then holds the codes this step took off the buffer.
     const held = delta.prev;
@@ -131,6 +137,12 @@ export class ClassEditHistory {
 
   get canUndo(): boolean {
     return this._undo.length > 0;
+  }
+
+  /** The step the next undo or redo would replay, without replaying it. */
+  peek(dir: 'undo' | 'redo'): ClassDelta | undefined {
+    const stack = dir === 'undo' ? this._undo : this._redo;
+    return stack[stack.length - 1];
   }
 
   get canRedo(): boolean {
@@ -194,6 +206,8 @@ export interface ClassEditTarget {
   readonly classification?: Uint8Array;
   classMark: ClassMark;
   setClassificationState(state: ClassState, method?: string, before?: Uint8Array): void;
+  attachDerivedClassification(codes: Uint8Array, method?: string): void;
+  detachClassification(): Uint8Array | undefined;
 }
 
 const NO_INDICES = new Uint32Array(0);
@@ -228,8 +242,34 @@ export function recordClassEdit(
   return delta;
 }
 
+/**
+ * Attach derived `codes` to a cloud that carries no classification, recorded
+ * as one step: undo takes the codes off again, so the cloud reads as having
+ * no classification, and redo puts them back with the same provenance.
+ */
+export function recordClassAttach(
+  history: ClassEditHistory,
+  cloud: ClassEditTarget,
+  codes: Uint8Array,
+  method?: string,
+): ClassDelta {
+  const from = cloud.classMark;
+  cloud.attachDerivedClassification(codes, method);
+  const delta: ClassDelta = { indices: NO_INDICES, prev: codes, next: NO_CODES, prov: [from, cloud.classMark], attached: true };
+  history.push(delta);
+  return delta;
+}
+
 /** Undo or redo one recorded edit on `cloud`, codes and provenance together. */
 export function stepClassEdit(history: ClassEditHistory, cloud: ClassEditTarget, dir: 'undo' | 'redo'): ClassDelta | null {
+  const top = history.peek(dir);
+  if (top?.attached && top.prov) {
+    history[dir](NO_CODES);
+    if (dir === 'undo') cloud.detachClassification();
+    else cloud.attachDerivedClassification(top.prev);
+    cloud.classMark = top.prov[dir === 'undo' ? 0 : 1];
+    return top;
+  }
   const buf = cloud.classification;
   const d = buf ? history[dir](buf) : null;
   if (d?.prov) cloud.classMark = d.prov[dir === 'undo' ? 0 : 1];
