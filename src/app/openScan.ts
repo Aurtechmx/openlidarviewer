@@ -21,6 +21,8 @@
 import { sourcePositions } from '../model/pointFrames';
 import { isSessionFile } from '../io/sessionFile';
 import { scanFactsFromStatic } from './sessionScanFacts';
+import { takePendingSessionRestore } from './pendingSessionRestore';
+export { clearPendingSessionRestore } from './pendingSessionRestore';
 import { rememberCloudFile } from '../io/sourceFiles';
 import { detectCopc } from '../io/copc/copcDetect';
 import { formatProgress } from '../io/loadProgress';
@@ -622,7 +624,11 @@ export async function attachStaticCloud(
 
   // Only a fresh project resets saved work; an additive open keeps the layer
   // that is still on screen. tests/additiveOpenKeepsWork.test.ts pins this.
-  if (shouldResetSavedWork(viewer.clouds().length)) { deps.bookmarks.clear(); viewer.annotate.clear(); }
+  // A session imported before any scan was open is applied again below,
+  // matched and rebased onto this scan, so its restored work is not cleared.
+  const pendingSession = takePendingSessionRestore();
+  const freshProject = shouldResetSavedWork(viewer.clouds().length);
+  if (freshProject && !pendingSession) { deps.bookmarks.clear(); viewer.annotate.clear(); }
   deps.refreshAnnotationPanel();
 
   // ── Inspector setup — wrapped in defensive try/catches so a single
@@ -724,6 +730,17 @@ export async function attachStaticCloud(
       if (deps.debug) console.warn('[share] applyShareState threw', err);
     }
     deps.clearPendingShareState();
+  }
+
+  // The waiting session is matched against this scan and rebased once. On a
+  // refusal its toast says why, and the work restored in the session's own
+  // frame is removed rather than left misplaced on this scan.
+  if (pendingSession && freshProject) {
+    void deps.importSession(pendingSession).then((ok) => {
+      if (ok !== false || deps.scans.activeId !== id) return;
+      viewer.measure.clear(); viewer.annotate.clear(); deps.bookmarks.clear(); deps.inspector.setViews([]);
+      deps.refreshAnnotationPanel();
+    });
   }
 
   // The render-quality controls reflect the viewer's state — EDL defaults

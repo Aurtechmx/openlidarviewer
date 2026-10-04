@@ -53,6 +53,7 @@ import {
   type StaticScanCloud,
 } from './sessionScanFacts';
 import { formatBytesIn } from '../io/formatByteSize';
+import { markPendingSessionRestore } from './pendingSessionRestore';
 
 // Re-exported so `sessionIo`'s public API is unchanged — `openScan.ts` reads
 // `scanFactsFromStatic` off `./sessionScanFacts` directly (the hot scan-open path
@@ -86,7 +87,13 @@ export interface SessionModule {
     cloudOrigin: readonly [number, number, number],
     target?: RebaseTarget,
   ) => RebasedSessionGeometry;
-  matchSessionToScan: (summary: SessionScanSummary | undefined, loaded: ScanFacts) => ScanMatch;
+  matchSessionToScan: (
+    summary: SessionScanSummary | undefined,
+    loaded: ScanFacts,
+    storedOrigin?: readonly [number, number, number] | null,
+  ) => ScanMatch;
+  /** The origin the session stored for its summary's scan. */
+  sessionScanOrigin?: (session: InspectionSession) => readonly [number, number, number] | null;
   detectSessionSpatialConflict: (
     claims: SessionSpatialClaims,
     declared: DeclaredSpatialFacts,
@@ -198,7 +205,7 @@ export async function importSession(
     // no GPU backend is needed — just a non-null instance).
     await deps.viewerReady;
     const viewer = deps.getViewer();
-    const { parseSession, rebaseSessionGeometry, matchSessionToScan, detectSessionSpatialConflict } =
+    const { parseSession, rebaseSessionGeometry, matchSessionToScan, detectSessionSpatialConflict, sessionScanOrigin } =
       await deps.loadSession();
     const session = parseSession(await file.text());
     // If an older build wrote this session, a newer one may grade or label the
@@ -239,7 +246,7 @@ export async function importSession(
       }
       let match: ScanMatch | undefined;
       if (loadedFacts) {
-        match = matchSessionToScan(session.scanSummary, loadedFacts);
+        match = matchSessionToScan(session.scanSummary, loadedFacts, sessionScanOrigin?.(session));
         if (match.verdict === 'conflict') {
           const why = match.reasons[0] ?? 'its scan fingerprint does not match';
           const want = session.scanSummary?.fileName;
@@ -408,6 +415,9 @@ export async function importSession(
     viewer.measure.loadMeasurements(ownedMeasurements);
     viewer.annotate.loadAnnotations(ownedAnnotations);
     applied = true;
+    // With no scan open the work waits, in the session's own frame, for its
+    // scan; the next fresh open applies this file again onto that scan.
+    markPendingSessionRestore(haveCloud ? null : file);
     // v7 — a view may carry a display bundle beyond its camera; hydrate it
     // into the in-memory shape so restoring by name reapplies the lot. A
     // v6 file's views have no bundle fields, so `buildViewState` returns
