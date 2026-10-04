@@ -135,17 +135,29 @@ the two entries were renumbered when the branches were integrated.
 | L228 | EXPORT | TEST | high | FIXED | new | A measurement taken on a scan that was then closed exported through the open scan's origin under its name, and a scan or unit change while the measurement export loaded mixed one scan's geometry with another's scale. |
 | L229 | UI | TEST | med | FIXED | new | The findings panel read "Exported a report" even when the export was refused or failed, opening another scan and adding measurements discarded the first scan's findings with no warning, Clear all emptied the list in one click with no Undo, and a findings report could take the next scan's name, CRS and epoch when the scan changed while the export loaded. |
 | L230 | EXPORT | TEST | medium | FIXED | new | The scan report PDF for a truncated file divided the header's declared point total by the extent of the points read, which inflated the density, and printed no truncation note. |
+| L231 | EXPORT | TEST | medium | FIXED | new | A profile PDF or CSV sampled from a truncated file stated a full static read, and the space report PDF for a truncated file carried no coverage note. |
+| L232 | ARCHITECTURE | TEST | low | FIXED | new | The `?test=1` Playwright seam sat inline in `src/main.ts`. It now lives in `src/app/testSeam/testSeamMount.ts` behind the same compile-time guard, and the shipped build still carries none of it. |
+| L233 | SCIENTIFIC | TEST | high | FIXED | new | With scan A open and scan B added later, closing A moved the project origin onto B, so B was drawn apart from its measurements, annotations, clip box, saved views and camera. |
+| L234 | EXPORT | TEST | medium | FIXED | new | A finished elevation comparison kept its difference download and result text after the Before or After choice changed or a compared scan was closed, so the download could hand out a grid for a pair the panel no longer named. |
+| L235 | EXPORT | TEST | high | FIXED | new | Two scans with one file name, point count and extent, at different positions, shared one layer id, so an unplaced second tile's measurement exported at the first tile's origin, and closing one tile left its measurements exportable through the other. |
+| L236 | EXPORT | TEST | high | FIXED | new | The point-cloud export tested a placed scan's source-local positions against the project-frame clip box, so with two scans open the file held a different region from the one shown inside the box. |
+| L237 | SCIENTIFIC | TEST | high | FIXED | new | A two-scan session saved with the second scan active wrote that scan's origin and no project frame, so reopening it placed project-frame measurements and annotations 100 m off. |
+| L238 | UI | TEST | medium | FIXED | new | When the Observatory worker failed and the main-thread fallback threw, the run never settled and the panel stayed on "Running…". |
+| L239 | EXPORT | TEST | high | FIXED | new | Classifying a scan that had no classes recorded no undo step, so Undo stayed disabled and a full-resolution export re-read the source and dropped the derived classes. |
+| L240 | SCIENTIFIC | TEST | high | FIXED | new | Opening a scan after importing its session cleared the restored annotations and views, and a session applied without asking to an unrelated scan of the same size at another position. |
+| L241 | UI | TEST | medium | FIXED | new | After a lasso reclassify, swap, Undo or Redo, hiding the new class left the edited points drawn, because the GPU class filter still read the codes from load. |
+
 ## Totals
 
 - BUILT: 1
 - DEFERRED: 4
-- FIXED: 84
+- FIXED: 95
 - MEASURED: 2
 - NOT REPRODUCIBLE: 9
 - OPEN: 0
 - PARTIAL: 5
 - SUPERSEDED: 1
-- total: 106
+- total: 117
 
 ## Detail
 
@@ -8568,3 +8580,231 @@ Tests: `tests/reportExport.test.ts` (a truncated cloud of 4 of 2,601 points:
 density from 4 points, the Points and Coverage rows and the caveat; a strided
 cloud keeps the declared 2,000).
 
+### L231 · FIXED · EXPORT
+
+A profile drawn across a truncated file (`metadata.truncation.read <
+declared`) was read as `full-static`, so the profile PDF said "Read: the full
+static sources" and the CSV had no note. The profile section seam now takes
+each static layer's truncation and returns a coverage note with the series. The
+measurement keeps it as `profileCoverageNote`, and it is saved with the session.
+The profile PDF prints it in the general notes, and the CSV starts with a `#`
+comment line that carries it. The profile provenance record keeps a source's
+`truncation`. A record with a truncated source is an incomplete read, described
+as a truncated static source, and the legend's read scope is the new
+`partial-static`.
+
+The space report PDF takes an optional `coverageNote`, filled from the active
+scan's truncation through the scan route coordinator's frame port, and prints
+it as a Coverage row in the provenance footer.
+
+A complete source produces the same output as before in all three exports.
+
+Tests: `tests/profilePdf.test.ts`, `tests/profileSummary.test.ts`,
+`tests/profileSectionSeam.test.ts`, `tests/spaceReportPdf.test.ts` (a truncated
+source of 4 of 2,601 points shows the note; a complete source is unchanged).
+
+### L232 · FIXED · ARCHITECTURE
+
+The `?test=1` Playwright seam (`window.__OLV_TEST_API__`) moved out of
+`src/main.ts` into `src/app/testSeam/testSeamMount.ts`, driven through a
+`TestSeamDeps` object of accessors (`getViewer`, the active scan id, the
+reclassify panel hooks). The `__OLV_TEST_SEAM__` guard stays at the call site
+and the module loads through `loadTestSeamMount()` in
+`src/app/testSeam/testSeamLoader.ts`, so a build with the constant false drops
+the call and the chunk. The API surface and every method body are unchanged.
+
+Tests: `npm run check:no-test-seam` after `npm run build:live` (no seam marker
+in the shipped bundle); `tests/e2e/measure.spec.ts`,
+`tests/e2e/exportPanel.spec.ts` and `tests/e2e/lazyChunkLoad.spec.ts` drive the
+seam under `?test=1`.
+
+### L233 · FIXED · SCIENTIFIC
+
+`src/app/projectFrame.ts` anchored the project origin on the first scan only, so
+closing it re-anchored the frame on the scan added later. That scan was drawn
+by the A to B separation away from its measurements, annotations, clip box,
+saved views and camera, with no message. Every aligned layer now joins the set
+the origin is anchored from. The origin holds while any layer that has been in
+the frame is open, and re-anchors only when the set empties or is replaced with
+no surviving layer.
+
+`src/app/LayerService.ts` keeps the last open layer at the compatibility it had
+beside the closed scan. Judged alone it was `verified`, which needs a vertical
+unit, so a pair that shared only X/Y lost the survivor's placement, and a
+survivor with its own Z moved vertically. The lasso volume walk in
+`src/render/integrableClouds.ts` applies the same rule as `integrableClouds`: a
+lone layer is analysed in its own frame, and with several layers each must be
+compatible and mounted.
+
+Tests: `tests/LayerService.test.ts` (open A, add B, a point on B, close A: B's
+placement and the point are unchanged, with and without a vertical datum),
+`tests/projectFrameService.test.ts`, `tests/integrableClouds.test.ts`,
+`tests/e2e/twoScanMount.spec.ts`.
+
+### L234 · FIXED · EXPORT
+
+The finished difference raster was cached in `layers.lastDifference` and
+cleared only when the next comparison started. Changing the Before or After
+selection, or closing a compared scan while two others stayed open, left the
+download offered and the old result shown. `createCompareDifference` in
+`src/app/comparePair.ts` now binds the shown result and its raster to the two
+scans they came from (viewer id, stable layer id and the loaded layer), and
+drops both, hiding the download and clearing the result text, when the
+selection names another pair or either scan is closed or replaced. The picker
+reports user changes to either select, and `removeCloud` re-checks. Choosing
+the original pair again does not bring the old result back. A comparison still
+running when the pair changes is retired, so it never publishes.
+
+Tests: `tests/compareDifferenceFreshness.test.ts` (a pair change; closing a
+participant with three scans open; a two-scan close and reopen; a replaced
+scan; a result with no raster; a pair change mid-run; the picker's change
+report) and `tests/e2e/withheldCompare.spec.ts` (with three georeferenced
+scans, the download and result hide after a pair change and stay hidden when
+the pair is restored).
+
+### L235 · FIXED · EXPORT
+
+`fingerprintKey` in `src/model/layerIdentity.ts` keyed a layer on its file name,
+point count, extent spans and CRS only, and `LayerIdentityRegistry.resolve`
+returned the remembered id even while an open layer held it. Two tiles named
+`tile.las` with equal counts and spans 1 km apart got one id, the measurement
+export placed the second tile's work through the first match, and closing one
+tile did not trip the closed-scan refusal.
+
+The fingerprint now includes the file's absolute source origin and, when known,
+the SHA-256 of its bytes. Stored facts without either are matched on the older
+key, and only when exactly one open layer fits. `resolve` mints a fresh id when
+the remembered one is held by an open layer, and the layer service releases the
+ids of closed layers at the next load, so a reopened scan still gets its id
+back. The measurement file export and the integrity report refuse when an owner
+id matches more than one open layer.
+
+Tests: `tests/layerIdentityUnique.test.ts`, `tests/layerIdentityService.test.ts`.
+
+### L236 · FIXED · EXPORT
+
+The clip box is in the project frame, the frame the viewer draws and counts in.
+`clipCloud` in `src/render/clip/clipCloud.ts` tested a placed scan's
+source-local positions against it, so with two scans open and the exported scan
+at a non-zero offset the file held a different region from the one shown inside
+the box, often with the same point count. `clipCloud` now takes the layer's
+offset and places each point by it before the test. Written positions stay
+source-local. `src/ui/ExportPanel.ts` reads the offset together with the clip
+box before the first await, and a full-resolution re-decode with a different
+source origin is corrected for that difference. A single unplaced scan exports
+as before.
+
+Tests: `tests/exportPanelClipPlacement.test.ts` (the points written match the
+points shown inside the box, by identity, for display and full-resolution
+exports of a placed scan and for an unplaced scan);
+`tests/e2e/clipPlacedExport.spec.ts` (two tiles 2 km apart, part of the second
+clipped, the exported coordinates checked).
+
+### L237 · FIXED · SCIENTIFIC
+
+A measurement or annotation placed with two or more scans open belongs to the
+project frame. A session saved with scan B active wrote B's origin and no frame
+block, so on reopen project-frame work was not shifted, and with B anchoring
+the scene a point at easting 500102 came back at 500202.
+
+With two or more static scans, `src/app/sessionSnapshot.ts` now writes the
+project frame (the origin and one record per scan) and uses the project origin
+as the session origin. `projectFrameInputFrom` in `src/app/projectFrame.ts`
+builds that record from the live frame, each scan's source origin, layer
+identity and placement, and returns null unless every scan has an origin and an
+identity. A single-scan save is byte-identical to before.
+
+On reopen, `src/io/session.ts` moves project-frame work by the recorded project
+origin less the target's. A point owned by a layer placed in X/Y only keeps that
+layer's own Z. The camera, saved views and clip box are in the scene frame and
+move by the change of project origin, never by one layer's offset. Work the
+file marks as project-frame with no frame recorded is not placed and is listed
+in `refused`, as is work whose owning layer is not open unless that layer was
+placed on all three axes. `src/app/sessionIo.ts` leaves refused items out and
+the restore message gives their count. Multi-scan v8 files written before this
+change carry no frame block, so their project-frame work is reported as not
+restored. v1 to v7 files and single-scan files read as before.
+
+Tests: `tests/sessionSaveProjectFrame.test.ts` (two scans saved with B active
+reopen with B as the anchor at easting 500102; a single-scan save is
+byte-identical; a v7 file rebases by the origin delta and refuses nothing).
+
+### L238 · FIXED · UI
+
+When the Observatory worker replied with a failure and the main-thread fallback
+then threw, the exception escaped the worker's message handler, so the job's
+promise never settled and the panel stayed on "Running…". The runner's catch
+also ran the pipeline a second time on the main thread.
+`src/app/observatoryWorkerClient.ts` now rejects the job when the fallback
+throws. `src/app/observatoryRunner.ts` commits a `failed` phase for a rejected
+job or a throw from an injected compute, with the fixed message "Observatory
+could not finish on this scan. Try again.", and no longer runs the pipeline
+twice. A failure for a superseded or aborted run leaves the state alone, and
+cancelled jobs still never settle. `src/ui/observatory/observatoryPanel.ts`
+shows that message, and the error text itself never reaches the page.
+
+Tests: `tests/observatoryWorkerFallbackFault.test.ts` (the job rejects, the
+runner reaches `failed` with the fixed message after one main-thread run, and
+an aborted run stays idle).
+
+### L239 · FIXED · EXPORT
+
+Classifying a scan that had no classes recorded no undo step. Undo stayed
+disabled, the unsaved-edit check read false, and a full-resolution export
+re-read the source file and dropped the derived classes. The first attach is
+now one step in `src/render/measure/classEditHistory.ts`. Undo takes the codes
+off the scan, removes the class attribute and the class filter from its points,
+and returns the colours, legend and Classes panel to the no-classification
+state. Redo puts the same codes back with the same provenance. The one-class
+fill uses the same path.
+
+`src/export/fullResClassGuard.ts` no longer asks whether Undo is available. It
+compares the scan's class provenance and edit count with the source, so derived
+or cleared codes, or source codes after any edit, refuse a classified
+full-resolution export. An undo followed by a redo still refuses.
+
+Tests: `tests/firstClassAttachUndo.test.ts` (the attach, undo, redo, the
+one-class fill and the export refusal); `tests/e2e/reclassifyUi.spec.ts` (Undo
+after the first fill returns the scan to no classes and an empty legend).
+
+### L240 · FIXED · SCIENTIFIC
+
+A session imported with no scan open restored its work, and opening its scan
+afterwards cleared the restored annotations and views. Opening the scan after
+such an import now applies the session again, once, through the scan match and
+the rebase (`src/app/pendingSessionRestore.ts`). When the scan does not match,
+the toast gives the reason and the work restored in the session's frame is
+removed.
+
+`matchSessionToScan` matched on size alone, so `west.las` matched `east.las`
+1 km away as `strong` and applied without asking. It now compares the stored
+bounds minimum with the loaded scan's. Older files fall back to the origin
+stored for that scan, which for a multi-scan session is the layer's own origin
+in `projectFrame`. A shift larger than the scan's spans is a conflict. A
+smaller shift, a different file name or a different source digest returns
+`partial`, which asks before applying. Sessions now store the bounds minimum,
+and the source digest when it is known. The same scan still matches `strong`,
+and a valid two-scan session compared through its per-layer origin applies
+without asking.
+
+Tests: `tests/sessionScanPosition.test.ts`, `tests/pendingSessionRestore.test.ts`,
+`tests/sessionScanIdentity.test.ts`, `tests/e2e/sessionPendingScan.spec.ts`
+(a second save after the delayed open keeps the measurement, the annotation and
+the view).
+
+### L241 · FIXED · UI
+
+`Viewer._afterClassEdit` refreshed the `aClass` attribute the class-visibility
+filter reads only for whole-scan edits (clear, derive, restore). A lasso
+reclassify, a swap, an Undo or a Redo changed the codes and the colours but not
+that attribute, so hiding class 6 after a 2 to 6 edit kept the edited points on
+screen. Every classification edit, including the undoable first attach in L239,
+now refills `aClass` in place and marks it for upload. Streaming scans take no
+classification edits and are unchanged. `Viewer.classFilterDrawnCount(id)`
+returns how many points the class mask draws, and the test seam exposes it as
+`gpuDrawnCount`.
+
+Tests: `tests/classFilterAfterEdit.test.ts` (the attribute after a swap, a
+reclassify, an Undo and a Redo matches the codes);
+`tests/e2e/reclassify.spec.ts` (after a lasso reclassify to class 6, hiding
+class 6 draws only the unedited points, through Undo and Redo).
