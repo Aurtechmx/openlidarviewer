@@ -357,6 +357,8 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
         router?.navigate({ mode: 'output', page: null });
         exp.preselectFullResolution!(id, refusal);
       },
+      reload: exp.reloadLayer ? (id, budget) => exp.reloadLayer!(id, budget) : undefined,
+      notify: exp.notify ? (m) => exp.notify!(m) : undefined,
     });
     d.addTeardown(() => bindFullFile(null));
   }

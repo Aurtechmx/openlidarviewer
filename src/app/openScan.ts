@@ -18,6 +18,7 @@
  * v0.6 decomposition (see `docs/architecture/architecture-map.md`).
  */
 
+import { takeReloadBudget } from './fullFileActions';
 import { sourcePositions } from '../model/pointFrames';
 import { isSessionFile } from '../io/sessionFile';
 import { scanFactsFromStatic } from './sessionScanFacts';
@@ -258,6 +259,8 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     return;
   }
   const controller = new AbortController();
+  // A reload at higher density hands this open a raised budget; any other open uses the device's.
+  const renderBudget = takeReloadBudget() ?? deps.renderBudget;
   let preview: PreviewCloudHandle | null = null;
   // Whether a streaming scan was already on screen when this open began.
   //
@@ -302,7 +305,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       viewerReady: deps.viewerReady,
       getViewer: deps.getViewer,
       isPhone: deps.isTouchFirst ?? deps.isPhone,
-      renderBudget: deps.renderBudget,
+      renderBudget,
       deviceMemoryGB: deps.deviceMemoryGB,
       dock: deps.dock,
       inspector: deps.inspector,
@@ -353,16 +356,16 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
           if (controller.signal.aborted) return;
           if (preview) return preview.append(chunk);
           deps.stage.hideEmptyState();
-          preview = (deps.startPreviewCloud ?? deferredPreviewCloud)(deps.getViewer(), chunk, deps.renderBudget);
+          preview = (deps.startPreviewCloud ?? deferredPreviewCloud)(deps.getViewer(), chunk, renderBudget);
         },
       },
       {
         // The point budget is the device's safe render budget — full on a
         // capable machine, reduced on a weak one to keep the GPU stable.
-        budget: deps.renderBudget,
+        budget: renderBudget,
         // What the stand-in can actually draw, so the decode hands back a
         // sample of that size instead of every record it places.
-        previewBudget: Math.max(1, Math.min(deps.renderBudget, PREVIEW_MAX_POINTS)),
+        previewBudget: Math.max(1, Math.min(renderBudget, PREVIEW_MAX_POINTS)),
         isMobile: (deps.isTouchFirst ?? deps.isPhone)(),
         deviceMemoryGB: deps.deviceMemoryGB(),
         signal: controller.signal,

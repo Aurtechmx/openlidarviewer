@@ -15,10 +15,12 @@
  */
 
 import './fullFileActions.css';
-import { estimateMemoryBytes, memoryCeilingBytes, type PointAttributes } from '../io/loadPlan';
+import { estimateMemoryBytes, memoryCeilingBytes, planLoad, type PointAttributes } from '../io/loadPlan';
+import { GPU_HARD_POINT_CEILING, deviceTier, type DeviceTier } from '../render/deviceProfile';
 import { evaluateFullResClassExport } from '../export/fullResClassGuard';
 import { compactPointCount } from '../terrain/datasetIntelligence';
 import { isTouchFirstDevice } from '../ui/isMobileDevice';
+import { openConfirm } from '../ui/Modal';
 import type { PointCloud } from '../model/PointCloud';
 
 type SourceFormat = PointCloud['sourceFormat'];
@@ -123,6 +125,10 @@ export interface FullFileHost {
   activeId(): string | null;
   /** Make the layer active, open Export with full resolution ticked, and show `refusal` when set. */
   openExport(id: string, refusal?: string): void;
+  /** Open the layer's source file again at `budget` points, replacing the layer. */
+  reload?(id: string, budget: number): Promise<void>;
+  /** Say why an action cannot run. */
+  notify?(message: string): void;
 }
 
 let host: FullFileHost | null = null;
@@ -218,4 +224,129 @@ export function layerFacts(input: {
     hasClassEdits: input.hasClassEdits,
     includeClassification: input.includeClassification,
   };
+}
+
+// ─── Reload at higher density ──────────────────────────────────────────────
+
+export interface ReloadDevice extends FullFileDevice {
+  readonly tier: DeviceTier;
+}
+
+export interface ReloadPlan {
+  readonly show: boolean;
+  readonly allowed: boolean;
+  readonly reason?: string;
+  /** Points the reload would hold. */
+  readonly target: number;
+  /** The reload would hold every declared point. */
+  readonly allPoints: boolean;
+  readonly label: string;
+  /** The confirm sentence, with the numbers. */
+  readonly confirm: string;
+  readonly estimateBytes: number;
+}
+
+const NO_RELOAD: ReloadPlan = { show: false, allowed: false, target: 0, allPoints: false, label: '', confirm: '', estimateBytes: 0 };
+
+/**
+ * The reload target for a reduced layer: min(GPU ceiling, memory fit, declared
+ * count), from the same planLoad the first open used, with the budget raised.
+ */
+export function assessReload(f: FullFileLayerFacts | null, device: ReloadDevice): ReloadPlan {
+  if (!f || !f.hasSource || !f.reduced || f.truncated) return NO_RELOAD;
+  if (f.declared === null || !(f.declared > f.resident)) return NO_RELOAD;
+  const declared = f.declared;
+  const plan = planLoad({
+    sourceCount: declared,
+    budget: Math.min(GPU_HARD_POINT_CEILING, declared),
+    fileBytes: f.fileBytes,
+    format: f.format,
+    attributes: f.attributes,
+    isMobile: device.isMobile,
+    deviceMemoryGB: device.deviceMemoryGB,
+  });
+  const target = Math.min(plan.targetCount, GPU_HARD_POINT_CEILING, declared);
+  const allPoints = target >= declared;
+  const label = allPoints ? `Reload all ${compactPointCount(declared)} points` : `Reload at ${compactPointCount(target)} points`;
+  const gb = formatGb(plan.memoryEstimateBytes);
+  const confirm = allPoints
+    ? `Shows all ${compactPointCount(declared)} points. Needs about ${gb} (estimated). May run slower.`
+    : `Shows ${compactPointCount(target)} of ${compactPointCount(declared)} points (still a sample). Needs about ${gb} (estimated). May run slower.`;
+  const base = { show: true, target, allPoints, label, confirm, estimateBytes: plan.memoryEstimateBytes };
+  const held = `${compactPointCount(f.resident)} of ${compactPointCount(declared)} points are loaded`;
+  const ceiling = formatGb(memoryCeilingBytes(device.deviceMemoryGB, device.isMobile));
+  if (device.isMobile) return { ...base, allowed: false, reason: `${held}. A denser reload is not offered on a phone or tablet.` };
+  if (device.tier === 'low') return { ...base, allowed: false, reason: `${held}. This device is in the low performance tier, so a denser reload is not offered.` };
+  if (plan.buildThenStream || plan.mayExceedCeiling) {
+    return { ...base, allowed: false, reason: `${held}. A denser reload needs about ${gb}, more than the ${ceiling} this device allows.` };
+  }
+  if (target <= f.resident) return { ...base, allowed: false, reason: `${held}. A reload would not add points on this device.` };
+  return { ...base, allowed: true };
+}
+
+export function currentReloadDevice(): ReloadDevice {
+  const d = currentDevice();
+  const cores = typeof navigator === 'undefined' ? undefined : navigator.hardwareConcurrency;
+  return { ...d, tier: deviceTier({ deviceMemoryGB: d.deviceMemoryGB, hardwareConcurrency: cores, isMobile: d.isMobile }) };
+}
+
+export function reloadAvailability(id?: string, device: ReloadDevice = currentReloadDevice()): ReloadPlan {
+  const target = id ?? host?.activeId() ?? null;
+  if (!host?.reload || !target) return NO_RELOAD;
+  return assessReload(host.facts(target), device);
+}
+
+/** The budget the next open uses instead of the device's, set by a reload. */
+let pendingBudget: number | null = null;
+
+/** Read and clear the reload budget. The open path calls this once per open. */
+export function takeReloadBudget(): number | null {
+  const b = pendingBudget;
+  pendingBudget = null;
+  return b;
+}
+
+/**
+ * Run the reload: refuse with the reason, or confirm with the numbers and then
+ * reopen the layer's file at the target budget. `ask` is the confirm dialog.
+ */
+export async function useReload(
+  id?: string,
+  device: ReloadDevice = currentReloadDevice(),
+  ask: (message: string, confirmLabel: string) => Promise<boolean> = defaultAsk,
+): Promise<ReloadPlan> {
+  const target = id ?? host?.activeId() ?? null;
+  const plan = reloadAvailability(target ?? undefined, device);
+  if (!host?.reload || !target || !plan.show) return plan;
+  if (!plan.allowed) { host.notify?.(plan.reason ?? ''); return plan; }
+  if (!(await ask(plan.confirm, 'Reload'))) return plan;
+  pendingBudget = plan.target;
+  try { await host.reload(target, plan.target); } finally { pendingBudget = null; }
+  return plan;
+}
+
+function defaultAsk(message: string, confirmLabel: string): Promise<boolean> {
+  return openConfirm({ title: 'Reload at higher density', message, confirmLabel });
+}
+
+/** The reload link beside a sample notice, or null when the layer offers none. */
+export function reloadLink(id?: string): HTMLButtonElement | null {
+  const p = reloadAvailability(id);
+  if (!p.show) return null;
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'olv-fullfile-link';
+  b.dataset.fullFile = 'reload';
+  if (id) b.dataset.layer = id;
+  b.textContent = p.label;
+  // A refused reload keeps its link: the click explains why, with the figures.
+  b.title = p.allowed ? p.confirm : p.reason ?? '';
+  if (!p.allowed) b.setAttribute('aria-disabled', 'true');
+  b.addEventListener('click', (e) => { e.stopPropagation(); void useReload(id); });
+  return b;
+}
+
+/** Both sample actions for a layer, in reading order. */
+export function sampleActionLinks(id?: string): HTMLButtonElement[] {
+  return [fullFileLink(id), reloadLink(id)].filter((b): b is HTMLButtonElement => b !== null);
 }

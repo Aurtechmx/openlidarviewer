@@ -68,6 +68,8 @@ export interface ShelfExportPanel extends FindingsReader {
   setTerrainExports(t: TerrainExportsLane | null): void;
   fullFileFacts?(id: string): FullFileLayerFacts | null;
   preselectFullResolution?(id: string, refusal?: string): void;
+  reloadLayer?(id: string, budget: number): Promise<void>;
+  notify?(message: string): void;
 }
 
 /** What the host hands the shell for the shelf: the owners, by reference. */

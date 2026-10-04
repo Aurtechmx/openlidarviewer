@@ -1,9 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   assessFullFile, bindFullFile, fullFileAvailability, fullFileLabel, layerFacts, pointBasisLine,
-  reviewSampleTip, useFullFile, formatGb, type FullFileLayerFacts,
+  reviewSampleTip, useFullFile, formatGb, assessReload, useReload, takeReloadBudget, type FullFileLayerFacts,
 } from '../src/app/fullFileActions';
-import { estimateMemoryBytes, memoryCeilingBytes } from '../src/io/loadPlan';
+import { estimateMemoryBytes, memoryCeilingBytes, planLoad } from '../src/io/loadPlan';
+import { GPU_HARD_POINT_CEILING } from '../src/render/deviceProfile';
 import { compactPointCount } from '../src/terrain/datasetIntelligence';
 import { FULL_RES_CLASS_EDITS_REFUSAL } from '../src/export/fullResClassGuard';
 import { buildExportSummary } from '../src/export/exportSummary';
@@ -167,5 +170,80 @@ describe('layerFacts', () => {
     const t = layerFacts({ id: 'd', cloud: { pointCount: 10, sourceFormat: 'las', metadata: { truncation: { read: 10, declared: 20 } } }, file: null, reduced: false, hasClassEdits: false, includeClassification: true });
     expect(t.truncated).toBe(true);
     expect(t.hasSource).toBe(false);
+  });
+});
+
+describe('reload at higher density', () => {
+  afterEach(() => bindFullFile(null));
+  const high = { deviceMemoryGB: 16, isMobile: false, tier: 'high' as const };
+
+  it('targets min(GPU ceiling, memory fit, declared count) from planLoad', () => {
+    const f = synth('strided');
+    const p = assessReload(f, high);
+    const plan = planLoad({ sourceCount: f.declared!, budget: Math.min(GPU_HARD_POINT_CEILING, f.declared!), fileBytes: f.fileBytes, format: f.format, attributes: f.attributes, isMobile: false, deviceMemoryGB: 16 });
+    expect(p.target).toBe(Math.min(plan.targetCount, GPU_HARD_POINT_CEILING, f.declared!));
+    expect(p.target).toBeLessThanOrEqual(GPU_HARD_POINT_CEILING);
+    expect(p.allowed).toBe(true);
+    expect(p.allPoints).toBe(false);
+    expect(p.confirm).toBe(`Shows ${compactPointCount(p.target)} of ${compactPointCount(f.declared!)} points (still a sample). Needs about ${formatGb(p.estimateBytes)} (estimated). May run slower.`);
+    expect(p.label).toBe(`Reload at ${compactPointCount(p.target)} points`);
+  });
+
+  it('calls it all points only when the declared count would be resident', () => {
+    const f = synth('strided', { resident: 1_000_000, declared: 3_500_000, fileBytes: 3_500_000 * 34 });
+    const p = assessReload(f, high);
+    expect(p.target).toBe(3_500_000);
+    expect(p.allPoints).toBe(true);
+    expect(p.label).toBe(`Reload all ${compactPointCount(3_500_000)} points`);
+    expect(p.confirm).toMatch(/^Shows all /);
+    expect(assessReload(synth('strided'), high).label).not.toContain('all');
+  });
+
+  it('refuses on a low tier, on mobile, and when it would not add points', () => {
+    expect(assessReload(synth('strided'), { ...high, tier: 'low' }).allowed).toBe(false);
+    expect(assessReload(synth('strided'), { deviceMemoryGB: 4, isMobile: true, tier: 'medium' }).allowed).toBe(false);
+    const full = synth('strided', { resident: GPU_HARD_POINT_CEILING, declared: 20_000_000, fileBytes: 20_000_000 * 34 });
+    expect(assessReload(full, high).reason).toBe(`${compactPointCount(GPU_HARD_POINT_CEILING)} of ${compactPointCount(20_000_000)} points are loaded. A reload would not add points on this device.`);
+  });
+
+  it('refuses the heavy file that does not fit memory, and hides for a complete load', () => {
+    const heavy = assessReload(synth('heavy'), high);
+    expect(heavy.allowed).toBe(false);
+    expect(heavy.reason).toContain(formatGb(heavy.estimateBytes));
+    expect(heavy.reason).toContain(`more than the ${formatGb(memoryCeilingBytes(16, false))} this device allows`);
+    expect(heavy.reason).toMatch(/ of .* points are loaded\./);
+    expect(assessReload(synth('small'), high).show).toBe(false);
+  });
+
+  it('confirms, then reopens the targeted layer with the budget the open path takes once', async () => {
+    const f = synth('strided', { id: 'r' });
+    let seen: number | null = null;
+    const reload = vi.fn(async () => { seen = takeReloadBudget(); });
+    bindFullFile({ facts: (id) => (id === 'r' ? f : null), activeId: () => 'r', openExport: vi.fn(), reload });
+    const ask = vi.fn(async () => true);
+    const p = await useReload('r', high, ask);
+    expect(ask).toHaveBeenCalledWith(p.confirm, 'Reload');
+    expect(reload).toHaveBeenCalledWith('r', p.target);
+    expect(seen).toBe(p.target);
+    expect(takeReloadBudget()).toBeNull();
+  });
+
+  it('does not reload when the confirm is declined, and notifies a refusal', async () => {
+    const notify = vi.fn();
+    const reload = vi.fn(async () => {});
+    bindFullFile({ facts: () => synth('strided', { id: 'q' }), activeId: () => 'q', openExport: vi.fn(), reload, notify });
+    await useReload('q', high, async () => false);
+    expect(reload).not.toHaveBeenCalled();
+    await useReload('q', { ...high, tier: 'low' }, async () => true);
+    expect(reload).not.toHaveBeenCalled();
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining('low performance tier'));
+  });
+});
+
+describe('GPU point ceiling', () => {
+  it('matches the upload guard in Viewer.ts', () => {
+    const src = readFileSync(fileURLToPath(new URL('../src/render/Viewer.ts', import.meta.url)), 'utf8');
+    const m = src.match(/const GPU_HARD_POINT_CEILING = ([\d_]+);/);
+    expect(Number(m![1].replace(/_/g, ''))).toBe(GPU_HARD_POINT_CEILING);
   });
 });
