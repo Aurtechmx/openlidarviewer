@@ -2462,7 +2462,7 @@ const exportPanel = new ExportPanel({
   // empty. Read the allocation-free frontier count rather than materialising a
   // snapshot just to test it for null.
   isStreamingPending: () => viewer?.streamingCloud != null && viewer.exportFrontierPointTotal() === 0,
-  getActiveClip: () => viewer.getClip(), getActiveScanId: () => scans.activeExportTargetId(),
+  getActiveClip: () => viewer.getClip(), getActiveClipOffset: () => (scans.activeId ? viewer.layerProjectOffset(scans.activeId) : null), getActiveScanId: () => scans.activeExportTargetId(),
   hasFullSource: () => scans.activeId != null && sourceFileById.has(scans.activeId),
   hasClassEdits: () => scans.activeId != null && (viewer?.canUndoClassification(scans.activeId) ?? false),
   // A streaming snapshot exports only resident points, so it is a reduced subset
