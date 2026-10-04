@@ -20,6 +20,8 @@
  *   3. every direct PRODUCTION dependency appears as a component
  *   4. each such component's version equals the LOCKED version
  *   5. no superseded root identity (an older version string in the root)
+ *   7. every component's distribution SHA-512 equals the lockfile integrity
+ *      of the tarball at that component's version
  *
  * Dev dependencies are deliberately NOT required: the SBOM is generated with
  * `--omit dev`, so their absence is correct, not drift.
@@ -34,6 +36,13 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { isCliEntry } from './lib/isCliEntry.mjs';
+
+/** Hex SHA-512 from an SRI integrity string ("sha512-<base64>"), or null. */
+function sha512Hex(integrity) {
+  if (typeof integrity !== 'string') return null;
+  const entry = integrity.split(/\s+/).find((e) => e.startsWith('sha512-'));
+  return entry ? Buffer.from(entry.slice(7), 'base64').toString('hex') : null;
+}
 
 /** Collect SBOM problems. `read(relPath)` returns text or null. */
 export function collectSbomProblems(read) {
@@ -124,6 +133,43 @@ export function collectSbomProblems(read) {
         problems.push(
           `sbom.json lists "${name}" at ${comp.version}, but package-lock resolves ${locked}.`,
         );
+      }
+    }
+  }
+
+  // 7. Distribution hashes. Each component's tarball SHA-512 must be the
+  //    lockfile `integrity` of the package at the component's version. A
+  //    version bump that moves the URL but keeps the old digest describes a
+  //    tarball that does not exist.
+  if (components) {
+    const integrityByNameVersion = new Map();
+    for (const [key, entry] of Object.entries(lock.packages ?? {})) {
+      const at = key.lastIndexOf('node_modules/');
+      if (at === -1 || !entry?.version || !entry?.integrity) continue;
+      const name = key.slice(at + 'node_modules/'.length);
+      integrityByNameVersion.set(`${name}@${entry.version}`, entry.integrity);
+    }
+    for (const c of components) {
+      if (!c || !c.name) continue;
+      const full = c.group ? `${c.group}/${c.name}` : c.name;
+      for (const ref of c.externalReferences ?? []) {
+        if (ref?.type !== 'distribution') continue;
+        const sha = (ref.hashes ?? []).find((h) => h?.alg === 'SHA-512');
+        if (!sha) {
+          problems.push(`sbom.json component "${full}@${c.version}" has no SHA-512 distribution hash.`);
+          continue;
+        }
+        const integrity = integrityByNameVersion.get(`${full}@${c.version}`);
+        const expected = sha512Hex(integrity);
+        if (expected == null) {
+          problems.push(
+            `sbom.json component "${full}@${c.version}" has no sha512 integrity in package-lock.json to check its hash against.`,
+          );
+        } else if (String(sha.content).toLowerCase() !== expected) {
+          problems.push(
+            `sbom.json SHA-512 for "${full}@${c.version}" does not match the package-lock integrity of that tarball.`,
+          );
+        }
       }
     }
   }
