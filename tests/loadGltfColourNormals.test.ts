@@ -14,7 +14,7 @@ interface Attr {
 }
 
 /** One-primitive glTF with the buffer inlined as a data URI. */
-function gltf(attrs: Record<string, Attr>, count: number): ArrayBuffer {
+function gltf(attrs: Record<string, Attr>, count: number, node: Record<string, unknown> = {}): ArrayBuffer {
   const parts: Uint8Array[] = [];
   const accessors: object[] = [];
   const bufferViews: object[] = [];
@@ -48,7 +48,7 @@ function gltf(attrs: Record<string, Attr>, count: number): ArrayBuffer {
     asset: { version: '2.0' },
     scene: 0,
     scenes: [{ nodes: [0] }],
-    nodes: [{ mesh: 0 }],
+    nodes: [{ mesh: 0, ...node }],
     meshes: [{ primitives: [{ attributes, mode: 0 }] }],
     accessors,
     bufferViews,
@@ -132,5 +132,41 @@ describe('loadGltf: grey-ramp-normals.glb fixture', () => {
     const a = (32 / 63 - 0.5) * Math.PI * 0.5;
     expect(pc.normals![32 * 3]).toBeCloseTo(Math.sin(a), 6);
     expect(pc.normals![32 * 3 + 2]).toBeCloseTo(Math.cos(a), 6);
+  });
+});
+
+describe('loadGltf: NORMAL under a node transform', () => {
+  const load = (n: number[], node: Record<string, unknown>) => loadGltf(
+    gltf(
+      {
+        POSITION: { data: Float32Array.from([0, 0, 0, 1, -1, 0]), componentType: 5126, type: 'VEC3' },
+        NORMAL: { data: Float32Array.from([...n, ...n]), componentType: 5126, type: 'VEC3' },
+      },
+      2,
+      node,
+    ),
+    'gltf',
+  );
+
+  test('a non-uniform scale keeps the normal perpendicular to its surface', async () => {
+    // Points on the plane x + y = 0; its tangent (1, -1, 0) becomes (2, -1, 0)
+    // under scale [2, 1, 1], so the scaled normal must be orthogonal to that.
+    const s = Math.SQRT1_2;
+    const pc = await load([s, s, 0], { scale: [2, 1, 1] });
+    const [nx, ny, nz] = Array.from(pc.normals!.slice(0, 3));
+    expect(nx * 2 + ny * -1).toBeCloseTo(0, 6);
+    expect(Math.hypot(nx, ny, nz)).toBeCloseTo(1, 6);
+    expect(nx).toBeGreaterThan(0);
+  });
+
+  test('a mirrored node keeps the normal facing out', async () => {
+    const pc = await load([0, 0, 1], { scale: [1, 1, -1] });
+    expect(Array.from(pc.normals!.slice(0, 3))).toEqual([0, 0, -1].map((v) => expect.closeTo(v, 6)));
+  });
+
+  test('a singular node drops the channel instead of writing a zero normal', async () => {
+    const pc = await load([1, 0, 0], { scale: [1, 0, 1] });
+    expect(pc.pointCount).toBe(2);
+    expect(pc.normals).toBeUndefined();
   });
 });

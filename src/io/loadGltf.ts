@@ -137,18 +137,33 @@ function collectNode(
       const normAttr = primitive.attributes.NORMAL;
       const primNormals = normAttr ? authoredNormals(normAttr.value, vertexCount, normAttr.components ?? normAttr.size ?? 3) : undefined;
       if (primNormals) {
-        // Normals are directions: rotate by the node's upper 3x3 and
-        // renormalise, so a scaled node keeps unit normals.
-        const e = world.elements;
+        // Normals transform by the inverse-transpose of the node's upper 3x3,
+        // not the matrix itself: under a non-uniform scale the plain matrix
+        // tilts a normal off its surface. The cofactor matrix equals
+        // det * inverse-transpose, so it stays defined for a singular node; the
+        // sign of det keeps a mirrored node's normals facing out.
+        const [a, b, c, , d, e, f, , g, h, k] = world.elements;
+        const c00 = e * k - f * h, c01 = f * g - d * k, c02 = d * h - e * g;
+        const c10 = c * h - b * k, c11 = a * k - c * g, c12 = b * g - a * h;
+        const c20 = b * f - c * e, c21 = c * d - a * f, c22 = a * e - b * d;
+        const det = a * c00 + b * c01 + c * c02;
+        const sign = det < 0 ? -1 : 1;
         for (let i = 0; i < vertexCount; i++) {
           const x = primNormals[i * 3];
           const y = primNormals[i * 3 + 1];
           const z = primNormals[i * 3 + 2];
-          const nx = e[0] * x + e[4] * y + e[8] * z;
-          const ny = e[1] * x + e[5] * y + e[9] * z;
-          const nz = e[2] * x + e[6] * y + e[10] * z;
-          const len = Math.hypot(nx, ny, nz) || 1;
-          normals.push(nx / len, ny / len, nz / len);
+          const nx = c00 * x + c10 * y + c20 * z;
+          const ny = c01 * x + c11 * y + c21 * z;
+          const nz = c02 * x + c12 * y + c22 * z;
+          const len = Math.hypot(nx, ny, nz);
+          // A singular node can flatten a normal to zero; it has no direction
+          // left, so the channel is dropped rather than carried as non-unit.
+          if (!(len > 1e-12)) {
+            normalSeen.missing = true;
+            normals.push(0, 0, 0);
+            continue;
+          }
+          normals.push((sign * nx) / len, (sign * ny) / len, (sign * nz) / len);
         }
       } else {
         normalSeen.missing = true;
