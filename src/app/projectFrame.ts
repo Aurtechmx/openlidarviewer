@@ -29,6 +29,8 @@ import {
   type ProjectSpatialFrame,
   type LayerSpatialTransform,
 } from '../geo/ProjectSpatialFrame';
+import { isZUpFormat, type SourceFormat } from '../io/sniffFormat';
+import type { SessionFrameInput } from '../io/sessionFrame';
 import type { AppContext } from './appContext';
 
 type Vec3 = readonly [number, number, number];
@@ -242,5 +244,114 @@ export function createProjectFrameService(context: AppContext): ProjectFrameServ
     get unknownCrs() {
       return state.unknownCrs;
     },
+  };
+}
+
+/** What {@link projectFrameInputFrom} reads from the running app. */
+export interface ProjectFrameSources {
+  readonly frame: { readonly projectOrigin: readonly [number, number, number] } | null;
+  readonly layerIds: readonly string[];
+  cloud(id: string): { readonly sourceOrigin?: readonly [number, number, number]; readonly sourceFormat: SourceFormat } | null | undefined;
+  record(id: string): { readonly layerId: string; readonly fingerprint: string; readonly displayName: string } | null;
+  placement(id: string): { readonly vertical: boolean } | null;
+}
+
+/**
+ * The frame input for a session save: null unless two or more static layers
+ * are open, each with a source origin and a proven identity. A partial frame
+ * is never written; the single-origin reading applies instead.
+ */
+export function projectFrameInputFrom(src: ProjectFrameSources): SessionFrameInput | null {
+  if (!src.frame || src.layerIds.length < 2) return null;
+  const layers: SessionFrameInput['layers'][number][] = [];
+  for (const id of src.layerIds) {
+    const cloud = src.cloud(id);
+    const record = src.record(id);
+    if (!cloud?.sourceOrigin || !record) return null;
+    const placement = src.placement(id);
+    const o = cloud.sourceOrigin;
+    layers.push({
+      layerId: record.layerId,
+      sourceFingerprint: record.fingerprint,
+      sourceName: record.displayName,
+      sourceOrigin: [o[0], o[1], o[2]],
+      upAxis: isZUpFormat(cloud.sourceFormat) ? 'z' : 'y',
+      placed: placement != null,
+      placedVertically: placement?.vertical ?? true,
+    });
+  }
+  const p = src.frame.projectOrigin;
+  return { projectOrigin: [p[0], p[1], p[2]], layers };
+}
+
+/**
+ * The origin the active layer's scene coordinates are local to. An unplaced
+ * layer is in its own file frame. A placed layer shares the project origin in
+ * X/Y, and in Z only when its vertical datum is verified; otherwise its Z
+ * stays on the file origin.
+ */
+export function sceneOriginFor(
+  projectOrigin: readonly [number, number, number] | null | undefined,
+  sourceOrigin: readonly [number, number, number],
+  placement: { readonly vertical: boolean } | null,
+): [number, number, number] {
+  if (!projectOrigin || !placement) return [sourceOrigin[0], sourceOrigin[1], sourceOrigin[2]];
+  return [projectOrigin[0], projectOrigin[1], placement.vertical ? projectOrigin[2] : sourceOrigin[2]];
+}
+
+/** What {@link layerSceneOrigin} reads from the running app. */
+export interface LayerOriginSources {
+  readonly projectOrigin: readonly [number, number, number] | null | undefined;
+  readonly viewerIds: readonly string[];
+  stableIdFor(viewerId: string): string | null;
+  sourceOrigin(viewerId: string): readonly [number, number, number] | null | undefined;
+  placement(viewerId: string): { readonly vertical: boolean } | null;
+}
+
+/** The scene origin of the open layer with stable id `layerId`, or null when it is not open. */
+export function layerSceneOrigin(layerId: string, src: LayerOriginSources): [number, number, number] | null {
+  const id = src.viewerIds.find((v) => src.stableIdFor(v) === layerId);
+  const so = id ? src.sourceOrigin(id) : null;
+  return id && so ? sceneOriginFor(src.projectOrigin, so, src.placement(id)) : null;
+}
+
+type V3 = readonly [number, number, number];
+
+/** What {@link sessionImportOrigins} reads from the running app. */
+export interface SessionImportSources {
+  frame(): { readonly projectOrigin: V3 } | null;
+  activeId(): string | null;
+  viewerIds(): readonly string[];
+  stableIdFor(viewerId: string): string | null;
+  cloud(viewerId: string): { readonly sourceOrigin?: V3 } | null | undefined;
+  placement(viewerId: string): { readonly vertical: boolean } | null;
+  /** The scene origin when no static scan is active. */
+  fallback(): V3;
+}
+
+/**
+ * The origins a session import rebases onto: the active layer's scene origin,
+ * each open layer's scene origin by stable id, and the project origin.
+ */
+export function sessionImportOrigins(src: SessionImportSources): {
+  exportOrigin: () => V3;
+  layerOrigin: (layerId: string) => V3 | null;
+  projectOrigin: () => V3 | null;
+} {
+  const layerSources = (): LayerOriginSources => ({
+    projectOrigin: src.frame()?.projectOrigin,
+    viewerIds: src.viewerIds(),
+    stableIdFor: src.stableIdFor,
+    sourceOrigin: (v) => src.cloud(v)?.sourceOrigin,
+    placement: src.placement,
+  });
+  return {
+    exportOrigin: () => {
+      const id = src.activeId();
+      const so = id ? src.cloud(id)?.sourceOrigin : null;
+      return id && so ? sceneOriginFor(src.frame()?.projectOrigin, so, src.placement(id)) : src.fallback();
+    },
+    layerOrigin: (layerId) => layerSceneOrigin(layerId, layerSources()),
+    projectOrigin: () => src.frame()?.projectOrigin ?? null,
   };
 }

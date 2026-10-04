@@ -15,6 +15,7 @@ import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
 import type { StoredView } from './appContext';
 import { isZUpFormat } from '../io/sniffFormat';
 import { TERRAIN_METRIC_VERSION } from '../terrain/datasetIntelligence';
+import { buildSessionProjectFrame, type SessionFrameInput, type SessionProjectFrame } from '../io/sessionFrame';
 
 export type SessionWriterModules = typeof import('../io/session') &
   Partial<typeof import('../terrain/export/exportProvenance')>;
@@ -31,7 +32,29 @@ export interface SessionSnapshotDeps {
   origin(): readonly [number, number, number];
   crs(): ResolvedCrs | null | undefined;
   layerGroups(): SessionLayerGroup[];
+  /**
+   * The live project frame when two or more static layers share one: its
+   * origin and every layer's record input. Null for a single scan, a streaming
+   * scene, or a layer with no proven identity, where the single-origin reading
+   * applies exactly as before.
+   */
+  projectFrame?(): SessionFrameInput | null;
   readonly appVersion: string;
+}
+
+/**
+ * The frame block to write, or undefined when there is none or it cannot be
+ * built consistently. A frame that will not build is left out rather than
+ * written wrong; the origin it would have named is still what `origin()` returns.
+ */
+function liveProjectFrame(deps: SessionSnapshotDeps): SessionProjectFrame | undefined {
+  const input = deps.projectFrame?.() ?? null;
+  if (!input || input.layers.length < 2) return undefined;
+  try {
+    return buildSessionProjectFrame(input);
+  } catch {
+    return undefined;
+  }
 }
 
 function baseName(name: string): string {
@@ -104,11 +127,16 @@ export function serializeActiveSession(
   // rationale (the v5 clip write-side fix, the hidden-codes contract, the
   // emit-only-when-set discipline) lives on captureViewState itself.
   const viewState = deps.captureViewState();
+  const projectFrame = liveProjectFrame(deps);
   return serializeSession({
     upAxis,
-    // The scene's real frame, static OR streaming — exportGeoContext resolves the
-    // static cloud's origin, else the streaming renderOrigin, else zero.
-    origin: [...deps.origin()],
+    // The frame every saved coordinate is local to. With two or more scans
+    // that is the project frame, wherever it is anchored, and the origin comes
+    // from the frame block itself so the two can never disagree. Otherwise it
+    // is the scene's single frame: the static cloud's origin, else the
+    // streaming renderOrigin, else zero.
+    origin: projectFrame ? [...projectFrame.projectOrigin] : [...deps.origin()],
+    ...(projectFrame ? { projectFrame } : {}),
     unitSystem: viewer.measure.unitSystem,
     // v7 — a view with a captured bundle serialises it per-view; a camera-only
     // view (e.g. restored from a v6 file) spreads nothing and keeps its exact
