@@ -228,10 +228,17 @@ describe('reload at higher density', () => {
     expect(ply.reason).not.toContain('streamed');
   });
 
-  it('refuses while the layer has unsaved class edits, figures first', () => {
-    const f = synth('strided', { hasClassEdits: true });
-    expect(assessReload(f, high).allowed).toBe(false);
-    expect(assessReload(f, high).reason).toBe(`${compactPointCount(f.resident)} of ${compactPointCount(f.declared!)} points are loaded; this layer has unsaved class edits, and reloading would discard them. Export or save the session first.`);
+  it('refuses while the layer\'s classes differ from the file, naming the cause', () => {
+    const lead = (f: FullFileLayerFacts) => `${compactPointCount(f.resident)} of ${compactPointCount(f.declared!)} points are loaded. A reload reads the original file, so it is unavailable while this layer's classes differ from the file: `;
+    const edited = synth('strided', { hasClassEdits: true, classCauses: { edited: true, derived: false } });
+    expect(assessReload(edited, high).allowed).toBe(false);
+    expect(assessReload(edited, high).reason).toBe(`${lead(edited)}it has manual class edits. Saving the session or exporting keeps them.`);
+    const derived = synth('strided', { hasClassEdits: true, classCauses: { edited: false, derived: true } });
+    expect(assessReload(derived, high).allowed).toBe(false);
+    expect(assessReload(derived, high).reason).toBe(`${lead(derived)}its classes were derived or cleared in the app, not read from the file. Saving the session or exporting keeps them.`);
+    const both = synth('strided', { hasClassEdits: true, classCauses: { edited: true, derived: true } });
+    expect(assessReload(both, high).reason).toContain('it has classes derived or cleared in the app and manual class edits.');
+    expect(assessReload(both, high).reason).not.toMatch(/save the session first|unsaved/i);
   });
 
   it('names the findings and compare difference a reload clears', () => {
@@ -275,7 +282,7 @@ describe('GPU point ceiling', () => {
 });
 
 describe('exportLayerHooks reload', () => {
-  type Outcome = 'ok' | 'cancel' | 'fail' | 'busy';
+  type Outcome = 'ok' | 'cancel' | 'fail' | 'busy' | 'two' | 'otherFile';
   function setup(outcome: Outcome) {
     const file = new File([new Uint8Array(4)], 'a.las');
     const clouds = ['old', 'other'];
@@ -288,6 +295,17 @@ describe('exportLayerHooks reload', () => {
       sourceFiles, reduced: new Map(),
       reopen: async (f) => {
         if (outcome === 'fail') throw new Error('decode failed');
+        if (outcome === 'two') {
+          clouds.push('new', 'new2');
+          sourceFiles.set('new', f);
+          sourceFiles.set('new2', f);
+          return;
+        }
+        if (outcome === 'otherFile') {
+          clouds.push('new');
+          sourceFiles.set('new', new File([new Uint8Array(4)], 'a.las'));
+          return;
+        }
         if (outcome !== 'ok') return; // cancelled, or the "Already loading" guard: no layer added
         clouds.push('new');
         sourceFiles.set('new', f);
@@ -305,12 +323,12 @@ describe('exportLayerHooks reload', () => {
     expect(t.notify).not.toHaveBeenCalled();
   });
 
-  for (const outcome of ['cancel', 'fail', 'busy'] as const) {
+  for (const outcome of ['cancel', 'fail', 'busy', 'two', 'otherFile'] as const) {
     it(`keeps the old layer when the reopen ends with ${outcome}`, async () => {
       const t = setup(outcome);
       await t.hooks.reloadLayer!('old', 5);
       expect(t.removeLayer).not.toHaveBeenCalled();
-      expect(t.clouds).toEqual(['old', 'other']);
+      expect(t.clouds.slice(0, 2)).toEqual(['old', 'other']);
       expect(t.notify).toHaveBeenCalledWith('The reload did not complete. The layer is unchanged.');
     });
   }

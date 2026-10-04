@@ -43,6 +43,12 @@ export interface FullFileLayerFacts {
   readonly attributes: PointAttributes;
   /** The layer carries in-session classification edits. */
   readonly hasClassEdits: boolean;
+  /**
+   * Why the layer's classes differ from the file: manual edits (`edited`),
+   * classes derived or cleared in the app (`derived`), or both. Absent when only
+   * `hasClassEdits` is known.
+   */
+  readonly classCauses?: { readonly edited: boolean; readonly derived: boolean };
   /** The Export panel will write the classification channel. */
   readonly includeClassification: boolean;
   /** Saved findings kept for the layer; a reload clears them. */
@@ -207,6 +213,7 @@ export function layerFacts(input: {
   readonly file: { readonly size: number } | null;
   readonly reduced: boolean;
   readonly hasClassEdits: boolean;
+  readonly classCauses?: { readonly edited: boolean; readonly derived: boolean };
   readonly includeClassification: boolean;
   readonly findings?: number;
   readonly inCompare?: boolean;
@@ -228,6 +235,7 @@ export function layerFacts(input: {
       hasNormals: !!c.normals, hasLasExtras: !!(c.gpsTime || c.returnNumber),
     },
     hasClassEdits: input.hasClassEdits,
+    ...(input.classCauses ? { classCauses: input.classCauses } : {}),
     includeClassification: input.includeClassification,
     findings: input.findings ?? 0,
     inCompare: input.inCompare ?? false,
@@ -285,7 +293,7 @@ export function assessReload(f: FullFileLayerFacts | null, device: ReloadDevice)
   const held = `${compactPointCount(f.resident)} of ${compactPointCount(declared)} points are loaded`;
   const ceiling = formatGb(memoryCeilingBytes(device.deviceMemoryGB, device.isMobile));
   if (f.hasClassEdits) {
-    return { ...base, allowed: false, reason: `${held}; this layer has unsaved class edits, and reloading would discard them. Export or save the session first.` };
+    return { ...base, allowed: false, reason: `${held}. ${classDiffersReason(f)}` };
   }
   if (device.isMobile) return { ...base, allowed: false, reason: `${held}. A denser reload is not offered on a phone or tablet.` };
   if (device.tier === 'low') return { ...base, allowed: false, reason: `${held}. This device is in the low performance tier, so a denser reload is not offered.` };
@@ -299,6 +307,19 @@ export function assessReload(f: FullFileLayerFacts | null, device: ReloadDevice)
   }
   if (target <= f.resident) return { ...base, allowed: false, reason: `${held}. A reload would not add points on this device.` };
   return { ...base, allowed: true };
+}
+
+/**
+ * Why a reload is unavailable for a layer whose classes differ from its file.
+ * Saving or exporting keeps the classes but does not make them match the file,
+ * so the reload stays unavailable afterwards too.
+ */
+function classDiffersReason(f: FullFileLayerFacts): string {
+  const c = f.classCauses ?? { edited: true, derived: false };
+  const cause = c.edited && c.derived
+    ? 'it has classes derived or cleared in the app and manual class edits'
+    : c.derived ? 'its classes were derived or cleared in the app, not read from the file' : 'it has manual class edits';
+  return `A reload reads the original file, so it is unavailable while this layer's classes differ from the file: ${cause}. Saving the session or exporting keeps them.`;
 }
 
 /** What a reload clears for the layer, as a sentence, or '' when nothing is held. */

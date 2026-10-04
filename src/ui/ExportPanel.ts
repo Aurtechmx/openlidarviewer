@@ -145,7 +145,7 @@ export interface ExportPanelCallbacks {
   /** Whether the loaded cloud is a reduced subset of the source. */
   isReduced: () => boolean;
   /** Per-layer facts for the "Export all N points" action; null when the layer is unknown. */
-  layerSource?: (id: string) => { cloud: PointCloud; file: File | null; reduced: boolean; hasClassEdits: boolean; inCompare?: boolean } | null;
+  layerSource?: (id: string) => { cloud: PointCloud; file: File | null; reduced: boolean; hasClassEdits: boolean; classCauses?: { edited: boolean; derived: boolean }; inCompare?: boolean } | null;
   /** Make a layer the active scan, so the panel exports it. */
   activateLayer?: (id: string) => void;
   /** Open a layer's source file again at `budget` points and drop the old layer. */
@@ -1495,6 +1495,10 @@ export function exportLayerHooks(state: ExportLayerState): Pick<ExportPanelCallb
         file: state.sourceFiles.get(id) ?? null,
         reduced: state.reduced.get(id) === true,
         hasClassEdits: classificationDiffersFromSource(cloud.classificationProvenance ?? 'none', viewer.classificationEpoch(id)),
+        classCauses: {
+          edited: viewer.classificationEpoch(id) > 0,
+          derived: !['source', 'none'].includes(cloud.classificationProvenance ?? 'none'),
+        },
         inCompare: state.inCompare?.(id) ?? false,
       };
     },
