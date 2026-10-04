@@ -29,7 +29,7 @@ import type { CrsInfo } from '../io/crs';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { PointCloud } from '../model/PointCloud';
 import { gzipConvertedFile, gzipAvailable } from '../convert/gzip';
-import { buildExportSummary, type ClassificationProvenance, type ExportSummaryInput } from '../export/exportSummary';
+import { buildExportSummary, displaySampleOf, displaySampleStatus, type ClassificationProvenance, type ExportSummaryInput } from '../export/exportSummary';
 import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
 import {
   evaluateFullResClassExport,
@@ -1293,6 +1293,9 @@ export class ExportPanel {
       const cloud = clipped ? clipCloud(sourceCloud, clip, clipFrameOffset(clipOffset, displayOrigin, sourceCloud)) : sourceCloud;
       const scopeNote = cloud === sourceCloud ? null
         : clipScopeText({ kept: cloud.pointCount, total: sourceCloud.pointCount });
+      // Without the full-resolution re-decode a reduced scan exports its display
+      // sample; the file's provenance, its name and the status all say so.
+      const displaySample = !useFull && this._cb.isReduced() ? displaySampleOf(sourceCloud) : null;
       showBusyScan(this._exportBtn, 'Exporting…');
       // A full-resolution re-decode reads the same File as the captured cloud.
       const { convertCloud, resolveExportDigests } = await loadConvertEngine();
@@ -1330,6 +1333,7 @@ export class ExportPanel {
         omitClassification: !includeClass,
         allowLegacyClassWrap: allowClassWrap,
         scopeNote,
+        displaySample,
       };
       const { file, report } = convertCloud(cloud, options);
       if (file) {
@@ -1353,11 +1357,13 @@ export class ExportPanel {
           downloadBytes(file.filename.replace(/\.[^.]+$/, '.prj'), new TextEncoder().encode(activeWkt), 'text/plain');
         }
         const warn = report.log.find((l) => l.level === 'warn');
-        const reducedNote = !useFull && this._cb.isReduced() ? ' · reduced view' : '';
+        const sampleNote = displaySample ? displaySampleStatus(displaySample) : '';
         const clipNote = scopeNote ? ` · ${scopeNote}` : '';
         this._setStatus(
-          warn ? warn.message : `Exported ${report.pointCount.toLocaleString()} points${reducedNote}${clipNote} · ${report.crsNote}`,
-          warn || reducedNote ? 'warn' : 'info',
+          warn
+            ? `${warn.message}${sampleNote}`
+            : `Exported ${report.pointCount.toLocaleString()} points${sampleNote}${clipNote} · ${report.crsNote}`,
+          warn || sampleNote ? 'warn' : 'info',
         );
       } else {
         const err = report.log.find((l) => l.level === 'error');

@@ -11,6 +11,7 @@ import type { ExportDigests } from '../science/exportDigestRecord';
 import type { TransformProvenance } from './transformProvenance';
 import type { CrsInfo } from '../io/crs';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
+import type { DisplaySample } from '../export/exportSummary';
 
 /** Output formats the converter can write. */
 export type ConvertFormat = 'las14' | 'las' | 'laz' | 'xyz' | 'asc';
@@ -88,6 +89,12 @@ export interface ConvertOptions {
   readonly digests?: ExportDigests | null;
   /** Which part of the scan was written, e.g. a clip; added to the provenance lines. */
   readonly scopeNote?: string | null;
+  /**
+   * Set when the cloud is the reduced display sample rather than the whole
+   * source. Adds a "Display sample" provenance line and a `-sample` filename
+   * suffix. Absent for a full-resolution export.
+   */
+  readonly displaySample?: DisplaySample | null;
   /**
    * Write LAS 1.2 even when classes above 31 wrap into its 5-bit field. Off by
    * default, and such a write is refused: each wrapped class lands on another

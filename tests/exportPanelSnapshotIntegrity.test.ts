@@ -543,3 +543,50 @@ describe('clipped export of a placed layer', () => {
     expect(writtenIds()).toEqual(shownIds(cloud, clipAt100, null));
   });
 });
+
+describe('ExportPanel — display-sample export says it is a sample', () => {
+  function reducedCloud(): PointCloud {
+    return new PointCloud({
+      positions: new Float32Array([0, 0, 0, 10, 0, 0]),
+      origin: [0, 0, 0],
+      sourceFormat: 'las',
+      name: 'scan.las',
+      declaredPointCount: 7,
+    });
+  }
+
+  it('passes the sample to the converter and states it in the status', async () => {
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    const cloud = reducedCloud();
+    const panel = new ExportPanel({
+      getCloud: () => cloud,
+      hasFullSource: () => true,
+      isReduced: () => true,
+      getFullCloud: async () => cloud,
+      getActiveScanId: () => 'scan-a',
+    });
+    const root = panel.element as unknown as FakeEl;
+    await pressExport(root);
+
+    expect(hoisted.options[0]?.displaySample).toEqual({ held: 2, source: 7 });
+    expect(statusText(root)).toMatch(/display sample of 7 source points/);
+  });
+
+  it('a full-resolution export carries no sample record', async () => {
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    const cloud = reducedCloud();
+    const panel = new ExportPanel({
+      getCloud: () => cloud,
+      hasFullSource: () => true,
+      isReduced: () => true,
+      getFullCloud: async () => cloud,
+      getActiveScanId: () => 'scan-a',
+    });
+    const root = panel.element as unknown as FakeEl;
+    enableFullRes(root);
+    await pressExport(root);
+
+    expect(hoisted.options[0]?.displaySample).toBeNull();
+    expect(statusText(root)).not.toMatch(/display sample/);
+  });
+});
