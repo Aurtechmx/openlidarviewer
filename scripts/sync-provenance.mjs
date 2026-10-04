@@ -52,6 +52,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => (existsSync(resolve(ROOT, p)) ? readFileSync(resolve(ROOT, p), 'utf8') : null);
@@ -69,7 +70,20 @@ function buildLookups() {
   const declared = { ...pkg.dependencies, ...pkg.devDependencies };
   const declaredRange = (name) => (Object.prototype.hasOwnProperty.call(declared, name) ? declared[name] : null);
   const lockedVersion = (name) => lock.packages?.[`node_modules/${name}`]?.version ?? null;
-  return { pkg, declaredRange, lockedVersion };
+  const lockedSha512 = (name) => sha512HexFromIntegrity(lock.packages?.[`node_modules/${name}`]?.integrity);
+  return { pkg, declaredRange, lockedVersion, lockedSha512 };
+}
+
+/**
+ * The hex SHA-512 of a package tarball, decoded from its lockfile `integrity`
+ * field (an SRI string such as "sha512-<base64>"). CycloneDX stores the same
+ * digest as lowercase hex. Returns null when there is no sha512 entry.
+ */
+export function sha512HexFromIntegrity(integrity) {
+  if (typeof integrity !== 'string') return null;
+  const entry = integrity.split(/\s+/).find((e) => e.startsWith('sha512-'));
+  if (!entry) return null;
+  return Buffer.from(entry.slice('sha512-'.length), 'base64').toString('hex');
 }
 
 /** Preserve a markdown-cell's exact surrounding whitespace, swap only the token. */
@@ -142,7 +156,7 @@ function bumpPurlVersion(purl, version) {
  * strings in the file and remap the graph's `ref`/`dependsOn` through it, which
  * keeps the graph consistent whether a dependency version or the root moved.
  */
-function syncSbom(text, { pkg, lockedVersion }) {
+export function syncSbom(text, { pkg, lockedVersion, lockedSha512 = () => null }) {
   const sbom = JSON.parse(text);
   const rootVersion = pkg.version;
   const rootRef = `openlidarviewer@${rootVersion}`;
@@ -174,11 +188,18 @@ function syncSbom(text, { pkg, lockedVersion }) {
     c.version = locked;
     c['bom-ref'] = newRef;
     if (c.purl) c.purl = bumpPurlVersion(c.purl, locked);
-    // The distribution tarball URL ends with '-<version>.tgz'. Only the version
-    // moves; the integrity hash is not recomputed here (that needs the tarball).
+    // The distribution tarball URL ends with '-<version>.tgz', and its SHA-512
+    // is the lockfile `integrity` of that tarball. Both move with the version:
+    // a new URL beside the old tarball's digest describes a file that does not
+    // exist.
+    const sha512 = lockedSha512(full);
     for (const ref of c.externalReferences ?? []) {
       if (typeof ref.url === 'string' && ref.url.endsWith(`-${oldVersion}.tgz`)) {
         ref.url = ref.url.slice(0, -`-${oldVersion}.tgz`.length) + `-${locked}.tgz`;
+      }
+      if (ref.type !== 'distribution' || sha512 == null) continue;
+      for (const h of ref.hashes ?? []) {
+        if (h && h.alg === 'SHA-512') h.content = sha512;
       }
     }
   }
@@ -237,4 +258,4 @@ function run({ check }) {
   process.exit(process.exitCode || 0);
 }
 
-run({ check: process.argv.includes('--check') });
+if (isCliEntry(import.meta.url)) run({ check: process.argv.includes('--check') });
