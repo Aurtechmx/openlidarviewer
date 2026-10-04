@@ -16,7 +16,7 @@ import { classifyScanShape } from '../terrain/scanShape';
 import { isZUpFormat } from '../io/sniffFormat';
 import { wktForEpsg } from '../io/epsgWkt';
 import { cloudToGlobal } from './globalPoints';
-import { describeLoss, inspectLegacyConversion } from '../lasSemantics';
+import { describeLoss, inspectLegacyConversion, legacyOverlapUpgradeNote, upgradeLegacyOverlap } from '../lasSemantics';
 import { countLegacyClassWrap, legacyClassWrapRefusal, legacyClassWrapWarning } from './legacyClassGuard';
 
 /**
@@ -273,6 +273,14 @@ export function convertCloud(
     const gpsStandardFromSource =
       declaredGps === undefined ? undefined : declaredGps === 'adjusted-standard';
     if (opts.format === 'las14') {
+      const overlap = upgradeLegacyOverlap(
+        cloud.metadata?.pointFormat, cloud.classificationProvenance,
+        g.classification, g.classificationFlags, g.count,
+      );
+      if (overlap) {
+        g = { ...g, classification: overlap.classification, classificationFlags: overlap.classificationFlags };
+        log.push({ level: 'info', message: legacyOverlapUpgradeNote(overlap.points) });
+      }
       if (outEpsg != null && outEpsg <= 65535 && wkt == null) {
         log.push({
           level: 'info',
