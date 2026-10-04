@@ -235,14 +235,23 @@ test.describe('command palette: action registry chunk failure', () => {
   test('firefox: Try again after a failed action registry opens the palette', async ({ page, browserName }) => {
     test.skip(browserName !== 'firefox', 'Chromium/WebKit cannot re-fetch a failed specifier without a full navigation.');
     await seedStaleReloadCooldown(page);
-    let attempts = 0;
-    await page.route(REGISTRY_CHUNK, (route) => (++attempts === 1 ? route.abort() : route.continue()));
+    // Every fetch of the chunk fails until the failure report is on screen, so
+    // an earlier request for it (a preload, another chunk) cannot use up the
+    // one failure and let the palette open without a report.
+    let failing = true;
+    let retried = 0;
+    await page.route(REGISTRY_CHUNK, (route) => {
+      if (failing) return route.abort();
+      retried++;
+      return route.continue();
+    });
     await page.goto('/');
     await page.keyboard.press('ControlOrMeta+KeyK');
     await expect(page.locator(TRY_AGAIN)).toHaveText('Try again', { timeout: 10_000 });
+    failing = false;
     await page.locator(TRY_AGAIN).click();
     await expect(page.locator('.olv-palette')).toBeVisible({ timeout: 10_000 });
     await expect(page.locator('.olv-palette')).toHaveCount(1);
-    expect(attempts).toBe(2);
+    expect(retried).toBeGreaterThan(0);
   });
 });

@@ -2826,12 +2826,11 @@ export class Viewer {
   editClassification(id: string, edit: (buf: Uint8Array) => void, to?: ClassState, method?: string): void {
     const entry = this._clouds.get(id);
     const d = entry && recordClassEdit(this._historyFor(id), entry.cloud, edit, to, method);
-    if (d) this._afterClassEdit(id, entry, !!d.prov);
+    if (d) this._afterClassEdit(id, entry);
   }
 
-  private _afterClassEdit(id: string, entry: CloudEntry, whole: boolean): void {
-    // A whole-scan edit rewrites every code, so the GPU class filter re-reads them.
-    if (whole) this._attachClassAttribute(entry, entry.cloud.classification!);
+  private _afterClassEdit(id: string, entry: CloudEntry): void {
+    this._attachClassAttribute(entry, entry.cloud.classification); // every edit re-uploads `aClass` (or drops it with the codes)
     refreshClassificationColours(entry);
     this._demand.changed('filter');
     this._markClassificationEdited(id);
@@ -2945,7 +2944,7 @@ export class Viewer {
     const h = this._classHistory.get(id);
     const d = entry && h && stepClassEdit(h, entry.cloud, 'undo');
     if (!d) return false;
-    this._afterClassEdit(id, entry, !!d.prov);
+    this._afterClassEdit(id, entry);
     return true;
   }
 
@@ -2959,10 +2958,11 @@ export class Viewer {
     const h = this._classHistory.get(id);
     const d = entry && h && stepClassEdit(h, entry.cloud, 'redo');
     if (!d) return false;
-    this._afterClassEdit(id, entry, !!d.prov);
+    this._afterClassEdit(id, entry);
     return true;
   }
 
+  classFilterDrawnCount(id: string): number { const a = this._clouds.get(id)?.mesh.geometry.getAttribute('aClass')?.array, m = this._classMaskUniform.array as number[]; return a ? Array.from(a).filter((c) => m[Math.round(c)] !== 0).length : -1; }
   /** Whether the cloud has a classification edit that can be undone. */
   canUndoClassification(id: string): boolean {
     return this._classHistory.get(id)?.canUndo ?? false;
@@ -2994,7 +2994,7 @@ export class Viewer {
     // replaced in place through the undo history, so Undo brings them back.
     // A cloud with none gets the codes as one undoable step, plus `aClass`.
     if (codes.length === cloud.pointCount && cloud.classification) this.editClassification(id, (buf) => buf.set(codes), 'derived', method);
-    else { recordClassAttach(this._historyFor(id), cloud, codes, method); this._afterClassEdit(id, entry, true); }
+    else { recordClassAttach(this._historyFor(id), cloud, codes, method); this._afterClassEdit(id, entry); }
     return true;
   }
 

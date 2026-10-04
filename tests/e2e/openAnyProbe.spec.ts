@@ -69,7 +69,7 @@ test('random bytes get the failure report with Copy report', async ({ page }) =>
   await expect(toast).toHaveClass(/olv-toast-error/, { timeout: 30_000 });
   await expect(page.locator('.olv-toast-text')).toContainText('not recognised as a point cloud');
   await expect(page.locator('.olv-toast-text')).toContainText('compressed or encrypted');
-  await expect(page.getByRole('button', { name: 'Copy report' })).toBeVisible();
+  await expect(page.locator('.olv-toast').getByRole('button', { name: 'Copy report', exact: true })).toBeVisible();
   // The label changes on click, so hold the control by position, not by name.
   const copy = page.locator('.olv-toast-row button').last();
   await copy.click();
@@ -105,7 +105,7 @@ test('a failed open leaves the loaded project untouched', async ({ page }) => {
 
   await drop(page, noise(300 * 1024), 'unknown.bin');
   await expect(page.locator('.olv-toast')).toHaveClass(/olv-toast-error/, { timeout: 30_000 });
-  await expect(page.getByRole('button', { name: 'Copy report' })).toBeVisible();
+  await expect(page.locator('.olv-toast').getByRole('button', { name: 'Copy report', exact: true })).toBeVisible();
 
   await expect(page.locator('.olv-empty')).toBeHidden();
   expect(await points()).toBe(before);
