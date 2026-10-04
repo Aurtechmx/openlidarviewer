@@ -31,6 +31,7 @@ import type {
   DeclaredSpatialFacts,
   InspectionSession,
   RebasedSessionGeometry,
+  RebaseTarget,
   ScanFacts,
   ScanMatch,
   SessionLayerGroup,
@@ -83,6 +84,7 @@ export interface SessionModule {
   rebaseSessionGeometry: (
     session: InspectionSession,
     cloudOrigin: readonly [number, number, number],
+    target?: RebaseTarget,
   ) => RebasedSessionGeometry;
   matchSessionToScan: (summary: SessionScanSummary | undefined, loaded: ScanFacts) => ScanMatch;
   detectSessionSpatialConflict: (
@@ -119,6 +121,10 @@ export interface SessionIoDeps {
   getActiveCloud: () => PointCloud | null;
   /** The source-frame origin the session's geometry is rebased against (`exportGeoContext().origin`). */
   exportOrigin: () => readonly [number, number, number];
+  /** The scene origin of the open layer with this stable id, or null when it is not open. */
+  layerOrigin?: (layerId: string) => readonly [number, number, number] | null;
+  /** The live project origin, or null when no project frame is set. */
+  projectOrigin?: () => readonly [number, number, number] | null;
   /** Saved-view store: `restore` replaces the list, `names` feeds the Inspector. */
   bookmarks: Pick<ViewBookmarksService, 'restore' | 'names'>;
   /** Push the restored view names into the Inspector panel. */
@@ -305,7 +311,7 @@ export async function importSession(
       }
     }
     const geo = haveCloud
-      ? rebaseSessionGeometry(session, deps.exportOrigin())
+      ? rebaseSessionGeometry(session, deps.exportOrigin(), { layerOrigin: deps.layerOrigin, projectOrigin: deps.projectOrigin?.() ?? null })
       : {
           measurements: session.measurements,
           annotations: session.annotations,
@@ -313,6 +319,7 @@ export async function importSession(
           camera: session.camera,
           clip: session.clip,
           delta: [0, 0, 0] as const,
+          refused: [] as readonly string[],
         };
     const rebased = geo.delta[0] !== 0 || geo.delta[1] !== 0 || geo.delta[2] !== 0;
     // The scan could have been swapped in under us since we matched (this import
@@ -440,7 +447,7 @@ export async function importSession(
     // say so and point the user at the file to drop, rather than restoring onto
     // an empty scene silently.
     const restored =
-      session.measurements.length + session.annotations.length + session.views.length;
+      geo.measurements.length + geo.annotations.length + geo.views.length;
     const wantFile = session.scanSummary?.fileName;
     // When the user reached here via "Apply anyway", record that the restore
     // proceeded on an unverified scan match rather than a confirmed one.
@@ -450,6 +457,13 @@ export async function importSession(
     // note that a non-obvious transform happened, not a silent relocation.
     const frameNote = rebased
       ? ' Its measurements were realigned to the loaded scan’s origin.'
+      : '';
+    // Work the file marks as placed in a project frame it does not record is
+    // left out, because there is no way to tell where that frame was anchored.
+    const refusedCount = geo.refused.length;
+    const refusedNote = refusedCount > 0
+      ? ` ${refusedCount} item${refusedCount === 1 ? ' was' : 's were'} not restored: the session `
+        + 'does not record the multi-scan project frame they were placed in.'
       : '';
     // Evidence Capsule: lead with the honesty roll-up when the shared session
     // carries graded measurements — the recipient sees the trust picture, not
@@ -481,11 +495,11 @@ export async function importSession(
       deps.showToast((lead ?? `Session restored — drop “${wantFile}” to view its scan.`) + manifestSuffix,
         lead ? { label: 'Need the scan', onClick: () => deps.showToast(`Drop “${wantFile}” to view this evidence on its scan.`) } : undefined);
     } else if (lead) {
-      deps.showToast(`${lead}${frameNote}${appliedNote}${manifestSuffix}`);
+      deps.showToast(`${lead}${frameNote}${refusedNote}${appliedNote}${manifestSuffix}`);
     } else {
       deps.showToast(
         `Session restored — ${restored} item${restored === 1 ? '' : 's'} ` +
-          `(measurements, annotations, views).${frameNote}${appliedNote}${manifestSuffix}`,
+          `(measurements, annotations, views).${frameNote}${refusedNote}${appliedNote}${manifestSuffix}`,
       );
     }
   } catch (err) {
