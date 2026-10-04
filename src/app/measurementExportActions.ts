@@ -202,11 +202,21 @@ function closedScanCount(measurements: readonly Measurement[], layers: readonly 
 
 /**
  * Refuse (and say why) when any measurement was taken on a scan that is no
- * longer open. True when refused.
+ * longer open, or names a scan more than one open layer matches. True when
+ * refused.
  */
 function refusedForClosedScan(measurements: readonly Measurement[], deps: MeasurementExportActionDeps): boolean {
   const layers = deps.layers ? exportLayersOf(deps.layers.view, deps.layers.stableIdFor) : [];
   if (layers.length === 0) return false;
+  // An owner id two open layers both carry names neither of them: placing the
+  // measurement through the first match would be a guess.
+  const held = new Map<string, number>();
+  for (const l of layers) if (l.stableId !== null) held.set(l.stableId, (held.get(l.stableId) ?? 0) + 1);
+  const shared = measurements.filter((m) => [...(m.pickLayers ?? []), ...(m.owner?.layerId ? [m.owner.layerId] : [])].some((id) => (held.get(id) ?? 0) > 1)).length;
+  if (shared > 0) {
+    deps.refuse?.(`Not exported: ${shared} ${shared === 1 ? 'measurement names' : 'measurements name'} a scan that more than one open scan matches. Close all but one of those scans, then export again.`);
+    return true;
+  }
   const closed = closedScanCount(measurements, layers);
   if (closed === 0) return false;
   deps.refuse?.(`Not exported: ${closed} ${closed === 1 ? 'measurement was' : 'measurements were'} taken on a scan that is no longer open. Reopen it or delete them, then export again.`);

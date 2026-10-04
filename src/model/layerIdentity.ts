@@ -38,6 +38,13 @@ export interface LayerFingerprint {
   readonly crs?: string;
   /** Horizontal EPSG code, when known. */
   readonly epsg?: number;
+  /**
+   * The file's absolute source origin. Two tiles of one survey routinely share
+   * a name, a point count and spans; their position is what tells them apart.
+   */
+  readonly origin?: readonly [number, number, number];
+  /** SHA-256 of the source bytes, when known. */
+  readonly sha256?: string;
 }
 
 /** A layer's identity record: the stable id, its display name, its source key. */
@@ -71,6 +78,25 @@ function normSpan(v: number | undefined): string {
  * exactly the reopen-stability case).
  */
 export function fingerprintKey(f: LayerFingerprint): string {
+  const key = legacyFingerprintKey(f);
+  const o = f.origin;
+  const pos = o && o.every((c) => Number.isFinite(c)) ? o.map((c) => c.toFixed(3)).join(',') : '';
+  const sha = (f.sha256 ?? '').trim().toLowerCase();
+  if (!pos && !sha) return key;
+  return [key, 'o', pos, sha].join('\0');
+}
+
+/** True when the fingerprint carries a position or a content digest. */
+export function hasPlacementFacts(f: LayerFingerprint): boolean {
+  return fingerprintKey(f) !== legacyFingerprintKey(f);
+}
+
+/**
+ * The key built from the facts older session files stored: name, count, spans
+ * and CRS, without position or digest. Used to match such a file, and only
+ * where the match is unambiguous.
+ */
+export function legacyFingerprintKey(f: LayerFingerprint): string {
   return [
     'f',
     (f.fileName ?? '').trim(),
@@ -129,6 +155,8 @@ export class LayerIdentityRegistry {
   /**
    * Resolve the id for a layer being loaded. Reuses the id last bound to this
    * fingerprint (reopen), otherwise generates a fresh one and remembers it.
+   * An id a live record still holds is never handed out again: a second open
+   * layer with the same fingerprint gets a fresh id.
    */
   resolve(fingerprint: LayerFingerprint, displayName: string): LayerRecord {
     const key = fingerprintKey(fingerprint);
@@ -136,6 +164,9 @@ export class LayerIdentityRegistry {
     if (layerId === undefined) {
       layerId = this.gen();
       this.byFingerprint.set(key, layerId);
+    } else if (this.records.has(layerId)) {
+      // The remembered id is in use; the key keeps pointing at it for a reopen.
+      layerId = this.gen();
     }
     const record: LayerRecord = { layerId, displayName, fingerprint: key };
     this.records.set(layerId, record);
@@ -145,14 +176,13 @@ export class LayerIdentityRegistry {
   /**
    * Adopt an id carried in from a session import, binding it to that session's
    * fingerprint so a later reopen of the same scan reuses it rather than
-   * minting a new one.
+   * minting a new one. The id is remembered, not live: no layer holds it
+   * until that scan is opened.
    */
   adopt(layerId: string, fingerprint: LayerFingerprint, displayName: string): LayerRecord {
     const key = fingerprintKey(fingerprint);
     this.byFingerprint.set(key, layerId);
-    const record: LayerRecord = { layerId, displayName, fingerprint: key };
-    this.records.set(layerId, record);
-    return record;
+    return { layerId, displayName, fingerprint: key };
   }
 
   /** Change a layer's display label. Identity is untouched. */
