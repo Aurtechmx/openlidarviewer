@@ -16,6 +16,7 @@
  * a comma-separated list of tier names (`"100M,250M"`).
  */
 
+import { waitForCondition } from './helpers/waitForCondition';
 import {
   buildScaledSyntheticCopc,
   STRESS_TIERS,
@@ -60,11 +61,8 @@ const instantDecoder: ChunkDecoder = {
 
 /** Wait until the scheduler has no queued or in-flight work. */
 async function drain(scheduler: StreamingScheduler): Promise<void> {
-  for (let i = 0; i < 400; i++) {
-    const s = scheduler.stats();
-    if (s.queued === 0 && s.loading === 0) return;
-    await new Promise((r) => setTimeout(r, 0));
-  }
+  const idle = (): boolean => { const s = scheduler.stats(); return s.queued === 0 && s.loading === 0; };
+  await waitForCondition(idle, () => `scheduler busy: ${JSON.stringify(scheduler.stats())}`);
 }
 
 /** A scripted orbit around the cube — six positions hit every octant. */

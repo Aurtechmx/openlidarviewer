@@ -3,6 +3,7 @@
  * while the export chunk is still loading, wired the way the app host wires it.
  */
 import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { waitForCondition } from './helpers/waitForCondition';
 import { FakeEl } from './helpers/exportPanelPillDomFake';
 import type { ReportFinding } from '../src/render/measure/reportManifest';
 import type { FindingsPanelDeps } from '../src/ui/findingsPanel';
@@ -28,7 +29,6 @@ beforeAll(() => {
   g.HTMLAnchorElement = class {};
 });
 
-const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 50));
 
 describe('ExportPanel findings export across a scan switch', () => {
   it('refuses, and writes nothing, when the scan changes while the export chunk loads', async () => {
@@ -59,9 +59,8 @@ describe('ExportPanel findings export across a scan switch', () => {
       exportFindingsReport: (f: readonly ReportFinding[], isCurrent: () => boolean) =>
         runFindingsExport(() => new Promise<typeof actions>((r) => { release = () => r(actions); }), deps, f, isCurrent),
     } as never);
-    await flush();
+    await waitForCondition(() => cap.deps !== null, () => 'findings panel chunk not loaded');
     const p = cap.deps as FindingsPanelDeps;
-    expect(p).toBeTruthy();
     const added = await p.collectMeasurements();
     for (const f of added) p.findings.add(f);
     expect(p.findings.count).toBe(1);
