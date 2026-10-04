@@ -243,6 +243,10 @@ export function renderObservatoryPanel(
     root.append(status);
     return root;
   }
+  if (state.phase === 'failed') {
+    root.append(el('p', { className: 'olv-observatory-status', text: state.message }));
+    return root;
+  }
   if (state.phase === 'stale') {
     root.append(el('p', { className: 'olv-observatory-status', text: 'The last run went stale before it could be shown (the scan or CRS changed mid-run). Run again.' }));
     return root;

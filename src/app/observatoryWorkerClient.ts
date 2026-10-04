@@ -38,12 +38,13 @@ export function computeObservatoryInWorker(cloud: ObservatoryCloudInput, options
   const id = ++jobId;
   const inThread = () => runObservatoryOverCloud(cloud, options);
   if (typeof Worker === 'undefined') return Promise.resolve().then(inThread);
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    // A throw from the in-thread run rejects the job, so the caller always settles.
     const fallback = () => {
       if (pending?.id !== id) return;
       pending = null;
       terminate();
-      resolve(inThread());
+      try { resolve(inThread()); } catch (err) { reject(err); }
     };
     pending = { id, resolve, fallback };
     try {
