@@ -10,6 +10,7 @@
  */
 
 import { exportDigestLines } from '../science/exportDigestRecord';
+import { DISPLAY_SAMPLE_SUFFIX, displaySampleLine } from '../export/exportSummary';
 import type { PointCloud } from '../model/PointCloud';
 import { sourcePositions } from '../model/pointFrames';
 import { classifyScanShape } from '../terrain/scanShape';
@@ -88,7 +89,11 @@ export function convertCloud(
 
   function run(): { file: ConvertedFile | null; report: ConvertReport } {
   const mode = opts.crsMode ?? 'keep';
-  const lines = [...(opts.digests ? exportDigestLines(opts.digests) : []), ...(opts.scopeNote ? [opts.scopeNote] : [])];
+  const lines = [
+    ...(opts.digests ? exportDigestLines(opts.digests) : []),
+    ...(opts.displaySample ? [displaySampleLine(opts.displaySample)] : []),
+    ...(opts.scopeNote ? [opts.scopeNote] : []),
+  ];
   const provenance = lines.length > 0 ? lines : null;
   // The RESOLVED source CRS (CrsService), when the caller supplies it, is the
   // authority — it honours any user override, so `cloud.metadata.crs` stays
@@ -214,7 +219,7 @@ export function convertCloud(
   }
 
   const geo = outEpsg != null ? isGeographicEpsg(outEpsg) : false;
-  const filename = `${baseName(cloud.name)}.${spec.ext}`;
+  const filename = `${baseName(cloud.name)}${opts.displaySample ? DISPLAY_SAMPLE_SUFFIX : ''}.${spec.ext}`;
 
   let bytes: Uint8Array;
   if (opts.format === 'las' || opts.format === 'las14') {

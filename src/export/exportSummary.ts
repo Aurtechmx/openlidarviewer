@@ -294,3 +294,49 @@ export function buildExportSummary(input: ExportSummaryInput): ExportSummary {
     line,
   };
 }
+
+// ─── Display-sample disclosure ──────────────────────────────────────────────
+// A large scan is reduced for display, and an export that is not re-decoded at
+// full resolution writes that reduced set. Nothing in such a file says it is a
+// sample unless the export states it, so the converter carries this record into
+// the file's provenance and its name, and the Export panel into its status.
+
+/** How many points the export holds, out of how many the source declared. */
+export interface DisplaySample {
+  /** Points in the display sample (before any clip). */
+  readonly held: number;
+  /** The source's declared point count, or null when the source declared none. */
+  readonly source: number | null;
+}
+
+/** The counts a cloud carries about itself (a structural slice of PointCloud). */
+export interface SampleCounts {
+  readonly pointCount: number;
+  readonly declaredPointCount?: number;
+  readonly sourceDeclaredPointCount?: number;
+}
+
+/** Filename suffix for a display-sample export, before the extension. */
+export const DISPLAY_SAMPLE_SUFFIX = '-sample';
+
+/** The sample record for a reduced cloud's export. */
+export function displaySampleOf(cloud: SampleCounts): DisplaySample {
+  const declared = cloud.sourceDeclaredPointCount ?? cloud.declaredPointCount;
+  const source = declared !== undefined && Number.isFinite(declared) && declared > cloud.pointCount ? declared : null;
+  return { held: cloud.pointCount, source };
+}
+
+const count = (n: number): string => n.toLocaleString('en-US');
+
+/** The provenance line written into the exported file. */
+export function displaySampleLine(s: DisplaySample): string {
+  return s.source !== null
+    ? `Display sample: ${count(s.held)} of ${count(s.source)} source points`
+    : `Display sample: ${count(s.held)} points, fewer than the source holds`;
+}
+
+/** The Export panel status suffix for a display-sample export. */
+export function displaySampleStatus(s: DisplaySample): string {
+  const of = s.source !== null ? ` of ${count(s.source)} source points` : '';
+  return ` · display sample${of}; tick Convert at full resolution to export every point`;
+}
