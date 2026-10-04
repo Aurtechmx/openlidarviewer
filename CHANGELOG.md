@@ -283,7 +283,7 @@ Full notes: [RELEASE_NOTES_v0.6.5.md](docs/releases/RELEASE_NOTES_v0.6.5.md)
 - The contour-readiness card renders its value on one line instead of stacking
   it into a vertical column.
 
-### Internal
+### Maintenance
 
 - Multi-layer mounting is disabled (`MULTI_LAYER_MOUNT_ENABLED = false`) while
   the per-layer frame fixes land, and the flag is guarded so the shipped state
@@ -813,7 +813,7 @@ before v0.6.0.
   alpha.1 EPT blank-render bug could not have been caught there. A case at
   UTM-scale coordinates now fails if that path regresses.
 
-### Internal
+### Maintenance
 
 - The stabilization work is tracked against measured baselines, separating
   what is provable in a sandbox from what needs a browser or a workstation.
@@ -852,7 +852,7 @@ First alpha of the v0.6 cycle: startup and streaming performance, a correctness-
 - **Partial session matches now ask before applying.** A session whose scan fingerprint neither clearly matches nor clearly conflicts with the loaded scan no longer restores automatically — it surfaces an "Apply anyway" confirmation, so an unverified match can't quietly place measurements on the wrong scan.
 - **No spurious PCD console warning.** A PCD file with a non-finite coordinate no longer prints three's `computeBoundingSphere(): Computed radius is NaN` — that one redundant message is suppressed for the parse (the point is still excluded and reported through the loader's own warning channel).
 
-### Internal
+### Maintenance
 
 - **Composition root.** New `AppRuntime`/`AppContext` own the shared application state (layer visibility/solo/comparison, active-scan selection, saved views) that previously lived in module-level mutables, and the first extracted service (`LayerService`) manages the layer list against it. Behaviour-preserving; groundwork for the v0.6 decomposition.
 - **Anti-thrash streaming selection (opt-in).** The budget selector can give an already-shown node a small score bonus so budget-boundary noise can't bump it out and force a re-fade — the "regions pulsing" flicker — with a node being refined away exempt so LOD never freezes. Unit-tested and off by default: enabling it live needs reconciling with eviction protection and visual verification in a browser, so no behaviour changes in this cut.

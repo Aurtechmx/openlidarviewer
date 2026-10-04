@@ -204,7 +204,7 @@ export function buildSchedulerCallbacks(deps: {
  *
  * Async: the streaming render engine is a lazily-imported chunk, fetched on the
  * first COPC/EPT open so it never weighs on the initial bundle. The caller
- * (`Viewer.attachStreamingCloud`) detaches the prior session only AFTER this
+ * (`Viewer.attachStreamingCloud`) detaches an earlier stream only AFTER this
  * resolves, so a throw in the lazy load or a constructor leaves the current
  * scan on screen instead of a blank scene.
  */
