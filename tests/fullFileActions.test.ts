@@ -232,12 +232,12 @@ describe('reload at higher density', () => {
     const lead = (f: FullFileLayerFacts) => `${compactPointCount(f.resident)} of ${compactPointCount(f.declared!)} points are loaded. A reload reads the original file, so it is unavailable while this layer's classes differ from the file: `;
     const edited = synth('strided', { hasClassEdits: true, classCauses: { edited: true, derived: false } });
     expect(assessReload(edited, high).allowed).toBe(false);
-    expect(assessReload(edited, high).reason).toBe(`${lead(edited)}it has manual class edits. Saving the session or exporting keeps them.`);
+    expect(assessReload(edited, high).reason).toBe(`${lead(edited)}it has manual class edits. Exporting with classification keeps them; a saved session does not.`);
     const derived = synth('strided', { hasClassEdits: true, classCauses: { edited: false, derived: true } });
     expect(assessReload(derived, high).allowed).toBe(false);
-    expect(assessReload(derived, high).reason).toBe(`${lead(derived)}its classes were derived or cleared in the app, not read from the file. Saving the session or exporting keeps them.`);
+    expect(assessReload(derived, high).reason).toBe(`${lead(derived)}its classes were derived or cleared in the app, not read from the file. Exporting with classification keeps them; a saved session does not.`);
     const both = synth('strided', { hasClassEdits: true, classCauses: { edited: true, derived: true } });
-    expect(assessReload(both, high).reason).toContain('it has classes derived or cleared in the app and manual class edits.');
+    expect(assessReload(both, high).reason).toBe(`${lead(both)}its classes were derived or cleared in the app, not read from the file. Exporting with classification keeps them; a saved session does not.`);
     expect(assessReload(both, high).reason).not.toMatch(/save the session first|unsaved/i);
   });
 
@@ -333,3 +333,24 @@ describe('exportLayerHooks reload', () => {
     });
   }
 });
+
+describe('exportLayerHooks class causes', () => {
+  const hooksFor = (provenance: string, epoch: number) => exportLayerHooks({
+    scans: { activeId: 'a', setActive: () => {} },
+    viewer: () => ({
+      getCloud: () => ({ classificationProvenance: provenance, pointCount: 1 }) as never,
+      classificationEpoch: () => epoch,
+      clouds: () => ['a'],
+    }),
+    sourceFiles: new Map(), reduced: new Map(),
+    reopen: async () => {}, removeLayer: () => {}, notify: () => {},
+  });
+
+  it('counts an epoch as a hand edit only on source classes', () => {
+    expect(hooksFor('source', 2).layerSource!('a')!.classCauses).toEqual({ edited: true, derived: false });
+    expect(hooksFor('derived', 3).layerSource!('a')!.classCauses).toEqual({ edited: false, derived: true });
+    expect(hooksFor('cleared', 1).layerSource!('a')!.classCauses).toEqual({ edited: false, derived: true });
+    expect(hooksFor('source', 0).layerSource!('a')!.classCauses).toEqual({ edited: false, derived: false });
+  });
+});
+

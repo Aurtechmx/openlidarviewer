@@ -44,9 +44,10 @@ export interface FullFileLayerFacts {
   /** The layer carries in-session classification edits. */
   readonly hasClassEdits: boolean;
   /**
-   * Why the layer's classes differ from the file: manual edits (`edited`),
-   * classes derived or cleared in the app (`derived`), or both. Absent when only
-   * `hasClassEdits` is known.
+   * Why the layer's classes differ from the file: manual edits to source
+   * classes (`edited`), or classes derived or cleared in the app (`derived`).
+   * A derived layer's epoch also moves without a hand edit, so `edited` is set
+   * only for source classes. Absent when only `hasClassEdits` is known.
    */
   readonly classCauses?: { readonly edited: boolean; readonly derived: boolean };
   /** The Export panel will write the classification channel. */
@@ -311,15 +312,14 @@ export function assessReload(f: FullFileLayerFacts | null, device: ReloadDevice)
 
 /**
  * Why a reload is unavailable for a layer whose classes differ from its file.
- * Saving or exporting keeps the classes but does not make them match the file,
- * so the reload stays unavailable afterwards too.
+ * An export that includes classification keeps the classes; a session file
+ * does not save them. Neither makes them match the file, so the reload stays
+ * unavailable afterwards too.
  */
 function classDiffersReason(f: FullFileLayerFacts): string {
   const c = f.classCauses ?? { edited: true, derived: false };
-  const cause = c.edited && c.derived
-    ? 'it has classes derived or cleared in the app and manual class edits'
-    : c.derived ? 'its classes were derived or cleared in the app, not read from the file' : 'it has manual class edits';
-  return `A reload reads the original file, so it is unavailable while this layer's classes differ from the file: ${cause}. Saving the session or exporting keeps them.`;
+  const cause = c.derived ? 'its classes were derived or cleared in the app, not read from the file' : 'it has manual class edits';
+  return `A reload reads the original file, so it is unavailable while this layer's classes differ from the file: ${cause}. Exporting with classification keeps them; a saved session does not.`;
 }
 
 /** What a reload clears for the layer, as a sentence, or '' when nothing is held. */

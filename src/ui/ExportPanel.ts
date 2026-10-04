@@ -1496,7 +1496,9 @@ export function exportLayerHooks(state: ExportLayerState): Pick<ExportPanelCallb
         reduced: state.reduced.get(id) === true,
         hasClassEdits: classificationDiffersFromSource(cloud.classificationProvenance ?? 'none', viewer.classificationEpoch(id)),
         classCauses: {
-          edited: viewer.classificationEpoch(id) > 0,
+          // Viewer bumps a derived cloud's epoch on frame invalidation, so the
+          // epoch means a hand edit only for source classes.
+          edited: cloud.classificationProvenance === 'source' && viewer.classificationEpoch(id) > 0,
           derived: !['source', 'none'].includes(cloud.classificationProvenance ?? 'none'),
         },
         inCompare: state.inCompare?.(id) ?? false,
