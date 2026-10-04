@@ -16,7 +16,7 @@
  * a comma-separated list of tier names (`"100M,250M"`).
  */
 
-import { vi } from 'vitest';
+import { waitForCondition } from './helpers/waitForCondition';
 import {
   buildScaledSyntheticCopc,
   STRESS_TIERS,
@@ -59,16 +59,10 @@ const instantDecoder: ChunkDecoder = {
     }),
 };
 
-/**
- * Wait until the scheduler has no queued or in-flight work. Bounded by
- * wall-clock time and failing loudly, so a slow machine cannot end the wait
- * early and hand the next camera step a half-loaded scheduler.
- */
+/** Wait until the scheduler has no queued or in-flight work. */
 async function drain(scheduler: StreamingScheduler): Promise<void> {
-  await vi.waitFor(() => {
-    const s = scheduler.stats();
-    if (s.queued !== 0 || s.loading !== 0) throw new Error(`scheduler busy: ${s.queued} queued, ${s.loading} loading`);
-  }, { timeout: 10_000, interval: 1 });
+  const idle = (): boolean => { const s = scheduler.stats(); return s.queued === 0 && s.loading === 0; };
+  await waitForCondition(idle, () => `scheduler busy: ${JSON.stringify(scheduler.stats())}`);
 }
 
 /** A scripted orbit around the cube — six positions hit every octant. */

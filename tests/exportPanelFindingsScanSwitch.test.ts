@@ -3,6 +3,7 @@
  * while the export chunk is still loading, wired the way the app host wires it.
  */
 import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { waitForCondition } from './helpers/waitForCondition';
 import { FakeEl } from './helpers/exportPanelPillDomFake';
 import type { ReportFinding } from '../src/render/measure/reportManifest';
 import type { FindingsPanelDeps } from '../src/ui/findingsPanel';
@@ -58,9 +59,7 @@ describe('ExportPanel findings export across a scan switch', () => {
       exportFindingsReport: (f: readonly ReportFinding[], isCurrent: () => boolean) =>
         runFindingsExport(() => new Promise<typeof actions>((r) => { release = () => r(actions); }), deps, f, isCurrent),
     } as never);
-    // The findings panel arrives through a dynamic import; wait for it on time,
-    // not on a fixed delay that a loaded machine can outrun.
-    await vi.waitFor(() => expect(cap.deps).toBeTruthy(), { timeout: 10_000, interval: 5 });
+    await waitForCondition(() => cap.deps !== null, () => 'findings panel chunk not loaded');
     const p = cap.deps as FindingsPanelDeps;
     const added = await p.collectMeasurements();
     for (const f of added) p.findings.add(f);

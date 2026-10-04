@@ -13,7 +13,8 @@
  * Expand and the real Close button.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { waitForCondition } from './helpers/waitForCondition';
 import { createMeasurePanelMount } from '../src/app/measurePanelMount';
 import { createAnalyseProfileVisibility } from '../src/app/analyseProfileVisibility';
 import { createProcessStudioFromShell } from '../src/app/processStudioMount';
@@ -150,14 +151,7 @@ function profileSummary(id = 'p1', name = 'Section A'): MeasurementSummary {
 }
 
 const settle = () => new Promise((r) => setTimeout(r, 0));
-/**
- * Wait for a condition on wall-clock time, not on a count of event-loop ticks.
- * The preflight and workbench arrive through dynamic imports whose cost depends
- * on machine load, so a fixed tick budget can run out before they land.
- */
-async function settleUntil(done: () => boolean): Promise<void> {
-  await vi.waitFor(() => { if (!done()) throw new Error('condition not met yet'); }, { timeout: 10_000, interval: 5 });
-}
+const settleUntil = (done: () => boolean): Promise<void> => waitForCondition(done);
 /** The shell's reveal has pulled the preflight chunk and repainted with it. */
 const preflightLanded = (r: { studio: { state(): { view: unknown } } }): boolean => r.studio.state().view !== undefined;
 
