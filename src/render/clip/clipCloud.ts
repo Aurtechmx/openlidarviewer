@@ -4,7 +4,8 @@
  * Produce a new {@link PointCloud} containing only the points an active clip box
  * keeps — so an export or analysis run over the clipped scan writes just the
  * isolated region, not the whole cloud. Every per-point channel (colour,
- * intensity, classification, returns, GPS time, …) is filtered in lockstep with
+ * intensity, classification, returns, scan angle, user data, scanner channel,
+ * scan direction, edge of flight line, GPS time, …) is filtered in lockstep with
  * the positions, so the subset stays internally consistent.
  *
  * Pure data: no DOM, no three.js, no GPU — it's the CPU realisation of the same
@@ -91,6 +92,11 @@ export function clipCloud(
     normals: filterChannel(cloud.normals, keep, n),
     returnNumber: filterChannel(cloud.returnNumber, keep, n),
     returnCount: filterChannel(cloud.returnCount, keep, n),
+    scanAngle: filterChannel(cloud.scanAngle, keep, n),
+    userData: filterChannel(cloud.userData, keep, n),
+    scannerChannel: filterChannel(cloud.scannerChannel, keep, n),
+    scanDirection: filterChannel(cloud.scanDirection, keep, n),
+    edgeOfFlightLine: filterChannel(cloud.edgeOfFlightLine, keep, n),
     pointSourceId: filterChannel(cloud.pointSourceId, keep, n),
     gpsTime: filterChannel(cloud.gpsTime, keep, n),
     origin: cloud.origin,
