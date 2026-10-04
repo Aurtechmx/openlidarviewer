@@ -37,6 +37,19 @@ export interface FullResClassExportInput {
   readonly hasClassEdits: boolean;
 }
 
+/**
+ * Whether the live classification can differ from what the source file holds,
+ * read from where the codes came from and the cloud's edit epoch rather than
+ * from the undo history (which a redo or a trimmed history leaves out of step).
+ * Derived or cleared codes always differ. Source codes differ once any edit has
+ * touched them; an undo back to the source still counts, so the answer errs
+ * toward refusing. A cloud with no classification matches a source with none.
+ */
+export function classificationDiffersFromSource(provenance: string, editEpoch: number): boolean {
+  if (provenance === 'none') return false;
+  return provenance !== 'source' || editEpoch > 0;
+}
+
 /** Whether this exact combination would silently drop in-session class edits. */
 export function fullResWouldDropClassEdits(input: FullResClassExportInput): boolean {
   return input.fullRes && input.includeClassification && input.hasClassEdits;

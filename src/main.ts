@@ -80,7 +80,7 @@ import type { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
-import { afterClassEdit, classCountsOf, noteClassificationEdited, wireFrameChange } from './app/classLegendRefresh';
+import { afterClassEdit, classCountsOf, classificationDiffersFromSource, noteClassificationEdited, wireFrameChange } from './app/classLegendRefresh';
 import type { ClassifyActionsDeps } from './app/classifyActions';
 import { buildExportHealth, densityStoryFields, footprintAreaM2, type ScanStoryInputs } from './intelligence/scanStory';
 import { fullScope, scopeFrom, scopeStamp, type ClassScope } from './render/class/classScope';
@@ -2270,21 +2270,21 @@ const terrainRunner = createTerrainAnalysisRunner({
   },
 });
 
-// Honesty guard: a manual class edit changes the bare-earth surface, so the
-// cached terrain core and any on-screen grade from the old classes go stale the
-// moment it lands, and it moves points between classes, so the Classes panel
-// counts still describe the pre-edit buffer. `noteClassificationEdited` settles
-// all three: drop the cache (aborting any in-flight compute) so the next
-// Analyse recomputes against the edited classes, caveat the result still on
-// screen, and recount the legend. The recount stops a landed edit reading as a
-// refusal on a height-coloured scan, where the legend is the only place it shows.
+// A class edit stales the terrain cache, any on-screen grade and the legend
+// counts; `noteClassificationEdited` drops the cache, caveats the result and
+// recounts. An undo of a first attach also returns the legend to empty.
 void viewerLoaded.then((v) => {
   v.onClassificationEdited = (id) => { noteClassificationEdited({
     classification: v.getCloud(id)?.classification, provenance: v.getCloud(id)?.classificationProvenance,
     legend: classLegendPanel,
     clearTerrainCache: () => terrainRunner.abortAndClearCache(),
     noteStale: (m) => analysePanel?.setStaleNotice(m),
-  }); reclassifyUi?.refresh(); processStudio.refresh(); exportPanel.refresh(); }; // provenance moves with whole-scan edits
+  });
+  if (id === scans.activeId && !v.getCloud(id)?.classification) {
+    refreshClassLegend();
+    syncColorModeForActive();
+  }
+  reclassifyUi?.refresh(); processStudio.refresh(); exportPanel.refresh(); };
 });
 
 // Per-cloud source files + reduced flags, so the Export panel can re-decode a
@@ -2464,7 +2464,7 @@ const exportPanel = new ExportPanel({
   isStreamingPending: () => viewer?.streamingCloud != null && viewer.exportFrontierPointTotal() === 0,
   getActiveClip: () => viewer.getClip(), getActiveClipOffset: () => (scans.activeId ? viewer.layerProjectOffset(scans.activeId) : null), getActiveScanId: () => scans.activeExportTargetId(),
   hasFullSource: () => scans.activeId != null && sourceFileById.has(scans.activeId),
-  hasClassEdits: () => scans.activeId != null && (viewer?.canUndoClassification(scans.activeId) ?? false),
+  hasClassEdits: () => scans.activeId != null && classificationDiffersFromSource(viewer?.getCloud(scans.activeId)?.classificationProvenance ?? 'none', viewer?.classificationEpoch(scans.activeId) ?? 0),
   // A streaming snapshot exports only resident points, so it is a reduced subset
   // until the whole cloud lands — flagged so the status reads "reduced view".
   isReduced: () => {

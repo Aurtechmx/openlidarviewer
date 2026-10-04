@@ -510,6 +510,13 @@ export class PointCloud {
     this.setClassificationState('derived', method);
   }
 
+  /** Undo of a first attach: drop the codes and return them for a Redo. */
+  detachClassification(): Uint8Array | undefined {
+    const codes = this._classification;
+    this._classification = undefined;
+    return codes;
+  }
+
   /**
    * Whether the attached DERIVED classification belongs to a frame the
    * application has since replaced.
