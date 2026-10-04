@@ -31,7 +31,7 @@ import {
   describeLoss,
   inspectLegacyConversion,
 } from '../lasSemantics';
-import { LEGACY_CLASS_WRAP_OPT_IN } from './types';
+import { LEGACY_CLASS_WRAP_OPT_IN, LEGACY_RETURN_CLAMP_OPT_IN } from './types';
 
 /** The classes a LAS 1.2 write would wrap. */
 export interface LegacyClassWrap {
@@ -98,4 +98,52 @@ export function previewLegacyClassWrap(
   const wrap = countLegacyClassWrap(classification);
   if (wrap.points === 0) return null;
   return { refusal: legacyClassWrapRefusal(wrap), warning: legacyClassWrapWarning(wrap.points) };
+}
+
+/*
+ * Returns. The legacy formats hold the return number and the number of
+ * returns in 3 bits each, and `writeLas` clamps both to 7, so return 8 of 12
+ * reads back as 7 of 7. The write gate refuses that unless the request sets
+ * `allowLegacyReturnClamp`, the same split as the class wrap above.
+ */
+
+/** Highest value the legacy 3-bit return fields hold. */
+const LEGACY_MAX_RETURN = 7;
+
+/** Points whose return number or number of returns is above 7. */
+export function countLegacyReturnClamp(
+  returnNumber: Uint8Array | undefined,
+  returnCount: Uint8Array | undefined,
+  count: number,
+): number {
+  let points = 0;
+  for (let i = 0; i < count; i++) {
+    if ((returnNumber && returnNumber[i] > LEGACY_MAX_RETURN) || (returnCount && returnCount[i] > LEGACY_MAX_RETURN)) {
+      points++;
+    }
+  }
+  return points;
+}
+
+function pointsLabel(points: number): string {
+  return `${points.toLocaleString()} point${points === 1 ? '' : 's'}`;
+}
+
+/** The refusal, with the count and both ways forward. */
+export function legacyReturnClampRefusal(points: number): string {
+  return (
+    `LAS 1.2 was not written. ${pointsLabel(points)} have a return number or number of returns above 7, ` +
+    `which LAS 1.2 clamps to 7, so return 8 of 12 would read back as 7 of 7. ` +
+    `Choose LAS 1.4 to keep them, or tick "${LEGACY_RETURN_CLAMP_OPT_IN}" to write them clamped.`
+  );
+}
+
+/** The warning an opted-in write logs. */
+export function legacyReturnClampWarning(points: number): string {
+  return `LAS 1.2 stores returns in 3 bits. ${pointsLabel(points)} with returns above 7 are written clamped to 7; use LAS 1.4 to keep them.`;
+}
+
+/** The line recorded in the written file's provenance. */
+export function legacyReturnClampProvenance(points: number): string {
+  return `LAS 1.2: returns above 7 clamped to 7 on ${pointsLabel(points)}.`;
 }

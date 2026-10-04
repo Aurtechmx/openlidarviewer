@@ -9,7 +9,7 @@
  * format pill, finding/toggling a checkbox row, constructing the panel).
  */
 
-import { expect } from 'vitest';
+import { expect, vi } from 'vitest';
 import { PointCloud } from '../../src/model/PointCloud';
 
 export class FakeEl {
@@ -144,4 +144,15 @@ export async function panelFor(
 /** Drain a handful of microtask ticks, e.g. for a lazily loaded chunk to settle. */
 export async function settleTicks(count = 6): Promise<void> {
   for (let i = 0; i < count; i++) await new Promise((r) => setTimeout(r, 0));
+}
+
+/** Press Export and wait until the run has set its outcome in the status line. */
+export async function pressExport(root: FakeEl): Promise<void> {
+  const before = exportStatus(root).textContent;
+  root.findByClass('olv-export-btn')[0].fire('click');
+  // The first run imports the real converter, which takes longer than a tick.
+  await vi.waitFor(() => {
+    expect(exportStatus(root).textContent).not.toBe(before);
+    expect(root.findByClass('olv-export-btn')[0].textContent).toBe('Export');
+  }, { timeout: 5000 });
 }

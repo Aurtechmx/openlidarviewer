@@ -18,7 +18,15 @@ import { isZUpFormat } from '../io/sniffFormat';
 import { wktForEpsg } from '../io/epsgWkt';
 import { cloudToGlobal } from './globalPoints';
 import { describeLoss, inspectLegacyConversion, legacyOverlapUpgradeNote, upgradeLegacyOverlap } from '../lasSemantics';
-import { countLegacyClassWrap, legacyClassWrapRefusal, legacyClassWrapWarning } from './legacyClassGuard';
+import {
+  countLegacyReturnClamp,
+  legacyReturnClampProvenance,
+  legacyReturnClampRefusal,
+  legacyReturnClampWarning,
+  countLegacyClassWrap,
+  legacyClassWrapRefusal,
+  legacyClassWrapWarning,
+} from './legacyClassGuard';
 
 /**
  * The extended classification-flags bit that carries overlap (LAS 1.4 Table 8),
@@ -315,6 +323,16 @@ export function convertCloud(
         if (!opts.allowLegacyClassWrap) return fail(legacyClassWrapRefusal(wrap), crsNote);
         log.push({ level: 'warn', message: legacyClassWrapWarning(wrap.points) });
       }
+      // Return number and number of returns are 3 bits each in LAS 1.2, and the
+      // writer clamps them to 7, which changes which return a point is. Refused
+      // unless the request opts in; opted in, the file's provenance says so.
+      const clamped = countLegacyReturnClamp(g.returnNumber, g.returnCount, g.count);
+      let legacyProvenance = provenance;
+      if (clamped > 0) {
+        if (!opts.allowLegacyReturnClamp) return fail(legacyReturnClampRefusal(clamped), crsNote);
+        log.push({ level: 'warn', message: legacyReturnClampWarning(clamped) });
+        legacyProvenance = [...(provenance ?? []), legacyReturnClampProvenance(clamped)];
+      }
       // The other thing a legacy write drops. The extended encoding carries
       // overlap as a flag bit beside a real base class; the legacy byte has
       // nowhere to put it, so `writeLas` composes only the
@@ -346,7 +364,7 @@ export function convertCloud(
         verticalEpsg: srcCtx.verticalEpsg ?? null,
         verticalUnitCode,
         description: datumNote,
-        provenance,
+        provenance: legacyProvenance,
       });
     }
   } else {

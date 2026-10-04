@@ -229,3 +229,17 @@ if (
   (document as { __olvTipDismissalInstalled?: boolean }).__olvTipDismissalInstalled = true;
   installControlTipDismissal(document);
 }
+
+/**
+ * A labelled opt-in checkbox row with a hint beneath, in the Export panel's
+ * row style. Shared by the Export panel and the batch converter.
+ */
+export function optInRow(label: string, hint: string, onChange: (checked: boolean) => void): HTMLDivElement {
+  const row = el('div', { className: 'olv-export-fullres' });
+  const labelEl = el('label', { className: 'olv-export-fullres-label' });
+  const box = el('input', { className: 'olv-export-fullres-box', type: 'checkbox' });
+  box.addEventListener('change', () => onChange(box.checked));
+  labelEl.append(box, el('span', { text: label }));
+  row.append(labelEl, el('span', { className: 'olv-export-fullres-hint', text: hint }));
+  return row;
+}
