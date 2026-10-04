@@ -45,6 +45,10 @@ export interface FullFileLayerFacts {
   readonly hasClassEdits: boolean;
   /** The Export panel will write the classification channel. */
   readonly includeClassification: boolean;
+  /** Saved findings kept for the layer; a reload clears them. */
+  readonly findings?: number;
+  /** The shown compare difference was computed on the layer; a reload clears it. */
+  readonly inCompare?: boolean;
 }
 
 export interface FullFileDevice {
@@ -204,6 +208,8 @@ export function layerFacts(input: {
   readonly reduced: boolean;
   readonly hasClassEdits: boolean;
   readonly includeClassification: boolean;
+  readonly findings?: number;
+  readonly inCompare?: boolean;
 }): FullFileLayerFacts {
   const c = input.cloud;
   const declared = c.sourceDeclaredPointCount ?? c.declaredPointCount;
@@ -223,6 +229,8 @@ export function layerFacts(input: {
     },
     hasClassEdits: input.hasClassEdits,
     includeClassification: input.includeClassification,
+    findings: input.findings ?? 0,
+    inCompare: input.inCompare ?? false,
   };
 }
 
@@ -269,19 +277,38 @@ export function assessReload(f: FullFileLayerFacts | null, device: ReloadDevice)
   const allPoints = target >= declared;
   const label = allPoints ? `Reload all ${compactPointCount(declared)} points` : `Reload at ${compactPointCount(target)} points`;
   const gb = formatGb(plan.memoryEstimateBytes);
-  const confirm = allPoints
+  const shows = allPoints
     ? `Shows all ${compactPointCount(declared)} points. Needs about ${gb} (estimated). May run slower.`
     : `Shows ${compactPointCount(target)} of ${compactPointCount(declared)} points (still a sample). Needs about ${gb} (estimated). May run slower.`;
+  const confirm = [shows, reloadClears(f)].filter((t) => t !== '').join(' ');
   const base = { show: true, target, allPoints, label, confirm, estimateBytes: plan.memoryEstimateBytes };
   const held = `${compactPointCount(f.resident)} of ${compactPointCount(declared)} points are loaded`;
   const ceiling = formatGb(memoryCeilingBytes(device.deviceMemoryGB, device.isMobile));
+  if (f.hasClassEdits) {
+    return { ...base, allowed: false, reason: `${held}; this layer has unsaved class edits, and reloading would discard them. Export or save the session first.` };
+  }
   if (device.isMobile) return { ...base, allowed: false, reason: `${held}. A denser reload is not offered on a phone or tablet.` };
   if (device.tier === 'low') return { ...base, allowed: false, reason: `${held}. This device is in the low performance tier, so a denser reload is not offered.` };
-  if (plan.buildThenStream || plan.mayExceedCeiling) {
+  if (plan.buildThenStream) {
+    // planLoad routes a LAS or LAZ this large to the out-of-core tile build: it
+    // would open as a streamed scan, not as the denser loaded layer a reload makes.
+    return { ...base, allowed: false, reason: `${held}. Loading more needs about ${gb}, over the ${ceiling} this device allows for a loaded layer. At that size the file opens as a streamed scan, and a reload only replaces a loaded layer.` };
+  }
+  if (plan.mayExceedCeiling) {
     return { ...base, allowed: false, reason: `${held}. A denser reload needs about ${gb}, more than the ${ceiling} this device allows.` };
   }
   if (target <= f.resident) return { ...base, allowed: false, reason: `${held}. A reload would not add points on this device.` };
   return { ...base, allowed: true };
+}
+
+/** What a reload clears for the layer, as a sentence, or '' when nothing is held. */
+function reloadClears(f: FullFileLayerFacts): string {
+  const n = f.findings ?? 0;
+  const parts = [
+    ...(n > 0 ? [`its ${n} saved ${n === 1 ? 'finding' : 'findings'}`] : []),
+    ...(f.inCompare ? ['the compare difference computed on it'] : []),
+  ];
+  return parts.length ? `Reloading clears ${parts.join(' and ')}.` : '';
 }
 
 export function currentReloadDevice(): ReloadDevice {

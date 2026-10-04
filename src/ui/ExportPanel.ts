@@ -145,7 +145,7 @@ export interface ExportPanelCallbacks {
   /** Whether the loaded cloud is a reduced subset of the source. */
   isReduced: () => boolean;
   /** Per-layer facts for the "Export all N points" action; null when the layer is unknown. */
-  layerSource?: (id: string) => { cloud: PointCloud; file: File | null; reduced: boolean; hasClassEdits: boolean } | null;
+  layerSource?: (id: string) => { cloud: PointCloud; file: File | null; reduced: boolean; hasClassEdits: boolean; inCompare?: boolean } | null;
   /** Make a layer the active scan, so the panel exports it. */
   activateLayer?: (id: string) => void;
   /** Open a layer's source file again at `budget` points and drop the old layer. */
@@ -518,7 +518,7 @@ export class ExportPanel {
   /** The "Export all N points" facts for a layer, read through this panel's callbacks. */
   fullFileFacts(id: string): FullFileLayerFacts | null {
     const src = this._cb.layerSource?.(id) ?? null;
-    return src ? layerFacts({ id, ...src, includeClassification: this._includeClass }) : null;
+    return src ? layerFacts({ id, ...src, includeClassification: this._includeClass, findings: this._findings?.countFor(id) ?? 0 }) : null;
   }
 
   /** Reload a layer at a raised budget, through the host's open path. */
@@ -1456,6 +1456,8 @@ export interface ExportLayerState {
   /** Remove a layer from the scene. */
   readonly removeLayer: (id: string) => void;
   readonly notify: (message: string) => void;
+  /** The shown compare difference was computed on this layer. */
+  readonly inCompare?: (id: string) => boolean;
 }
 
 /** The panel's per-layer callbacks: `hasFullSource`, `activateLayer`, `layerSource`, `reloadLayer` and `notify`. */
@@ -1468,8 +1470,20 @@ export function exportLayerHooks(state: ExportLayerState): Pick<ExportPanelCallb
     reloadLayer: async (id) => {
       const file = state.sourceFiles.get(id);
       if (!file) return;
-      await state.reopen(file);
-      if (state.scans.activeId !== id && state.viewer()?.clouds().includes(id)) state.removeLayer(id);
+      const before = new Set(state.viewer()?.clouds() ?? []);
+      try {
+        await state.reopen(file);
+      } catch {
+        // Reported below with the other incomplete outcomes.
+      }
+      // A cancelled, failed or refused open adds no layer. Only a single new
+      // layer read from the same file replaces the old one.
+      const added = (state.viewer()?.clouds() ?? []).filter((c) => !before.has(c));
+      if (added.length === 1 && state.sourceFiles.get(added[0]) === file) {
+        state.removeLayer(id);
+        return;
+      }
+      state.notify('The reload did not complete. The layer is unchanged.');
     },
     notify: (message) => state.notify(message),
     layerSource: (id) => {
@@ -1481,6 +1495,7 @@ export function exportLayerHooks(state: ExportLayerState): Pick<ExportPanelCallb
         file: state.sourceFiles.get(id) ?? null,
         reduced: state.reduced.get(id) === true,
         hasClassEdits: classificationDiffersFromSource(cloud.classificationProvenance ?? 'none', viewer.classificationEpoch(id)),
+        inCompare: state.inCompare?.(id) ?? false,
       };
     },
   };

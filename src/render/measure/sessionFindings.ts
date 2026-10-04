@@ -81,6 +81,11 @@ export class SessionFindings {
     return setAside;
   }
 
+  /** How many findings are kept for a scan. */
+  countFor(ownerId: string): number {
+    return this._byOwner.get(ownerId)?.length ?? 0;
+  }
+
   /** Drop the findings kept for a scan that has been removed. */
   forget(ownerId: string): void {
     this._forgotten.add(ownerId);

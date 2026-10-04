@@ -2463,7 +2463,7 @@ const exportPanel = new ExportPanel({
   // snapshot just to test it for null.
   isStreamingPending: () => viewer?.streamingCloud != null && viewer.exportFrontierPointTotal() === 0,
   getActiveClip: () => viewer.getClip(), getActiveClipOffset: () => (scans.activeId ? viewer.layerProjectOffset(scans.activeId) : null), getActiveScanId: () => scans.activeExportTargetId(),
-  ...exportLayerHooks({ scans, viewer: () => viewer, sourceFiles: sourceFileById, reduced: reducedById, reopen: handleFile, removeLayer: removeCloud, notify: showLassoToast }),
+  ...exportLayerHooks({ scans, viewer: () => viewer, sourceFiles: sourceFileById, reduced: reducedById, reopen: handleFile, removeLayer: removeCloud, notify: showLassoToast, inCompare: (id) => inspector.compareDifference.involves(id) }),
   hasClassEdits: () => scans.activeId != null && classificationDiffersFromSource(viewer?.getCloud(scans.activeId)?.classificationProvenance ?? 'none', viewer?.classificationEpoch(scans.activeId) ?? 0),
   // A streaming snapshot exports only resident points, so it is a reduced subset
   // until the whole cloud lands — flagged so the status reads "reduced view".

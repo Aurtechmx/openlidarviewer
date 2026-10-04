@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { exportLayerHooks } from '../src/ui/ExportPanel';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -210,9 +211,34 @@ describe('reload at higher density', () => {
     const heavy = assessReload(synth('heavy'), high);
     expect(heavy.allowed).toBe(false);
     expect(heavy.reason).toContain(formatGb(heavy.estimateBytes));
-    expect(heavy.reason).toContain(`more than the ${formatGb(memoryCeilingBytes(16, false))} this device allows`);
+    expect(heavy.reason).toContain(`over the ${formatGb(memoryCeilingBytes(16, false))} this device allows for a loaded layer`);
+    expect(heavy.reason).toContain('opens as a streamed scan');
     expect(heavy.reason).toMatch(/ of .* points are loaded\./);
     expect(assessReload(synth('small'), high).show).toBe(false);
+  });
+
+  it('says a LAS too large to hold would stream, and a non-streaming format does not fit', () => {
+    const las = synth('heavy');
+    const plan = planLoad({ sourceCount: las.declared!, budget: GPU_HARD_POINT_CEILING, fileBytes: las.fileBytes, format: 'las', attributes: las.attributes, isMobile: false, deviceMemoryGB: 16 });
+    expect(plan.buildThenStream).toBe(true);
+    expect(assessReload(las, high).reason).toMatch(/opens as a streamed scan, and a reload only replaces a loaded layer\.$/);
+    const ply = assessReload(synth('heavy', { format: 'ply' }), high);
+    expect(ply.allowed).toBe(false);
+    expect(ply.reason).toContain(`more than the ${formatGb(memoryCeilingBytes(16, false))} this device allows`);
+    expect(ply.reason).not.toContain('streamed');
+  });
+
+  it('refuses while the layer has unsaved class edits, figures first', () => {
+    const f = synth('strided', { hasClassEdits: true });
+    expect(assessReload(f, high).allowed).toBe(false);
+    expect(assessReload(f, high).reason).toBe(`${compactPointCount(f.resident)} of ${compactPointCount(f.declared!)} points are loaded; this layer has unsaved class edits, and reloading would discard them. Export or save the session first.`);
+  });
+
+  it('names the findings and compare difference a reload clears', () => {
+    expect(assessReload(synth('strided'), high).confirm).not.toContain('Reloading clears');
+    expect(assessReload(synth('strided', { findings: 1 }), high).confirm).toMatch(/ Reloading clears its 1 saved finding\.$/);
+    expect(assessReload(synth('strided', { findings: 3, inCompare: true }), high).confirm)
+      .toMatch(/ Reloading clears its 3 saved findings and the compare difference computed on it\.$/);
   });
 
   it('confirms, then reopens the targeted layer with the budget the open path takes once', async () => {
@@ -246,4 +272,46 @@ describe('GPU point ceiling', () => {
     const m = src.match(/const GPU_HARD_POINT_CEILING = ([\d_]+);/);
     expect(Number(m![1].replace(/_/g, ''))).toBe(GPU_HARD_POINT_CEILING);
   });
+});
+
+describe('exportLayerHooks reload', () => {
+  type Outcome = 'ok' | 'cancel' | 'fail' | 'busy';
+  function setup(outcome: Outcome) {
+    const file = new File([new Uint8Array(4)], 'a.las');
+    const clouds = ['old', 'other'];
+    const sourceFiles = new Map<string, File>([['old', file]]);
+    const removeLayer = vi.fn((id: string) => { clouds.splice(clouds.indexOf(id), 1); });
+    const notify = vi.fn();
+    const hooks = exportLayerHooks({
+      scans: { activeId: 'other', setActive: () => {} },
+      viewer: () => ({ getCloud: () => null, classificationEpoch: () => 0, clouds: () => clouds }),
+      sourceFiles, reduced: new Map(),
+      reopen: async (f) => {
+        if (outcome === 'fail') throw new Error('decode failed');
+        if (outcome !== 'ok') return; // cancelled, or the "Already loading" guard: no layer added
+        clouds.push('new');
+        sourceFiles.set('new', f);
+      },
+      removeLayer, notify,
+    });
+    return { hooks, clouds, removeLayer, notify };
+  }
+
+  it('replaces a layer that is not active once the reopened layer is in', async () => {
+    const t = setup('ok');
+    await t.hooks.reloadLayer!('old', 5);
+    expect(t.removeLayer).toHaveBeenCalledWith('old');
+    expect(t.clouds).toEqual(['other', 'new']);
+    expect(t.notify).not.toHaveBeenCalled();
+  });
+
+  for (const outcome of ['cancel', 'fail', 'busy'] as const) {
+    it(`keeps the old layer when the reopen ends with ${outcome}`, async () => {
+      const t = setup(outcome);
+      await t.hooks.reloadLayer!('old', 5);
+      expect(t.removeLayer).not.toHaveBeenCalled();
+      expect(t.clouds).toEqual(['old', 'other']);
+      expect(t.notify).toHaveBeenCalledWith('The reload did not complete. The layer is unchanged.');
+    });
+  }
 });
