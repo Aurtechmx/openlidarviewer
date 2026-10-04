@@ -28,7 +28,6 @@ beforeAll(() => {
   g.HTMLAnchorElement = class {};
 });
 
-const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 50));
 
 describe('ExportPanel findings export across a scan switch', () => {
   it('refuses, and writes nothing, when the scan changes while the export chunk loads', async () => {
@@ -59,9 +58,10 @@ describe('ExportPanel findings export across a scan switch', () => {
       exportFindingsReport: (f: readonly ReportFinding[], isCurrent: () => boolean) =>
         runFindingsExport(() => new Promise<typeof actions>((r) => { release = () => r(actions); }), deps, f, isCurrent),
     } as never);
-    await flush();
+    // The findings panel arrives through a dynamic import; wait for it on time,
+    // not on a fixed delay that a loaded machine can outrun.
+    await vi.waitFor(() => expect(cap.deps).toBeTruthy(), { timeout: 10_000, interval: 5 });
     const p = cap.deps as FindingsPanelDeps;
-    expect(p).toBeTruthy();
     const added = await p.collectMeasurements();
     for (const f of added) p.findings.add(f);
     expect(p.findings.count).toBe(1);

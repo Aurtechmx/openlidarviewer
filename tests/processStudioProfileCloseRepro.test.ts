@@ -13,7 +13,7 @@
  * Expand and the real Close button.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createMeasurePanelMount } from '../src/app/measurePanelMount';
 import { createAnalyseProfileVisibility } from '../src/app/analyseProfileVisibility';
 import { createProcessStudioFromShell } from '../src/app/processStudioMount';
@@ -150,9 +150,16 @@ function profileSummary(id = 'p1', name = 'Section A'): MeasurementSummary {
 }
 
 const settle = () => new Promise((r) => setTimeout(r, 0));
-async function settleUntil(done: () => boolean, ticks = 500): Promise<void> {
-  for (let i = 0; i < ticks && !done(); i++) await new Promise((r) => setTimeout(r, 0));
+/**
+ * Wait for a condition on wall-clock time, not on a count of event-loop ticks.
+ * The preflight and workbench arrive through dynamic imports whose cost depends
+ * on machine load, so a fixed tick budget can run out before they land.
+ */
+async function settleUntil(done: () => boolean): Promise<void> {
+  await vi.waitFor(() => { if (!done()) throw new Error('condition not met yet'); }, { timeout: 10_000, interval: 5 });
 }
+/** The shell's reveal has pulled the preflight chunk and repainted with it. */
+const preflightLanded = (r: { studio: { state(): { view: unknown } } }): boolean => r.studio.state().view !== undefined;
 
 function buildRig() {
   const appRoot = new FakeEl('div');
@@ -248,7 +255,7 @@ describe('profile Expand → Close must not disturb the Process Studio', () => {
     const r = buildRig();
     // Scan load: the shell reveals the studio and paints it.
     r.crsService.emit(metreCrs);
-    for (let i = 0; i < 50; i++) await settle(); // let the lazy preflight land
+    await settleUntil(() => preflightLanded(r)); // let the lazy preflight land
 
     // Analysis run: DTM + Contours produced.
     r.studio.markProduced(['dtm', 'contours']);
@@ -285,7 +292,7 @@ describe('profile Expand → Close restores the AnalysePanel it hid', () => {
   it('re-shows the AnalysePanel (and its contour-layer controls) after the workbench closes', async () => {
     const r = buildRig();
     r.crsService.emit(metreCrs);
-    for (let i = 0; i < 50; i++) await settle();
+    await settleUntil(() => preflightLanded(r));
 
     // Selecting the Profile kind hides the AnalysePanel, as main.ts does.
     r.analyseProfileVisibility.hideForProfile();
@@ -314,7 +321,7 @@ describe('profile Expand → Close restores the AnalysePanel it hid', () => {
   it('leaves the AnalysePanel HIDDEN on scan close (the ordering hazard)', async () => {
     const r = buildRig();
     r.crsService.emit(metreCrs);
-    for (let i = 0; i < 50; i++) await settle();
+    await settleUntil(() => preflightLanded(r));
 
     r.analyseProfileVisibility.hideForProfile();
     await r.mount.ensure();
