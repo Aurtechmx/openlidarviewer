@@ -442,6 +442,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
             soleLayer: infos.length <= 1,
           }),
           name: info.name,
+          id: info.id,
         };
       });
       const report = buildCompatibilityReport(

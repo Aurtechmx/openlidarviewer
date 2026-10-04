@@ -87,6 +87,8 @@ export interface LayerHealthRow {
    * fact itself is unchanged and still reachable.
    */
   readonly secondary?: true;
+  /** The row offers the "Export all N points" action when the layer allows it. */
+  readonly fullFileAction?: true;
 }
 
 /** Rows demoted to the frame-and-mount disclosure in a sole-layer session. */
@@ -334,6 +336,7 @@ function loadingRow(residency: LayerHealthInput['residency']): LayerHealthRow {
       label: 'Loading',
       value: `display sample: ${resident.toLocaleString('en-US')} of ${source.toLocaleString('en-US')} declared points resident`,
       status: 'info',
+      fullFileAction: true,
     };
   }
   return { label: 'Loading', value: 'fully loaded', status: 'ok' };

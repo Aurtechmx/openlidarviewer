@@ -60,10 +60,14 @@ export interface ShelfTerrainPanel extends TerrainReader {
 }
 
 /** The Export panel's read side plus its product selection. */
+import type { FullFileLayerFacts } from '../fullFileActions';
+
 export interface ShelfExportPanel extends FindingsReader {
   readonly element: HTMLElement;
   select(product: ResultExportProduct): boolean;
   setTerrainExports(t: TerrainExportsLane | null): void;
+  fullFileFacts?(id: string): FullFileLayerFacts | null;
+  preselectFullResolution?(id: string, refusal?: string): void;
 }
 
 /** What the host hands the shell for the shelf: the owners, by reference. */
@@ -84,6 +88,8 @@ export interface ResultsShelfSources {
   /** The active layer, read only; the shelf never sets it. */
   readonly scans: {
     activeExportTargetId(): string | null;
+    /** The active viewer layer id. */
+    readonly activeId?: string | null;
     onActiveChange(fn: () => void): () => void;
     activeCloud?(): { readonly name: string } | null;
   };

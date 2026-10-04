@@ -31,6 +31,7 @@
  * (see `docs/architecture/architecture-map.md`).
  */
 
+import { pointBasisLine } from '../export/exportSummary';
 import { sourceInterpretationOf, type SourceInterpretationRecord } from '../science/sourceInterpretation';
 import { footprintMetres } from '../report/reportFootprint';
 import type { Footprint } from '../report/reportFootprint';
@@ -375,6 +376,8 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
       // it so the PDF's full-cloud figures aren't read as filter-scoped.
       ...(deps.classScopeStamp() ? { classScopeNote: deps.classScopeStamp() } : {}),
       ...(trunc ? { coverageNote: truncationText(trunc), declaredPointCount: trunc.declared } : {}),
+      // The report states the file's total, but analysed figures read what is held.
+      ...(!trunc ? { pointBasis: fileN > staticCloud.pointCount ? pointBasisLine(false, staticCloud.pointCount, fileN) : pointBasisLine(true, fileN, null) } : {}),
     };
     exportFileStem = deps.baseName(staticCloud.name);
   } else {
