@@ -405,6 +405,23 @@ for (const theme of ['light', 'dark']) {
   });
 }
 
+/**
+ * The toast's bottom is computed from `--olv-dock-clear` and
+ * `--olv-strip-measured`, which ResizeObservers write a frame after the dock or
+ * strip changes height. Wait until both hold the heights the elements have now,
+ * so the toast is measured where the stylesheet places it.
+ */
+async function waitForChromeClearance(page: Page): Promise<void> {
+  await page.waitForFunction(() => {
+    const root = document.documentElement.style;
+    const dock = document.querySelector<HTMLElement>('.olv-dock');
+    const strip = document.querySelector<HTMLElement>('.olv-state-strip');
+    const dockOk = !dock || dock.offsetHeight === 0 || root.getPropertyValue('--olv-dock-clear') === `${dock.offsetHeight + 22}px`;
+    const stripOk = !strip || strip.offsetHeight === 0 || root.getPropertyValue('--olv-strip-measured') === `${strip.offsetHeight}px`;
+    return dockOk && stripOk;
+  }, undefined, { timeout: 5_000 });
+}
+
 // The phone toast parks above the dock and the state strip sits on the dock.
 // A message that wraps to three or four lines grew the toast down over the
 // strip, so the toast anchors its bottom edge to the strip's top edge.
@@ -420,6 +437,7 @@ for (const [width, height] of [[320, 700], [375, 812], [390, 844], [430, 932]] a
     await expect(toast).toBeVisible({ timeout: 15_000 });
     for (const text of ['Saved.', 'Terrain scan ready — grade the surface and build contours? Nothing uploaded. '.repeat(3)]) {
       await page.evaluate((t) => { document.querySelector('.olv-lasso-toast-msg')!.textContent = t; }, text);
+      await waitForChromeClearance(page);
       const [t, s] = await page.evaluate(() => [
         document.querySelector('.olv-lasso-toast')!.getBoundingClientRect().toJSON(),
         document.querySelector('.olv-state-strip')!.getBoundingClientRect().toJSON(),
@@ -428,6 +446,7 @@ for (const [width, height] of [[320, 700], [375, 812], [390, 844], [430, 932]] a
     }
     // Without the strip the toast falls back to its place above the dock.
     await page.evaluate(() => document.querySelector('.olv-state-strip')!.classList.add('olv-hidden'));
+    await waitForChromeClearance(page);
     const [toastBottom, dockTop] = await page.evaluate(() => [
       document.querySelector('.olv-lasso-toast')!.getBoundingClientRect().bottom,
       document.querySelector('.olv-dock')!.getBoundingClientRect().top,
