@@ -113,9 +113,12 @@ export class ProcessService {
 
   /** Build from already-normalised scan facts (e.g. tests, worker payloads). */
   static fromFacts(scans: readonly ScanFacts[], projectFrameCompatible?: boolean): ProcessService {
+    // Frame compatibility decides a two-scan product's readiness as much as
+    // the scan facts do, so it is part of the state a token is bound to.
+    const frame = projectFrameCompatible === true ? 'frame:proven' : 'frame:unproven';
     return new ProcessService(
       evaluateCapabilities({ scans, projectFrameCompatible }),
-      scientificStateSignature(scans),
+      `${scientificStateSignature(scans)}|${frame}`,
     );
   }
 
@@ -185,6 +188,9 @@ export class ProcessService {
     if (!isAuthenticAuthorization(token)) return { ok: false, reason: 'NOT_AUTHENTIC' };
     if (token.product !== product) return { ok: false, reason: 'WRONG_PRODUCT' };
     if (token.stateSignature !== this._stateSignature) return { ok: false, reason: 'STALE_AUTHORIZATION' };
+    // Eligibility is re-read when the token is consumed, so a product that is
+    // no longer `ready` here refuses even if its signature still matches.
+    if (this.readiness(product) !== 'ready') return { ok: false, reason: 'STALE_AUTHORIZATION' };
     return { ok: true };
   }
 
