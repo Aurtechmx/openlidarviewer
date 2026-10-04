@@ -151,8 +151,50 @@ describe('project-frame work on a layer placed in X/Y only', () => {
     // A's scene frame is the project X/Y with A's own Z.
     const target = (id: string): V3 | null =>
       id === 'layer_a' ? [500_000, 4_000_000, 99] : id === 'layer_b' ? [500_000, 4_000_000, 50] : null;
-    const rebased = rebaseSessionGeometry(session(), [500_000, 4_000_000, 50], target);
+    const rebased = rebaseSessionGeometry(session(), [500_000, 4_000_000, 50], { layerOrigin: target });
     const p = rebased.measurements[0]!.points[0]!;
     expect([p[0] + 500_000, p[1] + 4_000_000, p[2] + 99]).toEqual([500_004, 4_000_002, 100]);
+  });
+});
+
+describe('scene state and unplaceable work in a project-frame session', () => {
+  const P: V3 = [500_000, 4_600_000, 100];
+  const file = (layers: unknown[], measurements: unknown[] = []) => parseSession(JSON.stringify({
+    app: 'OpenLiDARViewer', kind: 'measurement-session', version: 8,
+    upAxis: 'z', origin: P, unitSystem: 'metric', annotations: [],
+    camera: { position: [1, 2, 10], target: [1, 2, 0] },
+    clip: { box: { min: [0, 0, 5], max: [1, 1, 10] }, mode: 'keep-inside', enabled: true },
+    views: [{ name: 'V1', camera: { position: [3, 4, 10], target: [3, 4, 0] } }],
+    projectFrame: { projectOrigin: P, layers },
+    measurements,
+  }));
+  const rec = (id: string, so: V3, sTP: V3) => ({
+    layerId: id, sourceFingerprint: `f${id}`, sourceName: `${id}.las`, sourceOrigin: so, sourceToProject: sTP, upAxis: 'z',
+  });
+  const A = rec('layer_a', [500_000, 4_600_000, 100], [0, 0, 0]);
+  const B_XY = rec('layer_b', [500_100, 4_600_000, 149], [100, 0, 0]);
+
+  it('moves the camera, saved views and clip box by the project origin change, not an X/Y-only active layer', () => {
+    // The active layer is placed in X/Y only, so its scene origin keeps its own
+    // Z (149) while the project origin is unchanged.
+    const g = rebaseSessionGeometry(file([A, B_XY]), [500_000, 4_600_000, 149], { projectOrigin: P });
+    expect(g.camera!.position).toEqual([1, 2, 10]);
+    expect(g.views[0]!.camera.position).toEqual([3, 4, 10]);
+    expect(g.clip!.box.min).toEqual([0, 0, 5]);
+  });
+
+  it('refuses project-frame work whose layer is not open unless it was placed on all three axes', () => {
+    const m = (id: string, layerId: string) => ({
+      id, kind: 'distance', name: id, points: [[1, 0, 0], [2, 0, 0]], owner: { layerId, frame: 'project' },
+    });
+    const s = file([A, B_XY, rec('layer_c', [500_200, 4_600_000, 120], [200, 0, 20])], [
+      m('onB', 'layer_b'), m('onC', 'layer_c'), m('onGone', 'layer_x'),
+    ]);
+    // Nothing open but the project origin: B (X/Y only) and an unknown layer
+    // cannot be placed; C was placed on all three axes.
+    const g = rebaseSessionGeometry(s, P, { projectOrigin: P, layerOrigin: () => null });
+    expect([...g.refused].sort()).toEqual(['onB', 'onGone']);
+    expect(g.measurements.map((x) => x.id)).toEqual(['onC']);
+    expect(g.measurements[0]!.points[0]).toEqual([1, 0, 0]);
   });
 });

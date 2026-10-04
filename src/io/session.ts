@@ -693,15 +693,22 @@ export interface RebasedSessionGeometry {
  * zero delta (matching frames, or a session/cloud both at the origin) copies
  * the geometry through unchanged.
  */
-export function rebaseSessionGeometry(
-  session: InspectionSession,
-  cloudOrigin: readonly number[],
+/** The reopened scene's frames, for a file that records a project frame. */
+export interface RebaseTarget {
   /**
    * The origin a layer's scene coordinates are local to in the reopened scene,
    * or null when the layer is not open. A layer placed in X/Y only keeps its
    * own Z, so its frame differs from the active layer's.
    */
-  targetOriginFor?: (layerId: string) => readonly number[] | null,
+  layerOrigin?: (layerId: string) => readonly number[] | null;
+  /** The reopened scene's project origin, or null when there is none. */
+  projectOrigin?: readonly number[] | null;
+}
+
+export function rebaseSessionGeometry(
+  session: InspectionSession,
+  cloudOrigin: readonly number[],
+  target: RebaseTarget = {},
 ): RebasedSessionGeometry {
   const dx = session.origin[0] - (cloudOrigin[0] ?? 0);
   const dy = session.origin[1] - (cloudOrigin[1] ?? 0);
@@ -714,7 +721,16 @@ export function rebaseSessionGeometry(
   // Elevation-only scalars (profile-chart heights, a volume reference plane)
   // move by the UP-axis component of the shift, not the full vector.
   const elevOf = (d: Vec3): number => (session.upAxis === 'z' ? d[2] : d[1]);
-  const shiftVec = shiftBy([dx, dy, dz]);
+  // The camera, saved views and clip box are in the scene frame. With a project
+  // frame on both sides that is the project frame, so they move by the change
+  // of project origin, never by one layer's offset: an active layer placed in
+  // X/Y only keeps its own Z, and its offset would move them vertically.
+  const savedProject = session.projectFrame?.projectOrigin ?? null;
+  const targetProject = target.projectOrigin ?? null;
+  const projectShift: Vec3 | null = savedProject && targetProject
+    ? [0, 1, 2].map((k) => savedProject[k]! - (targetProject[k] ?? 0)) as Vec3
+    : null;
+  const shiftVec = shiftBy(projectShift ?? [dx, dy, dz]);
   const shiftCamera = (c: SavedCameraState, shift = shiftVec): SavedCameraState => ({
     ...c,
     position: shift(c.position),
@@ -752,12 +768,22 @@ export function rebaseSessionGeometry(
   // owning layer was placed on, and to the layer's own origin on the rest:
   // a layer placed in X/Y only kept its own Z. Its record says which, as
   // `sourceOrigin - sourceToProject`. The same holds in the reopened scene.
+  // With the owning layer not open, only a layer placed on all three axes is
+  // known to be in the project frame, and it moves by the change of project
+  // origin. Any other is not placed: there is no frame to put it in.
   const projectDeltaFor = (layerId: string | undefined): Vec3 | null => {
     if (!projectDelta || !session.projectFrame) return projectDelta;
     const rec = frameLayer(session.projectFrame, layerId);
-    const target = layerId ? targetOriginFor?.(layerId) ?? null : null;
-    if (!rec || !target) return projectDelta;
-    return [0, 1, 2].map((k) => rec.sourceOrigin[k]! - rec.sourceToProject[k]! - (target[k] ?? 0)) as Vec3;
+    if (!rec) return null;
+    const layerTarget = layerId ? target.layerOrigin?.(layerId) ?? null : null;
+    if (layerTarget) {
+      return [0, 1, 2].map((k) => rec.sourceOrigin[k]! - rec.sourceToProject[k]! - (layerTarget[k] ?? 0)) as Vec3;
+    }
+    const p = session.projectFrame.projectOrigin;
+    const placedOnAllAxes = [0, 1, 2].every(
+      (k) => Math.abs(rec.sourceToProject[k]! - (rec.sourceOrigin[k]! - p[k]!)) < 1e-9,
+    );
+    return placedOnAllAxes ? projectShift ?? projectDelta : null;
   };
   /** The delta to apply, null to leave in place, or 'refuse'. */
   const deltaFor = (owner: WorkOwnership | undefined): Vec3 | null | 'refuse' => {

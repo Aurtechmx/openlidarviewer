@@ -31,6 +31,7 @@ import type {
   DeclaredSpatialFacts,
   InspectionSession,
   RebasedSessionGeometry,
+  RebaseTarget,
   ScanFacts,
   ScanMatch,
   SessionLayerGroup,
@@ -83,7 +84,7 @@ export interface SessionModule {
   rebaseSessionGeometry: (
     session: InspectionSession,
     cloudOrigin: readonly [number, number, number],
-    targetOriginFor?: (layerId: string) => readonly number[] | null,
+    target?: RebaseTarget,
   ) => RebasedSessionGeometry;
   matchSessionToScan: (summary: SessionScanSummary | undefined, loaded: ScanFacts) => ScanMatch;
   detectSessionSpatialConflict: (
@@ -122,6 +123,8 @@ export interface SessionIoDeps {
   exportOrigin: () => readonly [number, number, number];
   /** The scene origin of the open layer with this stable id, or null when it is not open. */
   layerOrigin?: (layerId: string) => readonly [number, number, number] | null;
+  /** The live project origin, or null when no project frame is set. */
+  projectOrigin?: () => readonly [number, number, number] | null;
   /** Saved-view store: `restore` replaces the list, `names` feeds the Inspector. */
   bookmarks: Pick<ViewBookmarksService, 'restore' | 'names'>;
   /** Push the restored view names into the Inspector panel. */
@@ -308,7 +311,7 @@ export async function importSession(
       }
     }
     const geo = haveCloud
-      ? rebaseSessionGeometry(session, deps.exportOrigin(), deps.layerOrigin)
+      ? rebaseSessionGeometry(session, deps.exportOrigin(), { layerOrigin: deps.layerOrigin, projectOrigin: deps.projectOrigin?.() ?? null })
       : {
           measurements: session.measurements,
           annotations: session.annotations,

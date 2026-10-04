@@ -314,3 +314,44 @@ export function layerSceneOrigin(layerId: string, src: LayerOriginSources): [num
   const so = id ? src.sourceOrigin(id) : null;
   return id && so ? sceneOriginFor(src.projectOrigin, so, src.placement(id)) : null;
 }
+
+type V3 = readonly [number, number, number];
+
+/** What {@link sessionImportOrigins} reads from the running app. */
+export interface SessionImportSources {
+  frame(): { readonly projectOrigin: V3 } | null;
+  activeId(): string | null;
+  viewerIds(): readonly string[];
+  stableIdFor(viewerId: string): string | null;
+  cloud(viewerId: string): { readonly sourceOrigin?: V3 } | null | undefined;
+  placement(viewerId: string): { readonly vertical: boolean } | null;
+  /** The scene origin when no static scan is active. */
+  fallback(): V3;
+}
+
+/**
+ * The origins a session import rebases onto: the active layer's scene origin,
+ * each open layer's scene origin by stable id, and the project origin.
+ */
+export function sessionImportOrigins(src: SessionImportSources): {
+  exportOrigin: () => V3;
+  layerOrigin: (layerId: string) => V3 | null;
+  projectOrigin: () => V3 | null;
+} {
+  const layerSources = (): LayerOriginSources => ({
+    projectOrigin: src.frame()?.projectOrigin,
+    viewerIds: src.viewerIds(),
+    stableIdFor: src.stableIdFor,
+    sourceOrigin: (v) => src.cloud(v)?.sourceOrigin,
+    placement: src.placement,
+  });
+  return {
+    exportOrigin: () => {
+      const id = src.activeId();
+      const so = id ? src.cloud(id)?.sourceOrigin : null;
+      return id && so ? sceneOriginFor(src.frame()?.projectOrigin, so, src.placement(id)) : src.fallback();
+    },
+    layerOrigin: (layerId) => layerSceneOrigin(layerId, layerSources()),
+    projectOrigin: () => src.frame()?.projectOrigin ?? null,
+  };
+}
