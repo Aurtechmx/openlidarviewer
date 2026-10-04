@@ -1129,10 +1129,10 @@ async function renderVisuals(
   organisation: string | undefined,
 ): Promise<PageCursor> {
   // Section appears even when empty so the template's intended structure is
-  // visible — the placeholder tells the user what to do to fill it. Keep-
+  // visible; the placeholder names the panel that saves rasters. Keep-
   // with-next: the empty block reserves exactly heading + placeholder.
   const vPlaceholder =
-    'No visuals captured. Use Image export in the Inspector to add height / intensity / classification rasters.';
+    'No raster visuals in this report. Height, intensity and classification images can be saved from Image export in the Export / Convert panel.';
   cursor = ensureSpace(
     cursor,
     inputs.visuals.length === 0 ? sectionKeepTogetherSpace(vPlaceholder, body) : 60,
@@ -1385,7 +1385,7 @@ async function renderTechnicalNotes(
   // exactly heading + placeholder, and a short notes body reserves its
   // first line with the heading.
   const nPlaceholder =
-    'No technical notes provided. Pass a notes string when generating the report to fill this section.';
+    'No technical notes were recorded for this scan.';
   cursor = ensureSpace(
     cursor,
     inputs.technicalNotes ? 60 : sectionKeepTogetherSpace(nPlaceholder, body),
