@@ -19,7 +19,7 @@ const O = encodeExtendedClassificationFlags({ overlap: true });
 
 /** Eight points on a 2 × 2 metre footprint (area 4). */
 const POS = [0, 0, 0, 2, 0, 0, 0, 2, 0, 2, 2, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1, 2, 0];
-const METRE = { crs: { source: 'wkt' as const, name: 'm', linearUnit: 'metre' as const, linearUnitToMetres: 1, isGeographic: false } };
+const METRE = { crs: { source: 'wkt' as const, name: 'm', linearUnit: 'metre' as const, linearUnitToMetres: 1, verticalUnitToMetres: 1, isGeographic: false } };
 
 function cloud(over: Partial<ConstructorParameters<typeof PointCloud>[0]> = {}): PointCloud {
   return new PointCloud({
