@@ -360,10 +360,11 @@ export function flowPulseStats(outcome: FlowPulseResult): HTMLElement {
   ]);
 }
 
-/** Label and state for the flow-motion control; off and disabled under reduced motion. */
+/** Label and state for the flow-motion control: pressed while paused; pressed and disabled under reduced motion. */
 export function flowMotionControlState(reducedMotion: boolean, paused: boolean): { text: string; pressed: boolean; disabled: boolean } {
-  if (reducedMotion) return { text: 'Flow motion off (reduced motion)', pressed: false, disabled: true };
-  return { text: paused ? 'Play flow motion' : 'Pause flow motion', pressed: !paused, disabled: false };
+  // One stable label; aria-pressed carries the state (pressed = paused).
+  if (reducedMotion) return { text: 'Pause flow motion', pressed: true, disabled: true };
+  return { text: 'Pause flow motion', pressed: paused, disabled: false };
 }
 
 /**
@@ -802,11 +803,11 @@ function mountFlowPulseInteractive(
     const banner = flowTerrainBanner(input);
     const motion = el('button', {
       className: 'olv-flow-motion-toggle', type: 'button',
-      tip: 'Dots move along the flow directions, faster where more cells drain through.',
+      text: 'Pause flow motion',
+      tip: 'Dots move along the flow directions, faster where more cells drain through. Off when the system asks for reduced motion.',
     }) as HTMLButtonElement;
     const syncMotion = (): void => {
       const st = flowMotionControlState(prefersReducedMotion(), grid.particles.paused);
-      motion.textContent = st.text;
       motion.disabled = st.disabled;
       motion.setAttribute('aria-pressed', st.pressed ? 'true' : 'false');
     };
@@ -874,6 +875,7 @@ function mountFlowPulseInteractive(
     // `acquireFlowOverlay`, rather than constructing a second one that would
     // leave the first orphaned in the scene.
     dispose: () => {
+      grid.dispose();
       if (!overlayOn && persistentFlowOverlay) {
         persistentFlowOverlay.overlay.dispose();
         persistentFlowOverlay = null;

@@ -172,6 +172,7 @@ export class FlowResultGrid {
   private _pathOrder: ArrayLike<number> | null = null;
   private _pathFraction = 1;
   private _cancelDraw: () => void = () => {};
+  private _stopResize: () => void = () => {};
   private _shade: Float32Array | null = null;
   private _maxUpstream = 1;
   /** Moving marks along the D8 directions; see flowParticles.ts. */
@@ -199,11 +200,18 @@ export class FlowResultGrid {
     const stage = el('div', { className: 'olv-lab-stage' });
     stage.append(this._canvas, this.particles.canvas, northBadge());
     this.element.replaceChildren(stage, this._status);
-    onWidthChange(this._canvas, () => this._redraw());
+    this._stopResize = onWidthChange(this._canvas, () => this._redraw());
   }
 
   focus(): void {
     this._canvas.focus();
+  }
+
+  /** Release the particle loop, its observer and listeners, the resize observer, and stop any path draw-in. */
+  dispose(): void {
+    this._cancelDraw();
+    this._stopResize();
+    this.particles.dispose();
   }
 
   get cursor(): GridCell {

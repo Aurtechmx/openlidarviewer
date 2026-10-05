@@ -116,23 +116,43 @@ export class FlowParticles {
   private _paused = false;
   private _onScreen = true;
   private _count = 0;
+  private _disposed = false;
+  private readonly _observer: IntersectionObserver | null = null;
+  private readonly _motionQuery: MediaQueryList | null = null;
+  private readonly _onChange = (): void => this._sync();
 
   constructor() {
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'olv-lab-particles';
     this.canvas.setAttribute('aria-hidden', 'true');
     if (typeof IntersectionObserver === 'function') {
-      new IntersectionObserver((entries) => {
+      this._observer = new IntersectionObserver((entries) => {
         this._onScreen = entries.some((e) => e.isIntersecting);
         this._sync();
-      }).observe(this.canvas);
+      });
+      this._observer.observe(this.canvas);
     }
     if (typeof document.addEventListener === 'function') {
-      document.addEventListener('visibilitychange', () => this._sync());
+      document.addEventListener('visibilitychange', this._onChange);
     }
     if (typeof matchMedia === 'function') {
-      matchMedia('(prefers-reduced-motion: reduce)').addEventListener?.('change', () => this._sync());
+      this._motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
+      this._motionQuery.addEventListener?.('change', this._onChange);
     }
+  }
+
+  /** Stop the loop and release the observer, both listeners and the field arrays. Idempotent. */
+  dispose(): void {
+    if (this._disposed) return;
+    this._disposed = true;
+    if (this._raf && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this._raf);
+    this._raf = 0;
+    this._observer?.disconnect();
+    if (typeof document.removeEventListener === 'function') document.removeEventListener('visibilitychange', this._onChange);
+    this._motionQuery?.removeEventListener?.('change', this._onChange);
+    this._field = null;
+    this._cells = new Int32Array(0);
+    this._particles = [];
   }
 
   get running(): boolean {
@@ -145,6 +165,7 @@ export class FlowParticles {
 
   /** Load a routed field; starts motion when allowed. */
   load(field: FlowParticleField): void {
+    if (this._disposed) return;
     this._field = field;
     this._cells = spawnCells(field);
     this._rand = seededRandom(field.cols * 73856093 ^ field.rows * 19349663);
@@ -161,7 +182,7 @@ export class FlowParticles {
 
   /** True when motion is allowed right now. */
   private _allowed(): boolean {
-    return !!this._field && this._cells.length > 0 && !this._paused && this._onScreen
+    return !this._disposed && !!this._field && this._cells.length > 0 && !this._paused && this._onScreen
       && !prefersReducedMotion()
       && !(typeof document !== 'undefined' && document.visibilityState === 'hidden')
       && typeof requestAnimationFrame === 'function';

@@ -166,11 +166,11 @@ describe('flow particles', () => {
 });
 
 describe('flow motion control', () => {
-  it('is off and disabled under reduced motion, and offers pause and play otherwise', async () => {
+  it('keeps one label; aria-pressed means paused, and reduced motion shows it pressed and disabled', async () => {
     const lab = await import('../src/ui/fieldSimulation/flowPulseLab');
-    expect(lab.flowMotionControlState(true, false)).toEqual({ text: 'Flow motion off (reduced motion)', pressed: false, disabled: true });
-    expect(lab.flowMotionControlState(false, false).text).toBe('Pause flow motion');
-    expect(lab.flowMotionControlState(false, true)).toEqual({ text: 'Play flow motion', pressed: false, disabled: false });
+    expect(lab.flowMotionControlState(false, false)).toEqual({ text: 'Pause flow motion', pressed: false, disabled: false });
+    expect(lab.flowMotionControlState(false, true)).toEqual({ text: 'Pause flow motion', pressed: true, disabled: false });
+    expect(lab.flowMotionControlState(true, false)).toEqual({ text: 'Pause flow motion', pressed: true, disabled: true });
   });
 
   it('never starts the particle loop under reduced motion', () => {
