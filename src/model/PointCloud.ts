@@ -78,6 +78,16 @@ export interface CloudMetadata {
    * carried rather than assume the modern convention.
    */
   gpsTimeType?: 'adjusted-standard' | 'week';
+  /**
+   * The LAS header scale and offset the coordinates were stored with. Present
+   * only on a cloud whose positions are the file's own decoded values; a step
+   * that moves or merges points (voxel reduction) drops it. A LAS export keeps
+   * these when they can represent the data (`convert/lasQuantisation.ts`).
+   */
+  sourceQuantisation?: {
+    readonly scale: readonly [number, number, number];
+    readonly offset: readonly [number, number, number];
+  };
   /** Software that produced the file, e.g. the LAS Generating Software field. */
   sourceSoftware?: string;
   /**

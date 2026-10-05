@@ -18,16 +18,19 @@
  * for future COPC output.
  *
  * Both writers quantise coordinates as
- * `int32 = round((global - offset) / scale)`. The offset is the per-axis
- * floor of the data minimum and the scale is mm for projected data (0.001)
- * or ~1e-7° for geographic, so the integer grid stays well inside int32
- * range while preserving the source precision.
+ * `int32 = round((global - offset) / scale)`. By default the offset is the
+ * per-axis floor of the data minimum and the scale is mm for projected data
+ * (0.001) or ~1e-7° for geographic, so the integer grid stays well inside int32
+ * range while preserving the source precision. A caller may instead supply the
+ * source file's own scale and offset (`quantisation`), which are used when they
+ * are valid and every coordinate fits int32 under them.
  *
  * Pure data — no DOM. Returns the LAS file as bytes.
  */
 
 import type { GlobalPoints } from './globalPoints';
 import { globalBounds } from './globalPoints';
+import { isValidQuantisation, quantisationFitsInt32, type Quantisation } from './lasQuantisation';
 import { BUILD_IDENTITY, type BuildIdentity } from '../build/buildIdentity';
 import { SCAN_ANGLE_EXTENDED_UNIT_DEG } from '../io/lasDecodeShared';
 
@@ -69,6 +72,15 @@ export interface WriteLasOptions {
   readonly verticalUnitCode?: number | null;
   /** Quantisation scale per axis. Defaults: projected 0.001, geographic 1e-7. */
   readonly scale?: [number, number, number];
+  /**
+   * A scale and offset to write instead of deriving them, normally the source
+   * file's own. Used only when both are finite, every scale is positive and
+   * every coordinate quantises into int32 under them; otherwise the derived
+   * quantisation applies, so a bad value can never produce an overflowed file.
+   * Takes precedence over `scale`. See `planQuantisation` for when a caller
+   * may supply it.
+   */
+  readonly quantisation?: Quantisation;
   /**
    * Whether the written `gpsTime` is Adjusted Standard GPS Time (sets
    * global-encoding bit 0). Defaults to `true` — the convention of every modern
@@ -184,6 +196,7 @@ function deriveQuantisation(
   g: GlobalPoints,
   geo: boolean,
   wantScale?: [number, number, number],
+  supplied?: Quantisation,
 ): {
   min: [number, number, number];
   max: [number, number, number];
@@ -191,6 +204,9 @@ function deriveQuantisation(
   offset: [number, number, number];
 } {
   const { min, max } = globalBounds(g);
+  if (isValidQuantisation(supplied) && g.count > 0 && quantisationFitsInt32(min, max, supplied)) {
+    return snappedBounds(min, max, [...supplied.scale], [...supplied.offset]);
+  }
   const want = wantScale ?? (geo ? [1e-7, 1e-7, 0.001] : [0.001, 0.001, 0.001]);
   const scale: [number, number, number] = [0, 1, 2].map((a) => {
     const range = max[a] - min[a];
@@ -202,12 +218,28 @@ function deriveQuantisation(
     Math.floor(min[1]),
     Math.floor(min[2]),
   ];
-  // Header bounds must describe the file's CONTENT, i.e. the coordinates a
-  // reader reconstructs from the quantised int32 records — not the raw input
-  // doubles. Quantisation is monotone (round of a shifted/scaled value), so
-  // the extremes survive: snap min/max through the same round-trip the point
-  // records take. Raw doubles in the header made strict validators (lasinfo,
-  // PDAL) flag points "outside the header bounds" by up to half a scale step.
+  return snappedBounds(min, max, scale, offset);
+}
+
+/**
+ * Header bounds must describe the file's CONTENT, i.e. the coordinates a
+ * reader reconstructs from the quantised int32 records — not the raw input
+ * doubles. Quantisation is monotone (round of a shifted/scaled value), so
+ * the extremes survive: snap min/max through the same round-trip the point
+ * records take. Raw doubles in the header made strict validators (lasinfo,
+ * PDAL) flag points "outside the header bounds" by up to half a scale step.
+ */
+function snappedBounds(
+  min: [number, number, number],
+  max: [number, number, number],
+  scale: [number, number, number],
+  offset: [number, number, number],
+): {
+  min: [number, number, number];
+  max: [number, number, number];
+  scale: [number, number, number];
+  offset: [number, number, number];
+} {
   const snap = (v: number, a: number): number =>
     offset[a] + Math.round((v - offset[a]) / scale[a]) * scale[a];
   const qMin: [number, number, number] = [snap(min[0], 0), snap(min[1], 1), snap(min[2], 2)];
@@ -438,7 +470,7 @@ export function writeLas(g: GlobalPoints, opts: WriteLasOptions = {}): Uint8Arra
   const view = new DataView(buf);
   const bytes = new Uint8Array(buf);
 
-  const { min, max, scale, offset } = deriveQuantisation(g, geo, opts.scale);
+  const { min, max, scale, offset } = deriveQuantisation(g, geo, opts.scale, opts.quantisation);
 
   // ── Public Header Block ────────────────────────────────────────────────
   writeFixedString(bytes, 0, 4, 'LASF');
@@ -582,7 +614,7 @@ export function writeLas14(g: GlobalPoints, opts: WriteLas14Options = {}): Uint8
   const view = new DataView(buf);
   const bytes = new Uint8Array(buf);
 
-  const { min, max, scale, offset } = deriveQuantisation(g, geo, opts.scale);
+  const { min, max, scale, offset } = deriveQuantisation(g, geo, opts.scale, opts.quantisation);
 
   // ── Public Header Block (375 bytes) ────────────────────────────────────
   writeFixedString(bytes, 0, 4, 'LASF');

@@ -384,6 +384,8 @@ function textArea(las: Uint8Array): { text: string; label: string } | null {
   return null;
 }
 
+const QUANTISATION = 'Scale/offset: re-quantised (the source scale and offset are not recorded for this cloud).';
+
 describe('point re-save (convert)', () => {
   const BASIS = 'Point basis: full file (2 points)';
   const EDITS = 'Classes edited in app: no';
@@ -396,7 +398,7 @@ describe('point re-save (convert)', () => {
       const { file } = convertCloud(cloud(), { format, digests: D });
       const ta = textArea(file!.bytes);
       expect(ta?.label).toBe('OpenLiDARViewer provenance');
-      expect(ta?.text).toBe(`Source SHA-256: ${SHA}\n${ORIGIN_LINE}\n${BASIS}\n${EDITS}`);
+      expect(ta?.text).toBe(`Source SHA-256: ${SHA}\n${ORIGIN_LINE}\n${BASIS}\n${EDITS}\n${QUANTISATION}`);
     }
   });
 
@@ -407,14 +409,14 @@ describe('point re-save (convert)', () => {
     const asc = dec(convertCloud(cloud(), { format: 'asc', digests: D }).file!);
     expect(asc).toContain(`# Source SHA-256: ${SHA}\n# ${ORIGIN_LINE}\n# ${BASIS}\n# ${EDITS}\n# columns:`);
     const plain = convertCloud(cloud(), { format: 'las' }).file!.bytes;
-    expect(textArea(plain)?.text).toBe(`${BASIS}\n${EDITS}`);
+    expect(textArea(plain)?.text).toBe(`${BASIS}\n${EDITS}\n${QUANTISATION}`);
     expect(dec(convertCloud(cloud(), { format: 'xyz' }).file!)).not.toContain('SHA-256');
   });
 
   it('a clipped export states the clip after the digests', () => {
     const note = 'Clipped: 2 of 5 points';
     const las = convertCloud(cloud(), { format: 'las', digests: D, scopeNote: note }).file!;
-    expect(textArea(las.bytes)?.text).toBe(`Source SHA-256: ${SHA}\n${ORIGIN_LINE}\n${BASIS}\n${note}\n${EDITS}`);
+    expect(textArea(las.bytes)?.text).toBe(`Source SHA-256: ${SHA}\n${ORIGIN_LINE}\n${BASIS}\n${note}\n${EDITS}\n${QUANTISATION}`);
     const xyz = new TextDecoder().decode(convertCloud(cloud(), { format: 'xyz', scopeNote: note }).file!.bytes);
     expect(xyz).toContain(`# ${BASIS}\n# ${note}\n# ${EDITS}\n`);
   });

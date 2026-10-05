@@ -1,6 +1,7 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { dropDenseGridPly, showWorkspaceMode } from './helpers';
+import { buildSourceLas, parseLasRecords, spreadRecords } from '../helpers/sourceLasQuantisation';
 
 /**
  * In-project Export / Convert panel — converts the open cloud to another
@@ -217,3 +218,34 @@ test('Export panel: a scan with no classification shows no wrap checkbox for any
   await panel.locator('.olv-bc-pill', { hasText: 'LAS 1.2' }).click();
   await expect(optIn).toBeHidden();
 });
+
+/**
+ * A source LAS with a 1 cm scale and its own offset exports from the panel with
+ * the same scale, offset and integer records. The source is built byte by byte
+ * outside the app, so the comparison is against the source's integers.
+ */
+for (const pill of ['LAS 1.4', 'LAS 1.2']) {
+  test(`Export panel: ${pill} keeps the source scale, offset and integer records`, async ({ page }) => {
+    const scale: [number, number, number] = [0.01, 0.01, 0.01];
+    const offset: [number, number, number] = [500000, 4100000, 100];
+    const records = spreadRecords(500, 200, scale);
+    const source = new Uint8Array(buildSourceLas({ version: '1.4', scale, offset, records }));
+
+    const panel = await openExportPanel(page, (p) => dropLasBytes(p, source, 'cm-scale.las'));
+    await expect(panel.getByRole('checkbox', { name: 'Include classification' })).toBeVisible({ timeout: 20_000 });
+    await panel.locator('.olv-bc-pill', { hasText: pill }).click();
+
+    const downloadPromise = page.waitForEvent('download');
+    await panel.locator('.olv-bc-convert').click();
+    const download = await downloadPromise;
+    const path = await download.path();
+    if (!path) throw new Error('download produced no local path');
+
+    const out = parseLasRecords(new Uint8Array(readFileSync(path)));
+    expect(out.scale).toEqual(scale);
+    expect(out.offset).toEqual(offset);
+    expect(out.count).toBe(records.length);
+    expect(Array.from(out.records)).toEqual(records.flat());
+    expect(out.vlrText).toContain('Scale/offset: kept from source');
+  });
+}

@@ -179,7 +179,7 @@ describe('exact datum reproject — the deliverable stays byte-clean (no false c
     expect(report.ok).toBe(true);
     expect(report.crsNote).not.toMatch(/APPROXIMATE/);
     // Only the provenance lines every converted file carries; no caveat.
-    expect(textAreaDescription(file!.bytes)).toBe('Point basis: full file (3 points)\nClasses edited in app: no');
+    expect(textAreaDescription(file!.bytes)).toBe('Point basis: full file (3 points)\nClasses edited in app: no\nScale/offset: re-quantised (the source scale and offset are not recorded for this cloud).');
   });
 
   it('LAS 1.2: a clean reproject adds no caveat VLR (GeoKey plus the provenance VLR)', () => {
@@ -189,7 +189,7 @@ describe('exact datum reproject — the deliverable stays byte-clean (no false c
     );
     // Geographic CRS ⇒ one GeoKey VLR plus the provenance Text Area, which holds no caveat.
     expect(vlrCount(file!.bytes)).toBe(2);
-    expect(textAreaDescription(file!.bytes)).toBe('Point basis: full file (3 points)\nClasses edited in app: no');
+    expect(textAreaDescription(file!.bytes)).toBe('Point basis: full file (3 points)\nClasses edited in app: no\nScale/offset: re-quantised (the source scale and offset are not recorded for this cloud).');
   });
 
   it('ASC: no datum-transform comment on a clean reproject', () => {

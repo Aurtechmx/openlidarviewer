@@ -169,7 +169,8 @@ export function emitVoxelCloud(cloud: PointCloud, out: number, acc: VoxelSums): 
     declaredPointCount: cloud.declaredPointCount,
     decodedPointCount: cloud.decodedPointCount,
     loadStride: cloud.loadStride,
-    metadata: cloud.metadata,
+    // Centroids are not the file's stored values, so the source quantisation does not describe them.
+    metadata: withoutSourceQuantisation(cloud.metadata),
     organizedRange: cloud.organizedRange
       ? withLinkageUnavailable(cloud.organizedRange, 'voxel-centroids')
       : undefined,
@@ -473,4 +474,11 @@ export function downsampleToBudgetReport(cloud: PointCloud, maxPoints: number): 
     }
   }
   return { cloud: reduced, passes, voxelSize: size };
+}
+
+/** `metadata` without the source quantisation, which only the file's own coordinates satisfy. */
+function withoutSourceQuantisation(metadata: PointCloud['metadata']): PointCloud['metadata'] {
+  if (!metadata?.sourceQuantisation) return metadata;
+  const { sourceQuantisation: _dropped, ...rest } = metadata;
+  return rest;
 }
