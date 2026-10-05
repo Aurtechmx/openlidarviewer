@@ -122,9 +122,15 @@ export function drawIn(ms: number, reduced: boolean, frame: (fraction: number) =
   let raf = 0;
   const t0 = performance.now();
   const tick = (now: number): void => {
-    const k = Math.min(1, (now - t0) / ms);
-    frame(1 - (1 - k) ** 3);
-    if (k < 1) raf = requestAnimationFrame(tick);
+    const elapsed = now - t0;
+    if (elapsed >= ms) {
+      // Exactly 1 at the end, so a finished route is complete on every engine.
+      frame(1);
+      return;
+    }
+    const k = Math.max(0, elapsed / ms);
+    frame(Math.min(1, 1 - (1 - k) ** 3));
+    raf = requestAnimationFrame(tick);
   };
   raf = requestAnimationFrame(tick);
   return () => cancelAnimationFrame(raf);
