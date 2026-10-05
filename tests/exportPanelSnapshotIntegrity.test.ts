@@ -575,11 +575,19 @@ describe('ExportPanel — display-sample export says it is a sample', () => {
   it('a full-resolution export carries no sample record', async () => {
     const { ExportPanel } = await import('../src/ui/ExportPanel');
     const cloud = reducedCloud();
+    // The re-decode reads every declared point.
+    const full = new PointCloud({
+      positions: new Float32Array(21),
+      origin: [0, 0, 0],
+      sourceFormat: 'las',
+      name: 'scan.las',
+      declaredPointCount: 7,
+    });
     const panel = new ExportPanel({
       getCloud: () => cloud,
       hasFullSource: () => true,
       isReduced: () => true,
-      getFullCloud: async () => cloud,
+      getFullCloud: async () => full,
       getActiveScanId: () => 'scan-a',
     });
     const root = panel.element as unknown as FakeEl;

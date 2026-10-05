@@ -33,7 +33,7 @@ import type { PointCloud } from '../model/PointCloud';
 import { gzipConvertedFile, gzipAvailable } from '../convert/gzip';
 import { buildExportSummary, displaySampleOf, displaySampleStatus, type ClassificationProvenance, type ExportSummaryInput } from '../export/exportSummary';
 import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
-import { layerFacts, type FullFileLayerFacts } from '../app/fullFileActions';
+import { fullDecodeRefusal, layerFacts, type FullFileLayerFacts } from '../app/fullFileActions';
 import { pointBasisOfCloud } from '../export/exportProvenanceLines';
 import {
   classificationDiffersFromSource,
@@ -1320,6 +1320,12 @@ export class ExportPanel {
       const sourceCloud = useFull ? await this._cb.getFullCloud() : this._cb.getCloud();
       if (!sourceCloud) {
         this._setStatus('Could not read the source at full resolution.', 'error');
+        return;
+      }
+      // A re-decode that had to stride is a sample: never written as the full file.
+      const shortfall = useFull ? fullDecodeRefusal(sourceCloud) : null;
+      if (shortfall) {
+        this._setStatus(shortfall, 'error');
         return;
       }
       // The decode is over — prove the export still describes what was asked for

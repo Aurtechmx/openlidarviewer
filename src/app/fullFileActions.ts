@@ -15,7 +15,14 @@
  */
 
 import './fullFileActions.css';
-import { estimateMemoryBytes, memoryCeilingBytes, planLoad, type PointAttributes } from '../io/loadPlan';
+import {
+  E57_COLUMN_BYTES,
+  E57_DECODE_CEILING_BYTES,
+  estimateMemoryBytes,
+  memoryCeilingBytes,
+  planLoad,
+  type PointAttributes,
+} from '../io/loadPlan';
 import { GPU_HARD_POINT_CEILING, deviceTier, type DeviceTier } from '../render/deviceProfile';
 import { evaluateFullResClassExport } from '../export/fullResClassGuard';
 import { compactPointCount } from '../terrain/datasetIntelligence';
@@ -56,6 +63,8 @@ export interface FullFileLayerFacts {
   readonly findings?: number;
   /** The shown compare difference was computed on the layer; a reload clears it. */
   readonly inCompare?: boolean;
+  /** E57 only: the decode planner's full-file estimate, when the load recorded it. */
+  readonly e57FullDecodeEstimateBytes?: number;
 }
 
 export interface FullFileDevice {
@@ -94,15 +103,80 @@ export function fullFileLabel(declared: number): string {
   return `Export all ${compactPointCount(declared)} points`;
 }
 
+/**
+ * Float64 columns the E57 decode materialises per record for these
+ * attributes: xyz, then colour, intensity, classification and normals. Used
+ * only when the load did not record the planner's own estimate.
+ */
+export function e57DecodeBytesFromAttributes(a: PointAttributes): number {
+  let columns = 3;
+  if (a.hasColor) columns += 3;
+  if (a.hasIntensity) columns += 1;
+  if (a.hasClassification) columns += 1;
+  if (a.hasNormals) columns += 3;
+  return columns * E57_COLUMN_BYTES;
+}
+
+/**
+ * Bytes a re-decode of every point needs. For E57 this is the decode planner's
+ * figure (`planE57Decode`), which counts the Float64 decode columns and the
+ * structured-grid buffers; the generic estimate leaves both out.
+ */
+export function fullFileEstimateBytes(f: FullFileLayerFacts, declared: number): number {
+  if (f.format === 'e57' && f.e57FullDecodeEstimateBytes !== undefined && f.e57FullDecodeEstimateBytes > 0) {
+    return f.e57FullDecodeEstimateBytes;
+  }
+  return estimateMemoryBytes({
+    pointCount: declared,
+    attributes: f.attributes,
+    fileBytes: f.fileBytes,
+    format: f.format,
+    ...(f.format === 'e57' ? { decodeBytesPerPoint: e57DecodeBytesFromAttributes(f.attributes) } : {}),
+  });
+}
+
+/** The ceiling a full re-decode is judged against: E57 is also held to the whole-file decode cap. */
+export function fullFileCeilingBytes(format: SourceFormat, device: FullFileDevice): number {
+  const deviceCeiling = memoryCeilingBytes(device.deviceMemoryGB, device.isMobile);
+  return format === 'e57' ? Math.min(deviceCeiling, E57_DECODE_CEILING_BYTES) : deviceCeiling;
+}
+
+/**
+ * The refusal for a full-resolution re-decode that did not read every point,
+ * or null when it did. Three shortfalls count: a strided decode, a file that
+ * ended before its declared count (`metadata.truncation`), and a decode that
+ * holds fewer points than it declares. Such a cloud is never written or
+ * labelled as the full file.
+ */
+export function fullDecodeRefusal(cloud: {
+  readonly pointCount: number;
+  readonly loadStride?: number;
+  readonly declaredPointCount?: number;
+  readonly metadata?: { readonly truncation?: { readonly read: number; readonly declared: number } } | null;
+}): string | null {
+  const stride = cloud.loadStride ?? 1;
+  if (stride > 1) {
+    const of = cloud.declaredPointCount !== undefined ? ` of ${compactPointCount(cloud.declaredPointCount)}` : '';
+    return `The full-resolution re-decode read ${compactPointCount(cloud.pointCount)}${of} points (one record in ${stride}) to fit memory, so nothing was exported.`;
+  }
+  const t = cloud.metadata?.truncation;
+  if (t && t.read < t.declared) {
+    return `The source file ends after ${compactPointCount(t.read)} of its ${compactPointCount(t.declared)} declared points, so nothing was exported as the full file.`;
+  }
+  const declared = cloud.declaredPointCount;
+  if (declared !== undefined && cloud.pointCount < declared) {
+    return `The full-resolution re-decode read ${compactPointCount(cloud.pointCount)} of ${compactPointCount(declared)} declared points, so nothing was exported as the full file.`;
+  }
+  return null;
+}
+
 /** Whether, and how, a layer may export every point in its file. */
 export function assessFullFile(f: FullFileLayerFacts | null, device: FullFileDevice): FullFileAvailability {
   if (!f || !f.hasSource || !f.reduced || f.truncated) return HIDDEN;
   if (f.declared === null || !(f.declared > f.resident)) return HIDDEN;
   const declared = f.declared;
-  const estimateBytes = estimateMemoryBytes({
-    pointCount: declared, attributes: f.attributes, fileBytes: f.fileBytes, format: f.format,
-  });
-  const ceilingBytes = memoryCeilingBytes(device.deviceMemoryGB, device.isMobile);
+  const estimateBytes = fullFileEstimateBytes(f, declared);
+  const ceilingBytes = fullFileCeilingBytes(f.format, device);
   const memoryEstimated = device.deviceMemoryGB === undefined;
   const base = {
     show: true,
@@ -209,7 +283,10 @@ export function layerFacts(input: {
     readonly sourceFormat: SourceFormat;
     readonly colors?: unknown; readonly intensity?: unknown; readonly classification?: unknown;
     readonly normals?: unknown; readonly gpsTime?: unknown; readonly returnNumber?: unknown;
-    readonly metadata?: { readonly truncation?: { readonly read: number; readonly declared: number } } | null;
+    readonly metadata?: {
+      readonly truncation?: { readonly read: number; readonly declared: number };
+      readonly e57FullDecodeEstimateBytes?: number;
+    } | null;
   };
   readonly file: { readonly size: number } | null;
   readonly reduced: boolean;
@@ -240,6 +317,9 @@ export function layerFacts(input: {
     includeClassification: input.includeClassification,
     findings: input.findings ?? 0,
     inCompare: input.inCompare ?? false,
+    ...(c.metadata?.e57FullDecodeEstimateBytes !== undefined
+      ? { e57FullDecodeEstimateBytes: c.metadata.e57FullDecodeEstimateBytes }
+      : {}),
   };
 }
 
