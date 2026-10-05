@@ -42,6 +42,7 @@ import type { Vec3 } from '../navMath';
 import type { LayerSpatialTransform } from '../../geo/ProjectSpatialFrame';
 import { accumulatorOffset, placeBufferInto } from '../layerPlacement';
 import { isWithheld } from '../../science/withheldPolicy';
+import { alignedClasses, isNoiseClass } from '../../terrain/ground/classificationFilter';
 import {
   type PolygonValidity,
   validatePolygon,
@@ -58,6 +59,12 @@ export interface PlacedVolumeBuffer {
    * Withheld; every point is then read and the exclusion count is unknown.
    */
   readonly flags?: Uint8Array | null;
+  /**
+   * The source's ASPRS classification codes, one per point. Noise classes 7
+   * and 18 are left out of the integration. Absent or misaligned: every
+   * non-Withheld point is read, as for an unclassified file.
+   */
+  readonly classification?: ArrayLike<number> | null;
 }
 
 /** The project-frame buffers a polygon cut/fill walk reads, split by the Withheld flag. */
@@ -66,6 +73,8 @@ export interface AssembledVolumePositions {
   readonly positions: Float32Array;
   /** Points flagged Withheld, left out of the integration and kept only to be counted. */
   readonly withheldPositions: Float32Array;
+  /** Points in a noise class (7, 18) and not Withheld, left out and kept only to be counted. */
+  readonly noisePositions: Float32Array;
   /** False when a contributing source had no flags channel lined up with its points. */
   readonly everySourceFlagged: boolean;
 }
@@ -89,39 +98,55 @@ export function assembleVolumePositions(
 ): AssembledVolumePositions {
   let everySourceFlagged = true;
   let withheldTotal = 0;
-  const aligned: Array<Uint8Array | null> = buffers.map(({ pos, flags }) => {
+  let noiseTotal = 0;
+  const aligned = buffers.map(({ pos, flags, classification }) => {
     const n = pos.length / 3;
-    if (!flags || flags.length !== n) {
-      everySourceFlagged = false;
-      return null;
-    }
+    const f = flags && flags.length === n ? flags : undefined;
+    if (!f) everySourceFlagged = false;
+    const c = alignedClasses(classification, n);
     let w = 0;
-    for (let i = 0; i < n; i++) if (isWithheld(flags[i])) w++;
+    let z = 0;
+    for (let i = 0; i < n; i++) {
+      if (f && isWithheld(f[i])) w++;
+      else if (c && isNoiseClass(c[i])) z++;
+    }
     withheldTotal += w;
-    return w > 0 ? flags : null;
+    noiseTotal += z;
+    return { f: w > 0 ? f : undefined, c: z > 0 ? c : undefined };
   });
-  const positions = new Float32Array(total - withheldTotal * 3);
+  const positions = new Float32Array(total - (withheldTotal + noiseTotal) * 3);
   const withheldPositions = new Float32Array(withheldTotal * 3);
+  const noisePositions = new Float32Array(noiseTotal * 3);
   let off = 0;
   let wOff = 0;
+  let nOff = 0;
   buffers.forEach(({ pos, placement }, b) => {
-    const flags = aligned[b];
-    if (!flags) {
+    const { f, c } = aligned[b];
+    if (!f && !c) {
       off = placeBufferInto(positions, off, pos, placement);
       return;
     }
     const [dx, dy, dz] = accumulatorOffset(placement);
     for (let i = 0, k = 0; k < pos.length; i++, k += 3) {
-      const dest = isWithheld(flags[i]) ? withheldPositions : positions;
-      const o = dest === positions ? off : wOff;
+      let dest = positions;
+      let o = off;
+      if (f && isWithheld(f[i])) {
+        dest = withheldPositions;
+        o = wOff;
+        wOff += 3;
+      } else if (c && isNoiseClass(c[i])) {
+        dest = noisePositions;
+        o = nOff;
+        nOff += 3;
+      } else {
+        off += 3;
+      }
       dest[o] = pos[k] + dx;
       dest[o + 1] = pos[k + 1] + dy;
       dest[o + 2] = pos[k + 2] + dz;
-      if (dest === positions) off += 3;
-      else wOff += 3;
     }
   });
-  return { positions, withheldPositions, everySourceFlagged };
+  return { positions, withheldPositions, noisePositions, everySourceFlagged };
 }
 
 // ── tiny vector helpers (duplicated module-local for the leaf contract) ────

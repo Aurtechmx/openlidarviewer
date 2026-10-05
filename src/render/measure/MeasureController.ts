@@ -12,6 +12,7 @@
  * the pure, unit-tested `geometry.ts` / `format.ts`.
  */
 
+import { noiseExcludedClause } from '../../terrain/ground/classificationFilter';
 import type * as THREE from 'three/webgpu';
 import { el } from '../../ui/dom';
 import {
@@ -2080,7 +2081,8 @@ export class MeasureController {
         const net = this._fmtCutFill(Math.abs(v.net));
         const netSign = v.net < 0 ? 'cut' : 'fill';
         const preview = v.gridAuthority === 'preview' ? ' · PREVIEW' : '';
-        return `${area} · +${fill} fill · −${cut} cut · net ${net} ${netSign}${preview}`;
+        const noise = noiseExcludedClause(v.withheld?.noiseExcluded);
+        return `${area} · +${fill} fill · −${cut} cut · net ${net} ${netSign}${preview}${noise ? ` · ${noise}` : ''}`;
       }
     }
   }

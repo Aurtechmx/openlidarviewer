@@ -183,7 +183,7 @@ import {
   createProfileSectionSeam,
   type ProfileSectionSeam,
 } from './measure/profileSectionSeam';
-import { samplePolygonVolume, POINT_SAMPLE_VOLUME_METHOD, type PlacedVolumeBuffer, type VolumeResult } from './measure/polygonVolumeSample';
+import { gatherVolumeBuffers, samplePolygonVolume, POINT_SAMPLE_VOLUME_METHOD, type VolumeResult } from './measure/polygonVolumeSample';
 import {
   integrableClouds, integrableEntries, streamingMayCombine, producerClassifiesGround,
   analysisClassification,
@@ -1148,27 +1148,15 @@ export class Viewer {
     });
     this._measure.setProfileSampler((a, b, opts) => this.profileSeam.sampleSeries(a, b, opts));
     // Volume sampler: visible, unlocked clouds plus resident streaming nodes,
-    // with their flags so Withheld points stay out (`polygonVolumeSample.ts`).
+    // with their flags and classes so Withheld and noise points stay out.
     // `up` is the configured world up, matching `autoReferenceZ` (v0.4.4 B1).
     this._measure.setVolumeSampler(
       (polygon, referenceZ): { record: VolumeRecord; residentOnly: boolean } | null => {
-        const buffers: PlacedVolumeBuffer[] = [];
-        let total = 0;
-        let streamingPoints = 0;
-        for (const { cloud, placement } of integrableClouds(this._clouds.values())) {
-          if (cloud.positions && cloud.positions.length > 0) {
-            buffers.push({ pos: cloud.positions, placement, flags: cloud.classificationFlags });
-            total += cloud.positions.length;
-          }
-        }
-        const streamOk = this._streamingMayCombine(buffers.length);
-        for (const { decoded } of streamOk ? this._streamingPickData.values() : []) {
-          if (decoded.positions && decoded.positions.length > 0) {
-            buffers.push({ pos: decoded.positions, flags: decoded.classificationFlags });
-            total += decoded.positions.length;
-            streamingPoints += decoded.positions.length;
-          }
-        }
+        const { buffers, total, streamingPoints } = gatherVolumeBuffers(
+          integrableClouds(this._clouds.values()),
+          (n) => (this._streamingMayCombine(n) ? [...this._streamingPickData.values()].map((e) => e.decoded) : []),
+          (cloud) => this._cloudWasReduced(cloud),
+        );
         if (total === 0) return null;
         const up: Vec3 = [this._worldUp.x, this._worldUp.y, this._worldUp.z];
         // Resident-only whenever streaming bytes were in the walk (audit #8).

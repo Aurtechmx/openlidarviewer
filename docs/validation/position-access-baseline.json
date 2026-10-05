@@ -1,5 +1,5 @@
 {
-  "total": 175,
+  "total": 168,
   "files": {
     "src/app/classifyActions.ts": 1,
     "src/app/epochFramePrep.ts": 2,
@@ -36,7 +36,7 @@
     "src/model/pointFrames.ts": 2,
     "src/render/ContourOverlay.ts": 1,
     "src/render/InspectTool.ts": 1,
-    "src/render/Viewer.ts": 37,
+    "src/render/Viewer.ts": 28,
     "src/render/class/deriveClassificationWorker.ts": 1,
     "src/render/densityColors.ts": 1,
     "src/render/densityPointSize.ts": 1,
@@ -46,7 +46,7 @@
     "src/render/measure/classificationEditor.ts": 1,
     "src/render/measure/lassoVolume.ts": 11,
     "src/render/measure/lassoVolumeCompute.ts": 4,
-    "src/render/measure/polygonVolumeSample.ts": 1,
+    "src/render/measure/polygonVolumeSample.ts": 3,
     "src/render/measure/profileSampler.ts": 1,
     "src/render/measure/profileSectionSeam.ts": 3,
     "src/render/measure/snap.ts": 2,
