@@ -15,7 +15,7 @@ import { verifyReportFileWithSignature } from '../src/export/verifyReport';
 
 function backend(): SigningKeyBackend {
   let rec: StoredSigningKey | null = null;
-  return { load: async () => rec, save: async (r) => { rec = r; }, clear: async () => { rec = null; } };
+  return { load: async () => rec, add: async (r) => { if (rec) return false; rec = r; return true; }, clear: async () => { rec = null; } };
 }
 
 function setup(b: SigningKeyBackend | null) {
@@ -83,7 +83,8 @@ describe('signing in the report exports', () => {
     const s = setup(backend());
     await exportMeasurementIntegrityReport(s.deps);
     expect(s.files).toHaveLength(0);
-    expect(s.refusals[0]).toMatch(/could not be signed/i);
+    expect(s.refusals[0]).toMatch(/no signing key exists in this browser/i);
+    expect(s.refusals[0]).not.toMatch(/webcrypto/i);
   });
 
   it('refuses when the signing function is unavailable', async () => {

@@ -18,6 +18,8 @@ import {
   publicKeyThumbprint,
   signReportManifest,
   trustedKeyIdFrom,
+  hasRepeatedMemberName,
+  SigningError,
   verifyReportSignature,
   type SigningKey,
 } from '../src/export/reportSignature';
@@ -38,7 +40,7 @@ function memoryBackend(): SigningKeyBackend & { rec: StoredSigningKey | null } {
   const b = {
     rec: null as StoredSigningKey | null,
     async load() { return b.rec; },
-    async save(r: StoredSigningKey) { b.rec = r; },
+    async add(r: StoredSigningKey) { if (b.rec) return false; b.rec = r; return true; },
     async clear() { b.rec = null; },
   };
   return b;
@@ -82,7 +84,8 @@ describe('sign and verify', () => {
     expect(v.signatureValid).toBe(true);
     expect(v.keyId).toBe(key.keyId);
     expect(v.signerLabelUnverified).toBe('A. Surveyor');
-    expect(v.reason).toMatch(/unverified/i);
+    expect(v.reason).toMatch(/^Anyone can produce this with their own key/);
+    expect(v.reason).toMatch(/not who holds that key/);
     expect(v.reason).not.toMatch(/trusted/i);
     expect(m.reportSignature.algorithm).toBe(REPORT_SIGNATURE_ALGORITHM);
   });
@@ -297,7 +300,7 @@ describe('key handling', () => {
   });
 
   it('signReportText refuses when no key exists', async () => {
-    await expect(signReportText('{"digest":"x"}', OPTS, memoryBackend())).rejects.toThrow(/No signing key/);
+    await expect(signReportText('{"digest":"x"}', OPTS, memoryBackend())).rejects.toThrow(/no signing key/i);
   });
 
   it('signReportText signs the exported text', async () => {
@@ -330,5 +333,123 @@ describe('no private key material in any export', () => {
     let message = '';
     try { await signReportText('not json', OPTS, b); } catch (e) { message = String((e as Error).message); }
     expect(message).not.toMatch(/"d"|privateKey/i);
+  });
+});
+
+// ── findings from review: forms of one signed report that must not verify ──
+
+describe('only the signed report verifies, not other spellings of its signature or members', () => {
+  const textOf = async (pretty = false) => JSON.stringify(await signed(), null, pretty ? 2 : 0);
+  const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+  it('still verifies the same values written with other whitespace, key order, escapes and number spellings', async () => {
+    const parsed = JSON.parse(await textOf()) as Record<string, unknown>;
+    const reversed = JSON.stringify(Object.fromEntries(Object.entries(parsed).reverse()), null, 4);
+    expect((await verifyReportFileWithSignature(reversed)).valid).toBe(true);
+    const spelled = (await textOf()).replace('4200000', '4.2e6').replace('1254', '1254.0').replace('"site-a"', '"\\u0073ite-a"');
+    expect(spelled).toContain('4.2e6');
+    expect((await verifyReportFileWithSignature(spelled)).valid).toBe(true);
+  });
+
+  it('rejects a signature whose last base64url character has other spare bits', async () => {
+    const m = JSON.parse(await textOf());
+    const sig: string = m.reportSignature.signature;
+    const i = B64.indexOf(sig[sig.length - 1]!);
+    // The last character carries 2 data bits and 4 spare bits; change only the spare bits.
+    const alt = B64[(i & 0b110000) | ((i + 1) & 0b001111)]!;
+    expect(alt).not.toBe(sig[sig.length - 1]);
+    m.reportSignature.signature = sig.slice(0, -1) + alt;
+    const v = await verifyReportSignature(m, canonicalize);
+    expect(v.signatureValid).toBe(false);
+    expect(v.reason).toMatch(/canonical/i);
+  });
+
+  it('rejects the high-s form (r, n - s) of a valid signature', async () => {
+    const m = JSON.parse(await textOf());
+    const raw = Uint8Array.from(atob(m.reportSignature.signature.replace(/-/g, '+').replace(/_/g, '/') + '=='), (c) => c.charCodeAt(0));
+    const N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+    let sv = 0n;
+    for (const x of raw.subarray(32)) sv = (sv << 8n) | BigInt(x);
+    expect(sv <= N >> 1n).toBe(true); // the signer made low-s
+    const high = new Uint8Array(raw);
+    let f = N - sv;
+    for (let k = 63; k >= 32; k--) { high[k] = Number(f & 0xffn); f >>= 8n; }
+    let bin = ''; for (const x of high) bin += String.fromCharCode(x);
+    m.reportSignature.signature = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const v = await verifyReportSignature(m, canonicalize);
+    expect(v.signatureValid).toBe(false);
+    expect(v.reason).toMatch(/low-s/i);
+  });
+
+  it('rejects an extra member inside the embedded public key', async () => {
+    const m = JSON.parse(await textOf());
+    m.reportSignature.publicKey.ext = true;
+    expect((await verifyReportSignature(m, canonicalize)).signatureValid).toBe(false);
+    const k = JSON.parse(await textOf());
+    k.reportSignature.publicKey.key_ops = ['verify'];
+    expect((await verifyReportSignature(k, canonicalize)).status).toBe('malformed');
+  });
+
+  it('rejects a repeated member name at the top level, in the block and nested', async () => {
+    const t = await textOf();
+    const fake = '"findings":[{"label":"Stockpile volume","value":9999,"unit":"m³"}],';
+    // JSON.parse keeps the last copy, so a parse-based check shows the real figures as Signed.
+    const first = '{' + fake + t.slice(1);
+    expect(JSON.parse(first).findings[0].value).toBe(1254);
+    for (const text of [
+      first,
+      t.replace('"reportSignature":{', '"reportSignature":{"signerLabel":"Other",'),
+      t.replace('"dataset":{', '"dataset":{"id":"fake",'),
+    ]) {
+      const r = await verifyReportFileWithSignature(text);
+      expect(r.valid).toBe(false);
+      expect(r.signature?.status).toBe('malformed');
+      expect(r.reason).toMatch(/repeat/i);
+    }
+  });
+
+  it('finds repeats at any depth, ignores names inside strings and values, and survives deep nesting', () => {
+    expect(hasRepeatedMemberName('{"a":1,"a":2}')).toBe(true);
+    expect(hasRepeatedMemberName('{"a":{"b":1,"b":2}}')).toBe(true);
+    expect(hasRepeatedMemberName('{"a":[{"b":1},{"b":2}]}')).toBe(false);
+    expect(hasRepeatedMemberName('{"a":"\\"a\\":1","b":"a"}')).toBe(false);
+    expect(hasRepeatedMemberName('{"a":1,"\\u0061":2}')).toBe(true);
+    expect(hasRepeatedMemberName('['.repeat(30_000) + ']'.repeat(30_000))).toBe(false);
+  });
+
+  it('rejects a signed time that is not a UTC timestamp and shows the time normalised', async () => {
+    const m = JSON.parse(await textOf());
+    m.reportSignature.signedAt = '1';
+    expect((await verifyReportSignature(m, canonicalize)).status).toBe('malformed');
+    expect((await verifyReportSignature(JSON.parse(await textOf()), canonicalize)).signedAtClaim).toBe(OPTS.signedAt);
+  });
+
+  it('strips bidi and zero-width characters from a label', () => {
+    expect(cleanSignerLabel('a\u202Eb\u200Bc\u2066d')).toBe('a b c d');
+  });
+});
+
+describe('a hostile report is a result, not an exception', () => {
+  it('returns a clear result for 1e999 and for deep nesting', async () => {
+    const inf = '{"digest":"x","digestAlgorithm":"SHA-256","findings":[{"value":1e999}]}';
+    const deep = '{"digest":"x","digestAlgorithm":"SHA-256","findings":[' + '['.repeat(30_000) + ']'.repeat(30_000) + ']}';
+    for (const text of [inf, deep]) {
+      const r = await verifyReportFileWithSignature(text);
+      expect(r.valid).toBe(false);
+      expect(r.reason.length).toBeGreaterThan(10);
+    }
+    expect((await verifyReportFileWithSignature(inf)).reason).toMatch(/cannot be checked/i);
+  });
+});
+
+describe('creating the key', () => {
+  it('ends with one key when two tabs create at once', async () => {
+    const b = memoryBackend();
+    const [a, c] = await Promise.all([createSigningKey('t', b), createSigningKey('t', b)]);
+    expect(a.keyId).toBe(c.keyId);
+    expect((await loadSigningKey(b))?.keyId).toBe(a.keyId);
+  });
+  it('says the cause when no key exists', async () => {
+    await expect(signReportText('{"digest":"x"}', OPTS, memoryBackend())).rejects.toBeInstanceOf(SigningError);
   });
 });

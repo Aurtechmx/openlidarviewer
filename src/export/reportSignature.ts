@@ -38,6 +38,20 @@ const COORD_LEN = 43;
 /** A 64-byte raw P-256 signature is 86 base64url characters. */
 const SIG_LEN = 86;
 export const MAX_SIGNER_LABEL_CHARS = 80;
+
+/** A signing failure whose message is written for the user and carries no key material. */
+export class SigningError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SigningError';
+  }
+}
+
+// P-256 group order and half of it. A signature is made and accepted only with s <= n/2,
+// so (r, n - s), which also verifies, is not a second valid form of the same signature.
+const P256_N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+const P256_HALF_N = P256_N >> 1n;
+const SIGNED_AT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
 const MAX_SHORT_FIELD_CHARS = 64;
 
 /** The public half of the signing key, as a JSON Web Key. */
@@ -93,6 +107,7 @@ export function toBase64Url(bytes: Uint8Array): string {
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+/** Decode base64url, refusing any spelling that does not re-encode to the same text. */
 function fromBase64Url(text: string): Uint8Array | null {
   if (!B64URL.test(text)) return null;
   try {
@@ -100,7 +115,7 @@ function fromBase64Url(text: string): Uint8Array | null {
     const bin = atob(padded);
     const out = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-    return out;
+    return toBase64Url(out) === text ? out : null;
   } catch {
     return null;
   }
@@ -126,14 +141,16 @@ export async function publicKeyThumbprint(jwk: PublicKeyJwk): Promise<string> {
   return toBase64Url(new Uint8Array(digest));
 }
 
-function isPublicKeyJwk(v: unknown): v is PublicKeyJwk {
-  if (typeof v !== 'object' || v === null) return false;
+function isCanonicalCoord(v: unknown): v is string {
+  return typeof v === 'string' && v.length === COORD_LEN && fromBase64Url(v) !== null;
+}
+
+/** With `exact`, the object must hold kty, crv, x and y and nothing else. */
+function isPublicKeyJwk(v: unknown, exact = false): v is PublicKeyJwk {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return false;
   const k = v as Record<string, unknown>;
-  return (
-    k.kty === 'EC' && k.crv === 'P-256' &&
-    typeof k.x === 'string' && k.x.length === COORD_LEN && B64URL.test(k.x) &&
-    typeof k.y === 'string' && k.y.length === COORD_LEN && B64URL.test(k.y)
-  );
+  if (exact && Object.keys(k).length !== 4) return false;
+  return k.kty === 'EC' && k.crv === 'P-256' && isCanonicalCoord(k.x) && isCanonicalCoord(k.y);
 }
 
 /** Keep only the four public fields, so extra members never travel. */
@@ -151,6 +168,23 @@ function signedBytes(canonicalize: Canonicalize, manifest: Obj, meta: { algorith
   return new TextEncoder().encode(`${DOMAIN_TAG}\n${canonicalize(meta)}\n${canonicalize(body)}`);
 }
 
+function bigFrom(b: Uint8Array): bigint {
+  let n = 0n;
+  for (const x of b) n = (n << 8n) | BigInt(x);
+  return n;
+}
+
+/** Return the raw signature in its low-s form. */
+function lowS(sig: Uint8Array): Uint8Array {
+  const s = bigFrom(sig.subarray(32));
+  if (s <= P256_HALF_N) return sig;
+  const out = new Uint8Array(64);
+  out.set(sig.subarray(0, 32));
+  const flipped = P256_N - s;
+  for (let i = 63; i >= 32; i--) out[i] = Number((flipped >> BigInt((63 - i) * 8)) & 0xffn);
+  return out;
+}
+
 // ── signing ──────────────────────────────────────────────────────────────
 
 export interface SigningKey {
@@ -166,10 +200,12 @@ export interface SignOptions {
   readonly signerLabel?: string;
 }
 
-/** Normalise a signer label: trimmed, control characters removed, length capped. */
+/** Normalise a signer label: trimmed, control, bidi and zero-width characters removed, length capped. Used when creating and again when displaying. */
 export function cleanSignerLabel(raw: string): string {
-  // eslint-disable-next-line no-control-regex
-  return raw.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_SIGNER_LABEL_CHARS);
+  return raw
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, ' ')
+    .replace(/\s+/g, ' ').trim().slice(0, MAX_SIGNER_LABEL_CHARS);
 }
 
 /** Return the manifest with a signature block attached. Throws if signing fails. */
@@ -185,7 +221,7 @@ export async function signReportManifest<T extends { digest: string }>(manifest:
     ...(label ? { signerLabel: label } : {}),
     digest: manifest.digest,
   };
-  const sig = await s.sign({ name: 'ECDSA', hash: 'SHA-256' }, key.privateKey, signedBytes(canonicalize, manifest as unknown as Obj, meta) as BufferSource);
+  const sig = lowS(new Uint8Array(await s.sign({ name: 'ECDSA', hash: 'SHA-256' }, key.privateKey, signedBytes(canonicalize, manifest as unknown as Obj, meta) as BufferSource)));
   const block: ReportSignatureBlock = {
     version: REPORT_SIGNATURE_VERSION,
     algorithm: REPORT_SIGNATURE_ALGORITHM,
@@ -195,7 +231,7 @@ export async function signReportManifest<T extends { digest: string }>(manifest:
     ...(meta.software ? { software: meta.software } : {}),
     ...(label ? { signerLabel: label } : {}),
     digest: manifest.digest,
-    signature: toBase64Url(new Uint8Array(sig)),
+    signature: toBase64Url(sig),
   };
   return { ...manifest, reportSignature: block };
 }
@@ -218,6 +254,46 @@ export async function trustedKeyIdFrom(text: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+// ── repeated member names ────────────────────────────────────────────────
+
+/**
+ * True when any object in the JSON text repeats a member name, at any depth.
+ * `JSON.parse` keeps the last copy, a first-wins parser keeps the first, so a
+ * file with a repeat can show different figures to different tools. Iterative,
+ * so deep nesting cannot exhaust the stack. Text that is not well formed
+ * returns false; the caller's own parse reports that.
+ */
+export function hasRepeatedMemberName(text: string): boolean {
+  const stack: Array<Set<string> | null> = [];
+  let i = 0;
+  const n = text.length;
+  let expectKey = false;
+  while (i < n) {
+    const c = text[i]!;
+    if (c === '"') {
+      let j = i + 1;
+      while (j < n && text[j] !== '"') j += text[j] === '\\' ? 2 : 1;
+      if (j >= n) return false;
+      const top = stack[stack.length - 1];
+      if (expectKey && top) {
+        let name: string;
+        try { name = JSON.parse(text.slice(i, j + 1)) as string; } catch { return false; }
+        if (top.has(name)) return true;
+        top.add(name);
+        expectKey = false;
+      }
+      i = j + 1;
+      continue;
+    }
+    if (c === '{') { stack.push(new Set()); expectKey = true; }
+    else if (c === '[') { stack.push(null); expectKey = false; }
+    else if (c === '}' || c === ']') { stack.pop(); expectKey = false; }
+    else if (c === ',') { expectKey = stack[stack.length - 1] instanceof Set; }
+    i++;
+  }
+  return false;
 }
 
 // ── verification ─────────────────────────────────────────────────────────
@@ -258,21 +334,26 @@ export async function verifyReportSignature(manifest: unknown, canonicalize: Can
     if (keyId === null || signedAt === null || digest === null || sigText === null || software === null || label === null) {
       return bad('malformed', 'The signature field has a missing, empty or oversize member.');
     }
-    if (!isPublicKeyJwk(b.publicKey)) return bad('malformed', 'The embedded public key is not a P-256 key.');
+    if (!isPublicKeyJwk(b.publicKey, true)) return bad('malformed', 'The embedded public key is not a plain P-256 key (kty, crv, x and y only).');
     const s = subtle();
     if (!s) return bad('unsupported', 'This browser cannot check signatures (WebCrypto is unavailable).');
-    const claim = { keyId: keyId!, signedAtClaim: signedAt!, signerLabelUnverified: label, software };
+    if (!SIGNED_AT.test(signedAt!) || !Number.isFinite(Date.parse(signedAt!))) return bad('malformed', 'The signed time is not a valid UTC date and time.');
+    if (!isCanonicalCoord(keyId)) return bad('malformed', 'The recorded key id is not in its canonical form.');
+    // Shown to the reader with control, bidi and zero-width characters removed. The raw text is what was signed.
+    const shown = (t: string | undefined): string | undefined => (t === undefined ? undefined : cleanSignerLabel(t) || undefined);
+    const claim = { keyId: keyId!, signedAtClaim: new Date(Date.parse(signedAt!)).toISOString(), signerLabelUnverified: shown(label), software: shown(software) };
     if ((await publicKeyThumbprint(b.publicKey)) !== keyId) return bad('invalid', 'The recorded key id does not match the embedded public key.', claim);
     if (sigText!.length !== SIG_LEN) return bad('invalid', 'The signature is the wrong length (truncated or padded).', claim);
     const sigBytes = fromBase64Url(sigText!);
-    if (!sigBytes || sigBytes.length !== 64) return bad('invalid', 'The signature is not valid base64url.', claim);
+    if (!sigBytes || sigBytes.length !== 64) return bad('invalid', 'The signature is not in canonical base64url form.', claim);
+    if (bigFrom(sigBytes.subarray(32)) > P256_HALF_N) return bad('invalid', 'The signature is not in its low-s form, so it is not the one that was made.', claim);
     if (digest !== m.digest) return bad('invalid', 'The report digest changed after signing.', claim);
     const key = await s.importKey('jwk', { ...b.publicKey, ext: true }, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
     const bytes = signedBytes(canonicalize, m, { algorithm: REPORT_SIGNATURE_ALGORITHM, keyId: keyId!, signedAt: signedAt!, ...(software ? { software } : {}), ...(label ? { signerLabel: label } : {}), digest: digest! });
     const ok = await s.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, sigBytes as BufferSource, bytes as BufferSource);
-    if (!ok) return bad('invalid', 'The signature does not match this report. The report was edited after signing, or the signature was copied from another report.', claim);
+    if (!ok) return bad('invalid', 'The signature does not match this report. Its figures or signed metadata changed after signing, or the signature was copied from another report.', claim);
     if (trustedKeyId === undefined || trustedKeyId === null) {
-      return { status: 'valid-unknown-signer', signatureValid: true, ...claim, reason: 'The signature is valid for the key inside the report, so the report is unchanged since that key signed it. You have not supplied a key to compare, so the signer is unverified.' };
+      return { status: 'valid-unknown-signer', signatureValid: true, ...claim, reason: 'Anyone can produce this with their own key. It shows the report is unchanged since the key inside it signed it, not who holds that key. You have not supplied a key to compare.' };
     }
     if (trustedKeyId === keyId) {
       return { status: 'valid-trusted-key', signatureValid: true, ...claim, reason: 'The signature is valid and was made by the key you supplied. That shows the holder of that key signed it, not who that person is.' };

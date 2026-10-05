@@ -17,6 +17,7 @@ import type { GeoExportContext } from './reportExport';
 
 import { activeScanBasisOf, type ActiveScanBasis } from './measurementScanHooks';
 import { appToast } from '../ui/panelChrome';
+import { SigningError } from '../export/reportSignature';
 import { reportSignerLabel, reportSigningRequested } from '../export/reportSigningState';
 
 export type { ActiveScanBasis } from './measurementScanHooks';
@@ -353,10 +354,11 @@ async function textToWrite(
 ): Promise<string | null> {
   if (!reportSigningRequested()) return text;
   try {
-    if (!signReportText) throw new Error('signing unavailable');
+    if (!signReportText) throw new SigningError('Signing is not available in this build. Turn off "Sign this report".');
     return await signReportText(text, { signedAt: deps.now(), software: deps.appVersion, signerLabel: reportSignerLabel() });
-  } catch {
-    (deps.refuse ?? deps.notify ?? appToast().show)('Report not written. It could not be signed: this browser has no signing key available. Turn off "Sign this report" or create a key in the Export panel.');
+  } catch (e) {
+    const cause = e instanceof SigningError ? e.message : 'Signing is not available. Turn off "Sign this report" to export an unsigned report.';
+    (deps.refuse ?? deps.notify ?? appToast().show)(`Report not written. ${cause}`);
     return null;
   }
 }

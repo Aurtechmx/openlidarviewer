@@ -1,8 +1,6 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { dropDenseGridPly, showWorkspaceMode } from './helpers';
 
 /**
@@ -115,12 +113,12 @@ test('the verifier reads signer, supplied key and tampering plainly', async ({ p
   await createKey(panel);
   await panel.locator('[data-testid="report-sign-show"]').click();
   const keyText = await panel.locator('[data-testid="report-sign-public-key"]').inputValue();
-  const file = join(tmpdir(), `olv-signed-${Date.now()}.json`);
+  const file = test.info().outputPath('signed.json');
   writeFileSync(file, await exportText(page, panel));
 
   await verify(page, file);
   const dialog = page.locator('[data-testid="report-verify"] [role="dialog"]');
-  await expect(page.locator('[data-testid="report-verify-sig-unverified"]')).toHaveText('Signed, signer unverified');
+  await expect(page.locator('[data-testid="report-verify-sig-unverified"]')).toHaveText("Signed, signer unverified");
   await expect(page.locator('[data-testid="report-verify-valid"]')).toBeVisible();
 
   // The dialog is labelled and the page has no new accessibility violations.
@@ -139,7 +137,7 @@ test('the verifier reads signer, supplied key and tampering plainly', async ({ p
 
   const tampered = JSON.parse(readFileSync(file, 'utf8'));
   tampered.findings[0].value = 999999;
-  const bad = join(tmpdir(), `olv-signed-bad-${Date.now()}.json`);
+  const bad = test.info().outputPath('signed-bad.json');
   writeFileSync(bad, JSON.stringify(tampered));
   await verify(page, bad);
   await expect(page.locator('[data-testid="report-verify-invalid"]').first()).toBeVisible({ timeout: 10_000 });
@@ -168,4 +166,68 @@ test('the signing controls work from the keyboard and fit a 343 px column', asyn
   expect(overflow).toBe(0);
   const axe = await new AxeBuilder({ page }).include('[data-testid="report-signing"]').analyze();
   expect(axe.violations.filter((v) => v.impact === 'critical' || v.impact === 'serious')).toEqual([]);
+});
+
+test('two clicks in one tick leave signing off, and the next export is unsigned', async ({ page }) => {
+  const panel = await prepare(page);
+  await createKey(panel);
+  const toggle = panel.locator('[data-testid="report-sign-toggle"]');
+  await toggle.click(); // off
+  await expect(toggle).not.toBeChecked();
+  // On, then off, before the key lookup can answer.
+  await toggle.evaluate((b) => { (b as HTMLInputElement).click(); (b as HTMLInputElement).click(); });
+  await page.waitForTimeout(500);
+  await expect(toggle).not.toBeChecked();
+  await expect(panel.locator('[data-testid="report-sign-status"]')).not.toContainText(/will be signed/i);
+  const report = JSON.parse(await exportText(page, panel));
+  expect(report.reportSignature).toBeUndefined();
+});
+
+test('a key can be deleted after confirming, and signing then stops', async ({ page }) => {
+  const panel = await prepare(page);
+  await createKey(panel);
+  await panel.locator('[data-testid="report-sign-delete"]').click();
+  await panel.locator('[data-testid="report-sign-delete-cancel"]').click();
+  await expect(panel.locator('[data-testid="report-sign-key-id"]')).toBeVisible();
+  await panel.locator('[data-testid="report-sign-delete"]').click();
+  await panel.locator('[data-testid="report-sign-delete-confirm"]').click();
+  await expect(panel.locator('[data-testid="report-sign-create"]')).toBeVisible();
+  await expect(panel.locator('[data-testid="report-sign-toggle"]')).not.toBeChecked();
+  expect(JSON.parse(await exportText(page, panel)).reportSignature).toBeUndefined();
+});
+
+test('the key text says signed reports can be linked and a private window forgets the key', async ({ page }) => {
+  const panel = await prepare(page);
+  await panel.locator('[data-testid="report-sign-toggle"]').click();
+  const intro = panel.getByRole('group', { name: 'Create a signing key' });
+  await expect(intro).toContainText("carries this key's id");
+  await expect(intro).toContainText('private window forgets it');
+  await expect(panel).not.toContainText(/webcrypto/i);
+});
+
+test('a hostile report opens the dialog with a reason instead of failing silently', async ({ page }) => {
+  await prepare(page);
+  const cases: Array<[string, string]> = [
+    ['1e999', '{"digest":"x","digestAlgorithm":"SHA-256","findings":[{"value":1e999}]}'],
+    ['deep', '{"digest":"x","digestAlgorithm":"SHA-256","findings":[' + '['.repeat(30_000) + ']'.repeat(30_000) + ']}'],
+  ];
+  for (const [name, text] of cases) {
+    const file = test.info().outputPath(`hostile-${name}.json`);
+    writeFileSync(file, text);
+    await verify(page, file);
+    await expect(page.locator('[data-testid="report-verify"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-testid="report-verify"]')).toContainText(/cannot be checked|not valid JSON|not a report/i);
+    await page.locator('[data-testid="report-verify-close"]').click();
+  }
+});
+
+test('a signed report with a repeated member name fails in the dialog', async ({ page }) => {
+  const panel = await prepare(page);
+  await createKey(panel);
+  const text = await exportText(page, panel);
+  const file = test.info().outputPath('dup.json');
+  writeFileSync(file, '{"findings":[],' + text.trim().slice(1));
+  await verify(page, file);
+  await expect(page.locator('[data-testid="report-verify-sig-invalid"]')).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('[data-testid="report-verify"]')).toContainText(/repeats a member name/i);
 });

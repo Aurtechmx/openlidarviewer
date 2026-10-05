@@ -25,7 +25,7 @@ import {
   type ReportManifest,
 } from '../render/measure/reportManifest';
 import type { HashFn } from '../render/measure/auditLog';
-import { signReportManifest, type SignOptions } from './reportSignature';
+import { SigningError, signReportManifest, type SignOptions } from './reportSignature';
 import { indexedDbBackend, loadSigningKey, type SigningKeyBackend } from './reportSigningKeyStore';
 import { exportGate } from '../validation/evidenceRegistry';
 import { evidenceNote, evidenceStatus, unverifiedUnitsCaveat, type EvidenceStatus } from '../validation/exportEvidenceNote';
@@ -392,9 +392,13 @@ export async function signReportText(
   backend: SigningKeyBackend = indexedDbBackend,
 ): Promise<string> {
   const key = await loadSigningKey(backend);
-  if (!key) throw new Error('No signing key exists in this browser. Create one in the Export panel first.');
+  if (!key) throw new SigningError('Signing is on, but no signing key exists in this browser. Create one in the Export panel or turn signing off.');
   const manifest = JSON.parse(text) as { digest: string };
-  return JSON.stringify(await signReportManifest(manifest, key, opts, canonicalize), null, 2);
+  try {
+    return JSON.stringify(await signReportManifest(manifest, key, opts, canonicalize), null, 2);
+  } catch {
+    throw new SigningError('The signature could not be made. Turn signing off to export an unsigned report.');
+  }
 }
 
 /** Source-file digest and CRS origin for this export's provenance, resolved off the main thread. */

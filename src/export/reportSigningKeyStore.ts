@@ -11,7 +11,7 @@
  * without IndexedDB.
  */
 
-import { publicKeyThumbprint, toPublicKeyJwk, type PublicKeyJwk, type SigningKey } from './reportSignature';
+import { SigningError, publicKeyThumbprint, toPublicKeyJwk, type PublicKeyJwk, type SigningKey } from './reportSignature';
 
 export interface StoredSigningKey {
   readonly privateKey: CryptoKey;
@@ -22,7 +22,8 @@ export interface StoredSigningKey {
 
 export interface SigningKeyBackend {
   load(): Promise<StoredSigningKey | null>;
-  save(record: StoredSigningKey): Promise<void>;
+  /** Store the record only if none exists. Resolves false when one already does. Atomic. */
+  add(record: StoredSigningKey): Promise<boolean>;
   clear(): Promise<void>;
 }
 
@@ -33,13 +34,13 @@ const RECORD = 'default';
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === 'undefined') {
-      reject(new Error('IndexedDB is not available.'));
+      reject(new SigningError('This browser does not allow key storage here, which private browsing can cause. Turn off "Sign this report" or use a normal window.'));
       return;
     }
     const req = indexedDB.open(DB_NAME, 1);
     req.onupgradeneeded = () => { req.result.createObjectStore(STORE); };
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(new Error('The signing-key store could not be opened.'));
+    req.onerror = () => reject(new SigningError('This browser would not open its key storage, which private browsing can cause. Turn off "Sign this report" or use a normal window.'));
   });
 }
 
@@ -64,8 +65,25 @@ export const indexedDbBackend: SigningKeyBackend = {
     const rec = await run<unknown>('readonly', (s) => s.get(RECORD));
     return isStoredKey(rec) ? rec : null;
   },
-  async save(record) {
-    await run('readwrite', (s) => s.put(record, RECORD));
+  async add(record) {
+    const db = await openDb();
+    try {
+      return await new Promise<boolean>((resolve, reject) => {
+        const tx = db.transaction(STORE, 'readwrite');
+        const req = tx.objectStore(STORE).add(record, RECORD);
+        let exists = false;
+        req.onerror = (e) => {
+          // add() fails with ConstraintError when the record id is taken, which
+          // is another tab having created its key first.
+          if (req.error?.name === 'ConstraintError') { exists = true; e.preventDefault(); }
+        };
+        tx.oncomplete = () => resolve(!exists);
+        tx.onerror = () => reject(new Error('store'));
+        tx.onabort = () => (exists ? resolve(false) : reject(new Error('store')));
+      });
+    } finally {
+      db.close();
+    }
   },
   async clear() {
     await run('readwrite', (s) => s.delete(RECORD));
@@ -84,23 +102,29 @@ export async function loadSigningKey(backend: SigningKeyBackend = indexedDbBacke
   return rec ? { privateKey: rec.privateKey, publicKey: rec.publicKey, keyId: rec.keyId } : null;
 }
 
-/** Create and store a new key. Replaces any existing one only when `replace` is set. */
+/**
+ * Create and store the key, or return the one that exists. The store is written
+ * with an add that fails when a record exists, so two tabs creating at once end
+ * with one key: the loser discards its own and returns the winner's.
+ */
 export async function createSigningKey(
   createdAt: string,
   backend: SigningKeyBackend = indexedDbBackend,
-  replace = false,
 ): Promise<SigningKey> {
   const s = globalThis.crypto?.subtle;
-  if (!s) throw new Error('WebCrypto is not available.');
-  if (!replace) {
-    const existing = await loadSigningKey(backend);
-    if (existing) return existing;
-  }
+  if (!s) throw new SigningError('This browser cannot sign reports.');
+  const existing = await loadSigningKey(backend);
+  if (existing) return existing;
   const pair = await s.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign', 'verify']);
   const jwk = toPublicKeyJwk(await s.exportKey('jwk', pair.publicKey));
-  if (!jwk) throw new Error('The generated key was not a P-256 key.');
+  if (!jwk) throw new SigningError('The generated key was not usable.');
   const keyId = await publicKeyThumbprint(jwk);
-  await backend.save({ privateKey: pair.privateKey, publicKey: jwk, keyId, createdAt });
+  const stored = await backend.add({ privateKey: pair.privateKey, publicKey: jwk, keyId, createdAt });
+  if (!stored) {
+    const winner = await loadSigningKey(backend);
+    if (winner) return winner;
+    throw new SigningError('The signing key could not be saved. Try again.');
+  }
   return { privateKey: pair.privateKey, publicKey: jwk, keyId };
 }
 

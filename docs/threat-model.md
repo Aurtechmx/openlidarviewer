@@ -57,9 +57,12 @@ version, an optional signer label and the digest. The private key is created in
 the browser as a non-extractable WebCrypto key and stored in IndexedDB; no key
 leaves the device, and nothing is sent over the network.
 
-What the signature protects: a verifier detects any change to the body, the
-signed metadata, the signature or the key id made after signing, and a signature
-copied onto another report fails. A signature that is valid for the key inside
+What the signature protects: a verifier detects any change to the report's
+figures or the signed metadata made after signing, and a signature copied onto
+another report fails. It covers the parsed values, not the file's bytes, so
+whitespace, key order and number spelling can differ without a figure changing.
+A file that repeats a member name, writes the signature in a non-canonical form
+or carries extra members in the public key is refused. A signature that is valid for the key inside
 the report reads as "signed, signer unverified" until the reader supplies a
 public key or key id and it matches.
 
@@ -75,6 +78,10 @@ What it does not protect:
   present.
 - A compromised browser profile, extension or page script can ask the stored key
   to sign anything. The key cannot be read out, but it can be used.
+- Linking. Every signed report carries the key id and public key, so anyone
+  holding two signed reports can tell the same key signed both. Deleting the
+  key and creating a new one gives a new key id.
+- Private windows. A private window forgets the key when it closes.
 - Key loss. Clearing site data deletes the key. Reports signed earlier still
   verify against their embedded public key; a new key has a different key id.
 

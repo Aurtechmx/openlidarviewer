@@ -22,7 +22,7 @@
 
 import { verifyReportManifest, type ReportManifest } from '../render/measure/reportManifest';
 import { canonicalize, fnv1a, sha256, type HashFn } from '../render/measure/auditLog';
-import { REPORT_SIGNATURE_FIELD, trustedKeyIdFrom, verifyReportSignature, type SignatureVerdict } from './reportSignature';
+import { REPORT_SIGNATURE_FIELD, hasRepeatedMemberName, trustedKeyIdFrom, verifyReportSignature, type SignatureVerdict } from './reportSignature';
 
 export interface VerifyReportResult {
   /** The text parsed as JSON and looked like an integrity report. */
@@ -92,7 +92,17 @@ export function verifyReportFile(jsonText: string): VerifyReportResult {
     };
   }
 
-  const valid = verifyReportManifest(m, hashFn);
+  let valid: boolean;
+  try {
+    valid = verifyReportManifest(m, hashFn);
+  } catch {
+    // canonicalize refuses a non-finite number (1e999 parses to Infinity) and
+    // very deep nesting exhausts the stack. Neither is a report this can check.
+    return {
+      recognised: true, valid: false, algorithm, software, classificationEpoch, findingsCount,
+      reason: 'This file cannot be checked: it holds a number too large to read or is nested too deeply to be a report.',
+    };
+  }
   // SHA-256 or FNV-1a, the digest is unkeyed: a match is a self-consistency
   // check, never proof of who made the report or which file it came from.
   const cryptographic = algorithm === 'SHA-256';
@@ -122,7 +132,12 @@ export async function verifyReportFileWithSignature(
   jsonText: string,
   trustedKeyText?: string,
 ): Promise<VerifyReportResult> {
-  const base = verifyReportFile(jsonText);
+  let base: VerifyReportResult;
+  try {
+    base = verifyReportFile(jsonText);
+  } catch {
+    return { recognised: false, valid: false, reason: 'This file cannot be checked.' };
+  }
   if (!base.recognised) return base;
   let raw: unknown;
   try {
@@ -131,6 +146,19 @@ export async function verifyReportFileWithSignature(
     return base;
   }
   if (typeof raw !== 'object' || raw === null || !(REPORT_SIGNATURE_FIELD in raw)) return base;
+
+  if (hasRepeatedMemberName(jsonText)) {
+    return {
+      ...base,
+      valid: false,
+      signature: {
+        status: 'malformed',
+        signatureValid: false,
+        reason: 'The file repeats a member name, so different tools could read different figures from it.',
+      },
+      reason: 'A signed report may not repeat a member name. The file repeats one, so different tools could read different figures from it.',
+    };
+  }
 
   const wanted = trustedKeyText?.trim() ? trustedKeyText : undefined;
   const trustedId = wanted === undefined ? undefined : await trustedKeyIdFrom(wanted);

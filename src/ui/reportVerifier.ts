@@ -80,6 +80,9 @@ function signatureSection(v: SignatureVerdict, compare?: SignerCompare): HTMLEle
   label.textContent = 'Compare with a public key or key id you trust';
   label.htmlFor = 'olv-verify-trusted-key';
   label.style.cssText = 'font:12px system-ui,sans-serif;opacity:0.85;';
+  const warn = document.createElement('div');
+  warn.textContent = 'Use a key you got from the signer by another route. A key copied out of this same report proves nothing, because the report supplies it.';
+  warn.style.cssText = 'font:11px system-ui,sans-serif;opacity:0.7;';
   const input = document.createElement('textarea');
   input.id = 'olv-verify-trusted-key';
   input.rows = 2;
@@ -117,7 +120,7 @@ function signatureSection(v: SignatureVerdict, compare?: SignerCompare): HTMLEle
     void compare(input.value).then((r) => { if (r.signature) fillSignature(result, r.signature); }).catch(() => undefined);
   });
   actions.append(load, go, file);
-  sec.append(label, input, actions);
+  sec.append(label, warn, input, actions);
   return sec;
 }
 
@@ -261,6 +264,14 @@ export async function verifyAndShow(file: File): Promise<void> {
     showReportVerification(oversize);
     return;
   }
+  try {
+    await verifyAndShowChecked(file);
+  } catch {
+    showReportVerification({ recognised: false, valid: false, reason: 'This file could not be checked.' });
+  }
+}
+
+async function verifyAndShowChecked(file: File): Promise<void> {
   let text: string;
   try {
     text = await file.text();

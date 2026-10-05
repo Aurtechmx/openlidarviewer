@@ -6,7 +6,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Added
 
-- Optional signature for integrity reports. "Sign this report" in the Export panel (off by default) adds an ECDSA P-256 / SHA-256 signature made with a key created in this browser, stored non-extractable in IndexedDB. The signature covers the same canonical report body as the digest, plus the algorithm, key id, the signer's claimed time, the app version and an optional signer label. "Show my public key" and "Copy public key" export the public half. The report verifier reports a valid signature from an unknown key as "Signed, signer unverified", can compare the signer against a public key you supply, and fails a report whose signature is invalid, malformed or unsupported. Unsigned reports verify exactly as before.
+- Optional signature for integrity reports. "Sign this report" in the Export panel (off by default) adds an ECDSA P-256 / SHA-256 signature made with a key created in this browser, stored non-extractable in IndexedDB. The signature covers the same canonical report body as the digest, plus the algorithm, key id, the signer's claimed time, the app version and an optional signer label. "Show my public key" and "Copy public key" export the public half. The report verifier reports a valid signature from an unknown key as "Signed, signer unverified", can compare the signer against a public key you supply, and fails a report whose signature is invalid, malformed or unsupported. A signed report fails verification if its figures or signed metadata change. Every signed report carries the key's id, so reports signed with one key can be linked; a Delete signing key control removes the key. Unsigned reports verify exactly as before.
 
 ### Fixed
 

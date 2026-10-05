@@ -8,9 +8,10 @@
  */
 
 import { el } from './dom';
-import { cleanSignerLabel, MAX_SIGNER_LABEL_CHARS, signingAvailable } from '../export/reportSignature';
+import { SigningError, cleanSignerLabel, MAX_SIGNER_LABEL_CHARS, signingAvailable } from '../export/reportSignature';
 import {
   createSigningKey,
+  deleteSigningKey,
   indexedDbBackend,
   loadSigningKey,
   publicKeyText,
@@ -20,7 +21,8 @@ import { reportSignerLabel, reportSigningRequested, setReportSignerLabel, setRep
 
 export const KEY_CREATION_EXPLANATION =
   'This creates a signing key in this browser. The private key cannot be exported and stays on this device. ' +
-  'It lives in this browser profile only: clearing site data deletes it. ' +
+  'It lives in this browser profile only: clearing site data deletes it, and a private window forgets it when the window closes. ' +
+  'Every report you sign carries this key\'s id, so anyone holding two of them can tell the same key signed both. ' +
   'A signature shows that the holder of this key signed the report. It does not show who that person is.';
 
 export function buildReportSigningControls(backend: SigningKeyBackend = indexedDbBackend): HTMLElement {
@@ -34,7 +36,7 @@ export function buildReportSigningControls(backend: SigningKeyBackend = indexedD
   label.append(box, el('span', { text: 'Sign this report' }));
   const hint = el('span', {
     className: 'olv-export-fullres-hint',
-    text: 'Adds a signature from a key kept in this browser, so a later edit to the report is detected. Applies to both report exports.',
+    text: 'Adds a signature from a key kept in this browser, so a later change to its figures is detected. Applies to both report exports.',
   });
   row.append(label, hint);
 
@@ -46,10 +48,13 @@ export function buildReportSigningControls(backend: SigningKeyBackend = indexedD
   root.append(row, body, status);
 
   const say = (t: string): void => { status.textContent = t; };
+  // Each toggle starts a new run. A run that finds it is no longer the latest, or
+  // finds the box unchecked, stops without touching the signing choice.
+  let run = 0;
 
   if (!signingAvailable()) {
     box.disabled = true;
-    say('Signing is unavailable: this browser has no WebCrypto.');
+    say('Signing is unavailable: this browser cannot sign reports.');
     return root;
   }
 
@@ -101,7 +106,37 @@ export function buildReportSigningControls(backend: SigningKeyBackend = indexedD
         }
       })();
     });
-    body.append(labelText, input, idLine, show, keyBox, copy);
+    const del = button('Delete signing key', 'report-sign-delete', 'Delete the signing key from this browser. Reports signed earlier still verify.', () => {
+      confirmRow.hidden = false;
+      del.hidden = true;
+    });
+    const confirmRow = el('div', { className: 'olv-sign-intro' });
+    confirmRow.hidden = true;
+    confirmRow.setAttribute('role', 'group');
+    confirmRow.setAttribute('aria-label', 'Confirm deleting the signing key');
+    const sure = el('p', { className: 'olv-export-fullres-hint', text: 'Delete this key? Reports signed with it still verify, but you cannot sign with it again. Creating a new key gives a new key id.' });
+    const yes = button('Delete key', 'report-sign-delete-confirm', 'Delete the signing key now.', () => {
+      void (async () => {
+        const mine = ++run;
+        try {
+          await deleteSigningKey(backend);
+        } catch {
+          say('The key could not be deleted. It is still in use.');
+          return;
+        }
+        if (mine !== run) return;
+        box.checked = false;
+        setReportSigningRequested(false);
+        showCreate();
+        say('Signing key deleted. Reports stay unsigned until you create a new key.');
+      })();
+    });
+    const no = button('Keep key', 'report-sign-delete-cancel', 'Keep the signing key.', () => {
+      confirmRow.hidden = true;
+      del.hidden = false;
+    });
+    confirmRow.append(sure, yes, no);
+    body.append(labelText, input, idLine, show, keyBox, copy, del, confirmRow);
   };
 
   const showCreate = (): void => {
@@ -112,8 +147,10 @@ export function buildReportSigningControls(backend: SigningKeyBackend = indexedD
     const text = el('p', { className: 'olv-export-fullres-hint', text: KEY_CREATION_EXPLANATION });
     const create = button('Create signing key', 'report-sign-create', 'Create the signing key in this browser.', () => {
       void (async () => {
+        const mine = ++run;
         try {
           const key = await createSigningKey(new Date().toISOString(), backend);
+          if (mine !== run) return;
           box.checked = true;
           setReportSigningRequested(true);
           showKeyControls(key);
@@ -129,6 +166,7 @@ export function buildReportSigningControls(backend: SigningKeyBackend = indexedD
 
   const apply = (): void => {
     void (async () => {
+      const mine = ++run;
       if (!box.checked) {
         setReportSigningRequested(false);
         body.hidden = true;
@@ -138,6 +176,7 @@ export function buildReportSigningControls(backend: SigningKeyBackend = indexedD
       body.hidden = false;
       try {
         const key = await loadSigningKey(backend);
+        if (mine !== run || !box.checked) return;
         if (key) {
           setReportSigningRequested(true);
           showKeyControls(key);
@@ -148,11 +187,12 @@ export function buildReportSigningControls(backend: SigningKeyBackend = indexedD
           showCreate();
           say('Create a signing key to sign reports.');
         }
-      } catch {
+      } catch (e) {
+        if (mine !== run) return;
         box.checked = false;
         setReportSigningRequested(false);
         body.hidden = true;
-        say('Signing is unavailable: this browser would not open its key store.');
+        say(e instanceof SigningError ? e.message : 'Signing is unavailable: this browser would not open its key storage.');
       }
     })();
   };
