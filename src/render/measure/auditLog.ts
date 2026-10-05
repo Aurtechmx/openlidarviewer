@@ -8,8 +8,8 @@
  * wanted — the algorithm is the caller's explicit choice, never implied.
  *
  * Local-first means the data never leaves the machine — but a surveyor staking
- * their name on a number needs more than privacy: they need to prove the number
- * wasn't quietly changed afterwards. This is an append-only hash chain. Each
+ * their name on a number needs more than privacy: they need to detect a number
+ * changed afterwards without re-chaining. This is an append-only hash chain. Each
  * entry's hash folds in the previous entry's hash plus a CANONICAL (stable
  * key-order) serialization of its own contents, so any later edit to any entry
  * — a reclassification logged with the wrong target class, a volume whose ±

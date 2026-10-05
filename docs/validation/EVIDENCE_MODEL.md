@@ -112,7 +112,7 @@ source name). `verifyProcessingManifest` recomputes the chain and reports the
 first altered op, so a reviewer holding only the artifact (or a `.olvsession`
 that embeds the same manifest) can confirm the record of *what was run, in
 what order, with which settings* is intact. The claim stops there: it is
-ordering + parameters + tamper-evidence, not an execution recipe, no executor
+ordering + parameters + a hash chain (self-consistency check), not an execution recipe, no executor
 consumes it, and an op whose settings never reached the provenance says
 `params not captured in this slice` rather than fabricating them.
 
