@@ -20,11 +20,20 @@ async function loadingRow(page: Page): Promise<string> {
 const N = 2_400_000;
 
 test('reload raises the resident count and keeps measurements', async ({ page }) => {
-  test.setTimeout(900_000);
+  // Two decodes of 2.4 M points through a software renderer. Passing CI runs
+  // took 8.5 to 13 minutes, and a 2x CPU-throttled local run 12 minutes, so the
+  // budget leaves room above that. The waits below end on state, not time.
+  test.setTimeout(1_200_000);
   await openReducedLas(page, N, 4);
-  // The Basis item opens Data on Layer Health, which builds the card.
-  await page.locator('.olv-ss-basis').dispatchEvent('click');
-  await expect.poll(() => loadingRow(page), { timeout: 120_000 }).toMatch(/^display sample: [\d,]+ of 2,400,000 declared points resident$/);
+  // The Layer Health card mounts from a lazily loaded chunk after the scan
+  // opens, and on a slow software renderer that can take minutes. The Basis
+  // item only reveals the card (focusLayerHealth is a no-op while the slot is
+  // empty), so the poll clicks it again until the Loading row exists, within
+  // the test's own budget.
+  await expect.poll(async () => {
+    await page.locator('.olv-ss-basis').dispatchEvent('click').catch(() => {});
+    return loadingRow(page);
+  }, { timeout: 0, intervals: [5_000] }).toMatch(/^display sample: [\d,]+ of 2,400,000 declared points resident$/);
   const before = Number((await loadingRow(page)).match(/^display sample: ([\d,]+)/)![1].replace(/,/g, ''));
 
   await page.evaluate(() => {
@@ -50,7 +59,13 @@ test('reload raises the resident count and keeps measurements', async ({ page })
   await expect(page.getByText('Shows all 2.4 M points. Needs about')).toBeVisible();
   await confirm.dispatchEvent('click');
 
-  await expect.poll(async () => { await page.locator('.olv-ss-basis').dispatchEvent('click').catch(() => {}); return loadingRow(page); }, { timeout: 300_000, intervals: [5_000] }).toBe('fully loaded');
+  // The reopen decodes 2.4 M points again. It is waited on by its outcome, the
+  // Loading row reading "fully loaded", within the test's own budget rather
+  // than a shorter fixed window that a slow runner can outlast.
+  await expect.poll(async () => {
+    await page.locator('.olv-ss-basis').dispatchEvent('click').catch(() => {});
+    return loadingRow(page);
+  }, { timeout: 0, intervals: [5_000] }).toBe('fully loaded');
   expect(before).toBeLessThan(N);
   expect(await page.evaluate(() => document.querySelectorAll('.olv-layerhealth-layer').length)).toBe(1);
   expect(await count()).toBe(1);
