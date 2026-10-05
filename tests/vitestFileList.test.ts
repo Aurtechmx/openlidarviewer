@@ -7,9 +7,9 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import {
   FILE_LIST_ENV,
   WINDOWS_COMMAND_LINE_LIMIT,
@@ -48,13 +48,35 @@ describe('the shard command line', () => {
 
 describe('the list file', () => {
   it('round-trips the exact file list through the environment', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'olv-list-'));
+    const list = writeFileList(MANY);
     try {
-      const path = join(dir, 'files.json');
-      writeFileList(path, MANY);
-      expect(readFileList({ [FILE_LIST_ENV]: path })).toEqual(MANY);
+      expect(readFileList({ [FILE_LIST_ENV]: list.path })).toEqual(MANY);
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      list.dispose();
+    }
+  });
+
+  it('creates the list exclusively, owner-only, inside its own mkdtemp directory', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'olv-parent-'));
+    try {
+      const list = writeFileList(['tests/a.test.ts'], parent);
+      const dir = dirname(list.path);
+      expect(dirname(dir)).toBe(parent);
+      expect(basename(dir)).toMatch(/^olv-files-.{6}$/);
+      if (process.platform !== 'win32') {
+        expect(statSync(list.path).mode & 0o777).toBe(0o600);
+        expect(statSync(dir).mode & 0o777).toBe(0o700);
+      }
+      // `wx`: a file already at that path is never overwritten.
+      expect(() => writeFileSync(list.path, '[]', { flag: 'wx' })).toThrow(/EEXIST/);
+      // Two lists never share a directory.
+      const other = writeFileList([], parent);
+      expect(dirname(other.path)).not.toBe(dir);
+      list.dispose();
+      other.dispose();
+      expect(existsSync(dir)).toBe(false);
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
     }
   });
 

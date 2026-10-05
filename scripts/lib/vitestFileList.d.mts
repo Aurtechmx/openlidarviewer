@@ -1,7 +1,7 @@
 /** Types for vitestFileList.mjs, which vitest.config.ts and its test import. */
 export declare const FILE_LIST_ENV: string;
 export declare const WINDOWS_COMMAND_LINE_LIMIT: number;
-export declare function writeFileList(path: string, files: readonly string[]): void;
+export declare function writeFileList(files: readonly string[], parent?: string): { path: string; dispose(): void };
 export declare function readFileList(env?: Record<string, string | undefined>): string[] | null;
 export declare function vitestRunArgs(options: {
   prefix?: readonly string[];

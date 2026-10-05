@@ -12,7 +12,9 @@
  * files either way, so `--shard=i/N` slices it the same way.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 /** The environment variable that names the file list. */
 export const FILE_LIST_ENV = 'OLV_VITEST_FILE_LIST';
@@ -20,9 +22,22 @@ export const FILE_LIST_ENV = 'OLV_VITEST_FILE_LIST';
 /** CreateProcess's limit on the whole command line, in characters. */
 export const WINDOWS_COMMAND_LINE_LIMIT = 32767;
 
-/** Write `files` (repo-relative paths) to `path` as JSON. */
-export function writeFileList(path, files) {
-  writeFileSync(path, JSON.stringify(files));
+/**
+ * Write `files` (repo-relative paths) as JSON into a new private directory
+ * under the OS temp dir. The directory comes from `mkdtempSync`, so its name is
+ * unpredictable, and the file is created exclusively (`wx`) and readable by its
+ * owner only. `dispose` removes the file and the directory.
+ */
+export function writeFileList(files, parent = tmpdir()) {
+  const dir = mkdtempSync(join(parent, 'olv-files-'));
+  const path = join(dir, 'files.json');
+  writeFileSync(path, JSON.stringify(files), { flag: 'wx', mode: 0o600 });
+  return {
+    path,
+    dispose() {
+      rmSync(dir, { recursive: true, force: true });
+    },
+  };
 }
 
 /**

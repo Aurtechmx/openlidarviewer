@@ -201,8 +201,7 @@ function runVitest(extra, label) {
     // The bucket's files travel in a JSON file that vitest.config.ts reads as
     // `include`, not as arguments: the unit bucket's list alone is longer than
     // the command line Windows accepts.
-    const listFile = join(tmpdir(), `olv-files-${arg}-${process.pid}-${seq}.json`);
-    writeFileList(listFile, files);
+    const list = writeFileList(files);
     const child = spawn(
       SPAWN_CMD,
       vitestRunArgs({ prefix: SPAWN_PREFIX, bucketArgs, extra, passthrough, tallyFile }),
@@ -211,7 +210,7 @@ function runVitest(extra, label) {
       // there `detached` only means "own console window", which would hide the
       // shard's output — so it stays off and the watchdog kills the child
       // directly (see the kill site).
-      { cwd: ROOT, stdio: 'inherit', detached: !WINDOWS, env: { ...process.env, [FILE_LIST_ENV]: listFile } },
+      { cwd: ROOT, stdio: 'inherit', detached: !WINDOWS, env: { ...process.env, [FILE_LIST_ENV]: list.path } },
     );
 
     let timedOut = false;
@@ -263,7 +262,7 @@ function runVitest(extra, label) {
       // and its partial JSON would misreport the run.
       if (!r.error && !r.signal && r.status === 0) readTally(tallyFile, arg);
       else { try { rmSync(tallyFile, { force: true }); } catch { /* best effort */ } }
-      try { rmSync(listFile, { force: true }); } catch { /* best effort */ }
+      try { list.dispose(); } catch { /* best effort */ }
       const secs = ((Date.now() - started) / 1000).toFixed(1);
       console.log(
         `[${label}] pid=${child.pid} elapsed=${secs}s code=${r.status ?? '-'} signal=${r.signal ?? '-'}`,
