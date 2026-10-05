@@ -320,7 +320,7 @@ describe('the exported rasters and path sit at their true place', () => {
     const geojson = jsonOf<{ coordinateFrame: string; features: { geometry: { coordinates: number[][] } }[] }>(zip, 'flow-flow-path.geojson');
     // Cell (col 3, row 1): east 499880 + 3.5, north 3999920 + 1.5.
     expect(geojson.features[0]!.geometry.coordinates[0]).toEqual([499883.5, 3999921.5]);
-    expect(geojson.coordinateFrame).toBe('source-crs-planar');
+    expect(geojson.coordinateFrame).toBe('scan-source-coordinates');
   });
 
   it('places a Y-up scene the same way: H2 is north, and the overlay alone negates it', async () => {
@@ -346,5 +346,29 @@ describe('outlet elevations with an unresolved vertical unit', () => {
     expect(head!.split(',')[4]).toBe('outletElevationLocal');
     expect(Number(first!.split(',')[4])).toBe(local);
     expect(textOf(zip, 'flow-README.txt')).not.toContain('the same figure the Lab readout shows');
+  });
+});
+
+describe('the path frame uses the Terrain Access names', () => {
+  const frameOf = (zip: Uint8Array) => jsonOf<{ coordinateFrame: string }>(zip, 'flow-flow-path.geojson').coordinateFrame;
+  const path = { cells: Int32Array.from([0]) };
+  const gridFrame = { originH1: -120, originH2: -80, cellSize: 1 };
+
+  it('scan-crs with a world origin and a resolved CRS', () => {
+    const zip = buildFlowPulsePackage(runOf(), { basename: 'flow', path, gridFrame, worldOrigin: { x: 1, y: 2 }, wkt: 'PROJCS["x"]' });
+    expect(frameOf(zip)).toBe('scan-crs');
+    expect(textOf(zip, 'flow-README.txt')).toContain('coordinateFrame scan-crs');
+  });
+
+  it('scan-source-coordinates with a world origin and no CRS', () => {
+    const zip = buildFlowPulsePackage(runOf(), { basename: 'flow', path, gridFrame, worldOrigin: { x: 1, y: 2 } });
+    expect(frameOf(zip)).toBe('scan-source-coordinates');
+  });
+
+  it('local-planar-metres with no world origin, from the (0, 0) corner in metres', () => {
+    const zip = buildFlowPulsePackage(runOf(), { basename: 'flow', path, gridFrame });
+    expect(frameOf(zip)).toBe('local-planar-metres');
+    const g = jsonOf<{ features: { geometry: { coordinates: number[][] } }[] }>(zip, 'flow-flow-path.geojson');
+    expect(g.features[0]!.geometry.coordinates[0]).toEqual([0.5, 0.5]);
   });
 });

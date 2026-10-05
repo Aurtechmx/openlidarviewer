@@ -146,10 +146,21 @@ export interface FlowGridFrame {
 
 const NO_DATA = -9999;
 
-/** The path GeoJSON's `coordinateFrame`: what its numbers are measured in. */
-function pathFrameName(frame: FlowGridFrame | null, worldOrigin: { readonly x: number; readonly y: number } | null): string {
-  if (!frame) return 'local-planar-metres';
-  return worldOrigin ? 'source-crs-planar' : 'local-planar-source-units';
+/**
+ * The path GeoJSON's `coordinateFrame`, in the names the Terrain Access
+ * export uses: `scan-crs` with a world origin and a resolved CRS,
+ * `scan-source-coordinates` with a world origin and no CRS, and
+ * `local-planar-metres` with no world origin.
+ */
+const PATH_FRAME_TEXT: Readonly<Record<string, string>> = {
+  'scan-crs': 'planar coordinates in the scan\'s resolved CRS (the CRS line above).',
+  'scan-source-coordinates': 'the scan\'s own source coordinates; no CRS resolved.',
+  'local-planar-metres': 'planar metres from the grid\'s own (0, 0) corner; no world origin.',
+};
+
+function pathFrameName(worldOrigin: { readonly x: number; readonly y: number } | null, crsResolved: boolean): string {
+  if (!worldOrigin) return 'local-planar-metres';
+  return crsResolved ? 'scan-crs' : 'scan-source-coordinates';
 }
 
 /** A README figure at `digits` decimals, trailing zeros dropped. */
@@ -287,6 +298,7 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
   readonly elevationOrigin: number | null;
   readonly terrainCaveat: FlowTerrainCaveat | null;
   readonly rasterCellSize: number | null;
+  readonly pathFrame: string;
 }): string {
   const r = result.record;
   const s = result.summary;
@@ -391,9 +403,9 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
   if (opts.hasPath) {
     lines.push(
       'flow-path.geojson coordinates',
-      '  Planar cell centres in the frame the CRS line above names (the same frame as',
-      '  the rasters\' xllcorner/yllcorner), NOT longitude/latitude. Reproject before',
-      '  loading into a lon/lat viewer.',
+      `  coordinateFrame ${opts.pathFrame}: ${PATH_FRAME_TEXT[opts.pathFrame] ?? ''}`,
+      '  Vertices are cell centres, in the same frame as the rasters\' xllcorner and',
+      '  yllcorner, NOT longitude/latitude. Reproject before loading into a lon/lat viewer.',
       '',
     );
   }
@@ -415,7 +427,9 @@ export function buildFlowPulsePackage(
     ...(options.digests ? { crsOrigin: options.digests.crsOrigin } : {}),
   };
   const grid = result.grid;
-  const frame = options.gridFrame ?? null;
+  // The raster frame is in source units, so it applies only with a world
+  // origin; without one the export stays in local planar metres from (0, 0).
+  const frame = options.worldOrigin ? options.gridFrame ?? null : null;
   // The true lower-left corner: the scan's world origin plus the DTM's own
   // raster offset. H1 is east and H2 north for either scene up-axis; a Y-up
   // scene only negates north when it places the overlay (flowOverlayFrame).
@@ -468,7 +482,7 @@ export function buildFlowPulsePackage(
     });
     const geojson = {
       type: 'FeatureCollection',
-      coordinateFrame: pathFrameName(frame, options.worldOrigin ?? null),
+      coordinateFrame: pathFrameName(options.worldOrigin ?? null, !!options.wkt || options.crsName != null),
       features: [{
         type: 'Feature',
         properties: { cells: options.path.cells.length },
@@ -539,6 +553,7 @@ export function buildFlowPulsePackage(
     crsName: options.crsName ?? null, hasWkt: !!options.wkt,
     verticalUnitLabel: options.verticalUnitLabel ?? 'units', hasPath, hasCatchment, sourceInterpretation,
     elevationOrigin, terrainCaveat: options.terrainCaveat ?? null, rasterCellSize: frame?.cellSize ?? null,
+    pathFrame: pathFrameName(options.worldOrigin ?? null, !!options.wkt || options.crsName != null),
     sourceSha256Text: options.sourceSha256 ?? (options.digests ? sourceSha256Text(options.digests) : (result.record.source.sourceDigest ?? SOURCE_NOT_SUPPLIED_NOTE)),
   });
   entries.push({

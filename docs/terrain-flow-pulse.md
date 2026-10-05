@@ -281,7 +281,7 @@ package's own Esri ASCII Grid writer rather than a new one.
 
 The package contains an accumulation raster and a direction raster, one
 value per DTM cell, at a local (0, 0) origin unless the caller supplies a
-world origin. When the caller also supplies the DTM's raster frame (its
+world origin. When the caller supplies a world origin and the DTM's raster frame (its
 `originH1`/`originH2` corner offset and cell size, in source units), the
 lower-left corner is the world origin plus that offset and the rasters use
 the source cell size. Without that frame, an anisotropic grid's rasters are
@@ -290,8 +290,9 @@ cell-size field, and the README states the true per-axis sizes. A sinks-and-depr
 inventory, largest first. A downstream path and a queried catchment are
 written only when the caller supplies them: the path ships as GeoJSON with
 one vertex per cell centre, marked with a `coordinateFrame` field that reads
-`source-crs-planar` when it is placed in the source CRS and
-`local-planar-metres` when it has no raster frame, since an unmarked GeoJSON file implies WGS84
+`scan-crs` with a world origin and a resolved CRS, `scan-source-coordinates`
+with a world origin and no CRS, and `local-planar-metres` with no world
+origin (the same names the Terrain Access export uses), since an unmarked GeoJSON file implies WGS84
 longitude and latitude by the format's own default; the catchment ships as a
 raster mask rather than a traced polygon, since no boundary-tracing
 algorithm is implemented.
