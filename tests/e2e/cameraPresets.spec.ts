@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropTinyPly } from './helpers';
+import { dropTinyPly, pinNavigationPanel } from './helpers';
 import { isBenignPageError } from './pageErrors';
 
 /**
@@ -28,6 +28,7 @@ import { isBenignPageError } from './pageErrors';
  */
 
 async function loadSample(page: Page): Promise<void> {
+  await pinNavigationPanel(page);
   await page.goto('/');
   await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });

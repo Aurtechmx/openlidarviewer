@@ -1583,9 +1583,9 @@ dock.setEmpty(true);
 // always-visible Point Size / EDL controls until a scan actually attaches.
 inspector.setEmpty(true);
 
-// Game-style navigation: mode switcher, speed slider, controls HUD.
+// Navigation bar; the opening fit keeps the scan above its mode triangle.
 const navBar = new NavBar(navWiring.callbacks);
-
+void viewerLoaded.then((v) => v.setFramingReserve(() => navBar.framingReservePx()));
 const projectCard = new ProjectCard();
 
 // The streaming-COPC panel (phase, live status, controls), its quality

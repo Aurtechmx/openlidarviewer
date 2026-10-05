@@ -30,6 +30,8 @@ export interface PlanViewActions {
    * every route that aims it.
    */
   notePlanViewPreset: (name: CameraPresetName) => void;
+  /** Show or hide the Navigation panel (camera presets, views, Ortho, Plan). */
+  toggleNavigationPanel: () => void;
 }
 
 export interface CameraActionDeps {
@@ -75,6 +77,16 @@ export function contributeCameraActions(deps: CameraActionDeps): Action[] {
     hint: 'Look straight down in parallel projection, with the hand tool on the drag.',
     keywords: ['plan', 'top', 'ortho', 'orthographic', 'parallel', '2d', 'map', 'pan'],
     run: () => deps.planView.togglePlanView(),
+  });
+  // The Navigation panel starts closed; this is its palette route, beside H
+  // and the panel button on the navigation bar.
+  actions.push({
+    id: 'camera.navigation-panel',
+    title: actionTitle('camera.navigation-panel'),
+    section: 'Camera',
+    hint: 'Show or hide the Navigation panel: camera presets, the six views, Ortho and Plan. H does the same.',
+    keywords: ['navigation', 'panel', 'hud', 'legend', 'views', 'camera', 'help'],
+    run: () => deps.planView.toggleNavigationPanel(),
   });
   // The six axis-aligned views and the orthographic toggle, which until now
   // lived only on the navigation panel. That made the panel undismissable in

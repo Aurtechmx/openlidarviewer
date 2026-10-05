@@ -12,6 +12,7 @@
 
 import * as THREE from 'three';
 import { orthoHalfExtents } from './orthoProjection';
+import { clampReserve } from './cameraPresets';
 
 /** A fresh orthographic camera sharing the perspective camera's depth range. */
 export function makeOrthoCamera(near: number, far: number): THREE.OrthographicCamera {
@@ -84,4 +85,91 @@ export function followPerspective(
   ortho.near = near;
   ortho.far = far;
   ortho.updateProjectionMatrix();
+}
+
+/**
+ * Shift the projection window so the image moves up by `ndcY` (NDC units) on
+ * both cameras, without moving either camera. Zero clears the shift. The
+ * perspective camera's view offset carries its aspect as the full width,
+ * because `setViewOffset` overwrites `aspect` with `fullWidth / fullHeight`.
+ * Raycasting and `Vector3.project` read the projection matrix, so picking
+ * follows the shift.
+ */
+export function setLensShift(
+  persp: THREE.PerspectiveCamera,
+  ortho: THREE.OrthographicCamera,
+  ndcY: number,
+): void {
+  if (ndcY === 0) {
+    persp.clearViewOffset();
+    ortho.clearViewOffset();
+    return;
+  }
+  const a = persp.aspect;
+  persp.setViewOffset(a, 1, 0, ndcY / 2, a, 1);
+  ortho.setViewOffset(1, 1, 0, ndcY / 2, 1, 1);
+}
+
+/**
+ * The opening fit's lens shift, owned in one place so a resize can refit it
+ * and a capture can clear it without racing a newer fit. Every change bumps a
+ * generation; a capture restores its shift only if nothing changed meanwhile.
+ */
+export class LensShift {
+  private _value = 0;
+  private _generation = 0;
+  /** True from an opening fit until a saved view, preset or standard view clears it. */
+  private _fitted = false;
+
+  private readonly _persp: () => THREE.PerspectiveCamera;
+  private readonly _ortho: () => THREE.OrthographicCamera;
+
+  constructor(persp: () => THREE.PerspectiveCamera, ortho: () => THREE.OrthographicCamera) {
+    this._persp = persp;
+    this._ortho = ortho;
+  }
+
+  get value(): number {
+    return this._value;
+  }
+
+  /** The opening fit's shift; resizes keep refitting it until {@link clear}. */
+  fit(ndcY: number): void {
+    this._fitted = true;
+    this._apply(ndcY);
+  }
+
+  /** Drop the shift for a pose that must stay centred; resizes leave it at 0. */
+  clear(): void {
+    this._fitted = false;
+    this._apply(0);
+  }
+
+  /**
+   * After a resize: an opening fit takes the new reserve share (0 while the bar
+   * does not lay out, back to a band once it does) and the new aspect. A
+   * cleared shift stays cleared, so a saved view or preset is never lifted.
+   */
+  refit(reserve: number): void {
+    if (this._fitted) this._apply(clampReserve(reserve));
+  }
+
+  private _apply(ndcY: number): void {
+    this._value = ndcY;
+    this._generation++;
+    setLensShift(this._persp(), this._ortho(), ndcY);
+  }
+
+  /** Run `capture` without the shift; put it back unless it changed meanwhile. */
+  async without<T>(capture: () => Promise<T>): Promise<T> {
+    const value = this._value;
+    if (value === 0) return capture();
+    setLensShift(this._persp(), this._ortho(), 0);
+    const generation = this._generation;
+    try {
+      return await capture();
+    } finally {
+      if (this._generation === generation) setLensShift(this._persp(), this._ortho(), value);
+    }
+  }
 }

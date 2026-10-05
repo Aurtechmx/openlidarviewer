@@ -23,6 +23,7 @@
 export const FRAME_ALL = 'Frame all';
 export const ORTHOGRAPHIC = 'Orthographic projection';
 export const PLAN_VIEW = 'Plan view';
+export const NAVIGATION_PANEL = 'Show navigation panel';
 export const MEASURE = 'Measure';
 export const INSPECT = 'Inspect';
 export const PROBE = 'Probe';

@@ -111,14 +111,9 @@ import type { StockpileBandInputs } from './measure/stockpileBandInputs';
 export type { StockpileBandInputs } from './measure/stockpileBandInputs';
 import { computeLassoVolume as computeLassoVolumeWalk, copyPlacedPositions, lassoVisibilityFilters, makeLassoProjector, sourcePositions, streamingLassoParts } from './measure/lassoVolumeCompute';
 import type { LassoSelectionBasis, LassoSelectionBasisReport } from './measure/lassoVolumeCompute';
-import {
-  cameraPresetPose,
-  standardViewPose,
-  fitBoxDistance,
-  type CameraPresetName,
-  type StandardView,
-} from './camera/cameraPresets';
-import { followPerspective } from './camera/orthoCamera';
+import { cameraPresetPose, standardViewPose, openingFit } from './camera/cameraPresets';
+import type { CameraPresetName, StandardView } from './camera/cameraPresets';
+import { followPerspective, LensShift } from './camera/orthoCamera';
 import { projectionFromLegacyFov } from './camera/orthoProjection';
 export type { CameraPresetName, StandardView } from './camera/cameraPresets';
 export { chooseRenderBackendForPage } from './viewerRenderBootstrap';
@@ -3484,6 +3479,7 @@ export class Viewer {
 
   /** Glide the camera to a previously saved viewpoint. */
   applyCameraPose(pose: CameraPose): void {
+    this._setLensShift(null);
     this._nav.applyPose(pose);
   }
 
@@ -3505,13 +3501,12 @@ export class Viewer {
   }
 
   /**
-   * Restore a camera state captured by {@link getCameraState}. The mode is
-   * applied first so the pose tween runs under the right navigation model; the
-   * projection is set last. A legacy view has no `projection` field but a
-   * `fov ≈ 2` (the old near-ortho lens), which restores as orthographic; a real
-   * perspective fov is clamped and applied to the perspective camera.
+   * Restore a {@link getCameraState} capture, centred (no lens shift): mode
+   * first, projection last. A legacy `fov ≈ 2` (old near-ortho lens) restores
+   * as orthographic; a real perspective fov is clamped and applied.
    */
   applyCameraState(state: SavedCameraState): void {
+    this._setLensShift(null);
     if (state.mode && state.mode !== this._nav.mode) this._nav.setMode(state.mode);
     const ortho = state.projection === 'orthographic'
       || projectionFromLegacyFov(state.fov, 2) === 'orthographic';
@@ -4005,6 +4000,20 @@ export class Viewer {
     if (box) this._frameBox(box);
   }
 
+  /** Pixels at the bottom of the canvas the opening fit keeps the scan out of. */
+  setFramingReserve(px: () => number): void {
+    this._framingReservePx = px;
+  }
+
+  private _framingReservePx: () => number = () => 0;
+  private readonly _lens = new LensShift(() => this._camera, () => this._orthoCamera);
+  /** Apply the opening fit's lens shift on both cameras; null clears it. */
+  private _setLensShift(ndcY: number | null): void {
+    if (ndcY === null) this._lens.clear();
+    else this._lens.fit(ndcY);
+    this.requestFrame();
+  }
+
   /**
    * Fit the camera for a load's stand-in cloud (`app/previewCloud.ts`), which
    * lives outside the layer table: Z up, navigation on, one fit to `min`..
@@ -4034,26 +4043,20 @@ export class Viewer {
       .addScaledVector(this._worldUp, Math.sin(0.61))
       .normalize();
 
-    // Extent-aware fit: the distance at which the actual bounding BOX just fills
-    // the frustum (aspect + FOV aware), not its much-larger bounding sphere. So
-    // a flat wide scan fills the viewport and a tall scan isn't over-zoomed —
-    // the framing adapts to the scan's shape. 1.05 leaves a small margin so the
-    // edge points sit just inside the frame rather than on its border.
-    const dist = fitBoxDistance({
+    // Box fit above the nav widget's band; target = box centre, lens shift lifts the image.
+    const h = this._canvas.clientHeight;
+    const fit = openingFit({
       boxMin: box.min,
       boxMax: box.max,
-      look: { x: -dir.x, y: -dir.y, z: -dir.z },
+      dir,
       worldUp: this._worldUp,
       fovDeg: this._camera.fov,
       aspect: this._camera.aspect,
-      pad: 1.05,
+      reserve: h > 0 ? this._framingReservePx() / h : 0,
     });
-
-    const pos = target.clone().addScaledVector(dir, dist);
-    // Slightly longer than the default tween — a Frame All sweep usually
-    // covers a larger camera delta, so the extra ~100 ms makes the cubic
-    // ease feel cinematic rather than rushed. Matches model-viewer's
-    // jump-to-goal cadence on a fresh load.
+    target.set(fit.target.x, fit.target.y, fit.target.z);
+    const pos = new THREE.Vector3(fit.position.x, fit.position.y, fit.position.z);
+    this._setLensShift(fit.lensShift);
     this._nav.tweenTo(pos, target, 0.9);
   }
 
@@ -4071,6 +4074,7 @@ export class Viewer {
   setCameraPreset(name: CameraPresetName): boolean {
     const sphere = this._visibleBoundingSphere();
     if (!sphere) return false;
+    this._setLensShift(null);
     const horiz = this._horizontalAxis();
     const pose = cameraPresetPose(name, {
       center: sphere.center,
@@ -4115,6 +4119,7 @@ export class Viewer {
   setStandardView(view: StandardView): boolean {
     const sphere = this._visibleBoundingSphere();
     if (!sphere) return false;
+    this._setLensShift(null);
     // A standard view is an orbit pose — make sure we're in orbit mode so the
     // controls own the camera (walk/fly would fight the snap).
     this._nav.setMode('orbit');
@@ -4364,7 +4369,8 @@ export class Viewer {
    * {@link SnapshotHost}; this method only binds the Viewer's own state to it.
    */
   async snapshot(options?: SnapshotOptions): Promise<Blob> {
-    return (await loadSnapshot()).captureSnapshot(this._buildSnapshotHost(), options);
+    const snap = await loadSnapshot();
+    return this._lens.without(() => snap.captureSnapshot(this._buildSnapshotHost(), options));
   }
 
   /** Bind the Viewer's live render state to the {@link SnapshotHost} contract. */
@@ -4404,19 +4410,10 @@ export class Viewer {
   }
 
   /**
-   * Visual Export Studio — render the live scene through a registered
-   * export mode and return the result as a `Blob` ready for download.
-   *
-   * The Studio ships seven modes: `orthographic-rgb`, `height-map`,
-   * `intensity`, `classification`, `depth`, `normal`, `contour`. The mode
-   * factories live in their own code-split chunk (`loadExportStudio`) so they
-   * only ship when the user opens the Studio panel or invokes an Export
-   * action.
-   *
-   * The {@link ExportSceneAdapter} below is the narrow Viewer slice each
-   * exporter consumes — colour-mode swap (and restore) and cloud capability
-   * queries. Defining it inline here keeps the export module free of any
-   * circular dependency on the Viewer class.
+   * Visual Export Studio: render the live scene through a registered export
+   * mode (factories in the lazy `loadExportStudio` chunk) and return a `Blob`.
+   * Rendered without the opening fit's lens shift, so the image is centred.
+   * The {@link ExportSceneAdapter} is the narrow Viewer slice each exporter uses.
    */
   async exportImage(
     mode: ExportMode,
@@ -4425,7 +4422,7 @@ export class Viewer {
   ): Promise<ExportResult> {
     const adapter = this._buildExportAdapter(); // LIVE closures: snapshots NOTHING (gate: exportImageAction)
     const studio = await loadExportStudio();
-    return studio.renderExport(
+    return this._lens.without(() => studio.renderExport(
       mode,
       {
         renderer: this._renderer,
@@ -4436,7 +4433,7 @@ export class Viewer {
         classScopeStamp, // empty when nothing is hidden
       },
       options,
-    );
+    ));
   }
 
   /**
@@ -4678,17 +4675,19 @@ export class Viewer {
 
     const camera = this._camera;
     const prevAspect = camera.aspect;
-    try {
-      camera.aspect = plan.aspect;
-      camera.updateProjectionMatrix();
-      const blob = await this._renderAtSize(plan.widthPx, plan.heightPx, () => {
-        this._renderer.render(this._scene, camera);
-      });
-      return { blob, widthPx: plan.widthPx, heightPx: plan.heightPx };
-    } finally {
-      camera.aspect = prevAspect;
-      camera.updateProjectionMatrix();
-    }
+    return this._lens.without(async () => {
+      try {
+        camera.aspect = plan.aspect;
+        camera.updateProjectionMatrix();
+        const blob = await this._renderAtSize(plan.widthPx, plan.heightPx, () => {
+          this._renderer.render(this._scene, camera);
+        });
+        return { blob, widthPx: plan.widthPx, heightPx: plan.heightPx };
+      } finally {
+        camera.aspect = prevAspect;
+        camera.updateProjectionMatrix();
+      }
+    });
   }
 
   /**
@@ -5954,6 +5953,7 @@ export class Viewer {
     if (w === 0 || h === 0) return;
     this._camera.aspect = w / h;
     this._camera.updateProjectionMatrix();
+    this._lens.refit(this._framingReservePx() / h);
     // Re-apply the pixel ratio: browser zoom and monitor-DPI changes alter
     // devicePixelRatio, and the backing-store resolution must follow or the
     // scene renders soft/aliased after a zoom.

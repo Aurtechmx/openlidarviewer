@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropTinyLas, dropTinyPly, reloadSettled } from './helpers';
+import { dropTinyLas, dropTinyPly, framedScanCentre, reloadSettled } from './helpers';
 import { DEFAULT_FOV } from '../../src/render/renderBootstrapPolicy';
 import { MOBILE_LAYOUT_QUERY } from '../../src/ui/isMobileDevice';
 
@@ -192,13 +192,14 @@ test.describe('mobile touch model — twist + pinch + pan decomposition', () => 
 
     const before = await readPose(page);
 
-    // Two quick taps at the centre, where the dropped cloud sits — the touch
+    // Two quick taps where the framed cloud's centre lands — the touch
     // double-tap the platform's dblclick never delivers on a touch-action:none
     // canvas. It should pick the point under the taps and focus the camera.
     const canvasBox = await page.locator('.olv-canvas').boundingBox();
     if (!canvasBox) throw new Error('no canvas bounding box');
-    const cx = canvasBox.width / 2;
-    const cy = canvasBox.height / 2;
+    const centre = await framedScanCentre(page);
+    const cx = centre.x - canvasBox.x;
+    const cy = centre.y - canvasBox.y;
     await singleTap(page, cx, cy);
     await page.waitForTimeout(80);
     await singleTap(page, cx, cy);

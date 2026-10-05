@@ -49,6 +49,8 @@ export interface NavBarWiring {
    * mode stops claiming a scene the user has aimed away from.
    */
   readonly notePlanViewPreset: (name: CameraPresetName) => void;
+  /** Show or hide the Navigation panel, as its button beside the mode triangle does. */
+  readonly toggleNavigationPanel: () => void;
 }
 
 /** Capitalise a lowercase view / preset name for the toast. */
@@ -117,5 +119,6 @@ export function createNavBarWiring(deps: NavBarWiringDeps): NavBarWiring {
     togglePlanView,
     resetPlanView: () => plan?.reset(),
     notePlanViewPreset: (name) => plan?.noteCameraPreset(name),
+    toggleNavigationPanel: () => deps.getNavBar()?.toggleNavigationPanel(),
   };
 }

@@ -393,3 +393,95 @@ export function standardViewPose(view: StandardView, input: PresetInput): Preset
   }
   return { position: add(target, scale(dir, dist)), target };
 }
+
+/*
+ * Framing reserve: fit a scan into the part of the view that chrome leaves free.
+ *
+ * The opening fit (`fitBoxDistance`) fills the whole frustum, so the
+ * bottom-centre navigation widget lands on the scan the moment it opens. This
+ * takes a band at the bottom of the canvas, as a fraction of its height, and
+ * returns the frustum to fit against plus the offset that recentres the image
+ * on what is left:
+ *
+ *   - the vertical field of view shrinks so the box fills only the top
+ *     `1 − r` of the height, with the horizontal field kept as it was;
+ *   - a lens shift of `r` in NDC (an off-axis projection window, see
+ *     `setLensShift` in orthoCamera.ts) lifts the box centre to the middle of
+ *     the free band. The camera and target do not move, so orbit still pivots
+ *     on the box centre.
+ *
+ */
+
+/** Largest share of the height a reserve may take; the scan keeps the rest. */
+export const MAX_FRAMING_RESERVE = 0.4;
+
+/** The frustum the fit should use when `reserve` of the height is taken. */
+export interface ReservedFrustum {
+  readonly fovDeg: number;
+  readonly aspect: number;
+  /** The reserve actually applied, after clamping. */
+  readonly reserve: number;
+}
+
+/** Clamp a reserve fraction to [0, MAX_FRAMING_RESERVE]; NaN reads as 0. */
+export function clampReserve(reserve: number): number {
+  if (!Number.isFinite(reserve) || reserve <= 0) return 0;
+  return Math.min(reserve, MAX_FRAMING_RESERVE);
+}
+
+/** The narrowed frustum for a bottom reserve. A zero reserve returns the input. */
+export function reservedFrustum(fovDeg: number, aspect: number, reserve: number): ReservedFrustum {
+  const r = clampReserve(reserve);
+  if (r === 0) return { fovDeg, aspect, reserve: 0 };
+  const tanV = Math.tan((fovDeg * Math.PI) / 360);
+  const narrowed = (Math.atan(tanV * (1 - r)) * 360) / Math.PI;
+  return { fovDeg: narrowed, aspect: aspect / (1 - r), reserve: r };
+}
+
+/** Inputs to {@link openingFit}. `dir` points from the target toward the camera. */
+export interface OpeningFitInput {
+  readonly boxMin: Vec3;
+  readonly boxMax: Vec3;
+  readonly dir: Vec3;
+  readonly worldUp: Vec3;
+  readonly fovDeg: number;
+  readonly aspect: number;
+  /** Share of the canvas height kept free at the bottom; see {@link reservedFrustum}. */
+  readonly reserve: number;
+}
+
+/** The opening pose, and the lens shift (NDC units) that lifts the image into the free band. */
+export interface OpeningFit {
+  readonly target: Vec3;
+  readonly position: Vec3;
+  readonly lensShift: number;
+}
+
+/**
+ * Fit a box for the opening view. The target is always the box centre, so
+ * orbit and zoom pivot on the scan. A bottom reserve narrows the fit and is
+ * paid for with a lens shift of `reserve` in NDC (the projection window moves
+ * down, so the image moves up), never by moving the target.
+ */
+export function openingFit(input: OpeningFitInput): OpeningFit {
+  const fr = reservedFrustum(input.fovDeg, input.aspect, input.reserve);
+  const dl = Math.hypot(input.dir.x, input.dir.y, input.dir.z) || 1;
+  const d = { x: input.dir.x / dl, y: input.dir.y / dl, z: input.dir.z / dl };
+  const dist = fitBoxDistance({
+    boxMin: input.boxMin,
+    boxMax: input.boxMax,
+    look: { x: -d.x, y: -d.y, z: -d.z },
+    worldUp: input.worldUp,
+    fovDeg: fr.fovDeg,
+    aspect: fr.aspect,
+    pad: 1.05,
+  });
+  const target = {
+    x: (input.boxMin.x + input.boxMax.x) / 2,
+    y: (input.boxMin.y + input.boxMax.y) / 2,
+    z: (input.boxMin.z + input.boxMax.z) / 2,
+  };
+  const position = { x: target.x + d.x * dist, y: target.y + d.y * dist, z: target.z + d.z * dist };
+  return { target, position, lensShift: fr.reserve };
+}
+
