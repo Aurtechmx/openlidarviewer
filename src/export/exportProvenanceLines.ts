@@ -69,7 +69,8 @@ const count = (n: number): string => n.toLocaleString('en-US');
  *
  * `reduced` is the caller's own record of whether the held points are a
  * display sample (true) or every record the file yields (false, e.g. a
- * full-resolution re-decode). Null falls back to the cloud: a load stride
+ * full-resolution re-decode). Even then, a cloud holding fewer points than
+ * its file declares is not called the full file. Null falls back to the cloud: a load stride
  * above 1, or a file that declares more points than the cloud holds.
  *
  * A truncated file (its body held fewer records than the header declares) is
@@ -88,8 +89,10 @@ export function pointBasisOfCloud(c: PointBasisCloud, reduced: boolean | null): 
     return `Point basis: truncated file (${count(trunc.read)} of ${count(trunc.declared)} declared points read)`;
   }
   const larger = declared !== undefined && Number.isFinite(declared) && declared > c.pointCount ? declared : null;
-  if (reduced === false) return pointBasisLine(true, larger ?? c.pointCount, null);
-  const sampled = reduced ?? ((c.loadStride ?? 1) > 1 || larger !== null);
+  // "Full file" only when the cloud holds every declared point; a re-decode
+  // that held fewer (a capped loader) reads as a sample with both counts.
+  if (reduced === false && larger === null) return pointBasisLine(true, c.pointCount, null);
+  const sampled = larger !== null || (reduced ?? (c.loadStride ?? 1) > 1);
   return sampled ? pointBasisLine(false, c.pointCount, larger) : pointBasisLine(true, c.pointCount, null);
 }
 

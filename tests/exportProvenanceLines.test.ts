@@ -82,6 +82,12 @@ describe('point basis of a loaded cloud', () => {
     expect(pointBasisOfCloud({ pointCount: 1200, sourceDeclaredPointCount: 1200 }, false)).toBe('Point basis: full file (1,200 points)');
   });
 
+  it('a full-resolution cloud holding fewer points than declared is not called the full file', () => {
+    const line = pointBasisOfCloud({ pointCount: 900, sourceDeclaredPointCount: 1000 }, false);
+    expect(line).not.toMatch(/full file/);
+    expect(line).toBe('Point basis: display sample (900 of 1,000 points)');
+  });
+
   it('a strided display sample, from the load stride or the caller\'s reduced state', () => {
     expect(pointBasisOfCloud({ pointCount: 500, loadStride: 4, sourceDeclaredPointCount: 2000 }, null))
       .toBe('Point basis: display sample (500 of 2,000 points)');
