@@ -111,9 +111,9 @@ import type { StockpileBandInputs } from './measure/stockpileBandInputs';
 export type { StockpileBandInputs } from './measure/stockpileBandInputs';
 import { computeLassoVolume as computeLassoVolumeWalk, copyPlacedPositions, lassoVisibilityFilters, makeLassoProjector, sourcePositions, streamingLassoParts } from './measure/lassoVolumeCompute';
 import type { LassoSelectionBasis, LassoSelectionBasisReport } from './measure/lassoVolumeCompute';
-import { cameraPresetPose, standardViewPose, fitBoxDistance, reservedFrustum, reserveShift } from './camera/cameraPresets';
+import { cameraPresetPose, standardViewPose, openingFit } from './camera/cameraPresets';
 import type { CameraPresetName, StandardView } from './camera/cameraPresets';
-import { followPerspective } from './camera/orthoCamera';
+import { followPerspective, setLensShift, withoutLensShift } from './camera/orthoCamera';
 import { projectionFromLegacyFov } from './camera/orthoProjection';
 export type { CameraPresetName, StandardView } from './camera/cameraPresets';
 export { chooseRenderBackendForPage } from './viewerRenderBootstrap';
@@ -3479,6 +3479,7 @@ export class Viewer {
 
   /** Glide the camera to a previously saved viewpoint. */
   applyCameraPose(pose: CameraPose): void {
+    this._setLensShift(0);
     this._nav.applyPose(pose);
   }
 
@@ -3500,13 +3501,12 @@ export class Viewer {
   }
 
   /**
-   * Restore a camera state captured by {@link getCameraState}. The mode is
-   * applied first so the pose tween runs under the right navigation model; the
-   * projection is set last. A legacy view has no `projection` field but a
-   * `fov ≈ 2` (the old near-ortho lens), which restores as orthographic; a real
-   * perspective fov is clamped and applied to the perspective camera.
+   * Restore a {@link getCameraState} capture, centred (no lens shift): mode
+   * first, projection last. A legacy `fov ≈ 2` (old near-ortho lens) restores
+   * as orthographic; a real perspective fov is clamped and applied.
    */
   applyCameraState(state: SavedCameraState): void {
+    this._setLensShift(0);
     if (state.mode && state.mode !== this._nav.mode) this._nav.setMode(state.mode);
     const ortho = state.projection === 'orthographic'
       || projectionFromLegacyFov(state.fov, 2) === 'orthographic';
@@ -4006,6 +4006,13 @@ export class Viewer {
   }
 
   private _framingReservePx: () => number = () => 0;
+  private _lensShift = 0;
+  /** Set (0 clears) the opening fit's lens shift on both cameras. */
+  private _setLensShift(ndcY: number): void {
+    this._lensShift = ndcY;
+    setLensShift(this._camera, this._orthoCamera, ndcY);
+    this.requestFrame();
+  }
 
   /**
    * Fit the camera for a load's stand-in cloud (`app/previewCloud.ts`), which
@@ -4036,24 +4043,20 @@ export class Viewer {
       .addScaledVector(this._worldUp, Math.sin(0.61))
       .normalize();
 
-    // Extent-aware box fit (not the bounding sphere), 1.05 margin, into the
-    // canvas above the band the navigation widget reserves (cameraPresets reservedFrustum).
-    const look = { x: -dir.x, y: -dir.y, z: -dir.z };
+    // Box fit above the nav widget's band; target = box centre, lens shift lifts the image.
     const h = this._canvas.clientHeight;
-    const fr = reservedFrustum(this._camera.fov, this._camera.aspect, h > 0 ? this._framingReservePx() / h : 0);
-    const dist = fitBoxDistance({
+    const fit = openingFit({
       boxMin: box.min,
       boxMax: box.max,
-      look,
+      dir,
       worldUp: this._worldUp,
-      fovDeg: fr.fovDeg,
-      aspect: fr.aspect,
-      pad: 1.05,
+      fovDeg: this._camera.fov,
+      aspect: this._camera.aspect,
+      reserve: h > 0 ? this._framingReservePx() / h : 0,
     });
-    const shift = reserveShift(look, this._worldUp, dist, this._camera.fov, fr.reserve);
-    target.add(new THREE.Vector3(shift.x, shift.y, shift.z));
-    const pos = target.clone().addScaledVector(dir, dist);
-    // 0.9 s, a little longer than the default: a Frame All sweep covers more ground.
+    target.set(fit.target.x, fit.target.y, fit.target.z);
+    const pos = new THREE.Vector3(fit.position.x, fit.position.y, fit.position.z);
+    this._setLensShift(fit.lensShift);
     this._nav.tweenTo(pos, target, 0.9);
   }
 
@@ -4071,6 +4074,7 @@ export class Viewer {
   setCameraPreset(name: CameraPresetName): boolean {
     const sphere = this._visibleBoundingSphere();
     if (!sphere) return false;
+    this._setLensShift(0);
     const horiz = this._horizontalAxis();
     const pose = cameraPresetPose(name, {
       center: sphere.center,
@@ -4115,6 +4119,7 @@ export class Viewer {
   setStandardView(view: StandardView): boolean {
     const sphere = this._visibleBoundingSphere();
     if (!sphere) return false;
+    this._setLensShift(0);
     // A standard view is an orbit pose — make sure we're in orbit mode so the
     // controls own the camera (walk/fly would fight the snap).
     this._nav.setMode('orbit');
@@ -4364,7 +4369,8 @@ export class Viewer {
    * {@link SnapshotHost}; this method only binds the Viewer's own state to it.
    */
   async snapshot(options?: SnapshotOptions): Promise<Blob> {
-    return (await loadSnapshot()).captureSnapshot(this._buildSnapshotHost(), options);
+    const snap = await loadSnapshot();
+    return withoutLensShift(this._camera, this._orthoCamera, this._lensShift, () => snap.captureSnapshot(this._buildSnapshotHost(), options));
   }
 
   /** Bind the Viewer's live render state to the {@link SnapshotHost} contract. */
@@ -4404,19 +4410,10 @@ export class Viewer {
   }
 
   /**
-   * Visual Export Studio — render the live scene through a registered
-   * export mode and return the result as a `Blob` ready for download.
-   *
-   * The Studio ships seven modes: `orthographic-rgb`, `height-map`,
-   * `intensity`, `classification`, `depth`, `normal`, `contour`. The mode
-   * factories live in their own code-split chunk (`loadExportStudio`) so they
-   * only ship when the user opens the Studio panel or invokes an Export
-   * action.
-   *
-   * The {@link ExportSceneAdapter} below is the narrow Viewer slice each
-   * exporter consumes — colour-mode swap (and restore) and cloud capability
-   * queries. Defining it inline here keeps the export module free of any
-   * circular dependency on the Viewer class.
+   * Visual Export Studio: render the live scene through a registered export
+   * mode (factories in the lazy `loadExportStudio` chunk) and return a `Blob`.
+   * Rendered without the opening fit's lens shift, so the image is centred.
+   * The {@link ExportSceneAdapter} is the narrow Viewer slice each exporter uses.
    */
   async exportImage(
     mode: ExportMode,
@@ -4425,7 +4422,7 @@ export class Viewer {
   ): Promise<ExportResult> {
     const adapter = this._buildExportAdapter(); // LIVE closures: snapshots NOTHING (gate: exportImageAction)
     const studio = await loadExportStudio();
-    return studio.renderExport(
+    return withoutLensShift(this._camera, this._orthoCamera, this._lensShift, () => studio.renderExport(
       mode,
       {
         renderer: this._renderer,
@@ -4436,7 +4433,7 @@ export class Viewer {
         classScopeStamp, // empty when nothing is hidden
       },
       options,
-    );
+    ));
   }
 
   /**
@@ -4678,7 +4675,9 @@ export class Viewer {
 
     const camera = this._camera;
     const prevAspect = camera.aspect;
+    const shift = this._lensShift;
     try {
+      setLensShift(camera, this._orthoCamera, 0);
       camera.aspect = plan.aspect;
       camera.updateProjectionMatrix();
       const blob = await this._renderAtSize(plan.widthPx, plan.heightPx, () => {
@@ -4687,6 +4686,7 @@ export class Viewer {
       return { blob, widthPx: plan.widthPx, heightPx: plan.heightPx };
     } finally {
       camera.aspect = prevAspect;
+      setLensShift(camera, this._orthoCamera, shift);
       camera.updateProjectionMatrix();
     }
   }

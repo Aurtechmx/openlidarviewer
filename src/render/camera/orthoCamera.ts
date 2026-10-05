@@ -85,3 +85,42 @@ export function followPerspective(
   ortho.far = far;
   ortho.updateProjectionMatrix();
 }
+
+/**
+ * Shift the projection window so the image moves up by `ndcY` (NDC units) on
+ * both cameras, without moving either camera. Zero clears the shift. The
+ * perspective camera's view offset carries its aspect as the full width,
+ * because `setViewOffset` overwrites `aspect` with `fullWidth / fullHeight`.
+ * Raycasting and `Vector3.project` read the projection matrix, so picking
+ * follows the shift.
+ */
+export function setLensShift(
+  persp: THREE.PerspectiveCamera,
+  ortho: THREE.OrthographicCamera,
+  ndcY: number,
+): void {
+  if (ndcY === 0) {
+    persp.clearViewOffset();
+    ortho.clearViewOffset();
+    return;
+  }
+  const a = persp.aspect;
+  persp.setViewOffset(a, 1, 0, ndcY / 2, a, 1);
+  ortho.setViewOffset(1, 1, 0, ndcY / 2, 1, 1);
+}
+
+/** Run `capture` with the lens shift cleared, then put it back. */
+export async function withoutLensShift<T>(
+  persp: THREE.PerspectiveCamera,
+  ortho: THREE.OrthographicCamera,
+  ndcY: number,
+  capture: () => Promise<T>,
+): Promise<T> {
+  if (ndcY === 0) return capture();
+  setLensShift(persp, ortho, 0);
+  try {
+    return await capture();
+  } finally {
+    setLensShift(persp, ortho, ndcY);
+  }
+}

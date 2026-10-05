@@ -405,13 +405,10 @@ export function standardViewPose(view: StandardView, input: PresetInput): Preset
  *
  *   - the vertical field of view shrinks so the box fills only the top
  *     `1 − r` of the height, with the horizontal field kept as it was;
- *   - the camera and its target move down along the camera's up vector by
- *     `r · dist · tan(fov/2)`, which lifts the box centre to the middle of the
- *     free band.
- *
- * The lift is exact at the target's depth. Nearer and farther points move by
- * slightly different amounts under perspective, and the fit's own margin
- * absorbs that.
+ *   - a lens shift of `r` in NDC (an off-axis projection window, see
+ *     `setLensShift` in orthoCamera.ts) lifts the box centre to the middle of
+ *     the free band. The camera and target do not move, so orbit still pivots
+ *     on the box centre.
  *
  */
 
@@ -441,22 +438,50 @@ export function reservedFrustum(fovDeg: number, aspect: number, reserve: number)
   return { fovDeg: narrowed, aspect: aspect / (1 - r), reserve: r };
 }
 
+/** Inputs to {@link openingFit}. `dir` points from the target toward the camera. */
+export interface OpeningFitInput {
+  readonly boxMin: Vec3;
+  readonly boxMax: Vec3;
+  readonly dir: Vec3;
+  readonly worldUp: Vec3;
+  readonly fovDeg: number;
+  readonly aspect: number;
+  /** Share of the canvas height kept free at the bottom; see {@link reservedFrustum}. */
+  readonly reserve: number;
+}
+
+/** The opening pose, and the lens shift (NDC units) that lifts the image into the free band. */
+export interface OpeningFit {
+  readonly target: Vec3;
+  readonly position: Vec3;
+  readonly lensShift: number;
+}
+
 /**
- * The world offset to add to both the camera position and its target, so the
- * box centre sits in the middle of the free band. `look` points from the
- * camera toward the target.
+ * Fit a box for the opening view. The target is always the box centre, so
+ * orbit and zoom pivot on the scan. A bottom reserve narrows the fit and is
+ * paid for with a lens shift of `reserve` in NDC (the projection window moves
+ * down, so the image moves up), never by moving the target.
  */
-export function reserveShift(look: Vec3, worldUp: Vec3, dist: number, fovDeg: number, reserve: number): Vec3 {
-  const r = clampReserve(reserve);
-  if (r === 0) return { x: 0, y: 0, z: 0 };
-  const ll = Math.hypot(look.x, look.y, look.z);
-  if (ll < 1e-9) return { x: 0, y: 0, z: 0 };
-  const f = { x: look.x / ll, y: look.y / ll, z: look.z / ll };
-  const right = cross(f, worldUp);
-  const rl = Math.hypot(right.x, right.y, right.z);
-  if (rl < 1e-9) return { x: 0, y: 0, z: 0 };
-  const up = cross({ x: right.x / rl, y: right.y / rl, z: right.z / rl }, f);
-  const s = -r * dist * Math.tan((fovDeg * Math.PI) / 360);
-  return { x: up.x * s, y: up.y * s, z: up.z * s };
+export function openingFit(input: OpeningFitInput): OpeningFit {
+  const fr = reservedFrustum(input.fovDeg, input.aspect, input.reserve);
+  const dl = Math.hypot(input.dir.x, input.dir.y, input.dir.z) || 1;
+  const d = { x: input.dir.x / dl, y: input.dir.y / dl, z: input.dir.z / dl };
+  const dist = fitBoxDistance({
+    boxMin: input.boxMin,
+    boxMax: input.boxMax,
+    look: { x: -d.x, y: -d.y, z: -d.z },
+    worldUp: input.worldUp,
+    fovDeg: fr.fovDeg,
+    aspect: fr.aspect,
+    pad: 1.05,
+  });
+  const target = {
+    x: (input.boxMin.x + input.boxMax.x) / 2,
+    y: (input.boxMin.y + input.boxMax.y) / 2,
+    z: (input.boxMin.z + input.boxMax.z) / 2,
+  };
+  const position = { x: target.x + d.x * dist, y: target.y + d.y * dist, z: target.z + d.z * dist };
+  return { target, position, lensShift: fr.reserve };
 }
 
