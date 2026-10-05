@@ -45,6 +45,7 @@ import './98b-process-studio.css'; // Process Studio panel: adaptive stages, pro
 import './98c-range-workbench.css'; // Range Frame Workbench: structured-data launcher, acquisition-grid raster, legend and per-frame diagnostics.
 import './98d-feature-candidates.css'; // Feature candidates: classified-scan launcher and the building/conductor candidate-review list.
 import './98e-observatory.css'; // Observatory panel: section layout and the origin/basis/suggested-station chip badges.
+import './98f-labs.css'; // Field Simulation Labs: colour-map legend ramps, pattern swatches, grid frame and caveat banner.
 import './99-mobile-gui-refresh.css'; // Mobile GUI refresh (v0.6.x) and the landscape-phone left rail.
 import './99y-tool-launcher.css'; // Tools-tab launcher: tool rows with their key chips, session counts, and the compact strip.
 import './99y2-results-shelf.css'; // Results shelf: the rail-footer toggle and its grouped list of session results.

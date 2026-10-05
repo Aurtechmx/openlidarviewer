@@ -35,6 +35,8 @@ import type { ExportDigests } from '../../science/exportDigestRecord';
 import type { SourceInterpretationRecord } from '../../science/sourceInterpretation';
 import { showBusyScan } from '../busyScan';
 import { el } from '../dom';
+import { hideTip } from '../tipLayer';
+import { labStatRow } from './labStats';
 import type { ModalHandle } from '../Modal';
 import { openLabSurface } from '../labSurface';
 import {
@@ -302,7 +304,7 @@ export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | nu
   if (!outcome) return card;
   if (!outcome.ok) {
     card.append(
-      el('div', { className: 'olv-story-headline', text: 'Terrain Access did not run' }),
+      el('div', { className: 'olv-story-headline olv-lab-refusal', text: 'Terrain Access did not run' }),
       el('div', { className: 'olv-story-next', text: outcome.reason }),
       methodDetails([row('Reason code', outcome.code)]),
     );
@@ -310,7 +312,7 @@ export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | nu
   }
   const d = outcome.diagnostics;
   card.append(
-    el('div', { className: 'olv-story-headline', text: 'A geometric traversability screening — not a safety or passability guarantee' }),
+    el('div', { className: 'olv-story-headline olv-lab-caveat', text: 'A geometric traversability screening — not a safety or passability guarantee' }),
     row('Route cells', String(d.cellCount)),
     row('Horizontal length', `${d.horizontalLengthM.toFixed(1)} m`),
     row('Ascent / descent', `${d.totalAscentM.toFixed(1)} m / ${d.totalDescentM.toFixed(1)} m`),
@@ -331,6 +333,18 @@ export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | nu
     methodDetails([row('Method', outcome.record.methods.join(' → '))]),
   );
   return card;
+}
+
+/** The figure row under the map after a route is found; null before a run or on a refusal. */
+export function terrainAccessStats(outcome: TerrainAccessLabOutcome | null): HTMLElement | null {
+  if (!outcome?.ok) return null;
+  const d = outcome.diagnostics;
+  return labStatRow('Route figures', [
+    { label: 'Length', value: d.horizontalLengthM.toFixed(1), unit: 'm' },
+    { label: 'Ascent', value: d.totalAscentM.toFixed(1), unit: 'm' },
+    { label: 'Max grade', value: (Math.atan(d.maxLongitudinalGrade) * 180 / Math.PI).toFixed(1), unit: '°' },
+    { label: 'Cells', value: String(d.cellCount) },
+  ]);
 }
 
 /** Plain lines beside a Terrain Access map and route. */
@@ -648,6 +662,7 @@ export function mountTerrainAccessInteractive(
   const inspectorPanel = el('div', { className: 'olv-ta-inspector' });
   const selectionPanel = el('div', { className: 'olv-ta-selection' });
   const runCard = el('div', { className: 'olv-ta-run-card' });
+  const statsHost = el('div', { className: 'olv-ta-stats' });
 
   const modeCtl = segmentedControl<SelectMode>(
     'What a selected cell does',
@@ -784,6 +799,7 @@ export function mountTerrainAccessInteractive(
     goalCell = null;
     outcome = null;
     grid.setRouteMask(null);
+    statsHost.replaceChildren();
     overlay?.clearRoute();
     renderSelection();
     applyOverlayVisibility();
@@ -820,7 +836,7 @@ export function mountTerrainAccessInteractive(
       if (outcome.ok) {
         // The Results shelf lists the latest route by reference.
         publishLabRun('terrain-access', { outcome, layerId: input?.layerId ?? null, filename: input?.filename ?? null });
-        grid.setRouteMask(maskFromIndices(readyPreview.grid.cols * readyPreview.grid.rows, outcome.path));
+        grid.setRouteMask(maskFromIndices(readyPreview.grid.cols * readyPreview.grid.rows, outcome.path), outcome.path);
         if (overlay && overlayFrame) overlay.setRoute(buildTerrainAccessRouteBuffers(readyPreview.grid, outcome.path, overlayFrame));
         announce('Terrain Access route found.');
       } else {
@@ -829,22 +845,27 @@ export function mountTerrainAccessInteractive(
         announce(`Terrain Access did not run: ${outcome.reason}`);
       }
       runCard.replaceChildren(renderTerrainAccessRunCard(outcome));
+      statsHost.replaceChildren(...[terrainAccessStats(outcome)].filter((n): n is HTMLElement => n !== null));
+      // The Run button's tip sits over the card that just filled in.
+      hideTip();
       renderSelection();
     };
 
     runCard.replaceChildren(renderTerrainAccessRunCard(null));
     inspectorPanel.replaceChildren();
 
+    // The map leads, then its figures and legend; reading notes come after the result.
     body.replaceChildren(
-      howToRead(TERRAIN_ACCESS_HOW_TO_READ),
       modeCtl.element,
       stepLine,
       grid.element,
+      statsHost,
       terrainAccessGridLegend(),
       selectionPanel,
       runButton,
       inspectorPanel,
       runCard,
+      howToRead(TERRAIN_ACCESS_HOW_TO_READ),
       overlayHost ? el('div', { className: 'olv-ta-overlay-section' }, [overlayToggle]) : el('div', {
         className: 'olv-ta-overlay-unavailable',
         text: 'The 3D traversability overlay is not available in this view; the 2D result grid still carries every interaction.',
@@ -892,6 +913,7 @@ export function mountTerrainAccessInteractive(
     // Lab open reclaims the SAME instance via `acquireTerrainAccessOverlay`
     // rather than constructing a second one that would orphan the first.
     dispose: () => {
+      grid.dispose();
       if (!overlayOn && persistentTerrainAccessOverlay) {
         persistentTerrainAccessOverlay.overlay.dispose();
         persistentTerrainAccessOverlay = null;

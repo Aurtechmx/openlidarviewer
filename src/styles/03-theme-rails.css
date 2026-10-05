@@ -14,6 +14,9 @@
  * returning user reads the same affordances.
  */
 body.olv-theme-light {
+  --lab-frame: var(--lab-frame-on-light);
+  --lab-caveat-ink: var(--lab-caveat-ink-on-light);
+  --lab-caveat-fill: var(--lab-caveat-fill-on-light);
   color-scheme: light;
   --bg: #f4f6fb;
   --panel: #ffffff;
@@ -66,6 +69,8 @@ body.olv-theme-light {
  * pair (text 21:1, dim 12.6:1, faint 4.6:1).
  */
 body.olv-theme-high-contrast {
+  --lab-frame: var(--text);
+  --lab-caveat-fill: transparent;
   color-scheme: dark;
   --bg: #000000;
   --panel: #0a0a0a;
