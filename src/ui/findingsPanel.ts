@@ -72,7 +72,7 @@ export function buildFindingsPanel(deps: FindingsPanelDeps): MountedFindingsPane
   addBtn.title = 'Append the placed measurements to the saved findings, each with its band and caveats.';
   const exportBtn = el('button', { className: 'olv-bc-pill olv-export-product-btn olv-findings-export', text: 'Export findings report' });
   exportBtn.type = 'button';
-  exportBtn.title = 'Export the saved findings as the tamper-evident report (JSON, SHA-256 digest).';
+  exportBtn.title = 'Export the saved findings as the integrity report (JSON, SHA-256 content digest).';
   const clearBtn = el('button', { className: 'olv-bc-pill olv-export-product-btn olv-findings-clear', text: 'Clear all' });
   clearBtn.type = 'button';
   clearBtn.title = 'Empty the saved findings for this scan. Undo is offered afterwards. Exported reports are unaffected.';

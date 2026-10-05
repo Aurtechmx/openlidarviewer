@@ -15,7 +15,7 @@ function reportInput(over: Partial<ReportManifestInput> = {}): ReportManifestInp
 }
 
 describe('verifyReportFile', () => {
-  test('a freshly built (SHA-256) report verifies as intact', () => {
+  test('a freshly built (SHA-256) report verifies as matching its contents', () => {
     const json = JSON.stringify(buildReportManifest(reportInput()));
     const r = verifyReportFile(json);
     expect(r.recognised).toBe(true);
@@ -24,7 +24,9 @@ describe('verifyReportFile', () => {
     expect(r.software).toBe('0.5.2');
     expect(r.classificationEpoch).toBe(3);
     expect(r.findingsCount).toBe(1);
-    expect(r.reason).toMatch(/intact/i);
+    expect(r.reason).toMatch(/digest matches the contents/i);
+    expect(r.reason).toMatch(/anyone can recompute/i);
+    expect(r.reason).not.toMatch(/intact|signed|infeasible/i);
     expect(r.cryptographic).toBe(true);
   });
 

@@ -1,7 +1,7 @@
 /**
  * measurementReport.ts
  *
- * Turns the placed measurements into a tamper-evident integrity report manifest
+ * Turns the placed measurements into an integrity report manifest
  * — the "Integrity report (JSON)" product, a sibling of the GeoJSON / CSV export.
  *
  * Each measurement becomes a {@link ReportFinding} carrying its primary metric

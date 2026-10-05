@@ -318,8 +318,24 @@ engine. The analysis paths that store placed coordinates, and the terrain
 gather, carry the placement in Float32. The mount-precision gate therefore still
 refuses a placement whose Float32 step would pass 1 mm, which on a metre grid is
 a placed reach of 16,384 m or more, and those paths stay under 1 mm inside the
-gate. Picking and distance are computed in Float64 and are exact, as are
-exports.
+gate. Picking and distance are computed in Float64. Exported coordinates are
+exact to under 1 mm within a 16 km extent. LAS export re-quantises them at
+1 mm (1e-7 degree on a geographic CRS) with a new offset at the floor of the
+data minimum, so the source file's scale and offset are not kept.
+
+## Release caveats on exports and reproduction
+
+- The integrity report's digest is an unkeyed SHA-256 over the report body. A
+  match shows the digest agrees with the contents, which catches accidental
+  edits. Anyone who edits a figure can recompute it, so it is a
+  self-consistency check, not a signature. It does not show who made the
+  report, and the verifier does not compare `sourceSha256` against a source
+  file.
+- LAS export writes a new 1 mm grid and a new offset rather than the source
+  scale and offset, and the sub-millimetre guarantee holds within a 16 km
+  extent (see the section above).
+- The reproduction pack's metrics reproduce exactly under the Node version
+  pinned in `.nvmrc`. Another Node or V8 version can change the last digits.
 
 ## Measurement exports with more than one scan open
 
