@@ -29,6 +29,7 @@
  */
 
 import {
+  gradePercentOf,
   polygonAreaHorizontal,
   polygonAreaPlanar,
   polygonPerimeter,
@@ -118,8 +119,10 @@ export function lineBreakdown(
     length3dM: Math.hypot(horizontalM, verticalM),
     horizontalM,
     verticalM,
-    gradePercent: pm.gradePercent,
-    gradeAngleDeg: pm.gradeAngleDeg,
+    // From the converted rise and run, so a compound CRS (height unit unlike
+    // the horizontal unit) grades the real slope, as the slant does.
+    gradePercent: gradePercentOf(verticalM, horizontalM),
+    gradeAngleDeg: (Math.atan2(verticalM, horizontalM) * 180) / Math.PI,
     mixedUnits: unitsDiffer(horizontalToMetres, verticalToMetres),
   };
 }

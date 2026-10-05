@@ -28,6 +28,8 @@ import {
   pointInfoCopyText,
   splitPointCoords,
   worldCoordLabels,
+  cameraDistanceText,
+  type WorldCoordLabels,
   pointHeight,
   heightRowLabel,
 } from './pointInfo';
@@ -393,11 +395,22 @@ export class InspectTool {
    * info in render coordinates so the export can place the card without
    * having to re-project the world position itself.
    */
-  selectionForExport(): { info: PointInfo; screen: { x: number; y: number } } | null {
+  selectionForExport(): { info: PointInfo; screen: { x: number; y: number }; labels: WorldCoordLabels; distanceText: string } | null {
     if (!this._selected) return null;
     const p = this._project(this._selected.world);
     if (!p.visible) return null;
-    return { info: this._selected.info, screen: { x: p.x, y: p.y } };
+    const crs = this._coordContext.crs;
+    return {
+      info: this._selected.info,
+      screen: { x: p.x, y: p.y },
+      labels: worldCoordLabels(crs),
+      distanceText: cameraDistanceText(this._selected.info.distance, crs),
+    };
+  }
+
+  /** The active scan's resolved CRS, as last set through `setCoordinateContext`. */
+  coordinateCrs(): ResolvedCrs | undefined {
+    return this._coordContext.crs;
   }
 
   /** Free DOM references. */
@@ -536,7 +549,7 @@ export class InspectTool {
     // ── Existing attribute rows ────────────────────────────────────────────
     rows.push(
       coordGroupHeader('Attributes'),
-      infoRow('Distance', `${info.distance} m`),
+      infoRow('Distance', cameraDistanceText(info.distance, this._coordContext.crs)),
       infoRow('Intensity', intensityText(info)),
       infoRow('Classification', classificationText(info)),
       infoRow('RGB', rgbText(info)),

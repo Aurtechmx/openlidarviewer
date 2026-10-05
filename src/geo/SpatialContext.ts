@@ -333,3 +333,16 @@ export function verticalMetresPerUnit(
   const h = ctx.linearUnitToMetres;
   return Number.isFinite(h) && h > 0 ? h : undefined;
 }
+
+/**
+ * The unit caveat a volume readout carries. A volume multiplies two horizontal
+ * factors by a vertical one; when the file declares no vertical unit the
+ * vertical factor is borrowed from the horizontal unit, and the readout says
+ * so. `validity` is the CRS verdict's validity, where `safe-explicit-local`
+ * means the units themselves are assumed metres.
+ */
+export function volumeUnitCaveat(ctx: SpatialContext, validity: string): string {
+  if (validity === 'safe-explicit-local') return ' · units assumed metres';
+  return ctx.verticalUnitToMetres === undefined ? ' · heights assumed in the horizontal unit (vertical unit not declared)' : '';
+}
+

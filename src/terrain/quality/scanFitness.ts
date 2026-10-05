@@ -82,6 +82,13 @@ export interface FitnessInputs {
    * space-metrics / lasso seams already apply.
    */
   readonly unitKnown?: boolean;
+  /**
+   * Whether the vertical scale resolved. When explicitly `false` the hold-out
+   * RMSE is in source Z units, so the vertical accuracy is reported as not
+   * gradable rather than graded against metre thresholds. `undefined` keeps
+   * the behaviour of callers that predate the flag.
+   */
+  readonly verticalScaleResolved?: boolean;
   // Classification: fraction unclassified (null = no classification at all) and
   // whether a ground class is present.
   readonly unclassifiedFraction: number | null;
@@ -329,6 +336,22 @@ function densityDimension(
   return { key: 'density', label: 'Ground detail', tone, summary, hint };
 }
 
+/** The accuracy row when the vertical scale did not resolve: neither a pass nor a fail. */
+const VERTICAL_UNRESOLVED_DIMENSION: FitnessDimension = {
+  key: 'accuracy',
+  label: 'Vertical accuracy',
+  tone: 'review',
+  summary: 'Can’t be graded: the vertical unit is not resolved, so the hold-out error is in source Z units.',
+};
+
+/**
+ * The hold-out RMSE the fitness card may grade: withheld when the vertical
+ * scale did not resolve, since the residuals are then in source Z units.
+ */
+export function fitnessVerticalRmse(r: { readonly verticalScaleResolved: boolean; readonly validation: { readonly rmse: number } }): number | null {
+  return r.verticalScaleResolved && Number.isFinite(r.validation.rmse) ? r.validation.rmse : null;
+}
+
 function accuracyDimension(rmse: number | null, unit: string, unitToMetres: number, unitKnown: boolean): FitnessDimension {
   if (rmse == null) {
     return { key: 'accuracy', label: 'Vertical accuracy', tone: 'review', summary: 'Not validated against any reference.' };
@@ -442,7 +465,9 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
     georefDimension(inp),
     coverageDimension(inp.measuredFraction),
     densityDimension(inp.groundDensityPerM2, inp.medianGroundDensityPerM2, unitKnown, inp.meanCountsPerMeasuredCell),
-    accuracyDimension(inp.verticalRmse, unit, unitToMetres, unitKnown),
+    inp.verticalScaleResolved === false
+      ? VERTICAL_UNRESOLVED_DIMENSION
+      : accuracyDimension(inp.verticalRmse, unit, unitToMetres, unitKnown),
     classificationDimension(inp.unclassifiedFraction, inp.hasGroundClass),
     integrityDimension(inp),
   ];

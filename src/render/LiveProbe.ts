@@ -14,7 +14,8 @@
  */
 
 import { el } from '../ui/dom';
-import { type PointInfo, classificationText } from './pointInfo';
+import { type PointInfo, type WorldCoordLabels, classificationText, coordTripletText, worldCoordLabels } from './pointInfo';
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
 
 /** Cursor offset and viewport margin for the floating readout, in pixels. */
 const CURSOR_OFFSET = 16;
@@ -38,7 +39,14 @@ export class LiveProbe {
   private _lastInfo: PointInfo | null = null;
   private _lastClient: { x: number; y: number } | null = null;
 
-  constructor() {
+  /**
+   * @param crs the active scan's resolved CRS, read per update so the readout
+   *   carries the same axis units as the inspector's World rows.
+   */
+  private readonly crs: () => ResolvedCrs | undefined;
+
+  constructor(crs: () => ResolvedCrs | undefined = () => undefined) {
+    this.crs = crs;
     this._coords = el('div', { className: 'olv-probe-coords' });
     this._attr = el('div', { className: 'olv-probe-attr' });
     this.element = el('div', { className: 'olv-probe-readout olv-hidden' }, [
@@ -74,9 +82,9 @@ export class LiveProbe {
    * The caller is responsible for translating client coords to canvas
    * coords (subtract the canvas bounding-rect offset) before drawing.
    */
-  activeProbeForExport(): { info: PointInfo; client: { x: number; y: number } } | null {
+  activeProbeForExport(): { info: PointInfo; client: { x: number; y: number }; labels: WorldCoordLabels } | null {
     if (!this._active || !this._lastInfo || !this._lastClient) return null;
-    return { info: this._lastInfo, client: { ...this._lastClient } };
+    return { info: this._lastInfo, client: { ...this._lastClient }, labels: worldCoordLabels(this.crs()) };
   }
 
   /**
@@ -95,7 +103,7 @@ export class LiveProbe {
     // Remember the last meaningful probe so exports can re-render it.
     this._lastInfo = info;
     this._lastClient = { x: clientX, y: clientY };
-    this._coords.textContent = `${info.x}, ${info.y}, ${info.z} m`;
+    this._coords.textContent = coordTripletText(info, worldCoordLabels(this.crs()));
     const attrs: string[] = [];
     if (info.classification !== null) attrs.push(classificationText(info));
     if (info.intensity !== null) attrs.push(`Intensity ${info.intensity}`);

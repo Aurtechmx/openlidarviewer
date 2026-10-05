@@ -47,11 +47,15 @@ export interface BreakdownLine {
   readonly title: string;
 }
 
-/** Said when a compound CRS makes some of the figures combine two units. */
+/** Said on a line when a compound CRS declares a height unit unlike the horizontal one. */
+const MIXED_UNITS_LINE_NOTE =
+  'This scan declares a different unit for height than for the horizontal axes. ' +
+  'The run and the rise are each converted to metres before the slant and the grade are computed.';
+
+/** Said on a ring when a compound CRS makes some of the figures combine two units. */
 const MIXED_UNITS_NOTE =
   'This scan declares a different unit for height than for the horizontal axes. ' +
-  'The run and the rise are exact; the slant length, the plane area, the perimeter ' +
-  'and the grade combine both units and are not reliable distances.';
+  'The plane area and the perimeter combine both units and are not reliable distances.';
 
 const PLANE_AREA_NOTE =
   'Plane is the area of the ring’s own best-fit plane, not a terrain surface: ' +
@@ -81,7 +85,7 @@ export function breakdownParts(
     return {
       text: parts.join(' · '),
       title: line.mixedUnits
-        ? MIXED_UNITS_NOTE
+        ? MIXED_UNITS_LINE_NOTE
         : 'Run is the map-plane distance, rise the height change, slant the straight line through space.',
     };
   }

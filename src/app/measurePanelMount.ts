@@ -138,10 +138,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       // every point of every eligible layer, and the presenter spreads it
       // across frames so the dock stays usable while a dense cloud is read.
       sectionChunks: (request) => deps.getViewer().profileSeam.sectionChunks(request),
-      metresPerUnit: () => {
-        const crs = deps.crsService.context();
-        return crs.linearUnitKnown === true ? crs.linearUnitToMetres : null;
-      },
+      metresPerUnit: () => profileMetresPerUnit(deps.crsService.context()),
       devicePixelRatio: () => (typeof window === 'undefined' ? 1 : window.devicePixelRatio),
       // The scene NOW, for a section that is a snapshot. A return is followed
       // back by the identity it was recorded under, never by matching
@@ -395,3 +392,14 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
     },
   };
 }
+
+/**
+ * Metres per source unit for the profile section, or null when there is no
+ * honest factor: the linear unit is unknown, or the CRS is geographic, where
+ * X and Y are degrees and the linear factor does not apply to them.
+ */
+export function profileMetresPerUnit(ctx: { readonly linearUnitKnown: boolean; readonly linearUnitToMetres: number; readonly isGeographic: boolean }): number | null {
+  if (ctx.isGeographic) return null;
+  return ctx.linearUnitKnown === true ? ctx.linearUnitToMetres : null;
+}
+

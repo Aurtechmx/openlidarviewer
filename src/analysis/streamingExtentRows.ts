@@ -62,7 +62,11 @@ export function streamingExtentRows(
   // Apply the metre factor ONLY when the unit is real. Otherwise the span stays
   // in raw source units (factor 1) and is not labelled "m".
   const mpu = unitConfirmed ? ctx.linearUnitToMetres : 1;
-  const vmpu = unitConfirmed ? (verticalMetresPerUnit(ctx, 'horizontal') ?? mpu) : 1;
+  // The height converts only with a declared vertical unit, as in the static
+  // scan report: without one it stays in source units and says so.
+  const vScale = verticalMetresPerUnit(ctx, 'none');
+  const vmpu = unitConfirmed && vScale !== undefined ? vScale : 1;
+  const heightUnit = !unitConfirmed ? ' (source units)' : vScale !== undefined ? ' m' : ' source units (vertical unit not declared)';
 
   const w = (header.max[0] - header.min[0]) * mpu;
   const d = (header.max[1] - header.min[1]) * mpu;
@@ -72,7 +76,7 @@ export function streamingExtentRows(
   const rows: ExtentRowSpec[] = [
     { label: 'Width', value: `${w.toFixed(1)}${lenUnit}`, scoped: false },
     { label: 'Depth', value: `${d.toFixed(1)}${lenUnit}`, scoped: false },
-    { label: 'Height', value: `${h.toFixed(1)}${lenUnit}`, scoped: false },
+    { label: 'Height', value: `${h.toFixed(1)}${heightUnit}`, scoped: false },
   ];
 
   const footprintArea = w * d;
