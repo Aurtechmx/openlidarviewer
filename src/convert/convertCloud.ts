@@ -10,7 +10,9 @@
  */
 
 import { exportDigestLines } from '../science/exportDigestRecord';
-import { DISPLAY_SAMPLE_SUFFIX, displaySampleLine } from '../export/exportSummary';
+import { DISPLAY_SAMPLE_SUFFIX, displaySampleLine, pointBasisLine } from '../export/exportSummary';
+import { truncationOf } from '../io/truncation';
+import { classEditLine, classesEdited, pointBasisOfCloud, softwareLine, sourceFileLine } from '../export/exportProvenanceLines';
 import type { PointCloud } from '../model/PointCloud';
 import { sourcePositions } from '../model/pointFrames';
 import { classifyScanShape } from '../terrain/scanShape';
@@ -100,10 +102,13 @@ export function convertCloud(
   const lines = [
     ...(opts.digests ? exportDigestLines(opts.digests) : []),
     ...(opts.displaySample ? [displaySampleLine(opts.displaySample)] : []),
-    ...(opts.pointBasis ? [opts.pointBasis] : []),
+    pointBasisFor(cloud, opts),
     ...(opts.scopeNote ? [opts.scopeNote] : []),
+    classEditLine(opts.classesEdited ?? classesEdited({ provenance: cloud.classificationProvenance, editEpoch: 0 })),
   ];
-  const provenance = lines.length > 0 ? lines : null;
+  const provenance = lines;
+  // ASCII has no header slot for the build or the source name, so both lead its comment lines.
+  const asciiProvenance = [softwareLine(), sourceFileLine(cloud.name), ...lines];
   // The RESOLVED source CRS (CrsService), when the caller supplies it, is the
   // authority — it honours any user override, so `cloud.metadata.crs` stays
   // source-declared PROVENANCE only. Given a resolved value we never consult
@@ -371,8 +376,8 @@ export function convertCloud(
   } else {
     const text =
       opts.format === 'asc'
-        ? writeAsc(g, { precision: opts.asciiPrecision, epsg: outEpsg, crsName: sourceCrs?.name ?? null, geographic: geo, datumNote, provenance })
-        : writeXyz(g, opts.asciiPrecision ?? 3, geo, datumNote, provenance);
+        ? writeAsc(g, { precision: opts.asciiPrecision, epsg: outEpsg, crsName: sourceCrs?.name ?? null, geographic: geo, datumNote, provenance: asciiProvenance })
+        : writeXyz(g, opts.asciiPrecision ?? 3, geo, datumNote, asciiProvenance, { epsg: outEpsg, crsName: sourceCrs?.name ?? null });
     bytes = new TextEncoder().encode(text);
   }
 
@@ -394,3 +399,15 @@ export function convertCloud(
 
 /** Source-file digest and CRS origin for this export's provenance, resolved off the main thread. */
 export { resolveExportDigests } from '../export/exportDigests';
+
+/**
+ * The point-basis line every converted file carries: the caller's own line, or
+ * the cloud's own basis (a truncated file is named as such; a display sample
+ * when `displaySample` is set or the cloud reads as strided).
+ */
+function pointBasisFor(cloud: PointCloud, opts: ConvertOptions): string {
+  if (opts.pointBasis) return opts.pointBasis;
+  const sample = opts.displaySample;
+  if (sample && !truncationOf(cloud)) return pointBasisLine(false, sample.held, sample.source);
+  return pointBasisOfCloud(cloud, sample ? true : null);
+}

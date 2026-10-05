@@ -502,3 +502,6 @@ export function measurementsToCsv(
 
 /** Source-file digest and CRS origin for this export's provenance, resolved off the main thread. */
 export { resolveExportDigests } from './exportDigests';
+
+/** The `<name>.provenance.txt` sidecar written beside a measurement CSV. */
+export { measurementCsvProvenance, provenanceSidecarName } from './exportProvenanceLines';

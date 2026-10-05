@@ -148,6 +148,8 @@ describe('a LAS 1.2 write with every class at or below 31 is unchanged', () => {
         verticalEpsg: null,
         verticalUnitCode: null,
         description: null,
+        // The provenance lines every converted file carries.
+        provenance: [`Point basis: full file (${cloud.pointCount} points)`, 'Classes edited in app: no'],
       });
       expect(plain.report.ok).toBe(true);
       expect(Array.from(plain.file!.bytes)).toEqual(Array.from(direct));

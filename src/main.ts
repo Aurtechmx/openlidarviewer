@@ -20,7 +20,7 @@ import { NavBar } from './ui/NavBar';
 import { createNavBarWiring } from './ui/navBarWiring';
 import { ProjectCard } from './ui/ProjectCard';
 import {
-  wireMeasureBarClearance, createToastHost } from './ui/panelChrome';
+  wireMeasureBarClearance, appToast } from './ui/panelChrome';
 import {
   applyTheme,
   readPersistedTheme,
@@ -797,8 +797,8 @@ if (
 // `I` belongs solely to the Inspect tool (binding 612), the collision fixed in
 // v0.4.3.
 
-/** The app's one toast; see `createToastHost`. */
-const showLassoToast = createToastHost().show;
+/** The app's one toast; see `appToast`. */
+const showLassoToast = appToast().show;
 
 /** Input-aware mobile check — drives the touch hint and the tighter point budget. */
 function isPhone(): boolean { return isMobileDevice(); }
