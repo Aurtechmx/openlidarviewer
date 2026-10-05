@@ -151,6 +151,27 @@ function diagnosticsCsv(result: TerrainAccessResult): string {
   return ['metric,value', ...rows.map(([k, v]) => `${k},${v}`), ...contributors].join('\n') + '\n';
 }
 
+/** What the route GeoJSON's coordinates are, given the origin actually added to them. */
+export function routeFrameLines(worldOrigin: { readonly x: number; readonly y: number } | null): string[] {
+  const lonLat = [
+    '  NOT longitude/latitude. Reproject before loading into a lon/lat viewer;',
+    '  loading it as-is will place it at the equator/prime meridian.',
+  ];
+  if (!worldOrigin) {
+    return [
+      '  Local planar metres relative to the grid\'s own (0, 0) corner (cell 0,0\'s',
+      '  lower-left).',
+      ...lonLat,
+    ];
+  }
+  return [
+    `  The scan's load-time origin (${worldOrigin.x}, ${worldOrigin.y}) plus each cell's`,
+    '  offset in metres from grid cell (0, 0). The grid\'s own position inside the',
+    '  scan is not added, so these are not coordinates in the scan CRS.',
+    ...lonLat,
+  ];
+}
+
 /** The reproduction steps and honest limitations a reader needs, per §22/§23. */
 function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
   readonly basename: string;
@@ -160,6 +181,7 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
   readonly hasWkt: boolean;
   readonly sourceInterpretation: SourceInterpretationRecord;
   readonly sourceSha256Text: string;
+  readonly worldOrigin: { readonly x: number; readonly y: number } | null;
 }): string {
   const r = result.record;
   const d = result.diagnostics;
@@ -174,7 +196,7 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
     'rollover, weather and vegetation compliance are not modelled.',
     '',
     'Files',
-    `  ${opts.basename}-route.geojson              Found route (local planar coordinates)`,
+    `  ${opts.basename}-route.geojson              Found route (${opts.worldOrigin ? 'planar offsets from the scan origin' : 'local planar coordinates'})`,
     `  ${opts.basename}-traversability.asc         Traversability-map bucket per cell (Esri ASCII Grid)`,
     opts.hasWkt ? `  ${opts.basename}.prj                    Coordinate reference system (WKT)` : null,
     `  ${opts.basename}-diagnostics.csv            Route diagnostics (worst conditions along the route)`,
@@ -239,9 +261,7 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
     '     changed — the config or the README says which was declared.',
     '',
     'route.geojson coordinates',
-    '  Local planar metres relative to the grid\'s own (0, 0) corner (cell 0,0\'s',
-    '  lower-left), NOT longitude/latitude. Reproject before loading into a lon/lat',
-    '  viewer; loading it as-is will place it at the equator/prime meridian.',
+    ...routeFrameLines(opts.worldOrigin),
     '',
     'What this is not',
     '  Not a safety assessment, a guaranteed-passable route, or a vehicle dynamics',
@@ -278,7 +298,7 @@ export function buildTerrainAccessPackage(
   });
   const geojson = {
     type: 'FeatureCollection',
-    coordinateFrame: 'local-planar-metres',
+    coordinateFrame: options.worldOrigin ? 'scan-origin-plus-grid-offset-metres' : 'local-planar-metres',
     features: [{
       type: 'Feature',
       properties: { cells: result.path.length, cost: result.cost },
@@ -336,6 +356,7 @@ export function buildTerrainAccessPackage(
 
   const readme = buildTerrainAccessReadme(result, {
     basename, generationDateIso, build, crsName: options.crsName ?? null, hasWkt: !!options.wkt, sourceInterpretation,
+    worldOrigin: options.worldOrigin ?? null,
     sourceSha256Text: options.sourceSha256 ?? (options.digests ? sourceSha256Text(options.digests) : (result.record.source.sourceDigest ?? SOURCE_NOT_SUPPLIED_NOTE)),
   });
   entries.push({

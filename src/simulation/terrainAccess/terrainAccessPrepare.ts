@@ -24,6 +24,7 @@ import {
   type TerrainAccessFeatures,
 } from './traversabilityCost';
 import { validateProfile, type TerrainAccessGrid, type TerrainAccessProfile } from './terrainAccessTypes';
+import { topBlockReasonSentence } from './terrainAccessExplain';
 import type { SimulationInputBasis } from '../simulationInputBasis';
 import type { TerrainAccessRefusal } from './terrainAccessRunner';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
@@ -134,9 +135,11 @@ export function prepareTerrainAccessRun(
   let eligibleCount = 0;
   for (const b of eligibility.blocked) if (b === 0) eligibleCount++;
   if (eligibleCount === 0) {
+    const top = topBlockReasonSentence(eligibility, profile);
     return {
       ok: false, code: 'INSUFFICIENT_EVIDENCE',
       reason: 'No cell in the terrain grid is eligible under the declared mobility profile. '
+        + (top ? `${top} ` : '')
         + 'Relax the profile\'s limits, or analyse terrain with better support.',
     };
   }
