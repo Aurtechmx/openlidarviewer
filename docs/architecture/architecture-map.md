@@ -26,7 +26,7 @@ from the tree and fails when a cell drifts.
 | Core numerics | `src/process`, `src/numeric.ts`, `src/units` | ~3.2k | Compensated sums, Welford, unit types. No dependencies. |
 | Model | `src/model` | ~3.7k | `PointCloud`, layer model. Plain data. |
 | Geo | `src/geo` | ~5.3k | CRS math, `ProjectSpatialFrame`, transforms. |
-| Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~49k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. UI-free by lint. |
+| Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~50k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. UI-free by lint. |
 | I/O | `src/io` | ~39k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
 | Render | `src/render` | ~76k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
 | Export / report | `src/export`, `src/report`, `src/convert` | ~15k | Studio exporters, PDF/report builders, batch conversion. |
