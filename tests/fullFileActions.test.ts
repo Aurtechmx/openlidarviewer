@@ -416,5 +416,11 @@ describe('E57 fit check for Export all N points', () => {
     );
     expect(fullDecodeRefusal({ pointCount: 26_910_771, loadStride: 1, declaredPointCount: 26_910_771 })).toBeNull();
     expect(fullDecodeRefusal({ pointCount: 900 })).toBeNull();
+    expect(fullDecodeRefusal({ pointCount: 60, declaredPointCount: 100, metadata: { truncation: { read: 60, declared: 100 } } })).toBe(
+      'The source file ends after 60 of its 100 declared points, so nothing was exported as the full file.',
+    );
+    expect(fullDecodeRefusal({ pointCount: 80, declaredPointCount: 100, loadStride: 1 })).toBe(
+      'The full-resolution re-decode read 80 of 100 declared points, so nothing was exported as the full file.',
+    );
   });
 });
