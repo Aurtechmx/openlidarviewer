@@ -33,7 +33,9 @@ import type { PointCloud } from '../model/PointCloud';
 import { gzipConvertedFile, gzipAvailable } from '../convert/gzip';
 import { buildExportSummary, displaySampleOf, displaySampleStatus, type ClassificationProvenance, type ExportSummaryInput } from '../export/exportSummary';
 import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
+import { layerFacts, pointBasisLine, type FullFileLayerFacts } from '../app/fullFileActions';
 import {
+  classificationDiffersFromSource,
   evaluateFullResClassExport,
   FULL_RES_CLASS_EDITS_MID_EXPORT_REFUSAL,
 } from '../export/fullResClassGuard';
@@ -142,6 +144,10 @@ export interface ExportPanelCallbacks {
   hasFullSource: () => boolean;
   /** Whether the loaded cloud is a reduced subset of the source. */
   isReduced: () => boolean;
+  /** Per-layer facts for the "Export all N points" action; null when the layer is unknown. */
+  layerSource?: (id: string) => { cloud: PointCloud; file: File | null; reduced: boolean; hasClassEdits: boolean } | null;
+  /** Make a layer the active scan, so the panel exports it. */
+  activateLayer?: (id: string) => void;
   /** Re-decode the original file at full resolution. Only call when `hasFullSource()`. */
   getFullCloud: () => Promise<PointCloud | null>;
   /**
@@ -505,6 +511,31 @@ export class ExportPanel {
     }));
   }
 
+  /** The "Export all N points" facts for a layer, read through this panel's callbacks. */
+  fullFileFacts(id: string): FullFileLayerFacts | null {
+    const src = this._cb.layerSource?.(id) ?? null;
+    return src ? layerFacts({ id, ...src, includeClassification: this._includeClass }) : null;
+  }
+
+  /**
+   * Open on a layer with Convert at full resolution ticked. A refusal (class
+   * edits, memory) is shown in the status before any decode starts.
+   */
+  preselectFullResolution(id: string, refusal?: string): void {
+    this._cb.activateLayer?.(id);
+    this.refresh();
+    if (this._cb.hasFullSource() && this._cb.isReduced()) this._useFullRes();
+    if (refusal) this._setStatus(refusal, 'error');
+  }
+
+  /** The active cloud's declared source count, when it declared more than it holds. */
+  private _sourceCount(): number | null {
+    if (!this._cb.hasFullSource()) return null;
+    const c = this._cb.getCloud();
+    const d = c ? c.sourceDeclaredPointCount ?? c.declaredPointCount : undefined;
+    return c && d !== undefined && d > c.pointCount ? d : null;
+  }
+
   /** Tick Convert at full resolution and put focus on it. */
   private _useFullRes(): void {
     this._fullRes = true;
@@ -686,7 +717,8 @@ export class ExportPanel {
       classification: this._classProvenance(),
       includeClassification: this._includeClass,
       viewDecimated: this._cb.isReduced(),
-      fullRes: this._fullRes,
+      fullRes: this._fullRes && this._cb.hasFullSource(),
+      sourcePointCount: this._sourceCount(),
       hasClassEdits: this._cb.hasClassEdits?.() ?? false,
       gzip: this._gzip,
       legacyClassWrap: legacyClasses ? this._legacyClassWrap(info.classification) : null,
@@ -698,7 +730,7 @@ export class ExportPanel {
       : s.warnings.find((w) => w.level === 'error') ??
         s.warnings.find((w) => w.level === 'warn') ??
         s.warnings.find((w) => w.level === 'info');
-    this._summary.textContent = s.line;
+    this._summary.textContent = `${s.line} · ${s.basisLabel}`;
     this._summary.className = 'olv-export-summary';
     this._summaryNote.textContent = note ? note.message : '';
     this._summaryNote.className = note
@@ -1344,6 +1376,7 @@ export class ExportPanel {
         allowLegacyReturnClamp: allowReturnClamp,
         scopeNote,
         displaySample,
+        pointBasis: useFull ? pointBasisLine(true, sourceCloud.pointCount, null) : null,
       };
       const { file, report } = convertCloud(cloud, options);
       if (file) {
@@ -1394,3 +1427,29 @@ function parseEpsg(v: string): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
+/** The app state {@link exportLayerHooks} reads. */
+export interface ExportLayerState {
+  readonly scans: { readonly activeId: string | null; setActive(id: string): void };
+  readonly viewer: () => { getCloud(id: string): PointCloud | null | undefined; classificationEpoch(id: string): number } | null | undefined;
+  readonly sourceFiles: ReadonlyMap<string, File>;
+  readonly reduced: ReadonlyMap<string, boolean>;
+}
+
+/** The panel's per-layer callbacks: `hasFullSource`, `activateLayer` and `layerSource`. */
+export function exportLayerHooks(state: ExportLayerState): Pick<ExportPanelCallbacks, 'hasFullSource' | 'activateLayer' | 'layerSource'> {
+  return {
+    hasFullSource: () => state.scans.activeId != null && state.sourceFiles.has(state.scans.activeId),
+    activateLayer: (id) => state.scans.setActive(id),
+    layerSource: (id) => {
+      const viewer = state.viewer();
+      const cloud = viewer?.getCloud(id);
+      if (!viewer || !cloud) return null;
+      return {
+        cloud,
+        file: state.sourceFiles.get(id) ?? null,
+        reduced: state.reduced.get(id) === true,
+        hasClassEdits: classificationDiffersFromSource(cloud.classificationProvenance ?? 'none', viewer.classificationEpoch(id)),
+      };
+    },
+  };
+}

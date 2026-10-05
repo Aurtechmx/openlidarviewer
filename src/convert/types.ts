@@ -95,6 +95,8 @@ export interface ConvertOptions {
    * suffix. Absent for a full-resolution export.
    */
   readonly displaySample?: DisplaySample | null;
+  /** "Point basis: full file (N points)" for a full-resolution export. */
+  readonly pointBasis?: string | null;
   /**
    * Write LAS 1.2 even when classes above 31 wrap into its 5-bit field. Off by
    * default, and such a write is refused: each wrapped class lands on another

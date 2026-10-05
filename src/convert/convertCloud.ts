@@ -100,6 +100,7 @@ export function convertCloud(
   const lines = [
     ...(opts.digests ? exportDigestLines(opts.digests) : []),
     ...(opts.displaySample ? [displaySampleLine(opts.displaySample)] : []),
+    ...(opts.pointBasis ? [opts.pointBasis] : []),
     ...(opts.scopeNote ? [opts.scopeNote] : []),
   ];
   const provenance = lines.length > 0 ? lines : null;

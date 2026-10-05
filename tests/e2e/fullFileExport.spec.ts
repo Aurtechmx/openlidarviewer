@@ -1,0 +1,97 @@
+import { test, expect, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { suppressOnboardingTour } from './helpers';
+
+/**
+ * "Export all N points": a LAS file large enough that the loader reduces it
+ * for display offers the action beside the sample notices. The action opens
+ * Export with full resolution ticked, and the written file holds every point
+ * the header declared, with a "full file" provenance line.
+ *
+ * The device reports 2 GB so the render budget is the low tier's; the file is
+ * built here, a little over that budget, so the load is reduced.
+ */
+
+/** A LAS 1.2 point format 0 file: a flat grid of `n` points with a little relief. */
+export function syntheticLas(n: number): Uint8Array {
+  const HEADER = 227;
+  const REC = 20;
+  const buf = new ArrayBuffer(HEADER + n * REC);
+  const v = new DataView(buf);
+  const u8 = new Uint8Array(buf);
+  u8.set([0x4c, 0x41, 0x53, 0x46], 0); // LASF
+  v.setUint8(24, 1); v.setUint8(25, 2); // version 1.2
+  v.setUint16(94, HEADER, true);
+  v.setUint32(96, HEADER, true); // offset to point data
+  v.setUint32(100, 0, true); // VLR count
+  v.setUint8(104, 0); // point format 0
+  v.setUint16(105, REC, true);
+  v.setUint32(107, n, true);
+  v.setUint32(111, n, true); // all first returns
+  const scale = 0.01;
+  for (const o of [131, 139, 147]) v.setFloat64(o, scale, true);
+  const side = Math.ceil(Math.sqrt(n));
+  let maxX = 0, maxY = 0, maxZ = 0;
+  for (let i = 0; i < n; i++) {
+    const x = i % side, y = Math.floor(i / side);
+    const z = Math.round(50 * Math.sin(x / 40) * Math.cos(y / 40)) + 100;
+    const p = HEADER + i * REC;
+    v.setInt32(p, x * 10, true); v.setInt32(p + 4, y * 10, true); v.setInt32(p + 8, z, true);
+    v.setUint16(p + 12, 100, true);
+    v.setUint8(p + 14, 0x09); // return 1 of 1
+    v.setUint8(p + 15, 2); // ground
+    maxX = Math.max(maxX, x * 10); maxY = Math.max(maxY, y * 10); maxZ = Math.max(maxZ, z);
+  }
+  v.setFloat64(179, maxX * scale, true); v.setFloat64(187, 0, true);
+  v.setFloat64(195, maxY * scale, true); v.setFloat64(203, 0, true);
+  v.setFloat64(211, maxZ * scale, true); v.setFloat64(219, 0, true);
+  return u8;
+}
+
+export async function openReducedLas(page: Page, n: number, name = 'reduced-grid.las'): Promise<void> {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'deviceMemory', { get: () => 2, configurable: true });
+  });
+  await suppressOnboardingTour(page);
+  await page.goto('/?test=1');
+  await page.locator('.olv-file-input').first().setInputFiles({
+    name, mimeType: 'application/octet-stream', buffer: Buffer.from(syntheticLas(n)),
+  });
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 60_000 });
+}
+
+const N = 1_500_000;
+
+test('the sample notice offers Export all N points and the file holds every declared point', async ({ page }) => {
+  test.setTimeout(480_000);
+  await openReducedLas(page, N);
+
+  const link = page.locator('.olv-ss-fullfile .olv-fullfile-link');
+  await expect(link).toBeVisible({ timeout: 30_000 });
+  await expect(link).toHaveText(/^Export all 1\.5 M points$/);
+  await link.dispatchEvent('click');
+
+  const panel = page.locator('.olv-export-panel');
+  // The action itself navigates to Output. A software renderer drawing a
+  // million points rarely yields two still frames, so clicks below go to the
+  // elements directly rather than waiting for layout stability.
+  await expect(panel).toBeVisible({ timeout: 120_000 });
+  if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
+    await panel.locator('.olv-panel-head').dispatchEvent('click');
+  }
+  await expect(panel.getByRole('checkbox', { name: 'Convert at full resolution' })).toBeChecked();
+  await expect(panel.locator('.olv-export-summary')).toContainText('Point basis: full file (1,500,000 points)');
+
+  const download = page.waitForEvent('download');
+  await panel.locator('.olv-bc-convert').dispatchEvent('click');
+  const confirm = page.getByRole('button', { name: 'Export anyway' });
+  if (await confirm.isVisible({ timeout: 2_000 }).catch(() => false)) await confirm.dispatchEvent('click');
+  const file = await download;
+  const bytes = readFileSync((await file.path())!);
+  const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const major = v.getUint8(24), minor = v.getUint8(25);
+  const count = minor >= 4 && major === 1 ? Number(v.getBigUint64(247, true)) : v.getUint32(107, true);
+  expect(count).toBe(N);
+  expect(file.suggestedFilename()).not.toContain('-sample');
+  expect(bytes.toString('latin1')).toContain('Point basis: full file (1,500,000 points)');
+});

@@ -55,6 +55,8 @@ export interface ExportSummaryInput {
   readonly viewDecimated?: boolean;
   /** User ticked "convert at full resolution". */
   readonly fullRes?: boolean;
+  /** The source's declared point count; a full-resolution export writes this many. */
+  readonly sourcePointCount?: number | null;
   /**
    * The active cloud carries in-session classification edits (manual reclassify)
    * that live only in the display-resolution buffer. A full-resolution export
@@ -95,6 +97,8 @@ export interface ExportSummary {
   readonly warnings: readonly ExportWarning[];
   /** The composed single-line summary for the panel. */
   readonly line: string;
+  /** Which points the export holds: "Point basis: full file (N points)" or the display sample. */
+  readonly basisLabel: string;
 }
 
 /** Public header block sizes (a fixed allowance; VLRs are negligible here). */
@@ -138,7 +142,10 @@ function crsLabelFor(i: ExportSummaryInput): string {
  */
 export function buildExportSummary(input: ExportSummaryInput): ExportSummary {
   const spec = CONVERT_FORMATS[input.format];
-  const n = Math.max(0, Math.floor(input.pointCount));
+  const src = input.sourcePointCount ?? null;
+  const fullFile = input.fullRes === true && src !== null && src > 0;
+  const n = Math.max(0, Math.floor(fullFile ? src : input.pointCount));
+  const basisLabel = input.viewDecimated || fullFile ? pointBasisLine(fullFile, n, src) : pointBasisLine(true, n, null);
   const hasRgb = input.hasRgb === true;
   const hasGps = input.hasGpsTime === true;
   const includeClass = input.includeClassification !== false;
@@ -292,6 +299,7 @@ export function buildExportSummary(input: ExportSummaryInput): ExportSummary {
     classificationLabel,
     warnings,
     line,
+    basisLabel,
   };
 }
 
@@ -339,4 +347,12 @@ export function displaySampleLine(s: DisplaySample): string {
 export function displaySampleStatus(s: DisplaySample): string {
   const of = s.source !== null ? ` of ${count(s.source)} source points` : '';
   return ` · display sample${of}; tick Convert at full resolution to export every point`;
+}
+
+/** "Point basis: full file (N points)" or "Point basis: display sample (n of N points)". */
+export function pointBasisLine(fullFile: boolean, held: number, declared: number | null): string {
+  if (fullFile) return `Point basis: full file (${count(held)} points)`;
+  return declared !== null && declared > held
+    ? `Point basis: display sample (${count(held)} of ${count(declared)} points)`
+    : `Point basis: display sample (${count(held)} points)`;
 }

@@ -22,6 +22,7 @@
  */
 
 import { el, formatCount } from './dom';
+import { fullFileLink } from '../app/fullFileActions';
 import {
   summariseDataset,
   signalTier,
@@ -398,6 +399,8 @@ export class DatasetIntelligenceCard {
 
     if (intel.coverage.streamingWarning) {
       this._coverageWarning.textContent = intel.coverage.streamingWarning;
+      const link = intel.coverage.bucket === 'display-sample' ? fullFileLink() : null;
+      if (link) this._coverageWarning.append(' ', link);
       this._coverageWarning.classList.remove('olv-hidden');
     } else {
       this._coverageWarning.textContent = '';

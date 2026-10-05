@@ -78,6 +78,8 @@ export interface MetadataInputs {
    * density and extents come from the points read. Absent for a complete read.
    */
   readonly coverageNote?: string;
+  /** Which points the analysed figures read, e.g. "Point basis: display sample (n of N points)". */
+  readonly pointBasis?: string;
   /** The header's declared total, stated beside the read count when truncated. */
   readonly declaredPointCount?: number;
   /**
@@ -229,6 +231,8 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
           : formatInt(inputs.sourcePointCount),
     },
   );
+  const basis = inputs.pointBasis?.trim();
+  if (basis) rows.push({ label: 'Point basis', value: basis.replace(/^Point basis: /, '') });
   if (coverage) {
     rows.push({
       label: 'Coverage',

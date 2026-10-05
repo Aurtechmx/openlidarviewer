@@ -19,11 +19,14 @@
  */
 
 import { el } from './dom';
+import { fullFileLink } from '../app/fullFileActions';
 import type { CompatibilityReport, LayerHealthRow } from '../app/layerHealth';
 
 /** One layer's heading + built rows, ready to render. */
 export interface LayerHealthSection {
   readonly name: string;
+  /** Viewer layer id; the row actions target this layer. */
+  readonly id?: string;
   readonly rows: readonly LayerHealthRow[];
 }
 
@@ -107,7 +110,7 @@ export class LayerHealthCard {
     const rows = el(
       'dl',
       { className: 'olv-layerhealth-rows' },
-      primary.map((r) => this._row(r)),
+      primary.map((r) => this._row(r, layer.id)),
     );
     const children: HTMLElement[] = [
       el('div', { className: 'olv-layerhealth-layer-name', text: layer.name }),
@@ -136,12 +139,14 @@ export class LayerHealthCard {
    * pattern DatasetIntelligenceCard uses. `data-status` drives the quiet
    * status dot; the WORD always carries the meaning, colour is supplementary.
    */
-  private _row(r: LayerHealthRow): HTMLElement {
+  private _row(r: LayerHealthRow, layerId?: string): HTMLElement {
     const value = el('dd', {
       className: `olv-layerhealth-row-value${r.mono ? ' is-mono' : ''}`,
       text: r.value,
     });
     value.dataset.status = r.status;
+    const link = r.fullFileAction && layerId ? fullFileLink(layerId) : null;
+    if (link) value.append(' ', link);
     return el('div', { className: 'olv-layerhealth-row' }, [
       el('dt', { className: 'olv-layerhealth-row-name', text: r.label }),
       value,

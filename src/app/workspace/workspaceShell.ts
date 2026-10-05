@@ -35,6 +35,7 @@ import { createAnalyseWorkspace, type AnalyseHostPanel, type AnalysePage, type A
 import { createDataHome } from './dataHome';
 import { mountStateStrip, type StateStripCrs } from '../stateStrip/stateStripMount';
 import { mountResultsShelf, type ResultsShelfSources, type ShelfExportPanel, type ShelfTerrainPanel } from '../results/resultsShelfMount';
+import { bindFullFile } from '../fullFileActions';
 import { mountLocationBar } from '../../ui/locationBar';
 import { decorateViewRail } from './viewRail';
 import { createModeHome, type ModeHome } from './modeHome';
@@ -344,6 +345,21 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   };
   const shelf = d.results ? mountResultsShelf(d.results, d.analysePanel, d.export, (route) => router?.navigate(route), d.runAction, openWorkbench) : null;
   if (shelf) { leftPanels.append(shelf.element); d.addTeardown(() => shelf.dispose()); }
+
+  // "Export all N points": per-layer facts through the Export panel, opened on the Output page.
+  const exp = d.export;
+  if (d.results && exp.fullFileFacts && exp.preselectFullResolution) {
+    const scans = d.results.scans;
+    bindFullFile({
+      facts: (id) => exp.fullFileFacts!(id),
+      activeId: () => scans.activeId ?? null,
+      openExport: (id, refusal) => {
+        router?.navigate({ mode: 'output', page: null });
+        exp.preselectFullResolution!(id, refusal);
+      },
+    });
+    d.addTeardown(() => bindFullFile(null));
+  }
 
   // The state strip: one row at the foot of the viewport, above the dock on a
   // phone. It reads the owners through its providers and only navigates.
