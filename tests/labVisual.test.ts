@@ -81,6 +81,20 @@ describe('reduced motion', () => {
     expect(frames.at(-1)).toBe(1);
   });
 
+  it('ends at exactly 1 when the last frame overshoots the duration', () => {
+    const queue: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { queue.push(cb); return queue.length; });
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    const frames: number[] = [];
+    paint.drawIn(600, false, (f) => frames.push(f), () => 1000);
+    let now = 1000;
+    // 250 ms steps reach 750 ms elapsed, so the last frame is past the duration.
+    for (let guard = 0; queue.length > 0 && guard < 20; guard++) { now += 250; queue.shift()!(now); }
+    expect(queue).toHaveLength(0);
+    expect(frames).toHaveLength(3);
+    expect(frames.at(-1)).toBe(1);
+  });
+
   it('eases to exactly 0 and 1 at and beyond the ends', () => {
     expect(paint.easeOutCubic(0)).toBe(0);
     expect(paint.easeOutCubic(-0.2)).toBe(0);
@@ -88,6 +102,7 @@ describe('reduced motion', () => {
     expect(paint.easeOutCubic(1)).toBe(1);
     expect(paint.easeOutCubic(1 - Number.EPSILON)).toBeLessThanOrEqual(1);
     expect(paint.easeOutCubic(1.0000001)).toBe(1);
+    expect(paint.easeOutCubic(1.5)).toBe(1);
     expect(paint.easeOutCubic(0.5)).toBeCloseTo(0.875, 12);
   });
 
