@@ -15,6 +15,7 @@ beforeAll(installRecordingDom);
 const digestModule = await import('../src/science/dtmProductDigest');
 const { buildIdentityProvenance } = await import('../src/build/buildIdentity');
 const { renderFlowPulseLab, runLabFlowPulse, flowScaleOf } = await import('../src/ui/fieldSimulation/flowPulseLab');
+const lab = await import('../src/ui/fieldSimulation/flowPulseLab');
 type LabInput = Parameters<typeof runLabFlowPulse>[0] & object;
 
 function input(over: Partial<LabInput> = {}, resolved = true): LabInput {
@@ -140,5 +141,66 @@ describe('the conditioning control', () => {
     if (!outcome.ok) return;
     const text = textOf(renderFlowPulseLab(outcome));
     for (const method of outcome.record.methods) expect(text).toContain(method);
+  });
+});
+
+describe('an unusable terrain run', () => {
+  const withQuality = (readiness: 'ready' | 'previewOnly' | 'blocked', ratio: number): LabInput => {
+    const base = input();
+    return { ...base, result: { ...base.result, quality: { readiness, interpolatedOfSurfaceRatio: ratio } } as never };
+  };
+
+  it('shows a banner with the verdict and interpolated share on a Blocked surface', () => {
+    const banner = lab.flowTerrainBanner(withQuality('blocked', 0.994));
+    expect(banner).not.toBeNull();
+    expect(textOf(banner!)).toBe(
+      'Terrain run not usable: read this as illustration only. Terrain verdict: Blocked; 99% of the ground surface is interpolated, not measured.',
+    );
+  });
+
+  it('shows the banner on a Preview surface', () => {
+    expect(textOf(lab.flowTerrainBanner(withQuality('previewOnly', 0.4))!)).toContain('Terrain verdict: Preview; 40%');
+  });
+
+  it('shows no banner on a ready surface', () => {
+    expect(lab.flowTerrainBanner(withQuality('ready', 0.99))).toBeNull();
+  });
+
+  it('carries the verdict and interpolated share into the export georef', () => {
+    const georef = lab.flowPulseGeorefOf(withQuality('blocked', 0.99), null);
+    expect(georef.terrainCaveat).toEqual({ verdict: 'Blocked', interpolatedPercent: 99 });
+  });
+});
+
+describe('the export georef', () => {
+
+  it('passes the resolved WKT through, so the ZIP carries a .prj', () => {
+    const georef = lab.flowPulseGeorefOf(input({ wkt: 'PROJCS["fixture"]', crsName: 'EPSG:6342' }), null);
+    expect(georef.wkt).toBe('PROJCS["fixture"]');
+    expect(georef.crsName).toBe('EPSG:6342');
+  });
+
+  it('passes the vertical origin through for the outlet elevations', () => {
+    expect(lab.flowPulseGeorefOf(input({ worldOriginZ: 1200 }), null).elevationOrigin).toBe(1200);
+    expect(lab.flowPulseGeorefOf(input(), null).elevationOrigin).toBeNull();
+  });
+});
+
+describe('the conditioning copy', () => {
+
+  it('says D8 drains to the neighbour with the steepest drop', () => {
+    expect(lab.FLOW_HOW_TO_READ[0]).toContain('the neighbour with the steepest drop');
+    expect(lab.FLOW_HOW_TO_READ.join(' ')).not.toContain('lowest neighbour');
+  });
+
+  it('says when to use Raw and when to use Priority-Flood', () => {
+    expect(lab.FLOW_CONDITIONING_HINT).toMatch(/Raw/);
+    expect(lab.FLOW_CONDITIONING_HINT).toMatch(/Priority-Flood/);
+  });
+
+  it('announces that a switch cleared the trace or catchment', () => {
+    const run = lab.runLabFlowPulse(input(), 'priority-flood');
+    expect(lab.rerunAnnouncement(run, true)).toBe('Flow Pulse run complete. The traced path and catchment were cleared.');
+    expect(lab.rerunAnnouncement(run, false)).toBe('Flow Pulse run complete.');
   });
 });

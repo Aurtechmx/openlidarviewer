@@ -58,6 +58,7 @@ import { methodRef, methodTag } from '../science/methodRegistry';
 import { BUILD_IDENTITY, buildIdentityProvenance, type BuildIdentity } from '../build/buildIdentity';
 import type { FlowPulseResult } from '../simulation/flowPulse/flowPulseRunner';
 import type { FlowGrid } from '../simulation/flowPulse/flowTypes';
+import { interpolatedShareText, type FlowTerrainCaveat } from '../process/flowTerrainCaveat';
 
 /** A caller-supplied downstream path (from `pulseFrom`), for the optional GeoJSON. */
 export interface FlowPulsePathInput {
@@ -113,9 +114,34 @@ export interface FlowPulsePackageOptions {
   readonly path?: FlowPulsePathInput | null;
   /** The upstream catchment from a catchment query, when the caller ran one. */
   readonly catchment?: FlowPulseCatchmentInput | null;
+  /**
+   * World Z of the load-time recentring origin. When known, outlet elevations
+   * are written with it added back, in the same source elevation the Lab's
+   * readout shows; when not, the columns are named `...Local` and the README
+   * states the frame.
+   */
+  readonly elevationOrigin?: number | null;
+  /** The terrain verdict and interpolated share, when the surface is Blocked or Preview. */
+  readonly terrainCaveat?: FlowTerrainCaveat | null;
 }
 
 const NO_DATA = -9999;
+
+/** A README figure at `digits` decimals, trailing zeros dropped. */
+function fig(value: number, digits: number): string {
+  return String(Number(value.toFixed(digits)));
+}
+
+/** An outlet elevation in source elevation when the origin is known, else in the local frame. */
+function outletValue(local: number | null, origin: number | null): number | '' {
+  if (local == null) return '';
+  return origin == null ? local : local + origin;
+}
+
+/** The outlet-elevation column name: `Local` marks the load-time recentred frame. */
+function outletColumn(base: string, origin: number | null): string {
+  return origin == null ? `${base}Local` : base;
+}
 
 /** Direction-index legend, matching `D8_NEIGHBOURS` in `flowTypes.ts`. */
 const DIRECTION_LEGEND = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
@@ -181,7 +207,7 @@ export function buildFlowPulseConfig(result: FlowPulseResult): Record<string, un
   };
 }
 
-function summaryCsv(result: FlowPulseResult): string {
+function summaryCsv(result: FlowPulseResult, origin: number | null): string {
   const s = result.summary;
   const d = result.depressions;
   const rows: [string, string][] = [
@@ -200,20 +226,20 @@ function summaryCsv(result: FlowPulseResult): string {
     ['largestDepressionCells', String(d.largestCells)],
     ['largestDepressionAreaM2', d.largestAreaM2 == null ? '' : String(d.largestAreaM2)],
     ['largestDepressionMaxFillDepth', d.largestMaxFillDepth == null ? '' : String(d.largestMaxFillDepth)],
-    ['largestDepressionOutletElevation', d.largestOutletElevation == null ? '' : String(d.largestOutletElevation)],
+    [outletColumn('largestDepressionOutletElevation', origin), String(outletValue(d.largestOutletElevation, origin))],
     ['fieldDigest', String(result.record.result.fieldDigest)],
   ];
   return ['metric,value', ...rows.map(([k, v]) => `${k},${v}`)].join('\n') + '\n';
 }
 
-function depressionsCsv(result: FlowPulseResult): string {
+function depressionsCsv(result: FlowPulseResult, origin: number | null): string {
   const cols = result.grid.cols;
-  const header = 'rank,cells,areaM2,maxFillDepth,outletElevation,seedCol,seedRow';
+  const header = `rank,cells,areaM2,maxFillDepth,${outletColumn('outletElevation', origin)},seedCol,seedRow`;
   const lines = result.depressions.depressions.map((dep) => {
     const col = dep.seedCell % cols;
     const row = (dep.seedCell - col) / cols;
     return [
-      dep.rank, dep.cells, dep.areaM2 ?? '', dep.maxFillDepth ?? '', dep.outletElevation ?? '', col, row,
+      dep.rank, dep.cells, dep.areaM2 ?? '', dep.maxFillDepth ?? '', outletValue(dep.outletElevation, origin), col, row,
     ].join(',');
   });
   return [header, ...lines].join('\n') + '\n';
@@ -233,6 +259,8 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
   readonly hasCatchment: boolean;
   readonly sourceInterpretation: SourceInterpretationRecord;
   readonly sourceSha256Text: string;
+  readonly elevationOrigin: number | null;
+  readonly terrainCaveat: FlowTerrainCaveat | null;
 }): string {
   const r = result.record;
   const s = result.summary;
@@ -243,6 +271,12 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     'SIMULATED. A topographic routing graph over the declared surface — not rainfall,',
     'runoff, infiltration or flood modelling. Accumulation counts cells, not water.',
     '',
+    ...(opts.terrainCaveat ? [
+      'TERRAIN RUN NOT USABLE: read this result as illustration only.',
+      `  Terrain verdict  ${opts.terrainCaveat.verdict}`,
+      `  Interpolated     ${interpolatedShareText(opts.terrainCaveat)}`,
+      '',
+    ] : []),
     'Files',
     `  ${opts.basename}-accumulation.asc   Upstream cell count per cell (Esri ASCII Grid)`,
     `  ${opts.basename}-direction.asc      D8 receiver direction index per cell (-1 to 7)`,
@@ -271,16 +305,20 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     `  CRS            ${opts.crsName ?? 'not georeferenced — rasters use a local (0, 0) origin'}`,
     ...(opts.sourceInterpretation.crsOrigin ? [`  ${crsOriginLine(opts.sourceInterpretation.crsOrigin)}`] : []),
     `  Vertical unit  ${opts.verticalUnitLabel === 'units' ? 'unresolved — every fill-depth/elevation figure below is in source units' : opts.verticalUnitLabel}`,
+    `  Terrain verdict    ${opts.terrainCaveat ? `${opts.terrainCaveat.verdict} (${interpolatedShareText(opts.terrainCaveat)})` : 'not flagged Blocked or Preview'}`,
+    opts.elevationOrigin == null
+      ? '  Outlet elevations  outletElevationLocal columns are in the load-time recentred frame (source elevation minus an origin this export does not know)'
+      : '  Outlet elevations  source elevation, the same figure the Lab readout shows',
     '',
     'Grid',
     `  Size           ${grid.cols} x ${grid.rows} cells`,
-    `  Cell size      ${grid.cellMetresX} m (east-west) x ${grid.cellMetresY} m (north-south)`,
+    `  Cell size      ${fig(grid.cellMetresX, 3)} m (east-west) x ${fig(grid.cellMetresY, 3)} m (north-south)`,
     `  NODATA value   ${NO_DATA}`,
     `  Direction legend   ${DIRECTION_LEGEND.map((d, i) => `${i}=${d}`).join(', ')}, -1 = sink/outlet/no data`,
     ...(grid.cellMetresX !== grid.cellMetresY ? [
       '  Anisotropic grid: the Esri ASCII Grid format has one cell size field, so',
-      `  the two .asc rasters are written at the X cell size (${grid.cellMetresX} m) and`,
-      `  will appear stretched along Y in GIS software (true Y is ${grid.cellMetresY} m).`,
+      `  the two .asc rasters are written at the X cell size (${fig(grid.cellMetresX, 3)} m) and`,
+      `  will appear stretched along Y in GIS software (true Y is ${fig(grid.cellMetresY, 3)} m).`,
       '  Routing itself used the true per-axis sizes; only these two raster files are',
       '  affected. The CSV and JSON files carry the true cell sizes throughout.',
     ] : []),
@@ -296,7 +334,7 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     `  Flats (unresolved)     ${s.flatCount}`,
     `  Outlets                ${s.outletCount}`,
     `  Largest upstream count ${s.maxUpstreamCells} cells`,
-    `  Largest contributing area   ${s.maxContributingAreaM2 == null ? 'withheld (horizontal scale unresolved)' : `${s.maxContributingAreaM2} m2`}`,
+    `  Largest contributing area   ${s.maxContributingAreaM2 == null ? 'withheld (horizontal scale unresolved)' : `${fig(s.maxContributingAreaM2, 1)} m2`}`,
     `  Depressions catalogued ${result.depressions.depressions.length}`,
     `  Field digest            ${r.result.fieldDigest}`,
     `  Run record digest       ${r.digest}`,
@@ -355,6 +393,7 @@ export function buildFlowPulsePackage(
   const coverage = coverageOf(grid);
   const hasPath = !!options.path;
   const hasCatchment = !!options.catchment;
+  const elevationOrigin = options.elevationOrigin ?? null;
 
   const entries: ZipEntry[] = [];
 
@@ -384,7 +423,7 @@ export function buildFlowPulsePackage(
 
   entries.push({
     name: `${basename}-sinks-depressions.csv`,
-    bytes: new TextEncoder().encode(depressionsCsv(result)),
+    bytes: new TextEncoder().encode(depressionsCsv(result, elevationOrigin)),
   });
 
   if (options.path) {
@@ -421,7 +460,7 @@ export function buildFlowPulsePackage(
 
   entries.push({
     name: `${basename}-summary.csv`,
-    bytes: new TextEncoder().encode(summaryCsv(result)),
+    bytes: new TextEncoder().encode(summaryCsv(result, elevationOrigin)),
   });
 
   entries.push({
@@ -465,6 +504,7 @@ export function buildFlowPulsePackage(
     basename, generationDateIso, softwareName, softwareVersion, build,
     crsName: options.crsName ?? null, hasWkt: !!options.wkt,
     verticalUnitLabel: options.verticalUnitLabel ?? 'units', hasPath, hasCatchment, sourceInterpretation,
+    elevationOrigin, terrainCaveat: options.terrainCaveat ?? null,
     sourceSha256Text: options.sourceSha256 ?? (options.digests ? sourceSha256Text(options.digests) : (result.record.source.sourceDigest ?? SOURCE_NOT_SUPPLIED_NOTE)),
   });
   entries.push({

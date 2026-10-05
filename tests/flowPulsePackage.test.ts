@@ -234,3 +234,57 @@ describe('the README never crosses into forbidden hydraulic language', () => {
     for (const l of result.limitations) expect(readme).toContain(l);
   });
 });
+
+describe('outlet elevations match the Lab readout', () => {
+  const depressionRows = (zip: Uint8Array) => textOf(zip, 'flow-sinks-depressions.csv').trim().split('\n');
+
+  it('adds the recentring origin back when the caller knows it', () => {
+    const result = runOf({ conditioning: 'priority-flood' });
+    const local = result.depressions.depressions[0]!.outletElevation!;
+    const zip = buildFlowPulsePackage(result, { basename: 'flow', elevationOrigin: 1000 });
+    const [header, first] = depressionRows(zip);
+    expect(header!.split(',')[4]).toBe('outletElevation');
+    expect(Number(first!.split(',')[4])).toBe(local + 1000);
+    expect(textOf(zip, 'flow-summary.csv')).toContain(`largestDepressionOutletElevation,${local + 1000}`);
+    expect(textOf(zip, 'flow-README.txt')).toContain('the same figure the Lab readout shows');
+  });
+
+  it('names the column Local and states the frame when the origin is unknown', () => {
+    const result = runOf({ conditioning: 'priority-flood' });
+    const local = result.depressions.depressions[0]!.outletElevation!;
+    const zip = buildFlowPulsePackage(result, { basename: 'flow' });
+    const [header, first] = depressionRows(zip);
+    expect(header!.split(',')[4]).toBe('outletElevationLocal');
+    expect(Number(first!.split(',')[4])).toBe(local);
+    expect(textOf(zip, 'flow-summary.csv')).toContain('largestDepressionOutletElevationLocal,');
+    expect(textOf(zip, 'flow-README.txt')).toContain('load-time recentred frame');
+  });
+});
+
+describe('the README states an unusable terrain run', () => {
+  it('names the verdict and the interpolated share', () => {
+    const zip = buildFlowPulsePackage(runOf(), {
+      basename: 'flow', terrainCaveat: { verdict: 'Blocked', interpolatedPercent: 99 },
+    });
+    const readme = textOf(zip, 'flow-README.txt');
+    expect(readme).toContain('TERRAIN RUN NOT USABLE: read this result as illustration only.');
+    expect(readme).toContain('Terrain verdict  Blocked');
+    expect(readme).toContain('99% of the ground surface is interpolated, not measured');
+  });
+
+  it('carries no banner for a usable surface', () => {
+    const readme = textOf(buildFlowPulsePackage(runOf(), { basename: 'flow' }), 'flow-README.txt');
+    expect(readme).not.toContain('NOT USABLE');
+  });
+});
+
+describe('README figures are rounded', () => {
+  it('prints cell size to 3 decimals and contributing area to 1', () => {
+    const scale = { ...projected, unitToMetres: 0.1 + 0.2 };
+    const r = runFlowPulse(bowlDtm(), scale, params(), identity);
+    if (!r.ok) throw new Error(`fixture run refused: ${r.code}`);
+    const readme = textOf(buildFlowPulsePackage(r, { basename: 'flow' }), 'flow-README.txt');
+    expect(readme).not.toMatch(/\d\.\d{4,}/);
+    expect(readme).toMatch(/Cell size\s+0\.3 m/);
+  });
+});

@@ -74,6 +74,8 @@ test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overl
   const floodBtn = labPage.locator('.olv-flow-cond-btn', { hasText: 'Priority-Flood conditioned' });
   await expect(rawBtn).toHaveAttribute('aria-pressed', 'true');
   await expect(floodBtn).toHaveAttribute('aria-pressed', 'false');
+  await expect(floodBtn).toHaveAttribute('data-tip', 'Fill closed hollows first, so most flow reaches an outlet; flats may remain.');
+  await expect(labPage.locator('.olv-flow-cond-hint')).toContainText('Use Raw to see where water pools');
 
   // Switching conditioning re-runs the model: the pressed state flips and the
   // record's own method list changes to name Priority-Flood.
@@ -134,6 +136,12 @@ test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overl
   await exportBtn.click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/-flow-pulse\.zip$/);
+
+  // Switching conditioning re-runs the model and clears the trace and
+  // catchment drawn above; the live region says so.
+  await rawBtn.click();
+  await expect(rawBtn).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 });
+  await expect(labPage.locator('.olv-flow-live')).toHaveText('Flow Pulse run complete. The traced path and catchment were cleared.', { timeout: 10_000 });
 
   // ACCUMULATION OVERLAY: offered (the Analyse panel wired real scene
   // membership through to the Lab), toggles, and states its own honesty

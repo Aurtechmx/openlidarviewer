@@ -54,7 +54,7 @@ describe('help catalogue', () => {
   it('search finds the concepts a user types', () => {
     for (const [query, topicId] of [
       ['volume', 'tools'], ['CRS', 'export-trust'], ['preview', 'scientific-states'], ['classification', 'analyse'],
-      ['keyboard', 'keyboard'], ['terrain', 'analyse'], ['export', 'export-trust'], ['orbit', 'navigation'],
+      ['keyboard', 'keyboard'], ['terrain', 'analyse'], ['catchment', 'flow-pulse'], ['drainage', 'flow-pulse'], ['export', 'export-trust'], ['orbit', 'navigation'],
     ] as const) {
       const hits = searchHelp(query, actions);
       expect(hits.map((h) => h.topic.id), query).toContain(topicId);

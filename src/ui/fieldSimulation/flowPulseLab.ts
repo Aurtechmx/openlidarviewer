@@ -58,6 +58,7 @@ import { buildIdentityProvenance } from '../../build/buildIdentity';
 import { FlowResultGrid, flowGridLegend, maskFromIndices } from './flowResultGrid';
 import { howToRead, labHeader, methodDetails, needsGround, readinessList } from '../labGuide';
 import { labReadiness } from '../../process/labGuideCopy';
+import { flowTerrainBannerText, flowTerrainCaveat, type FlowTerrainCaveat } from '../../process/flowTerrainCaveat';
 import {
   buildFlowAccumulationBuffers,
   buildFlowCatchmentBuffers,
@@ -227,6 +228,29 @@ export interface FlowPulseGeoref {
   readonly wkt: string | null;
   /** See {@link runFlowPulse}'s parameter of the same name. Defaults to `'units'`. */
   readonly verticalUnitLabel?: 'm' | 'ft' | 'units';
+  /** World Z of the load-time recentring origin, so exported elevations match the readout. */
+  readonly elevationOrigin?: number | null;
+  /** The terrain verdict and interpolated share, when the surface is Blocked or Preview. */
+  readonly terrainCaveat?: FlowTerrainCaveat | null;
+}
+
+/**
+ * The georef an export of `input` carries: the world origin, the CRS name and
+ * WKT (for the `.prj`), the vertical unit and origin, and the terrain caveat.
+ */
+export function flowPulseGeorefOf(input: FlowPulseLabInput, digests: ExportDigests | null): FlowPulseGeoref {
+  return {
+    worldOrigin: input.worldOriginX != null && input.worldOriginY != null
+      ? { x: input.worldOriginX, y: input.worldOriginY }
+      : null,
+    crsName: input.crsName ?? null,
+    wkt: input.wkt ?? null,
+    verticalUnitLabel: flowElevationReference(input).unitLabel,
+    elevationOrigin: input.worldOriginZ ?? null,
+    terrainCaveat: flowTerrainCaveat(input.result.quality),
+    sourceInterpretation: input.sourceInterpretation,
+    digests,
+  };
 }
 
 /**
@@ -265,6 +289,8 @@ export function buildFlowPulseExport(
     crsName: georef?.crsName ?? null,
     wkt: georef?.wkt ?? null,
     verticalUnitLabel: georef?.verticalUnitLabel ?? 'units',
+    elevationOrigin: georef?.elevationOrigin ?? null,
+    terrainCaveat: georef?.terrainCaveat ?? null,
     sourceInterpretation: georef?.sourceInterpretation ?? null,
     digests: georef?.digests ?? null,
   });
@@ -312,16 +338,42 @@ export function renderFlowPulseLab(outcome: FlowPulseResult | FlowRefusal): HTML
   return card;
 }
 
+/**
+ * The banner above the result card when the terrain run is Blocked or
+ * Preview, or null when the surface is usable.
+ */
+export function flowTerrainBanner(input: FlowPulseLabInput): HTMLElement | null {
+  const caveat = flowTerrainCaveat(input.result.quality);
+  if (!caveat) return null;
+  const banner = el('div', { className: 'olv-flow-terrain-banner', text: flowTerrainBannerText(caveat) });
+  banner.setAttribute('role', 'note');
+  return banner;
+}
+
 /** Plain lines beside a Flow Pulse result. */
 export const FLOW_HOW_TO_READ: readonly string[] = [
-  'Each square is one ground cell. Water in a cell moves to its lowest neighbour.',
+  'Each square is one ground cell. Water in a cell moves to the neighbour with the steepest drop.',
   'Outlets are where flow leaves the grid. Sinks are low spots where it stops.',
   'Upstream counts are numbers of cells, not volumes of water or rainfall.',
 ];
 
+/** One line under the Raw / Priority-Flood choice: when to use which. */
+export const FLOW_CONDITIONING_HINT =
+  'Use Raw to see where water pools in hollows; use Priority-Flood to follow drainage across them to an outlet.';
+
+/**
+ * What the live region says after a conditioning switch re-runs the model.
+ * A re-run clears any traced path or catchment, so the announcement says so
+ * when there was one.
+ */
+export function rerunAnnouncement(outcome: FlowPulseResult | FlowRefusal, hadSelection: boolean): string {
+  const base = outcome.ok ? 'Flow Pulse run complete.' : `Flow Pulse did not run: ${outcome.reason}`;
+  return hadSelection ? `${base} The traced path and catchment were cleared.` : base;
+}
+
 /** The readiness list for an input, or for none. */
 function flowReadiness(input: FlowPulseLabInput | null) {
-  return labReadiness('flow-pulse', !!input, !!input && flowScaleOf(input).resolved);
+  return labReadiness('flow-pulse', !!input, !!input && flowScaleOf(input).resolved, flowTerrainCaveat(input?.result.quality));
 }
 
 // ── interactive layer ───────────────────────────────────────────────────────
@@ -500,11 +552,12 @@ function mountFlowPulseInteractive(
     'olv-flow-cond-btn',
     [
       { value: 'raw', label: 'Raw terrain', tip: 'Trace flow over the terrain surface as loaded, unconditioned.' },
-      { value: 'priority-flood', label: 'Priority-Flood conditioned', tip: 'Fill closed depressions first, so flow always reaches an outlet.' },
+      { value: 'priority-flood', label: 'Priority-Flood conditioned', tip: 'Fill closed hollows first, so most flow reaches an outlet; flats may remain.' },
     ],
     () => conditioning,
     (value) => { if (value !== conditioning && !busy) void rerun(value); },
   );
+  const conditioningHint = el('div', { className: 'olv-flow-cond-hint', text: FLOW_CONDITIONING_HINT });
 
   const modeCtl = segmentedControl<ClickMode>(
     'What a selected cell does',
@@ -655,16 +708,7 @@ function mountFlowPulseInteractive(
         input.filename,
         input.layerId,
         buildFlowPulsePackage,
-        {
-          worldOrigin: input.worldOriginX != null && input.worldOriginY != null
-            ? { x: input.worldOriginX, y: input.worldOriginY }
-            : null,
-          crsName: input.crsName ?? null,
-          wkt: input.wkt ?? null,
-          verticalUnitLabel: flowElevationReference(input).unitLabel,
-          sourceInterpretation: input.sourceInterpretation,
-          digests,
-        },
+        flowPulseGeorefOf(input, digests),
       );
       if (!built.ok) {
         announce(`Export refused — ${built.reason}`);
@@ -726,10 +770,13 @@ function mountFlowPulseInteractive(
       overlayLegend,
     ]);
 
+    const banner = flowTerrainBanner(input);
     body.replaceChildren(
+      ...(banner ? [banner] : []),
       staticCard,
       howToRead(FLOW_HOW_TO_READ),
       conditioningCtl.element,
+      conditioningHint,
       modeCtl.element,
       gridHint,
       grid.element,
@@ -743,6 +790,7 @@ function mountFlowPulseInteractive(
   async function rerun(next: FlowConditioning): Promise<void> {
     conditioning = next;
     conditioningCtl.sync();
+    const hadSelection = lastTrace !== null || lastCatchment !== null;
     busy = true;
     const busyLine = el('div', { className: 'olv-flow-busy' });
     showBusyScan(busyLine, 'Running Flow Pulse…', 'emblem');
@@ -759,7 +807,7 @@ function mountFlowPulseInteractive(
       publish();
       busy = false;
       renderReady();
-      announce(outcome.ok ? 'Flow Pulse run complete.' : `Flow Pulse did not run: ${outcome.reason}`);
+      announce(rerunAnnouncement(outcome, hadSelection));
     } catch (err) {
       busy = false;
       showError(err);

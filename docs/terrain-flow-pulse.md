@@ -311,5 +311,13 @@ It states SIMULATED and never claims flood, runoff or discharge outside an
 explicit negation. A SHA256SUMS file lists the SHA-256 of every file in the
 package.
 
-The builder is a pure library. Nothing in this repository wires it to a UI
-export action yet.
+The Flow Pulse Lab's Export package (ZIP) button builds this package from
+the current run, through `buildFlowPulseExport` in
+`src/ui/fieldSimulation/flowPulseLab.ts`. It passes the world origin, the
+CRS name and WKT (written as a `.prj` when the CRS resolves), the vertical
+origin and the terrain verdict. With the vertical origin known, the
+depression table's `outletElevation` is the source elevation the Lab's
+readout shows; without it the column is `outletElevationLocal`, in the
+load-time recentred frame. A Blocked or Preview terrain run puts its
+verdict and the interpolated share of the surface at the top of the
+README.

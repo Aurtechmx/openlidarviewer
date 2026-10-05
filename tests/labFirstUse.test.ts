@@ -154,3 +154,25 @@ describe('lab copy', () => {
     expect(method).toContain('Digest:');
   });
 });
+
+describe('the ground row on an unusable terrain run', () => {
+  it('reads not met, without blocking, and names the verdict and interpolated share', () => {
+    const items = copy.labReadiness('flow-pulse', true, true, { verdict: 'Blocked', interpolatedPercent: 99 });
+    expect(items[0]!.met).toBe(false);
+    expect(items[0]!.blocking).toBe(false);
+    expect(items[0]!.note).toBe('Blocked terrain run: 99% of the ground surface is interpolated, not measured.');
+    expect(copy.firstBlocker(items)).toBeNull();
+  });
+
+  it('renders the ground row with the ! glyph, not a tick', async () => {
+    const { readinessList } = await import('../src/ui/labGuide');
+    const list = readinessList(copy.labReadiness('flow-pulse', true, true, { verdict: 'Preview', interpolatedPercent: 60 })) as unknown as RecordingEl;
+    const ground = list.children[0] as RecordingEl;
+    expect(ground.dataset.state).toBe('partial');
+    expect((ground.children[0] as RecordingEl).textContent).toBe('!');
+  });
+
+  it('the Flow Pulse units note names the geographic refusal', () => {
+    expect(copy.labReadiness('flow-pulse', true, false)[1]!.note).toContain('geographic degrees with no known latitude does not run');
+  });
+});
