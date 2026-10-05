@@ -67,6 +67,8 @@
   --lab-caveat-ink: var(--warn);
   --lab-caveat-fill: rgba(184, 134, 11, 0.12);
   --lab-num: tabular-nums slashed-zero;
+  --lab-glow: rgba(0, 178, 255, 0.28);
+  --lab-north-ink: #ffffff;
   --lab-frame-on-light: rgba(15, 23, 42, 0.28);
   --lab-caveat-ink-on-light: #7a5600;
   --lab-caveat-fill-on-light: rgba(184, 134, 11, 0.14);

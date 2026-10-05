@@ -36,6 +36,7 @@ import type { SourceInterpretationRecord } from '../../science/sourceInterpretat
 import { showBusyScan } from '../busyScan';
 import { el } from '../dom';
 import { hideTip } from '../tipLayer';
+import { labStatRow } from './labStats';
 import type { ModalHandle } from '../Modal';
 import { openLabSurface } from '../labSurface';
 import {
@@ -303,7 +304,7 @@ export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | nu
   if (!outcome) return card;
   if (!outcome.ok) {
     card.append(
-      el('div', { className: 'olv-story-headline', text: 'Terrain Access did not run' }),
+      el('div', { className: 'olv-story-headline olv-lab-refusal', text: 'Terrain Access did not run' }),
       el('div', { className: 'olv-story-next', text: outcome.reason }),
       methodDetails([row('Reason code', outcome.code)]),
     );
@@ -332,6 +333,18 @@ export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | nu
     methodDetails([row('Method', outcome.record.methods.join(' → '))]),
   );
   return card;
+}
+
+/** The figure row under the map after a route is found; null before a run or on a refusal. */
+export function terrainAccessStats(outcome: TerrainAccessLabOutcome | null): HTMLElement | null {
+  if (!outcome || !outcome.ok) return null;
+  const d = outcome.diagnostics;
+  return labStatRow('Route figures', [
+    { label: 'Length', value: d.horizontalLengthM.toFixed(1), unit: 'm' },
+    { label: 'Ascent', value: d.totalAscentM.toFixed(1), unit: 'm' },
+    { label: 'Max grade', value: (Math.atan(d.maxLongitudinalGrade) * 180 / Math.PI).toFixed(1), unit: '°' },
+    { label: 'Cells', value: String(d.cellCount) },
+  ]);
 }
 
 /** Plain lines beside a Terrain Access map and route. */
@@ -649,6 +662,7 @@ export function mountTerrainAccessInteractive(
   const inspectorPanel = el('div', { className: 'olv-ta-inspector' });
   const selectionPanel = el('div', { className: 'olv-ta-selection' });
   const runCard = el('div', { className: 'olv-ta-run-card' });
+  const statsHost = el('div', { className: 'olv-ta-stats' });
 
   const modeCtl = segmentedControl<SelectMode>(
     'What a selected cell does',
@@ -785,6 +799,7 @@ export function mountTerrainAccessInteractive(
     goalCell = null;
     outcome = null;
     grid.setRouteMask(null);
+    statsHost.replaceChildren();
     overlay?.clearRoute();
     renderSelection();
     applyOverlayVisibility();
@@ -830,6 +845,7 @@ export function mountTerrainAccessInteractive(
         announce(`Terrain Access did not run: ${outcome.reason}`);
       }
       runCard.replaceChildren(renderTerrainAccessRunCard(outcome));
+      statsHost.replaceChildren(...[terrainAccessStats(outcome)].filter((n): n is HTMLElement => n !== null));
       // The Run button's tip sits over the card that just filled in.
       hideTip();
       renderSelection();
@@ -838,16 +854,18 @@ export function mountTerrainAccessInteractive(
     runCard.replaceChildren(renderTerrainAccessRunCard(null));
     inspectorPanel.replaceChildren();
 
+    // The map leads, then its figures and legend; reading notes come after the result.
     body.replaceChildren(
-      howToRead(TERRAIN_ACCESS_HOW_TO_READ),
       modeCtl.element,
       stepLine,
       grid.element,
+      statsHost,
       terrainAccessGridLegend(),
       selectionPanel,
       runButton,
       inspectorPanel,
       runCard,
+      howToRead(TERRAIN_ACCESS_HOW_TO_READ),
       overlayHost ? el('div', { className: 'olv-ta-overlay-section' }, [overlayToggle]) : el('div', {
         className: 'olv-ta-overlay-unavailable',
         text: 'The 3D traversability overlay is not available in this view; the 2D result grid still carries every interaction.',

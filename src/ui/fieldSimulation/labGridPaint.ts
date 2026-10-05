@@ -73,9 +73,12 @@ export function casedPath(
   ctx.save();
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
-  for (const [stroke, width] of [[LAB_FIELD, w + 2], [color, w]] as const) {
+  for (const [stroke, width, glow] of [[LAB_FIELD, w + 2, 0], [color, w, Math.max(4, s / 2)]] as const) {
     ctx.strokeStyle = stroke;
     ctx.lineWidth = width;
+    // A soft glow on the light stroke marks the active path; the dark casing has none.
+    ctx.shadowColor = glow ? color : 'transparent';
+    ctx.shadowBlur = glow;
     ctx.beginPath();
     ctx.moveTo(shown[0]![0], shown[0]![1]);
     if (shown.length === 1) ctx.lineTo(shown[0]![0] + 0.01, shown[0]![1]);
@@ -104,7 +107,10 @@ export function letteredRing(
     ctx.font = `600 ${Math.round(r * 1.1)}px "Olv Font", "Olv Font Fallback", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(letter, cx, cy + 0.5);
+    // The grid context is flipped north-up; unflip so the letter reads upright.
+    ctx.translate(cx, cy);
+    ctx.scale(1, -1);
+    ctx.fillText(letter, 0, 0.5);
   }
   ctx.restore();
 }
@@ -127,4 +133,86 @@ export function drawIn(ms: number, reduced: boolean, frame: (fraction: number) =
   };
   raf = requestAnimationFrame(tick);
   return () => cancelAnimationFrame(raf);
+}
+
+/**
+ * Size a grid canvas to fill its column with square cells, at the device
+ * pixel ratio, and return its 2D context with the cell size in device pixels.
+ * Grid row 0 is the southern row (rasterizeDtm counts rows up from the
+ * minimum northing), so the context is flipped vertically: callers draw row r
+ * at y = r * s and it lands north-up on screen, row rows - 1 at the top.
+ * `styleScale` sets the CSS aspect ratio (cols x rows at that scale). Returns
+ * null where there is no 2D context (the Node test DOM).
+ */
+export function fitGridCanvas(
+  canvas: HTMLCanvasElement, cols: number, rows: number, styleScale: number,
+): { ctx: CanvasRenderingContext2D; s: number } | null {
+  const w = cols * styleScale, h = rows * styleScale;
+  canvas.style.width = '100%';
+  canvas.style.height = 'auto';
+  canvas.style.aspectRatio = `${w} / ${h}`;
+  const ctx = typeof canvas.getContext === 'function' ? canvas.getContext('2d') : null;
+  if (!ctx) {
+    canvas.width = w;
+    canvas.height = h;
+    return null;
+  }
+  const dpr = typeof devicePixelRatio === 'number' && devicePixelRatio > 1 ? Math.min(3, devicePixelRatio) : 1;
+  const cssW = canvas.clientWidth > 0 ? canvas.clientWidth : w;
+  const s = Math.max(1, (cssW * dpr) / cols);
+  canvas.width = Math.round(s * cols);
+  canvas.height = Math.round(s * rows);
+  ctx.setTransform(1, 0, 0, -1, 0, canvas.height);
+  return { ctx, s };
+}
+
+/** Pixel span [x, width] of cell `i` along an axis at cell size `s`, with no seams between cells. */
+export function cellSpan(i: number, s: number): [number, number] {
+  const a = Math.round(i * s);
+  return [a, Math.round((i + 1) * s) - a];
+}
+
+/** Cell borders, drawn only once a cell is at least 12 device pixels across. */
+export function cellBorders(ctx: CanvasRenderingContext2D, cols: number, rows: number, s: number): void {
+  if (s < 12) return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(5, 11, 26, 0.35)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let c = 1; c < cols; c++) { const x = Math.round(c * s) + 0.5; ctx.moveTo(x, 0); ctx.lineTo(x, rows * s); }
+  for (let r = 1; r < rows; r++) { const y = Math.round(r * s) + 0.5; ctx.moveTo(0, y); ctx.lineTo(cols * s, y); }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Call `redraw` when the canvas's laid-out width changes (one call per frame at most). */
+export function onWidthChange(canvas: HTMLCanvasElement, redraw: () => void): void {
+  if (typeof ResizeObserver !== 'function') return;
+  let last = 0;
+  let queued = false;
+  new ResizeObserver(() => {
+    const w = canvas.clientWidth;
+    if (w === last || queued) return;
+    last = w;
+    queued = true;
+    requestAnimationFrame(() => { queued = false; redraw(); });
+  }).observe(canvas);
+}
+
+/**
+ * Grid cell under a pointer, north-up: the top of the canvas is the northern
+ * row (rows - 1). Null outside the canvas.
+ */
+export function northUpCell(
+  cols: number, rows: number, w: number, h: number, px: number, py: number,
+): { col: number; row: number } | null {
+  if (cols <= 0 || rows <= 0 || w <= 0 || h <= 0 || px < 0 || py < 0 || px >= w || py >= h) return null;
+  const col = Math.min(cols - 1, Math.floor((px / w) * cols));
+  const fromTop = Math.min(rows - 1, Math.floor((py / h) * rows));
+  return { col, row: rows - 1 - fromTop };
+}
+
+/** Row step for a vertical arrow key on a north-up grid: ArrowUp moves north (row + 1). */
+export function northUpRowStep(key: string): number {
+  return key === 'ArrowUp' ? 1 : key === 'ArrowDown' ? -1 : 0;
 }

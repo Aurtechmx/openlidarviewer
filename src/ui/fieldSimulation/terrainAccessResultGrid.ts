@@ -19,7 +19,6 @@
 import {
   clampCell,
   moveCursor,
-  pixelToCell,
   describeTerrainAccessCell,
   terrainAccessCellAnnouncement,
   type ElevationReference,
@@ -31,9 +30,11 @@ import { el } from '../dom';
 import { TERRAIN_ACCESS_STATE_LABEL, costBucketNote } from '../../simulation/terrainAccess/terrainAccessExplain';
 import { maskFromIndices as sharedMaskFromIndices } from './gridMask';
 import { MAP_COST_BUCKETS, type TraversabilityMapCell } from '../../simulation/terrainAccess/traversabilityCost';
+import { northBadge } from './labStats';
 import { cividis, prefersReducedMotion, rampGradient, rgbCss } from './labColormaps';
 import {
-  LAB_BLOCKED, LAB_LINE, LAB_WITHHELD, casedPath, cellCentres, dotCell, drawIn, hatchCell, letteredRing,
+  LAB_BLOCKED, LAB_LINE, LAB_WITHHELD, casedPath, cellBorders, cellCentres, cellSpan, dotCell, drawIn, fitGridCanvas,
+  hatchCell, letteredRing, northUpCell, northUpRowStep, onWidthChange,
 } from './labGridPaint';
 import type { TerrainAccessGrid } from '../../simulation/terrainAccess/terrainAccessTypes';
 
@@ -84,26 +85,30 @@ export function terrainAccessGridLegend(): HTMLElement {
     t.style.left = `${(Number(at) / COST_RAMP_MAX) * 100}%`;
     return t;
   }));
+  // The bucket band sits under the ramp: each segment spans its bucket's cost
+  // range, so the 15 and 50 ticks are the segment edges.
+  const segment = (state: 'low-cost' | 'moderate-cost' | 'high-cost', from: number, to: number, range: string): HTMLElement => {
+    const seg = el('li', { className: 'olv-lab-bucket' }, [
+      el('span', { className: 'olv-lab-bucket-name', text: label[state] }),
+      el('span', { className: 'olv-lab-legend-range', text: range }),
+    ]);
+    seg.style.flexGrow = String(Math.round((to - from) * 100));
+    seg.style.setProperty?.('--bucket-ink', rgbCss(cividis(costT((from + to) / 2))));
+    return seg;
+  };
+  const band = el('ul', { className: 'olv-lab-buckets', ariaLabel: 'Cost buckets' }, [
+    segment('low-cost', 0, low, `≤ ${Math.round(low * 100)} %`),
+    segment('moderate-cost', low, mod, `≤ ${Math.round(mod * 100)} %`),
+    segment('high-cost', mod, COST_RAMP_MAX, `> ${Math.round(mod * 100)} %`),
+  ]);
   const ramp = el('div', { className: 'olv-lab-ramp' }, [
     el('p', { className: 'olv-lab-ramp-title', text: 'Extra cost over a flat, supported move (%)' }),
     bar,
     ticks,
+    band,
   ]);
-  ramp.setAttribute('role', 'img');
+  ramp.setAttribute('role', 'group');
   ramp.setAttribute('aria-label', 'Cost colour scale, cividis: dark blue is 0 % extra cost, yellow is 100 % or more.');
-  const bucket = (state: 'low-cost' | 'moderate-cost' | 'high-cost', from: number, to: number, range: string): HTMLElement => {
-    const sw = el('span', { className: 'olv-lab-swatch' });
-    sw.style.background = rgbCss(cividis(costT((from + to) / 2)));
-    return el('li', { className: 'olv-lab-legend-item' }, [
-      sw,
-      el('span', { text: label[state] }), el('span', { className: 'olv-lab-legend-range', text: range }),
-    ]);
-  };
-  const buckets = el('ul', { className: 'olv-lab-legend', ariaLabel: 'Cost buckets' }, [
-    bucket('low-cost', 0, low, `≤ ${Math.round(low * 100)} %`),
-    bucket('moderate-cost', low, mod, `≤ ${Math.round(mod * 100)} %`),
-    bucket('high-cost', mod, COST_RAMP_MAX, `> ${Math.round(mod * 100)} %`),
-  ]);
   const marks = el('ul', { className: 'olv-lab-legend', ariaLabel: 'Map legend' }, [
     patternSwatch('hatch', '✕', label.blocked, LAB_BLOCKED),
     patternSwatch('dots', '?', label.unknown, LAB_WITHHELD),
@@ -112,7 +117,7 @@ export function terrainAccessGridLegend(): HTMLElement {
     patternSwatch('ring', 'G', 'Goal', GOAL_COLOR),
   ]);
   return el('div', { className: 'olv-ta-legend olv-lab-legend-panel' }, [
-    ramp, buckets, marks,
+    ramp, marks,
     el('p', { className: 'olv-ta-legend-note', text: costBucketNote() }),
   ]);
 }
@@ -151,6 +156,11 @@ export class TerrainAccessResultGrid {
     this.element = dom.element;
     this._canvas = dom.canvas;
     this._status = dom.status;
+    // One stage holds the canvas and its north arrow.
+    const stage = el('div', { className: 'olv-lab-stage' });
+    stage.append(this._canvas, northBadge());
+    this.element.replaceChildren(stage, this._status);
+    onWidthChange(this._canvas, () => this._redraw());
   }
 
   focus(): void {
@@ -208,7 +218,7 @@ export class TerrainAccessResultGrid {
   private _handleClick(e: MouseEvent): void {
     if (!this._grid) return;
     const rect = this._canvas.getBoundingClientRect();
-    const cell = pixelToCell(
+    const cell = northUpCell(
       this._grid.cols, this._grid.rows, rect.width, rect.height,
       e.clientX - rect.left, e.clientY - rect.top,
     );
@@ -226,8 +236,8 @@ export class TerrainAccessResultGrid {
     switch (e.key) {
       case 'ArrowLeft': moved = moveCursor(cols, rows, this._cursor, -1, 0); break;
       case 'ArrowRight': moved = moveCursor(cols, rows, this._cursor, 1, 0); break;
-      case 'ArrowUp': moved = moveCursor(cols, rows, this._cursor, 0, -1); break;
-      case 'ArrowDown': moved = moveCursor(cols, rows, this._cursor, 0, 1); break;
+      case 'ArrowUp':
+      case 'ArrowDown': moved = moveCursor(cols, rows, this._cursor, 0, northUpRowStep(e.key)); break;
       case 'Enter':
       case ' ':
         e.preventDefault();
@@ -254,60 +264,46 @@ export class TerrainAccessResultGrid {
     const grid = this._grid;
     const map = this._map;
     if (!grid || !map) return;
-    const scale = Math.max(1, Math.floor(CANVAS_MAX / Math.max(grid.cols, grid.rows)));
-    const w = grid.cols * scale;
-    const h = grid.rows * scale;
-    this._canvas.width = w;
-    this._canvas.height = h;
-    // Width only: CSS max-width can narrow the canvas, and a fixed pixel
-    // height would then stretch every cell. Auto height keeps cells square.
-    this._canvas.style.width = `${w}px`;
-    this._canvas.style.height = 'auto';
-    this._canvas.style.aspectRatio = `${w} / ${h}`;
-    // No canvas 2D context under the Node unit-test DOM shim, matching
-    // `flowResultGrid.ts`'s own note: the tested state lives in `_cursor` and
-    // `_status.textContent`, neither of which needs a paint.
-    const ctx = typeof this._canvas.getContext === 'function' ? this._canvas.getContext('2d') : null;
-    if (!ctx) return;
+    // Cells stay square: the CSS aspect ratio follows cols x rows, the width
+    // fills the column, and the buffer is sized from the laid-out width.
+    const styleScale = Math.max(1, Math.floor(CANVAS_MAX / Math.max(grid.cols, grid.rows)));
+    const fit = fitGridCanvas(this._canvas, grid.cols, grid.rows, styleScale);
+    if (!fit) return;
+    const { ctx, s } = fit;
 
-    const dpr = typeof devicePixelRatio === 'number' && devicePixelRatio > 1 ? Math.min(3, devicePixelRatio) : 1;
-    if (dpr !== 1) {
-      this._canvas.width = w * dpr;
-      this._canvas.height = h * dpr;
-      ctx.scale(dpr, dpr);
-    }
     for (let row = 0; row < grid.rows; row++) {
+      const [y, ch] = cellSpan(row, s);
       for (let col = 0; col < grid.cols; col++) {
+        const [x, cw] = cellSpan(col, s);
         const cell = map[row * grid.cols + col]!;
-        const x = col * scale, y = row * scale;
-        if (cell.state === 'blocked') hatchCell(ctx, x, y, scale, LAB_BLOCKED);
-        else if (cell.state === 'unknown' || cell.bestMultiplier === null) dotCell(ctx, x, y, scale, LAB_WITHHELD);
+        if (cell.state === 'blocked') hatchCell(ctx, x, y, Math.max(cw, ch), LAB_BLOCKED);
+        else if (cell.state === 'unknown' || cell.bestMultiplier === null) dotCell(ctx, x, y, Math.max(cw, ch), LAB_WITHHELD);
         else {
           ctx.fillStyle = rgbCss(cividis(costT(cell.bestMultiplier)));
-          ctx.fillRect(x, y, scale, scale);
+          ctx.fillRect(x, y, cw, ch);
         }
       }
     }
+    cellBorders(ctx, grid.cols, grid.rows, s);
     if (this._routeMask && this._routeOrder) {
-      casedPath(ctx, cellCentres(this._routeOrder, grid.cols, scale), scale, ROUTE_COLOR, this._routeFraction);
+      casedPath(ctx, cellCentres(this._routeOrder, grid.cols, s), s, ROUTE_COLOR, this._routeFraction);
     } else if (this._routeMask) {
       ctx.fillStyle = ROUTE_COLOR;
       for (let i = 0; i < this._routeMask.length; i++) {
         if (this._routeMask[i] !== 1) continue;
-        const col = i % grid.cols, row = Math.floor(i / grid.cols);
-        ctx.fillRect(col * scale + scale / 3, row * scale + scale / 3, scale / 3, scale / 3);
+        ctx.fillRect((i % grid.cols) * s + s / 3, Math.floor(i / grid.cols) * s + s / 3, s / 3, s / 3);
       }
     }
-    if (this._start) letteredRing(ctx, this._start.col, this._start.row, scale, START_COLOR, 'S');
-    if (this._goal) letteredRing(ctx, this._goal.col, this._goal.row, scale, GOAL_COLOR, 'G');
-    // Cursor outline, always drawn last.
+    // Endpoints last but for the cursor, so a route never covers them.
+    if (this._start) letteredRing(ctx, this._start.col, this._start.row, s, START_COLOR, 'S');
+    if (this._goal) letteredRing(ctx, this._goal.col, this._goal.row, s, GOAL_COLOR, 'G');
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = Math.max(1, Math.floor(scale / 6));
+    ctx.lineWidth = Math.max(1, Math.floor(s / 8));
     ctx.strokeRect(
-      this._cursor.col * scale + ctx.lineWidth / 2,
-      this._cursor.row * scale + ctx.lineWidth / 2,
-      scale - ctx.lineWidth,
-      scale - ctx.lineWidth,
+      this._cursor.col * s + ctx.lineWidth / 2,
+      this._cursor.row * s + ctx.lineWidth / 2,
+      s - ctx.lineWidth,
+      s - ctx.lineWidth,
     );
   }
 }

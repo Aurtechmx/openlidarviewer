@@ -146,7 +146,7 @@ describe('result grid', () => {
     if (!prev.ok) throw new Error(prev.reason);
     const g = new resultGrid.TerrainAccessResultGrid({ ariaLabel: 'grid', onActivate: () => {}, onMove: () => {} });
     g.load(prev.grid, prev.map);
-    const canvas = rec(g.element).children[0]!;
+    const canvas = rec(g.element).children[0]!.children[0]!;
     expect(canvas.style.height).toBe('auto');
     expect(canvas.style.aspectRatio).toBe('320 / 80');
   });
