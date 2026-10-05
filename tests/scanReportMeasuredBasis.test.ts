@@ -175,3 +175,24 @@ describe('Layer Health — loading and vertical unit', () => {
     expect(r.status).toBe('info');
   });
 });
+
+describe('Classification row — unclassified codes name the display sample', () => {
+  it('adds "of display sample" to an all-unclassified row on a strided load', () => {
+    const c = new PointCloud({
+      positions: POS, origin: [0, 0, 0], sourceFormat: 'laz', name: 'strided',
+      declaredPointCount: 40, decodedPointCount: 4, loadStride: 10,
+      classification: new Uint8Array([1, 1, 0, 1]),
+    });
+    const value = scanReport.run(c).rows.find((r) => r.label === 'Classification')!.value;
+    expect(value).toBe('Present, unclassified (75.0 % coverage) of display sample');
+  });
+
+  it('leaves the row as it was on a full load', () => {
+    const c = new PointCloud({
+      positions: POS, origin: [0, 0, 0], sourceFormat: 'laz', name: 'full',
+      classification: new Uint8Array([1, 1, 0, 1]),
+    });
+    const value = scanReport.run(c).rows.find((r) => r.label === 'Classification')!.value;
+    expect(value).toBe('Present, unclassified (75.0 % coverage)');
+  });
+});

@@ -112,16 +112,34 @@ export const scanReport: AnalysisModule = {
       subset === null || (cls !== undefined && subset.has(cls[i] & 0xff));
 
     // ── Per-point scan ──────────────────────────────────────────────────
-    // Full scope: `n` is the cloud's reported point count and the extent comes
-    // from `cloud.bounds()` — byte-identical to the legacy path. Subset scope:
-    // count and extent are recomputed over the visible points only.
+    // `sampled`: the file holds more points than the buffer, whatever the
+    // scope. `strided`: the unfiltered report back-scales density/spacing to
+    // the declared total (a class subset keeps the decoded basis). See the
+    // file-scale note below.
     const totalN = cloud.pointCount;
+    const declaredN = cloud.declaredPointCount;
+    const sampled = declaredN !== undefined && declaredN > totalN;
+    const strided = subset === null && sampled;
+
+    // Points with the LAS Withheld flag are left out of the extent and of the
+    // density numerator, as terrain and profiles do (withheldPolicy.ts), so a
+    // withheld outlier cannot stretch Height or the footprint. A declared
+    // total, or a buffer with no flags channel (a voxel-reduced load), cannot
+    // say which points were Withheld, so nothing is left out then.
+    const flags = strided ? undefined : alignedFlags(cloud.classificationFlags, totalN);
+    let excluded = 0;
+    if (flags) for (let i = 0; i < totalN; i++) if (isVisible(i) && isWithheld(flags[i])) excluded++;
+
+    // Full scope with nothing withheld: `n` is the cloud's reported point
+    // count and the extent comes from `cloud.bounds()`, byte-identical to the
+    // legacy path. Otherwise count and extent are recomputed in one pass over
+    // the visible points, skipping Withheld ones for the extent.
     let n = totalN;
     const bounds = cloud.bounds();
     let minX = bounds.min[0], minY = bounds.min[1], minZ = bounds.min[2];
     let maxX = bounds.max[0], maxY = bounds.max[1], maxZ = bounds.max[2];
 
-    if (subset !== null) {
+    if (subset !== null || excluded > 0) {
       n = 0;
       minX = minY = minZ = Infinity;
       maxX = maxY = maxZ = -Infinity;
@@ -129,6 +147,7 @@ export const scanReport: AnalysisModule = {
       for (let i = 0; i < totalN; i++) {
         if (!isVisible(i)) continue;
         n++;
+        if (flags && isWithheld(flags[i])) continue;
         const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
@@ -137,10 +156,20 @@ export const scanReport: AnalysisModule = {
         if (z < minZ) minZ = z;
         if (z > maxZ) maxZ = z;
       }
-      if (n === 0) {
-        // No visible points — every extent collapses to zero so the degenerate
+      if (n === 0 || minX > maxX) {
+        // No points to span: every extent collapses to zero so the degenerate
         // branches below report N/A rather than NaN/Infinity arithmetic.
         minX = minY = minZ = maxX = maxY = maxZ = 0;
+      }
+    }
+
+    // Noise classes (7 Low Point, 18 High Noise) stay in the extent, so the
+    // Height row says so when the scope holds any.
+    let hasNoise = false;
+    if (cls !== undefined) {
+      for (let i = 0; i < totalN && !hasNoise; i++) {
+        const c = cls[i] & 0xff;
+        if ((c === 7 || c === 18) && isVisible(i) && !(flags && isWithheld(flags[i]))) hasNoise = true;
       }
     }
 
@@ -151,12 +180,6 @@ export const scanReport: AnalysisModule = {
     // it — the same back-scaling the terrain pipeline already applies. A class
     // subset can only be counted over the points actually loaded, so it keeps
     // the decoded basis.
-    const declaredN = cloud.declaredPointCount;
-    // `sampled`: the file holds more points than the buffer, whatever the
-    // scope. `strided`: the unfiltered report back-scales density/spacing to
-    // the declared total (a class subset keeps the decoded basis).
-    const sampled = declaredN !== undefined && declaredN > totalN;
-    const strided = subset === null && sampled;
     const reportedN = strided ? (declaredN as number) : n;
 
     if (sampled) {
@@ -220,19 +243,14 @@ export const scanReport: AnalysisModule = {
     rows.push(
       withScope(rowInfo('Width', `${width.toFixed(1)}${basis.lengthUnit}`), scope),
       withScope(rowInfo('Depth', `${depth.toFixed(1)}${basis.lengthUnit}`), scope),
-      withScope(rowInfo('Height', `${height.toFixed(1)}${basis.lengthUnit}`), scope),
+      withScope(rowInfo('Height', `${height.toFixed(1)}${basis.lengthUnit}${hasNoise ? ' (includes noise classes 7 and 18)' : ''}`), scope),
     );
 
     const footprintArea = width * depth;
 
-    // Density and spacing leave points with the LAS Withheld flag out, as
-    // terrain and profiles do (withheldPolicy.ts); Overlap stays. The count
-    // row above is the file's.
-    // A declared total, or a buffer with no flags channel (a voxel-reduced
-    // load), cannot say how many were Withheld, so the exclusion is 'unknown'.
-    const flags = strided ? undefined : alignedFlags(cloud.classificationFlags, totalN);
-    let excluded = 0;
-    if (flags) for (let i = 0; i < totalN; i++) if (isVisible(i) && isWithheld(flags[i])) excluded++;
+    // Density and spacing leave Withheld points out (counted above); Overlap
+    // stays. The count row above is the file's. With no flags the exclusion
+    // is 'unknown'.
     const withheld = withheldReadCounts(reportedN, excluded, flags !== undefined);
     const densityN = withheld.analysedPoints;
 
@@ -335,7 +353,9 @@ export const scanReport: AnalysisModule = {
       }
       const pct = (k: number): string => ((k / n) * 100).toFixed(1);
       if (!anyAssigned) {
-        classValue = n > 0 ? `Present, unclassified (${pct(nonZero)} % coverage)` : 'Present, unclassified';
+        classValue = n > 0
+          ? `Present, unclassified (${pct(nonZero)} % coverage)` + (strided ? ' of display sample' : '')
+          : 'Present, unclassified';
       } else if (n > 0) {
         classValue =
           `Yes — codes on ${pct(nonZero)} %, ${pct(codeOne)} % unclassified (code 1)`
