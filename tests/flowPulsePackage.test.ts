@@ -121,6 +121,12 @@ describe('the package carries every required file', () => {
     expect(readme).toMatch(/Vertical unit\s+unresolved.*source units/);
   });
 
+  it('describes the processing manifest as a self-consistency check, not tamper-evidence', () => {
+    const readme = textOf(buildFlowPulsePackage(runOf(), { basename: 'flow' }), 'flow-README.txt');
+    expect(readme).toContain('hash-chained (a self-consistency check, not a signature)');
+    expect(readme).not.toContain('tamper-evident processing steps');
+  });
+
   it('states the resolved vertical unit when the caller supplies one', () => {
     const readme = textOf(
       buildFlowPulsePackage(runOf(), { basename: 'flow', verticalUnitLabel: 'm' }),

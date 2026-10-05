@@ -292,7 +292,7 @@ export async function exportMeasurementsFile(
   deps.downloadText(`${stem}-measurements.${format === 'geojson' ? 'geojson' : 'csv'}`, text);
 }
 
-/** Export the signed measurement integrity report (JSON). */
+/** Export the measurement integrity report (JSON) with its content digest. */
 export async function exportMeasurementIntegrityReport(
   deps: MeasurementExportActionDeps,
 ): Promise<void> {

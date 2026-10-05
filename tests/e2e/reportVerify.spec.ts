@@ -6,7 +6,7 @@ import { dropDenseGridPly, showWorkspaceMode } from './helpers';
 
 /**
  * v0.5.2 — the "Verify integrity report" command-palette tool. Round-trips the
- * feature end to end: export a real report, verify it (intact), then tamper a
+ * feature end to end: export a real report, verify it (digest matches), then tamper a
  * figure and verify again (modified). The digest math itself is covered by the
  * verifyReport unit tests; this proves the UI wiring — file pick → verify →
  * verdict card — works against a genuinely-exported manifest.
@@ -70,11 +70,11 @@ async function verifyWith(page: Page, file: string): Promise<void> {
   await chooser.setFiles(file);
 }
 
-test('an exported report verifies as intact', async ({ page }) => {
+test('an exported report verifies as matching its contents', async ({ page }) => {
   const reportPath = await exportReport(page);
   await verifyWith(page, reportPath);
   await expect(page.locator('[data-testid="report-verify-valid"]')).toBeVisible({ timeout: 10_000 });
-  await expect(page.locator('[data-testid="report-verify-valid"]')).toHaveText(/intact/i);
+  await expect(page.locator('[data-testid="report-verify-valid"]')).toHaveText(/digest matches the contents/i);
   // The verdict is announced: the modal carries dialog semantics, matching the
   // app's other modals, so a screen reader conveys the intact/tamper result.
   await expect(page.locator('[data-testid="report-verify"] [role="dialog"]')).toHaveAttribute(

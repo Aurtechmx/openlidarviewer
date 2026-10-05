@@ -1,7 +1,7 @@
 /**
  * measurementReport.ts
  *
- * Turns the placed measurements into a tamper-evident integrity report manifest
+ * Turns the placed measurements into an integrity report manifest
  * — the "Integrity report (JSON)" product, a sibling of the GeoJSON / CSV export.
  *
  * Each measurement becomes a {@link ReportFinding} carrying its primary metric
@@ -29,8 +29,8 @@ import { evidenceNote, evidenceStatus, unverifiedUnitsCaveat, type EvidenceStatu
 import type { ClaimId } from '../validation/evidenceRegistry';
 
 /**
- * The claim the integrity report stands on (§19). REPORT-DIGEST is the tamper-
- * evident digest itself, which is E1 (unit-verified) and required E1 — so the
+ * The claim the integrity report stands on (§19). REPORT-DIGEST is the content
+ * digest itself (a self-consistency check, not a signature), which is E1 (unit-verified) and required E1 — so the
  * gate reports it VALIDATED. The exporter still routes through the gate rather
  * than asserting that: if the register ever lowers the digest below its bar, or
  * disables it, this exporter's verdict flips automatically.

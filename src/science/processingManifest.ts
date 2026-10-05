@@ -1,14 +1,15 @@
 /**
  * processingManifest.ts — the VERIFY-ONLY processing-provenance manifest.
  *
- * Every terrain export should carry one ordered, tamper-evident record of the
- * methods and parameters that produced it, so a reviewer holding only the
- * artifact can answer "what was run, in what order, with which settings — and
- * has this record been altered since?". That is the whole claim: a VERIFIABLE
- * manifest (ordering + parameters + tamper-evidence). It is deliberately NOT an
- * execution recipe — no executor exists that consumes it, and nothing here may
- * imply one. Verification proves the record is intact; it does not prove the
- * pipeline could be re-run from it.
+ * Every terrain export should carry one ordered record of the methods and
+ * parameters that produced it, hash-chained so a reviewer holding only the
+ * artifact can answer "what was run, in what order, with which settings" and
+ * check that the chain still matches the record. That is the whole claim. The
+ * chain is unkeyed SHA-256: a match catches an accidental edit, but anyone who
+ * edits the record can recompute the chain, so it is a self-consistency check,
+ * not a signature, and it says nothing about who wrote it. It is deliberately
+ * NOT an execution recipe: no executor consumes it, and nothing here may imply
+ * one. Verification does not prove the pipeline could be re-run from it.
  *
  * Mechanism: the same append-only hash-chain discipline as the measurement
  * audit log (whose pure primitives — {@link canonicalize} and {@link sha256} —
@@ -211,7 +212,7 @@ export interface ProcessingManifestVerification {
   readonly ok: boolean;
   /**
    * Index of the FIRST op whose seq or hash fails to recompute — the first
-   * point of tampering or corruption. `ops.length` means every op verified but
+   * point where the record no longer matches its chain. `ops.length` means every op verified but
    * the recorded `head` (or, equivalently, the envelope it covers on an
    * op-free manifest) does not match: a truncated chain or an edited head.
    * Omitted when `ok`.
@@ -227,7 +228,7 @@ const GENESIS_SENTINEL = '0';
 
 /**
  * The chain seed for a manifest envelope. Folding schema + build + source into
- * the seed makes the whole document tamper-evident, not just the op list — see
+ * the seed puts the whole document under the chain, not just the op list — see
  * the module comment for why the envelope is provenance too.
  */
 function envelopeGenesis(schemaVersion: number, build: string, source: string | null): string {
@@ -284,7 +285,7 @@ export function buildProcessingManifest(input: ProcessingManifestInput): Process
 
 /**
  * Recompute the whole chain — envelope genesis, every op fold, and the head —
- * and report whether the manifest is intact. On failure, `firstInvalid` is the
+ * and report whether the chain matches the manifest. On failure, `firstInvalid` is the
  * index of the first op that does not recompute (an edited envelope therefore
  * surfaces at index 0, because the genesis it seeds no longer matches), or
  * `ops.length` when the ops all verify but the recorded head does not.

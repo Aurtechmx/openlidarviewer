@@ -79,3 +79,32 @@ describe('scan report density — Withheld excluded, Overlap kept', () => {
     expect(SCAN_DENSITY_METHOD_TAG).toBe(methodTag(methodRef('olv.density.scan-report')));
   });
 });
+
+describe('scan report extent — Withheld points are left out', () => {
+  /** The 2 × 2 fixture plus one far outlier at (500, 500, 90). */
+  const withOutlier = (flag: number) => cloud({
+    positions: new Float32Array([...POS, 500, 500, 90]),
+    classificationFlags: new Uint8Array([0, 0, 0, 0, 0, 0, 0, 0, flag]),
+  });
+
+  it('a Withheld outlier changes neither the footprint nor the height', () => {
+    const c = withOutlier(W);
+    expect(row(c, 'Width')).toBe('2.0 m');
+    expect(row(c, 'Depth')).toBe('2.0 m');
+    expect(row(c, 'Height')).toBe('0.0 m');
+    expect(row(c, 'Point Count')).toBe('9');
+  });
+
+  it('the same outlier, not Withheld, does stretch the extent', () => {
+    const c = withOutlier(0);
+    expect(row(c, 'Width')).toBe('500.0 m');
+    expect(row(c, 'Height')).toBe('90.0 m');
+  });
+
+  it('says when Height includes noise classes 7 and 18', () => {
+    const noisy = cloud({ classification: new Uint8Array([2, 2, 2, 2, 2, 2, 2, 7]) });
+    expect(row(noisy, 'Height')).toBe('0.0 m (includes noise classes 7 and 18)');
+    const clean = cloud({ classification: new Uint8Array([2, 2, 2, 2, 2, 2, 2, 2]) });
+    expect(row(clean, 'Height')).toBe('0.0 m');
+  });
+});

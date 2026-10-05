@@ -408,7 +408,7 @@ function readmeText(record: ObservationRunRecord, opts: {
     '  state-summary.csv            Per-state voxel counts',
     '  frontier.csv                 The shadow frontier\'s voxel keys and summary',
     '  candidates.csv               Coverage Gain candidates, every term; suggested stations are not observations',
-    '  processing-manifest.json     Ordered, tamper-evident processing steps',
+    '  processing-manifest.json     Ordered processing steps, hash-chained (a self-consistency check, not a signature)',
     '  scientific-passport.json     Tamper-evident provenance for field.bin',
     '  SHA256SUMS.txt                SHA-256 of every file above',
     '',

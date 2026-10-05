@@ -606,11 +606,13 @@ describe('tamper evidence — the artifact and the account describing it', () =>
     // No unkeyed digest can refuse this. What the verifier must NOT do is claim
     // more than it knows, so the wording is checked instead.
     expect(verdict.valid).toBe(true);
-    expect(verdict.reason).toMatch(/intact/);
+    expect(verdict.reason).toMatch(/digest matches the contents/i);
+    expect(verdict.reason).toMatch(/anyone can recompute/i);
+    expect(verdict.reason).not.toMatch(/intact/i);
     expect(verdict.cryptographic).toBe(true);
   });
 
-  test('a forgeable checksum is never reported as intact', () => {
+  test('a forgeable checksum is reported as the weaker check', () => {
     const manifest = buildReportManifest({
       dataset: { id: 'site-a' },
       generatedAt: '2026-06-05T00:00:00.000Z',
@@ -622,7 +624,8 @@ describe('tamper evidence — the artifact and the account describing it', () =>
     const verdict = verifyReportFile(JSON.stringify(legacy));
     expect(verdict.valid).toBe(true);
     expect(verdict.cryptographic).toBe(false);
-    expect(verdict.reason).toMatch(/does NOT prove|forge/);
+    expect(verdict.reason).toMatch(/weaker accidental-edit check/);
+    expect(verdict.reason).not.toMatch(/intact|tamper/i);
   });
 });
 

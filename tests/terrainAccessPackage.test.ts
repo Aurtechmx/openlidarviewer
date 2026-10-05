@@ -116,6 +116,12 @@ function jsonOf<T>(zip: Uint8Array, name: string): T {
 }
 
 describe('the package carries every required file', () => {
+  it('describes the processing manifest as a self-consistency check, not tamper-evidence', () => {
+    const readme = textOf(buildTerrainAccessPackage(runOf(), { basename: 'ta' }), 'ta-README.txt');
+    expect(readme).toContain('hash-chained (a self-consistency check, not a signature)');
+    expect(readme).not.toContain('tamper-evident processing steps');
+  });
+
   it('includes the route, raster, diagnostics, run record, config, manifest, passport and README', () => {
     const zip = buildTerrainAccessPackage(runOf(), { basename: 'ta' });
     for (const name of [

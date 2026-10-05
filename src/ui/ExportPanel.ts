@@ -166,7 +166,7 @@ export interface ExportPanelCallbacks {
   /** Export the placed measurements to an open format (GeoJSON / CSV). */
   exportMeasurements?: (format: 'geojson' | 'csv') => void;
   /**
-   * Export a tamper-evident integrity report (JSON) — the placed measurements as
+   * Export an integrity report (JSON): the placed measurements as
    * findings, stamped with dataset provenance + the classification epoch + a
    * verifiable content digest. Wired alongside {@link exportMeasurements}.
    */

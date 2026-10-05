@@ -11,16 +11,15 @@
  * the report can {@link verifyReportManifest} it and detect a figure — a value,
  * a ± band, a caveat — that was changed without recomputing the digest.
  *
- * Honesty note: the default digest is SHA-256 (v3) — a cryptographic-strength
- * content hash, computed synchronously (see `sha256` in auditLog.ts). It is
- * tamper-EVIDENT: change a number but not the digest and verification fails, and
- * forging a matching SHA-256 digest for altered content is computationally
- * infeasible. This holds ONLY for SHA-256 — the legacy FNV-1a digest is a fast,
- * forgeable checksum, so `verifyReport` never trusts the file-named algorithm to
- * downgrade the guarantee: an FNV-1a match is reported as "matches but not
- * tamper-proof", not "intact".
- * It is still NOT a secret-keyed signature — it proves integrity, not identity,
- * so it can't tell you WHO produced the report. The `digestAlgorithm` field
+ * Honesty note: the default digest is SHA-256 (v3), an UNKEYED content hash
+ * over the body, computed synchronously (see `sha256` in auditLog.ts). A match
+ * says the digest agrees with the contents, which catches an accidental edit
+ * made without recomputing it. It proves nothing more: anyone who edits a
+ * figure can recompute the digest, so it is a self-consistency check, not a
+ * signature. It does not say who produced the report, and the verifier never
+ * compares `sourceSha256` against a source file, so it does not prove the
+ * report came from that file either. The legacy FNV-1a digest is weaker still,
+ * and `verifyReport` reports an FNV-1a match as a checksum match only. The `digestAlgorithm` field
  * names the algorithm so the output is self-describing; a caller may inject the
  * older `fnv1a` checksum for a fast, non-cryptographic digest.
  *

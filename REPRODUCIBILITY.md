@@ -43,7 +43,7 @@ npm run e2e:browsers
 
 ## Determinism
 
-- The analysis reproduction pack (`tests/reproPack.test.ts`, run via `npm run repro`) is fully deterministic: every input is generated from a fixed seed (an LCG plus Box–Muller), so the emitted metrics under `benchmarks/out/` reproduce bit-for-bit on any machine. The report digest is content-addressed (tamper-evident).
+- The analysis reproduction pack (`tests/reproPack.test.ts`, run via `npm run repro`) is fully deterministic: every input is generated from a fixed seed (an LCG plus Box–Muller), so the emitted metrics under `benchmarks/out/` reproduce exactly under the Node version pinned in `.nvmrc`. Another Node or V8 version can change the last digits of floating-point results. The report digest is an unkeyed SHA-256 over the report body: a match shows the digest agrees with the contents, which catches accidental edits. Anyone can recompute it after an edit, so it is not a signature and does not show who made the report.
 - Test fixtures under `tests/` are synthetic and seed-generated (see `scripts/make-*.py` and `tests/fixtures/FIXTURES.md`), or explicitly licensed (see `docs/project/THIRD_PARTY_NOTICES.md`).
 - Build identity is reproducible: the build honours `SOURCE_DATE_EPOCH`, and when git metadata is unavailable the commit is reported as `unknown` rather than fabricated.
 
