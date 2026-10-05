@@ -25,7 +25,6 @@ import {
   clampCell,
   describeCell,
   moveCursor,
-  pixelToCell,
   type CellReport,
   type ElevationReference,
   type GridCell,
@@ -34,7 +33,11 @@ import { CELL_FLAT, CELL_NODATA, CELL_OUTLET, CELL_SINK } from '../../simulation
 import { logScale } from '../../render/flowOverlayGeometry';
 import { el } from '../dom';
 import { prefersReducedMotion, rampGradient, rgbCss, viridis } from './labColormaps';
-import { LAB_LINE, LAB_WITHHELD, casedPath, cellCentres, dotCell, drawIn } from './labGridPaint';
+import {
+  LAB_LINE, LAB_WITHHELD, casedPath, cellBorders, cellCentres, cellSpan, dotCell, drawIn, fitGridCanvas, northUpCell, northUpRowStep, onWidthChange,
+} from './labGridPaint';
+import { FlowParticles } from './flowParticles';
+import { northBadge } from './labStats';
 import { buildResultGridDom } from './resultGridDom';
 import { legend } from '../labGuide';
 import { maskFromIndices as sharedMaskFromIndices } from './gridMask';
@@ -78,7 +81,8 @@ export function upstreamTicks(max: number): number[] {
 
 /**
  * Lambertian hillshade per cell from the grid's own elevations, sun at
- * azimuth 315 deg, altitude 45 deg, in [0, 1]. NoData and edge-adjacent
+ * azimuth 315 deg (north-west), altitude 45 deg, in [0, 1]. Row 0 is the
+ * southern row, so rows increase northwards. NoData and edge-adjacent
  * NoData neighbours fall back to the centre cell's elevation.
  */
 export function hillshade(grid: FlowGrid): Float32Array {
@@ -97,7 +101,8 @@ export function hillshade(grid: FlowGrid): Float32Array {
       if (!valid[i]) continue;
       const z0 = z[i]!;
       const dzdx = (at(c + 1, r, z0) - at(c - 1, r, z0)) / (2 * grid.cellMetresX);
-      const dzdy = (at(c, r + 1, z0) - at(c, r - 1, z0)) / (2 * grid.cellMetresY);
+      // Horn's dz/dy runs north to south; rows here run south to north.
+      const dzdy = (at(c, r - 1, z0) - at(c, r + 1, z0)) / (2 * grid.cellMetresY);
       const slope = Math.atan(Math.hypot(dzdx, dzdy));
       const aspect = Math.atan2(dzdy, -dzdx);
       const v = Math.cos(zen) * Math.cos(slope) + Math.sin(zen) * Math.sin(slope) * Math.cos(az - aspect);
@@ -169,6 +174,8 @@ export class FlowResultGrid {
   private _cancelDraw: () => void = () => {};
   private _shade: Float32Array | null = null;
   private _maxUpstream = 1;
+  /** Moving marks along the D8 directions; see flowParticles.ts. */
+  readonly particles: FlowParticles;
 
   constructor(opts: FlowResultGridOptions) {
     this._onActivate = opts.onActivate;
@@ -186,6 +193,13 @@ export class FlowResultGrid {
     this.element = dom.element;
     this._canvas = dom.canvas;
     this._status = dom.status;
+    // The particle canvas sits over the grid canvas in one stage; it takes no
+    // pointer events, so clicks and keys still reach the grid.
+    this.particles = new FlowParticles();
+    const stage = el('div', { className: 'olv-lab-stage' });
+    stage.append(this._canvas, this.particles.canvas, northBadge());
+    this.element.replaceChildren(stage, this._status);
+    onWidthChange(this._canvas, () => this._redraw());
   }
 
   focus(): void {
@@ -210,6 +224,10 @@ export class FlowResultGrid {
     let max = 1;
     for (const v of accumulation.upstreamCells) if (v > max) max = v;
     this._maxUpstream = max;
+    this.particles.load({
+      cols: grid.cols, rows: grid.rows, receiver: routed.receiver,
+      upstreamCells: accumulation.upstreamCells, maxUpstream: max,
+    });
     this._cursor = clampCell(grid.cols, grid.rows, 0, 0);
     this._redraw();
     this._updateStatus(false);
@@ -249,7 +267,7 @@ export class FlowResultGrid {
   private _handleClick(e: MouseEvent): void {
     if (!this._grid) return;
     const rect = this._canvas.getBoundingClientRect();
-    const cell = pixelToCell(
+    const cell = northUpCell(
       this._grid.cols, this._grid.rows, rect.width, rect.height,
       e.clientX - rect.left, e.clientY - rect.top,
     );
@@ -267,8 +285,8 @@ export class FlowResultGrid {
     switch (e.key) {
       case 'ArrowLeft': moved = moveCursor(cols, rows, this._cursor, -1, 0); break;
       case 'ArrowRight': moved = moveCursor(cols, rows, this._cursor, 1, 0); break;
-      case 'ArrowUp': moved = moveCursor(cols, rows, this._cursor, 0, -1); break;
-      case 'ArrowDown': moved = moveCursor(cols, rows, this._cursor, 0, 1); break;
+      case 'ArrowUp':
+      case 'ArrowDown': moved = moveCursor(cols, rows, this._cursor, 0, northUpRowStep(e.key)); break;
       case 'Enter':
       case ' ':
         e.preventDefault();
@@ -298,39 +316,26 @@ export class FlowResultGrid {
     const grid = this._grid;
     const routed = this._routed;
     if (!grid || !routed) return;
-    const scale = Math.max(1, Math.floor(CANVAS_MAX / Math.max(grid.cols, grid.rows)));
-    const w = grid.cols * scale;
-    const h = grid.rows * scale;
-    this._canvas.width = w;
-    this._canvas.height = h;
-    this._canvas.style.width = `${w}px`;
-    this._canvas.style.height = `${h}px`;
-    // No canvas 2D context under the Node unit-test DOM shim (no `getContext` at
-    // all) or in a headless environment without one: the cursor/status state this
-    // module is actually tested on lives in `_cursor` and `_status.textContent`,
-    // neither of which needs a paint. A real browser always has one.
-    const ctx = typeof this._canvas.getContext === 'function' ? this._canvas.getContext('2d') : null;
-    if (!ctx) return;
-
-    const dpr = typeof devicePixelRatio === 'number' && devicePixelRatio > 1 ? Math.min(3, devicePixelRatio) : 1;
-    if (dpr !== 1) {
-      this._canvas.width = w * dpr;
-      this._canvas.height = h * dpr;
-      ctx.scale(dpr, dpr);
-    }
+    // Square cells filling the column, buffer sized from the laid-out width.
+    const styleScale = Math.max(1, Math.floor(CANVAS_MAX / Math.max(grid.cols, grid.rows)));
+    const fit = fitGridCanvas(this._canvas, grid.cols, grid.rows, styleScale);
+    if (!fit) return;
+    const { ctx, s: scale } = fit;
     const acc = this._accumulation;
     const shade = this._shade;
     for (let row = 0; row < grid.rows; row++) {
       for (let col = 0; col < grid.cols; col++) {
         const i = row * grid.cols + col;
-        const x = col * scale, y = row * scale;
-        if (routed.status[i] === CELL_NODATA) { dotCell(ctx, x, y, scale, LAB_WITHHELD); continue; }
+        const [x, cw] = cellSpan(col, scale);
+        const [y, ch] = cellSpan(row, scale);
+        if (routed.status[i] === CELL_NODATA) { dotCell(ctx, x, y, Math.max(cw, ch), LAB_WITHHELD); continue; }
         const c = viridis(acc ? logScale(acc.upstreamCells[i]!, this._maxUpstream) : 0);
         const k = shade ? 1 - HILLSHADE_WEIGHT * (1 - shade[i]!) : 1;
         ctx.fillStyle = rgbCss([Math.round(c[0] * k), Math.round(c[1] * k), Math.round(c[2] * k)]);
-        ctx.fillRect(x, y, scale, scale);
+        ctx.fillRect(x, y, cw, ch);
       }
     }
+    cellBorders(ctx, grid.cols, grid.rows, scale);
     if (this._catchmentMask) this._strokeMaskEdge(ctx, grid, this._catchmentMask, scale);
     if (this._pathMask && this._pathOrder) {
       casedPath(ctx, cellCentres(this._pathOrder, grid.cols, scale), scale, PATH_COLOR, this._pathFraction);

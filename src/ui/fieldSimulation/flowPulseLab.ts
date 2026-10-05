@@ -56,6 +56,8 @@ import { dtmProductDigest } from '../../science/dtmProductDigest';
 import { dtmMethodDigest, resolveLiveDtmDescriptor } from '../../science/liveDtmDescriptor';
 import { buildIdentityProvenance } from '../../build/buildIdentity';
 import { FlowResultGrid, flowGridLegend, maskFromIndices } from './flowResultGrid';
+import { labStatRow } from './labStats';
+import { prefersReducedMotion } from './labColormaps';
 import { howToRead, labHeader, methodDetails, needsGround, readinessList } from '../labGuide';
 import { labReadiness } from '../../process/labGuideCopy';
 import { flowTerrainBannerText, flowTerrainCaveat, type FlowTerrainCaveat } from '../../process/flowTerrainCaveat';
@@ -345,6 +347,23 @@ export function renderFlowPulseLab(outcome: FlowPulseResult | FlowRefusal): HTML
     methodDetails([row('Method', outcome.record.methods.join(' → '))]),
   );
   return card;
+}
+
+/** The figure row under the grid for a routed result. */
+export function flowPulseStats(outcome: FlowPulseResult): HTMLElement {
+  const s = outcome.summary;
+  return labStatRow('Flow figures', [
+    { label: 'Routed', value: String(s.readableCells), unit: 'cells' },
+    { label: 'Outlets', value: String(s.outletCount) },
+    { label: 'Sinks', value: String(s.sinkCount) },
+    { label: 'Max upstream', value: String(s.maxUpstreamCells), unit: 'cells' },
+  ]);
+}
+
+/** Label and state for the flow-motion control; off and disabled under reduced motion. */
+export function flowMotionControlState(reducedMotion: boolean, paused: boolean): { text: string; pressed: boolean; disabled: boolean } {
+  if (reducedMotion) return { text: 'Flow motion off (reduced motion)', pressed: false, disabled: true };
+  return { text: paused ? 'Play flow motion' : 'Pause flow motion', pressed: !paused, disabled: false };
 }
 
 /**
@@ -781,17 +800,35 @@ function mountFlowPulseInteractive(
     ]);
 
     const banner = flowTerrainBanner(input);
+    const motion = el('button', {
+      className: 'olv-flow-motion-toggle', type: 'button',
+      tip: 'Dots move along the flow directions, faster where more cells drain through.',
+    }) as HTMLButtonElement;
+    const syncMotion = (): void => {
+      const st = flowMotionControlState(prefersReducedMotion(), grid.particles.paused);
+      motion.textContent = st.text;
+      motion.disabled = st.disabled;
+      motion.setAttribute('aria-pressed', st.pressed ? 'true' : 'false');
+    };
+    motion.addEventListener('click', () => {
+      grid.particles.setPaused(!grid.particles.paused);
+      syncMotion();
+    });
+    syncMotion();
+    // The grid leads, then its figures and legend; the full card and reading notes follow.
     body.replaceChildren(
       ...(banner ? [banner] : []),
-      staticCard,
-      howToRead(FLOW_HOW_TO_READ),
       conditioningCtl.element,
       conditioningHint,
       modeCtl.element,
       gridHint,
       grid.element,
+      motion,
+      flowPulseStats(outcome),
       flowGridLegend(grid.maxUpstream),
       selectionPanel,
+      staticCard,
+      howToRead(FLOW_HOW_TO_READ),
       overlaySection,
       exportButton,
     );
