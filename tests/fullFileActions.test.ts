@@ -5,8 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   assessFullFile, bindFullFile, fullFileAvailability, fullFileLabel, layerFacts, pointBasisLine,
   reviewSampleTip, useFullFile, formatGb, assessReload, useReload, takeReloadBudget, type FullFileLayerFacts,
+  e57DecodeBytesFromAttributes, fullDecodeRefusal, fullFileCeilingBytes, fullFileEstimateBytes,
 } from '../src/app/fullFileActions';
-import { estimateMemoryBytes, memoryCeilingBytes, planLoad } from '../src/io/loadPlan';
+import { E57_DECODE_CEILING_BYTES, estimateMemoryBytes, memoryCeilingBytes, planE57Decode, planLoad } from '../src/io/loadPlan';
 import { GPU_HARD_POINT_CEILING } from '../src/render/deviceProfile';
 import { compactPointCount } from '../src/terrain/datasetIntelligence';
 import { FULL_RES_CLASS_EDITS_REFUSAL } from '../src/export/fullResClassGuard';
@@ -354,3 +355,66 @@ describe('exportLayerHooks class causes', () => {
   });
 });
 
+
+describe('E57 fit check for Export all N points', () => {
+  // openpitmine.e57: 26.9 M records, xyz + RGB, the file loadPlan.ts cites.
+  const OPEN_PIT = {
+    sourceCount: 26_910_771, fileBytes: 616_108_032, decodeBytesPerRecord: 6 * 8,
+    attributes: { hasColor: true, hasIntensity: false, hasClassification: false, hasNormals: false },
+  };
+  const facts = (over: Partial<FullFileLayerFacts> = {}): FullFileLayerFacts => ({
+    id: 'pit', hasSource: true, reduced: true, truncated: false, resident: 4_000_000,
+    declared: OPEN_PIT.sourceCount, fileBytes: OPEN_PIT.fileBytes, format: 'e57', attributes: OPEN_PIT.attributes,
+    hasClassEdits: false, includeClassification: false, ...over,
+  });
+
+  it('uses the decode planner estimate recorded at load', () => {
+    const plan = planE57Decode({ ...OPEN_PIT, isMobile: false, deviceMemoryGB: 16 });
+    const a = assessFullFile(facts({ e57FullDecodeEstimateBytes: plan.fullDecodeEstimateBytes }), desktop16);
+    expect(a.estimateBytes).toBe(plan.fullDecodeEstimateBytes);
+    expect(a.ceilingBytes).toBe(plan.ceilingBytes);
+  });
+
+  it('without a recorded estimate, matches the planner for the same columns', () => {
+    const plan = planE57Decode({ ...OPEN_PIT, isMobile: false, deviceMemoryGB: 16 });
+    expect(e57DecodeBytesFromAttributes(OPEN_PIT.attributes)).toBe(OPEN_PIT.decodeBytesPerRecord);
+    expect(fullFileEstimateBytes(facts(), OPEN_PIT.sourceCount)).toBe(plan.fullDecodeEstimateBytes);
+    const generic = estimateMemoryBytes({
+      pointCount: OPEN_PIT.sourceCount, attributes: OPEN_PIT.attributes, fileBytes: OPEN_PIT.fileBytes, format: 'e57',
+    });
+    expect(generic).toBeLessThan(plan.fullDecodeEstimateBytes);
+  });
+
+  it('holds E57 to the whole-file decode cap and refuses over it with the figures', () => {
+    expect(fullFileCeilingBytes('e57', desktop16)).toBe(E57_DECODE_CEILING_BYTES);
+    expect(fullFileCeilingBytes('las', desktop16)).toBe(memoryCeilingBytes(16, false));
+    const a = assessFullFile(facts(), desktop16);
+    expect(a.show).toBe(true);
+    expect(a.allowed).toBe(false);
+    expect(a.estimateBytes).toBeGreaterThan(E57_DECODE_CEILING_BYTES);
+    expect(a.reason).toBe(`Exporting every point needs about ${formatGb(a.estimateBytes)}; this device allows about ${formatGb(E57_DECODE_CEILING_BYTES)}.`);
+  });
+
+  it('allows an E57 whose planner estimate fits under the cap', () => {
+    const a = assessFullFile(facts({ declared: 5_000_000, fileBytes: 120_000_000, resident: 1_000_000 }), desktop16);
+    expect(a.estimateBytes).toBeLessThanOrEqual(E57_DECODE_CEILING_BYTES);
+    expect(a.allowed).toBe(true);
+  });
+
+  it('layerFacts carries the recorded estimate from the cloud metadata', () => {
+    const f = layerFacts({
+      id: 'pit',
+      cloud: { pointCount: 10, declaredPointCount: 100, sourceFormat: 'e57', metadata: { e57FullDecodeEstimateBytes: 123 } },
+      file: { size: 1 }, reduced: true, hasClassEdits: false, includeClassification: false,
+    });
+    expect(f.e57FullDecodeEstimateBytes).toBe(123);
+  });
+
+  it('a strided re-decode is refused, never written as the full file', () => {
+    expect(fullDecodeRefusal({ pointCount: 13_455_386, loadStride: 2, declaredPointCount: 26_910_771 })).toBe(
+      `The full-resolution re-decode read ${compactPointCount(13_455_386)} of ${compactPointCount(26_910_771)} points (one record in 2) to fit memory, so nothing was exported.`,
+    );
+    expect(fullDecodeRefusal({ pointCount: 26_910_771, loadStride: 1, declaredPointCount: 26_910_771 })).toBeNull();
+    expect(fullDecodeRefusal({ pointCount: 900 })).toBeNull();
+  });
+});

@@ -583,6 +583,9 @@ export async function loadE57(
     declaredPointCount: stride > 1 ? plan.sourceCount : total,
     decodedPointCount: total,
     loadStride: stride,
-    metadata: e57Metadata(parsed.metadata, parsed.sourceMetadata, scans.length, warnings),
+    metadata: {
+      ...e57Metadata(parsed.metadata, parsed.sourceMetadata, scans.length, warnings),
+      e57FullDecodeEstimateBytes: plan.fullDecodeEstimateBytes,
+    },
   });
 }

@@ -53,6 +53,12 @@ export interface SourceMetadata {
  */
 export interface CloudMetadata {
   /**
+   * E57 only: the decode planner's estimate for reading every record of the
+   * file (`planE57Decode`'s `fullDecodeEstimateBytes`), from the file's own
+   * declaration. The "Export all N points" fit check judges against it.
+   */
+  e57FullDecodeEstimateBytes?: number;
+  /**
    * The LAS System Identifier (or the E57 sensor summary). Per the LAS spec
    * this names the hardware OR the producing process/organisation, so it is
    * shown as "System identifier", not as a capture sensor.
