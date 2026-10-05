@@ -1,0 +1,171 @@
+import { test, expect, type Page, type Locator } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { dropDenseGridPly, showWorkspaceMode } from './helpers';
+
+/**
+ * Optional report signing, end to end: the Export panel controls, the key
+ * surviving a reload, the signed file, and the verifier dialog's results.
+ * The crypto itself is covered by tests/reportSignature.test.ts.
+ */
+
+/** Load a scan, place one measurement and open the Export panel's Products lane. */
+async function prepare(page: Page): Promise<Locator> {
+  await page.goto('/?test=1');
+  await dropDenseGridPly(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await page.locator('.olv-tool', { hasText: 'Measure' }).click();
+  await expect(page.locator('.olv-measure-bar')).toBeVisible();
+  await page.evaluate(() => {
+    const api = (window as unknown as {
+      __OLV_TEST_API__: { setMeasureKind: (k: string) => void; placeMeasurementPoint: (p: { x: number; y: number; z: number }) => void };
+    }).__OLV_TEST_API__;
+    api.setMeasureKind('distance');
+    api.placeMeasurementPoint({ x: 0, y: 0, z: 0 });
+    api.placeMeasurementPoint({ x: 1, y: 0, z: 0 });
+  });
+  await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
+  await showWorkspaceMode(page, 'output');
+  const panel = page.locator('.olv-export-panel');
+  await expect(panel).toBeVisible({ timeout: 20_000 });
+  if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) await panel.locator('.olv-panel-head').click();
+  const head = panel.locator('.olv-export-products-head');
+  if ((await head.getAttribute('aria-expanded')) === 'false') await head.click();
+  await expect(panel.locator('[data-testid="export-integrity-report"]')).toBeEnabled();
+  return panel;
+}
+
+async function exportText(page: Page, panel: Locator): Promise<string> {
+  const dl = page.waitForEvent('download');
+  await panel.locator('[data-testid="export-integrity-report"]').click();
+  const path = await (await dl).path();
+  if (!path) throw new Error('no download path');
+  return readFileSync(path, 'utf8');
+}
+
+async function createKey(panel: Locator): Promise<void> {
+  await panel.locator('[data-testid="report-sign-toggle"]').click();
+  await expect(panel.locator('[data-testid="report-sign-create"]')).toBeVisible();
+  await panel.locator('[data-testid="report-sign-create"]').click();
+  await expect(panel.locator('[data-testid="report-sign-key-id"]')).toBeVisible({ timeout: 10_000 });
+}
+
+async function verify(page: Page, file: string): Promise<void> {
+  const chooser = page.waitForEvent('filechooser');
+  await page.keyboard.press('ControlOrMeta+KeyK');
+  await page.locator('.olv-palette-input').fill('verify integrity');
+  await page.locator('.olv-palette-row').filter({ hasText: 'Verify report with verification checksum' }).first().click();
+  await (await chooser).setFiles(file);
+}
+
+test('signing is off by default and an unsigned export carries no signature', async ({ page }) => {
+  const panel = await prepare(page);
+  await expect(panel.locator('[data-testid="report-sign-toggle"]')).not.toBeChecked();
+  const report = JSON.parse(await exportText(page, panel));
+  expect(report.reportSignature).toBeUndefined();
+});
+
+test('first use explains the key, then signs; the key survives a reload', async ({ page }) => {
+  let panel = await prepare(page);
+  await panel.locator('[data-testid="report-sign-toggle"]').click();
+  const intro = panel.getByRole('group', { name: 'Create a signing key' });
+  await expect(intro).toContainText('cannot be exported');
+  await expect(intro).toContainText('clearing site data deletes it');
+  await expect(intro).toContainText('does not show who that person is');
+  // Until the key exists the choice is not applied.
+  await expect(panel.locator('[data-testid="report-sign-toggle"]')).not.toBeChecked();
+  await panel.locator('[data-testid="report-sign-create"]').click();
+  await expect(panel.locator('[data-testid="report-sign-toggle"]')).toBeChecked();
+  const keyId = (await panel.locator('[data-testid="report-sign-key-id"]').textContent())!.replace('Key id: ', '');
+  await panel.locator('[data-testid="report-sign-label"]').fill('Field team');
+
+  const text = await exportText(page, panel);
+  const signed = JSON.parse(text);
+  expect(signed.reportSignature.keyId).toBe(keyId);
+  expect(signed.reportSignature.signerLabel).toBe('Field team');
+  expect(text).not.toMatch(/"d"\s*:/);
+
+  // A fresh page load finds the stored key and does not ask to create one.
+  panel = await prepare(page);
+  await panel.locator('[data-testid="report-sign-toggle"]').click();
+  await expect(panel.locator('[data-testid="report-sign-key-id"]')).toContainText(keyId);
+  await expect(panel.locator('[data-testid="report-sign-create"]')).toHaveCount(0);
+  const again = JSON.parse(await exportText(page, panel));
+  expect(again.reportSignature.keyId).toBe(keyId);
+});
+
+test('Show and Copy expose only the public key', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => undefined);
+  const panel = await prepare(page);
+  await createKey(panel);
+  const show = panel.locator('[data-testid="report-sign-show"]');
+  await expect(show).toHaveAttribute('aria-expanded', 'false');
+  await show.click();
+  await expect(show).toHaveAttribute('aria-expanded', 'true');
+  const keyText = await panel.locator('[data-testid="report-sign-public-key"]').inputValue();
+  expect(Object.keys(JSON.parse(keyText)).sort()).toEqual(['crv', 'kty', 'x', 'y']);
+  await panel.locator('[data-testid="report-sign-copy"]').click();
+  await expect(panel.locator('[data-testid="report-sign-status"]')).toHaveText(/copied|could not copy/i);
+});
+
+test('the verifier reads signer, supplied key and tampering plainly', async ({ page }) => {
+  const panel = await prepare(page);
+  await createKey(panel);
+  await panel.locator('[data-testid="report-sign-show"]').click();
+  const keyText = await panel.locator('[data-testid="report-sign-public-key"]').inputValue();
+  const file = join(tmpdir(), `olv-signed-${Date.now()}.json`);
+  writeFileSync(file, await exportText(page, panel));
+
+  await verify(page, file);
+  const dialog = page.locator('[data-testid="report-verify"] [role="dialog"]');
+  await expect(page.locator('[data-testid="report-verify-sig-unverified"]')).toHaveText('Signed, signer unverified');
+  await expect(page.locator('[data-testid="report-verify-valid"]')).toBeVisible();
+
+  // The dialog is labelled and the page has no new accessibility violations.
+  const axe = await new AxeBuilder({ page }).include('[data-testid="report-verify"]').analyze();
+  expect(axe.violations.filter((v) => v.impact === 'critical' || v.impact === 'serious')).toEqual([]);
+
+  const input = page.locator('[data-testid="report-verify-trusted-key"]');
+  await input.fill(keyText);
+  await page.locator('[data-testid="report-verify-compare"]').click();
+  await expect(page.locator('[data-testid="report-verify-sig-trusted"]')).toHaveText('Signed by the key you supplied');
+  await input.fill('A'.repeat(43));
+  await page.locator('[data-testid="report-verify-compare"]').click();
+  await expect(page.locator('[data-testid="report-verify-sig-different"]')).toBeVisible();
+  await expect(dialog).toHaveAttribute('aria-modal', 'true');
+  await page.locator('[data-testid="report-verify-close"]').click();
+
+  const tampered = JSON.parse(readFileSync(file, 'utf8'));
+  tampered.findings[0].value = 999999;
+  const bad = join(tmpdir(), `olv-signed-bad-${Date.now()}.json`);
+  writeFileSync(bad, JSON.stringify(tampered));
+  await verify(page, bad);
+  await expect(page.locator('[data-testid="report-verify-invalid"]').first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('[data-testid="report-verify-sig-invalid"]')).toHaveText('Signature does not verify');
+});
+
+test('the signing controls work from the keyboard and fit a 343 px column', async ({ page }) => {
+  const panel = await prepare(page);
+  const toggle = panel.locator('[data-testid="report-sign-toggle"]');
+  await toggle.focus();
+  await page.keyboard.press('Space');
+  await expect(panel.locator('[data-testid="report-sign-create"]')).toBeVisible();
+  await panel.locator('[data-testid="report-sign-create"]').focus();
+  await page.keyboard.press('Enter');
+  await expect(panel.locator('[data-testid="report-sign-key-id"]')).toBeVisible({ timeout: 10_000 });
+  await panel.locator('[data-testid="report-sign-show"]').focus();
+  await page.keyboard.press('Enter');
+  await expect(panel.locator('[data-testid="report-sign-public-key"]')).toBeVisible();
+  // A 375 px phone leaves a 343 px column after the 16 px gutters. The phone
+  // layout hides the workspace tabs this spec uses to reach the panel, so the
+  // block is narrowed in place and checked for overflow instead.
+  const overflow = await panel.locator('[data-testid="report-signing"]').evaluate((root) => {
+    (root as HTMLElement).style.width = '343px';
+    return [root, ...root.querySelectorAll('*')].filter((n) => n.scrollWidth > n.clientWidth + 1 && getComputedStyle(n).display !== 'inline').length;
+  });
+  expect(overflow).toBe(0);
+  const axe = await new AxeBuilder({ page }).include('[data-testid="report-signing"]').analyze();
+  expect(axe.violations.filter((v) => v.impact === 'critical' || v.impact === 'serious')).toEqual([]);
+});

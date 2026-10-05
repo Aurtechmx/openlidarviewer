@@ -21,7 +21,8 @@
  */
 
 import { verifyReportManifest, type ReportManifest } from '../render/measure/reportManifest';
-import { fnv1a, sha256, type HashFn } from '../render/measure/auditLog';
+import { canonicalize, fnv1a, sha256, type HashFn } from '../render/measure/auditLog';
+import { REPORT_SIGNATURE_FIELD, trustedKeyIdFrom, verifyReportSignature, type SignatureVerdict } from './reportSignature';
 
 export interface VerifyReportResult {
   /** The text parsed as JSON and looked like an integrity report. */
@@ -42,6 +43,11 @@ export interface VerifyReportResult {
   readonly classificationEpoch?: number;
   /** Number of findings in the report. */
   readonly findingsCount?: number;
+  /**
+   * The signature check, present only when the report carries a signature
+   * field. Unsigned reports leave it undefined and read as before.
+   */
+  readonly signature?: SignatureVerdict;
   /** A short, user-facing summary line. */
   readonly reason: string;
 }
@@ -102,4 +108,49 @@ export function verifyReportFile(jsonText: string): VerifyReportResult {
     recognised: true, valid, cryptographic, algorithm, software, classificationEpoch, findingsCount,
     reason,
   };
+}
+
+/**
+ * Verify a report, including its optional signature. An unsigned report returns
+ * exactly what {@link verifyReportFile} returns. A report with a signature
+ * field also gets a {@link SignatureVerdict}; a signature that does not verify,
+ * is malformed or is unsupported makes the result invalid. `trustedKeyText` is
+ * a public key (JSON) or key id the reader trusts, compared to the signer's.
+ * Never throws.
+ */
+export async function verifyReportFileWithSignature(
+  jsonText: string,
+  trustedKeyText?: string,
+): Promise<VerifyReportResult> {
+  const base = verifyReportFile(jsonText);
+  if (!base.recognised) return base;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(jsonText);
+  } catch {
+    return base;
+  }
+  if (typeof raw !== 'object' || raw === null || !(REPORT_SIGNATURE_FIELD in raw)) return base;
+
+  const wanted = trustedKeyText?.trim() ? trustedKeyText : undefined;
+  const trustedId = wanted === undefined ? undefined : await trustedKeyIdFrom(wanted);
+  let signature = await verifyReportSignature(raw, canonicalize, trustedId);
+  if (wanted !== undefined && trustedId === null && signature.signatureValid) {
+    signature = {
+      ...signature,
+      status: 'valid-unknown-signer',
+      reason: 'The text you supplied is not a P-256 public key or key id, so the signer is still unverified.',
+    };
+  }
+  if (!signature.signatureValid) {
+    return {
+      ...base,
+      valid: false,
+      signature,
+      reason: base.valid
+        ? `The report carries a signature that does not verify. ${signature.reason}`
+        : base.reason,
+    };
+  }
+  return { ...base, signature };
 }

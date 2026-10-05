@@ -346,6 +346,14 @@ floor of the data minimum, and the provenance text gives the reason.
   self-consistency check, not a signature. It does not show who made the
   report, and the verifier does not compare `sourceSha256` against a source
   file.
+- A report signed with "Sign this report" carries an ECDSA P-256 signature that
+  detects any edit made after signing and shows whether two reports were signed
+  by the same key. It does not show who holds the key, when the report was
+  signed (the time is the signer's own claim), which source file the report came
+  from, or that the numbers are right. The private key lives in one browser
+  profile; clearing site data deletes it, and a compromised profile can sign
+  anything. Removing the signature field leaves a report that verifies as an
+  unsigned one.
 - LAS export keeps the source scale and offset and returns the source's integer
   records within the extent Float32 positions resolve (16 km at a 1 mm scale);
   a reprojected, voxel-reduced, streamed or non-LAS export is re-quantised at

@@ -9,7 +9,8 @@
  * so a hostile report field can't inject markup.
  */
 
-import { verifyReportFile, type VerifyReportResult } from '../export/verifyReport';
+import { verifyReportFileWithSignature, type VerifyReportResult } from '../export/verifyReport';
+import type { SignatureVerdict } from '../export/reportSignature';
 import { focusableIn, wireDialogA11y, type DialogA11yHandle } from './Modal';
 import { formatBytesIn } from '../io/formatByteSize';
 
@@ -21,13 +22,107 @@ function row(label: string, value: string): HTMLElement {
   l.style.cssText = 'opacity:0.7;';
   const v = document.createElement('span');
   v.textContent = value;
-  v.style.cssText = 'font-variant-numeric:tabular-nums;text-align:right;';
+  v.style.cssText = 'font-variant-numeric:tabular-nums;text-align:right;overflow-wrap:anywhere;min-width:0;';
   r.append(l, v);
   return r;
 }
 
+/** Headline, colour and test id for a signature verdict. The words carry the meaning. */
+export function signatureHeadline(v: SignatureVerdict): { text: string; color: string; testid: string } {
+  switch (v.status) {
+    case 'valid-trusted-key':
+      return { text: 'Signed by the key you supplied', color: 'var(--rating-excellent)', testid: 'report-verify-sig-trusted' };
+    case 'valid-different-key':
+      return { text: 'Signed by a different key than the one you supplied', color: 'var(--rating-weak)', testid: 'report-verify-sig-different' };
+    case 'valid-unknown-signer':
+      return { text: 'Signed, signer unverified', color: 'var(--rating-good)', testid: 'report-verify-sig-unverified' };
+    case 'malformed':
+      return { text: 'Signature field is malformed', color: 'var(--rating-weak)', testid: 'report-verify-sig-invalid' };
+    case 'unsupported':
+      return { text: 'Signature is not supported here', color: 'var(--rating-weak)', testid: 'report-verify-sig-invalid' };
+    default:
+      return { text: 'Signature does not verify', color: 'var(--rating-weak)', testid: 'report-verify-sig-invalid' };
+  }
+}
+
+/** Re-checks the open report against a public key or key id the reader supplies. */
+export type SignerCompare = (keyText: string) => Promise<VerifyReportResult>;
+
+function fillSignature(box: HTMLElement, v: SignatureVerdict): void {
+  box.replaceChildren();
+  const h = signatureHeadline(v);
+  const head = document.createElement('div');
+  head.setAttribute('data-testid', h.testid);
+  head.textContent = h.text;
+  head.style.cssText = `font:600 13px system-ui,sans-serif;color:${h.color};`;
+  const why = document.createElement('div');
+  why.textContent = v.reason;
+  why.style.cssText = 'font:12px system-ui,sans-serif;color:var(--text);opacity:0.85;';
+  box.append(head, why);
+  if (v.keyId) box.append(row('Key id', v.keyId));
+  if (v.signedAtClaim) box.append(row('Signed at (signer\'s claim)', v.signedAtClaim));
+  if (v.signerLabelUnverified) box.append(row('Signer label (not verified)', v.signerLabelUnverified));
+}
+
+function signatureSection(v: SignatureVerdict, compare?: SignerCompare): HTMLElement {
+  const sec = document.createElement('section');
+  sec.setAttribute('data-testid', 'report-verify-signature');
+  sec.setAttribute('aria-label', 'Signature');
+  sec.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin-top:4px;padding-top:8px;border-top:1px solid var(--hairline);';
+  const result = document.createElement('div');
+  result.setAttribute('aria-live', 'polite');
+  result.style.cssText = 'display:flex;flex-direction:column;gap:5px;';
+  fillSignature(result, v);
+  sec.append(result);
+  if (!v.signatureValid || !compare) return sec;
+
+  const label = document.createElement('label');
+  label.textContent = 'Compare with a public key or key id you trust';
+  label.htmlFor = 'olv-verify-trusted-key';
+  label.style.cssText = 'font:12px system-ui,sans-serif;opacity:0.85;';
+  const input = document.createElement('textarea');
+  input.id = 'olv-verify-trusted-key';
+  input.rows = 2;
+  input.maxLength = 4096;
+  input.spellcheck = false;
+  input.setAttribute('data-testid', 'report-verify-trusted-key');
+  input.style.cssText = 'width:100%;box-sizing:border-box;font:11px ui-monospace,monospace;color:var(--text);background:var(--panel);border:1px solid var(--hairline);border-radius:6px;padding:6px;resize:vertical;';
+  const actions = document.createElement('div');
+  actions.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;';
+  const btnCss = 'padding:6px 12px;border:1px solid var(--hairline);border-radius:8px;cursor:pointer;font:600 12px system-ui,sans-serif;color:var(--text);background:transparent;';
+  const file = document.createElement('input');
+  file.type = 'file';
+  file.accept = '.json,.txt,application/json,text/plain';
+  file.hidden = true;
+  file.setAttribute('aria-label', 'Load a public key file');
+  file.setAttribute('data-testid', 'report-verify-trusted-file');
+  const load = document.createElement('button');
+  load.type = 'button';
+  load.textContent = 'Load key file';
+  load.title = 'Read a public key from a file on this device.';
+  load.style.cssText = btnCss;
+  load.addEventListener('click', () => file.click());
+  file.addEventListener('change', () => {
+    const f = file.files?.[0];
+    if (!f || f.size > 4096) { if (f) input.value = ''; return; }
+    void f.text().then((t) => { input.value = t.slice(0, 4096); }).catch(() => undefined);
+  });
+  const go = document.createElement('button');
+  go.type = 'button';
+  go.textContent = 'Compare';
+  go.title = 'Check whether this signature was made by the key you entered.';
+  go.setAttribute('data-testid', 'report-verify-compare');
+  go.style.cssText = btnCss;
+  go.addEventListener('click', () => {
+    void compare(input.value).then((r) => { if (r.signature) fillSignature(result, r.signature); }).catch(() => undefined);
+  });
+  actions.append(load, go, file);
+  sec.append(label, input, actions);
+  return sec;
+}
+
 /** Render the verification result as a dismissible modal card. */
-export function showReportVerification(result: VerifyReportResult): void {
+export function showReportVerification(result: VerifyReportResult, compare?: SignerCompare): void {
   const backdrop = document.createElement('div');
   backdrop.className = 'olv-verify-backdrop';
   backdrop.setAttribute('data-testid', 'report-verify');
@@ -37,7 +132,7 @@ export function showReportVerification(result: VerifyReportResult): void {
 
   const card = document.createElement('div');
   card.style.cssText =
-    'min-width:300px;max-width:440px;padding:18px 20px;border-radius:12px;' +
+    'min-width:min(300px,calc(100vw - 32px));max-width:min(440px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;padding:18px 20px;border-radius:12px;' +
     'background:var(--panel);border:1px solid var(--hairline);color:var(--text);' +
     'box-shadow:0 8px 30px rgba(0,0,0,0.5);display:flex;flex-direction:column;gap:10px;';
   // Dialog semantics, matching the app's other modals (Modal.ts, TourOverlay):
@@ -64,8 +159,11 @@ export function showReportVerification(result: VerifyReportResult): void {
   }
   status.setAttribute('data-testid', statusTestid);
   let statusText: string;
+  const sigFailed = !!result.signature && !result.signature.signatureValid;
   if (!result.recognised) {
     statusText = 'Not a report';
+  } else if (sigFailed) {
+    statusText = 'Signature does not verify';
   } else if (!ok) {
     statusText = 'Report has been modified';
   } else if (weak) {
@@ -98,6 +196,7 @@ export function showReportVerification(result: VerifyReportResult): void {
     if (result.classificationEpoch !== undefined) meta.append(row('Classification epoch', String(result.classificationEpoch)));
     if (result.findingsCount !== undefined) meta.append(row('Findings', String(result.findingsCount)));
     card.append(meta);
+    if (result.signature) card.append(signatureSection(result.signature, compare));
   }
 
   const close = document.createElement('button');
@@ -169,5 +268,5 @@ export async function verifyAndShow(file: File): Promise<void> {
     showReportVerification({ recognised: false, valid: false, reason: 'Could not read the file.' });
     return;
   }
-  showReportVerification(verifyReportFile(text));
+  showReportVerification(await verifyReportFileWithSignature(text), (key) => verifyReportFileWithSignature(text, key));
 }

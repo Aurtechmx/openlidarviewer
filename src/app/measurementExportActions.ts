@@ -17,6 +17,7 @@ import type { GeoExportContext } from './reportExport';
 
 import { activeScanBasisOf, type ActiveScanBasis } from './measurementScanHooks';
 import { appToast } from '../ui/panelChrome';
+import { reportSignerLabel, reportSigningRequested } from '../export/reportSigningState';
 
 export type { ActiveScanBasis } from './measurementScanHooks';
 
@@ -53,7 +54,8 @@ export interface MeasurementExportActionDeps {
     Pick<
       typeof import('../export/measurementReport'),
       'integrityReportFile' | 'measurementsToFindings' | 'findingsReportFile' | 'resolveExportDigests'
-    >
+    > &
+      Partial<Pick<typeof import('../export/measurementReport'), 'signReportText'>>
   >;
   /**
    * Every open layer, for placing each measurement through the layer it was
@@ -339,6 +341,26 @@ function csvBasis(
   return { pointBasis: scan.pointBasis, classesEdited: scan.classesEdited, sourceName };
 }
 
+/**
+ * The report text to write: signed when the user turned signing on, otherwise
+ * as built. Returns null, after saying why, when signing was requested and
+ * cannot be done, so a report the user meant to sign is never written unsigned.
+ */
+async function textToWrite(
+  text: string,
+  deps: MeasurementExportActionDeps,
+  signReportText: ((t: string, o: { signedAt: string; software?: string; signerLabel?: string }) => Promise<string>) | undefined,
+): Promise<string | null> {
+  if (!reportSigningRequested()) return text;
+  try {
+    if (!signReportText) throw new Error('signing unavailable');
+    return await signReportText(text, { signedAt: deps.now(), software: deps.appVersion, signerLabel: reportSignerLabel() });
+  } catch {
+    (deps.refuse ?? deps.notify ?? appToast().show)('Report not written. It could not be signed: this browser has no signing key available. Turn off "Sign this report" or create a key in the Export panel.');
+    return null;
+  }
+}
+
 /** Export the measurement integrity report (JSON) with its content digest. */
 export async function exportMeasurementIntegrityReport(
   deps: MeasurementExportActionDeps,
@@ -362,7 +384,7 @@ export async function exportMeasurementIntegrityReport(
   // path read the bare `crsKnown` and so called a lon/lat scan unit-verified.
   const crsKnown = snap.unitsVerified;
   const generatedAt = deps.now();
-  const { integrityReportFile, resolveExportDigests } = await deps.loadMeasurementReport();
+  const { integrityReportFile, resolveExportDigests, signReportText } = await deps.loadMeasurementReport();
   const digests = await resolveExportDigests(geo.source, geo.crs);
   const f = integrityReportFile(
     ms,
@@ -378,7 +400,8 @@ export async function exportMeasurementIntegrityReport(
     undefined,
     digests,
   );
-  deps.downloadText(f.filename, f.text);
+  const out = await textToWrite(f.text, deps, signReportText);
+  if (out !== null) deps.downloadText(f.filename, out);
 }
 
 /**
@@ -412,18 +435,20 @@ export async function exportFindingsReport(
   const classificationEpoch = deps.activeClassificationEpoch();
   // Geographic reads as unverified here too — see `exportIntegrityReport`.
   const crsKnown = deps.measure.crsKnown && !deps.measure.geographicCrs;
-  const { findingsReportFile, resolveExportDigests } = await deps.loadMeasurementReport();
+  const { findingsReportFile, resolveExportDigests, signReportText } = await deps.loadMeasurementReport();
   const digests = await resolveExportDigests(geo.source, geo.crs);
+  const generatedAt = deps.now();
   const f = findingsReportFile(
     findings,
     geo.name ? deps.baseName(geo.name) : 'scan',
     geo.crsName,
-    deps.now(),
+    generatedAt,
     classificationEpoch,
     deps.appVersion,
     crsKnown,
     undefined,
     digests,
   );
-  deps.downloadText(f.filename, f.text);
+  const out = await textToWrite(f.text, deps, signReportText);
+  if (out !== null) deps.downloadText(f.filename, out);
 }
