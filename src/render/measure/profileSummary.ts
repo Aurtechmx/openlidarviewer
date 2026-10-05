@@ -374,10 +374,17 @@ function heightColumnToken(reference: VerticalReference): string {
  * Why a profile CSV cannot be written, or null when it can. On a geographic CRS
  * the chainage is in degrees, and a `chainage_m` column would label degrees as
  * metres, so the export is refused with the same notice the panel shows. The
- * geographic refusal travels on the measurement's trust reasons.
+ * geographic refusal travels on the measurement's trust reasons, and the
+ * caller passes the active CRS's geographic flag too.
  */
-export function profileCsvRefusal(s: { readonly trust?: { readonly reasons: readonly string[] } }): string | null {
-  return s.trust?.reasons.includes(GEOGRAPHIC_CRS_MEASURE_NOTICE) ? GEOGRAPHIC_CRS_MEASURE_NOTICE : null;
+export function profileCsvRefusal(
+  s: { readonly trust?: { readonly reasons: readonly string[] } },
+  geographicCrs: boolean | undefined,
+): string | null {
+  // Either source is enough. A summary without trust proves nothing about the
+  // frame, so the active CRS is checked as well rather than trusting absence.
+  const geographic = geographicCrs === true || s.trust?.reasons.includes(GEOGRAPHIC_CRS_MEASURE_NOTICE) === true;
+  return geographic ? GEOGRAPHIC_CRS_MEASURE_NOTICE : null;
 }
 
 export function buildProfileCsv(

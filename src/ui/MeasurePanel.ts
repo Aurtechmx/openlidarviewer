@@ -363,6 +363,8 @@ export class MeasurePanel {
   private _summaries: MeasurementSummary[] = [];
   /** Persistent geographic-CRS caveat, toggled via {@link setGeographicNotice}. */
   private readonly _geoNotice: HTMLElement;
+  /** Whether the active CRS is geographic, as last set by {@link setGeographicNotice}. */
+  private _geographicCrs = false;
   /**
    * Active `ResizeObserver` instances created for the profile-chart
    * persistence path. Each `_renderList()` call detaches and replaces
@@ -593,6 +595,7 @@ export class MeasurePanel {
    * never disagree about the active frame.
    */
   setGeographicNotice(show: boolean): void {
+    this._geographicCrs = show;
     this._geoNotice.classList.toggle('olv-hidden', !show);
   }
 
@@ -854,7 +857,7 @@ export class MeasurePanel {
 
   /** Disable a profile CSV button, with the reason as its tooltip, when the export is refused. */
   private _applyCsvRefusal(button: HTMLButtonElement, s: MeasurementSummary): void {
-    const refusal = profileCsvRefusal(s);
+    const refusal = profileCsvRefusal(s, this._geographicCrs);
     if (!refusal) return;
     button.disabled = true;
     button.title = refusal;
@@ -862,7 +865,7 @@ export class MeasurePanel {
 
   private _exportProfileCsv(s: MeasurementSummary): void {
     if (!s.profileChart || s.profileChart.length < 2) return;
-    if (profileCsvRefusal(s)) return;
+    if (profileCsvRefusal(s, this._geographicCrs)) return;
     const system = this._displayUnits(s);
     const csv = buildProfileCsv(s.profileChart, system, this._verticalReference(s), s.profileCoverageNote);
     triggerDownload(new Blob([csv], { type: 'text/csv' }), `${safeFileName(s.name)}-profile.csv`);

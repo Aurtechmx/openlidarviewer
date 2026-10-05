@@ -1,6 +1,6 @@
 import type { SpatialContext } from '../geo/SpatialContext';
 import { describeWithheldRead, withheldReadCounts } from '../science/withheldCounts';
-import { verticalMetresPerUnit } from '../geo/SpatialContext';
+import { heightScale } from '../geo/SpatialContext';
 
 /** One extent/density/spacing row the streaming Scan-report emits. */
 export interface ExtentRowSpec {
@@ -64,9 +64,7 @@ export function streamingExtentRows(
   const mpu = unitConfirmed ? ctx.linearUnitToMetres : 1;
   // The height converts only with a declared vertical unit, as in the static
   // scan report: without one it stays in source units and says so.
-  const vScale = verticalMetresPerUnit(ctx, 'none');
-  const vmpu = unitConfirmed && vScale !== undefined ? vScale : 1;
-  const heightUnit = !unitConfirmed ? ' (source units)' : vScale !== undefined ? ' m' : ' source units (vertical unit not declared)';
+  const { factor: vmpu, suffix: heightUnit } = heightScale(ctx, unitConfirmed);
 
   const w = (header.max[0] - header.min[0]) * mpu;
   const d = (header.max[1] - header.min[1]) * mpu;

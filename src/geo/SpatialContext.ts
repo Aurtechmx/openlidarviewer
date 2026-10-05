@@ -346,3 +346,19 @@ export function volumeUnitCaveat(ctx: SpatialContext, validity: string): string 
   return ctx.verticalUnitToMetres === undefined ? ' · heights assumed in the horizontal unit (vertical unit not declared)' : '';
 }
 
+/**
+ * How an extent report converts and labels a height. Metres only when the
+ * horizontal unit is known and a valid vertical unit is declared; a declared
+ * but degenerate vertical unit (zero, negative, non-finite) and an undeclared
+ * one each keep the height in source units with their own label. The static
+ * scan report and the streamed extent rows both read this, so they agree.
+ */
+export function heightScale(ctx: SpatialContext, horizontalKnown: boolean): { readonly factor: number; readonly suffix: string } {
+  if (!horizontalKnown) return { factor: 1, suffix: ' (source units)' };
+  const v = verticalMetresPerUnit(ctx, 'none');
+  if (v !== undefined) return { factor: v, suffix: ' m' };
+  return ctx.verticalUnitToMetres === undefined
+    ? { factor: 1, suffix: ' source units (vertical unit not declared)' }
+    : { factor: 1, suffix: ' source units (declared vertical unit is invalid)' };
+}
+
