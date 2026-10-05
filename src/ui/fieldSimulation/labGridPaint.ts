@@ -185,18 +185,27 @@ export function cellBorders(ctx: CanvasRenderingContext2D, cols: number, rows: n
   ctx.restore();
 }
 
-/** Call `redraw` when the canvas's laid-out width changes (one call per frame at most). */
-export function onWidthChange(canvas: HTMLCanvasElement, redraw: () => void): void {
-  if (typeof ResizeObserver !== 'function') return;
+/**
+ * Call `redraw` when the canvas's laid-out width changes (one call per frame
+ * at most). Returns a disposer that disconnects the observer and cancels a
+ * pending frame.
+ */
+export function onWidthChange(canvas: HTMLCanvasElement, redraw: () => void): () => void {
+  if (typeof ResizeObserver !== 'function') return () => {};
   let last = 0;
-  let queued = false;
-  new ResizeObserver(() => {
+  let raf = 0;
+  const ro = new ResizeObserver(() => {
     const w = canvas.clientWidth;
-    if (w === last || queued) return;
+    if (w === last || raf) return;
     last = w;
-    queued = true;
-    requestAnimationFrame(() => { queued = false; redraw(); });
-  }).observe(canvas);
+    raf = requestAnimationFrame(() => { raf = 0; redraw(); });
+  });
+  ro.observe(canvas);
+  return () => {
+    ro.disconnect();
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+  };
 }
 
 /**

@@ -139,6 +139,7 @@ export class TerrainAccessResultGrid {
   private _routeOrder: ArrayLike<number> | null = null;
   private _routeFraction = 1;
   private _cancelDraw: () => void = () => {};
+  private _stopResize: () => void = () => {};
 
   constructor(opts: TerrainAccessResultGridOptions) {
     this._onActivate = opts.onActivate;
@@ -160,11 +161,17 @@ export class TerrainAccessResultGrid {
     const stage = el('div', { className: 'olv-lab-stage' });
     stage.append(this._canvas, northBadge());
     this.element.replaceChildren(stage, this._status);
-    onWidthChange(this._canvas, () => this._redraw());
+    this._stopResize = onWidthChange(this._canvas, () => this._redraw());
   }
 
   focus(): void {
     this._canvas.focus();
+  }
+
+  /** Stop a route draw-in and the resize observer. */
+  dispose(): void {
+    this._cancelDraw();
+    this._stopResize();
   }
 
   get cursor(): GridCell {

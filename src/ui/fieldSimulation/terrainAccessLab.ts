@@ -913,6 +913,7 @@ export function mountTerrainAccessInteractive(
     // Lab open reclaims the SAME instance via `acquireTerrainAccessOverlay`
     // rather than constructing a second one that would orphan the first.
     dispose: () => {
+      grid.dispose();
       if (!overlayOn && persistentTerrainAccessOverlay) {
         persistentTerrainAccessOverlay.overlay.dispose();
         persistentTerrainAccessOverlay = null;
