@@ -5,13 +5,13 @@
       "goal": 2500
     },
     "src/render/Viewer.ts": {
-      "lines": 5980,
+      "lines": 5978,
       "goal": 2000
     }
   },
   "watch": {
     "src/ui/AnalysePanel.ts": {
-      "lines": 3345
+      "lines": 3348
     },
     "src/ui/Inspector.ts": {
       "lines": 2675
@@ -20,7 +20,7 @@
       "lines": 2649
     },
     "src/ui/MeasurePanel.ts": {
-      "lines": 2342
+      "lines": 2357
     },
     "src/render/measure/profilePdf.ts": {
       "lines": 1946
