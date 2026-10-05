@@ -21,6 +21,7 @@
  * (scan centred) at phone width and comes back on desktop.
  */
 import { test, expect, type Page } from '@playwright/test';
+import { waitForCameraSettled } from './helpers';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -118,12 +119,14 @@ const centre = (b: Box): { x: number; y: number } => ({ x: b.x + b.w / 2, y: b.y
 
 async function openFixture(page: Page, vp: { width: number; height: number }): Promise<void> {
   await page.setViewportSize(vp);
-  await page.goto('/');
+  await page.goto('/?test=1');
   await expect(page.locator('.olv-empty-title')).toBeVisible();
   await page.locator('.olv-file-input').first().setInputFiles(FIXTURE);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 60_000 });
-  // The opening glide is 0.9 s and the bar's rise-in is shorter; let both finish.
-  await page.waitForTimeout(2500);
+  await expect(page.locator('body.olv-has-scan')).toHaveCount(1, { timeout: 30_000 });
+  // Wait for the opening glide to end rather than sleeping a fixed time: on a
+  // loaded software renderer a fixed sleep can end mid-glide.
+  await waitForCameraSettled(page, 60_000);
 }
 
 /** The free band's centre: above the triangle's row (less the fit's 12 px gap), else the canvas centre. */
@@ -178,7 +181,7 @@ for (const vp of SIZES) {
       await page.mouse.down();
       for (let i = 1; i <= 8; i++) await page.mouse.move(band.x + (dx * i) / 8, band.y);
       await page.mouse.up();
-      await page.waitForTimeout(800);
+      await waitForCameraSettled(page, 60_000);
       const after = await readAt();
       expect(before).toHaveLength(3);
       expect(after).toHaveLength(3);
@@ -198,15 +201,18 @@ for (const vp of SIZES) {
       await expect(hint).toContainText('first point');
       await page.mouse.click(band.x, band.y);
       await expect(hint).toContainText('second point');
-      // The overlay redraws on the next rendered frame; wait for the marker.
+      // The overlay redraws on the next rendered frame. Until then a dot can sit
+      // unlaid-out with a zero box at (0, 0), so only dots with a box count, and
+      // the check polls until the overlay has drawn the placed point.
       const markers = page.locator('.olv-measure-svg circle.olv-measure-dot');
-      await expect(markers.first()).toBeAttached({ timeout: 10_000 });
-      const dots = await markers.evaluateAll((els) => els.map((c) => {
-        const r = c.getBoundingClientRect();
-        return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-      }));
-      const miss = Math.min(...dots.map((d) => Math.hypot(d.x - band.x, d.y - band.y)));
-      expect(miss, `nearest marker ${miss.toFixed(1)} px from the click`).toBeLessThanOrEqual(6);
+      const nearest = async (): Promise<number> => {
+        const dots = await markers.evaluateAll((els) => els.flatMap((c) => {
+          const r = c.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 ? [{ x: r.x + r.width / 2, y: r.y + r.height / 2 }] : [];
+        }));
+        return dots.length === 0 ? Infinity : Math.min(...dots.map((d) => Math.hypot(d.x - band.x, d.y - band.y)));
+      };
+      await expect.poll(nearest, { timeout: 10_000, message: 'nearest drawn marker to the click, px' }).toBeLessThanOrEqual(6);
     });
 
     test('a saved snapshot renders the scan centred, without the reserved band', async ({ page }) => {
@@ -221,9 +227,7 @@ for (const vp of SIZES) {
         return { w: bmp.width, h: bmp.height };
       }, [...png]);
       const box = await brightBox(page, png, size.w, true);
-      // Chromium's headless GL canvas reads back empty after the snapshot's
-      // present wait (no preserveDrawingBuffer), so there is nothing to measure.
-      test.skip(box === null, 'the snapshot holds no scan pixels in this browser');
+      expect(box, 'the snapshot holds the scan').not.toBeNull();
       const c = centre(box!);
       expect(Math.abs(c.x - size.w / 2), `snapshot x ${c.x} of ${size.w}`).toBeLessThanOrEqual(size.w * 0.08);
       expect(Math.abs(c.y - size.h / 2), `snapshot y ${c.y} of ${size.h}`).toBeLessThanOrEqual(size.h * 0.1);

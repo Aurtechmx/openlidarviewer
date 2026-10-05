@@ -175,6 +175,41 @@ export async function pinNavigationPanel(page: Page): Promise<void> {
 }
 
 /**
+ * Wait until the camera stops moving: the pose from the test API reads the
+ * same across two polls three animation frames apart. Needs a page opened
+ * with `?test=1`. Use it after a scan opens instead of a fixed sleep, so a
+ * click never lands mid-way through the opening glide on a slow renderer.
+ */
+export async function waitForCameraSettled(page: Page, timeout = 30_000): Promise<void> {
+  const pose = () => page.evaluate(() => {
+    const api = (window as unknown as {
+      __OLV_TEST_API__?: { getCameraPose?: () => { position: number[]; target: number[] } };
+    }).__OLV_TEST_API__;
+    const p = api?.getCameraPose?.();
+    return p ? JSON.stringify({ position: p.position, target: p.target }) : '';
+  });
+  const threeFrames = () => page.evaluate(() => new Promise<void>((resolve) => {
+    let n = 0;
+    const tick = (): void => {
+      n += 1;
+      if (n >= 3) resolve();
+      else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }));
+  const deadline = Date.now() + timeout;
+  let last = await pose();
+  if (last === '') throw new Error('no camera pose: open the page with ?test=1');
+  for (;;) {
+    await threeFrames();
+    const next = await pose();
+    if (next === last) return;
+    if (Date.now() > deadline) throw new Error(`the camera was still moving after ${timeout} ms`);
+    last = next;
+  }
+}
+
+/**
  * Where a freshly framed scan's centre lands, in page coordinates. The opening
  * fit keeps the scan above the navigation bar's mode triangle with a lens
  * shift, so on desktop the centre sits in the middle of the band above the

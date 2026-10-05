@@ -60,7 +60,7 @@ You start in Orbit, where dragging swings around the scan and scrolling zooms. S
 | W A S D | Move through the scan (Walk and Fly) |
 | Space / C | Move up / down (Walk and Fly) |
 | Shift | Move faster |
-| F | Focus on whatever is at the centre of the view |
+| F | Focus on whatever is at the screen centre |
 | R | Re-frame the whole scan |
 | Esc | Release the cursor |
 | 1 / 2 / 3 / 4 | Orbit, Walk, Fly, Pan |
