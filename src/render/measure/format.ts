@@ -47,9 +47,11 @@ export const GEOGRAPHIC_CRS_MEASURE_NOTICE =
  * the wording cannot fork.
  */
 export const VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE =
-  'Compound CRS: the height unit differs from the horizontal unit, so 3D ' +
-  'lengths, areas and grades mix units and are NOT reliable distances. ' +
-  'Heights are scaled correctly; use them, or reproject to a single unit.';
+  'Compound CRS: heights use a different unit from horizontal positions. ' +
+  'Heights, box sizes, volumes and the horizontal run of a line are converted ' +
+  'correctly. 3D lengths, areas, grades, angles and profiles mix the two units ' +
+  'and are NOT reliable. Read heights or the run, or reproject the scan to one ' +
+  'unit before measuring the rest.';
 
 /**
  * The measurement stack's honest limitation when the loaded clouds hold

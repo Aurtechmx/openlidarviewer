@@ -43,6 +43,13 @@ describe('measurement vertical unit (compound CRS)', () => {
     expect(t.reasons).toContain(VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE);
   });
 
+  it('says which figures hold and which do not under a compound CRS', () => {
+    expect(VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE).toMatch(/^Compound CRS:/);
+    expect(VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE).toMatch(/Heights, box sizes, volumes and the horizontal run of a line are converted correctly/);
+    expect(VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE).toMatch(/3D lengths, areas, grades, angles and profiles mix the two units/);
+    expect(VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE).toMatch(/reproject the scan to one unit/);
+  });
+
   it('equal vertical/horizontal unit leaves the grade untouched (common case)', () => {
     const t = gradeMeasurement({
       vertices: [strong, strong],
