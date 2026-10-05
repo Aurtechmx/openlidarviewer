@@ -3,7 +3,7 @@ import type { PointCloud } from '../../model/PointCloud';
 import { sourcePositions } from '../../model/pointFrames';
 import type { ClassScope } from '../../render/class/classScope';
 import type { SpatialContext } from '../../geo/SpatialContext';
-import { spatialContextFrom } from '../../geo/SpatialContext';
+import { heightScale, spatialContextFrom } from '../../geo/SpatialContext';
 import { isZUpFormat } from '../../io/sniffFormat';
 import { heightLabel } from '../../geo/height';
 import { estimateInMemoryPrecision } from '../../geo/inMemoryPrecision';
@@ -82,14 +82,13 @@ export interface ScanReportUnitBasis {
 export function scanReportUnitBasis(ctx: SpatialContext): ScanReportUnitBasis {
   const unitKnown = ctx.linearUnitKnown;
   const mpu = unitKnown ? ctx.linearUnitToMetres : 1;
-  const verticalDeclared = ctx.verticalUnitToMetres !== undefined;
-  const vmpu = unitKnown && verticalDeclared ? ctx.verticalUnitToMetres! : 1;
+  const height = heightScale(ctx, unitKnown);
   return {
     unitKnown,
     mpu,
-    vmpu,
+    vmpu: height.factor,
     lengthUnit: unitKnown ? ' m' : ' (source units)',
-    heightUnit: !unitKnown ? ' (source units)' : verticalDeclared ? ' m' : ' source units (vertical unit not declared)',
+    heightUnit: height.suffix,
     densityUnit: unitKnown ? ' pts/m²' : ' pts/unit²',
   };
 }

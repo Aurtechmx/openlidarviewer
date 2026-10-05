@@ -101,9 +101,14 @@ describe('volume readout unit caveat', () => {
 
 describe('profile CSV on a geographic CRS', () => {
   it('refuses the export with the geographic notice', () => {
-    expect(profileCsvRefusal({ trust: { reasons: [GEOGRAPHIC_CRS_MEASURE_NOTICE] } })).toBe(GEOGRAPHIC_CRS_MEASURE_NOTICE);
-    expect(profileCsvRefusal({ trust: { reasons: [] } })).toBeNull();
-    expect(profileCsvRefusal({})).toBeNull();
+    expect(profileCsvRefusal({ trust: { reasons: [GEOGRAPHIC_CRS_MEASURE_NOTICE] } }, false)).toBe(GEOGRAPHIC_CRS_MEASURE_NOTICE);
+    expect(profileCsvRefusal({ trust: { reasons: [] } }, false)).toBeNull();
+    expect(profileCsvRefusal({}, false)).toBeNull();
+  });
+
+  it('fails closed on a summary without trust when the active CRS is geographic', () => {
+    expect(profileCsvRefusal({}, true)).toBe(GEOGRAPHIC_CRS_MEASURE_NOTICE);
+    expect(profileCsvRefusal({ trust: { reasons: [] } }, true)).toBe(GEOGRAPHIC_CRS_MEASURE_NOTICE);
   });
 
   it('gives the profile section no metres-per-unit factor on a geographic CRS', () => {
@@ -122,3 +127,26 @@ describe('line grade on a compound CRS', () => {
     expect(r.length3dM).toBeCloseTo(Math.hypot(3, 4 * 0.3048), 9);
   });
 });
+
+import { scanReportUnitBasis } from '../src/analysis/modules/scanReport';
+import { streamingExtentRows } from '../src/analysis/streamingExtentRows';
+
+describe('a declared but invalid vertical unit', () => {
+  const ctxV = (v: number) =>
+    spatialContextFrom({ source: 'epsg', name: 'EPSG:32613', linearUnit: 'metre', linearUnitToMetres: 1, verticalUnitToMetres: v } as CrsInfo);
+  const header = { min: [0, 0, 0] as [number, number, number], max: [10, 10, 5] as [number, number, number] };
+
+  for (const v of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    it(`keeps the static height in source units for ${v}`, () => {
+      const b = scanReportUnitBasis(ctxV(v));
+      expect(b.vmpu).toBe(1);
+      expect(b.heightUnit).toBe(' source units (declared vertical unit is invalid)');
+    });
+
+    it(`streams the same label for ${v}`, () => {
+      const height = streamingExtentRows(header as never, ctxV(v), 100).rows.find((r) => r.label === 'Height')!;
+      expect(height.value).toBe('5.0 source units (declared vertical unit is invalid)');
+    });
+  }
+});
+
