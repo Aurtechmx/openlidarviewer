@@ -149,8 +149,37 @@ describe('captureSnapshot — fast path', () => {
     expect(result).toBe(blob);
     expect(h.ready).toHaveBeenCalledTimes(1);
     // Two render()/present cycles flush the WebGPU colour-buffer upload — the
-    // fix for every export mode reading the previous frame.
-    expect(h.renderFrame).toHaveBeenCalledTimes(2);
+    // fix for every export mode reading the previous frame — and a third render
+    // runs in the same task as the read.
+    expect(h.renderFrame).toHaveBeenCalledTimes(3);
+  });
+
+  it('copies the canvas in the same task as the last render, with nothing awaited between', async () => {
+    const order: string[] = [];
+    const out = {
+      width: 0, height: 0,
+      getContext: () => ({ drawImage: () => order.push('drawImage') }),
+      toBlob: (cb: (b: Blob | null) => void) => cb(new Blob(['copy'])),
+    };
+    const g = globalThis as unknown as { document?: unknown };
+    const prev = g.document;
+    g.document = { createElement: () => out };
+    try {
+      let afterRender = false;
+      const h = host({
+        renderFrame: vi.fn(() => {
+          order.push('render');
+          afterRender = true;
+          // A microtask between the render and the read would flip this first.
+          void Promise.resolve().then(() => { if (afterRender) order.push('microtask'); afterRender = false; });
+        }),
+      });
+      await captureSnapshot(h);
+      const last = order.lastIndexOf('render');
+      expect(order[last + 1]).toBe('drawImage');
+    } finally {
+      g.document = prev;
+    }
   });
 
   it('does not touch any overlay accessor or the colorbar on the fast path', async () => {

@@ -164,6 +164,34 @@ export function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
 }
 
 /**
+ * Render a frame and copy the GL canvas into a 2-D canvas in the same task.
+ *
+ * A WebGL drawing buffer may be cleared once the frame is presented, and a
+ * WebGPU canvas texture expires at the end of the task that rendered it. A read
+ * after any await can therefore see an empty buffer. `drawImage` is
+ * synchronous, so rendering and copying here, with nothing awaited between,
+ * reads the frame just drawn. The copy can then be encoded asynchronously.
+ * Returns the GL canvas itself when no 2-D context is available.
+ */
+export function renderedCopy(gl: HTMLCanvasElement, renderFrame: () => void, width = gl.width, height = gl.height): HTMLCanvasElement {
+  const out = typeof document === 'undefined' ? null : document.createElement('canvas');
+  if (out) {
+    out.width = width;
+    out.height = height;
+  }
+  const ctx = out?.getContext('2d') ?? null;
+  renderFrame();
+  if (!out || !ctx) return gl;
+  ctx.drawImage(gl, 0, 0, width, height);
+  return out;
+}
+
+/** Render a frame and encode it to a PNG `Blob`, reading the canvas in the render's task. */
+export function renderedBlob(gl: HTMLCanvasElement, renderFrame: () => void): Promise<Blob> {
+  return canvasToBlob(renderedCopy(gl, renderFrame));
+}
+
+/**
  * Render one frame and capture it as a PNG `Blob`. See the module doc for the
  * fast-path / compositor split.
  */
@@ -210,17 +238,14 @@ export async function captureSnapshot(
   // Fast path: no overlays + no upscale + no scale bar — return the
   // GL canvas untouched at native resolution.
   if (fastPathEligible(plan, activeBar)) {
-    return canvasToBlob(gl);
+    return renderedBlob(gl, () => host.renderFrame());
   }
 
-  // Composite path: draw the GL frame into a 2-D canvas at full
-  // (optionally upscaled) resolution.
-  const out = document.createElement('canvas');
-  out.width = gl.width * plan.supersample;
-  out.height = gl.height * plan.supersample;
-  const ctx = out.getContext('2d');
+  // Composite path: render once more and draw that frame into a 2-D canvas at
+  // full (optionally upscaled) resolution in the same task.
+  const out = renderedCopy(gl, () => host.renderFrame(), gl.width * plan.supersample, gl.height * plan.supersample);
+  const ctx = out === gl ? null : out.getContext('2d');
   if (!ctx) return canvasToBlob(gl);
-  ctx.drawImage(gl, 0, 0, out.width, out.height);
 
   // Re-project each overlay with the export camera, then serialise it, so
   // alignment with the rendered frame is exact. Measurements sit beneath the

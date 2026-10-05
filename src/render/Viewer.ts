@@ -4642,7 +4642,7 @@ export class Viewer {
       };
       await present();
       await present();
-      return await (await loadSnapshot()).canvasToBlob(gl);
+      return await (await loadSnapshot()).renderedBlob(gl, renderFrame);
     } finally {
       this._renderer.setPixelRatio(prevRatio);
       this._renderer.setSize(prevSize.x, prevSize.y, false);
