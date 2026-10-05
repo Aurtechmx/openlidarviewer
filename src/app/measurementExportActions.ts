@@ -15,6 +15,10 @@ import type { MeasurementExportContext } from '../export/measurementExport';
 import type { ReportFinding } from '../render/measure/reportManifest';
 import type { GeoExportContext } from './reportExport';
 
+import type { ActiveScanBasis } from './measurementScanHooks';
+
+export type { ActiveScanBasis } from './measurementScanHooks';
+
 /** The slice of the measure controller these exports read. */
 export interface MeasureExportView {
   getMeasurements(): readonly Measurement[];
@@ -42,7 +46,7 @@ export interface MeasurementExportActionDeps {
   readonly baseName: (name: string) => string;
   readonly downloadText: (filename: string, text: string) => void;
   readonly loadMeasurementExport: () => Promise<
-    Pick<typeof import('../export/measurementExport'), 'measurementsToGeoJSON' | 'measurementsToCsv' | 'resolveExportDigests'>
+    Pick<typeof import('../export/measurementExport'), 'measurementsToGeoJSON' | 'measurementsToCsv' | 'measurementCsvProvenance' | 'provenanceSidecarName' | 'resolveExportDigests'>
   >;
   readonly loadMeasurementReport: () => Promise<
     Pick<
@@ -59,6 +63,11 @@ export interface MeasurementExportActionDeps {
   readonly refuse?: (message: string) => void;
   /** Active scan's classification epoch (0 when none), for the report manifest. */
   readonly activeClassificationEpoch: () => number;
+  /**
+   * The active scan's point basis line and class-edit state, for the CSV's
+   * provenance sidecar; null when no scan is active.
+   */
+  readonly activeScanBasis?: () => ActiveScanBasis | null;
   readonly appVersion: string;
   /** ISO timestamp source — injected so the report build stays deterministic. */
   readonly now: () => string;
@@ -255,7 +264,10 @@ export async function exportMeasurementsFile(
   const stems = sources ? sources.map(deps.baseName) : geo.name ? [deps.baseName(geo.name)] : [];
   const singleSource = geo.name ? deps.baseName(geo.name) : null;
   const sourceOfId = own ? new Map([...own.byId].map(([id, p]) => [id, p.names.map(deps.baseName).join('+')])) : null;
-  const { measurementsToGeoJSON, measurementsToCsv, resolveExportDigests } = await deps.loadMeasurementExport();
+  // Read with the rest of the scan state, before the lazy import yields.
+  const scanBasis = deps.activeScanBasis?.() ?? null;
+  const exporter = await deps.loadMeasurementExport();
+  const { measurementsToGeoJSON, measurementsToCsv, resolveExportDigests } = exporter;
   const digests = await resolveExportDigests(activeOnly ? geo.source : undefined, geo.crs);
   // From here on only the snapshot is read.
   const ctx: MeasurementExportContext = {
@@ -289,7 +301,26 @@ export async function exportMeasurementsFile(
   const text =
     format === 'geojson' ? measurementsToGeoJSON(measurements, ctx) : measurementsToCsv(measurements, ctx);
   const stem = stems.length > 0 ? stems.join('+') : 'measurements';
-  deps.downloadText(`${stem}-measurements.${format === 'geojson' ? 'geojson' : 'csv'}`, text);
+  const filename = `${stem}-measurements.${format === 'geojson' ? 'geojson' : 'csv'}`;
+  deps.downloadText(filename, text);
+  if (format === 'geojson' || !ctx.provenance) return;
+  // A CSV has no comment slot every parser skips, so its provenance rides in a sidecar.
+  const basis = csvBasis(scanBasis, activeOnly, sources?.length ?? 1, geo.name);
+  deps.downloadText(exporter.provenanceSidecarName(filename), exporter.measurementCsvProvenance(ctx.provenance, basis));
+}
+
+/** The sidecar's scan facts: the active scan's own, or a statement that several scans are mixed. */
+function csvBasis(
+  scan: ActiveScanBasis | null,
+  activeOnly: boolean,
+  sourceCount: number,
+  sourceName: string | null,
+): { pointBasis: string; classesEdited: boolean | null; sourceName: string | null } {
+  if (!activeOnly) {
+    return { pointBasis: `Point basis: not recorded (measurements span ${sourceCount} scans)`, classesEdited: null, sourceName: null };
+  }
+  if (!scan) return { pointBasis: 'Point basis: not recorded (no active scan)', classesEdited: null, sourceName };
+  return { pointBasis: scan.pointBasis, classesEdited: scan.classesEdited, sourceName };
 }
 
 /** Export the measurement integrity report (JSON) with its content digest. */

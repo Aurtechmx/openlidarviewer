@@ -385,6 +385,8 @@ function textArea(las: Uint8Array): { text: string; label: string } | null {
 }
 
 describe('point re-save (convert)', () => {
+  const BASIS = 'Point basis: full file (2 points)';
+  const EDITS = 'Classes edited in app: no';
   const cloud = () => new PointCloud({
     positions: Float32Array.from([0, 0, 0, 10, 20, 1]), origin: [500000, 4000000, 100], sourceFormat: 'las', name: 'survey.las',
   } as unknown as ConstructorParameters<typeof PointCloud>[0]);
@@ -394,27 +396,27 @@ describe('point re-save (convert)', () => {
       const { file } = convertCloud(cloud(), { format, digests: D });
       const ta = textArea(file!.bytes);
       expect(ta?.label).toBe('OpenLiDARViewer provenance');
-      expect(ta?.text).toBe(`Source SHA-256: ${SHA}\n${ORIGIN_LINE}`);
+      expect(ta?.text).toBe(`Source SHA-256: ${SHA}\n${ORIGIN_LINE}\n${BASIS}\n${EDITS}`);
     }
   });
 
-  it('XYZ and ASC carry them as comment lines; without digests the bytes are unchanged', () => {
+  it('XYZ and ASC carry them as comment lines; without digests only the basis lines remain', () => {
     const dec = (f: { bytes: Uint8Array }) => new TextDecoder().decode(f.bytes);
     const xyz = dec(convertCloud(cloud(), { format: 'xyz', digests: D }).file!);
-    expect(xyz.startsWith(`# Source SHA-256: ${SHA}\n# ${ORIGIN_LINE}\n`)).toBe(true);
+    expect(xyz).toContain(`# Source file: survey.las\n# Source SHA-256: ${SHA}\n# ${ORIGIN_LINE}\n`);
     const asc = dec(convertCloud(cloud(), { format: 'asc', digests: D }).file!);
-    expect(asc).toContain(`# Source SHA-256: ${SHA}\n# ${ORIGIN_LINE}\n# columns:`);
+    expect(asc).toContain(`# Source SHA-256: ${SHA}\n# ${ORIGIN_LINE}\n# ${BASIS}\n# ${EDITS}\n# columns:`);
     const plain = convertCloud(cloud(), { format: 'las' }).file!.bytes;
-    expect(textArea(plain)).toBeNull();
-    expect(dec(convertCloud(cloud(), { format: 'xyz' }).file!).startsWith('#')).toBe(false);
+    expect(textArea(plain)?.text).toBe(`${BASIS}\n${EDITS}`);
+    expect(dec(convertCloud(cloud(), { format: 'xyz' }).file!)).not.toContain('SHA-256');
   });
 
   it('a clipped export states the clip after the digests', () => {
     const note = 'Clipped: 2 of 5 points';
     const las = convertCloud(cloud(), { format: 'las', digests: D, scopeNote: note }).file!;
-    expect(textArea(las.bytes)?.text).toBe(`Source SHA-256: ${SHA}\n${ORIGIN_LINE}\n${note}`);
+    expect(textArea(las.bytes)?.text).toBe(`Source SHA-256: ${SHA}\n${ORIGIN_LINE}\n${BASIS}\n${note}\n${EDITS}`);
     const xyz = new TextDecoder().decode(convertCloud(cloud(), { format: 'xyz', scopeNote: note }).file!.bytes);
-    expect(xyz.startsWith(`# ${note}\n`)).toBe(true);
+    expect(xyz).toContain(`# ${BASIS}\n# ${note}\n# ${EDITS}\n`);
   });
 
   it('the batch converter hashes each input file\'s own bytes', async () => {

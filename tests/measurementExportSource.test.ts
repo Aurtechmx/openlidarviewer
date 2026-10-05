@@ -81,7 +81,8 @@ describe('two-scan measurement export', () => {
     const fromA = await run(ms, GEO('geom-a.las', A_ORIGIN), layers);
     const fromB = await run(ms, GEO('geom-b.las', B_ORIGIN), layers);
     expect(fromA.refusals).toEqual([]);
-    expect(fromA.downloads.map((d) => d.filename)).toEqual(['geom-a+geom-b-measurements.geojson', 'geom-a+geom-b-measurements.csv']);
+    expect(fromA.downloads.map((d) => d.filename)).toEqual(['geom-a+geom-b-measurements.geojson', 'geom-a+geom-b-measurements.csv', 'geom-a+geom-b-measurements.provenance.txt']);
+    expect(fromA.downloads[2].text).toContain('Point basis: not recorded (measurements span 2 scans)');
     const fc = JSON.parse(fromA.downloads[0].text);
     expect(fc.features[0].geometry.coordinates).toEqual([[500004, 4000002, 100], [500007, 4000002, 100]]);
     expect(fc.features[1].geometry.coordinates).toEqual([[500101, 4000001, 50], [500104, 4000005, 50]]);
@@ -124,7 +125,7 @@ describe('single-scan measurement export', () => {
     const one: ExportLayerView = { ...view({}), clouds: () => ['cloud_0'] };
     const m = owned('a1', undefined, [[4, 2, 1], [7, 2, 1]]);
     const out = await run([m], GEO('geom-a.las', A_ORIGIN), { view: one, stableIdFor });
-    expect(out.downloads.map((d) => d.filename)).toEqual(['geom-a-measurements.geojson', 'geom-a-measurements.csv']);
+    expect(out.downloads.map((d) => d.filename)).toEqual(['geom-a-measurements.geojson', 'geom-a-measurements.csv', 'geom-a-measurements.provenance.txt']);
     const fc = JSON.parse(out.downloads[0].text);
     expect(fc.features[0].geometry.coordinates).toEqual([[500004, 4000002, 100], [500007, 4000002, 100]]);
     // Without the source field the serializers write exactly what they did before.
@@ -312,8 +313,11 @@ describe('a change while the serializer chunk loads', () => {
     (A.points as V3[])[1] = [77, 0, 0];
     release();
     await pending;
-    expect(downloads).toHaveLength(1);
+    expect(downloads).toHaveLength(2);
     expect(downloads[0].filename).toBe('geom-a-measurements.csv');
+    expect(downloads[1].filename).toBe('geom-a-measurements.provenance.txt');
+    expect(downloads[1].text).toContain('Source file: geom-a.las');
+    expect(downloads[1].text).not.toMatch(/geom-b/);
     const [head, row] = downloads[0].text.split('\n');
     const cols = head.split(',');
     const cell = (k: string): string => row.split(',')[cols.indexOf(k)]!;

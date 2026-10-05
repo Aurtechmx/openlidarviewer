@@ -146,7 +146,12 @@ describe('approximate datum reproject — the caveat is embedded in the file', (
     );
     expect(report.ok).toBe(true);
     const text = new TextDecoder().decode(file!.bytes);
-    expect(text.split('\n')[0]).toMatch(/^# datum-transform: APPROXIMATE/);
+    // Product and CRS lines open the file; the datum note follows them.
+    expect(text.split('\n').slice(0, 3)).toEqual([
+      '# OpenLiDARViewer XYZ export',
+      '# crs: EPSG:7855',
+      expect.stringMatching(/^# datum-transform: APPROXIMATE/),
+    ]);
     expect(text).toMatch(/GDA94/);
     // loadXyz skips `#` comments, so the note does not corrupt the point list.
     const out = await loadXyz(file!.bytes.buffer as ArrayBuffer, 'gda.xyz');
@@ -166,24 +171,25 @@ describe('approximate datum reproject — the caveat is embedded in the file', (
 });
 
 describe('exact datum reproject — the deliverable stays byte-clean (no false caveat)', () => {
-  it('LAS 1.4: no Text Area Description VLR when the datum pair is sufficient', () => {
+  it('LAS 1.4: the Text Area Description holds no datum caveat when the datum pair is sufficient', () => {
     const { file, report } = convertCloud(
       cloudWith(WGS84_UTM11N, [500000, 4000000, 100]),
       { format: 'las14', crsMode: 'reproject', targetEpsg: 4326 }, // WGS84 → WGS84
     );
     expect(report.ok).toBe(true);
     expect(report.crsNote).not.toMatch(/APPROXIMATE/);
-    expect(textAreaDescription(file!.bytes)).toBeNull();
+    // Only the provenance lines every converted file carries; no caveat.
+    expect(textAreaDescription(file!.bytes)).toBe('Point basis: full file (3 points)\nClasses edited in app: no');
   });
 
-  it('LAS 1.2: a clean reproject adds no extra VLR (only the CRS GeoKey VLR)', () => {
+  it('LAS 1.2: a clean reproject adds no caveat VLR (GeoKey plus the provenance VLR)', () => {
     const { file } = convertCloud(
       cloudWith(WGS84_UTM11N, [500000, 4000000, 100]),
       { format: 'las', crsMode: 'reproject', targetEpsg: 4326 },
     );
-    // Geographic CRS ⇒ exactly one GeoKey VLR, and no caveat VLR.
-    expect(vlrCount(file!.bytes)).toBe(1);
-    expect(textAreaDescription(file!.bytes)).toBeNull();
+    // Geographic CRS ⇒ one GeoKey VLR plus the provenance Text Area, which holds no caveat.
+    expect(vlrCount(file!.bytes)).toBe(2);
+    expect(textAreaDescription(file!.bytes)).toBe('Point basis: full file (3 points)\nClasses edited in app: no');
   });
 
   it('ASC: no datum-transform comment on a clean reproject', () => {
@@ -202,8 +208,9 @@ describe('exact datum reproject — the deliverable stays byte-clean (no false c
     );
     const text = new TextDecoder().decode(file!.bytes);
     expect(text).not.toMatch(/datum-transform/);
-    // First line is data, not a comment.
-    expect(text.split('\n')[0]).not.toMatch(/^#/);
+    // Every comment line is provenance; the first non-comment line is data.
+    const data = text.split('\n').find((l) => !l.startsWith('#'));
+    expect(data).toMatch(/^-?\d/);
   });
 
   it('still exposes provenance on a clean reproject (accuracyMetres null, no caveat)', () => {

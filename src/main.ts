@@ -95,7 +95,7 @@ import type { WorkspaceMode } from './ui/workspace/DesktopWorkspace';
 import type { WorkspaceShell } from './app/workspace/workspaceShell';
 import { createScanRouteCoordinator, type SpaceExportContext } from './app/scanRouteCoordinator';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
-import { ExportPanel, exportClassFacts, exportLayerHooks } from './ui/ExportPanel';
+import { ExportPanel, exportClassFacts, exportLayerHooks, measurementScanHooks } from './ui/ExportPanel';
 import { makeLocalToLonLat } from './export/lonLatMapper';
 import { runFindingsExport, writeScanScopedExport, spaceContextStillCurrent, SPACE_CONTEXT_MOVED, SESSION_EXPORT_SCAN_CHANGED_REFUSAL } from './export/exportScanIdentity';
 import {
@@ -2372,7 +2372,7 @@ const measurementExportActionDeps = (v: Viewer): MeasurementExportActionDeps => 
   downloadText,
   loadMeasurementExport,
   loadMeasurementReport,
-  activeClassificationEpoch: () => (scans.activeId ? v.classificationEpoch(scans.activeId) : 0),
+  ...measurementScanHooks({ scans, viewer: v, reduced: reducedById }),
   appVersion: __APP_VERSION__,
   now: () => new Date().toISOString(),
 });

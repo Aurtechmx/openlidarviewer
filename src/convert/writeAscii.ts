@@ -43,10 +43,18 @@ function datumTransformComment(note: string | null | undefined): string | null {
   return t ? `# datum-transform: ${t}` : null;
 }
 
+/** The `# crs:` comment both ASCII writers put in their header. */
+export function crsComment(epsg: number | null | undefined, crsName: string | null | undefined): string {
+  if (epsg != null) return `# crs: EPSG:${epsg}`;
+  if (crsName) return `# crs: ${crsName}`;
+  return '# crs: none recorded (coordinates unchanged from the source)';
+}
+
 /**
  * Write space-delimited `x y z` (+ `r g b` when the cloud has colour). A
  * non-empty `datumNote` prepends a `# datum-transform:` comment; `loadXyz`
- * skips `#` lines, so the note never corrupts the point list.
+ * skips `#` lines, so the note never corrupts the point list. When `crs` is
+ * given, a product line and a `# crs:` line open the file.
  */
 export function writeXyz(
   g: GlobalPoints,
@@ -54,8 +62,13 @@ export function writeXyz(
   geographic?: boolean,
   datumNote?: string | null,
   provenance?: readonly string[] | null,
+  crs?: { readonly epsg?: number | null; readonly crsName?: string | null },
 ): string {
   const lines: string[] = [];
+  if (crs) {
+    lines.push('# OpenLiDARViewer XYZ export');
+    lines.push(crsComment(crs.epsg, crs.crsName));
+  }
   const note = datumTransformComment(datumNote);
   if (note) lines.push(note);
   for (const l of provenance ?? []) lines.push(`# ${l}`);
@@ -94,7 +107,7 @@ export function writeAsc(
      * byte-clean).
      */
     datumNote?: string | null;
-    /** Provenance lines (source SHA-256, CRS origin), each written as a `#` comment. */
+    /** Provenance lines (software, source file and SHA-256, CRS origin, point basis, class edits), each written as a `#` comment. */
     provenance?: readonly string[] | null;
   } = {},
 ): string {
@@ -102,9 +115,7 @@ export function writeAsc(
   const h = horizontalPrecision(precision, opts.geographic);
   const hasI = g.intensity != null;
   const header: string[] = ['# OpenLiDARViewer ASC export'];
-  if (opts.epsg != null) header.push(`# crs: EPSG:${opts.epsg}`);
-  else if (opts.crsName) header.push(`# crs: ${opts.crsName}`);
-  else header.push('# crs: none recorded (coordinates unchanged from the source)');
+  header.push(crsComment(opts.epsg, opts.crsName));
   const datumComment = datumTransformComment(opts.datumNote);
   if (datumComment) header.push(datumComment);
   for (const l of opts.provenance ?? []) header.push(`# ${l}`);

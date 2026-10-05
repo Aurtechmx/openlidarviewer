@@ -11,6 +11,11 @@ import { convertCloud } from '../src/convert/convertCloud';
 import type { CrsInfo } from '../src/io/crs';
 import type { ResolvedCrs } from '../src/geo/CoordinateTypes';
 
+/** The point lines of an XYZ / ASC file, without its `#` provenance comments. */
+function dataLines(bytes: Uint8Array): string[] {
+  return new TextDecoder().decode(bytes).trim().split('\n').filter((l) => !l.startsWith('#'));
+}
+
 function utmCloud(crs?: CrsInfo | null): PointCloud {
   // A few points near UTM 11N easting 500000 / northing 4000000.
   return new PointCloud({
@@ -114,7 +119,7 @@ describe('convertCloud', () => {
     );
     expect(report.ok).toBe(true);
     expect(report.crsNote).toMatch(/reprojected/i);
-    const firstLine = new TextDecoder().decode(file!.bytes).split('\n')[0];
+    const firstLine = dataLines(file!.bytes)[0];
     const lon = parseFloat(firstLine.split(' ')[0]);
     expect(lon).toBeGreaterThan(-118);
     expect(lon).toBeLessThan(-116);
@@ -166,7 +171,7 @@ describe('convertCloud — resolved source CRS wins over declared metadata', () 
     expect(r.report.ok).toBe(true);
     // 12N places these eastings ~6° further east than 11N would, so the fix is
     // observable in the coordinates, not just the label.
-    const lon = parseFloat(new TextDecoder().decode(r.file!.bytes).split('\n')[0].split(' ')[0]);
+    const lon = parseFloat(dataLines(r.file!.bytes)[0].split(' ')[0]);
     // 500000E in 12N is ~ -111° longitude; in 11N it would be ~ -117°.
     expect(lon).toBeGreaterThan(-113);
     expect(lon).toBeLessThan(-109);
@@ -265,7 +270,7 @@ describe('convertCloud — mesh up-axis is DETECTED, then normalised', () => {
     expect(out.report.log.some((l) => /y-up/i.test(l.message))).toBe(true);
     // Decisive coordinate check: authored point (3, sin(1)cos(0), 0) is line 3*N.
     // Authored point at grid (3, 0): (6, e30, 0) → east 6, north 0, up e30.
-    const line = new TextDecoder().decode(out.file!.bytes).trim().split('\n')[3 * N];
+    const line = dataLines(out.file!.bytes)[3 * N];
     const elev = 5 * Math.exp(-((3 - 20) ** 2 + (0 - 20) ** 2) / 180);
     expect(line).toBe(`6.000 0.000 ${elev.toFixed(3)}`);
     void e; void second;
@@ -276,7 +281,7 @@ describe('convertCloud — mesh up-axis is DETECTED, then normalised', () => {
     // format as Y-up rotated real terrain into vertical walls in the terrain
     // gather, caught by e2e. The converter uses the same detection.
     const out = convertCloud(field('z'), { format: 'xyz' });
-    const line = new TextDecoder().decode(out.file!.bytes).trim().split('\n')[3 * N];
+    const line = dataLines(out.file!.bytes)[3 * N];
     const elev = 5 * Math.exp(-((3 - 20) ** 2 + (0 - 20) ** 2) / 180);
     expect(line).toBe(`6.000 0.000 ${elev.toFixed(3)}`);
     expect(out.report.log.some((l) => /y-up/i.test(l.message))).toBe(false);
@@ -292,7 +297,7 @@ describe('convertCloud — mesh up-axis is DETECTED, then normalised', () => {
       }),
       { format: 'xyz' },
     );
-    expect(new TextDecoder().decode(out.file!.bytes).trim()).toBe('3.000 5.000 7.000');
+    expect(dataLines(out.file!.bytes)).toEqual(['3.000 5.000 7.000']);
   });
 });
 

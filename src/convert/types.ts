@@ -95,8 +95,16 @@ export interface ConvertOptions {
    * suffix. Absent for a full-resolution export.
    */
   readonly displaySample?: DisplaySample | null;
-  /** "Point basis: full file (N points)" for a full-resolution export. */
+  /**
+   * "Point basis: full file (N points)" or "Point basis: display sample (...)".
+   * Absent: derived from `displaySample`, or the whole cloud as the full file.
+   */
   readonly pointBasis?: string | null;
+  /**
+   * Whether the classification was edited in the app (edit epoch above 0, or
+   * codes not from the source). Absent: read from the cloud's own provenance.
+   */
+  readonly classesEdited?: boolean | null;
   /**
    * Write LAS 1.2 even when classes above 31 wrap into its 5-bit field. Off by
    * default, and such a write is refused: each wrapped class lands on another

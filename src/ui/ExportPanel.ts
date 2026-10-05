@@ -34,6 +34,9 @@ import { gzipConvertedFile, gzipAvailable } from '../convert/gzip';
 import { buildExportSummary, displaySampleOf, displaySampleStatus, type ClassificationProvenance, type ExportSummaryInput } from '../export/exportSummary';
 import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
 import { layerFacts, pointBasisLine, type FullFileLayerFacts } from '../app/fullFileActions';
+
+/** Active-scan facts for the measurement exports, wired beside the panel's own layer hooks. */
+export { measurementScanHooks } from '../app/measurementScanHooks';
 import {
   classificationDiffersFromSource,
   evaluateFullResClassExport,
@@ -1390,7 +1393,9 @@ export class ExportPanel {
         allowLegacyReturnClamp: allowReturnClamp,
         scopeNote,
         displaySample,
-        pointBasis: useFull ? pointBasisLine(true, sourceCloud.pointCount, null) : null,
+        // A display sample's basis comes from `displaySample`; otherwise the loaded cloud is the whole file.
+        pointBasis: displaySample ? null : pointBasisLine(true, sourceCloud.pointCount, null),
+        classesEdited: this._cb.hasClassEdits?.() ?? false,
       };
       const { file, report } = convertCloud(cloud, options);
       if (file) {

@@ -16,6 +16,7 @@
 //    which makes the signed report non-reproducible.
 
 import { resolveExportDigests } from '../src/export/exportDigests';
+import { measurementCsvProvenance, provenanceSidecarName } from '../src/export/exportProvenanceLines';
 import { describe, it, expect, vi } from 'vitest';
 import {
   exportMeasurementsFile,
@@ -73,6 +74,8 @@ function deps(over: Partial<MeasurementExportActionDeps> = {}): Recorded {
           csvCalls.push({ measurements, ctx });
           return 'id,name\n';
         },
+        measurementCsvProvenance,
+        provenanceSidecarName,
         resolveExportDigests,
       };
     },
@@ -185,9 +188,36 @@ describe('exportMeasurementsFile — landing local points in the source frame', 
     expect(r.downloads.map((d) => d.filename)).toEqual([
       'scan-measurements.geojson',
       'scan-measurements.csv',
+      'scan-measurements.provenance.txt',
     ]);
     expect(r.downloads[0].text).toBe('{"geojson":true}');
     expect(r.downloads[1].text).toBe('id,name\n');
+  });
+
+  it('writes a provenance sidecar beside the CSV, and the CSV itself stays plain', async () => {
+    const r = deps({
+      activeScanBasis: () => ({ pointBasis: 'Point basis: display sample (500 of 2,000 points)', classesEdited: true }),
+    });
+    await exportMeasurementsFile('csv', r.deps);
+    expect(r.downloads[0].text).toBe('id,name\n');
+    const side = r.downloads[1];
+    expect(side.filename).toBe('scan-measurements.provenance.txt');
+    const lines = side.text.trimEnd().split('\n');
+    expect(lines[0]).toBe('OpenLiDARViewer measurement CSV provenance');
+    expect(lines[1]).toMatch(/^Software: OpenLiDARViewer \d+\.\d+\.\d+\S* \(testtest\)$/);
+    expect(lines).toContain('Source file: scan.laz');
+    expect(lines.some((l) => l.startsWith('Source SHA-256: '))).toBe(true);
+    expect(lines).toContain('CRS: WGS 84 / UTM zone 12N');
+    expect(lines).toContain('Point basis: display sample (500 of 2,000 points)');
+    expect(lines).toContain('Classes edited in app: yes');
+  });
+
+  it('a CSV with no active scan states the basis was not recorded', async () => {
+    const r = deps({ activeScanBasis: () => null });
+    await exportMeasurementsFile('csv', r.deps);
+    const lines = r.downloads[1].text.trimEnd().split('\n');
+    expect(lines).toContain('Point basis: not recorded (no active scan)');
+    expect(lines).toContain('Classes edited in app: not recorded');
   });
 
   it('falls back to a generic stem when the frame carries no scan name', async () => {
