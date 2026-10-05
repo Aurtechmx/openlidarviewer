@@ -56,6 +56,8 @@ import { dtmProductDigest } from '../../science/dtmProductDigest';
 import { dtmMethodDigest, resolveLiveDtmDescriptor } from '../../science/liveDtmDescriptor';
 import { buildIdentityProvenance } from '../../build/buildIdentity';
 import { FlowResultGrid, flowGridLegend, maskFromIndices } from './flowResultGrid';
+import { labStatRow } from './labStats';
+import { prefersReducedMotion } from './labColormaps';
 import { howToRead, labHeader, methodDetails, needsGround, readinessList } from '../labGuide';
 import { labReadiness } from '../../process/labGuideCopy';
 import { flowTerrainBannerText, flowTerrainCaveat, type FlowTerrainCaveat } from '../../process/flowTerrainCaveat';
@@ -347,6 +349,24 @@ export function renderFlowPulseLab(outcome: FlowPulseResult | FlowRefusal): HTML
   return card;
 }
 
+/** The figure row under the grid for a routed result. */
+export function flowPulseStats(outcome: FlowPulseResult): HTMLElement {
+  const s = outcome.summary;
+  return labStatRow('Flow figures', [
+    { label: 'Routed', value: String(s.readableCells), unit: 'cells' },
+    { label: 'Outlets', value: String(s.outletCount) },
+    { label: 'Sinks', value: String(s.sinkCount) },
+    { label: 'Max upstream', value: String(s.maxUpstreamCells), unit: 'cells' },
+  ]);
+}
+
+/** Label and state for the flow-motion control: pressed while paused; pressed and disabled under reduced motion. */
+export function flowMotionControlState(reducedMotion: boolean, paused: boolean): { text: string; pressed: boolean; disabled: boolean } {
+  // One stable label; aria-pressed carries the state (pressed = paused).
+  if (reducedMotion) return { text: 'Pause flow motion', pressed: true, disabled: true };
+  return { text: 'Pause flow motion', pressed: paused, disabled: false };
+}
+
 /**
  * The banner above the result card when the terrain run is Blocked or
  * Preview, or null when the surface is usable.
@@ -356,6 +376,7 @@ export function flowTerrainBanner(input: FlowPulseLabInput): HTMLElement | null 
   if (!caveat) return null;
   const banner = el('div', { className: 'olv-flow-terrain-banner', text: flowTerrainBannerText(caveat) });
   banner.setAttribute('role', 'note');
+  banner.dataset.verdict = caveat.verdict.toLowerCase();
   return banner;
 }
 
@@ -666,7 +687,7 @@ function mountFlowPulseInteractive(
         const trace = traceClick(outcome, cell, stale);
         lastTrace = trace;
         if (trace.ok) {
-          grid.setPathMask(maskFromIndices(outcome.grid.cols * outcome.grid.rows, trace.path));
+          grid.setPathMask(maskFromIndices(outcome.grid.cols * outcome.grid.rows, trace.path), trace.path);
           if (flowOverlay && overlayFrame) {
             flowOverlay.setPath(buildFlowPathBuffers(outcome.grid, trace.path, overlayFrame));
           }
@@ -780,17 +801,35 @@ function mountFlowPulseInteractive(
     ]);
 
     const banner = flowTerrainBanner(input);
+    const motion = el('button', {
+      className: 'olv-flow-motion-toggle', type: 'button',
+      text: 'Pause flow motion',
+      tip: 'Dots move along the flow directions, faster where more cells drain through. Off when the system asks for reduced motion.',
+    }) as HTMLButtonElement;
+    const syncMotion = (): void => {
+      const st = flowMotionControlState(prefersReducedMotion(), grid.particles.paused);
+      motion.disabled = st.disabled;
+      motion.setAttribute('aria-pressed', st.pressed ? 'true' : 'false');
+    };
+    motion.addEventListener('click', () => {
+      grid.particles.setPaused(!grid.particles.paused);
+      syncMotion();
+    });
+    syncMotion();
+    // The grid leads, then its figures and legend; the full card and reading notes follow.
     body.replaceChildren(
       ...(banner ? [banner] : []),
-      staticCard,
-      howToRead(FLOW_HOW_TO_READ),
       conditioningCtl.element,
       conditioningHint,
       modeCtl.element,
       gridHint,
       grid.element,
-      flowGridLegend(),
+      motion,
+      flowPulseStats(outcome),
+      flowGridLegend(grid.maxUpstream),
       selectionPanel,
+      staticCard,
+      howToRead(FLOW_HOW_TO_READ),
       overlaySection,
       exportButton,
     );
@@ -836,6 +875,7 @@ function mountFlowPulseInteractive(
     // `acquireFlowOverlay`, rather than constructing a second one that would
     // leave the first orphaned in the scene.
     dispose: () => {
+      grid.dispose();
       if (!overlayOn && persistentFlowOverlay) {
         persistentFlowOverlay.overlay.dispose();
         persistentFlowOverlay = null;

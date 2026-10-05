@@ -36,6 +36,7 @@ const ACCEPTED: Record<string, readonly Site[]> = {
   'src/ui/panelChrome.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot deferred write of the dock clearance, only when the dock height changes; superseded by the next change and cancelled by the wireDockClearance disposer' }],
   'src/ui/stateStrip.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot deferred write of the measured strip height, only when the strip height changes; superseded by the next change' }],
   'src/ui/fieldSimulation/labGridPaint.ts': [{ kind: 'requestAnimationFrame', count: 3, owner: 'route/path draw-in bounded to its duration and cancelled by the grid; one-shot resize redraw cancelled by the onWidthChange disposer; both reached from the lab dispose' }],
+  'src/ui/fieldSimulation/flowParticles.ts': [{ kind: 'requestAnimationFrame', count: 2, owner: 'flow-particle loop: runs only while on screen, visible, unpaused and motion allowed; FlowParticles.dispose() cancels it from the lab dispose' }],
   'src/ui/ProjectCard.ts': [{ kind: 'setTimeout-rearm', count: 1, owner: 'fade hand-off poll; bounded by FADE_WAIT_CEILING_MS' }],
 };
 

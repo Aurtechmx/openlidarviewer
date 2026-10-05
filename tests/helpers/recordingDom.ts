@@ -45,6 +45,11 @@ export class RecordingEl {
   append(...kids: (RecordingEl | string | null)[]): void {
     for (const k of kids) if (k) this.children.push(typeof k === 'string' ? RecordingEl.text(k) : k);
   }
+  prepend(...kids: (RecordingEl | string | null)[]): void {
+    const added: RecordingEl[] = [];
+    for (const k of kids) if (k) added.push(typeof k === 'string' ? RecordingEl.text(k) : k);
+    this.children.unshift(...added);
+  }
   replaceChildren(...kids: (RecordingEl | string)[]): void {
     this._text = '';
     this.children.length = 0;
