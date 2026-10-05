@@ -30,7 +30,11 @@ import {
   type ElevationReference,
   type GridCell,
 } from '../../simulation/flowPulse/flowGridCursor';
-import { CELL_NODATA, CELL_OUTLET, CELL_SINK } from '../../simulation/flowPulse/flowTypes';
+import { CELL_FLAT, CELL_NODATA, CELL_OUTLET, CELL_SINK } from '../../simulation/flowPulse/flowTypes';
+import { logScale } from '../../render/flowOverlayGeometry';
+import { el } from '../dom';
+import { prefersReducedMotion, rampGradient, rgbCss, viridis } from './labColormaps';
+import { LAB_LINE, LAB_WITHHELD, casedPath, cellCentres, dotCell, drawIn } from './labGridPaint';
 import { buildResultGridDom } from './resultGridDom';
 import { legend } from '../labGuide';
 import { maskFromIndices as sharedMaskFromIndices } from './gridMask';
@@ -55,26 +59,94 @@ export interface FlowResultGridOptions {
 }
 
 /** Flat status colours — legible at a glance, no gradient to misread as data. */
-const STATUS_COLOR: Record<number, string> = {
-  [CELL_NODATA]: '#1c1f26',
-  [CELL_SINK]: '#c25b5b',
-  [CELL_OUTLET]: '#5b9dc2',
-};
-const ROUTED_COLOR = '#3a4a3a';
-const FLAT_COLOR = '#8a7d3a';
-const CATCHMENT_COLOR = 'rgba(255, 165, 60, 0.55)';
-const PATH_COLOR = 'rgba(250, 243, 89, 0.9)';
+const PATH_COLOR = LAB_LINE;
+const CATCHMENT_COLOR = '#ffffff';
+const OUTLET_COLOR = '#38bdf8';
+const SINK_COLOR = '#f0abfc';
+const PATH_DRAW_MS = 600;
+/** How much the hillshade darkens a cell: 0 keeps the ramp colour, 1 is full shade. */
+const HILLSHADE_WEIGHT = 0.35;
 
-/** The grid's legend, in the colours `_redraw` paints, each with a glyph and a word. */
-export function flowGridLegend(): HTMLElement {
-  return legend('Grid legend', [
-    { glyph: '■', label: 'Ground cell', color: ROUTED_COLOR },
-    { glyph: '━', label: 'Path', color: PATH_COLOR },
-    { glyph: '▦', label: 'Catchment', color: CATCHMENT_COLOR },
-    { glyph: '▲', label: 'Outlet (flow leaves the grid)', color: STATUS_COLOR[CELL_OUTLET]! },
-    { glyph: '▼', label: 'Sink (flow stops)', color: STATUS_COLOR[CELL_SINK]! },
-    { glyph: '▬', label: 'Flat', color: FLAT_COLOR },
+/** Tick values for a log upstream-count ramp: 1, then powers of ten below the maximum, then the maximum. */
+export function upstreamTicks(max: number): number[] {
+  const m = Math.max(1, Math.round(max));
+  const ticks = [1];
+  for (let v = 10; v < m; v *= 10) if (logScale(v, m) < 0.8) ticks.push(v);
+  if (m > 1) ticks.push(m);
+  return ticks;
+}
+
+/**
+ * Lambertian hillshade per cell from the grid's own elevations, sun at
+ * azimuth 315 deg, altitude 45 deg, in [0, 1]. NoData and edge-adjacent
+ * NoData neighbours fall back to the centre cell's elevation.
+ */
+export function hillshade(grid: FlowGrid): Float32Array {
+  const { cols, rows, z, valid } = grid;
+  const out = new Float32Array(cols * rows);
+  // Compass azimuth 315 deg in the math convention the aspect formula uses (360 - az + 90).
+  const zen = Math.PI / 4, az = (135 * Math.PI) / 180;
+  const at = (c: number, r: number, fallback: number): number => {
+    if (c < 0 || r < 0 || c >= cols || r >= rows) return fallback;
+    const i = r * cols + c;
+    return valid[i] ? z[i]! : fallback;
+  };
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const i = r * cols + c;
+      if (!valid[i]) continue;
+      const z0 = z[i]!;
+      const dzdx = (at(c + 1, r, z0) - at(c - 1, r, z0)) / (2 * grid.cellMetresX);
+      const dzdy = (at(c, r + 1, z0) - at(c, r - 1, z0)) / (2 * grid.cellMetresY);
+      const slope = Math.atan(Math.hypot(dzdx, dzdy));
+      const aspect = Math.atan2(dzdy, -dzdx);
+      const v = Math.cos(zen) * Math.cos(slope) + Math.sin(zen) * Math.sin(slope) * Math.cos(az - aspect);
+      out[i] = Math.min(1, Math.max(0, v));
+    }
+  }
+  return out;
+}
+
+function markItem(kind: 'hatch' | 'dots' | 'line' | 'ring' | 'dash', glyph: string, label: string, color: string): HTMLElement {
+  const swatch = el('span', { className: `olv-lab-swatch olv-lab-swatch--${kind}` });
+  swatch.style.color = color;
+  return el('li', { className: 'olv-lab-legend-item' }, [
+    swatch,
+    el('span', { className: 'olv-lab-legend-glyph', text: glyph }),
+    el('span', { text: label }),
   ]);
+}
+
+/**
+ * The grid legend: the viridis upstream-count ramp on its log scale, with
+ * ticks at powers of ten up to `maxUpstream`, then the marks drawn over it.
+ */
+export function flowGridLegend(maxUpstream = 1): HTMLElement {
+  const max = Math.max(1, Math.round(maxUpstream));
+  const bar = el('div', { className: 'olv-lab-ramp-bar' });
+  bar.style.background = rampGradient(viridis);
+  const ticks = el('div', { className: 'olv-lab-ramp-ticks' }, upstreamTicks(max).map((v) => {
+    const t = el('span', { className: 'olv-lab-ramp-tick', text: v.toLocaleString('en-US') });
+    t.style.left = `${logScale(v, max) * 100}%`;
+    return t;
+  }));
+  const ramp = el('div', { className: 'olv-lab-ramp' }, [
+    el('p', { className: 'olv-lab-ramp-title', text: 'Upstream cells draining through a cell (log scale)' }),
+    bar,
+    ticks,
+  ]);
+  ramp.setAttribute('role', 'img');
+  ramp.setAttribute('aria-label', `Upstream-cell colour scale, viridis on a log scale: dark purple is 1 cell, yellow is ${max.toLocaleString('en-US')} cells. Relief shading darkens cells facing away from a north-west light.`);
+  const marks = legend('Grid legend', []);
+  marks.append(
+    markItem('line', '━', 'Path', PATH_COLOR),
+    markItem('dash', '┅', 'Catchment edge', CATCHMENT_COLOR),
+    markItem('ring', '○', 'Outlet (flow leaves the grid)', OUTLET_COLOR),
+    markItem('ring', '▼', 'Sink (flow stops)', SINK_COLOR),
+    markItem('dash', '–', 'Flat', LAB_LINE),
+    markItem('dots', '?', 'No ground data', LAB_WITHHELD),
+  );
+  return el('div', { className: 'olv-flow-legend olv-lab-legend-panel' }, [ramp, marks]);
 }
 
 export class FlowResultGrid {
@@ -92,6 +164,11 @@ export class FlowResultGrid {
   private _cursor: GridCell = { col: 0, row: 0 };
   private _pathMask: Uint8Array | null = null;
   private _catchmentMask: Uint8Array | null = null;
+  private _pathOrder: ArrayLike<number> | null = null;
+  private _pathFraction = 1;
+  private _cancelDraw: () => void = () => {};
+  private _shade: Float32Array | null = null;
+  private _maxUpstream = 1;
 
   constructor(opts: FlowResultGridOptions) {
     this._onActivate = opts.onActivate;
@@ -125,17 +202,42 @@ export class FlowResultGrid {
     this._routed = routed;
     this._accumulation = accumulation;
     this._areaM2 = areaM2;
+    this._cancelDraw();
     this._pathMask = null;
+    this._pathOrder = null;
     this._catchmentMask = null;
+    this._shade = hillshade(grid);
+    let max = 1;
+    for (const v of accumulation.upstreamCells) if (v > max) max = v;
+    this._maxUpstream = max;
     this._cursor = clampCell(grid.cols, grid.rows, 0, 0);
     this._redraw();
     this._updateStatus(false);
   }
 
-  /** Highlight a traced downstream path, or clear it with `null`. */
-  setPathMask(mask: Uint8Array | null): void {
+  /** The largest upstream count on the loaded grid, for the legend's scale. */
+  get maxUpstream(): number {
+    return this._maxUpstream;
+  }
+
+  /**
+   * Highlight a traced downstream path, or clear it with `null`. With `order`
+   * (the path's cell indices, downstream) it draws in from the picked cell, or
+   * at once under reduced motion.
+   */
+  setPathMask(mask: Uint8Array | null, order: ArrayLike<number> | null = null): void {
+    this._cancelDraw();
     this._pathMask = mask;
-    this._redraw();
+    this._pathOrder = mask ? order : null;
+    if (!mask || !order) {
+      this._pathFraction = 1;
+      this._redraw();
+      return;
+    }
+    this._cancelDraw = drawIn(PATH_DRAW_MS, prefersReducedMotion(), (f) => {
+      this._pathFraction = f;
+      this._redraw();
+    });
   }
 
   /** Highlight an upstream catchment, or clear it with `null`. */
@@ -210,30 +312,36 @@ export class FlowResultGrid {
     const ctx = typeof this._canvas.getContext === 'function' ? this._canvas.getContext('2d') : null;
     if (!ctx) return;
 
+    const dpr = typeof devicePixelRatio === 'number' && devicePixelRatio > 1 ? Math.min(3, devicePixelRatio) : 1;
+    if (dpr !== 1) {
+      this._canvas.width = w * dpr;
+      this._canvas.height = h * dpr;
+      ctx.scale(dpr, dpr);
+    }
+    const acc = this._accumulation;
+    const shade = this._shade;
     for (let row = 0; row < grid.rows; row++) {
       for (let col = 0; col < grid.cols; col++) {
         const i = row * grid.cols + col;
-        const status = routed.status[i];
-        ctx.fillStyle = STATUS_COLOR[status] ?? (status === 2 /* CELL_FLAT */ ? FLAT_COLOR : ROUTED_COLOR);
-        ctx.fillRect(col * scale, row * scale, scale, scale);
+        const x = col * scale, y = row * scale;
+        if (routed.status[i] === CELL_NODATA) { dotCell(ctx, x, y, scale, LAB_WITHHELD); continue; }
+        const c = viridis(acc ? logScale(acc.upstreamCells[i]!, this._maxUpstream) : 0);
+        const k = shade ? 1 - HILLSHADE_WEIGHT * (1 - shade[i]!) : 1;
+        ctx.fillStyle = rgbCss([Math.round(c[0] * k), Math.round(c[1] * k), Math.round(c[2] * k)]);
+        ctx.fillRect(x, y, scale, scale);
       }
     }
-    if (this._catchmentMask) {
-      ctx.fillStyle = CATCHMENT_COLOR;
-      for (let i = 0; i < this._catchmentMask.length; i++) {
-        if (this._catchmentMask[i] !== 1) continue;
-        const col = i % grid.cols, row = Math.floor(i / grid.cols);
-        ctx.fillRect(col * scale, row * scale, scale, scale);
-      }
-    }
-    if (this._pathMask) {
+    if (this._catchmentMask) this._strokeMaskEdge(ctx, grid, this._catchmentMask, scale);
+    if (this._pathMask && this._pathOrder) {
+      casedPath(ctx, cellCentres(this._pathOrder, grid.cols, scale), scale, PATH_COLOR, this._pathFraction);
+    } else if (this._pathMask) {
       ctx.fillStyle = PATH_COLOR;
       for (let i = 0; i < this._pathMask.length; i++) {
         if (this._pathMask[i] !== 1) continue;
-        const col = i % grid.cols, row = Math.floor(i / grid.cols);
-        ctx.fillRect(col * scale, row * scale, scale, scale);
+        ctx.fillRect((i % grid.cols) * scale + scale / 3, Math.floor(i / grid.cols) * scale + scale / 3, scale / 3, scale / 3);
       }
     }
+    this._drawStatusMarks(ctx, grid, routed.status, scale);
     // Cursor outline, always drawn last.
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = Math.max(1, Math.floor(scale / 6));
@@ -243,6 +351,59 @@ export class FlowResultGrid {
       scale - ctx.lineWidth,
       scale - ctx.lineWidth,
     );
+  }
+
+  /** Dashed outline along the edges where the mask meets a cell outside it. */
+  private _strokeMaskEdge(ctx: CanvasRenderingContext2D, grid: FlowGrid, mask: Uint8Array, s: number): void {
+    const inside = (c: number, r: number): boolean =>
+      c >= 0 && r >= 0 && c < grid.cols && r < grid.rows && mask[r * grid.cols + c] === 1;
+    ctx.save();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.strokeStyle = CATCHMENT_COLOR;
+    ctx.lineWidth = Math.max(1, s / 8);
+    ctx.setLineDash([Math.max(2, s / 3), Math.max(2, s / 4)]);
+    ctx.beginPath();
+    for (let r = 0; r < grid.rows; r++) {
+      for (let c = 0; c < grid.cols; c++) {
+        if (!inside(c, r)) continue;
+        const x = c * s, y = r * s;
+        ctx.fillRect(x, y, s, s);
+        if (!inside(c, r - 1)) { ctx.moveTo(x, y); ctx.lineTo(x + s, y); }
+        if (!inside(c, r + 1)) { ctx.moveTo(x, y + s); ctx.lineTo(x + s, y + s); }
+        if (!inside(c - 1, r)) { ctx.moveTo(x, y); ctx.lineTo(x, y + s); }
+        if (!inside(c + 1, r)) { ctx.moveTo(x + s, y); ctx.lineTo(x + s, y + s); }
+      }
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /** Outlets as open rings, sinks as filled down-triangles, flats as a short dash. */
+  private _drawStatusMarks(ctx: CanvasRenderingContext2D, grid: FlowGrid, status: ArrayLike<number>, s: number): void {
+    if (s < 4) return;
+    ctx.save();
+    ctx.lineWidth = Math.max(1, s / 8);
+    for (let i = 0; i < grid.cols * grid.rows; i++) {
+      const st = status[i];
+      if (st !== CELL_OUTLET && st !== CELL_SINK && st !== CELL_FLAT) continue;
+      const cx = (i % grid.cols) * s + s / 2, cy = Math.floor(i / grid.cols) * s + s / 2, r = s * 0.32;
+      ctx.beginPath();
+      if (st === CELL_OUTLET) {
+        ctx.strokeStyle = OUTLET_COLOR;
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (st === CELL_SINK) {
+        ctx.fillStyle = SINK_COLOR;
+        ctx.moveTo(cx - r, cy - r * 0.7); ctx.lineTo(cx + r, cy - r * 0.7); ctx.lineTo(cx, cy + r * 0.9);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        ctx.strokeStyle = LAB_LINE;
+        ctx.moveTo(cx - r * 0.7, cy); ctx.lineTo(cx + r * 0.7, cy);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
   }
 }
 

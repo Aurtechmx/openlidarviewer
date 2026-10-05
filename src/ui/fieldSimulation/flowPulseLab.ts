@@ -356,6 +356,7 @@ export function flowTerrainBanner(input: FlowPulseLabInput): HTMLElement | null 
   if (!caveat) return null;
   const banner = el('div', { className: 'olv-flow-terrain-banner', text: flowTerrainBannerText(caveat) });
   banner.setAttribute('role', 'note');
+  banner.setAttribute('data-verdict', caveat.verdict.toLowerCase());
   return banner;
 }
 
@@ -666,7 +667,7 @@ function mountFlowPulseInteractive(
         const trace = traceClick(outcome, cell, stale);
         lastTrace = trace;
         if (trace.ok) {
-          grid.setPathMask(maskFromIndices(outcome.grid.cols * outcome.grid.rows, trace.path));
+          grid.setPathMask(maskFromIndices(outcome.grid.cols * outcome.grid.rows, trace.path), trace.path);
           if (flowOverlay && overlayFrame) {
             flowOverlay.setPath(buildFlowPathBuffers(outcome.grid, trace.path, overlayFrame));
           }
@@ -789,7 +790,7 @@ function mountFlowPulseInteractive(
       modeCtl.element,
       gridHint,
       grid.element,
-      flowGridLegend(),
+      flowGridLegend(grid.maxUpstream),
       selectionPanel,
       overlaySection,
       exportButton,
