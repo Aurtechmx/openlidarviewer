@@ -401,3 +401,18 @@ describe('labels never claim more placement than the export applied', () => {
     expect(crs).toContain('(CRS units, as written in the .asc files)');
   });
 });
+
+describe('the README CRS line', () => {
+  it('says the CRS is not applied when the export is not placed', () => {
+    const readme = textOf(buildFlowPulsePackage(runOf(), { basename: 'flow', worldOrigin: { x: 1, y: 2 }, crsName: 'EPSG:6342' }), 'flow-README.txt');
+    expect(readme).toContain('CRS            EPSG:6342 (not applied: rasters are in local metres from (0, 0))');
+  });
+
+  it('names the CRS plainly when the export is placed', () => {
+    const readme = textOf(buildFlowPulsePackage(runOf(), {
+      basename: 'flow', worldOrigin: { x: 1, y: 2 }, crsName: 'EPSG:6342',
+      gridFrame: { originH1: 0, originH2: 0, cellSize: 1 },
+    }), 'flow-README.txt');
+    expect(readme).toMatch(/CRS {12}EPSG:6342\n/);
+  });
+});

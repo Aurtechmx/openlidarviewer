@@ -153,6 +153,12 @@ const NO_DATA = -9999;
  * `local-planar-metres` when not placed (no world origin or no raster frame).
  * The CRS name is the resolved-frame label; the WKT only feeds the .prj.
  */
+/** The README CRS line: a CRS name is stated as applied only when the export is placed. */
+function crsLine(crsName: string | null, placed: boolean): string {
+  if (crsName == null) return 'not georeferenced — rasters use a local (0, 0) origin';
+  return placed ? crsName : `${crsName} (not applied: rasters are in local metres from (0, 0))`;
+}
+
 const PATH_FRAME_TEXT: Readonly<Record<string, string>> = {
   'scan-crs': 'planar coordinates in the scan\'s resolved CRS (the CRS line above).',
   'scan-source-coordinates': 'the scan\'s own source coordinates; no CRS resolved.',
@@ -300,6 +306,7 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
   readonly terrainCaveat: FlowTerrainCaveat | null;
   readonly rasterCellSize: number | null;
   readonly pathFrame: string;
+  readonly placed: boolean;
 }): string {
   const r = result.record;
   const s = result.summary;
@@ -341,7 +348,7 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     `  Input coverage ${r.source.basis.coverage} (${r.source.basis.complete ? 'complete' : 'partial'})`,
     `  Cells read     ${r.source.basis.measuredCells} of ${r.source.basis.totalCells}`,
     `  Withheld excluded   ${r.source.basis.withheldExcluded === null ? 'not recorded' : String(r.source.basis.withheldExcluded)}`,
-    `  CRS            ${opts.crsName ?? 'not georeferenced — rasters use a local (0, 0) origin'}`,
+    `  CRS            ${crsLine(opts.crsName, opts.placed)}`,
     ...(opts.sourceInterpretation.crsOrigin ? [`  ${crsOriginLine(opts.sourceInterpretation.crsOrigin)}`] : []),
     `  Vertical unit  ${opts.verticalUnitLabel === 'units' ? 'unresolved — every fill-depth/elevation figure below is in source units' : opts.verticalUnitLabel}`,
     `  Terrain verdict    ${opts.terrainCaveat ? `${opts.terrainCaveat.verdict} (${interpolatedShareText(opts.terrainCaveat)})` : 'not flagged Blocked or Preview'}`,
@@ -558,6 +565,7 @@ export function buildFlowPulsePackage(
     verticalUnitLabel: options.verticalUnitLabel ?? 'units', hasPath, hasCatchment, sourceInterpretation,
     elevationOrigin, terrainCaveat: options.terrainCaveat ?? null, rasterCellSize: frame?.cellSize ?? null,
     pathFrame: pathFrameName(placedOrigin, options.crsName != null),
+    placed: placedOrigin != null,
     sourceSha256Text: options.sourceSha256 ?? (options.digests ? sourceSha256Text(options.digests) : (result.record.source.sourceDigest ?? SOURCE_NOT_SUPPLIED_NOTE)),
   });
   entries.push({
