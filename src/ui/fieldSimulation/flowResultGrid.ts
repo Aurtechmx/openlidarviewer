@@ -172,7 +172,7 @@ export class FlowResultGrid {
   private _pathOrder: ArrayLike<number> | null = null;
   private _pathFraction = 1;
   private _cancelDraw: () => void = () => {};
-  private _stopResize: () => void = () => {};
+  private readonly _stopResize: () => void;
   private _shade: Float32Array | null = null;
   private _maxUpstream = 1;
   /** Moving marks along the D8 directions; see flowParticles.ts. */

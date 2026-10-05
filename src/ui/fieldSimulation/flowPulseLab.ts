@@ -376,7 +376,7 @@ export function flowTerrainBanner(input: FlowPulseLabInput): HTMLElement | null 
   if (!caveat) return null;
   const banner = el('div', { className: 'olv-flow-terrain-banner', text: flowTerrainBannerText(caveat) });
   banner.setAttribute('role', 'note');
-  banner.setAttribute('data-verdict', caveat.verdict.toLowerCase());
+  banner.dataset.verdict = caveat.verdict.toLowerCase();
   return banner;
 }
 
