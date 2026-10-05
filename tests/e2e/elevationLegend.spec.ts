@@ -10,33 +10,11 @@
  * height, so no colour-mode click is needed.
  */
 import { test, expect, type Page } from '@playwright/test';
-
-async function dropHills(page: Page): Promise<void> {
-  const N = 70;
-  const rows: string[] = [];
-  for (let i = 0; i < N; i++) {
-    for (let j = 0; j < N; j++) {
-      const u = i / (N - 1);
-      const v = j / (N - 1);
-      const h = 380 + 40 * Math.sin(u * 3.1) * Math.cos(v * 2.2) + 15 * u;
-      // PLY is Y-up: the height goes in the second column.
-      rows.push(`${(u * 60 - 30).toFixed(3)} ${h.toFixed(3)} ${(v * 60 - 30).toFixed(3)}`);
-    }
-  }
-  const text =
-    `ply\nformat ascii 1.0\nelement vertex ${N * N}\nproperty float x\nproperty float y\nproperty float z\nend_header\n` +
-    rows.join('\n') + '\n';
-  const dataTransfer = await page.evaluateHandle((t) => {
-    const dt = new DataTransfer();
-    dt.items.add(new File([t], 'hills.ply'));
-    return dt;
-  }, text);
-  await page.dispatchEvent('body', 'drop', { dataTransfer });
-}
+import { dropHillsPly } from './helpers';
 
 async function openLegend(page: Page) {
   await page.goto('/');
-  await dropHills(page);
+  await dropHillsPly(page);
   const legend = page.locator('.olv-colorbar');
   await expect(legend).toBeVisible({ timeout: 30_000 });
   await expect(legend.locator('.olv-colorbar-hist rect').first()).toBeAttached({ timeout: 10_000 });

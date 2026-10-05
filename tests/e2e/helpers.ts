@@ -176,6 +176,33 @@ export async function seedStaleReloadCooldown(page: Page): Promise<void> {
 }
 
 /**
+ * Drop a 70 x 70 synthesised height field as a positions-only PLY. With no
+ * colour channel it opens coloured by height, so the colour bar is up.
+ */
+export async function dropHillsPly(page: Page): Promise<void> {
+  const N = 70;
+  const rows: string[] = [];
+  for (let i = 0; i < N; i++) {
+    for (let j = 0; j < N; j++) {
+      const u = i / (N - 1);
+      const v = j / (N - 1);
+      const h = 380 + 40 * Math.sin(u * 3.1) * Math.cos(v * 2.2) + 15 * u;
+      // PLY is Y-up: the height goes in the second column.
+      rows.push(`${(u * 60 - 30).toFixed(3)} ${h.toFixed(3)} ${(v * 60 - 30).toFixed(3)}`);
+    }
+  }
+  const text =
+    `ply\nformat ascii 1.0\nelement vertex ${N * N}\nproperty float x\nproperty float y\nproperty float z\nend_header\n` +
+    rows.join('\n') + '\n';
+  const dataTransfer = await page.evaluateHandle((t) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([t], 'hills.ply'));
+    return dt;
+  }, text);
+  await page.dispatchEvent('body', 'drop', { dataTransfer });
+}
+
+/**
  * Drop the bundled `tiny.ply` fixture onto the page body via a synthesised
  * DataTransfer. Exercises the same load → render → validate path a real
  * dragged file takes, and works whether or not the empty-state sample

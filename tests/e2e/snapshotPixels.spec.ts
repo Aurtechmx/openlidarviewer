@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Download } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { dropTerrainAccessUtmLas } from './helpers';
+import { dropHillsPly, dropTerrainAccessUtmLas } from './helpers';
 
 /**
  * Snapshot and image-export PNGs hold the scan, not an empty frame.
@@ -65,31 +65,10 @@ test('a height-map image export holds scan pixels', async ({ page }) => {
   expect(differing, 'height-map pixels that differ from the background').toBeGreaterThan(200);
 });
 
-/** A height field with no colour channel, so it opens coloured by height. */
-async function dropHeightField(page: Page): Promise<void> {
-  const N = 70;
-  const rows: string[] = [];
-  for (let i = 0; i < N; i++) {
-    for (let j = 0; j < N; j++) {
-      const u = i / (N - 1);
-      const v = j / (N - 1);
-      const h = 380 + 40 * Math.sin(u * 3.1) * Math.cos(v * 2.2) + 15 * u;
-      rows.push(`${(u * 60 - 30).toFixed(3)} ${h.toFixed(3)} ${(v * 60 - 30).toFixed(3)}`);
-    }
-  }
-  const text = `ply\nformat ascii 1.0\nelement vertex ${N * N}\nproperty float x\nproperty float y\nproperty float z\nend_header\n${rows.join('\n')}\n`;
-  const dataTransfer = await page.evaluateHandle((t) => {
-    const dt = new DataTransfer();
-    dt.items.add(new File([t], 'hills.ply'));
-    return dt;
-  }, text);
-  await page.dispatchEvent('body', 'drop', { dataTransfer });
-}
-
 test('a snapshot with the colour bar burned in holds scan pixels left of the bar', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/?test=1');
-  await dropHeightField(page);
+  await dropHillsPly(page);
   // Coloured by height: the legend shows, so the snapshot takes the composite path.
   await expect(page.locator('.olv-colorbar')).toBeVisible({ timeout: 30_000 });
   const download = page.waitForEvent('download');
