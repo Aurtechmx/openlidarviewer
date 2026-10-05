@@ -57,7 +57,7 @@ describe('provenance line helpers', () => {
   });
 
   it('writes the source basename, never a host path', () => {
-    expect(sourceFileLine('/home/u/data/site.laz')).toBe('Source file: site.laz');
+    expect(sourceFileLine('data/sub/site.laz')).toBe('Source file: site.laz');
     expect(sourceFileLine('C:\\scans\\site.laz')).toBe('Source file: site.laz');
     expect(sourceFileLine(null)).toBe('Source file: unknown');
   });

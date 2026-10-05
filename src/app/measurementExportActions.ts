@@ -61,6 +61,8 @@ export interface MeasurementExportActionDeps {
   readonly layers?: { readonly view: ExportLayerView; readonly stableIdFor: (viewerId: string) => string | null };
   /** Shown when the export is refused rather than written. */
   readonly refuse?: (message: string) => void;
+  /** Shown after a write, on the app's toast line. */
+  readonly notify?: (message: string) => void;
   /** Active scan's classification epoch (0 when none), for the report manifest. */
   readonly activeClassificationEpoch: () => number;
   /**
@@ -306,7 +308,17 @@ export async function exportMeasurementsFile(
   if (format === 'geojson' || !ctx.provenance) return;
   // A CSV has no comment slot every parser skips, so its provenance rides in a sidecar.
   const basis = csvBasis(scanBasis, activeOnly, sources?.length ?? 1, geo.name);
-  deps.downloadText(exporter.provenanceSidecarName(filename), exporter.measurementCsvProvenance(ctx.provenance, basis));
+  const sidecar = exporter.provenanceSidecarName(filename);
+  deps.downloadText(sidecar, exporter.measurementCsvProvenance(ctx.provenance, basis));
+  deps.notify?.(csvSavedMessage(filename, sidecar));
+}
+
+/**
+ * The toast after a CSV export. It names both files, because a browser can
+ * block the second download until the user allows multiple downloads.
+ */
+export function csvSavedMessage(csv: string, sidecar: string): string {
+  return `Saved ${csv} and ${sidecar}. If your browser asked to allow multiple downloads, allow it to get the provenance file.`;
 }
 
 /** The sidecar's scan facts: the active scan's own, or a statement that several scans are mixed. */

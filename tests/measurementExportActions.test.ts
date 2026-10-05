@@ -21,6 +21,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   exportMeasurementsFile,
   exportMeasurementIntegrityReport,
+  csvSavedMessage,
   type MeasurementExportActionDeps,
 } from '../src/app/measurementExportActions';
 import type { Measurement } from '../src/render/measure/types';
@@ -210,6 +211,23 @@ describe('exportMeasurementsFile — landing local points in the source frame', 
     expect(lines).toContain('CRS: WGS 84 / UTM zone 12N');
     expect(lines).toContain('Point basis: display sample (500 of 2,000 points)');
     expect(lines).toContain('Classes edited in app: yes');
+  });
+
+  it('names the CSV and its sidecar on the toast line after a CSV export', async () => {
+    const notes: string[] = [];
+    const r = deps({ notify: (m) => notes.push(m) });
+    await exportMeasurementsFile('csv', r.deps);
+    expect(notes).toEqual([
+      'Saved scan-measurements.csv and scan-measurements.provenance.txt. If your browser asked to allow multiple downloads, allow it to get the provenance file.',
+    ]);
+    expect(csvSavedMessage('a.csv', 'a.provenance.txt')).toMatch(/^Saved a\.csv and a\.provenance\.txt\. /);
+  });
+
+  it('a GeoJSON export shows no sidecar toast', async () => {
+    const notes: string[] = [];
+    const r = deps({ notify: (m) => notes.push(m) });
+    await exportMeasurementsFile('geojson', r.deps);
+    expect(notes).toEqual([]);
   });
 
   it('a CSV with no active scan states the basis was not recorded', async () => {
