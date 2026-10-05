@@ -8,13 +8,19 @@
  * converter and pin what the user sees: a blocked export with the reason, the
  * two ways forward it names (LAS 1.4, or the opt-in checkbox), the same
  * sentence in the live preview before the click, and a written file once the
- * opt-in is ticked. Node environment via a recording DOM stub.
+ * opt-in is ticked. The same panel path for returns above 7 is pinned at the
+ * end. Node environment via a recording DOM stub.
  */
 
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { PointCloud } from '../src/model/PointCloud';
-import { LEGACY_CLASS_WRAP_OPT_IN } from '../src/convert/types';
-import { legacyClassWrapRefusal, legacyClassWrapWarning } from '../src/convert/legacyClassGuard';
+import { LEGACY_CLASS_WRAP_OPT_IN, LEGACY_RETURN_CLAMP_OPT_IN } from '../src/convert/types';
+import {
+  legacyClassWrapRefusal,
+  legacyClassWrapWarning,
+  legacyReturnClampRefusal,
+  legacyReturnClampWarning,
+} from '../src/convert/legacyClassGuard';
 import {
   installFakeDom,
   classifiedCloud as cloud,
@@ -25,6 +31,7 @@ import {
   exportStatus as status,
   exportNote as note,
   settleTicks,
+  pressExport,
   type FakeEl,
 } from './helpers/exportPanelHarness';
 
@@ -54,17 +61,6 @@ const settle = async (): Promise<void> => {
   await import('../src/convert/legacyClassGuard');
   await settleTicks();
 };
-
-/** Press Export and wait until the run has set its outcome in the status line. */
-async function pressExport(root: FakeEl): Promise<void> {
-  const before = status(root).textContent;
-  root.findByClass('olv-export-btn')[0].fire('click');
-  // The first run imports the real converter, which takes longer than a tick.
-  await vi.waitFor(() => {
-    expect(status(root).textContent).not.toBe(before);
-    expect(root.findByClass('olv-export-btn')[0].textContent).toBe('Export');
-  }, { timeout: 5000 });
-}
 
 describe('ExportPanel — LAS 1.2 with classes above 31', () => {
   it('blocks the export and gives the reason, naming LAS 1.4 and the opt-in', async () => {
@@ -165,6 +161,41 @@ describe('ExportPanel — the opt-in row', () => {
     const root = await panelFor(plain);
     pickFormat(root, 'LAS 1.2');
     expect(checkRow(root, LEGACY_CLASS_WRAP_OPT_IN)!.hidden).toBe(true);
+  });
+});
+
+/** Two points, one of them return 8 of 12. */
+function multiReturn(): PointCloud {
+  return new PointCloud({
+    positions: new Float32Array([0, 0, 0, 1, 1, 1]),
+    returnNumber: Uint8Array.from([8, 1]),
+    returnCount: Uint8Array.from([12, 12]),
+    origin: [0, 0, 0],
+    sourceFormat: 'las',
+    name: 'survey.las',
+  });
+}
+
+describe('ExportPanel — LAS 1.2 with returns above 7', () => {
+  it('blocks the export and shows the opt-in only for LAS 1.2', async () => {
+    const root = await panelFor(multiReturn());
+    expect(checkRow(root, LEGACY_RETURN_CLAMP_OPT_IN)?.hidden).toBe(true);
+    pickFormat(root, 'LAS 1.2');
+    expect(checkRow(root, LEGACY_RETURN_CLAMP_OPT_IN)?.hidden).toBe(false);
+    await pressExport(root);
+    expect(hoisted.downloads).toEqual([]);
+    expect(status(root).textContent).toBe(legacyReturnClampRefusal(2));
+    expect(status(root).className).toContain('is-error');
+  });
+
+  it('writes the file once the opt-in is ticked, with a warning', async () => {
+    const root = await panelFor(multiReturn());
+    pickFormat(root, 'LAS 1.2');
+    setCheckbox(root, LEGACY_RETURN_CLAMP_OPT_IN, true);
+    await pressExport(root);
+    expect(hoisted.downloads.map((d) => d.name)).toEqual(['survey.las']);
+    expect(status(root).textContent).toBe(legacyReturnClampWarning(2));
+    expect(status(root).className).toContain('is-warn');
   });
 });
 

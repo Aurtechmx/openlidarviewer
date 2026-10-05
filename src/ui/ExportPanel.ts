@@ -14,12 +14,14 @@
 import { showBusyScan } from './busyScan';
 import type { ExportHealth } from '../intelligence/scanStory';
 import { renderExportHealthPanel } from './scanStoryViews';
-import { el } from './dom';
+import { el, optInRow } from './dom';
 import { downloadBytes } from '../io/download';
 import { loadConvertEngine, loadFindingsPanel, loadLegacyClassGuard, loadSessionFindings } from '../lazyChunks';
 import {
   CONVERT_FORMATS,
   LEGACY_CLASS_WRAP_OPT_IN,
+  LEGACY_RETURN_CLAMP_HINT,
+  LEGACY_RETURN_CLAMP_OPT_IN,
   type ConvertFormat,
   type CrsMode,
   type ConvertOptions,
@@ -309,6 +311,9 @@ export class ExportPanel {
   private _includeClass = true;
   /** Write LAS 1.2 even when classes above 31 wrap (see `allowLegacyClassWrap`). */
   private _allowClassWrap = false;
+  /** Write LAS 1.2 even when returns above 7 clamp (see `allowLegacyReturnClamp`). */
+  private _allowReturnClamp = false;
+  private readonly _returnRow: HTMLElement;
   /**
    * The LAS 1.2 class-wrap preview, fetched on first use because it names
    * classes from tables kept out of the eager shell. Null until it arrives.
@@ -386,6 +391,7 @@ export class ExportPanel {
       className: 'olv-export-fullres-hint',
       text: 'LAS 1.2 keeps 5 bits of class, so 33 is written as 1 and 64 as 0. Unticked, such a file is refused.',
     }));
+    this._returnRow = optInRow(LEGACY_RETURN_CLAMP_OPT_IN, LEGACY_RETURN_CLAMP_HINT, (on) => { this._allowReturnClamp = on; });
     // The live "what you'll get" line — size, CRS, classification, before any write.
     this._summary = el('p', { className: 'olv-export-summary', text: '' });
     // The note is a sibling, not a tail on the summary line: the neutral
@@ -417,6 +423,7 @@ export class ExportPanel {
       this._fullResRow,
       this._classRow,
       this._wrapRow,
+      this._returnRow,
       this._summary,
       this._summaryNote,
       this._exportBtn,
@@ -654,6 +661,7 @@ export class ExportPanel {
     const legacyClasses =
       info != null && this._format === 'las' && this._includeClass && info.classProvenance !== 'none';
     this._wrapRow.classList.toggle('olv-hidden', !legacyClasses);
+    this._returnRow.classList.toggle('olv-hidden', this._format !== 'las');
     // Snapshot BEFORE `_legacyClassWrap` runs below: a fresh attempt clears
     // this flag as part of starting itself, so reading it afterwards would
     // only ever see that fresh (unset) state, never the failure that made
@@ -1253,6 +1261,7 @@ export class ExportPanel {
     const sourceEpsg = parseEpsg(this._sourceEpsg);
     const includeClass = this._includeClass;
     const allowClassWrap = this._allowClassWrap;
+    const allowReturnClamp = this._allowReturnClamp;
     const gzip = this._gzip;
 
     this._busy = true;
@@ -1332,6 +1341,7 @@ export class ExportPanel {
         resolvedSourceCrs,
         omitClassification: !includeClass,
         allowLegacyClassWrap: allowClassWrap,
+        allowLegacyReturnClamp: allowReturnClamp,
         scopeNote,
         displaySample,
       };

@@ -102,6 +102,13 @@ export interface ConvertOptions {
    * error. LAS 1.4 keeps the full byte and needs no opt-in.
    */
   readonly allowLegacyClassWrap?: boolean;
+  /**
+   * Write LAS 1.2 even when a return number or number of returns is above 7.
+   * Off by default, and such a write is refused: the 3-bit fields clamp, so
+   * return 8 of 12 reads back as 7 of 7. LAS 1.4 holds up to 15 and needs no
+   * opt-in.
+   */
+  readonly allowLegacyReturnClamp?: boolean;
 }
 
 /**
@@ -111,6 +118,12 @@ export interface ConvertOptions {
  * eager shell and the refusal's class tables are not.
  */
 export const LEGACY_CLASS_WRAP_OPT_IN = 'Allow classes above 31 to wrap';
+
+/** The label of the control that sets `allowLegacyReturnClamp`. */
+export const LEGACY_RETURN_CLAMP_OPT_IN = 'Allow returns above 7 to be clamped';
+/** The hint shown under that control. */
+export const LEGACY_RETURN_CLAMP_HINT =
+  'LAS 1.2 keeps 3 bits of return, so return 8 of 12 is written as 7 of 7. Unticked, such a file is refused.';
 
 /** A single produced output file, ready to download. */
 export interface ConvertedFile {
