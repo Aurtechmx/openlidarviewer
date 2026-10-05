@@ -37,7 +37,7 @@ function ctx(o: Partial<CrsInfo>) {
 test('metre CRS: converts and labels "m" / "pts/m²" (byte-identical to before)', () => {
   const { unitConfirmed, rows } = streamingExtentRows(
     header,
-    ctx({ linearUnit: 'metre', linearUnitToMetres: 1 }),
+    ctx({ linearUnit: 'metre', linearUnitToMetres: 1, verticalUnitToMetres: 1 }),
     1_000_000,
   );
   expect(unitConfirmed).toBe(true);
@@ -107,3 +107,10 @@ test('degenerate footprint: emits extents only, no density/spacing', () => {
   const { rows } = streamingExtentRows(flat, ctx({ linearUnit: 'metre', linearUnitToMetres: 1 }), 1000);
   expect(rows.map((r) => r.label)).toEqual(['Width', 'Depth', 'Height']);
 });
+
+test('no declared vertical unit: the height stays in source units and says so', () => {
+  const { rows } = streamingExtentRows(header, ctx({ linearUnit: 'foot', linearUnitToMetres: 0.3048 }), 1_000_000);
+  const byLabel = Object.fromEntries(rows.map((r) => [r.label, r.value]));
+  expect(byLabel.Height).toBe('100.0 source units (vertical unit not declared)');
+});
+

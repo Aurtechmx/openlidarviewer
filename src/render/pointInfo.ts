@@ -139,6 +139,22 @@ export function worldCoordLabels(crs: ResolvedCrs | undefined): WorldCoordLabels
   };
 }
 
+/** A picked point's world X, Y, Z with each axis's own unit, e.g. "−105.1°, 40.2°, 1601.2 m". */
+export function coordTripletText(info: { readonly x: number; readonly y: number; readonly z: number }, labels: WorldCoordLabels): string {
+  return `${info.x}${labels.xUnit}, ${info.y}${labels.yUnit}, ${info.z}${labels.zUnit}`;
+}
+
+/**
+ * The camera distance with its unit. The distance is measured in render units,
+ * which are the source's linear units, so it carries a real unit only on a
+ * projected CRS whose linear unit is known; otherwise it says "render units".
+ */
+export function cameraDistanceText(distance: number, crs: ResolvedCrs | undefined): string {
+  const ctx = spatialContextFrom(crs);
+  const suffix = ctx.kind === 'projected' ? linearAxisSuffix(ctx.linearUnit) : '';
+  return suffix ? `${distance}${suffix}` : `${distance} render units`;
+}
+
 /**
  * The vertical reference a picked point's height is measured from, per the
  * resolved CRS. `local` and `unknown` scans have no georeferenced datum, so

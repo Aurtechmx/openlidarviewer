@@ -245,7 +245,7 @@ import { CatalogPanel, buildCuratedDemoSample } from './ui/CatalogPanel';
 // streaming clouds expose `.crs()` returning the same shape.
 import type { StreamingReportCloud } from './app/streamingScanReport'; import { runStreamingModules, preloadStreamingReport } from './app/streamingReportSeam';
 import { CrsService } from './geo/CrsService';
-import { verticalMetresPerUnit } from './geo/SpatialContext';
+import { verticalMetresPerUnit, volumeUnitCaveat } from './geo/SpatialContext';
 import { prepareEpochFrames, epochUnitMismatchLines } from './app/epochFramePrep';
 // Shared vertical-unit labeller (already eager via terrainAnalysisRunner) —
 // feeds the colorbar legend's elevation unit from the resolved CRS.
@@ -621,10 +621,7 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
       pendingLassoSave = null;
       return;
     }
-    const crsCaveat =
-      crsVerdict.validity === 'safe-explicit-local'
-        ? ' · units assumed metres'
-        : '';
+    const crsCaveat = volumeUnitCaveat(ctx, crsVerdict.validity);
     showLassoToast(
       `${stock?.headline ?? `Volume · net ${(out.result.net * vol).toFixed(2)} m³`} · ` +
         `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat} · ${out.selectionBasis.clause}.${stock?.suffix ?? ''} Estimate from the point cloud, not survey-grade.`,

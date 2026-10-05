@@ -21,7 +21,7 @@
 
 import type { ProfileChartSample } from './types';
 import { formatStationing, formatGradePercent, profileSampleCovered } from './civilProfileStats';
-import { formatElevation, formatLength, formatUnitUnverified, unitToken, type DisplayUnits } from './format';
+import { GEOGRAPHIC_CRS_MEASURE_NOTICE, formatElevation, formatLength, formatUnitUnverified, unitToken, type DisplayUnits } from './format';
 // Height headings come from one vocabulary, where "Elevation" is earned by an
 // orthometric reference and by nothing else. The panel, the station table, the
 // CSV and the sheet all label from here, so no two of them can name the same
@@ -370,6 +370,16 @@ function heightColumnToken(reference: VerticalReference): string {
  * station table renders. `reference` is required, for the same fail-open
  * reason as {@link profileSummaryRows}.
  */
+/**
+ * Why a profile CSV cannot be written, or null when it can. On a geographic CRS
+ * the chainage is in degrees, and a `chainage_m` column would label degrees as
+ * metres, so the export is refused with the same notice the panel shows. The
+ * geographic refusal travels on the measurement's trust reasons.
+ */
+export function profileCsvRefusal(s: { readonly trust?: { readonly reasons: readonly string[] } }): string | null {
+  return s.trust?.reasons.includes(GEOGRAPHIC_CRS_MEASURE_NOTICE) ? GEOGRAPHIC_CRS_MEASURE_NOTICE : null;
+}
+
 export function buildProfileCsv(
   samples: ReadonlyArray<ProfileChartSample>,
   system: DisplayUnits,

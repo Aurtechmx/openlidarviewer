@@ -33,6 +33,7 @@ import {
 // (no pdf-lib), so a static import keeps the panel a leaf module.
 import {
   buildProfileCsv,
+  profileCsvRefusal,
   computeProfileSummary,
   profileStationRows,
   profileSummaryRows,
@@ -851,8 +852,17 @@ export class MeasurePanel {
     return this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric';
   }
 
+  /** Disable a profile CSV button, with the reason as its tooltip, when the export is refused. */
+  private _applyCsvRefusal(button: HTMLButtonElement, s: MeasurementSummary): void {
+    const refusal = profileCsvRefusal(s);
+    if (!refusal) return;
+    button.disabled = true;
+    button.title = refusal;
+  }
+
   private _exportProfileCsv(s: MeasurementSummary): void {
     if (!s.profileChart || s.profileChart.length < 2) return;
+    if (profileCsvRefusal(s)) return;
     const system = this._displayUnits(s);
     const csv = buildProfileCsv(s.profileChart, system, this._verticalReference(s), s.profileCoverageNote);
     triggerDownload(new Blob([csv], { type: 'text/csv' }), `${safeFileName(s.name)}-profile.csv`);
@@ -970,6 +980,7 @@ export class MeasurePanel {
           title: `Export ${s.name} station data as CSV`,
           ariaLabel: `Export profile ${s.name} station data as CSV`,
         });
+        this._applyCsvRefusal(csvBtn, s);
         csvBtn.addEventListener('click', () => {
           csvBtn.blur();
           this._exportProfileCsv(s);
@@ -1755,6 +1766,7 @@ export class MeasurePanel {
           'station, chainage, ground height, corridor point count, grade.',
         ariaLabel: `Export profile ${s.name} station data as CSV`,
       });
+      this._applyCsvRefusal(csvBtn, s);
       csvBtn.addEventListener('click', () => {
         csvBtn.blur();
         this._exportProfileCsv(s);

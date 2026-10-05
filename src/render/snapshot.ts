@@ -17,7 +17,7 @@
  */
 
 import { loadSvgImage } from './snapshotSvg';
-import { classificationText, intensityText, rgbText, type PointInfo } from './pointInfo';
+import { classificationText, coordTripletText, intensityText, rgbText, worldCoordLabels, type PointInfo, type WorldCoordLabels } from './pointInfo';
 import { computeScaleBar, pixelsPerMetreAt } from './scaleBar';
 import { burnInColorbarLayout, type ActiveColorbar } from './activeColorbar';
 import { colorbarStops, niceTicks, formatColorbarValue } from './colorbar';
@@ -96,9 +96,9 @@ export interface SnapshotHost {
   /** Render the inspector marker against the live camera and serialise it. */
   inspectorOverlaySVG(): string;
   /** The inspector's selected point for the info-card bake, or null. */
-  inspectorSelection(): { info: PointInfo; screen: { x: number; y: number } } | null;
+  inspectorSelection(): { info: PointInfo; screen: { x: number; y: number }; labels?: WorldCoordLabels; distanceText?: string } | null;
   /** The most recent probe readout for the bake, or null. */
-  probeReadout(): { info: PointInfo; client: { x: number; y: number } } | null;
+  probeReadout(): { info: PointInfo; client: { x: number; y: number }; labels?: WorldCoordLabels } | null;
   /** The live canvas bounding rect, for translating client→canvas pixels. */
   canvasRect(): { left: number; top: number; width: number; height: number };
   /**
@@ -273,7 +273,7 @@ export async function captureSnapshot(
   // matches the live UI line for line.
   if (plan.wantInspector) {
     const sel = host.inspectorSelection();
-    if (sel) drawInspectorInfoCard(ctx, sel.info, sel.screen);
+    if (sel) drawInspectorInfoCard(ctx, sel.info, sel.screen, sel.labels, sel.distanceText);
   }
   // v0.3.7 final-polish — scale bar overlay. Drawn last so it sits on
   // top of everything else but underneath the inspector / probe cards.
@@ -311,7 +311,7 @@ export async function captureSnapshot(
       const rect = host.canvasRect();
       const sx = (probe.client.x - rect.left) * (out.width / rect.width);
       const sy = (probe.client.y - rect.top) * (out.height / rect.height);
-      drawProbeReadoutCard(ctx, probe.info, { x: sx, y: sy });
+      drawProbeReadoutCard(ctx, probe.info, { x: sx, y: sy }, probe.labels);
     }
   }
   return canvasToBlob(out);
@@ -334,13 +334,16 @@ function drawInspectorInfoCard(
   ctx: CanvasRenderingContext2D,
   info: PointInfo,
   screen: { x: number; y: number },
+  labels: WorldCoordLabels = worldCoordLabels(undefined),
+  distanceText = `${info.distance} render units`,
 ): void {
-  // Build the rows the live card builds (see InspectTool._fillCard).
+  // Build the rows the live card builds (see InspectTool._fillCard), with the
+  // same per-axis units as its World rows.
   const rows: Array<[string, string]> = [
-    ['X', `${info.x} m`],
-    ['Y', `${info.y} m`],
-    ['Z', `${info.z} m`],
-    ['Distance', `${info.distance} m`],
+    ['X', `${info.x}${labels.xUnit}`],
+    ['Y', `${info.y}${labels.yUnit}`],
+    ['Z', `${info.z}${labels.zUnit}`],
+    ['Distance', distanceText],
     ['Intensity', intensityText(info)],
     ['Classification', classificationText(info)],
     ['RGB', rgbText(info)],
@@ -436,8 +439,9 @@ function drawProbeReadoutCard(
   ctx: CanvasRenderingContext2D,
   info: PointInfo,
   screen: { x: number; y: number },
+  labels: WorldCoordLabels = worldCoordLabels(undefined),
 ): void {
-  const coords = `${info.x}, ${info.y}, ${info.z} m`;
+  const coords = coordTripletText(info, labels);
   const attrParts: string[] = [];
   if (info.classification !== null) attrParts.push(classificationText(info));
   if (info.intensity !== null) attrParts.push(`Intensity ${info.intensity}`);

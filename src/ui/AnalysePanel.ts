@@ -172,7 +172,7 @@ import {
   type ScanTypeControl,
   type ScanTypeDisabledReasons,
 } from './scanTypeControl';
-import { buildScanFitness, type FitnessInputs } from '../terrain/quality/scanFitness';
+import { buildScanFitness, fitnessVerticalRmse, type FitnessInputs } from '../terrain/quality/scanFitness';
 import { fitnessIcon, fitnessToneGlyph } from './fitnessIcons';
 
 /** Callbacks the host (main.ts) provides. */
@@ -3144,7 +3144,10 @@ export class AnalysePanel {
       measuredFraction: covered > 0 ? t.measured / covered : null,
       groundDensityPerM2: Number.isFinite(r.cellMetrics.meanDensity) ? r.cellMetrics.meanDensity : null,
       medianGroundDensityPerM2: Number.isFinite(r.cellMetrics.medianDensity) ? r.cellMetrics.medianDensity : null,
-      verticalRmse: Number.isFinite(r.validation.rmse) ? r.validation.rmse : null,
+      // Withheld when the vertical scale did not resolve: the residuals are then
+      // in source Z units, and the 'm' below would mislabel them.
+      verticalRmse: fitnessVerticalRmse(r),
+      verticalScaleResolved: r.verticalScaleResolved,
       notSurveyGrade: true,
       unit: 'm',
       unitToMetres: 1,

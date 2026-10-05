@@ -249,7 +249,8 @@ describe('scanReport module', () => {
       // 2 ft → 0.6096 m → "0.6 m"; 1 ft → 0.3048 m → "0.3 m".
       expect(parseFloat(rowByLabel(r, 'Width').value)).toBeCloseTo(0.6, 1);
       expect(parseFloat(rowByLabel(r, 'Depth').value)).toBeCloseTo(0.6, 1);
-      expect(parseFloat(rowByLabel(r, 'Height').value)).toBeCloseTo(0.3, 1);
+      // No vertical unit declared: the height stays in source units, labelled so.
+      expect(rowByLabel(r, 'Height').value).toBe('1.0 source units (vertical unit not declared)');
     });
 
     test('density is pts per true m² (not pts/ft² mislabelled)', () => {

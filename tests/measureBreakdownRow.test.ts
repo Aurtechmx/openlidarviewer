@@ -65,8 +65,10 @@ describe('breakdownParts — a distance', () => {
     // The run and the rise are still shown: they are exact under a compound CRS.
     expect(r!.text).toContain('Run 3.00m');
     expect(r!.text).toContain('Rise 1.22m');
-    expect(r!.title).toMatch(/run and the rise are exact/i);
-    expect(r!.title).toMatch(/not reliable distances/i);
+    // The slant and the grade come from the converted run and rise, so the
+    // note no longer calls them unreliable.
+    expect(r!.title).toMatch(/converted to metres before the slant and the grade/i);
+    expect(r!.title).not.toMatch(/not reliable/i);
   });
 
   it('does not warn about mixed units when there are none', () => {

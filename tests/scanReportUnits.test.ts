@@ -57,8 +57,17 @@ describe('scanReportUnitBasis — fail-closed unit gate (routed via spatialConte
     const b = basisFor(crsWith('foot', 0.3048));
     expect(b.unitKnown).toBe(true);
     expect(b.mpu).toBeCloseTo(0.3048, 6);
-    expect(b.vmpu).toBeCloseTo(0.3048, 6); // vertical falls back to the horizontal factor
+    // No vertical unit declared: the height is not converted with the
+    // horizontal factor and its label says the vertical unit is undeclared.
+    expect(b.vmpu).toBe(1);
     expect(b.lengthUnit).toBe(' m');
+    expect(b.heightUnit).toBe(' source units (vertical unit not declared)');
+  });
+
+  test('foot CRS with a declared vertical unit converts the height', () => {
+    const b = basisFor({ ...crsWith('foot', 0.3048), verticalUnitToMetres: 0.3048 } as CrsInfo);
+    expect(b.vmpu).toBeCloseTo(0.3048, 6);
+    expect(b.heightUnit).toBe(' m');
   });
 
   test('unknown-unit CRS: fails closed to source units despite the placeholder factor', () => {

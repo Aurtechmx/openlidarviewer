@@ -47,6 +47,12 @@ export interface ScanReportUnitBasis {
   readonly vmpu: number;
   /** Length suffix: ' m' when confirmed, ' (source units)' otherwise. */
   readonly lengthUnit: string;
+  /**
+   * Height suffix. ' m' only when both the horizontal unit and a vertical unit
+   * are declared; with no declared vertical unit the height stays in source
+   * units and says so, rather than borrowing the horizontal unit.
+   */
+  readonly heightUnit: string;
   /** Areal-density suffix: ' pts/m²' when confirmed, ' pts/unit²' otherwise. */
   readonly densityUnit: string;
 }
@@ -76,12 +82,14 @@ export interface ScanReportUnitBasis {
 export function scanReportUnitBasis(ctx: SpatialContext): ScanReportUnitBasis {
   const unitKnown = ctx.linearUnitKnown;
   const mpu = unitKnown ? ctx.linearUnitToMetres : 1;
-  const vmpu = unitKnown ? (ctx.verticalUnitToMetres ?? mpu) : 1;
+  const verticalDeclared = ctx.verticalUnitToMetres !== undefined;
+  const vmpu = unitKnown && verticalDeclared ? ctx.verticalUnitToMetres! : 1;
   return {
     unitKnown,
     mpu,
     vmpu,
     lengthUnit: unitKnown ? ' m' : ' (source units)',
+    heightUnit: !unitKnown ? ' (source units)' : verticalDeclared ? ' m' : ' source units (vertical unit not declared)',
     densityUnit: unitKnown ? ' pts/m²' : ' pts/unit²',
   };
 }
@@ -243,7 +251,7 @@ export const scanReport: AnalysisModule = {
     rows.push(
       withScope(rowInfo('Width', `${width.toFixed(1)}${basis.lengthUnit}`), scope),
       withScope(rowInfo('Depth', `${depth.toFixed(1)}${basis.lengthUnit}`), scope),
-      withScope(rowInfo('Height', `${height.toFixed(1)}${basis.lengthUnit}${hasNoise ? ' (includes noise classes 7 and 18)' : ''}`), scope),
+      withScope(rowInfo('Height', `${height.toFixed(1)}${basis.heightUnit}${hasNoise ? ' (includes noise classes 7 and 18)' : ''}`), scope),
     );
 
     const footprintArea = width * depth;

@@ -205,7 +205,7 @@ export interface Slope {
  * ±Infinity matching the rise's sign (v0.4.3 audit: the old unsigned
  * `Infinity` reported a straight-DOWN pair as an infinite CLIMB).
  */
-function gradePercentOf(rise: number, run: number): number {
+export function gradePercentOf(rise: number, run: number): number {
   if (run >= EPSILON) return (100 * rise) / run;
   if (rise === 0) return 0;
   return rise > 0 ? Infinity : -Infinity;

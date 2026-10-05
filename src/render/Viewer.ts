@@ -1220,7 +1220,7 @@ export class Viewer {
     this._annotate.setMeasurementSource(() =>
       this._measure.getMeasurements().map((m) => ({ id: m.id, name: m.name })),
     );
-    this._probe = new LiveProbe();
+    this._probe = new LiveProbe(() => this._inspect.coordinateCrs());
 
     // ── leak-free listener wiring. Every listener is
     //    stored as a bound reference and removed in `dispose()`, so a
