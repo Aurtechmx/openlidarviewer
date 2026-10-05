@@ -186,13 +186,17 @@ describe('the audit this policy records', () => {
     // (analysis/scanReport.ts) leaves Withheld points out of its density
     // count; see tests/scanReportWithheld.test.ts. The polygon Volume tool's
     // buffer assembly (render/measure/volume.ts) routes Withheld points out of
-    // its cut/fill; see tests/polygonVolumeWithheld.test.ts. Compare
+    // its cut/fill; see tests/polygonVolumeWithheld.test.ts. Its buffer
+    // gather (render/measure/polygonVolumeSample.ts, gatherVolumeBuffers)
+    // carries each source's flags channel to that assembly unmodified and
+    // tests no bit of its own. Compare
     // elevation filters each epoch (terrain/change/compareEpochs.ts); see
     // tests/withheldChangeFeatures.test.ts.
     const reading = SCIENTIFIC_DIRS.flatMap(filesReadingFlags);
     expect(reading.sort()).toEqual([
       'analysis/scanReport.ts',
       'render/measure/lassoVolumeCompute.ts',
+      'render/measure/polygonVolumeSample.ts',
       'render/measure/profileSampler.ts',
       'render/measure/profileSectionBuilder.ts',
       'render/measure/profileSectionExtract.ts',
