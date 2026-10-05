@@ -284,15 +284,16 @@ value per DTM cell, at a local (0, 0) origin unless the caller supplies a
 world origin. When the caller supplies a world origin and the DTM's raster frame (its
 `originH1`/`originH2` corner offset and cell size, in source units), the
 lower-left corner is the world origin plus that offset and the rasters use
-the source cell size. Without that frame, an anisotropic grid's rasters are
-written at the X cell size in metres, since the ASCII Grid format has one
+the source cell size. Without both, the rasters sit at a local (0, 0)
+corner in metres, and an anisotropic grid's rasters are written at the X cell size, since the ASCII Grid format has one
 cell-size field, and the README states the true per-axis sizes. A sinks-and-depressions CSV lists the depression
 inventory, largest first. A downstream path and a queried catchment are
 written only when the caller supplies them: the path ships as GeoJSON with
 one vertex per cell centre, marked with a `coordinateFrame` field that reads
-`scan-crs` with a world origin and a resolved CRS, `scan-source-coordinates`
-with a world origin and no CRS, and `local-planar-metres` with no world
-origin (the same names the Terrain Access export uses), since an unmarked GeoJSON file implies WGS84
+`scan-crs` when the export is placed and the CRS name resolved,
+`scan-source-coordinates` when it is placed and no CRS name resolved, and
+`local-planar-metres` when it is not placed (no world origin or no raster
+frame) (the same names the Terrain Access export uses), since an unmarked GeoJSON file implies WGS84
 longitude and latitude by the format's own default; the catchment ships as a
 raster mask rather than a traced polygon, since no boundary-tracing
 algorithm is implemented.

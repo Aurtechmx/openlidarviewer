@@ -148,14 +148,15 @@ const NO_DATA = -9999;
 
 /**
  * The path GeoJSON's `coordinateFrame`, in the names the Terrain Access
- * export uses: `scan-crs` with a world origin and a resolved CRS,
- * `scan-source-coordinates` with a world origin and no CRS, and
- * `local-planar-metres` with no world origin.
+ * export uses: `scan-crs` when placed with a resolved CRS name,
+ * `scan-source-coordinates` when placed with no CRS name, and
+ * `local-planar-metres` when not placed (no world origin or no raster frame).
+ * The CRS name is the resolved-frame label; the WKT only feeds the .prj.
  */
 const PATH_FRAME_TEXT: Readonly<Record<string, string>> = {
   'scan-crs': 'planar coordinates in the scan\'s resolved CRS (the CRS line above).',
   'scan-source-coordinates': 'the scan\'s own source coordinates; no CRS resolved.',
-  'local-planar-metres': 'planar metres from the grid\'s own (0, 0) corner; no world origin.',
+  'local-planar-metres': 'planar metres from the grid\'s own (0, 0) corner; not placed in the scan frame.',
 };
 
 function pathFrameName(worldOrigin: { readonly x: number; readonly y: number } | null, crsResolved: boolean): string {
@@ -351,7 +352,7 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     'Grid',
     `  Size           ${grid.cols} x ${grid.rows} cells`,
     `  Cell size      ${fig(grid.cellMetresX, 3)} m (east-west) x ${fig(grid.cellMetresY, 3)} m (north-south)`,
-    ...(opts.rasterCellSize != null ? [`  Raster cell size   ${fig(opts.rasterCellSize, 6)} (CRS units, as written in the .asc files)`] : []),
+    ...(opts.rasterCellSize != null ? [`  Raster cell size   ${fig(opts.rasterCellSize, 6)} (${opts.crsName != null ? 'CRS' : 'source'} units, as written in the .asc files)`] : []),
     `  NODATA value   ${NO_DATA}`,
     `  Direction legend   ${DIRECTION_LEGEND.map((d, i) => `${i}=${d}`).join(', ')}, -1 = sink/outlet/no data`,
     ...(opts.rasterCellSize == null && grid.cellMetresX !== grid.cellMetresY ? [
@@ -429,12 +430,15 @@ export function buildFlowPulsePackage(
   const grid = result.grid;
   // The raster frame is in source units, so it applies only with a world
   // origin; without one the export stays in local planar metres from (0, 0).
-  const frame = options.worldOrigin ? options.gridFrame ?? null : null;
+  // The export is placed only with both a world origin and the raster frame;
+  // with either missing it stays in local planar metres from (0, 0).
+  const placedOrigin = options.worldOrigin && options.gridFrame ? options.worldOrigin : null;
+  const frame = placedOrigin ? options.gridFrame ?? null : null;
   // The true lower-left corner: the scan's world origin plus the DTM's own
   // raster offset. H1 is east and H2 north for either scene up-axis; a Y-up
   // scene only negates north when it places the overlay (flowOverlayFrame).
-  const ox = (options.worldOrigin?.x ?? 0) + (frame?.originH1 ?? 0);
-  const oy = (options.worldOrigin?.y ?? 0) + (frame?.originH2 ?? 0);
+  const ox = (placedOrigin?.x ?? 0) + (frame?.originH1 ?? 0);
+  const oy = (placedOrigin?.y ?? 0) + (frame?.originH2 ?? 0);
   const rasterCell = frame?.cellSize ?? grid.cellMetresX;
   const pathCellX = frame?.cellSize ?? grid.cellMetresX;
   const pathCellY = frame?.cellSize ?? grid.cellMetresY;
@@ -482,7 +486,7 @@ export function buildFlowPulsePackage(
     });
     const geojson = {
       type: 'FeatureCollection',
-      coordinateFrame: pathFrameName(options.worldOrigin ?? null, !!options.wkt || options.crsName != null),
+      coordinateFrame: pathFrameName(placedOrigin, options.crsName != null),
       features: [{
         type: 'Feature',
         properties: { cells: options.path.cells.length },
@@ -553,7 +557,7 @@ export function buildFlowPulsePackage(
     crsName: options.crsName ?? null, hasWkt: !!options.wkt,
     verticalUnitLabel: options.verticalUnitLabel ?? 'units', hasPath, hasCatchment, sourceInterpretation,
     elevationOrigin, terrainCaveat: options.terrainCaveat ?? null, rasterCellSize: frame?.cellSize ?? null,
-    pathFrame: pathFrameName(options.worldOrigin ?? null, !!options.wkt || options.crsName != null),
+    pathFrame: pathFrameName(placedOrigin, options.crsName != null),
     sourceSha256Text: options.sourceSha256 ?? (options.digests ? sourceSha256Text(options.digests) : (result.record.source.sourceDigest ?? SOURCE_NOT_SUPPLIED_NOTE)),
   });
   entries.push({

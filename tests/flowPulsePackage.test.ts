@@ -88,6 +88,7 @@ describe('the package carries every required file', () => {
     const zip = buildFlowPulsePackage(runOf(), {
       basename: 'flow',
       worldOrigin: { x: 400123.5, y: 3600456.25 },
+      gridFrame: { originH1: 0, originH2: 0, cellSize: 1 },
     });
     const asc = textOf(zip, 'flow-accumulation.asc');
     expect(asc).toMatch(/xllcorner 400123\.5/);
@@ -355,7 +356,7 @@ describe('the path frame uses the Terrain Access names', () => {
   const gridFrame = { originH1: -120, originH2: -80, cellSize: 1 };
 
   it('scan-crs with a world origin and a resolved CRS', () => {
-    const zip = buildFlowPulsePackage(runOf(), { basename: 'flow', path, gridFrame, worldOrigin: { x: 1, y: 2 }, wkt: 'PROJCS["x"]' });
+    const zip = buildFlowPulsePackage(runOf(), { basename: 'flow', path, gridFrame, worldOrigin: { x: 1, y: 2 }, crsName: 'EPSG:6342', wkt: 'PROJCS["x"]' });
     expect(frameOf(zip)).toBe('scan-crs');
     expect(textOf(zip, 'flow-README.txt')).toContain('coordinateFrame scan-crs');
   });
@@ -370,5 +371,33 @@ describe('the path frame uses the Terrain Access names', () => {
     expect(frameOf(zip)).toBe('local-planar-metres');
     const g = jsonOf<{ features: { geometry: { coordinates: number[][] } }[] }>(zip, 'flow-flow-path.geojson');
     expect(g.features[0]!.geometry.coordinates[0]).toEqual([0.5, 0.5]);
+  });
+});
+
+describe('labels never claim more placement than the export applied', () => {
+  const path = { cells: Int32Array.from([0]) };
+  const frameOf = (zip: Uint8Array) => jsonOf<{ coordinateFrame: string }>(zip, 'flow-flow-path.geojson').coordinateFrame;
+
+  it('a world origin without the raster frame stays local-planar-metres at (0, 0)', () => {
+    const zip = buildFlowPulsePackage(runOf(), { basename: 'flow', path, worldOrigin: { x: 500000, y: 4000000 }, crsName: 'EPSG:6342' });
+    expect(frameOf(zip)).toBe('local-planar-metres');
+    expect(textOf(zip, 'flow-accumulation.asc')).toMatch(/xllcorner 0\b/);
+    expect(textOf(zip, 'flow-accumulation.asc')).toMatch(/yllcorner 0\b/);
+  });
+
+  it('a WKT without a resolved CRS name reads scan-source-coordinates, as Terrain Access does', () => {
+    const zip = buildFlowPulsePackage(runOf(), {
+      basename: 'flow', path, worldOrigin: { x: 1, y: 2 }, wkt: 'PROJCS["x"]',
+      gridFrame: { originH1: 0, originH2: 0, cellSize: 1 },
+    });
+    expect(frameOf(zip)).toBe('scan-source-coordinates');
+  });
+
+  it('states the raster cell size in source units when no CRS resolved, CRS units when one did', () => {
+    const gridFrame = { originH1: 0, originH2: 0, cellSize: 1 };
+    const bare = textOf(buildFlowPulsePackage(runOf(), { basename: 'flow', worldOrigin: { x: 1, y: 2 }, gridFrame }), 'flow-README.txt');
+    expect(bare).toContain('(source units, as written in the .asc files)');
+    const crs = textOf(buildFlowPulsePackage(runOf(), { basename: 'flow', worldOrigin: { x: 1, y: 2 }, gridFrame, crsName: 'EPSG:6342' }), 'flow-README.txt');
+    expect(crs).toContain('(CRS units, as written in the .asc files)');
   });
 });

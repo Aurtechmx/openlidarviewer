@@ -99,7 +99,10 @@ describe('a fresh, non-stale result', () => {
   it('forwards the georef to the package, writing the real corner and a .prj', () => {
     const out = buildFlowPulseExport(
       runOf(), false, null, null, 'site', 'layer-a', buildFlowPulsePackage,
-      { worldOrigin: { x: 400123.5, y: 3600456.25 }, crsName: 'EPSG:6342', wkt: 'PROJCS["fixture",...]' },
+      {
+        worldOrigin: { x: 400123.5, y: 3600456.25 }, crsName: 'EPSG:6342', wkt: 'PROJCS["fixture",...]',
+        gridFrame: { originH1: 0, originH2: 0, cellSize: 1 },
+      },
     );
     expect(out.ok).toBe(true);
     if (!out.ok) return;
