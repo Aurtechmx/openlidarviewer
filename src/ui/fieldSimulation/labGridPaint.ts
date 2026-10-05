@@ -111,26 +111,35 @@ export function letteredRing(
 }
 
 /**
- * Run `frame(fraction)` from 0 to 1 over `ms`, or once at 1 when motion is
- * reduced or there is no animation clock. Returns a cancel function.
+ * Ease-out cubic on k in [0, 1]. Exactly 0 at or below 0 and exactly 1 at or
+ * above 1, so the end of a draw-in is complete on every engine.
  */
-export function drawIn(ms: number, reduced: boolean, frame: (fraction: number) => void): () => void {
-  if (reduced || typeof requestAnimationFrame !== 'function') {
+export function easeOutCubic(k: number): number {
+  if (!(k > 0)) return 0;
+  if (k >= 1) return 1;
+  return 1 - (1 - k) ** 3;
+}
+
+/**
+ * Run `frame(fraction)` from 0 to 1 over `ms`, or once at 1 when motion is
+ * reduced or there is no animation clock. Each frame's fraction is
+ * `easeOutCubic(elapsed / ms)`; the frame where elapsed reaches `ms` reports
+ * exactly 1 and is the last. `clock` defaults to `performance.now` (the
+ * timebase rAF timestamps use). Returns a cancel function.
+ */
+export function drawIn(
+  ms: number, reduced: boolean, frame: (fraction: number) => void, clock: () => number = () => performance.now(),
+): () => void {
+  if (reduced || typeof requestAnimationFrame !== 'function' || !(ms > 0)) {
     frame(1);
     return () => {};
   }
   let raf = 0;
-  const t0 = performance.now();
+  const t0 = clock();
   const tick = (now: number): void => {
-    const elapsed = now - t0;
-    if (elapsed >= ms) {
-      // Exactly 1 at the end, so a finished route is complete on every engine.
-      frame(1);
-      return;
-    }
-    const k = Math.max(0, elapsed / ms);
-    frame(Math.min(1, 1 - (1 - k) ** 3));
-    raf = requestAnimationFrame(tick);
+    const k = (now - t0) / ms;
+    frame(easeOutCubic(k));
+    if (k < 1) raf = requestAnimationFrame(tick);
   };
   raf = requestAnimationFrame(tick);
   return () => cancelAnimationFrame(raf);

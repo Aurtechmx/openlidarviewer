@@ -64,18 +64,46 @@ describe('reduced motion', () => {
     expect(raf).not.toHaveBeenCalled();
   });
 
-  it('animates from the start towards 1 otherwise', () => {
+  it('animates from the start towards 1 otherwise, ending at exactly 1 once the duration has passed', () => {
     const queue: FrameRequestCallback[] = [];
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { queue.push(cb); return queue.length; });
     vi.stubGlobal('cancelAnimationFrame', () => {});
     const frames: number[] = [];
-    const t0 = performance.now();
-    paint.drawIn(600, false, (f) => frames.push(f));
-    queue.shift()!(t0 + 300);
-    queue.shift()!(t0 + 600);
-    expect(frames[0]).toBeGreaterThan(0);
-    expect(frames[0]).toBeLessThan(1);
+    // A fixed clock: drawIn's start time is exactly 1000, so frame timestamps are exact.
+    paint.drawIn(600, false, (f) => frames.push(f), () => 1000);
+    let now = 1000;
+    // Step 100 ms per frame until drawIn stops asking for frames; it must stop.
+    for (let guard = 0; queue.length > 0 && guard < 20; guard++) { now += 100; queue.shift()!(now); }
+    expect(queue).toHaveLength(0);
+    expect(frames).toHaveLength(6);
+    expect(frames[2]).toBeCloseTo(paint.easeOutCubic(0.5), 12);
+    for (let i = 1; i < frames.length; i++) expect(frames[i]!).toBeGreaterThan(frames[i - 1]!);
     expect(frames.at(-1)).toBe(1);
+  });
+
+  it('ends at exactly 1 when the last frame overshoots the duration', () => {
+    const queue: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => { queue.push(cb); return queue.length; });
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    const frames: number[] = [];
+    paint.drawIn(600, false, (f) => frames.push(f), () => 1000);
+    let now = 1000;
+    // 250 ms steps reach 750 ms elapsed, so the last frame is past the duration.
+    for (let guard = 0; queue.length > 0 && guard < 20; guard++) { now += 250; queue.shift()!(now); }
+    expect(queue).toHaveLength(0);
+    expect(frames).toHaveLength(3);
+    expect(frames.at(-1)).toBe(1);
+  });
+
+  it('eases to exactly 0 and 1 at and beyond the ends', () => {
+    expect(paint.easeOutCubic(0)).toBe(0);
+    expect(paint.easeOutCubic(-0.2)).toBe(0);
+    expect(paint.easeOutCubic(Number.NaN)).toBe(0);
+    expect(paint.easeOutCubic(1)).toBe(1);
+    expect(paint.easeOutCubic(1 - Number.EPSILON)).toBeLessThanOrEqual(1);
+    expect(paint.easeOutCubic(1.0000001)).toBe(1);
+    expect(paint.easeOutCubic(1.5)).toBe(1);
+    expect(paint.easeOutCubic(0.5)).toBeCloseTo(0.875, 12);
   });
 
   it('reads the media query, and treats a missing matchMedia as full motion', () => {
