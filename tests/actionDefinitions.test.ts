@@ -192,6 +192,7 @@ interface Harness {
   resetNavigation: ReturnType<typeof vi.fn>;
   togglePlanView: ReturnType<typeof vi.fn>;
   notePlanViewPreset: ReturnType<typeof vi.fn>;
+  toggleNavigationPanel: ReturnType<typeof vi.fn>;
   run: (id: string) => void;
   find: (id: string) => Action;
 }
@@ -230,6 +231,7 @@ function harness(opts: { getViewer?: () => FakeViewer } = {}): Harness {
     resetNavigation: vi.fn(),
     togglePlanView: vi.fn(),
     notePlanViewPreset: vi.fn(),
+    toggleNavigationPanel: vi.fn(),
   };
   const self = h as Harness;
 
@@ -281,6 +283,7 @@ function harness(opts: { getViewer?: () => FakeViewer } = {}): Harness {
     planView: {
       togglePlanView: self.togglePlanView,
       notePlanViewPreset: self.notePlanViewPreset,
+      toggleNavigationPanel: self.toggleNavigationPanel,
     },
   };
 
@@ -330,7 +333,7 @@ describe('buildActionRegistry — registry shape', () => {
     // Matched by shape rather than listed, so adding a view does not have to
     // be remembered here.
     const notAPreset = (id: string): boolean =>
-      id === 'camera.frame-all' || id === 'camera.plan-view' ||
+      id === 'camera.frame-all' || id === 'camera.plan-view' || id === 'camera.navigation-panel' ||
       id === 'camera.orthographic' || id.startsWith('camera.view-');
     const cameras = actions.filter((a) => a.id.startsWith('camera.') && !notAPreset(a.id));
     expect(cameras.map((a) => a.id)).toEqual(CAMERA_PRESET_ORDER.map((n) => `camera.${n}`));
@@ -340,6 +343,13 @@ describe('buildActionRegistry — registry shape', () => {
     const h = harness();
     h.run('camera.plan-view');
     expect(h.togglePlanView).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers Show navigation panel from the palette, on the same toggle as the bar button', () => {
+    const h = harness();
+    expect(h.find('camera.navigation-panel').title).toBe('Show navigation panel');
+    h.run('camera.navigation-panel');
+    expect(h.toggleNavigationPanel).toHaveBeenCalledTimes(1);
   });
 
   it('tells plan mode which pose a palette preset aimed at', () => {
@@ -847,7 +857,7 @@ describe('buildActionRegistry — one name per action (CE-NAME-01)', () => {
     const { ACTION_TITLES, SURFACE_DESCRIPTORS } = await import('../src/ui/actionDescriptors');
     const { actions } = harness();
     const titled = actions.filter((a) => a.id in ACTION_TITLES);
-    expect(titled.length).toBe(9);
+    expect(titled.length).toBe(10);
     for (const a of titled) expect(a.title, a.id).toBe(ACTION_TITLES[a.id as keyof typeof ACTION_TITLES]);
     // A control-only descriptor never shadows a palette action.
     for (const d of SURFACE_DESCRIPTORS) expect(actions.some((a) => a.id === d.id), d.id).toBe(false);

@@ -1,6 +1,7 @@
 import { DisposableGroup } from '../disposableGroup';
 import { el } from './dom';
 import { storageGet, storageSet } from './safeStorage';
+import { NAVIGATION_PANEL } from './actionNames';
 import type { NavMode } from '../render/NavController';
 import {
   CAMERA_PRESET_KEY,
@@ -149,7 +150,8 @@ function hasStoredHelpPinned(): boolean {
 function readStoredHelpPinned(): boolean {
   const stored = storageGet(HELP_PINNED_KEY);
   // Closed until the user opens it: on first open the panel sat over the
-  // middle of the scan. H, the dock's Help button and the palette open it.
+  // middle of the scan. H, the panel button beside the mode triangle and the
+  // palette's "Show navigation panel" open it.
   return stored === '1';
 }
 
@@ -223,6 +225,8 @@ export class NavBar {
   private readonly _speed: HTMLElement;
   /** The mode triangle's row: the part of the bar that stays up over the scan. */
   private readonly _navRow: HTMLElement;
+  /** The button beside the mode triangle that shows or hides the panel. */
+  private readonly _panelToggle: HTMLButtonElement;
   private readonly _modeButtons = new Map<NavMode, HTMLButtonElement>();
   /** The Pan (hand tool) pad — hidden when `?handPan=off` disables it. */
   private readonly _panBtn!: HTMLButtonElement;
@@ -594,7 +598,18 @@ export class NavBar {
       ]),
     ]);
 
-    this._navRow = el('div', { className: 'olv-nav-row' }, [switcher, this._speed]);
+    this._panelToggle = el('button', {
+      className: 'olv-cam-chip olv-nav-panel-toggle',
+      type: 'button',
+      text: 'Navigation',
+      title: `${NAVIGATION_PANEL} (H)`,
+      ariaLabel: NAVIGATION_PANEL,
+    });
+    this._panelToggle.addEventListener('click', () => {
+      this._panelToggle.blur();
+      this.toggleNavigationPanel();
+    });
+    this._navRow = el('div', { className: 'olv-nav-row' }, [switcher, this._panelToggle, this._speed]);
     this.element = el('div', { className: 'olv-navbar' }, [this._hud, this._navRow]);
 
     this.prompt = el('div', { className: 'olv-nav-prompt' }, [
@@ -718,6 +733,21 @@ export class NavBar {
    * dismissed panel back. So H never hides the Camera and Views controls, which
    * is what it used to do when it toggled the panel outright.
    */
+  /**
+   * Show the panel if it is closed, close it if it is open. The panel button
+   * and the palette action call this; H keeps its own cycle through the
+   * legend. Either way the choice is stored, as `dismissPanel` stores it.
+   */
+  toggleNavigationPanel(): void {
+    if (this._helpPinned) {
+      this.dismissPanel();
+      return;
+    }
+    this._helpPinned = true;
+    writeStoredHelpPinned(true);
+    this._render();
+  }
+
   dismissPanel(): void {
     this._helpPinned = false;
     writeStoredHelpPinned(false);
@@ -817,15 +847,16 @@ export class NavBar {
     // v0.3.10: HUD visibility now follows `_helpPinned`. The flashHelp
     // call on scan load primes it true so the legend + camera presets
     // are visible by default; pressing H or clicking the X in the
-    // title row toggles it off. The Help button in the dock and the
-    // command palette surface H as the re-open shortcut.
+    // title row toggles it off. H, the panel button beside the mode
+    // triangle and the command palette reopen it.
     // The close control dismisses the whole panel. That was not safe while the
     // Camera and Views rows lived only here: dismissal is persisted, so hiding
     // them took the only route to orthographic projection and the standard
     // views away for good, which is what `navViewControlsPersist.test.ts`
     // caught. They are in the command palette now, so the panel can close the
-    // way a panel is expected to, and H or the dock's Help button reopens it.
+    // way a panel is expected to, and H or the panel button reopens it.
     this._hud.classList.toggle('olv-hidden', !this._helpPinned);
+    this._panelToggle.setAttribute('aria-pressed', this._helpPinned ? 'true' : 'false');
     // `.olv-nav-hud-collapsed` has been styled since v0.3.10 but nothing ever
     // added it, so the legend was always expanded over the scan. It follows the
     // persisted legend state now.

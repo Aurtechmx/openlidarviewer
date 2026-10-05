@@ -8,11 +8,12 @@
  */
 
 import type { ActionDescriptor } from './actionRegistry';
-import { FRAME_ALL, ORTHOGRAPHIC, PLAN_VIEW, MEASURE, INSPECT, PROBE, ANNOTATE, CLIP_BOX, SAVE_SNAPSHOT, COPY_VIEW_LINK, ANALYSE, COMMANDS, HELP, OPEN_SCAN, CLOSE_SCAN, EXPORT_SESSION } from './actionNames';
+import { FRAME_ALL, ORTHOGRAPHIC, PLAN_VIEW, NAVIGATION_PANEL, MEASURE, INSPECT, PROBE, ANNOTATE, CLIP_BOX, SAVE_SNAPSHOT, COPY_VIEW_LINK, ANALYSE, COMMANDS, HELP, OPEN_SCAN, CLOSE_SCAN, EXPORT_SESSION } from './actionNames';
 export const ACTION_TITLES = {
   'camera.frame-all': FRAME_ALL,
   'camera.orthographic': ORTHOGRAPHIC,
   'camera.plan-view': PLAN_VIEW,
+  'camera.navigation-panel': NAVIGATION_PANEL,
   'tool.measure': MEASURE,
   'tool.inspect': INSPECT,
   'tool.probe': PROBE,

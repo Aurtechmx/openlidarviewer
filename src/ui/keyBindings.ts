@@ -603,7 +603,7 @@ export function buildViewerKeyBindings(
     //    Present so a future collision lint knows they are taken. ──────────
     {
       id: 'reserved-nav-controller',
-      help: 'Navigation: 1 to 4 pick the mode, R frames the scan, F focuses the centre, H hides the HUD, G toggles the hand tool, WASD and the arrows move.',
+      help: 'Navigation: 1 to 4 pick the mode, R frames the scan, F focuses the centre, H shows or hides the navigation panel, G toggles the hand tool, WASD and the arrows move.',
       // Real `key` values (not `e.code` strings), so the collision lint reads
       // them as occupied slots and can catch a dispatched binding placed on a
       // nav key in a shared scope. Both cases are listed because the lint

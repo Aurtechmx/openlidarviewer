@@ -100,6 +100,20 @@ describe('dismissing the navigation legend keeps the view controls', () => {
     expect(root.byClass('olv-cam-presets-row').length).toBeGreaterThanOrEqual(2);
   });
 
+  it('the Navigation button beside the mode triangle shows and hides the panel', async () => {
+    const { root, bar } = await navbar();
+    const hud = root.byClass('olv-nav-hud')[0]!;
+    const toggle = root.byClass('olv-nav-panel-toggle')[0]!;
+    expect(toggle.getAttribute('aria-label')).toBe('Show navigation panel');
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    bar.toggleNavigationPanel();
+    expect(hud.classList.contains('olv-hidden')).toBe(false);
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    bar.toggleNavigationPanel();
+    expect(hud.classList.contains('olv-hidden')).toBe(true);
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+  });
+
   it('leaves the standard views reachable from the command palette', async () => {
     // The reason the panel may close at all. If this ever fails, closing the
     // panel takes the only route to these controls with it, which is the
