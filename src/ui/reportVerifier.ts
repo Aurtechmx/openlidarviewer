@@ -69,7 +69,7 @@ export function showReportVerification(result: VerifyReportResult): void {
   } else if (!ok) {
     statusText = 'Report has been modified';
   } else if (weak) {
-    statusText = 'Checksum matches — not tamper-proof';
+    statusText = 'Checksum matches (weaker FNV-1a check)';
   } else {
     statusText = 'Digest matches the contents';
   }

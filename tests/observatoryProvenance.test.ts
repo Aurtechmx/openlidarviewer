@@ -177,6 +177,8 @@ describe('observatory package provenance', () => {
 
   it('README and passport say the whole-file hash is unavailable', () => {
     expect(files.get('o/README.md')).toMatch(/Analysis input SHA-256  [0-9a-f]{64}/);
+    expect(files.get('o/README.md')).toContain('hash-chained (a self-consistency check, not a signature)');
+    expect(files.get('o/README.md')).not.toContain('tamper-evident processing steps');
     expect(files.get('o/README.md')).toMatch(/Source SHA-256  not recorded by this export path/);
     const passport = JSON.parse(files.get('o/scientific-passport.json')!);
     expect(passport.source.sha256).toBeNull();

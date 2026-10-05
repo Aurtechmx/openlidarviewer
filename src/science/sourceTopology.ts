@@ -42,7 +42,7 @@ const SEVERITY: Readonly<Record<RangeLinkage['kind'], number>> = {
  * Order two reason strings by UTF-16 code unit.
  *
  * Deliberately NOT `String.localeCompare`. These strings are hashed into the
- * processing manifest's tamper-evident chain, so their order has to be the same
+ * processing manifest's hash chain, so their order has to be the same
  * on every machine that builds the same artifact. `localeCompare` consults the
  * runtime's locale and ICU data, which differ between a developer's laptop, a
  * CI runner and a reviewer's machine, and a different order would produce a

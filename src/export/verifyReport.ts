@@ -96,7 +96,7 @@ export function verifyReportFile(jsonText: string): VerifyReportResult {
   } else if (cryptographic) {
     reason = 'The SHA-256 digest matches the contents. This catches accidental edits, but anyone can recompute the digest after an edit, so it does not show who made the report or that it came from the named source file.';
   } else {
-    reason = `The ${algorithm} checksum matches, but it is a fast non-cryptographic checksum an editor can forge — this does NOT prove the report was not altered. Treat it as unverified for tamper-evidence.`;
+    reason = `The ${algorithm} checksum matches the contents. It is a weaker accidental-edit check than SHA-256: its 32-bit digest gives a much higher chance that a different body has the same checksum. Like any unkeyed digest, anyone can recompute it after an edit.`;
   }
   return {
     recognised: true, valid, cryptographic, algorithm, software, classificationEpoch, findingsCount,

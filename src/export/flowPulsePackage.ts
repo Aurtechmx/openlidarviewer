@@ -253,7 +253,7 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     `  ${opts.basename}-summary.csv         The figures above, flat`,
     `  ${opts.basename}-simulation-run.json The sealed run record`,
     `  ${opts.basename}.olv-field-sim.json  Reproducible config: re-run it, get the same fieldDigest`,
-    `  ${opts.basename}-processing-manifest.json   Ordered, tamper-evident processing steps`,
+    `  ${opts.basename}-processing-manifest.json   Ordered processing steps, hash-chained (a self-consistency check, not a signature)`,
     `  ${opts.basename}-scientific-artifact-passport.json   Tamper-evident provenance for the accumulation raster`,
     `  SHA256SUMS.txt               SHA-256 of every file above`,
     '',

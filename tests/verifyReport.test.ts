@@ -42,10 +42,11 @@ describe('verifyReportFile', () => {
     const r = verifyReportFile(JSON.stringify(tampered));
     // The forged checksum DOES match (the attacker recomputed it) …
     expect(r.valid).toBe(true);
-    // … but it must NOT be reported as intact/tamper-evident.
+    // … and it is reported as the weaker check it is.
     expect(r.cryptographic).toBe(false);
     expect(r.reason).not.toMatch(/intact/i);
-    expect(r.reason).toMatch(/not tamper-proof|forge|unverified/i);
+    expect(r.reason).toMatch(/weaker accidental-edit check/i);
+    expect(r.reason).not.toMatch(/tamper/i);
   });
 
   test('pretty-printed JSON still verifies (canonical re-hash)', () => {
