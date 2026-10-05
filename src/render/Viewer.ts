@@ -113,7 +113,7 @@ import { computeLassoVolume as computeLassoVolumeWalk, copyPlacedPositions, lass
 import type { LassoSelectionBasis, LassoSelectionBasisReport } from './measure/lassoVolumeCompute';
 import { cameraPresetPose, standardViewPose, openingFit } from './camera/cameraPresets';
 import type { CameraPresetName, StandardView } from './camera/cameraPresets';
-import { followPerspective, setLensShift, withoutLensShift } from './camera/orthoCamera';
+import { followPerspective, LensShift } from './camera/orthoCamera';
 import { projectionFromLegacyFov } from './camera/orthoProjection';
 export type { CameraPresetName, StandardView } from './camera/cameraPresets';
 export { chooseRenderBackendForPage } from './viewerRenderBootstrap';
@@ -3479,7 +3479,7 @@ export class Viewer {
 
   /** Glide the camera to a previously saved viewpoint. */
   applyCameraPose(pose: CameraPose): void {
-    this._setLensShift(0);
+    this._setLensShift(null);
     this._nav.applyPose(pose);
   }
 
@@ -3506,7 +3506,7 @@ export class Viewer {
    * as orthographic; a real perspective fov is clamped and applied.
    */
   applyCameraState(state: SavedCameraState): void {
-    this._setLensShift(0);
+    this._setLensShift(null);
     if (state.mode && state.mode !== this._nav.mode) this._nav.setMode(state.mode);
     const ortho = state.projection === 'orthographic'
       || projectionFromLegacyFov(state.fov, 2) === 'orthographic';
@@ -4006,11 +4006,11 @@ export class Viewer {
   }
 
   private _framingReservePx: () => number = () => 0;
-  private _lensShift = 0;
-  /** Set (0 clears) the opening fit's lens shift on both cameras. */
-  private _setLensShift(ndcY: number): void {
-    this._lensShift = ndcY;
-    setLensShift(this._camera, this._orthoCamera, ndcY);
+  private readonly _lens = new LensShift(() => this._camera, () => this._orthoCamera);
+  /** Apply the opening fit's lens shift on both cameras; null clears it. */
+  private _setLensShift(ndcY: number | null): void {
+    if (ndcY === null) this._lens.clear();
+    else this._lens.fit(ndcY);
     this.requestFrame();
   }
 
@@ -4074,7 +4074,7 @@ export class Viewer {
   setCameraPreset(name: CameraPresetName): boolean {
     const sphere = this._visibleBoundingSphere();
     if (!sphere) return false;
-    this._setLensShift(0);
+    this._setLensShift(null);
     const horiz = this._horizontalAxis();
     const pose = cameraPresetPose(name, {
       center: sphere.center,
@@ -4119,7 +4119,7 @@ export class Viewer {
   setStandardView(view: StandardView): boolean {
     const sphere = this._visibleBoundingSphere();
     if (!sphere) return false;
-    this._setLensShift(0);
+    this._setLensShift(null);
     // A standard view is an orbit pose — make sure we're in orbit mode so the
     // controls own the camera (walk/fly would fight the snap).
     this._nav.setMode('orbit');
@@ -4370,7 +4370,7 @@ export class Viewer {
    */
   async snapshot(options?: SnapshotOptions): Promise<Blob> {
     const snap = await loadSnapshot();
-    return withoutLensShift(this._camera, this._orthoCamera, this._lensShift, () => snap.captureSnapshot(this._buildSnapshotHost(), options));
+    return this._lens.without(() => snap.captureSnapshot(this._buildSnapshotHost(), options));
   }
 
   /** Bind the Viewer's live render state to the {@link SnapshotHost} contract. */
@@ -4422,7 +4422,7 @@ export class Viewer {
   ): Promise<ExportResult> {
     const adapter = this._buildExportAdapter(); // LIVE closures: snapshots NOTHING (gate: exportImageAction)
     const studio = await loadExportStudio();
-    return withoutLensShift(this._camera, this._orthoCamera, this._lensShift, () => studio.renderExport(
+    return this._lens.without(() => studio.renderExport(
       mode,
       {
         renderer: this._renderer,
@@ -4675,20 +4675,19 @@ export class Viewer {
 
     const camera = this._camera;
     const prevAspect = camera.aspect;
-    const shift = this._lensShift;
-    try {
-      setLensShift(camera, this._orthoCamera, 0);
-      camera.aspect = plan.aspect;
-      camera.updateProjectionMatrix();
-      const blob = await this._renderAtSize(plan.widthPx, plan.heightPx, () => {
-        this._renderer.render(this._scene, camera);
-      });
-      return { blob, widthPx: plan.widthPx, heightPx: plan.heightPx };
-    } finally {
-      camera.aspect = prevAspect;
-      setLensShift(camera, this._orthoCamera, shift);
-      camera.updateProjectionMatrix();
-    }
+    return this._lens.without(async () => {
+      try {
+        camera.aspect = plan.aspect;
+        camera.updateProjectionMatrix();
+        const blob = await this._renderAtSize(plan.widthPx, plan.heightPx, () => {
+          this._renderer.render(this._scene, camera);
+        });
+        return { blob, widthPx: plan.widthPx, heightPx: plan.heightPx };
+      } finally {
+        camera.aspect = prevAspect;
+        camera.updateProjectionMatrix();
+      }
+    });
   }
 
   /**
@@ -5954,6 +5953,7 @@ export class Viewer {
     if (w === 0 || h === 0) return;
     this._camera.aspect = w / h;
     this._camera.updateProjectionMatrix();
+    this._lens.refit(this._framingReservePx() / h);
     // Re-apply the pixel ratio: browser zoom and monitor-DPI changes alter
     // devicePixelRatio, and the backing-store resolution must follow or the
     // scene renders soft/aliased after a zoom.

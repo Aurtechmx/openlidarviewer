@@ -17,6 +17,8 @@
  *   - a Measure click places its point under the cursor with the shift on;
  *   - a saved snapshot renders without the shift, so the scan is centred.
  * The last three run at desktop size only: a phone reserves no band.
+ * A last test resizes 1280x800 -> 375x812 -> 1280x800: the shift drops to 0
+ * (scan centred) at phone width and comes back on desktop.
  */
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
@@ -183,11 +185,13 @@ for (const vp of SIZES) {
       await expect(hint).toContainText('first point');
       await page.mouse.click(band.x, band.y);
       await expect(hint).toContainText('second point');
-      const dots = await page.evaluate(() =>
-        Array.from(document.querySelectorAll('svg circle')).map((c) => {
-          const r = c.getBoundingClientRect();
-          return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-        }));
+      // The overlay redraws on the next rendered frame; wait for the marker.
+      const markers = page.locator('.olv-measure-svg circle.olv-measure-dot');
+      await expect(markers.first()).toBeAttached({ timeout: 10_000 });
+      const dots = await markers.evaluateAll((els) => els.map((c) => {
+        const r = c.getBoundingClientRect();
+        return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+      }));
       const miss = Math.min(...dots.map((d) => Math.hypot(d.x - band.x, d.y - band.y)));
       expect(miss, `nearest marker ${miss.toFixed(1)} px from the click`).toBeLessThanOrEqual(6);
     });
@@ -213,3 +217,29 @@ for (const vp of SIZES) {
     });
   });
 }
+
+test('a resize refits the lens shift: none at phone width, the band again on desktop', async ({ page }) => {
+  test.setTimeout(240_000);
+  await openFixture(page, SIZES[0]);
+  const desktopCloud = (await cloudBox(page))!;
+  const gizmo = (await gizmoBox(page))!;
+  expect(overlap(desktopCloud, gizmo), 'the band holds the triangle after the opening fit').toBe(0);
+
+  // Phone width: the bar does not lay out, so the reserve and the shift are 0
+  // and the scan sits centred on the canvas instead of above an empty band.
+  await page.setViewportSize(SIZES[1]);
+  await page.waitForTimeout(1000);
+  expect(await gizmoBox(page)).toBeNull();
+  const canvas = (await page.locator('canvas').first().boundingBox())!;
+  const phone = centre((await cloudBox(page))!);
+  expect(Math.abs(phone.x - (canvas.x + canvas.width / 2)), `phone x ${phone.x}`).toBeLessThanOrEqual(canvas.width * 0.1);
+  expect(Math.abs(phone.y - (canvas.y + canvas.height / 2)), `phone y ${phone.y}`).toBeLessThanOrEqual(canvas.height * 0.1);
+
+  // Back to desktop: the shift is recomputed and the triangle is clear again.
+  await page.setViewportSize(SIZES[0]);
+  await page.waitForTimeout(1000);
+  const back = (await cloudBox(page))!;
+  const gizmoBack = (await gizmoBox(page))!;
+  expect(overlap(back, gizmoBack), `cloud ${JSON.stringify(back)} vs gizmo ${JSON.stringify(gizmoBack)}`).toBe(0);
+  expect(Math.abs(centre(back).y - centre(desktopCloud).y), 'same lift as the opening fit').toBeLessThanOrEqual(8);
+});

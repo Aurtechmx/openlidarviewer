@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { clampReserve, reservedFrustum, openingFit, MAX_FRAMING_RESERVE } from '../src/render/camera/cameraPresets';
-import { setLensShift, withoutLensShift } from '../src/render/camera/orthoCamera';
+import { setLensShift, LensShift } from '../src/render/camera/orthoCamera';
 
 const tanHalf = (fovDeg: number): number => Math.tan((fovDeg * Math.PI) / 360);
 
@@ -77,12 +77,47 @@ describe('openingFit', () => {
 
   it('clears the shift for a capture and restores it after', async () => {
     const cam = new THREE.PerspectiveCamera(50, 1.6, 0.1, 100);
-    const ortho = new THREE.OrthographicCamera();
-    setLensShift(cam, ortho, 0.2);
-    const during = await withoutLensShift(cam, ortho, 0.2, async () => cam.view?.enabled === true);
+    const lens = new LensShift(() => cam, () => new THREE.OrthographicCamera());
+    lens.fit(0.2);
+    const during = await lens.without(async () => cam.view?.enabled === true);
     expect(during).toBe(false);
     expect(cam.view?.enabled).toBe(true);
     expect(cam.view?.offsetY).toBeCloseTo(0.1, 12);
     expect(cam.aspect).toBe(1.6);
   });
+
+  it('does not restore a stale shift over one set during the capture', async () => {
+    const cam = new THREE.PerspectiveCamera(50, 1.6, 0.1, 100);
+    const lens = new LensShift(() => cam, () => new THREE.OrthographicCamera());
+    lens.fit(0.2);
+    await lens.without(async () => lens.fit(0.3));
+    expect(lens.value).toBe(0.3);
+    expect(cam.view?.offsetY).toBeCloseTo(0.15, 12);
+    await lens.without(async () => lens.fit(0));
+    expect(lens.value).toBe(0);
+    expect(cam.view?.enabled ?? false).toBe(false);
+  });
+
+  it('refits an opening fit on resize, and leaves a cleared shift cleared', () => {
+    const cam = new THREE.PerspectiveCamera(50, 1.6, 0.1, 100);
+    const lens = new LensShift(() => cam, () => new THREE.OrthographicCamera());
+    lens.fit(0.24);
+    // A phone width: the bar no longer lays out, so the reserve is 0.
+    cam.aspect = 375 / 812;
+    lens.refit(0);
+    expect(lens.value).toBe(0);
+    expect(cam.view?.enabled ?? false).toBe(false);
+    // Back to a desktop width: the opening fit takes its band again, at the new aspect.
+    cam.aspect = 1280 / 700;
+    lens.refit(0.3);
+    expect(lens.value).toBe(0.3);
+    expect(cam.aspect).toBeCloseTo(1280 / 700, 12);
+    expect(cam.view?.offsetY).toBeCloseTo(0.15, 12);
+    // A saved view or preset clears it, and no resize brings it back.
+    lens.clear();
+    lens.refit(0.3);
+    expect(lens.value).toBe(0);
+  });
+
+
 });
