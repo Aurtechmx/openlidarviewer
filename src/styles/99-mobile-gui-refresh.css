@@ -339,10 +339,10 @@
   .olv-ws-tab, .olv-chip, .olv-mp-action,
   .olv-pc-dismiss, .olv-colorbar-close, .olv-lasso-toast-action,
   .olv-modal button, .olv-help-overlay button,
-  .olv-github, .olv-theme-toggle, .olv-quality-button, .olv-nav-hud-close, .olv-cam-chip, .olv-mp-del {
+  .olv-github, .olv-theme-toggle, .olv-quality-button, .olv-nav-hud-close, .olv-cam-chip, .olv-nav-panel-toggle, .olv-mp-del {
     min-height: 44px; min-width: 44px;
   }
-  .olv-chip, .olv-ws-tab, .olv-github, .olv-cam-chip { display: inline-flex; align-items: center; justify-content: center; }
+  .olv-chip, .olv-ws-tab, .olv-github, .olv-cam-chip, .olv-nav-panel-toggle { display: inline-flex; align-items: center; justify-content: center; }
   .olv-left-panels summary, .olv-right-rail summary { display: flex; align-items: center; }
   .olv-mp-footer { flex-wrap: wrap; }
   .olv-dock .olv-tool { min-height: 48px; padding-inline: 12px; }

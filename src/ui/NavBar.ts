@@ -599,7 +599,7 @@ export class NavBar {
     ]);
 
     this._panelToggle = el('button', {
-      className: 'olv-cam-chip olv-nav-panel-toggle',
+      className: 'olv-nav-panel-toggle',
       type: 'button',
       text: 'Navigation',
       title: `${NAVIGATION_PANEL} (H)`,

@@ -65,8 +65,21 @@ async function brightBox(page: Page, png: Buffer, cssWidth: number, colourOnly =
   }, [[...png], cssWidth, colourOnly] as const);
 }
 
-/** The cloud's box on the live canvas, with every overlay hidden for the shot. */
+/**
+ * The cloud's box on the live canvas. A load can still be streaming in its
+ * first frames when the test looks, so this polls until the cloud is drawn.
+ */
 async function cloudBox(page: Page): Promise<Box | null> {
+  const deadline = Date.now() + 20_000;
+  for (;;) {
+    const box = await cloudBoxOnce(page);
+    if (box !== null || Date.now() > deadline) return box;
+    await page.waitForTimeout(500);
+  }
+}
+
+/** One shot of the cloud's box, with every overlay hidden for the screenshot. */
+async function cloudBoxOnce(page: Page): Promise<Box | null> {
   await page.evaluate(() => {
     for (const el of Array.from(document.querySelectorAll<HTMLElement>('body *'))) {
       if (el.tagName === 'CANVAS' || el.querySelector('canvas')) continue;
@@ -223,6 +236,8 @@ test('a resize refits the lens shift: none at phone width, the band again on des
   await openFixture(page, SIZES[0]);
   const desktopCloud = (await cloudBox(page))!;
   const gizmo = (await gizmoBox(page))!;
+  expect(desktopCloud, 'the framed cloud is drawn').not.toBeNull();
+  expect(gizmo, 'the navigation bar lays out').not.toBeNull();
   expect(overlap(desktopCloud, gizmo), 'the band holds the triangle after the opening fit').toBe(0);
 
   // Phone width: the bar does not lay out, so the reserve and the shift are 0
@@ -231,7 +246,9 @@ test('a resize refits the lens shift: none at phone width, the band again on des
   await page.waitForTimeout(1000);
   expect(await gizmoBox(page)).toBeNull();
   const canvas = (await page.locator('canvas').first().boundingBox())!;
-  const phone = centre((await cloudBox(page))!);
+  const phoneBox = await cloudBox(page);
+  expect(phoneBox, 'the cloud is drawn at phone width').not.toBeNull();
+  const phone = centre(phoneBox!);
   expect(Math.abs(phone.x - (canvas.x + canvas.width / 2)), `phone x ${phone.x}`).toBeLessThanOrEqual(canvas.width * 0.1);
   expect(Math.abs(phone.y - (canvas.y + canvas.height / 2)), `phone y ${phone.y}`).toBeLessThanOrEqual(canvas.height * 0.1);
 
@@ -240,6 +257,8 @@ test('a resize refits the lens shift: none at phone width, the band again on des
   await page.waitForTimeout(1000);
   const back = (await cloudBox(page))!;
   const gizmoBack = (await gizmoBox(page))!;
+  expect(back, 'the cloud is drawn back on desktop').not.toBeNull();
+  expect(gizmoBack, 'the navigation bar lays out again').not.toBeNull();
   expect(overlap(back, gizmoBack), `cloud ${JSON.stringify(back)} vs gizmo ${JSON.stringify(gizmoBack)}`).toBe(0);
   expect(Math.abs(centre(back).y - centre(desktopCloud).y), 'same lift as the opening fit').toBeLessThanOrEqual(8);
 });

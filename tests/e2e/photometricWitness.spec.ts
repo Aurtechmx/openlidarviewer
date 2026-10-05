@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropTinyPly } from './helpers';
+import { dropTinyPly, framedScanCentre } from './helpers';
 
 /**
  * v0.3.7 patch-view phase 2 — photometric witness e2e.
@@ -19,12 +19,10 @@ async function loadSampleAndPick(page: Page): Promise<void> {
   // Let the framing tween settle so canvas clicks land on the cloud.
   await page.waitForTimeout(1500);
   await page.locator('.olv-tool', { hasText: 'Inspect' }).click();
-  // Click roughly mid-canvas to pick a point. Tiny PLY positions a few
-  // points there reliably.
-  const canvas = page.locator('canvas').first();
-  const box = await canvas.boundingBox();
-  if (!box) throw new Error('canvas has no bounding box');
-  await canvas.click({ position: { x: box.width * 0.5, y: box.height * 0.5 } });
+  // Click where the framed scan's centre lands to pick a point. Tiny PLY
+  // positions a few points there reliably.
+  const at = await framedScanCentre(page);
+  await page.mouse.click(at.x, at.y);
 }
 
 test('the Photometric witness section appears after a point is picked', async ({ page }) => {

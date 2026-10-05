@@ -175,6 +175,25 @@ export async function pinNavigationPanel(page: Page): Promise<void> {
 }
 
 /**
+ * Where a freshly framed scan's centre lands, in page coordinates. The opening
+ * fit keeps the scan above the navigation bar's mode triangle with a lens
+ * shift, so on desktop the centre sits in the middle of the band above the
+ * triangle (less the fit's 12 px gap), not the canvas centre. Where the bar
+ * does not lay out (phones) it is the canvas centre.
+ */
+export async function framedScanCentre(page: Page): Promise<{ x: number; y: number }> {
+  const canvas = await page.locator('canvas').first().boundingBox();
+  if (!canvas) throw new Error('canvas has no bounding box');
+  const rowTop = await page.evaluate(() => {
+    const row = document.querySelector('.olv-navbar .olv-nav-row');
+    const r = row?.getBoundingClientRect();
+    return r && r.width > 0 && r.height > 0 ? r.y : null;
+  });
+  const bottom = rowTop === null ? canvas.y + canvas.height : rowTop - 12;
+  return { x: canvas.x + canvas.width / 2, y: (canvas.y + bottom) / 2 };
+}
+
+/**
  * Pre-seed the stale-chunk recovery cooldown (staleChunkReload.ts), so the
  * first aborted chunk in a test takes the no-reload branch and reaches the
  * failure toast instead of reloading the page.

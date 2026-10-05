@@ -2299,6 +2299,7 @@ body.olv-theme-light .olv-empty::before {
 .olv-navbar select,
 .olv-navbar a,
 .olv-navbar .olv-cam-chip,
+.olv-navbar .olv-nav-panel-toggle,
 .olv-navbar .olv-mode,
 .olv-navbar .olv-nav-reset { pointer-events: auto; }
 .olv-nav-row { display: flex; align-items: center; gap: var(--space-md); }
@@ -2615,7 +2616,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   display: block; margin-bottom: var(--space-sm);
 }
 .olv-cam-presets, .olv-cam-views { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
-.olv-cam-chip {
+.olv-cam-chip,
+.olv-nav-panel-toggle {
   display: inline-flex; align-items: center; gap: var(--space-sm);
   font-family: var(--font);
   background: rgba(255, 255, 255, 0.04);
@@ -2625,12 +2627,15 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard),
     transform 90ms var(--ease-standard);
 }
-.olv-cam-chip:hover {
+.olv-cam-chip:hover,
+.olv-nav-panel-toggle:hover {
   color: var(--text); border-color: var(--accent);
   background: rgba(0, 178, 255, 0.08);
 }
-.olv-cam-chip:active { transform: scale(0.96); }
-.olv-cam-chip:focus-visible {
+.olv-cam-chip:active,
+.olv-nav-panel-toggle:active { transform: scale(0.96); }
+.olv-cam-chip:focus-visible,
+.olv-nav-panel-toggle:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 .olv-cam-chip-key {
@@ -11655,10 +11660,10 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   .olv-ws-tab, .olv-chip, .olv-mp-action,
   .olv-pc-dismiss, .olv-colorbar-close, .olv-lasso-toast-action,
   .olv-modal button, .olv-help-overlay button,
-  .olv-github, .olv-theme-toggle, .olv-quality-button, .olv-nav-hud-close, .olv-cam-chip, .olv-mp-del {
+  .olv-github, .olv-theme-toggle, .olv-quality-button, .olv-nav-hud-close, .olv-cam-chip, .olv-nav-panel-toggle, .olv-mp-del {
     min-height: 44px; min-width: 44px;
   }
-  .olv-chip, .olv-ws-tab, .olv-github, .olv-cam-chip { display: inline-flex; align-items: center; justify-content: center; }
+  .olv-chip, .olv-ws-tab, .olv-github, .olv-cam-chip, .olv-nav-panel-toggle { display: inline-flex; align-items: center; justify-content: center; }
   .olv-left-panels summary, .olv-right-rail summary { display: flex; align-items: center; }
   .olv-mp-footer { flex-wrap: wrap; }
   .olv-dock .olv-tool { min-height: 48px; padding-inline: 12px; }
