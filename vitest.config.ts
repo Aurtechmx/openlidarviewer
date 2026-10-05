@@ -2,6 +2,7 @@ import { defineConfig } from 'vitest/config';
 import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import { forcedGcRequested } from './benchmarks/runner/gcMode';
+import { readFileList } from './scripts/lib/vitestFileList.mjs';
 
 // Mirror the `__APP_VERSION__` define the Vite build stamps in, so test files
 // (and modules they import — like `BaseExportMode.ts`) can read the version
@@ -63,7 +64,10 @@ export default defineConfig({
     // Unit tests only — Playwright specs under tests/e2e/ are excluded. The
     // benchmark-framework suites live one level down, so they are listed
     // explicitly rather than by a `tests/**` glob that would sweep e2e back in.
-    include: ['tests/*.{test,spec}.ts', 'tests/benchmark/*.{test,spec}.ts'],
+    // test-bucket.mjs hands a bucket's files over in a list file (the unit
+    // bucket's paths are too long for a Windows command line); without one,
+    // the default globs apply.
+    include: readFileList() ?? ['tests/*.{test,spec}.ts', 'tests/benchmark/*.{test,spec}.ts'],
     // Headroom over the 5 s default so the heavier DOM-building / LAS-decoding
     // suites don't time out (and flake) under parallel load on a busy machine —
     // 15 s is still unambiguously "broken" if a unit test ever hits it.
