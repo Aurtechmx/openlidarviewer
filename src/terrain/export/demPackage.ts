@@ -784,7 +784,7 @@ export function buildDemPackage(
   // ONE file rather than the package: a passport digesting the ZIP it travels
   // inside could never verify, because adding it changes what it measured.
   //
-  // This is a tamper-evident provenance record, not a signature. It binds the
+  // This is a provenance record (self-consistency check, not a signature). It binds the
   // source identity, the analysis record, the processing manifest, the methods,
   // the evidence decision and the digest of the raster it names. A recipient
   // who rehashes that raster and reads the record can tell whether the file

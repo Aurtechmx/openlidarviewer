@@ -12,7 +12,7 @@
  * lists, under the evidence grade it records — or find out precisely WHERE that
  * chain was broken.
  *
- * TAMPER-EVIDENT, NOT AUTHENTICATED. This is provenance, not a signature. There
+ * SELF-CONSISTENCY CHECK, NOT AUTHENTICATED. This is provenance, not a signature. There
  * is no private key, no certificate, and no authority: anyone can rebuild a
  * passport, so the passport proves nobody's identity and vouches for no one. It
  * proves only internal CONSISTENCY — that the recorded digests still recompute
@@ -45,12 +45,12 @@ export const SCIENTIFIC_ARTIFACT_PASSPORT_SCHEMA = 1;
 
 /**
  * The exact scope this passport claims, pinned as a constant so UI and exports
- * quote it verbatim and no caller drifts into a stronger word. It is tamper
- * EVIDENCE over internal consistency — never authentication, authorship, or
- * accuracy beyond the recorded evidence level.
+ * quote it verbatim and no caller drifts into a stronger word. It is a
+ * self-consistency check over the recorded digests, not authenticated: never
+ * authentication, authorship, or accuracy beyond the recorded evidence level.
  */
 export const PASSPORT_CLAIM_SCOPE =
-  'Tamper-evident, not authenticated. Proves only that the recorded digests ' +
+  'Self-consistency check, not authenticated. Proves only that the recorded digests ' +
   'still recompute over the bytes and records they cover; it proves no identity, ' +
   'no authorship, and no accuracy beyond the evidence level recorded.';
 

@@ -298,8 +298,8 @@ lets a reader re-run the export over the identical DTM and reproduce the
 exported field digest; `tests/flowPulsePackage.test.ts` proves this end to
 end. A processing manifest, an ordered and hash-chained record of the
 methods that ran, is built with `src/science/processingManifest.ts`. A
-scientific artifact passport, a tamper-evident but not authenticated
-provenance record bound to the accumulation raster, is built with
+scientific artifact passport, an unauthenticated provenance record (a
+self-consistency check, not a signature) bound to the accumulation raster, is built with
 `src/science/scientificArtifactPassport.ts`; it records source and input
 digest, the registered method ids, the processing-manifest head, and the
 result digest, the same seam `demPackage.ts` uses for the DEM's bare-earth

@@ -409,7 +409,7 @@ function readmeText(record: ObservationRunRecord, opts: {
     '  frontier.csv                 The shadow frontier\'s voxel keys and summary',
     '  candidates.csv               Coverage Gain candidates, every term; suggested stations are not observations',
     '  processing-manifest.json     Ordered processing steps, hash-chained (a self-consistency check, not a signature)',
-    '  scientific-passport.json     Tamper-evident provenance for field.bin',
+    '  scientific-passport.json     Provenance record for field.bin; its digests recompute over the files they cover (a self-consistency check, not a signature)',
     '  SHA256SUMS.txt                SHA-256 of every file above',
     '',
     'Identity',

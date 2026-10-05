@@ -123,9 +123,10 @@ describe('buildScientificArtifactPassport', () => {
 });
 
 describe('PASSPORT_CLAIM_SCOPE', () => {
-  it('pins the tamper-evidence disclaimer and claims nothing stronger', () => {
+  it('pins the self-consistency disclaimer and claims nothing stronger', () => {
+    expect(PASSPORT_CLAIM_SCOPE.startsWith('Self-consistency check, not authenticated.')).toBe(true);
     const scope = PASSPORT_CLAIM_SCOPE.toLowerCase();
-    expect(scope).toContain('tamper-evident');
+    expect(scope).not.toContain('tamper');
     expect(scope).toContain('not authenticated');
     expect(scope).not.toContain('certified accurate');
     expect(scope).not.toContain('authenticated by');

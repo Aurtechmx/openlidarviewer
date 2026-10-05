@@ -8,13 +8,15 @@
  * wanted — the algorithm is the caller's explicit choice, never implied.
  *
  * Local-first means the data never leaves the machine — but a surveyor staking
- * their name on a number needs more than privacy: they need to prove the number
- * wasn't quietly changed afterwards. This is an append-only hash chain. Each
+ * their name on a number needs more than privacy: they need to detect a number
+ * changed afterwards without re-chaining. This is an append-only hash chain. Each
  * entry's hash folds in the previous entry's hash plus a CANONICAL (stable
  * key-order) serialization of its own contents, so any later edit to any entry
  * — a reclassification logged with the wrong target class, a volume whose ±
- * band was tampered down — breaks the chain from that point on and
- * {@link verifyAuditChain} reports exactly where.
+ * band was edited down — breaks the chain from that point on, unless the
+ * editor re-chains every later entry, and {@link verifyAuditChain} reports
+ * exactly where. The chain is unkeyed, so it detects edits that were not
+ * re-chained; it does not show who made them.
  *
  * Deterministic by construction: the same sequence of appends always yields the
  * same hashes and the same serialization, so two parties can independently
@@ -22,8 +24,8 @@
  *
  * The hash function is injectable. The built-in {@link fnv1a} is a fast,
  * deterministic, NON-cryptographic checksum — it catches accidental corruption
- * and casual edits. For cryptographic tamper-evidence, inject a SHA-256 (e.g.
- * via SubtleCrypto, pre-hashing each body) — the chain logic is hash-agnostic.
+ * and casual edits. The default is SHA-256, a cryptographic-strength hash; the
+ * chain logic is hash-agnostic either way.
  */
 import { compareCodeUnits } from '../../canonicalHash';
 
@@ -152,8 +154,8 @@ export class AuditLog {
   private readonly _entries: AuditEntry[] = [];
   private readonly _hashFn: HashFn;
 
-  // Defaults to the cryptographic SHA-256 so the chain is tamper-evident by
-  // construction; pass fnv1a explicitly for a fast corruption-only checksum.
+  // Defaults to SHA-256, a cryptographic-strength unkeyed hash chain that detects
+  // edits that were not re-chained; pass fnv1a for a fast corruption-only checksum.
   constructor(hashFn: HashFn = sha256) {
     this._hashFn = hashFn;
   }
@@ -186,8 +188,8 @@ export class AuditLog {
 
 /**
  * Recompute the chain over `entries` and return the index of the FIRST entry
- * that is out of order or whose hash doesn't match — i.e. the first point of
- * tampering or corruption. Returns -1 when the chain is fully intact.
+ * that is out of order or whose hash doesn't match: the first edit or
+ * corruption that was not re-chained. Returns -1 when every hash recomputes.
  */
 export function verifyAuditChain(
   entries: ReadonlyArray<AuditEntry>,
