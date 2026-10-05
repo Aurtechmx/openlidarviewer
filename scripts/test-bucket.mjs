@@ -28,6 +28,7 @@
 
 import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { BUCKETS, NESTED_TEST_DIRS, bucketOf } from './lib/testBuckets.mjs';
+import { FILE_LIST_ENV, vitestRunArgs, writeFileList } from './lib/vitestFileList.mjs';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join, sep } from 'node:path';
@@ -195,22 +196,22 @@ function readTally(file, bucket) {
 function runVitest(extra, label) {
   return new Promise((res) => {
     const started = Date.now();
-    const tallyFile = join(tmpdir(), `olv-tally-${arg}-${process.pid}-${tallySeq++}.json`);
+    const seq = tallySeq++;
+    const tallyFile = join(tmpdir(), `olv-tally-${arg}-${process.pid}-${seq}.json`);
+    // The bucket's files travel in a JSON file that vitest.config.ts reads as
+    // `include`, not as arguments: the unit bucket's list alone is longer than
+    // the command line Windows accepts.
+    const listFile = join(tmpdir(), `olv-files-${arg}-${process.pid}-${seq}.json`);
+    writeFileList(listFile, files);
     const child = spawn(
       SPAWN_CMD,
-      [
-        ...SPAWN_PREFIX,
-        'run', ...files, ...bucketArgs, ...extra, ...passthrough,
-        // default keeps the human console output; json feeds the file the
-        // parent reads for the GATE TALLY line.
-        '--reporter=default', '--reporter=json', `--outputFile.json=${tallyFile}`,
-      ],
+      vitestRunArgs({ prefix: SPAWN_PREFIX, bucketArgs, extra, passthrough, tallyFile }),
       // `detached` is what makes the shard a process-group leader so the
       // timeout below can kill the group. Windows has no process groups —
       // there `detached` only means "own console window", which would hide the
       // shard's output — so it stays off and the watchdog kills the child
       // directly (see the kill site).
-      { cwd: ROOT, stdio: 'inherit', detached: !WINDOWS },
+      { cwd: ROOT, stdio: 'inherit', detached: !WINDOWS, env: { ...process.env, [FILE_LIST_ENV]: listFile } },
     );
 
     let timedOut = false;
@@ -262,6 +263,7 @@ function runVitest(extra, label) {
       // and its partial JSON would misreport the run.
       if (!r.error && !r.signal && r.status === 0) readTally(tallyFile, arg);
       else { try { rmSync(tallyFile, { force: true }); } catch { /* best effort */ } }
+      try { rmSync(listFile, { force: true }); } catch { /* best effort */ }
       const secs = ((Date.now() - started) / 1000).toFixed(1);
       console.log(
         `[${label}] pid=${child.pid} elapsed=${secs}s code=${r.status ?? '-'} signal=${r.signal ?? '-'}`,
