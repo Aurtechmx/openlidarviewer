@@ -51,12 +51,7 @@ export function dotCell(ctx: CanvasRenderingContext2D, x: number, y: number, s: 
 
 /** Cell centres, in canvas pixels, for an ordered list of row-major indices. */
 export function cellCentres(order: ArrayLike<number>, cols: number, s: number): Array<[number, number]> {
-  const out: Array<[number, number]> = [];
-  for (let k = 0; k < order.length; k++) {
-    const i = order[k]!;
-    out.push([(i % cols) * s + s / 2, Math.floor(i / cols) * s + s / 2]);
-  }
-  return out;
+  return Array.from(order, (i): [number, number] => [(i % cols) * s + s / 2, Math.floor(i / cols) * s + s / 2]);
 }
 
 /**
@@ -223,5 +218,7 @@ export function northUpCell(
 
 /** Row step for a vertical arrow key on a north-up grid: ArrowUp moves north (row + 1). */
 export function northUpRowStep(key: string): number {
-  return key === 'ArrowUp' ? 1 : key === 'ArrowDown' ? -1 : 0;
+  if (key === 'ArrowUp') return 1;
+  if (key === 'ArrowDown') return -1;
+  return 0;
 }

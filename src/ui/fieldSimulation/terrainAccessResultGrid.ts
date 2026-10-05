@@ -139,7 +139,7 @@ export class TerrainAccessResultGrid {
   private _routeOrder: ArrayLike<number> | null = null;
   private _routeFraction = 1;
   private _cancelDraw: () => void = () => {};
-  private _stopResize: () => void = () => {};
+  private readonly _stopResize: () => void;
 
   constructor(opts: TerrainAccessResultGridOptions) {
     this._onActivate = opts.onActivate;

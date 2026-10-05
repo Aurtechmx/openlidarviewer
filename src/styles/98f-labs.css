@@ -31,13 +31,15 @@
 }
 .olv-lab-stats:empty, .olv-ta-stats:empty { display: none; }
 .olv-lab-stat { display: flex; flex-direction: column-reverse; gap: 2px; min-width: 0; }
-.olv-lab-stat-label { font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); font-size: var(--text-xs); }
+.olv-lab-stat-label {
+  font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-dim); overflow-wrap: normal;
+}
 .olv-lab-stat-value { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 3px; min-width: 0; }
 .olv-lab-stat-num { font-size: var(--text-xl); font-weight: 500; line-height: 1.1; color: var(--text); font-variant-numeric: var(--lab-num); }
 .olv-lab-stat-unit { font-size: var(--text-xs); color: var(--text-dim); }
 
 .olv-lab-stats-wrap { container-type: inline-size; }
-.olv-lab-stat-label { overflow-wrap: normal; }
 @container (min-width: 300px) {
   .olv-lab-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .olv-lab-stat-num { font-size: var(--text-2xl); }
@@ -54,10 +56,9 @@
 /* Legend panel: ramp first, then bucket and mark lists. */
 .olv-lab-legend-panel { display: flex; flex-direction: column; gap: var(--space-sm); }
 .olv-lab-ramp { display: flex; flex-direction: column; gap: 4px; width: 100%; box-sizing: border-box; padding: 0 12px 0 4px; }
-.olv-lab-ramp-ticks { margin-bottom: 14px; }
 .olv-lab-ramp-title { margin: 0; font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.04em; color: var(--text-dim); }
 .olv-lab-ramp-bar { height: 10px; border-radius: 2px; border: 0.5px solid var(--lab-frame); }
-.olv-lab-ramp-ticks { position: relative; height: 0; font-size: var(--text-xs); color: var(--text-dim); }
+.olv-lab-ramp-ticks { position: relative; height: 0; margin-bottom: 14px; font-size: var(--text-xs); color: var(--text-dim); }
 .olv-lab-ramp-tick { position: absolute; top: 0; transform: translateX(-50%); padding-top: 4px; white-space: nowrap; }
 .olv-lab-ramp-tick::before {
   content: ""; position: absolute; top: -4px; left: 50%; width: 1px; height: 6px; background: var(--text-dim);

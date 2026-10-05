@@ -337,7 +337,7 @@ export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | nu
 
 /** The figure row under the map after a route is found; null before a run or on a refusal. */
 export function terrainAccessStats(outcome: TerrainAccessLabOutcome | null): HTMLElement | null {
-  if (!outcome || !outcome.ok) return null;
+  if (!outcome?.ok) return null;
   const d = outcome.diagnostics;
   return labStatRow('Route figures', [
     { label: 'Length', value: d.horizontalLengthM.toFixed(1), unit: 'm' },
