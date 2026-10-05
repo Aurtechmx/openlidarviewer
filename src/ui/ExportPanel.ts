@@ -853,7 +853,7 @@ export class ExportPanel {
           ),
         );
       });
-      // Tamper-evident integrity report (JSON) — the same measurements, stamped
+      // Integrity report (JSON) — the same measurements, stamped
       // with provenance + a verifiable content digest (catches accidental/casual
       // edits; not a cryptographic signature). The honest deliverable.
       if (this._cb.exportIntegrityReport) {

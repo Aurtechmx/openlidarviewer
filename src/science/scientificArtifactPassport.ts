@@ -50,7 +50,7 @@ export const SCIENTIFIC_ARTIFACT_PASSPORT_SCHEMA = 1;
  * accuracy beyond the recorded evidence level.
  */
 export const PASSPORT_CLAIM_SCOPE =
-  'Tamper-evident, not authenticated. Proves only that the recorded digests ' +
+  'Self-consistency check, not authenticated. Proves only that the recorded digests ' +
   'still recompute over the bytes and records they cover; it proves no identity, ' +
   'no authorship, and no accuracy beyond the evidence level recorded.';
 

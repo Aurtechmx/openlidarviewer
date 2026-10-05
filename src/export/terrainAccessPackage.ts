@@ -260,7 +260,7 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
     `  ${opts.basename}-simulation-run.json        The sealed run record`,
     `  ${opts.basename}.olv-field-sim.json         Reproducible config: re-run it, get the same resultDigest`,
     `  ${opts.basename}-processing-manifest.json   Ordered processing steps, hash-chained (a self-consistency check, not a signature)`,
-    `  ${opts.basename}-scientific-artifact-passport.json   Tamper-evident provenance for the traversability raster`,
+    `  ${opts.basename}-scientific-artifact-passport.json   Provenance record for the traversability raster; its digests recompute over the files they cover (a self-consistency check, not a signature)`,
     '  SHA256SUMS.txt                        SHA-256 of every file above',
     '',
     'Identity',

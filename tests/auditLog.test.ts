@@ -86,7 +86,7 @@ describe('AuditLog hash chain', () => {
     expect(verifyAuditChain(log.entries, fnv1a)).toBe(0);
   });
 
-  test('defaults to cryptographic SHA-256, so "tamper-evident" is true by construction', () => {
+  test('defaults to SHA-256, a cryptographic-strength hash chain', () => {
     const log = new AuditLog();
     log.append('op', { a: 1 });
     // A SHA-256 chain hash is 64 hex chars; the 8-char FNV form would not be.
