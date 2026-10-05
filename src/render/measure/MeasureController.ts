@@ -76,6 +76,7 @@ import {
   UNIT_UNVERIFIED_MEASURE_NOTICE,
   GEOGRAPHIC_CRS_MEASURE_NOTICE,
   VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE,
+  VERTICAL_MISMATCH_KINDS,
 } from './format';
 // B2 (v0.4.5) — one unit seam: the chart series is converted render-units →
 // metres in `getSummaries` by the same module the panel/CSV/PDF read, so
@@ -903,12 +904,7 @@ export class MeasureController {
    * exactly rescaled instead, so they are absent here — mirrors how the
    * geographic refusal spares heights and angles.
    */
-  private static readonly VERTICAL_MISMATCH_KINDS: ReadonlySet<MeasurementKind> =
-    // `angle` is included: a 3D angle is invariant only under UNIFORM scaling,
-    // so when the height unit differs from the horizontal unit the raw-coordinate
-    // angle mixes the two axes and is physically wrong (pass-6 M3). Height, box
-    // and volume are exactly rescaled by the vertical factor and stay out.
-    new Set<MeasurementKind>(['distance', 'polyline', 'area', 'slope', 'profile', 'angle']);
+  private static readonly VERTICAL_MISMATCH_KINDS = VERTICAL_MISMATCH_KINDS;
 
   /**
    * Whether the active scan has a known CRS with real-world units. Drives the

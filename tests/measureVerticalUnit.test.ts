@@ -13,6 +13,7 @@ import {
   formatLengthRender,
   formatVolume,
   VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE,
+  VERTICAL_MISMATCH_KINDS,
 } from '../src/render/measure/format';
 import { gradeMeasurement } from '../src/render/measure/measurementTrust';
 
@@ -41,6 +42,23 @@ describe('measurement vertical unit (compound CRS)', () => {
     expect(t.grade).toBe('red');
     expect(t.presentable).toBe(false);
     expect(t.reasons).toContain(VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE);
+  });
+
+  it('names as unreliable exactly the kinds the trust grade refuses', () => {
+    const text = VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE;
+    const [correct, unreliable] = text.split('converted correctly.');
+    const unreliableKinds: Record<string, string> = {
+      Distances: 'distance', polylines: 'polyline', 'plane areas': 'area',
+      slopes: 'slope', angles: 'angle', profiles: 'profile',
+    };
+    const named = Object.keys(unreliableKinds).filter((w) => unreliable.split('NOT reliable')[0].includes(w));
+    expect(new Set(named.map((w) => unreliableKinds[w]))).toEqual(new Set(VERTICAL_MISMATCH_KINDS));
+    for (const [word, kind] of [['Heights', 'height'], ['box sizes', 'box'], ['volumes', 'volume']] as const) {
+      expect(correct).toContain(word);
+      expect(VERTICAL_MISMATCH_KINDS.has(kind)).toBe(false);
+    }
+    expect(correct).toMatch(/the run of a line and the plan area of a ring/);
+    expect(text).toMatch(/reproject the scan to one unit/);
   });
 
   it('equal vertical/horizontal unit leaves the grade untouched (common case)', () => {

@@ -12,7 +12,7 @@
  * surfaces. The imperial branch and the angle / grade formatters live here too.
  */
 
-import type { UnitSystem } from './types';
+import type { MeasurementKind, UnitSystem } from './types';
 // Metres → feet, single-sourced: this module used to keep its own copy.
 import { FT_PER_M as FEET_PER_METRE } from '../../units/units';
 
@@ -47,9 +47,19 @@ export const GEOGRAPHIC_CRS_MEASURE_NOTICE =
  * the wording cannot fork.
  */
 export const VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE =
-  'Compound CRS: the height unit differs from the horizontal unit, so 3D ' +
-  'lengths, areas and grades mix units and are NOT reliable distances. ' +
-  'Heights are scaled correctly; use them, or reproject to a single unit.';
+  'Compound CRS: heights use a different unit from horizontal positions. ' +
+  'Heights, box sizes, volumes, the run of a line and the plan area of a ring ' +
+  'are converted correctly. Distances, polylines, plane areas, slopes, angles ' +
+  'and profiles mix the two units and are NOT reliable. Read heights, the run ' +
+  'or the plan area, or reproject the scan to one unit before measuring the rest.';
+
+/**
+ * The kinds the notice above names as unreliable: their trust grade is refused
+ * under a compound CRS. Height, box and volume rescale exactly by the vertical
+ * factor and stay out. `angle` is in: a 3D angle survives only UNIFORM scaling.
+ */
+export const VERTICAL_MISMATCH_KINDS: ReadonlySet<MeasurementKind> =
+  new Set<MeasurementKind>(['distance', 'polyline', 'area', 'slope', 'profile', 'angle']);
 
 /**
  * The measurement stack's honest limitation when the loaded clouds hold
