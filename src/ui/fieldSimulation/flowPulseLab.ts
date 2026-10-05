@@ -72,7 +72,7 @@ import type { AnalyseContoursResult } from '../../terrain/contour/analyseContour
 import { loadFlowPulsePackage, registerFlowOverlayInvalidator } from '../../lazyChunks';
 import { downloadBytes } from '../../io/download';
 import { labRun, publishLabRun, takeResultReopen } from '../../app/results/resultSignals';
-import type { buildFlowPulsePackage } from '../../export/flowPulsePackage';
+import type { buildFlowPulsePackage, FlowGridFrame } from '../../export/flowPulsePackage';
 
 /** The analysed surface and the frame facts the Analyse panel holds for it. */
 export interface FlowPulseLabInput {
@@ -232,6 +232,8 @@ export interface FlowPulseGeoref {
   readonly elevationOrigin?: number | null;
   /** The terrain verdict and interpolated share, when the surface is Blocked or Preview. */
   readonly terrainCaveat?: FlowTerrainCaveat | null;
+  /** The DTM's raster corner offset and cell size, in source units. */
+  readonly gridFrame?: FlowGridFrame | null;
 }
 
 /**
@@ -248,6 +250,11 @@ export function flowPulseGeorefOf(input: FlowPulseLabInput, digests: ExportDiges
     verticalUnitLabel: flowElevationReference(input).unitLabel,
     elevationOrigin: input.worldOriginZ ?? null,
     terrainCaveat: flowTerrainCaveat(input.result.quality),
+    gridFrame: {
+      originH1: input.result.dtm.originH1,
+      originH2: input.result.dtm.originH2,
+      cellSize: input.result.dtm.cellSizeM,
+    },
     sourceInterpretation: input.sourceInterpretation,
     digests,
   };
@@ -291,6 +298,8 @@ export function buildFlowPulseExport(
     verticalUnitLabel: georef?.verticalUnitLabel ?? 'units',
     elevationOrigin: georef?.elevationOrigin ?? null,
     terrainCaveat: georef?.terrainCaveat ?? null,
+    gridFrame: georef?.gridFrame ?? null,
+    verticalResolved: (georef?.verticalUnitLabel ?? 'units') !== 'units',
     sourceInterpretation: georef?.sourceInterpretation ?? null,
     digests: georef?.digests ?? null,
   });

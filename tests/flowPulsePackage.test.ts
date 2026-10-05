@@ -288,3 +288,63 @@ describe('README figures are rounded', () => {
     expect(readme).toMatch(/Cell size\s+0\.3 m/);
   });
 });
+
+describe('the exported rasters and path sit at their true place', () => {
+  // Hand check: world origin (500000, 4000000), DTM corner offset (-120, -80),
+  // 1 m cells. The true lower-left corner is (499880, 3999920).
+  const georef = {
+    basename: 'flow',
+    worldOrigin: { x: 500000, y: 4000000 },
+    gridFrame: { originH1: -120, originH2: -80, cellSize: 1 },
+  } as const;
+  const header = (zip: Uint8Array, name: string, key: string): number => {
+    const line = textOf(zip, name).split('\n').find((l) => l.toLowerCase().startsWith(key))!;
+    return Number(line.trim().split(/\s+/)[1]);
+  };
+
+  it('adds the DTM corner offset to every raster corner', () => {
+    const result = runOf({ conditioning: 'priority-flood' });
+    const zip = buildFlowPulsePackage(result, {
+      ...georef,
+      catchment: { mask: catchmentFrom(result, 12), outletCell: 12 },
+    });
+    for (const name of ['flow-accumulation.asc', 'flow-direction.asc', 'flow-catchment.asc']) {
+      expect(header(zip, name, 'xllcorner'), name).toBe(499880);
+      expect(header(zip, name, 'yllcorner'), name).toBe(3999920);
+    }
+  });
+
+  it('writes path vertices at cell centres', () => {
+    const result = runOf();
+    const zip = buildFlowPulsePackage(result, { ...georef, path: { cells: Int32Array.from([1 * 5 + 3]) } });
+    const geojson = jsonOf<{ coordinateFrame: string; features: { geometry: { coordinates: number[][] } }[] }>(zip, 'flow-flow-path.geojson');
+    // Cell (col 3, row 1): east 499880 + 3.5, north 3999920 + 1.5.
+    expect(geojson.features[0]!.geometry.coordinates[0]).toEqual([499883.5, 3999921.5]);
+    expect(geojson.coordinateFrame).toBe('source-crs-planar');
+  });
+
+  it('places a Y-up scene the same way: H2 is north, and the overlay alone negates it', async () => {
+    const { flowOverlayFrame } = await import('../src/render/flowOverlayGeometry');
+    const frame = flowOverlayFrame('y', -120, -80, 1);
+    // The overlay puts north on scene -Z; the export keeps H2 as north.
+    expect(frame.negateNorthing).toBe(true);
+    expect(frame.originH1).toBe(-120);
+    expect(frame.originH2).toBe(-80);
+    const zip = buildFlowPulsePackage(runOf(), { ...georef, path: { cells: Int32Array.from([0]) } });
+    const geojson = jsonOf<{ features: { geometry: { coordinates: number[][] } }[] }>(zip, 'flow-flow-path.geojson');
+    expect(geojson.features[0]!.geometry.coordinates[0]).toEqual([499880.5, 3999920.5]);
+    expect(header(zip, 'flow-accumulation.asc', 'yllcorner')).toBe(3999920);
+  });
+});
+
+describe('outlet elevations with an unresolved vertical unit', () => {
+  it('keeps the Local columns, since the Lab readout shows no elevation', () => {
+    const result = runOf({ conditioning: 'priority-flood' });
+    const local = result.depressions.depressions[0]!.outletElevation!;
+    const zip = buildFlowPulsePackage(result, { basename: 'flow', elevationOrigin: 1000, verticalResolved: false });
+    const [head, first] = textOf(zip, 'flow-sinks-depressions.csv').trim().split('\n');
+    expect(head!.split(',')[4]).toBe('outletElevationLocal');
+    expect(Number(first!.split(',')[4])).toBe(local);
+    expect(textOf(zip, 'flow-README.txt')).not.toContain('the same figure the Lab readout shows');
+  });
+});

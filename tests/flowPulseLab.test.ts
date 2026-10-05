@@ -204,3 +204,12 @@ describe('the conditioning copy', () => {
     expect(lab.rerunAnnouncement(run, false)).toBe('Flow Pulse run complete.');
   });
 });
+
+describe('the export georef carries the DTM raster frame', () => {
+  it('passes the DTM corner offset and cell size', () => {
+    const base = input();
+    const dtm = { ...(base.result as { dtm: object }).dtm, originH1: -120, originH2: -80, cellSizeM: 0.5 };
+    const georef = lab.flowPulseGeorefOf({ ...base, result: { ...base.result, dtm } as never }, null);
+    expect(georef.gridFrame).toEqual({ originH1: -120, originH2: -80, cellSize: 0.5 });
+  });
+});
