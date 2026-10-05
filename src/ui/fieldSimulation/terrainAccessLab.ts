@@ -74,7 +74,7 @@ import {
 } from './terrainAccessProfileForm';
 import { loadTerrainAccessPackage, registerTerrainAccessOverlayInvalidator } from '../../lazyChunks';
 import { downloadBytes } from '../../io/download';
-import type { buildTerrainAccessPackage } from '../../export/terrainAccessPackage';
+import type { buildTerrainAccessPackage, TerrainAccessGridPlacement } from '../../export/terrainAccessPackage';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
 import { labRun, publishLabRun, takeResultReopen } from '../../app/results/resultSignals';
 import type { SurfaceGrid } from '../../terrain/surface/buildDsm';
@@ -236,8 +236,15 @@ export interface TerrainAccessGeoref {
   /** Probe interpretation level and data basis of the analysed scan, for export provenance. */
   readonly sourceInterpretation?: SourceInterpretationRecord;
   readonly worldOrigin: { readonly x: number; readonly y: number } | null;
+  /** The grid's own position in the scan (`DtmGrid.originH1/originH2/cellSizeM`). */
+  readonly gridPlacement?: TerrainAccessGridPlacement | null;
   readonly crsName: string | null;
   readonly wkt: string | null;
+}
+
+/** The grid's placement in the scan, read from the DTM the run was built on. */
+export function terrainAccessGridPlacement(dtm: DtmGrid): TerrainAccessGridPlacement {
+  return { originH1: dtm.originH1, originH2: dtm.originH2, cellSize: dtm.cellSizeM };
 }
 
 /** Build the export package from the CURRENT run, refusing on a stale result. Pure and DOM-free. */
@@ -259,6 +266,7 @@ export function buildTerrainAccessExport(
   const bytes = build(outcome, {
     basename,
     worldOrigin: georef?.worldOrigin ?? null,
+    gridPlacement: georef?.gridPlacement ?? null,
     crsName: georef?.crsName ?? null,
     wkt: georef?.wkt ?? null,
     sourceInterpretation: georef?.sourceInterpretation ?? null,
@@ -421,7 +429,7 @@ function segmentedControl<T extends string>(
  * (`cellConfidence.ts`: ground-return density where measured, distance to data
  * and roughness where interpolated). */
 export const TERRAIN_CONFIDENCE_HINT =
-  '0–100: how well ground returns support each cell (return density where measured, distance to data where interpolated)';
+  '0–100: how well ground returns support each cell (return density where measured, distance to data and local roughness where interpolated)';
 
 /** Build the mobility-profile form. Returns the element and a live-read accessor
  * for its current values — no field is pre-filled with a number (no preset). */
@@ -600,7 +608,7 @@ registerTerrainAccessOverlayInvalidator(disposePersistentTerrainAccessOverlay);
  * on stays drawn on the scan after the modal closes, mirroring
  * `flowPulseLab.ts`'s `mountFlowPulseInteractive` exactly.
  */
-function mountTerrainAccessInteractive(
+export function mountTerrainAccessInteractive(
   input: TerrainAccessLabInput | null,
   onRunTerrain: (() => void) | null = null,
 ): { element: HTMLElement; dispose: () => void } {
@@ -731,6 +739,7 @@ function mountTerrainAccessInteractive(
           worldOrigin: input.worldOriginX != null && input.worldOriginY != null
             ? { x: input.worldOriginX, y: input.worldOriginY }
             : null,
+          gridPlacement: terrainAccessGridPlacement(input.dtm),
           crsName: input.crsName ?? null,
           wkt: input.wkt ?? null,
           sourceInterpretation: input.sourceInterpretation,

@@ -25,6 +25,9 @@ const { runTerrainAccess, TERRAIN_ACCESS_DEFAULTS } = await import('../src/simul
 const { prepareTerrainAccessPreview } = await import('../src/simulation/terrainAccess/terrainAccessPreview');
 const { buildTerrainAccessPackage, routeFrameLines } = await import('../src/export/terrainAccessPackage');
 const { extractEntry } = await import('./helpers/zipReader');
+const { buildDemPackage } = await import('../src/terrain/export/demPackage');
+const { demResultAround, DEM_PKG_OPTS } = await import('./helpers/demPackageFixture');
+const { placedWorldOrigin } = await import('../src/terrain/canonicalFrame');
 
 const rec = (n: unknown): RecordingEl => n as RecordingEl;
 
@@ -176,19 +179,77 @@ describe('controls', () => {
   });
 });
 
-describe('route GeoJSON frame', () => {
-  it('labels the frame by the origin actually added to the coordinates', () => {
-    const run = weakSupportRun();
+describe('route and raster placement', () => {
+  // 4 x 3 cells of 2 m, cell (0, 0) at (-10, -6) from a load-time origin of
+  // (400000, 3600000): the lower-left corner is (399990, 3599994).
+  function placedDtm(): DtmGrid {
+    return { ...dtmOf(4, 3, 60), cellSizeM: 2, originH1: -10, originH2: -6 } as DtmGrid;
+  }
+  const ORIGIN = { x: 400_000, y: 3_600_000 };
+  const text = (zip: Uint8Array, name: string) => new TextDecoder().decode(extractEntry(zip, name)!);
+
+  function placedRun() {
+    const r = runTerrainAccess(placedDtm(), RESOLVED, profileOf(), 0, 11, TERRAIN_ACCESS_DEFAULTS, identity);
+    if (!r.ok) throw new Error(r.reason);
+    return r;
+  }
+
+  it('writes the raster corner and route vertices in the scan CRS, from a hand computation', () => {
+    const run = placedRun();
+    const zip = buildTerrainAccessPackage(run, {
+      basename: 'ta', worldOrigin: ORIGIN, crsName: 'UTM zone 10N', wkt: 'PROJCS["x"]',
+      gridPlacement: lab.terrainAccessGridPlacement(placedDtm()),
+    });
+    const asc = text(zip, 'ta-traversability.asc');
+    expect(asc).toContain('xllcorner 399990\nyllcorner 3599994\ncellsize 2\n');
+    const geo = JSON.parse(text(zip, 'ta-route.geojson'));
+    expect(geo.coordinateFrame).toBe('scan-crs');
+    // Cell 0 is (col 0, row 0): its centre is one half cell in from the corner.
+    expect(geo.features[0].geometry.coordinates[0]).toEqual([399991, 3599995]);
+    // Cell 11 is (col 3, row 2): 399990 + 3.5 * 2, 3599994 + 2.5 * 2.
+    expect(geo.features[0].geometry.coordinates.at(-1)).toEqual([399997, 3599999]);
+    expect(text(zip, 'ta.prj')).toBe('PROJCS["x"]');
+    expect(text(zip, 'ta-README.txt')).toContain(routeFrameLines('scan-crs', 'UTM zone 10N').join('\n'));
+  });
+
+  it('places a Y-up scan the same way, through the canonical origin the Lab receives', () => {
+    // A Y-up scene stores northing as -z. Its load-time origin (400000, 50,
+    // -3600000) becomes (400000, 3600000, 50) in the canonical Z-up frame the
+    // DTM and getMapContext use, so originH2 is a northing offset there too.
+    const canon = placedWorldOrigin([400_000, 50, -3_600_000], 'y')!;
+    expect(canon).toEqual([400_000, 3_600_000, 50]);
+    const zip = buildTerrainAccessPackage(placedRun(), {
+      basename: 'ta', worldOrigin: { x: canon[0], y: canon[1] }, crsName: 'UTM zone 10N',
+      gridPlacement: lab.terrainAccessGridPlacement(placedDtm()),
+    });
+    const first = JSON.parse(text(zip, 'ta-route.geojson')).features[0].geometry.coordinates[0];
+    // Cell (0, 0)'s centre in the scene is local x = -10 + 1, local z = -(-6 + 1) = 5.
+    // In source coordinates that is x = 400000 - 9 and z = -3600000 + 5, so its
+    // northing is -z = 3599995.
+    const sceneX = -9;
+    const sceneZ = 5;
+    expect(first).toEqual([400_000 + sceneX, -(-3_600_000 + sceneZ)]);
+    expect(text(zip, 'ta-traversability.asc')).toContain('xllcorner 399990\nyllcorner 3599994\n');
+  });
+
+  it('puts the raster on the same corner the DEM package writes for the same grid', () => {
+    const dtm = { ...placedDtm(), verticalEpsg: 5703 } as DtmGrid;
+    const dem = text(buildDemPackage(demResultAround(dtm), { ...DEM_PKG_OPTS, worldOrigin: ORIGIN }), 'terrain-dtm.asc');
+    const ta = text(buildTerrainAccessPackage(placedRun(), {
+      basename: 'ta', worldOrigin: ORIGIN, gridPlacement: lab.terrainAccessGridPlacement(dtm),
+    }), 'ta-traversability.asc');
+    const header = (asc: string) => asc.split('\n').slice(0, 5).join('\n');
+    expect(header(ta)).toBe(header(dem));
+  });
+
+  it('labels the frame local without an origin, and source coordinates without a CRS', () => {
+    const run = placedRun();
     const local = buildTerrainAccessPackage(run, { basename: 'ta' });
-    const shifted = buildTerrainAccessPackage(run, { basename: 'ta', worldOrigin: { x: 500, y: 4000 } });
-    const json = (zip: Uint8Array) => JSON.parse(new TextDecoder().decode(extractEntry(zip, 'ta-route.geojson')!));
-    const readme = (zip: Uint8Array) => new TextDecoder().decode(extractEntry(zip, 'ta-README.txt')!);
-    expect(json(local).coordinateFrame).toBe('local-planar-metres');
-    expect(json(shifted).coordinateFrame).toBe('scan-origin-plus-grid-offset-metres');
-    expect(json(shifted).features[0].geometry.coordinates[0]).toEqual([500, 4000]);
-    expect(readme(local)).toContain(routeFrameLines(null).join('\n'));
-    expect(readme(shifted)).toContain(routeFrameLines({ x: 500, y: 4000 }).join('\n'));
-    expect(readme(shifted)).toContain("The scan's load-time origin (500, 4000)");
-    expect(readme(shifted)).not.toContain("relative to the grid's own (0, 0) corner");
+    expect(JSON.parse(text(local, 'ta-route.geojson')).coordinateFrame).toBe('local-planar-metres');
+    expect(text(local, 'ta-traversability.asc')).toContain('xllcorner 0\nyllcorner 0\n');
+    expect(text(local, 'ta-README.txt')).toContain(routeFrameLines('local-planar-metres', null).join('\n'));
+    const noCrs = buildTerrainAccessPackage(run, { basename: 'ta', worldOrigin: ORIGIN, gridPlacement: lab.terrainAccessGridPlacement(placedDtm()) });
+    expect(JSON.parse(text(noCrs, 'ta-route.geojson')).coordinateFrame).toBe('scan-source-coordinates');
+    expect(extractEntry(noCrs, 'ta.prj')).toBeNull();
   });
 });

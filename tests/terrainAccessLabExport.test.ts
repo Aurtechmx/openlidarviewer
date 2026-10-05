@@ -112,6 +112,7 @@ describe('a fresh, non-stale result', () => {
     const wkt = 'PROJCS["NAD83(2011) / UTM zone 13N",...]';
     const out = buildTerrainAccessExport(runOf(), false, 'site', 'layer-a', buildTerrainAccessPackage, {
       worldOrigin: { x: 400123.5, y: 3600456.25 },
+      gridPlacement: { originH1: 0, originH2: 0, cellSize: 1 },
       crsName: 'UTM zone 13N',
       wkt,
     });

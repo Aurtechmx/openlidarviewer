@@ -54,8 +54,10 @@ export interface TerrainAccessPackageOptions {
   readonly generationDateIso?: string;
   readonly softwareName?: string;
   readonly softwareVersion?: string;
-  /** World offset added to local grid coordinates in the raster/GeoJSON, when known. */
+  /** The scan's load-time origin, in horizontal CRS units, when known. */
   readonly worldOrigin?: { readonly x: number; readonly y: number } | null;
+  /** The grid's own position in the scan. With {@link worldOrigin}, places the route and raster in the scan CRS. */
+  readonly gridPlacement?: TerrainAccessGridPlacement | null;
   /** A CRS name for the README/passport, when the caller can supply one. Never invented here. */
   readonly crsName?: string | null;
   /**
@@ -151,24 +153,79 @@ function diagnosticsCsv(result: TerrainAccessResult): string {
   return ['metric,value', ...rows.map(([k, v]) => `${k},${v}`), ...contributors].join('\n') + '\n';
 }
 
-/** What the route GeoJSON's coordinates are, given the origin actually added to them. */
-export function routeFrameLines(worldOrigin: { readonly x: number; readonly y: number } | null): string[] {
-  const lonLat = [
-    '  NOT longitude/latitude. Reproject before loading into a lon/lat viewer;',
-    '  loading it as-is will place it at the equator/prime meridian.',
-  ];
-  if (!worldOrigin) {
+/**
+ * Where the grid sits in the scan, as `DtmGrid` records it: the west and
+ * south edges of cell (0, 0) relative to the load-time origin, and the cell
+ * size, all in the scan's horizontal CRS units. Rows run north from
+ * `originH2` (see `cellConfidence.ts`).
+ */
+export interface TerrainAccessGridPlacement {
+  readonly originH1: number;
+  readonly originH2: number;
+  readonly cellSize: number;
+}
+
+/** The coordinate frame the route and raster are written in. */
+export type TerrainAccessCoordinateFrame = 'scan-crs' | 'scan-source-coordinates' | 'local-planar-metres';
+
+/** The lower-left corner, the cell sizes and the frame both the route and the raster use. */
+export interface TerrainAccessPlacement {
+  readonly xll: number;
+  readonly yll: number;
+  readonly cellX: number;
+  readonly cellY: number;
+  readonly frame: TerrainAccessCoordinateFrame;
+}
+
+/**
+ * Place the grid. With a world origin and the grid's own placement, the
+ * corner is `origin + originH1/originH2` in scan CRS units, the same corner
+ * the DEM package writes for this grid. Without them the grid is written in
+ * local metres from its own lower-left corner.
+ */
+export function terrainAccessPlacement(
+  grid: { readonly cellMetresX: number; readonly cellMetresY: number },
+  worldOrigin: { readonly x: number; readonly y: number } | null,
+  placement: TerrainAccessGridPlacement | null,
+  crsName: string | null,
+): TerrainAccessPlacement {
+  if (!worldOrigin || !placement) {
+    return { xll: 0, yll: 0, cellX: grid.cellMetresX, cellY: grid.cellMetresY, frame: 'local-planar-metres' };
+  }
+  return {
+    xll: worldOrigin.x + placement.originH1,
+    yll: worldOrigin.y + placement.originH2,
+    cellX: placement.cellSize,
+    cellY: placement.cellSize,
+    frame: crsName ? 'scan-crs' : 'scan-source-coordinates',
+  };
+}
+
+/** The route vertex for a cell index: the cell's centre. */
+export function routeVertex(cell: number, cols: number, p: TerrainAccessPlacement): [number, number] {
+  const col = cell % cols;
+  const row = (cell - col) / cols;
+  return [p.xll + (col + 0.5) * p.cellX, p.yll + (row + 0.5) * p.cellY];
+}
+
+/** What the route GeoJSON's coordinates are, for the frame they were written in. */
+export function routeFrameLines(frame: TerrainAccessCoordinateFrame, crsName: string | null): string[] {
+  if (frame === 'scan-crs') {
     return [
-      '  Local planar metres relative to the grid\'s own (0, 0) corner (cell 0,0\'s',
-      '  lower-left).',
-      ...lonLat,
+      `  Cell centres in the scan CRS (${crsName}), the same frame as the raster and`,
+      '  the .prj when one is written.',
+    ];
+  }
+  if (frame === 'scan-source-coordinates') {
+    return [
+      '  Cell centres in the scan\'s own source coordinates. The CRS did not resolve,',
+      '  so no .prj names it; assign the CRS before loading into a GIS.',
     ];
   }
   return [
-    `  The scan's load-time origin (${worldOrigin.x}, ${worldOrigin.y}) plus each cell's`,
-    '  offset in metres from grid cell (0, 0). The grid\'s own position inside the',
-    '  scan is not added, so these are not coordinates in the scan CRS.',
-    ...lonLat,
+    '  Cell centres in local planar metres from the grid\'s lower-left corner,',
+    '  NOT longitude/latitude. Loading it as-is in a lon/lat viewer places it at',
+    '  the equator/prime meridian.',
   ];
 }
 
@@ -181,7 +238,7 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
   readonly hasWkt: boolean;
   readonly sourceInterpretation: SourceInterpretationRecord;
   readonly sourceSha256Text: string;
-  readonly worldOrigin: { readonly x: number; readonly y: number } | null;
+  readonly frame: TerrainAccessCoordinateFrame;
 }): string {
   const r = result.record;
   const d = result.diagnostics;
@@ -196,7 +253,7 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
     'rollover, weather and vegetation compliance are not modelled.',
     '',
     'Files',
-    `  ${opts.basename}-route.geojson              Found route (${opts.worldOrigin ? 'planar offsets from the scan origin' : 'local planar coordinates'})`,
+    `  ${opts.basename}-route.geojson              Found route (${opts.frame === 'local-planar-metres' ? 'local planar coordinates' : 'scan coordinates'})`,
     `  ${opts.basename}-traversability.asc         Traversability-map bucket per cell (Esri ASCII Grid)`,
     opts.hasWkt ? `  ${opts.basename}.prj                    Coordinate reference system (WKT)` : null,
     `  ${opts.basename}-diagnostics.csv            Route diagnostics (worst conditions along the route)`,
@@ -216,7 +273,9 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
     `  Input digest   ${r.source.analysisInputDigest}`,
     `  Input coverage ${r.source.basis.coverage} (${r.source.basis.complete ? 'complete' : 'partial'})`,
     `  Cells read     ${r.source.basis.measuredCells} of ${r.source.basis.totalCells}`,
-    `  CRS            ${opts.crsName ?? 'not georeferenced — the raster uses a local (0, 0) origin'}`,
+    `  CRS            ${opts.crsName ?? (opts.frame === 'local-planar-metres'
+      ? 'not georeferenced — the raster uses a local (0, 0) origin'
+      : 'not resolved — the raster uses the scan\'s source coordinates')}`,
     ...(opts.sourceInterpretation.crsOrigin ? [`  ${crsOriginLine(opts.sourceInterpretation.crsOrigin)}`] : []),
     '',
     'Grid',
@@ -224,7 +283,7 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
     `  Cell size      ${grid.cellMetresX} m (east-west) x ${grid.cellMetresY} m (north-south)`,
     `  NODATA value   ${NO_DATA}`,
     '  Traversability bucket codes   0=blocked, 1=no data/unknown, 2=low-cost, 3=moderate-cost, 4=high-cost',
-    ...(grid.cellMetresX !== grid.cellMetresY ? [
+    ...(opts.frame === 'local-planar-metres' && grid.cellMetresX !== grid.cellMetresY ? [
       '  Anisotropic grid: the Esri ASCII Grid format has one cell size field, so the',
       `  raster is written at the X cell size (${grid.cellMetresX} m) and will appear`,
       `  stretched along Y in GIS software (true Y is ${grid.cellMetresY} m). Routing`,
@@ -261,7 +320,7 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
     '     changed — the config or the README says which was declared.',
     '',
     'route.geojson coordinates',
-    ...routeFrameLines(opts.worldOrigin),
+    ...routeFrameLines(opts.frame, opts.crsName),
     '',
     'What this is not',
     '  Not a safety assessment, a guaranteed-passable route, or a vehicle dynamics',
@@ -285,20 +344,15 @@ export function buildTerrainAccessPackage(
     ...(options.sourceInterpretation ?? sourceInterpretationOf(undefined, undefined)),
     ...(options.digests ? { crsOrigin: options.digests.crsOrigin } : {}),
   };
-  const ox = options.worldOrigin?.x ?? 0;
-  const oy = options.worldOrigin?.y ?? 0;
   const grid = result.grid;
+  const place = terrainAccessPlacement(grid, options.worldOrigin ?? null, options.gridPlacement ?? null, options.crsName ?? null);
 
   const entries: ZipEntry[] = [];
 
-  const coords = result.path.map((c) => {
-    const col = c % grid.cols;
-    const row = (c - col) / grid.cols;
-    return [ox + col * grid.cellMetresX, oy + row * grid.cellMetresY];
-  });
+  const coords = result.path.map((c) => routeVertex(c, grid.cols, place));
   const geojson = {
     type: 'FeatureCollection',
-    coordinateFrame: options.worldOrigin ? 'scan-origin-plus-grid-offset-metres' : 'local-planar-metres',
+    coordinateFrame: place.frame,
     features: [{
       type: 'Feature',
       properties: { cells: result.path.length, cost: result.cost },
@@ -321,8 +375,8 @@ export function buildTerrainAccessPackage(
     name: `${basename}-traversability.asc`,
     bytes: new TextEncoder().encode(writeAsciiGrid({
       values: codes, coverage,
-      cols: grid.cols, rows: grid.rows, cellSize: grid.cellMetresX,
-      xllCorner: ox, yllCorner: oy, noData: NO_DATA, precision: 0,
+      cols: grid.cols, rows: grid.rows, cellSize: place.cellX,
+      xllCorner: place.xll, yllCorner: place.yll, noData: NO_DATA, precision: 0,
     })),
   });
 
@@ -356,7 +410,7 @@ export function buildTerrainAccessPackage(
 
   const readme = buildTerrainAccessReadme(result, {
     basename, generationDateIso, build, crsName: options.crsName ?? null, hasWkt: !!options.wkt, sourceInterpretation,
-    worldOrigin: options.worldOrigin ?? null,
+    frame: place.frame,
     sourceSha256Text: options.sourceSha256 ?? (options.digests ? sourceSha256Text(options.digests) : (result.record.source.sourceDigest ?? SOURCE_NOT_SUPPLIED_NOTE)),
   });
   entries.push({

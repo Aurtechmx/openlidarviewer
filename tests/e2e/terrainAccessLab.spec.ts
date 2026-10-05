@@ -197,8 +197,8 @@ test('profile, start/goal by keyboard and click, run, route shown, why-not, expo
     // The fixture's UTM easting/northing are in the 500000/4100000 range —
     // real georeferencing, not a local (0, 0) origin.
     expect(readmeText).not.toContain('not georeferenced');
-    // The route frame names the origin actually added to its coordinates.
-    expect(readmeText).toContain("The scan's load-time origin");
+    // The route is written in the scan CRS, at cell centres.
+    expect(readmeText).toContain('Cell centres in the scan CRS');
     const ascText = extractZipEntryText(zipBytes, findZipEntryName(zipBytes, 'traversability.asc'));
     expect(ascText).toMatch(/xllcorner 5000\d\d\.?\d*/);
     expect(ascText).toMatch(/yllcorner 41000\d\d\.?\d*/);
