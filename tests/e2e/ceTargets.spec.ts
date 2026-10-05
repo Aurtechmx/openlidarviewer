@@ -13,7 +13,7 @@
  * and the Measure panel's Export session.
  */
 import { test, expect, type Locator, type Page } from '@playwright/test';
-import { dropDenseGridPly, placeTestDistance } from './helpers';
+import { dropDenseGridPly, pinNavigationPanel, placeTestDistance } from './helpers';
 
 const AA = 24;
 const TOUCH = 44;
@@ -54,6 +54,7 @@ test.describe('targets at desktop size', () => {
   });
 
   test('dock, NavBar and canvas menu controls', async ({ page }) => {
+    await pinNavigationPanel(page);
     await openScan(page);
     await expect(page.locator('.olv-dock [data-action="tool.measure"]')).toBeEnabled({ timeout: 20_000 });
     expectAtLeast(await sizes(page.locator('.olv-dock [data-action]')), AA, 'dock buttons');

@@ -161,6 +161,20 @@ export async function suppressOnboardingTour(page: Page): Promise<void> {
 }
 
 /**
+ * Open the Navigation panel (Camera and Views rows) from the first scan, as a
+ * user who has opened it before would see it. It starts closed otherwise.
+ */
+export async function pinNavigationPanel(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('olv.nav.helpPinned', '1');
+    } catch {
+      // Storage blocked: the panel starts closed and the spec sees that.
+    }
+  });
+}
+
+/**
  * Pre-seed the stale-chunk recovery cooldown (staleChunkReload.ts), so the
  * first aborted chunk in a test takes the no-reload branch and reaches the
  * failure toast instead of reloading the page.

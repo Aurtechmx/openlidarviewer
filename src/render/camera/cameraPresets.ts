@@ -393,3 +393,70 @@ export function standardViewPose(view: StandardView, input: PresetInput): Preset
   }
   return { position: add(target, scale(dir, dist)), target };
 }
+
+/*
+ * Framing reserve: fit a scan into the part of the view that chrome leaves free.
+ *
+ * The opening fit (`fitBoxDistance`) fills the whole frustum, so the
+ * bottom-centre navigation widget lands on the scan the moment it opens. This
+ * takes a band at the bottom of the canvas, as a fraction of its height, and
+ * returns the frustum to fit against plus the offset that recentres the image
+ * on what is left:
+ *
+ *   - the vertical field of view shrinks so the box fills only the top
+ *     `1 − r` of the height, with the horizontal field kept as it was;
+ *   - the camera and its target move down along the camera's up vector by
+ *     `r · dist · tan(fov/2)`, which lifts the box centre to the middle of the
+ *     free band.
+ *
+ * The lift is exact at the target's depth. Nearer and farther points move by
+ * slightly different amounts under perspective, and the fit's own margin
+ * absorbs that.
+ *
+ */
+
+/** Largest share of the height a reserve may take; the scan keeps the rest. */
+export const MAX_FRAMING_RESERVE = 0.4;
+
+/** The frustum the fit should use when `reserve` of the height is taken. */
+export interface ReservedFrustum {
+  readonly fovDeg: number;
+  readonly aspect: number;
+  /** The reserve actually applied, after clamping. */
+  readonly reserve: number;
+}
+
+/** Clamp a reserve fraction to [0, MAX_FRAMING_RESERVE]; NaN reads as 0. */
+export function clampReserve(reserve: number): number {
+  if (!Number.isFinite(reserve) || reserve <= 0) return 0;
+  return Math.min(reserve, MAX_FRAMING_RESERVE);
+}
+
+/** The narrowed frustum for a bottom reserve. A zero reserve returns the input. */
+export function reservedFrustum(fovDeg: number, aspect: number, reserve: number): ReservedFrustum {
+  const r = clampReserve(reserve);
+  if (r === 0) return { fovDeg, aspect, reserve: 0 };
+  const tanV = Math.tan((fovDeg * Math.PI) / 360);
+  const narrowed = (Math.atan(tanV * (1 - r)) * 360) / Math.PI;
+  return { fovDeg: narrowed, aspect: aspect / (1 - r), reserve: r };
+}
+
+/**
+ * The world offset to add to both the camera position and its target, so the
+ * box centre sits in the middle of the free band. `look` points from the
+ * camera toward the target.
+ */
+export function reserveShift(look: Vec3, worldUp: Vec3, dist: number, fovDeg: number, reserve: number): Vec3 {
+  const r = clampReserve(reserve);
+  if (r === 0) return { x: 0, y: 0, z: 0 };
+  const ll = Math.hypot(look.x, look.y, look.z);
+  if (ll < 1e-9) return { x: 0, y: 0, z: 0 };
+  const f = { x: look.x / ll, y: look.y / ll, z: look.z / ll };
+  const right = cross(f, worldUp);
+  const rl = Math.hypot(right.x, right.y, right.z);
+  if (rl < 1e-9) return { x: 0, y: 0, z: 0 };
+  const up = cross({ x: right.x / rl, y: right.y / rl, z: right.z / rl }, f);
+  const s = -r * dist * Math.tan((fovDeg * Math.PI) / 360);
+  return { x: up.x * s, y: up.y * s, z: up.z * s };
+}
+

@@ -77,12 +77,15 @@ describe('dismissing the navigation legend keeps the view controls', () => {
     expect(hud.classList.contains('olv-hidden')).toBe(true);
   });
 
-  it('starts with the legend collapsed, and H cycles it without hiding the controls', async () => {
-    // The panel is anchored bottom-centre and stacks upward, so the legend's
-    // height is what reaches over the scan. It is help, so it is opt-in.
+  it('starts closed, opens with the legend collapsed, and H cycles it without hiding the controls', async () => {
+    // The panel is anchored bottom-centre and stacks upward over the scan, so
+    // a first-time user starts with it closed. The first H opens the panel.
     const { root, bar } = await navbar();
     const hud = root.byClass('olv-nav-hud')[0]!;
     const legend = root.byClass('olv-legend')[0]!;
+    expect(hud.classList.contains('olv-hidden')).toBe(true);
+
+    bar.toggleHelp();
     expect(hud.classList.contains('olv-nav-hud-collapsed')).toBe(true);
     expect(legend.classList.contains('olv-hidden')).toBe(true);
     expect(hud.classList.contains('olv-hidden')).toBe(false);

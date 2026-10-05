@@ -111,13 +111,8 @@ import type { StockpileBandInputs } from './measure/stockpileBandInputs';
 export type { StockpileBandInputs } from './measure/stockpileBandInputs';
 import { computeLassoVolume as computeLassoVolumeWalk, copyPlacedPositions, lassoVisibilityFilters, makeLassoProjector, sourcePositions, streamingLassoParts } from './measure/lassoVolumeCompute';
 import type { LassoSelectionBasis, LassoSelectionBasisReport } from './measure/lassoVolumeCompute';
-import {
-  cameraPresetPose,
-  standardViewPose,
-  fitBoxDistance,
-  type CameraPresetName,
-  type StandardView,
-} from './camera/cameraPresets';
+import { cameraPresetPose, standardViewPose, fitBoxDistance, reservedFrustum, reserveShift } from './camera/cameraPresets';
+import type { CameraPresetName, StandardView } from './camera/cameraPresets';
 import { followPerspective } from './camera/orthoCamera';
 import { projectionFromLegacyFov } from './camera/orthoProjection';
 export type { CameraPresetName, StandardView } from './camera/cameraPresets';
@@ -4005,6 +4000,13 @@ export class Viewer {
     if (box) this._frameBox(box);
   }
 
+  /** Pixels at the bottom of the canvas the opening fit keeps the scan out of. */
+  setFramingReserve(px: () => number): void {
+    this._framingReservePx = px;
+  }
+
+  private _framingReservePx: () => number = () => 0;
+
   /**
    * Fit the camera for a load's stand-in cloud (`app/previewCloud.ts`), which
    * lives outside the layer table: Z up, navigation on, one fit to `min`..
@@ -4034,26 +4036,24 @@ export class Viewer {
       .addScaledVector(this._worldUp, Math.sin(0.61))
       .normalize();
 
-    // Extent-aware fit: the distance at which the actual bounding BOX just fills
-    // the frustum (aspect + FOV aware), not its much-larger bounding sphere. So
-    // a flat wide scan fills the viewport and a tall scan isn't over-zoomed —
-    // the framing adapts to the scan's shape. 1.05 leaves a small margin so the
-    // edge points sit just inside the frame rather than on its border.
+    // Extent-aware box fit (not the bounding sphere), 1.05 margin, into the
+    // canvas above the band the navigation widget reserves (cameraPresets reservedFrustum).
+    const look = { x: -dir.x, y: -dir.y, z: -dir.z };
+    const h = this._canvas.clientHeight;
+    const fr = reservedFrustum(this._camera.fov, this._camera.aspect, h > 0 ? this._framingReservePx() / h : 0);
     const dist = fitBoxDistance({
       boxMin: box.min,
       boxMax: box.max,
-      look: { x: -dir.x, y: -dir.y, z: -dir.z },
+      look,
       worldUp: this._worldUp,
-      fovDeg: this._camera.fov,
-      aspect: this._camera.aspect,
+      fovDeg: fr.fovDeg,
+      aspect: fr.aspect,
       pad: 1.05,
     });
-
+    const shift = reserveShift(look, this._worldUp, dist, this._camera.fov, fr.reserve);
+    target.add(new THREE.Vector3(shift.x, shift.y, shift.z));
     const pos = target.clone().addScaledVector(dir, dist);
-    // Slightly longer than the default tween — a Frame All sweep usually
-    // covers a larger camera delta, so the extra ~100 ms makes the cubic
-    // ease feel cinematic rather than rushed. Matches model-viewer's
-    // jump-to-goal cadence on a fresh load.
+    // 0.9 s, a little longer than the default: a Frame All sweep covers more ground.
     this._nav.tweenTo(pos, target, 0.9);
   }
 

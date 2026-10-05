@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropTinyPly } from './helpers';
+import { dropTinyPly, pinNavigationPanel } from './helpers';
 
 /**
  * reducedMotion.spec.ts: `prefers-reduced-motion: reduce` stops camera motion
@@ -22,6 +22,7 @@ type Pose = number[];
 
 async function loadReduced(page: Page): Promise<void> {
   await page.emulateMedia({ reducedMotion: 'reduce' });
+  await pinNavigationPanel(page);
   await page.goto('/');
   await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });

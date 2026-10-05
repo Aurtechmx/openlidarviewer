@@ -1,7 +1,6 @@
 import { DisposableGroup } from '../disposableGroup';
 import { el } from './dom';
 import { storageGet, storageSet } from './safeStorage';
-import { narrowStage } from './panelChrome';
 import type { NavMode } from '../render/NavController';
 import {
   CAMERA_PRESET_KEY,
@@ -149,9 +148,13 @@ function hasStoredHelpPinned(): boolean {
 
 function readStoredHelpPinned(): boolean {
   const stored = storageGet(HELP_PINNED_KEY);
-  // A first-time user gets it open where the stage has room for it.
-  return stored === null ? !narrowStage() : stored === '1';
+  // Closed until the user opens it: on first open the panel sat over the
+  // middle of the scan. H, the dock's Help button and the palette open it.
+  return stored === '1';
 }
+
+/** Space kept between the framed scan and the top of the mode triangle. */
+const NAV_FRAMING_GAP_PX = 12;
 
 /** Storage key for the legend's own open/closed state, independent of the panel. */
 const LEGEND_OPEN_KEY = 'olv.nav.legendOpen';
@@ -218,6 +221,8 @@ export class NavBar {
   /** The legend's show/hide control, whose label follows the current state. */
   private readonly _legendToggle: HTMLButtonElement;
   private readonly _speed: HTMLElement;
+  /** The mode triangle's row: the part of the bar that stays up over the scan. */
+  private readonly _navRow: HTMLElement;
   private readonly _modeButtons = new Map<NavMode, HTMLButtonElement>();
   /** The Pan (hand tool) pad — hidden when `?handPan=off` disables it. */
   private readonly _panBtn!: HTMLButtonElement;
@@ -589,10 +594,8 @@ export class NavBar {
       ]),
     ]);
 
-    this.element = el('div', { className: 'olv-navbar' }, [
-      this._hud,
-      el('div', { className: 'olv-nav-row' }, [switcher, this._speed]),
-    ]);
+    this._navRow = el('div', { className: 'olv-nav-row' }, [switcher, this._speed]);
+    this.element = el('div', { className: 'olv-navbar' }, [this._hud, this._navRow]);
 
     this.prompt = el('div', { className: 'olv-nav-prompt' }, [
       el('span', { text: 'Click the scan to look around' }),
@@ -719,6 +722,26 @@ export class NavBar {
     this._helpPinned = false;
     writeStoredHelpPinned(false);
     this._render();
+  }
+
+  /**
+   * Pixels from the bottom of the stage to the top of the mode triangle, plus
+   * a small gap: the band the opening fit keeps the scan out of. Zero when
+   * the bar does not lay out (phones hide it). Read through offsets, so the
+   * rise-in animation's transform does not change it, and measured with the
+   * bar's `olv-hidden` lifted for the call, because a scan is framed just
+   * before the bar is revealed.
+   */
+  framingReservePx(): number {
+    const bar = this.element;
+    const wasHidden = bar.classList.contains('olv-hidden');
+    if (wasHidden) bar.classList.remove('olv-hidden');
+    const stage = bar.offsetParent instanceof HTMLElement ? bar.offsetParent : null;
+    const rowTop = bar.offsetTop + this._navRow.offsetTop;
+    const rowH = this._navRow.offsetHeight;
+    if (wasHidden) bar.classList.add('olv-hidden');
+    if (stage === null || rowH === 0) return 0;
+    return Math.max(0, stage.clientHeight - rowTop + NAV_FRAMING_GAP_PX);
   }
 
   toggleHelp(): void {
