@@ -6,6 +6,8 @@
  * into the stored record. Withheld points are left out of the integration
  * and counted inside the footprint, so the record states points read,
  * Withheld excluded and points analysed the way the lasso volume does.
+ * Noise classes 7 and 18 are left out the same way and counted as
+ * `noiseExcluded` when a source carries a classification channel.
  *
  * Pure: no DOM, no three.js.
  */
@@ -38,7 +40,7 @@ export function samplePolygonVolume(
   referenceZ: number,
   up: Vec3,
 ): VolumeRecord {
-  const { positions, withheldPositions, everySourceFlagged } = assembleVolumePositions(buffers, total);
+  const { positions, withheldPositions, noisePositions, everySourceFlagged } = assembleVolumePositions(buffers, total);
   const result = volumeCutFill({ polygon, referenceZ, up, positions });
   const record = deriveVolumeRecord(result, referenceZ, POINT_SAMPLE_VOLUME_METHOD);
   let excluded = 0;
@@ -46,11 +48,17 @@ export function samplePolygonVolume(
     const w = volumeCutFill({ polygon, referenceZ, up, positions: withheldPositions });
     excluded = w.pointsInPolygon + (w.skippedNonFinite ?? 0);
   }
+  let noise = 0;
+  if (noisePositions.length > 0) {
+    const z = volumeCutFill({ polygon, referenceZ, up, positions: noisePositions });
+    noise = z.pointsInPolygon + (z.skippedNonFinite ?? 0);
+  }
   const analysed = result.pointsInPolygon;
   record.withheld = {
-    source: analysed + (result.skippedNonFinite ?? 0) + excluded,
+    source: analysed + (result.skippedNonFinite ?? 0) + excluded + noise,
     excluded: everySourceFlagged ? excluded : 'unknown',
     analysed,
   };
+  if (noise > 0) record.withheld = { ...record.withheld, noiseExcluded: noise };
   return record;
 }

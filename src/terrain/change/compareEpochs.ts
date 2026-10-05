@@ -26,6 +26,7 @@ import type { DtmGrid } from '../ground/cellConfidence';
 import type { TerrainPoint } from '../TerrainContracts';
 import { compareDtms, type CompareDtmsOptions, type EpochComparison } from './compareDtms';
 import { isWithheld } from '../../science/withheldPolicy';
+import { alignedClasses, isNoiseClass, noiseExcludedClause } from '../ground/classificationFilter';
 import { horizontalSpanXY } from '../../render/measure/measureDerivations';
 import {
   alignedFlags,
@@ -283,6 +284,8 @@ export interface WithheldFilteredEpoch<T extends { readonly positions: Float32Ar
   /** The same object when nothing was excluded; a copy with fewer positions otherwise. */
   readonly cloud: T;
   readonly withheld: WithheldReadCounts;
+  /** Points left out as ASPRS noise (classes 7 and 18); 0 without a class channel. */
+  readonly noiseExcluded: number;
 }
 
 /**
@@ -295,28 +298,49 @@ export interface WithheldFilteredEpoch<T extends { readonly positions: Float32Ar
  * channel excludes nothing and records the count as 'unknown'. When no point is
  * Withheld the input object is returned as it was, so the comparison is the
  * same computation it was before.
+ *
+ * `classification`, when it lines up with the buffer, also leaves out the ASPRS
+ * noise classes 7 and 18, counted in `noiseExcluded`, so a low-noise return
+ * cannot pull either DTM down. Without a class channel nothing more is dropped.
  */
 export function excludeWithheldEpoch<T extends { readonly positions: Float32Array }>(
   cloud: T,
   flags: ArrayLike<number> | null | undefined,
+  classification?: ArrayLike<number> | null,
 ): WithheldFilteredEpoch<T> {
   const n = (cloud.positions.length / 3) | 0;
   const f = alignedFlags(flags, n);
-  if (!f) return { cloud, withheld: withheldReadCounts(n, 0, false) };
-  let kept = 0;
-  for (let i = 0; i < n; i++) if (!isWithheld(f[i])) kept += 1;
-  const withheld = withheldReadCounts(n, n - kept, true);
-  if (kept === n) return { cloud, withheld };
+  const c = alignedClasses(classification, n);
+  const drop = (i: number): boolean => (f !== undefined && isWithheld(f[i])) || (c !== undefined && isNoiseClass(c[i]));
+  let withheldCount = 0;
+  let noiseExcluded = 0;
+  for (let i = 0; i < n; i++) {
+    if (f && isWithheld(f[i])) withheldCount += 1;
+    else if (c && isNoiseClass(c[i])) noiseExcluded += 1;
+  }
+  const withheld = f
+    ? withheldReadCounts(n, withheldCount, true)
+    : withheldReadCounts(n, 0, false);
+  const kept = n - withheldCount - noiseExcluded;
+  if (kept === n) return { cloud, withheld, noiseExcluded };
   const src = cloud.positions;
   const out = new Float32Array(kept * 3);
   let w = 0;
   for (let i = 0; i < n; i++) {
-    if (isWithheld(f[i])) continue;
+    if (drop(i)) continue;
     out[w++] = src[i * 3];
     out[w++] = src[i * 3 + 1];
     out[w++] = src[i * 3 + 2];
   }
-  return { cloud: { ...cloud, positions: out }, withheld };
+  return { cloud: { ...cloud, positions: out }, withheld, noiseExcluded };
+}
+
+/** Compare-panel line naming the noise points each epoch left out, or none. */
+export function epochNoiseLines(beforeNoise: number, afterNoise: number): string[] {
+  const lines: string[] = [];
+  if (beforeNoise > 0) lines.push(`Before points: ${noiseExcludedClause(beforeNoise)}`);
+  if (afterNoise > 0) lines.push(`After points: ${noiseExcludedClause(afterNoise)}`);
+  return lines;
 }
 
 /**
@@ -341,16 +365,19 @@ type PlacedEpoch = { readonly positions: Float32Array; readonly origin?: readonl
  */
 export function withheldEpochs<T extends PlacedEpoch, P extends { readonly beforeCloud: T; readonly afterCloud: T }>(
   prepared: P,
-  a: { readonly classificationFlags?: ArrayLike<number> },
-  b: { readonly classificationFlags?: ArrayLike<number> },
+  a: { readonly classificationFlags?: ArrayLike<number>; readonly classification?: ArrayLike<number> },
+  b: { readonly classificationFlags?: ArrayLike<number>; readonly classification?: ArrayLike<number> },
 ): P & { readonly lines: string[]; readonly span: number } {
-  const before = excludeWithheldEpoch(prepared.beforeCloud, a.classificationFlags);
-  const after = excludeWithheldEpoch(prepared.afterCloud, b.classificationFlags);
+  const before = excludeWithheldEpoch(prepared.beforeCloud, a.classificationFlags, a.classification);
+  const after = excludeWithheldEpoch(prepared.afterCloud, b.classificationFlags, b.classification);
   return {
     ...prepared,
     beforeCloud: before.cloud,
     afterCloud: after.cloud,
-    lines: epochWithheldLines(before.withheld, after.withheld),
+    lines: [
+      ...epochWithheldLines(before.withheld, after.withheld),
+      ...epochNoiseLines(before.noiseExcluded, after.noiseExcluded),
+    ],
     span: horizontalSpanXY(before.cloud.positions, before.cloud.origin),
   };
 }

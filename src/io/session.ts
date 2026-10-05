@@ -1709,6 +1709,9 @@ function parseVolumeRecord(v: unknown): VolumeRecord | undefined {
   const w = v.withheld;
   if (isRecord(w) && finiteFields(w, ['source', 'analysed']) && (w.excluded === 'unknown' || isFiniteNum(w.excluded))) {
     record.withheld = { source: w.source as number, excluded: w.excluded as number | 'unknown', analysed: w.analysed as number };
+    if (isFiniteNum(w.noiseExcluded) && w.noiseExcluded > 0) {
+      record.withheld = { ...record.withheld, noiseExcluded: w.noiseExcluded };
+    }
   }
   return record;
 }

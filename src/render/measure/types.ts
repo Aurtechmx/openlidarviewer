@@ -204,6 +204,8 @@ export interface VolumeWithheldCounts {
   readonly source: number;
   readonly excluded: number | 'unknown';
   readonly analysed: number;
+  /** Points left out as ASPRS noise (classes 7, 18). Absent when none were. */
+  readonly noiseExcluded?: number;
 }
 
 /** A single placed measurement. */

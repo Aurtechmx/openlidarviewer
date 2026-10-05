@@ -49,6 +49,8 @@ export interface StreamingLassoPart {
   filters(stride: number): SelectionVisibilityFilters | null;
   /** The node's own per-point flag bytes, or absent when it carries none. */
   readonly flags?: Uint8Array;
+  /** The node's own ASPRS classification codes, or absent when it carries none. */
+  readonly classification?: Uint8Array;
 }
 
 /** A resident node as the parts builder needs to read it. */
@@ -82,6 +84,7 @@ export function streamingLassoParts(
   return chunks.map((chunk) => ({
     positions: chunk.positions,
     flags: chunk.classificationFlags,
+    classification: chunk.classification,
     filters: (stride: number) => lassoVisibilityFilters(clipKeep, acceptFor(chunk), stride),
   }));
 }
@@ -146,6 +149,36 @@ export function dropWithheld(
   return { sel: { indices, screenX, screenY, depth, count: w }, dropped: sel.count - w };
 }
 
+/**
+ * Drop the points in an ASPRS noise class (7 low noise, 18 high noise) from a
+ * selection, in place. `classification` indexes the source's OWN buffer, so
+ * the walk's strided index is multiplied back by `stride`. A missing or
+ * misaligned channel drops nothing, so an unclassified source reads as before.
+ */
+export function dropNoise(
+  sel: LassoSelectionWithDepth,
+  classification: ArrayLike<number> | undefined,
+  pointCount: number,
+  stride: number,
+): { readonly sel: LassoSelectionWithDepth; readonly dropped: number } {
+  if (!alignedClasses(classification, pointCount)) return { sel, dropped: 0 };
+  const codes = classification as ArrayLike<number>;
+  const step = Math.max(1, Math.floor(stride));
+  const { indices, screenX, screenY, depth } = sel;
+  let w = 0;
+  for (let r = 0; r < sel.count; r++) {
+    const pi = indices[r];
+    if (isNoiseClass(codes[pi * step])) continue;
+    indices[w] = pi;
+    screenX[w] = screenX[r];
+    screenY[w] = screenY[r];
+    depth[w] = depth[r];
+    w++;
+  }
+  return { sel: { indices, screenX, screenY, depth, count: w }, dropped: sel.count - w };
+}
+
+import { alignedClasses, isNoiseClass } from '../../terrain/ground/classificationFilter';
 import { describeLassoSelectionBasis, rejectOccluded } from './lassoOcclusion';
 import type { LassoSelectionBasis, OcclusionOutcome } from './lassoOcclusion';
 export type { LassoSelectionBasis } from './lassoOcclusion';
@@ -428,17 +461,24 @@ export function computeLassoVolume(
   let withheldDropped = 0;
   let withheldKnown = true;
   let sourceCount = 0;
+  let noiseDropped = 0;
   const takeWithheld = (
     sel: LassoSelectionWithDepth,
     flags: Uint8Array | undefined,
     points: number,
+    classification: Uint8Array | undefined,
   ): LassoSelectionWithDepth => {
     sourceCount += sel.count;
-    if (!excludeWithheld) return sel;
-    const out = dropWithheld(sel, flags, points, stride);
-    if (out.dropped === null) withheldKnown = false;
-    else withheldDropped += out.dropped;
-    return out.sel;
+    let kept = sel;
+    if (excludeWithheld) {
+      const out = dropWithheld(sel, flags, points, stride);
+      if (out.dropped === null) withheldKnown = false;
+      else withheldDropped += out.dropped;
+      kept = out.sel;
+    }
+    const noise = dropNoise(kept, classification, points, stride);
+    noiseDropped += noise.dropped;
+    return noise.sel;
   };
 
   // Static clouds, walked independently so per-cloud indices can go back to
@@ -455,7 +495,8 @@ export function computeLassoVolume(
     // A voxel-reduced cloud's points are centroids, which have no flags of
     // their own: its Withheld count is unknown whatever array it holds.
     const flags = host.wasReduced(entry.cloud) ? undefined : entry.cloud.classificationFlags;
-    const sel = takeWithheld(visible, flags, entry.cloud.pointCount);
+    const classes = host.wasReduced(entry.cloud) ? undefined : entry.cloud.classification;
+    const sel = takeWithheld(visible, flags, entry.cloud.pointCount, classes);
     if (sel.count === 0) continue;
     if (host.wasReduced(entry.cloud)) anySourceReduced = true;
     parts.push({ id, positions, sel });
@@ -476,7 +517,7 @@ export function computeLassoVolume(
     const visible = applyVisibility(raw, positions, part.filters(stride));
     if (visible.count === 0) continue;
     if (visible.count < raw.count) anyHidden = true;
-    const sel = takeWithheld(visible, part.flags, src.length / 3);
+    const sel = takeWithheld(visible, part.flags, src.length / 3, part.classification);
     if (sel.count === 0) continue;
     parts.push({ id: null, positions, sel });
     candidateCount += sel.count;
@@ -593,6 +634,7 @@ export function computeLassoVolume(
       source: sourceCount,
       excluded: !excludeWithheld ? 0 : withheldKnown ? withheldDropped : 'unknown',
       analysed: totalSelected,
+      ...(noiseDropped > 0 ? { noiseExcluded: noiseDropped } : {}),
     },
   };
 }

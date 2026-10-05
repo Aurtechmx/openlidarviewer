@@ -16,6 +16,7 @@
  * so none of it lands in the startup shell.
  */
 import type { VolumeRecord, VolumeWithheldCounts } from './types';
+import { noiseExcludedClause } from '../../terrain/ground/classificationFilter';
 
 /** Shape version of a lasso result built here. Bump when its fields change meaning. */
 export const STOCKPILE_RESULT_SCHEMA = 1;
@@ -122,9 +123,14 @@ export function stockpileResultHeadline(r: VolumeRecord, vol: number): string {
   return head + withheldClause(r.withheld);
 }
 
-/** ` · N Withheld points excluded`, ` · Withheld flags unavailable`, or `''`. */
+/**
+ * ` · N Withheld points excluded`, ` · Withheld flags unavailable`, or `''`,
+ * followed by ` · N noise points (classes 7, 18) excluded` when any were.
+ */
 export function withheldClause(w: VolumeWithheldCounts | undefined): string {
   if (!w) return '';
-  if (w.excluded === 'unknown') return ' · Withheld flags unavailable';
-  return w.excluded > 0 ? ` · ${w.excluded.toLocaleString()} Withheld points excluded` : '';
+  const noise = noiseExcludedClause(w.noiseExcluded);
+  const tail = noise ? ` · ${noise}` : '';
+  if (w.excluded === 'unknown') return ' · Withheld flags unavailable' + tail;
+  return (w.excluded > 0 ? ` · ${w.excluded.toLocaleString()} Withheld points excluded` : '') + tail;
 }

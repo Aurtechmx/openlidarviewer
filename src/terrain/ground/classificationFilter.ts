@@ -23,6 +23,32 @@ import type { TerrainPoint } from '../TerrainContracts';
  */
 export const NON_GROUND_CLASSES: readonly number[] = [3, 4, 5, 6, 7, 18];
 
+/** ASPRS noise classes: 7 low noise, 18 high noise. */
+export const NOISE_CLASSES: readonly number[] = [7, 18];
+
+/** True for an ASPRS noise class (7 or 18). */
+export function isNoiseClass(code: number): boolean {
+  return code === 7 || code === 18;
+}
+
+/**
+ * The classification channel when it lines up with `pointCount`, otherwise
+ * undefined. A missing or misaligned channel excludes nothing, so an
+ * unclassified file is read exactly as before.
+ */
+export function alignedClasses(
+  classification: ArrayLike<number> | null | undefined,
+  pointCount: number,
+): ArrayLike<number> | undefined {
+  return classification != null && classification.length === pointCount ? classification : undefined;
+}
+
+/** The report clause for noise points left out, or '' when there were none. */
+export function noiseExcludedClause(count: number | undefined): string {
+  if (!count || count <= 0) return '';
+  return `${count.toLocaleString('en-US')} noise points (classes 7, 18) excluded`;
+}
+
 export interface ClassificationFilterResult {
   /** The kept points (a new array; input is not mutated). */
   readonly points: TerrainPoint[];
