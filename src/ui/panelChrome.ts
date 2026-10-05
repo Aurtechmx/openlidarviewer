@@ -405,3 +405,14 @@ export function createToastHost(host: () => HTMLElement = () => document.body): 
     },
   };
 }
+
+let sharedToast: ToastHost | null = null;
+
+/**
+ * The app's one toast line, created on first use. Every caller that shows a
+ * toast goes through it, so only one `.olv-lasso-toast` element ever exists.
+ */
+export function appToast(): ToastHost {
+  sharedToast ??= createToastHost();
+  return sharedToast;
+}

@@ -11,7 +11,8 @@
 
 import { exportDigestLines } from '../science/exportDigestRecord';
 import { DISPLAY_SAMPLE_SUFFIX, displaySampleLine, pointBasisLine } from '../export/exportSummary';
-import { classEditLine, classesEdited, softwareLine, sourceFileLine } from '../export/exportProvenanceLines';
+import { truncationOf } from '../io/truncation';
+import { classEditLine, classesEdited, pointBasisOfCloud, softwareLine, sourceFileLine } from '../export/exportProvenanceLines';
 import type { PointCloud } from '../model/PointCloud';
 import { sourcePositions } from '../model/pointFrames';
 import { classifyScanShape } from '../terrain/scanShape';
@@ -401,11 +402,12 @@ export { resolveExportDigests } from '../export/exportDigests';
 
 /**
  * The point-basis line every converted file carries: the caller's own line, or
- * the display sample's counts, or the whole loaded cloud as the full file.
+ * the cloud's own basis (a truncated file is named as such; a display sample
+ * when `displaySample` is set or the cloud reads as strided).
  */
 function pointBasisFor(cloud: PointCloud, opts: ConvertOptions): string {
   if (opts.pointBasis) return opts.pointBasis;
-  const s = opts.displaySample;
-  if (s) return pointBasisLine(false, s.held, s.source);
-  return pointBasisLine(true, cloud.pointCount, null);
+  const sample = opts.displaySample;
+  if (sample && !truncationOf(cloud)) return pointBasisLine(false, sample.held, sample.source);
+  return pointBasisOfCloud(cloud, sample ? true : null);
 }

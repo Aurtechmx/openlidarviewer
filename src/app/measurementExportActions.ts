@@ -16,7 +16,7 @@ import type { ReportFinding } from '../render/measure/reportManifest';
 import type { GeoExportContext } from './reportExport';
 
 import { activeScanBasisOf, type ActiveScanBasis } from './measurementScanHooks';
-import { createToastHost, type ToastHost } from '../ui/panelChrome';
+import { appToast } from '../ui/panelChrome';
 
 export type { ActiveScanBasis } from './measurementScanHooks';
 
@@ -314,15 +314,7 @@ export async function exportMeasurementsFile(
   const basis = csvBasis(scanBasis, activeOnly, sources?.length ?? 1, geo.name);
   const sidecar = exporter.provenanceSidecarName(filename);
   deps.downloadText(sidecar, exporter.measurementCsvProvenance(ctx.provenance, basis));
-  (deps.notify ?? showToast)(csvSavedMessage(filename, sidecar));
-}
-
-let toastHost: ToastHost | null = null;
-
-/** The app's toast line, created on first use. */
-function showToast(message: string): void {
-  toastHost ??= createToastHost();
-  toastHost.show(message);
+  (deps.notify ?? appToast().show)(csvSavedMessage(filename, sidecar));
 }
 
 /**

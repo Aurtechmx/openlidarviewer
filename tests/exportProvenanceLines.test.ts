@@ -11,7 +11,7 @@ import { cloudToGlobal } from '../src/convert/globalPoints';
 import {
   classEditLine,
   classesEdited,
-  pointBasisOf,
+  pointBasisOfCloud,
   softwareLine,
   sourceFileLine,
   measurementCsvProvenance,
@@ -71,8 +71,54 @@ describe('provenance line helpers', () => {
   });
 
   it('states the point basis for a full file and a display sample', () => {
-    expect(pointBasisOf({ pointCount: 1200, reduced: false, declaredPointCount: null })).toBe('Point basis: full file (1,200 points)');
-    expect(pointBasisOf({ pointCount: 500, reduced: true, declaredPointCount: 2000 })).toBe('Point basis: display sample (500 of 2,000 points)');
+  });
+});
+
+describe('point basis of a loaded cloud', () => {
+  const trunc = (read: number, declared: number) => ({ truncation: { read, declared } });
+
+  it('a full file', () => {
+    expect(pointBasisOfCloud({ pointCount: 1200 }, null)).toBe('Point basis: full file (1,200 points)');
+    expect(pointBasisOfCloud({ pointCount: 1200, sourceDeclaredPointCount: 1200 }, false)).toBe('Point basis: full file (1,200 points)');
+  });
+
+  it('a strided display sample, from the load stride or the caller\'s reduced state', () => {
+    expect(pointBasisOfCloud({ pointCount: 500, loadStride: 4, sourceDeclaredPointCount: 2000 }, null))
+      .toBe('Point basis: display sample (500 of 2,000 points)');
+    expect(pointBasisOfCloud({ pointCount: 500, sourceDeclaredPointCount: 2000 }, true))
+      .toBe('Point basis: display sample (500 of 2,000 points)');
+  });
+
+  it('a voxel-reduced cloud, from the declared-count fallback', () => {
+    expect(pointBasisOfCloud({ pointCount: 800, declaredPointCount: 3000 }, null))
+      .toBe('Point basis: display sample (800 of 3,000 points)');
+  });
+
+  it('a truncated file is named as truncated, never as a display sample', () => {
+    const c = { pointCount: 4, declaredPointCount: 2601, metadata: trunc(4, 2601) };
+    expect(pointBasisOfCloud(c, null)).toBe('Point basis: truncated file (4 of 2,601 declared points read)');
+    expect(pointBasisOfCloud(c, false)).toBe('Point basis: truncated file (4 of 2,601 declared points read)');
+  });
+
+  it('a truncated file also sampled for display names both, with each count', () => {
+    const c = { pointCount: 250, loadStride: 4, sourceDeclaredPointCount: 5000, metadata: trunc(1000, 5000) };
+    expect(pointBasisOfCloud(c, null))
+      .toBe('Point basis: truncated file, display sample (250 held of 1,000 read of 5,000 declared points)');
+    expect(pointBasisOfCloud(c, true))
+      .toBe('Point basis: truncated file, display sample (250 held of 1,000 read of 5,000 declared points)');
+  });
+
+  it('the converter writes the truncated basis into a LAS file', () => {
+    const c = new PointCloud({
+      positions: Float32Array.from([0, 0, 0, 1, 1, 1]),
+      origin: [0, 0, 0],
+      sourceFormat: 'las',
+      name: 'cut.las',
+      declaredPointCount: 10,
+      metadata: { truncation: { read: 2, declared: 10 } },
+    } as unknown as ConstructorParameters<typeof PointCloud>[0]);
+    const { file } = convertCloud(c, { format: 'las' });
+    expect(textArea(file!.bytes)).toContain('Point basis: truncated file (2 of 10 declared points read)');
   });
 });
 

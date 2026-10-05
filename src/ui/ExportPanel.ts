@@ -33,7 +33,8 @@ import type { PointCloud } from '../model/PointCloud';
 import { gzipConvertedFile, gzipAvailable } from '../convert/gzip';
 import { buildExportSummary, displaySampleOf, displaySampleStatus, type ClassificationProvenance, type ExportSummaryInput } from '../export/exportSummary';
 import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
-import { layerFacts, pointBasisLine, type FullFileLayerFacts } from '../app/fullFileActions';
+import { layerFacts, type FullFileLayerFacts } from '../app/fullFileActions';
+import { pointBasisOfCloud } from '../export/exportProvenanceLines';
 import {
   classificationDiffersFromSource,
   evaluateFullResClassExport,
@@ -1390,8 +1391,9 @@ export class ExportPanel {
         allowLegacyReturnClamp: allowReturnClamp,
         scopeNote,
         displaySample,
-        // A display sample's basis comes from `displaySample`; otherwise the loaded cloud is the whole file.
-        pointBasis: displaySample ? null : pointBasisLine(true, sourceCloud.pointCount, null),
+        // Read from the loaded cloud, so a truncated file is named as truncated;
+        // a full-resolution re-decode holds every record the file yields.
+        pointBasis: pointBasisOfCloud(sourceCloud, useFull ? false : this._cb.isReduced()),
         classesEdited: this._cb.hasClassEdits?.() ?? false,
       };
       const { file, report } = convertCloud(cloud, options);

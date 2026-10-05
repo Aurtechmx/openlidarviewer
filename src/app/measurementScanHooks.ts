@@ -4,11 +4,13 @@
  *
  * Read from the export frame's own source reference (the loaded cloud, or the
  * streaming snapshot) and the active scan's classification epoch, both of
- * which the measurement-export deps already carry.
+ * which the measurement-export deps already carry. A loaded cloud's display
+ * sample is read from its load stride, with the declared-count gap as a
+ * fallback, and a truncated file is named as truncated (pointBasisOfCloud).
  */
 
 import { pointBasisLine } from '../export/exportSummary';
-import { classesEdited } from '../export/exportProvenanceLines';
+import { classesEdited, pointBasisOfCloud, type PointBasisCloud } from '../export/exportProvenanceLines';
 
 /** The active scan's point basis and class-edit state. */
 export interface ActiveScanBasis {
@@ -22,6 +24,8 @@ interface SourceCounts {
   readonly sourceDeclaredPointCount?: number;
   readonly declaredPointCount?: number;
   readonly classificationProvenance?: string;
+  readonly loadStride?: number;
+  readonly metadata?: PointBasisCloud['metadata'];
   readonly residentPointCount?: number;
   readonly sourcePointCount?: number | null;
 }
@@ -37,9 +41,7 @@ function basisLine(c: SourceCounts, streamed: boolean): string | null {
     return pointBasisLine(false, c.residentPointCount, total);
   }
   if (!finite(c.pointCount)) return null;
-  const declared = c.sourceDeclaredPointCount ?? c.declaredPointCount;
-  if (finite(declared) && declared > c.pointCount) return pointBasisLine(false, c.pointCount, declared);
-  return pointBasisLine(true, c.pointCount, null);
+  return pointBasisOfCloud(c as PointBasisCloud, null);
 }
 
 /**

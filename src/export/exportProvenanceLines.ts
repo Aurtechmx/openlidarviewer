@@ -16,6 +16,7 @@
 import { BUILD_IDENTITY, type BuildIdentity } from '../build/buildIdentity';
 import { classificationDiffersFromSource } from './fullResClassGuard';
 import { pointBasisLine } from './exportSummary';
+import { truncationOf, type Truncation } from '../io/truncation';
 import { crsOriginLine } from '../science/crsOrigin';
 import { sourceSha256Text } from '../science/exportDigestRecord';
 import { lightProvenance, type LightProvenanceInput } from './lightProvenance';
@@ -51,19 +52,45 @@ export function classesEdited(f: ClassEditFacts): boolean {
   return classificationDiffersFromSource(f.provenance, f.editEpoch);
 }
 
-/** The counts the point-basis line reads from a loaded cloud. */
-export interface PointBasisFacts {
+/** The fields of a loaded cloud the point-basis line reads. */
+export interface PointBasisCloud {
   readonly pointCount: number;
-  /** True when the loaded cloud is a display sample of a larger file. */
-  readonly reduced: boolean;
-  /** Points the source file declares, when known. */
-  readonly declaredPointCount: number | null;
+  /** Decode stride the loader applied; above 1 means a strided display sample. */
+  readonly loadStride?: number;
+  readonly sourceDeclaredPointCount?: number;
+  readonly declaredPointCount?: number;
+  readonly metadata?: { readonly truncation?: Truncation } | null;
 }
 
-/** "Point basis: full file (N points)" or "Point basis: display sample (n of N points)". */
-export function pointBasisOf(f: PointBasisFacts): string {
-  if (!f.reduced) return pointBasisLine(true, f.pointCount, null);
-  return pointBasisLine(false, f.pointCount, f.declaredPointCount);
+const count = (n: number): string => n.toLocaleString('en-US');
+
+/**
+ * The point-basis line for a loaded cloud.
+ *
+ * `reduced` is the caller's own record of whether the held points are a
+ * display sample (true) or every record the file yields (false, e.g. a
+ * full-resolution re-decode). Null falls back to the cloud: a load stride
+ * above 1, or a file that declares more points than the cloud holds.
+ *
+ * A truncated file (its body held fewer records than the header declares) is
+ * never called a display sample on the count gap alone. It reads "truncated
+ * file (n of N declared points read)", or, when the read points were also
+ * sampled for display, names both with each count.
+ */
+export function pointBasisOfCloud(c: PointBasisCloud, reduced: boolean | null): string {
+  const trunc = truncationOf(c);
+  const declared = c.sourceDeclaredPointCount ?? c.declaredPointCount;
+  if (trunc) {
+    const sampled = reduced ?? ((c.loadStride ?? 1) > 1 || c.pointCount < trunc.read);
+    if (sampled && c.pointCount < trunc.read) {
+      return `Point basis: truncated file, display sample (${count(c.pointCount)} held of ${count(trunc.read)} read of ${count(trunc.declared)} declared points)`;
+    }
+    return `Point basis: truncated file (${count(trunc.read)} of ${count(trunc.declared)} declared points read)`;
+  }
+  const larger = declared !== undefined && Number.isFinite(declared) && declared > c.pointCount ? declared : null;
+  if (reduced === false) return pointBasisLine(true, larger ?? c.pointCount, null);
+  const sampled = reduced ?? ((c.loadStride ?? 1) > 1 || larger !== null);
+  return sampled ? pointBasisLine(false, c.pointCount, larger) : pointBasisLine(true, c.pointCount, null);
 }
 
 /** The scan facts the sidecar adds to the light provenance record. */
