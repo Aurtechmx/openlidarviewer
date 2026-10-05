@@ -17,7 +17,7 @@ import {
   measurementCsvProvenance,
   provenanceSidecarName,
 } from '../src/export/exportProvenanceLines';
-import { activeScanBasisOf, measurementScanHooks } from '../src/app/measurementScanHooks';
+import { activeScanBasisOf } from '../src/app/measurementScanHooks';
 
 const cloud = (): PointCloud => new PointCloud({
   positions: Float32Array.from([0, 0, 0, 10, 20, 1, 4, 5, 6]),
@@ -166,21 +166,32 @@ describe('measurement CSV sidecar', () => {
   });
 });
 
-describe('active-scan hooks', () => {
-  const viewer = (prov: string, epoch: number) => ({
-    getCloud: () => ({ pointCount: 500, sourceDeclaredPointCount: 2000, classificationProvenance: prov }),
-    classificationEpoch: () => epoch,
+describe('active-scan basis', () => {
+  const loaded = (prov: string, declared?: number) => ({
+    key: { pointCount: 500, sourceDeclaredPointCount: declared, classificationProvenance: prov },
+    streamed: false,
   });
 
-  it('reads the display sample and the edit epoch of the active scan', () => {
-    const basis = activeScanBasisOf({ scans: { activeId: 'a' }, viewer: viewer('source', 1), reduced: new Map([['a', true]]) });
-    expect(basis).toEqual({ pointBasis: 'Point basis: display sample (500 of 2,000 points)', classesEdited: true });
+  it('reads a display sample and an edit epoch above 0', () => {
+    expect(activeScanBasisOf(loaded('source', 2000), 1)).toEqual({
+      pointBasis: 'Point basis: display sample (500 of 2,000 points)',
+      classesEdited: true,
+    });
   });
 
-  it('reads a full-file scan with source classes as unedited, and no scan as null', () => {
-    const hooks = measurementScanHooks({ scans: { activeId: 'a' }, viewer: viewer('source', 0), reduced: new Map() });
-    expect(hooks.activeScanBasis()).toEqual({ pointBasis: 'Point basis: full file (500 points)', classesEdited: false });
-    expect(hooks.activeClassificationEpoch()).toBe(0);
-    expect(activeScanBasisOf({ scans: { activeId: null }, viewer: viewer('source', 0), reduced: new Map() })).toBeNull();
+  it('reads a full-file scan with source classes as unedited, derived classes as edited', () => {
+    expect(activeScanBasisOf(loaded('source'), 0)).toEqual({ pointBasis: 'Point basis: full file (500 points)', classesEdited: false });
+    expect(activeScanBasisOf(loaded('derived'), 0)?.classesEdited).toBe(true);
+  });
+
+  it('reads a streaming snapshot from its resident and source counts', () => {
+    const partial = { key: { residentPointCount: 300, sourcePointCount: 1000 }, streamed: true };
+    expect(activeScanBasisOf(partial, 0)?.pointBasis).toBe('Point basis: display sample (300 of 1,000 points)');
+    const whole = { key: { residentPointCount: 1000, sourcePointCount: 1000 }, streamed: true };
+    expect(activeScanBasisOf(whole, 0)?.pointBasis).toBe('Point basis: full file (1,000 points)');
+  });
+
+  it('is null with no source in the frame', () => {
+    expect(activeScanBasisOf(undefined, 0)).toBeNull();
   });
 });

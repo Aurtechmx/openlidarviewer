@@ -95,7 +95,7 @@ import type { WorkspaceMode } from './ui/workspace/DesktopWorkspace';
 import type { WorkspaceShell } from './app/workspace/workspaceShell';
 import { createScanRouteCoordinator, type SpaceExportContext } from './app/scanRouteCoordinator';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
-import { ExportPanel, exportClassFacts, exportLayerHooks, measurementScanHooks } from './ui/ExportPanel';
+import { ExportPanel, exportClassFacts, exportLayerHooks } from './ui/ExportPanel';
 import { makeLocalToLonLat } from './export/lonLatMapper';
 import { runFindingsExport, writeScanScopedExport, spaceContextStillCurrent, SPACE_CONTEXT_MOVED, SESSION_EXPORT_SCAN_CHANGED_REFUSAL } from './export/exportScanIdentity';
 import {
@@ -2367,12 +2367,12 @@ const kmlDeps: KmlActionDeps = {
 const measurementExportActionDeps = (v: Viewer): MeasurementExportActionDeps => ({
   measure: v.measure,
   geo: exportGeoContext,
-  layers: { view: v, stableIdFor: runtime.layerIdentity.stableIdFor }, refuse: (m) => dropZone.setError(m), notify: (m) => showLassoToast(m),
+  layers: { view: v, stableIdFor: runtime.layerIdentity.stableIdFor }, refuse: (m) => dropZone.setError(m),
   baseName,
   downloadText,
   loadMeasurementExport,
   loadMeasurementReport,
-  ...measurementScanHooks({ scans, viewer: v, reduced: reducedById }),
+  activeClassificationEpoch: () => (scans.activeId ? v.classificationEpoch(scans.activeId) : 0),
   appVersion: __APP_VERSION__,
   now: () => new Date().toISOString(),
 });

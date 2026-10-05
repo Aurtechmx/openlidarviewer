@@ -15,7 +15,8 @@ import type { MeasurementExportContext } from '../export/measurementExport';
 import type { ReportFinding } from '../render/measure/reportManifest';
 import type { GeoExportContext } from './reportExport';
 
-import type { ActiveScanBasis } from './measurementScanHooks';
+import { activeScanBasisOf, type ActiveScanBasis } from './measurementScanHooks';
+import { createToastHost, type ToastHost } from '../ui/panelChrome';
 
 export type { ActiveScanBasis } from './measurementScanHooks';
 
@@ -61,13 +62,14 @@ export interface MeasurementExportActionDeps {
   readonly layers?: { readonly view: ExportLayerView; readonly stableIdFor: (viewerId: string) => string | null };
   /** Shown when the export is refused rather than written. */
   readonly refuse?: (message: string) => void;
-  /** Shown after a write, on the app's toast line. */
+  /** Shown after a write. Defaults to the app's toast line. */
   readonly notify?: (message: string) => void;
   /** Active scan's classification epoch (0 when none), for the report manifest. */
   readonly activeClassificationEpoch: () => number;
   /**
    * The active scan's point basis line and class-edit state, for the CSV's
-   * provenance sidecar; null when no scan is active.
+   * provenance sidecar; null when no scan is active. Defaults to reading the
+   * export frame's source and the active classification epoch.
    */
   readonly activeScanBasis?: () => ActiveScanBasis | null;
   readonly appVersion: string;
@@ -267,7 +269,9 @@ export async function exportMeasurementsFile(
   const singleSource = geo.name ? deps.baseName(geo.name) : null;
   const sourceOfId = own ? new Map([...own.byId].map(([id, p]) => [id, p.names.map(deps.baseName).join('+')])) : null;
   // Read with the rest of the scan state, before the lazy import yields.
-  const scanBasis = deps.activeScanBasis?.() ?? null;
+  const scanBasis = deps.activeScanBasis
+    ? deps.activeScanBasis()
+    : activeScanBasisOf(geo.source, deps.activeClassificationEpoch());
   const exporter = await deps.loadMeasurementExport();
   const { measurementsToGeoJSON, measurementsToCsv, resolveExportDigests } = exporter;
   const digests = await resolveExportDigests(activeOnly ? geo.source : undefined, geo.crs);
@@ -310,7 +314,15 @@ export async function exportMeasurementsFile(
   const basis = csvBasis(scanBasis, activeOnly, sources?.length ?? 1, geo.name);
   const sidecar = exporter.provenanceSidecarName(filename);
   deps.downloadText(sidecar, exporter.measurementCsvProvenance(ctx.provenance, basis));
-  deps.notify?.(csvSavedMessage(filename, sidecar));
+  (deps.notify ?? showToast)(csvSavedMessage(filename, sidecar));
+}
+
+let toastHost: ToastHost | null = null;
+
+/** The app's toast line, created on first use. */
+function showToast(message: string): void {
+  toastHost ??= createToastHost();
+  toastHost.show(message);
 }
 
 /**

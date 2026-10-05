@@ -89,6 +89,7 @@ function deps(over: Partial<MeasurementExportActionDeps> = {}): Recorded {
     } as unknown as Awaited<ReturnType<MeasurementExportActionDeps['loadMeasurementReport']>>),
     activeClassificationEpoch: () => 7,
     appVersion: '0.6.6',
+    notify: () => undefined,
     now: () => '2026-01-02T03:04:05.000Z',
     ...over,
   };
@@ -221,6 +222,18 @@ describe('exportMeasurementsFile — landing local points in the source frame', 
       'Saved scan-measurements.csv and scan-measurements.provenance.txt. If your browser asked to allow multiple downloads, allow it to get the provenance file.',
     ]);
     expect(csvSavedMessage('a.csv', 'a.provenance.txt')).toMatch(/^Saved a\.csv and a\.provenance\.txt\. /);
+  });
+
+  it('reads the sidecar basis from the export frame\'s source when no hook is given', async () => {
+    const key = { pointCount: 400, sourceDeclaredPointCount: 4000, classificationProvenance: 'source' };
+    const r = deps({
+      geo: () => ({ origin: [0, 0, 0], crsName: 'WGS 84 / UTM zone 12N', name: 'site/scan.laz', source: { key, streamed: false } }),
+      activeClassificationEpoch: () => 3,
+    });
+    await exportMeasurementsFile('csv', r.deps);
+    const lines = r.downloads[1].text.trimEnd().split('\n');
+    expect(lines).toContain('Point basis: display sample (400 of 4,000 points)');
+    expect(lines).toContain('Classes edited in app: yes');
   });
 
   it('a GeoJSON export shows no sidecar toast', async () => {

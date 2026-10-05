@@ -1,13 +1,14 @@
 /**
- * measurementScanHooks.ts — the active-scan facts the measurement exports read:
- * the classification epoch for the integrity report, and the point basis and
- * class-edit state for the CSV's provenance sidecar.
+ * measurementScanHooks.ts — the active scan's point basis and class-edit
+ * state, for the measurement CSV's provenance sidecar.
  *
- * Kept out of the composition root so `main.ts` wires both with one spread.
+ * Read from the export frame's own source reference (the loaded cloud, or the
+ * streaming snapshot) and the active scan's classification epoch, both of
+ * which the measurement-export deps already carry.
  */
 
-import { displaySampleOf } from '../export/exportSummary';
-import { classesEdited, pointBasisOf } from '../export/exportProvenanceLines';
+import { pointBasisLine } from '../export/exportSummary';
+import { classesEdited } from '../export/exportProvenanceLines';
 
 /** The active scan's point basis and class-edit state. */
 export interface ActiveScanBasis {
@@ -15,50 +16,45 @@ export interface ActiveScanBasis {
   readonly classesEdited: boolean;
 }
 
-/** The slice of a loaded cloud the hooks read. */
-export interface ScanBasisCloud {
-  readonly pointCount: number;
-  readonly declaredPointCount?: number;
+/** The fields a loaded cloud or a streaming snapshot may carry. */
+interface SourceCounts {
+  readonly pointCount?: number;
   readonly sourceDeclaredPointCount?: number;
-  readonly classificationProvenance: string;
+  readonly declaredPointCount?: number;
+  readonly classificationProvenance?: string;
+  readonly residentPointCount?: number;
+  readonly sourcePointCount?: number | null;
 }
 
-export interface MeasurementScanHookInput {
-  readonly scans: { readonly activeId: string | null };
-  readonly viewer: {
-    getCloud(id: string): ScanBasisCloud | undefined;
-    classificationEpoch(id: string): number;
-  };
-  /** Scan ids loaded as a display sample of a larger file. */
-  readonly reduced: ReadonlyMap<string, boolean>;
+const finite = (n: number | null | undefined): n is number => typeof n === 'number' && Number.isFinite(n);
+
+/** "Point basis: …" for a loaded cloud (display sample when the file declares more) or a streaming snapshot. */
+function basisLine(c: SourceCounts, streamed: boolean): string | null {
+  if (streamed) {
+    if (!finite(c.residentPointCount)) return null;
+    const total = finite(c.sourcePointCount) ? c.sourcePointCount : null;
+    if (total !== null && c.residentPointCount >= total) return pointBasisLine(true, total, null);
+    return pointBasisLine(false, c.residentPointCount, total);
+  }
+  if (!finite(c.pointCount)) return null;
+  const declared = c.sourceDeclaredPointCount ?? c.declaredPointCount;
+  if (finite(declared) && declared > c.pointCount) return pointBasisLine(false, c.pointCount, declared);
+  return pointBasisLine(true, c.pointCount, null);
 }
 
-/** The point basis and class-edit state of the active scan, or null with none active. */
-export function activeScanBasisOf(input: MeasurementScanHookInput): ActiveScanBasis | null {
-  const id = input.scans.activeId;
-  if (id == null) return null;
-  const cloud = input.viewer.getCloud(id);
-  if (!cloud) return null;
-  const sample = displaySampleOf(cloud);
-  const pointBasis = pointBasisOf({
-    pointCount: cloud.pointCount,
-    reduced: input.reduced.get(id) === true,
-    declaredPointCount: sample.source,
-  });
-  const edited = classesEdited({ provenance: cloud.classificationProvenance, editEpoch: input.viewer.classificationEpoch(id) });
-  return { pointBasis, classesEdited: edited };
-}
-
-/** Both hooks, spread into the measurement-export deps. */
-export function measurementScanHooks(input: MeasurementScanHookInput): {
-  activeClassificationEpoch: () => number;
-  activeScanBasis: () => ActiveScanBasis | null;
-} {
-  return {
-    activeClassificationEpoch: () => {
-      const id = input.scans.activeId;
-      return id ? input.viewer.classificationEpoch(id) : 0;
-    },
-    activeScanBasis: () => activeScanBasisOf(input),
-  };
+/**
+ * The basis of the scan the export frame names, or null when the frame has no
+ * source. A streaming snapshot carries no class provenance, so its codes count
+ * as the source's unless the edit epoch moved.
+ */
+export function activeScanBasisOf(
+  source: { readonly key: object; readonly streamed: boolean } | undefined,
+  editEpoch: number,
+): ActiveScanBasis | null {
+  if (!source) return null;
+  const c = source.key as SourceCounts;
+  const pointBasis = basisLine(c, source.streamed);
+  if (pointBasis === null) return null;
+  const provenance = c.classificationProvenance ?? 'source';
+  return { pointBasis, classesEdited: classesEdited({ provenance, editEpoch }) };
 }

@@ -62,6 +62,7 @@ async function run(ms: Measurement[], geo: GeoExportContext, layers: Measurement
     loadMeasurementReport: async () => { throw new Error('unused'); },
     activeClassificationEpoch: () => 0,
     appVersion: '0.0.0',
+    notify: () => undefined,
     now: () => '2026-01-01T00:00:00.000Z',
   };
   await exportMeasurementsFile('geojson', deps);
@@ -253,6 +254,7 @@ describe('a measurement whose scan was closed', () => {
       loadMeasurementReport: async () => { loaded = true; throw new Error('must not load'); },
       activeClassificationEpoch: () => 0,
       appVersion: '0.0.0',
+      notify: () => undefined,
       now: () => '2026-01-01T00:00:00.000Z',
     });
     expect(loaded).toBe(false);
@@ -302,6 +304,7 @@ describe('a change while the serializer chunk loads', () => {
       loadMeasurementReport: async () => { throw new Error('unused'); },
       activeClassificationEpoch: () => 0,
       appVersion: '0.0.0',
+      notify: () => undefined,
       now: () => '2026-01-01T00:00:00.000Z',
     };
     const pending = exportMeasurementsFile('csv', deps);
