@@ -58,6 +58,7 @@ import { methodRef, methodTag } from '../science/methodRegistry';
 import { BUILD_IDENTITY, buildIdentityProvenance, type BuildIdentity } from '../build/buildIdentity';
 import type { FlowPulseResult } from '../simulation/flowPulse/flowPulseRunner';
 import type { FlowGrid } from '../simulation/flowPulse/flowTypes';
+import { interpolatedShareText, type FlowTerrainCaveat } from '../process/flowTerrainCaveat';
 
 /** A caller-supplied downstream path (from `pulseFrom`), for the optional GeoJSON. */
 export interface FlowPulsePathInput {
@@ -113,9 +114,77 @@ export interface FlowPulsePackageOptions {
   readonly path?: FlowPulsePathInput | null;
   /** The upstream catchment from a catchment query, when the caller ran one. */
   readonly catchment?: FlowPulseCatchmentInput | null;
+  /**
+   * World Z of the load-time recentring origin. When known, outlet elevations
+   * are written with it added back, in the same source elevation the Lab's
+   * readout shows; when not, the columns are named `...Local` and the README
+   * states the frame.
+   */
+  readonly elevationOrigin?: number | null;
+  /** The terrain verdict and interpolated share, when the surface is Blocked or Preview. */
+  readonly terrainCaveat?: FlowTerrainCaveat | null;
+  /**
+   * The DTM's own raster frame in source units: the lower-left corner offset
+   * from `worldOrigin` (`originH1` east, `originH2` north) and the square cell
+   * size. Supplied, the rasters and the path are placed at their true position;
+   * omitted, the grid's corner sits at `worldOrigin` and cells are in metres.
+   */
+  readonly gridFrame?: FlowGridFrame | null;
+  /**
+   * Whether the vertical unit resolved. The Lab readout shows an elevation
+   * only when it did, so outlet elevations add `elevationOrigin` back only then.
+   */
+  readonly verticalResolved?: boolean;
+}
+
+/** A DTM raster frame: corner offset and cell size, in source units. */
+export interface FlowGridFrame {
+  readonly originH1: number;
+  readonly originH2: number;
+  readonly cellSize: number;
 }
 
 const NO_DATA = -9999;
+
+/**
+ * The path GeoJSON's `coordinateFrame`, in the names the Terrain Access
+ * export uses: `scan-crs` when placed with a resolved CRS name,
+ * `scan-source-coordinates` when placed with no CRS name, and
+ * `local-planar-metres` when not placed (no world origin or no raster frame).
+ * The CRS name is the resolved-frame label; the WKT only feeds the .prj.
+ */
+/** The README CRS line: a CRS name is stated as applied only when the export is placed. */
+function crsLine(crsName: string | null, placed: boolean): string {
+  if (crsName == null) return 'not georeferenced — rasters use a local (0, 0) origin';
+  return placed ? crsName : `${crsName} (not applied: rasters are in local metres from (0, 0))`;
+}
+
+const PATH_FRAME_TEXT: Readonly<Record<string, string>> = {
+  'scan-crs': 'planar coordinates in the scan\'s resolved CRS (the CRS line above).',
+  'scan-source-coordinates': 'the scan\'s own source coordinates; no CRS resolved.',
+  'local-planar-metres': 'planar metres from the grid\'s own (0, 0) corner; not placed in the scan frame.',
+};
+
+function pathFrameName(worldOrigin: { readonly x: number; readonly y: number } | null, crsResolved: boolean): string {
+  if (!worldOrigin) return 'local-planar-metres';
+  return crsResolved ? 'scan-crs' : 'scan-source-coordinates';
+}
+
+/** A README figure at `digits` decimals, trailing zeros dropped. */
+function fig(value: number, digits: number): string {
+  return String(Number(value.toFixed(digits)));
+}
+
+/** An outlet elevation in source elevation when the origin is known, else in the local frame. */
+function outletValue(local: number | null, origin: number | null): number | '' {
+  if (local == null) return '';
+  return origin == null ? local : local + origin;
+}
+
+/** The outlet-elevation column name: `Local` marks the load-time recentred frame. */
+function outletColumn(base: string, origin: number | null): string {
+  return origin == null ? `${base}Local` : base;
+}
 
 /** Direction-index legend, matching `D8_NEIGHBOURS` in `flowTypes.ts`. */
 const DIRECTION_LEGEND = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
@@ -181,7 +250,7 @@ export function buildFlowPulseConfig(result: FlowPulseResult): Record<string, un
   };
 }
 
-function summaryCsv(result: FlowPulseResult): string {
+function summaryCsv(result: FlowPulseResult, origin: number | null): string {
   const s = result.summary;
   const d = result.depressions;
   const rows: [string, string][] = [
@@ -200,20 +269,20 @@ function summaryCsv(result: FlowPulseResult): string {
     ['largestDepressionCells', String(d.largestCells)],
     ['largestDepressionAreaM2', d.largestAreaM2 == null ? '' : String(d.largestAreaM2)],
     ['largestDepressionMaxFillDepth', d.largestMaxFillDepth == null ? '' : String(d.largestMaxFillDepth)],
-    ['largestDepressionOutletElevation', d.largestOutletElevation == null ? '' : String(d.largestOutletElevation)],
+    [outletColumn('largestDepressionOutletElevation', origin), String(outletValue(d.largestOutletElevation, origin))],
     ['fieldDigest', String(result.record.result.fieldDigest)],
   ];
   return ['metric,value', ...rows.map(([k, v]) => `${k},${v}`)].join('\n') + '\n';
 }
 
-function depressionsCsv(result: FlowPulseResult): string {
+function depressionsCsv(result: FlowPulseResult, origin: number | null): string {
   const cols = result.grid.cols;
-  const header = 'rank,cells,areaM2,maxFillDepth,outletElevation,seedCol,seedRow';
+  const header = `rank,cells,areaM2,maxFillDepth,${outletColumn('outletElevation', origin)},seedCol,seedRow`;
   const lines = result.depressions.depressions.map((dep) => {
     const col = dep.seedCell % cols;
     const row = (dep.seedCell - col) / cols;
     return [
-      dep.rank, dep.cells, dep.areaM2 ?? '', dep.maxFillDepth ?? '', dep.outletElevation ?? '', col, row,
+      dep.rank, dep.cells, dep.areaM2 ?? '', dep.maxFillDepth ?? '', outletValue(dep.outletElevation, origin), col, row,
     ].join(',');
   });
   return [header, ...lines].join('\n') + '\n';
@@ -233,6 +302,11 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
   readonly hasCatchment: boolean;
   readonly sourceInterpretation: SourceInterpretationRecord;
   readonly sourceSha256Text: string;
+  readonly elevationOrigin: number | null;
+  readonly terrainCaveat: FlowTerrainCaveat | null;
+  readonly rasterCellSize: number | null;
+  readonly pathFrame: string;
+  readonly placed: boolean;
 }): string {
   const r = result.record;
   const s = result.summary;
@@ -243,6 +317,12 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     'SIMULATED. A topographic routing graph over the declared surface — not rainfall,',
     'runoff, infiltration or flood modelling. Accumulation counts cells, not water.',
     '',
+    ...(opts.terrainCaveat ? [
+      'TERRAIN RUN NOT USABLE: read this result as illustration only.',
+      `  Terrain verdict  ${opts.terrainCaveat.verdict}`,
+      `  Interpolated     ${interpolatedShareText(opts.terrainCaveat)}`,
+      '',
+    ] : []),
     'Files',
     `  ${opts.basename}-accumulation.asc   Upstream cell count per cell (Esri ASCII Grid)`,
     `  ${opts.basename}-direction.asc      D8 receiver direction index per cell (-1 to 7)`,
@@ -268,19 +348,24 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     `  Input coverage ${r.source.basis.coverage} (${r.source.basis.complete ? 'complete' : 'partial'})`,
     `  Cells read     ${r.source.basis.measuredCells} of ${r.source.basis.totalCells}`,
     `  Withheld excluded   ${r.source.basis.withheldExcluded === null ? 'not recorded' : String(r.source.basis.withheldExcluded)}`,
-    `  CRS            ${opts.crsName ?? 'not georeferenced — rasters use a local (0, 0) origin'}`,
+    `  CRS            ${crsLine(opts.crsName, opts.placed)}`,
     ...(opts.sourceInterpretation.crsOrigin ? [`  ${crsOriginLine(opts.sourceInterpretation.crsOrigin)}`] : []),
     `  Vertical unit  ${opts.verticalUnitLabel === 'units' ? 'unresolved — every fill-depth/elevation figure below is in source units' : opts.verticalUnitLabel}`,
+    `  Terrain verdict    ${opts.terrainCaveat ? `${opts.terrainCaveat.verdict} (${interpolatedShareText(opts.terrainCaveat)})` : 'not flagged Blocked or Preview'}`,
+    opts.elevationOrigin == null
+      ? '  Outlet elevations  outletElevationLocal columns are in the load-time recentred frame (source elevation minus an origin this export does not apply)'
+      : '  Outlet elevations  source elevation, the same figure the Lab readout shows',
     '',
     'Grid',
     `  Size           ${grid.cols} x ${grid.rows} cells`,
-    `  Cell size      ${grid.cellMetresX} m (east-west) x ${grid.cellMetresY} m (north-south)`,
+    `  Cell size      ${fig(grid.cellMetresX, 3)} m (east-west) x ${fig(grid.cellMetresY, 3)} m (north-south)`,
+    ...(opts.rasterCellSize != null ? [`  Raster cell size   ${fig(opts.rasterCellSize, 6)} (${opts.crsName != null ? 'CRS' : 'source'} units, as written in the .asc files)`] : []),
     `  NODATA value   ${NO_DATA}`,
     `  Direction legend   ${DIRECTION_LEGEND.map((d, i) => `${i}=${d}`).join(', ')}, -1 = sink/outlet/no data`,
-    ...(grid.cellMetresX !== grid.cellMetresY ? [
+    ...(opts.rasterCellSize == null && grid.cellMetresX !== grid.cellMetresY ? [
       '  Anisotropic grid: the Esri ASCII Grid format has one cell size field, so',
-      `  the two .asc rasters are written at the X cell size (${grid.cellMetresX} m) and`,
-      `  will appear stretched along Y in GIS software (true Y is ${grid.cellMetresY} m).`,
+      `  the two .asc rasters are written at the X cell size (${fig(grid.cellMetresX, 3)} m) and`,
+      `  will appear stretched along Y in GIS software (true Y is ${fig(grid.cellMetresY, 3)} m).`,
       '  Routing itself used the true per-axis sizes; only these two raster files are',
       '  affected. The CSV and JSON files carry the true cell sizes throughout.',
     ] : []),
@@ -296,7 +381,7 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     `  Flats (unresolved)     ${s.flatCount}`,
     `  Outlets                ${s.outletCount}`,
     `  Largest upstream count ${s.maxUpstreamCells} cells`,
-    `  Largest contributing area   ${s.maxContributingAreaM2 == null ? 'withheld (horizontal scale unresolved)' : `${s.maxContributingAreaM2} m2`}`,
+    `  Largest contributing area   ${s.maxContributingAreaM2 == null ? 'withheld (horizontal scale unresolved)' : `${fig(s.maxContributingAreaM2, 1)} m2`}`,
     `  Depressions catalogued ${result.depressions.depressions.length}`,
     `  Field digest            ${r.result.fieldDigest}`,
     `  Run record digest       ${r.digest}`,
@@ -326,9 +411,9 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
   if (opts.hasPath) {
     lines.push(
       'flow-path.geojson coordinates',
-      '  Local planar metres relative to the grid\'s own (0, 0) corner (cell 0,0\'s',
-      '  lower-left), NOT longitude/latitude. Reproject before loading into a lon/lat',
-      '  viewer; loading it as-is will place it at the equator/prime meridian.',
+      `  coordinateFrame ${opts.pathFrame}: ${PATH_FRAME_TEXT[opts.pathFrame] ?? ''}`,
+      '  Vertices are cell centres, in the same frame as the rasters\' xllcorner and',
+      '  yllcorner, NOT longitude/latitude. Reproject before loading into a lon/lat viewer.',
       '',
     );
   }
@@ -349,12 +434,25 @@ export function buildFlowPulsePackage(
     ...(options.sourceInterpretation ?? sourceInterpretationOf(undefined, undefined)),
     ...(options.digests ? { crsOrigin: options.digests.crsOrigin } : {}),
   };
-  const ox = options.worldOrigin?.x ?? 0;
-  const oy = options.worldOrigin?.y ?? 0;
   const grid = result.grid;
+  // The raster frame is in source units, so it applies only with a world
+  // origin; without one the export stays in local planar metres from (0, 0).
+  // The export is placed only with both a world origin and the raster frame;
+  // with either missing it stays in local planar metres from (0, 0).
+  const placedOrigin = options.worldOrigin && options.gridFrame ? options.worldOrigin : null;
+  const frame = placedOrigin ? options.gridFrame ?? null : null;
+  // The true lower-left corner: the scan's world origin plus the DTM's own
+  // raster offset. H1 is east and H2 north for either scene up-axis; a Y-up
+  // scene only negates north when it places the overlay (flowOverlayFrame).
+  const ox = (placedOrigin?.x ?? 0) + (frame?.originH1 ?? 0);
+  const oy = (placedOrigin?.y ?? 0) + (frame?.originH2 ?? 0);
+  const rasterCell = frame?.cellSize ?? grid.cellMetresX;
+  const pathCellX = frame?.cellSize ?? grid.cellMetresX;
+  const pathCellY = frame?.cellSize ?? grid.cellMetresY;
   const coverage = coverageOf(grid);
   const hasPath = !!options.path;
   const hasCatchment = !!options.catchment;
+  const elevationOrigin = options.verticalResolved === false ? null : options.elevationOrigin ?? null;
 
   const entries: ZipEntry[] = [];
 
@@ -363,7 +461,7 @@ export function buildFlowPulsePackage(
     name: `${basename}-accumulation.asc`,
     bytes: new TextEncoder().encode(writeAsciiGrid({
       values: result.accumulation.upstreamCells, coverage,
-      cols: grid.cols, rows: grid.rows, cellSize: grid.cellMetresX,
+      cols: grid.cols, rows: grid.rows, cellSize: rasterCell,
       xllCorner: ox, yllCorner: oy, noData: NO_DATA, precision: 0,
     })),
   });
@@ -377,25 +475,25 @@ export function buildFlowPulsePackage(
       values: result.routed.direction, coverage,
       // Esri ASCII Grid has one `cellsize` field: square cells only. Both
       // rasters use the X cell size; see the README note on anisotropic grids.
-      cols: grid.cols, rows: grid.rows, cellSize: grid.cellMetresX,
+      cols: grid.cols, rows: grid.rows, cellSize: rasterCell,
       xllCorner: ox, yllCorner: oy, noData: NO_DATA, precision: 0,
     })),
   });
 
   entries.push({
     name: `${basename}-sinks-depressions.csv`,
-    bytes: new TextEncoder().encode(depressionsCsv(result)),
+    bytes: new TextEncoder().encode(depressionsCsv(result, elevationOrigin)),
   });
 
   if (options.path) {
     const coords = Array.from(options.path.cells, (c) => {
       const col = c % grid.cols;
       const row = (c - col) / grid.cols;
-      return [ox + col * grid.cellMetresX, oy + row * grid.cellMetresY];
+      return [ox + (col + 0.5) * pathCellX, oy + (row + 0.5) * pathCellY];
     });
     const geojson = {
       type: 'FeatureCollection',
-      coordinateFrame: 'local-planar-metres',
+      coordinateFrame: pathFrameName(placedOrigin, options.crsName != null),
       features: [{
         type: 'Feature',
         properties: { cells: options.path.cells.length },
@@ -413,7 +511,7 @@ export function buildFlowPulsePackage(
       name: `${basename}-catchment.asc`,
       bytes: new TextEncoder().encode(writeAsciiGrid({
         values: options.catchment.mask, coverage,
-        cols: grid.cols, rows: grid.rows, cellSize: grid.cellMetresX,
+        cols: grid.cols, rows: grid.rows, cellSize: rasterCell,
         xllCorner: ox, yllCorner: oy, noData: NO_DATA, precision: 0,
       })),
     });
@@ -421,7 +519,7 @@ export function buildFlowPulsePackage(
 
   entries.push({
     name: `${basename}-summary.csv`,
-    bytes: new TextEncoder().encode(summaryCsv(result)),
+    bytes: new TextEncoder().encode(summaryCsv(result, elevationOrigin)),
   });
 
   entries.push({
@@ -465,6 +563,9 @@ export function buildFlowPulsePackage(
     basename, generationDateIso, softwareName, softwareVersion, build,
     crsName: options.crsName ?? null, hasWkt: !!options.wkt,
     verticalUnitLabel: options.verticalUnitLabel ?? 'units', hasPath, hasCatchment, sourceInterpretation,
+    elevationOrigin, terrainCaveat: options.terrainCaveat ?? null, rasterCellSize: frame?.cellSize ?? null,
+    pathFrame: pathFrameName(placedOrigin, options.crsName != null),
+    placed: placedOrigin != null,
     sourceSha256Text: options.sourceSha256 ?? (options.digests ? sourceSha256Text(options.digests) : (result.record.source.sourceDigest ?? SOURCE_NOT_SUPPLIED_NOTE)),
   });
   entries.push({

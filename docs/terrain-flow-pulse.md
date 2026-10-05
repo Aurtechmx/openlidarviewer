@@ -281,13 +281,19 @@ package's own Esri ASCII Grid writer rather than a new one.
 
 The package contains an accumulation raster and a direction raster, one
 value per DTM cell, at a local (0, 0) origin unless the caller supplies a
-world origin. An anisotropic grid's rasters are written at the X cell size,
-since the ASCII Grid format has one cell-size field, and the README states
-the true per-axis sizes. A sinks-and-depressions CSV lists the depression
+world origin. When the caller supplies a world origin and the DTM's raster frame (its
+`originH1`/`originH2` corner offset and cell size, in source units), the
+lower-left corner is the world origin plus that offset and the rasters use
+the source cell size. Without both, the rasters sit at a local (0, 0)
+corner in metres, and an anisotropic grid's rasters are written at the X cell size, since the ASCII Grid format has one
+cell-size field, and the README states the true per-axis sizes. A sinks-and-depressions CSV lists the depression
 inventory, largest first. A downstream path and a queried catchment are
-written only when the caller supplies them: the path ships as GeoJSON in
-local planar metres, marked with a `coordinateFrame` field reading
-`local-planar-metres`, since an unmarked GeoJSON file implies WGS84
+written only when the caller supplies them: the path ships as GeoJSON with
+one vertex per cell centre, marked with a `coordinateFrame` field that reads
+`scan-crs` when the export is placed and the CRS name resolved,
+`scan-source-coordinates` when it is placed and no CRS name resolved, and
+`local-planar-metres` when it is not placed (no world origin or no raster
+frame) (the same names the Terrain Access export uses), since an unmarked GeoJSON file implies WGS84
 longitude and latitude by the format's own default; the catchment ships as a
 raster mask rather than a traced polygon, since no boundary-tracing
 algorithm is implemented.
@@ -311,5 +317,14 @@ It states SIMULATED and never claims flood, runoff or discharge outside an
 explicit negation. A SHA256SUMS file lists the SHA-256 of every file in the
 package.
 
-The builder is a pure library. Nothing in this repository wires it to a UI
-export action yet.
+The Flow Pulse Lab's Export package (ZIP) button builds this package from
+the current run, through `buildFlowPulseExport` in
+`src/ui/fieldSimulation/flowPulseLab.ts`. It passes the world origin, the
+CRS name and WKT (written as a `.prj` when the CRS resolves), the DTM's
+raster frame, the vertical origin and the terrain verdict. When the vertical
+origin is known and the vertical unit resolved, the depression table's
+`outletElevation` is the source elevation the Lab's readout shows. Otherwise
+the readout shows no elevation, and the column is `outletElevationLocal`, in
+the load-time recentred frame. A Blocked or Preview terrain run puts its
+verdict and the interpolated share of the surface at the top of the
+README.

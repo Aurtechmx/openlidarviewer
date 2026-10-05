@@ -88,6 +88,7 @@ describe('the package carries every required file', () => {
     const zip = buildFlowPulsePackage(runOf(), {
       basename: 'flow',
       worldOrigin: { x: 400123.5, y: 3600456.25 },
+      gridFrame: { originH1: 0, originH2: 0, cellSize: 1 },
     });
     const asc = textOf(zip, 'flow-accumulation.asc');
     expect(asc).toMatch(/xllcorner 400123\.5/);
@@ -232,5 +233,186 @@ describe('the README never crosses into forbidden hydraulic language', () => {
     const zip = buildFlowPulsePackage(result, { basename: 'flow' });
     const readme = textOf(zip, 'flow-README.txt');
     for (const l of result.limitations) expect(readme).toContain(l);
+  });
+});
+
+describe('outlet elevations match the Lab readout', () => {
+  const depressionRows = (zip: Uint8Array) => textOf(zip, 'flow-sinks-depressions.csv').trim().split('\n');
+
+  it('adds the recentring origin back when the caller knows it', () => {
+    const result = runOf({ conditioning: 'priority-flood' });
+    const local = result.depressions.depressions[0]!.outletElevation!;
+    const zip = buildFlowPulsePackage(result, { basename: 'flow', elevationOrigin: 1000 });
+    const [header, first] = depressionRows(zip);
+    expect(header!.split(',')[4]).toBe('outletElevation');
+    expect(Number(first!.split(',')[4])).toBe(local + 1000);
+    expect(textOf(zip, 'flow-summary.csv')).toContain(`largestDepressionOutletElevation,${local + 1000}`);
+    expect(textOf(zip, 'flow-README.txt')).toContain('the same figure the Lab readout shows');
+  });
+
+  it('names the column Local and states the frame when the origin is unknown', () => {
+    const result = runOf({ conditioning: 'priority-flood' });
+    const local = result.depressions.depressions[0]!.outletElevation!;
+    const zip = buildFlowPulsePackage(result, { basename: 'flow' });
+    const [header, first] = depressionRows(zip);
+    expect(header!.split(',')[4]).toBe('outletElevationLocal');
+    expect(Number(first!.split(',')[4])).toBe(local);
+    expect(textOf(zip, 'flow-summary.csv')).toContain('largestDepressionOutletElevationLocal,');
+    expect(textOf(zip, 'flow-README.txt')).toContain('load-time recentred frame');
+  });
+});
+
+describe('the README states an unusable terrain run', () => {
+  it('names the verdict and the interpolated share', () => {
+    const zip = buildFlowPulsePackage(runOf(), {
+      basename: 'flow', terrainCaveat: { verdict: 'Blocked', interpolatedPercent: 99 },
+    });
+    const readme = textOf(zip, 'flow-README.txt');
+    expect(readme).toContain('TERRAIN RUN NOT USABLE: read this result as illustration only.');
+    expect(readme).toContain('Terrain verdict  Blocked');
+    expect(readme).toContain('99% of the ground surface is interpolated, not measured');
+  });
+
+  it('carries no banner for a usable surface', () => {
+    const readme = textOf(buildFlowPulsePackage(runOf(), { basename: 'flow' }), 'flow-README.txt');
+    expect(readme).not.toContain('NOT USABLE');
+  });
+});
+
+describe('README figures are rounded', () => {
+  it('prints cell size to 3 decimals and contributing area to 1', () => {
+    const scale = { ...projected, unitToMetres: 0.1 + 0.2 };
+    const r = runFlowPulse(bowlDtm(), scale, params(), identity);
+    if (!r.ok) throw new Error(`fixture run refused: ${r.code}`);
+    const readme = textOf(buildFlowPulsePackage(r, { basename: 'flow' }), 'flow-README.txt');
+    expect(readme).not.toMatch(/\d\.\d{4,}/);
+    expect(readme).toMatch(/Cell size\s+0\.3 m/);
+  });
+});
+
+describe('the exported rasters and path sit at their true place', () => {
+  // Hand check: world origin (500000, 4000000), DTM corner offset (-120, -80),
+  // 1 m cells. The true lower-left corner is (499880, 3999920).
+  const georef = {
+    basename: 'flow',
+    worldOrigin: { x: 500000, y: 4000000 },
+    gridFrame: { originH1: -120, originH2: -80, cellSize: 1 },
+  } as const;
+  const header = (zip: Uint8Array, name: string, key: string): number => {
+    const line = textOf(zip, name).split('\n').find((l) => l.toLowerCase().startsWith(key))!;
+    return Number(line.trim().split(/\s+/)[1]);
+  };
+
+  it('adds the DTM corner offset to every raster corner', () => {
+    const result = runOf({ conditioning: 'priority-flood' });
+    const zip = buildFlowPulsePackage(result, {
+      ...georef,
+      catchment: { mask: catchmentFrom(result, 12), outletCell: 12 },
+    });
+    for (const name of ['flow-accumulation.asc', 'flow-direction.asc', 'flow-catchment.asc']) {
+      expect(header(zip, name, 'xllcorner'), name).toBe(499880);
+      expect(header(zip, name, 'yllcorner'), name).toBe(3999920);
+    }
+  });
+
+  it('writes path vertices at cell centres', () => {
+    const result = runOf();
+    const zip = buildFlowPulsePackage(result, { ...georef, path: { cells: Int32Array.from([1 * 5 + 3]) } });
+    const geojson = jsonOf<{ coordinateFrame: string; features: { geometry: { coordinates: number[][] } }[] }>(zip, 'flow-flow-path.geojson');
+    // Cell (col 3, row 1): east 499880 + 3.5, north 3999920 + 1.5.
+    expect(geojson.features[0]!.geometry.coordinates[0]).toEqual([499883.5, 3999921.5]);
+    expect(geojson.coordinateFrame).toBe('scan-source-coordinates');
+  });
+
+  it('places a Y-up scene the same way: H2 is north, and the overlay alone negates it', async () => {
+    const { flowOverlayFrame } = await import('../src/render/flowOverlayGeometry');
+    const frame = flowOverlayFrame('y', -120, -80, 1);
+    // The overlay puts north on scene -Z; the export keeps H2 as north.
+    expect(frame.negateNorthing).toBe(true);
+    expect(frame.originH1).toBe(-120);
+    expect(frame.originH2).toBe(-80);
+    const zip = buildFlowPulsePackage(runOf(), { ...georef, path: { cells: Int32Array.from([0]) } });
+    const geojson = jsonOf<{ features: { geometry: { coordinates: number[][] } }[] }>(zip, 'flow-flow-path.geojson');
+    expect(geojson.features[0]!.geometry.coordinates[0]).toEqual([499880.5, 3999920.5]);
+    expect(header(zip, 'flow-accumulation.asc', 'yllcorner')).toBe(3999920);
+  });
+});
+
+describe('outlet elevations with an unresolved vertical unit', () => {
+  it('keeps the Local columns, since the Lab readout shows no elevation', () => {
+    const result = runOf({ conditioning: 'priority-flood' });
+    const local = result.depressions.depressions[0]!.outletElevation!;
+    const zip = buildFlowPulsePackage(result, { basename: 'flow', elevationOrigin: 1000, verticalResolved: false });
+    const [head, first] = textOf(zip, 'flow-sinks-depressions.csv').trim().split('\n');
+    expect(head!.split(',')[4]).toBe('outletElevationLocal');
+    expect(Number(first!.split(',')[4])).toBe(local);
+    expect(textOf(zip, 'flow-README.txt')).not.toContain('the same figure the Lab readout shows');
+  });
+});
+
+describe('the path frame uses the Terrain Access names', () => {
+  const frameOf = (zip: Uint8Array) => jsonOf<{ coordinateFrame: string }>(zip, 'flow-flow-path.geojson').coordinateFrame;
+  const path = { cells: Int32Array.from([0]) };
+  const gridFrame = { originH1: -120, originH2: -80, cellSize: 1 };
+
+  it('scan-crs with a world origin and a resolved CRS', () => {
+    const zip = buildFlowPulsePackage(runOf(), { basename: 'flow', path, gridFrame, worldOrigin: { x: 1, y: 2 }, crsName: 'EPSG:6342', wkt: 'PROJCS["x"]' });
+    expect(frameOf(zip)).toBe('scan-crs');
+    expect(textOf(zip, 'flow-README.txt')).toContain('coordinateFrame scan-crs');
+  });
+
+  it('scan-source-coordinates with a world origin and no CRS', () => {
+    const zip = buildFlowPulsePackage(runOf(), { basename: 'flow', path, gridFrame, worldOrigin: { x: 1, y: 2 } });
+    expect(frameOf(zip)).toBe('scan-source-coordinates');
+  });
+
+  it('local-planar-metres with no world origin, from the (0, 0) corner in metres', () => {
+    const zip = buildFlowPulsePackage(runOf(), { basename: 'flow', path, gridFrame });
+    expect(frameOf(zip)).toBe('local-planar-metres');
+    const g = jsonOf<{ features: { geometry: { coordinates: number[][] } }[] }>(zip, 'flow-flow-path.geojson');
+    expect(g.features[0]!.geometry.coordinates[0]).toEqual([0.5, 0.5]);
+  });
+});
+
+describe('labels never claim more placement than the export applied', () => {
+  const path = { cells: Int32Array.from([0]) };
+  const frameOf = (zip: Uint8Array) => jsonOf<{ coordinateFrame: string }>(zip, 'flow-flow-path.geojson').coordinateFrame;
+
+  it('a world origin without the raster frame stays local-planar-metres at (0, 0)', () => {
+    const zip = buildFlowPulsePackage(runOf(), { basename: 'flow', path, worldOrigin: { x: 500000, y: 4000000 }, crsName: 'EPSG:6342' });
+    expect(frameOf(zip)).toBe('local-planar-metres');
+    expect(textOf(zip, 'flow-accumulation.asc')).toMatch(/xllcorner 0\b/);
+    expect(textOf(zip, 'flow-accumulation.asc')).toMatch(/yllcorner 0\b/);
+  });
+
+  it('a WKT without a resolved CRS name reads scan-source-coordinates, as Terrain Access does', () => {
+    const zip = buildFlowPulsePackage(runOf(), {
+      basename: 'flow', path, worldOrigin: { x: 1, y: 2 }, wkt: 'PROJCS["x"]',
+      gridFrame: { originH1: 0, originH2: 0, cellSize: 1 },
+    });
+    expect(frameOf(zip)).toBe('scan-source-coordinates');
+  });
+
+  it('states the raster cell size in source units when no CRS resolved, CRS units when one did', () => {
+    const gridFrame = { originH1: 0, originH2: 0, cellSize: 1 };
+    const bare = textOf(buildFlowPulsePackage(runOf(), { basename: 'flow', worldOrigin: { x: 1, y: 2 }, gridFrame }), 'flow-README.txt');
+    expect(bare).toContain('(source units, as written in the .asc files)');
+    const crs = textOf(buildFlowPulsePackage(runOf(), { basename: 'flow', worldOrigin: { x: 1, y: 2 }, gridFrame, crsName: 'EPSG:6342' }), 'flow-README.txt');
+    expect(crs).toContain('(CRS units, as written in the .asc files)');
+  });
+});
+
+describe('the README CRS line', () => {
+  it('says the CRS is not applied when the export is not placed', () => {
+    const readme = textOf(buildFlowPulsePackage(runOf(), { basename: 'flow', worldOrigin: { x: 1, y: 2 }, crsName: 'EPSG:6342' }), 'flow-README.txt');
+    expect(readme).toContain('CRS            EPSG:6342 (not applied: rasters are in local metres from (0, 0))');
+  });
+
+  it('names the CRS plainly when the export is placed', () => {
+    const readme = textOf(buildFlowPulsePackage(runOf(), {
+      basename: 'flow', worldOrigin: { x: 1, y: 2 }, crsName: 'EPSG:6342',
+      gridFrame: { originH1: 0, originH2: 0, cellSize: 1 },
+    }), 'flow-README.txt');
+    expect(readme).toMatch(/CRS {12}EPSG:6342\n/);
   });
 });

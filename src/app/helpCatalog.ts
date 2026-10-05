@@ -81,6 +81,19 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
     keywords: ['terrain access', 'route', 'mobility', 'traversability', 'vehicle', 'walker', 'slope', 'path'],
   },
   {
+    id: 'flow-pulse',
+    title: 'Flow Pulse',
+    summary: 'Which way water would run over the ground surface, and what drains to a point.',
+    paragraphs: [
+      'Flow Pulse reads the ground surface from the latest terrain run. Each cell drains to the neighbour with the steepest drop (D8). Upstream counts are numbers of cells, not rainfall or volumes of water.',
+      'Raw terrain shows where water pools in hollows. Priority-Flood conditioned fills closed hollows first, so most flow reaches an outlet; flats may remain. Switching re-runs the model and clears a traced path or catchment.',
+      'When the terrain verdict is Blocked or Preview, a banner above the result says the run is an illustration only and gives the share of the surface that is interpolated.',
+      'Export package (ZIP) writes the accumulation and direction rasters, the depression table, the run record, a reproducible config and a README, plus the traced path and catchment when you drew them. A .prj file is included when the coordinate system resolves.',
+    ],
+    actionIds: ['analyse.flowPulse', 'analyse.run'],
+    keywords: ['flow', 'pulse', 'drainage', 'catchment', 'sink', 'depression', 'd8', 'priority-flood', 'water'],
+  },
+  {
     id: 'export-trust',
     title: 'Export and scientific trust',
     summary: 'What leaves the app, and what it may claim.',

@@ -7,6 +7,8 @@
  * tests read the same strings.
  */
 
+import { interpolatedShareText, type FlowTerrainCaveat } from './flowTerrainCaveat';
+
 export type LabId = 'flow-pulse' | 'terrain-access' | 'observatory';
 
 export const LAB_NAME: Readonly<Record<LabId, string>> = {
@@ -51,10 +53,15 @@ export interface ReadinessItem {
  * units rule matches each runner: Terrain Access refuses without known units,
  * Flow Pulse still routes and withholds the area figures.
  */
-export function labReadiness(lab: 'flow-pulse' | 'terrain-access', ground: boolean, unitsKnown: boolean): ReadinessItem[] {
+export function labReadiness(
+  lab: 'flow-pulse' | 'terrain-access',
+  ground: boolean,
+  unitsKnown: boolean,
+  groundCaveat: FlowTerrainCaveat | null = null,
+): ReadinessItem[] {
   const ta = lab === 'terrain-access';
   return [
-    { label: 'Ground surface (terrain run)', met: ground, blocking: true, note: ground ? 'Read from the latest terrain run.' : 'Missing: no terrain run yet.' },
+    groundItem(ground, groundCaveat),
     {
       label: 'Units known',
       met: ground && unitsKnown,
@@ -66,9 +73,23 @@ export function labReadiness(lab: 'flow-pulse' | 'terrain-access', ground: boole
           ? 'Distances and heights are in known units.'
           : ta
             ? 'Missing: grades and distances need known units. Assign a coordinate system to the scan.'
-            : 'Not known: areas are withheld; cell counts still work.',
+            : 'Not known: areas are withheld; cell counts still work. A scan in geographic degrees with no known latitude does not run.',
     },
   ];
+}
+
+/**
+ * The ground-surface row. A terrain run whose surface verdict is Blocked or
+ * Preview exists but is not usable, so the row reads as not met (the "!"
+ * glyph) without blocking: the lab still routes and labels the result.
+ */
+function groundItem(ground: boolean, caveat: FlowTerrainCaveat | null): ReadinessItem {
+  const label = 'Ground surface (terrain run)';
+  if (!ground) return { label, met: false, blocking: true, note: 'Missing: no terrain run yet.' };
+  if (caveat) {
+    return { label, met: false, blocking: false, note: `${caveat.verdict} terrain run: ${interpolatedShareText(caveat)}.` };
+  }
+  return { label, met: true, blocking: true, note: 'Read from the latest terrain run.' };
 }
 
 /** The first blocking item not met, or null when the lab can run. */
