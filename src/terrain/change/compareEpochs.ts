@@ -318,9 +318,10 @@ export function excludeWithheldEpoch<T extends { readonly positions: Float32Arra
     if (f && isWithheld(f[i])) withheldCount += 1;
     else if (c && isNoiseClass(c[i])) noiseExcluded += 1;
   }
-  const withheld = f
-    ? withheldReadCounts(n, withheldCount, true)
-    : withheldReadCounts(n, 0, false);
+  // `analysedPoints` is what SMRF and the DTM read: noise is subtracted too,
+  // so analysed + Withheld + noise = source.
+  const base = f ? withheldReadCounts(n, withheldCount, true) : withheldReadCounts(n, 0, false);
+  const withheld = { ...base, analysedPoints: base.analysedPoints - noiseExcluded };
   const kept = n - withheldCount - noiseExcluded;
   if (kept === n) return { cloud, withheld, noiseExcluded };
   const src = cloud.positions;

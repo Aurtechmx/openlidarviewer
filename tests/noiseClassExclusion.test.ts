@@ -12,6 +12,7 @@ import { dropNoise } from '../src/render/measure/lassoVolumeCompute';
 import { withheldClause } from '../src/render/measure/stockpileResult';
 import { noiseExcludedClause } from '../src/terrain/ground/classificationFilter';
 import type { Vec3 } from '../src/render/navMath';
+import { encodeExtendedClassificationFlags } from '../src/lasSemantics';
 
 const N = 40;
 const SIZE = 20;
@@ -56,6 +57,24 @@ describe('epoch change leaves noise classes out', () => {
     expect(kept.noiseExcluded).toBe(after.noise);
     expect(kept.cloud.positions.length).toBe(after.positions.length - after.noise * 3);
     expect(maxAbsDiff(before.positions, kept.cloud.positions)).toBe(0);
+  });
+
+  it('analysed, Withheld and noise counts add up to the source count', () => {
+    const after = epoch(true);
+    const n = after.positions.length / 3;
+    const flags = new Uint8Array(n);
+    const withheldByte = encodeExtendedClassificationFlags({ withheld: true });
+    let withheldSet = 0;
+    for (let i = 1; i < n; i += 50) {
+      flags[i] = withheldByte;
+      withheldSet++;
+    }
+    const out = excludeWithheldEpoch({ positions: after.positions }, flags, after.classification);
+    const w = out.withheld;
+    expect(w.withheldExcluded).toBe(withheldSet);
+    expect(out.noiseExcluded).toBeGreaterThan(0);
+    expect(w.analysedPoints + (w.withheldExcluded as number) + out.noiseExcluded).toBe(w.sourcePoints);
+    expect(w.analysedPoints).toBe(out.cloud.positions.length / 3);
   });
 
   it('an unclassified epoch is returned unchanged', () => {
