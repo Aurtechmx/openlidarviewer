@@ -1,0 +1,91 @@
+/*
+ * Field Simulation Labs (Flow Pulse, Terrain Access): the result grid frame,
+ * colour-map legend ramps, pattern swatches for states that sit off a ramp,
+ * tabular figures, and the caveat banner. The grid field stays dark in every
+ * theme so a colour map reads the same; the chrome around it follows the theme.
+ */
+/* Grid: a framed instrument field with a faint inner rule. */
+.olv-ta-grid-canvas, .olv-flow-grid-canvas {
+  background: var(--lab-field);
+  border: 1px solid var(--lab-frame);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 3px var(--lab-field), 0 0 0 4px var(--lab-frame);
+  margin: 4px;
+  image-rendering: auto;
+}
+.olv-ta-grid-status, .olv-flow-grid-status,
+.olv-story-row, .olv-story-v, .olv-ta-selection, .olv-lab-ramp-ticks, .olv-lab-legend-range {
+  font-variant-numeric: var(--lab-num);
+}
+
+/* Legend panel: ramp first, then bucket and mark lists. */
+.olv-lab-legend-panel { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-lab-ramp { display: flex; flex-direction: column; gap: 4px; max-width: 280px; padding-bottom: 14px; }
+.olv-lab-ramp-title { margin: 0; font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.04em; color: var(--text-dim); }
+.olv-lab-ramp-bar { height: 10px; border-radius: 2px; border: 0.5px solid var(--lab-frame); }
+.olv-lab-ramp-ticks { position: relative; height: 0; font-size: var(--text-2xs); color: var(--text-dim); }
+.olv-lab-ramp-tick { position: absolute; top: 0; transform: translateX(-50%); padding-top: 4px; white-space: nowrap; }
+.olv-lab-ramp-tick::before {
+  content: ""; position: absolute; top: -4px; left: 50%; width: 1px; height: 6px; background: var(--text-dim);
+}
+.olv-lab-ramp-tick:first-child { transform: none; }
+.olv-lab-ramp-tick:first-child::before { left: 0; }
+.olv-lab-ramp-tick:last-child { transform: translateX(-100%); }
+.olv-lab-ramp-tick:last-child::before { left: auto; right: 0; }
+.olv-lab-legend-range { color: var(--text-faint); }
+
+/* Pattern swatches mirror the canvas marks: hatch, dots, line, ring. */
+.olv-lab-swatch--hatch {
+  background: repeating-linear-gradient(-45deg, currentColor 0 1.5px, var(--lab-field) 1.5px 4px);
+}
+.olv-lab-swatch--dots {
+  background: radial-gradient(circle, currentColor 1px, transparent 1.3px) 0 0 / 6px 6px, var(--lab-field);
+}
+.olv-lab-swatch--line {
+  background: linear-gradient(var(--lab-field) 0 4px, currentColor 4px 8px, var(--lab-field) 8px);
+}
+.olv-lab-swatch--ring { border-radius: 50%; border: 2px solid currentColor; background: var(--lab-field); }
+
+.olv-lab-swatch--dash {
+  background: repeating-linear-gradient(90deg, currentColor 0 3px, var(--lab-field) 3px 5px) center / 100% 2px no-repeat, var(--lab-field);
+}
+
+/* Flow Pulse: a Blocked or Preview terrain run gets a full-width banner at the top of the page. */
+.olv-flow-terrain-banner {
+  position: relative;
+  padding: var(--space-sm) var(--space-sm) var(--space-sm) calc(var(--space-sm) + 22px);
+  border: 0.5px solid var(--state-blocked);
+  border-left: 3px solid var(--state-blocked);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--lab-caveat-fill);
+  color: var(--text); font-weight: 500;
+}
+.olv-flow-terrain-banner::before {
+  content: "✕"; position: absolute; left: var(--space-sm); top: var(--space-sm);
+  color: var(--state-blocked); font-weight: 600;
+}
+.olv-flow-terrain-banner[data-verdict="preview"] { border-color: var(--lab-caveat-ink); }
+.olv-flow-terrain-banner[data-verdict="preview"]::before { content: "!"; color: var(--lab-caveat-ink); }
+.olv-flow-cond-hint { margin-top: calc(-1 * var(--space-xs)); }
+
+/* The caveat line on a result reads as a banner, never as a caption. */
+.olv-lab-caveat {
+  display: flex; gap: var(--space-xs); align-items: baseline;
+  margin: 0 0 var(--space-xs); padding: var(--space-xs) var(--space-sm);
+  border-left: 3px solid var(--lab-caveat-ink);
+  background: var(--lab-caveat-fill);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--text); opacity: 1; font-weight: 500;
+}
+.olv-lab-caveat::before { content: "!"; color: var(--lab-caveat-ink); font-weight: 600; }
+
+@media (max-width: 480px) {
+  .olv-lab-ramp { max-width: none; }
+  .olv-lab-legend-panel .olv-lab-legend { row-gap: var(--space-xs); }
+}
+
+/* Forced colours: the ramp and swatches are data, so they keep their colours. */
+@media (forced-colors: active) {
+  .olv-lab-ramp-bar, .olv-lab-swatch, .olv-ta-grid-canvas, .olv-flow-grid-canvas { forced-color-adjust: none; }
+  .olv-lab-caveat { border-left-color: CanvasText; }
+}

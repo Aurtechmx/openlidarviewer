@@ -27,11 +27,14 @@ import {
   type TerrainAccessCellReport,
 } from '../../simulation/terrainAccess/terrainAccessGridCursor';
 import { buildResultGridDom } from './resultGridDom';
-import { legend } from '../labGuide';
 import { el } from '../dom';
 import { TERRAIN_ACCESS_STATE_LABEL, costBucketNote } from '../../simulation/terrainAccess/terrainAccessExplain';
 import { maskFromIndices as sharedMaskFromIndices } from './gridMask';
-import type { TraversabilityMapCell } from '../../simulation/terrainAccess/traversabilityCost';
+import { MAP_COST_BUCKETS, type TraversabilityMapCell } from '../../simulation/terrainAccess/traversabilityCost';
+import { cividis, prefersReducedMotion, rampGradient, rgbCss } from './labColormaps';
+import {
+  LAB_BLOCKED, LAB_LINE, LAB_WITHHELD, casedPath, cellCentres, dotCell, drawIn, hatchCell, letteredRing,
+} from './labGridPaint';
 import type { TerrainAccessGrid } from '../../simulation/terrainAccess/terrainAccessTypes';
 
 const CANVAS_MAX = 320;
@@ -47,35 +50,69 @@ export interface TerrainAccessResultGridOptions {
   readonly elevationRef?: ElevationReference | null;
 }
 
-/** Flat, colourblind-legible bucket colours — a glance-level classification, not data. */
-const STATE_COLOR: Record<TraversabilityMapCell['state'], string> = {
-  blocked: '#5b2b2b',
-  unknown: '#1c1f26',
-  'low-cost': '#3a7a4a',
-  'moderate-cost': '#8a7d3a',
-  'high-cost': '#a24f2b',
-};
+/** The cost ramp spans 0 to 100 % extra cost; anything dearer takes the top colour. */
+const COST_RAMP_MAX = 1;
+const costT = (multiplier: number): number => multiplier / COST_RAMP_MAX;
 
-const START_COLOR = '#5b9dc2';
-const GOAL_COLOR = '#c25bb0';
-const ROUTE_COLOR = 'rgba(250, 243, 89, 0.9)';
+const START_COLOR = '#38bdf8';
+const GOAL_COLOR = '#f0abfc';
+const ROUTE_COLOR = LAB_LINE;
+const ROUTE_DRAW_MS = 600;
 
-/** The map's legend, in the colours `_redraw` paints, each with a glyph and the
- * state name the cursor readout also uses, followed by what the cost buckets mean. */
+function patternSwatch(kind: 'hatch' | 'dots' | 'line' | 'ring', glyph: string, label: string, color: string): HTMLElement {
+  const swatch = el('span', { className: `olv-lab-swatch olv-lab-swatch--${kind}` });
+  swatch.style.color = color;
+  return el('li', { className: 'olv-lab-legend-item' }, [
+    swatch,
+    el('span', { className: 'olv-lab-legend-glyph', text: glyph }),
+    el('span', { text: label }),
+  ]);
+}
+
+/** The map's legend: the cividis cost ramp with its unit and bucket edges, the
+ * patterns for cells off the ramp, and the route marks, each with a glyph and
+ * the state name the cursor readout also uses. */
 export function terrainAccessGridLegend(): HTMLElement {
   const label = TERRAIN_ACCESS_STATE_LABEL;
-  const list = legend('Map legend', [
-    { glyph: '■', label: label['low-cost'], color: STATE_COLOR['low-cost'] },
-    { glyph: '◧', label: label['moderate-cost'], color: STATE_COLOR['moderate-cost'] },
-    { glyph: '◼', label: label['high-cost'], color: STATE_COLOR['high-cost'] },
-    { glyph: '✕', label: label.blocked, color: STATE_COLOR.blocked },
-    { glyph: '?', label: label.unknown, color: STATE_COLOR.unknown },
-    { glyph: '━', label: 'Route', color: ROUTE_COLOR },
-    { glyph: 'S', label: 'Start', color: START_COLOR },
-    { glyph: 'G', label: 'Goal', color: GOAL_COLOR },
+  const low = MAP_COST_BUCKETS.low, mod = MAP_COST_BUCKETS.moderate;
+  const bar = el('div', { className: 'olv-lab-ramp-bar' });
+  bar.style.background = rampGradient(cividis);
+  const ticks = el('div', { className: 'olv-lab-ramp-ticks' }, [
+    [0, '0'], [low, `${Math.round(low * 100)}`], [mod, `${Math.round(mod * 100)}`], [COST_RAMP_MAX, '≥100'],
+  ].map(([at, text]) => {
+    const t = el('span', { className: 'olv-lab-ramp-tick', text: String(text) });
+    t.style.left = `${(Number(at) / COST_RAMP_MAX) * 100}%`;
+    return t;
+  }));
+  const ramp = el('div', { className: 'olv-lab-ramp' }, [
+    el('p', { className: 'olv-lab-ramp-title', text: 'Extra cost over a flat, supported move (%)' }),
+    bar,
+    ticks,
   ]);
-  return el('div', { className: 'olv-ta-legend' }, [
-    list,
+  ramp.setAttribute('role', 'img');
+  ramp.setAttribute('aria-label', 'Cost colour scale, cividis: dark blue is 0 % extra cost, yellow is 100 % or more.');
+  const bucket = (state: 'low-cost' | 'moderate-cost' | 'high-cost', from: number, to: number, range: string): HTMLElement => {
+    const sw = el('span', { className: 'olv-lab-swatch' });
+    sw.style.background = rgbCss(cividis(costT((from + to) / 2)));
+    return el('li', { className: 'olv-lab-legend-item' }, [
+      sw,
+      el('span', { text: label[state] }), el('span', { className: 'olv-lab-legend-range', text: range }),
+    ]);
+  };
+  const buckets = el('ul', { className: 'olv-lab-legend', ariaLabel: 'Cost buckets' }, [
+    bucket('low-cost', 0, low, `≤ ${Math.round(low * 100)} %`),
+    bucket('moderate-cost', low, mod, `≤ ${Math.round(mod * 100)} %`),
+    bucket('high-cost', mod, COST_RAMP_MAX, `> ${Math.round(mod * 100)} %`),
+  ]);
+  const marks = el('ul', { className: 'olv-lab-legend', ariaLabel: 'Map legend' }, [
+    patternSwatch('hatch', '✕', label.blocked, LAB_BLOCKED),
+    patternSwatch('dots', '?', label.unknown, LAB_WITHHELD),
+    patternSwatch('line', '━', 'Route', ROUTE_COLOR),
+    patternSwatch('ring', 'S', 'Start', START_COLOR),
+    patternSwatch('ring', 'G', 'Goal', GOAL_COLOR),
+  ]);
+  return el('div', { className: 'olv-ta-legend olv-lab-legend-panel' }, [
+    ramp, buckets, marks,
     el('p', { className: 'olv-ta-legend-note', text: costBucketNote() }),
   ]);
 }
@@ -94,6 +131,9 @@ export class TerrainAccessResultGrid {
   private _start: GridCell | null = null;
   private _goal: GridCell | null = null;
   private _routeMask: Uint8Array | null = null;
+  private _routeOrder: ArrayLike<number> | null = null;
+  private _routeFraction = 1;
+  private _cancelDraw: () => void = () => {};
 
   constructor(opts: TerrainAccessResultGridOptions) {
     this._onActivate = opts.onActivate;
@@ -127,7 +167,9 @@ export class TerrainAccessResultGrid {
     this._map = map;
     this._start = null;
     this._goal = null;
+    this._cancelDraw();
     this._routeMask = null;
+    this._routeOrder = null;
     this._cursor = clampCell(grid.cols, grid.rows, 0, 0);
     this._redraw();
     this._updateStatus();
@@ -143,10 +185,24 @@ export class TerrainAccessResultGrid {
     this._redraw();
   }
 
-  /** Highlight a found route, or clear it with `null`. */
-  setRouteMask(mask: Uint8Array | null): void {
+  /**
+   * Highlight a found route, or clear it with `null`. With `order` (the route's
+   * cell indices from start to goal) the route is drawn as a line that draws in
+   * from the start, or at once under reduced motion.
+   */
+  setRouteMask(mask: Uint8Array | null, order: ArrayLike<number> | null = null): void {
+    this._cancelDraw();
     this._routeMask = mask;
-    this._redraw();
+    this._routeOrder = mask ? order : null;
+    if (!mask || !order) {
+      this._routeFraction = 1;
+      this._redraw();
+      return;
+    }
+    this._cancelDraw = drawIn(ROUTE_DRAW_MS, prefersReducedMotion(), (f) => {
+      this._routeFraction = f;
+      this._redraw();
+    });
   }
 
   private _handleClick(e: MouseEvent): void {
@@ -214,29 +270,36 @@ export class TerrainAccessResultGrid {
     const ctx = typeof this._canvas.getContext === 'function' ? this._canvas.getContext('2d') : null;
     if (!ctx) return;
 
+    const dpr = typeof devicePixelRatio === 'number' && devicePixelRatio > 1 ? Math.min(3, devicePixelRatio) : 1;
+    if (dpr !== 1) {
+      this._canvas.width = w * dpr;
+      this._canvas.height = h * dpr;
+      ctx.scale(dpr, dpr);
+    }
     for (let row = 0; row < grid.rows; row++) {
       for (let col = 0; col < grid.cols; col++) {
-        const i = row * grid.cols + col;
-        ctx.fillStyle = STATE_COLOR[map[i].state];
-        ctx.fillRect(col * scale, row * scale, scale, scale);
+        const cell = map[row * grid.cols + col]!;
+        const x = col * scale, y = row * scale;
+        if (cell.state === 'blocked') hatchCell(ctx, x, y, scale, LAB_BLOCKED);
+        else if (cell.state === 'unknown' || cell.bestMultiplier === null) dotCell(ctx, x, y, scale, LAB_WITHHELD);
+        else {
+          ctx.fillStyle = rgbCss(cividis(costT(cell.bestMultiplier)));
+          ctx.fillRect(x, y, scale, scale);
+        }
       }
     }
-    if (this._routeMask) {
+    if (this._routeMask && this._routeOrder) {
+      casedPath(ctx, cellCentres(this._routeOrder, grid.cols, scale), scale, ROUTE_COLOR, this._routeFraction);
+    } else if (this._routeMask) {
       ctx.fillStyle = ROUTE_COLOR;
       for (let i = 0; i < this._routeMask.length; i++) {
         if (this._routeMask[i] !== 1) continue;
         const col = i % grid.cols, row = Math.floor(i / grid.cols);
-        ctx.fillRect(col * scale, row * scale, scale, scale);
+        ctx.fillRect(col * scale + scale / 3, row * scale + scale / 3, scale / 3, scale / 3);
       }
     }
-    if (this._start) {
-      ctx.fillStyle = START_COLOR;
-      ctx.fillRect(this._start.col * scale, this._start.row * scale, scale, scale);
-    }
-    if (this._goal) {
-      ctx.fillStyle = GOAL_COLOR;
-      ctx.fillRect(this._goal.col * scale, this._goal.row * scale, scale, scale);
-    }
+    if (this._start) letteredRing(ctx, this._start.col, this._start.row, scale, START_COLOR, 'S');
+    if (this._goal) letteredRing(ctx, this._goal.col, this._goal.row, scale, GOAL_COLOR, 'G');
     // Cursor outline, always drawn last.
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = Math.max(1, Math.floor(scale / 6));

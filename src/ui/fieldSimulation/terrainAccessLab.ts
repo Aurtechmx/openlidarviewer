@@ -35,6 +35,7 @@ import type { ExportDigests } from '../../science/exportDigestRecord';
 import type { SourceInterpretationRecord } from '../../science/sourceInterpretation';
 import { showBusyScan } from '../busyScan';
 import { el } from '../dom';
+import { hideTip } from '../tipLayer';
 import type { ModalHandle } from '../Modal';
 import { openLabSurface } from '../labSurface';
 import {
@@ -310,7 +311,7 @@ export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | nu
   }
   const d = outcome.diagnostics;
   card.append(
-    el('div', { className: 'olv-story-headline', text: 'A geometric traversability screening — not a safety or passability guarantee' }),
+    el('div', { className: 'olv-story-headline olv-lab-caveat', text: 'A geometric traversability screening — not a safety or passability guarantee' }),
     row('Route cells', String(d.cellCount)),
     row('Horizontal length', `${d.horizontalLengthM.toFixed(1)} m`),
     row('Ascent / descent', `${d.totalAscentM.toFixed(1)} m / ${d.totalDescentM.toFixed(1)} m`),
@@ -820,7 +821,7 @@ export function mountTerrainAccessInteractive(
       if (outcome.ok) {
         // The Results shelf lists the latest route by reference.
         publishLabRun('terrain-access', { outcome, layerId: input?.layerId ?? null, filename: input?.filename ?? null });
-        grid.setRouteMask(maskFromIndices(readyPreview.grid.cols * readyPreview.grid.rows, outcome.path));
+        grid.setRouteMask(maskFromIndices(readyPreview.grid.cols * readyPreview.grid.rows, outcome.path), outcome.path);
         if (overlay && overlayFrame) overlay.setRoute(buildTerrainAccessRouteBuffers(readyPreview.grid, outcome.path, overlayFrame));
         announce('Terrain Access route found.');
       } else {
@@ -829,6 +830,8 @@ export function mountTerrainAccessInteractive(
         announce(`Terrain Access did not run: ${outcome.reason}`);
       }
       runCard.replaceChildren(renderTerrainAccessRunCard(outcome));
+      // The Run button's tip sits over the card that just filled in.
+      hideTip();
       renderSelection();
     };
 
