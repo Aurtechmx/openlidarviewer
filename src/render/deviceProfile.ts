@@ -126,3 +126,12 @@ export function deviceCaps(signals: DeviceSignals): DeviceCaps {
   const table = signals.isMobile ? MOBILE_BUDGET : DESKTOP_BUDGET;
   return { tier, renderBudget: table[tier] };
 }
+
+/**
+ * Absolute GPU-upload point ceiling. The device-aware load budget already
+ * sizes a cloud to the machine; this is the last-resort guard so that no path
+ * can upload a cloud large enough to risk a GPU out-of-memory crash. It sits
+ * above every load budget, and a reload at higher density never asks for more.
+ * Viewer.ts applies the same value at upload; a test keeps the two equal.
+ */
+export const GPU_HARD_POINT_CEILING = 8_000_000;

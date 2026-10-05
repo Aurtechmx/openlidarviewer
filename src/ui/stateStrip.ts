@@ -11,7 +11,7 @@
 
 import './stateStrip.css';
 import { el } from './dom';
-import { fullFileAvailability, fullFileLink, reviewSampleTip } from '../app/fullFileActions';
+import { fullFileAvailability, reloadAvailability, reviewSampleTip, sampleActionLinks } from '../app/fullFileActions';
 import { STATE_GLYPH, STATE_LABEL, type SciState } from './stateChip';
 import { linearUnitLabel } from '../io/crs';
 import { clipScopeText } from '../render/clip/clipScope';
@@ -158,11 +158,11 @@ export function createStateStrip(host: StateStripHost): StateStrip {
       paint('vertical', s.vertical?.value.label ?? null, s.vertical?.validity ?? null);
       paint('basis', s.basis ? BASIS_TEXT[s.basis.value] : null, s.basis?.validity ?? null);
       const ff = s.basis?.value === 'sampled' ? fullFileAvailability() : null;
-      const ffKey = ff?.show ? `${ff.label}|${ff.allowed}|${ff.reason ?? ''}` : '';
+      const rl = s.basis?.value === 'sampled' ? reloadAvailability() : null;
+      const ffKey = `${ff?.show ? `${ff.label}|${ff.allowed}|${ff.reason ?? ''}` : ''}#${rl?.show ? `${rl.label}|${rl.allowed}` : ''}`;
       if (ffKey !== fullFileKey) {
         fullFileKey = ffKey;
-        const link = ff?.show ? fullFileLink() : null;
-        fullFileSlot.replaceChildren(...(link ? [link] : []));
+        fullFileSlot.replaceChildren(...(s.basis?.value === 'sampled' ? sampleActionLinks() : []));
       }
       buttons.get('basis')!.title = s.basis?.value === 'resident-only'
         ? 'Only the points currently in memory, not the whole file.'

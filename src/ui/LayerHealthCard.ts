@@ -19,7 +19,7 @@
  */
 
 import { el } from './dom';
-import { fullFileLink } from '../app/fullFileActions';
+import { sampleActionLinks } from '../app/fullFileActions';
 import type { CompatibilityReport, LayerHealthRow } from '../app/layerHealth';
 
 /** One layer's heading + built rows, ready to render. */
@@ -145,8 +145,7 @@ export class LayerHealthCard {
       text: r.value,
     });
     value.dataset.status = r.status;
-    const link = r.fullFileAction && layerId ? fullFileLink(layerId) : null;
-    if (link) value.append(' ', link);
+    for (const link of r.fullFileAction && layerId ? sampleActionLinks(layerId) : []) value.append(' ', link);
     return el('div', { className: 'olv-layerhealth-row' }, [
       el('dt', { className: 'olv-layerhealth-row-name', text: r.label }),
       value,

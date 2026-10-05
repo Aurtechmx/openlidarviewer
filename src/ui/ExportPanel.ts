@@ -145,9 +145,13 @@ export interface ExportPanelCallbacks {
   /** Whether the loaded cloud is a reduced subset of the source. */
   isReduced: () => boolean;
   /** Per-layer facts for the "Export all N points" action; null when the layer is unknown. */
-  layerSource?: (id: string) => { cloud: PointCloud; file: File | null; reduced: boolean; hasClassEdits: boolean } | null;
+  layerSource?: (id: string) => { cloud: PointCloud; file: File | null; reduced: boolean; hasClassEdits: boolean; classCauses?: { edited: boolean; derived: boolean }; inCompare?: boolean } | null;
   /** Make a layer the active scan, so the panel exports it. */
   activateLayer?: (id: string) => void;
+  /** Open a layer's source file again at `budget` points and drop the old layer. */
+  reloadLayer?: (id: string, budget: number) => Promise<void>;
+  /** Show a short message to the user. */
+  notify?: (message: string) => void;
   /** Re-decode the original file at full resolution. Only call when `hasFullSource()`. */
   getFullCloud: () => Promise<PointCloud | null>;
   /**
@@ -514,7 +518,17 @@ export class ExportPanel {
   /** The "Export all N points" facts for a layer, read through this panel's callbacks. */
   fullFileFacts(id: string): FullFileLayerFacts | null {
     const src = this._cb.layerSource?.(id) ?? null;
-    return src ? layerFacts({ id, ...src, includeClassification: this._includeClass }) : null;
+    return src ? layerFacts({ id, ...src, includeClassification: this._includeClass, findings: this._findings?.countFor(id) ?? 0 }) : null;
+  }
+
+  /** Reload a layer at a raised budget, through the host's open path. */
+  reloadLayer(id: string, budget: number): Promise<void> {
+    return this._cb.reloadLayer?.(id, budget) ?? Promise.resolve();
+  }
+
+  /** Show a message through the host. */
+  notify(message: string): void {
+    this._cb.notify?.(message);
   }
 
   /**
@@ -1430,16 +1444,48 @@ function parseEpsg(v: string): number | null {
 /** The app state {@link exportLayerHooks} reads. */
 export interface ExportLayerState {
   readonly scans: { readonly activeId: string | null; setActive(id: string): void };
-  readonly viewer: () => { getCloud(id: string): PointCloud | null | undefined; classificationEpoch(id: string): number } | null | undefined;
+  readonly viewer: () => {
+    getCloud(id: string): PointCloud | null | undefined;
+    classificationEpoch(id: string): number;
+    clouds(): readonly string[];
+  } | null | undefined;
   readonly sourceFiles: ReadonlyMap<string, File>;
   readonly reduced: ReadonlyMap<string, boolean>;
+  /** The app's open path for a file. */
+  readonly reopen: (file: File) => Promise<void>;
+  /** Remove a layer from the scene. */
+  readonly removeLayer: (id: string) => void;
+  readonly notify: (message: string) => void;
+  /** The shown compare difference was computed on this layer. */
+  readonly inCompare?: (id: string) => boolean;
 }
 
-/** The panel's per-layer callbacks: `hasFullSource`, `activateLayer` and `layerSource`. */
-export function exportLayerHooks(state: ExportLayerState): Pick<ExportPanelCallbacks, 'hasFullSource' | 'activateLayer' | 'layerSource'> {
+/** The panel's per-layer callbacks: `hasFullSource`, `activateLayer`, `layerSource`, `reloadLayer` and `notify`. */
+export function exportLayerHooks(state: ExportLayerState): Pick<ExportPanelCallbacks, 'hasFullSource' | 'activateLayer' | 'layerSource' | 'reloadLayer' | 'notify'> {
   return {
     hasFullSource: () => state.scans.activeId != null && state.sourceFiles.has(state.scans.activeId),
     activateLayer: (id) => state.scans.setActive(id),
+    // The open path reads the raised budget itself (takeReloadBudget), then
+    // the old layer is dropped once the reopened one has taken its place.
+    reloadLayer: async (id) => {
+      const file = state.sourceFiles.get(id);
+      if (!file) return;
+      const before = new Set(state.viewer()?.clouds() ?? []);
+      try {
+        await state.reopen(file);
+      } catch {
+        // Reported below with the other incomplete outcomes.
+      }
+      // A cancelled, failed or refused open adds no layer. Only a single new
+      // layer read from the same file replaces the old one.
+      const added = (state.viewer()?.clouds() ?? []).filter((c) => !before.has(c));
+      if (added.length === 1 && state.sourceFiles.get(added[0]) === file) {
+        state.removeLayer(id);
+        return;
+      }
+      state.notify('The reload did not complete. The layer is unchanged.');
+    },
+    notify: (message) => state.notify(message),
     layerSource: (id) => {
       const viewer = state.viewer();
       const cloud = viewer?.getCloud(id);
@@ -1449,6 +1495,13 @@ export function exportLayerHooks(state: ExportLayerState): Pick<ExportPanelCallb
         file: state.sourceFiles.get(id) ?? null,
         reduced: state.reduced.get(id) === true,
         hasClassEdits: classificationDiffersFromSource(cloud.classificationProvenance ?? 'none', viewer.classificationEpoch(id)),
+        classCauses: {
+          // Viewer bumps a derived cloud's epoch on frame invalidation, so the
+          // epoch means a hand edit only for source classes.
+          edited: cloud.classificationProvenance === 'source' && viewer.classificationEpoch(id) > 0,
+          derived: !['source', 'none'].includes(cloud.classificationProvenance ?? 'none'),
+        },
+        inCompare: state.inCompare?.(id) ?? false,
       };
     },
   };

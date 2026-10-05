@@ -241,6 +241,10 @@ export function createCompareDifference(deps: CompareDifferenceDeps) {
     hold(file: { readonly stem: string; readonly asc: () => string }): void {
       if (shown) deps.slot.lastDifference = { ...file, ...shown };
     },
+    /** Whether the shown result was computed on this scan. */
+    involves(viewerId: string): boolean {
+      return !!shown && (shown.before.viewerId === viewerId || shown.after.viewerId === viewerId);
+    },
     dropStale(): void {
       if (!shown || compareResultCurrent(shown, deps.ids(), deps.selection(), deps.lookup, deps.stableIdFor)) return;
       shown = null;
