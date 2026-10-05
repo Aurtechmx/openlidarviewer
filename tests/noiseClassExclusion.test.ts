@@ -3,11 +3,15 @@
  * noise classes 7 and 18 out, and report how many they left out. A file with
  * no classification channel gives the same result as before.
  */
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import { buildSharedEpochDtms, epochNoiseLines, excludeWithheldEpoch, withheldEpochs } from '../src/terrain/change/compareEpochs';
 import { compareDtms } from '../src/terrain/change/compareDtms';
-import { samplePolygonVolume } from '../src/render/measure/polygonVolumeSample';
+import { gatherVolumeBuffers, samplePolygonVolume } from '../src/render/measure/polygonVolumeSample';
 import { dropNoise } from '../src/render/measure/lassoVolumeCompute';
 import { withheldClause } from '../src/render/measure/stockpileResult';
 import { noiseExcludedClause } from '../src/terrain/ground/classificationFilter';
@@ -135,5 +139,34 @@ describe('volume leaves noise classes out', () => {
       ' · 2 noise points (classes 7, 18) excluded',
     );
     expect(withheldClause({ source: 10, excluded: 0, analysed: 10 })).toBe('');
+  });
+});
+
+describe('Viewer volume sampler wiring', () => {
+  it('gatherVolumeBuffers hands each source its classification', () => {
+    const g = epoch(true);
+    const cloud = { positions: g.positions, classification: g.classification };
+    const node = { positions: g.positions, classification: g.classification };
+    const out = gatherVolumeBuffers([{ cloud, placement: null }], () => [node], () => false);
+    expect(out.buffers.map((b) => b.classification)).toEqual([g.classification, g.classification]);
+    expect(out.streamingPoints).toBe(g.positions.length);
+    const rec = samplePolygonVolume(out.buffers, out.total, POLY, 0, UP);
+    expect(rec.withheld?.noiseExcluded).toBe(g.noise * 2);
+    expect(rec.cut).toBe(0);
+  });
+
+  it('a reduced static cloud passes no classification', () => {
+    const g = epoch(true);
+    const out = gatherVolumeBuffers([{ cloud: { positions: g.positions, classification: g.classification } }], () => [], () => true);
+    expect(out.buffers[0].classification).toBeUndefined();
+  });
+
+  it('the Viewer volume sampler builds its buffers through gatherVolumeBuffers', () => {
+    const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../src/render/Viewer.ts'), 'utf8');
+    const start = src.indexOf('this._measure.setVolumeSampler(');
+    expect(start).toBeGreaterThan(0);
+    const body = src.slice(start, src.indexOf('samplePolygonVolume(', start));
+    expect(body).toContain('gatherVolumeBuffers(');
+    expect(body).not.toContain('buffers.push(');
   });
 });

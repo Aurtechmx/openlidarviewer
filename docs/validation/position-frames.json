@@ -85,6 +85,13 @@
       "why": "Same assembled gather as the export path: placement is folded before the buffer arrives, so the analysis core reads project coordinates."
     },
     {
+      "file": "src/app/testSeam/testSeamMount.ts",
+      "symbol": "mountTestSeam.seedUniformClass",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Reads only the buffer length to size a class array. The frame is still named because the length must match the layer this class array will be attached to."
+    },
+    {
       "file": "src/io/copc/copcChunkDecode.ts",
       "symbol": "chunkTransferables",
       "frame": "render-local",
@@ -267,13 +274,6 @@
       "why": "The active static cloud's resident buffer feeds the KML footprint's convex-hull outline, which is traced in the cloud's own source-local XY — the same frame the bounding-rectangle extent is read in."
     },
     {
-      "file": "src/app/testSeam/testSeamMount.ts",
-      "symbol": "mountTestSeam.seedUniformClass",
-      "frame": "source-local",
-      "reads": 1,
-      "why": "Reads only the buffer length to size a class array. The frame is still named because the length must match the layer this class array will be attached to."
-    },
-    {
       "file": "src/model/PointCloud.ts",
       "symbol": "PointCloud.bounds",
       "frame": "source-local",
@@ -425,6 +425,16 @@
     },
     {
       "file": "src/render/measure/polygonVolumeSample.ts",
+      "symbol": "gatherVolumeBuffers",
+      "frame": [
+        "source-local",
+        "render-local"
+      ],
+      "reads": 2,
+      "why": "Collects the polygon volume buffers: static layers contribute source-local buffers with their placement alongside, resident streaming nodes contribute render-local ones. Neither is lifted here; assembleVolumePositions folds placement as it copies."
+    },
+    {
+      "file": "src/render/measure/polygonVolumeSample.ts",
       "symbol": "samplePolygonVolume",
       "frame": "project-local",
       "reads": 1,
@@ -545,7 +555,7 @@
         "source-local",
         "render-local"
       ],
-      "reads": 14,
+      "reads": 5,
       "why": "The sampler callbacks registered here (profile, cut/fill volume, inspector patch) collect buffers from both sources: static layers contribute source-local buffers WITH their placement alongside, resident streaming nodes contribute render-local ones. Neither is lifted here; the assemblers fold placement as they copy."
     },
     {

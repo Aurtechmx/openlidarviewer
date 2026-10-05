@@ -12,6 +12,7 @@
  * Pure: no DOM, no three.js.
  */
 import type { Vec3 } from '../navMath';
+import type { LayerSpatialTransform } from '../../geo/ProjectSpatialFrame';
 import type { VolumeRecord } from './types';
 import { deriveVolumeRecord } from './measureDerivations';
 import {
@@ -61,4 +62,52 @@ export function samplePolygonVolume(
   };
   if (noise > 0) record.withheld = { ...record.withheld, noiseExcluded: noise };
   return record;
+}
+
+/** A source the volume sampler reads: positions plus its per-point channels. */
+export interface VolumeSourceCloud {
+  readonly positions?: Float32Array;
+  readonly classificationFlags?: Uint8Array;
+  readonly classification?: Uint8Array;
+}
+
+/** The buffers one polygon volume walk reads, with the point totals. */
+export interface GatheredVolumeBuffers {
+  readonly buffers: PlacedVolumeBuffer[];
+  /** Summed element length (Σ pos.length). */
+  readonly total: number;
+  /** Elements that came from resident streaming nodes. */
+  readonly streamingPoints: number;
+}
+
+/**
+ * Collect the placed buffers for the polygon Volume tool, each with its
+ * Withheld flags and classification, so `samplePolygonVolume` can leave out
+ * Withheld and noise points. A reduced (voxel or strided) static cloud passes
+ * no classification, as the lasso walk does. `streaming` receives the static
+ * buffer count and returns the resident nodes that may join the walk.
+ */
+export function gatherVolumeBuffers<C extends VolumeSourceCloud>(
+  statics: Iterable<{ readonly cloud: C; readonly placement?: LayerSpatialTransform | null }>,
+  streaming: (staticCount: number) => Iterable<VolumeSourceCloud>,
+  wasReduced: (cloud: C) => boolean,
+): GatheredVolumeBuffers {
+  const buffers: PlacedVolumeBuffer[] = [];
+  let total = 0;
+  let streamingPoints = 0;
+  for (const { cloud, placement } of statics) {
+    const pos = cloud.positions;
+    if (!pos || pos.length === 0) continue;
+    const classification = wasReduced(cloud) ? undefined : cloud.classification;
+    buffers.push({ pos, placement, flags: cloud.classificationFlags, classification });
+    total += pos.length;
+  }
+  for (const node of streaming(buffers.length)) {
+    const pos = node.positions;
+    if (!pos || pos.length === 0) continue;
+    buffers.push({ pos, flags: node.classificationFlags, classification: node.classification });
+    total += pos.length;
+    streamingPoints += pos.length;
+  }
+  return { buffers, total, streamingPoints };
 }
