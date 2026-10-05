@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import {
@@ -78,6 +78,33 @@ describe('the list file', () => {
     } finally {
       rmSync(parent, { recursive: true, force: true });
     }
+  });
+
+  it('puts the tally file in the same private directory, owner-only and exclusive', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'olv-parent-'));
+    try {
+      const list = writeFileList(['tests/a.test.ts'], parent);
+      expect(dirname(list.tallyPath)).toBe(dirname(list.path));
+      expect(dirname(dirname(list.tallyPath))).toBe(parent);
+      expect(basename(list.tallyPath)).not.toMatch(/pid|\d{3,}/);
+      if (process.platform !== 'win32') {
+        expect(statSync(list.tallyPath).mode & 0o777).toBe(0o600);
+      }
+      expect(() => writeFileSync(list.tallyPath, '{}', { flag: 'wx' })).toThrow(/EEXIST/);
+      list.dispose();
+      expect(existsSync(list.tallyPath)).toBe(false);
+      expect(existsSync(dirname(list.tallyPath))).toBe(false);
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
+
+  it('test-bucket.mjs no longer builds a tally path in the shared temp directory', () => {
+    const src = readFileSync(join(__dirname, '..', 'scripts', 'test-bucket.mjs'), 'utf8');
+    expect(src).not.toMatch(/tmpdir\(/);
+    expect(src).not.toMatch(/olv-tally-/);
+    expect(src).toMatch(/list\.tallyPath/);
+    expect(src).toMatch(/process\.on\('exit'/);
   });
 
   it('returns null when no list is named, and throws on a malformed one', () => {

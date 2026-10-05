@@ -26,14 +26,19 @@ export const WINDOWS_COMMAND_LINE_LIMIT = 32767;
  * Write `files` (repo-relative paths) as JSON into a new private directory
  * under the OS temp dir. The directory comes from `mkdtempSync`, so its name is
  * unpredictable, and the file is created exclusively (`wx`) and readable by its
- * owner only. `dispose` removes the file and the directory.
+ * owner only. `tallyPath` is a second file in the same directory, created the
+ * same way, for the JSON summary vitest writes. `dispose` removes the files and
+ * the directory.
  */
 export function writeFileList(files, parent = tmpdir()) {
   const dir = mkdtempSync(join(parent, 'olv-files-'));
   const path = join(dir, 'files.json');
   writeFileSync(path, JSON.stringify(files), { flag: 'wx', mode: 0o600 });
+  const tallyPath = join(dir, 'tally.json');
+  writeFileSync(tallyPath, '', { flag: 'wx', mode: 0o600 });
   return {
     path,
+    tallyPath,
     dispose() {
       rmSync(dir, { recursive: true, force: true });
     },
