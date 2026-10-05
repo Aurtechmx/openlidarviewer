@@ -15,6 +15,7 @@
 import { cellIndex, resolveElevation, type ElevationReference, type GridCell } from '../flowPulse/flowGridCursor';
 import { whyNotEligible, type TerrainAccessFeatures, type NodeEligibility, type TraversabilityMapCell } from './traversabilityCost';
 import type { TerrainAccessGrid, TerrainAccessProfile } from './terrainAccessTypes';
+import { TERRAIN_ACCESS_STATE_LABEL } from './terrainAccessExplain';
 
 export {
   cellIndex, cellAt, clampCell, moveCursor, pixelToCell,
@@ -40,14 +41,6 @@ export interface TerrainAccessCellReport {
   readonly mapState: string | null;
   readonly eligible: boolean | null;
 }
-
-const MAP_STATE_LABEL: Record<TraversabilityMapCell['state'], string> = {
-  blocked: 'blocked',
-  unknown: 'no data',
-  'low-cost': 'low cost',
-  'moderate-cost': 'moderate cost',
-  'high-cost': 'high cost',
-};
 
 /**
  * Describe one cell from an already-built traversability map, for the live
@@ -76,7 +69,7 @@ export function describeTerrainAccessCell(
     elevation,
     elevationUnit,
     confidence: readable ? grid.confidence[i] : null,
-    mapState: cellMap ? MAP_STATE_LABEL[cellMap.state] : null,
+    mapState: cellMap ? TERRAIN_ACCESS_STATE_LABEL[cellMap.state].toLowerCase() : null,
     eligible: cellMap ? cellMap.state !== 'blocked' && cellMap.state !== 'unknown' : null,
   };
 }

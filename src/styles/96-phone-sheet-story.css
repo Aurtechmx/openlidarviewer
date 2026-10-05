@@ -367,6 +367,7 @@
 .olv-ta-field-input:focus { outline: none; border-color: var(--accent); }
 .olv-ta-field-input:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .olv-ta-field-hint { font-size: var(--text-2xs); font-weight: 400; letter-spacing: normal; color: var(--text-faint); }
+.olv-ta-legend-note { margin: var(--space-xs) 0 0; font-size: var(--text-2xs); color: var(--text-faint); }
 
 .olv-ta-toggle-row { display: flex; flex-direction: column; gap: var(--space-2xs); }
 .olv-ta-toggle-row > label { display: flex; align-items: center; gap: var(--space-sm); font-size: var(--text-xs); color: var(--text-dim); }

@@ -28,6 +28,8 @@ import {
 } from '../../simulation/terrainAccess/terrainAccessGridCursor';
 import { buildResultGridDom } from './resultGridDom';
 import { legend } from '../labGuide';
+import { el } from '../dom';
+import { TERRAIN_ACCESS_STATE_LABEL, costBucketNote } from '../../simulation/terrainAccess/terrainAccessExplain';
 import { maskFromIndices as sharedMaskFromIndices } from './gridMask';
 import type { TraversabilityMapCell } from '../../simulation/terrainAccess/traversabilityCost';
 import type { TerrainAccessGrid } from '../../simulation/terrainAccess/terrainAccessTypes';
@@ -58,17 +60,23 @@ const START_COLOR = '#5b9dc2';
 const GOAL_COLOR = '#c25bb0';
 const ROUTE_COLOR = 'rgba(250, 243, 89, 0.9)';
 
-/** The map's legend, in the colours `_redraw` paints, each with a glyph and a word. */
+/** The map's legend, in the colours `_redraw` paints, each with a glyph and the
+ * state name the cursor readout also uses, followed by what the cost buckets mean. */
 export function terrainAccessGridLegend(): HTMLElement {
-  return legend('Map legend', [
-    { glyph: '■', label: 'Eligible, low cost', color: STATE_COLOR['low-cost'] },
-    { glyph: '◧', label: 'Higher cost', color: STATE_COLOR['moderate-cost'] },
-    { glyph: '◼', label: 'Highest cost', color: STATE_COLOR['high-cost'] },
-    { glyph: '✕', label: 'Blocked', color: STATE_COLOR.blocked },
-    { glyph: '?', label: 'Withheld (not enough evidence)', color: STATE_COLOR.unknown },
+  const label = TERRAIN_ACCESS_STATE_LABEL;
+  const list = legend('Map legend', [
+    { glyph: '■', label: label['low-cost'], color: STATE_COLOR['low-cost'] },
+    { glyph: '◧', label: label['moderate-cost'], color: STATE_COLOR['moderate-cost'] },
+    { glyph: '◼', label: label['high-cost'], color: STATE_COLOR['high-cost'] },
+    { glyph: '✕', label: label.blocked, color: STATE_COLOR.blocked },
+    { glyph: '?', label: label.unknown, color: STATE_COLOR.unknown },
     { glyph: '━', label: 'Route', color: ROUTE_COLOR },
     { glyph: 'S', label: 'Start', color: START_COLOR },
     { glyph: 'G', label: 'Goal', color: GOAL_COLOR },
+  ]);
+  return el('div', { className: 'olv-ta-legend' }, [
+    list,
+    el('p', { className: 'olv-ta-legend-note', text: costBucketNote() }),
   ]);
 }
 
@@ -195,8 +203,11 @@ export class TerrainAccessResultGrid {
     const h = grid.rows * scale;
     this._canvas.width = w;
     this._canvas.height = h;
+    // Width only: CSS max-width can narrow the canvas, and a fixed pixel
+    // height would then stretch every cell. Auto height keeps cells square.
     this._canvas.style.width = `${w}px`;
-    this._canvas.style.height = `${h}px`;
+    this._canvas.style.height = 'auto';
+    this._canvas.style.aspectRatio = `${w} / ${h}`;
     // No canvas 2D context under the Node unit-test DOM shim, matching
     // `flowResultGrid.ts`'s own note: the tested state lives in `_cursor` and
     // `_status.textContent`, neither of which needs a paint.

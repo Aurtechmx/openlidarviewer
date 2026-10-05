@@ -44,6 +44,13 @@ describe('help catalogue', () => {
     expect(clip.help?.summary).not.toMatch(/no export is changed/i);
   });
 
+  it('Terrain Access has its own topic listing its action', () => {
+    const topic = HELP_TOPICS.find((t) => t.id === 'terrain-access')!;
+    expect(topic.actionIds).toEqual(['analyse.terrainAccess']);
+    expect(helpActionRows(topic, actions).map((r) => r.id)).toEqual(['analyse.terrainAccess']);
+    expect(searchHelp('traversability', actions).map((h) => h.topic.id)).toContain('terrain-access');
+  });
+
   it('search finds the concepts a user types', () => {
     for (const [query, topicId] of [
       ['volume', 'tools'], ['CRS', 'export-trust'], ['preview', 'scientific-states'], ['classification', 'analyse'],

@@ -198,7 +198,8 @@ the terrain.
 
 ## Terrain Access is a geometry screening, never a safety guarantee
 
-Terrain Access opens from the command palette next to Flow Pulse. It screens
+Terrain Access opens from its row on the Analyse home and from the command
+palette, next to Flow Pulse. It screens
 a route between two chosen cells against a mobility profile the reader
 declares, with no preset presented as validated. It is not a safety
 assessment, a guaranteed-passable route or a vehicle dynamics simulation:
@@ -286,7 +287,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 97 for the shell, 75 for the renderer and 23 for the Analyse panel,
-across 1070 modules with no dependency cycles.
+across 1071 modules with no dependency cycles.
 
 ## The shell has little headroom
 

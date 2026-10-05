@@ -1,7 +1,7 @@
 /**
  * terrainAccessLab.ts — the Field Simulation Lab's Terrain Access view.
  *
- * Opened from the command palette and loaded on demand, exactly like
+ * Opened from the Analyse home or the command palette and loaded on demand, exactly like
  * `flowPulseLab.ts`: the routing core, the preview and this view ride their
  * own chunk, so a session that never asks for a Terrain Access run never
  * downloads any of it.
@@ -51,6 +51,8 @@ import {
 import { whyNotSentence, type ElevationReference, type GridCell } from '../../simulation/terrainAccess/terrainAccessGridCursor';
 import type { HorizontalScale } from '../../simulation/terrainAccess/dtmTerrainAccessGrid';
 import type { TerrainAccessProfile } from '../../simulation/terrainAccess/terrainAccessTypes';
+import type { RouteDiagnostics } from '../../simulation/terrainAccess/routeDiagnostics';
+import { costDriversSentence } from '../../simulation/terrainAccess/terrainAccessExplain';
 import { dtmProductDigest } from '../../science/dtmProductDigest';
 import { buildIdentityProvenance } from '../../build/buildIdentity';
 import { verticalUnitLabel } from '../../units/units';
@@ -72,7 +74,7 @@ import {
 } from './terrainAccessProfileForm';
 import { loadTerrainAccessPackage, registerTerrainAccessOverlayInvalidator } from '../../lazyChunks';
 import { downloadBytes } from '../../io/download';
-import type { buildTerrainAccessPackage } from '../../export/terrainAccessPackage';
+import type { buildTerrainAccessPackage, TerrainAccessGridPlacement } from '../../export/terrainAccessPackage';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
 import { labRun, publishLabRun, takeResultReopen } from '../../app/results/resultSignals';
 import type { SurfaceGrid } from '../../terrain/surface/buildDsm';
@@ -234,8 +236,15 @@ export interface TerrainAccessGeoref {
   /** Probe interpretation level and data basis of the analysed scan, for export provenance. */
   readonly sourceInterpretation?: SourceInterpretationRecord;
   readonly worldOrigin: { readonly x: number; readonly y: number } | null;
+  /** The grid's own position in the scan (`DtmGrid.originH1/originH2/cellSizeM`). */
+  readonly gridPlacement?: TerrainAccessGridPlacement | null;
   readonly crsName: string | null;
   readonly wkt: string | null;
+}
+
+/** The grid's placement in the scan, read from the DTM the run was built on. */
+export function terrainAccessGridPlacement(dtm: DtmGrid): TerrainAccessGridPlacement {
+  return { originH1: dtm.originH1, originH2: dtm.originH2, cellSize: dtm.cellSizeM };
 }
 
 /** Build the export package from the CURRENT run, refusing on a stale result. Pure and DOM-free. */
@@ -257,6 +266,7 @@ export function buildTerrainAccessExport(
   const bytes = build(outcome, {
     basename,
     worldOrigin: georef?.worldOrigin ?? null,
+    gridPlacement: georef?.gridPlacement ?? null,
     crsName: georef?.crsName ?? null,
     wkt: georef?.wkt ?? null,
     sourceInterpretation: georef?.sourceInterpretation ?? null,
@@ -265,11 +275,24 @@ export function buildTerrainAccessExport(
   return { ok: true, bytes, filename: `${basename}-terrain-access.zip` };
 }
 
+/** Export is offered only once a run has produced a route, and not while one is in flight. */
+export function terrainAccessExportReady(outcome: TerrainAccessLabOutcome | null, busy: boolean, exportBusy: boolean): boolean {
+  return !!outcome && outcome.ok && !busy && !exportBusy;
+}
+
 function row(label: string, value: string): HTMLElement {
   return el('div', { className: 'olv-story-row' }, [
     el('span', { className: 'olv-story-k', text: label }),
     el('span', { className: 'olv-story-v', text: value }),
   ]);
+}
+
+/** Measured, interpolated and low-confidence shares of the route's cells. */
+export function evidenceSplitText(d: RouteDiagnostics): string {
+  if (d.fractionMeasured == null || d.fractionInterpolated == null) return 'not recorded';
+  const pct = (x: number): string => `${Math.round(x * 100)}%`;
+  const low = d.fractionLowConfidenceOrEdgeRisk ?? 0;
+  return `${pct(d.fractionMeasured)} measured, ${pct(d.fractionInterpolated)} interpolated, ${pct(low)} low confidence`;
 }
 
 /** The run's answer as a card: a refusal's named reason, or the route diagnostics.
@@ -296,6 +319,10 @@ export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | nu
     row('Max step (limit applies here)', `${d.maxEdgeStepM.toFixed(3)} m`),
     row('Terrain relief within the footprint window', `${d.maxLocalReliefM.toFixed(3)} m`),
     row('Min terrain confidence', Number.isFinite(d.minTerrainConfidence) ? d.minTerrainConfidence.toFixed(0) : 'n/a'),
+    row('P95 longitudinal grade', `${d.p95LongitudinalGrade.toFixed(3)} (tangent), ${tangentToDegrees(d.p95LongitudinalGrade)}`),
+    row('Total cost', `${outcome.cost.toFixed(1)} (distance in metres, weighted by the cost terms)`),
+    row('Route cells by evidence', evidenceSplitText(d)),
+    el('div', { className: 'olv-story-next', text: costDriversSentence(d.dominantCostContributors) }),
   );
   const list = el('ul', { className: 'olv-story-v' });
   for (const sentence of outcome.limitations) list.append(el('li', { text: sentence }));
@@ -325,6 +352,13 @@ export function terrainAccessReadiness(input: TerrainAccessLabInput | null) {
 
 type SelectMode = 'start' | 'goal' | 'inspect';
 
+/** What a click on the map does, one option per mode. */
+export const TERRAIN_ACCESS_MODE_OPTIONS: ReadonlyArray<{ value: SelectMode; label: string; tip: string }> = [
+  { value: 'start', label: 'Set start', tip: "Click a cell on the map to set the route's starting point." },
+  { value: 'goal', label: 'Set goal', tip: "Click a cell on the map to set the route's destination." },
+  { value: 'inspect', label: 'Inspect a cell', tip: 'Click a cell to see why it can or cannot be reached.' },
+];
+
 function button(text: string, className: string, tip: string): HTMLButtonElement {
   return el('button', { className, text, type: 'button', tip }) as HTMLButtonElement;
 }
@@ -342,14 +376,27 @@ function liveRegion(): HTMLElement {
   return node;
 }
 
-function labeledInput(labelText: string, hint: string | null): { wrap: HTMLElement; input: HTMLInputElement } {
+let fieldHintSeq = 0;
+
+function labeledInput(
+  labelText: string,
+  hint: string | null,
+  numeric = true,
+): { wrap: HTMLElement; input: HTMLInputElement } {
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'olv-ta-field-input';
+  if (numeric) input.setAttribute('inputmode', 'decimal');
+  const hintNode = hint ? el('span', { className: 'olv-ta-field-hint', text: hint }) : null;
+  if (hintNode) {
+    fieldHintSeq += 1;
+    hintNode.id = `olv-ta-hint-${fieldHintSeq}`;
+    input.setAttribute('aria-describedby', hintNode.id);
+  }
   const label = el('label', { className: 'olv-ta-field-label' }, [
     el('span', { text: labelText }),
     input,
-    ...(hint ? [el('span', { className: 'olv-ta-field-hint', text: hint })] : []),
+    ...(hintNode ? [hintNode] : []),
   ]);
   const wrap = el('div', { className: 'olv-ta-field' }, [label]);
   return { wrap, input };
@@ -378,9 +425,15 @@ function segmentedControl<T extends string>(
   return { element: group, sync };
 }
 
+/** The hint under "Minimum terrain confidence": what the 0–100 score measures
+ * (`cellConfidence.ts`: ground-return density where measured, distance to data
+ * and roughness where interpolated). */
+export const TERRAIN_CONFIDENCE_HINT =
+  '0–100: how well ground returns support each cell (return density where measured, distance to data and local roughness where interpolated)';
+
 /** Build the mobility-profile form. Returns the element and a live-read accessor
  * for its current values — no field is pre-filled with a number (no preset). */
-function buildProfileForm(onSubmit: () => void, blockedReason: string | null): {
+export function buildProfileForm(onSubmit: () => void, blockedReason: string | null): {
   element: HTMLElement;
   values: () => TerrainAccessProfileFormValues;
   showProblems: (problems: readonly { field: string; reason: string }[]) => void;
@@ -389,12 +442,12 @@ function buildProfileForm(onSubmit: () => void, blockedReason: string | null): {
     ...EMPTY_TERRAIN_ACCESS_PROFILE_FORM,
   };
 
-  const name = labeledInput('Profile name', 'e.g. "Illustrative — confirm for your platform"');
+  const name = labeledInput('Profile name', 'e.g. "Illustrative — confirm for your platform"', false);
   const longGrade = labeledInput('Max longitudinal grade', 'degrees');
   const crossSlope = labeledInput('Max cross slope', 'degrees');
   const stepHeight = labeledInput('Max step height', 'metres');
   const vehicleWidth = labeledInput('Vehicle width', 'metres — 0 for a point footprint');
-  const confidence = labeledInput('Minimum terrain confidence', '0–100');
+  const confidence = labeledInput('Minimum terrain confidence', TERRAIN_CONFIDENCE_HINT);
 
   const ruggednessToggle = document.createElement('input');
   ruggednessToggle.type = 'checkbox';
@@ -414,8 +467,8 @@ function buildProfileForm(onSubmit: () => void, blockedReason: string | null): {
   const unknownPolicyCtl = segmentedControl<'block' | 'penalize'>(
     'Weak-evidence policy',
     [
-      { value: 'block', label: 'Block weak-evidence cells', tip: 'Treat a cell with no confidence value as impassable.' },
-      { value: 'penalize', label: 'Allow, cost-penalize', tip: 'Allow a cell with no confidence value, at an extra route cost.' },
+      { value: 'block', label: 'Block weak-evidence cells', tip: 'Treat cells below the minimum confidence as impassable.' },
+      { value: 'penalize', label: 'Allow, cost-penalize', tip: 'Allow cells below the minimum confidence, at an extra route cost.' },
     ],
     () => state.unknownPolicy,
     (value) => { state.unknownPolicy = value; unknownPolicyCtl.sync(); },
@@ -555,7 +608,7 @@ registerTerrainAccessOverlayInvalidator(disposePersistentTerrainAccessOverlay);
  * on stays drawn on the scan after the modal closes, mirroring
  * `flowPulseLab.ts`'s `mountFlowPulseInteractive` exactly.
  */
-function mountTerrainAccessInteractive(
+export function mountTerrainAccessInteractive(
   input: TerrainAccessLabInput | null,
   onRunTerrain: (() => void) | null = null,
 ): { element: HTMLElement; dispose: () => void } {
@@ -598,11 +651,7 @@ function mountTerrainAccessInteractive(
 
   const modeCtl = segmentedControl<SelectMode>(
     'What a selected cell does',
-    [
-      { value: 'start', label: 'Set start', tip: "Click a cell on the map to set the route's starting point." },
-      { value: 'goal', label: 'Set goal', tip: "Click a cell on the map to set the route's destination." },
-      { value: 'inspect', label: 'Why is this cell blocked?', tip: 'Click a cell to see why it can or cannot be reached.' },
-    ],
+    TERRAIN_ACCESS_MODE_OPTIONS,
     () => mode,
     (value) => { mode = value; modeCtl.sync(); },
   );
@@ -636,6 +685,7 @@ function mountTerrainAccessInteractive(
       row('Goal', goalCell ? `col ${goalCell.col}, row ${goalCell.row}` : 'not set'),
     );
     runButton.disabled = !(startCell && goalCell) || busy;
+    exportButton.disabled = !terrainAccessExportReady(outcome, busy, exportBusy);
     if (outcome?.ok) {
       head.setStage(4);
       stepLine.textContent = 'Next: read the route below, or export it.';
@@ -689,6 +739,7 @@ function mountTerrainAccessInteractive(
           worldOrigin: input.worldOriginX != null && input.worldOriginY != null
             ? { x: input.worldOriginX, y: input.worldOriginY }
             : null,
+          gridPlacement: terrainAccessGridPlacement(input.dtm),
           crsName: input.crsName ?? null,
           wkt: input.wkt ?? null,
           sourceInterpretation: input.sourceInterpretation,
@@ -706,7 +757,7 @@ function mountTerrainAccessInteractive(
       announce(`Export failed: ${msg}`);
     } finally {
       exportBusy = false;
-      exportButton.disabled = false;
+      exportButton.disabled = !terrainAccessExportReady(outcome, busy, exportBusy);
       exportButton.textContent = label;
     }
   }

@@ -111,10 +111,15 @@ test('profile, start/goal by keyboard and click, run, route shown, why-not, expo
   await expect(grid).toBeVisible({ timeout: 10_000 });
   const box = await grid.boundingBox();
   if (!box) throw new Error('grid canvas has no box');
+  // Square cells: the drawn box keeps the canvas's own width:height ratio.
+  const intrinsic = await grid.evaluate((c: HTMLCanvasElement) => c.width / c.height);
+  expect(Math.abs(box.width / box.height - intrinsic)).toBeLessThan(0.05);
+  // No run yet, so there is nothing to export.
+  await expect(labPage.locator('.olv-ta-export')).toBeDisabled();
 
   // WHY-NOT INSPECTOR: default mode is 'start'; switch to inspect and read a
   // sentence naming a concrete reason (eligible or blocked), never a vague answer.
-  await labPage.locator('.olv-ta-segmented-btn', { hasText: 'Why is this cell blocked?' }).click();
+  await labPage.locator('.olv-ta-segmented-btn', { hasText: 'Inspect a cell' }).click();
   await grid.click({ position: { x: box.width / 2, y: box.height / 2 } });
   await expect(labPage.locator('.olv-ta-inspector')).toContainText(/eligible|blocked|withheld/, { timeout: 5_000 });
   // The inspector's cell readout is a real elevation with its unit, or an
@@ -180,6 +185,7 @@ test('profile, start/goal by keyboard and click, run, route shown, why-not, expo
   // coordinates in the dataset CRS, not a local (0, 0) origin.
   const exportBtn = labPage.locator('.olv-ta-export');
   await expect(exportBtn).toBeVisible();
+  await expect(exportBtn).toBeEnabled();
   const downloadPromise = page.waitForEvent('download');
   await exportBtn.click();
   const download = await downloadPromise;
@@ -191,6 +197,8 @@ test('profile, start/goal by keyboard and click, run, route shown, why-not, expo
     // The fixture's UTM easting/northing are in the 500000/4100000 range —
     // real georeferencing, not a local (0, 0) origin.
     expect(readmeText).not.toContain('not georeferenced');
+    // The route is written in the scan CRS, at cell centres.
+    expect(readmeText).toContain('Cell centres in the scan CRS');
     const ascText = extractZipEntryText(zipBytes, findZipEntryName(zipBytes, 'traversability.asc'));
     expect(ascText).toMatch(/xllcorner 5000\d\d\.?\d*/);
     expect(ascText).toMatch(/yllcorner 41000\d\d\.?\d*/);

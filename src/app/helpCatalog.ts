@@ -70,6 +70,17 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
     keywords: ['terrain', 'dtm', 'contour', 'ground', 'classification', 'derived', 'analysis', 'story'],
   },
   {
+    id: 'terrain-access',
+    title: 'Terrain Access',
+    summary: 'Screen a route over the ground for a vehicle or walker you describe.',
+    paragraphs: [
+      'Open Terrain Access from its row on the Analyse home, or from the command palette. It needs a terrain run first. Enter the limits for the vehicle or walker: nothing is filled in for you.',
+      'The map colours each cell by the cost of its cheapest move. Set a start and a goal, then run to find the lowest-cost route. Inspect a cell to see why it is blocked. The result is a geometric screening, never a safety or passability guarantee.',
+    ],
+    actionIds: ['analyse.terrainAccess'],
+    keywords: ['terrain access', 'route', 'mobility', 'traversability', 'vehicle', 'walker', 'slope', 'path'],
+  },
+  {
     id: 'export-trust',
     title: 'Export and scientific trust',
     summary: 'What leaves the app, and what it may claim.',

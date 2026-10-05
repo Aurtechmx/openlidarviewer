@@ -227,6 +227,7 @@ describe('georeferenced export', () => {
     const zip = buildTerrainAccessPackage(runOf(), {
       basename: 'ta',
       worldOrigin: { x: 400123.5, y: 3600456.25 },
+      gridPlacement: { originH1: 0, originH2: 0, cellSize: 1 },
     });
     const asc = textOf(zip, 'ta-traversability.asc');
     expect(asc).toMatch(/xllcorner 400123\.5/);
@@ -237,11 +238,13 @@ describe('georeferenced export', () => {
     const zip = buildTerrainAccessPackage(runOf(), {
       basename: 'ta',
       worldOrigin: { x: 400123.5, y: 3600456.25 },
+      gridPlacement: { originH1: 0, originH2: 0, cellSize: 1 },
     });
     const geojson = jsonOf<{ features: { geometry: { coordinates: [number, number][] } }[] }>(zip, 'ta-route.geojson');
     const [x0, y0] = geojson.features[0].geometry.coordinates[0];
-    expect(x0).toBeCloseTo(400123.5, 6);
-    expect(y0).toBeCloseTo(3600456.25, 6);
+    // Cell 0's centre: half a 1 m cell in from the corner.
+    expect(x0).toBeCloseTo(400124, 6);
+    expect(y0).toBeCloseTo(3600456.75, 6);
   });
 
   it('writes a local (0, 0) origin and no .prj when no world origin/CRS is supplied', () => {
@@ -257,6 +260,7 @@ describe('georeferenced export', () => {
     const zip = buildTerrainAccessPackage(runOf(), {
       basename: 'ta',
       worldOrigin: { x: 400123.5, y: 3600456.25 },
+      gridPlacement: { originH1: 0, originH2: 0, cellSize: 1 },
       wkt,
     });
     expect(textOf(zip, 'ta.prj')).toBe(wkt);
