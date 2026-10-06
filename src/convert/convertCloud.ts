@@ -33,6 +33,7 @@ import {
   isMaterialAcquisitionLoss,
   asciiDroppedFieldsEvent,
   eventRecordLine,
+  provenanceTrimmedMessage,
   type ConversionEvent,
 } from './conversionEvents';
 import {
@@ -69,12 +70,6 @@ import {
   LEGACY_RETURN_CLAMP_OPT_IN,
 } from './types';
 
-/** Logged when the file's text area could not hold every provenance line. */
-function provenanceTrimmedMessage(eventsOmitted: number): string {
-  return eventsOmitted > 0
-    ? `The conversion events were too long for the file's text area, so ${eventsOmitted.toLocaleString('en-US')} of them are not recorded in it. They are all in this report.`
-    : 'The provenance text was too long for the file, so only the conversion events are recorded in it.';
-}
 
 const MIME: Record<string, string> = {
   las14: 'application/octet-stream',

@@ -100,9 +100,9 @@ export interface BatchProgress {
 
 /** Append " (n)" before the extension to make `name` unique within `seen`. */
 export function dedupeName(name: string, seen: Set<string>): string {
-  // Compared in lower case: a ZIP unpacked on a case-insensitive file system
+  // Compared in NFC and lower case: a ZIP unpacked on a case-insensitive file system
   // would otherwise overwrite "A.las" with "a.las".
-  const key = (n: string): string => n.toLowerCase();
+  const key = (n: string): string => n.normalize('NFC').toLowerCase();
   if (!seen.has(key(name))) {
     seen.add(key(name));
     return name;

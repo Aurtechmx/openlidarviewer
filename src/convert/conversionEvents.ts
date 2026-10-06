@@ -68,7 +68,10 @@ export function fitProvenance(
   events: readonly ConversionEvent[],
 ): { lines: string[]; trimmed: boolean; eventsOmitted: number } {
   const eventLines = events.map(eventRecordLine);
-  const size = (lines: readonly string[]): number => lines.join('\n').length + (datumNote ? datumNote.length + 1 : 0);
+  // UTF-8 bytes, the unit of the VLR length field; the writer folds to ASCII,
+  // which is never longer.
+  const size = (lines: readonly string[]): number =>
+    utf8Bytes(lines.join('\n')) + (datumNote ? utf8Bytes(datumNote) + 1 : 0);
   const all = [...baseLines, ...eventLines];
   if (size(all) <= MAX_RECORD_BYTES) return { lines: all, trimmed: false, eventsOmitted: 0 };
   if (size(eventLines) <= MAX_RECORD_BYTES) return { lines: eventLines, trimmed: true, eventsOmitted: 0 };
@@ -81,6 +84,15 @@ export function fitProvenance(
   const omitted = eventLines.length - kept.length;
   kept.push(`${omitted} further conversion event${omitted === 1 ? '' : 's'} could not be listed here; see the export report.`);
   return { lines: kept, trimmed: true, eventsOmitted: omitted };
+}
+
+const utf8Bytes = (s: string): number => new TextEncoder().encode(s).length;
+
+/** The report warning for a trimmed record: what was left out of the file. */
+export function provenanceTrimmedMessage(eventsOmitted: number): string {
+  return eventsOmitted > 0
+    ? `The provenance text was too long for the file's text area, so the other provenance lines and ${eventsOmitted.toLocaleString('en-US')} conversion event${eventsOmitted === 1 ? '' : 's'} are not recorded in it. They are all in this report.`
+    : 'The provenance text was too long for the file, so only the conversion events are recorded in it.';
 }
 
 /** The report entries the panels must show: every warning and error, and each translation. */
@@ -249,6 +261,10 @@ export function asciiDroppedFieldsEvent(
     readonly colors?: unknown;
     readonly scanAngle?: unknown;
     readonly pointSourceId?: unknown;
+    readonly userData?: unknown;
+    readonly scannerChannel?: unknown;
+    readonly scanDirection?: unknown;
+    readonly edgeOfFlightLine?: unknown;
   },
   format: 'xyz' | 'asc',
 ): ConversionEvent | null {
@@ -259,6 +275,9 @@ export function asciiDroppedFieldsEvent(
   if (g.gpsTime) dropped.push('GPS time');
   if (g.scanAngle) dropped.push('scan angle');
   if (g.pointSourceId) dropped.push('point source id');
+  if (g.userData) dropped.push('user data');
+  if (g.scannerChannel) dropped.push('scanner channel');
+  if (g.scanDirection || g.edgeOfFlightLine) dropped.push('scan direction and edge of flight line');
   if (format === 'xyz' && g.intensity) dropped.push('intensity');
   if (format === 'asc' && g.colors) dropped.push('colour');
   if (dropped.length === 0) return null;

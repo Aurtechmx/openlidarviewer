@@ -10,9 +10,12 @@ import { runBatch, dedupeName, type BatchInput } from '../src/convert/convertRun
 import { buildZip } from '../src/convert/zipStore';
 import { writeXyz, writeAsc } from '../src/convert/writeAscii';
 import { sourceFileLine, measurementCsvProvenance } from '../src/export/exportProvenanceLines';
-import { safeEntryName, singleLine, unsafeEntryName } from '../src/export/safeText';
+import { MAX_ENTRY_NAME_BYTES, safeEntryName, singleLine, unsafeEntryName } from '../src/export/safeText';
+import { exportDigests } from '../src/science/exportDigestRecord';
 import { buildExportSummary } from '../src/export/exportSummary';
-import { fitProvenance, type ConversionEvent } from '../src/convert/conversionEvents';
+import { fitProvenance, provenanceTrimmedMessage, type ConversionEvent } from '../src/convert/conversionEvents';
+import { loadLas } from '../src/io/loadLas';
+import { buildLas } from './helpers/rawLas';
 import { parseSignedAt } from '../src/export/reportSignature';
 import { readLas } from './helpers/rawLas';
 
@@ -90,7 +93,50 @@ describe('ZIP entry names', () => {
     expect(safeEntryName('../../etc/passwd')).toBe('passwd');
     expect(safeEntryName('a\nb.las')).toBe('a_b.las');
     expect(safeEntryName('..')).toBe('file');
-    expect(safeEntryName('C:evil.las')).toBe('evil.las');
+    // ":" is reserved on Windows, so a drive-like prefix becomes "_" and the
+    // rest of the name is kept; nothing is cut from a name that was safe.
+    expect(safeEntryName('C:evil.las')).toBe('C_evil.las');
+    expect(safeEntryName('Site: A.las')).toBe('Site_ A.las');
+    expect(safeEntryName('site-a.las')).toBe('site-a.las');
+  });
+
+  it('safeEntryName removes bidi controls and zero-width characters', () => {
+    // A right-to-left override would show "evil\u202Esal.exe" as "evilexe.las".
+    expect(safeEntryName('evil\u202Esal.exe')).toBe('evilsal.exe');
+    for (const ch of ['\u202A', '\u202B', '\u202C', '\u202D', '\u2066', '\u2067', '\u2068', '\u2069', '\u200E', '\u200F', '\u200B', '\u200C', '\u200D', '\uFEFF']) {
+      expect(safeEntryName(`a${ch}b.las`)).toBe('ab.las');
+      expect(singleLine(`a${ch}b`)).toBe('ab');
+      expect(unsafeEntryName(`a${ch}b.las`)).not.toBeNull();
+    }
+  });
+
+  it.each(['CON', 'con.las', 'PRN.txt', 'AUX', 'NUL.tar.gz', 'COM1', 'com9.las', 'LPT1', 'lpt9.xyz'])('safeEntryName prefixes the Windows device name %s', (name) => {
+    expect(safeEntryName(name)).toBe(`_${name}`);
+  });
+
+  it('safeEntryName keeps names that only start like a device name', () => {
+    expect(safeEntryName('console.las')).toBe('console.las');
+    expect(safeEntryName('COM10.las')).toBe('COM10.las');
+    expect(safeEntryName('nullable.las')).toBe('nullable.las');
+  });
+
+  it('safeEntryName replaces <>:"|?* and trims trailing dots and spaces', () => {
+    expect(safeEntryName('a<b>c:d"e|f?g*h.las')).toBe('a_b_c_d_e_f_g_h.las');
+    expect(safeEntryName('scan.las. . ')).toBe('scan.las');
+    expect(safeEntryName('  scan  ')).toBe('scan');
+    expect(safeEntryName('. .')).toBe('file');
+  });
+
+  it('safeEntryName caps a long name at MAX_ENTRY_NAME_BYTES of UTF-8, keeping the extension and whole characters', () => {
+    const ascii = safeEntryName(`${'a'.repeat(400)}.las`);
+    expect(new TextEncoder().encode(ascii).length).toBe(MAX_ENTRY_NAME_BYTES);
+    expect(ascii.endsWith('.las')).toBe(true);
+    const wide = safeEntryName(`${'\u00e9'.repeat(150)}\u{1F600}${'\u00e9'.repeat(50)}.laz`);
+    expect(new TextEncoder().encode(wide).length).toBeLessThanOrEqual(MAX_ENTRY_NAME_BYTES);
+    expect(wide.endsWith('.laz')).toBe(true);
+    expect(wide).not.toMatch(/\uFFFD/);
+    expect([...wide].every((c) => c.codePointAt(0)! < 0xd800 || c.codePointAt(0)! > 0xdfff)).toBe(true);
+    expect(safeEntryName('short.las')).toBe('short.las');
   });
 
   it('names a converted file safely and de-duplicates ignoring case', () => {
@@ -100,6 +146,9 @@ describe('ZIP entry names', () => {
     expect(dedupeName('A.las', seen)).toBe('A.las');
     expect(dedupeName('a.las', seen)).toBe('a (2).las');
     expect(dedupeName('A.LAS', seen)).toBe('A (3).LAS');
+    // The same name in NFC and NFD forms is one name.
+    expect(dedupeName('caf\u00e9.las', seen)).toBe('caf\u00e9.las');
+    expect(dedupeName('cafe\u0301.las', seen)).toBe('cafe\u0301 (2).las');
   });
 });
 
@@ -129,16 +178,21 @@ describe('batch provenance names the CRS origin the output is tagged with', () =
   const input = (name: string): BatchInput => ({ name, sizeBytes: 1, bytes: async () => new ArrayBuffer(1) });
   const record = (bytes: Uint8Array): string => text(readLas(bytes).vlrs.find((v) => v.recordId === 3)!.data);
 
-  it('records the file\'s declared CRS, as the single export does for the same CRS', async () => {
+  it('records the declared CRS with the name and EPSG the single export records for it, and tags the file the same way', async () => {
     const withCrs = cloud('a.las', { metadata: { crs } });
     const [r] = await runBatch([input('a.las')], { format: 'las14' }, async () => withCrs);
     expect(r.report.ok).toBe(true);
-    const line = record(r.file!.bytes).split('\n').find((l) => l.startsWith('CRS source'))!;
-    expect(line).toMatch(/^CRS source file-wkt \(WGS 84 \/ UTM zone 12N, EPSG:32612\)/);
-    // The same declared CRS passed to the single export names the same code.
-    const single = convertCloud(withCrs, { format: 'las14', resolvedSourceCrs: undefined });
-    expect(record(single.file!.bytes)).not.toContain('CRS source file-wkt');
-    expect(readLas(single.file!.bytes).vlrs.length).toBe(readLas(r.file!.bytes).vlrs.length);
+    const batchLine = record(r.file!.bytes).split('\n').find((l) => l.startsWith('CRS source'))!;
+    expect(batchLine).toMatch(/^CRS source file-wkt \(WGS 84 \/ UTM zone 12N, EPSG:32612\)/);
+    // The single export records the resolved CRS; for an unchanged file CRS it
+    // has the same name and code, with the resolver's own source token.
+    const resolved = { source: 'las-vlr', name: 'WGS 84 / UTM zone 12N', epsg: 32612 };
+    const single = convertCloud(withCrs, { format: 'las14', digests: exportDigests({ sha256: null, note: 'n' }, resolved) });
+    const singleLine_ = record(single.file!.bytes).split('\n').find((l) => l.startsWith('CRS source'))!;
+    const nameAndCode = (l: string): string => /\(([^)]*)\)/.exec(l)![1];
+    expect(nameAndCode(batchLine)).toBe(nameAndCode(singleLine_));
+    const wkt = (b: Uint8Array): string => text(readLas(b).vlrs.find((v) => v.recordId === 2112)!.data);
+    expect(wkt(r.file!.bytes)).toBe(wkt(single.file!.bytes));
   });
 
   it('says unknown when the file declares none, and tags nothing', async () => {
@@ -186,6 +240,19 @@ describe('ASCII output records the fields it does not hold', () => {
   });
 });
 
+describe('ASCII output from a LAS 1.4 scanner-channel file', () => {
+  it('lists the scanner channel, user data and scan direction it leaves out', async () => {
+    const src = buildLas({ version: '1.4', pdrf: 6, points: [{ cls: 2, channel: 2 }, { cls: 2, channel: 1 }] });
+    const decoded = await loadLas(src.buffer.slice(0) as ArrayBuffer, 'las', 'ch.las', 1, undefined, true);
+    expect(decoded.scannerChannel).toBeDefined();
+    const { report } = convertCloud(decoded, { format: 'xyz' });
+    const msg = report.events!.find((e) => e.id === 'ascii-fields-dropped')!.message;
+    expect(msg).toContain('scanner channel');
+    expect(msg).toContain('user data');
+    expect(msg).toContain('scan direction and edge of flight line');
+  });
+});
+
 describe('an export that keeps no points', () => {
   it('fails with a clear message instead of writing an empty file', async () => {
     const empty = cloud('e.las', { positions: new Float32Array(0) });
@@ -209,6 +276,23 @@ describe('conversion events that overflow the text area', () => {
     expect(fit.lines.join('\n').length).toBeLessThan(0xffff);
     expect(fit.lines.at(-1)).toMatch(new RegExp(`^${fit.eventsOmitted} further conversion events could not be listed`));
     expect(fit.lines.filter((l) => l.startsWith('Conversion event ')).length + fit.eventsOmitted).toBe(300);
+  });
+});
+
+describe('the text area limit counts UTF-8 bytes', () => {
+  const one: ConversionEvent = { id: 'scan-angle-clipped', kind: 'clipped', level: 'warn', points: 1, message: 'm', acknowledged: true };
+
+  it('trims a record whose characters fit but whose bytes do not', () => {
+    // 40,000 two-byte characters: 40,000 UTF-16 units, 80,000 bytes.
+    const fit = fitProvenance(['\u00e9'.repeat(40_000)], null, [one]);
+    expect(fit.trimmed).toBe(true);
+    expect(fit.lines).toEqual([expect.stringMatching(/^Conversion event scan-angle-clipped:/)]);
+  });
+
+  it('names both the provenance lines and the events when it drops both', () => {
+    expect(provenanceTrimmedMessage(3)).toMatch(/the other provenance lines and 3 conversion events are not recorded/);
+    expect(provenanceTrimmedMessage(1)).toMatch(/the other provenance lines and 1 conversion event are not recorded/);
+    expect(provenanceTrimmedMessage(0)).toMatch(/only the conversion events are recorded/);
   });
 });
 

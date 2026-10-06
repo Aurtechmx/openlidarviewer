@@ -299,12 +299,49 @@ describe('terrain exports', () => {
   });
 });
 
+/** The wall-and-ground Observatory run the package tests share. */
+function observatoryRun() {
+  const out = runObservatoryOverCloud(wallAndGroundCloud(), {
+    voxelEdge: 0.5, declaredStepBudget: 50_000_000, filename: 'wall.ptx', metresPerUnit: 1, buildTag: 't', planning: false,
+  });
+  if (out.status !== 'ok') throw new Error('fixture refused');
+  return out;
+}
+
+/** A small sink DTM run through Flow Pulse. */
+function flowRun() {
+  const run = runFlowPulse(flowDtmOf([[5, 5, 5], [5, 1, 5], [5, 5, 5]]), FLOW_PROJECTED_SCALE, FLOW_PULSE_DEFAULTS, FLOW_TEST_IDENTITY);
+  if (!run.ok) throw new Error('fixture refused');
+  return run;
+}
+
+/** A 5 by 5 flat DTM run through Terrain Access, for the package tests. */
+function terrainAccessRun() {
+  const n = 25;
+  const dtm = {
+    z: new Float32Array(n), coverage: new Uint8Array(n).fill(2), confidence: new Float32Array(n).fill(100),
+    counts: new Uint32Array(n).fill(1), interpDistanceCells: new Float32Array(n),
+    cols: 5, rows: 5, cellSizeM: 1, originH1: 0, originH2: 0,
+    crs: 'EPSG:32610', horizontalEpsg: 32610, verticalDatum: null, verticalEpsg: null,
+    verticalUnitToMetres: 1, coverageMode: 'full', sourcePointCount: n,
+    analyzedPointCount: n, withheldExcluded: true, meanConfidence: 100, warnings: [],
+  } as unknown as DtmGrid;
+  const profile: TerrainAccessProfile = {
+    name: 'p', maxLongitudinalGrade: 1, maxCrossSlope: 1, maxStepHeight: 5, maxRuggedness: null,
+    vehicleWidth: 0, vehicleLength: null, minimumTerrainConfidence: 0, unknownPolicy: 'block', obstacleHeightThreshold: null,
+  };
+  const identity = {
+    layerId: 'l', filename: 'site', sourceDigest: null, analysisInputDigest: 'x',
+    build: 'b', id: 'r', generatedAt: '2026-01-01T00:00:00.000Z', processingManifestHead: null,
+  };
+  const run = runTerrainAccess(dtm, { isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: true }, profile, 0, 24, TERRAIN_ACCESS_DEFAULTS, identity);
+  if (!run.ok) throw new Error('fixture refused');
+  return run;
+}
+
 describe('analysis packages', () => {
   it('Observatory: source digest, analysis input digest and passport', () => {
-    const out = runObservatoryOverCloud(wallAndGroundCloud(), {
-      voxelEdge: 0.5, declaredStepBudget: 50_000_000, filename: 'wall.ptx', metresPerUnit: 1, buildTag: 't', planning: false,
-    });
-    if (out.status !== 'ok') throw new Error('fixture refused');
+    const out = observatoryRun();
     const zip = buildObservatoryPackage(out.record, out.rows, [], { basename: 'o', crs: CRS, sourceSha256: SHA });
     const readme = textOf(zip, 'o/README.md');
     expect(readme).toContain(`Analysis input SHA-256  ${out.record.source.analysisInputSha256}`);
@@ -316,8 +353,7 @@ describe('analysis packages', () => {
   });
 
   it('Flow Pulse: README, manifest CRS origin and passport', () => {
-    const run = runFlowPulse(flowDtmOf([[5, 5, 5], [5, 1, 5], [5, 5, 5]]), FLOW_PROJECTED_SCALE, FLOW_PULSE_DEFAULTS, FLOW_TEST_IDENTITY);
-    if (!run.ok) throw new Error('fixture refused');
+    const run = flowRun();
     const zip = buildFlowPulsePackage(run, { basename: 'f', digests: D });
     const readme = textOf(zip, 'f-README.txt');
     expect(readme).toContain(`Source SHA-256 ${SHA}`);
@@ -328,25 +364,7 @@ describe('analysis packages', () => {
   });
 
   it('Terrain Access: README and passport', () => {
-    const n = 25;
-    const dtm = {
-      z: new Float32Array(n), coverage: new Uint8Array(n).fill(2), confidence: new Float32Array(n).fill(100),
-      counts: new Uint32Array(n).fill(1), interpDistanceCells: new Float32Array(n),
-      cols: 5, rows: 5, cellSizeM: 1, originH1: 0, originH2: 0,
-      crs: 'EPSG:32610', horizontalEpsg: 32610, verticalDatum: null, verticalEpsg: null,
-      verticalUnitToMetres: 1, coverageMode: 'full', sourcePointCount: n,
-      analyzedPointCount: n, withheldExcluded: true, meanConfidence: 100, warnings: [],
-    } as unknown as DtmGrid;
-    const profile: TerrainAccessProfile = {
-      name: 'p', maxLongitudinalGrade: 1, maxCrossSlope: 1, maxStepHeight: 5, maxRuggedness: null,
-      vehicleWidth: 0, vehicleLength: null, minimumTerrainConfidence: 0, unknownPolicy: 'block', obstacleHeightThreshold: null,
-    };
-    const identity = {
-      layerId: 'l', filename: 'site', sourceDigest: null, analysisInputDigest: 'x',
-      build: 'b', id: 'r', generatedAt: '2026-01-01T00:00:00.000Z', processingManifestHead: null,
-    };
-    const run = runTerrainAccess(dtm, { isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: true }, profile, 0, 24, TERRAIN_ACCESS_DEFAULTS, identity);
-    if (!run.ok) throw new Error('fixture refused');
+    const run = terrainAccessRun();
     const zip = buildTerrainAccessPackage(run, { basename: 'ta', digests: D });
     expect(textOf(zip, 'ta-README.txt')).toContain(`Source SHA-256 ${SHA}`);
     expect(textOf(zip, 'ta-README.txt')).toContain(ORIGIN_LINE);
@@ -490,10 +508,7 @@ describe('multi-source, cancellation and record names', () => {
   });
 
   it('N1: the Observatory record names its digest analysisInputSha256; an old record still reads', () => {
-    const out = runObservatoryOverCloud(wallAndGroundCloud(), {
-      voxelEdge: 0.5, declaredStepBudget: 50_000_000, filename: 'wall.ptx', metresPerUnit: 1, buildTag: 't', planning: false,
-    });
-    if (out.status !== 'ok') throw new Error('fixture refused');
+    const out = observatoryRun();
     const src = out.record.source as unknown as Record<string, unknown>;
     expect(src.analysisInputSha256).toMatch(/^[0-9a-f]{64}$/);
     expect('sourceDigest' in src).toBe(false);
@@ -544,33 +559,11 @@ describe('package builders with an unsafe basename', () => {
   });
 
   it('Observatory, Flow Pulse and Terrain Access packages', () => {
-    const out = runObservatoryOverCloud(wallAndGroundCloud(), {
-      voxelEdge: 0.5, declaredStepBudget: 50_000_000, filename: 'wall.ptx', metresPerUnit: 1, buildTag: 't', planning: false,
-    });
-    if (out.status !== 'ok') throw new Error('fixture refused');
+    const out = observatoryRun();
     expectSafe(buildObservatoryPackage(out.record, out.rows, [], { basename: UNSAFE }));
-    const flow = runFlowPulse(flowDtmOf([[5, 5, 5], [5, 1, 5], [5, 5, 5]]), FLOW_PROJECTED_SCALE, FLOW_PULSE_DEFAULTS, FLOW_TEST_IDENTITY);
-    if (!flow.ok) throw new Error('fixture refused');
+    const flow = flowRun();
     expectSafe(buildFlowPulsePackage(flow, { basename: UNSAFE }));
-    const n = 25;
-    const dtm = {
-      z: new Float32Array(n), coverage: new Uint8Array(n).fill(2), confidence: new Float32Array(n).fill(100),
-      counts: new Uint32Array(n).fill(1), interpDistanceCells: new Float32Array(n),
-      cols: 5, rows: 5, cellSizeM: 1, originH1: 0, originH2: 0,
-      crs: 'EPSG:32610', horizontalEpsg: 32610, verticalDatum: null, verticalEpsg: null,
-      verticalUnitToMetres: 1, coverageMode: 'full', sourcePointCount: n,
-      analyzedPointCount: n, withheldExcluded: true, meanConfidence: 100, warnings: [],
-    } as unknown as DtmGrid;
-    const profile: TerrainAccessProfile = {
-      name: 'p', maxLongitudinalGrade: 1, maxCrossSlope: 1, maxStepHeight: 5, maxRuggedness: null,
-      vehicleWidth: 0, vehicleLength: null, minimumTerrainConfidence: 0, unknownPolicy: 'block', obstacleHeightThreshold: null,
-    };
-    const identity = {
-      layerId: 'l', filename: 'site', sourceDigest: null, analysisInputDigest: 'x',
-      build: 'b', id: 'r', generatedAt: '2026-01-01T00:00:00.000Z', processingManifestHead: null,
-    };
-    const run = runTerrainAccess(dtm, { isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: true }, profile, 0, 24, TERRAIN_ACCESS_DEFAULTS, identity);
-    if (!run.ok) throw new Error('fixture refused');
+    const run = terrainAccessRun();
     expectSafe(buildTerrainAccessPackage(run, { basename: UNSAFE }));
   });
 
