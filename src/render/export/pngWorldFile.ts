@@ -18,6 +18,7 @@
  * Pure data: no DOM, no three.js, no canvas. Deterministic.
  */
 
+import { safeEntryName } from '../../export/safeText';
 import { buildZip, type ZipEntry } from '../../convert/zipStore';
 
 /** World-space extent of the rendered raster (render/local frame). */
@@ -110,20 +111,21 @@ export function buildStudioPngPackage(params: StudioPngPackageParams): StudioPng
   const pgw = buildWorldFileText(params);
   if (pgw == null) return null;
   const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s);
+  const basename = safeEntryName(params.basename, 'image');
   const entries: ZipEntry[] = [
-    { name: `${params.basename}.png`, bytes: params.png },
-    { name: `${params.basename}.pgw`, bytes: utf8(pgw) },
+    { name: `${basename}.png`, bytes: params.png },
+    { name: `${basename}.pgw`, bytes: utf8(pgw) },
   ];
   // Honesty gate: a .prj asserts "these world-file numbers are coordinates in
   // THIS CRS" — only true when the local→world origin shift was applied.
   const georeferenced =
     params.wkt != null && params.wkt.trim().length > 0 && params.worldOrigin != null;
   if (georeferenced) {
-    entries.push({ name: `${params.basename}.prj`, bytes: utf8((params.wkt as string).trim()) });
+    entries.push({ name: `${basename}.prj`, bytes: utf8((params.wkt as string).trim()) });
   }
   return {
     zip: buildZip(entries),
-    filename: `${params.basename}.zip`,
+    filename: `${basename}.zip`,
     georeferenced,
   };
 }

@@ -39,6 +39,7 @@
  * Pure-data: returns ZIP bytes; no DOM.
  */
 
+import { safeEntryName } from './safeText';
 import { SOURCE_NOT_SUPPLIED_NOTE, sourceSha256Text, type ExportDigests } from '../science/exportDigestRecord';
 import { crsOriginLine } from '../science/crsOrigin';
 import { writeAsciiGrid } from '../terrain/export/demAsciiGrid';
@@ -427,7 +428,7 @@ export function buildFlowPulsePackage(
   result: FlowPulseResult,
   options: FlowPulsePackageOptions = {},
 ): Uint8Array {
-  const basename = options.basename ?? 'flow-pulse';
+  const basename = safeEntryName(options.basename ?? 'flow-pulse', 'flow-pulse');
   const generationDateIso = options.generationDateIso ?? new Date().toISOString();
   const build = options.build ?? BUILD_IDENTITY;
   const softwareName = options.softwareName ?? 'OpenLiDARViewer';

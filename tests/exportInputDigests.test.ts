@@ -29,6 +29,9 @@ import { analyseContours, computeTerrainCore, contoursFromCore } from '../src/te
 import { encodeTerrainCore, decodeTerrainCore } from '../src/terrain/contour/terrainCorePayload';
 import { buildExportProvenance, provenanceJson, provenanceLines } from '../src/terrain/export/exportProvenance';
 import { buildDemPackage } from '../src/terrain/export/demPackage';
+import { unsafeEntryName } from '../src/export/safeText';
+import { buildZip } from '../src/convert/zipStore';
+import { buildStudioPngPackage } from '../src/render/export/pngWorldFile';
 import { buildContourDeliverableFromResult } from '../src/terrain/export/contourDeliverableBuild';
 import { buildTerrainReportContent } from '../src/terrain/export/terrainReportContent';
 import { buildMapSheetPdf } from '../src/render/measure/mapSheetPdf';
@@ -497,5 +500,93 @@ describe('multi-source, cancellation and record names', () => {
     const old = { ...out.record, source: { filename: 'w', sourceDigest: 'f'.repeat(64), basis: 'resident-only', metresPerUnit: 1 } };
     const zip = buildObservatoryPackage(old as unknown as typeof out.record, out.rows, [], { basename: 'o' });
     expect(textOf(zip, 'o/README.md')).toContain(`Analysis input SHA-256  ${'f'.repeat(64)}`);
+  });
+});
+
+/** Every entry name in a store-only ZIP, read from its central directory. */
+function zipEntryNames(zip: Uint8Array): string[] {
+  const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
+  const eocd = zip.byteLength - 22;
+  const count = view.getUint16(eocd + 10, true);
+  let p = view.getUint32(eocd + 16, true);
+  const names: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const len = view.getUint16(p + 28, true);
+    const extra = view.getUint16(p + 30, true);
+    const comment = view.getUint16(p + 32, true);
+    names.push(new TextDecoder().decode(zip.subarray(p + 46, p + 46 + len)));
+    p += 46 + len + extra + comment;
+  }
+  return names;
+}
+
+describe('package builders with an unsafe basename', () => {
+  // A layer or file name a user can give: a separator, a backslash, dots and a newline.
+  const UNSAFE = 'site/a\\b..\nx';
+
+  function expectSafe(zip: Uint8Array): void {
+    const names = zipEntryNames(zip);
+    expect(names.length).toBeGreaterThan(0);
+    for (const n of names) {
+      expect(unsafeEntryName(n), n).toBeNull();
+      expect(n).not.toMatch(/[\r\n\\]/);
+      expect(n.startsWith('site/')).toBe(false);
+    }
+  }
+
+  it('DEM package and contour deliverable', () => {
+    const result = analyseContours(hill(), PARAMS);
+    expectSafe(buildDemPackage(result, { basename: UNSAFE, linearUnit: 'metre', digests: D, generationDateIso: '2026-01-01T00:00:00.000Z' }));
+    expectSafe(buildContourDeliverableFromResult(result, {
+      decision: validatedDecision(DTM_CLAIMS), basename: UNSAFE, isGeographic: false, softwareVersion: 'v', metricVersion: 'm',
+      generatedAt: new Date('2026-01-01T00:00:00.000Z'), exportPermit: null, digests: D,
+    }));
+  });
+
+  it('Observatory, Flow Pulse and Terrain Access packages', () => {
+    const out = runObservatoryOverCloud(wallAndGroundCloud(), {
+      voxelEdge: 0.5, declaredStepBudget: 50_000_000, filename: 'wall.ptx', metresPerUnit: 1, buildTag: 't', planning: false,
+    });
+    if (out.status !== 'ok') throw new Error('fixture refused');
+    expectSafe(buildObservatoryPackage(out.record, out.rows, [], { basename: UNSAFE }));
+    const flow = runFlowPulse(flowDtmOf([[5, 5, 5], [5, 1, 5], [5, 5, 5]]), FLOW_PROJECTED_SCALE, FLOW_PULSE_DEFAULTS, FLOW_TEST_IDENTITY);
+    if (!flow.ok) throw new Error('fixture refused');
+    expectSafe(buildFlowPulsePackage(flow, { basename: UNSAFE }));
+    const n = 25;
+    const dtm = {
+      z: new Float32Array(n), coverage: new Uint8Array(n).fill(2), confidence: new Float32Array(n).fill(100),
+      counts: new Uint32Array(n).fill(1), interpDistanceCells: new Float32Array(n),
+      cols: 5, rows: 5, cellSizeM: 1, originH1: 0, originH2: 0,
+      crs: 'EPSG:32610', horizontalEpsg: 32610, verticalDatum: null, verticalEpsg: null,
+      verticalUnitToMetres: 1, coverageMode: 'full', sourcePointCount: n,
+      analyzedPointCount: n, withheldExcluded: true, meanConfidence: 100, warnings: [],
+    } as unknown as DtmGrid;
+    const profile: TerrainAccessProfile = {
+      name: 'p', maxLongitudinalGrade: 1, maxCrossSlope: 1, maxStepHeight: 5, maxRuggedness: null,
+      vehicleWidth: 0, vehicleLength: null, minimumTerrainConfidence: 0, unknownPolicy: 'block', obstacleHeightThreshold: null,
+    };
+    const identity = {
+      layerId: 'l', filename: 'site', sourceDigest: null, analysisInputDigest: 'x',
+      build: 'b', id: 'r', generatedAt: '2026-01-01T00:00:00.000Z', processingManifestHead: null,
+    };
+    const run = runTerrainAccess(dtm, { isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: true }, profile, 0, 24, TERRAIN_ACCESS_DEFAULTS, identity);
+    if (!run.ok) throw new Error('fixture refused');
+    expectSafe(buildTerrainAccessPackage(run, { basename: UNSAFE }));
+  });
+
+  it('Studio PNG package, including its download name', () => {
+    const pkg = buildStudioPngPackage({
+      basename: UNSAFE, png: new Uint8Array([137, 80, 78, 71]), extent: { minX: 0, minY: 0, maxX: 10, maxY: 10 },
+      widthPx: 10, heightPx: 10, worldOrigin: { x: 0, y: 0 }, wkt: 'PROJCS["x"]',
+    })!;
+    expectSafe(pkg.zip);
+    expect(unsafeEntryName(pkg.filename)).toBeNull();
+    expect(pkg.filename).toBe('b.._x.zip');
+  });
+
+  it('the batch converter names each file safely', () => {
+    const c = new PointCloud({ positions: Float32Array.from([0, 0, 0]), origin: [0, 0, 0], sourceFormat: 'las', name: UNSAFE });
+    const { file } = convertCloud(c, { format: 'las14' });
+    expect(() => buildZip([{ name: file!.filename, bytes: file!.bytes }])).not.toThrow();
   });
 });

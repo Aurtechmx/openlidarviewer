@@ -41,6 +41,7 @@
  * Pure-data: returns ZIP bytes; no DOM.
  */
 
+import { safeEntryName } from './safeText';
 import { observationInputDigest } from '../observation/runRecord';
 import { INPUT_NOT_RECORDED_NOTE, SOURCE_NOT_SUPPLIED_NOTE, sourceSha256Text } from '../science/exportDigestRecord';
 import { buildZip, type ZipEntry } from '../convert/zipStore';
@@ -527,7 +528,7 @@ export function buildObservatoryPackage(
   frontierVoxelKeys: readonly number[],
   options: ObservatoryPackageOptions = {},
 ): Uint8Array {
-  const basename = options.basename ?? 'observatory';
+  const basename = safeEntryName(options.basename ?? 'observatory', 'observatory');
   const generationDateIso = options.generationDateIso ?? new Date().toISOString();
   const build = options.build ?? BUILD_IDENTITY;
   const softwareVersion = options.softwareVersion ?? buildIdentityProvenance(build);

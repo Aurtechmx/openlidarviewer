@@ -228,3 +228,27 @@ describe('parseSignedAt years', () => {
     expect(parseSignedAt('0100-02-29T00:00:00Z')).toBeNull();
   });
 });
+
+describe('the browser download name', () => {
+  it('is one plain file name, whatever the scan or layer was called', async () => {
+    const anchors: { download: string }[] = [];
+    const g = globalThis as unknown as Record<string, unknown>;
+    const saved = { document: g.document, createObjectURL: URL.createObjectURL, revokeObjectURL: URL.revokeObjectURL };
+    g.document = {
+      createElement: () => { const a = { href: '', download: '', click() {}, remove() {} }; anchors.push(a); return a; },
+      body: { appendChild() {} },
+    };
+    URL.createObjectURL = () => 'blob:x';
+    URL.revokeObjectURL = () => {};
+    try {
+      const { triggerDownload } = await import('../src/io/download');
+      triggerDownload(new Blob(['x']), 'site/a\\b..\nx-terrain-access.zip');
+      triggerDownload(new Blob(['x']), 'plain.las');
+    } finally {
+      g.document = saved.document;
+      URL.createObjectURL = saved.createObjectURL;
+      URL.revokeObjectURL = saved.revokeObjectURL;
+    }
+    expect(anchors.map((a) => a.download)).toEqual(['b.._x-terrain-access.zip', 'plain.las']);
+  });
+});
