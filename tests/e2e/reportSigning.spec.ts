@@ -231,3 +231,26 @@ test('a signed report with a repeated member name fails in the dialog', async ({
   await expect(page.locator('[data-testid="report-verify-sig-invalid"]')).toBeVisible({ timeout: 10_000 });
   await expect(page.locator('[data-testid="report-verify"]')).toContainText(/repeats a member name/i);
 });
+
+test('a tab that loses the key-creation race adopts the winning key', async ({ page, context }) => {
+  const panelA = await prepare(page);
+  const second = await context.newPage();
+  const panelB = await prepare(second);
+  await panelB.locator('[data-testid="report-sign-toggle"]').click();
+  await expect(panelB.locator('[data-testid="report-sign-create"]')).toBeVisible();
+  await createKey(panelA);
+  const winner = (await panelA.locator('[data-testid="report-sign-key-id"]').textContent())!;
+  // Make the second tab's lookup miss the stored key, so its create reaches the
+  // atomic add and meets the key the first tab wrote.
+  await second.evaluate(() => {
+    const get = IDBObjectStore.prototype.get;
+    // Only the first lookup misses; reloading the winner afterwards reads normally.
+    IDBObjectStore.prototype.get = function (this: IDBObjectStore) {
+      IDBObjectStore.prototype.get = get;
+      return get.call(this, '__none__');
+    };
+  });
+  await panelB.locator('[data-testid="report-sign-create"]').click();
+  await expect(panelB.locator('[data-testid="report-sign-key-id"]')).toHaveText(winner, { timeout: 10_000 });
+  await expect(panelB.locator('[data-testid="report-sign-status"]')).not.toContainText(/could not be created/i);
+});

@@ -78,7 +78,9 @@ export const indexedDbBackend: SigningKeyBackend = {
           if (req.error?.name === 'ConstraintError') { exists = true; e.preventDefault(); }
         };
         tx.oncomplete = () => resolve(!exists);
-        tx.onerror = () => reject(new Error('store'));
+        // A ConstraintError reaches the transaction too, and the transaction
+        // then completes: settle there, and reject only for another failure.
+        tx.onerror = () => { if (!exists) reject(new Error('store')); };
         tx.onabort = () => (exists ? resolve(false) : reject(new Error('store')));
       });
     } finally {

@@ -19,6 +19,7 @@ import {
   signReportManifest,
   trustedKeyIdFrom,
   hasRepeatedMemberName,
+  parseSignedAt,
   SigningError,
   verifyReportSignature,
   type SigningKey,
@@ -422,6 +423,26 @@ describe('only the signed report verifies, not other spellings of its signature 
     m.reportSignature.signedAt = '1';
     expect((await verifyReportSignature(m, canonicalize)).status).toBe('malformed');
     expect((await verifyReportSignature(JSON.parse(await textOf()), canonicalize)).signedAtClaim).toBe(OPTS.signedAt);
+  });
+
+  it('reads signed times the same in every engine, with explicit range checks', async () => {
+    expect(parseSignedAt('2026-02-30T00:00:00Z')).toBeNull();
+    expect(parseSignedAt('2026-13-01T00:00:00Z')).toBeNull();
+    expect(parseSignedAt('2026-00-10T00:00:00Z')).toBeNull();
+    expect(parseSignedAt('2026-01-01T24:00:00Z')).toBeNull();
+    expect(parseSignedAt('2026-01-01T00:60:00Z')).toBeNull();
+    expect(parseSignedAt('2026-01-01T00:00:60Z')).toBeNull();
+    expect(parseSignedAt('2026-04-31T00:00:00Z')).toBeNull();
+    expect(parseSignedAt('2025-02-29T00:00:00Z')).toBeNull();
+    expect(parseSignedAt('2024-02-29T00:00:00Z')).toBe('2024-02-29T00:00:00.000Z');
+    expect(parseSignedAt('2000-02-29T12:30:45.5Z')).toBe('2000-02-29T12:30:45.500Z');
+    expect(parseSignedAt('1900-02-29T00:00:00Z')).toBeNull();
+    for (const bad of ['2026-02-30T00:00:00Z', '2026-13-01T00:00:00Z', '2026-01-01T24:00:00Z']) {
+      const m = JSON.parse(await textOf());
+      m.reportSignature.signedAt = bad;
+      const v = await verifyReportSignature(m, canonicalize);
+      expect(v.status).toBe('malformed');
+    }
   });
 
   it('strips bidi and zero-width characters from a label', () => {

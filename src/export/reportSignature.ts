@@ -51,7 +51,24 @@ export class SigningError extends Error {
 // so (r, n - s), which also verifies, is not a second valid form of the same signature.
 const P256_N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
 const P256_HALF_N = P256_N >> 1n;
-const SIGNED_AT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
+const SIGNED_AT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?Z$/;
+
+/**
+ * Parse a signed time as UTC with explicit range checks, so every engine reads
+ * a given string the same way (`Date.parse` rolls 2026-02-30 over in V8 and
+ * returns NaN in Firefox and Safari). Returns the normalised ISO time or null.
+ */
+export function parseSignedAt(text: string): string | null {
+  const m = SIGNED_AT.exec(text);
+  if (!m) return null;
+  const [y, mo, d, h, mi, se] = m.slice(1, 7).map(Number) as [number, number, number, number, number, number];
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mo - 1];
+  if (mo < 1 || mo > 12 || d < 1 || d > days! || h > 23 || mi > 59 || se > 59) return null;
+  const ms = Number((m[7] ?? '').padEnd(3, '0') || 0);
+  const t = Date.UTC(y, mo - 1, d, h, mi, se, ms);
+  return Number.isFinite(t) ? new Date(t).toISOString() : null;
+}
 const MAX_SHORT_FIELD_CHARS = 64;
 
 /** The public half of the signing key, as a JSON Web Key. */
@@ -337,11 +354,12 @@ export async function verifyReportSignature(manifest: unknown, canonicalize: Can
     if (!isPublicKeyJwk(b.publicKey, true)) return bad('malformed', 'The embedded public key is not a plain P-256 key (kty, crv, x and y only).');
     const s = subtle();
     if (!s) return bad('unsupported', 'This browser cannot check signatures (WebCrypto is unavailable).');
-    if (!SIGNED_AT.test(signedAt!) || !Number.isFinite(Date.parse(signedAt!))) return bad('malformed', 'The signed time is not a valid UTC date and time.');
+    const signedAtIso = parseSignedAt(signedAt!);
+    if (signedAtIso === null) return bad('malformed', 'The signed time is not a valid UTC date and time.');
     if (!isCanonicalCoord(keyId)) return bad('malformed', 'The recorded key id is not in its canonical form.');
     // Shown to the reader with control, bidi and zero-width characters removed. The raw text is what was signed.
     const shown = (t: string | undefined): string | undefined => (t === undefined ? undefined : cleanSignerLabel(t) || undefined);
-    const claim = { keyId: keyId!, signedAtClaim: new Date(Date.parse(signedAt!)).toISOString(), signerLabelUnverified: shown(label), software: shown(software) };
+    const claim = { keyId: keyId!, signedAtClaim: signedAtIso, signerLabelUnverified: shown(label), software: shown(software) };
     if ((await publicKeyThumbprint(b.publicKey)) !== keyId) return bad('invalid', 'The recorded key id does not match the embedded public key.', claim);
     if (sigText!.length !== SIG_LEN) return bad('invalid', 'The signature is the wrong length (truncated or padded).', claim);
     const sigBytes = fromBase64Url(sigText!);
