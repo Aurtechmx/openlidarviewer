@@ -35,6 +35,7 @@ import type { CrsInfo } from '../io/crs';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { PointCloud } from '../model/PointCloud';
 import { gzipConvertedFile, gzipAvailable } from '../convert/gzip';
+import { epsgFieldProblem, parseEpsgField } from '../convert/epsg';
 import { buildExportSummary, displaySampleOf, displaySampleStatus, type ClassificationProvenance, type ExportSummaryInput } from '../export/exportSummary';
 import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
 import {
@@ -1218,7 +1219,7 @@ export class ExportPanel {
     const modes: { mode: CrsMode; label: string; tip: string }[] = [
       { mode: 'keep', label: 'Keep', tip: 'Write the file with its existing CRS unchanged.' },
       { mode: 'assign', label: 'Assign EPSG', tip: 'Label the file with an EPSG code without changing any coordinates.' },
-      { mode: 'reproject', label: 'Reproject', tip: 'Recompute every coordinate into a different CRS before writing the file.' },
+      { mode: 'reproject', label: 'Reproject', tip: 'Transform horizontal X/Y coordinates into a different CRS before writing the file. Z and its vertical reference are unchanged.' },
     ];
     modes.forEach(({ mode, label, tip }) => {
       const pill = el('button', {
@@ -1286,6 +1287,13 @@ export class ExportPanel {
       return;
     }
     const target = parseEpsg(this._targetEpsg);
+    const epsgProblem =
+      (this._crsMode !== 'keep' ? epsgFieldProblem(this._targetEpsg, 'target') : null) ??
+      (this._crsMode === 'reproject' ? epsgFieldProblem(this._sourceEpsg, 'source') : null);
+    if (epsgProblem) {
+      this._setStatus(epsgProblem, 'warn');
+      return;
+    }
     if (this._crsMode !== 'keep' && target == null) {
       this._setStatus('Enter the target EPSG code first.', 'warn');
       return;
@@ -1462,7 +1470,7 @@ export class ExportPanel {
         const hasWarning = entries.some((l) => l.level === 'warn');
         this._setStatus(
           entries.length > 0
-            ? exportedLine(report.pointCount, entries.length, warningSummary(entries), `${sampleNote}${clipNote}`)
+            ? exportedLine(report.pointCount, entries.length, warningSummary(entries), `${sampleNote}${clipNote}`, report.crsNote)
             : `Exported ${report.pointCount.toLocaleString()} points${sampleNote}${clipNote} · ${report.crsNote}`,
           hasWarning || sampleNote ? 'warn' : 'info',
         );
@@ -1481,10 +1489,7 @@ export class ExportPanel {
   }
 }
 
-function parseEpsg(v: string): number | null {
-  const n = Number.parseInt(v, 10);
-  return Number.isInteger(n) && n > 0 ? n : null;
-}
+const parseEpsg = parseEpsgField;
 
 /** The app state {@link exportLayerHooks} reads. */
 export interface ExportLayerState {

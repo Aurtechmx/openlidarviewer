@@ -219,9 +219,9 @@ describe('exportMeasurementsFile — landing local points in the source frame', 
     const r = deps({ notify: (m) => notes.push(m) });
     await exportMeasurementsFile('csv', r.deps);
     expect(notes).toEqual([
-      'Saved scan-measurements.csv and scan-measurements.provenance.txt. If your browser asked to allow multiple downloads, allow it to get the provenance file.',
+      'Requested downloads for scan-measurements.csv and scan-measurements.provenance.txt. Keep both files together. If your browser asked to allow multiple downloads, allow it.',
     ]);
-    expect(csvSavedMessage('a.csv', 'a.provenance.txt')).toMatch(/^Saved a\.csv and a\.provenance\.txt\. /);
+    expect(csvSavedMessage('a.csv', 'a.provenance.txt')).toMatch(/^Requested downloads for a\.csv and a\.provenance\.txt\. /);
   });
 
   it('reads the sidecar basis from the export frame\'s source when no hook is given', async () => {

@@ -325,7 +325,7 @@ export async function exportMeasurementsFile(
  * block the second download until the user allows multiple downloads.
  */
 export function csvSavedMessage(csv: string, sidecar: string): string {
-  return `Saved ${csv} and ${sidecar}. If your browser asked to allow multiple downloads, allow it to get the provenance file.`;
+  return `Requested downloads for ${csv} and ${sidecar}. Keep both files together. If your browser asked to allow multiple downloads, allow it.`;
 }
 
 /** The sidecar's scan facts: the active scan's own, or a statement that several scans are mixed. */

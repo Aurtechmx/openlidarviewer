@@ -280,3 +280,22 @@ export function epsgLabel(epsg: number): string {
   if (epsg >= 7846 && epsg <= 7859) return `GDA2020 / MGA zone ${epsg - 7800}`;
   return `EPSG:${epsg}`;
 }
+
+/**
+ * Read an EPSG code typed into a field. The whole text must be the code: digits
+ * only, with an optional `EPSG:` prefix in any case. Returns null for empty
+ * text and for anything else, so `4326junk`, `32614.5` and `1e3` are refused
+ * instead of being cut down to a different code.
+ */
+export function parseEpsgField(text: string): number | null {
+  const m = /^(?:epsg:)?(\d{1,9})$/i.exec(text.trim());
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
+}
+
+/** The refusal to show when an EPSG field holds text that is not a code, or null when it is empty or valid. */
+export function epsgFieldProblem(text: string, what: string): string | null {
+  if (text.trim() === '' || parseEpsgField(text) !== null) return null;
+  return `The ${what} EPSG must be a whole number such as 32614, or EPSG:32614.`;
+}

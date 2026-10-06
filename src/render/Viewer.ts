@@ -3453,6 +3453,8 @@ export class Viewer {
     return this._nav.mode;
   }
 
+  get cameraTweening(): boolean { return this._nav.isTweening; }
+
   /**
    * Whether the v0.5.5 hand tool (pan mode) is available — false when the
    * `?handPan=off` dev flag disabled it. The app reads this to decide
@@ -4212,7 +4214,7 @@ export class Viewer {
    * the orbit pivot — and the pivot itself sits at the bbox CENTRE, which
    * is typically tens of metres above the actual ground surface. The user
    * would hit the floor while still floating above the terrain. Floor is
-   * now anchored to the near-clip plane (4× near, so no clipping artefacts)
+   * now anchored to the near-clip plane (2× near: 0.02 against near 0.01, so no clipping artefacts)
    * with a small absolute fallback for tiny clouds. `maxDistance` bumped
    * from 16× to 50× radius so the user can pull *way* out for context on
    * large surveys.
@@ -4975,9 +4977,7 @@ export class Viewer {
     // front of the camera and blocked close inspection. The far plane
     // still scales with the cloud so a coarse fly-around stays framed.
     //
-    // Depth-buffer precision at near=0.01, far=50km is ~3-4 quanta per
-    // millimetre with a 24-bit depth attachment — fine for both scene
-    // rendering and EDL's linearised-depth pass.
+    // `logarithmicDepthBuffer: true` keeps a 1 cm near plane usable out to far (see `edl.ts`).
     this._camera.near = 0.01;
     this._camera.far = Math.max(size * 16, 1000);
     this._camera.updateProjectionMatrix();

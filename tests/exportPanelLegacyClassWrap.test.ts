@@ -95,7 +95,7 @@ describe('ExportPanel — LAS 1.2 with classes above 31', () => {
     await pressExport(root);
 
     expect(hoisted.downloads.map((d) => d.name)).toEqual(['survey.las']);
-    expect(status(root).textContent).toBe('Exported 2 points with 1 warning');
+    expect(status(root).textContent).toBe('Exported 2 points with 1 warning · no CRS recorded (coordinates unchanged)');
     expect(root.findByClass('olv-conv-note').map((n) => n.textContent)).toEqual([legacyClassWrapWarning(1)]);
     expect(status(root).className).toContain('is-warn');
   });
@@ -195,7 +195,7 @@ describe('ExportPanel — LAS 1.2 with returns above 7', () => {
     setCheckbox(root, LEGACY_RETURN_CLAMP_OPT_IN, true);
     await pressExport(root);
     expect(hoisted.downloads.map((d) => d.name)).toEqual(['survey.las']);
-    expect(status(root).textContent).toBe('Exported 2 points with 1 warning');
+    expect(status(root).textContent).toBe('Exported 2 points with 1 warning · no CRS recorded (coordinates unchanged)');
     expect(root.findByClass('olv-conv-note').map((n) => n.textContent)).toEqual([legacyReturnClampWarning(2)]);
     expect(status(root).className).toContain('is-warn');
   });
