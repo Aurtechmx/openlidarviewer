@@ -30,7 +30,8 @@ export function parseXml(source: string): XmlNode {
   };
 
   const parseAttrs = (): Record<string, string> => {
-    const attrs: Record<string, string> = {};
+    // Attribute names come from the file; a null-prototype object keeps names such as __proto__ as plain keys.
+    const attrs: Record<string, string> = Object.create(null) as Record<string, string>;
     for (;;) {
       skipSpace();
       const c = source[i];
