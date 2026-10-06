@@ -296,3 +296,20 @@
 .olv-export-fullres-box:disabled { cursor: not-allowed; }
 .olv-export-fullres-hint { font-size: var(--text-2xs); color: var(--text-faint); line-height: 1.4; }
 
+
+/* Report signing options in the Products lane. */
+.olv-sign { display: flex; flex-direction: column; gap: var(--space-xs); }
+.olv-sign-body { display: flex; flex-direction: column; gap: var(--space-xs); }
+.olv-sign-body[hidden] { display: none; }
+.olv-sign-intro { display: flex; flex-direction: column; gap: var(--space-xs); }
+.olv-sign-intro p { margin: 0; }
+.olv-sign-status { font-size: var(--text-2xs); color: var(--text-faint); line-height: 1.4; min-height: 1em; }
+.olv-sign-label, .olv-sign-key {
+  width: 100%; box-sizing: border-box; font-size: var(--text-xs); color: var(--text);
+  background: var(--panel); border: 0.5px solid var(--hairline-strong); border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+}
+.olv-sign-key { font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--text-2xs); resize: vertical; overflow-wrap: anywhere; }
+.olv-sign-key[hidden] { display: none; }
+.olv-sign-label:focus-visible, .olv-sign-key:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.olv-sign .olv-export-fullres-hint { overflow-wrap: anywhere; }

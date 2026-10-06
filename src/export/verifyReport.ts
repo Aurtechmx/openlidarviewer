@@ -21,7 +21,8 @@
  */
 
 import { verifyReportManifest, type ReportManifest } from '../render/measure/reportManifest';
-import { fnv1a, sha256, type HashFn } from '../render/measure/auditLog';
+import { canonicalize, fnv1a, sha256, type HashFn } from '../render/measure/auditLog';
+import { REPORT_SIGNATURE_FIELD, hasRepeatedMemberName, trustedKeyIdFrom, verifyReportSignature, type SignatureVerdict } from './reportSignature';
 
 export interface VerifyReportResult {
   /** The text parsed as JSON and looked like an integrity report. */
@@ -42,6 +43,11 @@ export interface VerifyReportResult {
   readonly classificationEpoch?: number;
   /** Number of findings in the report. */
   readonly findingsCount?: number;
+  /**
+   * The signature check, present only when the report carries a signature
+   * field. Unsigned reports leave it undefined and read as before.
+   */
+  readonly signature?: SignatureVerdict;
   /** A short, user-facing summary line. */
   readonly reason: string;
 }
@@ -86,7 +92,17 @@ export function verifyReportFile(jsonText: string): VerifyReportResult {
     };
   }
 
-  const valid = verifyReportManifest(m, hashFn);
+  let valid: boolean;
+  try {
+    valid = verifyReportManifest(m, hashFn);
+  } catch {
+    // canonicalize refuses a non-finite number (1e999 parses to Infinity) and
+    // very deep nesting exhausts the stack. Neither is a report this can check.
+    return {
+      recognised: true, valid: false, algorithm, software, classificationEpoch, findingsCount,
+      reason: 'This file cannot be checked: it holds a number too large to read or is nested too deeply to be a report.',
+    };
+  }
   // SHA-256 or FNV-1a, the digest is unkeyed: a match is a self-consistency
   // check, never proof of who made the report or which file it came from.
   const cryptographic = algorithm === 'SHA-256';
@@ -102,4 +118,67 @@ export function verifyReportFile(jsonText: string): VerifyReportResult {
     recognised: true, valid, cryptographic, algorithm, software, classificationEpoch, findingsCount,
     reason,
   };
+}
+
+/**
+ * Verify a report, including its optional signature. An unsigned report returns
+ * exactly what {@link verifyReportFile} returns. A report with a signature
+ * field also gets a {@link SignatureVerdict}; a signature that does not verify,
+ * is malformed or is unsupported makes the result invalid. `trustedKeyText` is
+ * a public key (JSON) or key id the reader trusts, compared to the signer's.
+ * Never throws.
+ */
+export async function verifyReportFileWithSignature(
+  jsonText: string,
+  trustedKeyText?: string,
+): Promise<VerifyReportResult> {
+  let base: VerifyReportResult;
+  try {
+    base = verifyReportFile(jsonText);
+  } catch {
+    return { recognised: false, valid: false, reason: 'This file cannot be checked.' };
+  }
+  if (!base.recognised) return base;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(jsonText);
+  } catch {
+    return base;
+  }
+  if (typeof raw !== 'object' || raw === null || !(REPORT_SIGNATURE_FIELD in raw)) return base;
+
+  if (hasRepeatedMemberName(jsonText)) {
+    return {
+      ...base,
+      valid: false,
+      signature: {
+        status: 'malformed',
+        signatureValid: false,
+        reason: 'The file repeats a member name, so different tools could read different figures from it.',
+      },
+      reason: 'A signed report may not repeat a member name. The file repeats one, so different tools could read different figures from it.',
+    };
+  }
+
+  const wanted = trustedKeyText?.trim() ? trustedKeyText : undefined;
+  const trustedId = wanted === undefined ? undefined : await trustedKeyIdFrom(wanted);
+  let signature = await verifyReportSignature(raw, canonicalize, trustedId);
+  if (wanted !== undefined && trustedId === null && signature.signatureValid) {
+    signature = {
+      ...signature,
+      status: 'valid-unknown-signer',
+      reason: 'The text you supplied is not a P-256 public key or key id, so the signer is still unverified.',
+    };
+  }
+  if (!signature.signatureValid) {
+    return {
+      ...base,
+      valid: false,
+      signature,
+      reason: base.valid
+        ? `The report carries a signature that does not verify. ${signature.reason}`
+        : base.reason,
+    };
+  }
+  return { ...base, signature };
 }

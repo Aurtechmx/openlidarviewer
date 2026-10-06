@@ -62,6 +62,7 @@ import { buildExportDeliverables, type ExportDeliverables } from './export/expor
 import type { ReportFinding } from '../render/measure/reportManifest';
 import type { SessionFindings } from '../render/measure/sessionFindings';
 import type { MountedFindingsPanel } from './findingsPanel';
+import { buildReportSigningControls } from './reportSigningControls';
 
 /** Why the measurement deliverables are inert: shown as the group hint AND each button's tooltip. */
 /** Why the LAZ pill is greyed, shown beside it and on hover. */
@@ -886,10 +887,10 @@ export class ExportPanel {
           count > 0,
           () => this._cb.exportIntegrityReport?.(),
           NO_MEASUREMENTS_HINT,
-          'Save the measurements with a SHA-256 digest, so a later edit to the file shows up.',
+          'Save the measurements with a SHA-256 digest. The digest alone cannot prove who made the file; turn on signing below to add a signature.',
         );
         btn.setAttribute('data-testid', 'export-integrity-report');
-        measureRow.append(btn);
+        measureRow.append(btn, buildReportSigningControls());
       }
       const measurePlural = count === 1 ? '' : 's';
       content.append(

@@ -32,6 +32,9 @@
 import type { CrsOriginRecord } from '../../science/crsOrigin';
 import { canonicalize, sha256, type HashFn } from './auditLog';
 
+/** The canonical serializer the digest and the optional signature both cover. */
+export { canonicalize };
+
 export const REPORT_MANIFEST_VERSION = 3;
 
 /**
@@ -140,6 +143,8 @@ export function verifyReportManifest(
   manifest: ReportManifest,
   hashFn: HashFn = sha256,
 ): boolean {
-  const { digest, ...body } = manifest;
+  // An optional signature block sits beside the digest, outside what it covers,
+  // so signing a report never changes its digest. See export/reportSignature.ts.
+  const { digest, reportSignature: _signature, ...body } = manifest as ReportManifest & { reportSignature?: unknown };
   return hashFn(canonicalize(body)) === digest;
 }

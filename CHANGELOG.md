@@ -4,6 +4,10 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
+### Added
+
+- Optional signature for integrity reports. "Sign this report" in the Export panel (off by default) adds an ECDSA P-256 / SHA-256 signature made with a key created in this browser, stored non-extractable in IndexedDB. The signature covers the same canonical report body as the digest, plus the algorithm, key id, the signer's claimed time, the app version and an optional signer label. "Show my public key" and "Copy public key" export the public half. The report verifier reports a valid signature from an unknown key as "Signed, signer unverified", can compare the signer against a public key you supply, and fails a report whose signature is invalid, malformed or unsupported. A signed report fails verification if its figures or signed metadata change. Every signed report carries the key's id, so reports signed with one key can be linked; a Delete signing key control removes the key. Unsigned reports verify exactly as before.
+
 ### Fixed
 
 - A LAS 1.4 export to LAS 1.0 to 1.3 clipped scan angles that round beyond 90 degrees to 90 and dropped the scanner channel with only a success line in the report. The write is now refused until "Allow scan angles to clip and scanner channels to be dropped" is ticked in the Export panel or the batch converter; the opt-in covers these two losses and no others. An angle is clipped only when it rounds beyond 90 degrees (±90.5 and beyond); 90.4 is rounded to 90 and recorded without refusal, like any fractional angle inside the range. Angles exactly halfway between two degrees round away from zero, so -1.5 is written as -2 (it was -1). A refusal names every opt-in the write needs, so a file that wraps classes, clamps returns and clips angles lists all three controls at once.

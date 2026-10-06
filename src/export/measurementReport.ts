@@ -20,10 +20,13 @@ import type { Measurement, Vec3 } from '../render/measure/types';
 import { measurementMetrics } from './measurementExport';
 import {
   buildReportManifest,
+  canonicalize,
   type ReportFinding,
   type ReportManifest,
 } from '../render/measure/reportManifest';
 import type { HashFn } from '../render/measure/auditLog';
+import { SigningError, signReportManifest, type SignOptions } from './reportSignature';
+import { indexedDbBackend, loadSigningKey, type SigningKeyBackend } from './reportSigningKeyStore';
 import { exportGate } from '../validation/evidenceRegistry';
 import { evidenceNote, evidenceStatus, unverifiedUnitsCaveat, type EvidenceStatus } from '../validation/exportEvidenceNote';
 import type { ClaimId } from '../validation/evidenceRegistry';
@@ -376,6 +379,26 @@ export function measurementsToReportManifest(
     },
     hashFn,
   );
+}
+
+/**
+ * Sign an exported report's text with the stored key (used when the user turned
+ * signing on). It never creates a key: key creation is an explicit step in the
+ * Export panel.
+ */
+export async function signReportText(
+  text: string,
+  opts: SignOptions,
+  backend: SigningKeyBackend = indexedDbBackend,
+): Promise<string> {
+  const key = await loadSigningKey(backend);
+  if (!key) throw new SigningError('Signing is on, but no signing key exists in this browser. Create one in the Export panel or turn signing off.');
+  const manifest = JSON.parse(text) as { digest: string };
+  try {
+    return JSON.stringify(await signReportManifest(manifest, key, opts, canonicalize), null, 2);
+  } catch {
+    throw new SigningError('The signature could not be made. Turn signing off to export an unsigned report.');
+  }
 }
 
 /** Source-file digest and CRS origin for this export's provenance, resolved off the main thread. */
