@@ -32,6 +32,11 @@ export interface TerrainAccessOverlayFrame {
   readonly originH2: number;
   /** Cell length in the DTM's source unit. */
   readonly cellSizeM: number;
+  /**
+   * Metres per DTM vertical unit. The grid's z is in metres, the scene's is in
+   * the DTM's own vertical unit, so a drawn height is divided by this.
+   */
+  readonly verticalUnitToMetres: number;
 }
 
 export function terrainAccessOverlayFrame(
@@ -39,9 +44,11 @@ export function terrainAccessOverlayFrame(
   originH1: number,
   originH2: number,
   cellSizeM: number,
+  verticalUnitToMetres: number | null | undefined = 1,
 ): TerrainAccessOverlayFrame {
   const axis = sceneUpAxis ?? 'z';
-  return { verticalAxis: axis, negateNorthing: axis === 'y', originH1, originH2, cellSizeM };
+  const v = verticalUnitToMetres != null && verticalUnitToMetres > 0 ? verticalUnitToMetres : 1;
+  return { verticalAxis: axis, negateNorthing: axis === 'y', originH1, originH2, cellSizeM, verticalUnitToMetres: v };
 }
 
 function place(
@@ -55,10 +62,11 @@ function place(
   const x = frame.originH1 + col * frame.cellSizeM;
   const north = frame.originH2 + row * frame.cellSizeM;
   const n = frame.negateNorthing ? -north : north;
+  const height = elevation / frame.verticalUnitToMetres;
   if (frame.verticalAxis === 'y') {
-    out[o] = x; out[o + 1] = elevation; out[o + 2] = n;
+    out[o] = x; out[o + 1] = height; out[o + 2] = n;
   } else {
-    out[o] = x; out[o + 1] = n; out[o + 2] = elevation;
+    out[o] = x; out[o + 1] = n; out[o + 2] = height;
   }
 }
 

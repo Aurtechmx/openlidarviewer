@@ -72,6 +72,10 @@ export function terrainDtmToAccessGrid(
 ): DtmTerrainAccessGrid {
   const policy = options.interpolated ?? 'route';
   const n = dtm.cols * dtm.rows;
+  // The traversability core reads z as metres (slope, step height, ascent),
+  // so source vertical units are converted here, once. The preparation step
+  // refuses a run whose factor is unresolved before this is reached.
+  const zToMetres = dtm.verticalUnitToMetres != null && dtm.verticalUnitToMetres > 0 ? dtm.verticalUnitToMetres : 1;
   // NaN-filled, not zero-filled: `hornSlopeAspect` (terrainDerivatives.ts) has
   // no `valid` mask of its own — it takes `!Number.isFinite(z[i])` as its own
   // "no data here" signal, matching the convention `DtmGrid.z` already uses
@@ -95,7 +99,7 @@ export function terrainDtmToAccessGrid(
     const v = dtm.z[i];
     if (!Number.isFinite(v)) continue;
     if (isInterpolated) interpolated++;
-    z[i] = v;
+    z[i] = v * zToMetres;
     valid[i] = 1;
     confidence[i] = dtm.confidence[i];
     coverage[i] = cover;
@@ -122,7 +126,7 @@ export function terrainDtmToAccessGrid(
       const hag = new Float32Array(n);
       for (let i = 0; i < n; i++) {
         if (valid[i] === 0 || dsm.coverage[i] === 0) { hag[i] = Number.NaN; continue; }
-        hag[i] = dsm.z[i] - z[i];
+        hag[i] = dsm.z[i] * zToMetres - z[i];
       }
       heightAboveGround = hag;
     }

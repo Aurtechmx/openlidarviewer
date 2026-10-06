@@ -46,37 +46,103 @@ const byClass = (root: FakeEl, cls: string): FakeEl => {
 
 const key = (k: string) => ({ key: k, preventDefault: () => {} });
 
+type Lab = ReturnType<typeof mountTerrainAccessInteractive>;
+
+function mount(dsm?: unknown): { lab: Lab; root: FakeEl } {
+  const lab = mountTerrainAccessInteractive({
+    dtm: flatDtm(4, 3),
+    scale: { isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: true },
+    layerId: 'layer-a',
+    filename: 'site',
+    verticalScaleResolved: true,
+    dsm: dsm as never,
+  });
+  return { lab, root: lab.element as unknown as FakeEl };
+}
+
+function applyProfile(root: FakeEl): void {
+  const values = ['test', '30', '30', '1', '0', '0'];
+  const inputs = root.findAll((e) => e.hasClass('olv-ta-field-input'));
+  inputs.forEach((input, i) => { (input as unknown as { value: string }).value = values[i] ?? ''; });
+  byClass(root, 'olv-ta-form-submit').fire('click');
+}
+
+function setEndpoints(root: FakeEl): void {
+  const canvas = byClass(root, 'olv-ta-grid-canvas');
+  canvas.fire('keydown', key('Enter'));
+  root.find((e) => e.hasClass('olv-ta-segmented-btn') && e.dataset.value === 'goal')!.fire('click');
+  canvas.fire('keydown', key('ArrowRight'));
+  canvas.fire('keydown', key('ArrowDown'));
+  canvas.fire('keydown', key('Enter'));
+}
+
+const runOf = (root: FakeEl) => byClass(root, 'olv-ta-run') as unknown as { onclick: () => Promise<void> };
+
 describe('Terrain Access Lab export button', () => {
   it('is disabled until a run finds a route, then enabled', async () => {
-    const lab = mountTerrainAccessInteractive({
-      dtm: flatDtm(4, 3),
-      scale: { isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: true },
-      layerId: 'layer-a',
-      filename: 'site',
-    });
-    const root = lab.element as unknown as FakeEl;
-
-    const values = ['test', '30', '30', '1', '0', '0'];
-    const inputs = root.findAll((e) => e.hasClass('olv-ta-field-input'));
-    inputs.forEach((input, i) => { (input as unknown as { value: string }).value = values[i] ?? ''; });
-    byClass(root, 'olv-ta-form-submit').fire('click');
-
+    const { lab, root } = mount();
+    applyProfile(root);
     const exportButton = byClass(root, 'olv-ta-export');
     expect(exportButton.disabled).toBe(true);
-
-    const canvas = byClass(root, 'olv-ta-grid-canvas');
-    canvas.fire('keydown', key('Enter'));
-    const goal = root.find((e) => e.hasClass('olv-ta-segmented-btn') && e.dataset.value === 'goal')!;
-    goal.fire('click');
-    canvas.fire('keydown', key('ArrowRight'));
-    canvas.fire('keydown', key('ArrowDown'));
-    canvas.fire('keydown', key('Enter'));
+    setEndpoints(root);
     expect(exportButton.disabled).toBe(true);
-
-    const runButton = byClass(root, 'olv-ta-run') as unknown as { onclick: () => Promise<void> };
-    await runButton.onclick();
+    await runOf(root).onclick();
     expect(byClass(root, 'olv-ta-run-card').textContent).toContain('geometric traversability screening');
     expect(exportButton.disabled).toBe(false);
+    lab.dispose();
+  });
+
+  it('moving the start or goal clears the route, its card and the export', async () => {
+    const { lab, root } = mount();
+    applyProfile(root);
+    setEndpoints(root);
+    await runOf(root).onclick();
+    const exportButton = byClass(root, 'olv-ta-export');
+    expect(exportButton.disabled).toBe(false);
+    root.find((e) => e.hasClass('olv-ta-segmented-btn') && e.dataset.value === 'start')!.fire('click');
+    const canvas = byClass(root, 'olv-ta-grid-canvas');
+    canvas.fire('keydown', key('ArrowRight'));
+    canvas.fire('keydown', key('Enter'));
+    expect(exportButton.disabled).toBe(true);
+    expect(byClass(root, 'olv-ta-run-card').textContent).not.toContain('geometric traversability screening');
+    lab.dispose();
+  });
+});
+
+describe('Terrain Access Lab failures', () => {
+  // A surface that throws on any read once armed stands in for an internal failure.
+  function trap(): { dsm: unknown; arm: () => void } {
+    let armed = false;
+    const dsm = new Proxy({ cols: 99, rows: 99, cellSizeM: 1 }, {
+      get(target, prop) {
+        if (armed) throw new Error('boom');
+        return (target as Record<string | symbol, unknown>)[prop];
+      },
+    });
+    return { dsm, arm: () => { armed = true; } };
+  }
+
+  it('a run that throws restores the controls and shows a failure card', async () => {
+    const t = trap();
+    const { lab, root } = mount(t.dsm);
+    applyProfile(root);
+    setEndpoints(root);
+    t.arm();
+    await runOf(root).onclick();
+    const card = byClass(root, 'olv-ta-run-card').textContent;
+    expect(card).toContain('Terrain Access did not run');
+    expect(card).toContain('could not finish: boom');
+    expect((byClass(root, 'olv-ta-run') as unknown as { disabled: boolean }).disabled).toBe(false);
+    lab.dispose();
+  });
+
+  it('a preview that throws shows a failure and a way back to the form', () => {
+    const t = trap();
+    t.arm();
+    const { lab, root } = mount(t.dsm);
+    applyProfile(root);
+    expect(root.textContent).toContain('could not finish: boom');
+    expect(byClass(root, 'olv-ta-retry')).toBeTruthy();
     lab.dispose();
   });
 });
