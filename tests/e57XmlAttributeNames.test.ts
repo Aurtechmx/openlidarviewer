@@ -16,3 +16,11 @@ describe('E57 XML attribute names', () => {
     expect(node.attrs.toString).toBeUndefined();
   });
 });
+
+describe('E57 column maps', () => {
+  it('builds the decoded and structured column maps without a prototype', async () => {
+    const src = await import('node:fs').then((fs) => fs.readFileSync('src/io/e57/compressedVector.ts', 'utf8') + fs.readFileSync('src/io/e57/parseE57.ts', 'utf8'));
+    expect(src).not.toMatch(/columns: DecodedColumns = \{\}/);
+    expect(src).not.toMatch(/\{ columns: \{\}, contradiction/);
+  });
+});

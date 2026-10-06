@@ -160,7 +160,7 @@ export function parseE57(buffer: ArrayBuffer, opts?: ParseE57Options): E57ParseR
   const scans: E57ScanData[] = document.scans.map((scan) => {
     const requests = structuredFor?.(scan) ?? [];
     const sink: E57StructuredSink | undefined =
-      requests.length > 0 ? { columns: {}, contradiction: null } : undefined;
+      requests.length > 0 ? { columns: Object.create(null) as E57StructuredSink['columns'], contradiction: null } : undefined;
     return {
       name: scan.name,
       guid: scan.guid,

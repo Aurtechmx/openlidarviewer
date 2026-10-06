@@ -228,7 +228,8 @@ export function decodeCompressedVector(
     packetAt += packetLength;
   }
 
-  const columns: DecodedColumns = {};
+  // Column names come from the file's prototype; a null-prototype object keeps them as plain keys.
+  const columns: DecodedColumns = Object.create(null) as DecodedColumns;
   const structured = options?.structured;
   const requested = new Map<string, E57StructuredColumnRequest>();
   if (structured) for (const r of structured.requests) requested.set(r.name, r);
