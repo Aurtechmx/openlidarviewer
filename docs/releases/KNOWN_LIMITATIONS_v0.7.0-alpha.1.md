@@ -293,7 +293,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 97 for the shell, 75 for the renderer and 23 for the Analyse panel,
-across 1077 modules with no dependency cycles.
+across 1080 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -350,6 +350,27 @@ floor of the data minimum, and the provenance text gives the reason.
   records within the extent Float32 positions resolve (16 km at a 1 mm scale);
   a reprojected, voxel-reduced, streamed or non-LAS export is re-quantised at
   1 mm. See the section above.
+- LAS classes convert by meaning only where the specification gives one.
+  Between LAS 1.0 to 1.3 and LAS 1.4, legacy class 8 (Model Key-point) becomes
+  class 1 with the key-point flag, and legacy class 12 (Overlap Points) becomes
+  class 1 with the overlap flag. The other numbers whose meaning differs (8, 10
+  to 22) have no mapping between the two tables, so they are written unchanged
+  and the report lists each with its point count. A LAS 1.4 export read by a
+  LAS 1.2 reader shows class 19 and the other defined extended classes as
+  reserved; high noise (18) has no legacy class. Classes above 31 are refused
+  or wrapped as before. A derived or edited classification, or a source whose
+  point format is unknown, is not translated: when such a classification of a
+  legacy file is written as LAS 1.4, untouched legacy class 8 and 12 points are
+  written as the reserved codes 8 and 12, with no translation and no warning.
+- A LAS 1.2 write cannot keep every acquisition field. Scan angles are stored
+  as whole degrees from -90 to 90 and there is no scanner channel, so a LAS 1.4
+  file with an angle that rounds beyond 90 degrees or a nonzero channel is
+  refused until the opt-in for those two losses is ticked. Angles inside the
+  range are rounded to a whole degree, with halves rounding away from zero (-1.5
+  is written as -2, where it was -1), and the file's text area records that
+  without asking. The text
+  area is the only place the file itself records a conversion: a reader that
+  ignores it sees nothing, and a format other than LAS has no such record.
 - The reproduction pack's metrics reproduce exactly under the Node version
   pinned in `.nvmrc`. Another Node or V8 version can change the last digits.
 

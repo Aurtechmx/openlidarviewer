@@ -112,7 +112,7 @@ test('LAS 1.2 refuses classes above 31 with the reason, and writes them wrapped 
   // Refused: a failed row with the reason, naming both ways forward, and no download.
   const row = dialog.locator('.olv-bc-row');
   await expect(row).toHaveClass(/is-error/, { timeout: 20_000 });
-  const reason = row.locator('.olv-bc-log-error');
+  const reason = row.locator('.olv-conv-note.is-error');
   await expect(reason).toContainText('LAS 1.2 was not written');
   await expect(reason).toContainText('64 (User Definable), 200 (User Definable)');
   await expect(reason).toContainText('Choose LAS 1.4');
@@ -123,6 +123,6 @@ test('LAS 1.2 refuses classes above 31 with the reason, and writes them wrapped 
   await optIn.locator('input[type="checkbox"]').check();
   await dialog.locator('.olv-bc-convert').click();
   await expect(row).toHaveClass(/is-ok/, { timeout: 20_000 });
-  await expect(row.locator('.olv-bc-log-warn')).toContainText('wrap to their low 5 bits');
+  await expect(row.locator('.olv-conv-note.is-warn')).toContainText('wrap to their low 5 bits');
   await expect(row.locator('.olv-bc-row-dl')).toBeVisible();
 });

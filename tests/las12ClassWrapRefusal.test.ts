@@ -14,6 +14,7 @@ import { PointCloud } from '../src/model/PointCloud';
 import { convertCloud } from '../src/convert/convertCloud';
 import { cloudToGlobal } from '../src/convert/globalPoints';
 import { writeLas } from '../src/convert/writeLas';
+import { eventRecordLine } from '../src/convert/conversionEvents';
 import { loadLas } from '../src/io/loadLas';
 import { runBatch, summariseBatch, type DecodeFn } from '../src/convert/convertRunner';
 import {
@@ -149,7 +150,9 @@ describe('a LAS 1.2 write with every class at or below 31 is unchanged', () => {
         verticalUnitCode: null,
         description: null,
         // The provenance lines every converted file carries.
-        provenance: [`Point basis: full file (${cloud.pointCount} points)`, 'Classes edited in app: no', 'Scale/offset: re-quantised (the source scale and offset are not recorded for this cloud).'],
+        provenance: [`Point basis: full file (${cloud.pointCount} points)`, 'Classes edited in app: no', 'Scale/offset: re-quantised (the source scale and offset are not recorded for this cloud).',
+          // A dropped overlap flag is recorded in the file as a conversion event.
+          ...(plain.report.events ?? []).map(eventRecordLine)],
       });
       expect(plain.report.ok).toBe(true);
       expect(Array.from(plain.file!.bytes)).toEqual(Array.from(direct));

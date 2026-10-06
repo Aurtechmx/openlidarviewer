@@ -47,6 +47,7 @@ export class FakeEl {
   }
   set innerHTML(_v: string) { /* icons only */ }
   setAttribute(k: string, v: string): void { this.attrs[k] = v; }
+  getAttribute(k: string): string | null { return k in this.attrs ? this.attrs[k] : null; }
   removeAttribute(k: string): void { delete this.attrs[k]; }
   append(...kids: (FakeEl | string)[]): void {
     for (const k of kids) if (k) this.children.push(typeof k === 'string' ? FakeEl.text(k) : k);

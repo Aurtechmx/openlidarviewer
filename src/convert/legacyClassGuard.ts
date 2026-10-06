@@ -84,7 +84,10 @@ export function legacyClassWrapRefusal(wrap: LegacyClassWrap): string {
 
 /** The warning an opted-in write logs, with the arithmetic a reader will see. */
 export function legacyClassWrapWarning(points: number): string {
-  return `LAS 1.2 stores 5-bit classes — ${points.toLocaleString()} points with classes > 31 wrap to their low 5 bits (class & 31), so 33 reads back as 1 and 64 as 0; use LAS 1.4 to preserve them.`;
+  const tail = 'so 33 reads back as 1 and 64 as 0; use LAS 1.4 to preserve them.';
+  return points === 1
+    ? `LAS 1.2 stores 5-bit classes — 1 point with a class > 31 wraps to its low 5 bits (class & 31), ${tail}`
+    : `LAS 1.2 stores 5-bit classes — ${points.toLocaleString()} points with classes > 31 wrap to their low 5 bits (class & 31), ${tail}`;
 }
 
 /**
@@ -132,7 +135,7 @@ function pointsLabel(points: number): string {
 /** The refusal, with the count and both ways forward. */
 export function legacyReturnClampRefusal(points: number): string {
   return (
-    `LAS 1.2 was not written. ${pointsLabel(points)} have a return number or number of returns above 7, ` +
+    `LAS 1.2 was not written. ${pointsLabel(points)} ${points === 1 ? 'has' : 'have'} a return number or number of returns above 7, ` +
     `which LAS 1.2 clamps to 7, so return 8 of 12 would read back as 7 of 7. ` +
     `Choose LAS 1.4 to keep them, or tick "${LEGACY_RETURN_CLAMP_OPT_IN}" to write them clamped.`
   );
