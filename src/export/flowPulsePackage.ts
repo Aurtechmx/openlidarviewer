@@ -359,7 +359,9 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     'Grid',
     `  Size           ${grid.cols} x ${grid.rows} cells`,
     `  Cell size      ${fig(grid.cellMetresX, 3)} m (east-west) x ${fig(grid.cellMetresY, 3)} m (north-south)`,
-    ...(opts.rasterCellSize != null ? [`  Raster cell size   ${fig(opts.rasterCellSize, 6)} (${opts.crsName != null ? 'CRS' : 'source'} units, as written in the .asc files)`] : []),
+    opts.rasterCellSize != null
+      ? `  Raster cell size   ${fig(opts.rasterCellSize, 6)} (${opts.crsName != null ? 'CRS' : 'source'} units, as written in the .asc files)`
+      : `  Raster cell size   ${fig(grid.cellMetresX, 6)} m (local metres, as written in the .asc files)`,
     `  NODATA value   ${NO_DATA}`,
     `  Direction legend   ${DIRECTION_LEGEND.map((d, i) => `${i}=${d}`).join(', ')}, -1 = sink/outlet/no data`,
     ...(opts.rasterCellSize == null && grid.cellMetresX !== grid.cellMetresY ? [
@@ -555,13 +557,14 @@ export function buildFlowPulsePackage(
     bytes: new TextEncoder().encode(`${JSON.stringify(manifest, null, 2)}\n`),
   });
 
-  if (options.wkt) {
+  // A .prj beside rasters in local metres would make a GIS place them at the CRS origin.
+  if (placedOrigin && options.wkt) {
     entries.push({ name: `${basename}.prj`, bytes: new TextEncoder().encode(options.wkt) });
   }
 
   const readme = buildFlowReadme(result, {
     basename, generationDateIso, softwareName, softwareVersion, build,
-    crsName: options.crsName ?? null, hasWkt: !!options.wkt,
+    crsName: options.crsName ?? null, hasWkt: placedOrigin != null && !!options.wkt,
     verticalUnitLabel: options.verticalUnitLabel ?? 'units', hasPath, hasCatchment, sourceInterpretation,
     elevationOrigin, terrainCaveat: options.terrainCaveat ?? null, rasterCellSize: frame?.cellSize ?? null,
     pathFrame: pathFrameName(placedOrigin, options.crsName != null),

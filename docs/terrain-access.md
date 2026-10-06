@@ -145,7 +145,9 @@ in `lazyChunks.ts`) `terrainAnalysisRunner.ts` already calls for Flow Pulse.
 
 Exported rasters and the route GeoJSON carry the real world corner in the
 dataset CRS, and a `.prj` sidecar when the CRS resolves, when the caller
-supplies a world origin and CRS/WKT; otherwise the raster is written at a
+supplies a world origin and CRS/WKT; with a CRS but no world origin the
+package writes no `.prj` and the README marks the CRS as not applied;
+otherwise the raster is written at a
 local (0, 0) origin and the README says so, exactly as the DEM package and
 Flow Pulse's own export already behave.
 

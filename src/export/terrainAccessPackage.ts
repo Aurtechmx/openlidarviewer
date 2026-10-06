@@ -229,6 +229,22 @@ export function routeFrameLines(frame: TerrainAccessCoordinateFrame, crsName: st
   ];
 }
 
+/** The README CRS line: a CRS name is stated as applied only when the export is placed. */
+function crsLine(crsName: string | null, frame: TerrainAccessCoordinateFrame): string {
+  if (frame === 'local-planar-metres') {
+    return crsName == null
+      ? 'not georeferenced — the raster uses a local (0, 0) origin'
+      : `${crsName} (not applied: local metres)`;
+  }
+  return crsName ?? 'not resolved — the raster uses the scan\'s source coordinates';
+}
+
+/** The raster cell size as written in the .asc, with the unit it is in. */
+function rasterCellLine(cell: number, frame: TerrainAccessCoordinateFrame): string {
+  if (frame === 'local-planar-metres') return `${cell} m (local metres, as written in the .asc file)`;
+  return `${cell} (${frame === 'scan-crs' ? 'CRS' : 'source'} units, as written in the .asc file)`;
+}
+
 /** The reproduction steps and honest limitations a reader needs, per §22/§23. */
 function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
   readonly basename: string;
@@ -236,6 +252,7 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
   readonly build: BuildIdentity;
   readonly crsName: string | null;
   readonly hasWkt: boolean;
+  readonly rasterCellSize: number;
   readonly sourceInterpretation: SourceInterpretationRecord;
   readonly sourceSha256Text: string;
   readonly frame: TerrainAccessCoordinateFrame;
@@ -273,14 +290,13 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
     `  Input digest   ${r.source.analysisInputDigest}`,
     `  Input coverage ${r.source.basis.coverage} (${r.source.basis.complete ? 'complete' : 'partial'})`,
     `  Cells read     ${r.source.basis.measuredCells} of ${r.source.basis.totalCells}`,
-    `  CRS            ${opts.crsName ?? (opts.frame === 'local-planar-metres'
-      ? 'not georeferenced — the raster uses a local (0, 0) origin'
-      : 'not resolved — the raster uses the scan\'s source coordinates')}`,
+    `  CRS            ${crsLine(opts.crsName, opts.frame)}`,
     ...(opts.sourceInterpretation.crsOrigin ? [`  ${crsOriginLine(opts.sourceInterpretation.crsOrigin)}`] : []),
     '',
     'Grid',
     `  Size           ${grid.cols} x ${grid.rows} cells`,
     `  Cell size      ${grid.cellMetresX} m (east-west) x ${grid.cellMetresY} m (north-south)`,
+    `  Raster cell size   ${rasterCellLine(opts.rasterCellSize, opts.frame)}`,
     `  NODATA value   ${NO_DATA}`,
     '  Traversability bucket codes   0=blocked, 1=no data/unknown, 2=low-cost, 3=moderate-cost, 4=high-cost',
     ...(opts.frame === 'local-planar-metres' && grid.cellMetresX !== grid.cellMetresY ? [
@@ -346,6 +362,7 @@ export function buildTerrainAccessPackage(
   };
   const grid = result.grid;
   const place = terrainAccessPlacement(grid, options.worldOrigin ?? null, options.gridPlacement ?? null, options.crsName ?? null);
+  const placed = place.frame !== 'local-planar-metres';
 
   const entries: ZipEntry[] = [];
 
@@ -409,7 +426,7 @@ export function buildTerrainAccessPackage(
   });
 
   const readme = buildTerrainAccessReadme(result, {
-    basename, generationDateIso, build, crsName: options.crsName ?? null, hasWkt: !!options.wkt, sourceInterpretation,
+    basename, generationDateIso, build, crsName: options.crsName ?? null, hasWkt: placed && !!options.wkt, rasterCellSize: place.cellX, sourceInterpretation,
     frame: place.frame,
     sourceSha256Text: options.sourceSha256 ?? (options.digests ? sourceSha256Text(options.digests) : (result.record.source.sourceDigest ?? SOURCE_NOT_SUPPLIED_NOTE)),
   });
@@ -418,7 +435,8 @@ export function buildTerrainAccessPackage(
     bytes: new TextEncoder().encode(readme),
   });
 
-  if (options.wkt) {
+  // A .prj beside a raster in local metres would make a GIS place it at the CRS origin.
+  if (placed && options.wkt) {
     entries.push({ name: `${basename}.prj`, bytes: new TextEncoder().encode(options.wkt) });
   }
 
