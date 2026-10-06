@@ -194,8 +194,14 @@ export function buildExportSummary(input: ExportSummaryInput): ExportSummary {
 
   // ── classification note ──────────────────────────────────────────────────
   let classificationLabel: string | null = null;
+  // Only the LAS formats carry a class field. XYZ and ASC write coordinates
+  // (and colour or intensity), so a class note there would claim data the file
+  // does not hold.
+  const writesClasses = input.format === 'las' || input.format === 'las14';
   if (provenance !== 'none') {
-    if (!includeClass) {
+    if (!writesClasses) {
+      classificationLabel = `Classification not written (${spec.label} has no class column)`;
+    } else if (!includeClass) {
       classificationLabel = 'Classification omitted';
     } else if (provenance === 'derived') {
       const conf =
@@ -219,10 +225,10 @@ export function buildExportSummary(input: ExportSummaryInput): ExportSummary {
           : 'Enter the EPSG code to assign before exporting.',
     });
   }
-  if (includeClass && provenance === 'cleared') {
+  if (writesClasses && includeClass && provenance === 'cleared') {
     warnings.push({ level: 'warn', message: `Classification: ${CLEARED_CLASS_NOTE}. Restore earlier classes to write the classes held before the clear.` });
   }
-  if (includeClass && provenance === 'derived') {
+  if (writesClasses && includeClass && provenance === 'derived') {
     warnings.push({
       level: 'warn',
       message:

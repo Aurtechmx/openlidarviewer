@@ -10,13 +10,16 @@
  */
 
 import { ownedExactBuffer } from './range/boundedRead';
+import { safeEntryName } from '../export/safeText';
 
 /** Trigger a browser download of `blob` as `filename`, deferring the URL revoke. */
 export function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = filename;
+  // A name built from a scan or layer name can carry a separator or a control
+  // character; the browser gets one plain file name.
+  a.download = safeEntryName(filename, 'download');
   // Appended + clicked + removed in one synchronous tick, so it never paints
   // (no display:none needed); the in-DOM anchor is what Firefox requires for a
   // programmatic click to fire.

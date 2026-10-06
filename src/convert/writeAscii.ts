@@ -11,6 +11,7 @@
  */
 
 import type { GlobalPoints } from './globalPoints';
+import { singleLine } from '../export/safeText';
 
 function fmt(v: number, precision: number): string {
   return v.toFixed(precision);
@@ -40,13 +41,13 @@ function horizontalPrecision(precision: number, geographic?: boolean): number {
  */
 function datumTransformComment(note: string | null | undefined): string | null {
   const t = note?.trim();
-  return t ? `# datum-transform: ${t}` : null;
+  return t ? `# datum-transform: ${singleLine(t)}` : null;
 }
 
 /** The `# crs:` comment both ASCII writers put in their header. */
 export function crsComment(epsg: number | null | undefined, crsName: string | null | undefined): string {
   if (epsg != null) return `# crs: EPSG:${epsg}`;
-  if (crsName) return `# crs: ${crsName}`;
+  if (crsName) return `# crs: ${singleLine(crsName)}`;
   return '# crs: none recorded (coordinates unchanged from the source)';
 }
 
@@ -71,7 +72,7 @@ export function writeXyz(
   }
   const note = datumTransformComment(datumNote);
   if (note) lines.push(note);
-  for (const l of provenance ?? []) lines.push(`# ${l}`);
+  for (const l of provenance ?? []) lines.push(`# ${singleLine(l)}`);
   const c = g.colors;
   const h = horizontalPrecision(precision, geographic);
   for (let i = 0; i < g.count; i++) {
@@ -118,7 +119,7 @@ export function writeAsc(
   header.push(crsComment(opts.epsg, opts.crsName));
   const datumComment = datumTransformComment(opts.datumNote);
   if (datumComment) header.push(datumComment);
-  for (const l of opts.provenance ?? []) header.push(`# ${l}`);
+  for (const l of opts.provenance ?? []) header.push(`# ${singleLine(l)}`);
   header.push(`# columns: x y z${hasI ? ' intensity' : ''}`);
 
   const lines: string[] = [header.join('\n')];

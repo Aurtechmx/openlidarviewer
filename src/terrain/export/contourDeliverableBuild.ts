@@ -19,6 +19,7 @@
  * what the standalone export would produce.
  */
 
+import { safeEntryName } from '../../export/safeText';
 import type { ExportDigests } from '../../science/exportDigestRecord';
 import type { AnalysedBasis } from './analysedBasis';
 import type { AnalyseContoursResult } from '../contour/analyseContours';
@@ -148,7 +149,7 @@ function gatherDeliverable(
   result: AnalyseContoursResult,
   opts: DeliverableBuildOptions,
 ): GatheredDeliverable {
-  const basename = opts.basename || 'contour-deliverable';
+  const basename = safeEntryName(opts.basename || 'contour-deliverable', 'contour-deliverable');
   const provenance = buildExportProvenance(result, {
     digests: opts.digests ?? null,
     basename,

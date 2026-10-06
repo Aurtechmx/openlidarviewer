@@ -31,6 +31,7 @@
  * Pure-data: returns ZIP bytes; no DOM.
  */
 
+import { safeEntryName } from './safeText';
 import { SOURCE_NOT_SUPPLIED_NOTE, sourceSha256Text, type ExportDigests } from '../science/exportDigestRecord';
 import { crsOriginLine } from '../science/crsOrigin';
 import { writeAsciiGrid } from '../terrain/export/demAsciiGrid';
@@ -352,7 +353,7 @@ export function buildTerrainAccessPackage(
   result: TerrainAccessResult,
   options: TerrainAccessPackageOptions = {},
 ): Uint8Array {
-  const basename = options.basename ?? 'terrain-access';
+  const basename = safeEntryName(options.basename ?? 'terrain-access', 'terrain-access');
   const generationDateIso = options.generationDateIso ?? new Date().toISOString();
   const build = options.build ?? BUILD_IDENTITY;
   const softwareVersion = options.softwareVersion ?? buildIdentityProvenance(build);

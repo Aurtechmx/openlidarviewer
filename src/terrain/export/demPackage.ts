@@ -23,6 +23,7 @@
  * a prominent PRELIMINARY caveat whenever the data is not full + ready.
  */
 
+import { safeEntryName } from '../../export/safeText';
 import type { ExportDigests } from '../../science/exportDigestRecord';
 import {
   buildEvidenceContractView,
@@ -581,7 +582,7 @@ export function buildDemPackage(
   options: DemPackageOptions = {},
 ): Uint8Array {
   const dtm = result.dtm;
-  const basename = options.basename || 'terrain';
+  const basename = safeEntryName(options.basename || 'terrain', 'terrain');
   // Defaulted once for the whole package. Two clocks read a millisecond apart
   // would stamp the README and the passport differently, so a rebuild from the
   // same inputs would not produce the same bytes and neither file would be

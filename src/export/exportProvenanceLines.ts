@@ -13,6 +13,7 @@
  * Pure data: no DOM, no I/O.
  */
 
+import { singleLine } from './safeText';
 import { BUILD_IDENTITY, type BuildIdentity } from '../build/buildIdentity';
 import { classificationDiffersFromSource } from './fullResClassGuard';
 import { pointBasisLine } from './exportSummary';
@@ -33,7 +34,7 @@ export function softwareLine(id: Pick<BuildIdentity, 'version' | 'commit' | 'dir
 export function sourceFileLine(name: string | null | undefined): string {
   const parts = (name ?? '').split(/[\\/]/);
   const base = parts[parts.length - 1];
-  return `Source file: ${base || 'unknown'}`;
+  return `Source file: ${singleLine(base) || 'unknown'}`;
 }
 
 /**
@@ -132,5 +133,5 @@ export function measurementCsvProvenance(input: LightProvenanceInput, basis: Mea
     basis.pointBasis,
     edited,
   ];
-  return lines.join('\n') + '\n';
+  return lines.map(singleLine).join('\n') + '\n';
 }

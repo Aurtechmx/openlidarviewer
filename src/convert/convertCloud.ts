@@ -12,6 +12,7 @@
 import { exportDigestLines } from '../science/exportDigestRecord';
 import { DISPLAY_SAMPLE_SUFFIX, displaySampleLine, pointBasisLine } from '../export/exportSummary';
 import { truncationOf } from '../io/truncation';
+import { safeEntryName, singleLine } from '../export/safeText';
 import { classEditLine, classesEdited, pointBasisOfCloud, softwareLine, sourceFileLine } from '../export/exportProvenanceLines';
 import type { PointCloud } from '../model/PointCloud';
 import { sourcePositions } from '../model/pointFrames';
@@ -30,6 +31,9 @@ import {
   eventLogEntry,
   fitProvenance,
   isMaterialAcquisitionLoss,
+  asciiDroppedFieldsEvent,
+  eventRecordLine,
+  provenanceTrimmedMessage,
   type ConversionEvent,
 } from './conversionEvents';
 import {
@@ -66,9 +70,6 @@ import {
   LEGACY_RETURN_CLAMP_OPT_IN,
 } from './types';
 
-/** Logged when the file's text area could not hold every provenance line. */
-const PROVENANCE_TRIMMED =
-  'The provenance text was too long for the file, so only the conversion events are recorded in it.';
 
 const MIME: Record<string, string> = {
   las14: 'application/octet-stream',
@@ -138,9 +139,9 @@ export function convertCloud(
       opts.omitClassification === true,
     ),
   ];
-  const provenance = lines;
+  const provenance = lines.map(singleLine);
   // ASCII has no header slot for the build or the source name, so both lead its comment lines.
-  const asciiProvenance = [softwareLine(), sourceFileLine(cloud.name), ...lines];
+  const asciiProvenanceBase = [softwareLine(), sourceFileLine(cloud.name), ...provenance];
   // The RESOLVED source CRS (CrsService), when the caller supplies it, is the
   // authority — it honours any user override, so `cloud.metadata.crs` stays
   // source-declared PROVENANCE only. Given a resolved value we never consult
@@ -154,6 +155,9 @@ export function convertCloud(
     ? (opts.resolvedSourceCrs?.epsg ?? opts.sourceEpsg ?? null)
     : (cloud.metadata?.crs?.epsg ?? opts.sourceEpsg ?? null);
   let g = cloudToGlobal(cloud);
+  if (g.count === 0) {
+    return fail('Nothing was exported: the scan has no points in the current scope, so no file was written.');
+  }
   // Every output format here reads Z as elevation (LAS by spec; the ASCII
   // writers by the same convention), which is wrong for the Y-up mesh formats:
   // raw storage order would put the mesh's elevation in the northing column and
@@ -267,7 +271,7 @@ export function convertCloud(
   }
 
   const geo = outEpsg != null ? isGeographicEpsg(outEpsg) : false;
-  const filename = `${baseName(cloud.name)}${opts.displaySample ? DISPLAY_SAMPLE_SUFFIX : ''}.${spec.ext}`;
+  const filename = `${safeEntryName(baseName(cloud.name), 'converted')}${opts.displaySample ? DISPLAY_SAMPLE_SUFFIX : ''}.${spec.ext}`;
 
   let bytes: Uint8Array;
   if (opts.format === 'las' || opts.format === 'las14') {
@@ -356,7 +360,7 @@ export function convertCloud(
         });
       }
       const record14 = fitProvenance(lasProvenance, datumNote, events);
-      if (record14.trimmed) log.push({ level: 'warn', message: PROVENANCE_TRIMMED });
+      if (record14.trimmed) log.push({ level: 'warn', message: provenanceTrimmedMessage(record14.eventsOmitted) });
       bytes = writeLas14(g, {
         gpsStandardTime: gpsStandardFromSource,
         epsg: outEpsg ?? undefined,
@@ -442,7 +446,7 @@ export function convertCloud(
         }
       }
       const recordLegacy = fitProvenance(lasProvenance, datumNote, events);
-      if (recordLegacy.trimmed) log.push({ level: 'warn', message: PROVENANCE_TRIMMED });
+      if (recordLegacy.trimmed) log.push({ level: 'warn', message: provenanceTrimmedMessage(recordLegacy.eventsOmitted) });
       bytes = writeLas(g, {
         // Declare the time the source declared. Adjusted Standard GPS Time and
         // GPS Week Time are different quantities, so carrying the values across
@@ -460,6 +464,11 @@ export function convertCloud(
       });
     }
   } else {
+    // ASCII holds fewer columns than the cloud: say which were left out, here
+    // and in the file's own header.
+    const dropped = asciiDroppedFieldsEvent(g, opts.format === 'asc' ? 'asc' : 'xyz');
+    if (dropped) record(dropped);
+    const asciiProvenance = [...asciiProvenanceBase, ...events.map(eventRecordLine)];
     const text =
       opts.format === 'asc'
         ? writeAsc(g, { precision: opts.asciiPrecision, epsg: outEpsg, crsName: sourceCrs?.name ?? null, geographic: geo, datumNote, provenance: asciiProvenance })
