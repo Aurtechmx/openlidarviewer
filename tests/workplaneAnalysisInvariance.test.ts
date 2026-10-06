@@ -7,6 +7,10 @@
  * with the plane off, with it drawn (horizontal at the scan minimum, then
  * through three points picked from the scan), and after it is turned off
  * again. All must be identical.
+ *
+ * On its own this cannot fail: the analyses never receive the scene. What
+ * makes it true is held by `workplaneDataIsolation.test.ts`, which fails if a
+ * source file walks the scene graph or a data-path module imports the plane.
  */
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three/webgpu';
@@ -58,12 +62,6 @@ describe('reference plane: analysis invariance', () => {
       pickPoint: () => {
         const i = pickOrder[pickIndex++ % 3];
         return { x: pos[i * 3], y: pos[i * 3 + 1], z: pos[i * 3 + 2] };
-      },
-      elevationExtent: () => {
-        let min = Infinity;
-        let max = -Infinity;
-        for (let i = 2; i < pos.length; i += 3) { min = Math.min(min, pos[i]); max = Math.max(max, pos[i]); }
-        return { min, max };
       },
       mergedVisibleBounds: () => [0, 0, 0, 40, 40, 36],
       measure: { worldUp: [0, 0, 1], datumResolved: true },

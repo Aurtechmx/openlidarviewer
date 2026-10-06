@@ -41,6 +41,10 @@ describe('automatic spacing: 1-2-5 steps, 50 to 100 px apart', () => {
     expect(minorStepFor(5)).toBe(1);
     expect(minorStepFor(20)).toBe(5);
     expect(minorStepFor(0.05)).toBe(0.01);
+    // Typed values that are not 2 x 10^k split in five, as the comment says.
+    expect(minorStepFor(1.5)).toBe(0.3);
+    expect(minorStepFor(2.5)).toBe(0.5);
+    expect(minorStepFor(0.2)).toBe(0.05);
   });
 
   it('refuses a scale it cannot measure rather than guessing', () => {

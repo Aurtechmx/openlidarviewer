@@ -42,7 +42,16 @@ import { add, dot, scale, sub, type Vec3, type WorkplaneBasis } from './workplan
 /** Most major lines drawn either side of the focus, whatever the scan size. */
 export const MAX_HALF_MAJORS = 100;
 /** Most segments one line is split into. */
-export const MAX_SEGMENTS_PER_LINE = 48;
+export const MAX_SEGMENTS_PER_LINE = 32;
+/**
+ * Largest lattice index the patch may use. A double counts integers exactly
+ * only up to 2^53, and past that `i++` no longer changes `i`, so a loop over
+ * such indices never ends. 2^50 leaves room for the minor subdivision (at most
+ * five per major) and the loop's last increment.
+ */
+export const MAX_SAFE_INDEX = 2 ** 50;
+/** Most minor lines per major interval the geometry will subdivide into. */
+const MAX_MINOR_RATIO = 10;
 /** Most minor lines per direction; beyond this the minors are left out. */
 export const MAX_MINOR_LINES = 600;
 /** Lines closer than this on screen are not drawn. */
@@ -62,32 +71,51 @@ export interface WorkplanePatch {
 
 /**
  * The patch to draw: the scan's box projected on the plane, widened by one
- * scan size on every side, snapped outward to the major lattice, and capped
- * around the focus. `boxPlane` is the scan box's extent in plane coordinates
+ * scan size on every side, snapped outward to the major lattice, and capped to
+ * {@link MAX_HALF_MAJORS} major lines either side of the focus. When the focus
+ * is far outside that range, the patch is the same cap around the box centre
+ * instead. `boxPlane` is the scan box's extent in plane coordinates
  * `[sMin, sMax, tMin, tMax]`; `scanSize` its largest dimension.
+ *
+ * Returns null when the lattice indices would not be exact integers (the
+ * origin is too far from the scan for this spacing, or the spacing is too
+ * fine for the distance), so the caller draws nothing instead of looping.
  */
 export function patchFor(
   boxPlane: readonly [number, number, number, number],
   scanSize: number,
   focus: readonly [number, number],
   major: number,
-): WorkplanePatch {
+): WorkplanePatch | null {
+  if (!(major > 0) || !Number.isFinite(major) || !Number.isFinite(scanSize)) return null;
+  if (!boxPlane.every(Number.isFinite) || !focus.every(Number.isFinite)) return null;
   const margin = Math.max(scanSize, 4 * major);
-  let iMin = Math.floor((boxPlane[0] - margin) / major);
-  let iMax = Math.ceil((boxPlane[1] + margin) / major);
-  let jMin = Math.floor((boxPlane[2] - margin) / major);
-  let jMax = Math.ceil((boxPlane[3] + margin) / major);
-  const fi = Math.round(focus[0] / major);
-  const fj = Math.round(focus[1] / major);
-  iMin = Math.max(iMin, fi - MAX_HALF_MAJORS);
-  iMax = Math.min(iMax, fi + MAX_HALF_MAJORS);
-  jMin = Math.max(jMin, fj - MAX_HALF_MAJORS);
-  jMax = Math.min(jMax, fj + MAX_HALF_MAJORS);
-  // A focus far outside the scan leaves an empty range; fall back to the scan
-  // itself so the patch never inverts.
-  if (iMin > iMax) [iMin, iMax] = [Math.floor(boxPlane[0] / major), Math.ceil(boxPlane[1] / major)];
-  if (jMin > jMax) [jMin, jMax] = [Math.floor(boxPlane[2] / major), Math.ceil(boxPlane[3] / major)];
-  return { iMin, iMax, jMin, jMax };
+  const range = (lo: number, hi: number, f: number): [number, number] | null => {
+    const min = Math.floor((lo - margin) / major);
+    const max = Math.ceil((hi + margin) / major);
+    const centre = Math.round((lo + hi) / 2 / major);
+    const fi = Math.round(f / major);
+    for (const v of [min, max, centre, fi]) if (!Number.isSafeInteger(v) || Math.abs(v) > MAX_SAFE_INDEX) return null;
+    let a = Math.max(min, fi - MAX_HALF_MAJORS);
+    let b = Math.min(max, fi + MAX_HALF_MAJORS);
+    // The focus is off the patch: centre the same cap on the scan instead.
+    if (a > b) {
+      a = Math.max(min, centre - MAX_HALF_MAJORS);
+      b = Math.min(max, centre + MAX_HALF_MAJORS);
+    }
+    return [a, b];
+  };
+  const i = range(boxPlane[0], boxPlane[1], focus[0]);
+  const j = range(boxPlane[2], boxPlane[3], focus[1]);
+  if (!i || !j) return null;
+  return { iMin: i[0], iMax: i[1], jMin: j[0], jMax: j[1] };
+}
+
+/** Whether a patch can be iterated safely: exact integer indices and a bounded span. */
+export function patchIsSafe(p: WorkplanePatch): boolean {
+  const idx = [p.iMin, p.iMax, p.jMin, p.jMax];
+  if (!idx.every((v) => Number.isSafeInteger(v) && Math.abs(v) <= MAX_SAFE_INDEX)) return false;
+  return p.iMax >= p.iMin && p.jMax >= p.jMin && p.iMax - p.iMin <= 2 * MAX_HALF_MAJORS && p.jMax - p.jMin <= 2 * MAX_HALF_MAJORS;
 }
 
 export interface WorkplaneGeometryInput {
@@ -158,7 +186,9 @@ class SetBuilder {
 
 /** Build the grid buffers for a patch. */
 export function buildWorkplaneGeometry(input: WorkplaneGeometryInput): WorkplaneGeometry {
-  const { plane, patch, major, minor } = input;
+  const { plane, major, minor } = input;
+  // An unsafe patch is never iterated: it draws nothing.
+  const patch = patchIsSafe(input.patch) ? input.patch : { iMin: 1, iMax: 0, jMin: 1, jMax: 0 };
   // The anchor is the lattice crossing nearest the patch centre.
   const ia = Math.round((patch.iMin + patch.iMax) / 2);
   const ja = Math.round((patch.jMin + patch.jMax) / 2);
@@ -182,14 +212,18 @@ export function buildWorkplaneGeometry(input: WorkplaneGeometryInput): Workplane
   }
 
   const minorSet = new SetBuilder(plane, minor);
-  const r = minor > 0 && minor < major ? Math.round(major / minor) : 0;
+  const r = minor > 0 && minor < major ? Math.min(MAX_MINOR_RATIO, Math.round(major / minor)) : 0;
   const minorCount = r * Math.max(patch.iMax - patch.iMin, patch.jMax - patch.jMin);
+  // Minor lines are faint and fade first, so half the segments carry their fade:
+  // they are most of the vertices, and this halves the per-move fade cost.
+  const minorAlongV = Math.max(1, Math.ceil(nAlongV / 2));
+  const minorAlongU = Math.max(1, Math.ceil(nAlongU / 2));
   if (input.showMinor && r > 1 && minorCount <= MAX_MINOR_LINES) {
     for (let m = patch.iMin * r; m <= patch.iMax * r; m++) {
-      if (m % r !== 0) minorSet.line((m / r - ia) * major, tLo, (m / r - ia) * major, tHi, nAlongV, 0);
+      if (m % r !== 0) minorSet.line((m / r - ia) * major, tLo, (m / r - ia) * major, tHi, minorAlongV, 0);
     }
     for (let m = patch.jMin * r; m <= patch.jMax * r; m++) {
-      if (m % r !== 0) minorSet.line(sLo, (m / r - ja) * major, sHi, (m / r - ja) * major, nAlongU, 1);
+      if (m % r !== 0) minorSet.line(sLo, (m / r - ja) * major, sHi, (m / r - ja) * major, minorAlongU, 1);
     }
   }
 
@@ -241,18 +275,21 @@ const smooth = (x: number): number => {
 };
 
 /**
- * Per-vertex alpha for one line set: 0 where neighbouring lines sit closer
- * than {@link FADE_ZERO_PX} on screen, 1 from {@link FADE_FULL_PX}, times the
- * fade over the outer {@link EDGE_FADE_SHARE} of the patch.
+ * Write the per-vertex alpha for one line set into `out` (one float per
+ * vertex): 0 where neighbouring lines sit closer than {@link FADE_ZERO_PX} on
+ * screen, 1 from {@link FADE_FULL_PX}, times the fade over the outer
+ * {@link EDGE_FADE_SHARE} of the patch. Allocates nothing, so it can run on
+ * every camera move; `out` is reused by the caller.
  */
-export function fadeAlphas(
+export function writeFade(
   set: WorkplaneLineSet,
   geom: Pick<WorkplaneGeometry, 'anchorScene' | 'rect'>,
   plane: Pick<WorkplaneBasis, 'u' | 'v'>,
   cam: WorkplaneFadeCamera,
-): Float32Array {
-  const n = set.vertices.length / 3;
-  const out = new Float32Array(n);
+  out: Float32Array,
+): void {
+  const verts = set.vertices;
+  const n = Math.min(out.length, verts.length / 3);
   // World units per CSS px per unit of depth.
   const k = (2 * Math.tan((cam.fovDeg * Math.PI) / 360)) / cam.canvasCssHeight;
   const [sLo, sHi, tLo, tHi] = geom.rect;
@@ -260,38 +297,57 @@ export function fadeAlphas(
   const tMid = (tLo + tHi) / 2;
   const sHalf = Math.max((sHi - sLo) / 2, 1e-12);
   const tHalf = Math.max((tHi - tLo) / 2, 1e-12);
-  const a = geom.anchorScene;
-  const ax = a[0] - cam.position[0];
-  const ay = a[1] - cam.position[1];
-  const az = a[2] - cam.position[2];
+  const [ux, uy, uz] = plane.u;
+  const [wx, wy, wz] = plane.v;
+  const [fx, fy, fz] = cam.forward;
+  const ax = geom.anchorScene[0] - cam.position[0];
+  const ay = geom.anchorScene[1] - cam.position[1];
+  const az = geom.anchorScene[2] - cam.position[2];
+  const ortho = cam.orthographic;
+  const fade = (FADE_FULL_PX - FADE_ZERO_PX) * k;
   for (let i = 0; i < n; i++) {
-    const vx = set.vertices[i * 3];
-    const vy = set.vertices[i * 3 + 1];
-    const vz = set.vertices[i * 3 + 2];
-    let dir: Vec3;
-    let depth: number;
-    if (cam.orthographic) {
-      dir = cam.forward;
-      depth = cam.orbitDistance;
-    } else {
-      const dx = ax + vx;
-      const dy = ay + vy;
-      const dz = az + vz;
-      depth = Math.hypot(dx, dy, dz) || 1e-12;
-      dir = [dx / depth, dy / depth, dz / depth];
+    const vx = verts[i * 3];
+    const vy = verts[i * 3 + 1];
+    const vz = verts[i * 3 + 2];
+    let dx = fx;
+    let dy = fy;
+    let dz = fz;
+    let depth = cam.orbitDistance;
+    if (!ortho) {
+      dx = ax + vx;
+      dy = ay + vy;
+      dz = az + vz;
+      depth = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-12;
       // Behind the camera nothing is seen.
-      if (dot(dir, cam.forward) <= 0) continue;
+      if (dx * fx + dy * fy + dz * fz <= 0) {
+        out[i] = 0;
+        continue;
+      }
+      dx /= depth;
+      dy /= depth;
+      dz /= depth;
     }
-    const p = set.across[i] === 0 ? plane.u : plane.v;
-    const c = dot(dir, p);
-    const px = (set.spacing * Math.sqrt(Math.max(0, 1 - c * c))) / (k * depth);
-    const density = smooth((px - FADE_ZERO_PX) / (FADE_FULL_PX - FADE_ZERO_PX));
-    const s = vx * plane.u[0] + vy * plane.u[1] + vz * plane.u[2];
-    const t = vx * plane.v[0] + vy * plane.v[1] + vz * plane.v[2];
+    const c = set.across[i] === 0 ? dx * ux + dy * uy + dz * uz : dx * wx + dy * wy + dz * wz;
+    // Screen spacing in px, compared without a division per vertex.
+    const spacingWorld = set.spacing * Math.sqrt(Math.max(0, 1 - c * c));
+    const density = smooth((spacingWorld - FADE_ZERO_PX * k * depth) / (fade * depth));
+    const s = vx * ux + vy * uy + vz * uz;
+    const t = vx * wx + vy * wy + vz * wz;
     const edgeS = (1 - Math.abs(s - sMid) / sHalf) / EDGE_FADE_SHARE;
     const edgeT = (1 - Math.abs(t - tMid) / tHalf) / EDGE_FADE_SHARE;
-    out[i] = density * smooth(Math.min(edgeS, edgeT));
+    out[i] = density * smooth(edgeS < edgeT ? edgeS : edgeT);
   }
+}
+
+/** {@link writeFade} into a new array, for tests and one-off use. */
+export function fadeAlphas(
+  set: WorkplaneLineSet,
+  geom: Pick<WorkplaneGeometry, 'anchorScene' | 'rect'>,
+  plane: Pick<WorkplaneBasis, 'u' | 'v'>,
+  cam: WorkplaneFadeCamera,
+): Float32Array {
+  const out = new Float32Array(set.vertices.length / 3);
+  writeFade(set, geom, plane, cam, out);
   return out;
 }
 

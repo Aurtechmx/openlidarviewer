@@ -347,7 +347,7 @@ export interface KeyBindingDeps {
 function targetIsField(e: KeyboardEvent): boolean {
   const t = e.target as (HTMLElement & { isContentEditable?: boolean }) | null;
   const tag = t?.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || t?.isContentEditable === true;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t?.isContentEditable === true;
 }
 
 /**

@@ -40,8 +40,12 @@ describe('reference plane settings in the session file', () => {
 
   it('a damaged block falls back field by field, and never throws the import', () => {
     const doc = JSON.parse(serializeSession(session())) as Record<string, unknown>;
-    doc.referencePlane = { enabled: 'yes', orientation: 'sideways', originH: [1, 'x'], elevation: Infinity, fixedSpacing: -3, points: 'none' };
-    const back = parseSession(JSON.stringify(doc));
+    doc.referencePlane = { enabled: 'yes', orientation: 'sideways', originH: [1, 'x'], elevation: '__HUGE__', fixedSpacing: -3, points: 'none' };
+    // 1e999 is not representable: JSON.parse reads it as Infinity, which the
+    // parser must refuse. Written raw, since JSON.stringify would emit null.
+    const raw = JSON.stringify(doc).replace('"__HUGE__"', '1e999');
+    expect(raw).toContain('"elevation":1e999');
+    const back = parseSession(raw);
     expect(back.referencePlane).toEqual(WORKPLANE_DEFAULTS);
     doc.referencePlane = 42;
     expect(parseSession(JSON.stringify(doc)).referencePlane).toBeUndefined();
@@ -63,5 +67,23 @@ describe('parseWorkplaneSettings', () => {
   it('never invents a ground source for an elevation', () => {
     expect(parseWorkplaneSettings({ elevation: 12, elevationSource: 'ground' })?.elevationSource).toBe('typed');
     expect(parseWorkplaneSettings({ elevationSource: 'scan-minimum' })?.elevationSource).toBeNull();
+  });
+});
+
+describe('hostile values', () => {
+  it('a session block that would put the lattice past exact integers is refused field by field', () => {
+    const doc = JSON.parse(serializeSession(session())) as Record<string, unknown>;
+    doc.referencePlane = { enabled: true, orientation: 'horizontal', originH: [1e17, 1e17], elevation: 1e17, fixedSpacing: 1e-20 };
+    const back = parseSession(JSON.stringify(doc)).referencePlane!;
+    expect(back.enabled).toBe(true);
+    expect(back.originH).toBeNull(); // falls back to the scan centre
+    expect(back.elevation).toBeNull(); // not drawn until set
+    expect(back.fixedSpacing).toBe(1e-20); // in range; the controller floors it to the scan size
+  });
+
+  it('accepts values up to the bound and refuses past it', () => {
+    expect(parseWorkplaneSettings({ originH: [1e9, -1e9] })?.originH).toEqual([1e9, -1e9]);
+    expect(parseWorkplaneSettings({ originH: [1e9 * 1.0001, 0] })?.originH).toBeNull();
+    expect(parseWorkplaneSettings({ fixedSpacing: 2e9 })?.fixedSpacing).toBeNull();
   });
 });

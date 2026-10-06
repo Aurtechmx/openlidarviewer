@@ -24,6 +24,7 @@
  */
 
 import * as THREE from 'three/webgpu';
+import { attribute, materialOpacity } from 'three/tsl';
 import type { SceneOverlayHost } from '../sceneLineOverlay';
 import type { WorkplaneGeometry } from './workplaneGeometry';
 
@@ -80,13 +81,19 @@ export class WorkplaneOverlay {
     this._host.requestFrame();
   }
 
-  /** Per-vertex fade for one line set, 0..1, same vertex order as its positions. */
-  setAlphas(kind: WorkplaneKind, alphas: Float32Array): void {
-    const lines = this._lines.get(kind);
-    const attr = lines?.geometry.getAttribute('color') as THREE.BufferAttribute | undefined;
-    if (!attr || attr.count !== alphas.length) return;
-    const arr = attr.array as Float32Array;
-    for (let i = 0; i < alphas.length; i++) arr[i * 4 + 3] = alphas[i];
+  /**
+   * The per-vertex fade buffer of one line set (one float per vertex, 0..1),
+   * to be written in place and then committed. Null before the first update.
+   */
+  fadeBuffer(kind: WorkplaneKind): Float32Array | null {
+    const attr = this._lines.get(kind)?.geometry.getAttribute('fade') as THREE.BufferAttribute | undefined;
+    return attr ? (attr.array as Float32Array) : null;
+  }
+
+  /** Upload a fade buffer written through {@link fadeBuffer}. */
+  commitFade(kind: WorkplaneKind): void {
+    const attr = this._lines.get(kind)?.geometry.getAttribute('fade') as THREE.BufferAttribute | undefined;
+    if (!attr) return;
     attr.needsUpdate = true;
     this._host.requestFrame();
   }
@@ -95,7 +102,7 @@ export class WorkplaneOverlay {
   setBackdrop(backdrop: 'dark' | 'light'): void {
     if (backdrop === this._backdrop) return;
     this._backdrop = backdrop;
-    for (const [kind, lines] of this._lines) applyStyle(lines.material as THREE.LineBasicMaterial, WORKPLANE_STYLES[backdrop][kind]);
+    for (const [kind, lines] of this._lines) applyStyle(lines.material as THREE.LineBasicNodeMaterial, WORKPLANE_STYLES[backdrop][kind]);
     this._host.requestFrame();
   }
 
@@ -131,7 +138,13 @@ export class WorkplaneOverlay {
   private _setBuffer(kind: WorkplaneKind, positions: Float32Array): void {
     let lines = this._lines.get(kind);
     if (!lines) {
-      const material = new THREE.LineBasicMaterial({ transparent: true, depthWrite: false, depthTest: true, vertexColors: true });
+      const material = new THREE.LineBasicNodeMaterial();
+      material.transparent = true;
+      material.depthWrite = false;
+      material.depthTest = true;
+      // The layer's opacity times the per-vertex fade; one float per vertex,
+      // so a camera move re-uploads a quarter of what an RGBA colour would.
+      material.opacityNode = attribute('fade', 'float').mul(materialOpacity);
       applyStyle(material, WORKPLANE_STYLES[this._backdrop][kind]);
       lines = new THREE.LineSegments(new THREE.BufferGeometry(), material);
       lines.name = `olv-reference-plane-${kind}`;
@@ -147,16 +160,16 @@ export class WorkplaneOverlay {
     const previous = lines.geometry;
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    // White RGB times the material colour; the alpha channel carries the fade.
-    const colour = new Float32Array((positions.length / 3) * 4).fill(1);
-    geometry.setAttribute('color', new THREE.BufferAttribute(colour, 4));
+    const fade = new THREE.BufferAttribute(new Float32Array(positions.length / 3).fill(1), 1);
+    fade.setUsage(THREE.DynamicDrawUsage);
+    geometry.setAttribute('fade', fade);
     lines.geometry = geometry;
     lines.visible = positions.length > 0;
     previous.dispose();
   }
 }
 
-function applyStyle(material: THREE.LineBasicMaterial, style: LineStyle): void {
+function applyStyle(material: THREE.LineBasicNodeMaterial, style: LineStyle): void {
   material.color.setRGB(style.color[0], style.color[1], style.color[2]);
   material.opacity = style.opacity;
   material.needsUpdate = true;

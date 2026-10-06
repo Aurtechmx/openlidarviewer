@@ -111,7 +111,6 @@ export function createWorkplanePanel(host: HTMLElement, controller: WorkplaneCon
     title: 'Stop picking points; the plane stays as it was (Esc does the same)',
   });
   cancel.addEventListener('click', () => controller.cancelPick());
-  const scanMinNote = el('p', { className: 'olv-refplane-note', text: 'Scan minimum is the lowest point in the scan, not ground.' });
 
   const spacingMode = el('select', {
     className: 'olv-report-select',
@@ -160,7 +159,6 @@ export function createWorkplanePanel(host: HTMLElement, controller: WorkplaneCon
     north.row,
     elevation.row,
     el('div', { className: 'olv-chips' }, [pickOrigin, scanCentre, scanMin, pickThree, cancel]),
-    scanMinNote,
     el('div', { className: 'olv-refplane-row' }, [spacingLabel, spacingMode]),
     fixed.row,
     status,
@@ -182,7 +180,8 @@ export function createWorkplanePanel(host: HTMLElement, controller: WorkplaneCon
       fixed.unit.textContent = spacingUnit(view.units, s.orientation);
       setField(east.input, view.originH?.[0] ?? null, formatCoord);
       setField(north.input, view.originH?.[1] ?? null, formatCoord);
-      setField(elevation.input, s.elevation, formatCoord);
+      // On a three-point plane this is the plane's elevation at the origin, as the readout states.
+      setField(elevation.input, view.elevation, formatCoord);
       // A three-point plane sets its own elevation at the origin.
       elevation.input.disabled = s.orientation === 'three-point';
       spacingMode.value = s.fixedSpacing !== null || pendingFixed ? 'fixed' : 'auto';

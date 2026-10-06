@@ -51,7 +51,7 @@ export function createReferencePlaneSection(deps: ReferencePlaneDeps): Reference
   const chip = el('button', {
     className: 'olv-chip olv-refplane-toggle',
     type: 'button',
-    text: 'Show reference plane',
+    text: 'Reference plane',
     title: 'Draw a reference grid at an elevation you set (B). It is not measured terrain.',
   });
   chip.setAttribute('aria-pressed', 'false');
@@ -81,14 +81,22 @@ export function createReferencePlaneSection(deps: ReferencePlaneDeps): Reference
     return loading;
   };
 
+  // The last press wins, even when several arrive before the chunk has loaded:
+  // the button shows the intent at once, and only the latest intent is applied.
+  let wanted = false;
   const setEnabled = async (on: boolean): Promise<void> => {
     touched = true;
+    wanted = on;
+    mirror(on);
     try {
       const m = await ensure();
+      if (wanted !== on) return; // a later press superseded this one
       m.controller.setEnabled(on);
-      const v = m.controller.view();
-      deps.toast(on ? (v.drawn ? 'Reference plane on.' : 'Reference plane on. Set its elevation in View, Reference plane.') : 'Reference plane off.');
+      // What to do next (set an elevation) is in the panel's status line.
+      deps.toast(on ? 'Reference plane on.' : 'Reference plane off.');
     } catch {
+      wanted = false;
+      mirror(false);
       deps.toast('The reference plane could not load. Try again.');
     }
   };
@@ -103,6 +111,7 @@ export function createReferencePlaneSection(deps: ReferencePlaneDeps): Reference
       return;
     }
     mount?.controller.reset();
+    wanted = false;
     mirror(false);
     saved = undefined;
     touched = false;

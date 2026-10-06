@@ -300,7 +300,11 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 97 for the shell, 75 for the renderer and 23 for the Analyse panel,
+<<<<<<< HEAD
 across 1088 modules with no dependency cycles.
+=======
+across 1098 modules with no dependency cycles.
+>>>>>>> cb9a6f02b (Bound the reference plane's inputs and lattice, and tighten its edges)
 
 ## The shell has little headroom
 
@@ -496,5 +500,9 @@ sets. It has these limits:
 - A point lying exactly on the plane can share pixels with a line, because
   polygon offset does not apply to lines.
 - Lines are one pixel wide on both renderer backends.
+- With two or more layers that share no datum, the plane is not drawn: there is
+  no single source frame to place it in.
+- "Use scan minimum" takes the lowest point of every visible layer's bounding
+  box, which is a box corner, not necessarily a point a pick would find.
 - Closing the scan removes the plane. A plane is not carried from one scan to
   the next except through a saved session.

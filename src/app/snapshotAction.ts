@@ -10,8 +10,9 @@
  *
  * A reference plane that is on screen is part of the view, so it is in the
  * pixels, and the provenance says so in an `olv:reference-plane` chunk. The
- * scope stamp, the view context and that note are all read in the same task
- * as the capture, so they describe the captured pixels.
+ * scope stamp, the view context and that note are read as soon as the capture
+ * resolves, before any further await, so a later change to the view cannot
+ * reach them; a change during the capture itself is not guarded.
  */
 
 import type { FigureViewContext } from '../export/types';

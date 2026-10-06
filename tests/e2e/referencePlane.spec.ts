@@ -32,15 +32,26 @@ test('reference plane: toggle, readout, projections, three-point plane, release'
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await waitForCameraSettled(page);
 
+  // B twice before the plane's chunk has loaded (the section is still closed)
+  // ends where the presses say: off, once the chunk has landed.
+  const pending = page.locator('.olv-refplane-toggle');
+  await page.keyboard.press('b');
+  await page.keyboard.press('b');
+  await expect(page.locator('.olv-refplane-honesty')).toHaveCount(1, { timeout: 10_000 }); // the chunk loaded
+  await page.waitForTimeout(300);
+  await expect(pending).toHaveAttribute('aria-pressed', 'false');
+
   const section = await openSection(page);
   const toggle = section.locator('.olv-refplane-toggle');
   const body = section.locator('.olv-refplane-body');
   const readout = body.locator('.olv-refplane-readout');
 
-  // Off by default; on, it states what it is and waits for an elevation.
+  // Off by default, with one static label; pressed state is aria-pressed.
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(toggle).toHaveText('Reference plane');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(toggle).toHaveText('Reference plane');
   await expect(body.locator('.olv-refplane-honesty')).toHaveText('Reference plane, not measured terrain.');
   await expect(readout).toContainText('Elevation: not set');
   await expect(body).toHaveAttribute('data-drawn', 'false');

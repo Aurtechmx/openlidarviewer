@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  MAX_SAFE_INDEX,
   buildWorkplaneGeometry,
   fadeAlphas,
   patchFor,
@@ -80,11 +81,11 @@ describe('grid lines are anchored to the origin, not the camera', () => {
 
 describe('patch bounds', () => {
   it('covers the scan plus one scan size on each side, snapped to the lattice', () => {
-    expect(patchFor([0, 30, 0, 20], 30, [15, 10], 5)).toEqual({ iMin: -6, iMax: 12, jMin: -6, jMax: 10 });
+    expect(patchFor([0, 30, 0, 20], 30, [15, 10], 5)!).toEqual({ iMin: -6, iMax: 12, jMin: -6, jMax: 10 });
   });
 
   it('caps the patch around the focus for a scan far larger than the spacing', () => {
-    const p = patchFor([0, 1e6, 0, 1e6], 1e6, [5000, 5000], 1);
+    const p = patchFor([0, 1e6, 0, 1e6], 1e6, [5000, 5000], 1)!;
     expect(p.iMax - p.iMin).toBe(2 * MAX_HALF_MAJORS);
     expect(p.iMin).toBe(5000 - MAX_HALF_MAJORS);
   });
@@ -92,7 +93,7 @@ describe('patch bounds', () => {
 
 describe('fade', () => {
   const plane = principalPlane('horizontal', [0, 0, 0], 'z');
-  const patch = patchFor([-50, 50, -50, 50], 100, [0, 0], 5);
+  const patch = patchFor([-50, 50, -50, 50], 100, [0, 0], 5)!;
   const g = buildWorkplaneGeometry({ plane, patch, major: 5, minor: 1, showMinor: true, sceneOrigin: ZERO });
   const v = sourceVertices(g.major, g, ZERO);
   const edge = (p: Vec3): boolean => Math.max(Math.abs(p[0]), Math.abs(p[1])) >= 149.999;
@@ -148,12 +149,16 @@ describe('recentring at UTM-sized coordinates', () => {
   it('line positions are exact to well under a millimetre at 1e6 m, where absolute Float32 is centimetres off', () => {
     const plane = principalPlane('horizontal', origin, 'z');
     const g = buildWorkplaneGeometry({ plane, patch: { iMin: -100, iMax: 100, jMin: -100, jMax: 100 }, major: 5, minor: 1, showMinor: false, sceneOrigin: datum });
+    // Each line is checked on the axis it is constant along: a line spaced
+    // along u (across = 0) has constant x; one spaced along v, constant y.
     let worst = 0;
-    for (const p of sourceVertices(g.major, g, datum)) {
-      const fx = (p[0] - origin[0]) / 5;
-      const fy = (p[1] - origin[1]) / 5;
-      worst = Math.max(worst, Math.min(Math.abs(fx - Math.round(fx)), Math.abs(fy - Math.round(fy))) * 5 + Math.abs(p[2] - origin[2]));
-    }
+    const v = sourceVertices(g.major, g, datum);
+    v.forEach((p, i) => {
+      const k = g.major.across[i] === 0 ? 0 : 1;
+      const f = (p[k] - origin[k]) / 5;
+      worst = Math.max(worst, Math.abs(f - Math.round(f)) * 5, Math.abs(p[2] - origin[2]));
+    });
+    expect(v.length).toBeGreaterThan(1000);
     expect(worst).toBeLessThan(1e-4);
     expect(Math.abs(Math.fround(origin[1] + 0.123) - (origin[1] + 0.123))).toBeGreaterThan(0.01);
   });
@@ -173,7 +178,7 @@ describe('accuracy on a tilted synthetic cloud', () => {
   if (!r.ok) throw new Error('refused');
   const plane = r.basis;
   const major = 10;
-  const patch = patchFor([-60, 160, -60, 160], 100, [40, 40], major);
+  const patch = patchFor([-60, 160, -60, 160], 100, [40, 40], major)!;
   const g = buildWorkplaneGeometry({ plane, patch, major, minor: 2, showMinor: true, sceneOrigin: datum });
   const scale = (patch.iMax - patch.iMin) * major; // the patch size
 
@@ -226,5 +231,41 @@ describe('accuracy on a tilted synthetic cloud', () => {
     const zs = sourceVertices(gn.major, gn, ZERO).map((p) => p[2]);
     expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(12, 9);
     expect(Math.max(...zs) - Math.min(...zs)).toBeCloseTo(12, 9);
+  });
+});
+
+describe('unsafe inputs cannot hang the tab', () => {
+  it('an origin 1e17 away with major 10 gives no patch, and building finishes at once', () => {
+    // Plane coordinates of the scan around -1e17: lattice indices near -1e16, past 2^53 / 10.
+    const p = patchFor([-1e17, -1e17 + 30, -1e17, -1e17 + 30], 30, [-1e17, -1e17], 10);
+    expect(p).toBeNull();
+    const t0 = performance.now();
+    const g = buildWorkplaneGeometry({
+      plane: principalPlane('horizontal', [1e17, 1e17, 0], 'z'),
+      patch: { iMin: -1e16 - 4, iMax: -1e16 + 4, jMin: -1e16 - 4, jMax: -1e16 + 4 },
+      major: 10, minor: 2, showMinor: true, sceneOrigin: ZERO,
+    });
+    expect(performance.now() - t0).toBeLessThan(50);
+    expect(g.major.vertices.length + g.minor.vertices.length).toBe(0);
+  });
+
+  it('a fixed spacing of 1e-20 with the focus 100 m away gives no patch', () => {
+    expect(patchFor([0, 30, 0, 30], 30, [100, 100], 1e-20)).toBeNull();
+  });
+
+  it('indices up to 2^50 are still drawn; beyond it they are not', () => {
+    expect(patchFor([0, 1, 0, 1], 1, [0, 0], 1 / 2 ** 46)).not.toBeNull();
+    expect(patchFor([0, 1, 0, 1], 1, [0, 0], 1 / 2 ** 51)).toBeNull();
+    expect(MAX_SAFE_INDEX).toBe(2 ** 50);
+  });
+
+  it('the fallback patch for a far focus is capped around the scan centre', () => {
+    // 5 km scan, 0.1 spacing, focus 1e6 away: about 50,000 lines a side uncapped.
+    const p = patchFor([0, 5000, 0, 5000], 5000, [1e6, 1e6], 0.1)!;
+    expect(p.iMax - p.iMin).toBeLessThanOrEqual(2 * MAX_HALF_MAJORS);
+    expect(p.jMax - p.jMin).toBeLessThanOrEqual(2 * MAX_HALF_MAJORS);
+    expect(Math.abs((p.iMin + p.iMax) / 2 - 25_000)).toBeLessThanOrEqual(1);
+    const g = buildWorkplaneGeometry({ plane: principalPlane('horizontal', [0, 0, 0], 'z'), patch: p, major: 0.1, minor: 0.02, showMinor: false, sceneOrigin: ZERO });
+    expect(g.major.vertices.length / 3).toBeLessThan(30_000);
   });
 });

@@ -51,20 +51,15 @@ function candidatesAround(x: number): number[] {
   return out;
 }
 
-/** The leading digit of a positive number (1 to 9). */
-function mantissaOf(x: number): number {
-  const e = Math.floor(Math.log10(x));
-  return Math.round(x / Math.pow(10, e));
-}
-
 /**
- * Minor spacing for a major step: a fifth for a 1 or 5 step, a quarter for a 2
- * step, so every minor line sits on a round value (2 m -> 0.5 m, not 0.4 m).
- * Any other typed major is split in five.
+ * Minor spacing for a major step: a quarter for a step that is exactly 2 x 10^k,
+ * so its minor lines sit on round values (2 m -> 0.5 m, not 0.4 m), and a fifth
+ * for every other step, including 1, 5 and any typed value such as 1.5 or 2.5.
  */
 export function minorStepFor(major: number): number {
-  const m = mantissaOf(major);
-  const minor = m === 2 ? major / 4 : major / 5;
+  const e = Math.floor(Math.log10(major));
+  const isTwo = Math.abs(major / Math.pow(10, e) - 2) < 1e-9;
+  const minor = isTwo ? major / 4 : major / 5;
   return Number(minor.toPrecision(12));
 }
 

@@ -157,7 +157,8 @@ export function planeFromThreePoints(
   // |e1 × e2| is twice the triangle area; over the longest edge it is the
   // smallest altitude. Dividing by the longest edge again makes it scale-free.
   const flatness = length(n) / (longest * longest);
-  if (flatness < COLLINEAR_TOLERANCE) {
+  // Written so a NaN flatness (an overflowed cross product) is refused too.
+  if (!(flatness >= COLLINEAR_TOLERANCE)) {
     return {
       ok: false,
       reason:

@@ -95,6 +95,8 @@ export interface WorkplaneReadoutInput {
   /** True when the origin is the scan centre rounded to the grid, not a set value. */
   readonly originAuto?: boolean;
   readonly elevation: number | null;
+  /** True when a typed fixed spacing was raised to the floor (1e-6 of the scan size). */
+  readonly floored?: boolean;
   readonly elevationSource: WorkplaneElevationSource | null;
   readonly spacing: { readonly major: number; readonly minor: number; readonly showMinor: boolean; readonly fixed: boolean } | null;
   readonly units: WorkplaneUnits;
@@ -127,16 +129,19 @@ export function workplaneReadout(input: WorkplaneReadoutInput): string[] {
     const u = spacingUnit(units, input.orientation);
     const major = withUnit(formatStep(input.spacing.major), u);
     const minor = input.spacing.showMinor ? `, minor ${withUnit(formatStep(input.spacing.minor), u)}` : ', minor lines hidden at this zoom';
-    lines.push(`Grid ${major}${minor}${input.spacing.fixed ? ' (fixed)' : ''}`);
+    lines.push(`Grid ${major}${minor}${input.spacing.fixed ? (input.floored ? ' (fixed, raised to the floor of 1e-6 of the scan size)' : ' (fixed)') : ''}`);
   } else {
     lines.push('Grid: not drawn until the elevation is set');
   }
-  if (!input.datumKnown) lines.push('The open layers share no datum, so these are scene coordinates.');
+  if (!input.datumKnown) lines.push('The open layers share no datum, so the plane is not drawn.');
   if (units.note) lines.push(units.note);
   return lines;
 }
 
-/** The one-line provenance note a snapshot carries while the plane is drawn. */
+/**
+ * The one-line provenance note a snapshot carries while the plane is drawn:
+ * every readout line, so the unit and datum caveats travel with the numbers.
+ */
 export function workplaneFigureNote(lines: readonly string[]): string {
-  return `Reference plane, not measured terrain. ${lines.slice(0, 4).join('; ')}`;
+  return `Reference plane, not measured terrain. ${lines.join('; ')}`;
 }

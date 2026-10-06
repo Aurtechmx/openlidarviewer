@@ -13,8 +13,15 @@
  *
  * FRAME. Settings are kept in source coordinates (what the readouts show).
  * Scene coordinates are source minus the scene datum, the origin every open
- * layer shares. When the layers share no datum the plane is placed and read
- * out in scene coordinates instead, and the readout says so.
+ * layer shares. When the open layers share no datum there is no single source
+ * frame to place the plane in, so it is not drawn and the panel says why; a
+ * saved plane is never reinterpreted in another frame.
+ *
+ * BOUNDS. Every value is range-checked (`WORKPLANE_MAX_ABS`), a fixed spacing
+ * is raised to at least `FIXED_SPACING_FLOOR` of the scan size, and a patch
+ * whose lattice indices would not be exact integers is not drawn
+ * (`patchFor` returns null). Together these keep a typed value or a hostile
+ * session file from freezing the tab.
  *
  * GPU LIFETIME. Buffers exist only while the plane is on and drawable. Turning
  * it off, resetting it for a closed scan and `dispose()` all free them; a
@@ -26,6 +33,8 @@ import type { SceneOverlayHost } from '../render/sceneLineOverlay';
 import type { SpatialContext } from '../geo/SpatialContext';
 import {
   WORKPLANE_DEFAULTS,
+  WORKPLANE_MAX_ABS,
+  parseWorkplaneSettings,
   type WorkplaneOrientationSetting,
   type WorkplaneSettings,
   type WorkplaneTriple,
@@ -44,8 +53,8 @@ import {
 import { chooseAutoSpacing, fixedSpacing, MINOR_MIN_PX, type GridSpacing } from '../render/workplane/workplaneSpacing';
 import {
   buildWorkplaneGeometry,
-  fadeAlphas,
   patchFor,
+  writeFade,
   planeCoordsOf,
   type WorkplaneGeometry,
 } from '../render/workplane/workplaneGeometry';
@@ -65,8 +74,6 @@ export interface WorkplaneViewer {
   onDrawnFrame(listener: () => void): () => void;
   /** The scan point under a screen position, in scene coordinates. */
   pickPoint(ndcX: number, ndcY: number): { x: number; y: number; z: number } | null;
-  /** Lowest and highest elevation in the scan, source units. */
-  elevationExtent(): { min: number; max: number } | null;
   /** The visible scan's box in scene coordinates, `[minX, minY, minZ, maxX, maxY, maxZ]`. */
   mergedVisibleBounds(): readonly number[] | null;
   readonly measure: { readonly worldUp: readonly number[]; readonly datumResolved: boolean };
@@ -79,7 +86,9 @@ export interface WorkplaneViewer {
 /** What the overlay must do. `WorkplaneOverlay` satisfies it. */
 export interface WorkplaneDrawing {
   update(geom: WorkplaneGeometry): void;
-  setAlphas(kind: WorkplaneKind, alphas: Float32Array): void;
+  /** The fade buffer of a line set, written in place, then committed. */
+  fadeBuffer(kind: WorkplaneKind): Float32Array | null;
+  commitFade(kind: WorkplaneKind): void;
   setBackdrop(backdrop: 'dark' | 'light'): void;
   setVisible(visible: boolean): void;
   dispose(): void;
@@ -112,6 +121,8 @@ export interface WorkplaneView {
   readonly settings: WorkplaneSettings;
   /** The origin in use: the set one, or the scan centre rounded to the grid. Null before a scan and grid exist. */
   readonly originH: readonly [number, number] | null;
+  /** The elevation of the origin in use (on a three-point plane, the plane's). */
+  readonly elevation: number | null;
   readonly units: WorkplaneUnits;
   readonly axisNames: readonly [string, string];
   readonly readout: readonly string[];
@@ -150,6 +161,9 @@ export interface WorkplaneController {
   dispose(): void;
 }
 
+/** A fixed spacing is raised to at least this share of the scan's largest dimension. */
+export const FIXED_SPACING_FLOOR = 1e-6;
+
 /** A pick within this many CSS px of where the press began is a click, not a drag. */
 const CLICK_SLOP_PX = 5;
 
@@ -170,7 +184,9 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
   let lastPlane: WorkplaneBasis | null = null;
   let lastPose = '';
   let drawn = false;
-  let hidden = false;
+  let hideDepth = 0;
+  let floored = false;
+  let blocked: string | null = null;
   let status: string | null = null;
   let picking: 'origin' | 'three-point' | null = null;
   let picks: Vec3[] = [];
@@ -189,7 +205,9 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
     return !!v && (v.clouds().length > 0 || v.hasStreamingCloud);
   };
 
-  /** The visible scan's box in source coordinates, or null. */
+  const inRange = (...v: number[]): boolean => v.every((x) => Number.isFinite(x) && Math.abs(x) <= WORKPLANE_MAX_ABS);
+
+  /** The visible scan's box in source coordinates, or null. Every visible layer counts. */
   const sourceBox = (): { min: Vec3; max: Vec3 } | null => {
     const b = deps.viewer()?.mergedVisibleBounds();
     if (!b || b.length < 6 || !b.every(Number.isFinite)) return null;
@@ -228,7 +246,10 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
     if (s.orientation === 'three-point') {
       if (!s.points) return null;
       const r = planeFromThreePoints(s.points[0], s.points[1], s.points[2], axis());
-      if (!r.ok) return null;
+      if (!r.ok) {
+        blocked = `The three saved points are in a line, or nearly, so the plane is not drawn. Pick three points again.`;
+        return null;
+      }
       const origin = placeOnPlane(originPoint(s, s.elevation ?? elevationOf(s.points[0], axis()), major), r.basis, axis());
       return { basis: { ...r.basis, origin }, dipDeg: r.dipDeg };
     }
@@ -250,6 +271,7 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
       originH: settings.originH ?? (major !== null ? originH : null),
       originAuto: settings.originH === null,
       elevation,
+      floored,
       elevationSource: settings.elevationSource,
       spacing: plane && lastSpacing ? { ...lastSpacing, fixed: settings.fixedSpacing !== null } : null,
       units,
@@ -258,10 +280,11 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
     return {
       settings,
       originH: settings.originH ?? (major !== null ? originH : null),
+      elevation,
       units,
       axisNames: axisNames(),
       readout,
-      status,
+      status: blocked ?? status,
       picking,
       drawn,
       liveResources: drawing?.liveResources ?? 0,
@@ -279,7 +302,7 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
     lastPose = '';
   };
 
-  /** Apply the per-vertex fade for the current camera to every line set. */
+  /** Write the per-vertex fade for the current camera into every line set's buffer. */
   const applyFade = (cam: { position: Vec3; target: Vec3; fov?: number }, orthographic: boolean): void => {
     if (!drawing || !lastGeom || !lastPlane) return;
     const dx = cam.target[0] - cam.position[0];
@@ -295,29 +318,54 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
       canvasCssHeight: deps.canvas.clientHeight || 1,
     };
     for (const kind of ['minor', 'major', 'axes'] as const) {
-      drawing.setAlphas(kind, fadeAlphas(lastGeom[kind], lastGeom, lastPlane, fadeCam));
+      const out = drawing.fadeBuffer(kind);
+      if (!out || out.length === 0) continue;
+      writeFade(lastGeom[kind], lastGeom, lastPlane, fadeCam, out);
+      drawing.commitFade(kind);
     }
+  };
+
+  /** Stop drawing and say why. */
+  const block = (why: string, previous: string | null): void => {
+    blocked = why;
+    if (drawing) releaseGpu();
+    lastSpacing = null;
+    if (previous !== why) emit();
   };
 
   /** Recompute spacing, patch and fade from the camera; rebuild only when the lines change. */
   const refresh = (): void => {
     if (disposed) return;
     const viewer = deps.viewer();
+    const wasBlocked = blocked;
+    blocked = null;
+    if (settings.enabled && viewer && hasScan() && !datumKnown()) {
+      block('The open layers do not share a datum, so the plane has no single frame to sit in and is not drawn. Close the other layers to draw it.', wasBlocked);
+      return;
+    }
     const provisional = settings.enabled && viewer && hasScan() ? planeOf(settings, null) : null;
     const box = sourceBox();
     if (!provisional || !viewer || !box) {
+      if (blocked) {
+        block(blocked, wasBlocked);
+        return;
+      }
       if (drawing) releaseGpu();
       lastSpacing = null;
+      if (wasBlocked) emit();
       return;
     }
+    const scanSize = Math.max(box.max[0] - box.min[0], box.max[1] - box.min[1], box.max[2] - box.min[2], 1e-9);
     const cam = viewer.getCameraState();
     const sceneOrigin = datum();
     const h = deps.canvas.clientHeight || 1;
     const camIn = { position: cam.position, target: cam.target, fovDeg: cam.fov ?? DEFAULT_FOV, orthographic: viewer.orthographic };
     const first = sampleWorkplaneView(camIn, provisional.basis, sceneOrigin, h);
+    const floor = FIXED_SPACING_FLOOR * scanSize;
+    floored = settings.fixedSpacing !== null && settings.fixedSpacing < floor;
     const spacing =
       settings.fixedSpacing !== null
-        ? fixedSpacing(settings.fixedSpacing)
+        ? fixedSpacing(Math.max(settings.fixedSpacing, floor))
         : chooseAutoSpacing(first.pxPerUnit, previousMajor) ?? (previousMajor ? fixedSpacing(previousMajor) : null);
     if (!spacing) return;
     if (settings.fixedSpacing === null) previousMajor = spacing.major;
@@ -342,10 +390,14 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
       Math.min(...st.map((p) => p[1])),
       Math.max(...st.map((p) => p[1])),
     ] as const;
-    const scanSize = Math.max(box.max[0] - box.min[0], box.max[1] - box.min[1], box.max[2] - box.min[2]);
     const patch = patchFor(boxPlane, scanSize, sample.focus, spacing.major);
+    if (!patch) {
+      block('The origin is too far from the scan for this spacing, so the plane is not drawn. Use the scan centre or a coarser spacing.', wasBlocked);
+      return;
+    }
     const key = [spacing.major, spacing.minor, showMinor, patch.iMin, patch.iMax, patch.jMin, patch.jMax, ...b.origin, ...b.normal, ...b.u, ...sceneOrigin].join('|');
     lastSpacing = { ...spacing, showMinor };
+    if (wasBlocked) emit();
     drawing ??= deps.makeDrawing(viewer.derivedLayerHost());
     drawing.setBackdrop(deps.lightBackdrop() ? 'light' : 'dark');
     const pose = [...cam.position, ...cam.target, cam.fov ?? DEFAULT_FOV, viewer.orthographic, h].join('|');
@@ -362,7 +414,7 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
     lastGeom = buildWorkplaneGeometry({ plane: b, patch, major: spacing.major, minor: spacing.minor, showMinor, sceneOrigin });
     drawing.update(lastGeom);
     applyFade(cam, viewer.orthographic);
-    drawing.setVisible(!hidden);
+    drawing.setVisible(hideDepth === 0);
     drawn = true;
     // The spacing and origin readouts follow the drawn grid.
     emit();
@@ -428,6 +480,11 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
     const [a, b] = horizontalIndices(axis());
     if (picking === 'origin') {
       stopPicking();
+      if (!inRange(...p)) {
+        status = 'The picked point is out of range.';
+        emit();
+        return;
+      }
       apply({ ...settings, originH: [p[a], p[b]], elevation: elevationOf(p, axis()), elevationSource: 'picked' }, 'Origin and elevation set from the picked point.');
       return;
     }
@@ -468,23 +525,23 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
       apply({ ...settings, originH: null }, 'Origin set to the scan centre, rounded to the grid.');
     },
     setOriginH(east, north) {
-      if (!Number.isFinite(east) || !Number.isFinite(north)) {
-        status = 'The origin needs two finite numbers.';
+      if (!inRange(east, north)) {
+        status = `The origin needs two numbers between -${WORKPLANE_MAX_ABS.toExponential(0)} and ${WORKPLANE_MAX_ABS.toExponential(0)}.`;
         emit();
         return;
       }
       apply({ ...settings, originH: [east, north], ...(settings.orientation === 'three-point' ? { elevation: null } : {}) });
     },
     setElevation(value) {
-      if (!Number.isFinite(value)) {
-        status = 'The elevation needs a finite number.';
+      if (!inRange(value)) {
+        status = `The elevation needs a number between -${WORKPLANE_MAX_ABS.toExponential(0)} and ${WORKPLANE_MAX_ABS.toExponential(0)}.`;
         emit();
         return;
       }
       apply({ ...settings, elevation: value, elevationSource: 'typed' });
     },
     setFixedSpacing(major) {
-      if (major !== null && !(Number.isFinite(major) && major > 0)) {
+      if (major !== null && !(Number.isFinite(major) && major > 0 && major <= WORKPLANE_MAX_ABS)) {
         status = 'A fixed spacing needs a number above zero.';
         emit();
         return;
@@ -492,17 +549,24 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
       apply({ ...settings, fixedSpacing: major });
     },
     useScanMinimum() {
-      const ext = deps.viewer()?.elevationExtent();
-      if (!ext || !Number.isFinite(ext.min)) {
-        status = 'No scan is open to take a minimum from.';
+      // The lowest point over every visible layer, in the same source frame the
+      // plane is placed in. With no shared datum there is no such frame.
+      const box = datumKnown() ? sourceBox() : null;
+      if (!box) {
+        status = datumKnown() ? 'No scan is open to take a minimum from.' : 'The open layers do not share a datum, so there is no single scan minimum.';
         emit();
         return;
       }
-      apply({ ...settings, elevation: ext.min, elevationSource: 'scan-minimum' }, 'Elevation set to the lowest point in the scan. That is not ground.');
+      apply({ ...settings, elevation: box.min[upIndex(axis())], elevationSource: 'scan-minimum' }, 'Elevation set to the scan minimum.');
     },
     beginPick(kind) {
       if (!hasScan()) {
         status = 'Open a scan first, then pick on its points.';
+        emit();
+        return;
+      }
+      if (!datumKnown()) {
+        status = 'The open layers do not share a datum, so a picked point has no single frame. Close the other layers to pick.';
         emit();
         return;
       }
@@ -527,7 +591,9 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
     },
     restore(next) {
       stopPicking();
-      apply(next);
+      // Re-checked here as well as in the session parser, so no caller can hand
+      // the lattice an out-of-range value.
+      apply(parseWorkplaneSettings(next) ?? WORKPLANE_DEFAULTS);
     },
     reset() {
       stopPicking();
@@ -540,18 +606,18 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
       emit();
     },
     async without(fn) {
-      if (!drawing || !drawn) return fn();
-      hidden = true;
-      drawing.setVisible(false);
+      // Counted, so overlapping exports each keep the plane hidden until the last ends.
+      hideDepth++;
+      drawing?.setVisible(false);
       try {
         return await fn();
       } finally {
-        hidden = false;
-        drawing?.setVisible(true);
+        hideDepth--;
+        if (hideDepth === 0) drawing?.setVisible(true);
       }
     },
     figureNote() {
-      return drawn && !hidden ? workplaneFigureNote(buildView().readout) : null;
+      return drawn && hideDepth === 0 ? workplaneFigureNote(buildView().readout) : null;
     },
     refresh,
     reframe() {

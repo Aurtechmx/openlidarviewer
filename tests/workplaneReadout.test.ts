@@ -92,7 +92,7 @@ describe('readout', () => {
     });
     expect(lines[0]).toBe('Orientation: Through 3 picked points, dip 12.3°');
     expect(lines[3]).toBe('Grid 2 m, minor lines hidden at this zoom (fixed)');
-    expect(lines).toContain('The open layers share no datum, so these are scene coordinates.');
+    expect(lines).toContain('The open layers share no datum, so the plane is not drawn.');
   });
 
   it('the snapshot note says what the plane is and is not', () => {

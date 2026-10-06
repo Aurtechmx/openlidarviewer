@@ -47,10 +47,19 @@ export const WORKPLANE_DEFAULTS: WorkplaneSettings = {
   points: null,
 };
 
+/**
+ * Largest magnitude any stored coordinate, elevation or spacing may have, in
+ * source units. Projected coordinates reach about 1e7 (a northing in metres,
+ * three times that in feet); 1e9 leaves room for any real frame and keeps the
+ * plane's lattice arithmetic exact. A larger value is refused, never clamped
+ * into a different place.
+ */
+export const WORKPLANE_MAX_ABS = 1e9;
+
 const ORIENTATIONS: readonly WorkplaneOrientationSetting[] = ['horizontal', 'vertical-x', 'vertical-north', 'three-point'];
 const SOURCES: readonly WorkplaneElevationSource[] = ['typed', 'picked', 'scan-minimum', 'plane'];
 
-const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= WORKPLANE_MAX_ABS;
 
 function triple(v: unknown): WorkplaneTriple | null {
   return Array.isArray(v) && v.length === 3 && v.every(finite) ? [v[0], v[1], v[2]] : null;
