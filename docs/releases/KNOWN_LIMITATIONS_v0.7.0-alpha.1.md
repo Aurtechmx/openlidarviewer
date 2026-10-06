@@ -279,7 +279,12 @@ for this development cut: that evidence comes from the engines themselves.
 
 ## The two monoliths are still monoliths
 
+<<<<<<< HEAD
 `src/main.ts` is 4,341 lines and `src/render/Viewer.ts` is 5,973, two hundred and fifty lines
+=======
+`src/main.ts` is 4,321 lines, twenty fewer since the Save view snapshot moved
+to its own lazy module, and `src/render/Viewer.ts` is 5,978, two hundred and forty-five lines
+>>>>>>> 54775d4e6 (Add a reference plane to the View panel)
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
@@ -469,3 +474,27 @@ report and confidence, and keeps the static layers open.
 
 Unchanged from prior releases. Scans must share a coordinate reference system to
 be compared, and the viewer refuses rather than approximating.
+
+## The reference plane is a drawing, not a surface
+
+The View panel's reference plane is a visual grid at an elevation the user
+sets. It has these limits:
+
+- Nothing snaps to it. Measurements, picks and the clip box ignore it.
+- A plane through three picked points passes through those three points
+  exactly. It is not fitted to the scan around them, so the noise in each pick
+  goes straight into its tilt.
+- "Use scan minimum" takes the lowest point in the scan, which is often a
+  noise return or a pit. It is not ground, and the panel says so.
+- On a geographic scan the grid is laid out in degrees on the horizontal axes,
+  and the readout calls its spacing "units" because a degree is not a length.
+- Automatic spacing is chosen for the scale at the centre of the view. Toward
+  the horizon of a low perspective view the far lines draw closer together, and
+  they fade out below about 14 px apart rather than being drawn.
+- The grid covers the scan and one scan size around it, capped at 100 major
+  lines either side of the view centre. Past that it fades out.
+- A point lying exactly on the plane can share pixels with a line, because
+  polygon offset does not apply to lines.
+- Lines are one pixel wide on both renderer backends.
+- Closing the scan removes the plane. A plane is not carried from one scan to
+  the next except through a saved session.

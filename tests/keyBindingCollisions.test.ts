@@ -38,6 +38,7 @@ function stubDeps(): KeyBindingDeps {
     workflowRecorderEnabled: false,
     matchesWorkflowShortcut: () => false,
     toggleWorkflowRecord: () => {},
+    toggleReferencePlane: () => {},
     globalActions: () => null,
   };
 }

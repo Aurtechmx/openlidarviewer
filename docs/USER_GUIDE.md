@@ -91,7 +91,7 @@ Use Colour by to change what the points represent:
 - GPS time: when each point was captured, which shows the flight or setup pattern
 - Coverage and Confidence: how much to trust the ground surface (see *Analyse the terrain* below)
 
-Point size, eye-dome lighting (which adds depth cues), and a few other rendering controls live in the right-hand rail.
+Point size, eye-dome lighting (which adds depth cues), and a few other rendering controls live in the right-hand rail. The same rail's Reference plane section (or the `B` key) draws a grid at an elevation you set, as a visual reference. It is not measured terrain; see [usage.md](usage.md#reference-plane).
 
 ---
 

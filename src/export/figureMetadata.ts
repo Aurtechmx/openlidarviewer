@@ -7,7 +7,7 @@
  *
  * Used by BOTH figure surfaces so they can never drift:
  *   - `runStudioExport` (this chunk) stamps every Studio image export;
- *   - `saveSnapshot` in main.ts reaches it through the `loadExportStudio()`
+ *   - `saveSnapshot` in app/snapshotAction.ts reaches it through the `loadExportStudio()`
  *     seam, so the stamping code stays in the lazy export chunk and adds
  *     nothing to the eager shell.
  *
@@ -55,6 +55,8 @@ export interface FigureStampContext {
   readonly reconstructedShare?: number | null;
   /** The rendered source and CRS origin; null when several layers are visible. */
   readonly provenanceSource?: FigureProvenanceSource | null;
+  /** The reference plane drawn in the capture, as its readout line; absent when none was. */
+  readonly referencePlane?: string | null;
 }
 
 /**
@@ -79,6 +81,7 @@ export async function stampFigureProvenanceOntoBlob(
       clip: context.clip ?? null,
       sourceInterpretation: context.sourceInterpretation ?? null,
       digests: await figureDigests(context.provenanceSource),
+      referencePlane: context.referencePlane ?? null,
     });
     entries.push(
       ...buildPresentationProvenance(

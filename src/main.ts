@@ -56,7 +56,6 @@ import type { WorkflowEvent } from './render/workflow/workflowRecorder';
 import { matchesShortcut } from './render/workflow/workflowConfig';
 import { LassoVolumeTool } from './ui/LassoVolumeTool';
 import {
-  triggerDownload,
   downloadBytes as downloadFileBytes,
   downloadText,
 } from './io/download';
@@ -222,7 +221,7 @@ import {
   loadActionRegistry,
   loadToolLauncher,
   loadWorkspaceShell,
-  loadStockpilePresenter, loadSessionIo, loadAnalysisModules, loadRecovery, loadSessionSnapshot, loadRemoteDeepLink, loadScanReportRenderer,
+  loadStockpilePresenter, loadSessionIo, loadAnalysisModules, loadRecovery, loadSessionSnapshot, loadRemoteDeepLink, loadSnapshotAction,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -1153,6 +1152,14 @@ const inspector = new Inspector({
   // touched. No new rendering machinery: the preset module is a table.
   onOpenDatasetStory: () => void ensureActionRegistry().then((r) => r.find((a) => a.id === 'story.dataset')?.run()),
   onTerrainWorkflowPreset: (id) => visuals.applyWorkflowPreset(id),
+  referencePlane: {
+    viewer: () => viewer,
+    canvas: stage.canvas,
+    context: () => crsService.context(),
+    sceneOrigin: () => exportGeoContext().origin,
+    toast: showLassoToast,
+    crs: crsService,
+  },
 });
 
 // v0.4.3 — the header theme toggle was constructed with the persisted
@@ -1535,6 +1542,7 @@ const keyBindingDeps: KeyBindingDeps = {
     workflowRecorderEnabled: WORKFLOW_RECORDER_ENABLED,
     matchesWorkflowShortcut: (e) => matchesShortcut(e, workflowController.config.shortcut),
     toggleWorkflowRecord: toggleWorkflowRecord,
+    toggleReferencePlane: () => inspector.referencePlane?.toggle(),
     globalActions: () => globalActionHandlers,
 };
 stage.addTeardown(installKeyDispatch(buildViewerKeyBindings(keyBindingDeps), keyBindingDeps));
@@ -2387,6 +2395,7 @@ const exportPanel = new ExportPanel({
       scans,
       baseName,
       currentClassScopeStamp,
+      withoutReferencePlane: (render) => inspector.referencePlane?.without(render) ?? render(),
     }),
   onExportReport: (templateId) => {
     // Generate a PDF report from the live scan state + annotations +
@@ -3538,6 +3547,7 @@ const sessionSnapshotDeps: SessionSnapshotDeps = {
   getViewer: () => viewer, activeCloud: () => scans.activeCloud(), analysedResult: () => analysePanel?.currentResultForProvenance() ?? null,
   verticalUnitToMetres: () => verticalMetresPerUnit(crsService.context(), 'horizontal-when-known') ?? null,
   captureViewState, savedViews: () => viewBookmarks.savedViews, origin: () => exportGeoContext().origin,
+  referencePlane: () => inspector.referencePlane?.sessionState(),
   crs: () => crsService.current(), layerGroups: () => inspector.layerGroupsForSession(), appVersion: __APP_VERSION__,
   projectFrame: () => projectFrameInputFrom({ frame: projectFrame.frame, layerIds: layerService.buildLayerInfos().map((i) => i.id), cloud: (id) => viewer?.getCloud(id), record: (id) => runtime.layerIdentity.recordFor(id), placement: layerService.placementOf }) };
 
@@ -3561,6 +3571,7 @@ const sessionIoDeps: SessionIoDeps = {
   refreshMeasurePanel,
   refreshAnnotationPanel,
   applyViewState,
+  restoreReferencePlane: (settings) => void inspector.referencePlane?.restore(settings),
   setCrsOverride: (args) => { crsService.setOverride(args); },
   showToast: showLassoToast,
   setDropError: (message) => dropZone.setError(message),
@@ -4283,48 +4294,16 @@ function closeScan(): void {
   resetToEmptyState();
 }
 
-/**
- * Save the current view as a PNG — entirely client-side. Any placed
- * measurements and annotations are burned into the image, so the snapshot is
- * usable as inspection evidence; a clean scan with neither simply exports the
- * bare render.
- */
+/** Save the current view as a PNG (`app/snapshotAction.ts`, a lazy chunk). */
 async function saveSnapshot(): Promise<void> {
-  try {
-    const blob = await viewer.snapshot({
-      annotations: viewer.annotate.getAnnotations().length > 0,
-      measurements: viewer.measure.getMeasurements().length > 0,
-      // Burn the labelled colorbar when a continuous scalar mode is active, so
-      // exported colours read back to values + units. Self-gating in the Viewer (categorical modes draw
-      // nothing), and single-sourced with the on-screen legend, so the PNG
-      // always matches what the user saw.
-      colorbar: true,
-    });
-    // `snapshot()` renders the live scene through the class-mask shader, so a
-    // filtered view drops hidden classes from the PNG. Stamp the same scope
-    // banner the Studio export path uses so a filtered snapshot can't leave the
-    // app undisclosed. With an empty stamp (nothing hidden) the helper returns
-    // the input Blob unchanged, keeping the snapshot byte-identical to before.
-    // Scope stamp and view provenance belong to the captured pixels, so both are
-    // read here rather than after the Studio chunk await below.
-    const scope = currentClassScopeStamp(); const figureView = viewer.figureViewContext();
-    let stamped = await (await loadScanReportRenderer()).composeClassScopeBannerOntoBlob(blob, scope);
-    // Embed figure provenance (build / CRS / colormap / camera / clip) as PNG
-    // text chunks — the same chunks every Studio export carries, so a saved
-    // view can answer "which build drew you, seen from where?" months later.
-    // The stamping code lives in the lazy Studio chunk (already pre-warmed
-    // after a scan loads); a chunk-load or stamping failure is swallowed
-    // because the snapshot itself must never sink on a metadata enrichment.
-    try {
-      const studio = await loadExportStudio();
-      stamped = await studio.stampFigureProvenanceOntoBlob(stamped, figureView);
-    } catch (err) {
-      console.warn('[snapshot] provenance stamping skipped:', err);
-    }
-    triggerDownload(stamped, 'openlidarviewer.png');
-  } catch {
-    dropZone.setError('Could not save the view');
-  }
+  const onError = (message: string): void => dropZone.setError(message);
+  const deps = {
+    viewer,
+    classScopeStamp: currentClassScopeStamp,
+    referencePlaneNote: () => inspector.referencePlane?.figureNote() ?? null,
+    onError,
+  };
+  await loadSnapshotAction().then((m) => m.saveSnapshot(deps), () => onError('Could not save the view'));
 }
 
 // Root owner (docs/disposal-contracts.md): a non-persisted pagehide releases these, newest first.
@@ -4333,6 +4312,7 @@ runtime.lifetime.own({
   viewer: () => { debugOverlay?.stop(); viewer?.dispose(); },
   'decode workers': () => { copcDecoder?.dispose(); eptLaszipDecoder?.dispose(); },
   'streaming session': () => streamingUi.endSession(),
+  'reference plane': () => inspector.referencePlane?.dispose(),
 }, window);
 // Crash/reload recovery (src/app/recovery): journals the Save session JSON, never the cloud.
 let recovery: import('./app/recovery/recoveryController').RecoveryHandle | null = null;

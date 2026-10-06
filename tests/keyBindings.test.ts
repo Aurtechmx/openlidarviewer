@@ -61,6 +61,7 @@ function makeDeps(over: Partial<{
     workflowRecorderEnabled: over.workflowEnabled ?? false,
     matchesWorkflowShortcut: () => over.workflowMatches ?? false,
     toggleWorkflowRecord: vi.fn(),
+    toggleReferencePlane: vi.fn(),
     globalActions: () =>
       over.globalActions === undefined ? globals : over.globalActions,
   };

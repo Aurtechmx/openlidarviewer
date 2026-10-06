@@ -1,7 +1,8 @@
 /**
  * viewActions.ts
  *
- * Theme, the compass, orbit handedness, and named view states. The theme
+ * Theme, the compass, orbit handedness, the reference plane, and named view
+ * states. The theme
  * setter, the compass controller, the bookmarks and the shell's save/apply
  * are its whole surface.
  */
@@ -21,6 +22,8 @@ export interface ViewActionDeps {
   toggleOrbitInvert: (axis: 'x' | 'y') => void;
   /** Return orbit navigation to the shipped defaults. */
   resetNavigation: () => void;
+  /** Show or hide the reference plane. */
+  toggleReferencePlane: () => void;
   hasScan: () => boolean;
   saveCurrentView: () => void;
   applyView: (index: number) => void;
@@ -86,6 +89,15 @@ export function contributeViewActions(deps: ViewActionDeps): Action[] {
       hint: 'Return orbit handedness to the shipped defaults.',
       keywords: ['reset', 'navigation', 'orbit', 'invert', 'defaults', 'handedness', 'gyroscope'],
       run: () => deps.resetNavigation(),
+    },
+    {
+      id: 'view.reference-plane',
+      title: 'Toggle reference plane',
+      section: 'View',
+      keys: keyDisplayFor('reference-plane'),
+      hint: 'Show or hide a reference grid at an elevation you set. It is not measured terrain.',
+      keywords: ['grid', 'workplane', 'plane', 'reference', 'elevation', 'datum', 'level'],
+      run: () => deps.toggleReferencePlane(),
     },
     {
       id: 'view.save-state',

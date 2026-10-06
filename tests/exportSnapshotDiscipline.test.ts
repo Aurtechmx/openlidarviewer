@@ -27,7 +27,7 @@ const VIEWER = read('src/render/Viewer.ts');
 const BASEMODE = read('src/export/BaseExportMode.ts');
 const MEASUREPANEL = read('src/ui/MeasurePanel.ts');
 const ANALYSE = read('src/ui/AnalysePanel.ts');
-const MAIN = read('src/main.ts');
+const SNAPSHOT = read('src/app/snapshotAction.ts');
 
 /** The body of an exported async function, to its closing brace at col 0. */
 function fnBody(src: string, name: string): string {
@@ -152,9 +152,9 @@ describe('figure and report exports describe the scan they captured', () => {
   });
 
   it('the plain snapshot captures scope and view with the pixels', () => {
-    const at = MAIN.indexOf('composeClassScopeBannerOntoBlob(blob');
+    const at = SNAPSHOT.indexOf('composeClassScopeBannerOntoBlob(blob');
     expect(at).toBeGreaterThan(-1);
-    const after = MAIN.slice(at);
+    const after = SNAPSHOT.slice(at);
     const studioAt = after.indexOf('await loadExportStudio()');
     expect(studioAt).toBeGreaterThan(-1);
     expect(after.slice(studioAt)).not.toMatch(/viewer\.figureViewContext\(\)/);

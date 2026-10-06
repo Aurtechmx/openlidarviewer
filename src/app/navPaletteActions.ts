@@ -17,6 +17,8 @@ interface NavPrefsViewer {
 }
 interface NavPrefsInspector {
   syncNavigationPrefs(prefs: NavigationPreferences): void;
+  /** The View panel's reference plane, when it was built. */
+  readonly referencePlane: { toggle(): void } | null;
 }
 
 export interface NavPaletteDeps {
@@ -29,9 +31,10 @@ export interface NavPaletteDeps {
 export interface NavPaletteActions {
   toggleOrbitInvert: (axis: 'x' | 'y') => void;
   resetNavigation: () => void;
+  toggleReferencePlane: () => void;
 }
 
-/** Build the two nav command-palette handlers bound to the live shell objects. */
+/** Build the View command-palette handlers bound to the live shell objects. */
 export function makeNavPaletteActions(deps: NavPaletteDeps): NavPaletteActions {
   return {
     toggleOrbitInvert: (axis) => {
@@ -43,5 +46,6 @@ export function makeNavPaletteActions(deps: NavPaletteDeps): NavPaletteActions {
       resetNavPrefs(deps.viewer, deps.inspector, deps.persist);
       deps.toast('Navigation reset to defaults.');
     },
+    toggleReferencePlane: () => deps.inspector.referencePlane?.toggle(),
   };
 }

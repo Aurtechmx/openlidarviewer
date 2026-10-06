@@ -13,6 +13,7 @@ import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { SessionLayerGroup, SessionScanSummary } from '../io/session';
 import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
 import type { StoredView } from './appContext';
+import type { WorkplaneSettings } from '../model/workplaneSettings';
 import { isZUpFormat } from '../io/sniffFormat';
 import { TERRAIN_METRIC_VERSION } from '../terrain/datasetIntelligence';
 import { buildSessionProjectFrame, type SessionFrameInput, type SessionProjectFrame } from '../io/sessionFrame';
@@ -32,6 +33,8 @@ export interface SessionSnapshotDeps {
   origin(): readonly [number, number, number];
   crs(): ResolvedCrs | null | undefined;
   layerGroups(): SessionLayerGroup[];
+  /** The reference plane's settings, or undefined when it was never used. */
+  referencePlane?(): WorkplaneSettings | undefined;
   /**
    * The live project frame when two or more static layers share one: its
    * origin and every layer's record input. Null for a single scan, a streaming
@@ -168,5 +171,6 @@ export function serializeActiveSession(
     // field; the exporter simply never populated it.
     crs: deps.crs() ?? undefined,
     layerGroups: deps.layerGroups(),
+    referencePlane: deps.referencePlane?.(),
   });
 }

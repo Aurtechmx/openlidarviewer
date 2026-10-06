@@ -901,6 +901,14 @@ export const loadSessionSnapshot = () => import('./app/sessionSnapshot');
  * out) emits no seam chunk.
  */
 export { loadTestSeamMount } from './app/testSeam/testSeamLoader';
+/**
+ * The reference plane (overlay, controller, settings panel), loaded on the first
+ * toggle or the first opening of its View section. The startup shell holds only
+ * the toggle (`ui/referencePlaneSection.ts`).
+ */
+export const loadWorkplane = () => import('./app/workplaneMount');
+/** The Save view snapshot pipeline, loaded on the first snapshot. */
+export const loadSnapshotAction = () => import('./app/snapshotAction');
 /** Load the deep-link gate (validate + confirm the host) for a `?copc=` URL. */
 export const loadRemoteDeepLink = () => import('./app/remoteDeepLink');
 

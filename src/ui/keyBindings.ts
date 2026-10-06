@@ -334,6 +334,8 @@ export interface KeyBindingDeps {
   workflowRecorderEnabled: boolean;
   matchesWorkflowShortcut: (e: KeyboardEvent) => boolean;
   toggleWorkflowRecord: () => void;
+  // Reference plane — B (220)
+  toggleReferencePlane: () => void;
   // Global actions (600+) — null until the full app wires them
   globalActions: () => GlobalActionHandlers | null;
 }
@@ -419,6 +421,19 @@ export function buildViewerKeyBindings(
       when: (_ctx, e) => !targetIsField(e),
       run: () => {
         deps.toggleLasso();
+        return true;
+      },
+    },
+    {
+      id: 'reference-plane',
+      actionIds: ['view.reference-plane'],
+      match: { key: ['b', 'B'], bareOnly: true },
+      priority: 220,
+      contextTag: 'global',
+      displayKeys: 'B',
+      when: (_ctx, e) => !targetIsField(e),
+      run: () => {
+        deps.toggleReferencePlane();
         return true;
       },
     },
@@ -670,6 +685,7 @@ const DISPLAY_META_DEPS: KeyBindingDeps = {
   workflowRecorderEnabled: false,
   matchesWorkflowShortcut: () => false,
   toggleWorkflowRecord: () => {},
+  toggleReferencePlane: () => {},
   globalActions: () => null,
 };
 
