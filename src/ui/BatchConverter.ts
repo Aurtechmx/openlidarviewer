@@ -18,6 +18,7 @@ import { wireDialogA11y, focusableIn, type DialogA11yHandle } from './Modal';
 import { downloadBytes } from '../io/download';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import { decodeFull } from '../convert/decodeFull';
+import { epsgFieldProblem, parseEpsgField } from '../convert/epsg';
 import { runBatch, summariseBatch, guardedBatchInput, type BatchInput, type BatchItemResult } from '../convert/convertRunner';
 import { conversionNotes } from './conversionNotes';
 import { memoryCeilingBytes } from '../io/loadPlan';
@@ -311,7 +312,7 @@ export class BatchConverter {
     const modes: { mode: CrsMode; label: string; title: string }[] = [
       { mode: 'keep', label: 'Keep', title: 'Leave coordinates and any CRS tag as they are' },
       { mode: 'assign', label: 'Assign EPSG', title: 'Tag a CRS without moving points (fix a mislabelled file)' },
-      { mode: 'reproject', label: 'Reproject', title: 'Transform coordinates to a target CRS' },
+      { mode: 'reproject', label: 'Reproject', title: 'Transform horizontal X/Y coordinates to a target CRS; Z and its vertical reference are unchanged' },
     ];
     modes.forEach(({ mode, label, title }) => {
       const pill = el('button', {
@@ -358,6 +359,10 @@ export class BatchConverter {
   private _validate(): { ok: boolean; reason: string } {
     if (this._files.length === 0) return { ok: false, reason: 'Add at least one file to convert.' };
     const target = parseEpsg(this._targetEpsg);
+    const epsgProblem =
+      (this._crsMode !== 'keep' ? epsgFieldProblem(this._targetEpsg, 'target') : null) ??
+      (this._crsMode === 'reproject' ? epsgFieldProblem(this._sourceEpsg, 'source') : null);
+    if (epsgProblem) return { ok: false, reason: epsgProblem };
     if (this._crsMode === 'assign' && target == null) {
       return { ok: false, reason: 'Enter the EPSG code to assign.' };
     }
@@ -507,9 +512,6 @@ export class BatchConverter {
 }
 
 // ── small local helpers ─────────────────────────────────────────────────────
-function parseEpsg(v: string): number | null {
-  const n = Number.parseInt(v, 10);
-  return Number.isInteger(n) && n > 0 ? n : null;
-}
+const parseEpsg = parseEpsgField;
 
 

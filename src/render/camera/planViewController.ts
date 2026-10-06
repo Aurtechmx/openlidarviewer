@@ -40,6 +40,8 @@ export interface PlanViewViewport {
   readonly navMode: NavMode;
   readonly orthographic: boolean;
   readonly handPanEnabled: boolean;
+  /** True while a camera tween is still running. Absent on viewers that cannot report it. */
+  readonly cameraTweening?: boolean;
   /** False when no scan is loaded, so there is no bounding sphere to aim at. */
   setStandardView(view: StandardView): boolean;
   setOrthographic(on: boolean): boolean;
@@ -68,6 +70,13 @@ export interface PlanViewControllerDeps {
  * the pose plan mode asked for.
  */
 export const PLAN_VIEW_SETTLE_MS = 900;
+
+/**
+ * How many extra waits plan mode allows while the viewer still reports a tween.
+ * After that it applies the mode anyway, so a page whose frames never resume
+ * cannot hold the mode change forever.
+ */
+export const PLAN_VIEW_MAX_REWAITS = 6;
 
 export interface PlanViewController {
   /** Whether plan mode is on. */
@@ -141,9 +150,19 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
     const target = mode ?? fallbackMode;
     if (target === null) return true;
     if (tweening) {
-      defer(() => {
-        if (scheduledUnder === generation) v.setMode(target);
-      });
+      // The tween advances with rendered frames, so a slow or hidden page can
+      // outlast the timer. Wait again while the viewer still reports a tween.
+      let rewaits = 0;
+      const settle = (): void => {
+        if (scheduledUnder !== generation) return;
+        if (v.cameraTweening === true && rewaits < PLAN_VIEW_MAX_REWAITS) {
+          rewaits += 1;
+          defer(settle);
+          return;
+        }
+        v.setMode(target);
+      };
+      defer(settle);
     } else {
       v.setMode(target);
     }

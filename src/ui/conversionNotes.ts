@@ -28,7 +28,8 @@ export function conversionNotes(report: Pick<ConvertReport, 'log' | 'events'>): 
 }
 
 /** The status line after a write: the outcome and the count, not the first warning. */
-export function exportedLine(points: number, entries: number, summary: string, scope: string): string {
+export function exportedLine(points: number, entries: number, summary: string, scope: string, crsNote?: string): string {
   const head = `Exported ${points.toLocaleString()} point${points === 1 ? '' : 's'}`;
-  return entries > 0 ? `${head} with ${summary}${scope}` : `${head}${scope}`;
+  const crs = crsNote ? ` · ${crsNote}` : '';
+  return entries > 0 ? `${head} with ${summary}${scope}${crs}` : `${head}${scope}${crs}`;
 }

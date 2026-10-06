@@ -59,7 +59,7 @@ describe('ExportPanel: every warning is listed', () => {
     await pressExport(root);
 
     expect(hoisted.downloads).toHaveLength(1);
-    expect(status(root).textContent).toBe('Exported 2 points with 4 warnings');
+    expect(status(root).textContent).toBe('Exported 2 points with 4 warnings · no CRS recorded (coordinates unchanged)');
     expect(status(root).className).toContain('is-warn');
     const texts = noteTexts(root);
     expect(texts).toHaveLength(4);
@@ -142,5 +142,6 @@ describe('exportedLine', () => {
   it('names the count and keeps the clip scope', () => {
     expect(exportedLine(1, 1, '1 warning', ' · clipped')).toBe('Exported 1 point with 1 warning · clipped');
     expect(exportedLine(3, 0, '', ' · clipped')).toBe('Exported 3 points · clipped');
+    expect(exportedLine(2, 1, '1 warning', '', 'reprojected to EPSG:32614')).toBe('Exported 2 points with 1 warning · reprojected to EPSG:32614');
   });
 });

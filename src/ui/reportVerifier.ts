@@ -48,6 +48,92 @@ export function signatureHeadline(v: SignatureVerdict): { text: string; color: s
 /** Re-checks the open report against a public key or key id the reader supplies. */
 export type SignerCompare = (keyText: string) => Promise<VerifyReportResult>;
 
+/**
+ * Decides which Compare result may be shown. Each request takes a ticket; a
+ * result is shown only when its ticket is still the newest, nothing changed the
+ * key text since, and the dialog is still open. Editing the key text or closing
+ * the dialog retires every ticket in flight.
+ */
+export interface CompareGate {
+  begin(): number;
+  retire(): void;
+  current(ticket: number, open: boolean): boolean;
+}
+
+export function createCompareGate(): CompareGate {
+  let latest = 0;
+  return {
+    begin: () => ++latest,
+    retire: () => { latest += 1; },
+    current: (ticket, open) => open && ticket === latest,
+  };
+}
+
+/** What the Compare flow changes on screen. */
+export interface KeyCompareView {
+  showBaseline(): void;
+  showVerdict(v: SignatureVerdict): void;
+  setNote(text: string): void;
+  setBusy(busy: boolean): void;
+}
+
+/**
+ * The Compare button's behaviour, apart from the DOM. `keyChanged` runs for
+ * every change to the key text, typed or loaded from a file: it retires any
+ * check in flight and puts back the verdict that does not depend on a key.
+ */
+export function createKeyCompareFlow(
+  compare: SignerCompare,
+  isOpen: () => boolean,
+  view: KeyCompareView,
+): { keyChanged(): void; run(keyText: string): Promise<void> } {
+  const gate = createCompareGate();
+  let compared = false;
+  const reset = (): void => {
+    if (!compared) return;
+    compared = false;
+    view.showBaseline();
+  };
+  return {
+    keyChanged(): void {
+      gate.retire();
+      view.setNote(compared ? 'The key changed. Press Compare to check it.' : '');
+      reset();
+      view.setBusy(false);
+    },
+    async run(keyText: string): Promise<void> {
+      const ticket = gate.begin();
+      const checked = describeComparedKey(keyText);
+      view.setNote('Checking…');
+      view.setBusy(true);
+      try {
+        const r = await compare(keyText);
+        if (!gate.current(ticket, isOpen())) return;
+        view.setBusy(false);
+        if (!r.signature) {
+          reset();
+          view.setNote('The check could not be completed.');
+          return;
+        }
+        compared = true;
+        view.showVerdict(r.signature);
+        view.setNote(`Checked against: ${checked}`);
+      } catch {
+        if (!gate.current(ticket, isOpen())) return;
+        view.setBusy(false);
+        reset();
+        view.setNote('The comparison could not be completed. Try again.');
+      }
+    },
+  };
+}
+
+/** A short, readable echo of the key text a verdict was checked against. */
+export function describeComparedKey(text: string): string {
+  const t = text.trim().replace(/\s+/g, ' ');
+  return t.length <= 24 ? t : `${t.slice(0, 12)}…${t.slice(-8)}`;
+}
+
 function fillSignature(box: HTMLElement, v: SignatureVerdict): void {
   box.replaceChildren();
   const h = signatureHeadline(v);
@@ -123,13 +209,22 @@ function signatureSection(v: SignatureVerdict, compare?: SignerCompare): HTMLEle
   file.addEventListener('change', () => {
     const f = file.files?.[0];
     if (!f) return;
+    // Clear the chooser so picking the same file again fires `change` again.
+    const done = (): void => { file.value = ''; };
     const problem = keyFileProblem(f.size);
     fileNote.textContent = problem ?? '';
     if (problem) {
       input.value = '';
+      flow.keyChanged();
+      done();
       return;
     }
-    void f.text().then((t) => { input.value = t.slice(0, KEY_FILE_MAX_BYTES); }).catch(() => undefined);
+    void f.text().then((t) => {
+      input.value = t.slice(0, KEY_FILE_MAX_BYTES);
+      flow.keyChanged();
+    }).catch(() => {
+      fileNote.textContent = 'The key file could not be read. Pick it again or paste the key.';
+    }).finally(done);
   });
   const go = document.createElement('button');
   go.type = 'button';
@@ -137,11 +232,20 @@ function signatureSection(v: SignatureVerdict, compare?: SignerCompare): HTMLEle
   go.title = 'Check whether this signature was made by the key you entered.';
   go.setAttribute('data-testid', 'report-verify-compare');
   go.style.cssText = btnCss;
-  go.addEventListener('click', () => {
-    void compare(input.value).then((r) => { if (r.signature) fillSignature(result, r.signature); }).catch(() => undefined);
+  const note = document.createElement('div');
+  note.setAttribute('aria-live', 'polite');
+  note.setAttribute('data-testid', 'report-verify-compare-note');
+  note.style.cssText = 'font:11px system-ui,sans-serif;opacity:0.8;';
+  const flow = createKeyCompareFlow(compare, () => sec.isConnected, {
+    showBaseline: () => fillSignature(result, v),
+    showVerdict: (sig) => fillSignature(result, sig),
+    setNote: (t) => { note.textContent = t; },
+    setBusy: (b) => { go.disabled = b; },
   });
+  input.addEventListener('input', () => flow.keyChanged());
+  go.addEventListener('click', () => { void flow.run(input.value); });
   actions.append(load, go, file);
-  sec.append(label, warn, input, actions, fileNote);
+  sec.append(label, warn, input, actions, fileNote, note);
   return sec;
 }
 

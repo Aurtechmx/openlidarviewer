@@ -623,3 +623,48 @@ describe('reset cancels work the scene will not be there for', () => {
     expect(plan.active).toBe(false);
   });
 });
+
+describe('a camera tween that outlasts the settle timer', () => {
+  it('keeps waiting while the viewer still reports a tween, so the view lands before the mode changes', () => {
+    const v = new FakeViewport() as FakeViewport & { cameraTweening: boolean };
+    v.cameraTweening = true;
+    const { plan, settle, pending } = controller(v);
+
+    plan.toggle();
+    settle(); // the settle timer fires while frames are still behind
+    expect(v.calls).not.toContain('mode:pan');
+    expect(pending.length).toBe(1);
+
+    v.cameraTweening = false;
+    settle();
+    expect(v.navMode).toBe('pan');
+  });
+
+  it('drops the wait when plan mode is left before the tween lands', () => {
+    const v = new FakeViewport() as FakeViewport & { cameraTweening: boolean };
+    v.cameraTweening = true;
+    const { plan, settle } = controller(v);
+
+    plan.toggle();
+    settle();
+    plan.reset();
+    v.cameraTweening = false;
+    settle();
+    expect(v.calls).not.toContain('mode:pan');
+  });
+});
+
+describe('a camera tween that never reports an end', () => {
+  it('applies the mode after a bounded number of waits', async () => {
+    const { PLAN_VIEW_MAX_REWAITS } = await import('../src/render/camera/planViewController');
+    const v = new FakeViewport() as FakeViewport & { cameraTweening: boolean };
+    v.cameraTweening = true;
+    const { plan, settle } = controller(v);
+
+    plan.toggle();
+    for (let i = 0; i < PLAN_VIEW_MAX_REWAITS; i += 1) settle();
+    expect(v.navMode).toBe('orbit');
+    settle();
+    expect(v.navMode).toBe('pan');
+  });
+});
