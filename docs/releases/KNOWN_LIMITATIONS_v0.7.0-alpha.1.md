@@ -98,6 +98,12 @@ hides its basis: on a strided load the report says in the value itself that it
 is the declared count over the display-sample footprint. What is missing is one
 record rather than two computations.
 
+## Findings added during a higher-density reload are not protected
+
+Saved findings added to a layer while a higher-density reload is decoding are
+dropped when the layer is replaced. The confirm names the findings that exist
+when you confirm. Measurements and annotations are not affected.
+
 ## The ground filter loses ground on curved terrain
 
 The ground filter is measured on five synthetic scenes in two ways.

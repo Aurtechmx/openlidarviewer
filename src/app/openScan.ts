@@ -260,7 +260,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
   }
   const controller = new AbortController();
   // A reload at higher density hands this open a raised budget; any other open uses the device's.
-  const renderBudget = takeReloadBudget() ?? deps.renderBudget;
+  const renderBudget = takeReloadBudget(file) ?? deps.renderBudget;
   let preview: PreviewCloudHandle | null = null;
   // Whether a streaming scan was already on screen when this open began.
   //

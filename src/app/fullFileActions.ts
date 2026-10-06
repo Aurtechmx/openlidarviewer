@@ -424,14 +424,45 @@ export function reloadAvailability(id?: string, device: ReloadDevice = currentRe
   return assessReload(host.facts(target), device);
 }
 
-/** The budget the next open uses instead of the device's, set by a reload. */
-let pendingBudget: number | null = null;
+/** The budget a reload hands to the open of one specific file. */
+let pendingReload: { readonly file: File; readonly budget: number } | null = null;
 
-/** Read and clear the reload budget. The open path calls this once per open. */
-export function takeReloadBudget(): number | null {
-  const b = pendingBudget;
-  pendingBudget = null;
+/** Hand `budget` to the next open of `file`, and to no other open. */
+export function armReloadBudget(file: File, budget: number): void {
+  pendingReload = { file, budget };
+}
+
+/** Withdraw an armed budget that no open took. */
+export function disarmReloadBudget(): void {
+  pendingReload = null;
+}
+
+/**
+ * The raised budget for opening `file`, or null. The open path calls this once
+ * per open; a budget armed for another file is left alone.
+ */
+export function takeReloadBudget(file: File): number | null {
+  if (pendingReload === null || pendingReload.file !== file) return null;
+  const b = pendingReload.budget;
+  pendingReload = null;
   return b;
+}
+
+/** What a reload compares before it replaces a layer: the cloud, the file and the class state. */
+export interface ReloadStamp {
+  readonly cloud: object | null;
+  readonly file: File | null;
+  readonly epoch: number;
+  readonly provenance: string | null;
+}
+
+/** Why a layer no longer matches its stamp, in plain words; empty when it matches. */
+export function reloadStampChanges(before: ReloadStamp, after: ReloadStamp): string[] {
+  const out: string[] = [];
+  if (before.cloud !== after.cloud) out.push('the layer was replaced or closed');
+  if (before.file !== after.file) out.push('its source file changed');
+  if (before.provenance !== after.provenance || before.epoch !== after.epoch) out.push('its classes changed');
+  return out;
 }
 
 /**
@@ -448,9 +479,15 @@ export async function useReload(
   if (!host?.reload || !target || !plan.show) return plan;
   if (!plan.allowed) { host.notify?.(plan.reason ?? ''); return plan; }
   if (!(await ask(plan.confirm, 'Reload'))) return plan;
-  pendingBudget = plan.target;
-  try { await host.reload(target, plan.target); } finally { pendingBudget = null; }
-  return plan;
+  // The layer can change while the dialog is open, so the decision is made
+  // again on its current facts before anything starts.
+  const now = reloadAvailability(target, device);
+  if (!now.show || !now.allowed) {
+    host.notify?.(now.allowed || !now.reason ? 'The layer changed while you confirmed, so the reload did not start.' : now.reason);
+    return now;
+  }
+  await host.reload(target, now.target);
+  return now;
 }
 
 function defaultAsk(message: string, confirmLabel: string): Promise<boolean> {
