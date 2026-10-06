@@ -231,7 +231,9 @@ export type TerrainAccessExportOutcome =
  * its raster/GeoJSON — see `FlowPulseGeoref`, which this mirrors exactly.
  * All null when the scene has no single resolved origin or CRS, in which
  * case the package writes a local (0, 0) origin and no .prj, and says so in
- * its README.
+ * its README. A WKT or CRS name without a world origin (open layers whose
+ * origins disagree) is not placed either: the package writes no .prj and marks
+ * the CRS as not applied.
  */
 export interface TerrainAccessGeoref {
   readonly digests?: ExportDigests | null;

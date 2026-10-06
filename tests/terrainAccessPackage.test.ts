@@ -266,4 +266,27 @@ describe('georeferenced export', () => {
     expect(textOf(zip, 'ta.prj')).toBe(wkt);
     expect(textOf(zip, 'ta-README.txt')).toContain('ta.prj');
   });
+
+  // Two open layers whose origins disagree give the package a WKT and a CRS
+  // name but no world origin. The raster is then in local metres, and a .prj
+  // beside it would make a GIS place it at the CRS origin.
+  it('writes no .prj when the export is not placed, and says the CRS is not applied', () => {
+    const wkt = 'PROJCS["NAD83(2011) / UTM zone 13N",...]';
+    const zip = buildTerrainAccessPackage(runOf(), { basename: 'ta', crsName: 'UTM zone 13N', wkt, worldOrigin: null });
+    expect(() => extractEntry(zip, 'ta.prj')).toThrow();
+    const readme = textOf(zip, 'ta-README.txt');
+    expect(readme).not.toContain('ta.prj');
+    expect(readme).toContain('UTM zone 13N (not applied: local metres)');
+    expect(jsonOf<{ coordinateFrame: string }>(zip, 'ta-route.geojson').coordinateFrame).toBe('local-planar-metres');
+  });
+
+  it('states the raster cell size with its unit', () => {
+    const placed = textOf(buildTerrainAccessPackage(runOf(), {
+      basename: 'ta', worldOrigin: { x: 400123.5, y: 3600456.25 }, gridPlacement: { originH1: 0, originH2: 0, cellSize: 1 },
+      crsName: 'UTM zone 13N',
+    }), 'ta-README.txt');
+    expect(placed).toContain('Raster cell size   1 (CRS units, as written in the .asc file)');
+    const local = textOf(buildTerrainAccessPackage(runOf(), { basename: 'ta' }), 'ta-README.txt');
+    expect(local).toContain('Raster cell size   1 m (local metres, as written in the .asc file)');
+  });
 });

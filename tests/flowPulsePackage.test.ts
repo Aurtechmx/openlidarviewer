@@ -95,6 +95,32 @@ describe('the package carries every required file', () => {
     expect(asc).toMatch(/yllcorner 3600456\.25/);
   });
 
+  // Two open layers whose origins disagree give the package a WKT and a CRS
+  // name but no world origin: the rasters are in local metres.
+  it('writes no .prj when the export is not placed, and says the CRS is not applied', () => {
+    const wkt = 'PROJCS["NAD83(2011) / UTM zone 13N",...]';
+    const zip = buildFlowPulsePackage(runOf(), { basename: 'flow', crsName: 'UTM zone 13N', wkt, worldOrigin: null });
+    expect(extractEntry(zip, 'flow.prj')).toBeNull();
+    const readme = textOf(zip, 'flow-README.txt');
+    expect(readme).not.toContain('flow.prj');
+    expect(readme).toContain('UTM zone 13N (not applied');
+  });
+
+  it('keeps the .prj when the export is placed, and states the raster cell size in CRS units', () => {
+    const wkt = 'PROJCS["NAD83(2011) / UTM zone 13N",...]';
+    const zip = buildFlowPulsePackage(runOf(), {
+      basename: 'flow', crsName: 'UTM zone 13N', wkt,
+      worldOrigin: { x: 400123.5, y: 3600456.25 }, gridFrame: { originH1: 0, originH2: 0, cellSize: 1 },
+    });
+    expect(textOf(zip, 'flow.prj')).toBe(wkt);
+    expect(textOf(zip, 'flow-README.txt')).toContain('Raster cell size   1 (CRS units, as written in the .asc files)');
+  });
+
+  it('states the raster cell size in local metres when not placed', () => {
+    const readme = textOf(buildFlowPulsePackage(runOf(), { basename: 'flow' }), 'flow-README.txt');
+    expect(readme).toContain('Raster cell size   1 m (local metres, as written in the .asc files)');
+  });
+
   it('writes a local (0, 0) origin and no .prj when no world origin/CRS is supplied', () => {
     const zip = buildFlowPulsePackage(runOf(), { basename: 'flow' });
     const asc = textOf(zip, 'flow-accumulation.asc');
@@ -108,6 +134,7 @@ describe('the package carries every required file', () => {
     const zip = buildFlowPulsePackage(runOf(), {
       basename: 'flow',
       worldOrigin: { x: 400123.5, y: 3600456.25 },
+      gridFrame: { originH1: 0, originH2: 0, cellSize: 1 },
       wkt,
     });
     expect(textOf(zip, 'flow.prj')).toBe(wkt);

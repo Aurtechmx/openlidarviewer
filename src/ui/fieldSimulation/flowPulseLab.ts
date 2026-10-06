@@ -219,7 +219,9 @@ export type FlowPulseExportOutcome =
  * its rasters — the same `worldOrigin`/`wkt`/`crsName` the DEM package
  * already reads off `getMapContext()`. All null when the scene has no
  * single resolved origin or CRS, in which case the package writes a local
- * (0, 0) origin and no .prj, and says so in its README.
+ * (0, 0) origin and no .prj, and says so in its README. A WKT or CRS name
+ * without a world origin (open layers whose origins disagree) is not placed
+ * either: the package writes no .prj and marks the CRS as not applied.
  */
 export interface FlowPulseGeoref {
   readonly digests?: ExportDigests | null;

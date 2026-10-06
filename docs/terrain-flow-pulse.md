@@ -320,7 +320,7 @@ package.
 The Flow Pulse Lab's Export package (ZIP) button builds this package from
 the current run, through `buildFlowPulseExport` in
 `src/ui/fieldSimulation/flowPulseLab.ts`. It passes the world origin, the
-CRS name and WKT (written as a `.prj` when the CRS resolves), the DTM's
+CRS name and WKT (written as a `.prj` only when the export is placed, that is, when a world origin and the raster frame are also supplied; without them the rasters are in local metres and the README marks the CRS as not applied), the DTM's
 raster frame, the vertical origin and the terrain verdict. When the vertical
 origin is known and the vertical unit resolved, the depression table's
 `outletElevation` is the source elevation the Lab's readout shows. Otherwise
