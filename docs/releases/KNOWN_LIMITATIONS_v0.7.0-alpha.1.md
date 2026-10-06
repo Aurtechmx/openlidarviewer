@@ -358,9 +358,11 @@ floor of the data minimum, and the provenance text gives the reason.
   written as the reserved codes 8 and 12, with no translation and no warning.
 - A LAS 1.2 write cannot keep every acquisition field. Scan angles are stored
   as whole degrees from -90 to 90 and there is no scanner channel, so a LAS 1.4
-  file with an angle that rounds beyond 90 degrees or a nonzero channel is refused until the opt-in
-  for those two losses is ticked. Angles inside the range are rounded to the
-  nearest degree, which the file's text area records without asking. The text
+  file with an angle that rounds beyond 90 degrees or a nonzero channel is
+  refused until the opt-in for those two losses is ticked. Angles inside the
+  range are rounded to a whole degree, with halves rounding away from zero (-1.5
+  is written as -2, where it was -1), and the file's text area records that
+  without asking. The text
   area is the only place the file itself records a conversion: a reader that
   ignores it sees nothing, and a format other than LAS has no such record.
 - The reproduction pack's metrics reproduce exactly under the Node version

@@ -220,6 +220,7 @@ const WRITE_PREFIX = 'LAS 1.2 was not written. ';
 export function combineRefusals(refusals: readonly LegacyRefusal[]): string {
   if (refusals.length === 1) return refusals[0].text;
   const bodies = refusals.map((r) => r.text.replace(WRITE_PREFIX, '').replace(CHOOSE_CLAUSE, ''));
-  const controls = refusals.map((r) => `"${r.optIn}"`).join(', ');
-  return `${WRITE_PREFIX}It would lose data in ${refusals.length} ways. ${bodies.join(' ')} Choose LAS 1.4 to keep all of it, or tick ${controls} to write the file without it.`;
+  const quoted = refusals.map((r) => `"${r.optIn}"`);
+  const controls = `${quoted.slice(0, -1).join(', ')} and ${quoted[quoted.length - 1]}`;
+  return `${WRITE_PREFIX}It would lose data that needs ${refusals.length} opt-ins. ${bodies.join(' ')} Choose LAS 1.4 to keep all of it, or tick ${controls} to write the file without it.`;
 }

@@ -135,7 +135,7 @@ function pointsLabel(points: number): string {
 /** The refusal, with the count and both ways forward. */
 export function legacyReturnClampRefusal(points: number): string {
   return (
-    `LAS 1.2 was not written. ${pointsLabel(points)} have a return number or number of returns above 7, ` +
+    `LAS 1.2 was not written. ${pointsLabel(points)} ${points === 1 ? 'has' : 'have'} a return number or number of returns above 7, ` +
     `which LAS 1.2 clamps to 7, so return 8 of 12 would read back as 7 of 7. ` +
     `Choose LAS 1.4 to keep them, or tick "${LEGACY_RETURN_CLAMP_OPT_IN}" to write them clamped.`
   );

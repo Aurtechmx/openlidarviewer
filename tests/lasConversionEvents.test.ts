@@ -138,7 +138,7 @@ describe('one refusal names every opt-in a write needs', () => {
     const { file, report } = convertCloud(await needsAll(), { format: 'las' });
     expect(file).toBeNull();
     const msg = report.log.at(-1)!.message;
-    expect(msg).toMatch(/^LAS 1\.2 was not written\. It would lose data in 3 ways\./);
+    expect(msg).toMatch(/^LAS 1\.2 was not written\. It would lose data that needs 3 opt-ins\./);
     expect(msg).toMatch(/classes/);
     expect(msg).toMatch(/return number/);
     expect(msg).toMatch(/scan angle that rounds beyond 90/);
@@ -147,13 +147,14 @@ describe('one refusal names every opt-in a write needs', () => {
     expect(msg).toContain('"Allow returns above 7 to be clamped"');
     expect(msg).toContain(`"${LEGACY_ACQUISITION_LOSS_OPT_IN}"`);
     expect(msg.match(/Choose LAS 1\.4/g)).toHaveLength(1);
+    expect(msg).toContain('"Allow returns above 7 to be clamped" and "Allow scan angles to clip and scanner channels to be dropped"');
   });
 
   it('names only the opt-ins still missing', async () => {
     const { file, report } = convertCloud(await needsAll(), { format: 'las', allowLegacyClassWrap: true });
     expect(file).toBeNull();
     const msg = report.log.at(-1)!.message;
-    expect(msg).toMatch(/in 2 ways/);
+    expect(msg).toMatch(/needs 2 opt-ins/);
     expect(msg).not.toContain('"Allow classes above 31 to wrap"');
     expect(msg).toContain('"Allow returns above 7 to be clamped"');
   });
@@ -163,6 +164,27 @@ describe('one refusal names every opt-in a write needs', () => {
       format: 'las', allowLegacyClassWrap: true, allowLegacyReturnClamp: true, allowLegacyAcquisitionLoss: true,
     });
     expect(file).not.toBeNull();
+  });
+});
+
+describe('refusal wording for a single point', () => {
+  it('says "has" for one point and "have" for two in the return-clamp refusal', async () => {
+    const make = async (n: number) => {
+      const cloud = await decode(ext(Array.from({ length: n }, () => ({ cls: 2 }))));
+      cloud.returnNumber!.fill(9);
+      cloud.returnCount!.fill(12);
+      return convertCloud(cloud, { format: 'las' }).report.log.at(-1)!.message;
+    };
+    expect(await make(1)).toMatch(/1 point has a return number/);
+    expect(await make(2)).toMatch(/2 points have a return number/);
+  });
+
+  it('rounds a half away from zero in both directions', () => {
+    const cloud = new PointCloud({
+      positions: Float32Array.from([0, 0, 0, 1, 1, 1]), scanAngle: Float32Array.from([-1.5, 1.5]),
+      sourceFormat: 'las', name: 'a.las', origin: [0, 0, 0],
+    });
+    expect(readLas(convertCloud(cloud, { format: 'las' }).file!.bytes).angle).toEqual([-2, 2]);
   });
 });
 
