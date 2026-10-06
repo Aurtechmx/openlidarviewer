@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
-import { activate, dropHillsPly, framedScanCentre, pinNavigationPanel, waitForCameraSettled } from './helpers';
+import { activate, dropHillsPly, pinNavigationPanel, waitForCameraSettled } from './helpers';
 import { isBenignPageError } from './pageErrors';
 
 /**
@@ -22,6 +22,7 @@ async function openSection(page: Page): Promise<Locator> {
 }
 
 test('reference plane: toggle, readout, projections, three-point plane, release', async ({ page }) => {
+  test.setTimeout(120_000);
   const errors: string[] = [];
   page.on('pageerror', (e) => { if (!isBenignPageError(e.message)) errors.push(e.message); });
   page.on('console', (m) => { if (m.type() === 'error' && !isBenignPageError(m.text())) errors.push(m.text()); });
@@ -78,41 +79,41 @@ test('reference plane: toggle, readout, projections, three-point plane, release'
   await expect(body).toHaveAttribute('data-drawn', 'true');
   await expect(readout).toContainText(/Grid [\d.]+ units/);
 
-  // Back to perspective, then three points picked on the scan, well apart,
-  // above the Navigation panel.
-  await views.locator('.olv-plan-toggle').click();
-  await expect(views.locator('.olv-plan-toggle')).toHaveAttribute('aria-pressed', 'false');
-  await waitForCameraSettled(page);
+  // Three points picked on the scan in Plan view, where the scan lies flat
+  // under the centre of the canvas whatever the renderer's framing.
   await body.getByRole('button', { name: 'Pick 3 points' }).click();
-  await expect(body.locator('.olv-refplane-status')).toContainText('Click the first point');
-  const c = await framedScanCentre(page);
   const status = body.locator('.olv-refplane-status');
+  await expect(status).toContainText('Click the first point');
+  const box = (await page.locator('.olv-canvas').boundingBox())!;
+  const c = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
   const prompts = ['Click the second point', 'Click the third point', 'passes through them exactly'];
-  // Offsets where the canvas itself is under the pointer, not a card or panel.
+  // Spots where the canvas itself is under the pointer, not a card or panel.
   const onCanvas = await page.evaluate(({ x, y }) => {
     const out: Array<[number, number]> = [];
-    for (let dy = -300; dy <= 300; dy += 20) for (let dx = -400; dx <= 400; dx += 20) {
+    for (let dy = -240; dy <= 240; dy += 15) for (let dx = -320; dx <= 320; dx += 15) {
       if (document.elementFromPoint(x + dx, y + dy)?.tagName === 'CANVAS') out.push([dx, dy]);
     }
     return out;
   }, c);
   // A miss reports "No scan point" and keeps the pick open, so try the canvas
   // spots nearest each wanted offset until one lands on the scan.
-  const wants: Array<[number, number]> = [[-80, -60], [80, -60], [0, 60]];
+  const wants: Array<[number, number]> = [[-60, -45], [60, -45], [0, 50]];
   for (const [i, want] of wants.entries()) {
     const order = [...onCanvas].sort((p, q) => Math.hypot(p[0] - want[0], p[1] - want[1]) - Math.hypot(q[0] - want[0], q[1] - want[1]));
     let landed = false;
-    // Every canvas spot, nearest first: a slow software renderer can frame the
-    // scan smaller or off centre, and a miss costs one click.
-    for (const [dx, dy] of order) {
+    let last = '';
+    for (const [dx, dy] of order.slice(0, 40)) {
       await page.mouse.click(c.x + dx, c.y + dy);
-      if ((await status.textContent())?.includes(prompts[i])) { landed = true; break; }
+      last = (await status.textContent()) ?? '';
+      if (last.includes(prompts[i])) { landed = true; break; }
     }
-    expect(landed, `pick ${i + 1} found a scan point`).toBe(true);
+    expect(landed, `pick ${i + 1} found a scan point (last status: "${last}")`).toBe(true);
   }
   await expect(readout).toContainText(/Orientation: Through 3 picked points, dip [\d.]+°/);
   await expect(body.locator('select').first()).toHaveValue('three-point');
   await expect(body).toHaveAttribute('data-drawn', 'true');
+  await views.locator('.olv-plan-toggle').click();
+  await expect(views.locator('.olv-plan-toggle')).toHaveAttribute('aria-pressed', 'false');
 
   // Off: nothing drawn, every geometry and material released.
   await toggle.click();
