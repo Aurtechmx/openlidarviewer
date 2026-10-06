@@ -13,11 +13,12 @@
 const CONTROL_CLASS = '\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029';
 /**
  * Characters that change how text displays without showing: bidi embeddings,
- * overrides and isolates, the LRM and RLM marks, zero-width spaces and joiners,
- * and the byte-order mark. A name holding "gpj.las" behind a right-to-left
+ * overrides and isolates, the LRM, RLM and Arabic letter marks, zero-width
+ * spaces and joiners, the word joiner and invisible operators, the soft hyphen,
+ * the Mongolian vowel separator and the byte-order mark. A name holding "gpj.las" behind a right-to-left
  * override reads as a different file type.
  */
-const INVISIBLE_CLASS = '\\u200b-\\u200f\\u202a-\\u202e\\u2066-\\u2069\\ufeff';
+const INVISIBLE_CLASS = '\\u00ad\\u061c\\u180e\\u200b-\\u200f\\u202a-\\u202e\\u2060-\\u2064\\u2066-\\u2069\\ufeff';
 const CONTROL = new RegExp(`[${CONTROL_CLASS}]`, 'g');
 const INVISIBLE = new RegExp(`[${INVISIBLE_CLASS}]`, 'g');
 const UNSAFE_CHAR = new RegExp(`[${CONTROL_CLASS}${INVISIBLE_CLASS}]`);
@@ -25,7 +26,7 @@ const UNSAFE_CHAR = new RegExp(`[${CONTROL_CLASS}${INVISIBLE_CLASS}]`);
 /** Characters Windows does not allow in a file name, beside the separators. */
 const WINDOWS_RESERVED_CHARS = /[<>:"|?*]/g;
 /** Device names Windows reserves, with or without an extension. */
-const WINDOWS_DEVICE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i;
+const WINDOWS_DEVICE = /^(con|prn|aux|nul|com[1-9\u00b9\u00b2\u00b3]|lpt[1-9\u00b9\u00b2\u00b3])\s*(\.|$)/i;
 
 /**
  * Longest entry name, in UTF-8 bytes. Common file systems allow 255 bytes per
@@ -34,6 +35,9 @@ const WINDOWS_DEVICE = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i;
  * room for those.
  */
 export const MAX_ENTRY_NAME_BYTES = 200;
+
+/** Dots and spaces Windows drops from the end of a name. */
+const TRAILING = /[. ]+$/;
 
 const utf8Length = (s: string): number => new TextEncoder().encode(s).length;
 
@@ -74,11 +78,16 @@ export function safeEntryName(name: string, fallback = 'file'): string {
     .replace(CONTROL, '_')
     .replace(INVISIBLE, '')
     .replace(WINDOWS_RESERVED_CHARS, '_')
-    .trim()
-    .replace(/[. ]+$/, '');
-  if (leaf.length === 0) return fallback;
+    .trim();
+  // Nothing but dots and spaces names no file.
+  if (/^[. ]*$/.test(leaf)) return fallback;
+  // A leading dot makes a hidden file in a ZIP or a download.
+  leaf = leaf.replace(/^\.+/, '_').replace(TRAILING, '');
   if (WINDOWS_DEVICE.test(leaf)) leaf = `_${leaf}`;
-  return capBytes(leaf);
+  // Cutting can leave a dot or space at the end; trim again so the result is
+  // stable when passed through this function a second time.
+  leaf = capBytes(leaf).replace(TRAILING, '');
+  return leaf.length === 0 ? fallback : leaf;
 }
 
 /**

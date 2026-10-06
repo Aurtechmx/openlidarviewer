@@ -152,6 +152,56 @@ describe('ZIP entry names', () => {
   });
 });
 
+describe('safeEntryName edge cases', () => {
+  it('is idempotent when the cap leaves a dot or space at the end', () => {
+    const name = `${'x'.repeat(199)}.${'y'.repeat(20)}`;
+    const once = safeEntryName(name);
+    expect(once.endsWith('.')).toBe(false);
+    expect(safeEntryName(once)).toBe(once);
+    expect(new TextEncoder().encode(once).length).toBeLessThanOrEqual(MAX_ENTRY_NAME_BYTES);
+    const spaced = safeEntryName(`${'x'.repeat(199)} ${'y'.repeat(30)}`);
+    expect(spaced.endsWith(' ')).toBe(false);
+    expect(safeEntryName(spaced)).toBe(spaced);
+  });
+
+  it('is idempotent over a fuzz set of awkward names', () => {
+    const parts = ['.', '..', ' ', 'a', 'CON', 'com\u00b9', '\u202e', '\u00ad', '/', '\\', ':', '\n', 'x'.repeat(150), '\u00e9'.repeat(90), '.las'];
+    let seed = 7;
+    const next = (): number => (seed = (seed * 1103515245 + 12345) & 0x7fffffff);
+    for (let i = 0; i < 2000; i++) {
+      const n = 1 + (next() % 6);
+      let name = '';
+      for (let k = 0; k < n; k++) name += parts[next() % parts.length];
+      const once = safeEntryName(name);
+      expect(safeEntryName(once), JSON.stringify(name)).toBe(once);
+      expect(unsafeEntryName(once), JSON.stringify(name)).toBeNull();
+      expect(once.startsWith('.'), JSON.stringify(name)).toBe(false);
+      expect(once.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('does not leave a hidden file', () => {
+    expect(safeEntryName('.hidden')).toBe('_hidden');
+    expect(safeEntryName('..las')).toBe('_las');
+    expect(safeEntryName(' .bashrc')).toBe('_bashrc');
+    expect(safeEntryName('.\u202e.las')).toBe('_las');
+    expect(safeEntryName('.')).toBe('file');
+    expect(safeEntryName('a.las')).toBe('a.las');
+  });
+
+  it('removes the soft hyphen, Arabic letter mark, word joiner and invisible operators', () => {
+    for (const ch of ['\u00ad', '\u061c', '\u180e', '\u2060', '\u2061', '\u2062', '\u2063', '\u2064']) {
+      expect(safeEntryName(`a${ch}b.las`)).toBe('ab.las');
+      expect(singleLine(`a${ch}b`)).toBe('ab');
+      expect(unsafeEntryName(`a${ch}b`)).not.toBeNull();
+    }
+  });
+
+  it.each(['COM\u00b9', 'com\u00b2.las', 'LPT\u00b3', 'lpt\u00b9.txt', 'CON .txt', 'NUL  .las', 'aux .x'])('prefixes the device name %j', (name) => {
+    expect(safeEntryName(name).startsWith('_')).toBe(true);
+  });
+});
+
 describe('the export summary says what is written per format', () => {
   const base = { pointCount: 10, crsMode: 'keep' as const, format: 'las14' as const, classification: 'source' as const, includeClassification: true };
 
