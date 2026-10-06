@@ -12,15 +12,24 @@
  * Pure: no DOM, no three.js.
  */
 
-import { cellIndex, resolveElevation, type ElevationReference, type GridCell } from '../flowPulse/flowGridCursor';
+import { cellIndex, resolveElevation, type ElevationReference as BaseElevationReference, type GridCell } from '../flowPulse/flowGridCursor';
 import { whyNotEligible, type TerrainAccessFeatures, type NodeEligibility, type TraversabilityMapCell } from './traversabilityCost';
 import type { TerrainAccessGrid, TerrainAccessProfile } from './terrainAccessTypes';
 import { TERRAIN_ACCESS_STATE_LABEL } from './terrainAccessExplain';
 
 export {
   cellIndex, cellAt, clampCell, moveCursor, pixelToCell,
-  type ElevationReference, type GridCell,
+  type GridCell,
 } from '../flowPulse/flowGridCursor';
+
+/**
+ * {@link BaseElevationReference} plus the factor that turns the grid's metre
+ * z back into the DTM's own vertical unit, which the readout is labelled in.
+ * Absent means the grid z is already in that unit.
+ */
+export interface ElevationReference extends BaseElevationReference {
+  readonly metresPerVerticalUnit?: number | null;
+}
 
 /** A readable summary of one cell, for the live region and the selection panel. */
 export interface TerrainAccessCellReport {
@@ -60,7 +69,9 @@ export function describeTerrainAccessCell(
   const i = cellIndex(grid.cols, cell);
   const readable = grid.valid[i] === 1;
   const cellMap = map[i];
-  const { elevation, elevationUnit } = resolveElevation(readable, grid.z[i], elevationRef);
+  const unitFactor = elevationRef?.metresPerVerticalUnit;
+  const zInSourceUnit = unitFactor != null && unitFactor > 0 ? grid.z[i] / unitFactor : grid.z[i];
+  const { elevation, elevationUnit } = resolveElevation(readable, zInSourceUnit, elevationRef);
 
   return {
     col: cell.col,

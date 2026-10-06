@@ -241,6 +241,8 @@ export function reconstructDsmChm(
 
 /** Options for {@link buildDemReadme}. */
 export interface DemReadmeOptions {
+  /** False when the rasters carry no world origin: no CRS is written and the README says so. Default true. */
+  readonly placed?: boolean;
   readonly result: AnalyseContoursResult;
   /** Source-file digest and CRS origin for the provenance block. */
   readonly digests?: ExportDigests | null;
@@ -471,7 +473,7 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     ...(opts.attentionFilename
       ? [`  ${opts.attentionFilename.padEnd(28)} Terrain attention: where to inspect first, and why (see below)`]
       : []),
-    `  *.prj                        Coordinate reference system (WKT), when known`,
+    ...(opts.placed === false ? [] : [`  *.prj                        Coordinate reference system (WKT), when known`]),
     `  SHA256SUMS.txt               SHA-256 of every file above (verify: sha256sum -c)`,
     ``,
     `Raster`,
@@ -479,7 +481,10 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     `  Cell size      ${dtm.cellSizeM} ${hUnit}`,
     `  NODATA value   ${NO_DATA}`,
     `  Coverage       ${pct(cov.measured)} measured, ${pct(cov.interp)} interpolated`,
-    `  Bounds (CRS units, ${isGeographic ? 'lon/lat degrees' : 'projected'})`,
+    ...(opts.placed === false
+      ? ['  Frame          local frame, not georeferenced; elevations recentred']
+      : []),
+    `  Bounds (${opts.placed === false ? 'local frame offsets' : 'CRS units'}, ${isGeographic ? 'lon/lat degrees' : 'projected'})`,
     `    min X / min Y  ${coord(opts.boundsMinX)} / ${coord(opts.boundsMinY)}`,
     `    max X / max Y  ${coord(opts.boundsMaxX)} / ${coord(opts.boundsMaxY)}`,
     `  Elevation unit ${zUnit}`,
@@ -587,8 +592,12 @@ export function buildDemPackage(
   const cellSize = dtm.cellSizeM;
   // Numeric codes from the resolver are authoritative; the label parse is the
   // defensive fallback for grids built before the codes travelled.
-  const epsg = dtm.horizontalEpsg ?? parseEpsg(dtm.crs);
-  const verticalEpsg = dtm.verticalEpsg ?? parseEpsg(dtm.verticalDatum);
+  // With no world origin (open layers whose origins disagree) the rasters sit
+  // at project-frame offsets, so no CRS is written onto them: no EPSG or
+  // vertical GeoKeys and no .prj. The README says the frame is local.
+  const placed = options.worldOrigin != null;
+  const epsg = placed ? (dtm.horizontalEpsg ?? parseEpsg(dtm.crs)) : null;
+  const verticalEpsg = placed ? (dtm.verticalEpsg ?? parseEpsg(dtm.verticalDatum)) : null;
   // GeoTIFF unit code for the Z values, from the factor the analysis carried.
   const verticalUnitCode = verticalUnitGeoKeyCode(dtm.verticalUnitToMetres);
   const isGeographic = options.isGeographic ?? false;
@@ -751,10 +760,11 @@ export function buildDemPackage(
     sensitivityGrids: sensitivityBytes ? options.sensitivityGrids ?? null : null,
   });
 
-  if (options.wkt) {
+  if (placed && options.wkt) {
     entries.push({ name: `${basename}.prj`, bytes: new TextEncoder().encode(options.wkt) });
   }
   const readme = buildDemReadme({
+    placed,
     verticalUnitToMetres: options.verticalUnitToMetres ?? null,
     result,
     basename,

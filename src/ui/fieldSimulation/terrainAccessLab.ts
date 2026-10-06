@@ -129,7 +129,7 @@ export function terrainAccessElevationReference(input: TerrainAccessLabInput): E
     ? null
     : (input.dtm.verticalUnitToMetres ?? null);
   const unitLabel = zFactor == null ? 'units' : verticalUnitLabel(zFactor);
-  return { originZ: input.worldOriginZ ?? null, unitLabel };
+  return { originZ: input.worldOriginZ ?? null, unitLabel, metresPerVerticalUnit: zFactor };
 }
 
 const NO_IDENTITY = {
@@ -182,8 +182,17 @@ export const TERRAIN_ACCESS_STALE_REASON =
  * stretched to cover a precondition it cannot check itself. */
 export interface TerrainAccessStaleRefusal {
   readonly ok: false;
-  readonly code: 'STALE_INPUT';
+  readonly code: 'STALE_INPUT' | 'RUN_FAILED';
   readonly reason: string;
+}
+
+/** The refusal shown when the preview or the run throws, so the controls come back instead of hanging. */
+export function terrainAccessFailure(err: unknown): TerrainAccessStaleRefusal {
+  const msg = err instanceof Error ? err.message : String(err);
+  return {
+    ok: false, code: 'RUN_FAILED',
+    reason: `Terrain Access could not finish: ${msg}. Re-apply the mobility profile and try again.`,
+  };
 }
 
 export type TerrainAccessLabOutcome = TerrainAccessResult | TerrainAccessRefusal | TerrainAccessStaleRefusal;
@@ -360,7 +369,8 @@ export const TERRAIN_ACCESS_HOW_TO_READ: readonly string[] = [
 export function terrainAccessReadiness(input: TerrainAccessLabInput | null) {
   const s = input?.scale;
   const v = input?.dtm.verticalUnitToMetres;
-  const units = !!s && s.resolved && (!s.isGeographic || Number.isFinite(s.latitudeDeg ?? Number.NaN)) && v != null && v > 0;
+  const units = !!s && s.resolved && (!s.isGeographic || Number.isFinite(s.latitudeDeg ?? Number.NaN)) && v != null && v > 0
+    && input?.verticalScaleResolved !== false;
   return labReadiness('terrain-access', !!input, units);
 }
 
@@ -638,7 +648,7 @@ export function mountTerrainAccessInteractive(
   const announce = (msg: string): void => { live.textContent = msg; };
 
   let profile: TerrainAccessProfile | null = null;
-  let preview: TerrainAccessPreview | TerrainAccessRefusal | null = null;
+  let preview: TerrainAccessPreview | TerrainAccessRefusal | TerrainAccessStaleRefusal | null = null;
   let outcome: TerrainAccessLabOutcome | null = null;
   let mode: SelectMode = 'start';
   let startCell: GridCell | null = null;
@@ -717,6 +727,17 @@ export function mountTerrainAccessInteractive(
     }
   }
 
+  /** Moving an endpoint makes the last route, its figures and its export stale, so they go. */
+  function clearResult(): void {
+    if (!outcome) return;
+    outcome = null;
+    grid.setRouteMask(null);
+    overlay?.clearRoute();
+    statsHost.replaceChildren();
+    runCard.replaceChildren(renderTerrainAccessRunCard(null));
+    publishLabRun('terrain-access', null);
+  }
+
   function handleActivate(cell: GridCell): void {
     if (!preview || !preview.ok) return;
     if (input?.isStale?.()) {
@@ -725,11 +746,13 @@ export function mountTerrainAccessInteractive(
       return;
     }
     if (mode === 'start') {
+      clearResult();
       startCell = cell;
       grid.setStart(cell);
       renderSelection();
       announce(`Start set to column ${cell.col}, row ${cell.row}.`);
     } else if (mode === 'goal') {
+      clearResult();
       goalCell = cell;
       grid.setGoal(cell);
       renderSelection();
@@ -795,7 +818,7 @@ export function mountTerrainAccessInteractive(
     // captured at this point, once, to the `ok: true` branch just checked above.
     const readyPreview = preview;
     const dtm = input!.dtm;
-    overlayFrame = terrainAccessOverlayFrame(input?.sceneUpAxis, dtm.originH1, dtm.originH2, dtm.cellSizeM);
+    overlayFrame = terrainAccessOverlayFrame(input?.sceneUpAxis, dtm.originH1, dtm.originH2, dtm.cellSizeM, dtm.verticalUnitToMetres);
     grid.load(readyPreview.grid, readyPreview.map);
     startCell = null;
     goalCell = null;
@@ -833,8 +856,13 @@ export function mountTerrainAccessInteractive(
       }
       const startIndex = startCell.row * readyPreview.grid.cols + startCell.col;
       const endIndex = goalCell.row * readyPreview.grid.cols + goalCell.col;
-      outcome = runLabTerrainAccess(input, profile, startIndex, endIndex);
-      busy = false;
+      try {
+        outcome = runLabTerrainAccess(input, profile, startIndex, endIndex);
+      } catch (err) {
+        outcome = terrainAccessFailure(err);
+      } finally {
+        busy = false;
+      }
       if (outcome.ok) {
         // The Results shelf lists the latest route by reference.
         publishLabRun('terrain-access', { outcome, layerId: input?.layerId ?? null, filename: input?.filename ?? null });
@@ -886,7 +914,11 @@ export function mountTerrainAccessInteractive(
     }
     form.showProblems([]);
     profile = parsed.profile;
-    preview = buildLabPreview(input, profile);
+    try {
+      preview = buildLabPreview(input, profile);
+    } catch (err) {
+      preview = terrainAccessFailure(err);
+    }
     renderPreview();
   }, blocker && input ? `Apply profile is off. ${blocker.note}` : null);
 
