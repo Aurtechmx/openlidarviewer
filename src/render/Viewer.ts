@@ -1089,6 +1089,7 @@ export class Viewer {
       onToggleHelp: () => this._navListeners.onToggleHelp?.(),
       onReset: () => this.frameAll(),
       onFocusCenter: () => this._focusCenter(),
+      isOrthographic: () => this._orthographic,
     });
 
     // Picking tools — while one is active, a canvas click picks a point.
@@ -5271,9 +5272,8 @@ export class Viewer {
     if (delta.dPinch !== 0) {
       const k = px(), d = cam.position.distanceTo(tgt);
       const c = this._controls, f = d > 1e-9 ? Math.min(Math.max(d * (1 - delta.dPinch), c.minDistance), c.maxDistance) / d : 1;
-      TWIST_OFFSET.copy(cam.position).sub(tgt).multiplyScalar(f);
-      cam.position.copy(tgt).add(TWIST_OFFSET);
-      if (delta.at) shift((delta.at.x - (h * cam.aspect) / 2) * k * (1 - f), (h / 2 - delta.at.y) * k * (1 - f));
+      cam.position.sub(tgt).multiplyScalar(f).add(tgt);
+      if (delta.at) shift((delta.at.x - (h * cam.aspect) / 2) * k * (1 - f), (h / 2 - delta.at.y - (this._orthographic ? (this._lens.value * h) / 2 : 0)) * k * (1 - f));
     }
 
     // ── twist / yaw around world up ────────────────────────────────────

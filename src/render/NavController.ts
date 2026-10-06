@@ -55,6 +55,7 @@ import {
 import { readDevFlags } from '../perf/devFlags';
 import { dollyVelocityAtRest, glideAtRest, orbitVelocityAtRest, perFrameToDt, type GlideView } from './orbitFeel';
 import { navDrive } from '../perf/navProbeHook';
+import { orthoCursorDolly } from './camera/orthoZoomAnchor';
 import { loadNavDriver } from '../perf/navDriverLoader';
 
 /** Under `?benchmark=nav`, load and install the scripted camera driver. */
@@ -85,6 +86,12 @@ export interface NavCallbacks {
   onFocusCenter?: () => void;
   /** `H` — toggle the controls help overlay. */
   onToggleHelp?: () => void;
+  /**
+   * True while the orthographic follower is the displayed camera. The wheel
+   * dolly then anchors the cursor in the orthographic image, not along the
+   * perspective ray.
+   */
+  isOrthographic?: () => boolean;
 }
 
 interface Tween {
@@ -293,11 +300,12 @@ export class NavController {
       this._controls.mouseButtons.MIDDLE = null as unknown as THREE.MOUSE;
     }
     // P2 — take the wheel away from OrbitControls so the app-owned, refresh-rate-
-    // independent log-space dolly owns it. Note: the viewer's "orthographic" mode
-    // is emulated as a very long lens on THIS same perspective camera (see
-    // Viewer.setOrthographic), never a separate OrthographicCamera — so zoom is a
-    // dolly in both modes and this one handler covers both. `passive: false` lets
-    // `preventDefault` stop the page from scrolling under the canvas.
+    // independent log-space dolly owns it. In orthographic mode the displayed
+    // camera is a follower whose frustum scales with this camera's distance to
+    // the target (see Viewer.setOrthographic), so zoom is a dolly in both modes
+    // and this one handler covers both; only the cursor anchoring differs.
+    // `passive: false` lets `preventDefault` stop the page from scrolling under
+    // the canvas.
     if (this._wheelDolly) {
       this._controls.enableZoom = false;
       canvas.addEventListener('wheel', this._onWheel, { passive: false });
@@ -635,8 +643,9 @@ export class NavController {
    * `wheelDollyMath` (unit-tested); this only feeds it. Runs only while
    * OrbitControls is enabled (orbit / pan), so it never fights a modal tool.
    * Sign: a positive `deltaY` (scroll down) grows the eye distance → zoom OUT.
-   * The viewer's "ortho" mode is a narrow-FOV perspective camera on this same
-   * object, so the dolly is the correct zoom in both modes.
+   * A trackpad pinch arrives here too, as a wheel with `ctrlKey`. In
+   * orthographic mode the follower's frustum scales with this distance, so the
+   * same dolly zooms both projections.
    */
   private _handleWheel(e: WheelEvent): void {
     if (!this._wheelDolly || !this._inputEnabled || !this._controls.enabled) return;
@@ -682,9 +691,12 @@ export class NavController {
    * by `exp(velocity · dt)`, clamped to OrbitControls' own min/max distance so
    * the app-owned dolly can never punch past the limits the rest of the app
    * relies on. When the pointer is known (a wheel event captured it), the zoom
-   * is cursor-centred — the world point under the pointer stays fixed — matching
-   * OrbitControls' `zoomToCursor`, which the legacy wheel path still uses. Falls
-   * back to a target pivot when no pointer is known. No-op once velocity settles.
+   * is cursor-centred: the world point under the pointer stays fixed on screen,
+   * every frame of the inertial tail, including a step the clamp shortened. In
+   * perspective that matches OrbitControls' `zoomToCursor`, which the legacy
+   * wheel path still uses; in orthographic mode `orthoCursorDolly` anchors the
+   * point in the follower's image. Falls back to a target pivot when no pointer
+   * is known. No-op once velocity settles.
    */
   private _stepWheelDolly(dt: number): void {
     if (!this._wheelDolly || isDollySettled(this._dollyVelocity)) return;
@@ -707,11 +719,22 @@ export class NavController {
     if (Number.isFinite(min)) next = Math.max(min, next);
     if (Number.isFinite(max)) next = Math.min(max, next);
 
-    // Cursor-centred zoom: translate the camera along the world ray through the
-    // captured pointer position by the change in radius, then re-seat the target
-    // along the (unchanged) view direction at the new radius. This keeps the
-    // world point under the pointer stationary — the OrbitControls zoomToCursor
-    // behaviour. Falls back to the target pivot when no pointer is known (e.g. a
+    // Orthographic cursor-centred zoom: the image has no depth, so the anchor is
+    // the cursor's offset in the view plane. Camera and target shift together in
+    // that plane by the share of the offset the frustum change would move.
+    if (
+      this._dollyCursorValid &&
+      this._cb.isOrthographic?.() === true &&
+      orthoCursorDolly(this._camera, target, this._dollyNdcX, this._dollyNdcY, next)
+    ) {
+      return;
+    }
+
+    // Perspective cursor-centred zoom: translate the camera along the world ray
+    // through the captured pointer position by the change in radius, then
+    // re-seat the target along the (unchanged) view direction at the new radius.
+    // This keeps the world point under the pointer stationary — the
+    // OrbitControls zoomToCursor behaviour. Falls back to the target pivot when no pointer is known (e.g. a
     // keyboard-driven step) or the ray degenerates.
     if (this._dollyCursorValid) {
       this._camera.updateMatrixWorld();
