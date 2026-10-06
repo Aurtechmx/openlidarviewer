@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { dropDenseGridPly, showWorkspaceMode } from './helpers';
@@ -210,15 +210,20 @@ test('two clicks in one tick leave signing off, and the next export is unsigned'
 test('a key file over 4 KB is refused with a message', async ({ page }) => {
   const panel = await prepare(page);
   await createKey(panel);
-  const out = join(tmpdir(), `olv-big-key-${Date.now()}.txt`);
-  writeFileSync(out, 'x'.repeat(5000));
-  const signed = join(tmpdir(), `olv-signed-${Date.now()}.json`);
-  writeFileSync(signed, await exportText(page, panel));
-  await verify(page, signed);
-  await expect(page.locator('[data-testid="report-verify-signature"]')).toBeVisible({ timeout: 10_000 });
-  await page.locator('[data-testid="report-verify-trusted-file"]').setInputFiles(out);
-  await expect(page.locator('[data-testid="report-verify-key-file-note"]')).toContainText(/too large/i);
-  await expect(page.locator('[data-testid="report-verify-trusted-key"]')).toHaveValue('');
+  const dir = mkdtempSync(join(tmpdir(), 'olv-big-key-'));
+  try {
+    const out = join(dir, 'key.txt');
+    writeFileSync(out, 'x'.repeat(5000), { mode: 0o600, flag: 'wx' });
+    const signed = join(dir, 'signed.json');
+    writeFileSync(signed, await exportText(page, panel), { mode: 0o600, flag: 'wx' });
+    await verify(page, signed);
+    await expect(page.locator('[data-testid="report-verify-signature"]')).toBeVisible({ timeout: 10_000 });
+    await page.locator('[data-testid="report-verify-trusted-file"]').setInputFiles(out);
+    await expect(page.locator('[data-testid="report-verify-key-file-note"]')).toContainText(/too large/i);
+    await expect(page.locator('[data-testid="report-verify-trusted-key"]')).toHaveValue('');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('a key can be deleted after confirming, and signing then stops', async ({ page }) => {
