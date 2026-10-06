@@ -19,7 +19,8 @@ import { classifyScanShape } from '../terrain/scanShape';
 import { isZUpFormat } from '../io/sniffFormat';
 import { wktForEpsg } from '../io/epsgWkt';
 import { cloudToGlobal } from './globalPoints';
-import { describeLoss, inspectLegacyConversion, legacyOverlapUpgradeNote, upgradeLegacyOverlap } from '../lasSemantics';
+import { describeLoss, inspectLegacyConversion } from '../lasSemantics';
+import { planClassSemantics } from './classSemantics';
 import {
   countLegacyReturnClamp,
   legacyReturnClampProvenance,
@@ -308,14 +309,16 @@ export function convertCloud(
     const gpsStandardFromSource =
       declaredGps === undefined ? undefined : declaredGps === 'adjusted-standard';
     if (opts.format === 'las14') {
-      const overlap = upgradeLegacyOverlap(
-        cloud.metadata?.pointFormat, cloud.classificationProvenance,
-        g.classification, g.classificationFlags, g.count,
-      );
-      if (overlap) {
-        g = { ...g, classification: overlap.classification, classificationFlags: overlap.classificationFlags };
-        log.push({ level: 'info', message: legacyOverlapUpgradeNote(overlap.points) });
-      }
+      const semantics = planClassSemantics({
+        sourcePdrf: cloud.metadata?.pointFormat,
+        provenance: cloud.classificationProvenance,
+        classification: g.classification,
+        classificationFlags: g.classificationFlags,
+        count: g.count,
+        target: 'extended',
+      });
+      g = { ...g, classification: semantics.classification, classificationFlags: semantics.classificationFlags };
+      log.push(...semantics.log);
       if (outEpsg != null && outEpsg <= 65535 && wkt == null) {
         log.push({
           level: 'info',
@@ -356,6 +359,18 @@ export function convertCloud(
         log.push({ level: 'warn', message: legacyReturnClampWarning(clamped) });
         legacyProvenance = [...lasProvenance, legacyReturnClampProvenance(clamped)];
       }
+      // Numbers whose meaning differs between the two class tables. The
+      // number is written as it is, so the report names each one.
+      log.push(
+        ...planClassSemantics({
+          sourcePdrf: cloud.metadata?.pointFormat,
+          provenance: cloud.classificationProvenance,
+          classification: g.classification,
+          classificationFlags: g.classificationFlags,
+          count: g.count,
+          target: 'legacy',
+        }).log,
+      );
       // The other thing a legacy write drops. The extended encoding carries
       // overlap as a flag bit beside a real base class; the legacy byte has
       // nowhere to put it, so `writeLas` composes only the
@@ -371,7 +386,7 @@ export function convertCloud(
           const loss = describeLoss(inspectLegacyConversion([], true), LEGACY_PDRF_FOR_LOSS);
           log.push({
             level: 'warn',
-            message: `LAS 1.2 cannot record the overlap flag — ${overlapped.toLocaleString()} points carry it and ${loss}; the base class is written and the overlap mark is dropped. Use LAS 1.4 to preserve it.`,
+            message: `LAS 1.2 cannot record the overlap flag — ${overlapped.toLocaleString()} point${overlapped === 1 ? '' : 's'} ${overlapped === 1 ? 'carries' : 'carry'} it and ${loss}; the base class is written and the overlap mark is dropped. Use LAS 1.4 to preserve it.`,
           });
         }
       }
