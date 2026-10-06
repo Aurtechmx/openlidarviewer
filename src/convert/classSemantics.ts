@@ -117,9 +117,15 @@ function changeFinding(code: number, points: number, target: ClassTarget): Class
   const legacy = reading(code, LEGACY_PDRF);
   const extended = reading(code, EXTENDED_PDRF);
   const head = `Class ${code} (${pointsLabel(points)}): the number is written unchanged. It is ${extended} in LAS 1.4 and ${legacy} in LAS 1.0 to 1.3.`;
+  // Where LAS 1.4 reserves the number and the legacy table defines it (8, 12),
+  // a legacy reader does not see "reserved": it reads the legacy class.
+  const legacyReads =
+    extended === 'reserved' && legacy !== 'reserved'
+      ? `LAS 1.2 readers will read ${pointsLabel(points) === '1 point' ? 'it' : 'them'} as ${legacy}.`
+      : 'LAS 1.2 readers will not read the LAS 1.4 meaning.';
   const message =
     target === 'legacy'
-      ? `${head} LAS 1.2 readers will not read the LAS 1.4 meaning. Use LAS 1.4 to keep it.`
+      ? `${head} ${legacyReads} Use LAS 1.4 to keep the meaning.`
       : `${head} LAS 1.4 readers will read a meaning the source did not define.`;
   return { code, points, message };
 }

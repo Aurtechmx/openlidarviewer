@@ -353,7 +353,9 @@ floor of the data minimum, and the provenance text gives the reason.
   LAS 1.2 reader shows class 19 and the other defined extended classes as
   reserved; high noise (18) has no legacy class. Classes above 31 are refused
   or wrapped as before. A derived or edited classification, or a source whose
-  point format is unknown, is not translated.
+  point format is unknown, is not translated: when such a classification of a
+  legacy file is written as LAS 1.4, untouched legacy class 8 and 12 points are
+  written as the reserved codes 8 and 12, with no translation and no warning.
 - The reproduction pack's metrics reproduce exactly under the Node version
   pinned in `.nvmrc`. Another Node or V8 version can change the last digits.
 

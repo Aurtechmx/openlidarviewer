@@ -386,7 +386,7 @@ export function convertCloud(
           const loss = describeLoss(inspectLegacyConversion([], true), LEGACY_PDRF_FOR_LOSS);
           log.push({
             level: 'warn',
-            message: `LAS 1.2 cannot record the overlap flag — ${overlapped.toLocaleString()} points carry it and ${loss}; the base class is written and the overlap mark is dropped. Use LAS 1.4 to preserve it.`,
+            message: `LAS 1.2 cannot record the overlap flag — ${overlapped.toLocaleString()} point${overlapped === 1 ? '' : 's'} ${overlapped === 1 ? 'carries' : 'carry'} it and ${loss}; the base class is written and the overlap mark is dropped. Use LAS 1.4 to preserve it.`,
           });
         }
       }

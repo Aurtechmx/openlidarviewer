@@ -168,3 +168,23 @@ describe('the shared table', () => {
     expect(up.report.log.filter((e) => e.level === 'warn' && e.message.startsWith(`Class ${code} (`))).toHaveLength(1);
   });
 });
+
+describe('message wording', () => {
+  it('says what a legacy reader reads for extended-reserved 8 and 12, in the singular for one point', async () => {
+    const { report } = await convert(extended([8, 12, 12]), 'las');
+    const warns = report.log.filter((e) => e.level === 'warn').map((e) => e.message);
+    const eight = warns.find((m) => m.startsWith('Class 8 ('))!;
+    const twelve = warns.find((m) => m.startsWith('Class 12 ('))!;
+    expect(eight).toMatch(/LAS 1\.2 readers will read it as Model Key-Point/);
+    expect(twelve).toMatch(/LAS 1\.2 readers will read them as Overlap Points/);
+    expect(eight).not.toMatch(/will not read/);
+  });
+
+  it('uses the singular in the overlap-flag warning for one point and the plural for two', async () => {
+    const one = await convert(extended([2, 2], [OVERLAP, 0]), 'las');
+    const two = await convert(extended([2, 2], [OVERLAP, OVERLAP]), 'las');
+    const text = (r: typeof one) => r.report.log.find((e) => /overlap flag/.test(e.message) && e.level === 'warn')!.message;
+    expect(text(one)).toMatch(/ 1 point carries it /);
+    expect(text(two)).toMatch(/ 2 points carry it /);
+  });
+});
