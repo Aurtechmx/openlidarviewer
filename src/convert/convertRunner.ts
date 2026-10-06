@@ -11,6 +11,7 @@
  * progress.
  */
 
+import { fullDecodeRefusal } from '../export/fullDecodeRefusal';
 import { exportDigests } from '../science/exportDigestRecord';
 import type { PointCloud } from '../model/PointCloud';
 import { convertCloud } from './convertCloud';
@@ -156,6 +157,17 @@ export async function runBatch(
       // The digest of these exact bytes, before the decode can drop them.
       const sha256 = await bufferSha256(buffer);
       const cloud = await decode(buffer, input.name, signal);
+      // A decode that read only a sample, or a file that ended early, is not
+      // the full file: refuse it as the single export does.
+      const shortfall = fullDecodeRefusal(cloud);
+      if (shortfall) {
+        results.push({
+          source: input.name, file: null,
+          report: { source: input.name, ok: false, pointCount: 0, crsNote: '—', log: [{ level: 'error', message: shortfall }] },
+        });
+        emit('error');
+        continue;
+      }
       emit('converting');
       const { file, report } = convertCloud(cloud, { ...options, digests: exportDigests({ sha256, note: null }, null) });
       const finalFile = file

@@ -133,7 +133,10 @@ export function convertCloud(
     ...(opts.displaySample ? [displaySampleLine(opts.displaySample)] : []),
     pointBasisFor(cloud, opts),
     ...(opts.scopeNote ? [opts.scopeNote] : []),
-    classEditLine(opts.classesEdited ?? classesEdited({ provenance: cloud.classificationProvenance, editEpoch: 0 })),
+    classEditLine(
+      opts.classesEdited ?? classesEdited({ provenance: cloud.classificationProvenance, editEpoch: 0 }),
+      opts.omitClassification === true,
+    ),
   ];
   const provenance = lines;
   // ASCII has no header slot for the build or the source name, so both lead its comment lines.

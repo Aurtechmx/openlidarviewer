@@ -580,8 +580,10 @@ export async function loadE57(
     origin: clean.origin,
     sourceFormat: 'e57',
     name,
-    declaredPointCount: stride > 1 ? plan.sourceCount : total,
-    decodedPointCount: total,
+    // The points that survived sanitation: a point dropped as non-finite is not
+    // a point of the file the cloud falls short of.
+    declaredPointCount: stride > 1 ? plan.sourceCount : total - clean.excludedCount,
+    decodedPointCount: total - clean.excludedCount,
     loadStride: stride,
     metadata: {
       ...e57Metadata(parsed.metadata, parsed.sourceMetadata, scans.length, warnings),
