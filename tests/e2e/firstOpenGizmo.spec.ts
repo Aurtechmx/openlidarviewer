@@ -79,6 +79,24 @@ async function cloudBox(page: Page): Promise<Box | null> {
   }
 }
 
+/**
+ * The cloud's box once it stops moving: two reads in a row agree to within 2 px.
+ * A viewport resize refits the camera over a few frames, so a single read can
+ * land mid-way; this waits for the refit to finish instead of sleeping.
+ */
+async function stableCloudBox(page: Page): Promise<Box | null> {
+  const deadline = Date.now() + 30_000;
+  let last = await cloudBoxOnce(page);
+  for (;;) {
+    const next = await cloudBoxOnce(page);
+    if (last !== null && next !== null && Math.max(
+      Math.abs(next.x - last.x), Math.abs(next.y - last.y), Math.abs(next.w - last.w), Math.abs(next.h - last.h),
+    ) <= 2) return next;
+    if (Date.now() > deadline) return next;
+    last = next;
+  }
+}
+
 /** One shot of the cloud's box, with every overlay hidden for the screenshot. */
 async function cloudBoxOnce(page: Page): Promise<Box | null> {
   await page.evaluate(() => {
@@ -247,10 +265,9 @@ test('a resize refits the lens shift: none at phone width, the band again on des
   // Phone width: the bar does not lay out, so the reserve and the shift are 0
   // and the scan sits centred on the canvas instead of above an empty band.
   await page.setViewportSize(SIZES[1]);
-  await page.waitForTimeout(1000);
-  expect(await gizmoBox(page)).toBeNull();
+  await expect.poll(() => gizmoBox(page), { timeout: 10_000 }).toBeNull();
   const canvas = (await page.locator('canvas').first().boundingBox())!;
-  const phoneBox = await cloudBox(page);
+  const phoneBox = await stableCloudBox(page);
   expect(phoneBox, 'the cloud is drawn at phone width').not.toBeNull();
   const phone = centre(phoneBox!);
   expect(Math.abs(phone.x - (canvas.x + canvas.width / 2)), `phone x ${phone.x}`).toBeLessThanOrEqual(canvas.width * 0.1);
@@ -258,8 +275,8 @@ test('a resize refits the lens shift: none at phone width, the band again on des
 
   // Back to desktop: the shift is recomputed and the triangle is clear again.
   await page.setViewportSize(SIZES[0]);
-  await page.waitForTimeout(1000);
-  const back = (await cloudBox(page))!;
+  await expect.poll(() => gizmoBox(page), { timeout: 10_000 }).not.toBeNull();
+  const back = (await stableCloudBox(page))!;
   const gizmoBack = (await gizmoBox(page))!;
   expect(back, 'the cloud is drawn back on desktop').not.toBeNull();
   expect(gizmoBack, 'the navigation bar lays out again').not.toBeNull();

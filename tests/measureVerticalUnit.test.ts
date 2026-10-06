@@ -48,10 +48,10 @@ describe('measurement vertical unit (compound CRS)', () => {
     const text = VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE;
     const [correct, unreliable] = text.split('converted correctly.');
     const unreliableKinds: Record<string, string> = {
-      Distances: 'distance', polylines: 'polyline', 'plane areas': 'area',
-      slopes: 'slope', angles: 'angle', profiles: 'profile',
+      distance: 'distance', polyline: 'polyline', 'plane area': 'area',
+      slope: 'slope', angle: 'angle', profile: 'profile',
     };
-    const named = Object.keys(unreliableKinds).filter((w) => unreliable.split('NOT reliable')[0].includes(w));
+    const named = Object.keys(unreliableKinds).filter((w) => unreliable.split('NOT reliable')[0].toLowerCase().includes(w.toLowerCase()));
     expect(new Set(named.map((w) => unreliableKinds[w]))).toEqual(new Set(VERTICAL_MISMATCH_KINDS));
     for (const [word, kind] of [['Heights', 'height'], ['box sizes', 'box'], ['volumes', 'volume']] as const) {
       expect(correct).toContain(word);
@@ -59,6 +59,9 @@ describe('measurement vertical unit (compound CRS)', () => {
     }
     expect(correct).toMatch(/the run of a line and the plan area of a ring/);
     expect(text).toMatch(/reproject the scan to one unit/);
+    // The headline is refused while the breakdown beneath a distance is read:
+    // the notice names the breakdown figures that are computed from converted values.
+    expect(text).toMatch(/Run, Rise, Slant and Grade under a distance are computed from the converted run and rise/);
   });
 
   it('equal vertical/horizontal unit leaves the grade untouched (common case)', () => {

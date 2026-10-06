@@ -1,6 +1,8 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { dropDenseGridPly, showWorkspaceMode } from './helpers';
 
 /**
@@ -174,13 +176,49 @@ test('two clicks in one tick leave signing off, and the next export is unsigned'
   const toggle = panel.locator('[data-testid="report-sign-toggle"]');
   await toggle.click(); // off
   await expect(toggle).not.toBeChecked();
+  // Count the key-store reads the page starts and finishes, so the test waits
+  // for the stale lookup to answer instead of sleeping.
+  await page.evaluate(() => {
+    const probe = { started: 0, done: 0 };
+    (window as unknown as { __keyReads: typeof probe }).__keyReads = probe;
+    const get = IDBObjectStore.prototype.get;
+    IDBObjectStore.prototype.get = function (this: IDBObjectStore, ...args: Parameters<IDBObjectStore['get']>) {
+      const req = get.apply(this, args);
+      probe.started += 1;
+      const finish = (): void => { probe.done += 1; };
+      req.addEventListener('success', finish);
+      req.addEventListener('error', finish);
+      return req;
+    };
+  });
   // On, then off, before the key lookup can answer.
   await toggle.evaluate((b) => { (b as HTMLInputElement).click(); (b as HTMLInputElement).click(); });
-  await page.waitForTimeout(500);
+  await page.waitForFunction(() => {
+    const probe = (window as unknown as { __keyReads: { started: number; done: number } }).__keyReads;
+    return probe.started >= 1 && probe.done >= probe.started;
+  });
+  // The lookup's continuation runs after its request settles; let it run.
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  }));
   await expect(toggle).not.toBeChecked();
   await expect(panel.locator('[data-testid="report-sign-status"]')).not.toContainText(/will be signed/i);
   const report = JSON.parse(await exportText(page, panel));
   expect(report.reportSignature).toBeUndefined();
+});
+
+test('a key file over 4 KB is refused with a message', async ({ page }) => {
+  const panel = await prepare(page);
+  await createKey(panel);
+  const out = join(tmpdir(), `olv-big-key-${Date.now()}.txt`);
+  writeFileSync(out, 'x'.repeat(5000));
+  const signed = join(tmpdir(), `olv-signed-${Date.now()}.json`);
+  writeFileSync(signed, await exportText(page, panel));
+  await verify(page, signed);
+  await expect(page.locator('[data-testid="report-verify-signature"]')).toBeVisible({ timeout: 10_000 });
+  await page.locator('[data-testid="report-verify-trusted-file"]').setInputFiles(out);
+  await expect(page.locator('[data-testid="report-verify-key-file-note"]')).toContainText(/too large/i);
+  await expect(page.locator('[data-testid="report-verify-trusted-key"]')).toHaveValue('');
 });
 
 test('a key can be deleted after confirming, and signing then stops', async ({ page }) => {

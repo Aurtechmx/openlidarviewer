@@ -628,6 +628,11 @@ Nothing here proves who produced it, and a test asserts the document claims no
 signature. The eager shell is unchanged at 805 KiB. Covered by
 `tests/demPackageReadme.test.ts`.
 
+The wording above is what this entry recorded when it was written, and it is
+kept as written. The passport and report digests are unkeyed, so anyone can
+recompute them after an edit; the product text now calls them a
+self-consistency check, not a signature (#1231).
+
 ### L17 · FIXED · EVIDENCE
 
 The evidence boundary inspector was implemented, tested and unreachable. Its
