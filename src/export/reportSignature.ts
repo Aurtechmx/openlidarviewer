@@ -66,8 +66,11 @@ export function parseSignedAt(text: string): string | null {
   const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mo - 1];
   if (mo < 1 || mo > 12 || d < 1 || d > days! || h > 23 || mi > 59 || se > 59) return null;
   const ms = Number((m[7] ?? '').padEnd(3, '0') || 0);
-  const t = Date.UTC(y, mo - 1, d, h, mi, se, ms);
-  return Number.isFinite(t) ? new Date(t).toISOString() : null;
+  // `Date.UTC` reads years 0 to 99 as 1900 to 1999; set the year explicitly.
+  const date = new Date(0);
+  date.setUTCFullYear(y, mo - 1, d);
+  date.setUTCHours(h, mi, se, ms);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
 }
 const MAX_SHORT_FIELD_CHARS = 64;
 

@@ -30,6 +30,24 @@ export interface CrsOriginInput {
   readonly assertedBy?: string;
 }
 
+/**
+ * The origin of a CRS the file itself declared (the batch converter has no
+ * resolver): its `source` token names how the file carried it. Null when the
+ * file declared none.
+ */
+export function declaredCrsOrigin(
+  crs: { readonly source: string; readonly name: string; readonly epsg?: number; readonly verticalEpsg?: number; readonly verticalDatum?: string } | null | undefined,
+): CrsOriginInput | null {
+  if (!crs) return null;
+  return {
+    source: `file-${crs.source}`,
+    name: crs.name,
+    ...(crs.epsg !== undefined ? { epsg: crs.epsg } : {}),
+    ...(crs.verticalEpsg !== undefined ? { verticalEpsg: crs.verticalEpsg } : {}),
+    ...(crs.verticalDatum !== undefined ? { verticalDatum: crs.verticalDatum } : {}),
+  };
+}
+
 export function crsOriginOf(resolved: CrsOriginInput | null | undefined): CrsOriginRecord {
   const u = 'unknown';
   if (!resolved) return { source: u, name: u, epsg: u, verticalDatum: u, verticalSource: u };

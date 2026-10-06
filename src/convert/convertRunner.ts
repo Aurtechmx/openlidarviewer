@@ -12,6 +12,7 @@
  */
 
 import { fullDecodeRefusal } from '../export/fullDecodeRefusal';
+import { declaredCrsOrigin } from '../science/crsOrigin';
 import { exportDigests } from '../science/exportDigestRecord';
 import type { PointCloud } from '../model/PointCloud';
 import { convertCloud } from './convertCloud';
@@ -99,8 +100,11 @@ export interface BatchProgress {
 
 /** Append " (n)" before the extension to make `name` unique within `seen`. */
 export function dedupeName(name: string, seen: Set<string>): string {
-  if (!seen.has(name)) {
-    seen.add(name);
+  // Compared in lower case: a ZIP unpacked on a case-insensitive file system
+  // would otherwise overwrite "A.las" with "a.las".
+  const key = (n: string): string => n.toLowerCase();
+  if (!seen.has(key(name))) {
+    seen.add(key(name));
     return name;
   }
   const dot = name.lastIndexOf('.');
@@ -108,11 +112,11 @@ export function dedupeName(name: string, seen: Set<string>): string {
   const ext = dot > 0 ? name.slice(dot) : '';
   let i = 2;
   let candidate = `${stem} (${i})${ext}`;
-  while (seen.has(candidate)) {
+  while (seen.has(key(candidate))) {
     i++;
     candidate = `${stem} (${i})${ext}`;
   }
-  seen.add(candidate);
+  seen.add(key(candidate));
   return candidate;
 }
 
@@ -169,7 +173,7 @@ export async function runBatch(
         continue;
       }
       emit('converting');
-      const { file, report } = convertCloud(cloud, { ...options, digests: exportDigests({ sha256, note: null }, null) });
+      const { file, report } = convertCloud(cloud, { ...options, digests: exportDigests({ sha256, note: null }, declaredCrsOrigin(cloud.metadata?.crs)) });
       const finalFile = file
         ? { ...file, filename: dedupeName(file.filename, seen) }
         : null;

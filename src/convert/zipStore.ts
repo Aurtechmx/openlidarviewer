@@ -9,6 +9,8 @@
  * Pure data — no DOM. Deterministic given its inputs (timestamps are fixed).
  */
 
+import { singleLine, unsafeEntryName } from '../export/safeText';
+
 /** One entry to place in the archive. */
 export interface ZipEntry {
   readonly name: string;
@@ -115,6 +117,11 @@ export function buildZip(entries: ReadonlyArray<ZipEntry>): Uint8Array {
     throw new Error(
       `Cannot build a ZIP of ${entries.length.toLocaleString('en-US')} files — the format allows at most ${ZIP_MAX_ENTRIES.toLocaleString('en-US')}.`,
     );
+  }
+
+  for (const e of entries) {
+    const unsafe = unsafeEntryName(e.name);
+    if (unsafe) throw new Error(`Cannot ZIP "${singleLine(e.name)}": ${unsafe}.`);
   }
 
   let size = 0;
