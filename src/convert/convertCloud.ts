@@ -22,6 +22,15 @@ import { cloudToGlobal } from './globalPoints';
 import { describeLoss, inspectLegacyConversion } from '../lasSemantics';
 import { planClassSemantics } from './classSemantics';
 import {
+  acquisitionEvents,
+  acquisitionLossRefusal,
+  assessLegacyAcquisition,
+  eventLogEntry,
+  fitProvenance,
+  isMaterialAcquisitionLoss,
+  type ConversionEvent,
+} from './conversionEvents';
+import {
   countLegacyReturnClamp,
   legacyReturnClampProvenance,
   legacyReturnClampRefusal,
@@ -50,7 +59,12 @@ import {
   type ConvertedFile,
   type ConvertReport,
   type LogEntry,
+  LEGACY_ACQUISITION_LOSS_OPT_IN,
 } from './types';
+
+/** Logged when the file's text area could not hold every provenance line. */
+const PROVENANCE_TRIMMED =
+  'The provenance text was too long for the file, so only the conversion events are recorded in it.';
 
 const MIME: Record<string, string> = {
   las14: 'application/octet-stream',
@@ -82,6 +96,15 @@ export function convertCloud(
   opts: ConvertOptions,
 ): { file: ConvertedFile | null; report: ConvertReport } {
   const log: LogEntry[] = [];
+  // Everything the conversion changes or loses, once: the log, the panels and
+  // the written file's text area all read this list.
+  const events: ConversionEvent[] = [];
+  const record = (...added: ConversionEvent[]): void => {
+    for (const e of added) {
+      events.push(e);
+      log.push(eventLogEntry(e));
+    }
+  };
   const spec = CONVERT_FORMATS[opts.format];
   const fail = (msg: string, crsNote = '—'): { file: null; report: ConvertReport } => {
     log.push({ level: 'error', message: msg });
@@ -318,13 +341,15 @@ export function convertCloud(
         target: 'extended',
       });
       g = { ...g, classification: semantics.classification, classificationFlags: semantics.classificationFlags };
-      log.push(...semantics.log);
+      record(...semantics.events);
       if (outEpsg != null && outEpsg <= 65535 && wkt == null) {
         log.push({
           level: 'info',
           message: 'No WKT available for this CRS — recorded as GeoTIFF keys (strict LAS 1.4 readers prefer WKT for point formats 6+).',
         });
       }
+      const record14 = fitProvenance(lasProvenance, datumNote, events);
+      if (record14.trimmed) log.push({ level: 'warn', message: PROVENANCE_TRIMMED });
       bytes = writeLas14(g, {
         gpsStandardTime: gpsStandardFromSource,
         epsg: outEpsg ?? undefined,
@@ -334,7 +359,7 @@ export function convertCloud(
         verticalUnitCode,
         wkt,
         description: datumNote,
-        provenance: lasProvenance,
+        provenance: record14.lines,
         quantisation: quantPlan.use ?? undefined,
       });
     } else {
@@ -345,23 +370,36 @@ export function convertCloud(
       // ahead and the wrap is logged with its arithmetic. Only the `count`
       // records the writer emits are judged.
       const wrap = countLegacyClassWrap(g.classification?.subarray(0, g.count));
-      if (wrap.points > 0) {
-        if (!opts.allowLegacyClassWrap) return fail(legacyClassWrapRefusal(wrap), crsNote);
-        log.push({ level: 'warn', message: legacyClassWrapWarning(wrap.points) });
-      }
+      if (wrap.points > 0 && !opts.allowLegacyClassWrap) return fail(legacyClassWrapRefusal(wrap), crsNote);
       // Return number and number of returns are 3 bits each in LAS 1.2, and the
       // writer clamps them to 7, which changes which return a point is. Refused
-      // unless the request opts in; opted in, the file's provenance says so.
+      // unless the request opts in.
       const clamped = countLegacyReturnClamp(g.returnNumber, g.returnCount, g.count);
-      let legacyProvenance = lasProvenance;
-      if (clamped > 0) {
-        if (!opts.allowLegacyReturnClamp) return fail(legacyReturnClampRefusal(clamped), crsNote);
-        log.push({ level: 'warn', message: legacyReturnClampWarning(clamped) });
-        legacyProvenance = [...lasProvenance, legacyReturnClampProvenance(clamped)];
+      if (clamped > 0 && !opts.allowLegacyReturnClamp) return fail(legacyReturnClampRefusal(clamped), crsNote);
+      // The scan angle is clipped to 90 degrees and the scanner channel has no
+      // field. Refused unless the request opts in, and the opt-in covers these
+      // two losses only.
+      const acquisition = assessLegacyAcquisition(g.scanAngle, g.scannerChannel, g.count);
+      const acquisitionLoss = isMaterialAcquisitionLoss(acquisition);
+      if (acquisitionLoss && !opts.allowLegacyAcquisitionLoss) {
+        return fail(acquisitionLossRefusal(acquisition, LEGACY_ACQUISITION_LOSS_OPT_IN), crsNote);
       }
+      if (wrap.points > 0) {
+        record({
+          id: 'class-wrap', kind: 'clipped', level: 'warn', points: wrap.points,
+          message: legacyClassWrapWarning(wrap.points), acknowledged: true,
+        });
+      }
+      if (clamped > 0) {
+        record({
+          id: 'return-clamp', kind: 'clipped', level: 'warn', points: clamped,
+          message: legacyReturnClampWarning(clamped), record: legacyReturnClampProvenance(clamped), acknowledged: true,
+        });
+      }
+      record(...acquisitionEvents(acquisition, acquisitionLoss));
       // Numbers whose meaning differs between the two class tables. The
       // number is written as it is, so the report names each one.
-      log.push(
+      record(
         ...planClassSemantics({
           sourcePdrf: cloud.metadata?.pointFormat,
           provenance: cloud.classificationProvenance,
@@ -369,7 +407,7 @@ export function convertCloud(
           classificationFlags: g.classificationFlags,
           count: g.count,
           target: 'legacy',
-        }).log,
+        }).events,
       );
       // The other thing a legacy write drops. The extended encoding carries
       // overlap as a flag bit beside a real base class; the legacy byte has
@@ -384,12 +422,14 @@ export function convertCloud(
         }
         if (overlapped > 0) {
           const loss = describeLoss(inspectLegacyConversion([], true), LEGACY_PDRF_FOR_LOSS);
-          log.push({
-            level: 'warn',
-            message: `LAS 1.2 cannot record the overlap flag — ${overlapped.toLocaleString()} point${overlapped === 1 ? '' : 's'} ${overlapped === 1 ? 'carries' : 'carry'} it and ${loss}; the base class is written and the overlap mark is dropped. Use LAS 1.4 to preserve it.`,
+          record({
+            id: 'overlap-dropped', kind: 'dropped', level: 'warn', points: overlapped, acknowledged: false,
+            message: `LAS 1.2 cannot record the overlap flag \u2014 ${overlapped.toLocaleString()} point${overlapped === 1 ? '' : 's'} ${overlapped === 1 ? 'carries' : 'carry'} it and ${loss}; the base class is written and the overlap mark is dropped. Use LAS 1.4 to preserve it.`,
           });
         }
       }
+      const recordLegacy = fitProvenance(lasProvenance, datumNote, events);
+      if (recordLegacy.trimmed) log.push({ level: 'warn', message: PROVENANCE_TRIMMED });
       bytes = writeLas(g, {
         // Declare the time the source declared. Adjusted Standard GPS Time and
         // GPS Week Time are different quantities, so carrying the values across
@@ -402,7 +442,7 @@ export function convertCloud(
         verticalEpsg: srcCtx.verticalEpsg ?? null,
         verticalUnitCode,
         description: datumNote,
-        provenance: legacyProvenance,
+        provenance: recordLegacy.lines,
         quantisation: quantPlan.use ?? undefined,
       });
     }
@@ -423,6 +463,7 @@ export function convertCloud(
       pointCount: g.count,
       crsNote,
       log,
+      events,
       // Only reproject mode produces provenance; keep/assign omit the field.
       ...(transformProvenance ? { provenance: transformProvenance } : {}),
     },

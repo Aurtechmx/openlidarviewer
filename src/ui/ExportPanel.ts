@@ -15,10 +15,14 @@ import { showBusyScan } from './busyScan';
 import type { ExportHealth } from '../intelligence/scanStory';
 import { renderExportHealthPanel } from './scanStoryViews';
 import { el, optInRow } from './dom';
+import { conversionNotes, exportedLine } from './conversionNotes';
+import { notableEntries, warningSummary } from '../convert/conversionEvents';
 import { downloadBytes } from '../io/download';
 import { loadConvertEngine, loadFindingsPanel, loadLegacyClassGuard, loadSessionFindings } from '../lazyChunks';
 import {
   CONVERT_FORMATS,
+  LEGACY_ACQUISITION_LOSS_HINT,
+  LEGACY_ACQUISITION_LOSS_OPT_IN,
   LEGACY_CLASS_WRAP_OPT_IN,
   LEGACY_RETURN_CLAMP_HINT,
   LEGACY_RETURN_CLAMP_OPT_IN,
@@ -325,6 +329,11 @@ export class ExportPanel {
   /** Write LAS 1.2 even when returns above 7 clamp (see `allowLegacyReturnClamp`). */
   private _allowReturnClamp = false;
   private readonly _returnRow: HTMLElement;
+  /** Write LAS 1.2 even when scan angles clip or scanner channels drop (see `allowLegacyAcquisitionLoss`). */
+  private _allowAcquisitionLoss = false;
+  private readonly _acquisitionRow: HTMLElement;
+  /** Every warning of the last export, under the status line. */
+  private readonly _notes: HTMLElement;
   /**
    * The LAS 1.2 class-wrap preview, fetched on first use because it names
    * classes from tables kept out of the eager shell. Null until it arrives.
@@ -403,6 +412,8 @@ export class ExportPanel {
       text: 'LAS 1.2 keeps 5 bits of class, so 33 is written as 1 and 64 as 0. Unticked, such a file is refused.',
     }));
     this._returnRow = optInRow(LEGACY_RETURN_CLAMP_OPT_IN, LEGACY_RETURN_CLAMP_HINT, (on) => { this._allowReturnClamp = on; });
+    this._acquisitionRow = optInRow(LEGACY_ACQUISITION_LOSS_OPT_IN, LEGACY_ACQUISITION_LOSS_HINT, (on) => { this._allowAcquisitionLoss = on; });
+    this._notes = el('div', { className: 'olv-export-notes' });
     // The live "what you'll get" line — size, CRS, classification, before any write.
     this._summary = el('p', { className: 'olv-export-summary', text: '' });
     // The note is a sibling, not a tail on the summary line: the neutral
@@ -414,6 +425,8 @@ export class ExportPanel {
     }) as HTMLButtonElement;
     this._exportBtn.addEventListener('click', () => void this._export());
     this._status = el('p', { className: 'olv-export-status', text: 'Export the open scan to another format.' });
+    // Announce the outcome when it appears; the warnings list sits under it.
+    this._status.setAttribute('role', 'status');
     // The collapsed "Products" lane — derived artifacts (measurements today;
     // rasters / report / session to follow) kept out of the primary save flow.
     this._products = el('div', { className: 'olv-export-products' });
@@ -435,10 +448,12 @@ export class ExportPanel {
       this._classRow,
       this._wrapRow,
       this._returnRow,
+      this._acquisitionRow,
       this._summary,
       this._summaryNote,
       this._exportBtn,
       this._status,
+      this._notes,
       this._products,
     );
 
@@ -708,6 +723,7 @@ export class ExportPanel {
       info != null && this._format === 'las' && this._includeClass && info.classProvenance !== 'none';
     this._wrapRow.classList.toggle('olv-hidden', !legacyClasses);
     this._returnRow.classList.toggle('olv-hidden', this._format !== 'las');
+    this._acquisitionRow.classList.toggle('olv-hidden', this._format !== 'las');
     // Snapshot BEFORE `_legacyClassWrap` runs below: a fresh attempt clears
     // this flag as part of starting itself, so reading it afterwards would
     // only ever see that fresh (unset) state, never the failure that made
@@ -1236,6 +1252,12 @@ export class ExportPanel {
   private _setStatus(text: string, level: 'info' | 'warn' | 'error' = 'info'): void {
     this._status.textContent = text;
     this._status.className = `olv-export-status is-${level}`;
+    // The warning list belongs to one outcome; a new status replaces it.
+    this._showNotes(null);
+  }
+
+  private _showNotes(notes: HTMLElement | null): void {
+    this._notes.replaceChildren(...(notes ? [notes] : []));
   }
 
   private async _export(): Promise<void> {
@@ -1309,6 +1331,7 @@ export class ExportPanel {
     const includeClass = this._includeClass;
     const allowClassWrap = this._allowClassWrap;
     const allowReturnClamp = this._allowReturnClamp;
+    const allowAcquisitionLoss = this._allowAcquisitionLoss;
     const gzip = this._gzip;
 
     this._busy = true;
@@ -1395,6 +1418,7 @@ export class ExportPanel {
         omitClassification: !includeClass,
         allowLegacyClassWrap: allowClassWrap,
         allowLegacyReturnClamp: allowReturnClamp,
+        allowLegacyAcquisitionLoss: allowAcquisitionLoss,
         scopeNote,
         displaySample,
         // Read from the loaded cloud, so a truncated file is named as truncated;
@@ -1423,15 +1447,17 @@ export class ExportPanel {
         if ((format === 'xyz' || format === 'asc') && crsMode === 'keep' && activeWkt) {
           downloadBytes(file.filename.replace(/\.[^.]+$/, '.prj'), new TextEncoder().encode(activeWkt), 'text/plain');
         }
-        const warn = report.log.find((l) => l.level === 'warn');
         const sampleNote = displaySample ? displaySampleStatus(displaySample) : '';
         const clipNote = scopeNote ? ` · ${scopeNote}` : '';
+        const entries = notableEntries(report);
+        const hasWarning = entries.some((l) => l.level === 'warn');
         this._setStatus(
-          warn
-            ? `${warn.message}${sampleNote}`
+          entries.length > 0
+            ? exportedLine(report.pointCount, entries.length, warningSummary(entries), `${sampleNote}${clipNote}`)
             : `Exported ${report.pointCount.toLocaleString()} points${sampleNote}${clipNote} · ${report.crsNote}`,
-          warn || sampleNote ? 'warn' : 'info',
+          hasWarning || sampleNote ? 'warn' : 'info',
         );
+        this._showNotes(conversionNotes(report));
       } else {
         const err = report.log.find((l) => l.level === 'error');
         this._setStatus(err ? err.message : 'Export failed.', 'error');

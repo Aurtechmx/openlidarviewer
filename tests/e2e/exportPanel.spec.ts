@@ -155,7 +155,8 @@ test('Export panel: LAS 1.2 class-wrap opt-in previews, refuses, then writes wra
   const downloadPromise = page.waitForEvent('download');
   await panel.locator('.olv-bc-convert').click();
   const download = await downloadPromise;
-  await expect(panel.locator('.olv-export-status')).toHaveText(legacyClassWrapWarning(wrap.points));
+  await expect(panel.locator('.olv-export-status')).toContainText('with 1 warning');
+  await expect(panel.locator('.olv-conv-note')).toHaveText(legacyClassWrapWarning(wrap.points));
 
   const path = await download.path();
   if (!path) throw new Error('download produced no local path');

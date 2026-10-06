@@ -84,7 +84,10 @@ export function legacyClassWrapRefusal(wrap: LegacyClassWrap): string {
 
 /** The warning an opted-in write logs, with the arithmetic a reader will see. */
 export function legacyClassWrapWarning(points: number): string {
-  return `LAS 1.2 stores 5-bit classes — ${points.toLocaleString()} points with classes > 31 wrap to their low 5 bits (class & 31), so 33 reads back as 1 and 64 as 0; use LAS 1.4 to preserve them.`;
+  const tail = 'so 33 reads back as 1 and 64 as 0; use LAS 1.4 to preserve them.';
+  return points === 1
+    ? `LAS 1.2 stores 5-bit classes — 1 point with a class > 31 wraps to its low 5 bits (class & 31), ${tail}`
+    : `LAS 1.2 stores 5-bit classes — ${points.toLocaleString()} points with classes > 31 wrap to their low 5 bits (class & 31), ${tail}`;
 }
 
 /**

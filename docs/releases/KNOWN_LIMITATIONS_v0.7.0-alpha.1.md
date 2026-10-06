@@ -287,7 +287,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 97 for the shell, 75 for the renderer and 23 for the Analyse panel,
-across 1078 modules with no dependency cycles.
+across 1080 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -356,6 +356,13 @@ floor of the data minimum, and the provenance text gives the reason.
   point format is unknown, is not translated: when such a classification of a
   legacy file is written as LAS 1.4, untouched legacy class 8 and 12 points are
   written as the reserved codes 8 and 12, with no translation and no warning.
+- A LAS 1.2 write cannot keep every acquisition field. Scan angles are stored
+  as whole degrees from -90 to 90 and there is no scanner channel, so a LAS 1.4
+  file with a larger angle or a nonzero channel is refused until the opt-in
+  for those two losses is ticked. Angles inside the range are rounded to the
+  nearest degree, which the file's text area records without asking. The text
+  area is the only place the file itself records a conversion: a reader that
+  ignores it sees nothing, and a format other than LAS has no such record.
 - The reproduction pack's metrics reproduce exactly under the Node version
   pinned in `.nvmrc`. Another Node or V8 version can change the last digits.
 

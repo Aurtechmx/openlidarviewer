@@ -169,10 +169,11 @@
   padding: var(--space-xs) var(--space-md); cursor: pointer;
 }
 .olv-bc-row-dl:hover { border-color: var(--accent); }
-.olv-bc-row-log { margin: var(--space-sm) 0 0; padding-left: var(--space-xl); display: flex; flex-direction: column; gap: var(--space-2xs); }
-.olv-bc-row-log li { font-size: var(--text-xs); }
-.olv-bc-log-warn { color: var(--rating-moderate); }
-.olv-bc-log-error { color: var(--rating-weak); }
+.olv-conv-notes { margin: var(--space-xs) 0 0; font-size: var(--text-xs); }
+.olv-conv-notes-summary { cursor: pointer; color: var(--text-dim); }
+.olv-conv-notes-list { margin: var(--space-xs) 0 0; padding-left: var(--space-xl); display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-conv-note.is-warn { color: var(--rating-moderate); }
+.olv-conv-note.is-error { color: var(--rating-weak); }
 .olv-bc-row-error { font-size: var(--text-xs); color: var(--rating-weak); }
 
 @media (max-width: 767px) {
