@@ -87,6 +87,8 @@ export interface SnapshotHost {
   renderFrame(): void;
   /** The live GL drawing-buffer canvas. */
   glCanvas(): HTMLCanvasElement;
+  /** The scene background (a colour object, a texture or null), for the opaque underlay. */
+  background(): unknown;
   /** The active continuous-colour legend spec, or null for categorical modes. */
   activeColorbar(): ActiveColorbar | null;
   /** Render the measurement overlay against the live camera and serialise it. */
@@ -163,6 +165,47 @@ export function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   });
 }
 
+/** The 2-D drawing calls {@link underlayOpaque} uses. */
+export interface OpaqueUnderlayContext {
+  save(): void;
+  restore(): void;
+  fillRect(x: number, y: number, w: number, h: number): void;
+  globalCompositeOperation: GlobalCompositeOperation;
+  fillStyle: string | CanvasGradient | CanvasPattern;
+}
+
+/** The colour used under a frame when the scene background is not a plain colour. */
+export const FALLBACK_UNDERLAY = '#000';
+
+/**
+ * A CSS colour for the scene background. A three.js `Color` reports its sRGB
+ * value through `getStyle()`; a texture, null or anything else has no single
+ * colour and gives the fallback.
+ */
+export function backgroundCss(background: unknown): string {
+  const style = (background as { getStyle?: () => string } | null | undefined)?.getStyle;
+  if (typeof style !== 'function') return FALLBACK_UNDERLAY;
+  const css = style.call(background);
+  return typeof css === 'string' && css !== '' ? css : FALLBACK_UNDERLAY;
+}
+
+/**
+ * Make every pixel of a drawn frame opaque by painting the scene background
+ * beneath it. The live renderer has no alpha channel (`alpha: false`), so the
+ * frame is opaque on screen. A browser engine can still report the partial
+ * alpha that point blending left in the drawing buffer through `drawImage`, and
+ * the exported PNG then holds partly transparent pixels around the points.
+ * `destination-over` paints only where the frame leaves room, so a pixel that is
+ * already opaque keeps its colour and the rest take the background.
+ */
+export function underlayOpaque(ctx: OpaqueUnderlayContext, width: number, height: number, colour: string): void {
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-over';
+  ctx.fillStyle = colour;
+  ctx.fillRect(0, 0, width, height);
+  ctx.restore();
+}
+
 /**
  * Render a frame and copy the GL canvas into a 2-D canvas in the same task.
  *
@@ -171,9 +214,17 @@ export function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
  * after any await can therefore see an empty buffer. `drawImage` is
  * synchronous, so rendering and copying here, with nothing awaited between,
  * reads the frame just drawn. The copy can then be encoded asynchronously.
- * Returns the GL canvas itself when no 2-D context is available.
+ * The copy is opaque: the scene `background` is painted under the frame (see
+ * {@link underlayOpaque}). Returns the GL canvas itself when no 2-D context is
+ * available.
  */
-export function renderedCopy(gl: HTMLCanvasElement, renderFrame: () => void, width = gl.width, height = gl.height): HTMLCanvasElement {
+export function renderedCopy(
+  gl: HTMLCanvasElement,
+  renderFrame: () => void,
+  width = gl.width,
+  height = gl.height,
+  background?: unknown,
+): HTMLCanvasElement {
   const out = typeof document === 'undefined' ? null : document.createElement('canvas');
   if (out) {
     out.width = width;
@@ -183,12 +234,13 @@ export function renderedCopy(gl: HTMLCanvasElement, renderFrame: () => void, wid
   renderFrame();
   if (!out || !ctx) return gl;
   ctx.drawImage(gl, 0, 0, width, height);
+  underlayOpaque(ctx, width, height, backgroundCss(background));
   return out;
 }
 
 /** Render a frame and encode it to a PNG `Blob`, reading the canvas in the render's task. */
-export function renderedBlob(gl: HTMLCanvasElement, renderFrame: () => void): Promise<Blob> {
-  return canvasToBlob(renderedCopy(gl, renderFrame));
+export function renderedBlob(gl: HTMLCanvasElement, renderFrame: () => void, background?: unknown): Promise<Blob> {
+  return canvasToBlob(renderedCopy(gl, renderFrame, gl.width, gl.height, background));
 }
 
 /**
@@ -238,12 +290,12 @@ export async function captureSnapshot(
   // Fast path: no overlays + no upscale + no scale bar — return the
   // GL canvas untouched at native resolution.
   if (fastPathEligible(plan, activeBar)) {
-    return renderedBlob(gl, () => host.renderFrame());
+    return renderedBlob(gl, () => host.renderFrame(), host.background());
   }
 
   // Composite path: render once more and draw that frame into a 2-D canvas at
   // full (optionally upscaled) resolution in the same task.
-  const out = renderedCopy(gl, () => host.renderFrame(), gl.width * plan.supersample, gl.height * plan.supersample);
+  const out = renderedCopy(gl, () => host.renderFrame(), gl.width * plan.supersample, gl.height * plan.supersample, host.background());
   const ctx = out === gl ? null : out.getContext('2d');
   if (!ctx) return canvasToBlob(gl);
 

@@ -4383,6 +4383,7 @@ export class Viewer {
         else this._renderer.render(this._scene, this._activeCamera());
       },
       glCanvas: () => this._renderer.domElement as HTMLCanvasElement,
+      background: () => this._scene.background,
       activeColorbar: () => this.activeColorbar(),
       measurementsOverlaySVG: () => {
         this._measure.render(this._activeCamera() as THREE.PerspectiveCamera, this._canvas);
@@ -4398,10 +4399,7 @@ export class Viewer {
       },
       inspectorSelection: () => this._inspect.selectionForExport(),
       probeReadout: () => this._probe.activeProbeForExport(),
-      canvasRect: () => {
-        const rect = this._canvas.getBoundingClientRect();
-        return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
-      },
+      canvasRect: () => this._canvas.getBoundingClientRect(),
       scaleBarCamera: () => ({
         distanceToTarget: this._camera.position.distanceTo(this._controls.target),
         fovYRadians: (this._camera.fov * Math.PI) / 180,
@@ -4627,7 +4625,7 @@ export class Viewer {
       };
       await present();
       await present();
-      return await (await loadSnapshot()).renderedBlob(gl, renderFrame);
+      return await (await loadSnapshot()).renderedBlob(gl, renderFrame, this._scene.background);
     } finally {
       this._renderer.setPixelRatio(prevRatio);
       this._renderer.setSize(prevSize.x, prevSize.y, false);

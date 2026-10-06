@@ -259,7 +259,7 @@ in `main.ts`, which reaches the module through `loadTestSeamMount()` in
 and the chunk
 (`npm run check:no-test-seam`). `main.ts` went from 4,426 to 4,348 lines.
 
-`src/render/Viewer.ts` (5,980): the constructor and a handful of large
+`src/render/Viewer.ts` (5,978): the constructor and a handful of large
 methods dominate:
 
 Done: the renderer, scene, cameras and EDL pipeline are built by
