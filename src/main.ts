@@ -1156,7 +1156,7 @@ const inspector = new Inspector({
     viewer: () => viewer,
     canvas: stage.canvas,
     context: () => crsService.context(),
-    sceneOrigin: () => exportGeoContext().origin,
+    sceneOrigin: () => sessionIoDeps.exportOrigin(), // placement-aware: a placed layer is local to the project origin
     toast: showLassoToast,
     crs: crsService,
   },

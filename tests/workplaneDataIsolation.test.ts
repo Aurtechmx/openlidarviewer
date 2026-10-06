@@ -6,15 +6,17 @@
  * test alone could not fail. These checks hold the property that makes it true,
  * and each fails when the property breaks:
  *
- *  1. No source file reads the three.js scene graph through a traversal or
- *     raycast API. Picking, measurement, terrain, profiles and exports all read
+ *  1. No source file reads the three.js scene graph: any `.children` read,
+ *     `traverse` or `.raycast(` outside a reviewed list of files (DOM and
+ *     parsed-tree readers, and the governor) fails. Picking, measurement, terrain, profiles and exports all read
  *     the scan's own buffers; a scene walk is the only way a grid line could be
  *     read as data. (Checked by adding `scene.traverse(() => {})` to a terrain
  *     module: this test then fails and names the file.)
  *  2. The one scene walker in the tree, the frame-budget governor, only reduces
  *     instanced point meshes and leaves the grid's line sets untouched.
- *  3. No data-path module imports the plane's drawing or controller; only the
- *     session parser reads its plain settings.
+ *  3. Only the plane's own modules, its View panel host, the lazy loader and
+ *     the session code import the plane, and the session code reads only its
+ *     plain settings.
  *  4. The grid's object names appear in the plane's own modules only.
  */
 import { describe, it, expect } from 'vitest';
@@ -50,10 +52,41 @@ function code(file: string): string {
 const rel = (f: string): string => relative(ROOT, f).split('\\').join('/');
 
 describe('the reference plane cannot reach a data path', () => {
-  it('no source file walks or raycasts the scene graph', () => {
-    const SCENE_READ = /\b(traverse|traverseVisible|traverseAncestors|intersectObjects?|getObjectBy\w*|getObjectsByProperty)\s*\(|\b_?scene\.children\b/;
-    const offenders = sources().filter((f) => SCENE_READ.test(code(f))).map(rel);
-    expect(offenders).toEqual([]);
+  it('no source file walks or raycasts the scene graph, outside a reviewed list', () => {
+    // Any `.children` read, any `traverse`, any `.raycast(` call. Each file
+    // below reads `.children` of something that is not the three.js scene (a
+    // DOM node, a parsed XML / WKT / glTF / tileset tree), or is the reviewed
+    // scene walker. A new file that matches must be read and added here.
+    const SCENE_READ = /\.children\b|\.raycast\s*\(|\btraverse\b|\bintersectObjects?\s*\(|\bgetObjectBy\w*\s*\(|\bgetObjectsByProperty\s*\(/;
+    const REVIEWED: Record<string, string> = {
+      'src/render/perf/governorWiring.ts': 'scene walker: reduces instanced point meshes only (checked below)',
+      'src/science/methodRegistry.ts': 'the word "traverse" in a method description string',
+      'src/render/measure/MeasureOverlay.ts': 'DOM: SVG element children',
+      'src/ui/labGuide.ts': 'DOM: spread of child nodes',
+      'src/ui/AnalysePanel.ts': 'DOM',
+      'src/ui/MeasurePanel.ts': 'DOM',
+      'src/ui/ClassLegendPanel.ts': 'DOM',
+      'src/ui/Inspector.ts': 'DOM',
+      'src/ui/StreamingPanel.ts': 'DOM',
+      'src/app/workspace/workspaceRouter.ts': 'DOM',
+      'src/app/workspace/modeHome.ts': 'DOM',
+      'src/app/sessionLog/sessionLogRecorder.ts': 'DOM',
+      'src/io/wktParser.ts': 'WKT parse tree',
+      'src/io/crs.ts': 'WKT parse tree',
+      'src/io/loadGltf.ts': 'glTF JSON node tree',
+      'src/io/e57/schema.ts': 'E57 XML tree',
+      'src/io/e57/xml.ts': 'E57 XML tree',
+      'src/io/tiles3d/externalTilesets.ts': '3D Tiles tileset JSON tree',
+      'src/io/tiles3d/tilesetTraversal.ts': '3D Tiles tileset JSON tree',
+      'src/io/tiles3d/tileTransform.ts': '3D Tiles tileset JSON tree',
+      'src/io/tiles3d/tilesetFrame.ts': '3D Tiles tileset JSON tree',
+      'src/io/tiles3d/tileset.ts': '3D Tiles tileset JSON tree',
+      'src/io/tiles3d/implicitExpand.ts': '3D Tiles tileset JSON tree',
+    };
+    const matches = sources().filter((f) => SCENE_READ.test(code(f))).map(rel);
+    expect(matches.filter((r) => !(r in REVIEWED))).toEqual([]);
+    // A reviewed file that stopped matching is dropped from the list, so the list stays honest.
+    expect(Object.keys(REVIEWED).filter((r) => !matches.includes(r))).toEqual([]);
   });
 
   it('the frame-budget governor, the one scene walker, leaves the grid alone', () => {
@@ -78,16 +111,25 @@ describe('the reference plane cannot reach a data path', () => {
     overlay.dispose();
   });
 
-  it('no data-path module imports the plane, beyond the session reading its settings', () => {
-    const DATA = ['src/terrain/', 'src/analysis/', 'src/science/', 'src/export/', 'src/io/', 'src/convert/', 'src/report/', 'src/render/measure/', 'src/render/streaming/', 'src/geo/', 'src/process/', 'src/validation/'];
-    const IMPORT = /from\s+['"]([^'"]*workplane[^'"]*)['"]|import\(\s*['"]([^'"]*workplane[^'"]*)['"]/g;
+  it('only the plane, its View panel host and the session read the plane modules', () => {
+    // src/app and src/render included: a module there that started to import
+    // the drawing or the controller would be a new path from the plane to data.
+    const IMPORT = /from\s+['"]([^'"]*(?:workplane|referencePlaneSection)[^'"]*)['"]|import\(\s*['"]([^'"]*(?:workplane|referencePlaneSection)[^'"]*)['"]/g;
+    const PLANE = /^src\/(render\/workplane\/|app\/workplane|ui\/workplanePanel|ui\/referencePlaneSection)/;
+    const ALLOWED: Record<string, RegExp> = {
+      'src/ui/Inspector.ts': /referencePlaneSection$/,
+      'src/lazyChunks.ts': /app\/workplaneMount$/,
+      'src/io/session.ts': /model\/workplaneSettings$/,
+      'src/app/sessionIo.ts': /model\/workplaneSettings$/,
+      'src/app/sessionSnapshot.ts': /model\/workplaneSettings$/,
+    };
     const found: string[] = [];
     for (const f of sources()) {
       const r = rel(f);
-      if (!DATA.some((d) => r.startsWith(d))) continue;
+      if (PLANE.test(r)) continue;
       for (const m of code(f).matchAll(IMPORT)) {
         const spec = m[1] ?? m[2];
-        if (!spec.endsWith('model/workplaneSettings')) found.push(`${r} -> ${spec}`);
+        if (!ALLOWED[r]?.test(spec)) found.push(`${r} -> ${spec}`);
       }
     }
     expect(found).toEqual([]);

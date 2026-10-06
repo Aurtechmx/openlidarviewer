@@ -501,8 +501,13 @@ sets. It has these limits:
   polygon offset does not apply to lines.
 - Lines are one pixel wide on both renderer backends.
 - With two or more layers that share no datum, the plane is not drawn: there is
-  no single source frame to place it in.
+  no single source frame to place it in. That includes a mounted multi-tile
+  project, whose tiles have different file origins: the panel says "Close the
+  other layers to draw it". A single tile left placed in a project frame is
+  drawn in that tile's own source coordinates.
 - "Use scan minimum" takes the lowest point of every visible layer's bounding
-  box, which is a box corner, not necessarily a point a pick would find.
+  box, which is a box corner, not necessarily a point a pick would find. For a
+  streamed COPC or EPT source it is the minimum of the header's bounding box,
+  not of the points loaded so far.
 - Closing the scan removes the plane. A plane is not carried from one scan to
   the next except through a saved session.

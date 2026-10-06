@@ -50,8 +50,13 @@ export const MAX_SEGMENTS_PER_LINE = 32;
  * five per major) and the loop's last increment.
  */
 export const MAX_SAFE_INDEX = 2 ** 50;
-/** Most minor lines per major interval the geometry will subdivide into. */
-const MAX_MINOR_RATIO = 10;
+/**
+ * Most minor lines per major interval. Five, so the largest minor index,
+ * 5 x 2^50, stays below 2^53 and every minor loop counts exactly. The minor
+ * step is a quarter or a fifth of the major (`minorStepFor`); a finer one is
+ * not subdivided at all rather than drawn at a spacing the readout does not state.
+ */
+export const MAX_MINOR_RATIO = 5;
 /** Most minor lines per direction; beyond this the minors are left out. */
 export const MAX_MINOR_LINES = 600;
 /** Lines closer than this on screen are not drawn. */
@@ -212,7 +217,8 @@ export function buildWorkplaneGeometry(input: WorkplaneGeometryInput): Workplane
   }
 
   const minorSet = new SetBuilder(plane, minor);
-  const r = minor > 0 && minor < major ? Math.min(MAX_MINOR_RATIO, Math.round(major / minor)) : 0;
+  const ratio = minor > 0 && minor < major ? Math.round(major / minor) : 0;
+  const r = ratio <= MAX_MINOR_RATIO ? ratio : 0;
   const minorCount = r * Math.max(patch.iMax - patch.iMin, patch.jMax - patch.jMin);
   // Minor lines are faint and fade first, so half the segments carry their fade:
   // they are most of the vertices, and this halves the per-move fade cost.

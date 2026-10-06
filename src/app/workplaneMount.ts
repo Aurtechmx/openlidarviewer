@@ -57,12 +57,11 @@ export function mountWorkplane(
   panel.render(controller.view());
   // Esc leaves a pick in progress. Registered for the life of the mount; it does
   // nothing unless a pick is running, so other Esc owners are unaffected.
-  // Capture phase, and stopped there, so the app's other Esc owners (leave a
-  // tool, close a panel) do not also act on the Esc that ends a pick.
+  // Esc ends a pick only when no dialog or palette is open, and is not stopped,
+  // so an Esc meant for a dialog reaches it and nothing else is swallowed.
   const onKey = (e: KeyboardEvent): void => {
     if (e.key !== 'Escape' || !controller.view().picking) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
+    if (document.querySelector('[aria-modal="true"], dialog[open], .olv-palette:not(.olv-hidden)')) return;
     controller.cancelPick();
   };
   window.addEventListener('keydown', onKey, true);

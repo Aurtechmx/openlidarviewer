@@ -269,3 +269,29 @@ describe('unsafe inputs cannot hang the tab', () => {
     expect(g.major.vertices.length / 3).toBeLessThan(30_000);
   });
 });
+
+describe('minor subdivision near the index limit', () => {
+  it('a minor step of a tenth of the major is not subdivided, so the minor index stays exact', () => {
+    // Indices near 2^50: ten minors per major would reach 10 x 2^50 > 2^53.
+    const big = 2 ** 50 - 10;
+    const t0 = performance.now();
+    const g = buildWorkplaneGeometry({
+      plane: principalPlane('horizontal', [0, 0, 0], 'z'),
+      patch: { iMin: big - 4, iMax: big, jMin: big - 4, jMax: big },
+      major: 1, minor: 0.1, showMinor: true, sceneOrigin: ZERO,
+    });
+    expect(performance.now() - t0).toBeLessThan(50);
+    expect(g.minor.vertices.length).toBe(0);
+    expect(g.major.vertices.length).toBeGreaterThan(0);
+  });
+
+  it('fifths are still drawn there', () => {
+    const big = 2 ** 50 - 10;
+    const g = buildWorkplaneGeometry({
+      plane: principalPlane('horizontal', [0, 0, 0], 'z'),
+      patch: { iMin: big - 4, iMax: big, jMin: big - 4, jMax: big },
+      major: 1, minor: 0.2, showMinor: true, sceneOrigin: ZERO,
+    });
+    expect(g.minor.vertices.length).toBeGreaterThan(0);
+  });
+});

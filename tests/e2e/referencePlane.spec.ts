@@ -278,3 +278,57 @@ test('reference plane on the WebGPU backend @gpu', async ({ page }) => {
   expect(await litPixels(page)).toBeGreaterThan(litBefore * 1.05);
   expect(errors).toEqual([]);
 });
+
+type PickApi = {
+  layerProjectPoints: (i: number) => Array<{ id: string; project: [number, number, number] }>;
+  projectToClient: (p: { x: number; y: number; z: number }) => { x: number; y: number } | null;
+  pickAtClient: (x: number, y: number) => boolean;
+};
+
+test('reference plane: three points picked in perspective on known scan points', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto('/?test=1');
+  await dropHillsPly(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await waitForCameraSettled(page);
+  const dismiss = page.locator('.olv-pc-dismiss');
+  if (await dismiss.count()) await dismiss.first().click().catch(() => {});
+  const section = await openSection(page);
+  await section.locator('.olv-refplane-toggle').click();
+  const body = section.locator('.olv-refplane-body');
+  const status = body.locator('.olv-refplane-status');
+  await body.getByRole('button', { name: 'Pick 3 points' }).click();
+  await expect(status).toContainText('Click the first point');
+  // Count the pointer events the canvas receives, to tell a click that never
+  // arrived from one whose ray missed.
+  await page.evaluate(() => {
+    const w = window as unknown as { __pd: number; __pu: number };
+    w.__pd = 0;
+    w.__pu = 0;
+    const c = document.querySelector('.olv-canvas')!;
+    c.addEventListener('pointerdown', () => { w.__pd++; });
+    c.addEventListener('pointerup', () => { w.__pu++; });
+  });
+  // Points of the 70 x 70 hills grid, well apart: near one corner, the far
+  // side and the middle of the opposite edge.
+  const indices = [70 * 12 + 12, 70 * 12 + 57, 70 * 57 + 35];
+  const prompts = ['Click the second point', 'Click the third point', 'passes through them exactly'];
+  for (const [k, i] of indices.entries()) {
+    const at = await page.evaluate((idx) => {
+      const api = (window as unknown as { __OLV_TEST_API__: PickApi }).__OLV_TEST_API__;
+      const p = api.layerProjectPoints(idx)[0]?.project;
+      if (!p) return null;
+      const xy = api.projectToClient({ x: p[0], y: p[1], z: p[2] });
+      return xy ? { ...xy, picks: api.pickAtClient(xy.x, xy.y), top: document.elementFromPoint(xy.x, xy.y)?.className ?? '' } : null;
+    }, i);
+    expect(at, `point ${i} projects onto the canvas`).not.toBeNull();
+    await page.mouse.click(at!.x, at!.y);
+    const counts = await page.evaluate(() => {
+      const w = window as unknown as { __pd: number; __pu: number };
+      return `${w.__pd} down / ${w.__pu} up`;
+    });
+    await expect(status, `pick ${k + 1}: viewer pick hit=${at!.picks}, element under pointer "${at!.top}", canvas got ${counts}`).toContainText(prompts[k]);
+  }
+  await expect(body.locator('.olv-refplane-readout')).toContainText(/Orientation: Through 3 picked points, dip [\d.]+°/);
+  await expect(body).toHaveAttribute('data-drawn', 'true');
+});

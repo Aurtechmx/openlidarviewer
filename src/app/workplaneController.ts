@@ -178,11 +178,23 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
   let drawing: WorkplaneDrawing | null = null;
   let unsubscribeFrame: (() => void) | null = null;
   let previousMajor: number | null = null;
-  let lastKey = '';
   let lastSpacing: (GridSpacing & { showMinor: boolean }) | null = null;
   let lastGeom: WorkplaneGeometry | null = null;
   let lastPlane: WorkplaneBasis | null = null;
-  let lastPose = '';
+  // Numeric keys, compared in place, so an idle or orbiting frame allocates no strings.
+  const lastKeyNums: number[] = [];
+  const lastPoseNums: number[] = [];
+  const sameAs = (store: number[], next: readonly number[]): boolean => {
+    if (store.length !== next.length) return false;
+    for (let i = 0; i < next.length; i++) if (store[i] !== next[i]) return false;
+    return true;
+  };
+  const keep = (store: number[], next: readonly number[]): void => {
+    store.length = next.length;
+    for (let i = 0; i < next.length; i++) store[i] = next[i];
+  };
+  // The scan box projected on the plane, kept until the box or the plane moves.
+  const boxPlaneCache = { inputs: [] as number[], value: [0, 0, 0, 0] as [number, number, number, number] };
   let drawn = false;
   let hideDepth = 0;
   let floored = false;
@@ -297,9 +309,9 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
     drawing?.dispose();
     drawing = null;
     drawn = false;
-    lastKey = '';
+    lastKeyNums.length = 0;
     lastGeom = null;
-    lastPose = '';
+    lastPoseNums.length = 0;
   };
 
   /** Write the per-vertex fade for the current camera into every line set's buffer. */
@@ -381,35 +393,41 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
     const facing = Math.abs(fx * b.normal[0] + fy * b.normal[1] + fz * b.normal[2]) / (Math.hypot(fx, fy, fz) || 1);
     const showMinor = spacing.minor * sample.pxPerUnit >= MINOR_MIN_PX && (viewer.orthographic || facing >= 0.3);
     // The scan's box on the plane, and its largest dimension.
-    const corners: Vec3[] = [];
-    for (const x of [box.min[0], box.max[0]]) for (const y of [box.min[1], box.max[1]]) for (const z of [box.min[2], box.max[2]]) corners.push([x, y, z]);
-    const st = corners.map((c) => planeCoordsOf(c, b));
-    const boxPlane = [
-      Math.min(...st.map((p) => p[0])),
-      Math.max(...st.map((p) => p[0])),
-      Math.min(...st.map((p) => p[1])),
-      Math.max(...st.map((p) => p[1])),
-    ] as const;
+    const boxInputs = [...box.min, ...box.max, ...b.origin, ...b.u, ...b.v];
+    if (!sameAs(boxPlaneCache.inputs, boxInputs)) {
+      keep(boxPlaneCache.inputs, boxInputs);
+      const v = boxPlaneCache.value;
+      v[0] = v[2] = Infinity;
+      v[1] = v[3] = -Infinity;
+      for (const x of [box.min[0], box.max[0]]) for (const y of [box.min[1], box.max[1]]) for (const z of [box.min[2], box.max[2]]) {
+        const [cs, ct] = planeCoordsOf([x, y, z], b);
+        v[0] = Math.min(v[0], cs);
+        v[1] = Math.max(v[1], cs);
+        v[2] = Math.min(v[2], ct);
+        v[3] = Math.max(v[3], ct);
+      }
+    }
+    const boxPlane = boxPlaneCache.value;
     const patch = patchFor(boxPlane, scanSize, sample.focus, spacing.major);
     if (!patch) {
       block('The origin is too far from the scan for this spacing, so the plane is not drawn. Use the scan centre or a coarser spacing.', wasBlocked);
       return;
     }
-    const key = [spacing.major, spacing.minor, showMinor, patch.iMin, patch.iMax, patch.jMin, patch.jMax, ...b.origin, ...b.normal, ...b.u, ...sceneOrigin].join('|');
+    const key = [spacing.major, spacing.minor, showMinor ? 1 : 0, patch.iMin, patch.iMax, patch.jMin, patch.jMax, ...b.origin, ...b.normal, ...b.u, ...sceneOrigin];
     lastSpacing = { ...spacing, showMinor };
     if (wasBlocked) emit();
     drawing ??= deps.makeDrawing(viewer.derivedLayerHost());
     drawing.setBackdrop(deps.lightBackdrop() ? 'light' : 'dark');
-    const pose = [...cam.position, ...cam.target, cam.fov ?? DEFAULT_FOV, viewer.orthographic, h].join('|');
-    if (key === lastKey) {
-      if (pose !== lastPose) {
-        lastPose = pose;
+    const pose = [...cam.position, ...cam.target, cam.fov ?? DEFAULT_FOV, viewer.orthographic ? 1 : 0, h];
+    if (sameAs(lastKeyNums, key)) {
+      if (!sameAs(lastPoseNums, pose)) {
+        keep(lastPoseNums, pose);
         applyFade(cam, viewer.orthographic);
       }
       return;
     }
-    lastKey = key;
-    lastPose = pose;
+    keep(lastKeyNums, key);
+    keep(lastPoseNums, pose);
     lastPlane = b;
     lastGeom = buildWorkplaneGeometry({ plane: b, patch, major: spacing.major, minor: spacing.minor, showMinor, sceneOrigin });
     drawing.update(lastGeom);
@@ -440,7 +458,7 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
       unsubscribeFrames();
       releaseGpu();
     }
-    lastKey = '';
+    lastKeyNums.length = 0;
     refresh();
     emit();
   };
@@ -454,6 +472,13 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
     press = null;
     if (!picking || e.button !== 0 || !start) return;
     if (Math.hypot(e.offsetX - start.x, e.offsetY - start.y) > CLICK_SLOP_PX) return; // an orbit drag
+    // A measure, inspect or annotate tool turned on mid-pick owns this click.
+    if (deps.viewer()?.toolActive) {
+      stopPicking();
+      status = 'Picking stopped: another tool is taking clicks on the scan.';
+      emit();
+      return;
+    }
     const w = deps.canvas.clientWidth;
     const h = deps.canvas.clientHeight;
     if (!w || !h) return;
@@ -486,6 +511,11 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
         return;
       }
       apply({ ...settings, originH: [p[a], p[b]], elevation: elevationOf(p, axis()), elevationSource: 'picked' }, 'Origin and elevation set from the picked point.');
+      return;
+    }
+    if (!inRange(...p)) {
+      status = 'The picked point is out of range.';
+      emit();
       return;
     }
     picks.push(p);
@@ -557,7 +587,13 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
         emit();
         return;
       }
-      apply({ ...settings, elevation: box.min[upIndex(axis())], elevationSource: 'scan-minimum' }, 'Elevation set to the scan minimum.');
+      const min = box.min[upIndex(axis())];
+      if (!inRange(min)) {
+        status = 'The scan minimum is out of range for the plane.';
+        emit();
+        return;
+      }
+      apply({ ...settings, elevation: min, elevationSource: 'scan-minimum' }, 'Elevation set to the scan minimum.');
     },
     beginPick(kind) {
       if (!hasScan()) {
@@ -621,7 +657,7 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
     },
     refresh,
     reframe() {
-      lastKey = '';
+      lastKeyNums.length = 0;
       refresh();
       emit();
     },

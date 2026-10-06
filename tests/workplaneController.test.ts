@@ -388,3 +388,111 @@ describe('hostile settings never hang the controller', () => {
     expect(v.readout[2]).toContain(v.elevation!.toFixed(3));
   });
 });
+
+describe('a layer still placed in the project frame (tile B after closing tile A)', () => {
+  // Tiles A and B were mounted: the project origin is A's file origin OA, and
+  // B is placed with sourceToProject = OB - OA. A is closed; B stays placed.
+  const OA: [number, number, number] = [500000, 4100000, 100];
+  const OB: [number, number, number] = [500900, 4100400, 120];
+  // B's points span 30 m in source coordinates from OB; its scene coordinates
+  // are source - OA, the frame the placed mesh is drawn in.
+  const sceneBounds = [OB[0] - OA[0], OB[1] - OA[1], OB[2] - OA[2], OB[0] - OA[0] + 30, OB[1] - OA[1] + 30, OB[2] - OA[2] + 5];
+
+  async function placedHarness(useRawSourceOrigin: boolean) {
+    const { sessionImportOrigins } = await import('../src/app/projectFrame');
+    const origins = sessionImportOrigins({
+      frame: () => ({ projectOrigin: OA }),
+      activeId: () => 'B',
+      viewerIds: () => ['B'],
+      stableIdFor: () => 'layer-b',
+      cloud: () => ({ sourceOrigin: OB }),
+      placement: () => ({ vertical: true }),
+      fallback: () => [0, 0, 0],
+    });
+    const host = fakeHost();
+    const viewer = {
+      getCameraState: () => ({ position: [915, 415, 200] as [number, number, number], target: [915, 415, 20] as [number, number, number] }),
+      orthographic: false,
+      derivedLayerHost: () => host,
+      onDrawnFrame: () => () => {},
+      pickPoint: () => null,
+      mergedVisibleBounds: () => sceneBounds,
+      measure: { worldUp: [0, 0, 1], datumResolved: true }, // one layer left: its origin is unanimous
+      clouds: () => ['B'],
+      hasStreamingCloud: false,
+    };
+    const views: WorkplaneView[] = [];
+    const controller = createWorkplaneController({
+      viewer: () => viewer,
+      canvas: fakeCanvas(),
+      context: () => spatialContextFrom({ source: 'wkt', name: 'UTM', epsg: 32612, linearUnit: 'metre', linearUnitToMetres: 1, isGeographic: false }),
+      // The fix: the placement-aware origin session import uses. The defect: B's raw file origin.
+      sceneOrigin: useRawSourceOrigin ? () => OB : origins.exportOrigin,
+      makeDrawing: (h) => new WorkplaneOverlay(h),
+      lightBackdrop: () => false,
+      onChange: (v) => views.push(v),
+    });
+    return { controller, host };
+  }
+
+  it('the placement-aware origin is the project origin, not the file origin', async () => {
+    const { sessionImportOrigins } = await import('../src/app/projectFrame');
+    const o = sessionImportOrigins({ frame: () => ({ projectOrigin: OA }), activeId: () => 'B', viewerIds: () => ['B'], stableIdFor: () => 'b', cloud: () => ({ sourceOrigin: OB }), placement: () => ({ vertical: true }), fallback: () => [0, 0, 0] });
+    expect(o.exportOrigin()).toEqual(OA);
+  });
+
+  for (const raw of [false, true]) {
+    it(raw ? 'with the raw file origin (the defect) a typed elevation lands OB - OA off' : 'a typed elevation and the readout are in B\'s true source coordinates', async () => {
+      const { controller, host } = await placedHarness(raw);
+      controller.setEnabled(true);
+      controller.setElevation(123.25);
+      const group = [...host.objects][0] as THREE.Group;
+      // Where the grid really is, in source coordinates: scene + OA.
+      const drawnZ = group.position.z + OA[2];
+      const v = controller.view();
+      const major = Number(/Grid ([\d.]+)/.exec(v.readout.join(' '))![1]);
+      const centreX = Math.round((OB[0] + 15) / major) * major;
+      if (raw) {
+        expect(Math.abs(drawnZ - 123.25)).toBeCloseTo(Math.abs(OB[2] - OA[2]), 6);
+        expect(v.originH![0]).not.toBeCloseTo(centreX, 0);
+      } else {
+        expect(drawnZ).toBeCloseTo(123.25, 9);
+        expect(v.originH![0]).toBeCloseTo(centreX, 9); // the scan centre of B, in source coordinates
+        expect(v.readout[1]).toContain(centreX.toFixed(3));
+        expect(controller.figureNote()).toContain(`Elevation: 123.250`);
+        expect(controller.figureNote()).toContain(centreX.toFixed(3));
+      }
+    });
+  }
+});
+
+describe('more refusals', () => {
+  it('a three-point pick out of range is refused, not kept in memory', () => {
+    const h = harness({ datum: [0, 0, 0] });
+    h.controller.setEnabled(true);
+    h.controller.beginPick('three-point');
+    h.viewer.picks.push({ x: 2e9, y: 0, z: 0 });
+    click(h);
+    expect(h.controller.view().status).toMatch(/out of range/);
+    expect(h.controller.view().settings.points).toBeNull();
+  });
+
+  it('a scan minimum out of range is refused', () => {
+    const h = harness({ datum: [0, 0, -5e9] });
+    h.controller.setEnabled(true);
+    h.controller.useScanMinimum();
+    expect(h.controller.view().status).toMatch(/out of range/);
+    expect(h.controller.view().settings.elevation).toBeNull();
+  });
+
+  it('a tool turned on mid-pick takes the click, and the pick stops', () => {
+    const h = harness();
+    h.controller.beginPick('origin');
+    (h.viewer as unknown as { toolActive: boolean }).toolActive = true;
+    h.viewer.picks.push({ x: 1, y: 2, z: 3 });
+    click(h);
+    expect(h.controller.view().settings.elevation).toBeNull();
+    expect(h.controller.view().picking).toBeNull();
+    expect(h.controller.view().status).toMatch(/another tool/);
+  });
+});
