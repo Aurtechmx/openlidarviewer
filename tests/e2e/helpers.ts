@@ -31,16 +31,25 @@ import { fileURLToPath } from 'node:url';
 /**
  * Activate a desktop-workspace left mode (Data / Work / Analyse / Output). The
  * workspace shows ONE mode at a time (v0.6.5), so a panel that lives in a
- * non-active mode is `display:none` until its tab is selected. A no-op on mobile
- * or before a scan (the tab strip is absent), so callers can invoke it
- * unconditionally after a scan loads.
+ * non-active mode is `display:none` until its tab is selected. A no-op before a
+ * scan (the tab strip is absent), so callers can invoke it unconditionally after
+ * a scan loads. At a phone width the rail is hidden and the mode is opened
+ * through the bottom sheet's tab instead.
  */
 export async function showWorkspaceMode(
   page: Page,
   mode: 'data' | 'work' | 'analyse' | 'output',
 ): Promise<void> {
   const tab = page.locator(`.olv-ws-tab[data-mode="${mode}"]`);
-  if (await tab.count()) await tab.click();
+  if ((await tab.count()) === 0) return;
+  if (await tab.isVisible()) {
+    await tab.click();
+    return;
+  }
+  // Phone layout: the desktop rail is hidden and its modes are the bottom
+  // sheet's tabs, so the mode is reached through the sheet.
+  const sheetTab = page.locator(`.olv-mobile-sheet .olv-msheet-tab[data-tab="${mode}"]`);
+  if (await sheetTab.isVisible()) await activate(sheetTab);
 }
 
 /**
