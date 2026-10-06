@@ -33,7 +33,15 @@ import type { PointCloud } from '../model/PointCloud';
 import { gzipConvertedFile, gzipAvailable } from '../convert/gzip';
 import { buildExportSummary, displaySampleOf, displaySampleStatus, type ClassificationProvenance, type ExportSummaryInput } from '../export/exportSummary';
 import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
-import { fullDecodeRefusal, layerFacts, type FullFileLayerFacts } from '../app/fullFileActions';
+import {
+  armReloadBudget,
+  disarmReloadBudget,
+  fullDecodeRefusal,
+  layerFacts,
+  reloadStampChanges,
+  type FullFileLayerFacts,
+  type ReloadStamp,
+} from '../app/fullFileActions';
 import { pointBasisOfCloud } from '../export/exportProvenanceLines';
 import {
   classificationDiffersFromSource,
@@ -1475,25 +1483,63 @@ export function exportLayerHooks(state: ExportLayerState): Pick<ExportPanelCallb
   return {
     hasFullSource: () => state.scans.activeId != null && state.sourceFiles.has(state.scans.activeId),
     activateLayer: (id) => state.scans.setActive(id),
-    // The open path reads the raised budget itself (takeReloadBudget), then
-    // the old layer is dropped once the reopened one has taken its place.
-    reloadLayer: async (id) => {
+    // The open path takes the raised budget for this file (takeReloadBudget).
+    // The old layer is dropped only if, once the reopened layer is in, the old
+    // one is still the same cloud, file and class state the reload started from.
+    reloadLayer: async (id, budget) => {
       const file = state.sourceFiles.get(id);
       if (!file) return;
+      const stampOf = (layer: string): ReloadStamp => {
+        const viewer = state.viewer();
+        const cloud = viewer?.getCloud(layer) ?? null;
+        return {
+          cloud,
+          file: state.sourceFiles.get(layer) ?? null,
+          epoch: viewer?.classificationEpoch(layer) ?? 0,
+          provenance: cloud?.classificationProvenance ?? null,
+        };
+      };
+      const stamp = stampOf(id);
       const before = new Set(state.viewer()?.clouds() ?? []);
+      armReloadBudget(file, budget);
       try {
         await state.reopen(file);
       } catch {
         // Reported below with the other incomplete outcomes.
+      } finally {
+        disarmReloadBudget();
       }
       // A cancelled, failed or refused open adds no layer. Only a single new
-      // layer read from the same file replaces the old one.
+      // layer read from the same file can replace the old one.
       const added = (state.viewer()?.clouds() ?? []).filter((c) => !before.has(c));
-      if (added.length === 1 && state.sourceFiles.get(added[0]) === file) {
+      if (added.length !== 1 || state.sourceFiles.get(added[0]) !== file) {
+        state.notify('The reload did not complete. The layer is unchanged.');
+        return;
+      }
+      const changes = reloadStampChanges(stamp, stampOf(id));
+      if (changes.length === 0) {
         state.removeLayer(id);
         return;
       }
-      state.notify('The reload did not complete. The layer is unchanged.');
+      // Replacing now would discard what happened to the layer during the
+      // reload. The original stays as it is. The new copy is closed when it
+      // holds nothing of the user's, and kept alongside when it does.
+      const fresh = added[0];
+      const freshCloud = state.viewer()?.getCloud(fresh);
+      const freshEdited = !!freshCloud
+        && classificationDiffersFromSource(freshCloud.classificationProvenance ?? 'none', state.viewer()?.classificationEpoch(fresh) ?? 0);
+      if (!state.viewer()?.getCloud(id)) {
+        state.notify('The layer was closed while it reloaded, so the reloaded copy stays.');
+        return;
+      }
+      const why = `The reload was refused: ${changes.join(' and ')} while it ran.`;
+      if (freshEdited) {
+        state.notify(`${why} The reloaded copy was kept beside it.`);
+        return;
+      }
+      state.removeLayer(fresh);
+      state.scans.setActive(id);
+      state.notify(`${why} The original layer and its edits are kept, and the reloaded copy was closed.`);
     },
     notify: (message) => state.notify(message),
     layerSource: (id) => {

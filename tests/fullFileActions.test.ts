@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { exportLayerHooks } from '../src/ui/ExportPanel';
+
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   assessFullFile, bindFullFile, fullFileAvailability, fullFileLabel, layerFacts, pointBasisLine,
-  reviewSampleTip, useFullFile, formatGb, assessReload, useReload, takeReloadBudget, type FullFileLayerFacts,
+  reviewSampleTip, useFullFile, formatGb, assessReload, useReload, takeReloadBudget, armReloadBudget, disarmReloadBudget, type FullFileLayerFacts,
   e57DecodeBytesFromAttributes, fullDecodeRefusal, fullFileCeilingBytes, fullFileEstimateBytes,
 } from '../src/app/fullFileActions';
 import { E57_DECODE_CEILING_BYTES, estimateMemoryBytes, memoryCeilingBytes, planE57Decode, planLoad } from '../src/io/loadPlan';
@@ -249,17 +250,37 @@ describe('reload at higher density', () => {
       .toMatch(/ Reloading clears its 3 saved findings and the compare difference computed on it\.$/);
   });
 
-  it('confirms, then reopens the targeted layer with the budget the open path takes once', async () => {
+  it('confirms, then hands the targeted layer to the host with the planned target', async () => {
     const f = synth('strided', { id: 'r' });
-    let seen: number | null = null;
-    const reload = vi.fn(async () => { seen = takeReloadBudget(); });
+    const reload = vi.fn(async () => {});
     bindFullFile({ facts: (id) => (id === 'r' ? f : null), activeId: () => 'r', openExport: vi.fn(), reload });
     const ask = vi.fn(async () => true);
     const p = await useReload('r', high, ask);
     expect(ask).toHaveBeenCalledWith(p.confirm, 'Reload');
     expect(reload).toHaveBeenCalledWith('r', p.target);
-    expect(seen).toBe(p.target);
-    expect(takeReloadBudget()).toBeNull();
+  });
+
+  it('decides again after the confirmation: class edits made while the dialog was open stop the reload', async () => {
+    const f = { ...synth('strided', { id: 'r' }) } as { -readonly [K in keyof FullFileLayerFacts]: FullFileLayerFacts[K] };
+    const reload = vi.fn(async () => {});
+    const notify = vi.fn();
+    bindFullFile({ facts: () => f, activeId: () => 'r', openExport: vi.fn(), reload, notify });
+    await useReload('r', high, async () => {
+      f.hasClassEdits = true;
+      f.classCauses = { edited: true, derived: false };
+      return true;
+    });
+    expect(reload).not.toHaveBeenCalled();
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining('classes differ from the file'));
+  });
+
+  it('says the layer changed when it is no longer reloadable after the confirmation', async () => {
+    let f: FullFileLayerFacts | null = synth('strided', { id: 'r' });
+    const reload = vi.fn(async () => {});
+    const notify = vi.fn();
+    bindFullFile({ facts: () => f, activeId: () => 'r', openExport: vi.fn(), reload, notify });
+    await useReload('r', high, async () => { f = null; return true; });
+    expect(reload).not.toHaveBeenCalled();
   });
 
   it('does not reload when the confirm is declined, and notifies a refusal', async () => {
@@ -424,3 +445,104 @@ describe('E57 fit check for Export all N points', () => {
     );
   });
 });
+
+describe('reload commit guard', () => {
+  /** A viewer whose layers are real objects with a class epoch and provenance. */
+  function scene(duringReopen: (w: ReturnType<typeof scene>, file: File) => void) {
+    const file = new File([new Uint8Array(4)], 'a.las');
+    const layers = new Map<string, { classificationProvenance: string }>([
+      ['old', { classificationProvenance: 'source' }],
+      ['other', { classificationProvenance: 'source' }],
+    ]);
+    const epochs = new Map<string, number>([['old', 0], ['other', 0], ['new', 0]]);
+    const sourceFiles = new Map<string, File>([['old', file]]);
+    const active = { id: 'other' as string | null };
+    const removeLayer = vi.fn((id: string) => { layers.delete(id); });
+    const setActive = vi.fn((id: string) => { active.id = id; });
+    const notify = vi.fn();
+    const world = {
+      file, layers, epochs, sourceFiles, active, removeLayer, setActive, notify, seenBudget: [] as (number | null)[],
+      hooks: null as unknown as ReturnType<typeof exportLayerHooks>,
+    };
+    world.hooks = exportLayerHooks({
+      scans: { get activeId() { return active.id; }, setActive },
+      viewer: () => ({
+        getCloud: (id: string) => (layers.get(id) ?? null) as never,
+        classificationEpoch: (id: string) => epochs.get(id) ?? 0,
+        clouds: () => [...layers.keys()],
+      }),
+      sourceFiles, reduced: new Map(),
+      reopen: async (f) => {
+        world.seenBudget.push(takeReloadBudget(f));
+        await Promise.resolve();
+        layers.set('new', { classificationProvenance: 'source' });
+        sourceFiles.set('new', f);
+        duringReopen(world, f);
+      },
+      removeLayer, notify,
+    });
+    return world;
+  }
+
+  it('replaces exactly the original layer when nothing changed', async () => {
+    const w = scene(() => {});
+    await w.hooks.reloadLayer!('old', 8_000_000);
+    expect(w.removeLayer).toHaveBeenCalledTimes(1);
+    expect(w.removeLayer).toHaveBeenCalledWith('old');
+    expect([...w.layers.keys()]).toEqual(['other', 'new']);
+    expect(w.notify).not.toHaveBeenCalled();
+  });
+
+  it('hands the raised budget to the open of this file only, once', async () => {
+    const w = scene(() => {});
+    await w.hooks.reloadLayer!('old', 8_000_000);
+    expect(w.seenBudget).toEqual([8_000_000]);
+    armReloadBudget(w.file, 5);
+    expect(takeReloadBudget(new File([new Uint8Array(4)], 'b.las'))).toBeNull();
+    expect(takeReloadBudget(w.file)).toBe(5);
+    expect(takeReloadBudget(w.file)).toBeNull();
+    // Nothing stays armed once the reload withdraws a budget no open took.
+    armReloadBudget(w.file, 7);
+    disarmReloadBudget();
+    expect(takeReloadBudget(w.file)).toBeNull();
+  });
+
+  const refusals: Array<[string, (w: ReturnType<typeof scene>) => void, RegExp]> = [
+    ['a class edit while it decodes', (w) => { w.epochs.set('old', 1); }, /its classes changed/],
+    ['classes derived while it decodes', (w) => { w.layers.set('old', { classificationProvenance: 'derived' }); }, /its classes changed/],
+    ['the source file swapped while it decodes', (w) => { w.sourceFiles.set('old', new File([new Uint8Array(4)], 'a.las')); }, /its source file changed/],
+    ['the layer replaced by another cloud while it decodes', (w) => { w.layers.set('old', { classificationProvenance: 'source' }); }, /the layer was replaced or closed/],
+  ];
+  for (const [name, change, message] of refusals) {
+    it(`keeps the original and closes the new copy after ${name}`, async () => {
+      const w = scene((world) => change(world));
+      await w.hooks.reloadLayer!('old', 5);
+      expect(w.removeLayer).not.toHaveBeenCalledWith('old');
+      expect(w.removeLayer).toHaveBeenCalledWith('new');
+      expect(w.setActive).toHaveBeenCalledWith('old');
+      expect(w.layers.has('old')).toBe(true);
+      expect(w.layers.has('new')).toBe(false);
+      expect(w.notify).toHaveBeenCalledTimes(1);
+      expect(w.notify.mock.calls[0][0]).toMatch(/^The reload was refused: /);
+      expect(w.notify.mock.calls[0][0]).toMatch(message);
+      expect(w.notify.mock.calls[0][0]).toMatch(/original layer and its edits are kept/);
+    });
+  }
+
+  it('keeps both layers when the reloaded copy was edited too', async () => {
+    const w = scene((world) => { world.epochs.set('old', 1); world.epochs.set('new', 1); });
+    await w.hooks.reloadLayer!('old', 5);
+    expect(w.removeLayer).not.toHaveBeenCalled();
+    expect([...w.layers.keys()].sort()).toEqual(['new', 'old', 'other']);
+    expect(w.notify.mock.calls[0][0]).toMatch(/reloaded copy was kept beside it/);
+  });
+
+  it('keeps the reloaded layer when the original was closed during the reload', async () => {
+    const w = scene((world) => { world.layers.delete('old'); });
+    await w.hooks.reloadLayer!('old', 5);
+    expect(w.removeLayer).not.toHaveBeenCalled();
+    expect(w.layers.has('new')).toBe(true);
+    expect(w.notify).toHaveBeenCalledWith('The layer was closed while it reloaded, so the reloaded copy stays.');
+  });
+});
+
