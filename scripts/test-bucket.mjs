@@ -32,7 +32,6 @@ import { FILE_LIST_ENV, vitestRunArgs, writeFileList } from './lib/vitestFileLis
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join, sep } from 'node:path';
-import { tmpdir } from 'node:os';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TESTS_DIR = resolve(ROOT, 'tests');
@@ -164,7 +163,6 @@ const SPAWN_PREFIX = WINDOWS ? [VITEST_ENTRY] : [];
  * why wedged workers kept the pipe open and the parent waited forever.
  * Resolves the same {status, signal, error} shape `resolveExit` expects.
  */
-let tallySeq = 0;
 
 /**
  * Emit a machine-readable tally the release evidence collector can trust.
@@ -193,15 +191,24 @@ function readTally(file, bucket) {
   }
 }
 
+// The private directories of shards still running. An exit that skips a
+// shard's own cleanup (an uncaught error, process.exit) removes them here.
+const activeLists = new Set();
+process.on('exit', () => {
+  for (const list of activeLists) {
+    try { list.dispose(); } catch { /* best effort */ }
+  }
+});
+
 function runVitest(extra, label) {
   return new Promise((res) => {
     const started = Date.now();
-    const seq = tallySeq++;
-    const tallyFile = join(tmpdir(), `olv-tally-${arg}-${process.pid}-${seq}.json`);
     // The bucket's files travel in a JSON file that vitest.config.ts reads as
     // `include`, not as arguments: the unit bucket's list alone is longer than
     // the command line Windows accepts.
     const list = writeFileList(files);
+    activeLists.add(list);
+    const tallyFile = list.tallyPath;
     const child = spawn(
       SPAWN_CMD,
       vitestRunArgs({ prefix: SPAWN_PREFIX, bucketArgs, extra, passthrough, tallyFile }),
@@ -263,6 +270,7 @@ function runVitest(extra, label) {
       if (!r.error && !r.signal && r.status === 0) readTally(tallyFile, arg);
       else { try { rmSync(tallyFile, { force: true }); } catch { /* best effort */ } }
       try { list.dispose(); } catch { /* best effort */ }
+      activeLists.delete(list);
       const secs = ((Date.now() - started) / 1000).toFixed(1);
       console.log(
         `[${label}] pid=${child.pid} elapsed=${secs}s code=${r.status ?? '-'} signal=${r.signal ?? '-'}`,
