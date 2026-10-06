@@ -91,7 +91,7 @@ test('reference plane: toggle, readout, projections, three-point plane, release'
   // Offsets where the canvas itself is under the pointer, not a card or panel.
   const onCanvas = await page.evaluate(({ x, y }) => {
     const out: Array<[number, number]> = [];
-    for (let dy = -120; dy <= 120; dy += 20) for (let dx = -160; dx <= 160; dx += 20) {
+    for (let dy = -300; dy <= 300; dy += 20) for (let dx = -400; dx <= 400; dx += 20) {
       if (document.elementFromPoint(x + dx, y + dy)?.tagName === 'CANVAS') out.push([dx, dy]);
     }
     return out;
@@ -102,7 +102,9 @@ test('reference plane: toggle, readout, projections, three-point plane, release'
   for (const [i, want] of wants.entries()) {
     const order = [...onCanvas].sort((p, q) => Math.hypot(p[0] - want[0], p[1] - want[1]) - Math.hypot(q[0] - want[0], q[1] - want[1]));
     let landed = false;
-    for (const [dx, dy] of order.slice(0, 25)) {
+    // Every canvas spot, nearest first: a slow software renderer can frame the
+    // scan smaller or off centre, and a miss costs one click.
+    for (const [dx, dy] of order) {
       await page.mouse.click(c.x + dx, c.y + dy);
       if ((await status.textContent())?.includes(prompts[i])) { landed = true; break; }
     }
@@ -256,7 +258,8 @@ test.describe('phone width', () => {
       if (box) expect(box.height, await control.evaluate((n) => n.outerHTML.slice(0, 80))).toBeGreaterThanOrEqual(24);
     }
     await section.locator('.olv-refplane-readout').scrollIntoViewIfNeeded();
-    await page.screenshot({ path: '/private/tmp/claude-501/plane-shots/reference-plane-phone.png' });
+    // A screenshot for review only when asked for, never to a fixed path.
+    if (process.env.OLV_SHOT_DIR) await page.screenshot({ path: `${process.env.OLV_SHOT_DIR}/reference-plane-phone.png` });
   });
 });
 
