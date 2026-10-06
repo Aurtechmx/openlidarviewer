@@ -274,6 +274,26 @@ once the reach reaches 131,072 m. A foot grid reaches the same metre steps
 further out, because a foot is 0.3048 m: `fine` holds under 32,768 ft and the
 refusal engages at 524,288 ft.
 
+### LAS export and the source scale
+
+A LAS export keeps the source file's scale and offset where they can represent
+the data (`src/convert/lasQuantisation.ts`). The export rebuilds
+`round((float32(local) + origin - offset) / scale)`, which returns the source
+integer while the Float32 rounding stays under half a scale step. The
+extent that holds this grows with the scale:
+
+| Source scale | Exact records out to | Measured just past that limit | Measured at 40 km |
+|---|---|---|---|
+| 0.0001 | 1,024 m | 771 of 60,000 values differ at 1,100 m, by 1 step | 51,851 differ, up to 20 steps |
+| 0.001 | 16,384 m | 1,041 differ at 17,000 m, by 1 step | 20,095 differ, up to 2 steps |
+| 0.01 | 131,072 m | 1,309 differ at 140,000 m, by 1 step | 0 differ |
+
+Each case exports 20,000 random points, 3 values each, from a hand-built LAS 1.4
+source. Every case at or under the exact extent returned all records unchanged
+(`tests/lasKeepSourceQuantisation.test.ts`). Past the exact extent the scale and
+offset are still written, and the Text Area Description VLR says the records can
+differ from the source's by up to the stated number of steps.
+
 ### Where the figure is disclosed
 
 The Scan Report carries two rows next to the extent they derive from

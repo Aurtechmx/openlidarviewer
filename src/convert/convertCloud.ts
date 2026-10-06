@@ -37,6 +37,7 @@ import {
 const EXT_OVERLAP_FLAG_BIT = 0x8;
 const LEGACY_PDRF_FOR_LOSS = 3;
 import { writeLas, writeLas14 } from './writeLas';
+import { planQuantisation } from './lasQuantisation';
 import { spatialContextFrom } from '../geo/SpatialContext';
 import { writeXyz, writeAsc } from './writeAscii';
 import { reprojectGlobal } from './reproject';
@@ -135,7 +136,9 @@ export function convertCloud(
   // same detection the terrain gather uses — a format table alone rotated
   // genuinely Z-up PLYs into vertical walls there, and would corrupt exports
   // identically here. Survey formats skip detection: Z-up by spec.
+  let rotatedToZUp = false;
   if (!isZUpFormat(cloud.sourceFormat) && classifyScanShape(sourcePositions(cloud)).up === 'y') {
+    rotatedToZUp = true;
     const { y, z } = g;
     for (let i = 0; i < g.count; i++) {
       const yv = y[i];
@@ -285,6 +288,19 @@ export function convertCloud(
     const verticalUnitCode = sourceCrs
       ? unitToGeoTiff(srcCtx.verticalLinearUnit ?? srcCtx.linearUnit)
       : null;
+    // Keep the source file's own scale and offset when they can represent
+    // these coordinates; otherwise re-quantise, and say which in the file.
+    const quantPlan = planQuantisation(g, cloud.metadata?.sourceQuantisation, {
+      sourceFormat: cloud.sourceFormat,
+      sourceOrigin: cloud.sourceOrigin,
+      coordinatesChanged: reprojectApplied
+        ? 'the coordinates were reprojected'
+        : rotatedToZUp
+          ? 'the axes were rotated into the Z-up frame'
+          : null,
+    });
+    log.push({ level: 'info', message: quantPlan.line });
+    const lasProvenance = [...provenance, quantPlan.line];
     // Global Encoding bit 0 on the source, when it declared one. undefined
     // leaves the writer's modern default in place for a source that carries no
     // such declaration at all.
@@ -315,7 +331,8 @@ export function convertCloud(
         verticalUnitCode,
         wkt,
         description: datumNote,
-        provenance,
+        provenance: lasProvenance,
+        quantisation: quantPlan.use ?? undefined,
       });
     } else {
       // LAS 1.2 stores the classification in 5 bits and the writer masks
@@ -333,11 +350,11 @@ export function convertCloud(
       // writer clamps them to 7, which changes which return a point is. Refused
       // unless the request opts in; opted in, the file's provenance says so.
       const clamped = countLegacyReturnClamp(g.returnNumber, g.returnCount, g.count);
-      let legacyProvenance = provenance;
+      let legacyProvenance = lasProvenance;
       if (clamped > 0) {
         if (!opts.allowLegacyReturnClamp) return fail(legacyReturnClampRefusal(clamped), crsNote);
         log.push({ level: 'warn', message: legacyReturnClampWarning(clamped) });
-        legacyProvenance = [...(provenance ?? []), legacyReturnClampProvenance(clamped)];
+        legacyProvenance = [...lasProvenance, legacyReturnClampProvenance(clamped)];
       }
       // The other thing a legacy write drops. The extended encoding carries
       // overlap as a flag bit beside a real base class; the legacy byte has
@@ -371,6 +388,7 @@ export function convertCloud(
         verticalUnitCode,
         description: datumNote,
         provenance: legacyProvenance,
+        quantisation: quantPlan.use ?? undefined,
       });
     }
   } else {

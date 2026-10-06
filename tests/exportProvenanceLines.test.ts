@@ -180,11 +180,14 @@ describe('ASC', () => {
   });
 });
 
+/** The line a LAS export adds when the cloud records no source scale and offset. */
+const NO_SOURCE_QUANTISATION = 'Scale/offset: re-quantised (the source scale and offset are not recorded for this cloud).';
+
 describe('LAS', () => {
   it('adds the point basis and class-edit lines to the Text Area provenance', () => {
     for (const format of ['las', 'las14'] as const) {
       const { file } = convertCloud(cloud(), { format, classesEdited: true, pointBasis: 'Point basis: full file (9,000 points)' });
-      expect(textArea(file!.bytes)).toBe('Point basis: full file (9,000 points)\nClasses edited in app: yes');
+      expect(textArea(file!.bytes)).toBe(`Point basis: full file (9,000 points)\nClasses edited in app: yes\n${NO_SOURCE_QUANTISATION}`);
     }
   });
 });

@@ -287,7 +287,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 97 for the shell, 75 for the renderer and 23 for the Analyse panel,
-across 1076 modules with no dependency cycles.
+across 1077 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -320,9 +320,17 @@ gather, carry the placement in Float32. The mount-precision gate therefore still
 refuses a placement whose Float32 step would pass 1 mm, which on a metre grid is
 a placed reach of 16,384 m or more, and those paths stay under 1 mm inside the
 gate. Picking and distance are computed in Float64. Exported coordinates are
-exact to under 1 mm within a 16 km extent. LAS export re-quantises them at
-1 mm (1e-7 degree on a geographic CRS) with a new offset at the floor of the
-data minimum, so the source file's scale and offset are not kept.
+exact to under 1 mm within a 16 km extent. LAS export keeps the source file's
+scale and offset when the source is LAS or LAZ, the header values are valid,
+the coordinates are the source's own and every one fits int32. Within the
+extent where Float32 positions resolve the scale (16,384 m at a 1 mm scale,
+1,024 m at 0.1 mm, past 100 km at 1 cm) each exported X, Y and Z integer record
+equals the source's. Beyond that extent the scale and offset are still kept and
+an integer record can differ from the source's by a few steps: up to 2 steps at
+a 1 mm scale over 40 km. The export's provenance text records which case
+applied. A reprojected, voxel-reduced, streamed or non-LAS export is
+re-quantised at 1 mm (1e-7 degree on a geographic CRS) with the offset at the
+floor of the data minimum, and the provenance text gives the reason.
 
 ## Release caveats on exports and reproduction
 
@@ -332,9 +340,10 @@ data minimum, so the source file's scale and offset are not kept.
   self-consistency check, not a signature. It does not show who made the
   report, and the verifier does not compare `sourceSha256` against a source
   file.
-- LAS export writes a new 1 mm grid and a new offset rather than the source
-  scale and offset, and the sub-millimetre guarantee holds within a 16 km
-  extent (see the section above).
+- LAS export keeps the source scale and offset and returns the source's integer
+  records within the extent Float32 positions resolve (16 km at a 1 mm scale);
+  a reprojected, voxel-reduced, streamed or non-LAS export is re-quantised at
+  1 mm. See the section above.
 - The reproduction pack's metrics reproduce exactly under the Node version
   pinned in `.nvmrc`. Another Node or V8 version can change the last digits.
 

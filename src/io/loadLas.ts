@@ -160,6 +160,10 @@ function lasMetadata(header: LasHeader): CloudMetadata | undefined {
   if (header.generatingSoftware) metadata.sourceSoftware = header.generatingSoftware;
   metadata.pointFormat = header.pointFormat;
   if (header.gpsTimeType !== null) metadata.gpsTimeType = header.gpsTimeType;
+  metadata.sourceQuantisation = {
+    scale: [header.scale[0], header.scale[1], header.scale[2]],
+    offset: [header.offset[0], header.offset[1], header.offset[2]],
+  };
   const captureDate = formatCreationDate(header.creationYear, header.creationDay);
   if (captureDate) metadata.captureDate = captureDate;
   // surface the CRS parsed from LASF_Projection VLRs so the
