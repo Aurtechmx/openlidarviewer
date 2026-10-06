@@ -734,8 +734,8 @@ export class NavController {
     // through the captured pointer position by the change in radius, then
     // re-seat the target along the (unchanged) view direction at the new radius.
     // This keeps the world point under the pointer stationary — the
-    // OrbitControls zoomToCursor behaviour. Falls back to the target pivot when no pointer is known (e.g. a
-    // keyboard-driven step) or the ray degenerates.
+    // OrbitControls zoomToCursor behaviour. Falls back to the target pivot when
+    // no pointer is known (e.g. a keyboard-driven step) or the ray degenerates.
     if (this._dollyCursorValid) {
       this._camera.updateMatrixWorld();
       const dir = this._dollyDir
