@@ -36,8 +36,12 @@ export function sourceFileLine(name: string | null | undefined): string {
   return `Source file: ${base || 'unknown'}`;
 }
 
-/** "Classes edited in app: yes" or "... no". */
-export function classEditLine(edited: boolean): string {
+/**
+ * "Classes edited in app: yes" or "... no"; when the export leaves the classes
+ * out, the file has none to describe.
+ */
+export function classEditLine(edited: boolean, omitted = false): string {
+  if (omitted) return 'Classes edited in app: not applicable (classes omitted)';
   return `Classes edited in app: ${edited ? 'yes' : 'no'}`;
 }
 

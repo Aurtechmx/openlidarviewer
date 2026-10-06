@@ -56,9 +56,11 @@ past 128 MB per scan.
 
 Two outputs carry a cleared or derived marker inside the file: the header
 comment of the quick XYZ export and the PDF report. Both name the classifier's
-id and version beside derived classes. LAS 1.2 and 1.4, the converter's XYZ
-and ASC, CSV and the PNG image exports write the classes with no marker. The
-Export panel states the provenance on screen; those files do not.
+id and version beside derived classes. LAS 1.2 and 1.4 and the converter's XYZ
+and ASC exports write the classes with no classifier id or version, only a
+"Classes edited in app" line (yes or no, and "not applicable" when the classes
+are left out); the measurement CSV sidecar carries the same line and the PNG
+image export carries nothing. The Export panel states the provenance on screen.
 
 Auto-classify finds ground, vegetation and buildings only, and buildings come
 from a height and roughness heuristic. It does not find wires, poles, water,
@@ -293,7 +295,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 97 for the shell, 75 for the renderer and 23 for the Analyse panel,
-across 1084 modules with no dependency cycles.
+across 1085 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -367,7 +369,7 @@ floor of the data minimum, and the provenance text gives the reason.
   and the report lists each with its point count. A LAS 1.4 export read by a
   LAS 1.2 reader shows class 19 and the other defined extended classes as
   reserved; high noise (18) has no legacy class. Classes above 31 are refused
-  or wrapped as before. A derived or edited classification, or a source whose
+  or wrapped as before. A derived or cleared classification, or a source whose
   point format is unknown, is not translated: when such a classification of a
   legacy file is written as LAS 1.4, untouched legacy class 8 and 12 points are
   written as the reserved codes 8 and 12, with no translation and no warning.
