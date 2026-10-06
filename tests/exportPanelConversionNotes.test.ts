@@ -111,7 +111,7 @@ describe('ExportPanel: the acquisition-loss opt-in', () => {
     expect(hoisted.downloads).toEqual([]);
     expect(status(root).className).toContain('is-error');
     expect(status(root).textContent).toContain(LEGACY_ACQUISITION_LOSS_OPT_IN);
-    expect(status(root).textContent).toMatch(/1 point has a scan angle beyond 90 degrees/);
+    expect(status(root).textContent).toMatch(/1 point has a scan angle that rounds beyond 90 degrees/);
     expect(status(root).textContent).toMatch(/1 point carries a scanner channel/);
   });
 

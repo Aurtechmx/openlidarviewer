@@ -25,6 +25,8 @@ import {
   acquisitionEvents,
   acquisitionLossRefusal,
   assessLegacyAcquisition,
+  combineRefusals,
+  type LegacyRefusal,
   eventLogEntry,
   fitProvenance,
   isMaterialAcquisitionLoss,
@@ -60,6 +62,8 @@ import {
   type ConvertReport,
   type LogEntry,
   LEGACY_ACQUISITION_LOSS_OPT_IN,
+  LEGACY_CLASS_WRAP_OPT_IN,
+  LEGACY_RETURN_CLAMP_OPT_IN,
 } from './types';
 
 /** Logged when the file's text area could not hold every provenance line. */
@@ -370,20 +374,26 @@ export function convertCloud(
       // ahead and the wrap is logged with its arithmetic. Only the `count`
       // records the writer emits are judged.
       const wrap = countLegacyClassWrap(g.classification?.subarray(0, g.count));
-      if (wrap.points > 0 && !opts.allowLegacyClassWrap) return fail(legacyClassWrapRefusal(wrap), crsNote);
       // Return number and number of returns are 3 bits each in LAS 1.2, and the
-      // writer clamps them to 7, which changes which return a point is. Refused
-      // unless the request opts in.
+      // writer clamps them to 7, which changes which return a point is.
       const clamped = countLegacyReturnClamp(g.returnNumber, g.returnCount, g.count);
-      if (clamped > 0 && !opts.allowLegacyReturnClamp) return fail(legacyReturnClampRefusal(clamped), crsNote);
       // The scan angle is clipped to 90 degrees and the scanner channel has no
-      // field. Refused unless the request opts in, and the opt-in covers these
-      // two losses only.
+      // field.
       const acquisition = assessLegacyAcquisition(g.scanAngle, g.scannerChannel, g.count);
       const acquisitionLoss = isMaterialAcquisitionLoss(acquisition);
-      if (acquisitionLoss && !opts.allowLegacyAcquisitionLoss) {
-        return fail(acquisitionLossRefusal(acquisition, LEGACY_ACQUISITION_LOSS_OPT_IN), crsNote);
+      // Each loss is refused unless the request allows that loss, and one
+      // refusal names every loss that is not allowed.
+      const refusals: LegacyRefusal[] = [];
+      if (wrap.points > 0 && !opts.allowLegacyClassWrap) {
+        refusals.push({ text: legacyClassWrapRefusal(wrap), optIn: LEGACY_CLASS_WRAP_OPT_IN });
       }
+      if (clamped > 0 && !opts.allowLegacyReturnClamp) {
+        refusals.push({ text: legacyReturnClampRefusal(clamped), optIn: LEGACY_RETURN_CLAMP_OPT_IN });
+      }
+      if (acquisitionLoss && !opts.allowLegacyAcquisitionLoss) {
+        refusals.push({ text: acquisitionLossRefusal(acquisition, LEGACY_ACQUISITION_LOSS_OPT_IN), optIn: LEGACY_ACQUISITION_LOSS_OPT_IN });
+      }
+      if (refusals.length > 0) return fail(combineRefusals(refusals), crsNote);
       if (wrap.points > 0) {
         record({
           id: 'class-wrap', kind: 'clipped', level: 'warn', points: wrap.points,

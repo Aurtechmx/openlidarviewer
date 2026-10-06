@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { PointCloud } from '../src/model/PointCloud';
 import { convertCloud } from '../src/convert/convertCloud';
 import { loadLas } from '../src/io/loadLas';
 import { LEGACY_ACQUISITION_LOSS_OPT_IN } from '../src/convert/types';
@@ -43,7 +44,7 @@ describe('scan angle and scanner channel on a LAS 1.2 write', () => {
     const { result } = await toLegacy([{ cls: 2, angle: 120, channel: 3 }]);
     expect(result.file).toBeNull();
     const msg = result.report.log.at(-1)!.message;
-    expect(msg).toMatch(/1 point has a scan angle beyond 90 degrees/);
+    expect(msg).toMatch(/1 point has a scan angle that rounds beyond 90 degrees/);
     expect(msg).toMatch(/1 point carries a scanner channel/);
     expect(msg).toContain(LEGACY_ACQUISITION_LOSS_OPT_IN);
     expect(msg).toContain('LAS 1.4');
@@ -64,11 +65,31 @@ describe('scan angle and scanner channel on a LAS 1.2 write', () => {
     expect(lines.some((l) => l.startsWith('Conversion event scanner-channel-dropped:') && l.endsWith('Allowed in the export request.'))).toBe(true);
   });
 
+  // The writer stores the angle rounded to a whole degree, so only a value that
+  // rounds beyond 90 is clipped: 90.006 and 90.402 are rounded, 90.6 is clipped.
   it.each([
-    [-180, true], [-91, true], [-90, false], [0, false], [90, false], [91, true], [180, true],
-  ])('angle %i degrees %s', async (angle, refused) => {
-    const { result } = await toLegacy([{ cls: 2, angle }]);
-    expect(result.file === null).toBe(refused);
+    [-180, 'clipped'], [-91, 'clipped'], [-90.6, 'clipped'], [-90.4, 'rounded'], [-90, 'exact'],
+    [0, 'exact'], [90, 'exact'], [90.006, 'rounded'], [90.402, 'rounded'], [90.6, 'clipped'], [180, 'clipped'],
+  ])('angle %f degrees is %s', async (angle, outcome) => {
+    const { result, out } = await toLegacy([{ cls: 2, angle }], ALLOW);
+    expect(result.file).not.toBeNull();
+    const ids = result.report.events!.map((e) => e.id);
+    expect(ids.includes('scan-angle-clipped')).toBe(outcome === 'clipped');
+    expect(ids.includes('scan-angle-rounded')).toBe(outcome === 'rounded');
+    expect(Math.abs(out!.angle[0])).toBeLessThanOrEqual(90);
+    // Without the opt-in only a clipped angle is refused.
+    const strict = await toLegacy([{ cls: 2, angle }]);
+    expect(strict.result.file === null).toBe(outcome === 'clipped');
+  });
+
+  it.each([[90.5, 'clipped'], [-90.5, 'clipped'], [90.49, 'rounded']])('angle %f degrees held exactly in float32 is %s', (angle, outcome) => {
+    const cloud = new PointCloud({
+      positions: Float32Array.from([0, 0, 0]), scanAngle: Float32Array.from([angle]),
+      sourceFormat: 'las', name: 'a.las', origin: [0, 0, 0],
+    });
+    const { file, report } = convertCloud(cloud, ALLOW);
+    expect(readLas(file!.bytes).angle[0]).toBe(Math.sign(angle) * 90);
+    expect(report.events!.map((e) => e.id)).toContain(outcome === 'clipped' ? 'scan-angle-clipped' : 'scan-angle-rounded');
   });
 
   it.each([[0, false], [1, true], [2, true], [3, true]])('scanner channel %i refused: %s', async (channel, refused) => {
@@ -102,6 +123,46 @@ describe('scan angle and scanner channel on a LAS 1.2 write', () => {
     const acq = await toLegacy([{ cls: 64, angle: 120 }], { format: 'las', allowLegacyClassWrap: true });
     expect(acq.result.file).toBeNull();
     expect(acq.result.report.log.at(-1)!.message).toContain(LEGACY_ACQUISITION_LOSS_OPT_IN);
+  });
+});
+
+describe('one refusal names every opt-in a write needs', () => {
+  async function needsAll() {
+    const cloud = await decode(ext([{ cls: 64, angle: 120, channel: 1 }]));
+    cloud.returnNumber![0] = 9;
+    cloud.returnCount![0] = 12;
+    return cloud;
+  }
+
+  it('lists all three losses and all three controls in one message', async () => {
+    const { file, report } = convertCloud(await needsAll(), { format: 'las' });
+    expect(file).toBeNull();
+    const msg = report.log.at(-1)!.message;
+    expect(msg).toMatch(/^LAS 1\.2 was not written\. It would lose data in 3 ways\./);
+    expect(msg).toMatch(/classes/);
+    expect(msg).toMatch(/return number/);
+    expect(msg).toMatch(/scan angle that rounds beyond 90/);
+    expect(msg).toMatch(/scanner channel/);
+    expect(msg).toContain('"Allow classes above 31 to wrap"');
+    expect(msg).toContain('"Allow returns above 7 to be clamped"');
+    expect(msg).toContain(`"${LEGACY_ACQUISITION_LOSS_OPT_IN}"`);
+    expect(msg.match(/Choose LAS 1\.4/g)).toHaveLength(1);
+  });
+
+  it('names only the opt-ins still missing', async () => {
+    const { file, report } = convertCloud(await needsAll(), { format: 'las', allowLegacyClassWrap: true });
+    expect(file).toBeNull();
+    const msg = report.log.at(-1)!.message;
+    expect(msg).toMatch(/in 2 ways/);
+    expect(msg).not.toContain('"Allow classes above 31 to wrap"');
+    expect(msg).toContain('"Allow returns above 7 to be clamped"');
+  });
+
+  it('writes the file once all three are allowed', async () => {
+    const { file } = convertCloud(await needsAll(), {
+      format: 'las', allowLegacyClassWrap: true, allowLegacyReturnClamp: true, allowLegacyAcquisitionLoss: true,
+    });
+    expect(file).not.toBeNull();
   });
 });
 

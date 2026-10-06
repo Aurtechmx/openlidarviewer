@@ -100,7 +100,7 @@ const LEGACY_MAX_ANGLE = 90;
 const ROUNDING_TOLERANCE_DEG = 1e-6;
 
 export interface AcquisitionLoss {
-  /** Points whose angle lies beyond 90 degrees and is clipped to it. */
+  /** Points whose angle rounds to a whole-degree value beyond 90 and is clipped to 90. */
   readonly clippedAngle: number;
   /** Points whose in-range angle is rounded to a whole degree. */
   readonly roundedAngle: number;
@@ -108,6 +108,14 @@ export interface AcquisitionLoss {
   readonly droppedChannel: number;
   /** The channel numbers that occur among those points, ascending. */
   readonly channels: readonly number[];
+}
+
+/**
+ * The whole-degree value a legacy write stores for an angle, before the
+ * -90..90 limit: halves round away from zero, so 90.5 and -90.5 both clip.
+ */
+export function roundLegacyAngle(angle: number): number {
+  return Math.sign(angle) * Math.round(Math.abs(angle));
 }
 
 export function assessLegacyAcquisition(
@@ -123,8 +131,12 @@ export function assessLegacyAcquisition(
     if (scanAngle) {
       const a = scanAngle[i];
       if (Number.isFinite(a)) {
-        if (Math.abs(a) > LEGACY_MAX_ANGLE) clippedAngle++;
-        else if (Math.abs(a - Math.round(a)) > ROUNDING_TOLERANCE_DEG) roundedAngle++;
+        // The writer stores the rounded angle (`roundLegacyAngle`), limited to -90..90. An angle is
+        // clipped only when that whole-degree value is out of range; 90.402
+        // writes as 90 and is rounded, 90.6 writes as 91 and is clipped.
+        const rank = roundLegacyAngle(a);
+        if (rank > LEGACY_MAX_ANGLE || rank < -LEGACY_MAX_ANGLE) clippedAngle++;
+        else if (Math.abs(a - rank) > ROUNDING_TOLERANCE_DEG) roundedAngle++;
       }
     }
     if (scannerChannel && scannerChannel[i] !== 0) {
@@ -148,7 +160,7 @@ function pts(n: number): string {
 export function acquisitionLossRefusal(loss: AcquisitionLoss, optIn: string): string {
   const parts: string[] = [];
   if (loss.clippedAngle > 0) {
-    parts.push(`${pts(loss.clippedAngle)} ${loss.clippedAngle === 1 ? 'has' : 'have'} a scan angle beyond 90 degrees, which LAS 1.2 clips to 90`);
+    parts.push(`${pts(loss.clippedAngle)} ${loss.clippedAngle === 1 ? 'has' : 'have'} a scan angle that rounds beyond 90 degrees, which LAS 1.2 clips to 90`);
   }
   if (loss.droppedChannel > 0) {
     parts.push(`${pts(loss.droppedChannel)} ${loss.droppedChannel === 1 ? 'carries' : 'carry'} a scanner channel, which LAS 1.2 has no field for`);
@@ -165,7 +177,7 @@ export function acquisitionEvents(loss: AcquisitionLoss, acknowledged: boolean):
       kind: 'clipped',
       level: 'warn',
       points: loss.clippedAngle,
-      message: `LAS 1.2 stores the scan angle as -90 to 90 whole degrees. ${pts(loss.clippedAngle)} with a scan angle beyond 90 degrees ${loss.clippedAngle === 1 ? 'is' : 'are'} written as 90 or -90; use LAS 1.4 to keep them.`,
+      message: `LAS 1.2 stores the scan angle as -90 to 90 whole degrees. ${pts(loss.clippedAngle)} with a scan angle that rounds beyond 90 degrees ${loss.clippedAngle === 1 ? 'is' : 'are'} written as 90 or -90; use LAS 1.4 to keep them.`,
       acknowledged,
     });
   }
@@ -190,4 +202,24 @@ export function acquisitionEvents(loss: AcquisitionLoss, acknowledged: boolean):
     });
   }
   return events;
+}
+
+/** One refusal a LAS 1.2 write would return, and the control that allows it. */
+export interface LegacyRefusal {
+  readonly text: string;
+  readonly optIn: string;
+}
+
+const CHOOSE_CLAUSE = /\s*Choose LAS 1\.4\b.*$/s;
+const WRITE_PREFIX = 'LAS 1.2 was not written. ';
+
+/**
+ * One refusal for a write that needs several opt-ins, so the user sees every
+ * loss and every control at once. A single refusal is returned unchanged.
+ */
+export function combineRefusals(refusals: readonly LegacyRefusal[]): string {
+  if (refusals.length === 1) return refusals[0].text;
+  const bodies = refusals.map((r) => r.text.replace(WRITE_PREFIX, '').replace(CHOOSE_CLAUSE, ''));
+  const controls = refusals.map((r) => `"${r.optIn}"`).join(', ');
+  return `${WRITE_PREFIX}It would lose data in ${refusals.length} ways. ${bodies.join(' ')} Choose LAS 1.4 to keep all of it, or tick ${controls} to write the file without it.`;
 }
