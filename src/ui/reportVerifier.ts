@@ -64,6 +64,17 @@ function fillSignature(box: HTMLElement, v: SignatureVerdict): void {
   if (v.signerLabelUnverified) box.append(row('Signer label (not verified)', v.signerLabelUnverified));
 }
 
+/** The most a key file may hold; a public key is a few hundred bytes. */
+export const KEY_FILE_MAX_BYTES = 4096;
+
+/** What the picker says when a key file is over {@link KEY_FILE_MAX_BYTES}. */
+export const KEY_FILE_TOO_LARGE = 'That key file is too large (over 4 KB), so it was not loaded. A public key is much smaller. Check that you chose the key file.';
+
+/** The message for a key file of `size` bytes, or null when it can be read. */
+export function keyFileProblem(size: number): string | null {
+  return size > KEY_FILE_MAX_BYTES ? KEY_FILE_TOO_LARGE : null;
+}
+
 function signatureSection(v: SignatureVerdict, compare?: SignerCompare): HTMLElement {
   const sec = document.createElement('section');
   sec.setAttribute('data-testid', 'report-verify-signature');
@@ -99,6 +110,10 @@ function signatureSection(v: SignatureVerdict, compare?: SignerCompare): HTMLEle
   file.hidden = true;
   file.setAttribute('aria-label', 'Load a public key file');
   file.setAttribute('data-testid', 'report-verify-trusted-file');
+  const fileNote = document.createElement('div');
+  fileNote.setAttribute('role', 'status');
+  fileNote.setAttribute('data-testid', 'report-verify-key-file-note');
+  fileNote.style.cssText = 'font:11px system-ui,sans-serif;color:var(--rating-weak);';
   const load = document.createElement('button');
   load.type = 'button';
   load.textContent = 'Load key file';
@@ -107,8 +122,14 @@ function signatureSection(v: SignatureVerdict, compare?: SignerCompare): HTMLEle
   load.addEventListener('click', () => file.click());
   file.addEventListener('change', () => {
     const f = file.files?.[0];
-    if (!f || f.size > 4096) { if (f) input.value = ''; return; }
-    void f.text().then((t) => { input.value = t.slice(0, 4096); }).catch(() => undefined);
+    if (!f) return;
+    const problem = keyFileProblem(f.size);
+    fileNote.textContent = problem ?? '';
+    if (problem) {
+      input.value = '';
+      return;
+    }
+    void f.text().then((t) => { input.value = t.slice(0, KEY_FILE_MAX_BYTES); }).catch(() => undefined);
   });
   const go = document.createElement('button');
   go.type = 'button';
@@ -120,7 +141,7 @@ function signatureSection(v: SignatureVerdict, compare?: SignerCompare): HTMLEle
     void compare(input.value).then((r) => { if (r.signature) fillSignature(result, r.signature); }).catch(() => undefined);
   });
   actions.append(load, go, file);
-  sec.append(label, warn, input, actions);
+  sec.append(label, warn, input, actions, fileNote);
   return sec;
 }
 

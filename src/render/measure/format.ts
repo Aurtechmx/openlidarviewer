@@ -49,9 +49,11 @@ export const GEOGRAPHIC_CRS_MEASURE_NOTICE =
 export const VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE =
   'Compound CRS: heights use a different unit from horizontal positions. ' +
   'Heights, box sizes, volumes, the run of a line and the plan area of a ring ' +
-  'are converted correctly. Distances, polylines, plane areas, slopes, angles ' +
-  'and profiles mix the two units and are NOT reliable. Read heights, the run ' +
-  'or the plan area, or reproject the scan to one unit before measuring the rest.';
+  'are converted correctly. The headline value of a distance, polyline, plane ' +
+  'area, slope, angle or profile mixes the two units and is NOT reliable. The ' +
+  'Run, Rise, Slant and Grade under a distance are computed from the converted ' +
+  'run and rise and can be read. Otherwise read heights, the run or the plan ' +
+  'area, or reproject the scan to one unit before measuring the rest.';
 
 /**
  * The kinds the notice above names as unreliable: their trust grade is refused

@@ -199,6 +199,11 @@ process.on('exit', () => {
     try { list.dispose(); } catch { /* best effort */ }
   }
 });
+// An interrupt or a termination skips the exit hook unless the process exits
+// through it, so Ctrl-C and a CI cancel would leave the private directory behind.
+// 128 plus the signal number is the conventional status.
+process.on('SIGINT', () => process.exit(130));
+process.on('SIGTERM', () => process.exit(143));
 
 function runVitest(extra, label) {
   return new Promise((res) => {

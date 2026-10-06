@@ -407,6 +407,22 @@ Truncation is recorded for uncompressed LAS only; a truncated LAZ is not marked 
 unknown, measurement rows, the measure hint, the profile chart, summary and PDF,
 and the Profile Workbench state the unit is unverified.
 
+## The vertical unit is handled differently by different features
+
+When a file declares no vertical unit, the features do not agree on what a height
+is. The Scan Report and the streamed extent rows refuse to borrow the horizontal
+unit: Height stays in source units and reads "source units (vertical unit not
+declared)", and a declared but invalid vertical unit (zero, negative or
+non-finite) is kept in source units and labelled the same way. The Measure tool,
+the lasso volume, the project size, the terrain analysis runner and the
+classifier cues call `verticalMetresPerUnit(ctx, 'horizontal')`, which borrows
+the horizontal unit, so the same scan can show Height in source units in the
+Scan Report and in metres in Measure. Only the lasso volume readout says so, with
+" · heights assumed in the horizontal unit (vertical unit not declared)". A
+height read in Measure carries no vertical-unit note of its own; it is flagged
+only when the horizontal unit is unknown. A valid declared vertical unit is used
+by every feature.
+
 ## Export digests that some surfaces cannot carry
 
 Provenance-carrying exports record the source file SHA-256, the CRS origin and,

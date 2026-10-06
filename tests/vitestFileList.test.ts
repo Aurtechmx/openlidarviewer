@@ -107,6 +107,12 @@ describe('the list file', () => {
     expect(src).toMatch(/process\.on\('exit'/);
   });
 
+  it('test-bucket.mjs exits through its cleanup hook on SIGINT and SIGTERM', () => {
+    const src = readFileSync(join(__dirname, '..', 'scripts', 'test-bucket.mjs'), 'utf8');
+    expect(src).toMatch(/process\.on\('SIGINT', \(\) => process\.exit\(130\)\)/);
+    expect(src).toMatch(/process\.on\('SIGTERM', \(\) => process\.exit\(143\)\)/);
+  });
+
   it('returns null when no list is named, and throws on a malformed one', () => {
     expect(readFileList({})).toBeNull();
     const dir = mkdtempSync(join(tmpdir(), 'olv-list-'));

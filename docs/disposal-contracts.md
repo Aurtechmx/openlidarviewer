@@ -39,6 +39,7 @@ disposal runs immediately. It is covered by `tests/appLifetime.test.ts`.
 | Per-dataset override entries | `CrsOverrideStore` (localStorage) | LRU-bounded to 100 entries; persists across sessions | `clearOverride(key)` for one, `clearAllOverrides()` for all |
 | Action registry rows in palette | `CommandPalette._actions` | Per-host lifetime | `setActions([])` |
 | Selection by cloud id (highlight) | `Viewer._selectionSnapshots` | Per highlight | `clearSelectionHighlight()` |
+| IndexedDB database `olv-report-signing`, store `keys`, one record `default` holding the non-extractable report-signing key | `indexedDbBackend` in `src/export/reportSigningKeyStore.ts` | The record lasts across sessions in this browser profile. Each database connection lasts one read or write | Each call closes its connection in `finally`. The record is removed by `deleteSigningKey` (the Export panel's "Delete signing key", after confirming) or when the browser clears site data. Closing a scan and `pagehide` leave it in place |
 
 ### Viewer / three.js / streaming (covered by the e2e long-session spec)
 
