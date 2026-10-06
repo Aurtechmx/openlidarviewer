@@ -249,6 +249,8 @@ test('loading a key file replaces a verdict shown for the typed key', async ({ p
     // A file sets the text from code, with no input event; the verdict for the old key must go.
     await page.locator('[data-testid="report-verify-trusted-file"]').setInputFiles(other);
     await expect(input).toHaveValue('A'.repeat(43));
+    // The chooser is cleared, so picking the same file again fires `change` again.
+    await expect.poll(() => page.locator('[data-testid="report-verify-trusted-file"]').evaluate((el) => (el as HTMLInputElement).value)).toBe('');
     await expect(page.locator('[data-testid="report-verify-sig-trusted"]')).toHaveCount(0);
     await expect(page.locator('[data-testid="report-verify-sig-unverified"]')).toBeVisible();
     await expect(note).toHaveText('The key changed. Press Compare to check it.');

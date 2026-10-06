@@ -209,17 +209,22 @@ function signatureSection(v: SignatureVerdict, compare?: SignerCompare): HTMLEle
   file.addEventListener('change', () => {
     const f = file.files?.[0];
     if (!f) return;
+    // Clear the chooser so picking the same file again fires `change` again.
+    const done = (): void => { file.value = ''; };
     const problem = keyFileProblem(f.size);
     fileNote.textContent = problem ?? '';
     if (problem) {
       input.value = '';
       flow.keyChanged();
+      done();
       return;
     }
     void f.text().then((t) => {
       input.value = t.slice(0, KEY_FILE_MAX_BYTES);
       flow.keyChanged();
-    }).catch(() => undefined);
+    }).catch(() => {
+      fileNote.textContent = 'The key file could not be read. Pick it again or paste the key.';
+    }).finally(done);
   });
   const go = document.createElement('button');
   go.type = 'button';
