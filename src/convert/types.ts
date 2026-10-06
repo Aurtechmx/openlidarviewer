@@ -7,6 +7,7 @@
  * output formats. Everything here is deterministic and unit-testable.
  */
 
+import type { ConversionEvent } from './conversionEvents';
 import type { ExportDigests } from '../science/exportDigestRecord';
 import type { TransformProvenance } from './transformProvenance';
 import type { CrsInfo } from '../io/crs';
@@ -119,6 +120,12 @@ export interface ConvertOptions {
    * opt-in.
    */
   readonly allowLegacyReturnClamp?: boolean;
+  /**
+   * Write LAS 1.2 even when a scan angle beyond 90 degrees is clipped or a
+   * scanner channel is dropped. Off by default, and such a write is refused.
+   * It allows these two losses and no other. LAS 1.4 keeps both.
+   */
+  readonly allowLegacyAcquisitionLoss?: boolean;
 }
 
 /**
@@ -134,6 +141,12 @@ export const LEGACY_RETURN_CLAMP_OPT_IN = 'Allow returns above 7 to be clamped';
 /** The hint shown under that control. */
 export const LEGACY_RETURN_CLAMP_HINT =
   'LAS 1.2 keeps 3 bits of return, so return 8 of 12 is written as 7 of 7. Unticked, such a file is refused.';
+
+/** The label of the control that sets `allowLegacyAcquisitionLoss`. */
+export const LEGACY_ACQUISITION_LOSS_OPT_IN = 'Allow scan angles to clip and scanner channels to be dropped';
+/** The hint shown under that control. */
+export const LEGACY_ACQUISITION_LOSS_HINT =
+  'LAS 1.2 keeps scan angles from -90 to 90 degrees and has no scanner channel. Unticked, a file that would lose either is refused.';
 
 /** A single produced output file, ready to download. */
 export interface ConvertedFile {
@@ -166,6 +179,12 @@ export interface ConvertReport {
   readonly crsNote: string;
   /** Per-conversion log lines. */
   readonly log: ReadonlyArray<LogEntry>;
+  /**
+   * What the conversion translated, carried unchanged under a different
+   * meaning, dropped, clipped or rounded. The log, the panels and the written
+   * file's text area all come from this list.
+   */
+  readonly events?: ReadonlyArray<ConversionEvent>;
   /**
    * Machine-readable provenance of the coordinate transform, present only in
    * `reproject` mode (the sole mode that runs `reprojectGlobal`) and on every

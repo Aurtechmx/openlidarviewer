@@ -19,10 +19,13 @@ import { downloadBytes } from '../io/download';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import { decodeFull } from '../convert/decodeFull';
 import { runBatch, summariseBatch, guardedBatchInput, type BatchInput, type BatchItemResult } from '../convert/convertRunner';
+import { conversionNotes } from './conversionNotes';
 import { memoryCeilingBytes } from '../io/loadPlan';
 import { buildZip, assessZipDownload } from '../convert/zipStore';
 import {
   CONVERT_FORMATS,
+  LEGACY_ACQUISITION_LOSS_HINT,
+  LEGACY_ACQUISITION_LOSS_OPT_IN,
   LEGACY_CLASS_WRAP_OPT_IN,
   LEGACY_RETURN_CLAMP_HINT,
   LEGACY_RETURN_CLAMP_OPT_IN,
@@ -78,6 +81,8 @@ export class BatchConverter {
   private _allowClassWrap = false;
   private _allowReturnClamp = false;
   private readonly _returnRow: HTMLElement;
+  private _allowAcquisitionLoss = false;
+  private readonly _acquisitionRow: HTMLElement;
   private _crsMode: CrsMode = 'keep';
   private _targetEpsg = '';
   private _sourceEpsg = '';
@@ -123,6 +128,7 @@ export class BatchConverter {
       text: 'LAS 1.2 keeps 5 bits of class, so 33 is written as 1 and 64 as 0. Unticked, a file with such classes is refused.',
     }));
     this._returnRow = optInRow(LEGACY_RETURN_CLAMP_OPT_IN, LEGACY_RETURN_CLAMP_HINT, (on) => { this._allowReturnClamp = on; });
+    this._acquisitionRow = optInRow(LEGACY_ACQUISITION_LOSS_OPT_IN, LEGACY_ACQUISITION_LOSS_HINT, (on) => { this._allowAcquisitionLoss = on; });
     this._crsRow = el('div', { className: 'olv-bc-pills' });
     this._crsExtra = el('div', { className: 'olv-bc-crs-extra' });
     this._hint = el('p', { className: 'olv-bc-hint' });
@@ -145,7 +151,7 @@ export class BatchConverter {
       this._section('Files', this._buildFilesSection()),
       this._section('Output format', (() => {
         const wrap = el('div');
-        wrap.append(this._formatRow, this._formatNote, this._wrapRow, this._returnRow);
+        wrap.append(this._formatRow, this._formatNote, this._wrapRow, this._returnRow, this._acquisitionRow);
         return wrap;
       })()),
       this._section('Coordinate system', (() => {
@@ -297,6 +303,7 @@ export class BatchConverter {
     // comes later in the stylesheet and would win over the latter.
     this._wrapRow.classList.toggle('olv-hidden', this._format !== 'las');
     this._returnRow.classList.toggle('olv-hidden', this._format !== 'las');
+    this._acquisitionRow.classList.toggle('olv-hidden', this._format !== 'las');
   }
 
   private _renderCrsPills(): void {
@@ -399,6 +406,7 @@ export class BatchConverter {
       sourceEpsg: parseEpsg(this._sourceEpsg),
       allowLegacyClassWrap: this._allowClassWrap,
       allowLegacyReturnClamp: this._allowReturnClamp,
+      allowLegacyAcquisitionLoss: this._allowAcquisitionLoss,
     };
 
     this._abort = new AbortController();
@@ -486,14 +494,8 @@ export class BatchConverter {
       }
       row.append(top);
       // Surface warnings/errors inline, near their source.
-      const notable = r.report.log.filter((l) => l.level !== 'info');
-      if (notable.length) {
-        const log = el('ul', { className: 'olv-bc-row-log' });
-        for (const line of notable) {
-          log.append(el('li', { className: `olv-bc-log-${line.level}`, text: line.message }));
-        }
-        row.append(log);
-      }
+      const notes = conversionNotes(r.report);
+      if (notes) row.append(notes);
       this._results.append(row);
     }
   }

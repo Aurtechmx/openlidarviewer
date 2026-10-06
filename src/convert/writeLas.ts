@@ -28,6 +28,7 @@
  * Pure data — no DOM. Returns the LAS file as bytes.
  */
 
+import { roundLegacyAngle } from './conversionEvents';
 import type { GlobalPoints } from './globalPoints';
 import { globalBounds } from './globalPoints';
 import { isValidQuantisation, quantisationFitsInt32, type Quantisation } from './lasQuantisation';
@@ -562,7 +563,7 @@ function bit(a: Uint8Array | undefined, i: number): number {
 /** Legacy scan angle rank: whole degrees, int8, clamped to -90..90. */
 function scanAngleRank(a: Float32Array | undefined, i: number): number {
   if (!a || !Number.isFinite(a[i])) return 0;
-  return Math.max(-90, Math.min(90, Math.round(a[i])));
+  return Math.max(-90, Math.min(90, roundLegacyAngle(a[i])));
 }
 
 /** Extended scan angle: degrees → int16 in 0.006° steps, clamped to ±30000. */

@@ -25,7 +25,7 @@
  */
 
 import { classAllocation, classificationName, isExtendedPdrf, FIRST_EXTENDED_PDRF, LEGACY_MAX_CLASS } from '../lasSemantics';
-import type { LogEntry } from './types';
+import type { ConversionEvent } from './conversionEvents';
 
 /** A PDRF inside the legacy table and one inside the extended table. */
 const LEGACY_PDRF = 3;
@@ -82,8 +82,8 @@ export interface ClassSemanticsPlan {
   readonly translations: readonly ClassFinding[];
   /** Codes carried unchanged whose meaning differs in the target. */
   readonly changes: readonly ClassFinding[];
-  /** The report lines for both lists, translations first. */
-  readonly log: readonly LogEntry[];
+  /** One event per finding, translations first. */
+  readonly events: readonly ConversionEvent[];
 }
 
 function pointsLabel(points: number): string {
@@ -141,7 +141,7 @@ function changeFinding(code: number, points: number, target: ClassTarget): Class
  */
 export function planClassSemantics(input: ClassSemanticsInput): ClassSemanticsPlan {
   const { classification, classificationFlags, count, target } = input;
-  const unchanged: ClassSemanticsPlan = { classification, classificationFlags, translations: [], changes: [], log: [] };
+  const unchanged: ClassSemanticsPlan = { classification, classificationFlags, translations: [], changes: [], events: [] };
   if (!classification || count === 0) return unchanged;
 
   const known = input.sourcePdrf !== undefined && input.provenance === 'source';
@@ -182,9 +182,13 @@ export function planClassSemantics(input: ClassSemanticsInput): ClassSemanticsPl
     }
   }
 
-  const log: LogEntry[] = [
-    ...translations.map((f): LogEntry => ({ level: 'info', message: f.message })),
-    ...changes.map((f): LogEntry => ({ level: 'warn', message: f.message })),
+  const events: ConversionEvent[] = [
+    ...translations.map((f): ConversionEvent => ({
+      id: `class-${f.code}-translated`, kind: 'translated', level: 'info', points: f.points, message: f.message, acknowledged: false,
+    })),
+    ...changes.map((f): ConversionEvent => ({
+      id: `class-meaning-${f.code}`, kind: 'reinterpreted', level: 'warn', points: f.points, message: f.message, acknowledged: false,
+    })),
   ];
-  return { classification: cls, classificationFlags: flags, translations, changes, log };
+  return { classification: cls, classificationFlags: flags, translations, changes, events };
 }
