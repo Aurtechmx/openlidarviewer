@@ -54,6 +54,7 @@ function mount(dsm?: unknown): { lab: Lab; root: FakeEl } {
     scale: { isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: true },
     layerId: 'layer-a',
     filename: 'site',
+    verticalScaleResolved: true,
     dsm: dsm as never,
   });
   return { lab, root: lab.element as unknown as FakeEl };

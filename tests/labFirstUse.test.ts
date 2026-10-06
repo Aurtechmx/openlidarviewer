@@ -20,7 +20,7 @@ beforeAll(() => {
 const copy = await import('../src/process/labGuideCopy');
 const { analysisRows } = await import('../src/process/analysisStatus');
 const { renderFlowPulseLab, renderFlowPulseNeedsGround, runLabFlowPulse } = await import('../src/ui/fieldSimulation/flowPulseLab');
-const { renderTerrainAccessRunCard, terrainAccessReadiness } = await import('../src/ui/fieldSimulation/terrainAccessLab');
+const { renderTerrainAccessRunCard, terrainAccessElevationReference, terrainAccessReadiness } = await import('../src/ui/fieldSimulation/terrainAccessLab');
 const { renderObservatoryPanel } = await import('../src/ui/observatory/observatoryPanel');
 const { runObservatoryOverCloud } = await import('../src/app/observatoryFromCloud');
 const { wallAndGroundCloud } = await import('./helpers/observatoryPlanningFixtures');
@@ -75,12 +75,24 @@ describe('readiness', () => {
   it('Terrain Access reads units the way its runner does', () => {
     const dtm = { verticalUnitToMetres: 1 } as never;
     const scale = { isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: true };
-    const ok = { dtm, scale, layerId: null, filename: null };
+    const ok = { dtm, scale, layerId: null, filename: null, verticalScaleResolved: true };
     expect(copy.firstBlocker(terrainAccessReadiness(ok))).toBeNull();
     expect(copy.firstBlocker(terrainAccessReadiness({ ...ok, scale: { ...scale, resolved: false } }))?.label).toBe('Units known');
     expect(copy.firstBlocker(terrainAccessReadiness({ ...ok, scale: { ...scale, isGeographic: true } }))?.label).toBe('Units known');
     expect(copy.firstBlocker(terrainAccessReadiness({ ...ok, dtm: { verticalUnitToMetres: null } as never }))?.label).toBe('Units known');
     expect(copy.firstBlocker(terrainAccessReadiness(null))?.label).toBe('Ground surface (terrain run)');
+  });
+
+  it('Terrain Access counts an absent or false vertical-scale statement as unresolved', () => {
+    const dtm = { verticalUnitToMetres: 0.3048 } as never;
+    const scale = { isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: true };
+    const base = { dtm, scale, layerId: null, filename: null };
+    expect(copy.firstBlocker(terrainAccessReadiness(base))?.label).toBe('Units known');
+    expect(copy.firstBlocker(terrainAccessReadiness({ ...base, verticalScaleResolved: false }))?.label).toBe('Units known');
+    expect(copy.firstBlocker(terrainAccessReadiness({ ...base, verticalScaleResolved: true }))).toBeNull();
+    const ref = (v?: boolean) => terrainAccessElevationReference({ ...base, worldOriginZ: 10, verticalScaleResolved: v });
+    expect(ref(undefined)).toMatchObject({ unitLabel: 'units', metresPerVerticalUnit: null });
+    expect(ref(true)).toMatchObject({ unitLabel: 'ft', metresPerVerticalUnit: 0.3048 });
   });
 
   it('shows a grade in degrees next to its tangent', () => {

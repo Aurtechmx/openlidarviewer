@@ -54,4 +54,15 @@ describe('DEM package placement', () => {
     expect(readme).toContain('local frame, not georeferenced; elevations recentred');
     expect(readme).not.toContain('site.prj');
   });
+
+  it('unplaced bounds are local offsets in the project frame unit, for a projected and a geographic frame', () => {
+    const opts = { basename: 'site', generationDateIso: DEM_PKG_OPTS.generationDateIso };
+    const projected = text(buildDemPackage(demResultFor(grid()), opts), 'site-README.txt');
+    expect(projected).toContain('Bounds (local offsets in the project frame, m)');
+    const geographic = text(buildDemPackage(demResultFor(grid()), { ...opts, isGeographic: true }), 'site-README.txt');
+    expect(geographic).toContain('Bounds (local offsets in the project frame, degrees)');
+    expect(geographic).not.toContain('lon/lat degrees');
+    const placed = text(buildDemPackage(demResultFor(grid()), { ...DEM_PKG_OPTS, basename: 'site', isGeographic: true }), 'site-README.txt');
+    expect(placed).toContain('Bounds (CRS units, lon/lat degrees)');
+  });
 });

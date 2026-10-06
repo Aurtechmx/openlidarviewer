@@ -484,7 +484,9 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     ...(opts.placed === false
       ? ['  Frame          local frame, not georeferenced; elevations recentred']
       : []),
-    `  Bounds (${opts.placed === false ? 'local frame offsets' : 'CRS units'}, ${isGeographic ? 'lon/lat degrees' : 'projected'})`,
+    opts.placed === false
+      ? `  Bounds (local offsets in the project frame, ${hUnit})`
+      : `  Bounds (CRS units, ${isGeographic ? 'lon/lat degrees' : 'projected'})`,
     `    min X / min Y  ${coord(opts.boundsMinX)} / ${coord(opts.boundsMinY)}`,
     `    max X / max Y  ${coord(opts.boundsMaxX)} / ${coord(opts.boundsMaxY)}`,
     `  Elevation unit ${zUnit}`,

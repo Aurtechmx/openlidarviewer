@@ -100,7 +100,8 @@ export interface TerrainAccessLabInput {
    * Whether the DTM's own claimed vertical factor actually resolved — the
    * same fact `AnalyseContoursResult.verticalScaleResolved` carries for Flow
    * Pulse. Absent/undefined is treated as unresolved, never as resolved by
-   * default: an elevation reading is withheld unless this says otherwise.
+   * default: the readout withholds an elevation and the readiness list holds
+   * Apply off until this is true.
    */
   readonly verticalScaleResolved?: boolean;
   /**
@@ -125,7 +126,7 @@ export interface TerrainAccessLabInput {
  * CRS-less scan pins to 1.
  */
 export function terrainAccessElevationReference(input: TerrainAccessLabInput): ElevationReference {
-  const zFactor = input.verticalScaleResolved === false
+  const zFactor = input.verticalScaleResolved !== true
     ? null
     : (input.dtm.verticalUnitToMetres ?? null);
   const unitLabel = zFactor == null ? 'units' : verticalUnitLabel(zFactor);
@@ -370,7 +371,7 @@ export function terrainAccessReadiness(input: TerrainAccessLabInput | null) {
   const s = input?.scale;
   const v = input?.dtm.verticalUnitToMetres;
   const units = !!s && s.resolved && (!s.isGeographic || Number.isFinite(s.latitudeDeg ?? Number.NaN)) && v != null && v > 0
-    && input?.verticalScaleResolved !== false;
+    && input?.verticalScaleResolved === true;
   return labReadiness('terrain-access', !!input, units);
 }
 
