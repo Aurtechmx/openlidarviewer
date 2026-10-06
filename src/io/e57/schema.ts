@@ -618,7 +618,7 @@ function extensionLeaves(
 
 /** The `xmlns:prefix` declarations on the root element. */
 function namespaceDeclarations(root: XmlNode): Record<string, string> {
-  const out: Record<string, string> = {};
+  const out: Record<string, string> = Object.create(null) as Record<string, string>;
   for (const [k, v] of Object.entries(root.attrs)) {
     if (k.startsWith('xmlns:')) out[k.slice(6)] = v;
   }

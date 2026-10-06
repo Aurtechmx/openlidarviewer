@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { dropDenseGridPly, showWorkspaceMode } from './helpers';
@@ -90,10 +90,15 @@ test('a tampered report is reported as modified', async ({ page }) => {
   // Alter a finding value without recomputing the digest.
   const manifest = JSON.parse(readFileSync(reportPath, 'utf8'));
   manifest.findings[0].value = 999999;
-  const tampered = join(tmpdir(), `olv-tampered-${Date.now()}.json`);
-  writeFileSync(tampered, JSON.stringify(manifest));
+  const dir = mkdtempSync(join(tmpdir(), 'olv-tampered-'));
+  try {
+    const tampered = join(dir, 'report.json');
+    writeFileSync(tampered, JSON.stringify(manifest), { mode: 0o600, flag: 'wx' });
 
-  await verifyWith(page, tampered);
-  await expect(page.locator('[data-testid="report-verify-invalid"]')).toBeVisible({ timeout: 10_000 });
-  await expect(page.locator('[data-testid="report-verify-invalid"]')).toHaveText(/modified/i);
+    await verifyWith(page, tampered);
+    await expect(page.locator('[data-testid="report-verify-invalid"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-testid="report-verify-invalid"]')).toHaveText(/modified/i);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
