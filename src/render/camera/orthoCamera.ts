@@ -75,9 +75,8 @@ export function followPerspective(
   far: number,
 ): void {
   syncCameraPose(ortho, persp);
-  const dist = persp.position.distanceTo(target);
-  const halfH = Math.max(dist * Math.tan((fovDeg * Math.PI) / 360), 1e-4);
-  const a = Number.isFinite(aspect) && aspect > 0 ? aspect : 1;
+  const halfH = orthoHalfHeight(persp.position.distanceTo(target), fovDeg);
+  const a = orthoAspect(aspect);
   ortho.top = halfH;
   ortho.bottom = -halfH;
   ortho.right = halfH * a;
@@ -85,6 +84,20 @@ export function followPerspective(
   ortho.near = near;
   ortho.far = far;
   ortho.updateProjectionMatrix();
+}
+
+/**
+ * The follower's vertical half-height for a camera-to-target distance: the
+ * height the perspective camera spans at the orbit target, floored so a zero
+ * distance never collapses the frustum.
+ */
+export function orthoHalfHeight(dist: number, fovDeg: number): number {
+  return Math.max(dist * Math.tan((fovDeg * Math.PI) / 360), 1e-4);
+}
+
+/** The follower's width / height ratio: `aspect`, or 1 when it is not a usable number. */
+export function orthoAspect(aspect: number): number {
+  return Number.isFinite(aspect) && aspect > 0 ? aspect : 1;
 }
 
 /**

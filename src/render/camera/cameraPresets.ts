@@ -324,8 +324,8 @@ export function cameraPresetPose(
 // world-up axis, and Front / Back / Left / Right around the two horizontal
 // axes. Distinct from the angled presets above — these look straight down an
 // axis so a wall or floor reads flat and can be measured without skew. Pairing
-// them with the viewer's near-orthographic (very narrow FOV) projection gives
-// a parallel, distortion-free view.
+// them with the viewer's orthographic projection gives a parallel,
+// distortion-free view.
 
 /** Names a standard axis-aligned view. */
 export type StandardView = 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right';
