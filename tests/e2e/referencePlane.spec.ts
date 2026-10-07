@@ -309,25 +309,47 @@ test('reference plane: three points picked in perspective on known scan points',
     c.addEventListener('pointerdown', () => { w.__pd++; });
     c.addEventListener('pointerup', () => { w.__pu++; });
   });
-  // Points of the 70 x 70 hills grid, well apart: near one corner, the far
-  // side and the middle of the opposite edge.
-  const indices = [70 * 12 + 12, 70 * 12 + 57, 70 * 57 + 35];
+  // Scan points (every 5th row and column of the 70 x 70 hills grid) whose
+  // projected spot has the canvas on top: a card or panel over a point (the
+  // Project ready card, at first) would take the click instead. Of those, the
+  // three most spread out: leftmost, rightmost, and farthest from both.
+  const spots = await page.evaluate(() => {
+    const api = (window as unknown as { __OLV_TEST_API__: PickApi }).__OLV_TEST_API__;
+    const out: Array<{ i: number; x: number; y: number; picks: boolean }> = [];
+    for (let r = 2; r < 70; r += 5) for (let c = 2; c < 70; c += 5) {
+      const i = r * 70 + c;
+      const p = api.layerProjectPoints(i)[0]?.project;
+      const xy = p ? api.projectToClient({ x: p[0], y: p[1], z: p[2] }) : null;
+      if (xy && document.elementFromPoint(xy.x, xy.y)?.tagName === 'CANVAS') out.push({ i, ...xy, picks: api.pickAtClient(xy.x, xy.y) });
+    }
+    return out;
+  });
+  expect(spots.length, 'scan points with the canvas on top').toBeGreaterThan(10);
+  // Re-checked right before each click: a toast or chip can appear over a spot
+  // between picks, and a covered spot never reaches the canvas.
+  const uncovered = (): Promise<typeof spots> =>
+    page.evaluate((all) => all.filter((q) => document.elementFromPoint(q.x, q.y)?.tagName === 'CANVAS'), spots);
+  const chosen: typeof spots = [];
+  const roles: Array<(c: typeof spots) => (typeof spots)[number]> = [
+    (c) => c.reduce((a, b) => (b.x < a.x ? b : a)),
+    (c) => c.reduce((a, b) => (b.x > a.x ? b : a)),
+    (c) => c.reduce((a, b) => {
+      const d = (q: typeof a) => Math.min(...chosen.map((h) => Math.hypot(q.x - h.x, q.y - h.y)));
+      return d(b) > d(a) ? b : a;
+    }),
+  ];
   const prompts = ['Click the second point', 'Click the third point', 'passes through them exactly'];
-  for (const [k, i] of indices.entries()) {
-    const at = await page.evaluate((idx) => {
-      const api = (window as unknown as { __OLV_TEST_API__: PickApi }).__OLV_TEST_API__;
-      const p = api.layerProjectPoints(idx)[0]?.project;
-      if (!p) return null;
-      const xy = api.projectToClient({ x: p[0], y: p[1], z: p[2] });
-      return xy ? { ...xy, picks: api.pickAtClient(xy.x, xy.y), top: document.elementFromPoint(xy.x, xy.y)?.className ?? '' } : null;
-    }, i);
-    expect(at, `point ${i} projects onto the canvas`).not.toBeNull();
-    await page.mouse.click(at!.x, at!.y);
+  for (const [k, role] of roles.entries()) {
+    const free = await uncovered();
+    expect(free.length, `uncovered scan points before pick ${k + 1}`).toBeGreaterThan(0);
+    const at = role(free);
+    chosen.push(at);
+    await page.mouse.click(at.x, at.y);
     const counts = await page.evaluate(() => {
       const w = window as unknown as { __pd: number; __pu: number };
       return `${w.__pd} down / ${w.__pu} up`;
     });
-    await expect(status, `pick ${k + 1}: viewer pick hit=${at!.picks}, element under pointer "${at!.top}", canvas got ${counts}`).toContainText(prompts[k]);
+    await expect(status, `pick ${k + 1} (point ${at.i}): viewer pick hit=${at.picks}, canvas got ${counts}`).toContainText(prompts[k]);
   }
   await expect(body.locator('.olv-refplane-readout')).toContainText(/Orientation: Through 3 picked points, dip [\d.]+°/);
   await expect(body).toHaveAttribute('data-drawn', 'true');
