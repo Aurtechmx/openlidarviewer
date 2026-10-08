@@ -340,7 +340,9 @@ when each of these jobs succeeds:
 - `npm-audit`: `npm audit --omit=dev --audit-level=high` over the runtime
   dependencies.
 
-`e2e-gpu` and `coverage` report results without blocking a merge.
+`e2e-gpu`, `e2e-journeys` (the UX journey specs in `tests/e2e/journeys`, run
+locally with `npm run test:e2e:journeys`) and `coverage` report results without
+blocking a merge.
 
 Pre-merge checklist for any PR into `main`: all review threads resolved,
 `ci-green` passing, branch rebased on the latest `main`.

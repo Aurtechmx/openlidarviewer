@@ -30,7 +30,7 @@ export const ERROR_ALLOWLIST: ReadonlyArray<{ pattern: RegExp; reason: string }>
     pattern: /^Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline' does not appear in the style-src directive/,
     reason:
       "WebKit only: Playwright's screenshot injects an inline <style>, which the app's CSP blocks. " +
-      'App-raised CSP violations are still caught: startJourney records securitypolicyviolation events outside screenshots and fails on them.',
+      'App-raised CSP violations are still caught: startJourney records securitypolicyviolation events and fails on any that is not an inline style shortly after a screenshot.',
   },
   {
     pattern: /GL Driver Message|GPU stall due to ReadPixels/,
@@ -81,28 +81,41 @@ export function startJourney(page: Page, info: TestInfo, journeyId: string, extr
     ? join(process.env.OLV_JOURNEY_EVIDENCE, journeyId, info.project.name)
     : null;
   if (dir) mkdirSync(dir, { recursive: true });
-  // CSP violations the app causes, recorded in the page; ones raised while a
-  // screenshot is being taken are the harness's own and are not recorded.
+  // CSP violations the app causes, recorded in the page with their time. WebKit
+  // blocks the inline <style> Playwright injects for a screenshot, and on a busy
+  // runner that violation event arrives well after the screenshot returns, so
+  // an inline style-src-elem violation within SHOT_GRACE_MS of a screenshot is
+  // the harness's own and is dropped; every other violation fails the step.
   void page.addInitScript(() => {
-    const w = window as unknown as { __jCsp: string[]; __jShot: boolean };
+    const w = window as unknown as { __jCsp: Array<{ t: number; text: string; inlineStyle: boolean }>; __jShots: number[] };
     w.__jCsp = [];
-    w.__jShot = false;
+    w.__jShots = [];
     document.addEventListener('securitypolicyviolation', (e) => {
-      if (!w.__jShot) w.__jCsp.push(`${e.violatedDirective} ${e.blockedURI} ${e.sourceFile}:${e.lineNumber}`);
+      w.__jCsp.push({
+        t: performance.now(),
+        text: `${e.violatedDirective} ${e.blockedURI} ${e.sourceFile}:${e.lineNumber}`,
+        inlineStyle: e.violatedDirective.startsWith('style-src') && e.blockedURI === 'inline',
+      });
     });
   });
+  const SHOT_GRACE_MS = 5_000;
   const cspViolations = (): Promise<string[]> =>
-    page.evaluate(() => (window as unknown as { __jCsp?: string[] }).__jCsp?.splice(0) ?? []).catch(() => []);
+    page
+      .evaluate((grace) => {
+        const w = window as unknown as { __jCsp?: Array<{ t: number; text: string; inlineStyle: boolean }>; __jShots?: number[] };
+        const shots = w.__jShots ?? [];
+        return (w.__jCsp?.splice(0) ?? [])
+          .filter((v) => !(v.inlineStyle && shots.some((s) => v.t >= s && v.t - s <= grace)))
+          .map((v) => v.text);
+      }, SHOT_GRACE_MS)
+      .catch(() => []);
   let n = 0;
 
   const capture = async (name: string): Promise<string> => {
     n += 1;
     const file = `${String(n).padStart(2, '0')}-${slug(name)}.png`;
-    await page.evaluate(() => { (window as unknown as { __jShot: boolean }).__jShot = true; }).catch(() => undefined);
+    await page.evaluate(() => { (window as unknown as { __jShots?: number[] }).__jShots?.push(performance.now()); }).catch(() => undefined);
     const shot = await page.screenshot({ fullPage: false }).catch(() => null);
-    // Violation events are dispatched asynchronously; let them land while flagged.
-    await page.waitForTimeout(50);
-    await page.evaluate(() => { (window as unknown as { __jShot: boolean }).__jShot = false; }).catch(() => undefined);
     if (!shot) return '';
     await info.attach(file, { body: shot, contentType: 'image/png' });
     if (dir) {
