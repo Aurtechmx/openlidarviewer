@@ -514,7 +514,7 @@ describe('a clear asked for before the journal is ready', () => {
     const s = fakeStore([entryFor(session(2))]);
     const app = await start(s.store);
 
-    await app.click('Clear');
+    await app.click('Clear all saved work');
 
     expect(s.entries.size).toBe(0);
     expect(app.noticeText()).toBe('Recovery data in this browser was deleted.');
@@ -614,7 +614,7 @@ describe('reopening a source offers the newest saved work for that source', () =
     app.restores[0].resolve(false);
     await drain();
     expect(s.entries.get(SITE_KEY)).toBe(a);
-    await app.click('Discard');
+    await app.click('Discard this work');
     expect(s.log).toEqual(['remove site.las']);
     expect(s.entries.get(OTHER_KEY)).toBe(b);
   });

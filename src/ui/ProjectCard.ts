@@ -1,6 +1,7 @@
 import { el, formatCount } from './dom';
 import { announcePolite } from './politeAnnounce';
 import { truncationText, type Truncation } from '../io/truncation';
+import { appTransientLane } from './transientLane';
 
 /**
  * Route a message to the app's single polite live region (see
@@ -180,7 +181,27 @@ export class ProjectCard {
     preAnnounced = null;
     if (this._timer !== null) clearTimeout(this._timer);
     this._onDismiss = info.onDismiss ?? null;
-    this._timer = window.setTimeout(() => this._dismiss(), DISMISS_MS);
+    // On a phone the card shares one lane with the other transient cards, and
+    // the first touch on the scan dismisses it; its timer starts once shown.
+    appTransientLane().claim(this.element, () => {
+      if (this._timer !== null) clearTimeout(this._timer);
+      this._timer = window.setTimeout(() => this._dismiss(), DISMISS_MS);
+      if (!appTransientLane().active() || typeof document === 'undefined') return;
+      this._dropGesture();
+      const onGesture = (e: Event): void => {
+        if (e.target instanceof HTMLCanvasElement) this._dismiss();
+      };
+      document.addEventListener('pointerdown', onGesture, true);
+      this._gesture = onGesture;
+    }, true);
+  }
+
+  /** The canvas-gesture listener that dismisses the card on a phone. */
+  private _gesture: ((e: Event) => void) | null = null;
+
+  private _dropGesture(): void {
+    if (this._gesture) document.removeEventListener('pointerdown', this._gesture, true);
+    this._gesture = null;
   }
 
   /** Fade the card out and drop any pending lane successor. */
@@ -191,6 +212,8 @@ export class ProjectCard {
     }
     this._onDismiss = null;
     this.element.classList.remove('olv-visible');
+    if (this._gesture) this._dropGesture();
+    appTransientLane().release(this.element);
   }
 
   /**

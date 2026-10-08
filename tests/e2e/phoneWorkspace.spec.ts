@@ -109,7 +109,15 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }
     test('the scan-ready toast does not cover the open sheet', async ({ page }) => {
       await openScan(page);
       const toast = page.locator('.olv-lasso-toast.olv-visible');
-      await expect(toast).toBeVisible({ timeout: 8_000 });
+      // On a phone the toast takes its turn after the Project card and the
+      // touch hint (transientLane.ts); closing them brings it forward.
+      await expect.poll(async () => {
+        for (const x of ['.olv-project-card.olv-visible .olv-pc-dismiss', '.olv-touch-hint.olv-visible .olv-touch-hint-x']) {
+          const b = page.locator(x);
+          if (await b.isVisible()) await b.evaluate((e) => (e as HTMLElement).click());
+        }
+        return toast.isVisible();
+      }, { timeout: 15_000 }).toBe(true);
       for (const id of ['data', 'output']) {
         await tab(page, id).click();
         const t = (await toast.boundingBox())!;

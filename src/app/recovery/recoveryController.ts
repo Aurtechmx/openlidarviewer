@@ -26,6 +26,7 @@ import {
   type RecoveryStore,
 } from './recoveryJournal';
 import { recoveryEnabled, setRecoveryEnabled, setRecoveryStatus } from './recoveryStatus';
+import { appTransientLane } from '../../ui/transientLane';
 
 export interface RecoveryDeps {
   readonly lifetime: AppLifetime;
@@ -103,6 +104,7 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
   };
 
   const hideNotice = (): void => {
+    if (notice) appTransientLane().release(notice);
     notice?.remove();
     notice = null;
   };
@@ -130,6 +132,8 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
     el.append(p, row);
     (deps.host ?? document.body).append(el);
     notice = el;
+    // On a phone the notice waits behind any other transient card.
+    appTransientLane().claim(el);
   };
 
   /** Drop the pending entry and the notice, and void every write in flight. */
@@ -164,8 +168,11 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
     }, () => disable('clear-failed'));
   };
 
-  const DISCARD_TIP = 'Delete this unsaved work from the browser.';
-  const CLEAR_TIP = 'Delete all work saved for recovery in this browser now.';
+  // The two delete actions differ in scope, so each label names it.
+  const DISCARD = 'Discard this work';
+  const CLEAR = 'Clear all saved work';
+  const DISCARD_TIP = 'Delete only this unsaved work from the browser. Other saved work stays.';
+  const CLEAR_TIP = 'Delete every piece of work saved for recovery in this browser, for all files.';
 
   const turnOff = (): void => {
     setRecoveryEnabled(false);
@@ -175,8 +182,8 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
 
   const offerReopen = (e: RecoveryEntry): void =>
     showNotice(`Unsaved work found: ${describe(e)}. Open ${e.fileName} again (the same file or URL) to restore it.`, [
-      ['Discard', discard, DISCARD_TIP],
-      ['Clear', clearAll, CLEAR_TIP],
+      [DISCARD, discard, DISCARD_TIP],
+      [CLEAR, clearAll, CLEAR_TIP],
       ['Turn off recovery', turnOff, 'Stop saving work for recovery in this browser and delete what is saved.'],
     ]);
 
@@ -256,8 +263,8 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
   const offerRestore = (e: RecoveryEntry): void =>
     showNotice(`This file matches your unsaved work: ${describe(e)}.`, [
       ['Restore previous work', () => void restoreEntry(e), 'Put the saved measurements, annotations, views and camera back on this file.'],
-      ['Discard', discard, DISCARD_TIP],
-      ['Clear', clearAll, CLEAR_TIP],
+      [DISCARD, discard, DISCARD_TIP],
+      [CLEAR, clearAll, CLEAR_TIP],
     ]);
 
   /** Offer the newest saved work for the open source, or say it differs. */
@@ -275,7 +282,7 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
       else if (newest) {
         showNotice(
           `The open file differs from ${newest.fileName}, so the unsaved work (${describe(newest)}) was not restored. Open ${newest.fileName} to restore it.`,
-          [['Discard', discard, DISCARD_TIP], ['Clear', clearAll, CLEAR_TIP]],
+          [[DISCARD, discard, DISCARD_TIP], [CLEAR, clearAll, CLEAR_TIP]],
         );
       } else hideNotice();
     }, () => {});

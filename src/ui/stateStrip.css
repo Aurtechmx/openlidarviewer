@@ -97,6 +97,13 @@
   body:has(.olv-state-strip:not(.olv-hidden)) .olv-measure-bar { bottom: var(--olv-strip-clear); }
 }
 
+/* Phone with a touch screen: each item is a 44 px target. The strip keeps one
+   row and scrolls sideways, so it stays as short as the two 24 px rows were. */
+@media (pointer: coarse) and (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  .olv-state-strip { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; }
+  .olv-ss-item { flex: none; min-height: 44px; min-width: 44px; }
+}
+
 /* Elapsed time (and the estimate left) a host shows beside its busy
    indicator. Written by the strip's busy-task adapter, so it ships here. */
 .olv-busy-wait {

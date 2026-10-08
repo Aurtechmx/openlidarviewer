@@ -10,6 +10,7 @@
 import { el } from './dom';
 import { applyClassicScrollbarClass } from './classicScrollbars';
 import { storageGet, storageSet } from './safeStorage';
+import { appTransientLane } from './transientLane';
 
 /** Below 1024 px the side rails leave no free centre for an unrequested panel. */
 export function narrowStage(): boolean {
@@ -399,9 +400,17 @@ export function createToastHost(host: () => HTMLElement = () => document.body): 
         root.append(btn);
       }
       root.classList.add('olv-visible');
-      liftAboveNavbar(root);
       const shown = root;
-      timer = setTimeout(() => shown.classList.remove('olv-visible'), action ? 8000 : 6000);
+      // On a phone the toast waits its turn behind another transient card, and
+      // its timer starts only once it is on screen (transientLane.ts).
+      appTransientLane().claim(shown, () => {
+        if (timer !== null) clearTimeout(timer);
+        liftAboveNavbar(shown);
+        timer = setTimeout(() => {
+          shown.classList.remove('olv-visible');
+          appTransientLane().release(shown);
+        }, action ? 8000 : 6000);
+      });
     },
   };
 }

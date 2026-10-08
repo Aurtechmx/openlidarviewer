@@ -53,4 +53,17 @@ describe('planInstantAnswer', () => {
       expect(planInstantAnswer(c).message.toLowerCase()).toMatch(/nothing (uploaded|leaves)/);
     }
   });
+  it('a terrain scan with an unknown CRS states the unit caveat in the prompt', () => {
+    const a = planInstantAnswer({ cloudCount: 1, scanShape: 'terrain', crsKnown: false });
+    expect(a.action).toBe('terrain');
+    expect(a.message).toMatch(/CRS unknown/);
+    expect(a.message).toMatch(/source units/);
+    expect(a.message).toMatch(/Nothing uploaded/);
+    expect(a.actionLabel).toBe('Analyse terrain →');
+  });
+
+  it('a known CRS keeps the plain terrain prompt', () => {
+    const a = planInstantAnswer({ cloudCount: 1, scanShape: 'terrain', crsKnown: true });
+    expect(a.message).not.toMatch(/unknown/);
+  });
 });

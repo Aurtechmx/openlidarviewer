@@ -12312,6 +12312,49 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 /* The Measure panel's session buttons keep one line: "Export session" takes
    the width it needs and the shorter captions give way. */
 .olv-mp-action { flex: 1 0 auto; white-space: nowrap; }
+
+/* Phone touch targets: every control a finger reaches on the phone layout is
+   at least 44 x 44 px. Icon buttons keep their glyph size and grow only their
+   transparent box, so the header looks the same. Desktop and the large-touch
+   layout (99-mobile-gui-refresh.css) are untouched. */
+@media (pointer: coarse) and (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  .olv-theme-toggle, .olv-quality-button, .olv-pc-dismiss, .olv-colorbar-close,
+  .olv-colorbar-toggle, .olv-dock .olv-tool-more {
+    min-width: 44px; min-height: 44px;
+  }
+  .olv-colorbar-close { display: inline-flex; align-items: center; justify-content: center; }
+  .olv-lasso-toast-action, .olv-toast-cancel { min-height: 44px; min-width: 44px; }
+}
+
+/* Phone: the colour legend starts as its one-line head (ColorbarOverlay.ts);
+   the expand button opens the ramp. Elsewhere the toggle is not shown. */
+.olv-colorbar-toggle { display: none; }
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .olv-colorbar-toggle {
+    display: inline-flex; align-items: center; justify-content: center;
+    border: none; background: none; color: var(--text-dim); cursor: pointer;
+    font-size: var(--text-sm); border-radius: var(--radius-xs);
+  }
+  .olv-colorbar.olv-colorbar-collapsed { padding-block: 0; width: auto; }
+  /* The legend steps aside while the Project card is up, as it already does
+     on a narrow desktop window (98-layer-health.css). */
+  body:has(.olv-project-card.olv-visible:not(.olv-lane-wait)) .olv-colorbar:not(.olv-colorbar-docked) { visibility: hidden; }
+  .olv-colorbar.olv-colorbar-collapsed > :not(.olv-colorbar-head) { display: none; }
+  /* The Project card is a compact summary on a phone: the file name, then
+     format, points and size on one or two lines. The Data panel keeps the full
+     list; the title is announced through the live region (ProjectCard.ts). */
+  .olv-project-card { padding: var(--space-sm) var(--space-lg); }
+  .olv-pc-head { position: absolute; top: 0; right: 0; }
+  .olv-pc-title { display: none; }
+  .olv-pc-name { margin: var(--space-xs) 44px var(--space-2xs) 0; color: var(--text); }
+  .olv-pc-grid { flex-direction: row; flex-wrap: wrap; column-gap: var(--space-lg); row-gap: 0; }
+  .olv-pc-row { gap: var(--space-xs); justify-content: flex-start; }
+  .olv-pc-row:nth-child(n + 4) { display: none; }
+  .olv-pc-value { font-size: var(--text-xs); text-align: left; }
+  .olv-pc-countdown { margin-top: var(--space-sm); }
+  /* While a transient card waits for its turn (transientLane.ts) it is not shown. */
+  .olv-lane-wait { display: none !important; }
+}
 /* ── Windows High Contrast / forced-colors ──────────────────────────────────
    Windows High Contrast replaces the author palette with a small system one.
    Backgrounds, borders and shadows are forced, `backdrop-filter` stops
