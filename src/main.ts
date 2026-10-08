@@ -2328,7 +2328,7 @@ const kmlDeps: KmlActionDeps = {
   hasViewer: () => Boolean(viewer),
   geo: exportGeoContext,
   crsCurrent: () => crsService.current(),
-  upAxis: () => crsService.context().upAxis, // RESOLVED axis
+  upAxis: () => crsService.context().upAxis, isGeographic: () => crsService.context().isGeographic, // RESOLVED axis and frame
   annotations: () => viewer?.annotate.getAnnotations() ?? [],
   measurements: () => viewer?.measure.getMeasurements() ?? [], layerCount: () => viewer?.clouds().length ?? 0,
   viewpoints: () => viewBookmarks.savedViews.map(
