@@ -36,6 +36,10 @@
 
 import type { Vec3 } from '../navMath';
 import type { ProfileChartSample } from './types';
+import { profileSampleCovered } from './civilProfileStats';
+
+/** The coverage rule this module applies, re-exported for the report builder. */
+export { profileSampleCovered };
 import {
   buildProfileFrame,
   positionAtProfileChainage,
@@ -286,9 +290,11 @@ export function summariseSlopes(grades: ReadonlyArray<SlopeGrade>): SlopeSummary
  * Interpolate the elevation at a target chainage from a sorted sample series.
  *
  * Gap rule, the same one `profileSummary` and `civilProfileStats` apply: a
- * chainage that lands exactly on a sample takes that sample's height, gap or
- * not; a chainage strictly between two samples interpolates only when BOTH
- * brackets are finite, and returns NaN otherwise. A single finite bracket is
+ * sample is covered only when `profileSampleCovered` says so (a finite height
+ * and a corridor count other than 0), and an uncovered sample reads as NaN. A
+ * chainage that lands exactly on a sample takes that sample's reading; a
+ * chainage strictly between two samples interpolates only when BOTH brackets
+ * are covered, and returns NaN otherwise. A single finite bracket is
  * never spread across the gap beside it, so a station inside a no-coverage
  * span reads as unknown rather than as a measured elevation.
  */
@@ -298,9 +304,12 @@ function elevationAtChainage(
 ): number {
   const last = samples.at(-1);
   if (last === undefined) return Number.NaN;
-  if (chainage <= samples[0].distance) return samples[0].height;
+  // An uncovered sample (no finite height, or a corridor count of 0) reads as
+  // NaN, so a height the sampler did not stand behind never enters a grade.
+  const h = (s: ProfileChartSample): number => (profileSampleCovered(s) ? s.height : Number.NaN);
+  if (chainage <= samples[0].distance) return h(samples[0]);
   if (chainage >= last.distance) {
-    return last.height;
+    return h(last);
   }
   // Linear search — samples are typically 32..256 long; binary
   // search would shave µs but adds branch complexity not worth it
@@ -311,13 +320,15 @@ function elevationAtChainage(
       const lo = samples[i - 1];
       const hi = samples[i];
       // Exact hit on the upper bracket: that sample IS the station's reading.
-      if (chainage === hi.distance) return hi.height;
+      if (chainage === hi.distance) return h(hi);
       const span = hi.distance - lo.distance;
-      if (span <= 0) return hi.height;
-      if (!Number.isFinite(lo.height) || !Number.isFinite(hi.height)) return Number.NaN;
+      if (span <= 0) return h(hi);
+      const loH = h(lo);
+      const hiH = h(hi);
+      if (!Number.isFinite(loH) || !Number.isFinite(hiH)) return Number.NaN;
       const t = (chainage - lo.distance) / span;
-      return lo.height + t * (hi.height - lo.height);
+      return loH + t * (hiH - loH);
     }
   }
-  return last.height;
+  return h(last);
 }

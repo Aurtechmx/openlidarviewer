@@ -26,7 +26,7 @@ import { buildSpaceReportContent } from '../../terrain/space/spaceReportLayout';
 import type { FloorPlanModel } from '../../terrain/space/floorplan/extractFloorPlan';
 import type { PlanUnitSystem } from '../../terrain/space/floorplan/floorPlanSvg';
 import { pdfInfoDate } from '../../pdfInfoDate';
-import { winAnsiSafe } from '../../winAnsiText';
+import { capFieldText, clipWithSuffix, omissionMarker, winAnsiSafe, wrapToWidth } from '../../winAnsiText';
 
 export interface SpaceReportPdfInput {
   readonly space: SpaceMetrics | null;
@@ -109,11 +109,25 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
 
   let y = PH - M;
 
-  /** Break to a fresh page when `need` points of body would cross the footer. */
-  const room = (need: number): void => {
-    if (y - need >= BODY_FLOOR) return;
+  /** Break to a fresh page when `need` points of body would cross the footer; true when it broke. */
+  const room = (need: number): boolean => {
+    if (y - need >= BODY_FLOOR) return false;
     page = doc.addPage([PW, PH]);
     y = PH - M;
+    return true;
+  };
+
+  /**
+   * Draw `s` wrapped to `maxW` from `x`, each line checking its own room, so
+   * a long note continues on the next page instead of running into the
+   * footer. A field past PDF_FIELD_CHAR_CAP is cut there with a marker line.
+   */
+  const flow = (s: string, x: number, maxW: number, sz: number, f: PDFFont, c: Color): void => {
+    for (const line of wrapField(s, f, sz, maxW)) {
+      room(sz + 3);
+      page.drawText(line, { x, y, size: sz, font: f, color: c });
+      y -= sz + 3;
+    }
   };
 
   // ── Title + subtitle ──
@@ -133,14 +147,28 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
     y -= 16;
     for (const row of section.rows) {
       room(14);
-      text(row.label, labelX, y, 9.5, bold, DIM);
-      text(row.value, valueX, y, 9.5, font, INK);
+      // Label and value wrap in their own columns and advance together; a
+      // row that breaks across pages repeats its label as "(continued)".
+      const labelW = valueX - labelX - 8;
+      const valueW = PW - M - valueX;
+      const labelLines = wrapField(row.label, bold, 9.5, labelW);
+      const valueLines = wrapField(row.value, font, 9.5, valueW);
+      const rows = Math.max(labelLines.length, valueLines.length);
+      for (let i = 0; i < rows; i++) {
+        if (i > 0) y -= 12.5;
+        if (room(9.5) && i >= labelLines.length) {
+          const cont = clipWithSuffix(labelLines.join(' '), ' (continued)', (t) => bold.widthOfTextAtSize(t, 9.5), labelW);
+          page.drawText(cont, { x: labelX, y, size: 9.5, font: bold, color: DIM });
+        }
+        if (i < labelLines.length) page.drawText(labelLines[i], { x: labelX, y, size: 9.5, font: bold, color: DIM });
+        if (i < valueLines.length) page.drawText(valueLines[i], { x: valueX, y, size: 9.5, font, color: INK });
+      }
       y -= 14;
       // The per-row qualifier the panel shows as a tooltip. Without it the
       // sheet printed a bare envelope volume and a bare bounding surface area,
       // so a reader had no way to tell either one from a solid measurement.
       if (row.hint) {
-        y = drawWrapped(page, font, row.hint, valueX, y, PW - M - valueX, 7, DIM);
+        flow(row.hint, valueX, PW - M - valueX, 7, font, DIM);
         y -= 1;
       }
     }
@@ -167,7 +195,7 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
     for (const c of content.caveats) {
       // Two lines of headroom, so a note that wraps starts on the page it ends on.
       room(24);
-      y = drawWrapped(page, font, `- ${c}`, M, y, PW - 2 * M, 8.5, DIM);
+      flow(`- ${c}`, M, PW - 2 * M, 8.5, font, DIM);
       y -= 3;
     }
   }
@@ -229,35 +257,19 @@ function wrapStampLine(
   return out;
 }
 
-/** Word-wrap text into the page width, advancing y; returns the new y. */
-function drawWrapped(
-  page: PDFPage,
-  font: PDFFont,
-  s: string,
-  x: number,
-  y: number,
-  maxW: number,
-  sz: number,
-  color: ReturnType<typeof rgb>,
-): number {
-  const words = safe(s).split(/\s+/);
-  let line = '';
-  let cy = y;
-  for (const w of words) {
-    const cand = line ? `${line} ${w}` : w;
-    if (font.widthOfTextAtSize(cand, sz) > maxW && line) {
-      page.drawText(line, { x, y: cy, size: sz, font, color });
-      cy -= sz + 3;
-      line = w;
-    } else {
-      line = cand;
-    }
-  }
-  if (line) {
-    page.drawText(line, { x, y: cy, size: sz, font, color });
-    cy -= sz + 3;
-  }
-  return cy;
+type Color = ReturnType<typeof rgb>;
+
+/**
+ * Word-wrap one field into lines no wider than `maxW` (a word wider than the
+ * line is hard-broken), capped at PDF_FIELD_CHAR_CAP with a marker line when
+ * cut. Mirrors the wrapper in terrainReportPdf.ts.
+ */
+function wrapField(s: string, font: PDFFont, sz: number, maxW: number): string[] {
+  const field = capFieldText(s);
+  const measure = (t: string): number => font.widthOfTextAtSize(t, sz);
+  const lines = wrapToWidth(safe(field.text), measure, maxW);
+  if (field.omitted > 0) lines.push(...wrapToWidth(safe(omissionMarker(field.omitted)), measure, maxW));
+  return lines;
 }
 
 /** Draw the extracted wall plan (floor fill + wall poché + dims) in a box. */

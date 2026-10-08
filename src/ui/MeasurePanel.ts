@@ -50,6 +50,7 @@ import type { VerticalReference } from '../geo/height';
 // the sheet draw the same geometry. Pure string assembly, no dependencies.
 import { fitAxisLabels } from '../render/measure/profileAxes';
 import { profilePolylinePath } from '../render/measure/profilePath';
+import { profileSampleCovered } from '../render/measure/civilProfileStats';
 // Δh in the chart tooltip goes through the shared formatter so it carries
 // its unit in BOTH systems (B9 — it used to print a hardcoded "m" even in
 // imperial mode).
@@ -2072,7 +2073,7 @@ function renderProfileChart(
     // Infinity chainage would make `xSpan` infinite, and the station /
     // minor-grid walks below would then push gridlines forever — a frozen
     // tab, not a chart. Such a sample is corrupt; treat it as a gap.
-    if (!Number.isFinite(s.height) || !Number.isFinite(s.distance)) continue;
+    if (!profileSampleCovered(s) || !Number.isFinite(s.distance)) continue;
     if (s.distance < xMin) xMin = s.distance;
     if (s.distance > xMax) xMax = s.distance;
     if (s.height < yMin) yMin = s.height;
@@ -2109,9 +2110,10 @@ function renderProfileChart(
   const runs: Array<Array<{ x: number; y: number }>> = [];
   let run: Array<{ x: number; y: number }> = [];
   for (const s of samples) {
-    // Same corrupt-sample rule as the bounds scan above: a non-finite
-    // distance OR height is a gap, never a plotted point.
-    if (!Number.isFinite(s.height) || !Number.isFinite(s.distance)) {
+    // Same rule as the bounds scan above: a non-finite distance, or a sample
+    // `profileSampleCovered` rejects (no finite height, or a corridor count
+    // of 0), is a gap, never a plotted point.
+    if (!profileSampleCovered(s) || !Number.isFinite(s.distance)) {
       if (run.length) {
         runs.push(run);
         run = [];

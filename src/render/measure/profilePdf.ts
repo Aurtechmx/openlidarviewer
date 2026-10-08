@@ -828,17 +828,26 @@ function drawGeneralNotes(p: PDFPage, f: Faces, notes: readonly string[]): void 
   const w = PAGE_W - M - TITLE_BLOCK_W - TITLE_BLOCK_GUTTER - M;
   trackedText(p, 'GENERAL NOTES', x0, FURNITURE_TOP - 11, T_NOTE_HEAD, f.bold, INK, 1.0);
   rule(p, x0, FURNITURE_TOP - 17, x0 + w, FURNITURE_TOP - 17, RULE, 0.6);
-  let y = FURNITURE_TOP - 30;
-  notes.forEach((note, i) => {
-    const lines = wrapText(note, f.font, T_NOTE, w - 18);
-    lines.forEach((line, li) => {
-      if (y < FURNITURE_BOT + 2) return;
-      if (li === 0) put(p, `${i + 1}.`, x0, y, T_NOTE, f.font, INK_DIM);
-      put(p, line, x0 + 18, y, T_NOTE, f.font, INK);
-      y -= 11.5;
-    });
-    y -= 2.5;
+  // Every wrapped line, in order, with the gap that follows the last line of
+  // each note. When the box cannot hold them all, the last line that fits is
+  // given to a marker that counts the lines left out, so a cut is visible.
+  const floor = FURNITURE_BOT + 2;
+  const lines = notes.flatMap((note, i) => {
+    const wrapped = wrapText(note, f.font, T_NOTE, w - 18);
+    return wrapped.map((line, li) => ({ n: i + 1, first: li === 0, line, gap: li === wrapped.length - 1 ? 2.5 : 0 }));
   });
+  let y = FURNITURE_TOP - 30;
+  for (let k = 0; k < lines.length; k++) {
+    const { n, first, line, gap } = lines[k];
+    const nextY = y - 11.5 - gap;
+    if (y < floor || (k < lines.length - 1 && nextY < floor)) {
+      put(p, `[... ${lines.length - k} more lines omitted]`, x0 + 18, y, T_NOTE, f.font, INK_DIM);
+      return;
+    }
+    if (first) put(p, `${n}.`, x0, y, T_NOTE, f.font, INK_DIM);
+    put(p, line, x0 + 18, y, T_NOTE, f.font, INK);
+    y = nextY;
+  }
 }
 
 /** Everything that is on every sheet of the set, drawn after the content. */
