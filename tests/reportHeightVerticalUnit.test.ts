@@ -7,7 +7,7 @@
  * says why, word for word with the Scan Report. Also covers the "CRS origin"
  * row's wording when no vertical datum is declared.
  */
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { buildDatasetSummary, extentRows } from '../src/report/ReportMetadataSection';
 import { generateReportPdf, type ReportExportDeps } from '../src/app/reportExport';
 import { scanReportUnitBasis } from '../src/analysis/modules/scanReport';
@@ -19,6 +19,7 @@ import { crsOriginLine, crsOriginOf } from '../src/science/crsOrigin';
 import { exportDigests } from '../src/science/exportDigestRecord';
 import type { CrsInfo } from '../src/io/crs';
 import type { Viewer } from '../src/render/Viewer';
+import { stubDownloadGlobals } from './helpers/downloadGlobalsStub';
 
 const US_SURVEY_FOOT = 1200 / 3937;
 
@@ -35,25 +36,7 @@ const CS92: CrsInfo = {
 /** The 2023-12-16 scan's raw extents, in source units. */
 const SPAN: readonly [number, number, number] = [1041.9, 461.7, 15.7];
 
-// generateReportPdf ends by triggering a browser download; stub the two DOM
-// globals it touches, as tests/reportExport.test.ts does.
-beforeAll(() => {
-  vi.useFakeTimers();
-  vi.stubGlobal('document', {
-    createElement: () => ({ href: '', download: '', click() {}, remove() {} }),
-    body: { appendChild() {} },
-  });
-  const u = globalThis.URL as unknown as Record<string, unknown>;
-  u.createObjectURL = () => 'blob:height-test';
-  u.revokeObjectURL = () => {};
-});
-afterAll(() => {
-  vi.useRealTimers();
-  vi.unstubAllGlobals();
-  const u = globalThis.URL as unknown as Record<string, unknown>;
-  delete u.createObjectURL;
-  delete u.revokeObjectURL;
-});
+stubDownloadGlobals('blob:height-test');
 
 /**
  * Run the real report export (`generateReportPdf`) for one cloud and CRS and

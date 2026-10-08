@@ -32,7 +32,7 @@
  */
 
 import { resolveExportDigests } from '../src/export/exportDigests';
-import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { captureProvenance } from '../src/diagnostics/captureProvenance';
 import { createInspectorCardRefreshers } from '../src/app/inspectorCardRefreshers';
 import { generateReportPdf, type ReportExportDeps } from '../src/app/reportExport';
@@ -40,27 +40,9 @@ import { buildExportAdapter, type ExportAdapterHost } from '../src/render/export
 import type { Inspector } from '../src/ui/Inspector';
 import type { Viewer } from '../src/render/Viewer';
 import type { ProvenanceFingerprint } from '../src/diagnostics/provenance';
+import { stubDownloadGlobals } from './helpers/downloadGlobalsStub';
 
-// generateReportPdf ends by triggering a browser download; the node test env has
-// no DOM, so stub the two globals `triggerDownload` touches. Fake timers keep the
-// helper's deferred URL-revoke from firing after the stubs are torn down.
-beforeAll(() => {
-  vi.useFakeTimers();
-  vi.stubGlobal('document', {
-    createElement: () => ({ href: '', download: '', click() {}, remove() {} }),
-    body: { appendChild() {} },
-  });
-  const u = globalThis.URL as unknown as Record<string, unknown>;
-  u.createObjectURL = () => 'blob:capture-provenance-test';
-  u.revokeObjectURL = () => {};
-});
-afterAll(() => {
-  vi.useRealTimers();
-  vi.unstubAllGlobals();
-  const u = globalThis.URL as unknown as Record<string, unknown>;
-  delete u.createObjectURL;
-  delete u.revokeObjectURL;
-});
+stubDownloadGlobals('blob:capture-provenance-test');
 
 // ── the two scans ───────────────────────────────────────────────────────────
 
