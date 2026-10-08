@@ -360,7 +360,10 @@ describe('results shelf actions', () => {
     installLiveFakeDom();
     const context = { scan: { activeId: 'a' } } as unknown as Parameters<typeof createScanService>[0]['context'];
     const scans = createScanService({ getViewer: () => ({ streamingCloud: null }) as never, context });
-    const terrain = Object.assign(new FakeTerrain(), { exportProduct: () => true });
+    const terrain = Object.assign(new FakeTerrain(), {
+      exportProductStatus: () => ({ ready: true, reason: '' }),
+      exportProduct: () => ({ ok: true as const }),
+    });
     terrain.ref = { result: { dtm: grid() }, scanId: 'a', fresh: true, filename: 'north.laz', sceneUpAxis: 'z' };
     const pose = { position: [0, 0, 10] as [number, number, number], target: [0, 0, 0] as [number, number, number] };
     const mounted = mountResultsShelf({

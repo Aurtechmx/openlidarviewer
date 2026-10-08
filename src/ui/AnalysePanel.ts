@@ -119,6 +119,7 @@ import type { MountedRangeWorkbench } from './rangeWorkbenchMount';
 import type { MountedFeatureCandidates } from './featureCandidatesMount';
 import type { PointCloud } from '../model/PointCloud';
 import { openModal, type ModalHandle } from './Modal';
+import { announcePolite } from './politeAnnounce';
 import type { SheetSize, SheetOrientation, MapSheetPurpose } from '../render/measure/mapSheetPdf';
 import type { Annotation } from '../render/annotate/types';
 import {
@@ -369,6 +370,37 @@ let lastPreparedBy = '';
 let lastSheet: SheetSize = 'letter';
 let lastOrientation: SheetOrientation = 'portrait';
 let lastNotes: string | null = null;
+
+/** Whether a terrain product can run from the Export mode, and why not. */
+export interface TerrainProductStatus { readonly ready: boolean; readonly reason: string }
+/** What happened when the Export mode asked for a terrain product. */
+export type TerrainProductOutcome = { readonly ok: true } | { readonly ok: false; readonly reason: string };
+
+const NO_TERRAIN_RESULT = 'Run a terrain analysis first.';
+
+/** Shown when the map sheet cannot start from the Export mode. */
+const MAP_SHEET_OPEN_STUDIO =
+  'Choose a purpose in Contour Studio on the Contours page, then export the PDF there.';
+
+/**
+ * Why the contour exports are disabled for this result, in the words the
+ * export note uses, or null when they can run.
+ */
+function contourExportBlockReason(r: AnalyseContoursResult): string | null {
+  if (r.quality.exportReadiness === 'blocked') {
+    return `Export disabled — ${r.quality.reasons[0] ?? 'DTM quality gate not met.'}`;
+  }
+  if (r.model.features.length === 0) return 'No contours at this interval to export.';
+  return null;
+}
+
+/** Whether the map sheet was written, and why not when it was not. */
+type MapSheetOutcome = { readonly ok: true } | { readonly ok: false; readonly reason: string };
+
+/** Shown in the map sheet dialog when no granted evidence permit reached it. */
+const MAP_SHEET_NO_PERMIT =
+  'Map sheet not exported. It needs an evidence permit, which Contour Studio grants. '
+  + 'Open Contour Studio on the Contours page, choose a purpose, then export the PDF there.';
 // The contour shape style is remembered on the panel instance (so it drives all
 // exports), but the MAP-PDF dialog also seeds from the panel's current choice.
 
@@ -1046,15 +1078,59 @@ export class AnalysePanel {
   }
 
   /**
-   * Run one of the panel's own exports from elsewhere (the Export mode's
-   * terrain lane). Goes through the same backing button, so a gated export
-   * stays gated. Returns false when the button is disabled or absent.
+   * Whether one of the panel's own exports can run from elsewhere (the Export
+   * mode's terrain lane), and the panel's own words for why not.
    */
-  exportProduct(kind: 'dem' | 'contours'): boolean {
+  exportProductStatus(kind: 'dem' | 'contours'): TerrainProductStatus {
+    const r = this._result;
+    if (!r) return { ready: false, reason: NO_TERRAIN_RESULT };
+    const breach = this._freshnessBreach();
+    if (breach !== null) return { ready: false, reason: FRESHNESS_REFUSALS[breach] };
     const btn = this._studioExportBtns.get(kind === 'dem' ? 'package' : 'pdf');
-    if (!btn || btn.disabled || !this._result) return false;
-    btn.click();
-    return true;
+    if (kind === 'contours') {
+      const blocked = contourExportBlockReason(r);
+      if (blocked) return { ready: false, reason: blocked };
+    }
+    if (!btn || btn.disabled) {
+      return { ready: false, reason: btn?.title || NO_TERRAIN_RESULT };
+    }
+    return { ready: true, reason: '' };
+  }
+
+  /**
+   * Run one of the panel's own exports from elsewhere (the Export mode's
+   * terrain lane). The DEM package goes through its backing button. The map
+   * sheet goes through the Contour Studio export adapter with the Studio's
+   * starting intent, so it carries the permit, purpose and provenance a Studio
+   * export of the same scan carries. `srcBtn` is the button the user pressed;
+   * it shows the busy or blocked state. Refusals say why.
+   */
+  exportProduct(kind: 'dem' | 'contours', srcBtn?: HTMLButtonElement): TerrainProductOutcome {
+    const status = this.exportProductStatus(kind);
+    if (!status.ready) return { ok: false, reason: status.reason };
+    if (kind === 'dem') {
+      this._studioExportBtns.get('package')?.click();
+      return { ok: true };
+    }
+    const result = this._result;
+    const ctx = this._contourFrame;
+    if (!result || !ctx) return { ok: false, reason: MAP_SHEET_OPEN_STUDIO };
+    const btn = srcBtn ?? this._studioExportBtns.get('pdf');
+    if (!btn) return { ok: false, reason: MAP_SHEET_OPEN_STUDIO };
+    void loadContourStudioMount()
+      .then(({ defaultContourExport }) => {
+        // A newer result or frame landed while the chunk loaded: export nothing
+        // rather than a sheet for the previous run.
+        if (this._result !== result || this._contourFrame !== ctx) return;
+        const { intent, frame } = defaultContourExport(result, ctx);
+        this._handleContourStudioExport('pdf', btn, intent, frame);
+      })
+      .catch((err: unknown) => {
+        // eslint-disable-next-line no-console
+        console.error('OpenLiDARViewer: map sheet export could not start.', err);
+        announcePolite(MAP_SHEET_OPEN_STUDIO);
+      });
+    return { ok: true };
   }
 
   /** Subscribe to result changes (a new result, a cleared one). Returns an unsubscribe. */
@@ -2926,12 +3002,7 @@ export class AnalysePanel {
               shapeStyle: chosenStyle,
             });
           }
-          // Remember the chosen style as the default for subsequent quick exports.
-          // A manual pick uses the default generalization tolerance, so clear any
-          // per-purpose tolerance a prior Studio export had adopted.
-          this._contourStyle = chosenStyle;
-          this._contourGeneralizeToleranceCells = undefined;
-          await this._buildAndDownloadMapPdf(result, {
+          const outcome = await this._buildAndDownloadMapPdf(result, {
             title: titleInput.value,
             preparedBy: preparedInput.value,
             notes: notesInput.value,
@@ -2944,6 +3015,21 @@ export class AnalysePanel {
             // annotations always exports the plain sheet.
             includeAnnotations: annoCheck.checked,
           });
+          if (!outcome.ok) {
+            // Nothing was written: keep the dialog open, say why, and keep none
+            // of the entered values as if the sheet had been exported.
+            errLine.textContent = outcome.reason;
+            errLine.style.display = '';
+            exportBtn.disabled = false;
+            cancelBtn.disabled = false;
+            exportBtn.textContent = restoreLabel;
+            return;
+          }
+          // Remember the chosen style as the default for subsequent quick exports.
+          // A manual pick uses the default generalization tolerance, so clear any
+          // per-purpose tolerance a prior Studio export had adopted.
+          this._contourStyle = chosenStyle;
+          this._contourGeneralizeToleranceCells = undefined;
           // Remember the user's choices for the rest of the session.
           lastPreparedBy = preparedInput.value;
           lastSheet = sheetSel.value as SheetSize;
@@ -2978,7 +3064,7 @@ export class AnalysePanel {
       /** Draw the (opt-in) annotation layer on the sheet. */
       includeAnnotations: boolean;
     },
-  ): Promise<void> {
+  ): Promise<MapSheetOutcome> {
     // §19 ENFORCEMENT: the map sheet is a gated contour deliverable. It is only
     // reachable via the Studio 'pdf' product, which stashes a granted permit; a
     // null / blocked permit means write nothing (defensive — matches the vector
@@ -2992,12 +3078,15 @@ export class AnalysePanel {
     if (!permit?.ok) {
       // eslint-disable-next-line no-console
       console.warn('OpenLiDARViewer: map sheet export refused — no granted evidence permit (§19).');
-      return;
+      return { ok: false, reason: MAP_SHEET_NO_PERMIT };
     }
     // The dialog can sit open for minutes and its Export can regenerate the
     // contours, so the scan is checked again here — right before the sheet is
     // built — not only when the dialog was opened.
-    if (this._refuseForeignScanExport()) return;
+    if (this._refuseForeignScanExport()) {
+      const breach = this._freshnessBreach();
+      return { ok: false, reason: breach ? FRESHNESS_REFUSALS[breach] : MAP_SHEET_NO_PERMIT };
+    }
     // Resolved linear unit so the sheet's scale bar + 1:N ratio honour a foot
     // CRS (the map is drawn in source units) instead of the metre default. Read
     // the map context ONCE, before the pdf chunks load — it also supplies the
@@ -3063,6 +3152,7 @@ export class AnalysePanel {
       new Blob([bytes as BlobPart], { type: 'application/pdf' }),
       ensurePdfExtension(sanitizeMapFilename(opts.filename)),
     );
+    return { ok: true };
   }
 
   /**
@@ -3321,10 +3411,9 @@ export class AnalysePanel {
       this._demNote.style.display = 'none';
     }
     this._legend.style.display = hasFeatures ? '' : 'none';
-    if (e === 'blocked') {
-      this._exportNote.textContent = `Export disabled — ${r.quality.reasons[0] ?? 'DTM quality gate not met.'}`;
-    } else if (!hasFeatures) {
-      this._exportNote.textContent = 'No contours at this interval to export.';
+    const blockedReason = contourExportBlockReason(r);
+    if (blockedReason) {
+      this._exportNote.textContent = blockedReason;
     } else if (e === 'previewOnly' && !merged) {
       this._exportNote.textContent = 'Preview export — not survey-grade (see the reasons above).';
     } else {

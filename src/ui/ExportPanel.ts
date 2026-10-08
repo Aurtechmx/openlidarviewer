@@ -270,7 +270,13 @@ export type ExportProduct = 'measurements' | 'findings' | 'terrain-dem' | 'conto
 /** The terrain lane: whether a result exists, and the export run by its owner. */
 export interface TerrainExportsLane {
   ready(): boolean;
-  run(kind: 'dem' | 'contours'): void;
+  /** Whether one product can run now, and why not. Absent means it can. */
+  status?(kind: 'dem' | 'contours'): { readonly ready: boolean; readonly reason: string };
+  /**
+   * Run one product. `btn` is the pressed button, for the busy state. A
+   * refusal comes back with its reason; nothing returned means it started.
+   */
+  run(kind: 'dem' | 'contours', btn?: HTMLButtonElement): { readonly ok: boolean; readonly reason?: string } | void;
 }
 
 /**
@@ -997,15 +1003,12 @@ export class ExportPanel {
       let ready = false;
       try { ready = terrain.ready(); } catch { ready = false; }
       if (ready) {
-        const noResult = 'Run a terrain analysis first.';
-        const demRow = el('div', { className: 'olv-export-product-actions' });
-        demRow.append(this._productButton('DEM package (ZIP)', true, () => terrain.run('dem'), noResult,
-          'Save the elevation rasters with their metadata sheet.'));
-        content.append(this._productGroup('Terrain surface', demRow, undefined, 'terrain-dem'));
-        const contourRow = el('div', { className: 'olv-export-product-actions' });
-        contourRow.append(this._productButton('Contour map sheet (PDF)', true, () => terrain.run('contours'), noResult,
-          'Open the map sheet dialog for the contours.'));
-        content.append(this._productGroup('Contours', contourRow, undefined, 'contours'));
+        content.append(
+          this._terrainProduct(terrain, 'dem', 'Terrain surface', 'DEM package (ZIP)', 'terrain-dem',
+            'Save the elevation rasters with their metadata sheet.'),
+          this._terrainProduct(terrain, 'contours', 'Contours', 'Contour map sheet (PDF)', 'contours',
+            'Open the map sheet dialog for the contours.'),
+        );
       }
     }
     this._products.append(head, content);
@@ -1176,6 +1179,46 @@ export class ExportPanel {
   private _retargetFindings(): number {
     if (!this._findings) return 0;
     return this._findings.retarget(this._activeFindingsId());
+  }
+
+  /**
+   * One terrain lane product. A product that cannot run is disabled and says
+   * why, on hover and under the button; a refusal at click time writes its
+   * reason in the same place and to the polite live region, so a press never
+   * ends in silence.
+   */
+  private _terrainProduct(
+    terrain: TerrainExportsLane,
+    kind: 'dem' | 'contours',
+    groupLabel: string,
+    label: string,
+    product: ExportProduct,
+    enabledTitle: string,
+  ): HTMLElement {
+    const noResult = 'Run a terrain analysis first.';
+    let status: { readonly ready: boolean; readonly reason: string };
+    try {
+      status = terrain.status?.(kind) ?? { ready: true, reason: '' };
+    } catch {
+      status = { ready: false, reason: noResult };
+    }
+    const row = el('div', { className: 'olv-export-product-actions' });
+    const hint = el('span', { className: 'olv-export-fullres-hint', text: status.ready ? '' : status.reason });
+    hint.setAttribute('role', 'status');
+    const btn = this._productButton(label, status.ready, () => {
+      const outcome = terrain.run(kind, btn);
+      if (outcome && !outcome.ok) {
+        const reason = outcome.reason || noResult;
+        hint.textContent = reason;
+        btn.title = reason;
+      } else {
+        hint.textContent = '';
+      }
+    }, status.reason || noResult, enabledTitle);
+    row.append(btn);
+    const group = this._productGroup(groupLabel, row, undefined, product);
+    group.append(hint);
+    return group;
   }
 
   private _productGroup(label: string, actions: HTMLElement, hint?: string, product?: ExportProduct): HTMLElement {

@@ -56,7 +56,11 @@ type Pose = { position: [number, number, number]; target: [number, number, numbe
 
 /** The Analyse panel's read side plus its own export hand-off. */
 export interface ShelfTerrainPanel extends TerrainReader {
-  exportProduct(kind: 'dem' | 'contours'): boolean;
+  exportProductStatus(kind: 'dem' | 'contours'): { readonly ready: boolean; readonly reason: string };
+  exportProduct(
+    kind: 'dem' | 'contours',
+    srcBtn?: HTMLButtonElement,
+  ): { readonly ok: true } | { readonly ok: false; readonly reason: string };
 }
 
 /** The Export panel's read side plus its product selection. */
@@ -155,7 +159,10 @@ export function mountResultsShelf(
   // The Export mode's terrain lane runs the Analyse panel's own exports.
   const terrainExports: TerrainExportsLane = {
     ready: () => !!src.terrain()?.resultRef(),
-    run: (kind: 'dem' | 'contours') => { src.terrain()?.exportProduct(kind); },
+    status: (kind: 'dem' | 'contours') =>
+      src.terrain()?.exportProductStatus(kind) ?? { ready: false, reason: 'Run a terrain analysis first.' },
+    run: (kind: 'dem' | 'contours', btn?: HTMLButtonElement) =>
+      src.terrain()?.exportProduct(kind, btn) ?? { ok: false, reason: 'Run a terrain analysis first.' },
   };
   exportPanel?.setTerrainExports(terrainExports);
   let hadTerrain = terrainExports.ready();
