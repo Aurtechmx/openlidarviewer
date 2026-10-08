@@ -334,3 +334,28 @@ export function heightReferenceNote(reference: VerticalReference): string {
       return 'The vertical datum is not known here, so this height is not tied to a known reference.';
   }
 }
+
+// ── Height unit wording ────────────────────────────────────────────────────
+// The words a height carries when it cannot be stated in metres although the
+// horizontal unit is known. The on-screen Scan Report (`heightScale`), the
+// streamed extent rows and the PDF dataset summary all print these, so the
+// surfaces agree word for word.
+
+/** Why a height is not in metres: no vertical unit, or a declared one that is unusable. */
+export type HeightUnitGap = 'vertical-unit-not-declared' | 'vertical-unit-invalid';
+
+/** The suffix after the number, leading space included. */
+export const HEIGHT_UNIT_GAP_SUFFIX: Readonly<Record<HeightUnitGap, string>> = {
+  'vertical-unit-not-declared': ' source units (vertical unit not declared)',
+  'vertical-unit-invalid': ' source units (declared vertical unit is invalid)',
+};
+
+/**
+ * Classify a declared vertical factor. `undefined` means no vertical unit was
+ * declared; a declared factor that is zero, negative or non-finite is invalid.
+ * Mirrors `verticalScaleKnown` in the spatial context.
+ */
+export function heightUnitGapOf(verticalUnitToMetres: number | undefined): HeightUnitGap | null {
+  if (verticalUnitToMetres === undefined) return 'vertical-unit-not-declared';
+  return Number.isFinite(verticalUnitToMetres) && verticalUnitToMetres > 0 ? null : 'vertical-unit-invalid';
+}

@@ -110,14 +110,19 @@ export { isNonTerrainVerdict };
  */
 export function footprintToMetadataExtent(
   fp: Footprint,
-): Pick<MetadataInputs, 'width' | 'depth' | 'height' | 'density' | 'extentUnitStatus'> {
+): Pick<MetadataInputs, 'width' | 'depth' | 'height' | 'density' | 'extentUnitStatus' | 'heightUnitGap'> {
   if (fp.unitStatus === 'confirmed') {
-    return {
-      width: fp.widthMetres,
-      depth: fp.depthMetres,
-      height: fp.heightMetres,
-      density: fp.densityPerM2,
-    };
+    // The height has its own unit: metres only when a valid vertical unit is
+    // declared, otherwise the source span and the reason it is not metres.
+    return fp.heightUnitGap === null
+      ? { width: fp.widthMetres, depth: fp.depthMetres, height: fp.heightMetres, density: fp.densityPerM2 }
+      : {
+          width: fp.widthMetres,
+          depth: fp.depthMetres,
+          height: fp.heightSourceUnits,
+          heightUnitGap: fp.heightUnitGap,
+          density: fp.densityPerM2,
+        };
   }
   return {
     width: fp.widthSourceUnits,

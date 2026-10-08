@@ -381,7 +381,7 @@ describe('scan PDF report', () => {
       hasRgb: false, hasIntensity: false, hasClassification: false, digests: D,
     });
     expect(rows).toContainEqual({ label: 'Source SHA-256', value: SHA });
-    expect(rows).toContainEqual({ label: 'CRS origin', value: 'las-vlr, EPSG:6344; vertical EPSG:5703 from las-vlr' });
+    expect(rows).toContainEqual({ label: 'CRS origin', value: 'las-vlr, EPSG:6344; vertical datum EPSG:5703 from las-vlr' });
   });
 });
 

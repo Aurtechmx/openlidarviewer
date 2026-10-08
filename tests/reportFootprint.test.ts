@@ -15,7 +15,7 @@ describe('footprintMetres — confirmed unit', () => {
   it('passes a metre CRS through unchanged (factor 1)', () => {
     const f = footprintMetres({
       extentX: 100, extentY: 50, extentZ: 20, pointCount: 5000,
-      linearUnitToMetres: 1, linearUnitKnown: true,
+      linearUnitToMetres: 1, verticalUnitToMetres: 1, linearUnitKnown: true,
     });
     expect(f.unitStatus).toBe('confirmed');
     if (f.unitStatus !== 'confirmed') throw new Error('unreachable');
@@ -29,7 +29,7 @@ describe('footprintMetres — confirmed unit', () => {
     // 100 ft × 50 ft footprint. In metres: 30.48 × 15.24 = 464.5 m² (NOT 5000).
     const f = footprintMetres({
       extentX: 100, extentY: 50, extentZ: 20, pointCount: 5000,
-      linearUnitToMetres: FT, linearUnitKnown: true,
+      linearUnitToMetres: FT, verticalUnitToMetres: FT, linearUnitKnown: true,
     });
     if (f.unitStatus !== 'confirmed') throw new Error('expected confirmed');
     expect(f.widthMetres).toBeCloseTo(30.48, 4);
@@ -50,6 +50,32 @@ describe('footprintMetres — confirmed unit', () => {
     if (f.unitStatus !== 'confirmed') throw new Error('expected confirmed');
     expect(f.widthMetres).toBeCloseTo(30.48, 4); // horizontal still feet→m
     expect(f.heightMetres).toBeCloseTo(10, 6);   // vertical untouched
+  });
+
+  it('keeps the height in source units when no vertical unit is declared', () => {
+    // A metre CRS with no vertical unit: width and depth are metres, the height
+    // is not converted with the horizontal factor.
+    const f = footprintMetres({
+      extentX: 100, extentY: 50, extentZ: 20, pointCount: 5000,
+      linearUnitToMetres: FT, linearUnitKnown: true,
+    });
+    if (f.unitStatus !== 'confirmed') throw new Error('expected confirmed');
+    expect(f.widthMetres).toBeCloseTo(30.48, 4);
+    expect(f.heightUnitGap).toBe('vertical-unit-not-declared');
+    expect(Number.isNaN(f.heightMetres)).toBe(true);
+    expect(f.heightSourceUnits).toBe(20);
+  });
+
+  it('flags a declared vertical unit that is zero or non-finite', () => {
+    for (const v of [0, -1, Number.NaN]) {
+      const f = footprintMetres({
+        extentX: 100, extentY: 50, extentZ: 20, pointCount: 5000,
+        linearUnitToMetres: 1, verticalUnitToMetres: v, linearUnitKnown: true,
+      });
+      if (f.unitStatus !== 'confirmed') throw new Error('expected confirmed');
+      expect(f.heightUnitGap).toBe('vertical-unit-invalid');
+      expect(Number.isNaN(f.heightMetres)).toBe(true);
+    }
   });
 
   it('returns NaN density for a degenerate (zero-extent) footprint', () => {
