@@ -239,6 +239,9 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
     // Drives the geometry's altitudeMode: absolute only for a declared metric
     // vertical datum, otherwise clamped with the reason stated.
     verticalDatum: crs?.verticalDatum ?? null,
+    // A degree frame: measurements the live tool refuses publish no
+    // grade, angle or length.
+    geographic: crs?.kind === 'geographic',
     toLonLat,
     notSurveyGradeNote: NOT_SURVEY_GRADE,
     // The scan's outline, placed through the same mapper as every feature. The

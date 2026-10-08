@@ -477,10 +477,14 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     // readouts from, now that the report shares measurementMetrics.
     worldUp: viewer.measure.worldUp,
     verticalToMetres: viewer.measure.verticalUnitToMetres,
-    // The SAME accessor the CSV / GeoJSON exports use for `unitsVerified`. The
+    // The SAME rule the CSV / GeoJSON exports use for `unitsVerified`. The
     // factor above is an inert 1 when this is false, so without it the PDF
-    // printed source-unit numbers as metres.
-    unitsVerified: viewer.measure.crsKnown,
+    // printed source-unit numbers as metres. A geographic frame is never
+    // verified: no scalar turns degrees into metres.
+    unitsVerified: viewer.measure.crsKnown && !viewer.measure.geographicCrs,
+    // The flag the live Measure tool refuses on, so the PDF withholds the same
+    // grades, angles and lengths the panel marks as not distances.
+    geographicCrs: viewer.measure.geographicCrs,
     provenance: provenanceFp,
     // The file's own declared source metadata (E57 today) — verbatim,
     // rendered by the report's "Declared source metadata" section under the

@@ -50,8 +50,12 @@ export const DEFAULT_DIGEST_ALGORITHM = 'SHA-256';
 export interface ReportFinding {
   /** Human label, e.g. "Stockpile volume". */
   readonly label: string;
-  /** The measured value. */
-  readonly value: number;
+  /**
+   * The measured value, or null when the frame refuses it (a grade, angle or
+   * length on a geographic CRS). A null finding carries an empty unit and a
+   * caveat stating why, and the digest covers the null like any other value.
+   */
+  readonly value: number | null;
   /** Unit, e.g. "m³" / "m²" / "m". */
   readonly unit: string;
   /** 1σ uncertainty band, if the measurement carries one. */

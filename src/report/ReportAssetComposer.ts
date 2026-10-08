@@ -75,6 +75,12 @@ export interface ComposeReportInputs {
    * byte-identical.
    */
   readonly unitsVerified?: boolean;
+  /**
+   * True when the scan's frame is geographic (degrees), the same flag the live
+   * Measure tool refuses on. Every measurement except a height then reads
+   * "not available" in place of its number. Defaults false.
+   */
+  readonly geographicCrs?: boolean;
   readonly technicalNotes?: string;
   /**
    * Provenance fingerprint from the classifier. When supplied AND the
@@ -138,6 +144,7 @@ export function composeReportInputs(input: ComposeReportInputs): ReportInputs {
       input.worldUp ? [...input.worldUp] : [0, 0, 1],
       input.verticalToMetres ?? input.unitToMetres ?? 1,
       input.unitsVerified ?? true,
+      input.geographicCrs ?? false,
     ),
     technicalNotes: input.technicalNotes,
     provenance: input.provenance,

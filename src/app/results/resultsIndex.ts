@@ -389,7 +389,7 @@ export function signalSources(
 /** The Export panel's read side of the findings ledger. */
 export interface FindingsReader {
   findingsLedger(): {
-    readonly all: ReadonlyArray<{ readonly label: string; readonly value: number; readonly unit: string }>;
+    readonly all: ReadonlyArray<{ readonly label: string; readonly value: number | null; readonly unit: string }>;
     readonly ownerId: string | null;
   } | null;
   watchFindings(fn: () => void): () => void;
@@ -410,7 +410,8 @@ export function findingsSource(read: () => FindingsReader | null): ResultSource 
         return {
           id: `finding:${id}`,
           type: 'finding' as const,
-          title: `${f.label}, ${f.value} ${f.unit}`,
+          // A refused figure (null) is named as such, never printed as "null".
+          title: f.value === null ? `${f.label}, not available` : `${f.label}, ${f.value} ${f.unit}`,
           sourceIdentity: ledger.ownerId,
           status: 'ready' as const,
           route: { mode: OUTPUT, page: null },

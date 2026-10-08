@@ -26,7 +26,12 @@ import { lightProvenance, lightProvenanceLine, type LightProvenanceInput } from 
 import type { Annotation } from '../render/annotate/types';
 import type { Measurement, Vec3 } from '../render/measure/types';
 import { isComplete } from '../render/measure/types';
-import { measurementMetrics } from './measurementExport';
+import {
+  GEOGRAPHIC_NOT_AVAILABLE,
+  geographicFilter,
+  geographicRefuses,
+  measurementMetrics,
+} from './measurementExport';
 import { verticalReferenceKey } from '../model/layerCompatibility';
 import type { LocalToLonLatSourceZ } from './lonLatMapper';
 import {
@@ -94,6 +99,12 @@ export interface KmlExportInput {
    * datum. Anything else clamps to ground and says why.
    */
   readonly verticalDatum?: string | null;
+  /**
+   * True when the scan's frame is geographic (degrees). A measurement the live
+   * Measure tool refuses there lists only its pure-vertical figures and says
+   * the rest are not available. Defaults false.
+   */
+  readonly geographic?: boolean;
 }
 
 /**
@@ -317,8 +328,14 @@ function annotationPlacemark(a: Annotation, input: KmlExportInput): string {
  * so a foot-based scan reports true metres rather than raw render units.
  */
 function metricsLine(m: Measurement, input: KmlExportInput): string {
-  const metrics = measurementMetrics(m, input.up, input.unitToMetres, input.verticalUnitToMetres);
-  const parts = Object.entries(metrics).map(([k, v]) => `${k}=${v}`);
+  const all = measurementMetrics(m, input.up, input.unitToMetres, input.verticalUnitToMetres);
+  const metrics = geographicFilter(all, m, input.geographic);
+  const parts = Object.entries(metrics).filter(([, v]) => v !== null).map(([k, v]) => `${k}=${v}`);
+  const refused = geographicRefuses(m, input.geographic) && Object.keys(all).length > 0;
+  if (refused) {
+    if (parts.length === 0) return `Figures ${GEOGRAPHIC_NOT_AVAILABLE}.`;
+    return `Measured (${input.unitLabel}): ${parts.join(', ')}. Other figures ${GEOGRAPHIC_NOT_AVAILABLE}.`;
+  }
   if (parts.length === 0) return '';
   return `Measured (${input.unitLabel}): ${parts.join(', ')}`;
 }

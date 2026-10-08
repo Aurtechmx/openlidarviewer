@@ -25,6 +25,10 @@ import {
   GEOGRAPHIC_CRS_MEASURE_NOTICE,
   VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE,
 } from './format';
+import { geographicRefusesKind } from './types';
+
+// The kind rule lives with the kind union; re-exported for the live grade's callers.
+export { geographicRefusesKind };
 
 export type TrustGrade = 'green' | 'yellow' | 'red';
 

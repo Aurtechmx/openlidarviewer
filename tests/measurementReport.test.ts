@@ -100,7 +100,7 @@ describe('measurementReport — compound CRS vertical factor', () => {
   test('a volume scales by linear squared times vertical, not linear cubed', () => {
     const f = measurementsToFindings([volume('v1', 1000)], up, METRE, US_FOOT);
     // 1000 native (m²·ft) = 1000 × 1 × 1 × 0.3048006 = 304.80 m³.
-    expect(Math.abs(f[0].value)).toBeCloseTo(304.8006, 3);
+    expect(Math.abs(f[0].value!)).toBeCloseTo(304.8006, 3);
   });
 
   test('the manifest carries the same vertical-scaled value as the findings', () => {

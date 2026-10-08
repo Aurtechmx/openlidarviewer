@@ -51,7 +51,7 @@ export interface MountedFindingsPanel {
 
 /** Format a finding's value + unit, with its ± band when present. */
 function formatValue(f: ReportFinding): string {
-  const v = Number.isFinite(f.value) ? f.value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—';
+  const v = f.value !== null && Number.isFinite(f.value) ? f.value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—';
   const band = f.sigma != null && Number.isFinite(f.sigma) ? ` ± ${f.sigma.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '';
   return `${v}${band} ${f.unit}`.trim();
 }

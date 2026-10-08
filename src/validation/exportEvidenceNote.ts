@@ -92,6 +92,22 @@ export function unverifiedUnitsCaveat(unitsVerified: boolean): string {
   );
 }
 
+/**
+ * A caveat for a measurement product taken on a GEOGRAPHIC (degree) frame. The
+ * live Measure tool refuses every figure that mixes degree X/Y with a linear Z,
+ * so the product leaves those figures empty; this says which and why. Empty
+ * when the frame is not geographic, so a projected export is byte-identical.
+ */
+export function geographicRefusalCaveat(geographic: boolean): string {
+  if (!geographic) return '';
+  return (
+    ' Geographic CRS (degrees): X/Y are in degrees, not metres, so lengths, ' +
+    'areas, grades, angles, profiles and volumes are not available and are ' +
+    'left empty (degrees are not distances). Heights are kept. Reproject to a ' +
+    'projected CRS for measurement work.'
+  );
+}
+
 export function evidenceStatus(claimId: string): EvidenceStatus {
   const d = exportGate(claimId);
   if (d.exploratoryOnly) return 'exploratory';

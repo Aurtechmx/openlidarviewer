@@ -18,8 +18,16 @@
  */
 
 import type { Measurement, Vec3 } from '../render/measure/types';
-import { isComplete } from '../render/measure/types';
-import { evidenceNote, evidenceStatus, unverifiedUnitsCaveat } from '../validation/exportEvidenceNote';
+import { GEOGRAPHIC_NOT_AVAILABLE, geographicRefusesKind, isComplete } from '../render/measure/types';
+import {
+  evidenceNote,
+  evidenceStatus,
+  geographicRefusalCaveat,
+  unverifiedUnitsCaveat,
+} from '../validation/exportEvidenceNote';
+
+/** The refusal rule and wording, for the report and KML serializers. */
+export { GEOGRAPHIC_NOT_AVAILABLE, geographicRefusesKind };
 import { crsUrn } from './crsIdentifier';
 import { lightProvenance, type LightProvenanceInput } from './lightProvenance';
 import {
@@ -59,7 +67,12 @@ export interface MeasurementExportContext {
   readonly verticalUnitToMetres?: number;
   /** CRS label for the GeoJSON crs hint + per-feature provenance. */
   readonly crsName?: string;
-  /** True when `toOutput` yields geographic WGS84 lon/lat (RFC 7946 default frame). */
+  /**
+   * True when the scan's frame is geographic (degrees), so `toOutput` yields
+   * WGS84 lon/lat (the RFC 7946 default frame). The live Measure tool refuses
+   * every kind but a height on such a frame, and so does the export: see
+   * {@link geographicFilter}.
+   */
   readonly geographic?: boolean;
   /**
    * True when the scan's linear scale is KNOWN (a resolved CRS unit), so the
@@ -217,6 +230,38 @@ export function measurementMetrics(
   return out;
 }
 
+/**
+ * Metric keys measured along the up axis alone, in the Z unit. On a geographic
+ * frame they are still honest figures, so a refused kind keeps them.
+ */
+const PURE_VERTICAL_KEYS: ReadonlySet<string> = new Set(['vertical_m', 'rise_m', 'height_m']);
+
+/**
+ * True when a geographic frame refuses this measurement's figures. The kind
+ * rule is the live grade's own (`geographicRefusesKind`), so an export cannot
+ * publish a number the Measure panel marks as not a distance.
+ */
+export function geographicRefuses(m: Measurement, geographic: boolean | undefined): boolean {
+  return geographic === true && geographicRefusesKind(m.kind);
+}
+
+/**
+ * The metrics with every refused figure set to null. A refused measurement on
+ * a geographic frame keeps only its pure-vertical keys; every other figure
+ * mixes degree X/Y with linear Z. Key order is unchanged. A measurement that
+ * is not refused passes through as is.
+ */
+export function geographicFilter(
+  metrics: Record<string, number>,
+  m: Measurement,
+  geographic: boolean | undefined,
+): Record<string, number | null> {
+  if (!geographicRefuses(m, geographic)) return metrics;
+  return Object.fromEntries(
+    Object.entries(metrics).map(([k, v]) => [k, PURE_VERTICAL_KEYS.has(k) ? v : null]),
+  );
+}
+
 /** GeoJSON geometry type for a kind. */
 function geometryFor(
   m: Measurement,
@@ -263,14 +308,21 @@ export function measurementsToGeoJSON(
     .map((m) => {
       const geometry = geometryFor(m, ctx);
       if (!geometry) return null;
+      // A figure the geographic frame refuses stays as its key with a null
+      // value, and the feature says why, so a reader sees it was withheld
+      // rather than never computed.
+      const metrics = geographicFilter(
+        measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres),
+        m,
+        ctx.geographic,
+      );
       const properties: Record<string, unknown> = {
         id: m.id,
         name: m.name,
         kind: m.kind,
         ...(ctx.sourceOf ? { source: ctx.sourceOf(m) } : {}),
-        ...(unitsKnown
-          ? measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres)
-          : inSourceUnits(measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres))),
+        ...(unitsKnown ? metrics : inSourceUnits(metrics)),
+        ...(geographicRefuses(m, ctx.geographic) ? { not_available: GEOGRAPHIC_NOT_AVAILABLE } : {}),
       };
       if (ctx.crsName) properties.crs = ctx.crsName;
       // Same coverage verdict the CSV's grid_authority column carries — see
@@ -305,7 +357,8 @@ export function measurementsToGeoJSON(
   const claims = claimsPresent(measurements);
   const evidence =
     claims.map((c) => `${c}: ${evidenceNote(c)}`).join(' ')
-    + unverifiedUnitsCaveat(ctx.unitsVerified ?? true);
+    + unverifiedUnitsCaveat(ctx.unitsVerified ?? true)
+    + geographicRefusalCaveat(measurements.some((m) => geographicRefuses(m, ctx.geographic)));
   // A collection with nothing in it makes no claim, so there is no verdict to
   // carry — and an `evidence: ""` member would be a field that says nothing
   // where a reader expects a statement. The key is omitted instead.
@@ -476,12 +529,20 @@ export function measurementsToCsv(
   // the others'. `MEAS-PROFILE` meets its required level where `MEAS-DISTANCE`
   // does not, so stamping every row with the distance answer understated one
   // and misnamed the claim behind the rest.
+  // A row the geographic frame refuses also names that in its evidence cell;
+  // its refused figures are empty cells, and its pure-vertical ones remain.
   const evidenceFor = (m: Measurement): string => {
     const status = evidenceStatus(claimForMeasurement(m) ?? 'MEAS-DISTANCE');
-    return unitsKnown ? status : `${status}; units-unverified (source render units, not metres)`;
+    const units = unitsKnown ? status : `${status}; units-unverified (source render units, not metres)`;
+    return geographicRefuses(m, ctx.geographic) ? `${units}; ${GEOGRAPHIC_NOT_AVAILABLE}` : units;
   };
   for (const m of measurements) {
-    const raw = measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
+    const all = measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
+    // Refused figures are dropped, so the cell is empty like any figure the
+    // geometry cannot establish.
+    const raw = geographicRefuses(m, ctx.geographic)
+      ? Object.fromEntries(Object.entries(all).filter(([k]) => PURE_VERTICAL_KEYS.has(k)))
+      : all;
     const metrics = unitsKnown ? raw : inSourceUnits(raw);
     const base: Record<string, string | number> = {
       id: m.id,

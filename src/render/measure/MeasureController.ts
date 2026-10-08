@@ -63,7 +63,7 @@ import {
   type SnapResult,
   type Segments,
 } from './snap';
-import { gradeMeasurement, type MeasurementTrust } from './measurementTrust';
+import { gradeMeasurement, geographicRefusesKind, type MeasurementTrust } from './measurementTrust';
 import {
   formatLengthRender,
   formatAreaRender,
@@ -1846,7 +1846,7 @@ export class MeasureController {
       // scaling only, so an arm mixing degree horizontal with linear vertical
       // gives a raw-coordinate angle that is physically wrong (pass-6 M3).
       geographicCrs:
-        this._geographicCrs && m.kind !== 'height',
+        this._geographicCrs && geographicRefusesKind(m.kind),
       // Compound CRS (height unit ≠ horizontal unit): refuse the kinds whose
       // number mixes the two axes. Heights, boxes and volumes are exactly
       // rescaled by the vertical factor, so they keep their ordinary grade.
