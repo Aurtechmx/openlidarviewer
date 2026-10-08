@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import { presentStockpile, stockpileToastLine } from '../src/render/measure/stockpilePresenter';
-import type { StockpileVolumeResult } from '../src/render/measure/stockpileVolume';
+import { stockpileVolume, type StockpileVolumeResult } from '../src/render/measure/stockpileVolume';
 
 function result(over: Partial<StockpileVolumeResult> = {}): StockpileVolumeResult {
   return {
@@ -405,5 +405,41 @@ describe('the grid option that cubes one factor stays off the record path', () =
     expect(feet.fillNative).toBeCloseTo(metres.fillNative, 9);
     expect(feet.cutNative).toBeCloseTo(metres.cutNative, 9);
     expect(feet.netNative).toBeCloseTo(metres.netNative, 9);
+  });
+});
+
+/**
+ * The base-plane caveat and the Base plane row describe the same uncertainty,
+ * so they must print the same metres. The caveat printed the native figure with
+ * an "m" suffix, so a foot survey read ±0.14 m in the row and ±0.45 m in the
+ * caveat.
+ */
+describe('presentStockpile — base-plane caveat unit', () => {
+  const FOOT = 1200 / 3937;
+  const polygon: Vec3[] = [[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0]];
+  const positions = (() => {
+    const out: number[] = [];
+    for (let x = 0.25; x < 10; x += 0.25) {
+      for (let y = 0.25; y < 10; y += 0.25) out.push(x, y, 2 + Math.sin(x * 3.1) * Math.cos(y * 2.3));
+    }
+    return Float32Array.from(out);
+  })();
+
+  test('the caveat ± equals the base-plane row ± on a foot survey', () => {
+    const r = stockpileVolume({
+      polygon,
+      positions,
+      base: { mode: 'lowest-percentile' },
+      linearUnitToMetres: FOOT,
+      verticalUnitToMetres: FOOT,
+    });
+    expect(r.breakdown.baseUncertainty).toBeGreaterThan(0.05);
+    const v = presentStockpile(r, { lin: FOOT, vert: FOOT });
+    const rowValue = v.rows.find((row) => row.label === 'Base plane')?.value ?? '';
+    const rowPm = Number(/±([\d.]+) m/.exec(rowValue)?.[1]);
+    const caveat = v.caveats.find((c) => c.startsWith('Base plane was inferred')) ?? '';
+    const caveatPm = Number(/±([\d.]+) m/.exec(caveat)?.[1]);
+    expect(Number.isFinite(rowPm)).toBe(true);
+    expect(caveatPm).toBe(rowPm);
   });
 });
