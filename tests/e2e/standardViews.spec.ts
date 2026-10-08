@@ -68,6 +68,23 @@ test.describe('standard views — NavBar "Views" row', () => {
 });
 
 test.describe('plan view', () => {
+  test('a camera move that never lands turns Plan off and says to try again', async ({ page }) => {
+    await loadSample(page);
+    const row = viewsRow(page);
+    const plan = row.locator('.olv-plan-toggle');
+    const ortho = row.locator('.olv-ortho-toggle');
+    await expect(plan).toBeVisible();
+    await expect(ortho).toHaveAttribute('aria-pressed', 'false');
+    // Stop the frame loop: the camera move advances only with drawn frames,
+    // so it stalls where it starts while Plan's timers keep running.
+    await page.evaluate(() => { window.requestAnimationFrame = () => 0; });
+    await plan.click();
+    await expect(page.locator('.olv-lasso-toast')).toContainText('Plan view did not finish. Try Plan again.', { timeout: 15_000 });
+    await expect(plan).toHaveAttribute('aria-pressed', 'false');
+    // The projection is put back as it was.
+    await expect(ortho).toHaveAttribute('aria-pressed', 'false');
+  });
+
   test('the Plan chip enters, presses, and hands the scene back', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (e) => { if (!isBenignPageError(e.message)) errors.push(e.message); });

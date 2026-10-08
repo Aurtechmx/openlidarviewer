@@ -126,3 +126,57 @@ test('LAS 1.2 refuses classes above 31 with the reason, and writes them wrapped 
   await expect(row.locator('.olv-conv-note.is-warn')).toContainText('wrap to their low 5 bits');
   await expect(row.locator('.olv-bc-row-dl')).toBeVisible();
 });
+
+for (const c of [
+  {
+    title: 'a class that changes meaning',
+    file: 'meaning.las',
+    points: { classification: Uint8Array.from([2, 19, 19]) },
+    optIn: 'Allow class numbers to change meaning',
+    reason: 'class 19',
+  },
+  {
+    title: 'the overlap flag',
+    file: 'overlap.las',
+    points: { classification: Uint8Array.from([2, 2, 2]), classificationFlags: Uint8Array.from([0, 8, 8]) },
+    optIn: 'Allow the overlap flag to be dropped',
+    reason: 'carry the overlap flag',
+  },
+]) {
+  test(`LAS 1.2 refuses ${c.title} with the reason, and writes the file once opted in`, async ({ page }) => {
+    const writeLas14 = await loadLasWriter();
+    const las = writeLas14({
+      count: 3,
+      x: Float64Array.from([500000, 500001, 500002]),
+      y: Float64Array.from([4100000, 4100001, 4100002]),
+      z: Float64Array.from([10, 11, 12]),
+      ...c.points,
+    });
+
+    await page.goto('/');
+    await page.locator('.olv-convert-chip').click();
+    const dialog = page.locator('.olv-bc-dialog');
+    await expect(dialog).toBeVisible();
+
+    const optIn = dialog.locator('.olv-export-fullres', { hasText: c.optIn });
+    await expect(optIn).toBeHidden();
+    await dialog.locator('.olv-bc-pill', { hasText: 'LAS 1.2' }).click();
+    await expect(optIn).toBeVisible();
+
+    await dialog.locator('.olv-file-input').setInputFiles({ name: c.file, mimeType: 'application/octet-stream', buffer: Buffer.from(las) });
+    await dialog.locator('.olv-bc-convert').click();
+
+    const row = dialog.locator('.olv-bc-row');
+    await expect(row).toHaveClass(/is-error/, { timeout: 20_000 });
+    const reason = row.locator('.olv-conv-note.is-error');
+    await expect(reason).toContainText('LAS 1.2 was not written');
+    await expect(reason).toContainText(c.reason);
+    await expect(reason).toContainText(`"${c.optIn}"`);
+    await expect(row.locator('.olv-bc-row-dl')).toHaveCount(0);
+
+    await optIn.locator('input[type="checkbox"]').check();
+    await dialog.locator('.olv-bc-convert').click();
+    await expect(row).toHaveClass(/is-ok/, { timeout: 20_000 });
+    await expect(row.locator('.olv-bc-row-dl')).toBeVisible();
+  });
+}

@@ -496,3 +496,30 @@ describe('more refusals', () => {
     expect(h.controller.view().status).toMatch(/another tool/);
   });
 });
+
+describe('idle frames', () => {
+  it('an idle frame does no rebuild; a camera move does', () => {
+    const h = harness();
+    h.controller.setEnabled(true);
+    h.controller.setElevation(12);
+    h.viewer.frame();
+    const backdrop = vi.spyOn(WorkplaneOverlay.prototype, 'setBackdrop');
+    const update = vi.spyOn(WorkplaneOverlay.prototype, 'update');
+    try {
+      for (let i = 0; i < 5; i++) h.viewer.frame();
+      expect(backdrop).not.toHaveBeenCalled();
+      expect(update).not.toHaveBeenCalled();
+      (h.viewer as unknown as { cam: { position: number[] } }).cam.position = [30, -90, 120];
+      h.viewer.frame();
+      expect(backdrop).toHaveBeenCalledTimes(1);
+      // The bounds growing (a streaming layer) is not an idle frame either.
+      backdrop.mockClear();
+      (h.viewer as unknown as { mergedVisibleBounds: () => number[] }).mergedVisibleBounds = () => [0, 0, -2.5, 80, 60, 40];
+      h.viewer.frame();
+      expect(backdrop).toHaveBeenCalledTimes(1);
+    } finally {
+      backdrop.mockRestore();
+      update.mockRestore();
+    }
+  });
+});

@@ -465,3 +465,35 @@ describe('NavController wheel dolly in perspective is unchanged', () => {
     expect(Math.hypot(((p.x - NDC.x) * W) / 2, ((p.y - NDC.y) * H) / 2)).toBeLessThan(1e-3);
   });
 });
+
+describe('wheel during a camera move', () => {
+  const saved = { window: globalThis.window, document: globalThis.document };
+  afterEach(() => {
+    globalThis.window = saved.window;
+    globalThis.document = saved.document;
+  });
+
+  for (const orthographic of [false, true]) {
+    it(`drops wheel input while a tween runs, so nothing lands after it (${orthographic ? 'orthographic' : 'perspective'})`, () => {
+      const rig = makeNavRig({ orthographic });
+      const toPos = rig.persp.position.clone().add(new THREE.Vector3(2, 1, 0));
+      const toTarget = rig.target.clone().add(new THREE.Vector3(2, 1, 0));
+      rig.nav.tweenTo(toPos, toTarget, 0.8);
+      for (let f = 0; f < 30; f++) {
+        wheel(rig, PX.x, PX.y, -100);
+        rig.nav.update(1 / 60);
+      }
+      expect(rig.nav.isTweening).toBe(true);
+      // The tween is not cancelled by the wheel: it runs to its pose.
+      for (let f = 0; f < 60 && rig.nav.isTweening; f++) rig.nav.update(1 / 60);
+      expect(rig.nav.tweenOutcome).toBe('completed');
+      const landed = rig.persp.position.clone();
+      expect(landed.distanceTo(toPos)).toBeLessThan(1e-9);
+      for (let f = 0; f < 30; f++) {
+        rig.nav.update(1 / 60);
+        follow(rig);
+      }
+      expect(rig.persp.position.distanceTo(landed)).toBeLessThan(1e-9);
+    });
+  }
+});

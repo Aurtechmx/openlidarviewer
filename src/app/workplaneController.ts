@@ -193,6 +193,21 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
     store.length = next.length;
     for (let i = 0; i < next.length; i++) store[i] = next[i];
   };
+  // Everything a drawn frame depends on besides the settings: the pose, the
+  // canvas height, the visible bounds, the datum and the backdrop. An idle
+  // frame whose stamp matches the last drawn one returns before any work.
+  const lastIdle: number[] = [];
+  const idleScratch: number[] = [];
+  const fillIdle = (viewer: NonNullable<ReturnType<typeof deps.viewer>>): number[] => {
+    const cam = viewer.getCameraState();
+    const b = viewer.mergedVisibleBounds();
+    const s = idleScratch;
+    s.length = 0;
+    s.push(...cam.position, ...cam.target, cam.fov ?? DEFAULT_FOV, viewer.orthographic ? 1 : 0, deps.canvas.clientHeight || 1);
+    if (b) for (const x of b) s.push(x);
+    s.push(...datum(), datumKnown() ? 1 : 0, deps.lightBackdrop() ? 1 : 0, axis() === 'z' ? 1 : 0);
+    return s;
+  };
   // The scan box projected on the plane, kept until the box or the plane moves.
   const boxPlaneCache = { inputs: [] as number[], value: [0, 0, 0, 0] as [number, number, number, number] };
   let drawn = false;
@@ -349,6 +364,8 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
   const refresh = (): void => {
     if (disposed) return;
     const viewer = deps.viewer();
+    if (viewer && drawing && blocked === null && lastKeyNums.length > 0 && sameAs(lastIdle, fillIdle(viewer))) return;
+    lastIdle.length = 0;
     const wasBlocked = blocked;
     blocked = null;
     if (settings.enabled && viewer && hasScan() && !datumKnown()) {
@@ -424,6 +441,7 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
         keep(lastPoseNums, pose);
         applyFade(cam, viewer.orthographic);
       }
+      keep(lastIdle, fillIdle(viewer));
       return;
     }
     keep(lastKeyNums, key);
@@ -434,6 +452,7 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
     applyFade(cam, viewer.orthographic);
     drawing.setVisible(hideDepth === 0);
     drawn = true;
+    keep(lastIdle, fillIdle(viewer));
     // The spacing and origin readouts follow the drawn grid.
     emit();
   };

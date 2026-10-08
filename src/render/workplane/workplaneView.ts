@@ -18,9 +18,11 @@
 
 import {
   add,
+  dot,
   length,
   projectOntoPlane,
   rayPlaneHit,
+  scale,
   sub,
   toPlaneCoords,
   type Vec3,
@@ -56,8 +58,10 @@ export function sampleWorkplaneView(
   const pos = add(camera.position, sceneOrigin);
   const tgt = add(camera.target, sceneOrigin);
   // Where the line of sight meets the plane; when it runs parallel or away
-  // from the plane, the orbit target dropped onto the plane stands in.
-  const hit = camera.orthographic ? null : rayPlaneHit(pos, tgt, plane);
+  // from the plane, the orbit target dropped onto the plane stands in. An
+  // orthographic view's screen centre is the line through the target along
+  // the view direction, which meets the plane on either side of the target.
+  const hit = camera.orthographic ? linePlaneHit(tgt, sub(tgt, pos), plane) : rayPlaneHit(pos, tgt, plane);
   const focusPoint = hit ?? projectOntoPlane(tgt, plane);
   const orbit = length(sub(tgt, pos));
   const depth = camera.orthographic ? orbit : Math.min(length(sub(focusPoint, pos)), orbit * 50);
@@ -65,4 +69,12 @@ export function sampleWorkplaneView(
   const worldPerPx = (2 * depth * Math.tan(fov / 2)) / canvasCssHeight;
   const pxPerUnit = Number.isFinite(worldPerPx) && worldPerPx > 0 ? 1 / worldPerPx : 0;
   return { focus: toPlaneCoords(focusPoint, plane), pxPerUnit };
+}
+
+/** Where the line through `p` along `dir` meets the plane, or null when parallel. */
+function linePlaneHit(p: Vec3, dir: Vec3, plane: WorkplaneBasis): Vec3 | null {
+  const denom = dot(dir, plane.normal);
+  if (Math.abs(denom) < 1e-12 * (length(dir) || 1)) return null;
+  const t = dot(sub(plane.origin, p), plane.normal) / denom;
+  return Number.isFinite(t) ? add(p, scale(dir, t)) : null;
 }

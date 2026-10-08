@@ -159,3 +159,27 @@ describe('placing on the plane', () => {
     expect(rayPlaneHit([0, 0, 10], [0, 0, 20], plane)).toBeNull(); // looking away
   });
 });
+
+describe('view focus on the plane', () => {
+  const plane = { origin: [0, 0, 0], normal: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0] } as const;
+
+  it('an oblique orthographic view focuses where the screen centre meets the plane', async () => {
+    const { sampleWorkplaneView } = await import('../src/render/workplane/workplaneView');
+    // Looking down at 45 degrees along +X, target 10 above the plane.
+    const cam = { position: [-10, 0, 20] as [number, number, number], target: [0, 0, 10] as [number, number, number], fovDeg: 50, orthographic: true };
+    const s = sampleWorkplaneView(cam, plane, [0, 0, 0], 800);
+    expect(s.focus[0]).toBeCloseTo(10, 9);
+    expect(s.focus[1]).toBeCloseTo(0, 9);
+    // The perspective view of the same pose lands on the same point.
+    const p = sampleWorkplaneView({ ...cam, orthographic: false }, plane, [0, 0, 0], 800);
+    expect(p.focus[0]).toBeCloseTo(10, 9);
+  });
+
+  it('a view parallel to the plane falls back to the target dropped onto it', async () => {
+    const { sampleWorkplaneView } = await import('../src/render/workplane/workplaneView');
+    const cam = { position: [-10, 0, 5] as [number, number, number], target: [0, 3, 5] as [number, number, number], fovDeg: 50, orthographic: true };
+    const s = sampleWorkplaneView(cam, plane, [0, 0, 0], 800);
+    expect(s.focus[0]).toBeCloseTo(0, 9);
+    expect(s.focus[1]).toBeCloseTo(3, 9);
+  });
+});

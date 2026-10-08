@@ -300,3 +300,62 @@ for (const pill of ['LAS 1.4', 'LAS 1.2']) {
     expect(out.vlrText).toContain('Scale/offset: kept from source');
   });
 }
+
+test('Export panel: LAS 1.2 refuses to drop the overlap flag, then writes once allowed', async ({ page }) => {
+  const writeLas14 = await loadLasWriter();
+  const { LEGACY_OVERLAP_DROP_OPT_IN } = await import('../../src/convert/types');
+  const las = writeLas14({
+    count: 3,
+    x: Float64Array.from([0, 1, 2]),
+    y: Float64Array.from([0, 1, 0]),
+    z: Float64Array.from([0, 0, 1]),
+    classification: Uint8Array.from([2, 2, 2]),
+    classificationFlags: Uint8Array.from([0, 8, 8]),
+  });
+
+  const panel = await openExportPanel(page, (p) => dropLasBytes(p, las, 'overlap.las'));
+  await expect(panel.getByRole('checkbox', { name: 'Include classification' })).toBeVisible({ timeout: 20_000 });
+  const optIn = panel.locator('.olv-export-fullres', { hasText: LEGACY_OVERLAP_DROP_OPT_IN });
+  await expect(optIn).toBeHidden();
+  await panel.locator('.olv-bc-pill', { hasText: 'LAS 1.2' }).click();
+  await expect(optIn).toBeVisible();
+
+  let downloadFired = false;
+  page.once('download', () => { downloadFired = true; });
+  await panel.locator('.olv-bc-convert').click();
+  const status = panel.locator('.olv-export-status');
+  await expect(status).toContainText('LAS 1.2 was not written', { timeout: 10_000 });
+  await expect(status).toContainText('2 points carry the overlap flag');
+  await expect(status).toContainText(LEGACY_OVERLAP_DROP_OPT_IN);
+  expect(downloadFired, 'a file was written despite the refusal').toBe(false);
+
+  await optIn.locator('input[type="checkbox"]').check();
+  const downloadPromise = page.waitForEvent('download');
+  await panel.locator('.olv-bc-convert').click();
+  const download = await downloadPromise;
+  expect(await download.path()).toBeTruthy();
+});
+
+test('Export panel: a malformed target EPSG is refused with a message, not cut down', async ({ page }) => {
+  const writeLas14 = await loadLasWriter();
+  const las = writeLas14(
+    {
+      count: 3,
+      x: Float64Array.from([500000, 500001, 500002]),
+      y: Float64Array.from([4100000, 4100001, 4100000]),
+      z: Float64Array.from([0, 0, 1]),
+    },
+    { epsg: 32614 },
+  );
+  const panel = await openExportPanel(page, (p) => dropLasBytes(p, las, 'utm.las'));
+  const assign = panel.locator('.olv-bc-pill', { hasText: 'Assign EPSG' });
+  await expect(assign).toBeVisible({ timeout: 20_000 });
+  await assign.click();
+  await panel.locator('.olv-bc-field', { hasText: 'Target EPSG' }).locator('input').fill('4326junk');
+
+  let downloadFired = false;
+  page.once('download', () => { downloadFired = true; });
+  await panel.locator('.olv-bc-convert').click();
+  await expect(panel.locator('.olv-export-status')).toHaveText('The target EPSG must be a whole number such as 32614, or EPSG:32614.');
+  expect(downloadFired, 'a file was written despite the refusal').toBe(false);
+});

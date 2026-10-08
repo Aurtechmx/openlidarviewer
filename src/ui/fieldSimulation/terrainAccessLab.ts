@@ -76,6 +76,7 @@ import {
 } from './terrainAccessProfileForm';
 import { loadTerrainAccessPackage, registerTerrainAccessOverlayInvalidator } from '../../lazyChunks';
 import { downloadBytes } from '../../io/download';
+import { singleLine } from '../../export/safeText';
 import type { buildTerrainAccessPackage, TerrainAccessGridPlacement } from '../../export/terrainAccessPackage';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
 import { labRun, publishLabRun, takeResultReopen } from '../../app/results/resultSignals';
@@ -189,7 +190,9 @@ export interface TerrainAccessStaleRefusal {
 
 /** The refusal shown when the preview or the run throws, so the controls come back instead of hanging. */
 export function terrainAccessFailure(err: unknown): TerrainAccessStaleRefusal {
-  const msg = err instanceof Error ? err.message : String(err);
+  // The message can carry file-derived text: no line breaks, controls or
+  // invisible characters reach the user.
+  const msg = singleLine(err instanceof Error ? err.message : String(err));
   return {
     ok: false, code: 'RUN_FAILED',
     reason: `Terrain Access could not finish: ${msg}. Re-apply the mobility profile and try again.`,
