@@ -18,7 +18,21 @@ function ctx(linearUnit: CrsLinearUnit, linearUnitToMetres: number, extra: Parti
 
 describe('unit labels follow the spatial context', () => {
   it('metres only when the CRS resolves metres', () => {
-    expect(workplaneUnits(ctx('metre', 1))).toMatchObject({ horizontal: 'm', vertical: 'm', note: null });
+    expect(workplaneUnits(ctx('metre', 1, { verticalUnitToMetres: 1 }))).toMatchObject({ horizontal: 'm', vertical: 'm', note: null });
+  });
+
+  it('an undeclared vertical unit borrowed from the horizontal one is labelled and caveated', () => {
+    const u = workplaneUnits(ctx('metre', 1));
+    expect(u.vertical).toBe('m');
+    expect(u.note).toMatch(/assumed to be in the horizontal unit \(vertical unit not declared\)/);
+    // The caveat reaches the readout and the snapshot note, so a vertical or
+    // three-point plane's "m" spacing carries it too.
+    const lines = workplaneReadout({
+      orientation: 'vertical-x', axisNames: ['X', 'Y'], originH: [0, 0], elevation: 1,
+      elevationSource: 'typed', spacing: { major: 5, minor: 1, showMinor: true, fixed: false }, units: u, datumKnown: true,
+    });
+    expect(lines.find((l) => l.startsWith('Grid'))).toMatch(/^Grid 5\s?m, minor 1\s?m$/u);
+    expect(workplaneFigureNote(lines)).toMatch(/vertical unit not declared/);
   });
 
   it('feet for an international or US survey foot CRS', () => {

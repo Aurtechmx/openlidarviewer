@@ -685,6 +685,14 @@ export class NavController {
     // wheel with `ctrlKey: true` and must still drive the camera.
     if (e.ctrlKey && this._ctrlHeld) return;
     e.preventDefault();
+    // A wheel during a camera move is dropped, not banked: the update loop
+    // does not integrate the dolly while a tween runs, so a stored impulse
+    // would land all at once on arrival, anchored at a stale cursor. The
+    // tween itself is left to finish.
+    if (this._tween) {
+      this._dollyVelocity = 0;
+      return;
+    }
     this._cancelMotionExcept('dolly');
     // Capture the pointer in NDC so the cursor-centred dolly keeps driving toward
     // where the wheel happened for the whole inertial tail, not just this frame.

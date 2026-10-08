@@ -11,7 +11,7 @@
  * "units". Elevation is labelled from the vertical unit, falling back to the
  * horizontal unit only when that unit is itself known
  * (`verticalMetresPerUnit(ctx, 'horizontal-when-known')`, the policy for a
- * label). A plane that spans a horizontal and the vertical axis (a vertical or
+ * label), and the note then says the vertical unit is assumed. A plane that spans a horizontal and the vertical axis (a vertical or
  * three-point plane) has one spacing on both, so it names a unit only when the
  * two agree.
  *
@@ -48,6 +48,12 @@ export function workplaneUnits(ctx: SpatialContext | null): WorkplaneUnits {
   }
   const v = verticalMetresPerUnit(ctx, 'horizontal-when-known');
   const vertical: WorkplaneUnitLabel = v === undefined ? 'units' : verticalUnitLabel(v);
+  // A vertical unit borrowed from the horizontal one is labelled, and says so,
+  // the way the volume readout does (`volumeUnitCaveat`).
+  if (vertical !== 'units' && ctx.verticalUnitToMetres === undefined) {
+    const assumed = 'Heights are assumed to be in the horizontal unit (vertical unit not declared).';
+    note = note ? `${note} ${assumed}` : assumed;
+  }
   return { horizontal, vertical, note };
 }
 
