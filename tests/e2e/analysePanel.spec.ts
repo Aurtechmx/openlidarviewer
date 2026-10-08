@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { dropDenseGridPly, openAnalysePage, openAnalysePanel } from './helpers';
+import { dropDenseGridPly, dropDenseGridUtmLas, openAnalysePage, openAnalysePanel } from './helpers';
 import { extractEntry } from '../helpers/zipReader';
 
 /**
@@ -178,38 +178,6 @@ test('after running on a scan: readiness, chips, recommendations, and gated expo
   await expect(complete).toBeVisible();
   await expect(complete).toBeEnabled();
 });
-
-/**
- * The dense-grid surface as a LAS 1.4 in EPSG:32633 with a NAVD88 metre
- * vertical axis, so the vertical unit resolves and the tier can reach T3.
- */
-async function dropDenseGridUtmLas(page: Page): Promise<void> {
-  (globalThis as Record<string, unknown>).__BUILD_IDENTITY__ ??= {
-    version: '0.0.0-test', commit: 'unknown', dirty: false, builtAt: '1970-01-01T00:00:00.000Z',
-  };
-  const { writeLas14 } = await import('../../src/convert/writeLas');
-  const { wktForEpsg } = await import('../../src/io/epsgWkt');
-  const N = 60;
-  const x = new Float64Array(N * N);
-  const y = new Float64Array(N * N);
-  const z = new Float64Array(N * N);
-  for (let k = 0; k < N * N; k++) {
-    const u = Math.floor(k / N) / (N - 1);
-    const v = (k % N) / (N - 1);
-    x[k] = 500_000 + u * 10;
-    y[k] = 5_000_000 + v * 10;
-    z[k] = 200 + Math.sin(u * Math.PI) * Math.cos(v * Math.PI) * 1.5;
-  }
-  const bytes = writeLas14({ count: N * N, x, y, z }, {
-    wkt: wktForEpsg(32633), epsg: 32633, linearUnitCode: 9001, verticalEpsg: 5703, verticalUnitCode: 9001,
-  });
-  const dt = await page.evaluateHandle((b) => {
-    const d = new DataTransfer();
-    d.items.add(new File([new Uint8Array(b)], 'dense-grid-utm.las'));
-    return d;
-  }, [...bytes]);
-  await page.dispatchEvent('body', 'drop', { dataTransfer: dt });
-}
 
 /** Load a scan, run the analysis, open Contour Studio and return a DEM download helper. */
 async function openDemExport(page: Page, drop: (page: Page) => Promise<void>) {
