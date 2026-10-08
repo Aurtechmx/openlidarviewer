@@ -62,7 +62,18 @@ export function crsOriginOf(resolved: CrsOriginInput | null | undefined): CrsOri
   };
 }
 
+/**
+ * The vertical half of the origin line: "vertical datum NAVD88 from las-vlr",
+ * or "vertical datum not declared" when the record names no datum. Text only;
+ * the record keeps its 'unknown' fields.
+ */
+export function crsOriginVerticalPhrase(o: CrsOriginRecord): string {
+  return o.verticalDatum === 'unknown'
+    ? 'vertical datum not declared'
+    : `vertical datum ${o.verticalDatum} from ${o.verticalSource}`;
+}
+
 /** One README / description line naming the CRS origin. */
 export function crsOriginLine(o: CrsOriginRecord): string {
-  return `CRS source ${o.source} (${o.name}, ${o.epsg}); vertical datum ${o.verticalDatum} from ${o.verticalSource}`;
+  return `CRS source ${o.source} (${o.name}, ${o.epsg}); ${crsOriginVerticalPhrase(o)}`;
 }

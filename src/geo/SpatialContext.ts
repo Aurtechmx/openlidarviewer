@@ -48,7 +48,7 @@ import { isLinearUnitKnown, resolvedFromCrsInfo, unknownCrs } from './Coordinate
 import type { CrsValidity, CrsValiditySeverity } from './CrsValidation';
 import { validateCrsForMeasurement } from './CrsValidation';
 import type { VerticalReference } from './height';
-import { verticalReferenceFromDatum } from './height';
+import { HEIGHT_UNIT_GAP_SUFFIX, verticalReferenceFromDatum } from './height';
 import type { LayerSpatialTransform, ProjectSpatialFrame } from './ProjectSpatialFrame';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -358,7 +358,7 @@ export function heightScale(ctx: SpatialContext, horizontalKnown: boolean): { re
   const v = verticalMetresPerUnit(ctx, 'none');
   if (v !== undefined) return { factor: v, suffix: ' m' };
   return ctx.verticalUnitToMetres === undefined
-    ? { factor: 1, suffix: ' source units (vertical unit not declared)' }
-    : { factor: 1, suffix: ' source units (declared vertical unit is invalid)' };
+    ? { factor: 1, suffix: HEIGHT_UNIT_GAP_SUFFIX['vertical-unit-not-declared'] }
+    : { factor: 1, suffix: HEIGHT_UNIT_GAP_SUFFIX['vertical-unit-invalid'] };
 }
 

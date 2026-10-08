@@ -11,8 +11,10 @@
  */
 
 import type { ReportDatasetRow } from './types';
+import { HEIGHT_UNIT_GAP_SUFFIX, type HeightUnitGap } from '../geo/height';
 import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
 import { sourceSha256Text, type ExportDigests } from '../science/exportDigestRecord';
+import { crsOriginVerticalPhrase } from '../science/crsOrigin';
 
 /** What `buildDatasetSummary` needs to know about the scan. */
 export interface MetadataInputs {
@@ -22,7 +24,15 @@ export interface MetadataInputs {
   /** Bounds in metres: width × depth × height. Pass NaN when unknown. */
   readonly width: number;
   readonly depth: number;
+  /** Height in metres, or in source units when {@link heightUnitGap} is set. */
   readonly height: number;
+  /**
+   * Set when the horizontal unit is confirmed but the height is not in metres:
+   * the vertical unit is not declared, or the declared one is invalid. The
+   * Height row then prints the source span with the same words as the
+   * on-screen Scan Report. Absent means the height is in the extents' unit.
+   */
+  readonly heightUnitGap?: HeightUnitGap;
   /** Source point density in pts/m² on the XY footprint. NaN when unknown. */
   readonly density: number;
   readonly hasRgb: boolean;
@@ -112,24 +122,54 @@ function formatSourceUnits(n: number): string {
 }
 
 /**
- * Width, Depth and Height describe ONE bounding box, so they share one unit.
+ * Width and Depth share one unit, chosen from the largest metre dimension.
  * Formatting each independently let a 1000 m depth cross the km threshold while
- * its 922 m and 331 m siblings stayed in metres, so the report read
- * "922.0 m / 1.00 km / 330.6 m" for one box while the on-screen Scan Report
- * showed 1000.0 m for the same depth. The unit is chosen from the LARGEST
- * dimension and applied to all three, so the figures stay comparable by eye.
+ * its 922 m sibling stayed in metres, so the report read "922.0 m / 1.00 km"
+ * for one box while the on-screen Scan Report showed 1000.0 m for the same
+ * depth. Height joins that unit when it is in metres too, so the three figures
+ * stay comparable by eye.
+ *
+ * Height has its own unit. When the vertical unit is not declared, or the
+ * declared one is invalid, the height is a source-unit span: it takes no part
+ * in the km/m/cm choice and prints with the on-screen Scan Report's words.
  */
 export function extentRows(inputs: {
   readonly width: number;
   readonly depth: number;
   readonly height: number;
   readonly unitKnown: boolean;
+  /** Why the height is not in metres; absent when it is. Ignored when `unitKnown` is false. */
+  readonly heightUnit?: HeightUnitGap;
 }): Array<{ label: string; value: string }> {
-  const labels = ['Width', 'Depth', 'Height'] as const;
-  const dims = [inputs.width, inputs.depth, inputs.height];
   if (!inputs.unitKnown) {
-    return labels.map((label, i) => ({ label, value: formatSourceUnits(dims[i]) }));
+    return [
+      { label: 'Width', value: formatSourceUnits(inputs.width) },
+      { label: 'Depth', value: formatSourceUnits(inputs.depth) },
+      { label: 'Height', value: formatSourceUnits(inputs.height) },
+    ];
   }
+  const gap = inputs.heightUnit;
+  const metric = gap === undefined
+    ? [inputs.width, inputs.depth, inputs.height]
+    : [inputs.width, inputs.depth];
+  const scale = sharedMetricScale(metric);
+  const fmt = (v: number): string =>
+    Number.isFinite(v) ? `${(v / scale.div).toFixed(scale.dp)} ${scale.unit}` : 'unknown';
+  const h = inputs.height;
+  return [
+    { label: 'Width', value: fmt(inputs.width) },
+    { label: 'Depth', value: fmt(inputs.depth) },
+    {
+      label: 'Height',
+      value: gap === undefined
+        ? fmt(h)
+        : Number.isFinite(h) ? `${h.toFixed(1)}${HEIGHT_UNIT_GAP_SUFFIX[gap]}` : 'unknown',
+    },
+  ];
+}
+
+/** One km / m / cm scale and decimal count for a group of metre values. */
+function sharedMetricScale(dims: readonly number[]): { div: number; unit: string; dp: number } {
   const finite = dims.filter((d) => Number.isFinite(d));
   const largest = finite.length > 0 ? Math.max(...finite) : Number.NaN;
   // One scale for the whole group, picked from the largest dimension. km starts
@@ -150,14 +190,7 @@ export function extentRows(inputs: {
   const dp = !Number.isFinite(scaledSmall) || scaledSmall >= 10
     ? 1
     : Math.min(3, Math.max(1, Math.ceil(-Math.log10(scaledSmall)) + 1));
-  const scale = { ...base, dp };
-  return labels.map((label, i) => {
-    const v = dims[i];
-    return {
-      label,
-      value: Number.isFinite(v) ? `${(v / scale.div).toFixed(scale.dp)} ${scale.unit}` : 'unknown',
-    };
-  });
+  return { ...base, dp };
 }
 
 /** Pretty-format an integer point count with locale separators. */
@@ -279,6 +312,7 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
       depth: inputs.depth,
       height: inputs.height,
       unitKnown: !unitsUnconfirmed,
+      ...(inputs.heightUnitGap ? { heightUnit: inputs.heightUnitGap } : {}),
     }),
   );
   if (Number.isFinite(inputs.density) && inputs.density > 0) {
@@ -303,7 +337,7 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
     const o = inputs.digests.crsOrigin;
     rows.push(
       { label: 'Source SHA-256', value: sourceSha256Text(inputs.digests) },
-      { label: 'CRS origin', value: `${o.source}, ${o.epsg}; vertical ${o.verticalDatum} from ${o.verticalSource}` },
+      { label: 'CRS origin', value: `${o.source}, ${o.epsg}; ${crsOriginVerticalPhrase(o)}` },
     );
   }
   return rows;

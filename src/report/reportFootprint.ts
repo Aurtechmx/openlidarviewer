@@ -13,6 +13,8 @@
  * funnel through here so the conversion can't drift between them.
  */
 
+import { heightUnitGapOf, type HeightUnitGap } from '../geo/height';
+
 export interface FootprintInput {
   /** Raw X / Y / Z extent of the bounding box, in the source CRS linear units. */
   readonly extentX: number;
@@ -22,7 +24,11 @@ export interface FootprintInput {
   readonly pointCount: number | null;
   /** Horizontal CRS unit → metres (1 for a metre CRS, ~0.3048 for feet). */
   readonly linearUnitToMetres?: number;
-  /** Vertical unit → metres, when the source declares one distinct from horizontal. */
+  /**
+   * Vertical unit → metres, when the source declares one. Absent means the
+   * vertical unit is not declared: the height then stays in source units and
+   * is never converted with the horizontal factor.
+   */
   readonly verticalUnitToMetres?: number;
   /**
    * Whether the source CRS declares a REAL linear unit — the fail-closed gate
@@ -61,8 +67,16 @@ export interface FootprintConfirmed {
   readonly widthMetres: number;
   /** Depth in metres. */
   readonly depthMetres: number;
-  /** Height in metres. */
+  /** Height in metres; NaN when {@link heightUnitGap} is set. */
   readonly heightMetres: number;
+  /**
+   * Why the height is not in metres: the vertical unit is not declared, or the
+   * declared one is invalid. Null when the height is in metres. Width and depth
+   * follow the horizontal unit either way.
+   */
+  readonly heightUnitGap: HeightUnitGap | null;
+  /** Height span in raw source units, read when {@link heightUnitGap} is set. */
+  readonly heightSourceUnits: number;
   /** Footprint density in pts·m⁻² on the XY footprint; NaN when extent is degenerate. */
   readonly densityPerM2: number;
 }
@@ -91,9 +105,10 @@ export type Footprint = FootprintConfirmed | FootprintUnknownUnit;
  * Project a raw bounding-box extent into a footprint, FAILING CLOSED on an
  * unconfirmed linear unit.
  *
- * When `linearUnitKnown` is true the extents are converted to metres with the
- * declared unit factors and a pts·m⁻² density is computed — the historical,
- * byte-identical behaviour for a real CRS. When it is false the CRS carries no
+ * When `linearUnitKnown` is true, width, depth and the pts·m⁻² density are
+ * converted with the horizontal factor. The height is converted only when a
+ * valid vertical unit is declared; otherwise it stays a source-unit span and
+ * `heightUnitGap` says why. When it is false the CRS carries no
  * usable linear unit (absent, or the `linearUnit: 'unknown'` placeholder whose
  * `linearUnitToMetres` is the inert 1), so the raw source-unit spans are
  * returned with NO metre value and NO density: stamping "m" / "pts/m²" on a
@@ -120,13 +135,18 @@ export function footprintMetres(input: FootprintInput): Footprint {
   }
 
   const uH = Number.isFinite(input.linearUnitToMetres) ? (input.linearUnitToMetres as number) : 1;
-  const uV = Number.isFinite(input.verticalUnitToMetres) ? (input.verticalUnitToMetres as number) : uH;
+  // The height has its own unit. It is in metres only when a valid vertical
+  // unit is declared, the rule the on-screen Scan Report applies (`heightScale`).
+  const heightUnitGap = heightUnitGapOf(input.verticalUnitToMetres);
   const widthMetres = spanWidth * uH;
   const depthMetres = spanDepth * uH;
-  const heightMetres = spanHeight * uV;
+  const heightMetres = heightUnitGap === null ? spanHeight * (input.verticalUnitToMetres as number) : Number.NaN;
   const densityPerM2 =
     widthMetres > 0 && depthMetres > 0 && input.pointCount !== null
       ? input.pointCount / (widthMetres * depthMetres)
       : Number.NaN;
-  return { unitStatus: 'confirmed', widthMetres, depthMetres, heightMetres, densityPerM2 };
+  return {
+    unitStatus: 'confirmed', widthMetres, depthMetres, heightMetres, heightUnitGap,
+    heightSourceUnits: spanHeight, densityPerM2,
+  };
 }

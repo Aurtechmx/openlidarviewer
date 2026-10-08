@@ -80,7 +80,7 @@ describe('CRS origin in export provenance', () => {
     const { geojson, kml } = exportsFor(rc);
     expect(geojson.provenance.crsOrigin).toEqual(crsOriginOf(null));
     expect(Object.values(geojson.provenance.crsOrigin)).toEqual(['unknown', 'unknown', 'unknown', 'unknown', 'unknown']);
-    expect(kml).toContain('CRS source unknown (unknown, unknown); vertical datum unknown from unknown');
+    expect(kml).toContain('CRS source unknown (unknown, unknown); vertical datum not declared');
   });
 
   it('manifest op params and README lines carry the origin; verification still passes', async () => {

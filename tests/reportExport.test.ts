@@ -1,6 +1,6 @@
 import { buildInspectionSummary } from '../src/report/ReportFindings';
 import { buildDatasetSummary, type MetadataInputs } from '../src/report/ReportMetadataSection';
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { resolveExportDigests } from '../src/export/exportDigests';
 import {
   effectiveCrsName,
@@ -13,6 +13,7 @@ import {
 import type { ResolvedCrs } from '../src/geo/CoordinateTypes';
 import type { Viewer } from '../src/render/Viewer';
 import type { SpaceKind } from '../src/terrain/scanShape';
+import { stubDownloadGlobals } from './helpers/downloadGlobalsStub';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The pure decisions the extraction exposes — the only report/export logic that
@@ -193,26 +194,7 @@ describe('isNonTerrainVerdict covers every SpaceKind', () => {
 // warning, the no-scan guard and an engine failure.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// generateReportPdf ends by triggering a browser download; the node test env has
-// no DOM, so stub the two globals `triggerDownload` touches. Fake timers keep the
-// helper's deferred URL-revoke from firing after the stubs are torn down.
-beforeAll(() => {
-  vi.useFakeTimers();
-  vi.stubGlobal('document', {
-    createElement: () => ({ href: '', download: '', click() {}, remove() {} }),
-    body: { appendChild() {} },
-  });
-  const u = globalThis.URL as unknown as Record<string, unknown>;
-  u.createObjectURL = () => 'blob:reportexport-test';
-  u.revokeObjectURL = () => {};
-});
-afterAll(() => {
-  vi.useRealTimers();
-  vi.unstubAllGlobals();
-  const u = globalThis.URL as unknown as Record<string, unknown>;
-  delete u.createObjectURL;
-  delete u.revokeObjectURL;
-});
+stubDownloadGlobals('blob:reportexport-test');
 
 // A static cloud whose declared total exceeds the strided display count (file-scale
 // honesty), with a metre CRS + declared source metadata + one colour channel.
