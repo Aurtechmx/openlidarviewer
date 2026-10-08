@@ -279,12 +279,8 @@ for this development cut: that evidence comes from the engines themselves.
 
 ## The two monoliths are still monoliths
 
-<<<<<<< HEAD
-`src/main.ts` is 4,341 lines and `src/render/Viewer.ts` is 5,973, two hundred and fifty lines
-=======
 `src/main.ts` is 4,321 lines, twenty fewer since the Save view snapshot moved
-to its own lazy module, and `src/render/Viewer.ts` is 5,978, two hundred and forty-five lines
->>>>>>> 54775d4e6 (Add a reference plane to the View panel)
+to its own lazy module, and `src/render/Viewer.ts` is 5,973, two hundred and fifty lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
@@ -300,11 +296,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 97 for the shell, 75 for the renderer and 23 for the Analyse panel,
-<<<<<<< HEAD
-across 1088 modules with no dependency cycles.
-=======
-across 1098 modules with no dependency cycles.
->>>>>>> cb9a6f02b (Bound the reference plane's inputs and lattice, and tighten its edges)
+across 1100 modules with no dependency cycles.
 
 ## The shell has little headroom
 
