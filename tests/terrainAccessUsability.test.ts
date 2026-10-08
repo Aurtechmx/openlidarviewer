@@ -253,3 +253,10 @@ describe('route and raster placement', () => {
     expect(extractEntry(noCrs, 'ta.prj')).toBeNull();
   });
 });
+
+describe('run failure text', () => {
+  it('keeps an error message to one plain line', () => {
+    const r = lab.terrainAccessFailure(new Error('bad\nline‮evil​'));
+    expect(r.reason).toBe('Terrain Access could not finish: bad lineevil. Re-apply the mobility profile and try again.');
+  });
+});
