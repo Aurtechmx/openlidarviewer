@@ -51,10 +51,11 @@ describe('LAS 1.4 upgrade of legacy class 12', () => {
     expect(report.log.some((e) => /overlap flag/i.test(e.message))).toBe(false);
   });
 
-  it('round-trips: the upgraded file written back to LAS 1.2 warns that overlap is dropped', async () => {
+  it('round-trips: the upgraded file written back to LAS 1.2 refuses, and warns once the overlap drop is allowed', async () => {
     const { file } = convertCloud(legacyCloud(3), { format: 'las14' });
     const up = await decode(file!.bytes);
-    const { report } = convertCloud(up, { format: 'las' });
+    expect(convertCloud(up, { format: 'las' }).file).toBeNull();
+    const { report } = convertCloud(up, { format: 'las', allowLegacyOverlapDrop: true });
     expect(report.ok).toBe(true);
     expect(report.log.some((e) => e.level === 'warn' && /overlap flag/.test(e.message))).toBe(true);
   });

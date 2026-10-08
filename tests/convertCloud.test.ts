@@ -318,13 +318,16 @@ describe('a legacy LAS write says what it drops', () => {
     classificationFlags: Uint8Array.from(flags),
   } as never);
 
+  // The overlap loss refuses unless allowed, so the warning is read from an
+  // allowed write.
   const warnings = (c: PointCloud, allowLegacyClassWrap = false): string[] =>
-    convertCloud(c, { format: 'las', allowLegacyClassWrap }).report.log
+    convertCloud(c, { format: 'las', allowLegacyClassWrap, allowLegacyOverlapDrop: true }).report.log
       .filter((l) => l.level === 'warn')
       .map((l) => l.message);
 
   it('warns that the overlap flag cannot be recorded, and counts the points', () => {
     // 0x8 is the extended overlap bit; two of the three carry it.
+    expect(convertCloud(flagged([0x8, 0x8, 0]), { format: 'las' }).file).toBeNull();
     const w = warnings(flagged([0x8, 0x8, 0]));
     const overlap = w.find((m) => /overlap/i.test(m));
     expect(overlap, w.join(' | ')).toBeDefined();
@@ -339,7 +342,7 @@ describe('a legacy LAS write says what it drops', () => {
 
   it('reports the class wrap and the flag loss independently', () => {
     // Both losses at once: a class above 31 AND an overlap flag. The wrap
-    // refuses by default, so the write is opted in to see both warnings.
+    // and the flag loss each refuse by default, so the write allows both.
     const both = new PointCloud({
       positions: Float32Array.from([0, 0, 0, 10, 20, 1, 30, 40, 2]),
       origin: [500000, 4000000, 100],

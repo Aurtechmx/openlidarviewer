@@ -165,6 +165,56 @@ test('Export panel: LAS 1.2 class-wrap opt-in previews, refuses, then writes wra
 });
 
 /**
+ * LAS 1.2 class reinterpretation opt-in. Class 10 is Rail in a LAS 1.4 source
+ * and reserved in LAS 1.2, so the number would be written with another
+ * meaning. The write is refused with LAS 1.2 still selected, and writes the
+ * number unchanged once its own opt-in is ticked.
+ */
+test('Export panel: LAS 1.2 refuses a class that changes meaning, then writes it once allowed', async ({ page }) => {
+  const writeLas14 = await loadLasWriter();
+  const { LEGACY_CLASS_REINTERPRETATION_OPT_IN } = await import('../../src/convert/types');
+
+  const classes = [2, 10, 10];
+  const las = writeLas14({
+    count: classes.length,
+    x: Float64Array.from([0, 1, 2]),
+    y: Float64Array.from([0, 1, 0]),
+    z: Float64Array.from([0, 0, 1]),
+    classification: Uint8Array.from(classes),
+  });
+
+  const panel = await openExportPanel(page, (p) => dropLasBytes(p, las, 'rail.las'));
+  await expect(panel.getByRole('checkbox', { name: 'Include classification' })).toBeVisible({ timeout: 20_000 });
+
+  const optIn = panel.locator('.olv-export-fullres', { hasText: LEGACY_CLASS_REINTERPRETATION_OPT_IN });
+  await expect(optIn).toBeHidden();
+  await panel.locator('.olv-bc-pill', { hasText: 'LAS 1.2' }).click();
+  await expect(optIn).toBeVisible();
+
+  let downloadFired = false;
+  page.once('download', () => { downloadFired = true; });
+  await panel.locator('.olv-bc-convert').click();
+  const status = panel.locator('.olv-export-status');
+  await expect(status).toContainText('LAS 1.2 was not written', { timeout: 10_000 });
+  await expect(status).toContainText('class 10');
+  await expect(status).toContainText(LEGACY_CLASS_REINTERPRETATION_OPT_IN);
+  await expect(status).toContainText('Choose LAS 1.4');
+  await expect(panel.locator('.olv-bc-pill', { hasText: 'LAS 1.2' })).toHaveClass(/is-active/);
+  expect(downloadFired, 'a file was written despite the refusal').toBe(false);
+
+  await optIn.locator('input[type="checkbox"]').check();
+  const downloadPromise = page.waitForEvent('download');
+  await panel.locator('.olv-bc-convert').click();
+  const download = await downloadPromise;
+  await expect(status).toContainText('with 1 warning');
+  await expect(panel.locator('.olv-conv-note')).toContainText(/^Class 10 \(2 points\)/);
+
+  const path = await download.path();
+  if (!path) throw new Error('download produced no local path');
+  expect(await readLegacyClasses(path, classes.length)).toEqual(classes);
+});
+
+/**
  * The wrap opt-in row is offered whenever LAS 1.2 would write A classification
  * at all — it does not pre-inspect whether any code actually exceeds 31 (the
  * same row, unconditional on format, in the splash BatchConverter). For a

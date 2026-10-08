@@ -223,7 +223,7 @@ Clear and Auto-classify need a fully loaded scan, so Edit classes stays hidden o
 
 The Export tab has two lanes.
 
-Point cloud. Re-save the points as LAS 1.4, LAS 1.2, XYZ or ASC. Either LAS can be gzipped to a smaller `.las.gz`. You choose whether to keep the scan's coordinate system, assign an EPSG code, or reproject, and whether to write the display sample or every point at full resolution. A live summary tells you the point count, the size and the coordinate system before you commit.
+Point cloud. Re-save the points as LAS 1.4, LAS 1.2, XYZ or ASC. Either LAS can be gzipped to a smaller `.las.gz`. You choose whether to keep the scan's coordinate system, assign an EPSG code, or reproject, and whether to write the display sample or every point at full resolution. A live summary tells you the point count, the size and the coordinate system before you commit. LAS 1.2 holds less than LAS 1.4. When a LAS 1.2 write would lose information (a class above 31, a return above 7, a scan angle beyond 90 degrees, a scanner channel, a class number whose meaning differs, or the overlap flag), the export is refused and names the checkbox that allows each loss. LAS 1.4 keeps all of it.
 
 Products. The things you make *from* the scan: your measurements as GeoJSON or CSV, an integrity report that pairs them with a checksum (and, if you turn on Sign this report, a signature from a key kept in this browser), and a Site KML and scan-area polygon for Google Earth. Image exports sit here too: height, intensity, class and normal maps, and a view capture that comes out as a georeferenced top-down image when the scan is georeferenced. The terrain products are downloaded from Analyse, on the Contours page under Terrain, where the run that made them lives.
 

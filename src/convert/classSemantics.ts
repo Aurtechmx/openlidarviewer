@@ -26,6 +26,7 @@
 
 import { classAllocation, classificationName, isExtendedPdrf, FIRST_EXTENDED_PDRF, LEGACY_MAX_CLASS } from '../lasSemantics';
 import type { ConversionEvent } from './conversionEvents';
+import { LEGACY_CLASS_REINTERPRETATION_OPT_IN } from './types';
 
 /** A PDRF inside the legacy table and one inside the extended table. */
 const LEGACY_PDRF = 3;
@@ -191,4 +192,20 @@ export function planClassSemantics(input: ClassSemanticsInput): ClassSemanticsPl
     })),
   ];
   return { classification: cls, classificationFlags: flags, translations, changes, events };
+}
+
+/**
+ * The refusal a LAS 1.2 write returns when class numbers would change meaning
+ * and the request has not allowed it. Names the points, the codes and both
+ * ways forward.
+ */
+export function legacyClassReinterpretationRefusal(changes: readonly ClassFinding[]): string {
+  const points = changes.reduce((n, f) => n + f.points, 0);
+  const codes = changes.map((f) => f.code);
+  const codeList = codes.length === 1 ? `class ${codes[0]}` : `classes ${codes.slice(0, -1).join(', ')} and ${codes[codes.length - 1]}`;
+  return (
+    `LAS 1.2 was not written. ${pointsLabel(points)} ${points === 1 ? 'has' : 'have'} ${codeList}, ` +
+    `whose meaning in LAS 1.2 differs from the source, so LAS 1.2 readers would read a different class. ` +
+    `Choose LAS 1.4 to keep the meaning, or tick "${LEGACY_CLASS_REINTERPRETATION_OPT_IN}" to write the numbers unchanged.`
+  );
 }

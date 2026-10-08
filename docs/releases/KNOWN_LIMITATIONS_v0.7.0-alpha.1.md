@@ -368,8 +368,12 @@ floor of the data minimum, and the provenance text gives the reason.
   to 22) have no mapping between the two tables, so they are written unchanged
   and the report lists each with its point count. A LAS 1.4 export read by a
   LAS 1.2 reader shows class 19 and the other defined extended classes as
-  reserved; high noise (18) has no legacy class. Classes above 31 are refused
-  or wrapped as before. A derived or cleared classification, or a source whose
+  reserved; high noise (18) has no legacy class. A LAS 1.2 write with such a
+  class is refused until "Allow class numbers to change meaning" is ticked, and
+  a LAS 1.2 write of points carrying the LAS 1.4 overlap flag is refused until
+  "Allow the overlap flag to be dropped" is ticked. Each opt-in allows only its
+  own loss, and the refusal names every opt-in the write needs. A LAS 1.4 write
+  needs neither. Classes above 31 are refused or wrapped as before. A derived or cleared classification, or a source whose
   point format is unknown, is not translated: when such a classification of a
   legacy file is written as LAS 1.4, untouched legacy class 8 and 12 points are
   written as the reserved codes 8 and 12, with no translation and no warning.

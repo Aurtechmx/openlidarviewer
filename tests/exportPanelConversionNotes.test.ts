@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { PointCloud } from '../src/model/PointCloud';
-import { LEGACY_ACQUISITION_LOSS_OPT_IN, LEGACY_CLASS_WRAP_OPT_IN } from '../src/convert/types';
+import { LEGACY_ACQUISITION_LOSS_OPT_IN, LEGACY_CLASS_WRAP_OPT_IN, LEGACY_OVERLAP_DROP_OPT_IN } from '../src/convert/types';
 import { convertCloud } from '../src/convert/convertCloud';
 import { exportedLine } from '../src/ui/conversionNotes';
 import {
@@ -56,6 +56,7 @@ describe('ExportPanel: every warning is listed', () => {
     pickFormat(root, 'LAS 1.2');
     setCheckbox(root, LEGACY_CLASS_WRAP_OPT_IN, true);
     setCheckbox(root, LEGACY_ACQUISITION_LOSS_OPT_IN, true);
+    setCheckbox(root, LEGACY_OVERLAP_DROP_OPT_IN, true);
     await pressExport(root);
 
     expect(hoisted.downloads).toHaveLength(1);
@@ -85,6 +86,7 @@ describe('ExportPanel: every warning is listed', () => {
     pickFormat(root, 'LAS 1.2');
     setCheckbox(root, LEGACY_CLASS_WRAP_OPT_IN, true);
     setCheckbox(root, LEGACY_ACQUISITION_LOSS_OPT_IN, true);
+    setCheckbox(root, LEGACY_OVERLAP_DROP_OPT_IN, true);
     await pressExport(root);
     expect(noteTexts(root)).toHaveLength(4);
     setCheckbox(root, LEGACY_ACQUISITION_LOSS_OPT_IN, false);
@@ -107,6 +109,7 @@ describe('ExportPanel: the acquisition-loss opt-in', () => {
     const root = await panelFor(lossyCloud());
     pickFormat(root, 'LAS 1.2');
     setCheckbox(root, LEGACY_CLASS_WRAP_OPT_IN, true);
+    setCheckbox(root, LEGACY_OVERLAP_DROP_OPT_IN, true);
     await pressExport(root);
     expect(hoisted.downloads).toEqual([]);
     expect(status(root).className).toContain('is-error');
@@ -128,7 +131,7 @@ describe('batch converter: every warning is listed', () => {
     const { BatchConverter } = await import('../src/ui/BatchConverter');
     const host = new FakeElCtor('div');
     const bc = new BatchConverter(host as unknown as HTMLElement);
-    const report = convertCloud(lossyCloud(), { format: 'las', allowLegacyClassWrap: true, allowLegacyAcquisitionLoss: true });
+    const report = convertCloud(lossyCloud(), { format: 'las', allowLegacyClassWrap: true, allowLegacyAcquisitionLoss: true, allowLegacyOverlapDrop: true });
     (bc as unknown as { _renderResults(r: unknown[]): void })._renderResults([
       { source: 'survey.las', report: report.report, file: report.file },
     ]);
