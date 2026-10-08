@@ -100,4 +100,14 @@ describe('Export panel terrain lane refusals', () => {
     productButton(root, 'terrain-dem').fire('click');
     expect(hintOf(root, 'terrain-dem')).toBe(reason);
   });
+
+  it('shows the gate reason when a product refuses after it starts', async () => {
+    const reason = 'The selected area has too much unsupported surface.';
+    const { p, root } = await panel();
+    p.setTerrainExports({ ready: () => true, run: () => Promise.resolve({ ok: false, reason }) });
+    productButton(root, 'contours').fire('click');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(hintOf(root, 'contours')).toBe(reason);
+  });
 });

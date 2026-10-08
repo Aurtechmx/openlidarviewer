@@ -549,3 +549,38 @@ describe('shelf Focus on a lab or Observatory result opens its modal', () => {
     expect(takeResultReopen('observatory')).toBe(false);
   });
 });
+
+describe('Export terrain lane follows the active scan', () => {
+  it('re-renders the lane when the active scan changes, so a button disabled for another scan comes back', () => {
+    installLiveFakeDom();
+    const context = { scan: { activeId: 'a' } } as unknown as Parameters<typeof createScanService>[0]['context'];
+    const scans = createScanService({ getViewer: () => ({ streamingCloud: null }) as never, context });
+    const terrain = Object.assign(new FakeTerrain(), {
+      exportProductStatus: () => (scans.activeId === 'a'
+        ? { ready: true, reason: '' }
+        : { ready: false, reason: 'different scan' }),
+      exportProduct: () => ({ ok: true as const }),
+    });
+    terrain.ref = { result: { dtm: grid() }, scanId: 'a', fresh: true, filename: 'north.laz', sceneUpAxis: 'z' };
+    const seen: string[] = [];
+    const exportPanel = {
+      element: new FakeEl('div') as unknown as HTMLElement,
+      select: () => true,
+      findingsCount: () => 0,
+      setTerrainExports: (lane: { status?: (k: 'contours') => { ready: boolean } } | null) => {
+        if (lane?.status) seen.push(lane.status('contours').ready ? 'ready' : 'refused');
+      },
+    };
+    mountResultsShelf({
+      viewer: { measure: { getMeasurements: () => [] }, clouds: () => ['a', 'b'], getCloud: (id: string) => ({ name: `${id}.laz` }), getCameraPose: () => ({ position: [0, 0, 1], target: [0, 0, 0] }), applyCameraPose: vi.fn() },
+      identity: { stableIdFor: (id: string) => id },
+      scans,
+      terrainRunner: new FakeRunner(),
+    } as never, () => terrain, exportPanel as never, vi.fn());
+    seen.length = 0;
+    scans.setActive('b');
+    expect(seen.at(-1)).toBe('refused');
+    scans.setActive('a');
+    expect(seen.at(-1)).toBe('ready');
+  });
+});

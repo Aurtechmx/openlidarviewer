@@ -268,6 +268,9 @@ export interface ExportPanelCallbacks {
 export type ExportProduct = 'measurements' | 'findings' | 'terrain-dem' | 'contours';
 
 /** The terrain lane: whether a result exists, and the export run by its owner. */
+/** A terrain lane run: started, or refused with the reason to show. */
+export type TerrainLaneOutcome = { readonly ok: boolean; readonly reason?: string };
+
 export interface TerrainExportsLane {
   ready(): boolean;
   /** Whether one product can run now, and why not. Absent means it can. */
@@ -276,7 +279,7 @@ export interface TerrainExportsLane {
    * Run one product. `btn` is the pressed button, for the busy state. A
    * refusal comes back with its reason; nothing returned means it started.
    */
-  run(kind: 'dem' | 'contours', btn?: HTMLButtonElement): { readonly ok: boolean; readonly reason?: string } | void;
+  run(kind: 'dem' | 'contours', btn?: HTMLButtonElement): TerrainLaneOutcome | Promise<TerrainLaneOutcome> | void;
 }
 
 /**
@@ -1205,8 +1208,7 @@ export class ExportPanel {
     const row = el('div', { className: 'olv-export-product-actions' });
     const hint = el('span', { className: 'olv-export-fullres-hint', text: status.ready ? '' : status.reason });
     hint.setAttribute('role', 'status');
-    const btn = this._productButton(label, status.ready, () => {
-      const outcome = terrain.run(kind, btn);
+    const show = (outcome: TerrainLaneOutcome | void): void => {
       if (outcome && !outcome.ok) {
         const reason = outcome.reason || noResult;
         hint.textContent = reason;
@@ -1214,6 +1216,13 @@ export class ExportPanel {
       } else {
         hint.textContent = '';
       }
+    };
+    const btn = this._productButton(label, status.ready, () => {
+      hint.textContent = '';
+      const outcome = terrain.run(kind, btn);
+      // The map sheet decides after its chunk loads; the refusal still lands here.
+      if (outcome && 'then' in outcome) void outcome.then(show, () => show({ ok: false, reason: noResult }));
+      else show(outcome);
     }, status.reason || noResult, enabledTitle);
     row.append(btn);
     const group = this._productGroup(groupLabel, row, undefined, product);

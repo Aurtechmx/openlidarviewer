@@ -24,10 +24,15 @@ vi.mock('../src/io/download', () => ({
 vi.mock('../src/ui/Modal', () => ({
   FOCUSABLE: '',
   focusableIn: () => [],
-  openModal: (opts: { footer: unknown; body: unknown }) => {
+  openModal: (opts: { footer: unknown; body: unknown; onClose?: () => void }) => {
     const rec = { footer: opts.footer, body: opts.body, closed: 0 };
     hoisted.modals.push(rec);
-    return { close: () => { rec.closed++; }, dialog: opts.body };
+    return {
+      close: () => {
+        if (rec.closed++ === 0) opts.onClose?.();
+      },
+      dialog: opts.body,
+    };
   },
 }));
 
@@ -83,7 +88,7 @@ async function panel(): Promise<Internals> {
   return p as unknown as Internals;
 }
 
-function openDialog(p: Internals): { exportBtn: FakeEl; errLine: FakeEl; prepared: FakeEl & { value: string }; closed: () => number } {
+function openDialog(p: Internals): { footer: FakeEl; exportBtn: FakeEl; errLine: FakeEl; prepared: FakeEl & { value: string }; closed: () => number } {
   p._openMapPdfDialog(new FakeEl('button'));
   const rec = hoisted.modals.at(-1);
   if (!rec) throw new Error('the map sheet dialog did not open');
@@ -97,7 +102,7 @@ function openDialog(p: Internals): { exportBtn: FakeEl; errLine: FakeEl; prepare
     | (FakeEl & { value: string })
     | undefined;
   if (!exportBtn || !errLine || !prepared) throw new Error('the dialog is missing its controls');
-  return { exportBtn, errLine, prepared, closed: () => rec.closed };
+  return { footer, exportBtn, errLine, prepared, closed: () => rec.closed };
 }
 
 async function settle(): Promise<void> {
@@ -120,7 +125,10 @@ describe('map sheet dialog without a granted permit', () => {
     expect(d.errLine.textContent).toMatch(/Contour Studio/);
     expect(d.exportBtn.disabled).toBe(false);
 
-    // A second dialog opens with the default, not the value of the refused run.
+    // Cancelled, then opened again: the new dialog has the default, not the
+    // value of the refused run.
+    fire(d.footer.findByText('Cancel')[0], 'click');
+    expect(d.closed()).toBe(1);
     const again = openDialog(p);
     expect(again.prepared.value).toBe('');
   });

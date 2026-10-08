@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
+import { inflateSync } from 'node:zlib';
+import { PDFDocument } from 'pdf-lib';
 import { dropDenseGridUtmLas, dropTinyLas, openAnalysePage, openAnalysePanel, showWorkspaceMode } from './helpers';
 
 /**
@@ -29,6 +31,45 @@ async function analyseFixture(page: Page): Promise<void> {
   await openAnalysePanel(page);
   await page.locator('.olv-analyse-run').click();
   await expect(page.locator('.olv-fit-verdict-text')).toBeVisible({ timeout: 30_000 });
+}
+
+/**
+ * The text a PDF draws: every Flate content stream inflated, then its hex and
+ * literal string operands decoded. Enough to compare two sheets' lines.
+ */
+function pdfText(bytes: Buffer): string {
+  const raw = bytes.toString('latin1');
+  const out: string[] = [];
+  const re = /stream\r?\n/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(raw)) !== null) {
+    const start = m.index + m[0].length;
+    const end = raw.indexOf('endstream', start);
+    if (end < 0) break;
+    let body: string;
+    try {
+      body = inflateSync(bytes.subarray(start, end)).toString('latin1');
+    } catch {
+      continue;
+    }
+    for (const h of body.matchAll(/<([0-9A-Fa-f\s]+)>\s*Tj/g)) {
+      out.push(Buffer.from(h[1].replace(/\s+/g, ''), 'hex').toString('latin1'));
+    }
+    for (const l of body.matchAll(/\(((?:\\.|[^\\)])*)\)\s*Tj/g)) out.push(l[1]);
+    re.lastIndex = end;
+  }
+  return out.join('\n');
+}
+
+/** Page count and the evidence and deliverable lines of one map sheet. */
+async function sheetFacts(bytes: Buffer): Promise<{ pages: number; evidence: string[]; deliverable: string[] }> {
+  const doc = await PDFDocument.load(bytes);
+  const lines = pdfText(bytes).split('\n');
+  return {
+    pages: doc.getPageCount(),
+    evidence: lines.filter((l) => l.startsWith('Evidence:')),
+    deliverable: lines.filter((l) => l.startsWith('Deliverable - ')),
+  };
 }
 
 function contourGroup(page: Page) {
@@ -81,7 +122,14 @@ test('Export mode: the contour map sheet button downloads the PDF', async ({ pag
     dialog.getByRole('button', { name: 'Export PDF' }).click(),
   ]);
   const studioBytes = readFileSync((await studio.path())!);
-  expect(Math.abs(studioBytes.length - bytes.length)).toBeLessThan(bytes.length * 0.02);
+  const lane = await sheetFacts(bytes);
+  const viaStudio = await sheetFacts(studioBytes);
+  expect(lane.pages).toBe(viaStudio.pages);
+  expect(lane.evidence.length).toBeGreaterThan(0);
+  expect(lane.evidence).toEqual(viaStudio.evidence);
+  expect(lane.deliverable).toContain('Deliverable - Custom');
+  expect(lane.deliverable).toEqual(viaStudio.deliverable);
+  expect(Math.abs(studioBytes.length - bytes.length)).toBeLessThan(bytes.length * 0.005);
 });
 
 test('Export mode: a map sheet that cannot be written says why', async ({ page }) => {
@@ -92,7 +140,10 @@ test('Export mode: a map sheet that cannot be written says why', async ({ page }
   await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 20_000 });
   const group = await openContourLane(page);
   const btn = group.getByRole('button', { name: 'Contour map sheet (PDF)' });
-  if (await btn.isEnabled()) await btn.click();
+  // The lane re-renders on the active-scan change, so the button is already
+  // disabled and says why before any press.
+  await expect(btn).toBeDisabled();
+  await expect(btn).toHaveAttribute('title', /different scan/i);
   const hint = group.locator('.olv-export-fullres-hint');
   await expect(hint).toContainText(/different scan/i);
   await expect(page.locator('.olv-modal[role="dialog"]')).toHaveCount(0);
