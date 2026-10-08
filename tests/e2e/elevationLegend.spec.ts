@@ -84,8 +84,16 @@ test.describe('elevation legend', () => {
 test.describe('elevation legend on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
-  test('the card fits the screen and the ramp spans it', async ({ page }) => {
+  test('the card opens collapsed, and expanded it fits the screen and the ramp spans it', async ({ page }) => {
     const legend = await openLegend(page);
+    // On a phone the legend opens as its one-line range so it does not cover
+    // the scan; the expand button shows the ramp.
+    const toggle = legend.locator('.olv-colorbar-toggle');
+    await expect(legend).toHaveClass(/olv-colorbar-collapsed/);
+    await expect(legend.locator('.olv-colorbar-ramp')).toBeHidden();
+    await toggle.tap();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(legend.locator('.olv-colorbar-ramp')).toBeVisible();
     const b = (await legend.boundingBox())!;
     expect(b.x).toBeGreaterThanOrEqual(0);
     expect(b.x + b.width).toBeLessThanOrEqual(390);
