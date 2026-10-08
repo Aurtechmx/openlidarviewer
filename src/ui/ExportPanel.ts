@@ -750,7 +750,9 @@ export class ExportPanel {
     this._returnRow.classList.toggle('olv-hidden', this._format !== 'las');
     this._acquisitionRow.classList.toggle('olv-hidden', this._format !== 'las');
     this._reinterpretationRow.classList.toggle('olv-hidden', !legacyClasses);
-    this._overlapRow.classList.toggle('olv-hidden', !legacyClasses);
+    // Flags are written even when the classification is omitted, so the
+    // overlap row follows the format alone.
+    this._overlapRow.classList.toggle('olv-hidden', this._format !== 'las');
     // Snapshot BEFORE `_legacyClassWrap` runs below: a fresh attempt clears
     // this flag as part of starting itself, so reading it afterwards would
     // only ever see that fresh (unset) state, never the failure that made

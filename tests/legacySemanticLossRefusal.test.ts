@@ -121,6 +121,28 @@ describe('the overlap flag on a LAS 1.2 write', () => {
   });
 });
 
+describe('no loss, no refusal', () => {
+  it('a LAS 1.2 write with no overlap flag set never refuses for overlap', async () => {
+    const { file, report } = legacy(await decode([{ cls: 2 }, { cls: 6, flags: 0x1 | 0x4 }]));
+    expect(file).not.toBeNull();
+    expect(report.events?.some((e) => e.id === 'overlap-dropped') ?? false).toBe(false);
+  });
+
+  it('a LAS 1.2 write with no classification never refuses for reinterpretation', async () => {
+    const { file, report } = legacy(await reinterpreted(), { omitClassification: true });
+    expect(file).not.toBeNull();
+    expect(report.events?.some((e) => e.kind === 'reinterpreted') ?? false).toBe(false);
+  });
+
+  it('an omitted classification still refuses a dropped overlap flag, and writes once allowed', async () => {
+    const cloud = await overlapped();
+    const refused = legacy(cloud, { omitClassification: true });
+    expect(refused.file).toBeNull();
+    expect(refused.report.log.at(-1)!.message).toContain(LEGACY_OVERLAP_DROP_OPT_IN);
+    expect(legacy(cloud, { omitClassification: true, ...OVERLAP_DROP }).file).not.toBeNull();
+  });
+});
+
 describe('several losses at once', () => {
   async function everyLoss(): Promise<PointCloud> {
     const cloud = await decode([{ cls: 64, angle: 120, channel: 1 }, { cls: 19, flags: OVERLAP }]);
@@ -190,6 +212,20 @@ describe('the batch converter', () => {
 });
 
 describe('the Export panel', () => {
+  it('keeps the overlap opt-in reachable when the classification is omitted', async () => {
+    const root = await panelFor(await overlapped());
+    pickFormat(root, 'LAS 1.2');
+    setCheckbox(root, 'Include classification', false);
+    expect(checkRow(root, LEGACY_CLASS_REINTERPRETATION_OPT_IN)!.hidden).toBe(true);
+    expect(checkRow(root, LEGACY_OVERLAP_DROP_OPT_IN)!.hidden).toBe(false);
+    await pressExport(root);
+    expect(hoisted.downloads).toEqual([]);
+    expect(status(root).textContent).toContain(LEGACY_OVERLAP_DROP_OPT_IN);
+    setCheckbox(root, LEGACY_OVERLAP_DROP_OPT_IN, true);
+    await pressExport(root);
+    expect(hoisted.downloads).toHaveLength(1);
+  });
+
   it('shows both opt-ins for LAS 1.2 only', async () => {
     const root = await panelFor(await reinterpreted());
     expect(checkRow(root, LEGACY_CLASS_REINTERPRETATION_OPT_IN)!.hidden).toBe(true);
