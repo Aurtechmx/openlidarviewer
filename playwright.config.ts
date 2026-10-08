@@ -59,7 +59,15 @@ const FIREFOX_DISPLAY = FIREFOX_DISPLAYS.length
  * already; listing it here as well keeps it out of `deterministic`, `firefox`
  * and `webkit` even if the tag is edited. Run it with `--project=gpu`.
  */
-const NOT_BLOCKING = /firefoxWebglPreflight|streamingNavPerf/;
+const NOT_BLOCKING = /firefoxWebglPreflight|streamingNavPerf|e2e\/journeys\//;
+
+/**
+ * The UX journey specs (tests/e2e/journeys). Each one opens a scan and walks a
+ * whole user task with a screenshot per step, so together they add several
+ * minutes per engine. They run in their own `journeys-*` projects and their own
+ * advisory CI job, and the blocking projects above never collect them.
+ */
+const JOURNEYS = /e2e\/journeys\/[^/]+\.spec\.ts$/;
 
 /**
  * Firefox tests that run alone, after the rest of the Firefox suite. The
@@ -209,6 +217,13 @@ export default defineConfig({
       use: { ...devices['iPhone 15'] },
       testMatch: /visualsStudioMobile|smoke\.spec|touchGesture|phoneWorkspace/,
     },
+    // The UX journeys, one project per engine, run by `npm run test:e2e:journeys`
+    // and the advisory `e2e-journeys` CI job. The phone project collects only
+    // the journeys the touch persona walks: open, navigate and layout.
+    { name: 'journeys', use: { ...devices['Desktop Chrome'] }, testMatch: JOURNEYS },
+    { name: 'journeys-webkit', use: { ...devices['Desktop Safari'] }, testMatch: JOURNEYS },
+    { name: 'journeys-firefox', use: FIREFOX_USE, testMatch: JOURNEYS },
+    { name: 'journeys-mobile', use: { ...devices['iPhone 15'] }, testMatch: /e2e\/journeys\/j(1|3|10)-/ },
     // The graphics preflight is its own project so it can be run before the
     // suite without joining any project's default set. `deterministic` is a
     // required check, and an advisory leg must not move its test count.

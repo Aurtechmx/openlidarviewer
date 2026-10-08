@@ -291,6 +291,37 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
+  e2e-journeys:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    needs: verify
+    # Advisory: the UX journey specs (tests/e2e/journeys) on Chromium, WebKit,
+    # Firefox and an iPhone WebKit viewport. Each journey walks a whole user
+    # task, so they run here and never in the blocking e2e jobs, where they
+    # would add several minutes per engine. Reported, never blocking.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Install Playwright browsers
+        run: ./node_modules/.bin/playwright install --with-deps chromium webkit firefox
+      # Firefox runs headful on Linux (see FIREFOX_USE in playwright.config.ts),
+      # so the run gets a display. One worker, so no two windows share it.
+      - name: UX journey end-to-end tests (advisory)
+        run: xvfb-run -a npm run test:e2e:journeys
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-journeys
+          path: playwright-report/
+          retention-days: 7
+
   # Production dependency audit. Fails on a high or critical advisory in a
   # shipped (non-dev) dependency. ci-green needs it, so a merge cannot land
   # with one open.
