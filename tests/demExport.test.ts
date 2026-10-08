@@ -605,12 +605,14 @@ describe('buildDemPackage', () => {
     // codes must never have them second-guessed from prose — that path once
     // read CH1903+ / LV95 as EPSG:1903.
     const r = fixtureResult();
-    const d = r.dtm as { crs: string | null; horizontalEpsg?: number | null; verticalEpsg?: number | null };
+    const d = r.dtm as { crs: string | null; horizontalEpsg?: number | null; verticalEpsg?: number | null; verticalUnitToMetres?: number | null };
     // The label PARSES here (to a different code), so this test can tell the
     // preference order apart — a codeless label cannot.
     d.crs = 'EPSG:32612';
     d.horizontalEpsg = 2056;
     d.verticalEpsg = 5729;
+    // A vertical CRS is written only with a height unit to check it against.
+    d.verticalUnitToMetres = 1;
     const zip = buildDemPackage(r, { worldOrigin: { x: 600000, y: 4000000 }, basename: 'site' });
     expect(readTiffCrsEpsg(extractEntry(zip, 'site-dtm.tif')!)).toBe(2056);
     expect(readTiffVerticalEpsg(extractEntry(zip, 'site-dtm.tif')!)).toBe(5729);
@@ -719,11 +721,22 @@ describe('buildDemPackage', () => {
   });
 
   it('stamps the DTM and DSM with the vertical CRS but leaves the CHM unstamped', () => {
-    const zip = buildDemPackage(fixtureResult(), {
+    const r = fixtureResult();
+    (r.dtm as { verticalUnitToMetres?: number | null }).verticalUnitToMetres = 1;
+    const zip = buildDemPackage(r, {
       worldOrigin: { x: 600000, y: 4000000 }, basename: 'site',
     });
     expect(readTiffVerticalEpsg(extractEntry(zip, 'site-dtm.tif')!)).toBe(5703);
     expect(readTiffVerticalEpsg(extractEntry(zip, 'site-dsm.tif')!)).toBe(5703);
     expect(readTiffVerticalEpsg(extractEntry(zip, 'site-chm.tif')!)).toBeNull();
+  });
+
+  it('writes no vertical CRS when the height unit is unknown, and says so', () => {
+    const zip = buildDemPackage(fixtureResult(), {
+      worldOrigin: { x: 600000, y: 4000000 }, basename: 'site',
+    });
+    expect(readTiffVerticalEpsg(extractEntry(zip, 'site-dtm.tif')!)).toBeNull();
+    const readme = new TextDecoder().decode(extractEntry(zip, 'site-README.txt')!);
+    expect(readme).toMatch(/Vertical CRS\s+not written/);
   });
 });

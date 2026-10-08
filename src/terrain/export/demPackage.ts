@@ -43,7 +43,15 @@ import {
   type ExportPermitStamp,
 } from './exportProvenance';
 import { writeAsciiGrid } from './demAsciiGrid';
-import { writeGeoTiff, verticalUnitGeoKeyCode } from './demGeoTiff';
+import {
+  verticalUnitGeoKeyCode,
+  resolveVerticalGeoKeys,
+  verticalUnitName,
+  writeGeoTiffDroppingVerticalConflict,
+  VERTICAL_CRS_UNITS,
+  type VerticalGeoKeyResolution,
+} from './demGeoTiff';
+import { chooseNoData, DEFAULT_NO_DATA } from './demNoData';
 import {
   hasEvidenceArrays,
   terrainEvidenceBands,
@@ -200,7 +208,6 @@ export function parseEpsg(id: string | null | undefined): number | null {
   return epsgFromCrsLabel(id);
 }
 
-const NO_DATA = -9999;
 
 /** Print a numeric coordinate at full precision, or an explicit fallback. */
 function coord(v: number | null | undefined): string {
@@ -252,6 +259,13 @@ export interface DemReadmeOptions {
   /** Metres per source vertical unit, or null when the frame resolved none. */
   readonly verticalUnitToMetres?: number | null;
   /**
+   * What the DTM and DSM GeoTIFFs carry as their vertical CRS, from
+   * {@link resolveVerticalGeoKeys}. Omitted or `none` prints no line.
+   */
+  readonly verticalGeoKeys?: VerticalGeoKeyResolution | null;
+  /** The NoData value every raster in the package declares. Default -9999. */
+  readonly noData?: number;
+  /**
    * Resolved linear unit of a projected CRS (ignored when `isGeographic`).
    * Omitted ⇒ the standing metre assumption.
    */
@@ -283,6 +297,69 @@ export interface DemReadmeOptions {
   readonly attentionFilename?: string | null;
   /** DEM evidence tier record; omitted writes no tier section. */
   readonly demEvidence?: DemEvidenceRecord | null;
+}
+
+/** Heights "in metres" / "in feet" / "in US survey feet", by GeoTIFF unit code. */
+const HEIGHT_UNIT_PLURAL: Record<number, string> = { 9001: 'metres', 9002: 'feet', 9003: 'US survey feet' };
+
+const vcrsLabel = (code: number): string => {
+  const e = VERTICAL_CRS_UNITS[code];
+  return e ? `EPSG:${code} (${e.name})` : `EPSG:${code}`;
+};
+
+/**
+ * README lines saying which vertical CRS the DTM and DSM GeoTIFFs carry, and
+ * why none is written when the source's code and height unit do not give a
+ * consistent one.
+ */
+export function verticalCrsReadmeLines(res: VerticalGeoKeyResolution | null | undefined): string[] {
+  if (res == null || res.status === 'none') return [];
+  const pad = '                 ';
+  if (res.status === 'written') {
+    const lines = [`  Vertical CRS   ${vcrsLabel(res.epsg)} in the DTM and DSM GeoTIFFs (GeoTIFF 1.1 keys)`];
+    const text = [
+      res.epsg !== res.requestedEpsg
+        ? `The source gave EPSG:${res.requestedEpsg} with heights in ${HEIGHT_UNIT_PLURAL[res.unitCode]}; EPSG:${res.epsg} is the same vertical reference in that unit.`
+        : '',
+      `The height unit is the source's vertical unit, or its horizontal unit when the source declares no vertical unit.`,
+    ].filter(Boolean).join(' ');
+    return [...lines, ...wrapReadme(text, pad)];
+  }
+  const unit = verticalUnitName(res.unitCode);
+  const heights = res.unitCode != null ? HEIGHT_UNIT_PLURAL[res.unitCode] : null;
+  const tail = unit
+    ? `The GeoTIFFs record the height unit only as the band unit (GDAL UNITTYPE "${unit}").`
+    : `The GeoTIFFs state no height unit.`;
+  let why: string;
+  if (res.status === 'conflict') {
+    why = `The source gave ${vcrsLabel(res.requestedEpsg)}, which EPSG defines in ` +
+      `${HEIGHT_UNIT_PLURAL[res.codeUnitCode]}, with heights in ${heights}. The code and the unit disagree, so no vertical CRS is written.`;
+  } else if (res.reason === 'no-code-in-unit') {
+    why = `The source gave ${vcrsLabel(res.requestedEpsg)} with heights in ${heights}, and EPSG has no vertical CRS for that reference in ${heights}.`;
+  } else if (res.reason === 'depth-axis') {
+    why = `The source gave ${vcrsLabel(res.requestedEpsg)}, a depth CRS whose axis points down. The DTM and DSM hold heights, which that CRS would read with the sign reversed.`;
+  } else if (res.reason === 'unverified-code') {
+    why = `The source gave EPSG:${res.requestedEpsg}, which is not among the vertical CRS codes whose unit the writer can check.`;
+  } else {
+    why = `The source gave ${vcrsLabel(res.requestedEpsg)} but no recognised height unit, so the code's own unit cannot be checked against the heights.`;
+  }
+  return [`  Vertical CRS   not written to the DTM and DSM GeoTIFFs.`, ...wrapReadme(`${why} ${tail}`, pad)];
+}
+
+/** Wrap prose to README width under a fixed indent. */
+function wrapReadme(text: string, indent: string, width = 78): string[] {
+  const out: string[] = [];
+  let line = '';
+  for (const word of text.split(/\s+/)) {
+    if (line && indent.length + line.length + 1 + word.length > width) {
+      out.push(indent + line);
+      line = word;
+    } else {
+      line = line ? `${line} ${word}` : word;
+    }
+  }
+  if (line) out.push(indent + line);
+  return out;
 }
 
 /** Map a coverage mode to a one-line plain-English label. */
@@ -480,7 +557,7 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     `Raster`,
     `  Grid size      ${dtm.cols} x ${dtm.rows} cells`,
     `  Cell size      ${dtm.cellSizeM} ${hUnit}`,
-    `  NODATA value   ${NO_DATA}`,
+    `  NODATA value   ${opts.noData ?? DEFAULT_NO_DATA}`,
     `  Coverage       ${pct(cov.measured)} measured, ${pct(cov.interp)} interpolated`,
     ...(opts.placed === false
       ? ['  Frame          local frame, not georeferenced; elevations recentred']
@@ -491,6 +568,7 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     `    min X / min Y  ${coord(opts.boundsMinX)} / ${coord(opts.boundsMinY)}`,
     `    max X / max Y  ${coord(opts.boundsMaxX)} / ${coord(opts.boundsMaxY)}`,
     `  Elevation unit ${zUnit}`,
+    ...(opts.placed === false ? [] : verticalCrsReadmeLines(opts.verticalGeoKeys)),
     // The DERIVED-PRODUCT digest: a hash of the surface this package emits, not
     // of the source file and not of the analysis inputs. Two packages carrying
     // the same grid of heights and coverage states share this value; any cell,
@@ -603,6 +681,10 @@ export function buildDemPackage(
   const verticalEpsg = placed ? (dtm.verticalEpsg ?? parseEpsg(dtm.verticalDatum)) : null;
   // GeoTIFF unit code for the Z values, from the factor the analysis carried.
   const verticalUnitCode = verticalUnitGeoKeyCode(dtm.verticalUnitToMetres);
+  // The vertical CRS the DTM and DSM carry: the code in the heights' unit, or
+  // none when the code and unit give no consistent one, including a code whose
+  // own unit contradicts the heights. The README says which.
+  const verticalGeoKeys = resolveVerticalGeoKeys(verticalEpsg, verticalUnitCode);
   const isGeographic = options.isGeographic ?? false;
 
   // Bounds extent in CRS units: lower-left corner of the lower-left cell to the
@@ -635,22 +717,28 @@ export function buildDemPackage(
     values: ArrayLike<number>;
     coverage: ArrayLike<number>;
     verticalEpsg: number | null;
+    /** GeoTIFF unit code of the values; null for the CHM, a relative height. */
+    unitCode: number | null;
   }> = [
     // CHM is DSM − DTM: a height ABOVE GROUND, not a coordinate in any absolute
     // vertical CRS. Stamping it with the DTM/DSM's VerticalCSType told a GIS
     // its canopy heights were NAVD88 elevations — a claim a reader acts on
     // (geoid corrections, benchmark comparisons). Only the absolute grids
     // carry the stamp; the relative one states no vertical reference.
-    { key: 'dtm', values: shiftZ(dtm.z, dtm.coverage), coverage: dtm.coverage, verticalEpsg },
-    { key: 'dsm', values: shiftZ(dsmZ, dsmCov), coverage: dsmCov, verticalEpsg },
-    { key: 'chm', values: chm, coverage: chmCov, verticalEpsg: null },
+    { key: 'dtm', values: shiftZ(dtm.z, dtm.coverage), coverage: dtm.coverage, verticalEpsg, unitCode: verticalUnitCode },
+    { key: 'dsm', values: shiftZ(dsmZ, dsmCov), coverage: dsmCov, verticalEpsg, unitCode: verticalUnitCode },
+    { key: 'chm', values: chm, coverage: chmCov, verticalEpsg: null, unitCode: null },
   ];
+
+  // One NoData value for every raster and the README: -9999 unless a written
+  // height reads back equal to it as a float32 or as three-place ASCII text.
+  const packageNoData = chooseNoData(grids);
 
   const entries: ZipEntry[] = [];
   for (const g of grids) {
     const common = {
       values: g.values, coverage: g.coverage,
-      cols: dtm.cols, rows: dtm.rows, cellSize, xllCorner: xll, yllCorner: yll, noData: NO_DATA,
+      cols: dtm.cols, rows: dtm.rows, cellSize, xllCorner: xll, yllCorner: yll, noData: packageNoData,
     };
     entries.push(
       {
@@ -659,7 +747,7 @@ export function buildDemPackage(
       },
       {
         name: `${basename}-${g.key}.tif`,
-        bytes: writeGeoTiff({ ...common, epsg, isGeographic, verticalEpsg: g.verticalEpsg, verticalUnitCode: g.verticalEpsg != null ? verticalUnitCode : null }),
+        bytes: writeGeoTiffDroppingVerticalConflict({ ...common, epsg, isGeographic, verticalEpsg: g.verticalEpsg, verticalUnitCode: g.unitCode }),
       },
     );
   }
@@ -678,7 +766,7 @@ export function buildDemPackage(
     evidenceBytes = writeTerrainEvidenceGeoTiff(dtm, {
       xllCorner: xll,
       yllCorner: yll,
-      noData: NO_DATA,
+      noData: packageNoData,
       epsg,
       isGeographic,
       horizontalUnit: hUnit,
@@ -696,7 +784,7 @@ export function buildDemPackage(
     sensitivityBytes = writeTerrainSensitivityGeoTiff(options.sensitivityGrids, {
       xllCorner: xll,
       yllCorner: yll,
-      noData: NO_DATA,
+      noData: packageNoData,
       epsg,
       isGeographic,
       verticalUnit: evVUnit,
@@ -769,6 +857,8 @@ export function buildDemPackage(
   const readme = buildDemReadme({
     placed,
     verticalUnitToMetres: options.verticalUnitToMetres ?? null,
+    verticalGeoKeys,
+    noData: packageNoData,
     result,
     basename,
     isGeographic,

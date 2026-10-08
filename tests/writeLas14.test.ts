@@ -351,7 +351,8 @@ describe('GeoKeys — the vertical unit comes from the source, not the horizonta
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     expect(view.getUint16(6, true) & 0x10).toBe(0x10); // WKT still the horizontal authority
     expect(view.getUint32(100, true)).toBe(2); // WKT VLR + GeoKey VLR
-    expect(key(bytes, 4096)).toBe(5703);
+    // NAVD88 in US survey feet is EPSG:6360, the code readers take the unit from.
+    expect(key(bytes, 4096)).toBe(6360);
     expect(key(bytes, 4099)).toBe(9003);
     // The horizontal frame has exactly ONE authority: no horizontal keys that
     // could contradict the WKT.

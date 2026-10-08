@@ -25,6 +25,7 @@
  */
 
 import { UNIT_FACTORS } from '../../units/units';
+import { assertNoDataClear, chooseNoData, NoDataCollisionError } from './demNoData';
 
 export interface DemGeoTiffInput {
   /** Row-major cell values; length === cols*rows. Required unless `bands` is given. */
@@ -39,19 +40,29 @@ export interface DemGeoTiffInput {
   readonly xllCorner: number;
   /** World Y (north) of the lower-left corner of the lower-left cell. */
   readonly yllCorner: number;
-  /** Sentinel written for empty cells. Default -9999. */
+  /**
+   * Sentinel written for empty cells. Omitted: -9999, or for float32 bands a
+   * value below every written height when one equals -9999 as a float32
+   * ({@link chooseNoData}). A given value that a written sample equals is
+   * refused with {@link NoDataCollisionError}, in every band.
+   */
   readonly noData?: number;
   /** Horizontal CRS EPSG code, or null when unknown. */
   readonly epsg?: number | null;
   /** True for a geographic (lat/lon) CRS, false/omitted for projected. */
   readonly isGeographic?: boolean;
-  /** Vertical CRS EPSG code, or null. */
+  /**
+   * Vertical CRS (or vertical datum) EPSG code, or null. Written as
+   * VerticalGeoKey (4096) only in the form whose axis unit is
+   * `verticalUnitCode`; see {@link resolveVerticalGeoKeys}. A code that names a
+   * different unit throws {@link GeoTiffVerticalCrsConflictError}.
+   */
   readonly verticalEpsg?: number | null;
   /**
-   * GeoTIFF vertical unit code (9001/9002/9003) for VerticalUnitsGeoKey 4099.
-   * Written only when known — GeoTIFF 1.1 defines 4096 and 4099 as separate
-   * keys, and omitting 4099 left a compound-CRS raster's heights ambiguous
-   * between metres and feet. Never derived from the horizontal unit.
+   * GeoTIFF unit code (9001/9002/9003) of the heights. Written as
+   * VerticalUnitsGeoKey (4099) beside 4096; when no vertical CRS is written it
+   * goes in GDAL_METADATA as the band unit instead, on bands that name none.
+   * Never derived from the horizontal unit.
    */
   readonly verticalUnitCode?: number | null;
   /**
@@ -133,6 +144,183 @@ export function verticalUnitGeoKeyCode(metresPerUnit: number | null | undefined)
   return null;
 }
 
+/** GeoTIFF linear unit codes a vertical axis can carry here. */
+type VerticalUnitCode = 9001 | 9002 | 9003;
+
+/** GDAL's (PROJ's) name for each vertical unit code, used as the UNITTYPE text. */
+const VERTICAL_UNIT_NAME: Record<VerticalUnitCode, string> = {
+  9001: 'metre',
+  9002: 'foot',
+  9003: 'US survey foot',
+};
+
+const isVerticalUnitCode = (u: number | null | undefined): u is VerticalUnitCode =>
+  u === 9001 || u === 9002 || u === 9003;
+
+/** One EPSG vertical CRS the writer may put in VerticalGeoKey (4096). */
+export interface VerticalCrsEntry {
+  /** EPSG name, as the registry gives it. */
+  readonly name: string;
+  /** The unit of the CRS's own axis, as a GeoTIFF unit code. */
+  readonly unitCode: VerticalUnitCode;
+  /** Codes in one family share a datum and an axis direction and differ only in unit. */
+  readonly family: string;
+  /** Axis direction: 'up' for a height, 'down' for a depth. */
+  readonly direction: 'up' | 'down';
+  /**
+   * True when the code names its unit: "(ft)", "(ftUS)" or "(m)". Such a code
+   * states the unit outright, so a different declared unit contradicts it. A
+   * code without one (5703, 5714) has long been written with 4099 giving the
+   * height unit, the GeoTIFF 1.0 practice of treating it as the datum, so a
+   * different unit there selects the family member in that unit.
+   */
+  readonly unitInName: boolean;
+}
+
+/**
+ * Vertical CRS codes the writer knows the unit of, checked against the EPSG
+ * registry (pyproj 3.7.2 on PROJ 9.8.1; `tests/demGeoTiffGdal.test.ts` repeats
+ * the check with `projinfo`). A code outside this table is never written,
+ * because its axis unit cannot be compared with the heights.
+ */
+export const VERTICAL_CRS_UNITS: Readonly<Record<number, VerticalCrsEntry>> = {
+  5703: { name: 'NAVD88 height', unitCode: 9001, family: 'navd88-height', direction: 'up', unitInName: false },
+  8228: { name: 'NAVD88 height (ft)', unitCode: 9002, family: 'navd88-height', direction: 'up', unitInName: true },
+  6360: { name: 'NAVD88 height (ftUS)', unitCode: 9003, family: 'navd88-height', direction: 'up', unitInName: true },
+  6357: { name: 'NAVD88 depth', unitCode: 9001, family: 'navd88-depth', direction: 'down', unitInName: false },
+  6358: { name: 'NAVD88 depth (ftUS)', unitCode: 9003, family: 'navd88-depth', direction: 'down', unitInName: true },
+  7968: { name: 'NGVD29 height (m)', unitCode: 9001, family: 'ngvd29-height', direction: 'up', unitInName: true },
+  5702: { name: 'NGVD29 height (ftUS)', unitCode: 9003, family: 'ngvd29-height', direction: 'up', unitInName: true },
+  6359: { name: 'NGVD29 depth (ftUS)', unitCode: 9003, family: 'ngvd29-depth', direction: 'down', unitInName: true },
+  5714: { name: 'MSL height', unitCode: 9001, family: 'msl-height', direction: 'up', unitInName: false },
+  8050: { name: 'MSL height (ft)', unitCode: 9002, family: 'msl-height', direction: 'up', unitInName: true },
+  8052: { name: 'MSL height (ftUS)', unitCode: 9003, family: 'msl-height', direction: 'up', unitInName: true },
+  5715: { name: 'MSL depth', unitCode: 9001, family: 'msl-depth', direction: 'down', unitInName: false },
+  8051: { name: 'MSL depth (ft)', unitCode: 9002, family: 'msl-depth', direction: 'down', unitInName: true },
+  8053: { name: 'MSL depth (ftUS)', unitCode: 9003, family: 'msl-depth', direction: 'down', unitInName: true },
+  5701: { name: 'ODN height', unitCode: 9001, family: 'odn-height', direction: 'up', unitInName: false },
+  3855: { name: 'EGM2008 height', unitCode: 9001, family: 'egm2008-height', direction: 'up', unitInName: false },
+  5773: { name: 'EGM96 height', unitCode: 9001, family: 'egm96-height', direction: 'up', unitInName: false },
+  5798: { name: 'EGM84 height', unitCode: 9001, family: 'egm84-height', direction: 'up', unitInName: false },
+  5705: { name: 'Baltic 1977 height', unitCode: 9001, family: 'baltic1977-height', direction: 'up', unitInName: false },
+  5612: { name: 'Baltic 1977 depth', unitCode: 9001, family: 'baltic1977-depth', direction: 'down', unitInName: false },
+  6647: { name: 'CGVD2013(CGG2013) height', unitCode: 9001, family: 'cgvd2013-height', direction: 'up', unitInName: false },
+  5713: { name: 'CGVD28 height', unitCode: 9001, family: 'cgvd28-height', direction: 'up', unitInName: false },
+  5711: { name: 'AHD height', unitCode: 9001, family: 'ahd-height', direction: 'up', unitInName: false },
+  5709: { name: 'NAP height', unitCode: 9001, family: 'nap-height', direction: 'up', unitInName: false },
+  7837: { name: 'DHHN2016 height', unitCode: 9001, family: 'dhhn2016-height', direction: 'up', unitInName: false },
+  5621: { name: 'EVRF2007 height', unitCode: 9001, family: 'evrf2007-height', direction: 'up', unitInName: false },
+  9389: { name: 'EVRF2019 height', unitCode: 9001, family: 'evrf2019-height', direction: 'up', unitInName: false },
+  6695: { name: 'JGD2011 (vertical) height', unitCode: 9001, family: 'jgd2011-height', direction: 'up', unitInName: false },
+  7839: { name: 'NZVD2016 height', unitCode: 9001, family: 'nzvd2016-height', direction: 'up', unitInName: false },
+  5728: { name: 'LN02 height', unitCode: 9001, family: 'ln02-height', direction: 'up', unitInName: false },
+  5729: { name: 'LHN95 height', unitCode: 9001, family: 'lhn95-height', direction: 'up', unitInName: false },
+};
+
+/**
+ * EPSG vertical datum codes (GeoTIFF 1.0 wrote these in 4096) and the height
+ * family each one selects. Checked with pyproj: 5103 North American Vertical
+ * Datum 1988, 5102 National Geodetic Vertical Datum 1929, 5100 Mean Sea Level.
+ */
+const VERTICAL_DATUM_FAMILY: Readonly<Record<number, string>> = {
+  5103: 'navd88-height',
+  5102: 'ngvd29-height',
+  5100: 'msl-height',
+};
+
+/** What the writer does with a vertical CRS code and a height unit. */
+export type VerticalGeoKeyResolution =
+  /** No vertical CRS was given. */
+  | { readonly status: 'none' }
+  /** 4096 = `epsg` and 4099 = `unitCode` are written; `epsg` may differ from the code given. */
+  | { readonly status: 'written'; readonly requestedEpsg: number; readonly epsg: number; readonly unitCode: VerticalUnitCode }
+  /** No vertical CRS is written; the height unit, when known, goes in UNITTYPE. */
+  | {
+      readonly status: 'omitted';
+      readonly requestedEpsg: number;
+      readonly unitCode: VerticalUnitCode | null;
+      readonly reason: 'unknown-unit' | 'unverified-code' | 'no-code-in-unit' | 'depth-axis';
+    }
+  /** The code's own unit and the declared unit disagree; the writer refuses this. */
+  | { readonly status: 'conflict'; readonly requestedEpsg: number; readonly unitCode: VerticalUnitCode; readonly codeUnitCode: VerticalUnitCode };
+
+/**
+ * Decide the VerticalGeoKey for a vertical CRS or datum code and the unit the
+ * heights are in. GDAL takes the unit from the code and ignores 4099, so the
+ * code written must be one whose axis is in the heights' unit:
+ *
+ * - a code in that unit is written as given;
+ * - a code without a unit in its name (5703) or a datum code (5103) selects
+ *   the family member in that unit (5703 in US survey feet is 6360);
+ * - a code that names a different unit (6360 with metres) is a conflict;
+ * - a code with no family member in that unit, a code outside the checked
+ *   table, or an unknown unit leaves the vertical CRS off;
+ * - a depth CRS (axis down) is left off: every raster written with a vertical
+ *   CRS holds heights, and a depth CRS would read them with the sign reversed.
+ */
+export function resolveVerticalGeoKeys(
+  verticalEpsg: number | null | undefined,
+  verticalUnitCode: number | null | undefined,
+  opts: {
+    /**
+     * Accept a depth CRS. A GeoTIFF elevation raster holds heights and leaves
+     * one off; a LAS file passes the source's own depth CRS through.
+     */
+    readonly allowDepth?: boolean;
+  } = {},
+): VerticalGeoKeyResolution {
+  if (verticalEpsg == null) return { status: 'none' };
+  if (!isVerticalUnitCode(verticalUnitCode)) {
+    return { status: 'omitted', requestedEpsg: verticalEpsg, unitCode: null, reason: 'unknown-unit' };
+  }
+  const entry = VERTICAL_CRS_UNITS[verticalEpsg] as VerticalCrsEntry | undefined;
+  const family = entry?.family ?? VERTICAL_DATUM_FAMILY[verticalEpsg];
+  if (family == null) {
+    return { status: 'omitted', requestedEpsg: verticalEpsg, unitCode: verticalUnitCode, reason: 'unverified-code' };
+  }
+  if (entry?.direction === 'down' && opts.allowDepth !== true) {
+    return { status: 'omitted', requestedEpsg: verticalEpsg, unitCode: verticalUnitCode, reason: 'depth-axis' };
+  }
+  if (entry && entry.unitCode === verticalUnitCode) {
+    return { status: 'written', requestedEpsg: verticalEpsg, epsg: verticalEpsg, unitCode: verticalUnitCode };
+  }
+  if (entry && entry.unitInName) {
+    return { status: 'conflict', requestedEpsg: verticalEpsg, unitCode: verticalUnitCode, codeUnitCode: entry.unitCode };
+  }
+  for (const [code, e] of Object.entries(VERTICAL_CRS_UNITS)) {
+    if (e.family === family && e.unitCode === verticalUnitCode) {
+      return { status: 'written', requestedEpsg: verticalEpsg, epsg: Number(code), unitCode: verticalUnitCode };
+    }
+  }
+  return { status: 'omitted', requestedEpsg: verticalEpsg, unitCode: verticalUnitCode, reason: 'no-code-in-unit' };
+}
+
+/** GDAL's name for a GeoTIFF vertical unit code, or null for an unknown code. */
+export function verticalUnitName(code: number | null | undefined): string | null {
+  return isVerticalUnitCode(code) ? VERTICAL_UNIT_NAME[code] : null;
+}
+
+/**
+ * Thrown by {@link writeGeoTiff} when the vertical CRS code names one unit and
+ * the heights are declared in another. Writing either would give a file that
+ * states a wrong unit for its heights.
+ */
+export class GeoTiffVerticalCrsConflictError extends Error {
+  readonly verticalEpsg: number;
+  readonly verticalUnitCode: number;
+  readonly codeUnitCode: number;
+  constructor(verticalEpsg: number, verticalUnitCode: VerticalUnitCode, codeUnitCode: VerticalUnitCode) {
+    super(
+      `writeGeoTiff: vertical CRS EPSG:${verticalEpsg} is defined in ${VERTICAL_UNIT_NAME[codeUnitCode]}, ` +
+        `but the heights are declared in ${VERTICAL_UNIT_NAME[verticalUnitCode]}`,
+    );
+    this.name = 'GeoTiffVerticalCrsConflictError';
+    this.verticalEpsg = verticalEpsg;
+    this.verticalUnitCode = verticalUnitCode;
+    this.codeUnitCode = codeUnitCode;
+  }
+}
+
 // TIFF field types.
 const T_SHORT = 3;
 const T_LONG = 4;
@@ -212,15 +400,46 @@ export function writeGeoTiff(input: DemGeoTiffInput): Uint8Array {
       `writeGeoTiff: coverage.length (${input.coverage.length}) must equal rows*cols (${rows}*${cols}=${cellCount})`,
     );
   }
-  const noData = input.noData ?? -9999;
+  // GDAL_NODATA holds one value for every band, and a reader compares each
+  // written sample with it, so no covered sample in any band may equal it.
+  const covered = bands.map((b) => ({ values: b.values, coverage: input.coverage }));
+  let noData: number;
+  if (sampleType === 'float32') {
+    const opts = { serialisations: ['float32'] as const };
+    noData = input.noData ?? chooseNoData(covered, opts);
+    if (input.noData != null) assertNoDataClear(covered, noData, opts);
+  } else {
+    noData = input.noData ?? -9999;
+    const asWritten = (v: number): number => (sampleType === 'uint8' ? v & 0xff : v >>> 0);
+    for (const g of covered) {
+      for (let i = 0; i < g.values.length; i++) {
+        const v = g.values[i];
+        if (g.coverage[i] !== 0 && Number.isFinite(v) && asWritten(v) === asWritten(noData)) {
+          throw new NoDataCollisionError(noData, v);
+        }
+      }
+    }
+  }
   const nBands = bands.length;
   const bitsPerSample = SAMPLE_BITS[sampleType];
   const bytesPerSample = bitsPerSample / 8;
   const epsg = input.epsg ?? null;
-  const verticalEpsg = input.verticalEpsg ?? null;
+  const vertical = resolveVerticalGeoKeys(input.verticalEpsg, input.verticalUnitCode);
+  if (vertical.status === 'conflict') {
+    throw new GeoTiffVerticalCrsConflictError(vertical.requestedEpsg, vertical.unitCode, vertical.codeUnitCode);
+  }
+  // With no vertical CRS written, a known height unit still reaches the reader
+  // as the band unit, on bands that do not name one already.
+  if (vertical.status !== 'written') {
+    const unit = verticalUnitName(input.verticalUnitCode);
+    if (unit != null && bands.some((b) => !b.unit)) bands = bands.map((b) => (b.unit ? b : { ...b, unit }));
+  }
 
   // ── GeoKey directory (array of uint16) ───────────────────────────────────
-  // Header: [KeyDirectoryVersion=1, KeyRevision=1, MinorRevision=0, NumberOfKeys]
+  // Header: [KeyDirectoryVersion=1, KeyRevision=1, MinorRevision, NumberOfKeys].
+  // MinorRevision is 1 (GeoTIFF 1.1) when VerticalGeoKey is written: OGC
+  // 19-008r4 requirement 2.9 asks for it, and GDAL drops the vertical part of a
+  // 1.0 file on a default read. Every other file keeps 0 and its bytes.
   const keys: number[] = [];
   // GTModelType (1024): 1=Projected, 2=Geographic, 32767=user-defined.
   let modelType: number;
@@ -236,13 +455,15 @@ export function writeGeoTiff(input: DemGeoTiffInput): Uint8Array {
     if (input.isGeographic) keys.push(2048, 0, 1, epsg); // GeographicTypeGeoKey
     else keys.push(3072, 0, 1, epsg); // ProjectedCSTypeGeoKey
   }
-  if (verticalEpsg != null) keys.push(4096, 0, 1, verticalEpsg); // VerticalCSTypeGeoKey
-  const verticalUnitCode = input.verticalUnitCode ?? null;
-  if (verticalEpsg != null && verticalUnitCode != null && verticalUnitCode > 0) {
-    keys.push(4099, 0, 1, verticalUnitCode); // VerticalUnitsGeoKey — see options doc
+  if (vertical.status === 'written') {
+    keys.push(
+      4096, 0, 1, vertical.epsg, // VerticalGeoKey, in the heights' unit
+      4099, 0, 1, vertical.unitCode, // VerticalUnitsGeoKey, the same unit
+    );
   }
   const numKeys = keys.length / 4;
-  const geoDir = [1, 1, 0, numKeys, ...keys]; // uint16[]
+  const minorRevision = vertical.status === 'written' ? 1 : 0;
+  const geoDir = [1, 1, minorRevision, numKeys, ...keys]; // uint16[]
 
   // ── overflow blobs ───────────────────────────────────────────────────────
   // ModelPixelScale: 3 doubles (sx, sy, sz).
@@ -395,4 +616,20 @@ export function writeGeoTiff(input: DemGeoTiffInput): Uint8Array {
   }
 
   return out;
+}
+
+/**
+ * {@link writeGeoTiff}, except that a vertical CRS whose own unit contradicts
+ * the heights is dropped instead of thrown: the raster is written with no
+ * vertical CRS and the height unit as the band unit. For callers that ship the
+ * raster either way and report the conflict elsewhere, as the DEM package does
+ * in its README from {@link resolveVerticalGeoKeys}.
+ */
+export function writeGeoTiffDroppingVerticalConflict(input: DemGeoTiffInput): Uint8Array {
+  try {
+    return writeGeoTiff(input);
+  } catch (e) {
+    if (e instanceof GeoTiffVerticalCrsConflictError) return writeGeoTiff({ ...input, verticalEpsg: null });
+    throw e;
+  }
 }

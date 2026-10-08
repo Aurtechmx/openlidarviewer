@@ -149,7 +149,7 @@ describe('writeLas — linear-unit + vertical GeoKeys', () => {
     expect(map.get(1024)).toBe(1); // projected
     expect(map.get(3072)).toBe(26911); // ProjectedCSType
     expect(map.get(3076)).toBe(9002); // linear unit = international foot
-    expect(map.get(4096)).toBe(5703); // vertical CRS
+    expect(map.get(4096)).toBe(8228); // NAVD88 height (ft), the code in the Z unit
     expect(map.get(4099)).toBe(9002); // the explicitly-passed vertical unit
   });
 });

@@ -112,7 +112,20 @@ composed by the `analyseContours` orchestrator
   GeoTIFF (`demGeoTiff.ts`), bundled by `demPackage.ts` with a `.prj`
   sidecar (when WKT is available) and a README that records coverage, the
   quality-gate outcome, and provenance. Empty cells are written as NODATA;
-  CRS/datum warnings travel with the package.
+  CRS/datum warnings travel with the package. The DTM and DSM GeoTIFFs carry
+  the vertical CRS as an EPSG code whose own unit is the unit of the heights:
+  NAVD88 heights in US survey feet are written as EPSG:6360, in international
+  feet as EPSG:8228 and in metres as EPSG:5703. A file with a vertical CRS
+  declares GeoTIFF 1.1 (GeoKey MinorRevision 1), which GDAL reads as a
+  compound CRS by default. When the source's code and height unit give no
+  such EPSG code (no code in that unit, a code the writer has no unit for, an
+  unknown height unit, a code defined in a different unit, or a depth CRS),
+  no vertical CRS is written, the height unit is kept as the band unit (GDAL UNITTYPE),
+  and the README says why. The CHM is a height above ground and carries no
+  vertical CRS. Every raster declares one NoData value: -9999, unless a
+  written height reads back equal to it as a float32 or as three-place ASCII
+  text. Then the package uses the first of -99999, -999999 and -9999999 below
+  every height, or the most negative float32, and the README states it.
 - Cross-section profiles (`render/measure/`). A lower-percentile corridor
   estimator (`profileSampler.ts`) and a full-page PDF profile sheet
   (`profilePdf.ts`) with a scaled chart, station/elevation/grade table, and

@@ -30,6 +30,7 @@
 
 import { roundLegacyAngle } from './conversionEvents';
 import type { GlobalPoints } from './globalPoints';
+import { resolveVerticalGeoKeys } from '../terrain/export/demGeoTiff';
 import { globalBounds } from './globalPoints';
 import { isValidQuantisation, quantisationFitsInt32, type Quantisation } from './lasQuantisation';
 import { BUILD_IDENTITY, type BuildIdentity } from '../build/buildIdentity';
@@ -264,14 +265,27 @@ function snappedBounds(
  * emitted here, so the WKT stays the sole authority on the horizontal frame.
  */
 function buildVerticalGeoKeys(opts: WriteLasOptions): Array<[number, number]> {
-  const geoKeys: Array<[number, number]> = [];
-  if (opts.verticalEpsg != null && opts.verticalEpsg > 0 && opts.verticalEpsg <= 65535) {
-    geoKeys.push([4096, opts.verticalEpsg]); // VerticalCSType
-    if (opts.verticalUnitCode != null && opts.verticalUnitCode > 0) {
-      geoKeys.push([4099, opts.verticalUnitCode]); // VerticalUnits
-    }
+  const v = opts.verticalEpsg;
+  if (v == null || !(v > 0) || v > 65535) return [];
+  const unit = opts.verticalUnitCode != null && opts.verticalUnitCode > 0 ? opts.verticalUnitCode : null;
+  // Readers (PDAL, GDAL) take the Z unit from the VerticalCSType code and
+  // ignore VerticalUnits, so the code written is the one in the unit of the
+  // Z values: 5703 with US survey feet is written as 6360.
+  const res = resolveVerticalGeoKeys(v, unit, { allowDepth: true });
+  switch (res.status) {
+    case 'written':
+      return [[4096, res.epsg], [4099, res.unitCode]];
+    case 'conflict':
+      // The code names another unit than the Z values: keep the unit only.
+      return [[4099, res.unitCode]];
+    case 'omitted':
+      if (res.reason === 'no-code-in-unit') return [[4099, res.unitCode as number]];
+      // No unit to check the code against, or a code outside the checked
+      // table: the source's own declaration passes through unchanged.
+      return unit != null ? [[4096, v], [4099, unit]] : [[4096, v]];
+    default:
+      return [];
   }
-  return geoKeys;
 }
 
 function buildGeoKeys(opts: WriteLasOptions, geo: boolean): Array<[number, number]> {
@@ -309,7 +323,9 @@ function writeGeoKeyVlr(
   view.setUint16(p + 20, geoKeyDataBytes, true); // record length after header
   writeFixedString(bytes, p + 22, 32, 'GeoKeyDirectoryTag');
   p += VLR_HEADER_SIZE;
-  // GeoKey header: dirVersion=1, revision=1, minorRevision=0, numKeys.
+  // GeoKey header: dirVersion=1, revision=1, minorRevision=0, numKeys. LAS
+  // 1.4 R16 fixes this record's header at 1,1,0 ("wMinorRevision = 0; //
+  // Always"), unlike a GeoTIFF with vertical keys, which declares 1,1,1.
   view.setUint16(p, 1, true);
   view.setUint16(p + 2, 1, true);
   view.setUint16(p + 4, 0, true);
