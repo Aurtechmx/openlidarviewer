@@ -70,6 +70,9 @@ test.describe('J1 open a scan and know what it is', () => {
   });
 
   test('P3: a LAZ with no CRS says so and claims no metres', async ({ page }, info) => {
+    // multichunk.laz is 120 000 points of LAZ; on a CI software renderer the
+    // open alone took 30 s, past the default test timeout.
+    test.setTimeout(120_000);
     const j = startJourney(page, info, 'j1');
     const bytes = fixtureBytes('multichunk.laz');
     const h = header(bytes);
@@ -118,6 +121,9 @@ test.describe('J2 understand scope and units', () => {
   });
 
   test('P1: on a scan with no CRS, no readout claims metres', async ({ page }, info) => {
+    // multichunk.laz is 120 000 points of LAZ; on a CI software renderer the
+    // open alone took 30 s, past the default test timeout.
+    test.setTimeout(120_000);
     test.skip(test.info().project.use.hasTouch === true, 'desktop rail journey');
     const j = startJourney(page, info, 'j2');
     await j.step('open the LAZ with no CRS', () => openWith(page, fixtureBytes('multichunk.laz'), 'multichunk.laz'));

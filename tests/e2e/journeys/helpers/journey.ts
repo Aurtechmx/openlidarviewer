@@ -162,7 +162,8 @@ export async function openWith(page: Page, bytes: Uint8Array, name: string): Pro
   await expect(page.locator('.olv-empty')).toBeVisible();
   const t0 = Date.now();
   await dropBytes(page, bytes, name);
-  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 30_000 });
+  // A 120 000-point LAZ takes about 30 s to open on a CI software renderer.
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 60_000 });
   await page.waitForFunction(() => 'getCameraPose' in ((window as unknown as { __OLV_TEST_API__?: object }).__OLV_TEST_API__ ?? {}), undefined, { timeout: 20_000 });
   return Date.now() - t0;
 }
