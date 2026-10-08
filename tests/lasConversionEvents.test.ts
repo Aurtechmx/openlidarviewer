@@ -38,6 +38,8 @@ function recordLines(bytes: Uint8Array): string[] {
 }
 
 const ALLOW = { format: 'las' as const, allowLegacyAcquisitionLoss: true };
+/** The two class-table losses, each allowed by its own control. */
+const ALLOW_SEMANTIC = { allowLegacyClassReinterpretation: true, allowLegacyOverlapDrop: true } as const;
 
 describe('scan angle and scanner channel on a LAS 1.2 write', () => {
   it('refuses a clipped angle and a dropped channel unless the request allows them, naming both', async () => {
@@ -192,14 +194,15 @@ describe('the file records every event', () => {
   it('writes class wrap, overlap loss, clipping and channel loss with their counts, with no digest and no CRS', async () => {
     const { result } = await toLegacy(
       [{ cls: 64, flags: 8, angle: 120, channel: 2 }, { cls: 19 }],
-      { format: 'las', allowLegacyClassWrap: true, allowLegacyAcquisitionLoss: true },
+      { format: 'las', allowLegacyClassWrap: true, allowLegacyAcquisitionLoss: true, ...ALLOW_SEMANTIC },
     );
     const ids = result.report.events!.map((e) => e.id);
     expect(ids).toEqual(['class-wrap', 'scan-angle-clipped', 'scanner-channel-dropped', 'class-meaning-19', 'overlap-dropped']);
     const lines = recordLines(result.file!.bytes);
     for (const id of ids) expect(lines.some((l) => l.startsWith(`Conversion event ${id}: `)), id).toBe(true);
     expect(lines.find((l) => l.startsWith('Conversion event class-wrap:'))).toMatch(/1 point with a class > 31 wraps.*Allowed in the export request\.$/);
-    expect(lines.find((l) => l.startsWith('Conversion event overlap-dropped:'))).toMatch(/overlap flag/);
+    expect(lines.find((l) => l.startsWith('Conversion event overlap-dropped:'))).toMatch(/overlap flag.*Allowed in the export request\.$/);
+    expect(lines.find((l) => l.startsWith('Conversion event class-meaning-19:'))).toMatch(/Allowed in the export request\.$/);
     // Every report warning appears in the file.
     expect(result.report.log.filter((e) => e.level === 'warn')).toHaveLength(ids.length);
   });
@@ -223,7 +226,7 @@ describe('the file records every event', () => {
   });
 
   it('is identical for the same input', async () => {
-    const run = async () => recordLines((await toLegacy([{ cls: 19, angle: 120 }], ALLOW)).result.file!.bytes);
+    const run = async () => recordLines((await toLegacy([{ cls: 19, angle: 120 }], { ...ALLOW, ...ALLOW_SEMANTIC })).result.file!.bytes);
     expect(await run()).toEqual(await run());
   });
 
@@ -241,7 +244,7 @@ describe('the file records every event', () => {
 
 describe('what the panels list', () => {
   it('lists every warning and each translation, not only the first', async () => {
-    const { result } = await toLegacy([{ cls: 64, flags: 8, angle: 120, channel: 2 }], { format: 'las', allowLegacyClassWrap: true, allowLegacyAcquisitionLoss: true });
+    const { result } = await toLegacy([{ cls: 64, flags: 8, angle: 120, channel: 2 }], { format: 'las', allowLegacyClassWrap: true, allowLegacyAcquisitionLoss: true, ...ALLOW_SEMANTIC });
     const entries = notableEntries(result.report);
     expect(entries.length).toBe(4);
     expect(warningSummary(entries)).toBe('4 warnings');

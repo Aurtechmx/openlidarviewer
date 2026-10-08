@@ -21,7 +21,7 @@ import { isZUpFormat } from '../io/sniffFormat';
 import { wktForEpsg } from '../io/epsgWkt';
 import { cloudToGlobal } from './globalPoints';
 import { describeLoss, inspectLegacyConversion } from '../lasSemantics';
-import { planClassSemantics } from './classSemantics';
+import { legacyClassReinterpretationRefusal, planClassSemantics } from './classSemantics';
 import {
   acquisitionEvents,
   acquisitionLossRefusal,
@@ -52,6 +52,23 @@ import {
  */
 const EXT_OVERLAP_FLAG_BIT = 0x8;
 const LEGACY_PDRF_FOR_LOSS = 3;
+
+/** Points among the first `count` whose extended flags carry overlap. */
+function countOverlapFlag(flags: Uint8Array | null | undefined, count: number): number {
+  if (!flags) return 0;
+  let n = 0;
+  for (let i = 0; i < count; i++) if ((flags[i] & EXT_OVERLAP_FLAG_BIT) !== 0) n++;
+  return n;
+}
+
+/** The refusal a LAS 1.2 write returns when the overlap flag would be dropped. */
+function legacyOverlapDropRefusal(points: number): string {
+  const label = `${points.toLocaleString()} point${points === 1 ? '' : 's'}`;
+  return (
+    `LAS 1.2 was not written. ${label} ${points === 1 ? 'carries' : 'carry'} the overlap flag, which LAS 1.2 has no place for. ` +
+    `Choose LAS 1.4 to keep it, or tick "${LEGACY_OVERLAP_DROP_OPT_IN}" to write the base class without it.`
+  );
+}
 import { writeLas, writeLas14 } from './writeLas';
 import { planQuantisation } from './lasQuantisation';
 import { spatialContextFrom } from '../geo/SpatialContext';
@@ -66,7 +83,9 @@ import {
   type ConvertReport,
   type LogEntry,
   LEGACY_ACQUISITION_LOSS_OPT_IN,
+  LEGACY_CLASS_REINTERPRETATION_OPT_IN,
   LEGACY_CLASS_WRAP_OPT_IN,
+  LEGACY_OVERLAP_DROP_OPT_IN,
   LEGACY_RETURN_CLAMP_OPT_IN,
 } from './types';
 
@@ -388,6 +407,20 @@ export function convertCloud(
       // field.
       const acquisition = assessLegacyAcquisition(g.scanAngle, g.scannerChannel, g.count);
       const acquisitionLoss = isMaterialAcquisitionLoss(acquisition);
+      // Numbers whose meaning differs between the two class tables. The number
+      // is written as it is, so a reader of the file would read another class.
+      const semantics = planClassSemantics({
+        sourcePdrf: cloud.metadata?.pointFormat,
+        provenance: cloud.classificationProvenance,
+        classification: g.classification,
+        classificationFlags: g.classificationFlags,
+        count: g.count,
+        target: 'legacy',
+      });
+      // The extended encoding carries overlap as a flag bit beside a real base
+      // class; the legacy byte has nowhere to put it, so `writeLas` composes
+      // only the synthetic/key-point/withheld bits and the overlap mark is lost.
+      const overlapped = countOverlapFlag(g.classificationFlags, g.count);
       // Each loss is refused unless the request allows that loss, and one
       // refusal names every loss that is not allowed.
       const refusals: LegacyRefusal[] = [];
@@ -399,6 +432,12 @@ export function convertCloud(
       }
       if (acquisitionLoss && !opts.allowLegacyAcquisitionLoss) {
         refusals.push({ text: acquisitionLossRefusal(acquisition, LEGACY_ACQUISITION_LOSS_OPT_IN), optIn: LEGACY_ACQUISITION_LOSS_OPT_IN });
+      }
+      if (semantics.changes.length > 0 && !opts.allowLegacyClassReinterpretation) {
+        refusals.push({ text: legacyClassReinterpretationRefusal(semantics.changes), optIn: LEGACY_CLASS_REINTERPRETATION_OPT_IN });
+      }
+      if (overlapped > 0 && !opts.allowLegacyOverlapDrop) {
+        refusals.push({ text: legacyOverlapDropRefusal(overlapped), optIn: LEGACY_OVERLAP_DROP_OPT_IN });
       }
       if (refusals.length > 0) return fail(combineRefusals(refusals), crsNote);
       if (wrap.points > 0) {
@@ -414,36 +453,15 @@ export function convertCloud(
         });
       }
       record(...acquisitionEvents(acquisition, acquisitionLoss));
-      // Numbers whose meaning differs between the two class tables. The
-      // number is written as it is, so the report names each one.
-      record(
-        ...planClassSemantics({
-          sourcePdrf: cloud.metadata?.pointFormat,
-          provenance: cloud.classificationProvenance,
-          classification: g.classification,
-          classificationFlags: g.classificationFlags,
-          count: g.count,
-          target: 'legacy',
-        }).events,
-      );
-      // The other thing a legacy write drops. The extended encoding carries
-      // overlap as a flag bit beside a real base class; the legacy byte has
-      // nowhere to put it, so `writeLas` composes only the
-      // synthetic/key-point/withheld bits and the overlap mark disappears.
-      // This one warns rather than refuses, because the base class written
-      // beside it is still correct (see `inspectLegacyConversion`).
-      if (g.classificationFlags) {
-        let overlapped = 0;
-        for (let i = 0; i < g.count; i++) {
-          if ((g.classificationFlags[i] & EXT_OVERLAP_FLAG_BIT) !== 0) overlapped++;
-        }
-        if (overlapped > 0) {
-          const loss = describeLoss(inspectLegacyConversion([], true), LEGACY_PDRF_FOR_LOSS);
-          record({
-            id: 'overlap-dropped', kind: 'dropped', level: 'warn', points: overlapped, acknowledged: false,
-            message: `LAS 1.2 cannot record the overlap flag \u2014 ${overlapped.toLocaleString()} point${overlapped === 1 ? '' : 's'} ${overlapped === 1 ? 'carries' : 'carry'} it and ${loss}; the base class is written and the overlap mark is dropped. Use LAS 1.4 to preserve it.`,
-          });
-        }
+      // Only reached when the request allowed these losses, so the record
+      // says the loss was allowed.
+      record(...semantics.events.map((e) => (e.kind === 'reinterpreted' ? { ...e, acknowledged: true } : e)));
+      if (overlapped > 0) {
+        const loss = describeLoss(inspectLegacyConversion([], true), LEGACY_PDRF_FOR_LOSS);
+        record({
+          id: 'overlap-dropped', kind: 'dropped', level: 'warn', points: overlapped, acknowledged: true,
+          message: `LAS 1.2 cannot record the overlap flag \u2014 ${overlapped.toLocaleString()} point${overlapped === 1 ? '' : 's'} ${overlapped === 1 ? 'carries' : 'carry'} it and ${loss}; the base class is written and the overlap mark is dropped. Use LAS 1.4 to preserve it.`,
+        });
       }
       const recordLegacy = fitProvenance(lasProvenance, datumNote, events);
       if (recordLegacy.trimmed) log.push({ level: 'warn', message: provenanceTrimmedMessage(recordLegacy.eventsOmitted) });

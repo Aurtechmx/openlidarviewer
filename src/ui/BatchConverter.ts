@@ -27,7 +27,11 @@ import {
   CONVERT_FORMATS,
   LEGACY_ACQUISITION_LOSS_HINT,
   LEGACY_ACQUISITION_LOSS_OPT_IN,
+  LEGACY_CLASS_REINTERPRETATION_HINT,
+  LEGACY_CLASS_REINTERPRETATION_OPT_IN,
   LEGACY_CLASS_WRAP_OPT_IN,
+  LEGACY_OVERLAP_DROP_HINT,
+  LEGACY_OVERLAP_DROP_OPT_IN,
   LEGACY_RETURN_CLAMP_HINT,
   LEGACY_RETURN_CLAMP_OPT_IN,
   type ConvertFormat,
@@ -84,6 +88,10 @@ export class BatchConverter {
   private readonly _returnRow: HTMLElement;
   private _allowAcquisitionLoss = false;
   private readonly _acquisitionRow: HTMLElement;
+  private _allowReinterpretation = false;
+  private readonly _reinterpretationRow: HTMLElement;
+  private _allowOverlapDrop = false;
+  private readonly _overlapRow: HTMLElement;
   private _crsMode: CrsMode = 'keep';
   private _targetEpsg = '';
   private _sourceEpsg = '';
@@ -130,6 +138,8 @@ export class BatchConverter {
     }));
     this._returnRow = optInRow(LEGACY_RETURN_CLAMP_OPT_IN, LEGACY_RETURN_CLAMP_HINT, (on) => { this._allowReturnClamp = on; });
     this._acquisitionRow = optInRow(LEGACY_ACQUISITION_LOSS_OPT_IN, LEGACY_ACQUISITION_LOSS_HINT, (on) => { this._allowAcquisitionLoss = on; });
+    this._reinterpretationRow = optInRow(LEGACY_CLASS_REINTERPRETATION_OPT_IN, LEGACY_CLASS_REINTERPRETATION_HINT, (on) => { this._allowReinterpretation = on; });
+    this._overlapRow = optInRow(LEGACY_OVERLAP_DROP_OPT_IN, LEGACY_OVERLAP_DROP_HINT, (on) => { this._allowOverlapDrop = on; });
     this._crsRow = el('div', { className: 'olv-bc-pills' });
     this._crsExtra = el('div', { className: 'olv-bc-crs-extra' });
     this._hint = el('p', { className: 'olv-bc-hint' });
@@ -152,7 +162,7 @@ export class BatchConverter {
       this._section('Files', this._buildFilesSection()),
       this._section('Output format', (() => {
         const wrap = el('div');
-        wrap.append(this._formatRow, this._formatNote, this._wrapRow, this._returnRow, this._acquisitionRow);
+        wrap.append(this._formatRow, this._formatNote, this._wrapRow, this._returnRow, this._acquisitionRow, this._reinterpretationRow, this._overlapRow);
         return wrap;
       })()),
       this._section('Coordinate system', (() => {
@@ -305,6 +315,8 @@ export class BatchConverter {
     this._wrapRow.classList.toggle('olv-hidden', this._format !== 'las');
     this._returnRow.classList.toggle('olv-hidden', this._format !== 'las');
     this._acquisitionRow.classList.toggle('olv-hidden', this._format !== 'las');
+    this._reinterpretationRow.classList.toggle('olv-hidden', this._format !== 'las');
+    this._overlapRow.classList.toggle('olv-hidden', this._format !== 'las');
   }
 
   private _renderCrsPills(): void {
@@ -412,6 +424,8 @@ export class BatchConverter {
       allowLegacyClassWrap: this._allowClassWrap,
       allowLegacyReturnClamp: this._allowReturnClamp,
       allowLegacyAcquisitionLoss: this._allowAcquisitionLoss,
+      allowLegacyClassReinterpretation: this._allowReinterpretation,
+      allowLegacyOverlapDrop: this._allowOverlapDrop,
     };
 
     this._abort = new AbortController();

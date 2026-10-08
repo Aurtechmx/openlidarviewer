@@ -114,11 +114,11 @@ describe('convertCloud refuses a LAS 1.2 write whose classes would wrap', () => 
     expect(file).not.toBeNull();
   });
 
-  it('keeps the overlap-flag loss a warning: the base class is still correct', () => {
-    const { file, report } = convertCloud(
-      cloudWithClasses([2, 2, 6], { classificationFlags: Uint8Array.from([0x8, 0, 0]) }),
-      { format: 'las' },
-    );
+  it('refuses the overlap-flag loss on its own terms: the wrap opt-in does not allow it', () => {
+    const cloud = cloudWithClasses([2, 2, 6], { classificationFlags: Uint8Array.from([0x8, 0, 0]) });
+    expect(convertCloud(cloud, { format: 'las' }).file).toBeNull();
+    expect(convertCloud(cloud, { format: 'las', allowLegacyClassWrap: true }).file).toBeNull();
+    const { file, report } = convertCloud(cloud, { format: 'las', allowLegacyOverlapDrop: true });
     expect(report.ok).toBe(true);
     expect(file).not.toBeNull();
     expect(report.log.some((l) => l.level === 'warn' && /overlap/i.test(l.message))).toBe(true);
@@ -137,8 +137,10 @@ describe('a LAS 1.2 write with every class at or below 31 is unchanged', () => {
 
   for (const [name, cloud] of Object.entries(cases)) {
     it(`${name}: the bytes are the writer's own, with or without the opt-in`, () => {
-      const plain = convertCloud(cloud, { format: 'las' });
-      const optedIn = convertCloud(cloud, { format: 'las', allowLegacyClassWrap: true });
+      // The flagged case carries an overlap flag, which needs its own opt-in.
+      const overlap = name === 'flagged' ? { allowLegacyOverlapDrop: true } : {};
+      const plain = convertCloud(cloud, { format: 'las', ...overlap });
+      const optedIn = convertCloud(cloud, { format: 'las', allowLegacyClassWrap: true, ...overlap });
       // What the pure writer produces for the same points and the same
       // keep-mode, no-CRS options convertCloud passes it.
       const direct = writeLas(cloudToGlobal(cloud), {

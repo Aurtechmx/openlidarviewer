@@ -126,6 +126,19 @@ export interface ConvertOptions {
    * It allows these two losses and no other. LAS 1.4 keeps both.
    */
   readonly allowLegacyAcquisitionLoss?: boolean;
+  /**
+   * Write LAS 1.2 even when a class number means something different there
+   * than in the source (class 10 is Rail in LAS 1.4 and reserved in LAS 1.2).
+   * Off by default, and such a write is refused. It allows this loss and no
+   * other. LAS 1.4 keeps the meaning.
+   */
+  readonly allowLegacyClassReinterpretation?: boolean;
+  /**
+   * Write LAS 1.2 even when points carry the LAS 1.4 overlap flag, which LAS
+   * 1.2 has no place for. Off by default, and such a write is refused. It
+   * allows this loss and no other. LAS 1.4 keeps the flag.
+   */
+  readonly allowLegacyOverlapDrop?: boolean;
 }
 
 /**
@@ -147,6 +160,18 @@ export const LEGACY_ACQUISITION_LOSS_OPT_IN = 'Allow scan angles to clip and sca
 /** The hint shown under that control. */
 export const LEGACY_ACQUISITION_LOSS_HINT =
   'LAS 1.2 keeps scan angles from -90 to 90 degrees and has no scanner channel. Unticked, a file that would lose either is refused.';
+
+/** The label of the control that sets `allowLegacyClassReinterpretation`. */
+export const LEGACY_CLASS_REINTERPRETATION_OPT_IN = 'Allow class numbers to change meaning';
+/** The hint shown under that control. */
+export const LEGACY_CLASS_REINTERPRETATION_HINT =
+  'Some class numbers mean different things in LAS 1.4 and LAS 1.2, so class 10 (Rail) is read as reserved. Unticked, such a file is refused.';
+
+/** The label of the control that sets `allowLegacyOverlapDrop`. */
+export const LEGACY_OVERLAP_DROP_OPT_IN = 'Allow the overlap flag to be dropped';
+/** The hint shown under that control. */
+export const LEGACY_OVERLAP_DROP_HINT =
+  'LAS 1.2 has no overlap flag. The base class is written and the flag is lost. Unticked, such a file is refused.';
 
 /** A single produced output file, ready to download. */
 export interface ConvertedFile {

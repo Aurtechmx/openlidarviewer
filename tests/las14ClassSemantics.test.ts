@@ -26,9 +26,14 @@ async function decode(bytes: Uint8Array) {
   return loadLas(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, 'las', 'src.las', 1, undefined, true);
 }
 
+// A legacy write refuses a class that changes meaning or an overlap flag that
+// would be dropped (tests/legacySemanticLossRefusal.test.ts). These tests read
+// the warning the allowed write records, so they allow both losses.
+const ALLOW_SEMANTIC_LOSS = { allowLegacyClassReinterpretation: true, allowLegacyOverlapDrop: true } as const;
+
 async function convert(source: Uint8Array, format: 'las' | 'las14', allowWrap = false) {
   const cloud = await decode(source);
-  const result = convertCloud(cloud, { format, allowLegacyClassWrap: allowWrap });
+  const result = convertCloud(cloud, { format, allowLegacyClassWrap: allowWrap, ...ALLOW_SEMANTIC_LOSS });
   expect(result.file).not.toBeNull();
   return { cloud, report: result.report, out: readLas(result.file!.bytes) };
 }
@@ -146,7 +151,8 @@ describe('LAS 1.4 to legacy', () => {
       classificationFlags: Uint8Array.from([0, 0]),
       sourceFormat: 'las', name: 'x.las', origin: [0, 0, 0],
     });
-    const { report } = convertCloud(cloud, { format: 'las' });
+    expect(convertCloud(cloud, { format: 'las' }).file).toBeNull();
+    const { report } = convertCloud(cloud, { format: 'las', ...ALLOW_SEMANTIC_LOSS });
     const warns = report.log.filter((e) => e.level === 'warn').map((e) => e.message);
     expect(warns.some((m) => /^Class 18 /.test(m))).toBe(true);
     // The source meaning of 8 is unknown, so nothing is asserted about it.
@@ -160,6 +166,7 @@ describe('the shared table', () => {
   });
 
   it.each(DIFFERING_CLASS_CODES.filter((c) => c !== 8 && c !== 12))('class %i is reported in both directions', async (code) => {
+    expect(convertCloud(await decode(extended([code])), { format: 'las' }).file).toBeNull();
     const down = await convert(extended([code]), 'las');
     expect(down.out.cls).toEqual([code]);
     expect(down.report.log.filter((e) => e.level === 'warn' && e.message.startsWith(`Class ${code} (`))).toHaveLength(1);

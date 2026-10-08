@@ -23,7 +23,11 @@ import {
   CONVERT_FORMATS,
   LEGACY_ACQUISITION_LOSS_HINT,
   LEGACY_ACQUISITION_LOSS_OPT_IN,
+  LEGACY_CLASS_REINTERPRETATION_HINT,
+  LEGACY_CLASS_REINTERPRETATION_OPT_IN,
   LEGACY_CLASS_WRAP_OPT_IN,
+  LEGACY_OVERLAP_DROP_HINT,
+  LEGACY_OVERLAP_DROP_OPT_IN,
   LEGACY_RETURN_CLAMP_HINT,
   LEGACY_RETURN_CLAMP_OPT_IN,
   type ConvertFormat,
@@ -342,6 +346,12 @@ export class ExportPanel {
   /** Write LAS 1.2 even when scan angles clip or scanner channels drop (see `allowLegacyAcquisitionLoss`). */
   private _allowAcquisitionLoss = false;
   private readonly _acquisitionRow: HTMLElement;
+  /** Write LAS 1.2 even when class numbers change meaning (see `allowLegacyClassReinterpretation`). */
+  private _allowReinterpretation = false;
+  private readonly _reinterpretationRow: HTMLElement;
+  /** Write LAS 1.2 even when the overlap flag is dropped (see `allowLegacyOverlapDrop`). */
+  private _allowOverlapDrop = false;
+  private readonly _overlapRow: HTMLElement;
   /** Every warning of the last export, under the status line. */
   private readonly _notes: HTMLElement;
   /**
@@ -423,6 +433,9 @@ export class ExportPanel {
     }));
     this._returnRow = optInRow(LEGACY_RETURN_CLAMP_OPT_IN, LEGACY_RETURN_CLAMP_HINT, (on) => { this._allowReturnClamp = on; });
     this._acquisitionRow = optInRow(LEGACY_ACQUISITION_LOSS_OPT_IN, LEGACY_ACQUISITION_LOSS_HINT, (on) => { this._allowAcquisitionLoss = on; });
+    // Shown, like the wrap row, only while LAS 1.2 would write a classification.
+    this._reinterpretationRow = optInRow(LEGACY_CLASS_REINTERPRETATION_OPT_IN, LEGACY_CLASS_REINTERPRETATION_HINT, (on) => { this._allowReinterpretation = on; });
+    this._overlapRow = optInRow(LEGACY_OVERLAP_DROP_OPT_IN, LEGACY_OVERLAP_DROP_HINT, (on) => { this._allowOverlapDrop = on; });
     this._notes = el('div', { className: 'olv-export-notes' });
     // The live "what you'll get" line — size, CRS, classification, before any write.
     this._summary = el('p', { className: 'olv-export-summary', text: '' });
@@ -459,6 +472,8 @@ export class ExportPanel {
       this._wrapRow,
       this._returnRow,
       this._acquisitionRow,
+      this._reinterpretationRow,
+      this._overlapRow,
       this._summary,
       this._summaryNote,
       this._exportBtn,
@@ -734,6 +749,8 @@ export class ExportPanel {
     this._wrapRow.classList.toggle('olv-hidden', !legacyClasses);
     this._returnRow.classList.toggle('olv-hidden', this._format !== 'las');
     this._acquisitionRow.classList.toggle('olv-hidden', this._format !== 'las');
+    this._reinterpretationRow.classList.toggle('olv-hidden', !legacyClasses);
+    this._overlapRow.classList.toggle('olv-hidden', !legacyClasses);
     // Snapshot BEFORE `_legacyClassWrap` runs below: a fresh attempt clears
     // this flag as part of starting itself, so reading it afterwards would
     // only ever see that fresh (unset) state, never the failure that made
@@ -1349,6 +1366,8 @@ export class ExportPanel {
     const allowClassWrap = this._allowClassWrap;
     const allowReturnClamp = this._allowReturnClamp;
     const allowAcquisitionLoss = this._allowAcquisitionLoss;
+    const allowReinterpretation = this._allowReinterpretation;
+    const allowOverlapDrop = this._allowOverlapDrop;
     const gzip = this._gzip;
 
     this._busy = true;
@@ -1436,6 +1455,8 @@ export class ExportPanel {
         allowLegacyClassWrap: allowClassWrap,
         allowLegacyReturnClamp: allowReturnClamp,
         allowLegacyAcquisitionLoss: allowAcquisitionLoss,
+        allowLegacyClassReinterpretation: allowReinterpretation,
+        allowLegacyOverlapDrop: allowOverlapDrop,
         scopeNote,
         displaySample,
         // Read from the loaded cloud, so a truncated file is named as truncated;
