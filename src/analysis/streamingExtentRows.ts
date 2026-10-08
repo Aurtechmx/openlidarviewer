@@ -48,9 +48,9 @@ export const SCAN_DENSITY_METHOD_TAG = 'olv.density.scan-report@2';
  * from the one resolved model instead of a hand-rolled predicate.
  *
  * COPC/EPT are Z-up by spec, so the horizontal footprint is X·Y and height is
- * Z; the vertical span uses the vertical unit when the frame declares one,
- * falling back to the horizontal factor (the GeoTIFF `'horizontal'` policy,
- * matching the prior `verticalUnitToMetres ?? mpu`).
+ * Z. The vertical span is converted only with a valid declared vertical unit
+ * (`heightScale`); without one it stays in source units and the row says so.
+ * It never borrows the horizontal factor.
  */
 export function streamingExtentRows(
   header: { readonly min: readonly [number, number, number]; readonly max: readonly [number, number, number] },

@@ -105,9 +105,10 @@ export type Footprint = FootprintConfirmed | FootprintUnknownUnit;
  * Project a raw bounding-box extent into a footprint, FAILING CLOSED on an
  * unconfirmed linear unit.
  *
- * When `linearUnitKnown` is true the extents are converted to metres with the
- * declared unit factors and a pts·m⁻² density is computed — the historical,
- * byte-identical behaviour for a real CRS. When it is false the CRS carries no
+ * When `linearUnitKnown` is true, width, depth and the pts·m⁻² density are
+ * converted with the horizontal factor. The height is converted only when a
+ * valid vertical unit is declared; otherwise it stays a source-unit span and
+ * `heightUnitGap` says why. When it is false the CRS carries no
  * usable linear unit (absent, or the `linearUnit: 'unknown'` placeholder whose
  * `linearUnitToMetres` is the inert 1), so the raw source-unit spans are
  * returned with NO metre value and NO density: stamping "m" / "pts/m²" on a
