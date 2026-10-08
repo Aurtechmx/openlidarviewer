@@ -21,6 +21,7 @@
 import type { NavBar, NavBarCallbacks } from './NavBar';
 import type { CameraPresetName } from '../render/camera/cameraPresets';
 import type { Viewer } from '../render/Viewer';
+import type { NavMode } from '../render/NavController';
 import type { PlanViewController } from '../render/camera/planViewController';
 import { loadPlanViewController } from '../lazyChunks';
 import { retryableOnce } from '../app/lazySurfaceLoad';
@@ -49,6 +50,11 @@ export interface NavBarWiring {
    * mode stops claiming a scene the user has aimed away from.
    */
   readonly notePlanViewPreset: (name: CameraPresetName) => void;
+  /**
+   * The viewer's navigation mode changed. The bar follows it, and a change made
+   * by a mode shortcut drops Plan's pending mode change.
+   */
+  readonly navModeChanged: (mode: NavMode, byKey?: boolean) => void;
   /** Show or hide the Navigation panel, as its button beside the mode triangle does. */
   readonly toggleNavigationPanel: () => void;
 }
@@ -123,6 +129,10 @@ export function createNavBarWiring(deps: NavBarWiringDeps): NavBarWiring {
     togglePlanView,
     resetPlanView: () => plan?.reset(),
     notePlanViewPreset: (name) => plan?.noteCameraPreset(name),
+    navModeChanged: (mode, byKey) => {
+      deps.getNavBar()?.setMode(mode);
+      if (byKey) plan?.noteManualNavigation();
+    },
     toggleNavigationPanel: () => deps.getNavBar()?.toggleNavigationPanel(),
   };
 }

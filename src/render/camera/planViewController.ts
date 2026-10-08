@@ -161,6 +161,8 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
   ): boolean {
     cancelPending();
     const scheduledUnder = generation;
+    // Entering puts the projection back if the move never lands; leaving does not.
+    const projectionBefore = requireScan ? v.orthographic : null;
     let mode: NavMode | null = null;
     let tweening = false;
     for (const intent of intents) {
@@ -198,6 +200,9 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
             rewaits += 1;
             wait(settle);
             return;
+          }
+          if (projectionBefore !== null && v.orthographic !== projectionBefore) {
+            v.setOrthographic(projectionBefore);
           }
           unfinished(true);
           return;

@@ -473,7 +473,7 @@ describe('the NavBar callbacks', () => {
     const v = new FakeViewer();
     const pending: (() => void)[] = [];
     const toasts: string[] = [];
-    const bar = { setPlanActive: vi.fn(), setOrthographicActive: vi.fn() };
+    const bar = { setPlanActive: vi.fn(), setOrthographicActive: vi.fn(), setMode: vi.fn() };
     const wiring = createNavBarWiring({
       getViewer: () => v,
       getNavBar: () => bar,
@@ -490,8 +490,31 @@ describe('the NavBar callbacks', () => {
       toggle: wiring.togglePlanView,
       notePreset: wiring.notePlanViewPreset,
       reset: wiring.resetPlanView,
+      navModeChanged: wiring.navModeChanged,
     };
   }
+
+  it('a mode shortcut before the move lands keeps the mode the user chose', async () => {
+    const { v, bar, settle, toggle, navModeChanged } = await wired();
+
+    await toggle();
+    v.setMode('walk');
+    navModeChanged('walk', true);
+    settle();
+
+    expect(bar.setMode).toHaveBeenCalledWith('walk');
+    expect(v.navMode).toBe('walk');
+  });
+
+  it('a mode change that was not a shortcut leaves the pending mode alone', async () => {
+    const { v, settle, toggle, navModeChanged } = await wired();
+
+    await toggle();
+    navModeChanged('orbit', false);
+    settle();
+
+    expect(v.navMode).toBe('pan');
+  });
 
   it('reaches the viewer and reports back to the bar', async () => {
     const { v, bar, toasts, settle, toggle } = await wired();
@@ -736,6 +759,33 @@ describe('a camera tween that never reports an end', () => {
     expect(plan.active).toBe(false);
     expect(statuses).toEqual([]);
     expect(pending.size).toBe(0);
+  });
+
+  it('puts the projection back when entering Plan times out', async () => {
+    const { PLAN_VIEW_MAX_REWAITS } = await import('../src/render/camera/planViewController');
+    const v = stalled();
+    expect(v.orthographic).toBe(false);
+    const { plan, settle } = tracked(v);
+
+    plan.toggle();
+    expect(v.orthographic).toBe(true);
+    for (let i = 0; i <= PLAN_VIEW_MAX_REWAITS; i += 1) settle();
+    expect(v.orthographic).toBe(false);
+    expect(v.calls.filter((c) => c.startsWith('mode:'))).toEqual([]);
+  });
+
+  it('dispose leaves no timer and no later mode change', () => {
+    const v = stalled();
+    const { plan, settle, pending } = tracked(v);
+
+    plan.toggle();
+    plan.dispose();
+    expect(pending.size).toBe(0);
+    expect(plan.active).toBe(false);
+    v.cameraTweening = false;
+    v.cameraTweenOutcome = 'completed';
+    settle();
+    expect(v.calls.filter((c) => c.startsWith('mode:'))).toEqual([]);
   });
 
   it.each([

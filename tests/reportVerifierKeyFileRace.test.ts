@@ -99,6 +99,17 @@ describe('key-file reads that overlap', () => {
     expect(state.text).toBe('OK');
   });
 
+  it('typing clears an old read error', async () => {
+    const { state, loader, type } = field();
+    const bad = controlledFile();
+    const p = loader.load(bad);
+    bad.reject();
+    await p;
+    expect(state.problem).toBe(KEY_FILE_READ_FAILED);
+    type('pasted key');
+    expect(state.problem).toBe('');
+  });
+
   it('clears the field for an oversized file and says why', async () => {
     const { state, loader } = field();
     state.text = 'old';

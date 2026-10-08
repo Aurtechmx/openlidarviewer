@@ -43,6 +43,8 @@ export function createKeyFileLoader(
   return {
     typed(): void {
       generation += 1;
+      // A note about an earlier file no longer describes the field.
+      field.setProblem('');
       field.keyChanged();
     },
     async load(file: KeyFileSource): Promise<void> {

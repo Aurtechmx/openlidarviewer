@@ -375,7 +375,7 @@ interface StreamingPickEntry {
 
 /** UI-facing navigation events the app can subscribe to. */
 export interface NavListeners {
-  onModeChange?: (mode: NavMode) => void;
+  onModeChange?: (mode: NavMode, byKey?: boolean) => void;
   onPointerLockChange?: (locked: boolean) => void;
   onToggleHelp?: () => void;
 }
@@ -1084,7 +1084,7 @@ export class Viewer {
 
     // ── Navigation controller ─────────────────────────────────────────────
     this._nav = new NavController(this._camera, canvas, this._controls, {
-      onModeChange: (m) => this._navListeners.onModeChange?.(m),
+      onModeChange: (m, byKey) => this._navListeners.onModeChange?.(m, byKey),
       onPointerLockChange: (l) => this._navListeners.onPointerLockChange?.(l),
       onToggleHelp: () => this._navListeners.onToggleHelp?.(),
       onReset: () => this.frameAll(),

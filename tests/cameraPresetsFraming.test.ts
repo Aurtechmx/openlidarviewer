@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import {
   CAMERA_PRESET_ORDER,
   FRAME_EDGE_RESERVE,
+  MIN_FIT_DISTANCE,
   STANDARD_VIEW_ORDER,
   cameraPresetPose,
   presetInputForBounds,
@@ -133,5 +134,59 @@ describe('the box fit keeps each pose direction', () => {
       const d = dirOf(cameraPresetPose(name, boxed)).dot(dirOf(cameraPresetPose(name, sphereOnly)));
       expect(d, name).toBeCloseTo(1, 9);
     }
+  });
+});
+
+describe('degenerate bounds still give a usable pose', () => {
+  const NEAR = 0.01;
+  const up = { x: 0, y: 0, z: 1 };
+  const horizontal = { x: 1, y: 0, z: 0 };
+
+  /** Every pose is finite, every point is in front of the near plane and on screen. */
+  function expectUsable(min: Vec3, max: Vec3, points: readonly Vec3[]): void {
+    const input = presetInputForBounds({ min, max }, up, horizontal, { fovDeg: FOV, aspect: 1.5 });
+    const poses: [string, PresetPose][] = [
+      ...STANDARD_VIEW_ORDER.map((v): [string, PresetPose] => [v, standardViewPose(v, input)]),
+      ...CAMERA_PRESET_ORDER.map((n): [string, PresetPose] => [n, cameraPresetPose(n, input)]),
+    ];
+    for (const [name, pose] of poses) {
+      const all = [pose.position, pose.target].flatMap((p) => [p.x, p.y, p.z]);
+      expect(all.every(Number.isFinite), name).toBe(true);
+      const look = new THREE.Vector3(
+        pose.target.x - pose.position.x, pose.target.y - pose.position.y, pose.target.z - pose.position.z,
+      );
+      expect(look.length(), name).toBeGreaterThanOrEqual(MIN_FIT_DISTANCE);
+      look.normalize();
+      for (const p of points) {
+        const depth = new THREE.Vector3(p.x - pose.position.x, p.y - pose.position.y, p.z - pose.position.z).dot(look);
+        expect(depth, `${name} depth`).toBeGreaterThan(NEAR);
+      }
+      if (points.length > 0) expect(maxNdc(pose, up, 1.5, points), name).toBeLessThanOrEqual(1);
+    }
+  }
+
+  it('a single point', () => {
+    const p = { x: 3, y: -2, z: 7 };
+    expectUsable(p, p, [p]);
+  });
+
+  it('a flat zero-thickness box seen edge-on', () => {
+    const min = { x: -5, y: -5, z: 1 };
+    const max = { x: 5, y: 5, z: 1 };
+    expectUsable(min, max, corners(min, max));
+  });
+
+  it('a line seen end-on', () => {
+    // Along the horizontal seed: the Front and Back views look straight down it.
+    const min = { x: -10, y: 2, z: 0 };
+    const max = { x: 10, y: 2, z: 0 };
+    expectUsable(min, max, [min, max]);
+    const vertical = { min: { x: 0, y: 0, z: -4 }, max: { x: 0, y: 0, z: 4 } };
+    expectUsable(vertical.min, vertical.max, [vertical.min, vertical.max]);
+  });
+
+  it('NaN or infinite bounds fall back to the sphere fit', () => {
+    expectUsable({ x: NaN, y: 0, z: 0 }, { x: 1, y: 1, z: 1 }, []);
+    expectUsable({ x: 0, y: 0, z: 0 }, { x: Infinity, y: 1, z: 1 }, []);
   });
 });

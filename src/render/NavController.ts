@@ -76,8 +76,8 @@ export interface CameraPose {
 
 /** Hooks the app wires up so the UI and viewer can react to navigation. */
 export interface NavCallbacks {
-  /** Fired whenever the active mode changes. */
-  onModeChange?: (mode: NavMode) => void;
+  /** Fired whenever the active mode changes; `byKey` when a mode shortcut changed it. */
+  onModeChange?: (mode: NavMode, byKey?: boolean) => void;
   /** Fired when the pointer-lock (mouse-look) state changes. */
   onPointerLockChange?: (locked: boolean) => void;
   /** `R` — reset / re-frame the view. */
@@ -448,7 +448,7 @@ export class NavController {
   }
 
   /** Switch navigation mode, syncing camera state across the transition. */
-  setMode(mode: NavMode): void {
+  setMode(mode: NavMode, byKey = false): void {
     if (mode === this._mode) return;
     // Pan mode is unreachable when the `?handPan=off` dev flag disabled the
     // hand tool — including programmatic paths (saved sessions, embeds).
@@ -490,7 +490,7 @@ export class NavController {
 
     this._applyDragInputMap();
     this._applyIdleCursor();
-    this._cb.onModeChange?.(mode);
+    this._cb.onModeChange?.(mode, byKey);
   }
 
   /** Whether the hand tool is available (`?handPan` dev flag, default on). */
@@ -962,16 +962,16 @@ export class NavController {
     // group and G toggles the hand tool from anywhere; both are inert when
     // `?handPan=off` disabled the tool (panModeForKey returns null then).
     switch (e.code) {
-      case 'Digit1': this.setMode('orbit'); return;
-      case 'Digit2': this.setMode('walk'); return;
-      case 'Digit3': this.setMode('fly'); return;
+      case 'Digit1': this.setMode('orbit', true); return;
+      case 'Digit2': this.setMode('walk', true); return;
+      case 'Digit3': this.setMode('fly', true); return;
       case 'KeyR': this._cb.onReset?.(); return;
       case 'KeyF': this._cb.onFocusCenter?.(); return;
       case 'KeyH': this._cb.onToggleHelp?.(); return;
       case 'Digit4':
       case 'KeyG': {
         const next = panModeForKey(e.code, this._mode, this._handPan);
-        if (next) this.setMode(next);
+        if (next) this.setMode(next, true);
         return;
       }
     }

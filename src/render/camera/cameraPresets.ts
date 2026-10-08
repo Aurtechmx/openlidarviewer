@@ -236,21 +236,49 @@ export const FRAME_EDGE_RESERVE = 0.05;
  */
 function poseFit(input: PresetInput, dir: Vec3): { dist: number; target: Vec3 } {
   const { boxMin, boxMax } = input;
-  if (!boxMin || !boxMax) {
-    return { dist: fitDistance(input.radius, input.fovDeg, input.pad ?? CAMERA_FRAME_PAD), target: input.center };
-  }
+  if (!boxMin || !boxMax || !boundsUsable(boxMin, boxMax, input.radius)) return sphereFit(input);
   const tanV = Math.tan((input.fovDeg * Math.PI) / 360) * (1 - FRAME_EDGE_RESERVE);
-  const dist = fitBoxDistance({
+  const look = scale(dir, -1);
+  const fitted = fitBoxDistance({
     boxMin,
     boxMax,
-    look: scale(dir, -1),
+    look,
     worldUp: input.worldUp,
     fovDeg: (Math.atan(tanV) * 360) / Math.PI,
     aspect: input.aspect ?? 1,
     pad: 1,
   });
+  // A line or plane seen end-on has no screen extent, so the box fit alone can
+  // put the camera on its nearest point. Keep that point a margin in front.
+  const half = scale(add(boxMax, scale(boxMin, -1)), 0.5);
+  const depthAlongLook = Math.abs(half.x * look.x) + Math.abs(half.y * look.y) + Math.abs(half.z * look.z);
+  const margin = Math.max(MIN_FIT_DISTANCE, input.radius * FRAME_EDGE_RESERVE);
+  const dist = Math.max(fitted, depthAlongLook + margin);
   const target = scale(add(boxMin, boxMax), 0.5);
   return { dist, target };
+}
+
+/**
+ * Smallest camera-to-target distance and nearest-point clearance a fit may
+ * produce: above the viewer's 0.01 near plane and 0.02 orbit minimum.
+ */
+export const MIN_FIT_DISTANCE = 0.05;
+
+/** Finite bounds with a non-zero extent; anything else uses the sphere fit. */
+function boundsUsable(min: Vec3, max: Vec3, radius: number): boolean {
+  const all = [min.x, min.y, min.z, max.x, max.y, max.z, radius];
+  return all.every(Number.isFinite) && radius > 1e-6;
+}
+
+/**
+ * The sphere fit, also the safe fallback: a zero, tiny or non-finite radius
+ * reads as 1 and a non-finite centre as the origin, so the pose is always finite.
+ */
+function sphereFit(input: PresetInput): { dist: number; target: Vec3 } {
+  const r = Number.isFinite(input.radius) && input.radius > 1e-6 ? input.radius : 1;
+  const c = input.center;
+  const target = [c.x, c.y, c.z].every(Number.isFinite) ? c : { x: 0, y: 0, z: 0 };
+  return { dist: fitDistance(r, input.fovDeg, input.pad ?? CAMERA_FRAME_PAD), target };
 }
 
 /** Inputs to {@link fitBoxDistance}. */
