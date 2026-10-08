@@ -813,3 +813,82 @@ describe('a camera tween that never reports an end', () => {
     expect(v.calls.filter((c) => c === 'mode:pan')).toEqual([]);
   });
 });
+
+describe('Plan reads on only once the camera has landed', () => {
+  it('reports nothing while the standard-view tween is still running', () => {
+    const v = new FakeViewport();
+    const { plan, settle, changes } = controller(v);
+
+    plan.toggle();
+    expect(plan.active).toBe(true);
+    expect(changes).toEqual([]);
+
+    settle();
+    expect(changes).toEqual([{ active: true, reason: 'toggle' }]);
+  });
+
+  it('never reports on when the move stalls, and still restores the projection', async () => {
+    const { PLAN_VIEW_MAX_REWAITS } = await import('../src/render/camera/planViewController');
+    const v = new FakeViewport() as FakeViewport & { cameraTweening: boolean; cameraTweenOutcome: string };
+    v.cameraTweening = true;
+    v.cameraTweenOutcome = 'running';
+    const { plan, settle, changes } = controller(v);
+
+    plan.toggle();
+    for (let i = 0; i <= PLAN_VIEW_MAX_REWAITS; i += 1) settle();
+    expect(changes.some((c) => c.active)).toBe(false);
+    expect(v.orthographic).toBe(false);
+  });
+
+  it('never reports on when the user takes the camera before it lands', () => {
+    const v = new FakeViewport() as FakeViewport & { cameraTweenOutcome: string };
+    const { plan, settle, changes } = controller(v);
+
+    plan.toggle();
+    v.cameraTweenOutcome = 'cancelled';
+    settle();
+    expect(changes.some((c) => c.active)).toBe(false);
+  });
+});
+
+describe('an entry interrupted before the camera lands', () => {
+  it('a mode change retires the claim, reports off, and puts the projection back', () => {
+    const v = new FakeViewport();
+    const { plan, settle, changes } = controller(v);
+
+    plan.toggle();
+    expect(v.orthographic).toBe(true);
+    plan.noteManualNavigation();
+    settle();
+
+    expect(plan.active).toBe(false);
+    expect(changes).toEqual([{ active: false, reason: 'drift' }]);
+    expect(v.orthographic).toBe(false);
+  });
+
+  it('the next press enters again instead of leaving', () => {
+    const v = new FakeViewport();
+    const { plan, settle, changes } = controller(v);
+
+    plan.toggle();
+    plan.noteManualNavigation();
+    settle();
+    plan.toggle();
+    settle();
+
+    expect(plan.active).toBe(true);
+    expect(changes.at(-1)).toEqual({ active: true, reason: 'toggle' });
+  });
+
+  it('a second press before landing cancels without a "Plan view off" toggle', () => {
+    const v = new FakeViewport();
+    const { plan, settle, changes } = controller(v);
+
+    plan.toggle();
+    plan.toggle();
+    settle();
+
+    expect(plan.active).toBe(false);
+    expect(changes).toEqual([{ active: false, reason: 'drift' }]);
+  });
+});

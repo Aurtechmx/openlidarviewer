@@ -5,6 +5,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { crsFromWkt, crsFromGeoTiff } from '../src/io/crs';
+import { verticalReferenceFromDatum } from '../src/geo/height';
 import { writeLas } from '../src/convert/writeLas';
 import { cloudToGlobal } from '../src/convert/globalPoints';
 import { convertCloud } from '../src/convert/convertCloud';
@@ -53,6 +54,17 @@ describe('crsFromWkt — compound CRS (horizontal vs vertical)', () => {
     expect(crs.verticalDatum).toBe('Some local height datum');
   });
 
+  it.each([
+    ['NAVD88 depth', 6357],
+    ['MSL depth', 5715],
+    ['Baltic 1977 depth', 5612],
+  ])('a WKT VERT_CS named "%s" resolves to depth EPSG:%i, not a height datum', (name, code) => {
+    const wkt = `COMPD_CS["x",PROJCS["WGS 84 / UTM zone 13N",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],UNIT["metre",1],AUTHORITY["EPSG","32613"]],VERT_CS["${name}",VERT_DATUM["d",2005],UNIT["metre",1],AXIS["Depth",DOWN],AUTHORITY["EPSG","${code}"]]]`;
+    const crs = crsFromWkt(wkt);
+    expect(crs.verticalEpsg).toBe(code);
+    expect(verticalReferenceFromDatum(crs)).toBe('depth');
+  });
+
   it('parses a standalone VERT_CS (no horizontal CRS)', () => {
     const crs = crsFromWkt('VERT_CS["NAVD88 height",VERT_DATUM["NAVD88",2005],UNIT["metre",1],AUTHORITY["EPSG","5703"]]');
     expect(crs.verticalEpsg).toBe(5703);
@@ -90,6 +102,14 @@ describe('crsFromGeoTiff — vertical key', () => {
     expect(crs.linearUnitToMetres).toBe(1);
     expect(crs.verticalLinearUnit).toBe('us-survey-foot');
     expect(crs.verticalUnitToMetres).toBeCloseTo(0.3048006096012192, 10);
+  });
+
+  it('reads 4096 = 6360 (NAVD88 height, ftUS) as a recognised datum', () => {
+    const crs = crsFromGeoTiff(geoKeyBytes([[1024, 1], [3072, 32613], [4096, 6360], [4099, 9003]]), null, null);
+    expect(crs.verticalEpsg).toBe(6360);
+    expect(crs.verticalDatum).toBe('NAVD88 height (ftUS)');
+    expect(verticalReferenceFromDatum(crs)).toBe('orthometric');
+    expect(crs.verticalUnitToMetres).toBeCloseTo(1200 / 3937, 12);
   });
 
   it('leaves the vertical unit undefined when no 4099 key is present', () => {

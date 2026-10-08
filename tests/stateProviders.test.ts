@@ -87,6 +87,25 @@ describe('state strip providers', () => {
     if (ctx.verticalReferenceKnown) expect(v.validity).toBe('measured');
   });
 
+  it('NAVD88 height (ftUS), EPSG:6360: the strip names it instead of unknown', () => {
+    const ctx = freeze(spatialContextFrom({ ...unknownVertical, epsg: 32613, verticalEpsg: 6360, verticalDatum: 'NAVD88 height (ftUS)', verticalUnitToMetres: 1200 / 3937 }));
+    const v = verticalReferenceProvider(ctx);
+    expect(v.value.label).toBe('Vertical: NAVD88 height (ftUS)');
+    expect(v.validity).toBe('measured');
+  });
+
+  it('unrecognised datum with a declared vertical unit: states the unit and that the datum is not recognised', () => {
+    const ctx = freeze(spatialContextFrom({ ...unknownVertical, verticalEpsg: 9999, verticalDatum: 'EPSG:9999', verticalUnitToMetres: 1200 / 3937 }));
+    const v = verticalReferenceProvider(ctx);
+    expect(v.value.label).toBe('Vertical: US survey feet, datum not recognised');
+    expect(v.validity).toBe('review');
+  });
+
+  it('a declared vertical unit with no datum at all says the datum is not declared', () => {
+    const ctx = freeze(spatialContextFrom({ ...unknownVertical, verticalUnitToMetres: 1 }));
+    expect(verticalReferenceProvider(ctx).value.label).toBe('Vertical: metres, datum not declared');
+  });
+
   it('resident-only: returns the coverage deriveScanFacts settled on', () => {
     const facts = freeze(deriveScanFacts({ kind: 'streaming' }));
     expect(layerBasisProvider(facts)).toEqual({ value: 'resident-only', source: 'scan-facts', validity: 'preview' });

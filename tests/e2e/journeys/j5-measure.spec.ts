@@ -58,11 +58,9 @@ test('P2: distance, sloped distance and polyline match ground truth', async ({ p
 });
 
 test('P2: a rise on a file with no declared vertical unit says the unit is assumed', async ({ page }, info) => {
-  // FINDING J5-RISE: the reference plane on this file says "Heights are
-  // assumed to be in the horizontal unit (vertical unit not declared)", but a
-  // distance with a rise reads "Rise 4.0000 m ... datum resolved" with no
-  // caveat in the panel or the hint bar. Recorded as an expected failure.
-  test.fail();
+  // J5-RISE: the reference plane on this file says "Heights are assumed to
+  // be in the horizontal unit (vertical unit not declared)", and a distance
+  // with a rise says the same in the Measurements panel.
   const j = startJourney(page, info, 'j5');
   const survey = await buildSurveyLas14();
   await j.step('open the survey file and Measure', async () => {
@@ -109,11 +107,9 @@ test('P2: on a compound CRS with feet heights, a 3D distance is flagged as not r
 });
 
 test('P2: the state strip names the declared vertical CRS and unit (NAVD88 height, US survey feet)', async ({ page }, info) => {
-  // FINDING J5-VSTRIP: a file declaring VerticalCSTypeGeoKey 6360 (NAVD88
-  // height, ftUS) and VerticalUnitsGeoKey 9003 shows "Vertical: unknown" on
-  // the strip while Measure converts its heights from US survey feet and warns
-  // about a compound CRS. Recorded as an expected failure.
-  test.fail();
+  // J5-VSTRIP: a file declaring VerticalCSTypeGeoKey 6360 (NAVD88 height,
+  // ftUS) and VerticalUnitsGeoKey 9003 names that CRS on the strip, as Measure
+  // already converts its heights from US survey feet.
   const j = startJourney(page, info, 'j5');
   const { writeLas14 } = await loadLasWriter();
   const N = 10;

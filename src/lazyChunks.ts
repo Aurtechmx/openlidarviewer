@@ -543,10 +543,14 @@ export const loadSession = () => import('./io/session');
  */
 const importSessionIoChunk = () => import('./app/sessionIo');
 export const loadSessionIo = () =>
-  importSessionIoChunk().then((mod) => {
-    if (!mod) throw new Error('Could not load the session importer.');
-    return mod;
-  });
+  importSessionIoChunk().then(
+    (mod) => {
+      if (!mod) throw new Error('Could not load the session importer.');
+      return mod;
+    },
+    // A rejected chunk (offline, or a network failure) reads the same.
+    () => { throw new Error('Could not load the session importer.'); },
+  );
 export const loadCompareEpochs = () => import('./terrain/change/compareEpochs');
 export const loadAlignEpochs = () => import('./terrain/change/alignEpochs');
 export const loadCompareDtms = () => import('./terrain/change/compareDtms');

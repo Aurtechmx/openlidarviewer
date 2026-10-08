@@ -38,6 +38,7 @@ import {
   type WktNode,
 } from './wktParser';
 import { getCrsEntry } from '../geo/CrsRegistry';
+import { knownVerticalCrs, resolveVerticalEpsg } from '../geo/height';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -112,19 +113,6 @@ export interface CrsInfo {
   readonly catalogue?: string;
 }
 
-/** Common vertical-datum EPSG codes → readable names. */
-const VERTICAL_DATUM_NAMES: Readonly<Record<number, string>> = {
-  5703: 'NAVD88',
-  5701: 'ODN (Newlyn)',
-  5714: 'MSL height',
-  5715: 'MSL depth',
-  3855: 'EGM2008 height',
-  5773: 'EGM96 height',
-  6647: 'CGVD2013',
-  5705: 'Baltic 1977',
-  5612: 'EGM84 height',
-};
-
 /**
  * Label a vertical-datum EPSG code (known name, or `EPSG:<code>`). Returns
  * undefined for the placeholder codes that mean "no real datum" (0 / 32767),
@@ -132,7 +120,7 @@ const VERTICAL_DATUM_NAMES: Readonly<Record<number, string>> = {
  */
 export function verticalDatumLabel(epsg: number): string | undefined {
   if (!(epsg > 0) || epsg === 32767) return undefined;
-  return VERTICAL_DATUM_NAMES[epsg] ?? `EPSG:${epsg}`;
+  return knownVerticalCrs(epsg)?.label ?? `EPSG:${epsg}`;
 }
 
 /**
@@ -632,11 +620,17 @@ function extractVerticalFromNode(
 
 /** Map a vertical-datum name to its EPSG code (the common geoids/datums). */
 function verticalEpsgFromName(name: string): number | undefined {
+  // The shared vertical CRS table first, so "NAVD88 depth" is 6357, not 5703.
+  const known = resolveVerticalEpsg({ verticalDatum: name });
+  if (known !== undefined && knownVerticalCrs(known)) return known;
   const n = name.toLowerCase();
+  // The loose matches below name height datums. A depth axis they do not know
+  // is left to the node's own AUTHORITY.
+  if (n.includes('depth')) return undefined;
   if (n.includes('navd88') || n.includes('navd 88')) return 5703;
   if (n.includes('egm2008')) return 3855;
   if (n.includes('egm96')) return 5773;
-  if (n.includes('egm84')) return 5612;
+  if (n.includes('egm84')) return 5798;
   if (n.includes('odn') || n.includes('newlyn')) return 5701;
   if (n.includes('cgvd2013')) return 6647;
   if (n.includes('baltic')) return 5705;

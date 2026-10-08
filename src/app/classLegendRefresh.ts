@@ -25,7 +25,20 @@
  * unit-testable without a Viewer or a panel.
  */
 
-export { classificationDiffersFromSource } from '../export/fullResClassGuard';
+import { classificationDiffersFromSource } from '../export/fullResClassGuard';
+export { classificationDiffersFromSource };
+
+/**
+ * Whether the active static scan's classes differ from its file. One reading
+ * for Export and Save session. A streaming scan (no active id) reads false.
+ */
+export function activeScanHasClassEdits(
+  activeId: string | null,
+  viewer: { getCloud(id: string): { classificationProvenance?: string } | undefined | null; classificationEpoch(id: string): number } | null | undefined,
+): boolean {
+  if (activeId == null || !viewer) return false;
+  return classificationDiffersFromSource(viewer.getCloud(activeId)?.classificationProvenance ?? 'none', viewer.classificationEpoch(activeId));
+}
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import { countClasses } from '../render/class/classHistogram';
 import { toClassBuffer } from '../render/class/classBuffer';

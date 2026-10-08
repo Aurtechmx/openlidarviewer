@@ -40,6 +40,24 @@ streaming source declares none here, and the four codes whose meaning differs
 between the legacy and extended tables report both readings rather than one
 guess.
 
+## Class edits are not stored in a session file
+
+A session file stores the class filter, not per-point classes. Lasso edits,
+clears and auto-classify results are gone after a session is saved and
+restored. Save session says so when the open scan carries class edits. To keep
+them, export the scan as LAS at display resolution: a full-resolution export
+re-reads the source file and refuses while class edits differ from it. The
+recovery journal does not keep class edits either, and a streaming scan cannot
+be reclassified, so Save session gives no warning there. Storing an edit log
+keyed to the source file's SHA-256 is planned for v0.7.1.
+
+## A Safari chunk failure online can still reload the page
+
+When a lazy part of the app fails to load while the browser reports a
+connection, the page reloads only if the server no longer has the file. Safari
+names no file in that error, so on a connection that reports online but has no
+uplink, Safari still reloads the page once, as before.
+
 ## Clear classifications holds for one session on a loaded scan
 
 Clear classes sets every point to class 1 in the viewer. The working classes

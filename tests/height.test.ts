@@ -14,6 +14,7 @@ import {
   heightInMetres,
   heightLabel,
   heightReferenceNote,
+  knownVerticalCrs,
   makeHeight,
   resolveVerticalEpsg,
   verticalReferenceFromDatum,
@@ -56,7 +57,7 @@ describe('verticalReferenceFromDatum', () => {
   });
 
   test('orthometric height datums, by EPSG', () => {
-    for (const code of [5703, 5701, 5714, 3855, 5773, 6647, 5705, 5612]) {
+    for (const code of [5703, 5701, 5714, 3855, 5773, 6647, 5705, 5798]) {
       expect(verticalReferenceFromDatum({ verticalEpsg: code })).toBe('orthometric');
     }
   });
@@ -105,7 +106,9 @@ describe('verticalReferenceFromDatum', () => {
     ['NAVD88x local adjustment', 'unknown'],
     ['Local datum referenced to NAVD88', 'unknown'],
     // An axis that contradicts its own datum is refused, not reinterpreted.
-    ['NAVD88 depth', 'unknown'],
+    ['NAVD88 height depth', 'unknown'],
+    // EPSG:6357 is the NAVD88 depth CRS by that exact name.
+    ['NAVD88 depth', 'depth'],
   ] as const)('a qualified datum name resolves: %s', (verticalDatum, expected) => {
     expect(verticalReferenceFromDatum({ verticalDatum })).toBe(expected);
   });
@@ -184,5 +187,37 @@ describe('heightReferenceNote', () => {
     for (const r of ['ellipsoidal', 'orthometric', 'depth', 'local', 'unknown'] as const) {
       expect(heightReferenceNote(r).length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('vertical CRS codes checked against the EPSG dataset', () => {
+  // Code, reference class, metres per axis unit (EPSG proj.db).
+  const FT_US = 1200 / 3937;
+  test.each([
+    [5703, 'orthometric', 1],
+    [6360, 'orthometric', FT_US], // NAVD88 height (ftUS)
+    [8228, 'orthometric', 0.3048], // NAVD88 height (ft)
+    [6357, 'depth', 1], // NAVD88 depth
+    [6358, 'depth', FT_US], // NAVD88 depth (ftUS)
+    [7968, 'orthometric', 1], // NGVD29 height (m)
+    [5702, 'orthometric', FT_US], // NGVD29 height (ftUS)
+    [6359, 'depth', FT_US], // NGVD29 depth (ftUS)
+    [8050, 'orthometric', 0.3048], // MSL height (ft)
+    [8052, 'orthometric', FT_US], // MSL height (ftUS)
+    [8051, 'depth', 0.3048], // MSL depth (ft)
+    [8053, 'depth', FT_US], // MSL depth (ftUS)
+    [5798, 'orthometric', 1], // EGM84 height
+    [5612, 'depth', 1], // Baltic 1977 depth, not EGM84
+    [5728, 'orthometric', 1], // LN02 height
+  ] as const)('EPSG:%i is %s with %f m per unit', (code, ref, m) => {
+    expect(verticalReferenceFromDatum({ verticalEpsg: code })).toBe(ref);
+    expect(knownVerticalCrs(code)?.metresPerUnit).toBeCloseTo(m, 12);
+    // The printed label reads back to the same code.
+    expect(resolveVerticalEpsg({ verticalDatum: knownVerticalCrs(code)!.label })).toBe(code);
+  });
+
+  test('an unlisted code stays unknown', () => {
+    expect(verticalReferenceFromDatum({ verticalEpsg: 9999 })).toBe('unknown');
+    expect(knownVerticalCrs(9999)).toBeUndefined();
   });
 });

@@ -75,6 +75,79 @@ export interface StaleChunkRecoveryOptions {
   onUnrecoverable?: (err: unknown) => void;
   /** One-line diagnostic sink. Default: console.warn. */
   log?: (reason: string) => void;
+  /** Whether the browser reports a connection. Default: `navigator.onLine !== false`. */
+  isOnline?: () => boolean;
+  /**
+   * Called with {@link OFFLINE_CHUNK_MESSAGE} when a chunk fails to load while
+   * the browser is offline. The page is not reloaded: a reload offline lands on
+   * an error page and drops the open scan.
+   */
+  onOffline?: (message: string) => void;
+  /**
+   * Ask the server whether a chunk URL still exists. Resolves 'missing' for a
+   * 404 or 410 (a real deploy swept it away), 'present' when it is served, and
+   * 'unreachable' when the request itself fails (a network blip). Default: a
+   * no-store HEAD request in a browser, none elsewhere. With no probe, or no URL
+   * in the error, the failure is treated as a stale deploy as before.
+   */
+  probe?: ((url: string) => Promise<ChunkProbe>) | null;
+}
+
+/** What a HEAD request for a failed chunk URL found. */
+export type ChunkProbe = 'missing' | 'present' | 'unreachable';
+
+/** Shown when a lazy part of the app cannot load because there is no connection. */
+export const OFFLINE_CHUNK_MESSAGE =
+  'You are offline, this part could not load. Try again when back online. ' +
+  'To use every tool offline, run Make available offline when connected.';
+
+/** The script URL a failed dynamic import names, if its message carries one. */
+export function chunkUrlFromError(err: unknown): string | null {
+  const m = /(https?:\/\/[^\s'"]+?\.(?:m?js|css))(?:[?#][^\s'"]*)?(?=$|[\s'"])/i.exec(errorMessage(err));
+  return m ? m[1] : null;
+}
+
+/** The response facts {@link classifyProbeResponse} reads. */
+export interface ProbeResponse {
+  readonly ok: boolean;
+  readonly redirected: boolean;
+  readonly contentType: string | null;
+}
+
+/**
+ * Read a HEAD response for a chunk URL. Only a script or stylesheet counts as
+ * the chunk being served: a host with a single-page-app fallback answers a
+ * deleted chunk with index.html and 200, which is a stale deploy. A redirect
+ * (a captive portal, a login wall) says nothing about the deploy.
+ */
+export function classifyProbeResponse(res: ProbeResponse): ChunkProbe {
+  if (res.redirected) return 'unreachable';
+  const type = (res.contentType ?? '').toLowerCase();
+  if (res.ok && /javascript|ecmascript|text\/css/.test(type)) return 'present';
+  return 'missing';
+}
+
+/** How long the default probe waits before treating the server as unreachable. */
+export const PROBE_TIMEOUT_MS = 5000;
+
+/**
+ * Default probe: a no-store HEAD request for a same-origin chunk, with a
+ * timeout. A cross-origin URL is never probed and reads as unreachable.
+ */
+export function makeHeadProbe(
+  fetchFn: typeof fetch,
+  origin: string,
+  timeoutMs = PROBE_TIMEOUT_MS,
+): (url: string) => Promise<ChunkProbe> {
+  return async (url) => {
+    try {
+      if (new URL(url).origin !== origin) return 'unreachable';
+      const res = await fetchFn(url, { method: 'HEAD', cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) });
+      return classifyProbeResponse({ ok: res.ok, redirected: res.redirected, contentType: res.headers.get('content-type') });
+    } catch {
+      return 'unreachable';
+    }
+  };
 }
 
 /** The handle returned by installStaleChunkRecovery. */
@@ -178,6 +251,49 @@ export function installStaleChunkRecovery(
   }
   const onUnrecoverable = opts.onUnrecoverable;
   const log = opts.log ?? ((reason: string) => console.warn('[staleChunkReload]', reason));
+  const isOnline = opts.isOnline ?? (() => typeof navigator === 'undefined' || navigator.onLine !== false);
+  const onOffline = opts.onOffline;
+  let probe: ((url: string) => Promise<ChunkProbe>) | null;
+  if (opts.probe !== undefined) probe = opts.probe;
+  else probe = typeof window !== 'undefined' && typeof fetch === 'function' ? makeHeadProbe(fetch, window.location.origin) : null;
+
+  // Vite reports one failed import twice: the vite:preloadError event, then the
+  // rethrow into importOrReload. Both share one probe and one decision per URL,
+  // and the offline note is shown once per failure burst.
+  const decisions = new Map<string, Promise<'reloaded' | 'unrecoverable' | 'kept'>>();
+  let offlineNoted = false;
+  function noteOffline(): void {
+    if (offlineNoted) return;
+    offlineNoted = true;
+    onOffline?.(OFFLINE_CHUNK_MESSAGE);
+    // A later failure, after this burst, may say so again.
+    setTimeout(() => { offlineNoted = false; }, 2000);
+  }
+
+  /**
+   * Reload only for a stale deploy. Offline, or when the probe shows the chunk
+   * server is unreachable or still serving the chunk, report and keep the page.
+   */
+  function recoverIfStale(err: unknown): Promise<'reloaded' | 'unrecoverable' | 'kept'> {
+    const url = chunkUrlFromError(err);
+    if (!url) return decide(err, null);
+    let d = decisions.get(url);
+    if (!d) {
+      d = decide(err, url);
+      decisions.set(url, d);
+      // Forget the decision once settled, so a retry later probes afresh.
+      void d.then(() => setTimeout(() => decisions.delete(url), 2000));
+    }
+    return d;
+  }
+
+  async function decide(err: unknown, url: string | null): Promise<'reloaded' | 'unrecoverable' | 'kept'> {
+    const found = url && probe ? await probe(url) : 'missing';
+    if (found === 'missing') return attemptRecover(err);
+    // The import rejects and its caller reports the failure.
+    log(`chunk load failed but the server ${found === 'present' ? 'still serves it' : 'is unreachable'}; not reloading`);
+    return 'kept';
+  }
 
   function readMarker(): number | null {
     try {
@@ -228,6 +344,20 @@ export function installStaleChunkRecovery(
       event && typeof event === 'object'
         ? ((event as { payload?: unknown }).payload ?? event)
         : event;
+    if (!isOnline()) {
+      // Offline: a reload cannot fetch the new shell and would drop the open
+      // scan. Leave the event alone so the import rejects and its caller can
+      // report it and retry later.
+      log('chunk load failed while offline; not reloading');
+      noteOffline();
+      return;
+    }
+    if (probe && chunkUrlFromError(payload)) {
+      // The import rejects as usual; the page reloads only if the probe finds
+      // the chunk gone from the server.
+      void recoverIfStale(payload);
+      return;
+    }
     // We own recovery from here; stop Vite's default, which is to re-throw.
     if (event && typeof event === 'object') {
       const prevent = (event as { preventDefault?: unknown }).preventDefault;
@@ -253,7 +383,13 @@ export function installStaleChunkRecovery(
         // An ordinary feature exception — never reload the page over it.
         throw err;
       }
-      const outcome = attemptRecover(err);
+      if (!isOnline()) {
+        log('chunk load failed while offline; not reloading');
+        noteOffline();
+        throw err;
+      }
+      const outcome = probe && chunkUrlFromError(err) ? await recoverIfStale(err) : attemptRecover(err);
+      if (outcome === 'kept') throw err;
       if (outcome === 'unrecoverable' && !onUnrecoverable) {
         // No surface was wired — propagate so the caller can show the error.
         throw err;

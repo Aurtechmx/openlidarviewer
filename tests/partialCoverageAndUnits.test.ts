@@ -96,6 +96,6 @@ describe('unknown horizontal unit', () => {
       null,
     );
     expect(known.unitVerified).toBe(true);
-    expect(confidenceForKind('distance', known).label).toBe('Viewer measurement · datum resolved');
+    expect(confidenceForKind('distance', known).label).toBe('Viewer measurement · horizontal frame resolved');
   });
 });

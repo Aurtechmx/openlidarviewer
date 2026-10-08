@@ -129,11 +129,8 @@ test.describe('J3 navigate (mouse and keyboard)', () => {
   }
 
   test('P1: Plan view reads pressed only once the camera looks straight down', async ({ page }, info) => {
-    // FINDING J3-PLAN: the Plan chip turns aria-pressed (and the "Plan view
-    // on" toast shows) synchronously on click, about 250 ms before the camera
-    // reaches top-down (planViewController.ts toggle() calls onChange(true)
-    // before the tween lands). Recorded as an expected failure until fixed.
-    test.fail();
+    // J3-PLAN: the Plan chip turns aria-pressed (and the "Plan view on" toast
+    // shows) only once the camera has landed top-down.
     const j = startJourney(page, info, 'j3');
     await j.step('open the scan', () => openTerrain(page));
     await j.step('Plan view presses only once the camera looks straight down', async () => {

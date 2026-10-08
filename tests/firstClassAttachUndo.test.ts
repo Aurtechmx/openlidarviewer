@@ -115,6 +115,8 @@ describe('full-resolution export after a first classification', () => {
 
   it('the export guard reads the source comparison, not undo availability', () => {
     const main = readFileSync(resolve(__dirname, '../src/main.ts'), 'utf8');
-    expect(main).toMatch(/hasClassEdits: [^\n]*classificationDiffersFromSource\([^\n]*classificationEpoch\(/);
+    expect(main).toMatch(/hasClassEdits: \(\) => activeScanHasClassEdits\(/);
+    const helper = readFileSync(resolve(__dirname, '../src/app/classLegendRefresh.ts'), 'utf8');
+    expect(helper).toMatch(/classificationDiffersFromSource\([^\n]*classificationEpoch\(/);
   });
 });

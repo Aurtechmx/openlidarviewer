@@ -59,6 +59,7 @@ import {
   formatArea,
   formatGrade,
   formatLength,
+  formatLengthInBandOf,
   formatUnitUnverified,
   unitToken,
   type DisplayUnits,
@@ -74,6 +75,7 @@ import { breakdownParts } from './measureBreakdownRow';
 import {
   confidenceForKind,
   UNRESOLVED_SCENE_CONTEXT,
+  VERTICAL_UNIT_BORROWED_NOTE,
   type MeasureSceneContext,
 } from '../render/measure/measureConfidence';
 import { actionTitle } from './actionDescriptors';
@@ -407,12 +409,12 @@ export class MeasurePanel {
       className: 'olv-mp-action',
       text: actionTitle('session.export'),
       // The .olvsession file is useful standalone: plain JSON with measurement
-      // coordinates, annotation text and named views. It is not a replay file
-      // like .olvworkflow, and the tooltip keeps the two apart.
+      // coordinates, annotation text and named views, kept on the device. It
+      // stores no per-point classes, so the tooltip says class edits need LAS.
       title:
-        'Save measurements, annotations, named views, camera, render settings ' +
-        'and the class filter as an .olvsession. ' +
-        'Readable JSON that stays on your device.',
+        'Save measurements, annotations, views, camera, render settings ' +
+        'and the class filter. Class edits are not stored: export LAS ' +
+        'at display resolution to keep them.',
     });
     exportBtn.addEventListener('click', () => {
       exportBtn.blur();
@@ -1171,7 +1173,8 @@ export class MeasurePanel {
       prev.datumResolved === scene.datumResolved &&
       prev.layers === scene.layers &&
       prev.verticalReferenceKnown === scene.verticalReferenceKnown &&
-      prev.unitVerified === scene.unitVerified
+      prev.unitVerified === scene.unitVerified &&
+      prev.verticalUnitBorrowed === scene.verticalUnitBorrowed
     ) {
       return;
     }
@@ -1390,7 +1393,7 @@ export class MeasurePanel {
       // An unknown horizontal unit prints the source number marked unverified.
       s.unitUnverified
         ? { formatLength: formatUnitUnverified, formatArea: formatUnitUnverified, formatGrade, formatAngle }
-        : { formatLength, formatArea, formatGrade, formatAngle },
+        : { formatLength, formatLengthInBandOf, formatArea, formatGrade, formatAngle },
     );
     const breakdownLine = breakdown
       ? el('div', {
@@ -1399,6 +1402,14 @@ export class MeasurePanel {
           title: breakdown.title,
         })
       : null;
+    // A rise, slant, grade, height or volume on a file with no vertical unit
+    // borrows the horizontal one; say so beside the figures, as the reference
+    // plane does.
+    const usesHeight = !!s.lineMetrics || !!s.areaMetrics || s.kind === 'height' || s.kind === 'volume';
+    const vunitNote = this._confidenceScene?.verticalUnitBorrowed && usesHeight
+      ? el('div', { className: 'olv-mp-chart-caveat olv-mp-vunit-note', text: VERTICAL_UNIT_BORROWED_NOTE })
+      : null;
+    const breakdownEls = [breakdownLine, vunitNote].filter((e): e is HTMLDivElement => e !== null);
 
     // Profile-only: render a compact height-vs-distance chart strip
     // beneath the headline row. The chart is a single inline SVG, no
@@ -1814,7 +1825,7 @@ export class MeasurePanel {
       return el('div', { className: 'olv-mp-row-stack' }, [
         headRow,
         confLine,
-        ...(breakdownLine ? [breakdownLine] : []),
+        ...breakdownEls,
         ...notes,
       ]);
     }
@@ -1822,7 +1833,7 @@ export class MeasurePanel {
     return el('div', { className: 'olv-mp-row-stack' }, [
       headRow,
       confLine,
-      ...(breakdownLine ? [breakdownLine] : []),
+      ...breakdownEls,
     ]);
   }
 }

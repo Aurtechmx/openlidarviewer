@@ -26,6 +26,7 @@ import type { SpatialContext } from '../geo/SpatialContext';
 import type { CrsSource, ResolvedCrs } from '../geo/CoordinateTypes';
 import type { CrsValiditySeverity } from '../geo/CrsValidation';
 import { heightLabel } from '../geo/height';
+import { UNIT_FACTORS } from '../units/units';
 import type { Coverage, ScanFacts } from './ProcessPlan';
 import type { AnalysisRow } from './analysisStatus';
 import type { ResultEntry } from '../app/results/resultsIndex';
@@ -116,12 +117,34 @@ export interface VerticalRef {
 
 export const VERTICAL_UNKNOWN = 'Vertical: unknown';
 
+/** Name a declared vertical unit by its metres-per-unit factor. */
+function declaredUnitName(m: number | undefined): string | undefined {
+  if (m === undefined) return undefined;
+  if (Math.abs(m - 1) < 1e-12) return 'metres';
+  if (Math.abs(m - UNIT_FACTORS.M_PER_FT) < 1e-12) return 'international feet';
+  if (Math.abs(m - UNIT_FACTORS.M_PER_US_FT) < 1e-12) return 'US survey feet';
+  return undefined;
+}
+
+/**
+ * The strip label. A recognised datum names itself; an unrecognised one with a
+ * declared vertical unit still states that unit, so the strip reports what the
+ * file does say instead of "unknown".
+ */
+function verticalLabel(context: SpatialContext): string {
+  if (context.verticalReferenceKnown) return `Vertical: ${context.verticalDatum ?? heightLabel(context.verticalReference)}`;
+  const unit = context.verticalScaleKnown ? declaredUnitName(context.verticalUnitToMetres) : undefined;
+  if (!unit) return VERTICAL_UNKNOWN;
+  const declared = context.verticalEpsg !== undefined || (context.verticalDatum ?? '').trim() !== '';
+  return `Vertical: ${unit}, datum ${declared ? 'not recognised' : 'not declared'}`;
+}
+
 /** The vertical reference from the spatial context. */
 export function verticalReferenceProvider(context: SpatialContext): StripFact<VerticalRef> {
   const known = context.verticalReferenceKnown;
   return {
     value: {
-      label: known ? `Vertical: ${context.verticalDatum ?? heightLabel(context.verticalReference)}` : VERTICAL_UNKNOWN,
+      label: verticalLabel(context),
       reference: context.verticalReference,
       datum: context.verticalDatum,
       epsg: context.verticalEpsg,

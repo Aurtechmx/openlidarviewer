@@ -68,6 +68,19 @@ export const TERRAIN_RESULT_FOREIGN_SCAN_REFUSAL =
   + 'Re-run the analysis on this scan to export it.';
 
 /**
+ * Said after Save session when the active scan carries class edits. A session
+ * file stores the class filter, not per-point classes, so the edits would be
+ * gone after a restore unless the scan itself is exported.
+ */
+export const SESSION_CLASS_EDITS_NOT_STORED =
+  'Session saved. Class edits are not stored in the session file. To keep them, export the scan as LAS at display resolution.';
+
+/** The notice to show after a session save, or null when there is nothing to warn about. */
+export function sessionSaveNotice(hasClassEdits: boolean): string | null {
+  return hasClassEdits ? SESSION_CLASS_EDITS_NOT_STORED : null;
+}
+
+/**
  * Refusal for a `.olvsession` export whose active scan was swapped while the
  * session writer was loading. A session file embeds the scan's summary, origin,
  * CRS and unit alongside the measurements, annotations and saved views, so a
