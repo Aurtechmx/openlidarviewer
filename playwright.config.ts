@@ -207,7 +207,8 @@ export default defineConfig({
     {
       name: 'webkit-mobile',
       use: { ...devices['iPhone 15'] },
-      testMatch: /visualsStudioMobile|smoke\.spec|touchGesture|phoneWorkspace/,
+      // The UX journeys that P3 (touch only) walks: open, navigate, layout.
+      testMatch: /visualsStudioMobile|smoke\.spec|touchGesture|phoneWorkspace|journeys\/j(1|3|10)-/,
     },
     // The graphics preflight is its own project so it can be run before the
     // suite without joining any project's default set. `deterministic` is a
