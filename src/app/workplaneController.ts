@@ -204,7 +204,7 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
     const s = idleScratch;
     s.length = 0;
     s.push(...cam.position, ...cam.target, cam.fov ?? DEFAULT_FOV, viewer.orthographic ? 1 : 0, deps.canvas.clientHeight || 1);
-    if (b) for (let i = 0; i < b.length; i++) s.push(b[i]);
+    if (b) for (const x of b) s.push(x);
     s.push(...datum(), datumKnown() ? 1 : 0, deps.lightBackdrop() ? 1 : 0, axis() === 'z' ? 1 : 0);
     return s;
   };

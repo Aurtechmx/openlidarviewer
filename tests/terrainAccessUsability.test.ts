@@ -256,7 +256,7 @@ describe('route and raster placement', () => {
 
 describe('run failure text', () => {
   it('keeps an error message to one plain line', () => {
-    const r = lab.terrainAccessFailure(new Error('bad\nline‮evil​'));
+    const r = lab.terrainAccessFailure(new Error(`bad\nline${String.fromCodePoint(0x202e)}evil${String.fromCodePoint(0x200b)}`));
     expect(r.reason).toBe('Terrain Access could not finish: bad lineevil. Re-apply the mobility profile and try again.');
   });
 });
