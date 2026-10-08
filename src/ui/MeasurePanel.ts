@@ -797,6 +797,10 @@ export class MeasurePanel {
    */
   private async _buildProfileSheet(s: MeasurementSummary): Promise<void> {
     if (!s.profileChart || s.profileChart.length < 2) return;
+    // The sheet prints grades and chainages, which a geographic frame refuses,
+    // exactly as the profile CSV is refused. The docked workbench comes through
+    // here too, so the refusal covers both controls.
+    if (profileCsvRefusal(s, this._geographicCrs)) throw new Error(GEOGRAPHIC_CRS_MEASURE_NOTICE);
     // The frame the section was measured in, captured with it. Both were read
     // after the chunk await, so a scan swap while pdf-lib loaded labelled this
     // profile's geometry with the next scan's CRS and unit system.
@@ -1001,6 +1005,7 @@ export class MeasurePanel {
           pdfBtn.blur();
           void this._exportProfilePdf(s, pdfBtn);
         });
+        this._applyCsvRefusal(pdfBtn, s);
         container.append(el('div', { className: 'olv-rf-actions' }, [csvBtn, pdfBtn]));
       },
     });
@@ -1782,6 +1787,7 @@ export class MeasurePanel {
         ariaLabel: `Export profile ${s.name} station data as CSV`,
       });
       this._applyCsvRefusal(csvBtn, s);
+      this._applyCsvRefusal(pdfBtn, s);
       csvBtn.addEventListener('click', () => {
         csvBtn.blur();
         this._exportProfileCsv(s);
