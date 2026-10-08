@@ -234,7 +234,17 @@ function buildProfileExtras(
   if (stations.length === 0) return undefined;
   // Slope grades: use profile samples if the measurement carries them.
   const samples = m.profileChart && m.profileChart.length >= 2 ? m.profileChart : undefined;
-  const grades = slopeGradesPerSegment({ stations, samples });
+  // Samples and station heights are native: chainage in the horizontal unit,
+  // height in the vertical one. A grade is rise over run, so on a compound CRS
+  // the heights are rescaled by vf / f first; the ratio then matches the metric
+  // grade the summary line prints. A single-unit CRS (vf === f) is unchanged.
+  const hv = vf / f;
+  const grades = hv === 1
+    ? slopeGradesPerSegment({ stations, samples })
+    : slopeGradesPerSegment({
+      stations: stations.map((s) => ({ ...s, height: (s.height ?? s.position[2]) * hv })),
+      samples: samples?.map((s) => ({ ...s, height: s.height * hv })),
+    });
   const summary = summariseSlopes(grades);
 
   // The summary line's Horizontal / 3D / Δh / grade come from the ONE shared
