@@ -13,54 +13,20 @@ import { computeTerrainCore, contoursFromCore } from '../src/terrain/contour/ana
 import type { AnalyseContoursResult, TerrainCoreParams } from '../src/terrain/contour/analyseContours';
 import type { LaunchFrameContext } from '../src/terrain/contourStudio/contourStudioLaunchStateFromResult';
 
-const hoisted = vi.hoisted(() => ({
-  downloads: [] as { name: string; blob: Blob }[],
-  modals: [] as { footer: unknown; body: unknown; closed: number; close: () => void }[],
-}));
+vi.mock('../src/io/download', async () =>
+  (await import('./helpers/mapSheetDialogHarness')).downloadModuleMock());
+vi.mock('../src/ui/Modal', async () =>
+  (await import('./helpers/mapSheetDialogHarness')).modalModuleMock());
 
-vi.mock('../src/io/download', () => ({
-  triggerDownload: (blob: Blob, name: string) => { hoisted.downloads.push({ name, blob }); },
-  downloadBytes: () => {},
-}));
+import { FakeEl } from './helpers/analysePanelDom';
+import { fire, installDialogListeners, recorded as hoisted, slopePositions } from './helpers/mapSheetDialogHarness';
 
-vi.mock('../src/ui/Modal', () => ({
-  FOCUSABLE: '',
-  focusableIn: () => [],
-  openModal: (opts: { footer: unknown; body: unknown; onClose?: () => void }) => {
-    const rec = {
-      footer: opts.footer,
-      body: opts.body,
-      closed: 0,
-      close: () => {
-        if (rec.closed++ === 0) opts.onClose?.();
-      },
-    };
-    hoisted.modals.push(rec);
-    return { close: rec.close, dialog: opts.body };
-  },
-}));
-
-import { FakeEl, installAnalysePanelDom } from './helpers/analysePanelDom';
-
-type Listener = () => void;
-const listeners = new WeakMap<FakeEl, Map<string, Listener[]>>();
-
-beforeAll(() => {
-  installAnalysePanelDom({ ns: true });
-  FakeEl.prototype.addEventListener = function (this: FakeEl, type: string, fn: Listener): void {
-    const m = listeners.get(this) ?? new Map<string, Listener[]>();
-    m.set(type, [...(m.get(type) ?? []), fn]);
-    listeners.set(this, m);
-  } as FakeEl['addEventListener'];
-});
+beforeAll(installDialogListeners);
 beforeEach(() => {
   hoisted.downloads.length = 0;
   hoisted.modals.length = 0;
 });
 
-function fire(node: FakeEl, type: string): void {
-  for (const fn of listeners.get(node)?.get(type) ?? []) fn();
-}
 
 async function settle(): Promise<void> {
   for (let i = 0; i < 40; i++) await new Promise((r) => setTimeout(r, 0));
@@ -74,17 +40,10 @@ async function exported(errLine: FakeEl, downloads: number): Promise<void> {
   }
 }
 
-function slope(): Float32Array {
-  const pts: number[] = [];
-  for (let y = 0; y < 24; y++) {
-    for (let x = 0; x < 24; x++) pts.push(x * 0.5, y * 0.5, 50 + 0.4 * x + 0.2 * y);
-  }
-  return new Float32Array(pts);
-}
 
 function analyse(): AnalyseContoursResult {
   const params: TerrainCoreParams = { cellSizeM: 1, crs: 'EPSG:32610', verticalUnitToMetres: 1 };
-  return contoursFromCore(computeTerrainCore(slope(), params), { intervalM: 0.5 });
+  return contoursFromCore(computeTerrainCore(slopePositions(), params), { intervalM: 0.5 });
 }
 
 const CTX: LaunchFrameContext = {

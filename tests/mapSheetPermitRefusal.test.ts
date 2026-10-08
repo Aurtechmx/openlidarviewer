@@ -11,62 +11,21 @@ import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { computeTerrainCore, contoursFromCore } from '../src/terrain/contour/analyseContours';
 import type { TerrainCoreParams } from '../src/terrain/contour/analyseContours';
 
-const hoisted = vi.hoisted(() => ({
-  downloads: [] as { name: string; blob: Blob }[],
-  modals: [] as { footer: unknown; body: unknown; closed: number }[],
-}));
+vi.mock('../src/io/download', async () =>
+  (await import('./helpers/mapSheetDialogHarness')).downloadModuleMock());
+vi.mock('../src/ui/Modal', async () =>
+  (await import('./helpers/mapSheetDialogHarness')).modalModuleMock());
 
-vi.mock('../src/io/download', () => ({
-  triggerDownload: (blob: Blob, name: string) => { hoisted.downloads.push({ name, blob }); },
-  downloadBytes: () => {},
-}));
+import { FakeEl } from './helpers/analysePanelDom';
+import { fire, installDialogListeners, recorded as hoisted, slopePositions } from './helpers/mapSheetDialogHarness';
 
-vi.mock('../src/ui/Modal', () => ({
-  FOCUSABLE: '',
-  focusableIn: () => [],
-  openModal: (opts: { footer: unknown; body: unknown; onClose?: () => void }) => {
-    const rec = { footer: opts.footer, body: opts.body, closed: 0 };
-    hoisted.modals.push(rec);
-    return {
-      close: () => {
-        if (rec.closed++ === 0) opts.onClose?.();
-      },
-      dialog: opts.body,
-    };
-  },
-}));
-
-import { FakeEl, installAnalysePanelDom } from './helpers/analysePanelDom';
-
-type Listener = () => void;
-const listeners = new WeakMap<FakeEl, Map<string, Listener[]>>();
-
-beforeAll(() => {
-  installAnalysePanelDom({ ns: true });
-  // The stub drops listeners; the dialog is driven through its own buttons, so
-  // record them here and fire them on demand.
-  FakeEl.prototype.addEventListener = function (this: FakeEl, type: string, fn: Listener): void {
-    const m = listeners.get(this) ?? new Map<string, Listener[]>();
-    m.set(type, [...(m.get(type) ?? []), fn]);
-    listeners.set(this, m);
-  } as FakeEl['addEventListener'];
-});
+beforeAll(installDialogListeners);
 beforeEach(() => {
   hoisted.downloads.length = 0;
   hoisted.modals.length = 0;
 });
 
-function fire(node: FakeEl, type: string): void {
-  for (const fn of listeners.get(node)?.get(type) ?? []) fn();
-}
 
-function slope(): Float32Array {
-  const pts: number[] = [];
-  for (let y = 0; y < 24; y++) {
-    for (let x = 0; x < 24; x++) pts.push(x * 0.5, y * 0.5, 50 + 0.4 * x + 0.2 * y);
-  }
-  return new Float32Array(pts);
-}
 
 interface Internals {
   _openMapPdfDialog(btn: unknown): void;
@@ -81,7 +40,7 @@ async function panel(): Promise<Internals> {
     getMapContext: () => ({ worldOrigin: { x: 0, y: 0, z: 0 }, linearUnit: 'metre' as const }),
   });
   const params: TerrainCoreParams = { cellSizeM: 1, crs: 'EPSG:32610', verticalUnitToMetres: 1 };
-  const result = contoursFromCore(computeTerrainCore(slope(), params), { intervalM: 0.5 });
+  const result = contoursFromCore(computeTerrainCore(slopePositions(), params), { intervalM: 0.5 });
   expect(result.model.features.length).toBeGreaterThan(0);
   expect(result.quality.exportReadiness).not.toBe('blocked');
   p.update(result);
