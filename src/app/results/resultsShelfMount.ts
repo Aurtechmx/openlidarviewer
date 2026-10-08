@@ -55,8 +55,14 @@ export const LAB_OPEN_FALLBACK_MS = 8_000;
 type Pose = { position: [number, number, number]; target: [number, number, number] };
 
 /** The Analyse panel's read side plus its own export hand-off. */
+type TerrainOutcome = { readonly ok: true } | { readonly ok: false; readonly reason: string };
+
 export interface ShelfTerrainPanel extends TerrainReader {
-  exportProduct(kind: 'dem' | 'contours'): boolean;
+  exportProductStatus(kind: 'dem' | 'contours'): { readonly ready: boolean; readonly reason: string };
+  exportProduct(
+    kind: 'dem' | 'contours',
+    srcBtn?: HTMLButtonElement,
+  ): TerrainOutcome | Promise<TerrainOutcome>;
 }
 
 /** The Export panel's read side plus its product selection. */
@@ -155,7 +161,10 @@ export function mountResultsShelf(
   // The Export mode's terrain lane runs the Analyse panel's own exports.
   const terrainExports: TerrainExportsLane = {
     ready: () => !!src.terrain()?.resultRef(),
-    run: (kind: 'dem' | 'contours') => { src.terrain()?.exportProduct(kind); },
+    status: (kind: 'dem' | 'contours') =>
+      src.terrain()?.exportProductStatus(kind) ?? { ready: false, reason: 'Run a terrain analysis first.' },
+    run: (kind: 'dem' | 'contours', btn?: HTMLButtonElement) =>
+      src.terrain()?.exportProduct(kind, btn) ?? { ok: false, reason: 'Run a terrain analysis first.' },
   };
   exportPanel?.setTerrainExports(terrainExports);
   let hadTerrain = terrainExports.ready();
@@ -214,8 +223,13 @@ export function mountResultsShelf(
     }
   });
   const refresh = (): void => { index.refresh(); shelf.sync(); };
-  // The other-layer notes depend on the active layer, not on the results.
-  const offActive = host.scans.onActiveChange(() => shelf.sync());
+  // The other-layer notes depend on the active layer, not on the results. So
+  // does the terrain lane: a product refused for another scan's analysis comes
+  // back when that scan is active again.
+  const offActive = host.scans.onActiveChange(() => {
+    shelf.sync();
+    exportPanel?.setTerrainExports(terrainExports);
+  });
   refresh();
   const toggle = shelf.element.querySelector('.olv-results-toggle');
   toggle?.addEventListener('click', refresh, { capture: true });

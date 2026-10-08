@@ -71,3 +71,43 @@ describe('Export panel terrain readiness row', () => {
     expect(root.textContent).toContain('Export-ready');
   });
 });
+
+describe('Export panel terrain lane refusals', () => {
+  const productButton = (root: FakeEl, product: string): FakeEl =>
+    root.find((e) => e.dataset.product === product)!.find((e) => e.tagName === 'button')!;
+  const hintOf = (root: FakeEl, product: string): string =>
+    root.find((e) => e.dataset.product === product)!.find((e) => e.hasClass('olv-export-fullres-hint'))!.textContent;
+
+  it('disables a product that cannot run and says why', async () => {
+    const reason = 'No contours at this interval to export.';
+    const { p, root } = await panel();
+    p.setTerrainExports({
+      ready: () => true,
+      status: (kind) => (kind === 'contours' ? { ready: false, reason } : { ready: true, reason: '' }),
+      run: () => ({ ok: true }),
+    });
+    const btn = productButton(root, 'contours');
+    expect(btn.disabled).toBe(true);
+    expect(btn.title).toBe(reason);
+    expect(hintOf(root, 'contours')).toBe(reason);
+    expect(productButton(root, 'terrain-dem').disabled).toBe(false);
+  });
+
+  it('shows the reason when a product refuses at click time', async () => {
+    const reason = 'Run a terrain analysis first.';
+    const { p, root } = await panel();
+    p.setTerrainExports({ ready: () => true, run: () => ({ ok: false, reason }) });
+    productButton(root, 'terrain-dem').fire('click');
+    expect(hintOf(root, 'terrain-dem')).toBe(reason);
+  });
+
+  it('shows the gate reason when a product refuses after it starts', async () => {
+    const reason = 'The selected area has too much unsupported surface.';
+    const { p, root } = await panel();
+    p.setTerrainExports({ ready: () => true, run: () => Promise.resolve({ ok: false, reason }) });
+    productButton(root, 'contours').fire('click');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(hintOf(root, 'contours')).toBe(reason);
+  });
+});

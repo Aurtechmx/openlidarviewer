@@ -1,0 +1,94 @@
+/**
+ * mapSheetPermitRefusal.test.ts
+ *
+ * The contour map sheet is written only under a granted evidence permit. When
+ * the dialog's Export runs without one, nothing downloads, and the dialog must
+ * say so: it stays open, shows why in its error line, and keeps none of the
+ * entered values as if the sheet had been written.
+ */
+
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { computeTerrainCore, contoursFromCore } from '../src/terrain/contour/analyseContours';
+import type { TerrainCoreParams } from '../src/terrain/contour/analyseContours';
+
+vi.mock('../src/io/download', async () =>
+  (await import('./helpers/mapSheetDialogHarness')).downloadModuleMock());
+vi.mock('../src/ui/Modal', async () =>
+  (await import('./helpers/mapSheetDialogHarness')).modalModuleMock());
+
+import { FakeEl } from './helpers/analysePanelDom';
+import { fire, installDialogListeners, recorded as hoisted, slopePositions } from './helpers/mapSheetDialogHarness';
+
+beforeAll(installDialogListeners);
+beforeEach(() => {
+  hoisted.downloads.length = 0;
+  hoisted.modals.length = 0;
+});
+
+
+
+interface Internals {
+  _openMapPdfDialog(btn: unknown): void;
+  _contourPdfPermit: unknown;
+}
+
+async function panel(): Promise<Internals> {
+  const { AnalysePanel } = await import('../src/ui/AnalysePanel');
+  const p = new AnalysePanel({
+    getActiveScanId: () => 'scan-a',
+    getExportBasename: () => 'site',
+    getMapContext: () => ({ worldOrigin: { x: 0, y: 0, z: 0 }, linearUnit: 'metre' as const }),
+  });
+  const params: TerrainCoreParams = { cellSizeM: 1, crs: 'EPSG:32610', verticalUnitToMetres: 1 };
+  const result = contoursFromCore(computeTerrainCore(slopePositions(), params), { intervalM: 0.5 });
+  expect(result.model.features.length).toBeGreaterThan(0);
+  expect(result.quality.exportReadiness).not.toBe('blocked');
+  p.update(result);
+  return p as unknown as Internals;
+}
+
+function openDialog(p: Internals): { footer: FakeEl; exportBtn: FakeEl; errLine: FakeEl; prepared: FakeEl & { value: string }; closed: () => number } {
+  p._openMapPdfDialog(new FakeEl('button'));
+  const rec = hoisted.modals.at(-1);
+  if (!rec) throw new Error('the map sheet dialog did not open');
+  const footer = rec.footer as FakeEl;
+  const body = rec.body as FakeEl;
+  const exportBtn = footer.findByText('Export PDF')[0];
+  const errLine = footer.findByClass('olv-modal-error')[0];
+  const prepared = body
+    .findByClass('olv-modal-input')
+    .find((n) => (n as unknown as { placeholder?: string }).placeholder?.startsWith('Name or organisation')) as
+    | (FakeEl & { value: string })
+    | undefined;
+  if (!exportBtn || !errLine || !prepared) throw new Error('the dialog is missing its controls');
+  return { footer, exportBtn, errLine, prepared, closed: () => rec.closed };
+}
+
+async function settle(): Promise<void> {
+  for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 0));
+}
+
+describe('map sheet dialog without a granted permit', () => {
+  it('stays open, says why, writes nothing and keeps none of the entered values', async () => {
+    const p = await panel();
+    p._contourPdfPermit = null;
+    const d = openDialog(p);
+    d.prepared.value = 'Field crew 7';
+    fire(d.exportBtn, 'click');
+    await settle();
+
+    expect(hoisted.downloads).toHaveLength(0);
+    expect(d.closed()).toBe(0);
+    expect(d.errLine.style.display).not.toBe('none');
+    expect(d.errLine.textContent).toMatch(/not exported/i);
+    expect(d.errLine.textContent).toMatch(/Contour Studio/);
+    expect(d.exportBtn.disabled).toBe(false);
+
+    // Cancelled, then opened again: the new dialog has the default, not the
+    // value of the refused run.
+    fire(d.footer.findByText('Cancel')[0], 'click');
+    expect(d.closed()).toBe(1);
+    const again = openDialog(p);
+    expect(again.prepared.value).toBe('');
+  });
+});

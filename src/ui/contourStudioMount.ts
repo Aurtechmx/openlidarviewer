@@ -68,6 +68,50 @@ export interface MountContourStudioOptions {
 const WORKSPACE_HOST_CLASS = 'olv-cs-host';
 
 /**
+ * The per-frame gate facts for the §19 export permit: the launch status plus
+ * the CRS unit facts and the artifact claims of this result. The host adds only
+ * the analytical/cartographic flag from the intent when it mints the permit.
+ */
+function frameFactsFor(
+  result: AnalyseContoursResult,
+  ctx: LaunchFrameContext,
+  state: ReturnType<typeof contourStudioLaunchStateFromResult>,
+): ContourExportFrameFacts {
+  return {
+    launchStatus: state.status,
+    verticalUnitsKnown: ctx.verticalUnitsKnown,
+    crsProjected: ctx.crsProjected,
+    blockedReasons: 'reasons' in state ? state.reasons : undefined,
+    precision: ctx.precision,
+    capabilities: ctx.capabilities,
+    artifactClaimIds: {
+      contours: contourArtifactClaims(result),
+      dtm: dtmArtifactClaims(result),
+    },
+    authorizeFor: ctx.authorizeFor,
+  };
+}
+
+/**
+ * What a Studio export sends when the Studio has not been opened: the intent of
+ * the Studio's starting state (the 'custom' purpose, which a fresh Studio
+ * exports until a purpose is picked) and the gate facts the mounted Studio
+ * would hand over for this result and frame. The Export mode's map sheet runs
+ * through the same adapter with these, so its permit, purpose and provenance
+ * are the ones a Studio export of the same scan carries.
+ */
+export function defaultContourExport(
+  result: AnalyseContoursResult,
+  ctx: LaunchFrameContext,
+): { readonly intent: ContourExportIntent; readonly frame: ContourExportFrameFacts } {
+  const state = contourStudioLaunchStateFromResult(result, ctx);
+  return {
+    intent: contourExportIntentFromState(baseContourStudioState()),
+    frame: frameFactsFor(result, ctx, state),
+  };
+}
+
+/**
  * Compute the launch state and render the launcher + workspace shell into the
  * panel's hosts. Idempotent: re-mounting clears the launcher slot and reuses a
  * single workspace host inside the deliverable container, so repeated analyses
@@ -98,24 +142,11 @@ export function mountContourStudio(opts: MountContourStudioOptions): void {
   // "2 m". Unknown unit ⇒ unknownUnit() ⇒ no metric claim.
   const scale = opts.ctx.verticalUnitToMetres;
   const unitKnown = scale != null && Number.isFinite(scale) && scale > 0;
-  // Stable per-frame gate facts for the §19 export permit: the launch status
-  // plus the CRS unit facts. Computed ONCE here (from the same launch state the
-  // launcher renders) and handed to the host so it mints a permit at click time
-  // by adding only the analytical/cartographic flag from the intent — the gate
-  // context never depends on click ordering.
-  const frame: ContourExportFrameFacts = {
-    launchStatus: state.status,
-    verticalUnitsKnown: opts.ctx.verticalUnitsKnown,
-    crsProjected: opts.ctx.crsProjected,
-    blockedReasons: 'reasons' in state ? state.reasons : undefined,
-    precision: opts.ctx.precision,
-    capabilities: opts.ctx.capabilities,
-    artifactClaimIds: {
-      contours: contourArtifactClaims(opts.result),
-      dtm: dtmArtifactClaims(opts.result),
-    },
-    authorizeFor: opts.ctx.authorizeFor,
-  };
+  // Stable per-frame gate facts for the §19 export permit, computed ONCE here
+  // (from the same launch state the launcher renders) and handed to the host so
+  // it mints a permit at click time — the gate context never depends on click
+  // ordering.
+  const frame = frameFactsFor(opts.result, opts.ctx, state);
   // The claim the complete package exports under, rendered on the review row
   // and the ladder so the interface says what the file says.
   const claim = resolveWorkspaceClaim(frame);

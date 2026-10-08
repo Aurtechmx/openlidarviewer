@@ -81,6 +81,11 @@ export interface ContourExportHost {
   exportTerrainReport(permitStamp: ExportPermitStamp | null): Promise<void>;
 }
 
+/** What the adapter decided for one export: started, or refused with the gate's reasons. */
+export type ContourExportDecision =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reasons: readonly string[] };
+
 /** Milliseconds the "Blocked" flash sits on a button before restoring. */
 const BLOCKED_FLASH_MS = 1500;
 
@@ -99,13 +104,15 @@ export class ContourExportAdapter {
    * facts; `intent` the per-click purpose/geometry. EVERY product is gated here
    * by the single authoritative permit — vectors, map-PDF, DEM package, complete
    * deliverable and terrain report all resolve through the one evidence resolver.
+   * Returns the decision, so a caller outside the Studio can say why a refused
+   * export wrote nothing.
    */
   handle(
     product: ContourStudioExportProduct,
     srcBtn: HTMLButtonElement,
     intent: ContourExportIntent,
     frame: ContourExportFrameFacts,
-  ): void {
+  ): ContourExportDecision {
     // Make the purpose real: two purposes regenerate different geometry, each at
     // its own bounded generalization tolerance.
     this.host.setContourStyle(
@@ -122,10 +129,10 @@ export class ContourExportAdapter {
       const demPermit = resolveContourExportPermit('dem', permitContextFor('dem', frame, false));
       if (!demPermit.ok) {
         this._flashBlocked(srcBtn, product, demPermit.reasons);
-        return;
+        return { ok: false, reasons: demPermit.reasons };
       }
       void this._busy(srcBtn, () => this.host.exportDemPackage(permitStamp(demPermit)));
-      return;
+      return { ok: true };
     }
     // Complete deliverable ZIP: gated as the bundle product (contour.package /
     // CONTOURS claim). A hard block refuses; otherwise it assembles + downloads,
@@ -134,10 +141,10 @@ export class ContourExportAdapter {
       const permit = resolveContourExportPermit('complete-package', permitContextFor('complete-package', frame, false));
       if (!permit.ok) {
         this._flashBlocked(srcBtn, product, permit.reasons);
-        return;
+        return { ok: false, reasons: permit.reasons };
       }
       void this._busy(srcBtn, () => this.host.exportCompletePackage(permit, intent));
-      return;
+      return { ok: true };
     }
     // Terrain intelligence report: routed through the SAME resolver (DTM claim,
     // contour.report). A hard block (no usable surface) refuses; otherwise it
@@ -148,10 +155,10 @@ export class ContourExportAdapter {
       const reportPermit = resolveContourExportPermit('report', permitContextFor('report', frame, false));
       if (!reportPermit.ok) {
         this._flashBlocked(srcBtn, product, reportPermit.reasons);
-        return;
+        return { ok: false, reasons: reportPermit.reasons };
       }
       void this._busy(srcBtn, () => this.host.exportTerrainReport(permitStamp(reportPermit)));
-      return;
+      return { ok: true };
     }
 
     // §19: mint the permit for the contour product. analyticalGeometry keys off
@@ -162,13 +169,13 @@ export class ContourExportAdapter {
     );
     if (!permit.ok) {
       this._flashBlocked(srcBtn, product, permit.reasons);
-      return;
+      return { ok: false, reasons: permit.reasons };
     }
 
     if (product === 'pdf') {
       // The dialog is the feedback — no busy spinner; stash the permit + open it.
       this.host.openMapPdf(permit, intent);
-      return;
+      return { ok: true };
     }
     // geojson | dxf | svg → the gated vector exporter, stamped self-describing.
     const fmt = product as ContourVectorFormat;
@@ -179,6 +186,7 @@ export class ContourExportAdapter {
         permit,
       }),
     );
+    return { ok: true };
   }
 
   /**
@@ -232,6 +240,10 @@ export class ContourExportAdapter {
     console.warn(
       `OpenLiDARViewer: contour ${product} export blocked by the evidence gate — ${reasons.join(' ')}`,
     );
+    // Say why, not only that: the first reason goes to the polite live region,
+    // so the refusal is heard and not just a word flashed on one button.
+    const doc = (btn as unknown as { ownerDocument?: Document }).ownerDocument;
+    if (doc && reasons.length > 0) announcePolite(`Export blocked. ${reasons[0]}`, doc);
     const restore = btn.textContent ?? '';
     btn.textContent = 'Blocked';
     btn.disabled = true;
