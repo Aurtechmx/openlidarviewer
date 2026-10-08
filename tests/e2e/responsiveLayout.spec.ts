@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dropTinyLas, dropTerrainAccessUtmLas } from './helpers';
+import { bringPhoneToastForward, dropTinyLas, dropTerrainAccessUtmLas } from './helpers';
 
 /**
  * responsiveLayout.spec.ts — the v0.7 layout-lane audit's own regression
@@ -433,8 +433,7 @@ for (const [width, height] of [[320, 700], [375, 812], [390, 844], [430, 932]] a
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 30_000 });
     const strip = page.locator('.olv-state-strip');
     await expect(strip).toBeVisible();
-    const toast = page.locator('.olv-lasso-toast.olv-visible');
-    await expect(toast).toBeVisible({ timeout: 15_000 });
+    await bringPhoneToastForward(page);
     for (const text of ['Saved.', 'Terrain scan ready — grade the surface and build contours? Nothing uploaded. '.repeat(3)]) {
       await page.evaluate((t) => { document.querySelector('.olv-lasso-toast-msg')!.textContent = t; }, text);
       await waitForChromeClearance(page);

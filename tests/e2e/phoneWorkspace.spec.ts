@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropDenseGridPly, placeTestDistance } from './helpers';
+import { bringPhoneToastForward, dropDenseGridPly, placeTestDistance } from './helpers';
 
 /**
  * tests/e2e/phoneWorkspace.spec.ts
@@ -109,19 +109,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }
     test('the scan-ready toast does not cover the open sheet', async ({ page }) => {
       await openScan(page);
       const toast = page.locator('.olv-lasso-toast.olv-visible');
-      // On a phone the toast takes its turn after the Project card and the
-      // touch hint (transientLane.ts). The card is raised after the load
-      // settles and goes in front of whatever is showing, so wait for it,
-      // close it, then close the hint until the toast is the card on screen.
-      const card = page.locator('.olv-project-card.olv-visible');
-      await expect(card).toBeVisible({ timeout: 10_000 });
-      await card.locator('.olv-pc-dismiss').evaluate((e) => (e as HTMLElement).click());
-      await expect(card).toHaveCount(0);
-      const hint = page.locator('.olv-touch-hint.olv-visible:not(.olv-lane-wait) .olv-touch-hint-x');
-      await expect.poll(async () => {
-        if (await hint.isVisible()) await hint.evaluate((e) => (e as HTMLElement).click());
-        return toast.isVisible();
-      }, { timeout: 10_000 }).toBe(true);
+      await bringPhoneToastForward(page);
       for (const id of ['data', 'output']) {
         await tab(page, id).click();
         const t = (await toast.boundingBox())!;
