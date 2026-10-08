@@ -38,7 +38,7 @@ import {
   type WktNode,
 } from './wktParser';
 import { getCrsEntry } from '../geo/CrsRegistry';
-import { knownVerticalCrs } from '../geo/height';
+import { knownVerticalCrs, resolveVerticalEpsg } from '../geo/height';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -620,7 +620,13 @@ function extractVerticalFromNode(
 
 /** Map a vertical-datum name to its EPSG code (the common geoids/datums). */
 function verticalEpsgFromName(name: string): number | undefined {
+  // The shared vertical CRS table first, so "NAVD88 depth" is 6357, not 5703.
+  const known = resolveVerticalEpsg({ verticalDatum: name });
+  if (known !== undefined && knownVerticalCrs(known)) return known;
   const n = name.toLowerCase();
+  // The loose matches below name height datums. A depth axis they do not know
+  // is left to the node's own AUTHORITY.
+  if (n.includes('depth')) return undefined;
   if (n.includes('navd88') || n.includes('navd 88')) return 5703;
   if (n.includes('egm2008')) return 3855;
   if (n.includes('egm96')) return 5773;

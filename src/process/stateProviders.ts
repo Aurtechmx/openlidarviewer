@@ -134,7 +134,9 @@ function declaredUnitName(m: number | undefined): string | undefined {
 function verticalLabel(context: SpatialContext): string {
   if (context.verticalReferenceKnown) return `Vertical: ${context.verticalDatum ?? heightLabel(context.verticalReference)}`;
   const unit = context.verticalScaleKnown ? declaredUnitName(context.verticalUnitToMetres) : undefined;
-  return unit ? `Vertical: ${unit}, datum not recognised` : VERTICAL_UNKNOWN;
+  if (!unit) return VERTICAL_UNKNOWN;
+  const declared = context.verticalEpsg !== undefined || (context.verticalDatum ?? '').trim() !== '';
+  return `Vertical: ${unit}, datum ${declared ? 'not recognised' : 'not declared'}`;
 }
 
 /** The vertical reference from the spatial context. */

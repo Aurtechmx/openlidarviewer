@@ -850,3 +850,45 @@ describe('Plan reads on only once the camera has landed', () => {
     expect(changes.some((c) => c.active)).toBe(false);
   });
 });
+
+describe('an entry interrupted before the camera lands', () => {
+  it('a mode change retires the claim, reports off, and puts the projection back', () => {
+    const v = new FakeViewport();
+    const { plan, settle, changes } = controller(v);
+
+    plan.toggle();
+    expect(v.orthographic).toBe(true);
+    plan.noteManualNavigation();
+    settle();
+
+    expect(plan.active).toBe(false);
+    expect(changes).toEqual([{ active: false, reason: 'drift' }]);
+    expect(v.orthographic).toBe(false);
+  });
+
+  it('the next press enters again instead of leaving', () => {
+    const v = new FakeViewport();
+    const { plan, settle, changes } = controller(v);
+
+    plan.toggle();
+    plan.noteManualNavigation();
+    settle();
+    plan.toggle();
+    settle();
+
+    expect(plan.active).toBe(true);
+    expect(changes.at(-1)).toEqual({ active: true, reason: 'toggle' });
+  });
+
+  it('a second press before landing cancels without a "Plan view off" toggle', () => {
+    const v = new FakeViewport();
+    const { plan, settle, changes } = controller(v);
+
+    plan.toggle();
+    plan.toggle();
+    settle();
+
+    expect(plan.active).toBe(false);
+    expect(changes).toEqual([{ active: false, reason: 'drift' }]);
+  });
+});

@@ -124,6 +124,14 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
     const id = setTimeout(fn, PLAN_VIEW_SETTLE_MS);
     return () => clearTimeout(id);
   });
+  /**
+   * Whether Plan on has been reported for the current claim. Between the press
+   * and the camera landing the claim is held but not announced; anything that
+   * interrupts that window retires the claim, so the chip and the state agree.
+   */
+  let announced = false;
+  /** The projection before an unannounced entry, to put back if it is abandoned. */
+  let entryProjection: boolean | null = null;
   /** Cancels the wait currently scheduled, if any. */
   let cancelWait: (() => void) | null = null;
 
@@ -231,7 +239,24 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
     cancelPending();
     if (!state.active) return;
     state = PLAN_VIEW_OFF;
+    announced = false;
+    entryProjection = null;
     deps.onChange?.(false, 'drift');
+  }
+
+  /**
+   * The user acted before an entry landed. The pending announcement is gone with
+   * the cancelled wait, and a mode change stops the tween short of top-down, so
+   * the claim is retired rather than left on with the chip off. The projection
+   * the entry switched is put back unless the user just chose one themselves.
+   */
+  function interruptEntry(restoreProjection: boolean): boolean {
+    if (!state.active || announced) return false;
+    const before = entryProjection;
+    const v = deps.viewport();
+    if (restoreProjection && before !== null && v && v.orthographic !== before) v.setOrthographic(before);
+    drop();
+    return true;
   }
 
   /**
@@ -257,7 +282,12 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
     const transition = leavePlanView(state);
     state = transition.state;
     apply(v, transition.intents, restore?.mode ?? null, false);
-    deps.onChange?.(false, 'toggle');
+    // A press before the entry landed cancels an entry that never read as on:
+    // report it as a drift, so no "Plan view off" toast follows a chip that never lit.
+    const reason: PlanViewChange = announced ? 'toggle' : 'drift';
+    announced = false;
+    entryProjection = null;
+    deps.onChange?.(false, reason);
   }
 
   return {
@@ -286,14 +316,21 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
       // move that stalls or is taken over reports off through `drop`.
       let entered = false;
       let landedEarly = false;
+      const announce = (): void => {
+        announced = true;
+        entryProjection = null;
+        deps.onChange?.(true, 'toggle');
+      };
+      const projectionBefore = v.orthographic;
       const ok = apply(v, transition.intents, keepPan, true, () => {
-        if (entered) deps.onChange?.(true, 'toggle');
+        if (entered) announce();
         else landedEarly = true;
       });
       if (!ok) return;
       state = transition.state;
       entered = true;
-      if (landedEarly) deps.onChange?.(true, 'toggle');
+      entryProjection = projectionBefore;
+      if (landedEarly) announce();
     },
 
     reset(): void {
@@ -305,22 +342,27 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
 
     noteManualNavigation(): void {
       cancelPending();
+      interruptEntry(true);
     },
 
     dispose(): void {
       cancelPending();
       state = PLAN_VIEW_OFF;
+      announced = false;
+      entryProjection = null;
     },
 
     noteStandardView(view: StandardView): void {
       cancelPending();
       viewIsTop = view === 'top';
+      if (interruptEntry(true)) return;
       const v = deps.viewport();
       if (v) evaluate(v.orthographic);
     },
 
     noteOrthographic(on: boolean): void {
       cancelPending();
+      if (interruptEntry(false)) return;
       evaluate(on);
     },
 
@@ -329,6 +371,7 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
       // pose is an angled one, which is the user leaving plan.
       cancelPending();
       viewIsTop = name === 'top';
+      if (interruptEntry(true)) return;
       const v = deps.viewport();
       if (v) evaluate(v.orthographic);
     },

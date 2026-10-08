@@ -413,8 +413,8 @@ export class MeasurePanel {
       // stores no per-point classes, so the tooltip says class edits need LAS.
       title:
         'Save measurements, annotations, views, camera, render settings ' +
-        'and the class filter as an .olvsession. ' +
-        'Class edits are not stored: export LAS to keep them.',
+        'and the class filter. Class edits are not stored: export LAS ' +
+        'at display resolution to keep them.',
     });
     exportBtn.addEventListener('click', () => {
       exportBtn.blur();

@@ -248,7 +248,7 @@ A point re-save (LAS, XYZ, ASC) carries the source digest and CRS origin only: L
 
 ## Save and share
 
-Your work saves to a single **`.olvsession`** file from the Measurements panel. It holds your measurements and annotations, your saved viewpoints and the camera, the render and colour settings, and the class filter. It does not store class edits: to keep a reclassification, export the scan as LAS. It is plain text you can read in any editor, and it never contains the scan itself, so it stays small and private.
+Your work saves to a single **`.olvsession`** file from the Measurements panel. It holds your measurements and annotations, your saved viewpoints and the camera, the render and colour settings, and the class filter. It does not store class edits: to keep a reclassification, export the scan as LAS at display resolution. It is plain text you can read in any editor, and it never contains the scan itself, so it stays small and private.
 
 Use Export in that panel to write one and Open to read one back, or just drag the session onto the window. The viewer restores everything, including the trust grade on each measurement. Because the scan does not travel inside the session, open it alongside the same scan file; if the scan is not loaded, the viewer tells you which file to drop.
 

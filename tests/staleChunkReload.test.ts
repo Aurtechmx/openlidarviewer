@@ -21,6 +21,9 @@ import {
   deferredPageReload,
   installStaleChunkRecovery,
   STALE_RELOAD_MARKER_KEY,
+  OFFLINE_CHUNK_MESSAGE,
+  classifyProbeResponse,
+  makeHeadProbe,
 } from '../src/app/staleChunkReload';
 import type { StorageLike, EventTargetLike } from '../src/app/staleChunkReload';
 
@@ -356,7 +359,8 @@ describe('offline and network-blip chunk failures', () => {
     target.emit('vite:preloadError', { payload: chromiumErr(), preventDefault });
     expect(preventDefault).not.toHaveBeenCalled();
     expect(reload).not.toHaveBeenCalled();
-    expect(onOffline).toHaveBeenCalledWith('You are offline, this part could not load. Try again when back online.');
+    expect(onOffline).toHaveBeenCalledWith(OFFLINE_CHUNK_MESSAGE);
+    expect(OFFLINE_CHUNK_MESSAGE).toMatch(/Make available offline/);
   });
 
   it('offline: importOrReload rejects with the original error and does not reload or write the marker', async () => {
@@ -406,5 +410,73 @@ describe('offline and network-blip chunk failures', () => {
     expect(chunkUrlFromError(chromiumErr())).toBe('https://olv.example/assets/findingsPanel-abc123.js');
     expect(chunkUrlFromError(new TypeError('error loading dynamically imported module: http://localhost:4173/assets/a-1.js?v=2'))).toBe('http://localhost:4173/assets/a-1.js');
     expect(chunkUrlFromError(new TypeError('Importing a module script failed.'))).toBeNull();
+  });
+});
+
+describe('the chunk probe', () => {
+  it.each([
+    [{ ok: true, redirected: false, contentType: 'text/javascript; charset=utf-8' }, 'present'],
+    [{ ok: true, redirected: false, contentType: 'application/javascript' }, 'present'],
+    [{ ok: true, redirected: false, contentType: 'text/css' }, 'present'],
+    // A single-page-app fallback answers a deleted chunk with index.html and 200.
+    [{ ok: true, redirected: false, contentType: 'text/html' }, 'missing'],
+    [{ ok: false, redirected: false, contentType: 'text/html' }, 'missing'],
+    [{ ok: true, redirected: true, contentType: 'text/html' }, 'unreachable'],
+  ] as const)('%o reads %s', (res, want) => {
+    expect(classifyProbeResponse(res)).toBe(want);
+  });
+
+  const headers = (type: string) => ({ get: (k: string) => (k.toLowerCase() === 'content-type' ? type : null) });
+
+  it('a 404 is missing and a 200 script is present', async () => {
+    const f404 = vi.fn(async () => ({ ok: false, status: 404, redirected: false, headers: headers('text/html') }));
+    expect(await makeHeadProbe(f404 as never, 'https://olv.example')('https://olv.example/assets/a-1.js')).toBe('missing');
+    const f200 = vi.fn(async () => ({ ok: true, status: 200, redirected: false, headers: headers('text/javascript') }));
+    expect(await makeHeadProbe(f200 as never, 'https://olv.example')('https://olv.example/assets/a-1.js')).toBe('present');
+    expect(f200).toHaveBeenCalledWith('https://olv.example/assets/a-1.js', expect.objectContaining({ method: 'HEAD', cache: 'no-store' }));
+  });
+
+  it('a timeout reads unreachable', async () => {
+    const hang = vi.fn((_u: string, init: { signal: AbortSignal }) => new Promise((_r, reject) => {
+      init.signal.addEventListener('abort', () => reject(init.signal.reason));
+    }));
+    expect(await makeHeadProbe(hang as never, 'https://olv.example', 10)('https://olv.example/assets/a-1.js')).toBe('unreachable');
+  });
+
+  it('a cross-origin URL is never probed', async () => {
+    const f = vi.fn();
+    expect(await makeHeadProbe(f as never, 'https://olv.example')('https://cdn.other.example/a-1.js')).toBe('unreachable');
+    expect(f).not.toHaveBeenCalled();
+  });
+});
+
+describe('one failure reported twice (preloadError, then the rethrow)', () => {
+  const err = (): Error => new TypeError('Failed to fetch dynamically imported module: https://olv.example/assets/x-1.js');
+
+  it('online 404: one probe, one reload, and importOrReload never settles with an error', async () => {
+    const reload = vi.fn();
+    const onUnrecoverable = vi.fn();
+    const probe = vi.fn(async () => 'missing' as const);
+    const target = makeTarget();
+    const { importOrReload } = installStaleChunkRecovery({ reload, storage: makeStorage(), eventTarget: target, isOnline: () => true, probe, onUnrecoverable, log: () => {} });
+    const e = err();
+    target.emit('vite:preloadError', { payload: e, preventDefault: () => {} });
+    let settled = false;
+    void importOrReload(() => Promise.reject(e)).then(() => { settled = true; }, () => { settled = true; });
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(probe).toHaveBeenCalledTimes(1);
+    expect(onUnrecoverable).not.toHaveBeenCalled();
+    expect(settled).toBe(false);
+  });
+
+  it('offline: one toast for both reports', async () => {
+    const onOffline = vi.fn();
+    const target = makeTarget();
+    const { importOrReload } = installStaleChunkRecovery({ reload: vi.fn(), storage: makeStorage(), eventTarget: target, isOnline: () => false, onOffline, probe: null, log: () => {} });
+    const e = err();
+    target.emit('vite:preloadError', { payload: e, preventDefault: () => {} });
+    await expect(importOrReload(() => Promise.reject(e))).rejects.toBe(e);
+    expect(onOffline).toHaveBeenCalledTimes(1);
   });
 });

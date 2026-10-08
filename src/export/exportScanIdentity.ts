@@ -73,7 +73,7 @@ export const TERRAIN_RESULT_FOREIGN_SCAN_REFUSAL =
  * gone after a restore unless the scan itself is exported.
  */
 export const SESSION_CLASS_EDITS_NOT_STORED =
-  'Session saved. Class edits are not stored in the session file. To keep them, export the scan as LAS.';
+  'Session saved. Class edits are not stored in the session file. To keep them, export the scan as LAS at display resolution.';
 
 /** The notice to show after a session save, or null when there is nothing to warn about. */
 export function sessionSaveNotice(hasClassEdits: boolean): string | null {

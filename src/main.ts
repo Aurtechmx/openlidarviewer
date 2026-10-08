@@ -79,7 +79,7 @@ import type { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
-import { afterClassEdit, classCountsOf, classificationDiffersFromSource, noteClassificationEdited, wireFrameChange } from './app/classLegendRefresh';
+import { activeScanHasClassEdits, afterClassEdit, classCountsOf, noteClassificationEdited, wireFrameChange } from './app/classLegendRefresh';
 import type { ClassifyActionsDeps } from './app/classifyActions';
 import { buildExportHealth, densityStoryFields, footprintAreaM2, type ScanStoryInputs } from './intelligence/scanStory';
 import { fullScope, scopeFrom, scopeStamp, type ClassScope } from './render/class/classScope';
@@ -2470,7 +2470,7 @@ const exportPanel = new ExportPanel({
   isStreamingPending: () => viewer?.streamingCloud != null && viewer.exportFrontierPointTotal() === 0,
   getActiveClip: () => viewer.getClip(), getActiveClipOffset: () => (scans.activeId ? viewer.layerProjectOffset(scans.activeId) : null), getActiveScanId: () => scans.activeExportTargetId(),
   ...exportLayerHooks({ scans, viewer: () => viewer, sourceFiles: sourceFileById, reduced: reducedById, reopen: handleFile, removeLayer: removeCloud, notify: showLassoToast, inCompare: (id) => inspector.compareDifference.involves(id) }),
-  hasClassEdits: () => scans.activeId != null && classificationDiffersFromSource(viewer?.getCloud(scans.activeId)?.classificationProvenance ?? 'none', viewer?.classificationEpoch(scans.activeId) ?? 0),
+  hasClassEdits: () => activeScanHasClassEdits(scans.activeId, viewer),
   // A streaming snapshot exports only resident points, so it is a reduced subset
   // until the whole cloud lands — flagged so the status reads "reduced view".
   isReduced: () => {
@@ -3538,7 +3538,7 @@ async function exportSession(): Promise<void> {
     refuse: () => showLassoToast(SESSION_EXPORT_SCAN_CHANGED_REFUSAL),
     // Both lazy imports resolve before any state is read; their exports spread into one deps object.
     load: async () => ({ ...(await loadSession()), ...(await loadExportProvenance()), ...(await loadSessionSnapshot()) }),
-    write: (json) => { downloadText(`${baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? 'openlidarviewer')}.olvsession`, json); const note = sessionSaveNotice(scans.activeId != null && classificationDiffersFromSource(viewer?.getCloud(scans.activeId)?.classificationProvenance ?? 'none', viewer?.classificationEpoch(scans.activeId) ?? 0)); if (note) showLassoToast(note); },
+    write: (json) => { downloadText(`${baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? 'openlidarviewer')}.olvsession`, json); const note = sessionSaveNotice(activeScanHasClassEdits(scans.activeId, viewer)); if (note) showLassoToast(note); },
     serialize: (m) => m.serializeActiveSession(m, sessionSnapshotDeps),
   });
 }

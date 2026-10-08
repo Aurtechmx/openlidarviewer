@@ -18,10 +18,11 @@ export function buildMeasureConfidenceContext(
     | {
         readonly verticalEpsg?: number | null;
         readonly verticalDatum?: string | null;
-        readonly verticalUnitToMetres?: number | null;
       }
     | null
     | undefined,
+  /** The spatial context, for whether heights borrow the horizontal unit. */
+  spatial?: { readonly verticalUnitToMetres?: number; readonly linearUnitKnown: boolean; readonly isGeographic: boolean } | null,
 ): MeasureSceneContext {
   // Roadmap P1 #6: a height/volume measurement is only "datum resolved" when
   // the vertical reference is actually KNOWN — not merely when a datum STRING
@@ -46,8 +47,9 @@ export function buildMeasureConfidenceContext(
     // An unknown horizontal unit is not metres. A geographic frame carries its
     // own caveat and is graded elsewhere.
     unitVerified: viewer.measure.crsKnown !== false || !!viewer.measure.geographicCrs,
-    // A georeferenced file with no vertical unit borrows the horizontal one
-    // for heights (verticalMetresPerUnit 'horizontal-when-known').
-    verticalUnitBorrowed: resolvedCrs != null && resolvedCrs.verticalUnitToMetres == null,
+    // Heights borrow the horizontal unit exactly when verticalMetresPerUnit's
+    // 'horizontal-when-known' policy does: no vertical unit declared, a known
+    // horizontal unit, and a projected (not geographic) frame.
+    verticalUnitBorrowed: spatial != null && spatial.verticalUnitToMetres === undefined && spatial.linearUnitKnown && !spatial.isGeographic,
   };
 }

@@ -298,7 +298,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
     if (panel) {
       const viewer = deps.getViewer();
       panel.update(viewer.measure.getSummaries());
-      panel.setConfidenceContext(buildMeasureConfidenceContext(viewer, deps.crsService.current()));
+      panel.setConfidenceContext(buildMeasureConfidenceContext(viewer, deps.crsService.current(), deps.crsService.context()));
       const measurements = viewer.measure.getMeasurements();
       const hasMeasurements = measurements.length > 0;
       panel.setVisible(viewer.measureMode || hasMeasurements);

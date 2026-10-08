@@ -290,6 +290,9 @@ export function clipFrameOffset(
   return out.every((v) => v === 0) ? null : out;
 }
 
+/** Thrown when a findings chunk resolves undefined. */
+const FINDINGS_LOAD_FAILED = 'Saved findings could not load.';
+
 export class ExportPanel {
   readonly element: HTMLElement;
   /** The moved deliverables (formats / image / report), or null when not wired. */
@@ -1090,7 +1093,7 @@ export class ExportPanel {
     void Promise.all([loadFindingsPanel(), loadSessionFindings()]).then(
       ([panelMod, findingsMod]) => {
         // A chunk the stale-deploy recovery defaulted out resolves undefined.
-        if (!panelMod || !findingsMod) throw new Error('Saved findings could not load.');
+        if (!panelMod || !findingsMod) throw new Error(FINDINGS_LOAD_FAILED);
         const { buildFindingsPanel } = panelMod;
         const { SessionFindings } = findingsMod;
         this._findings = new SessionFindings();
@@ -1137,11 +1140,19 @@ export class ExportPanel {
         });
         slot.append(this._findingsPanel.element);
       },
-    ).catch(() => {
+    ).catch((err: unknown) => {
       // Offline or a failed chunk: say so in the slot and let the user retry.
+      // Anything else is a bug; log it, and drop a half-built ledger so a retry
+      // does not leave a second store subscribed beside the first.
+      console.error('[ExportPanel] saved findings did not mount', err);
       this._findingsMountStarted = false;
       if (this._findingsPanel) return;
-      const note = el('p', { className: 'olv-findings-load-failed olv-export-fullres-hint', text: 'Saved findings could not load. Check the connection and try again. ' });
+      this._findings = null;
+      const chunk = err instanceof Error && (err.message === FINDINGS_LOAD_FAILED || classifyLoadError(err) === 'stale-chunk');
+      const note = el('p', {
+        className: 'olv-findings-load-failed olv-export-fullres-hint',
+        text: chunk ? 'Saved findings could not load. Check the connection and try again. ' : 'Saved findings could not load. ',
+      });
       const retry = el('button', { className: 'olv-bc-pill olv-export-product-btn', text: 'Try again', tip: 'Load saved findings again' }) as HTMLButtonElement;
       retry.type = 'button';
       retry.addEventListener('click', () => { note.remove(); this._mountFindingsLedger(slot); });

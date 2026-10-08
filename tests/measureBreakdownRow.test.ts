@@ -150,3 +150,25 @@ describe('one unit per breakdown line', () => {
     expect(out!.text).toMatch(/Run 30\.0+ cm · Rise 40\.0+ cm · Slant 50\.0+ cm/);
   });
 });
+
+describe('a shared unit never hides a small figure', () => {
+  const fmtAll = async () => {
+    const f = await import('../src/render/measure/format');
+    return { formatLength: f.formatLength, formatLengthInBandOf: f.formatLengthInBandOf, formatArea: f.formatArea, formatGrade: f.formatGrade, formatAngle: f.formatAngle };
+  };
+
+  it('a 1.5 km run with a 3 cm rise prints the rise in metres, not 0 km', async () => {
+    const out = breakdownParts({ kind: 'distance', lineMetrics: lineBreakdown([0, 0, 0], [1500, 0, 0.03], Z_UP, 1) }, 'metric', await fmtAll());
+    expect(out!.text).toMatch(/Rise 0\.03\d* m/);
+    expect(out!.text).toMatch(/Run 1500\.\d+ m/);
+    expect(out!.text).not.toMatch(/km/);
+  });
+
+  it('a 2 mi run with a 2 in rise prints the rise in feet, not 0 mi', async () => {
+    const mi = 2 * 1609.344;
+    const inch = 2 * 0.0254;
+    const out = breakdownParts({ kind: 'distance', lineMetrics: lineBreakdown([0, 0, 0], [mi, 0, inch], Z_UP, 1) }, 'imperial', await fmtAll());
+    expect(out!.text).toMatch(/Rise 0\.16\d* ft/);
+    expect(out!.text).not.toMatch(/\bmi\b/);
+  });
+});

@@ -7,7 +7,7 @@ import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { waitForCondition } from './helpers/waitForCondition';
 import { FakeEl } from './helpers/exportPanelPillDomFake';
 
-const cap = vi.hoisted(() => ({ calls: 0, mode: 'undefined' as 'undefined' | 'reject' | 'ok', built: 0 }));
+const cap = vi.hoisted(() => ({ calls: 0, mode: 'undefined' as 'undefined' | 'reject' | 'ok' | 'bug', built: 0 }));
 vi.mock('../src/lazyChunks', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   loadFindingsPanel: async () => {
@@ -16,6 +16,7 @@ vi.mock('../src/lazyChunks', async (orig) => ({
     if (cap.mode === 'reject') throw new TypeError('Failed to fetch dynamically imported module: http://x/assets/findingsPanel-abc.js');
     return {
       buildFindingsPanel: () => {
+        if (cap.mode === 'bug') throw new RangeError('a bug in the panel');
         cap.built++;
         return { element: new FakeEl('div'), refresh: () => {} };
       },
@@ -92,4 +93,31 @@ describe('ExportPanel saved findings when the chunk fails to load', () => {
       expect(cap.calls).toBe(2);
     });
   }
+});
+
+describe('a bug thrown while the findings panel builds', () => {
+  it('is logged, drops the half-built ledger, and does not blame the connection', async () => {
+    cap.calls = 0;
+    cap.built = 0;
+    cap.mode = 'bug';
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    const panel = new ExportPanel({
+      getCloud: () => null,
+      hasFullSource: () => false,
+      isReduced: () => false,
+      getFullCloud: async () => null,
+      exportMeasurements: async () => {},
+      measurementCount: () => 1,
+      activeFindingsTargetId: () => 'scan-A',
+      collectMeasurementFindings: async () => [],
+      exportFindingsReport: async () => 'downloaded',
+    } as never);
+    const root = panel.element as unknown as ClickEl;
+    await waitForCondition(() => failNote(root) !== null, () => 'no failure note after the build threw');
+    expect(errors).toHaveBeenCalled();
+    expect(panel.findingsLedger()).toBeNull();
+    expect(failNote(root)!.textContent).not.toMatch(/connection/);
+    errors.mockRestore();
+  });
 });

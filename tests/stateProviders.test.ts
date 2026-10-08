@@ -101,6 +101,11 @@ describe('state strip providers', () => {
     expect(v.validity).toBe('review');
   });
 
+  it('a declared vertical unit with no datum at all says the datum is not declared', () => {
+    const ctx = freeze(spatialContextFrom({ ...unknownVertical, verticalUnitToMetres: 1 }));
+    expect(verticalReferenceProvider(ctx).value.label).toBe('Vertical: metres, datum not declared');
+  });
+
   it('resident-only: returns the coverage deriveScanFacts settled on', () => {
     const facts = freeze(deriveScanFacts({ kind: 'streaming' }));
     expect(layerBasisProvider(facts)).toEqual({ value: 'resident-only', source: 'scan-facts', validity: 'preview' });

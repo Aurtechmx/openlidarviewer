@@ -100,21 +100,37 @@ describe('buildMeasureConfidenceContext — end-to-end confidence of a height me
 
 describe('vertical unit borrowed from the horizontal unit', () => {
   const v = { measure: { datumResolved: true, crsKnown: true }, clouds: () => ['c'] as ReadonlyArray<unknown> };
+  const crs = { verticalEpsg: null, verticalDatum: null };
+  const projected = (verticalUnitToMetres?: number) => ({ verticalUnitToMetres, linearUnitKnown: true, isGeographic: false });
 
-  it('is flagged when the CRS declares no vertical unit', () => {
-    expect(buildMeasureConfidenceContext(v, { verticalEpsg: null, verticalDatum: null }).verticalUnitBorrowed).toBe(true);
+  it('is flagged for a projected metre CRS with no vertical unit', () => {
+    expect(buildMeasureConfidenceContext(v, crs, projected()).verticalUnitBorrowed).toBe(true);
   });
 
-  it('is not flagged when the vertical unit is declared, or there is no CRS', () => {
-    expect(buildMeasureConfidenceContext(v, { verticalUnitToMetres: 1200 / 3937 }).verticalUnitBorrowed).toBe(false);
-    expect(buildMeasureConfidenceContext(v, null).verticalUnitBorrowed).toBe(false);
+  it('is not flagged for a compound CRS that declares its vertical unit', () => {
+    expect(buildMeasureConfidenceContext(v, crs, projected(1200 / 3937)).verticalUnitBorrowed).toBe(false);
+  });
+
+  it('is not flagged for a local frame with an unknown unit (PLY, OBJ, no CRS)', () => {
+    expect(buildMeasureConfidenceContext(v, crs, { verticalUnitToMetres: undefined, linearUnitKnown: false, isGeographic: false }).verticalUnitBorrowed).toBe(false);
+    expect(buildMeasureConfidenceContext(v, null, null).verticalUnitBorrowed).toBe(false);
+  });
+
+  it('is not flagged for a geographic CRS', () => {
+    expect(buildMeasureConfidenceContext(v, crs, { verticalUnitToMetres: undefined, linearUnitKnown: true, isGeographic: true }).verticalUnitBorrowed).toBe(false);
+  });
+
+  it('matches verticalMetresPerUnit on real contexts', async () => {
+    const { spatialContextFrom, verticalMetresPerUnit } = await import('../src/geo/SpatialContext');
+    const utm = spatialContextFrom({ kind: 'projected', name: 'UTM 13N', epsg: 32613, linearUnit: 'metre', linearUnitToMetres: 1, source: 'las-vlr', confidence: 'high', userConfirmed: false } as never);
+    const borrowed = verticalMetresPerUnit(utm, 'horizontal-when-known') !== undefined && utm.verticalUnitToMetres === undefined;
+    expect(buildMeasureConfidenceContext(v, crs, utm).verticalUnitBorrowed).toBe(borrowed);
+    expect(borrowed).toBe(true);
   });
 
   it('a distance with no known vertical reference says only the horizontal frame is resolved', () => {
-    const ctx = buildMeasureConfidenceContext(v, { verticalEpsg: null, verticalDatum: null });
-    const c = confidenceForKind('distance', ctx);
+    const c = confidenceForKind('distance', buildMeasureConfidenceContext(v, crs, projected()));
     expect(c.level).toBe('verified');
     expect(c.label).toBe('Viewer measurement · horizontal frame resolved');
-    expect(c.label).not.toContain('datum resolved');
   });
 });
