@@ -193,7 +193,7 @@ export class ProjectCard {
       };
       document.addEventListener('pointerdown', onGesture, true);
       this._gesture = onGesture;
-    }, true);
+    }, { first: true });
   }
 
   /** The canvas-gesture listener that dismisses the card on a phone. */

@@ -410,6 +410,13 @@ export function createToastHost(host: () => HTMLElement = () => document.body): 
           shown.classList.remove('olv-visible');
           appTransientLane().release(shown);
         }, action ? 8000 : 6000);
+      }, {
+        // Sent back behind the Project card: the timer stops, so the toast is
+        // not dropped while it waits, and restarts when it returns.
+        onBack: () => {
+          if (timer !== null) clearTimeout(timer);
+          timer = null;
+        },
       });
     },
   };

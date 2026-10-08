@@ -69,11 +69,38 @@ describe('transient lane', () => {
     const toast = card(), project = card();
     const onToast = vi.fn();
     lane.claim(toast, onToast);
-    lane.claim(project, undefined, true);
+    lane.claim(project, undefined, { first: true });
     expect(lane.front()).toBe(project);
     expect(waiting(toast)).toBe(true);
     lane.release(project);
     expect(lane.front()).toBe(toast);
     expect(onToast).toHaveBeenCalledTimes(2);
+  });
+  it('a card sent back by a first claim is told, so its timer cannot drop it while it waits', () => {
+    vi.useFakeTimers();
+    try {
+      const lane = createTransientLane(() => true);
+      const toast = card(), project = card();
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      let shown = 0;
+      const startTimer = (): void => {
+        shown++;
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => lane.release(toast), 8000);
+      };
+      lane.claim(toast, startTimer, { onBack: () => { if (timer) clearTimeout(timer); timer = null; } });
+      vi.advanceTimersByTime(1000);
+      lane.claim(project, undefined, { first: true });
+      vi.advanceTimersByTime(20_000); // the card stays up well past the toast's 8 s
+      expect(lane.front()).toBe(project);
+      lane.release(project);
+      expect(lane.front()).toBe(toast);
+      expect(waiting(toast)).toBe(false);
+      expect(shown).toBe(2);
+      vi.advanceTimersByTime(8000);
+      expect(lane.front()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -647,6 +647,11 @@ export class NavBar {
     appTransientLane().claim(this.touchHint, () => {
       if (this._touchTimer !== null) clearTimeout(this._touchTimer);
       this._touchTimer = window.setTimeout(() => this.hideTouchHint(), TOUCH_HINT_MS);
+    }, {
+      onBack: () => {
+        if (this._touchTimer !== null) clearTimeout(this._touchTimer);
+        this._touchTimer = null;
+      },
     });
   }
 

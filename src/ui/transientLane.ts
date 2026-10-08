@@ -19,10 +19,10 @@ export interface TransientLane {
   /**
    * Queue `el`; `onFront` runs once it is the card on screen. Re-claiming a
    * queued card keeps its place. With `first` the card goes to the front and
-   * the card that was showing waits behind it, its `onFront` running again
-   * when it returns.
+   * the card that was showing waits behind it: its `onBack` runs then, so it
+   * can stop its own timer, and its `onFront` runs again when it returns.
    */
-  claim(el: HTMLElement, onFront?: () => void, first?: boolean): void;
+  claim(el: HTMLElement, onFront?: () => void, opts?: ClaimOptions): void;
   /** Remove `el` from the lane and show the next card waiting, if any. */
   release(el: HTMLElement): void;
   /** The card currently shown, or null. */
@@ -31,10 +31,30 @@ export interface TransientLane {
   active(): boolean;
 }
 
+export interface ClaimOptions {
+  /** Take the front, sending the card on screen back to wait. */
+  readonly first?: boolean;
+  /** Runs when another card's `first` claim sends this one back to wait. */
+  readonly onBack?: () => void;
+}
+
+interface Entry { el: HTMLElement; onFront?: () => void; onBack?: () => void }
+
 const WAIT_CLASS = 'olv-lane-wait';
 
 export function createTransientLane(active: () => boolean): TransientLane {
-  const queue: Array<{ el: HTMLElement; onFront?: () => void }> = [];
+  const queue: Entry[] = [];
+
+  /** Put `entry` in front, sending the card on screen back to wait. */
+  const takeFront = (entry: Entry): void => {
+    const prior = queue[0];
+    if (prior) {
+      prior.el.classList.add(WAIT_CLASS);
+      prior.onBack?.();
+    }
+    queue.unshift(entry);
+    promote();
+  };
 
   const promote = (): void => {
     const head = queue[0];
@@ -44,7 +64,8 @@ export function createTransientLane(active: () => boolean): TransientLane {
   };
 
   return {
-    claim(el, onFront, first = false) {
+    claim(el, onFront, opts = {}) {
+      const { first = false, onBack } = opts;
       if (!active()) {
         el.classList?.remove(WAIT_CLASS);
         onFront?.();
@@ -52,23 +73,22 @@ export function createTransientLane(active: () => boolean): TransientLane {
       }
       const at = queue.findIndex((q) => q.el === el);
       if (at >= 0) {
-        queue[at].onFront = onFront;
+        const entry = queue[at];
+        entry.onFront = onFront;
+        entry.onBack = onBack;
         if (at === 0) onFront?.();
         else if (first) {
           queue.splice(at, 1);
-          queue[0].el.classList.add(WAIT_CLASS);
-          queue.unshift({ el, onFront });
-          promote();
+          takeFront(entry);
         }
         return;
       }
+      const entry: Entry = { el, onFront, onBack };
       if (first && queue.length > 0) {
-        queue[0].el.classList.add(WAIT_CLASS);
-        queue.unshift({ el, onFront });
-        promote();
+        takeFront(entry);
         return;
       }
-      queue.push({ el, onFront });
+      queue.push(entry);
       if (queue.length === 1) promote();
       else el.classList.add(WAIT_CLASS);
     },
