@@ -6,9 +6,10 @@
  * produces the final PDF Blob.
  *
  * The renderer is **layout-bounded** — each section knows its rough
- * height needs and can request a new page when it overflows. The layout
- * is hand-tuned (no full paragraph reflow); the technical-notes section
- * currently takes a single line of body copy.
+ * height needs and can request a new page when it overflows, and every
+ * wrapped line of text checks its own room (`drawLines`), so a long field
+ * breaks across pages instead of running below the footer. The layout is
+ * hand-tuned (no full paragraph reflow).
  *
  * Pure of DOM; pdf-lib gives us PDF bytes that we wrap in a Blob.
  * Tests pin the pure-data section builders; the actual render is
@@ -36,7 +37,16 @@ import { describeAnnotationGroups } from '../render/annotate/annotationClusterin
 import type { AnnotationType } from '../render/annotate/types';
 import type { FindingTier, ReportFinding, ReportInspectionSummary } from './ReportFindings';
 import { pdfInfoDate } from '../pdfInfoDate';
-import { WIN_ANSI_TRANSLITERATIONS } from '../winAnsiText';
+import {
+  WIN_ANSI_TRANSLITERATIONS,
+  PDF_FIELD_CHAR_CAP,
+  capFieldText,
+  clipWithSuffix,
+  mayCapField,
+  omissionMarker,
+  pdfParagraphs,
+  wrapToWidth,
+} from '../winAnsiText';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Layout constants — letter portrait, 0.6 inch margins.
@@ -91,6 +101,40 @@ interface PageCursor {
   page: PDFPage;
   y: number;
 }
+
+/** What a drawing helper needs to start a new page partway through a block. */
+interface PageContext {
+  readonly doc: PDFDocument;
+  readonly accent: ParsedColor;
+  readonly theme: ReportThemePalette;
+  readonly organisation: string | undefined;
+}
+
+/** How one run of wrapped lines is set: left edge, face, size, leading, colour. */
+interface LineStyle {
+  readonly x: number;
+  readonly font: PDFFont;
+  readonly size: number;
+  /** Vertical advance per line; also the room checked before each line. */
+  readonly leading: number;
+  readonly color: ParsedColor;
+}
+
+/** Called on each fresh page a block breaks onto, before its next line is drawn. */
+type OnNewPage = (cursor: PageCursor) => PageCursor;
+
+/**
+ * The longest a source-metadata section may run, counted in characters with
+ * every field charged at least one printed line (100 characters). A file with
+ * a few hundred declared fields prints in full; past the budget the remaining
+ * fields are left out under a visible marker. 120,000 characters is about
+ * 1,200 lines, some 25 pages, so a file that declares thousands of fields
+ * (each already capped at PDF_FIELD_CHAR_CAP) cannot add hundreds of pages.
+ * A field `mayCapField` protects (a CRS definition, a digest) counts at its
+ * full length and is never cut: if it alone would overrun the budget it is
+ * left out and counted by the marker, never printed in part.
+ */
+const SOURCE_METADATA_SECTION_CAP = 120_000;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public entry
@@ -284,7 +328,7 @@ async function renderSection(
 ): Promise<PageCursor> {
   switch (section) {
     case 'cover':
-      return renderCover(cursor, inputs, accent, theme, body, bold, logo);
+      return renderCover(cursor, inputs, doc, accent, theme, body, bold, logo, organisation);
     case 'inspection-summary':
       return renderInspectionSummary(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'dataset-summary':
@@ -372,44 +416,29 @@ function ensureSpace(
  * (a long unbroken token / URL) are hard-broken character-by-character so the
  * loop always terminates and nothing is silently clipped at the page edge.
  *
- * The input is run through `sanitiseForPdf` first so the width measurement
- * matches what actually gets drawn (the WinAnsi substitutions change string
- * length — e.g. "≥" → ">=").
+ * A line break in the text starts a new line (a blank source line stays a
+ * blank line), and tabs and other whitespace become spaces (`pdfParagraphs`),
+ * so neither reaches the WinAnsi fallback as '?'. Each paragraph is then run
+ * through `sanitiseForPdf` so the width measurement matches what actually
+ * gets drawn (the WinAnsi substitutions change string length — e.g. "≥" →
+ * ">=").
  */
 function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
-  const clean = sanitiseForPdf(text);
-  if (clean.length === 0) return [''];
-  const lines: string[] = [];
-  let line = '';
-  for (const word of clean.split(/\s+/)) {
-    if (word.length === 0) continue;
-    const candidate = line ? `${line} ${word}` : word;
-    if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
-      line = candidate;
-      continue;
-    }
-    if (line) {
-      lines.push(line);
-      line = '';
-    }
-    // The word alone may still overflow — hard-break it.
-    if (font.widthOfTextAtSize(word, size) <= maxWidth) {
-      line = word;
-    } else {
-      let chunk = '';
-      for (const ch of word) {
-        if (chunk && font.widthOfTextAtSize(chunk + ch, size) > maxWidth) {
-          lines.push(chunk);
-          chunk = ch;
-        } else {
-          chunk += ch;
-        }
-      }
-      line = chunk;
-    }
-  }
-  if (line) lines.push(line);
+  const measure = (t: string): number => font.widthOfTextAtSize(t, size);
+  const lines = pdfParagraphs(text).flatMap((p) => {
+    const wrapped = wrapToWidth(sanitiseForPdf(p), measure, maxWidth);
+    return wrapped.length > 0 ? wrapped : [''];
+  });
   return lines.length > 0 ? lines : [''];
+}
+
+/**
+ * `text` for a single drawn line: line breaks, tabs and other control
+ * whitespace become spaces, so they never print as '?'. Ordinary spaces,
+ * doubled ones included, are kept as they are.
+ */
+function oneLine(text: string): string {
+  return text.replace(/[\t\n\v\f\r\u2028\u2029]+/g, ' ');
 }
 
 /**
@@ -454,27 +483,103 @@ function drawSectionHeader(
   return { page: cursor.page, y: cursor.y - HEADER_FONT_SIZE - 14 };
 }
 
+/**
+ * Draw pre-wrapped `lines` down the page. Before each line the remaining room
+ * is checked, and a line that would cross the footer band goes to a new page
+ * instead, where `onNewPage` (when given) draws the "(continued)" label first.
+ * Every multi-line block in this renderer goes through here, so no wrapped
+ * line can land below the footer however long the text is.
+ */
+function drawLines(
+  cursor: PageCursor,
+  lines: readonly string[],
+  style: LineStyle,
+  ctx: PageContext,
+  onNewPage?: OnNewPage,
+): PageCursor {
+  const color = rgb(style.color.r, style.color.g, style.color.b);
+  for (const line of lines) {
+    const next = ensureSpace(cursor, style.leading, ctx.doc, ctx.accent, ctx.theme, ctx.organisation);
+    if (next !== cursor) cursor = onNewPage ? onNewPage(next) : next;
+    cursor.page.drawText(line, {
+      x: style.x, y: cursor.y - style.size,
+      size: style.size, font: style.font, color,
+    });
+    cursor = { page: cursor.page, y: cursor.y - style.leading };
+  }
+  return cursor;
+}
+
+/**
+ * Wrap `text` to the right margin from `style.x` and draw it through
+ * {@link drawLines}. With `cap`, a field longer than PDF_FIELD_CHAR_CAP is cut
+ * there and followed by a muted marker line that states how many characters
+ * were left out, so a cut is always visible on the page.
+ */
+function drawWrappedField(
+  cursor: PageCursor,
+  text: string,
+  style: LineStyle,
+  body: PDFFont,
+  ctx: PageContext,
+  opts: { readonly cap: boolean; readonly onNewPage?: OnNewPage },
+): PageCursor {
+  const field = opts.cap ? capFieldText(text) : { text, omitted: 0 };
+  const width = PAGE_WIDTH - MARGIN - style.x;
+  cursor = drawLines(cursor, wrapText(field.text, style.font, style.size, width), style, ctx, opts.onNewPage);
+  if (field.omitted > 0) {
+    const markerStyle: LineStyle = { ...style, font: body, color: ctx.theme.mutedText };
+    cursor = drawLines(
+      cursor, wrapText(omissionMarker(field.omitted), body, style.size, width), markerStyle, ctx, opts.onNewPage,
+    );
+  }
+  return cursor;
+}
+
+/**
+ * The one-line "<label> (continued)" repeated at the top of a page when a
+ * value breaks across pages, in the muted label colour, so the reader can see
+ * whose value the page opens with. A long label is shortened to one line.
+ */
+function continuedLabel(label: string, bold: PDFFont, ctx: PageContext, x: number = MARGIN): OnNewPage {
+  const text = clipWithSuffix(
+    sanitiseForPdf(label), ' (continued)',
+    (t) => bold.widthOfTextAtSize(t, BODY_FONT_SIZE), PAGE_WIDTH - MARGIN - x,
+  );
+  const muted = rgb(ctx.theme.mutedText.r, ctx.theme.mutedText.g, ctx.theme.mutedText.b);
+  return (cursor) => {
+    cursor.page.drawText(text, {
+      x, y: cursor.y - BODY_FONT_SIZE,
+      size: BODY_FONT_SIZE, font: bold, color: muted,
+    });
+    return { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 4 };
+  };
+}
+
+interface BodyLineOptions {
+  readonly indent?: number;
+  /** Repeat this label as "(continued)" when the text breaks across pages. */
+  readonly continued?: { readonly label: string; readonly bold: PDFFont };
+}
+
 function drawBodyLine(
   cursor: PageCursor,
   text: string,
   body: PDFFont,
-  theme: ReportThemePalette,
-  indent = 0,
+  ctx: PageContext,
+  opts: BodyLineOptions = {},
 ): PageCursor {
   // Wrap to the content width so long lines (the provenance disclaimer, free
-  // notes) flow onto further lines instead of running off the right margin.
-  const x = MARGIN + indent;
-  const maxWidth = PAGE_WIDTH - MARGIN - x;
-  let y = cursor.y;
-  for (const line of wrapText(text, body, BODY_FONT_SIZE, maxWidth)) {
-    cursor.page.drawText(line, {
-      x, y: y - BODY_FONT_SIZE,
-      size: BODY_FONT_SIZE, font: body,
-      color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
-    });
-    y -= BODY_FONT_SIZE + 4;
-  }
-  return { page: cursor.page, y };
+  // notes) flow onto further lines instead of running off the right margin,
+  // and onto further pages instead of running off the bottom.
+  const x = MARGIN + (opts.indent ?? 0);
+  const style: LineStyle = {
+    x, font: body, size: BODY_FONT_SIZE, leading: BODY_FONT_SIZE + 4, color: ctx.theme.bodyText,
+  };
+  return drawWrappedField(cursor, text, style, body, ctx, {
+    cap: false,
+    onNewPage: opts.continued ? continuedLabel(opts.continued.label, opts.continued.bold, ctx) : undefined,
+  });
 }
 
 /**
@@ -501,9 +606,11 @@ function drawProfileChart(
   const bottom = top - CHART_H;
   const rule = rgb(theme.rule.r, theme.rule.g, theme.rule.b);
 
-  // Bounds of the samples (finite-only; the caller already filtered).
+  // Bounds of the covered samples. The builder passes an uncovered sample as a
+  // NaN height, which marks a gap in the line.
   let dMin = Infinity, dMax = -Infinity, hMin = Infinity, hMax = -Infinity;
   for (const s of chart) {
+    if (!Number.isFinite(s.distance) || !Number.isFinite(s.height)) continue;
     if (s.distance < dMin) dMin = s.distance;
     if (s.distance > dMax) dMax = s.distance;
     if (s.height < hMin) hMin = s.height;
@@ -518,14 +625,27 @@ function drawProfileChart(
 
   const sx = (d: number): number => x0 + PAD + ((d - dMin) / dSpan) * (CHART_W - 2 * PAD);
   const sy = (h: number): number => bottom + PAD + ((h - hMin) / hSpan) * (CHART_H - 2 * PAD);
+  const covered = (i: number): boolean =>
+    i >= 0 && i < chart.length && Number.isFinite(chart[i].distance) && Number.isFinite(chart[i].height);
   let prev: { x: number; y: number } | null = null;
-  for (const s of chart) {
+  for (let i = 0; i < chart.length; i++) {
+    const s = chart[i];
+    // A gap lifts the pen: the next covered sample starts a new run, so no
+    // segment is drawn across missing data.
+    if (!covered(i)) {
+      prev = null;
+      continue;
+    }
     const pt = { x: sx(s.distance), y: sy(s.height) };
     if (prev) {
       cursor.page.drawLine({
         start: prev, end: pt, thickness: 0.9,
         color: rgb(accent.r, accent.g, accent.b),
       });
+    } else if (!covered(i + 1)) {
+      // A covered sample with a gap (or the end) on both sides is a run of
+      // one. It has no segment, so it is drawn as a dot rather than vanishing.
+      cursor.page.drawCircle({ x: pt.x, y: pt.y, size: 1.2, color: rgb(accent.r, accent.g, accent.b) });
     }
     prev = pt;
   }
@@ -557,49 +677,53 @@ function drawLabelValueRow(
   value: string,
   body: PDFFont,
   bold: PDFFont,
-  theme: ReportThemePalette,
+  ctx: PageContext,
+  /**
+   * Cap the label and value at PDF_FIELD_CHAR_CAP. Only for file-derived
+   * fields (declared source metadata) whose label `mayCapField` allows; text
+   * the user typed and app-written rows are always printed whole.
+   */
+  cap = false,
 ): PageCursor {
-  const cleanLabel = sanitiseForPdf(label);
+  const labelField = cap ? capFieldText(label) : { text: label, omitted: 0 };
+  const cleanLabel = sanitiseForPdf(oneLine(labelField.text));
   const labelX = gridX(1);
-  const muted = rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b);
-  const bodyColor = rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b);
+  const leading = BODY_FONT_SIZE + 4;
+  const labelStyle: LineStyle = {
+    x: labelX, font: bold, size: BODY_FONT_SIZE, leading, color: ctx.theme.mutedText,
+  };
+  // A value that breaks across pages opens the new page with its label.
+  const onNewPage = continuedLabel(cleanLabel, bold, ctx, labelX);
   // Does the bold label fit before the value column with a 6-pt gap? Wide
   // labels (the provenance "Typical density (USGS QL2)" rows) used to overrun
   // the value at LABEL_VALUE_GUTTER_X — the label and value collided. When the
   // label is too wide, drop the value onto its own indented line below it.
   const labelWidth = bold.widthOfTextAtSize(cleanLabel, BODY_FONT_SIZE);
-  const inlineFits = labelX + labelWidth + 6 <= LABEL_VALUE_GUTTER_X;
-
-  cursor.page.drawText(cleanLabel, {
-    x: labelX, y: cursor.y - BODY_FONT_SIZE,
-    size: BODY_FONT_SIZE, font: bold, color: muted,
-  });
+  const inlineFits = labelField.omitted === 0 && labelX + labelWidth + 6 <= LABEL_VALUE_GUTTER_X;
 
   if (inlineFits) {
-    // Value shares the row, wrapped within the column to the right margin.
-    const valueX = LABEL_VALUE_GUTTER_X;
-    const valueMax = PAGE_WIDTH - MARGIN - valueX;
-    let y = cursor.y;
-    for (const line of wrapText(value, body, BODY_FONT_SIZE, valueMax)) {
-      cursor.page.drawText(line, {
-        x: valueX, y: y - BODY_FONT_SIZE, size: BODY_FONT_SIZE, font: body, color: bodyColor,
-      });
-      y -= BODY_FONT_SIZE + 4;
-    }
-    return { page: cursor.page, y };
+    // Label and the first value line share the row; the value wraps within
+    // its column to the right margin.
+    cursor = ensureSpace(cursor, leading, ctx.doc, ctx.accent, ctx.theme, ctx.organisation);
+    cursor.page.drawText(cleanLabel, {
+      x: labelX, y: cursor.y - BODY_FONT_SIZE,
+      size: BODY_FONT_SIZE, font: bold,
+      color: rgb(ctx.theme.mutedText.r, ctx.theme.mutedText.g, ctx.theme.mutedText.b),
+    });
+    const valueStyle: LineStyle = {
+      x: LABEL_VALUE_GUTTER_X, font: body, size: BODY_FONT_SIZE, leading, color: ctx.theme.bodyText,
+    };
+    return drawWrappedField(cursor, value, valueStyle, body, ctx, { cap, onNewPage });
   }
 
-  // Label too wide — value flows below it, indented one grid track, wrapped.
-  let y = cursor.y - BODY_FONT_SIZE - 4;
-  const valueX = gridX(2);
-  const valueMax = PAGE_WIDTH - MARGIN - valueX;
-  for (const line of wrapText(value, body, BODY_FONT_SIZE, valueMax)) {
-    cursor.page.drawText(line, {
-      x: valueX, y: y - BODY_FONT_SIZE, size: BODY_FONT_SIZE, font: body, color: bodyColor,
-    });
-    y -= BODY_FONT_SIZE + 4;
-  }
-  return { page: cursor.page, y };
+  // Label too wide: it wraps across the content width (capped like the value
+  // when the row is capped), and the value flows below it, indented one grid
+  // track.
+  cursor = drawWrappedField(cursor, label, labelStyle, body, ctx, { cap });
+  const valueStyle: LineStyle = {
+    x: gridX(2), font: body, size: BODY_FONT_SIZE, leading, color: ctx.theme.bodyText,
+  };
+  return drawWrappedField(cursor, value, valueStyle, body, ctx, { cap, onNewPage });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -609,12 +733,15 @@ function drawLabelValueRow(
 async function renderCover(
   cursor: PageCursor,
   inputs: ReportInputs,
+  doc: PDFDocument,
   accent: ParsedColor,
   theme: ReportThemePalette,
   body: PDFFont,
   bold: PDFFont,
   logo: PDFImage | undefined,
+  organisation: string | undefined,
 ): Promise<PageCursor> {
+  const ctx: PageContext = { doc, accent, theme, organisation };
   // Template design DNA — drives the small uppercase tag chip rendered
   // above the title so each of the six templates produces a visually
   // distinct cover even before the reader gets to the title.
@@ -675,26 +802,26 @@ async function renderCover(
   cursor = { page: cursor.page, y: cursor.y - 30 };
 
   // Cover metadata block — dataset / organisation / author / exported.
-  cursor = drawLabelValueRow(cursor, 'Dataset',     inputs.cover.datasetName, body, bold, theme);
+  cursor = drawLabelValueRow(cursor, 'Dataset',     inputs.cover.datasetName, body, bold, ctx);
   if (inputs.branding.organisation) {
-    cursor = drawLabelValueRow(cursor, 'Organisation', inputs.branding.organisation, body, bold, theme);
+    cursor = drawLabelValueRow(cursor, 'Organisation', inputs.branding.organisation, body, bold, ctx);
   }
   if (inputs.branding.author) {
-    cursor = drawLabelValueRow(cursor, 'Author',     inputs.branding.author, body, bold, theme);
+    cursor = drawLabelValueRow(cursor, 'Author',     inputs.branding.author, body, bold, ctx);
   }
   cursor = drawLabelValueRow(
-    cursor, 'Exported', formatTimestamp(inputs.cover.exportedAt), body, bold, theme,
+    cursor, 'Exported', formatTimestamp(inputs.cover.exportedAt), body, bold, ctx,
   );
   // optional project-metadata rows, one per provided field.
   // Rendered after the standard block so the cover stays clean when no
   // project metadata was supplied.
   const pm = inputs.branding.projectMetadata;
   if (pm) {
-    if (pm.client)    cursor = drawLabelValueRow(cursor, 'Client',    pm.client,    body, bold, theme);
-    if (pm.project)   cursor = drawLabelValueRow(cursor, 'Project',   pm.project,   body, bold, theme);
-    if (pm.phase)     cursor = drawLabelValueRow(cursor, 'Phase',     pm.phase,     body, bold, theme);
-    if (pm.reference) cursor = drawLabelValueRow(cursor, 'Reference', pm.reference, body, bold, theme);
-    if (pm.date)      cursor = drawLabelValueRow(cursor, 'Date',      pm.date,      body, bold, theme);
+    if (pm.client)    cursor = drawLabelValueRow(cursor, 'Client',    pm.client,    body, bold, ctx);
+    if (pm.project)   cursor = drawLabelValueRow(cursor, 'Project',   pm.project,   body, bold, ctx);
+    if (pm.phase)     cursor = drawLabelValueRow(cursor, 'Phase',     pm.phase,     body, bold, ctx);
+    if (pm.reference) cursor = drawLabelValueRow(cursor, 'Reference', pm.reference, body, bold, ctx);
+    if (pm.date)      cursor = drawLabelValueRow(cursor, 'Date',      pm.date,      body, bold, ctx);
   }
   return cursor;
 }
@@ -723,49 +850,67 @@ function drawFinding(
   organisation: string | undefined,
 ): PageCursor {
   cursor = ensureSpace(cursor, 34, doc, accent, theme, organisation);
+  const ctx: PageContext = { doc, accent, theme, organisation };
   const dotX = MARGIN + 4;
   const textX = MARGIN + 16;
+  const lineWidth = PAGE_WIDTH - MARGIN - textX;
   const dot = tierColor(finding.tier);
   // Status dot, vertically centred on the label line.
   cursor.page.drawEllipse({
     x: dotX, y: cursor.y - BODY_FONT_SIZE + 3, xScale: 3, yScale: 3,
     color: rgb(dot.r, dot.g, dot.b),
   });
-  // Label (bold) + value on the same line; value sits after the label.
-  const cleanLabel = sanitiseForPdf(finding.label);
-  cursor.page.drawText(cleanLabel, {
-    x: textX, y: cursor.y - BODY_FONT_SIZE,
-    size: BODY_FONT_SIZE, font: bold,
-    color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
-  });
+  // Label (bold) + value on the same line; value sits after the label. When
+  // the pair is wider than the line, the label wraps and the value wraps
+  // below it, so neither runs past the right margin.
+  const cleanLabel = sanitiseForPdf(oneLine(finding.label));
+  const cleanValue = sanitiseForPdf(oneLine(finding.value));
   const labelW = bold.widthOfTextAtSize(cleanLabel, BODY_FONT_SIZE);
   const valueX = textX + labelW + 8;
-  cursor.page.drawText(sanitiseForPdf(finding.value), {
-    x: valueX, y: cursor.y - BODY_FONT_SIZE,
-    size: BODY_FONT_SIZE, font: body,
-    color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
-  });
-  let y = cursor.y - BODY_FONT_SIZE - 4;
+  const leading = BODY_FONT_SIZE + 4;
+  const onNewPage = continuedLabel(cleanLabel, bold, ctx, textX);
+  if (valueX + body.widthOfTextAtSize(cleanValue, BODY_FONT_SIZE) <= PAGE_WIDTH - MARGIN) {
+    cursor.page.drawText(cleanLabel, {
+      x: textX, y: cursor.y - BODY_FONT_SIZE,
+      size: BODY_FONT_SIZE, font: bold,
+      color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
+    });
+    cursor.page.drawText(cleanValue, {
+      x: valueX, y: cursor.y - BODY_FONT_SIZE,
+      size: BODY_FONT_SIZE, font: body,
+      color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
+    });
+    cursor = { page: cursor.page, y: cursor.y - leading };
+  } else {
+    cursor = drawWrappedField(
+      cursor, finding.label,
+      { x: textX, font: bold, size: BODY_FONT_SIZE, leading, color: theme.bodyText },
+      body, ctx, { cap: false },
+    );
+    cursor = drawWrappedField(
+      cursor, finding.value,
+      { x: textX, font: body, size: BODY_FONT_SIZE, leading, color: theme.bodyText },
+      body, ctx, { cap: false, onNewPage },
+    );
+  }
   // Detail line(s), wrapped + indented under the label.
   if (finding.detail) {
-    for (const line of wrapText(finding.detail, body, BODY_FONT_SIZE - 1, PAGE_WIDTH - MARGIN - textX)) {
-      cursor.page.drawText(line, {
-        x: textX, y: y - (BODY_FONT_SIZE - 1),
-        size: BODY_FONT_SIZE - 1, font: body,
-        color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
-      });
-      y -= BODY_FONT_SIZE + 2;
-    }
+    cursor = drawLines(
+      cursor,
+      wrapText(finding.detail, body, BODY_FONT_SIZE - 1, lineWidth),
+      { x: textX, font: body, size: BODY_FONT_SIZE - 1, leading: BODY_FONT_SIZE + 2, color: theme.mutedText },
+      ctx, onNewPage,
+    );
   }
   if (finding.source) {
-    cursor.page.drawText(`source: ${sanitiseForPdf(finding.source)}`, {
-      x: textX, y: y - (BODY_FONT_SIZE - 2),
-      size: BODY_FONT_SIZE - 2, font: body,
-      color: rgb(theme.mutedText.r, theme.mutedText.g, theme.mutedText.b),
-    });
-    y -= BODY_FONT_SIZE;
+    cursor = drawLines(
+      cursor,
+      wrapText(`source: ${finding.source}`, body, BODY_FONT_SIZE - 2, lineWidth),
+      { x: textX, font: body, size: BODY_FONT_SIZE - 2, leading: BODY_FONT_SIZE, color: theme.mutedText },
+      ctx, onNewPage,
+    );
   }
-  return { page: cursor.page, y: y - 4 };
+  return { page: cursor.page, y: cursor.y - 4 };
 }
 
 /**
@@ -849,6 +994,7 @@ async function renderInspectionSummary(
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
+  const ctx: PageContext = { doc, accent, theme, organisation };
   const summary = inputs.summary;
   if (!summary) return cursor;
   cursor = ensureSpace(cursor, 70, doc, accent, theme, organisation);
@@ -877,7 +1023,7 @@ async function renderInspectionSummary(
   cursor = { page: cursor.page, y: cursor.y - 2 };
   for (const c of summary.caveats) {
     cursor = ensureSpace(cursor, 24, doc, accent, theme, organisation);
-    cursor = drawBodyLine(cursor, `• ${c}`, body, theme, 4);
+    cursor = drawBodyLine(cursor, `• ${c}`, body, ctx, { indent: 4 });
   }
   return { page: cursor.page, y: cursor.y - 12 };
 }
@@ -892,11 +1038,12 @@ async function renderDatasetSummary(
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
+  const ctx: PageContext = { doc, accent, theme, organisation };
   cursor = ensureSpace(cursor, 60 + inputs.datasetRows.length * 14, doc, accent, theme, organisation);
   cursor = drawSectionHeader(cursor, 'Dataset summary', accent, bold);
   for (const row of inputs.datasetRows) {
     cursor = ensureSpace(cursor, 16, doc, accent, theme, organisation);
-    cursor = drawLabelValueRow(cursor, row.label, row.value, body, bold, theme);
+    cursor = drawLabelValueRow(cursor, row.label, row.value, body, bold, ctx);
   }
   return { page: cursor.page, y: cursor.y - 14 };
 }
@@ -934,6 +1081,7 @@ async function renderProvenance(
   organisation: string | undefined,
   opts?: { readonly compact?: boolean },
 ): Promise<PageCursor> {
+  const ctx: PageContext = { doc, accent, theme, organisation };
   cursor = ensureSpace(cursor, 60, doc, accent, theme, organisation);
   cursor = drawSectionHeader(cursor, 'Provenance', accent, bold);
   if (!inputs.provenance) {
@@ -941,7 +1089,7 @@ async function renderProvenance(
       cursor,
       'No provenance fingerprint available for this scan.',
       body,
-      theme,
+      ctx,
     );
     return { page: cursor.page, y: cursor.y - 10 };
   }
@@ -953,7 +1101,7 @@ async function renderProvenance(
     `${p.label} — ${p.confidence} confidence`,
     body,
     bold,
-    theme,
+    ctx,
   );
   cursor = { page: cursor.page, y: cursor.y - 6 };
   // Signals — bullet list of the cues that drove the classification.
@@ -968,7 +1116,7 @@ async function renderProvenance(
     cursor = { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 4 };
     for (const sig of p.signals) {
       cursor = ensureSpace(cursor, 14, doc, accent, theme, organisation);
-      cursor = drawBodyLine(cursor, `• ${sig}`, body, theme);
+      cursor = drawBodyLine(cursor, `• ${sig}`, body, ctx);
     }
     cursor = { page: cursor.page, y: cursor.y - 4 };
   }
@@ -983,7 +1131,7 @@ async function renderProvenance(
     cursor = { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 4 };
     for (const b of p.bounds) {
       cursor = ensureSpace(cursor, 30, doc, accent, theme, organisation);
-      cursor = drawLabelValueRow(cursor, b.label, b.value, body, bold, theme);
+      cursor = drawLabelValueRow(cursor, b.label, b.value, body, bold, ctx);
       // Sanitised like every other drawn string. A citation glyph outside
       // WinAnsi ("Ruzgienė") used to throw HERE, aborting the section after
       // its heading + signals were already drawn — and the reverted cursor
@@ -998,7 +1146,7 @@ async function renderProvenance(
   }
   // Honest-hedge disclaimer — the classifier always emits one.
   cursor = ensureSpace(cursor, 26, doc, accent, theme, organisation);
-  cursor = drawBodyLine(cursor, p.disclaimer, body, theme);
+  cursor = drawBodyLine(cursor, p.disclaimer, body, ctx);
   return { page: cursor.page, y: cursor.y - 10 };
 }
 
@@ -1020,6 +1168,7 @@ async function renderSourceMetadata(
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
+  const ctx: PageContext = { doc, accent, theme, organisation };
   const sm = inputs.sourceMetadata;
   if (!sm || (sm.standard.length === 0 && sm.extensions.length === 0)) return cursor;
   cursor = ensureSpace(cursor, 72, doc, accent, theme, organisation);
@@ -1029,14 +1178,30 @@ async function renderSourceMetadata(
     'The fields below are quoted verbatim from the source file\'s own ' +
       'metadata — declared by the file, not verified by OpenLiDARViewer.',
     body,
-    theme,
+    ctx,
   );
   cursor = { page: cursor.page, y: cursor.y - 4 };
+  // Section budget (see SOURCE_METADATA_SECTION_CAP): fields past it are
+  // counted and named by one marker line instead of printed.
+  let budget = SOURCE_METADATA_SECTION_CAP;
+  let omittedFields = 0;
+  const fits = (f: { readonly name: string; readonly value: string }): boolean => {
+    const cappable = mayCapField(f.name);
+    const len = (t: string): number => (cappable ? Math.min(t.length, PDF_FIELD_CHAR_CAP) : t.length);
+    const cost = Math.max(100, len(f.name) + len(f.value));
+    if (omittedFields > 0 || cost > budget) {
+      omittedFields++;
+      return false;
+    }
+    budget -= cost;
+    return true;
+  };
   for (const f of sm.standard) {
+    if (!fits(f)) continue;
     cursor = ensureSpace(cursor, 16, doc, accent, theme, organisation);
-    cursor = drawLabelValueRow(cursor, f.name, f.value, body, bold, theme);
+    cursor = drawLabelValueRow(cursor, f.name, f.value, body, bold, ctx, mayCapField(f.name));
   }
-  if (sm.extensions.length > 0) {
+  if (sm.extensions.length > 0 && omittedFields === 0) {
     cursor = ensureSpace(cursor, 30, doc, accent, theme, organisation);
     cursor = { page: cursor.page, y: cursor.y - 4 };
     cursor.page.drawText('Extension fields (file-declared)', {
@@ -1048,12 +1213,22 @@ async function renderSourceMetadata(
     // Extension namespaces disclosed once, compactly, rather than per row.
     const uris = [...new Set(sm.extensions.map((f) => f.namespaceUri).filter(Boolean))];
     if (uris.length > 0) {
-      cursor = drawBodyLine(cursor, `Namespace: ${uris.join(', ')}`, body, theme, 4);
+      cursor = drawBodyLine(cursor, `Namespace: ${uris.join(', ')}`, body, ctx, { indent: 4 });
     }
     for (const f of sm.extensions) {
+      if (!fits(f)) continue;
       cursor = ensureSpace(cursor, 16, doc, accent, theme, organisation);
-      cursor = drawLabelValueRow(cursor, f.name, f.value, body, bold, theme);
+      cursor = drawLabelValueRow(cursor, f.name, f.value, body, bold, ctx, mayCapField(f.name));
     }
+  } else {
+    omittedFields += sm.extensions.length;
+  }
+  if (omittedFields > 0) {
+    cursor = drawBodyLine(
+      cursor,
+      `[… ${omittedFields.toLocaleString('en-US')} more declared fields omitted from this PDF]`,
+      body, ctx,
+    );
   }
   return { page: cursor.page, y: cursor.y - 14 };
 }
@@ -1068,6 +1243,7 @@ async function renderScanQuality(
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
+  const ctx: PageContext = { doc, accent, theme, organisation };
   const q = inputs.scanQuality;
   if (!q) return cursor;
   cursor = ensureSpace(cursor, 90, doc, accent, theme, organisation);
@@ -1077,28 +1253,28 @@ async function renderScanQuality(
     'A summary of what the loaded scan establishes about itself. Every line ' +
       'below is read off the cloud; the boundary of the report is stated at the end.',
     body,
-    theme,
+    ctx,
   );
   cursor = { page: cursor.page, y: cursor.y - 4 };
 
   // Coordinate quality — the georeferencing verdict and its two sub-facts.
   cursor = ensureSpace(cursor, 48, doc, accent, theme, organisation);
-  cursor = drawLabelValueRow(cursor, 'Coordinate reference', q.coordinateHeadline, body, bold, theme);
-  cursor = drawLabelValueRow(cursor, 'Position', q.positionLabel, body, bold, theme);
-  cursor = drawLabelValueRow(cursor, 'Height', q.heightLabel, body, bold, theme);
+  cursor = drawLabelValueRow(cursor, 'Coordinate reference', q.coordinateHeadline, body, bold, ctx);
+  cursor = drawLabelValueRow(cursor, 'Position', q.positionLabel, body, bold, ctx);
+  cursor = drawLabelValueRow(cursor, 'Height', q.heightLabel, body, bold, ctx);
 
   // Classification provenance.
   cursor = ensureSpace(cursor, 16, doc, accent, theme, organisation);
-  cursor = drawLabelValueRow(cursor, 'Classification', q.classificationNote, body, bold, theme);
+  cursor = drawLabelValueRow(cursor, 'Classification', q.classificationNote, body, bold, ctx);
 
   // Attributes the cloud carries.
   if (q.attributes.length > 0) {
     const carried = q.attributes.filter((a) => a.present).map((a) => a.name);
     const absent = q.attributes.filter((a) => !a.present).map((a) => a.name);
     cursor = ensureSpace(cursor, 16, doc, accent, theme, organisation);
-    cursor = drawLabelValueRow(cursor, 'Attributes present', carried.length > 0 ? carried.join(', ') : 'none', body, bold, theme);
+    cursor = drawLabelValueRow(cursor, 'Attributes present', carried.length > 0 ? carried.join(', ') : 'none', body, bold, ctx);
     if (absent.length > 0) {
-      cursor = drawLabelValueRow(cursor, 'Attributes absent', absent.join(', '), body, bold, theme);
+      cursor = drawLabelValueRow(cursor, 'Attributes absent', absent.join(', '), body, bold, ctx);
     }
   }
 
@@ -1113,7 +1289,7 @@ async function renderScanQuality(
   cursor = { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 4 };
   for (const caveat of q.caveats) {
     cursor = ensureSpace(cursor, 16, doc, accent, theme, organisation);
-    cursor = drawBodyLine(cursor, `• ${caveat}`, body, theme, 2);
+    cursor = drawBodyLine(cursor, `• ${caveat}`, body, ctx, { indent: 2 });
   }
   return { page: cursor.page, y: cursor.y - 14 };
 }
@@ -1128,6 +1304,7 @@ async function renderVisuals(
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
+  const ctx: PageContext = { doc, accent, theme, organisation };
   // Section appears even when empty so the template's intended structure is
   // visible; the placeholder names the panel that saves rasters. Keep-
   // with-next: the empty block reserves exactly heading + placeholder.
@@ -1140,7 +1317,7 @@ async function renderVisuals(
   );
   cursor = drawSectionHeader(cursor, 'Visuals', accent, bold);
   if (inputs.visuals.length === 0) {
-    cursor = drawBodyLine(cursor, vPlaceholder, body, theme);
+    cursor = drawBodyLine(cursor, vPlaceholder, body, ctx);
     return { page: cursor.page, y: cursor.y - 10 };
   }
   for (const v of inputs.visuals) {
@@ -1177,6 +1354,7 @@ async function renderAnnotations(
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
+  const ctx: PageContext = { doc, accent, theme, organisation };
   // Keep-with-next (see renderMeasurements).
   const aPlaceholder =
     'No annotations on this scan. Use the Annotate tool on the tool dock to flag issues, name features, or attach notes.';
@@ -1187,7 +1365,7 @@ async function renderAnnotations(
   );
   cursor = drawSectionHeader(cursor, `Annotations (${inputs.annotations.length})`, accent, bold);
   if (inputs.annotations.length === 0) {
-    cursor = drawBodyLine(cursor, aPlaceholder, body, theme);
+    cursor = drawBodyLine(cursor, aPlaceholder, body, ctx);
     return { page: cursor.page, y: cursor.y - 10 };
   }
   // Grouping summary — same line the live Annotations panel shows, so the
@@ -1195,18 +1373,22 @@ async function renderAnnotations(
   const groupSummary = describeAnnotationGroups(
     inputs.annotations.map((a) => ({ type: a.type as AnnotationType, localPosition: a.position })),
   );
-  if (groupSummary) cursor = drawBodyLine(cursor, groupSummary, body, theme);
+  if (groupSummary) cursor = drawBodyLine(cursor, groupSummary, body, ctx);
   for (const a of inputs.annotations) {
     cursor = ensureSpace(cursor, 36, doc, accent, theme, organisation);
-    // Title + type badge.
-    cursor.page.drawText(sanitiseForPdf(`${a.title}  [${a.type}]`), {
-      x: MARGIN, y: cursor.y - BODY_FONT_SIZE,
-      size: BODY_FONT_SIZE, font: bold,
-      color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
-    });
-    cursor = { page: cursor.page, y: cursor.y - BODY_FONT_SIZE - 2 };
-    if (a.note) {
-      cursor = drawBodyLine(cursor, a.note, body, theme);
+    // Title + type badge, wrapped. The title and note are the user's own
+    // text, so they are never capped (as technical notes are not): a long
+    // note adds pages instead of losing text.
+    cursor = drawWrappedField(
+      cursor, `${oneLine(a.title)}  [${a.type}]`,
+      { x: MARGIN, font: bold, size: BODY_FONT_SIZE, leading: BODY_FONT_SIZE + 2, color: theme.bodyText },
+      body, ctx, { cap: false },
+    );
+    // A note that is only whitespace has nothing to print.
+    if (a.note && a.note.trim() !== '') {
+      cursor = drawBodyLine(cursor, a.note, body, ctx, {
+        continued: { label: oneLine(a.title), bold },
+      });
     }
     // Label the coordinate FRAME so a render-local fallback is never presented
     // as a surveyed location. `world` names the CRS when the annotation carries
@@ -1221,7 +1403,7 @@ async function renderAnnotations(
       cursor,
       `Position (${frameLabel}): ${a.position.x.toFixed(3)}, ${a.position.y.toFixed(3)}, ${a.position.z.toFixed(3)}`,
       body,
-      theme,
+      ctx,
     );
     cursor = { page: cursor.page, y: cursor.y - 6 };
   }
@@ -1238,6 +1420,7 @@ async function renderMeasurements(
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
+  const ctx: PageContext = { doc, accent, theme, organisation };
   // Keep-with-next: an empty section is a heading + a short placeholder —
   // reserve exactly that, so the block stays with its predecessor whenever
   // it fits and never splits across the break.
@@ -1250,7 +1433,7 @@ async function renderMeasurements(
   );
   cursor = drawSectionHeader(cursor, `Measurements (${inputs.measurements.length})`, accent, bold);
   if (inputs.measurements.length === 0) {
-    cursor = drawBodyLine(cursor, mPlaceholder, body, theme);
+    cursor = drawBodyLine(cursor, mPlaceholder, body, ctx);
     return { page: cursor.page, y: cursor.y - 10 };
   }
   for (const m of inputs.measurements) {
@@ -1264,14 +1447,14 @@ async function renderMeasurements(
       rowH = 16 + 12 * 4 + (extras.coverageCaveat ? 12 : 0) + (extras.chart ? 68 : 0);
     }
     cursor = ensureSpace(cursor, rowH, doc, accent, theme, organisation);
-    cursor = drawLabelValueRow(cursor, `${m.kind} · ${m.name}`, m.value, body, bold, theme);
+    cursor = drawLabelValueRow(cursor, `${m.kind} · ${m.name}`, m.value, body, bold, ctx);
     if (extras) {
-      cursor = drawLabelValueRow(cursor, '  summary', extras.summary, body, bold, theme);
-      cursor = drawLabelValueRow(cursor, '  stations', extras.stations, body, bold, theme);
-      cursor = drawLabelValueRow(cursor, '  interval', extras.stationInterval, body, bold, theme);
-      cursor = drawLabelValueRow(cursor, '  slopes', extras.slopeSummary, body, bold, theme);
+      cursor = drawLabelValueRow(cursor, '  summary', extras.summary, body, bold, ctx);
+      cursor = drawLabelValueRow(cursor, '  stations', extras.stations, body, bold, ctx);
+      cursor = drawLabelValueRow(cursor, '  interval', extras.stationInterval, body, bold, ctx);
+      cursor = drawLabelValueRow(cursor, '  slopes', extras.slopeSummary, body, bold, ctx);
       if (extras.coverageCaveat) {
-        cursor = drawLabelValueRow(cursor, '  coverage', extras.coverageCaveat, body, bold, theme);
+        cursor = drawLabelValueRow(cursor, '  coverage', extras.coverageCaveat, body, bold, ctx);
       }
       if (extras.chart && extras.chart.length >= 2) {
         cursor = drawProfileChart(cursor, extras.chart, theme, accent, doc, body, organisation);
@@ -1288,7 +1471,7 @@ async function renderMeasurements(
       'Note: profile measurements are for visual inspection. Treat them as ' +
         'survey-grade only when validated against ground truth + procedures.',
       body,
-      theme,
+      ctx,
     );
   }
   return { page: cursor.page, y: cursor.y - 10 };
@@ -1381,6 +1564,7 @@ async function renderTechnicalNotes(
   bold: PDFFont,
   organisation: string | undefined,
 ): Promise<PageCursor> {
+  const ctx: PageContext = { doc, accent, theme, organisation };
   // Keep-with-next (see renderMeasurements): the empty block reserves
   // exactly heading + placeholder, and a short notes body reserves its
   // first line with the heading.
@@ -1393,15 +1577,16 @@ async function renderTechnicalNotes(
   );
   cursor = drawSectionHeader(cursor, 'Technical notes', accent, bold);
   if (!inputs.technicalNotes) {
-    cursor = drawBodyLine(cursor, nPlaceholder, body, theme);
+    cursor = drawBodyLine(cursor, nPlaceholder, body, ctx);
     return { page: cursor.page, y: cursor.y - 10 };
   }
-  // no full paragraph reflow; we split on newlines and
-  // render each line. A real text-wrapping pass lands in a follow-up
-  // when the notes section grows enough to warrant it.
+  // Split on newlines; each line wraps to the content width. The notes are the author's own document, bounded as a whole by the
+  // engine's MAX_TECHNICAL_NOTES_BYTES, so they are not capped per field.
+  // Each wrapped line checks its own room, and a page the notes continue
+  // onto opens with "Technical notes (continued)".
+  const continued = { label: 'Technical notes', bold };
   for (const line of inputs.technicalNotes.split('\n')) {
-    cursor = ensureSpace(cursor, 14, doc, accent, theme, organisation);
-    cursor = drawBodyLine(cursor, line, body, theme);
+    cursor = drawBodyLine(cursor, line, body, ctx, { continued });
   }
   return cursor;
 }

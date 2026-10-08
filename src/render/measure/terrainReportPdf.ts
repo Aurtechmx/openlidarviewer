@@ -26,7 +26,7 @@
  * caller triggers the download.
  */
 
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib';
 import type { AnalyseContoursResult } from '../../terrain/contour/analyseContours';
 import {
   buildTerrainReportContent,
@@ -35,7 +35,15 @@ import {
 } from '../../terrain/export/terrainReportContent';
 import { NO_RESOLVED_VERTICAL_SCALE } from '../../terrain/export/exportProvenance';
 import { pdfInfoDate } from '../../pdfInfoDate';
-import { winAnsiSafe } from '../../winAnsiText';
+import {
+  capFieldText,
+  clipWithSuffix,
+  mayCapField,
+  omissionMarker,
+  pdfParagraphs,
+  winAnsiSafe,
+  wrapToWidth,
+} from '../../winAnsiText';
 
 const INK = rgb(0.12, 0.14, 0.18);
 const DIM = rgb(0.42, 0.46, 0.52);
@@ -126,6 +134,27 @@ export async function buildTerrainReportPdf(
     if (y - need < M + FOOTER_RESERVE) newPage();
   };
 
+  /** Like {@link ensure}, reporting whether it started a new page. */
+  const broke = (need: number): boolean => {
+    if (y - need >= M + FOOTER_RESERVE) return false;
+    newPage();
+    return true;
+  };
+
+  /**
+   * Draw `s` wrapped to `maxW` from `x`, one line at a time, each line checking
+   * its own room so a long value continues on the next page instead of running
+   * off this one. Used for app-written text (warnings, fixes, definitions), which
+   * is never capped. Advances the shared cursor.
+   */
+  const flow = (s: string, x: number, maxW: number, sz: number, f: PDFFont, c: Color): void => {
+    for (const line of wrapField(s, f, sz, maxW, false)) {
+      ensure(sz + 3);
+      page.drawText(line, { x, y, size: sz, font: f, color: c });
+      y -= sz + 3;
+    }
+  };
+
   // ── Title + subtitle ─────────────────────────────────────────────────────
   text(content.subtitle, M, y - 12, 11, bold, DIM);
   y -= 18;
@@ -152,10 +181,26 @@ export async function buildTerrainReportPdf(
     y -= 14;
     for (const row of sec.rows) {
       ensure(16);
-      // Both columns wrap inside their own width; the row advances by the taller.
-      const labelEndY = drawWrapped(page, bold, row.label, labelX, y, labelW, 9.5, DIM);
-      const endY = drawWrapped(page, font, row.value, valueX, y, valueW, 9.5, INK);
-      y = Math.min(y - 14, endY - 2, labelEndY - 2);
+      // Both columns wrap inside their own width and advance together, line
+      // by line; the row ends below the taller column. A row that breaks
+      // across pages repeats its label as "(continued)" on the new page.
+      // A row value may copy file-derived text (the scan name) and is capped,
+      // unless its label marks a CRS, datum, digest or unit.
+      const cap = mayCapField(row.label);
+      const labelLines = wrapField(row.label, bold, 9.5, labelW, cap);
+      const valueLines = wrapField(row.value, font, 9.5, valueW, cap);
+      const startPage = page;
+      const startY = y;
+      for (let i = 0; i < Math.max(labelLines.length, valueLines.length); i++) {
+        if (broke(12.5) && i >= labelLines.length) {
+          const cont = clipWithSuffix(labelLines.join(' '), ' (continued)', (t) => bold.widthOfTextAtSize(t, 9.5), labelW);
+          page.drawText(cont, { x: labelX, y, size: 9.5, font: bold, color: DIM });
+        }
+        if (i < labelLines.length) page.drawText(labelLines[i], { x: labelX, y, size: 9.5, font: bold, color: DIM });
+        if (i < valueLines.length) page.drawText(valueLines[i], { x: valueX, y, size: 9.5, font, color: INK });
+        y -= 12.5;
+      }
+      y = page === startPage ? Math.min(startY - 14, y - 2) : y - 2;
     }
     y -= 10;
   }
@@ -173,7 +218,7 @@ export async function buildTerrainReportPdf(
   } else {
     for (const w of content.warnings) {
       ensure(16);
-      y = drawWrapped(page, font, `- ${w}`, M, y, PW - 2 * M, 9, WARN);
+      flow(`- ${w}`, M, PW - 2 * M, 9, font, WARN);
       y -= 3;
     }
   }
@@ -188,7 +233,7 @@ export async function buildTerrainReportPdf(
     y -= 14;
     for (const f of content.howToImprove) {
       ensure(16);
-      y = drawWrapped(page, font, `- ${f}`, M, y, PW - 2 * M, 9, INK);
+      flow(`- ${f}`, M, PW - 2 * M, 9, font, INK);
       y -= 3;
     }
     y -= 10;
@@ -203,7 +248,7 @@ export async function buildTerrainReportPdf(
     y -= 14;
     for (const d of content.definitions) {
       ensure(16);
-      y = drawWrapped(page, font, `- ${d}`, M, y, PW - 2 * M, 9, INK);
+      flow(`- ${d}`, M, PW - 2 * M, 9, font, INK);
       y -= 3;
     }
     y -= 10;
@@ -280,38 +325,20 @@ function wrapStampLine(
   return out;
 }
 
+type Color = ReturnType<typeof rgb>;
+
 /**
- * Word-wrap text into the given width, advancing y; returns the new y. Mirrors
- * the wrapper in spaceReportPdf.ts (pure, injected font measurer).
+ * Word-wrap one field into lines no wider than `maxW` (a word wider than the
+ * line is hard-broken). With `cap`, a field past PDF_FIELD_CHAR_CAP is cut there
+ * with a marker line; app-written text and CRS, digest or unit rows pass false. Mirrors the wrapper in spaceReportPdf.ts.
  */
-function drawWrapped(
-  page: PDFPage,
-  font: PDFFont,
-  s: string,
-  x: number,
-  y: number,
-  maxW: number,
-  sz: number,
-  color: ReturnType<typeof rgb>,
-): number {
-  const words = safe(s).split(/\s+/);
-  let line = '';
-  let cy = y;
-  for (const w of words) {
-    const cand = line ? `${line} ${w}` : w;
-    if (font.widthOfTextAtSize(cand, sz) > maxW && line) {
-      page.drawText(line, { x, y: cy, size: sz, font, color });
-      cy -= sz + 3;
-      line = w;
-    } else {
-      line = cand;
-    }
-  }
-  if (line) {
-    page.drawText(line, { x, y: cy, size: sz, font, color });
-    cy -= sz + 3;
-  }
-  return cy;
+function wrapField(s: string, font: PDFFont, sz: number, maxW: number, cap: boolean): string[] {
+  const field = cap ? capFieldText(s) : { text: s, omitted: 0 };
+  const measure = (t: string): number => font.widthOfTextAtSize(t, sz);
+  // A line break starts a new line and a tab is a space (never '?').
+  const lines = pdfParagraphs(field.text).flatMap((p) => wrapToWidth(safe(p), measure, maxW));
+  if (field.omitted > 0) lines.push(...wrapToWidth(safe(omissionMarker(field.omitted)), measure, maxW));
+  return lines;
 }
 
 // Re-exported for callers that want to colour-key the marks / availability

@@ -27,6 +27,8 @@ import {
   // station interval comes from the same horizontal span the headline
   // (measurementMetrics) prints.
   profileHorizontalLength,
+  // The sample-coverage rule the profile sheet and slope line use.
+  profileSampleCovered,
 } from '../render/measure/profileStations';
 // Area formatting is single-sourced from the live measurement formatter so a
 // polygon reads the same units in the PDF report as on the overlay — the same
@@ -263,10 +265,16 @@ function buildProfileExtras(
     slopeLine = `Slope summary unavailable — ${reason}`;
   }
 
-  // The renderer self-normalises, so pass the finite samples straight through
-  // (their absolute units are immaterial to the drawn shape).
+  // The renderer self-normalises, so the absolute units are immaterial to the
+  // drawn shape. Every sample with a finite distance is kept, in order, and an
+  // uncovered one (no finite height, or a corridor count of 0) goes through as
+  // a NaN height: the renderer breaks the line there, the same gap rule the
+  // dedicated profile sheet applies. Dropping it instead would let the line
+  // join the samples on either side straight across the gap.
   const chart = samples
-    ? samples.filter((s) => Number.isFinite(s.distance) && Number.isFinite(s.height))
+    ? samples
+        .filter((s) => Number.isFinite(s.distance))
+        .map((s) => ({ distance: s.distance, height: profileSampleCovered(s) ? s.height : Number.NaN }))
     : undefined;
 
   return {
@@ -277,7 +285,7 @@ function buildProfileExtras(
     coverageCaveat: m.profileChartResidentOnly
       ? 'Resident-node analysis only — profile may refine as streaming loads.'
       : undefined,
-    chart: chart && chart.length >= 2 ? chart : undefined,
+    chart: chart && chart.filter((s) => Number.isFinite(s.height)).length >= 2 ? chart : undefined,
   };
 }
 
