@@ -401,6 +401,9 @@ export async function exportMeasurementIntegrityReport(
     crsKnown,
     undefined,
     digests,
+    // The flag the live grade refuses on: every kind but a height is
+    // recorded as a null finding with the reason.
+    snap.geographicCrs,
   );
   const out = await textToWrite(f.text, deps, signReportText);
   if (out !== null) deps.downloadText(f.filename, out);
@@ -423,8 +426,12 @@ export async function collectMeasurementFindings(
   const worldUp = measure.worldUp;
   const unitToMetres = measure.unitToMetres;
   const verticalUnitToMetres = measure.verticalUnitToMetres;
+  // A geographic frame refuses what the live grade refuses, and an
+  // unconfirmed scale is not labelled metres.
+  const geographic = measure.geographicCrs;
+  const unitsVerified = measure.crsKnown && !geographic;
   const { measurementsToFindings } = await deps.loadMeasurementReport();
-  return measurementsToFindings(ms, worldUp, unitToMetres, verticalUnitToMetres);
+  return measurementsToFindings(ms, worldUp, unitToMetres, verticalUnitToMetres, { geographic, unitsVerified });
 }
 
 /** Export the curated findings ledger as the signed integrity report (JSON). */
@@ -436,7 +443,8 @@ export async function exportFindingsReport(
   const geo = deps.geo();
   const classificationEpoch = deps.activeClassificationEpoch();
   // Geographic reads as unverified here too — see `exportIntegrityReport`.
-  const crsKnown = deps.measure.crsKnown && !deps.measure.geographicCrs;
+  const geographic = deps.measure.geographicCrs;
+  const crsKnown = deps.measure.crsKnown && !geographic;
   const { findingsReportFile, resolveExportDigests, signReportText } = await deps.loadMeasurementReport();
   const digests = await resolveExportDigests(geo.source, geo.crs);
   const generatedAt = deps.now();
@@ -450,6 +458,7 @@ export async function exportFindingsReport(
     crsKnown,
     undefined,
     digests,
+    geographic,
   );
   const out = await textToWrite(f.text, deps, signReportText);
   if (out !== null) deps.downloadText(f.filename, out);

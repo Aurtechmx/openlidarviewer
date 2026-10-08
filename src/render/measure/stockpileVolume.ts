@@ -88,6 +88,12 @@ export interface StockpileInput {
    */
   readonly linearUnitToMetres?: number;
   /**
+   * Vertical (up-axis) `verticalUnitToMetres` for the source CRS. Used ONLY to
+   * print the base-plane uncertainty caveat in metres, the same factor the
+   * presenter applies to its Base plane row. Defaults to `linearUnitToMetres`.
+   */
+  readonly verticalUnitToMetres?: number;
+  /**
    * Whether the horizontal unit is actually KNOWN, so a points/m² density is a
    * real figure rather than an assumption. Defaults to true — a metric project
    * or any caller that has resolved its CRS. Pass false for an unknown CRS:
@@ -322,7 +328,9 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
     inN,
     relativeError,
     baseMode,
-    baseUncertainty,
+    // The caveat prints metres, so the native band is scaled by the vertical
+    // factor, as the presenter's Base plane row is.
+    baseUncertainty * (input.verticalUnitToMetres ?? lin),
     input.sourceReduced ?? false,
     densityUnitKnown,
   );
@@ -388,7 +396,8 @@ function buildCaveats(
   pointsInPolygon: number,
   relErr: number,
   baseMode: BasePlaneMode,
-  baseUncertainty: number,
+  /** Base-plane uncertainty, already in metres. */
+  baseUncertaintyM: number,
   sourceReduced: boolean,
   densityUnitKnown: boolean,
 ): string[] {
@@ -410,7 +419,7 @@ function buildCaveats(
   }
   if (baseMode === 'lowest-percentile') {
     out.push(
-      `Base plane was inferred from the lowest ground points inside the footprint (±${baseUncertainty.toFixed(2)} m); set an explicit base if you have a surveyed datum.`,
+      `Base plane was inferred from the lowest ground points inside the footprint (±${baseUncertaintyM.toFixed(2)} m); set an explicit base if you have a surveyed datum.`,
     );
   }
   // Mirrors changeUncertainty's spatial-correlation caveat: the √N in the

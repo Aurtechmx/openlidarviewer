@@ -97,6 +97,12 @@ export interface KmlActionDeps {
    * extent, yet is built on the same X/Y-is-horizontal assumption.
    */
   readonly upAxis: () => SpatialUpAxis;
+  /**
+   * True when the active scan's frame is geographic (degrees), from the one
+   * spatial context. Measurements then publish only their pure-vertical
+   * figures, as the live Measure tool allows.
+   */
+  readonly isGeographic?: () => boolean;
   /** The active scan's horizontal extent in LOCAL space, or null when none. */
   readonly scanExtent: () => ScanExtentReading | null;
   /**
@@ -239,6 +245,9 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
     // Drives the geometry's altitudeMode: absolute only for a declared metric
     // vertical datum, otherwise clamped with the reason stated.
     verticalDatum: crs?.verticalDatum ?? null,
+    // A degree frame: measurements the live tool refuses publish no
+    // grade, angle or length.
+    geographic: deps.isGeographic?.() ?? false,
     toLonLat,
     notSurveyGradeNote: NOT_SURVEY_GRADE,
     // The scan's outline, placed through the same mapper as every feature. The

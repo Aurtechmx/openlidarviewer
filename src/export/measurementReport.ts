@@ -17,7 +17,7 @@
 
 import type { ExportDigests } from '../science/exportDigestRecord';
 import type { Measurement, Vec3 } from '../render/measure/types';
-import { measurementMetrics } from './measurementExport';
+import { GEOGRAPHIC_NOT_AVAILABLE, geographicRefuses, measurementMetrics } from './measurementExport';
 import {
   buildReportManifest,
   canonicalize,
@@ -28,7 +28,13 @@ import type { HashFn } from '../render/measure/auditLog';
 import { SigningError, signReportManifest, type SignOptions } from './reportSignature';
 import { indexedDbBackend, loadSigningKey, type SigningKeyBackend } from './reportSigningKeyStore';
 import { exportGate } from '../validation/evidenceRegistry';
-import { evidenceNote, evidenceStatus, unverifiedUnitsCaveat, type EvidenceStatus } from '../validation/exportEvidenceNote';
+import {
+  evidenceNote,
+  evidenceStatus,
+  geographicRefusalCaveat,
+  unverifiedUnitsCaveat,
+  type EvidenceStatus,
+} from '../validation/exportEvidenceNote';
 import type { ClaimId } from '../validation/evidenceRegistry';
 
 /**
@@ -105,6 +111,30 @@ const PRIMARY: Record<string, { readonly key: string; readonly unit: string }> =
   volume: { key: 'fill_m3', unit: 'm³' },
 };
 
+/** How the frame qualifies the findings; see {@link measurementsToFindings}. */
+export interface FindingsFrame {
+  /**
+   * True when the scan's frame is geographic (degrees). Every kind the live
+   * Measure tool refuses there becomes a finding with a null value, an empty
+   * unit and the reason as its caveat.
+   */
+  readonly geographic?: boolean;
+  /**
+   * False when the linear scale is not confirmed: the unit then names source
+   * units rather than metres. Defaults true.
+   */
+  readonly unitsVerified?: boolean;
+}
+
+/** A metre unit label, renamed to source units when the scale is unconfirmed. */
+function unitLabel(unit: string, unitsVerified: boolean): string {
+  if (unitsVerified) return unit;
+  if (unit === 'm') return 'source units';
+  if (unit === 'm²') return 'source units²';
+  if (unit === 'm³') return 'source units³';
+  return unit;
+}
+
 /** One report finding per measurement, using its primary metric. */
 export function measurementsToFindings(
   measurements: readonly Measurement[],
@@ -116,31 +146,42 @@ export function measurementsToFindings(
    * eastings over foot heights), where one factor cannot describe both axes.
    */
   verticalToMetres: number = unitToMetres,
+  frame: FindingsFrame = {},
 ): ReportFinding[] {
+  const verified = frame.unitsVerified ?? true;
+  const u = (unit: string): string => unitLabel(unit, verified);
   const findings: ReportFinding[] = [];
   measurements.forEach((m, i) => {
     const metrics = measurementMetrics(m, up, unitToMetres, verticalToMetres);
+    // A figure the live tool refuses is recorded as an explicit null with the
+    // reason, never as a number. Only complete measurements produce a finding.
+    if (geographicRefuses(m, frame.geographic)) {
+      if (Object.keys(metrics).length === 0) return;
+      const label = m.name?.trim() || `${m.kind} ${i + 1}`;
+      findings.push({ label, value: null, unit: '', caveats: [GEOGRAPHIC_NOT_AVAILABLE] });
+      return;
+    }
     const primary = PRIMARY[m.kind];
     let value: number | null = null;
     let unit = '';
     if (primary && Number.isFinite(metrics[primary.key])) {
       value = metrics[primary.key];
-      unit = primary.unit;
+      unit = u(primary.unit);
     } else {
       // Fallback: the first metric the geometry could establish.
       const k = Object.keys(metrics).find((key) => Number.isFinite(metrics[key]));
       if (k) {
         value = metrics[k];
         if (k.endsWith('_m2')) {
-          unit = 'm²';
+          unit = u('m²');
         } else if (k.endsWith('_m3')) {
-          unit = 'm³';
+          unit = u('m³');
         } else if (k.endsWith('_deg')) {
           unit = '°';
         } else if (k.endsWith('_pct')) {
           unit = '%';
         } else {
-          unit = 'm';
+          unit = u('m');
         }
       }
     }
@@ -162,7 +203,7 @@ export function measurementsToFindings(
       // Plain L³ applied the HORIZONTAL unit to the vertical axis, overstating
       // a metre/US-foot compound volume by 3.28×.
       const V = L * L * Vv; // native render units³ → m³
-      const footprint = `${(vol.footprintArea * L * L).toFixed(2)} m²`;
+      const footprint = `${(vol.footprintArea * L * L).toFixed(2)} ${u('m²')}`;
       const caveats: string[] = [];
       // A grid-owned lasso record's estimator is the area-weighted grid;
       // an unswitched record (the polygon tool, or one saved before the grid became its figure) keeps
@@ -175,13 +216,13 @@ export function measurementsToFindings(
         );
         if (vol.crossCheck) {
           caveats.push(
-            `Point-sample cross-check (${vol.crossCheck.method}): cut ${(vol.crossCheck.cut * V).toFixed(2)} m³ / fill ${(vol.crossCheck.fill * V).toFixed(2)} m³.`,
+            `Point-sample cross-check (${vol.crossCheck.method}): cut ${(vol.crossCheck.cut * V).toFixed(2)} ${u('m³')} / fill ${(vol.crossCheck.fill * V).toFixed(2)} ${u('m³')}.`,
           );
         }
         caveats.push(GRID_KNOWN_LIMITATIONS, GRID_ACCURACY_EVIDENCE);
       } else {
         caveats.push(
-          `Cut ${((vol.cut ?? 0) * V).toFixed(2)} m³ / fill ${((vol.fill ?? 0) * V).toFixed(2)} m³ over ${footprint} footprint.`,
+          `Cut ${((vol.cut ?? 0) * V).toFixed(2)} ${u('m³')} / fill ${((vol.fill ?? 0) * V).toFixed(2)} ${u('m³')} over ${footprint} footprint.`,
           'Point-sample integration assumes uniform coverage inside the polygon.',
         );
       }
@@ -199,12 +240,12 @@ export function measurementsToFindings(
       // cross-check's net is reported instead, under a label that says so —
       // never silently as the (absent) grid figure.
       if (vol.net !== undefined) {
-        findings.push({ label, value: roundTo3(vol.net * V), unit: 'm³', confidence: vol.confidence, caveats });
+        findings.push({ label, value: roundTo3(vol.net * V), unit: u('m³'), confidence: vol.confidence, caveats });
       } else if (vol.crossCheck) {
         findings.push({
           label: `${label} (point-sample cross-check — grid volume withheld)`,
           value: roundTo3(vol.crossCheck.net * V),
-          unit: 'm³',
+          unit: u('m³'),
           confidence: vol.confidence,
           caveats,
         });
@@ -259,6 +300,12 @@ export function integrityReportFile(
   unitsVerified: boolean = true,
   claimId: string = INTEGRITY_REPORT_CLAIM,
   digests?: ExportDigests,
+  /**
+   * True when the scan's frame is geographic (degrees): every kind but a
+   * height is recorded as a null finding, and the notes say why. Defaults
+   * false (unchanged callers).
+   */
+  geographic: boolean = false,
 ): IntegrityReportFile {
   const gate = exportGate(claimId);
   // A product the register disables entirely never leaves — not even as an
@@ -273,13 +320,13 @@ export function integrityReportFile(
     generatedAt,
     classificationEpoch,
     software,
-    notes: reportNotes(unitsVerified, crsName),
+    notes: reportNotes(unitsVerified, crsName, geographic),
     digests,
-  }, verticalToMetres);
+  }, verticalToMetres, undefined, { geographic, unitsVerified });
   return {
     filename: `${datasetId}-report.json`,
     text: JSON.stringify(manifest, null, 2),
-    evidence: evidenceNote(claimId) + unverifiedUnitsCaveat(unitsVerified),
+    evidence: evidenceNote(claimId) + unverifiedUnitsCaveat(unitsVerified) + geographicRefusalCaveat(geographic),
     evidenceStatus: evidenceStatus(claimId),
     exploratory: gate.exploratoryOnly,
   };
@@ -302,6 +349,8 @@ export function findingsReportFile(
   unitsVerified: boolean = true,
   claimId: string = INTEGRITY_REPORT_CLAIM,
   digests?: ExportDigests,
+  /** True when the scan's frame is geographic (degrees); adds the note saying so. */
+  geographic: boolean = false,
 ): IntegrityReportFile {
   const gate = exportGate(claimId);
   if (!gate.allowed && !gate.exploratoryOnly) {
@@ -313,12 +362,12 @@ export function findingsReportFile(
     software,
     classificationEpoch,
     findings: [...findings],
-    notes: reportNotes(unitsVerified, crsName),
+    notes: reportNotes(unitsVerified, crsName, geographic),
   });
   return {
     filename: `${datasetId}-findings.json`,
     text: JSON.stringify(manifest, null, 2),
-    evidence: evidenceNote(claimId) + unverifiedUnitsCaveat(unitsVerified),
+    evidence: evidenceNote(claimId) + unverifiedUnitsCaveat(unitsVerified) + geographicRefusalCaveat(geographic),
     evidenceStatus: evidenceStatus(claimId),
     exploratory: gate.exploratoryOnly,
   };
@@ -334,10 +383,14 @@ export function findingsReportFile(
  * for the same scan renamed their columns and carried the note. These go
  * INTO the manifest, where the digest covers them.
  */
-function reportNotes(unitsVerified: boolean, crsName: string | undefined): string[] {
+function reportNotes(unitsVerified: boolean, crsName: string | undefined, geographic = false): string[] {
   const notes: string[] = [];
   const units = unverifiedUnitsCaveat(unitsVerified).trim();
   if (units) notes.push(units);
+  // Empty unless the frame is geographic, so every other report's notes (and
+  // digest) are unchanged.
+  const geo = geographicRefusalCaveat(geographic).trim();
+  if (geo) notes.push(geo);
   // An absent `crs` key is indistinguishable from an older build that did not
   // record one. Saying so is shorter than leaving the reader to guess.
   if (!crsName) {
@@ -362,6 +415,7 @@ export function measurementsToReportManifest(
   provenance: ReportProvenance,
   verticalToMetres: number = unitToMetres,
   hashFn?: HashFn,
+  frame: FindingsFrame = {},
 ): ReportManifest {
   return buildReportManifest(
     {
@@ -375,7 +429,7 @@ export function measurementsToReportManifest(
       software: provenance.software,
       classificationEpoch: provenance.classificationEpoch,
       notes: provenance.notes,
-      findings: measurementsToFindings(measurements, up, unitToMetres, verticalToMetres),
+      findings: measurementsToFindings(measurements, up, unitToMetres, verticalToMetres, frame),
     },
     hashFn,
   );

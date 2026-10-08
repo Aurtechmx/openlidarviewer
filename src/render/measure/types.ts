@@ -56,6 +56,26 @@ export type MeasurementKind =
    */
   | 'volume';
 
+/**
+ * Whether a geographic (degree) frame refuses this kind's figure. Every kind
+ * whose number mixes degree X/Y with a linear Z is refused: lengths, areas,
+ * grades, profiles, boxes, volumes and angles. A 3D angle is invariant under
+ * uniform scaling only, so an arm mixing degree horizontal with linear
+ * vertical gives a physically wrong angle. Only a pure-vertical height, a
+ * difference along up in the Z unit, is kept. The live grade and every export
+ * read this one rule.
+ */
+export function geographicRefusesKind(kind: MeasurementKind): boolean {
+  return kind !== 'height';
+}
+
+/**
+ * What a published surface (PDF row, CSV/GeoJSON note, KML description,
+ * report finding) prints in place of a figure the live tool refuses on a
+ * geographic frame. One string so every export reads the same.
+ */
+export const GEOGRAPHIC_NOT_AVAILABLE = 'not available: geographic CRS (degrees are not distances)';
+
 /** Unit system for displayed values; toggled live from the Measurements panel. */
 export type UnitSystem = 'metric' | 'imperial';
 

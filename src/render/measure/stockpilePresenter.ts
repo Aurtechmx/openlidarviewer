@@ -351,6 +351,7 @@ function computeStockpileGridForLasso(
     base: { mode: 'lowest-percentile', percentile: 0.05 },
     sourceReduced,
     linearUnitToMetres: lin,
+    verticalUnitToMetres: vert,
     densityUnitKnown,
   });
   if (stock.validity !== 'ok') return empty;

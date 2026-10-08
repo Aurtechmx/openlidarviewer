@@ -25,16 +25,21 @@
  *     "0 m" (which would imply a real measured value of zero).
  *
  * All values are returned in metres / square metres / cubic metres.
- * Geometry math runs in RENDER (source) units — a foot-CRS scan keeps
- * feet in render space — so `aggregate` takes the CRS's
- * `unitToMetres` factor (B2, v0.4.5) and scales each contributed
- * value by f^power(dimension): lengths ×f, areas ×f², volumes ×f³,
- * heights ×f; angles and grades are dimensionless. The UI layer then
- * formats with the active unit system (metric / imperial) via
- * `formatLength` / `formatArea` / `formatVolume`.
+ * Points are stored in RENDER (source) units, and a compound CRS can carry a
+ * different unit on each axis, so every point-derived figure is computed on
+ * points mapped into the metre frame the exporter uses (`toMetricFrame`):
+ * horizontal components ×fH, the up component ×fV. A 3D length, a tilted area,
+ * a grade and an angle then match the exported figure. Stored volumes (not
+ * point-derived) scale by fH²·fV. The UI layer then formats with the active
+ * unit system (metric / imperial).
+ *
+ * On an unconfirmed scale the unit names source units, never metres. On a
+ * geographic (degree) frame every dimension but height is refused, the same
+ * rule the live grade and the exports apply.
  */
 
 import type { Measurement, MeasurementKind } from './types';
+import { GEOGRAPHIC_NOT_AVAILABLE } from './types';
 import {
   angleAtVertex,
   boxFromCorners,
@@ -43,6 +48,7 @@ import {
   polygonAreaPlanar,
   polylineLength,
   slopeBetween,
+  toMetricFrame,
   verticalDelta,
 } from './geometry';
 import type { Vec3 } from '../navMath';
@@ -75,6 +81,19 @@ export interface ChainResult {
   readonly operation: ChainOperation;
   /** The dimension the aggregate is in. */
   readonly dimension: ChainDimension;
+  /**
+   * Set when the frame refuses this dimension (a geographic CRS): `value` is
+   * NaN, `unit` is empty, and this is the text to show instead.
+   */
+  readonly refusal?: string;
+}
+
+/** The scale context a chain runs in; see {@link aggregate}. */
+export interface ChainScale {
+  /** False when the linear scale is not confirmed: units read source units. Defaults true. */
+  readonly unitsVerified?: boolean;
+  /** True on a geographic (degree) frame: every dimension but height is refused. */
+  readonly geographic?: boolean;
 }
 
 /**
@@ -129,24 +148,16 @@ const DIMENSION_UNIT: Readonly<Record<ChainDimension, string>> = {
   grade: '%',
 };
 
-/**
- * The power of the render-unit → metre factor each dimension needs:
- * 1 for lengths/heights, 2 for areas, 3 for volumes, 0 for the
- * dimensionless angle/grade. Single table so a future dimension can't
- * forget its unit behaviour (B2).
- */
-// A dimension's unit scale is split into its HORIZONTAL and VERTICAL powers,
-// because a compound CRS can carry a different unit on each axis (metre grid +
-// US-survey-foot heights). area is h², height is v¹, a volume is h²·v¹. Applying
-// one horizontal factor `f^power` scaled heights and volumes by the wrong axis's
-// unit, so a chain sum disagreed with the single-measurement readout and the
-// export. When the two factors are equal (a single-unit CRS) k reduces to the
-// old f^(h+v) exactly, so single-unit behaviour is unchanged.
-const DIMENSION_H_POWER: Readonly<Record<ChainDimension, number>> = {
-  length: 1, area: 2, 'volume-fill': 2, 'volume-cut': 2, 'volume-net': 2, height: 0, angle: 0, grade: 0,
-};
-const DIMENSION_V_POWER: Readonly<Record<ChainDimension, number>> = {
-  length: 0, area: 0, 'volume-fill': 1, 'volume-cut': 1, 'volume-net': 1, height: 1, angle: 0, grade: 0,
+/** The unit a dimension reads in when the linear scale is not confirmed. */
+const SOURCE_UNIT: Readonly<Record<ChainDimension, string>> = {
+  length: 'source units',
+  area: 'source units²',
+  'volume-fill': 'source units³',
+  'volume-cut': 'source units³',
+  'volume-net': 'source units³',
+  height: 'source units',
+  angle: '°',
+  grade: '%',
 };
 
 /**
@@ -156,14 +167,24 @@ const DIMENSION_V_POWER: Readonly<Record<ChainDimension, number>> = {
  * The math is the same the headline rows use — by going through
  * `geometry.ts` instead of duplicating, a future fix to `slopeBetween`
  * lands in the aggregate too without a second touch.
+ *
+ * `fH` / `fV` are the horizontal and vertical render-unit → metre factors.
+ * Points are mapped into the metre frame before any geometry runs, so a figure
+ * mixing the two axes is correct on a compound CRS; stored (not point-derived)
+ * areas and volumes scale by fH² and fH²·fV. The defaults (1) return the
+ * native figure.
  */
 export function valueForDimension(
   m: Measurement,
   dim: ChainDimension,
   worldUp: Vec3 = [0, 0, 1],
+  fH = 1,
+  fV = fH,
 ): number | null {
-  const p = m.points;
-  if (p.length < 2) return null;
+  if (m.points.length < 2) return null;
+  const p = fH === 1 && fV === 1 ? m.points : m.points.map((q) => toMetricFrame(q, worldUp, fH, fV));
+  const storedArea = fH * fH;
+  const storedVolume = fH * fH * fV;
 
   switch (dim) {
     case 'length':
@@ -176,14 +197,14 @@ export function valueForDimension(
     case 'area':
       if (m.kind === 'area' && p.length >= 3) return polygonAreaPlanar(p);
       if (m.kind === 'volume' && p.length >= 3 && m.volume) {
-        return m.volume.footprintArea;
+        return m.volume.footprintArea * storedArea;
       }
       if (m.kind === 'box' && p.length >= 2) {
         // For a box, "area" is the horizontal footprint (width × depth), and
         // which two edges those are depends on the scan's up-axis. Reading
         // them off X and Y multiplied one horizontal extent by the HEIGHT on a
-        // Y-up frame, and `DIMENSION_H_POWER.area = 2` then scaled that height
-        // by the horizontal unit factor as well. `boxMetrics` already answers
+        // Y-up frame, and the horizontal unit factor then scaled that height
+        // as well. `boxMetrics` already answers
         // this correctly, so the chain asks it rather than keeping a second
         // opinion about which axis points up.
         const b = boxMetrics(boxFromCorners(p[0], p[1]), worldUp);
@@ -194,21 +215,20 @@ export function valueForDimension(
     case 'volume-fill':
       // A withheld grid figure carries no fill/cut/net — it contributes
       // nothing to a chain total rather than a borrowed cut-and-fill number.
-      if (m.kind === 'volume' && m.volume) return m.volume.fill ?? null;
+      if (m.kind === 'volume' && m.volume) return m.volume.fill != null ? m.volume.fill * storedVolume : null;
       if (m.kind === 'box' && p.length >= 2) {
-        // The product of three edges does not depend on which one is vertical,
-        // but `k = fH²·fV` does, so this goes through the same up-aware
-        // answer the area branch and the box readout use.
+        // The box is built on metre-frame corners, so the up-aware answer the
+        // area branch and the box readout use already carries fH²·fV.
         return boxMetrics(boxFromCorners(p[0], p[1]), worldUp).volume;
       }
       return null;
 
     case 'volume-cut':
-      if (m.kind === 'volume' && m.volume) return m.volume.cut ?? null;
+      if (m.kind === 'volume' && m.volume) return m.volume.cut != null ? m.volume.cut * storedVolume : null;
       return null;
 
     case 'volume-net':
-      if (m.kind === 'volume' && m.volume) return m.volume.net ?? null;
+      if (m.kind === 'volume' && m.volume) return m.volume.net != null ? m.volume.net * storedVolume : null;
       return null;
 
     case 'height':
@@ -251,25 +271,37 @@ export function aggregate(
   worldUp: Vec3 = [0, 0, 1],
   unitToMetres = 1,
   verticalUnitToMetres = unitToMetres,
+  scale: ChainScale = {},
 ): ChainResult {
   const totalCount = measurements.length;
-  // B2 — geometry values arrive in render (source) units; convert into the
-  // dimension's canonical metre-based unit ONCE, here, so min/max/mean all
-  // operate on already-true values. Invalid factors fall back to 1 (the
-  // pre-B2 "assume metres" behaviour — never multiply by garbage).
+  // A geographic frame refuses every figure that mixes degree X/Y with a
+  // linear Z; only a height (along up, in the Z unit) is left.
+  if (scale.geographic === true && dimension !== 'height') {
+    return {
+      value: Number.NaN,
+      unit: '',
+      contributingCount: 0,
+      totalCount,
+      operation,
+      dimension,
+      refusal: GEOGRAPHIC_NOT_AVAILABLE,
+    };
+  }
+  // Geometry values arrive in render (source) units; each value is converted
+  // into metres ONCE, inside valueForDimension, so min/max/mean all operate on
+  // already-true values. Invalid factors fall back to 1 (never multiply by
+  // garbage).
   const fH = Number.isFinite(unitToMetres) && unitToMetres > 0 ? unitToMetres : 1;
   const fV = Number.isFinite(verticalUnitToMetres) && verticalUnitToMetres > 0 ? verticalUnitToMetres : fH;
-  // Scale each axis by its OWN unit factor. `?? 0` guards a dimension string this
-  // build doesn't know (a forward-compat session/embed caller): power 0 means
-  // "no scaling", never a NaN aggregate.
-  const k = Math.pow(fH, DIMENSION_H_POWER[dimension] ?? 0) * Math.pow(fV, DIMENSION_V_POWER[dimension] ?? 0);
   const values: number[] = [];
   for (const m of measurements) {
-    const v = valueForDimension(m, dimension, worldUp);
-    if (v !== null && Number.isFinite(v)) values.push(v * k);
+    const v = valueForDimension(m, dimension, worldUp, fH, fV);
+    if (v !== null && Number.isFinite(v)) values.push(v);
   }
   const contributingCount = values.length;
-  const unit = DIMENSION_UNIT[dimension];
+  // A geographic frame has no confirmed linear scale either.
+  const verified = (scale.unitsVerified ?? true) && scale.geographic !== true;
+  const unit = (verified ? DIMENSION_UNIT : SOURCE_UNIT)[dimension] ?? '';
 
   if (operation === 'count') {
     return {
@@ -369,6 +401,7 @@ export function supportedDimensions(
  * min/max).
  */
 export function formatChainResult(result: ChainResult): string {
+  if (result.refusal) return result.refusal;
   if (result.operation === 'count') {
     return `${result.value} of ${result.totalCount}`;
   }

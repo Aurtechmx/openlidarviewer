@@ -31,7 +31,7 @@ import type {
   UnitSystem,
   VolumeRecord,
 } from './types';
-import { MIN_POINTS, isFull } from './types';
+import { GEOGRAPHIC_NOT_AVAILABLE, MIN_POINTS, isFull } from './types';
 import type { WorkOwnership } from '../../model/workOwnership';
 import type { ProfileProvenance } from './profileProvenance';
 import type { WithheldReadCounts } from '../../science/withheldCounts';
@@ -63,7 +63,7 @@ import {
   type SnapResult,
   type Segments,
 } from './snap';
-import { gradeMeasurement, type MeasurementTrust } from './measurementTrust';
+import { gradeMeasurement, geographicRefusesKind, type MeasurementTrust } from './measurementTrust';
 import {
   formatLengthRender,
   formatAreaRender,
@@ -1846,7 +1846,7 @@ export class MeasureController {
       // scaling only, so an arm mixing degree horizontal with linear vertical
       // gives a raw-coordinate angle that is physically wrong (pass-6 M3).
       geographicCrs:
-        this._geographicCrs && m.kind !== 'height',
+        this._geographicCrs && geographicRefusesKind(m.kind),
       // Compound CRS (height unit ≠ horizontal unit): refuse the kinds whose
       // number mixes the two axes. Heights, boxes and volumes are exactly
       // rescaled by the vertical factor, so they keep their ordinary grade.
@@ -2196,10 +2196,29 @@ export class MeasureController {
     const polygons: OverlayPolygon[] = [];
     const labels: OverlayLabel[] = [];
     for (const m of this._measurements) {
+      const from = labels.length;
       this._appendMeasurement(m, vertices, edges, polygons, labels);
+      this._refuseGeographicLabels(m, labels, from);
     }
-    if (this._draft) this._appendDraft(this._draft, vertices, edges, polygons, labels);
+    if (this._draft) {
+      const from = labels.length;
+      this._appendDraft(this._draft, vertices, edges, polygons, labels);
+      this._refuseGeographicLabels(this._draft, labels, from);
+    }
     return { polygons, edges, vertices, labels };
+  }
+
+  /**
+   * On a geographic (degree) frame, replace the labels a refused measurement
+   * just added. The overlay feeds snapshot PNGs and Studio images, so a grade,
+   * angle, length or area the grade refuses must not be drawn as a number:
+   * the headline reads the refusal and the secondary labels are dropped.
+   */
+  private _refuseGeographicLabels(m: Measurement, labels: OverlayLabel[], from: number): void {
+    if (!this._geographicCrs || !geographicRefusesKind(m.kind) || labels.length <= from) return;
+    const added = labels.splice(from);
+    const head = added.find((l) => l.primary) ?? added[0];
+    labels.push({ ...head, text: GEOGRAPHIC_NOT_AVAILABLE, primary: true });
   }
 
   /** Add a committed measurement's geometry to the draw model. */

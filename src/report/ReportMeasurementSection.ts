@@ -41,7 +41,11 @@ import { formatArea, displayDecimals } from '../render/measure/format';
 // Z vertical and took only a horizontal factor, so a Y-up scan or a compound
 // CRS printed wrong (pass-6 M6). measurementMetrics returns metres already, in
 // the scene's real up-axis and per-axis units; this module only formats them.
-import { measurementMetrics } from '../export/measurementExport';
+import {
+  GEOGRAPHIC_NOT_AVAILABLE,
+  geographicRefusesKind,
+  measurementMetrics,
+} from '../export/measurementExport';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Inline math
@@ -230,7 +234,17 @@ function buildProfileExtras(
   if (stations.length === 0) return undefined;
   // Slope grades: use profile samples if the measurement carries them.
   const samples = m.profileChart && m.profileChart.length >= 2 ? m.profileChart : undefined;
-  const grades = slopeGradesPerSegment({ stations, samples });
+  // Samples and station heights are native: chainage in the horizontal unit,
+  // height in the vertical one. A grade is rise over run, so on a compound CRS
+  // the heights are rescaled by vf / f first; the ratio then matches the metric
+  // grade the summary line prints. A single-unit CRS (vf === f) is unchanged.
+  const hv = vf / f;
+  const grades = hv === 1
+    ? slopeGradesPerSegment({ stations, samples })
+    : slopeGradesPerSegment({
+      stations: stations.map((s) => ({ ...s, height: (s.height ?? s.position[2]) * hv })),
+      samples: samples?.map((s) => ({ ...s, height: s.height * hv })),
+    });
   const summary = summariseSlopes(grades);
 
   // The summary line's Horizontal / 3D / Δh / grade come from the ONE shared
@@ -336,16 +350,29 @@ export function buildMeasurementRows(
    * in source units". Defaults true so every georeferenced caller is unchanged.
    */
   unitsVerified = true,
+  /**
+   * True when the scan's frame is geographic (degrees). The live Measure tool
+   * refuses every kind but a pure-vertical height there, because degree X/Y
+   * mixed with a linear Z is wrong as a grade, an angle or a length. The row
+   * then says so in place of the number, and a profile carries no detail
+   * block. Defaults false, so every projected report is unchanged.
+   */
+  geographicCrs = false,
 ): readonly ReportMeasurementRow[] {
   const f = Number.isFinite(unitToMetres) && unitToMetres > 0 ? unitToMetres : 1;
   const vf = Number.isFinite(verticalToMetres) && verticalToMetres > 0 ? verticalToMetres : f;
-  return measurements.map((m) => ({
-    name: m.name,
-    kind: m.kind,
-    value: computeValue(m, unitSystem, worldUp, f, vf, unitsVerified),
-    pointCount: m.points.length,
-    profileExtras: m.kind === 'profile'
-      ? buildProfileExtras(m, unitSystem, f, worldUp, vf, unitsVerified)
-      : undefined,
-  }));
+  return measurements.map((m) => {
+    const refused = geographicCrs && geographicRefusesKind(m.kind);
+    return {
+      name: m.name,
+      kind: m.kind,
+      value: refused
+        ? GEOGRAPHIC_NOT_AVAILABLE
+        : computeValue(m, unitSystem, worldUp, f, vf, unitsVerified),
+      pointCount: m.points.length,
+      profileExtras: m.kind === 'profile' && !refused
+        ? buildProfileExtras(m, unitSystem, f, worldUp, vf, unitsVerified)
+        : undefined,
+    };
+  });
 }
