@@ -434,8 +434,8 @@ and the Profile Workbench state the unit is unverified.
 
 ## Exports carry the geographic refusal, not the endpoint grade
 
-On a geographic CRS the PDF report, CSV, GeoJSON, KML, findings, integrity
-report and chain total withhold every figure but heights, as the Measure panel
+On a geographic CRS the PDF report, profile sheet, CSV, GeoJSON, KML, findings,
+integrity report, chain total and drawn labels withhold every figure but heights, as the Measure panel
 does. The per-measurement support grade does not travel with them: a
 measurement with an endpoint in empty space reads Unverified in the panel and
 is still published as a number. On a compound CRS whose height unit differs
