@@ -24,15 +24,15 @@ from the tree and fails when a cell drifts.
 | Layer | Path | Size | Role |
 |---|---|---:|---|
 | Core numerics | `src/process`, `src/numeric.ts`, `src/units` | ~3.3k | Compensated sums, Welford, unit types. No dependencies. |
-| Model | `src/model` | ~3.7k | `PointCloud`, layer model. Plain data. |
+| Model | `src/model` | ~3.8k | `PointCloud`, layer model. Plain data. |
 | Geo | `src/geo` | ~5.3k | CRS math, `ProjectSpatialFrame`, transforms. |
 | Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~50k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. UI-free by lint. |
 | I/O | `src/io` | ~39k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
-| Render | `src/render` | ~77k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
+| Render | `src/render` | ~78k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
 | Export / report | `src/export`, `src/report`, `src/convert` | ~17k | Studio exporters, PDF/report builders, batch conversion. |
-| Application services | `src/app` | ~26k | Composition root and the services that own shared state. |
-| UI | `src/ui` | ~41k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 4,341 | Wiring. A monolith under decomposition. |
+| Application services | `src/app` | ~27k | Composition root and the services that own shared state. |
+| UI | `src/ui` | ~42k | Panels, Inspector, Studio surfaces, onboarding. |
+| Shell | `src/main.ts` | 4,321 | Wiring. A monolith under decomposition. |
 
 ## Composition root
 
@@ -102,7 +102,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-`src/main.ts` (4,341): the largest blocks, which are the extraction
+`src/main.ts` (4,321): the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` is a thin assembler in `src/app/actionDefinitions.ts` over
@@ -249,6 +249,16 @@ gate, the no-scan point-filter skip, the shell's restored-window write-back, the
 that must touch nothing but the pose (`tests/viewStateCoordinator.test.ts`). The
 field order and the present/absent guards stay in `src/io/viewState.ts`.
 `main.ts` keeps five thin delegates and the deps object.
+
+Done: the Save view snapshot (`saveSnapshot`, ~45 lines with its scope stamp
+and provenance stamping) now lives in `src/app/snapshotAction.ts`, loaded on the
+first snapshot through `loadSnapshotAction()`. It takes the viewer structurally
+plus the scope stamp and the reference plane's provenance note as accessors, so
+the capture order, the stamping fallback and the error path are Node-tested
+(`tests/snapshotAction.test.ts`). The reference plane itself is a new feature
+outside the shell: its toggle is `src/ui/referencePlaneSection.ts` in the View
+panel, and the overlay, controller and settings panel load together from
+`src/app/workplaneMount.ts` on first use.
 
 Done: the `?test=1` Playwright seam (`window.__OLV_TEST_API__`, ~78 lines) now
 lives in `src/app/testSeam/testSeamMount.ts`, driven through a `TestSeamDeps`

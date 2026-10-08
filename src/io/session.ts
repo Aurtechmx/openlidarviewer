@@ -51,6 +51,7 @@ import type { SessionProjectFrame } from './sessionFrame';
 import { parseWorkOwnership, serializeWorkOwnership } from '../model/workOwnership';
 import type { WorkOwnership } from '../model/workOwnership';
 import { parseWithheldReadCounts } from './withheldCountsJson';
+import { parseWorkplaneSettings, type WorkplaneSettings } from '../model/workplaneSettings';
 
 /**
  * Current session-file schema version (v8). The history, oldest first: v3 added
@@ -101,6 +102,11 @@ import { parseWithheldReadCounts } from './withheldCountsJson';
  * byte-shape; a session that predates it parses with the field undefined and
  * loses nothing. It holds counts and identity only, never the accepted returns,
  * so it cannot grow with the size of the cloud it describes.
+ *
+ * The reference plane (`referencePlane`, see `model/workplaneSettings.ts`) is
+ * additive within v8 on the same terms: a view setting, emitted only once the
+ * plane has been used, and read field by field so a damaged block falls back to
+ * the default (off) rather than failing the import.
  *
  * Older v1..v7 files parse with no loss: the new optional fields just
  * read as undefined, and the Viewer falls back to its current state. A v7
@@ -347,6 +353,8 @@ export interface InspectionSession {
    * about where geometry is read back depends on it.
    */
   layerGroups?: SessionLayerGroup[];
+  /** The reference plane's settings, a view setting; absent when it was never used. */
+  referencePlane?: WorkplaneSettings;
   /**
    * v8. The project frame: the one origin the project's layers map into, plus
    * a record per layer (see `io/sessionFrame.ts`). Present only for a session
@@ -447,6 +455,7 @@ export function serializeSession(
   // emitted when a group survives, keeping the no-groups byte-shape.
   const groups = sanitizeLayerGroups(session.layerGroups);
   if (groups.length > 0) doc.layerGroups = groups;
+  if (session.referencePlane) doc.referencePlane = session.referencePlane;
   // v8. The project frame, validated here as well as on read, so this app can
   // never write a session it would itself refuse to open.
   if (session.projectFrame) {
@@ -634,6 +643,8 @@ export function parseSession(text: string): InspectionSession {
   // stripped by a round trip.
   const layerGroups = sanitizeLayerGroups(raw.layerGroups);
   if (layerGroups.length > 0) out.layerGroups = layerGroups;
+  const referencePlane = parseWorkplaneSettings(raw.referencePlane);
+  if (referencePlane) out.referencePlane = referencePlane;
   // v8. The project frame. Version-independent on read, like the other
   // additive fields, so a file that carries one is never stripped by a round
   // trip. An inconsistent frame THROWS (see `sessionFrame.ts`): it decides

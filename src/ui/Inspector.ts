@@ -6,6 +6,7 @@ import {
   type StreamingDetail,
 } from './streamingDetail';
 import { collapsibleSection } from './collapsibleSection';
+import { createReferencePlaneSection, type ReferencePlaneDeps, type ReferencePlaneHandle } from './referencePlaneSection';
 import { loadInspectorSections, saveInspectorSection } from '../prefs';
 import type { LayerGroupsPanel } from './LayerGroupsPanel';
 import type { SessionLayerGroup } from '../io/session';
@@ -183,6 +184,8 @@ export interface InspectorCallbacks {
   onTerrainWorkflowPreset: (id: TerrainWorkflowPresetId) => void;
   /** Open the Dataset Story modal (reuses the command-palette `story.dataset` action). */
   onOpenDatasetStory?: () => void;
+  /** What the reference plane reads and draws through; omitted, the section is not built. */
+  referencePlane?: ReferencePlaneDeps;
 }
 
 const MODE_LABELS: Record<ColorMode, string> = {
@@ -517,6 +520,8 @@ export class Inspector {
    * has loaded.
    */
   readonly sheetToggle: HTMLButtonElement;
+  /** The reference plane's toggle and handle; null when no deps were given. */
+  readonly referencePlane: ReferencePlaneHandle | null;
   /**
    * Phone-only tap target. The Inspector's panel head doubles as a sheet
    * handle on mobile so the user can tap the bar at the bottom of the
@@ -1322,6 +1327,16 @@ export class Inspector {
     // paint — it simply is not there yet).
     this._layerHealthSlot = el('div');
 
+    // A view setting, so it sits with Rendering. The settings panel loads with
+    // the plane's chunk the first time the section opens or the plane turns on.
+    this.referencePlane = callbacks.referencePlane ? createReferencePlaneSection(callbacks.referencePlane) : null;
+    const referencePlaneSection = this.referencePlane
+      ? this._persistSection('referencePlane', collapsibleSection('Reference plane', this.referencePlane.element))
+      : null;
+    referencePlaneSection?.addEventListener('toggle', () => {
+      if (referencePlaneSection.open) void this.referencePlane?.open();
+    });
+
     this._crsSection = collapsibleSection('Coordinate system', this._crsBody);
     // Task frequency order: appearance (Rendering holds the navigation
     // group), filters, saved views, then the scan facts.
@@ -1330,6 +1345,7 @@ export class Inspector {
       this._colorBySection,
       visualsStudioSection,
       this._renderingSection,
+      ...(referencePlaneSection ? [referencePlaneSection] : []),
       this._elevFilter.section,
       this._intenFilter.section,
       this._persistSection('savedViews', collapsibleSection('Saved views', views)),

@@ -54,6 +54,26 @@ export function mountTestSeam(deps: TestSeamDeps): void {
     clearMeasurements: () => v.clearMeasurements(),
     getMeasurementCount: () => v.measure.getMeasurements().length,
     layerProjectPoints: (i: number) => v.layerProjectPoints(i), getCameraPose: () => v.getCameraPose(),
+    // A scene point projected to page coordinates through the camera the last
+    // frame drew with, so a spec can click a known scan point in any projection.
+    projectToClient: (p: { x: number; y: number; z: number }): { x: number; y: number } | null => {
+      const cam = (v as unknown as { _activeCamera(): { matrixWorldInverse: { elements: number[] }; projectionMatrix: { elements: number[] } } })._activeCamera();
+      const m = cam.matrixWorldInverse.elements;
+      const q = cam.projectionMatrix.elements;
+      const e = [p.x * m[0] + p.y * m[4] + p.z * m[8] + m[12], p.x * m[1] + p.y * m[5] + p.z * m[9] + m[13], p.x * m[2] + p.y * m[6] + p.z * m[10] + m[14], 1];
+      const c = [0, 1, 2, 3].map((r) => q[r] * e[0] + q[4 + r] * e[1] + q[8 + r] * e[2] + q[12 + r] * e[3]);
+      if (!(c[3] !== 0)) return null;
+      const canvas = document.querySelector<HTMLCanvasElement>('.olv-canvas');
+      const rect = canvas?.getBoundingClientRect();
+      if (!rect) return null;
+      return { x: rect.left + ((c[0] / c[3] + 1) / 2) * rect.width, y: rect.top + ((1 - c[1] / c[3]) / 2) * rect.height };
+    },
+    // Whether the viewer's own point pick finds the scan at a page position.
+    pickAtClient: (x: number, y: number): boolean => {
+      const rect = document.querySelector<HTMLCanvasElement>('.olv-canvas')?.getBoundingClientRect();
+      if (!rect) return false;
+      return v.pickPoint(((x - rect.left) / rect.width) * 2 - 1, -((y - rect.top) / rect.height) * 2 + 1) !== null;
+    },
     // Elevation filter (v0.5.6) device-verify seam: pass a world-space
     // [min, max] window (or null to clear) and confirm points outside it hide.
     setElevationFilter: (range: [number, number] | null) =>

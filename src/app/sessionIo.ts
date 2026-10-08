@@ -20,6 +20,7 @@
  */
 
 import type { Viewer } from '../render/Viewer';
+import type { WorkplaneSettings } from '../model/workplaneSettings';
 import type { PointCloud } from '../model/PointCloud';
 import type { ViewBookmarksService } from './viewBookmarks';
 import type { CrsService } from '../geo/CrsService';
@@ -142,6 +143,8 @@ export interface SessionIoDeps {
    * scans that are actually open and drops the rest.
    */
   restoreLayerGroups: (groups: readonly SessionLayerGroup[]) => void;
+  /** Re-apply the reference plane a session saved. Optional: an older host has none. */
+  restoreReferencePlane?: (settings: WorkplaneSettings) => void;
   /** Re-render the measurements panel from the viewer's store. */
   refreshMeasurePanel: () => void;
   /** Re-render the annotations panel from the viewer's store. */
@@ -426,6 +429,8 @@ export async function importSession(
     // Groups are additive within v8: a file written before the field existed
     // carries none, and the panel is left exactly as the user arranged it.
     if (session.layerGroups) deps.restoreLayerGroups(session.layerGroups);
+    // A view setting, additive within v8: absent leaves the plane as it is.
+    if (session.referencePlane) deps.restoreReferencePlane?.(session.referencePlane);
     deps.refreshMeasurePanel();
     deps.refreshAnnotationPanel();
 

@@ -14,7 +14,7 @@ export function buildTestActionRegistry(): Action[] {
     runDeriveClassification: async () => undefined, saveSnapshot: noop, copyShareLink: noop, terrainAnalysisEntry: {} as never,
     runFillUnclassified: async () => undefined, runTool: noop, buildCurrentStoryInputs: () => ({}) as never, startWorkflowRecording: noop,
     dispatchWorkflowEvent: noop, ensureWorkflowConfigPanel: async () => ({}) as never, ensureShortcutSheet: async () => ({}) as never,
-    hasScan: () => false, saveCurrentView: noop, applyView: noop, toggleOrbitInvert: noop, resetNavigation: noop,
+    hasScan: () => false, saveCurrentView: noop, applyView: noop, toggleOrbitInvert: noop, resetNavigation: noop, toggleReferencePlane: noop,
     planView: { togglePlanView: noop, notePlanViewPreset: noop, toggleNavigationPanel: noop },
   } as unknown as ActionRegistryDeps);
 }

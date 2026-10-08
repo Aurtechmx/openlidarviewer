@@ -41,7 +41,7 @@ describe('action contributors', () => {
     const setTheme = vi.fn(); const capture = vi.fn();
     const compass = { isEnabled: () => false, setEnabled: vi.fn() };
     const bookmarks = { count: () => 0, get: () => undefined };
-    const deps = { setTheme, capture, compass: compass as never, bookmarks: bookmarks as never, toggleOrbitInvert: vi.fn(), resetNavigation: vi.fn(), showTouchGestures: vi.fn(), hasScan: () => false, saveCurrentView: vi.fn(), applyView: vi.fn(), showLassoToast: toast };
+    const deps = { setTheme, capture, compass: compass as never, bookmarks: bookmarks as never, toggleOrbitInvert: vi.fn(), resetNavigation: vi.fn(), toggleReferencePlane: vi.fn(), showTouchGestures: vi.fn(), hasScan: () => false, saveCurrentView: vi.fn(), applyView: vi.fn(), showLassoToast: toast };
     const actions = contributeViewActions(deps);
     actions.find((a) => a.id === 'theme.dark')!.run();
     expect(setTheme).toHaveBeenCalledWith('dark');
@@ -52,6 +52,8 @@ describe('action contributors', () => {
     // The gestures action only re-flashes the hint; it asks nothing of the app.
     actions.find((a) => a.id === 'nav.gestures')!.run();
     expect(deps.showTouchGestures).toHaveBeenCalled();
+    actions.find((a) => a.id === 'view.reference-plane')!.run();
+    expect(deps.toggleReferencePlane).toHaveBeenCalled();
     actions.find((a) => a.id === 'view.save-state')!.run();
     expect(deps.saveCurrentView).not.toHaveBeenCalled(); // no scan: refused with a toast
     expect(toast).toHaveBeenCalledWith(expect.stringMatching(/Load a scan first/));
@@ -88,7 +90,7 @@ describe('action contributors', () => {
   it('ids are unique across every contributor', () => {
     const all = [
       ...contributeCameraActions({ getViewer: () => ({}) as never, planView: { togglePlanView() {}, notePlanViewPreset() {}, toggleNavigationPanel() {} }, capture: vi.fn(), showLassoToast: toast }),
-      ...contributeViewActions({ setTheme: vi.fn(), capture: vi.fn(), compass: {} as never, bookmarks: {} as never, toggleOrbitInvert: vi.fn(), resetNavigation: vi.fn(), showTouchGestures: vi.fn(), hasScan: () => false, saveCurrentView: vi.fn(), applyView: vi.fn(), showLassoToast: toast }),
+      ...contributeViewActions({ setTheme: vi.fn(), capture: vi.fn(), compass: {} as never, bookmarks: {} as never, toggleOrbitInvert: vi.fn(), resetNavigation: vi.fn(), toggleReferencePlane: vi.fn(), showTouchGestures: vi.fn(), hasScan: () => false, saveCurrentView: vi.fn(), applyView: vi.fn(), showLassoToast: toast }),
       ...contributeToolActions({ getViewer: () => ({}) as never, workflowController: {} as never, lassoVolumeTool: {} as never, syncLassoButton: vi.fn(), runDeriveClassification: vi.fn(), runFillUnclassified: vi.fn(), showLassoToast: toast, runTool: vi.fn() }),
       ...contributeAnalysisActions({ terrainAnalysisEntry: {} as never, observatoryEntry: {} as never, buildCurrentStoryInputs: () => ({}) as never }),
       ...contributeExportActions({ saveSnapshot: vi.fn(), copyShareLink: vi.fn(), buildCurrentStoryInputs: () => ({}) as never, showLassoToast: vi.fn() }),

@@ -45,9 +45,10 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       'Drag to rotate and scroll to zoom. Keys 1 to 4 pick the mode: orbit, walk, fly, pan. WASD and the arrows move in walk and fly. Space and C raise and lower; Shift sprints.',
       'R frames the whole scan and F focuses its centre; a double-click focuses a point. Hold Space while a tool is active to rotate or pan, then release to resume. Right-click opens a quick menu to focus, frame or snap to a view.',
       'The Navigation panel holds the camera presets, the six views, Ortho and Plan. It starts closed. Press H or the Navigation button beside the mode triangle to show or hide it.',
+      'B shows a reference plane, a grid at an elevation you set in the View panel. It is a visual reference, not measured terrain, and nothing measures or snaps to it.',
     ],
-    actionIds: ['camera.navigation-panel', 'camera.top', 'camera.oblique', 'camera.planar', 'camera.plan-view', 'camera.orthographic', 'view.save-state', 'view.restore-state', 'view.compass'],
-    keywords: ['orbit', 'walk', 'fly', 'pan', 'camera', 'frame', 'focus', 'zoom', 'view', 'compass', 'keyboard'],
+    actionIds: ['camera.navigation-panel', 'camera.top', 'camera.oblique', 'camera.planar', 'camera.plan-view', 'camera.orthographic', 'view.save-state', 'view.restore-state', 'view.compass', 'view.reference-plane'],
+    keywords: ['orbit', 'walk', 'fly', 'pan', 'camera', 'frame', 'focus', 'zoom', 'view', 'compass', 'keyboard', 'grid', 'reference plane'],
   },
   {
     id: 'tools',

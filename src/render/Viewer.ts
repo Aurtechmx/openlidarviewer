@@ -3978,7 +3978,7 @@ export class Viewer {
    * false when nothing is under the cursor so the caller can fall back.
    */
   focusOnScreen(ndcX: number, ndcY: number): boolean {
-    const point = this._pickPoint(ndcX, ndcY);
+    const point = this.pickPoint(ndcX, ndcY);
     if (!point) return false;
     this._nav.focusOn(point);
     return true;
@@ -4998,7 +4998,7 @@ export class Viewer {
   private _visibleBoundingBox(): THREE.Box3 | null {
     // A streaming COPC contributes its whole octree extent so framing works
     // before any node has finished decoding.
-    const s = this._mergedVisibleBounds();
+    const s = this.mergedVisibleBounds();
     if (!s) return null;
     return new THREE.Box3(
       new THREE.Vector3(s[0], s[1], s[2]),
@@ -5009,9 +5009,9 @@ export class Viewer {
   /**
    * The one scene-bounds merge (layerPlacement.mergePlacedBounds): camera
    * framing and the orbit clamp read the same placed union, so the two can
-   * never disagree on where the visible data sits.
+   * never disagree on where the visible data sits. Scene frame; public for the reference plane.
    */
-  private _mergedVisibleBounds(): [number, number, number, number, number, number] | null {
+  mergedVisibleBounds(): [number, number, number, number, number, number] | null {
     const layers: Array<{ bounds: ReturnType<PointCloud['bounds']>; placement?: LayerSpatialTransform | null }> = [];
     for (const entry of this._clouds.values()) {
       if (!entry.mesh.visible) continue;
@@ -5034,7 +5034,7 @@ export class Viewer {
    * attach avoids re-walking the cloud map in the render loop.
    */
   private _visibleCloudAabb(): OrbitAabb | null {
-    return this._mergedVisibleBounds();
+    return this.mergedVisibleBounds();
   }
 
   /**
@@ -5388,9 +5388,9 @@ export class Viewer {
   /**
    * Pick the cloud point under normalised device coords, or null if none.
    * Searches static clouds first, then resident streaming nodes — so
-   * measurement and focus work on a COPC scan as well as a static one.
+   * measurement, focus and the reference plane's picks work on either.
    */
-  private _pickPoint(ndcX: number, ndcY: number): THREE.Vector3 | null {
+  pickPoint(ndcX: number, ndcY: number): THREE.Vector3 | null {
     const onStatic = this._pickDetailed(ndcX, ndcY)?.point;
     if (onStatic) return onStatic;
     return this._pickStreaming(ndcX, ndcY);
@@ -5601,7 +5601,7 @@ export class Viewer {
     if (this._toolMode !== 'none') return; // other tools handle their own dbl
     const ndcX = (e.offsetX / this._canvas.clientWidth) * 2 - 1;
     const ndcY = -(e.offsetY / this._canvas.clientHeight) * 2 + 1;
-    const point = this._pickPoint(ndcX, ndcY);
+    const point = this.pickPoint(ndcX, ndcY);
     if (point) this._nav.focusOn(point);
   }
 
@@ -5728,7 +5728,7 @@ export class Viewer {
 
   /** `F` key — focus on whatever point is centred in the view. */
   private _focusCenter(): void {
-    const point = this._pickPoint(0, 0);
+    const point = this.pickPoint(0, 0);
     if (point) this._nav.focusOn(point);
     else this.frameAll();
   }
@@ -5898,7 +5898,7 @@ export class Viewer {
       pointerOnCanvas: () => this._pointerOnCanvas,
       pointerNdc: () => ({ x: this._pointerNdcX, y: this._pointerNdcY }),
       pointerClient: () => ({ x: this._pointerClientX, y: this._pointerClientY }),
-      pickPoint: (ndcX, ndcY) => this._pickPoint(ndcX, ndcY),
+      pickPoint: (ndcX, ndcY) => this.pickPoint(ndcX, ndcY),
       setMeasureCursor: (point) => {
         this._measure.setCursor(point);
         // The overlay re-projects only on a frame that draws, and a hover has

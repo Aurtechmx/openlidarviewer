@@ -48,6 +48,11 @@ export interface FigureProvenanceInput {
   readonly sourceInterpretation?: { readonly interpretationLevel: string; readonly dataBasis: string } | null;
   /** Source-file digest and CRS origin; a figure does not come from an analysis. */
   readonly digests?: ExportDigests | null;
+  /**
+   * The reference plane drawn in the figure, when one was on screen. A grid in
+   * the pixels is not data, and this chunk says it is there and what it is.
+   */
+  readonly referencePlane?: string | null;
 }
 
 /** Fixed-precision triple: `1.000,-5.250,3.000`. 3 decimals ≈ mm at metre
@@ -108,6 +113,8 @@ export function buildFigureProvenance(input: FigureProvenanceInput): PngTextEntr
       { keyword: 'olv:crs-origin', text: crsOriginLine(input.digests.crsOrigin) },
     );
   }
+
+  if (input.referencePlane) entries.push({ keyword: 'olv:reference-plane', text: input.referencePlane });
 
   return entries;
 }

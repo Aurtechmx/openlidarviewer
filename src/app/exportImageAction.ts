@@ -46,6 +46,12 @@ export interface ExportImageActionDeps {
   };
   readonly baseName: (name: string) => string;
   readonly currentClassScopeStamp: () => string;
+  /**
+   * Run the render with the reference plane hidden. A Studio export is a map or
+   * a data raster (height, depth, intensity), and a drawn grid in its pixels
+   * would read back as data, so the plane never reaches one.
+   */
+  readonly withoutReferencePlane?: <T>(render: () => Promise<T>) => Promise<T>;
 }
 
 const MODE_LABEL: Record<string, string> = {
@@ -74,10 +80,10 @@ export function exportImageAction(mode: ExportMode, deps: ExportImageActionDeps)
   const base = sourceName ? deps.baseName(sourceName) : 'openlidarviewer';
   const label = MODE_LABEL[mode] ?? mode;
   progress.setProgress(`Exporting ${label}…`);
-  return viewer
-    // Thread the active class-scope stamp so a filtered export carries the
-    // "showing N of M classes" banner; empty when nothing is hidden.
-    .exportImage(mode, {}, deps.currentClassScopeStamp())
+  // Thread the active class-scope stamp so a filtered export carries the
+  // "showing N of M classes" banner; empty when nothing is hidden.
+  const render = () => viewer.exportImage(mode, {}, deps.currentClassScopeStamp());
+  return (deps.withoutReferencePlane ? deps.withoutReferencePlane(render) : render())
     .then(async (result) => {
       // The scan moved while the Studio loaded or rendered. The bytes in hand
       // describe whatever is on screen now; the name and stamp describe what was
