@@ -257,6 +257,13 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
           // grid + US-foot heights) must scale a height sum and volume by feet,
           // not by the horizontal metre factor (audit #8).
           viewer.measure.verticalUnitToMetres,
+          // The same frame verdicts the live grade and the exports read: a
+          // geographic frame refuses all but height, and an unconfirmed scale
+          // is not called metres.
+          {
+            geographic: viewer.measure.geographicCrs,
+            unitsVerified: viewer.measure.crsKnown && !viewer.measure.geographicCrs,
+          },
         );
       },
       // v0.3.10 Profile-as-Deliverable — expose the controller's unit

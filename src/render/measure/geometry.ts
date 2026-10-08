@@ -524,3 +524,22 @@ export function countPointsInBox(positions: Float32Array, box: BoxBounds): numbe
   }
   return n;
 }
+
+/**
+ * Express a source-frame point in an isotropic METRE frame: scale the component
+ * along the (unit) up-axis by the vertical factor and the perpendicular
+ * (horizontal) part by the horizontal factor. Computing 3D geometry on these
+ * points is then physically correct even for a COMPOUND CRS (metre eastings over
+ * foot heights) — where scaling a 3D distance or a slope grade by one factor
+ * mixed the two axes and produced a self-contradictory export: grade 100 % beside
+ * rise 0.3048 m / run 1 m (pass-6 M2). For a single-unit CRS both factors are
+ * equal, so this is a uniform scale and every metric is byte-identical to before.
+ */
+export function toMetricFrame(p: Vec3, up: Vec3, h: number, v: number): Vec3 {
+  const along = p[0] * up[0] + p[1] * up[1] + p[2] * up[2]; // dot(p, up)
+  return [
+    (p[0] - along * up[0]) * h + along * up[0] * v,
+    (p[1] - along * up[1]) * h + along * up[1] * v,
+    (p[2] - along * up[2]) * h + along * up[2] * v,
+  ];
+}
