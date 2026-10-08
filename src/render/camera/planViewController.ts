@@ -24,7 +24,7 @@
  * which `Viewer` satisfies structurally, so the whole wiring runs under Node.
  */
 
-import type { NavMode } from '../NavController';
+import type { NavMode, TweenOutcome } from '../NavController';
 import type { CameraPresetName, StandardView } from './cameraPresets';
 import {
   PLAN_VIEW_OFF,
@@ -42,6 +42,8 @@ export interface PlanViewViewport {
   readonly handPanEnabled: boolean;
   /** True while a camera tween is still running. Absent on viewers that cannot report it. */
   readonly cameraTweening?: boolean;
+  /** How the most recent camera tween ended. Absent on viewers that cannot report it. */
+  readonly cameraTweenOutcome?: TweenOutcome;
   /** False when no scan is loaded, so there is no bounding sphere to aim at. */
   setStandardView(view: StandardView): boolean;
   setOrthographic(on: boolean): boolean;
@@ -58,10 +60,16 @@ export interface PlanViewControllerDeps {
   readonly onChange?: (active: boolean, reason: PlanViewChange) => void;
   /**
    * Run `fn` once the standard-view tween has landed. Injected by the tests;
-   * production waits {@link PLAN_VIEW_SETTLE_MS}.
+   * production waits {@link PLAN_VIEW_SETTLE_MS}. May return a function that
+   * cancels the wait, which the controller calls when the wait is superseded.
    */
-  readonly defer?: (fn: () => void) => void;
+  readonly defer?: (fn: () => void) => (() => void) | void;
+  /** A short, retryable message for the user, e.g. a Plan view that did not finish. */
+  readonly onStatus?: (message: string) => void;
 }
+
+/** Shown when the camera never reached top-down, so Plan did not take effect. */
+export const PLAN_VIEW_UNFINISHED_MESSAGE = 'Plan view did not finish. Try Plan again.';
 
 /**
  * How long to wait before applying a navigation mode over a standard-view tween.
@@ -73,8 +81,9 @@ export const PLAN_VIEW_SETTLE_MS = 900;
 
 /**
  * How many extra waits plan mode allows while the viewer still reports a tween.
- * After that it applies the mode anyway, so a page whose frames never resume
- * cannot hold the mode change forever.
+ * After that it gives up without changing the mode: a mode change would cancel
+ * the unfinished tween and leave the camera short of the pose. Plan is retired
+ * and the user is told to try again.
  */
 export const PLAN_VIEW_MAX_REWAITS = 6;
 
@@ -95,6 +104,10 @@ export interface PlanViewController {
   noteOrthographic(on: boolean): void;
   /** The user jumped the camera to a named preset themselves. */
   noteCameraPreset(name: CameraPresetName): void;
+  /** The user changed the navigation mode or moved the camera themselves. */
+  noteManualNavigation(): void;
+  /** Cancel any pending follow-up; the controller holds no timer afterwards. */
+  dispose(): void;
 }
 
 export function createPlanViewController(deps: PlanViewControllerDeps): PlanViewController {
@@ -107,9 +120,29 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
    * second toggle cannot be overwritten by the first one's late arrival.
    */
   let generation = 0;
-  const defer = deps.defer ?? ((fn: () => void): void => {
-    setTimeout(fn, PLAN_VIEW_SETTLE_MS);
+  const defer = deps.defer ?? ((fn: () => void): (() => void) => {
+    const id = setTimeout(fn, PLAN_VIEW_SETTLE_MS);
+    return () => clearTimeout(id);
   });
+  /** Cancels the wait currently scheduled, if any. */
+  let cancelWait: (() => void) | null = null;
+
+  function wait(fn: () => void): void {
+    let fired = false;
+    const cancel = defer(() => {
+      fired = true;
+      cancelWait = null;
+      fn();
+    });
+    if (!fired) cancelWait = typeof cancel === 'function' ? cancel : null;
+  }
+
+  /** Retire the follow-up owed by the last transition, timer included. */
+  function cancelPending(): void {
+    generation += 1;
+    cancelWait?.();
+    cancelWait = null;
+  }
 
   /**
    * Run one transition's intents against the viewer.
@@ -126,7 +159,7 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
     fallbackMode: NavMode | null,
     requireScan: boolean,
   ): boolean {
-    generation += 1;
+    cancelPending();
     const scheduledUnder = generation;
     let mode: NavMode | null = null;
     let tweening = false;
@@ -155,14 +188,23 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
       let rewaits = 0;
       const settle = (): void => {
         if (scheduledUnder !== generation) return;
-        if (v.cameraTweening === true && rewaits < PLAN_VIEW_MAX_REWAITS) {
-          rewaits += 1;
-          defer(settle);
+        if (v.cameraTweenOutcome === 'cancelled') {
+          // The user took the camera before it arrived; the follow-up is theirs to drop.
+          unfinished(false);
+          return;
+        }
+        if (v.cameraTweening === true) {
+          if (rewaits < PLAN_VIEW_MAX_REWAITS) {
+            rewaits += 1;
+            wait(settle);
+            return;
+          }
+          unfinished(true);
           return;
         }
         v.setMode(target);
       };
-      defer(settle);
+      wait(settle);
     } else {
       v.setMode(target);
     }
@@ -171,11 +213,21 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
 
   /** Drop the claim without restoring anything — the user already moved the scene. */
   function drop(): void {
+    // Cancels any deferred mode change still owed by the transition that entered.
+    cancelPending();
     if (!state.active) return;
     state = PLAN_VIEW_OFF;
-    // Cancels any deferred mode change still owed by the transition that entered.
-    generation += 1;
     deps.onChange?.(false, 'drift');
+  }
+
+  /**
+   * The camera never reached the transition's pose. The mode is left alone, the
+   * claim is retired, and, when the move stalled rather than being taken over
+   * by the user, a retryable message says so.
+   */
+  function unfinished(stalled: boolean): void {
+    drop();
+    if (stalled) deps.onStatus?.(PLAN_VIEW_UNFINISHED_MESSAGE);
   }
 
   /** Re-check plan mode's claim about the scene against what the scene now is. */
@@ -221,27 +273,37 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
     },
 
     reset(): void {
-      // Bump FIRST, unconditionally. `drop()` returns early when plan is already
-      // inactive, and leaving plan mode goes inactive BEFORE `apply()` schedules
-      // its deferred `setMode`. Without this, closing a scan within
-      // PLAN_VIEW_SETTLE_MS of leaving let that call land on the empty stage.
-      generation += 1;
+      // `drop()` cancels the pending follow-up before its early return, so a
+      // scan closed within PLAN_VIEW_SETTLE_MS of leaving plan mode (inactive,
+      // but still owing a deferred `setMode`) cannot steer the empty stage.
       drop();
     },
 
+    noteManualNavigation(): void {
+      cancelPending();
+    },
+
+    dispose(): void {
+      cancelPending();
+      state = PLAN_VIEW_OFF;
+    },
+
     noteStandardView(view: StandardView): void {
+      cancelPending();
       viewIsTop = view === 'top';
       const v = deps.viewport();
       if (v) evaluate(v.orthographic);
     },
 
     noteOrthographic(on: boolean): void {
+      cancelPending();
       evaluate(on);
     },
 
     noteCameraPreset(name: CameraPresetName): void {
       // Only the top preset leaves the camera looking straight down; every other
       // pose is an angled one, which is the user leaving plan.
+      cancelPending();
       viewIsTop = name === 'top';
       const v = deps.viewport();
       if (v) evaluate(v.orthographic);

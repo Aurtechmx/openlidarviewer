@@ -37,17 +37,17 @@
  *               surveying built-environment scans where the analyst
  *               wants the building elevation.
  *
- * The distance formula is the standard sphere-fit-to-FOV:
- *   `dist = (radius / sin(fov / 2)) * pad`
- * Default `pad` is 1.2, matching `Viewer.frameAll()`.
+ * With the visible bounds supplied, the distance is the box fit
+ * (`fitBoxDistance`) for the pose's own direction and the viewport aspect,
+ * keeping `FRAME_EDGE_RESERVE` clear at each edge. Without them it falls back
+ * to the sphere fit `dist = (radius / sin(fov / 2)) * pad`.
  */
 
 /**
- * Sphere-fit padding shared by `Viewer.frameAll()` and every camera preset.
- * 0.85 (was 1.2) opens a scan ~25% closer so it fills the viewport and the
- * Top / Oblique / Planar views read as distinctly different framings rather
- * than near-identical far shots. Sub-1.0 only trims the empty volume of a flat
- * scan's bounding sphere; the points stay in frame.
+ * Sphere-fit padding for a preset or standard view called without bounds.
+ * Below 1.0 this is a deliberately tight crop: it can cut off the ends of a
+ * thin diagonal cloud. The viewer always passes the visible bounds, which
+ * switches to the box fit with {@link FRAME_EDGE_RESERVE} instead.
  */
 export const CAMERA_FRAME_PAD = 0.85;
 
@@ -115,9 +115,44 @@ export interface PresetInput {
   readonly fovDeg: number;
   /**
    * Optional radius multiplier on the fit distance. Larger = more
-   * padding around the cloud. Defaults to 1.2 (matches frameAll).
+   * padding around the cloud. Only the sphere fit reads it; a call that
+   * passes `boxMin` / `boxMax` is fitted to the box instead.
    */
   readonly pad?: number;
+  /**
+   * The visible axis-aligned bounds. When both are given the pose is fitted to
+   * the box as seen from the requested direction, with {@link FRAME_EDGE_RESERVE}
+   * kept free at every screen edge, and the target is the box centre.
+   */
+  readonly boxMin?: Vec3;
+  readonly boxMax?: Vec3;
+  /** Viewport width / height for the box fit. Defaults to 1. */
+  readonly aspect?: number;
+}
+
+/**
+ * The preset input for an axis-aligned box: its bounding sphere (centre and
+ * half-diagonal, as `Box3.getBoundingSphere` gives) plus the box itself, so the
+ * pose is fitted to the bounds.
+ */
+export function presetInputForBounds(
+  box: { readonly min: Vec3; readonly max: Vec3 },
+  worldUp: Vec3,
+  horizontal: Vec3,
+  lens: { readonly fovDeg: number; readonly aspect: number },
+): PresetInput {
+  const center = scale(add(box.min, box.max), 0.5);
+  const radius = length(add(box.max, scale(box.min, -1))) / 2;
+  return {
+    center,
+    radius,
+    worldUp,
+    horizontal,
+    fovDeg: lens.fovDeg,
+    aspect: lens.aspect,
+    boxMin: box.min,
+    boxMax: box.max,
+  };
 }
 
 /** Result of a preset evaluation. */
@@ -187,6 +222,37 @@ function fitDistance(radius: number, fovDeg: number, pad: number): number {
   return (r / Math.sin(fovRad / 2)) * pad;
 }
 
+/**
+ * Share of the half-screen kept clear at each edge by the box-fitted standard
+ * views and presets: every corner of the bounds projects inside |NDC| <= 0.95.
+ */
+export const FRAME_EDGE_RESERVE = 0.05;
+
+/**
+ * Fit distance and target for a pose looking along `-dir` (`dir` points from
+ * the target toward the camera). With bounds this is the box fit with the
+ * vertical and horizontal fields both narrowed by {@link FRAME_EDGE_RESERVE};
+ * without them it falls back to the sphere fit.
+ */
+function poseFit(input: PresetInput, dir: Vec3): { dist: number; target: Vec3 } {
+  const { boxMin, boxMax } = input;
+  if (!boxMin || !boxMax) {
+    return { dist: fitDistance(input.radius, input.fovDeg, input.pad ?? CAMERA_FRAME_PAD), target: input.center };
+  }
+  const tanV = Math.tan((input.fovDeg * Math.PI) / 360) * (1 - FRAME_EDGE_RESERVE);
+  const dist = fitBoxDistance({
+    boxMin,
+    boxMax,
+    look: scale(dir, -1),
+    worldUp: input.worldUp,
+    fovDeg: (Math.atan(tanV) * 360) / Math.PI,
+    aspect: input.aspect ?? 1,
+    pad: 1,
+  });
+  const target = scale(add(boxMin, boxMax), 0.5);
+  return { dist, target };
+}
+
 /** Inputs to {@link fitBoxDistance}. */
 export interface BoxFitInput {
   readonly boxMin: Vec3;
@@ -252,11 +318,12 @@ export function cameraPresetPose(
   name: CameraPresetName,
   input: PresetInput,
 ): PresetPose {
-  const pad = input.pad ?? CAMERA_FRAME_PAD;
-  const dist = fitDistance(input.radius, input.fovDeg, pad);
   const up = normalize(input.worldUp);
   const horiz = normalize(input.horizontal);
-  const target = input.center;
+  const place = (dir: Vec3): PresetPose => {
+    const { dist, target } = poseFit(input, dir);
+    return { position: add(target, scale(dir, dist)), target };
+  };
 
   switch (name) {
     case 'top': {
@@ -268,8 +335,7 @@ export function cameraPresetPose(
       const dir = normalize(
         add(scale(up, Math.cos(tilt)), scale(horiz, Math.sin(tilt))),
       );
-      const position = add(target, scale(dir, dist));
-      return { position, target };
+      return place(dir);
     }
     case 'iso': {
       // Classic 45° azimuth, 35.264° (= atan(1/√2)) elevation iso —
@@ -286,8 +352,7 @@ export function cameraPresetPose(
           scale(up, Math.sin(elevation)),
         ),
       );
-      const position = add(target, scale(dir, dist));
-      return { position, target };
+      return place(dir);
     }
     case 'oblique': {
       // The v0.3.5 frameAll() opening pose: horizontal heading
@@ -297,8 +362,7 @@ export function cameraPresetPose(
       const dir = normalize(
         add(scale(horiz, Math.cos(elevation)), scale(up, Math.sin(elevation))),
       );
-      const position = add(target, scale(dir, dist));
-      return { position, target };
+      return place(dir);
     }
     case 'planar': {
       // Look horizontally along the dominant axis — true side
@@ -306,8 +370,7 @@ export function cameraPresetPose(
       // the analyst wants the building elevation. No vertical
       // component on the direction.
       const dir = horiz;
-      const position = add(target, scale(dir, dist));
-      return { position, target };
+      return place(dir);
     }
     // The switch is exhaustive over the union, so this arm is unreachable by
     // type. It stays as the runtime guard for a name arriving from outside
@@ -359,13 +422,10 @@ export const STANDARD_VIEW_LABEL: Readonly<Record<StandardView, string>> = {
  * ±the second horizontal axis (worldUp × horizontal). Pure + deterministic.
  */
 export function standardViewPose(view: StandardView, input: PresetInput): PresetPose {
-  const pad = input.pad ?? CAMERA_FRAME_PAD;
-  const dist = fitDistance(input.radius, input.fovDeg, pad);
   const up = normalize(input.worldUp);
   const horiz = normalize(input.horizontal);
   // The second horizontal axis, perpendicular to both up and the seed.
   const horiz2 = normalize(cross(up, horiz));
-  const target = input.center;
 
   let dir: Vec3;
   switch (view) {
@@ -391,6 +451,7 @@ export function standardViewPose(view: StandardView, input: PresetInput): Preset
       dir = scale(horiz2, -1);
       break;
   }
+  const { dist, target } = poseFit(input, dir);
   return { position: add(target, scale(dir, dist)), target };
 }
 

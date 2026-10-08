@@ -32,7 +32,7 @@ export interface NavBarWiringDeps {
   readonly getNavBar: () => NavBar | null;
   readonly toast: (message: string) => void;
   /** Passed through to the plan controller; the tests drive the wait by hand. */
-  readonly defer?: (fn: () => void) => void;
+  readonly defer?: (fn: () => void) => (() => void) | void;
 }
 
 export interface NavBarWiring {
@@ -66,6 +66,7 @@ export function createNavBarWiring(deps: NavBarWiringDeps): NavBarWiring {
       plan = createPlanViewController({
         viewport: () => deps.getViewer(),
         defer: deps.defer,
+        onStatus: deps.toast,
         onChange: (active, reason) => {
           const bar = deps.getNavBar();
           bar?.setPlanActive(active);
@@ -91,7 +92,10 @@ export function createNavBarWiring(deps: NavBarWiringDeps): NavBarWiring {
   };
 
   const callbacks: NavBarCallbacks = {
-    onMode: (mode) => deps.getViewer()?.setMode(mode),
+    onMode: (mode) => {
+      deps.getViewer()?.setMode(mode);
+      plan?.noteManualNavigation();
+    },
     onSpeed: (multiplier) => deps.getViewer()?.setNavSpeed(multiplier),
     onReset: () => deps.getViewer()?.frameAll(),
     onCameraPreset: (name) => {

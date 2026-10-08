@@ -13,6 +13,7 @@ import { verifyReportFileWithSignature, type VerifyReportResult } from '../expor
 import type { SignatureVerdict } from '../export/reportSignature';
 import { focusableIn, wireDialogA11y, type DialogA11yHandle } from './Modal';
 import { formatBytesIn } from '../io/formatByteSize';
+import { createKeyFileLoader } from './keyFileLoader';
 
 function row(label: string, value: string): HTMLElement {
   const r = document.createElement('div');
@@ -210,21 +211,7 @@ function signatureSection(v: SignatureVerdict, compare?: SignerCompare): HTMLEle
     const f = file.files?.[0];
     if (!f) return;
     // Clear the chooser so picking the same file again fires `change` again.
-    const done = (): void => { file.value = ''; };
-    const problem = keyFileProblem(f.size);
-    fileNote.textContent = problem ?? '';
-    if (problem) {
-      input.value = '';
-      flow.keyChanged();
-      done();
-      return;
-    }
-    void f.text().then((t) => {
-      input.value = t.slice(0, KEY_FILE_MAX_BYTES);
-      flow.keyChanged();
-    }).catch(() => {
-      fileNote.textContent = 'The key file could not be read. Pick it again or paste the key.';
-    }).finally(done);
+    void keyFile.load(f).finally(() => { file.value = ''; });
   });
   const go = document.createElement('button');
   go.type = 'button';
@@ -242,7 +229,12 @@ function signatureSection(v: SignatureVerdict, compare?: SignerCompare): HTMLEle
     setNote: (t) => { note.textContent = t; },
     setBusy: (b) => { go.disabled = b; },
   });
-  input.addEventListener('input', () => flow.keyChanged());
+  const keyFile = createKeyFileLoader({
+    setText: (t) => { input.value = t; },
+    keyChanged: () => flow.keyChanged(),
+    setProblem: (m) => { fileNote.textContent = m; },
+  }, KEY_FILE_MAX_BYTES, keyFileProblem);
+  input.addEventListener('input', () => keyFile.typed());
   go.addEventListener('click', () => { void flow.run(input.value); });
   actions.append(load, go, file);
   sec.append(label, warn, input, actions, fileNote, note);

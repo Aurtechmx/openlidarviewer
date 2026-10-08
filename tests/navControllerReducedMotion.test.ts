@@ -72,3 +72,29 @@ describe('NavController camera tween under prefers-reduced-motion', () => {
     expect(() => nav.tweenTo(new THREE.Vector3(1, 0, 0), new THREE.Vector3())).not.toThrow();
   });
 });
+
+describe('NavController tween outcome', () => {
+  const saved = { window: globalThis.window, document: globalThis.document };
+  afterEach(() => {
+    globalThis.window = saved.window;
+    globalThis.document = saved.document;
+  });
+
+  it('reports running, then completed when the tween lands', () => {
+    const { nav } = makeNav(false);
+    expect(nav.tweenOutcome).toBe('none');
+    nav.tweenTo(new THREE.Vector3(100, 0, 0), new THREE.Vector3(0, 0, 0));
+    expect(nav.tweenOutcome).toBe('running');
+    for (let i = 0; i < 120; i += 1) nav.update(1 / 60);
+    expect(nav.tweenOutcome).toBe('completed');
+  });
+
+  it('reports cancelled when a mode change stops the tween short', () => {
+    const { nav } = makeNav(false);
+    nav.tweenTo(new THREE.Vector3(100, 0, 0), new THREE.Vector3(0, 0, 0));
+    nav.update(1 / 60);
+    nav.setMode('walk');
+    expect(nav.isTweening).toBe(false);
+    expect(nav.tweenOutcome).toBe('cancelled');
+  });
+});
