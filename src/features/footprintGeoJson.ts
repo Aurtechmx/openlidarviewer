@@ -59,6 +59,12 @@ export interface FootprintGeoJsonOptions {
    * the collection metadata only when a Withheld point was left out.
    */
   readonly withheld?: WithheldReadCounts;
+  /**
+   * The lon/lat mapper's datum caveat when the source is not exact WGS 84
+   * (NAD83, ETRS89, GDA94, GDA2020, NZGD2000, RGF93). The note then states the
+   * approximation instead of WGS 84.
+   */
+  readonly datumCaveat?: string | null;
 }
 
 /**
@@ -71,7 +77,13 @@ export function footprintsToGeoJson(
   options: FootprintGeoJsonOptions = {},
 ): {
   type: 'FeatureCollection';
-  metadata: { extractedFromCrs?: string; product: string; note: string; withheld?: WithheldReadCounts };
+  metadata: {
+    extractedFromCrs?: string;
+    product: string;
+    note: string;
+    datumCaveat?: string;
+    withheld?: WithheldReadCounts;
+  };
   features: Array<Record<string, unknown>>;
 } {
   const features = footprints
@@ -105,7 +117,12 @@ export function footprintsToGeoJson(
       // were EXTRACTED in, before reprojection.
       ...(options.sourceCrsLabel ? { extractedFromCrs: options.sourceCrsLabel } : {}),
       product: 'building-footprint-candidates',
-      note: 'Derived footprint candidates from classified building points; not surveyed outlines. Coordinates are WGS 84 longitude/latitude per RFC 7946.',
+      note: options.datumCaveat
+        ? 'Derived footprint candidates from classified building points; not surveyed outlines. '
+          + 'Coordinates are longitude/latitude computed without a datum transformation to WGS 84, '
+          + 'so they are approximate; datumCaveat states by how much.'
+        : 'Derived footprint candidates from classified building points; not surveyed outlines. Coordinates are WGS 84 longitude/latitude per RFC 7946.',
+      ...(options.datumCaveat ? { datumCaveat: options.datumCaveat } : {}),
       ...(options.withheld && typeof options.withheld.withheldExcluded === 'number' && options.withheld.withheldExcluded > 0
         ? { withheld: { ...options.withheld } }
         : {}),

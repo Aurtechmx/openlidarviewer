@@ -346,7 +346,7 @@ claims:
     units: [metres, degrees]
     crsDatum: "WGS-84 geodetic in, WGS-84 UTM out. The same datum on both sides, so no datum transformation is performed."
     assumptions: ["the input latitude and longitude are already on WGS 84", "latitude lies inside the UTM domain of 80S to 84N"]
-    failureModes: ["latitude outside the UTM domain, which is refused rather than extrapolated", "a coordinate on a datum other than WGS 84, which is projected as if it were WGS 84"]
+    failureModes: ["latitude outside the UTM domain, which is refused rather than extrapolated", "a coordinate on a datum other than WGS 84, which is projected as if it were WGS 84 (the longitude/latitude exports refuse NAD27 and unlisted datums, and label NAD83, ETRS89, RGF93, GDA94, GDA2020 and NZGD2000 output approximate with the size of the difference; no datum transformation is applied)"]
     exportAllowed: true
     userLabel: "Cross-implementation validated UTM projection"
     softwareStatus: shipping

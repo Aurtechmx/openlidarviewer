@@ -604,11 +604,11 @@ function drawMap(
   const stepX = niceStep(worldMaxX - worldMinX, 5);
   const stepY = niceStep(worldMaxY - worldMinY, 5);
   const labelGrid = input.worldOrigin != null;
-  // Only a truly georeferenced scan has a real east/north + true north. When it
-  // isn't, the graticule labels drop the "E"/"N" compass suffix (the numbers
-  // are local-frame coordinates) and the north arrow is replaced by an explicit
-  // "local grid up" note — claiming a compass direction on ungeoreferenced data
-  // would be an overclaim.
+  // Only a truly georeferenced scan has a real easting/northing and a grid
+  // north. When it isn't, the graticule labels drop the "E"/"N" suffix (the
+  // numbers are local-frame coordinates) and the "Grid N" arrow is replaced by
+  // an explicit "local grid up" note: claiming a direction on ungeoreferenced
+  // data would be an overclaim.
   const prov = input.provenance;
   const georef = prov
     ? prov.crsKnown
@@ -722,14 +722,21 @@ function drawMap(
 
   // ── orientation (top-right inside frame) ─────────────────────────────────
   if (georef) {
-    // True north — a georeferenced frame has a real bearing.
+    // GRID north: the sheet is drawn in the source CRS, so page-up is the
+    // grid's +Y axis. For a projected CRS true north differs from it by the
+    // meridian convergence (1.29 degrees for UTM 12N at -109, 40; 2.27 degrees
+    // at a zone edge at 49 N, at most 2.98 degrees at 84 N, by PROJ), which
+    // this sheet does not compute, so the
+    // arrow says "Grid N" rather than claiming true north.
     const nx = frame.x + frame.w - 22;
     const ny = frame.y + frame.h - 30;
-    page.drawRectangle({ x: nx - 12, y: ny - 22, width: 24, height: 40, color: WHITE, opacity: 0.82 });
+    const northLabel = 'Grid N';
+    const labelSize = 7;
+    page.drawRectangle({ x: nx - 15, y: ny - 22, width: 30, height: 40, color: WHITE, opacity: 0.82 });
     page.drawSvgPath(`M ${nx} ${PH - (ny + 14)} L ${nx - 5} ${PH - (ny - 6)} L ${nx} ${PH - (ny - 2)} L ${nx + 5} ${PH - (ny - 6)} Z`, {
       x: 0, y: PH, color: INK, borderColor: INK, borderWidth: 0.5,
     });
-    page.drawText('N', { x: nx - bold.widthOfTextAtSize('N', 8) / 2, y: ny - 18, size: 8, font: bold, color: INK });
+    page.drawText(northLabel, { x: nx - bold.widthOfTextAtSize(northLabel, labelSize) / 2, y: ny - 18, size: labelSize, font: bold, color: INK });
   } else {
     // Ungeoreferenced: the sheet's +Y IS up (pageY maps world +Y to page +Y),
     // but that is a LOCAL grid axis, not a compass bearing. State it explicitly

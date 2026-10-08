@@ -297,8 +297,9 @@ for this development cut: that evidence comes from the engines themselves.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,321 lines, twenty fewer since the Save view snapshot moved
-to its own lazy module, and `src/render/Viewer.ts` is 5,973, two hundred and fifty lines
+`src/main.ts` is 4,316 lines, twenty-five fewer since the Save view snapshot
+moved to its own lazy module and the Analyse panel's longitude and latitude
+wiring moved to the mapper module, and `src/render/Viewer.ts` is 5,973, two hundred and fifty lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
@@ -521,6 +522,67 @@ report and confidence, and keeps the static layers open.
 
 Unchanged from prior releases. Scans must share a coordinate reference system to
 be compared, and the viewer refuses rather than approximating.
+
+## Longitude and latitude exports apply no datum transformation
+
+The site KML, the scan-area KML, the RFC 7946 contour GeoJSON and the accepted
+building-footprint GeoJSON write longitude and latitude. OLV computes them
+without a datum transformation, so the export depends on the scan's datum:
+
+- WGS 84 (EPSG:4326, 4979, WGS 84 / UTM and Web Mercator) is exported
+  unchanged.
+- NAD83 (EPSG:4269, 6318, NAD83 / UTM 26901 to 26923, NAD83(2011) / UTM 6330
+  to 6349, and CONUS Albers 5070) is exported as if it were WGS 84, and every
+  file says the positions are approximate, about 1 to 2 m. NAD83(2011) and
+  WGS 84 at epoch 2026.75 differ by 0.9 to 1.6 m across the conterminous
+  United States (0.89 m at Miami, 1.61 m at Seattle).
+- ETRS89, RGF93, GDA94, GDA2020 and NZGD2000, geographic or projected, are also
+  exported as if they were WGS 84, and every file names the datum and the size
+  of the difference. Each datum is fixed to its plate at a reference epoch, so
+  the difference grows every year. At epoch 2026.75 PROJ gives 0.93 m for
+  ETRS89 (RGF93 follows it), 0.40 m for GDA2020 and 1.96 m for GDA94. NZGD2000
+  needs the New Zealand deformation model, which PROJ does not have offline;
+  the files state about 1 m.
+- NAD27 is refused. proj4 has no NAD27 grids and would apply no shift, which is
+  34.6 m wrong at 100 W, 40 N and 61.7 m wrong in UTM zone 12. Reproject in
+  OLV refuses a NAD27 datum leg for the same reason, so it cannot produce a
+  WGS 84-labelled file that the exports would treat as exact.
+- A geographic CRS on CGCS2000 or another datum OLV does not list, or with no
+  EPSG code, is refused.
+- A projected CRS whose proj4 definition carries no datum is refused unless its
+  EPSG datum is WGS 84 (Web Mercator).
+- British National Grid, CH1903+ / LV95 and S-JTSK / Krovák carry a Helmert
+  shift in their proj4 definitions and are exported without a datum note. A
+  Helmert shift is an approximation of the national transformation grids.
+- A geographic coordinate with latitude outside -90 to 90, longitude outside
+  -180 to 180, or a non-finite value is refused. Longitudes are not wrapped.
+
+The NAD27 refusal reads: "This scan is on NAD27. Longitude and latitude export
+needs a datum transformation that OLV does not apply yet, and Reproject in OLV
+applies no NAD27 shift. Reproject the scan to WGS 84 with PROJ, GDAL or PDAL
+using the NADCON or NTv2 grids, then open the result." The KML buttons, the
+building-footprint export and the contour GeoJSON export show it.
+
+Planned for v0.7.1: real datum transformation with epoch and grids (NADCON,
+NTv2 and time-dependent ITRF transformations), so NAD83, NAD27 and the
+plate-fixed datums can be exported at their true WGS 84 positions.
+
+## Grid north, not true north
+
+The map sheet's orientation arrow, the compass rose and the distance bearing in
+the Measurements panel are measured from the scan's +Y axis. On a projected CRS
+that is grid north, which differs from true north by the meridian convergence:
+1.29 degrees in UTM zone 12 at 109 W, 40 N, 2.27 degrees at a zone edge at
+49 N, and at most 2.98 degrees at 84 N. The arrow and the rose's top face read
+"Grid N", and the bearing reads, for example, "042° grid" on a projected CRS
+with an EPSG code. With no CRS, a local engineering CRS or a Y-up scan, the
+bearing reads "(local axes)", and the map sheet keeps its "local grid up / true
+north unknown" note. A geographic CRS shows no bearing, because a degree of
+longitude and a degree of latitude are not the same length. Hillshade and
+aspect azimuths are grid-relative too, as is usual in GIS.
+
+Planned for v0.7.1: a true-north arrow on the map sheet, rotated by the
+meridian convergence at the sheet centre and labelled with that angle.
 
 ## The reference plane is a drawing, not a surface
 

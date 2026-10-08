@@ -208,15 +208,21 @@ export class ContourExportAdapter {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('OpenLiDARViewer: contour export failed.', err);
-      btn.textContent = 'Export failed';
+      // A frame refusal (no honest lon/lat for this scan's datum) is not a
+      // transient failure: name it and give the reason instead of "Try again".
+      const refusal = err instanceof Error && err.name === 'GeoJsonFrameError' ? err.message : null;
+      const title = btn.title;
+      btn.textContent = refusal ? 'Export refused' : 'Export failed';
+      if (refusal) btn.title = refusal;
       // Read the region off the pressed button's own document rather than the
       // global — keeps this testable with a fake button in a non-DOM
       // environment (no `document` global exists there) without changing what
       // ships in the browser, where `srcBtn` is always mounted.
       const doc = (btn as unknown as { ownerDocument?: Document }).ownerDocument;
-      if (doc) announcePolite('Contour export failed. Try again.', doc);
+      if (doc) announcePolite(refusal ? `Contour export refused. ${refusal}` : 'Contour export failed. Try again.', doc);
       setTimeout(() => {
         btn.textContent = label;
+        btn.title = title;
         btn.disabled = false;
       }, EXPORT_FAILED_FLASH_MS);
       return;

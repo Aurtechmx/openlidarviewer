@@ -193,13 +193,18 @@ function isWgs84EllipsoidalHeight(model: ContourFeatureModel): boolean {
 }
 
 /** Thrown when a standards-compliant GeoJSON cannot be produced honestly. */
-export class GeoJsonFrameError extends Error {}
+export class GeoJsonFrameError extends Error {
+  override name = 'GeoJsonFrameError';
+}
 
 /**
  * A point in the source frame → WGS 84 `[lon, lat, elevation]`.
  * Throws (rather than approximating) for a point it cannot convert.
  */
-export type ToLonLat = (p: readonly [number, number, number]) => [number, number, number];
+export type ToLonLat = ((p: readonly [number, number, number]) => [number, number, number]) & {
+  /** Set when the source datum is not exact WGS 84 (NAD83, ETRS89, GDA, ...); see lonLatMapper. */
+  readonly datumCaveat?: string | null;
+};
 
 /**
  * Build an RFC 7946 GeoJSON: WGS 84 longitude/latitude, and NO `crs` member.
@@ -222,9 +227,18 @@ export function toGeoJSONWgs84(
   delete obj.crs;
   const metadata = { ...(obj.metadata as Record<string, unknown>) };
   metadata.sourceCrs = model.crs ?? null;
-  metadata.coordinateFrame =
-    'WGS 84 longitude/latitude (RFC 7946). Reprojected from the source CRS named in sourceCrs; '
-    + 'the native projected coordinates ship in the companion -native file.';
+  // A NAD83 or null-shift (ETRS89, GDA, NZGD2000, RGF93) source is placed
+  // without a datum transformation, so the frame is
+  // NOT stated as plain WGS 84: the sentence names the approximation and the
+  // caveat travels as its own member for readers that keep only metadata keys.
+  const datumCaveat = toLonLat.datumCaveat ?? null;
+  metadata.coordinateFrame = datumCaveat
+    ? 'Longitude/latitude in RFC 7946 positions, computed from the source CRS named in sourceCrs '
+      + 'WITHOUT a datum transformation to WGS 84, so positions are approximate; datumCaveat states by how much. '
+      + 'The native projected coordinates ship in the companion -native file.'
+    : 'WGS 84 longitude/latitude (RFC 7946). Reprojected from the source CRS named in sourceCrs; '
+      + 'the native projected coordinates ship in the companion -native file.';
+  if (datumCaveat) metadata.datumCaveat = datumCaveat;
   obj.metadata = metadata;
 
   // RFC 7946 §3.1.1 defines the third position element as height in metres

@@ -25,7 +25,11 @@
  * serialiser is a lazy loader so this module stays off the boot graph.
  */
 
-import { makeLocalToLonLat, LonLatConversionError, type LocalToLonLatSourceZ } from '../export/lonLatMapper';
+import {
+  resolveLocalToLonLat,
+  LonLatConversionError,
+  type LocalToLonLatSourceZ,
+} from '../export/lonLatMapper';
 import {
   footprintCrsRefusal,
   footprintConvexHullRing,
@@ -188,12 +192,11 @@ export function siteKmlStatus(deps: KmlActionDeps): KmlActionStatus {
       reason: 'KML needs a georeferenced scan (it places features on a lat/lon map).',
     };
   }
-  if (!makeLocalToLonLat(resolved, geo.origin)) {
-    return {
-      ready: false,
-      reason: "This scan's CRS isn't supported for lat/lon export yet (UTM and geographic are).",
-    };
-  }
+  // The mapper's own refusal: an unsupported CRS, or a datum (NAD27 and the
+  // others it will not treat as WGS 84) that needs a transformation OLV does
+  // not apply yet.
+  const mapper = resolveLocalToLonLat(resolved, geo.origin);
+  if (!mapper.ok) return { ready: false, reason: mapper.reason };
   // A known CRS is not enough: the placement also assumes X/Y is the ground
   // plane. The footprint export has always refused a Y-up scan for this reason;
   // the site KML converts the same way and must refuse on the same ground.
@@ -207,8 +210,13 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
   if (!deps.hasViewer()) return;
   const geo = deps.geo();
   const crs = deps.crsCurrent();
-  const toLonLat = makeLocalToLonLat(crs, geo.origin);
-  if (!toLonLat) return; // gated by siteKmlStatus; defensive no-op if reached
+  const mapper = resolveLocalToLonLat(crs, geo.origin);
+  if (!mapper.ok) {
+    // Gated by siteKmlStatus; the CRS can still change before the click.
+    deps.setError(`KML export stopped. ${mapper.reason}`);
+    return;
+  }
+  const toLonLat = mapper.map;
   // Re-checked here, not just in the status: the status renders the button, and
   // the axis can resolve differently by the time it is clicked.
   const axisRefusal = lonLatUpAxisRefusal(deps.upAxis());
@@ -300,12 +308,8 @@ export function scanFootprintStatus(deps: KmlActionDeps): KmlActionStatus {
   if (geo.name === null) return { ready: false, reason: 'Open a scan first.' };
   const refusal = footprintCrsRefusal(deps.crsCurrent());
   if (refusal) return { ready: false, reason: refusal };
-  if (!makeLocalToLonLat(deps.crsCurrent(), geo.origin)) {
-    return {
-      ready: false,
-      reason: "This scan's CRS isn't supported for lat/lon export yet (UTM and geographic are).",
-    };
-  }
+  const mapper = resolveLocalToLonLat(deps.crsCurrent(), geo.origin);
+  if (!mapper.ok) return { ready: false, reason: mapper.reason };
   const reading = deps.scanExtent();
   if (!reading) {
     return { ready: false, reason: 'The scan has no measured extent to outline yet.' };
@@ -363,9 +367,13 @@ export async function exportScanFootprintKml(deps: KmlActionDeps): Promise<void>
     const localRing = hullPositions
       ? footprintConvexHullRing(hullPositions)
       : footprintRectangleRing(reading.extent);
+    const mapper = resolveLocalToLonLat(crs, geo.origin);
+    if (!mapper.ok) throw new ScanFootprintError(mapper.reason);
+    const toLonLat = mapper.map;
     text = buildFootprintKml({
       name: stem,
-      ring: footprintLonLatRing(localRing, makeLocalToLonLat(crs, geo.origin)),
+      ring: footprintLonLatRing(localRing, toLonLat),
+      datumCaveat: mapper.datumCaveat,
       crsName: geo.crsName ?? crs?.name ?? null,
       extentBasis: reading.basis,
       shape: hullPositions ? 'point-cloud outline' : 'bounding rectangle',

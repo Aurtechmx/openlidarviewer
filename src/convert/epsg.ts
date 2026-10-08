@@ -117,8 +117,10 @@ export type DatumFamily =
 export function epsgDatumFamily(epsg: number): DatumFamily | null {
   if (!Number.isInteger(epsg)) return null;
   // Geographic + world codes.
-  if (epsg === 4326 || epsg === 3857 || epsg === 3395 || epsg === 4978) return 'WGS84';
-  if (epsg === 4269 || epsg === 5070) return 'NAD83';
+  if (epsg === 4326 || epsg === 4979 || epsg === 3857 || epsg === 3395 || epsg === 4978) return 'WGS84';
+  // 6318 is NAD83(2011) geographic 2D. It has no proj4 definition here; it is
+  // named so the longitude/latitude export can attach the NAD83 caveat to it.
+  if (epsg === 4269 || epsg === 6318 || epsg === 5070) return 'NAD83';
   if (epsg === 4267) return 'NAD27';
   if (epsg === 4258 || epsg === 3035) return 'ETRS89';
   if (epsg === 4283 || epsg === 3577) return 'GDA94';
@@ -126,7 +128,7 @@ export function epsgDatumFamily(epsg: number): DatumFamily | null {
   if (epsg === 4167 || epsg === 2193) return 'NZGD2000';
   if (epsg === 4490) return 'CGCS2000';
   if (epsg === 27700) return 'OSGB36';
-  if (epsg === 2154) return 'RGF93';
+  if (epsg === 2154 || epsg === 4171) return 'RGF93';
   // Parametric UTM / MGA families (mirror epsgToProj4's ranges exactly).
   if (epsg >= 32601 && epsg <= 32660) return 'WGS84';
   if (epsg >= 32701 && epsg <= 32760) return 'WGS84';
@@ -146,8 +148,10 @@ export function epsgDatumFamily(epsg: number): DatumFamily | null {
  * transform is known to be missing or degenerate:
  *
  *   - NAD27 ↔ anything else: proj4js bundles no NADCON/NTv2 distortion grids,
- *     so the NAD27 leg degrades to a coarse parametric shift — horizontal
- *     errors of 10 m+ are normal (worse in Alaska / at datum edges).
+ *     and its `+datum=NAD27` definition then has datum_type PJD_NODATUM, so
+ *     the NAD27 leg is a NULL shift. Against PROJ with grids the error is
+ *     34.6 m at (-100, 40) and 61.7 m in UTM zone 12 near (-111, 40); it is
+ *     larger in Alaska and at datum edges.
  *   - GDA94 ↔ GDA2020: both are defined here as null shifts to WGS84, so the
  *     "transform" applies an IDENTITY datum shift while the true plate-motion
  *     difference is ≈ 1.8 m and growing.
@@ -208,8 +212,9 @@ export function datumShiftCaveat(srcEpsg: number, dstEpsg: number): string | nul
   switch (classifyDatumShift(srcEpsg, dstEpsg)) {
     case 'nad27-legless':
       return (
-        'NAD27 datum grids (NADCON/NTv2) are not bundled — the NAD27 leg of this ' +
-        'transform uses a coarse parametric shift; horizontal errors of 10 m or more are expected'
+        'NAD27 datum grids (NADCON/NTv2) are not bundled, so no NAD27 datum shift is applied: ' +
+        'the NAD27 leg of this transform is a null shift, and horizontal errors of 10 m or more ' +
+        'are expected (tens of metres across the conterminous United States)'
       );
     case 'gda94-gda2020-identity':
       return (
@@ -218,8 +223,9 @@ export function datumShiftCaveat(srcEpsg: number, dstEpsg: number): string | nul
       );
     case 'nad83-wgs84-identity':
       return (
-        'NAD83 is applied here as an identity shift to the WGS84 datum family, but the two ' +
-        'differ by ≈ 1–2 m — no NAD83 datum grid was applied'
+        'NAD83 is treated here as identical to WGS 84, but the two differ by about 1 to 2 m ' +
+        '(0.9 to 1.6 m for NAD83(2011) against WGS 84 in the conterminous United States in 2026); ' +
+        'no NAD83 to WGS 84 transformation was applied'
       );
     default:
       return null;

@@ -75,7 +75,7 @@ import { spatialContextFrom } from '../geo/SpatialContext';
 import { writeXyz, writeAsc } from './writeAscii';
 import { reprojectGlobal } from './reproject';
 import type { TransformProvenance } from './transformProvenance';
-import { isGeographicEpsg, epsgLabel, epsgToProj4 } from './epsg';
+import { isGeographicEpsg, epsgLabel, epsgToProj4, epsgDatumFamily } from './epsg';
 import {
   CONVERT_FORMATS,
   type ConvertOptions,
@@ -112,6 +112,13 @@ function baseName(name: string): string {
   const stem = slash >= 0 ? name.slice(slash + 1) : name;
   const dot = stem.lastIndexOf('.');
   return dot > 0 ? stem.slice(0, dot) : stem;
+}
+
+/** True when a reprojection crosses into or out of NAD27. */
+function nad27DatumLeg(src: number, dst: number): boolean {
+  const a = epsgDatumFamily(src);
+  const b = epsgDatumFamily(dst);
+  return a !== b && (a === 'NAD27' || b === 'NAD27');
 }
 
 /** Convert one cloud. Returns the file (or null) and a report. */
@@ -249,6 +256,15 @@ export function convertCloud(
     // TransformProvenance carries the realization-preserving datum name and the
     // source coordinate epoch. Hints affect only the metadata, never the
     // reprojected coordinates.
+    // proj4 has no NAD27 grids and applies a null shift (61.7 m off PROJ in
+    // UTM zone 12), so a NAD27 datum leg is refused rather than written under
+    // the target EPSG, where every later export would read it as exact.
+    if (nad27DatumLeg(sourceEpsg, opts.targetEpsg)) {
+      return fail(
+        'Reproject refused: OLV has no NAD27 datum grids and would apply no NAD27 shift (tens of metres). '
+        + 'Reproject with PROJ, GDAL or PDAL using the NADCON or NTv2 grids instead.',
+      );
+    }
     const r = reprojectGlobal(g, sourceEpsg, opts.targetEpsg, { sourceCrs });
     g = r.points;
     // Provenance is present on every reproject outcome (applied / approximate /
