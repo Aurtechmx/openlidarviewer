@@ -158,6 +158,7 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
     intents: readonly PlanViewIntent[],
     fallbackMode: NavMode | null,
     requireScan: boolean,
+    landed?: () => void,
   ): boolean {
     cancelPending();
     const scheduledUnder = generation;
@@ -183,7 +184,13 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
       }
     }
     const target = mode ?? fallbackMode;
-    if (target === null) return true;
+    if (target === null) {
+      if (tweening && landed) {
+        // No mode to hand over, but the claim still waits for the camera.
+        wait(() => { if (scheduledUnder === generation && v.cameraTweenOutcome !== 'cancelled') landed(); });
+      } else landed?.();
+      return true;
+    }
     if (tweening) {
       // The tween advances with rendered frames, so a slow or hidden page can
       // outlast the timer. Wait again while the viewer still reports a tween.
@@ -208,10 +215,12 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
           return;
         }
         v.setMode(target);
+        landed?.();
       };
       wait(settle);
     } else {
       v.setMode(target);
+      landed?.();
     }
     return true;
   }
@@ -272,9 +281,19 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
       // The core says nothing when the scene is already panning; the standard
       // view takes the hand tool away anyway, so ask for it back.
       const keepPan = ctx.mode === 'pan' ? ('pan' as NavMode) : null;
-      if (!apply(v, transition.intents, keepPan, true)) return;
+      // Plan reads on only once the camera has landed top-down: the press is
+      // reported from the settle step, not while the view is still tilted. A
+      // move that stalls or is taken over reports off through `drop`.
+      let entered = false;
+      let landedEarly = false;
+      const ok = apply(v, transition.intents, keepPan, true, () => {
+        if (entered) deps.onChange?.(true, 'toggle');
+        else landedEarly = true;
+      });
+      if (!ok) return;
       state = transition.state;
-      deps.onChange?.(true, 'toggle');
+      entered = true;
+      if (landedEarly) deps.onChange?.(true, 'toggle');
     },
 
     reset(): void {

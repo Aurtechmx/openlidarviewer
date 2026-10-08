@@ -121,3 +121,32 @@ describe('breakdownParts — measurements with no breakdown', () => {
     expect(r!.text).not.toContain('Perimeter');
   });
 });
+
+describe('one unit per breakdown line', () => {
+  it('a 15.7 cm rise beside a 10.63 m run reads in metres, not centimetres', async () => {
+    const f = await import('../src/render/measure/format');
+    const line = lineBreakdown([0, 0, 0], [10.63, 0, 0.157], Z_UP, 1);
+    const out = breakdownParts({ kind: 'distance', lineMetrics: line }, 'metric', {
+      formatLength: f.formatLength,
+      formatLengthInBandOf: f.formatLengthInBandOf,
+      formatArea: f.formatArea,
+      formatGrade: f.formatGrade,
+      formatAngle: f.formatAngle,
+    });
+    expect(out!.text).toMatch(/Rise 0\.1570? m/);
+    expect(out!.text).not.toMatch(/ cm\b/);
+  });
+
+  it('a short line stays in centimetres throughout', async () => {
+    const f = await import('../src/render/measure/format');
+    const line = lineBreakdown([0, 0, 0], [0.3, 0, 0.4], Z_UP, 1);
+    const out = breakdownParts({ kind: 'distance', lineMetrics: line }, 'metric', {
+      formatLength: f.formatLength,
+      formatLengthInBandOf: f.formatLengthInBandOf,
+      formatArea: f.formatArea,
+      formatGrade: f.formatGrade,
+      formatAngle: f.formatAngle,
+    });
+    expect(out!.text).toMatch(/Run 30\.0+ cm · Rise 40\.0+ cm · Slant 50\.0+ cm/);
+  });
+});

@@ -56,7 +56,15 @@ export interface MeasureSceneContext {
    * metres, and no measurement reads as datum resolved. Omitted counts as known.
    */
   readonly unitVerified?: boolean;
+  /**
+   * True when the file declares no vertical unit, so a rise, slant, grade or
+   * height borrows the horizontal unit. Omitted counts as declared.
+   */
+  readonly verticalUnitBorrowed?: boolean;
 }
+
+/** Shown wherever a measured height borrows the horizontal unit. */
+export const VERTICAL_UNIT_BORROWED_NOTE = 'Heights are assumed to be in the horizontal unit (vertical unit not declared).';
 
 /** The per-measurement input: the scene facts plus the kind's height dependency. */
 export interface MeasureConfidenceContext extends MeasureSceneContext {
@@ -118,7 +126,12 @@ export function measureConfidence(ctx: MeasureConfidenceContext): MeasureConfide
     };
   }
 
-  return { level: 'verified', label: 'Viewer measurement · datum resolved' };
+  // Say what is resolved. With no known vertical reference only the shared
+  // horizontal frame is, and "datum resolved" would read as if heights were too.
+  return {
+    level: 'verified',
+    label: ctx.verticalReferenceKnown ? 'Viewer measurement · datum resolved' : 'Viewer measurement · horizontal frame resolved',
+  };
 }
 
 /**

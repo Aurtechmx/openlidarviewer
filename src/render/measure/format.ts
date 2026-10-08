@@ -146,28 +146,37 @@ export function displayDecimals(
 
 /** Format a length given in metres for the active unit system. */
 export function formatLength(metres: number, system: DisplayUnits): string {
+  return formatLengthInBandOf(metres, metres, system);
+}
+
+/**
+ * Format `metres` in the unit band `bandMetres` would get. A breakdown line
+ * passes its largest figure as the band so every figure on the line shares one
+ * unit ("Rise 0.157 m · Run 10.63 m", never "Rise 15.7 cm · Run 10.63 m").
+ */
+export function formatLengthInBandOf(metres: number, bandMetres: number, system: DisplayUnits): string {
   if (!Number.isFinite(metres)) return '—';
   if (system === 'unverified') return formatUnitUnverified(metres);
+  const band = Number.isFinite(bandMetres) ? Math.abs(bandMetres) : Math.abs(metres);
   if (system === 'metric') {
-    const abs = Math.abs(metres);
     // Band by magnitude (not sign): a signed reading — a downward delta, an
     // elevation below the render origin — stays in the unit its size warrants.
-    if (abs < 1) {
+    if (band < 1) {
       const cm = metres * 100;
       return `${cm.toFixed(displayDecimals(cm, 1, 4))} cm`;
     }
-    if (abs < 1000) return `${metres.toFixed(displayDecimals(metres, 2, 4))} m`;
+    if (band < 1000) return `${metres.toFixed(displayDecimals(metres, 2, 4))} m`;
     const km = metres / 1000;
     return `${km.toFixed(displayDecimals(km, 3, 4))} km`;
   }
 
   const feet = metres * FEET_PER_METRE;
-  const abs = Math.abs(feet);
-  if (abs < 1) {
+  const bandFeet = band * FEET_PER_METRE;
+  if (bandFeet < 1) {
     const inches = feet * 12;
     return `${inches.toFixed(displayDecimals(inches, 1, 4))} in`;
   }
-  if (abs < FEET_PER_MILE) return `${feet.toFixed(displayDecimals(feet, 2, 4))} ft`;
+  if (bandFeet < FEET_PER_MILE) return `${feet.toFixed(displayDecimals(feet, 2, 4))} ft`;
   const miles = feet / FEET_PER_MILE;
   return `${miles.toFixed(displayDecimals(miles, 3, 4))} mi`;
 }

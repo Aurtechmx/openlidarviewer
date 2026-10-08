@@ -40,6 +40,14 @@ streaming source declares none here, and the four codes whose meaning differs
 between the legacy and extended tables report both readings rather than one
 guess.
 
+## Class edits are not stored in a session file
+
+A session file stores the class filter, not per-point classes. Lasso edits,
+clears and auto-classify results are gone after a session is saved and
+restored. Save session says so when the open scan carries class edits. To keep
+them, export the scan as LAS. Storing an edit log keyed to the source file's
+SHA-256 is planned for v0.7.1.
+
 ## Clear classifications holds for one session on a loaded scan
 
 Clear classes sets every point to class 1 in the viewer. The working classes

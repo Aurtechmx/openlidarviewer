@@ -15,6 +15,7 @@ import { showBusyScan } from './busyScan';
 import type { ExportHealth } from '../intelligence/scanStory';
 import { renderExportHealthPanel } from './scanStoryViews';
 import { el, optInRow } from './dom';
+import { classifyLoadError, OFFLINE_CHUNK_MESSAGE } from '../app/staleChunkReload';
 import { conversionNotes, exportedLine } from './conversionNotes';
 import { notableEntries, warningSummary } from '../convert/conversionEvents';
 import { downloadBytes } from '../io/download';
@@ -1087,7 +1088,11 @@ export class ExportPanel {
     if (this._findingsMountStarted) return;
     this._findingsMountStarted = true;
     void Promise.all([loadFindingsPanel(), loadSessionFindings()]).then(
-      ([{ buildFindingsPanel }, { SessionFindings }]) => {
+      ([panelMod, findingsMod]) => {
+        // A chunk the stale-deploy recovery defaulted out resolves undefined.
+        if (!panelMod || !findingsMod) throw new Error('Saved findings could not load.');
+        const { buildFindingsPanel } = panelMod;
+        const { SessionFindings } = findingsMod;
         this._findings = new SessionFindings();
         const notify = (): void => { for (const fn of [...this._findingsWatchers]) fn(); };
         this._findings.subscribe(notify);
@@ -1132,7 +1137,17 @@ export class ExportPanel {
         });
         slot.append(this._findingsPanel.element);
       },
-    );
+    ).catch(() => {
+      // Offline or a failed chunk: say so in the slot and let the user retry.
+      this._findingsMountStarted = false;
+      if (this._findingsPanel) return;
+      const note = el('p', { className: 'olv-findings-load-failed olv-export-fullres-hint', text: 'Saved findings could not load. Check the connection and try again. ' });
+      const retry = el('button', { className: 'olv-bc-pill olv-export-product-btn', text: 'Try again', tip: 'Load saved findings again' }) as HTMLButtonElement;
+      retry.type = 'button';
+      retry.addEventListener('click', () => { note.remove(); this._mountFindingsLedger(slot); });
+      note.append(retry);
+      slot.append(note);
+    });
   }
 
   /**
@@ -1503,7 +1518,9 @@ export class ExportPanel {
         this._setStatus(err ? err.message : 'Export failed.', 'error');
       }
     } catch (err) {
-      this._setStatus(`Export failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
+      // Offline, a converter that was never cached cannot load; say that plainly.
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false && classifyLoadError(err) === 'stale-chunk';
+      this._setStatus(offline ? `Export failed. ${OFFLINE_CHUNK_MESSAGE}` : `Export failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
     } finally {
       this._busy = false;
       this._exportBtn.disabled = false;

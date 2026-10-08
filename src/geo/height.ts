@@ -17,6 +17,8 @@
  * single honest answer instead of re-deriving the reference three ways.
  */
 
+import { UNIT_FACTORS } from '../units/units';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -93,23 +95,65 @@ export function heightInMetres(h: HeightValue): number | undefined {
 // Reference classification
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** One vertical CRS the app recognises by EPSG code. */
+export interface KnownVerticalCrs {
+  /** Short label shown in the strip, Inspector and reports. */
+  readonly label: string;
+  /** Which way the axis points: up from the surface, or down. */
+  readonly axis: 'height' | 'depth';
+  /** Metres per axis unit, from the EPSG definition. */
+  readonly metresPerUnit: number;
+}
+
+const FT = UNIT_FACTORS.M_PER_FT;
+const FT_US = UNIT_FACTORS.M_PER_US_FT;
+
+/**
+ * Orthometric (height or depth from a level surface) vertical CRSs by EPSG
+ * code, with the axis unit each code defines. Codes, names and units are
+ * those of the EPSG dataset (proj.db). The strip, the Inspector and Measure
+ * all read this one table through {@link knownVerticalCrs}, so they cannot
+ * disagree about whether a declared code is recognised.
+ */
+const KNOWN_VERTICAL_CRS: Readonly<Record<number, KnownVerticalCrs>> = {
+  5703: { label: 'NAVD88', axis: 'height', metresPerUnit: 1 },
+  6360: { label: 'NAVD88 height (ftUS)', axis: 'height', metresPerUnit: FT_US },
+  8228: { label: 'NAVD88 height (ft)', axis: 'height', metresPerUnit: FT },
+  6357: { label: 'NAVD88 depth', axis: 'depth', metresPerUnit: 1 },
+  6358: { label: 'NAVD88 depth (ftUS)', axis: 'depth', metresPerUnit: FT_US },
+  7968: { label: 'NGVD29 height (m)', axis: 'height', metresPerUnit: 1 },
+  5702: { label: 'NGVD29 height (ftUS)', axis: 'height', metresPerUnit: FT_US },
+  6359: { label: 'NGVD29 depth (ftUS)', axis: 'depth', metresPerUnit: FT_US },
+  5701: { label: 'ODN (Newlyn)', axis: 'height', metresPerUnit: 1 },
+  5714: { label: 'MSL height', axis: 'height', metresPerUnit: 1 },
+  8050: { label: 'MSL height (ft)', axis: 'height', metresPerUnit: FT },
+  8052: { label: 'MSL height (ftUS)', axis: 'height', metresPerUnit: FT_US },
+  5715: { label: 'MSL depth', axis: 'depth', metresPerUnit: 1 },
+  8051: { label: 'MSL depth (ft)', axis: 'depth', metresPerUnit: FT },
+  8053: { label: 'MSL depth (ftUS)', axis: 'depth', metresPerUnit: FT_US },
+  3855: { label: 'EGM2008 height', axis: 'height', metresPerUnit: 1 },
+  5773: { label: 'EGM96 height', axis: 'height', metresPerUnit: 1 },
+  5798: { label: 'EGM84 height', axis: 'height', metresPerUnit: 1 },
+  6647: { label: 'CGVD2013', axis: 'height', metresPerUnit: 1 },
+  5705: { label: 'Baltic 1977', axis: 'height', metresPerUnit: 1 },
+  5612: { label: 'Baltic 1977 depth', axis: 'depth', metresPerUnit: 1 },
+  5728: { label: 'LN02 height', axis: 'height', metresPerUnit: 1 },
+};
+
+/** The recognised vertical CRS for an EPSG code, or `undefined`. */
+export function knownVerticalCrs(epsg: number | undefined): KnownVerticalCrs | undefined {
+  return epsg === undefined ? undefined : KNOWN_VERTICAL_CRS[epsg];
+}
+
 /** Orthometric (height-above-datum) vertical CRS codes. */
-const ORTHOMETRIC_EPSG: ReadonlySet<number> = new Set([
-  5703, // NAVD88
-  5701, // ODN (Newlyn)
-  5714, // MSL height
-  3855, // EGM2008 geoid height
-  5773, // EGM96 geoid height
-  6647, // CGVD2013
-  5705, // Baltic 1977
-  5612, // EGM84 geoid height
-  5728, // LN02 (Swiss levelling heights)
-]);
+const ORTHOMETRIC_EPSG: ReadonlySet<number> = new Set(
+  Object.entries(KNOWN_VERTICAL_CRS).filter(([, v]) => v.axis === 'height').map(([k]) => Number(k)),
+);
 
 /** Depth (downward) vertical CRS codes. */
-const DEPTH_EPSG: ReadonlySet<number> = new Set([
-  5715, // MSL depth
-]);
+const DEPTH_EPSG: ReadonlySet<number> = new Set(
+  Object.entries(KNOWN_VERTICAL_CRS).filter(([, v]) => v.axis === 'depth').map(([k]) => Number(k)),
+);
 
 /**
  * Ellipsoidal-height vertical CRS codes. Deliberately narrow, like the RFC-7946
@@ -128,6 +172,8 @@ const ELLIPSOIDAL_EPSG: ReadonlySet<number> = new Set([
  * ("NAVD88") and one that arrives as a code ("EPSG:5703") resolve to one identity.
  */
 const NAME_TO_EPSG: Readonly<Record<string, number>> = {
+  // Every label the table prints reads back to its own code.
+  ...Object.fromEntries(Object.entries(KNOWN_VERTICAL_CRS).map(([code, v]) => [v.label.toLowerCase(), Number(code)])),
   navd88: 5703,
   'odn (newlyn)': 5701,
   'msl height': 5714,
@@ -136,7 +182,7 @@ const NAME_TO_EPSG: Readonly<Record<string, number>> = {
   'egm96 height': 5773,
   cgvd2013: 6647,
   'baltic 1977': 5705,
-  'egm84 height': 5612,
+  'egm84 height': 5798,
 };
 
 /** Known datum names, longest first, so a match takes the most specific. */

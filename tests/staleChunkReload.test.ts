@@ -342,3 +342,69 @@ describe('deferredPageReload', () => {
     expect(() => deferredPageReload(null)()).not.toThrow();
   });
 });
+
+describe('offline and network-blip chunk failures', () => {
+  const chromiumErr = (): Error =>
+    new TypeError('Failed to fetch dynamically imported module: https://olv.example/assets/findingsPanel-abc123.js');
+
+  it('offline: a vite:preloadError neither reloads nor calls preventDefault, and reports the offline note', () => {
+    const reload = vi.fn();
+    const onOffline = vi.fn();
+    const target = makeTarget();
+    installStaleChunkRecovery({ reload, storage: makeStorage(), eventTarget: target, isOnline: () => false, onOffline, probe: null, log: () => {} });
+    const preventDefault = vi.fn();
+    target.emit('vite:preloadError', { payload: chromiumErr(), preventDefault });
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+    expect(onOffline).toHaveBeenCalledWith('You are offline, this part could not load. Try again when back online.');
+  });
+
+  it('offline: importOrReload rejects with the original error and does not reload or write the marker', async () => {
+    const reload = vi.fn();
+    const storage = makeStorage();
+    const { importOrReload } = installStaleChunkRecovery({ reload, storage, eventTarget: null, isOnline: () => false, onOffline: () => {}, probe: null, log: () => {} });
+    const err = chromiumErr();
+    await expect(importOrReload(() => Promise.reject(err))).rejects.toBe(err);
+    expect(reload).not.toHaveBeenCalled();
+    expect(storage.map.has(STALE_RELOAD_MARKER_KEY)).toBe(false);
+  });
+
+  it('online, chunk server unreachable: a network blip is not read as a deploy, so no reload and no preventDefault', async () => {
+    const reload = vi.fn();
+    const log = vi.fn();
+    const probe = vi.fn(async () => 'unreachable' as const);
+    const target = makeTarget();
+    installStaleChunkRecovery({ reload, storage: makeStorage(), eventTarget: target, isOnline: () => true, probe, log });
+    const preventDefault = vi.fn();
+    target.emit('vite:preloadError', { payload: chromiumErr(), preventDefault });
+    await vi.waitFor(() => expect(log).toHaveBeenCalledWith(expect.stringContaining('unreachable')));
+    expect(probe).toHaveBeenCalledWith('https://olv.example/assets/findingsPanel-abc123.js');
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('online, chunk still served: importOrReload rethrows instead of reloading', async () => {
+    const reload = vi.fn();
+    const { importOrReload } = installStaleChunkRecovery({ reload, storage: makeStorage(), eventTarget: null, isOnline: () => true, probe: async () => 'present', log: () => {} });
+    const err = chromiumErr();
+    await expect(importOrReload(() => Promise.reject(err))).rejects.toBe(err);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('online, chunk gone (404): the stale-deploy reload still happens once', async () => {
+    const reload = vi.fn();
+    const storage = makeStorage();
+    const target = makeTarget();
+    installStaleChunkRecovery({ reload, storage, eventTarget: target, isOnline: () => true, probe: async () => 'missing', log: () => {} });
+    target.emit('vite:preloadError', { payload: chromiumErr(), preventDefault: () => {} });
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+    expect(storage.map.has(STALE_RELOAD_MARKER_KEY)).toBe(true);
+  });
+
+  it('reads the chunk URL out of engine messages and ignores messages without one', async () => {
+    const { chunkUrlFromError } = await import('../src/app/staleChunkReload');
+    expect(chunkUrlFromError(chromiumErr())).toBe('https://olv.example/assets/findingsPanel-abc123.js');
+    expect(chunkUrlFromError(new TypeError('error loading dynamically imported module: http://localhost:4173/assets/a-1.js?v=2'))).toBe('http://localhost:4173/assets/a-1.js');
+    expect(chunkUrlFromError(new TypeError('Importing a module script failed.'))).toBeNull();
+  });
+});

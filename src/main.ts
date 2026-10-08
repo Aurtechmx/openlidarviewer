@@ -96,7 +96,7 @@ import { createScanRouteCoordinator, type SpaceExportContext } from './app/scanR
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel, exportClassFacts, exportLayerHooks } from './ui/ExportPanel';
 import { makeLocalToLonLat } from './export/lonLatMapper';
-import { runFindingsExport, writeScanScopedExport, spaceContextStillCurrent, SPACE_CONTEXT_MOVED, SESSION_EXPORT_SCAN_CHANGED_REFUSAL } from './export/exportScanIdentity';
+import { runFindingsExport, writeScanScopedExport, spaceContextStillCurrent, SPACE_CONTEXT_MOVED, SESSION_EXPORT_SCAN_CHANGED_REFUSAL, sessionSaveNotice } from './export/exportScanIdentity';
 import {
   crsIsKnown,
   exportScanFootprintKml,
@@ -511,7 +511,7 @@ let viewer: Viewer = null as unknown as Viewer;
 // content-hashed import fails because a newer build replaced the asset mid-session,
 // do ONE guarded reload (sessionStorage cooldown, URL preserved), not a hard boot
 // failure. Ordinary Viewer exceptions are NOT classified as stale and never reload.
-const { importOrReload } = installStaleChunkRecovery();
+const { importOrReload } = installStaleChunkRecovery({ onOffline: (msg) => appToast().show(msg) });
 let startViewer: () => void = () => {};
 const viewerStarted = new Promise<void>((resolve) => { startViewer = resolve; });
 /** Start the Viewer import if it has not started, and hand back the shared promise. */
@@ -3538,7 +3538,7 @@ async function exportSession(): Promise<void> {
     refuse: () => showLassoToast(SESSION_EXPORT_SCAN_CHANGED_REFUSAL),
     // Both lazy imports resolve before any state is read; their exports spread into one deps object.
     load: async () => ({ ...(await loadSession()), ...(await loadExportProvenance()), ...(await loadSessionSnapshot()) }),
-    write: (json) => downloadText(`${baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? 'openlidarviewer')}.olvsession`, json),
+    write: (json) => { downloadText(`${baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? 'openlidarviewer')}.olvsession`, json); const note = sessionSaveNotice(scans.activeId != null && classificationDiffersFromSource(viewer?.getCloud(scans.activeId)?.classificationProvenance ?? 'none', viewer?.classificationEpoch(scans.activeId) ?? 0)); if (note) showLassoToast(note); },
     serialize: (m) => m.serializeActiveSession(m, sessionSnapshotDeps),
   });
 }

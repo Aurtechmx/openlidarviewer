@@ -5,6 +5,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { crsFromWkt, crsFromGeoTiff } from '../src/io/crs';
+import { verticalReferenceFromDatum } from '../src/geo/height';
 import { writeLas } from '../src/convert/writeLas';
 import { cloudToGlobal } from '../src/convert/globalPoints';
 import { convertCloud } from '../src/convert/convertCloud';
@@ -90,6 +91,14 @@ describe('crsFromGeoTiff — vertical key', () => {
     expect(crs.linearUnitToMetres).toBe(1);
     expect(crs.verticalLinearUnit).toBe('us-survey-foot');
     expect(crs.verticalUnitToMetres).toBeCloseTo(0.3048006096012192, 10);
+  });
+
+  it('reads 4096 = 6360 (NAVD88 height, ftUS) as a recognised datum', () => {
+    const crs = crsFromGeoTiff(geoKeyBytes([[1024, 1], [3072, 32613], [4096, 6360], [4099, 9003]]), null, null);
+    expect(crs.verticalEpsg).toBe(6360);
+    expect(crs.verticalDatum).toBe('NAVD88 height (ftUS)');
+    expect(verticalReferenceFromDatum(crs)).toBe('orthometric');
+    expect(crs.verticalUnitToMetres).toBeCloseTo(1200 / 3937, 12);
   });
 
   it('leaves the vertical unit undefined when no 4099 key is present', () => {

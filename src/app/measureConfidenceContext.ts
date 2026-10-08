@@ -18,6 +18,7 @@ export function buildMeasureConfidenceContext(
     | {
         readonly verticalEpsg?: number | null;
         readonly verticalDatum?: string | null;
+        readonly verticalUnitToMetres?: number | null;
       }
     | null
     | undefined,
@@ -45,5 +46,8 @@ export function buildMeasureConfidenceContext(
     // An unknown horizontal unit is not metres. A geographic frame carries its
     // own caveat and is graded elsewhere.
     unitVerified: viewer.measure.crsKnown !== false || !!viewer.measure.geographicCrs,
+    // A georeferenced file with no vertical unit borrows the horizontal one
+    // for heights (verticalMetresPerUnit 'horizontal-when-known').
+    verticalUnitBorrowed: resolvedCrs != null && resolvedCrs.verticalUnitToMetres == null,
   };
 }

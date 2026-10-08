@@ -29,6 +29,11 @@ import type { AreaBreakdown, LineBreakdown } from '../render/measure/measureBrea
 /** The formatters this borrows from the measurement stack. */
 export interface BreakdownFormatters {
   formatLength(metres: number, system: UnitSystem): string;
+  /**
+   * Format in the unit band of `bandMetres`, so one line keeps one unit.
+   * Absent: each figure picks its own band through `formatLength`.
+   */
+  formatLengthInBandOf?(metres: number, bandMetres: number, system: UnitSystem): string;
   formatArea(squareMetres: number, system: UnitSystem): string;
   formatGrade(percent: number): string;
   formatAngle(degrees: number): string;
@@ -75,10 +80,14 @@ export function breakdownParts(
 ): BreakdownLine | null {
   const line = s.lineMetrics;
   if (line) {
+    // One unit for the whole line, chosen by its largest figure.
+    const band = Math.max(Math.abs(line.horizontalM), Math.abs(line.verticalM), Math.abs(line.length3dM));
+    const len = (m: number): string =>
+      fmt.formatLengthInBandOf ? fmt.formatLengthInBandOf(m, band, system) : fmt.formatLength(m, system);
     const parts = [
-      `Run ${fmt.formatLength(line.horizontalM, system)}`,
-      `Rise ${fmt.formatLength(line.verticalM, system)}`,
-      `Slant ${fmt.formatLength(line.length3dM, system)}`,
+      `Run ${len(line.horizontalM)}`,
+      `Rise ${len(line.verticalM)}`,
+      `Slant ${len(line.length3dM)}`,
     ];
     if (Number.isFinite(line.gradePercent)) {
       parts.push(`Grade ${fmt.formatGrade(line.gradePercent)} (${fmt.formatAngle(line.gradeAngleDeg)})`);

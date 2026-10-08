@@ -98,15 +98,13 @@ test('P1: save, reload, reopen: camera, measurement and plane come back; the fil
   });
 });
 
-test('P1: a class edit made before saving comes back after reopening', async ({ page }, info) => {
-  // FINDING J8-CLASS: the session file has no field for classification edits
-  // (sessionSnapshot.ts writes classFilter only), so a lasso reclassification
-  // is gone after save, reload and restore, with no warning at save time.
-  // Recorded as an expected failure.
-  test.fail();
+test('P1: saving a session with class edits warns that the edits are not stored', async ({ page }, info) => {
+  // J8-CLASS: the session file stores the class filter, not per-point classes
+  // (sessionSnapshot.ts). Save session says so, and points to a LAS export.
   test.setTimeout(120_000);
   const j = startJourney(page, info, 'j8');
   const survey = await buildSurveyLas14();
+  const { SESSION_CLASS_EDITS_NOT_STORED } = await import('../../../src/export/exportScanIdentity');
   await j.step('open and lasso-reclassify the whole view to class 6', async () => {
     await openWith(page, survey.bytes, 'survey-14.las');
     await waitForCameraSettled(page);
@@ -116,14 +114,9 @@ test('P1: a class edit made before saving comes back after reopening', async ({ 
     expect(n).toBeGreaterThan(survey.count / 2);
     expect(await page.evaluate(() => (window as unknown as { __OLV_TEST_API__: { classAt: (i: number) => number } }).__OLV_TEST_API__.classAt(1))).toBe(6);
   });
-  const saved = await j.step('save the session', () => saveSession(page));
-  await j.step('reload, reopen, restore, and read a point class', async () => {
-    await reloadSettled(page);
-    await openWith(page, survey.bytes, 'survey-14.las');
-    await dropBytes(page, saved.bytes, saved.name);
-    await page.waitForTimeout(2_000);
-    const cls = await page.evaluate(() => (window as unknown as { __OLV_TEST_API__: { classAt: (i: number) => number } }).__OLV_TEST_API__.classAt(1));
-    expect(cls, 'class of point 1 after restore (file says 2, the edit said 6)').toBe(6);
+  await j.step('save the session: the warning names the loss and the way to keep the edits', async () => {
+    await saveSession(page);
+    await expect(page.locator('.olv-lasso-toast-msg')).toHaveText(SESSION_CLASS_EDITS_NOT_STORED, { timeout: 5_000 });
   });
 });
 
