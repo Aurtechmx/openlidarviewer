@@ -68,8 +68,14 @@ function runsOf(chart: ReadonlyArray<{ distance: number; height: number }>): num
   return out;
 }
 
-/** The chart polyline segments the general report draws (0.9 pt accent lines). */
-async function reportChartSegments(row: ReportMeasurementRow): Promise<Array<{ x0: number; x1: number }>> {
+interface ReportChart {
+  readonly segs: Array<{ x0: number; x1: number }>;
+  /** Single-sample runs, drawn as dots. */
+  readonly dots: number;
+}
+
+/** The chart the general report draws: 0.9 pt accent segments and the dots for lone samples. */
+async function reportChart(row: ReportMeasurementRow): Promise<ReportChart> {
   const inputs: ReportInputs = {
     ...composeReportInputs({
       templateId: 'technical-report',
@@ -85,26 +91,39 @@ async function reportChartSegments(row: ReportMeasurementRow): Promise<Array<{ x
     measurements: [row],
   };
   const orig = PDFPage.prototype.drawLine;
+  const origCircle = PDFPage.prototype.drawCircle;
   const segs: Array<{ x0: number; x1: number }> = [];
+  let dots = 0;
   PDFPage.prototype.drawLine = function (this: PDFPage, opts: Parameters<PDFPage['drawLine']>[0]) {
     if (opts.thickness === 0.9) segs.push({ x0: opts.start.x, x1: opts.end.x });
     return orig.call(this, opts);
   } as PDFPage['drawLine'];
+  PDFPage.prototype.drawCircle = function (this: PDFPage, opts: Parameters<PDFPage['drawCircle']>[0]) {
+    dots++;
+    return origCircle.call(this, opts);
+  } as PDFPage['drawCircle'];
   try {
     const result = await generateReport(inputs, { timeoutMs: Infinity });
     expect(result.failedSections).toEqual([]);
   } finally {
     PDFPage.prototype.drawLine = orig;
+    PDFPage.prototype.drawCircle = origCircle;
   }
-  return segs;
+  return { segs, dots };
 }
 
-/** The number of profile polylines the dedicated sheet strokes (1.6 pt curve). */
-async function profileSheetRuns(gap: ProfileChartSample): Promise<number> {
+/**
+ * The runs the dedicated sheet strokes (1.6 pt curve), as the sample distance
+ * of each vertex. The sheet maps chainage linearly from d = 0 at x = 0, so a
+ * vertex's distance is its x over the x of the last sample, times 30 m.
+ */
+async function profileSheetRuns(gap: ProfileChartSample): Promise<number[][]> {
   const orig = PDFPage.prototype.drawSvgPath;
-  let n = 0;
+  const paths: number[][] = [];
   PDFPage.prototype.drawSvgPath = function (this: PDFPage, path: string, opts?: Parameters<PDFPage['drawSvgPath']>[1]) {
-    if (opts?.borderWidth === 1.6) n++;
+    if (opts?.borderWidth === 1.6) {
+      paths.push([...path.matchAll(/[ML]\s*(-?[\d.]+)[ ,]+(-?[\d.]+)/g)].map((m) => Number(m[1])));
+    }
     return orig.call(this, path, opts);
   } as PDFPage['drawSvgPath'];
   try {
@@ -112,7 +131,8 @@ async function profileSheetRuns(gap: ProfileChartSample): Promise<number> {
   } finally {
     PDFPage.prototype.drawSvgPath = orig;
   }
-  return n;
+  const xMax = Math.max(...paths.flat());
+  return paths.map((xs) => xs.map((x) => Math.round((x / xMax) * 30)));
 }
 
 /** The profile paths the live panel chart draws, as their vertex counts. */
@@ -137,8 +157,10 @@ describe.each(GAPS)('profile chart with $name at d = 10', ({ gap }) => {
     expect(runsOf(chart)).toEqual([[0], [20, 30]]);
   });
 
-  it('the general report draws no segment across the gap', async () => {
-    const segs = await reportChartSegments(profileRow(gap));
+  it('the general report draws no segment across the gap, and a dot for the lone sample', async () => {
+    const { segs, dots } = await reportChart(profileRow(gap));
+    // d = 0 has a gap after it and nothing before it: one dot.
+    expect(dots).toBe(1);
     // Only 20 -> 30 is a segment; its width is a third of the plotted span.
     expect(segs).toHaveLength(1);
     const plotted = 240 - 2 * 5;
@@ -154,7 +176,7 @@ describe.each(GAPS)('profile chart with $name at d = 10', ({ gap }) => {
 
   it('the dedicated sheet and the general report break into the same runs', async () => {
     const chart = profileRow(gap).profileExtras!.chart!;
-    expect(await profileSheetRuns(gap)).toBe(runsOf(chart).length);
+    expect(await profileSheetRuns(gap)).toEqual(runsOf(chart));
   });
 
   it('the live panel chart breaks at the gap', () => {

@@ -121,8 +121,12 @@ const REPORT_PAGE_W = 612;
 const REPORT_MARGIN = 44;
 /** FOOTER_HEIGHT + 16: the lowest baseline flowing text may use. */
 const REPORT_FLOOR = 48;
-/** Footer stamps are drawn by the late page-number pass at y <= 22. */
-const isReportFooter = (r: Drawn): boolean => r.y <= 22;
+/**
+ * Footer stamps are drawn by the late page-number pass. They are recognised by
+ * their text, not their position, so a body line that fell to a low or
+ * negative y can never pass as footer text.
+ */
+const isReportFooter = (r: Drawn): boolean => /^OpenLiDARViewer · \d+ of \d+$/.test(r.text);
 
 function baseInputs(): ReportInputs {
   return composeReportInputs({
@@ -154,7 +158,9 @@ async function renderReport(inputs: ReportInputs) {
 
 function expectReportGeometry(runs: readonly Drawn[]): void {
   for (const r of runs) {
-    if (!isReportFooter(r)) {
+    if (isReportFooter(r)) {
+      expect(r.y, `footer stamp on page ${r.page}`).toBe(12);
+    } else {
       expect(r.y, `"${r.text.slice(0, 40)}" on page ${r.page} sits below the footer band`).toBeGreaterThanOrEqual(REPORT_FLOOR);
     }
     expect(
@@ -212,6 +218,39 @@ describe('report PDF: wrapped text paginates', () => {
     expect(runs.some((r) => r.text.startsWith('Position (render-local)'))).toBe(true);
   });
 
+  it('a 15,000-character annotation note is the user\'s own text and prints in full', async () => {
+    const note = sourceText(15_000, 13);
+    const base = await renderReport(baseInputs());
+    const { pages, failed, runs } = await renderReport({
+      ...baseInputs(),
+      annotations: [
+        { title: 'Crack B', type: 'issue', note, position: { x: 1, y: 2, z: 3 }, frame: 'local', createdAt: 0 },
+      ],
+    });
+    expect(failed).toEqual([]);
+    expectReportGeometry(runs);
+    expect(pages).toBeGreaterThanOrEqual(base.pages + 2);
+    expect(drawnSource(runs, false)).toBe(strip(note));
+    expect(runs.some((r) => r.text.includes('omitted'))).toBe(false);
+  });
+
+  it('keeps line breaks in a note as lines, turns tabs into spaces, and drops a blank note', async () => {
+    const { failed, runs } = await renderReport({
+      ...baseInputs(),
+      annotations: [
+        { title: 'Two lines', type: 'note', note: 'first line\nsecond\tline', position: { x: 0, y: 0, z: 0 }, frame: 'local', createdAt: 0 },
+        { title: 'Blank', type: 'note', note: ' \n\t ', position: { x: 0, y: 0, z: 0 }, frame: 'local', createdAt: 0 },
+      ],
+      technicalNotes: 'alpha\tbeta\r\ngamma',
+    });
+    expect(failed).toEqual([]);
+    expect(runs.some((r) => r.text === 'first line')).toBe(true);
+    expect(runs.some((r) => r.text === 'second line')).toBe(true);
+    expect(runs.some((r) => r.text === 'alpha beta')).toBe(true);
+    expect(runs.some((r) => r.text === 'gamma')).toBe(true);
+    expect(runs.filter((r) => r.text.includes('?'))).toEqual([]);
+  });
+
   it('E57-style declared metadata (40 fields of 400 characters) stays above the footer', async () => {
     const fields = Array.from({ length: 40 }, (_, i) => ({
       name: `field${i + 1}`,
@@ -230,7 +269,38 @@ describe('report PDF: wrapped text paginates', () => {
     expect(body).toBe(fields.map((f) => strip(f.value)).join(''));
   });
 
-  it('a 15,000-character measurement name is wrapped, paginated and capped with a visible marker', async () => {
+  it('a 15,000-character file-derived metadata field is capped with a visible marker', async () => {
+    const value = sourceText(15_000, 17);
+    const { failed, runs } = await renderReport({
+      ...baseInputs(),
+      sourceMetadata: { standard: [{ name: 'description', value }], extensions: [] },
+    });
+    expect(failed).toEqual([]);
+    expectReportGeometry(runs);
+    expect(drawnSource(runs, false)).toBe(strip(value.slice(0, 8_000)));
+    expect(runs.some((r) => r.text === '[… 7,000 characters omitted from this PDF]')).toBe(true);
+  });
+
+  it('a pretty-printed 11,000-character WKT is never cut', async () => {
+    const parts: string[] = ['PROJCRS["Test grid",'];
+    for (let i = 0; parts.join('\n').length < 11_000; i++) {
+      parts.push(`        PARAMETER["Parameter ${i}",${i}.5,`, `            LENGTHUNIT["metre",1]],`);
+    }
+    parts.push('    ID["EPSG",99999]]');
+    const wkt = parts.join('\n');
+    expect(wkt.length).toBeGreaterThan(11_000);
+    const { failed, runs } = await renderReport({
+      ...baseInputs(),
+      sourceMetadata: { standard: [{ name: 'coordinateMetadata', value: wkt }], extensions: [] },
+    });
+    expect(failed).toEqual([]);
+    expectReportGeometry(runs);
+    expect(runs.some((r) => r.text.includes('omitted'))).toBe(false);
+    const body = runs.filter((r) => !r.bold && !isReportFooter(r)).map((r) => strip(r.text)).join('');
+    expect(body.includes(strip(wkt))).toBe(true);
+  });
+
+  it('a 15,000-character measurement name is wrapped and paginated, and printed in full', async () => {
     const name = sourceText(15_000, 23);
     const { pages, failed, runs } = await renderReport({
       ...baseInputs(),
@@ -240,12 +310,9 @@ describe('report PDF: wrapped text paginates', () => {
     expectReportGeometry(runs);
     const base = await renderReport(baseInputs());
     expect(pages).toBeGreaterThan(base.pages);
-    // The row label is "distance · <name>"; its first 8,000 characters are
-    // drawn and the marker names the rest.
-    const prefix = 'distance · '.length;
-    expect(drawnSource(runs, true)).toBe(strip(name.slice(0, 8_000 - prefix)));
-    const marker = runs.find((r) => r.text.includes('characters omitted'));
-    expect(marker?.text).toBe(`[… ${(15_000 + prefix - 8_000).toLocaleString('en-US')} characters omitted from this PDF]`);
+    // A measurement name is typed by the user, so it is never capped.
+    expect(drawnSource(runs, true)).toBe(strip(name));
+    expect(runs.some((r) => r.text.includes('omitted'))).toBe(false);
     // The value still prints after the name.
     expect(runs.some((r) => r.text === '12.50 m')).toBe(true);
   });
@@ -305,7 +372,7 @@ describe('report PDF: wrapped text paginates', () => {
 /** The terrain body floor: M + FOOTER_RESERVE. */
 const TERRAIN_FLOOR = 48 + 96;
 
-function terrainContent(rowValue: string, warning: string): TerrainReportContent {
+function terrainContent(rowValue: string, warning: string, crsValue = 'EPSG:32614'): TerrainReportContent {
   return {
     title: 'Terrain report',
     subtitle: 'TERRAIN INTELLIGENCE REPORT',
@@ -315,6 +382,7 @@ function terrainContent(rowValue: string, warning: string): TerrainReportContent
         rows: [
           { label: 'Surface', value: 'Ground model ready' },
           { label: 'Operator note', value: rowValue },
+          { label: 'Horizontal CRS', value: crsValue },
         ],
       },
     ],
@@ -330,9 +398,9 @@ function terrainContent(rowValue: string, warning: string): TerrainReportContent
 }
 
 describe('terrain report PDF: wrapped text paginates', () => {
-  it('a 15,000-character row value and a 6,000-character warning flow across pages', async () => {
+  it('a 15,000-character row value and a 9,000-character warning flow across pages', async () => {
     const value = sourceText(15_000, 51);
-    const warning = sourceText(6_000, 53);
+    const warning = sourceText(9_000, 53);
     const { runs, pages } = await recordDraws(() => buildTerrainReportPdf(terrainContent(value, warning)));
     const short = await recordDraws(() => buildTerrainReportPdf(terrainContent('short', 'short')));
     expect(pages).toBeGreaterThanOrEqual(short.pages + 2);
@@ -340,19 +408,26 @@ describe('terrain report PDF: wrapped text paginates', () => {
     // crosses the right margin.
     for (const r of runs) {
       expect(r.x + r.width, `"${r.text.slice(0, 30)}" crosses the right margin`).toBeLessThanOrEqual(r.pageWidth - 48 + 0.5);
-      if (isSourceRun(r)) {
+      if (isSourceRun(r) || r.text.includes('omitted') || r.text.endsWith('(continued)')) {
         expect(r.y, `"${r.text.slice(0, 30)}" on page ${r.page} sits in the footer reserve`).toBeGreaterThanOrEqual(TERRAIN_FLOOR);
       }
     }
     const body = drawnSource(runs, false);
     // The value is capped at 8,000 characters with a visible marker; the
-    // 6,000-character warning prints whole.
+    // warning is app-written and prints whole.
     expect(body.includes(strip(value.slice(0, 8_000)))).toBe(true);
     expect(body.includes(strip(value.slice(0, 8_001)))).toBe(false);
     expect(runs.some((r) => r.text === '[... 7,000 characters omitted from this PDF]')).toBe(true);
     expect(body.includes(strip(warning))).toBe(true);
     const label = runs.find((r) => r.text === 'Operator note')!;
     expect(runs.some((r) => r.text === 'Operator note (continued)' && r.page > label.page)).toBe(true);
+  });
+
+  it('never caps a CRS row', async () => {
+    const crs = sourceText(12_000, 57);
+    const { runs } = await recordDraws(() => buildTerrainReportPdf(terrainContent('short', 'none', crs)));
+    expect(runs.some((r) => r.text.includes('omitted'))).toBe(false);
+    expect(drawnSource(runs, false)).toBe(strip(crs));
   });
 
   it('hard-breaks a single word wider than the value column', async () => {
@@ -397,10 +472,9 @@ describe('space report PDF: wrapped text paginates', () => {
         expect(r.y, `"${r.text.slice(0, 30)}" on page ${r.page} overprints the footer`).toBeGreaterThan(footerTop + 12);
       }
     }
-    // The note line is "- <caveat>", capped at 8,000 characters with a
-    // visible marker for the rest.
-    expect(drawnSource(runs, false)).toBe(strip(caveat.slice(0, 8_000 - 2)));
-    expect(runs.some((r) => r.text === '[... 7,002 characters omitted from this PDF]')).toBe(true);
+    // Caveats are app-written, so they are never capped.
+    expect(drawnSource(runs, false)).toBe(strip(caveat));
+    expect(runs.some((r) => r.text.includes('omitted'))).toBe(false);
   });
 });
 

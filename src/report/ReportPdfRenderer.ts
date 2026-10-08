@@ -42,7 +42,9 @@ import {
   PDF_FIELD_CHAR_CAP,
   capFieldText,
   clipWithSuffix,
+  mayCapField,
   omissionMarker,
+  pdfParagraphs,
   wrapToWidth,
 } from '../winAnsiText';
 
@@ -128,6 +130,9 @@ type OnNewPage = (cursor: PageCursor) => PageCursor;
  * fields are left out under a visible marker. 120,000 characters is about
  * 1,200 lines, some 25 pages, so a file that declares thousands of fields
  * (each already capped at PDF_FIELD_CHAR_CAP) cannot add hundreds of pages.
+ * A field `mayCapField` protects (a CRS definition, a digest) counts at its
+ * full length and is never cut: if it alone would overrun the budget it is
+ * left out and counted by the marker, never printed in part.
  */
 const SOURCE_METADATA_SECTION_CAP = 120_000;
 
@@ -411,13 +416,29 @@ function ensureSpace(
  * (a long unbroken token / URL) are hard-broken character-by-character so the
  * loop always terminates and nothing is silently clipped at the page edge.
  *
- * The input is run through `sanitiseForPdf` first so the width measurement
- * matches what actually gets drawn (the WinAnsi substitutions change string
- * length — e.g. "≥" → ">=").
+ * A line break in the text starts a new line (a blank source line stays a
+ * blank line), and tabs and other whitespace become spaces (`pdfParagraphs`),
+ * so neither reaches the WinAnsi fallback as '?'. Each paragraph is then run
+ * through `sanitiseForPdf` so the width measurement matches what actually
+ * gets drawn (the WinAnsi substitutions change string length — e.g. "≥" →
+ * ">=").
  */
 function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
-  const lines = wrapToWidth(sanitiseForPdf(text), (t) => font.widthOfTextAtSize(t, size), maxWidth);
+  const measure = (t: string): number => font.widthOfTextAtSize(t, size);
+  const lines = pdfParagraphs(text).flatMap((p) => {
+    const wrapped = wrapToWidth(sanitiseForPdf(p), measure, maxWidth);
+    return wrapped.length > 0 ? wrapped : [''];
+  });
   return lines.length > 0 ? lines : [''];
+}
+
+/**
+ * `text` for a single drawn line: line breaks, tabs and other control
+ * whitespace become spaces, so they never print as '?'. Ordinary spaces,
+ * doubled ones included, are kept as they are.
+ */
+function oneLine(text: string): string {
+  return text.replace(/[\t\n\v\f\r\u2028\u2029]+/g, ' ');
 }
 
 /**
@@ -537,8 +558,6 @@ function continuedLabel(label: string, bold: PDFFont, ctx: PageContext, x: numbe
 
 interface BodyLineOptions {
   readonly indent?: number;
-  /** Cap the text at PDF_FIELD_CHAR_CAP (file-derived or user free text). */
-  readonly cap?: boolean;
   /** Repeat this label as "(continued)" when the text breaks across pages. */
   readonly continued?: { readonly label: string; readonly bold: PDFFont };
 }
@@ -558,7 +577,7 @@ function drawBodyLine(
     x, font: body, size: BODY_FONT_SIZE, leading: BODY_FONT_SIZE + 4, color: ctx.theme.bodyText,
   };
   return drawWrappedField(cursor, text, style, body, ctx, {
-    cap: opts.cap ?? false,
+    cap: false,
     onNewPage: opts.continued ? continuedLabel(opts.continued.label, opts.continued.bold, ctx) : undefined,
   });
 }
@@ -606,11 +625,14 @@ function drawProfileChart(
 
   const sx = (d: number): number => x0 + PAD + ((d - dMin) / dSpan) * (CHART_W - 2 * PAD);
   const sy = (h: number): number => bottom + PAD + ((h - hMin) / hSpan) * (CHART_H - 2 * PAD);
+  const covered = (i: number): boolean =>
+    i >= 0 && i < chart.length && Number.isFinite(chart[i].distance) && Number.isFinite(chart[i].height);
   let prev: { x: number; y: number } | null = null;
-  for (const s of chart) {
+  for (let i = 0; i < chart.length; i++) {
+    const s = chart[i];
     // A gap lifts the pen: the next covered sample starts a new run, so no
     // segment is drawn across missing data.
-    if (!Number.isFinite(s.distance) || !Number.isFinite(s.height)) {
+    if (!covered(i)) {
       prev = null;
       continue;
     }
@@ -620,6 +642,10 @@ function drawProfileChart(
         start: prev, end: pt, thickness: 0.9,
         color: rgb(accent.r, accent.g, accent.b),
       });
+    } else if (!covered(i + 1)) {
+      // A covered sample with a gap (or the end) on both sides is a run of
+      // one. It has no segment, so it is drawn as a dot rather than vanishing.
+      cursor.page.drawCircle({ x: pt.x, y: pt.y, size: 1.2, color: rgb(accent.r, accent.g, accent.b) });
     }
     prev = pt;
   }
@@ -652,9 +678,15 @@ function drawLabelValueRow(
   body: PDFFont,
   bold: PDFFont,
   ctx: PageContext,
+  /**
+   * Cap the label and value at PDF_FIELD_CHAR_CAP. Only for file-derived
+   * fields (declared source metadata) whose label `mayCapField` allows; text
+   * the user typed and app-written rows are always printed whole.
+   */
+  cap = false,
 ): PageCursor {
-  const labelField = capFieldText(label);
-  const cleanLabel = sanitiseForPdf(labelField.text);
+  const labelField = cap ? capFieldText(label) : { text: label, omitted: 0 };
+  const cleanLabel = sanitiseForPdf(oneLine(labelField.text));
   const labelX = gridX(1);
   const leading = BODY_FONT_SIZE + 4;
   const labelStyle: LineStyle = {
@@ -681,16 +713,17 @@ function drawLabelValueRow(
     const valueStyle: LineStyle = {
       x: LABEL_VALUE_GUTTER_X, font: body, size: BODY_FONT_SIZE, leading, color: ctx.theme.bodyText,
     };
-    return drawWrappedField(cursor, value, valueStyle, body, ctx, { cap: true, onNewPage });
+    return drawWrappedField(cursor, value, valueStyle, body, ctx, { cap, onNewPage });
   }
 
-  // Label too wide: it wraps across the content width (a field-length label is
-  // capped like a value), and the value flows below it, indented one grid track.
-  cursor = drawWrappedField(cursor, label, labelStyle, body, ctx, { cap: true });
+  // Label too wide: it wraps across the content width (capped like the value
+  // when the row is capped), and the value flows below it, indented one grid
+  // track.
+  cursor = drawWrappedField(cursor, label, labelStyle, body, ctx, { cap });
   const valueStyle: LineStyle = {
     x: gridX(2), font: body, size: BODY_FONT_SIZE, leading, color: ctx.theme.bodyText,
   };
-  return drawWrappedField(cursor, value, valueStyle, body, ctx, { cap: true, onNewPage });
+  return drawWrappedField(cursor, value, valueStyle, body, ctx, { cap, onNewPage });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -830,8 +863,8 @@ function drawFinding(
   // Label (bold) + value on the same line; value sits after the label. When
   // the pair is wider than the line, the label wraps and the value wraps
   // below it, so neither runs past the right margin.
-  const cleanLabel = sanitiseForPdf(finding.label);
-  const cleanValue = sanitiseForPdf(finding.value);
+  const cleanLabel = sanitiseForPdf(oneLine(finding.label));
+  const cleanValue = sanitiseForPdf(oneLine(finding.value));
   const labelW = bold.widthOfTextAtSize(cleanLabel, BODY_FONT_SIZE);
   const valueX = textX + labelW + 8;
   const leading = BODY_FONT_SIZE + 4;
@@ -852,12 +885,12 @@ function drawFinding(
     cursor = drawWrappedField(
       cursor, finding.label,
       { x: textX, font: bold, size: BODY_FONT_SIZE, leading, color: theme.bodyText },
-      body, ctx, { cap: true },
+      body, ctx, { cap: false },
     );
     cursor = drawWrappedField(
       cursor, finding.value,
       { x: textX, font: body, size: BODY_FONT_SIZE, leading, color: theme.bodyText },
-      body, ctx, { cap: true, onNewPage },
+      body, ctx, { cap: false, onNewPage },
     );
   }
   // Detail line(s), wrapped + indented under the label.
@@ -1153,7 +1186,9 @@ async function renderSourceMetadata(
   let budget = SOURCE_METADATA_SECTION_CAP;
   let omittedFields = 0;
   const fits = (f: { readonly name: string; readonly value: string }): boolean => {
-    const cost = Math.max(100, Math.min(f.name.length, PDF_FIELD_CHAR_CAP) + Math.min(f.value.length, PDF_FIELD_CHAR_CAP));
+    const cappable = mayCapField(f.name);
+    const len = (t: string): number => (cappable ? Math.min(t.length, PDF_FIELD_CHAR_CAP) : t.length);
+    const cost = Math.max(100, len(f.name) + len(f.value));
     if (omittedFields > 0 || cost > budget) {
       omittedFields++;
       return false;
@@ -1164,7 +1199,7 @@ async function renderSourceMetadata(
   for (const f of sm.standard) {
     if (!fits(f)) continue;
     cursor = ensureSpace(cursor, 16, doc, accent, theme, organisation);
-    cursor = drawLabelValueRow(cursor, f.name, f.value, body, bold, ctx);
+    cursor = drawLabelValueRow(cursor, f.name, f.value, body, bold, ctx, mayCapField(f.name));
   }
   if (sm.extensions.length > 0 && omittedFields === 0) {
     cursor = ensureSpace(cursor, 30, doc, accent, theme, organisation);
@@ -1183,7 +1218,7 @@ async function renderSourceMetadata(
     for (const f of sm.extensions) {
       if (!fits(f)) continue;
       cursor = ensureSpace(cursor, 16, doc, accent, theme, organisation);
-      cursor = drawLabelValueRow(cursor, f.name, f.value, body, bold, ctx);
+      cursor = drawLabelValueRow(cursor, f.name, f.value, body, bold, ctx, mayCapField(f.name));
     }
   } else {
     omittedFields += sm.extensions.length;
@@ -1341,18 +1376,18 @@ async function renderAnnotations(
   if (groupSummary) cursor = drawBodyLine(cursor, groupSummary, body, ctx);
   for (const a of inputs.annotations) {
     cursor = ensureSpace(cursor, 36, doc, accent, theme, organisation);
-    // Title + type badge, wrapped and capped like any free-text field.
-    const title = capFieldText(a.title);
+    // Title + type badge, wrapped. The title and note are the user's own
+    // text, so they are never capped (as technical notes are not): a long
+    // note adds pages instead of losing text.
     cursor = drawWrappedField(
-      cursor, `${title.text}  [${a.type}]`,
+      cursor, `${oneLine(a.title)}  [${a.type}]`,
       { x: MARGIN, font: bold, size: BODY_FONT_SIZE, leading: BODY_FONT_SIZE + 2, color: theme.bodyText },
       body, ctx, { cap: false },
     );
-    if (title.omitted > 0) cursor = drawBodyLine(cursor, omissionMarker(title.omitted), body, ctx);
-    if (a.note) {
+    // A note that is only whitespace has nothing to print.
+    if (a.note && a.note.trim() !== '') {
       cursor = drawBodyLine(cursor, a.note, body, ctx, {
-        cap: true,
-        continued: { label: title.text, bold },
+        continued: { label: oneLine(a.title), bold },
       });
     }
     // Label the coordinate FRAME so a render-local fallback is never presented

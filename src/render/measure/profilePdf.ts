@@ -830,7 +830,9 @@ function drawGeneralNotes(p: PDFPage, f: Faces, notes: readonly string[]): void 
   rule(p, x0, FURNITURE_TOP - 17, x0 + w, FURNITURE_TOP - 17, RULE, 0.6);
   // Every wrapped line, in order, with the gap that follows the last line of
   // each note. When the box cannot hold them all, the last line that fits is
-  // given to a marker that counts the lines left out, so a cut is visible.
+  // given to a marker that counts the lines left out, so a cut is visible. The
+  // marker takes that line's slot, so one more note line is left out than the
+  // box could otherwise have held; the count includes it.
   const floor = FURNITURE_BOT + 2;
   const lines = notes.flatMap((note, i) => {
     const wrapped = wrapText(note, f.font, T_NOTE, w - 18);

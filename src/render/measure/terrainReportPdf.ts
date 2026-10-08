@@ -35,7 +35,15 @@ import {
 } from '../../terrain/export/terrainReportContent';
 import { NO_RESOLVED_VERTICAL_SCALE } from '../../terrain/export/exportProvenance';
 import { pdfInfoDate } from '../../pdfInfoDate';
-import { capFieldText, clipWithSuffix, omissionMarker, winAnsiSafe, wrapToWidth } from '../../winAnsiText';
+import {
+  capFieldText,
+  clipWithSuffix,
+  mayCapField,
+  omissionMarker,
+  pdfParagraphs,
+  winAnsiSafe,
+  wrapToWidth,
+} from '../../winAnsiText';
 
 const INK = rgb(0.12, 0.14, 0.18);
 const DIM = rgb(0.42, 0.46, 0.52);
@@ -136,11 +144,11 @@ export async function buildTerrainReportPdf(
   /**
    * Draw `s` wrapped to `maxW` from `x`, one line at a time, each line checking
    * its own room so a long value continues on the next page instead of running
-   * off this one. A field past PDF_FIELD_CHAR_CAP is cut there and followed by
-   * a marker line. Advances the shared cursor.
+   * off this one. Used for app-written text (warnings, fixes, definitions), which
+   * is never capped. Advances the shared cursor.
    */
   const flow = (s: string, x: number, maxW: number, sz: number, f: PDFFont, c: Color): void => {
-    for (const line of wrapField(s, f, sz, maxW)) {
+    for (const line of wrapField(s, f, sz, maxW, false)) {
       ensure(sz + 3);
       page.drawText(line, { x, y, size: sz, font: f, color: c });
       y -= sz + 3;
@@ -176,8 +184,11 @@ export async function buildTerrainReportPdf(
       // Both columns wrap inside their own width and advance together, line
       // by line; the row ends below the taller column. A row that breaks
       // across pages repeats its label as "(continued)" on the new page.
-      const labelLines = wrapField(row.label, bold, 9.5, labelW);
-      const valueLines = wrapField(row.value, font, 9.5, valueW);
+      // A row value may copy file-derived text (the scan name) and is capped,
+      // unless its label marks a CRS, datum, digest or unit.
+      const cap = mayCapField(row.label);
+      const labelLines = wrapField(row.label, bold, 9.5, labelW, cap);
+      const valueLines = wrapField(row.value, font, 9.5, valueW, cap);
       const startPage = page;
       const startY = y;
       for (let i = 0; i < Math.max(labelLines.length, valueLines.length); i++) {
@@ -318,13 +329,14 @@ type Color = ReturnType<typeof rgb>;
 
 /**
  * Word-wrap one field into lines no wider than `maxW` (a word wider than the
- * line is hard-broken), capped at PDF_FIELD_CHAR_CAP with a marker line when
- * cut. Mirrors the wrapper in spaceReportPdf.ts.
+ * line is hard-broken). With `cap`, a field past PDF_FIELD_CHAR_CAP is cut there
+ * with a marker line; app-written text and CRS, digest or unit rows pass false. Mirrors the wrapper in spaceReportPdf.ts.
  */
-function wrapField(s: string, font: PDFFont, sz: number, maxW: number): string[] {
-  const field = capFieldText(s);
+function wrapField(s: string, font: PDFFont, sz: number, maxW: number, cap: boolean): string[] {
+  const field = cap ? capFieldText(s) : { text: s, omitted: 0 };
   const measure = (t: string): number => font.widthOfTextAtSize(t, sz);
-  const lines = wrapToWidth(safe(field.text), measure, maxW);
+  // A line break starts a new line and a tab is a space (never '?').
+  const lines = pdfParagraphs(field.text).flatMap((p) => wrapToWidth(safe(p), measure, maxW));
   if (field.omitted > 0) lines.push(...wrapToWidth(safe(omissionMarker(field.omitted)), measure, maxW));
   return lines;
 }
