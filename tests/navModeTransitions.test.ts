@@ -27,7 +27,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as THREE from 'three/webgpu';
 
 import { NavController } from '../src/render/NavController';
-import type { NavMode } from '../src/render/NavController';
+import type { NavCallbacks, NavMode } from '../src/render/NavController';
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 type Handler = (event?: unknown) => void;
@@ -245,6 +245,15 @@ describe('navigation mode transitions', () => {
       nav.setMode('walk');
       clickAimedAtDock('orbit');
       expect(nav.mode).toBe('orbit');
+    });
+
+    it('marks a mode change made by a shortcut, and only that one', () => {
+      const seen: [NavMode, boolean | undefined][] = [];
+      (nav as unknown as { _cb: NavCallbacks })._cb.onModeChange = (m, byKey) => { seen.push([m, byKey]); };
+      nav.setMode('walk');
+      pressKey('Digit1');
+      pressKey('Digit3');
+      expect(seen).toEqual([['walk', false], ['orbit', true], ['fly', true]]);
     });
 
     it('still reaches orbit from a locked walk with the 1 key', () => {

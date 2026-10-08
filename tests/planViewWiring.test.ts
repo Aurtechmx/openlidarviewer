@@ -32,6 +32,7 @@ import {
   createPlanViewController,
   PLAN_VIEW_SETTLE_MS,
   type PlanViewChange,
+  type PlanViewController,
   type PlanViewViewport,
 } from '../src/render/camera/planViewController';
 
@@ -472,7 +473,7 @@ describe('the NavBar callbacks', () => {
     const v = new FakeViewer();
     const pending: (() => void)[] = [];
     const toasts: string[] = [];
-    const bar = { setPlanActive: vi.fn(), setOrthographicActive: vi.fn() };
+    const bar = { setPlanActive: vi.fn(), setOrthographicActive: vi.fn(), setMode: vi.fn() };
     const wiring = createNavBarWiring({
       getViewer: () => v,
       getNavBar: () => bar,
@@ -489,8 +490,31 @@ describe('the NavBar callbacks', () => {
       toggle: wiring.togglePlanView,
       notePreset: wiring.notePlanViewPreset,
       reset: wiring.resetPlanView,
+      navModeChanged: wiring.navModeChanged,
     };
   }
+
+  it('a mode shortcut before the move lands keeps the mode the user chose', async () => {
+    const { v, bar, settle, toggle, navModeChanged } = await wired();
+
+    await toggle();
+    v.setMode('walk');
+    navModeChanged('walk', true);
+    settle();
+
+    expect(bar.setMode).toHaveBeenCalledWith('walk');
+    expect(v.navMode).toBe('walk');
+  });
+
+  it('a mode change that was not a shortcut leaves the pending mode alone', async () => {
+    const { v, settle, toggle, navModeChanged } = await wired();
+
+    await toggle();
+    navModeChanged('orbit', false);
+    settle();
+
+    expect(v.navMode).toBe('pan');
+  });
 
   it('reaches the viewer and reports back to the bar', async () => {
     const { v, bar, toasts, settle, toggle } = await wired();
@@ -655,16 +679,137 @@ describe('a camera tween that outlasts the settle timer', () => {
 });
 
 describe('a camera tween that never reports an end', () => {
-  it('applies the mode after a bounded number of waits', async () => {
-    const { PLAN_VIEW_MAX_REWAITS } = await import('../src/render/camera/planViewController');
-    const v = new FakeViewport() as FakeViewport & { cameraTweening: boolean };
+  type TweenViewport = FakeViewport & {
+    cameraTweening: boolean;
+    cameraTweenOutcome: 'none' | 'running' | 'completed' | 'cancelled';
+  };
+  const stalled = (): TweenViewport => {
+    const v = new FakeViewport() as TweenViewport;
     v.cameraTweening = true;
-    const { plan, settle } = controller(v);
+    v.cameraTweenOutcome = 'running';
+    return v;
+  };
+
+  /** A controller whose waits are tracked, so a test can see a timer left behind. */
+  function tracked(v: FakeViewport) {
+    const pending = new Set<() => void>();
+    const changes: { active: boolean; reason: PlanViewChange }[] = [];
+    const statuses: string[] = [];
+    const plan = createPlanViewController({
+      viewport: () => v,
+      defer: (fn) => {
+        const run = (): void => { pending.delete(run); fn(); };
+        pending.add(run);
+        return () => { pending.delete(run); };
+      },
+      onChange: (active, reason) => { changes.push({ active, reason }); },
+      onStatus: (m) => { statuses.push(m); },
+    });
+    const settle = (): void => { for (const fn of [...pending]) fn(); };
+    return { plan, settle, pending, changes, statuses };
+  }
+
+  it('never changes the mode while the viewer still reports a tween', async () => {
+    const { PLAN_VIEW_MAX_REWAITS } = await import('../src/render/camera/planViewController');
+    const v = stalled();
+    const { plan, settle, pending } = tracked(v);
 
     plan.toggle();
-    for (let i = 0; i < PLAN_VIEW_MAX_REWAITS; i += 1) settle();
-    expect(v.navMode).toBe('orbit');
+    for (let i = 0; i <= PLAN_VIEW_MAX_REWAITS + 3; i += 1) settle();
+    expect(v.calls.filter((c) => c.startsWith('mode:'))).toEqual([]);
+    expect(pending.size).toBe(0);
+  });
+
+  it('retires Plan and says it can be tried again when the retries run out', async () => {
+    const { PLAN_VIEW_MAX_REWAITS, PLAN_VIEW_UNFINISHED_MESSAGE } = await import('../src/render/camera/planViewController');
+    const v = stalled();
+    const { plan, settle, changes, statuses } = tracked(v);
+
+    plan.toggle();
+    for (let i = 0; i <= PLAN_VIEW_MAX_REWAITS; i += 1) settle();
+    expect(plan.active).toBe(false);
+    expect(changes.at(-1)).toEqual({ active: false, reason: 'drift' });
+    expect(statuses).toEqual([PLAN_VIEW_UNFINISHED_MESSAGE]);
+  });
+
+  it('applies the mode exactly once when the tween completes', () => {
+    const v = stalled();
+    const { plan, settle, pending } = tracked(v);
+
+    plan.toggle();
     settle();
-    expect(v.navMode).toBe('pan');
+    v.cameraTweening = false;
+    v.cameraTweenOutcome = 'completed';
+    settle();
+    settle();
+    expect(v.calls.filter((c) => c.startsWith('mode:'))).toEqual(['mode:pan']);
+    expect(plan.active).toBe(true);
+    expect(pending.size).toBe(0);
+  });
+
+  it('drops the follow-up when the user cancels the tween by moving the camera', () => {
+    const v = stalled();
+    const { plan, settle, pending, statuses } = tracked(v);
+
+    plan.toggle();
+    v.cameraTweening = false;
+    v.cameraTweenOutcome = 'cancelled';
+    settle();
+    expect(v.calls.filter((c) => c.startsWith('mode:'))).toEqual([]);
+    expect(plan.active).toBe(false);
+    expect(statuses).toEqual([]);
+    expect(pending.size).toBe(0);
+  });
+
+  it('puts the projection back when entering Plan times out', async () => {
+    const { PLAN_VIEW_MAX_REWAITS } = await import('../src/render/camera/planViewController');
+    const v = stalled();
+    expect(v.orthographic).toBe(false);
+    const { plan, settle } = tracked(v);
+
+    plan.toggle();
+    expect(v.orthographic).toBe(true);
+    for (let i = 0; i <= PLAN_VIEW_MAX_REWAITS; i += 1) settle();
+    expect(v.orthographic).toBe(false);
+    expect(v.calls.filter((c) => c.startsWith('mode:'))).toEqual([]);
+  });
+
+  it('dispose leaves no timer and no later mode change', () => {
+    const v = stalled();
+    const { plan, settle, pending } = tracked(v);
+
+    plan.toggle();
+    plan.dispose();
+    expect(pending.size).toBe(0);
+    expect(plan.active).toBe(false);
+    v.cameraTweening = false;
+    v.cameraTweenOutcome = 'completed';
+    settle();
+    expect(v.calls.filter((c) => c.startsWith('mode:'))).toEqual([]);
+  });
+
+  it.each([
+    ['a second Plan toggle', (p: PlanViewController) => p.toggle()],
+    ['another standard view', (p: PlanViewController) => p.noteStandardView('front')],
+    ['a named preset', (p: PlanViewController) => p.noteCameraPreset('iso')],
+    ['a projection change', (p: PlanViewController) => p.noteOrthographic(false)],
+    ['manual navigation', (p: PlanViewController) => p.noteManualNavigation()],
+    ['the scan closing', (p: PlanViewController) => p.reset()],
+    ['dispose', (p: PlanViewController) => p.dispose()],
+  ])('%s cancels the pending follow-up and leaves no timer', (_label, act) => {
+    const v = stalled();
+    const { plan, settle, pending } = tracked(v);
+
+    plan.toggle();
+    expect(pending.size).toBe(1);
+    v.calls.length = 0;
+    act(plan);
+    // A second toggle schedules its own follow-up; only the first one's must be gone.
+    const owed = v.calls.includes('view:front') && _label === 'a second Plan toggle' ? 1 : 0;
+    expect(pending.size).toBe(owed);
+    v.cameraTweening = false;
+    v.cameraTweenOutcome = 'completed';
+    settle();
+    expect(v.calls.filter((c) => c === 'mode:pan')).toEqual([]);
   });
 });

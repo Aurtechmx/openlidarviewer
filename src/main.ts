@@ -2732,7 +2732,7 @@ function refreshClassLegend(classification?: ArrayLike<number>, sample?: { reado
 // to be deferred.
 void viewerLoaded.then(() => {
   viewer.setNavListeners({
-    onModeChange: (mode) => navBar.setMode(mode),
+    onModeChange: navWiring.navModeChanged,
     onPointerLockChange: (locked) => navBar.setLocked(locked),
     onToggleHelp: () => { if (!dialogOpen()) navBar.toggleHelp(); }, // H leaves the navigation help alone behind an open dialog
   });

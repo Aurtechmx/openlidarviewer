@@ -76,8 +76,8 @@ export interface CameraPose {
 
 /** Hooks the app wires up so the UI and viewer can react to navigation. */
 export interface NavCallbacks {
-  /** Fired whenever the active mode changes. */
-  onModeChange?: (mode: NavMode) => void;
+  /** Fired whenever the active mode changes; `byKey` when a mode shortcut changed it. */
+  onModeChange?: (mode: NavMode, byKey?: boolean) => void;
   /** Fired when the pointer-lock (mouse-look) state changes. */
   onPointerLockChange?: (locked: boolean) => void;
   /** `R` — reset / re-frame the view. */
@@ -93,6 +93,13 @@ export interface NavCallbacks {
    */
   isOrthographic?: () => boolean;
 }
+
+/**
+ * How the most recent camera tween ended: it reached its pose ('completed'),
+ * something stopped it first ('cancelled': a mode change or user input), or it
+ * is still advancing ('running'). 'none' before any tween.
+ */
+export type TweenOutcome = 'none' | 'running' | 'completed' | 'cancelled';
 
 interface Tween {
   fromPos: THREE.Vector3;
@@ -186,6 +193,8 @@ export class NavController {
 
   // ── Camera tween ───────────────────────────────────────────────────────
   private _tween: Tween | null = null;
+  /** How the most recent tween ended, or 'running' while it advances. */
+  private _tweenOutcome: TweenOutcome = 'none';
   /** OrbitControls damping as tuned for a 60 Hz frame; captured on first update. */
   private _dampingBase: number | null = null;
 
@@ -339,6 +348,17 @@ export class NavController {
     return this._tween !== null;
   }
 
+  /** How the most recent tween ended; see {@link TweenOutcome}. */
+  get tweenOutcome(): TweenOutcome {
+    return this._tweenOutcome;
+  }
+
+  /** Stop an in-flight tween short of its pose and record that it was cancelled. */
+  private _cancelTween(): void {
+    if (this._tween) this._tweenOutcome = 'cancelled';
+    this._tween = null;
+  }
+
   /**
    * Set the world "up" axis. LAS/LAZ surveys are Z-up; phone scans are Y-up —
    * passing the right axis makes walk/fly and the horizon behave correctly.
@@ -428,14 +448,14 @@ export class NavController {
   }
 
   /** Switch navigation mode, syncing camera state across the transition. */
-  setMode(mode: NavMode): void {
+  setMode(mode: NavMode, byKey = false): void {
     if (mode === this._mode) return;
     // Pan mode is unreachable when the `?handPan=off` dev flag disabled the
     // hand tool — including programmatic paths (saved sessions, embeds).
     if (mode === 'pan' && !this._handPan) return;
     const previous = this._mode;
     this._mode = mode;
-    this._tween = null;
+    this._cancelTween();
     // Clear all held input across the transition — a movement key held
     // during a mode switch must not carry over as phantom input; an
     // unfinished hand-tool drag must cancel safely, never carry over.
@@ -470,7 +490,7 @@ export class NavController {
 
     this._applyDragInputMap();
     this._applyIdleCursor();
-    this._cb.onModeChange?.(mode);
+    this._cb.onModeChange?.(mode, byKey);
   }
 
   /** Whether the hand tool is available (`?handPan` dev flag, default on). */
@@ -528,6 +548,7 @@ export class NavController {
       elapsed: 0,
       duration: Math.max(0.0001, d),
     };
+    this._tweenOutcome = 'running';
   }
 
   /**
@@ -858,6 +879,7 @@ export class NavController {
 
     if (tw.elapsed >= tw.duration) {
       this._tween = null;
+      this._tweenOutcome = 'completed';
       if (this._mode === 'orbit' || this._mode === 'pan') {
         this._controls.target.copy(tw.toTarget);
         this._controls.enabled = true;
@@ -940,16 +962,16 @@ export class NavController {
     // group and G toggles the hand tool from anywhere; both are inert when
     // `?handPan=off` disabled the tool (panModeForKey returns null then).
     switch (e.code) {
-      case 'Digit1': this.setMode('orbit'); return;
-      case 'Digit2': this.setMode('walk'); return;
-      case 'Digit3': this.setMode('fly'); return;
+      case 'Digit1': this.setMode('orbit', true); return;
+      case 'Digit2': this.setMode('walk', true); return;
+      case 'Digit3': this.setMode('fly', true); return;
       case 'KeyR': this._cb.onReset?.(); return;
       case 'KeyF': this._cb.onFocusCenter?.(); return;
       case 'KeyH': this._cb.onToggleHelp?.(); return;
       case 'Digit4':
       case 'KeyG': {
         const next = panModeForKey(e.code, this._mode, this._handPan);
-        if (next) this.setMode(next);
+        if (next) this.setMode(next, true);
         return;
       }
     }
@@ -957,14 +979,14 @@ export class NavController {
     if (this._mode === 'orbit' || this._mode === 'pan') {
       // Arrow keys orbit the camera; WASD and the rest stay inert in orbit.
       if (this._setOrbitKey(e.code, true)) {
-        this._tween = null; // a keyboard orbit cancels an in-progress tween
+        this._cancelTween(); // a keyboard orbit cancels an in-progress tween
         e.preventDefault();
       }
       return;
     }
 
     if (this._setMovementKey(e.code, true)) {
-      this._tween = null; // a movement key cancels an in-progress tween
+      this._cancelTween(); // a movement key cancels an in-progress tween
       e.preventDefault();
     }
   }
@@ -1226,7 +1248,7 @@ export class NavController {
     }
     this._canvas.style.cursor = 'grabbing';
     this._ownsCursor = true;
-    this._tween = null; // grabbing the scene cancels an in-flight tween
+    this._cancelTween(); // grabbing the scene cancels an in-flight tween
     this._cancelMotionExcept(null);
   }
 
@@ -1347,7 +1369,7 @@ export class NavController {
     } catch {
       // Pointer already gone (device quirk) — the drag ends on the natural up.
     }
-    this._tween = null; // a manual orbit cancels an in-flight tween
+    this._cancelTween(); // a manual orbit cancels an in-flight tween
     this._cancelMotionExcept('orbit');
   }
 

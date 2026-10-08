@@ -111,7 +111,7 @@ import type { StockpileBandInputs } from './measure/stockpileBandInputs';
 export type { StockpileBandInputs } from './measure/stockpileBandInputs';
 import { computeLassoVolume as computeLassoVolumeWalk, copyPlacedPositions, lassoVisibilityFilters, makeLassoProjector, sourcePositions, streamingLassoParts } from './measure/lassoVolumeCompute';
 import type { LassoSelectionBasis, LassoSelectionBasisReport } from './measure/lassoVolumeCompute';
-import { cameraPresetPose, standardViewPose, openingFit } from './camera/cameraPresets';
+import { cameraPresetPose, standardViewPose, openingFit, presetInputForBounds, type PresetInput } from './camera/cameraPresets';
 import type { CameraPresetName, StandardView } from './camera/cameraPresets';
 import { followPerspective, LensShift } from './camera/orthoCamera';
 import { projectionFromLegacyFov } from './camera/orthoProjection';
@@ -375,7 +375,7 @@ interface StreamingPickEntry {
 
 /** UI-facing navigation events the app can subscribe to. */
 export interface NavListeners {
-  onModeChange?: (mode: NavMode) => void;
+  onModeChange?: (mode: NavMode, byKey?: boolean) => void;
   onPointerLockChange?: (locked: boolean) => void;
   onToggleHelp?: () => void;
 }
@@ -1084,7 +1084,7 @@ export class Viewer {
 
     // ── Navigation controller ─────────────────────────────────────────────
     this._nav = new NavController(this._camera, canvas, this._controls, {
-      onModeChange: (m) => this._navListeners.onModeChange?.(m),
+      onModeChange: (m, byKey) => this._navListeners.onModeChange?.(m, byKey),
       onPointerLockChange: (l) => this._navListeners.onPointerLockChange?.(l),
       onToggleHelp: () => this._navListeners.onToggleHelp?.(),
       onReset: () => this.frameAll(),
@@ -3455,6 +3455,7 @@ export class Viewer {
   }
 
   get cameraTweening(): boolean { return this._nav.isTweening; }
+  get cameraTweenOutcome(): NavController['tweenOutcome'] { return this._nav.tweenOutcome; }
 
   /**
    * Whether the v0.5.5 hand tool (pan mode) is available — false when the
@@ -4075,23 +4076,24 @@ export class Viewer {
    * state if it cares.
    */
   setCameraPreset(name: CameraPresetName): boolean {
-    const sphere = this._visibleBoundingSphere();
-    if (!sphere) return false;
+    const input = this._presetInput();
+    if (!input) return false;
     this._setLensShift(null);
-    const horiz = this._horizontalAxis();
-    const pose = cameraPresetPose(name, {
-      center: sphere.center,
-      radius: sphere.radius,
-      worldUp: this._worldUp,
-      horizontal: horiz,
-      fovDeg: this._camera.fov,
-    });
+    const pose = cameraPresetPose(name, input);
     const pos = new THREE.Vector3(pose.position.x, pose.position.y, pose.position.z);
     const target = new THREE.Vector3(pose.target.x, pose.target.y, pose.target.z);
     // Match frameAll's cinematic 0.9 s tween — these presets are
     // discoverability surfaces, not micro-adjustments.
     this._nav.tweenTo(pos, target, 0.9);
     return true;
+  }
+
+  /** What the preset and standard-view fits read: the visible bounds, up axis, lens and aspect. */
+  private _presetInput(): PresetInput | null {
+    const box = this._visibleBoundingBox();
+    if (!box) return null;
+    const lens = { fovDeg: this._camera.fov, aspect: this._camera.aspect };
+    return presetInputForBounds(box, this._worldUp, this._horizontalAxis(), lens);
   }
 
   /** Whether the true orthographic (parallel) projection is active. */
@@ -4120,25 +4122,18 @@ export class Viewer {
   }
 
   setStandardView(view: StandardView): boolean {
-    const sphere = this._visibleBoundingSphere();
-    if (!sphere) return false;
+    const input = this._presetInput();
+    if (!input) return false;
     this._setLensShift(null);
     // A standard view is an orbit pose — make sure we're in orbit mode so the
     // controls own the camera (walk/fly would fight the snap).
     this._nav.setMode('orbit');
-    const horiz = this._horizontalAxis();
-    const pose = standardViewPose(view, {
-      center: sphere.center,
-      radius: sphere.radius,
-      worldUp: this._worldUp,
-      horizontal: horiz,
-      fovDeg: this._camera.fov,
-    });
+    const pose = standardViewPose(view, input);
     const target = new THREE.Vector3(pose.target.x, pose.target.y, pose.target.z);
     const pos = new THREE.Vector3(pose.position.x, pose.position.y, pose.position.z);
     // Keep depth range + dolly bounds consistent with the (possibly far)
     // framing distance before the camera arrives there.
-    this._applyProjectionRanges(sphere.radius, pos.distanceTo(target));
+    this._applyProjectionRanges(input.radius, pos.distanceTo(target));
     this._nav.tweenTo(pos, target, 0.8);
     return true;
   }

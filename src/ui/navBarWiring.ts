@@ -21,6 +21,7 @@
 import type { NavBar, NavBarCallbacks } from './NavBar';
 import type { CameraPresetName } from '../render/camera/cameraPresets';
 import type { Viewer } from '../render/Viewer';
+import type { NavMode } from '../render/NavController';
 import type { PlanViewController } from '../render/camera/planViewController';
 import { loadPlanViewController } from '../lazyChunks';
 import { retryableOnce } from '../app/lazySurfaceLoad';
@@ -32,7 +33,7 @@ export interface NavBarWiringDeps {
   readonly getNavBar: () => NavBar | null;
   readonly toast: (message: string) => void;
   /** Passed through to the plan controller; the tests drive the wait by hand. */
-  readonly defer?: (fn: () => void) => void;
+  readonly defer?: (fn: () => void) => (() => void) | void;
 }
 
 export interface NavBarWiring {
@@ -49,6 +50,11 @@ export interface NavBarWiring {
    * mode stops claiming a scene the user has aimed away from.
    */
   readonly notePlanViewPreset: (name: CameraPresetName) => void;
+  /**
+   * The viewer's navigation mode changed. The bar follows it, and a change made
+   * by a mode shortcut drops Plan's pending mode change.
+   */
+  readonly navModeChanged: (mode: NavMode, byKey?: boolean) => void;
   /** Show or hide the Navigation panel, as its button beside the mode triangle does. */
   readonly toggleNavigationPanel: () => void;
 }
@@ -66,6 +72,7 @@ export function createNavBarWiring(deps: NavBarWiringDeps): NavBarWiring {
       plan = createPlanViewController({
         viewport: () => deps.getViewer(),
         defer: deps.defer,
+        onStatus: deps.toast,
         onChange: (active, reason) => {
           const bar = deps.getNavBar();
           bar?.setPlanActive(active);
@@ -91,7 +98,10 @@ export function createNavBarWiring(deps: NavBarWiringDeps): NavBarWiring {
   };
 
   const callbacks: NavBarCallbacks = {
-    onMode: (mode) => deps.getViewer()?.setMode(mode),
+    onMode: (mode) => {
+      deps.getViewer()?.setMode(mode);
+      plan?.noteManualNavigation();
+    },
     onSpeed: (multiplier) => deps.getViewer()?.setNavSpeed(multiplier),
     onReset: () => deps.getViewer()?.frameAll(),
     onCameraPreset: (name) => {
@@ -119,6 +129,10 @@ export function createNavBarWiring(deps: NavBarWiringDeps): NavBarWiring {
     togglePlanView,
     resetPlanView: () => plan?.reset(),
     notePlanViewPreset: (name) => plan?.noteCameraPreset(name),
+    navModeChanged: (mode, byKey) => {
+      deps.getNavBar()?.setMode(mode);
+      if (byKey) plan?.noteManualNavigation();
+    },
     toggleNavigationPanel: () => deps.getNavBar()?.toggleNavigationPanel(),
   };
 }
