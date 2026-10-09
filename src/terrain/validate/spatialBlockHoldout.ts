@@ -61,6 +61,9 @@ export interface SurfaceModel {
   predict(x: number, y: number): number | null;
 }
 
+export type HoldoutCiStatus = 'computed' | 'unavailable';
+export type HoldoutCiUnavailableReason = 'one-scored-block' | 'bootstrap-disabled' | 'no-residuals';
+
 export interface SpatialBlockOptions {
   /** Block edge length, in the same units as x/y. Must be > 0. */
   readonly blockSize: number;
@@ -105,10 +108,18 @@ export interface SpatialBlockResult {
   readonly blocks: number;
   /** Folds actually run. */
   readonly folds: number;
-  /** Lower bound of the bootstrap CI on RMSE. */
-  readonly ciLow: number;
-  /** Upper bound of the bootstrap CI on RMSE. */
-  readonly ciHigh: number;
+  /** Lower bound of the bootstrap CI on RMSE; null when the interval is unavailable. */
+  readonly ciLow: number | null;
+  /** Upper bound of the bootstrap CI on RMSE; null when the interval is unavailable. */
+  readonly ciHigh: number | null;
+  /** Whether an interval was actually computed. */
+  readonly ciStatus: HoldoutCiStatus;
+  /** Why no interval was computed; null when `ciStatus` is 'computed'. */
+  readonly ciUnavailableReason: HoldoutCiUnavailableReason | null;
+  /** Blocks that contributed at least one scored residual. */
+  readonly scoredBlocks: number;
+  /** Share of held-out points with no covered prediction, 0..1 (0 when none were held out). */
+  readonly uncoveredFraction: number;
   /** The CI level used (echoed for the report). */
   readonly ciLevel: number;
   /**
@@ -277,9 +288,12 @@ export function spatialBlockHoldout(
   // report an interval that is too tight; the block is the exchangeable unit.
   const B = opts.bootstrapN ?? 1000;
   const ciLevel = opts.ciLevel ?? 0.95;
-  let ciLow = rmse;
-  let ciHigh = rmse;
-  if (B > 0 && residualsByBlock.length > 1) {
+  let ciLow: number | null = null;
+  let ciHigh: number | null = null;
+  let ciUnavailableReason: HoldoutCiUnavailableReason | null = null;
+  if (B <= 0) ciUnavailableReason = 'bootstrap-disabled';
+  else if (residualsByBlock.length < 2) ciUnavailableReason = 'one-scored-block';
+  else {
     const nb = residualsByBlock.length;
     const boot = new Array<number>(B);
     for (let b = 0; b < B; b++) {
@@ -311,6 +325,10 @@ export function spatialBlockHoldout(
     folds,
     ciLow,
     ciHigh,
+    ciStatus: ciUnavailableReason === null ? 'computed' : 'unavailable',
+    ciUnavailableReason,
+    scoredBlocks: residualsByBlock.length,
+    uncoveredFraction: uncovered / (residuals.length + uncovered),
     ciLevel,
     warnings,
   };
@@ -331,8 +349,12 @@ function degenerate(
     uncovered,
     blocks: 0,
     folds: 0,
-    ciLow: Number.NaN,
-    ciHigh: Number.NaN,
+    ciLow: null,
+    ciHigh: null,
+    ciStatus: 'unavailable',
+    ciUnavailableReason: 'no-residuals',
+    scoredBlocks: 0,
+    uncoveredFraction: uncovered > 0 ? 1 : 0,
     ciLevel: opts.ciLevel ?? 0.95,
     warnings: [...warnings, reason],
   };

@@ -107,3 +107,28 @@ describe('the blocked hold-out is not described as the random one plus a gap', (
     expect(blocked).toMatch(/neither is guaranteed the larger/);
   });
 });
+
+describe('the blocked RMSE interval', () => {
+  const render = async (ci: object): Promise<string> => {
+    const { AnalysePanel } = await import('../src/ui/AnalysePanel');
+    const panel = new AnalysePanel({});
+    const res = analyseContours(hillScene(), {
+      ...BASE, horizontalUnitToMetres: 1, verticalUnitToMetres: 1,
+    });
+    panel.update({ ...res, blockedAccuracy: { ...res.blockedAccuracy!, rmse: 2, n: 20, ...ci } });
+    return (panel.element as unknown as FakeEl).textContent;
+  };
+
+  it('says the interval is unavailable and keeps the point RMSE', async () => {
+    const text = await render({
+      ciLow: null, ciHigh: null, ciStatus: 'unavailable', ciUnavailableReason: 'one-scored-block',
+    });
+    expect(text).toMatch(/Blocked RMSE: 2\.00 m \(Confidence interval unavailable: only one block was scored\)/);
+    expect(text).not.toMatch(/Blocked RMSE:[^|]*(95% CI|\[2|2\.00\s*[–-]\s*2\.00)/);
+  });
+
+  it('still shows a computed zero-width interval', async () => {
+    const text = await render({ ciLow: 2, ciHigh: 2, ciStatus: 'computed', ciUnavailableReason: null });
+    expect(text).toMatch(/Blocked RMSE: 2\.00 m \(95% CI 2\.00–2\.00\)/);
+  });
+});

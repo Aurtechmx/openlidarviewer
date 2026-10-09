@@ -1205,8 +1205,8 @@ export function computeTerrainCore(
         ...raw,
         rmse: raw.rmse * vMetresB,
         mae: raw.mae * vMetresB,
-        ciLow: raw.ciLow * vMetresB,
-        ciHigh: raw.ciHigh * vMetresB,
+        ciLow: raw.ciLow === null ? null : raw.ciLow * vMetresB,
+        ciHigh: raw.ciHigh === null ? null : raw.ciHigh * vMetresB,
       };
     }
   }

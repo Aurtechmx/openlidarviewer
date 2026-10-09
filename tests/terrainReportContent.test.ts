@@ -709,6 +709,26 @@ describe('buildTerrainReportContent — every row names its basis', () => {
     expect(tv).toMatch(/holding classification treatment fixed/);
   });
 
+  it('states an unavailable blocked-RMSE interval instead of printing endpoints', () => {
+    const base = readyResult();
+    const mk = (extra: object) => ({
+      ...base,
+      blockedAccuracy: {
+        n: 20, rmse: 2, mae: 2, classificationScope: 'whole-cloud',
+        ciLevel: 0.95, ...extra,
+      },
+    }) as unknown as AnalyseContoursResult;
+    const off = rowValue(buildTerrainReportContent(mk({
+      ciLow: null, ciHigh: null, ciStatus: 'unavailable', ciUnavailableReason: 'one-scored-block',
+    }), OPTS), 'Quality Metrics', 'Blocked RMSE (spatial CV)') ?? '';
+    expect(off).toMatch(/^2\.00 m \(Confidence interval unavailable: only one block was scored\)/);
+    expect(off).not.toMatch(/2\.00\s*-\s*2\.00|95% CI/);
+    const on = rowValue(buildTerrainReportContent(mk({
+      ciLow: 2, ciHigh: 2, ciStatus: 'computed', ciUnavailableReason: null,
+    }), OPTS), 'Quality Metrics', 'Blocked RMSE (spatial CV)') ?? '';
+    expect(on).toMatch(/95% CI 2\.00 m?-2\.00/);
+  });
+
   it('#5 names the two density bases apart', () => {
     const intelligence: DatasetIntelligence = {
       density: { bucket: 'very-dense', label: 'Very Dense', basis: 'areal' },
