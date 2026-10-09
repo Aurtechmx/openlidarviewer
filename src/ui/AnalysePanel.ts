@@ -27,6 +27,7 @@
  * Mounted in `main.ts` next to the Measurements and Annotations panels.
  */
 
+import { blockedCiClause } from '../terrain/validate/holdoutCiText';
 import type { LocalToLonLatSourceZ } from '../export/lonLatMapper';
 import { terrainExportDigests, type TerrainExportDigests } from '../export/terrainExportDigests';
 import { sourceInterpretationOf, type SourceInterpretationRecord } from '../science/sourceInterpretation';
@@ -2182,7 +2183,6 @@ export class AnalysePanel {
         'Of the held-out ground points on measured cells, the share whose height came within the tolerance, with a Wilson 95% confidence interval. Interpolated (void-filled) cells are model support, not a measured reliability.',
       ));
     }
-
     // Spatially-blocked hold-out RMSE. NOT a like-for-like contrast with the
     // random hold-out above: that one re-runs ground classification on the
     // training points only, while this one scores against the whole-cloud
@@ -2193,7 +2193,7 @@ export class AnalysePanel {
       this._validationRow.append(this._hint(
         el('div', {
           className: 'olv-analyse-blocked',
-          text: `Blocked RMSE: ${fmtR(blocked.rmse)} ${zUnit} (95% CI ${fmtR(blocked.ciLow)}–${fmtR(blocked.ciHigh)})`,
+          text: `Blocked RMSE: ${fmtR(blocked.rmse)} ${zUnit} (${blockedCiClause(blocked, fmtR, '–')})`,
         }),
         blockedRmseHint(v.classificationScope, blocked.classificationScope),
       ));

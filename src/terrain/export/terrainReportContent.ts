@@ -42,6 +42,7 @@
  * so the two can never drift.
  */
 
+import { blockedCiClause } from '../validate/holdoutCiText';
 import { BLOCKED_CV_PARAMS, type AnalyseContoursResult } from '../contour/analyseContours';
 import { terrainAssessment } from '../contour/terrainAssessment';
 import { readinessLine } from '../quality/readinessEngine';
@@ -507,7 +508,7 @@ export function buildTerrainReportContent(
   const blk = result.blockedAccuracy;
   const hasBlk = blk != null && blk.n > 0 && Number.isFinite(blk.rmse);
   const blockedValue = hasBlk
-    ? `${fmtZ(blk.rmse)} (95% CI ${fmtZ(blk.ciLow)}-${fmtZ(blk.ciHigh)})`
+    ? `${fmtZ(blk.rmse)} (${blockedCiClause(blk, fmtZ)})`
     : DASH;
   // One line that says what each RMSE tests, so the two figures are never
   // read as competing estimates of the same thing. Parameters are the ones
