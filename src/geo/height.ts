@@ -357,12 +357,11 @@ export const HEIGHT_INCLUDES_NOISE_SUFFIX = ' (includes noise classes 7 and 18)'
 export function hasNoiseClassPoints(
   classification: ArrayLike<number>,
   count: number,
-  skip?: (i: number) => boolean,
 ): boolean {
   const n = Math.min(count, classification.length);
   for (let i = 0; i < n; i++) {
     const c = classification[i] & 0xff;
-    if ((c === 7 || c === 18) && !(skip && skip(i))) return true;
+    if (c === 7 || c === 18) return true;
   }
   return false;
 }

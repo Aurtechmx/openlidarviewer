@@ -444,7 +444,7 @@ export function formatLinear(value: number, unit: LinearUnit): string {
 }
 
 /**
- * Format a YYYY-MM-DD HH:MM UTC timestamp, with the zone named — the footer
+ * Format a YYYY-MM-DD HH:MM UTC timestamp, with the zone named. The footer
  * of every scan report. Pure function for testability.
  */
 export function formatTimestamp(d: Date): string {

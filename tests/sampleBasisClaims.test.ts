@@ -12,7 +12,7 @@ import {
 } from '../src/terrain/export/analysedBasis';
 import { buildExportProvenance, provenanceLines } from '../src/terrain/export/exportProvenance';
 import type { AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
-import { extentRows } from '../src/report/ReportMetadataSection';
+import { extentRows, buildDatasetSummary } from '../src/report/ReportMetadataSection';
 import { hasNoiseClassPoints, HEIGHT_INCLUDES_NOISE_SUFFIX } from '../src/geo/height';
 import { formatTimestamp } from '../src/export';
 
@@ -77,11 +77,43 @@ describe('Height row noise qualifier', () => {
     expect(plain.find((r) => r.label === 'Height')!.value).toBe('43.8 m');
   });
 
-  it('detects noise classes 7 and 18 and honours the skip predicate', () => {
+  it('detects noise classes 7 and 18', () => {
     expect(hasNoiseClassPoints(new Uint8Array([2, 7, 2]), 3)).toBe(true);
     expect(hasNoiseClassPoints(new Uint8Array([2, 18, 2]), 3)).toBe(true);
     expect(hasNoiseClassPoints(new Uint8Array([2, 2, 6]), 3)).toBe(false);
-    expect(hasNoiseClassPoints(new Uint8Array([2, 7, 2]), 3, (i) => i === 1)).toBe(false);
+  });
+});
+
+describe('dataset summary Height row', () => {
+  const base = {
+    fileName: 'tile.laz', format: 'LAZ', sourcePointCount: 1000,
+    width: 100, depth: 100, height: 43.8, density: 4,
+    hasRgb: false, hasIntensity: true, hasClassification: true,
+    extentUnitStatus: 'confirmed', unitName: 'metre',
+  };
+  const heightOf = (extra: object): string =>
+    buildDatasetSummary({ ...base, ...extra } as never).find((r) => r.label === 'Height')?.value ?? '';
+  it('carries the noise qualifier only when the metadata says noise is present', () => {
+    expect(heightOf({ heightIncludesNoise: true })).toBe(`43.8 m${HEIGHT_INCLUDES_NOISE_SUFFIX}`);
+    expect(heightOf({})).toBe('43.8 m');
+  });
+});
+
+describe('a full read with Withheld points is not a sample', () => {
+  const full = { coverage: 'full', pointCount: 1000 } as const;
+  it('accounts for Withheld exclusions', () => {
+    const b = analysedBasisOf(full, 990, 1000, undefined, undefined, 10);
+    expect(isSampledBasis(b)).toBe(false);
+    const p = buildExportProvenance(result('full'), { ...OPTS, analysedBasis: b });
+    expect(p.accuracy?.usgsDensityReferenceFloor).toBe('QL2');
+    expect(p.accuracy?.accuracyOnSample).toBeUndefined();
+  });
+  it('treats unexplained missing points as a sample', () => {
+    const b = analysedBasisOf(full, 990, 1000);
+    expect(isSampledBasis(b)).toBe(true);
+    expect(isSampledBasis(analysedBasisOf(full, 990, 1000, undefined, undefined, 5))).toBe(true);
+    const p = buildExportProvenance(result('full'), { ...OPTS, analysedBasis: b });
+    expect(p.accuracy?.usgsDensityReferenceFloor).toBe('none');
   });
 });
 

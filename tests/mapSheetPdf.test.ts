@@ -480,6 +480,13 @@ describe('buildMapSheetPdf — the density reference names its basis', () => {
     expect(text).not.toContain('Survey accuracy');
   });
 
+  it('retitles the block when the readiness is Preview, without claiming a sample', async () => {
+    const prov = { ...PROV, exportReadiness: 'Preview', accuracy: { rmseZM: 1, nvaM: 1.96, vvaM: 2.1, usgsDensityReferenceFloor: 'QL3' } } as typeof PROV;
+    const text = drawn(await buildMapSheetPdf({ model, labels: [], provenance: prov }));
+    expect(text).toContain('Hold-out accuracy (preview)');
+    expect(text).not.toContain('Figures are from a sample of the points');
+  });
+
   it('keeps the density reference on a full-cloud basis', async () => {
     const prov = { ...PROV, accuracy: { rmseZM: 1, nvaM: 1.96, vvaM: 2.1, usgsDensityReferenceFloor: 'QL3' } } as typeof PROV;
     const text = drawn(await buildMapSheetPdf({ model, labels: [], provenance: { ...prov, exportReadiness: 'Ready' } as typeof PROV }));
