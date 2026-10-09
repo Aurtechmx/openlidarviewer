@@ -176,7 +176,7 @@ describe('LayerGroupsPanel — visibility is written, never stored', () => {
     h.addMember(0, 'cloud_1');
     h.addMember(0, 'cloud_2');
     h.setVisible.mockClear();
-    h.groupBox(0).querySelector('.olv-group-head')?.children[1].dispatchEvent({ type: 'change' });
+    h.groupBox(0).querySelector('.olv-group-head')?.children[1].children[0].dispatchEvent({ type: 'change' });
     expect(h.setVisible.mock.calls).toEqual([
       ['cloud_1', false],
       ['cloud_2', false],
@@ -192,7 +192,7 @@ describe('LayerGroupsPanel — visibility is written, never stored', () => {
     h.addMember(0, 'cloud_2');
     h.visible.set('cloud_1', false);
     h.panel.syncHeaders();
-    const box = h.groupBox(0).querySelector('.olv-group-head')?.children[1];
+    const box = h.groupBox(0).querySelector('.olv-group-head')?.children[1].children[0];
     expect(box?.indeterminate).toBe(true);
     expect(box?.checked).toBe(false);
     box?.dispatchEvent({ type: 'change' });
@@ -209,7 +209,7 @@ describe('LayerGroupsPanel — visibility is written, never stored', () => {
     h.addMember(0, 'cloud_2');
     h.visible.set('cloud_2', false);
     h.panel.syncHeaders();
-    expect(h.groupBox(0).querySelector('.olv-group-head')?.children[1].indeterminate).toBe(true);
+    expect(h.groupBox(0).querySelector('.olv-group-head')?.children[1].children[0].indeterminate).toBe(true);
   });
 
   it('treats an empty group as empty, not as hidden', () => {
@@ -218,11 +218,11 @@ describe('LayerGroupsPanel — visibility is written, never stored', () => {
     const head = h.heads()[0];
     // Nothing is hidden, so the control is disabled rather than showing an
     // unchecked box that invites a click which would do nothing.
-    expect(head.children[1].disabled).toBe(true);
+    expect(head.children[1].children[0].disabled).toBe(true);
     expect(head.querySelector('.olv-group-solo')?.disabled).toBe(true);
     expect(head.className.split(/\s+/)).toContain('olv-group-empty');
     h.setVisible.mockClear();
-    head.children[1].dispatchEvent({ type: 'change' });
+    head.children[1].children[0].dispatchEvent({ type: 'change' });
     head.querySelector('.olv-group-solo')?.dispatchEvent({ type: 'click' });
     expect(h.setVisible).not.toHaveBeenCalled();
   });
