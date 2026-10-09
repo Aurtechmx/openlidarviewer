@@ -5444,6 +5444,49 @@ body.olv-theme-light .olv-busy-scan--emblem {
 .olv-data-row-go {
   color: var(--text-dim);
 }
+.olv-data-class-section[hidden] { display: none; }
+.olv-data-class-toggle,
+.olv-data-class-open {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: 500 var(--text-xs) / 1.3 var(--font);
+  text-align: left;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.olv-data-class-toggle:hover,
+.olv-data-class-open:hover { background: var(--hairline); }
+.olv-data-class-toggle:focus-visible,
+.olv-data-class-open:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.olv-data-class-open { color: var(--accent); }
+.olv-data-class-chevron { transition: transform 0.15s ease; }
+.is-collapsed .olv-data-class-chevron { transform: rotate(-90deg); }
+@media (prefers-reduced-motion: reduce) { .olv-data-class-chevron { transition: none; } }
+.olv-data-class-body[hidden] { display: none; }
+.olv-data-class-list { list-style: none; margin: 0; padding: 0 var(--space-md); }
+.olv-data-class-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: 28px;
+  font: 500 var(--text-xs) / 1.3 var(--font);
+  min-width: 0;
+}
+.olv-data-class-swatch { flex: none; width: 10px; height: 10px; border-radius: 2px; }
+.olv-data-class-code { flex: none; min-width: 1.5em; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.olv-data-class-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.olv-data-class-share { flex: none; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+@media (max-width: 768px), (pointer: coarse) {
+  .olv-data-class-toggle,
+  .olv-data-class-open { min-height: 44px; }
+}
 .olv-data-empty {
   padding: var(--space-md);
   color: var(--text-dim);
@@ -12228,7 +12271,9 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
     padding-left: 0;
     padding-right: 0;
   }
-  .olv-left-panels .olv-data-row {
+  .olv-left-panels .olv-data-row,
+  .olv-left-panels .olv-data-class-toggle,
+  .olv-left-panels .olv-data-class-open {
     padding-left: 0;
     padding-right: 0;
   }
