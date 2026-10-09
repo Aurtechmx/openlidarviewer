@@ -161,3 +161,14 @@ describe('frozen rule defaults', () => {
     expect(own.supported).toBe(true);
   });
 });
+
+describe('no usable windows', () => {
+  it('reports every candidate untestable instead of scoring NaN', () => {
+    const { nx, ny } = history(30, 60, null, 0.01, 0, 9);
+    const pack = packWindows(nx, ny, 1000);
+    expect(pack.counts.length).toBe(0);
+    const res = decodeHistories(pack, 0.01, [{ label: 'any', step: 0.0137, jacobian: rot(0) }]);
+    expect(res[0].status).toBe('untestable');
+    expect(res[0].supported).toBe(false);
+  });
+});

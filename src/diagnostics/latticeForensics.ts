@@ -44,6 +44,7 @@ export interface LatticePeak {
 }
 
 export interface CandidateHistory {
+  /** System name. Candidates sharing a label are steps of one system for the coarsest-step rule. */
   readonly label: string;
   /** Ancestral storage step in ancestral units (m, ft, deg ...). */
   readonly step: number;
@@ -233,6 +234,13 @@ export function decodeHistories(
   pack: WindowPack, currentStep: number, candidates: readonly CandidateHistory[], opts: DecodeOptions = {},
 ): CandidateResult[] {
   const kMin = opts.kMin ?? 0.05, aMin = opts.aMin ?? 0.01, alpha = opts.alpha ?? 0.01;
+  if (pack.counts.length === 0) {
+    // No window holds enough points: every candidate is untestable, nothing is scored.
+    return candidates.map((c) => ({
+      label: c.label, step: c.step, status: 'untestable' as const, peaks: [], scores: [],
+      pJoint: 1, pBonferroni: 1, amplitudeRatio: Number.NaN, supported: false, mostSpecific: false,
+    }));
+  }
   const nul = nullScores(pack, opts.nNull ?? 2000, kMin);
   const partial = candidates.map((c) => {
     const ratio = c.step / currentStep;

@@ -624,14 +624,13 @@ the horizontal decision rule and the phase test for earlier storage grids
 in LAS and LAZ integers. No panel calls it, so the application shows no
 result from it. The caller supplies the candidate dictionary, the
 Jacobians and the mapped nodes. It does not include the vertical rule,
-the phase attribution rule, Brown's correction or the block jackknife;
+the phase attribution rule, Brown's correction, the constellation rank or
+the block jackknife;
 the phase uncertainty it reports is a delete-one-window jackknife, which
 ignores spatial correlation between windows. Its random windows and null
 draws come from a different generator than the Python reference, so they
-are different samples; its window power, coherence and phase kernels have
-been compared with the reference on identical windows in the companion
-study, and its p-values
-have not.
-Model-based p-values below about 0.003 are not calibrated tail
-probabilities, and a supported grid names a compatible grid, not the
-operation that produced it.
+are different samples, and no test in this repository compares its
+results with the reference. Its empirical p-values cannot fall below
+1/2001 per peak; the Fisher-combined value below that is a model-based
+figure, not a calibrated tail probability. A supported grid names a
+compatible grid, not the operation that produced it.
