@@ -74,7 +74,7 @@ test.describe('mode home and Continue', () => {
   test('desktop: Back keeps the page remembered, and Escape from the page returns home', async ({ page }) => {
     await openScan(page, { width: 1440, height: 900 });
     await page.locator('.olv-ws-tab[data-mode="data"]').click();
-    await page.locator('.olv-data-class-open').click();
+    await page.locator(':is(.olv-data-class-open, .olv-data-row):visible', { hasText: 'Classes' }).click();
     await expect(bar(page)).toHaveAttribute('data-path', 'Data › Classes');
     await page.keyboard.press('Escape');
     await expect(bar(page)).toHaveAttribute('data-path', 'Data');
@@ -84,7 +84,7 @@ test.describe('mode home and Continue', () => {
   test('phone: a sheet tab opens the home with the Continue row', async ({ page }) => {
     await openScan(page, { width: 390, height: 844 });
     await page.locator('.olv-mobile-sheet .olv-msheet-tab[data-tab="data"]').click();
-    await page.locator('.olv-msheet-slot[data-tab="data"] .olv-data-class-open').click();
+    await page.locator('.olv-msheet-slot[data-tab="data"] :is(.olv-data-class-open, .olv-data-row):visible', { hasText: 'Classes' }).click();
     await expect(bar(page)).toHaveAttribute('data-path', 'Data › Classes');
     await page.locator('.olv-mobile-sheet .olv-msheet-tab[data-tab="work"]').click();
     await page.locator('.olv-mobile-sheet .olv-msheet-tab[data-tab="data"]').click();

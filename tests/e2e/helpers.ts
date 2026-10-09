@@ -60,7 +60,7 @@ export async function openClassesPage(page: Page): Promise<void> {
   await showWorkspaceMode(page, 'data');
   // Data remembers its page: when Classes is already open there is no row to click.
   if (await page.locator('#olv-ws-mode-data .olv-ws-task-title', { hasText: 'Classes' }).isVisible()) return;
-  await page.locator('.olv-data-class-open').click({ timeout: 20_000 });
+  await page.locator(':is(.olv-data-class-open, .olv-data-row):visible', { hasText: 'Classes' }).click({ timeout: 20_000 });
   // The pointer would rest over whatever the page puts under the row; park it
   // so a hover tip does not cover the page's controls.
   await page.mouse.move(1, 1);
