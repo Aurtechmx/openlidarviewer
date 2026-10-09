@@ -109,8 +109,15 @@ export class ColorbarOverlay {
       this._dismissedMode = this._mode;
       this._setVisible(false);
     });
-    this.element = el('div', { className: 'olv-colorbar olv-hidden' }, [
-      el('div', { className: 'olv-colorbar-head' }, [this._range, close]),
+    // On a phone the legend opens as its one-line head so it does not cover
+    // the scan; this button shows the ramp. Hidden by CSS on wider layouts.
+    const toggle = el('button', { className: 'olv-colorbar-toggle', ariaLabel: 'Show colour legend', title: 'Show legend', text: '▾' });
+    toggle.type = 'button';
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.addEventListener('click', () => this._setCollapsed(!this.element.classList.contains('olv-colorbar-collapsed')));
+    this._toggle = toggle;
+    this.element = el('div', { className: 'olv-colorbar olv-hidden olv-colorbar-collapsed' }, [
+      el('div', { className: 'olv-colorbar-head' }, [this._range, toggle, close]),
       el('div', { className: 'olv-colorbar-plot' }, [this._svgHost, this._marker, this._readout]),
       this._caps,
       this._note,
@@ -213,6 +220,17 @@ export class ColorbarOverlay {
     this._marker.classList.remove('olv-hidden');
     this._readout.textContent =
       `${formatColorbarValue(v)} ${s.unit ?? 'source units'} · ${ordinal(Math.round(percentileOf(h, v)))} pct`;
+  }
+
+  private readonly _toggle: HTMLButtonElement;
+
+  /** Collapse the legend to its head row (phone only; CSS ignores it elsewhere). */
+  private _setCollapsed(collapsed: boolean): void {
+    this.element.classList.toggle('olv-colorbar-collapsed', collapsed);
+    this._toggle.setAttribute('aria-expanded', String(!collapsed));
+    this._toggle.textContent = collapsed ? '▾' : '▴';
+    this._toggle.setAttribute('aria-label', collapsed ? 'Show colour legend' : 'Collapse colour legend');
+    this._toggle.title = collapsed ? 'Show legend' : 'Collapse legend';
   }
 
   private _setVisible(visible: boolean): void {

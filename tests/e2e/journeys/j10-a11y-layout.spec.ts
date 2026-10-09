@@ -113,11 +113,9 @@ test.describe('J10 touch (P3)', () => {
   test.skip(() => test.info().project.use.hasTouch !== true, 'touch journey runs on webkit-mobile');
 
   test('P3: on a phone nothing overflows and every visible control is at least 44 px', async ({ page }, info) => {
-    // FINDING J10-TARGETS: on iPhone 15 (WebKit) the theme toggle (28 px),
-    // performance button (30 px), state-strip items (24 px tall), colour
-    // legend close (20 px), More tools (40 px wide) and the toast action
-    // (31 px tall) are under 44 px. Recorded as an expected failure.
-    test.fail();
+    // J10-TARGETS: the theme toggle, performance button, state-strip items,
+    // colour legend close, More tools and toast action were under 44 px on
+    // iPhone 15 (WebKit). The phone coarse-pointer rules now size them.
     const j = startJourney(page, info, 'j10');
     await j.step('open the LAZ', () => openWith(page, fixtureBytes('multichunk.laz'), 'multichunk.laz'));
     await j.step('no horizontal overflow at phone width', async () => {

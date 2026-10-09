@@ -132,7 +132,7 @@ test('an entry older than seven days is deleted and not offered; Clear removes t
   await reloadSettled(page);
   const notice = page.locator('.olv-recovery-notice');
   await expect(notice).toContainText('Unsaved work found');
-  await notice.getByRole('button', { name: 'Clear', exact: true }).click();
+  await notice.getByRole('button', { name: 'Clear all saved work', exact: true }).click();
   await expect(notice).toContainText('Recovery data in this browser was deleted.');
   await expect.poll(() => journal(page)).toEqual([]);
   await reloadSettled(page);

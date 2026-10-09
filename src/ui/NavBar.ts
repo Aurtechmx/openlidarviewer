@@ -1,6 +1,7 @@
 import { DisposableGroup } from '../disposableGroup';
 import { el } from './dom';
 import { storageGet, storageSet } from './safeStorage';
+import { appTransientLane } from './transientLane';
 import { NAVIGATION_PANEL } from './actionNames';
 import type { NavMode } from '../render/NavController';
 import {
@@ -642,8 +643,16 @@ export class NavBar {
    */
   flashTouchHint(): void {
     this.touchHint.classList.add('olv-visible');
-    if (this._touchTimer !== null) clearTimeout(this._touchTimer);
-    this._touchTimer = window.setTimeout(() => this.hideTouchHint(), TOUCH_HINT_MS);
+    // One transient card at a time on a phone; the timer starts once shown.
+    appTransientLane().claim(this.touchHint, () => {
+      if (this._touchTimer !== null) clearTimeout(this._touchTimer);
+      this._touchTimer = window.setTimeout(() => this.hideTouchHint(), TOUCH_HINT_MS);
+    }, {
+      onBack: () => {
+        if (this._touchTimer !== null) clearTimeout(this._touchTimer);
+        this._touchTimer = null;
+      },
+    });
   }
 
   /**
@@ -668,6 +677,7 @@ export class NavBar {
       this._touchYieldTimer = null;
     }
     this.touchHint.classList.remove('olv-visible');
+    appTransientLane().release(this.touchHint);
   }
 
   /** Reflect the current navigation mode (no callback fired). */

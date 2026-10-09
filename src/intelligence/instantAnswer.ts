@@ -32,7 +32,19 @@ export interface InstantAnswerInput {
   readonly scanLabel?: string;
   /** The previously-loaded scan's label, for the compare offer. */
   readonly priorScanLabel?: string;
+  /**
+   * False when the scan's CRS is unknown. Terrain analysis still runs then,
+   * but slope needs the horizontal and vertical units to agree, which an
+   * unknown CRS cannot confirm, and contours stay in source units. The terrain
+   * prompt says the results are in source units instead of offering it as if
+   * the units were known.
+   */
+  readonly crsKnown?: boolean;
 }
+
+/** The terrain prompt for a scan whose CRS is unknown. */
+export const TERRAIN_UNKNOWN_CRS_MESSAGE =
+  'Terrain scan ready, CRS unknown: results in source units. Nothing uploaded.';
 
 export interface InstantAnswer {
   /** One-line prompt shown the instant the scan lands. */
@@ -77,6 +89,9 @@ export function planInstantAnswer(input: InstantAnswerInput): InstantAnswer {
       };
     case 'terrain':
     default:
+      if (input.crsKnown === false) {
+        return { message: TERRAIN_UNKNOWN_CRS_MESSAGE, action: 'terrain', actionLabel: 'Analyse terrain →' };
+      }
       return {
         message: 'Terrain scan ready — grade the surface and build contours? Nothing uploaded.',
         action: 'terrain',

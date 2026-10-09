@@ -815,8 +815,8 @@ function showInstantAnswer(scanLabel: string): void {
   const answer = planInstantAnswer({
     cloudCount: viewer.clouds().length,
     scanShape: captureProvenance.verdict(),
-    scanLabel,
-    priorScanLabel: _lastInstantScanLabel,
+    scanLabel, priorScanLabel: _lastInstantScanLabel,
+    crsKnown: crsIsKnown(crsService.current()),
   });
   _lastInstantScanLabel = scanLabel;
   showLassoToast(answer.message, {

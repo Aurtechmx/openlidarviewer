@@ -662,3 +662,23 @@ export async function dropDenseGridUtmLas(page: Page): Promise<void> {
   }, [...bytes]);
   await page.dispatchEvent('body', 'drop', { dataTransfer: dt });
 }
+
+/**
+ * On the phone layout the scan-ready toast takes its turn in the transient
+ * lane (src/ui/transientLane.ts) after the Project card and the touch hint.
+ * Wait for the card, close it, then close the hint until the toast is the card
+ * on screen. Conditions only: the card is raised after the load settles and
+ * goes in front of whatever is showing, so nothing here depends on timing.
+ */
+export async function bringPhoneToastForward(page: Page): Promise<void> {
+  const card = page.locator('.olv-project-card.olv-visible');
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await card.locator('.olv-pc-dismiss').evaluate((e) => (e as HTMLElement).click());
+  await expect(card).toHaveCount(0);
+  const toast = page.locator('.olv-lasso-toast.olv-visible:not(.olv-lane-wait)');
+  const hint = page.locator('.olv-touch-hint.olv-visible:not(.olv-lane-wait) .olv-touch-hint-x');
+  await expect.poll(async () => {
+    if (await hint.isVisible()) await hint.evaluate((e) => (e as HTMLElement).click());
+    return toast.isVisible();
+  }, { timeout: 10_000 }).toBe(true);
+}

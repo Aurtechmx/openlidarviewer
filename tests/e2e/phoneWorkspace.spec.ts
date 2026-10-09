@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropDenseGridPly, placeTestDistance } from './helpers';
+import { bringPhoneToastForward, dropDenseGridPly, placeTestDistance } from './helpers';
 
 /**
  * tests/e2e/phoneWorkspace.spec.ts
@@ -109,7 +109,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }
     test('the scan-ready toast does not cover the open sheet', async ({ page }) => {
       await openScan(page);
       const toast = page.locator('.olv-lasso-toast.olv-visible');
-      await expect(toast).toBeVisible({ timeout: 8_000 });
+      await bringPhoneToastForward(page);
       for (const id of ['data', 'output']) {
         await tab(page, id).click();
         const t = (await toast.boundingBox())!;
