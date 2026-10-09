@@ -258,6 +258,39 @@ describe('the caveat reaches every surface', () => {
     expect(back[2].volume?.withheld?.reduction).toBeUndefined();
   });
 
+  it('a damaged saved record cannot export a noise count beside a voxel mode', () => {
+    const damaged = mk('d', {
+      ...voxelRecord,
+      withheld: { source: 10, excluded: 0, analysed: 10, noiseExcluded: 0, reduction: voxelRecord.withheld!.reduction },
+    } as never);
+    const text = serializeSession({
+      upAxis: 'z', origin: [0, 0, 0], unitSystem: 'metric', views: [], measurements: [damaged], annotations: [], software: '0.7.0',
+    } as never);
+    const back = parseSession(text).measurements[0];
+    expect(back.volume?.withheld?.exclusionUnavailable).toBe('reduced-sample');
+    const csv = measurementsToCsv([back], ctx as never).split('\n');
+    expect(csv[1].split(',')[csv[0].split(',').indexOf('noise_excluded')]).toBe('unavailable');
+  });
+
+  it('a negative or non-finite reduction count drops the reduction on restore', () => {
+    for (const bad of [-1, Number.POSITIVE_INFINITY]) {
+      const m = mk('b', { ...voxelRecord, withheld: { source: 1, excluded: 'unknown', analysed: 1, reduction: { mode: 'voxel-centroids', resident: bad, declared: 5 } } } as never);
+      const text = serializeSession({
+        upAxis: 'z', origin: [0, 0, 0], unitSystem: 'metric', views: [], measurements: [m], annotations: [], software: '0.7.0',
+      } as never);
+      expect(parseSession(text).measurements[0]?.volume?.withheld?.reduction).toBeUndefined();
+    }
+  });
+
+  it('a reduced cloud that puts no point inside the polygon adds no caveat', () => {
+    const far: Vec3[] = [[100, 100, 0], [108, 100, 0], [108, 108, 0], [100, 108, 0]];
+    const out = gatherVolumeBuffers([voxel(g) as never, whole(g) as never], () => [], (c) => cloudReduction(c as never));
+    const rec = samplePolygonVolume(out.buffers, out.total, POLY, 0, UP, out.reductions);
+    expect(rec.withheld?.reduction?.resident).toBe(400);
+    const none = samplePolygonVolume(out.buffers.slice(0, 1), 1200, far, 0, UP, out.reductions.slice(0, 1));
+    expect(none.withheld?.reduction).toBeUndefined();
+  });
+
   it('CSV adds the columns only when a volume was reduced, and never writes a zero for unavailable', () => {
     const header = (csv: string) => csv.split('\n')[0].split(',');
     const withReduced = measurementsToCsv([reduced, plain], ctx as never).split('\n');
@@ -268,7 +301,7 @@ describe('the caveat reaches every surface', () => {
     expect(cell(withReduced[1], 'reduction_mode')).toBe('voxel-centroids');
     expect(cell(withReduced[1], 'resident_points')).toBe('400');
     expect(cell(withReduced[1], 'declared_points')).toBe('10000');
-    expect(cell(withReduced[1], 'withheld_excluded')).toBe('unknown');
+    expect(cell(withReduced[1], 'withheld_excluded')).toBe('unavailable');
     expect(withReduced[1]).toContain('reduced sample');
     expect(cell(withReduced[2], 'reduction_mode')).toBe('');
     // No reduced volume: the header is the one it always was.

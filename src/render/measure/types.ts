@@ -426,6 +426,7 @@ export function reductionExportFields(w: VolumeWithheldCounts): Record<string, s
   const r = w.reduction;
   const caveat = reducedSampleCaveat(w);
   return {
+    ...(w.exclusionUnavailable ? { withheld_excluded: 'unavailable' } : {}),
     noise_excluded: w.exclusionUnavailable ? 'unavailable' : (w.noiseExcluded ?? 0),
     ...(r ? { reduction_mode: r.mode, resident_points: r.resident, declared_points: r.declared } : {}),
     ...(caveat ? { reduction_caveat: caveat } : {}),

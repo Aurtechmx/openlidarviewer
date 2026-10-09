@@ -1,5 +1,5 @@
 /**
- * volumeReduction.ts — what a volume walk knows about reduced source clouds.
+ * volumeReduction.ts: what a volume walk knows about reduced source clouds.
  *
  * A loader can hand the viewer fewer points than the file declared in two
  * ways. A stride keeps original records, so each point still has its own

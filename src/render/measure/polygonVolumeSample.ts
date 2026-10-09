@@ -62,10 +62,35 @@ export function samplePolygonVolume(
     source: analysed + (result.skippedNonFinite ?? 0) + excluded + noise,
     excluded: everySourceFlagged ? excluded : 'unknown',
     analysed,
-    ...reductionFields(reductions),
+    ...reductionFields(contributing(buffers, polygon, referenceZ, up, reductions)),
   };
   if (noise > 0) record.withheld = { ...record.withheld, noiseExcluded: noise };
   return record;
+}
+
+/**
+ * The reductions of the static sources that put at least one point inside the
+ * footprint, so the caveat describes only what the figure read. `reductions`
+ * is aligned with the leading `buffers`.
+ */
+function contributing(
+  buffers: ReadonlyArray<PlacedVolumeBuffer>,
+  polygon: ReadonlyArray<Vec3>,
+  referenceZ: number,
+  up: Vec3,
+  reductions: ReadonlyArray<CloudReduction | undefined>,
+): Array<CloudReduction | undefined> {
+  return reductions.map((r, i) => {
+    const buffer = buffers[i];
+    if (!r || !buffer) return undefined;
+    const sets = assembleVolumePositions([buffer], buffer.pos.length);
+    for (const positions of [sets.withheldPositions, sets.noisePositions, sets['positions']]) {
+      if (positions.length === 0) continue;
+      const cut = volumeCutFill({ polygon, referenceZ, up, positions });
+      if (cut.pointsInPolygon + (cut.skippedNonFinite ?? 0) > 0) return r;
+    }
+    return undefined;
+  });
 }
 
 /** A source the volume sampler reads: positions plus its per-point channels. */
