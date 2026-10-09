@@ -169,6 +169,7 @@ export function emitVoxelCloud(cloud: PointCloud, out: number, acc: VoxelSums): 
     declaredPointCount: cloud.declaredPointCount,
     decodedPointCount: cloud.decodedPointCount,
     loadStride: cloud.loadStride,
+    pointReduction: 'voxel-centroids',
     // Centroids are not the file's stored values, so the source quantisation does not describe them.
     metadata: withoutSourceQuantisation(cloud.metadata),
     organizedRange: cloud.organizedRange

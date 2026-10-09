@@ -25,7 +25,7 @@ import type { ExportDigests } from '../science/exportDigestRecord';
 import { lightProvenance, lightProvenanceLine, type LightProvenanceInput } from './lightProvenance';
 import type { Annotation } from '../render/annotate/types';
 import type { Measurement, Vec3 } from '../render/measure/types';
-import { isComplete } from '../render/measure/types';
+import { isComplete, reducedSampleCaveat } from '../render/measure/types';
 import {
   GEOGRAPHIC_NOT_AVAILABLE,
   geographicFilter,
@@ -358,6 +358,7 @@ function measurementPlacemark(m: Measurement, input: KmlExportInput): string | n
     metricsLine(m, input),
     `Kind: ${m.kind}`,
     first ? sourceElevationLine(input, first[2]) : '',
+    (m.kind === 'volume' && reducedSampleCaveat(m.volume?.withheld)) || '',
     caveatBlock(input),
   ];
   const desc = description(lines);

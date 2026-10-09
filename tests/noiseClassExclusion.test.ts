@@ -147,7 +147,7 @@ describe('Viewer volume sampler wiring', () => {
     const g = epoch(true);
     const cloud = { positions: g.positions, classification: g.classification };
     const node = { positions: g.positions, classification: g.classification };
-    const out = gatherVolumeBuffers([{ cloud, placement: null }], () => [node], () => false);
+    const out = gatherVolumeBuffers([{ cloud, placement: null }], () => [node], () => undefined);
     expect(out.buffers.map((b) => b.classification)).toEqual([g.classification, g.classification]);
     expect(out.streamingPoints).toBe(g.positions.length);
     const rec = samplePolygonVolume(out.buffers, out.total, POLY, 0, UP);
@@ -155,9 +155,10 @@ describe('Viewer volume sampler wiring', () => {
     expect(rec.cut).toBe(0);
   });
 
-  it('a reduced static cloud passes no classification', () => {
+  it('a voxel-reduced static cloud passes no classification', () => {
     const g = epoch(true);
-    const out = gatherVolumeBuffers([{ cloud: { positions: g.positions, classification: g.classification } }], () => [], () => true);
+    const voxel = { mode: 'voxel-centroids', resident: 8, declared: 80 } as const;
+    const out = gatherVolumeBuffers([{ cloud: { positions: g.positions, classification: g.classification } }], () => [], () => voxel);
     expect(out.buffers[0].classification).toBeUndefined();
   });
 

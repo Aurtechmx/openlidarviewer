@@ -178,7 +178,7 @@ import {
   createProfileSectionSeam,
   type ProfileSectionSeam,
 } from './measure/profileSectionSeam';
-import { gatherVolumeBuffers, samplePolygonVolume, POINT_SAMPLE_VOLUME_METHOD, type VolumeResult } from './measure/polygonVolumeSample';
+import { gatherVolumeBuffers, samplePolygonVolume, cloudReduction, POINT_SAMPLE_VOLUME_METHOD, type VolumeResult } from './measure/polygonVolumeSample';
 import {
   integrableClouds, integrableEntries, streamingMayCombine, producerClassifiesGround,
   analysisClassification,
@@ -1148,15 +1148,15 @@ export class Viewer {
     // `up` is the configured world up, matching `autoReferenceZ` (v0.4.4 B1).
     this._measure.setVolumeSampler(
       (polygon, referenceZ): { record: VolumeRecord; residentOnly: boolean } | null => {
-        const { buffers, total, streamingPoints } = gatherVolumeBuffers(
+        const { buffers, total, streamingPoints, reductions } = gatherVolumeBuffers(
           integrableClouds(this._clouds.values()),
           (n) => (this._streamingMayCombine(n) ? [...this._streamingPickData.values()].map((e) => e.decoded) : []),
-          (cloud) => this._cloudWasReduced(cloud),
+          cloudReduction,
         );
         if (total === 0) return null;
         const up: Vec3 = [this._worldUp.x, this._worldUp.y, this._worldUp.z];
         // Resident-only whenever streaming bytes were in the walk (audit #8).
-        return { record: samplePolygonVolume(buffers, total, polygon, referenceZ, up), residentOnly: streamingPoints > 0 };
+        return { record: samplePolygonVolume(buffers, total, polygon, referenceZ, up, reductions), residentOnly: streamingPoints > 0 };
       },
     );
     this._inspect = new InspectTool(this._camera, canvas, {
@@ -3639,7 +3639,7 @@ export class Viewer {
             this._clip?.enabled ? (x, y, z) => clipKeepsPoint(this._clip!, [x, y, z]) : null,
             (c) => this._pickAccept(c.positions, c.classification, c.intensity,
               this._currentFilterWindow(this._primaryElevLayer())) ?? null) : [],
-        wasReduced: (cloud) => this._cloudWasReduced(cloud), worldUp: [this._worldUp.x, this._worldUp.y, this._worldUp.z],
+        wasReduced: (cloud) => cloudReduction(cloud) !== undefined, reductionOf: cloudReduction, worldUp: [this._worldUp.x, this._worldUp.y, this._worldUp.z],
         visibilityFor: (entry, stride) => { const clip = this._clip; const c = entry.cloud;
           return lassoVisibilityFilters(clip?.enabled ? (x, y, z) => clipKeepsPoint(clip, [x, y, z]) : null,
             this._pickAccept(sourcePositions(c), c.classification, c.intensity,
@@ -3982,17 +3982,6 @@ export class Viewer {
     if (!point) return false;
     this._nav.focusOn(point);
     return true;
-  }
-
-  /**
-   * Whether a cloud's resident points are a device-budget reduction of a
-   * denser source — true when the declared source count meaningfully exceeds
-   * the resident count (voxel/stride downsample kicked in at load). Used to add
-   * an honesty caveat to volumes measured on the thinner sample.
-   */
-  private _cloudWasReduced(cloud: PointCloud): boolean {
-    const declared = cloud.declaredPointCount;
-    return declared != null && cloud.pointCount < declared * 0.95;
   }
 
   /**

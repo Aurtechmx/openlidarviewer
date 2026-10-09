@@ -226,6 +226,25 @@ export interface VolumeWithheldCounts {
   readonly analysed: number;
   /** Points left out as ASPRS noise (classes 7, 18). Absent when none were. */
   readonly noiseExcluded?: number;
+  /**
+   * Set when a contributing source was a voxel reduction, whose centroid
+   * labels cannot say which points were noise or Withheld. Neither exclusion
+   * could be applied to that source, so `excluded` reads `'unknown'` and
+   * `noiseExcluded`, when present, counts the other sources only.
+   */
+  readonly exclusionUnavailable?: 'reduced-sample';
+  /** How the reduced sources were reduced; absent when every source was whole. */
+  readonly reduction?: VolumeSourceReduction;
+}
+
+/** The reduction behind a volume's source points. */
+export interface VolumeSourceReduction {
+  /** Voxel centroids, or original records kept by a stride. */
+  readonly mode: 'voxel-centroids' | 'strided-records';
+  /** Points held, summed over the reduced sources. */
+  readonly resident: number;
+  /** Points the source files declared, summed over the same sources. */
+  readonly declared: number;
 }
 
 /** A single placed measurement. */
@@ -378,4 +397,37 @@ export function isComplete(m: Measurement): boolean {
 export function isFull(m: Measurement): boolean {
   const fixed = FIXED_POINTS[m.kind];
   return fixed !== undefined && m.points.length >= fixed;
+}
+
+/**
+ * The caveat a figure computed on voxel centroids carries, or null when the
+ * walk's noise and Withheld labels were usable.
+ */
+export function reducedSampleCaveat(w: VolumeWithheldCounts | undefined): string | null {
+  if (!w || w.exclusionUnavailable !== 'reduced-sample') return null;
+  const r = w.reduction;
+  const of = r ? ` (${r.resident.toLocaleString('en-US')} resident of ${r.declared.toLocaleString('en-US')} declared points)` : '';
+  return `Computed on a reduced sample of voxel centroids${of} without noise-class (7, 18) or Withheld filtering.`;
+}
+
+/** A short form for a panel row or a toast. */
+export function reducedSampleClause(w: VolumeWithheldCounts | undefined): string {
+  return w?.exclusionUnavailable === 'reduced-sample'
+    ? 'noise and Withheld exclusion unavailable (reduced sample)'
+    : '';
+}
+
+/**
+ * The export columns (CSV, GeoJSON) for a volume measured on a reduced source.
+ * `noise_excluded` reads `unavailable` where a voxel source's labels could not
+ * support a count, never 0; the caveat key is present only when there is one.
+ */
+export function reductionExportFields(w: VolumeWithheldCounts): Record<string, string | number> {
+  const r = w.reduction;
+  const caveat = reducedSampleCaveat(w);
+  return {
+    noise_excluded: w.exclusionUnavailable ? 'unavailable' : (w.noiseExcluded ?? 0),
+    ...(r ? { reduction_mode: r.mode, resident_points: r.resident, declared_points: r.declared } : {}),
+    ...(caveat ? { reduction_caveat: caveat } : {}),
+  };
 }

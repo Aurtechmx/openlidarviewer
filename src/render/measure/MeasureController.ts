@@ -32,7 +32,7 @@ import type {
   UnitSystem,
   VolumeRecord,
 } from './types';
-import { GEOGRAPHIC_NOT_AVAILABLE, MIN_POINTS, isFull } from './types';
+import { GEOGRAPHIC_NOT_AVAILABLE, MIN_POINTS, isFull, reducedSampleClause } from './types';
 import type { WorkOwnership } from '../../model/workOwnership';
 import type { ProfileProvenance } from './profileProvenance';
 import type { WithheldReadCounts } from '../../science/withheldCounts';
@@ -2140,7 +2140,8 @@ export class MeasureController {
         const netSign = v.net < 0 ? 'cut' : 'fill';
         const preview = v.gridAuthority === 'preview' ? ' · PREVIEW' : '';
         const noise = noiseExcludedClause(v.withheld?.noiseExcluded);
-        return `${area} · +${fill} fill · −${cut} cut · net ${net} ${netSign}${preview}${noise ? ` · ${noise}` : ''}`;
+        const unavailable = reducedSampleClause(v.withheld);
+        return `${area} · +${fill} fill · −${cut} cut · net ${net} ${netSign}${preview}${noise ? ` · ${noise}` : ''}${unavailable ? ` · ${unavailable}` : ''}`;
       }
     }
   }

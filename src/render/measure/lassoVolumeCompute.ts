@@ -36,6 +36,7 @@ import type {
 import type { Vec3 } from '../navMath';
 import { isWithheld } from '../../science/withheldPolicy';
 import type { VolumeWithheldCounts } from './types';
+import { labelsReliable, reductionFields, type CloudReduction } from './volumeReduction';
 /** A resident streaming node as the lasso walk needs to see it. */
 export interface StreamingLassoPart {
   /** The node's decoded positions, render-local — which is world for a stream. */
@@ -324,8 +325,15 @@ export interface LassoVolumeHost {
    * plus placement.
    */
   readonly streamingParts: ReadonlyArray<StreamingLassoPart>;
-  /** Whether this cloud was voxel-reduced to fit the device budget. */
+  /** Whether this cloud was reduced to fit the device budget. */
   wasReduced(cloud: PointCloud): boolean;
+  /**
+   * How this cloud was reduced, when it was. A voxel reduction holds centroids
+   * whose class and flags are not the points' own; a stride keeps original
+   * records. When a host supplies no answer, a reduced cloud is read as voxel
+   * centroids, the conservative case.
+   */
+  reductionOf?(cloud: PointCloud): CloudReduction | undefined;
   /**
    * The clip box and class/elevation/intensity filters that decide what this
    * layer currently SHOWS, or null when nothing is hiding anything.
@@ -388,6 +396,14 @@ export interface LassoSelectionBasisReport {
   readonly clause: string;
 }
 
+/** The host's answer for `cloud`, or the conservative one when it gives none. */
+function reductionFor(host: LassoVolumeHost, cloud: PointCloud): CloudReduction | undefined {
+  if (host.reductionOf) return host.reductionOf(cloud);
+  return host.wasReduced(cloud)
+    ? { mode: 'voxel-centroids', resident: cloud.pointCount, declared: cloud.declaredPointCount ?? cloud.pointCount }
+    : undefined;
+}
+
 export interface LassoVolumeComputeOutput {
   readonly selectedPositions: Float32Array;
   readonly selectedCount: number;
@@ -446,6 +462,7 @@ export function computeLassoVolume(
 
   const selectionByCloudId = new Map<string, ReadonlyArray<number>>();
   let anySourceReduced = false;
+  const reductions: Array<CloudReduction | undefined> = [];
   /** Whether the clip box or a visibility filter held any candidate back. */
   let anyHidden = false;
 
@@ -493,12 +510,16 @@ export function computeLassoVolume(
     if (visible.count === 0) continue;
     if (visible.count < raw.count) anyHidden = true;
     // A voxel-reduced cloud's points are centroids, which have no flags of
-    // their own: its Withheld count is unknown whatever array it holds.
-    const flags = host.wasReduced(entry.cloud) ? undefined : entry.cloud.classificationFlags;
-    const classes = host.wasReduced(entry.cloud) ? undefined : entry.cloud.classification;
+    // their own and a first-member class: its Withheld and noise counts are
+    // unknown whatever arrays it holds. A strided cloud keeps its records.
+    const reduction = reductionFor(host, entry.cloud);
+    const trusted = labelsReliable(reduction);
+    const flags = trusted ? entry.cloud.classificationFlags : undefined;
+    const classes = trusted ? entry.cloud.classification : undefined;
     const sel = takeWithheld(visible, flags, entry.cloud.pointCount, classes);
     if (sel.count === 0) continue;
-    if (host.wasReduced(entry.cloud)) anySourceReduced = true;
+    if (reduction) anySourceReduced = true;
+    reductions.push(reduction);
     parts.push({ id, positions, sel });
     candidateCount += sel.count;
   }
@@ -635,6 +656,7 @@ export function computeLassoVolume(
       excluded: !excludeWithheld ? 0 : withheldKnown ? withheldDropped : 'unknown',
       analysed: totalSelected,
       ...(noiseDropped > 0 ? { noiseExcluded: noiseDropped } : {}),
+      ...reductionFields(reductions),
     },
   };
 }

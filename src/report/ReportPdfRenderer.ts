@@ -1446,8 +1446,10 @@ async function renderMeasurements(
     if (extras) {
       rowH = 16 + 12 * 4 + (extras.coverageCaveat ? 12 : 0) + (extras.chart ? 68 : 0);
     }
+    if (m.note) rowH += 28;
     cursor = ensureSpace(cursor, rowH, doc, accent, theme, organisation);
     cursor = drawLabelValueRow(cursor, `${m.kind} · ${m.name}`, m.value, body, bold, ctx);
+    if (m.note) cursor = drawLabelValueRow(cursor, '  note', m.note, body, bold, ctx);
     if (extras) {
       cursor = drawLabelValueRow(cursor, '  summary', extras.summary, body, bold, ctx);
       cursor = drawLabelValueRow(cursor, '  stations', extras.stations, body, bold, ctx);

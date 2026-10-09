@@ -14,6 +14,7 @@
 import type { Vec3 } from '../navMath';
 import type { LayerSpatialTransform } from '../../geo/ProjectSpatialFrame';
 import type { VolumeRecord } from './types';
+import { labelsReliable, reductionFields, type CloudReduction } from './volumeReduction';
 import { deriveVolumeRecord } from './measureDerivations';
 import {
   assembleVolumePositions,
@@ -23,6 +24,7 @@ import {
 } from './volume';
 
 // Re-exported so the Viewer keeps one import edge for the volume cluster.
+export { cloudReduction } from './volumeReduction';
 export { POINT_SAMPLE_VOLUME_METHOD, type PlacedVolumeBuffer, type VolumeResult } from './volume';
 
 /**
@@ -40,6 +42,7 @@ export function samplePolygonVolume(
   polygon: ReadonlyArray<Vec3>,
   referenceZ: number,
   up: Vec3,
+  reductions: ReadonlyArray<CloudReduction | undefined> = [],
 ): VolumeRecord {
   const { positions, withheldPositions, noisePositions, everySourceFlagged } = assembleVolumePositions(buffers, total);
   const result = volumeCutFill({ polygon, referenceZ, up, positions });
@@ -59,6 +62,7 @@ export function samplePolygonVolume(
     source: analysed + (result.skippedNonFinite ?? 0) + excluded + noise,
     excluded: everySourceFlagged ? excluded : 'unknown',
     analysed,
+    ...reductionFields(reductions),
   };
   if (noise > 0) record.withheld = { ...record.withheld, noiseExcluded: noise };
   return record;
@@ -78,28 +82,40 @@ export interface GatheredVolumeBuffers {
   readonly total: number;
   /** Elements that came from resident streaming nodes. */
   readonly streamingPoints: number;
+  /** How each static source was reduced, in walk order; undefined for a whole one. */
+  readonly reductions: ReadonlyArray<CloudReduction | undefined>;
 }
 
 /**
  * Collect the placed buffers for the polygon Volume tool, each with its
  * Withheld flags and classification, so `samplePolygonVolume` can leave out
- * Withheld and noise points. A reduced (voxel or strided) static cloud passes
- * no classification, as the lasso walk does. `streaming` receives the static
+ * Withheld and noise points. A strided static cloud keeps its original
+ * records and passes both. A voxel-reduced one holds centroids, whose labels
+ * are not those of the points they stand for, so it passes neither; the
+ * lasso walk does the same. `streaming` receives the static
  * buffer count and returns the resident nodes that may join the walk.
  */
 export function gatherVolumeBuffers<C extends VolumeSourceCloud>(
   statics: Iterable<{ readonly cloud: C; readonly placement?: LayerSpatialTransform | null }>,
   streaming: (staticCount: number) => Iterable<VolumeSourceCloud>,
-  wasReduced: (cloud: C) => boolean,
+  reductionOf: (cloud: C) => CloudReduction | undefined,
 ): GatheredVolumeBuffers {
   const buffers: PlacedVolumeBuffer[] = [];
   let total = 0;
   let streamingPoints = 0;
+  const reductions: Array<CloudReduction | undefined> = [];
   for (const { cloud, placement } of statics) {
     const pos = cloud.positions;
     if (!pos || pos.length === 0) continue;
-    const classification = wasReduced(cloud) ? undefined : cloud.classification;
-    buffers.push({ pos, placement, flags: cloud.classificationFlags, classification });
+    const reduction = reductionOf(cloud);
+    const trusted = labelsReliable(reduction);
+    reductions.push(reduction);
+    buffers.push({
+      pos,
+      placement,
+      flags: trusted ? cloud.classificationFlags : undefined,
+      classification: trusted ? cloud.classification : undefined,
+    });
     total += pos.length;
   }
   for (const node of streaming(buffers.length)) {
@@ -109,5 +125,5 @@ export function gatherVolumeBuffers<C extends VolumeSourceCloud>(
     total += pos.length;
     streamingPoints += pos.length;
   }
-  return { buffers, total, streamingPoints };
+  return { buffers, total, streamingPoints, reductions };
 }

@@ -46,6 +46,7 @@ import {
   areaWithheldNote,
   geographicRefusesKind,
   measurementMetrics,
+  reducedSampleCaveat,
 } from '../export/measurementExport';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -372,6 +373,9 @@ export function buildMeasurementRows(
         ? GEOGRAPHIC_NOT_AVAILABLE
         : computeValue(m, unitSystem, worldUp, f, vf, unitsVerified),
       pointCount: m.points.length,
+      ...(m.kind === 'volume' && !refused && reducedSampleCaveat(m.volume?.withheld)
+        ? { note: reducedSampleCaveat(m.volume?.withheld) as string }
+        : {}),
       profileExtras: m.kind === 'profile' && !refused
         ? buildProfileExtras(m, unitSystem, f, worldUp, vf, unitsVerified)
         : undefined,
