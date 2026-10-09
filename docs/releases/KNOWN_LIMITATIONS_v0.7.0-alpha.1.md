@@ -315,7 +315,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 97 for the shell, 75 for the renderer and 23 for the Analyse panel,
-across 1102 modules with no dependency cycles.
+across 1103 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -616,3 +616,22 @@ sets. It has these limits:
   not of the points loaded so far.
 - Closing the scan removes the plane. A plane is not carried from one scan to
   the next except through a saved session.
+
+## Quantization-signature forensics is a library, not a tool
+
+`src/diagnostics/latticeForensics.ts` implements the frequency statistic,
+the horizontal decision rule and the phase test for earlier storage grids
+in LAS and LAZ integers. No panel calls it, so the application shows no
+result from it. The caller supplies the candidate dictionary, the
+Jacobians and the mapped nodes. It does not include the vertical rule,
+the phase attribution rule, Brown's correction or the block jackknife;
+the phase uncertainty it reports is a delete-one-window jackknife, which
+ignores spatial correlation between windows. Its random windows and null
+draws come from a different generator than the Python reference, so they
+are different samples; its window power, coherence and phase kernels have
+been compared with the reference on identical windows in the companion
+study, and its p-values
+have not.
+Model-based p-values below about 0.003 are not calibrated tail
+probabilities, and a supported grid names a compatible grid, not the
+operation that produced it.
