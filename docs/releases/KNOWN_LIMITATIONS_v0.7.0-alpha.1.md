@@ -435,6 +435,11 @@ cannot be identified, close the other scans and export again. The integrity
 and findings reports name the active scan; they carry lengths and areas, not
 coordinates. The site KML is written only while one scan is open.
 
+The tabular exports round to three decimals. A value of 0.0005 and above keeps
+three decimals; a smaller nonzero value keeps three significant digits, down to
+values far below any physical length, so a nonzero measurement is not written
+as 0.
+
 ## Truncated files and unknown units
 
 A LAS file whose body ends before its declared records opens with the records
