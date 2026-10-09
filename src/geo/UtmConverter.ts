@@ -7,13 +7,16 @@
  * plus international UTM zones for any catalog provider that surfaces
  * them.
  *
- * Both NAD83 (EPSG:269xx) and WGS84 (EPSG:326xx) UTM variants are
- * treated as WGS84 here. For the v0.3.6 inspector use case
- * (display-grade lat/lon, ~1 m of accuracy), the WGS84↔NAD83 datum
- * shift in CONUS is well under a metre. Higher-precision callers
- * (future GCP validation, survey-grade exports) should NOT use this
- * converter and should plug in a proj4-backed converter behind the
- * same `CoordinateConverter` interface.
+ * Both NAD83 (EPSG:26901-26923) and WGS84 (EPSG:326xx) UTM variants are
+ * decoded with WGS84 constants and no datum shift. That is NOT exact for
+ * NAD83: NAD83(2011) and WGS 84 (ITRF2014, epoch 2026.75) differ by 0.9 to
+ * 1.6 m across the conterminous United States (0.89 m at Miami, 1.40 m at
+ * -100, 40, 1.61 m at Seattle), so
+ * NAD83 output is display-grade, good to about 1 to 2 m. Callers that
+ * publish it (the longitude/latitude exports) must say so; higher-precision
+ * callers (GCP validation, survey-grade exports) should NOT use this
+ * converter and should plug in a datum-aware converter behind the same
+ * `CoordinateConverter` interface.
  *
  * Formulas: Snyder, "Map Projections — A Working Manual", USGS
  * Professional Paper 1395 (1987), § Transverse Mercator (TM).
@@ -135,8 +138,9 @@ function utmRangeFailure(easting: number, northing: number): ConversionFailure |
  * Recognised ranges:
  *   - 32601 … 32660 → WGS84 / UTM zone NN North
  *   - 32701 … 32760 → WGS84 / UTM zone NN South
- *   - 26901 … 26960 → NAD83 / UTM zone NN North (treated as WGS84
- *                     for v0.3.6 display-grade conversion)
+ *   - 26901 … 26923 → NAD83 / UTM zone NN North (treated as WGS84,
+ *                     about 1 to 2 m off). 26929 and up are NAD83 State
+ *                     Plane zones (26929 is Alabama East), not UTM.
  */
 function decodeUtmEpsg(
   epsg: number,
@@ -147,7 +151,7 @@ function decodeUtmEpsg(
   if (epsg >= 32701 && epsg <= 32760) {
     return { zone: epsg - 32700, hemisphere: 'S' };
   }
-  if (epsg >= 26901 && epsg <= 26960) {
+  if (epsg >= 26901 && epsg <= 26923) {
     return { zone: epsg - 26900, hemisphere: 'N' };
   }
   return null;

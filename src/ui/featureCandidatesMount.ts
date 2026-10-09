@@ -57,6 +57,11 @@ export interface MountFeatureCandidatesOptions {
    */
   readonly toLonLat: LocalToLonLatSourceZ | null;
   /**
+   * The mapper's own reason when `toLonLat` is null (an unsupported CRS, or a
+   * datum such as NAD27 that needs a transformation OLV does not apply yet).
+   */
+  readonly lonLatRefusal?: string | null;
+  /**
    * Metres per source unit from the RESOLVED frame, or undefined when the frame
    * states none. The extraction had derived this from `cloud.metadata.crs` — the
    * file's DECLARATION — so a scan the user re-declared kept producing areas and
@@ -165,7 +170,10 @@ export function mountFeatureCandidates(
   button.addEventListener('click', () => {
     if (!built) {
       built = true;
-      reviewHost.replaceChildren(buildReview(input, review, crsLabel, toLonLat, axisRefusal));
+      // The export refusal names the real obstacle: the up-axis first, then the
+      // mapper's own reason (a datum it will not treat as WGS 84).
+      const exportRefusal = axisRefusal ?? (toLonLat ? null : opts.lonLatRefusal ?? null);
+      reviewHost.replaceChildren(buildReview(input, review, crsLabel, toLonLat, exportRefusal));
     }
     onLaunch();
   });
@@ -335,7 +343,12 @@ export function acceptedFootprintGeoJson(
       centroidY: ll(b.centroid[0], b.centroid[1]).y,
       id: b.id,
     })),
-    { sourceCrsLabel: crsLabel, method: methodTag(methodRef('olv.feature.building-footprint')), withheld },
+    {
+      sourceCrsLabel: crsLabel,
+      method: methodTag(methodRef('olv.feature.building-footprint')),
+      withheld,
+      datumCaveat: toLonLat.datumCaveat ?? null,
+    },
   );
 }
 
@@ -350,7 +363,7 @@ function buildFootprintExport(
   review: CandidateReviewStore,
   crsLabel: string | null,
   toLonLat: LocalToLonLatSourceZ | null,
-  /** Why no geographic export is possible, when the reason is the up-axis. */
+  /** Why no geographic export is possible: the up-axis or the datum. */
   axisRefusal: string | null,
   withheld?: WithheldReadCounts,
 ): HTMLElement {

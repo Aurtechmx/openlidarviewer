@@ -95,7 +95,7 @@ import type { WorkspaceShell } from './app/workspace/workspaceShell';
 import { createScanRouteCoordinator, type SpaceExportContext } from './app/scanRouteCoordinator';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel, exportClassFacts, exportLayerHooks } from './ui/ExportPanel';
-import { makeLocalToLonLat } from './export/lonLatMapper';
+import { lonLatMapContext } from './export/lonLatMapper';
 import { runFindingsExport, writeScanScopedExport, spaceContextStillCurrent, SPACE_CONTEXT_MOVED, SESSION_EXPORT_SCAN_CHANGED_REFUSAL, sessionSaveNotice } from './export/exportScanIdentity';
 import {
   crsIsKnown,
@@ -1677,6 +1677,7 @@ void viewerLoaded.then(() => {
     // trust grades + captions the hint; the panel shows the persistent
     // caveat. One boolean, one seam, so the two can never disagree.
     viewer.measure.setGeographicCrs(ctx.isGeographic);
+    viewer.measure.setProjectedCrs(ctx.kind === 'projected' && ctx.epsg != null); // grid-north bearing label
     measureMount.setGeographicNotice(ctx.isGeographic);
     // Colorbar legend — same context, `'horizontal-when-known'` policy: an
     // explicit vertical unit wins, else the horizontal one WHEN really declared
@@ -1841,13 +1842,7 @@ function newAnalysePanel(
         // scan's origin, which the converter probes: (0,0) fails every UTM grid.
         // TWO of them, named for the frame they ACCEPT — contours arrive in world,
         // extraction render-local; one name served both, landing footprints at 0,0.
-        ...(() => {
-          const o = origin ?? null;
-          const local = o && cur ? makeLocalToLonLat(cur, [o[0], o[1], o[2]]) : null;
-          if (!o || !local) return {};
-          const w = (p: readonly [number, number, number]): [number, number, number] => local([p[0] - o[0], p[1] - o[1], p[2] - o[2]]);
-          return { localToLonLat: local, worldToLonLat: w };
-        })(),
+        ...lonLatMapContext(cur ?? null, origin ?? null),
         // Metres per source VERTICAL (Z) unit: the CRS's own vertical factor when
         // it declares one, else the horizontal linear factor when the frame is
         // actually resolved (GeoTIFF default: vertical follows the model's linear

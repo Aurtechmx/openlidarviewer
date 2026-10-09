@@ -19,8 +19,11 @@ export type StandardView = 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right
 export type CompassFacePosition = 'top' | 'right' | 'bottom' | 'left';
 
 /**
- * A clickable rose face. It carries TWO labels because the rose is only a true
- * geographic compass when the scan's orientation is geographically known:
+ * A clickable rose face. It carries TWO labels because the rose only has
+ * cardinal directions when the scan's orientation is geographically known.
+ * Even then the rose follows the scan's +Y axis, which is GRID north on a
+ * projected CRS (true north differs by the meridian convergence, 1.29 degrees
+ * in UTM 12N at 109 W, 40 N), so the top face reads "Grid N":
  *
  *   - `geo` (N/E/S/W) is shown ONLY when the active scan has a known geographic
  *     frame (a projected or geographic CRS). Then the cardinals are meaningful.
@@ -40,7 +43,7 @@ export interface CompassFace {
 
 /** Clickable compass faces, in render order around the rose (top face first). */
 export const COMPASS_FACES: readonly CompassFace[] = [
-  { view: 'back', position: 'top', geo: 'N', local: 'B' },
+  { view: 'back', position: 'top', geo: 'Grid N', local: 'B' },
   { view: 'right', position: 'right', geo: 'E', local: 'R' },
   { view: 'front', position: 'bottom', geo: 'S', local: 'F' },
   { view: 'left', position: 'left', geo: 'W', local: 'L' },

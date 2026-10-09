@@ -90,6 +90,8 @@ export function serializeContours(
      * export refuses rather than emitting projected numbers as degrees.
      */
     toLonLat?: ToLonLat;
+    /** The lon/lat mapper's reason when `toLonLat` is absent, for the refusal. */
+    lonLatRefusal?: string;
   } = {},
 ): ContourFile {
   const basename = opts.basename ?? 'contours';
@@ -138,8 +140,10 @@ export function serializeContours(
     case 'geojson':
       if (!opts.toLonLat) {
         throw new GeoJsonFrameError(
-          'Cannot write RFC 7946 GeoJSON: no conversion to WGS 84 longitude/latitude is '
-          + 'available for this CRS. Export the native-frame GeoJSON instead.',
+          opts.lonLatRefusal
+            ? `${opts.lonLatRefusal} The native-frame GeoJSON can still be exported.`
+            : 'Cannot write RFC 7946 GeoJSON: no conversion to WGS 84 longitude/latitude is '
+              + 'available for this CRS. Export the native-frame GeoJSON instead.',
         );
       }
       content = geojsonStringWgs84(exportModel, opts.toLonLat, true, opts.provenance);

@@ -253,6 +253,32 @@ export function formatBearing(azimuthDeg: number): string {
 }
 
 /**
+ * What a measured bearing is relative to.
+ *
+ *  - `grid`: a projected CRS in a Z-up frame. The bearing is measured from the
+ *    +Y axis, which is GRID north. True north differs by the meridian
+ *    convergence (1.29 degrees for UTM 12N at -109, 40; 2.27 degrees at a zone
+ *    edge at 49 N; at most 2.98 degrees at 84 N, by PROJ), which OLV does not
+ *    apply.
+ *  - `local`: no CRS, or a frame whose horizontal axes are not easting and
+ *    northing (a Y-up scan measures from +Z). The angle is between scan axes.
+ *  - `none`: a geographic CRS. Longitude and latitude degrees are not equal
+ *    lengths, so atan2 on them is not an azimuth, and no bearing is shown.
+ */
+export type BearingFrame = 'grid' | 'local' | 'none';
+
+/**
+ * A bearing with the reference it is measured from, e.g. "042° grid" or
+ * "042° (local axes)". Null when there is no honest bearing to show (a
+ * vertical segment, or a geographic CRS).
+ */
+export function formatFramedBearing(azimuthDeg: number, frame: BearingFrame): string | null {
+  if (frame === 'none' || !Number.isFinite(azimuthDeg)) return null;
+  const b = formatBearing(azimuthDeg);
+  return frame === 'grid' ? `${b} grid` : `${b} (local axes)`;
+}
+
+/**
  * Format a profile measurement's headline readout — a single compact line
  * that captures the 3D length and the vertical drop with grade, matching the
  * tags an engineer reads off a paper cross-section card.

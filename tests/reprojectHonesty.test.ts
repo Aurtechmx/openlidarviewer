@@ -70,7 +70,7 @@ describe('epsgDatumFamily / datumShiftCaveat', () => {
 
   it('caveats NAD83 ↔ the WGS84-coincident cluster (identity applied, ~1–2 m offset)', () => {
     expect(datumShiftCaveat(26915, 32615)).toMatch(/NAD83/); // NAD83 UTM 15 → WGS84 UTM 15
-    expect(datumShiftCaveat(4269, 4326)).toMatch(/1[–-]2 m/); // NAD83 geographic → WGS84
+    expect(datumShiftCaveat(4269, 4326)).toMatch(/1 to 2 m/); // NAD83 geographic → WGS84
     expect(datumShiftCaveat(4269, 4258)).toMatch(/NAD83/); // NAD83 → ETRS89 (both identity-to-WGS84)
   });
 

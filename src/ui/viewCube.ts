@@ -118,9 +118,15 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
     for (const { face, el } of faceButtons) {
       const label = compassFaceLabel(face, geographic);
       el.textContent = label;
+      // "Grid N" is wider than the 20 px disc a single letter fits.
+      el.style.width = label.length > 1 ? 'auto' : '20px';
+      el.style.padding = label.length > 1 ? '0 4px' : '0';
+      el.style.borderRadius = label.length > 1 ? '10px' : '50%';
       el.setAttribute(
         'aria-label',
-        geographic ? `View from ${label}` : `${VIEW_NAME[face.view]} view`,
+        geographic
+          ? `View from ${label === 'Grid N' ? 'grid north' : label}`
+          : `${VIEW_NAME[face.view]} view`,
       );
       // The north marker reads as the accent so "which way is north" is obvious —
       // but only when north is real. In local mode no face is privileged.

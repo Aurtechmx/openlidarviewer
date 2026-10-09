@@ -56,8 +56,8 @@ describe('roseRotationDeg', () => {
 describe('COMPASS_FACES', () => {
   test('cardinals map to opposite standard views (geographic labels)', () => {
     const byGeo = Object.fromEntries(COMPASS_FACES.map((f) => [f.geo, f.view]));
-    // Looking north (the rose N) frames the scan from the back.
-    expect(byGeo.N).toBe('back');
+    // Looking grid north (the rose's top face) frames the scan from the back.
+    expect(byGeo['Grid N']).toBe('back');
     expect(byGeo.S).toBe('front');
     expect(byGeo.E).toBe('right');
     expect(byGeo.W).toBe('left');
@@ -71,8 +71,11 @@ describe('COMPASS_FACES', () => {
 });
 
 describe('compassFaceLabel — geography only when the frame is known', () => {
-  test('geographic frame shows cardinals', () => {
-    expect(COMPASS_FACES.map((f) => compassFaceLabel(f, true))).toEqual(['N', 'E', 'S', 'W']);
+  test('a known frame shows cardinals, with the top face labelled grid north', () => {
+    // The rose follows the scan's +Y axis, which is grid north on a projected
+    // CRS (1.29 degrees off true north in UTM 12N at 109 W, 40 N), never a
+    // bare "N" that reads as true north.
+    expect(COMPASS_FACES.map((f) => compassFaceLabel(f, true))).toEqual(['Grid N', 'E', 'S', 'W']);
   });
   test('local / unknown frame shows truthful local labels, never cardinals', () => {
     const local = COMPASS_FACES.map((f) => compassFaceLabel(f, false));

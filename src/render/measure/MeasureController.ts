@@ -68,7 +68,8 @@ import {
   formatLengthRender,
   formatAreaRender,
   formatAngle,
-  formatBearing,
+  formatFramedBearing,
+  type BearingFrame,
   formatGrade,
   formatProfileHeadline,
   formatBoxHeadline,
@@ -560,6 +561,12 @@ export class MeasureController {
    * the red refusal (see {@link gradeMeasurement}).
    */
   private _geographicCrs = false;
+  /**
+   * True when the active scan's CRS is PROJECTED with an EPSG code, so +Y is
+   * grid north. A local engineering CRS can declare metres (`_crsKnown`) and
+   * still have no north at all; the distance bearing reads "grid" only here.
+   */
+  private _projectedCrs = false;
   private _lastCamera: THREE.PerspectiveCamera | null = null;
   private _lastCanvas: HTMLCanvasElement | null = null;
   private readonly _snapBtn: HTMLButtonElement | null = null;
@@ -932,6 +939,13 @@ export class MeasureController {
     // gain one if a known CRS is later cleared). Mirrors the drag-end re-grade.
     for (const m of this._measurements) m.trust = this._gradeMeasurement(m);
     this._updateHint();
+    this._emitChange();
+  }
+
+  /** Flag the active scan's CRS as projected with an EPSG code (see the field doc). */
+  setProjectedCrs(projected: boolean): void {
+    if (projected === this._projectedCrs) return;
+    this._projectedCrs = projected;
     this._emitChange();
   }
 
@@ -2013,10 +2027,18 @@ export class MeasureController {
         if (p.length < 2) return '—';
         const len = this._fmtLen(distance(p[0], p[1]));
         const az = bearingDegrees(p[0], p[1], this._worldUp);
-        // Append the compass bearing when the segment has a horizontal run —
-        // a survey staple. Purely vertical pairs have no bearing, so just the
-        // length shows.
-        return Number.isFinite(az) ? `${len} · ${formatBearing(az)}` : len;
+        // Append the bearing when the segment has a horizontal run, labelled
+        // with what it is measured from. It is taken against +Y, which is grid
+        // north only for a projected CRS in a Z-up frame; any other frame
+        // gets "(local axes)", and a geographic CRS none (see BearingFrame).
+        // Purely vertical pairs have no bearing, so just the length shows.
+        const u = this._worldUp;
+        const zUp = Math.abs(u[2]) / (Math.hypot(u[0], u[1], u[2]) || 1) > 0.99;
+        const frame: BearingFrame = this._geographicCrs
+          ? 'none'
+          : this._projectedCrs && zUp ? 'grid' : 'local';
+        const bearing = formatFramedBearing(az, frame);
+        return bearing ? `${len} · ${bearing}` : len;
       }
       case 'polyline':
         return this._fmtLen(polylineLength(p).total);

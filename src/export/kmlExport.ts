@@ -485,6 +485,10 @@ export function buildKml(input: KmlExportInput, digests?: ExportDigests): string
   const crs = input.crsName ?? 'unknown CRS';
   const docDesc = description([
     `OpenLiDARViewer export. CRS: ${crs}. Units: ${input.unitLabel}.`,
+    // A NAD83 or null-shift datum source is placed without a datum
+    // transformation; the file says so
+    // next to the CRS rather than letting the coordinates read as exact WGS 84.
+    input.toLonLat.datumCaveat ?? '',
     input.notSurveyGradeNote,
     ...(input.provenance ? [lightProvenanceLine(lightProvenance(input.provenance))] : []),
   ]);
@@ -523,6 +527,12 @@ export interface KmlFootprintInput {
   readonly shape?: FootprintShape;
   /** The "not survey-grade" caveat, the same one every other product carries. */
   readonly notSurveyGradeNote: string;
+  /**
+   * The mapper's datum caveat when the source is not exact WGS 84 (NAD83 or a
+   * null-shift datum such as ETRS89), so
+   * the description does not claim an exact reprojection.
+   */
+  readonly datumCaveat?: string | null;
 }
 
 /**
@@ -562,7 +572,9 @@ export function buildFootprintKml(input: KmlFootprintInput): string {
   const label = `${input.name} scan area`;
   const rectLabel = `${label} (${shape})`;
   const lines = [
-    `${shapeCap} of the scanned area, reprojected to WGS84 longitude/latitude.`,
+    input.datumCaveat
+      ? `${shapeCap} of the scanned area, in longitude/latitude. ${input.datumCaveat}`
+      : `${shapeCap} of the scanned area, reprojected to WGS84 longitude/latitude.`,
     `Source CRS: ${crs}. Extent read from ${input.extentBasis}.`,
     'Heights are clamped to ground: an outline states where the scan is, not how high it is.',
     input.notSurveyGradeNote,

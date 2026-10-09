@@ -27,6 +27,7 @@
  * Mounted in `main.ts` next to the Measurements and Annotations panels.
  */
 
+import type { LocalToLonLatSourceZ } from '../export/lonLatMapper';
 import { terrainExportDigests, type TerrainExportDigests } from '../export/terrainExportDigests';
 import { sourceInterpretationOf, type SourceInterpretationRecord } from '../science/sourceInterpretation';
 import { showBusyScan, clearBusyScan, createBusyScan, createBusyScanController, type BusyScanController } from './busyScan';
@@ -287,15 +288,10 @@ export interface AnalysePanelCallbacks {
     sheet?: 'letter' | 'a4' | 'a3';
     /** True when the horizontal CRS is geographic (degree cells). */
     isGeographic?: boolean;
-    /**
-     * Source frame → WGS 84 lon/lat for the RFC 7946 contour GeoJSON.
-     * Undefined when the CRS cannot be converted; the export then refuses
-     * rather than writing projected numbers into degree fields.
-     */
-    /** RENDER-LOCAL source coordinates to WGS 84 lon/lat. */
-    localToLonLat?: (p: readonly [number, number, number]) => [number, number, number];
-    /** WORLD (origin-restored) source coordinates to WGS 84 lon/lat. */
-    worldToLonLat?: (p: readonly [number, number, number]) => [number, number, number];
+    /** Render-local and world (origin-restored) lon/lat mappers, or the refusal; see lonLatMapContext. */
+    localToLonLat?: LocalToLonLatSourceZ;
+    worldToLonLat?: LocalToLonLatSourceZ;
+    lonLatRefusal?: string;
     /** Metres per source unit, from the RESOLVED frame; undefined when unknown. */
     resolvedUnitToMetres?: number;
     /** The resolved frame's label, for provenance. Never the declared one. */
@@ -927,6 +923,7 @@ export class AnalysePanel {
           // the seam that already exists, and refuse where it refuses.
           // Extraction runs on the RECENTRED buffer, so it needs the local converter.
           toLonLat: fctx.localToLonLat ?? null,
+          lonLatRefusal: fctx.lonLatRefusal ?? null,
           // The RESOLVED frame, so a user CRS correction reaches the metric
           // twins and the provenance label instead of the file's declaration.
           unitToMetres: fctx.resolvedUnitToMetres,
@@ -2384,7 +2381,7 @@ export class AnalysePanel {
           // Resolved CRS unit → DXF $INSUNITS + the SVG scale note, so a
           // foot-based CRS stamps feet instead of the metre default.
           linearUnit: mapCtx?.linearUnit,
-          toLonLat: mapCtx?.worldToLonLat,
+          toLonLat: mapCtx?.worldToLonLat, lonLatRefusal: mapCtx?.lonLatRefusal,
         }),
       );
     } catch (err) {
