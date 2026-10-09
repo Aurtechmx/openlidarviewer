@@ -17,16 +17,9 @@ import { buildKml } from '../src/export/kmlExport';
 import type { Measurement, Vec3 } from '../src/render/measure/types';
 
 const UP: Vec3 = [0, 0, 1];
-const CTX: MeasurementExportContext = {
-  toOutput: (p) => [p[0], p[1], p[2]],
-  up: UP,
-  unitToMetres: 1,
-  crsName: 'EPSG:32612',
-};
-
-function mk(kind: Measurement['kind'], points: Vec3[], extra: Partial<Measurement> = {}): Measurement {
-  return { id: `m-${kind}`, kind, name: `${kind} 1`, points, ...extra };
-}
+const CTX = { toOutput: (p: Vec3) => p, up: UP, unitToMetres: 1, crsName: 'EPSG:32612' } as MeasurementExportContext;
+const mk = (kind: Measurement['kind'], points: Vec3[], extra: Partial<Measurement> = {}): Measurement =>
+  ({ id: kind, kind, name: kind, points, ...extra });
 
 const tinyDist = (d: number): Measurement => mk('distance', [[0, 0, 0], [d, 0, 0]]);
 const tinySquare = (s: number): Measurement =>
