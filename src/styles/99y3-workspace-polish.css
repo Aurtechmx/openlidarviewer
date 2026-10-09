@@ -134,7 +134,9 @@
     padding-left: 0;
     padding-right: 0;
   }
-  .olv-left-panels .olv-data-row {
+  .olv-left-panels .olv-data-row,
+  .olv-left-panels .olv-data-class-toggle,
+  .olv-left-panels .olv-data-class-open {
     padding-left: 0;
     padding-right: 0;
   }

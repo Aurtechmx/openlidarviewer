@@ -119,6 +119,7 @@ export class ClassLegendPanel {
 
   /** "Counts cover the loaded display sample" caption (hidden unless sampled). */
   private readonly _sampleNote: HTMLElement;
+  private _sampled = false;
 
   /** Caption for a classification run that produced nothing (hidden when empty). */
   private readonly _unavailableNote: HTMLElement;
@@ -448,7 +449,13 @@ export class ClassLegendPanel {
       typeof declared === 'number' &&
       Number.isFinite(declared) &&
       declared > sample.loaded;
+    this._sampled = sampled;
     this._sampleNote.classList.toggle('olv-hidden', !sampled);
+  }
+
+  /** Whether the counts describe a display sample, not the whole file. */
+  isSampled(): boolean {
+    return this._sampled;
   }
 
   /**
@@ -500,6 +507,23 @@ export class ClassLegendPanel {
    */
   presentCodes(): number[] {
     return this._presentCodes();
+  }
+
+  /**
+   * Read-only roster for compact surfaces: each present class with its name,
+   * share of the counted points (0 to 100) and legend colour. Same counts and
+   * names the legend rows use; nothing here changes a class or its visibility.
+   */
+  classSummary(): { code: number; name: string; share: number; color: [number, number, number] }[] {
+    const codes = this._presentCodes();
+    let total = 0;
+    for (const c of codes) total += this._counts.get(c) ?? 0;
+    return codes.map((code) => ({
+      code,
+      name: classificationLabel(code, this._pointFormat),
+      share: total > 0 ? ((this._counts.get(code) ?? 0) / total) * 100 : 0,
+      color: classColor(code) as [number, number, number],
+    }));
   }
 
   /** Present class codes (count > 0), ascending. */

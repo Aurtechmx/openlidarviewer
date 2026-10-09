@@ -1,5 +1,5 @@
 /**
- * The Data home: the layer list plus a `Classes` row and a `Source and
+ * The Data home: the layer list plus a `Classes` list (open when the scan is classified) and a `Source and
  * metadata` row. The class legend is a page under Data; Layer Health lives in
  * the right rail (View). Running a Field Simulation Lab from the palette
  * opens its Analyse page.
@@ -18,9 +18,13 @@ test.describe('Data home', () => {
     await showWorkspaceMode(page, 'data');
 
     const home = page.locator('#olv-ws-mode-data');
-    const classesRow = home.locator('.olv-data-row', { hasText: 'Classes' });
+    const classesRow = home.locator('.olv-data-class-open');
+    const classesToggle = home.locator('.olv-data-class-toggle');
     await expect(home.locator('.olv-layers-section')).toBeVisible();
-    await expect(classesRow).toContainText(/\d+ detected/, { timeout: 20_000 });
+    await expect(classesToggle).toContainText(/\d+ detected/, { timeout: 20_000 });
+    // A classified scan opens with its class list shown on the home.
+    await expect(classesToggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(home.locator('.olv-data-class-item').first()).toBeVisible();
     await expect(home.locator('.olv-data-row', { hasText: 'Source and metadata' })).toBeVisible();
     await expect(home.locator('.olv-class-panel')).toBeHidden();
     await expect(home.locator('.olv-reclass-panel')).toBeHidden();
