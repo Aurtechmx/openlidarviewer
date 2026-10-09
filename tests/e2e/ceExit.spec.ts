@@ -157,7 +157,7 @@ test.describe('one exit convention', () => {
     await expect(bar(page)).toHaveAttribute('data-path', 'Data › Classes');
     await page.keyboard.press('Escape');
     await expect(bar(page)).toHaveAttribute('data-path', 'Data');
-    await expect(row).toBeVisible();
+    await expect(row).toBeFocused();
   });
 
   test('Escape: a workspace closes, then each page goes back to its parent', async ({ page }) => {
