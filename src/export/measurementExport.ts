@@ -36,6 +36,8 @@ import {
   profileMetrics,
   polygonAreaHorizontal,
   polygonAreaPlanar,
+  areaRingVerdict,
+  type AreaRingVerdict,
   polygonPerimeter,
   angleAtVertex,
   slopeBetween,
@@ -175,8 +177,13 @@ export function measurementMetrics(
       // Exporting the horizontal projection here made a vertical 1 m×1 m wall
       // read ~1 m² on screen but 0 m² in the file (pass-6 M4). The map footprint
       // is still exported alongside as `horizontal_area_m2` for GIS use.
-      set('area_m2', polygonAreaPlanar(mp));
-      set('horizontal_area_m2', polygonAreaHorizontal(mp, up));
+      // A ring that does not establish an area (it crosses itself, repeats a
+      // vertex, collapses, or is far from planar) carries no area figure at all:
+      // both keys are omitted and `areaWithheldNote` states why.
+      if (ringVerdict(pts, mp).ok) {
+        set('area_m2', polygonAreaPlanar(mp));
+        set('horizontal_area_m2', polygonAreaHorizontal(mp, up));
+      }
       set('perimeter_m', polygonPerimeter(mp));
       break;
     case 'box': {
@@ -210,6 +217,33 @@ export function measurementMetrics(
       break;
   }
   return out;
+}
+
+/**
+ * The ring verdict: the stored vertices must be numbers before the metric frame
+ * is applied, since a null or string component would otherwise coerce to a
+ * finite value.
+ */
+function ringVerdict(stored: readonly Vec3[], metric: readonly Vec3[]): AreaRingVerdict {
+  const v = areaRingVerdict(stored);
+  return v.ok ? areaRingVerdict(metric) : v;
+}
+
+/**
+ * The stated reason an Area measurement reports no area figure, or undefined
+ * when it reports one (or is not a complete Area). The same verdict that
+ * `measurementMetrics` uses to omit the keys.
+ */
+export function areaWithheldNote(
+  m: Measurement,
+  up: Vec3,
+  unitToMetres: number,
+  verticalToMetres: number = unitToMetres,
+): string | undefined {
+  if (m.kind !== 'area' || !isComplete(m)) return undefined;
+  const Vv = Number.isFinite(verticalToMetres) && verticalToMetres > 0 ? verticalToMetres : unitToMetres;
+  const v = ringVerdict(m.points, m.points.map((p) => toMetricFrame(p, up, unitToMetres, Vv)));
+  return v.ok ? undefined : `Area withheld: ${v.text}`;
 }
 
 /**
@@ -278,6 +312,12 @@ function geometryFor(
   }
 }
 
+/** The `area_withheld` property for a record whose ring establishes no area. */
+function areaNoteProp(m: Measurement, ctx: MeasurementExportContext): { area_withheld?: string } {
+  const note = areaWithheldNote(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
+  return note ? { area_withheld: note } : {};
+}
+
 /** Serialise measurements to a GeoJSON FeatureCollection (pretty-printed). */
 export function measurementsToGeoJSON(
   measurements: readonly Measurement[],
@@ -305,6 +345,7 @@ export function measurementsToGeoJSON(
         ...(ctx.sourceOf ? { source: ctx.sourceOf(m) } : {}),
         ...(unitsKnown ? metrics : inSourceUnits(metrics)),
         ...(geographicRefuses(m, ctx.geographic) ? { not_available: GEOGRAPHIC_NOT_AVAILABLE } : {}),
+        ...areaNoteProp(m, ctx),
       };
       if (ctx.crsName) properties.crs = ctx.crsName;
       // Same coverage verdict the CSV's grid_authority column carries — see
@@ -516,7 +557,9 @@ export function measurementsToCsv(
   const evidenceFor = (m: Measurement): string => {
     const status = evidenceStatus(claimForMeasurement(m) ?? 'MEAS-DISTANCE');
     const units = unitsKnown ? status : `${status}; units-unverified (source render units, not metres)`;
-    return geographicRefuses(m, ctx.geographic) ? `${units}; ${GEOGRAPHIC_NOT_AVAILABLE}` : units;
+    const withGeo = geographicRefuses(m, ctx.geographic) ? `${units}; ${GEOGRAPHIC_NOT_AVAILABLE}` : units;
+    const note = areaWithheldNote(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
+    return note ? `${withGeo}; ${note}` : withGeo;
   };
   for (const m of measurements) {
     const all = measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);

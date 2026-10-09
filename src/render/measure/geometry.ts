@@ -123,12 +123,16 @@ export function newellNormal(points: Vec3[]): Vec3 {
   let ny = 0;
   let nz = 0;
   const n = points.length;
+  if (n === 0) return [0, 0, 0];
+  // Terms are taken relative to the first vertex: the normal of a closed ring
+  // does not depend on the origin, and the products stay small far from it.
+  const o = points[0];
   for (let i = 0; i < n; i++) {
     const a = points[i];
     const b = points[(i + 1) % n];
-    nx += (a[1] - b[1]) * (a[2] + b[2]);
-    ny += (a[2] - b[2]) * (a[0] + b[0]);
-    nz += (a[0] - b[0]) * (a[1] + b[1]);
+    nx += (a[1] - b[1]) * (a[2] + b[2] - 2 * o[2]);
+    ny += (a[2] - b[2]) * (a[0] + b[0] - 2 * o[0]);
+    nz += (a[0] - b[0]) * (a[1] + b[1] - 2 * o[1]);
   }
   return [nx, ny, nz];
 }
@@ -543,3 +547,7 @@ export function toMetricFrame(p: Vec3, up: Vec3, h: number, v: number): Vec3 {
     (p[2] - along * up[2]) * h + along * up[2] * v,
   ];
 }
+
+// The ring-validity verdict that gates every Area figure; re-exported so the
+// export layer reaches it through the geometry module it already uses.
+export { areaRingVerdict, areaWithheldReason, type AreaRingVerdict } from './areaValidity';

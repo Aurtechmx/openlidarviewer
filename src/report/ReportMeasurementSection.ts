@@ -43,6 +43,7 @@ import { formatArea, displayDecimals } from '../render/measure/format';
 // the scene's real up-axis and per-axis units; this module only formats them.
 import {
   GEOGRAPHIC_NOT_AVAILABLE,
+  areaWithheldNote,
   geographicRefusesKind,
   measurementMetrics,
 } from '../export/measurementExport';
@@ -162,7 +163,8 @@ function computeValue(
     case 'profile':
       return mm.length_m != null ? formatLinear(mm.length_m, system, verified) : '—';
     case 'area':
-      return mm.area_m2 != null ? formatAreaHonest(mm.area_m2, system, verified) : '—';
+      if (mm.area_m2 != null) return formatAreaHonest(mm.area_m2, system, verified);
+      return areaWithheldNote(m, up, unitToMetres, verticalToMetres) ?? '—';
     case 'height':
       return mm.vertical_m != null ? formatLinear(Math.abs(mm.vertical_m), system, verified) : '—';
     case 'angle':

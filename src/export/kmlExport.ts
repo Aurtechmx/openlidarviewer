@@ -31,6 +31,7 @@ import {
   geographicFilter,
   geographicRefuses,
   measurementMetrics,
+  areaWithheldNote,
 } from './measurementExport';
 import { verticalReferenceKey } from '../model/layerCompatibility';
 import type { LocalToLonLatSourceZ } from './lonLatMapper';
@@ -336,8 +337,10 @@ function metricsLine(m: Measurement, input: KmlExportInput): string {
     if (parts.length === 0) return `Figures ${GEOGRAPHIC_NOT_AVAILABLE}.`;
     return `Measured (${input.unitLabel}): ${parts.join(', ')}. Other figures ${GEOGRAPHIC_NOT_AVAILABLE}.`;
   }
-  if (parts.length === 0) return '';
-  return `Measured (${input.unitLabel}): ${parts.join(', ')}`;
+  const note = areaWithheldNote(m, input.up, input.unitToMetres, input.verticalUnitToMetres);
+  if (parts.length === 0) return note ?? '';
+  const line = `Measured (${input.unitLabel}): ${parts.join(', ')}`;
+  return note ? `${line}. ${note}` : line;
 }
 
 /** Area-like kinds become a closed <Polygon>; everything else a <LineString>. */

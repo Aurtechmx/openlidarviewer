@@ -46,6 +46,7 @@ import { alignedClasses, isNoiseClass } from '../../terrain/ground/classificatio
 import {
   type PolygonValidity,
   validatePolygon,
+  anchoredShoelace,
 } from './polygonHygiene';
 
 /** A placed source buffer contributing to a combined cut/fill walk. */
@@ -262,11 +263,7 @@ export function polygonHorizontalArea(
 ): number {
   const n = polygon.length;
   if (n < 3) return 0;
-  let sum = 0;
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    sum += (polygon[j].x + polygon[i].x) * (polygon[j].y - polygon[i].y);
-  }
-  return Math.abs(sum) * 0.5;
+  return Math.abs(anchoredShoelace(n, (i) => polygon[i].x, (i) => polygon[i].y));
 }
 
 /** Cut / fill estimation result. */

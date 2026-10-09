@@ -23,6 +23,7 @@
  * Pure data, deterministic. No DOM.
  */
 
+import { anchoredShoelace } from '../../../render/measure/polygonHygiene';
 import type { OccupancyGrid } from './occupancyGrid';
 
 /** A closed ring of plan points, metres. Not explicitly re-closed (last ≠ first). */
@@ -108,13 +109,7 @@ function walkLoop(
 
 /** Signed area of a ring (positive = CCW in a y-up frame). */
 export function ringSignedArea(ring: Ring): number {
-  let a = 0;
-  for (let i = 0; i < ring.length; i++) {
-    const [x1, y1] = ring[i];
-    const [x2, y2] = ring[(i + 1) % ring.length];
-    a += x1 * y2 - x2 * y1;
-  }
-  return a / 2;
+  return anchoredShoelace(ring.length, (i) => ring[i][0], (i) => ring[i][1]);
 }
 
 /** Perpendicular distance from point p to the segment a–b. */
