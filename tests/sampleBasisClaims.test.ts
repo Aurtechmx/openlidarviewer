@@ -58,7 +58,7 @@ describe('density reference on a sampled basis', () => {
     const basis = analysedBasisOf({ coverage: 'full', pointCount: 1000 }, 1000);
     const p = buildExportProvenance(result('full'), { ...OPTS, analysedBasis: basis });
     expect(p.accuracy?.usgsDensityReferenceFloor).toBe('QL2');
-    expect(p.accuracy?.accuracyOnSample).toBe(false);
+    expect(p.accuracy?.accuracyOnSample).toBeUndefined();
   });
 });
 

@@ -540,7 +540,7 @@ export function buildExportProvenance(
             coverageMode === 'sampled' || isSampledBasis(opts.analysedBasis)
               ? 'none'
               : (acc.densityReferenceFloorsMet[0] ?? 'none'),
-          accuracyOnSample: coverageMode === 'sampled' || isSampledBasis(opts.analysedBasis),
+          ...(coverageMode === 'sampled' || isSampledBasis(opts.analysedBasis) ? { accuracyOnSample: true } : {}),
         }
       : null;
   const pointDensityPerM2 =
