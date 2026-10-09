@@ -617,20 +617,16 @@ sets. It has these limits:
 - Closing the scan removes the plane. A plane is not carried from one scan to
   the next except through a saved session.
 
-## Quantization-signature forensics is a library, not a tool
+## Storage-grid diagnostics are a library, not a tool
 
-`src/diagnostics/latticeForensics.ts` implements the frequency statistic,
-the horizontal decision rule and the phase test for earlier storage grids
-in LAS and LAZ integers. No panel calls it, so the application shows no
-result from it. The caller supplies the candidate dictionary, the
-Jacobians and the mapped nodes. It does not include the vertical rule,
-the phase attribution rule, Brown's correction, the constellation rank or
-the block jackknife;
-the phase uncertainty it reports is a delete-one-window jackknife, which
-ignores spatial correlation between windows. Its random windows and null
-draws come from a different generator than the Python reference, so they
-are different samples, and no test in this repository compares its
-results with the reference. Its empirical p-values cannot fall below
-1/2001 per peak; the Fisher-combined value below that is a model-based
-figure, not a calibrated tail probability. A supported grid names a
-compatible grid, not the operation that produced it.
+`src/diagnostics/latticeForensics.ts` looks for earlier storage grids in
+the integers of LAS and LAZ files: it predicts where a candidate grid
+leaves spectral peaks, scores them and tests whether the points sit on
+that grid's nodes. No panel calls it, so the application shows no result
+from it. The caller supplies the candidate grids, their Jacobians and
+their mapped nodes. It reads horizontal coordinates only. Its phase
+uncertainty is a delete-one-window jackknife, which ignores spatial
+correlation between windows. Empirical p-values cannot fall below 1/2001
+per peak, and the combined value below that is a model figure, not a
+calibrated probability. A supported grid is a grid the points are
+compatible with; it does not say which operation produced it.

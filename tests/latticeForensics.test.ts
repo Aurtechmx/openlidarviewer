@@ -139,7 +139,7 @@ describe('phaseTest', () => {
   });
 });
 
-describe('frozen rule defaults', () => {
+describe('defaults', () => {
   it('scores 2 000 null wavevectors outside |k| = 0.05', () => {
     const { nx, ny } = history(4_000, 20, null, 0.01, 0, 5);
     const pack = packWindows(nx, ny, 1000, { maxWindows: 4, minPoints: 20 });

@@ -1,33 +1,27 @@
 /**
- * latticeForensics.ts — coordinate-history (lattice) forensics for stored integer coordinates.
+ * latticeForensics.ts — earlier storage grids in stored integer coordinates.
  *
- * A LAS/LAZ file stores X = offset + scale * N with N an integer. Every earlier storage step
- * (another scale, unit or reference system) leaves its own lattice in the integers when the data
- * are re-rounded. For an ancestral lattice with basis B (in current storage units), the stored
- * integers carry structure at the reciprocal vectors k = B^{-T} m, folded into [-1/2, 1/2)^2, with
- * visibility A = |sinc(k1) sinc(k2)| on the unfolded k (sinc(u) = sin(pi u)/(pi u)).
+ * A LAS/LAZ file stores X = offset + scale * N with N an integer. When data stored on one grid
+ * (another scale, unit or reference system) are re-rounded onto the current one, the earlier
+ * grid can remain as a faint lattice in the integers. For an earlier lattice with basis B in
+ * current storage units, the integers carry structure at k = B^{-T} m, folded into
+ * [-1/2, 1/2)^2, with visibility A = |sinc(k1) sinc(k2)| on the unfolded k.
  *
- * This module is pure (no DOM, no three, no proj4). The caller supplies, per candidate history,
- * the local Jacobian J of the ancestral-to-file map (file metres per ancestral unit) so that the
- * module stays independent of any projection library. Statistic and decision rule follow the
- * Python reference implementation:
+ * The module is pure (no DOM, no three, no proj4). The caller supplies, per candidate grid, the
+ * local Jacobian J of the candidate-to-file map (file metres per candidate unit).
  *   T(k)     = sum_w |sum_{j in w} exp(2 pi i k.N_j)|^2 / sum_w n_w   (windows of fixed size)
  *   score(k) = T(k) / median T(ring of 8 points at radius 6/w)
- *   supported: Fisher-combined empirical p over testable peaks, Bonferroni over candidates < alpha,
- *              and measured/predicted amplitude ratio within [0.5, 2].
+ *   supported: Fisher-combined empirical p over testable peaks, Bonferroni over tested
+ *              candidates below alpha, and median measured/predicted amplitude in [0.5, 2].
  *
- * Defaults follow the frozen horizontal rule: 10 m windows (set by the caller), at least 40 points,
- * at most 250 windows reduced so that about 80 000 points enter (never below 20 windows), 2 000
- * null wavevectors with |k| > 0.05, testable peaks with |k| >= 0.05 and A >= 0.01, alpha 0.01.
- * A candidate in the file's own frame at an exact integer refinement of the stored step has one
- * rounding error value, so its peaks are predicted at A = 1.
+ * Defaults: windows of at least 40 points, at most 250 windows reduced so that about 80 000
+ * points enter (never below 20 windows), 2 000 null wavevectors with |k| > 0.05, testable peaks
+ * with |k| >= 0.05 and A >= 0.01, alpha 0.01. A candidate in the file's own frame at an exact
+ * integer refinement of the stored step has one rounding error value, so its peaks are
+ * predicted at A = 1. Within one system the coarsest supported step is reported.
  *
- * Not included: Brown's correction and the constellation rank (post-decision checks), the phase
- * attribution rule, the vertical rule and the block jackknife. phaseTest reports a
- * delete-one-window jackknife, which ignores spatial correlation between windows.
- *
- * Deterministic: window selection and the null use a seeded PRNG. The PRNG differs from the
- * reference implementation, so selected windows and null draws are not the same samples.
+ * phaseTest reports a delete-one-window jackknife, which ignores spatial correlation between
+ * windows. Window selection and the null use a seeded PRNG, so results are deterministic.
  */
 
 export type Vec2 = readonly [number, number];
