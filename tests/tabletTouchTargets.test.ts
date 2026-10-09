@@ -78,10 +78,16 @@ describe('tablet touch targets', () => {
   });
 
   it('wraps the class visibility checkbox in a label that is a 44 px box under the query only', () => {
-    expect(CSS).toMatch(/^\.olv-cl-check-hit \{ display: inline-flex;/m);
-    expect(mediaBody(CSS)).toContain('.olv-cl-check-hit { min-width: 44px; min-height: 44px;');
+    expect(CSS).toMatch(/^\.olv-check-hit \{ display: inline-flex;/m);
+    expect(mediaBody(CSS)).toContain('.olv-check-hit { min-width: 44px; min-height: 44px;');
     const src = readFileSync(fileURLToPath(new URL('../src/ui/ClassLegendPanel.ts', import.meta.url)), 'utf8');
-    expect(src).toContain("el('label', { className: 'olv-cl-check-hit' }, [check])");
+    expect(src).toContain("el('label', { className: 'olv-check-hit' }, [check])");
+  });
+
+  it('sizes the location bar, catalogue inputs and the View panel head', () => {
+    const body = mediaBody(CSS);
+    expect(body).toContain('.olv-loc-back, .olv-loc-crumb, .olv-catalog-input { min-height: 44px; }');
+    expect(body).toContain(".olv-panel-head[role='button'] { min-height: 44px;");
   });
 
   it('lets the state strip hold 44 px items on a large touch screen', () => {

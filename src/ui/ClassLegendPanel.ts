@@ -639,7 +639,7 @@ export class ClassLegendPanel {
     });
 
     const row = el('div', { className: `olv-cl-row${on ? '' : ' is-hidden'}` }, [
-      el('label', { className: 'olv-cl-check-hit' }, [check]),
+      el('label', { className: 'olv-check-hit' }, [check]),
       swatch,
       label,
       count,

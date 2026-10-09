@@ -7,9 +7,9 @@
    keep their current sizes. 44 px is the floor; the most frequent actions
    (panel close, Frame all) are 48 px. */
 
-/* The class-visibility checkbox sits in a label so its hit area can grow
+/* The layer, group and class-visibility checkboxes sit in a label so its hit area can grow
    without changing the checkbox. Outside the query the label is the checkbox. */
-.olv-cl-check-hit { display: inline-flex; align-items: center; flex-shrink: 0; }
+.olv-check-hit { display: inline-flex; align-items: center; flex-shrink: 0; }
 
 @media (pointer: coarse) and (hover: none) and (min-width: 768px) and (min-height: 600px) {
   /* Close buttons: 48 px. The element-qualified selector outranks the
@@ -54,7 +54,10 @@
   .olv-navbar .olv-cam-chip { white-space: nowrap; }
 
   /* Bare checkboxes and radios take the 44 px box of their label. */
-  .olv-cl-check-hit { min-width: 44px; min-height: 44px; justify-content: center; }
+  .olv-loc-back, .olv-loc-crumb, .olv-catalog-input { min-height: 44px; }
+  .olv-loc-back, .olv-loc-crumb { min-width: 44px; }
+  .olv-panel-head[role='button'] { min-height: 44px; display: flex; align-items: center; }
+  .olv-check-hit { min-width: 44px; min-height: 44px; justify-content: center; }
   .olv-left-panels label:has(> input[type='checkbox']),
   .olv-left-panels label:has(> input[type='radio']),
   .olv-right-rail label:has(> input[type='checkbox']),

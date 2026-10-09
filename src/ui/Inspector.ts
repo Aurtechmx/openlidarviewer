@@ -1520,7 +1520,7 @@ export class Inspector {
     });
 
     const row = el('div', { className: 'olv-layer' }, [
-      visible,
+      el('label', { className: 'olv-check-hit' }, [visible]),
       el('span', { className: 'olv-layer-name', text: name }),
       el('span', { className: 'olv-layer-count', text: formatCount(pointCount) }),
       crs,

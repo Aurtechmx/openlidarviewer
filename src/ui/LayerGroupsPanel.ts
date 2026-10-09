@@ -457,7 +457,7 @@ class GroupHeader {
 
     this.element = el('div', { className: 'olv-group-head' }, [
       this._fold,
-      this._visible,
+      el('label', { className: 'olv-check-hit' }, [this._visible]),
       this._name,
       this._count,
       rename,
