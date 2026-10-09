@@ -39,6 +39,7 @@ describe('roundMeasured', () => {
     expect(roundMeasured(1.23456)).toBe(1.235);
     expect(roundMeasured(-1.23456)).toBe(-1.235);
     expect(roundMeasured(-0.0006)).toBe(-0.001);
+    expect(roundMeasured(-0.0005)).toBe(-0.0005);
   });
   it('keeps three significant digits when a nonzero value would round to zero', () => {
     expect(roundMeasured(0.0004)).toBe(0.0004);
@@ -76,7 +77,7 @@ describe('measurementMetrics with tiny values', () => {
     expect(s.rise_m).toBe(0.0004);
     expect(s.grade_pct).toBeGreaterThan(0);
     expect(s.angle_deg).toBeGreaterThan(0);
-    const angle = mk('angle', [[1, 0, 0], [0, 0, 0], [1, 0.00001, 0]]);
+    const angle = mk('angle', [[1, 0, 0], [0, 0, 0], [1, 0.000001, 0]]);
     expect(measurementMetrics(angle, UP, 1).angle_deg).toBeGreaterThan(0);
   });
   it('keeps exact zero as zero', () => {

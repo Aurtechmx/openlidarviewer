@@ -82,12 +82,12 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - Reproject in Export and the batch converter wrote a NAD27 scan to another datum with no NAD27 shift and stamped the target EPSG, so the result read as exact downstream. A reprojection into or out of NAD27 is now refused with a pointer to PROJ, GDAL or PDAL with the NADCON or NTv2 grids.
 - The map sheet's orientation arrow and the compass rose's top face read "N" over grid north, and the distance bearing in the Measurements panel showed a bare value such as "042°" for any scan. The arrow and the rose now read "Grid N". The bearing reads "042° grid" on a projected CRS with an EPSG code, "042° (local axes)" with no CRS, a local engineering CRS or a Y-up scan, and is not shown on a geographic CRS. True north differs from grid north by 1.29 degrees in UTM zone 12 at 109 W, 40 N, and by up to 2.98 degrees in a UTM zone.
 - The blocked hold-out RMSE showed a 95% interval of [RMSE, RMSE] whenever only one block was scored or the bootstrap was off, although no interval had been computed. The result now carries an interval status, the reason it is unavailable, the number of scored blocks and the uncovered share. The Analyse panel and the report show "Confidence interval unavailable" with the reason and keep the point RMSE. Intervals computed from two or more blocks are unchanged.
+- A nonzero measurement no longer exports as 0 when it is smaller than 0.0005. The measurement CSV, GeoJSON and KML, the integrity report and the findings report keep three decimals for values of 0.0005 and above, as before, and keep three significant digits for smaller nonzero values, so a 0.0004 m segment reads 0.0004. Exact zero stays 0, and CSV and KML write tiny values without an exponent.
 
 ## [0.7.0-alpha.1] - 2026-09-18
 
 A development cut on the way to v0.7.0. It carries no DOI, and its test figures
 are not release-authoritative.
-- A nonzero measurement no longer exports as 0 when it is smaller than 0.0005. The measurement CSV, GeoJSON and KML, the integrity report and the findings report keep three decimals for values of 0.0005 and above, as before, and keep three significant digits for smaller nonzero values, so a 0.0004 m segment reads 0.0004. Exact zero stays 0, and CSV and KML write tiny values without an exponent.
 
 ### Added
 
