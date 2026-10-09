@@ -44,7 +44,7 @@ export type TerrainCrsFacts = Pick<CrsService, 'current' | 'context' | 'crsRevis
 // from, plus the named vertical-fallback policy that replaces the local
 // `verticalUnitToMetres ?? linearUnitToMetres` chains.
 import { verticalMetresPerUnit } from '../geo/SpatialContext';
-import { analysedBasisOf } from '../terrain/export/analysedBasis';
+import { analysedBasisOf, WITHHELD_RECOVERY_STATUS } from '../terrain/export/analysedBasis';
 import type {
   AnalyseContoursResult,
   TerrainCore,
@@ -882,10 +882,7 @@ export function createTerrainAnalysisRunner(
         // main-thread fallback only runs under the sync-fallback ceiling, and a
         // recovered sample is normally far above it, so a failed worker makes
         // the recovery refuse and the display core take over instead.
-        analysePanel.setStatus(
-          'Points flagged Withheld were excluded from this surface. The display was reduced to fit the '
-          + 'point budget, so the surface was rebuilt from a full-resolution re-decode of the source file.',
-        );
+        analysePanel.setStatus(WITHHELD_RECOVERY_STATUS);
       } else if (coreSource === 'restored') {
         analysePanel.setStatus(
           'Terrain core restored from the on-device cache. The analysed points, the classification, the parameters and the method versions all matched.',
@@ -934,7 +931,7 @@ export function createTerrainAnalysisRunner(
         // declares — not the count the viewer holds, which on a display sample
         // is the same number on both sides and states nothing.
         analysedBasis: facts
-          ? ((c) => analysedBasisOf(facts, pos.length / 3, c?.declaredPointCount, c ? c.metadata?.interpretationLevel ?? null : undefined, gathered.totalPoints))(viewer.getCloud(getActiveId() ?? ''))
+          ? ((c) => analysedBasisOf(facts, pos.length / 3, c?.declaredPointCount, c ? c.metadata?.interpretationLevel ?? null : undefined, gathered.totalPoints, gathered.withheldExcludedCount))(viewer.getCloud(getActiveId() ?? ''))
           : undefined,
         // The token is minted on the facts this frame was built from and
         // verified at export against the facts the scan has then, so an edit

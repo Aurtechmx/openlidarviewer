@@ -74,7 +74,7 @@ export const SOFTWARE_NAME = 'OpenLiDARViewer';
  */
 import { NOT_SURVEY_GRADE_NOTE } from './exportNotes';
 import { verticalUnitLabel } from '../../units/units';
-import { analysedBasisLine, type AnalysedBasis } from './analysedBasis';
+import { analysedBasisLine, DENSITY_REF_SAMPLE_NOTE, isSampledBasis, type AnalysedBasis } from './analysedBasis';
 import type { TransformProvenance } from '../../convert/transformProvenance';
 import type { OrganizedRangeSet } from '../../model/OrganizedRange';
 import { sourceTopologyRecord } from '../../science/sourceTopology';
@@ -179,6 +179,8 @@ export interface ExportProvenanceAccuracy {
    * NOT a quality-level determination — ground-return density is not pulse density.
    */
   readonly usgsDensityReferenceFloor: string;
+  /** True when the hold-out figures come from a sampled analysis; the density reference is then withheld. */
+  readonly accuracyOnSample?: boolean;
 }
 
 /**
@@ -530,7 +532,15 @@ export function buildExportProvenance(
           // demAccuracyStandards withholds the comparison there, because the
           // density is per source unit squared and the 3DEP floors are pulses
           // per square metre. Decided once, at the producer.
-          usgsDensityReferenceFloor: acc.densityReferenceFloorsMet[0] ?? 'none',
+          //
+          // Withheld when the analysed points are a sample: the density is
+          // then a stride extrapolation, and the floors are a statement about
+          // the full cloud.
+          usgsDensityReferenceFloor:
+            coverageMode === 'sampled' || isSampledBasis(opts.analysedBasis)
+              ? 'none'
+              : (acc.densityReferenceFloorsMet[0] ?? 'none'),
+          ...(coverageMode === 'sampled' || isSampledBasis(opts.analysedBasis) ? { accuracyOnSample: true } : {}),
         }
       : null;
   const pointDensityPerM2 =
@@ -971,7 +981,7 @@ export function provenanceLines(p: ExportProvenance): string[] {
       'USGS density ref',
       p.accuracy && p.accuracy.usgsDensityReferenceFloor !== 'none'
         ? `${p.accuracy.usgsDensityReferenceFloor} density floor (reference)`
-        : 'unknown',
+        : p.accuracy?.accuracyOnSample ? DENSITY_REF_SAMPLE_NOTE : 'unknown',
     ),
     // Ground-return density over measured cells, stride-scaled — not the
     // scan's all-returns point density.

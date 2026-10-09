@@ -560,12 +560,10 @@ test('formatMetres scales km / m / cm by magnitude', () => {
   expect(formatMetres(0.051)).toBe('5.1 cm');
 });
 
-test('formatTimestamp returns the YYYY-MM-DD HH:MM shape', () => {
-  // 2026-05-26 22:03 local time — using local Date so this test is
-  // timezone-independent by checking the format, not the literal value.
-  const d = new Date(2026, 4, 26, 22, 3);
-  expect(formatTimestamp(d)).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
-  expect(formatTimestamp(d)).toBe('2026-05-26 22:03');
+test('formatTimestamp returns the YYYY-MM-DD HH:MM UTC shape', () => {
+  const d = new Date(Date.UTC(2026, 4, 26, 22, 3));
+  expect(formatTimestamp(d)).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC$/);
+  expect(formatTimestamp(d)).toBe('2026-05-26 22:03 UTC');
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

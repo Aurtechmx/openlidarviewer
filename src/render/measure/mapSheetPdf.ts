@@ -37,6 +37,7 @@ import { contourShapeStyleLabel } from '../../terrain/contour/contourShapeStyle'
 import { gradePercent } from '../../terrain/contour/evidenceGrade';
 import type { DemAccuracyStandards } from '../../terrain/quality/demAccuracyStandards';
 import type { ExportProvenance } from '../../terrain/export/exportProvenance';
+import { DENSITY_REF_SAMPLE_NOTE } from '../../terrain/export/analysedBasis';
 import {
   fitTransform,
   niceStep,
@@ -1142,8 +1143,17 @@ function drawTitleBlock(
 
   // Right column — accuracy + readiness + provenance.
   const rxr = PW - M - 4;
-  rightText('Survey accuracy', rxr, topY - 16, 9, bold);
-  page.drawLine({ start: { x: rxr - bold.widthOfTextAtSize('Survey accuracy', 9), y: topY - 21 }, end: { x: rxr, y: topY - 21 }, thickness: 0.6, color: FRAME });
+  // Hold-out figures from a sampled or unvalidated surface are a preview, not
+  // a survey accuracy statement.
+  const accHeading =
+    prov && (prov.accuracy?.accuracyOnSample || prov.exportReadiness !== 'Ready')
+      ? 'Hold-out accuracy (preview)'
+      : 'Survey accuracy';
+  rightText(accHeading, rxr, topY - 16, 9, bold);
+  page.drawLine({ start: { x: rxr - bold.widthOfTextAtSize(accHeading, 9), y: topY - 21 }, end: { x: rxr, y: topY - 21 }, thickness: 0.6, color: FRAME });
+  if (prov?.accuracy?.accuracyOnSample) {
+    rightText('Figures are from a sample of the points', rxr, topY - 28, 5.5, font, DIM);
+  }
   // ' m' is unconditional and correct here: these figures are metres by
   // construction (a hold-out residual times the resolved vertical factor), and
   // the provenance withholds the whole accuracy block when no vertical scale
@@ -1170,7 +1180,7 @@ function drawTitleBlock(
           'Ground-return density ref',
           prov.accuracy && prov.accuracy.usgsDensityReferenceFloor !== 'none'
             ? `>= USGS ${prov.accuracy.usgsDensityReferenceFloor}`
-            : '—',
+            : prov.accuracy?.accuracyOnSample ? DENSITY_REF_SAMPLE_NOTE : '—',
         ],
       ]
     : (() => {

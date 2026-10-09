@@ -155,6 +155,7 @@ import type {
   ContourExportPermit,
 } from '../export/contourExportPermit';
 import { permitStamp } from '../export/permitStamp';
+import { DENSITY_REF_SAMPLE_NOTE, isSampledBasis } from '../terrain/export/analysedBasis';
 import {
   analysisFreshnessBreach,
   FRESHNESS_REFUSALS,
@@ -2121,7 +2122,7 @@ export class AnalysePanel {
           `${METRIC_TOOLTIPS.nva} ${METRIC_TOOLTIPS.vva}`,
         ));
       }
-      if (std.densityReferenceFloorsMet.length > 0) {
+      if (std.densityReferenceFloorsMet.length > 0 && !isSampledBasis(this._contourFrame?.analysedBasis)) {
         // When the gather strided the cloud, the density is a uniform-stride
         // extrapolation (the core pushes a warning saying so). Carry that into
         // the hint so the figure is never read as an exact, directly-counted
@@ -2990,12 +2991,10 @@ export class AnalysePanel {
       ['NVA-style (95%, hold-out)', fmtM(a?.nvaM)],
       ['VVA-style (95th pct, hold-out)', fmtM(a?.vvaM)],
       ['RMSEz', fmtM(a?.rmseZM)],
-      // A density REFERENCE (which 3DEP nominal-pulse-density floor the measured
-      // ground-return density clears), not a quality-level grade — ground-return
-      // density is not a pulse-density determination.
+      // A density REFERENCE, not a quality-level grade; withheld on a sample.
       [
         'USGS density ref',
-        a && a.densityReferenceFloorsMet.length > 0 ? `≥ ${a.densityReferenceFloorsMet[0]} floor` : '—',
+        isSampledBasis(this._contourFrame?.analysedBasis) ? DENSITY_REF_SAMPLE_NOTE : a && a.densityReferenceFloorsMet.length > 0 ? `≥ ${a.densityReferenceFloorsMet[0]} floor` : '—',
       ],
       ['Approx. scale', 'auto — fits sheet'],
       ['Generated', generatedAt.toISOString().slice(0, 16).replace('T', ' ') + ' UTC'],

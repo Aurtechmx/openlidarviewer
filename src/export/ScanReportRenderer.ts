@@ -444,12 +444,12 @@ export function formatLinear(value: number, unit: LinearUnit): string {
 }
 
 /**
- * Format a YYYY-MM-DD HH:MM timestamp in the user's local timezone — the
- * footer of every scan report. Pure function for testability.
+ * Format a YYYY-MM-DD HH:MM UTC timestamp, with the zone named. The footer
+ * of every scan report. Pure function for testability.
  */
 export function formatTimestamp(d: Date): string {
   const pad = (n: number) => n.toString().padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(
-    d.getHours(),
-  )}:${pad(d.getMinutes())}`;
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(
+    d.getUTCHours(),
+  )}:${pad(d.getUTCMinutes())} UTC`;
 }

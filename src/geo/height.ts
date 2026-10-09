@@ -350,6 +350,22 @@ export const HEIGHT_UNIT_GAP_SUFFIX: Readonly<Record<HeightUnitGap, string>> = {
   'vertical-unit-invalid': ' source units (declared vertical unit is invalid)',
 };
 
+/** Appended to a Height figure when noise classes 7 and 18 sit inside the extent. */
+export const HEIGHT_INCLUDES_NOISE_SUFFIX = ' (includes noise classes 7 and 18)';
+
+/** Whether any counted point carries a noise class (7 Low Point, 18 High Noise). */
+export function hasNoiseClassPoints(
+  classification: ArrayLike<number>,
+  count: number,
+): boolean {
+  const n = Math.min(count, classification.length);
+  for (let i = 0; i < n; i++) {
+    const c = classification[i] & 0xff;
+    if (c === 7 || c === 18) return true;
+  }
+  return false;
+}
+
 /**
  * Classify a declared vertical factor. `undefined` means no vertical unit was
  * declared; a declared factor that is zero, negative or non-finite is invalid.

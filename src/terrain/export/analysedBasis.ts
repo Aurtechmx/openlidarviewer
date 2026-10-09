@@ -30,6 +30,11 @@ export interface AnalysedBasis {
    * analysed set is a strided subsample of them. Absent otherwise.
    */
   readonly residentPointCount?: number;
+  /**
+   * Points left out of the analysed set because they are flagged Withheld.
+   * Absent when none were. They are accounted for, not missing.
+   */
+  readonly withheldExcludedCount?: number;
 }
 
 /**
@@ -48,6 +53,7 @@ export function analysedBasisOf(
   declaredPointCount?: number | null,
   interpretationLevel?: string | null,
   residentPointCount?: number,
+  withheldExcludedCount?: number,
 ): AnalysedBasis {
   const stated = declaredPointCount ?? facts.pointCount;
   const declared = stated != null && Number.isFinite(stated) && stated > 0 ? stated : null;
@@ -64,6 +70,7 @@ export function analysedBasisOf(
     analysedPointCount, declaredPointCount: declared, coverage: facts.coverage, loadStride,
     ...(interpretationLevel !== undefined ? { interpretationLevel } : {}),
     ...(facts.coverage === 'resident-only' && (residentPointCount ?? 0) > analysedPointCount ? { residentPointCount } : {}),
+    ...((withheldExcludedCount ?? 0) > 0 ? { withheldExcludedCount } : {}),
   };
 }
 
@@ -81,3 +88,25 @@ export function analysedBasisLine(b: AnalysedBasis | null | undefined): string {
     : `display sample${b.loadStride != null ? `, stride ${b.loadStride}` : ''}`;
   return `${fmt(b.analysedPointCount)}${of} points (${how}); whole-dataset support not claimed`;
 }
+
+/**
+ * Whether the analysed points are a sample of the source: a coverage other
+ * than a full read, or points missing for a reason other than Withheld
+ * exclusion (analysed plus Withheld-excluded is fewer than the source
+ * declares). A null basis states nothing and is not treated as a sample.
+ */
+export function isSampledBasis(b: AnalysedBasis | null | undefined): boolean {
+  if (!b) return false;
+  if (b.coverage !== 'full') return true;
+  return b.declaredPointCount != null
+    && b.analysedPointCount + (b.withheldExcludedCount ?? 0) < b.declaredPointCount;
+}
+
+/** Shown in place of the density reference when the figure is on a sample. */
+export const DENSITY_REF_SAMPLE_NOTE = 'not stated on a sample';
+
+/** Status shown when the terrain surface was rebuilt from a Withheld-aware re-decode of the source. */
+export const WITHHELD_RECOVERY_STATUS =
+  'Points flagged Withheld were excluded from this surface. The display was reduced to fit the point budget, '
+  + 'so the surface was rebuilt by re-decoding the source file at that budget and taking every Nth point. '
+  + 'It is still a sample of the points, not every point.';

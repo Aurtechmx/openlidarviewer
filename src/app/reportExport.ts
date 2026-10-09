@@ -36,6 +36,7 @@ import { sourceInterpretationOf, type SourceInterpretationRecord } from '../scie
 import { footprintMetres } from '../report/reportFootprint';
 import type { Footprint } from '../report/reportFootprint';
 import { spatialContextFrom } from '../geo/SpatialContext';
+import { hasNoiseClassPoints } from '../geo/height';
 import { isZUpFormat } from '../io/sniffFormat';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
 import { captureProvenance, isNonTerrainVerdict } from '../diagnostics/captureProvenance';
@@ -376,6 +377,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
       hasIntensity: !!staticCloud.intensity,
       hasClassification: !!staticCloud.classification,
       ...classificationShare(staticCloud),
+      ...(staticCloud.classification && hasNoiseClassPoints(staticCloud.classification, staticCloud.pointCount) ? { heightIncludesNoise: true } : {}),
       ...(activeCrsLabel ? { crsName: activeCrsLabel, crsUnit: activeCrs?.linearUnit } : {}),
       // Class-filter honesty — when a filter narrows the live view, disclose
       // it so the PDF's full-cloud figures aren't read as filter-scoped.

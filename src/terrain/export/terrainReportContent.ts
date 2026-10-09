@@ -42,6 +42,7 @@
  * so the two can never drift.
  */
 
+import { DENSITY_REF_SAMPLE_NOTE } from './analysedBasis';
 import { blockedCiClause } from '../validate/holdoutCiText';
 import { BLOCKED_CV_PARAMS, type AnalyseContoursResult } from '../contour/analyseContours';
 import { terrainAssessment } from '../contour/terrainAssessment';
@@ -474,7 +475,7 @@ export function buildTerrainReportContent(
   const qlValue =
     hasAcc && provenance.accuracy && provenance.accuracy.usgsDensityReferenceFloor !== 'none'
       ? provenance.accuracy.usgsDensityReferenceFloor
-      : DASH;
+      : hasAcc && provenance.accuracy?.accuracyOnSample ? DENSITY_REF_SAMPLE_NOTE : DASH;
   // Phase 4 honesty figures, single-sourced from the same result the panel
   // shows. ASCII only (the PDF renderer strips non-Latin1), so "<=" not "≤".
   const pctOf = (x: number): string => `${Math.round(x * 100)}%`;
@@ -564,7 +565,7 @@ export function buildTerrainReportContent(
       // The stride-scaled ground density caveat used to live only in Warnings.
       {
         label: 'USGS density reference',
-        value: qlValue === DASH ? DASH : `>= ${qlValue} floor (stride-scaled ground density)`,
+        value: qlValue === DASH || qlValue === DENSITY_REF_SAMPLE_NOTE ? qlValue : `>= ${qlValue} floor (stride-scaled ground density)`,
       },
     ],
   };
