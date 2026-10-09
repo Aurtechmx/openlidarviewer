@@ -864,9 +864,9 @@ export function invalidateObservatoryOverlay(): void {
 }
 
 /**
- * The Withheld-aware terrain recovery gather: a full-resolution re-decode
- * (through the shared parse worker) of a static file the display path
- * voxel-downsampled at load, rasterised into a fresh `TerrainCore`. Only
+ * The Withheld-aware terrain recovery gather: a strided re-decode at the
+ * point budget (through the shared parse worker) of a static file the display
+ * path voxel-downsampled at load, rasterised into a fresh `TerrainCore`. Only
  * reached from `terrainAnalysisRunner.ts`'s export/report path, and only
  * when the display gather could not already say "excluded" — most runs never
  * touch this, so it stays out of the eager shell rather than pulling the

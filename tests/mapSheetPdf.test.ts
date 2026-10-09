@@ -467,6 +467,26 @@ describe('buildMapSheetPdf — the density reference names its basis', () => {
     expect(text, 'the unqualified label read as a pulse-density grade').not.toContain('USGS density ref');
   });
 
+  it('withholds the density reference and retitles the block on a sampled basis', async () => {
+    const prov = {
+      ...PROV,
+      accuracy: { rmseZM: 1, nvaM: 1.96, vvaM: 2.1, usgsDensityReferenceFloor: 'none', accuracyOnSample: true },
+    } as typeof PROV;
+    const text = drawn(await buildMapSheetPdf({ model, labels: [], provenance: prov }));
+    expect(text).toContain('Hold-out accuracy (preview)');
+    expect(text).toContain('Figures are from a sample of the points');
+    expect(text).toContain('not stated on a sample');
+    expect(text).not.toContain('>= USGS');
+    expect(text).not.toContain('Survey accuracy');
+  });
+
+  it('keeps the density reference on a full-cloud basis', async () => {
+    const prov = { ...PROV, accuracy: { rmseZM: 1, nvaM: 1.96, vvaM: 2.1, usgsDensityReferenceFloor: 'QL3' } } as typeof PROV;
+    const text = drawn(await buildMapSheetPdf({ model, labels: [], provenance: { ...prov, exportReadiness: 'Ready' } as typeof PROV }));
+    expect(text).toContain('>= USGS QL3');
+    expect(text).toContain('Survey accuracy');
+  });
+
   it('fits the accuracy column at its longest', async () => {
     const { PDFDocument, StandardFonts } = await import('pdf-lib');
     const font = await (await PDFDocument.create()).embedFont(StandardFonts.Helvetica);

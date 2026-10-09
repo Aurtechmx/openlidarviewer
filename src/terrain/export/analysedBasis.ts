@@ -81,3 +81,23 @@ export function analysedBasisLine(b: AnalysedBasis | null | undefined): string {
     : `display sample${b.loadStride != null ? `, stride ${b.loadStride}` : ''}`;
   return `${fmt(b.analysedPointCount)}${of} points (${how}); whole-dataset support not claimed`;
 }
+
+/**
+ * Whether the analysed points are a sample of the source: a coverage other
+ * than a full read, or fewer analysed points than the source declares. A null
+ * basis states nothing and is not treated as a sample.
+ */
+export function isSampledBasis(b: AnalysedBasis | null | undefined): boolean {
+  if (!b) return false;
+  if (b.coverage !== 'full') return true;
+  return b.declaredPointCount != null && b.analysedPointCount < b.declaredPointCount;
+}
+
+/** Shown in place of the density reference when the figure is on a sample. */
+export const DENSITY_REF_SAMPLE_NOTE = 'not stated on a sample';
+
+/** Status shown when the terrain surface was rebuilt from a Withheld-aware re-decode of the source. */
+export const WITHHELD_RECOVERY_STATUS =
+  'Points flagged Withheld were excluded from this surface. The display was reduced to fit the point budget, '
+  + 'so the surface was rebuilt by re-decoding the source file at that budget and taking every Nth point. '
+  + 'It is still a sample of the points, not every point.';

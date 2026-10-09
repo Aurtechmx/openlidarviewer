@@ -84,6 +84,10 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - The blocked hold-out RMSE showed a 95% interval of [RMSE, RMSE] whenever only one block was scored or the bootstrap was off, although no interval had been computed. The result now carries an interval status, the reason it is unavailable, the number of scored blocks and the uncovered share. The Analyse panel and the report show "Confidence interval unavailable" with the reason and keep the point RMSE. Intervals computed from two or more blocks are unchanged.
 - A nonzero measurement no longer exports as 0 when it is smaller than 0.0005. The measurement CSV, GeoJSON and KML, the integrity report and the findings report keep three decimals for values of 0.0005 and above, as before, and keep three significant digits for smaller nonzero values, so a 0.0004 m segment reads 0.0004. Exact zero stays 0, and CSV and KML write tiny values without an exponent.
 - The state strip showed "Export all N points" and "Reload all N points" run together at the page text size. They are now separate items with a gap, at the strip's own type size, with a hover and focus style, a 44 px target on touch screens and system link colors in forced-colors mode.
+- The terrain status after a Withheld-aware recovery no longer says the surface was rebuilt at full resolution. It now says the source was re-decoded at the point budget taking every Nth point, so the surface is still a sample.
+- The USGS density reference is no longer printed on the contour map sheet, the Analyse panel, the terrain report or the export provenance when the analysed points are a sample of the source. The sheet titles the block "Hold-out accuracy (preview)" and states the sample basis under the heading when the figures come from a sample or a preview surface.
+- The technical report's Dataset summary Height row now carries "(includes noise classes 7 and 18)" whenever the on-screen Scan Report does.
+- The technical report's Exported stamp and the scan-report footer now print UTC with the zone named, matching the map sheet.
 
 ## [0.7.0-alpha.1] - 2026-09-18
 

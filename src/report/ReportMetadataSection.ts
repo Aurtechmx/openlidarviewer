@@ -11,7 +11,7 @@
  */
 
 import type { ReportDatasetRow } from './types';
-import { HEIGHT_UNIT_GAP_SUFFIX, type HeightUnitGap } from '../geo/height';
+import { HEIGHT_INCLUDES_NOISE_SUFFIX, HEIGHT_UNIT_GAP_SUFFIX, type HeightUnitGap } from '../geo/height';
 import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
 import { sourceSha256Text, type ExportDigests } from '../science/exportDigestRecord';
 import { crsOriginVerticalPhrase } from '../science/crsOrigin';
@@ -33,6 +33,8 @@ export interface MetadataInputs {
    * on-screen Scan Report. Absent means the height is in the extents' unit.
    */
   readonly heightUnitGap?: HeightUnitGap;
+  /** Noise classes 7 or 18 sit inside the extent, so the Height row says so like the on-screen Scan Report. */
+  readonly heightIncludesNoise?: boolean;
   /** Source point density in pts/m² on the XY footprint. NaN when unknown. */
   readonly density: number;
   readonly hasRgb: boolean;
@@ -140,12 +142,15 @@ export function extentRows(inputs: {
   readonly unitKnown: boolean;
   /** Why the height is not in metres; absent when it is. Ignored when `unitKnown` is false. */
   readonly heightUnit?: HeightUnitGap;
+  /** Append the noise-class qualifier to the Height value. */
+  readonly includesNoise?: boolean;
 }): Array<{ label: string; value: string }> {
+  const noise = inputs.includesNoise ? HEIGHT_INCLUDES_NOISE_SUFFIX : '';
   if (!inputs.unitKnown) {
     return [
       { label: 'Width', value: formatSourceUnits(inputs.width) },
       { label: 'Depth', value: formatSourceUnits(inputs.depth) },
-      { label: 'Height', value: formatSourceUnits(inputs.height) },
+      { label: 'Height', value: formatSourceUnits(inputs.height) + noise },
     ];
   }
   const gap = inputs.heightUnit;
@@ -161,9 +166,9 @@ export function extentRows(inputs: {
     { label: 'Depth', value: fmt(inputs.depth) },
     {
       label: 'Height',
-      value: gap === undefined
+      value: (gap === undefined
         ? fmt(h)
-        : Number.isFinite(h) ? `${h.toFixed(1)}${HEIGHT_UNIT_GAP_SUFFIX[gap]}` : 'unknown',
+        : Number.isFinite(h) ? `${h.toFixed(1)}${HEIGHT_UNIT_GAP_SUFFIX[gap]}` : 'unknown') + (Number.isFinite(h) ? noise : ''),
     },
   ];
 }
@@ -312,6 +317,7 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
       depth: inputs.depth,
       height: inputs.height,
       unitKnown: !unitsUnconfirmed,
+      ...(inputs.heightIncludesNoise ? { includesNoise: true } : {}),
       ...(inputs.heightUnitGap ? { heightUnit: inputs.heightUnitGap } : {}),
     }),
   );

@@ -5,7 +5,7 @@ import type { ClassScope } from '../../render/class/classScope';
 import type { SpatialContext } from '../../geo/SpatialContext';
 import { heightScale, spatialContextFrom } from '../../geo/SpatialContext';
 import { isZUpFormat } from '../../io/sniffFormat';
-import { heightLabel } from '../../geo/height';
+import { heightLabel, HEIGHT_INCLUDES_NOISE_SUFFIX } from '../../geo/height';
 import { estimateInMemoryPrecision } from '../../geo/inMemoryPrecision';
 import { inMemoryPrecisionRows } from '../inMemoryPrecisionRows';
 import { SCAN_DENSITY_METHOD_TAG } from '../streamingExtentRows';
@@ -250,7 +250,7 @@ export const scanReport: AnalysisModule = {
     rows.push(
       withScope(rowInfo('Width', `${width.toFixed(1)}${basis.lengthUnit}`), scope),
       withScope(rowInfo('Depth', `${depth.toFixed(1)}${basis.lengthUnit}`), scope),
-      withScope(rowInfo('Height', `${height.toFixed(1)}${basis.heightUnit}${hasNoise ? ' (includes noise classes 7 and 18)' : ''}`), scope),
+      withScope(rowInfo('Height', `${height.toFixed(1)}${basis.heightUnit}${hasNoise ? HEIGHT_INCLUDES_NOISE_SUFFIX : ''}`), scope),
     );
 
     const footprintArea = width * depth;
