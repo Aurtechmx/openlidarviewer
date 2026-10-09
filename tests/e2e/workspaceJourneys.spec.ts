@@ -97,7 +97,7 @@ test.describe('workspace journeys', () => {
     await expectWorkspaceRules(page);
 
     await expect(page.locator('.olv-inspector .olv-layerhealth-card')).toHaveCount(1, { timeout: 20_000 });
-    await data.locator('.olv-data-row', { hasText: 'Classes' }).click();
+    await data.locator('.olv-data-class-open').click();
     await expect(taskTitle(page, 'data')).toHaveText('Classes');
     await expect(taskTitle(page, 'data')).toBeFocused();
     await expect(taskTitle(page, 'data')).toHaveAttribute('aria-current', 'page');
@@ -106,7 +106,7 @@ test.describe('workspace journeys', () => {
     // Keyboard Back: focus the button and press Enter.
     await backBtn(page, 'data').focus();
     await page.keyboard.press('Enter');
-    await expect(data.locator('.olv-data-row', { hasText: 'Classes' })).toBeVisible();
+    await expect(data.locator('.olv-data-class-open')).toBeVisible();
     await expect(taskTitle(page, 'data')).toBeHidden();
     await expectWorkspaceRules(page);
   });

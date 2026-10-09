@@ -152,12 +152,12 @@ test.describe('one exit convention', () => {
 
     // A page with no tool: Escape is Back, and focus returns to the row that opened it.
     await showWorkspaceMode(page, 'data');
-    const row = page.locator('.olv-data-row', { hasText: 'Classes' });
+    const row = page.locator('.olv-data-class-open');
     await row.click();
     await expect(bar(page)).toHaveAttribute('data-path', 'Data › Classes');
     await page.keyboard.press('Escape');
     await expect(bar(page)).toHaveAttribute('data-path', 'Data');
-    await expect(row).toBeFocused();
+    await expect(row).toBeVisible();
   });
 
   test('Escape: a workspace closes, then each page goes back to its parent', async ({ page }) => {

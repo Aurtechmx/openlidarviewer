@@ -62,7 +62,7 @@ export interface WorkspaceShellDeps {
     focusSource(): boolean;
     onSourceChange(fn: () => void): () => void;
   };
-  classLegend: Panel & { presentCodes(): number[]; getVisibility?(): { hiddenCodes(): number[] } };
+  classLegend: Panel & { presentCodes(): number[]; classSummary(): { code: number; name: string; share: number; color: readonly [number, number, number] }[]; getVisibility?(): { hiddenCodes(): number[] } };
   annotation: HTMLElement;
   toolLauncher: HTMLElement;
   clip: HTMLElement;
@@ -230,7 +230,8 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   const rightCollapsed = (): boolean => d.rightRail.classList.contains('olv-right-collapsed');
   const dataHome = createDataHome({
     hasScan: d.hasScan,
-    classCount: () => d.classLegend.presentCodes().length,
+    classRows: () => d.classLegend.classSummary(),
+    storage: storage(),
     sourceSummary: () => d.inspector.sourceSummary(),
     inspectorCollapsed: rightCollapsed,
     openClasses: () => router?.navigate({ mode: 'data', page: 'classes' }, true),

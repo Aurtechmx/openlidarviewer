@@ -502,6 +502,23 @@ export class ClassLegendPanel {
     return this._presentCodes();
   }
 
+  /**
+   * Read-only roster for compact surfaces: each present class with its name,
+   * share of the counted points (0 to 100) and legend colour. Same counts and
+   * names the legend rows use; nothing here changes a class or its visibility.
+   */
+  classSummary(): { code: number; name: string; share: number; color: [number, number, number] }[] {
+    const codes = this._presentCodes();
+    let total = 0;
+    for (const c of codes) total += this._counts.get(c) ?? 0;
+    return codes.map((code) => ({
+      code,
+      name: classificationLabel(code, this._pointFormat),
+      share: total > 0 ? ((this._counts.get(code) ?? 0) / total) * 100 : 0,
+      color: classColor(code) as [number, number, number],
+    }));
+  }
+
   /** Present class codes (count > 0), ascending. */
   private _presentCodes(): number[] {
     const codes: number[] = [];
