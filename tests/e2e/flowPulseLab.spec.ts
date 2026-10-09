@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropDenseGridPly, firePaletteAction, openAnalysePanel as openAnalyse } from './helpers';
+import { dropDenseGridPly, firePaletteAction, openAnalysePanel as openAnalyse, closeScanFromDock } from './helpers';
 
 /**
  * Flow Pulse (Field Simulation Lab) — run, switch conditioning, click-to-pulse
@@ -203,7 +203,7 @@ test('closing the scan tears down the persisted overlay without reopening the La
 
   // Close the scan — no Lab reopen in between. Before the fix, nothing
   // disposed the persisted overlay on this path at all.
-  await page.locator('.olv-tool-close').click();
+  await closeScanFromDock(page);
   await expect(page.locator('.olv-empty')).toBeVisible({ timeout: 10_000 });
 
   // Load a fresh scan and re-run analysis; the new Lab session's overlay

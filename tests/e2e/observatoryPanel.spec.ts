@@ -6,7 +6,7 @@
  * overlay must not outlive the scan it was drawn from.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { dropDenseGridPly, dropTinyPtx, showWorkspaceMode } from './helpers';
+import { dropDenseGridPly, dropTinyPtx, showWorkspaceMode, closeScanFromDock } from './helpers';
 
 async function firePaletteAction(page: Page, query: string, rowText: string): Promise<void> {
   await page.keyboard.press('ControlOrMeta+KeyK');
@@ -68,7 +68,7 @@ test.describe('Observatory panel', () => {
     await expect(page.locator('.olv-observatory-section-title')).toHaveCount(5, { timeout: 20_000 });
     await page.keyboard.press('Escape'); // leave the page; the overlay (if drawn) stays in the scene
 
-    await page.locator('.olv-tool-close').click();
+    await closeScanFromDock(page);
     await expect(page.locator('.olv-empty')).toBeVisible({ timeout: 20_000 });
 
     // Reopening the Observatory on the now-empty state must never show the

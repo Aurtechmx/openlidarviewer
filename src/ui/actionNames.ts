@@ -35,7 +35,7 @@ export const ANALYSE = 'Analyse';
 export const COMMANDS = 'Commands';
 export const HELP = 'Help';
 export const OPEN_SCAN = 'Open scan';
-export const CLOSE_SCAN = 'Close';
+export const CLOSE_SCAN = 'Close scan';
 export const EXPORT_SESSION = 'Export session';
 
 /** A camera preset's name, from the preset's own label ("Top" gives "Top view"). */

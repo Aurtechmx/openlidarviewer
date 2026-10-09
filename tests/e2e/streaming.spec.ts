@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { dropTinyLas } from './helpers';
+import { dropTinyLas, closeScanFromDock } from './helpers';
 import {
   COPC_FIXTURE,
   EPT_FIXTURE_NODES,
@@ -171,7 +171,7 @@ test.describe('streaming COPC and EPT fixtures', () => {
     await page.locator('.olv-file-input').first().setInputFiles(COPC_FIXTURE);
     await expect(page.locator('.olv-streaming-panel')).toBeVisible({ timeout: 30_000 });
 
-    await page.locator('.olv-tool', { hasText: 'Close' }).click();
+    await closeScanFromDock(page);
     await expect(page.locator('.olv-empty-title')).toBeVisible();
     await expect(page.locator('.olv-streaming-panel')).toBeHidden();
   });

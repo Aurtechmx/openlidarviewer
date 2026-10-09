@@ -180,3 +180,31 @@ describe('CRITIC-GAP-3 — isolate/lock 44px phone touch targets', () => {
     expect(rule).toMatch(/min-height:\s*44px/);
   });
 });
+
+// Close scan files under More on a phone and stays in the primary row elsewhere.
+describe('Close scan on phone layouts', () => {
+  const phone = (): string => {
+    const text = css('65-mobile-touch.css');
+    const at = text.indexOf('@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {');
+    expect(at, 'the phone media block is missing').toBeGreaterThan(-1);
+    return text.slice(at);
+  };
+  it('hides it until More is open, using the same disclosure class as the other folded tools', () => {
+    const text = phone();
+    expect(text).toMatch(/\.olv-dock \.olv-tool-close,\s*\.olv-dock \.olv-tool-probe \{\s*display: none;/);
+    expect(text).toMatch(/\.olv-dock\.olv-dock-more-open \.olv-tool-close \{\s*display: inline-flex;/);
+  });
+  it('keeps the 44 px target and its own cluster gap', () => {
+    const text = css('99-mobile-gui-refresh.css');
+    expect(text).toMatch(/\.olv-dock \.olv-tool-close \{ min-width: 44px; \}/);
+    expect(text).toMatch(/\.olv-dock > \.olv-dock-gap \{/);
+  });
+  it('does not fold it on the laptop tier', () => {
+    const text = css('45-dock-and-panels.css');
+    const at = text.indexOf('@media (max-width: 1100px) and (min-width: 768px)');
+    expect(text.slice(at, text.indexOf('\n}', at))).not.toContain('olv-tool-close');
+  });
+  it('keeps the destructive tint rule outside any media query', () => {
+    expect(css('45-dock-and-panels.css')).toMatch(/^\.olv-tool-close:not\(:disabled\) \{/m);
+  });
+});

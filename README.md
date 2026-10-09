@@ -276,7 +276,7 @@ npm run preview
 8. Annotate points of interest with categorised notes, and inspect or probe individual points.
 9. Save viewpoints for repeated inspection.
 10. Export a PNG snapshot, re-export the cloud as PLY, OBJ, XYZ, or CSV, or save the full working state as a `.olvsession` package.
-11. Close the scan from the tool dock to return to the start and open another.
+11. Close the scan (Close scan in the tool dock) to return to the start and open another.
 
 A fuller walkthrough is in [`docs/usage.md`](docs/usage.md).
 </details>

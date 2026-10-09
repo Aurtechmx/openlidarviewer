@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dropTinyPly, reloadSettled } from './helpers';
+import { dropTinyPly, reloadSettled, closeScanFromDock } from './helpers';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -165,7 +165,7 @@ test('closes a scan and returns to the empty state, ready for another', async ({
   await expect(page.locator('.olv-layer')).toHaveCount(1);
 
   // Close the scan — the empty state returns and the layer is gone.
-  await page.locator('.olv-tool', { hasText: 'Close' }).click();
+  await closeScanFromDock(page);
   await expect(page.locator('.olv-empty-title')).toBeVisible();
   await expect(page.locator('.olv-layer')).toHaveCount(0);
 

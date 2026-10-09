@@ -682,3 +682,22 @@ export async function bringPhoneToastForward(page: Page): Promise<void> {
     return toast.isVisible();
   }, { timeout: 10_000 }).toBe(true);
 }
+
+/**
+ * Close the scan from the tool dock. On a phone the control is filed under
+ * More, so the tray opens first. When the scan holds work that closing would
+ * discard, the confirmation appears and is accepted.
+ */
+export async function closeScanFromDock(page: Page): Promise<void> {
+  const close = page.locator('.olv-tool-close');
+  if (!(await close.isVisible())) {
+    const more = page.locator('.olv-tool-more');
+    if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
+  }
+  await close.click();
+  const confirm = page.locator('.olv-modal .olv-confirm-ok');
+  await Promise.race([
+    confirm.waitFor({ state: 'visible', timeout: 5_000 }).then(() => confirm.click()).catch(() => {}),
+    page.locator('.olv-empty').waitFor({ state: 'visible', timeout: 5_000 }).catch(() => {}),
+  ]);
+}

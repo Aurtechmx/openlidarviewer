@@ -48,6 +48,12 @@ describe('the name table', () => {
   });
 });
 
+describe('Close scan', () => {
+  it('is named Close scan in the registry', () => {
+    expect(ACTION_TITLES['scan.close']).toBe('Close scan');
+  });
+});
+
 describe('the dock', () => {
   it('labels every action button with its registry name', async () => {
     const { ToolDock } = await import('../src/ui/toolDock');

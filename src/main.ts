@@ -204,7 +204,7 @@ import {
   loadMeasurementExport,
   loadMeasurementReport,
   loadKmlExport,
-  loadConfirmFullExport,
+  loadConfirmFullExport, loadCloseScanGuard,
   loadFloorPlanConfidence,
   loadFullCloudGradeAction,
   loadSession,
@@ -1582,7 +1582,7 @@ const dock = new ToolDock({
   },
   onHelp: () => helpOverlay.open(),
   onCommandPalette: openCommandPalette,
-  onClose: closeScan,
+  onClose: () => { requestCloseScan().catch(() => { closeGuard = null; showLassoToast('Could not close the scan. Try again.'); }); },
 });
 // Start the dock hidden — the empty state shows no scan-dependent tools.
 // `setEmpty(false)` is called from every successful attach path.
@@ -4274,11 +4274,7 @@ function clearOpenStaticLayers(): void {
   scans.syncActive();
 }
 
-/**
- * Close the current scan: remove every loaded cloud and return to the empty
- * state, ready for another scan to be dropped, opened, or sampled.
- */
-function closeScan(): void {
+function closeScan(): void { // the guarded entry is requestCloseScan
   if (viewer.hasStreamingCloud) closeStreaming();
   for (const id of viewer.clouds()) {
     viewer.removeCloud(id);
@@ -4287,6 +4283,10 @@ function closeScan(): void {
   layerVisible.clear();
   layers.solo = null; recovery?.clear();
   resetToEmptyState();
+}
+let closeGuard: Promise<() => Promise<boolean>> | null = null; const requestCloseScan = (): Promise<boolean> => (closeGuard ??= loadCloseScanGuard().then((m) => m.createCloseScanGuard({ close: closeScan, saveSession: exportSession, work: discardableWork }))).then((g) => g());
+function discardableWork() {
+  return ({ measurements: viewerReady ? viewer.measure.getMeasurements().length : 0, annotations: viewerReady ? viewer.annotate.getAnnotations().length : 0, views: viewBookmarks.savedViews.length, classEdits: activeScanHasClassEdits(scans.activeId, viewer), results: workspaceShell?.readyResultCount() ?? 0, pendingRecovery: recovery?.hasPending() ?? false });
 }
 
 /** Save the current view as a PNG (`app/snapshotAction.ts`, a lazy chunk). */

@@ -79,7 +79,7 @@ describe('ToolDock manifest', () => {
       'Commands',
       'Help',
       '•••',
-      'Close',
+      'Close scan',
     ]);
   });
 
