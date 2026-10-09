@@ -39,7 +39,7 @@ import { serializeContours } from '../contour/contourDownload';
 import { dxfContours } from '../contour/dxfContours';
 import { validationDeliverableJson, contourStudioDeliverableJson } from './contourDeliverableJson';
 import { verticalUnitLabel, horizontalUnitLabel } from '../../units/units';
-import { writeGeoTiff, verticalUnitGeoKeyCode } from './demGeoTiff';
+import { writeGeoTiff, writeGeoTiffDroppingVerticalConflict, verticalUnitGeoKeyCode } from './demGeoTiff';
 import { parseEpsg } from './demPackage';
 import {
   buildContourPackageManifest,
@@ -48,7 +48,6 @@ import {
 import { assembleContourDeliverable } from './contourDeliverablePackage';
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
-const NO_DATA = -9999;
 
 export interface DeliverableBuildOptions {
   /** Source-file digest and CRS origin for the provenance record. */
@@ -247,7 +246,9 @@ function gatherDeliverable(
     }
     bytes.set(
       'dtm-raster',
-      writeGeoTiff({
+      // A vertical CRS code whose own unit contradicts the heights is left
+      // off, with the unit kept as the band unit, as in the DEM package.
+      writeGeoTiffDroppingVerticalConflict({
         values: dtmValues,
         coverage: dtm.coverage,
         cols: dtm.cols,
@@ -255,7 +256,7 @@ function gatherDeliverable(
         cellSize: dtm.cellSizeM,
         xllCorner: ox + dtm.originH1,
         yllCorner: oy + dtm.originH2,
-        noData: NO_DATA,
+        // NoData is left to the writer: -9999 unless a height equals it.
         epsg: dtm.horizontalEpsg ?? parseEpsg(dtm.crs),
         isGeographic: opts.isGeographic ?? false,
         verticalEpsg: dtm.verticalEpsg ?? parseEpsg(dtm.verticalDatum),

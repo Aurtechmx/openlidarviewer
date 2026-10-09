@@ -10,6 +10,8 @@
  * Pure-data: no DOM, deterministic, unit-testable.
  */
 
+import { assertNoDataClear, chooseNoData } from './demNoData';
+
 export interface DemGridInput {
   /** Row-major cell values; length === cols*rows. */
   readonly values: ArrayLike<number>;
@@ -23,7 +25,11 @@ export interface DemGridInput {
   readonly xllCorner: number;
   /** World Y (north) of the lower-left corner of the lower-left cell. */
   readonly yllCorner: number;
-  /** Sentinel written for empty cells. Default -9999. */
+  /**
+   * Sentinel written for empty cells. Omitted: -9999, or a value below every
+   * written height when one rounds to -9999 ({@link chooseNoData}). A given
+   * value that a written height rounds to is refused.
+   */
   readonly noData?: number;
   /** Decimal places for elevation values. Default 3. */
   readonly precision?: number;
@@ -37,7 +43,6 @@ function fmt(n: number, precision: number): string {
 /** Serialize an elevation grid to Esri ASCII Grid (AAIGrid) text. */
 export function writeAsciiGrid(input: DemGridInput): string {
   const { values, coverage, cols, rows, cellSize, xllCorner, yllCorner } = input;
-  const noData = input.noData ?? -9999;
   const precision = input.precision ?? 3;
   // The GeoTIFF writer validates its input; this one emitted whatever it was
   // handed. A cols x rows that does not match the arrays writes a raster whose
@@ -58,10 +63,16 @@ export function writeAsciiGrid(input: DemGridInput): string {
   if (!Number.isFinite(xllCorner) || !Number.isFinite(yllCorner)) {
     throw new RangeError(`writeAsciiGrid: origin must be finite; got (${xllCorner}, ${yllCorner})`);
   }
-  if (!Number.isFinite(noData)) throw new RangeError(`writeAsciiGrid: NODATA must be finite; got ${noData}`);
   if (!(Number.isInteger(precision) && precision >= 0 && precision <= 20)) {
     throw new RangeError(`writeAsciiGrid: precision must be an integer in [0, 20]; got ${precision}`);
   }
+  // A reader compares each cell's text, as a number, with NODATA_value; no
+  // written height may read back equal to it.
+  const grid = [{ values, coverage }];
+  const opts = { serialisations: ['ascii'] as const, precision };
+  const noData = input.noData ?? chooseNoData(grid, opts);
+  if (!Number.isFinite(noData)) throw new RangeError(`writeAsciiGrid: NODATA must be finite; got ${noData}`);
+  if (input.noData != null) assertNoDataClear(grid, noData, opts);
 
   const head =
     `ncols ${cols}\n` +

@@ -314,7 +314,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 97 for the shell, 75 for the renderer and 23 for the Analyse panel,
-across 1100 modules with no dependency cycles.
+across 1101 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -485,6 +485,28 @@ Some surfaces cannot carry every field:
 - The batch converter hashes each input file, but records the CRS origin as
   unknown, because it does not resolve a CRS per file.
 - The session file is unchanged and carries none of the three.
+
+## Vertical CRS in exported rasters and LAS files
+
+The DTM and DSM GeoTIFFs carry a vertical CRS only when it can be written as
+an EPSG code in the unit of the heights. The writer knows the unit and axis
+direction of a fixed list of vertical CRS codes, checked against the EPSG
+registry. A code outside that list, a height unit the analysis could not
+resolve, a datum with no EPSG code in the height unit (EGM2008 heights in
+feet, for example) or a depth CRS leaves the vertical CRS off. The heights
+keep their unit as the band unit, and the DEM package README names the source
+code and the reason. The contour deliverable writes its DTM the same way, but
+its README does not yet carry that note.
+
+When the source declares no vertical unit, the height unit is borrowed from
+the horizontal unit, and a vertical CRS written from it states that borrowed
+unit as part of the CRS. The DEM package README says so beside the code.
+
+LAS files written by the converter name the vertical CRS in the unit of the Z
+values through the same table (NAVD88 in US survey feet is EPSG:6360). A
+vertical code outside the table, or one with no unit to check it against,
+passes through from the source unchanged, so a reader takes its unit from the
+code.
 
 ## One streamed source at a time
 

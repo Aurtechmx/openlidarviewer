@@ -198,6 +198,12 @@ jobs:
           node-version-file: '.nvmrc'
           cache: npm
       - run: npm ci --ignore-scripts
+      # tests/demGeoTiffGdal.test.ts reads the DEM GeoTIFFs back with GDAL's
+      # command-line tools and skips itself when they are absent. Installing
+      # them here makes those checks run in CI rather than skip.
+      - name: Install GDAL command-line tools (terrain bucket)
+        if: matrix.bucket == 'terrain'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends gdal-bin proj-bin
       # scripts/test-bucket.mjs is the SINGLE source of the worker cap (2, to
       # match these ~2-core runners): passing --maxWorkers here as well would
       # make vitest reject a duplicate single-value option before any test runs.

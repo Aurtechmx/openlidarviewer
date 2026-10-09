@@ -30,6 +30,7 @@ import { describe, it, expect } from 'vitest';
 import { writeLas, writeLas14, pickPointFormat, pickPointFormat14 } from '../../src/convert/writeLas';
 import { loadLas } from '../../src/io/loadLas';
 import { parseLasHeader } from '../../src/io/lasHeader';
+import { verticalDatumLabel } from '../../src/io/crs';
 import { convertCloud } from '../../src/convert/convertCloud';
 import { cloudToGlobal } from '../../src/convert/globalPoints';
 import { PointCloud } from '../../src/model/PointCloud';
@@ -562,8 +563,10 @@ describe('CRS survival — what is written reads back as the same CRS', () => {
     expect(crs.epsg).toBe(32611);
     expect(crs.linearUnit).toBe('metre');
     expect(crs.linearUnitToMetres).toBe(1);
-    expect(crs.verticalEpsg).toBe(5703);
-    expect(crs.verticalDatum).toBe('NAVD88');
+    // NAVD88 in international feet is written as EPSG:8228, the code whose own
+    // unit is the foot; it reads back under that code's label.
+    expect(crs.verticalEpsg).toBe(8228);
+    expect(crs.verticalDatum).toBe(verticalDatumLabel(8228));
     expect(crs.verticalLinearUnit).toBe('foot');
     expect(crs.verticalUnitToMetres).toBeCloseTo(0.3048, 10);
   });
@@ -600,7 +603,7 @@ describe('CRS survival — what is written reads back as the same CRS', () => {
     expect(crs.epsg).toBe(32611);
     expect(crs.linearUnit).toBe('metre');
     // The vertical keys ride alongside the horizontal-only WKT.
-    expect(crs.verticalEpsg).toBe(5703);
+    expect(crs.verticalEpsg).toBe(8228);
     expect(crs.verticalLinearUnit).toBe('foot');
   });
 

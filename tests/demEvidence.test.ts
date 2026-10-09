@@ -157,8 +157,10 @@ describe('writeGeoTiff single band', () => {
   const base = { values, coverage, cols: 3, rows: 2, cellSize: 0.5, xllCorner: 600000, yllCorner: 4000000 };
 
   it('writes the same bytes as before for Float32 and uint8 bands', () => {
+    // A raster with VerticalGeoKey declares GeoTIFF 1.1 (MinorRevision 1), so
+    // this digest covers that header; the three below carry no vertical key.
     expect(sha256Hex(writeGeoTiff({ ...base, epsg: 32610, verticalEpsg: 5703, verticalUnitCode: 9001 })))
-      .toBe('d8ecc0c43ee9f1364fbc296bb984ee99b250fc97e5c636977957fcbb433cd085');
+      .toBe('3b306618b82ef62e2c8b2648818cf9098dec98215b74e89ab69978931e9551c8');
     expect(sha256Hex(writeGeoTiff({
       ...base, values: coverage, coverage: new Uint8Array(6).fill(1), noData: 255, epsg: 32610, band: 'uint8',
     }))).toBe('ac3e839441feb0828ad3bf80da94d6e16d9a93846b16f24d80692b9ad752e814');
