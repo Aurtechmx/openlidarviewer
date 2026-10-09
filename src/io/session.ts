@@ -1723,6 +1723,22 @@ function parseVolumeRecord(v: unknown): VolumeRecord | undefined {
     if (isFiniteNum(w.noiseExcluded) && w.noiseExcluded > 0) {
       record.withheld = { ...record.withheld, noiseExcluded: w.noiseExcluded };
     }
+    // How the source was reduced, and whether its noise and Withheld labels
+    // could be used. Absent on a whole-cloud record and on older files.
+    const red = w.reduction;
+    if (isRecord(red) && (red.mode === 'voxel-centroids' || red.mode === 'strided-records')
+      && finiteFields(red, ['resident', 'declared'])
+      && (red.resident as number) >= 0 && (red.declared as number) >= 0) {
+      record.withheld = {
+        ...record.withheld,
+        reduction: { mode: red.mode, resident: red.resident as number, declared: red.declared as number },
+      };
+    }
+    // Derived from the mode, never read on its own: a voxel source's
+    // exclusion is unavailable whatever the saved flag says.
+    if (record.withheld.reduction?.mode === 'voxel-centroids') {
+      record.withheld = { ...record.withheld, exclusionUnavailable: 'reduced-sample' };
+    }
   }
   return record;
 }

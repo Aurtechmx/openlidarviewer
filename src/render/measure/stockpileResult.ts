@@ -16,6 +16,7 @@
  * so none of it lands in the startup shell.
  */
 import type { VolumeRecord, VolumeWithheldCounts } from './types';
+import { reducedSampleClause } from './types';
 import { noiseExcludedClause } from '../../terrain/ground/classificationFilter';
 
 /** Shape version of a lasso result built here. Bump when its fields change meaning. */
@@ -131,6 +132,7 @@ export function withheldClause(w: VolumeWithheldCounts | undefined): string {
   if (!w) return '';
   const noise = noiseExcludedClause(w.noiseExcluded);
   const tail = noise ? ` · ${noise}` : '';
+  if (w.exclusionUnavailable) return ` · ${reducedSampleClause(w)}${tail}`;
   if (w.excluded === 'unknown') return ' · Withheld flags unavailable' + tail;
   return (w.excluded > 0 ? ` · ${w.excluded.toLocaleString()} Withheld points excluded` : '') + tail;
 }

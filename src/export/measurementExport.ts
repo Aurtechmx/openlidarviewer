@@ -18,7 +18,7 @@
  */
 
 import type { Measurement, Vec3 } from '../render/measure/types';
-import { GEOGRAPHIC_NOT_AVAILABLE, geographicRefusesKind, isComplete } from '../render/measure/types';
+import { GEOGRAPHIC_NOT_AVAILABLE, geographicRefusesKind, isComplete, reductionExportFields } from '../render/measure/types';
 import {
   evidenceNote,
   evidenceStatus,
@@ -28,6 +28,7 @@ import {
 
 /** The refusal rule and wording, for the report and KML serializers. */
 export { GEOGRAPHIC_NOT_AVAILABLE, geographicRefusesKind };
+export { reducedSampleCaveat } from '../render/measure/types';
 import { crsUrn } from './crsIdentifier';
 import { lightProvenance, type LightProvenanceInput } from './lightProvenance';
 import {
@@ -353,6 +354,8 @@ export function measurementsToGeoJSON(
       if (m.kind === 'volume' && m.volume?.gridAuthority) properties.grid_authority = m.volume.gridAuthority;
       const w = m.kind === 'volume' ? m.volume?.withheld : undefined;
       if (w) Object.assign(properties, { source_points: w.source, withheld_excluded: w.excluded, analysed_points: w.analysed });
+      // Only a volume measured on a reduced source states how; a whole one adds nothing.
+      if (w?.reduction) Object.assign(properties, reductionExportFields(w));
       return { type: 'Feature' as const, geometry, properties };
     })
     .filter((f): f is NonNullable<typeof f> => f !== null);
@@ -517,6 +520,15 @@ const CSV_COLUMNS = [
 ] as const;
 
 /**
+ * Appended after `evidence` when a volume rode on a reduced source. A noise
+ * count reads `unavailable` where the source's labels could not support one,
+ * never 0.
+ */
+const REDUCTION_CSV_COLUMNS = [
+  'noise_excluded', 'reduction_mode', 'resident_points', 'declared_points', 'reduction_caveat',
+] as const;
+
+/**
  * Escape a CSV cell per RFC 4180 (quote when it contains , " or newline), and
  * neutralise spreadsheet formula injection. A string cell that begins with
  * `= + - @` or a tab/CR is interpreted as a formula by Excel/Sheets; a
@@ -540,7 +552,12 @@ export function measurementsToCsv(
   // With no resolved scale the values are source-unit numbers, so the header
   // names them that way rather than asserting metres a parser would believe.
   const unitsKnown = ctx.unitsVerified ?? true;
-  const columns = unitsKnown ? CSV_COLUMNS : CSV_COLUMNS.map(sourceUnitKey);
+  // The reduction columns exist only when some volume rode on a reduced
+  // source, so every other export keeps the header it always had.
+  const reducedColumns = measurements.some((m) => m.kind === 'volume' && m.volume?.withheld?.reduction)
+    ? REDUCTION_CSV_COLUMNS
+    : [];
+  const columns = [...(unitsKnown ? CSV_COLUMNS : CSV_COLUMNS.map(sourceUnitKey)), ...reducedColumns];
   const rows: string[] = [columns.join(',')];
   // Route the CSV through the SAME one gate the GeoJSON path uses (PR §19):
   // measurements sit below their required evidence level, so every row carries
@@ -581,6 +598,7 @@ export function measurementsToCsv(
     if (m.kind === 'volume' && m.volume?.gridAuthority) base.grid_authority = m.volume.gridAuthority;
     const w = m.kind === 'volume' ? m.volume?.withheld : undefined;
     if (w) Object.assign(base, { source_points: w.source, withheld_excluded: w.excluded, analysed_points: w.analysed });
+    if (w?.reduction) Object.assign(base, reductionExportFields(w));
     rows.push(columns.map((c) => (c in base ? csvCell(base[c]) : '')).join(','));
   }
   return rows.join('\n');

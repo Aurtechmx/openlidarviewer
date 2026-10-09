@@ -17,7 +17,7 @@
 
 import type { ExportDigests } from '../science/exportDigestRecord';
 import type { Measurement, Vec3 } from '../render/measure/types';
-import { GEOGRAPHIC_NOT_AVAILABLE, areaWithheldNote, geographicRefuses, measurementMetrics } from './measurementExport';
+import { GEOGRAPHIC_NOT_AVAILABLE, areaWithheldNote, geographicRefuses, measurementMetrics, reducedSampleCaveat } from './measurementExport';
 import {
   buildReportManifest,
   canonicalize,
@@ -236,6 +236,8 @@ export function measurementsToFindings(
       }
       const wc = withheldCaveat(vol.withheld);
       if (wc) caveats.push(wc);
+      const rc = reducedSampleCaveat(vol.withheld);
+      if (rc) caveats.push(rc);
       if (m.volumeResidentOnly) {
         caveats.push('Sampled from streaming resident points only — may refine as more nodes load.');
       }

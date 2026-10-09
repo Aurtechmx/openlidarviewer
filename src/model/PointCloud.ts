@@ -7,6 +7,8 @@ import type { AcquisitionStationSet } from './AcquisitionStations';
 
 /** Provenance of a cloud's live classification codes. */
 export type ClassState = 'source' | 'cleared' | 'derived';
+/** How a cloud's held points were reduced from its decoded records. */
+export type PointReduction = 'voxel-centroids';
 /** {@link ClassState}, or 'none' when the cloud carries no classification. */
 export type ClassificationState = ClassState | 'none';
 
@@ -269,6 +271,13 @@ export interface PointCloudOptions {
    * points" (a real anomaly). Survives voxel downsampling.
    */
   loadStride?: number;
+  /**
+   * How the held points were reduced from the decoded records, when they
+   * were. `'voxel-centroids'`: each point is the centroid of a voxel, so its
+   * class is the first member's and it carries no per-record flags. Absent
+   * for original records, a stride of them included.
+   */
+  pointReduction?: PointReduction;
   /** Provenance metadata read from the file header, when available. */
   metadata?: CloudMetadata;
 }
@@ -342,6 +351,7 @@ export class PointCloud {
   readonly declaredPointCount?: number;
   readonly decodedPointCount?: number;
   readonly loadStride?: number;
+  readonly pointReduction?: PointReduction;
   /**
    * For a streaming resident snapshot: the SOURCE's declared total, distinct
    * from `declaredPointCount` (which stays equal to the held count so the
@@ -427,6 +437,7 @@ export class PointCloud {
     this.declaredPointCount = options.declaredPointCount;
     this.decodedPointCount = options.decodedPointCount;
     this.loadStride = options.loadStride;
+    this.pointReduction = options.pointReduction;
     this.sourceDeclaredPointCount = options.sourceDeclaredPointCount;
     this.metadata = options.metadata;
   }

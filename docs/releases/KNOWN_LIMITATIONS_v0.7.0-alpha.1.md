@@ -309,7 +309,7 @@ for this development cut: that evidence comes from the engines themselves.
 
 `src/main.ts` is 4,316 lines, twenty-five fewer since the Save view snapshot
 moved to its own lazy module and the Analyse panel's longitude and latitude
-wiring moved to the mapper module, and `src/render/Viewer.ts` is 5,973, two hundred and fifty lines
+wiring moved to the mapper module, and `src/render/Viewer.ts` is 5,962, two hundred and sixty-one lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
@@ -325,7 +325,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 97 for the shell, 75 for the renderer and 23 for the Analyse panel,
-across 1104 modules with no dependency cycles.
+across 1105 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -640,3 +640,16 @@ correlation between windows. Empirical p-values cannot fall below 1/2001
 per peak, and the combined value below that is a model figure, not a
 calibrated probability. A supported grid is a grid the points are
 compatible with; it does not say which operation produced it.
+
+## Volumes on a voxel-reduced cloud cannot exclude noise or Withheld points
+
+A polygon or lasso volume on a cloud the loader voxel-reduced reads centroids.
+A centroid carries the class of the first point in its voxel and no flags, so
+the walk cannot tell which of the points it stands for were ASPRS noise
+(classes 7 and 18) or Withheld. The volume is integrated over all of them, and
+the record, the Measure panel, the exports, the integrity report and the PDF
+report say that exclusion was unavailable and give the reduction mode with the
+resident and declared point counts. A high noise return inside a footprint can
+move such a figure a long way. A cloud reduced only by a stride keeps original
+records and is filtered as usual. Noise and Withheld points are not removed
+before the voxel pass at load.

@@ -28,7 +28,7 @@ from the tree and fails when a cell drifts.
 | Geo | `src/geo` | ~5.4k | CRS math, `ProjectSpatialFrame`, transforms. |
 | Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~50k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. UI-free by lint. |
 | I/O | `src/io` | ~39k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
-| Render | `src/render` | ~78k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
+| Render | `src/render` | ~79k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
 | Export / report | `src/export`, `src/report`, `src/convert` | ~18k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~27k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~42k | Panels, Inspector, Studio surfaces, onboarding. |
@@ -269,7 +269,7 @@ in `main.ts`, which reaches the module through `loadTestSeamMount()` in
 and the chunk
 (`npm run check:no-test-seam`). `main.ts` went from 4,426 to 4,348 lines.
 
-`src/render/Viewer.ts` (5,973): the constructor and a handful of large
+`src/render/Viewer.ts` (5,962): the constructor and a handful of large
 methods dominate:
 
 Done: the renderer, scene, cameras and EDL pipeline are built by

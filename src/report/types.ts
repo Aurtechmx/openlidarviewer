@@ -202,6 +202,12 @@ export interface ReportMeasurementRow {
    * single headline line. v0.3.10 Profile-as-Deliverable stream.
    */
   readonly profileExtras?: ReportProfileDeliverableExtras;
+  /**
+   * A statement the figure must be read with, printed beneath the row: a
+   * volume computed on a reduced sample without noise or Withheld filtering.
+   * Absent on every row that needs none.
+   */
+  readonly note?: string;
 }
 
 /**
