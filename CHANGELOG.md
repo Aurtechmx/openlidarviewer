@@ -92,6 +92,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - The technical report's Dataset summary Height row now carries "(includes noise classes 7 and 18)" whenever the on-screen Scan Report does.
 - The technical report's Exported stamp and the scan-report footer now print UTC with the zone named, matching the map sheet.
 - The dock button that closes a scan is named Close scan, and on a phone it sits under More instead of beside Frame, Measure, Inspect and Annotate, so one stray tap no longer discards the scan. It keeps its rose tint, its own group and its 44 px target, and tablet and desktop layouts are unchanged.
+- On a tablet (a touch screen at least 768 px wide and 600 px tall) the controls outside the rails, dock and dialogs are 44 px targets, and panel close buttons and Frame all are 48 px. This covers the navigation card and its speed slider, the view cube (which grows to 144 px so its five buttons do not overlap), the scan-state items, the empty state, the command palette, the shortcut sheet, the tour, the floating panels, the class visibility checkboxes (now inside a 44 px label) and checkbox labels in the rails. Mouse and phone layouts are unchanged.
 
 ## [0.7.0-alpha.1] - 2026-09-18
 

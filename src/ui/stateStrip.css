@@ -113,3 +113,10 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* Large touch screens (the query in src/platform/runtimeFormFactor.ts): the
+   scan-state items are 44 px targets and the strip is tall enough to hold them. */
+@media (pointer: coarse) and (hover: none) and (min-width: 768px) and (min-height: 600px) {
+  :root { --olv-strip-h: 48px; }
+  .olv-ss-item { min-height: 44px; min-width: 44px; }
+}

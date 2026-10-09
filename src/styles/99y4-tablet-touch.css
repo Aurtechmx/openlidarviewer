@@ -1,0 +1,77 @@
+/* Tablet touch targets. The large-touch layout in 99-mobile-gui-refresh.css
+   sizes the rails, dock, measure bar and dialogs; this partition covers the
+   controls it does not reach: the navigation card, view cube, empty state,
+   command palette, shortcut sheet, tour, floating panels and bare checkboxes.
+   Every rule sits inside the same query as LARGE_TOUCH_LAYOUT_QUERY in
+   src/platform/runtimeFormFactor.ts, so a fine pointer and the phone layouts
+   keep their current sizes. 44 px is the floor; the most frequent actions
+   (panel close, Frame all) are 48 px. */
+
+/* The class-visibility checkbox sits in a label so its hit area can grow
+   without changing the checkbox. Outside the query the label is the checkbox. */
+.olv-cl-check-hit { display: inline-flex; align-items: center; flex-shrink: 0; }
+
+@media (pointer: coarse) and (hover: none) and (min-width: 768px) and (min-height: 600px) {
+  /* Close buttons: 48 px. The element-qualified selector outranks the
+     44 px container rules above it. */
+  button.olv-palette-close, button.olv-shortcuts-close, button.olv-help-close,
+  button.olv-bc-close, button.olv-wfc-close, button.olv-workbench-close,
+  button.olv-pc-dismiss, button.olv-colorbar-close, button.olv-ws-close {
+    min-width: 48px; min-height: 48px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  /* Other controls outside the rail, dock and dialog containers. */
+  .olv-navbar button, .olv-navbar select,
+  .olv-empty button, .olv-empty summary,
+  .olv-palette-card button, .olv-palette-row,
+  .olv-shortcuts-card button,
+  .olv-tour-btn, .olv-tour-skip, .olv-tour-chip,
+  .olv-wfc button, .olv-rvc-apply, .olv-rvc-dismiss, .olv-touch-hint-x,
+  .olv-empty-status-dismiss, .olv-colorbar-toggle,
+  .olv-workbench-btn, .olv-mp-chain-chip, .olv-mp-vex-chip,
+  .olv-mp-stations-more, .olv-mp-summary-sec-toggle, .olv-mp-sampler-reset,
+  .olv-url-btn, .olv-open-btn, .olv-catalog-btn, .olv-capture-chip, .olv-convert-chip {
+    min-height: 44px; min-width: 44px;
+  }
+  .olv-rvc-apply, .olv-rvc-dismiss, .olv-touch-hint-x, .olv-empty-status-dismiss,
+  .olv-workbench-btn, .olv-mp-chain-chip, .olv-mp-vex-chip, .olv-mp-stations-more,
+  .olv-mp-summary-sec-toggle, .olv-mp-sampler-reset, .olv-tour-btn, .olv-tour-skip,
+  .olv-tour-chip, .olv-capture-chip, .olv-convert-chip {
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .olv-empty summary { display: flex; align-items: center; }
+
+  /* Frame all: 48 px, with the Walk, Fly and Pan pads moved out by the extra
+     width so no pad's box overlaps it. */
+  .olv-modes-triangle .olv-mode-reset { width: 48px; height: 48px; }
+  .olv-modes-triangle .olv-mode-walk { left: -7px; }
+  .olv-modes-triangle .olv-mode-fly { right: -7px; }
+  .olv-modes-triangle .olv-mode-pan { left: -66px; }
+  .olv-speed-slider { height: 44px; }
+
+  /* Camera chips and mode pads keep their row; the chip text stays on one line. */
+  .olv-navbar .olv-cam-chip { white-space: nowrap; }
+
+  /* Bare checkboxes and radios take the 44 px box of their label. */
+  .olv-cl-check-hit { min-width: 44px; min-height: 44px; justify-content: center; }
+  .olv-left-panels label:has(> input[type='checkbox']),
+  .olv-left-panels label:has(> input[type='radio']),
+  .olv-right-rail label:has(> input[type='checkbox']),
+  .olv-right-rail label:has(> input[type='radio']),
+  .olv-modal label:has(> input[type='checkbox']),
+  .olv-modal label:has(> input[type='radio']) {
+    min-height: 44px; align-items: center;
+  }
+
+  /* View cube: the four face buttons and the Top button become 44 px discs.
+     The cube grows to 144 px so they touch without overlapping. The sizes are
+     set inline by viewCube.ts, so these declarations need !important. */
+  .olv-viewcube { width: 144px !important; height: 144px !important; }
+  .olv-viewcube-rose button {
+    width: auto !important; min-width: 44px !important; height: 44px !important;
+    padding: 0 6px !important; font-size: var(--text-md) !important; line-height: 44px !important;
+    border-radius: 22px !important;
+  }
+  .olv-viewcube > button { width: 44px !important; height: 44px !important; }
+}

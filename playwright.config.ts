@@ -223,6 +223,9 @@ export default defineConfig({
     { name: 'journeys', use: { ...devices['Desktop Chrome'] }, testMatch: JOURNEYS },
     { name: 'journeys-webkit', use: { ...devices['Desktop Safari'] }, testMatch: JOURNEYS },
     { name: 'journeys-firefox', use: FIREFOX_USE, testMatch: JOURNEYS },
+    // Tablet touch targets: a touch Chromium at iPad viewport sizes. Only the
+    // tablet journey runs here; it sets its own viewports.
+    { name: 'journeys-tablet', use: { ...devices['Desktop Chrome'], hasTouch: true, isMobile: true, viewport: { width: 820, height: 1180 } }, testMatch: /e2e\/journeys\/j11-/ },
     { name: 'journeys-mobile', use: { ...devices['iPhone 15'] }, testMatch: /e2e\/journeys\/j(1|3|10)-/ },
     // The graphics preflight is its own project so it can be run before the
     // suite without joining any project's default set. `deterministic` is a
