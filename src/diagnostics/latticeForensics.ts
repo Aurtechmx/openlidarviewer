@@ -1,5 +1,5 @@
 /**
- * latticeForensics.ts — earlier storage grids in stored integer coordinates.
+ * latticeForensics.ts: earlier storage grids in stored integer coordinates.
  *
  * A LAS/LAZ file stores X = offset + scale * N with N an integer. When data stored on one grid
  * (another scale, unit or reference system) are re-rounded onto the current one, the earlier
