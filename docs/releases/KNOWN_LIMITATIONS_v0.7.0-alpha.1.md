@@ -101,6 +101,16 @@ one geometry it read 33 per cent at full decode and 100 per cent strided. It
 seeds only from cells with no reachable data now, and distances travel through
 the surveyed region, so neither depends on how densely the surface was sampled.
 
+## An Area ring that is far from planar or touches itself reports no area
+
+An Area polygon is judged in its own best-fit plane. A ring whose vertices
+sit further from that plane than a quarter of the ring's half-extent (about
+14 degrees of tilt across the ring), or whose edges touch at a vertex or
+overlap, reports no area. The Measure panel, totals and every export omit the
+area figures and state the reason; the perimeter is kept. A ring that is only
+slightly off its plane, such as a roof facet picked with a little noise, still
+reports its plane area, which is a lower bound on the draped surface.
+
 ## A lasso volume has one figure and a cross-check
 
 The toast, the saved record, the CSV, GeoJSON and the report all read one

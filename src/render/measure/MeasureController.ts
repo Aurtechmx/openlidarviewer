@@ -12,7 +12,7 @@
  * the pure, unit-tested `geometry.ts` / `format.ts`.
  */
 
-import { areaRingVerdict } from './areaValidity';
+import { areaRingVerdictCached } from './areaValidity';
 import { noiseExcludedClause } from '../../terrain/ground/classificationFilter';
 import type * as THREE from 'three/webgpu';
 import { el } from '../../ui/dom';
@@ -1030,7 +1030,7 @@ export class MeasureController {
           ? lineBreakdown(m.points[0], m.points[1], this._worldUp, f, this._effVertical())
           : undefined,
       areaMetrics:
-        m.kind === 'area' && m.points.length >= 3 && areaRingVerdict(m.points).ok
+        m.kind === 'area' && m.points.length >= 3 && areaRingVerdictCached(m.points).ok
           ? areaBreakdown(m.points, this._worldUp, f, this._effVertical())
           : undefined,
       volumeResidentOnly: m.volumeResidentOnly,
@@ -1396,14 +1396,33 @@ export class MeasureController {
     if (m) m.name = trimmed;
   }
 
+  private _noticeTimer: ReturnType<typeof setTimeout> | undefined;
+
   /** Enter or leave measurement mode. Completed measurements stay drawn. */
   setActive(on: boolean): void {
+    // Leaving the mode abandons the draft; an Area ring that was refused says
+    // why on the measure bar, which stays visible briefly after the mode ends.
+    let refusal: string | null = null;
+    if (!on && this._draft?.kind === 'area' && this._draft.points.length >= MIN_POINTS.area) {
+      const v = areaRingVerdictCached(this._draft.points);
+      if (!v.ok) refusal = `Area polygon not saved. ${v.text}`;
+    }
+    if (this._noticeTimer !== undefined) clearTimeout(this._noticeTimer);
+    this._noticeTimer = undefined;
     this._active = on;
     this._draft = null;
     this._cursor = null;
     if (!on) this._endDrag();
     this.hint.classList.toggle('olv-hidden', !on);
     this._updateHint();
+    if (refusal) {
+      this._setHintText(refusal);
+      this.hint.classList.remove('olv-hidden');
+      this._noticeTimer = setTimeout(() => {
+        this._noticeTimer = undefined;
+        if (!this._active) this.hint.classList.add('olv-hidden');
+      }, 6000);
+    }
   }
 
   /** Choose which kind of measurement the next placement creates. */
@@ -1645,7 +1664,7 @@ export class MeasureController {
       if (this._draft.kind === 'area') {
         // A ring that establishes no area is not committed; the draft stays
         // open so a vertex can be moved or removed.
-        const v = areaRingVerdict(this._draft.points);
+        const v = areaRingVerdictCached(this._draft.points);
         if (!v.ok) {
           this._setHintText(`${v.text} Undo a vertex or adjust it, then finish.`);
           return;
@@ -1717,6 +1736,7 @@ export class MeasureController {
 
   /** Free DOM references. */
   dispose(): void {
+    if (this._noticeTimer !== undefined) clearTimeout(this._noticeTimer);
     this._endDrag();
     this._draw.dispose();
     this.hint.remove();
@@ -2026,7 +2046,7 @@ export class MeasureController {
 
   /** Formatted area when the ring establishes one, otherwise the stated reason. */
   private _areaFmt(ring: Vec3[], area: () => number): string {
-    const v = areaRingVerdict(ring);
+    const v = areaRingVerdictCached(ring);
     return v.ok ? this._fmtArea(area()) : `no area: ${v.text}`;
   }
 
@@ -2313,7 +2333,7 @@ export class MeasureController {
         E.push({ a: pts[i], b: pts[(i + 1) % pts.length], style: 'solid' });
       }
       P.push({ points: pts });
-      const ok = areaRingVerdict(pts).ok;
+      const ok = areaRingVerdictCached(pts).ok;
       const text = ok
         ? `${this._fmtArea(polygonAreaPlanar(pts))} · map ${this._fmtArea(polygonAreaHorizontal(pts, this._worldUp))}`
         : 'no area';

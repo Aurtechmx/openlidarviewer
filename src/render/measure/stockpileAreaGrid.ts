@@ -30,7 +30,6 @@
  * only) rather than a validated interval — see {@link StockpileAreaGridResult}.
  */
 
-/** A point already projected to the horizontal plane: map x/y plus height z. */
 import { anchoredShoelace } from './polygonHygiene';
 import { methodRef, methodTag } from '../../science/methodRegistry';
 

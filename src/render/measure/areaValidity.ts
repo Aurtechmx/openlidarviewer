@@ -179,3 +179,28 @@ export function areaWithheldReason(points: ReadonlyArray<Vec3>): string | undefi
   const v = areaRingVerdict(points);
   return v.ok ? undefined : v.text;
 }
+
+const verdictCache = new WeakMap<object, { sig: number[]; verdict: AreaRingVerdict }>();
+
+/**
+ * `areaRingVerdict` memoised per points array. The ring can be edited in place
+ * (a vertex drag, a pushed pick), so a cached verdict is reused only while the
+ * coordinates still match the ones it was computed from; the check is linear,
+ * where the verdict itself is quadratic.
+ */
+export function areaRingVerdictCached(points: ReadonlyArray<Vec3>): AreaRingVerdict {
+  const hit = verdictCache.get(points);
+  if (hit && hit.sig.length === points.length * 3) {
+    let same = true;
+    for (let i = 0; i < points.length && same; i++) {
+      const p = points[i];
+      same = hit.sig[3 * i] === p[0] && hit.sig[3 * i + 1] === p[1] && hit.sig[3 * i + 2] === p[2];
+    }
+    if (same) return hit.verdict;
+  }
+  const verdict = areaRingVerdict(points);
+  const sig: number[] = [];
+  for (const p of points) sig.push(p[0], p[1], p[2]);
+  verdictCache.set(points, { sig, verdict });
+  return verdict;
+}
