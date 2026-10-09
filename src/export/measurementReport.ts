@@ -17,7 +17,7 @@
 
 import type { ExportDigests } from '../science/exportDigestRecord';
 import type { Measurement, Vec3 } from '../render/measure/types';
-import { GEOGRAPHIC_NOT_AVAILABLE, areaWithheldNote, geographicRefuses, measurementMetrics, reducedSampleCaveat } from './measurementExport';
+import { GEOGRAPHIC_NOT_AVAILABLE, areaWithheldNote, geographicRefuses, measurementMetrics, roundMeasured, reducedSampleCaveat } from './measurementExport';
 import {
   buildReportManifest,
   canonicalize,
@@ -63,7 +63,7 @@ export interface ReportProvenance {
 
 /** Match the 3-dp rounding `measurementMetrics` applies to every other value. */
 function roundTo3(v: number): number {
-  return Number.isFinite(v) ? Math.round(v * 1000) / 1000 : v;
+  return Number.isFinite(v) ? (roundMeasured(v) ?? v) : v;
 }
 
 /**

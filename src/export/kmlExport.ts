@@ -31,6 +31,7 @@ import {
   geographicFilter,
   geographicRefuses,
   measurementMetrics,
+  plainDecimal,
   areaWithheldNote,
 } from './measurementExport';
 import { verticalReferenceKey } from '../model/layerCompatibility';
@@ -331,7 +332,7 @@ function annotationPlacemark(a: Annotation, input: KmlExportInput): string {
 function metricsLine(m: Measurement, input: KmlExportInput): string {
   const all = measurementMetrics(m, input.up, input.unitToMetres, input.verticalUnitToMetres);
   const metrics = geographicFilter(all, m, input.geographic);
-  const parts = Object.entries(metrics).filter(([, v]) => v !== null).map(([k, v]) => `${k}=${v}`);
+  const parts = Object.entries(metrics).filter(([, v]) => v !== null).map(([k, v]) => `${k}=${typeof v === 'number' ? plainDecimal(v) : v}`);
   const refused = geographicRefuses(m, input.geographic) && Object.keys(all).length > 0;
   if (refused) {
     if (parts.length === 0) return `Figures ${GEOGRAPHIC_NOT_AVAILABLE}.`;

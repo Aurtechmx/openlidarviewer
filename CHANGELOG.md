@@ -87,6 +87,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 A development cut on the way to v0.7.0. It carries no DOI, and its test figures
 are not release-authoritative.
+- A nonzero measurement no longer exports as 0 when it is smaller than 0.0005. The measurement CSV, GeoJSON and KML, the integrity report and the findings report keep three decimals for values of 0.0005 and above, as before, and keep three significant digits for smaller nonzero values, so a 0.0004 m segment reads 0.0004. Exact zero stays 0, and CSV and KML write tiny values without an exponent.
 
 ### Added
 

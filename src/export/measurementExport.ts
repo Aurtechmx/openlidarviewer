@@ -95,10 +95,28 @@ export interface MeasurementExportContext {
 }
 
 /** A finite number rounded to `d` decimals, or null when not finite. */
-function num(v: number, d = 3): number | null {
+export function roundMeasured(v: number, d = 3): number | null {
   if (!Number.isFinite(v)) return null;
   const f = 10 ** d;
-  return Math.round(v * f) / f;
+  const r = Math.round(v * f) / f;
+  // A nonzero value that rounds to zero keeps three significant digits, so a
+  // rounded zero is never mistaken for a measured zero.
+  if (r === 0 && v !== 0) return Number(v.toPrecision(3));
+  return r === 0 ? 0 : r;
+}
+
+const num = roundMeasured;
+
+/**
+ * A finite number as plain decimal text, never in exponent form, so a tiny
+ * value such as 1.2e-9 is written as 0.0000000012 for CSV and KML readers.
+ */
+export function plainDecimal(v: number): string {
+  const s = String(v);
+  if (!/e/i.test(s)) return s;
+  const exp = Math.floor(Math.log10(Math.abs(v)));
+  const digits = Math.min(100, Math.max(0, 2 - exp));
+  return v.toFixed(digits);
 }
 
 /**
@@ -538,7 +556,7 @@ const REDUCTION_CSV_COLUMNS = [
  * neutralised, so a negative value like `-1.5` stays a plain number.
  */
 function csvCell(v: string | number): string {
-  const s = String(v);
+  const s = typeof v === 'number' ? plainDecimal(v) : String(v);
   const neutralise = typeof v === 'string' && /^[=+\-@\t\r]/.test(s);
   const cell = neutralise ? `'${s}` : s;
   return neutralise || /[",\n]/.test(cell) ? `"${cell.replaceAll(/"/g, '""')}"` : cell;
