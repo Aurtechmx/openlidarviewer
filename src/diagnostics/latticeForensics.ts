@@ -10,7 +10,7 @@
  * This module is pure (no DOM, no three, no proj4). The caller supplies, per candidate history,
  * the local Jacobian J of the ancestral-to-file map (file metres per ancestral unit) so that the
  * module stays independent of any projection library. Statistic and decision rule follow the
- * reference implementation archived with the paper:
+ * Python reference implementation:
  *   T(k)     = sum_w |sum_{j in w} exp(2 pi i k.N_j)|^2 / sum_w n_w   (windows of fixed size)
  *   score(k) = T(k) / median T(ring of 8 points at radius 6/w)
  *   supported: Fisher-combined empirical p over testable peaks, Bonferroni over candidates < alpha,
