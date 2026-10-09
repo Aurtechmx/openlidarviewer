@@ -16,6 +16,8 @@ export interface DataHomeDeps {
   hasScan(): boolean;
   /** Present classes with name, share of points (0 to 100) and legend colour. */
   classRows(): { code: number; name: string; share: number; color: readonly [number, number, number] }[];
+  /** True when the shares describe the loaded display sample, not the whole file. */
+  classesSampled?(): boolean;
   /** Where the collapse choice is kept per viewer; absent or throwing is fine. */
   storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
   sourceSummary(): string;
@@ -69,10 +71,13 @@ export function createDataHome(d: DataHomeDeps): DataHome {
   const toggle = el('button', { className: 'olv-data-class-toggle', type: 'button' }, [toggleLabel, toggleValue, chevron]) as HTMLButtonElement;
   const list = el('ul', { className: 'olv-data-class-list' });
   list.id = 'olv-data-class-list';
+  list.setAttribute('aria-label', 'Classes');
+  list.tabIndex = 0; // a capped list scrolls, so the keyboard must reach it
+  const basis = el('p', { className: 'olv-data-class-basis', text: 'Shares of the loaded display sample.' });
   toggle.setAttribute('aria-controls', list.id);
   const openPage = el('button', { className: 'olv-data-class-open', type: 'button', text: 'Open Classes →' });
   openPage.addEventListener('click', () => d.openClasses());
-  const body = el('div', { className: 'olv-data-class-body' }, [list, openPage]);
+  const body = el('div', { className: 'olv-data-class-body' }, [list, basis, openPage]);
   const section = el('div', { className: 'olv-data-class-section' }, [toggle, body]);
   const applyCollapsed = (): void => {
     body.hidden = collapsed;
@@ -108,6 +113,7 @@ export function createDataHome(d: DataHomeDeps): DataHome {
     classes.value.textContent = n > 0 ? `${n} detected` : 'None detected';
     toggleValue.textContent = `${n} detected`;
     toggle.setAttribute('aria-label', `Classes, ${n} detected`);
+    basis.hidden = !d.classesSampled?.();
     applyCollapsed();
     list.replaceChildren(...rows.map((r) => {
       const sw = el('span', { className: 'olv-data-class-swatch' });

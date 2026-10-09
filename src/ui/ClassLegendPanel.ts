@@ -119,6 +119,7 @@ export class ClassLegendPanel {
 
   /** "Counts cover the loaded display sample" caption (hidden unless sampled). */
   private readonly _sampleNote: HTMLElement;
+  private _sampled = false;
 
   /** Caption for a classification run that produced nothing (hidden when empty). */
   private readonly _unavailableNote: HTMLElement;
@@ -448,7 +449,13 @@ export class ClassLegendPanel {
       typeof declared === 'number' &&
       Number.isFinite(declared) &&
       declared > sample.loaded;
+    this._sampled = sampled;
     this._sampleNote.classList.toggle('olv-hidden', !sampled);
+  }
+
+  /** Whether the counts describe a display sample, not the whole file. */
+  isSampled(): boolean {
+    return this._sampled;
   }
 
   /**

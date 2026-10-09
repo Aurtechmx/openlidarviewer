@@ -140,6 +140,27 @@ describe('Data home class list', () => {
     expect(items(t.root).every((i) => i.tagName !== 'button' && i.listenerCount('click') === 0)).toBe(true);
   });
 
+  it('names the list, makes the capped list reachable, and states the sample basis', async () => {
+    let sampled = false;
+    const t = await home({ classesSampled: () => sampled });
+    const list = t.root.find((e) => e.hasClass('olv-data-class-list'))!;
+    const note = t.root.find((e) => e.hasClass('olv-data-class-basis'))!;
+    expect(list.getAttribute('aria-label')).toBe('Classes');
+    expect((list as unknown as { tabIndex: number }).tabIndex).toBe(0);
+    expect(note.hidden).toBe(true);
+    sampled = true;
+    t.h.refresh();
+    expect(note.hidden).toBe(false);
+    expect(note.textContent).toContain('loaded display sample');
+  });
+
+  it('caps the list height in the stylesheet', () => {
+    const css = readFileSync(join(__dirname, '..', 'src/styles/73-desktop-workspace.css'), 'utf8');
+    const rule = css.match(/\.olv-data-class-list \{[^}]*\}/)![0];
+    expect(rule).toMatch(/max-height:/);
+    expect(rule).toMatch(/overflow-y:\s*auto/);
+  });
+
   it('is hidden with no scan', async () => {
     const t = await home({ hasScan: () => false });
     expect(t.root.find((e) => e.hasClass('olv-data-class-section'))!.hidden).toBe(true);
