@@ -31,6 +31,7 @@
  */
 
 /** A point already projected to the horizontal plane: map x/y plus height z. */
+import { anchoredShoelace } from './polygonHygiene';
 import { methodRef, methodTag } from '../../science/methodRegistry';
 
 /**
@@ -168,11 +169,7 @@ const PREVIEW_MIN = 0.6;
 function polygonArea(poly: ReadonlyArray<Vec2>): number {
   const n = poly.length;
   if (n < 3) return 0;
-  let s = 0;
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    s += (poly[j].x + poly[i].x) * (poly[j].y - poly[i].y);
-  }
-  return Math.abs(s) * 0.5;
+  return Math.abs(anchoredShoelace(n, (i) => poly[i].x, (i) => poly[i].y));
 }
 
 /**

@@ -12,6 +12,7 @@
  * the pure, unit-tested `geometry.ts` / `format.ts`.
  */
 
+import { areaRingVerdict } from './areaValidity';
 import { noiseExcludedClause } from '../../terrain/ground/classificationFilter';
 import type * as THREE from 'three/webgpu';
 import { el } from '../../ui/dom';
@@ -1029,7 +1030,7 @@ export class MeasureController {
           ? lineBreakdown(m.points[0], m.points[1], this._worldUp, f, this._effVertical())
           : undefined,
       areaMetrics:
-        m.kind === 'area' && m.points.length >= 3
+        m.kind === 'area' && m.points.length >= 3 && areaRingVerdict(m.points).ok
           ? areaBreakdown(m.points, this._worldUp, f, this._effVertical())
           : undefined,
       volumeResidentOnly: m.volumeResidentOnly,
@@ -1641,7 +1642,16 @@ export class MeasureController {
   finishCurrent(): void {
     if (!this._draft) return;
     if (this._draft.points.length >= MIN_POINTS[this._draft.kind]) {
-      if (this._draft.kind === 'area') this._draft.closed = true;
+      if (this._draft.kind === 'area') {
+        // A ring that establishes no area is not committed; the draft stays
+        // open so a vertex can be moved or removed.
+        const v = areaRingVerdict(this._draft.points);
+        if (!v.ok) {
+          this._setHintText(`${v.text} Undo a vertex or adjust it, then finish.`);
+          return;
+        }
+        this._draft.closed = true;
+      }
       this._commitDraft();
     } else {
       this._draft = null;
@@ -2014,6 +2024,12 @@ export class MeasureController {
     return formatVolume(renderUnitsCu * f * f * this._effVertical(), this._units);
   }
 
+  /** Formatted area when the ring establishes one, otherwise the stated reason. */
+  private _areaFmt(ring: Vec3[], area: () => number): string {
+    const v = areaRingVerdict(ring);
+    return v.ok ? this._fmtArea(area()) : `no area: ${v.text}`;
+  }
+
   private _fmtArea(renderUnitsSq: number): string {
     if (this._unitUnverified()) return formatUnitUnverified(renderUnitsSq);
     return formatAreaRender(renderUnitsSq, this._unitToMetres, this._units);
@@ -2043,7 +2059,7 @@ export class MeasureController {
       case 'polyline':
         return this._fmtLen(polylineLength(p).total);
       case 'area':
-        return p.length >= 3 ? this._fmtArea(polygonAreaPlanar(p)) : '—';
+        return p.length >= 3 ? this._areaFmt(p, () => polygonAreaPlanar(p)) : '—';
       case 'height':
         return p.length >= 2
           ? this._fmtVertical(Math.abs(verticalDelta(p[0], p[1], this._worldUp).vertical))
@@ -2163,7 +2179,7 @@ export class MeasureController {
       }
       case 'area': {
         if (!d || d.points.length < 3) return `${VERB} polygon vertices — three or more`;
-        const area = this._fmtArea(polygonAreaPlanar(d.points));
+        const area = this._areaFmt(d.points, () => polygonAreaPlanar(d.points));
         return `${area} · ${VERB} more, click the first vertex or press Enter to close`;
       }
       case 'volume': {
@@ -2297,9 +2313,11 @@ export class MeasureController {
         E.push({ a: pts[i], b: pts[(i + 1) % pts.length], style: 'solid' });
       }
       P.push({ points: pts });
-      const planar = this._fmtArea(polygonAreaPlanar(pts));
-      const horiz = this._fmtArea(polygonAreaHorizontal(pts, this._worldUp));
-      L.push({ anchor: centroid(pts), text: `${planar} · map ${horiz}`, primary: true });
+      const ok = areaRingVerdict(pts).ok;
+      const text = ok
+        ? `${this._fmtArea(polygonAreaPlanar(pts))} · map ${this._fmtArea(polygonAreaHorizontal(pts, this._worldUp))}`
+        : 'no area';
+      L.push({ anchor: centroid(pts), text, primary: true });
       return;
     }
     if (m.kind === 'height' && pts.length >= 2) {
@@ -2526,7 +2544,7 @@ export class MeasureController {
         P.push({ points: ring });
         L.push({
           anchor: centroid(ring),
-          text: this._fmtArea(polygonAreaPlanar(ring)),
+          text: this._areaFmt(ring, () => polygonAreaPlanar(ring)),
           primary: true,
         });
       }

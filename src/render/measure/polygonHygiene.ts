@@ -30,6 +30,7 @@
  */
 
 import type { Vec3 } from '../navMath';
+import { NeumaierSum } from '../../process/numerics';
 
 /** A 2D polygon vertex. */
 export interface Vec2Like {
@@ -70,18 +71,39 @@ export interface PolygonValidationResult {
 export function signedArea2D(polygon: ReadonlyArray<Vec2Like>): number {
   const n = polygon.length;
   if (n < 3) return 0;
-  let sum = 0;
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    const xi = polygon[i].x;
-    const yi = polygon[i].y;
-    const xj = polygon[j].x;
-    const yj = polygon[j].y;
-    if (!Number.isFinite(xi) || !Number.isFinite(yi) || !Number.isFinite(xj) || !Number.isFinite(yj)) {
-      return 0;
-    }
-    sum += xj * yi - xi * yj;
+  for (let i = 0; i < n; i++) {
+    if (!Number.isFinite(polygon[i].x) || !Number.isFinite(polygon[i].y)) return 0;
   }
-  return sum * 0.5;
+  return anchoredShoelace(n, (i) => polygon[i].x, (i) => polygon[i].y);
+}
+
+/**
+ * Signed shoelace area of a ring given as accessors. The first vertex is
+ * subtracted from every vertex before the cross products, so a ring far from
+ * the origin no longer loses its area to cancellation between two huge
+ * products, and the terms are added with Neumaier compensation. Translation
+ * invariant to rounding; for a ring already near the origin the result is the
+ * ordinary shoelace value.
+ */
+export function anchoredShoelace(
+  n: number,
+  xAt: (i: number) => number,
+  yAt: (i: number) => number,
+): number {
+  if (n < 3) return 0;
+  const ax = xAt(0);
+  const ay = yAt(0);
+  const acc = new NeumaierSum();
+  let xj = xAt(n - 1) - ax;
+  let yj = yAt(n - 1) - ay;
+  for (let i = 0; i < n; i++) {
+    const xi = xAt(i) - ax;
+    const yi = yAt(i) - ay;
+    acc.add(xj * yi - xi * yj);
+    xj = xi;
+    yj = yi;
+  }
+  return acc.total * 0.5;
 }
 
 /**
@@ -110,18 +132,46 @@ export function bbox2D(polygon: ReadonlyArray<Vec2Like>): {
   return { width: maxX - minX, height: maxY - minY };
 }
 
+/** Relative tolerance for treating three points as collinear. */
+const COLLINEAR_REL = 1e-12;
+
 /**
- * `true` when two closed segments (a₀,a₁) and (b₀,b₁) share at least
- * one interior point. Touching at a shared vertex doesn't count — that
- * would flag every legal polygon as self-intersecting. NaN-safe: any
- * non-finite component returns `false`, leaving downstream finite-
- * vertex checks to flag the bad point.
+ * Orientation of c relative to the directed line a to b: 1, -1, or 0 when the
+ * three points are collinear within a tolerance scaled to the two vectors.
  */
-function segmentsCrossInterior(
+function orient(a: Vec2Like, b: Vec2Like, c: Vec2Like): number {
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const acx = c.x - a.x;
+  const acy = c.y - a.y;
+  const cross = abx * acy - aby * acx;
+  const tol = COLLINEAR_REL * (Math.hypot(abx, aby) * Math.hypot(acx, acy));
+  if (Math.abs(cross) <= tol) return 0;
+  return cross > 0 ? 1 : -1;
+}
+
+/** `true` when c, known collinear with a-b, lies within the segment's span. */
+function withinSpan(a: Vec2Like, b: Vec2Like, c: Vec2Like): boolean {
+  return (
+    c.x >= Math.min(a.x, b.x) && c.x <= Math.max(a.x, b.x) &&
+    c.y >= Math.min(a.y, b.y) && c.y <= Math.max(a.y, b.y)
+  );
+}
+
+/**
+ * `true` when two ring edges conflict. Non-adjacent edges conflict when they
+ * share any point: a proper crossing, a vertex resting on the other edge, or a
+ * collinear overlap. Adjacent edges share their common vertex by construction
+ * and conflict only when the second edge doubles back along the first.
+ * NaN-safe: any non-finite component returns `false`, leaving the finite-vertex
+ * check to flag the bad point.
+ */
+function edgesConflict(
   a0: Vec2Like,
   a1: Vec2Like,
   b0: Vec2Like,
   b1: Vec2Like,
+  adjacent: boolean,
 ): boolean {
   if (
     !Number.isFinite(a0.x) || !Number.isFinite(a0.y) ||
@@ -131,52 +181,88 @@ function segmentsCrossInterior(
   ) {
     return false;
   }
-  const d1x = a1.x - a0.x;
-  const d1y = a1.y - a0.y;
-  const d2x = b1.x - b0.x;
-  const d2y = b1.y - b0.y;
-  const denom = d1x * d2y - d1y * d2x;
-  if (Math.abs(denom) < 1e-12) return false;
-  const dx = b0.x - a0.x;
-  const dy = b0.y - a0.y;
-  const t = (dx * d2y - dy * d2x) / denom;
-  const u = (dx * d1y - dy * d1x) / denom;
-  // Open interval — touching at an endpoint (t∈{0,1} or u∈{0,1}) is
-  // allowed so adjacent edges sharing a vertex don't trigger the check.
-  const EPS = 1e-9;
-  return t > EPS && t < 1 - EPS && u > EPS && u < 1 - EPS;
+  const o1 = orient(a0, a1, b0);
+  const o2 = orient(a0, a1, b1);
+  const o3 = orient(b0, b1, a0);
+  const o4 = orient(b0, b1, a1);
+  if (adjacent) {
+    // Shared vertex s, far ends p (edge a) and q (edge b). A fold-back is a
+    // collinear pair pointing the same way from s.
+    const aFirst = a1.x === b0.x && a1.y === b0.y;
+    const s = aFirst ? a1 : a0;
+    const p = aFirst ? a0 : a1;
+    const q = aFirst ? b1 : b0;
+    const collinear = (aFirst ? o2 : o1) === 0 && (aFirst ? o4 : o3) === 0;
+    if (!collinear) return false;
+    return (p.x - s.x) * (q.x - s.x) + (p.y - s.y) * (q.y - s.y) > 0;
+  }
+  if (o1 !== o2 && o3 !== o4 && o1 !== 0 && o2 !== 0 && o3 !== 0 && o4 !== 0) return true;
+  if (o1 === 0 && withinSpan(a0, a1, b0)) return true;
+  if (o2 === 0 && withinSpan(a0, a1, b1)) return true;
+  if (o3 === 0 && withinSpan(b0, b1, a0)) return true;
+  if (o4 === 0 && withinSpan(b0, b1, a1)) return true;
+  return false;
 }
 
 /**
- * `true` when any two non-adjacent edges of the polygon cross. O(n²)
+ * `true` when any two edges of the polygon cross, touch, or overlap. O(n²)
  * brute-force pair walk; volume polygons are small enough that this
  * costs microseconds.
  */
-export function isPolygonSelfIntersecting(polygon: ReadonlyArray<Vec2Like>): boolean {
+export function isPolygonSelfIntersecting(input: ReadonlyArray<Vec2Like>): boolean {
+  // A repeated pick (consecutive identical vertices, or a closing copy of the
+  // first) adds a zero-length edge and no geometry, so it is set aside.
+  const polygon: Vec2Like[] = [];
+  for (const p of input) {
+    const last = polygon[polygon.length - 1];
+    if (!last || last.x !== p.x || last.y !== p.y) polygon.push(p);
+  }
+  if (polygon.length > 1 && polygon[0].x === polygon.at(-1)!.x && polygon[0].y === polygon.at(-1)!.y) {
+    polygon.pop();
+  }
   const n = polygon.length;
   if (n < 4) return false; // 3 vertices = triangle, always simple
   for (let i = 0; i < n; i++) {
     const a0 = polygon[i];
     const a1 = polygon[(i + 1) % n];
     for (let j = i + 1; j < n; j++) {
-      // Skip the edge that shares vertex `(i+1)` with edge `i`.
-      if (j === (i + 1) % n) continue;
-      // Skip the edge that shares vertex `i` with the last edge.
-      if (i === 0 && j === n - 1) continue;
+      const adjacent = j === (i + 1) % n || (i === 0 && j === n - 1);
       const b0 = polygon[j];
       const b1 = polygon[(j + 1) % n];
-      if (segmentsCrossInterior(a0, a1, b0, b1)) return true;
+      if (edgesConflict(a0, a1, b0, b1, adjacent)) return true;
     }
   }
   return false;
+}
+
+/**
+ * Smallest area, relative to the bounding box, that still counts as an area.
+ * Collinear vertices leave only rounding residue of order 1e-16 of the box.
+ */
+const MIN_AREA_FRACTION = 1e-12;
+
+/** `true` when every vertex lies on one line (or all coincide). */
+function isCollinearRing(polygon: ReadonlyArray<Vec2Like>): boolean {
+  const o = polygon[0];
+  let far = o;
+  let best = 0;
+  for (const p of polygon) {
+    const d = Math.hypot(p.x - o.x, p.y - o.y);
+    if (d > best) {
+      best = d;
+      far = p;
+    }
+  }
+  if (best === 0) return true;
+  return polygon.every((p) => orient(o, far, p) === 0);
 }
 
 /** Convenience predicate for "polygon has too few unique vertices to enclose area". */
 export function isPolygonDegenerate(polygon: ReadonlyArray<Vec2Like>): boolean {
   if (polygon.length < 3) return true;
   const signed = signedArea2D(polygon);
-  if (!Number.isFinite(signed) || Math.abs(signed) < 1e-9) return true;
   const { width, height } = bbox2D(polygon);
+  if (!Number.isFinite(signed) || Math.abs(signed) <= MIN_AREA_FRACTION * width * height) return true;
   return !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0;
 }
 
@@ -224,7 +310,7 @@ export function validatePolygon(
   // problem is the crossing, not the area. Reporting "zero-area" on
   // a bow-tie would mislead the user into thinking they just need to
   // spread the vertices apart.
-  if (isPolygonSelfIntersecting(polygon)) {
+  if (!isCollinearRing(polygon) && isPolygonSelfIntersecting(polygon)) {
     return {
       validity: 'self-intersecting',
       signedArea: signed,
@@ -233,7 +319,7 @@ export function validatePolygon(
       bboxHeight: height,
     };
   }
-  if (absolute < 1e-9) {
+  if (absolute <= MIN_AREA_FRACTION * width * height) {
     return {
       validity: 'zero-area',
       signedArea: signed,

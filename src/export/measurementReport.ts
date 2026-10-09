@@ -17,7 +17,7 @@
 
 import type { ExportDigests } from '../science/exportDigestRecord';
 import type { Measurement, Vec3 } from '../render/measure/types';
-import { GEOGRAPHIC_NOT_AVAILABLE, geographicRefuses, measurementMetrics } from './measurementExport';
+import { GEOGRAPHIC_NOT_AVAILABLE, areaWithheldNote, geographicRefuses, measurementMetrics } from './measurementExport';
 import {
   buildReportManifest,
   canonicalize,
@@ -159,6 +159,14 @@ export function measurementsToFindings(
       if (Object.keys(metrics).length === 0) return;
       const label = m.name?.trim() || `${m.kind} ${i + 1}`;
       findings.push({ label, value: null, unit: '', caveats: [GEOGRAPHIC_NOT_AVAILABLE] });
+      return;
+    }
+    // An Area ring that establishes no area is recorded as an explicit null with
+    // the reason; the perimeter is not promoted to its headline.
+    const areaNote = areaWithheldNote(m, up, unitToMetres, verticalToMetres);
+    if (areaNote) {
+      const label = m.name?.trim() || `${m.kind} ${i + 1}`;
+      findings.push({ label, value: null, unit: '', caveats: [areaNote] });
       return;
     }
     const primary = PRIMARY[m.kind];

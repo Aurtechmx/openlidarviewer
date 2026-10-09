@@ -38,6 +38,7 @@
  * rule the live grade and the exports apply.
  */
 
+import { areaRingVerdict } from './areaValidity';
 import type { Measurement, MeasurementKind } from './types';
 import { GEOGRAPHIC_NOT_AVAILABLE } from './types';
 import {
@@ -195,7 +196,7 @@ export function valueForDimension(
       return null;
 
     case 'area':
-      if (m.kind === 'area' && p.length >= 3) return polygonAreaPlanar(p);
+      if (m.kind === 'area' && p.length >= 3) return areaRingVerdict(p).ok ? polygonAreaPlanar(p) : null;
       if (m.kind === 'volume' && p.length >= 3 && m.volume) {
         return m.volume.footprintArea * storedArea;
       }
