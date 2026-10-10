@@ -452,7 +452,7 @@ function oneLine(text: string): string {
 function sectionKeepTogetherSpace(text: string, body: PDFFont): number {
   const lines = wrapText(text, body, BODY_FONT_SIZE, CONTENT_WIDTH).length;
   return (
-    HEADER_FONT_SIZE + 18 +                 // heading + its underline band
+    HEADER_FONT_SIZE + 18 +                 // heading + its spacing
     lines * (BODY_FONT_SIZE + 4) +          // each wrapped body line
     10                                      // trailing section gap
   );
@@ -468,16 +468,6 @@ function drawSectionHeader(
   cursor.page.drawText(clean, {
     x: MARGIN, y: cursor.y - HEADER_FONT_SIZE,
     size: HEADER_FONT_SIZE, font: bold,
-    color: rgb(accent.r, accent.g, accent.b),
-  });
-  // The underline spans the heading's measured text width (it used to be a
-  // fixed 40 pt — an underline under only the first few characters),
-  // clamped to the content width so a pathological heading cannot cross
-  // the right margin.
-  cursor.page.drawRectangle({
-    x: MARGIN, y: cursor.y - HEADER_FONT_SIZE - 4,
-    width: Math.min(bold.widthOfTextAtSize(clean, HEADER_FONT_SIZE), CONTENT_WIDTH),
-    height: 1.5,
     color: rgb(accent.r, accent.g, accent.b),
   });
   return { page: cursor.page, y: cursor.y - HEADER_FONT_SIZE - 14 };
@@ -1023,7 +1013,12 @@ async function renderInspectionSummary(
   cursor = { page: cursor.page, y: cursor.y - 2 };
   for (const c of summary.caveats) {
     cursor = ensureSpace(cursor, 24, doc, accent, theme, organisation);
-    cursor = drawBodyLine(cursor, `• ${c}`, body, ctx, { indent: 4 });
+    // Same marker column and text indent as the findings above.
+    cursor.page.drawEllipse({
+      x: MARGIN + 4, y: cursor.y - BODY_FONT_SIZE + 3, xScale: 2, yScale: 2,
+      color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
+    });
+    cursor = drawBodyLine(cursor, c, body, ctx, { indent: 16 });
   }
   return { page: cursor.page, y: cursor.y - 12 };
 }

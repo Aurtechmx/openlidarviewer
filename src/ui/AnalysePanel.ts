@@ -2109,8 +2109,7 @@ export class AnalysePanel {
     // density clears (density only; no quality-level determination).
     const std = this._result?.accuracyStandards;
     if (std) {
-      const fmtM = (n: number | null): string =>
-        n != null && Number.isFinite(n) ? `${n.toFixed(2)}\u00a0m` : '—';
+      const fmtM = (n: number | null): string => (n != null && Number.isFinite(n) ? `${n.toFixed(2)}\u00a0m` : '—');
       if (std.nvaM != null || std.vvaM != null) {
         // "-style (hold-out)": the figures use the ASPRS 2014 FORMULAS on
         // internally withheld points, not independent checkpoints — the

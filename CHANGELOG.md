@@ -98,6 +98,13 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - Profile exports are saved as `<scan name>-profile-<profile name>.pdf` (and `.csv`, `.png`), the style the map and report exports use, instead of the profile name alone. The sheet's PROJECT field names the scan, with the profile name beside the sheet name, and the horizontal CRS states its code once and is no longer cut off.
 - A profile measured on a voxel-reduced display sample no longer reads as a full static source. The workbench status line, the PNG, the CSV, the PDF's general notes, the technical notes and the method sheet state the sample size and the declared size, and that percentiles are taken over the sample with no Withheld or noise exclusion. Counts print with thousands separators.
 - The profile sheet qualifies its maximum grade as one station pair and no longer calls it the figure that governs buildability, prints height gain and loss in the same unit and at the same precision with a note that rise across a gap is not counted, prints lengths and heights at two decimals everywhere, names the declared vertical datum instead of "approximately mean sea level", writes "to" and "at" in place of an arrow and an at sign, calls a vertical scale below the horizontal a compression, and places the maximum-grade label clear of the profile line.
+- The Terrain panel and the Analyse readiness badge no longer show a USGS density reference floor when the analysis ran on a sample of the points. The panel redraws those rows when the analysed basis arrives, and the panel, badge, map sheet and provenance take the floor from one function.
+- The contour panel and the map sheet now print the same share of interpolated or uncertain contour length, taken from the export model.
+- Point counts in the Scan report and Profile Workbench analysed-of-source lines, the measurement report caveats and the cloud exclusion warning use thousands separators.
+- The Terrain panel keeps a value and its unit (and the tolerance in "Measured reliability") on one line with a non-breaking space.
+- The relief Colour label is no longer cut off by the colour select.
+- On the map sheet, accuracy rows longer than the right column are shortened or wrapped, the sample note has its own row, and the readiness note moves below the rows.
+- Technical report section headings are no longer underlined, and the closing caveat lines up with the findings list above it.
 
 ## [0.7.0-alpha.1] - 2026-09-18
 

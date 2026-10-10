@@ -142,7 +142,7 @@ function expectParity(record: VolumeRecord, headline: string): void {
     expect(row.withheld_excluded).toBe(String(w.excluded));
     expect(row.analysed_points).toBe(String(w.analysed));
     expect(props.withheld_excluded).toBe(w.excluded);
-    expect(finding.caveats?.join(' ')).toContain(`${w.analysed} of ${w.source} selected points analysed`);
+    expect(finding.caveats?.join(' ')).toContain(`${w.analysed.toLocaleString('en-US')} of ${w.source.toLocaleString('en-US')} selected points analysed`);
   }
   const stampsGrid = record.gridAuthority !== undefined && record.gridAuthority !== 'withheld';
   const note = JSON.parse(measurementsToGeoJSON([asMeasurement(saved)], ctx)).evidence as string;

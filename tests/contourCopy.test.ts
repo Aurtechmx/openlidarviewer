@@ -32,14 +32,14 @@ describe('formatHonestValue', () => {
 
   it('pairs a value with its confidence word', () => {
     const d = formatHonestValue({ value: 12.3, confidence: 92, units: 'm' });
-    expect(d.text).toBe('12.30 m');
+    expect(d.text).toBe('12.30\u00a0m');
     expect(d.confidenceText).toBe('92% confident (high)');
     expect(d.isAbsent).toBe(false);
   });
 
   it('omits confidence text when confidence is unknown', () => {
     const d = formatHonestValue({ value: 5, units: '%', digits: 0 });
-    expect(d.text).toBe('5 %');
+    expect(d.text).toBe('5\u00a0%');
     expect(d.confidenceText).toBeNull();
   });
 });
