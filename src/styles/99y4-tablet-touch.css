@@ -54,8 +54,8 @@
   .olv-navbar .olv-cam-chip { white-space: nowrap; }
 
   /* Bare checkboxes and radios take the 44 px box of their label. */
-  .olv-loc-back, .olv-loc-crumb, .olv-catalog-input { min-height: 44px; }
-  .olv-loc-back, .olv-loc-crumb { min-width: 44px; }
+  .olv-loc-back, .olv-loc-crumb, .olv-catalog-input, .olv-help-nav-item { min-height: 44px; }
+  .olv-loc-back, .olv-loc-crumb, .olv-help-nav-item { min-width: 44px; }
   .olv-panel-head[role='button'] { min-height: 44px; display: flex; align-items: center; }
   .olv-check-hit { min-width: 44px; min-height: 44px; justify-content: center; }
   .olv-left-panels label:has(> input[type='checkbox']),

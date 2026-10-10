@@ -3,7 +3,7 @@
  * visible interactive control in the dock, rails, panel headers, results shelf,
  * inspector, Data tab and the dialogs the spec opens is at least 44 x 44 CSS px.
  * Runs in the `journeys-tablet` project at 820 x 1180, 1180 x 820 and
- * 1024 x 1366. Exempt: an inline text link inside running text, a checkbox or
+ * 1024 x 1366. Exempt: a focusable scroll region that is not a control, an inline text link inside running text, a checkbox or
  * radio measured by its label, and a control whose 44 x 44 box around its centre
  * is entirely its own hit area (padding or a pseudo-element).
  */
@@ -43,6 +43,8 @@ async function undersized(page: Page): Promise<Small[]> {
       if (e.getAttribute('tabindex') !== null && Number(e.getAttribute('tabindex')) < 0) continue;
       if (e instanceof HTMLInputElement && (e.type === 'hidden' || e.type === 'file')) continue;
       const cs = getComputedStyle(e);
+      // A keyboard-focusable scroll region (tabindex on a list or div) is not a pressable control.
+      if (!/^(BUTTON|A|INPUT|SELECT|SUMMARY)$/.test(e.tagName) && !e.getAttribute('role') && /(auto|scroll)/.test(cs.overflowY)) continue;
       if (cs.visibility === 'hidden' || cs.display === 'none' || cs.pointerEvents === 'none') continue;
       if (e.closest('[hidden], [inert], [aria-hidden="true"], .olv-hidden')) continue;
       let box = e.getBoundingClientRect();

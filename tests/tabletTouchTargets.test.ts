@@ -108,7 +108,7 @@ describe('tablet touch targets', () => {
 
   it('sizes the location bar, catalogue inputs and the View panel head', () => {
     const body = mediaBody(CSS);
-    expect(body).toContain('.olv-loc-back, .olv-loc-crumb, .olv-catalog-input { min-height: 44px; }');
+    expect(body).toContain('.olv-loc-back, .olv-loc-crumb, .olv-catalog-input, .olv-help-nav-item { min-height: 44px; }');
     expect(body).toContain(".olv-panel-head[role='button'] { min-height: 44px;");
   });
 
