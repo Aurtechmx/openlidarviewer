@@ -69,12 +69,34 @@ describe('tablet touch targets', () => {
     expect(body).toMatch(/min-height: 44px; min-width: 44px;/);
   });
 
-  it('grows the view cube so five 44 px buttons fit without overlapping', () => {
+  it('keeps the five view cube buttons apart at every heading', () => {
     const body = mediaBody(CSS);
-    expect(body).toContain('.olv-viewcube { width: 144px !important; height: 144px !important; }');
-    expect(body).toContain('.olv-viewcube > button { width: 44px !important; height: 44px !important; }');
-    // Rose inset 8 px: the centre sits at 72 px, the top face ends at 50 px, the centre button starts at 50 px.
-    expect(8 - 2 + 44).toBeLessThanOrEqual(144 / 2 - 22);
+    const cube = Number(/\.olv-viewcube \{ width: (\d+)px !important; height: \1px !important; \}/.exec(body)?.[1]);
+    const face = Number(/\.olv-viewcube-rose button \{[^}]*?width: (\d+)px !important;[^}]*?height: \1px !important/.exec(body)?.[1]);
+    const top = Number(/\.olv-viewcube > button \{ width: (\d+)px !important; height: \1px !important; \}/.exec(body)?.[1]);
+    expect(body).toMatch(/\.olv-viewcube-rose button \{[^}]*border-radius: 50% !important/);
+    // Every face is a fixed-width circle, so a long label wraps and cannot widen the face.
+    expect(body).not.toMatch(/\.olv-viewcube-rose button \{[^}]*width: auto/);
+    expect(body).toMatch(/\.olv-viewcube-rose button \{[^}]*white-space: normal/);
+    // Geometry owned by viewCube.ts: the rose inset and how far a face sits outside it.
+    const src = readFileSync(fileURLToPath(new URL('../src/ui/viewCube.ts', import.meta.url)), 'utf8');
+    const inset = Number(/inset:(\d+)px/.exec(src)?.[1]);
+    const out = Number(/top:-(\d+)px;left:50%/.exec(src)?.[1]);
+    expect([cube, face, top, inset, out].every(Number.isFinite)).toBe(true);
+    const roseRadius = cube / 2 - inset;
+    // Face centre sits (roseRadius + out - face / 2) from the rose centre, along one of four axes.
+    const faceCentre = roseRadius + out - face / 2;
+    // Distance from the cube centre to the face centre does not change when the rose turns, and the
+    // faces are circles, so two circles of radius face / 2 and top / 2 stay clear when it is at least the sum.
+    expect(faceCentre).toBeGreaterThanOrEqual(face / 2 + top / 2);
+    // Neighbouring faces are 90 degrees apart on that ring.
+    expect(faceCentre * Math.SQRT2).toBeGreaterThanOrEqual(face);
+  });
+
+  it('moves the view cube right of the open left rail', () => {
+    const body = mediaBody(CSS);
+    expect(body).toContain("body:has(.olv-left-panels:not(.olv-rail-collapsed)) .olv-viewcube {");
+    expect(body).toContain('left: calc(var(--olv-rail-width) + 32px) !important;');
   });
 
   it('wraps the class visibility checkbox in a label that is a 44 px box under the query only', () => {

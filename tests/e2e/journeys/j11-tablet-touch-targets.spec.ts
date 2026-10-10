@@ -8,7 +8,8 @@
  * is entirely its own hit area (padding or a pseudo-element).
  */
 import { test, expect, type Page } from '@playwright/test';
-import { buildSurveyLas14, fixtureBytes, openWith, startJourney } from './helpers/journey';
+import { buildSurveyLas14, dropBytes, fixtureBytes, openWith, startJourney } from './helpers/journey';
+import { LARGE_TOUCH_LAYOUT_QUERY } from '../../../src/platform/runtimeFormFactor';
 import { openClassesPage, showWorkspaceMode } from '../helpers';
 
 const MIN = 44;
@@ -96,6 +97,8 @@ test.describe('J11 tablet touch targets', () => {
     test(`every control is at least 44 px at ${vp.name}`, async ({ page }, info) => {
       test.setTimeout(240_000);
       await page.setViewportSize({ width: vp.width, height: vp.height });
+      await page.goto('/?test=1');
+      expect(await page.evaluate((q) => matchMedia(q).matches, LARGE_TOUCH_LAYOUT_QUERY), 'the large-touch layout query matches').toBe(true);
       const j = startJourney(page, info, 'j11');
       const found = new Map<string, Small & { state: string }>();
       const scan = async (state: string): Promise<void> => {
@@ -116,6 +119,7 @@ test.describe('J11 tablet touch targets', () => {
       await j.step('scene, dock and navigation card', () => scan('scene'));
       for (const mode of ['data', 'work', 'analyse', 'output'] as const) {
         await j.step(`${mode} tab`, async () => {
+          await expect(page.locator(`.olv-ws-tab[data-mode="${mode}"]`)).toBeVisible();
           await showWorkspaceMode(page, mode);
           await scan(`${mode} tab`);
         });
@@ -127,25 +131,22 @@ test.describe('J11 tablet touch targets', () => {
         await scan('class list');
       });
       await j.step('results shelf', async () => {
-        const toggle = page.locator('.olv-results-toggle, [aria-controls*="results"]').first();
-        if (await toggle.isVisible().catch(() => false)) {
-          await toggle.click();
-          await scan('results shelf');
-        }
+        const toggle = page.locator('.olv-results-toggle').first();
+        await expect(toggle).toBeVisible();
+        await toggle.click();
+        await scan('results shelf');
       });
       await j.step('command palette', async () => {
         await page.keyboard.press('ControlOrMeta+KeyK');
-        if (await page.locator('.olv-palette').isVisible().catch(() => false)) {
-          await scan('command palette');
-          await page.keyboard.press('Escape');
-        }
+        await expect(page.locator('.olv-palette')).toBeVisible();
+        await scan('command palette');
+        await page.keyboard.press('Escape');
       });
       await j.step('help overlay', async () => {
         await page.keyboard.press('Shift+Slash');
-        if (await page.locator('.olv-help-overlay').isVisible().catch(() => false)) {
-          await scan('help overlay');
-          await page.keyboard.press('Escape');
-        }
+        await expect(page.locator('.olv-help-overlay')).toBeVisible();
+        await scan('help overlay');
+        await page.keyboard.press('Escape');
       });
 
       const lines = report(found);
@@ -153,4 +154,48 @@ test.describe('J11 tablet touch targets', () => {
       expect(lines, `controls smaller than ${MIN} x ${MIN} CSS px at ${vp.name}`).toEqual([]);
     });
   }
+
+  test('the view cube is measured and stays clear of the open left rail', async ({ page }, info) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: 820, height: 1180 });
+    await page.goto('/?test=1&viewcube=1');
+    expect(await page.evaluate((q) => matchMedia(q).matches, LARGE_TOUCH_LAYOUT_QUERY), 'the large-touch layout query matches').toBe(true);
+    const j = startJourney(page, info, 'j11');
+    await expect(page.locator('.olv-empty')).toBeVisible();
+    const survey = await buildSurveyLas14();
+    await j.step('open a scan with the view cube on', async () => {
+      await dropBytes(page, survey.bytes, 'survey-14.las');
+      await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 60_000 });
+      await expect(page.locator('.olv-viewcube')).toBeVisible({ timeout: 20_000 });
+    });
+    await j.step('cube buttons are 44 px and clear of the rail and each other', async () => {
+      await page.waitForTimeout(600);
+      const r = await page.evaluate(() => {
+        const rect = (e: Element) => e.getBoundingClientRect();
+        const cube = document.querySelector('.olv-viewcube') as HTMLElement;
+        const cubeBox = rect(cube);
+        const buttons = [...cube.querySelectorAll('button')].map((b) => rect(b));
+        const small = buttons.filter((b) => b.width < 43.5 || b.height < 43.5).map((b) => `${b.width.toFixed(0)}x${b.height.toFixed(0)}`);
+        // Circles: centres must be at least the sum of the radii apart.
+        const overlaps: string[] = [];
+        for (let i = 0; i < buttons.length; i++) for (let k = i + 1; k < buttons.length; k++) {
+          const a = buttons[i], b = buttons[k];
+          const d = Math.hypot(a.left + a.width / 2 - (b.left + b.width / 2), a.top + a.height / 2 - (b.top + b.height / 2));
+          if (d < (a.width + b.width) / 2 - 1) overlaps.push(`${i}-${k} ${d.toFixed(1)}`);
+        }
+        const rail = document.querySelector('.olv-left-panels');
+        const railOpen = !!rail && !rail.classList.contains('olv-rail-collapsed');
+        const covered = railOpen ? [...rail!.children].filter((c) => rect(c).width > 0 && getComputedStyle(c).display !== 'none').filter((c) => {
+          const b = rect(c);
+          return b.left < cubeBox.right && b.right > cubeBox.left && b.top < cubeBox.bottom && b.bottom > cubeBox.top;
+        }).map((c) => (c as HTMLElement).className) : [];
+        return { n: buttons.length, small, overlaps, railOpen, covered, size: `${cubeBox.width.toFixed(0)}x${cubeBox.height.toFixed(0)}` };
+      });
+      await info.attach('viewcube.json', { body: JSON.stringify(r), contentType: 'application/json' });
+      expect(r.n).toBe(5);
+      expect(r.small, 'cube buttons under 44 px').toEqual([]);
+      expect(r.overlaps, 'overlapping cube buttons').toEqual([]);
+      expect(r.covered, 'rail panels overlapping the cube').toEqual([]);
+    });
+  });
 });

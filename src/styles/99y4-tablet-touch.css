@@ -67,14 +67,25 @@
     min-height: 44px; align-items: center;
   }
 
-  /* View cube: the four face buttons and the Top button become 44 px discs.
-     The cube grows to 144 px so they touch without overlapping. The sizes are
-     set inline by viewCube.ts, so these declarations need !important. */
+  /* View cube: the four face buttons and the Top button become 44 px circles.
+     The cube grows to 144 px; the rose is inset 8 px and the faces sit 2 px
+     outside it, so each face centre is 44 px from the cube centre and a face
+     touches the Top button without overlapping it at any heading, because the
+     rose only rotates about that centre. Every face is a fixed 44 px circle, so
+     the two-word "Grid N" label wraps onto two lines instead of widening. The
+     sizes are set inline by viewCube.ts, so these declarations need !important. */
   .olv-viewcube { width: 144px !important; height: 144px !important; }
   .olv-viewcube-rose button {
-    width: auto !important; min-width: 44px !important; height: 44px !important;
-    padding: 0 6px !important; font-size: var(--text-md) !important; line-height: 44px !important;
-    border-radius: 22px !important;
+    width: 44px !important; min-width: 44px !important; height: 44px !important;
+    padding: 0 !important; border-radius: 50% !important;
+    display: flex !important; align-items: center !important; justify-content: center !important;
+    text-align: center; white-space: normal;
+    font-size: var(--text-sm) !important; line-height: 1.1 !important;
   }
   .olv-viewcube > button { width: 44px !important; height: 44px !important; }
+  /* While the left rail is open the cube moves right of it, so the rail
+     (above the cube in the stacking order) does not cover it. */
+  body:has(.olv-left-panels:not(.olv-rail-collapsed)) .olv-viewcube {
+    left: calc(var(--olv-rail-width) + 32px) !important;
+  }
 }
