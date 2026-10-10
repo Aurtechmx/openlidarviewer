@@ -130,10 +130,40 @@
   .olv-mkind-icon { min-width: 56px; padding: var(--space-xs) var(--space-2xs); border-radius: var(--radius-md); }
   .olv-mkind-icon svg { width: 22px; height: 22px; }
   .olv-mkind-icon .olv-mkind-name { font-size: var(--text-micro); }
-  /* On a phone the on-canvas pending-dot pulse carries the "tap next point"
-     guidance, so the instruction pill is dropped to keep the rail uncluttered
-     (touch has no hover tooltip to compete with anyway). */
+  /* The in-rail row stays hidden; the status line below replaces it. */
   .olv-measure-hint-row { display: none; }
+  /* The rail has no room for the instruction, so a compact status line sits
+     beside it (clear of the rail and its action buttons) and announces each
+     state change politely. Measure: right of the rail, level with its top
+     (the rail starts 30px below the lane top). Inspect has no rail, so its
+     line drops below the Inspect bar instead. The bottom band holds the tool
+     dock and sheet head, so neither line goes there. A lane card (Project
+     card, toast) is brief; the line draws above it while it shows. */
+  .olv-measure-phone-hint {
+    display: -webkit-box;
+    -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+    overflow: hidden;
+    position: absolute;
+    top: calc(var(--olv-lane-top) + 30px);
+    left: calc(88px + env(safe-area-inset-left));
+    right: calc(8px + env(safe-area-inset-right));
+    width: fit-content; max-width: calc(100% - 96px);
+    padding: var(--space-xs) var(--space-md);
+    font-size: var(--text-xs); line-height: 1.3; color: var(--text);
+    background: var(--panel);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    border: 0.5px solid var(--accent-soft);
+    border-radius: var(--radius-md);
+    pointer-events: none;
+    z-index: calc(var(--z-panel) + 1);
+  }
+  .olv-measure-phone-hint.olv-phone-hint-wide {
+    /* Bar height: two paddings plus the 44px Done target and its hairlines. */
+    top: calc(var(--olv-lane-top) + 2 * var(--space-lg) + 44px + 1px + var(--space-lg));
+    left: calc(var(--space-2xl) + env(safe-area-inset-left));
+    max-width: calc(100% - 2 * var(--space-2xl));
+  }
+  .olv-measure-phone-hint.olv-hidden { display: none; }
   /* Actions stack vertically below a hairline divider. */
   .olv-measure-actions {
     flex-direction: column;

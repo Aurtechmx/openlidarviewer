@@ -15,7 +15,7 @@
 
 import { clamp } from '../numeric';
 import * as THREE from 'three/webgpu';
-import { el, announcePolite } from '../ui/dom';
+import { el, announcePolite, politeStatus } from '../ui/dom';
 import {
   type PointInfo,
   classificationText,
@@ -182,6 +182,7 @@ export class InspectTool {
   private readonly _canvas: HTMLCanvasElement;
   private readonly _cb: InspectCallbacks;
   private readonly _hintText: HTMLElement;
+  private readonly _phoneHint: HTMLElement;
   private readonly _cardBody: HTMLElement;
   private readonly _copyBtn: HTMLButtonElement;
   private readonly _copyNote: HTMLElement;
@@ -230,7 +231,8 @@ export class InspectTool {
     this.overlay.setAttribute('class', 'olv-measure-svg');
 
     // ── Top-centre instruction bar — reuses the measure-hint styling ───────
-    this._hintText = el('span', { className: 'olv-measure-hint-text' });
+    this._hintText = politeStatus(el('span', { className: 'olv-measure-hint-text' }));
+    this._phoneHint = politeStatus(el('div', { className: 'olv-measure-phone-hint olv-phone-hint-wide olv-hidden' }));
     const done = el('button', { className: 'olv-measure-done', text: 'Done' });
     done.addEventListener('click', () => {
       done.blur();
@@ -311,6 +313,8 @@ export class InspectTool {
   setActive(on: boolean): void {
     this._active = on;
     this.hint.classList.toggle('olv-hidden', !on);
+    if (!this._phoneHint.isConnected && this.hint.parentElement) this.hint.parentElement.insertBefore(this._phoneHint, this.hint.nextSibling);
+    this._phoneHint.classList.toggle('olv-hidden', !on);
     this._canvas.style.cursor = on ? 'crosshair' : '';
     if (on) {
       this._setHint(`${PICK_VERB} a point to view its data`);
@@ -419,13 +423,15 @@ export class InspectTool {
     this._canvas.style.cursor = '';
     this.overlay.remove();
     this.hint.remove();
+    this._phoneHint.remove();
     this.card.remove();
   }
 
   // ── helpers ────────────────────────────────────────────────────────────────
 
   private _setHint(text: string): void {
-    this._hintText.textContent = text;
+    if (this._hintText.textContent !== text) this._hintText.textContent = text;
+    if (this._phoneHint.textContent !== text) this._phoneHint.textContent = text;
   }
 
   /** Populate the card rows from a point's data. */
