@@ -45,6 +45,8 @@ export interface RecoveryHandle {
   onSourceLoaded(): void;
   /** Explicit close: drop every journal entry and the notice. */
   clear(): void;
+  /** True while saved work from an earlier visit is waiting to be restored or discarded. */
+  hasPending(): boolean;
 }
 
 const plural = (n: number, one: string): string => `${n} ${one}${n === 1 ? '' : 's'}`;
@@ -309,6 +311,7 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
       sourceOpen = true;
       matchSource();
     },
+    hasPending: () => saved.length > 0,
     clear() {
       sourceOpen = false;
       invalidate();

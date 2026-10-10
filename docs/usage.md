@@ -19,7 +19,7 @@ Dropping a second file opens it as an additional layer alongside the first; the 
 
 ## Closing a scan
 
-Click Close in the tool dock to clear the current scan (and any additional layers) and return to the empty state. From there you can drop, open, or sample another scan. Closing also clears the session's measurements, annotations, and saved views, so the next scan starts clean; export the session first if you want to keep it.
+Click Close scan in the tool dock (on a phone it is under More) to clear the current scan (and any additional layers) and return to the empty state. From there you can drop, open, or sample another scan. Closing also clears the session's measurements, annotations, and saved views, so the next scan starts clean; export the session first if you want to keep it. When the scan holds measurements, annotations, saved views, class edits or results, a confirmation asks first and offers to save the session.
 
 ## Styling the cloud
 

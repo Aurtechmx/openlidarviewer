@@ -3,8 +3,7 @@ import { readFileSync, statSync } from 'node:fs';
 import {
   dropTerrainAccessUtmLas, firePaletteAction, openAnalysePage, openAnalysePanel, openToolPage, showWorkspaceMode,
   type MeasureTestApi,
-  reloadSettled,
-} from './helpers';
+  reloadSettled, closeScanFromDock } from './helpers';
 import { isBenignPageError } from './pageErrors';
 
 /**
@@ -54,7 +53,7 @@ async function runAnalysis(page: Page): Promise<void> {
 }
 
 async function closeScan(page: Page): Promise<void> {
-  await page.locator('.olv-tool-close').click();
+  await closeScanFromDock(page);
   await expect(page.locator('.olv-empty')).toBeVisible({ timeout: 20_000 });
   await expect(page.locator('.olv-layer')).toHaveCount(0);
 }

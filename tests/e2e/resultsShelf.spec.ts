@@ -7,7 +7,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
-import { dropDenseGridPly, openAnalysePanel, placeTestDistance, showWorkspaceMode } from './helpers';
+import { dropDenseGridPly, openAnalysePanel, placeTestDistance, showWorkspaceMode, closeScanFromDock } from './helpers';
 
 const MULTICHUNK = fileURLToPath(new URL('../fixtures/multichunk.laz', import.meta.url));
 
@@ -165,7 +165,7 @@ test.describe('results shelf', () => {
   test('closing the scan empties the shelf', async ({ page }) => {
     await openAndMeasure(page);
     await expect(shelf(page).locator('.olv-results-toggle')).toBeVisible();
-    await page.locator('.olv-tool-close').click();
+    await closeScanFromDock(page, { expectPrompt: true });
     await expect(page.locator('.olv-empty')).toBeVisible({ timeout: 20_000 });
     await expect(shelf(page)).toBeHidden();
   });

@@ -269,7 +269,7 @@ export class ToolDock {
       // keeping its rose tint. It has an enabled state but NO active state.
       {
         id: 'scan.close',
-        label: 'Close',
+        label: 'Close scan',
         title: 'Load a scan to enable',
         enabledTitle: 'Close the scan and return to the start',
         icon: ICON_CLOSE,

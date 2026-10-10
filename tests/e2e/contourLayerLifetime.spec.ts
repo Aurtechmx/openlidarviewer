@@ -19,7 +19,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
-import { dropDenseGridPly, openAnalysePage, openAnalysePanel, showWorkspaceMode } from './helpers';
+import { dropDenseGridPly, openAnalysePage, openAnalysePanel, showWorkspaceMode, closeScanFromDock } from './helpers';
 
 const MULTICHUNK = fileURLToPath(new URL('../fixtures/multichunk.laz', import.meta.url));
 
@@ -49,7 +49,7 @@ test.describe('contour derived-layer lifetime', () => {
 
     await runAnalysisAndWaitForContours(page);
 
-    await page.locator('.olv-tool-close').click();
+    await closeScanFromDock(page);
     await expect(page.locator('.olv-empty')).toBeVisible({ timeout: 20_000 });
 
     // Every "Contours in 3D" / "Derived layers" control must be gone — a
@@ -73,7 +73,7 @@ test.describe('contour derived-layer lifetime', () => {
     // Close, then open an unrelated scan through the empty state's own
     // picker — the exact repro: a scan closed while its contours were drawn,
     // then a different scan opened into what looked like a clean session.
-    await page.locator('.olv-tool-close').click();
+    await closeScanFromDock(page);
     await expect(page.locator('.olv-empty')).toBeVisible({ timeout: 20_000 });
     await page.locator('.olv-empty .olv-file-input').setInputFiles(MULTICHUNK);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 60_000 });

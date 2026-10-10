@@ -274,6 +274,14 @@
   }
 }
 
+/* Tablets and other touch screens get the same 44px confirm targets as phones. */
+@media (pointer: coarse) {
+  .olv-confirm-cancel, .olv-confirm-ok {
+    min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+}
+
 /* ───────────────────────────────────────────────────────────────────────────
    Live-probe readout — a cursor-following hover panel
    ─────────────────────────────────────────────────────────────────────────── */

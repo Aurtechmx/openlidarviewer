@@ -110,6 +110,8 @@ export interface WorkspaceShell {
   resumeToolPage(actionId: string): boolean;
   /** Re-apply the route and re-read the Results shelf's owners. */
   sync(): void;
+  /** How many Ready results the owners hold that are not measurements. */
+  readyResultCount(): number;
   /** Re-evaluate the phone sheet and the rail's availability. */
   applyMobileSheet(): void;
   /** Mount what an Analyse page needs, then show it. */
@@ -484,6 +486,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     mobileSheet: sheet,
     showMode: (m) => workspace.setMode(m),
     sync: () => { live.sync(); shelf?.refresh(); syncLog(); },
+    readyResultCount: () => { shelf?.refresh(); return shelf?.index.entries().filter((e) => e.status === 'ready' && e.type !== 'measurement').length ?? 0; },
     resumeToolPage: (id) => {
       const page = id.slice(5) as ToolPage;
       const node = id.startsWith('tool.') ? pages[page]?.element() : null;

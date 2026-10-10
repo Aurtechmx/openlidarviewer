@@ -278,7 +278,14 @@ export interface ConfirmOptions {
   readonly cancelTip?: string;
   /** Element to restore focus to on close. */
   readonly returnFocusTo?: HTMLElement | null;
+  /** Label of an optional third choice, offered between Cancel and the confirm button. */
+  readonly alternateLabel?: string;
+  /** Hover/focus explanation for the alternate button. */
+  readonly alternateTip?: string;
 }
+
+/** What a dialog with an alternate choice resolved to. Anything but a button press is `cancel`. */
+export type ConfirmChoice = 'confirm' | 'alternate' | 'cancel';
 
 /**
  * Styled confirm dialog — a Promise-based replacement for `window.confirm()`.
@@ -294,9 +301,14 @@ export interface ConfirmOptions {
  * Cancel button takes initial focus so an accidental Enter is a safe no.
  */
 export function openConfirm(opts: ConfirmOptions): Promise<boolean> {
-  return new Promise<boolean>((resolve) => {
+  return openConfirmChoice(opts).then((choice) => choice === 'confirm');
+}
+
+/** The same dialog as {@link openConfirm}, resolving which of its buttons was pressed. */
+export function openConfirmChoice(opts: ConfirmOptions): Promise<ConfirmChoice> {
+  return new Promise<ConfirmChoice>((resolve) => {
     let decided = false;
-    const settle = (value: boolean): void => {
+    const settle = (value: ConfirmChoice): void => {
       if (decided) return;
       decided = true;
       resolve(value);
@@ -324,7 +336,10 @@ export function openConfirm(opts: ConfirmOptions): Promise<boolean> {
       type: 'button',
       tip: opts.confirmTip ?? (opts.title ? `Proceed with: ${opts.title}` : 'Confirm and proceed.'),
     });
-    const footer = el('div', { className: 'olv-confirm-actions' }, [cancelBtn, confirmBtn]);
+    const altBtn = opts.alternateLabel
+      ? el('button', { className: 'olv-confirm-cancel olv-confirm-alternate', text: opts.alternateLabel, type: 'button', tip: opts.alternateTip ?? opts.alternateLabel })
+      : null;
+    const footer = el('div', { className: 'olv-confirm-actions' }, altBtn ? [cancelBtn, altBtn, confirmBtn] : [cancelBtn, confirmBtn]);
 
     const handle = openModal({
       title: opts.title,
@@ -333,15 +348,19 @@ export function openConfirm(opts: ConfirmOptions): Promise<boolean> {
       returnFocusTo: opts.returnFocusTo,
       // Backdrop click, Escape, and the close-X all route here — treat any
       // dismissal that isn't an explicit confirm as a "no".
-      onClose: () => settle(false),
+      onClose: () => settle('cancel'),
     });
 
     cancelBtn.addEventListener('click', () => {
-      settle(false);
+      settle('cancel');
+      handle.close();
+    });
+    altBtn?.addEventListener('click', () => {
+      settle('alternate');
       handle.close();
     });
     confirmBtn.addEventListener('click', () => {
-      settle(true);
+      settle('confirm');
       handle.close();
     });
 

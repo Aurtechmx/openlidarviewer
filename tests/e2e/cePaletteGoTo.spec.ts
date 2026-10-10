@@ -8,7 +8,7 @@
  * Deterministic project.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { dropDenseGridPly } from './helpers';
+import { dropDenseGridPly, closeScanFromDock } from './helpers';
 
 const ENTRIES: Array<{ title: string; path: string }> = [
   { title: 'Classes', path: 'Data › Classes' },
@@ -80,7 +80,7 @@ test.describe('palette Go to', () => {
     await page.goto('/?test=1');
     await dropDenseGridPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 30_000 });
-    await page.locator('.olv-tool-close').click();
+    await closeScanFromDock(page);
     await expect(page.locator('.olv-empty')).toBeVisible({ timeout: 20_000 });
     await expect(page.locator('.olv-topbar .olv-loc')).toBeHidden();
     await page.keyboard.press('ControlOrMeta+KeyK');

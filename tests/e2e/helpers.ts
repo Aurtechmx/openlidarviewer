@@ -682,3 +682,27 @@ export async function bringPhoneToastForward(page: Page): Promise<void> {
     return toast.isVisible();
   }, { timeout: 10_000 }).toBe(true);
 }
+
+/**
+ * Close the scan from the tool dock. On a phone the control is filed under
+ * More, so the tray opens first. When the scan holds work that closing would
+ * discard, the confirmation appears and is accepted; pass `expectPrompt: true`
+ * to fail when it does not, and `false` to fail when it does.
+ */
+export async function closeScanFromDock(page: Page, opts: { expectPrompt?: boolean } = {}): Promise<void> {
+  const close = page.locator('.olv-tool-close');
+  // Only a phone shows More beside a hidden Close; elsewhere click waits for the dock to appear.
+  const more = page.locator('.olv-tool-more');
+  if (!(await close.isVisible()) && (await more.isVisible()) && (await more.getAttribute('aria-expanded')) !== 'true') await more.click();
+  await close.click();
+  const confirm = page.locator('.olv-modal .olv-confirm-ok');
+  const empty = page.locator('.olv-empty');
+  const sawConfirm = confirm.waitFor({ state: 'visible', timeout: 10_000 }).then(() => true);
+  const sawEmpty = empty.waitFor({ state: 'visible', timeout: 10_000 }).then(() => false);
+  sawConfirm.catch(() => {}); // the loser of the race may time out unobserved
+  sawEmpty.catch(() => {});
+  const shown = await Promise.race([sawConfirm, sawEmpty]);
+  if (opts.expectPrompt === false && shown) throw new Error('The close confirmation appeared for a scan with no work');
+  if (shown) await confirm.click();
+  else if (opts.expectPrompt === true) throw new Error('The close confirmation did not appear');
+}

@@ -3883,9 +3883,10 @@ body.olv-theme-light .olv-busy-scan--emblem {
     line-height: 1;
     font-weight: 500;
   }
-  /* THE PRIORITY SPLIT. The primary row is Frame, Measure, Inspect, Annotate,
-     "More" and Close; Snapshot, Analyse, Copy view link and Help sit behind the
-     disclosure, and Probe stays out entirely (it is a hover affordance and a
+  /* THE PRIORITY SPLIT. The primary row is Frame, Measure, Inspect, Annotate
+     and "More"; Snapshot, Analyse, Copy view link, Help and Close scan sit behind the
+     disclosure (Close scan keeps its rose tint and its own cluster gap, so a tap
+     that discards the scan is never one stray touch from Annotate), and Probe stays out entirely (it is a hover affordance and a
      touch screen has no hover). Tapping "More" flips a class on the dock that
      un-hides the rest, and the row wraps to a second line to take them, which
      is why the dock's height is never fixed.
@@ -3900,13 +3901,15 @@ body.olv-theme-light .olv-busy-scan--emblem {
   .olv-dock .olv-tool-analyse,
   .olv-dock .olv-tool-share,
   .olv-dock .olv-tool-help,
+  .olv-dock .olv-tool-close,
   .olv-dock .olv-tool-probe {
     display: none;
   }
   .olv-dock.olv-dock-more-open .olv-tool-snapshot,
   .olv-dock.olv-dock-more-open .olv-tool-analyse,
   .olv-dock.olv-dock-more-open .olv-tool-share,
-  .olv-dock.olv-dock-more-open .olv-tool-help {
+  .olv-dock.olv-dock-more-open .olv-tool-help,
+  .olv-dock.olv-dock-more-open .olv-tool-close {
     display: inline-flex;
   }
   /* Subtle accent on the More button so it reads as a disclosure, and a
@@ -7368,6 +7371,14 @@ body.olv-theme-light .olv-busy-scan--emblem {
   .olv-modal { width: 100%; }
   .olv-modal-btn { min-height: 44px; }
   /* Touch-sized confirm buttons (>= 44px tap target). */
+  .olv-confirm-cancel, .olv-confirm-ok {
+    min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+}
+
+/* Tablets and other touch screens get the same 44px confirm targets as phones. */
+@media (pointer: coarse) {
   .olv-confirm-cancel, .olv-confirm-ok {
     min-height: 44px;
     display: inline-flex; align-items: center; justify-content: center;
