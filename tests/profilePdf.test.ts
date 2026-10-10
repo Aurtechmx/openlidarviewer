@@ -215,7 +215,7 @@ describe('provenance metadata (v0.4.5, B4)', () => {
     const text = drawnPdfProse(bytes);
     expect(text).toContain('EPSG:2225'); // header line + summary row
     expect(text).toContain('NAVD88');
-    expect(text).toContain('12.500 m'); // the real corridor, not "auto" (5 sig figs)
+    expect(text).toContain('12.50 m'); // the real corridor, not "auto"
     // The percentile that ran, in the words the legend states it in. It is
     // stated once, in general note 1, rather than a second time as a header
     // provenance line the title block and the KPI band already answer.
@@ -546,8 +546,8 @@ describe('unit system (v0.4.5, B9) — the sheet honours the active toggle end-t
     expect(text).toContain('0+10.00');
     // Summary: length 30 m = 98.4252 ft → "98.425 ft" via formatLength (5 sig
     // figs); the corridor 12.5 m = 41.0105 ft → "41.010 ft".
-    expect(text).toContain('98.425 ft');
-    expect(text).toContain('41.010 ft');
+    expect(text).toContain('98.43 ft');
+    expect(text).toContain('41.01 ft');
     // Station table: the column head names the unit and the reference (drawn
     // as tracked caps, so the spacing is stripped before matching); heights
     // convert per station (station 0 sits at exactly 100 m = 328.0840 ft →
@@ -597,7 +597,7 @@ describe('the sheet prints the same source elevations as the panel', () => {
         r.value,
       ]),
     );
-    expect(byLabel.get('Highest elevation')).toBe('418.16 m @ 0+343.98');
+    expect(byLabel.get('Highest elevation')).toBe('418.16 m at 0+343.98');
     expect(text).toContain(byLabel.get('Highest elevation'));
     expect(text).toContain(byLabel.get('Lowest elevation'));
     // The heights that reach the sheet are the header's, not the render
@@ -649,7 +649,7 @@ describe('height wording follows heightLabel, never the sheet author', () => {
     expect(text).toContain('Elevation (m)');
     expect(text).toContain('Elevation min / max');
     expect(text).toContain('Highest / Lowest elevation');
-    expect(text).toContain('approximately mean sea level');
+    expect(text).toContain('vertical datum reference surface (NAVD88)');
   });
 
   it('an ellipsoidal reference in the record is not printed as an elevation', async () => {

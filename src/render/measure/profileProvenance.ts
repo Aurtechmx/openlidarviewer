@@ -54,6 +54,7 @@ import type { ProfileSectionScope, StreamingCoverage } from './profileSectionSna
 import type { CrsLinearUnit } from '../../io/crs';
 import type { VerticalReference } from '../../geo/height';
 import type { Truncation } from '../../io/truncation';
+import type { SourceReduction, WithheldReadCounts } from '../../science/withheldCounts';
 
 /**
  * Schema version of the provenance record itself.
@@ -189,6 +190,13 @@ export interface ProfileProvenance {
   readonly complete: boolean | null;
   readonly classPolicy: ProfileClassPolicy;
   readonly units: ProfileUnitContext;
+  /**
+   * How the sources were reduced before the read, when they were: the
+   * resident and declared point counts and whether the reduction kept
+   * records or replaced them with voxel centroids. Absent for a whole
+   * cloud, and for a record saved before this field existed.
+   */
+  readonly reduction?: SourceReduction;
 }
 
 /** One source as the caller describes it to the builder. */
@@ -237,6 +245,8 @@ export interface ProfileProvenanceInput {
   /** ASPRS codes dropped before the percentile. */
   readonly excludedClasses: readonly number[];
   readonly units: ProfileUnitContext;
+  /** The sources' reduction, when the loader handed over fewer points than declared. */
+  readonly reduction?: SourceReduction | null;
 }
 
 /**
@@ -333,6 +343,15 @@ export function buildProfileProvenance(input: ProfileProvenanceInput): ProfilePr
           ? input.units.verticalMetresPerUnit
           : null,
     },
+    ...(input.reduction
+      ? {
+          reduction: {
+            mode: input.reduction.mode,
+            resident: input.reduction.resident,
+            declared: input.reduction.declared,
+          },
+        }
+      : {}),
   };
 }
 
@@ -362,8 +381,17 @@ export function profileProvenanceIdentity(record: ProfileProvenance): string {
  * A resident-only read whose residency is unknown says so, rather than
  * implying either answer.
  */
-export function describeProfileProvenance(record: ProfileProvenance): string {
+export function describeProfileProvenance(
+  record: ProfileProvenance,
+  reduction: SourceReduction | undefined = record.reduction,
+): string {
   if (record.scope === 'empty') return 'No source read';
+  // A reduced static source is not "the full source": the sample basis takes
+  // the place of that phrase, and "complete read" is dropped because the read
+  // was complete only over the sample.
+  if (reduction && record.scope === 'full-static-source') {
+    return `${describeSampleBasis(reduction)}, ${describeClassBasis(record.classPolicy.availableOnEverySource)}`;
+  }
   const base = record.residentOnly
     ? 'Resident snapshot'
     : record.scope === 'mixed-full-and-resident'
@@ -378,6 +406,70 @@ export function describeProfileProvenance(record: ProfileProvenance): string {
         ? 'incomplete read'
         : 'coverage unknown';
   return `${base}, ${coverage}, ${describeClassBasis(record.classPolicy.availableOnEverySource)}`;
+}
+
+/** An integer with thousands separators, the form every count on a profile surface prints in. */
+export function formatCount(n: number): string {
+  return Number.isFinite(n) ? Math.round(n).toLocaleString('en-US') : String(n);
+}
+
+/**
+ * What the loaded cloud is, when it is a reduction of the file rather than
+ * the file: "Display sample of 1,912,920 points (voxel centroids), 10,789,680
+ * declared". The wording the volume caveat uses for the same facts.
+ */
+export function describeSampleBasis(r: SourceReduction): string {
+  if (r.reducedSources !== undefined && r.totalSources !== undefined) {
+    const n = r.reducedSources;
+    return (
+      `Includes ${formatCount(n)} reduced ${n === 1 ? 'source' : 'sources'} of ${formatCount(r.totalSources)} ` +
+      `(${formatCount(r.resident)} of ${formatCount(r.declared)} declared points held in ${n === 1 ? 'it' : 'them'}, ` +
+      `${r.mode === 'voxel-centroids' ? 'voxel centroids' : 'strided'})`
+    );
+  }
+  return r.mode === 'voxel-centroids'
+    ? `Display sample of ${formatCount(r.resident)} points (voxel centroids), ${formatCount(r.declared)} declared`
+    : `Strided sample of ${formatCount(r.resident)} of ${formatCount(r.declared)} declared points`;
+}
+
+/**
+ * What a reduced sample means for the heights read off it. A centroid carries
+ * no flags and the class of its first member only, so a voxel sample cannot
+ * exclude Withheld or noise points; a stride keeps whole records.
+ */
+export function describeSampleCaveat(r: SourceReduction): string {
+  return r.mode === 'voxel-centroids'
+    ? 'Percentiles are over the sample, not the file\'s returns; Withheld and noise points cannot be excluded.'
+    : 'Percentiles are over the sample, not every return in the file.';
+}
+
+/** {@link describeWithheldRead} with separators, and the sample basis when the cloud was reduced. */
+export function describeProfilePointsRead(c: WithheldReadCounts, includeBasis = true): string {
+  const excluded =
+    c.withheldExcluded === 'unknown'
+      ? 'unknown (no flags on a source)'
+      : formatCount(c.withheldExcluded);
+  const read = `${formatCount(c.analysedPoints)} of ${formatCount(c.sourcePoints)} analysed; Withheld excluded: ${excluded}`;
+  return c.reduction && includeBasis ? `${describeSampleBasis(c.reduction)}; ${read}` : read;
+}
+
+/**
+ * The sheet's points note. The points-read statement is always there, with
+ * its method tag; a reduced cloud adds the sample basis beside it. For voxel
+ * centroids the read statement says Withheld excluded is unknown, because a
+ * centroid has no flags; a stride keeps flags and reports the count.
+ */
+export function describeSampleNote(
+  withheld: WithheldReadCounts | null,
+  reduction: SourceReduction | undefined,
+  method: string | null,
+): string {
+  const points = withheld
+    ? `Points: ${describeProfilePointsRead(withheld, false)} (${method ?? 'method not recorded'}).`
+    : 'Points: Withheld handling not recorded; sampled before Withheld points were excluded.';
+  return reduction
+    ? `${points} Sample basis: ${describeSampleBasis(reduction)}. ${describeSampleCaveat(reduction)}`
+    : points;
 }
 
 /**

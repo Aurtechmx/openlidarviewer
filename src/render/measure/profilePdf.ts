@@ -105,7 +105,8 @@ import { NOT_SURVEY_GRADE_NOTE } from '../../terrain/export/exportNotes';
 import {
   DATUM_CONFLICT_MEASURE_NOTICE,
   formatElevation,
-  formatLength,
+  formatRise,
+  shownSpan,
 } from './format';
 // Straight-polyline path builder shared with the panel chart so the sheet and
 // the screen draw the same geometry from the same samples.
@@ -115,10 +116,16 @@ import { profilePolylinePath } from './profilePath';
 import { buildDerivedSurfaceLegend } from './profileDerivedLegend';
 import type { DerivedSurfaceLegend, DerivedSurfaceSource } from './profileDerivedLegend';
 // What shaped the estimate, as the record the app keeps beside the sample.
-import { describeProfileProvenance } from './profileProvenance';
+import {
+  describeProfileProvenance,
+  describeSampleNote,
+  describeSampleBasis,
+  describeSampleCaveat,
+  formatCount,
+} from './profileProvenance';
 import { combinedTruncationNote } from '../../io/truncation';
 import type { ProfileProvenance } from './profileProvenance';
-import { describeWithheldRead, type WithheldReadCounts } from '../../science/withheldCounts';
+import type { SourceReduction, WithheldReadCounts } from '../../science/withheldCounts';
 // Height headings. `Elevation` is earned by an orthometric reference and by
 // nothing else — the sheet outlives the session, so it is the last place a
 // reader can discover which surface a height was measured from.
@@ -128,7 +135,13 @@ import { pdfInfoDate } from '../../pdfInfoDate';
 // Where the station band's columns land. Pure arithmetic over measured text,
 // kept out of the builder so the geometry of the sheet can be asserted
 // without reading a PDF back.
-import { buildStationBand } from './profileSheetLayout';
+import {
+  buildStationBand,
+  crsDisplayLabel,
+  fitTitleValue,
+  placeCalloutLabel,
+  verticalScaleStatement,
+} from './profileSheetLayout';
 // Metres → feet, single-sourced: this module used to keep its own copy.
 import { FT_PER_M as FEET_PER_METRE } from '../../units/units';
 import { winAnsiSafe as sharedWinAnsiSafe } from '../../winAnsiText';
@@ -136,11 +149,18 @@ import { winAnsiSafe as sharedWinAnsiSafe } from '../../winAnsiText';
 
 export interface ProfilePdfInput {
   /**
-   * Measurement name. It is the PROJECT field of the title block, on every
-   * sheet of the set, and it is printed nowhere else: a name repeated in a
-   * sheet header is the same identity given twice on one sheet.
+   * Measurement name. It is the PROFILE name in the title block's name block,
+   * on every sheet of the set, and it is printed nowhere else: a name repeated
+   * in a sheet header is the same identity given twice on one sheet. It is the
+   * PROJECT field only when {@link project} is unknown.
    */
   readonly name: string;
+  /**
+   * The scan the profile was measured on, as the other exports name it. The
+   * PROJECT field of the title block, on every sheet. Absent or blank when
+   * the host cannot name the scan.
+   */
+  readonly project?: string | null;
   /** Height-vs-distance samples (metres). */
   readonly samples: ReadonlyArray<ProfileChartSample>;
   /** Corridor half-width used by the sampler, metres (for provenance). */
@@ -299,6 +319,7 @@ const T_NOTE_HEAD = 9; // GENERAL NOTES heading, tracked caps, bold
 const T_NOTE = 9.5; // a numbered general note
 const T_TB_LABEL = 7.5; // title-block field label, tracked caps, bold
 const T_TB_VALUE = 10.5; // title-block field value
+const T_TB_FIT_MIN = 7; // smallest a fitted title-block value is set before it wraps
 const T_TB_EYEBROW = 8; // TERRAIN PROFILE over the sheet name, tracked, bold
 const T_TB_NAME = 15; // the sheet name, bold
 const T_TB_DESC = 9.5; // the one-line descriptor under it
@@ -685,8 +706,10 @@ interface SheetIdentity {
 
 /** The set-wide title-block fields, the same on every sheet. */
 interface SetIdentity {
-  /** The measurement name; the closest thing this export has to a project. */
+  /** The scan the profile was measured on; the measurement name when that is unknown. */
   readonly project: string;
+  /** The measurement name, shown beside the sheet eyebrow when it is not the project. */
+  readonly profileName: string | null;
   /** Horizontal CRS as declared, or null when the scan is not georeferenced. */
   readonly crs: string | null;
   /** The numbered general notes, already composed. */
@@ -749,15 +772,43 @@ function drawTitleBlock(
     const face = strong ? f.bold : f.font;
     put(p, clipText(value, face, T_TB_VALUE, w - 14), x + 7, yTop - 25, T_TB_VALUE, face, INK);
   };
+  // A value that must never be cut: shrunk to fit one line, then wrapped onto
+  // two at the smallest size. Used for the CRS, whose tail is its code.
+  const fitCell = (
+    x: number,
+    w: number,
+    yTop: number,
+    label: string,
+    value: string,
+    strong: boolean,
+  ) => {
+    const face = strong ? f.bold : f.font;
+    const maxW = w - 14;
+    const safe = winAnsiSafe(value);
+    trackedText(p, label, x + 7, yTop - 11, T_TB_LABEL, f.font, INK_MUTED, 0.7);
+    const fit = fitTitleValue(safe, maxW, T_TB_VALUE, T_TB_FIT_MIN, {
+      width: (t, size) => face.widthOfTextAtSize(t, size),
+      wrap: (t, size) => wrapText(t, face, size, maxW),
+      clip: (t, size) => clipText(t, face, size, maxW),
+    });
+    fit.lines.forEach((line, n) => put(p, line, x + 7, yTop - fit.first - n * fit.step, fit.size, face, INK));
+  };
 
   cell(x0, 235, top, 'PROJECT', set.project.trim() !== '' ? set.project : 'Unnamed', true);
   cell(c1, 117.5, top, 'STATUS', 'PRELIMINARY', true);
   cell(c2, TITLE_BLOCK_W - 352.5, top, 'SHEET', `${index} / ${total}`, true);
-  cell(x0, 235, rowA, 'HORIZONTAL CRS', set.crs ?? 'Not recorded', set.crs == null);
+  fitCell(x0, 235, rowA, 'HORIZONTAL CRS', set.crs ?? 'Not recorded', set.crs == null);
   cell(c1, 117.5, rowA, 'DRAWING NO.', 'Not assigned', true);
   cell(c2, TITLE_BLOCK_W - 352.5, rowA, 'REV.', '-', false);
 
   trackedText(p, 'TERRAIN PROFILE', x0 + 7, rowB - 14, T_TB_EYEBROW, f.font, INK_MUTED, 1.1);
+  // The profile's own name, on the eyebrow line and right-aligned, when the
+  // PROJECT cell above names the scan instead.
+  if (set.profileName != null && set.profileName.trim() !== '') {
+    const eyebrowW = 'TERRAIN PROFILE'.length * (f.font.widthOfTextAtSize('M', T_TB_EYEBROW) + 1.1);
+    const shown = clipText(`Profile: ${set.profileName.trim()}`, f.bold, T_TB_DESC, TITLE_BLOCK_W - 14 - eyebrowW - 12);
+    put(p, shown, x1 - 7 - f.bold.widthOfTextAtSize(shown, T_TB_DESC), rowB - 14, T_TB_DESC, f.bold, INK);
+  }
   put(
     p,
     clipText(sheet.sheetName, f.bold, T_TB_NAME, TITLE_BLOCK_W - 14),
@@ -966,33 +1017,56 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   const coverage =
     input.coverageNote?.trim() ||
     combinedTruncationNote((record?.sources ?? []).filter((s) => s.contributed).map((s) => s.truncation));
-  const lenStr = (m: number | null): string => (m == null ? '—' : formatLength(m, system));
-  // A datum reading is not a magnitude — see `formatElevation`.
-  const elevStr = (m: number | null): string => (m == null ? '—' : formatElevation(m, system));
+  // One precision for every length and height on the sheet: two decimals. A
+  // percentile estimate over a 1.9 M-point display sample does not carry the
+  // third and fourth decimal that the unit-banded formatter would print, and
+  // the same quantity must read the same on every sheet. A datum reading is not
+  // a magnitude, so `formatElevation` (fixed two decimals) serves both.
+  const lenStr = (m: number | null): string => (m == null ? '—' : formatElevation(m, system));
+  const elevStr = lenStr;
+  const riseStr = (m: number): string =>
+    system === 'unverified' ? lenStr(m) : formatRise(m, k, unit);
+  // Relief from the printed extremes, so max minus min reads true on the page.
+  const reliefStr = (): string =>
+    stats.reliefSpan == null || stats.minElevation == null || stats.maxElevation == null
+      ? '—'
+      : system === 'unverified'
+        ? lenStr(stats.reliefSpan)
+        : `${shownSpan(stats.minElevation, stats.maxElevation, k)} ${unit}`;
   const intel = computeProfileSummary(input.samples);
   const gapCount = stats.stations.filter((s) => s.elevation == null).length;
+  // How the loaded cloud was reduced, if it was: the record's, else the one
+  // the series was sampled under. One fact, one answer.
+  const reduction: SourceReduction | undefined = input.withheld?.reduction ?? record?.reduction;
+  const crsLabel = crsDisplayLabel(input.crs);
+  const projectName = input.project?.trim() ? input.project.trim() : null;
+  const steepestSpanM =
+    intel.steepest == null ? null : intel.steepest.toChainage - intel.steepest.fromChainage;
 
   // The notes are the sheet's honesty, and they are on every sheet of the set
   // because a sheet that leaves the set carries its caveats with it.
   const notes: string[] = [
     `${legend.seriesLabel}. Estimated, not measured.`,
-    `Vertical reference: ${heightWord}. ${heightReferenceNote(reference)}`,
+    `Vertical reference: ${heightWord}. ${heightReferenceNote(reference, datumKnown ? input.verticalDatum : null)}`,
     record == null
       ? 'Provenance: no record of the sources read was attached to this export, so the ' +
         'contributing sources and the read scope are not recorded on this drawing.'
-      : `Provenance: ${describeProfileProvenance(record)}`,
+      : `Provenance: ${describeProfileProvenance(record, reduction)}`,
     ...(coverage
       ? [`Coverage: ${coverage}. The profile is sampled from the points read, not the whole file.`]
       : []),
-    input.withheld
-      ? `Points: ${describeWithheldRead(input.withheld)} (${input.method ?? 'method not recorded'}).`
-      : 'Points: Withheld handling not recorded; sampled before Withheld points were excluded.',
+    describeSampleNote(input.withheld ?? null, reduction, input.method ?? null),
     NOT_SURVEY_GRADE_NOTE +
       (residentOnly
         ? ' Sampled from streaming-resident points only - may refine as more data loads.'
         : ''),
   ];
-  const set: SetIdentity = { project: input.name, crs: input.crs ?? null, notes };
+  const set: SetIdentity = {
+    project: projectName ?? input.name,
+    profileName: projectName != null ? input.name : null,
+    crs: crsLabel,
+    notes,
+  };
   const sheets: EmittedSheet[] = [];
 
   // ── Sheet 1: the longitudinal profile ──────────────────────────────────
@@ -1154,6 +1228,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       plotLeft,
       plotRight,
       system,
+      pairLength: steepestSpanM == null ? '' : lenStr(steepestSpanM),
     });
 
     // ── Station data band (the civil "guitarra") ───────────────────────
@@ -1260,9 +1335,13 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     const vex = vScale > 0 ? hScale / vScale : 1;
     // The print instruction is part of the scale statement, not a footnote:
     // every ratio on this line is false on a sheet scaled to fit.
+    // Below 1 the vertical scale is the smaller drawing, so the relief is
+    // drawn flatter than the run and the ratio is a compression. It is said as
+    // one, with its consequence, and never under the word exaggeration.
+    const vexText = verticalScaleStatement(vex);
     const scaleLine =
       `Horizontal 1:${Math.round(hScale)}   ·   Vertical 1:${Math.round(vScale)}   ·   ` +
-      `Vertical exaggeration ${vex.toFixed(1)}:1   |   PRINT AT 100% ON ${SHEET_SIZE}`;
+      `${vexText}   |   PRINT AT 100% ON ${SHEET_SIZE}`;
     put(page, scaleLine, M, scaleLineY, T_SCALE, f.bold, INK);
     const axisTitle =
       system === 'unverified' ? 'Chainage (unit unverified)' : system === 'metric' ? 'Chainage (station km+m)' : 'Chainage (100 ft stations)';
@@ -1311,7 +1390,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     { label: `LENGTH (${unit})`, value: bare(lenStr(len)) },
     {
       label: `RELIEF (${unit})`,
-      value: stats.reliefSpan == null ? '-' : bare(lenStr(stats.reliefSpan)),
+      value: stats.reliefSpan == null ? '-' : bare(reliefStr()),
     },
     {
       label: `MIN / MAX (${unit})`,
@@ -1358,7 +1437,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     },
     {
       item: 'Relief',
-      value: stats.reliefSpan == null ? '—' : lenStr(stats.reliefSpan),
+      value: reliefStr(),
       remark: 'Max minus min. Smaller than the total climb wherever the section rolls.',
     },
     {
@@ -1366,8 +1445,11 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       value:
         intel.gainM == null || intel.lossM == null
           ? '—'
-          : `+${lenStr(intel.gainM)}  /  -${lenStr(intel.lossM)}`,
-      remark: 'Summed rise and fall over every station pair. What cut and fill is sized from.',
+          : `+${riseStr(intel.gainM)}  /  -${riseStr(intel.lossM)}`,
+      remark:
+        gapCount === 0
+          ? 'Summed rise and fall over every station pair. What cut and fill is sized from.'
+          : `Summed rise and fall over covered station pairs. Rise or fall across a gap is not counted (${gapCount} gap ${gapCount === 1 ? 'station' : 'stations'}), so gain minus loss can differ from the net change.`,
     },
     {
       item: 'Mean grade',
@@ -1377,17 +1459,20 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     {
       item: 'Max grade (ratio, angle)',
       value: `${formatGradeRatio(stats.maxGrade)}, ${formatGradeDegrees(stats.maxGrade)}`,
-      remark: 'The steepest station pair. Governs whether an alignment is buildable.',
+      remark:
+        `Grade over one station pair${steepestSpanM == null ? '' : ` of ${lenStr(steepestSpanM)}`}, ` +
+        'sensitive to canopy and noise. Neighbouring pairs can read very differently; ' +
+        'it is not a measure of buildability.',
     },
     {
       item: 'Steepest section',
       value:
         intel.steepest == null
           ? '—'
-          : `${formatStation(intel.steepest.fromChainage, system)} -> ` +
+          : `${formatStation(intel.steepest.fromChainage, system)} to ` +
             `${formatStation(intel.steepest.toChainage, system)}  ` +
             `(${formatGradePercent(intel.steepest.grade)})`,
-      remark: 'Where that maximum was measured. Called out on the profile sheet.',
+      remark: 'Where that single-pair maximum was measured. Called out on the profile sheet.',
     },
     {
       item: `Highest / Lowest ${heightWord.toLowerCase()}`,
@@ -1424,14 +1509,14 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       // general note and the axis both say "Elevation" where this said
       // "orthometric".
       value: heightLabel(reference),
-      remark: heightReferenceNote(reference),
+      remark: heightReferenceNote(reference, datumKnown ? input.verticalDatum : null),
       limit: reference === 'unknown' || reference === 'local',
     },
     {
       item: 'Horizontal CRS',
-      value: input.crs ?? '— (not georeferenced)',
+      value: crsLabel ?? '— (not georeferenced)',
       remark: 'Chainage is measured in this frame. Without one, distances are frame-local.',
-      limit: input.crs == null,
+      limit: crsLabel == null,
     },
     {
       item: 'Vertical datum',
@@ -1457,9 +1542,16 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     },
     {
       item: 'Read scope',
-      value: record == null ? 'Not recorded' : describeProfileProvenance(record),
-      remark: 'A resident snapshot may refine as more of the source streams in.',
-      limit: record == null || residentOnly,
+      value:
+        record == null
+          ? reduction
+            ? `${describeSampleBasis(reduction)}; source record not attached`
+            : 'Not recorded'
+          : describeProfileProvenance(record, reduction),
+      remark: reduction
+        ? describeSampleCaveat(reduction)
+        : 'A resident snapshot may refine as more of the source streams in.',
+      limit: record == null || residentOnly || reduction != null,
     },
   ];
 
@@ -1470,9 +1562,11 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     legend,
     record,
     reference,
-    crs: input.crs ?? null,
+    crs: crsLabel,
     verticalDatum: datumKnown ? (input.verticalDatum ?? null) : null,
     datumKnown,
+    reduction: reduction ?? null,
+    pointsRead: input.withheld ?? null,
   });
 
   // ── Sheet 4+: the station schedule ─────────────────────────────────────
@@ -1552,6 +1646,8 @@ interface CalloutInput {
   readonly plotLeft: number;
   readonly plotRight: number;
   readonly system: DisplayUnits;
+  /** The steepest pair's span, formatted, or '' when there is none. */
+  readonly pairLength: string;
 }
 
 /**
@@ -1579,25 +1675,48 @@ function drawMaxGradeCallout(p: PDFPage, f: Faces, input: CalloutInput): void {
 
   const midChainage = (s.fromChainage + s.toChainage) / 2;
   const midElevation = (from.elevation + to.elevation) / 2;
-  const px = input.mapX(midChainage);
-  const py = input.plotTopY - input.mapYdown(midElevation);
+  // The marker is held inside the frame: the steepest pair is often at the
+  // section's highest or lowest height, which is the frame itself.
+  const px = Math.min(input.plotRight - 4, Math.max(input.plotLeft + 4, input.mapX(midChainage)));
+  const py = Math.min(
+    input.plotTopY - 4,
+    Math.max(input.plotBotY + 4, input.plotTopY - input.mapYdown(midElevation)),
+  );
 
   const line1 = `MAX GRADE ${formatGradePercent(s.grade)}`;
   const line2 =
     `STA. ${formatStation(s.fromChainage, input.system)} TO ` +
     `${formatStation(s.toChainage, input.system)}`;
+  // The grade is one pair of stations, and the label says so beside the figure.
+  const line3 =
+    input.pairLength === ''
+      ? 'Over one station pair; sensitive to canopy and noise'
+      : `Over one station pair of ${input.pairLength}; sensitive to canopy and noise`;
   const labelW = Math.max(
     f.bold.widthOfTextAtSize(winAnsiSafe(line1), T_CALLOUT),
     f.font.widthOfTextAtSize(winAnsiSafe(line2), T_CALLOUT_SUB),
+    f.font.widthOfTextAtSize(winAnsiSafe(line3), T_CALLOUT_SUB),
   );
 
-  // Out to the side with room, and up unless the point is already near the
-  // top of the frame.
-  const sx = px + 32 + labelW + 8 <= input.plotRight ? 1 : -1;
-  const sy = py + 46 <= input.plotTopY ? 1 : -1;
-  const elbowX = px + sx * 32;
-  const elbowY = py + sy * 34;
-  const textX = sx > 0 ? elbowX + 4 : elbowX - labelW - 4;
+  // The profile in page coordinates, so the label can be kept off it.
+  const polyline = input.stations.map((st) =>
+    st.elevation == null
+      ? null
+      : { x: input.mapX(st.chainage), y: input.plotTopY - input.mapYdown(st.elevation) },
+  );
+  const at = placeCalloutLabel({
+    point: { x: px, y: py },
+    labelW,
+    labelH: 34,
+    frame: {
+      left: input.plotLeft,
+      right: input.plotRight,
+      top: input.plotTopY,
+      bottom: input.plotBotY,
+    },
+    line: polyline,
+  });
+  const { sx, elbowX, elbowY, textX } = at;
 
   // A cross at the point, then the leader out to the shoulder the label sits
   // on. Four independent strokes.
@@ -1606,8 +1725,9 @@ function drawMaxGradeCallout(p: PDFPage, f: Faces, input: CalloutInput): void {
   rule(p, px, py, elbowX, elbowY, INK, 0.7);
   rule(p, elbowX, elbowY, sx > 0 ? textX + labelW : textX, elbowY, INK, 0.7);
 
-  put(p, line1, textX, elbowY + 16, T_CALLOUT, f.bold, INK);
-  put(p, line2, textX, elbowY + 5, T_CALLOUT_SUB, f.font, INK_DIM);
+  put(p, line1, textX, elbowY + 27, T_CALLOUT, f.bold, INK);
+  put(p, line2, textX, elbowY + 16, T_CALLOUT_SUB, f.font, INK_DIM);
+  put(p, line3, textX, elbowY + 5, T_CALLOUT_SUB, f.font, INK_DIM);
 }
 
 interface TechnicalNotesInput {
@@ -1626,6 +1746,9 @@ interface MethodSheetInput {
   readonly crs: string | null;
   readonly verticalDatum: string | null;
   readonly datumKnown: boolean;
+  /** How the loaded cloud was reduced, or null for a whole cloud. */
+  readonly reduction: SourceReduction | null;
+  readonly pointsRead: WithheldReadCounts | null;
 }
 
 /**
@@ -1786,6 +1909,20 @@ function renderMethodSheet(
   para(`Horizontal CRS: ${input.crs ?? 'not georeferenced'}`, T_PARA, INK_SOFT);
   if (!input.datumKnown) para(DATUM_CONFLICT_MEASURE_NOTICE, T_PARA, INK_SOFT);
 
+  if (input.reduction != null) {
+    heading('Sample basis');
+    para(`${describeSampleBasis(input.reduction)}.`);
+    para(describeSampleCaveat(input.reduction), T_PARA, INK_SOFT);
+    if (input.pointsRead != null) {
+      para(
+        `${formatCount(input.pointsRead.analysedPoints)} of ${formatCount(input.pointsRead.sourcePoints)} ` +
+          'sample points were analysed.',
+        T_PARA,
+        INK_SOFT,
+      );
+    }
+  }
+
   heading('Sources read');
   if (input.record == null) {
     para(
@@ -1819,7 +1956,7 @@ function renderMethodSheet(
         s.displayName !== '' ? s.displayName : '-',
         s.classification,
         s.streaming ? 'streaming' : 'static',
-        String(s.acceptedCount),
+        formatCount(s.acceptedCount),
         s.contributed ? 'yes' : 'no',
         !s.streaming
           ? '-'
@@ -1836,7 +1973,7 @@ function renderMethodSheet(
       y -= 13;
     }
     y -= 5;
-    para(`Total accepted returns: ${String(input.record.acceptedCount)}.`, T_PARA, INK_SOFT);
+    para(`Total accepted returns: ${formatCount(input.record.acceptedCount)}.`, T_PARA, INK_SOFT);
 
     heading('Read scope');
     // The scope sentence is general note 3, on this sheet and on every other.

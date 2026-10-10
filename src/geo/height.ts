@@ -320,12 +320,19 @@ export function heightLabel(reference: VerticalReference): string {
  * for a tooltip or a report line. Plain and factual: the unknown case states the
  * consequence (not tied to a known reference) rather than implying one.
  */
-export function heightReferenceNote(reference: VerticalReference): string {
+export function heightReferenceNote(
+  reference: VerticalReference,
+  /** The declared vertical datum's name; an orthometric note names it when given. */
+  datumName?: string | null,
+): string {
+  const named = typeof datumName === 'string' ? datumName.trim() : '';
   switch (reference) {
     case 'ellipsoidal':
       return 'Height above the reference ellipsoid (GNSS / WGS 84). Not a sea-level elevation.';
     case 'orthometric':
-      return 'Height above the vertical datum reference surface (approximately mean sea level).';
+      return named === ''
+        ? 'Height above the vertical datum reference surface (approximately mean sea level).'
+        : `Height above the vertical datum reference surface (${named}).`;
     case 'depth':
       return 'Depth below the vertical datum reference surface.';
     case 'local':

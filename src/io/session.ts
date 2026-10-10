@@ -50,7 +50,7 @@ import {
 import type { SessionProjectFrame } from './sessionFrame';
 import { parseWorkOwnership, serializeWorkOwnership } from '../model/workOwnership';
 import type { WorkOwnership } from '../model/workOwnership';
-import { parseWithheldReadCounts } from './withheldCountsJson';
+import { parseSourceReduction, parseWithheldReadCounts } from './withheldCountsJson';
 import { parseWorkplaneSettings, type WorkplaneSettings } from '../model/workplaneSettings';
 
 /**
@@ -1611,6 +1611,7 @@ function parseProfileProvenance(v: unknown): ProfileProvenance | undefined {
       availableOnEverySource: policy.availableOnEverySource,
     },
     units,
+    ...((r) => (r ? { reduction: r } : {}))(parseSourceReduction(v.reduction)),
   };
 }
 

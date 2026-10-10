@@ -53,6 +53,8 @@ export interface MeasurePanelMountDeps {
   exportSession: () => unknown;
   handleFile: (file: File) => unknown;
   recordUsage: (category: 'measurement', kind: string) => void;
+  /** The active scan's base name, as the other exports name it; null or absent when unknown. */
+  getScanBaseName?: () => string | null;
   /** The app's one toast; a delete offers its Undo there. */
   toast?: (message: string, action?: { label: string; onClick: () => void }) => void;
   /**
@@ -168,6 +170,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       launcher = createProfileWorkbenchRuntime({
         stage: workbenchStage,
         scene: workbenchScene(),
+        ...(deps.getScanBaseName ? { scanBaseName: deps.getScanBaseName } : {}),
         markerHost: () => deps.getViewer().derivedLayerHost(),
         // The pose pair, not a focus call: the workbench composes the move so
         // the arithmetic stays testable, and so the only way here is the
@@ -276,10 +279,12 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       // "— (not georeferenced)" fallback.
       getProfileExportContext: () => {
         const cur = deps.crsService.current();
+        const scanName = deps.getScanBaseName?.() ?? null;
         if (!cur || (cur.kind !== 'projected' && cur.kind !== 'geographic')) {
-          return { crs: null, verticalDatum: null };
+          return { crs: null, verticalDatum: null, scanName };
         }
         return {
+          scanName,
           // "EPSG:NNNN — name" when the code is known; the resolved name alone
           // otherwise (it already falls back to the WKT name / EPSG label).
           crs: cur.epsg != null ? `EPSG:${cur.epsg} — ${cur.name}` : cur.name,

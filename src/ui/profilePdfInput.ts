@@ -25,6 +25,8 @@ import type { DisplayUnits } from '../render/measure/format';
 export interface ProfileExportContext {
   readonly crs: string | null;
   readonly verticalDatum: string | null;
+  /** The active scan's base name, as the other exports name it; null when unknown. */
+  readonly scanName?: string | null;
 }
 
 /** What the caller states about the moment of export. */
@@ -50,6 +52,7 @@ export function profilePdfInputFor(
 ): ProfilePdfInput {
   return {
     name: s.name,
+    project: options.context?.scanName ?? null,
     samples: s.profileChart ?? [],
     residentOnly: s.profileChartResidentOnly,
     corridorWidthM: s.profileCorridorWidthM ?? null,

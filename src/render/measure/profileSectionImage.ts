@@ -193,6 +193,12 @@ export interface ProfileSectionImageRequest {
   readonly hoverLabel?: string | null;
   /** Preformatted timestamp, or null for no timestamp line. */
   readonly generatedAt: string | null;
+  /**
+   * What the cloud is when it is a reduced sample, and what that means for
+   * the percentile. The basis replaces the scope in the header and the caveat
+   * is captioned under the counts. Absent for a whole cloud.
+   */
+  readonly sampleBasis?: { readonly basis: string; readonly caveat: string } | null;
 }
 
 /** What was composed, and what the image now claims. */
@@ -502,7 +508,8 @@ export function composeProfileSectionImage(
       ? 1
       : 0;
   const captionLines =
-    legendLines + 2 + (request.generatedAt != null ? 1 : 0) + (request.annotation ? 1 : 0);
+    legendLines + 2 + (request.generatedAt != null ? 1 : 0) + (request.annotation ? 1 : 0) +
+    (request.sampleBasis ? 1 : 0);
 
   const headerHeight = TITLE_SIZE + 6 + BODY_SIZE + 10;
   const axisBlockHeight = TICK_LEN + 4 + AXIS_SIZE + 6 + AXIS_SIZE + 8;
@@ -580,7 +587,7 @@ export function composeProfileSectionImage(
   drawAxes(ctx, ink, axes, plot, theme);
 
   // ── Header ────────────────────────────────────────────────────────────────
-  const scopeLine = describeSectionScope(request.scope, request.streamingComplete);
+  const scopeLine = request.sampleBasis?.basis ?? describeSectionScope(request.scope, request.streamingComplete);
   ink.write(request.name, PAD, PAD, TITLE_SIZE, theme.text, 'left', 'top');
   ink.write(
     `Source read: ${scopeLine}`,
@@ -623,6 +630,10 @@ export function composeProfileSectionImage(
   y += LINE_H;
   ink.write(scale, PAD, y, AXIS_SIZE, theme.mutedText, 'left', 'top');
   y += LINE_H;
+  if (request.sampleBasis) {
+    ink.write(request.sampleBasis.caveat, PAD, y, AXIS_SIZE, theme.mutedText, 'left', 'top');
+    y += LINE_H;
+  }
 
   // ── Annotation, only when asked for ───────────────────────────────────────
   let annotated = false;
