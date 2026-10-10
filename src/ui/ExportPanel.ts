@@ -12,6 +12,10 @@
  */
 
 import { showBusyScan } from './busyScan';
+
+/** Only the clip limits a point-cloud write; the class filter does not. */
+export const EXPORT_BUTTON_TOOLTIP =
+  'Write the open scan in the chosen format. An active clip limits which points are written; the class filter does not.';
 import type { ExportHealth } from '../intelligence/scanStory';
 import { renderExportHealthPanel } from './scanStoryViews';
 import { el, optInRow } from './dom';
@@ -457,7 +461,7 @@ export class ExportPanel {
     this._summaryNote = el('p', { className: 'olv-export-summary-note olv-hidden', text: '' });
     this._exportBtn = el('button', {
       className: 'olv-bc-convert olv-export-btn', type: 'button', text: 'Export',
-      title: 'Write the open scan in the chosen format. An active clip or class filter limits what is written.',
+      title: EXPORT_BUTTON_TOOLTIP,
     }) as HTMLButtonElement;
     this._exportBtn.addEventListener('click', () => void this._export());
     this._status = el('p', { className: 'olv-export-status', text: 'Export the open scan to another format.' });
