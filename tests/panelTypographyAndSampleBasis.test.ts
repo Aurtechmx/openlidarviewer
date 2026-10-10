@@ -12,15 +12,11 @@ beforeAll(() => {
 });
 
 function hill(): TerrainPoint[] {
-  const pts: TerrainPoint[] = [];
-  for (let x = 0; x <= 40; x++) {
-    for (let y = 0; y <= 40; y++) {
-      const dx = x - 20;
-      const dy = y - 20;
-      pts.push({ x, y, z: 8 * Math.exp(-(dx * dx + dy * dy) / 220) + ((x * 7 + y * 3) % 5) * 0.01 });
-    }
-  }
-  return pts;
+  return Array.from({ length: 41 * 41 }, (_, i) => {
+    const x = i % 41;
+    const y = Math.floor(i / 41);
+    return { x, y, z: 6 * Math.sin(x / 7) * Math.cos(y / 9) + ((x * 5 + y * 11) % 7) * 0.01 };
+  });
 }
 
 const SAMPLED: AnalysedBasis = {
