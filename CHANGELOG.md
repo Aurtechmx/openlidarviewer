@@ -4,6 +4,8 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-10
+
 ### Added
 
 - A storage-grid diagnostics library, `src/diagnostics/latticeForensics.ts`. Given candidate grids and their Jacobians, it predicts the spectral peaks an earlier storage grid leaves in LAS and LAZ integers, scores them against random wavevectors, reports which candidates the points support, and tests whether the points sit on a supported grid's nodes. No panel calls it yet; Known limitations states its limits.
