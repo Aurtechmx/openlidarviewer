@@ -332,7 +332,7 @@ export function renderFlowPulseLab(outcome: FlowPulseResult | FlowRefusal): HTML
   const metric = mayReportMetricArea(outcome.basis) && s.maxContributingAreaM2 != null;
   card.append(
     el('div', { className: 'olv-story-headline', text: 'D8 flow routing over the analysed DTM' }),
-    row('Cells routed', `${s.readableCells} of ${s.cells}`),
+    row('Cells routed', `${s.readableCells.toLocaleString('en-US')} of ${s.cells.toLocaleString('en-US')}`),
     row('Outlets', String(s.outletCount)),
     row('Sinks', String(s.sinkCount)),
     row('Flats', String(s.flatCount)),

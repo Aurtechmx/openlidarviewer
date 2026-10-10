@@ -16,6 +16,7 @@
  */
 
 import type { ExportDigests } from '../science/exportDigestRecord';
+import { formatGroupedInt } from '../science/withheldCounts';
 import type { Measurement, Vec3 } from '../render/measure/types';
 import { GEOGRAPHIC_NOT_AVAILABLE, areaWithheldNote, geographicRefuses, measurementMetrics, roundMeasured, reducedSampleCaveat } from './measurementExport';
 import {
@@ -87,9 +88,9 @@ const GRID_ACCURACY_EVIDENCE =
 function withheldCaveat(w: NonNullable<Measurement['volume']>['withheld']): string | null {
   if (!w) return null;
   if (w.excluded === 'unknown') {
-    return `${w.analysed} of ${w.source} selected points analysed; Withheld flags unavailable, so any Withheld points were not excluded.`;
+    return `${formatGroupedInt(w.analysed)} of ${formatGroupedInt(w.source)} selected points analysed; Withheld flags unavailable, so any Withheld points were not excluded.`;
   }
-  return `${w.analysed} of ${w.source} selected points analysed; ${w.excluded} Withheld excluded.`;
+  return `${formatGroupedInt(w.analysed)} of ${formatGroupedInt(w.source)} selected points analysed; ${formatGroupedInt(w.excluded)} Withheld excluded.`;
 }
 
 const GRID_KNOWN_LIMITATIONS =

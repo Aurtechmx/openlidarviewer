@@ -421,8 +421,9 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-relief-slider { display: flex; align-items: center; gap: var(--space-md); }
 .olv-analyse-relief-tag {
   font-size: var(--text-2xs); text-transform: uppercase;
-  letter-spacing: 0.06em; color: var(--text-faint); width: 26px; flex: 0 0 auto;
+  letter-spacing: 0.06em; color: var(--text-faint); min-width: 4.5em; flex: 0 0 auto; white-space: nowrap;
 }
+.olv-analyse-relief-select { flex: 1 1 auto; min-width: 0; }
 .olv-analyse-relief-slider input[type='range'] { flex: 1 1 auto; accent-color: var(--accent); min-width: 0; }
 .olv-analyse-relief-slider input[type='range']:disabled { opacity: 0.4; }
 .olv-analyse-relief-val {

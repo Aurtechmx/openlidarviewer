@@ -83,7 +83,7 @@ import { triggerDownload } from '../io/download';
 // Colourblind-safe twin of the coverage tile: same confidence buckets on the
 // Cividis palette, so a colour-vision-deficient viewer isn't left with the
 // green/yellow/red ramp. Selected when the colourblind-safe palette is active.
-import { interpolatedCaption } from '../terrain/contour/evidenceGrade';
+import { interpolatedShareCaption } from '../terrain/contour/evidenceGrade';
 import {
   computeTerrainReadiness,
   type ReadinessIndicator,
@@ -155,7 +155,7 @@ import type {
   ContourExportPermit,
 } from '../export/contourExportPermit';
 import { permitStamp } from '../export/permitStamp';
-import { DENSITY_REF_SAMPLE_NOTE, isSampledBasis } from '../terrain/export/analysedBasis';
+import { DENSITY_REF_SAMPLE_NOTE, densityReferenceFloorFor, isSampledBasis } from '../terrain/export/analysedBasis';
 import {
   analysisFreshnessBreach,
   FRESHNESS_REFUSALS,
@@ -1518,6 +1518,7 @@ export class AnalysePanel {
   setContourFrame(ctx: LaunchFrameContext | null): void {
     const token = ++this._contourToken; // any new call supersedes a pending mount
     this._contourFrame = ctx;
+    if (this._result) { this._renderFitness(); this._renderValidation(); }
     this._contourLauncher.replaceChildren();
     // Always re-hide first: opening the deliverable is an explicit user action,
     // and a fresh frame must not leak the previous scan's open panel.
@@ -2109,7 +2110,7 @@ export class AnalysePanel {
     const std = this._result?.accuracyStandards;
     if (std) {
       const fmtM = (n: number | null): string =>
-        n != null && Number.isFinite(n) ? `${n.toFixed(2)} m` : '—';
+        n != null && Number.isFinite(n) ? `${n.toFixed(2)}\u00a0m` : '—';
       if (std.nvaM != null || std.vvaM != null) {
         // "-style (hold-out)": the figures use the ASPRS 2014 FORMULAS on
         // internally withheld points, not independent checkpoints — the
@@ -2122,7 +2123,7 @@ export class AnalysePanel {
           `${METRIC_TOOLTIPS.nva} ${METRIC_TOOLTIPS.vva}`,
         ));
       }
-      if (std.densityReferenceFloorsMet.length > 0 && !isSampledBasis(this._contourFrame?.analysedBasis)) {
+      if (densityReferenceFloorFor(std.densityReferenceFloorsMet, this._contourFrame?.analysedBasis, this._result?.dtm.coverageMode)) {
         // When the gather strided the cloud, the density is a uniform-stride
         // extrapolation (the core pushes a warning saying so). Carry that into
         // the hint so the figure is never read as an exact, directly-counted
@@ -2138,7 +2139,7 @@ export class AnalysePanel {
         this._validationRow.append(this._hint(
           el('div', {
             className: 'olv-analyse-ql',
-            text: `USGS density ref: ≥ ${std.densityReferenceFloorsMet[0]} floor`,
+            text: `USGS density ref: ≥ ${densityReferenceFloorFor(std.densityReferenceFloorsMet, this._contourFrame?.analysedBasis, this._result?.dtm.coverageMode)} floor`,
           }),
           std.densityReferenceNote + strideNote,
         ));
@@ -2156,7 +2157,7 @@ export class AnalysePanel {
     if (slopeParts.length > 1) {
       this._validationRow.append(el('div', {
         className: 'olv-analyse-strata',
-        text: `RMSE by slope: ${slopeParts.join(' · ')} ${zUnit}`,
+        text: `RMSE by slope: ${slopeParts.join(' · ')}\u00a0${zUnit}`,
       }));
     }
     const zoneParts = (v.perZone ?? [])
@@ -2165,7 +2166,7 @@ export class AnalysePanel {
     if (zoneParts.length > 1) {
       this._validationRow.append(el('div', {
         className: 'olv-analyse-strata',
-        text: `RMSE by zone: ${zoneParts.join(' · ')} ${zUnit}`,
+        text: `RMSE by zone: ${zoneParts.join(' · ')}\u00a0${zUnit}`,
       }));
     }
 
@@ -2179,7 +2180,7 @@ export class AnalysePanel {
       this._validationRow.append(this._hint(
         el('div', {
           className: 'olv-analyse-reliability',
-          text: `Measured reliability: ${pct(m.reliability)} (95% CI ${pct(m.ciLow)}–${pct(m.ciHigh)}) at |Δz| ≤ ${fmtR(m.tolerance)} ${zUnit}`,
+          text: `Measured reliability: ${pct(m.reliability)} (95% CI ${pct(m.ciLow)}–${pct(m.ciHigh)}) at |Δz|\u00a0≤\u00a0${fmtR(m.tolerance)}\u00a0${zUnit}`,
         }),
         'Of the held-out ground points on measured cells, the share whose height came within the tolerance, with a Wilson 95% confidence interval. Interpolated (void-filled) cells are model support, not a measured reliability.',
       ));
@@ -2194,7 +2195,7 @@ export class AnalysePanel {
       this._validationRow.append(this._hint(
         el('div', {
           className: 'olv-analyse-blocked',
-          text: `Blocked RMSE: ${fmtR(blocked.rmse)} ${zUnit} (${blockedCiClause(blocked, fmtR, '–')})`,
+          text: `Blocked RMSE: ${fmtR(blocked.rmse)}\u00a0${zUnit} (${blockedCiClause(blocked, fmtR, '–')})`,
         }),
         blockedRmseHint(v.classificationScope, blocked.classificationScope),
       ));
@@ -2207,7 +2208,7 @@ export class AnalysePanel {
     this._body.append(
       el('div', {
         className: 'olv-analyse-caption',
-        text: interpolatedCaption(this._result.tally),
+        text: interpolatedShareCaption(this._result.model.interpolatedFraction),
       }),
     );
     if (this._result.excludedByClassification > 0) {
@@ -2994,7 +2995,7 @@ export class AnalysePanel {
       // A density REFERENCE, not a quality-level grade; withheld on a sample.
       [
         'USGS density ref',
-        isSampledBasis(this._contourFrame?.analysedBasis) ? DENSITY_REF_SAMPLE_NOTE : a && a.densityReferenceFloorsMet.length > 0 ? `≥ ${a.densityReferenceFloorsMet[0]} floor` : '—',
+        ((f) => (f ? `≥ ${f} floor` : isSampledBasis(this._contourFrame?.analysedBasis) || r.dtm.coverageMode === 'sampled' ? DENSITY_REF_SAMPLE_NOTE : '—'))(densityReferenceFloorFor(a?.densityReferenceFloorsMet, this._contourFrame?.analysedBasis, r.dtm.coverageMode)),
       ],
       ['Approx. scale', 'auto — fits sheet'],
       ['Generated', generatedAt.toISOString().slice(0, 16).replace('T', ' ') + ' UTC'],
@@ -3274,7 +3275,7 @@ export class AnalysePanel {
     const a = terrainAssessment(r);
     const t = r.cellStatusTally;
     const covered = t.measured + t.interpolated + t.lowConfidence + t.edgeRisk;
-    const densityFloor = r.accuracyStandards.densityReferenceFloorsMet[0] ?? null;
+    const densityFloor = densityReferenceFloorFor(r.accuracyStandards.densityReferenceFloorsMet, this._contourFrame?.analysedBasis, r.dtm.coverageMode);
     const hasClass = r.excludedByClassification > 0;
     // Whether the source linear unit is confirmed — the same gate every other
     // unit consumer applies (`crs.linearUnit !== 'unknown'`). An unknown-unit or
