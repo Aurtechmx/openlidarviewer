@@ -13,25 +13,27 @@ For LAS and LAZ files a short preload summary appears first: the format, the sou
 
 A "Project ready" card then summarises the file: its format, point count, bounding box and detected attributes, with a suggested navigation mode and a performance estimate. It dismisses on its own.
 
-Supported imports are `LAS`, `LAZ`, `E57`, `PLY`, `OBJ`, `GLB`, `GLTF`, `XYZ`, `CSV`, `PCD`, `PTS`, and `PTX`. Large hierarchical-streaming formats, `COPC` (`.copc.laz`) and `EPT` (Entwine Point Tile, via an `ept.json` URL), open progressively through their octree hierarchies; see [`streaming.md`](streaming.md). Nothing is uploaded. The file is read and rendered entirely in your browser.
+Supported imports are `LAS`, `LAZ`, `E57`, `PLY`, `OBJ`, `GLB`, `GLTF`, `XYZ`, `CSV`, `ASC`, `TXT`, `PCD`, `PTS`, `PTX`, and 3D Tiles (a single `.pnts` tile or a whole tileset). Large hierarchical-streaming formats, `COPC` (`.copc.laz`) and `EPT` (Entwine Point Tile, via an `ept.json` URL), open progressively through their octree hierarchies; see [`streaming.md`](streaming.md). Nothing is uploaded. The file is read and rendered entirely in your browser.
 
-Dropping a second file opens it as an additional layer alongside the first; the Layers section of the Scan Intelligence panel lists every open scan, each with a visibility toggle and a remove control.
+Dropping a second file opens it as an additional layer alongside the first; the Layers list in the Data tab lists every open scan, each with a visibility toggle and a remove control.
 
 ## Closing a scan
 
-Click Close scan in the tool dock (on a phone it is under More) to clear the current scan (and any additional layers) and return to the empty state. From there you can drop, open, or sample another scan. Closing also clears the session's measurements, annotations, and saved views, so the next scan starts clean; export the session first if you want to keep it. When the scan holds measurements, annotations, saved views, class edits or results, a confirmation asks first and offers to save the session.
+Click Close scan in the tool dock to clear the current scan (and any additional layers) and return to the empty state. On a phone the button is under the ••• More tray, not in the primary row. From there you can drop, open, or sample another scan. Closing also clears the session's measurements, annotations, and saved views, so the next scan starts clean.
+
+If closing would lose work, a "Close this scan?" dialog asks first and lists what would be discarded: measurements, annotations, saved views, class edits that differ from the file, computed results (Ready results from Analyse, Observatory, the labs and saved findings), or work held for recovery in this browser. Cancel has the focus, so a reflexive Enter keeps the scan open. The other choices are Close without saving and, when the session would keep something, Save session first, which downloads the session file and then closes. The session file stores measurements, annotations and saved views only. It does not store class edits, so the dialog says to export the scan as LAS to keep them. If the save fails, the scan stays open and the message reads "Session not saved. The scan is still open." A scan with no such work closes without a dialog.
 
 ## Styling the cloud
 
-The Scan Intelligence panel controls how the cloud looks:
+The View panel in the right rail controls how the cloud looks:
 
-- Color by switches the colour mode between Height, Intensity and Classification, or RGB and Normal. Only the modes the file actually contains are offered, and the best one is selected automatically. Normal shading maps each point's surface-normal direction to colour and appears for files that carry per-point normals, such as many E57 scans.
+- Color by switches the colour mode: RGB, Height, Intensity, Class, Normal, Density, Return, GPS time, and the analysis-gated Coverage and Confidence. Only the modes the file actually contains are offered, and the best one is selected automatically. Normal shading maps each point's surface-normal direction to colour and appears for files that carry per-point normals, such as many E57 scans. Coverage and Confidence stay off until a terrain analysis has run.
 - Point size sets the base on-screen size of each point.
 - Detail shows the honest `shown / total` count. A cloud larger than the point budget is loaded at reduced density so the viewer stays responsive: see [performance.md](performance.md).
 
 ## Rendering
 
-The Rendering section of the panel tunes how the cloud is drawn:
+The Rendering section of the View panel tunes how the cloud is drawn:
 
 - Eye Dome Lighting toggles screen-space depth shading. It darkens depth discontinuities so edges and 3D structure stand out, and the strength slider sets how pronounced the effect is. It is on by default on desktop WebGPU, and off on the WebGL 2 fallback and on phones, where it can still be switched on.
 - Point size mode switches between Adaptive (points scale with camera distance, clamped so far points stay visible and near ones do not bloat) and Fixed, a constant on-screen size. A cloud opens at the smallest size in Fixed mode (the most honest first view, with no distance-driven size gradient) and the point-size slider sets the base size for both modes. A size or mode you choose is remembered for the next session.
@@ -51,27 +53,33 @@ The grid covers the scan and one scan size around it. Lines are drawn at full st
 
 ## Navigating
 
-Switch modes with the bottom-centre control or the `1` / `2` / `3` keys. Orbit lets you drag to rotate, scroll to zoom, and double-click to focus. Walk is first-person, with WASD on the level and Space/C for height. Fly is free flight, where WASD follows where you look.
+Switch modes with the bottom-centre control or the `1` / `2` / `3` / `4` keys. Orbit lets you drag to rotate, scroll to zoom, and double-click to focus. Walk is first-person, with WASD on the level and Space/C for height. Fly is free flight, where WASD follows where you look. Pan (`4`, or `G` from any mode) is the hand tool, which drags the scene under the pointer. The Plan chip looks straight down in parallel projection with the hand tool on the drag, and turning it off restores the view you had.
 
 In Walk and Fly, click the scan to capture the cursor for mouse-look, and press `Esc` to release it. See [navigation.md](navigation.md).
 
-## Inspecting with Scan Intelligence
+## The scan report
 
-The Scan report shows the headline metrics: point count, width, depth, height, density, spacing, and which attributes (RGB, intensity, classification) are present. When a LAS or LAZ file records them, it also shows the capture sensor, the source software, and the capture date. Open the Advanced report for the scan's georeferenced bounding box (the min and max corners in real-world coordinates) and integrity diagnostics. Those flag invalid coordinates, duplicate points and stray outliers, and compare the declared point count against the decoded one.
+The Scan report section of the View panel shows the headline metrics: point count, width, depth, height, density, spacing, and which attributes (RGB, intensity, classification) are present. When a LAS or LAZ file records them, it also shows the capture sensor, the source software, and the capture date. Open the Advanced report for the scan's georeferenced bounding box (the min and max corners in real-world coordinates) and integrity diagnostics. Those flag invalid coordinates, duplicate points and stray outliers, and compare the declared point count against the decoded one.
 
 ## Measuring
 
 Click Measure in the tool dock to open the measurement toolbar. Pick a tool from it, then click points on the scan:
 
 - Distance takes two clicks and reports the straight-line distance between them.
-- Polyline takes any number of clicks and reports the total path length. Double-click or press Done to finish.
-- Area takes three or more clicks forming a polygon and reports both the true area in the polygon's own plane and the horizontal map-projected area.
+- Polyline takes any number of clicks and reports the total path length. Click the first vertex, double-click, press Enter or use the Finish polygon button to finish, and Backspace removes the last vertex.
+- Area takes three or more clicks forming a polygon and reports both the true area in the polygon's own plane and the horizontal map-projected area. It closes the same ways a polyline finishes. A polygon that crosses itself, overlaps its own edges, collapses to a line, or has vertices far from one plane is not accepted, and a saved or imported one reports no area with the reason, never 0.
 - Height takes two clicks and reports the vertical difference between them.
 - Angle takes three clicks and reports the angle at the middle vertex.
 - Slope takes two clicks and reports the rise, run, slope angle, and grade percentage.
 - Profile takes two clicks and reports the full cross-section geometry of the line: 3D length, horizontal distance, vertical drop, and grade percentage. Reads in a single compact card ("12.5 m · Δh +2.3 m · 18.4%"); the overlay draws the 3D segment plus an L-bent ghost so the run and drop are visible separately.
+- Box takes two clicks on opposite corners of a diagonal and reports an axis-aligned width, depth, height and volume.
+- Volume takes a polygon footprint, or a freeform shape drawn with the Lasso button, and reports cut, fill and net against a reference height. It leaves out noise classes 7 and 18 and Withheld points and counts them. On a cloud the loader reduced to one point per small cube, those labels are not available, and the volume records that instead of a count.
+
+Snapping is off until you turn it on. The snap button cycles off, point and geometry, and needs points in memory and a perspective view.
 
 While placing, undo removes the last point. Once placed, drag any point to move it, and a measurement can be renamed or deleted from the Measurements panel. Clear all empties the list. The units toggle switches every readout between metric and imperial. Export saves all measurements to a JSON session file, and Import loads one back. Measurements persist for the browser session.
+
+When the scan is in geographic coordinates (degrees), every measurement except a height is marked as not a distance, and the exports print or write "not available: geographic CRS (degrees are not distances)" in place of the figure. Heights, rises and box heights are still written. Nonzero values smaller than 0.0005 keep three significant digits in the exports, so a small segment does not export as 0. The bearing of a distance reads "grid" on a projected coordinate system with an EPSG code and "(local axes)" otherwise, and is not shown on a geographic one. The user guide describes each case in [USER_GUIDE.md](USER_GUIDE.md).
 
 Measurement is for visual inspection. See the note in [limitations.md](limitations.md).
 
@@ -103,33 +111,33 @@ Press `?` for the shortcut sheet: every action with its key, searchable, from th
 
 ## Exporting
 
-Snapshot, in the tool dock, saves the current view as a PNG; any placed measurements and annotations are burned into the image, so the snapshot works as inspection evidence. The Visual Export Studio adds image modes beyond the screen view, such as orthographic RGB and a height map; intensity, classification and normal images are there too, each with a customisable legend. Export, in the panel, re-exports the loaded cloud in real-world coordinates as a PLY or OBJ file, or as XYZ or CSV text.
+Save a snapshot, in the tool dock, saves the current view as a PNG; any placed measurements and annotations are burned into the image, so the snapshot works as inspection evidence. The Image export section of the Export tab adds Height map, Intensity, Class map, Normal map and View capture. The intensity, class and normal modes are disabled on a cloud without that channel, and the hover text says so. On a georeferenced scan, View capture downloads a top-down image with world file and projection sidecars. The quick Export buttons write the loaded cloud in real-world coordinates as a PLY or OBJ file, or as XYZ or CSV text. LAS and LAZ re-saves, with their coordinate system options, are in the Export tab's point cloud lane; see the [user guide](USER_GUIDE.md).
 
-Report PDF. Export → Report PDF builds a multi-page technical report from the live working state. It opens with a cover page and a dataset summary (point count, bounds, density, CRS), then embeds the image exports and tables of annotations and measurements, and ends with technical notes and a footer. Two built-in templates (Survey Summary, Technical Report) set the default voice; three themes (`light-technical`, `dark-inspection`, `minimal-engineering`) and white-label project metadata (Client / Project / Phase / Reference / Date) plus an optional footer note propagate through every page. Branding (accent colour, logo, organisation, author) and the metric/imperial unit system propagate through every table. The PDF engine and its pdf-lib dependency load only when you click the button, so the initial app payload stays unchanged for users who never need a report.
+Report PDF. Export → Report PDF builds a multi-page report from the live working state. Pick a template first: Survey Summary is a compact handover with a cover, inspection summary, dataset summary, compact provenance, measurements and technical notes. Technical Report adds the full provenance, the file's declared source metadata, annotations and visuals. Scan QA is a data-quality summary with an explicit statement of what the report does not establish. The metric or imperial setting of the Measurements panel applies to the tables. In the dataset summary, Height reads in source units with "(vertical unit not declared)" when the file declares no vertical unit, and "(declared vertical unit is invalid)" when the declared factor is zero, negative or not a number. It carries "(includes noise classes 7 and 18)" whenever the on-screen Scan report does. The Exported stamp prints UTC with the zone named. For measurements on a geographic coordinate system, the report prints "not available: geographic CRS (degrees are not distances)" in place of grades, angles, lengths, areas and volumes. The PDF engine loads only when you click the button, so the initial app payload stays unchanged for users who never need a report.
 
 <!-- #region session-reference -->
 <!-- The region markers on this page let the docs site's "Embed & session
      reference" include these sections verbatim — this file stays the single
      canonical copy. Keep the markers around their sections when editing. -->
-Session round-trip (`.olvsession`). The session Export saves the full working state to a `.olvsession` JSON file. The file holds the camera, render settings and active colour mode. It also stores the annotations, measurements and named views, along with the scan metadata. Import loads one back, restoring the camera and view exactly. Older measurement-only and v2 session files still open via the v1/v2/v3 schema back-compat in the parser.
+Session round-trip (`.olvsession`). The session Export saves the full working state to a `.olvsession` JSON file. The file holds the camera, render settings and active colour mode. It also stores the annotations, measurements and named views, along with the scan metadata. Import loads one back, restoring the camera and view exactly. Class edits are not stored in the session file. To keep a reclassification, export the scan as LAS at display resolution. Older measurement-only and v2 session files still open via the v1/v2/v3 schema back-compat in the parser.
 <!-- #endregion session-reference -->
 
 ## Mobile usage
 
 1. Open OpenLiDARViewer on your phone.
-2. Tap "Open scan from device."
+2. Tap "Open scan."
 3. Choose a compatible file from device storage or a cloud file provider.
 4. Use touch gestures to navigate: drag to rotate, pinch to zoom, two fingers to pan.
-5. Tap Measure to measure between points, or Annotate to mark and note a point of interest.
-6. Open Scan Info to view scan metadata.
-7. Export a snapshot or a supported file format.
+5. Tap Measure to measure between points, or Annotate to mark and note a point of interest. Measure and Annotate are in the dock, and Analyse, Help, Save a snapshot and Copy view link sit under the ••• button.
+6. Open the View tab in the bottom sheet to see the Scan report with the scan metadata.
+7. Save a snapshot from the dock, or export a supported file format from the Export tab.
 
 The annotation editor and panel use touch-sized controls on phones. The live probe is a hover tool, so it is desktop-only.
 
 <!-- #region embed-reference -->
 ## Sharing a view
 
-The Share tool in the bottom dock copies a link that reproduces the current view: the camera position and target, the colour mode, the point sizing, and the selected annotation. The link carries no scan data: the recipient opens the same scan themselves, and the saved view is applied on top. This keeps "share this view" working with no upload and no backend.
+The Copy view link button in the bottom dock copies a link that reproduces the current view: the camera position and target, the colour mode, the point sizing, and the selected annotation. The link carries no scan data: the recipient opens the same scan themselves, and the saved view is applied on top. This keeps "share this view" working with no upload and no backend.
 
 ## Embedding
 

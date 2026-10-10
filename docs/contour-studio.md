@@ -9,7 +9,7 @@ Load scan → analyze → see terrain readiness → Create Contour Deliverable
           → choose a purpose → review recommendations → export
 ```
 
-After analysis, a Terrain Products launcher appears outside the analysis panel. Its state (hidden, unavailable, exploratory, or available) is computed from the analysis result and the reference frame. Opening it reveals the Contour Studio workspace: purpose cards, a review bar of recommendations, an evidence ladder, and an export bar. The contour export controls no longer live inline in the analysis panel.
+After analysis, a Terrain Products launcher leads the results. Its state (hidden, unavailable, exploratory, or available) is computed from the analysis result and the reference frame. Opening it reveals the Contour Studio workspace: purpose cards, a review bar of recommendations, an evidence ladder, and an export bar. The Analyse panel keeps its own Export Contours, DEM (ZIP) and Intelligence report (PDF) buttons; the Studio adds the purpose cards, the review bar and the complete export bar.
 
 ## Honesty model
 
@@ -43,4 +43,8 @@ UI (vanilla-TS DOM builders) under `src/ui/`: `contourStudioLauncher.ts`, `conto
 
 ## Status and limits
 
-v0.5.9 lands the Contour Studio cores and the workspace shell. The pixel-level PDF/raster rendering, the ZIP byte assembly, functional exports, worker progress/cancel for heavy compute, and the browser end-to-end suite are integration and device-verified work that sits on top of these cores. Since that release, every Studio export product (including the DEM raster package and the terrain intelligence report, which shipped in 0.5.9 with their own product-specific gates) has been folded under the single central evidence resolver. See `VALIDATION_REPORT_v0.5.9.md` and `docs/validation/THREATS_TO_VALIDITY.md` for the evidence scope.
+The Studio's export bar writes the contour vectors (GeoJSON, DXF and SVG), the map sheet (PDF), the DEM package (ZIP), the complete deliverable (ZIP) and the Intelligence report (PDF). A product that cannot run is disabled, and the reason is shown. The map sheet is also available as Contour map sheet (PDF) in the Export tab, and it runs the same export with the Studio's starting purpose.
+
+When the analysis was built from a display sample or a resident streaming set, the map sheet says so under the accuracy heading and prints the analysed basis. It leaves out the USGS density reference, and it titles the accuracy block "Hold-out accuracy (preview)". On a placed scan the sheet's orientation arrow reads "Grid N", and its timestamps are in UTC with the zone named. The WGS 84 contour GeoJSON is refused for a scan on NAD27 or on a datum the viewer cannot confirm, because OLV applies no datum shift; the button shows the reason.
+
+Since the first Studio release, every export product (including the DEM raster package and the terrain intelligence report, which shipped in 0.5.9 with their own product-specific gates) has been folded under the single central evidence resolver. See `docs/releases/VALIDATION_REPORT_v0.5.9.md` and `docs/validation/THREATS_TO_VALIDITY.md` for the evidence scope.

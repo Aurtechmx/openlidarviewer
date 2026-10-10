@@ -29,6 +29,8 @@ Orbit is the default. Drag to rotate, right-drag to pan, scroll to zoom, and dou
 | F | Focus on the point under the cursor |
 | 1 / 2 / 3 / 4 | Orbit / Walk / Fly / Pan mode |
 | G | Toggle the Pan (hand) tool from any mode |
+| H | Show or hide the navigation panel |
+| Arrow keys | Turn the view in Orbit, and move like W A S D in Walk and Fly |
 | Middle-drag | Temporary grab: pan the view in any mode, release to continue |
 | Double-click | Fly to the clicked point |
 
@@ -44,13 +46,27 @@ Beyond movement, a small set of global keys reach the tools and panels. Press `?
 | `I` | Inspect tool |
 | `A` | Annotate tool |
 | `V` | Save the current camera view |
+| `B` | Show or hide the reference plane |
+| `L` | Lasso volume tool |
+| `T` / `O` / `P` | Camera presets: Top, Oblique, Planar |
 | Ctrl/Cmd-Z | Undo the last edit (annotation or classification) |
 | Ctrl/Cmd-Shift-Z, Ctrl/Cmd-Y | Redo |
-| Delete / Backspace | Delete the current selection |
+| Delete / Backspace | Remove the selected annotation |
 | Hold Space (while a tool is active) | Temporarily hand the mouse back to camera navigation: rotate, pan, and zoom, then release to resume the tool |
 | Right-click the scan | Context menu: focus the pivot on the point under the cursor, frame the scan, or jump to a standard view |
 
 Bare-key shortcuts are ignored while you are typing in a text field, so naming a measurement or an annotation never also fires a tool.
+
+## Views and projection
+
+The camera pads next to the navigation legend hold the view controls.
+
+- Camera presets: Top, Iso, Oblique and Planar jump the camera to a named pose. Iso has no key.
+- Standard views: Top, Bottom, Front, Back, Left and Right look straight at one face of the scan, fitted to the visible bounds with a margin at each screen edge.
+- Ortho switches between perspective and a flat orthographic projection. Measurements use the 3D points either way. Scroll zoom in an orthographic view keeps the point under the cursor fixed.
+- Plan looks straight down in parallel projection with the hand tool on the drag. Turning it off puts back the projection and navigation mode you had. Plan switches on once the camera has landed top-down. Choosing another mode, view or preset before it lands cancels the entry. If the camera cannot reach top-down, Plan turns off and says "Plan view did not finish. Try Plan again." Scroll zoom is ignored while the camera is moving into the view.
+
+The compass rose reads Grid N on its top face when the scan has a coordinate system. That is the direction of the map's Y axis, not true north. A scan with no coordinate system labels the faces B, R, F and L.
 
 ## Mouse-look (pointer lock)
 

@@ -37,7 +37,7 @@ A file that refuses to open, a warning that looks wrong, one screen that confuse
 ## Where next
 
 - [Navigation](./navigation): Orbit, Walk, Fly, and Pan, with the full key reference
-- [Measurement & analysis](./measurement-analysis): the seven measurement tools, annotations, inspection, and exports
+- [Measurement & analysis](./measurement-analysis): the nine measurement tools, annotations, inspection, and exports
 - [Terrain intelligence](./terrain-intelligence): the confidence-aware DTM / contour pipeline
 - [Streaming](./streaming): COPC and EPT datasets far larger than browser memory
 - [Supported formats](/formats/): what opens today, exactly, and what is planned
