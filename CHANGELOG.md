@@ -95,6 +95,13 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - On a tablet (a touch screen at least 768 px wide and 600 px tall whose primary pointer is coarse with no hover, which includes an iPad with an attached trackpad) the controls outside the rails, dock and dialogs are 44 px targets, and panel close buttons and Frame all are 48 px. This covers the navigation card and its speed slider, the scan-state items, the empty state, the command palette, the shortcut sheet, the tour, the floating panels, the location bar buttons, the catalogue inputs, the View panel head, and checkbox labels in the rails. The view cube grows to 144 px with 44 px circular buttons (a long label wraps instead of widening) and moves right of the left rail while it is open. The class, layer and group visibility checkboxes now sit inside a label, which is a 44 px box on a tablet; the label element and its inline-flex rule exist on every device. Mouse and phone layouts keep their sizes.
 - The Export button tooltip no longer says a class filter limits what is written. Only an active clip limits a point-cloud export; hidden or soloed classes affect image exports only.
 - On a phone the Measure and Inspect instruction (for example "Select the second point") was hidden, so only a pulsing dot said what to do next and screen readers got nothing. A compact status line beside the tool rail now shows it, up to two lines, and announces each change once.
+- The Terrain panel and the Analyse readiness badge no longer show a USGS density reference floor when the analysis ran on a sample of the points. The panel redraws those rows when the analysed basis arrives, and the panel, badge, map sheet and provenance take the floor from one function.
+- The contour panel and the map sheet now print the same share of interpolated or uncertain contour length, taken from the export model.
+- Point counts in the Scan report and Profile Workbench analysed-of-source lines, the measurement report caveats and the cloud exclusion warning use thousands separators.
+- The Terrain panel keeps a value and its unit (and the tolerance in "Measured reliability") on one line with a non-breaking space.
+- The relief Colour label is no longer cut off by the colour select.
+- On the map sheet, accuracy rows longer than the right column are shortened or wrapped, the sample note has its own row, and the readiness note moves below the rows.
+- Technical report section headings are no longer underlined, and the closing caveat lines up with the findings list above it.
 
 ## [0.7.0-alpha.1] - 2026-09-18
 

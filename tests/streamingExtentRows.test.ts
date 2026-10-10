@@ -98,7 +98,7 @@ test('density & spacing rows carry the class-scope flag; extents do not', () => 
 test("density basis: a header total records the Withheld exclusion as 'unknown', never 0", () => {
   const { rows } = streamingExtentRows(header, ctx({ linearUnit: 'metre', linearUnitToMetres: 1 }), 1_000_000);
   expect(rows.find((r) => r.label === 'Density basis')!.value).toBe(
-    '1000000 of 1000000 analysed; Withheld excluded: unknown (no flags on a source) (olv.density.scan-report@2)',
+    '1,000,000 of 1,000,000 analysed; Withheld excluded: unknown (no flags on a source) (olv.density.scan-report@2)',
   );
 });
 

@@ -739,8 +739,8 @@ describe('the span figures describe the corridor, not the drawn subset', () => {
     });
     const rows = rec.detail[0]!;
     // The cap really did bite, so the two sets genuinely differ here.
-    expect(figure(rows, 'Returns in corridor')).toBe('120002');
-    expect(figure(rows, 'Drawn')).toBe('120000');
+    expect(figure(rows, 'Returns in corridor')).toBe('120,002');
+    expect(figure(rows, 'Drawn')).toBe('120,000');
     expect(figure(rows, 'Chainage span')).toBe(axisSpanCaption(100, 'unit unverified'));
     expect(figure(rows, 'Height span')).toBe(axisSpanCaption(50, 'unit unverified'));
     // What the drawn subset alone would have claimed.
@@ -818,7 +818,7 @@ describe('the corridor is walked across frames', () => {
     }
     expect(slices).toBeGreaterThan(1);
     expect(rec.detail).toHaveLength(1);
-    expect(figure(rec.detail[0]!, 'Drawn')).toBe('120000');
+    expect(figure(rec.detail[0]!, 'Drawn')).toBe('120,000');
   });
 
   it('abandons a walk still in flight when the dock goes', () => {
