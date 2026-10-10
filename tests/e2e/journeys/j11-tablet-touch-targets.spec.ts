@@ -131,6 +131,18 @@ test.describe('J11 tablet touch targets', () => {
         await scan('class list');
       });
       await j.step('results shelf', async () => {
+        // The shelf is hidden until the session has a result, so make a measurement.
+        await page.locator('.olv-tool', { hasText: 'Measure' }).click();
+        await page.evaluate(() => {
+          const api = (window as unknown as { __OLV_TEST_API__: { setMeasureKind: (k: string) => void; placeMeasurementPoint: (p: { x: number; y: number; z: number }) => void } }).__OLV_TEST_API__;
+          api.setMeasureKind('distance');
+          api.placeMeasurementPoint({ x: 1, y: 2, z: 0 });
+          api.placeMeasurementPoint({ x: 7, y: 10, z: 0 });
+        });
+        await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
+        await scan('measure panel');
+        await page.keyboard.press('Escape');
+        await showWorkspaceMode(page, 'data');
         const toggle = page.locator('.olv-results-toggle').first();
         await expect(toggle).toBeVisible();
         await toggle.click();
