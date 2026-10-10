@@ -155,10 +155,17 @@ test.describe('J11 tablet touch targets', () => {
         await page.keyboard.press('Escape');
       });
       await j.step('help overlay', async () => {
-        await page.keyboard.press('Shift+Slash');
-        await expect(page.locator('.olv-help-overlay')).toBeVisible();
+        const help = page.getByRole('button', { name: /^Help$/ }).first();
+        if (!(await help.isVisible())) {
+          // At this width the dock folds some tools under More.
+          await page.locator('.olv-dock .olv-tool-more').click();
+        }
+        await expect(help).toBeVisible();
+        await help.click();
+        await expect(page.locator('.olv-help-backdrop')).toBeVisible();
         await scan('help overlay');
         await page.keyboard.press('Escape');
+        await expect(page.locator('.olv-help-backdrop')).toBeHidden();
       });
 
       const lines = report(found);
