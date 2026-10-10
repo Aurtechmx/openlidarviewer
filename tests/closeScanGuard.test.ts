@@ -9,10 +9,11 @@ const NONE: DiscardableWork = { measurements: 0, annotations: 0, views: 0, class
 
 function setup(work: Partial<DiscardableWork>, choice: ConfirmChoice = 'cancel', withSave = true) {
   const close = vi.fn();
-  const saveSession = vi.fn(async () => {});
+  const saveSession = vi.fn(async () => true);
+  const onSaveFailed = vi.fn();
   const confirm = vi.fn(async (_o: ConfirmOptions) => choice);
-  const deps: CloseScanGuardDeps = { work: () => ({ ...NONE, ...work }), close, confirm, ...(withSave ? { saveSession } : {}) };
-  return { guard: createCloseScanGuard(deps), close, saveSession, confirm };
+  const deps: CloseScanGuardDeps = { work: () => ({ ...NONE, ...work }), close, confirm, onSaveFailed, ...(withSave ? { saveSession } : {}) };
+  return { guard: createCloseScanGuard(deps), close, saveSession, confirm, onSaveFailed };
 }
 
 describe('close scan guard', () => {
@@ -55,17 +56,44 @@ describe('close scan guard', () => {
   it('saves the session, then closes, on the alternate choice', async () => {
     const order: string[] = [];
     const t = setup({ measurements: 1 }, 'alternate');
-    t.saveSession.mockImplementation(async () => { order.push('save'); });
+    t.saveSession.mockImplementation(async () => { order.push('save'); return true; });
     t.close.mockImplementation(() => { order.push('close'); });
     expect(await t.guard()).toBe(true);
     expect(order).toEqual(['save', 'close']);
   });
 
-  it('keeps the scan open when the save fails', async () => {
+  it('keeps the scan open and says so when the save throws', async () => {
     const t = setup({ measurements: 1 }, 'alternate');
     t.saveSession.mockRejectedValue(new Error('disk'));
     expect(await t.guard()).toBe(false);
     expect(t.close).not.toHaveBeenCalled();
+    expect(t.onSaveFailed).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the scan open and says so when the save is refused without writing', async () => {
+    const t = setup({ measurements: 1 }, 'alternate');
+    t.saveSession.mockResolvedValue(false);
+    expect(await t.guard()).toBe(false);
+    expect(t.close).not.toHaveBeenCalled();
+    expect(t.onSaveFailed).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no save when class edits are the only work, and says the session does not store them', async () => {
+    const t = setup({ classEdits: true });
+    await t.guard();
+    const o = t.confirm.mock.calls[0]![0];
+    expect(o.alternateLabel).toBeUndefined();
+    expect(o.message).toContain('does not store class edits');
+    expect(o.message).not.toContain('Save the session first');
+  });
+
+  it('says results can be recomputed and offers no save when results are the only work', async () => {
+    const t = setup({ results: 2 });
+    await t.guard();
+    const o = t.confirm.mock.calls[0]![0];
+    expect(o.alternateLabel).toBeUndefined();
+    expect(o.message).toContain('recomputed');
+    expect(o.message).not.toContain('measurements, annotations and views');
   });
 
   it('offers Cancel, the alternate and the confirm label, and states what is lost', async () => {

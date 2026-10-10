@@ -29,8 +29,10 @@ export interface CloseScanGuardDeps {
   work(): DiscardableWork;
   /** Remove the scan and clear the recovery journal. */
   close(): void;
-  /** Download the session file. Absent when there is no save action. */
-  saveSession?(): Promise<unknown>;
+  /** Download the session file. Resolves true only once a file was written. Absent when there is no save action. */
+  saveSession?(): Promise<boolean>;
+  /** Tell the user the save did not happen and the scan is still open. */
+  onSaveFailed?(): void;
   /** The shared confirm dialog; replaceable in tests. */
   confirm?(opts: ConfirmOptions): Promise<ConfirmChoice>;
 }
@@ -68,12 +70,17 @@ export function createCloseScanGuard(deps: CloseScanGuardDeps): () => Promise<bo
       deps.close();
       return true;
     }
-    const save = deps.saveSession;
+    // The session file stores measurements, annotations and saved views, nothing else.
+    const storable = work.measurements > 0 || work.annotations > 0 || work.views > 0;
+    const save = storable ? deps.saveSession : undefined;
+    const lines = [`Closing the scan discards ${describeDiscardableWork(work)}.`];
+    if (storable) lines.push(save ? 'Save the session first to keep your measurements, annotations and views.' : 'This cannot be undone.');
+    if (work.classEdits) lines.push('The session file does not store class edits. Export the scan as LAS to keep them.');
+    if (work.results > 0 && !storable) lines.push('Computed results can be recomputed by running the analysis again.');
+    if (!storable && !work.classEdits && work.results === 0) lines.push('This cannot be undone.');
     const choice = await confirm({
       title: 'Close this scan?',
-      message:
-        `Closing the scan discards ${describeDiscardableWork(work)}.\n` +
-        (save ? 'Save the session first to keep your measurements, annotations and views.' : 'This cannot be undone.'),
+      message: lines.join('\n'),
       confirmLabel: 'Close without saving',
       confirmTip: 'Close the scan and discard this work.',
       cancelLabel: 'Cancel',
@@ -82,7 +89,9 @@ export function createCloseScanGuard(deps: CloseScanGuardDeps): () => Promise<bo
     });
     if (choice === 'cancel') return false;
     if (choice === 'alternate' && save) {
-      try { await save(); } catch { return false; }
+      let saved = false;
+      try { saved = (await save()) === true; } catch { saved = false; }
+      if (!saved) { deps.onSaveFailed?.(); return false; }
     }
     deps.close();
     return true;

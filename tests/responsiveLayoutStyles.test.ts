@@ -208,3 +208,9 @@ describe('Close scan on phone layouts', () => {
     expect(css('45-dock-and-panels.css')).toMatch(/^\.olv-tool-close:not\(:disabled\) \{/m);
   });
 });
+
+describe('confirm dialog touch targets', () => {
+  it('keeps 44 px buttons on any coarse pointer, not only below 768px', () => {
+    expect(css('80-modal-system.css')).toMatch(/@media \(pointer: coarse\) \{\s*\.olv-confirm-cancel, \.olv-confirm-ok \{\s*min-height: 44px;/);
+  });
+});

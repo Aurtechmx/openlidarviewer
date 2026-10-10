@@ -165,7 +165,7 @@ test.describe('results shelf', () => {
   test('closing the scan empties the shelf', async ({ page }) => {
     await openAndMeasure(page);
     await expect(shelf(page).locator('.olv-results-toggle')).toBeVisible();
-    await closeScanFromDock(page);
+    await closeScanFromDock(page, { expectPrompt: true });
     await expect(page.locator('.olv-empty')).toBeVisible({ timeout: 20_000 });
     await expect(shelf(page)).toBeHidden();
   });

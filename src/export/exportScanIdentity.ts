@@ -120,16 +120,18 @@ export interface ScanScopedExportIo<D> {
  * serialise it with no await in between, then write only when the scan the export
  * was requested for is still active. A scan opened while the writer loaded is
  * refused rather than written, so the file can never splice two scans. Returns
- * after the write OR the refusal, never both.
+ * after the write OR the refusal, never both. Resolves true only when the
+ * text was written.
  */
-export async function writeScanScopedExport<D>(io: ScanScopedExportIo<D>): Promise<void> {
+export async function writeScanScopedExport<D>(io: ScanScopedExportIo<D>): Promise<boolean> {
   const deps = await io.load();
   const text = io.serialize(deps);
   if (!sameExportTarget(io.activeScanId(), io.requestedScanId)) {
     io.refuse();
-    return;
+    return false;
   }
   io.write(text);
+  return true;
 }
 
 /**

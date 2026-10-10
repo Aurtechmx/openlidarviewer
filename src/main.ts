@@ -3526,8 +3526,8 @@ function applyShareState(state: ShareState, cloud: PointCloud): void {
  * writeScanScopedExport loads first, snapshots once with no await, and writes
  * only while the requested scan stays active (else refuses, never splices).
  */
-async function exportSession(): Promise<void> {
-  await writeScanScopedExport({
+async function exportSession(): Promise<boolean> {
+  return writeScanScopedExport({
     requestedScanId: scans.activeExportTargetId(), // streaming leaves activeId null
     activeScanId: () => scans.activeExportTargetId(),
     refuse: () => showLassoToast(SESSION_EXPORT_SCAN_CHANGED_REFUSAL),
@@ -4284,7 +4284,7 @@ function closeScan(): void { // the guarded entry is requestCloseScan
   layers.solo = null; recovery?.clear();
   resetToEmptyState();
 }
-let closeGuard: Promise<() => Promise<boolean>> | null = null; const requestCloseScan = (): Promise<boolean> => (closeGuard ??= loadCloseScanGuard().then((m) => m.createCloseScanGuard({ close: closeScan, saveSession: exportSession, work: discardableWork }))).then((g) => g());
+let closeGuard: Promise<() => Promise<boolean>> | null = null; const requestCloseScan = (): Promise<boolean> => (closeGuard ??= loadCloseScanGuard().then((m) => m.createCloseScanGuard({ close: closeScan, saveSession: exportSession, onSaveFailed: () => showLassoToast('Session not saved. The scan is still open.'), work: discardableWork }))).then((g) => g());
 function discardableWork() {
   return ({ measurements: viewerReady ? viewer.measure.getMeasurements().length : 0, annotations: viewerReady ? viewer.annotate.getAnnotations().length : 0, views: viewBookmarks.savedViews.length, classEdits: activeScanHasClassEdits(scans.activeId, viewer), results: workspaceShell?.readyResultCount() ?? 0, pendingRecovery: recovery?.hasPending() ?? false });
 }

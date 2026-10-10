@@ -112,3 +112,18 @@ describe('writeScanScopedExport — load first, snapshot once, verify before wri
     expect(written).toEqual(['session-bytes']);
   });
 });
+
+describe('writeScanScopedExport result', () => {
+  const io = (active: string) => ({
+    requestedScanId: 'A',
+    load: async () => ({}),
+    serialize: () => '{}',
+    activeScanId: () => active,
+    write: () => {},
+    refuse: () => {},
+  });
+  it('resolves true after a write and false after a refusal', async () => {
+    expect(await writeScanScopedExport(io('A'))).toBe(true);
+    expect(await writeScanScopedExport(io('B'))).toBe(false);
+  });
+});
