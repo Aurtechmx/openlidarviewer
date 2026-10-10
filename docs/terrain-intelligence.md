@@ -352,6 +352,25 @@ compute took at least one second are written; cheaper ones stay in memory for
 the session and are recomputed afterwards. Nothing in this store reaches the
 point-cloud tile caches or the source file, and nothing leaves the device.
 
+## What the analysis was built from
+
+A terrain run reads the points the viewer holds, so its basis is stated wherever
+a result appears. The coverage is `full`, `sampled` (a display sample) or
+`resident-only` (the streaming set in memory), and every artifact prints an
+analysed-basis line such as "2,899,049 of 47,170,656 points (display sample);
+whole-dataset support not claimed". Points flagged Withheld are left out of the
+surface and counted, and they do not turn a full read into a sample. When a
+Withheld-aware recovery rebuilds the surface from the source file, the status says
+the source was read again at the point budget, taking every Nth point, so the
+surface is still a sample.
+
+The USGS ground-return density reference is not stated when the coverage is not a
+full read, or when points are missing for a reason other than Withheld exclusion.
+The Analyse panel, the contour map sheet, the terrain report and the export
+provenance leave it out, and the map sheet prints "not stated on a sample" in its
+place. The sheet titles the accuracy block "Hold-out accuracy (preview)" and states
+that the figures come from a sample of the points.
+
 ## What confidence means (and what it does not)
 
 The per-cell confidence is calibrated against measured error, not
@@ -363,6 +382,12 @@ the reported figure, so a cell's percentage reflects the probability that
 its elevation is within the measured vertical tolerance. An NVA/VVA-style vertical statistic (hold-out, not ASPRS
 checkpoints) (NVA/VVA) is reported via `validate/verticalAccuracy.ts`.
 
+The blocked hold-out RMSE carries a 95% confidence interval from a bootstrap over
+the scored blocks. With only one scored block, a disabled bootstrap, or no held-out
+points, no interval is computed. The Analyse panel and the report then show
+"Confidence interval unavailable" with that reason and keep the point RMSE. They do
+not print the RMSE as both endpoints.
+
 Confidence does not mean survey certification. It is a calibrated,
 data-quality estimate from the returns the analyser actually walked. It does
 not stand in for a licensed surveyor, a ground-control network, datum
@@ -373,9 +398,10 @@ against survey-grade data and procedures.
 ## Scope note
 
 The live pipeline above is what produces every terrain product in the
-Analyse panel. In-scene 3D overlays of the DTM and contours are not part of the live
-pipeline today; the pipeline produces the data such overlays would consume,
-and surfacing them is future work.
+Analyse panel. Contours are drawn into the scene as their own layer, and the
+Coverage and Confidence colour modes grade the point cloud from the DTM. The DTM
+itself is not drawn as a surface in the scene. It appears as the 2D preview
+tiles in the Analyse panel and as the exported rasters.
 
 For how each terrain product is validated (and the manual pre-release
 checks) see

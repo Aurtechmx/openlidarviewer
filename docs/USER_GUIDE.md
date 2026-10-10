@@ -38,16 +38,22 @@ The scan fills the window, with four places around it.
 
 The left rail holds four tabs, one open at a time:
 
-- Data: what the scan is: the layers you have open, how healthy each one is, and the classes it carries.
+- Data: what the scan is: the layers you have open, how healthy each one is, and the classes it carries. For a classified scan the class list is open here, one row per class with its code, name, share of points and legend colour. A scan that was reduced to a display sample says "Shares of the loaded display sample." under the list. A collapse control hides the list and remembers your choice, and Open Classes goes to the full Classes page. The rows only display and never change a class. A scan with no classification shows a single Classes row reading "None detected".
 - Tools: what you do to it: Measure, Inspect, Annotate and the Clip box, each listed with its key.
 - Analyse: one row per analysis with its status (ready, review, blocked, or what the step needs) and the reason, and a page for each task.
 - Export: writing the scan, the images and the reports out.
 
 The right rail is how the scan is drawn: Colour by, point size and rendering, with the scan's coordinate system, its scan report and your saved views below. Inspecting a point puts its readout on a card beside the point itself.
 
-The bottom dock carries Frame, Snapshot, Measure, Inspect, Probe, Annotate, Analyse, Copy view link, Commands and Help. Above it sit the camera pads and the navigation legend.
+The bottom dock carries Frame all, Save a snapshot, Measure, Inspect, Probe, Annotate, Analyse, Copy view link, Commands and Help, with Close scan at the far right. On narrower windows a ••• button folds some of them away: laptop widths fold Save a snapshot, Copy view link and Probe (and Commands between 768 and 830 px wide), and phones also fold Analyse, Help and Close scan. Close scan asks first when closing would lose measurements, annotations, saved views, class edits or results, and offers Save session first when the session would keep something. The session file does not keep class edits. Above the dock sit the camera pads and the navigation legend.
 
-Measure, Annotate and Analyse from the dock switch the left rail to the tab that holds them. The other tools leave it where it is. Each rail has a grabber on its inside edge that hides it and gives the space back to the scan. On a phone the panels move into a bottom sheet with View, Analyse and Layers tabs.
+Measure, Annotate and Analyse from the dock switch the left rail to the tab that holds them. The other tools leave it where it is. Each rail has a grabber on its inside edge that hides it and gives the space back to the scan. On a phone the panels move into a bottom sheet with Data, Tools, Analyse, Export and View tabs.
+
+### The state strip
+
+Once a scan is open, a strip of short readouts shows its state. From left to right it shows the dataset name, the horizontal coordinate system, the vertical reference, the basis, the clip box when one is on, what is processing, and how many items are waiting for review. Each item is a button that opens the place that explains it, such as Data, the coordinate system section, the Clip box or Analyse.
+
+The basis reads Full dataset, Currently loaded points, Sampled, or Partial for a truncated file. When a local file was reduced to a display sample, two links appear beside the basis. Export all N points opens the Export tab with full resolution ticked, so the file is written from the original rather than from the sample. Reload all N points opens the file again at a higher point count; when the device cannot hold every point the link reads Reload at N points, and the result is still a sample. A link that cannot run stays in place and says why when you press it. The reasons include a device that is too small, a phone or tablet, and class edits that a reload would discard. A reload clears the layer's saved findings and any compare result computed on it. Analyses keep reading the display sample either way.
 
 ### Moving the camera
 
@@ -69,7 +75,7 @@ You start in Orbit, where dragging swings around the scan and scrolling zooms. S
 
 Four movement styles cover most jobs. Orbit circles a target and is best for inspecting an object from the outside. Walk keeps you upright and is good for moving across a site. Fly lets you move freely in any direction. Pan slides the view sideways without turning it, which is what you want when reading a face or a plan straight-on.
 
-There are also six standard views (top, front, side, and so on) and a toggle between perspective and a flat orthographic view, which is the one for reading measurements off a face straight-on.
+The camera pads add four camera presets (Top, Iso, Oblique and Planar; the keys T, O and P select Top, Oblique and Planar), six axis-aligned standard views (Top, Bottom, Front, Back, Left and Right), an Ortho toggle for a flat orthographic view, and a Plan chip. Plan looks straight down in parallel projection with the hand tool on the drag, and turning it off puts back the view you had. It switches on once the camera has landed top-down. If the camera cannot get there, Plan turns off and says "Plan view did not finish. Try Plan again." Orthographic is the view for reading measurements off a face straight-on. Measurements use the 3D points either way. On a scan with a coordinate system the top face of the compass rose reads Grid N, the direction of the map's Y axis, which is not true north. A scan with no coordinate system labels the faces B, R, F and L instead.
 
 Keyboard and mouse. Press `?` any time for the full shortcut sheet. The ones worth knowing up front: `Cmd-K` (or `Ctrl-K`) opens a command palette that searches every tool and action, `Ctrl/Cmd-Z` undoes your last edit, right-clicking the scan opens a quick menu (focus here, frame, standard views), and holding `Space` while a tool is active lets you move the camera without putting the tool down. The full list is in [docs/navigation.md](navigation.md).
 
@@ -123,6 +129,15 @@ A measurement on a fully loaded scan carries a small red / yellow / green dot ne
 
 Hover the dot to see exactly why it earned its grade. The badge travels with the measurement when you share it (see *Save and share* below), so whoever opens your file sees the same verdict.
 
+### When a measurement reports no number
+
+- Area. A polygon that crosses itself, overlaps its own edges, collapses to a line or has a vertex that is not a finite number is not committed. The check runs in the polygon's own best-fit plane, so a vertical wall or a tilted plane is accepted. A ring whose vertices sit far from any single plane is refused too, because a plane area would not describe it. A saved or imported polygon like this reports no area. The Measurements panel, the totals and every export leave the area out and give the reason, instead of writing 0.
+- Volume on a reduced cloud. Polygon and lasso volumes leave out noise classes 7 and 18 and Withheld points, and count them. A cloud the loader thinned by keeping every Nth point keeps the file's own records, so both exclusions work. A cloud reduced to one point per small cube holds centroids that carry the first member's class and no flags. A volume on it records that noise and Withheld exclusion was unavailable, together with the reduction mode and the resident and declared point counts. The Measurements panel, saved sessions, the measurement CSV, GeoJSON and KML, the integrity report and the PDF report all say so. Volumes on a whole cloud are unchanged.
+- Geographic coordinate systems. When the scan is in degrees, every measurement except a height is marked as not a distance. The exports follow. The PDF report, the chain total and the labels drawn on snapshots print "not available: geographic CRS (degrees are not distances)". The profile sheet PDF is disabled. CSV cells are left empty, GeoJSON properties are null with a `not_available` property, and the findings and integrity reports record a null value with an empty unit and still verify. Heights, rises and box heights are still written.
+- Unconfirmed scale. A length on a scan whose scale is not confirmed as metres is labelled in source units in the PDF and the findings report, never in metres.
+
+A few more details on what a measurement says. A nonzero value smaller than 0.0005 keeps three significant digits in the CSV, GeoJSON, KML, integrity report and findings report, so a 0.0004 m segment reads 0.0004 and not 0. Exact zero stays 0. A bearing reads "042° grid" on a projected coordinate system with an EPSG code, and "042° (local axes)" when there is no coordinate system, a local engineering one, or a Y-up scan. No bearing is shown on a geographic one. Grid north is the direction of the map's Y axis, and it differs from true north by up to about 3 degrees inside a UTM zone. When a file declares no vertical unit, a rise, slant, grade, height or volume uses the horizontal unit, and the Measurements panel says "Heights are assumed to be in the horizontal unit (vertical unit not declared)". On a compound coordinate system the chain total, the PDF grades and the angles use the horizontal and the vertical unit separately.
+
 ---
 
 ## Analyse the terrain
@@ -137,12 +152,24 @@ Choose Terrain and run the analysis. After a run, Create contours opens the Cont
 
 The grade is honest about gaps. A scan that only measured part of the ground will say so rather than pretend the filled-in areas are survey-quality.
 
+### What the analysis was built from
+
+A terrain run reads the points the viewer holds. On a scan reduced to a display sample that is a sample, and on a streaming scan it is the resident set. The surface, the contours and every export say which. The map sheet prints an "Analysed basis" line such as "2,899,049 of 47,170,656 points (display sample); whole-dataset support not claimed". Points flagged Withheld are left out and counted, and they do not make a full read count as a sample. If Withheld points forced the surface to be rebuilt, the status says the source was read again at the point budget, taking every Nth point, so the surface is still a sample.
+
+The USGS density reference is not printed on the map sheet, in the Analyse panel, in the terrain report or in an export's provenance when the coverage is not a full read, or when points are missing for a reason other than Withheld exclusion. The map sheet shows "not stated on a sample" in its place and titles the accuracy block "Hold-out accuracy (preview)" with a line saying the figures come from a sample of the points. The hold-out figures are internal checks on withheld ground returns, not a survey accuracy statement.
+
+The blocked hold-out RMSE comes with a 95% confidence interval when two or more blocks were scored. When no interval could be computed, the Analyse panel and the report show "Confidence interval unavailable" with the reason (only one block was scored, the bootstrap was disabled, or no held-out points were scored) and keep the point RMSE.
+
 ### What a run gives you to take away
 
 - DEM (ZIP): the bare-earth surface, the top surface and the canopy-height model, as ASCII Grid and GeoTIFF with a README recording the settings that produced them
 - Contour vectors: GeoJSON in the scan's own coordinates, GeoJSON in WGS 84, DXF, or SVG
 - Export Contours: a printable map sheet, where you also pick the contour interval from the ones this surface supports
 - Intelligence report (PDF): the assessment, coverage, accuracy figures and warnings in one sheet
+
+Once a run exists, the Export tab's Products list also offers DEM package (ZIP) and Contour map sheet (PDF). They run the same exports as the Analyse buttons. The map sheet button opens the map sheet dialog. If the sheet is refused, the dialog stays open and says why. A button that cannot run is disabled and shows the reason on hover, for example "No contours at this interval to export." or that the analysis belongs to a different scan.
+
+The DTM and DSM GeoTIFFs carry a vertical coordinate system only when the height unit is known and EPSG has a code for that reference in that unit. NAVD88 heights in US survey feet are written as EPSG:6360, in international feet as EPSG:8228 and in metres as EPSG:5703. Otherwise the rasters carry no vertical coordinate system, keep the height unit as the band unit, and the README says why. A raster without a placed origin is written with no coordinate system at all, and the README says the frame is local. Every raster declares one NoData value, -9999 unless a written height equals it, in which case the package uses a value below every height and states it in the README. The LAS writer matches its vertical code to the unit of the Z values in the same way, and leaves the code off when the two contradict.
 
 ### When the scan is not ground
 
@@ -177,7 +204,7 @@ lost.
 
 ## Compare two scans
 
-Load two scans of the same place, a "before" and an "after", and a Compare elevation button appears in the Layers section of the Inspector. A one-click prompt also appears when the second scan lands. Both are there only while exactly two scans are loaded.
+Load two scans of the same place, a "before" and an "after", and a Compare elevation button appears in the Layers list on the Data tab. A one-click prompt also appears when the second scan lands. Both are there only while exactly two scans are loaded.
 
 The comparison lines the two up horizontally, turning and shifting sideways but never vertically, so real settlement or fill is measured rather than absorbed into the fit. It builds both bare-earth surfaces on one shared grid and differences them. The panel reports what the alignment did, the net change, the gain and the loss separately, and how many grid cells were comparable. Cell by cell, a change below a small noise floor counts as unchanged, and the gain and loss figures cover only what clears it. You can export the difference grid for use elsewhere.
 
@@ -201,7 +228,9 @@ Both actions need points in memory, so neither runs on a streaming scan.
 
 A derived class is a heuristic guess rather than a survey product, and it is labelled that way wherever it appears, so it is never confused with the data the scanner shipped.
 
-You can solo a single class, hide several, and switch to a colourblind-safe palette. Hiding is a display filter: a point-cloud export still writes every class, whatever is hidden on screen.
+You can solo a single class, hide several, and switch to a colourblind-safe palette. On a scan reduced to a display sample, the counts, solo and hide act on the loaded sample rather than the full cloud, and the Classes page says so. Hiding is a display filter: a point-cloud export still writes every class, whatever is hidden on screen.
+
+Two kinds of point are treated apart from the rest. A point carrying the LAS Withheld flag is shown on screen and written back to an export with its flag intact, but terrain analysis, profiles and the volume tools leave it out and say how many they left out. The Scan Report leaves Withheld points out of its extent, density and spacing. Points in the ASPRS noise classes 7 and 18 are left out of the volume tools and of the elevation comparison, each of which states how many. When noise points sit inside the extent, the Height in the Scan Report and the PDF report reads "(includes noise classes 7 and 18)". Overlap-flagged points are never left out.
 
 You can also correct classes by hand. Pick a target class in Edit classes, press Reclassify (lasso), and draw around the points to change. Undo and Redo take the change back, and your source file is never modified.
 
@@ -223,11 +252,22 @@ Clear and Auto-classify need a fully loaded scan, so Edit classes stays hidden o
 
 The Export tab has two lanes.
 
-Point cloud. Re-save the points as LAS 1.4, LAS 1.2, XYZ or ASC. Either LAS can be gzipped to a smaller `.las.gz`. You choose whether to keep the scan's coordinate system, assign an EPSG code, or reproject, and whether to write the display sample or every point at full resolution. A live summary tells you the point count, the size and the coordinate system before you commit. LAS 1.2 holds less than LAS 1.4. When a LAS 1.2 write would lose information (a class above 31, a return above 7, a scan angle beyond 90 degrees, a scanner channel, a class number whose meaning differs, or the overlap flag), the export is refused and names the checkbox that allows each loss. LAS 1.4 keeps all of it.
+Point cloud. Re-save the points as LAS 1.4, LAS 1.2, XYZ or ASC. Either LAS can be gzipped to a smaller `.las.gz`. You choose whether to keep the scan's coordinate system, assign an EPSG code, or reproject, and whether to write the display sample or every point at full resolution. A live summary tells you the point count, the size and the coordinate system before you commit. LAS 1.2 holds less than LAS 1.4. When a LAS 1.2 write would lose information (a class above 31, a return above 7, a scan angle beyond 90 degrees, a scanner channel, a class number whose meaning differs, or the overlap flag), the export is refused and names the checkbox that allows each loss. The checkboxes read "Allow classes above 31 to wrap", "Allow returns above 7 to be clamped", "Allow scan angles to clip and scanner channels to be dropped", "Allow class numbers to change meaning" and "Allow the overlap flag to be dropped". A class number can change meaning because some codes differ between the two versions: class 10 (Rail) is read as reserved in LAS 1.2, and high noise (18) has no legacy class. LAS 1.4 keeps all of it.
 
-Products. The things you make *from* the scan: your measurements as GeoJSON or CSV, an integrity report that pairs them with a checksum (and, if you turn on Sign this report, a signature from a key kept in this browser), and a Site KML and scan-area polygon for Google Earth. Image exports sit here too: height, intensity, class and normal maps, and a view capture that comes out as a georeferenced top-down image when the scan is georeferenced. The terrain products are downloaded from Analyse, on the Contours page under Terrain, where the run that made them lives.
+Products. The things you make *from* the scan: your measurements as GeoJSON or CSV, an integrity report that pairs them with a checksum (and, if you turn on Sign this report, a signature from a key kept in this browser), and a Site KML and scan-area polygon for Google Earth. After a terrain run it also lists the DEM package (ZIP) and the Contour map sheet (PDF).
+
+The Export tab also has quick buttons that write the loaded cloud as PLY, OBJ, XYZ or CSV, an Image export section, and a Report PDF section. The images are Height map, Intensity, Class map, Normal map and View capture. A view capture comes out as a georeferenced top-down image with world file and projection sidecars when the scan is georeferenced. The Report PDF section has a template list (Survey Summary, Technical Report and Scan QA) and a Report PDF button. Survey Summary is a compact handover, Technical Report adds the full provenance, annotations and visuals, and Scan QA is a data-quality summary. The report follows the Measurements panel's metric or imperial setting. In the dataset summary, Height follows the vertical unit: it reads in source units with "(vertical unit not declared)" when the file declares none, and "(declared vertical unit is invalid)" when the declared factor is zero, negative or not a number. Width and Depth follow the horizontal unit. The Exported stamp prints UTC with the zone named. The terrain products can also be downloaded from Analyse, on the Contours page under Terrain.
 
 A product that cannot be made yet says why on hover rather than failing when you press it.
+
+#### Longitude and latitude exports
+
+The Site KML, the scan-area polygon, the WGS 84 contour GeoJSON and the accepted building-footprint GeoJSON write longitude and latitude. OLV applies no datum shift when it writes them, so each export checks the datum first.
+
+- A scan on NAD27, a geographic scan on a datum the viewer does not list, a scan with no EPSG code, or a projected scan whose definition names no datum, unless its EPSG code is on WGS 84, is refused. The export button shows the reason, such as "This scan is on NAD27", and points to PROJ, GDAL or PDAL with the NADCON or NTv2 grids for the transformation.
+- NAD83, ETRS89, RGF93, GDA94, GDA2020 and NZGD2000 scans export, geographic or projected. The KML description and the GeoJSON metadata name the datum and the size of the difference from WGS 84 (about 1 to 2 m for NAD83, about 1 m for ETRS89, RGF93 and NZGD2000, about 2 m for GDA94 and about 0.4 m for GDA2020) instead of calling the coordinates WGS 84.
+- A point with latitude outside -90 to 90, longitude outside -180 to 180, or a value that is not finite is refused. Longitudes are not wrapped.
+- Reproject in Export and the batch converter refuse a move into or out of NAD27, because OLV has no NAD27 shift. They transform X and Y and leave Z unchanged.
 
 ### How to reproduce a result
 

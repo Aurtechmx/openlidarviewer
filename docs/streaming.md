@@ -44,9 +44,12 @@ WebGPU and WebGL2 backends all apply to a COPC scan exactly as to any other.
 
 Every resident node also keeps its full decoded per-point attributes, so the
 measurement, annotation, point-inspection, and live-probe tools work on a
-streaming scan exactly as on a static one: a click reports the same real-world
-coordinates and the same attributes (intensity, classification, return, GPS
-time and point-source id).
+streaming scan: a click reports the same real-world coordinates and the same
+attributes (intensity, classification, return, GPS time and point-source id) as
+on a static one. Three things differ. Snapping needs points in memory and is
+unavailable. Measurements carry no trust dot, because there are no resident
+points to grade against. Class editing and the Classify actions need a fully
+loaded scan.
 
 ## The streaming panel
 
@@ -54,8 +57,9 @@ While a COPC scan is open, a panel shows the load phase (detecting, reading
 metadata, reading hierarchy, loading the coarse view, refining, ready), the
 live node and point counts, the cache size, and controls:
 
-- Colour: RGB, Height, Intensity, or Class.
+- Colour: RGB (when the data carries colour), Height, Intensity, and Class for COPC and EPT. A 3D Tiles tileset adds Normal when its tiles carry normals.
 - Quality: Low, Balanced, or High; raises or lowers the point budget.
+- Grade full cloud: samples the whole octree rather than only what is on screen and shows a grade with summary lines. A label says whether the result is exact or a sample of the cloud.
 - Pause / Resume: stop or resume loading new detail.
 - Clear cache: drop the cached compressed chunks.
 
