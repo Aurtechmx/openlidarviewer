@@ -98,6 +98,8 @@
   letter-spacing: 0.05em; text-transform: uppercase;
 }
 .olv-measure-hint-text { font-size: var(--text-sm); color: var(--text); text-wrap: pretty; }
+/* Phone-only copy of the instruction; hidden everywhere else. */
+.olv-measure-phone-hint { display: none; }
 .olv-measure-actions {
   display: flex; flex-direction: row; align-items: center; gap: var(--space-sm);
 }

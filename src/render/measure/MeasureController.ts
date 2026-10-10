@@ -15,7 +15,7 @@
 import { areaRingVerdictCached } from './areaValidity';
 import { noiseExcludedClause } from '../../terrain/ground/classificationFilter';
 import type * as THREE from 'three/webgpu';
-import { el } from '../../ui/dom';
+import { el, politeStatus } from '../../ui/dom';
 import {
   KIND_ICON,
   ICON_UNDO,
@@ -395,6 +395,8 @@ export class MeasureController {
   private readonly _cb: MeasureCallbacks;
   private readonly _draw = new MeasureOverlay();
   private readonly _hintEl: HTMLElement;
+  /** Phone-only copy of the instruction; shown beside the tool rail. */
+  private readonly _phoneHintEl: HTMLElement;
   private readonly _clearBtn: HTMLButtonElement;
   private readonly _unitsBtn: HTMLButtonElement;
   /** Finish-polygon button — shown only while a polygon draft is open. */
@@ -617,7 +619,8 @@ export class MeasureController {
     this._kindRow = kindRow;
 
     // ── Instruction text + action buttons ─────────────────────────────────
-    this._hintEl = el('span', { className: 'olv-measure-hint-text' });
+    this._hintEl = politeStatus(el('span', { className: 'olv-measure-hint-text' }));
+    this._phoneHintEl = politeStatus(el('div', { className: 'olv-measure-phone-hint olv-hidden' }));
 
     const undoBtn = el('button', {
       className: 'olv-measure-undo olv-micon-btn',
@@ -1414,13 +1417,18 @@ export class MeasureController {
     this._cursor = null;
     if (!on) this._endDrag();
     this.hint.classList.toggle('olv-hidden', !on);
+    this._syncPhoneHint();
     this._updateHint();
     if (refusal) {
       this._setHintText(refusal);
       this.hint.classList.remove('olv-hidden');
+      this._syncPhoneHint();
       this._noticeTimer = setTimeout(() => {
         this._noticeTimer = undefined;
-        if (!this._active) this.hint.classList.add('olv-hidden');
+        if (!this._active) {
+          this.hint.classList.add('olv-hidden');
+          this._syncPhoneHint();
+        }
       }, 6000);
     }
   }
@@ -1740,6 +1748,7 @@ export class MeasureController {
     this._endDrag();
     this._draw.dispose();
     this.hint.remove();
+    this._phoneHintEl.remove();
   }
 
   // ── internals ──────────────────────────────────────────────────────────────
@@ -1900,8 +1909,18 @@ export class MeasureController {
     });
   }
 
+  /** Keep the phone line beside the bar and shown exactly when the bar is. */
+  private _syncPhoneHint(): void {
+    if (!this._phoneHintEl.isConnected && this.hint.parentElement) {
+      this.hint.parentElement.insertBefore(this._phoneHintEl, this.hint.nextSibling);
+    }
+    this._phoneHintEl.classList.toggle('olv-hidden', this.hint.classList.contains('olv-hidden'));
+  }
+
   private _setHintText(text: string): void {
-    this._hintEl.textContent = text;
+    // Write only on a real change so a polite live region announces once.
+    if (this._hintEl.textContent !== text) this._hintEl.textContent = text;
+    if (this._phoneHintEl.textContent !== text) this._phoneHintEl.textContent = text;
     this._clearBtn.classList.toggle('olv-hidden', this._measurements.length === 0);
   }
 

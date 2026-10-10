@@ -243,3 +243,11 @@ export function optInRow(label: string, hint: string, onChange: (checked: boolea
   row.append(labelEl, el('span', { className: 'olv-export-fullres-hint', text: hint }));
   return row;
 }
+
+/** Mark a node as a polite, atomic live status so changes are announced once. */
+export function politeStatus<T extends HTMLElement>(node: T): T {
+  node.setAttribute('role', 'status');
+  node.setAttribute('aria-live', 'polite');
+  node.setAttribute('aria-atomic', 'true');
+  return node;
+}
