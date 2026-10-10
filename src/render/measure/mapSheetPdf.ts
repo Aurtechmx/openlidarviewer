@@ -1217,7 +1217,7 @@ function drawTitleBlock(
           prov.accuracy && prov.accuracy.usgsDensityReferenceFloor !== 'none'
             ? `>= USGS ${prov.accuracy.usgsDensityReferenceFloor}`
             : prov.accuracy?.accuracyOnSample ? DENSITY_REF_SAMPLE_NOTE : '—',
-          'Density ref',
+          'Ground density ref',
         ],
       ]
     : (() => {
