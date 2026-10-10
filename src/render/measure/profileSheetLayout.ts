@@ -126,3 +126,209 @@ export function buildStationBand(req: StationBandRequest): StationBandLayout {
   }
   return { columns, shown: columns.length, total };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The maximum-grade callout
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A point in page coordinates (y up). */
+export interface SheetPoint {
+  readonly x: number;
+  readonly y: number;
+}
+
+/** The plot frame in page coordinates (y up). */
+export interface SheetFrame {
+  readonly left: number;
+  readonly right: number;
+  readonly top: number;
+  readonly bottom: number;
+}
+
+export interface CalloutPlacementRequest {
+  /** The steepest pair's midpoint. */
+  readonly point: SheetPoint;
+  /** The widest text line, and the height of the stacked lines, in points. */
+  readonly labelW: number;
+  readonly labelH: number;
+  readonly frame: SheetFrame;
+  /** The profile's vertices in page coordinates; null breaks the line at a gap. */
+  readonly line: ReadonlyArray<SheetPoint | null>;
+}
+
+/** Where the callout's shoulder and label sit. */
+export interface CalloutPlacement {
+  /** +1 puts the label to the right of the point, -1 to the left. */
+  readonly sx: 1 | -1;
+  /** +1 puts the shoulder above the point, -1 below it. */
+  readonly sy: 1 | -1;
+  readonly elbowX: number;
+  readonly elbowY: number;
+  /** Left edge of the label text. */
+  readonly textX: number;
+  /** The label's bounding box. */
+  readonly box: { readonly x0: number; readonly y0: number; readonly x1: number; readonly y1: number };
+  /** True when the box lies inside the frame and clear of the profile line. */
+  readonly clear: boolean;
+}
+
+/** Air kept between the label box and the frame, and between it and the line. */
+const CALLOUT_FRAME_MARGIN = 4;
+const CALLOUT_LINE_MARGIN = 3;
+
+/** Whether the polyline passes through `box` grown by `pad`. */
+export function lineCrossesBox(
+  line: ReadonlyArray<SheetPoint | null>,
+  box: { x0: number; y0: number; x1: number; y1: number },
+  pad: number,
+): boolean {
+  const x0 = box.x0 - pad;
+  const x1 = box.x1 + pad;
+  const y0 = box.y0 - pad;
+  const y1 = box.y1 + pad;
+  const inside = (x: number, y: number) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
+  for (let i = 0; i < line.length; i++) {
+    const a = line[i];
+    if (a == null) continue;
+    if (inside(a.x, a.y)) return true;
+    const b = line[i + 1];
+    if (b == null) continue;
+    // Sampled at a pitch below the box margin, so a steep segment cannot step
+    // over a box edge between two samples.
+    const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 1.5));
+    for (let s = 1; s < steps; s++) {
+      const t = s / steps;
+      if (inside(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Choose where the maximum-grade label goes.
+ *
+ * The point of the callout sits on the profile line by construction, and the
+ * steepest place on a section is usually also its highest or lowest, so the
+ * label has to be placed rather than assumed: a label set up and to the right
+ * of the point is crossed by the line whenever the section keeps climbing
+ * that way. Candidates are tried nearest first, on the preferred side first,
+ * and the first whose box is inside the frame and clear of the line wins.
+ * When none is clear the nearest one inside the frame is used and `clear` is
+ * false, so the failure is visible to a test rather than silently drawn over.
+ */
+export function placeCalloutLabel(req: CalloutPlacementRequest): CalloutPlacement {
+  const { point, labelW, labelH, frame, line } = req;
+  const m = CALLOUT_FRAME_MARGIN;
+  const build = (sx: 1 | -1, sy: 1 | -1, dx: number, dy: number): CalloutPlacement => {
+    const elbowX = point.x + sx * dx;
+    const elbowY = point.y + sy * dy;
+    const textX = sx > 0 ? elbowX + 4 : elbowX - labelW - 4;
+    const box = { x0: textX, y0: elbowY + 2, x1: textX + labelW, y1: elbowY + 2 + labelH };
+    const inFrame =
+      box.x0 >= frame.left + m && box.x1 <= frame.right - m &&
+      box.y0 >= frame.bottom + m && box.y1 <= frame.top - m;
+    return {
+      sx, sy, elbowX, elbowY, textX, box,
+      clear: inFrame && !lineCrossesBox(line, box, CALLOUT_LINE_MARGIN),
+    };
+  };
+  const roomRight = point.x + 32 + labelW + 8 <= frame.right;
+  const upFirst = point.y + 46 <= frame.top;
+  // Every offset on a grid, nearest first, with a small penalty for the side
+  // that is not preferred. A line that climbs through the usual spots leaves a
+  // clear region only some distance off, which a handful of fixed offsets can
+  // miss.
+  const candidates: Array<{ sx: 1 | -1; sy: 1 | -1; dx: number; dy: number; cost: number }> = [];
+  for (const sx of [1, -1] as const) {
+    for (const sy of [1, -1] as const) {
+      const penalty = (sx > 0 === roomRight ? 0 : 24) + (sy > 0 === upFirst ? 0 : 12);
+      for (let dx = 32; dx <= 360; dx += 12) {
+        for (let dy = 20; dy <= 220; dy += 8) {
+          candidates.push({ sx, sy, dx, dy, cost: Math.hypot(dx, dy) + penalty });
+        }
+      }
+    }
+  }
+  candidates.sort((p, q) => p.cost - q.cost);
+  let firstInFrame: CalloutPlacement | null = null;
+  for (const c of candidates) {
+    const placed = build(c.sx, c.sy, c.dx, c.dy);
+    if (placed.clear) return placed;
+    if (firstInFrame == null && !boxOutsideFrame(placed, frame)) firstInFrame = placed;
+  }
+  return firstInFrame ?? build(roomRight ? 1 : -1, upFirst ? 1 : -1, 32, 34);
+}
+
+/** True when the placement's box is outside the frame (so it cannot be a fallback). */
+function boxOutsideFrame(c: CalloutPlacement, frame: SheetFrame): boolean {
+  const m = CALLOUT_FRAME_MARGIN;
+  return !(
+    c.box.x0 >= frame.left + m && c.box.x1 <= frame.right - m &&
+    c.box.y0 >= frame.bottom + m && c.box.y1 <= frame.top - m
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sheet wording that is computed rather than written
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A CRS string with its code stated once. A resolved frame arrives as
+ * "EPSG:26913 - NAD83 / UTM zone 13N (EPSG:26913)" when the CRS name already
+ * carries its code; the label is the name followed by the code, once:
+ * "NAD83 / UTM zone 13N (EPSG:26913)". Anything not in that shape is kept.
+ */
+export function crsDisplayLabel(crs: string | null | undefined): string | null {
+  if (crs == null || crs.trim() === '') return null;
+  const m = /^\s*(EPSG:\d+)\s*[-–—]\s*(.+?)\s*$/.exec(crs);
+  if (!m) return crs.trim();
+  const code = m[1];
+  const name = m[2];
+  return name.includes(code) ? name : `${name} (${code})`;
+}
+
+/**
+ * The scale statement's vertical clause. Below 1 the vertical scale is the
+ * smaller drawing, so the relief is drawn flatter than the run: a compression,
+ * said with its consequence, and never under the word exaggeration.
+ */
+export function verticalScaleStatement(vex: number): string {
+  return Math.round(vex * 10) / 10 < 1
+    ? `Vertical compression ${vex.toFixed(1)}:1, slopes look flatter than they are`
+    : `Vertical exaggeration ${vex.toFixed(1)}:1`;
+}
+
+/** A title-block value fitted into its 30 pt row: the lines, their size and baselines below the row top. */
+export interface FittedValue {
+  readonly lines: readonly string[];
+  readonly size: number;
+  readonly first: number;
+  readonly step: number;
+}
+
+/**
+ * Fit a value that must never be cut. One line, shrunk from `maxSize` down to
+ * `minSize`; then two lines at `minSize`; then three at 6.5 pt. The baselines
+ * stay inside the row, clear of the label above and the rule below, and a last
+ * line that still does not fit is clipped with a mark rather than dropped.
+ */
+export function fitTitleValue(
+  value: string,
+  maxW: number,
+  maxSize: number,
+  minSize: number,
+  text: {
+    width: (t: string, size: number) => number;
+    wrap: (t: string, size: number) => string[];
+    clip: (t: string, size: number) => string;
+  },
+): FittedValue {
+  let size = maxSize;
+  while (size > minSize && text.width(value, size) > maxW) size -= 0.5;
+  if (text.width(value, size) <= maxW) return { lines: [value], size, first: 25, step: 0 };
+  let lines = text.wrap(value, minSize);
+  if (lines.length <= 2) return { lines, size: minSize, first: 19.5, step: 7.5 };
+  lines = text.wrap(value, 6.5);
+  if (lines.length > 3) lines = [...lines.slice(0, 2), text.clip(lines.slice(2).join(' '), 6.5)];
+  return { lines, size: 6.5, first: 18, step: 5.2 };
+}

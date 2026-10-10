@@ -1632,7 +1632,7 @@ const measureMount = createMeasurePanelMount({
   crsService,
   getExportPanel: () => exportPanel,
   exportSession, handleFile, toast: showLassoToast,
-  recordUsage,
+  recordUsage, getScanBaseName: () => baseName(scans.activeCloud()?.name ?? lastCloudName),
   workbenchStage: stage,
   onWorkbenchClose: () => analyseProfileVisibility.restore(),
 });

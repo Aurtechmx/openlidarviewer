@@ -37,8 +37,11 @@ import {
   alignedFlags,
   withheldReadCounts,
   type WithheldReadCounts,
+  type SourceReduction,
 } from '../../science/withheldCounts';
 import { resolveCorridorHalfWidth } from './profileCorridor';
+import { cloudReduction, summariseReductions, type CloudReduction, type ReductionSource } from './volumeReduction';
+import { describeSampleBasis } from './profileProvenance';
 import { buildProfileFrame, type ProfileFrame } from './profileGeometry';
 import {
   extractProfileSectionChunks,
@@ -82,6 +85,11 @@ export interface ProfileSeamLayer extends IntegrableEntry {
   readonly placement?: LayerSpatialTransform | null;
   /** The source file's truncation, or null / absent for a complete read. */
   readonly truncation?: Truncation | null;
+  /**
+   * The cloud's point counts and reduction mode, when the loader reduced it.
+   * Read through `cloudReduction` so a whole cloud contributes nothing.
+   */
+  readonly reductionSource?: ReductionSource | null;
 }
 
 /** One resident streaming node offered to the seam. */
@@ -116,6 +124,21 @@ export interface ProfileSectionSeamDeps {
   worldUp: () => Vec3;
   /** Node coverage of the open streaming source, or null when none is open. */
   streamingCoverage: () => StreamingCoverage | null;
+}
+
+/**
+ * `summary` with how many of the sources it covers, when some sources were
+ * read whole: a sample statement must not read as covering every point.
+ */
+function withSourceMix(
+  summary: SourceReduction | undefined,
+  perStatic: ReadonlyArray<CloudReduction | undefined>,
+  residentSources: number,
+): SourceReduction | undefined {
+  if (!summary) return undefined;
+  const reduced = perStatic.filter((r) => r !== undefined).length;
+  const total = perStatic.length + residentSources;
+  return reduced < total ? { ...summary, reducedSources: reduced, totalSources: total } : summary;
 }
 
 /** What the derived sampler hands back, with the values that shaped it. */
@@ -157,6 +180,8 @@ export interface ProfileSectionResult {
   readonly scope: ProfileSectionScope;
   /** The sentence a header shows for {@link scope}. */
   readonly scopeLabel: string;
+  /** How the static sources were reduced, when they were. Absent for whole clouds. */
+  readonly reduction?: SourceReduction;
   /**
    * True only when every contributing source carried a usable classification
    * channel, so the class exclusion could act on all of them. The same
@@ -380,6 +405,7 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
     let sourcePoints = 0;
     let withheldExcluded = 0;
     let everySourceFlagged = true;
+    const reductions: Array<CloudReduction | undefined> = [];
     const { statics, residents } = walkScene(deps);
     const take = (
       raw: ProfileSourceBuffer,
@@ -405,6 +431,7 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
     for (const { layer, pos } of statics) {
       const cls = alignedClassification(layer.channels, pos.length);
       take({ pos, cls, placement: layer.placement }, layer.channels, false);
+      reductions.push(layer.reductionSource ? cloudReduction(layer.reductionSource) : undefined);
     }
     for (const { node, pos } of residents) {
       const cls = alignedClassification(node.channels, pos.length);
@@ -448,7 +475,12 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
       residentOnly: streamingPoints > 0 && !fullyResident(),
       corridorWidth,
       groundPercentile,
-      withheld: withheldReadCounts(sourcePoints, withheldExcluded, everySourceFlagged),
+      withheld: {
+        ...withheldReadCounts(sourcePoints, withheldExcluded, everySourceFlagged),
+        ...((r) => (r ? { reduction: r } : {}))(
+          withSourceMix(summariseReductions(reductions), reductions, residents.length),
+        ),
+      },
       method: PROFILE_SERIES_METHOD_TAG,
       ...(coverageNote ? { coverageNote } : {}),
     };
@@ -471,7 +503,9 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
     // decision `viewOf` makes, so a channel rejected for misalignment counts as
     // absent here too rather than as classification that was never applied.
     let classifiedSources = 0;
+    const reductions: Array<CloudReduction | undefined> = [];
     for (const { layer, pos } of statics) {
+      reductions.push(layer.reductionSource ? cloudReduction(layer.reductionSource) : undefined);
       const slot = sources.length;
       sources.push(viewOf(slot, pos, layer.channels, layer.bounds, layer.placement));
       if (alignedClassification(layer.channels, pos.length) !== undefined) classifiedSources++;
@@ -508,12 +542,19 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
     });
     const coverage = deps.streamingCoverage();
     const complete = coverage === null ? null : streamingIsComplete(coverage);
+    const reduction = withSourceMix(summariseReductions(reductions), reductions, residents.length);
     return {
       points: step.value.points,
       frame,
       band,
       scope,
-      scopeLabel: describeSectionScope(scope, complete),
+      // A reduced static source is named as the sample it is, not as "the
+      // full static source": the heights are read off the sample.
+      scopeLabel:
+        reduction && scope === 'full-static-source'
+          ? describeSampleBasis(reduction)
+          : describeSectionScope(scope, complete),
+      ...(reduction ? { reduction } : {}),
       classificationOnEverySource: sources.length > 0 && classifiedSources === sources.length,
       streamingComplete: complete,
       sources: refs,

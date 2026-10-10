@@ -21,12 +21,15 @@
 
 import type { ProfileChartSample } from './types';
 import { formatStationing, formatGradePercent, profileSampleCovered } from './civilProfileStats';
-import { GEOGRAPHIC_CRS_MEASURE_NOTICE, formatElevation, formatLength, formatUnitUnverified, unitToken, type DisplayUnits } from './format';
+import { GEOGRAPHIC_CRS_MEASURE_NOTICE, formatElevation, formatRise, formatLength, formatUnitUnverified, unitToken, type DisplayUnits } from './format';
 // Height headings come from one vocabulary, where "Elevation" is earned by an
 // orthometric reference and by nothing else. The panel, the station table, the
 // CSV and the sheet all label from here, so no two of them can name the same
 // number differently.
 import { heightLabel } from '../../geo/height';
+import { safeEntryName } from '../../export/safeText';
+import { describeSampleBasis, describeSampleCaveat } from './profileProvenance';
+import type { SourceReduction } from '../../science/withheldCounts';
 import type { VerticalReference } from '../../geo/height';
 // Metres → feet, single-sourced: this module used to keep its own copy.
 import { FT_PER_M as FEET_PER_METRE } from '../../units/units';
@@ -216,7 +219,7 @@ export function formatStation(chainageM: number, system: DisplayUnits): string {
 }
 
 /**
- * Format a located extreme as `elevation @ station` — the shared model behind
+ * Format a located extreme as `elevation at station` — the shared model behind
  * the panel's Highest/Lowest rows and the PDF's, so the sheet an engineer
  * checks against the screen cannot quote a different point. The elevation goes
  * through `formatElevation`, not the length formatter: it is a signed datum
@@ -225,7 +228,40 @@ export function formatStation(chainageM: number, system: DisplayUnits): string {
  */
 export function formatProfileExtreme(e: ProfileExtreme | null, system: DisplayUnits): string {
   if (e == null) return '—';
-  return `${formatElevation(e.elevation, system)} @ ${formatStation(e.chainage, system)}`;
+  return `${formatElevation(e.elevation, system)} at ${formatStation(e.chainage, system)}`;
+}
+
+/**
+ * A name reduced to characters safe in a download file name. Letters and
+ * numbers in any script ride through; every other run becomes one underscore.
+ */
+export function safeFileStem(name: string): string {
+  return name.replace(/[^\p{L}\p{M}\p{N}._-]+/gu, '_').replace(/^_+|_+$/g, '');
+}
+
+/**
+ * The download name of a profile export: `<scan base name>-profile-<name>.<ext>`,
+ * the style the map and report exports use for their scan. The measurement
+ * name is slugified with {@link safeFileStem}, a leading word "profile" is
+ * dropped ("Profile 1" gives `-profile-1`), and a name that is only that word
+ * gives `<scan>-profile.<ext>`.
+ *
+ * Returns null when the scan's name is unknown, so the caller keeps the name
+ * it used before.
+ */
+export function profileExportFileName(
+  scanBaseName: string | null | undefined,
+  profileName: string,
+  ext: 'pdf' | 'csv' | 'png',
+): string | null {
+  const scan = safeFileStem(scanBaseName ?? '').replace(/^\.+|\.+$/g, '');
+  if (scan === '') return null;
+  const slug = safeFileStem(profileName.trim().replace(/^profile(?:[\s_-]+|$)/i, ''))
+    .toLowerCase()
+    .replace(/_+/g, '-')
+    .replace(/^[.-]+|[.-]+$/g, '');
+  // The repo's one entry-name rule: byte cap, no leading dot, no device names.
+  return safeEntryName(slug === '' ? `${scan}-profile.${ext}` : `${scan}-profile-${slug}.${ext}`, `profile.${ext}`);
 }
 
 /** One display row of the summary block. */
@@ -256,12 +292,19 @@ export function profileSummaryRows(
   // needed the datum, which is why the gain/loss row names no reference at all.
   const heightWord = heightLabel(reference).toLowerCase();
   const len = (m: number | null): string => (m == null ? '—' : formatLength(m, system));
+  const rise = (m: number): string =>
+    system === 'unverified' ? formatElevation(m, system) : formatRise(m, system === 'imperial' ? FEET_PER_METRE : 1, unitToken(system));
   const extreme = (e: ProfileExtreme | null): string => formatProfileExtreme(e, system);
   return [
     { label: 'Length', value: len(s.lengthM) },
     {
       label: 'Height gain / loss',
-      value: s.gainM == null || s.lossM == null ? '—' : `+${len(s.gainM)} / −${len(s.lossM)}`,
+      // Both in one unit at one precision: a metre of gain beside a loss in
+      // centimetres reads as two different quantities.
+      value:
+        s.gainM == null || s.lossM == null
+          ? '—'
+          : `+${rise(s.gainM)} / −${rise(s.lossM)}`,
     },
     { label: 'Avg grade', value: formatGradePercent(s.averageGrade) },
     { label: 'Max grade', value: formatGradePercent(s.maxGrade) },
@@ -392,6 +435,7 @@ export function buildProfileCsv(
   system: DisplayUnits,
   reference: VerticalReference,
   coverageNote?: string | null,
+  reduction?: SourceReduction | null,
 ): string {
   const unit = unitToken(system);
   // An unearned reference renames the column; it must NOT blank it. A blank
@@ -403,6 +447,8 @@ export function buildProfileCsv(
   const note = coverageNote?.trim().replace(/[\r\n]+/g, ' ');
   const lines: string[] = [
     ...(note ? [`# ${note}. Profile sampled from the points read.`] : []),
+    // A reduced sample is not the file: the percentile is over the sample.
+    ...(reduction ? [`# ${describeSampleBasis(reduction)}. ${describeSampleCaveat(reduction)}`] : []),
     `station,chainage_${unit},${heightCol},points,grade_to_next_pct`,
   ];
   for (const r of profileStationRows(samples, system)) {

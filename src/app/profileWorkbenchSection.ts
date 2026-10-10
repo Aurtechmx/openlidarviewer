@@ -51,9 +51,12 @@ import {
 } from '../render/measure/profileSectionRenderer';
 import {
   describeClassBasis,
+  describeProfilePointsRead,
+  describeSampleBasis,
+  describeSampleCaveat,
+  formatCount,
   GROUND_BASIS_UNVERIFIED_NOTE,
 } from '../render/measure/profileProvenance';
-import { describeWithheldRead } from '../science/withheldCounts';
 import {
   axisSpanCaption,
   CHAINAGE_TICK_SPACING_PX,
@@ -492,6 +495,14 @@ export function buildProfileSectionImageRequest(input: {
     acceptedCount: input.section.points.count,
     legend: null,
     generatedAt: input.generatedAt,
+    ...(input.section.reduction
+      ? {
+          sampleBasis: {
+            basis: describeSampleBasis(input.section.reduction),
+            caveat: describeSampleCaveat(input.section.reduction),
+          },
+        }
+      : {}),
   };
 }
 
@@ -547,7 +558,7 @@ function defaultSectionImageCanvas(): SectionImageCanvas {
  */
 export async function exportProfileSectionImagePng(
   plot: WorkbenchSectionPlot,
-  opts: { name: string; generatedAt: string | null; size?: ProfileViewport },
+  opts: { name: string; generatedAt: string | null; size?: ProfileViewport; fileName?: string },
   ports: SectionImageExportPorts = {},
 ): Promise<void> {
   const canvas = (ports.createCanvas ?? defaultSectionImageCanvas)();
@@ -569,7 +580,7 @@ export async function exportProfileSectionImagePng(
     canvas.toBlob((b) => resolve(b), 'image/png');
   });
   if (!blob) throw new Error('The browser could not encode the section image as a PNG.');
-  (ports.download ?? triggerDownload)(blob, `${safeImageFileName(opts.name)}.png`);
+  (ports.download ?? triggerDownload)(blob, opts.fileName ?? `${safeImageFileName(opts.name)}.png`);
 }
 
 /**
@@ -688,8 +699,8 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
   draw();
 
   const detail: ProfileWorkbenchDetailRow[] = [
-    { label: 'Returns in corridor', value: String(section.points.count) },
-    { label: 'Drawn', value: String(indices.length) },
+    { label: 'Returns in corridor', value: formatCount(section.points.count) },
+    { label: 'Drawn', value: formatCount(indices.length) },
     { label: 'Corridor half-width', value: axisSpanCaption(section.band * scale, unit) },
     {
       label: 'Chainage span',
@@ -699,14 +710,14 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
       label: 'Height span',
       value: axisSpanCaption((bounds.maxHeight - bounds.minHeight) * scale, unit),
     },
-    { label: 'Sources', value: String(section.sources.length) },
-    { label: 'Points read', value: describeWithheldRead(section.withheld) },
+    { label: 'Sources', value: formatCount(section.sources.length) },
+    { label: 'Points read', value: describeProfilePointsRead(section.withheld) },
     { label: 'Colour', value: colouring.legend.kind === 'unavailable' ? 'unavailable' : colouring.mode },
   ];
   if (filterDescriptor) {
     detail.push({
       label: 'Kept (filter)',
-      value: `${filterDescriptor.keptCount} of ${filterDescriptor.acceptedCount}`,
+      value: `${formatCount(filterDescriptor.keptCount)} of ${formatCount(filterDescriptor.acceptedCount)}`,
     });
     const rules = filterDescriptor.scopes.filter((s) => s.active).map((s) => s.rule);
     if (rules.length > 0) detail.push({ label: 'Filter', value: rules.join('; ') });
@@ -716,8 +727,8 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
     section.points.count === 0
       ? 'No returns fell inside this corridor.'
       : indices.length < section.points.count
-        ? `Showing ${indices.length} of ${section.points.count} returns.`
-        : `Showing ${section.points.count} returns.`;
+        ? `Showing ${formatCount(indices.length)} of ${formatCount(section.points.count)} returns.`
+        : `Showing ${formatCount(section.points.count)} returns.`;
 
   return {
     view: {
@@ -725,9 +736,13 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
       // because both answer the one question a reader has about the plot:
       // what was read, and what could be excluded from it.
       scope: `${section.scopeLabel} · ${describeClassBasis(section.classificationOnEverySource)}`,
-      groundBasisNote: section.classificationOnEverySource
-        ? null
-        : GROUND_BASIS_UNVERIFIED_NOTE,
+      groundBasisNote:
+        [
+          section.reduction ? describeSampleCaveat(section.reduction) : null,
+          section.classificationOnEverySource ? null : GROUND_BASIS_UNVERIFIED_NOTE,
+        ]
+          .filter((n): n is string => n != null)
+          .join(' ') || null,
       status,
       detail,
       drawn: indices.length,

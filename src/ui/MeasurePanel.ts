@@ -35,6 +35,7 @@ import {
   buildProfileCsv,
   profileCsvRefusal,
   computeProfileSummary,
+  profileExportFileName,
   profileStationRows,
   profileSummaryRows,
   type ProfileStationRow,
@@ -272,6 +273,8 @@ export interface MeasurePanelCallbacks {
   getProfileExportContext?: () => {
     crs: string | null;
     verticalDatum: string | null;
+    /** The active scan's base name; names the exported files and the sheet's project. */
+    scanName?: string | null;
   };
   /**
    * Re-sample one profile with user-set sampler parameters (B7/B8, v0.4.5):
@@ -822,7 +825,7 @@ export class MeasurePanel {
     );
     triggerDownload(
       new Blob([bytes as BlobPart], { type: 'application/pdf' }),
-      `${safeFileName(s.name)}-profile.pdf`,
+      profileExportFileName(context?.scanName, s.name, 'pdf') ?? `${safeFileName(s.name)}-profile.pdf`,
     );
   }
 
@@ -874,8 +877,18 @@ export class MeasurePanel {
     if (!s.profileChart || s.profileChart.length < 2) return;
     if (profileCsvRefusal(s, this._geographicCrs)) return;
     const system = this._displayUnits(s);
-    const csv = buildProfileCsv(s.profileChart, system, this._verticalReference(s), s.profileCoverageNote);
-    triggerDownload(new Blob([csv], { type: 'text/csv' }), `${safeFileName(s.name)}-profile.csv`);
+    const csv = buildProfileCsv(
+      s.profileChart,
+      system,
+      this._verticalReference(s),
+      s.profileCoverageNote,
+      s.profileWithheld?.reduction ?? s.profileProvenance?.reduction,
+    );
+    const scanName = this._cb.getProfileExportContext?.().scanName;
+    triggerDownload(
+      new Blob([csv], { type: 'text/csv' }),
+      profileExportFileName(scanName, s.name, 'csv') ?? `${safeFileName(s.name)}-profile.csv`,
+    );
   }
 
   /**

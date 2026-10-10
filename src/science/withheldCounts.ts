@@ -38,6 +38,28 @@ export interface WithheldReadCounts {
   readonly withheldExcluded: number | 'unknown';
   /** Points the computation read. */
   readonly analysedPoints: number;
+  /**
+   * How the source was reduced before the walk, when it was. Absent for a
+   * whole cloud, so a record for one serialises as it did before.
+   */
+  readonly reduction?: SourceReduction;
+}
+
+/** A source held at fewer points than its file declared, and how. */
+export interface SourceReduction {
+  /** Voxel centroids, or original records kept by a stride. */
+  readonly mode: 'voxel-centroids' | 'strided-records';
+  /** Points held. */
+  readonly resident: number;
+  /** Points the file declared. */
+  readonly declared: number;
+  /**
+   * When only some of the sources were reduced: how many were, and how many
+   * were read. Absent when every source was reduced, so a single-cloud record
+   * is unchanged. `resident` and `declared` then count the reduced ones only.
+   */
+  readonly reducedSources?: number;
+  readonly totalSources?: number;
 }
 
 /** Assemble {@link WithheldReadCounts} from a walk's tallies. */

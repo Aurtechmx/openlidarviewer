@@ -325,7 +325,7 @@ export function buildDerivedSurfaceLegend(input: DerivedSurfaceLegendInput): Der
   const geometryLine =
     halfWidth == null
       ? `${stationCount} ${plural(stationCount, 'station', 'stations')} along the section. Corridor half width: not recorded.`
-      : `${stationCount} ${plural(stationCount, 'station', 'stations')} along the section, corridor half width ${num(halfWidth, 3)} m each side of the line.`;
+      : `${stationCount} ${plural(stationCount, 'station', 'stations')} along the section, corridor half width ${num(halfWidth, 2)} m each side of the line.`;
 
   const lines: string[] = [
     `${seriesLabel}. Estimated, not measured.`,

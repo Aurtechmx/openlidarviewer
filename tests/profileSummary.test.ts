@@ -135,12 +135,12 @@ describe('profileSummaryRows', () => {
     const byLabel = new Map(rows.map((r) => [r.label, r.value]));
     // Length is a distance → adaptive 5-sig-fig precision ("50.000 m").
     expect(byLabel.get('Length')).toBe('50.000 m');
-    expect(byLabel.get('Height gain / loss')).toBe('+2.0000 m / −2.0000 m');
+    expect(byLabel.get('Height gain / loss')).toBe('+2.00 m / −2.00 m');
     expect(byLabel.get('Avg grade')).toBe('6.00%');
     expect(byLabel.get('Max grade')).toBe('20.00%');
     expect(byLabel.get('Steepest section')).toBe('0+000.00 → 0+010.00 (20.00%)');
-    expect(byLabel.get('Highest elevation')).toBe('14.00 m @ 0+040.00');
-    expect(byLabel.get('Lowest elevation')).toBe('10.00 m @ 0+000.00');
+    expect(byLabel.get('Highest elevation')).toBe('14.00 m at 0+040.00');
+    expect(byLabel.get('Lowest elevation')).toBe('10.00 m at 0+000.00');
   });
 
   it('imperial rows convert lengths and stationing', () => {
@@ -149,7 +149,7 @@ describe('profileSummaryRows', () => {
     // 50 m = 164.04 ft; 14 m = 45.93 ft; grades are unit-free.
     expect(byLabel.get('Length')).toBe('164.04 ft');
     expect(byLabel.get('Avg grade')).toBe('6.00%');
-    expect(byLabel.get('Highest elevation')).toBe('45.93 ft @ 1+31.23');
+    expect(byLabel.get('Highest elevation')).toBe('45.93 ft at 1+31.23');
   });
 
   it('an empty profile renders honest dashes', () => {
@@ -378,10 +378,10 @@ describe('profile display surfaces print SOURCE elevations', () => {
     const byLabel = new Map(
       profileSummaryRows(computeProfileSummary(SOURCE), 'metric', 'orthometric').map((r) => [r.label, r.value]),
     );
-    expect(byLabel.get('Lowest elevation')).toBe('348.93 m @ 0+000.00');
+    expect(byLabel.get('Lowest elevation')).toBe('348.93 m at 0+000.00');
     // 418.165 is an exact decimal tie that IEEE-754 holds as 418.16499…, so
     // it rounds down. The elevation is right; the last digit is arithmetic.
-    expect(byLabel.get('Highest elevation')).toBe('418.16 m @ 0+343.98');
+    expect(byLabel.get('Highest elevation')).toBe('418.16 m at 0+343.98');
   });
 
   it('an elevation never degrades into centimetres or kilometres', () => {
@@ -397,8 +397,8 @@ describe('profile display surfaces print SOURCE elevations', () => {
       'orthometric',
     );
     const byLabel = new Map(rows.map((r) => [r.label, r.value]));
-    expect(byLabel.get('Lowest elevation')).toBe('0.40 m @ 0+000.00');
-    expect(byLabel.get('Highest elevation')).toBe('1200.00 m @ 0+010.00');
+    expect(byLabel.get('Lowest elevation')).toBe('0.40 m at 0+000.00');
+    expect(byLabel.get('Highest elevation')).toBe('1200.00 m at 0+010.00');
   });
 
   it('the station table and the CSV agree with the panel', () => {
@@ -416,8 +416,8 @@ describe('profile display surfaces print SOURCE elevations', () => {
       profileSummaryRows(computeProfileSummary(SOURCE), 'imperial', 'orthometric').map((r) => [r.label, r.value]),
     );
     // 348.927 m = 1144.77 ft; 418.165 m = 1371.93 ft.
-    expect(byLabel.get('Lowest elevation')).toBe('1144.77 ft @ 0+00.00');
-    expect(byLabel.get('Highest elevation')).toBe('1371.93 ft @ 11+28.54');
+    expect(byLabel.get('Lowest elevation')).toBe('1144.77 ft at 0+00.00');
+    expect(byLabel.get('Highest elevation')).toBe('1371.93 ft at 11+28.54');
   });
 
   it('an extreme is always located at one of the series own stations', () => {
@@ -469,8 +469,8 @@ describe('a refused datum degrades to local heights, visibly', () => {
         r.value,
       ]),
     );
-    expect(byLabel.get('Highest height (local frame)')).toBe('-411.87 m @ 0+343.98');
-    expect(byLabel.get('Lowest height (local frame)')).toBe('-481.10 m @ 0+000.00');
+    expect(byLabel.get('Highest height (local frame)')).toBe('-411.87 m at 0+343.98');
+    expect(byLabel.get('Lowest height (local frame)')).toBe('-481.10 m at 0+000.00');
     // The elevation wording must be gone — that is the whole visible signal.
     expect(byLabel.has('Highest elevation')).toBe(false);
     expect(byLabel.has('Lowest elevation')).toBe(false);
@@ -514,7 +514,7 @@ describe('a refused datum degrades to local heights, visibly', () => {
         r.value,
       ]),
     );
-    expect(byLabel.get('Highest elevation')).toBe('418.16 m @ 0+343.98');
+    expect(byLabel.get('Highest elevation')).toBe('418.16 m at 0+343.98');
     expect(buildProfileCsv(known, 'metric', 'orthometric').split('\n')[0]).toBe(
       'station,chainage_m,elevation_m,points,grade_to_next_pct',
     );
@@ -531,7 +531,7 @@ describe('a refused datum degrades to local heights, visibly', () => {
         r.value,
       ]),
     );
-    expect(byLabel.get('Highest height (datum unknown)')).toBe('418.16 m @ 0+343.98');
+    expect(byLabel.get('Highest height (datum unknown)')).toBe('418.16 m at 0+343.98');
     expect(byLabel.has('Highest elevation')).toBe(false);
     expect(buildProfileCsv(known, 'metric', 'unknown').split('\n')[0]).toBe(
       'station,chainage_m,height_datum_unknown_m,points,grade_to_next_pct',
@@ -567,8 +567,8 @@ describe('height headings follow the resolved vertical reference', () => {
 
   it('an undeclared datum names the extremes as heights of unknown datum', () => {
     const rows = rowsFor('unknown');
-    expect(rows.get('Highest height (datum unknown)')).toBe('14.00 m @ 0+040.00');
-    expect(rows.get('Lowest height (datum unknown)')).toBe('10.00 m @ 0+000.00');
+    expect(rows.get('Highest height (datum unknown)')).toBe('14.00 m at 0+040.00');
+    expect(rows.get('Lowest height (datum unknown)')).toBe('10.00 m at 0+000.00');
   });
 
   it('NO row label says elevation when the datum is undeclared', () => {
@@ -593,7 +593,7 @@ describe('height headings follow the resolved vertical reference', () => {
 
   it('the gain / loss row is a difference, so it names no reference at all', () => {
     for (const reference of ['orthometric', 'unknown', 'local'] as VerticalReference[]) {
-      expect(rowsFor(reference).get('Height gain / loss')).toBe('+2.0000 m / −2.0000 m');
+      expect(rowsFor(reference).get('Height gain / loss')).toBe('+2.00 m / −2.00 m');
     }
   });
 

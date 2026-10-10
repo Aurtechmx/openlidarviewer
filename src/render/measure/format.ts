@@ -402,3 +402,21 @@ export type DisplayUnits = UnitSystem | 'unverified';
 export function unitToken(system: DisplayUnits): 'm' | 'ft' | 'source' {
   return system === 'imperial' ? 'ft' : system === 'metric' ? 'm' : 'source';
 }
+
+/**
+ * A rise or fall in the display unit at two decimals, with one more decimal
+ * for each place it takes until a nonzero value does not read as zero.
+ */
+export function formatRise(metres: number, feetPerMetre: number, unit: string): string {
+  if (!Number.isFinite(metres)) return '—';
+  const v = metres * feetPerMetre;
+  let dp = 2;
+  while (dp < 6 && Number(v.toFixed(dp)) === 0 && v !== 0) dp++;
+  return `${v.toFixed(dp)} ${unit}`;
+}
+
+/** A displayed difference taken from the displayed ends, so the three figures agree. */
+export function shownSpan(low: number, high: number, scale: number): string {
+  const r = (x: number) => Math.round(x * scale * 100);
+  return ((r(high) - r(low)) / 100).toFixed(2);
+}

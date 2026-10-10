@@ -530,3 +530,31 @@ describe('composeProfileSectionImage — order and reproducibility', () => {
     for (const text of result.texts) expect(text).not.toContain('Composed ');
   });
 });
+
+describe('composeProfileSectionImage — a reduced sample is stated on the image', () => {
+  it('replaces the scope with the sample basis and captions what it means for percentiles', () => {
+    const surface = new RecordingSurface();
+    composeProfileSectionImage(
+      baseRequest(surface, {
+        scope: 'full-static-source',
+        sampleBasis: {
+          basis: 'Display sample of 3 points (voxel centroids), 30 declared',
+          caveat: 'Percentiles are over the sample.',
+        },
+      }),
+    );
+    const drawn = surface.ctx.texts();
+    expect(drawn).toContain('Source read: Display sample of 3 points (voxel centroids), 30 declared');
+    expect(drawn).toContain('Percentiles are over the sample.');
+    expect(drawn).not.toContain('Source read: Full static source');
+  });
+
+  it('draws a whole cloud exactly as before', () => {
+    const a = new RecordingSurface();
+    const b = new RecordingSurface();
+    composeProfileSectionImage(baseRequest(a, { scope: 'full-static-source' }));
+    composeProfileSectionImage(baseRequest(b, { scope: 'full-static-source', sampleBasis: null }));
+    expect(b.ctx.ops).toEqual(a.ctx.ops);
+    expect(a.ctx.texts()).toContain('Source read: Full static source');
+  });
+});
