@@ -72,14 +72,12 @@ jobs:
     needs: validate
     permissions:
       contents: read
-    # Measured basis: the v0.6.2 release gate took 2 h 20 m wall clock, of
-    # which the mutation stage — 188 mutants over the numeric core at ~174
-    # tests each — was roughly 2 h. Removing it leaves about 20 minutes of
-    # gate, plus npm ci, the Playwright install and packaging. 60 minutes is
-    # that measurement with room for a slow runner, and it is short enough that
-    # a hung stage is caught the same day rather than five hours later. The
-    # scheduled mutation workflow carries its own, larger budget.
-    timeout-minutes: 60
+    # Measured basis: on a hosted runner the static gate takes about 11 minutes
+    # and the deterministic e2e suite (651 tests on two workers, one retry)
+    # takes more than 50, before the docs build, audit, coverage and packaging.
+    # 150 minutes covers that with room for a slow runner. The scheduled
+    # mutation workflow carries its own, larger budget.
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:

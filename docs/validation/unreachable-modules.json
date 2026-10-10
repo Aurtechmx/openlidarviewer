@@ -456,7 +456,7 @@
       "why": "Storage-grid diagnostics: predicted peaks of a candidate grid, their scores, the support decision and the phase test. It is pure (no DOM, three or proj4) and is exercised by tests/latticeForensics.test.ts. No panel reads stored integers into it yet, and the caller supplies the Jacobians and mapped nodes.",
       "graduation": "Reachable when a diagnostics panel decodes the stored integers of an open LAS or LAZ layer, supplies proj4 Jacobians for a candidate dictionary, and reports the outcome with its stated limits.",
       "review": "2027-03-31",
-      "declaredIn": "docs/releases/KNOWN_LIMITATIONS_v0.7.0-alpha.1.md"
+      "declaredIn": "docs/releases/KNOWN_LIMITATIONS_v0.7.0.md"
     }
   ]
 }

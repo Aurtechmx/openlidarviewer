@@ -1,23 +1,23 @@
 {
   "schemaVersion": 3,
   "project": "openlidarviewer",
-  "version": "0.7.0-alpha.1",
+  "version": "0.7.0",
   "releaseChannel": "development",
   "releaseAuthoritative": false,
   "tag": null,
-  "commit": "eba83fd173312701270684ce292c4278d46668da",
-  "repository": null,
-  "generatedAt": "2026-10-02T20:29:07.330Z",
-  "nodeVersion": "v22.23.2",
-  "npmVersion": "10.9.8",
-  "platform": "darwin-arm64",
-  "workflow": null,
-  "workflowRunId": null,
-  "workflowRunAttempt": null,
-  "workflowSha": null,
+  "commit": "a21c61217eb606d15dbff864e3c91992a9f67b6c",
+  "repository": "Aurtechmx/openlidarviewer",
+  "generatedAt": "2026-10-10T16:11:50.805Z",
+  "nodeVersion": "v22.18.0",
+  "npmVersion": "10.9.3",
+  "platform": "linux-x64",
+  "workflow": "Evidence record",
+  "workflowRunId": "38065886976",
+  "workflowRunAttempt": "1",
+  "workflowSha": "33ccb4006a7e3dacd49ea896d2c3bbef87ecb61f",
   "gateExit": 0,
   "gateLog": "release/gate.log",
-  "gateLogSha256": "7a9b53f92a8966a388ee4f164b3465e60707169e3c9434bdd9a377ed73f92f8f",
+  "gateLogSha256": "b773394528b622623700e27217f4561e484cd8061f45a66828ac388d9526cdf9",
   "stages": {
     "mutation": "not-executed"
   },
@@ -52,45 +52,45 @@
   },
   "buckets": {
     "unit": {
-      "passed": 12566,
-      "skipped": 43,
+      "passed": 13522,
+      "skipped": 58,
       "runs": 3
     },
     "export": {
-      "passed": 1246,
+      "passed": 1495,
       "skipped": 0,
       "runs": 1
     },
     "terrain": {
-      "passed": 3501,
-      "skipped": 1,
+      "passed": 3609,
+      "skipped": 12,
       "runs": 2
     },
     "ui": {
-      "passed": 1056,
+      "passed": 1132,
       "skipped": 0,
       "runs": 1
     },
     "slow": {
-      "passed": 1474,
+      "passed": 1480,
       "skipped": 6,
       "runs": 2
     }
   },
   "total": {
-    "passed": 19843,
-    "skipped": 50
+    "passed": 21238,
+    "skipped": 76
   },
   "bundle": {
-    "liveEntryKiB": 576,
+    "liveEntryKiB": 604,
     "ceilingKiB": 795
   },
-  "packageLockSha256": "d585b1b99d6c6adcaed11217ff5d35735f070940480ee3060a6d74594fe3835a",
+  "packageLockSha256": "fb5d6a54176630a41652dada4502f3fdceef027c587194c6bb7de722da475f51",
   "sbom": {
-    "sha256": "1b10f238668555ea812cfb793eb94ab2f4c7163618af4679f73c72c5279fda78",
+    "sha256": "5116bec1f88a724662547c587216da1cebb9f6b154a6bc7c4a2f2f8ba1182495",
     "rootName": "openlidarviewer",
-    "rootVersion": "0.7.0-alpha.1",
-    "bomRef": "openlidarviewer@0.7.0-alpha.1",
+    "rootVersion": "0.7.0",
+    "bomRef": "openlidarviewer@0.7.0",
     "components": 36
   },
   "science": {

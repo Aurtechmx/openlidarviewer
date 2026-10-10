@@ -1,7 +1,6 @@
-# Known limitations: OpenLiDARViewer 0.7.0-alpha.1
+# Known limitations: OpenLiDARViewer 0.7.0
 
-In development. This document is written from the final state at freeze. What
-follows is the state so far, and every entry is reproduced rather than carried
+Every entry below was reproduced against this release rather than carried
 forward from v0.6.9 by default.
 
 ## Withheld points are excluded from scientific products, not from registration, classification or measurement
@@ -84,11 +83,10 @@ Auto-classify finds ground, vegetation and buildings only, and buildings come
 from a height and roughness heuristic. It does not find wires, poles, water,
 bridges or noise, and its result is heuristic, not survey-grade.
 
-## What the ledger settled, and what it did not
+## What was settled from v0.6.9, and what was not
 
 Every v0.6.9 limitation was reproduced or cleared rather than carried forward.
-The implementation ledger records each one with how it was established and the
-test that proves its status. Of the inherited set, the boundary share was fixed,
+Each one has a test that proves its status. Of the inherited set, the boundary share was fixed,
 the stockpile split was closed, and two turned out not to reproduce: the
 oriented extent is presented as a principal-axis estimate with its failure mode
 named, and truncation is reported rather than hidden.
@@ -294,7 +292,7 @@ is not built.
 
 Chromium, Firefox, WebKit and Windows block a merge. The `e2e-firefox`,
 `e2e-webkit` and `windows` jobs run in `ci.yml` and are listed in `ci-green`'s
-`needs`, which the ruleset for `main` requires (ledger L13). Windows runs
+`needs`, which the ruleset for `main` requires. Windows runs
 Chromium. The iPhone-shaped WebKit project runs in the cross-browser smoke
 workflow, which sits outside `ci-green` and which no ruleset requires. Touch
 gestures run end to end on all three engines, and in the iPhone-shaped WebKit
@@ -302,8 +300,7 @@ project, as synthesized pointer events. Multi-touch on a real device is
 unverified. An iOS simulator check drives real Mobile Safari on a pinned
 simulator (iOS 26.5, iPhone 17e) and has passed end to end, including a
 two-finger pinch. It runs only when started by hand and is advisory until 20
-consecutive passes, counted by `scripts/ios-streak.mjs`. No matrix is recorded
-for this development cut: that evidence comes from the engines themselves.
+consecutive passes, counted by `scripts/ios-streak.mjs`.
 
 ## The two monoliths are still monoliths
 

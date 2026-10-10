@@ -305,9 +305,9 @@ const fact = (name, value) => {
 // describing a tree it never saw.
 {
   const CURRENT_DOCS = [
-    'docs/releases/KNOWN_LIMITATIONS_v0.7.0-alpha.1.md',
-    'docs/releases/RELEASE_NOTES_v0.7.0-alpha.1.md',
-    'docs/releases/VALIDATION_REPORT_v0.7.0-alpha.1.md',
+    'docs/releases/KNOWN_LIMITATIONS_v0.7.0.md',
+    'docs/releases/RELEASE_NOTES_v0.7.0.md',
+    'docs/releases/VALIDATION_REPORT_v0.7.0.md',
   ].filter((f) => existsSync(resolve(ROOT, f)));
 
   const measurement = measureModuleGraph();
