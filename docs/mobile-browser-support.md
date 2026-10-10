@@ -41,6 +41,10 @@ OpenLiDARViewer is not affiliated with, endorsed by, or sponsored by Apple or an
 
 The panels sit in a bottom sheet with Data, Tools, Analyse, Export and View tabs. The dock keeps Frame all, Measure, Inspect, Annotate and Commands in view, and the ••• button holds Save a snapshot, Analyse, Copy view link, Help and Close scan. The live probe is a hover tool, so it is not offered on touch screens. A strip of state readouts shows the dataset, coordinate system, vertical reference and basis. On a scan reduced to a display sample, the strip offers Export all N points, which a phone refuses when the file is too large for its memory, and it gives the reason. A denser reload is not offered on a phone or tablet.
 
+## Tablets
+
+A tablet counts as a touch layout when it has a touch screen at least 768 px wide and 600 px tall, a coarse primary pointer and no hover. An iPad with a trackpad attached still counts. On such a tablet the controls outside the rails, dock and dialogs are 44 px targets, and panel close buttons and Frame all are 48 px. This covers the navigation card and its speed slider, the scan-state items, the empty state, the command palette, the shortcut sheet, the tour, the floating panels, the location bar buttons, the catalogue inputs, the View panel head, and checkbox labels in the rails, each of which is a 44 px box. The view cube grows to 144 px with 44 px circular buttons, a long label wraps instead of widening the button, and the cube moves to the right of the left rail while that rail is open. Mouse and phone layouts keep their sizes.
+
 ## Touch navigation
 
 - Drag with one finger to rotate.
@@ -51,6 +55,8 @@ The panels sit in a bottom sheet with Data, Tools, Analyse, Export and View tabs
 ## Mobile measurement
 
 To measure on mobile, open the Measure tool, pick a kind from the toolbar and tap points on the scan. The kinds are the desktop ones: distance, polyline, area, height, angle, slope, profile, box and volume. Tap a placed point to drag it, and use the Clear and Done controls to remove measurements or exit the tool. The units toggle switches between metric and imperial.
+
+While Measure or Inspect is active, a short instruction such as "Select the second point" appears beside the tool rail, up to two lines long. For Measure it sits to the right of the rail, and for Inspect, which has no rail, it sits below the Inspect bar. Screen readers are told each time the instruction changes. Desktop layouts do not change.
 
 Measurements are intended for visual inspection and documentation workflows unless validated against survey-grade data and procedures.
 
