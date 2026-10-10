@@ -102,6 +102,25 @@ export function isSampledBasis(b: AnalysedBasis | null | undefined): boolean {
     && b.analysedPointCount + (b.withheldExcludedCount ?? 0) < b.declaredPointCount;
 }
 
+/**
+ * The one decision on whether a USGS density reference floor may be printed:
+ * the strongest floor cleared, or null when the figure is on a sample (the
+ * grid reports a sampled extent, or the analysed basis is not a full read) only.
+ * The panel, the fitness badge, the sheet and the provenance all print this.
+ */
+export function densityReferenceFloorFor(
+  floors: readonly string[] | null | undefined,
+  basis: AnalysedBasis | null | undefined,
+  coverageMode?: string | null,
+): string | null {
+  // An unknown basis (null or absent: scan facts were missing when the analysis
+  // ran) is NOT treated as a sample. Many export paths build provenance without
+  // a basis, and withholding there would drop the floor from full-read exports.
+  // The unknown case keeps the earlier behaviour and relies on `coverageMode`.
+  if (coverageMode === 'sampled' || isSampledBasis(basis)) return null;
+  return floors?.[0] ?? null;
+}
+
 /** Shown in place of the density reference when the figure is on a sample. */
 export const DENSITY_REF_SAMPLE_NOTE = 'not stated on a sample';
 

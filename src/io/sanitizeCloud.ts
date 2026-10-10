@@ -188,7 +188,7 @@ interface AttributeSlot {
 /** State the honest warning / refusal wording needs. */
 function exclusionWarning(excluded: number, total: number): string {
   return (
-    `Excluded ${excluded} of ${total} points: their x/y/z carried a non-finite ` +
+    `Excluded ${excluded.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} points: their x/y/z carried a non-finite ` +
     `value (NaN or ±Infinity), so they could not be placed in space. Each ` +
     `excluded point's attributes were removed with it.`
   );

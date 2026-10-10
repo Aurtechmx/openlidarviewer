@@ -65,8 +65,8 @@ describe('the validation row states the unit its residuals are in', () => {
     });
     // The fixture must actually produce these rows, or the unresolved-frame
     // assertions below prove nothing: an absent row has no caption to get wrong.
-    expect(text, 'the fixture produced no overall RMSE').toMatch(/Vertical RMSE: [\d.]+ m/);
-    expect(text, 'the fixture produced no blocked RMSE').toMatch(/Blocked RMSE: [\d.]+ m/);
+    expect(text, 'the fixture produced no overall RMSE').toMatch(/Vertical RMSE: [\d.]+\u00a0m/);
+    expect(text, 'the fixture produced no blocked RMSE').toMatch(/Blocked RMSE: [\d.]+\u00a0m/);
   });
 
   it('does not call source Z units metres when no vertical scale resolved', async () => {
@@ -74,14 +74,14 @@ describe('the validation row states the unit its residuals are in', () => {
     // residuals stay in whatever the file's Z axis is.
     const { text } = await renderValidationText({ ...BASE, horizontalUnitToMetres: 1 });
     expect(text, 'an unresolved frame still produced a figure captioned "m"')
-      .not.toMatch(/Vertical RMSE: [\d.]+ m\b/);
-    expect(text).not.toMatch(/Blocked RMSE: [\d.]+ m\b/);
-    expect(text).not.toMatch(/RMSE by slope:[^|]*? m\b/);
-    expect(text).not.toMatch(/RMSE by zone:[^|]*? m\b/);
-    expect(text).not.toMatch(/\|Δz\| ≤ [\d.]+ m\b/);
+      .not.toMatch(/Vertical RMSE: [\d.]+\u00a0m\b/);
+    expect(text).not.toMatch(/Blocked RMSE: [\d.]+\u00a0m\b/);
+    expect(text).not.toMatch(/RMSE by slope:[^|]*?\u00a0m\b/);
+    expect(text).not.toMatch(/RMSE by zone:[^|]*?\u00a0m\b/);
+    expect(text).not.toMatch(/\|Δz\|\u00a0≤\u00a0[\d.]+\u00a0m\b/);
     // And it still reports the figure, under the unit it is genuinely in — the
     // residual statistics are unaffected, only the caption was wrong.
-    expect(text).toMatch(/Vertical RMSE: [\d.]+ source Z units/);
+    expect(text).toMatch(/Vertical RMSE: [\d.]+\u00a0source Z units/);
   });
 });
 
@@ -123,12 +123,12 @@ describe('the blocked RMSE interval', () => {
     const text = await render({
       ciLow: null, ciHigh: null, ciStatus: 'unavailable', ciUnavailableReason: 'one-scored-block',
     });
-    expect(text).toMatch(/Blocked RMSE: 2\.00 m \(Confidence interval unavailable: only one block was scored\)/);
+    expect(text).toMatch(/Blocked RMSE: 2\.00\u00a0m \(Confidence interval unavailable: only one block was scored\)/);
     expect(text).not.toMatch(/Blocked RMSE:[^|]*(95% CI|\[2|2\.00\s*[–-]\s*2\.00)/);
   });
 
   it('still shows a computed zero-width interval', async () => {
     const text = await render({ ciLow: 2, ciHigh: 2, ciStatus: 'computed', ciUnavailableReason: null });
-    expect(text).toMatch(/Blocked RMSE: 2\.00 m \(95% CI 2\.00–2\.00\)/);
+    expect(text).toMatch(/Blocked RMSE: 2\.00\u00a0m \(95% CI 2\.00–2\.00\)/);
   });
 });
