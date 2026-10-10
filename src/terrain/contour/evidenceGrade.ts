@@ -77,10 +77,19 @@ export function tallyContourSet(set: ContourSet): GradeTally {
  * Returns a plain "no contours drawn" when the set is empty.
  */
 export function interpolatedCaption(tally: GradeTally): string {
-  if (!Number.isFinite(tally.interpolatedFraction) || tally.totalLength === 0) {
-    return 'No contours drawn.';
-  }
-  const pct = gradePercent(tally.interpolatedFraction);
+  if (tally.totalLength === 0) return 'No contours drawn.';
+  return interpolatedShareCaption(tally.interpolatedFraction);
+}
+
+/**
+ * The same caption from a length-weighted fraction, so a surface that already
+ * holds the export model's fraction prints the figure the map sheet prints
+ * (the model is graded on the stitched, shaped runs that are drawn; the raw
+ * segment tally is graded before stitching and shaping).
+ */
+export function interpolatedShareCaption(fraction: number): string {
+  if (!Number.isFinite(fraction)) return 'No contours drawn.';
+  const pct = gradePercent(fraction);
   if (pct === 0) return 'All contour length is from confident, measured terrain.';
   return `${pct}% of contour length is interpolated (dashed) or uncertain (gap).`;
 }

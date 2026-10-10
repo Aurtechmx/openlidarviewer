@@ -53,7 +53,7 @@ import {
   describeClassBasis,
   GROUND_BASIS_UNVERIFIED_NOTE,
 } from '../render/measure/profileProvenance';
-import { describeWithheldRead } from '../science/withheldCounts';
+import { describeWithheldRead, formatGroupedInt } from '../science/withheldCounts';
 import {
   axisSpanCaption,
   CHAINAGE_TICK_SPACING_PX,
@@ -688,8 +688,8 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
   draw();
 
   const detail: ProfileWorkbenchDetailRow[] = [
-    { label: 'Returns in corridor', value: String(section.points.count) },
-    { label: 'Drawn', value: String(indices.length) },
+    { label: 'Returns in corridor', value: formatGroupedInt(section.points.count) },
+    { label: 'Drawn', value: formatGroupedInt(indices.length) },
     { label: 'Corridor half-width', value: axisSpanCaption(section.band * scale, unit) },
     {
       label: 'Chainage span',
@@ -706,7 +706,7 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
   if (filterDescriptor) {
     detail.push({
       label: 'Kept (filter)',
-      value: `${filterDescriptor.keptCount} of ${filterDescriptor.acceptedCount}`,
+      value: `${formatGroupedInt(filterDescriptor.keptCount)} of ${formatGroupedInt(filterDescriptor.acceptedCount)}`,
     });
     const rules = filterDescriptor.scopes.filter((s) => s.active).map((s) => s.rule);
     if (rules.length > 0) detail.push({ label: 'Filter', value: rules.join('; ') });
@@ -716,7 +716,7 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
     section.points.count === 0
       ? 'No returns fell inside this corridor.'
       : indices.length < section.points.count
-        ? `Showing ${indices.length} of ${section.points.count} returns.`
+        ? `Showing ${formatGroupedInt(indices.length)} of ${formatGroupedInt(section.points.count)} returns.`
         : `Showing ${section.points.count} returns.`;
 
   return {

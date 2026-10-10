@@ -53,10 +53,15 @@ export function withheldReadCounts(
   };
 }
 
+/** An integer count with comma grouping, independent of the viewer's locale. */
+export function formatGroupedInt(n: number): string {
+  return Number.isFinite(n) ? Math.round(n).toLocaleString('en-US') : String(n);
+}
+
 /** One line for a report row or a CSV/PDF provenance field. */
 export function describeWithheldRead(c: WithheldReadCounts): string {
   const excluded =
-    c.withheldExcluded === 'unknown' ? 'unknown (no flags on a source)' : String(c.withheldExcluded);
-  return `${c.analysedPoints} of ${c.sourcePoints} analysed; Withheld excluded: ${excluded}`;
+    c.withheldExcluded === 'unknown' ? 'unknown (no flags on a source)' : formatGroupedInt(c.withheldExcluded);
+  return `${formatGroupedInt(c.analysedPoints)} of ${formatGroupedInt(c.sourcePoints)} analysed; Withheld excluded: ${excluded}`;
 }
 

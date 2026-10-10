@@ -221,8 +221,8 @@ describe('technical-report layout — overlap regression', () => {
 // 2. Section-heading underline spans the heading text
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('technical-report layout — heading underline', () => {
-  it('spans the measured heading width, not a fixed 40 pt stub', async () => {
+describe('technical-report layout — section headings', () => {
+  it('draws headings without an underline rule', async () => {
     const { runs, rects } = await renderRuns(tikalInputs());
     const HEADINGS = new Set([
       'Inspection summary', 'Dataset summary', 'Provenance',
@@ -231,15 +231,22 @@ describe('technical-report layout — heading underline', () => {
     const headings = runs.filter((r) => r.size === 14 && HEADINGS.has(r.text));
     expect(headings).toHaveLength(HEADINGS.size);
     for (const h of headings) {
-      // The underline is the 1.5 pt-high rect drawn 4 pt under the heading.
       const underline = rects.find(
         (r) => r.page === h.page && r.h === 1.5 && Math.abs(r.y - (h.y - 4)) < 0.5,
       );
-      expect(underline, `underline for "${h.text}"`).toBeDefined();
-      // Longer than the old 40 pt stub and proportional to the text
-      // ("Inspection summary" at 14 pt bold measures ≈ 120+ pt).
-      expect(underline!.w, `underline width for "${h.text}"`).toBeGreaterThan(40);
+      expect(underline, `no underline for "${h.text}"`).toBeUndefined();
     }
+  });
+
+  it('aligns the closing caveat with the findings list text column', async () => {
+    const { runs } = await renderRuns(tikalInputs());
+    const caveat = runs.find((r) => r.text.startsWith('These findings describe'));
+    expect(caveat).toBeDefined();
+    expect(caveat!.text.startsWith('•')).toBe(false);
+    // Findings place their label at MARGIN + 16; the caveat text uses the same column.
+    const labelRun = runs.find((r) => r.page === caveat!.page && r.x < caveat!.x && r.y > caveat!.y);
+    expect(labelRun).toBeDefined();
+    expect(caveat!.x - 44).toBeCloseTo(16, 0);
   });
 });
 

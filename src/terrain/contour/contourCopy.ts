@@ -207,7 +207,7 @@ export interface HonestValueDisplay {
  */
 export function formatHonestValue(p: HonestValueParams): HonestValueDisplay {
   const digits = p.digits ?? 2;
-  const units = p.units ? ` ${p.units}` : '';
+  const units = p.units ? `\u00a0${p.units}` : '';
   if (p.value == null || !Number.isFinite(p.value)) {
     return {
       text: '—',

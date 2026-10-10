@@ -74,7 +74,7 @@ export const SOFTWARE_NAME = 'OpenLiDARViewer';
  */
 import { NOT_SURVEY_GRADE_NOTE } from './exportNotes';
 import { verticalUnitLabel } from '../../units/units';
-import { analysedBasisLine, DENSITY_REF_SAMPLE_NOTE, isSampledBasis, type AnalysedBasis } from './analysedBasis';
+import { analysedBasisLine, DENSITY_REF_SAMPLE_NOTE, densityReferenceFloorFor, isSampledBasis, type AnalysedBasis } from './analysedBasis';
 import type { TransformProvenance } from '../../convert/transformProvenance';
 import type { OrganizedRangeSet } from '../../model/OrganizedRange';
 import { sourceTopologyRecord } from '../../science/sourceTopology';
@@ -537,9 +537,7 @@ export function buildExportProvenance(
           // then a stride extrapolation, and the floors are a statement about
           // the full cloud.
           usgsDensityReferenceFloor:
-            coverageMode === 'sampled' || isSampledBasis(opts.analysedBasis)
-              ? 'none'
-              : (acc.densityReferenceFloorsMet[0] ?? 'none'),
+            densityReferenceFloorFor(acc.densityReferenceFloorsMet, opts.analysedBasis, coverageMode) ?? 'none',
           ...(coverageMode === 'sampled' || isSampledBasis(opts.analysedBasis) ? { accuracyOnSample: true } : {}),
         }
       : null;

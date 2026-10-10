@@ -369,6 +369,45 @@ export function mapScaleLabel(scaleN: number, linearUnit: MapSheetInput['linearU
   return scaleN > 0 ? `1:${scaleN.toLocaleString()}` : '—';
 }
 
+/** A drawn line of the sheet's right-hand accuracy column, baseline `y`. */
+export interface AccuracyColumnLine { readonly text: string; readonly y: number; readonly size: number }
+
+/**
+ * Lay out the right-hand accuracy column: the optional sample note on its own
+ * row, then one row per `[label, value, shortLabel?]`. A row that is wider than
+ * the column is retried with its short label, then wrapped to two lines, so no
+ * line leaves the column. `bottomY` is the baseline of the last line.
+ */
+export function layoutAccuracyColumn(
+  rows: ReadonlyArray<readonly [string, string, string?]>,
+  opts: {
+    readonly topY: number;
+    readonly colW: number;
+    readonly sampleNote: string | null;
+    readonly measure: (s: string, size: number) => number;
+  },
+): { readonly lines: AccuracyColumnLine[]; readonly bottomY: number } {
+  const lines: AccuracyColumnLine[] = [];
+  const size = 7.5;
+  let y = opts.topY - 34;
+  if (opts.sampleNote) {
+    lines.push({ text: opts.sampleNote, y: opts.topY - 27, size: 5.5 });
+    y = opts.topY - 41;
+  }
+  let bottomY = y;
+  for (const [label, value, shortLabel] of rows) {
+    let parts = [`${label}:  ${value}`];
+    if (opts.measure(parts[0], size) > opts.colW && shortLabel) parts = [`${shortLabel}:  ${value}`];
+    if (opts.measure(parts[0], size) > opts.colW) parts = wrapTextToWidth(parts[0], opts.colW, size, opts.measure, 2);
+    parts.forEach((t, i) => {
+      bottomY = y - i * 8.5;
+      lines.push({ text: t, y: bottomY, size });
+    });
+    y -= 12 + (parts.length - 1) * 8.5;
+  }
+  return { lines, bottomY };
+}
+
 /** The sheet's interpolated share, named by its basis (contour length, not grid cells). */
 export function interpolatedLengthLine(fraction: number): string {
   return `${gradePercent(fraction)}% interpolated or uncertain (by contour length)`;
@@ -1151,9 +1190,6 @@ function drawTitleBlock(
       : 'Survey accuracy';
   rightText(accHeading, rxr, topY - 16, 9, bold);
   page.drawLine({ start: { x: rxr - bold.widthOfTextAtSize(accHeading, 9), y: topY - 21 }, end: { x: rxr, y: topY - 21 }, thickness: 0.6, color: FRAME });
-  if (prov?.accuracy?.accuracyOnSample) {
-    rightText('Figures are from a sample of the points', rxr, topY - 28, 5.5, font, DIM);
-  }
   // ' m' is unconditional and correct here: these figures are metres by
   // construction (a hold-out residual times the resolved vertical factor), and
   // the provenance withholds the whole accuracy block when no vertical scale
@@ -1162,7 +1198,7 @@ function drawTitleBlock(
   // Accuracy rows, single-sourced from provenance when present (its accuracy
   // block is null when the run measured none, in which case every figure reads
   // '—' rather than a fabricated zero).
-  const aRows: Array<[string, string]> = prov
+  const aRows: Array<[string, string, string?]> = prov
     ? [
         // "-style (hold-out)" / "(estimated)": the printed sheet must carry
         // the same qualifiers as the Analyse-panel preview of these rows —
@@ -1181,6 +1217,7 @@ function drawTitleBlock(
           prov.accuracy && prov.accuracy.usgsDensityReferenceFloor !== 'none'
             ? `>= USGS ${prov.accuracy.usgsDensityReferenceFloor}`
             : prov.accuracy?.accuracyOnSample ? DENSITY_REF_SAMPLE_NOTE : '—',
+          'Density ref',
         ],
       ]
     : (() => {
@@ -1195,10 +1232,13 @@ function drawTitleBlock(
           ],
         ];
       })();
-  aRows.forEach((r, i) => {
-    const y = topY - 34 - i * 13;
-    rightText(`${r[0]}:  ${r[1]}`, rxr, y, 7.5, font, INK);
+  const accCol = layoutAccuracyColumn(aRows, {
+    topY,
+    colW: rxr - rcx,
+    sampleNote: prov?.accuracy?.accuracyOnSample ? 'Figures are from a sample of the points' : null,
+    measure: (t, sz) => font.widthOfTextAtSize(safe(t), sz),
   });
+  accCol.lines.forEach((ln) => rightText(ln.text, rxr, ln.y, ln.size, font, ln.size < 7 ? DIM : INK));
   // Export-readiness verdict — single-sourced from the unified provenance so the
   // sheet's readiness note can't disagree with the other exports. Maps the
   // provenance verdict (Ready / Preview / Blocked) onto the note vocabulary.
@@ -1220,11 +1260,12 @@ function drawTitleBlock(
   const boldMeasure = (s: string, sz: number): number => bold.widthOfTextAtSize(safe(s), sz);
   const note = readinessNote(readiness);
   const noteWrapped = wrapTextToWidth(note, rcw, 6.5, boldMeasure, 3);
-  noteWrapped.forEach((ln, i) => rightText(ln, rxr, topY - 84 - i * 8, 6.5, bold, readiness === 'ready' ? INK : warn));
+  const noteTopY = Math.min(topY - 84, accCol.bottomY - 11);
+  noteWrapped.forEach((ln, i) => rightText(ln, rxr, noteTopY - i * 8, 6.5, bold, readiness === 'ready' ? INK : warn));
   const evLine = mapSheetEvidenceLine();
   const evColor = evidenceStatus(MAP_SHEET_CLAIM) === 'validated' ? DIM : warn;
   const evWrapped = wrapTextToWidth(evLine, rcw, 6, measure, 3);
-  const evStartY = topY - 84 - noteWrapped.length * 8 - 5;
+  const evStartY = noteTopY - noteWrapped.length * 8 - 5;
   evWrapped.forEach((ln, i) => rightText(ln, rxr, evStartY - i * 8, 6, font, evColor));
   rightText('OpenLiDARViewer - terrain analysis', rxr, M - 9, 6, font, DIM);
   // Which build drew this sheet. Every other provenance-bearing export carries
