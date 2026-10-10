@@ -691,10 +691,9 @@ export async function bringPhoneToastForward(page: Page): Promise<void> {
  */
 export async function closeScanFromDock(page: Page, opts: { expectPrompt?: boolean } = {}): Promise<void> {
   const close = page.locator('.olv-tool-close');
-  if (!(await close.isVisible())) {
-    const more = page.locator('.olv-tool-more');
-    if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
-  }
+  // Only a phone shows More beside a hidden Close; elsewhere click waits for the dock to appear.
+  const more = page.locator('.olv-tool-more');
+  if (!(await close.isVisible()) && (await more.isVisible()) && (await more.getAttribute('aria-expanded')) !== 'true') await more.click();
   await close.click();
   const confirm = page.locator('.olv-modal .olv-confirm-ok');
   const empty = page.locator('.olv-empty');
