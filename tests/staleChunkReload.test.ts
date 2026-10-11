@@ -22,8 +22,11 @@ import {
   installStaleChunkRecovery,
   STALE_RELOAD_MARKER_KEY,
   OFFLINE_CHUNK_MESSAGE,
+  AMBIGUOUS_CHUNK_MESSAGE,
   classifyProbeResponse,
   makeHeadProbe,
+  makeAmbiguousChunkHandler,
+  RELOAD_LOSS_MESSAGE,
 } from '../src/app/staleChunkReload';
 import type { StorageLike, EventTargetLike } from '../src/app/staleChunkReload';
 
@@ -65,7 +68,7 @@ function makeTarget(): FakeTarget {
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 const staleError = () =>
-  new Error('Failed to fetch dynamically imported module: /assets/panel-abc123.js');
+  new Error('Failed to fetch dynamically imported module: https://olv.example/assets/panel-abc123.js');
 
 describe('classifyLoadError', () => {
   it('classifies the real stale-chunk / preload phrasings as stale-chunk', () => {
@@ -114,6 +117,7 @@ describe('installStaleChunkRecovery.importOrReload', () => {
       reload,
       storage: makeStorage(),
       eventTarget: null,
+      probe: async () => 'missing' as const,
       log: () => {},
     });
     await expect(recovery.importOrReload(async () => 42)).resolves.toBe(42);
@@ -129,6 +133,7 @@ describe('installStaleChunkRecovery.importOrReload', () => {
       reload,
       storage,
       eventTarget: null,
+      probe: async () => 'missing' as const,
       log,
     });
 
@@ -155,6 +160,7 @@ describe('installStaleChunkRecovery.importOrReload', () => {
       reload,
       storage,
       eventTarget: null,
+      probe: async () => 'missing' as const,
       onUnrecoverable,
       log: () => {},
     });
@@ -178,6 +184,7 @@ describe('installStaleChunkRecovery.importOrReload', () => {
       reload,
       storage: makeStorage({ [STALE_RELOAD_MARKER_KEY]: '1000' }),
       eventTarget: null,
+      probe: async () => 'missing' as const,
       log: () => {},
     });
 
@@ -195,6 +202,7 @@ describe('installStaleChunkRecovery.importOrReload', () => {
       reload,
       storage,
       eventTarget: null,
+      probe: async () => 'missing' as const,
       log: () => {},
     });
 
@@ -214,6 +222,7 @@ describe('installStaleChunkRecovery.importOrReload', () => {
       reload,
       storage,
       eventTarget: null,
+      probe: async () => 'missing' as const,
       log: () => {},
     });
 
@@ -226,7 +235,7 @@ describe('installStaleChunkRecovery.importOrReload', () => {
 });
 
 describe('installStaleChunkRecovery vite:preloadError handler', () => {
-  it('drives the same guarded one-shot reload from a vite:preloadError event', () => {
+  it('drives the same guarded one-shot reload from a vite:preloadError event', async () => {
     const reload = vi.fn();
     const storage = makeStorage();
     const target = makeTarget();
@@ -235,17 +244,15 @@ describe('installStaleChunkRecovery vite:preloadError handler', () => {
       reload,
       storage,
       eventTarget: target,
+      probe: async () => 'missing' as const,
       log: () => {},
     });
 
-    const preventDefault = vi.fn();
     target.emit('vite:preloadError', {
-      payload: new Error('Unable to preload CSS for /assets/x.css'),
-      preventDefault,
+      payload: new Error('Unable to preload CSS for https://olv.example/assets/x.css'),
     });
 
-    expect(reload).toHaveBeenCalledTimes(1);
-    expect(preventDefault).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
     expect(storage.map.get(STALE_RELOAD_MARKER_KEY)).toBe('5000');
   });
 });
@@ -478,5 +485,130 @@ describe('one failure reported twice (preloadError, then the rethrow)', () => {
     target.emit('vite:preloadError', { payload: e, preventDefault: () => {} });
     await expect(importOrReload(() => Promise.reject(e))).rejects.toBe(e);
     expect(onOffline).toHaveBeenCalledTimes(1);
+  });
+});
+
+
+describe('an ambiguous chunk failure does not reload', () => {
+  const noUrlError = () => new Error('Importing a module script failed.');
+  const urlError = () => new Error('Failed to fetch dynamically imported module: https://olv.example/assets/a-1.js');
+
+  it('no URL with a probe reporting unreachable: no reload, and Retry is offered', async () => {
+    const reload = vi.fn();
+    const storage = makeStorage();
+    const probe = vi.fn(async () => 'unreachable' as const);
+    const onAmbiguous = vi.fn();
+    const { importOrReload } = installStaleChunkRecovery({ reload, storage, eventTarget: null, isOnline: () => true, probe, onAmbiguous, log: () => {} });
+    const err = noUrlError();
+    await expect(importOrReload(() => Promise.reject(err))).rejects.toBe(err);
+    expect(reload).not.toHaveBeenCalled();
+    expect(storage.map.has(STALE_RELOAD_MARKER_KEY)).toBe(false);
+    expect(probe).not.toHaveBeenCalled();
+    expect(onAmbiguous).toHaveBeenCalledTimes(1);
+    expect(onAmbiguous.mock.calls[0][0]).toBe(AMBIGUOUS_CHUNK_MESSAGE);
+    expect(onAmbiguous.mock.calls[0][1].attempt).toBe(1);
+  });
+
+  it('no URL and no probe: no reload', async () => {
+    const reload = vi.fn();
+    const onAmbiguous = vi.fn();
+    const { importOrReload } = installStaleChunkRecovery({ reload, storage: makeStorage(), eventTarget: null, isOnline: () => true, probe: null, onAmbiguous, log: () => {} });
+    await expect(importOrReload(() => Promise.reject(noUrlError()))).rejects.toThrow();
+    expect(reload).not.toHaveBeenCalled();
+    expect(onAmbiguous).toHaveBeenCalledTimes(1);
+  });
+
+  it('a URL with no probe: no reload', async () => {
+    const reload = vi.fn();
+    const { importOrReload } = installStaleChunkRecovery({ reload, storage: makeStorage(), eventTarget: null, isOnline: () => true, probe: null, log: () => {} });
+    await expect(importOrReload(() => Promise.reject(urlError()))).rejects.toThrow();
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('a vite:preloadError without a URL does not reload or prevent the default', async () => {
+    const reload = vi.fn();
+    const target = makeTarget();
+    installStaleChunkRecovery({ reload, storage: makeStorage(), eventTarget: target, isOnline: () => true, probe: async () => 'missing', log: () => {} });
+    const preventDefault = vi.fn();
+    target.emit('vite:preloadError', { payload: noUrlError(), preventDefault });
+    await flush();
+    expect(reload).not.toHaveBeenCalled();
+    expect(preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('Retry runs the loader again and reports whether it loaded', async () => {
+    const onAmbiguous = vi.fn();
+    const { importOrReload } = installStaleChunkRecovery({ reload: vi.fn(), storage: makeStorage(), eventTarget: null, isOnline: () => true, probe: null, onAmbiguous, log: () => {} });
+    const loader = vi.fn().mockRejectedValueOnce(noUrlError()).mockResolvedValueOnce(1).mockRejectedValueOnce(noUrlError());
+    await expect(importOrReload(loader)).rejects.toThrow();
+    const { retry } = onAmbiguous.mock.calls[0][1];
+    expect(await retry()).toBe(true);
+    expect(await retry()).toBe(false);
+    expect(loader).toHaveBeenCalledTimes(3);
+  });
+
+  it('the offered reload goes through the cooldown', async () => {
+    const reload = vi.fn();
+    const storage = makeStorage({ [STALE_RELOAD_MARKER_KEY]: '1000' });
+    const onAmbiguous = vi.fn();
+    const { importOrReload } = installStaleChunkRecovery({ now: () => 2000, reload, storage, eventTarget: null, isOnline: () => true, probe: null, onAmbiguous, log: () => {} });
+    await expect(importOrReload(() => Promise.reject(noUrlError()))).rejects.toThrow();
+    onAmbiguous.mock.calls[0][1].reload();
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('a URL the probe reports missing still reloads', async () => {
+    const reload = vi.fn();
+    const onAmbiguous = vi.fn();
+    const { importOrReload } = installStaleChunkRecovery({ now: () => 1000, reload, storage: makeStorage(), eventTarget: null, isOnline: () => true, probe: async () => 'missing', onAmbiguous, log: () => {} });
+    void importOrReload(() => Promise.reject(urlError()));
+    await flush();
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(onAmbiguous).not.toHaveBeenCalled();
+  });
+});
+
+describe('the ambiguous failure surface', () => {
+  function setup(retryOk: boolean, confirm: boolean) {
+    const shown: Array<{ m: string; a?: { label: string; onClick: () => void } }> = [];
+    const confirmReload = vi.fn(async () => confirm);
+    const reload = vi.fn();
+    const retry = vi.fn(async () => retryOk);
+    const handle = makeAmbiguousChunkHandler({ showToast: (m, a) => { shown.push({ m, a }); }, confirmReload });
+    return { shown, confirmReload, reload, retry, handle };
+  }
+
+  it('offers Retry first and never reloads on its own', () => {
+    const t = setup(true, true);
+    t.handle('msg', { attempt: 1, retry: t.retry, reload: t.reload });
+    expect(t.shown[0].a?.label).toBe('Retry');
+    expect(t.reload).not.toHaveBeenCalled();
+  });
+
+  it('a Retry that loads says so and does not ask to reload', async () => {
+    const t = setup(true, true);
+    t.handle('msg', { attempt: 1, retry: t.retry, reload: t.reload });
+    t.shown[0].a?.onClick();
+    await flush();
+    expect(t.shown[1].m).toBe('Loaded.');
+    expect(t.confirmReload).not.toHaveBeenCalled();
+  });
+
+  it('a failed Retry asks first, naming what a reload discards, and reloads only on yes', async () => {
+    const t = setup(false, true);
+    t.handle('msg', { attempt: 1, retry: t.retry, reload: t.reload });
+    t.shown[0].a?.onClick();
+    await flush();
+    expect(t.confirmReload).toHaveBeenCalledWith('Reload the page?', RELOAD_LOSS_MESSAGE);
+    expect(t.reload).toHaveBeenCalledTimes(1);
+  });
+
+  it('declining the dialog keeps the page', async () => {
+    const t = setup(false, false);
+    t.handle('msg', { attempt: 2, retry: t.retry, reload: t.reload });
+    expect(t.shown[0].a?.label).toBe('Reload\u2026');
+    t.shown[0].a?.onClick();
+    await flush();
+    expect(t.reload).not.toHaveBeenCalled();
   });
 });

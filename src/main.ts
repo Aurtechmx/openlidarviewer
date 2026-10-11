@@ -221,7 +221,7 @@ import {
   loadActionRegistry,
   loadToolLauncher,
   loadWorkspaceShell,
-  loadStockpilePresenter, loadSessionIo, loadAnalysisModules, loadRecovery, loadSessionSnapshot, loadRemoteDeepLink, loadSnapshotAction,
+  loadStockpilePresenter, loadSessionIo, loadAnalysisModules, loadRecovery, loadSessionSnapshot, loadRemoteDeepLink, loadSnapshotAction, loadModal,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -250,7 +250,7 @@ import { prepareEpochFrames, epochUnitMismatchLines } from './app/epochFramePrep
 // feeds the colorbar legend's elevation unit from the resolved CRS.
 import { verticalUnitLabel } from './units/units';
 import { createInspectorCardRefreshers } from './app/inspectorCardRefreshers';
-import { installStaleChunkRecovery } from './app/staleChunkReload';
+import { installStaleChunkRecovery, makeAmbiguousChunkHandler } from './app/staleChunkReload';
 import { createCrsCoordinator } from './app/crsCoordinator';
 import { remoteCopcName, describeRemoteCopcError } from './app/remoteSourceNaming';
 import { deriveVolumeRecord } from './render/measure/measureDerivations';
@@ -511,7 +511,7 @@ let viewer: Viewer = null as unknown as Viewer;
 // content-hashed import fails because a newer build replaced the asset mid-session,
 // do ONE guarded reload (sessionStorage cooldown, URL preserved), not a hard boot
 // failure. Ordinary Viewer exceptions are NOT classified as stale and never reload.
-const { importOrReload } = installStaleChunkRecovery({ onOffline: (msg) => appToast().show(msg) });
+const { importOrReload } = installStaleChunkRecovery({ onOffline: (msg) => appToast().show(msg), onAmbiguous: makeAmbiguousChunkHandler({ showToast: (m, a) => appToast().show(m, a), confirmReload: async (title, message) => (await loadModal()).openConfirm({ title, message, confirmLabel: 'Reload page', cancelLabel: 'Keep working' }) }) });
 let startViewer: () => void = () => {};
 const viewerStarted = new Promise<void>((resolve) => { startViewer = resolve; });
 /** Start the Viewer import if it has not started, and hand back the shared promise. */

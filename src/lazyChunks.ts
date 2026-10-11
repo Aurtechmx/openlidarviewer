@@ -500,6 +500,7 @@ export const loadLasLoader = () => import('./io/loadLas');
  * how the workflow-config panel crashed on the deployed build). Routing every
  * runtime seam through this excluded module makes them deterministically safe.
  */
+export const loadModal = () => import('./ui/Modal');
 export const loadContextMenu = () => import('./ui/contextMenu');
 export const loadCommandPalette = () => import('./ui/CommandPalette');
 export const loadShortcutSheet = () => import('./ui/ShortcutSheet');
