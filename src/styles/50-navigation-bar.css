@@ -31,182 +31,75 @@
 .olv-navbar .olv-nav-reset { pointer-events: auto; }
 .olv-nav-row { display: flex; align-items: center; gap: var(--space-md); }
 
-/* v0.3.6 triangle mode switcher — three vertex buttons connected by a
- * dashed cyan outline, with a centre Reset action at the centroid. Users
- * previously missed the navigation modes entirely because they sat as a
- * flat segmented row; the triangle composition reads as a single
- * dedicated control surface. */
-.olv-modes.olv-modes-triangle {
-  position: relative;
-  width: 140px;
-  height: 108px;
-  background: transparent;
-  border: none;
-  padding: 0;
-  gap: 0;
-  display: block;
-}
-.olv-modes-tri-bg {
-  position: absolute; inset: 0;
-  pointer-events: none;
-  display: block;
-}
-.olv-modes-tri-bg svg { width: 100%; height: 100%; display: block; }
-
-/* Triangle vertex buttons — circular pads with stacked icon + label. */
-.olv-modes-triangle .olv-mode {
-  position: absolute;
-  width: 50px; height: 50px;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  gap: 1px;
-  background: rgba(8, 14, 28, 0.72);
+/* Mode selector — one compact segmented control, Orbit | Walk | Fly | Pan,
+ * with Frame all and the "More" disclosure beside it. */
+.olv-modes.olv-modes-segmented {
+  display: inline-flex; align-items: stretch; gap: 2px;
+  padding: 2px;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-md);
   -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-  border: 0.5px solid var(--hairline);
-  border-radius: 50%;
-  color: var(--text-dim);
-  font-size: var(--text-2xs);
-  letter-spacing: 0.04em;
-  padding: 0;
-  cursor: pointer;
-  transition: background 180ms var(--ease-standard), color 180ms var(--ease-standard), border-color 180ms var(--ease-standard),
-              box-shadow 180ms var(--ease-standard), transform 90ms var(--ease-standard);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
 }
-.olv-modes-triangle .olv-mode:hover:not(.olv-mode-active) {
-  color: var(--text);
-  border-color: rgba(0, 178, 255, 0.5);
+.olv-modes-segmented .olv-mode {
+  display: inline-flex; align-items: center; gap: var(--space-sm);
+  height: 32px; padding: 0 var(--space-lg);
+  font-family: var(--font); font-size: var(--text-xs); font-weight: 500;
+  color: var(--text-dim); background: transparent; border: 0;
+  border-radius: var(--radius-sm); cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard),
+              transform 90ms var(--ease-standard);
 }
-.olv-modes-triangle .olv-mode:active { transform: scale(0.94); }
-.olv-modes-triangle .olv-mode.olv-mode-active {
-  color: var(--accent);
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  box-shadow:
-    0 0 0 2px rgba(0, 178, 255, 0.25),
-    0 4px 16px rgba(0, 178, 255, 0.28);
+.olv-modes-segmented .olv-mode:hover:not(.olv-mode-active) { color: var(--text); background: rgba(127, 127, 127, 0.10); }
+.olv-modes-segmented .olv-mode:active { transform: scale(0.96); }
+.olv-modes-segmented .olv-mode.olv-mode-active {
+  color: var(--accent); background: var(--accent-soft);
+  box-shadow: inset 0 0 0 0.5px var(--accent);
 }
-.olv-mode-icon {
-  display: inline-flex;
-  width: 22px; height: 22px;
-  color: inherit;
-}
+.olv-modes-segmented .olv-mode:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.olv-mode-icon { display: inline-flex; width: 16px; height: 16px; color: inherit; }
 .olv-mode-icon svg { width: 100%; height: 100%; display: block; }
-.olv-mode-label {
-  font-size: var(--text-micro);
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  margin-top: 1px;
-}
+.olv-mode-label { font-size: var(--text-xs); letter-spacing: 0.01em; }
 
-/* Vertex positions — Orbit at the apex, Walk + Fly at the base. */
-.olv-modes-triangle .olv-mode-orbit { top: -8px; left: 50%; transform: translateX(-50%); }
-.olv-modes-triangle .olv-mode-orbit:active { transform: translateX(-50%) scale(0.94); }
-.olv-modes-triangle .olv-mode-walk  { bottom: -8px; left: -3px; }
-.olv-modes-triangle .olv-mode-fly   { bottom: -8px; right: -3px; }
-/* Pan (v0.5.5 hand tool) — a fourth pad docked left of the triangle,
- * vertically on the Walk/Fly base line so it reads as a sibling tool
- * rather than a fourth vertex. Same 50px circular pad = same touch
- * target. Hidden via .olv-hidden when ?handPan=off disables the tool. */
-.olv-modes-triangle .olv-mode-pan   { bottom: -8px; left: -62px; }
-
-/* Centre Reset button — sits at the triangle's centroid. Sized and
- * lit so it reads as the primary "frame the scan" action without
- * overpowering the three vertex chips. Earlier passes left it as a
- * tiny subtle dot that disappeared into the triangle outline. */
+/* Frame all — a compact icon button beside the selector. */
 .olv-mode-reset {
-  position: absolute;
-  /* The centroid of the three pads (apex centre ~17px, base centres ~91px),
-     so the Orbit pad above no longer overlaps it and reads as a second icon. */
-  top: 62%; left: 50%;
-  transform: translate(-50%, -50%);
-  width: 44px; height: 44px;
   display: inline-flex; align-items: center; justify-content: center;
-  background: radial-gradient(
-    circle at 30% 30%,
-    rgba(0, 178, 255, 0.32) 0%,
-    rgba(8, 14, 28, 0.94) 72%
-  );
-  border: 1.5px solid rgba(0, 178, 255, 0.85);
-  border-radius: 50%;
-  color: var(--accent);
-  cursor: pointer;
-  box-shadow:
-    0 0 0 4px rgba(0, 178, 255, 0.08),
-    0 0 16px 2px rgba(0, 178, 255, 0.28),
-    0 2px 10px rgba(0, 0, 0, 0.45);
-  transition:
-    background 180ms var(--ease-standard),
-    transform 90ms var(--ease-standard),
-    box-shadow var(--dur-base) var(--ease-standard),
-    border-color 180ms var(--ease-standard);
+  width: 36px; height: 36px; padding: 0;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-md); color: var(--accent); cursor: pointer;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+  transition: border-color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard),
+              transform 90ms var(--ease-standard);
 }
-/* "Frame" tag — appears above the button on hover / focus so the
- * action self-describes the moment the user reaches for it. Kept
- * out of the resting state because the three vertex chips have
- * labels and we don't want the centre to crowd the triangle base
- * where Walk / Fly sit. */
-.olv-mode-reset::after {
-  content: 'Frame';
-  position: absolute;
-  top: -22px;
-  left: 50%;
-  font-size: var(--text-2xs);
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(0, 178, 255, 1);
-  background: rgba(8, 14, 28, 0.92);
-  border: 1px solid rgba(0, 178, 255, 0.6);
-  border-radius: var(--radius-xs);
-  padding: var(--space-2xs) var(--space-md);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-  pointer-events: none;
-  white-space: nowrap;
-  opacity: 0;
-  transform: translate(-50%, 4px);
-  transition: opacity 160ms var(--ease-standard), transform 160ms var(--ease-standard);
-}
-.olv-mode-reset:hover::after,
-.olv-mode-reset:focus-visible::after {
-  opacity: 1;
-  transform: translate(-50%, 0);
-}
-.olv-mode-reset:hover {
-  background: radial-gradient(
-    circle at 30% 30%,
-    rgba(0, 178, 255, 0.55) 0%,
-    rgba(8, 14, 28, 0.95) 72%
-  );
-  border-color: rgba(0, 178, 255, 1);
-  box-shadow:
-    0 0 0 6px rgba(0, 178, 255, 0.14),
-    0 0 24px 4px rgba(0, 178, 255, 0.48),
-    0 2px 10px rgba(0, 0, 0, 0.45);
-}
-.olv-mode-reset:focus-visible {
-  outline: 2px solid rgba(0, 178, 255, 1);
-  outline-offset: 4px;
-}
-.olv-mode-reset:active { transform: translate(-50%, -50%) scale(0.93); }
-.olv-mode-reset svg {
-  width: 20px; height: 20px; display: block;
-  filter: drop-shadow(0 0 4px rgba(0, 178, 255, 0.45));
-}
-/* High-contrast theme override — keep the action visible without
- * blowing out the contrast envelope. */
-body[data-theme="high-contrast"] .olv-mode-reset {
-  background: #001a2a;
-  border: 2px solid var(--accent);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.15);
-}
-body[data-theme="high-contrast"] .olv-mode-reset::after {
-  color: var(--accent);
-  text-shadow: none;
-}
+.olv-mode-reset:hover { border-color: var(--accent); background: var(--accent-soft); }
+.olv-mode-reset:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.olv-mode-reset:active { transform: scale(0.94); }
+.olv-mode-reset svg { width: 18px; height: 18px; display: block; }
+body[data-theme="high-contrast"] .olv-mode-reset { border: 2px solid var(--accent); }
 
-/* Legacy non-triangle mode switcher fallback (kept in case any non-
- * NavBar caller instantiates `.olv-modes` without the triangle class). */
+/* "More" — the six axis views, in a popover above the row. */
+.olv-nav-more-wrap { position: relative; display: inline-flex; }
+.olv-nav-more {
+  height: 36px; padding: 0 var(--space-lg);
+  font-family: var(--font); font-size: var(--text-xs);
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-md); color: var(--text-dim); cursor: pointer;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.olv-nav-more:hover, .olv-nav-more[aria-expanded="true"] { color: var(--text); border-color: var(--accent); }
+.olv-nav-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.olv-nav-more-menu {
+  position: absolute; bottom: calc(100% + var(--space-sm)); left: 50%; transform: translateX(-50%);
+  padding: var(--space-md); width: max-content; max-width: 260px;
+  background: var(--panel); border: 0.5px solid var(--hairline); border-radius: var(--radius-md);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+}
+.olv-nav-more-menu .olv-nav-more-views { display: grid; grid-template-columns: repeat(3, auto); gap: var(--space-sm); }
+
+/* Legacy non-segmented mode switcher fallback. */
 .olv-modes {
   display: flex; gap: var(--space-2xs);
   background: var(--panel); border: 0.5px solid var(--hairline);
@@ -225,21 +118,11 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   box-shadow: inset 0 0 0 0.5px rgba(0, 178, 255, 0.4);
 }
 
-/* Speed slider */
-/*
- * Speed pill sits to the right of the triangle switcher. The
- * triangle's visual centroid (Reset button) lands below the flex
- * row's geometric centre because the triangle is wider at the
- * bottom (Walk + Fly vertices vs. single Orbit at top). A small
- * downward translate aligns the speed pill's baseline with the
- * triangle's actual centroid — Gestalt continuity, so the eye
- * reads the two as living on one axis.
- */
+/* Speed slider — beside the selector, shown in Walk and Fly only. */
 .olv-nav-speed {
   display: flex; align-items: center; gap: var(--space-lg);
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: var(--radius-md); padding: var(--space-md) var(--space-xl);
-  transform: translateY(6px);
+  border-radius: var(--radius-md); padding: var(--space-sm) var(--space-xl);
 }
 .olv-nav-speed-label {
   font-size: var(--text-xs); font-weight: 600; color: var(--text-faint);
@@ -396,6 +279,32 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   opacity: 0; transition: opacity 220ms var(--ease-standard);
 }
 .olv-nav-prompt.olv-visible { opacity: 1; animation: olv-prompt-breathe 2.6s ease-in-out infinite; }
+.olv-nav-prompt.olv-nav-prompt-tool {
+  top: auto; bottom: 132px; transform: translateX(-50%);
+  padding: var(--space-sm) var(--space-xl); font-size: var(--text-xs); color: var(--text-dim);
+  border-radius: var(--radius-md); max-width: min(520px, calc(100% - 32px)); text-align: center;
+}
+.olv-nav-prompt.olv-nav-prompt-tool.olv-visible { animation: none; }
+/* The one-time desktop hint shares the touch hint's element and lane. */
+@media (min-width: 768px) {
+  .olv-touch-hint.olv-first-hint {
+    display: flex; align-items: center; gap: var(--space-md);
+    position: absolute; bottom: 132px; left: 50%; transform: translateX(-50%);
+    background: var(--panel); border: 0.5px solid var(--hairline);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    border-radius: var(--radius-md); padding: var(--space-xs) var(--space-xs) var(--space-xs) var(--space-xl);
+    font-size: var(--text-xs); color: var(--text); white-space: nowrap;
+    z-index: var(--z-hud); opacity: 0; pointer-events: none;
+    transition: opacity var(--dur-slow) var(--ease-standard);
+  }
+  .olv-touch-hint.olv-first-hint.olv-visible { opacity: 1; pointer-events: auto; }
+  .olv-touch-hint.olv-first-hint .olv-touch-hint-x {
+    background: none; border: 0; color: var(--text-faint); cursor: pointer;
+    font-size: var(--text-lg); line-height: 1; min-width: 28px; min-height: 28px;
+  }
+  .olv-touch-hint.olv-first-hint .olv-touch-hint-x:hover { color: var(--text); }
+}
+@media (prefers-reduced-motion: reduce) { .olv-touch-hint.olv-first-hint { transition: none; } }
 .olv-nav-prompt-sub { font-size: var(--text-xs); color: var(--text-faint); font-variant-numeric: tabular-nums; }
 
 @keyframes olv-prompt-breathe {

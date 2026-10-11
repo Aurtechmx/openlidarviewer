@@ -342,7 +342,8 @@
 .olv-lasso-toast {
   position: fixed;
   left: 50%;
-  bottom: calc(120px + env(safe-area-inset-bottom));
+  /* Never on the navigation row: NavBar publishes its clearance (0 when hidden). */
+  bottom: max(calc(120px + env(safe-area-inset-bottom)), var(--olv-nav-clear, 0px));
   transform: translateX(-50%);
   z-index: var(--z-modal);
   /* Subtract the horizontal display cut-outs too (landscape notch / rounded
@@ -374,6 +375,10 @@
  * for example, a rapid sequence of camera-preset chip clicks fired
  * the "Camera · Top view." toast first, which then sat for six
  * seconds intercepting the next chip. */
+/* A toast lifted over the navigation row (panelChrome.ts) measures the row
+   once, possibly mid rise-in; the row's own published clearance is the
+   settled figure, so it wins over that inline estimate. */
+.olv-lasso-toast[data-lifted] { bottom: max(calc(120px + env(safe-area-inset-bottom)), var(--olv-nav-clear, 0px)) !important; }
 .olv-lasso-toast.olv-visible {
   opacity: 1;
   pointer-events: none;

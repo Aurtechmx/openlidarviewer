@@ -1,0 +1,28 @@
+/* The ViewCube (viewCube.ts). Loaded with the lazy cube chunk, never eagerly.
+   Sizes, positions and the 3D transforms are set from script; this sheet owns
+   the look: faces, depth shading, hover and focus, and the coarse-pointer sizes. */
+.olv-viewcube{position:absolute;z-index:12;pointer-events:none;user-select:none;-webkit-user-select:none}
+.olv-viewcube-stage{position:absolute;left:0;top:0;pointer-events:auto;touch-action:none}
+.olv-viewcube-cube{position:absolute;left:50%;top:50%;width:0;height:0;transform-style:preserve-3d}
+.olv-viewcube-face{position:absolute;box-sizing:border-box;margin:0;padding:0;display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--hairline-strong);background:var(--panel-raised);color:var(--text);cursor:pointer;
+  font-family:var(--font);font-weight:600;font-size:var(--text-2xs);line-height:1;letter-spacing:.02em;backface-visibility:hidden;-webkit-backface-visibility:hidden;
+  transition:background-color 120ms ease-out,color 120ms ease-out}
+.olv-viewcube-face[data-shade="top"]{box-shadow:inset 0 0 0 999px color-mix(in srgb,var(--text) 7%,transparent)}
+.olv-viewcube-face[data-shade="side"]{box-shadow:inset 0 0 0 999px color-mix(in srgb,var(--bg) 12%,transparent)}
+.olv-viewcube-face[data-shade="bottom"]{box-shadow:inset 0 0 0 999px color-mix(in srgb,var(--bg) 32%,transparent)}
+.olv-viewcube-face.is-active{color:var(--accent);border-color:var(--accent)}
+.olv-viewcube-face:hover,.olv-viewcube-face:focus-visible{background:color-mix(in srgb,var(--accent) 22%,var(--panel-raised));outline:none}
+.olv-viewcube-face[data-north="true"]{color:var(--accent)}
+.olv-viewcube-spot{position:absolute;margin:0;padding:0;border:0;background:transparent;cursor:pointer;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;transform:translate(-50%,-50%)}
+.olv-viewcube-spot::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--text);opacity:.35;
+  transition:opacity 120ms ease-out,transform 120ms ease-out}
+.olv-viewcube-spot:hover::after,.olv-viewcube-spot:focus-visible::after{opacity:1;background:var(--accent);transform:scale(1.5)}
+.olv-viewcube-spot[hidden]{display:none}
+.olv-viewcube-home{position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:24px;height:24px;margin:0;padding:0;border:1px solid var(--hairline);
+  border-radius:50%;background:var(--panel-raised);color:var(--text);cursor:pointer;pointer-events:auto;display:flex;align-items:center;justify-content:center}
+.olv-viewcube-home:hover,.olv-viewcube-home:focus-visible{color:var(--accent);border-color:var(--accent);outline:none}
+.olv-viewcube-home svg{width:13px;height:13px}
+@media (pointer:coarse){.olv-viewcube-face{font-size:var(--text-sm)}.olv-viewcube-home{width:44px;height:44px}.olv-viewcube-home svg{width:18px;height:18px}}
+@media (prefers-reduced-motion:reduce){.olv-viewcube-face,.olv-viewcube-spot::after{transition:none}}

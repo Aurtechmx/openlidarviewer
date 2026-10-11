@@ -106,6 +106,11 @@ export interface PlanViewController {
   noteCameraPreset(name: CameraPresetName): void;
   /** The user changed the navigation mode or moved the camera themselves. */
   noteManualNavigation(): void;
+  /**
+   * The user turned the camera to a direction that is not one of the standard
+   * views (a ViewCube edge or corner): it is not looking straight down.
+   */
+  noteCustomView(): void;
   /** Cancel any pending follow-up; the controller holds no timer afterwards. */
   dispose(): void;
 }
@@ -364,6 +369,14 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
       cancelPending();
       if (interruptEntry(false)) return;
       evaluate(on);
+    },
+
+    noteCustomView(): void {
+      cancelPending();
+      viewIsTop = false;
+      if (interruptEntry(true)) return;
+      const v = deps.viewport();
+      if (v) evaluate(v.orthographic);
     },
 
     noteCameraPreset(name: CameraPresetName): void {

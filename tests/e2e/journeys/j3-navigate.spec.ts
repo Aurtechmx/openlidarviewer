@@ -118,6 +118,9 @@ test.describe('J3 navigate (mouse and keyboard)', () => {
       await j.step('open the scan', () => openTerrain(page));
       for (const view of ['Top view', 'Iso view', 'Front view (axis aligned)', 'Right view (axis aligned)']) {
         await j.step(`${view} frames every point`, async () => {
+          // The axis views sit in the nav row's "More" disclosure.
+          const more = page.locator('.olv-nav-more');
+          if (view.includes('axis aligned') && (await more.getAttribute('aria-expanded')) !== 'true') await more.click();
           const chip = page.getByRole('button', { name: view, exact: true });
           await expect(chip).toBeVisible();
           await chip.click();

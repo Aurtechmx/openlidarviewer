@@ -68,8 +68,6 @@ const FORBIDDEN_IDENTIFIERS =
  * (or its argument expression); matching is file-scoped and must be
  * one-to-one. Every entry below was hand-verified on 2026-06-10:
  *
- * - src/ui/NavBar.ts — mode-triangle outline: a zero-interpolation
- *   template literal of SVG embedded in the source.
  * - src/ui/NavBar.ts — `def.icon`: reads the module-level `MODES`
  *   const, whose `icon` fields are all literal SVG strings.
  * - src/ui/ThemeToggle.ts — `ICON_SVG[name]`: a module-level
@@ -87,7 +85,6 @@ const FORBIDDEN_IDENTIFIERS =
  *   never `unsafeHtml` — so the top bar / hero need no allowlist entry.)
  */
 const ALLOWLIST: readonly string[] = [
-  'src/ui/NavBar.ts::<svg viewBox="0 0 140 110"',
   // The trailing quote pins the MODES-loop icon wrapper exactly, so it can't
   // also claim the Pan pad's `olv-mode-icon olv-mode-pan-icon` site below.
   "src/ui/NavBar.ts::olv-mode-icon'",
