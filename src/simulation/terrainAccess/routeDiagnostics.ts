@@ -23,7 +23,6 @@
  */
 
 import { EVIDENCE_THRESHOLDS } from '../../terrain/ground/cellConfidence';
-import { quantile } from '../../terrain/quantile';
 import { edgeGeometry, utilization, type CostWeights, type TerrainAccessFeatures } from './traversabilityCost';
 import type { TerrainAccessGrid } from './terrainAccessTypes';
 
@@ -32,7 +31,12 @@ const MEASURED = 2;
 /** A named cost term and how much of the route's total soft cost it explains. */
 export interface CostContributor {
   readonly term: 'longitudinal-grade' | 'cross-slope' | 'ruggedness' | 'step' | 'support';
-  /** Sum, over every edge in the route, of this term's weighted utilization. */
+  /**
+   * Sum, over every edge in the route, of this term's weighted utilization
+   * times the edge's horizontal distance in metres: the share of the route's
+   * total cost this term accounts for, so a long diagonal edge counts for
+   * more than a short orthogonal one, as it does in the cost itself.
+   */
   readonly total: number;
 }
 
@@ -43,9 +47,16 @@ export interface RouteDiagnostics {
   readonly length3dM: number;
   readonly totalAscentM: number;
   readonly totalDescentM: number;
+  /**
+   * Per-edge grade as `edgeGeometry` defines it (the larger of the Horn
+   * directional grade at either endpoint and the edge's own rise/run), the
+   * same figure the grade limit gates.
+   */
   readonly maxLongitudinalGrade: number;
+  /** 95th percentile of the per-edge grade, weighted by edge length. */
   readonly p95LongitudinalGrade: number;
   readonly maxCrossSlope: number;
+  /** 95th percentile of the per-edge cross slope, weighted by edge length. */
   readonly p95CrossSlope: number;
   /**
    * The largest adjacent-cell elevation jump actually crossed along the
@@ -102,6 +113,7 @@ export function computeRouteDiagnostics(
   let totalDescentM = 0;
   const longitudinalGrades: number[] = [];
   const crossSlopes: number[] = [];
+  const edgeLengths: number[] = [];
   let maxEdgeStepM = 0;
   let maxLocalReliefM = 0;
   let minTerrainConfidence = Number.POSITIVE_INFINITY;
@@ -135,15 +147,18 @@ export function computeRouteDiagnostics(
 
     longitudinalGrades.push(evalr.longitudinalGrade);
     crossSlopes.push(evalr.crossSlope);
+    edgeLengths.push(evalr.distanceM);
 
-    contribSums['longitudinal-grade'] += weights.longitudinal * utilization(evalr.longitudinalGrade, profile.maxLongitudinalGrade);
-    contribSums['cross-slope'] += weights.cross * utilization(evalr.crossSlope, profile.maxCrossSlope);
-    contribSums.step += weights.step * utilization(evalr.stepM, profile.maxStepHeight);
+    // Each term weighted by the edge's distance, as edgeCost weights it.
+    const w = evalr.distanceM;
+    contribSums['longitudinal-grade'] += w * weights.longitudinal * utilization(evalr.longitudinalGrade, profile.maxLongitudinalGrade);
+    contribSums['cross-slope'] += w * weights.cross * utilization(evalr.crossSlope, profile.maxCrossSlope);
+    contribSums.step += w * weights.step * utilization(evalr.stepM, profile.maxStepHeight);
     const vrmHere = Math.max(features.vrm[prev] || 0, features.vrm[i] || 0);
     contribSums.ruggedness += profile.maxRuggedness != null
-      ? weights.ruggedness * utilization(vrmHere, profile.maxRuggedness)
+      ? w * weights.ruggedness * utilization(vrmHere, profile.maxRuggedness)
       : 0;
-    contribSums.support += weights.support * (1 - Math.min(grid.confidence[prev], grid.confidence[i]) / 100);
+    contribSums.support += w * weights.support * (1 - Math.min(grid.confidence[prev], grid.confidence[i]) / 100);
   }
 
   let measured = 0;
@@ -171,9 +186,9 @@ export function computeRouteDiagnostics(
     totalAscentM,
     totalDescentM,
     maxLongitudinalGrade: longitudinalGrades.length ? Math.max(...longitudinalGrades) : 0,
-    p95LongitudinalGrade: quantile(longitudinalGrades, 0.95),
+    p95LongitudinalGrade: weightedQuantile(longitudinalGrades, edgeLengths, 0.95),
     maxCrossSlope: crossSlopes.length ? Math.max(...crossSlopes) : 0,
-    p95CrossSlope: quantile(crossSlopes, 0.95),
+    p95CrossSlope: weightedQuantile(crossSlopes, edgeLengths, 0.95),
     maxEdgeStepM, maxLocalReliefM,
     maxVrm,
     minTerrainConfidence: Number.isFinite(minTerrainConfidence) ? minTerrainConfidence : Number.NaN,
@@ -182,4 +197,29 @@ export function computeRouteDiagnostics(
     fractionLowConfidenceOrEdgeRisk: coverageKnown ? lowConfOrEdge / path.length : null,
     dominantCostContributors: contributors,
   };
+}
+
+/**
+ * Length-weighted quantile: the smallest value v such that edges with value
+ * at most v cover at least fraction `q` of the total weight. Lower-value
+ * step function (no interpolation), so the result is always an observed
+ * edge value. 0 for an empty input.
+ */
+export function weightedQuantile(values: readonly number[], weightsIn: readonly number[], q: number): number {
+  const idx: number[] = [];
+  let total = 0;
+  for (let k = 0; k < values.length; k++) {
+    if (!Number.isFinite(values[k]) || !(weightsIn[k] > 0)) continue;
+    idx.push(k);
+    total += weightsIn[k];
+  }
+  if (idx.length === 0) return 0;
+  idx.sort((a, b) => values[a] - values[b] || a - b);
+  const target = q * total;
+  let acc = 0;
+  for (const k of idx) {
+    acc += weightsIn[k];
+    if (acc >= target) return values[k];
+  }
+  return values[idx[idx.length - 1]];
 }

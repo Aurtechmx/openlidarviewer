@@ -52,12 +52,38 @@ import { assertFlowGrid, D8_NEIGHBOURS, type FlowGrid } from './flowTypes';
 export interface PriorityFloodResult {
   /** The conditioned elevations. The input grid is untouched. */
   readonly z: Float32Array;
-  /** Cells whose elevation rose. */
+  /**
+   * Cells that lie in a depression: their original elevation is strictly
+   * below the spill level they were reached at. A cell on a flat, level with
+   * its spill parent, is lifted by the epsilon gradient only and is not
+   * counted here; see `flatCellsResolved`.
+   */
   readonly cellsRaised: number;
-  /** The largest rise applied to any one cell, in the grid's vertical unit. */
+  /**
+   * The deepest depression fill: spill level minus original elevation, in the
+   * grid's vertical unit. The epsilon gradient applied on top is excluded.
+   */
   readonly maxFillDepth: number;
   /**
-   * Sum of the rises, in cell·metres of the vertical unit. A volume proxy
+   * Cells that were level with (not below) their spill level and rose only
+   * by the epsilon gradient that gives a flat a direction to drain.
+   */
+  readonly flatCellsResolved: number;
+  /**
+   * 1 where a cell lies in a depression (original height strictly below the
+   * spill level it was reached from), 0 elsewhere. Flats are 0.
+   */
+  readonly depressionMask: Uint8Array;
+  /**
+   * Per cell, the spill level the flood reached it at, without the epsilon
+   * gradient: the original height outside depressions, the level water would
+   * have to reach to spill out inside one. Invalid or unreachable cells hold
+   * their input value.
+   */
+  readonly spillLevel: Float64Array;
+  /**
+   * Sum of the depression fill depths (spill level minus original, epsilon
+   * excluded), in cell·metres of the vertical unit. A volume proxy
    * only: multiplying by cell area gives a filled volume under the
    * assumption that each cell's rise is uniform across it.
    */
@@ -215,6 +241,13 @@ export function priorityFlood(
     }
   }
 
+  // The spill level each cell was reached at, without the epsilon gradient,
+  // per Barnes, Lehman & Mulla (2014): a cell is in a depression only when
+  // its ORIGINAL height is strictly below this level.
+  const spill = new Float64Array(n);
+  for (let i = 0; i < n; i++) spill[i] = z[i];
+  const depressionMask = new Uint8Array(n);
+  let flatCellsResolved = 0;
   let cellsRaised = 0;
   let maxFillDepth = 0;
   let fillDepthSum = 0;
@@ -235,16 +268,23 @@ export function priorityFlood(
 
       closed[nb] = 1;
       const original = z[nb];
-      // Reached from below: raise to just above the level it was reached at.
+      const level = spill[c];
+      if (original < level) {
+        // In a depression: the fill depth is the spill level minus the
+        // original height, not inflated by the epsilon chain.
+        depressionMask[nb] = 1;
+        spill[nb] = level;
+        const depth = level - original;
+        cellsRaised++;
+        fillDepthSum += depth;
+        if (depth > maxFillDepth) maxFillDepth = depth;
+      }
+      // Reached from below or level: raise to just above the level it was
+      // reached at so D8 has a descent (flats included).
       if (original <= zc) {
-        const target = zc + epsilon;
-        z[nb] = target;
-        const rise = z[nb] - original;
-        if (rise > 0) {
-          cellsRaised++;
-          fillDepthSum += rise;
-          if (rise > maxFillDepth) maxFillDepth = rise;
-        }
+        const before = z[nb];
+        z[nb] = zc + epsilon;
+        if (depressionMask[nb] !== 1 && z[nb] > before) flatCellsResolved++;
         // The epsilon vanished into Float32: the cell is level with its
         // parent and the flat it was meant to break survives.
         if (epsilon > 0 && z[nb] <= zc) epsilonAbsorbed++;
@@ -258,20 +298,22 @@ export function priorityFlood(
     if (valid[i] === 1 && closed[i] !== 1) cellsUnreachable++;
   }
 
-  return { z, cellsRaised, maxFillDepth, fillDepthSum, epsilonAbsorbed, cellsUnreachable };
+  return {
+    z, cellsRaised, maxFillDepth, fillDepthSum, epsilonAbsorbed, cellsUnreachable,
+    flatCellsResolved, depressionMask, spillLevel: spill,
+  };
 }
 
 /**
- * Cells the conditioning raised, as a mask.
- *
- * Kept separate from the flood so a caller that only wants the surface does
- * not pay for an array it will not read, and so the comparison is made
- * against the original rather than remembered during the pass.
+ * Cells in a depression, as a mask: original height strictly below the spill
+ * level the flood reached them from. Cells lifted only by the epsilon
+ * gradient across a flat are excluded, so a level plateau is not a
+ * depression (Barnes, Lehman & Mulla 2014).
  */
 export function filledCells(grid: FlowGrid, conditioned: PriorityFloodResult): Uint8Array {
   const mask = new Uint8Array(grid.z.length);
   for (let i = 0; i < mask.length; i++) {
-    if (grid.valid[i] === 1 && conditioned.z[i] > grid.z[i]) mask[i] = 1;
+    if (grid.valid[i] === 1 && conditioned.depressionMask[i] === 1) mask[i] = 1;
   }
   return mask;
 }

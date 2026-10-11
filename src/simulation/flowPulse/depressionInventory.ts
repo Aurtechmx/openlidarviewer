@@ -5,7 +5,9 @@
  * `priorityFlood` already reports how many cells it raised and the deepest
  * rise, but those are grid-wide totals: a reader cannot tell a single deep
  * borrow pit from fifty shallow single-cell potholes that happen to sum to
- * the same `cellsRaised`. This groups the raised cells into their connected
+ * the same `cellsRaised`. This groups the filled cells (original height
+ * strictly below the spill level; a level flat the epsilon tilts is not one)
+ * into their connected
  * depressions and reports each one — cell count, area, its own deepest fill,
  * and the elevation of the rim it would spill over — which is what §10.10
  * asks for and what "do not call every single-cell sink a natural pond"
@@ -134,7 +136,7 @@ export function depressionInventory(
     };
   }
 
-  // Group the raised cells into 8-connected components — the same adjacency
+  // Group the filled cells into 8-connected components — the same adjacency
   // D8 routes over, so two cells that could drain into one another are never
   // split into separate depressions on a technicality of connectivity.
   const label = new Int32Array(n).fill(-1);
@@ -174,7 +176,7 @@ export function depressionInventory(
     let seedCell = members[0];
     for (const c of members) {
       if (c < seedCell) seedCell = c;
-      const depth = conditioned.z[c] - z[c];
+      const depth = conditioned.spillLevel[c] - z[c];
       if (depth > maxFillDepth) maxFillDepth = depth;
 
       const col = c % cols;

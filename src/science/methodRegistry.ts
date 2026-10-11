@@ -95,8 +95,9 @@ function terrainAccessMethod(
   summary: string,
   citation: string,
   implementation: readonly string[],
+  version = 1,
 ): MethodEntry {
-  return { id, version: 1, name, summary, citation, category: 'simulation', implementation };
+  return { id, version, name, summary, citation, category: 'simulation', implementation };
 }
 
 /**
@@ -608,13 +609,18 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     category: 'simulation',
     implementation: ['src/simulation/flowPulse/d8Flow.ts'],
   },
+  // v3 counts a cell as filled only when its original height is strictly
+  // below the spill level it was reached from (Barnes, Lehman & Mulla 2014):
+  // cells lifted only by the epsilon gradient across a flat are reported as
+  // flatCellsResolved, not as fill, and fill depth excludes the epsilon chain.
+  // The conditioned surface itself is unchanged from v2.
   // v2 seeds at the grid boundary only. v1 also seeded every cell beside
   // NoData, reading a survey hole as a drainage exit that D8 routes nothing
   // into, so a v1 figure does not carry the v2 meaning. That reading is the
   // declared `.gap-outlet` variant below.
   'olv.simulation.terrain-flow.priority-flood': {
     id: 'olv.simulation.terrain-flow.priority-flood',
-    version: 2,
+    version: 3,
     name: 'Priority-Flood depression conditioning',
     summary:
       'Floods inward from the grid boundary, raising each cell reached from below '
@@ -622,14 +628,16 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       + 'DTM. NoData is a wall, as D8 reads it; cells NoData encloses are left as '
       + 'they are and counted. An optional increment above the spill parent breaks '
       + 'the resulting plateaux; increments lost to Float32 precision are counted '
-      + 'and reported rather than assumed to have applied.',
+      + 'and reported rather than assumed to have applied. Only a cell whose original '
+      + 'height is strictly below its spill level counts as filled; a flat lifted by '
+      + 'the epsilon alone is counted separately, and fill depth excludes the epsilon.',
     citation: 'Barnes, Lehman & Mulla (2014), doi:10.1016/j.cageo.2013.04.024',
     category: 'simulation',
     implementation: ['src/simulation/flowPulse/priorityFlood.ts'],
   },
   'olv.simulation.terrain-flow.priority-flood.gap-outlet': {
     id: 'olv.simulation.terrain-flow.priority-flood.gap-outlet',
-    version: 1,
+    version: 2,
     name: 'Priority-Flood conditioning with NoData gaps as exits',
     summary:
       'The same flood, also seeded at every cell beside NoData, so a gap drains '
@@ -669,11 +677,13 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   },
   'olv.simulation.terrain-flow.depression-inventory': {
     id: 'olv.simulation.terrain-flow.depression-inventory',
-    version: 1,
+    version: 2,
     name: 'Depression inventory',
     summary:
-      'Groups the cells Priority-Flood raised into 8-connected depressions and reports '
-      + 'each one\'s cell count, area, deepest fill and rim (outlet) elevation, largest '
+      'Groups the cells Priority-Flood filled (original height strictly below the spill '
+      + 'level; a level flat is not a depression) into 8-connected depressions and reports '
+      + 'each one\'s cell count, area, deepest fill (spill level minus original height) '
+      + 'and rim (outlet) elevation, largest '
       + 'first. Without conditioning, lists each raw D8 sink as its own one-cell '
       + 'candidate rather than claiming an extent nothing measured. Sink count always '
       + 'describes the unconditioned surface, in both modes.',
@@ -712,9 +722,13 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       + 'terrain support, ruggedness, above-ground obstruction evidence, '
       + 'vehicle-width clearance) from direction-dependent ones (longitudinal '
       + 'grade, cross slope, step height), and assigns eligible edges a '
-      + 'distance-scaled cost from declared, bounded utilization weights.',
+      + 'distance-scaled cost from declared, bounded utilization weights. An '
+      + 'edge\'s longitudinal grade is the largest of the directional Horn grade '
+      + 'at either endpoint and the edge\'s own rise over run; its cross slope is '
+      + 'the larger perpendicular Horn component of the two endpoints.',
     'Internal composition (declared multi-term utilization cost); no single source method.',
     ['src/simulation/terrainAccess/traversabilityCost.ts'],
+    2,
   ),
   'olv.simulation.terrain-access.astar': terrainAccessMethod(
     'olv.simulation.terrain-access.astar',

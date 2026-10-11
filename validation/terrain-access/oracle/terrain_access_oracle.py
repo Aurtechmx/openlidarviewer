@@ -379,10 +379,18 @@ class Terrain:
 
 
 def edge_geometry(terrain, a, b, dx, dy):
+    # Per-edge grade: the steepest of the directional Horn grade at either
+    # endpoint and the edge's own rise over run, so the figure is symmetric
+    # under reversing the move and never below what the edge actually climbs.
+    # Cross slope is the steeper of the two endpoints' perpendicular parts.
     h_e, h_n = heading_unit(dx, dy, terrain.mx, terrain.my)
-    longitudinal, cross = directional_slope(terrain.grad_e[a], terrain.grad_n[a], h_e, h_n)
+    long_a, cross_a = directional_slope(terrain.grad_e[a], terrain.grad_n[a], h_e, h_n)
+    long_b, cross_b = directional_slope(terrain.grad_e[b], terrain.grad_n[b], h_e, h_n)
     step = edge_step(terrain.z, terrain.valid, a, b)
     distance = math.hypot(dx * terrain.mx, dy * terrain.my)
+    rise_run = step / distance if is_finite(step) and distance > 0 else 0.0
+    longitudinal = max(long_a, long_b, rise_run)
+    cross = max(cross_a, cross_b)
     return distance, longitudinal, cross, step
 
 

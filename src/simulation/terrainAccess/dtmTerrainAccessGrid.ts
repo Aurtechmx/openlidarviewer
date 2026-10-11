@@ -75,7 +75,13 @@ export function terrainDtmToAccessGrid(
   // The traversability core reads z as metres (slope, step height, ascent),
   // so source vertical units are converted here, once. The preparation step
   // refuses a run whose factor is unresolved before this is reached.
-  const zToMetres = dtm.verticalUnitToMetres != null && dtm.verticalUnitToMetres > 0 ? dtm.verticalUnitToMetres : 1;
+  const zToMetres = dtm.verticalUnitToMetres;
+  if (zToMetres == null || !(zToMetres > 0) || !Number.isFinite(zToMetres)) {
+    throw new Error(
+      'terrainDtmToAccessGrid: the DTM vertical unit factor is unresolved; '
+      + 'refusing to read elevations as metres without one.',
+    );
+  }
   // NaN-filled, not zero-filled: `hornSlopeAspect` (terrainDerivatives.ts) has
   // no `valid` mask of its own — it takes `!Number.isFinite(z[i])` as its own
   // "no data here" signal, matching the convention `DtmGrid.z` already uses

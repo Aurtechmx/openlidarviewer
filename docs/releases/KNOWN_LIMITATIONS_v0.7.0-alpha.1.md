@@ -231,7 +231,10 @@ runoff, infiltration or flood modelling, and accumulation counts cells rather
 than water.
 
 The lab offers a conditioning control: raw routing, or the same surface run
-through Priority-Flood depression filling first. Either way, a cell with no
+through Priority-Flood depression filling first. Only cells below their
+spill level count as filled; a level plateau that the conditioning tilts by a
+small epsilon so it can drain is not reported as a depression or as fill.
+Either way, a cell with no
 lower neighbour keeps its flow as a sink, and a cell level with a neighbour is
 reported unresolved rather than given a direction. Interpolated cells are
 routed over, so a path may cross ground no return landed on, and routes stop
@@ -311,6 +314,12 @@ local (0, 0) origin. The run record states whether the terrain was built
 from every point or from a sample, read from the DTM's own `coverageMode`
 (`computeTerrainCore`'s own fix, shared by every reader of that field), so
 Terrain Access states the same honest basis without a change of its own.
+
+A move's grade is the largest of the Horn gradient along the heading at
+either end cell and the move's own rise over its length, and its cross slope
+the larger of the two end cells' sideways Horn components. The figure is
+conservative: a cell-scale feature steeper than its neighbourhood gates the
+moves across it even where the smoothed gradient is gentle.
 
 Vehicle length is recorded in the profile and the diagnostics but not
 enforced: eligibility uses width-only clearance, not full swept-body
