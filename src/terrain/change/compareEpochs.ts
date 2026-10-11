@@ -19,6 +19,7 @@
 import { classifyGroundSmrf } from '../ground/groundFilter';
 import { rasterizeDtm } from '../ground/rasterizeDtm';
 import { buildSurfaceFromRaster } from '../ground/surfaceFromRaster';
+import { holdoutValidateDtm } from '../validate/holdoutRmse';
 // Tiny pure constant — the unit-aware cell floor must agree with the
 // metres-per-degree scale the rest of the terrain pipeline uses.
 import { METRES_PER_DEGREE } from '../ground/horizontalScale';
@@ -92,6 +93,18 @@ export interface EpochDtms {
   readonly cellSizeM: number;
   readonly cols: number;
   readonly rows: number;
+  /**
+   * Each epoch's hold-out RMSEz (m), the uniform σz of the propagated level of
+   * detection. Present only when requested; null for an epoch whose hold-out
+   * could not run (too few ground returns) or whose vertical unit is unknown.
+   */
+  readonly sigmaZ?: { readonly before: number | null; readonly after: number | null };
+}
+
+/** Options for {@link buildSharedEpochDtms}. */
+export interface SharedEpochDtmOptions {
+  /** Run a hold-out RMSEz pass per epoch (20 % split, seed 1) for the LoD. Default false. */
+  readonly holdoutSigmaZ?: boolean;
 }
 
 const ZERO: readonly [number, number, number] = [0, 0, 0];
@@ -171,7 +184,7 @@ function sharedGrid(before: EpochCloud, after: EpochCloud): SharedGrid | null {
 }
 
 /** Build one cloud's DTM on the shared world grid, matching the live analysis surface. */
-function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid): DtmGrid {
+function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid, holdout = false): { dtm: DtmGrid; sigmaZ: number | null } {
   const points = boxPoints(cloud.positions, cloud.origin ?? ZERO);
   // Match the analysis runner's unit-aware slope-growth run (deriveCoreParams):
   // the SMRF threshold multiplies a rise/run slope by a horizontal run, so that
@@ -222,7 +235,7 @@ function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid): DtmGrid {
     aggregation: 'median',
     verticalAxis: 'z',
   });
-  return buildSurfaceFromRaster(raster, {
+  const dtm = buildSurfaceFromRaster(raster, {
     crs: cloud.crs ?? null,
     verticalDatum: cloud.verticalDatum ?? null,
     // Degree cells must read as metres-per-degree in the confidence
@@ -242,18 +255,45 @@ function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid): DtmGrid {
     // source units. Both consumers are inside buildSurfaceFromRaster.
     verticalUnitToMetres: vertToMetres,
   }).dtm;
+  if (!holdout) return { dtm, sigmaZ: null };
+  // Uniform σz for the propagated LoD: the same ground mask and cell size,
+  // 20 % of the ground returns withheld, residuals against the rebuilt surface.
+  // Only a declared or metre-resolvable vertical scale yields metres.
+  const verticalKnown =
+    (Number.isFinite(cloud.verticalUnitToMetres) && (cloud.verticalUnitToMetres as number) > 0) ||
+    cloud.isGeographic === true ||
+    (Number.isFinite(cloud.linearUnitToMetres) && (cloud.linearUnitToMetres as number) > 0);
+  const report = holdoutValidateDtm(points, gf.isGround, {
+    cellSizeM: grid.cellSizeM,
+    aggregation: 'median',
+    verticalAxis: 'z',
+    isGeographic: cloud.isGeographic ?? false,
+    horizontalUnitToMetres:
+      cloud.linearUnitToMetres && cloud.linearUnitToMetres > 0 ? cloud.linearUnitToMetres : 1,
+    verticalUnitToMetres: vertToMetres,
+  });
+  const sigmaZ = verticalKnown && report.sampleSize > 0 && Number.isFinite(report.rmse) ? report.rmse : null;
+  return { dtm, sigmaZ };
 }
 
 /** Rasterise both epochs onto one shared grid, or null when either is empty. */
-export function buildSharedEpochDtms(before: EpochCloud, after: EpochCloud): EpochDtms | null {
+export function buildSharedEpochDtms(
+  before: EpochCloud,
+  after: EpochCloud,
+  options: SharedEpochDtmOptions = {},
+): EpochDtms | null {
   const grid = sharedGrid(before, after);
   if (!grid) return null;
+  const holdout = options.holdoutSigmaZ === true;
+  const b = dtmOnGrid(before, grid, holdout);
+  const a = dtmOnGrid(after, grid, holdout);
   return {
-    before: dtmOnGrid(before, grid),
-    after: dtmOnGrid(after, grid),
+    before: b.dtm,
+    after: a.dtm,
     cellSizeM: grid.cellSizeM,
     cols: grid.cols,
     rows: grid.rows,
+    ...(holdout ? { sigmaZ: { before: b.sigmaZ, after: a.sigmaZ } } : {}),
   };
 }
 
