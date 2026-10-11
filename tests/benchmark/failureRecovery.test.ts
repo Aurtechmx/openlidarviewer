@@ -720,8 +720,9 @@ describe('a coordinate reference system that is absent or unresolvable', () => {
     expect(noVertical.verticalUnitToMetres).toBeUndefined();
     expect(noVertical.verticalLinearUnit).toBeUndefined();
 
-    // A vertical unit code we do not map is also left undefined rather than
-    // resolved to the horizontal unit.
+    // A vertical unit code we do not map is declared but unreadable: it is
+    // tagged unknown with a non-finite factor, so the vertical-scale gates
+    // refuse it instead of borrowing the horizontal unit.
     const unmappedVertical = crsFromGeoTiff(
       geoKeyDirectory([
         [GEOKEY_MODEL_TYPE, 1],
@@ -732,7 +733,9 @@ describe('a coordinate reference system that is absent or unresolvable', () => {
       null,
       null,
     );
-    expect(unmappedVertical.verticalUnitToMetres).toBeUndefined();
+    expect(unmappedVertical.verticalLinearUnit).toBe('unknown');
+    expect(Number.isFinite(unmappedVertical.verticalUnitToMetres)).toBe(false);
+    expect(unmappedVertical.verticalUnitConflict).toBeDefined();
   });
 
   test('a projected CRS declaring a unit code we cannot resolve is tagged unknown, not metres', () => {

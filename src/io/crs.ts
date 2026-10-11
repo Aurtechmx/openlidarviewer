@@ -38,7 +38,7 @@ import {
   type WktNode,
 } from './wktParser';
 import { getCrsEntry } from '../geo/CrsRegistry';
-import { knownVerticalCrs, resolveVerticalEpsg } from '../geo/height';
+import { knownVerticalCrs, resolveVerticalEpsg, sameDatumVariantInUnit } from '../geo/height';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -93,11 +93,17 @@ export interface CrsInfo {
   /** Z-unit conversion to metres (1 metre, 0.3048 foot, …). Absent ⇒ unknown. */
   readonly verticalUnitToMetres?: number;
   /**
-   * Set when the source's declared vertical unit contradicts the unit its
-   * vertical EPSG code defines. The vertical unit is then 'unknown' and its
-   * factor non-finite, so no height is converted on either reading.
+   * Set when the source declares a vertical unit that is not a length unit we
+   * can read. The vertical unit is then 'unknown' and its factor non-finite,
+   * so no height is converted.
    */
   readonly verticalUnitConflict?: string;
+  /**
+   * Set when a declared vertical unit overrides the unit the vertical EPSG
+   * code defines (5703, metres, declared in US survey feet). The declared
+   * unit is used.
+   */
+  readonly verticalUnitNote?: string;
   /**
    * Set to `'evlr'` when the record that decided the CRS was a LAS 1.4
    * extended VLR rather than a VLR in the header block. Absent for a VLR.
@@ -290,18 +296,16 @@ function crsFromHeldRecords(records: ProjectionRecords): CrsInfo | null {
     const verticalEpsg = fromWkt.verticalEpsg ?? fromKeys.verticalEpsg;
     // A unit taken from the keys is checked against the vertical code that
     // will be reported, which may be the WKT's rather than the keys' own.
-    const v = fromWkt.verticalLinearUnit != null
-      ? { unit: fromWkt.verticalLinearUnit, toMetres: fromWkt.verticalUnitToMetres, conflict: fromWkt.verticalUnitConflict }
-      : fromKeys.verticalUnitConflict
-        ? { unit: fromKeys.verticalLinearUnit, toMetres: fromKeys.verticalUnitToMetres, conflict: fromKeys.verticalUnitConflict }
+    const v: VerticalUnitResolution = fromWkt.verticalLinearUnit != null
+      ? { unit: fromWkt.verticalLinearUnit, toMetres: fromWkt.verticalUnitToMetres, conflict: fromWkt.verticalUnitConflict, note: fromWkt.verticalUnitNote }
+      : fromKeys.verticalUnitConflict || fromWkt.verticalEpsg == null
+        ? { unit: fromKeys.verticalLinearUnit, toMetres: fromKeys.verticalUnitToMetres, conflict: fromKeys.verticalUnitConflict, note: fromKeys.verticalUnitNote }
         : resolveVerticalUnit(fromKeys.verticalLinearUnit, verticalEpsg);
     const merged: CrsInfo = {
       ...fromWkt,
       verticalEpsg,
-      verticalDatum: fromWkt.verticalDatum ?? fromKeys.verticalDatum,
-      verticalLinearUnit: v.unit,
-      verticalUnitToMetres: v.toMetres,
-      ...(v.conflict ? { verticalUnitConflict: v.conflict } : {}),
+      verticalDatum: v.datumLabel ?? fromWkt.verticalDatum ?? fromKeys.verticalDatum,
+      ...verticalUnitFields(v),
     };
     return merged;
   }
@@ -597,7 +601,7 @@ export function crsFromWkt(wkt: string): CrsInfo {
   // best-effort reverse lookup for the writer. The vertical block's own UNIT
   // (when present) gives the Z-axis unit, which can differ from the horizontal.
   const vert = verticalNode ? extractVerticalFromNode(verticalNode) : {};
-  const vUnit = verticalNode ? resolveVerticalUnit(vert.unit, vert.epsg) : {};
+  const vUnit: VerticalUnitResolution = verticalNode ? resolveVerticalUnit(vert.unit, vert.epsg) : {};
 
   return {
     source: 'wkt',
@@ -607,11 +611,9 @@ export function crsFromWkt(wkt: string): CrsInfo {
     linearUnit,
     linearUnitToMetres,
     isGeographic,
-    verticalDatum: vert.name,
     verticalEpsg: vert.epsg,
-    verticalLinearUnit: vUnit.unit,
-    verticalUnitToMetres: vUnit.toMetres,
-    ...(vUnit.conflict ? { verticalUnitConflict: vUnit.conflict } : {}),
+    verticalDatum: vUnit.datumLabel ?? vert.name,
+    ...verticalUnitFields(vUnit),
     horizontalDatum,
   };
 }
@@ -1016,8 +1018,10 @@ export function crsFromGeoTiff(
   // in US survey feet). With neither it stays undefined so callers fall back
   // to the horizontal linear unit (the GeoTIFF default). A 4099 that
   // contradicts the code's own unit resolves to unknown and is reported.
-  const mappedVerticalUnit = verticalUnitCode !== undefined ? GEOTIFF_LINEAR_UNITS[verticalUnitCode] : undefined;
-  const vUnit = resolveVerticalUnit(mappedVerticalUnit, verticalEpsg);
+  let declaredVerticalUnit: CrsLinearUnit | undefined;
+  if (verticalUnitCode !== undefined) declaredVerticalUnit = GEOTIFF_LINEAR_UNITS[verticalUnitCode] ?? 'unknown';
+  const vUnit = resolveVerticalUnit(declaredVerticalUnit, verticalEpsg);
+  if (vUnit.datumLabel && verticalEpsg !== undefined) verticalDatum = vUnit.datumLabel;
 
   return {
     source: 'geotiff',
@@ -1028,9 +1032,7 @@ export function crsFromGeoTiff(
     isGeographic,
     verticalEpsg,
     verticalDatum,
-    verticalLinearUnit: vUnit.unit,
-    verticalUnitToMetres: vUnit.toMetres,
-    ...(vUnit.conflict ? { verticalUnitConflict: vUnit.conflict } : {}),
+    ...verticalUnitFields(vUnit),
   };
 }
 
@@ -1191,30 +1193,64 @@ function unitForMetresPerUnit(m: number): CrsLinearUnit | undefined {
   return undefined;
 }
 
+/** Outcome of {@link resolveVerticalUnit}. */
+export interface VerticalUnitResolution {
+  readonly unit?: CrsLinearUnit;
+  readonly toMetres?: number;
+  /** Set when a declared unit could not be read as a length unit. */
+  readonly conflict?: string;
+  /** Set when a declared unit overrides the unit the vertical code defines. */
+  readonly note?: string;
+  /** Label of the same-datum code in the declared unit (6360 for 5703 in ftUS), when one is known. */
+  readonly datumLabel?: string;
+}
+
 /**
  * Resolve the vertical unit from an explicitly declared unit (when any) and
- * the unit the vertical EPSG code defines. With no declared unit, the code's
- * own unit applies. When the two disagree the source contradicts itself; the
- * result is the 'unknown' unit with a non-finite factor, which every
- * vertical-scale gate reads as "not known", and `conflict` says why.
+ * the vertical EPSG code. A declared length unit is the unit, as GDAL and
+ * libgeotiff read VerticalUnitsGeoKey: 5703 (NAVD88) with 4099 = 9003 is
+ * NAVD88 height in US survey feet (EPSG:6360), the common encoding of it.
+ * When it differs from the code's own unit, `note` records the override and
+ * `datumLabel` names the same-datum variant in that unit if one is known.
+ * With no declared unit, the code's own unit applies. A declared unit that is
+ * not a length unit we can read ('unknown') resolves to 'unknown' with a
+ * non-finite factor, which every vertical-scale gate reads as not known.
  */
 export function resolveVerticalUnit(
   declared: CrsLinearUnit | undefined,
   verticalEpsg: number | undefined,
-): { unit?: CrsLinearUnit; toMetres?: number; conflict?: string } {
+): VerticalUnitResolution {
   const known = knownVerticalCrs(verticalEpsg);
   const implied = known ? unitForMetresPerUnit(known.metresPerUnit) : undefined;
   if (declared === undefined) {
     return implied ? { unit: implied, toMetres: known!.metresPerUnit } : {};
   }
-  if (implied !== undefined && declared !== 'unknown' && declared !== implied) {
+  if (declared === 'unknown') {
     return {
       unit: 'unknown',
       toMetres: Number.NaN,
-      conflict: `Declared vertical unit (${declared}) contradicts EPSG:${verticalEpsg} (${implied})`,
+      conflict: 'Declared vertical unit is not a length unit that can be read',
     };
   }
-  return { unit: declared, toMetres: declared === 'unknown' ? undefined : metresPerLinearUnit(declared) };
+  const toMetres = metresPerLinearUnit(declared);
+  if (implied === undefined || implied === declared) return { unit: declared, toMetres };
+  const variant = sameDatumVariantInUnit(verticalEpsg, toMetres);
+  return {
+    unit: declared,
+    toMetres,
+    note: `Declared vertical unit (${declared}) overrides the unit of EPSG:${verticalEpsg} (${implied})`,
+    ...(variant !== undefined ? { datumLabel: knownVerticalCrs(variant)!.label } : {}),
+  };
+}
+
+/** The CrsInfo vertical fields a {@link VerticalUnitResolution} sets. */
+export function verticalUnitFields(v: VerticalUnitResolution): Pick<CrsInfo, 'verticalLinearUnit' | 'verticalUnitToMetres' | 'verticalUnitConflict' | 'verticalUnitNote'> {
+  return {
+    verticalLinearUnit: v.unit,
+    verticalUnitToMetres: v.toMetres,
+    ...(v.conflict ? { verticalUnitConflict: v.conflict } : {}),
+    ...(v.note ? { verticalUnitNote: v.note } : {}),
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

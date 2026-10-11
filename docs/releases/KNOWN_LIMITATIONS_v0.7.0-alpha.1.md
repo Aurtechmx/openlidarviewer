@@ -454,8 +454,9 @@ CRS registry or a list of metre families checked against the EPSG dataset
 GDA2020 MGA; ETRS89 LAEA and LCC Europe; SWEREF99; DHDN Gauss-Kruger; MGI
 Austria; Web Mercator; British National Grid; RD New; Lambert-93; NZTM); any
 other code is treated as unknown, not as metres. A vertical EPSG code fixes the height unit when no
-vertical unit is declared, and a declared vertical unit that contradicts the
-code leaves the height unit unknown.
+vertical unit is declared. A declared vertical unit wins over the code's own
+(NAVD88 with US survey feet reads as NAVD88 height in ftUS, as in GDAL), and a
+declared vertical unit code the app cannot read leaves the height unit unknown.
 
 ## Exports carry the geographic refusal, not the endpoint grade
 

@@ -70,12 +70,14 @@ describe('a vertical EPSG code with no vertical unit key', () => {
     expect(crs.verticalUnitToMetres).toBeCloseTo(FT_US, 12);
   });
 
-  it('WKT: a VERT_CS UNIT that contradicts its code is reported, not picked', () => {
+  it('WKT: a VERT_CS UNIT that differs from its code wins, and the override is noted', () => {
     const crs = crsFromWkt(
       'VERT_CS["NAVD88 height",VERT_DATUM["NAVD88",2005],UNIT["US survey foot",0.304800609601219],AUTHORITY["EPSG","5703"]]',
     );
-    expect(crs.verticalLinearUnit).toBe('unknown');
-    expect(crs.verticalUnitConflict).toBeDefined();
+    expect(crs.verticalLinearUnit).toBe('us-survey-foot');
+    expect(crs.verticalDatum).toBe('NAVD88 height (ftUS)');
+    expect(crs.verticalUnitConflict).toBeUndefined();
+    expect(crs.verticalUnitNote).toBeDefined();
   });
 
   it('EPT codes: horizontal 2264 + vertical 6360', () => {

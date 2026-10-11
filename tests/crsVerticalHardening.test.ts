@@ -95,9 +95,8 @@ describe('crsFromGeoTiff — vertical key', () => {
 
   it('reads VerticalUnitsGeoKey (4099) as the Z-axis unit, distinct from horizontal', () => {
     // Horizontal grid in metres (3076 = 9001), vertical height in US survey feet
-    // (4099 = 9003) over a vertical code that is itself ftUS (6360). Elevation
-    // must convert by the foot unit, not the metre one.
-    const bytes = geoKeyBytes([[1024, 1], [3072, 26911], [3076, 9001], [4096, 6360], [4099, 9003]]);
+    // (4099 = 9003). Elevation must convert by the foot unit, not the metre one.
+    const bytes = geoKeyBytes([[1024, 1], [3072, 26911], [3076, 9001], [4096, 5703], [4099, 9003]]);
     const crs = crsFromGeoTiff(bytes, null, null);
     expect(crs.linearUnit).toBe('metre');
     expect(crs.linearUnitToMetres).toBe(1);
@@ -125,12 +124,36 @@ describe('crsFromGeoTiff — vertical key', () => {
     expect(crs.verticalUnitToMetres).toBeUndefined();
   });
 
-  it('reports a 4099 that contradicts the vertical code instead of picking one', () => {
-    // 5703 is NAVD88 in metres; 4099 = 9003 says US survey feet.
+  it('5703 + 4099 = 9003 is NAVD88 in US survey feet, as GDAL reads it', () => {
     const crs = crsFromGeoTiff(geoKeyBytes([[1024, 1], [3072, 26911], [4096, 5703], [4099, 9003]]), null, null);
+    expect(crs.verticalEpsg).toBe(5703);
+    expect(crs.verticalDatum).toBe('NAVD88 height (ftUS)');
+    expect(crs.verticalLinearUnit).toBe('us-survey-foot');
+    expect(crs.verticalUnitToMetres).toBeCloseTo(1200 / 3937, 12);
+    expect(crs.verticalUnitConflict).toBeUndefined();
+    expect(crs.verticalUnitNote).toMatch(/EPSG:5703/);
+  });
+
+  it('5703 + 4099 = 9002 is NAVD88 in international feet', () => {
+    const crs = crsFromGeoTiff(geoKeyBytes([[1024, 1], [3072, 26911], [4096, 5703], [4099, 9002]]), null, null);
+    expect(crs.verticalDatum).toContain('NAVD88');
+    expect(crs.verticalLinearUnit).toBe('foot');
+    expect(crs.verticalUnitToMetres).toBe(0.3048);
+  });
+
+  it('6360 + 4099 = 9001: the declared metre wins and the override is noted', () => {
+    const crs = crsFromGeoTiff(geoKeyBytes([[1024, 1], [3072, 26911], [4096, 6360], [4099, 9001]]), null, null);
+    expect(crs.verticalLinearUnit).toBe('metre');
+    expect(crs.verticalUnitToMetres).toBe(1);
+    expect(crs.verticalDatum).toBe('NAVD88');
+    expect(crs.verticalUnitNote).toMatch(/EPSG:6360/);
+  });
+
+  it('a 4099 that is not a length unit we can read leaves the height unit unknown', () => {
+    const crs = crsFromGeoTiff(geoKeyBytes([[1024, 1], [3072, 26911], [4096, 5703], [4099, 9095]]), null, null);
     expect(crs.verticalLinearUnit).toBe('unknown');
     expect(Number.isFinite(crs.verticalUnitToMetres)).toBe(false);
-    expect(crs.verticalUnitConflict).toMatch(/EPSG:5703/);
+    expect(crs.verticalUnitConflict).toBeDefined();
   });
 });
 
