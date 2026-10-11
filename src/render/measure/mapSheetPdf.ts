@@ -44,6 +44,8 @@ import {
   gridTicks,
   scaleBar,
   mapScaleRatio,
+  formatScaleTick,
+  tickDecimals,
   type Box,
 } from '../../terrain/contour/mapSheetLayout';
 import { evidenceNote, evidenceStatus } from '../../validation/exportEvidenceNote';
@@ -671,11 +673,14 @@ function drawMap(
     }
   }
   // Edge ticks + coordinate labels (top edge for eastings, left edge for northings).
+  // A sub-unit grid step keeps the decimals it needs so labels never repeat.
+  const decX = tickDecimals(stepX);
+  const decY = tickDecimals(stepY);
   for (const tx of ticksX) {
     page.drawLine({ start: { x: tx.px, y: frame.y }, end: { x: tx.px, y: frame.y + 6 }, thickness: 0.5, color: FRAME });
     page.drawLine({ start: { x: tx.px, y: frame.y + frame.h }, end: { x: tx.px, y: frame.y + frame.h - 6 }, thickness: 0.5, color: FRAME });
     if (labelGrid) {
-      const s = georef ? `${Math.round(tx.w)}E` : `${Math.round(tx.w)}`;
+      const s = `${tx.w.toFixed(decX)}${georef ? 'E' : ''}`;
       page.drawText(safe(s), { x: tx.px - font.widthOfTextAtSize(s, 6) / 2, y: frame.y + frame.h + 3, size: 6, font, color: DIM });
     }
   }
@@ -683,7 +688,7 @@ function drawMap(
     page.drawLine({ start: { x: frame.x, y: ty.py }, end: { x: frame.x + 6, y: ty.py }, thickness: 0.5, color: FRAME });
     page.drawLine({ start: { x: frame.x + frame.w, y: ty.py }, end: { x: frame.x + frame.w - 6, y: ty.py }, thickness: 0.5, color: FRAME });
     if (labelGrid) {
-      const s = georef ? `${Math.round(ty.w)}N` : `${Math.round(ty.w)}`;
+      const s = `${ty.w.toFixed(decY)}${georef ? 'N' : ''}`;
       page.drawText(safe(s), { x: frame.x - 3 - font.widthOfTextAtSize(s, 6), y: ty.py - 3, size: 6, font, color: DIM });
     }
   }
@@ -808,7 +813,7 @@ function drawMap(
     const { unit, divisor: scl } = scaleBarUnit(bar.totalGround, input.linearUnit);
     for (let i = 0; i <= bar.segments; i++) {
       const v = (bar.segGround * i) / scl;
-      const lbl = `${Number.isInteger(v) ? v : v.toFixed(1)}`;
+      const lbl = formatScaleTick(v);
       page.drawText(safe(lbl), { x: bx + i * segPt - font.widthOfTextAtSize(lbl, 6) / 2, y: by + 6, size: 6, font, color: INK });
     }
     page.drawText(unit, { x: bx + bar.barPt + 4, y: by, size: 6, font, color: DIM });

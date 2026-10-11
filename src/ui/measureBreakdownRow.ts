@@ -55,13 +55,12 @@ export interface BreakdownLine {
 /** Said on a line when a compound CRS declares a height unit unlike the horizontal one. */
 const MIXED_UNITS_LINE_NOTE =
   'This scan declares a different unit for height than for the horizontal axes. ' +
-  'The run and the rise are each converted to metres before the slant and the grade are computed, ' +
-  'so read these figures rather than the headline distance.';
+  'The run and the rise are each converted to metres before the slant and the grade are computed.';
 
 /** Said on a ring when a compound CRS makes some of the figures combine two units. */
 const MIXED_UNITS_NOTE =
   'This scan declares a different unit for height than for the horizontal axes. ' +
-  'The plane area and the perimeter combine both units and are not reliable distances.';
+  'Each axis is converted by its own unit before the plane area and the perimeter are computed.';
 
 const PLANE_AREA_NOTE =
   'Plane is the area of the ring’s own best-fit plane, not a terrain surface: ' +

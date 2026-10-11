@@ -23,7 +23,6 @@
 
 import {
   GEOGRAPHIC_CRS_MEASURE_NOTICE,
-  VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE,
 } from './format';
 import { geographicRefusesKind } from './types';
 
@@ -62,16 +61,6 @@ export interface MeasurementTrustInput {
    * flagged).
    */
   readonly geographicCrs?: boolean;
-  /**
-   * True when this measurement's NUMBER combines the horizontal and vertical
-   * axes on a COMPOUND CRS whose height unit differs from its horizontal unit
-   * (e.g. metres + US-survey-feet). A single scalar can't repair a 3D length /
-   * tilted area / grade, so — like {@link geographicCrs} — it is a REFUSAL,
-   * not a caution. The caller scopes this to the affected kinds; a pure-
-   * vertical height is scaled by the vertical factor and stays honest, so it is
-   * not flagged.
-   */
-  readonly verticalUnitMismatch?: boolean;
 }
 
 export interface MeasurementTrust {
@@ -162,24 +151,14 @@ export function gradeMeasurement(input: MeasurementTrustInput): MeasurementTrust
     grade = 'red';
   }
 
-  // Compound-CRS vertical/horizontal unit clash — same refusal class as the
-  // geographic frame: the 3D figure mixes two linear units, so it is wrong as a
-  // distance, not merely uncertified.
-  const verticalMismatchRefusal = input.verticalUnitMismatch === true;
-  if (verticalMismatchRefusal) {
-    reasons.push(VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE);
-    grade = 'red';
-  }
-
   if (input.residentOnly) {
     reasons.push('Only the loaded subset of a streaming cloud was measured — the full-resolution data may shift this.');
     if (grade === 'green') grade = 'yellow';
   }
 
-  const presentable = !anyVoid && !geographicRefusal && !verticalMismatchRefusal;
+  const presentable = !anyVoid && !geographicRefusal;
   let caption: string;
   if (geographicRefusal) caption = 'Unverified — degrees are not distances (geographic CRS)';
-  else if (verticalMismatchRefusal) caption = 'Unverified — height unit differs from horizontal (compound CRS)';
   else if (grade === 'green') caption = 'Verified — well supported by measured points';
   else if (grade === 'yellow') caption = 'Caution — loosely supported or unverified scale';
   else caption = 'Unverified — an endpoint has no points to measure';
