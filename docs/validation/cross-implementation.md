@@ -52,7 +52,10 @@ vectors. Bias, RMSE and the maximum absolute residual agree to about 4.4×10⁻�
 over eighteen comparisons, and the 95 percent figure, 1.96 times that RMSE,
 agrees to about 8.9×10⁻¹⁶ over six, both under a 1×10⁻¹² tolerance. What that
 establishes is that the formula is computed correctly outside TypeScript,
-including that RMSE is the raw second moment rather than a standard deviation.
+including that RMSE is the raw second moment rather than a standard deviation. The recomputation runs checkpointAccuracy and computeVerticalAccuracy on the
+frozen residuals, not the hold-out procedure in holdoutValidateDtm, and it
+excludes P95, so `NVA-VVA` covers the NVA figure only and the VVA-style P95 is
+registered separately as `VVA-P95` at E3.
 It establishes nothing about accuracy: both claims still require E5, the
 held-out points still come from the same source as the interpolated ones, and
 the tolerance was adopted alongside the result rather than preregistered.

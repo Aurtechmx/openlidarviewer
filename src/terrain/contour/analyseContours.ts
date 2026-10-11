@@ -1135,6 +1135,9 @@ export function computeTerrainCore(
   // Measured-cell empirical reliability (Wilson CI) kept separate from
   // interpolated-cell model support, at τ = the measured RMSE. Only stated when
   // there is real held-out evidence and a finite τ; a void has no truth to test.
+  // τ is estimated from the same residuals and the residuals are spatially
+  // correlated, so the Wilson interval is narrower than nominal (stated where
+  // the interval is shown).
   const reliabilityTolerance =
     Number.isFinite(validation.rmse) && validation.rmse > 0 ? validation.rmse : null;
   const reliabilitySplit: ReliabilitySplit | null =

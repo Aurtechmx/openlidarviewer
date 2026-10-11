@@ -509,7 +509,7 @@ export function buildTerrainReportContent(
     ? `Within 1 × hold-out RMSEz (${fmtZ(relM.tolerance)})`
     : 'Within 1 × hold-out RMSEz';
   const reliabilityValue = hasRel
-    ? `${pctOf(relM.reliability)} of measured-cell hold-out residuals (95% CI ${pctOf(relM.ciLow)}-${pctOf(relM.ciHigh)})`
+    ? `${pctOf(relM.reliability)} of measured-cell hold-out residuals (95% CI ${pctOf(relM.ciLow)}-${pctOf(relM.ciHigh)}; narrower than nominal: the tolerance is estimated from the same residuals and they are spatially correlated)`
     : DASH;
   const blk = result.blockedAccuracy;
   const hasBlk = blk != null && blk.n > 0 && Number.isFinite(blk.rmse);

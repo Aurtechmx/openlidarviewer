@@ -20,6 +20,7 @@ import { classifyGroundSmrf } from '../ground/groundFilter';
 import { rasterizeDtm } from '../ground/rasterizeDtm';
 import { buildSurfaceFromRaster } from '../ground/surfaceFromRaster';
 import { holdoutValidateDtm } from '../validate/holdoutRmse';
+import { makeTrainOnlyReclassifier } from '../validate/trainOnlyReclassify';
 // Tiny pure constant — the unit-aware cell floor must agree with the
 // metres-per-degree scale the rest of the terrain pipeline uses.
 import { METRES_PER_DEGREE } from '../ground/horizontalScale';
@@ -220,7 +221,7 @@ function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid, holdout = false): { dtm:
   // units so a foot frame keeps its physical ground tolerance (a geographic
   // frame's z is already metric, so zPerMetre is 1 there).
   const zPerMetre = 1 / vertToMetres;
-  const gf = classifyGroundSmrf(points, {
+  const smrfParams = {
     cellSizeM: grid.cellSizeM,
     cellSizeZUnits: grid.cellSizeM * (horizToMetres / vertToMetres),
     maxWindowCells: 8,
@@ -228,8 +229,9 @@ function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid, holdout = false): { dtm:
     elevationThresholdM: 0.5 * zPerMetre,
     maxElevationThresholdM: 2.5 * zPerMetre,
     floorPercentile: 5,
-    verticalAxis: 'z',
-  });
+    verticalAxis: 'z' as const,
+  };
+  const gf = classifyGroundSmrf(points, smrfParams);
   const raster = rasterizeDtm(points, gf.isGround, {
     grid,
     aggregation: 'median',
@@ -256,8 +258,12 @@ function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid, holdout = false): { dtm:
     verticalUnitToMetres: vertToMetres,
   }).dtm;
   if (!holdout) return { dtm, sigmaZ: null };
-  // Uniform σz for the propagated LoD: the same ground mask and cell size,
-  // 20 % of the ground returns withheld, residuals against the rebuilt surface.
+  // Uniform σz for the propagated LoD: the same cell size, 20 % of the ground
+  // returns withheld at random, and the ground re-classified from the TRAINING
+  // points only (the same train-only reclassifier Analyse uses), so a withheld
+  // point never helps decide its own ground membership. σz is the
+  // point-vs-surface hold-out RMSEz, which includes the epoch's own bias; it is
+  // not checkpoint accuracy nor a per-cell DEM uncertainty.
   // Only a declared or metre-resolvable vertical scale yields metres.
   const verticalKnown =
     (Number.isFinite(cloud.verticalUnitToMetres) && (cloud.verticalUnitToMetres as number) > 0) ||
@@ -271,6 +277,8 @@ function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid, holdout = false): { dtm:
     horizontalUnitToMetres:
       cloud.linearUnitToMetres && cloud.linearUnitToMetres > 0 ? cloud.linearUnitToMetres : 1,
     verticalUnitToMetres: vertToMetres,
+    reclassifyGround: makeTrainOnlyReclassifier(smrfParams),
+    reclassificationKind: 'train-only',
   });
   const sigmaZ = verticalKnown && report.sampleSize > 0 && Number.isFinite(report.rmse) ? report.rmse : null;
   return { dtm, sigmaZ };

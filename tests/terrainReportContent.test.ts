@@ -584,7 +584,8 @@ describe('buildTerrainReportContent — every row names its basis', () => {
     const c = buildTerrainReportContent(r, OPTS);
     expect(labels(c, 'Quality Metrics')).not.toContain('Measured reliability');
     expect(rowValue(c, 'Quality Metrics', 'Within 1 × hold-out RMSEz (0.66 m)')).toBe(
-      '76% of measured-cell hold-out residuals (95% CI 75%-76%)',
+      '76% of measured-cell hold-out residuals (95% CI 75%-76%; narrower than nominal: ' +
+        'the tolerance is estimated from the same residuals and they are spatially correlated)',
     );
   });
 

@@ -402,7 +402,8 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'threshold; gain and loss volumes sum only above-LoD cells, and net is gain minus ' +
       'loss over that same thresholded subset. v2 sets the threshold to the propagated minimum ' +
       'LoD, 1.96·√(σz_before² + σz_after² + σreg²), from each epoch\'s hold-out RMSEz and the ' +
-      'alignment 3-D RMS (a conservative proxy for vertical registration error); when a term is ' +
+      'alignment 3-D RMS (a proxy: fit misfit, not shown to bound vertical registration error; alignment ' +
+      'does not solve z); when a term is ' +
       'missing it falls back to the fixed 0.1 m, labelled assumed, not measured. v1 used the fixed ' +
       '0.1 m always.',
     citation: 'Anderson (2019), pubs.usgs.gov/publication/70202166 (LoD thresholding for gross change); Wheaton et al. (2010), doi:10.1002/esp.1886 (propagated minimum LoD)',

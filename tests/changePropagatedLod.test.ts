@@ -48,7 +48,7 @@ describe('propagated level of detection', () => {
     expect(text).toMatch(/0\.255 m \(propagated, 95 %\)/);
     expect(text).toMatch(/before σz 30\.0 mm/);
     expect(text).toMatch(/after σz 40\.0 mm/);
-    expect(text).toMatch(/3-D RMS, a conservative proxy/);
+    expect(text).toMatch(/3-D RMS, a proxy: fit misfit, not shown to bound vertical registration error/);
     expect(text).toMatch(/Wheaton et al\. 2010/);
   });
 
