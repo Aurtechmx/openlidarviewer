@@ -427,6 +427,8 @@ export interface ReloadStamp {
   readonly file: File | null;
   readonly epoch: number;
   readonly provenance: string | null;
+  /** Revision of the layer's saved findings; absent when none are tracked. */
+  readonly findings?: number;
 }
 
 /** Why a layer no longer matches its stamp, in plain words; empty when it matches. */
@@ -435,6 +437,7 @@ export function reloadStampChanges(before: ReloadStamp, after: ReloadStamp): str
   if (before.cloud !== after.cloud) out.push('the layer was replaced or closed');
   if (before.file !== after.file) out.push('its source file changed');
   if (before.provenance !== after.provenance || before.epoch !== after.epoch) out.push('its classes changed');
+  if ((before.findings ?? 0) !== (after.findings ?? 0)) out.push('its findings changed');
   return out;
 }
 

@@ -41,11 +41,22 @@ export class SessionFindings {
   /** Scans removed this session; Undo never restores findings into one. */
   private readonly _forgotten = new Set<string>();
   private readonly _listeners = new Set<() => void>();
+  /** Bumped on every add, edit, removal, clear and restore, per owner scan. */
+  private readonly _revisions = new Map<string, number>();
 
   /** Told after every change to the ledger. Returns an unsubscribe. */
   subscribe(fn: () => void): () => void {
     this._listeners.add(fn);
     return () => { this._listeners.delete(fn); };
+  }
+
+  private _touch(owner: string | null): void {
+    if (owner !== null) this._revisions.set(owner, (this._revisions.get(owner) ?? 0) + 1);
+  }
+
+  /** A number that changes whenever the findings kept for a scan change. */
+  revisionFor(ownerId: string): number {
+    return this._revisions.get(ownerId) ?? 0;
   }
 
   private _changed(): void {
@@ -89,6 +100,7 @@ export class SessionFindings {
   /** Drop the findings kept for a scan that has been removed. */
   forget(ownerId: string): void {
     this._forgotten.add(ownerId);
+    this._touch(ownerId);
     const had = this._byOwner.get(ownerId);
     if (!this._byOwner.delete(ownerId)) return;
     if (ownerId === this._ownerId && had && had.length > 0) this._changed();
@@ -96,6 +108,7 @@ export class SessionFindings {
 
   add(finding: ReportFinding): void {
     this._list().push(finding);
+    this._touch(this._ownerId);
     this._changed();
   }
 
@@ -110,7 +123,7 @@ export class SessionFindings {
   /** Drop the most recent finding (e.g. the user discarded a measurement). */
   pop(): ReportFinding | undefined {
     const f = this._list().pop();
-    if (f) this._changed();
+    if (f) { this._touch(this._ownerId); this._changed(); }
     return f;
   }
 
@@ -119,6 +132,7 @@ export class SessionFindings {
     const list = this._list();
     if (index >= 0 && index < list.length) {
       list.splice(index, 1);
+      this._touch(this._ownerId);
       this._changed();
     }
   }
@@ -127,6 +141,7 @@ export class SessionFindings {
   clear(): ClearedFindings {
     const cleared: ClearedFindings = { ownerId: this._ownerId, findings: [...this.all] };
     this._byOwner.delete(this._ownerId);
+    this._touch(this._ownerId);
     this._changed();
     return cleared;
   }
@@ -140,6 +155,7 @@ export class SessionFindings {
     if (cleared.ownerId !== null && this._forgotten.has(cleared.ownerId)) return;
     const list = this._list(cleared.ownerId);
     list.unshift(...cleared.findings);
+    this._touch(cleared.ownerId);
     if (cleared.ownerId === this._ownerId) this._changed();
   }
 }
