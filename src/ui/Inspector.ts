@@ -8,6 +8,7 @@ import {
 import { collapsibleSection } from './collapsibleSection';
 import { createReferencePlaneSection, type ReferencePlaneDeps, type ReferencePlaneHandle } from './referencePlaneSection';
 import { loadInspectorSections, saveInspectorSection } from '../prefs';
+import { DetailModeController, DETAIL_MODE_PREF, type DetailMode } from './inspector/detailMode';
 import type { LayerGroupsPanel } from './LayerGroupsPanel';
 import type { SessionLayerGroup } from '../io/session';
 import {
@@ -253,6 +254,9 @@ const VISUALS_RGB_CHIPS: ReadonlyArray<{ id: string; label: string }> = [
   { id: 'high-contrast', label: 'High Contrast' },
 ];
 
+/** The RGB looks offered as Basic quick shortcuts. */
+const QUICK_RGB_IDS: readonly string[] = ['natural', 'photoreal-rgb', 'survey', 'high-contrast'];
+
 /** The four EDL chips (Off + three named presets). */
 const VISUALS_EDL_CHIPS: ReadonlyArray<{
   id: EdlPresetSelection;
@@ -373,6 +377,8 @@ function buildRangeFilter(opts: {
   unit: string;
   resetTitle: string;
   onApply: (range: [number, number] | null) => void;
+  /** Told whenever the "filtering" state may have changed. */
+  onActiveChange?: (active: boolean) => void;
 }): RangeFilter {
   let extent: { min: number; max: number } | null = null;
   const mkInput = (bound: string): HTMLInputElement => {
@@ -398,6 +404,10 @@ function buildRangeFilter(opts: {
   ]);
   const sectionEl = section(opts.title, body);
   sectionEl.classList.add('olv-hidden');
+  const setActive = (on: boolean): void => {
+    sectionEl.classList.toggle('olv-filter-active', on);
+    opts.onActiveChange?.(on);
+  };
 
   // Read a numeric field, or null when it's empty/blank. `Number('')` is 0
   // (and `Number.isFinite(0)` is true), so without the empty-string guard,
@@ -417,7 +427,7 @@ function buildRangeFilter(opts: {
     opts.onApply([lo, hi]);
     // Flag "filtering" only when the window is narrower than the full extent —
     // a full-range window hides nothing, so it shouldn't read as active.
-    sectionEl.classList.toggle('olv-filter-active', narrowsExtent(lo, hi, extent));
+    setActive(narrowsExtent(lo, hi, extent));
   };
   minInput.addEventListener('input', apply);
   maxInput.addEventListener('input', apply);
@@ -429,7 +439,7 @@ function buildRangeFilter(opts: {
       maxInput.value = String(Math.ceil(extent.max));
     }
     opts.onApply(null);
-    sectionEl.classList.remove('olv-filter-active');
+    setActive(false);
   });
 
   return {
@@ -445,7 +455,10 @@ function buildRangeFilter(opts: {
         sectionEl.classList.add('olv-hidden');
         // No usable extent ⇒ no scan to filter: clear any live GPU filter so the
         // renderer can't keep applying a stale window from a previous scan.
-        if (changed) opts.onApply(null);
+        if (changed) {
+          opts.onApply(null);
+          setActive(false);
+        }
         return;
       }
       if (!changed) return;
@@ -454,7 +467,8 @@ function buildRangeFilter(opts: {
       // A fresh seed is the full extent — visible, nothing filtered yet. Clear
       // any filter carried over from a previous scan so the reset fields and the
       // renderer agree (the "reseed leaves the old GPU filter active" bug).
-      sectionEl.classList.remove('olv-hidden', 'olv-filter-active');
+      sectionEl.classList.remove('olv-hidden');
+      setActive(false);
       opts.onApply(null);
     },
     applyWindow(range): void {
@@ -468,7 +482,7 @@ function buildRangeFilter(opts: {
           maxInput.value = String(Math.ceil(extent.max));
         }
         opts.onApply(null);
-        sectionEl.classList.remove('olv-filter-active');
+        setActive(false);
       }
     },
   };
@@ -544,6 +558,9 @@ export class Inspector {
   /** Visuals Studio — Visuals Studio chip rails. Stored so syncVisuals can re-flag active. */
   private readonly _visualsRgbRail = el('div', { className: 'olv-chips' });
   private readonly _visualsEdlRail = el('div', { className: 'olv-chips' });
+  /** Basic-only shortcuts onto a few of the same presets (same callbacks). */
+  private readonly _quickRgbRail = el('div', { className: 'olv-chips olv-hidden' });
+  private readonly _quickEdlRail = el('div', { className: 'olv-chips' });
   private readonly _visualsSkyRail = el('div', { className: 'olv-chips' });
   /** Visuals Studio > Workflow preset rail (v0.4.5) + its "Custom" state chip. */
   private readonly _visualsWorkflowRail = el('div', { className: 'olv-chips' });
@@ -623,8 +640,12 @@ export class Inspector {
   // active and their streaming-equivalents in StreamingPanel take over.
   private readonly _layersSection!: HTMLElement;
   private readonly _colorBySection!: HTMLElement;
+  private readonly _provenanceSection!: HTMLElement;
+  private readonly _reportSection!: HTMLElement;
   /** Stored open/closed state for the persisted collapsible sections. */
   private readonly _sectionState: Record<string, boolean> = loadInspectorSections();
+  /** Basic / Advanced switch; tier-marks the technician sections. */
+  private readonly _detailMode: DetailModeController;
   private readonly _renderingSection!: HTMLElement;
   private readonly _viewList = el('div', { className: 'olv-views' });
   /** Session-stats body — rebuilt lazily when the details section opens. */
@@ -737,6 +758,15 @@ export class Inspector {
 
   constructor(callbacks: InspectorCallbacks) {
     this._cb = callbacks;
+    this._detailMode = new DetailModeController(
+      this._sectionState[DETAIL_MODE_PREF] === true,
+      (advanced) => {
+        this._sectionState[DETAIL_MODE_PREF] = advanced;
+        saveInspectorSection(DETAIL_MODE_PREF, advanced);
+      },
+      (target) => this._revealSection(target, 'summary, input'),
+    );
+    const adv = <T extends HTMLElement>(node: T): T => this._detailMode.advanced(node);
 
     // The "New group" control. The panel behind it loads on the first click, so
     // grouping is discoverable from the start without the startup shell paying
@@ -977,12 +1007,12 @@ export class Inspector {
       ]),
       el('div', { className: 'olv-chips' }, this._sizeModeChips.map((c) => c.chip)),
       slider,
-      el('div', { className: 'olv-render-sublabel', text: 'Point appearance' }),
-      this._visualsSplatRail,
+      adv(el('div', { className: 'olv-render-sublabel', text: 'Point appearance' })),
+      adv(this._visualsSplatRail),
       el('div', { className: 'olv-render-sublabel', text: 'Eye Dome Lighting' }),
       el('div', { className: 'olv-chips' }, [this._edlChip, this._aaChip, this._touchChip]),
-      this._edlStrengthRow,
-      navigationGroup,
+      adv(this._edlStrengthRow),
+      adv(navigationGroup),
     ]);
 
     // Saved views: a "save" button above a list of stored viewpoints.
@@ -1140,12 +1170,16 @@ export class Inspector {
       unit: 'elevation',
       resetTitle,
       onApply: (r) => this._cb.onElevationFilter?.(r),
+      onActiveChange: (on) =>
+        this._detailMode.setNotice('elevFilter', on ? 'Elevation filter active' : null, this._elevFilter.section),
     });
     this._intenFilter = buildRangeFilter({
       title: 'Intensity filter (loaded sample range)',
       unit: 'intensity',
       resetTitle,
       onApply: (r) => this._cb.onIntensityFilter?.(r),
+      onActiveChange: (on) =>
+        this._detailMode.setNotice('intenFilter', on ? 'Intensity filter active' : null, this._intenFilter.section),
     });
 
     // Visuals Studio — Visuals Studio.
@@ -1194,6 +1228,20 @@ export class Inspector {
       this._visualsWorkflowRail.append(custom);
     }
 
+    // Quick appearance (Basic only): the common RGB looks and the EDL presets,
+    // routed through the same callbacks as the full rails below.
+    for (const def of VISUALS_RGB_CHIPS.filter((d) => QUICK_RGB_IDS.includes(d.id))) {
+      const chip = el('button', { className: 'olv-chip', text: def.label, title: `Apply the ${def.label} RGB appearance preset` });
+      chip.dataset.presetId = def.id;
+      chip.addEventListener('click', () => this._cb.onRgbAppearancePreset(def.id));
+      this._quickRgbRail.append(chip);
+    }
+    for (const def of VISUALS_EDL_CHIPS) {
+      const chip = el('button', { className: 'olv-chip', text: def.label, title: def.id === null ? 'Disable Eye Dome Lighting' : `Apply the ${def.label} EDL preset` });
+      chip.dataset.presetId = def.id ?? 'off';
+      chip.addEventListener('click', () => this._cb.onEdlPreset(def.id));
+      this._quickEdlRail.append(chip);
+    }
     for (const def of VISUALS_RGB_CHIPS) {
       const chip = el('button', {
         className: 'olv-chip',
@@ -1298,11 +1346,11 @@ export class Inspector {
     // the other three collapse, and their state persists per user.
     const visualsBody = el('div', { className: 'olv-visuals-body' }, [
       this._persistSection('visuals.workflow', collapsibleSection('Workflow', this._visualsWorkflowRail)),
-      this._persistSection('visuals.rgb', collapsibleSection('RGB', this._visualsRgbRail)),
-      el('div', { className: 'olv-visuals-group-label', text: 'Depth (EDL)' }),
-      this._visualsEdlRail,
-      this._persistSection('visuals.background', collapsibleSection('Background', this._visualsSkyRail)),
-      this._wbAdvancedDetails,
+      adv(this._persistSection('visuals.rgb', collapsibleSection('RGB', this._visualsRgbRail))),
+      adv(el('div', { className: 'olv-visuals-group-label', text: 'Depth (EDL)' })),
+      adv(this._visualsEdlRail),
+      adv(this._persistSection('visuals.background', collapsibleSection('Background', this._visualsSkyRail))),
+      adv(this._wbAdvancedDetails),
     ]);
     // Visuals Studio is the curator's tool — preset chips that pick a
     // tuned bundle in one click. Default-open so first-paint surfaces
@@ -1331,7 +1379,7 @@ export class Inspector {
     // the plane's chunk the first time the section opens or the plane turns on.
     this.referencePlane = callbacks.referencePlane ? createReferencePlaneSection(callbacks.referencePlane) : null;
     const referencePlaneSection = this.referencePlane
-      ? this._persistSection('referencePlane', collapsibleSection('Reference plane', this.referencePlane.element))
+      ? adv(this._persistSection('referencePlane', collapsibleSection('Reference plane', this.referencePlane.element)))
       : null;
     referencePlaneSection?.addEventListener('toggle', () => {
       if (referencePlaneSection.open) void this.referencePlane?.open();
@@ -1342,18 +1390,26 @@ export class Inspector {
     // group), filters, saved views, then the scan facts.
     this.element = el('aside', { className: 'olv-inspector' }, [
       head,
+      this._detailMode.control,
+      this._detailMode.notices,
       this._colorBySection,
+      // Basic-only shortcuts, beside (not inside) the full Visuals Studio rails.
+      this._detailMode.basicOnly(el('div', { className: 'olv-section olv-quick-appearance' }, [
+        el('div', { className: 'olv-visuals-group-label', text: 'Quick appearance' }),
+        this._quickRgbRail,
+        this._quickEdlRail,
+      ])),
       visualsStudioSection,
       this._renderingSection,
       ...(referencePlaneSection ? [referencePlaneSection] : []),
-      this._elevFilter.section,
-      this._intenFilter.section,
+      adv(this._elevFilter.section),
+      adv(this._intenFilter.section),
       this._persistSection('savedViews', collapsibleSection('Saved views', views)),
       this._datasetIntelligence.element,
       this._layersSection,
       this._layerHealthSlot,
-      this._persistSection('detail', collapsibleSection('Detail', this._detail)),
-      this._persistSection(
+      adv(this._persistSection('detail', collapsibleSection('Detail', this._detail))),
+      (this._provenanceSection = adv(this._persistSection(
         'provenance',
         collapsibleSection(
           'Provenance',
@@ -1362,11 +1418,12 @@ export class Inspector {
             this._provenanceBody,
           ]),
         ),
-      ),
+      ))),
       this._crsSection,
-      this._persistSection('scanReport', collapsibleSection('Scan report', this._report)),
-      sessionStats,
+      (this._reportSection = adv(this._persistSection('scanReport', collapsibleSection('Scan report', this._report)))),
+      adv(sessionStats),
     ]);
+    this._detailMode.bind(this.element);
     this._showReportPlaceholder();
     this._showViewsPlaceholder();
 
@@ -1841,6 +1898,16 @@ export class Inspector {
     return [format, this._pendingCrs?.name].filter(Boolean).join(', ');
   }
 
+  /** The Basic / Advanced detail level of the panel. */
+  detailMode(): DetailMode {
+    return this._detailMode.mode();
+  }
+
+  /** Switch the detail level, as the segmented control does. */
+  setDetailMode(mode: DetailMode): void {
+    this._detailMode.setMode(mode);
+  }
+
   /** Bring the Layer Health card into view. False while it has no data yet. */
   focusLayerHealth(): boolean {
     return this._layerHealthSlot.childElementCount > 0 && this._revealSection(this._layerHealthSlot, null);
@@ -1901,6 +1968,8 @@ export class Inspector {
    */
   private _revealSection(target: HTMLElement | null, focusSelector: string | null): boolean {
     if (!target || target.classList.contains('olv-hidden')) return false;
+    // A deep link into a section Basic hides reveals that section, not the mode.
+    this._detailMode.reveal(target);
     this.openSheet();
     // Duck-typed rather than `instanceof HTMLDetailsElement`: this file is
     // built under recording-DOM stubs in the node test environment, where the
@@ -1993,6 +2062,8 @@ export class Inspector {
     this._modes = modes.filter((m) => !ANALYSIS_GATED_MODES.includes(m));
     this._activeMode = active;
     this._openingReason = openingReason ?? null;
+    // RGB looks only mean something on a scan that carries colour.
+    this._quickRgbRail.classList.toggle('olv-hidden', !this._modes.includes('rgb'));
     this._renderColorChips();
   }
 
@@ -2079,11 +2150,11 @@ export class Inspector {
    * underlying renderer state.
    */
   syncVisuals(state: VisualsStudioState): void {
-    for (const chip of this._visualsRgbRail.children) {
+    for (const chip of [...this._visualsRgbRail.children, ...this._quickRgbRail.children]) {
       const id = (chip as HTMLElement).dataset?.presetId;
       chip.classList.toggle('olv-chip-active', id === state.rgbAppearancePresetId);
     }
-    for (const chip of this._visualsEdlRail.children) {
+    for (const chip of [...this._visualsEdlRail.children, ...this._quickEdlRail.children]) {
       const id = (chip as HTMLElement).dataset?.presetId;
       const wanted = state.edlPresetId ?? 'off';
       chip.classList.toggle('olv-chip-active', id === wanted);
@@ -2209,6 +2280,12 @@ export class Inspector {
       return;
     }
     this._pendingReportRows = rows;
+    const flagged = rows.filter((r) => r.status === 'warn' || r.status === 'fail').length;
+    this._detailMode.setNotice(
+      'report',
+      flagged > 0 ? `Scan report: ${flagged} ${flagged === 1 ? 'warning' : 'warnings'}` : null,
+      this._reportSection,
+    );
     if (this._renderReportFn) {
       this._renderReportFn(this._report, rows);
       return;
@@ -2324,6 +2401,7 @@ export class Inspector {
     this._chips.replaceChildren();
     this._detail.replaceChildren();
     this._showReportPlaceholder();
+    this._detailMode.setNotice('report', null, this._reportSection);
     this._showViewsPlaceholder();
     // v0.3.10 trust-pass — scan-close used to leave the Dataset
     // Intelligence card showing the previous scan's intel (density
@@ -2442,6 +2520,8 @@ export class Inspector {
   setDeclaredProvenance(model: ProvenanceCardModel | null): void {
     const body = this._declaredProvenanceBody;
     body.replaceChildren();
+    const limited = Boolean(model && (model.limitations || model.referenceGrade));
+    this._detailMode.setNotice('limits', limited ? 'Declared limitations' : null, this._provenanceSection);
     if (!model) {
       body.classList.add('olv-hidden');
       return;

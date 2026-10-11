@@ -10,7 +10,10 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { suppressOnboardingTour } from './helpers';
+import { suppressOnboardingTour, useAdvancedInspector } from './helpers';
+
+// These specs drive the Inspector's Advanced sections.
+test.beforeEach(async ({ page }) => useAdvancedInspector(page));
 
 async function drop(page: Page, bytes: number[], name: string): Promise<void> {
   const dataTransfer = await page.evaluateHandle(

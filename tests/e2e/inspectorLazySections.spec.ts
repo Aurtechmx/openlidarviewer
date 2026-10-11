@@ -1,5 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
-import { suppressOnboardingTour, dropTinyLas } from './helpers';
+import { suppressOnboardingTour, dropTinyLas, useAdvancedInspector } from './helpers';
+
+// These specs drive the Inspector's Advanced sections.
+test.beforeEach(async ({ page }) => useAdvancedInspector(page));
 
 /**
  * inspectorLazySections.spec.ts

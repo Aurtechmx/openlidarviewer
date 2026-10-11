@@ -706,3 +706,25 @@ export async function closeScanFromDock(page: Page, opts: { expectPrompt?: boole
   if (shown) await confirm.click();
   else if (opts.expectPrompt === true) throw new Error('The close confirmation did not appear');
 }
+
+/**
+ * Start the View Inspector in Advanced detail, for specs that drive its
+ * technician sections (Provenance, Scan report, Reference plane, filters,
+ * navigation). New users get Basic; this stores the Advanced choice the way
+ * the switch does, unless the page already holds a choice.
+ */
+export async function useAdvancedInspector(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    try {
+      const key = 'openlidarviewer.prefs.v1';
+      const prefs = JSON.parse(localStorage.getItem(key) ?? '{}') as Record<string, unknown>;
+      const sections = (prefs.inspectorSections ?? {}) as Record<string, boolean>;
+      if (!('mode.advanced' in sections)) {
+        prefs.inspectorSections = { ...sections, 'mode.advanced': true };
+        localStorage.setItem(key, JSON.stringify(prefs));
+      }
+    } catch {
+      // Storage blocked: the spec sees Basic.
+    }
+  });
+}

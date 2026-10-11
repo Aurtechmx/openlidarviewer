@@ -1,6 +1,9 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
-import { activate, dropHillsPly, pinNavigationPanel, waitForCameraSettled } from './helpers';
+import { activate, dropHillsPly, pinNavigationPanel, waitForCameraSettled, useAdvancedInspector } from './helpers';
 import { isBenignPageError } from './pageErrors';
+
+// These specs drive the Inspector's Advanced sections.
+test.beforeEach(async ({ page }) => useAdvancedInspector(page));
 
 /**
  * The reference plane in the View panel: on, readout, placed at the scan

@@ -1941,6 +1941,39 @@ body.olv-theme-light .olv-empty::before {
 .olv-coordinate-hud-status[data-status='georeferenced'] { color: var(--good, var(--accent)); }
 .olv-coordinate-hud-status[data-status='local'] { color: var(--warn, var(--text-dim)); }
 .olv-coordinate-hud-status[data-status='unresolved'] { color: var(--text-dim); }
+
+/* Basic / Advanced detail switch (src/ui/inspector/detailMode.ts). Basic
+   styles the tier-marked technician sections out of view; they stay mounted,
+   so their state and listeners survive the switch. A section revealed by a
+   deep link stays visible until the user returns to Basic. */
+.olv-inspector.olv-detail-basic .olv-tier-advanced:not(.olv-tier-revealed) { display: none; }
+.olv-detail-mode {
+  display: inline-flex; align-self: flex-start; flex: none;
+  margin: var(--space-xs) 0 var(--space-md);
+  padding: var(--space-2xs); gap: var(--space-2xs);
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
+  background: var(--hover-wash);
+}
+.olv-detail-mode-btn {
+  min-height: var(--control-h); padding: 0 var(--space-xl);
+  font-size: var(--text-xs); font-weight: 600; white-space: nowrap;
+  color: var(--text-dim); background: transparent;
+  border: 0; border-radius: var(--radius-sm); cursor: pointer;
+}
+.olv-detail-mode-btn:hover { color: var(--text); }
+.olv-detail-mode-btn.olv-detail-mode-active { color: var(--accent-text, var(--accent)); background: var(--accent-soft); }
+.olv-detail-mode-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.olv-detail-notices { display: flex; flex-wrap: wrap; gap: var(--space-xs); margin-bottom: var(--space-md); }
+.olv-detail-notice {
+  max-width: 100%; text-align: left; white-space: normal;
+  font-size: var(--text-xs); color: var(--accent-text, var(--accent));
+  background: var(--accent-soft); border: 0.5px solid var(--hairline-strong);
+  border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-md); cursor: pointer;
+}
+.olv-detail-notice:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Basic-only shortcuts give way to the full rails in Advanced. */
+.olv-inspector:not(.olv-detail-basic) .olv-tier-basic { display: none; }
+.olv-quick-appearance { display: flex; flex-direction: column; gap: var(--space-sm); margin-bottom: var(--space-md); }
 /* Tool dock + backend indicator */
 .olv-dock {
   position: absolute; bottom: 14px; left: 16px;
