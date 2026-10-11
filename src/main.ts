@@ -4153,7 +4153,7 @@ function compareLoadedLayers(): void {
   void (async () => {
     // Load the change-detection code on demand, then yield a frame so the
     // "working" line paints before the synchronous ground-filter compute.
-    const [{ buildSharedEpochDtms, withheldEpochs }, { alignEpochClouds, summarizeAlignment, buildRegistrationArtifact, summarizeRegistration }, { compareDtms, summarizeChange }, { changeToEsriAscii }] =
+    const [{ buildSharedEpochDtms, withheldEpochs }, { alignEpochClouds, summarizeAlignment, buildRegistrationArtifact, summarizeRegistration }, { compareDtms, summarizeChange }, { packageChangeRaster, ChangeRasterRefusal }] =
       await Promise.all([
         loadCompareEpochs(),
         loadAlignEpochs(),
@@ -4195,7 +4195,8 @@ function compareLoadedLayers(): void {
       });
       if (!current()) return;
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
-      inspector.setCompareResult([header, summarizeAlignment(alignment), summarizeRegistration(buildRegistrationArtifact(alignment, { targetId: ids[0], targetName: a.name, sourceId: ids[1], sourceName: b.name }, Date.now())), ...lines, ...summarizeChange(cmp, { registrationSigmaM: alignment.applied ? alignment.rmsResidualM : 0, horizontalUnitToMetres: frames.horizontalUnitToMetres })]);
+      const resultLines = [header, summarizeAlignment(alignment), summarizeRegistration(buildRegistrationArtifact(alignment, { targetId: ids[0], targetName: a.name, sourceId: ids[1], sourceName: b.name }, Date.now())), ...lines, ...summarizeChange(cmp, { registrationSigmaM: alignment.applied ? alignment.rmsResidualM : 0, horizontalUnitToMetres: frames.horizontalUnitToMetres })];
+      inspector.setCompareResult(resultLines);
       // A georeferenced .asc of the signed difference, origin at the world-frame
       // corner. Cell values are converted from metres to the source linear unit so
       // they match the grid geometry (1 for a metre CRS: a byte-identical no-op).
@@ -4211,18 +4212,14 @@ function compareLoadedLayers(): void {
         gridUnitToMetres === 1
           ? cmp.result.diff
           : cmp.result.diff.map((v) => v / gridUnitToMetres);
-      inspector.compareDifference.hold({
-        stem: `${baseName(a.name)}-to-${baseName(b.name)}-difference`,
-        asc: () =>
-          changeToEsriAscii({
-            diff: ascDiff,
-            ncols: dtms.cols,
-            nrows: dtms.rows,
-            cellSizeM: dtms.cellSizeM,
-            xllCorner: dtms.before.originH1,
-            yllCorner: dtms.before.originH2,
-          }),
-      });
+      const rasterCrs = crsService.resolveFor({ name: a.name, detected: a.metadata?.crs ?? undefined, source: 'las-vlr' });
+      const grid = { diff: ascDiff, ncols: dtms.cols, nrows: dtms.rows, cellSizeM: dtms.cellSizeM, xllCorner: dtms.before.originH1, yllCorner: dtms.before.originH2 };
+      try {
+        inspector.compareDifference.hold({ stem: `${baseName(a.name)}-to-${baseName(b.name)}-difference`, ...packageChangeRaster(grid, { crs: rasterCrs, valueUnit: gridUnitToMetres === 1 ? 'metre' : rasterCrs.linearUnit, beforeScan: a.name, afterScan: b.name }) });
+      } catch (err) {
+        if (!(err instanceof ChangeRasterRefusal)) throw err;
+        inspector.setDifferenceAvailable(false); inspector.setCompareResult([...resultLines, err.message]); return;
+      }
       inspector.setDifferenceAvailable(true);
     } catch (err) {
       if (current()) inspector.setCompareResult([`Compare failed: ${err instanceof Error ? err.message : String(err)}`]);
