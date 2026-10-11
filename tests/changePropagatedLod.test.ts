@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { compareDtms, summarizeChange } from '../src/terrain/change/compareDtms';
 import { buildSharedEpochDtms } from '../src/terrain/change/compareEpochs';
+import { detectChange } from '../src/terrain/change/changeDetection';
 import {
   describeLevelOfDetection,
   propagatedLevelOfDetection,
@@ -121,5 +122,86 @@ describe('per-epoch hold-out σz on the shared grid', () => {
     expect(s?.before as number).toBeGreaterThan(0);
     expect(s?.before as number).toBeLessThan(0.1);
     expect(s?.after).toBeCloseTo(s?.before as number, 12);
+  });
+});
+
+describe('LoD units: every term and the DoD it thresholds are metres', () => {
+  const FTUS = 1200 / 3937;
+  // Known answer in metres: 0.03, 0.04, 0.12 -> combined 0.13 -> LoD 0.2548 m.
+  const SZ_B = 0.03;
+  const SZ_A = 0.04;
+  const REG = 0.12;
+  const LOD = 1.96 * 0.13;
+
+  /** Build source-unit inputs, convert with the CRS factors as upstream does, and threshold. */
+  function run(hToM: number, vToM: number) {
+    // Source-unit values as the hold-out and ICP would measure them.
+    const rmseBSrc = SZ_B / vToM;
+    const rmseASrc = SZ_A / vToM;
+    const residSrc = REG / hToM;
+    const lod = propagatedLevelOfDetection({
+      sigmaZBeforeM: rmseBSrc * vToM,
+      sigmaZAfterM: rmseASrc * vToM,
+      sigmaRegM: residSrc * hToM,
+    });
+    // Two cells: a rise just above and just below the LoD, in SOURCE vertical units.
+    const above = (LOD + 0.001) / vToM;
+    const below = (LOD - 0.001) / vToM;
+    const a = { width: 2, height: 1, cellSizeM: 1, values: Float32Array.from([0, 0]) };
+    const b = { width: 2, height: 1, cellSizeM: 1, values: Float32Array.from([above, below]) };
+    const res = detectChange(a, b, {
+      levelOfDetectionM: lod.valueM,
+      horizontalUnitToMetres: hToM,
+      verticalUnitToMetres: vToM,
+    });
+    return { lod, res };
+  }
+
+  it('metre horizontal + metre vertical', () => {
+    const { lod, res } = run(1, 1);
+    expect(lod.basis).toBe('propagated');
+    expect(lod.valueM).toBeCloseTo(LOD, 9);
+    expect(Array.from(res.classes)).toEqual([1, 0]);
+  });
+
+  it('US survey foot horizontal + US survey foot vertical', () => {
+    const { lod, res } = run(FTUS, FTUS);
+    expect(lod.valueM).toBeCloseTo(LOD, 9);
+    expect(res.diff[0]).toBeCloseTo(LOD + 0.001, 5);
+    expect(Array.from(res.classes)).toEqual([1, 0]);
+  });
+
+  it('metre horizontal + US survey foot vertical (compound)', () => {
+    const { lod, res } = run(1, FTUS);
+    expect(lod.valueM).toBeCloseTo(LOD, 9);
+    expect(res.diff[1]).toBeCloseTo(LOD - 0.001, 5);
+    expect(Array.from(res.classes)).toEqual([1, 0]);
+  });
+
+  it('unknown units fall back to the assumed default and say why', () => {
+    const lod = propagatedLevelOfDetection({
+      sigmaZBeforeM: 0.03,
+      sigmaZAfterM: 0.04,
+      sigmaRegM: 0.12,
+      verticalUnitKnown: false,
+      horizontalUnitKnown: false,
+    });
+    expect(lod.basis).toBe('assumed');
+    expect(lod.valueM).toBe(0.1);
+    expect(lod.sigmaZBeforeM).toBeNull();
+    expect(lod.sigmaRegM).toBeNull();
+    const text = describeLevelOfDetection(lod).join(' ');
+    expect(text).toContain('vertical unit unknown');
+    expect(text).toContain('horizontal unit unknown');
+    expect(text).toContain('assumed, not measured');
+  });
+
+  it('an unknown horizontal unit alone drops only σreg', () => {
+    const lod = propagatedLevelOfDetection({
+      sigmaZBeforeM: 0.03, sigmaZAfterM: 0.04, sigmaRegM: 0.12, horizontalUnitKnown: false,
+    });
+    expect(lod.basis).toBe('assumed');
+    expect(lod.sigmaZBeforeM).toBe(0.03);
+    expect(lod.missing).toEqual(['registration σ (horizontal unit unknown, cannot be expressed in metres)']);
   });
 });

@@ -12,6 +12,18 @@
  * the alignment here reports only a 3-D RMS residual, which is carried as a
  * conservative proxy for the vertical term and labelled as such.
  *
+ * Units: every term is in METRES before it enters the sum, and the threshold
+ * is metres. Upstream does the conversion with the CRS factors: σz is the
+ * hold-out residual scaled by the epoch's vertical metres-per-unit
+ * (holdoutValidateDtm), σreg is the ICP residual scaled by the before epoch's
+ * horizontal metres-per-unit (alignEpochClouds; its fit space puts z on the
+ * horizontal unit, so one factor covers the 3-D residual), and the DoD it
+ * thresholds is (z_after − z_before) · verticalUnitToMetres (detectChange),
+ * also metres. When a factor is only the inert placeholder 1 (unknown unit),
+ * the caller says so via `verticalUnitKnown` / `horizontalUnitKnown` and the
+ * affected term is treated as missing: a source-unit number is never summed
+ * as metres.
+ *
  * When any term is missing the threshold falls back to the fixed default and
  * is labelled "assumed, not measured". A level of detection the user typed
  * wins over both and is labelled "user-set".
@@ -40,6 +52,16 @@ export interface LodInputs {
    * the alignment's 3-D RMS, used as a conservative proxy.
    */
   readonly sigmaRegIsVertical?: boolean;
+  /**
+   * False when the vertical metres-per-unit is unknown (placeholder 1), so the
+   * σz values are source units, not metres. Both σz terms are then missing.
+   */
+  readonly verticalUnitKnown?: boolean;
+  /**
+   * False when the horizontal metres-per-unit is unknown, so the alignment
+   * residual is in source units. σreg is then missing.
+   */
+  readonly horizontalUnitKnown?: boolean;
   /** A level of detection the user typed (m). Wins when finite and ≥ 0. */
   readonly userLodM?: number | null;
   /** Fallback threshold (m) when a term is missing. Default {@link FALLBACK_LOD_M}. */
@@ -73,15 +95,25 @@ function usable(v: number | null | undefined): v is number {
 /** Compute the applied level of detection and its basis. */
 export function propagatedLevelOfDetection(input: LodInputs): LevelOfDetection {
   const t = LOD_T_95;
-  const zb = usable(input.sigmaZBeforeM) ? input.sigmaZBeforeM : null;
-  const za = usable(input.sigmaZAfterM) ? input.sigmaZAfterM : null;
+  const vKnown = input.verticalUnitKnown !== false;
+  const hKnown = input.horizontalUnitKnown !== false;
+  const zb = vKnown && usable(input.sigmaZBeforeM) ? input.sigmaZBeforeM : null;
+  const za = vKnown && usable(input.sigmaZAfterM) ? input.sigmaZAfterM : null;
   // A zero registration RMS means "no alignment term", not a perfect fit.
-  const reg = usable(input.sigmaRegM) && input.sigmaRegM > 0 ? input.sigmaRegM : null;
+  const regRaw = usable(input.sigmaRegM) && input.sigmaRegM > 0 ? input.sigmaRegM : null;
+  const reg = hKnown ? regRaw : null;
   const regVertical = input.sigmaRegIsVertical === true;
   const missing: string[] = [];
-  if (zb === null) missing.push('before-epoch σz (hold-out RMSEz)');
-  if (za === null) missing.push('after-epoch σz (hold-out RMSEz)');
-  if (reg === null) missing.push('registration σ (no alignment applied)');
+  const vWhy = ' (vertical unit unknown, cannot be expressed in metres)';
+  if (zb === null) missing.push(`before-epoch σz (hold-out RMSEz)${vKnown ? '' : vWhy}`);
+  if (za === null) missing.push(`after-epoch σz (hold-out RMSEz)${vKnown ? '' : vWhy}`);
+  if (reg === null) {
+    missing.push(
+      regRaw !== null && !hKnown
+        ? 'registration σ (horizontal unit unknown, cannot be expressed in metres)'
+        : 'registration σ (no alignment applied)',
+    );
+  }
   const randomSigma = zb !== null && za !== null ? Math.hypot(zb, za) : null;
 
   const base = { t, sigmaZBeforeM: zb, sigmaZAfterM: za, sigmaRegM: reg, sigmaRegIsVertical: regVertical, missing };

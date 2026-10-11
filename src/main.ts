@@ -4191,7 +4191,7 @@ function compareLoadedLayers(): void {
       // comparison refuses volumes rather than printing degree² figures as m³.
       const cmp = compareDtms(dtms.before, dtms.after, {
         ...frames, // isGeographic + horizontalUnitKnown + horizontalUnitToMetres, from the two contexts
-        verticalUnitToMetres: ctxA.verticalUnitToMetres, levelOfDetection: propagatedLevelOfDetection({ sigmaZBeforeM: dtms.sigmaZ?.before, sigmaZAfterM: dtms.sigmaZ?.after, sigmaRegM: alignment.applied ? alignment.rmsResidualM : null }), // Z keeps its OWN declared scale; LoD per Wheaton et al. (2010), the 3-D RMS standing in for vertical registration error
+        verticalUnitToMetres: ctxA.verticalUnitToMetres, levelOfDetection: propagatedLevelOfDetection({ sigmaZBeforeM: dtms.sigmaZ?.before, sigmaZAfterM: dtms.sigmaZ?.after, sigmaRegM: alignment.applied ? alignment.rmsResidualM : null, verticalUnitKnown: verticalMetresPerUnit(ctxA, 'horizontal-when-known') !== undefined, horizontalUnitKnown: frames.horizontalUnitKnown }), // Z keeps its OWN declared scale; LoD per Wheaton et al. (2010) in metres, like the DoD it thresholds; a term whose unit has no metre factor is treated as missing
       });
       if (!current()) return;
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
