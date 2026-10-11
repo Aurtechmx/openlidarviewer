@@ -150,6 +150,24 @@ hides its basis: on a strided load the report says in the value itself that it
 is the declared count over the display-sample footprint. What is missing is one
 record rather than two computations.
 
+The Analyse ground density is the scaled ground-return count divided by the
+area of the ground surface's covered cells (measured plus interpolated), so it
+does not rise as the stride thins the sample. It still assumes the stride is
+uniform across the scan.
+
+## Hold-out statistics have their own limits
+
+The hold-out builds its validation surface on a grid anchored at the minimum of
+the ground returns, not at the delivered DTM's origin, so its cells can be
+offset from the delivered grid by up to one cell. The hold-out RMSE describes
+that surface, built with the same method and cell size, not the delivered cells
+themselves.
+
+The measured-cell reliability interval is a Wilson 95 % interval at a tolerance
+equal to the hold-out RMSE. That tolerance is estimated from the same residuals,
+and neighbouring residuals are spatially correlated, so the interval is narrower
+than its nominal 95 %.
+
 ## Findings added during a higher-density reload are not protected
 
 Saved findings added to a layer while a higher-density reload is decoding are
@@ -717,10 +735,14 @@ change result in the panel says so. Check the difference over ground known to
 be stable: a non-zero mean there is a bias, not change.
 
 The level of detection is propagated as 1.96·√(σz_before² + σz_after² + σreg²)
-(Wheaton et al. 2010, uniform form). Each σz is that epoch's hold-out RMSEz over
-the whole surface, not a per-cell field. σreg is the alignment's 3-D RMS
-residual, a conservative proxy for the vertical registration error, which is
-not measured on its own. When no alignment is applied or a hold-out cannot run,
+(Wheaton et al. 2010, uniform form). Each σz is that epoch's random-split
+hold-out RMSEz over the whole surface: a point-vs-surface residual with the
+ground re-classified from the training points only, and it includes the
+epoch's own bias. It is not checkpoint accuracy and not a per-cell DEM
+uncertainty. The 95 % level holds only if the errors are normal, independent
+and unbiased. σreg is the alignment's 3-D RMS residual, a proxy (fit misfit;
+not shown to bound vertical registration error; alignment does not solve z).
+The vertical registration error is not measured on its own. When no alignment is applied or a hold-out cannot run,
 the threshold falls back to a fixed 0.1 m and the result labels it "assumed,
 not measured". The difference raster (.asc) has no header field for the
 threshold, so the level of detection travels in the panel text, not the file.

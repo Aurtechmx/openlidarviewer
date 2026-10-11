@@ -70,7 +70,9 @@ export interface ZonedSample {
 }
 
 /**
- * Wilson score interval for a binomial proportion `k/n` at 95%. Returns bounds
+ * Wilson score interval for a binomial proportion `k/n` at 95%. Caveat where
+ * it is shown: the analyser sets τ from the same residuals and those residuals
+ * are spatially correlated, so the interval is narrower than nominal. Returns bounds
  * inside [0,1] even at k = 0 or k = n, where the normal approximation fails.
  */
 export function wilsonInterval(k: number, n: number): { low: number; high: number } {

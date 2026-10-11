@@ -36,6 +36,7 @@ export const EVIDENCE_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   'VRM': { current: 'E4_CROSS_IMPLEMENTATION_VALIDATED', required: 'E4_CROSS_IMPLEMENTATION_VALIDATED', exportAllowed: true },
   'HOLDOUT-RMSE': { current: 'E4_CROSS_IMPLEMENTATION_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
   'NVA-VVA': { current: 'E4_CROSS_IMPLEMENTATION_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
+  'VVA-P95': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
   'QUALITY-LEVEL': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
   'CONFIDENCE-OVERLAY': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
   'EPOCH-ALIGN': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
@@ -86,6 +87,7 @@ export type ClaimId =
   | 'VRM'
   | 'HOLDOUT-RMSE'
   | 'NVA-VVA'
+  | 'VVA-P95'
   | 'QUALITY-LEVEL'
   | 'CONFIDENCE-OVERLAY'
   | 'EPOCH-ALIGN'

@@ -137,7 +137,10 @@ Marketing superlatives, "best", "industry-leading", "most accurate",
   times that RMSE, agrees to about 8.9×10⁻¹⁶ over six, both under a 1×10⁻¹²
   tolerance. That establishes the formula is computed correctly outside
   TypeScript, including that RMSE is the raw second moment rather than a standard
-  deviation. It establishes nothing about accuracy: both claims still require E5,
+  deviation. It runs checkpointAccuracy and computeVerticalAccuracy on the frozen
+  residuals, not holdoutValidateDtm, and excludes P95, so `NVA-VVA` covers the NVA
+  figure only and the VVA-style P95 is registered as `VVA-P95` at E3. It
+  establishes nothing about accuracy: both claims still require E5,
   the held-out points still come from the same source as the interpolated ones,
   and the tolerance was adopted alongside the result rather than preregistered.
   Median, NMAD and P95 are excluded because R interpolates at type 7 while

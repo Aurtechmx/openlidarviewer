@@ -2181,7 +2181,7 @@ export class AnalysePanel {
           className: 'olv-analyse-reliability',
           text: `Measured reliability: ${pct(m.reliability)} (95% CI ${pct(m.ciLow)}–${pct(m.ciHigh)}) at |Δz|\u00a0≤\u00a0${fmtR(m.tolerance)}\u00a0${zUnit}`,
         }),
-        'Of the held-out ground points on measured cells, the share whose height came within the tolerance, with a Wilson 95% confidence interval. Interpolated (void-filled) cells are model support, not a measured reliability.',
+        'Of the held-out ground points on measured cells, the share whose height came within the tolerance, with a Wilson 95% interval. The tolerance comes from the same residuals and they are spatially correlated, so the true interval is wider. Void-filled cells are model support, not measured reliability.',
       ));
     }
     // Spatially-blocked hold-out RMSE. NOT a like-for-like contrast with the

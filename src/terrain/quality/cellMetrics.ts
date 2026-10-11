@@ -29,9 +29,27 @@ export interface CellMetrics {
 /** Scene-level rollup of the per-cell metrics. */
 export interface CellMetricsSummary {
   readonly measuredCellCount: number;
-  /** Mean ground returns / m² over measured cells. */
+  /**
+   * Cells the ground surface covers (measured + interpolated, coverage > 0).
+   * The area that `meanDensity` divides by.
+   */
+  readonly footprintCellCount: number;
+  /**
+   * Ground returns / m² over the ground surface's covered footprint:
+   * Σ counts · countScale / (footprint cells × cell area). The footprint is the
+   * covered extent of the surface, not the set of cells that happen to hold a
+   * sampled point, so the figure does not rise as the analysed sample thins.
+   * (Averaging per-cell densities over occupied cells only is the mean of a
+   * count conditional on ≥ 1 point, biased high: about λ / (1 − e^(−λ/s)) for
+   * true density λ and stride s.)
+   */
   readonly meanDensity: number;
-  /** Median ground returns / m² over measured cells (robust). */
+  /**
+   * Median ground returns / m² over blocks of footprint cells, each block sized
+   * to hold about 20 analysed points so empty cells and the stride do not bias
+   * it. Equals per-cell median over the footprint when cells are already that
+   * dense.
+   */
   readonly medianDensity: number;
   /** Mean local completeness (0..1) over measured cells. */
   readonly meanCompleteness: number;
@@ -194,36 +212,84 @@ export function computeCellMetrics(
   for (let i = 0; i < n; i++) edgeDistanceCells[i] = measured[i] ? dist[i] : 0;
 
   // Summary.
-  const densities: number[] = [];
-  let densSum = 0;
   let compSum = 0;
   let boundaryMeasured = 0;
   let measuredCount = 0;
+  let footprintCount = 0;
+  let countSum = 0;
   for (let i = 0; i < n; i++) {
+    if (g.coverage[i] !== NO_COVERAGE) {
+      footprintCount++;
+      countSum += g.counts[i];
+    }
     if (!measured[i]) continue;
     measuredCount++;
-    densSum += pointDensity[i];
-    densities.push(pointDensity[i]);
     compSum += localCompleteness[i];
     if (edgeDistanceCells[i] <= edgeThreshold) boundaryMeasured++;
   }
-  densities.sort((a, b) => a - b);
-  // True median: for an even count, average the two central values rather than
-  // taking the lower-middle element (which biases the reported density low).
-  const dn = densities.length;
-  let median: number;
-  if (dn === 0) median = 0;
-  else if (dn % 2 === 1) median = densities[(dn - 1) >> 1];
-  else median = (densities[dn / 2 - 1] + densities[dn / 2]) / 2;
+  // Mean density over the covered FOOTPRINT, not over occupied cells: a cell
+  // the sample happened to miss still lies under the surface and still has
+  // ground area, so it belongs in the denominator.
+  const meanDensity =
+    footprintCount > 0 ? (countSum * countScale) / (footprintCount * cellArea) : 0;
+  const median = blockMedianDensity(g, countSum, footprintCount, countScale, cellArea);
 
   return {
     metrics: { pointDensity, localCompleteness, edgeDistanceCells },
     summary: {
       measuredCellCount: measuredCount,
-      meanDensity: measuredCount ? densSum / measuredCount : 0,
+      footprintCellCount: footprintCount,
+      meanDensity,
       medianDensity: median,
       meanCompleteness: measuredCount ? compSum / measuredCount : 0,
       boundaryMeasuredRatio: measuredCount ? boundaryMeasured / measuredCount : 0,
     },
   };
+}
+
+/** Target analysed points per block for the median density. */
+const MEDIAN_BLOCK_POINTS = 20;
+
+/**
+ * Median density over square blocks of footprint cells. A per-cell median over
+ * a thinned sample is 0 (most cells empty) or, over occupied cells only, biased
+ * high; blocks sized to hold ~MEDIAN_BLOCK_POINTS analysed points avoid both.
+ * Blocks with less than half their cells in the footprint are skipped (edge
+ * slivers would read their density off a partial area).
+ */
+function blockMedianDensity(
+  g: DtmGrid,
+  countSum: number,
+  footprintCount: number,
+  countScale: number,
+  cellArea: number,
+): number {
+  if (footprintCount === 0 || countSum <= 0) return 0;
+  const { cols, rows } = g;
+  const perCell = countSum / footprintCount;
+  const side = Math.max(1, Math.ceil(Math.sqrt(MEDIAN_BLOCK_POINTS / perCell)));
+  const vals: number[] = [];
+  const full = side * side;
+  for (let r0 = 0; r0 < rows; r0 += side) {
+    for (let c0 = 0; c0 < cols; c0 += side) {
+      let cells = 0;
+      let cnt = 0;
+      const r1 = Math.min(rows, r0 + side);
+      const c1 = Math.min(cols, c0 + side);
+      for (let r = r0; r < r1; r++) {
+        for (let c = c0; c < c1; c++) {
+          const i = r * cols + c;
+          if (g.coverage[i] === NO_COVERAGE) continue;
+          cells++;
+          cnt += g.counts[i];
+        }
+      }
+      if (cells === 0 || cells * 2 < full) continue;
+      vals.push((cnt * countScale) / (cells * cellArea));
+    }
+  }
+  if (vals.length === 0) return (countSum * countScale) / (footprintCount * cellArea);
+  vals.sort((a, b) => a - b);
+  const m = vals.length;
+  return m % 2 === 1 ? vals[(m - 1) >> 1] : (vals[m / 2 - 1] + vals[m / 2]) / 2;
 }

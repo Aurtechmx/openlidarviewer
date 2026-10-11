@@ -7,10 +7,15 @@
  *
  *   LoD = t · sqrt(σz_before² + σz_after² + σreg²),  t = 1.96 (95 %)
  *
- * Uniform form: each σz is ONE number for the whole surface (that epoch's
- * hold-out RMSEz), not a per-cell field. σreg is the co-registration error;
- * the alignment here reports only a 3-D RMS residual, which is carried as a
- * conservative proxy for the vertical term and labelled as such.
+ * Uniform form: each σz is ONE number for the whole surface, not a per-cell
+ * field: that epoch's random-split hold-out RMSEz (point-vs-surface residual,
+ * ground re-classified from the training points only), which includes the
+ * epoch's own bias. It is not checkpoint accuracy and not a DEM-cell
+ * uncertainty. The 95 % level holds only if the errors are normal, independent
+ * and unbiased. σreg is the co-registration error; the alignment here reports
+ * only a 3-D RMS residual, which is carried as a proxy (fit misfit; not shown
+ * to bound vertical registration error; alignment does not solve z) and
+ * labelled as such.
  *
  * Units: every term is in METRES before it enters the sum, and the threshold
  * is metres. Upstream does the conversion with the CRS factors: σz is the
@@ -49,7 +54,8 @@ export interface LodInputs {
   readonly sigmaRegM?: number | null;
   /**
    * True when `sigmaRegM` is a vertical residual. False (default) means it is
-   * the alignment's 3-D RMS, used as a conservative proxy.
+   * the alignment's 3-D RMS, used as a proxy (fit misfit; not shown to bound
+   * vertical registration error; alignment does not solve z).
    */
   readonly sigmaRegIsVertical?: boolean;
   /**
@@ -149,7 +155,7 @@ export function describeLevelOfDetection(lod: LevelOfDetection): string[] {
   const lines: string[] = [`Level of detection: ${lodLabel(lod)}.`];
   const regName = lod.sigmaRegIsVertical
     ? 'registration σ (vertical residual)'
-    : 'registration σ (alignment 3-D RMS, a conservative proxy for the vertical term)';
+    : 'registration σ (alignment 3-D RMS, a proxy: fit misfit, not shown to bound vertical registration error; alignment does not solve z)';
   const comp = [
     `before σz ${lod.sigmaZBeforeM === null ? 'not measured' : mm(lod.sigmaZBeforeM)}`,
     `after σz ${lod.sigmaZAfterM === null ? 'not measured' : mm(lod.sigmaZAfterM)}`,
@@ -158,7 +164,10 @@ export function describeLevelOfDetection(lod: LevelOfDetection): string[] {
   if (lod.basis === 'propagated') {
     lines.push(
       `Basis: LoD = ${lod.t} · √(σz_before² + σz_after² + σreg²) (Wheaton et al. 2010, uniform form); ` +
-        `${comp}. Each σz is that epoch's hold-out RMSEz over the whole surface.`,
+        `${comp}. Each σz is that epoch's random-split hold-out RMSEz (point-vs-surface residual, ` +
+        `ground re-classified from the training points only; includes the epoch's bias), not ` +
+        `checkpoint accuracy nor a DEM-cell uncertainty. The 95 % level holds only if the errors ` +
+        `are normal, independent and unbiased.`,
     );
   } else if (lod.basis === 'user-set') {
     lines.push(`Basis: user-set threshold; the propagated terms were not used (${comp}).`);

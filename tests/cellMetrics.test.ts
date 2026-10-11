@@ -155,3 +155,44 @@ describe('computeCellMetrics', () => {
     expect(summary.medianDensity).toBeCloseTo(25, 6);
   });
 });
+
+describe('computeCellMetrics — footprint density is unbiased under stride', () => {
+  // Poisson ground points at a true density on 1 m cells, 200×200 grid, kept
+  // every `stride`-th point. Every cell lies under the surface (coverage > 0);
+  // occupied cells are measured, the rest interpolated.
+  function rng(seed: number) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6d2b79f5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const cases: ReadonlyArray<readonly [number, number]> = [
+    [2, 1], [2, 4], [2, 10], [2, 50], [0.5, 1], [0.5, 4], [4, 50],
+  ];
+  for (const [lam, stride] of cases) {
+    it(`true ${lam} pts/m², stride ${stride} → mean and median within 5 %`, () => {
+      const W = 200;
+      const n = W * W;
+      const r = rng(7);
+      const total = Math.round(lam * n);
+      const counts = new Float32Array(n);
+      let kept = 0;
+      for (let i = 0; i < total; i++) {
+        const c = Math.floor(r() * n);
+        if (i % stride === 0) { counts[c]++; kept++; }
+      }
+      const coverage = new Uint8Array(n);
+      for (let i = 0; i < n; i++) coverage[i] = counts[i] > 0 ? 2 : 1;
+      const g = { cols: W, rows: W, cellSizeM: 1, counts, coverage,
+        z: new Float32Array(n), confidence: new Float32Array(n) } as unknown as DtmGrid;
+      const s = computeCellMetrics(g, { horizontalUnitToMetres: 1, countScale: total / kept }).summary;
+      expect(s.footprintCellCount).toBe(n);
+      expect(Math.abs(s.meanDensity / lam - 1)).toBeLessThan(0.05);
+      expect(Math.abs(s.medianDensity / lam - 1)).toBeLessThan(0.05);
+    });
+  }
+});

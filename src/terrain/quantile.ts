@@ -24,8 +24,11 @@
  *   - {@link quantileType7InPlace}: type-7 on a Float64Array sorted in place,
  *     written with the (hi − idx) weight the lasso occlusion gate was tuned on.
  *   - {@link quantileNearestRankSorted}: nearest-rank, `ceil(p·n) − 1`, so the
- *     result is always an observed value (validation residuals, bootstrap
- *     endpoints, frame-time percentiles).
+ *     result is always an observed value (checkpoint-accuracy residuals in
+ *     src/validation/checkpointAccuracy.ts, bootstrap endpoints, frame-time
+ *     percentiles). The hold-out residual P95 in holdoutRmse.ts is NOT one of
+ *     these: it uses type-7 {@link quantileSorted}, so the hold-out and
+ *     checkpoint P95 can differ by up to one order-statistic gap.
  *   - {@link floorRankIndex}: the `floor(p·n)` index pick the colour-range
  *     and RGB-histogram paths use.
  *
