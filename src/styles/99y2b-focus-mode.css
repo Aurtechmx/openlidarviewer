@@ -33,6 +33,9 @@
   border-color: var(--accent);
 }
 .olv-focus-toggle.olv-hidden { display: none; }
+/* Narrow desktop windows: size to the label so the header never runs past the
+   viewport edge (the sweep at 768 px caught the GitHub link 1.8 px over). */
+@media (max-width: 900px) { .olv-focus-toggle { min-width: 0; padding: 0 var(--space-md); } }
 /* Touch: the 44 px floor for tablets lives in 99y4-tablet-touch.css with the other controls. */
 
 .olv-focus-mode .olv-wordmark,
