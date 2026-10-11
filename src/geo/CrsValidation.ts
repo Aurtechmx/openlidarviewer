@@ -30,6 +30,17 @@
  *       cubic-metre headline; show the value as "—" with a "confirm CRS
  *       to measure" prompt.
  *
+ *   `grid-only`
+ *       Web Mercator (EPSG:3857 and its aliases). The grid has a metre unit
+ *       but a grid metre is not a ground metre: the scale grows as 1/cos φ,
+ *       so a 100-unit segment at 60° N is about 50 m on the ground. Horizontal
+ *       lengths, areas, slopes and volumes are refused; a pure height
+ *       difference (the vertical axis) stays available.
+ *
+ *   `unsupported-frame`
+ *       Geocentric (Earth-centred Cartesian) CRS. X/Y are not a ground plane
+ *       and Z is not elevation, so every metric and elevation claim is refused.
+ *
  *   `non-finite-unit`
  *       The CRS reports a `linearUnitToMetres` that is NaN, zero, or
  *       negative. Defensive — should be impossible from a well-formed
@@ -49,7 +60,35 @@ export type CrsValidity =
   | 'safe-explicit-local'
   | 'requires-projection'
   | 'unknown-needs-confirmation'
+  | 'grid-only'
+  | 'unsupported-frame'
   | 'non-finite-unit';
+
+/** EPSG codes for Web Mercator (Pseudo-Mercator) and its historical aliases. */
+const WEB_MERCATOR_EPSG: ReadonlySet<number> = new Set([3857, 900913, 3785, 102100, 102113]);
+
+/**
+ * Whether `crs` is Web Mercator: a known code, or a WKT / name that says
+ * Pseudo-Mercator or Popular Visualisation.
+ */
+export function isWebMercator(crs: Pick<ResolvedCrs, 'epsg' | 'name' | 'wkt'>): boolean {
+  if (crs.epsg !== undefined && WEB_MERCATOR_EPSG.has(crs.epsg)) return true;
+  const text = `${crs.name} ${crs.wkt ?? ''}`.toLowerCase();
+  return /pseudo[ -_]?mercator|popular[ _]visuali[sz]ation/.test(text);
+}
+
+/** The refusal reason for a Web Mercator grid. */
+export const WEB_MERCATOR_REASON =
+  'Web Mercator grid units are not ground metres (the scale grows with latitude), so horizontal lengths, areas, slopes and volumes are refused.';
+
+/** The refusal reason for a geocentric frame. */
+export const GEOCENTRIC_REASON =
+  'Geocentric CRS (Earth-centred X/Y/Z): X/Y are not a ground plane and Z is not elevation, so metric and elevation workflows refuse it.';
+
+/** Whether a verdict refuses horizontal ground metrics while the frame itself is identified. */
+export function refusesHorizontalGround(validity: CrsValidity): boolean {
+  return validity === 'grid-only' || validity === 'unsupported-frame';
+}
 
 /** Severity of the verdict — drives the badge colour in the inspector. */
 export type CrsValiditySeverity = 'ok' | 'caution' | 'warn' | 'block';
@@ -117,6 +156,16 @@ export function validateCrsForMeasurement(
 
   switch (crs.kind) {
     case 'projected':
+      if (isWebMercator(crs)) {
+        return {
+          validity: 'grid-only',
+          severity: 'block',
+          canDisplayMetric: false,
+          canSaveMeasurement: false,
+          reason: WEB_MERCATOR_REASON,
+          suggestion: 'Reproject to a conformal local CRS (UTM, state plane) before measuring.',
+        };
+      }
       return {
         validity: 'safe-metric',
         severity: 'ok',
@@ -148,6 +197,16 @@ export function validateCrsForMeasurement(
           'Geographic CRS (lat/lon in degrees). Distance and volume in degrees are meaningless.',
         suggestion:
           'Pick a projected CRS (UTM, state plane, etc.) before measuring.',
+      };
+
+    case 'geocentric':
+      return {
+        validity: 'unsupported-frame',
+        severity: 'block',
+        canDisplayMetric: false,
+        canSaveMeasurement: false,
+        reason: GEOCENTRIC_REASON,
+        suggestion: 'Reproject to a projected CRS with a vertical datum before measuring.',
       };
 
     case 'unknown':

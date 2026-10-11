@@ -117,7 +117,7 @@ export function changeToEsriAscii(input: ChangeRasterInput): string {
 
 /** The horizontal CRS the raster's origin and cell size are expressed in. */
 export interface ChangeRasterCrs {
-  readonly kind: 'projected' | 'geographic' | 'local' | 'unknown';
+  readonly kind: 'projected' | 'geographic' | 'geocentric' | 'local' | 'unknown';
   readonly name: string;
   readonly epsg?: number;
   readonly wkt?: string;
@@ -159,6 +159,11 @@ export function changeRasterSidecars(input: ChangeRasterSidecarInput): ChangeRas
   if (crs.kind === 'unknown') {
     throw new ChangeRasterRefusal(
       'Difference raster not written: the scans have no declared coordinate reference system, so the grid could not be placed. Set a CRS in the Inspector and compare again.',
+    );
+  }
+  if (crs.kind === 'geocentric') {
+    throw new ChangeRasterRefusal(
+      `Difference raster not written: "${crs.name}" is a geocentric CRS (Earth-centred X/Y/Z), which has no ground plane to grid on.`,
     );
   }
   if (crs.kind === 'projected' || crs.kind === 'geographic') {

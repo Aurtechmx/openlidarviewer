@@ -18,7 +18,7 @@
 import type { CrsInfo } from '../io/crs';
 import { sceneUpAxisPolicy, type SourceFormat } from '../io/sniffFormat';
 import type { CrsService } from '../geo/CrsService';
-import { spatialContextFrom, type SpatialContext } from '../geo/SpatialContext';
+import { elevationWorkflowRefusal, spatialContextFrom, type SpatialContext } from '../geo/SpatialContext';
 import {
   epochFrameFacts,
   epochFrameOptions,
@@ -50,13 +50,15 @@ export interface PreparedEpochFrames {
   readonly comparable: boolean;
   /** Why the comparison was refused, or null when it may proceed. */
   readonly reason: EpochRefusal | null;
+  /** The frame refusal message when `reason` is `'frame'`, else null. */
+  readonly frameRefusal: string | null;
   readonly frames: EpochFrameOptions;
   readonly beforeCloud: PreparedEpochCloud;
   readonly afterCloud: PreparedEpochCloud;
 }
 
 /** Why a comparison was refused. */
-export type EpochRefusal = 'vertical-unit' | 'up-axis';
+export type EpochRefusal = 'vertical-unit' | 'up-axis' | 'frame';
 
 /**
  * Whether BOTH epochs are Z-up, which the change pipeline requires.
@@ -85,7 +87,10 @@ function epochUpAxisContractHolds(a: EpochFrameInput, b: EpochFrameInput): boole
 }
 
 /** Compare-panel lines shown when the two epochs cannot be compared. */
-export function epochUnitMismatchLines(header: string, reason: EpochRefusal = 'vertical-unit'): string[] {
+export function epochUnitMismatchLines(header: string, reason: EpochRefusal = 'vertical-unit', frameReason?: string): string[] {
+  if (reason === 'frame') {
+    return [header, `Cannot compare — ${frameReason ?? 'an epoch is in a frame elevation workflows refuse.'}`];
+  }
   if (reason === 'up-axis') {
     return [
       header,
@@ -120,12 +125,21 @@ export function prepareEpochFrames(
   const ctxB = spatialContextFrom(
     crsService.resolveFor({ name: b.name, detected: b.metadata?.crs ?? undefined, source: 'las-vlr' }),
   );
+  // A depth-down, geocentric or Web Mercator epoch is refused before anything
+  // else: d = (after − before) would read a depth decrease (a physical rise) as
+  // a loss, and the other two have no ground-metre plane to grid on.
+  const frameRefusal = elevationWorkflowRefusal(ctxA) ?? elevationWorkflowRefusal(ctxB);
   const unitsOk = epochVerticalScalesComparable(ctxA, ctxB);
   const axisOk = epochUpAxisContractHolds(a, b);
+  let reason: EpochRefusal | null = null;
+  if (frameRefusal !== null) reason = 'frame';
+  else if (!unitsOk) reason = 'vertical-unit';
+  else if (!axisOk) reason = 'up-axis';
   return {
     ctxA,
-    comparable: unitsOk && axisOk,
-    reason: !unitsOk ? 'vertical-unit' : (!axisOk ? 'up-axis' : null),
+    comparable: reason === null,
+    reason,
+    frameRefusal,
     frames: epochFrameOptions(ctxA, ctxB),
     beforeCloud: { positions: a.positions, origin: a.sourceOrigin, ...epochFrameFacts(ctxA) },
     afterCloud: { positions: b.positions, origin: b.sourceOrigin, ...epochFrameFacts(ctxB) },

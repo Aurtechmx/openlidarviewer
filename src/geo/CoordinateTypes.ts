@@ -29,9 +29,13 @@ import type { CrsInfo, CrsLinearUnit } from '../io/crs';
  * `geographic` — lat/lon in degrees. Distances need projection to be
  *                metric-accurate; conversion to a projected CRS is
  *                well-defined.
+ * `geocentric` — Earth-centred Cartesian X/Y/Z (EPSG:4978 and kin). The CRS
+ *                identity is kept, but X/Y are not a ground plane and Z is
+ *                not elevation, so every metric, terrain and elevation gate
+ *                refuses it.
  * `unknown` — the CRS detector found no metadata.
  */
-export type CrsKind = 'local' | 'projected' | 'geographic' | 'unknown';
+export type CrsKind = 'local' | 'projected' | 'geographic' | 'geocentric' | 'unknown';
 
 /**
  * Where the CRS metadata came from. Surfaced in the Inspector so the
@@ -128,6 +132,8 @@ export interface ResolvedCrs {
   readonly verticalEpsg?: number;
   /** Human label for the vertical datum (name or `EPSG:<code>`); undefined = unknown. */
   readonly verticalDatum?: string;
+  /** Set when the vertical axis is declared DOWN (a depth axis). See `CrsInfo.verticalAxisDown`. */
+  readonly verticalAxisDown?: boolean;
   /**
    * Horizontal geodetic datum name (e.g. "NAD83(2011)", "WGS 84", "ETRS89"),
    * resolved consistently across every path: a WKT-declared datum always wins,
@@ -213,7 +219,8 @@ export function resolvedFromCrsInfo(
   source: CrsSource,
 ): ResolvedCrs | null {
   if (!info) return null;
-  const kind: CrsKind = info.isGeographic ? 'geographic' : 'projected';
+  let kind: CrsKind = info.isGeographic ? 'geographic' : 'projected';
+  if (info.geocentric) kind = 'geocentric';
   // Confidence: EPSG + WKT = high, EPSG OR a recognisable name = medium.
   // The CrsInfo always has a `name`, so the discriminator is EPSG.
   let confidence: CrsConfidence;
@@ -240,6 +247,7 @@ export function resolvedFromCrsInfo(
     verticalEpsg: info.verticalEpsg,
     verticalDatum: info.verticalDatum,
     verticalUnitToMetres: info.verticalUnitToMetres,
+    ...(info.verticalAxisDown ? { verticalAxisDown: true } : {}),
     // The WKT-declared datum (realization-preserving). CrsService fills the
     // registry fallback by EPSG when this is absent — kept out of here to avoid
     // a CoordinateTypes → CrsRegistry import cycle.

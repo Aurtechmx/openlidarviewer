@@ -46,7 +46,7 @@ import type { CrsInfo, CrsLinearUnit } from '../io/crs';
 import type { CrsKind, CrsSource, ResolvedCrs } from './CoordinateTypes';
 import { isLinearUnitKnown, resolvedFromCrsInfo, unknownCrs } from './CoordinateTypes';
 import type { CrsValidity, CrsValiditySeverity } from './CrsValidation';
-import { validateCrsForMeasurement } from './CrsValidation';
+import { GEOCENTRIC_REASON, WEB_MERCATOR_REASON, refusesHorizontalGround, validateCrsForMeasurement } from './CrsValidation';
 import type { VerticalReference } from './height';
 import { HEIGHT_UNIT_GAP_SUFFIX, verticalReferenceFromDatum } from './height';
 import type { LayerSpatialTransform, ProjectSpatialFrame } from './ProjectSpatialFrame';
@@ -132,6 +132,20 @@ export interface SpatialContext {
    * height is a datum-referenced metre value.
    */
   readonly verticalReferenceKnown: boolean;
+  /**
+   * Whether the vertical axis points DOWN (a depth-positive-down reference):
+   * a known depth code (NAVD88 depth, MSL depth, …) or a WKT vertical AXIS
+   * declared DOWN. Elevation workflows treat Z as positive-up height, so they
+   * refuse a frame where this holds (see {@link elevationWorkflowRefusal}).
+   */
+  readonly verticalAxisDown: boolean;
+  /**
+   * Whether horizontal ground metrics (lengths, areas, grades, volumes) are
+   * refused while heights stay available: a geographic (degree) CRS, a Web
+   * Mercator grid, or a geocentric frame. The Measure tool's horizontal
+   * refusal reads this one flag.
+   */
+  readonly horizontalMetricRefused: boolean;
 
   // ── Up axis / basis ──────────────────────────────────────────────────────
   /** Which storage axis is elevation; `'unknown'` when undetected. */
@@ -267,6 +281,8 @@ export function spatialContextFrom(
     verticalLinearUnit,
     verticalScaleKnown,
     verticalReferenceKnown: verticalReference !== 'unknown',
+    verticalAxisDown: verticalReference === 'depth' || crs?.verticalAxisDown === true,
+    horizontalMetricRefused: resolved.kind === 'geographic' || refusesHorizontalGround(verdict.validity),
 
     upAxis: placement.upAxis ?? 'unknown',
 
@@ -280,6 +296,31 @@ export function spatialContextFrom(
 
     metricClaimsPermitted,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Elevation workflows — the shared frame refusal
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Refusal for a depth-positive-down vertical reference. */
+export const DEPTH_AXIS_REFUSAL =
+  'Depth-positive-down vertical reference; elevation workflows refuse it until normalisation is supported.';
+
+/**
+ * Why an elevation workflow (terrain analysis, contours, DEM export, flow,
+ * access, epoch comparison) must refuse this frame, or `null` when it may run.
+ *
+ * Those workflows read Z as a positive-up height on a ground plane. A depth
+ * axis inverts every rise into a fall (a surface going from 10 m to 9 m depth
+ * rose by 1 m, and was reported as a 1 m loss); a geocentric frame has no
+ * ground plane and no elevation axis; a Web Mercator grid has no ground-metre
+ * scale for slopes, areas and volumes. Each is refused rather than computed.
+ */
+export function elevationWorkflowRefusal(ctx: SpatialContext): string | null {
+  if (ctx.kind === 'geocentric') return GEOCENTRIC_REASON;
+  if (ctx.verticalAxisDown) return DEPTH_AXIS_REFUSAL;
+  if (ctx.metricValidity === 'grid-only') return WEB_MERCATOR_REASON;
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

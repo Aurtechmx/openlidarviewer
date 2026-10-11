@@ -31,7 +31,7 @@ import { FT_PER_M as FEET_PER_METRE } from '../../units/units';
 export const UNIT_UNVERIFIED_MEASURE_NOTICE = 'unit unverified (source units, not metres)';
 
 export const GEOGRAPHIC_CRS_MEASURE_NOTICE =
-  'Geographic CRS (degrees): X/Y are in degrees, not metres, so lengths, ' +
+  'Geographic CRS (degrees), Web Mercator grid or geocentric frame: X/Y are not ground metres, so lengths, ' +
   'areas, grades and profiles are NOT reliable distances. Reproject to a ' +
   'projected CRS for measurement work.';
 

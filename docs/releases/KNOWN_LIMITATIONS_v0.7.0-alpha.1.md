@@ -507,6 +507,21 @@ vertical unit is declared. A declared vertical unit wins over the code's own
 (NAVD88 with US survey feet reads as NAVD88 height in ftUS, as in GDAL), and a
 declared vertical unit code the app cannot read leaves the height unit unknown.
 
+## Depth references, geocentric frames and Web Mercator are refused, not converted
+
+Terrain analysis, contours, DEM export, Flow Pulse, Terrain Access and change
+detection refuse a depth-positive-down vertical reference on either epoch
+("Depth-positive-down vertical reference; elevation workflows refuse it until
+normalisation is supported."). Depths are not negated into heights. A
+geocentric CRS (EPSG:4978 and similar) is refused by every metric, terrain and
+elevation workflow; it is not converted to geographic or projected
+coordinates. Web Mercator is treated as grid units only: horizontal lengths,
+areas, grades, slopes and volumes are withheld and heights are kept; no
+scale-factor correction is applied. A geocentric code outside the built-in
+list is recognised only from its WKT or GeoTIFF model type. A WKT
+engineering CRS (ENGCRS, LOCAL_CS) is not yet classified as local and keeps
+its current handling.
+
 ## Exports carry the geographic refusal, not the endpoint grade
 
 On a geographic CRS the PDF report, profile sheet, CSV, GeoJSON, KML, findings,

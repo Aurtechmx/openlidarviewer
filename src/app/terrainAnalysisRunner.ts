@@ -43,7 +43,7 @@ export type TerrainCrsFacts = Pick<CrsService, 'current' | 'context' | 'crsRevis
 // The one spatial context this pipeline reads its unit / datum / axis facts
 // from, plus the named vertical-fallback policy that replaces the local
 // `verticalUnitToMetres ?? linearUnitToMetres` chains.
-import { verticalMetresPerUnit } from '../geo/SpatialContext';
+import { elevationWorkflowRefusal, verticalMetresPerUnit } from '../geo/SpatialContext';
 import { analysedBasisOf, WITHHELD_RECOVERY_STATUS } from '../terrain/export/analysedBasis';
 import type {
   AnalyseContoursResult,
@@ -149,6 +149,11 @@ export function deriveCoreParams(
   // CRS label and both EPSG codes — is read off it, so the params handed to the
   // terrain core cannot disagree with each other about the same scan.
   const ctx = crsService.context();
+  // The shared elevation-workflow gate. Every terrain product (analysis,
+  // contours, DEM export, flow, access) is built from the core these params
+  // key, so a frame refused here is refused for all of them.
+  const frameRefusal = elevationWorkflowRefusal(ctx);
+  if (frameRefusal !== null) throw new Error(frameRefusal);
   const isGeographic = ctx.isGeographic;
   // Aim for a grid ~256 cells across, clamped to a sane floor. The floor is
   // 0.25 METRES expressed in SOURCE units — the old raw `0.25` was unit-blind:

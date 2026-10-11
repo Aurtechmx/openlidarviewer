@@ -74,7 +74,8 @@ export function geographicRefusesKind(kind: MeasurementKind): boolean {
  * report finding) prints in place of a figure the live tool refuses on a
  * geographic frame. One string so every export reads the same.
  */
-export const GEOGRAPHIC_NOT_AVAILABLE = 'not available: geographic CRS (degrees are not distances)';
+export const GEOGRAPHIC_NOT_AVAILABLE =
+  'not available: horizontal CRS units are not ground distances (geographic degrees, Web Mercator grid or geocentric frame)';
 
 /** Unit system for displayed values; toggled live from the Measurements panel. */
 export type UnitSystem = 'metric' | 'imperial';

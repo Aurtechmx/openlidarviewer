@@ -1676,9 +1676,9 @@ void viewerLoaded.then(() => {
     // X/Y are degrees, Z is linear. The controller refuses the affected
     // trust grades + captions the hint; the panel shows the persistent
     // caveat. One boolean, one seam, so the two can never disagree.
-    viewer.measure.setGeographicCrs(ctx.isGeographic);
+    viewer.measure.setGeographicCrs(ctx.horizontalMetricRefused); // degrees, Web Mercator grid or geocentric
     viewer.measure.setProjectedCrs(ctx.kind === 'projected' && ctx.epsg != null); // grid-north bearing label
-    measureMount.setGeographicNotice(ctx.isGeographic);
+    measureMount.setGeographicNotice(ctx.horizontalMetricRefused);
     // Colorbar legend — same context, `'horizontal-when-known'` policy: an
     // explicit vertical unit wins, else the horizontal one WHEN really declared
     // (an unknown CRS reports a pass-through 1 that must not read as metres).
@@ -4163,10 +4163,10 @@ function compareLoadedLayers(): void {
     await new Promise((resolve) => setTimeout(resolve, 16));
     if (!current()) return;
     try {
-      const { ctxA, comparable, reason, frames, beforeCloud, afterCloud, lines, span } = withheldEpochs(prepareEpochFrames(crsService, a, b), a, b);
+      const { ctxA, comparable, reason, frameRefusal, frames, beforeCloud, afterCloud, lines, span } = withheldEpochs(prepareEpochFrames(crsService, a, b), a, b);
       if (!comparable) {
         inspector.setCompareResult(
-          epochUnitMismatchLines(`${baseName(a.name)} (before) → ${baseName(b.name)} (after)`, reason ?? 'vertical-unit'),
+          epochUnitMismatchLines(`${baseName(a.name)} (before) → ${baseName(b.name)} (after)`, reason ?? 'vertical-unit', frameRefusal ?? undefined),
         );
         inspector.setDifferenceAvailable(false);
         return;
