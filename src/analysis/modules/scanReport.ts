@@ -8,6 +8,8 @@ import { isZUpFormat } from '../../io/sniffFormat';
 import { heightLabel, HEIGHT_INCLUDES_NOISE_SUFFIX } from '../../geo/height';
 import { estimateInMemoryPrecision } from '../../geo/inMemoryPrecision';
 import { inMemoryPrecisionRows } from '../inMemoryPrecisionRows';
+import { drawPrecisionRows } from '../drawPrecisionRows';
+import { evaluateDrawPrecision, tileFromLocalFloat32 } from '../../science/drawPrecision';
 import { SCAN_DENSITY_METHOD_TAG } from '../streamingExtentRows';
 
 export { SCAN_DENSITY_METHOD_TAG };
@@ -324,8 +326,20 @@ export const scanReport: AnalysisModule = {
     });
     // Both rows come from the one formatter the streaming report also uses, so
     // the two paths cannot describe the same Float32 policy in different words.
+    // Per-draw precision bound for the view this report was generated at: a
+    // diagnostic about the eye-space position the GPU computes, evaluated on
+    // demand here and never consulted by the render loop. {rho, r} are cached
+    // per position buffer, so a re-run only redoes the O(1) check.
+    const draw = options?.drawPrecision
+      ? drawPrecisionRows(evaluateDrawPrecision(tileFromLocalFloat32(sourcePositions(cloud)), options.drawPrecision, {
+        linearUnitKnown: basis.unitKnown,
+        linearUnitToMetres: ctx.linearUnitToMetres,
+        verticalUnitToMetres: zUp ? ctx.verticalUnitToMetres : undefined,
+      }))
+      : [];
     rows.push(
       ...inMemoryPrecisionRows(precision),
+      ...draw,
       // Attribute coverage.
       rowInfo('RGB', cloud.colors !== undefined ? 'Yes' : 'No'),
       rowInfo('Intensity', cloud.intensity !== undefined ? 'Yes' : 'No'),

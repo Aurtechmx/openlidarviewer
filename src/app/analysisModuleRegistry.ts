@@ -19,6 +19,9 @@ import type { PointCloud } from '../model/PointCloud';
 import { healthCheck } from '../analysis/modules/healthCheck';
 import { scanReport } from '../analysis/modules/scanReport';
 
+/** Read the active cloud's draw for the scan report's precision bound; lazy with the modules. */
+export { drawPrecisionViewFor } from './drawPrecisionView';
+
 /** The registry with every shipped analysis module registered, in order. */
 export function createAnalysisModuleRegistry(): ModuleRegistry {
   const registry = new ModuleRegistry();

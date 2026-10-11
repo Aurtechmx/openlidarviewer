@@ -62,6 +62,7 @@ The viewer itself is built on open-source work we're grateful for:
 - loaders.gl: glTF / LAS / OBJ / PLY parsing
 - proj4js: coordinate-system transforms
 - pdf-lib: the PDF reports
+- spe-check (A. Urias, MIT): the draw precision bound, from "Per-Draw Precision Bounds for Large-Coordinate Rendering in WebGL2 and WebGPU"
 
 Full license details for every bundled dependency are in
 [THIRD_PARTY_NOTICES.md](project/THIRD_PARTY_NOTICES.md).

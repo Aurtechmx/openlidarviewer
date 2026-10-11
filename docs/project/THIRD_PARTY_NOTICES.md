@@ -111,6 +111,19 @@ Authors) under a different family name, as the SIL Open Font License requires
 of a derivative. Its copyright lines and licence text are in the generated
 section below.
 
+## Vendored code (committed to the repository, bundled into the shipped build)
+
+| Component | Version | License | Files | Upstream |
+| --- | --- | --- | --- | --- |
+| spe-check | `spe_check.js` SHA-256 `53229a0e2682fb103097eaef028079a40b6fa1a5f0c78fbf1da2b0b3c4598b6b` | MIT | `src/vendor/spe-check/` (with `LICENSE`) | A. Urias, checker accompanying "Per-Draw Precision Bounds for Large-Coordinate Rendering in WebGL2 and WebGPU" |
+
+`spe_check.mjs` is the ES-module build of the upstream checker, byte-for-byte
+as published; it differs from `spe_check.js` only in the export statement.
+`olv_preflight.mjs` and the two reference shaders are the upstream adapter and
+expressions, unchanged. The `.d.mts` files beside them add type declarations
+only. MIT code is compatible with the AGPL-3.0 licence of this project; the
+SPDX headers and the MIT licence text are kept.
+
 ## Development-only dependencies (not bundled into the shipped build)
 
 The following are used during typecheck, test, lint, or build only.
@@ -368,7 +381,7 @@ subject to those terms.
 
 ## Copyright notices and full licence texts
 
-This section is generated from the installed packages and the vendored fonts by
+This section is generated from the installed packages and the vendored components by
 `scripts/gen-third-party-notices.mjs`. Each bundled package is listed with
 the copyright lines from its own licence and NOTICE files and the licence text
 that applies to it; each distinct text is reproduced once at the end.
@@ -625,6 +638,12 @@ Licence: OFL-1.1. Text: T20.
 
 - Copyright 2020 The Poppins Project Authors (https://github.com/itfoundry/Poppins)
 - Modified in 2026 for the Olv Font project: horizontal proportions, spacing, additional glyphs and OpenType features. A derivative of Poppins, renamed as the OFL requires.
+
+#### spe-check sha256-53229a0e
+
+Licence: MIT. Text: T21.
+
+- Copyright (c) 2026 A. Urias
 
 ### NOTICE files
 
@@ -1672,6 +1691,22 @@ INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
 DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
+```
+
+#### T21: MIT
+
+Applies to: spe-check sha256-53229a0e.
+
+```
+MIT License
+
+Copyright (c) 2026 A. Urias
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
 <!-- generated:licence-texts:end -->
