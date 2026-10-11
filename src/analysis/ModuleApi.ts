@@ -1,6 +1,7 @@
 import type { PointCloud } from '../model/PointCloud';
 import type { ClassScope } from '../render/class/classScope';
 import type { SpatialContext } from '../geo/SpatialContext';
+import type { DrawPrecisionView } from '../science/drawPrecision';
 
 export type AnalysisStatus = 'pass' | 'warn' | 'fail' | 'info';
 
@@ -55,6 +56,12 @@ export interface RunOptions {
    * This changes the SOURCE of unit/frame truth, never a metric formula.
    */
   spatialContext?: SpatialContext;
+  /**
+   * The active cloud's draw at the current camera, for the per-draw precision
+   * bound diagnostic (`science/drawPrecision.ts`). Absent for callers without a
+   * viewer; the scan report then omits the rows.
+   */
+  drawPrecision?: DrawPrecisionView;
 }
 
 export interface AnalysisModule {

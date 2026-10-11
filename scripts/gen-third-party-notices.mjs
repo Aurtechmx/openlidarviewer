@@ -73,6 +73,12 @@ export const VENDORED = [
     modified:
       'Modified in 2026 for the Olv Font project: horizontal proportions, spacing, additional glyphs and OpenType features. A derivative of Poppins, renamed as the OFL requires.',
   },
+  {
+    name: 'spe-check',
+    version: 'sha256-53229a0e',
+    licence: 'MIT',
+    dir: 'src/vendor/spe-check',
+  },
 ];
 
 const LICENCE_FILE = /^(licen[cs]e|copying)(\.(md|txt))?$/i;
@@ -161,7 +167,7 @@ export function buildBlock(components, readPkg) {
   const ids = new Map([...texts.keys()].map((h, i) => [h, `T${i + 1}`]));
   const out = [BEGIN, '', '## Copyright notices and full licence texts', ''];
   out.push(
-    'This section is generated from the installed packages and the vendored fonts by',
+    'This section is generated from the installed packages and the vendored components by',
     '`scripts/gen-third-party-notices.mjs`. Each bundled package is listed with',
     'the copyright lines from its own licence and NOTICE files and the licence text',
     'that applies to it; each distinct text is reproduced once at the end.',
@@ -248,7 +254,7 @@ if (isCliEntry(import.meta.url)) {
       console.error(`notices: ${NOTICES_PATH} is stale. Run node scripts/gen-third-party-notices.mjs.`);
       process.exit(1);
     }
-    console.log(`notices OK: ${components.length} bundled packages and ${VENDORED.length} vendored font, licence texts current.`);
+    console.log(`notices OK: ${components.length} bundled packages and ${VENDORED.length} vendored components, licence texts current.`);
   } else {
     writeFileSync(path, next);
     console.log(`notices: wrote ${components.length} bundled packages to ${NOTICES_PATH}.`);

@@ -4218,14 +4218,13 @@ export class Viewer {
   // Utility
   // ─────────────────────────────────────────────────────────────────────────
 
-  /**
-   * Report which GPU backend is active.
-   * Call after `await viewer.ready`.
-   */
+  /** Report which GPU backend is active. Call after `await viewer.ready`. */
   activeBackend(): 'webgpu' | 'webgl2' {
     const backend = (this._renderer as unknown as { backend: { isWebGPUBackend?: boolean } }).backend;
     return backend?.isWebGPUBackend === true ? 'webgpu' : 'webgl2';
   }
+  /** Cloud `id`'s binary64 model-view, composed as three's `highpModelViewMatrix` does (app/drawPrecisionView.ts), or null. */
+  cloudModelView64(id: string): Float64Array | null { const e = this._clouds.get(id); return e ? Float64Array.from(new THREE.Matrix4().multiplyMatrices(this._activeCamera().matrixWorldInverse, e.mesh.matrixWorld).elements) : null; }
 
   /** Watch device loss and restore; a restore rebuilds the renderer (contextRecovery.ts, loaded on demand). One detach for both; the caller drops the previous one. */
   private _watchDevice(): void {

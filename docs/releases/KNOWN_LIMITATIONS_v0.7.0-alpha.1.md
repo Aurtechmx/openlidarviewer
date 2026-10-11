@@ -331,7 +331,7 @@ for this development cut: that evidence comes from the engines themselves.
 
 `src/main.ts` is 4,313 lines, twenty-five fewer since the Save view snapshot
 moved to its own lazy module and the Analyse panel's longitude and latitude
-wiring moved to the mapper module, and `src/render/Viewer.ts` is 5,962, two hundred and sixty-one lines
+wiring moved to the mapper module, and `src/render/Viewer.ts` is 5,961, two hundred and sixty-two lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
@@ -342,12 +342,12 @@ there. The frame gained a decision while the file lost lines. The two-finger
 pinch and pan now share one screen-space shift, which took another
 thirty-six out. The figure view context moved into the export adapter, which
 took twenty-one more. The measure click handling moved into the
-measurement controller, which took twenty-eight more. A shrink-only lint
+measurement controller, which took twenty-eight more. The draw precision bound's model-view accessor took one line and a shorter doc comment gave back two. A shrink-only lint
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 97 for the shell, 75 for the renderer and 23 for the Analyse panel,
-across 1108 modules with no dependency cycles.
+across 1111 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -677,6 +677,23 @@ correlation between windows. Empirical p-values cannot fall below 1/2001
 per peak, and the combined value below that is a model figure, not a
 calibrated probability. A supported grid is a grid the points are
 compatible with; it does not say which operation produced it.
+
+## The draw precision bound is a diagnostic for one view
+
+The scan report's "Draw precision bound" row bounds the error of the eye-space
+position of each point centre, `modelView * vec4(p, 1.0)` in binary32, under
+round-to-nearest arithmetic, for the camera at the moment the report was
+generated. It does not cover projection, the divide by w, the point sprite
+size, depth or survey accuracy, and it never stops a draw. It is computed for
+the active static cloud only; streaming scans and the Observatory overlay are
+not evaluated. The storage error is a worst-case figure from the Float32
+buffer, because binary64 source positions are not kept after load. With no
+established linear unit, or a vertical unit different from the horizontal
+one, the bound is shown in source units and not graded. The mapping from
+OLV's shaders to the bounded expression was read from three.js 0.186.0 and
+pinned by content against 0.186.1 (`docs/architecture/draw-precision-contract.md`);
+any other three.js version
+fails `tests/drawPrecisionShaderContract.test.ts` until it is read again.
 
 ## Volumes on a voxel-reduced cloud cannot exclude noise or Withheld points
 

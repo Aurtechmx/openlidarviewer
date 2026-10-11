@@ -31,6 +31,7 @@ the paper that specifies it.
 | `olv.contour.generalize.dp` | 1 | Douglas to Peucker contour simplification | Douglas & Peucker (1973) |
 | `olv.contour.generalize.terrain-adaptive` | 1 | Terrain-adaptive contour generalization; feature-scaled Douglas to Peucker followed by the same Chaikin corner-cutting | internal (feature-scaled DP, then Chaikin) |
 | `olv.class.derived-heuristic` | 3 | Derived point classification (heuristic) | Zhang et al. (2003); internal composition |
+| `olv.render.draw-precision-bound` | 1 | Per-draw eye-space precision bound: upper bound on the binary32 error of `modelView * vec4(p, 1.0)` for the active cloud at the current camera, compared with 1 mm; a diagnostic, not a draw gate, and NOT_TESTED where the shader contract is not verified (see `docs/architecture/draw-precision-contract.md`); projection, divide by w and survey accuracy not covered | A. Urias, "Per-Draw Precision Bounds for Large-Coordinate Rendering in WebGL2 and WebGPU"; checker SHA-256 `53229a0e2682fb103097eaef028079a40b6fa1a5f0c78fbf1da2b0b3c4598b6b` |
 | `olv.topology.linkage-record` | 1 | Source acquisition topology linkage record | internal (provenance record) |
 | `olv.provenance.source-interpretation` | 1 | Source interpretation and data basis record | internal (provenance record) |
 | `olv.dtm.idw-fill` | 1 | DTM raster + void fill; the shipped fill is geodesic, an Euclidean IDW prefill only seeds it (see `methodRegistry.ts`) | internal |

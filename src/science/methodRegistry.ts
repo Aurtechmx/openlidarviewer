@@ -38,7 +38,9 @@ export type MethodCategory =
   /** A declared model applied to a measured product, producing a simulated result. */
   | 'simulation'
   /** Ray-and-voxel scanner-visibility evidence (Observatory, docs/observatory/SPEC.md). */
-  | 'observation';
+  | 'observation'
+  /** Bounds on numerical error in how the viewer represents or draws coordinates. */
+  | 'precision';
 
 /** A lightweight reference to a registered method at its current version. */
 export interface MethodRef {
@@ -423,6 +425,22 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     citation: 'Anderson (2019), pubs.usgs.gov/publication/70202166 (thresholded gross vs raw net); Wheaton et al. (2010), doi:10.1002/esp.1886 (propagated minimum LoD)',
     category: 'change',
     implementation: ['src/terrain/change/changeDetection.ts', 'src/terrain/change/compareDtms.ts'],
+  },
+  'olv.render.draw-precision-bound': {
+    id: 'olv.render.draw-precision-bound',
+    version: 1,
+    name: 'Per-draw eye-space precision bound',
+    summary:
+      'Upper bound on the binary32 error of the eye-space point position modelView * vec4(p, 1.0) ' +
+      'for one cloud at the current camera, under round-to-nearest arithmetic, compared with a 1 mm ' +
+      'tolerance. A diagnostic, not a draw gate; NOT_TESTED on a draw path whose shader is not verified. ' +
+      'Does not cover projection, the divide by w, or survey accuracy.',
+    citation:
+      'A. Urias, "Per-Draw Precision Bounds for Large-Coordinate Rendering in WebGL2 and WebGPU"; ' +
+      'checker spe_check.js SHA-256 53229a0e2682fb103097eaef028079a40b6fa1a5f0c78fbf1da2b0b3c4598b6b (vendored, MIT).',
+    category: 'precision',
+    // The checker itself is src/vendor/spe-check/ (spe_check.mjs, olv_preflight.mjs), reached through this module.
+    implementation: ['src/science/drawPrecision.ts'],
   },
   'olv.topology.linkage-record': {
     id: 'olv.topology.linkage-record',
