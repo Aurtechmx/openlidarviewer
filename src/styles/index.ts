@@ -52,4 +52,5 @@ import './99y2-results-shelf.css'; // Results shelf: the rail-footer toggle and 
 import './99y2b-focus-mode.css'; // Focus mode: the header control, and the chrome that steps aside while it is on.
 import './99y3-workspace-polish.css'; // Left-rail polish: one task surface per mode, hairline sections, task title type, route transitions.
 import './99y4-tablet-touch.css'; // Tablet touch targets: 44 px floor and 48 px close and Frame all on large touch screens, outside the rails, dock and dialogs.
+import './99y5-active-tool.css'; // Active-tool pill: the pointer tool in use, its Finish and Cancel, and the clip chip.
 import './99z-forced-colors.css'; // Windows High Contrast / forced-colors — the final override block.

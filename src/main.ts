@@ -219,7 +219,7 @@ import {
   loadObjectPanel,
   loadTilesetOpen,
   loadActionRegistry,
-  loadToolLauncher,
+  loadToolLauncher, loadActiveToolStatus,
   loadWorkspaceShell,
   loadStockpilePresenter, loadSessionIo, loadAnalysisModules, loadRecovery, loadSessionSnapshot, loadRemoteDeepLink, loadSnapshotAction, loadModal,
 } from './lazyChunks';
@@ -2904,7 +2904,7 @@ void viewerLoaded.then(() => {
     stage.overlay.append(viewer.inspectElements.overlay);
     stage.overlay.append(viewer.inspectElements.hint);
     stage.overlay.append(viewer.annotateElements.overlay);
-    stage.overlay.append(viewer.annotateElements.hint);
+    stage.overlay.append(viewer.annotateElements.hint); void loadActiveToolStatus().then((m) => stage.addTeardown(m.wireActiveToolIndicator({ viewer: () => viewer, clipEnabled: () => clipPanel.enabled, mount: stage.overlay, watch: [viewer.measureElements.hint, viewer.inspectElements.hint, viewer.annotateElements.hint] }).dispose));
     // Right context rail — one coherent column: the Streaming card (only while a
     // COPC streams) above the Inspector, in normal vertical flow rather than a
     // fixed 50vh absolute split. The rail owns the collapse + wheel containment.
@@ -4022,7 +4022,7 @@ async function loadFromUrl(url: string, name: string): Promise<void> {
  */
 function resetToEmptyState(): void {
   viewer.setMeasureMode(false);
-  viewer.setInspectMode(false);
+  viewer.setInspectMode(false); viewer.setAnnotateMode(false);
   viewer.clearMeasurements(); clearPendingSessionRestore();
   // No scan open → take the compass down (nothing to orient).
   compass.refresh();

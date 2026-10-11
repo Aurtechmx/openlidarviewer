@@ -252,3 +252,57 @@ describe('workspaceRouter direction marks and dispose', () => {
     }
   });
 });
+
+describe('launching a tool routes the Tools workspace', () => {
+  async function launch() {
+    const t = await make();
+    const { runSceneTool } = await import('../src/app/toggleTool');
+    const v = {
+      measureMode: false, inspectMode: false, annotateMode: false,
+      setMeasureMode(on: boolean) { v.measureMode = on; },
+      setInspectMode(on: boolean) { v.inspectMode = on; },
+      setAnnotateMode(on: boolean) { v.annotateMode = on; },
+    };
+    let clipOn = false;
+    const deps = {
+      viewer: () => v,
+      workflow: { capture: vi.fn() },
+      toggleClip: () => (clipOn = !clipOn),
+      openPage: (page: 'measure' | 'annotate' | 'clip') => t.router.navigate({ mode: 'work', page }),
+    };
+    // The launcher's resume: an active tool's row reopens its page, never toggles it.
+    const resume = (page: 'measure' | 'annotate' | 'clip'): boolean => {
+      const on = page === 'measure' ? v.measureMode : page === 'annotate' ? v.annotateMode : clipOn;
+      if (on) t.router.navigate({ mode: 'work', page });
+      return on;
+    };
+    const open = (tool: 'measure' | 'annotate' | 'clip'): void => { if (!resume(tool)) runSceneTool(deps, tool); };
+    return { t, v, open, runSceneTool, deps };
+  }
+
+  it('opens each tool on its own page', async () => {
+    const { t, open } = await launch();
+    for (const tool of ['measure', 'annotate', 'clip'] as const) {
+      t.router.back();
+      open(tool);
+      expect(t.router.route()).toEqual({ mode: 'work', page: tool });
+    }
+  });
+
+  it('reopening an active tool keeps it on and returns to its page', async () => {
+    const { t, v, open } = await launch();
+    open('measure');
+    t.ws.setMode('data');
+    open('measure');
+    expect(v.measureMode).toBe(true);
+    expect(t.router.route()).toEqual({ mode: 'work', page: 'measure' });
+  });
+
+  it('inspect toggles without a page, leaving the route alone', async () => {
+    const { t, v, runSceneTool, deps } = await launch();
+    t.ws.setMode('work');
+    runSceneTool(deps, 'inspect');
+    expect(v.inspectMode).toBe(true);
+    expect(t.router.route()).toEqual({ mode: 'work', page: null });
+  });
+});
