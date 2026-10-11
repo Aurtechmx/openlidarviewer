@@ -84,6 +84,12 @@ const LONLAT = {
   aArea: WORLD.aArea.map(utm13LonLat),
   bDist: WORLD.bDist.map(utm13LonLat),
 };
+// A scan that declares NAVD88 in metres has a proven vertical datum, so its
+// positions carry the height as the third coordinate.
+const LONLAT_H = {
+  aDist: WORLD.aDist.map((p) => [...utm13LonLat(p), p[2]]),
+  bDist: WORLD.bDist.map((p) => [...utm13LonLat(p), p[2]]),
+};
 
 interface Feature { geometry: { type: string; coordinates: number[][] | number[][][] }; properties: Record<string, unknown> }
 
@@ -195,7 +201,8 @@ for (const vertical of [false, true]) {
       await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
       const geo = await exportFile(page, 'GeoJSON');
       const f = Object.values(byName(geo.text))[0];
-      expect(f.geometry.coordinates).toEqual(aFirst ? LONLAT.aDist : LONLAT.bDist);
+      const want = vertical ? LONLAT_H : LONLAT;
+      expect(f.geometry.coordinates).toEqual(aFirst ? want.aDist : want.bDist);
       expect(f.properties.source).toBe(aFirst ? 'geom-a' : 'geom-b');
       expect(geo.name).toBe(aFirst ? 'geom-a-measurements.geojson' : 'geom-b-measurements.geojson');
     });
