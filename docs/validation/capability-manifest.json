@@ -119,7 +119,7 @@
     },
     {
       "id": "volume",
-      "title": "Point-sample and stockpile volume",
+      "title": "Cut-fill and stockpile volume",
       "status": "stable",
       "modules": [
         "src/ui/LassoVolumeTool.ts"

@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { samplePolygonVolume } from '../src/render/measure/polygonVolumeSample';
-import { POINT_SAMPLE_VOLUME_METHOD, volumeCutFill, type PlacedVolumeBuffer } from '../src/render/measure/volume';
+import { CUT_FILL_VOLUME_METHOD, volumeCutFill, type PlacedVolumeBuffer } from '../src/render/measure/volume';
 import { deriveVolumeRecord } from '../src/render/measure/measureDerivations';
 import { encodeExtendedClassificationFlags } from '../src/lasSemantics';
 import type { Vec3 } from '../src/render/navMath';
@@ -56,8 +56,8 @@ describe('polygon volume Withheld exclusion', () => {
     expect(excluded).toBeGreaterThan(0);
     expect(rec.withheld).toEqual({ source: all, excluded, analysed: ref.pointsInPolygon });
     // Reading the spikes would have inflated the fill.
-    expect(volumeCutFill({ polygon: POLY, referenceZ: 0, up: UP, positions: g.pos }).fill).toBeGreaterThan(rec.fill! * 2);
-    expect(rec.method).toBe(POINT_SAMPLE_VOLUME_METHOD);
+    expect(volumeCutFill({ polygon: POLY, referenceZ: 0, up: UP, positions: g.pos }).fill).toBeGreaterThan(rec.fill! * 1.2);
+    expect(rec.method).toBe(CUT_FILL_VOLUME_METHOD);
   });
 
   it('applies each source placement to the Withheld points it counts', () => {
@@ -79,7 +79,7 @@ describe('polygon volume Withheld exclusion', () => {
     const golden = deriveVolumeRecord(
       volumeCutFill({ polygon: POLY, referenceZ: 0, up: UP, positions: g.pos }),
       0,
-      POINT_SAMPLE_VOLUME_METHOD,
+      CUT_FILL_VOLUME_METHOD,
     );
     const { withheld, ...rest } = rec;
     expect(rest).toEqual(golden);

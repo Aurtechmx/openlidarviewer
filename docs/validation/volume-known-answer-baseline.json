@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "label": "volume-known-answer-baseline",
+  "generatedAt": "2026-10-10",
+  "revision": "fix/volume-area-weighting",
+  "test": "tests/benchmark/volumeKnownAnswerBaseline.test.ts",
+  "runCommand": "npx vitest run tests/benchmark/volumeKnownAnswerBaseline.test.ts",
+  "method": "olv.volume.stockpile@3",
+  "workload": "Two known-answer scenes for the cut-fill volume. Points are drawn from a fixed-seed LCG, so every figure is deterministic. truthM3 is the closed form; legacyM3 is the point-weighted v1/v2 arithmetic on the same input; recordedM3 is the shipping area-weighted figure at this revision; toleranceRel bounds |recorded - truth| / truth.",
+  "cases": [
+    {
+      "id": "dense-half-sparse-half",
+      "description": "10 m x 10 m polygon, reference z = 0; 900 points at z = 1 uniform on x < 5, 100 points at z = 0 uniform on x > 5 (LCG seed 12345).",
+      "truthM3": 50,
+      "legacyM3": 90,
+      "recordedM3": 56.314,
+      "toleranceRel": 0.2,
+      "interpolationVerdict": "ok"
+    },
+    {
+      "id": "l-shaped-lasso",
+      "description": "L-shaped slab [0,10]x[0,2] U [0,2]x[0,10] (36 m^2) sampled every 0.1 m, z = 1 except a z = 0 rim on x < 0.05 or y < 0.05; footprint is the drawn L lasso, reference the 5th percentile.",
+      "truthM3": 36,
+      "truthAreaM2": 36,
+      "legacyM3": 64.4,
+      "legacyAreaM2": 68,
+      "recordedM3": 35.938,
+      "recordedAreaM2": 36,
+      "toleranceRel": 0.05,
+      "interpolationVerdict": "ok"
+    }
+  ]
+}

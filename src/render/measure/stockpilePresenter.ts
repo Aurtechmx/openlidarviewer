@@ -16,6 +16,7 @@
 
 import { stockpileVolume, type StockpileVolumeResult, type StockpileConfidence } from './stockpileVolume';
 import { stockpileAreaGrid, type StockpileAreaGridResult } from './stockpileAreaGrid';
+import { interpolationVerdict } from './volume';
 import type { Vec3 } from '../navMath';
 import { streamingIsComplete, type StreamingCoverage } from './profileSectionSnapshot';
 import { buildStockpileResult, stockpileResultHeadline } from './stockpileResult';
@@ -102,7 +103,9 @@ export function presentStockpile(
 
   // "model band", not "1σ": the ± is one standard deviation OF THE MODEL above,
   // not a measured coverage interval on the volume.
-  const headline = `${int(r.volume * vol)} m³ ± ${int(r.sigma * vol)} m³ (model band)`;
+  const headline = r.withheldReason
+    ? `Volume withheld (${r.withheldReason})`
+    : `${int(r.volume * vol)} m³ ± ${int(r.sigma * vol)} m³ (model band)`;
   const relative = `±${(r.relativeError * 100).toFixed(1)}%`;
 
   const baseLabel =
@@ -119,11 +122,20 @@ export function presentStockpile(
 
   const rows: StockpileViewRow[] = [
     { label: 'Footprint', value: `${(b.footprintArea * lin2).toFixed(1)} m²` },
+    ...(b.coverageFraction !== undefined && b.coveredArea !== undefined
+      ? [{
+        label: 'Footprint covered',
+        value: `${(b.coveredArea * lin2).toFixed(1)} m² (${(b.coverageFraction * 100).toFixed(0)}%, measured from points)`,
+      }]
+      : []),
+    ...(r.interpolatedFraction !== undefined
+      ? [{ label: 'Interpolated', value: `${(r.interpolatedFraction * 100).toFixed(0)}% of footprint` }]
+      : []),
     { label: 'Points in footprint', value: int(b.pointsInPolygon) },
     densityRow,
     { label: 'Base plane', value: baseLabel },
     { label: 'Mean thickness', value: `${(b.meanThickness * vert).toFixed(2)} m` },
-    { label: 'Sampling error', value: `± ${int(b.samplingError * vol)} m³` },
+    { label: 'Surface error', value: `± ${int(b.samplingError * vol)} m³` },
     { label: 'Base-plane error', value: `± ${int(b.basePlaneError * vol)} m³` },
   ];
 
@@ -193,6 +205,10 @@ export interface StockpileAreaGridView {
   /** Supported footprint fraction, 0..1, and the coverage verdict it gave. */
   readonly supportFraction: number;
   readonly coverage: StockpileAreaGridResult['coverage'];
+  /** Footprint share whose surface was interpolated across gaps, 0..1. */
+  readonly interpolatedFraction: number;
+  /** Footprint share outside the covered extent, left out of the volume, 0..1. */
+  readonly excludedFraction: number;
   /** Per-cell surface spread term, m³; the only term the incomplete model carries. */
   readonly surfaceTermM3: number;
   /** Base plane elevation (m) and its heuristic spread (m), not in the band. */
@@ -250,8 +266,24 @@ export function presentStockpileAreaGrid(
     points,
     polygon: polygon.map((p) => ({ x: p[0], y: p[1] })),
     base: { kind: 'constant', zM: base.z },
+    interpolateGaps: true,
   });
-  const { authority, reason } = stockpileAuthority(grid.coverage, scope);
+  // Gaps inside the covered extent are interpolated, so the verdict reads the
+  // interpolated share (over 25 %: low confidence, shown as PREVIEW; over
+  // 50 %: withheld) and, separately, how much of the footprint lies outside
+  // the scan at all, on the grid's own support thresholds.
+  const interp = interpolationVerdict(grid.interpolatedFraction);
+  const reached = 1 - grid.excludedFraction;
+  const extentCoverage: StockpileAreaGridResult['coverage'] =
+    reached >= 0.9 ? 'measured' : reached >= 0.6 ? 'preview' : 'refused';
+  let { authority, reason } = stockpileAuthority(extentCoverage, scope);
+  if (interp.verdict === 'withheld') {
+    authority = 'withheld';
+    reason = interp.reason ?? 'too much of the footprint interpolated';
+  } else if (interp.verdict === 'low-confidence' && authority === 'measured') {
+    authority = 'preview';
+    reason = `${Math.round(grid.interpolatedFraction * 100)}% interpolated, low confidence`;
+  }
   return {
     method: grid.method,
     authority,
@@ -262,6 +294,8 @@ export function presentStockpileAreaGrid(
     netNative: grid.netM3,
     supportFraction: grid.supportFraction,
     coverage: grid.coverage,
+    interpolatedFraction: grid.interpolatedFraction,
+    excludedFraction: grid.excludedFraction,
     surfaceTermM3: grid.surfaceTermM3 * vol,
     baseZM: base.z * vert,
     baseUncertaintyM: base.uncertainty * vert,
@@ -275,7 +309,7 @@ export function presentStockpileAreaGrid(
  * number at all.
  */
 export function stockpileAreaGridToastLine(v: StockpileAreaGridView): string {
-  const support = `${Math.round(v.supportFraction * 100)}% footprint support`;
+  const support = `${Math.round(v.supportFraction * 100)}% footprint support · ${Math.round(v.interpolatedFraction * 100)}% interpolated`;
   let line: string;
   if (v.authority === 'withheld') {
     line = `Stockpile: volume withheld · ${support} · ${v.reason}`;

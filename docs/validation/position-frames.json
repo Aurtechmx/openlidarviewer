@@ -494,10 +494,10 @@
     },
     {
       "file": "src/render/measure/volume.ts",
-      "symbol": "volumeCutFill",
+      "symbol": "cutFill",
       "frame": "project-local",
       "reads": 1,
-      "why": "Every caller (the Viewer volume sampler, the stockpile estimator, the lasso walk) supplies placed positions."
+      "why": "Shared walk of volumeCutFill and pointSampleCutFill. Every caller (the Viewer volume sampler, the stockpile estimator, the lasso walk) supplies placed positions."
     },
     {
       "file": "src/render/patchView.ts",

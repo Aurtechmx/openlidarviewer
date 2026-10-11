@@ -18,14 +18,14 @@ import { labelsReliable, reductionFields, type CloudReduction } from './volumeRe
 import { deriveVolumeRecord } from './measureDerivations';
 import {
   assembleVolumePositions,
-  POINT_SAMPLE_VOLUME_METHOD,
+  CUT_FILL_VOLUME_METHOD,
   volumeCutFill,
   type PlacedVolumeBuffer,
 } from './volume';
 
 // Re-exported so the Viewer keeps one import edge for the volume cluster.
 export { cloudReduction } from './volumeReduction';
-export { POINT_SAMPLE_VOLUME_METHOD, type PlacedVolumeBuffer, type VolumeResult } from './volume';
+export { CUT_FILL_VOLUME_METHOD, type PlacedVolumeBuffer, type VolumeResult } from './volume';
 
 /**
  * Integrate the polygon cut/fill over `buffers`, leaving Withheld points out.
@@ -46,7 +46,7 @@ export function samplePolygonVolume(
 ): VolumeRecord {
   const { positions, withheldPositions, noisePositions, everySourceFlagged } = assembleVolumePositions(buffers, total);
   const result = volumeCutFill({ polygon, referenceZ, up, positions });
-  const record = deriveVolumeRecord(result, referenceZ, POINT_SAMPLE_VOLUME_METHOD);
+  const record = deriveVolumeRecord(result, referenceZ, CUT_FILL_VOLUME_METHOD);
   let excluded = 0;
   if (withheldPositions.length > 0) {
     const w = volumeCutFill({ polygon, referenceZ, up, positions: withheldPositions });

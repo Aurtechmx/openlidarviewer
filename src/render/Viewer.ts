@@ -109,7 +109,7 @@ import type { SplatMode } from './splatShader';
 import { filterSelectionToVisible, selectByLasso } from './measure/lassoVolume';
 import type { StockpileBandInputs } from './measure/stockpileBandInputs';
 export type { StockpileBandInputs } from './measure/stockpileBandInputs';
-import { computeLassoVolume as computeLassoVolumeWalk, copyPlacedPositions, lassoVisibilityFilters, makeLassoProjector, sourcePositions, streamingLassoParts } from './measure/lassoVolumeCompute';
+import { computeLassoVolume as computeLassoVolumeWalk, copyPlacedPositions, lassoVisibilityFilters, makeLassoProjector, makeLassoUnprojector, sourcePositions, streamingLassoParts } from './measure/lassoVolumeCompute';
 import type { LassoSelectionBasis, LassoSelectionBasisReport } from './measure/lassoVolumeCompute';
 import { cameraPresetPose, standardViewPose, openingFit, presetInputForBounds, type PresetInput } from './camera/cameraPresets';
 import type { CameraPresetName, StandardView } from './camera/cameraPresets';
@@ -178,7 +178,7 @@ import {
   createProfileSectionSeam,
   type ProfileSectionSeam,
 } from './measure/profileSectionSeam';
-import { gatherVolumeBuffers, samplePolygonVolume, cloudReduction, POINT_SAMPLE_VOLUME_METHOD, type VolumeResult } from './measure/polygonVolumeSample';
+import { gatherVolumeBuffers, samplePolygonVolume, cloudReduction, CUT_FILL_VOLUME_METHOD, type VolumeResult } from './measure/polygonVolumeSample';
 import {
   integrableClouds, integrableEntries, streamingMayCombine, producerClassifiesGround,
   analysisClassification,
@@ -3631,7 +3631,7 @@ export class Viewer {
     const integrable = integrableEntries(this._clouds);
     const out = computeLassoVolumeWalk({
       host: {
-        project,
+        project, unprojectToHeight: makeLassoUnprojector(cam.matrixWorld.elements, cam.projectionMatrixInverse.elements, w, h, [this._worldUp.x, this._worldUp.y, this._worldUp.z]),
         integrable,
         // Each node carries what it shows: a clip binds a stream as a layer.
         streamingParts: this._streaming && this._streamingMayCombine(integrable.length)
@@ -3652,7 +3652,7 @@ export class Viewer {
     if (!out) return null;
 
     return {
-      result: out.result, volumeMethod: POINT_SAMPLE_VOLUME_METHOD,
+      result: out.result, volumeMethod: CUT_FILL_VOLUME_METHOD,
       selectionRestrictedByVisibility: out.selectionRestrictedByVisibility, lasso,
       stockpileInputs: {
         polygon: out.polygon3D, positions: out.selectedPositions, lin, withheld: out.withheld,

@@ -65,6 +65,22 @@ export function deriveVolumeRecord(
   if (method) record.method = method;
   const skippedNonFinite = result.skippedNonFinite ?? 0;
   if (skippedNonFinite > 0) record.skippedNonFinite = skippedNonFinite;
+  if (result.coverageFraction !== undefined && Number.isFinite(result.coverageFraction)) {
+    record.coverageFraction = result.coverageFraction;
+  }
+  if (result.interpolatedFraction !== undefined) record.interpolatedFraction = result.interpolatedFraction;
+  if (result.excludedFraction !== undefined) record.excludedFraction = result.excludedFraction;
+  // More than a quarter of the surface interpolated: low confidence whatever
+  // the point count. More than half: no figure at all, under a stated reason.
+  if (result.interpolationVerdict === 'low-confidence') record.confidence = 'low';
+  if (result.interpolationVerdict === 'withheld') {
+    record.confidence = 'low';
+    delete record.fill;
+    delete record.cut;
+    delete record.net;
+    record.gridAuthority = 'withheld';
+    record.gridAuthorityReason = result.withheldReason ?? 'too much of the footprint interpolated';
+  }
   return record;
 }
 

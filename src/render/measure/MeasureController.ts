@@ -2152,16 +2152,22 @@ export class MeasureController {
         if (v.fill === undefined || v.cut === undefined || v.net === undefined) {
           const cc = v.crossCheck, reason = v.gridAuthorityReason ? ` (${v.gridAuthorityReason})` : '';
           return `${area} · ${cc ? 'grid ' : ''}volume withheld${reason}` +
-            (cc ? ` · point-sample cross-check net ${this._fmtCutFill(Math.abs(cc.net))} ${cc.net < 0 ? 'cut' : 'fill'}` : '');
+            (cc ? ` · cut-fill cross-check net ${this._fmtCutFill(Math.abs(cc.net))} ${cc.net < 0 ? 'cut' : 'fill'}` : '');
         }
         const fill = this._fmtCutFill(Math.max(0, v.fill));
         const cut = this._fmtCutFill(Math.max(0, v.cut));
         const net = this._fmtCutFill(Math.abs(v.net));
         const netSign = v.net < 0 ? 'cut' : 'fill';
         const preview = v.gridAuthority === 'preview' ? ' · PREVIEW' : '';
+        const covered = v.interpolatedFraction !== undefined
+          ? ` · ${(v.interpolatedFraction * 100).toFixed(0)}% interpolated` +
+            (v.interpolatedFraction > 0.25 ? ' (low confidence)' : '') +
+            (v.excludedFraction !== undefined && v.excludedFraction > 0.005
+              ? ` · ${(v.excludedFraction * 100).toFixed(0)}% outside scan, left out` : '')
+          : '';
         const noise = noiseExcludedClause(v.withheld?.noiseExcluded);
         const unavailable = reducedSampleClause(v.withheld);
-        return `${area} · +${fill} fill · −${cut} cut · net ${net} ${netSign}${preview}${noise ? ` · ${noise}` : ''}${unavailable ? ` · ${unavailable}` : ''}`;
+        return `${area} · +${fill} fill · −${cut} cut · net ${net} ${netSign}${covered}${preview}${noise ? ` · ${noise}` : ''}${unavailable ? ` · ${unavailable}` : ''}`;
       }
     }
   }

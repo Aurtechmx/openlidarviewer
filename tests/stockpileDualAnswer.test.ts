@@ -1,9 +1,12 @@
 /**
  * stockpileDualAnswer.test.ts: one lasso, both stockpile estimators, one input.
  *
- * A lasso answers twice. The toast's "Volume · fill" line, and the record a
- * Save writes to the session, report and CSV, come from the point-sample
- * integration (`volumeCutFill`, reached through `computeLassoVolume`). The
+ * A lasso answered twice up to version 2 of `olv.volume.stockpile`: the point-sample
+ * integration, and the area-weighted grid. From v3 the cut-fill record is
+ * area-weighted too, so the "point sample" column here is the superseded
+ * arithmetic (`pointSampleCutFill`) over the same footprint, selection and
+ * reference the app path produced. It is kept as the baseline the grid is
+ * measured against, which is what the pinned figures document. The
  * " · Stockpile:" band beside it comes from the area-weighted grid
  * (`stockpileAreaGrid`, reached through `stockpileToastSuffix`). This file
  * drives both from the same selection the way the application does and
@@ -59,7 +62,7 @@ import { PointCloud } from '../src/model/PointCloud';
 import { computeLassoVolume } from '../src/render/measure/lassoVolumeCompute';
 import type { LassoVolumeHost } from '../src/render/measure/lassoVolumeCompute';
 import { deriveVolumeRecord } from '../src/render/measure/measureDerivations';
-import { POINT_SAMPLE_VOLUME_METHOD, pointInPolygon2D } from '../src/render/measure/volume';
+import { CUT_FILL_VOLUME_METHOD, pointInPolygon2D, pointSampleCutFill } from '../src/render/measure/volume';
 import { stockpileVolume } from '../src/render/measure/stockpileVolume';
 import { stockpileAreaGrid } from '../src/render/measure/stockpileAreaGrid';
 import type { StockpileAreaGridResult } from '../src/render/measure/stockpileAreaGrid';
@@ -290,7 +293,10 @@ function dualAnswer(positions: Float32Array, lasso: ReadonlyArray<{ x: number; y
   if (!out) throw new Error('lasso selected nothing');
   const { lin, vert } = units;
   const vol = lin * lin * vert;
-  const record = deriveVolumeRecord(out.result, out.referenceZ, POINT_SAMPLE_VOLUME_METHOD);
+  const record = deriveVolumeRecord(out.result, out.referenceZ, CUT_FILL_VOLUME_METHOD);
+  const legacy = pointSampleCutFill({
+    polygon: out.polygon3D, referenceZ: out.referenceZ, up: [0, 0, 1], positions: out.selectedPositions,
+  });
 
   // The band, exactly as `stockpileToastSuffix` builds it from what the Viewer hands back.
   const sampled = out.anySourceReduced || out.budget.downsample;
@@ -319,7 +325,7 @@ function dualAnswer(positions: Float32Array, lasso: ReadonlyArray<{ x: number; y
     if (Number.isFinite(z)) pts.push({ x: sp[i * 3], y: sp[i * 3 + 1], z });
   }
   const hull = out.polygon3D.map((p) => ({ x: p[0], y: p[1] }));
-  const g = stockpileAreaGrid({ points: pts, polygon: hull, base: { kind: 'constant', zM: baseZ } });
+  const g = stockpileAreaGrid({ points: pts, polygon: hull, base: { kind: 'constant', zM: baseZ }, interpolateGaps: true });
   const toastSuffix = withToast
     ? stockpileToastSuffix(out.polygon3D, out.selectedPositions, lin, {
       sourceReduced: out.anySourceReduced,
@@ -332,14 +338,14 @@ function dualAnswer(positions: Float32Array, lasso: ReadonlyArray<{ x: number; y
     : undefined;
   return {
     selected: out.selectedCount,
-    recordConfidence: record.confidence,
+    recordConfidence: legacyConfidence(legacy.pointsInPolygon),
     hull,
     footprintM2: out.result.footprintArea * lin * lin,
     recordBase: record.referenceZ,
     gridBase: baseZ,
     // `deriveVolumeRecord` always sets fill/cut/net; only a withheld grid
     // record (never built in this harness) leaves them absent.
-    ps: { fill: record.fill! * vol, cut: record.cut! * vol, net: record.net! * vol },
+    ps: { fill: legacy.fill * vol, cut: legacy.cut * vol, net: legacy.net * vol },
     grid: {
       fill: g.fillM3 * vol,
       cut: g.cutM3 * vol,
@@ -353,6 +359,11 @@ function dualAnswer(positions: Float32Array, lasso: ReadonlyArray<{ x: number; y
     toastSuffix,
     presenterM3: view.volumeM3,
   };
+}
+
+/** The v1/v2 record's point-count tier (measureDerivations' thresholds). */
+function legacyConfidence(n: number): 'high' | 'medium' | 'low' {
+  return n >= 1000 ? 'high' : n >= 100 ? 'medium' : 'low';
 }
 
 /** The integer the toast prints for a volume, e.g. "1,254". */
@@ -779,6 +790,7 @@ function unitsRows(): Map<string, UnitsRow> {
       polygon: d.hull,
       base: { kind: 'constant', zM: d.gridBase },
       linearUnitToMetres: units.lin,
+      interpolateGaps: true,
     });
     rows.set(id, { id, units, d, gridOwnM3: own.fillM3 });
   }
@@ -803,33 +815,33 @@ function unitsRows(): Map<string, UnitsRow> {
  * and nothing an estimator change would do.
  */
 const LADDER: Record<string, readonly [number, number, number, number, number]> = {
-  'cone/uniform/1': [-0.0357, 0.1097, -0.0295, 0.0553, 0.984],
-  'cone/uniform/10': [0.0060, 0.0275, -0.0041, 0.0077, 0.998],
-  'cone/uniform/100': [-0.0005, 0.0061, -0.0010, 0.0011, 0.998],
-  'cone/clustered/1': [-0.0486, 0.2992, -0.1980, 0.2413, 0.776],
-  'cone/clustered/10': [-0.0315, 0.1056, -0.0371, 0.0464, 0.968],
-  'cone/clustered/100': [-0.0077, 0.0100, -0.0029, 0.0031, 0.996],
-  'cone/gradient/1': [-0.2438, 0.2520, -0.0544, 0.0964, 0.929],
-  'cone/gradient/10': [-0.1780, 0.1812, -0.0117, 0.0180, 0.954],
-  'cone/gradient/100': [-0.1855, 0.1859, -0.0144, 0.0145, 0.959],
-  'frustum/uniform/1': [-0.0089, 0.1018, -0.0424, 0.0696, 0.987],
-  'frustum/uniform/10': [0.0055, 0.0373, -0.0097, 0.0117, 0.998],
-  'frustum/uniform/100': [0.0039, 0.0101, -0.0009, 0.0011, 0.998],
-  'frustum/clustered/1': [-0.0883, 0.2786, -0.2640, 0.3084, 0.741],
-  'frustum/clustered/10': [0.0151, 0.0776, -0.0321, 0.0363, 0.972],
-  'frustum/clustered/100': [-0.0090, 0.0257, -0.0038, 0.0039, 0.996],
-  'frustum/gradient/1': [-0.2350, 0.2525, -0.0463, 0.0835, 0.929],
-  'frustum/gradient/10': [-0.1989, 0.2006, -0.0207, 0.0248, 0.951],
-  'frustum/gradient/100': [-0.1936, 0.1941, -0.0163, 0.0172, 0.956],
-  'mound/uniform/1': [-0.0156, 0.0873, -0.0167, 0.0453, 0.988],
-  'mound/uniform/10': [0.0045, 0.0221, -0.0033, 0.0058, 0.998],
-  'mound/uniform/100': [-0.0007, 0.0059, -0.0026, 0.0030, 0.998],
-  'mound/clustered/1': [-0.0841, 0.2346, -0.2412, 0.2754, 0.763],
-  'mound/clustered/10': [0.0063, 0.0544, -0.0319, 0.0340, 0.968],
-  'mound/clustered/100': [-0.0053, 0.0294, -0.0035, 0.0039, 0.997],
-  'mound/gradient/1': [-0.2115, 0.2224, -0.0309, 0.0682, 0.932],
-  'mound/gradient/10': [-0.1832, 0.1846, -0.0321, 0.0336, 0.949],
-  'mound/gradient/100': [-0.1652, 0.1653, -0.0200, 0.0201, 0.954],
+  'cone/uniform/1': [-0.0357, 0.1097, -0.0252, 0.0498, 0.984],
+  'cone/uniform/10': [0.0060, 0.0275, -0.0025, 0.0054, 0.998],
+  'cone/uniform/100': [-0.0005, 0.0061, -0.0000, 0.0002, 0.998],
+  'cone/clustered/1': [-0.0486, 0.2992, 0.0420, 0.1419, 0.776],
+  'cone/clustered/10': [-0.0315, 0.1056, -0.0048, 0.0098, 0.968],
+  'cone/clustered/100': [-0.0077, 0.0100, 0.0000, 0.0002, 0.996],
+  'cone/gradient/1': [-0.2438, 0.2520, -0.0156, 0.0743, 0.929],
+  'cone/gradient/10': [-0.1780, 0.1812, 0.0014, 0.0056, 0.954],
+  'cone/gradient/100': [-0.1855, 0.1859, -0.0003, 0.0006, 0.959],
+  'frustum/uniform/1': [-0.0089, 0.1018, -0.0384, 0.0648, 0.987],
+  'frustum/uniform/10': [0.0055, 0.0373, -0.0078, 0.0096, 0.998],
+  'frustum/uniform/100': [0.0039, 0.0101, -0.0001, 0.0006, 0.998],
+  'frustum/clustered/1': [-0.0883, 0.2786, 0.0308, 0.1559, 0.741],
+  'frustum/clustered/10': [0.0151, 0.0776, -0.0033, 0.0090, 0.972],
+  'frustum/clustered/100': [-0.0090, 0.0257, -0.0001, 0.0006, 0.996],
+  'frustum/gradient/1': [-0.2350, 0.2525, -0.0083, 0.0734, 0.929],
+  'frustum/gradient/10': [-0.1989, 0.2006, 0.0000, 0.0071, 0.951],
+  'frustum/gradient/100': [-0.1936, 0.1941, -0.0006, 0.0008, 0.956],
+  'mound/uniform/1': [-0.0156, 0.0873, -0.0150, 0.0451, 0.988],
+  'mound/uniform/10': [0.0045, 0.0221, -0.0019, 0.0048, 0.998],
+  'mound/uniform/100': [-0.0007, 0.0059, -0.0002, 0.0003, 0.998],
+  'mound/clustered/1': [-0.0841, 0.2346, 0.0094, 0.1212, 0.763],
+  'mound/clustered/10': [0.0063, 0.0544, -0.0037, 0.0062, 0.968],
+  'mound/clustered/100': [-0.0053, 0.0294, 0.0000, 0.0003, 0.997],
+  'mound/gradient/1': [-0.2115, 0.2224, 0.0089, 0.0478, 0.932],
+  'mound/gradient/10': [-0.1832, 0.1846, -0.0026, 0.0054, 0.949],
+  'mound/gradient/100': [-0.1652, 0.1653, -0.0001, 0.0003, 0.954],
 };
 const LADDER_TOL = 0.0015;
 
@@ -838,18 +850,18 @@ const CUT_RUNS: Record<string, number> = { 'cone/clustered/1': 1, 'mound/cluster
 
 /** Single runs as measured: [point-sample fill m³, grid fill m³, grid support, authority]. */
 const SINGLE: Record<string, readonly [number, number, number, StockpileAuthority]> = {
-  'R01-tilted-plane': [22920.15, 23062.85, 0.997, 'measured'],
-  'R02-rolling-incommensurate': [27338.78, 27469.24, 0.997, 'measured'],
-  'R03-ridge-with-canopy': [53688.14, 49053.95, 0.997, 'measured'],
-  'R04-variable-density': [4450.06, 6774.70, 0.929, 'measured'],
+  'R01-tilted-plane': [22920.15, 23154.54, 0.997, 'measured'],
+  'R02-rolling-incommensurate': [27338.78, 27563.66, 0.997, 'measured'],
+  'R03-ridge-with-canopy': [53688.14, 49155.30, 0.997, 'measured'],
+  'R04-variable-density': [4450.06, 7287.94, 0.929, 'measured'],
   'C02-block-uplift': [40.00, 33.84, 1.000, 'measured'],
   'C07-holes': [33.35, 33.86, 0.958, 'measured'],
   'C08-ramp': [292.41, 340.69, 1.000, 'measured'],
-  'pc-16-estonia-boreal': [245739.99, 236996.49, 0.993, 'measured'],
-  'full coverage': [108.40, 112.09, 0.993, 'measured'],
-  'one quadrant unobserved': [102.73, 94.64, 0.848, 'preview'],
-  'east of x = -3 unobserved': [31.23, 11.80, 0.455, 'withheld'],
-  'notched lasso': [120.61, 110.88, 0.906, 'measured'],
+  'pc-16-estonia-boreal': [245739.99, 238219.93, 0.993, 'measured'],
+  'full coverage': [108.40, 112.10, 0.993, 'measured'],
+  'one quadrant unobserved': [102.73, 119.48, 0.848, 'measured'],
+  'east of x = -3 unobserved': [31.23, 38.84, 0.455, 'withheld'],
+  'notched lasso': [120.61, 111.85, 0.906, 'measured'],
 };
 
 function expectSingle(id: string, d: DualAnswer): void {
@@ -919,13 +931,12 @@ describe('analytic piles: where each estimator lands', () => {
     }
   }, 60_000);
 
-  it('under a scanner gradient the point sample reads 16 to 25 % low at every density; the grid reads 1 to 6 % low', () => {
+  it('under a scanner gradient the point sample reads 16 to 25 % low at every density; the grid reads within 2 %', () => {
     for (const r of analyticLadder().values()) {
       if (!r.key.includes('/gradient/')) continue;
       expect(r.psErr[0], r.key).toBeLessThan(-0.16);
       expect(r.psErr[0], r.key).toBeGreaterThan(-0.25);
-      expect(r.gridErr[0], r.key).toBeLessThan(0);
-      expect(r.gridErr[0], r.key).toBeGreaterThan(-0.06);
+      expect(Math.abs(r.gridErr[0]), r.key).toBeLessThan(0.02);
       // More points do not close it: the bias is in how the points are weighted.
       expect(r.gap, r.key).toBeGreaterThan(0.17);
       // The grid is nearer the truth in all but at most two runs.
@@ -933,10 +944,10 @@ describe('analytic piles: where each estimator lands', () => {
     }
   });
 
-  it('under uniform sampling both centre on the truth; the grid reads slightly low and scatters less', () => {
+  it('under uniform sampling both centre on the truth; the grid scatters less', () => {
     for (const r of analyticLadder().values()) {
       if (!r.key.includes('/uniform/')) continue;
-      expect(r.gridErr[0], r.key).toBeLessThan(0);
+      expect(r.gridErr[0], r.key).toBeLessThan(0.001);
       expect(r.gridRms, r.key).toBeLessThan(r.psRms);
       if (!r.key.endsWith('/1')) {
         expect(Math.abs(r.psErr[0]), r.key).toBeLessThan(0.01);
@@ -945,25 +956,26 @@ describe('analytic piles: where each estimator lands', () => {
     }
   });
 
-  it('clustered at 1 pt/m², neither is within 20 % and the grid says PREVIEW in every run', () => {
+  it('clustered at 1 pt/m², the point sample scatters past 20 % while the gap-filled grid stays under 16 %', () => {
     for (const r of analyticLadder().values()) {
       if (!r.key.endsWith('/clustered/1')) continue;
       expect(r.psRms, r.key).toBeGreaterThan(0.2);
-      expect(r.gridRms, r.key).toBeGreaterThan(0.2);
-      // Only supported cells are counted, so the grid reads low by roughly the unsupported share.
-      expect(r.gridErr[0], r.key).toBeLessThan(-0.19);
-      expect(r.authority.preview, r.key).toBe(r.runs);
-      // The point sample lands nearer in most runs here.
-      expect(r.gridCloser, r.key).toBeLessThan(r.runs / 2);
+      expect(r.gridRms, r.key).toBeLessThan(0.16);
+      // Gaps inside the covered extent are interpolated, not dropped, so the
+      // grid no longer reads low by the unsupported share.
+      expect(Math.abs(r.gridErr[0]), r.key).toBeLessThan(0.05);
+      // Runs past 25 % interpolated, or short of the extent thresholds, read PREVIEW.
+      expect(r.authority.preview, r.key).toBeGreaterThan(0);
+      expect(r.authority.withheld, r.key).toBe(0);
+      expect(r.gridCloser, r.key).toBeGreaterThan(r.runs / 2);
     }
   });
 
-  it('clustered at 10 pts/m², the grid says MEASURED in every run while reading 3 to 4 % low', () => {
+  it('clustered at 10 pts/m², the grid says MEASURED in every run and reads within 0.6 %', () => {
     for (const r of analyticLadder().values()) {
       if (!r.key.endsWith('/clustered/10')) continue;
       expect(r.authority.measured, r.key).toBe(r.runs);
-      expect(r.gridErr[0], r.key).toBeLessThan(-0.03);
-      expect(r.gridErr[0], r.key).toBeGreaterThan(-0.04);
+      expect(Math.abs(r.gridErr[0]), r.key).toBeLessThan(0.006);
     }
   });
 });
@@ -973,11 +985,10 @@ describe('repository fixtures', () => {
     for (const { id, d } of fixtureRows().values()) expectSingle(id, d);
   }, 60_000);
 
-  it('reads the variable-density surface 39 % low by point sample and 7 % low by grid', () => {
+  it('reads the variable-density surface 39 % low by point sample and within 1 % by grid', () => {
     const { d, truthPs, truthGrid } = fixtureRows().get('R04-variable-density')!;
     expect(d.ps.fill / truthPs! - 1).toBeLessThan(-0.35);
-    expect(d.grid.fill / truthGrid! - 1).toBeLessThan(-0.05);
-    expect(d.grid.fill / truthGrid! - 1).toBeGreaterThan(-0.08);
+    expect(Math.abs(d.grid.fill / truthGrid! - 1)).toBeLessThan(0.01);
   });
 
   it('reads the two uniformly sampled surfaces within 1.1 %, the grid the nearer', () => {
@@ -1009,9 +1020,9 @@ describe('repository fixtures', () => {
 
   it('on real airborne returns and on a canopy the two disagree with no truth to settle it', () => {
     const forest = fixtureRows().get('pc-16-estonia-boreal')!.d;
-    expect(forest.grid.fill / forest.ps.fill - 1).toBeCloseTo(-0.036, 3);
+    expect(forest.grid.fill / forest.ps.fill - 1).toBeCloseTo(-0.031, 3);
     const canopy = fixtureRows().get('R03-ridge-with-canopy')!.d;
-    expect(canopy.grid.fill / canopy.ps.fill - 1).toBeCloseTo(-0.086, 3);
+    expect(canopy.grid.fill / canopy.ps.fill - 1).toBeCloseTo(-0.084, 3);
   });
 });
 
@@ -1020,18 +1031,22 @@ describe('sparse coverage and a concave lasso', () => {
     for (const { id, d } of sparseRows().values()) expectSingle(id, d);
   });
 
-  it('withholds the grid figure at 46 % support while the record keeps a high-confidence figure', () => {
+  it('withholds the grid figure at 54 % interpolated, where the point sample kept a high-confidence figure', () => {
     const { d, truth } = sparseRows().get('east of x = -3 unobserved')!;
     expect(d.grid.authority).toBe('withheld');
+    expect(d.toastSuffix).toMatch(/above the 50% limit/);
     expect(d.toastSuffix).not.toMatch(/\d m³/);
     expect(d.recordConfidence).toBe('high');
     expect(d.ps.fill / truth - 1).toBeLessThan(-0.7);
   });
 
-  it('marks a missing quadrant PREVIEW, and reads it lower than the point sample does', () => {
+  it('interpolates a missing quadrant inside the covered extent and says how much', () => {
     const { d, truth } = sparseRows().get('one quadrant unobserved')!;
-    expect(d.grid.authority).toBe('preview');
-    expect(d.grid.fill).toBeLessThan(d.ps.fill);
+    // 15 % interpolated: under the 25 % low-confidence line, so MEASURED,
+    // and the toast states the interpolated share.
+    expect(d.grid.authority).toBe('measured');
+    expect(d.toastSuffix).toMatch(/15% interpolated/);
+    expect(Math.abs(d.grid.fill / truth - 1)).toBeLessThan(0.06);
     expect(d.ps.fill / truth - 1).toBeLessThan(-0.05);
   });
 

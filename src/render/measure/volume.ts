@@ -9,26 +9,36 @@
  * plane sits inside the polygon (fill), and how much earth below the
  * plane (cut)?"
  *
- * Algorithm — the "point sample" estimator, the standard browser-side
- * approximation used by every viewer that doesn't ship a triangulated
- * mesh extractor:
+ * Algorithm — area-weighted cell prisms (method `olv.volume.stockpile`
+ * from v3; the same integration as `olv.volume.stockpile-area-grid`):
  *
  *   1. Compute the polygon's horizontal-plane (map) area.
- *   2. Walk the cloud's points. For each point whose (x, y) projection
- *      lies inside the polygon, bucket its Δz = z − referenceZ.
- *   3. Sum the positive Δz values (fill) and the absolute negative Δz
- *      values (cut). Multiply each by `polygonArea / pointsInPolygon`
- *      — the per-point footprint each sample represents at uniform
- *      density.
+ *   2. Keep the cloud's points whose (x, y) projection lies inside the
+ *      polygon.
+ *   3. Lay a regular horizontal grid over the footprint (cell size from the
+ *      point spacing, `deriveCellSize`). Each cell holding at least one
+ *      point contributes its polygon-clipped area times (median cell
+ *      height − referenceZ), split into fill and cut by sign.
  *   4. Net = fill − cut.
  *
- * Limits — documented honestly so the report can show the right caveat:
+ * Every cell counts once whatever its point count, so a dense patch no
+ * longer outweighs a sparse one. Up to v2 the sum was Σ Δz · (area / N),
+ * which weighted each POINT equally: a footprint scanned 9:1 denser on its
+ * raised half reported 90 m³ for a 50 m³ truth.
  *
- *   • Assumes the cloud is reasonably uniform-density inside the
- *     polygon. A scan with a sparse corner will under-report volume in
- *     that corner.
- *   • The reference is a horizontal plane (constant z). A future
- *     iteration accepts a triangulated reference mesh.
+ * Empty cells are never zero-filled. A cell without points whose centre lies
+ * inside the convex extent of the covered cell centres takes a surface
+ * interpolated from the nearest covered cells (inverse-distance weighting);
+ * a cell outside that extent is never extrapolated and is left out, its area
+ * reported as `excludedFraction`. The interpolated share is reported as
+ * `interpolatedFraction` with every volume: above 25 % the volume is
+ * low-confidence, above 50 % it is withheld (`interpolationVerdict`).
+ *
+ * Limits:
+ *
+ *   • The volume is over the covered plus interpolated area; footprint
+ *     outside the covered extent is excluded, not estimated.
+ *   • The reference is a horizontal plane (constant z).
  *   • The cloud's "up" is assumed to be Z. Hand `up` in for a different
  *     CRS convention; the projection helpers use it directly.
  *
@@ -43,6 +53,7 @@ import type { LayerSpatialTransform } from '../../geo/ProjectSpatialFrame';
 import { accumulatorOffset, placeBufferInto } from '../layerPlacement';
 import { isWithheld } from '../../science/withheldPolicy';
 import { alignedClasses, isNoiseClass } from '../../terrain/ground/classificationFilter';
+import { stockpileAreaGrid, type AreaGridPoint } from './stockpileAreaGrid';
 import {
   type PolygonValidity,
   validatePolygon,
@@ -266,13 +277,12 @@ export function polygonHorizontalArea(
   return Math.abs(anchoredShoelace(n, (i) => polygon[i].x, (i) => polygon[i].y));
 }
 
-/** Cut / fill estimation result. */
 /**
  * The estimator this module implements, as `id@version`, for a record to name
  * itself by. Read from the registry rather than written out, so the tag cannot
- * drift from the method it refers to.
+ * drift from the method it refers to. From v3 the method is area-weighted.
  */
-export const POINT_SAMPLE_VOLUME_METHOD = methodTag(methodRef('olv.volume.stockpile'));
+export const CUT_FILL_VOLUME_METHOD = methodTag(methodRef('olv.volume.stockpile'));
 
 export interface VolumeResult {
   /** Volume above the reference plane, m³. Always ≥ 0. */
@@ -319,6 +329,51 @@ export interface VolumeResult {
    * `undefined` as 0.
    */
   skippedNonFinite?: number;
+  /**
+   * Footprint area whose grid cells held at least one point, native unit².
+   * Fill and cut are integrated over this area only; the rest of the
+   * footprint was not observed and is NOT counted as zero height.
+   * Optional for records that pre-date the area-weighted estimator.
+   */
+  coveredArea?: number;
+  /** coveredArea / footprintArea, 0..1. */
+  coverageFraction?: number;
+  /** Grid cell size used, native unit. */
+  cellSize?: number;
+  /**
+   * 1σ surface term of the integration, native³: sqrt(Σ (A_c · NMAD_c / √n_c)²)
+   * over the covered cells. Incomplete on its own (no base term).
+   */
+  surfaceSigma?: number;
+  /** Share of the footprint whose surface was interpolated across a gap, 0..1. */
+  interpolatedFraction?: number;
+  /** Share of the footprint outside the covered extent, left out of the volume, 0..1. */
+  excludedFraction?: number;
+  /**
+   * `'ok'`, `'low-confidence'` (interpolated share above 25 %) or `'withheld'`
+   * (above 50 %): a withheld volume must not be shown as a figure.
+   */
+  interpolationVerdict?: InterpolationVerdict;
+  /** Why the volume is withheld; present iff `interpolationVerdict` is `'withheld'`. */
+  withheldReason?: string;
+}
+
+/** The verdict the interpolated share of a footprint puts on its volume. */
+export type InterpolationVerdict = 'ok' | 'low-confidence' | 'withheld';
+
+/** Interpolated share above which a volume is low-confidence. */
+export const INTERPOLATED_LOW_CONFIDENCE = 0.25;
+/** Interpolated share above which a volume is withheld. */
+export const INTERPOLATED_WITHHOLD = 0.5;
+
+/** The verdict and, when withheld, the reason, for an interpolated share. */
+export function interpolationVerdict(fraction: number): { verdict: InterpolationVerdict; reason?: string } {
+  const pct = `${(fraction * 100).toFixed(0)}%`;
+  if (fraction > INTERPOLATED_WITHHOLD) {
+    return { verdict: 'withheld', reason: `${pct} of the footprint interpolated, above the 50% limit` };
+  }
+  if (fraction > INTERPOLATED_LOW_CONFIDENCE) return { verdict: 'low-confidence' };
+  return { verdict: 'ok' };
 }
 
 /**
@@ -339,11 +394,26 @@ export interface VolumeInput {
 
 /**
  * Compute the cut / fill volume of a polygon footprint above and below a
- * horizontal reference plane, by point-sample integration. Returns
+ * horizontal reference plane, by area-weighted grid integration (see the module header). Returns
  * conservative zeros (with `footprintArea` still populated) when the
  * polygon has fewer than 3 vertices or the sample count is zero.
  */
 export function volumeCutFill(input: VolumeInput): VolumeResult {
+  return cutFill(input, true);
+}
+
+/**
+ * The superseded point-weighted estimator of `olv.volume.stockpile` v1 and v2:
+ * fill = Σ max(0, Δz) · (footprintArea / N). Each POINT carries an equal share
+ * of the footprint, so a densely scanned area outweighs a sparse one. Kept only
+ * so a v1/v2 figure can be reproduced and its bias characterised against the
+ * area-weighted estimator; no tool reports it as a volume.
+ */
+export function pointSampleCutFill(input: VolumeInput): VolumeResult {
+  return cutFill(input, false);
+}
+
+function cutFill(input: VolumeInput, areaWeighted: boolean): VolumeResult {
   const up = input.up ?? ([0, 0, 1] as Vec3);
   const projectedPoly = input.polygon.map((p) => horizontalProjection(p, up));
   // Read the buffer once. The walk below touches it three times per point.
@@ -381,9 +451,10 @@ export function volumeCutFill(input: VolumeInput): VolumeResult {
   const basis = horizontalBasis(up);
   const refZ = input.referenceZ;
 
+  let inCount = 0;
   let fillSum = 0;
   let cutSum = 0;
-  let inCount = 0;
+  const insidePoints: AreaGridPoint[] = [];
   let skippedNonFinite = 0;
   // We collect inside Δz magnitudes for the median; cap the buffer at 10 000 to
   // bound allocation on a 100 M-point chunk. Filling it with the FIRST 10 000
@@ -445,12 +516,13 @@ export function volumeCutFill(input: VolumeInput): VolumeResult {
       continue;
     }
     const dz = height - refZ;
-    if (dz >= 0) fillSum += dz;
+    if (areaWeighted) insidePoints.push({ x: hx, y: hy, z: height });
+    else if (dz >= 0) fillSum += dz;
     else cutSum += -dz;
     // Reservoir sampling for the median buffer: fill directly until full, then
     // replace a uniformly-chosen slot so every inside point has an equal chance
-    // of being in the final sample. (The fill/cut SUMS above already use every
-    // point — only the median needs de-biasing.)
+    // of being in the final sample. (The area grid below uses every point;
+    // only this median needs de-biasing.)
     const absDz = Math.abs(dz);
     if (inCount < MAX_DELTAS) {
       deltas[inCount] = absDz;
@@ -473,19 +545,47 @@ export function volumeCutFill(input: VolumeInput): VolumeResult {
       medianAbsDelta: Number.NaN,
       validity: 'ok',
       skippedNonFinite,
+      ...(areaWeighted ? { coveredArea: 0, coverageFraction: 0, interpolatedFraction: 0, excludedFraction: 1 } : {}),
     };
   }
-
-  const areaPerPoint = footprintArea / inCount;
-  const fill = fillSum * areaPerPoint;
-  const cut = cutSum * areaPerPoint;
-  const net = fill - cut;
 
   // Median of the collected |Δz| samples (cap-aware).
   const used = Math.min(inCount, MAX_DELTAS);
   const sub = deltas.subarray(0, used).slice();
   sub.sort();
   const median = used % 2 === 1 ? sub[(used - 1) >> 1] : (sub[used / 2 - 1] + sub[used / 2]) * 0.5;
+
+  if (!areaWeighted) {
+    const areaPerPoint = footprintArea / inCount;
+    const fill = fillSum * areaPerPoint;
+    const cut = cutSum * areaPerPoint;
+    return {
+      fill,
+      cut,
+      net: fill - cut,
+      footprintArea,
+      pointsInPolygon: inCount,
+      sampleCount,
+      densityNative: inCount / footprintArea,
+      medianAbsDelta: median,
+      validity: 'ok',
+      skippedNonFinite,
+    };
+  }
+
+  // Area-weighted integration: one prism per supported grid cell, clipped to
+  // the footprint. Unsupported cells drop out and lower the coverage.
+  const grid = stockpileAreaGrid({
+    points: insidePoints,
+    polygon: projectedPoly,
+    base: { kind: 'constant', zM: refZ },
+    pointsInsideFootprint: true,
+    interpolateGaps: true,
+  });
+  const verdict = interpolationVerdict(grid.interpolatedFraction);
+  const fill = grid.fillM3;
+  const cut = grid.cutM3;
+  const net = fill - cut;
 
   return {
     fill,
@@ -498,6 +598,14 @@ export function volumeCutFill(input: VolumeInput): VolumeResult {
     medianAbsDelta: median,
     validity: 'ok',
     skippedNonFinite,
+    coveredArea: grid.supportedAreaM2,
+    coverageFraction: grid.supportFraction,
+    cellSize: grid.cellSizeM,
+    surfaceSigma: grid.surfaceTermM3,
+    interpolatedFraction: grid.interpolatedFraction,
+    excludedFraction: grid.excludedFraction,
+    interpolationVerdict: verdict.verdict,
+    ...(verdict.reason ? { withheldReason: verdict.reason } : {}),
   };
 }
 

@@ -30,20 +30,21 @@ const base: VolumeRecord = {
 };
 
 describe('the two estimators are distinct records in the registry', () => {
-  it('names the point-sample estimator at version 2', () => {
-    expect(methodTag(methodRef('olv.volume.stockpile'))).toBe('olv.volume.stockpile@2');
+  it('names the cut-fill estimator at version 3', () => {
+    expect(methodTag(methodRef('olv.volume.stockpile'))).toBe('olv.volume.stockpile@3');
   });
 
-  it('names the area-weighted grid at version 3', () => {
+  it('names the area-weighted grid at version 4', () => {
     expect(methodTag(methodRef('olv.volume.stockpile-area-grid'))).toBe(
-      'olv.volume.stockpile-area-grid@3',
+      'olv.volume.stockpile-area-grid@4',
     );
   });
 
   it('records that a v1 figure does not carry the v2 meaning', () => {
     // The registry says so in prose; this pins that the two are not aliases.
-    expect(method('olv.volume.stockpile')?.version).toBe(2);
-    expect(method('olv.volume.stockpile-area-grid')?.version).toBe(3);
+    expect(method('olv.volume.stockpile')?.version).toBe(3);
+    expect(method('olv.volume.stockpile')?.summary).toContain('does not carry the v3 meaning');
+    expect(method('olv.volume.stockpile-area-grid')?.version).toBe(4);
     expect(method('olv.volume.stockpile-area-grid')?.summary).toContain('does not carry the v2 meaning');
     expect(method('olv.volume.stockpile-area-grid')?.summary).toContain('v3 is the lasso figure read with points flagged Withheld left out');
   });
@@ -113,7 +114,7 @@ describe('a volume record through a session', () => {
 // ── the area-weighted grid becomes the LASSO record's canonical figure ──
 
 const grid = (over: Partial<StockpileGridFigure> = {}): StockpileGridFigure => ({
-  method: 'olv.volume.stockpile-area-grid@3',
+  method: 'olv.volume.stockpile-area-grid@4',
   authority: 'measured',
   reason: '',
   fillNative: 90, cutNative: 3, netNative: 87,
@@ -144,7 +145,7 @@ describe('withStockpileGrid — authority and method version', () => {
     expect(out.fill).toBe(90);
     expect(out.cut).toBe(3);
     expect(out.net).toBe(87);
-    expect(out.method).toBe('olv.volume.stockpile-area-grid@3');
+    expect(out.method).toBe('olv.volume.stockpile-area-grid@4');
     expect(out.gridAuthority).toBe('measured');
   });
 
@@ -197,7 +198,7 @@ describe('a session round trip carries an old record and a switched one unchange
     const backOld = back.find((m) => m.id === 'old')!.volume!;
     const backNew = back.find((m) => m.id === 'new')!.volume!;
     expect(backOld).toEqual(oldRecord);
-    expect(backNew.method).toBe('olv.volume.stockpile-area-grid@3');
+    expect(backNew.method).toBe('olv.volume.stockpile-area-grid@4');
     expect(backNew.gridAuthority).toBe('measured');
     expect(backNew.crossCheck).toEqual({ fill: 120, cut: 4, net: 116, method: 'olv.volume.stockpile@1' }); // method-literal-ok: a record stored at an earlier version
     expect(backNew.fill).toBe(90);

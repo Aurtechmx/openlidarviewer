@@ -6428,7 +6428,7 @@ are not consulted. The result records `source`, `excluded` and `analysed`
 counts; when a contributing source has no flags channel (a voxel-reduced
 cloud, whose centroids carry none, or a decode without point semantics),
 `excluded` reads `unknown` rather than 0 and nothing is invented for it. The
-grid's method moves to `olv.volume.stockpile-area-grid@3`; a record stored at
+grid's method moves to `olv.volume.stockpile-area-grid@3` (method-literal-ok: the version at the time); a record stored at
 `@2` keeps that tag.
 
 Values change only on files that contain Withheld points inside the lasso.
@@ -6738,7 +6738,7 @@ columns and the report caveat show them with no new plumbing. A source with
 no flags channel is read whole and its `excluded` reads `unknown`. Overlap and
 the other flags are not consulted.
 
-The point-sample estimator moves to `olv.volume.stockpile@2`; a record stored
+The point-sample estimator moves to `olv.volume.stockpile@2` (method-literal-ok: the version at the time); a record stored
 at `@1` keeps that tag. A cloud without flags integrates to the same figure as
 before. Terrain, lasso stockpile volume, profiles, density and the polygon
 Volume tool now all leave Withheld points out, which is the scope this row

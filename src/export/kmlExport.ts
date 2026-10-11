@@ -358,6 +358,7 @@ function measurementPlacemark(m: Measurement, input: KmlExportInput): string | n
   const lines = [
     metricsLine(m, input),
     `Kind: ${m.kind}`,
+    m.kind === 'volume' && m.volume?.method ? `Volume method: ${m.volume.method}` : '',
     first ? sourceElevationLine(input, first[2]) : '',
     (m.kind === 'volume' && reducedSampleCaveat(m.volume?.withheld)) || '',
     caveatBlock(input),

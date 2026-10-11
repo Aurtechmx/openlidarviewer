@@ -17,7 +17,7 @@ import { deriveVolumeRecord, horizontalSpanXY } from '../src/render/measure/meas
 import { withStockpileGrid } from '../src/render/measure/stockpileResult';
 import type { StockpileGridFigure } from '../src/render/measure/stockpileResult';
 import type { VolumeResult } from '../src/render/measure/volume';
-import { POINT_SAMPLE_VOLUME_METHOD } from '../src/render/measure/volume';
+import { CUT_FILL_VOLUME_METHOD } from '../src/render/measure/volume';
 import { readFileSync } from 'node:fs';
 
 function result(over: Partial<VolumeResult> = {}): VolumeResult {
@@ -107,8 +107,8 @@ describe('a derived volume record names its estimator', () => {
   };
 
   it('stamps the estimator it is given', () => {
-    const r = deriveVolumeRecord(result as never, 3, POINT_SAMPLE_VOLUME_METHOD);
-    expect(r.method).toBe(POINT_SAMPLE_VOLUME_METHOD);
+    const r = deriveVolumeRecord(result as never, 3, CUT_FILL_VOLUME_METHOD);
+    expect(r.method).toBe(CUT_FILL_VOLUME_METHOD);
     expect(r.method).toMatch(/^olv\.volume\.stockpile@\d+$/);
   });
 
@@ -121,7 +121,7 @@ describe('a derived volume record names its estimator', () => {
 
   it('carries the same figures either way', () => {
     const bare = deriveVolumeRecord(result as never, 3);
-    const named = deriveVolumeRecord(result as never, 3, POINT_SAMPLE_VOLUME_METHOD);
+    const named = deriveVolumeRecord(result as never, 3, CUT_FILL_VOLUME_METHOD);
     expect([bare.fill, bare.cut, bare.net, bare.referenceZ]).toEqual([10, 2, 8, 3]);
     expect(named.fill).toBe(bare.fill);
     expect(named.net).toBe(bare.net);
@@ -132,7 +132,7 @@ describe('a derived volume record names its estimator', () => {
     // that through. If either half is dropped the record silently goes back to
     // unknown, which no unit test of this function alone would notice.
     const viewer = readFileSync(new URL('../src/render/Viewer.ts', import.meta.url), 'utf8');
-    expect(viewer).toMatch(/volumeMethod:\s*POINT_SAMPLE_VOLUME_METHOD/);
+    expect(viewer).toMatch(/volumeMethod:\s*CUT_FILL_VOLUME_METHOD/);
     const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
     expect(main).toMatch(/deriveVolumeRecord\([^)]*out\.volumeMethod\)/);
     // The live path also hands the point-sample record to the stockpile chunk,
@@ -148,11 +148,11 @@ describe('a derived volume record names its estimator', () => {
 const psRecord = {
   fill: 10, cut: 2, net: 8, referenceZ: 3, footprintArea: 20,
   pointsInPolygon: 500, densityNative: 25, confidence: 'high' as const,
-  method: POINT_SAMPLE_VOLUME_METHOD,
+  method: CUT_FILL_VOLUME_METHOD,
 };
 
 const gridFigure = (over: Partial<StockpileGridFigure> = {}): StockpileGridFigure => ({
-  method: 'olv.volume.stockpile-area-grid@3',
+  method: 'olv.volume.stockpile-area-grid@4',
   authority: 'measured', reason: '',
   fillNative: 7, cutNative: 1, netNative: 6,
   ...over,
@@ -178,7 +178,7 @@ describe('withStockpileGrid', () => {
     expect(out.fill).toBe(7);
     expect(out.cut).toBe(1);
     expect(out.net).toBe(6);
-    expect(out.method).toBe('olv.volume.stockpile-area-grid@3');
+    expect(out.method).toBe('olv.volume.stockpile-area-grid@4');
     expect(out.confidence).toBe(psRecord.confidence);
     expect(out.referenceZ).toBe(psRecord.referenceZ);
     expect(out.footprintArea).toBe(psRecord.footprintArea);
@@ -196,7 +196,7 @@ describe('withStockpileGrid', () => {
   it('always moves the ORIGINAL point-sample numbers into crossCheck, whatever the authority', () => {
     for (const authority of ['measured', 'preview', 'withheld'] as const) {
       const out = withStockpileGrid(psRecord, gridFigure({ authority }));
-      expect(out.crossCheck).toEqual({ fill: 10, cut: 2, net: 8, method: POINT_SAMPLE_VOLUME_METHOD });
+      expect(out.crossCheck).toEqual({ fill: 10, cut: 2, net: 8, method: CUT_FILL_VOLUME_METHOD });
     }
   });
 });

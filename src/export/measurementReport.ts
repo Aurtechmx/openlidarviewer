@@ -225,14 +225,16 @@ export function measurementsToFindings(
         );
         if (vol.crossCheck) {
           caveats.push(
-            `Point-sample cross-check (${vol.crossCheck.method}): cut ${(vol.crossCheck.cut * V).toFixed(2)} ${u('m³')} / fill ${(vol.crossCheck.fill * V).toFixed(2)} ${u('m³')}.`,
+            `Cut-fill cross-check (${vol.crossCheck.method}): cut ${(vol.crossCheck.cut * V).toFixed(2)} ${u('m³')} / fill ${(vol.crossCheck.fill * V).toFixed(2)} ${u('m³')}.`,
           );
         }
         caveats.push(GRID_KNOWN_LIMITATIONS, GRID_ACCURACY_EVIDENCE);
       } else {
         caveats.push(
-          `Cut ${((vol.cut ?? 0) * V).toFixed(2)} ${u('m³')} / fill ${((vol.fill ?? 0) * V).toFixed(2)} ${u('m³')} over ${footprint} footprint.`,
-          'Point-sample integration assumes uniform coverage inside the polygon.',
+          `Cut ${((vol.cut ?? 0) * V).toFixed(2)} ${u('m³')} / fill ${((vol.fill ?? 0) * V).toFixed(2)} ${u('m³')} over ${footprint} footprint${vol.method ? ` (${vol.method})` : ''}.`,
+          vol.coverageFraction !== undefined
+            ? `Area-weighted grid integration: ${(vol.coverageFraction * 100).toFixed(0)}% of the footprint measured from points, ${((vol.interpolatedFraction ?? 0) * 100).toFixed(0)}% interpolated from neighbouring cells, ${((vol.excludedFraction ?? 0) * 100).toFixed(0)}% outside the scanned extent and left out. Above 25% interpolated the volume is low-confidence; above 50% it is withheld.`
+            : 'Point-sample integration (method before olv.volume.stockpile@3) assumes uniform coverage inside the polygon.',
         );
       }
       const wc = withheldCaveat(vol.withheld);
@@ -254,12 +256,15 @@ export function measurementsToFindings(
         findings.push({ label, value: roundTo3(vol.net * V), unit: u('m³'), confidence: vol.confidence, caveats });
       } else if (vol.crossCheck) {
         findings.push({
-          label: `${label} (point-sample cross-check — grid volume withheld)`,
+          label: `${label} (cut-fill cross-check — grid volume withheld)`,
           value: roundTo3(vol.crossCheck.net * V),
           unit: u('m³'),
           confidence: vol.confidence,
           caveats,
         });
+      } else {
+        // Withheld with nothing to show: an explicit null under the reason.
+        findings.push({ label: `${label} (volume withheld)`, value: null, unit: '', confidence: vol.confidence, caveats });
       }
       return;
     }

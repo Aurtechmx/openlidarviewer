@@ -16,7 +16,7 @@ import { STOCKPILE_RESULT_SCHEMA } from '../src/render/measure/stockpileResult';
 import { deriveVolumeRecord } from '../src/render/measure/measureDerivations';
 import { volumeFromLassoWithFootprint } from '../src/render/measure/lassoVolume';
 import { computeLassoVolume } from '../src/render/measure/lassoVolumeCompute';
-import { POINT_SAMPLE_VOLUME_METHOD } from '../src/render/measure/volume';
+import { CUT_FILL_VOLUME_METHOD } from '../src/render/measure/volume';
 import { measurementsToCsv, measurementsToGeoJSON } from '../src/export/measurementExport';
 import { measurementsToFindings } from '../src/export/measurementReport';
 import { valueForDimension } from '../src/render/measure/measurementChains';
@@ -47,7 +47,7 @@ function lassoOf(positions: Float32Array, options: StockpileBandInputs['options'
     referencePercentile: 0.05,
     up: UP,
   });
-  const ps = deriveVolumeRecord(lo.result, lo.referenceZ, POINT_SAMPLE_VOLUME_METHOD);
+  const ps = deriveVolumeRecord(lo.result, lo.referenceZ, CUT_FILL_VOLUME_METHOD);
   const inputs: StockpileBandInputs = {
     polygon: RECT,
     positions,
@@ -157,7 +157,7 @@ describe('one lasso result on every surface', () => {
     const out = lassoStockpileResult(ps, inputs, 1);
     expect(out.record.gridAuthority).toBe('measured');
     expect(out.record.resultSchema).toBe(STOCKPILE_RESULT_SCHEMA);
-    expect(out.record.method).toBe('olv.volume.stockpile-area-grid@3');
+    expect(out.record.method).toBe('olv.volume.stockpile-area-grid@4');
     expect(out.record.crossCheck).toEqual({ fill: ps.fill, cut: ps.cut, net: ps.net, method: ps.method });
     expect(out.headline).toContain('(area-weighted grid)');
     expectParity(out.record, out.headline);
@@ -206,7 +206,7 @@ describe('one lasso result on every surface', () => {
       referencePercentile: 0.05,
     })!;
     expect(walk.withheld).toEqual({ source: n, excluded: withheld, analysed: n - withheld });
-    const ps = deriveVolumeRecord(walk.result, walk.referenceZ, POINT_SAMPLE_VOLUME_METHOD);
+    const ps = deriveVolumeRecord(walk.result, walk.referenceZ, CUT_FILL_VOLUME_METHOD);
     const out = lassoStockpileResult(ps, {
       polygon: RECT, positions: walk.selectedPositions, lin: 1, options: {}, withheld: walk.withheld,
     }, 1);

@@ -132,12 +132,19 @@ export interface StockpileBreakdown {
   readonly baseUncertainty: number;
   /** Mean pile thickness above the base across inside points, m. */
   readonly meanThickness: number;
-  /** Std of the per-point thickness, m. */
+  /** Sample std (n−1) of the per-point thickness, m. */
   readonly thicknessStdDev: number;
-  /** 1σ volume error from point sampling, m³. */
+  /**
+   * 1σ volume term from the cell surfaces, m³: sqrt(Σ (A_c · NMAD_c / √n_c)²)
+   * over the covered grid cells, the same cells the volume is integrated on.
+   */
   readonly samplingError: number;
-  /** 1σ volume error from base-plane uncertainty, m³. */
+  /** 1σ volume error from base-plane uncertainty over the covered area, m³. */
   readonly basePlaneError: number;
+  /** Footprint area the volume is integrated over (cells holding points), native². */
+  readonly coveredArea?: number;
+  /** coveredArea / footprintArea, 0..1. */
+  readonly coverageFraction?: number;
 }
 
 /**
@@ -148,6 +155,13 @@ export interface StockpileBreakdown {
  * for a state-plane-feet cloud native == feet. Do not treat these as m³.
  */
 export interface StockpileVolumeResult {
+  /**
+   * Set when more than half of the footprint's surface was interpolated: the
+   * volume figures are then not to be shown, and this says why.
+   */
+  readonly withheldReason?: string;
+  /** Share of the footprint whose surface was interpolated, 0..1. */
+  readonly interpolatedFraction?: number;
   /** Stockpile volume above the base (fill), native units³ (×lin³ → m³). ≥ 0. */
   readonly volume: number;
   /** Material below the base inside the footprint (cut), native units³. ≥ 0. */
@@ -293,25 +307,23 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
     return zeroResult(v.validity ?? 'ok', v.footprintArea, baseMode, baseZ, densityUnitKnown);
   }
 
-  // Per-point thickness above the base (clamped at 0 — the fill contribution),
-  // mean and std for the sampling-error term. Welford streams both in one pass
-  // with no cancellation — the naive Σt²/n − mean² form loses the variance
-  // entirely for a tall pile with a smooth top (spread tiny next to the mean).
-  // fill = area · mean(thickness).
+  // Per-point thickness above the base (clamped at 0), for the descriptive
+  // mean and spread shown in the breakdown. Welford streams both in one pass
+  // with no cancellation. The spread is the SAMPLE standard deviation (n−1).
   const thickness = new WelfordStats();
   for (const z of insideHeights) thickness.push(Math.max(0, z - baseZ));
-  const m = insideHeights.length || 1;
   const meanThk = thickness.mean;
-  const stdThk = thickness.populationStd;
+  const stdThk = thickness.sampleStd;
 
   const area = v.footprintArea;
-  // Standard error of the mean thickness × area. The √N must be taken over the
-  // SAME population the thickness σ was computed on — the `m` finite inside
-  // heights — not `inN`. The two coincide (volumeCutFill also excludes
-  // non-finite-z inside points), but using `m` keeps σ and √N self-consistent
-  // regardless of how volumeCutFill counts.
-  const samplingError = m > 0 ? (area * stdThk) / Math.sqrt(m) : 0;
-  const basePlaneError = area * baseUncertainty;
+  // The band follows the estimator. The volume is integrated per grid cell over
+  // the covered area, so the surface term is the grid's own per-cell term and
+  // the base term spans the covered area, not the full footprint.
+  const covered = v.coveredArea !== undefined
+    ? v.coveredArea + area * (v.interpolatedFraction ?? 0)
+    : area;
+  const samplingError = v.surfaceSigma ?? 0;
+  const basePlaneError = covered * baseUncertainty;
   const sigma = Math.hypot(samplingError, basePlaneError);
 
   const volume = v.fill;
@@ -322,7 +334,9 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
   // wrongly downgraded. m² per native² = linearUnitToMetres².
   const lin = input.linearUnitToMetres ?? 1;
   const densityPerM2 = lin > 0 ? v.densityNative / (lin * lin) : v.densityNative;
-  const confidence = gradeConfidence(relativeError, inN, densityPerM2, densityUnitKnown);
+  const graded = gradeConfidence(relativeError, inN, densityPerM2, densityUnitKnown);
+  // More than a quarter of the surface interpolated caps the grade at LOW.
+  const confidence: StockpileConfidence = v.interpolationVerdict && v.interpolationVerdict !== 'ok' ? 'low' : graded;
   const caveats = buildCaveats(
     confidence,
     inN,
@@ -355,9 +369,13 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
       thicknessStdDev: stdThk,
       samplingError,
       basePlaneError,
+      coveredArea: covered,
+      coverageFraction: v.coverageFraction ?? 1,
     },
     validity: 'ok',
-    caveats,
+    caveats: interpCaveat(v.interpolatedFraction, v.excludedFraction, caveats),
+    ...(v.interpolatedFraction !== undefined ? { interpolatedFraction: v.interpolatedFraction } : {}),
+    ...(v.withheldReason ? { withheldReason: v.withheldReason } : {}),
   };
 }
 
@@ -372,7 +390,19 @@ function stdDev(values: ArrayLike<number>): number {
     const d = values[i] - mean;
     acc += d * d;
   }
-  return Math.sqrt(acc / n);
+  return Math.sqrt(acc / (n - 1));
+}
+
+/** Prepend the interpolated / excluded footprint shares to the caveats. */
+function interpCaveat(interp: number | undefined, excluded: number | undefined, caveats: string[]): string[] {
+  const out = [...caveats];
+  if (excluded !== undefined && excluded > 0.005) {
+    out.unshift(`${(excluded * 100).toFixed(0)}% of the footprint lies outside the scanned extent and is left out of the volume.`);
+  }
+  if (interp !== undefined && interp > 0.005) {
+    out.unshift(`${(interp * 100).toFixed(0)}% of the footprint surface is interpolated from neighbouring cells.`);
+  }
+  return out;
 }
 
 function gradeConfidence(
@@ -422,12 +452,12 @@ function buildCaveats(
       `Base plane was inferred from the lowest ground points inside the footprint (±${baseUncertaintyM.toFixed(2)} m); set an explicit base if you have a surveyed datum.`,
     );
   }
-  // Mirrors changeUncertainty's spatial-correlation caveat: the √N in the
-  // sampling-error term assumes independent residuals, which scan noise
+  // Mirrors changeUncertainty's spatial-correlation caveat: the per-cell √n in
+  // the surface term assumes independent residuals, which scan noise
   // (scan lines, registration drift) routinely violates.
   out.push(
-    'Point-sample estimate over a horizontal base plane; not a triangulated surface-to-surface volume.',
-    'Point-sampling noise is assumed spatially independent; the true error is larger if it is correlated.',
+    'Area-weighted grid estimate over a horizontal base plane (empty cells interpolated inside the scanned extent, never read as zero); not a triangulated surface-to-surface volume.',
+    'Surface noise is assumed spatially independent; the true error is larger if it is correlated.',
   );
   if (confidence === 'high') {
     out.unshift('Dense, even coverage with a clean base — suitable for a documented stockpile figure once validated.');
@@ -469,6 +499,8 @@ function zeroResult(
       thicknessStdDev: 0,
       samplingError: 0,
       basePlaneError: 0,
+      coveredArea: 0,
+      coverageFraction: 0,
     },
     validity,
     caveats: zeroCaveats(validity, densityUnitKnown),

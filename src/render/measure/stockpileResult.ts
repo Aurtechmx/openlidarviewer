@@ -36,6 +36,10 @@ export interface StockpileGridFigure {
   readonly fillNative: number;
   readonly cutNative: number;
   readonly netNative: number;
+  /** Measured, interpolated and excluded footprint shares of the grid, 0..1. */
+  readonly supportFraction?: number;
+  readonly interpolatedFraction?: number;
+  readonly excludedFraction?: number;
 }
 
 /**
@@ -73,6 +77,11 @@ export function withStockpileGrid(
     gridAuthorityReason: grid.reason,
     crossCheck: { fill, cut, net, method },
   };
+  // The shares the canonical figure stands on are the grid's own.
+  if (grid.supportFraction !== undefined) enriched.coverageFraction = grid.supportFraction;
+  if (grid.interpolatedFraction !== undefined) enriched.interpolatedFraction = grid.interpolatedFraction;
+  if (grid.excludedFraction !== undefined) enriched.excludedFraction = grid.excludedFraction;
+  if (grid.interpolatedFraction !== undefined && grid.interpolatedFraction > 0.25) enriched.confidence = 'low';
   if (grid.authority === 'withheld') {
     delete enriched.fill;
     delete enriched.cut;
@@ -120,7 +129,7 @@ export function stockpileResultHeadline(r: VolumeRecord, vol: number): string {
   } else {
     head = `Volume withheld (${r.gridAuthorityReason || 'insufficient observations'})`;
   }
-  if (cc) head += ` · point-sample cross-check fill ${m3(cc.fill, vol)} · cut ${m3(cc.cut, vol)} · net ${m3(cc.net, vol)}`;
+  if (cc) head += ` · cut-fill cross-check fill ${m3(cc.fill, vol)} · cut ${m3(cc.cut, vol)} · net ${m3(cc.net, vol)}`;
   return head + withheldClause(r.withheld);
 }
 

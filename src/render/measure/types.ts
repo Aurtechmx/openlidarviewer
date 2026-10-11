@@ -144,7 +144,7 @@ export interface VolumeRecord {
    *
    * The PDF report card surfaces this so a low-coverage result reads
    * as an estimate rather than a survey-grade volume. The methodology
-   * caveat ("Point-sample integration assumes uniform coverage") is the
+   * caveat (area-weighted grid, covered share of the footprint) is the
    * same on every confidence level — the badge is what the analyst sees
    * first when scanning the report.
    */
@@ -152,8 +152,9 @@ export interface VolumeRecord {
   /**
    * The estimator that produced these numbers, as `id@version`.
    *
-   * Two estimators can answer for one lasso: the point-sample integration this
-   * record comes from, and the area-weighted grid the toast reports. They do
+   * Two estimators can answer for one lasso: the cut-fill integration this
+   * record comes from (`olv.volume.stockpile`, area-weighted from v3), and the
+   * area-grid stockpile figure the toast reports. They do
    * not produce the same figure, so a stored record has to say which one it is
    * rather than leaving a reader to assume the current default.
    *
@@ -171,6 +172,21 @@ export interface VolumeRecord {
    * for fully-finite clouds and for records from older session files.
    */
   skippedNonFinite?: number;
+  /**
+   * Share of the footprint (0..1) whose grid cells held points, from
+   * `olv.volume.stockpile@3` on. `fill`/`cut`/`net` are integrated over that
+   * share only; cells without points are not read as zero. Absent on a record
+   * from an earlier method version.
+   */
+  coverageFraction?: number;
+  /**
+   * Share of the footprint (0..1) whose surface was interpolated across a gap
+   * between covered cells. Above 0.25 the record is low-confidence; above 0.5
+   * its figures are withheld. Absent before `olv.volume.stockpile@3`.
+   */
+  interpolatedFraction?: number;
+  /** Share of the footprint outside the covered extent, left out (0..1). */
+  excludedFraction?: number;
   /**
    * Lasso only, present on a lasso record saved with the grid as its figure, when `method` names the
    * area-weighted grid: the coverage verdict `fill`/`cut`/`net` stand under.

@@ -114,11 +114,33 @@ reports its plane area, which is a lower bound on the draped surface.
 ## A lasso volume has one figure and a cross-check
 
 The toast, the saved record, the CSV, GeoJSON and the report all read one
-stockpile result built from the area-weighted grid. The point-sample cut and
-fill is kept beside it under its own columns as a cross-check, and the two
-still differ. A record saved before this change keeps its method version and
-its stored figure; it is never recomputed. The polygon Volume tool still uses
-the point sample.
+stockpile result built from the area-weighted grid. The cut-fill figure is
+kept beside it under the `pointsample_*` columns as a cross-check; from
+`olv.volume.stockpile@3` it is area-weighted too, and its estimator is named by
+the record's `crossCheck.method`. A record saved before this change keeps its
+method version and its stored figure; it is never recomputed. The lasso
+footprint is the drawn lasso projected onto the horizontal plane at the
+reference height; in an oblique view, points of a tall pile that project inside
+the lasso but lie outside that plane footprint are left out.
+
+## Volumes are area-weighted; gaps are interpolated and graded
+
+The polygon Volume tool, the lasso volume and the stockpile breakdown all
+integrate a horizontal grid: each cell holding points contributes its
+footprint-clipped area times its median height, so a densely scanned area no
+longer outweighs a sparse one. A cell without points inside the convex extent
+of the covered cells takes a surface interpolated from its nearest covered
+neighbours; one outside that extent is left out, never extrapolated. Every
+volume states its interpolated and excluded shares. Above 25% interpolated the
+figure is low-confidence; above 50% it is withheld with the reason. A sharp
+step that falls inside one cell goes to the side holding more of the cell's
+points, so a step between a dense and a sparse half still reads high by up to
+one cell width times the step (56 m³ for a 50 m³ known answer in
+`docs/validation/volume-known-answer-baseline.json`). The grid's cell size is
+derived from the point spacing, so on an exact lattice the cell edges can fall
+on lattice points; which cell such a point joins is then decided by
+floating-point rounding, and a very small selection can move by a cell's worth
+under translation.
 
 ## Two densities, each stating its basis
 

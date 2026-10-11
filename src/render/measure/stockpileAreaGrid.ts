@@ -91,6 +91,19 @@ export interface StockpileAreaGridInput {
   /** Max cells across the grid before it is coarsened, so a huge footprint at a
    *  fine resolution cannot allocate without bound. Default 1e6. */
   readonly maxCells?: number;
+  /**
+   * The caller already kept only points inside `polygon` (as `volumeCutFill`
+   * does), so the per-point polygon test can be skipped. Default false.
+   */
+  readonly pointsInsideFootprint?: boolean;
+  /**
+   * Fill cells without support by interpolating the covered cell surfaces
+   * (inverse-distance weighting over the nearest covered cells), but only
+   * where the cell centre lies inside the convex extent of the covered cell
+   * centres. Cells outside that extent are never extrapolated: they are
+   * excluded and their area reported. Default false.
+   */
+  readonly interpolateGaps?: boolean;
 }
 
 /** Per-cell record kept for coverage accounting and diagnostics. */
@@ -154,6 +167,17 @@ export interface StockpileAreaGridResult {
   readonly uncertaintyModel: 'incomplete';
   readonly surfaceTermM3: number;
   readonly cells: readonly StockpileCell[];
+  /** Footprint area whose surface was interpolated, m² (0 unless `interpolateGaps`). */
+  readonly interpolatedAreaM2: number;
+  /** interpolatedArea / polygonArea, 0..1. */
+  readonly interpolatedFraction: number;
+  /**
+   * Unsupported footprint area left out of the volume, m²: every gap when
+   * interpolation is off, otherwise only gaps outside the covered extent.
+   */
+  readonly excludedAreaM2: number;
+  /** excludedArea / polygonArea, 0..1. */
+  readonly excludedFraction: number;
 }
 
 const DEFAULT_MIN_CELL = 0.05;
@@ -317,6 +341,77 @@ function pointInPolygon(poly: ReadonlyArray<Vec2>, x: number, y: number): boolea
   return inside;
 }
 
+/**
+ * Flag every grid cell a footprint edge can pass through. Each edge is walked
+ * in quarter-cell steps and the cell under each step plus its eight neighbours
+ * is flagged, so the marking is conservative: a flagged cell may be interior
+ * (it is then clipped exactly anyway), an unflagged cell is never crossed.
+ */
+function markBoundaryCells(
+  poly: ReadonlyArray<Vec2>,
+  xmin: number,
+  ymin: number,
+  cell: number,
+  nx: number,
+  ny: number,
+): Uint8Array {
+  const out = new Uint8Array(nx * ny);
+  const mark = (x: number, y: number): void => {
+    const ix = Math.floor((x - xmin) / cell);
+    const iy = Math.floor((y - ymin) / cell);
+    for (let dy = -1; dy <= 1; dy++) {
+      const yy = iy + dy;
+      if (yy < 0 || yy >= ny) continue;
+      for (let dx = -1; dx <= 1; dx++) {
+        const xx = ix + dx;
+        if (xx >= 0 && xx < nx) out[yy * nx + xx] = 1;
+      }
+    }
+  };
+  const n = poly.length;
+  for (let i = 0; i < n; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % n];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const steps = Math.max(1, Math.ceil(len / (cell * 0.25)));
+    for (let k = 0; k <= steps; k++) {
+      const t = k / steps;
+      mark(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+    }
+  }
+  return out;
+}
+
+/** Convex hull (monotone chain), counter-clockwise, no collinear points. */
+function convexHull(pts: ReadonlyArray<Vec2>): Vec2[] {
+  if (pts.length < 3) return [...pts];
+  const p = [...pts].sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (o: Vec2, a: Vec2, b: Vec2): number => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower: Vec2[] = [];
+  for (const q of p) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], q) <= 0) lower.pop();
+    lower.push(q);
+  }
+  const upper: Vec2[] = [];
+  for (let i = p.length - 1; i >= 0; i--) {
+    const q = p[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 0) upper.pop();
+    upper.push(q);
+  }
+  return lower.slice(0, -1).concat(upper.slice(0, -1));
+}
+
+/** Point inside (or on) a counter-clockwise convex polygon. */
+function insideConvex(hull: ReadonlyArray<Vec2>, x: number, y: number): boolean {
+  const n = hull.length;
+  for (let i = 0; i < n; i++) {
+    const a = hull[i];
+    const b = hull[(i + 1) % n];
+    if ((b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x) < -1e-12) return false;
+  }
+  return true;
+}
+
 function baseZ(base: StockpileBase, x: number, y: number): number {
   return base.kind === 'constant' ? base.zM : base.a * x + base.b * y + base.c;
 }
@@ -348,6 +443,8 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
     supportedAreaM2: 0, unobservedAreaM2: polyAreaSrc * unit * unit, supportFraction: 0,
     singleReturnAreaM2: 0, singleReturnFraction: 0,
     coverage: 'refused', uncertaintyModel: 'incomplete', surfaceTermM3: 0, cells: [],
+    interpolatedAreaM2: 0, interpolatedFraction: 0,
+    excludedAreaM2: polyAreaSrc * unit * unit, excludedFraction: polyAreaSrc > 0 ? 1 : 0,
   });
   if (!(polyAreaSrc > 0) || !Number.isFinite(xmin)) return emptyResult();
 
@@ -380,30 +477,50 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
     // footprint can have bbox-inside points that sit outside the actual
     // polygon (e.g. in the notch of an L-shape), which would otherwise
     // corrupt the surface of whichever cell they land in.
-    if (!pointInPolygon(input.polygon, p.x, p.y)) continue;
+    if (!input.pointsInsideFootprint && !pointInPolygon(input.polygon, p.x, p.y)) continue;
     const ix = Math.min(nx - 1, Math.floor((p.x - xmin) / cell));
     const iy = Math.min(ny - 1, Math.floor((p.y - ymin) / cell));
     heights[iy * nx + ix].push(p.z);
   }
 
   const cells: StockpileCell[] = [];
+  /** Unsupported cells inside the footprint, with their clipped centroid. */
+  const gaps: Array<{ ix: number; iy: number; areaSrc: number; cx: number; cy: number }> = [];
   let fillSrc = 0;
   let cutSrc = 0;
   let supportedAreaSrc = 0;
   let singleReturnAreaSrc = 0;
   let surfaceVarM6 = 0; // Σ (A_c·σ_c)² in metre units, for the surface term.
 
+  // Cells a footprint edge can touch are clipped exactly; every other cell is
+  // wholly inside or wholly outside, decided by its centre. Clipping every
+  // cell against a many-vertex lasso was O(cells x vertices) with allocation.
+  const boundary = markBoundaryCells(input.polygon, xmin, ymin, cell, nx, ny);
+
   for (let iy = 0; iy < ny; iy++) {
     for (let ix = 0; ix < nx; ix++) {
       const cx0 = xmin + ix * cell;
       const cy0 = ymin + iy * cell;
-      const clipped = clipCellPolygon(input.polygon, cx0, cy0, Math.min(cx0 + cell, xmax), Math.min(cy0 + cell, ymax));
-      const areaSrc = polygonArea(clipped);
+      const cx1 = Math.min(cx0 + cell, xmax);
+      const cy1 = Math.min(cy0 + cell, ymax);
+      let clipped: ReadonlyArray<Vec2>;
+      let areaSrc: number;
+      if (boundary[iy * nx + ix] === 1) {
+        clipped = clipCellPolygon(input.polygon, cx0, cy0, cx1, cy1);
+        areaSrc = polygonArea(clipped);
+      } else if (pointInPolygon(input.polygon, (cx0 + cx1) / 2, (cy0 + cy1) / 2)) {
+        clipped = [{ x: cx0, y: cy0 }, { x: cx1, y: cy0 }, { x: cx1, y: cy1 }, { x: cx0, y: cy1 }];
+        areaSrc = (cx1 - cx0) * (cy1 - cy0);
+      } else {
+        continue;
+      }
       if (areaSrc <= 0) continue; // cell outside the footprint
       const hs = heights[iy * nx + ix];
       if (hs.length < minSupport) {
         // Observed-but-unsupported: recorded, NOT interpolated to zero.
         cells.push({ ix, iy, areaSrc, surfaceZ: Number.NaN, support: hs.length, spread: 0 });
+        const c = polygonCentroid(clipped);
+        gaps.push({ ix, iy, areaSrc, cx: c.x, cy: c.y });
         continue;
       }
       const med = median(hs);
@@ -441,6 +558,64 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
     }
   }
 
+  // Gap filling. Interpolated cells add volume but never support: the
+  // coverage verdict and the support fraction stay statements about what was
+  // observed, and the interpolated share is reported beside them.
+  let interpolatedAreaSrc = 0;
+  let excludedAreaSrc = 0;
+  if (input.interpolateGaps && gaps.length > 0) {
+    const surf = new Float64Array(nx * ny).fill(Number.NaN);
+    const centres: Vec2[] = [];
+    for (const c of cells) {
+      if (Number.isFinite(c.surfaceZ)) {
+        surf[c.iy * nx + c.ix] = c.surfaceZ;
+        centres.push({ x: xmin + (c.ix + 0.5) * cell, y: ymin + (c.iy + 0.5) * cell });
+      }
+    }
+    const hull = convexHull(centres);
+    const maxRing = Math.max(nx, ny);
+    for (const g of gaps) {
+      const gx = xmin + (g.ix + 0.5) * cell;
+      const gy = ymin + (g.iy + 0.5) * cell;
+      if (hull.length < 3 || !insideConvex(hull, gx, gy)) {
+        excludedAreaSrc += g.areaSrc;
+        continue;
+      }
+      // Inverse-distance weighting over the covered cells in the nearest
+      // ring(s) that hold any, widened by one ring so a single neighbour
+      // never decides a cell alone.
+      let wSum = 0;
+      let zSum = 0;
+      let foundAt = -1;
+      for (let r = 1; r <= maxRing; r++) {
+        for (let jy = g.iy - r; jy <= g.iy + r; jy++) {
+          if (jy < 0 || jy >= ny) continue;
+          const edge = jy === g.iy - r || jy === g.iy + r;
+          for (let jx = g.ix - r; jx <= g.ix + r; jx += edge ? 1 : 2 * r) {
+            if (jx < 0 || jx >= nx) continue;
+            const z = surf[jy * nx + jx];
+            if (!Number.isFinite(z)) continue;
+            const w = 1 / ((jx - g.ix) ** 2 + (jy - g.iy) ** 2);
+            wSum += w;
+            zSum += w * z;
+          }
+        }
+        if (wSum > 0 && foundAt < 0) foundAt = r;
+        if (foundAt >= 0 && r >= foundAt + 1) break;
+      }
+      if (!(wSum > 0)) {
+        excludedAreaSrc += g.areaSrc;
+        continue;
+      }
+      const dz = zSum / wSum - baseZ(input.base, g.cx, g.cy);
+      if (dz >= 0) fillSrc += g.areaSrc * dz;
+      else cutSrc += g.areaSrc * -dz;
+      interpolatedAreaSrc += g.areaSrc;
+    }
+  } else {
+    for (const g of gaps) excludedAreaSrc += g.areaSrc;
+  }
+
   const polygonAreaM2 = polyAreaSrc * unit * unit;
   const supportedAreaM2 = supportedAreaSrc * unit * unit;
   const singleReturnAreaM2 = singleReturnAreaSrc * unit * unit;
@@ -474,5 +649,9 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
     uncertaintyModel: 'incomplete',
     surfaceTermM3: Math.sqrt(surfaceVarM6),
     cells,
+    interpolatedAreaM2: interpolatedAreaSrc * unit * unit,
+    interpolatedFraction: polyAreaSrc > 0 ? Math.min(1, interpolatedAreaSrc / polyAreaSrc) : 0,
+    excludedAreaM2: excludedAreaSrc * unit * unit,
+    excludedFraction: polyAreaSrc > 0 ? Math.min(1, excludedAreaSrc / polyAreaSrc) : 0,
   };
 }
