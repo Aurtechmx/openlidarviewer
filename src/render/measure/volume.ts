@@ -53,7 +53,7 @@ import type { LayerSpatialTransform } from '../../geo/ProjectSpatialFrame';
 import { accumulatorOffset, placeBufferInto } from '../layerPlacement';
 import { isWithheld } from '../../science/withheldPolicy';
 import { alignedClasses, isNoiseClass } from '../../terrain/ground/classificationFilter';
-import { stockpileAreaGrid, type AreaGridPoint } from './stockpileAreaGrid';
+import { stockpileAreaGrid } from './stockpileAreaGrid';
 import {
   type PolygonValidity,
   validatePolygon,
@@ -454,7 +454,10 @@ function cutFill(input: VolumeInput, areaWeighted: boolean): VolumeResult {
   let inCount = 0;
   let fillSum = 0;
   let cutSum = 0;
-  const insidePoints: AreaGridPoint[] = [];
+  // Inside points for the area grid, packed x,y,z and grown by doubling: one
+  // object per point cost ~100 bytes each, ~1 GB at 10 M points.
+  let insideXyz = new Float64Array(areaWeighted ? Math.min(sampleCount, 1 << 16) * 3 : 0);
+  let insideCount = 0;
   let skippedNonFinite = 0;
   // We collect inside Δz magnitudes for the median; cap the buffer at 10 000 to
   // bound allocation on a 100 M-point chunk. Filling it with the FIRST 10 000
@@ -516,8 +519,17 @@ function cutFill(input: VolumeInput, areaWeighted: boolean): VolumeResult {
       continue;
     }
     const dz = height - refZ;
-    if (areaWeighted) insidePoints.push({ x: hx, y: hy, z: height });
-    else if (dz >= 0) fillSum += dz;
+    if (areaWeighted) {
+      if (insideCount * 3 + 3 > insideXyz.length) {
+        const grown = new Float64Array(Math.max(3, Math.min(sampleCount * 3, insideXyz.length * 2)));
+        grown.set(insideXyz);
+        insideXyz = grown;
+      }
+      insideXyz[insideCount * 3] = hx;
+      insideXyz[insideCount * 3 + 1] = hy;
+      insideXyz[insideCount * 3 + 2] = height;
+      insideCount++;
+    } else if (dz >= 0) fillSum += dz;
     else cutSum += -dz;
     // Reservoir sampling for the median buffer: fill directly until full, then
     // replace a uniformly-chosen slot so every inside point has an equal chance
@@ -576,11 +588,12 @@ function cutFill(input: VolumeInput, areaWeighted: boolean): VolumeResult {
   // Area-weighted integration: one prism per supported grid cell, clipped to
   // the footprint. Unsupported cells drop out and lower the coverage.
   const grid = stockpileAreaGrid({
-    points: insidePoints,
+    points: { xyz: insideXyz, count: insideCount },
     polygon: projectedPoly,
     base: { kind: 'constant', zM: refZ },
     pointsInsideFootprint: true,
     interpolateGaps: true,
+    maxInterpolatedFraction: INTERPOLATED_WITHHOLD,
   });
   const verdict = interpolationVerdict(grid.interpolatedFraction);
   const fill = grid.fillM3;

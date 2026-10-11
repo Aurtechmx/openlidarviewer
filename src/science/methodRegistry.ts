@@ -373,7 +373,11 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'Withheld left out of its input (ASPRS LAS 1.4: not to be included in ' +
       'processing); Overlap points are kept. A v2 figure included them. v4 ' +
       'interpolates unsupported cells inside the convex extent of the covered ' +
-      'cells (inverse-distance weighting over the nearest covered cells), ' +
+      'cells by inverse-distance weighting (w = 1/d^2): within 8 cells of ' +
+      'cover over the nearest square ring of cells holding any covered cell ' +
+      'plus the next ring, deeper in a void over the first covered cell along ' +
+      'each of the 8 grid directions plus the nearest covered cell, so the ' +
+      'fill is linear in the grid size; it ' +
       'excludes and reports those outside it, and grades the figure by the ' +
       'interpolated share (over 25%: low confidence, over 50%: withheld); a v3 ' +
       'figure left every unsupported cell out.',

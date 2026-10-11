@@ -896,6 +896,10 @@ describe('the harness takes both answers from the app path', () => {
 
   it('reads the grid figure the presenter reads', () => {
     for (const [id, d] of everyAnswer()) {
+      // A withheld grid has no figure to agree on: the presenter stops at the
+      // 50 % interpolation limit without computing interpolated heights, so its
+      // volumeM3 covers observed cells only and is never shown.
+      if (d.grid.authority === 'withheld') continue;
       expect(d.presenterM3, id).toBeCloseTo(d.grid.fill, 9);
     }
   });

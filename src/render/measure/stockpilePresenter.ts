@@ -16,7 +16,7 @@
 
 import { stockpileVolume, type StockpileVolumeResult, type StockpileConfidence } from './stockpileVolume';
 import { stockpileAreaGrid, type StockpileAreaGridResult } from './stockpileAreaGrid';
-import { interpolationVerdict } from './volume';
+import { INTERPOLATED_WITHHOLD, interpolationVerdict } from './volume';
 import type { Vec3 } from '../navMath';
 import { streamingIsComplete, type StreamingCoverage } from './profileSectionSnapshot';
 import { buildStockpileResult, stockpileResultHeadline } from './stockpileResult';
@@ -267,6 +267,7 @@ export function presentStockpileAreaGrid(
     polygon: polygon.map((p) => ({ x: p[0], y: p[1] })),
     base: { kind: 'constant', zM: base.z },
     interpolateGaps: true,
+    maxInterpolatedFraction: INTERPOLATED_WITHHOLD,
   });
   // Gaps inside the covered extent are interpolated, so the verdict reads the
   // interpolated share (over 25 %: low confidence, shown as PREVIEW; over

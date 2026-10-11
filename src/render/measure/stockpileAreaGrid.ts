@@ -55,6 +55,15 @@ export interface AreaGridPoint {
   readonly z: number;
 }
 
+/**
+ * Points packed as interleaved x,y,z (`xyz.length >= 3·count`). Lets a caller
+ * with millions of points avoid one JS object per point.
+ */
+export interface PackedAreaGridPoints {
+  readonly xyz: Float64Array;
+  readonly count: number;
+}
+
 /** A 2D footprint vertex in the same frame as the points. */
 export interface Vec2 {
   readonly x: number;
@@ -70,7 +79,7 @@ export type StockpileBase =
 
 export interface StockpileAreaGridInput {
   /** Cloud points inside or near the footprint, projected to (x, y) + height z. */
-  readonly points: ReadonlyArray<AreaGridPoint>;
+  readonly points: ReadonlyArray<AreaGridPoint> | PackedAreaGridPoints;
   /** The stockpile footprint, in placement order, same 2D frame as the points. */
   readonly polygon: ReadonlyArray<Vec2>;
   /** The base surface (constant elevation or a fitted plane). */
@@ -104,6 +113,14 @@ export interface StockpileAreaGridInput {
    * excluded and their area reported. Default false.
    */
   readonly interpolateGaps?: boolean;
+  /**
+   * With `interpolateGaps`: when the share of the footprint that would be
+   * interpolated exceeds this fraction, the interpolated heights are not
+   * computed (the caller withholds such a volume anyway). The interpolated
+   * and excluded shares are still reported; fill/cut then cover observed
+   * cells only. Default: no limit.
+   */
+  readonly maxInterpolatedFraction?: number;
 }
 
 /** Per-cell record kept for coverage accounting and diagnostics. */
@@ -213,15 +230,15 @@ export function deriveCellSize(
 }
 
 /** Median of a numeric array (mutates a copy). Empty → NaN. */
-function median(values: number[]): number {
+function median(values: Float64Array): number {
   if (values.length === 0) return Number.NaN;
-  const s = [...values].sort((a, b) => a - b);
+  const s = Float64Array.from(values).sort();
   const mid = s.length >> 1;
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
 /** NMAD (1.4826 × median absolute deviation). <2 values → 0. */
-function nmad(values: number[], med: number): number {
+function nmad(values: Float64Array, med: number): number {
   if (values.length < 2) return 0;
   const dev = values.map((v) => Math.abs(v - med));
   return 1.4826 * median(dev);
@@ -412,6 +429,143 @@ function insideConvex(hull: ReadonlyArray<Vec2>, x: number, y: number): boolean 
   return true;
 }
 
+/** The eight grid directions searched by {@link idwFill}. */
+const OCTANT_DIRS: ReadonlyArray<readonly [number, number]> = [
+  [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1],
+];
+
+/**
+ * Chebyshev distance (in cells) up to which a gap is filled by the exact
+ * square-ring search; deeper gaps use the eight-direction search. The ring
+ * search costs O(r) per gap here (two ring perimeters), so the cap bounds it
+ * by a constant and keeps the whole fill O(nx·ny).
+ */
+const RING_SEARCH_MAX = 8;
+
+/**
+ * Inverse-distance-weighted surface for every unsupported cell of an `nx×ny`
+ * grid whose covered cells hold a finite `surf` value (NaN elsewhere). Cells
+ * are addressed by integer (ix, iy); d is the Euclidean distance between cell
+ * centres in cell units and every weight is w = 1/d². Estimator
+ * (olv.volume.stockpile-area-grid v5), with r(g) the Chebyshev distance from
+ * gap g to the nearest covered cell (exact, by multi-source 8-connected BFS):
+ *
+ *   • r(g) ≤ RING_SEARCH_MAX (near a covered cell — almost every gap in a
+ *     real scan): S(g) = every covered cell at Chebyshev distance r(g) or
+ *     r(g)+1 from g, i.e. the nearest square ring holding any covered cell
+ *     plus one more, so a single neighbour never decides a cell alone. This
+ *     is exactly the v4 estimator.
+ *   • r(g) > RING_SEARCH_MAX (deep inside a large void): S(g) = along each of
+ *     the 8 grid directions (±x, ±y, both diagonals) the first covered cell
+ *     met walking outward from g, plus the BFS-nearest covered cell when it
+ *     is not on one of those rays (ties broken by the fixed BFS order), so
+ *     S(g) is never empty. This is an octant search: it brackets the void
+ *     from every side instead of enumerating O(r²) ring cells.
+ *
+ *   ẑ(g) = Σ_{c∈S(g)} z_c / d²(g,c)  /  Σ_{c∈S(g)} 1 / d²(g,c)
+ *
+ * Every term is an observed surface; the caller fills only cells inside the
+ * convex extent of the covered centres (no extrapolation) and never zero-fills.
+ * Cost O(nx·ny): one BFS, eight linear sweeps that carry "the last covered
+ * cell seen", and a constant-bounded ring sum. The v4 search widened rings
+ * for every gap, O(K·R²) for a void of K cells and radius R.
+ */
+function idwFill(surf: Float64Array, nx: number, ny: number): Float64Array {
+  const n = nx * ny;
+  const out = new Float64Array(n).fill(Number.NaN);
+  // Nearest covered cell and Chebyshev distance by multi-source BFS.
+  const src = new Int32Array(n).fill(-1);
+  const dist = new Int32Array(n);
+  const queue = new Int32Array(n);
+  let head = 0, tail = 0;
+  for (let i = 0; i < n; i++) if (Number.isFinite(surf[i])) { src[i] = i; queue[tail++] = i; }
+  while (head < tail) {
+    const i = queue[head++];
+    const ix = i % nx, iy = (i / nx) | 0;
+    for (let oy = -1; oy <= 1; oy++) {
+      const jy = iy + oy;
+      if (jy < 0 || jy >= ny) continue;
+      for (let ox = -1; ox <= 1; ox++) {
+        const jx = ix + ox;
+        if ((ox === 0 && oy === 0) || jx < 0 || jx >= nx) continue;
+        const j = jy * nx + jx;
+        if (src[j] >= 0) continue;
+        src[j] = src[i];
+        dist[j] = dist[i] + 1;
+        queue[tail++] = j;
+      }
+    }
+  }
+
+  // Near gaps: the exact two-ring search, bounded by RING_SEARCH_MAX.
+  let deep = false;
+  for (let i = 0; i < n; i++) {
+    if (Number.isFinite(surf[i]) || src[i] < 0) continue;
+    const r0 = dist[i];
+    if (r0 > RING_SEARCH_MAX) { deep = true; continue; }
+    const gx = i % nx, gy = (i / nx) | 0;
+    let wSum = 0, zSum = 0;
+    for (let r = r0; r <= r0 + 1; r++) {
+      for (let jy = gy - r; jy <= gy + r; jy++) {
+        if (jy < 0 || jy >= ny) continue;
+        const edge = jy === gy - r || jy === gy + r;
+        for (let jx = gx - r; jx <= gx + r; jx += edge ? 1 : 2 * r) {
+          if (jx < 0 || jx >= nx) continue;
+          const z = surf[jy * nx + jx];
+          if (!Number.isFinite(z)) continue;
+          const w = 1 / ((jx - gx) ** 2 + (jy - gy) ** 2);
+          wSum += w;
+          zSum += w * z;
+        }
+      }
+    }
+    if (wSum > 0) out[i] = zSum / wSum;
+  }
+  if (!deep) return out;
+
+  // Deep gaps: eight-direction (octant) search.
+  const wSum = new Float64Array(n);
+  const zSum = new Float64Array(n);
+  const near = new Int32Array(n);
+  const isDeep = (i: number): boolean => src[i] >= 0 && dist[i] > RING_SEARCH_MAX && !Number.isFinite(surf[i]);
+  const addTerm = (i: number, j: number): void => {
+    const dx = (i % nx) - (j % nx);
+    const dy = ((i / nx) | 0) - ((j / nx) | 0);
+    const w = 1 / (dx * dx + dy * dy);
+    wSum[i] += w;
+    zSum[i] += w * surf[j];
+  };
+  for (const [dx, dy] of OCTANT_DIRS) {
+    // near[i] = first covered cell strictly beyond i in direction (dx, dy).
+    const y0 = dy > 0 ? ny - 1 : 0, y1 = dy > 0 ? -1 : ny, ys = dy > 0 ? -1 : 1;
+    const x0 = dx > 0 ? nx - 1 : 0, x1 = dx > 0 ? -1 : nx, xs = dx > 0 ? -1 : 1;
+    for (let iy = y0; iy !== y1; iy += ys) {
+      for (let ix = x0; ix !== x1; ix += xs) {
+        const jx = ix + dx, jy = iy + dy;
+        let v = -1;
+        if (jx >= 0 && jx < nx && jy >= 0 && jy < ny) {
+          const j = jy * nx + jx;
+          v = Number.isFinite(surf[j]) ? j : near[j];
+        }
+        const i = iy * nx + ix;
+        near[i] = v;
+        if (v >= 0 && isDeep(i)) addTerm(i, v);
+      }
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    if (!isDeep(i)) continue;
+    // The BFS-nearest cell lies on a ray from i only when its offset is axial
+    // or diagonal, and then it is the first covered cell on that ray.
+    const s = src[i];
+    const dx = Math.abs((i % nx) - (s % nx));
+    const dy = Math.abs(((i / nx) | 0) - ((s / nx) | 0));
+    if (!(dx === 0 || dy === 0 || dx === dy)) addTerm(i, s);
+    if (wSum[i] > 0) out[i] = zSum[i] / wSum[i];
+  }
+  return out;
+}
+
 function baseZ(base: StockpileBase, x: number, y: number): number {
   return base.kind === 'constant' ? base.zM : base.a * x + base.b * y + base.c;
 }
@@ -448,7 +602,14 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
   });
   if (!(polyAreaSrc > 0) || !Number.isFinite(xmin)) return emptyResult();
 
-  let cell = input.cellSizeM ?? deriveCellSize(polyAreaSrc, input.points.length, minCell, maxCell);
+  // Uniform read access to either point representation.
+  const packed = 'xyz' in input.points ? input.points : null;
+  const objs = packed ? null : (input.points as ReadonlyArray<AreaGridPoint>);
+  const pointCount = packed ? packed.count : objs!.length;
+  const px = (i: number): number => (packed ? packed.xyz[i * 3] : objs![i].x);
+  const py = (i: number): number => (packed ? packed.xyz[i * 3 + 1] : objs![i].y);
+  const pz = (i: number): number => (packed ? packed.xyz[i * 3 + 2] : objs![i].z);
+  let cell = input.cellSizeM ?? deriveCellSize(polyAreaSrc, pointCount, minCell, maxCell);
   const cellDerived = input.cellSizeM == null;
   // A caller-supplied cell size of zero is not nullish, so it survived the
   // `??` above and then made the coarsening loop below multiply zero by two
@@ -469,19 +630,36 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
   const nx = Math.max(1, Math.ceil(spanX / cell));
   const ny = Math.max(1, Math.ceil(spanY / cell));
 
-  // Bin point heights into cells.
-  const heights: number[][] = Array.from({ length: nx * ny }, () => []);
-  for (const p of input.points) {
-    if (p.x < xmin || p.x > xmax || p.y < ymin || p.y > ymax) continue;
+  // Bin point heights into cells by counting sort: one cell index per point,
+  // then every cell's heights contiguous in one Float64Array. No per-cell or
+  // per-point JS objects, so memory is ~12 bytes per point.
+  const pointCell = new Int32Array(pointCount);
+  const cellStart = new Int32Array(nx * ny + 1);
+  for (let i = 0; i < pointCount; i++) {
+    pointCell[i] = -1;
+    const x = px(i), y = py(i);
+    if (x < xmin || x > xmax || y < ymin || y > ymax) continue;
     // The bounding-box test above is a cheap pre-filter only; a concave
     // footprint can have bbox-inside points that sit outside the actual
     // polygon (e.g. in the notch of an L-shape), which would otherwise
     // corrupt the surface of whichever cell they land in.
-    if (!input.pointsInsideFootprint && !pointInPolygon(input.polygon, p.x, p.y)) continue;
-    const ix = Math.min(nx - 1, Math.floor((p.x - xmin) / cell));
-    const iy = Math.min(ny - 1, Math.floor((p.y - ymin) / cell));
-    heights[iy * nx + ix].push(p.z);
+    if (!input.pointsInsideFootprint && !pointInPolygon(input.polygon, x, y)) continue;
+    const ix = Math.min(nx - 1, Math.floor((x - xmin) / cell));
+    const iy = Math.min(ny - 1, Math.floor((y - ymin) / cell));
+    const k = iy * nx + ix;
+    pointCell[i] = k;
+    cellStart[k + 1]++;
   }
+  for (let k = 0; k < nx * ny; k++) cellStart[k + 1] += cellStart[k];
+  const binned = new Float64Array(cellStart[nx * ny]);
+  {
+    const cursor = cellStart.slice(0, nx * ny);
+    for (let i = 0; i < pointCount; i++) {
+      const k = pointCell[i];
+      if (k >= 0) binned[cursor[k]++] = pz(i);
+    }
+  }
+  const heightsOf = (k: number): Float64Array => binned.subarray(cellStart[k], cellStart[k + 1]);
 
   const cells: StockpileCell[] = [];
   /** Unsupported cells inside the footprint, with their clipped centroid. */
@@ -515,7 +693,7 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
         continue;
       }
       if (areaSrc <= 0) continue; // cell outside the footprint
-      const hs = heights[iy * nx + ix];
+      const hs = heightsOf(iy * nx + ix);
       if (hs.length < minSupport) {
         // Observed-but-unsupported: recorded, NOT interpolated to zero.
         cells.push({ ix, iy, areaSrc, surfaceZ: Number.NaN, support: hs.length, spread: 0 });
@@ -573,44 +751,36 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
       }
     }
     const hull = convexHull(centres);
-    const maxRing = Math.max(nx, ny);
-    for (const g of gaps) {
+    // Pass 1 (cheap): which gaps lie inside the convex extent of the covered
+    // cell centres. Only those may be filled; the rest are excluded.
+    const fillable: number[] = [];
+    let fillableAreaSrc = 0;
+    for (let k = 0; k < gaps.length; k++) {
+      const g = gaps[k];
       const gx = xmin + (g.ix + 0.5) * cell;
       const gy = ymin + (g.iy + 0.5) * cell;
       if (hull.length < 3 || !insideConvex(hull, gx, gy)) {
         excludedAreaSrc += g.areaSrc;
-        continue;
+      } else {
+        fillable.push(k);
+        fillableAreaSrc += g.areaSrc;
       }
-      // Inverse-distance weighting over the covered cells in the nearest
-      // ring(s) that hold any, widened by one ring so a single neighbour
-      // never decides a cell alone.
-      let wSum = 0;
-      let zSum = 0;
-      let foundAt = -1;
-      for (let r = 1; r <= maxRing; r++) {
-        for (let jy = g.iy - r; jy <= g.iy + r; jy++) {
-          if (jy < 0 || jy >= ny) continue;
-          const edge = jy === g.iy - r || jy === g.iy + r;
-          for (let jx = g.ix - r; jx <= g.ix + r; jx += edge ? 1 : 2 * r) {
-            if (jx < 0 || jx >= nx) continue;
-            const z = surf[jy * nx + jx];
-            if (!Number.isFinite(z)) continue;
-            const w = 1 / ((jx - g.ix) ** 2 + (jy - g.iy) ** 2);
-            wSum += w;
-            zSum += w * z;
-          }
-        }
-        if (wSum > 0 && foundAt < 0) foundAt = r;
-        if (foundAt >= 0 && r >= foundAt + 1) break;
+    }
+    interpolatedAreaSrc = fillableAreaSrc;
+    const limit = input.maxInterpolatedFraction;
+    // A result whose interpolated share exceeds the caller's withhold limit is
+    // withheld whatever the interpolated heights are, so they are not
+    // computed: the shares are reported, the volume covers observed cells only.
+    const skip = limit != null && polyAreaSrc > 0 && fillableAreaSrc / polyAreaSrc > limit;
+    if (!skip && fillable.length > 0) {
+      const est = idwFill(surf, nx, ny);
+      for (const k of fillable) {
+        const g = gaps[k];
+        const z = est[g.iy * nx + g.ix];
+        const dz = z - baseZ(input.base, g.cx, g.cy);
+        if (dz >= 0) fillSrc += g.areaSrc * dz;
+        else cutSrc += g.areaSrc * -dz;
       }
-      if (!(wSum > 0)) {
-        excludedAreaSrc += g.areaSrc;
-        continue;
-      }
-      const dz = zSum / wSum - baseZ(input.base, g.cx, g.cy);
-      if (dz >= 0) fillSrc += g.areaSrc * dz;
-      else cutSrc += g.areaSrc * -dz;
-      interpolatedAreaSrc += g.areaSrc;
     }
   } else {
     for (const g of gaps) excludedAreaSrc += g.areaSrc;
