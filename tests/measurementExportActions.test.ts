@@ -26,6 +26,9 @@ import {
 } from '../src/app/measurementExportActions';
 import type { Measurement } from '../src/render/measure/types';
 import type { MeasurementExportContext } from '../src/export/measurementExport';
+import { UTM13 } from './helpers/geoJsonLonLat';
+
+const UTM12 = { ...UTM13, name: 'WGS 84 / UTM zone 12N', epsg: 32612 };
 
 function distance(id: string, a: [number, number, number], b: [number, number, number]): Measurement {
   return { id, kind: 'distance', name: `Distance ${id}`, points: [a, b] };
@@ -58,8 +61,9 @@ function deps(over: Partial<MeasurementExportActionDeps> = {}): Recorded {
     },
     geo: () => {
       order.push('geo');
-      return { origin: [400_000, 3_800_000, 100], crsName: 'WGS 84 / UTM zone 12N', name: 'site/scan.laz' };
+      return { origin: [400_000, 3_800_000, 100], crsName: 'WGS 84 / UTM zone 12N', name: 'site/scan.laz', crs: UTM12 };
     },
+    upAxis: () => 'z',
     baseName: (n) => n.replace(/^.*\//, '').replace(/\.[^.]+$/, ''),
     downloadText: (filename, text) => {
       downloads.push({ filename, text });

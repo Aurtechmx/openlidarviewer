@@ -26,6 +26,7 @@ import { analysedBasisOf } from '../src/terrain/export/analysedBasis';
 import { FLOW_PROJECTED_SCALE, FLOW_TEST_IDENTITY, flowDtmOf } from './helpers/flowFixtures';
 import { wallAndGroundCloud } from './helpers/observatoryPlanningFixtures';
 import { textOf, jsonOf } from './helpers/zipReader';
+import { IDENTITY_LONLAT } from './helpers/geoJsonLonLat';
 
 const SAMPLED_PROBABLE = sourceInterpretationOf('PROBABLE', 'sampled');
 
@@ -157,7 +158,7 @@ describe('single-file vector exports', () => {
     expect(JSON.stringify(prov)).not.toContain('/home');
   });
 
-  const ctx = { toOutput: (p: readonly [number, number, number]) => [p[0], p[1], p[2]] as [number, number, number], up: [0, 0, 1] as [number, number, number], unitToMetres: 1, crsName: 'EPSG:32612' };
+  const ctx = { toOutput: (p: readonly [number, number, number]) => [p[0], p[1], p[2]] as [number, number, number], lonLat: IDENTITY_LONLAT, up: [0, 0, 1] as [number, number, number], unitToMetres: 1, crsName: 'EPSG:32612' };
   const dist = { id: 'd', kind: 'distance' as const, name: 'd', points: [[0, 0, 0], [3, 4, 0]] as [number, number, number][] };
 
   it('measurement GeoJSON carries a provenance member; features are unchanged', () => {

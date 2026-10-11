@@ -32,10 +32,11 @@ import {
 } from '../src/render/measure/mapSheetPdf';
 import type { Measurement, Vec3 } from '../src/render/measure/types';
 import type { ContourFeatureModel } from '../src/terrain/contour/contourFeatureModel';
+import { IDENTITY_LONLAT } from './helpers/geoJsonLonLat';
 
 const UP: Vec3 = [0, 0, 1];
 const CTX: MeasurementExportContext = {
-  toOutput: (p) => [p[0], p[1], p[2]],
+  toOutput: (p) => [p[0], p[1], p[2]], lonLat: IDENTITY_LONLAT,
   up: UP,
   unitToMetres: 1,
   crsName: 'EPSG:32612',

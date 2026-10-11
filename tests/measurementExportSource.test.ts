@@ -13,7 +13,9 @@ import {
   exportMeasurementIntegrityReport,
   type ExportLayerView,
   type MeasurementExportActionDeps,
+  geoJsonLonLat,
 } from '../src/app/measurementExportActions';
+import { UTM13, utm13LonLat } from './helpers/geoJsonLonLat';
 import * as serializers from '../src/export/measurementExport';
 import type { Measurement } from '../src/render/measure/types';
 import type { GeoExportContext } from '../src/app/reportExport';
@@ -43,7 +45,12 @@ function owned(id: string, layerId: string | undefined, pts: V3[], picked = true
   };
 }
 
-const GEO = (name: string, origin: V3): GeoExportContext => ({ origin, crsName: 'WGS 84 / UTM zone 13N', name });
+const GEO = (name: string, origin: V3): GeoExportContext => ({ origin, crsName: 'WGS 84 / UTM zone 13N', name, crs: UTM13 });
+const lonLatFor = (g: GeoExportContext) => {
+  const r = geoJsonLonLat(g, 'z');
+  if ('refused' in r) throw new Error(r.refused);
+  return r.lonLat;
+};
 
 async function run(ms: Measurement[], geo: GeoExportContext, layers: MeasurementExportActionDeps['layers']) {
   const downloads: { filename: string; text: string }[] = [];
@@ -51,6 +58,7 @@ async function run(ms: Measurement[], geo: GeoExportContext, layers: Measurement
   const deps: MeasurementExportActionDeps = {
     measure: { getMeasurements: () => ms, worldUp: [0, 0, 1], unitToMetres: 1, verticalUnitToMetres: 1, crsKnown: true, geographicCrs: false },
     geo: () => geo,
+    upAxis: () => 'z',
     layers,
     refuse: (m) => refusals.push(m),
     baseName: (n) => n.replace(/\.[^.]+$/, ''),
@@ -85,8 +93,8 @@ describe('two-scan measurement export', () => {
     expect(fromA.downloads.map((d) => d.filename)).toEqual(['geom-a+geom-b-measurements.geojson', 'geom-a+geom-b-measurements.csv', 'geom-a+geom-b-measurements.provenance.txt']);
     expect(fromA.downloads[2].text).toContain('Point basis: not recorded (measurements span 2 scans)');
     const fc = JSON.parse(fromA.downloads[0].text);
-    expect(fc.features[0].geometry.coordinates).toEqual([[500004, 4000002, 100], [500007, 4000002, 100]]);
-    expect(fc.features[1].geometry.coordinates).toEqual([[500101, 4000001, 50], [500104, 4000005, 50]]);
+    expect(fc.features[0].geometry.coordinates).toEqual([[500004, 4000002, 100], [500007, 4000002, 100]].map(utm13LonLat));
+    expect(fc.features[1].geometry.coordinates).toEqual([[500101, 4000001, 50], [500104, 4000005, 50]].map(utm13LonLat));
     expect(fc.features.map((f: { properties: { source: string } }) => f.properties.source)).toEqual(['geom-a', 'geom-b']);
     // Active scan changes nothing about the geometry or the sources.
     const fcB = JSON.parse(fromB.downloads[0].text);
@@ -128,9 +136,9 @@ describe('single-scan measurement export', () => {
     const out = await run([m], GEO('geom-a.las', A_ORIGIN), { view: one, stableIdFor });
     expect(out.downloads.map((d) => d.filename)).toEqual(['geom-a-measurements.geojson', 'geom-a-measurements.csv', 'geom-a-measurements.provenance.txt']);
     const fc = JSON.parse(out.downloads[0].text);
-    expect(fc.features[0].geometry.coordinates).toEqual([[500004, 4000002, 100], [500007, 4000002, 100]]);
+    expect(fc.features[0].geometry.coordinates).toEqual([[500004, 4000002, 100], [500007, 4000002, 100]].map(utm13LonLat));
     // Without the source field the serializers write exactly what they did before.
-    const ctx = { toOutput: (p: V3): V3 => [p[0] + A_ORIGIN[0], p[1] + A_ORIGIN[1], p[2] + A_ORIGIN[2]], up: [0, 0, 1] as V3, unitToMetres: 1, verticalUnitToMetres: 1, crsName: 'WGS 84 / UTM zone 13N', unitsVerified: true };
+    const ctx = { toOutput: (p: V3): V3 => [p[0] + A_ORIGIN[0], p[1] + A_ORIGIN[1], p[2] + A_ORIGIN[2]], up: [0, 0, 1] as V3, unitToMetres: 1, verticalUnitToMetres: 1, crsName: 'WGS 84 / UTM zone 13N', unitsVerified: true, lonLat: lonLatFor(GEO('geom-a.las', A_ORIGIN)) };
     const plain = JSON.parse(serializers.measurementsToGeoJSON([m], ctx));
     delete fc.features[0].properties.source;
     expect(fc.features).toEqual(plain.features);
@@ -162,7 +170,7 @@ describe('a point picked on a scan that is not the active one', () => {
       const m: Measurement = { ...owned('b1', 'layer-a', B_LOCAL.map((p) => add(p, off.b))), pickLayers: ['layer-b'] };
       const out = await run([m], GEO('geom-a.las', A_ORIGIN), { view: view({ cloud_0: off.a, cloud_1: off.b }), stableIdFor });
       const f = JSON.parse(out.downloads[0].text).features[0];
-      expect(f.geometry.coordinates).toEqual(B_WORLD);
+      expect(f.geometry.coordinates).toEqual(B_WORLD.map(utm13LonLat));
       expect(f.properties.source).toBe('geom-b');
       expect(out.downloads[0].filename).toBe('geom-b-measurements.geojson');
     });
@@ -172,7 +180,7 @@ describe('a point picked on a scan that is not the active one', () => {
       const m: Measurement = { ...owned('a1', 'layer-b', A_LOCAL.map((p) => add(p, off.a))), pickLayers: ['layer-a'] };
       const out = await run([m], GEO('geom-b.las', B_ORIGIN), { view: view({ cloud_0: off.a, cloud_1: off.b }), stableIdFor });
       const f = JSON.parse(out.downloads[0].text).features[0];
-      expect(f.geometry.coordinates).toEqual(A_WORLD);
+      expect(f.geometry.coordinates).toEqual(A_WORLD.map(utm13LonLat));
       expect(f.properties.source).toBe('geom-a');
     });
   }
@@ -196,7 +204,7 @@ describe('a point picked on a scan that is not the active one', () => {
     const m: Measurement = { ...owned('x', 'layer-a', [[4, 2, 1], [101, 1, -49]]), pickLayers: ['layer-a', 'layer-b'] };
     const out = await run([m], GEO('geom-a.las', A_ORIGIN), { view: view({ cloud_0: null, cloud_1: [100, 0, -49] }), stableIdFor });
     const f = JSON.parse(out.downloads[0].text).features[0];
-    expect(f.geometry.coordinates).toEqual([[500004, 4000002, 100], [500101, 4000001, 50]]);
+    expect(f.geometry.coordinates).toEqual([[500004, 4000002, 100], [500101, 4000001, 50]].map(utm13LonLat));
     expect(f.properties.source).toBe('geom-a+geom-b');
   });
 
@@ -213,7 +221,7 @@ describe('a point picked on a scan that is not the active one', () => {
   it('places a measurement with no pick record through its owner when the scans share one frame', async () => {
     const m = owned('r', 'layer-b', B_LOCAL.map((p) => add(p, [100, 0, -49])), false);
     const out = await run([m], GEO('geom-a.las', A_ORIGIN), { view: view({ cloud_0: null, cloud_1: [100, 0, -49] }), stableIdFor });
-    expect(JSON.parse(out.downloads[0].text).features[0].geometry.coordinates).toEqual(B_WORLD);
+    expect(JSON.parse(out.downloads[0].text).features[0].geometry.coordinates).toEqual(B_WORLD.map(utm13LonLat));
   });
 });
 
@@ -264,9 +272,9 @@ describe('a measurement whose scan was closed', () => {
 
   it('still exports a restored measurement owned by the one open scan', async () => {
     const m = owned('b1', 'layer-b', [[0, 0, 0], [1, 0, 0]], false);
-    const out = await run([m], GEO('geom-b.las', [500, 600, 0]), bOnly);
+    const out = await run([m], GEO('geom-b.las', [500_500, 4_000_600, 0]), bOnly);
     expect(out.refusals).toEqual([]);
-    expect(JSON.parse(out.downloads[0].text).features[0].geometry.coordinates[0]).toEqual([500, 600, 0]);
+    expect(JSON.parse(out.downloads[0].text).features[0].geometry.coordinates[0]).toEqual(utm13LonLat([500_500, 4_000_600, 0]));
   });
 });
 

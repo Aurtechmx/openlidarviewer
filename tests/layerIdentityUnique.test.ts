@@ -19,6 +19,7 @@ import {
   type ExportLayerView,
   type MeasurementExportActionDeps,
 } from '../src/app/measurementExportActions';
+import { UTM13, utm13LonLat } from './helpers/geoJsonLonLat';
 import * as serializers from '../src/export/measurementExport';
 import type { Measurement } from '../src/render/measure/types';
 
@@ -50,7 +51,8 @@ async function run(ms: Measurement[], layers: MeasurementExportActionDeps['layer
   const reports: string[] = [];
   const deps: MeasurementExportActionDeps = {
     measure: { getMeasurements: () => ms, worldUp: [0, 0, 1], unitToMetres: 1, verticalUnitToMetres: 1, crsKnown: false, geographicCrs: false },
-    geo: () => ({ origin: A_ORIGIN, crsName: undefined, name: 'tile.las' }),
+    geo: () => ({ origin: A_ORIGIN, crsName: undefined, name: 'tile.las', crs: UTM13 }),
+    upAxis: () => 'z',
     layers,
     refuse: (m) => refusals.push(m),
     baseName: (n) => n.replace(/\.[^.]+$/, ''),
@@ -122,7 +124,7 @@ describe('measurement export with same-name, same-size scans', () => {
     const out = await run([picked('b1', b.layerId, [[1, 1, 1], [2, 1, 1]])], { view: view(['cloud_0', 'cloud_1']), stableIdFor: svc.stableIdFor });
     expect(out.refusals).toEqual([]);
     const fc = JSON.parse(out.downloads[0]!.text);
-    expect(fc.features[0].geometry.coordinates[0]).toEqual([501001, 4000001, 1]);
+    expect(fc.features[0].geometry.coordinates[0]).toEqual(utm13LonLat([501001, 4000001, 1]));
   });
 
   it('refuses A\'s measurements once A is closed and B is open', async () => {
@@ -147,7 +149,7 @@ describe('measurement export with same-name, same-size scans', () => {
     const out = await run([picked('a1', a.layerId, [[1, 1, 1], [2, 1, 1]]), picked('b1', b.layerId, [[1001, 1, 1], [1002, 1, 1]])], layers);
     expect(out.refusals).toEqual([]);
     const fc = JSON.parse(out.downloads[0]!.text);
-    expect(fc.features[0].geometry.coordinates[0]).toEqual([500001, 4000001, 1]);
-    expect(fc.features[1].geometry.coordinates[0]).toEqual([501001, 4000001, 1]);
+    expect(fc.features[0].geometry.coordinates[0]).toEqual(utm13LonLat([500001, 4000001, 1]));
+    expect(fc.features[1].geometry.coordinates[0]).toEqual(utm13LonLat([501001, 4000001, 1]));
   });
 });

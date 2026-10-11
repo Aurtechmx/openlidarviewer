@@ -9,6 +9,7 @@ import { installFakeDom } from './support/measurePanelDom';
 import { areaRingVerdict, areaRingVerdictCached } from '../src/render/measure/areaValidity';
 import { measurementsToCsv, measurementsToGeoJSON, type MeasurementExportContext } from '../src/export/measurementExport';
 import type { Measurement } from '../src/render/measure/types';
+import { IDENTITY_LONLAT } from './helpers/geoJsonLonLat';
 
 
 beforeAll(() => {
@@ -98,7 +99,7 @@ describe('memoised verdict', () => {
 });
 
 describe('an ordinary ring with a non-zero first vertex exports as before', () => {
-  const ctx: MeasurementExportContext = { toOutput: (p) => [p[0], p[1], p[2]], up: [0, 0, 1], unitToMetres: 1, crsName: 'EPSG:32612' };
+  const ctx: MeasurementExportContext = { toOutput: (p) => [p[0], p[1], p[2]], lonLat: { ...IDENTITY_LONLAT, map: (p) => [p[0] / 1e4, p[1] / 1e4, p[2]] }, up: [0, 0, 1], unitToMetres: 1, crsName: 'EPSG:32612' };
   const m: Measurement = {
     id: 'a', kind: 'area', name: 'Plot',
     points: [[1000, 2000, 3], [1010, 2000, 3], [1010, 2010, 3], [1000, 2010, 3]], closed: true,

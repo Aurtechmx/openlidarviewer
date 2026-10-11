@@ -11,12 +11,16 @@
  */
 
 import type { Measurement, Vec3 } from '../render/measure/types';
-import type { MeasurementExportContext } from '../export/measurementExport';
+import type { GeoJsonLonLat, MeasurementExportContext } from '../export/measurementExport';
+import type { SpatialUpAxis } from '../geo/SpatialContext';
 import type { ReportFinding } from '../render/measure/reportManifest';
 import type { GeoExportContext } from './reportExport';
 
 import { activeScanBasisOf, type ActiveScanBasis } from './measurementScanHooks';
 import { appToast } from '../ui/panelChrome';
+import { resolveLocalToLonLat, LonLatConversionError } from '../export/lonLatMapper';
+import { lonLatUpAxisRefusal } from '../export/scanFootprint';
+import { kmlAltitudeMode } from '../export/kmlExport';
 import { SigningError } from '../export/reportSignature';
 import { reportSignerLabel, reportSigningRequested } from '../export/reportSigningState';
 
@@ -63,6 +67,11 @@ export interface MeasurementExportActionDeps {
    * taken on. Omitted or a single layer: the active frame from `geo()`.
    */
   readonly layers?: { readonly view: ExportLayerView; readonly stableIdFor: (viewerId: string) => string | null };
+  /**
+   * The resolved up-axis of the active scan. The GeoJSON places X/Y as the
+   * ground plane, so it refuses a frame that is not Z-up, as the KML does.
+   */
+  readonly upAxis?: () => SpatialUpAxis;
   /** Shown when the export is refused rather than written. */
   readonly refuse?: (message: string) => void;
   /** Shown after a write. Defaults to the app's toast line. */
@@ -262,6 +271,15 @@ export async function exportMeasurementsFile(
   const geo = deps.geo();
   const origin: [number, number, number] = [geo.origin[0], geo.origin[1], geo.origin[2]];
   const generatedAt = deps.now();
+  let lonLat: GeoJsonLonLat | undefined;
+  if (format === 'geojson') {
+    const placed = geoJsonLonLat(geo, deps.upAxis?.() ?? 'unknown');
+    if ('refused' in placed) {
+      deps.refuse?.(placed.refused);
+      return;
+    }
+    lonLat = placed.lonLat;
+  }
   // Several layers: each point leaves through its own layer, undoing that
   // layer's placement and adding its file origin. The file names the sources
   // it holds; the digest and data basis describe the active scan, so they are
@@ -298,6 +316,7 @@ export async function exportMeasurementsFile(
     // are nominal, not metres — the evidence note then says so (M1). An angular
     // frame is unverified for a stronger reason: no scalar could make it metres.
     unitsVerified: snap.unitsVerified,
+    lonLat,
     provenance: {
       generatedAt,
       source: stems.length > 0 ? stems.join('+') : null,
@@ -307,8 +326,17 @@ export async function exportMeasurementsFile(
       digests,
     },
   };
-  const text =
-    format === 'geojson' ? measurementsToGeoJSON(measurements, ctx) : measurementsToCsv(measurements, ctx);
+  let text: string;
+  try {
+    text = format === 'geojson' ? measurementsToGeoJSON(measurements, ctx) : measurementsToCsv(measurements, ctx);
+  } catch (err) {
+    // One point that has no place in lon/lat makes the whole GeoJSON wrong.
+    if (format === 'geojson' && (err instanceof LonLatConversionError || (err instanceof Error && err.name === 'GeoJsonLonLatError'))) {
+      deps.refuse?.(`GeoJSON export stopped: a point could not be placed in longitude/latitude. ${err.message} Export CSV instead for the measured values.`);
+      return;
+    }
+    throw err;
+  }
   const stem = stems.length > 0 ? stems.join('+') : 'measurements';
   const filename = `${stem}-measurements.${format === 'geojson' ? 'geojson' : 'csv'}`;
   deps.downloadText(filename, text);
@@ -319,6 +347,42 @@ export async function exportMeasurementsFile(
   deps.downloadText(sidecar, exporter.measurementCsvProvenance(ctx.provenance, basis));
   (deps.notify ?? appToast().show)(csvSavedMessage(filename, sidecar));
 }
+
+/**
+ * The WGS 84 placement for a GeoJSON export, or the sentence that refuses it.
+ *
+ * The same resolver, datum refusals and NAD83-style caveat the site KML uses,
+ * and the same altitude rule: a height is written only when the source's
+ * vertical datum is a recognised metric height above sea level. Output-frame
+ * points (origin restored) are moved back to the active scan's local frame
+ * before the mapper, which is built on that origin.
+ */
+export function geoJsonLonLat(
+  geo: GeoExportContext,
+  upAxis: SpatialUpAxis,
+): { lonLat: GeoJsonLonLat } | { refused: string } {
+  const crs = geo.crs ?? null;
+  const mapper = resolveLocalToLonLat(crs, geo.origin);
+  if (!mapper.ok) return { refused: `GeoJSON export refused. ${mapper.reason} ${GEOJSON_CSV_HINT}` };
+  const axis = lonLatUpAxisRefusal(upAxis);
+  if (axis) return { refused: `GeoJSON export refused. ${axis} ${GEOJSON_CSV_HINT}` };
+  const altitude = kmlAltitudeMode(crs?.verticalDatum ?? null, crs?.verticalUnitToMetres);
+  const withAltitude = altitude.mode === 'absolute';
+  const [ox, oy, oz] = geo.origin;
+  return {
+    lonLat: {
+      map: (p) => mapper.map([p[0] - ox, p[1] - oy, p[2] - oz]),
+      withAltitude,
+      altitudeNote: withAltitude
+        ? altitude.reason.replace('Altitudes are', 'The third coordinate is')
+        : altitude.reason.replace(/^Heights are clamped to ground/, 'Positions are 2D (no height written)').replace(/ Altitudes in this file are not authoritative\.$/, ''),
+      datumCaveat: mapper.datumCaveat,
+    },
+  };
+}
+
+const GEOJSON_CSV_HINT =
+  'GeoJSON is WGS 84 longitude/latitude by definition (RFC 7946); export CSV instead for the measured values.';
 
 /**
  * The toast after a CSV export. It names both files, because a browser can
