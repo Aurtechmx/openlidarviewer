@@ -12216,8 +12216,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   border-color: var(--accent);
 }
 .olv-focus-toggle.olv-hidden { display: none; }
-/* Touch: a 44 px target, as J11 requires for every tablet control. */
-@media (pointer: coarse) { .olv-focus-toggle { height: 44px; } }
+/* Touch: the 44 px floor for tablets lives in 99y4-tablet-touch.css with the other controls. */
 
 .olv-focus-mode .olv-wordmark,
 .olv-focus-mode .olv-loc,
@@ -12523,7 +12522,8 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   .olv-empty-status-dismiss, .olv-colorbar-toggle,
   .olv-workbench-btn, .olv-mp-chain-chip, .olv-mp-vex-chip,
   .olv-mp-stations-more, .olv-mp-summary-sec-toggle, .olv-mp-sampler-reset,
-  .olv-url-btn, .olv-open-btn, .olv-catalog-btn, .olv-capture-chip, .olv-convert-chip {
+  .olv-url-btn, .olv-open-btn, .olv-catalog-btn, .olv-capture-chip, .olv-convert-chip,
+  .olv-focus-toggle {
     min-height: 44px; min-width: 44px;
   }
   .olv-rvc-apply, .olv-rvc-dismiss, .olv-touch-hint-x, .olv-empty-status-dismiss,

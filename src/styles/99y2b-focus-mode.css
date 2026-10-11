@@ -33,8 +33,7 @@
   border-color: var(--accent);
 }
 .olv-focus-toggle.olv-hidden { display: none; }
-/* Touch: a 44 px target, as J11 requires for every tablet control. */
-@media (pointer: coarse) { .olv-focus-toggle { height: 44px; } }
+/* Touch: the 44 px floor for tablets lives in 99y4-tablet-touch.css with the other controls. */
 
 .olv-focus-mode .olv-wordmark,
 .olv-focus-mode .olv-loc,
