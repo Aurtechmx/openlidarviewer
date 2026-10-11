@@ -63,7 +63,7 @@ import { noteEdit, pickUndo, pickRedo, withSuppressed } from './ui/undoRouter';
 // The Measurements panel is lazy-mounted on the first scan load (never in the
 // empty-state shell); its whole mount lifecycle lives in `measurePanelMount.ts`,
 // which pulls the panel class through `loadMeasurePanel()` inside `ensure()`.
-import { createMeasurePanelMount, createAnalyseProfileVisibility } from './app/measurePanelMount';
+import { createMeasurePanelMount, createAnalyseProfileVisibility, useBoxAsClip } from './app/measurePanelMount';
 import { createProcessStudioFromShell } from './app/processStudioMount';
 import { readTerrainComputePath } from './app/terrainComputePath';
 import { lazyCoordinateHud } from './app/coordinateHudLazy';
@@ -760,8 +760,7 @@ stage.canvas.addEventListener('contextmenu', (e) => {
 // overlapping them; the user opts in when they want it. `?viewcube=1` forces it
 // on, `?viewcube=0` off. Life cycle lives in ui/compassController.ts.
 const compass = createCompassController({
-  host: () => stage.overlay,
-  urlParams,
+  host: () => stage.overlay, urlParams, onView: (view) => navWiring.callbacks.onStandardView(view), // same path (and Plan View rule) as the NavBar buttons
   // Cardinals only when georeferenced; local scans show truthful local axes.
   cardinalsAreGeographic: () => crsIsKnown(crsService.current()),
 });
@@ -1635,6 +1634,7 @@ const measureMount = createMeasurePanelMount({
   recordUsage, getScanBaseName: () => baseName(scans.activeCloud()?.name ?? lastCloudName),
   workbenchStage: stage,
   onWorkbenchClose: () => analyseProfileVisibility.restore(),
+  onUseAsClip: (id) => useBoxAsClip({ measurements: () => viewer.measure.getMeasurements(), activeLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null), layerCount: () => viewer.clouds().length, adoptClip: (c) => clipPanel.adoptBounds(c), openClipPage: () => workspaceShell?.openToolPage('clip'), toast: showLassoToast }, id),
 });
 // Save the AnalysePanel's visibility when a profile hides it, and restore that
 // exact state on the workbench close (kind-change fires on open, not on close).

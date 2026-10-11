@@ -25,6 +25,8 @@ import { retryableOnce, mountPanelOnce } from './lazySurfaceLoad';
 // Re-exported here so the shell reaches it through the cluster that owns the
 // profile-workbench close signal, without adding a main.ts fan-out edge.
 export { createAnalyseProfileVisibility } from './analyseProfileVisibility';
+// Same reason: the Box row's "Use as clipping region" handler.
+export { useBoxAsClip } from './boxToClip';
 export type {
   AnalyseProfileVisibility,
   AnalyseProfileVisibilityDeps,
@@ -70,6 +72,8 @@ export interface MeasurePanelMountDeps {
    * to restore the AnalysePanel visibility the profile open had hidden.
    */
   onWorkbenchClose?: () => void;
+  /** "Use as clipping region" on a Box row; absent hides the action. */
+  onUseAsClip?: (id: string) => void;
 }
 
 /** The Measurements-panel mount controller `main.ts` drives. */
@@ -302,6 +306,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       // a stage and the launcher accepts, `ResultFocus` on every refusal. The
       // panel is told only true or false, so it never learns what a dock is.
       openProfileWorkbench: workbenchStage ? openWorkbench : undefined,
+      onUseAsClip: deps.onUseAsClip,
     });
   }
 

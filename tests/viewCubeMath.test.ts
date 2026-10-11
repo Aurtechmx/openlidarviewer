@@ -5,6 +5,9 @@ import {
   roseRotationDeg,
   COMPASS_FACES,
   compassFaceLabel,
+  unwrapAngleDeg,
+  stableHeadingDeg,
+  NEAR_VERTICAL_HORIZONTAL_EPS,
 } from '../src/render/viewCubeMath';
 
 describe('compassHeadingDeg', () => {
@@ -82,5 +85,46 @@ describe('compassFaceLabel — geography only when the frame is known', () => {
     expect(local).toEqual(['B', 'R', 'F', 'L']);
     // The whole point: no geographic letter leaks into the local frame.
     expect(local.some((l) => ['N', 'E', 'S', 'W'].includes(l))).toBe(false);
+  });
+});
+
+describe('unwrapAngleDeg — continuous display heading (spec 6A)', () => {
+  test('crossing north takes the short way', () => {
+    expect(unwrapAngleDeg(359, 1)).toBe(361);
+    expect(unwrapAngleDeg(1, 359)).toBe(-1);
+  });
+  test('repeated rotations stay continuous', () => {
+    let d = 0;
+    for (let turn = 0; turn < 3; turn++) for (let h = 10; h <= 360; h += 10) d = unwrapAngleDeg(d, h % 360);
+    expect(d).toBe(1080);
+    for (let i = 0; i < 36; i++) d = unwrapAngleDeg(d, ((360 - (i + 1) * 10) % 360 + 360) % 360);
+    expect(d).toBe(720);
+  });
+  test('a display many turns in still lands on the congruent angle', () => {
+    expect(unwrapAngleDeg(725, 10)).toBe(730);
+    expect(unwrapAngleDeg(-725, 350)).toBe(-730);
+  });
+  test('non-finite next keeps prev; non-finite prev starts from next', () => {
+    expect(unwrapAngleDeg(42, Number.NaN)).toBe(42);
+    expect(unwrapAngleDeg(42, Number.POSITIVE_INFINITY)).toBe(42);
+    expect(unwrapAngleDeg(Number.NaN, 90)).toBe(90);
+  });
+});
+
+describe('stableHeadingDeg — near-vertical guard (spec 6A)', () => {
+  test('a usable horizontal component gives the canonical heading', () => {
+    expect(stableHeadingDeg(1, 0)).toBe(compassHeadingDeg(1, 0));
+    expect(stableHeadingDeg(0, -0.5, 10)).toBe(180);
+  });
+  test('looking straight down keeps the last reliable heading instead of 0', () => {
+    const tiny = NEAR_VERTICAL_HORIZONTAL_EPS / 10;
+    expect(stableHeadingDeg(tiny, -tiny, 123)).toBe(123);
+    expect(stableHeadingDeg(0, 0, 77)).toBe(77);
+    expect(Number.isNaN(stableHeadingDeg(0, 0))).toBe(true);
+    expect(stableHeadingDeg(Number.NaN, 1, 5)).toBe(5);
+  });
+  test('canonical outputs for existing consumers are unchanged', () => {
+    expect(compassHeadingDeg(0, 0)).toBe(0);
+    expect(roseRotationDeg(90)).toBe(-90);
   });
 });

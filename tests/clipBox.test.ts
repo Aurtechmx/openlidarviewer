@@ -7,6 +7,9 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { clipFromBoxMeasurement, type BoxMeasurementLike } from '../src/render/clip/clipFromMeasurement';
+import { useBoxAsClip } from '../src/app/boxToClip';
+import type { Vec3 } from '../src/render/measure/types';
 import {
   makeClipBox,
   clipKeepsPoint,
@@ -87,5 +90,93 @@ describe('clipMaskArray / countKept', () => {
       if (clipKeepsPoint(c, [pts[i * 3], pts[i * 3 + 1], pts[i * 3 + 2]])) expected++;
     }
     expect(countKept(c, pts)).toBe(expected);
+  });
+});
+
+// ── Box measurement → clipping region (spec 3) ─────────────────────────────
+
+const one = { activeLayerId: 'L1', layerCount: 1 };
+const boxM = (a: Vec3, b: Vec3, extra: Partial<BoxMeasurementLike> = {}): BoxMeasurementLike =>
+  ({ id: 'm1', kind: 'box', points: [a, b], ...extra });
+
+describe('clipFromBoxMeasurement', () => {
+  it('builds an enabled keep-inside clip; reversed corners give the same box', () => {
+    const r1 = clipFromBoxMeasurement(boxM([0, 0, 0], [2, 3, 4]), one);
+    const r2 = clipFromBoxMeasurement(boxM([2, 3, 4], [0, 0, 0]), one);
+    const r3 = clipFromBoxMeasurement(boxM([2, 0, 4], [0, 3, 0]), one);
+    const want = { box: { min: [0, 0, 0], max: [2, 3, 4] }, mode: 'keep-inside', enabled: true };
+    for (const r of [r1, r2, r3]) expect(r).toEqual({ ok: true, clip: want });
+  });
+
+  it('refuses non-finite or missing corners', () => {
+    expect(clipFromBoxMeasurement(boxM([0, 0, Number.NaN], [1, 1, 1]), one).ok).toBe(false);
+    expect(clipFromBoxMeasurement(boxM([0, 0, 0], [Infinity, 1, 1]), one).ok).toBe(false);
+    expect(clipFromBoxMeasurement({ id: 'm1', kind: 'box', points: [[0, 0, 0]] }, one).ok).toBe(false);
+    expect(clipFromBoxMeasurement(null, one).ok).toBe(false);
+    expect(clipFromBoxMeasurement({ id: 'd', kind: 'distance', points: [[0, 0, 0], [1, 1, 1]] }, one).ok).toBe(false);
+  });
+
+  it('refuses a degenerate box with a zero extent on any axis', () => {
+    for (const b of [[0, 1, 1], [1, 0, 1], [1, 1, 0]] as Vec3[]) {
+      const r = clipFromBoxMeasurement(boxM([0, 0, 0], b), one);
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.reason).toMatch(/flat along [XYZ]/);
+    }
+  });
+
+  it('refuses a box owned by another scan, and an unowned box among several scans', () => {
+    expect(clipFromBoxMeasurement(boxM([0, 0, 0], [1, 1, 1], { owner: { layerId: 'L2' } }), { activeLayerId: 'L1', layerCount: 2 }).ok).toBe(false);
+    expect(clipFromBoxMeasurement(boxM([0, 0, 0], [1, 1, 1]), { activeLayerId: 'L1', layerCount: 2 }).ok).toBe(false);
+    expect(clipFromBoxMeasurement(boxM([0, 0, 0], [1, 1, 1], { owner: { layerId: 'L1' } }), { activeLayerId: 'L1', layerCount: 2 }).ok).toBe(true);
+    expect(clipFromBoxMeasurement(boxM([0, 0, 0], [1, 1, 1]), { activeLayerId: null, layerCount: 0 }).ok).toBe(false);
+  });
+
+  it('is an independent copy both ways', () => {
+    const a: Vec3 = [0, 0, 0];
+    const b: Vec3 = [1, 1, 1];
+    const r = clipFromBoxMeasurement(boxM(a, b), one);
+    if (!r.ok) throw new Error('expected ok');
+    a[0] = -5; // editing the measurement afterwards...
+    expect(r.clip.box.min[0]).toBe(0); // ...does not move the clip
+    (r.clip.box.max as number[])[0] = 9; // editing the clip...
+    expect(b[0]).toBe(1); // ...does not move the measurement
+  });
+
+  it('the clip survives a session-style JSON round trip unchanged', () => {
+    const r = clipFromBoxMeasurement(boxM([0, 0, 0], [1, 2, 3]), one);
+    if (!r.ok) throw new Error('expected ok');
+    expect(JSON.parse(JSON.stringify(r.clip))).toEqual(r.clip);
+  });
+});
+
+describe('useBoxAsClip', () => {
+  function deps(ms: BoxMeasurementLike[], ctx = one) {
+    const log = { adopted: [] as ClipBox[], opened: 0, toasts: [] as string[] };
+    return {
+      log,
+      d: {
+        measurements: () => ms,
+        activeLayerId: () => ctx.activeLayerId,
+        layerCount: () => ctx.layerCount,
+        adoptClip: (c: ClipBox) => log.adopted.push(c),
+        openClipPage: () => { log.opened++; },
+        toast: (m: string) => log.toasts.push(m),
+      },
+    };
+  }
+  it('resolves by id, adopts the clip, opens Tools → Clip and toasts', () => {
+    const { d, log } = deps([boxM([0, 0, 0], [1, 1, 1]), { ...boxM([5, 5, 5], [6, 7, 8]), id: 'm2' }]);
+    expect(useBoxAsClip(d, 'm2')).toBe(true);
+    expect(log.adopted[0].box).toEqual({ min: [5, 5, 5], max: [6, 7, 8] });
+    expect(log.opened).toBe(1);
+    expect(log.toasts).toHaveLength(1);
+  });
+  it('a refusal applies nothing and opens nothing, but explains', () => {
+    const { d, log } = deps([boxM([0, 0, 0], [1, 1, 0])]);
+    expect(useBoxAsClip(d, 'm1')).toBe(false);
+    expect(useBoxAsClip(d, 'gone')).toBe(false);
+    expect(log.adopted).toHaveLength(0);
+    expect(log.opened).toBe(0);
+    expect(log.toasts).toHaveLength(2);
   });
 });

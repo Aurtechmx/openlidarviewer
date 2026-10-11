@@ -16,7 +16,7 @@
 import {
   COMPASS_FACES,
   compassFaceLabel,
-  roseRotationDeg,
+  unwrapAngleDeg,
   type CompassFace,
   type StandardView,
 } from '../render/viewCubeMath';
@@ -24,7 +24,10 @@ import {
 export interface ViewCubeOptions {
   /** Where to mount the gizmo. */
   readonly host: HTMLElement;
-  /** Current camera heading in degrees [0,360); read each frame to spin the rose. */
+  /**
+   * Current camera heading in degrees [0,360); read each drawn frame to spin
+   * the rose. NaN (camera near vertical, no reliable heading) holds the rose.
+   */
   readonly getHeading: () => number;
   /**
    * Whether the active scan's orientation is geographically known — read each
@@ -71,6 +74,15 @@ function faceButton(view: StandardView, onView: (v: StandardView) => void): HTML
   return b;
 }
 
+/** True when the user asked the OS for reduced motion; the rose then snaps. */
+function prefersReducedMotion(): boolean {
+  try {
+    return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch {
+    return false;
+  }
+}
+
 /** Mount the compass gizmo. Returns a handle with `update()` and `dispose()`. */
 export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
   const root = document.createElement('div');
@@ -90,7 +102,7 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
   rose.className = 'olv-viewcube-rose';
   rose.style.cssText =
     'position:absolute;inset:8px;border-radius:50%;border:1px solid var(--hairline);' +
-    'transition:transform 120ms ease-out;';
+    (prefersReducedMotion() ? '' : 'transition:transform 120ms ease-out;');
 
   // Place each face by its position around the rose (top/right/bottom/left).
   const placements: Record<CompassFace['position'], string> = {
@@ -147,14 +159,19 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
 
   opts.host.appendChild(root);
 
-  let lastRoseDeg = NaN;
+  // The rose angle is UNWRAPPED (continuous, not folded into [0,360)): the CSS
+  // transition interpolates the numeric angle, so a heading crossing north
+  // (359 -> 1) must move +2 degrees, not spin -358 the long way round.
+  let displayHeading = Number.NaN;
+  let lastWritten: number | null = null;
   const update = (): void => {
-    // Skip the style write (and its recalc) on idle frames where the heading
-    // hasn't moved — this runs on an always-on rAF while a scan is open.
-    const deg = roseRotationDeg(opts.getHeading());
-    if (deg !== lastRoseDeg) {
+    displayHeading = unwrapAngleDeg(displayHeading, opts.getHeading());
+    // Skip the style write (and its recalc) when the rounded angle is unchanged:
+    // this runs after every drawn frame while a scan is open.
+    const deg = Number.isFinite(displayHeading) ? -Math.round(displayHeading * 10) / 10 : 0;
+    if (deg !== lastWritten) {
       rose.style.transform = `rotate(${deg}deg)`;
-      lastRoseDeg = deg;
+      lastWritten = deg;
     }
     applyLabels(isGeographic()); // no-op unless the frame's geographic state flipped
   };

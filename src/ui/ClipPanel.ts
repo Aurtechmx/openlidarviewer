@@ -37,8 +37,16 @@ export class ClipPanel {
   private _mode: ClipMode = 'keep-inside';
   private _min: [number, number, number] = [0, 0, 0];
   private _max: [number, number, number] = [1, 1, 1];
-  /** Trailing timer for number-input edits — see _applyDebounced. */
-  private _applyTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Trailing timer for the kept-point count — see _scheduleCount. */
+  private _countTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Bumped on every bounds / mode / enable change, on {@link invalidateCount}
+   * (scan, placement or resident data changed), on hide and on dispose. A
+   * scheduled count captures the value it was queued under and drops its
+   * result when the value has moved on, so a stale count never overwrites a
+   * newer one.
+   */
+  private _countGen = 0;
   private readonly _minInputs: HTMLInputElement[] = [];
   private readonly _maxInputs: HTMLInputElement[] = [];
   private readonly _enableBox: HTMLInputElement;
@@ -88,8 +96,8 @@ export class ClipPanel {
     // Extents grid
     const grid = el('div', { className: 'olv-clip-grid' });
     for (const { axis, label } of AXES) {
-      const mn = this._numInput((v) => { this._min[axis] = v; this._applyDebounced(); });
-      const mx = this._numInput((v) => { this._max[axis] = v; this._applyDebounced(); });
+      const mn = this._numInput((v) => { this._min[axis] = v; this._apply(); });
+      const mx = this._numInput((v) => { this._max[axis] = v; this._apply(); });
       this._minInputs[axis] = mn;
       this._maxInputs[axis] = mx;
       mn.setAttribute('aria-label', `${label} min`);
@@ -149,7 +157,7 @@ export class ClipPanel {
     this.element.style.display = on ? '' : 'none';
     if (!on) {
       // Hiding the panel (scan closed) clears the clip so it can't persist.
-      if (this._applyTimer !== null) { clearTimeout(this._applyTimer); this._applyTimer = null; }
+      this._cancelCount();
       this._enabled = false;
       this._enableBox.checked = false;
       this._cb.onApply(null);
@@ -163,6 +171,40 @@ export class ClipPanel {
   }
 
   /**
+   * Apply a clip built elsewhere (the Measurements panel's "Use as clipping
+   * region") through the NORMAL apply path: unlike {@link setState} this fires
+   * `onApply`, so the viewer, the checkbox, the numeric bounds, the mode pills,
+   * the readout and the clip scope all move together. The panel copies the
+   * bounds; nothing links it back to where they came from.
+   */
+  adoptBounds(clip: ClipBox): void {
+    // The user just asked for this clip: show its bounds, not a folded header.
+    this.element.classList.remove('olv-collapsed');
+    this._enabled = clip.enabled;
+    this._enableBox.checked = clip.enabled;
+    this._mode = clip.mode;
+    this._paintMode();
+    this._min = [clip.box.min[0], clip.box.min[1], clip.box.min[2]];
+    this._max = [clip.box.max[0], clip.box.max[1], clip.box.max[2]];
+    this._paintExtents();
+    this._apply();
+  }
+
+  /**
+   * The data under the clip changed (active scan, placement, resident nodes):
+   * drop any pending count and, while the clip is on, count again.
+   */
+  invalidateCount(): void {
+    this._cancelCount();
+    if (this._enabled) this._scheduleCount();
+  }
+
+  /** Drop pending work; the panel stays usable but no queued count lands. */
+  dispose(): void {
+    this._cancelCount();
+  }
+
+  /**
    * Adopt an externally-restored clip (session import) WITHOUT firing
    * `onApply` — the caller has already pushed the clip to the viewer, and
    * re-applying through `_apply` while `_enabled` was still false is exactly
@@ -172,28 +214,19 @@ export class ClipPanel {
    * actually clipping to.
    */
   setState(clip: ClipBox): void {
-    // A pending debounced apply would re-push the PREVIOUS state — drop it.
-    if (this._applyTimer !== null) { clearTimeout(this._applyTimer); this._applyTimer = null; }
+    // A pending count was queued for the PREVIOUS state — drop it.
+    this._cancelCount();
     this._enabled = clip.enabled;
     this._enableBox.checked = clip.enabled;
     this._mode = clip.mode;
-    for (const [m, btn] of this._modeBtns) {
-      btn.classList.toggle('is-active', m === clip.mode);
-      btn.setAttribute('aria-pressed', m === clip.mode ? 'true' : 'false');
-    }
+    this._paintMode();
     this._min = [clip.box.min[0], clip.box.min[1], clip.box.min[2]];
     this._max = [clip.box.max[0], clip.box.max[1], clip.box.max[2]];
-    for (const { axis } of AXES) {
-      this._minInputs[axis].value = String(round(this._min[axis]));
-      this._maxInputs[axis].value = String(round(this._max[axis]));
-    }
-    // Same readout _apply would show, minus the onApply side effect.
+    this._paintExtents();
+    // Same readout _apply would show, minus the onApply side effect. A restore
+    // is a one-off, so its count is taken straight away.
     if (this._enabled) {
-      const c = this._cb.keptCount(this._current());
-      this._readout.textContent = c
-        ? `${c.kept.toLocaleString()} of ${c.total.toLocaleString()} points kept.`
-        : '';
-      setClipScope(c);
+      this._showCount(this._cb.keptCount(this._current()));
     } else {
       this._readout.textContent = 'Enable to clip the scan to the box above.';
       setClipScope(null);
@@ -212,11 +245,22 @@ export class ClipPanel {
 
   private _setMode(mode: ClipMode): void {
     this._mode = mode;
-    for (const [m, btn] of this._modeBtns) {
-      btn.classList.toggle('is-active', m === mode);
-      btn.setAttribute('aria-pressed', m === mode ? 'true' : 'false');
-    }
+    this._paintMode();
     this._apply();
+  }
+
+  private _paintMode(): void {
+    for (const [m, btn] of this._modeBtns) {
+      btn.classList.toggle('is-active', m === this._mode);
+      btn.setAttribute('aria-pressed', m === this._mode ? 'true' : 'false');
+    }
+  }
+
+  private _paintExtents(): void {
+    for (const { axis } of AXES) {
+      this._minInputs[axis].value = String(round(this._min[axis]));
+      this._maxInputs[axis].value = String(round(this._max[axis]));
+    }
   }
 
   private _fit(): void {
@@ -224,10 +268,7 @@ export class ClipPanel {
     if (!b) return;
     this._min = [b.min[0], b.min[1], b.min[2]];
     this._max = [b.max[0], b.max[1], b.max[2]];
-    for (const { axis } of AXES) {
-      this._minInputs[axis].value = String(round(this._min[axis]));
-      this._maxInputs[axis].value = String(round(this._max[axis]));
-    }
+    this._paintExtents();
     this._apply();
   }
 
@@ -236,35 +277,53 @@ export class ClipPanel {
   }
 
   /**
-   * Coalesce per-keystroke number-input edits into one _apply. The expensive
-   * part of _apply is keptCount, an O(N) pass over the whole cloud; firing it on
-   * every `input` event froze the UI while typing or holding a spinner on a big
-   * scan. A 120 ms trailing timer keeps the readout responsive without the
-   * per-character stall. Mode / fit / checkbox changes still apply immediately.
+   * Push the clip to the renderer NOW — the geometry is a handful of planes and
+   * must follow every valid edit without lag — and move only the expensive part,
+   * the O(N) kept-point count, behind a trailing timer so typing or holding a
+   * spinner on a big scan never stalls. Until the count lands the readout says
+   * it is updating rather than showing the previous number as current.
    */
-  private _applyDebounced(): void {
-    if (this._applyTimer !== null) clearTimeout(this._applyTimer);
-    this._applyTimer = setTimeout(() => {
-      this._applyTimer = null;
-      this._apply();
-    }, 120);
-  }
-
   private _apply(): void {
     const clip = this._current();
+    this._cancelCount();
     this._cb.onApply(this._enabled ? clip : null);
     if (this._enabled) {
-      const c = this._cb.keptCount(clip);
-      this._readout.textContent = c
-        ? `${c.kept.toLocaleString()} of ${c.total.toLocaleString()} points kept.`
-        : '';
-      setClipScope(c);
+      // The clip scope keeps its last value until the new count lands, so its
+      // consumers see one settled figure rather than a gap.
+      this._readout.textContent = 'Updating kept-point count…';
+      this._scheduleCount();
     } else {
       this._readout.textContent = 'Enable to clip the scan to the box above.';
       setClipScope(null);
     }
   }
+
+  private _cancelCount(): void {
+    this._countGen++;
+    if (this._countTimer !== null) { clearTimeout(this._countTimer); this._countTimer = null; }
+  }
+
+  private _scheduleCount(): void {
+    const gen = this._countGen;
+    this._countTimer = setTimeout(() => {
+      this._countTimer = null;
+      if (gen !== this._countGen || !this._enabled) return;
+      const c = this._cb.keptCount(this._current());
+      if (gen !== this._countGen) return; // superseded while counting
+      this._showCount(c);
+    }, CLIP_COUNT_DEBOUNCE_MS);
+  }
+
+  private _showCount(c: { kept: number; total: number } | null): void {
+    this._readout.textContent = c
+      ? `${c.kept.toLocaleString()} of ${c.total.toLocaleString()} points kept.`
+      : '';
+    setClipScope(c);
+  }
 }
+
+/** Trailing quiet period before the kept-point count runs. */
+export const CLIP_COUNT_DEBOUNCE_MS = 120;
 
 function round(v: number): number {
   return Math.round(v * 1000) / 1000;
