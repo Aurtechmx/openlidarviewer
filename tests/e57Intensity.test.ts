@@ -7,9 +7,12 @@
  * straight into the Uint16 store (`clampU16(col.intensity[i])`). Math.round
  * of a 0–1 value yields only 0 or 1, so the whole continuous channel
  * collapsed to two values, and every downstream surface (CSV/XYZ export, the
- * intensity colour ramp, the inspector) saw the destroyed channel. The fix
- * mirrors the PTS/PCD house rule: a unit-range channel is rescaled to the
- * full 0–65535 span; a wider range is stored raw, clamped only.
+ * intensity colour ramp, the inspector) saw the destroyed channel.
+ *
+ * Declared intensityLimits are the channel's range (ASTM E2807), so the
+ * loader normalises (v − min) / (max − min) · 65535; a signed range keeps its
+ * negative values instead of clamping them to 0. With no declared limits a
+ * unit-range channel is rescaled to 0–65535 and a wider range is stored raw.
  *
  * The parser is mocked (same pattern as loadE57Merge.test.ts) so the scan
  * columns and declared limits are hand-built.
@@ -47,10 +50,13 @@ const READ_EVERY_RECORD: E57DecodePlan = {
 };
 
 
+const SAMPLE_MIN = 0.2800008952617645;
+const SAMPLE_MAX = 0.738064706325531;
+
 function scan(
   recordCount: number,
   intensityVals: number[],
-  intensityMax: number | null,
+  intensityLimits: [number, number] | null,
 ): E57ScanData {
   return {
     name: 'scan',
@@ -65,8 +71,10 @@ function scan(
     },
     fields: [],
     pose: null,
-    colorMax: null,
-    intensityMax,
+    colorLimits: null,
+    intensityLimits: intensityLimits
+      ? { minimum: intensityLimits[0], maximum: intensityLimits[1] }
+      : null,
   };
 }
 
@@ -89,17 +97,29 @@ beforeEach(() => {
 });
 
 describe('loadE57 — unit-range float intensity (the binarization bug)', () => {
-  it('preserves the continuous channel: declared-limit 0–1 floats rescale to 0–65535', async () => {
+  it('preserves the continuous channel: declared limits normalise to 0–65535', async () => {
     // The regression sample: intensityLimits 0.2800009–0.7380647, values
-    // declared as unit-range floats. Hand-computed: Math.round(v × 65535).
+    // declared as unit-range floats. Hand-computed:
+    // Math.round((v − min) / (max − min) × 65535).
     mockedParse.mockReturnValue(
-      parseResult([
-        scan(3, [0.2800008952617645, 0.5, 0.738064706325531], 0.738064706325531),
-      ]),
+      parseResult([scan(3, [SAMPLE_MIN, 0.5, SAMPLE_MAX], [SAMPLE_MIN, SAMPLE_MAX])]),
     );
     const cloud = await loadE57(new ArrayBuffer(0), 'sample.e57', { plan: READ_EVERY_RECORD });
-    // Pre-fix this read [0, 1, 1] — the whole channel collapsed to two values.
-    expect([...cloud.intensity!]).toEqual([18350, 32768, 48369]);
+    // Before the unit-range fix this read [0, 1, 1].
+    expect([...cloud.intensity!]).toEqual([0, 31475, 65535]);
+  });
+
+  it('normalises a signed declared range instead of clamping negatives to 0', async () => {
+    // intensityLimits −2048..2047: −1000 → (−1000 + 2048) / 4095 × 65535.
+    mockedParse.mockReturnValue(parseResult([scan(4, [-2048, -1000, 0, 2047], [-2048, 2047])]));
+    const cloud = await loadE57(new ArrayBuffer(0), 'signed.e57', { plan: READ_EVERY_RECORD });
+    expect([...cloud.intensity!]).toEqual([0, 16772, 32776, 65535]);
+  });
+
+  it('falls back to the no-limits rule when the declared range is degenerate (max == min)', async () => {
+    mockedParse.mockReturnValue(parseResult([scan(2, [0.25, 0.75], [0.5, 0.5])]));
+    const cloud = await loadE57(new ArrayBuffer(0), 'degenerate.e57', { plan: READ_EVERY_RECORD });
+    expect([...cloud.intensity!]).toEqual([16384, 49151]);
   });
 
   it('rescales by an OBSERVED unit-range maximum when the file declares no limits', async () => {
@@ -109,7 +129,7 @@ describe('loadE57 — unit-range float intensity (the binarization bug)', () => 
   });
 
   it('stores a wider-than-unit range raw (declared limits)', async () => {
-    mockedParse.mockReturnValue(parseResult([scan(3, [5, 1000, 65535], 65535)]));
+    mockedParse.mockReturnValue(parseResult([scan(3, [5, 1000, 65535], [0, 65535])]));
     const cloud = await loadE57(new ArrayBuffer(0), 'raw16.e57', { plan: READ_EVERY_RECORD });
     expect([...cloud.intensity!]).toEqual([5, 1000, 65535]);
   });
@@ -121,7 +141,7 @@ describe('loadE57 — unit-range float intensity (the binarization bug)', () => 
   });
 
   it('still clamps out-of-declared-range values into the Uint16 domain', async () => {
-    mockedParse.mockReturnValue(parseResult([scan(2, [-0.25, 1.5], 1)]));
+    mockedParse.mockReturnValue(parseResult([scan(2, [-0.25, 1.5], [0, 1])]));
     const cloud = await loadE57(new ArrayBuffer(0), 'clamped.e57', { plan: READ_EVERY_RECORD });
     expect([...cloud.intensity!]).toEqual([0, 65535]);
   });
@@ -130,15 +150,13 @@ describe('loadE57 — unit-range float intensity (the binarization bug)', () => 
     // End-to-end shape of the observed defect: E57 with float intensity
     // → CSV whose intensity column held ONLY 0 and 1.
     mockedParse.mockReturnValue(
-      parseResult([
-        scan(3, [0.2800008952617645, 0.5, 0.738064706325531], 0.738064706325531),
-      ]),
+      parseResult([scan(3, [SAMPLE_MIN, 0.5, SAMPLE_MAX], [SAMPLE_MIN, SAMPLE_MAX])]),
     );
     const cloud = await loadE57(new ArrayBuffer(0), 'sample.e57', { plan: READ_EVERY_RECORD });
     const rows = toCsv(cloud).trim().split('\n');
     expect(rows[0]).toBe('x,y,z,intensity');
     const written = rows.slice(1).map((r) => Number(r.split(',')[3]));
-    expect(written).toEqual([18350, 32768, 48369]);
+    expect(written).toEqual([0, 31475, 65535]);
     // The binarized signature — at most {0, 1} — must be gone.
     expect(new Set(written).size).toBe(3);
     expect(Math.max(...written)).toBeGreaterThan(1);

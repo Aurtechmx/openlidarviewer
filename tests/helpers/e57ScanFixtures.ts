@@ -39,8 +39,8 @@ export function scan(
     columns,
     fields: [],
     pose,
-    colorMax: null,
-    intensityMax: null,
+    colorLimits: null,
+    intensityLimits: null,
   };
 }
 

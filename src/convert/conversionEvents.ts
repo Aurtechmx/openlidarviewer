@@ -11,6 +11,7 @@
  */
 
 import type { ConvertReport, LogEntry } from './types';
+import { roundHalfAwayFromZero } from './lasQuantisation';
 
 /** What happened to the data. */
 export type ConversionEventKind =
@@ -138,7 +139,7 @@ export interface AcquisitionLoss {
  * -90..90 limit: halves round away from zero, so 90.5 and -90.5 both clip.
  */
 export function roundLegacyAngle(angle: number): number {
-  return Math.sign(angle) * Math.round(Math.abs(angle));
+  return roundHalfAwayFromZero(angle);
 }
 
 export function assessLegacyAcquisition(
