@@ -103,6 +103,22 @@ export function gridTicks(min: number, max: number, step: number): number[] {
   return out;
 }
 
+/**
+ * A scale-bar or graticule tick value as text: the shortest decimal that
+ * round-trips at six significant figures. A 1 m bar split into four reads
+ * 0 0.25 0.5 0.75 1, never a one-decimal rounding such as 0.3 or 0.8.
+ */
+export function formatScaleTick(v: number): string {
+  return String(Number(v.toPrecision(6)));
+}
+
+/** Decimals needed to print every multiple of `step` exactly (0 for whole steps). */
+export function tickDecimals(step: number): number {
+  const s = formatScaleTick(step);
+  const i = s.indexOf('.');
+  return i < 0 || s.includes('e') ? 0 : s.length - i - 1;
+}
+
 export interface ScaleBar {
   /** Total ground length the bar represents, world units. */
   readonly totalGround: number;

@@ -51,6 +51,7 @@ import {
   boxCorners,
   BOX_EDGES,
   elevationDatumOffset,
+  toMetricFrame,
 } from './geometry';
 import { resizeBoxByCorner, BOX_CORNER_INDICES, type BoxCornerIndex } from './boxEdit';
 import { areaBreakdown, lineBreakdown } from './measureBreakdown';
@@ -78,8 +79,6 @@ import {
   formatUnitUnverified,
   UNIT_UNVERIFIED_MEASURE_NOTICE,
   GEOGRAPHIC_CRS_MEASURE_NOTICE,
-  VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE,
-  VERTICAL_MISMATCH_KINDS,
 } from './format';
 // B2 (v0.4.5) — one unit seam: the chart series is converted render-units →
 // metres in `getSummaries` by the same module the panel/CSV/PDF read, so
@@ -898,6 +897,20 @@ export class MeasureController {
   }
 
   /**
+   * The points in an ISOTROPIC frame: the up component rescaled so it shares
+   * the horizontal render unit. This is the export's metre frame
+   * (`toMetricFrame`, as `measurementMetrics` uses) divided by the horizontal
+   * factor, so a figure computed here and formatted through `_fmtLen` /
+   * `_fmtArea` equals the exported one. The identity (same array) whenever
+   * the two units agree, which is every single-unit CRS.
+   */
+  private _iso(pts: readonly Vec3[]): Vec3[] {
+    if (!this._verticalUnitMismatch()) return pts as Vec3[];
+    const k = this._effVertical() / this._unitToMetres;
+    return pts.map((p) => toMetricFrame(p, this._worldUp, 1, k));
+  }
+
+  /**
    * True when a separate vertical unit was supplied AND it differs from the
    * horizontal one — the compound-CRS case where a 3D length / tilted area /
    * grade mixes two linear units. Pure-vertical readouts stay honest via
@@ -908,15 +921,6 @@ export class MeasureController {
     return v != null && Math.abs(v - this._unitToMetres) > 1e-12;
   }
 
-  /**
-   * Kinds whose headline NUMBER combines horizontal and vertical extent, so a
-   * single vertical factor can't repair it under a compound CRS: 3D lengths
-   * (distance / polyline / profile), a tilted planar area, and a slope grade.
-   * Pure-vertical (height) and per-axis-monomial (box / volume) kinds are
-   * exactly rescaled instead, so they are absent here — mirrors how the
-   * geographic refusal spares heights and angles.
-   */
-  private static readonly VERTICAL_MISMATCH_KINDS = VERTICAL_MISMATCH_KINDS;
 
   /**
    * Whether the active scan has a known CRS with real-world units. Drives the
@@ -1900,12 +1904,6 @@ export class MeasureController {
       // gives a raw-coordinate angle that is physically wrong (pass-6 M3).
       geographicCrs:
         this._geographicCrs && geographicRefusesKind(m.kind),
-      // Compound CRS (height unit ≠ horizontal unit): refuse the kinds whose
-      // number mixes the two axes. Heights, boxes and volumes are exactly
-      // rescaled by the vertical factor, so they keep their ordinary grade.
-      verticalUnitMismatch:
-        this._verticalUnitMismatch() &&
-        MeasureController.VERTICAL_MISMATCH_KINDS.has(m.kind),
     });
   }
 
@@ -2077,10 +2075,13 @@ export class MeasureController {
   /** The headline value string for a measurement, shown in the panel. */
   private _headlineText(m: Measurement): string {
     const p = m.points;
+    // Every figure that combines the horizontal and vertical axes is computed
+    // on the isotropic points, so a compound CRS reads what the export writes.
+    const q = this._iso(p);
     switch (m.kind) {
       case 'distance': {
         if (p.length < 2) return '—';
-        const len = this._fmtLen(distance(p[0], p[1]));
+        const len = this._fmtLen(distance(q[0], q[1]));
         const az = bearingDegrees(p[0], p[1], this._worldUp);
         // Append the bearing when the segment has a horizontal run, labelled
         // with what it is measured from. It is taken against +Y, which is grid
@@ -2096,28 +2097,28 @@ export class MeasureController {
         return bearing ? `${len} · ${bearing}` : len;
       }
       case 'polyline':
-        return this._fmtLen(polylineLength(p).total);
+        return this._fmtLen(polylineLength(q).total);
       case 'area':
-        return p.length >= 3 ? this._areaFmt(p, () => polygonAreaPlanar(p)) : '—';
+        return p.length >= 3 ? this._areaFmt(p, () => polygonAreaPlanar(q)) : '—';
       case 'height':
         return p.length >= 2
           ? this._fmtVertical(Math.abs(verticalDelta(p[0], p[1], this._worldUp).vertical))
           : '—';
       case 'angle':
-        return p.length >= 3 ? formatAngle(angleAtVertex(p[0], p[1], p[2])) : '—';
+        return p.length >= 3 ? formatAngle(angleAtVertex(q[0], q[1], q[2])) : '—';
       case 'slope': {
         if (p.length < 2) return '—';
-        const s = slopeBetween(p[0], p[1], this._worldUp);
+        const s = slopeBetween(q[0], q[1], this._worldUp);
         return `${formatGrade(s.gradePercent)} · ${formatAngle(s.angleDeg)}`;
       }
       case 'profile': {
         if (p.length < 2) return '—';
-        const pm = profileMetrics(p[0], p[1], this._worldUp);
+        const pm = profileMetrics(q[0], q[1], this._worldUp);
         return formatProfileHeadline(
-          // Length through the horizontal factor; the vertical drop through the
-          // up-axis factor (compound CRS). Grade is dimensionless.
+          // Isotropic points: both the length and the drop are in the
+          // horizontal render unit. Grade is dimensionless.
           pm.length3d * this._unitToMetres,
-          pm.verticalDrop * this._effVertical(),
+          pm.verticalDrop * this._unitToMetres,
           pm.gradePercent,
           this._units,
           ...(this._unitUnverified() ? [formatUnitUnverified] as const : []),
@@ -2177,8 +2178,6 @@ export class MeasureController {
         hint = `${hint} — ${GEOGRAPHIC_CRS_MEASURE_NOTICE}`;
       } else if (this._unitUnverified()) {
         hint = `${hint} · ${UNIT_UNVERIFIED_MEASURE_NOTICE}`;
-      } else if (this._verticalUnitMismatch()) {
-        hint = `${hint} — ${VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE}`;
       }
       this._setHintText(hint);
     }
@@ -2214,12 +2213,12 @@ export class MeasureController {
         return `${VERB} the first point on the scan`;
       case 'polyline': {
         if (!d || d.points.length < 2) return `${VERB} points along the path`;
-        const total = this._fmtLen(polylineLength(d.points).total);
+        const total = this._fmtLen(polylineLength(this._iso(d.points)).total);
         return `${total} · ${VERB} more, click the first vertex or press Enter to finish`;
       }
       case 'area': {
         if (!d || d.points.length < 3) return `${VERB} polygon vertices — three or more`;
-        const area = this._areaFmt(d.points, () => polygonAreaPlanar(d.points));
+        const area = this._areaFmt(d.points, () => polygonAreaPlanar(this._iso(d.points)));
         return `${area} · ${VERB} more, click the first vertex or press Enter to close`;
       }
       case 'volume': {
@@ -2326,13 +2325,13 @@ export class MeasureController {
       E.push({ a: pts[0], b: pts[1], style: 'solid' });
       L.push({
         anchor: midpoint(pts[0], pts[1]),
-        text: this._fmtLen(distance(pts[0], pts[1])),
+        text: this._fmtLen(distance(...this._iso(pts.slice(0, 2)) as [Vec3, Vec3])),
         primary: true,
       });
       return;
     }
     if (m.kind === 'polyline' && pts.length >= 2) {
-      const r = polylineLength(pts);
+      const r = polylineLength(this._iso(pts));
       for (let i = 1; i < pts.length; i++) {
         E.push({ a: pts[i - 1], b: pts[i], style: 'solid' });
         L.push({
@@ -2355,7 +2354,7 @@ export class MeasureController {
       P.push({ points: pts });
       const ok = areaRingVerdictCached(pts).ok;
       const text = ok
-        ? `${this._fmtArea(polygonAreaPlanar(pts))} · map ${this._fmtArea(polygonAreaHorizontal(pts, this._worldUp))}`
+        ? `${this._fmtArea(polygonAreaPlanar(this._iso(pts)))} · map ${this._fmtArea(polygonAreaHorizontal(pts, this._worldUp))}`
         : 'no area';
       L.push({ anchor: centroid(pts), text, primary: true });
       return;
@@ -2385,7 +2384,8 @@ export class MeasureController {
     if (m.kind === 'slope' && pts.length >= 2) {
       const [a, b] = pts;
       const elbow = elbowPoint(a, b, this._worldUp);
-      const s = slopeBetween(a, b, this._worldUp);
+      const [ia, ib] = this._iso([a, b]);
+      const s = slopeBetween(ia, ib, this._worldUp);
       E.push(
         { a, b, style: 'solid' },
         { a, b: elbow, style: 'preview' },
@@ -2399,7 +2399,7 @@ export class MeasureController {
         },
         {
           anchor: midpoint(elbow, b),
-          text: this._fmtVertical(Math.abs(s.rise)),
+          text: this._fmtLen(Math.abs(s.rise)),
           primary: false,
         },
         {
@@ -2418,7 +2418,7 @@ export class MeasureController {
       );
       L.push({
         anchor: vertex,
-        text: formatAngle(angleAtVertex(a, vertex, c)),
+        text: formatAngle(angleAtVertex(...this._iso([a, vertex, c]) as [Vec3, Vec3, Vec3])),
         primary: true,
       });
     }
@@ -2430,7 +2430,8 @@ export class MeasureController {
       // combined readout (length · Δh · grade).
       const [a, b] = pts;
       const elbow = elbowPoint(a, b, this._worldUp);
-      const pm = profileMetrics(a, b, this._worldUp);
+      const [ia, ib] = this._iso([a, b]);
+      const pm = profileMetrics(ia, ib, this._worldUp);
       E.push(
         { a, b, style: 'solid' },
         { a, b: elbow, style: 'preview' },
@@ -2440,9 +2441,9 @@ export class MeasureController {
         {
           anchor: midpoint(a, b),
           text: formatProfileHeadline(
-            // Length ×horizontal factor; drop ×up-axis factor (compound CRS).
+            // Isotropic points: length and drop share the horizontal factor.
             pm.length3d * this._unitToMetres,
-            pm.verticalDrop * this._effVertical(),
+            pm.verticalDrop * this._unitToMetres,
             pm.gradePercent,
             this._units,
           ),
@@ -2450,7 +2451,7 @@ export class MeasureController {
         },
         {
           anchor: midpoint(elbow, b),
-          text: this._fmtVertical(Math.abs(pm.verticalDrop)),
+          text: this._fmtLen(Math.abs(pm.verticalDrop)),
           primary: false,
         },
         {
@@ -2562,7 +2563,7 @@ export class MeasureController {
       E.push({ a: last, b: cur, style: 'preview' });
       L.push({
         anchor: midpoint(last, cur),
-        text: this._fmtLen(distance(last, cur)),
+        text: this._fmtLen(distance(...this._iso([last, cur]) as [Vec3, Vec3])),
         primary: true,
       });
       return;
@@ -2571,7 +2572,7 @@ export class MeasureController {
       E.push({ a: last, b: cur, style: 'preview' });
       L.push({
         anchor: cur,
-        text: this._fmtLen(polylineLength([...pts, cur]).total),
+        text: this._fmtLen(polylineLength(this._iso([...pts, cur])).total),
         primary: true,
       });
       return;
@@ -2584,7 +2585,7 @@ export class MeasureController {
         P.push({ points: ring });
         L.push({
           anchor: centroid(ring),
-          text: this._areaFmt(ring, () => polygonAreaPlanar(ring)),
+          text: this._areaFmt(ring, () => polygonAreaPlanar(this._iso(ring))),
           primary: true,
         });
       }
@@ -2624,7 +2625,7 @@ export class MeasureController {
     }
     if (d.kind === 'slope') {
       const elbow = elbowPoint(pts[0], cur, this._worldUp);
-      const s = slopeBetween(pts[0], cur, this._worldUp);
+      const s = slopeBetween(...this._iso([pts[0], cur]) as [Vec3, Vec3], this._worldUp);
       E.push(
         { a: pts[0], b: cur, style: 'preview' },
         { a: pts[0], b: elbow, style: 'preview' },
@@ -2642,7 +2643,7 @@ export class MeasureController {
       if (pts.length === 2) {
         L.push({
           anchor: pts[1],
-          text: formatAngle(angleAtVertex(pts[0], pts[1], cur)),
+          text: formatAngle(angleAtVertex(...this._iso([pts[0], pts[1], cur]) as [Vec3, Vec3, Vec3])),
           primary: true,
         });
       }
@@ -2652,7 +2653,7 @@ export class MeasureController {
       // run/drop ghost — but the live label carries the combined profile
       // readout (length · Δh · grade).
       const elbow = elbowPoint(pts[0], cur, this._worldUp);
-      const pm = profileMetrics(pts[0], cur, this._worldUp);
+      const pm = profileMetrics(...this._iso([pts[0], cur]) as [Vec3, Vec3], this._worldUp);
       E.push(
         { a: pts[0], b: cur, style: 'preview' },
         { a: pts[0], b: elbow, style: 'preview' },
@@ -2661,9 +2662,9 @@ export class MeasureController {
       L.push({
         anchor: midpoint(pts[0], cur),
         text: formatProfileHeadline(
-          // Length ×horizontal factor; drop ×up-axis factor (compound CRS).
+          // Isotropic points: length and drop share the horizontal factor.
           pm.length3d * this._unitToMetres,
-          pm.verticalDrop * this._effVertical(),
+          pm.verticalDrop * this._unitToMetres,
           pm.gradePercent,
           this._units,
         ),

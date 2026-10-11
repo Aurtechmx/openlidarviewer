@@ -69,9 +69,9 @@ describe('breakdownParts — a distance', () => {
     // note no longer calls them unreliable.
     expect(r!.title).toMatch(/converted to metres before the slant and the grade/i);
     expect(r!.title).not.toMatch(/not reliable/i);
-    // The headline distance is refused under a compound CRS, so the note sends
-    // the reader to these figures.
-    expect(r!.title).toMatch(/rather than the headline distance/);
+    // The headline is computed in the same metre frame, so the note no longer
+    // steers the reader away from it.
+    expect(r!.title).not.toMatch(/rather than the headline distance/);
   });
 
   it('does not warn about mixed units when there are none', () => {

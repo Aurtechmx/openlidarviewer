@@ -23,6 +23,7 @@ import { decimalsForInterval, type ContourLabel } from './labelPlacement';
 import { contourShapeStyleLabel } from './contourShapeStyle';
 import { provenanceLines, type ExportProvenance } from '../export/exportProvenance';
 import { NOT_SURVEY_GRADE_NOTE } from '../export/exportNotes';
+import { formatScaleTick } from './mapSheetLayout';
 
 /** Options for {@link svgContours}. */
 export interface SvgContourParams {
@@ -102,14 +103,13 @@ function scaleBar(x: number, y: number, scale: number, worldW: number, unit: str
         `fill="${fill}" stroke="${stroke}" stroke-width="0.5"/>`,
     );
   }
-  const dec = D < 1 ? 1 : 0;
   const tick = (px: number, label: string): string =>
     `<text x="${px.toFixed(2)}" y="${(y - 3).toFixed(2)}" font-size="9" text-anchor="middle" ` +
     `fill="${stroke}" font-family="sans-serif">${label}</text>`;
   parts.push(
     tick(x, '0'),
-    tick(x + (D * scale) / 2, (D / 2).toFixed(dec)),
-    tick(x + D * scale, `${D.toFixed(dec)} ${unit}`),
+    tick(x + (D * scale) / 2, formatScaleTick(D / 2)),
+    tick(x + D * scale, `${formatScaleTick(D)} ${unit}`),
   );
   return parts.join('');
 }

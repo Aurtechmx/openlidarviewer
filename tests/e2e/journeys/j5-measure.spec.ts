@@ -79,10 +79,9 @@ test('P2: a rise on a file with no declared vertical unit says the unit is assum
   });
 });
 
-test('P2: on a compound CRS with feet heights, a 3D distance is flagged as not reliable', async ({ page }, info) => {
+test('P2: on a compound CRS with feet heights, a 3D distance converts each axis by its own unit', async ({ page }, info) => {
   const j = startJourney(page, info, 'j5');
   const { writeLas14 } = await loadLasWriter();
-  const { VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE } = await import('../../../src/render/measure/format');
   const N = 20;
   const n = N * N;
   const x = new Float64Array(n);
@@ -94,12 +93,11 @@ test('P2: on a compound CRS with feet heights, a 3D distance is flagged as not r
     await openWith(page, bytes, 'compound-ftus.las');
     await openMeasure(page);
   });
-  await j.step('the distance carries the compound-CRS caveat', async () => {
+  await j.step('the distance is computed in the per-axis metre frame', async () => {
     await place(page, 'distance', [[0, 0, 0], [3, 0, 4]]);
     await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
-    // The notice is in the measure hint bar, which stays on screen while measuring.
-    await expect(page.locator('.olv-measure-bar')).toContainText(VERTICAL_UNIT_MISMATCH_MEASURE_NOTICE);
-    await expect(page.locator('.olv-measure-bar')).toBeVisible();
+    // 3 m run and 4 US survey feet (1.2192 m) rise: the headline is the true slant.
+    expect(await page.locator('.olv-measure-panel').innerText()).toMatch(/3\.238\d m/);
     // The breakdown converts the rise: 4 US survey feet is 1.2192 m.
     await expect(page.locator('.olv-mp-row').first()).toBeVisible();
     expect(await page.locator('.olv-measure-panel').innerText()).toMatch(/Rise 1\.219\d m/);

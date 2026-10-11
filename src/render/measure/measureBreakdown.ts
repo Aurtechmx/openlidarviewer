@@ -17,13 +17,11 @@
  * horizontal axes and another for height. A pure horizontal quantity (the map
  * run, the planimetric area, both scaled by the horizontal factor alone) and a
  * pure vertical one (the height change, scaled by the vertical factor alone)
- * stay exact under that CRS. A quantity that COMBINES the two axes cannot be
- * repaired by either factor: the 3D length, the tilted plane area, the 3D
- * perimeter and the grade all mix units. Those carry {@link Breakdown.mixedUnits}
- * so a reader is told which figures to trust, rather than the whole card being
- * withheld or, worse, presented as if a single unit described it. This is the
- * same split `MeasureController` applies to the headline and the trust grade
- * (`VERTICAL_MISMATCH_KINDS`); nothing here overrides that verdict.
+ * stay exact under that CRS. A quantity that COMBINES the two axes (the 3D
+ * length, the tilted plane area, the 3D perimeter, the grade) is computed from
+ * the per-axis converted components, the same metre frame the headline and the
+ * exporter use, so every surface reports one figure. {@link Breakdown.mixedUnits}
+ * only records that the scan declares two units.
  *
  * Pure — no DOM, no three.js.
  */
@@ -34,6 +32,7 @@ import {
   polygonAreaPlanar,
   polygonPerimeter,
   profileMetrics,
+  toMetricFrame,
 } from './geometry';
 import type { Vec3 } from '../navMath';
 
@@ -150,14 +149,15 @@ export function areaBreakdown(
       mixedUnits,
     };
   }
-  const ring = [...points];
-  // Area converts by the factor SQUARED: it is a product of two lengths, so
-  // converting once under-reports by the factor itself.
-  const areaFactor = horizontalToMetres * horizontalToMetres;
+  // Every vertex is mapped into the metre frame first (horizontal and up
+  // components by their own factors), the frame the exporter and the headline
+  // use, so the tilted plane and the 3D perimeter are true metres even when
+  // the height unit differs from the horizontal one.
+  const ring = points.map((p) => toMetricFrame(p, up, horizontalToMetres, verticalToMetres));
   return {
-    horizontalM2: polygonAreaHorizontal(ring, up) * areaFactor,
-    planarM2: polygonAreaPlanar(ring) * areaFactor,
-    perimeterM: polygonPerimeter(ring) * horizontalToMetres,
+    horizontalM2: polygonAreaHorizontal(ring, up),
+    planarM2: polygonAreaPlanar(ring),
+    perimeterM: polygonPerimeter(ring),
     vertexCount: ring.length,
     mixedUnits,
   };
