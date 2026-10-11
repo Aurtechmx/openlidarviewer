@@ -83,6 +83,11 @@ function matches(query: string): boolean {
   }
 }
 
+/** Outward normal of each face in the scene basis [east, north, up]. */
+const FACE_NORMALS: Readonly<Record<StandardView, SceneVec>> = {
+  top: [0, 0, 1], bottom: [0, 0, -1], front: [0, 1, 0], back: [0, -1, 0], right: [-1, 0, 0], left: [1, 0, 0],
+};
+
 /** Desktop and touch geometry, in CSS px. */
 const SIZE = {
   fine: { box: 120, half: 34, hit: 22, home: 24 },
@@ -117,6 +122,7 @@ function defaultObstacles(): CubeObstacle[] {
     ...all('.olv-right-rail:not(.olv-right-collapsed)', 'left'),
     ...all('.olv-right-rail-tab', 'left'),
     ...all('.olv-topbar', 'down'),
+    ...all('.olv-measure-bar', 'down'),
     ...all('.olv-colorbar-floating', 'down'),
   ];
 }
@@ -283,7 +289,7 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
     // Obstacles come and go (the colour key floats only while the rail is
     // collapsed, and can mount after the cube): watch class flips and mounts
     // in the page, and re-place only when one touches an obstacle.
-    const OBSTACLE = '.olv-right-rail, .olv-right-rail-tab, .olv-topbar, .olv-colorbar';
+    const OBSTACLE = '.olv-right-rail, .olv-right-rail-tab, .olv-topbar, .olv-colorbar, .olv-measure-bar';
     const touches = (n: Node): boolean => n instanceof Element && (n.matches(OBSTACLE) || n.querySelector(OBSTACLE) !== null);
     if (typeof MutationObserver === 'function' && document.body) {
       const mo = new MutationObserver((records) => {
@@ -328,6 +334,12 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
         s.el.style.left = `${fmt(centre + x)}px`;
         s.el.style.top = `${fmt(centre + y)}px`;
       }
+    }
+    // A face turned away (or edge-on) is neither drawn nor clickable, so it can
+    // never sit under, or over, another control.
+    for (const [view, el] of faces) {
+      const n = projectCubePoint(m, FACE_NORMALS[view]);
+      el.style.visibility = n[2] > 0.12 ? 'inherit' : 'hidden';
     }
     const active = activeCubeFace(o);
     if (active !== lastActive) {

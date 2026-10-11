@@ -2656,6 +2656,20 @@ body[data-theme="high-contrast"] .olv-mode-reset { border: 2px solid var(--accen
   border: 0;
 }
 
+
+/* Between two expanded rails the free band is narrow (about 235 px at 880 px
+ * wide). The bar may not be wider than that band, so its row wraps, and the
+ * mode selector drops its icons and tightens its padding so the four modes
+ * still fit one line. A collapsed rail gives its width back to the band. */
+.olv-navbar { --olv-nb-l: var(--olv-rail-width, 0px); --olv-nb-r: var(--olv-right-rail-width, 0px); }
+body:has(.olv-left-panels.olv-rail-collapsed) .olv-navbar { --olv-nb-l: 0px; }
+body:has(.olv-right-rail.olv-right-collapsed) .olv-navbar { --olv-nb-r: 0px; }
+@media (min-width: 768px) and (max-width: 1180px) {
+  .olv-navbar { max-width: calc(100vw - var(--olv-nb-l) - var(--olv-nb-r) - 100px); }
+  .olv-nav-row { flex-wrap: wrap; justify-content: center; }
+  .olv-modes-segmented .olv-mode { padding: 0 var(--space-md); }
+  .olv-modes-segmented .olv-mode-icon { display: none; }
+}
 /* ───────────────────────────────────────────────────────────────────────────
    Micro-interactions — tactile feedback, eased states, entrance motion
    ─────────────────────────────────────────────────────────────────────────── */
