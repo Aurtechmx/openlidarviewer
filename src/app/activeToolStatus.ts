@@ -121,8 +121,15 @@ export function wireActiveToolIndicator(d: ActiveToolWiringDeps): ActiveToolWiri
   const onResize = (): void => placeActiveToolPill(indicator.element, d.mount);
   win?.addEventListener('resize', onResize);
   // Toasts, the touch hint and the phone sheet come and go on their own
-  // timers; while the pill shows, re-seat it a few times a second.
-  const seat = win ? win.setInterval(() => { if (!indicator.element.hidden) onResize(); }, 250) : undefined;
+  // timers. Re-seat when one of them changes size, toggles its class or
+  // finishes a transition, coalesced to one placement per microtask.
+  let seatQueued = false;
+  const seatLater = (): void => {
+    if (seatQueued || indicator.element.hidden) return;
+    seatQueued = true;
+    queueMicrotask(() => { seatQueued = false; onResize(); });
+  };
+  const seat = watchPillFloor(d.mount, indicator.element, seatLater);
   refresh();
   return {
     indicator,
@@ -130,7 +137,7 @@ export function wireActiveToolIndicator(d: ActiveToolWiringDeps): ActiveToolWiri
     dispose: () => {
       mo.disconnect();
       win?.removeEventListener('resize', onResize);
-      if (seat !== undefined) win?.clearInterval(seat);
+      seat();
       for (const t of events) doc.removeEventListener(t, later, true);
       indicator.dispose();
       indicator.element.remove();
@@ -147,6 +154,42 @@ const FLOOR = ['.olv-navbar', '.olv-lasso-toast.olv-visible', '.olv-touch-hint.o
 
 /** Tool columns at the scene's side edge (the phone measure rail). */
 const SIDE = ['.olv-mkinds', '.olv-measure-actions'];
+
+/**
+ * Call `seat` whenever something the pill sits above may have moved: a FLOOR
+ * or SIDE element (or the host) resizes, any element's class or hidden flag
+ * changes or nodes are added (a toast shows, the sheet opens), or a
+ * transition or animation ends. Returns the disposer. Inert where the
+ * observers are missing.
+ */
+function watchPillFloor(host: HTMLElement, pill: HTMLElement, seat: () => void): () => void {
+  const doc = host.ownerDocument;
+  const body = doc?.body;
+  const RO = typeof ResizeObserver === 'function' ? ResizeObserver : null;
+  const MO = typeof MutationObserver === 'function' ? MutationObserver : null;
+  if (!doc || !body || !RO || !MO) return () => {};
+  const sized = new Set<Element>();
+  const ro = new RO(seat);
+  const track = (): void => {
+    const nodes = [host, ...Array.from(doc.querySelectorAll([...FLOOR, ...SIDE].map((x) => x.replace('.olv-visible', '')).join(',')))];
+    for (const n of nodes) if (!sized.has(n)) { sized.add(n); ro.observe(n); }
+    for (const n of sized) if (!n.isConnected) { sized.delete(n); ro.unobserve(n); }
+  };
+  track();
+  const mo = new MO((records) => {
+    if (records.every((r) => r.target === pill || pill.contains(r.target))) return;
+    if (records.some((r) => r.type === 'childList')) track();
+    seat();
+  });
+  mo.observe(body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'hidden'] });
+  const ends = ['transitionend', 'animationend'] as const;
+  for (const t of ends) doc.addEventListener(t, seat, true);
+  return () => {
+    mo.disconnect();
+    ro.disconnect();
+    for (const t of ends) doc.removeEventListener(t, seat, true);
+  };
+}
 
 function laidOut(n: HTMLElement | null): DOMRect | null {
   const r = n?.getBoundingClientRect();

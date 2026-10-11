@@ -32,7 +32,9 @@ const api = (page: Page, fn: string, arg?: unknown) => page.evaluate(([f, a]) =>
 async function shot(page: Page, name: string): Promise<void> {
   if (!SHOT_DIR) return;
   mkdirSync(SHOT_DIR, { recursive: true });
-  await page.screenshot({ path: `${SHOT_DIR}/${name}.png` });
+  // Kind buttons fade their active state; settle transitions so a capture
+  // never shows the previous kind mid-fade.
+  await page.screenshot({ path: `${SHOT_DIR}/${name}.png`, animations: 'disabled' });
 }
 
 /** No overlap between two visible boxes. */
@@ -116,10 +118,12 @@ test.describe('active-tool pill screenshots', () => {
         await shot(page, `distance-${tag}`);
         await clear(page, '.olv-ati', '.olv-navbar .olv-modes-triangle');
         await clear(page, '.olv-ati', '.olv-viewcube');
-        await api(page, 'setMeasureKind', 'box');
+        await page.locator('.olv-mkind', { hasText: 'Box' }).click();
         await expect(label(page)).toHaveText('Drawing box');
         await shot(page, `box-${tag}`);
-        await api(page, 'setMeasureKind', 'area');
+        await page.locator('.olv-mkind', { hasText: 'Area' }).click();
+        await expect(page.locator('.olv-mkind.olv-mkind-active')).toHaveCount(1);
+        await expect(page.locator('.olv-mkind.olv-mkind-active')).toContainText('Area');
         for (const p of [[0, 0], [1, 0], [1, 1]]) await api(page, 'placeMeasurementPoint', { x: p[0], y: p[1], z: 0 });
         await expect(page.locator('.olv-ati-finish')).toBeVisible();
         await shot(page, `area-finish-${tag}`);
