@@ -43,7 +43,7 @@ function bestOf(times: number, fn: () => void): number {
 }
 
 describe('stockpileAreaGrid gap filling', () => {
-  it('fills a 1000×1000 grid with a 36 % central void well under a second, exactly on a flat surface', () => {
+  it('fills a 1000×1000 grid with a 36 % central void in seconds, not minutes, exactly on a flat surface', () => {
     const n = 1000;
     const pts = holedSquare(n, 0.36);
     let r = run(n, pts);
@@ -56,7 +56,10 @@ describe('stockpileAreaGrid gap filling', () => {
     expect(r.excludedFraction).toBe(0);
     // Every neighbour is at z = 1, so every interpolated cell is exactly 1.
     expect(r.fillM3).toBeCloseTo(n * n, 6);
-    expect(ms).toBeLessThan(2000);
+    // The ring search this replaced took over 20 s at 800². 10 s keeps that
+    // regression caught with room for coverage instrumentation on a two-worker
+    // CI runner, which measured 2.6 s; the scaling test below is the tight guard.
+    expect(ms).toBeLessThan(10_000);
   }, 60_000);
 
   it('scales about linearly with the cell count (250² → 500²)', () => {
