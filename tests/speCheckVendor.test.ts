@@ -4,8 +4,8 @@
  * say. Ports test_spe_check.js (39 checks) and test_olv_preflight.mjs.
  *
  * Pins:
- *  - tests/fixtures/spe-check/spe_check.cjs is upstream spe_check.js (renamed .cjs so
- *    Node loads it as CommonJS in this "type": "module" package),
+ *  - tests/fixtures/spe-check/spe_check.js.txt is upstream spe_check.js, kept as
+ *    text (loaded here as CommonJS through node:vm) so it is data, not a module,
  *    SHA-256 53229a0e2682fb103097eaef028079a40b6fa1a5f0c78fbf1da2b0b3c4598b6b;
  *  - the vendored spe_check.mjs is that file with only the documented
  *    mechanical edits (ESM banner comment, no 'use strict', export statement);
@@ -14,7 +14,7 @@
 import { describe, it, expect } from 'vitest';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { runInNewContext } from 'node:vm';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as S from '../src/vendor/spe-check/spe_check.mjs';
@@ -30,9 +30,15 @@ import {
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const UPSTREAM_SHA256 = '53229a0e2682fb103097eaef028079a40b6fa1a5f0c78fbf1da2b0b3c4598b6b';
-const CJS_PATH = resolve(ROOT, 'tests/fixtures/spe-check/spe_check.cjs');
+const CJS_PATH = resolve(ROOT, 'tests/fixtures/spe-check/spe_check.js.txt');
 const ESM_PATH = resolve(ROOT, 'src/vendor/spe-check/spe_check.mjs');
-const C = createRequire(import.meta.url)(CJS_PATH) as typeof S;
+/** The upstream CommonJS build, evaluated with a fresh `module` object. */
+function loadCjs(): typeof S {
+  const mod = { exports: {} as unknown };
+  runInNewContext(readFileSync(CJS_PATH, 'utf8'), { module: mod, Math, Number, Array, ArrayBuffer, Float64Array, BigInt64Array, Object, Error, TypeError });
+  return mod.exports as typeof S;
+}
+const C = loadCjs();
 
 const I = (): number[][] => [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]];
 
