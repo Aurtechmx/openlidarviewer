@@ -87,10 +87,29 @@ export interface StaleChunkRecoveryOptions {
    * Ask the server whether a chunk URL still exists. Resolves 'missing' for a
    * 404 or 410 (a real deploy swept it away), 'present' when it is served, and
    * 'unreachable' when the request itself fails (a network blip). Default: a
-   * no-store HEAD request in a browser, none elsewhere. With no probe, or no URL
-   * in the error, the failure is treated as a stale deploy as before.
+   * no-store HEAD request in a browser, none elsewhere. Only a probe that
+   * reports 'missing' lets the page reload. With no probe, or no URL in the
+   * error, the failure is ambiguous and is reported through onAmbiguous.
    */
   probe?: ((url: string) => Promise<ChunkProbe>) | null;
+  /**
+   * Called when a chunk failed to load and nothing shows the deploy swept it
+   * away: the error names no URL, there is no probe, or the probe could not
+   * tell. The page is not reloaded, since that can discard unsaved work. Wire
+   * this to a surface offering Retry, and a reload only after saying what it
+   * would lose. If absent, importOrReload rejects with the original error.
+   */
+  onAmbiguous?: (message: string, actions: AmbiguousChunkActions) => void;
+}
+
+/** What the surface behind onAmbiguous can offer the user. */
+export interface AmbiguousChunkActions {
+  /** Run the failed import again. Resolves true when it loaded. */
+  retry(): Promise<boolean>;
+  /** Reload the page, through the same cooldown as an automatic reload. */
+  reload(): void;
+  /** How many times this failure has been reported without a successful load. */
+  attempt: number;
 }
 
 /** What a HEAD request for a failed chunk URL found. */
@@ -100,6 +119,15 @@ export type ChunkProbe = 'missing' | 'present' | 'unreachable';
 export const OFFLINE_CHUNK_MESSAGE =
   'You are offline, this part could not load. Try again when back online. ' +
   'To use every tool offline, run Make available offline when connected.';
+
+/** Shown when a lazy part of the app failed to load and the cause is unclear. */
+export const AMBIGUOUS_CHUNK_MESSAGE =
+  'This part of the app could not load. Try again; the page has not been reloaded.';
+
+/** Said before an explicit reload: what it would lose. */
+export const RELOAD_LOSS_MESSAGE =
+  'Reloading the page discards anything not saved: open scans, measurements, annotations, ' +
+  'class edits and results that are not in a saved session. Save your session first if you can.';
 
 /** The script URL a failed dynamic import names, if its message carries one. */
 export function chunkUrlFromError(err: unknown): string | null {
@@ -147,6 +175,37 @@ export function makeHeadProbe(
     } catch {
       return 'unreachable';
     }
+  };
+}
+
+export interface AmbiguousChunkDeps {
+  showToast(message: string, action?: { label: string; onClick: () => void }): void;
+  /** Resolves true when the user confirms. */
+  confirmReload(title: string, message: string): Promise<boolean>;
+}
+
+/**
+ * The surface behind onAmbiguous. The page is kept: the toast offers Retry,
+ * and a reload is offered only through a dialog that says what it would discard.
+ */
+export function makeAmbiguousChunkHandler(deps: AmbiguousChunkDeps) {
+  return (message: string, { attempt, retry, reload }: AmbiguousChunkActions): void => {
+    const askReload = async (): Promise<void> => {
+      if (await deps.confirmReload('Reload the page?', RELOAD_LOSS_MESSAGE)) reload();
+    };
+    if (attempt >= 2) {
+      deps.showToast(message, { label: 'Reload…', onClick: () => { void askReload(); } });
+      return;
+    }
+    deps.showToast(message, {
+      label: 'Retry',
+      onClick: () => {
+        void retry().then((ok) => {
+          if (ok) deps.showToast('Loaded.');
+          else void askReload();
+        });
+      },
+    });
   };
 }
 
@@ -253,6 +312,7 @@ export function installStaleChunkRecovery(
   const log = opts.log ?? ((reason: string) => console.warn('[staleChunkReload]', reason));
   const isOnline = opts.isOnline ?? (() => typeof navigator === 'undefined' || navigator.onLine !== false);
   const onOffline = opts.onOffline;
+  const onAmbiguous = opts.onAmbiguous;
   let probe: ((url: string) => Promise<ChunkProbe>) | null;
   if (opts.probe !== undefined) probe = opts.probe;
   else probe = typeof window !== 'undefined' && typeof fetch === 'function' ? makeHeadProbe(fetch, window.location.origin) : null;
@@ -288,10 +348,12 @@ export function installStaleChunkRecovery(
   }
 
   async function decide(err: unknown, url: string | null): Promise<'reloaded' | 'unrecoverable' | 'kept'> {
-    const found = url && probe ? await probe(url) : 'missing';
+    // Reload only on proof the chunk is gone. No URL or no probe proves nothing.
+    const found: ChunkProbe | 'unknown' = url && probe ? await probe(url) : 'unknown';
     if (found === 'missing') return attemptRecover(err);
     // The import rejects and its caller reports the failure.
-    log(`chunk load failed but the server ${found === 'present' ? 'still serves it' : 'is unreachable'}; not reloading`);
+    if (found === 'unknown') log('chunk load failed and the cause is unclear; not reloading');
+    else log(`chunk load failed but the server ${found === 'present' ? 'still serves it' : 'is unreachable'}; not reloading`);
     return 'kept';
   }
 
@@ -352,18 +414,10 @@ export function installStaleChunkRecovery(
       noteOffline();
       return;
     }
-    if (probe && chunkUrlFromError(payload)) {
-      // The import rejects as usual; the page reloads only if the probe finds
-      // the chunk gone from the server.
-      void recoverIfStale(payload);
-      return;
-    }
-    // We own recovery from here; stop Vite's default, which is to re-throw.
-    if (event && typeof event === 'object') {
-      const prevent = (event as { preventDefault?: unknown }).preventDefault;
-      if (typeof prevent === 'function') prevent.call(event);
-    }
-    attemptRecover(payload);
+    // The import rejects as usual; the page reloads only if the probe finds
+    // the chunk gone from the server. An ambiguous failure is reported by
+    // importOrReload, which holds the loader a retry needs.
+    void recoverIfStale(payload);
   }
 
   eventTarget?.addEventListener('vite:preloadError', onPreloadError);
@@ -373,6 +427,29 @@ export function installStaleChunkRecovery(
     if (disposed) return;
     disposed = true;
     eventTarget?.removeEventListener?.('vite:preloadError', onPreloadError);
+  }
+
+  let ambiguousAttempts = 0;
+  let ambiguousNoted = false;
+  /** Offer Retry through onAmbiguous; the caller still sees the rejection. */
+  function reportAmbiguous<T>(loader: () => Promise<T>): void {
+    if (!onAmbiguous || ambiguousNoted) return;
+    ambiguousNoted = true;
+    setTimeout(() => { ambiguousNoted = false; }, 2000);
+    ambiguousAttempts += 1;
+    onAmbiguous(AMBIGUOUS_CHUNK_MESSAGE, {
+      attempt: ambiguousAttempts,
+      reload: () => { attemptRecover(new Error('reload requested after a chunk load failure')); },
+      retry: async () => {
+        try {
+          await loader();
+          ambiguousAttempts = 0;
+          return true;
+        } catch {
+          return false;
+        }
+      },
+    });
   }
 
   async function importOrReload<T>(loader: () => Promise<T>): Promise<T> {
@@ -388,8 +465,11 @@ export function installStaleChunkRecovery(
         noteOffline();
         throw err;
       }
-      const outcome = probe && chunkUrlFromError(err) ? await recoverIfStale(err) : attemptRecover(err);
-      if (outcome === 'kept') throw err;
+      const outcome = await recoverIfStale(err);
+      if (outcome === 'kept') {
+        reportAmbiguous(loader);
+        throw err;
+      }
       if (outcome === 'unrecoverable' && !onUnrecoverable) {
         // No surface was wired — propagate so the caller can show the error.
         throw err;
