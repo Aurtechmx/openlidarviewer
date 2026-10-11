@@ -447,6 +447,16 @@ it holds and reads as partial coverage: "Truncated: N of M points read".
 Truncation is recorded for uncompressed LAS only; a truncated LAZ is not marked partial. When the horizontal unit is
 unknown, measurement rows, the measure hint, the profile chart, summary and PDF,
 and the Profile Workbench state the unit is unverified.
+A projected EPSG code that arrives without a unit (no GeoTIFF unit key, a WKT
+with no UNIT, or an EPT `srs` with codes only) takes its unit from the curated
+CRS registry or a list of metre families checked against the EPSG dataset
+(UTM on WGS 84, NAD83, NAD83(2011), NAD83(CSRS), NAD27 and ETRS89; GDA94 and
+GDA2020 MGA; ETRS89 LAEA and LCC Europe; SWEREF99; DHDN Gauss-Kruger; MGI
+Austria; Web Mercator; British National Grid; RD New; Lambert-93; NZTM); any
+other code is treated as unknown, not as metres. A vertical EPSG code fixes the height unit when no
+vertical unit is declared. A declared vertical unit wins over the code's own
+(NAVD88 with US survey feet reads as NAVD88 height in ftUS, as in GDAL), and a
+declared vertical unit code the app cannot read leaves the height unit unknown.
 
 ## Exports carry the geographic refusal, not the endpoint grade
 

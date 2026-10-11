@@ -145,6 +145,32 @@ export function knownVerticalCrs(epsg: number | undefined): KnownVerticalCrs | u
   return epsg === undefined ? undefined : KNOWN_VERTICAL_CRS[epsg];
 }
 
+/**
+ * Codes in {@link KNOWN_VERTICAL_CRS} that share one datum and axis direction
+ * and differ only in axis unit, per the EPSG dataset.
+ */
+const SAME_DATUM_VARIANTS: readonly (readonly number[])[] = [
+  [5703, 6360, 8228], // NAVD88 height: m, ftUS, ft
+  [6357, 6358], // NAVD88 depth: m, ftUS
+  [7968, 5702], // NGVD29 height: m, ftUS
+  [5714, 8050, 8052], // MSL height: m, ft, ftUS
+  [5715, 8051, 8053], // MSL depth: m, ft, ftUS
+];
+
+/**
+ * The code on the same datum and axis as `epsg` whose unit is
+ * `metresPerUnit`, or undefined when the table has no such variant. 5703
+ * (NAVD88, metres) with a US survey foot unit gives 6360.
+ */
+export function sameDatumVariantInUnit(epsg: number | undefined, metresPerUnit: number): number | undefined {
+  if (epsg === undefined) return undefined;
+  const group = SAME_DATUM_VARIANTS.find((g) => g.includes(epsg)) ?? [epsg];
+  return group.find((c) => {
+    const k = KNOWN_VERTICAL_CRS[c];
+    return k !== undefined && Math.abs(k.metresPerUnit - metresPerUnit) < 1e-12;
+  });
+}
+
 /** Orthometric (height-above-datum) vertical CRS codes. */
 const ORTHOMETRIC_EPSG: ReadonlySet<number> = new Set(
   Object.entries(KNOWN_VERTICAL_CRS).filter(([, v]) => v.axis === 'height').map(([k]) => Number(k)),

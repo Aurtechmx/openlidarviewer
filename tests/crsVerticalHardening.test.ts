@@ -112,10 +112,48 @@ describe('crsFromGeoTiff — vertical key', () => {
     expect(crs.verticalUnitToMetres).toBeCloseTo(1200 / 3937, 12);
   });
 
-  it('leaves the vertical unit undefined when no 4099 key is present', () => {
+  it('takes the vertical unit from the vertical code when no 4099 key is present', () => {
     const crs = crsFromGeoTiff(geoKeyBytes([[1024, 1], [3072, 26911], [4096, 5703]]), null, null);
+    expect(crs.verticalLinearUnit).toBe('metre');
+    expect(crs.verticalUnitToMetres).toBe(1);
+  });
+
+  it('leaves the vertical unit undefined with neither 4099 nor a recognised vertical code', () => {
+    const crs = crsFromGeoTiff(geoKeyBytes([[1024, 1], [3072, 26911]]), null, null);
     expect(crs.verticalLinearUnit).toBeUndefined();
     expect(crs.verticalUnitToMetres).toBeUndefined();
+  });
+
+  it('5703 + 4099 = 9003 is NAVD88 in US survey feet, as GDAL reads it', () => {
+    const crs = crsFromGeoTiff(geoKeyBytes([[1024, 1], [3072, 26911], [4096, 5703], [4099, 9003]]), null, null);
+    expect(crs.verticalEpsg).toBe(5703);
+    expect(crs.verticalDatum).toBe('NAVD88 height (ftUS)');
+    expect(crs.verticalLinearUnit).toBe('us-survey-foot');
+    expect(crs.verticalUnitToMetres).toBeCloseTo(1200 / 3937, 12);
+    expect(crs.verticalUnitConflict).toBeUndefined();
+    expect(crs.verticalUnitNote).toMatch(/EPSG:5703/);
+  });
+
+  it('5703 + 4099 = 9002 is NAVD88 in international feet', () => {
+    const crs = crsFromGeoTiff(geoKeyBytes([[1024, 1], [3072, 26911], [4096, 5703], [4099, 9002]]), null, null);
+    expect(crs.verticalDatum).toContain('NAVD88');
+    expect(crs.verticalLinearUnit).toBe('foot');
+    expect(crs.verticalUnitToMetres).toBe(0.3048);
+  });
+
+  it('6360 + 4099 = 9001: the declared metre wins and the override is noted', () => {
+    const crs = crsFromGeoTiff(geoKeyBytes([[1024, 1], [3072, 26911], [4096, 6360], [4099, 9001]]), null, null);
+    expect(crs.verticalLinearUnit).toBe('metre');
+    expect(crs.verticalUnitToMetres).toBe(1);
+    expect(crs.verticalDatum).toBe('NAVD88');
+    expect(crs.verticalUnitNote).toMatch(/EPSG:6360/);
+  });
+
+  it('a 4099 that is not a length unit we can read leaves the height unit unknown', () => {
+    const crs = crsFromGeoTiff(geoKeyBytes([[1024, 1], [3072, 26911], [4096, 5703], [4099, 9095]]), null, null);
+    expect(crs.verticalLinearUnit).toBe('unknown');
+    expect(Number.isFinite(crs.verticalUnitToMetres)).toBe(false);
+    expect(crs.verticalUnitConflict).toBeDefined();
   });
 });
 
