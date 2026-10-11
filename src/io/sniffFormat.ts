@@ -82,6 +82,23 @@ export function isZUpFormat(format: SourceFormat): boolean {
 }
 
 /**
+ * The up-axis a lon/lat placement may rely on. A resolved axis wins. When
+ * detection left it undetermined, LAS/LAZ and the COPC/EPT streams built on
+ * them are still z-up by specification, so the axis is settled by the format.
+ * Formats that are z-up only by convention stay undetermined.
+ */
+export function sourceUpAxis(
+  resolved: 'z' | 'y' | 'unknown',
+  format: SourceFormat | undefined,
+  streaming: boolean,
+): 'z' | 'y' | 'unknown' {
+  if (resolved !== 'unknown') return resolved;
+  if (format === 'las' || format === 'laz') return 'z';
+  if (format === undefined && streaming) return 'z';
+  return 'unknown';
+}
+
+/**
  * The vertical-axis hint scan-shape detection should run with, given the
  * source formats feeding the analysis buffer. LAS/LAZ (and the COPC/EPT
  * streams built on them) are z-up BY SPEC, so detection has nothing to decide

@@ -25,6 +25,7 @@ import { PointCloud } from '../src/model/PointCloud';
 import { encodeExtendedClassificationFlags } from '../src/lasSemantics';
 import type { StockpileBandInputs } from '../src/render/measure/stockpileBandInputs';
 import type { Measurement, Vec3, VolumeRecord } from '../src/render/measure/types';
+import { IDENTITY_LONLAT } from './helpers/geoJsonLonLat';
 
 const UP: Vec3 = [0, 0, 1];
 const RECT: Vec3[] = [[0, 0, 0], [20, 0, 0], [20, 10, 0], [0, 10, 0]];
@@ -58,7 +59,7 @@ function lassoOf(positions: Float32Array, options: StockpileBandInputs['options'
 }
 
 const ctx = {
-  toOutput: (p: readonly number[]) => [p[0], p[1], p[2]] as [number, number, number],
+  toOutput: (p: readonly number[]) => [p[0], p[1], p[2]] as [number, number, number], lonLat: IDENTITY_LONLAT,
   up: UP,
   unitToMetres: 1,
   verticalUnitToMetres: 1,

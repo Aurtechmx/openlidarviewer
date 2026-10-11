@@ -13,11 +13,12 @@ import {
   type MeasurementExportContext,
 } from '../src/export/measurementExport';
 import type { Measurement, Vec3 } from '../src/render/measure/types';
+import { IDENTITY_LONLAT } from './helpers/geoJsonLonLat';
 
 const UP: Vec3 = [0, 0, 1];
 /** Identity output frame, metric, projected with a CRS name. */
 const CTX: MeasurementExportContext = {
-  toOutput: (p) => [p[0], p[1], p[2]],
+  toOutput: (p) => [p[0], p[1], p[2]], lonLat: IDENTITY_LONLAT,
   up: UP,
   unitToMetres: 1,
   crsName: 'EPSG:32612',
@@ -208,26 +209,11 @@ describe('measurementsToGeoJSON', () => {
     expect(fc.features[0].properties).toMatchObject({ kind: 'distance', length_m: 5, crs: 'EPSG:32612' });
   });
 
-  it('projected export carries a named-CRS member; geographic does not', () => {
-    const projected = JSON.parse(measurementsToGeoJSON([DISTANCE], CTX));
-    // The member carries a resolvable IDENTIFIER, not the label: emitting the
-    // raw name left a reader unable to resolve it and silently defaulting to
-    // WGS84. The per-feature `crs` property above keeps the human label.
-    expect(projected.crs).toMatchObject({
-      type: 'name',
-      properties: { name: 'urn:ogc:def:crs:EPSG::32612' },
-    });
-    const geo = JSON.parse(
-      measurementsToGeoJSON([DISTANCE], { ...CTX, geographic: true }),
-    );
-    expect(geo.crs).toBeUndefined();
-  });
-
   it('applies the toOutput transform to coordinates', () => {
     const fc = JSON.parse(
-      measurementsToGeoJSON([DISTANCE], { ...CTX, toOutput: (p) => [p[0] + 100, p[1] + 200, p[2]] }),
+      measurementsToGeoJSON([DISTANCE], { ...CTX, toOutput: (p) => [p[0] + 10, p[1] + 20, p[2]] }),
     );
-    expect(fc.features[0].geometry.coordinates[0]).toEqual([100, 200, 0]);
+    expect(fc.features[0].geometry.coordinates[0]).toEqual([10, 20, 0]);
   });
 
   it('drops measurements with too few vertices', () => {
@@ -302,47 +288,6 @@ describe('measurementsToCsv — grid-canonical lasso volumes', () => {
   });
 });
 
-/**
- * The named-CRS member must carry an identifier a reader can resolve, not a
- * label a human can read. `ctx.crsName` in production is the display string the
- * CRS parsers build — "NAD83 / UTM zone 13N (EPSG:26913)" — and emitting that
- * as the crs name left QGIS/OGR unable to resolve it, falling back to RFC 7946's
- * default WGS84: easting 500000 read as longitude 500000. The earlier test
- * injected an idealized 'EPSG:32612', which is why this survived.
- */
-describe('measurementsToGeoJSON — a resolvable CRS identifier', () => {
-  const ctx = (crsName?: string) => ({
-    toOutput: (p: readonly number[]) => [p[0], p[1], p[2]] as [number, number, number],
-    up: [0, 0, 1] as [number, number, number],
-    unitToMetres: 1,
-    crsName,
-    geographic: false,
-  });
-  const m = [{ id: 'm1', kind: 'distance', name: '', points: [[0, 0, 0], [3, 0, 0]] }] as never;
-
-  it('emits an OGC URN for the display string the parsers actually build', () => {
-    const fc = JSON.parse(measurementsToGeoJSON(m, ctx('NAD83 / UTM zone 13N (EPSG:26913)') as never));
-    expect(fc.crs.properties.name).toBe('urn:ogc:def:crs:EPSG::26913');
-  });
-
-  it('emits an OGC URN for a bare authority string too', () => {
-    const fc = JSON.parse(measurementsToGeoJSON(m, ctx('EPSG:32612') as never));
-    expect(fc.crs.properties.name).toBe('urn:ogc:def:crs:EPSG::32612');
-  });
-
-  it('omits the crs member when no code can be recovered', () => {
-    // Naming an unresolvable CRS is worse than naming none: a reader silently
-    // falls back to WGS84 and places projected coordinates in the ocean.
-    const fc = JSON.parse(measurementsToGeoJSON(m, ctx('Some unnamed local grid') as never));
-    expect(fc.crs).toBeUndefined();
-  });
-
-  it('still omits the crs member for geographic output', () => {
-    const fc = JSON.parse(measurementsToGeoJSON(m, { ...ctx('EPSG:4326'), geographic: true } as never));
-    expect(fc.crs).toBeUndefined();
-  });
-});
-
 // ── M1: unknown scale must not silently claim metres ─────────────────────────
 // A local / unknown-unit scan has an inert unitToMetres of 1, so the `_m`
 // columns are nominal render units, not confirmed metres. The evidence note on
@@ -405,7 +350,7 @@ describe('unverified units caveat (M1)', () => {
 // stamped with a claim that never evaluated a volume.
 describe('the evidence stamp names the claim behind each figure', () => {
   const ctx = {
-    toOutput: (p: readonly number[]) => [p[0], p[1], p[2]] as [number, number, number],
+    toOutput: (p: readonly number[]) => [p[0], p[1], p[2]] as [number, number, number], lonLat: IDENTITY_LONLAT,
     up: [0, 0, 1] as [number, number, number],
     unitToMetres: 1,
     verticalUnitToMetres: 1,
@@ -487,7 +432,7 @@ describe('the evidence stamp names the claim behind each figure', () => {
 // nothing in it makes no claim, so the member is absent rather than blank.
 describe('an empty collection carries no verdict', () => {
   const emptyCtx = (unitsVerified: boolean): never => ({
-    toOutput: (p: readonly number[]) => [p[0], p[1], p[2]] as [number, number, number],
+    toOutput: (p: readonly number[]) => [p[0], p[1], p[2]] as [number, number, number], lonLat: IDENTITY_LONLAT,
     up: [0, 0, 1] as [number, number, number],
     unitToMetres: 1, verticalUnitToMetres: 1,
     crsName: 'EPSG:26913', geographic: false, unitsVerified,
@@ -513,7 +458,7 @@ describe('an empty collection carries no verdict', () => {
 // under a different locale.
 describe('the claim stamp orders the same way everywhere', () => {
   const ctx = {
-    toOutput: (p: readonly number[]) => [p[0], p[1], p[2]] as [number, number, number],
+    toOutput: (p: readonly number[]) => [p[0], p[1], p[2]] as [number, number, number], lonLat: IDENTITY_LONLAT,
     up: [0, 0, 1] as [number, number, number],
     unitToMetres: 1, verticalUnitToMetres: 1,
     crsName: 'EPSG:26913', geographic: false, unitsVerified: true,

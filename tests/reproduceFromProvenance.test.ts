@@ -17,6 +17,7 @@ import type { TerrainPoint } from '../src/terrain/TerrainContracts';
 import type { Measurement, Vec3 } from '../src/render/measure/types';
 import { FLOW_PROJECTED_SCALE, FLOW_TEST_IDENTITY, flowDtmOf } from './helpers/flowFixtures';
 import { textOf, jsonOf } from './helpers/zipReader';
+import { IDENTITY_LONLAT } from './helpers/geoJsonLonLat';
 
 const AT = '2026-01-01T00:00:00.000Z';
 
@@ -24,7 +25,7 @@ describe('Measure distance', () => {
   it('recomputes the exported length from the recorded geometry and CRS', () => {
     const m: Measurement = { id: 'd', kind: 'distance', name: 'd', points: [[1, 2, 3], [4, 6, 15]] };
     const ctx = {
-      toOutput: (p: Vec3) => [p[0], p[1], p[2]] as [number, number, number],
+      toOutput: (p: Vec3) => [p[0], p[1], p[2]] as [number, number, number], lonLat: IDENTITY_LONLAT,
       up: [0, 0, 1] as Vec3, unitToMetres: 1, crsName: 'EPSG:32612',
       provenance: { generatedAt: AT, source: 'site', crsName: 'EPSG:32612', interpretation: sourceInterpretationOf('VERIFIED', 'full') },
     };

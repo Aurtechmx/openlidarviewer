@@ -56,6 +56,7 @@ import { FLOW_PROJECTED_SCALE, FLOW_TEST_IDENTITY, flowDtmOf } from './helpers/f
 import { wallAndGroundCloud } from './helpers/observatoryPlanningFixtures';
 import { DTM_CLAIMS, validatedDecision } from './helpers/exportDecisions';
 import { extractEntry, jsonOf, textOf } from './helpers/zipReader';
+import { IDENTITY_LONLAT } from './helpers/geoJsonLonLat';
 
 const SHA = createHash('sha256').update('source bytes').digest('hex');
 const CRS = { source: 'las-vlr', name: 'NAD83(2011) / UTM zone 15N', epsg: 6344, verticalEpsg: 5703 };
@@ -204,7 +205,7 @@ describe('measurement exports', () => {
 
   it('GeoJSON provenance records the source digest beside the CRS origin', () => {
     const fc = JSON.parse(measurementsToGeoJSON([dist], {
-      toOutput: (p) => [p[0], p[1], p[2]], up: [0, 0, 1], unitToMetres: 1, provenance,
+      toOutput: (p) => [p[0], p[1], p[2]], lonLat: IDENTITY_LONLAT, up: [0, 0, 1], unitToMetres: 1, provenance,
     } as Parameters<typeof measurementsToGeoJSON>[1]));
     expect(fc.provenance.sourceSha256).toBe(SHA);
     expect(fc.provenance.sourceSha256Note).toBeNull();
@@ -214,7 +215,7 @@ describe('measurement exports', () => {
   it('a streamed source is stated in the GeoJSON and KML', () => {
     const streamed = { ...provenance, digests: exportDigests({ sha256: null, note: STREAMED_SOURCE_NOTE }, CRS) };
     const fc = JSON.parse(measurementsToGeoJSON([dist], {
-      toOutput: (p) => [p[0], p[1], p[2]], up: [0, 0, 1], unitToMetres: 1, provenance: streamed,
+      toOutput: (p) => [p[0], p[1], p[2]], lonLat: IDENTITY_LONLAT, up: [0, 0, 1], unitToMetres: 1, provenance: streamed,
     } as Parameters<typeof measurementsToGeoJSON>[1]));
     expect(fc.provenance).toMatchObject({ sourceSha256: null, sourceSha256Note: STREAMED_SOURCE_NOTE });
     const kml = buildKml({
@@ -226,7 +227,7 @@ describe('measurement exports', () => {
 
   it('a caller that resolved nothing says so rather than leaving the field out', () => {
     const fc = JSON.parse(measurementsToGeoJSON([dist], {
-      toOutput: (p) => [p[0], p[1], p[2]], up: [0, 0, 1], unitToMetres: 1, provenance: { generatedAt: 't', source: 's', crsName: null },
+      toOutput: (p) => [p[0], p[1], p[2]], lonLat: IDENTITY_LONLAT, up: [0, 0, 1], unitToMetres: 1, provenance: { generatedAt: 't', source: 's', crsName: null },
     } as Parameters<typeof measurementsToGeoJSON>[1]));
     expect(fc.provenance).toMatchObject({ sourceSha256: null, sourceSha256Note: SOURCE_NOT_SUPPLIED_NOTE });
   });

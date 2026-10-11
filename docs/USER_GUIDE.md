@@ -262,11 +262,12 @@ A product that cannot be made yet says why on hover rather than failing when you
 
 #### Longitude and latitude exports
 
-The Site KML, the scan-area polygon, the WGS 84 contour GeoJSON and the accepted building-footprint GeoJSON write longitude and latitude. OLV applies no datum shift when it writes them, so each export checks the datum first.
+The Site KML, the scan-area polygon, the measurement GeoJSON, the WGS 84 contour GeoJSON and the accepted building-footprint GeoJSON write longitude and latitude. OLV applies no datum shift when it writes them, so each export checks the datum first.
 
 - A scan on NAD27, a geographic scan on a datum the viewer does not list, a scan with no EPSG code, or a projected scan whose definition names no datum, unless its EPSG code is on WGS 84, is refused. The export button shows the reason, such as "This scan is on NAD27", and points to PROJ, GDAL or PDAL with the NADCON or NTv2 grids for the transformation.
 - NAD83, ETRS89, RGF93, GDA94, GDA2020 and NZGD2000 scans export, geographic or projected. The KML description and the GeoJSON metadata name the datum and the size of the difference from WGS 84 (about 1 to 2 m for NAD83, about 1 m for ETRS89, RGF93 and NZGD2000, about 2 m for GDA94 and about 0.4 m for GDA2020) instead of calling the coordinates WGS 84.
 - A point with latitude outside -90 to 90, longitude outside -180 to 180, or a value that is not finite is refused. Longitudes are not wrapped.
+- The measurement GeoJSON follows RFC 7946: positions are WGS 84 longitude and latitude, placed through the same conversion as the Site KML, and the file has no `crs` member. The measured values in each feature's properties are the ones computed in the scan's own projected frame, the same figures as the CSV, and each feature's `crs` property names that frame. A height is written as the third value only when the scan declares a metric height above sea level (NAVD88, MSL, EGM2008 or EGM96 in metres), the rule the Site KML uses for absolute altitude; otherwise positions are 2D. The collection's `coordinate_note` states the datum caveat and which way the height went. A scan with a local or unknown coordinate system, a refused datum, or a Y-up frame cannot be exported as GeoJSON; the refusal says why and points to the CSV.
 - Reproject in Export and the batch converter refuse a move into or out of NAD27, because OLV has no NAD27 shift. They transform X and Y and leave Z unchanged.
 
 ### How to reproduce a result

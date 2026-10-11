@@ -18,6 +18,7 @@ import { runObservatoryOverCloud } from '../src/app/observatoryFromCloud';
 import { wallAndGroundCloud } from './helpers/observatoryPlanningFixtures';
 import { jsonOf, textOf } from './helpers/zipReader';
 import type { Viewer } from '../src/render/Viewer';
+import { IDENTITY_LONLAT } from './helpers/geoJsonLonLat';
 
 const fixture = (name: string): ArrayBuffer => {
   const b = readFileSync(new URL(`./fixtures/${name}`, import.meta.url));
@@ -39,7 +40,7 @@ function geoFor(resolved: ResolvedCrs | null) {
   } as unknown as ReportExportDeps);
 }
 
-const ctx = { toOutput: (p: readonly [number, number, number]) => [p[0], p[1], p[2]] as [number, number, number], up: [0, 0, 1] as [number, number, number], unitToMetres: 1 };
+const ctx = { toOutput: (p: readonly [number, number, number]) => [p[0], p[1], p[2]] as [number, number, number], lonLat: IDENTITY_LONLAT, up: [0, 0, 1] as [number, number, number], unitToMetres: 1 };
 const dist = { id: 'd', kind: 'distance' as const, name: 'd', points: [[0, 0, 0], [3, 4, 0]] as [number, number, number][] };
 
 function exportsFor(resolved: ResolvedCrs | null) {

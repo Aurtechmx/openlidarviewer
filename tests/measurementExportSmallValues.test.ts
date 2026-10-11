@@ -15,9 +15,10 @@ import {
 import { measurementsToFindings } from '../src/export/measurementReport';
 import { buildKml } from '../src/export/kmlExport';
 import type { Measurement, Vec3 } from '../src/render/measure/types';
+import { IDENTITY_LONLAT } from './helpers/geoJsonLonLat';
 
 const UP: Vec3 = [0, 0, 1];
-const CTX = { toOutput: (p: Vec3) => p, up: UP, unitToMetres: 1, crsName: 'EPSG:32612' } as MeasurementExportContext;
+const CTX = { toOutput: (p: Vec3) => p, lonLat: IDENTITY_LONLAT, up: UP, unitToMetres: 1, crsName: 'EPSG:32612' } as MeasurementExportContext;
 const mk = (kind: Measurement['kind'], points: Vec3[], extra: Partial<Measurement> = {}): Measurement =>
   ({ id: kind, kind, name: kind, points, ...extra });
 

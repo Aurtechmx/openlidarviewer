@@ -25,6 +25,7 @@ import {
 } from '../src/export/measurementReport';
 import { buildKml, type KmlExportInput } from '../src/export/kmlExport';
 import { verifyReportManifest, type ReportManifest } from '../src/render/measure/reportManifest';
+import { IDENTITY_LONLAT } from './helpers/geoJsonLonLat';
 
 const UP: Vec3 = [0, 0, 1];
 
@@ -70,7 +71,7 @@ const VERTICAL_KEYS = new Set(['vertical_m', 'rise_m', 'height_m', 'vertical_sou
 const IDENTITY_COLS = new Set(['id', 'name', 'kind', 'source', 'vertices', 'evidence', 'grid_authority']);
 
 const GEO_CTX: MeasurementExportContext = {
-  toOutput: (p) => [p[0], p[1], p[2]],
+  toOutput: (p) => [p[0], p[1], p[2]], lonLat: IDENTITY_LONLAT,
   up: UP,
   unitToMetres: 1,
   verticalUnitToMetres: 1,

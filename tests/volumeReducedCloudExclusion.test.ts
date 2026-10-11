@@ -24,6 +24,7 @@ import { buildMeasurementRows } from '../src/report/ReportMeasurementSection';
 import { parseSession, serializeSession } from '../src/io/session';
 import { encodeExtendedClassificationFlags } from '../src/lasSemantics';
 import type { Measurement, Vec3 } from '../src/render/measure/types';
+import { IDENTITY_LONLAT } from './helpers/geoJsonLonLat';
 
 beforeAll(() => {
   installFakeDom({ ns: true });
@@ -218,7 +219,7 @@ describe('the caveat reaches every surface', () => {
   });
   const reduced = mk('v', voxelRecord);
   const plain = mk('p', polygonRecord([whole(g) as never]));
-  const ctx = { toOutput: (p: readonly [number, number, number]) => [p[0], p[1], p[2]] as [number, number, number], up: UP, unitToMetres: 1, crsName: 'EPSG:32612' };
+  const ctx = { toOutput: (p: readonly [number, number, number]) => [p[0], p[1], p[2]] as [number, number, number], lonLat: IDENTITY_LONLAT, up: UP, unitToMetres: 1, crsName: 'EPSG:32612' };
 
   it('the caveat text names the sample, the counts and the missing filter', () => {
     const text = reducedSampleCaveat(voxelRecord.withheld) ?? '';

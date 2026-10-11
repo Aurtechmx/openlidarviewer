@@ -29,7 +29,6 @@ import {
 /** The refusal rule and wording, for the report and KML serializers. */
 export { GEOGRAPHIC_NOT_AVAILABLE, geographicRefusesKind };
 export { reducedSampleCaveat } from '../render/measure/types';
-import { crsUrn } from './crsIdentifier';
 import { lightProvenance, type LightProvenanceInput } from './lightProvenance';
 import {
   distance,
@@ -69,8 +68,14 @@ export interface MeasurementExportContext {
    * this so the export matches the on-screen headline, which already does.
    */
   readonly verticalUnitToMetres?: number;
-  /** CRS label for the GeoJSON crs hint + per-feature provenance. */
+  /** Source CRS label, written as the per-feature `crs` property (the file's frame is always WGS 84). */
   readonly crsName?: string;
+  /**
+   * The WGS 84 placement the GeoJSON geometry is written in. RFC 7946 fixes
+   * GeoJSON coordinates to WGS 84 longitude/latitude, so without it the
+   * GeoJSON writer refuses ({@link GeoJsonLonLatError}); the CSV ignores it.
+   */
+  readonly lonLat?: GeoJsonLonLat;
   /**
    * True when the scan's frame is geographic (degrees), so `toOutput` yields
    * WGS84 lon/lat (the RFC 7946 default frame). The live Measure tool refuses
@@ -92,6 +97,47 @@ export interface MeasurementExportContext {
    * (RFC 7946 section 6.1). The CSV has no metadata slot and does not carry it.
    */
   readonly provenance?: LightProvenanceInput;
+}
+
+/**
+ * How the GeoJSON geometry reaches WGS 84. `map` takes a point in the OUTPUT
+ * frame (what `toOutput` returns) and gives `[lon, lat, sourceZ]`; only the
+ * first two are converted. `withAltitude` is true only when the vertical
+ * reference is proven (the KML `absolute` rule), and `altitudeNote` says which
+ * way it went. `datumCaveat` is the mapper's note when the source datum is
+ * treated as WGS 84 without a transformation (NAD83 and its kin).
+ */
+export interface GeoJsonLonLat {
+  readonly map: (p: readonly [number, number, number]) => [number, number, number];
+  readonly withAltitude: boolean;
+  readonly altitudeNote: string;
+  readonly datumCaveat: string | null;
+}
+
+/** The refusal when a GeoJSON cannot be placed in WGS 84 longitude/latitude. */
+export const GEOJSON_NEEDS_LONLAT =
+  'GeoJSON coordinates must be WGS 84 longitude/latitude (RFC 7946), and this scan cannot be placed '
+  + 'in longitude/latitude. Export CSV instead for the measured values.';
+
+/** Raised when a GeoJSON geometry cannot be written as a real WGS 84 position. */
+export class GeoJsonLonLatError extends Error {
+  override readonly name = 'GeoJsonLonLatError';
+}
+
+/** A finite number to at most 8 decimals (about 1 mm of latitude). */
+function deg(n: number): number {
+  return Math.round(n * 1e8) / 1e8;
+}
+
+/** One RFC 7946 position, refusing anything that is not a real lon/lat. */
+function lonLatPosition(lonLat: GeoJsonLonLat, p: readonly [number, number, number]): number[] {
+  const [lon, lat, z] = lonLat.map(p);
+  if (!Number.isFinite(lon) || !Number.isFinite(lat) || lon < -180 || lon > 180 || lat < -90 || lat > 90) {
+    throw new GeoJsonLonLatError(`A point maps to (${lon}, ${lat}), which is not a WGS 84 longitude/latitude.`);
+  }
+  if (!lonLat.withAltitude) return [deg(lon), deg(lat)];
+  if (!Number.isFinite(z)) throw new GeoJsonLonLatError(`A point has a non-finite height (${z}).`);
+  return [deg(lon), deg(lat), Math.round(z * 1e4) / 1e4];
 }
 
 /** A finite number rounded to `d` decimals, or null when not finite. */
@@ -301,8 +347,9 @@ export function geographicFilter(
 function geometryFor(
   m: Measurement,
   ctx: MeasurementExportContext,
+  lonLat: GeoJsonLonLat,
 ): { type: 'LineString' | 'Polygon' | 'Point'; coordinates: unknown } | null {
-  const t = (p: Vec3): [number, number, number] => ctx.toOutput(p, m);
+  const t = (p: Vec3): number[] => lonLatPosition(lonLat, ctx.toOutput(p, m));
   switch (m.kind) {
     case 'distance':
     case 'polyline':
@@ -337,17 +384,26 @@ function areaNoteProp(m: Measurement, ctx: MeasurementExportContext): { area_wit
   return note ? { area_withheld: note } : {};
 }
 
-/** Serialise measurements to a GeoJSON FeatureCollection (pretty-printed). */
+/**
+ * Serialise measurements to an RFC 7946 GeoJSON FeatureCollection
+ * (pretty-printed): geometry in WGS 84 longitude/latitude, no `crs` member.
+ * The measured values in the properties are the ones computed in the source
+ * projected/metric frame, exactly as the CSV carries them; nothing is
+ * recomputed from the degrees. Throws {@link GeoJsonLonLatError} when
+ * `ctx.lonLat` is absent or a point cannot be placed.
+ */
 export function measurementsToGeoJSON(
   measurements: readonly Measurement[],
   ctx: MeasurementExportContext,
 ): string {
+  const lonLat = ctx.lonLat;
+  if (!lonLat) throw new GeoJsonLonLatError(GEOJSON_NEEDS_LONLAT);
   // Same rule as the CSV: with no resolved scale the property names say source
   // units rather than asserting metres to a parser.
   const unitsKnown = ctx.unitsVerified ?? true;
   const features = measurements
     .map((m) => {
-      const geometry = geometryFor(m, ctx);
+      const geometry = geometryFor(m, ctx, lonLat);
       if (!geometry) return null;
       // A figure the geographic frame refuses stays as its key with a null
       // value, and the feature says why, so a reader sees it was withheld
@@ -378,20 +434,14 @@ export function measurementsToGeoJSON(
     })
     .filter((f): f is NonNullable<typeof f> => f !== null);
 
-  const fc: Record<string, unknown> = { type: 'FeatureCollection', features };
-  // Pre-RFC-7946 named-CRS member — non-standard but QGIS and others read it, so
-  // a PROJECTED export lands in the right place. Geographic output is the RFC
-  // default (WGS84) and carries no crs member.
-  //
-  // The name must be an IDENTIFIER, not the display label `crsName` carries
-  // (`NAD83 / UTM zone 13N (EPSG:26913)`): a reader that can't resolve it falls
-  // back to WGS84 and reads easting 500000 as longitude 500000. When no code can
-  // be recovered the member is omitted — an absent CRS makes a reader ask, a
-  // wrong one makes it place the geometry in the ocean.
-  const urn = ctx.geographic ? null : crsUrn(ctx.crsName);
-  if (urn) {
-    fc.crs = { type: 'name', properties: { name: urn } };
-  }
+  // RFC 7946: WGS 84 lon/lat and no `crs` member. The source CRS stays as
+  // each feature's `crs` property; how the degrees were reached, and whether
+  // a height was written, is stated once here.
+  const fc: Record<string, unknown> = {
+    type: 'FeatureCollection',
+    features,
+    coordinate_note: [lonLat.datumCaveat, lonLat.altitudeNote].filter(Boolean).join(' '),
+  };
   // Route the export through the ONE evidence gate (PR6): measurements sit below
   // their required evidence level, so the file carries the exploratory verdict
   // rather than leaving with no gate stamp at all. RFC 7946 permits foreign

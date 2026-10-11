@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { showWorkspaceMode } from './helpers';
 import { dropBytes, geomFixtures } from './geomFixtures';
+import { utm13LonLat } from '../helpers/geoJsonLonLat';
 
 /**
  * Measurement exports with two scans open place every measurement through the
@@ -77,6 +78,19 @@ const WORLD = {
   bDist: [[500101, 4000001, 50], [500104, 4000005, 50]],
 };
 
+// RFC 7946 writes WGS 84 lon/lat; the fixtures declare UTM 13N and no vertical datum, so 2D.
+const LONLAT = {
+  aDist: WORLD.aDist.map(utm13LonLat),
+  aArea: WORLD.aArea.map(utm13LonLat),
+  bDist: WORLD.bDist.map(utm13LonLat),
+};
+// A scan that declares NAVD88 in metres has a proven vertical datum, so its
+// positions carry the height as the third coordinate.
+const LONLAT_H = {
+  aDist: WORLD.aDist.map((p) => [...utm13LonLat(p), p[2]]),
+  bDist: WORLD.bDist.map((p) => [...utm13LonLat(p), p[2]]),
+};
+
 interface Feature { geometry: { type: string; coordinates: number[][] | number[][][] }; properties: Record<string, unknown> }
 
 function byName(text: string): Record<string, Feature> {
@@ -127,9 +141,9 @@ for (const order of ['A then B', 'B then A'] as const) {
     // Names follow placement order: the first scan's distance is "Distance 1".
     const aDist = first.key === 'a' ? 'Distance 1' : 'Distance 2';
     const bDist = first.key === 'a' ? 'Distance 2' : 'Distance 1';
-    expect(feats[aDist].geometry.coordinates, 'distance on A').toEqual(WORLD.aDist);
-    expect(feats[bDist].geometry.coordinates, 'distance on B').toEqual(WORLD.bDist);
-    expect((feats['Area 1'].geometry.coordinates as number[][][])[0], 'area on A').toEqual(WORLD.aArea);
+    expect(feats[aDist].geometry.coordinates, 'distance on A').toEqual(LONLAT.aDist);
+    expect(feats[bDist].geometry.coordinates, 'distance on B').toEqual(LONLAT.bDist);
+    expect((feats['Area 1'].geometry.coordinates as number[][][])[0], 'area on A').toEqual(LONLAT.aArea);
     expect(feats[aDist].properties.source).toBe('geom-a');
     expect(feats[bDist].properties.source).toBe('geom-b');
     expect(feats['Area 1'].properties.source).toBe('geom-a');
@@ -155,7 +169,7 @@ test('a one-scan export names that scan and keeps its coordinates', async ({ pag
   const geo = await exportFile(page, 'GeoJSON');
   expect(geo.name).toBe('geom-a-measurements.geojson');
   const f = Object.values(byName(geo.text))[0];
-  expect(f.geometry.coordinates).toEqual(WORLD.aDist);
+  expect(f.geometry.coordinates).toEqual(LONLAT.aDist);
   expect(f.properties.source).toBe('geom-a');
   const csv = await exportFile(page, 'CSV');
   expect(csv.name).toBe('geom-a-measurements.csv');
@@ -187,7 +201,8 @@ for (const vertical of [false, true]) {
       await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
       const geo = await exportFile(page, 'GeoJSON');
       const f = Object.values(byName(geo.text))[0];
-      expect(f.geometry.coordinates).toEqual(aFirst ? WORLD.aDist : WORLD.bDist);
+      const want = vertical ? LONLAT_H : LONLAT;
+      expect(f.geometry.coordinates).toEqual(aFirst ? want.aDist : want.bDist);
       expect(f.properties.source).toBe(aFirst ? 'geom-a' : 'geom-b');
       expect(geo.name).toBe(aFirst ? 'geom-a-measurements.geojson' : 'geom-b-measurements.geojson');
     });
@@ -230,6 +245,6 @@ test('a session saved and reopened with two scans keeps each point on the scan i
 
   const geo = await exportFile(page, 'GeoJSON');
   const f = Object.values(byName(geo.text))[0];
-  expect(f.geometry.coordinates).toEqual(WORLD.aDist);
+  expect(f.geometry.coordinates).toEqual(LONLAT.aDist);
   expect(f.properties.source).toBe('geom-a');
 });
