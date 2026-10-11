@@ -52,7 +52,6 @@ describe('Scan Fitness vertical accuracy', () => {
     const f = buildScanFitness(fitness({ verticalRmse: null, verticalScaleResolved: false }));
     const acc = f.dimensions.find((d) => d.key === 'accuracy')!;
     expect(acc.summary).toBe('Can’t be graded: the vertical unit is not resolved, so the hold-out error is in source Z units.');
-    expect(f.headlineAccuracy).toBeNull();
     expect(f.tierBadge).toBeNull();
   });
 });

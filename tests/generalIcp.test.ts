@@ -93,3 +93,41 @@ describe('generalIcp refuses rather than reporting a wrong alignment', () => {
     expect(r.inlierFraction).toBeLessThan(0.5);
   });
 });
+
+describe('generalIcp reports the trimmed residual at the returned pose', () => {
+  /** Brute-force trimmed nearest-neighbour RMS of `src` under (R, t) against `dst`. */
+  function trimmedNnRms(src: Vec3[], dst: Vec3[], R: Mat3, t: Vec3, radius: number, frac: number): number {
+    const d2: number[] = [];
+    for (const p of src) {
+      const q = apply(R, t, p);
+      let best = Infinity;
+      for (const r of dst) {
+        const d = (r[0] - q[0]) ** 2 + (r[1] - q[1]) ** 2 + (r[2] - q[2]) ** 2;
+        if (d <= radius * radius && d < best) best = d;
+      }
+      if (best < Infinity) d2.push(best);
+    }
+    d2.sort((a, b) => a - b);
+    const keep = Math.max(3, Math.floor(d2.length * (1 - frac)));
+    return Math.sqrt(d2.slice(0, keep).reduce((s, v) => s + v, 0) / keep);
+  }
+
+  it('rmse equals the trimmed NN RMS re-measured at the final R, t (not the last solve residual)', () => {
+    const src = randomCloud(120, 7);
+    const R = rotAxis(0.3, 0.2, 1, 0.05);
+    const t: Vec3 = [1.2, -0.8, 0.6];
+    const dst = src.map((p) => apply(R, t, p));
+    // One iteration: the solve's correspondences come from the identity pose, so
+    // its own residual is not the residual at the pose it returns.
+    const res = generalIcp(src, dst, { searchRadius: 6, trimFraction: 0.2, maxIterations: 1 });
+    expect(res.trimFraction).toBe(0.2);
+    const want = trimmedNnRms(src, dst, res.R, res.t, 6, 0.2);
+    expect(res.rmse).toBeCloseTo(want, 9);
+  });
+
+  it('echoes the clamped trim fraction', () => {
+    const src = lattice(4);
+    expect(generalIcp(src, src, { searchRadius: 0.5, trimFraction: 0.95 }).trimFraction).toBe(0.9);
+    expect(generalIcp(src, src, { searchRadius: 0.5 }).trimFraction).toBe(0.2);
+  });
+});

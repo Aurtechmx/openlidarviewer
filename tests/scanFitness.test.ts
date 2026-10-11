@@ -39,8 +39,11 @@ describe('buildScanFitness — scorecard tones', () => {
     expect(f.overallTone).toBe<FitnessTone>('ready');
     expect(f.verdict).toMatch(/ready for terrain products/i);
     expect(f.tierBadge).toBe('≥ QL1 density reference');
-    expect(f.headlineAccuracy).toBe('±0.07 m vertical');
     expect(f.dimensions).toHaveLength(6);
+    // RMSE is not a symmetric bound: no "±" headline is produced anywhere.
+    expect(f).not.toHaveProperty('headlineAccuracy');
+    expect(JSON.stringify(f)).not.toMatch(/±\s*\d/);
+    expect(f.dimensions.find((d) => d.key === 'accuracy')!.summary).toMatch(/^RMSE 0\.07 m \(internal hold-out\)/);
   });
 
   it('sparse coverage → coverage reviewed and named in the verdict', () => {
@@ -64,7 +67,6 @@ describe('buildScanFitness — scorecard tones', () => {
     expect(tone(buildScanFitness(base({ verticalRmse: 0.5 })), 'accuracy')).toBe('review');
     const none = buildScanFitness(base({ verticalRmse: null }));
     expect(tone(none, 'accuracy')).toBe('review');
-    expect(none.headlineAccuracy).toBeNull();
   });
 
   it('no classification → reviewed; partial → okay', () => {
@@ -83,7 +85,7 @@ describe('buildScanFitness — unit-correct accuracy bucketing', () => {
     // 0.5 ft = 0.1524 m → "okay" (≤ 0.3 m). Bucketing on raw 0.5 would be "review".
     const f = buildScanFitness(base({ verticalRmse: 0.5, unit: 'ft', unitToMetres: 0.3048 }));
     expect(tone(f, 'accuracy')).toBe<FitnessTone>('okay');
-    expect(f.headlineAccuracy).toBe('±0.50 ft vertical'); // displayed in feet
+    expect(f.dimensions.find((d) => d.key === 'accuracy')!.summary).toMatch(/^RMSE 0\.50 ft \(internal hold-out\)/); // displayed in feet
   });
 });
 
@@ -294,8 +296,6 @@ describe('buildScanFitness — unverified units fail closed', () => {
     expect(summary(f, 'density')).toMatch(/units are unverified/i);
     expect(summary(f, 'accuracy')).not.toMatch(/±\s*\d/);
     expect(summary(f, 'accuracy')).toMatch(/units are unverified/i);
-    // Headline accuracy (a bare "± m") is withheld too.
-    expect(f.headlineAccuracy).toBeNull();
     // The disclosure leads the non-hideable caveats.
     expect(f.caveats[0]).toMatch(/coordinate units are unverified/i);
     // A QL tier can't be earned on an unverified scale, even though a QL was supplied.
@@ -309,7 +309,6 @@ describe('buildScanFitness — unverified units fail closed', () => {
     const f = buildScanFitness(base()); // unitKnown undefined ⇒ assume known
     expect(tone(f, 'density')).toBe<FitnessTone>('ready');
     expect(tone(f, 'accuracy')).toBe<FitnessTone>('ready');
-    expect(f.headlineAccuracy).toBe('±0.07 m vertical');
     expect(f.tierBadge).toBe('≥ QL1 density reference');
     expect(f.caveats.some((c) => /units are unverified/i.test(c))).toBe(false);
   });

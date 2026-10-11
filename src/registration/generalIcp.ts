@@ -10,7 +10,8 @@
  *
  * It refuses rather than reports a confident-looking wrong answer: too few
  * points, or an inlier overlap below `minInlierFraction`, returns ok:false with
- * a reason. The result carries the final transform, RMSE, iteration count,
+ * a reason. The result carries the final transform, the trimmed nearest-
+ * neighbour RMSE re-measured at that transform (with the trim fraction), iteration count,
  * convergence flag and the achieved inlier fraction — the honesty signals a
  * caller needs before trusting an alignment. Pure and deterministic.
  */
@@ -33,7 +34,16 @@ export interface IcpOptions {
 export interface IcpResult {
   readonly R: Mat3;
   readonly t: Vec3;
+  /**
+   * Trimmed nearest-neighbour RMS at the FINAL pose: every source point is
+   * re-paired with its nearest target (within the search radius) under the
+   * returned R, t, the worst `trimFraction` of pairs are dropped, and the RMS is
+   * taken over the kept pairs. It is not the residual of the last solve (whose
+   * correspondences predate the final pose), and not an all-points RMS.
+   */
   readonly rmse: number;
+  /** The effective (clamped) trim fraction the reported `rmse` excludes. */
+  readonly trimFraction: number;
   readonly iterations: number;
   readonly converged: boolean;
   readonly inlierFraction: number;
@@ -55,7 +65,7 @@ export function generalIcp(
   const minInlier = opts.minInlierFraction ?? 0.3;
 
   if (source.length < 3 || target.length < 3) {
-    return fail('TOO_FEW_POINTS');
+    return { ...fail('TOO_FEW_POINTS'), trimFraction };
   }
 
   const hash = new SpatialHash3d(flatten(target), searchRadius);
@@ -84,17 +94,17 @@ export function generalIcp(
       if (bestId >= 0) { src.push(p); dst.push(target[bestId]); dists.push(Math.sqrt(bestD2)); }
     }
     inlierFraction = src.length / source.length;
-    if (src.length < 3) return { ...fail('NO_OVERLAP'), iterations: iter, inlierFraction };
+    if (src.length < 3) return { ...fail('NO_OVERLAP'), trimFraction, iterations: iter, inlierFraction };
 
     // Trim the worst pairs by distance.
     const keep = trim(src, dst, dists, trimFraction);
-    if (keep.src.length < 3) return { ...fail('NO_OVERLAP'), iterations: iter, inlierFraction };
+    if (keep.src.length < 3) return { ...fail('NO_OVERLAP'), trimFraction, iterations: iter, inlierFraction };
 
     // Correspondences are found with the current pose, but the solve uses the
     // ORIGINAL source points, so the fit is the new ABSOLUTE pose — replace the
     // running transform with it rather than composing.
     const fit = rigidSolve(keep.src, keep.dst);
-    if (!fit.ok) return { ...fail(fit.reason ?? 'SOLVE_FAILED'), iterations: iter, inlierFraction };
+    if (!fit.ok) return { ...fail(fit.reason ?? 'SOLVE_FAILED'), trimFraction, iterations: iter, inlierFraction };
     R = fit.R;
     t = fit.t;
     rmse = fit.rmse;
@@ -102,15 +112,49 @@ export function generalIcp(
     prevRmse = rmse;
   }
 
+  // Report the residual at the pose actually returned: re-pair at the final
+  // R, t and take the trimmed RMS, rather than echoing the last solve's residual
+  // over correspondences found at the previous pose.
+  const final = finalTrimmedRms(source, target, hash, searchRadius, R, t, trimFraction);
+  rmse = final.rmse;
+  inlierFraction = final.inlierFraction;
+  const res = { R, t, rmse, trimFraction, iterations: iter, converged, inlierFraction };
   if (inlierFraction < minInlier) {
-    return { R, t, rmse, iterations: iter, converged, inlierFraction, ok: false, reason: 'LOW_OVERLAP' };
+    return { ...res, ok: false, reason: 'LOW_OVERLAP' };
   }
-  return { R, t, rmse, iterations: iter, converged, inlierFraction, ok: true };
+  return { ...res, ok: true };
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function fail(reason: string): IcpResult {
-  return { R: IDENT, t: [0, 0, 0], rmse: NaN, iterations: 0, converged: false, inlierFraction: 0, ok: false, reason };
+  return { R: IDENT, t: [0, 0, 0], rmse: NaN, trimFraction: 0, iterations: 0, converged: false, inlierFraction: 0, ok: false, reason };
+}
+function finalTrimmedRms(
+  source: readonly Vec3[],
+  target: readonly Vec3[],
+  hash: SpatialHash3d,
+  radius: number,
+  R: Mat3,
+  t: Vec3,
+  frac: number,
+): { rmse: number; inlierFraction: number } {
+  const dists: number[] = [];
+  for (const p of source) {
+    const tp = applyRt(R, t, p);
+    let best = Infinity;
+    for (const id of hash.queryRadius(tp[0], tp[1], tp[2], radius)) {
+      const q = target[id];
+      const d2 = sq(q[0] - tp[0]) + sq(q[1] - tp[1]) + sq(q[2] - tp[2]);
+      if (d2 < best) best = d2;
+    }
+    if (best < Infinity) dists.push(best);
+  }
+  if (dists.length === 0) return { rmse: NaN, inlierFraction: 0 };
+  dists.sort((a, b) => a - b);
+  const keepN = frac <= 0 ? dists.length : Math.min(dists.length, Math.max(3, Math.floor(dists.length * (1 - frac))));
+  let s = 0;
+  for (let k = 0; k < keepN; k++) s += dists[k];
+  return { rmse: Math.sqrt(s / keepN), inlierFraction: dists.length / source.length };
 }
 function trim(src: Vec3[], dst: Vec3[], dists: number[], frac: number): { src: Vec3[]; dst: Vec3[] } {
   if (frac <= 0) return { src, dst };

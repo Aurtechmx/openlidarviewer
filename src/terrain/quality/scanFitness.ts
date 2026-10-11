@@ -167,8 +167,6 @@ export interface ScanFitness {
    * is deliberately avoided.
    */
   readonly tierBadge: string | null;
-  /** Headline accuracy string, or null when unvalidated. */
-  readonly headlineAccuracy: string | null;
   readonly dimensions: FitnessDimension[];
   /** Non-hideable honesty caveats. */
   readonly caveats: string[];
@@ -557,11 +555,6 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
       ? `≥ ${inp.densityReferenceFloor} density reference`
       : null;
 
-  // The headline is a bare "± m" claim, so it too is withheld on an unverified
-  // scale (the unit-unverified caveat carries the disclosure instead).
-  const headlineAccuracy =
-    unitKnown && inp.verticalRmse != null ? `±${inp.verticalRmse.toFixed(2)} ${unit} vertical` : null;
-
   const caveats: string[] = [];
   // Lead with the unit-unverified disclosure when the scale is unconfirmed — it
   // is the most use-limiting caveat, since it holds back the metric verdicts.
@@ -577,5 +570,5 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
     );
   if (!inp.crsKnown) caveats.push('No map position (CRS) — the scan isn’t placed on Earth.');
 
-  return { verdict, overallTone, tierBadge, headlineAccuracy, dimensions, caveats, provisional };
+  return { verdict, overallTone, tierBadge, dimensions, caveats, provisional };
 }
