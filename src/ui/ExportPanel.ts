@@ -1613,6 +1613,8 @@ export interface ExportLayerState {
   /** Remove a layer from the scene. */
   readonly removeLayer: (id: string) => void;
   readonly notify: (message: string) => void;
+  /** Revision of the findings kept for a layer; it changes when one is added, edited or deleted. */
+  readonly findingsRevision?: (id: string) => number;
   /** The shown compare difference was computed on this layer. */
   readonly inCompare?: (id: string) => boolean;
 }
@@ -1636,6 +1638,7 @@ export function exportLayerHooks(state: ExportLayerState): Pick<ExportPanelCallb
           file: state.sourceFiles.get(layer) ?? null,
           epoch: viewer?.classificationEpoch(layer) ?? 0,
           provenance: cloud?.classificationProvenance ?? null,
+          findings: state.findingsRevision?.(layer) ?? 0,
         };
       };
       const stamp = stampOf(id);
@@ -1666,7 +1669,8 @@ export function exportLayerHooks(state: ExportLayerState): Pick<ExportPanelCallb
       const fresh = added[0];
       const freshCloud = state.viewer()?.getCloud(fresh);
       const freshEdited = !!freshCloud
-        && classificationDiffersFromSource(freshCloud.classificationProvenance ?? 'none', state.viewer()?.classificationEpoch(fresh) ?? 0);
+        && (classificationDiffersFromSource(freshCloud.classificationProvenance ?? 'none', state.viewer()?.classificationEpoch(fresh) ?? 0)
+          || (state.findingsRevision?.(fresh) ?? 0) > 0);
       if (!state.viewer()?.getCloud(id)) {
         state.notify('The layer was closed while it reloaded, so the reloaded copy stays.');
         return;

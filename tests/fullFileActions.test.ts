@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { exportLayerHooks } from '../src/ui/ExportPanel';
+import { SessionFindings } from '../src/render/measure/sessionFindings';
 
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -455,13 +456,15 @@ describe('reload commit guard', () => {
       ['other', { classificationProvenance: 'source' }],
     ]);
     const epochs = new Map<string, number>([['old', 0], ['other', 0], ['new', 0]]);
+    const ledger = new SessionFindings();
+    ledger.retarget('old');
     const sourceFiles = new Map<string, File>([['old', file]]);
     const active = { id: 'other' as string | null };
     const removeLayer = vi.fn((id: string) => { layers.delete(id); });
     const setActive = vi.fn((id: string) => { active.id = id; });
     const notify = vi.fn();
     const world = {
-      file, layers, epochs, sourceFiles, active, removeLayer, setActive, notify, seenBudget: [] as (number | null)[],
+      file, layers, epochs, ledger, sourceFiles, active, removeLayer, setActive, notify, seenBudget: [] as (number | null)[],
       hooks: null as unknown as ReturnType<typeof exportLayerHooks>,
     };
     world.hooks = exportLayerHooks({
@@ -480,6 +483,7 @@ describe('reload commit guard', () => {
         duringReopen(world, f);
       },
       removeLayer, notify,
+      findingsRevision: (id) => ledger.revisionFor(id),
     });
     return world;
   }
@@ -528,6 +532,32 @@ describe('reload commit guard', () => {
       expect(w.notify.mock.calls[0][0]).toMatch(/original layer and its edits are kept/);
     });
   }
+
+  const finding = { label: 'Stockpile volume', value: 1, unit: 'm³' };
+  const findingRefusals: Array<[string, (w: ReturnType<typeof scene>) => void]> = [
+    ['a finding added', (w) => { w.ledger.add(finding); }],
+    ['a finding edited', (w) => { w.ledger.remove(0); w.ledger.add({ ...finding, value: 2 }); }],
+    ['a finding deleted', (w) => { w.ledger.remove(0); }],
+  ];
+  for (const [name, change] of findingRefusals) {
+    it(`keeps the original layer and its findings after ${name} while it decodes`, async () => {
+      const w2 = scene((world) => change(world));
+      if (name !== 'a finding added') w2.ledger.add(finding);
+      await w2.hooks.reloadLayer!('old', 5);
+      expect(w2.removeLayer).not.toHaveBeenCalledWith('old');
+      expect(w2.layers.has('old')).toBe(true);
+      expect(w2.layers.has('new')).toBe(false);
+      expect(w2.notify.mock.calls[0][0]).toMatch(/its findings changed/);
+      expect(w2.ledger.countFor('old')).toBe(name === 'a finding deleted' ? 0 : 1);
+    });
+  }
+
+  it('keeps both layers when the reloaded copy holds findings of its own', async () => {
+    const w = scene((world) => { world.ledger.add(finding); world.ledger.retarget('new'); world.ledger.add(finding); world.ledger.retarget('old'); });
+    await w.hooks.reloadLayer!('old', 5);
+    expect(w.removeLayer).not.toHaveBeenCalled();
+    expect(w.notify.mock.calls[0][0]).toMatch(/reloaded copy was kept beside it/);
+  });
 
   it('keeps both layers when the reloaded copy was edited too', async () => {
     const w = scene((world) => { world.epochs.set('old', 1); world.epochs.set('new', 1); });
