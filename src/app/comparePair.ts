@@ -205,6 +205,8 @@ export function createComparePairPicker(doc: Document = document): ComparePairPi
 export interface HeldDifference {
   readonly stem: string;
   readonly asc: () => string;
+  /** Companion files downloaded with the grid, as filename suffix + text. */
+  readonly sidecars?: readonly { readonly suffix: string; readonly text: string }[];
   readonly before: CompareParticipant;
   readonly after: CompareParticipant;
 }
@@ -238,7 +240,7 @@ export function createCompareDifference(deps: CompareDifferenceDeps) {
       shown = { before: participant(ids[0], before), after: participant(ids[1], after) };
     },
     /** The run's difference raster is ready to download. */
-    hold(file: { readonly stem: string; readonly asc: () => string }): void {
+    hold(file: { readonly stem: string; readonly asc: () => string; readonly sidecars?: readonly { readonly suffix: string; readonly text: string }[] }): void {
       if (shown) deps.slot.lastDifference = { ...file, ...shown };
     },
     /** Whether the shown result was computed on this scan. */
@@ -256,7 +258,9 @@ export function createCompareDifference(deps: CompareDifferenceDeps) {
     /** Download the held difference as an ESRI ASCII grid. */
     download(downloadText: (filename: string, text: string) => void): void {
       const held = deps.slot.lastDifference;
-      if (held) downloadText(`${held.stem}.asc`, held.asc());
+      if (!held) return;
+      downloadText(`${held.stem}.asc`, held.asc());
+      for (const side of held.sidecars ?? []) downloadText(`${held.stem}${side.suffix}`, side.text);
     },
   };
 }

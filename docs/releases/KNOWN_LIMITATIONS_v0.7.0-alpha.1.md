@@ -307,7 +307,7 @@ for this development cut: that evidence comes from the engines themselves.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,316 lines, twenty-five fewer since the Save view snapshot
+`src/main.ts` is 4,313 lines, twenty-five fewer since the Save view snapshot
 moved to its own lazy module and the Analyse panel's longitude and latitude
 wiring moved to the mapper module, and `src/render/Viewer.ts` is 5,962, two hundred and sixty-one lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
