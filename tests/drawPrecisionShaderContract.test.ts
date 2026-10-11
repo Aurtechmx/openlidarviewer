@@ -29,8 +29,10 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 describe('three.js (the version the mapping was verified against)', () => {
-  it('is 0.186.0; a different version needs the evidence re-read', () => {
-    expect(JSON.parse(read('node_modules/three/package.json')).version).toBe('0.186.0');
+  // 0.186.0 was read in full; 0.186.1 (the lockfile version) passed every
+  // content pin below in CI. Any other version needs the evidence re-read.
+  it('is a version the mapping was verified against', () => {
+    expect(['0.186.0', '0.186.1']).toContain(JSON.parse(read('node_modules/three/package.json')).version);
   });
 
   it('PointsNodeMaterial computes the view position as modelViewMatrix * vec3(positionNode)', () => {

@@ -20,10 +20,11 @@ It is a diagnostic. The render loop never calls it.
 
 ## Paths and findings
 
-Verified against three.js 0.186.0 as installed. Line numbers are for that
-version and for the tree this document landed in.
-`tests/drawPrecisionShaderContract.test.ts` pins each fact by content, so a
-change to either side fails the test.
+Read in three.js 0.186.0; three.js line numbers below are for that version.
+The lockfile resolves 0.186.1, and every quoted excerpt is pinned by content in
+`tests/drawPrecisionShaderContract.test.ts`, which passes against 0.186.1 in
+CI. The test also fails on any three.js version other than these two, and on
+a change to the OLV side.
 
 | Path | Used for | Expression | State |
 |---|---|---|---|

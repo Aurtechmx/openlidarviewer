@@ -690,8 +690,9 @@ not evaluated. The storage error is a worst-case figure from the Float32
 buffer, because binary64 source positions are not kept after load. With no
 established linear unit, or a vertical unit different from the horizontal
 one, the bound is shown in source units and not graded. The mapping from
-OLV's shaders to the bounded expression was read from three.js 0.186.0
-(`docs/architecture/draw-precision-contract.md`); a different three.js version
+OLV's shaders to the bounded expression was read from three.js 0.186.0 and
+pinned by content against 0.186.1 (`docs/architecture/draw-precision-contract.md`);
+any other three.js version
 fails `tests/drawPrecisionShaderContract.test.ts` until it is read again.
 
 ## Volumes on a voxel-reduced cloud cannot exclude noise or Withheld points
