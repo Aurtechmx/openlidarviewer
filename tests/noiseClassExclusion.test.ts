@@ -23,7 +23,7 @@ const SIZE = 20;
 const UP: Vec3 = [0, 0, 1];
 const POLY: Vec3[] = [[2, 2, 0], [18, 2, 0], [18, 18, 0], [2, 18, 0]];
 
-/** A flat grid at z = 0; every 9th point inside the centre is a class-7 return 5 m low. */
+/** A flat grid at z = 0; every point near the centre is a class-7/18 return 5 m low. */
 function epoch(withNoise: boolean): { positions: Float32Array; classification: Uint8Array; noise: number } {
   const pos = new Float32Array(N * N * 3);
   const cls = new Uint8Array(N * N).fill(2);
@@ -32,7 +32,9 @@ function epoch(withNoise: boolean): { positions: Float32Array; classification: U
     const x = ((i % N) / (N - 1)) * SIZE;
     const y = (Math.floor(i / N) / (N - 1)) * SIZE;
     let z = 0;
-    if (withNoise && Math.hypot(x - 10, y - 10) < 4 && i % 9 === 0) {
+    // A cluster, not a scatter: the area-weighted volume takes a median per
+    // cell, which a sparse scatter of low returns would not move.
+    if (withNoise && Math.hypot(x - 10, y - 10) < 2.5) {
       cls[i] = i % 2 === 0 ? 7 : 18;
       z = -5;
       noise++;

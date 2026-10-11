@@ -48,7 +48,7 @@ describe('presentStockpile', () => {
     expect(byLabel['Points in footprint']).toBe('4,200');
     expect(byLabel['Density']).toBe('13.2 pts/m²');
     expect(byLabel['Base plane']).toMatch(/lowest ground, ±0.08 m/);
-    expect(byLabel['Sampling error']).toBe('± 18 m³');
+    expect(byLabel['Surface error']).toBe('± 18 m³');
     expect(byLabel['Base-plane error']).toBe('± 25 m³');
   });
 
@@ -144,7 +144,7 @@ describe('presentStockpile — compound CRS vertical factor', () => {
   test('the error bands scale with the same cubic factor as the volume', () => {
     const v = presentStockpile(result(), { lin: 1, vert: US_FOOT });
     const row = (label: string) => v.rows.find((r) => r.label === label)?.value ?? '';
-    expect(row('Sampling error')).toContain('5'); // 18 × 0.3048 = 5.49
+    expect(row('Surface error')).toContain('5'); // 18 × 0.3048 = 5.49
     expect(row('Base-plane error')).toContain('8'); // 25 × 0.3048 = 7.62
   });
 });
@@ -221,7 +221,7 @@ describe('presentStockpileAreaGrid', () => {
     expect(v.authority).toBe('measured');
     expect(v.coverage).toBe('measured');
     expect(v.volumeM3).toBeCloseTo(20 * 10 * 3, 6);
-    expect(v.method).toBe('olv.volume.stockpile-area-grid@3');
+    expect(v.method).toBe('olv.volume.stockpile-area-grid@4');
     expect(v.supportFraction).toBeCloseTo(1, 6);
   });
 
@@ -271,7 +271,7 @@ describe('stockpileAreaGridToastLine', () => {
   test('a measured line names the state, the support and the method', () => {
     const pts = Float32Array.from(prism(3, 0.5, 0.5));
     const line = stockpileAreaGridToastLine(presentStockpileAreaGrid(RECT, pts, base, complete));
-    expect(line).toMatch(/^Stockpile: 600 m³ · MEASURED · 100% footprint support · area-weighted grid/);
+    expect(line).toMatch(/^Stockpile: 600 m³ · MEASURED · 100% footprint support · 0% interpolated · area-weighted grid/);
     expect(line).toMatch(/incomplete model/);
     expect(line).toMatch(/base 0\.00 m \(lowest ground, ±0\.05 m, not in the term\)/);
     expect(line).not.toMatch(/1σ|model band/);
@@ -290,7 +290,7 @@ describe('stockpileAreaGridToastLine', () => {
   test('a withheld result shows no number', () => {
     const half = Float32Array.from(prism(3, 0.5, 0.5, 0, 9));
     const line = stockpileAreaGridToastLine(presentStockpileAreaGrid(RECT, half, base, complete));
-    expect(line).toMatch(/^Stockpile: volume withheld · \d+% footprint support · insufficient observations$/);
+    expect(line).toMatch(/^Stockpile: volume withheld · \d+% footprint support · \d+% interpolated · insufficient observations$/);
     expect(line).not.toMatch(/m³/);
   });
   test('an unverified unit is disclosed on the line', () => {
@@ -363,7 +363,7 @@ describe('stockpileGridForLasso', () => {
     const { suffix: fromLasso, view } = stockpileGridForLasso(RECT, pts);
     expect(fromLasso).toBe(suffix);
     expect(view?.authority).toBe('measured');
-    expect(view?.method).toBe('olv.volume.stockpile-area-grid@3');
+    expect(view?.method).toBe('olv.volume.stockpile-area-grid@4');
   });
 
   test('view is null under the same gate that empties the suffix', () => {

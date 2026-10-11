@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   volumeCutFill,
+  pointSampleCutFill,
   pointInPolygon2D,
   polygonHorizontalArea,
   horizontalProjection,
@@ -180,7 +181,10 @@ describe('volumeCutFill — mixed cut + fill', () => {
     // by design — fine in production at typical scan densities, but a
     // test fixture must avoid the boundary). Left half at z = 2 (fill),
     // right half at z = −2 (cut), polygon covers the full unit square.
-    // Expected: fill ≈ cut ≈ 1 m³ each, net ≈ 0.
+    // Expected: fill ≈ cut ≈ 1 m³ each, net ≈ 0. The area-weighted grid
+    // integrates only cells holding points, and the fixture leaves a thin
+    // unsampled rim and a mixed seam at x = 0.5, so each reads a little under
+    // 1 and the uncovered share is reported instead of read as zero.
     const left = packGrid(11, [0.02, 0.48], [0.02, 0.98], 2);
     const right = packGrid(11, [0.52, 0.98], [0.02, 0.98], -2);
     const positions = new Float32Array(left.length + right.length);
@@ -197,9 +201,13 @@ describe('volumeCutFill — mixed cut + fill', () => {
       up: Z_UP,
       positions,
     });
-    expect(result.fill).toBeCloseTo(1, 5);
-    expect(result.cut).toBeCloseTo(1, 5);
-    expect(Math.abs(result.net)).toBeLessThan(1e-4);
+    expect(result.fill).toBeGreaterThan(0.85);
+    expect(result.fill).toBeLessThan(1.1);
+    expect(result.cut).toBeGreaterThan(0.85);
+    expect(result.cut).toBeLessThan(1.1);
+    expect(Math.abs(result.net)).toBeLessThan(0.1);
+    expect(result.coverageFraction).toBeGreaterThan(0.85);
+    expect(result.coverageFraction).toBeLessThan(1);
   });
 });
 
@@ -372,8 +380,32 @@ describe('volumeCutFill — general-up walk matches the per-point projection', (
     up: [number, number, number],
   ): void {
     const positions = scatter(2000);
-    const r = volumeCutFill({ polygon, referenceZ: 0, up, positions });
+    // The shared walk (projection, inside test, height) is pinned through the
+    // superseded point-weighted sum, whose arithmetic the naive loop restates.
+    const r = pointSampleCutFill({ polygon, referenceZ: 0, up, positions });
     const ref = naiveCutFill(polygon, 0, up, positions);
+    // The shipping area-weighted estimator under this up vector equals the
+    // same estimator on the cloud pre-projected into a Z-up frame.
+    const n = positions.length / 3;
+    const pre = new Float32Array(positions.length);
+    for (let i = 0; i < n; i++) {
+      const p: [number, number, number] = [positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]];
+      const h = horizontalProjection(p, up);
+      const un = Math.hypot(up[0], up[1], up[2]);
+      pre[i * 3] = h.x;
+      pre[i * 3 + 1] = h.y;
+      pre[i * 3 + 2] = (p[0] * up[0] + p[1] * up[1] + p[2] * up[2]) / un;
+    }
+    const prePoly = polygon.map((v) => {
+      const h = horizontalProjection(v, up);
+      return [h.x, h.y, 0] as [number, number, number];
+    });
+    const area = volumeCutFill({ polygon, referenceZ: 0, up, positions });
+    const areaPre = volumeCutFill({ polygon: prePoly, referenceZ: 0, positions: pre });
+    expect(area.pointsInPolygon).toBe(ref.inCount);
+    expect(area.fill).toBeCloseTo(areaPre.fill, 4);
+    expect(area.cut).toBeCloseTo(areaPre.cut, 4);
+    expect(area.fill).toBeGreaterThan(0);
     // The fixture must actually exercise both buckets, or the comparison
     // proves nothing.
     expect(ref.inCount).toBeGreaterThan(100);

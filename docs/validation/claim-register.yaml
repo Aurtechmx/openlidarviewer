@@ -369,38 +369,38 @@ claims:
     scopeNote: "The residual against both oracles takes both signs across the fixture set, which is what a truncated series expansion does; it is not an offset in one direction and must not be described as a bias. The two legs answer different questions. GeographicLib selects the zone itself, so that leg is the independent check on zone and hemisphere including the exception zones. cs2cs is told which EPSG code to project into, and that code is built from the GeographicLib zone rather than from the candidate, so the PROJ leg is a fixed target for the projection arithmetic and would not move if the candidate's zone rule changed. PROJ and GeographicLib share no transverse Mercator code, and their mutual agreement at 2.0e-9 m is six orders below the gate, which is what separates candidate error from oracle disagreement."
   # ── Volumes ─────────────────────────────────────────────────────────────────
   - claimId: VOL-POINT-SAMPLE
-    product: Point-sample volume (preview)
-    algorithm: Uniform-density point-sample estimator
-    algorithmVersion: v0.5.x
-    claim: "Approximate cut/fill volume from a uniform-density point sample against a base."
+    product: Cut-fill volume (preview)
+    algorithm: Area-weighted grid integration of the polygon Volume tool (olv.volume.stockpile@3; footprint-clipped cell area times median cell height, gaps interpolated inside the covered extent); the claim id predates v3, whose point-weighted sum it was named for
+    algorithmVersion: v0.7.0
+    claim: "Approximate cut/fill volume against a horizontal base, area-weighted over the footprint."
     currentEvidence: E3_SYNTHETICALLY_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/volume*.test.ts, tests/volumeSyntheticTruth.test.ts, tests/analyticVolumeOracle.test.ts]
+    supportingTests: [tests/volume*.test.ts, tests/volumeSyntheticTruth.test.ts, tests/analyticVolumeOracle.test.ts, tests/benchmark/volumeKnownAnswerBaseline.test.ts]
     supportingDatasets: []
     units: [cubic-metres]
     crsDatum: "Refuses on geographic degrees; local metric only."
-    assumptions: ["uniform point density", "base surface as specified"]
-    failureModes: ["density gradient", "missing footprint quadrant", "sloped/curved base"]
+    assumptions: ["one median surface height per grid cell", "base surface as specified", "gaps inside the covered extent interpolated; over 25% interpolated is low-confidence, over 50% withheld"]
+    failureModes: ["a sharp step inside one grid cell", "footprint outside the scanned extent (excluded and reported)", "sloped/curved base"]
     exportAllowed: true
-    userLabel: "Uniform-density point-sample preview"
+    userLabel: "Area-weighted cut-fill preview"
     softwareStatus: shipping
     evidenceLevel: E3_SYNTHETICALLY_VALIDATED
     externalValidationStatus: pending
     approvedClaim: "Order-of-magnitude preview volume; not a survey quantity."
-    prohibitedClaim: ["survey-grade volume", "area-weighted integration", "quantified uncertainty"]
+    prohibitedClaim: ["survey-grade volume", "quantified uncertainty"]
     scope:
       supported: []
       unsupported:
-        - "Every quantitative volume claim. The estimator assumes uniform point density and reports no uncertainty."
-        - "Clouds with a density gradient or a missing footprint quadrant, where the sample is biased and the bias is not measured."
+        - "Every quantitative volume claim. The figure carries no validated uncertainty."
+        - "Footprints mostly interpolated (withheld above 50%) or mostly outside the scan, where the figure covers only the observed extent."
         - "Bases other than the one specified, including sloped and curved bases."
 
   - claimId: VOL-STOCKPILE
     product: Stockpile volume
-    algorithm: Area-weighted grid integration (polygon-clipped cell areas, median cell surface) over a lowest-ground base plane fitted by the point-sample estimator
+    algorithm: Area-weighted grid integration (polygon-clipped cell areas, median cell surface, gaps interpolated inside the covered extent) over a lowest-ground base plane
     methodId: olv.volume.stockpile-area-grid
     algorithmVersion: v0.6.9
-    claim: "Stockpile volume above a reference base, over the supported footprint area."
+    claim: "Stockpile volume above a reference base, over the observed and interpolated footprint area."
     currentEvidence: E3_SYNTHETICALLY_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
     supportingTests: [tests/volume*.test.ts, tests/stockpile*.test.ts, tests/volumeSyntheticTruth.test.ts, tests/analyticVolumeOracle.test.ts]

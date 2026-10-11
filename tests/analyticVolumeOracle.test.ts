@@ -1,13 +1,16 @@
 /**
  * analyticVolumeOracle.test.ts
  *
- * A closed-form oracle for `volumeCutFill` (src/render/measure/volume.ts) and
- * for `stockpileVolume` with an explicit base plane. No third-party tool is the
+ * A closed-form oracle for `pointSampleCutFill` (src/render/measure/volume.ts),
+ * the point-weighted estimator of `olv.volume.stockpile` v1 and v2, and for the
+ * shipping area-weighted `stockpileVolume` with an explicit base plane. The
+ * point-weighted estimator is kept so a v1/v2 figure can be reproduced; the
+ * sections below characterise it, section 7 the estimator the tools report. No third-party tool is the
  * reference here. Every expected number is an integral solved on paper, and
  * every one of those integrals is checked against two independent numerical
  * quadratures before any assertion uses it.
  *
- * THE ESTIMATOR. `volumeCutFill` buckets each in-polygon point's
+ * THE ESTIMATOR. `pointSampleCutFill` buckets each in-polygon point's
  * dz = z - referenceZ into a fill sum (dz >= 0) and a cut sum (dz < 0), then
  * multiplies each by polygonArea / pointsInPolygon. It therefore reports
  *
@@ -86,7 +89,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { volumeCutFill } from '../src/render/measure/volume';
+import { pointSampleCutFill, volumeCutFill } from '../src/render/measure/volume';
 import { stockpileVolume } from '../src/render/measure/stockpileVolume';
 import type { Vec3 } from '../src/render/navMath';
 import { A_HALF, latticeCloud, type Field } from './support/volumeLatticeFixture';
@@ -398,7 +401,7 @@ const FINEST = DENSITIES[DENSITIES.length - 1];
 
 /** Run the estimator over the square footprint with the primitive's plane. */
 function runPrimitive(p: Primitive, positions: Float32Array) {
-  return volumeCutFill({
+  return pointSampleCutFill({
     polygon: squarePolygon(A_HALF, p.refZ),
     referenceZ: p.refZ,
     positions,
@@ -457,7 +460,7 @@ describe('closed forms verified by two independent quadratures', () => {
 
 // ── 2. OLV against the closed forms at the finest density ────────────────────
 
-describe('volumeCutFill against the closed forms', () => {
+describe('pointSampleCutFill against the closed forms', () => {
   it(`reproduces every primitive at ${FINEST}x${FINEST} samples`, () => {
     const lines = [
       'primitive        quantity  closed form      OLV              abs error        rel error %',
@@ -712,7 +715,7 @@ describe('invariance', () => {
         const poly = squarePolygon(A_HALF, p.refZ).map(
           (v): Vec3 => [v[0] * cs - v[1] * sn, v[0] * sn + v[1] * cs, v[2]],
         );
-        const r = volumeCutFill({ polygon: poly, referenceZ: p.refZ, positions: rotated });
+        const r = pointSampleCutFill({ polygon: poly, referenceZ: p.refZ, positions: rotated });
         expect(r.pointsInPolygon).toBe(reference.pointsInPolygon);
         expect(r.footprintArea).toBeCloseTo(AREA, 9);
         // Rotation leaves every height untouched and the shoelace area is
@@ -733,7 +736,7 @@ describe('invariance', () => {
       const poly = squarePolygon(A_HALF, p.refZ).map(
         (v): Vec3 => [v[0] + tx, v[1] + ty, v[2] + tz],
       );
-      const r = volumeCutFill({ polygon: poly, referenceZ: p.refZ + tz, positions: moved });
+      const r = pointSampleCutFill({ polygon: poly, referenceZ: p.refZ + tz, positions: moved });
       expect(r.pointsInPolygon).toBe(N_INV * N_INV);
       // Not bit-exact: storing z + 3.5 in Float32 spends mantissa bits on the
       // offset, so dz comes back rounded. The bound is the measured size of that.
@@ -756,7 +759,7 @@ describe('invariance', () => {
     for (const tz of [0, 1, 1024, 65536, 1_048_576, 4_194_304]) {
       const moved = mapCloud(base, (x, y, z) => [x, y, z + tz]);
       const poly = squarePolygon(A_HALF, p.refZ).map((v): Vec3 => [v[0], v[1], v[2] + tz]);
-      const r = volumeCutFill({ polygon: poly, referenceZ: p.refZ + tz, positions: moved });
+      const r = pointSampleCutFill({ polygon: poly, referenceZ: p.refZ + tz, positions: moved });
       if (tz === 0) atZero = r.fill;
       const d = deviation(r.fill, atZero);
       errs.push(Math.abs(r.fill - atZero) / atZero);
@@ -784,7 +787,7 @@ describe('invariance', () => {
       for (const s of [0.25, 2.5, 8]) {
         const scaled = mapCloud(base, (x, y, z) => [x * s, y * s, z * s]);
         const poly = squarePolygon(A_HALF * s, p.refZ * s);
-        const r = volumeCutFill({ polygon: poly, referenceZ: p.refZ * s, positions: scaled });
+        const r = pointSampleCutFill({ polygon: poly, referenceZ: p.refZ * s, positions: scaled });
         const expected = reference.fill * s * s * s;
         expect(r.footprintArea).toBeCloseTo(AREA * s * s, 9);
         const d = deviation(r.fill, expected);
@@ -812,7 +815,7 @@ describe('elevated reference plane', () => {
     const field: Field = (x, y) => PYR_H * (1 - tMax(x, y) / A_HALF);
     const lines = ['n      OLV fill         truth fill       OLV cut          truth cut        fill %      cut %'];
     for (const n of [80, 200, 400]) {
-      const r = volumeCutFill({
+      const r = pointSampleCutFill({
         polygon: squarePolygon(A_HALF, z0),
         referenceZ: z0,
         positions: latticeCloud(field, n),
@@ -838,7 +841,7 @@ describe('elevated reference plane', () => {
     console.log(['', `ELEVATED PLANE, SQUARE PYRAMID (z0 = ${z0}, tau = ${tau})`, ...lines, ''].join('\n'));
 
     // Against the closed form at the finest lattice. Bound from the table above.
-    const fine = volumeCutFill({
+    const fine = pointSampleCutFill({
       polygon: squarePolygon(A_HALF, z0),
       referenceZ: z0,
       positions: latticeCloud(field, 400),
@@ -863,7 +866,7 @@ describe('elevated reference plane', () => {
       const x0 = (z0 - TILT_C) / TILT_P;
       const fillTruth = A_HALF * TILT_P * (A_HALF - x0) * (A_HALF - x0);
       const cutTruth = A_HALF * TILT_P * (x0 + A_HALF) * (x0 + A_HALF);
-      const r = volumeCutFill({
+      const r = pointSampleCutFill({
         polygon: squarePolygon(A_HALF, z0),
         referenceZ: z0,
         positions: latticeCloud(field, n),
@@ -882,7 +885,7 @@ describe('elevated reference plane', () => {
 // ── 7. stockpileVolume with an explicit base ─────────────────────────────────
 
 describe('stockpileVolume with an explicit base plane', () => {
-  it('returns the same closed-form volumes as volumeCutFill', () => {
+  it('returns the same area-weighted volumes as volumeCutFill', () => {
     const lines = ['primitive        closed form      stockpile        rel error %   matches volumeCutFill'];
     for (const p of PRIMITIVES) {
       const positions = latticeCloud(p.z, FINEST);
@@ -897,7 +900,7 @@ describe('stockpileVolume with an explicit base plane', () => {
       expect(s.breakdown.baseZ).toBe(p.refZ);
       expect(s.breakdown.baseUncertainty).toBe(0);
       // An explicit base carries no base-plane term, so the whole band is the
-      // sampling term: sigma = area * sigma(thickness) / sqrt(N).
+      // per-cell surface term of the grid integration.
       expect(s.breakdown.basePlaneError).toBe(0);
       expect(s.sigma).toBeCloseTo(s.breakdown.samplingError, 12);
       const same = s.volume === v.fill;
@@ -907,13 +910,17 @@ describe('stockpileVolume with an explicit base plane', () => {
           `${d.relPct.toExponential(3).padEnd(13)} ${same}`,
       );
       expect(same).toBe(true);
+      // Measured at 400x400 (cell ~2.5 sample spacings, median cell surface):
+      // flat 1e-14, tilted 1.9e-9, pyramid 1.75e-3, frustum 1.12e-3,
+      // paraboloid 1.25e-4, saddle 1.91e-3. The kinks of the pyramid, frustum
+      // and saddle fall inside cells, where a median surface is not exact.
       const bounds: Record<string, number> = {
         'flat cap': 1e-7,
         'tilted plane': 1e-7,
-        'square pyramid': 2e-5,
-        frustum: 2e-5,
-        paraboloid: 2e-6,
-        saddle: 1e-6,
+        'square pyramid': 3e-3,
+        frustum: 2e-3,
+        paraboloid: 3e-4,
+        saddle: 3e-3,
       };
       assertAgainstOracle(s.volume, p.fill, bounds[p.name], `stockpile ${p.name}`);
       if (p.cut > 0) assertAgainstOracle(s.cut, p.cut, bounds[p.name], `stockpile ${p.name} cut`);
@@ -942,7 +949,8 @@ describe('stockpileVolume with an explicit base plane', () => {
       positions: latticeCloud(field, 400),
       base: { mode: 'explicit', z: z0 },
     });
-    assertAgainstOracle(s.volume, fillTruth, 5e-4, 'stockpile raised-plane pyramid');
+    // Measured 8.97e-3: the cut plane's ring of kinks crosses cells.
+    assertAgainstOracle(s.volume, fillTruth, 1.5e-2, 'stockpile raised-plane pyramid');
     expect(s.volume).toBeLessThan(AREA * PYR_H / 3);
   });
 });

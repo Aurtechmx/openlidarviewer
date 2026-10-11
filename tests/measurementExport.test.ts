@@ -118,7 +118,7 @@ describe('measurementMetrics', () => {
     volume: {
       fill: 100, cut: 5, net: 95, referenceZ: 0, footprintArea: 50,
       pointsInPolygon: 800, densityNative: 16, confidence: 'medium',
-      method: 'olv.volume.stockpile-area-grid@3', gridAuthority: 'measured', gridAuthorityReason: '',
+      method: 'olv.volume.stockpile-area-grid@4', gridAuthority: 'measured', gridAuthorityReason: '',
       crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' }, // method-literal-ok: a record stored at an earlier version
     },
   });
@@ -137,7 +137,7 @@ describe('measurementMetrics', () => {
     const withheld = mk('volume', [[0, 0, 0], [10, 0, 0], [10, 10, 0]], {
       volume: {
         referenceZ: 0, footprintArea: 50, pointsInPolygon: 800, densityNative: 16,
-        confidence: 'high', method: 'olv.volume.stockpile-area-grid@3',
+        confidence: 'high', method: 'olv.volume.stockpile-area-grid@4',
         gridAuthority: 'withheld', gridAuthorityReason: 'insufficient observations',
         crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' }, // method-literal-ok: a record stored at an earlier version
       },
@@ -251,7 +251,7 @@ describe('measurementsToCsv — grid-canonical lasso volumes', () => {
     volume: {
       fill: 100, cut: 5, net: 95, referenceZ: 0, footprintArea: 50,
       pointsInPolygon: 800, densityNative: 16, confidence: 'medium',
-      method: 'olv.volume.stockpile-area-grid@3', gridAuthority: 'preview', gridAuthorityReason: 'display sample',
+      method: 'olv.volume.stockpile-area-grid@4', gridAuthority: 'preview', gridAuthorityReason: 'display sample',
       crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' }, // method-literal-ok: a record stored at an earlier version
     },
   });
@@ -385,7 +385,7 @@ describe('the evidence stamp names the claim behind each figure', () => {
     volume: {
       fill: 100, cut: 5, net: 95, referenceZ: 0, footprintArea: 50,
       pointsInPolygon: 800, densityNative: 16, confidence: 'medium',
-      method: 'olv.volume.stockpile-area-grid@3', gridAuthority: 'measured', gridAuthorityReason: '',
+      method: 'olv.volume.stockpile-area-grid@4', gridAuthority: 'measured', gridAuthorityReason: '',
     },
   } as never;
   const psVol = {
@@ -414,7 +414,7 @@ describe('the evidence stamp names the claim behind each figure', () => {
     id: 'w', kind: 'volume', name: 'w', points: [[0, 0, 0], [10, 0, 0], [10, 10, 0]],
     volume: {
       referenceZ: 0, footprintArea: 50, pointsInPolygon: 800, densityNative: 16,
-      confidence: 'high', method: 'olv.volume.stockpile-area-grid@3',
+      confidence: 'high', method: 'olv.volume.stockpile-area-grid@4',
       gridAuthority: 'withheld', gridAuthorityReason: 'insufficient observations',
       crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' }, // method-literal-ok: a record stored at an earlier version
     },

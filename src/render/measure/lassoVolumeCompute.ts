@@ -27,6 +27,8 @@ import { accumulatorOffset } from '../layerPlacement';
 import type { VolumeBudgetDecision } from './volumeBudget';
 import { decideVolumeBudget } from './volumeBudget';
 import { selectByLassoWithDepth, volumeFromLassoWithFootprint } from './lassoVolume';
+import type { LassoFootprintBasis } from './lassoVolume';
+import type { LassoUnprojector } from './lassoProjector';
 import type {
   LassoSelectionWithDepth,
   ScreenProjector,
@@ -183,7 +185,7 @@ import { alignedClasses, isNoiseClass } from '../../terrain/ground/classificatio
 import { describeLassoSelectionBasis, rejectOccluded } from './lassoOcclusion';
 import type { LassoSelectionBasis, OcclusionOutcome } from './lassoOcclusion';
 export type { LassoSelectionBasis } from './lassoOcclusion';
-export { makeLassoProjector } from './lassoProjector';
+export { makeLassoProjector, makeLassoUnprojector } from './lassoProjector';
 // Re-exported through this cluster so the Viewer keeps one import for the
 // whole lasso walk rather than gaining an edge per helper.
 export { sourcePositions } from '../../model/pointFrames';
@@ -308,6 +310,11 @@ export interface LassoCloudEntry {
 export interface LassoVolumeHost {
   /** Screen projector built from the live camera. Returns null behind the near/far planes. */
   readonly project: ScreenProjector;
+  /**
+   * Inverse of `project` onto a horizontal plane, so the drawn lasso can be the
+   * volume's footprint. Omitted falls back to the selection's convex hull.
+   */
+  readonly unprojectToHeight?: LassoUnprojector;
   /** Layers eligible to contribute, already filtered for visibility and lock. */
   readonly integrable: ReadonlyArray<readonly [string, LassoCloudEntry]>;
   /**
@@ -426,6 +433,8 @@ export interface LassoVolumeComputeOutput {
   readonly selectionRestrictedByVisibility: boolean;
   readonly polygon3D: ReadonlyArray<[number, number, number]>;
   readonly referenceZ: number;
+  /** Whether the footprint is the drawn lasso or the convex-hull fallback. */
+  readonly footprintBasis?: LassoFootprintBasis;
   readonly result: ReturnType<typeof volumeFromLassoWithFootprint>['result'];
   readonly selectionBasis: LassoSelectionBasisReport;
   /** Source, Withheld-excluded and analysed point counts for this walk. */
@@ -637,6 +646,18 @@ export function computeLassoVolume(
     // The footprint hull and the reference plane are defined against this; a
     // Y-up scan measured without it gets a side elevation for a plan area.
     up: host.worldUp,
+    // The drawn lasso on the plane at the reference height is the footprint.
+    footprint: host.unprojectToHeight
+      ? (refZ) => {
+        const out: Array<[number, number, number]> = [];
+        for (const p of lasso) {
+          const w = host.unprojectToHeight!(p.x, p.y, refZ);
+          if (!w) return null;
+          out.push(w);
+        }
+        return out;
+      }
+      : undefined,
   });
 
   return {
@@ -649,6 +670,7 @@ export function computeLassoVolume(
     selectionRestrictedByVisibility: anyHidden,
     polygon3D: lassoOut.polygon3D as ReadonlyArray<[number, number, number]>,
     referenceZ: lassoOut.referenceZ,
+    footprintBasis: lassoOut.footprintBasis,
     result: lassoOut.result,
     selectionBasis,
     withheld: {

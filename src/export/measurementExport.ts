@@ -270,9 +270,14 @@ export function measurementMetrics(
         if (m.volume.cut !== undefined) set('cut_m3', m.volume.cut * Vol);
         if (m.volume.fill !== undefined) set('fill_m3', m.volume.fill * Vol);
         if (m.volume.net !== undefined) set('net_m3', m.volume.net * Vol);
-        // The point-sample cross-check a switched lasso record keeps beside the
-        // grid figure — named so a reader never confuses it with
-        // the canonical cut_m3/fill_m3/net_m3 above.
+        // Covered share of the footprint the figures are integrated over.
+        if (m.volume.coverageFraction !== undefined) set('coverage_fraction', m.volume.coverageFraction);
+        if (m.volume.interpolatedFraction !== undefined) set('interpolated_fraction', m.volume.interpolatedFraction);
+        if (m.volume.excludedFraction !== undefined) set('excluded_fraction', m.volume.excludedFraction);
+        // The cut-fill cross-check a switched lasso record keeps beside the
+        // grid figure — named so a reader never confuses it with the canonical
+        // cut_m3/fill_m3/net_m3 above. The `pointsample_` prefix is kept for
+        // existing readers; the estimator it names is `crossCheck.method`.
         if (m.volume.crossCheck) {
           set('pointsample_cut_m3', m.volume.crossCheck.cut * Vol);
           set('pointsample_fill_m3', m.volume.crossCheck.fill * Vol);
@@ -426,6 +431,7 @@ export function measurementsToGeoJSON(
       // Same coverage verdict the CSV's grid_authority column carries — see
       // measurementsToCsv.
       if (m.kind === 'volume' && m.volume?.gridAuthority) properties.grid_authority = m.volume.gridAuthority;
+      if (m.kind === 'volume' && m.volume?.method) properties.volume_method = m.volume.method;
       const w = m.kind === 'volume' ? m.volume?.withheld : undefined;
       if (w) Object.assign(properties, { source_points: w.source, withheld_excluded: w.excluded, analysed_points: w.analysed });
       // Only a volume measured on a reduced source states how; a whole one adds nothing.
@@ -580,6 +586,7 @@ const CSV_COLUMNS = [
   // cross-check kept beside its canonical cut_m3/fill_m3/net_m3 above — blank
   // on every other kind, and on a volume record from before the switch or
   // from the hand-drawn polygon tool, which has no grid counterpart.
+  'coverage_fraction', 'interpolated_fraction', 'excluded_fraction', 'volume_method',
   'grid_authority', 'pointsample_cut_m3', 'pointsample_fill_m3', 'pointsample_net_m3',
   // A lasso result's input counts; `withheld_excluded` reads `unknown` when
   // the source carried no flags, never 0.
@@ -664,6 +671,7 @@ export function measurementsToCsv(
       evidence: evidenceFor(m),
     };
     if (m.kind === 'volume' && m.volume?.gridAuthority) base.grid_authority = m.volume.gridAuthority;
+    if (m.kind === 'volume' && m.volume?.method) base.volume_method = m.volume.method;
     const w = m.kind === 'volume' ? m.volume?.withheld : undefined;
     if (w) Object.assign(base, { source_points: w.source, withheld_excluded: w.excluded, analysed_points: w.analysed });
     if (w?.reduction) Object.assign(base, reductionExportFields(w));

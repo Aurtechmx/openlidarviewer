@@ -187,7 +187,7 @@ function gridVolume(id: string, over: Record<string, unknown> = {}): Measurement
     volume: {
       fill: 100, cut: 5, net: 95, referenceZ: 0, footprintArea: 50,
       pointsInPolygon: 800, densityNative: 16, confidence: 'medium',
-      method: 'olv.volume.stockpile-area-grid@3', gridAuthority: 'measured', gridAuthorityReason: '',
+      method: 'olv.volume.stockpile-area-grid@4', gridAuthority: 'measured', gridAuthorityReason: '',
       crossCheck: { fill: 120, cut: 30, net: 90, method: 'olv.volume.stockpile@1' }, // method-literal-ok: a record stored at an earlier version
       ...over,
     },
@@ -201,9 +201,9 @@ describe('a grid-canonical volume finding', () => {
     expect(f[0].value).toBeCloseTo(95, 6);
   });
 
-  test('names the point-sample cross-check as a labelled figure, not the headline', () => {
+  test('names the cut-fill cross-check as a labelled figure, not the headline', () => {
     const f = measurementsToFindings([gridVolume('v1')], up, 1);
-    expect(f[0].caveats!.join(' ')).toMatch(/Point-sample cross-check.*cut 30\.00 m³ \/ fill 120\.00 m³/);
+    expect(f[0].caveats!.join(' ')).toMatch(/Cut-fill cross-check.*cut 30\.00 m³ \/ fill 120\.00 m³/);
   });
 
   test('states the grid\'s known limitations (the step, clustered-sparse, and the real-data disagreement)', () => {
@@ -230,17 +230,21 @@ describe('a grid-canonical volume finding', () => {
     });
     const f = measurementsToFindings([withheld], up, 1);
     expect(f).toHaveLength(1);
-    expect(f[0].label).toMatch(/point-sample cross-check — grid volume withheld/);
+    expect(f[0].label).toMatch(/cut-fill cross-check — grid volume withheld/);
     expect(f[0].value).toBeCloseTo(90, 6); // the cross-check's net, not a fabricated grid figure
     expect(f[0].caveats!.join(' ')).toMatch(/withheld \(insufficient observations/);
   });
 
-  test('a withheld record with no cross-check contributes no finding at all', () => {
+  test('a withheld record with no cross-check reports an explicit null under its reason', () => {
     const withheld = gridVolume('v1', {
       fill: undefined, cut: undefined, net: undefined, crossCheck: undefined,
       gridAuthority: 'withheld', gridAuthorityReason: 'insufficient observations',
     });
-    expect(measurementsToFindings([withheld], up, 1)).toHaveLength(0);
+    const f = measurementsToFindings([withheld], up, 1);
+    expect(f).toHaveLength(1);
+    expect(f[0].value).toBeNull();
+    expect(f[0].label).toMatch(/volume withheld/);
+    expect(f[0].caveats!.join(' ')).toMatch(/withheld \(insufficient observations/);
   });
 
   test('an un-switched volume record is unaffected — no gridAuthority, no cross-check caveat', () => {

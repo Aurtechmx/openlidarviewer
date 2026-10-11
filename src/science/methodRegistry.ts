@@ -330,37 +330,57 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   },
   'olv.volume.stockpile': {
     id: 'olv.volume.stockpile',
-    version: 2,
+    version: 3,
     name: 'Stockpile cut-fill volume with model sensitivity band',
     summary:
-      'Cut-fill prism volume of a footprint above a fitted base plane, with a ' +
-      'model sensitivity band combining the independent-sample thickness term ' +
-      'area·σ(thickness)/√N and a heuristic base-height term. The arithmetic is ' +
-      'a standard deviation of that model; it is not calibrated coverage, ' +
-      'because the thickness samples are spatially correlated and the base term ' +
-      'is a spread rather than a measured error. v2 leaves LAS Withheld points ' +
-      'out of the polygon Volume tool and records points read, Withheld excluded ' +
-      '(or unknown) and points analysed, and keeps Overlap; v1 read every point.',
-    citation: 'Internal composition (prismatic cut-fill); standard earthworks method.',
+      'Cut-fill volume of a footprint above a base plane, integrated over a ' +
+      'regular horizontal grid: each cell holding at least one point contributes ' +
+      'its footprint-clipped area times its median height above the base, so a ' +
+      'density gradient does not weight the result. Cells without points are ' +
+      'never read as zero: inside the convex extent of the covered cells they ' +
+      'take a surface interpolated from the nearest covered cells (inverse-' +
+      'distance weighting); outside it they are excluded and their area ' +
+      'reported. The interpolated share is reported with every volume; above ' +
+      '25% the volume is low-confidence and above 50% it is withheld. The ' +
+      'model sensitivity band combines a per-cell surface term ' +
+      'sqrt(sum (A_c * NMAD_c / sqrt(n_c))^2) with a heuristic base-height term ' +
+      'over the covered area (sample standard deviations, n-1). It is not ' +
+      'calibrated coverage. v3 replaces the point-weighted sum ' +
+      'sum(dz) * area / N of v1 and v2, which over-counted densely scanned ' +
+      'areas, and the lasso footprint is the drawn lasso projected to the ' +
+      'horizontal plane instead of the convex hull of the selection. v2 left LAS ' +
+      'Withheld points out of the polygon Volume tool and records points read, ' +
+      'Withheld excluded (or unknown) and points analysed, and keeps Overlap; ' +
+      'v1 read every point. A v1 or v2 figure does not carry the v3 meaning.',
+    citation: 'Internal composition (area-weighted prismatic cut-fill; Sutherland & Hodgman (1974) polygon clipping); standard earthworks method.',
     category: 'volume',
-    implementation: ['src/render/measure/stockpileVolume.ts', 'src/render/measure/polygonVolumeSample.ts'],
+    implementation: ['src/render/measure/volume.ts', 'src/render/measure/stockpileVolume.ts', 'src/render/measure/polygonVolumeSample.ts', 'src/render/measure/lassoVolume.ts'],
   },
   'olv.volume.stockpile-area-grid': {
     id: 'olv.volume.stockpile-area-grid',
-    version: 3,
+    version: 4,
     name: 'Area-weighted stockpile volume (grid integration)',
     summary:
       'Cut-fill volume by integrating over a regular horizontal grid: each cell ' +
       'contributes its polygon-clipped area times a robust (median) surface height ' +
       'above the base, so a density gradient in the cloud does not bias the result. ' +
       'Unobserved cells reduce reported coverage rather than reading as zero. ' +
-      'Distinct from olv.volume.stockpile, which is the point-sample estimator. ' +
+      'From olv.volume.stockpile v3 the cut-fill tools integrate the same grid. ' +
       'v2 excludes cells whose centre falls outside a concave footprint and ' +
       'evaluates a tilted base at each clipped cell polygon centroid; v1 summed ' +
       'every bounding-region cell against a cell-centre base, so a v1 figure does ' +
       'not carry the v2 meaning. v3 is the lasso figure read with points flagged ' +
       'Withheld left out of its input (ASPRS LAS 1.4: not to be included in ' +
-      'processing); Overlap points are kept. A v2 figure included them.',
+      'processing); Overlap points are kept. A v2 figure included them. v4 ' +
+      'interpolates unsupported cells inside the convex extent of the covered ' +
+      'cells by inverse-distance weighting (w = 1/d^2): within 8 cells of ' +
+      'cover over the nearest square ring of cells holding any covered cell ' +
+      'plus the next ring, deeper in a void over the first covered cell along ' +
+      'each of the 8 grid directions plus the nearest covered cell, so the ' +
+      'fill is linear in the grid size; it ' +
+      'excludes and reports those outside it, and grades the figure by the ' +
+      'interpolated share (over 25%: low confidence, over 50%: withheld); a v3 ' +
+      'figure left every unsupported cell out.',
     citation:
       'Internal composition (area-weighted DEM-of-difference integration; ' +
       'Sutherland & Hodgman (1974) polygon clipping); standard earthworks method.',

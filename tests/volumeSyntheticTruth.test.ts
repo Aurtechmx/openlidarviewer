@@ -1,10 +1,12 @@
 /**
  * tests/volumeSyntheticTruth.test.ts
  *
- * SYNTHETIC KNOWN-TRUTH validation for the point-sample volume estimator
- * (`volumeCutFill`, src/render/measure/volume.ts) and the stockpile
- * estimator built on it (`stockpileVolume`, src/render/measure/
- * stockpileVolume.ts).
+ * SYNTHETIC KNOWN-TRUTH validation for the superseded point-sample volume
+ * estimator (`pointSampleCutFill`, src/render/measure/volume.ts — the
+ * `olv.volume.stockpile` v1/v2 arithmetic, kept to reproduce old figures)
+ * and for the shipping area-weighted stockpile estimator (`stockpileVolume`,
+ * src/render/measure/stockpileVolume.ts). The VOL-POINT-SAMPLE failure modes
+ * below are the biases v3 removed; the VOL-STOCKPILE sections pin that.
  *
  * Claims under test: VOL-POINT-SAMPLE, VOL-STOCKPILE.
  *
@@ -36,7 +38,7 @@
  */
 
 import { describe, test, expect } from 'vitest';
-import { volumeCutFill } from '../src/render/measure/volume';
+import { pointSampleCutFill } from '../src/render/measure/volume';
 import { stockpileVolume } from '../src/render/measure/stockpileVolume';
 import type { Vec3 } from '../src/render/navMath';
 
@@ -109,7 +111,7 @@ describe('VOL-POINT-SAMPLE — prism over a non-rectangular footprint (V = A·h)
     // count that normalises area-per-point is the triangle's, not the box's.
     ([x, y]) => y < 8 - (2 / 3) * x,
   );
-  const res = volumeCutFill({ polygon, referenceZ: 0, up: Z_UP, positions: pack(pts) });
+  const res = pointSampleCutFill({ polygon, referenceZ: 0, up: Z_UP, positions: pack(pts) });
 
   test('footprint area is the exact shoelace triangle area', () => {
     // Exact rational area — the shoelace sum is a float sum of exact halves.
@@ -131,7 +133,7 @@ describe('VOL-POINT-SAMPLE — wedge under a tilted plane (∫∫ s·x dA)', () 
   //   V = ∫₀¹⁰∫₀¹⁰ 0.25x dy dx = 10 · 0.25 · 50 = 125 m³.
   const s = 0.25;
   const pts = lattice(40, 40, 0.25, (x) => s * x);
-  const res = volumeCutFill({
+  const res = pointSampleCutFill({
     polygon: rect(10, 10),
     referenceZ: 0,
     up: Z_UP,
@@ -155,7 +157,7 @@ describe('VOL-POINT-SAMPLE — tilted plane crossing the reference (analytic cut
   //   cut  = 50 m³ by symmetry, net = 0.
   const s = 0.4;
   const pts = lattice(40, 40, 0.25, (x) => s * (x - 5));
-  const res = volumeCutFill({
+  const res = pointSampleCutFill({
     polygon: rect(10, 10),
     referenceZ: 0,
     up: Z_UP,
@@ -190,7 +192,7 @@ describe('VOL-POINT-SAMPLE — square pyramid (V = L²H/3)', () => {
     const r = Math.max(Math.abs(x - 5), Math.abs(y - 5));
     return H * (1 - r / (L / 2));
   });
-  const res = volumeCutFill({
+  const res = pointSampleCutFill({
     polygon: rect(L, L),
     referenceZ: 0,
     up: Z_UP,
@@ -237,7 +239,7 @@ describe('VOL-POINT-SAMPLE — right circular cone (V = πR²H/3)', () => {
     -5,
     -5,
   );
-  const res = volumeCutFill({ polygon, referenceZ: 0, up: Z_UP, positions: pack(pts) });
+  const res = pointSampleCutFill({ polygon, referenceZ: 0, up: Z_UP, positions: pack(pts) });
 
   test('polygon area is the inscribed 256-gon area, not πR²', () => {
     const gonArea = (N_GON / 2) * R * R * Math.sin((2 * Math.PI) / N_GON);
@@ -276,7 +278,7 @@ describe('FAILURE MODE — density gradient biases the wedge by −30 %', () => 
   const pts: Array<[number, number, number]> = [];
   for (const x of centres(40, 0.125)) for (const y of ys) pts.push([x, y, s * x]);
   for (const x of centres(10, 0.5, 5)) for (const y of ys) pts.push([x, y, s * x]);
-  const res = volumeCutFill({
+  const res = pointSampleCutFill({
     polygon: rect(10, 10),
     referenceZ: 0,
     up: Z_UP,
@@ -315,7 +317,7 @@ describe('FAILURE MODE — missing footprint quadrant invents material (+33 %)',
       pts.push([x, y, 2]);
     }
   }
-  const res = volumeCutFill({
+  const res = pointSampleCutFill({
     polygon: rect(10, 10),
     referenceZ: 0,
     up: Z_UP,
@@ -346,7 +348,7 @@ describe('FAILURE MODE — sloped base: net survives, cut/fill do not', () => {
   //   cut  = fill − 20 = 52.9 m³
   //   net  = 20 m³ exactly — the linear base averages out of the DIFFERENCE.
   const pts = lattice(40, 40, 0.25, (x) => 0.5 * x + 0.2);
-  const res = volumeCutFill({
+  const res = pointSampleCutFill({
     polygon: rect(10, 10),
     referenceZ: 2.5,
     up: Z_UP,
@@ -377,14 +379,13 @@ describe('FAILURE MODE — sloped base: net survives, cut/fill do not', () => {
 describe('VOL-STOCKPILE — flat-topped pile on a flat apron, explicit base', () => {
   // Footprint 20 m × 20 m (400 m²). A 12 m × 12 m flat-topped pile 3 m high
   // sits at [4,16]²; the rest of the footprint is apron ground at z = 0.
-  // Lattice: spacing 0.25 ⇒ 80 × 80 = 6400 samples, of which the pile holds
-  // 48 × 48 = 2304 (exactly 36 % — the pile is 144/400 of the footprint).
+  // Lattice: spacing 0.25 ⇒ 80 × 80 = 6400 samples. True volume 432 m³.
   //
-  // Closed form, base explicit at 0:
-  //   volume   = 400 · 3 · 0.36                    = 432 m³   (= 144 · 3, exact)
-  //   σ(thick) = 3·√(0.36·0.64)                    = 1.44 m
-  //   sampling = 400 · 1.44 / √6400                = 7.2 m³
-  //   base     = 0 (explicit) ⇒ σ = 7.2 m³, ±1.667 %
+  // The area-weighted grid derives a 0.625 m cell from the spacing; the pile
+  // edges at 4 and 16 fall inside cells, whose median goes to the majority
+  // side, so the figure carries a cell-edge discretisation error (measured
+  // 442.97 m³, +2.5 %). The thickness spread is the SAMPLE std (n − 1):
+  // 3·√(0.36·0.64)·√(6400/6399).
   const ys = centres(80, 0.25);
   const pts: Array<[number, number, number]> = [];
   for (const x of centres(80, 0.25)) {
@@ -400,26 +401,23 @@ describe('VOL-STOCKPILE — flat-topped pile on a flat apron, explicit base', ()
     base: { mode: 'explicit', z: 0 },
   });
 
-  test('volume is the exact 432 m³ (144 m² × 3 m)', () => {
+  test('volume is 432 m³ within the cell-edge discretisation (3 %)', () => {
     expect(res.breakdown.pointsInPolygon).toBe(6400);
-    // Constant-per-region field on an exactly proportional lattice ⇒ no
-    // quadrature error; 1e-6 relative is Float32 storage only.
-    expect(relErr(res.volume, 432)).toBeLessThan(1e-6);
+    expect(relErr(res.volume, 432)).toBeLessThan(0.03);
     expect(res.cut).toBe(0);
+    expect(res.breakdown.coverageFraction).toBeCloseTo(1, 9);
+    expect(res.interpolatedFraction).toBe(0);
   });
 
-  test('the band is the hand-derived 7.2 m³ 1σ, all of it sampling error', () => {
-    expect(relErr(res.breakdown.thicknessStdDev, 1.44)).toBeLessThan(1e-6);
-    expect(relErr(res.breakdown.samplingError, 7.2)).toBeLessThan(1e-6);
+  test('the band is the per-cell surface term and the spread is the n − 1 std', () => {
+    expect(relErr(res.breakdown.thicknessStdDev, 1.44 * Math.sqrt(6400 / 6399))).toBeLessThan(1e-6);
     expect(res.breakdown.basePlaneError).toBe(0); // explicit base ⇒ no base term
-    expect(relErr(res.sigma, 7.2)).toBeLessThan(1e-6);
-    expect(res.relativeError).toBeCloseTo(7.2 / 432, 9);
-    expect(res.low).toBeCloseTo(432 - 7.2, 4);
-    expect(res.high).toBeCloseTo(432 + 7.2, 4);
+    expect(res.sigma).toBeCloseTo(res.breakdown.samplingError, 12);
+    expect(res.sigma).toBeGreaterThan(0); // only the cells straddling the edge carry spread
+    expect(res.relativeError).toBeLessThan(0.01);
   });
 
   test('grades HIGH on this ideal scene, and still carries the standing caveats', () => {
-    // 6400 pts ≥ 100, relErr 1.7 % ≤ 5 %, density 16 pts/m² ≥ 5, unit known.
     expect(res.confidence).toBe('high');
     expect(res.caveats.some((c) => c.includes('not a triangulated'))).toBe(true);
     expect(res.caveats.some((c) => c.includes('spatially independent'))).toBe(true);
@@ -427,10 +425,9 @@ describe('VOL-STOCKPILE — flat-topped pile on a flat apron, explicit base', ()
 });
 
 describe('VOL-STOCKPILE — inferred base recovers the same pile on flat ground', () => {
-  // Same scene, but the base is INFERRED from the lowest 5 % of inside heights
-  // instead of given. On a flat apron the 5th percentile is exactly 0 and both
-  // base-uncertainty terms (ground scatter, systematic ground-mean bias)
-  // vanish, so the inferred answer must equal the explicit one to the bit.
+  // Same scene, but the base is INFERRED from the lowest 5 % of inside heights.
+  // On a flat apron the 5th percentile is exactly 0 and both base-uncertainty
+  // terms vanish, so the inferred answer equals the explicit one.
   const ys = centres(80, 0.25);
   const pts: Array<[number, number, number]> = [];
   for (const x of centres(80, 0.25)) {
@@ -440,12 +437,15 @@ describe('VOL-STOCKPILE — inferred base recovers the same pile on flat ground'
     }
   }
   const res = stockpileVolume({ polygon: rect(20, 20), positions: pack(pts), up: Z_UP });
+  const explicit = stockpileVolume({
+    polygon: rect(20, 20), positions: pack(pts), up: Z_UP, base: { mode: 'explicit', z: 0 },
+  });
 
-  test('base lands at 0 with zero uncertainty; volume is still 432 m³', () => {
+  test('base lands at 0 with zero uncertainty; volume equals the explicit-base figure', () => {
     expect(res.breakdown.baseZ).toBeCloseTo(0, 9);
     expect(res.breakdown.baseUncertainty).toBeCloseTo(0, 9);
-    expect(relErr(res.volume, 432)).toBeLessThan(1e-6);
-    expect(relErr(res.sigma, 7.2)).toBeLessThan(1e-6);
+    expect(res.volume).toBe(explicit.volume);
+    expect(res.sigma).toBe(explicit.sigma);
   });
 
   test('inferring the base is disclosed even when it happens to be perfect', () => {
@@ -473,35 +473,28 @@ describe('VOL-STOCKPILE — pyramidal pile against the analytic L²H/3', () => {
     base: { mode: 'explicit', z: 0 },
   });
 
-  test('volume matches 216 m³ within the midpoint-rule error', () => {
-    // Same midpoint bias as the standalone pyramid (+0.1 % order, positive
-    // because the L∞ cone is convex in the sampled direction); 0.5 % tolerance.
-    expect(relErr(res.volume, 216)).toBeLessThan(5e-3);
+  test('volume matches 216 m³ within the grid error', () => {
+    // Measured 215.04 m³ (−0.44 %); 1 % tolerance.
+    expect(relErr(res.volume, 216)).toBeLessThan(1e-2);
   });
 
-  test('the band is wider than the flat-top scene relative to a smaller volume', () => {
-    // Thickness varies continuously here (σ ≈ 0.96 m against the flat top's
-    // 1.44 m — a tapering pile actually has LESS spread than a two-level one),
-    // but the same absolute sampling error now sits on a 216 m³ volume instead
-    // of 432 m³, so the RELATIVE band is the wider figure. The honest reading
-    // is that σ(thickness) tracks height dispersion, not pile complexity.
+  test('a continuously varying surface carries a nonzero surface term', () => {
     expect(res.breakdown.thicknessStdDev).toBeGreaterThan(0.9);
-    expect(res.relativeError).toBeGreaterThan(7.2 / 432);
+    expect(res.sigma).toBeGreaterThan(0);
   });
 });
 
-// ── VOL-STOCKPILE — registered failure modes ────────────────────────────────
+// ── VOL-STOCKPILE — the point-sample failure modes, fixed by v3 ─────────────
 //
-// Register: failureModes: ["non-uniform density", "coverage gaps",
-// "base-surface error"].
+// Up to version 2 of olv.volume.stockpile both scenes below were reported wrong by tens
+// of percent (540 and 617 m³ for 432 m³), graded HIGH, with a band that did
+// not contain the truth. The area-weighted grid reads both near 432 m³ and
+// discloses the share of the footprint it could not observe.
 
-describe('FAILURE MODE — a coverage gap over-reports 25 % and still grades HIGH', () => {
-  // The 432 m³ pile again, but a 4 m × 20 m strip of the footprint (x > 16) is
-  // unscanned — 20 % of the area, containing NO pile. Remaining samples:
-  //   N = 6400 − 16·80 = 5120, of which 2304 sit on the pile ⇒ 45 %.
-  //   volume = 400 · 3 · 0.45 = 540 m³ against a true 432 m³ (+25 %).
-  //   σ(thick) = 3√(0.45·0.55) = 1.492…, sampling = 400σ/√5120 ≈ 8.34 m³
-  //   ⇒ relative error ≈ 1.5 %, density 12.8 pts/m² ⇒ graded HIGH.
+describe('FIXED — a coverage gap outside the scan is excluded and disclosed, not averaged in', () => {
+  // A 4 m × 20 m strip (x > 16, 20 % of the footprint, no pile) is unscanned.
+  // It lies outside the convex extent of the covered cells, so it is neither
+  // interpolated nor counted; the volume is the pile's own.
   const ys = centres(80, 0.25);
   const pts: Array<[number, number, number]> = [];
   for (const x of centres(80, 0.25)) {
@@ -517,41 +510,23 @@ describe('FAILURE MODE — a coverage gap over-reports 25 % and still grades HIG
     up: Z_UP,
     base: { mode: 'explicit', z: 0 },
   });
-  const p = 2304 / 5120;
-  const expectedSigma = (400 * 3 * Math.sqrt(p * (1 - p))) / Math.sqrt(5120);
+  const legacy = pointSampleCutFill({ polygon: rect(20, 20), referenceZ: 0, up: Z_UP, positions: pack(pts) });
 
-  test('reports 540 m³ for a 432 m³ pile — the exact hand-derived +25 %', () => {
-    expect(res.breakdown.pointsInPolygon).toBe(5120);
-    expect(relErr(res.volume, 540)).toBeLessThan(1e-6);
-    expect(res.volume / 432).toBeCloseTo(1.25, 6);
+  test('reads 432 m³ within 3 % where the point sample read 540 m³', () => {
+    expect(relErr(legacy.fill, 540)).toBeLessThan(1e-6);
+    expect(relErr(res.volume, 432)).toBeLessThan(0.03);
   });
 
-  test('the ±band is ~1.5 % and the grade is HIGH — the band does not see the gap', () => {
-    // This is the honest finding this scene exists to record: the uncertainty
-    // model quantifies SAMPLING SCATTER and BASE HEIGHT, neither of which is
-    // sensitive to where the samples are. A 25 % spatial bias passes through
-    // untouched and the confidence tier rises rather than falls.
-    expect(relErr(res.sigma, expectedSigma)).toBeLessThan(1e-6);
-    expect(res.relativeError).toBeLessThan(0.02);
-    expect(res.confidence).toBe('high');
-    // The true 432 m³ lies BELOW the −1σ bound of the reported band: the
-    // interval does not contain the answer and never had a mechanism to.
-    expect(res.low).toBeGreaterThan(432);
+  test('states the excluded share instead of hiding it', () => {
+    expect(res.breakdown.coverageFraction).toBeLessThan(0.85);
+    expect(res.caveats.some((c) => /outside the scanned extent/.test(c))).toBe(true);
   });
 });
 
-describe('FAILURE MODE — non-uniform density over-reports the pile by 43 %', () => {
-  // The flat-topped 432 m³ pile again. A density gradient that is CORRELATED
-  // with the geometry — 4× denser over the pile footprint [4,16] than over the
-  // apron — is the realistic case (an operator walks the pile, not the yard).
-  //   dense columns: 12 m at 0.0625 m ⇒ 192; sparse: 8 m at 0.25 m ⇒ 32
-  //   rows: 80 at 0.25 m. N = 224 · 80 = 17 920.
-  //   pile samples = 192 · 48 = 9 216 ⇒ fraction 0.514285…
-  //   volume = 400 · 3 · 0.514285… = 617.142857… m³ (true 432 m³, +42.9 %).
-  //
-  // The contrast case is asserted below: a density gradient UNCORRELATED with
-  // the geometry costs nothing. The estimator is biased by correlation between
-  // density and thickness, not by non-uniformity as such.
+describe('FIXED — a density gradient correlated with the pile no longer weights it', () => {
+  // 4× denser over the pile columns [4,16] than over the apron. The point
+  // sample read (400 · 3 · 9216 / 17920) = 617.14 m³; the grid counts every
+  // cell once.
   const ys = centres(80, 0.25);
   const xs = [...centres(16, 0.25), ...centres(192, 0.0625, 4), ...centres(16, 0.25, 16)];
   const pts: Array<[number, number, number]> = [];
@@ -567,27 +542,15 @@ describe('FAILURE MODE — non-uniform density over-reports the pile by 43 %', (
     up: Z_UP,
     base: { mode: 'explicit', z: 0 },
   });
+  const legacy = pointSampleCutFill({ polygon: rect(20, 20), referenceZ: 0, up: Z_UP, positions: pack(pts) });
 
-  test('reports 617.14 m³ for a 432 m³ pile — the exact hand-derived +42.9 %', () => {
+  test('reads 432 m³ within 3 % where the point sample read 617 m³', () => {
     expect(res.breakdown.pointsInPolygon).toBe(17920);
-    expect(relErr(res.volume, (400 * 3 * 9216) / 17920)).toBeLessThan(1e-6);
-    expect(res.volume / 432).toBeGreaterThan(1.4);
+    expect(relErr(legacy.fill, (400 * 3 * 9216) / 17920)).toBeLessThan(1e-6);
+    expect(relErr(res.volume, 432)).toBeLessThan(0.03);
   });
 
-  test('the denser sample makes the band NARROWER while the error grows', () => {
-    // More points ⇒ smaller σ/√N ⇒ a tighter interval around a more wrong
-    // number. The reported density (44.8 pts/m²) is the very figure that earns
-    // the HIGH grade, and no caveat mentions the gradient.
-    expect(res.relativeError).toBeLessThan(0.01);
-    expect(res.confidence).toBe('high');
-    expect(res.caveats.some((c) => c.toLowerCase().includes('density'))).toBe(false);
-    expect(res.low).toBeGreaterThan(432);
-  });
-
-  test('the same 4× gradient costs nothing when it is uncorrelated with the pile', () => {
-    // Symmetric pyramidal pile (true 216 m³), 4× denser on x < 10. Because the
-    // pile is symmetric about x = 10, over-weighting one half re-weights two
-    // identical thickness distributions and the mean is unchanged.
+  test('a gradient uncorrelated with the pile costs nothing either', () => {
     const pile = (x: number, y: number): number => {
       const r = Math.max(Math.abs(x - 10), Math.abs(y - 10));
       return r >= 6 ? 0 : 4.5 * (1 - r / 6);
@@ -601,8 +564,7 @@ describe('FAILURE MODE — non-uniform density over-reports the pile by 43 %', (
       up: Z_UP,
       base: { mode: 'explicit', z: 0 },
     });
-    // Within the same 0.5 % midpoint-rule tolerance the uniform pyramid needed.
-    expect(relErr(symRes.volume, 216)).toBeLessThan(5e-3);
+    expect(relErr(symRes.volume, 216)).toBeLessThan(1e-2);
   });
 });
 

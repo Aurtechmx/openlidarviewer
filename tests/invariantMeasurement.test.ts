@@ -13,17 +13,17 @@
  * (polygonHygiene.ts) and `stockpileVolume` (stockpileVolume.ts).
  *
  * WHAT THE ESTIMATOR IS, AND WHICH RELATIONS FOLLOW. `volumeCutFill` is a 2.5D
- * height-field integral: it buckets each in-polygon point's Δz = z − referenceZ
- * and scales the sums by polygonArea / pointsInPolygon. So:
+ * height-field integral over an axis-aligned horizontal grid: each cell holding
+ * points contributes its footprint-clipped area times its median Δz. So:
  *
- *   • rotation about the UP axis is a symmetry (heights untouched, footprint
- *     congruent) and is asserted;
+ *   • rotation about the UP axis moves the points relative to the grid, so it
+ *     holds only to the grid's discretisation (asserted at TOL_ROT_GRID);
  *   • rotation about X or Y is NOT a symmetry. Tipping the solid relative to
  *     the horizontal reference plane changes the volume above that plane, and
  *     the suite pins that it changes rather than asserting a false invariance;
  *   • vertical translation is a symmetry only when referenceZ moves with the
  *     cloud. Moving the cloud alone is pinned by the sharper arithmetic
- *     identity Δfill = footprintArea · Δz;
+ *     identity Δfill = (covered + interpolated area) · Δz;
  *   • uniform scale s applied to cloud, polygon and referenceZ gives s³
  *     (area s², Δz s, point count unchanged).
  *
@@ -72,6 +72,12 @@ function makeRng(seed: number): () => number {
 const TOL_RIGID = 1e-13;
 /** Rotation about up applied to the cut/fill integral. Observed worst 2.9e-16. */
 const TOL_ROT_VOLUME = 1e-12;
+/**
+ * Rotation about up applied to the area-weighted grid integral. The grid is
+ * axis-aligned, so rotating the scene re-bins the points. Observed worst
+ * 2.7e-2 (volume) on the ~1100-point fixture.
+ */
+const TOL_ROT_GRID = 5e-2;
 /** Translation of a shoelace area, offsets to 1e6. Observed worst 1.5e-12. */
 const TOL_TRANSLATE_AREA = 1e-11;
 /**
@@ -486,8 +492,8 @@ describe('metamorphic: area', () => {
         polygon: [...HEX].reverse(),
         referenceZ: REF_Z,
         positions: emit(CLOUD, identity),
-      }).fill,
-    ).toBe(BASE.fill);
+      }).fill / BASE.fill,
+    ).toBeCloseTo(1, 12);
   });
 
   it('CONTRACT: signedArea2D is the signed quantity and flips exactly under reversal', () => {
@@ -544,9 +550,9 @@ describe('metamorphic: volumeCutFill', () => {
       });
       expect(r.pointsInPolygon).toBe(BASE.pointsInPolygon);
       assertRelClose(r.footprintArea, BASE.footprintArea, TOL_ROT_VOLUME, 'rotZ area');
-      assertRelClose(r.fill, BASE.fill, TOL_ROT_VOLUME, 'rotZ fill');
-      assertRelClose(r.cut, BASE.cut, TOL_ROT_VOLUME, 'rotZ cut');
-      assertScaledClose(r.net, BASE.net, BASE.fill + BASE.cut, TOL_ROT_VOLUME, 'rotZ net');
+      assertRelClose(r.fill, BASE.fill, TOL_ROT_GRID, 'rotZ fill');
+      assertRelClose(r.cut, BASE.cut, TOL_ROT_GRID, 'rotZ cut');
+      assertScaledClose(r.net, BASE.net, BASE.fill + BASE.cut, TOL_ROT_GRID, 'rotZ net');
     },
   );
 
@@ -627,7 +633,7 @@ describe('metamorphic: volumeCutFill', () => {
       expect(r.cut).toBe(0);
       assertRelClose(
         r.fill,
-        ABOVE_BASE.fill + ABOVE_BASE.footprintArea * t,
+        ABOVE_BASE.fill + (ABOVE_BASE.footprintArea * (1 - (ABOVE_BASE.excludedFraction ?? 0))) * t,
         TOL_PERMUTATION,
         `fill shift ${t}`,
       );
@@ -768,8 +774,8 @@ describe('metamorphic: stockpileVolume', () => {
       polygon: HEX.map((p) => apply(m, p)),
       positions: emit(CLOUD, (p) => apply(m, p)),
     });
-    assertRelClose(r.volume, SP_BASE.volume, TOL_ROT_VOLUME, 'stockpile rotZ volume');
-    assertRelClose(r.sigma, SP_BASE.sigma, TOL_ROT_VOLUME, 'stockpile rotZ sigma');
+    assertRelClose(r.volume, SP_BASE.volume, TOL_ROT_GRID, 'stockpile rotZ volume');
+    assertRelClose(r.sigma, SP_BASE.sigma, TOL_ROT_GRID, 'stockpile rotZ sigma');
     assertRelClose(
       r.breakdown.baseZ,
       SP_BASE.breakdown.baseZ,
@@ -900,21 +906,21 @@ describe('metamorphic: negative controls', () => {
     });
     assertRelClose(
       r.fill,
-      ABOVE_BASE.fill + ABOVE_BASE.footprintArea * t,
+      ABOVE_BASE.fill + (ABOVE_BASE.footprintArea * (1 - (ABOVE_BASE.excludedFraction ?? 0))) * t,
       TOL_PERMUTATION,
       'control ok',
     );
     expect(() =>
       assertRelClose(
         r.fill,
-        ABOVE_BASE.fill + ABOVE_BASE.footprintArea * t * 0.5,
+        ABOVE_BASE.fill + (ABOVE_BASE.footprintArea * (1 - (ABOVE_BASE.excludedFraction ?? 0))) * t * 0.5,
         TOL_PERMUTATION,
         'control half-coefficient',
       ),
     ).toThrow(/relative deviation/);
     // A tolerance loose enough to admit a wrong coefficient would be the real
     // failure mode, so pin how far off the wrong answer actually is.
-    expect(relDiff(r.fill, ABOVE_BASE.fill + ABOVE_BASE.footprintArea * t * 0.5)).toBeGreaterThan(
+    expect(relDiff(r.fill, ABOVE_BASE.fill + (ABOVE_BASE.footprintArea * (1 - (ABOVE_BASE.excludedFraction ?? 0))) * t * 0.5)).toBeGreaterThan(
       0.1,
     );
   });
@@ -934,7 +940,9 @@ describe('metamorphic: negative controls', () => {
     // this the permutation test could pass against a stub that ignores input.
     const src = emit(CLOUD, identity);
     const perturbed = shufflePoints(src, makeRng(0x1111));
-    perturbed[2] = perturbed[2] + 25;
+    // A cell's surface is a median, so one point cannot move it; raise a
+    // quarter of the (shuffled) cloud instead.
+    for (let i = 0; i < perturbed.length / 4; i += 3) perturbed[i + 2] += 25;
     const r = volumeCutFill({ polygon: HEX, referenceZ: REF_Z, positions: perturbed });
     expect(() => assertRelClose(r.fill, BASE.fill, TOL_PERMUTATION, 'control perturbed')).toThrow(
       /relative deviation/,

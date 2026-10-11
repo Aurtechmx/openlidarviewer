@@ -160,11 +160,15 @@ export function computeCivilProfileStats(
  */
 export function formatStationing(chainageM: number): string {
   if (!Number.isFinite(chainageM)) return '—';
-  const sign = chainageM < 0 ? '-' : '';
-  const m = Math.abs(chainageM);
-  const km = Math.floor(m / 1000);
-  const rem = m - km * 1000;
-  return `${sign}${km}+${rem.toFixed(2).padStart(6, '0')}`;
+  // Round to whole centimetres BEFORE splitting km from metres. Splitting
+  // first let 999.999 round its metre part up to 1000.00 inside km 0,
+  // printing "0+1000.00" for what is station 1+000.00.
+  const cm = Math.round(Math.abs(chainageM) * 100);
+  const sign = chainageM < 0 && cm > 0 ? '-' : '';
+  const km = Math.floor(cm / 100000);
+  const remCm = cm - km * 100000;
+  const rem = `${Math.floor(remCm / 100)}.${String(remCm % 100).padStart(2, '0')}`;
+  return `${sign}${km}+${rem.padStart(6, '0')}`;
 }
 
 /** Grade as a percentage string, e.g. 0.024 → "2.40%". */

@@ -5,7 +5,14 @@
  * and measure volume from every 3D point inside it." Sits as a leaf on
  * top of `volume.ts` so the existing `volumeCutFill` math is reused;
  * this module only adds the new SELECTION strategy and the helpers it
- * needs (screen projection, convex hull, percentile reference).
+ * needs (screen projection, footprint, percentile reference).
+ *
+ * The footprint is the DRAWN lasso projected onto the horizontal plane at the
+ * reference height (`footprint`). Up to version 2 of `olv.volume.stockpile` it was the
+ * convex hull of the selected points, which on a concave pick (an L-shaped
+ * slab) counted the empty notch as footprint area. The hull remains only as a
+ * fallback when the host cannot project the lasso, and the result says which
+ * one was used (`footprintBasis`).
  *
  * The 2D-vs-3D distinction matters:
  *   - The lasso is drawn in screen space (2D path).
@@ -308,15 +315,26 @@ export interface LassoVolumeInput {
   readonly referencePercentile?: number;
   /** World up vector. Defaults to `[0, 0, 1]`. */
   readonly up?: Vec3;
+  /**
+   * The drawn lasso projected onto the horizontal plane at the given reference
+   * height, in the same frame as `positions`, or null when it cannot be
+   * projected (a ray parallel to the plane). Omitted or null falls back to the
+   * convex hull of the selection.
+   */
+  readonly footprint?: (referenceZ: number) => ReadonlyArray<Vec3> | null;
 }
+
+/** Which polygon a lasso volume's footprint is. */
+export type LassoFootprintBasis = 'drawn-lasso' | 'convex-hull';
 
 /**
  * Compute the volumetric pick result from a lasso selection.
  *
  *   1. Extract XY of every selected point.
- *   2. Build the 2D convex hull of those XY points — that's the
- *      footprint polygon.
- *   3. Reference Z = percentile (default 5th) of selected Z values.
+ *   2. Reference Z = percentile (default 5th) of selected Z values.
+ *   3. Footprint = the drawn lasso on the plane at that reference
+ *      (`footprint`), or the 2D convex hull of the selection when the
+ *      host supplies none.
  *   4. Delegate to `volumeCutFill` against ONLY the selected subset.
  *
  * Returns the same `VolumeResult` shape as `volumeCutFill` so report
@@ -344,6 +362,8 @@ export interface LassoVolumeWithFootprint {
   readonly polygon3D: ReadonlyArray<Vec3>;
   /** Reference Z used by the cut/fill integration. */
   readonly referenceZ: number;
+  /** Which polygon the footprint is. Absent on the degenerate early returns. */
+  readonly footprintBasis?: LassoFootprintBasis;
 }
 
 export function volumeFromLassoWithFootprint(
@@ -471,7 +491,11 @@ export function volumeFromLassoWithFootprint(
   // value works — refZ is the cleanest.
   // Lift back through the same basis. For Z-up this is exactly [x, y, refZ],
   // byte-for-byte what it always was.
-  const polygon: Vec3[] = hull2D.map((p) => (basis.zAligned
+  const drawn = input.footprint?.(refZ) ?? null;
+  const useDrawn = drawn !== null && drawn.length >= 3
+    && drawn.every((v) => Number.isFinite(v[0]) && Number.isFinite(v[1]) && Number.isFinite(v[2]))
+    && polygonHorizontalArea(drawn.map(toPlane)) > 0;
+  const polygon: Vec3[] = useDrawn ? drawn.map((v) => [v[0], v[1], v[2]] as Vec3) : hull2D.map((p) => (basis.zAligned
     ? ([p.x, p.y, refZ] as Vec3)
     : ([
       basis.east[0] * p.x + basis.north[0] * p.y + basis.u[0] * refZ,
@@ -489,5 +513,6 @@ export function volumeFromLassoWithFootprint(
     result,
     polygon3D: polygon,
     referenceZ: refZ,
+    footprintBasis: useDrawn ? 'drawn-lasso' : 'convex-hull',
   };
 }

@@ -1712,6 +1712,17 @@ function parseVolumeRecord(v: unknown): VolumeRecord | undefined {
   if (isFiniteNum(v.skippedNonFinite) && v.skippedNonFinite > 0) {
     record.skippedNonFinite = v.skippedNonFinite;
   }
+  // Covered share of the footprint (area-weighted cut-fill, v3 on). Older
+  // files omit it and stay without it rather than claiming full coverage.
+  if (isFiniteNum(v.coverageFraction) && v.coverageFraction >= 0 && v.coverageFraction <= 1) {
+    record.coverageFraction = v.coverageFraction;
+  }
+  if (isFiniteNum(v.interpolatedFraction) && v.interpolatedFraction >= 0 && v.interpolatedFraction <= 1) {
+    record.interpolatedFraction = v.interpolatedFraction;
+  }
+  if (isFiniteNum(v.excludedFraction) && v.excludedFraction >= 0 && v.excludedFraction <= 1) {
+    record.excludedFraction = v.excludedFraction;
+  }
   // The estimator that produced the figure. A file written before the field
   // existed carries none, and none is left as none: reading it as the current
   // method would give a historical figure a meaning it was never computed

@@ -36,7 +36,7 @@ import {
   type StreamingLassoPart,
 } from '../../src/render/measure/lassoVolumeCompute';
 import { deriveVolumeRecord } from '../../src/render/measure/measureDerivations';
-import { POINT_SAMPLE_VOLUME_METHOD } from '../../src/render/measure/volume';
+import { CUT_FILL_VOLUME_METHOD } from '../../src/render/measure/volume';
 import { lassoStockpileResult } from '../../src/render/measure/stockpilePresenter';
 import {
   createProfileSectionSeam,
@@ -394,7 +394,7 @@ export function stockpileOutcome(
     referencePercentile: 0.05,
   });
   if (!out) throw new Error('lasso selected nothing');
-  const ps = deriveVolumeRecord(out.result, out.referenceZ, POINT_SAMPLE_VOLUME_METHOD);
+  const ps = deriveVolumeRecord(out.result, out.referenceZ, CUT_FILL_VOLUME_METHOD);
   const { record } = lassoStockpileResult(ps, {
     polygon: out.polygon3D,
     positions: out.selectedPositions,
