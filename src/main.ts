@@ -141,7 +141,7 @@ import type { DebugOverlay, StreamingDebugStats } from './ui/DebugOverlay';
 import type { ColorbarOverlay } from './ui/ColorbarOverlay';
 import { estimateDecodedBytes, estimateGpuBytes } from './render/streaming/streamingBudget';
 import { streamingHasGpsTime } from './render/streaming/StreamingSource';
-import { isZUpFormat } from './io/sniffFormat';
+import { isZUpFormat, sourceUpAxis } from './io/sniffFormat';
 // The PLY/OBJ/XYZ/CSV encoders load on first export (`loadExporters`).
 // Only the tiny file-router predicate is eager; the (large) serializer/parser
 // is dynamically imported in exportSession/importSession so it stays off the
@@ -2367,7 +2367,7 @@ const kmlDeps: KmlActionDeps = {
 const measurementExportActionDeps = (v: Viewer): MeasurementExportActionDeps => ({
   measure: v.measure,
   geo: exportGeoContext,
-  layers: { view: v, stableIdFor: runtime.layerIdentity.stableIdFor }, refuse: (m) => dropZone.setError(m), upAxis: () => crsService.context().upAxis,
+  layers: { view: v, stableIdFor: runtime.layerIdentity.stableIdFor }, refuse: (m) => dropZone.setError(m), upAxis: () => sourceUpAxis(crsService.context().upAxis, scans.activeCloud()?.sourceFormat, !!viewer?.streamingCloud),
   baseName,
   downloadText,
   loadMeasurementExport,
