@@ -103,8 +103,8 @@ describe('angleAtVertex', () => {
     expect(angleAtVertex(v(1, 0, 0), v(0, 0, 0), v(1, 1, 0))).toBeCloseTo(45, 6);
   });
 
-  it('returns zero for a degenerate ray', () => {
-    expect(angleAtVertex(v(0, 0, 0), v(0, 0, 0), v(1, 0, 0))).toBe(0);
+  it('is undefined (NaN) for a zero-length arm, not 0°', () => {
+    expect(angleAtVertex(v(0, 0, 0), v(0, 0, 0), v(1, 0, 0))).toBeNaN();
   });
 });
 

@@ -597,6 +597,24 @@ report and confidence, and keeps the static layers open.
 Unchanged from prior releases. Scans must share a coordinate reference system to
 be compared, and the viewer refuses rather than approximating.
 
+## Measurement GeoJSON heights and KML altitude
+
+OLV has no geoid model, so it cannot convert a sea-level (orthometric) height
+to a WGS 84 ellipsoidal height. The measurement GeoJSON therefore writes 2D
+positions unless the scan's heights are already WGS 84 ellipsoidal heights in
+metres (EPSG:4979) on an unshifted WGS 84 datum. Source elevations travel
+unconverted in each feature's `elevations_source`, with their datum and unit in
+the collection's `vertical_reference`; a reader who needs ellipsoidal heights
+must apply a geoid model (for NAVD88, GEOID18) themselves.
+
+The Site KML writes a metric sea-level height (NAVD88, MSL, EGM2008 or EGM96)
+as `absolute` altitude without conversion. KML absolute altitude is referenced
+to the EGM96 geoid, so a non-EGM96 height can sit up to about 1 to 2 m above or
+below its true position in a viewer. The KML note states this.
+
+A measurement with no shape in longitude and latitude (a vertical wall area, a
+purely vertical distance) is exported with no geometry and a stated reason.
+
 ## Longitude and latitude exports apply no datum transformation
 
 The site KML, the scan-area KML, the RFC 7946 contour GeoJSON and the accepted

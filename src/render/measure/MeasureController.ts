@@ -70,6 +70,8 @@ import {
   formatLengthRender,
   formatAreaRender,
   formatAngle,
+  formatArmAngle,
+  ANGLE_UNDEFINED_READOUT,
   formatFramedBearing,
   type BearingFrame,
   formatGrade,
@@ -1810,6 +1812,14 @@ export class MeasureController {
   private _commitDraft(): void {
     if (!this._draft) return;
     const m = this._draft;
+    // An angle with a zero-length arm has no defined value; like a refused Area
+    // ring it is not committed. The coincident point is dropped so the draft
+    // stays open for a different third point.
+    if (m.kind === 'angle' && !Number.isFinite(angleAtVertex(...(this._iso(m.points) as [Vec3, Vec3, Vec3])))) {
+      m.points.pop();
+      this._setHintText(`Angle not saved. ${ANGLE_UNDEFINED_READOUT}: a point coincides with the vertex. Pick a different point.`);
+      return;
+    }
     // Profile-only: stamp a sampled height-vs-distance chart onto the
     // measurement record. The sampler is allowed to fail (no cloud, empty
     // resident set on a streaming scan still warming up); a null return
@@ -2105,7 +2115,7 @@ export class MeasureController {
           ? this._fmtVertical(Math.abs(verticalDelta(p[0], p[1], this._worldUp).vertical))
           : '—';
       case 'angle':
-        return p.length >= 3 ? formatAngle(angleAtVertex(q[0], q[1], q[2])) : '—';
+        return p.length >= 3 ? formatArmAngle(angleAtVertex(q[0], q[1], q[2])) : '—';
       case 'slope': {
         if (p.length < 2) return '—';
         const s = slopeBetween(q[0], q[1], this._worldUp);
@@ -2424,7 +2434,7 @@ export class MeasureController {
       );
       L.push({
         anchor: vertex,
-        text: formatAngle(angleAtVertex(...this._iso([a, vertex, c]) as [Vec3, Vec3, Vec3])),
+        text: formatArmAngle(angleAtVertex(...this._iso([a, vertex, c]) as [Vec3, Vec3, Vec3])),
         primary: true,
       });
     }
@@ -2649,7 +2659,7 @@ export class MeasureController {
       if (pts.length === 2) {
         L.push({
           anchor: pts[1],
-          text: formatAngle(angleAtVertex(...this._iso([pts[0], pts[1], cur]) as [Vec3, Vec3, Vec3])),
+          text: formatArmAngle(angleAtVertex(...this._iso([pts[0], pts[1], cur]) as [Vec3, Vec3, Vec3])),
           primary: true,
         });
       }

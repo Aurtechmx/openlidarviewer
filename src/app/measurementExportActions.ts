@@ -20,7 +20,9 @@ import { activeScanBasisOf, type ActiveScanBasis } from './measurementScanHooks'
 import { appToast } from '../ui/panelChrome';
 import { resolveLocalToLonLat, LonLatConversionError } from '../export/lonLatMapper';
 import { lonLatUpAxisRefusal } from '../export/scanFootprint';
-import { kmlAltitudeMode } from '../export/kmlExport';
+import { resolveVerticalEpsg } from '../geo/height';
+import { UNIT_FACTORS } from '../units/units';
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import { SigningError } from '../export/reportSignature';
 import { reportSignerLabel, reportSigningRequested } from '../export/reportSigningState';
 
@@ -352,8 +354,8 @@ export async function exportMeasurementsFile(
  * The WGS 84 placement for a GeoJSON export, or the sentence that refuses it.
  *
  * The same resolver, datum refusals and NAD83-style caveat the site KML uses,
- * and the same altitude rule: a height is written only when the source's
- * vertical datum is a recognised metric height above sea level. Output-frame
+ * but its own height rule ({@link geoJsonHeightPolicy}): RFC 7946 heights are
+ * ellipsoidal, so KML's sea-level rule does not carry over. Output-frame
  * points (origin restored) are moved back to the active scan's local frame
  * before the mapper, which is built on that origin.
  */
@@ -366,18 +368,65 @@ export function geoJsonLonLat(
   if (!mapper.ok) return { refused: `GeoJSON export refused. ${mapper.reason} ${GEOJSON_CSV_HINT}` };
   const axis = lonLatUpAxisRefusal(upAxis);
   if (axis) return { refused: `GeoJSON export refused. ${axis} ${GEOJSON_CSV_HINT}` };
-  const altitude = kmlAltitudeMode(crs?.verticalDatum ?? null, crs?.verticalUnitToMetres);
-  const withAltitude = altitude.mode === 'absolute';
+  const policy = geoJsonHeightPolicy(crs, mapper.datumCaveat);
   const [ox, oy, oz] = geo.origin;
   return {
     lonLat: {
       map: (p) => mapper.map([p[0] - ox, p[1] - oy, p[2] - oz]),
-      withAltitude,
-      altitudeNote: withAltitude
-        ? altitude.reason.replace('Altitudes are', 'The third coordinate is')
-        : altitude.reason.replace(/^Heights are clamped to ground/, 'Positions are 2D (no height written)').replace(/ Altitudes in this file are not authoritative\.$/, ''),
+      withAltitude: policy.withAltitude,
+      altitudeNote: policy.note,
       datumCaveat: mapper.datumCaveat,
+      sourceHeights: policy.sourceHeights,
     },
+  };
+}
+
+/** A label for the source vertical unit, from its factor to metres. */
+function verticalUnitLabel(toMetres: number | undefined): string {
+  if (toMetres === undefined || !Number.isFinite(toMetres) || toMetres <= 0) return 'unknown unit';
+  if (Math.abs(toMetres - 1) < 1e-9) return 'metre';
+  if (Math.abs(toMetres - UNIT_FACTORS.M_PER_FT) < 1e-9) return 'foot';
+  if (Math.abs(toMetres - UNIT_FACTORS.M_PER_US_FT) < 1e-9) return 'US survey foot';
+  return `source unit (1 unit = ${toMetres} m)`;
+}
+
+/**
+ * The GeoJSON height rule, separate from KML's.
+ *
+ * RFC 7946 section 4 defines a third position element as height in metres
+ * above the WGS 84 ellipsoid. An orthometric elevation (NAVD88, EGM96, MSL…)
+ * differs from that by the local geoid undulation — tens of metres — and OLV
+ * carries no geoid model to convert it. So a height is written only when the
+ * source heights already ARE WGS 84 ellipsoidal heights in metres (EPSG:4979)
+ * and the horizontal datum was not substituted (no datum caveat): then the
+ * value passes through unchanged and means exactly what RFC 7946 says. Every
+ * other case writes 2D positions and keeps the source elevations, their unit
+ * and their datum in the feature properties, unconverted.
+ */
+export function geoJsonHeightPolicy(
+  crs: ResolvedCrs | null,
+  datumCaveat: string | null,
+): { withAltitude: boolean; note: string; sourceHeights: { verticalDatum: string | null; unit: string } } {
+  const datum = crs?.verticalDatum?.trim() || null;
+  const code = resolveVerticalEpsg({ verticalEpsg: crs?.verticalEpsg, verticalDatum: datum ?? undefined });
+  const metric = crs?.verticalUnitToMetres !== undefined && Math.abs(crs.verticalUnitToMetres - 1) < 1e-9;
+  const sourceHeights = { verticalDatum: datum ?? (code !== undefined ? `EPSG:${code}` : null), unit: verticalUnitLabel(crs?.verticalUnitToMetres) };
+  if (code === 4979 && metric && !datumCaveat) {
+    return {
+      withAltitude: true,
+      note: 'The third coordinate is the source height, already metres above the WGS 84 ellipsoid (EPSG:4979), as RFC 7946 defines it; it is passed through unconverted.',
+      sourceHeights,
+    };
+  }
+  const why = datum
+    ? `the source heights are on ${datum}, not metres above the WGS 84 ellipsoid, and no geoid conversion is applied`
+    : 'the source declares no vertical datum';
+  return {
+    withAltitude: false,
+    note:
+      `Positions are 2D (no height written): RFC 7946 defines a third coordinate as metres above the WGS 84 ellipsoid, and ${why}. `
+      + 'The source elevations are kept unconverted in each feature\'s elevations_source property; see vertical_reference.',
+    sourceHeights,
   };
 }
 

@@ -112,6 +112,13 @@ export interface GeoJsonLonLat {
   readonly withAltitude: boolean;
   readonly altitudeNote: string;
   readonly datumCaveat: string | null;
+  /**
+   * When set, each feature carries its source elevations (unconverted) as
+   * `elevations_source`, and the file states their datum and unit once as
+   * `vertical_reference`. The GeoJSON height policy sets it; RFC 7946 heights
+   * are ellipsoidal, so an orthometric source height rides here instead.
+   */
+  readonly sourceHeights?: { readonly verticalDatum: string | null; readonly unit: string };
 }
 
 /** The refusal when a GeoJSON cannot be placed in WGS 84 longitude/latitude. */
@@ -316,6 +323,27 @@ export function areaWithheldNote(
   return v.ok ? undefined : `Area withheld: ${v.text}`;
 }
 
+/** Why an Angle reports no angle: an arm has zero length, so the angle is undefined. */
+export const ANGLE_UNDEFINED_NOTE =
+  'Angle withheld: an arm has zero length (the vertex coincides with an end point), so the angle is undefined.';
+
+/**
+ * The stated reason an Angle measurement reports no `angle_deg`, or undefined
+ * when it reports one (or is not a complete Angle). Same verdict
+ * `measurementMetrics` uses to omit the key.
+ */
+export function angleWithheldNote(
+  m: Measurement,
+  up: Vec3,
+  unitToMetres: number,
+  verticalToMetres: number = unitToMetres,
+): string | undefined {
+  if (m.kind !== 'angle' || !isComplete(m)) return undefined;
+  const Vv = Number.isFinite(verticalToMetres) && verticalToMetres > 0 ? verticalToMetres : unitToMetres;
+  const mp = m.points.map((p) => toMetricFrame(p, up, unitToMetres, Vv));
+  return Number.isFinite(angleAtVertex(mp[0], mp[1], mp[2])) ? undefined : ANGLE_UNDEFINED_NOTE;
+}
+
 /**
  * Metric keys measured along the up axis alone, in the Z unit. On a geographic
  * frame they are still honest figures, so a refused kind keeps them.
@@ -348,13 +376,10 @@ export function geographicFilter(
   );
 }
 
-/** GeoJSON geometry type for a kind. */
-function geometryFor(
-  m: Measurement,
-  ctx: MeasurementExportContext,
-  lonLat: GeoJsonLonLat,
-): { type: 'LineString' | 'Polygon' | 'Point'; coordinates: unknown } | null {
-  const t = (p: Vec3): number[] => lonLatPosition(lonLat, ctx.toOutput(p, m));
+type GeoJsonGeometry = { type: 'LineString' | 'Polygon'; coordinates: unknown };
+
+/** The points a kind's geometry is drawn through, in LOCAL frame; null when incomplete. */
+function geometryPoints(m: Measurement, ctx: MeasurementExportContext): { type: 'LineString' | 'Polygon'; points: Vec3[] } | null {
   switch (m.kind) {
     case 'distance':
     case 'polyline':
@@ -362,31 +387,84 @@ function geometryFor(
     case 'angle':
     case 'slope':
     case 'profile':
-      return m.points.length >= 2
-        ? { type: 'LineString', coordinates: m.points.map(t) }
-        : null;
+      return m.points.length >= 2 ? { type: 'LineString', points: m.points } : null;
     case 'area':
-    case 'volume': {
-      if (m.points.length < 3) return null;
-      const ring = m.points.map(t);
-      ring.push(ring[0]); // close the ring (RFC 7946)
-      return { type: 'Polygon', coordinates: [ring] };
-    }
+    case 'volume':
+      return m.points.length >= 3 ? { type: 'Polygon', points: m.points } : null;
     case 'box': {
       if (m.points.length < 2) return null;
       // Footprint = the four bottom corners (indices 0..3 of boxCorners).
       const corners = boxCorners(boxFromCorners(m.points[0], m.points[1]), ctx.up);
-      const ring = [corners[0], corners[1], corners[2], corners[3]].map(t);
-      ring.push(ring[0]);
-      return { type: 'Polygon', coordinates: [ring] };
+      return { type: 'Polygon', points: [corners[0], corners[1], corners[2], corners[3]] };
     }
   }
 }
 
+/** Distinct lon/lat pairs (the height is not part of the planar shape). */
+function distinctLonLat(positions: readonly number[][]): number {
+  return new Set(positions.map((q) => `${q[0]},${q[1]}`)).size;
+}
+
+/** Shoelace area of a lon/lat ring, in square degrees (unsigned). */
+function lonLatRingArea(ring: readonly number[][]): number {
+  let a = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const [x1, y1] = ring[i];
+    const [x2, y2] = ring[(i + 1) % ring.length];
+    a += x1 * y2 - x2 * y1;
+  }
+  return Math.abs(a) / 2;
+}
+
+/**
+ * Why a written geometry would be degenerate in lon/lat, or null when it is a
+ * valid RFC 7946 shape. Checked AFTER conversion to the output frame: a
+ * vertical wall or a purely vertical distance is valid in 3D but collapses
+ * once projected to longitude/latitude.
+ */
+export function collapsedGeometryReason(type: 'LineString' | 'Polygon', positions: readonly number[][]): string | null {
+  if (type === 'LineString') {
+    return distinctLonLat(positions) < 2
+      ? 'The line collapses to a single longitude/latitude (it is vertical or shorter than the coordinate precision), so no LineString can be written. The measured values are kept with the feature.'
+      : null;
+  }
+  const distinct = distinctLonLat(positions);
+  let span = 0;
+  for (const q of positions) for (const r of positions) span = Math.max(span, Math.abs(q[0] - r[0]), Math.abs(q[1] - r[1]));
+  // Relative test: a ring whose area is negligible against its own extent is
+  // a line in plan (rounding at 1e-8 degrees leaves a sliver, not exactly 0).
+  if (distinct < 3 || !(lonLatRingArea(positions) > 1e-9 * span * span)) {
+    return 'The ring has no plan area in longitude/latitude (it is vertical or collinear in plan), so no valid Polygon can be written. The measured values are kept with the feature.';
+  }
+  return null;
+}
+
+/** GeoJSON geometry for a kind, validated in the output frame, plus the source heights of its points. */
+function geometryFor(
+  m: Measurement,
+  ctx: MeasurementExportContext,
+  lonLat: GeoJsonLonLat,
+): { geometry: GeoJsonGeometry | null; withheld: string | null; elevations: (number | null)[] } | null {
+  const g = geometryPoints(m, ctx);
+  if (!g) return null;
+  const out = g.points.map((p) => ctx.toOutput(p, m));
+  const positions = out.map((p) => lonLatPosition(lonLat, p));
+  const elevations = out.map((p) => {
+    const z = lonLat.map(p)[2];
+    return Number.isFinite(z) ? Math.round(z * 1e4) / 1e4 : null;
+  });
+  const withheld = collapsedGeometryReason(g.type, positions);
+  if (withheld) return { geometry: null, withheld, elevations };
+  if (g.type === 'LineString') return { geometry: { type: 'LineString', coordinates: positions }, withheld: null, elevations };
+  const ring = positions.concat([positions[0]]); // close the ring (RFC 7946)
+  return { geometry: { type: 'Polygon', coordinates: [ring] }, withheld: null, elevations };
+}
+
 /** The `area_withheld` property for a record whose ring establishes no area. */
-function areaNoteProp(m: Measurement, ctx: MeasurementExportContext): { area_withheld?: string } {
+function areaNoteProp(m: Measurement, ctx: MeasurementExportContext): { area_withheld?: string; angle_withheld?: string } {
   const note = areaWithheldNote(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
-  return note ? { area_withheld: note } : {};
+  const angle = angleWithheldNote(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
+  return { ...(note ? { area_withheld: note } : {}), ...(angle ? { angle_withheld: angle } : {}) };
 }
 
 /**
@@ -408,8 +486,9 @@ export function measurementsToGeoJSON(
   const unitsKnown = ctx.unitsVerified ?? true;
   const features = measurements
     .map((m) => {
-      const geometry = geometryFor(m, ctx, lonLat);
-      if (!geometry) return null;
+      const placed = geometryFor(m, ctx, lonLat);
+      if (!placed) return null;
+      const geometry = placed.geometry;
       // A figure the geographic frame refuses stays as its key with a null
       // value, and the feature says why, so a reader sees it was withheld
       // rather than never computed.
@@ -426,6 +505,8 @@ export function measurementsToGeoJSON(
         ...(unitsKnown ? metrics : inSourceUnits(metrics)),
         ...(geographicRefuses(m, ctx.geographic) ? { not_available: GEOGRAPHIC_NOT_AVAILABLE } : {}),
         ...areaNoteProp(m, ctx),
+        ...(placed.withheld ? { geometry_withheld: placed.withheld } : {}),
+        ...(lonLat.sourceHeights ? { elevations_source: placed.elevations } : {}),
       };
       if (ctx.crsName) properties.crs = ctx.crsName;
       // Same coverage verdict the CSV's grid_authority column carries — see
@@ -448,6 +529,14 @@ export function measurementsToGeoJSON(
     features,
     coordinate_note: [lonLat.datumCaveat, lonLat.altitudeNote].filter(Boolean).join(' '),
   };
+  if (lonLat.sourceHeights) {
+    const { verticalDatum, unit } = lonLat.sourceHeights;
+    fc.vertical_reference = {
+      elevations_source_datum: verticalDatum ?? 'not declared',
+      elevations_source_unit: unit,
+      note: 'elevations_source lists each geometry vertex\'s source elevation in this datum and unit, unconverted. It is not an RFC 7946 (WGS 84 ellipsoidal) height.',
+    };
+  }
   // Route the export through the ONE evidence gate (PR6): measurements sit below
   // their required evidence level, so the file carries the exploratory verdict
   // rather than leaving with no gate stamp at all. RFC 7946 permits foreign
@@ -650,7 +739,8 @@ export function measurementsToCsv(
     const status = evidenceStatus(claimForMeasurement(m) ?? 'MEAS-DISTANCE');
     const units = unitsKnown ? status : `${status}; units-unverified (source render units, not metres)`;
     const withGeo = geographicRefuses(m, ctx.geographic) ? `${units}; ${GEOGRAPHIC_NOT_AVAILABLE}` : units;
-    const note = areaWithheldNote(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
+    const note = areaWithheldNote(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres)
+      ?? angleWithheldNote(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
     return note ? `${withGeo}; ${note}` : withGeo;
   };
   for (const m of measurements) {
