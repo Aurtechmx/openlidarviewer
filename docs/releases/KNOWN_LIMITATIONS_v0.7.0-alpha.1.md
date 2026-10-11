@@ -325,7 +325,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 97 for the shell, 75 for the renderer and 23 for the Analyse panel,
-across 1107 modules with no dependency cycles.
+across 1108 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -658,3 +658,20 @@ resident and declared point counts. A high noise return inside a footprint can
 move such a figure a long way. A cloud reduced only by a stride keeps original
 records and is filtered as usual. Noise and Withheld points are not removed
 before the voxel pass at load.
+
+## Change detection does not estimate a vertical offset between epochs
+
+Epoch alignment solves yaw and x/y only. A systematic vertical offset between
+the two epochs, such as a datum or geoid difference or a sensor bias, is not
+estimated or removed, so it appears as change over the whole compared area. The
+change result in the panel says so. Check the difference over ground known to
+be stable: a non-zero mean there is a bias, not change.
+
+The level of detection is propagated as 1.96·√(σz_before² + σz_after² + σreg²)
+(Wheaton et al. 2010, uniform form). Each σz is that epoch's hold-out RMSEz over
+the whole surface, not a per-cell field. σreg is the alignment's 3-D RMS
+residual, a conservative proxy for the vertical registration error, which is
+not measured on its own. When no alignment is applied or a hold-out cannot run,
+the threshold falls back to a fixed 0.1 m and the result labels it "assumed,
+not measured". The difference raster (.asc) has no header field for the
+threshold, so the level of detection travels in the panel text, not the file.

@@ -4153,7 +4153,7 @@ function compareLoadedLayers(): void {
   void (async () => {
     // Load the change-detection code on demand, then yield a frame so the
     // "working" line paints before the synchronous ground-filter compute.
-    const [{ buildSharedEpochDtms, withheldEpochs }, { alignEpochClouds, summarizeAlignment, buildRegistrationArtifact, summarizeRegistration }, { compareDtms, summarizeChange }, { packageChangeRaster, ChangeRasterRefusal }] =
+    const [{ buildSharedEpochDtms, withheldEpochs }, { alignEpochClouds, summarizeAlignment, buildRegistrationArtifact, summarizeRegistration }, { compareDtms, summarizeChange, propagatedLevelOfDetection }, { packageChangeRaster, ChangeRasterRefusal }] =
       await Promise.all([
         loadCompareEpochs(),
         loadAlignEpochs(),
@@ -4181,7 +4181,7 @@ function compareLoadedLayers(): void {
       const { after: alignedAfter, alignment } = alignEpochClouds(beforeCloud, afterCloud, {
         maxResidualM: span > 0 ? span * 0.1 * spanUnitToM : undefined, horizontalUnitKnown: frames.horizontalUnitKnown, // one shared verdict: the alignment and the difference below read the SAME frame facts, so a shift reported in metres is never followed by a difference that refuses metres
       });
-      const dtms = buildSharedEpochDtms(beforeCloud, alignedAfter);
+      const dtms = buildSharedEpochDtms(beforeCloud, alignedAfter, { holdoutSigmaZ: true });
       if (!dtms) {
         inspector.setCompareResult([...lines, 'Could not compare — a layer has no ground points.']);
         return;
@@ -4191,7 +4191,7 @@ function compareLoadedLayers(): void {
       // comparison refuses volumes rather than printing degree² figures as m³.
       const cmp = compareDtms(dtms.before, dtms.after, {
         ...frames, // isGeographic + horizontalUnitKnown + horizontalUnitToMetres, from the two contexts
-        verticalUnitToMetres: ctxA.verticalUnitToMetres, // Z keeps its OWN declared scale; the horizontal verdict never stands in for it
+        verticalUnitToMetres: ctxA.verticalUnitToMetres, levelOfDetection: propagatedLevelOfDetection({ sigmaZBeforeM: dtms.sigmaZ?.before, sigmaZAfterM: dtms.sigmaZ?.after, sigmaRegM: alignment.applied ? alignment.rmsResidualM : null }), // Z keeps its OWN declared scale; LoD per Wheaton et al. (2010), the 3-D RMS standing in for vertical registration error
       });
       if (!current()) return;
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;

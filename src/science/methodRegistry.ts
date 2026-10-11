@@ -373,19 +373,23 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   // and should be preferred for new net-volume figures.
   'olv.change.dtm-difference': {
     id: 'olv.change.dtm-difference',
-    version: 1,
+    version: 2,
     name: 'DTM-of-difference cut/fill (thresholded gain/loss/net)',
     summary:
       'Per-cell two-epoch elevation difference, classified against a Level-of-Detection ' +
       'threshold; gain and loss volumes sum only above-LoD cells, and net is gain minus ' +
-      'loss over that same thresholded subset.',
-    citation: 'Anderson (2019), pubs.usgs.gov/publication/70202166 (LoD thresholding for gross change)',
+      'loss over that same thresholded subset. v2 sets the threshold to the propagated minimum ' +
+      'LoD, 1.96·√(σz_before² + σz_after² + σreg²), from each epoch\'s hold-out RMSEz and the ' +
+      'alignment 3-D RMS (a conservative proxy for vertical registration error); when a term is ' +
+      'missing it falls back to the fixed 0.1 m, labelled assumed, not measured. v1 used the fixed ' +
+      '0.1 m always.',
+    citation: 'Anderson (2019), pubs.usgs.gov/publication/70202166 (LoD thresholding for gross change); Wheaton et al. (2010), doi:10.1002/esp.1886 (propagated minimum LoD)',
     category: 'change',
     implementation: ['src/terrain/change/changeDetection.ts', 'src/terrain/change/compareDtms.ts'],
   },
   'olv.change.dtm-difference.raw-net': {
     id: 'olv.change.dtm-difference.raw-net',
-    version: 1,
+    version: 2,
     name: 'DTM-of-difference cut/fill (raw net + thresholded gross)',
     summary:
       'Same per-cell two-epoch difference as olv.change.dtm-difference, but reports the ' +
@@ -393,8 +397,10 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'LoD-thresholded gross gain/loss for erosion/deposition reporting. Thresholding is ' +
       'correct for gross change (noise inflates both sides) but biases the net, since ' +
       'uncorrelated sub-LoD error of opposite sign would otherwise cancel and instead gets ' +
-      'zeroed out asymmetrically.',
-    citation: 'Anderson (2019), pubs.usgs.gov/publication/70202166 (thresholded gross vs raw net)',
+      'zeroed out asymmetrically. v2 thresholds the gross figures at the propagated minimum LoD ' +
+      '(Wheaton et al. 2010) with the assumed 0.1 m fallback, and the net band\'s per-cell σ is ' +
+      '√(σz_before² + σz_after²) when both are measured; v1 used the fixed 0.1 m.',
+    citation: 'Anderson (2019), pubs.usgs.gov/publication/70202166 (thresholded gross vs raw net); Wheaton et al. (2010), doi:10.1002/esp.1886 (propagated minimum LoD)',
     category: 'change',
     implementation: ['src/terrain/change/changeDetection.ts', 'src/terrain/change/compareDtms.ts'],
   },

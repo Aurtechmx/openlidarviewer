@@ -22,7 +22,15 @@ import {
   type ChangeResult,
   type ChangeDetectionOptions,
 } from './changeDetection';
-import { changeVolumeUncertainty, cellSigmaFromLoD } from './changeUncertainty';
+import { changeVolumeUncertainty } from './changeUncertainty';
+import {
+  describeLevelOfDetection,
+  fixedLevelOfDetection,
+  VERTICAL_OFFSET_DISCLOSURE,
+  type LevelOfDetection,
+} from './propagatedLod';
+
+export { propagatedLevelOfDetection } from './propagatedLod';
 
 /**
  * Adapt a {@link DtmGrid} to the bare {@link ChangeGrid} the change core
@@ -63,6 +71,13 @@ export interface CompareDtmsOptions extends ChangeDetectionOptions {
    * Omitted/true means the unit is known (or a metre CRS) and figures print.
    */
   readonly horizontalUnitKnown?: boolean;
+  /**
+   * The threshold with its basis (propagated / user-set / assumed), from
+   * `propagatedLevelOfDetection`. When given, its `valueM` replaces
+   * `levelOfDetectionM`. When absent, a supplied `levelOfDetectionM` is
+   * labelled user-set and the default is labelled assumed, not measured.
+   */
+  readonly levelOfDetection?: LevelOfDetection;
 }
 
 /** A two-epoch comparison plus the co-registration verdict the grids can't carry. */
@@ -90,6 +105,8 @@ export interface EpochComparison {
   readonly coregistrationNotes: readonly string[];
   /** The Level-of-Detection (m) applied: |Δ| ≤ this read as no change (noise floor). */
   readonly levelOfDetectionM: number;
+  /** The applied threshold with its components and basis. */
+  readonly levelOfDetection: LevelOfDetection;
   /**
    * False when the grids' frame is geographic (degrees): the cut/fill volume
    * fields in `result.stats` are then degree²-based and MUST NOT be presented
@@ -253,14 +270,22 @@ export function compareDtms(
     );
   }
 
-  const result = detectChange(dtmToChangeGrid(a), dtmToChangeGrid(b), options);
+  const lod: LevelOfDetection =
+    options.levelOfDetection ??
+    (options.levelOfDetectionM === undefined
+      ? fixedLevelOfDetection(DEFAULT_LOD_M, false)
+      : fixedLevelOfDetection(Math.max(0, options.levelOfDetectionM), true));
+  const result = detectChange(dtmToChangeGrid(a), dtmToChangeGrid(b), {
+    ...options,
+    levelOfDetectionM: lod.valueM,
+  });
   // The raster mismatch (cell size / dims) is already in result.warnings; the
   // overall co-registration verdict folds those in too.
   const geographicNoteCount = volumesComputable ? 0 : 1;
   const coregistered = result.aligned && notes.length - geographicNoteCount === 0;
   const gridMisaligned = !result.aligned || originsOffset;
-  const levelOfDetectionM = Math.max(0, options.levelOfDetectionM ?? DEFAULT_LOD_M);
-  return { result, coregistered, coregistrationNotes: notes, levelOfDetectionM, volumesComputable, frameIncompatible, horizontalUnitUnknown, gridMisaligned };
+  const levelOfDetectionM = Math.max(0, lod.valueM);
+  return { result, coregistered, coregistrationNotes: notes, levelOfDetectionM, levelOfDetection: lod, volumesComputable, frameIncompatible, horizontalUnitUnknown, gridMisaligned };
 }
 
 /**
@@ -391,6 +416,7 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
         `(uncorrelated sub-LoD error should cancel, not zero out asymmetrically), so the raw net above ` +
         `is the reported net figure.`,
     );
+    lines.push(...describeLevelOfDetection(comparison.levelOfDetection));
     // Qualify the net volume with a ± band + detectability. A bare figure hides
     // whether the change exceeds the noise, and an unquantified co-registration
     // error is the most common way a change number lies — so both are surfaced.
@@ -405,7 +431,9 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
         netVolumeM3: s.rawNetVolumeM3,
         contributingCells: s.comparable,
         cellAreaM2: (result.cellSizeM * hM) * (result.cellSizeM * hM),
-        cellSigmaM: cellSigmaFromLoD(comparison.levelOfDetectionM),
+        // Propagated: sqrt(σz_before² + σz_after²), registration kept as the
+        // separate systematic term below. Otherwise LoD / 1.96 as before.
+        cellSigmaM: comparison.levelOfDetection.cellSigmaM,
         registrationSigmaM: ctx.registrationSigmaM ?? 0,
       });
       // Three outcomes, not two. An EMPTY error budget (a zero level of
@@ -444,7 +472,11 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
       // the level of detection is the built-in default rather than a figure
       // from this survey, the whole band rests on that default. Printing the
       // band without saying so presents a shipped constant as an error model.
-      if (comparison.levelOfDetectionM === DEFAULT_LOD_M && ctx.levelOfDetectionSupplied !== true) {
+      if (
+        comparison.levelOfDetection.basis !== 'propagated' &&
+        comparison.levelOfDetectionM === DEFAULT_LOD_M &&
+        ctx.levelOfDetectionSupplied !== true
+      ) {
         lines.push(
           `The per-cell sigma is derived from the level of detection (${DEFAULT_LOD_M} m ÷ 1.96), ` +
             'and that level of detection is this build\'s default, not a figure measured for ' +
@@ -460,6 +492,10 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
     `Largest gain ${s.maxGainM.toFixed(2)} m, largest loss ${s.maxLossM.toFixed(2)} m; ` +
       `mean |Δ| ${s.meanAbsChangeM.toFixed(2)} m over ${s.comparable} comparable cells.`,
   );
+  if (comparison.volumesComputable === false) {
+    lines.push(...describeLevelOfDetection(comparison.levelOfDetection));
+  }
+  lines.push(`⚠ ${VERTICAL_OFFSET_DISCLOSURE}`);
   for (const w of result.warnings) lines.push(`• ${w}`);
   for (const note of coregistrationNotes) lines.push(`• ${note}`);
   // Co-registration checklist — spell out what a MEASURED (not indicative)

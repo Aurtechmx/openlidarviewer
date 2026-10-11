@@ -81,7 +81,7 @@ export interface ChangeStats {
    * error that would cancel in a raw sum survives here because opposite-sign
    * sub-LoD cells are both zeroed out before they can offset each other. Use
    * {@link rawNetVolumeM3} for the net figure; these three remain exactly the
-   * legacy `olv.change.dtm-difference@1` quantities and are NOT redefined.
+   * legacy `olv.change.dtm-difference` v1 quantities and are NOT redefined.
    */
   readonly gainVolumeM3: number;
   readonly lossVolumeM3: number;
@@ -94,7 +94,7 @@ export interface ChangeStats {
    * called "the statistically correct net", which claims more than the model
    * supports: a systematic co-registration bias and spatially correlated error
    * do not cancel, and this sum carries them straight into the total. This is the primary net figure
-   * (`olv.change.dtm-difference.raw-net@1`); `netVolumeM3` above is kept
+   * (`olv.change.dtm-difference.raw-net`, introduced at v1); `netVolumeM3` above is kept
    * for `@1` provenance.
    */
   readonly rawNetVolumeM3: number;

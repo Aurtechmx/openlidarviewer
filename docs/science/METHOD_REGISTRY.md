@@ -45,8 +45,8 @@ the paper that specifies it.
 | `olv.registration.epoch-horizontal-icp` | 1 | Repeat-epoch horizontal alignment (yaw + XY, Z locked) | Besl & McKay (1992); Umeyama (1991) |
 | `olv.volume.stockpile` | 2 | Stockpile cut-fill volume with model sensitivity band; v2 leaves LAS Withheld points out of the polygon Volume tool and records points read, Withheld excluded (or unknown) and points analysed, and keeps Overlap; v1 read every point | internal (prismatic cut-fill) |
 | `olv.volume.stockpile-area-grid` | 3 | Area-weighted stockpile volume (grid integration) | internal (area-weighted DoD); Sutherland & Hodgman (1974) |
-| `olv.change.dtm-difference` | 1 | DTM-of-difference cut/fill (thresholded gain/loss/net) | Anderson (2019), LoD thresholding |
-| `olv.change.dtm-difference.raw-net` | 1 | DTM-of-difference cut/fill (raw net + thresholded gross) | Anderson (2019), thresholded gross vs raw net |
+| `olv.change.dtm-difference` | 2 | DTM-of-difference cut/fill (thresholded gain/loss/net); v2 thresholds at the propagated minimum level of detection 1.96·√(σz_before² + σz_after² + σreg²) from hold-out RMSEz and the alignment 3-D RMS, falling back to an assumed 0.1 m when a term is missing; v1 used a fixed 0.1 m | Anderson (2019), LoD thresholding; Wheaton et al. (2010), propagated level of detection |
+| `olv.change.dtm-difference.raw-net` | 2 | DTM-of-difference cut/fill (raw net + thresholded gross); v2 uses the propagated minimum level of detection for the gross figures; v1 used a fixed 0.1 m | Anderson (2019), thresholded gross vs raw net; Wheaton et al. (2010), propagated level of detection |
 | `olv.feature.building-footprint` | 1 | Building footprint candidate extraction | internal (connected-component + boundary trace) |
 | `olv.feature.conductor-fit` | 1 | Conductor centreline and sag fit | internal (parabolic small-sag approximation) |
 | `olv.profile.corridor-percentile` | 2 | Corridor-percentile profile; v2 leaves LAS Withheld points out and records points read, Withheld excluded (or unknown) and points analysed, and keeps Overlap; v1 read every point | internal (corridor binning, Hyndman & Fan (1996) type-7 quantile) |
