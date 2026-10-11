@@ -16,7 +16,15 @@ import { parseE57Header } from './header';
 import { depage, physicalToLogical } from './depage';
 import { parseXml } from './xml';
 import { readE57Document } from './schema';
-import type { E57Field, E57Metadata, E57Pose, E57Scan, E57SourceMetadata } from './schema';
+import type {
+  E57ColorLimits,
+  E57Field,
+  E57Metadata,
+  E57Pose,
+  E57Range,
+  E57Scan,
+  E57SourceMetadata,
+} from './schema';
 import { decodeCompressedVector } from './compressedVector';
 import type {
   DecodedColumns,
@@ -56,10 +64,10 @@ export interface E57ScanData {
   declaration?: E57Scan;
   /** Rigid-body placement in the file's global frame, or null for identity. */
   pose: E57Pose | null;
-  /** Declared colour maximum for 0–255 normalisation, or null. */
-  colorMax: number | null;
-  /** Declared intensity maximum, or null. */
-  intensityMax: number | null;
+  /** Per-channel colour range for 0–255 normalisation, or null. */
+  colorLimits: E57ColorLimits | null;
+  /** Declared intensity limits, or null. */
+  intensityLimits: E57Range | null;
   /**
    * The scan's structured columns, present only when the caller asked for them
    * and this scan declared an acquisition grid. Kept apart from `columns` so
@@ -171,8 +179,8 @@ export function parseE57(buffer: ArrayBuffer, opts?: ParseE57Options): E57ParseR
       fields: scan.prototype,
       declaration: scan,
       pose: scan.pose,
-      colorMax: scan.colorMax,
-      intensityMax: scan.intensityMax,
+      colorLimits: scan.colorLimits,
+      intensityLimits: scan.intensityLimits,
       columns: decodeCompressedVector(
         logical,
         scan.fileOffset,

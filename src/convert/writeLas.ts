@@ -32,7 +32,12 @@ import { roundLegacyAngle } from './conversionEvents';
 import type { GlobalPoints } from './globalPoints';
 import { resolveVerticalGeoKeys } from '../terrain/export/demGeoTiff';
 import { globalBounds } from './globalPoints';
-import { isValidQuantisation, quantisationFitsInt32, type Quantisation } from './lasQuantisation';
+import {
+  isValidQuantisation,
+  quantisationFitsInt32,
+  roundHalfAwayFromZero,
+  type Quantisation,
+} from './lasQuantisation';
 import { BUILD_IDENTITY, type BuildIdentity } from '../build/buildIdentity';
 import { SCAN_ANGLE_EXTENDED_UNIT_DEG } from '../io/lasDecodeShared';
 
@@ -243,7 +248,7 @@ function snappedBounds(
   offset: [number, number, number];
 } {
   const snap = (v: number, a: number): number =>
-    offset[a] + Math.round((v - offset[a]) / scale[a]) * scale[a];
+    offset[a] + roundHalfAwayFromZero((v - offset[a]) / scale[a]) * scale[a];
   const qMin: [number, number, number] = [snap(min[0], 0), snap(min[1], 1), snap(min[2], 2)];
   const qMax: [number, number, number] = [snap(max[0], 0), snap(max[1], 1), snap(max[2], 2)];
   return { min: qMin, max: qMax, scale, offset };
@@ -532,9 +537,9 @@ export function writeLas(g: GlobalPoints, opts: WriteLasOptions = {}): Uint8Arra
   const sz = scale[2];
   for (let i = 0; i < n; i++) {
     const rp = pointDataOffset + i * recLen;
-    view.setInt32(rp, Math.round((g.x[i] - offset[0]) / sx), true);
-    view.setInt32(rp + 4, Math.round((g.y[i] - offset[1]) / sy), true);
-    view.setInt32(rp + 8, Math.round((g.z[i] - offset[2]) / sz), true);
+    view.setInt32(rp, roundHalfAwayFromZero((g.x[i] - offset[0]) / sx), true);
+    view.setInt32(rp + 4, roundHalfAwayFromZero((g.y[i] - offset[1]) / sy), true);
+    view.setInt32(rp + 8, roundHalfAwayFromZero((g.z[i] - offset[2]) / sz), true);
     view.setUint16(rp + 12, g.intensity ? g.intensity[i] : 0, true);
     // return bits: return number (1–7) | number of returns (1–7)
     const rn = g.returnNumber ? Math.min(7, Math.max(1, g.returnNumber[i])) : 1;
@@ -585,7 +590,7 @@ function scanAngleRank(a: Float32Array | undefined, i: number): number {
 /** Extended scan angle: degrees → int16 in 0.006° steps, clamped to ±30000. */
 function scanAngleExtended(a: Float32Array | undefined, i: number): number {
   if (!a || !Number.isFinite(a[i])) return 0;
-  return Math.max(-30000, Math.min(30000, Math.round(a[i] / SCAN_ANGLE_EXTENDED_UNIT_DEG)));
+  return Math.max(-30000, Math.min(30000, roundHalfAwayFromZero(a[i] / SCAN_ANGLE_EXTENDED_UNIT_DEG)));
 }
 
 /**
@@ -697,9 +702,9 @@ export function writeLas14(g: GlobalPoints, opts: WriteLas14Options = {}): Uint8
   const sz = scale[2];
   for (let i = 0; i < n; i++) {
     const rp = pointDataOffset + i * recLen;
-    view.setInt32(rp, Math.round((g.x[i] - offset[0]) / sx), true);
-    view.setInt32(rp + 4, Math.round((g.y[i] - offset[1]) / sy), true);
-    view.setInt32(rp + 8, Math.round((g.z[i] - offset[2]) / sz), true);
+    view.setInt32(rp, roundHalfAwayFromZero((g.x[i] - offset[0]) / sx), true);
+    view.setInt32(rp + 4, roundHalfAwayFromZero((g.y[i] - offset[1]) / sy), true);
+    view.setInt32(rp + 8, roundHalfAwayFromZero((g.z[i] - offset[2]) / sz), true);
     view.setUint16(rp + 12, g.intensity ? g.intensity[i] : 0, true);
     // return bits: return number (1–15, bits 0–3) | number of returns (bits 4–7)
     const rn = g.returnNumber ? Math.min(15, Math.max(1, g.returnNumber[i])) : 1;

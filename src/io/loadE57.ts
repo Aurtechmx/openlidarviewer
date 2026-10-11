@@ -13,7 +13,7 @@
 
 import { parseE57 } from './e57/parseE57';
 import type { E57ScanData } from './e57/parseE57';
-import type { E57Metadata, E57Pose, E57SourceMetadata } from './e57/schema';
+import type { E57Metadata, E57Pose, E57Range, E57SourceMetadata } from './e57/schema';
 import { preflightE57, e57FieldIsConsumedForScan, e57LocalFieldName } from './e57/preflight';
 import { planE57Decode, e57TooLargeMessage, e57NoPlanMessage } from './loadPlan';
 import type { E57DecodePlan } from './loadPlan';
@@ -46,26 +46,37 @@ function clampU16(v: number): number {
 }
 
 /**
- * Per-scan scale that carries intensity into the Uint16 store. E57 intensity
- * is commonly a UNIT-RANGE FLOAT (a real user file declares intensityLimits
- * 0.2800009–0.7380647): rounding those floats straight into a Uint16
- * collapsed the whole continuous channel to {0, 1} — silent destruction that
- * reached every downstream surface, including the CSV/XYZ exports. This
- * mirrors the PTS/PCD house rule: a unit-range channel (declared
- * intensityMaximum ≤ 1 when the scan declares limits, otherwise an observed
- * maximum ≤ 1) is rescaled to the full 0–65535 span — absolute values scale
- * by 65535, they are NOT min–max stretched, so the declared magnitudes keep
- * their meaning. A wider range is taken as a raw value and only clamped.
+ * The affine map `v → v · scale + bias` that takes a scan's raw intensity to
+ * the 0–65535 store.
+ *
+ * When the scan declares `intensityLimits`, ASTM E2807 makes them the range of
+ * the channel, so it is normalised (v − min) / (max − min) · 65535: a signed
+ * range such as −2048..2047 maps its minimum to 0 rather than clamping every
+ * negative value to 0. A degenerate declaration (max ≤ min) carries no usable
+ * range and falls through to the no-limits rule.
+ *
+ * With no declared limits the observed maximum decides: a unit-range channel
+ * (observed max ≤ 1, common for float intensity) is scaled by 65535; a wider
+ * range is taken as a raw value and only clamped.
  */
-function intensityScaleFor(scan: E57ScanData): number {
+function intensityMapFor(scan: E57ScanData): { scale: number; bias: number } {
   const col = scan.columns.intensity;
-  if (!col) return 1;
-  if (scan.intensityMax !== null) {
-    return scan.intensityMax > 0 && scan.intensityMax <= 1 ? 65535 : 1;
+  if (!col) return { scale: 1, bias: 0 };
+  const lim = scan.intensityLimits;
+  if (lim && lim.maximum > lim.minimum) {
+    const scale = 65535 / (lim.maximum - lim.minimum);
+    return { scale, bias: -lim.minimum * scale };
   }
   let max = 0;
   for (const v of col) if (v > max) max = v;
-  return max > 0 && max <= 1 ? 65535 : 1;
+  return { scale: max > 0 && max <= 1 ? 65535 : 1, bias: 0 };
+}
+
+/** One colour channel's map to 0–255: (v − min) / (max − min) · 255, or identity without a range. */
+function colorMapFor(range: E57Range | undefined): { scale: number; bias: number } {
+  if (!range || !(range.maximum > range.minimum)) return { scale: 1, bias: 0 };
+  const scale = 255 / (range.maximum - range.minimum);
+  return { scale, bias: -range.minimum * scale };
 }
 
 /** Rotate a point by a quaternion `[w, x, y, z]`. */
@@ -400,8 +411,10 @@ export async function loadE57(
     const cz = col.cartesianZ;
     const invalid = col.cartesianInvalidState;
     const pose: E57Pose | null = scan.pose;
-    const colorScale = scan.colorMax && scan.colorMax > 0 ? 255 / scan.colorMax : 1;
-    const intensityScale = intensity ? intensityScaleFor(scan) : 1;
+    const cR = colorMapFor(scan.colorLimits?.red);
+    const cG = colorMapFor(scan.colorLimits?.green);
+    const cB = colorMapFor(scan.colorLimits?.blue);
+    const iMap = intensity ? intensityMapFor(scan) : { scale: 1, bias: 0 };
     // Resolve the (possibly namespaced) normal columns once per scan, not per
     // point. `hasNormals` guarantees all three keys resolve on every merged scan.
     const nX = normals ? col[normalKey(col, 'X')!] : undefined;
@@ -433,11 +446,13 @@ export async function loadE57(
       global[w * 3 + 2] = pz;
 
       if (colors && col.colorRed && col.colorGreen && col.colorBlue) {
-        colors[w * 3] = clampByte(col.colorRed[i] * colorScale);
-        colors[w * 3 + 1] = clampByte(col.colorGreen[i] * colorScale);
-        colors[w * 3 + 2] = clampByte(col.colorBlue[i] * colorScale);
+        colors[w * 3] = clampByte(col.colorRed[i] * cR.scale + cR.bias);
+        colors[w * 3 + 1] = clampByte(col.colorGreen[i] * cG.scale + cG.bias);
+        colors[w * 3 + 2] = clampByte(col.colorBlue[i] * cB.scale + cB.bias);
       }
-      if (intensity && col.intensity) intensity[w] = clampU16(col.intensity[i] * intensityScale);
+      if (intensity && col.intensity) {
+        intensity[w] = clampU16(col.intensity[i] * iMap.scale + iMap.bias);
+      }
       if (classification && col.classification) {
         classification[w] = clampByte(col.classification[i]);
       }

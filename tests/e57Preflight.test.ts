@@ -169,8 +169,8 @@ function scan(name: string, recordCount: number, fields: string[]): E57Scan {
     fileOffset: 0,
     prototype: fields.map(field),
     pose: null,
-    colorMax: null,
-    intensityMax: null,
+    colorLimits: null,
+    intensityLimits: null,
     indexBounds: null,
     structuredFields: {
       rowIndex: fields.includes('rowIndex'),

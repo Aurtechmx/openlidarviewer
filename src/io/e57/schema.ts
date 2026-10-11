@@ -23,8 +23,8 @@ export interface E57Field {
   /**
    * Integer / scaledInteger fields: the declared upper bound, verbatim.
    *
-   * Nothing reads this today — {@link bitWidthFor} consumes it and the decode
-   * needs only the width. It is retained because the bound, not the width, is
+   * Besides {@link bitWidthFor}, the colour normalisation reads it as the
+   * channel range when a scan declares no `colorLimits`. It is retained because the bound, not the width, is
    * what lets a later step choose an integer array wide enough for a declared
    * index without guessing: a field packed in 11 bits still says 2047, and
    * `2 ** bitWidth - 1 + minimum` is only the same number when the writer used
@@ -89,6 +89,19 @@ export interface E57StructuredFields {
   sphericalRange: boolean;
 }
 
+/** A declared minimum..maximum pair. */
+export interface E57Range {
+  minimum: number;
+  maximum: number;
+}
+
+/** Per-channel colour ranges (ASTM E2807 `colorLimits`). */
+export interface E57ColorLimits {
+  red: E57Range;
+  green: E57Range;
+  blue: E57Range;
+}
+
 /** One scan (a `data3D` child). */
 export interface E57Scan {
   name: string;
@@ -98,10 +111,14 @@ export interface E57Scan {
   fileOffset: number;
   prototype: E57Field[];
   pose: E57Pose | null;
-  /** Declared colour channel maximum, for 0–255 normalisation; null if absent. */
-  colorMax: number | null;
-  /** Declared intensity maximum; null if absent. */
-  intensityMax: number | null;
+  /**
+   * Per-channel colour range used for 0–255 normalisation: the declared
+   * `colorLimits`, else the colour fields' declared Integer bounds; null when
+   * neither is available.
+   */
+  colorLimits: E57ColorLimits | null;
+  /** Declared `intensityLimits`; null if absent or left at its empty default. */
+  intensityLimits: E57Range | null;
   /** The declared `indexBounds` structure, or null when the scan has none. */
   indexBounds: E57IndexBounds | null;
   /** Which structured fields this scan's prototype declares. */
@@ -449,6 +466,42 @@ export function e57ScanSupportsStructuredRange(scan: E57Scan): boolean {
   return Number.isSafeInteger(cells) && cells > 0;
 }
 
+/**
+ * A declared min..max limits pair, or null when the structure is absent or
+ * both bounds are left at the empty-element default 0.
+ */
+function readRange(node: XmlNode | undefined, minName: string, maxName: string): E57Range | null {
+  if (!node) return null;
+  const minimum = numText(child(node, minName));
+  const maximum = numText(child(node, maxName));
+  if (minimum === 0 && maximum === 0) return null;
+  return { minimum, maximum };
+}
+
+/**
+ * The colour range per channel: the declared `colorLimits` when present,
+ * otherwise each colour field's declared Integer minimum/maximum, so a 16-bit
+ * colour channel without `colorLimits` is not clipped at 255.
+ */
+function readColorLimits(node: XmlNode | undefined, prototype: E57Field[]): E57ColorLimits | null {
+  const red = readRange(node, 'colorRedMinimum', 'colorRedMaximum');
+  const green = readRange(node, 'colorGreenMinimum', 'colorGreenMaximum');
+  const blue = readRange(node, 'colorBlueMinimum', 'colorBlueMaximum');
+  if (red && green && blue) return { red, green, blue };
+  const fromField = (name: string): E57Range | null => {
+    const f = prototype.find((p) => p.name === name || p.name.endsWith(`:${name}`));
+    if (!f || f.type !== 'integer') return null;
+    const minimum = f.minimum ?? 0;
+    const maximum = f.maximum ?? 0;
+    return maximum > minimum ? { minimum, maximum } : null;
+  };
+  const fr = fromField('colorRed');
+  const fg = fromField('colorGreen');
+  const fb = fromField('colorBlue');
+  if (fr && fg && fb) return { red: fr, green: fg, blue: fb };
+  return null;
+}
+
 /** Interpret one `data3D` scan structure. */
 function readScan(scan: XmlNode, warnings: string[]): E57Scan {
   const points = child(scan, 'points');
@@ -457,16 +510,6 @@ function readScan(scan: XmlNode, warnings: string[]): E57Scan {
   if (!proto) throw new Error('E57: a scan has no point prototype.');
   // Resolved before the pose so pose warnings can name the scan.
   const name = child(scan, 'name')?.text ?? 'Scan';
-
-  const colorLimits = child(scan, 'colorLimits');
-  const colorMax = colorLimits
-    ? Math.max(
-        numText(child(colorLimits, 'colorRedMaximum')),
-        numText(child(colorLimits, 'colorGreenMaximum')),
-        numText(child(colorLimits, 'colorBlueMaximum')),
-      )
-    : null;
-  const intensityLimits = child(scan, 'intensityLimits');
 
   const prototype = proto.children.map(readField);
   return {
@@ -478,10 +521,8 @@ function readScan(scan: XmlNode, warnings: string[]): E57Scan {
     indexBounds: readIndexBounds(scan),
     structuredFields: readStructuredFields(prototype),
     pose: readPose(scan, name, warnings),
-    colorMax: colorMax && colorMax > 0 ? colorMax : null,
-    intensityMax: intensityLimits
-      ? numText(child(intensityLimits, 'intensityMaximum')) || null
-      : null,
+    colorLimits: readColorLimits(child(scan, 'colorLimits'), prototype),
+    intensityLimits: readRange(child(scan, 'intensityLimits'), 'intensityMinimum', 'intensityMaximum'),
   };
 }
 

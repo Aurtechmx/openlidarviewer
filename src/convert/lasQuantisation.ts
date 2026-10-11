@@ -19,6 +19,14 @@
 
 import { globalBounds, type GlobalPoints } from './globalPoints';
 
+/**
+ * Round to the nearest integer with halves away from zero, as LAStools'
+ * I32_QUANTIZE does: 2.5 → 3 and −2.5 → −3 (Math.round gives −2).
+ */
+export function roundHalfAwayFromZero(v: number): number {
+  return Math.sign(v) * Math.round(Math.abs(v));
+}
+
 /** A LAS scale and offset triple. */
 export interface Quantisation {
   readonly scale: readonly [number, number, number];
@@ -69,8 +77,8 @@ export function quantisationFitsInt32(
   q: Quantisation,
 ): boolean {
   for (let a = 0; a < 3; a++) {
-    const lo = Math.round((min[a] - q.offset[a]) / q.scale[a]);
-    const hi = Math.round((max[a] - q.offset[a]) / q.scale[a]);
+    const lo = roundHalfAwayFromZero((min[a] - q.offset[a]) / q.scale[a]);
+    const hi = roundHalfAwayFromZero((max[a] - q.offset[a]) / q.scale[a]);
     if (!(lo >= INT32_MIN && lo <= INT32_MAX && hi >= INT32_MIN && hi <= INT32_MAX)) return false;
   }
   return true;
