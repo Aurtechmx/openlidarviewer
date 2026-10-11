@@ -1138,21 +1138,34 @@ function readGeoTiffCitation(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Projected EPSG ranges whose axes are metres by the EPSG definition. Each was
- * checked against the EPSG dataset: WGS 84 / UTM north (32601-32660) and south
- * (32701-32760), NAD83 / UTM zones 1N-23N (26901-26923), NAD27 / UTM zones
- * 1N-22N (26701-26722), ETRS89 / UTM zones 28N-38N (25828-25838), and WGS 84 /
- * Pseudo-Mercator (3857), and OSGB36 / British National Grid (27700). Anything outside these and outside the curated
- * registry has no unit we can vouch for.
+ * Projected EPSG ranges whose axes are metres by the EPSG definition. Every
+ * range was checked against the EPSG dataset (proj.db): each code in it
+ * exists and its first axis unit is EPSG 9001, metre. A range must never span
+ * a code in feet, since that code would then be read 3.28x wrong in silence.
+ * Anything outside these and outside the curated registry has no unit we can
+ * vouch for.
  */
 const METRE_PROJECTED_RANGES: readonly (readonly [number, number])[] = [
-  [32601, 32660],
-  [32701, 32760],
-  [26901, 26923],
-  [26701, 26722],
-  [25828, 25838],
-  [3857, 3857],
-  [27700, 27700],
+  [32601, 32660], // WGS 84 / UTM zones 1N-60N
+  [32701, 32760], // WGS 84 / UTM zones 1S-60S
+  [26901, 26923], // NAD83 / UTM zones 1N-23N
+  [26701, 26722], // NAD27 / UTM zones 1N-22N
+  [6330, 6348], // NAD83(2011) / UTM zones 1N-19N
+  [2955, 2962], // NAD83(CSRS) / UTM zones 11N-21N
+  [3154, 3160], // NAD83(CSRS) / UTM zones 7N-16N
+  [25828, 25838], // ETRS89 / UTM zones 28N-38N
+  [3034, 3035], // ETRS89-extended / LCC Europe, LAEA Europe
+  [28348, 28358], // GDA94 / MGA zones 48-58
+  [7846, 7859], // GDA2020 / MGA zones 46-59
+  [3006, 3018], // SWEREF99 TM and the SWEREF99 local zones
+  [31466, 31469], // DHDN / 3-degree Gauss-Kruger zones 2-5
+  [31254, 31259], // MGI / Austria GK West .. M34
+  [31284, 31287], // MGI / Austria M28, M31, M34, Lambert
+  [3857, 3857], // WGS 84 / Pseudo-Mercator
+  [27700, 27700], // OSGB36 / British National Grid
+  [28992, 28992], // Amersfoort / RD New
+  [2154, 2154], // RGF93 v1 / Lambert-93
+  [2193, 2193], // NZGD2000 / NZTM 2000
 ];
 
 /**

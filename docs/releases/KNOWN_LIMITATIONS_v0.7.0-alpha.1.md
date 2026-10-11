@@ -449,9 +449,11 @@ unknown, measurement rows, the measure hint, the profile chart, summary and PDF,
 and the Profile Workbench state the unit is unverified.
 A projected EPSG code that arrives without a unit (no GeoTIFF unit key, a WKT
 with no UNIT, or an EPT `srs` with codes only) takes its unit from the curated
-CRS registry or a short list of metre families (WGS 84, NAD83, NAD27 and
-ETRS89 UTM, Web Mercator, British National Grid); any other code is treated
-as unknown, not as metres. A vertical EPSG code fixes the height unit when no
+CRS registry or a list of metre families checked against the EPSG dataset
+(UTM on WGS 84, NAD83, NAD83(2011), NAD83(CSRS), NAD27 and ETRS89; GDA94 and
+GDA2020 MGA; ETRS89 LAEA and LCC Europe; SWEREF99; DHDN Gauss-Kruger; MGI
+Austria; Web Mercator; British National Grid; RD New; Lambert-93; NZTM); any
+other code is treated as unknown, not as metres. A vertical EPSG code fixes the height unit when no
 vertical unit is declared, and a declared vertical unit that contradicts the
 code leaves the height unit unknown.
 
