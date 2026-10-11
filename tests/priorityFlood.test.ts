@@ -201,7 +201,8 @@ describe('NoData is a wall by default, as routing reads it', () => {
     expect(res.z[DEPRESSION_LOW]).toBeCloseTo(7.001, 4);
     expect(res.z[DEPRESSION_HIGH]).toBeCloseTo(7.002, 4);
     expect(res.cellsRaised).toBe(2);
-    expect(res.maxFillDepth).toBeCloseTo(4.001, 4);
+    // Spill level (7) minus original height (3): the epsilon chain is not depth.
+    expect(res.maxFillDepth).toBeCloseTo(4, 6);
     expect(res.cellsUnreachable).toBe(0);
   });
 

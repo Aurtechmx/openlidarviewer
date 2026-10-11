@@ -134,9 +134,10 @@ export function d8Flow(grid: FlowGrid): D8Result {
 /**
  * Follow flow downstream from `start` until it leaves, pits or repeats.
  *
- * The visited guard is not defensive dressing. D8 on a conditioned surface
- * can produce a two-cell cycle where each of a pair routes to the other, and
- * a tracer without this check would spin forever inside a UI click handler.
+ * D8 routes only to a strictly lower neighbour, so a well-formed result has
+ * no cycles. The visited guard is a cheap safeguard against a malformed or
+ * hand-built receiver array, so a tracer can never spin forever inside a UI
+ * click handler.
  * Returns the path including `start`; the last cell's status says how it
  * ended.
  */

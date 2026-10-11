@@ -366,6 +366,7 @@ export function terrainAccessStats(outcome: TerrainAccessLabOutcome | null): HTM
 export const TERRAIN_ACCESS_HOW_TO_READ: readonly string[] = [
   'Coloured cells show where the vehicle or walker you described could go, and at what cost.',
   'The route is the lowest-cost path between start and goal on this map.',
+  'Each move\'s grade is the steepest of the ground slope along it at either end cell and its own rise over run, so it reads the same both ways.',
   'Grades and steps come from the ground surface alone. Check the site before relying on a route.',
 ];
 

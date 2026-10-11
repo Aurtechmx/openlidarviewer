@@ -78,7 +78,14 @@ at the same elevation resolve the same way on every run, runs in O(n log n).
 
 An optional epsilon parameter raises each filled cell a small amount above
 its spill parent, turning what would otherwise be a plateau (no descent, so
-D8 would report it flat) into a surface with a deterministic path out. At a
+D8 would report it flat) into a surface with a deterministic path out. The
+epsilon is not fill. Following Barnes, Lehman and Mulla, a cell counts as
+filled only when its original height is strictly below the spill level it
+was reached from; a cell level with that spill level (a flat) rises by the
+epsilon alone and is counted separately as `flatCellsResolved`. The
+`cellsRaised`, `maxFillDepth` and `fillDepthSum` figures cover filled cells
+only, and a fill depth is the spill level minus the original height, never
+inflated by the epsilon chain across a filled depression. At a
 large coordinate magnitude a Float32 increment can be absorbed and the cell
 does not actually rise; every such absorption is counted in
 `epsilonAbsorbed` rather than assumed to have applied.
@@ -157,10 +164,13 @@ Raw mode lists every D8 sink as its own one-cell candidate, a pinpoint
 rather than a measured extent. Finding the true extent of a depression is
 exactly what Priority-Flood computes, so raw mode makes no claim about one.
 
-Conditioned mode groups the cells Priority-Flood raised into 8-connected
-depressions, the same adjacency D8 routes over, and reports, for each one:
-cell count; area in square metres when the horizontal scale is resolved,
-cell count only otherwise; the deepest rise within that depression; and its
+Conditioned mode groups the cells Priority-Flood filled, those whose
+original height is strictly below their spill level, into 8-connected
+depressions, the same adjacency D8 routes over. A level plateau lifted only
+by the epsilon is not a depression and is not listed. For each depression it
+reports: cell count; area in square metres when the horizontal scale is
+resolved, cell count only otherwise; the deepest fill within that
+depression, its spill level minus the cell's original height; and its
 outlet elevation, the lowest raw elevation among the valid, unfilled cells
 touching it, where the flood entered before finding higher ground.
 

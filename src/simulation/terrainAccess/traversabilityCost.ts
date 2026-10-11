@@ -145,10 +145,18 @@ export interface EdgeGeometry {
 
 /**
  * The geometry of the directed move `from → to` along raster offset
- * `(dx, dy)`: physical distance, directional grade/cross-slope (evaluated at
- * `from`'s gradient, per §12.5) and the edge step. Independent of any
- * profile, so a caller that only wants the numbers — `routeDiagnostics.ts`,
- * a UI inspector — is not required to fabricate one.
+ * `(dx, dy)`: physical distance, longitudinal grade, cross slope and the edge
+ * step. Independent of any profile, so a caller that only wants the numbers —
+ * `routeDiagnostics.ts`, a UI inspector — is not required to fabricate one.
+ *
+ * Longitudinal grade is the edge's conservative, direction-symmetric grade:
+ * the largest of the Horn gradient projected on the heading at `from`, the
+ * same projection at `to`, and the edge's own rise over run
+ * (|z(to) − z(from)| / distanceM). Using the from-cell gradient alone let a
+ * move out of a V-valley floor (zero gradient there) read as level although
+ * the edge itself climbs steeply, and made `a → b` and `b → a` disagree.
+ * Cross slope is the larger perpendicular Horn component of the two
+ * endpoints. Both are symmetric under reversing the move.
  */
 export function edgeGeometry(
   grid: TerrainAccessGrid,
@@ -159,10 +167,17 @@ export function edgeGeometry(
   dy: number,
 ): EdgeGeometry {
   const heading = headingUnit(dx, dy, grid.cellMetresX, grid.cellMetresY);
-  const grad = { east: features.gradient.east[fromIndex], north: features.gradient.north[fromIndex] };
-  const { longitudinalGrade, crossSlope } = directionalSlope(grad, heading);
+  const atFrom = directionalSlope(
+    { east: features.gradient.east[fromIndex], north: features.gradient.north[fromIndex] }, heading,
+  );
+  const atTo = directionalSlope(
+    { east: features.gradient.east[toIndex], north: features.gradient.north[toIndex] }, heading,
+  );
   const stepM = edgeStep(grid, fromIndex, toIndex);
   const distanceM = Math.hypot(dx * grid.cellMetresX, dy * grid.cellMetresY);
+  const edgeGrade = Number.isFinite(stepM) && distanceM > 0 ? stepM / distanceM : 0;
+  const longitudinalGrade = Math.max(atFrom.longitudinalGrade, atTo.longitudinalGrade, edgeGrade);
+  const crossSlope = Math.max(atFrom.crossSlope, atTo.crossSlope);
   return { distanceM, longitudinalGrade, crossSlope, stepM };
 }
 

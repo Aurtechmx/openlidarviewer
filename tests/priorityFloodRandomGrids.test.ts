@@ -9,7 +9,11 @@
  *
  *   outlet matches a standalone reimplementation of the seeding this branch
  *     replaced (every boundary cell and every cell touching NoData is a
- *     seed), field for field, bit for bit
+ *     seed), field for field, bit for bit. Its fill statistics follow the
+ *     depression definition the module now uses (a cell counts only when
+ *     its original height is strictly below the spill level it was reached
+ *     from; epsilon-only rises across flats are not fill), tracked here as
+ *     a separate per-cell spill level rather than read off the module
  *   `cellsUnreachable` under the wall matches a plain breadth-first search
  *     flood-fill from the boundary, run with its own queue rather than the
  *     conditioning pass's heap
@@ -105,6 +109,8 @@ function earlierSeedingFlood(grid: FlowGrid, epsilon: number): {
   const total = cols * rows;
   const z = new Float32Array(source);
   const resolved = new Uint8Array(total);
+  // Water level each resolved cell stands at, epsilon excluded.
+  const waterLevel = Array.from(source, (v) => v);
 
   const touchesGapOrEdge = (col: number, row: number): boolean => {
     if (col === 0 || row === 0 || col === cols - 1 || row === rows - 1) return true;
@@ -147,15 +153,17 @@ function earlierSeedingFlood(grid: FlowGrid, epsilon: number): {
       if (valid[neighbourAt] !== 1 || resolved[neighbourAt] === 1) continue;
       resolved[neighbourAt] = 1;
       const before = z[neighbourAt];
+      const parentLevel = waterLevel[current.at];
+      if (before < parentLevel) {
+        waterLevel[neighbourAt] = parentLevel;
+        const depth = parentLevel - before;
+        cellsRaised++;
+        fillDepthSum += depth;
+        if (depth > maxFillDepth) maxFillDepth = depth;
+      }
       if (before <= fromElevation) {
         const raisedTo = fromElevation + epsilon;
         z[neighbourAt] = raisedTo;
-        const rise = z[neighbourAt] - before;
-        if (rise > 0) {
-          cellsRaised++;
-          fillDepthSum += rise;
-          if (rise > maxFillDepth) maxFillDepth = rise;
-        }
         if (epsilon > 0 && z[neighbourAt] <= fromElevation) epsilonAbsorbed++;
       }
       frontier.push({ at: neighbourAt, elevation: z[neighbourAt], joinedAt: joinCounter++ });

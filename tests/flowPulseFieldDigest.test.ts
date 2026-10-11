@@ -62,6 +62,9 @@ function conditionedOf(z: readonly number[]): PriorityFloodResult {
     fillDepthSum: 0.5,
     epsilonAbsorbed: 0,
     cellsUnreachable: 0,
+    flatCellsResolved: 0,
+    depressionMask: new Uint8Array(z.length),
+    spillLevel: Float64Array.from(z),
   };
 }
 

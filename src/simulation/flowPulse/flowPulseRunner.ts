@@ -93,7 +93,7 @@ export interface FlowPulseResult {
   readonly contributingAreaM2: Float64Array | null;
   /** Present only when conditioning ran. */
   readonly conditioned: PriorityFloodResult | null;
-  /** Cells the conditioning raised, or null in raw mode. */
+  /** Cells the conditioning filled (original height below the spill level), or null in raw mode. */
   readonly filled: Uint8Array | null;
   /** Sinks and filled depressions, catalogued individually. See §10.10. */
   readonly depressions: DepressionInventoryResult;
@@ -116,7 +116,7 @@ export interface FlowSummary {
   readonly maxContributingAreaM2: number | null;
   /** Cells the conditioning raised, or null in raw mode. */
   readonly cellsRaised: number | null;
-  /** Deepest fill, or null in raw mode. */
+  /** Deepest fill (spill level minus original height, epsilon excluded), or null in raw mode. */
   readonly maxFillDepth: number | null;
   /**
    * Fill increments Float32 could not represent, or null in raw mode.
@@ -383,7 +383,7 @@ export function modelLimitations(
   } else {
     out.push(
       `Routed over a conditioned drainage surface, not the terrain: `
-      + `${summary.cellsRaised ?? 0} cell(s) were raised, the deepest by `
+      + `${summary.cellsRaised ?? 0} cell(s) in depressions were filled, the deepest by `
       + `${(summary.maxFillDepth ?? 0).toFixed(3)}${unitSuffix}. The canonical DTM is unchanged.`,
     );
     if ((summary.epsilonAbsorbed ?? 0) > 0) {

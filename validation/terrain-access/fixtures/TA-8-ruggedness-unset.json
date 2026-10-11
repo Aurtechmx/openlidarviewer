@@ -1,6 +1,6 @@
 {
   "name": "TA-8-ruggedness-unset",
-  "why": "The same rough spike as TA-8-ruggedness, but maxRuggedness is null (unconstrained): every cell stays eligible and the shortest route runs straight through the spike, contrasting directly with the forced detour when a limit is declared.",
+  "why": "The same rough spike as TA-8-ruggedness, but maxRuggedness is null (unconstrained): every cell stays eligible and no cell is excluded for roughness, contrasting directly with the forced detour when a limit is declared. The route still bends one row north around the 4 m spike itself, because the per-edge grade (which includes each edge's own rise over run) makes climbing over it costlier than the short sidestep.",
   "cellMetresX": 1,
   "cellMetresY": 1,
   "z": [

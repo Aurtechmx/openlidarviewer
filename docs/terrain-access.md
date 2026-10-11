@@ -64,6 +64,17 @@ from direction-dependent edge limits (longitudinal grade, cross slope, step
 height). A cell can be fine to stand on yet unreachable from one heading and
 reachable from another.
 
+The longitudinal grade of a move from cell A to neighbour B is the largest
+of three rise/run tangents: the Horn gradient at A projected on the heading,
+the Horn gradient at B projected on the heading, and the edge's own
+|z(B) - z(A)| divided by its horizontal length in metres. Its cross slope is
+the larger of the two endpoints' Horn components perpendicular to the
+heading. Both figures are therefore the same for A to B and B to A, and the
+grade is never lower than what the edge itself climbs: a move out of a
+V-shaped valley floor, where the centred Horn gradient is zero, is still
+gated on its real rise. The same per-edge figures feed the limit check, the
+cost and the route diagnostics.
+
 Eligible cells are then dilated by half the declared vehicle width
 (`footprintClearance.ts`), so a passage narrower than the vehicle is
 excluded even where its centre cells are individually clear. Every eligible
@@ -82,8 +93,11 @@ same grid, profile and endpoints always produce the same route.
 
 A found route's `RouteDiagnostics` (`routeDiagnostics.ts`) report the worst
 conditions actually crossed, rather than a single opaque cost number:
-maximum and p95 grade and cross-slope, maximum local step, minimum terrain
-confidence, and which cost term dominated.
+maximum and p95 grade and cross-slope (per-edge, as defined above, with the
+p95 weighted by edge length), maximum local step, minimum terrain
+confidence, and which cost term dominated, each term summed as edge length
+times its weighted utilization so it is the share of the route cost it
+adds.
 
 The traversability map (`buildTraversabilityMap`) classifies every readable
 cell into a declared bucket (blocked, unknown, or low/moderate/high cost)
