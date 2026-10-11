@@ -25,7 +25,8 @@ function alignment(over: Partial<EpochAlignment> = {}): EpochAlignment {
     appliedDof: 'yaw+xy',
     refused: false,
     degenerate: false,
-    rmsResidualM: 0.042,
+    solverResidualM: 0.042,
+    appliedTransformResidualM: 0.05,
     yawDeg: 1.3,
     translation: [0.1, -0.2, 0],
     sampleCount: 5000,
@@ -40,7 +41,8 @@ describe('buildRegistrationArtifact', () => {
     expect(art.kind).toBe('registration');
     expect(art.scans).toEqual(scans);
     expect(art.appliedDof).toBe('yaw+xy');
-    expect(art.rmsResidualM).toBeCloseTo(0.042);
+    expect(art.solverResidualM).toBeCloseTo(0.042);
+    expect(art.appliedTransformResidualM).toBeCloseTo(0.05);
     expect(art.translation).toEqual([0.1, -0.2, 0]);
     expect(art.overlapFraction).toBeCloseTo(0.87);
     expect(art.generatedAt).toBe(1_700_000_000_000);
@@ -54,7 +56,7 @@ describe('summarizeRegistration', () => {
   it('states an applied registration with its residual, DOF and overlap', () => {
     const s = summarizeRegistration(buildRegistrationArtifact(alignment(), scans, 0));
     expect(s).toContain('applied (yaw+xy)');
-    expect(s).toContain('residual 0.042 m');
+    expect(s).toContain('solver fit residual 0.042 m');
     expect(s).toContain('overlap 87%');
     expect(s).toContain('olv.registration.epoch-horizontal-icp@');
   });

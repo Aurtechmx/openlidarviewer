@@ -23,6 +23,7 @@
  */
 
 import { icpRegister, applyIcp, type Vec3, type IcpResult } from './icpRegister';
+import { buildPointIndex, nearestPoint, nearestState } from './pointIndex';
 import { verticalReferenceKey } from '../../model/layerCompatibility';
 import type { EpochCloud } from './compareEpochs';
 
@@ -100,8 +101,23 @@ export interface EpochAlignment {
   readonly refused: boolean;
   /** Too few finite points in a cloud to align. */
   readonly degenerate: boolean;
-  /** Final RMS nearest-neighbour residual after alignment, in metres. */
-  readonly rmsResidualM: number;
+  /**
+   * RMS nearest-neighbour residual of the SOLVER's transform (yaw + full x/y/z
+   * translation), in metres. It describes the fit the solver found, which on
+   * the default horizontal-only path is NOT the transform applied: the solver
+   * absorbs a uniform vertical offset that the applied transform deliberately
+   * keeps. Used for the residual gate. It is a fit misfit, not a vertical
+   * registration uncertainty, and must never be fed into a level of detection.
+   */
+  readonly solverResidualM: number;
+  /**
+   * RMS nearest-neighbour residual re-measured at the pose ACTUALLY applied to
+   * the `after` cloud (the identity when nothing was applied), in metres, over
+   * the same sampled points and the same trim as the solver. For identical
+   * clouds 1 m apart vertically this is 1 m while `solverResidualM` is 0. Like
+   * the solver residual it is a fit statistic, not σreg.
+   */
+  readonly appliedTransformResidualM: number;
   /** Solved planar rotation about the vertical axis, in degrees. */
   readonly yawDeg: number;
   /** Solved translation (metres) mapping `after` onto `before`. */
@@ -165,7 +181,8 @@ const NO_ALIGNMENT: EpochAlignment = {
   appliedDof: 'none',
   refused: false,
   degenerate: true,
-  rmsResidualM: Infinity,
+  solverResidualM: Infinity,
+  appliedTransformResidualM: Infinity,
   yawDeg: 0,
   translation: ZERO,
   sampleCount: 0,
@@ -280,6 +297,34 @@ function transformedLocal(
 }
 
 /**
+ * RMS nearest-neighbour distance from `source` (moved by `pose`) to `target`,
+ * in the fit's own units, over the best `trimFraction` of points when trimming
+ * (mirroring the solver's objective so the two residuals are comparable).
+ */
+function residualAtPose(
+  source: readonly Vec3[],
+  target: readonly Vec3[],
+  pose: Pick<IcpResult, 'yawRad' | 'translation'>,
+  trimFraction: number | undefined,
+): number {
+  const index = buildPointIndex(target);
+  const d2 = new Float64Array(source.length);
+  for (let i = 0; i < source.length; i++) {
+    const p = applyIcp(pose, source[i]);
+    nearestPoint(index, p[0], p[1], p[2]);
+    d2[i] = nearestState.d2;
+  }
+  const trim = trimFraction !== undefined && trimFraction > 0 && trimFraction < 1 ? trimFraction : 1;
+  const sorted = trim < 1 ? d2.slice().sort() : d2;
+  const keep = Math.max(1, Math.min(sorted.length, Math.round(sorted.length * trim)));
+  let sum = 0;
+  for (let i = 0; i < keep; i++) sum += sorted[i];
+  return Math.sqrt(sum / keep);
+}
+
+const IDENTITY_POSE: Pick<IcpResult, 'yawRad' | 'translation'> = { yawRad: 0, translation: [0, 0, 0] };
+
+/**
  * Coarse-align `after` onto `before` before a comparison. Returns the (possibly
  * transformed) `after` cloud and a report of what the fit did. When the fit is
  * refused or degenerate, `after` is returned unchanged.
@@ -358,7 +403,10 @@ export function alignEpochClouds(
   });
   const sampleCount = Math.min(beforeSample.length, afterSample.length);
   const yawDeg = (fit.yawRad * 180) / Math.PI;
-  const rmsResidualM = fit.rmsResidual * metresPerUnit;
+  const solverResidualM = fit.rmsResidual * metresPerUnit;
+  // Residual at the identity pose: what the comparison sees when nothing is applied.
+  const unappliedResidualM = (): number =>
+    fit.degenerate ? Infinity : residualAtPose(afterSample, beforeSample, IDENTITY_POSE, options.trimFraction) * metresPerUnit;
   /** A source-unit translation reported in metres (the applied one stays in source units). */
   const toMetres = (t: Vec3): Vec3 => [t[0] * metresPerUnit, t[1] * metresPerUnit, t[2] * metresPerUnit];
 
@@ -371,7 +419,8 @@ export function alignEpochClouds(
         appliedDof: 'none',
         refused: fit.refused,
         degenerate: fit.degenerate,
-        rmsResidualM,
+        solverResidualM,
+        appliedTransformResidualM: unappliedResidualM(),
         yawDeg,
         translation: toMetres(fit.translation),
         sampleCount,
@@ -396,7 +445,8 @@ export function alignEpochClouds(
         appliedDof: 'none',
         refused: false,
         degenerate: false,
-        rmsResidualM,
+        solverResidualM,
+        appliedTransformResidualM: unappliedResidualM(),
         yawDeg,
         translation: toMetres(fit.translation),
         sampleCount,
@@ -448,7 +498,16 @@ export function alignEpochClouds(
       appliedDof: horizontalOnly ? 'yaw+xy' : 'yaw+xyz',
       refused: false,
       degenerate: false,
-      rmsResidualM,
+      solverResidualM,
+      // Re-measured in the fit space at the pose actually applied (z shift in
+      // fit space is the solver's own on the 3-D path, zero on the default).
+      appliedTransformResidualM:
+        residualAtPose(
+          afterSample,
+          beforeSample,
+          horizontalOnly ? applied : { yawRad: fit.yawRad, translation: fit.translation },
+          options.trimFraction,
+        ) * metresPerUnit,
       yawDeg,
       // Reported in metres; `applied.translation` (source units) is what
       // actually moved the points.
@@ -485,17 +544,24 @@ export function summarizeAlignment(a: EpochAlignment): string {
       'the horizontal linear unit is unknown, so the shift and residual have no confirmed ' +
       'metre scale and are withheld; set the CRS linear unit (or reproject to a metre/foot CRS) to report them.';
     return a.refused
-      ? `Alignment: refused — the fit residual exceeds the limit, so the clouds are compared as-is. Note: ${unitNote}`
+      ? `Alignment: refused — the solver fit residual exceeds the limit, so the clouds are compared as-is. Note: ${unitNote}`
       : `Aligned the after cloud horizontally (${a.yawDeg.toFixed(2)}° yaw over ${a.sampleCount} sampled points); vertical change preserved. Note: ${unitNote}`;
   }
   if (a.refused) {
-    return `Alignment: refused — residual ${a.rmsResidualM.toFixed(2)} m exceeds the limit; comparing as-is.`;
+    return `Alignment: refused — solver fit residual ${a.solverResidualM.toFixed(2)} m exceeds the limit; comparing as-is (residual at the unshifted pose ${a.appliedTransformResidualM.toFixed(2)} m).`;
   }
   if (a.lowOverlap) {
     return `Alignment: withheld — only ${(a.overlapFraction * 100).toFixed(0)}% of the sampled points registered (below ${(LOW_OVERLAP_FRACTION * 100).toFixed(0)}%), so the fit locked onto a subset; comparing as-is rather than shifting on a partial overlap.`;
   }
   const shift = Math.hypot(a.translation[0], a.translation[1]);
-  const base = `Aligned the after cloud horizontally (${shift.toFixed(2)} m shift, ${a.yawDeg.toFixed(2)}° yaw, ${a.rmsResidualM.toFixed(2)} m residual, ${(a.overlapFraction * 100).toFixed(0)}% overlap over ${a.sampleCount} sampled points); vertical change preserved.`;
+  const applied = a.appliedDof === 'yaw+xyz' ? 'yaw + x/y/z' : 'yaw + x/y, z kept';
+  const base =
+    `Aligned the after cloud (${applied}: ${shift.toFixed(2)} m shift, ${a.yawDeg.toFixed(2)}° yaw; ` +
+    `${(a.overlapFraction * 100).toFixed(0)}% overlap over ${a.sampleCount} sampled points). ` +
+    `Residual at the applied pose ${a.appliedTransformResidualM.toFixed(2)} m; solver fit residual ` +
+    `(yaw + x/y/z, not what was applied) ${a.solverResidualM.toFixed(2)} m. Both are fit statistics, ` +
+    `not a vertical registration uncertainty.` +
+    (a.appliedDof === 'yaw+xyz' ? '' : ' Vertical change preserved.');
   // The figures above describe the FIT. Without a declared frame on both sides
   // they say nothing about the relationship between the epochs, and a residual
   // quoted in metres reads as evidence of georeferenced agreement.

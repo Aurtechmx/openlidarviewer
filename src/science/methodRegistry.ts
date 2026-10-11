@@ -396,24 +396,25 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   // and should be preferred for new net-volume figures.
   'olv.change.dtm-difference': {
     id: 'olv.change.dtm-difference',
-    version: 2,
+    version: 3,
     name: 'DTM-of-difference cut/fill (thresholded gain/loss/net)',
     summary:
       'Per-cell two-epoch elevation difference, classified against a Level-of-Detection ' +
       'threshold; gain and loss volumes sum only above-LoD cells, and net is gain minus ' +
-      'loss over that same thresholded subset. v2 sets the threshold to the propagated minimum ' +
-      'LoD, 1.96·√(σz_before² + σz_after² + σreg²), from each epoch\'s hold-out RMSEz and the ' +
-      'alignment 3-D RMS (a proxy: fit misfit, not shown to bound vertical registration error; alignment ' +
-      'does not solve z); when a term is ' +
-      'missing it falls back to the fixed 0.1 m, labelled assumed, not measured. v1 used the fixed ' +
-      '0.1 m always.',
+      'loss over that same thresholded subset. v3: σreg comes only from an independent stable-area ' +
+      'vertical assessment, never an alignment fit residual (none exists in the app yet, so it is ' +
+      'unavailable); with some terms known and some missing the threshold is ' +
+      'max(1.96·√(Σ known σ²), 0.1 m), labelled incomplete (a lower bound), and counts and ' +
+      'detectable volumes say so; with no term known it is the assumed 0.1 m; and the grids must ' +
+      'share origin and cell size to a few float64 ulps (capped at 1e-6 cell). v2 used the alignment ' +
+      '3-D RMS as σreg and fell back to 0.1 m when any term was missing; v1 used the fixed 0.1 m.',
     citation: 'Anderson (2019), pubs.usgs.gov/publication/70202166 (LoD thresholding for gross change); Wheaton et al. (2010), doi:10.1002/esp.1886 (propagated minimum LoD)',
     category: 'change',
     implementation: ['src/terrain/change/changeDetection.ts', 'src/terrain/change/compareDtms.ts'],
   },
   'olv.change.dtm-difference.raw-net': {
     id: 'olv.change.dtm-difference.raw-net',
-    version: 2,
+    version: 3,
     name: 'DTM-of-difference cut/fill (raw net + thresholded gross)',
     summary:
       'Same per-cell two-epoch difference as olv.change.dtm-difference, but reports the ' +
@@ -423,7 +424,10 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'uncorrelated sub-LoD error of opposite sign would otherwise cancel and instead gets ' +
       'zeroed out asymmetrically. v2 thresholds the gross figures at the propagated minimum LoD ' +
       '(Wheaton et al. 2010) with the assumed 0.1 m fallback, and the net band\'s per-cell σ is ' +
-      '√(σz_before² + σz_after²) when both are measured; v1 used the fixed 0.1 m.',
+      '√(σz_before² + σz_after²) when both are measured; v1 used the fixed 0.1 m. v3 applies the ' +
+      'olv.change.dtm-difference@3 threshold rule (no fit residual as σreg; incomplete threshold ' +
+      'never below the known terms; band σ = LoD/1.96 when incomplete) and grid-identity check; ' +
+      'the raw net is unthresholded and unaffected.',
     citation: 'Anderson (2019), pubs.usgs.gov/publication/70202166 (thresholded gross vs raw net); Wheaton et al. (2010), doi:10.1002/esp.1886 (propagated minimum LoD)',
     category: 'change',
     implementation: ['src/terrain/change/changeDetection.ts', 'src/terrain/change/compareDtms.ts'],

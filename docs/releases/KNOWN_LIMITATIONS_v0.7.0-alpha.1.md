@@ -787,4 +787,16 @@ not shown to bound vertical registration error; alignment does not solve z).
 The vertical registration error is not measured on its own. When no alignment is applied or a hold-out cannot run,
 the threshold falls back to a fixed 0.1 m and the result labels it "assumed,
 not measured". The difference raster (.asc) has no header field for the
+(Wheaton et al. 2010, uniform form). Each σz is that epoch's hold-out RMSEz over
+the whole surface, not a per-cell field. σreg must be the vertical registration
+error measured on stable reference areas; the app has no stable-area assessment
+yet, so σreg is unavailable. The alignment's residuals (at the applied pose, and
+the solver's own fit) are reported but are fit statistics and are not used as
+σreg. With σreg missing and both σz measured, the threshold is
+max(1.96·√(σz_before² + σz_after²), 0.1 m) and is labelled "incomplete — lower
+bound"; significance counts and detectable volumes carry the same label, and the
+raw net volume is unthresholded. Only when no term is known does it fall back to
+a fixed 0.1 m labelled "assumed, not measured". Two DTMs are differenced only
+when they share a grid to float64 representation; an offset grid is refused,
+not resampled. The difference raster (.asc) has no header field for the
 threshold, so the level of detection travels in the panel text, not the file.

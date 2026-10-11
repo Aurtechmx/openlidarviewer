@@ -85,7 +85,7 @@ export interface EpochComparison {
   readonly result: ChangeResult;
   /**
    * True only when the two DTMs share a raster (cell size + dims), sit at the
-   * same world origin (to floating-point representation — half a cell of slack
+   * same world origin (to a few float64 ulps, capped at 1e-6 cell — half a cell of slack
    * used to pass, and half a cell of misregistration is not co-registration),
    * and declare the same CRS + vertical datum where both are known. When false,
    * `coregistrationNotes` says why, and `summarizeChange` reports no cut/fill
@@ -141,6 +141,26 @@ export interface EpochComparison {
    * result is withheld the way a proven frame clash is.
    */
   readonly gridMisaligned: boolean;
+}
+
+/** Ulps of float64 tolerated in a grid-definition comparison. */
+const ULPS_TOLERATED = 4;
+
+/** One unit in the last place of a float64 at magnitude |x| (≥ the smallest normal). */
+function ulp(x: number): number {
+  const m = Math.abs(x);
+  if (!(m > 0) || !Number.isFinite(m)) return Number.MIN_VALUE;
+  return Math.max(Number.EPSILON * 2 ** Math.floor(Math.log2(m)), Number.MIN_VALUE);
+}
+
+/**
+ * Largest origin difference still treated as "the same number": a few ulps at
+ * the coordinate magnitude, or 1e-6 of a cell, whichever is smaller.
+ */
+export function gridTolerance(coordMagnitude: number, cellSize: number): number {
+  const ulpTol = ULPS_TOLERATED * ulp(Math.max(coordMagnitude, 1));
+  const cellTol = Number.isFinite(cellSize) && cellSize > 0 ? 1e-6 * cellSize : Infinity;
+  return Math.min(ulpTol, cellTol);
 }
 
 /**
@@ -207,12 +227,32 @@ export function compareDtms(
   // ARE the same grid. The live path composes both epochs onto one shared grid
   // (`compareEpochs.sharedGrid`), so its origins are the same number and this
   // costs it nothing; independently built pairs are told to co-register.
+  //
+  // The tolerance is a few units in the last place (ulp) of float64 at the
+  // coordinates' magnitude, capped by 1e-6 of a cell — whichever is STRICTER.
+  // The previous |coord|·1e-9 was 5 mm at a northing of 5e6, which accepted a
+  // 4 mm offset on a 1 cm grid (0.4 of a cell) as co-registered. Four ulps
+  // absorb the rounding of an origin that went through a few float64
+  // operations (≈ 3.7 nm at 5e6) and nothing a survey could produce; the
+  // cell-size cap keeps that true for very fine grids at tiny coordinates.
   let originsOffset = false;
   const dH1 = Math.abs(a.originH1 - b.originH1);
   const dH2 = Math.abs(a.originH2 - b.originH2);
-  const originTol =
-    Math.max(Math.abs(a.originH1), Math.abs(b.originH1), Math.abs(a.originH2), Math.abs(b.originH2), 1)
-    * 1e-9;
+  const originTol = gridTolerance(
+    Math.max(Math.abs(a.originH1), Math.abs(b.originH1), Math.abs(a.originH2), Math.abs(b.originH2)),
+    Math.min(a.cellSizeM, b.cellSizeM),
+  );
+  // Cell size must match to the same ulp scale: a drift of δ per cell walks
+  // the far edge of the raster off by cols·δ. detectChange's own 1e-9 check is
+  // looser, so the strict test lives here with the origin test.
+  const cellTol = ULPS_TOLERATED * ulp(Math.max(a.cellSizeM, b.cellSizeM));
+  if (Math.abs(a.cellSizeM - b.cellSizeM) > cellTol && Math.abs(a.cellSizeM - b.cellSizeM) < 1e-9) {
+    originsOffset = true;
+    notes.push(
+      `The two epochs' cell sizes differ beyond floating-point representation (${a.cellSizeM} vs ` +
+        `${b.cellSizeM}) — they are not one grid; resample onto a common grid before comparing.`,
+    );
+  }
   if (dH1 > originTol || dH2 > originTol) {
     // Origins are in SOURCE units. Convert to metres for a projected CRS
     // (a 30-ft offset must not print "30 m"); a geographic grid stays degrees.
@@ -229,7 +269,8 @@ export function compareDtms(
     originsOffset = true;
     notes.push(
       `The two epochs are offset by about ${offLabel}${cellLabel} at the grid origin — ` +
-        `co-register them (align to common ground control) before trusting the difference.`,
+        `they are not one grid, so no difference is computed from them. Co-register or resample them ` +
+        `onto a common grid first.`,
     );
   }
 
@@ -295,7 +336,11 @@ export function compareDtms(
  */
 /** Extra facts, known only at the call site, that qualify the net-volume figure. */
 export interface ChangeSummaryContext {
-  /** Co-registration RMSE (m) of the applied alignment — the systematic error term. */
+  /**
+   * Vertical co-registration σ (m) from an independent stable-area assessment —
+   * the band's systematic term. Never an alignment fit residual. 0 / absent
+   * means unavailable (the live workflow has no stable-area assessment yet).
+   */
   readonly registrationSigmaM?: number;
   /**
    * True when the caller supplied a level of detection measured for these
@@ -319,6 +364,13 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
   const { result, coregistered, coregistrationNotes } = comparison;
   const s = result.stats;
   const lines: string[] = [];
+  // Counts and detectable volumes thresholded with an incomplete (lower-bound)
+  // LoD are kept — the known terms set a real minimum — but say so inline, so
+  // the figure never travels without the qualifier.
+  const incompleteTag =
+    comparison.levelOfDetection.basis === 'incomplete'
+      ? ' [computed with an incomplete, lower-bound threshold — some uncertainty terms are missing, so these may overstate detectable change]'
+      : '';
 
   if (comparison.frameIncompatible) {
     // A PROVEN frame mismatch: the numbers describe nothing, so none are
@@ -414,7 +466,7 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
         `gain ${s.detectableGainVolumeM3.toFixed(1)} m³, loss ${s.detectableLossVolumeM3.toFixed(1)} m³, ` +
         `thresholded net ${s.detectableNetVolumeM3.toFixed(1)} m³ — thresholding the net biases it ` +
         `(uncorrelated sub-LoD error should cancel, not zero out asymmetrically), so the raw net above ` +
-        `is the reported net figure.`,
+        `is the reported net figure.${incompleteTag}`,
     );
     lines.push(...describeLevelOfDetection(comparison.levelOfDetection));
     // Qualify the net volume with a ± band + detectability. A bare figure hides
@@ -454,18 +506,18 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
         );
       }
       if (!(ctx.registrationSigmaM && ctx.registrationSigmaM > 0)) {
-        lines.push('The co-registration error is unquantified (no alignment applied), so this band is a lower bound.');
-      } else {
-        // What that term IS. The caller supplies the ICP fit's RMS
-        // nearest-neighbour distance, a 3-D residual carrying horizontal
-        // mismatch, point spacing, surface roughness and real change as well as
-        // vertical noise. It is a proxy for the vertical co-registration sigma
-        // the model wants, not a measurement of it, and the report said nothing.
+        // The alignment's fit residuals are NOT used here: they measure the fit
+        // (horizontal mismatch, spacing, roughness, real change), not vertical
+        // registration error. Only a stable-area assessment supplies σreg.
         lines.push(
-          'The co-registration term is the alignment fit\'s 3-D RMS residual, which ' +
-            'also carries horizontal mismatch, point spacing, surface roughness and ' +
-            'real change — a proxy for vertical registration error, not a measurement ' +
-            'of it. Vertical residuals on stable ground would quantify it.',
+          'The vertical co-registration error is unquantified — it needs an independent ' +
+            'assessment on stable reference areas, and alignment fit residuals are not a ' +
+            'substitute — so this band is a lower bound.',
+        );
+      } else {
+        lines.push(
+          'The co-registration term is the vertical σ measured on stable reference areas ' +
+            '(independent of the alignment fit).',
         );
       }
       // Where the per-cell sigma came from. It is derived as LoD/1.96, so when
@@ -488,7 +540,7 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
   lines.push(
     `${(s.significantFraction * 100).toFixed(1)}% of comparable cells changed beyond the ` +
       `detection floor of ${comparison.levelOfDetectionM} m ` +
-      `(${s.gained} gained, ${s.lost} lost, ${s.unchanged} unchanged).`,
+      `(${s.gained} gained, ${s.lost} lost, ${s.unchanged} unchanged).${incompleteTag}`,
     `Largest gain ${s.maxGainM.toFixed(2)} m, largest loss ${s.maxLossM.toFixed(2)} m; ` +
       `mean |Δ| ${s.meanAbsChangeM.toFixed(2)} m over ${s.comparable} comparable cells.`,
   );
