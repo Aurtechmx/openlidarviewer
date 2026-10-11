@@ -810,6 +810,13 @@ describe('buildTerrainReportContent — every row names its basis', () => {
     expect(rowValue(c, 'Dataset Statistics', 'Grid extent')).toBe('200 × 150 m');
   });
 
+  it('#10b prints a geographic grid extent in fractional degrees, not "0 × 0"', () => {
+    const r = readyResult();
+    (r as { dtm: unknown }).dtm = { ...r.dtm, crs: 'EPSG:4326', cellSizeM: 1e-5 };
+    const c = buildTerrainReportContent(r, { ...OPTS, isGeographic: true, linearUnit: null });
+    expect(rowValue(c, 'Dataset Statistics', 'Grid extent')).toBe('0.002 × 0.0015 degrees');
+  });
+
   it('#11 qualifies the USGS density reference with its basis', () => {
     const c = buildTerrainReportContent(readyResult(), OPTS);
     expect(rowValue(c, 'Quality Metrics', 'USGS density reference')).toBe(

@@ -292,9 +292,14 @@ export function buildTerrainReportContent(
     isGeographic: opts.isGeographic,
     linearUnit: opts.linearUnit,
   });
+  // Whole-unit rounding suits m / ft / source units, but a geographic grid is a
+  // fraction of a degree (200 cells of 1e-5° is 0.002°) and rounds to "0 × 0".
+  // Degrees are printed to three significant figures instead.
+  const fmtExtent = (v: number): string =>
+    footprintUnit === 'degrees' ? String(Number(v.toPrecision(3))) : Math.round(v).toLocaleString();
   const gridExtent =
     cols != null && rows != null && cell != null
-      ? `${Math.round(cols * cell).toLocaleString()} × ${Math.round(rows * cell).toLocaleString()} ${footprintUnit}`
+      ? `${fmtExtent(cols * cell)} × ${fmtExtent(rows * cell)} ${footprintUnit}`
       : DASH;
   const density = provenance.pointDensityPerM2;
   const classesExcluded =
