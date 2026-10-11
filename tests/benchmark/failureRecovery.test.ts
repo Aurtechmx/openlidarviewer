@@ -674,14 +674,11 @@ describe('a coordinate reference system that is absent or unresolvable', () => {
     expect(namedUnknown.linearUnitToMetres).toBe(20.1168);
     expect(toMetres(100, namedUnknown)).toBeCloseTo(2011.68, 6);
 
-    // Injection B: a projected CRS that states no UNIT at all. The file has
-    // declared nothing, so the format's own default applies and the CRS is
-    // metres. This is the case that MUST stay distinct from a file that does
-    // declare a unit we cannot resolve — see the GeoTIFF defect below.
+    // Injection B: a projected CRS that states no UNIT and no usable code.
+    // Nothing fixes the unit, so it is unknown rather than an assumed metre.
     const noUnit = crsFromWkt('PROJCS["Local grid",AUTHORITY["EPSG","0"]]');
-    expect(noUnit.linearUnit).toBe('metre');
+    expect(noUnit.linearUnit).toBe('unknown');
     expect(noUnit.linearUnitToMetres).toBe(1);
-    expect(toMetres(100, noUnit)).toBe(100);
   });
 
   test('a truncated GeoTIFF projection record says the CRS is unknown and names the truncation', () => {
@@ -766,8 +763,9 @@ describe('a coordinate reference system that is absent or unresolvable', () => {
     // the refusal, exactly as in the unresolvable-WKT case above.
     expect(declaredUnknownUnit.linearUnitToMetres).toBe(1);
 
-    // A file that declares NO unit at all is a different fact — the GeoTIFF
-    // default applies — and must stay distinguishable from the case above.
+    // A file that declares NO unit at all is a different fact — the unit the
+    // EPSG code defines applies (27700 is metres) — and must stay
+    // distinguishable from the case above.
     const noUnitDeclared = crsFromGeoTiff(
       geoKeyDirectory([[GEOKEY_MODEL_TYPE, 1], [GEOKEY_PROJECTED_CRS, 27700]]),
       null,

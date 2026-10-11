@@ -13,7 +13,7 @@
  *   3. Neither → null (raw exports often skip the SRS entirely).
  */
 
-import { crsFromWkt, crsFromEpsg, verticalDatumLabel, type CrsInfo } from '../../io/crs';
+import { crsFromWkt, crsFromEpsg, verticalDatumLabel, resolveVerticalUnit, type CrsInfo } from '../../io/crs';
 import { isGeographicEpsg } from '../../convert/epsg';
 import type { EptMetadata } from '../../io/ept/eptTypes';
 
@@ -30,7 +30,18 @@ export function resolveEptCrs(metadata: Pick<EptMetadata, 'srs' | 'srsCodes'>): 
     if (!fromWkt.verticalDatum && codes?.verticalEpsg) {
       const datum = verticalDatumLabel(codes.verticalEpsg);
       if (datum) {
-        return { ...fromWkt, verticalEpsg: codes.verticalEpsg, verticalDatum: datum };
+        // The code also fixes the Z unit (6360 is NAVD88 in US survey feet).
+        // A WKT that already stated a vertical unit keeps it, checked against
+        // the code's own.
+        const v = resolveVerticalUnit(fromWkt.verticalLinearUnit, codes.verticalEpsg);
+        return {
+          ...fromWkt,
+          verticalEpsg: codes.verticalEpsg,
+          verticalDatum: datum,
+          verticalLinearUnit: v.unit,
+          verticalUnitToMetres: v.toMetres,
+          ...(v.conflict ? { verticalUnitConflict: v.conflict } : {}),
+        };
       }
     }
     return fromWkt;

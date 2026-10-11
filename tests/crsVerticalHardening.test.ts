@@ -95,8 +95,9 @@ describe('crsFromGeoTiff — vertical key', () => {
 
   it('reads VerticalUnitsGeoKey (4099) as the Z-axis unit, distinct from horizontal', () => {
     // Horizontal grid in metres (3076 = 9001), vertical height in US survey feet
-    // (4099 = 9003). Elevation must convert by the foot unit, not the metre one.
-    const bytes = geoKeyBytes([[1024, 1], [3072, 26911], [3076, 9001], [4096, 5703], [4099, 9003]]);
+    // (4099 = 9003) over a vertical code that is itself ftUS (6360). Elevation
+    // must convert by the foot unit, not the metre one.
+    const bytes = geoKeyBytes([[1024, 1], [3072, 26911], [3076, 9001], [4096, 6360], [4099, 9003]]);
     const crs = crsFromGeoTiff(bytes, null, null);
     expect(crs.linearUnit).toBe('metre');
     expect(crs.linearUnitToMetres).toBe(1);
@@ -112,10 +113,24 @@ describe('crsFromGeoTiff — vertical key', () => {
     expect(crs.verticalUnitToMetres).toBeCloseTo(1200 / 3937, 12);
   });
 
-  it('leaves the vertical unit undefined when no 4099 key is present', () => {
+  it('takes the vertical unit from the vertical code when no 4099 key is present', () => {
     const crs = crsFromGeoTiff(geoKeyBytes([[1024, 1], [3072, 26911], [4096, 5703]]), null, null);
+    expect(crs.verticalLinearUnit).toBe('metre');
+    expect(crs.verticalUnitToMetres).toBe(1);
+  });
+
+  it('leaves the vertical unit undefined with neither 4099 nor a recognised vertical code', () => {
+    const crs = crsFromGeoTiff(geoKeyBytes([[1024, 1], [3072, 26911]]), null, null);
     expect(crs.verticalLinearUnit).toBeUndefined();
     expect(crs.verticalUnitToMetres).toBeUndefined();
+  });
+
+  it('reports a 4099 that contradicts the vertical code instead of picking one', () => {
+    // 5703 is NAVD88 in metres; 4099 = 9003 says US survey feet.
+    const crs = crsFromGeoTiff(geoKeyBytes([[1024, 1], [3072, 26911], [4096, 5703], [4099, 9003]]), null, null);
+    expect(crs.verticalLinearUnit).toBe('unknown');
+    expect(Number.isFinite(crs.verticalUnitToMetres)).toBe(false);
+    expect(crs.verticalUnitConflict).toMatch(/EPSG:5703/);
   });
 });
 

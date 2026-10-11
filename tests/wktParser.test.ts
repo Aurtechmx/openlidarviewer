@@ -168,14 +168,25 @@ const cases: Case[] = [
   {
     title: 'standalone vertical CRS (no horizontal)',
     wkt: 'VERT_CS["NAVD88 height",VERT_DATUM["NAVD88",2005],UNIT["metre",1],AUTHORITY["EPSG","5703"]]',
-    epsg: undefined, isGeographic: false, linearUnit: 'metre',
+    // No horizontal CRS, so no horizontal unit can be vouched for.
+    epsg: undefined, isGeographic: false, linearUnit: 'unknown',
     verticalEpsg: 5703, verticalDatumContains: 'NAVD88',
   },
   {
-    title: 'missing UNIT on a projected CRS defaults to metre',
+    title: 'missing UNIT on a projected CRS with no code is unknown, not metre',
     wkt: 'PROJCS["Local grid",AUTHORITY["EPSG","0"]]',
-    // EPSG:0 is below the accepted range → no code claimed.
-    epsg: undefined, isGeographic: false, linearUnit: 'metre',
+    // EPSG:0 is below the accepted range → no code claimed, so no unit either.
+    epsg: undefined, isGeographic: false, linearUnit: 'unknown',
+  },
+  {
+    title: 'missing UNIT on a projected CRS takes the unit its EPSG code defines',
+    wkt: 'PROJCS["WGS 84 / UTM zone 12N",AUTHORITY["EPSG","32612"]]',
+    epsg: 32612, isGeographic: false, linearUnit: 'metre',
+  },
+  {
+    title: 'missing UNIT on an unrecognised projected code is unknown (EPSG:2264 is ftUS)',
+    wkt: 'PROJCS["NAD83 / North Carolina (ftUS)",AUTHORITY["EPSG","2264"]]',
+    epsg: 2264, isGeographic: false, linearUnit: 'unknown',
   },
   {
     title: 'unknown unit NAME resolves to unknown (fail-closed), scale kept',
@@ -207,15 +218,14 @@ describe('crsFromWkt — table-driven shapes (parity with the regex parser)', ()
 });
 
 describe('crsFromWkt — malformed input falls back like the regex parser did', () => {
-  it('empty / whitespace / junk → Unknown CRS, no code, metre default off (unknown)', () => {
+  it('empty / whitespace / junk → Unknown CRS, no code, unit unknown', () => {
     for (const bad of ['', '   ', 'not wkt at all']) {
       const crs = crsFromWkt(bad);
       expect(crs.name).toBe('Unknown CRS');
       expect(crs.epsg).toBeUndefined();
       expect(crs.isGeographic).toBe(false);
-      // No PROJCS/GEOGCS recognised → not geographic; the projected branch with
-      // no UNIT defaults to metre, matching the prior parser exactly.
-      expect(crs.linearUnit).toBe('metre');
+      // No PROJCS/GEOGCS recognised and no code → no unit can be vouched for.
+      expect(crs.linearUnit).toBe('unknown');
     }
   });
 
@@ -224,7 +234,7 @@ describe('crsFromWkt — malformed input falls back like the regex parser did', 
     expect(crs.name).toBe('Unterminated');
     expect(crs.epsg).toBeUndefined();
     expect(crs.isGeographic).toBe(false);
-    expect(crs.linearUnit).toBe('metre');
+    expect(crs.linearUnit).toBe('unknown');
     expect(crs.horizontalDatum).toBe('base');
   });
 
