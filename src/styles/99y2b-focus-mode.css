@@ -1,0 +1,44 @@
+/* Focus mode (src/app/workspace/focusMode.ts).
+ *
+ * The control is a header ghost button beside the trust badge. In Focus mode
+ * the rest of the header, both rail grabbers and the renderer chip step aside;
+ * the rails themselves are collapsed through their own toggles. The header
+ * keeps its box (visibility, not display), so the control does not move and
+ * the way out stays where the way in was. The location bar's crumbs go too:
+ * they name a rail that is not on screen. Nothing here adds a layer over the
+ * canvas: the header is already click-through and only its real controls take
+ * input. The compass, navigation card, dock, measure guidance, state strip and
+ * toasts are not touched. */
+.olv-focus-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 30px; min-width: 64px; padding: 0 var(--space-lg);
+  font: inherit; font-size: var(--text-xs); font-weight: 500;
+  color: var(--text-dim);
+  background: transparent;
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.olv-focus-toggle:hover { color: var(--text); background: var(--hover-wash); }
+.olv-focus-toggle:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 2px;
+}
+.olv-focus-toggle[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--panel);
+  border-color: var(--accent);
+}
+.olv-focus-toggle.olv-hidden { display: none; }
+/* Touch: a 44 px target, as J11 requires for every tablet control. */
+@media (pointer: coarse) { .olv-focus-toggle { height: 44px; } }
+
+.olv-focus-mode .olv-wordmark,
+.olv-focus-mode .olv-loc,
+.olv-focus-mode .olv-topbar-right > :not(.olv-focus-toggle) { visibility: hidden; }
+.olv-focus-mode .olv-rail-tab,
+.olv-focus-mode .olv-right-rail-tab,
+.olv-focus-mode .olv-backend { display: none; }

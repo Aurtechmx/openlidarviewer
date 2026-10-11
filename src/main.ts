@@ -1521,7 +1521,7 @@ const keyBindingDeps: KeyBindingDeps = {
         viewer.setMeasureMode(false);
         handled = true;
       }
-      if (handled) showLassoToast('Back to navigation.');
+      if (handled) showLassoToast('Back to navigation.'); else if (!viewer?.toolActive) return workspaceShell?.focus.escape(); // Focus mode last
     },
     toggleLasso: () => {
       if (lassoVolumeTool.enabled) {

@@ -319,8 +319,9 @@ export interface KeyBindingDeps {
   isDrafting: () => boolean;
   measureFinish: () => void;
   measureUndoPoint: () => void;
-  // Universal Escape (120)
-  onEscape: () => void;
+  // Universal Escape (120). Returns true when Escape was spent on something
+  // the location bar's Back must not also act on (Focus mode's exit).
+  onEscape: () => boolean | void;
   // Lasso toggle — L (200)
   toggleLasso: () => void;
   // Camera presets — T / O / P (210)
@@ -403,8 +404,8 @@ export function buildViewerKeyBindings(
       // The original handler never called preventDefault on Escape.
       preventDefault: false,
       when: (ctx) => !ctx.isEditable,
-      run: () => {
-        deps.onEscape();
+      run: (_ctx, e) => {
+        if (deps.onEscape() === true) e.preventDefault();
         return true;
       },
     },

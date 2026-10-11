@@ -59,6 +59,15 @@ export function contributeViewActions(deps: ViewActionDeps): Action[] {
       run: () => deps.compass.setEnabled(!deps.compass.isEnabled()),
     },
     {
+      id: 'view.focus-mode',
+      title: 'Focus Mode',
+      section: 'View',
+      hint: 'Hide both side panels and the header links to give the scan the screen. Run it again, press Esc or use Exit focus to bring them back.',
+      keywords: ['focus', 'zen', 'distraction', 'fullscreen', 'clean', 'hide panels', 'rails', 'immersive', 'viewport'],
+      // The workspace shell owns the rails and answers this event.
+      run: () => { globalThis.document?.dispatchEvent(new CustomEvent('olv-focus-mode-toggle')); },
+    },
+    {
       id: 'nav.invert-vertical',
       title: 'Invert vertical orbit',
       section: 'View',

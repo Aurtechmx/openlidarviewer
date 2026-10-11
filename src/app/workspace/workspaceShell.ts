@@ -27,6 +27,7 @@ import {
   wireDockClearance,
   wireRailToggle,
   containPanelWheel,
+  appToast,
   RAIL_CHEVRON_LEFT,
   RAIL_CHEVRON_RIGHT,
 } from '../../ui/panelChrome';
@@ -42,6 +43,9 @@ import { createModeHome, type ModeHome } from './modeHome';
 import { sessionLog, SESSION_LOG_OPEN_EVENT } from '../sessionLog/sessionLog';
 import { installSessionLogRecorder } from '../sessionLog/sessionLogRecorder';
 import { mountSessionLogPage, openSessionLogDialog, type SessionLogPage } from '../sessionLog/sessionLogPage';
+import { createFocusMode, FOCUS_MODE_TOGGLE_EVENT, type FocusMode } from './focusMode';
+import { dialogOpen } from '../../ui/Modal';
+import { el } from '../../ui/dom';
 
 /** The scene tools that open a page in the Tools mode. */
 export type ToolPage = 'measure' | 'annotate' | 'clip';
@@ -114,6 +118,8 @@ export interface WorkspaceShell {
   readyResultCount(): number;
   /** Re-evaluate the phone sheet and the rail's availability. */
   applyMobileSheet(): void;
+  /** Focus mode: both rails and the secondary header chrome step aside. */
+  readonly focus: FocusMode;
   /** Mount what an Analyse page needs, then show it. */
   openAnalysePage(page: AnalysePage): void;
   mountAnalysePanel(el: HTMLElement): void;
@@ -192,9 +198,12 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   });
   const allPages = { work: pages as Record<string, WorkspacePage>, data: dataPages, analyse: analyse.pages };
   let modeHome: ModeHome | null = null;
-  router = createWorkspaceRouter(workspace, allPages, storage(), () => { modeHome?.refresh(); refreshLogPage(); });
+  // Set once both rails are wired below; the router's sync reaches it earlier.
+  let focus: FocusMode | null = null;
+  router = createWorkspaceRouter(workspace, allPages, storage(), () => { modeHome?.refresh(); refreshLogPage(); focus?.sync(); });
   analyse.attach(router);
   d.addTeardown(() => router?.dispose());
+  const live = router;
   const shown = (n: HTMLElement | null | undefined): boolean => !!n && !n.classList.contains('olv-hidden') && n.style.display !== 'none';
   modeHome = createModeHome({
     router,
@@ -246,7 +255,9 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   refreshDataHome = dataHome.refresh;
   d.addTeardown(d.inspector.onSourceChange(dataHome.refresh));
   decorateViewRail(d.inspector.element, () => router?.navigate({ mode: 'analyse', page: null }, true));
-  const expandRightRail = (): void => d.overlay.querySelector<HTMLButtonElement>('.olv-right-rail-tab')?.click();
+  // Asking for the View rail ends Focus mode first, so the rail opens from the
+  // state the user left, not from Focus mode's transient collapse.
+  const expandRightRail = (): void => { focus?.exit(); d.overlay.querySelector<HTMLButtonElement>('.olv-right-rail-tab')?.click(); };
   const workspacePanels = {
     dataLayers: dataEls.layers,
     dataHome: dataHome.element,
@@ -273,7 +284,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   d.addTeardown(wireMeasureBarClearance(d.measureHint, d.rightRail));
   // Keep the column above the real dock height, and add the one-tap rail collapse.
   d.addTeardown(wireDockClearance(d.dock, leftPanels));
-  d.addTeardown(wireRailToggle({
+  const leftRail = wireRailToggle({
     overlay: d.overlay,
     panels: [leftPanels],
     tabClass: 'olv-rail-tab',
@@ -281,10 +292,11 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     collapsedClass: 'olv-rail-collapsed',
     storageKey: 'olv.leftRail.collapsed',
     ariaControls: 'olv-left-panels',
-  }));
+  });
+  d.addTeardown(leftRail);
   // One grabber collapses the whole right context rail (Streaming + Inspector),
   // under the Inspector's persisted collapse key.
-  d.addTeardown(wireRailToggle({
+  const rightRailToggle = wireRailToggle({
     overlay: d.overlay,
     panels: [d.rightRail],
     tabClass: 'olv-right-rail-tab',
@@ -294,8 +306,11 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     ariaControls: 'olv-right-rail',
     label: 'View',
     narrowCollapsed: true,
-  }));
+  });
+  d.addTeardown(rightRailToggle);
   d.overlay.append(...d.overlayTail);
+  const focusMode = mountFocusMode(d, leftRail, rightRailToggle, () => live.route(), () => !mobileApplied && d.hasScan());
+  focus = focusMode;
 
   // Phone bottom sheet: the same four modes plus View (the Inspector). The
   // desktop mode hosts themselves are re-parented into the sheet's slots, so a
@@ -445,6 +460,9 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
       else toDesktopLayout();
       mobileApplied = isMobile;
     }
+    // A closed scan or a phone layout ends Focus mode; the control follows.
+    focus?.sync();
+    focusButton(d.overlay)?.classList.toggle('olv-hidden', isMobile || !d.hasScan());
     // The sheet shows only on a phone WITH a scan; the tab strip only with a scan.
     sheet.setVisible(isMobile && d.hasScan());
     workspace.setAvailable(d.hasScan());
@@ -480,7 +498,6 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   });
   router.sync();
 
-  const live = router;
   return {
     router,
     mobileSheet: sheet,
@@ -501,6 +518,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
       if (mobileApplied) sheet.setDetent('peek');
     },
     applyMobileSheet,
+    focus: focusMode,
     openAnalysePage: (page) => { void analyse.open(page); },
     mountAnalysePanel: (el) => {
       el.classList.remove('olv-collapsed'); // constructs collapsed; hides its action
@@ -513,4 +531,62 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
       placeAnalyse();
     },
   };
+}
+
+const focusButton = (overlay: HTMLElement): HTMLButtonElement | null =>
+  overlay.querySelector<HTMLButtonElement>('.olv-focus-toggle');
+
+/** Escape belongs to an open dialog, popover, result focus or pointer lock first. */
+function escapeClaimedElsewhere(): boolean {
+  if (dialogOpen() || document.pointerLockElement) return true;
+  return !!document.querySelector('[aria-haspopup][aria-expanded="true"], .olv-tool-more[aria-expanded="true"], .olv-result-focus:not(.olv-modal-closing)');
+}
+
+/**
+ * Focus mode's control and its palette event. The control sits in the header's
+ * right cluster, which stays in place while the rest of the header hides, so
+ * the way out is always where the way in was.
+ */
+function mountFocusMode(
+  d: WorkspaceShellDeps,
+  left: Parameters<typeof createFocusMode>[0]['left'],
+  right: Parameters<typeof createFocusMode>[0]['right'],
+  route: () => { mode: string; page: string | null },
+  available: () => boolean,
+): FocusMode {
+  const button = el('button', { className: 'olv-focus-toggle olv-hidden', text: 'Focus', tip: 'Hide both side panels and the header links to give the scan the screen. Esc or this button brings them back.' });
+  button.type = 'button';
+  const label = (on: boolean): void => {
+    button.textContent = on ? 'Exit focus' : 'Focus';
+    button.setAttribute('aria-pressed', String(on));
+    button.setAttribute('aria-label', on ? 'Exit focus mode' : 'Focus mode');
+  };
+  label(false);
+  const focus = createFocusMode({
+    root: d.overlay,
+    left,
+    right,
+    route,
+    available,
+    escapeBlocked: escapeClaimedElsewhere,
+    onChange: label,
+  });
+  const onClick = (): void => { focus.toggle(); };
+  button.addEventListener('click', onClick);
+  const header = d.overlay.querySelector<HTMLElement>('.olv-topbar-right');
+  if (header) header.prepend(button);
+  else d.overlay.append(button);
+  const onToggle = (): void => {
+    const wasOn = focus.isActive();
+    // Nothing to collapse on a phone or before a scan: say so, not silence.
+    if (!focus.toggle() && !wasOn) appToast().show('Focus mode needs a scan open on a wider screen. On a phone, lower the sheet to see the scan.');
+  };
+  document.addEventListener(FOCUS_MODE_TOGGLE_EVENT, onToggle);
+  d.addTeardown(() => {
+    document.removeEventListener(FOCUS_MODE_TOGGLE_EVENT, onToggle);
+    button.removeEventListener('click', onClick);
+    focus.dispose();
+    button.remove();
+  });
+  return focus;
 }
