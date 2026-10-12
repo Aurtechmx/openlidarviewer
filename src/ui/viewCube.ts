@@ -117,7 +117,7 @@ function defaultObstacles(): CubeObstacle[] {
   return [...document.querySelectorAll(OBSTACLE_SELECTOR)].map((el) => ({ el }));
 }
 
-/** What the cube keeps clear of: the rails and their tabs, the header, the stage's floating cards, the tool dock, the navigation row, the measure bar and the active-tool pill. */
+/** What the cube keeps clear of: the rails and their tabs, the header, the stage's floating cards, the tool dock, the navigation row, the measure bar, the active-tool pill, and the clip flow's result card and clip chip. */
 const OBSTACLE_SELECTOR = [
   '.olv-right-rail:not(.olv-right-collapsed)',
   '.olv-right-rail-tab',
@@ -129,6 +129,9 @@ const OBSTACLE_SELECTOR = [
   '.olv-navbar',
   '.olv-nav-prompt-tool',
   '.olv-dock',
+  // The clip flow's result card and active-clip chip. Hidden ones have no box and are skipped in place().
+  '.olv-result-card',
+  '.olv-clip-indicator',
 ].join(', ');
 
 function fmt(n: number): string {
