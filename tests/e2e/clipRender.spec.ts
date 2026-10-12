@@ -172,7 +172,8 @@ const GROUND_IN_BOX: [number, number, number] = [13, 16.5, GZ];
 const GROUND_FAR: [number, number, number] = [35, 25, GZ];
 const GROUND_FAR2: [number, number, number] = [4, 4, GZ];
 
-test('a box drawn on the ground isolates a 3D volume, not a slab, and the points outside are gone', async ({ page }) => {
+test('a box drawn on the ground isolates a 3D volume, not a slab, and the points outside are gone', async ({ page, browserName }) => {
+  test.skip(browserName === 'webkit', 'WebKit on CI returns a blank canvas screenshot, so drawn pixels cannot be read back');
   test.setTimeout(150_000);
   await openTower(page);
   const before = await lit(page, [ROOF, WALL, GROUND_IN_BOX, GROUND_FAR, GROUND_FAR2]);
@@ -220,7 +221,8 @@ test('a box drawn on the ground isolates a 3D volume, not a slab, and the points
   expect(await litTotal(page)).toBeGreaterThan(totalBefore * 0.03);
 });
 
-test('Outside mode removes the volume; Fit to scan, a numeric edit and Clear all change the drawing', async ({ page }) => {
+test('Outside mode removes the volume; Fit to scan, a numeric edit and Clear all change the drawing', async ({ page, browserName }) => {
+  test.skip(browserName === 'webkit', 'WebKit on CI returns a blank canvas screenshot, so drawn pixels cannot be read back');
   test.setTimeout(180_000);
   await openTower(page);
   const pose0 = await api(page, (a) => a.getCameraPose());
@@ -369,7 +371,8 @@ async function orbitFrames(page: Page, steps = 6): Promise<number[]> {
 }
 const median = (a: number[]): number => [...a].sort((x, y) => x - y)[a.length >> 1] ?? 0;
 
-test('orbiting near the clipped area is not materially slower than without a clip', async ({ page }) => {
+test('orbiting near the clipped area is not materially slower than without a clip', async ({ page, browserName }) => {
+  test.skip(browserName === 'webkit', 'WebKit frame pacing on the CI runner is too uneven for a frame-time ratio');
   test.setTimeout(300_000);
   await openTower(page, { width: 800, height: 520 });
   await openToolPage(page, 'Measure');
@@ -412,7 +415,8 @@ test('orbiting near the clipped area is not materially slower than without a cli
   }
 });
 
-test('a clip over a placed layer draws where that layer is (Inside keeps it, Outside removes it)', async ({ page }) => {
+test('a clip over a placed layer draws where that layer is (Inside keeps it, Outside removes it)', async ({ page, browserName }) => {
+  test.skip(browserName === 'webkit', 'WebKit on CI returns a blank canvas screenshot, so drawn pixels cannot be read back');
   test.setTimeout(240_000);
   const fx = await geomFixtures();
   await page.setViewportSize({ width: 1100, height: 700 });
