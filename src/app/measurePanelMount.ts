@@ -25,8 +25,9 @@ import { retryableOnce, mountPanelOnce } from './lazySurfaceLoad';
 // Re-exported here so the shell reaches it through the cluster that owns the
 // profile-workbench close signal, without adding a main.ts fan-out edge.
 export { createAnalyseProfileVisibility } from './analyseProfileVisibility';
-// Same reason: the Box row's "Use as clipping region" handler.
-export { useBoxAsClip } from './boxToClip';
+// Same reason: the Box → clip flow (the row's "Use as clipping region" and
+// the Clip page's "Isolate this box" both run its one conversion).
+export { createClipFlowFromShell } from './clipFlow';
 export type {
   AnalyseProfileVisibility,
   AnalyseProfileVisibilityDeps,

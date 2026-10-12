@@ -1230,6 +1230,21 @@ export class MeasurePanel {
     return true;
   }
 
+  /**
+   * Bring one measurement's row into view and focus its name field, so the
+   * result card's "Open details" lands on the row it is about. False when the
+   * panel has no such row (it was deleted, or the list has not rendered).
+   */
+  focusRow(id: string): boolean {
+    const row = Array.from(this._list.querySelectorAll<HTMLElement>('.olv-mp-row')).find(
+      (r) => r.getAttribute('data-measurement-id') === id,
+    );
+    if (!row) return false;
+    row.scrollIntoView?.({ block: 'nearest' });
+    row.querySelector<HTMLElement>('.olv-mp-name')?.focus();
+    return true;
+  }
+
   /** The newest plotted profile, whose Workbench button is the primary action. */
   private _newestProfileId(): string | null {
     for (let i = this._summaries.length - 1; i >= 0; i--) {
@@ -1397,6 +1412,7 @@ export class MeasurePanel {
     }
 
     const headRow = el('div', { className: 'olv-mp-row' }, children);
+    headRow.setAttribute('data-measurement-id', s.id);
 
     // Measurement-context line: what kind of number the value above it is.
     // Complements the per-endpoint trust dot (which grades the DATA under the

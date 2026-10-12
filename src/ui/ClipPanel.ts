@@ -1,9 +1,11 @@
 /**
  * ClipPanel.ts — the clip-box control.
  *
- * A compact left panel that drives the viewer's axis-aligned clip box: enable,
- * keep-inside vs keep-outside, six numeric extents, a "Fit to scan" that seeds
- * the box from the active cloud's bounds, and a live "kept of total" readout.
+ * A compact left panel that drives the viewer's axis-aligned clip box. The
+ * primary controls are Draw clipping box, Enable, keep-inside vs keep-outside,
+ * Fit to scan and Clear, with a live "kept of total" readout; the six numeric
+ * extents sit behind an Advanced disclosure (a native <details>, collapsed by
+ * default, whose nodes are built once and never recreated).
  *
  * The keep/cull decision and the count are the pure `clipBox` core; this panel
  * is only the DOM around it. The in-viewport GPU result is browser-verified.
@@ -52,6 +54,10 @@ export class ClipPanel {
   private readonly _enableBox: HTMLInputElement;
   private readonly _modeBtns = new Map<ClipMode, HTMLButtonElement>();
   private readonly _readout: HTMLElement;
+  private readonly _listeners = new Set<() => void>();
+  private readonly _advanced: HTMLElement;
+  private readonly _draw: HTMLButtonElement;
+  private _onDrawBox: (() => void) | null = null;
 
   constructor(callbacks: ClipPanelCallbacks) {
     this._cb = callbacks;
@@ -114,25 +120,47 @@ export class ClipPanel {
       title: 'Reset the box to the full extent of the open scan.',
     }) as HTMLButtonElement;
     fit.addEventListener('click', () => this._fit());
+    const clear = el('button', {
+      className: 'olv-bc-pill olv-clip-clear', type: 'button', text: 'Clear',
+      title: 'Turn the clip off and show the whole scan. The bounds stay under Advanced.',
+    }) as HTMLButtonElement;
+    clear.addEventListener('click', () => this.clear());
+    const actions = el('div', { className: 'olv-bc-pills olv-clip-actions' }, [fit, clear]);
+
+    this._draw = el('button', {
+      className: 'olv-bc-pill olv-clip-draw olv-hidden', type: 'button', text: 'Draw clipping box',
+      title: 'Draw a box on the scan with the Box measurement tool, then isolate it.',
+    }) as HTMLButtonElement;
+    this._draw.addEventListener('click', () => this._onDrawBox?.());
+
+    // Advanced: the six numeric extents. A native disclosure, closed until opened.
+    const advanced = el('details', { className: 'olv-clip-advanced' });
+    advanced.append(
+      el('summary', { className: 'olv-clip-advanced-summary', text: 'Advanced' }),
+      el('div', { className: 'olv-clip-grid-head' }, [
+        el('span', { text: '' }), el('span', { text: 'min' }), el('span', { text: 'max' }),
+      ]),
+      grid,
+    );
+    this._advanced = advanced;
 
     this._readout = el('p', { className: 'olv-export-fullres-hint', text: '' });
     this._readout.setAttribute('role', 'status');
     this._readout.setAttribute('aria-live', 'polite');
 
     const body = el('div', { className: 'olv-clip-body' }, [
+      this._draw,
       enableLabel,
       el('div', { className: 'olv-bc-section-label', text: 'Mode' }),
       modeRow,
-      el('div', { className: 'olv-clip-grid-head' }, [
-        el('span', { text: '' }), el('span', { text: 'min' }), el('span', { text: 'max' }),
-      ]),
-      grid,
-      fit,
+      actions,
       this._readout,
+      advanced,
     ]);
 
+    // Open from the start: the Clip page's Draw clipping box and Clear are its
+    // first controls, and a folded panel would hide them behind its own head.
     this.element.append(head, body);
-    this.element.classList.add('olv-collapsed');
     this.setVisible(false);
   }
 
@@ -153,6 +181,47 @@ export class ClipPanel {
     return this._enabled;
   }
 
+  /**
+   * Give the Clip page its "Draw clipping box" entry point. The shell's
+   * handler arms the existing Box measurement tool through the canonical
+   * scene-tool command; until one is set the button stays hidden.
+   */
+  setOnDrawBox(fn: (() => void) | null): void {
+    this._onDrawBox = fn;
+    this._draw.classList.toggle('olv-hidden', fn === null);
+  }
+
+  /** Which side the clip keeps. */
+  get mode(): ClipMode {
+    return this._mode;
+  }
+
+  /** Whether the Advanced numeric fields are showing. */
+  get advancedOpen(): boolean {
+    return (this._advanced as HTMLDetailsElement).open === true;
+  }
+
+  /**
+   * Run `fn` after every change to the clip's on/off state or side, however it
+   * came about (checkbox, Clear, adopt, session restore, scan close). Returns
+   * the unsubscribe. The active-clipping indicator is the one subscriber.
+   */
+  subscribe(fn: () => void): () => void {
+    this._listeners.add(fn);
+    return () => { this._listeners.delete(fn); };
+  }
+
+  /** Turn the clip off, keeping the bounds, through the normal apply path. */
+  clear(): void {
+    this._enabled = false;
+    this._enableBox.checked = false;
+    this._apply();
+  }
+
+  private _emit(): void {
+    for (const fn of [...this._listeners]) fn();
+  }
+
   setVisible(on: boolean): void {
     this.element.style.display = on ? '' : 'none';
     if (!on) {
@@ -162,6 +231,7 @@ export class ClipPanel {
       this._enableBox.checked = false;
       this._cb.onApply(null);
       setClipScope(null);
+      this._emit();
     }
   }
 
@@ -228,9 +298,10 @@ export class ClipPanel {
     if (this._enabled) {
       this._showCount(this._cb.keptCount(this._current()));
     } else {
-      this._readout.textContent = 'Enable to clip the scan to the box above.';
+      this._readout.textContent = 'Enable to clip the scan to the box.';
       setClipScope(null);
     }
+    this._emit();
   }
 
   private _numInput(onChange: (v: number) => void): HTMLInputElement {
@@ -287,13 +358,14 @@ export class ClipPanel {
     const clip = this._current();
     this._cancelCount();
     this._cb.onApply(this._enabled ? clip : null);
+    this._emit();
     if (this._enabled) {
       // The clip scope keeps its last value until the new count lands, so its
       // consumers see one settled figure rather than a gap.
       this._readout.textContent = 'Updating kept-point count…';
       this._scheduleCount();
     } else {
-      this._readout.textContent = 'Enable to clip the scan to the box above.';
+      this._readout.textContent = 'Enable to clip the scan to the box.';
       setClipScope(null);
     }
   }

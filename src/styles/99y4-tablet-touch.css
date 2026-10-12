@@ -72,4 +72,13 @@
 
   /* The ViewCube sizes its own faces, spots and Home control for coarse
      pointers (viewCube.ts: 156 px cube, 44 px hit areas). */
+  /* Clip flow and result card. */
+  .olv-result-btn, .olv-clip-ind-clear, .olv-clip-draw, .olv-clip-clear,
+  .olv-clip-advanced-summary, .olv-result-dismiss {
+    min-height: 44px; min-width: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .olv-clip-advanced-summary { display: flex; justify-content: flex-start; }
+  .olv-clip-num { min-height: 44px; }
 }
+

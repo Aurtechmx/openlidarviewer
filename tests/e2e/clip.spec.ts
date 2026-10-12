@@ -11,6 +11,7 @@ import { openExpandedPanel, showWorkspaceMode } from './helpers';
 test('an active clip is stated on the strip, in Export and in the written file', async ({ page }) => {
   const panel = await openExpandedPanel(page, 'work', '.olv-clip-panel');
   await panel.locator('label', { hasText: 'Clip the scan to this box' }).click();
+  await panel.locator('summary', { hasText: 'Advanced' }).click();
   const xMax = panel.locator('input.olv-clip-num').nth(1);
   await xMax.fill('0');
   const kept = panel.locator('[role="status"]');

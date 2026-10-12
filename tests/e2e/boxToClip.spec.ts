@@ -32,6 +32,7 @@ test('Box measurement → Use as clipping region → the Clip page shows its bou
 
   const clip = page.locator('.olv-clip-panel');
   await expect(clip).toBeVisible({ timeout: 10_000 });
+  await clip.locator('summary', { hasText: 'Advanced' }).click();
   const nums = clip.locator('input.olv-clip-num');
   await expect(nums.nth(0)).toBeVisible();
   await expect(nums.nth(0)).toHaveValue('-2');
