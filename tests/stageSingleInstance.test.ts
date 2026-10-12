@@ -42,7 +42,10 @@ describe('Stage lifecycle', () => {
     // stage teardown to.
     const shellSource = readFileSync(join(__dirname, '../src/app/workspace/workspaceShell.ts'), 'utf8');
     expect(mainSource).toMatch(/addTeardown: \(fn\) => stage\.addTeardown\(fn\)/);
-    const registered = shellSource.match(/d\.addTeardown\(wireRailToggle\(/g) ?? [];
-    expect(registered.length).toBeGreaterThan(0);
+    // Each rail toggle is held (Focus mode drives it) and its handle, which is
+    // the disposer, is registered.
+    const held = [...shellSource.matchAll(/const (\w+) = wireRailToggle\(/g)].map((m) => m[1]);
+    expect(held.length).toBe(2);
+    for (const name of held) expect(shellSource).toContain(`d.addTeardown(${name});`);
   });
 });

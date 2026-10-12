@@ -302,6 +302,14 @@ describe('dispatch — Space and Escape', () => {
     expect(deps.onEscape).toHaveBeenCalledTimes(1);
     expect(prevented).toBe(false);
   });
+
+  it('Escape spent on leaving Focus mode is prevented, so the location bar does not also go Back', () => {
+    const { deps } = makeDeps();
+    (deps.onEscape as ReturnType<typeof vi.fn>).mockReturnValue(true);
+    const { prevented } = dispatch(deps, { key: 'Escape' });
+    expect(deps.onEscape).toHaveBeenCalledTimes(1);
+    expect(prevented).toBe(true);
+  });
 });
 
 describe('dispatch — embed mode (no global handlers wired)', () => {

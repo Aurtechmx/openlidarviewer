@@ -220,12 +220,24 @@ export interface RailToggleConfig {
   narrowCollapsed?: boolean;
 }
 /**
- * Returns a disposer, same contract as wireRailScrollAffordance: it disconnects
- * the ResizeObserver, drops the window resize listener, and removes the grabber
- * this call appended. Without it a torn-down rail left an observer watching
- * detached panels and a resize handler measuring them forever.
+ * What `wireRailToggle` returns. Calling it is the disposer, same contract as
+ * wireRailScrollAffordance: it disconnects the ResizeObserver, drops the window
+ * resize listener, and removes the grabber this call appended. Without it a
+ * torn-down rail left an observer watching detached panels and a resize
+ * handler measuring them forever.
+ *
+ * The two methods are the rail's programmatic seam, so a caller such as Focus
+ * mode moves the rail through the same `apply` as the grabber instead of
+ * clicking it. `setCollapsed` writes the user's stored preference only when
+ * asked to (`persist: true`); a transient layout never overwrites it.
  */
-export function wireRailToggle(cfg: RailToggleConfig): () => void {
+export interface RailToggle {
+  (): void;
+  isCollapsed(): boolean;
+  setCollapsed(collapsed: boolean, opts?: { persist?: boolean }): void;
+}
+
+export function wireRailToggle(cfg: RailToggleConfig): RailToggle {
   const tab = el('button', { className: cfg.tabClass, unsafeHtml: cfg.chevron });
   tab.setAttribute('type', 'button');
   tab.setAttribute('aria-controls', cfg.ariaControls);
@@ -285,13 +297,21 @@ export function wireRailToggle(cfg: RailToggleConfig): () => void {
   window.addEventListener('resize', positionTab);
   positionTab();
 
-  return () => {
+  const dispose = (): void => {
     observer?.disconnect();
     observer = null;
     window.removeEventListener('resize', positionTab);
     tab.removeEventListener('click', onClick);
     tab.remove();
   };
+  return Object.assign(dispose, {
+    isCollapsed: () => collapsed,
+    setCollapsed: (next: boolean, opts?: { persist?: boolean }): void => {
+      collapsed = next;
+      apply(collapsed);
+      if (opts?.persist) storageSet(cfg.storageKey, collapsed ? '1' : '0');
+    },
+  });
 }
 
 // Inline, literally-embedded chevron SVGs — the sanctioned `unsafeHtml` use (see

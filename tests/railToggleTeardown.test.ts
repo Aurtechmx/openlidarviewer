@@ -16,7 +16,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { wireRailToggle } from '../src/ui/panelChrome';
+import { wireRailToggle, type RailToggle } from '../src/ui/panelChrome';
 
 interface Registration {
   type: string;
@@ -108,7 +108,7 @@ const windowStub = {
   },
 };
 
-function wire(overlay: NodeStub, panels: NodeStub[]): () => void {
+function wire(overlay: NodeStub, panels: NodeStub[]): RailToggle {
   return wireRailToggle({
     overlay: overlay as unknown as HTMLElement,
     panels: panels as unknown as HTMLElement[],
@@ -195,6 +195,65 @@ describe('wireRailToggle teardown', () => {
     // is the only thing that can take it back.
     expect(windowStub.removed.filter((r) => r.type === 'resize')).toHaveLength(1);
     expect(overlay.children[0].removedFromTree).toBe(true);
+  });
+
+  describe('programmatic seam (Focus mode)', () => {
+    const store = new Map<string, string>();
+    const savedStorage = globalThis.localStorage;
+    beforeEach(() => {
+      store.clear();
+      globalThis.localStorage = {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => void store.set(k, v),
+      } as unknown as Storage;
+    });
+    afterEach(() => { globalThis.localStorage = savedStorage; });
+
+    it('collapses and restores without touching the stored preference', () => {
+      const panel = makeNode();
+      const overlay = makeNode();
+      const rail = wire(overlay, [panel]);
+      const tab = overlay.children[0];
+      expect(rail.isCollapsed()).toBe(false);
+      rail.setCollapsed(true, { persist: false });
+      expect(rail.isCollapsed()).toBe(true);
+      expect(panel.classes.has('olv-rail-collapsed')).toBe(true);
+      expect(tab.attrs['aria-expanded']).toBe('false');
+      rail.setCollapsed(false);
+      expect(panel.classes.has('olv-rail-collapsed')).toBe(false);
+      expect(tab.attrs['aria-expanded']).toBe('true');
+      expect(store.has('olv.test.collapsed')).toBe(false);
+    });
+
+    it('writes the preference only when asked to persist', () => {
+      const rail = wire(makeNode(), [makeNode()]);
+      rail.setCollapsed(true, { persist: true });
+      expect(store.get('olv.test.collapsed')).toBe('1');
+    });
+
+    it('a stored collapse is read back and survives a transient round trip', () => {
+      store.set('olv.test.collapsed', '1');
+      const rail = wire(makeNode(), [makeNode()]);
+      expect(rail.isCollapsed()).toBe(true);
+      rail.setCollapsed(true, { persist: false });
+      rail.setCollapsed(true, { persist: false });
+      expect(rail.isCollapsed()).toBe(true);
+      expect(store.get('olv.test.collapsed')).toBe('1');
+    });
+
+    it('repeated toggling attaches no further listeners or observers', () => {
+      const overlay = makeNode();
+      const rail = wire(overlay, [makeNode()]);
+      const tab = overlay.children[0];
+      for (let i = 0; i < 20; i += 1) rail.setCollapsed(i % 2 === 0, { persist: false });
+      expect(RecordingObserver.instances).toHaveLength(1);
+      expect(windowStub.added).toHaveLength(1);
+      expect(tab.added).toHaveLength(1);
+      expect(overlay.children).toHaveLength(1);
+      rail();
+      expect(windowStub.removed).toHaveLength(1);
+      expect(RecordingObserver.instances[0].disconnects).toBe(1);
+    });
   });
 
   it('is safe to call twice', () => {

@@ -31,7 +31,8 @@
   .olv-empty-status-dismiss, .olv-colorbar-toggle,
   .olv-workbench-btn, .olv-mp-chain-chip, .olv-mp-vex-chip,
   .olv-mp-stations-more, .olv-mp-summary-sec-toggle, .olv-mp-sampler-reset,
-  .olv-url-btn, .olv-open-btn, .olv-catalog-btn, .olv-capture-chip, .olv-convert-chip {
+  .olv-url-btn, .olv-open-btn, .olv-catalog-btn, .olv-capture-chip, .olv-convert-chip,
+  .olv-focus-toggle {
     min-height: 44px; min-width: 44px;
   }
   .olv-rvc-apply, .olv-rvc-dismiss, .olv-touch-hint-x, .olv-empty-status-dismiss,

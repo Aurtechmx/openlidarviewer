@@ -12181,6 +12181,52 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   max-height: none;
   overflow-y: visible;
 }
+/* Focus mode (src/app/workspace/focusMode.ts).
+ *
+ * The control is a header ghost button beside the trust badge. In Focus mode
+ * the rest of the header, both rail grabbers and the renderer chip step aside;
+ * the rails themselves are collapsed through their own toggles. The header
+ * keeps its box (visibility, not display), so the control does not move and
+ * the way out stays where the way in was. The location bar's crumbs go too:
+ * they name a rail that is not on screen. Nothing here adds a layer over the
+ * canvas: the header is already click-through and only its real controls take
+ * input. The compass, navigation card, dock, measure guidance, state strip and
+ * toasts are not touched. */
+.olv-focus-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 30px; min-width: 64px; padding: 0 var(--space-lg);
+  font: inherit; font-size: var(--text-xs); font-weight: 500;
+  color: var(--text-dim);
+  background: transparent;
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.olv-focus-toggle:hover { color: var(--text); background: var(--hover-wash); }
+.olv-focus-toggle:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 2px;
+}
+.olv-focus-toggle[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--panel);
+  border-color: var(--accent);
+}
+.olv-focus-toggle.olv-hidden { display: none; }
+/* Narrow desktop windows: size to the label so the header never runs past the
+   viewport edge (the sweep at 768 px caught the GitHub link 1.8 px over). */
+@media (max-width: 900px) { .olv-focus-toggle { min-width: 0; padding: 0 var(--space-md); } }
+/* Touch: the 44 px floor for tablets lives in 99y4-tablet-touch.css with the other controls. */
+
+.olv-focus-mode .olv-wordmark,
+.olv-focus-mode .olv-loc,
+.olv-focus-mode .olv-topbar-right > :not(.olv-focus-toggle) { visibility: hidden; }
+.olv-focus-mode .olv-rail-tab,
+.olv-focus-mode .olv-right-rail-tab,
+.olv-focus-mode .olv-backend { display: none; }
 /* 99y3-workspace-polish.css — one surface per task in the desktop left rail.
    The rail itself carries no card; the active mode host is the one task
    surface; what it holds reads as sections separated by hairlines, not as
@@ -12479,7 +12525,8 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   .olv-empty-status-dismiss, .olv-colorbar-toggle,
   .olv-workbench-btn, .olv-mp-chain-chip, .olv-mp-vex-chip,
   .olv-mp-stations-more, .olv-mp-summary-sec-toggle, .olv-mp-sampler-reset,
-  .olv-url-btn, .olv-open-btn, .olv-catalog-btn, .olv-capture-chip, .olv-convert-chip {
+  .olv-url-btn, .olv-open-btn, .olv-catalog-btn, .olv-capture-chip, .olv-convert-chip,
+  .olv-focus-toggle {
     min-height: 44px; min-width: 44px;
   }
   .olv-rvc-apply, .olv-rvc-dismiss, .olv-touch-hint-x, .olv-empty-status-dismiss,
