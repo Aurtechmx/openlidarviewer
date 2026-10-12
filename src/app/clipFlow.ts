@@ -20,6 +20,7 @@ import { buildResultModel } from './measureResultModel';
 import { MeasureResultCard } from '../ui/MeasureResultCard';
 import { ClipIndicator, type ClipIndicatorSource } from '../ui/ClipIndicator';
 import { el } from '../ui/dom';
+import { seatClear, watchSeat } from '../ui/hudSeat';
 import { copyToClipboard } from '../render/InspectTool';
 import type { MeasurementSummary } from '../render/measure/MeasureController';
 import type { Viewer } from '../render/Viewer';
@@ -38,11 +39,6 @@ export interface ClipFlowDeps {
   /** Completed measurements' summaries (the Measurements list's own text). */
   readonly summaries: () => readonly MeasurementSummary[];
   readonly measureOn: () => boolean;
-  /**
-   * The measurement toolbar, once the Viewer exists. The lane sits under it
-   * while it shows, so the two never overlap (see {@link placeLane}).
-   */
-  readonly measureBar?: () => HTMLElement | null;
   /** The canonical scene-tool command for Measure (records, opens the page). */
   readonly runMeasureTool: () => void;
   readonly openMeasurePage: () => void;
@@ -70,6 +66,12 @@ export interface ClipFlow {
   dispose(): void;
 }
 
+/**
+ * What the lane stays below: the measurement toolbar, the progress toast and
+ * the project card, wherever they share its column at the top of the stage.
+ */
+const LANE_CLEAR_OF = ['.olv-measure-bar:not(.olv-hidden)', '.olv-toast:not(.olv-hidden)', '.olv-project-card.olv-visible'];
+
 export function createClipFlow(deps: ClipFlowDeps): ClipFlow {
   /** Set by Draw clipping box; names the card's clip action "Isolate this box". */
   let drawIntent = false;
@@ -95,28 +97,12 @@ export function createClipFlow(deps: ClipFlowDeps): ClipFlow {
   const indicator = new ClipIndicator(deps.clipPanel);
   const lane = el('div', { className: 'olv-flow-lane' }, [card.element, indicator.element]);
   deps.overlay.append(lane);
-  const unsubscribe = deps.clipPanel.subscribe(() => { indicator.sync(); bindBar(); });
+  const unsubscribe = deps.clipPanel.subscribe(() => indicator.sync());
 
-  // The lane sits under the measurement toolbar while it shows, and under the
-  // header otherwise. The toolbar's height changes with the width and with its
-  // Finish button, so it is watched rather than assumed.
-  let boundBar: HTMLElement | null = null;
-  let observer: ResizeObserver | null = null;
-  const placeLane = (): void => {
-    const bar = boundBar;
-    const h = bar ? bar.offsetHeight : 0;
-    if (!bar || h <= 0) { lane.style.removeProperty('--olv-flow-top'); return; }
-    lane.style.setProperty('--olv-flow-top', `${Math.round(bar.getBoundingClientRect().bottom) + 8}px`);
-  };
-  function bindBar(): void {
-    const bar = deps.measureBar?.() ?? null;
-    if (!bar || bar === boundBar) return;
-    observer?.disconnect();
-    boundBar = bar;
-    if (typeof ResizeObserver !== 'undefined') { observer = new ResizeObserver(placeLane); observer.observe(bar); }
-    if (typeof window !== 'undefined') window.addEventListener('resize', placeLane);
-    placeLane();
-  }
+  // The lane drops below whatever shares its column at the top of the stage:
+  // the measurement toolbar, a progress toast, the project card. Each changes
+  // size and comes and goes, so they are watched rather than assumed.
+  const unwatch = watchSeat(lane, LANE_CLEAR_OF, () => seatClear(lane, LANE_CLEAR_OF, 'down'));
 
   function dismissCard(): void {
     drawIntent = false;
@@ -131,7 +117,6 @@ export function createClipFlow(deps: ClipFlowDeps): ClipFlow {
   return {
     lane, card, indicator,
     drawClippingBox() {
-      bindBar();
       if (deps.measureOn()) deps.openMeasurePage();
       else deps.runMeasureTool();
       deps.setBoxKind();
@@ -140,7 +125,6 @@ export function createClipFlow(deps: ClipFlowDeps): ClipFlow {
     },
     isolate,
     onMeasurementsChanged() {
-      bindBar();
       const all = deps.summaries();
       const grewByOne = all.length === lastCount + 1;
       lastCount = all.length;
@@ -166,8 +150,7 @@ export function createClipFlow(deps: ClipFlowDeps): ClipFlow {
     },
     dispose() {
       unsubscribe();
-      observer?.disconnect();
-      if (typeof window !== 'undefined') window.removeEventListener('resize', placeLane);
+      unwatch();
       card.hide();
       lane.remove();
     },
@@ -207,7 +190,6 @@ export function createClipFlowFromShell(sh: ClipFlowShell): ClipFlow {
     },
     summaries: () => (sh.ready() ? v().measure.getSummaries() : []),
     measureOn: () => sh.ready() && v().measureMode,
-    measureBar: () => (sh.ready() ? v().measureElements.hint : null),
     runMeasureTool: () => sh.runTool('measure'),
     openMeasurePage: () => sh.openPage('measure'),
     setBoxKind: () => v().measure.setKind('box'),

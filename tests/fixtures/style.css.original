@@ -2607,7 +2607,9 @@ body[data-theme="high-contrast"] .olv-mode-reset { border: 2px solid var(--accen
 }
 .olv-nav-prompt.olv-visible { opacity: 1; animation: olv-prompt-breathe 2.6s ease-in-out infinite; }
 .olv-nav-prompt.olv-nav-prompt-tool {
-  top: auto; bottom: 132px; transform: translateX(-50%);
+  /* Lifted above a bottom toast or the first-run hint in its column (NavBar
+     writes --olv-seat), which otherwise land on the same line. */
+  top: auto; bottom: calc(132px + var(--olv-seat, 0px)); transform: translateX(-50%);
   padding: var(--space-sm) var(--space-xl); font-size: var(--text-xs); color: var(--text-dim);
   border-radius: var(--radius-md); max-width: min(520px, calc(100% - 32px)); text-align: center;
 }
@@ -4636,15 +4638,15 @@ body.olv-theme-light .olv-busy-scan--emblem {
 
 
 /* Flow lane: the latest-result card and the active-clip chip, stacked at the
-   top centre of the viewport. It starts under the measurement toolbar while
-   that shows (clipFlow.ts writes --olv-flow-top) and at the panel rails' own
-   top otherwise, so it never overlaps the toolbar, and it stays clear of the
+   top centre of the viewport. It starts at the panel rails' own top and drops
+   below the measurement toolbar, a progress toast or the project card when one
+   shares its column (clipFlow.ts writes --olv-seat), and it stays clear of the
    bottom band where the toast and the navigation card lift to. Between the
    rails on a wide screen; beside the left rail below 1024 px. It is
    click-through except for its own controls. */
 .olv-flow-lane {
   position: absolute; left: 50%; transform: translateX(-50%);
-  top: var(--olv-flow-top, var(--olv-rail-top));
+  top: calc(var(--olv-rail-top) + var(--olv-seat, 0px));
   display: flex; flex-direction: column; align-items: center; gap: var(--space-sm);
   width: max-content; max-width: min(520px, calc(100vw - 680px));
   z-index: var(--z-float); pointer-events: none;
@@ -4658,7 +4660,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
 /* Phone: the measurement tools are a left rail and the instruction a line
    under the header, so the lane starts below that line, right of the rail. */
 @media (max-width: 767px) {
-  .olv-flow-lane { top: calc(var(--olv-lane-top) + 80px); left: var(--space-lg); }
+  .olv-flow-lane { top: calc(var(--olv-lane-top) + 80px + var(--olv-seat, 0px)); left: var(--space-lg); }
   body:has(.olv-measure-bar:not(.olv-hidden)) .olv-flow-lane { left: 88px; }
 }
 .olv-flow-lane > * { pointer-events: auto; max-width: 100%; box-sizing: border-box; }

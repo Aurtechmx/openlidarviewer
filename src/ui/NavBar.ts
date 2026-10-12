@@ -2,6 +2,7 @@ import { DisposableGroup } from '../disposableGroup';
 import { el } from './dom';
 import { storageGet, storageSet } from './safeStorage';
 import { appTransientLane } from './transientLane';
+import { seatClear, watchSeat } from './hudSeat';
 import { NAVIGATION_PANEL } from './actionNames';
 import type { NavMode } from '../render/NavController';
 import {
@@ -166,6 +167,8 @@ const PROMPT_LOOK = 'Click the scan to look around';
 const PROMPT_LOOK_SUB = 'WASD to move · Esc or click to release';
 /** The prompt while a modal tool owns clicks — the Help guide's own sentence. */
 const PROMPT_TOOL = 'Hold Space while a tool is active to rotate or pan, then release to resume.';
+/** What the hold-Space hint lifts above: a bottom toast and the first-run hint. */
+const PROMPT_CLEAR_OF = ['.olv-lasso-toast.olv-visible', '.olv-touch-hint.olv-visible'];
 
 const TOUCH_HINT_TEXT = 'Drag to rotate · Pinch to zoom · Two fingers to pan';
 /** The one-time desktop hint, and the flag that records it was shown. */
@@ -664,6 +667,13 @@ export class NavBar {
     // dock while the pointer is locked. Both ways out are named here.
     this._promptSub = el('span', { className: 'olv-nav-prompt-sub', text: PROMPT_LOOK_SUB });
     this.prompt = el('div', { className: 'olv-nav-prompt' }, [this._promptMain, this._promptSub]);
+    // The hold-Space hint and a bottom toast or the first-run hint share one
+    // line above the navigation row; the hint lifts above whichever shows.
+    const prompt = this.prompt;
+    this._teardown.add(watchSeat(prompt, PROMPT_CLEAR_OF, () => {
+      if (prompt.classList.contains('olv-nav-prompt-tool')) seatClear(prompt, PROMPT_CLEAR_OF, 'up');
+      else prompt.style.removeProperty('--olv-seat');
+    }));
 
     // ── Touch-gesture hint (phones) ───────────────────────────────────────
     const touchDismiss = el('button', {

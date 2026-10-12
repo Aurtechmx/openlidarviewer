@@ -190,9 +190,10 @@ export function wireActiveToolIndicator(d: ActiveToolWiringDeps): ActiveToolWiri
 /**
  * What owns the bottom of the scene. The pill sits above every one of these
  * that shares its column: the navigation widget, a bottom toast, the touch
- * hint, the phone state strip and sheet, the dock.
+ * hint, the tools' hold-Space prompt, the phone state strip and sheet, the
+ * dock.
  */
-const FLOOR = ['.olv-navbar', '.olv-lasso-toast.olv-visible', '.olv-touch-hint.olv-visible', '.olv-state-strip', '.olv-mobile-sheet', '.olv-dock'];
+const FLOOR = ['.olv-navbar', '.olv-lasso-toast.olv-visible', '.olv-touch-hint.olv-visible', '.olv-nav-prompt-tool.olv-visible', '.olv-state-strip', '.olv-mobile-sheet', '.olv-dock'];
 
 /** Tool columns at the scene's side edge (the phone measure rail). */
 const SIDE = ['.olv-mkinds', '.olv-measure-actions'];
