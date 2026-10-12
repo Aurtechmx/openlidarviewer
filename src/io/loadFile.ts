@@ -642,9 +642,11 @@ export async function loadFile(
   // below materialises the WHOLE file in one ArrayBuffer. Leaving the refusal
   // to the worker meant a 600 MB file already known not to fit was pulled into
   // memory first, on the device least able to hold it, and only then rejected.
+  // E57 goes first: its decode ceiling (two file copies inside 2 GB) refuses
+  // every E57 the cap would, so an E57 keeps its own, more specific message.
   const refusal =
-    wholeFileCapRefusal(file, format) ??
     e57Refusal(file, preflight) ??
+    wholeFileCapRefusal(file, format) ??
     nonStreamingOverCeilingRefusal(file, preflight, options);
   if (refusal) throw refusal;
 
