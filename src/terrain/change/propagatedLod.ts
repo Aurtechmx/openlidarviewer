@@ -182,7 +182,6 @@ export function lodLabel(lod: LevelOfDetection): string {
 /** Report lines stating the threshold, its components and its basis. */
 export function describeLevelOfDetection(lod: LevelOfDetection): string[] {
   const lines: string[] = [`Level of detection: ${lodLabel(lod)}.`];
-  const regName = 'registration σ (independent stable-area assessment)';
   const comp = [
     `before σz ${lod.sigmaZBeforeM === null ? 'not measured' : mm(lod.sigmaZBeforeM)}`,
     `after σz ${lod.sigmaZAfterM === null ? 'not measured' : mm(lod.sigmaZAfterM)}`,
