@@ -60,7 +60,12 @@ body:has(.olv-ati:not(.olv-hidden)) :is(.olv-measure-badge, .olv-anno-hint-badge
     bottom: calc(var(--olv-sheet-peek, 96px) + var(--space-md) + env(safe-area-inset-bottom));
   }
 }
+/* Entrance: app/activeToolStatus.ts seats the pill while it is invisible
+   (placing), then reveals it on the next frame at that spot. The reveal fades
+   opacity only, so no frame shows the pill anywhere but its settled place;
+   only a settled pill glides when it is re-seated. */
+.olv-ati.olv-ati-placing { visibility: hidden; animation: none; transition: none; }
 @media (prefers-reduced-motion: no-preference) {
-  .olv-ati { animation: olv-ati-in var(--dur-fast) var(--ease-standard); transition: bottom var(--dur-base) var(--ease-standard); }
+  .olv-ati.olv-ati-settled { animation: olv-ati-in var(--dur-fast) var(--ease-standard); transition: bottom var(--dur-base) var(--ease-standard); }
 }
-@keyframes olv-ati-in { from { opacity: 0; transform: translate(-50%, 4px); } }
+@keyframes olv-ati-in { from { opacity: 0; } }

@@ -48,12 +48,73 @@ async function clear(page: Page, a: string, b: string): Promise<void> {
   expect(overlap, `${a} overlaps ${b}`).toBe(false);
 }
 
+/**
+ * Record the pill and its floor on every animation frame from now until the
+ * pill has been settled for a few frames. Call before the key that opens a
+ * tool; await the returned promise afterwards. Each sample is taken in a
+ * requestAnimationFrame callback, i.e. the geometry of the frame about to
+ * paint, while the pill is actually visible (placing is visibility: hidden).
+ */
+async function sampleEntrance(page: Page): Promise<() => Promise<{ frames: number; overlaps: string[] }>> {
+  await page.evaluate(() => {
+    const w = window as unknown as { __atiSamples?: Promise<{ frames: number; overlaps: string[] }> };
+    w.__atiSamples = new Promise((done) => {
+      const overlaps: string[] = [];
+      let frames = 0;
+      let settledFor = 0;
+      const t0 = performance.now();
+      const hit = (a: DOMRect, b: DOMRect): boolean => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      const tick = (): void => {
+        const pill = document.querySelector<HTMLElement>('.olv-ati');
+        const shown = !!pill && !pill.hidden && getComputedStyle(pill).display !== 'none' && getComputedStyle(pill).visibility === 'visible';
+        if (pill && shown) {
+          frames++;
+          const r = pill.getBoundingClientRect();
+          for (const sel of ['.olv-dock', '.olv-navbar .olv-modes-triangle']) {
+            const n = document.querySelector<HTMLElement>(sel);
+            const b = n?.getBoundingClientRect();
+            if (n && b && b.width > 0 && b.height > 0 && getComputedStyle(n).visibility !== 'hidden' && hit(r, b)) {
+              overlaps.push(`frame ${frames} (${Math.round(performance.now() - t0)} ms): pill ${JSON.stringify(r.toJSON())} overlaps ${sel} ${JSON.stringify(b.toJSON())}`);
+            }
+          }
+          if (pill.classList.contains('olv-ati-settled')) settledFor++;
+        }
+        if (settledFor >= 20 || performance.now() - t0 > 5000) done({ frames, overlaps });
+        else requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+  });
+  return () => page.evaluate(() => (window as unknown as { __atiSamples: Promise<{ frames: number; overlaps: string[] }> }).__atiSamples);
+}
+
+/** Wait until the pill is revealed and its box holds still across frames. */
+async function settled(page: Page): Promise<void> {
+  await expect(pill(page)).toHaveClass(/olv-ati-settled/);
+  await page.waitForFunction(() => new Promise<boolean>((ok) => {
+    const p = document.querySelector('.olv-ati');
+    if (!p) { ok(false); return; }
+    const a = p.getBoundingClientRect();
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const b = p.getBoundingClientRect();
+      ok(a.top === b.top && a.left === b.left && getComputedStyle(p).opacity === '1');
+    }));
+  }));
+}
+
 test.describe('active-tool pill', () => {
   test('absent while orbiting; measuring distance shows it, Esc leaves', async ({ page }) => {
     await open(page);
     await expect(pill(page)).toBeHidden();
+    const entrance = await sampleEntrance(page);
     await page.keyboard.press('m');
     await expect(label(page)).toHaveText('Measuring distance');
+    // From the very first frame it is visible, the pill sits clear of the dock
+    // and the navigation widget: it is seated before it is revealed.
+    const seen = await entrance();
+    expect(seen.frames, 'the pill was revealed').toBeGreaterThan(0);
+    expect(seen.overlaps).toEqual([]);
+    await settled(page);
     await expect(page.locator('.olv-ati [role="status"]')).toHaveAttribute('aria-live', 'polite');
     await expect(page.locator('.olv-ati-finish')).toBeHidden();
     // The pill names the mode; the bar keeps only its instruction.
@@ -115,6 +176,7 @@ test.describe('active-tool pill screenshots', () => {
         const tag = `${theme}-${w}x${h}`;
         await page.keyboard.press('m');
         await expect(label(page)).toHaveText('Measuring distance');
+        await settled(page);
         await shot(page, `distance-${tag}`);
         await clear(page, '.olv-ati', '.olv-navbar .olv-modes-triangle');
         await clear(page, '.olv-ati', '.olv-viewcube');

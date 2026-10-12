@@ -206,6 +206,10 @@ for (const size of [{ width: 1280, height: 800 }, { width: 1024, height: 768 }])
       await expect(page.locator('.olv-lasso-toast.olv-visible')).toBeVisible();
       await expect(page.locator('.olv-navbar')).toBeVisible();
       await page.waitForTimeout(500); // let the toast's move settle before hit-testing
+      // The active-tool pill is seated before it is revealed; wait for the
+      // reveal so the hit test sees its settled place (and it must not cover
+      // the dock there).
+      await expect(page.locator('.olv-ati')).toHaveClass(/olv-ati-settled/);
       expect(await coveredControls(page)).toEqual([]);
       await page.screenshot({ path: `test-results/large-touch-${size.width}x${size.height}-toast-${info.project.name}.png` });
       // Once the toast times out the legend is back, and still covers nothing.

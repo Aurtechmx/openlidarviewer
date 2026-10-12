@@ -8,7 +8,7 @@
  * secondary chip rather than an operation, and clear when the scan closes.
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { FakeEl, installLiveFakeDom } from './helpers/liveFakeDom';
 import { readActiveTool, wireActiveToolIndicator, type ActiveToolViewer } from '../src/app/activeToolStatus';
 
@@ -203,5 +203,43 @@ describe('active-tool pill', () => {
     expect(h.docListeners.size).toBe(0);
     expect(cancel.listenerCount('click')).toBe(0);
     expect(h.mount.findAll((e) => e.hasClass('olv-ati'))).toHaveLength(0);
+  });
+
+  it('seats the pill invisibly, then reveals it settled on the next frame', () => {
+    const frames: (() => void)[] = [];
+    vi.stubGlobal('requestAnimationFrame', (cb: () => void) => frames.push(cb));
+    vi.stubGlobal('cancelAnimationFrame', () => { frames.length = 0; });
+    try {
+      const h = harness();
+      expect(h.pill().hasClass('olv-ati-placing')).toBe(false);
+      h.v.setMeasureMode(true); h.mutate();
+      // Shown but still being placed: invisible, no glide, no animation yet.
+      expect(h.visible()).toBe(true);
+      expect(h.pill().hasClass('olv-ati-placing')).toBe(true);
+      expect(h.pill().hasClass('olv-ati-settled')).toBe(false);
+      expect(frames).toHaveLength(1);
+      // A refresh in the same frame does not queue a second reveal.
+      h.mutate();
+      expect(frames).toHaveLength(1);
+      frames.shift()!();
+      expect(h.pill().hasClass('olv-ati-placing')).toBe(false);
+      expect(h.pill().hasClass('olv-ati-settled')).toBe(true);
+      // A kind change while shown is not a new entrance.
+      h.v.kind = 'area'; h.mutate();
+      expect(frames).toHaveLength(0);
+      expect(h.pill().hasClass('olv-ati-settled')).toBe(true);
+      // Leaving resets, so the next entrance is placed again before it shows.
+      h.v.setMeasureMode(false); h.mutate();
+      expect(h.pill().hasClass('olv-ati-settled')).toBe(false);
+      h.v.setAnnotateMode(true); h.mutate();
+      expect(h.pill().hasClass('olv-ati-placing')).toBe(true);
+      // Hiding before the frame cancels the reveal.
+      h.v.setAnnotateMode(false); h.mutate();
+      expect(frames).toHaveLength(0);
+      expect(h.pill().hasClass('olv-ati-placing')).toBe(false);
+      h.w.dispose();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
