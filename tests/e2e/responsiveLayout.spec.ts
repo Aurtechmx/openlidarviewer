@@ -202,7 +202,7 @@ test.describe('responsive layout — findings the generic sweep cannot trigger',
   // the sweep above) drops `tiny.las` — 8 characters, nowhere near the
   // ~50-90+ char threshold that actually triggers the overflow — so this
   // gets its own drop with a synthesised long name.
-  test('the DropZone toast wraps an unbroken long filename instead of pushing Cancel off the card', async ({
+  test('the DropZone toast ellipsises an unbroken long filename instead of pushing Cancel off the card', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 375, height: HEIGHT });
@@ -219,7 +219,7 @@ test.describe('responsive layout — findings the generic sweep cannot trigger',
     // Drop and read the toast in ONE evaluate call: `DropZone.setOpening`
     // runs synchronously, before openScan's first await, so reading in the
     // same task as the dispatch guarantees nothing has superseded the
-    // "Opening <name>…" toast yet — no `waitForTimeout` race to get right.
+    // opening state yet — no `waitForTimeout` race to get right.
     const measured = await page.evaluate(
       ({ bytes: raw, name }) => {
         const dataTransfer = new DataTransfer();
@@ -228,30 +228,28 @@ test.describe('responsive layout — findings the generic sweep cannot trigger',
           new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer }),
         );
         const toast = document.querySelector('.olv-toast') as HTMLElement;
-        const text = document.querySelector('.olv-toast-text') as HTMLElement;
+        const file = document.querySelector('.olv-toast-file') as HTMLElement;
         const cancel = document.querySelector('.olv-toast-cancel') as HTMLElement;
         return {
-          toastText: text.textContent ?? '',
+          fileText: file.textContent ?? '',
           toastRight: toast.getBoundingClientRect().right,
-          textScrollWidth: text.scrollWidth,
-          textClientWidth: text.clientWidth,
+          fileRight: file.getBoundingClientRect().right,
           cancelRight: cancel.getBoundingClientRect().right,
+          pageOverflow: document.documentElement.scrollWidth - window.innerWidth,
         };
       },
       { bytes: [...bytes], name: longName },
     );
 
-    expect(measured.toastText, 'the toast never showed the dropped filename').toContain(longName);
-    // Wrapping keeps the text's own scrollWidth at or below its clientWidth;
-    // an unbroken word that cannot wrap instead forces scrollWidth wider.
-    expect(
-      measured.textScrollWidth,
-      `the filename forced the text ${measured.textScrollWidth}px wide, wider than its ${measured.textClientWidth}px box, instead of wrapping`,
-    ).toBeLessThanOrEqual(measured.textClientWidth + 1);
+    // The whole name is in the DOM (and so read by assistive technology);
+    // CSS shortens what is drawn.
+    expect(measured.fileText, 'the toast never showed the dropped filename').toBe(longName);
+    expect(measured.fileRight).toBeLessThanOrEqual(measured.toastRight + 1);
     expect(
       measured.cancelRight,
       `Cancel (right=${measured.cancelRight}) ran past the toast card (right=${measured.toastRight})`,
     ).toBeLessThanOrEqual(measured.toastRight + 1);
+    expect(measured.pageOverflow).toBeLessThanOrEqual(0);
   });
 
   // CRITIC-GAP-3: the phone Inspector layer row's isolate/lock buttons had

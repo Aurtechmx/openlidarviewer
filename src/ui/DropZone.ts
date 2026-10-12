@@ -1,6 +1,32 @@
 import { el } from './dom';
 import { createBusyScanController, type BusyScanController } from './busyScan';
 import { clamp01 } from '../numeric';
+import { createDisplayThrottle, type DisplayThrottle } from './displayThrottle';
+
+/** What is known about the file an open is reading, as plain text. */
+export interface LoadContext {
+  /** Short facts in display order, e.g. the format and the loading scope. */
+  readonly facts: readonly string[];
+  /** A preflight warning, kept under the progress line until the open ends. */
+  readonly note?: string;
+  /** What the polite region says once when these facts arrive. */
+  readonly announce?: string;
+}
+
+/** How a staged progress update is paced and announced. */
+export interface StageOptions {
+  /** The operation the update belongs to (`DropZone.operation`); a stale one is dropped. */
+  readonly op?: number;
+  /** Stage key. A new key renders at once and is announced; repeats are paced. */
+  readonly stage: string;
+  /** What the polite region says for the stage, without the changing detail. */
+  readonly announce?: string;
+  /** False keeps the busy scan's trail out of this stage's fraction. */
+  readonly trail?: boolean;
+}
+
+/** Shown beside the file name until the format and scope are known. */
+export const CHECKING_FILE = 'Checking file…';
 
 /**
  * Full-window drag-and-drop. The whole document is a drop target; a slim
@@ -21,6 +47,8 @@ export class DropZone {
   private readonly _text: HTMLElement;
   private readonly _bar: HTMLElement;
   private readonly _barFill: HTMLElement;
+  /** The busy slot; carries the progressbar role while a load runs. */
+  private readonly _mark: HTMLElement;
   private readonly _cancel: HTMLButtonElement;
   /** Copies the open failure report; shown only with an error that has one. */
   private readonly _copy: HTMLButtonElement;
@@ -45,6 +73,27 @@ export class DropZone {
   private readonly _scan: BusyScanController;
   /** Bumped by every state change, so a finishing settle knows it was superseded. */
   private _token = 0;
+  /**
+   * The open in progress. Bumped when an open starts and when it ends (done,
+   * failed, cancelled, hidden), so an update or held timer from an earlier
+   * open is dropped instead of drawing over a later one.
+   */
+  private _op = 0;
+  /** The file-context line: name, then the facts known so far. */
+  private readonly _context: HTMLElement;
+  private readonly _file: HTMLElement;
+  private readonly _facts: HTMLElement;
+  /** A preflight warning, shown under the progress line. */
+  private readonly _note: HTMLElement;
+  /** The file name of the open in progress, or '' when none. */
+  private _name = '';
+  /** The stage last drawn, and the last quarter of it announced. */
+  private _stage: string | null = null;
+  private _quarter = 0;
+  /** What this toast last wrote to the polite region; null once it should stay. */
+  private _ownStatus: string | null = null;
+  /** Paces same-stage updates; stage changes and ends bypass it. */
+  private readonly _throttle: DisplayThrottle = createDisplayThrottle();
 
   constructor(target: HTMLElement, onFile: (file: File) => void | Promise<void>, onDragIntent?: () => void) {
     this._onDragIntent = onDragIntent;
@@ -79,22 +128,36 @@ export class DropZone {
 
     this._barFill = el('span', { className: 'olv-toast-bar-fill' });
     this._bar = el('div', { className: 'olv-toast-bar olv-hidden' }, [this._barFill]);
+    // The bar is the visual; the progressbar role sits on the always-visible
+    // busy slot below, so an indeterminate stage is still announced as one.
+    this._bar.setAttribute('aria-hidden', 'true');
+
+    // File context: the name (ellipsised by CSS, whole in the DOM so assistive
+    // technology reads all of it) and what preflight found. Text only.
+    this._file = el('span', { className: 'olv-toast-file' });
+    this._facts = el('span', { className: 'olv-toast-facts' });
+    const sep = el('span', { className: 'olv-toast-sep', text: '·' });
+    sep.setAttribute('aria-hidden', 'true');
+    this._context = el('div', { className: 'olv-toast-context olv-hidden' }, [this._file, sep, this._facts]);
+    this._note = el('div', { className: 'olv-toast-note olv-hidden' });
+    const mark = el('span', { className: 'olv-toast-mark' }, [
+      el('span', { className: 'olv-toast-dot' }),
+      this._scan.element as unknown as HTMLElement,
+    ]);
+    this._mark = mark;
 
     const row = el('div', { className: 'olv-toast-row' }, [
       // One fixed-width slot holds the status dot and the busy scan. While a
       // load runs the scan shows; on error or idle the dot shows. The slot
       // keeps its width either way, so the text never moves.
-      el('span', { className: 'olv-toast-mark' }, [
-        el('span', { className: 'olv-toast-dot' }),
-        this._scan.element as unknown as HTMLElement,
-      ]),
+      mark,
       this._text,
       this._cancel,
       this._copy,
     ]);
     // Visibility is driven by .olv-hidden so theming + reduced-motion
     // overrides hit the toast the same way they hit every other surface.
-    this.toast = el('div', { className: 'olv-toast olv-hidden' }, [row, this._bar]);
+    this.toast = el('div', { className: 'olv-toast olv-hidden' }, [this._context, row, this._note, this._bar]);
     // Screen-reader announcements live in two PERMANENTLY rendered,
     // visually-hidden nodes rather than on the toast itself: the toast hides
     // via `display:none`, which removes it from the accessibility tree, so
@@ -164,25 +227,60 @@ export class DropZone {
     }
   }
 
+  /** The open in progress; pass it back with updates so a stale one is dropped. */
+  get operation(): number {
+    return this._op;
+  }
+
   /**
    * Show the prominent blue blinking "Opening …" state — the first feedback a
    * scan open gives, before staged progress (decoding / uploading / rendering)
    * takes over. Used by BOTH device-file and public/streaming opens so the two
    * entry points feel identical. The pulse is pure CSS (`is-opening`); staged
    * `setProgress`, `setError`, `setPreload`, and clear all drop the class.
+   *
+   * Starts a new operation. With `fileName`, the context line shows the name
+   * and "Checking file…" until `setFileContext` says what the file is.
    */
-  setOpening(text: string): void {
+  setOpening(text: string, fileName?: string): void {
     this._clearHideTimer();
+    this._beginOperation();
     this._token++;
     // A new load starts from the short trail.
     this._scan.reset();
     this.toast.classList.remove('olv-toast-error');
     this.toast.classList.add('is-opening', 'is-busy');
-    this._bar.classList.add('olv-hidden');
-    this._text.textContent = text;
-    this._srStatus.textContent = text;
+    this._setBar(undefined);
+    if (fileName) {
+      this._name = fileName;
+      this._file.textContent = fileName;
+      this._file.title = fileName;
+      this._facts.textContent = CHECKING_FILE;
+      this._context.classList.remove('olv-hidden');
+    }
+    // The name is already on the context line; the progress line says what is
+    // happening. The polite region names the file once, here.
+    this._text.textContent = fileName ? 'Opening…' : text;
+    this._announce(text);
     this._srAlert.textContent = '';
     this.toast.classList.remove('olv-hidden');
+  }
+
+  /**
+   * Say what the file is: its format and loading scope, and any preflight
+   * warning. Stays on screen through every later stage of the same open and is
+   * cleared when the open ends. Ignored for a stale `op` or with no file open.
+   */
+  setFileContext(context: LoadContext, op?: number): void {
+    if (op !== undefined && op !== this._op) return;
+    if (!this._name) return;
+    this._facts.textContent = context.facts.length > 0 ? context.facts.join(' · ') : CHECKING_FILE;
+    const note = context.note ?? '';
+    this._note.textContent = note;
+    this._note.classList.toggle('olv-hidden', note === '');
+    const said = context.announce ?? context.facts.join(', ');
+    const spoken = [said, note].filter(Boolean).join('. ');
+    if (spoken) this._announce(spoken);
   }
 
   /**
@@ -190,39 +288,164 @@ export class DropZone {
    * `null` to hide the toast entirely.
    */
   setProgress(text: string | null, fraction?: number): void {
+    if (text === null) {
+      this._hide();
+      return;
+    }
+    this._throttle.cancel();
+    this._stage = null;
+    this._render(text, fraction, true);
+    this._announce(text);
+  }
+
+  /**
+   * Staged progress for an open. A new stage draws at once and is announced
+   * once; repeats within the stage are paced (about 150 ms) and announce only
+   * at each quarter of a determinate stage. An update for a stale operation is
+   * dropped, and so is a paced update still held when the operation ends.
+   */
+  setStageProgress(text: string, fraction: number | undefined, options: StageOptions): void {
+    if (options.op !== undefined && options.op !== this._op) return;
+    const op = this._op;
+    const changed = options.stage !== this._stage;
+    const f = fraction === undefined || !Number.isFinite(fraction) ? undefined : clamp01(fraction);
+    // A stage reaching its end is drawn at once, so the last quarter is never
+    // held behind the next stage's first update and dropped.
+    const immediate = changed || (f !== undefined && f >= 1);
+    if (changed) this._stage = options.stage;
+    // The trail is one style value, so it follows every update; only the text
+    // and the announcements are paced.
+    if (f !== undefined && options.trail !== false) {
+      this._scan.setProgress(f);
+    }
+    this._throttle.push(() => {
+      if (op !== this._op) return;
+      this._render(text, f, options.trail !== false);
+      this._announceStage(text, f, changed, options.announce);
+    }, immediate);
+  }
+
+  /** Draw a busy progress state. */
+  private _render(text: string, fraction: number | undefined, trail: boolean): void {
     this._clearHideTimer();
     this._token++;
     // Staged progress supersedes the blue "Opening …" pulse.
-    this.toast.classList.remove('is-opening');
-    if (text === null) {
-      this.toast.classList.remove('is-busy');
-      this._scan.reset();
-      this.toast.classList.add('olv-hidden');
-      this._bar.classList.add('olv-hidden');
-      // Empty both live regions on hide so a re-shown toast re-announces
-      // (live regions only fire on content CHANGE) and no stale text lingers.
-      // The polite region is shared (`announcePolite`), so it is emptied only
-      // while it still holds the toast's own text: a hide that lands after the
-      // settle must not erase a newer announcement from another panel.
-      this._clearOwnStatus();
-      this._srAlert.textContent = '';
-      return;
-    }
-    this.toast.classList.remove('olv-toast-error');
+    this.toast.classList.remove('is-opening', 'olv-toast-error');
     this.toast.classList.add('is-busy');
     this._text.textContent = text;
-    this._srStatus.textContent = text;
     this._srAlert.textContent = '';
     this.toast.classList.remove('olv-hidden');
     // The trail grows with the bar; a stage without a fraction leaves it.
-    if (fraction !== undefined) this._scan.setProgress(fraction);
-    if (fraction === undefined) {
-      this._bar.classList.add('olv-hidden');
-    } else {
-      const pct = Math.round(clamp01(fraction) * 100);
-      this._barFill.style.width = `${pct}%`;
-      this._bar.classList.remove('olv-hidden');
+    if (fraction !== undefined && trail) this._scan.setProgress(fraction);
+    this._setBar(fraction, text);
+  }
+
+  /** Announce a stage once on entry, then at each quarter it completes. */
+  private _announceStage(text: string, fraction: number | undefined, changed: boolean, label?: string): void {
+    const base = label ?? text;
+    const quarter = fraction === undefined ? 0 : Math.floor(fraction * 4);
+    if (changed) {
+      this._quarter = quarter;
+      this._announce(fraction === undefined || quarter === 0 ? base : `${base}, ${quarter * 25}%`);
+      return;
     }
+    if (quarter > this._quarter) {
+      this._quarter = quarter;
+      this._announce(`${base}, ${quarter * 25}%`);
+    }
+  }
+
+  /**
+   * The bar and the busy slot's progressbar semantics. A fraction shows the
+   * bar and sets aria-valuenow; without one the bar is hidden, its width is
+   * dropped and aria-valuenow removed, so the progressbar reads as
+   * indeterminate and never carries an earlier stage's percentage.
+   */
+  private _setBar(fraction: number | undefined, text?: string): void {
+    const m = this._mark;
+    m.setAttribute('role', 'progressbar');
+    m.setAttribute('aria-label', 'Loading progress');
+    m.setAttribute('aria-valuemin', '0');
+    m.setAttribute('aria-valuemax', '100');
+    if (text) m.setAttribute('aria-valuetext', text);
+    else m.removeAttribute('aria-valuetext');
+    if (fraction === undefined) {
+      m.removeAttribute('aria-valuenow');
+      this._barFill.style.width = '0%';
+      this._bar.classList.add('olv-hidden');
+      return;
+    }
+    const pct = Math.round(clamp01(fraction) * 100);
+    m.setAttribute('aria-valuenow', String(pct));
+    this._barFill.style.width = `${pct}%`;
+    this._bar.classList.remove('olv-hidden');
+  }
+
+  /** Drop the progressbar semantics once nothing is loading. */
+  private _clearMeter(): void {
+    for (const a of ['role', 'aria-label', 'aria-valuemin', 'aria-valuemax', 'aria-valuenow', 'aria-valuetext']) {
+      this._mark.removeAttribute(a);
+    }
+  }
+
+  /** Start a new operation: drop held updates and any earlier context. */
+  private _beginOperation(): void {
+    this._op++;
+    this._throttle.cancel();
+    this._stage = null;
+    this._quarter = 0;
+    this._clearContext();
+  }
+
+  /** End the operation: later updates for it are dropped. */
+  private _endOperation(): void {
+    this._op++;
+    this._throttle.cancel();
+    this._stage = null;
+    this._quarter = 0;
+  }
+
+  /** Empty the context line and the warning. */
+  private _clearContext(): void {
+    this._name = '';
+    this._file.textContent = '';
+    this._file.title = '';
+    this._facts.textContent = '';
+    this._context.classList.add('olv-hidden');
+    this._note.textContent = '';
+    this._note.classList.add('olv-hidden');
+  }
+
+  /** Hide the toast and end any open. */
+  private _hide(): void {
+    this._clearHideTimer();
+    this._endOperation();
+    this._token++;
+    this.toast.classList.remove('is-opening', 'is-busy');
+    this._scan.reset();
+    this.toast.classList.add('olv-hidden');
+    this._setBar(undefined);
+    this._clearMeter();
+    this._clearContext();
+    // Empty both live regions on hide so a re-shown toast re-announces
+    // (live regions only fire on content CHANGE) and no stale text lingers.
+    // The polite region is shared (`announcePolite`), so it is emptied only
+    // while it still holds the toast's own text: a hide that lands after the
+    // settle must not erase a newer announcement from another panel.
+    this._clearOwnStatus();
+    this._srAlert.textContent = '';
+  }
+
+  /**
+   * End an open the user cancelled: hide at once and say so politely. Nothing
+   * was added, so there is no error.
+   */
+  setCancelled(): void {
+    const name = this._name;
+    this._onCancel = null;
+    this._cancel.classList.add('olv-hidden');
+    this._hide();
+    this._announce(name ? `Cancelled opening ${name}.` : 'Loading cancelled.', true);
   }
 
   /**
@@ -235,14 +458,19 @@ export class DropZone {
    * settle hid it, `false` when a later state change took the toast over.
    */
   finish(): Promise<boolean> {
+    const name = this._name;
     if (this.toast.classList.contains('olv-hidden') || !this.toast.classList.contains('is-busy')) {
       this.setProgress(null);
+      if (name) this._announce(`Opened ${name}.`, true);
       return Promise.resolve(true);
     }
     this._clearHideTimer();
+    // The open is over: late updates from it are dropped from here on.
+    this._endOperation();
     const token = ++this._token;
     this._onCancel = null;
     this._cancel.classList.add('olv-hidden');
+    if (name) this._announce(`Opened ${name}.`, true);
     return this._scan.complete().then(() => {
       if (token !== this._token) return false;
       this.setProgress(null);
@@ -264,9 +492,9 @@ export class DropZone {
     this.toast.classList.add('is-busy');
     const text = lines.join('\n');
     this._text.textContent = text;
-    this._srStatus.textContent = text;
+    this._announce(text);
     this._srAlert.textContent = '';
-    this._bar.classList.add('olv-hidden');
+    this._setBar(undefined, text);
     this.toast.classList.remove('olv-hidden');
   }
 
@@ -281,10 +509,13 @@ export class DropZone {
 
   /**
    * Show an error message in the toast. Auto-hides after 6 s, or 20 s when a
-   * `report` is offered through the Copy report control.
+   * `report` is offered through the Copy report control. Ends any open, so its
+   * file context is cleared and a late update from it is dropped.
    */
   setError(text: string, report?: string): void {
     this._clearHideTimer();
+    this._endOperation();
+    this._clearContext();
     this._token++;
     this._scan.reset();
     if (report) {
@@ -294,7 +525,8 @@ export class DropZone {
     }
     this._onCancel = null;
     this._cancel.classList.add('olv-hidden');
-    this._bar.classList.add('olv-hidden');
+    this._setBar(undefined);
+    this._clearMeter();
     this.toast.classList.remove('is-opening', 'is-busy');
     this.toast.classList.add('olv-toast-error');
     // The status node is emptied (when it holds the toast's text) so the
@@ -313,8 +545,20 @@ export class DropZone {
     }, report ? 20000 : 6000);
   }
 
+  /**
+   * Write to the polite region. Cleared first, so a repeat of the same words is
+   * still a change a screen reader announces. `keep` marks an end-of-open
+   * message that a later hide must leave in place.
+   */
+  private _announce(message: string, keep = false): void {
+    this._srStatus.textContent = '';
+    this._srStatus.textContent = message;
+    this._ownStatus = keep ? null : message;
+  }
+
   /** Empty the shared polite region if it still holds the toast's text. */
   private _clearOwnStatus(): void {
-    if (this._srStatus.textContent === this._text.textContent) this._srStatus.textContent = '';
+    if (this._ownStatus !== null && this._srStatus.textContent === this._ownStatus) this._srStatus.textContent = '';
+    this._ownStatus = null;
   }
 }
