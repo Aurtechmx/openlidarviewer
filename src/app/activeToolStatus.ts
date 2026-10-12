@@ -99,9 +99,50 @@ export function wireActiveToolIndicator(d: ActiveToolWiringDeps): ActiveToolWiri
   const indicator = createActiveToolIndicator();
   d.mount.append(indicator.element);
 
+  const pill = indicator.element;
+  const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null;
+  const caf = typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : null;
+  let reveal = 0;
+  const setClass = (c: string, on: boolean): void => { if (pill.classList.contains(c) !== on) pill.classList.toggle(c, on); };
+  /**
+   * Entrance: the pill is laid out but invisible (`olv-ati-placing`: no
+   * transition, no animation) while it is seated, and it is revealed on the
+   * next frame at that settled spot. Its first painted frame is therefore
+   * already clear of the dock and the navigation widget; the entrance fades
+   * opacity only. The `bottom` transition applies only once settled, so a
+   * later re-seat glides but the first placement never does.
+   */
+  const settle = (shown: boolean): void => {
+    if (!shown) {
+      if (reveal && caf) caf(reveal);
+      reveal = 0;
+      setClass('olv-ati-placing', false);
+      setClass('olv-ati-settled', false);
+      return;
+    }
+    if (pill.classList.contains('olv-ati-settled') || reveal) return;
+    if (!raf) { setClass('olv-ati-settled', true); return; }
+    setClass('olv-ati-placing', true);
+    reveal = raf(() => {
+      reveal = 0;
+      if (pill.hidden) return;
+      // Re-seat once more: anything that moved in the same frame is honoured.
+      placeActiveToolPill(pill, d.mount);
+      // Flush that seat while transitions are still off, so turning them on
+      // below finds nothing to animate.
+      pill.getBoundingClientRect?.();
+      setClass('olv-ati-placing', false);
+      setClass('olv-ati-settled', true);
+    });
+  };
   const refresh = (): void => {
+    const was = !pill.hidden;
     indicator.update(readActiveTool({ viewer: d.viewer(), clipEnabled: d.clipEnabled() }));
-    placeActiveToolPill(indicator.element, d.mount);
+    const shown = !pill.hidden;
+    // A fresh entrance (however the pill was hidden) starts unsettled.
+    if (shown && !was) settle(false);
+    settle(shown);
+    placeActiveToolPill(pill, d.mount);
   };
   let queued = false;
   const later = (): void => {
@@ -138,6 +179,7 @@ export function wireActiveToolIndicator(d: ActiveToolWiringDeps): ActiveToolWiri
       mo.disconnect();
       win?.removeEventListener('resize', onResize);
       seat();
+      settle(false);
       for (const t of events) doc.removeEventListener(t, later, true);
       indicator.dispose();
       indicator.element.remove();
