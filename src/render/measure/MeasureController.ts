@@ -68,6 +68,7 @@ import {
 import { gradeMeasurement, type MeasurementTrust } from './measurementTrust';
 import {
   formatLengthRender,
+  formatLengthsInSharedUnit,
   formatAreaRender,
   formatAngle,
   formatArmAngle,
@@ -2476,19 +2477,19 @@ export class MeasureController {
         { a, b: elbow, style: 'preview' },
         { a: elbow, b, style: 'preview' },
       );
+      // The drop and run share the headline's unit (the 3D length bounds both).
+      const f = this._unitToMetres;
+      const [dropText, runText] = this._unitUnverified()
+        ? [Math.abs(pm.verticalDrop), pm.lengthHorizontal].map(formatUnitUnverified)
+        : formatLengthsInSharedUnit(
+            [pm.length3d * f, Math.abs(pm.verticalDrop) * f, pm.lengthHorizontal * f],
+            this._units,
+          ).slice(1);
       L.push(
         // The panel's own headline, so the scene shows the same units.
         { anchor: midpoint(a, b), text: this._headlineText(m), primary: true },
-        {
-          anchor: midpoint(elbow, b),
-          text: this._fmtLen(Math.abs(pm.verticalDrop)),
-          primary: false,
-        },
-        {
-          anchor: midpoint(a, elbow),
-          text: this._fmtLen(pm.lengthHorizontal),
-          primary: false,
-        },
+        { anchor: midpoint(elbow, b), text: dropText, primary: false },
+        { anchor: midpoint(a, elbow), text: runText, primary: false },
       );
       // Station markers on the cloud — small dim dots at evenly-spaced
       // chainages along the section line, so the profile's stations are visible

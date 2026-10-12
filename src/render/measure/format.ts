@@ -360,7 +360,7 @@ export function formatBoxHeadline(
   // One unit for the three sides, at one decimal count, and the volume in the
   // cube of that unit: "13.200 m × 4.800 m × 0.005 m · 0.31680 m³", never
   // "13.200 m × 4.8000 m × 0.5000 cm · 317 dm³".
-  const unit = sharedLengthUnit(Math.max(...[width, depth, height].map(finiteAbs)), system);
+  const unit = sharedLengthUnit([width, depth, height], system);
   const [w, d, h] = [width, depth, height].map((x) => inSharedUnit(x, unit));
   let v = '—';
   if (Number.isFinite(volume) && volume >= 0) {
@@ -382,14 +382,25 @@ function finiteAbs(v: number): number {
 }
 
 /**
- * The unit the largest figure on a line (`bandMetres`) would get, and the
- * decimal count that figure earns under {@link displayDecimals}. Like
- * {@link formatLengthInBandOf}, a shared band stops at metres or feet.
+ * The unit the largest of `metres` would get, and the decimal count that
+ * figure earns under {@link displayDecimals}, raised until the smallest
+ * non-zero figure shows at least two significant figures (to
+ * {@link SHARED_MAX_DECIMALS}) so a small real value never prints as zero.
+ * Like {@link formatLengthInBandOf}, a shared band stops at metres or feet.
  */
-function sharedLengthUnit(bandMetres: number, system: UnitSystem): SharedLengthUnit {
-  const band = finiteAbs(bandMetres);
-  const pick = (perMetre: number, unit: SharedLengthUnit['unit'], minDecimals: number): SharedLengthUnit =>
-    ({ perMetre, unit, decimals: displayDecimals(band * perMetre, minDecimals, 4) });
+const SHARED_MAX_DECIMALS = 5;
+function sharedLengthUnit(metres: readonly number[], system: UnitSystem): SharedLengthUnit {
+  const abs = metres.map(finiteAbs);
+  const band = Math.max(0, ...abs);
+  const smallest = Math.min(Infinity, ...abs.filter((v) => v > 0));
+  const pick = (perMetre: number, unit: SharedLengthUnit['unit'], minDecimals: number): SharedLengthUnit => {
+    let decimals = displayDecimals(band * perMetre, minDecimals, 4);
+    if (Number.isFinite(smallest)) {
+      const need = Math.ceil(-Math.log10(smallest * perMetre)) + 1;
+      decimals = Math.max(decimals, Math.min(SHARED_MAX_DECIMALS, need));
+    }
+    return { perMetre, unit, decimals };
+  };
   if (system === 'metric') return band < 1 ? pick(100, 'cm', 1) : pick(1, 'm', 2);
   return band * FEET_PER_METRE < 1 ? pick(FEET_PER_METRE * 12, 'in', 1) : pick(FEET_PER_METRE, 'ft', 2);
 }
@@ -405,7 +416,7 @@ function inSharedUnit(metres: number, unit: SharedLengthUnit): string {
  */
 export function formatLengthsInSharedUnit(metres: readonly number[], system: DisplayUnits): string[] {
   if (system === 'unverified') return metres.map(formatUnitUnverified);
-  const unit = sharedLengthUnit(Math.max(0, ...metres.map(finiteAbs)), system);
+  const unit = sharedLengthUnit(metres, system);
   return metres.map((m) => inSharedUnit(m, unit));
 }
 

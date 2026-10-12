@@ -95,7 +95,7 @@ describe('scene labels: confirmed units', () => {
     const { value, labels } = await render(BOX, { crsKnown: true });
     const head = labels.find((l) => l.primary)!.text;
     expect(head).toBe(value);
-    expect(head).toBe('13.200 m × 4.800 m × 0.005 m  · 0.31680 m³');
+    expect(head).toBe('13.2000 m × 4.8000 m × 0.0050 m  · 0.31680 m³');
     expect(head).not.toMatch(/cm|dm³/);
   });
 
@@ -133,16 +133,55 @@ describe('scene labels: refused figures', () => {
   });
 });
 
+describe('small figures never print as zero', () => {
+  const TINY_BOX = mk('box', [[0, 0, 0], [13.2, 4.8, 0.0004]]);
+  const TINY_DROP = mk('profile', [[0, 0, 0], [50, 0, 0.0004]]);
+
+  it('metres: a 0.4 mm box height and profile drop keep their figures', async () => {
+    const box = await render(TINY_BOX, { crsKnown: true });
+    expect(box.labels[0].text).toBe(box.value);
+    expect(box.value).toMatch(/× 0\.00040 m /);
+    const prof = await render(TINY_DROP, { crsKnown: true });
+    expect(prof.labels[0].text).toBe(prof.value);
+    expect(prof.value).toContain('Δh +0.00040 m');
+    expect(prof.labels.map((l) => l.text).join('|')).not.toMatch(/\b0\.0+ (m|cm)\b/);
+  });
+
+  it('US survey feet: the same 0.4 mm survives on both unit systems', async () => {
+    const box = mk('box', [[0, 0, 0], [40, 15, 0.0013]]);
+    const metric = await render(box, { crsKnown: true, unitToMetres: US_SURVEY_FOOT });
+    expect(metric.value).not.toMatch(/× 0\.0+ m/);
+    const imperial = await render(box, { crsKnown: true, unitToMetres: US_SURVEY_FOOT, units: 'imperial' });
+    expect(imperial.value).toMatch(/× 0\.0013 ft /);
+  });
+
+  it('the scene drop and run labels share the headline unit', async () => {
+    const { labels } = await render(PROFILE, { crsKnown: true });
+    expect(labels.filter((l) => !l.primary).map((l) => l.text)).toEqual(['0.400 m', '50.000 m']);
+  });
+
+  it('unverified units still never print a metric unit', async () => {
+    const { value, labels } = await render(TINY_BOX, { crsKnown: false });
+    for (const t of [value, ...labels.map((l) => l.text)]) expect(t).not.toMatch(METRIC_TOKENS);
+  });
+
+  it('the helper widens decimals for the smallest non-zero figure, capped', () => {
+    expect(formatLengthsInSharedUnit([13.2, 0.0004], 'metric')).toEqual(['13.20000 m', '0.00040 m']);
+    expect(formatLengthsInSharedUnit([13.2, 0.0000001], 'metric')[1]).toBe('0.00000 m');
+    expect(formatLengthsInSharedUnit([13.2, 0], 'metric')).toEqual(['13.200 m', '0.000 m']);
+  });
+});
+
 describe('shared-unit formatting', () => {
   it('formats lengths on one line in one unit at one precision', () => {
-    expect(formatLengthsInSharedUnit([13.2, 4.8, 0.005], 'metric')).toEqual(['13.200 m', '4.800 m', '0.005 m']);
+    expect(formatLengthsInSharedUnit([13.2, 4.8, 0.005], 'metric')).toEqual(['13.2000 m', '4.8000 m', '0.0050 m']);
     expect(formatLengthsInSharedUnit([0.5, 0.02], 'metric')).toEqual(['50.000 cm', '2.000 cm']);
     expect(formatLengthsInSharedUnit([1, Number.NaN], 'metric')).toEqual(['1.0000 m', '—']);
     expect(formatLengthsInSharedUnit([2], 'unverified')).toEqual([`2 ${UNIT_UNVERIFIED}`]);
   });
 
   it('the box and profile headlines use it unless a formatter is passed', () => {
-    expect(formatBoxHeadline(13.2, 4.8, 0.005, 0.3168, 'metric')).toBe('13.200 m × 4.800 m × 0.005 m  · 0.31680 m³');
+    expect(formatBoxHeadline(13.2, 4.8, 0.005, 0.3168, 'metric')).toBe('13.2000 m × 4.8000 m × 0.0050 m  · 0.31680 m³');
     expect(formatBoxHeadline(Number.NaN, 0, 0, Number.NaN, 'imperial')).not.toMatch(/NaN|Infinity/);
     expect(formatProfileHeadline(50, -0.4, -0.8, 'metric')).toBe('50.000 m  · Δh −0.400 m  · -0.8%');
   });
