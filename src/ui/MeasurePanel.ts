@@ -306,6 +306,8 @@ export interface MeasurePanelCallbacks {
    * dock, a stage or a Viewer is.
    */
   openProfileWorkbench?: (summary: MeasurementSummary) => Promise<boolean>;
+  /** Box rows only: copy this box into the Clip tool as a keep-inside region. */
+  onUseAsClip?: (id: string) => void;
 }
 
 /**
@@ -1342,6 +1344,12 @@ export class MeasurePanel {
     // measurements feed the aggregate. Owned by the panel — the
     // controller is informed only at aggregate time.
     const children: HTMLElement[] = [dot, name, value, del];
+    const onClip = this._cb.onUseAsClip;
+    if (s.kind === 'box' && onClip) {
+      const clip = el('button', { className: 'olv-mp-profile-pdf olv-mp-use-clip', text: 'Clip', title: 'Use as clipping region', ariaLabel: `Use ${s.name} as clipping region` });
+      clip.addEventListener('click', () => onClip(s.id));
+      children.splice(children.indexOf(del), 0, clip);
+    }
     if (this._chainOn) {
       const check = el('input', {
         className: 'olv-mp-chain-check',

@@ -33,7 +33,7 @@ import type { ViewCubeHandle, ViewCubeOptions } from './viewCube';
 export interface CompassViewer {
   /** Open clouds — the compass stays down while this is empty. */
   clouds(): { readonly length: number };
-  /** Camera heading in degrees, read once per frame. */
+  /** Camera heading in degrees, read once per frame; NaN near vertical (rose holds). */
   cameraHeadingDeg(): number;
   /**
    * Run a listener after every drawn frame; returns the unsubscribe.
@@ -44,7 +44,7 @@ export interface CompassViewer {
    * it kept asking after the render loop learned to sleep.
    */
   onDrawnFrame(listener: () => void): () => void;
-  /** Snap the camera to one of the gizmo's faces. */
+  /** Snap the camera to one of the gizmo's faces (fallback when no `onView` is routed). */
   setStandardView(view: StandardView): unknown;
 }
 
@@ -81,6 +81,13 @@ export interface CompassControllerOptions {
    * must not be shown geographic cardinals it cannot substantiate.
    */
   cardinalsAreGeographic?: () => boolean;
+  /**
+   * Route a face click. The shell passes the NavBar's own standard-view
+   * callback (`navBarWiring`), so a compass snap updates Plan View exactly as
+   * the NavBar's view buttons do. Without it the compass falls back to the
+   * viewer's bare `setStandardView`, which knows nothing about Plan View.
+   */
+  onView?: (view: StandardView) => void;
 }
 
 export interface CompassController {
@@ -138,7 +145,7 @@ export function createCompassController(opts: CompassControllerOptions): Compass
         host: opts.host(),
         getHeading: () => v.cameraHeadingDeg(),
         isGeographic: opts.cardinalsAreGeographic ?? ((): boolean => false),
-        onView: (view) => void v.setStandardView(view),
+        onView: opts.onView ?? ((view) => void v.setStandardView(view)),
       });
       handle = cube;
       // One update straight away: the first drawn frame may be a while off on

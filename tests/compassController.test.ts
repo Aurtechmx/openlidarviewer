@@ -220,3 +220,39 @@ describe('compass frame subscription', () => {
     expect(v.listeners()).toBe(1);
   });
 });
+
+describe('compass face routing (spec 1.4)', () => {
+  async function mountWith(onView?: (v: string) => void) {
+    const h = harness('on');
+    let captured: { onView: (v: never) => void } | null = null;
+    const viewerCalls: string[] = [];
+    const v = { ...fakeViewer(1), setStandardView: (view: string) => { viewerCalls.push(view); return true; } };
+    const c = createCompassController({
+      host,
+      urlParams: new URLSearchParams(''),
+      platform: h.platform,
+      onView,
+      loadCube: () => Promise.resolve((o) => {
+        captured = o as unknown as { onView: (v: never) => void };
+        return { update: () => {}, dispose: () => {} };
+      }),
+    });
+    c.attachViewer(v);
+    await Promise.resolve(); await Promise.resolve();
+    return { click: (view: string) => captured!.onView(view as never), viewerCalls };
+  }
+
+  it('routes a face click through the supplied NavBar callback, not the viewer', async () => {
+    const routed: string[] = [];
+    const { click, viewerCalls } = await mountWith((v) => routed.push(v));
+    click('back');
+    expect(routed).toEqual(['back']);
+    expect(viewerCalls).toEqual([]);
+  });
+
+  it('falls back to the viewer when no route is supplied', async () => {
+    const { click, viewerCalls } = await mountWith();
+    click('left');
+    expect(viewerCalls).toEqual(['left']);
+  });
+});

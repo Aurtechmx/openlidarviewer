@@ -87,3 +87,43 @@ export function nearestCardinal(headingDeg: number): 'N' | 'E' | 'S' | 'W' {
 export function roseRotationDeg(headingDeg: number): number {
   return -(((headingDeg % 360) + 360) % 360);
 }
+
+/**
+ * Below this horizontal magnitude of the (unit) forward vector the heading is
+ * not trustworthy: the camera looks within ~0.57 degrees of straight up or
+ * down, where atan2 of two near-zero components flips with floating-point
+ * noise. 0.01 = sin(0.573 degrees). Consumers keep their last reliable heading
+ * instead of snapping the rose back to north.
+ */
+export const NEAR_VERTICAL_HORIZONTAL_EPS = 0.01;
+
+/**
+ * {@link compassHeadingDeg} with a near-vertical guard: when the forward
+ * vector's horizontal component magnitude is below
+ * {@link NEAR_VERTICAL_HORIZONTAL_EPS} (or non-finite), returns `lastReliableDeg`
+ * — NaN by default, which a display that unwraps with {@link unwrapAngleDeg}
+ * treats as "hold the previous angle". Otherwise the canonical heading.
+ */
+export function stableHeadingDeg(forwardEast: number, forwardNorth: number, lastReliableDeg = Number.NaN): number {
+  if (!Number.isFinite(forwardEast) || !Number.isFinite(forwardNorth)) return lastReliableDeg;
+  if (Math.hypot(forwardEast, forwardNorth) < NEAR_VERTICAL_HORIZONTAL_EPS) return lastReliableDeg;
+  return compassHeadingDeg(forwardEast, forwardNorth);
+}
+
+/**
+ * Continuous display angle: moves from `prevDisplayDeg` to the angle that is
+ * congruent to `nextCanonicalDeg` (mod 360) along the SHORTEST delta, so a CSS
+ * rotation never spins the long way round when a heading crosses 0/360
+ * (359 -> 1 moves +2, 1 -> 359 moves -2) and repeated turns accumulate.
+ * A non-finite `nextCanonicalDeg` returns `prevDisplayDeg` unchanged; a
+ * non-finite `prevDisplayDeg` (no display yet) starts from the canonical angle.
+ * An exact half-turn resolves to +180.
+ */
+export function unwrapAngleDeg(prevDisplayDeg: number, nextCanonicalDeg: number): number {
+  if (!Number.isFinite(nextCanonicalDeg)) return prevDisplayDeg;
+  if (!Number.isFinite(prevDisplayDeg)) return nextCanonicalDeg;
+  const prev = prevDisplayDeg;
+  let delta = (((nextCanonicalDeg - prev) % 360) + 360) % 360; // [0, 360)
+  if (delta > 180) delta -= 360;
+  return prev + delta;
+}

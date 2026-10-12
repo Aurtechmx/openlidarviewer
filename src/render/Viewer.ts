@@ -117,7 +117,7 @@ import { followPerspective, LensShift } from './camera/orthoCamera';
 import { projectionFromLegacyFov } from './camera/orthoProjection';
 export type { CameraPresetName, StandardView } from './camera/cameraPresets';
 export { chooseRenderBackendForPage } from './viewerRenderBootstrap';
-import { compassHeadingDeg } from './viewCubeMath';
+import { stableHeadingDeg } from './viewCubeMath';
 import type { VolumeBudgetDecision } from './measure/volumeBudget';
 
 /** Return shape from {@link Viewer.computeLassoVolume}. */
@@ -4107,7 +4107,7 @@ export class Viewer {
     const fwd = this._camera.getWorldDirection(new THREE.Vector3());
     const east = this._horizontalAxis();
     const north = new THREE.Vector3().crossVectors(this._worldUp, east).normalize();
-    return compassHeadingDeg(fwd.dot(east), fwd.dot(north));
+    return stableHeadingDeg(fwd.dot(east), fwd.dot(north)); // NaN near vertical: the compass holds its last heading
   }
 
   setStandardView(view: StandardView): boolean {
