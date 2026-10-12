@@ -68,6 +68,7 @@ test('a clip over a placed tile exports the points it shows', async ({ page }) =
   await expect(panel).toBeVisible({ timeout: 20_000 });
   if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) await panel.locator('.olv-panel-head').click();
   await panel.locator('label', { hasText: 'Clip the scan to this box' }).click();
+  await panel.locator('summary', { hasText: 'Advanced' }).click();
   const set = async (label: string, v: number): Promise<void> => {
     const input = panel.getByLabel(label, { exact: true });
     await input.fill(String(v));

@@ -189,6 +189,7 @@ test.describe('one exit convention', () => {
     await expect(bar(page)).toHaveAttribute('data-path', 'Tools › Clip box');
     const clip = page.locator('#olv-ws-mode-work .olv-clip-panel');
     if (await clip.evaluate((e) => e.classList.contains('olv-collapsed'))) await clip.locator('.olv-panel-head').click();
+    await clip.locator('summary', { hasText: 'Advanced' }).click();
     const field = clip.locator('input[type="number"]').first();
     await expect(field).toBeVisible();
     await field.focus();
