@@ -106,6 +106,40 @@ export interface LoadPlan {
    * than read whole. Optional for backward-compat, treat `undefined` as `false`.
    */
   buildThenStream?: boolean;
+  /**
+   * True when the file is over {@link MAX_WHOLE_FILE_BYTES} and is not a LAS or
+   * LAZ, so it has no out-of-core path and must be refused before it is read.
+   * Optional for backward-compat, treat `undefined` as `false`.
+   */
+  wholeFileRefused?: boolean;
+}
+
+/**
+ * Hard cap on reading one file into a single ArrayBuffer: 1 GiB, whatever the
+ * device reports. `navigator.deviceMemory` is coarse (rounded, capped at 8) and
+ * is not a per-tab allocation grant. Browsers refuse or crash on single buffers
+ * well below the 4 GiB typed-array limit once the decode's own arrays (and, for
+ * LAZ, a second copy in the WASM heap) sit beside the file, and mobile tabs fail
+ * far lower. 1 GiB keeps the file plus its decode inside a practical tab budget.
+ */
+export const MAX_WHOLE_FILE_BYTES = 1024 * 1024 * 1024;
+
+/** True when a file of `bytes` is over the whole-file cap. */
+export function exceedsWholeFileCap(bytes: number): boolean {
+  return bytes > MAX_WHOLE_FILE_BYTES;
+}
+
+/** The refusal for a whole-file read over the cap. */
+export const WHOLE_FILE_TOO_LARGE_MESSAGE = 'This file is too large to load whole in the browser.';
+
+/**
+ * The open-path refusal for a file over the cap: LAS and LAZ stream out-of-core,
+ * so any other format is pointed at a LAS or LAZ version.
+ */
+export function wholeFileTooLargeMessage(format: SourceFormat): string {
+  return format === 'las' || format === 'laz'
+    ? WHOLE_FILE_TOO_LARGE_MESSAGE
+    : `${WHOLE_FILE_TOO_LARGE_MESSAGE} Open a LAS or LAZ version of it instead.`;
 }
 
 /**
@@ -542,7 +576,13 @@ export function planLoad(input: LoadPlanInput): LoadPlan {
   // (a usable chunk table, a supported point format) is a separate check the open
   // path makes before it builds. The strided plan above stays populated as the
   // fallback for a caller that does not act on this flag.
-  const buildThenStream = (format === 'las' || format === 'laz') && mayExceedCeiling;
+  // The whole-file cap applies whatever the device reports, so the strongest of
+  // the two limits decides: over the cap, LAS/LAZ go out-of-core and any other
+  // format is refused before its read.
+  const isLas = format === 'las' || format === 'laz';
+  const overWholeFileCap = exceedsWholeFileCap(fileBytes);
+  const buildThenStream = isLas && (mayExceedCeiling || overWholeFileCap);
+  const wholeFileRefused = !isLas && overWholeFileCap;
 
   return {
     mode: plan.mode,
@@ -555,6 +595,7 @@ export function planLoad(input: LoadPlanInput): LoadPlan {
     mayExceedCeiling,
     largeNonLasFormat,
     buildThenStream,
+    wholeFileRefused,
   };
 }
 

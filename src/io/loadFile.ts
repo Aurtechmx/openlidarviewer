@@ -18,6 +18,8 @@ import {
   LARGE_NON_LAS_THRESHOLD_BYTES,
   LARGE_STATIC_LAS_THRESHOLD_BYTES,
   memoryCeilingBytes,
+  exceedsWholeFileCap,
+  wholeFileTooLargeMessage,
 } from './loadPlan';
 import type { LoadPlan, E57DecodePlan } from './loadPlan';
 import type { E57Preflight } from './e57/preflight';
@@ -410,6 +412,17 @@ function nonStreamingOverCeilingRefusal(
 }
 
 /**
+ * The refusal for a file over the whole-file cap, or `undefined` when it may be
+ * read. This loader reads the file into one ArrayBuffer (or hands a LAZ to a
+ * worker that may), so it applies whatever the device reports. An over-cap LAS
+ * or LAZ is routed out-of-core before it reaches here.
+ */
+function wholeFileCapRefusal(file: File, format: SourceFormat): LoadError | undefined {
+  if (!exceedsWholeFileCap(file.size)) return undefined;
+  return new LoadError('memory-constraint', wholeFileTooLargeMessage(format));
+}
+
+/**
  * Assemble the source metadata — the cheap preflight result the UI shows — from
  * a finished preflight. Shared by `fileMetadata` and `loadFile` so both surface
  * exactly the same facts without a second head-slice read.
@@ -630,7 +643,9 @@ export async function loadFile(
   // to the worker meant a 600 MB file already known not to fit was pulled into
   // memory first, on the device least able to hold it, and only then rejected.
   const refusal =
-    e57Refusal(file, preflight) ?? nonStreamingOverCeilingRefusal(file, preflight, options);
+    wholeFileCapRefusal(file, format) ??
+    e57Refusal(file, preflight) ??
+    nonStreamingOverCeilingRefusal(file, preflight, options);
   if (refusal) throw refusal;
 
   // --- Now read the whole file — only once the format is known. ---

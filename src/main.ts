@@ -2482,9 +2482,9 @@ const exportPanel = new ExportPanel({
     // confirm before decoding a large source. The confirm pulls the dialog +
     // byte formatter, so it's lazy-loaded here (full-res export is a deliberate
     // action) to keep it out of the eager startup chunk. Declining aborts.
-    const { confirmFullExport } = await loadConfirmFullExport();
-    if (!(await confirmFullExport(f))) return null;
-    return decodeFull(await f.arrayBuffer(), f.name);
+    const { readFullExportSource } = await loadConfirmFullExport(); // refuses over the whole-file cap before reading
+    const buffer = await readFullExportSource(f);
+    return buffer ? decodeFull(buffer, f.name) : null;
   },
   // Called synchronously while the ExportPanel builds its Products lane — which
   // happens before the lazy `viewer` chunk resolves, so it must tolerate a null

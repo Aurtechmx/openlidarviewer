@@ -9,6 +9,7 @@
 
 import { assessFullExportMemory } from './exportMemoryGuard';
 import { formatByteSize } from '../io/formatByteSize';
+import { exceedsWholeFileCap, WHOLE_FILE_TOO_LARGE_MESSAGE } from '../io/loadPlan';
 import { openConfirm } from '../ui/Modal';
 
 /**
@@ -28,4 +29,15 @@ export async function confirmFullExport(file: File): Promise<boolean> {
       `Export anyway?`,
     confirmLabel: 'Export anyway',
   });
+}
+
+/**
+ * Read `file` for a full-resolution re-decode, or null when the user declines.
+ * A file over the whole-file cap is refused before the confirm and before any
+ * byte is read: the confirm is a courtesy, not the memory guard.
+ */
+export async function readFullExportSource(file: File): Promise<ArrayBuffer | null> {
+  if (exceedsWholeFileCap(file.size)) throw new Error(WHOLE_FILE_TOO_LARGE_MESSAGE);
+  if (!(await confirmFullExport(file))) return null;
+  return file.arrayBuffer();
 }
