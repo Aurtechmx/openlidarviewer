@@ -100,20 +100,27 @@ describe('measurement GeoJSON in WGS 84', () => {
   it('keeps the properties exactly as computed in the metric frame', () => {
     const lonLat = JSON.parse(measurementsToGeoJSON([DIST, AREA], ctx(placed(UTM12))));
     const metric = JSON.parse(measurementsToGeoJSON([DIST, AREA], { ...ctx(IDENTITY_LONLAT), toOutput: (p) => [p[0], p[1], p[2]] }));
+    // The lon/lat file also carries the unconverted source elevations.
+    expect(lonLat.features[0].properties.elevations_source).toHaveLength(2);
+    for (const f of lonLat.features) delete f.properties.elevations_source;
     expect(lonLat.features.map((f: { properties: unknown }) => f.properties))
       .toEqual(metric.features.map((f: { properties: unknown }) => f.properties));
     expect(lonLat.features[0].properties.length_m).toBe(metric.features[0].properties.length_m);
     expect(lonLat.features[1].properties.area_m2).toBe(200);
   });
 
-  it('writes a height only for a proven metric vertical datum, as the KML does', () => {
+  it('writes a height only when the source is already WGS 84 ellipsoidal metres (RFC 7946), unlike the KML', () => {
     const navd: ResolvedCrs = { ...UTM12, verticalDatum: 'NAVD88', verticalUnitToMetres: 1 };
     const fc = JSON.parse(measurementsToGeoJSON([DIST], ctx(placed(navd))));
-    expect(fc.features[0].geometry.coordinates[0]).toHaveLength(3);
-    expect(fc.features[0].geometry.coordinates[0][2]).toBe(103);
+    expect(fc.features[0].geometry.coordinates[0]).toHaveLength(2);
+    expect(fc.features[0].properties.elevations_source[0]).toBe(103);
     expect(kmlCoordinates(navd, DIST)[0]).toHaveLength(3);
-    const ellipsoidal: ResolvedCrs = { ...UTM12, verticalDatum: 'WGS 84 ellipsoid', verticalUnitToMetres: 1 };
-    expect(JSON.parse(measurementsToGeoJSON([DIST], ctx(placed(ellipsoidal)))).features[0].geometry.coordinates[0]).toHaveLength(2);
+    const ellipsoidal: ResolvedCrs = { ...UTM12, verticalDatum: 'EPSG:4979', verticalUnitToMetres: 1 };
+    const e = JSON.parse(measurementsToGeoJSON([DIST], ctx(placed(ellipsoidal)))).features[0].geometry.coordinates[0];
+    expect(e).toHaveLength(3);
+    expect(e[2]).toBe(103);
+    const freeText: ResolvedCrs = { ...UTM12, verticalDatum: 'WGS 84 ellipsoid', verticalUnitToMetres: 1 };
+    expect(JSON.parse(measurementsToGeoJSON([DIST], ctx(placed(freeText)))).features[0].geometry.coordinates[0]).toHaveLength(2);
     const feet: ResolvedCrs = { ...UTM12, verticalDatum: 'NAVD88', verticalUnitToMetres: 0.3048 };
     expect(JSON.parse(measurementsToGeoJSON([DIST], ctx(placed(feet)))).features[0].geometry.coordinates[0]).toHaveLength(2);
   });

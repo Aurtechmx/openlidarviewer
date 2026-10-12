@@ -174,13 +174,20 @@ export function polygonPerimeter(points: Vec3[]): number {
 
 /**
  * Interior angle at `vertex`, formed by the rays toward `a` and `c`, in
- * degrees (0–180). Returns 0 when either ray is degenerate (a coincident
- * point), so a half-placed angle measurement reads cleanly.
+ * degrees (0–180). Returns NaN when either arm has zero length (an end point
+ * coincides with the vertex): no direction exists, so the angle is undefined,
+ * not 0°. The tolerance scales with the coordinates' magnitude so float noise
+ * on large coordinates is not read as a real arm. Collinear arms with non-zero
+ * length are legitimate and give 0° or 180°.
  */
 export function angleAtVertex(a: Vec3, vertex: Vec3, c: Vec3): number {
-  const va = normalize(sub(a, vertex));
-  const vc = normalize(sub(c, vertex));
-  if (length(va) < EPSILON || length(vc) < EPSILON) return 0;
+  const scale = Math.max(1, ...a.map(Math.abs), ...vertex.map(Math.abs), ...c.map(Math.abs));
+  const tol = EPSILON * scale;
+  const ra = sub(a, vertex);
+  const rc = sub(c, vertex);
+  if (!(length(ra) > tol) || !(length(rc) > tol)) return Number.NaN;
+  const va = normalize(ra);
+  const vc = normalize(rc);
   const cosine = Math.min(1, Math.max(-1, dot(va, vc)));
   return (Math.acos(cosine) * 180) / Math.PI;
 }

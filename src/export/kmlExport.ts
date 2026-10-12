@@ -33,6 +33,8 @@ import {
   measurementMetrics,
   plainDecimal,
   areaWithheldNote,
+  angleWithheldNote,
+  collapsedGeometryReason,
 } from './measurementExport';
 import { verticalReferenceKey } from '../model/layerCompatibility';
 import type { LocalToLonLatSourceZ } from './lonLatMapper';
@@ -180,9 +182,20 @@ export function kmlAltitudeMode(
         + 'are not authoritative.',
     };
   }
+  // OGC KML 2.2/2.3 define `absolute` as height above sea level, which readers
+  // realise as the EGM96 geoid. Only an EGM96 height means exactly that; any
+  // other orthometric datum (NAVD88, EGM2008, local MSL) is written unconverted
+  // — no geoid model is applied — and the note says so rather than implying the
+  // reader's sea level and the source's are the same surface.
+  const egm96 = verticalReferenceKey({ id: 'kml', verticalDatum: declared }) === 'epsg:5773';
   return {
     mode: 'absolute',
-    reason: `Altitudes are absolute metres above mean sea level on ${declared}.`,
+    reason: egm96
+      ? `Altitudes are absolute metres above mean sea level on ${declared}.`
+      : `Altitudes are absolute metres above mean sea level on ${declared}, written unconverted. `
+        + `KML absolute altitude is referenced to the EGM96 geoid; ${declared} heights differ from `
+        + 'EGM96 by up to about 1–2 m depending on location, so a viewer may place features that far '
+        + 'above or below their true height.',
   };
 }
 
@@ -338,10 +351,24 @@ function metricsLine(m: Measurement, input: KmlExportInput): string {
     if (parts.length === 0) return `Figures ${GEOGRAPHIC_NOT_AVAILABLE}.`;
     return `Measured (${input.unitLabel}): ${parts.join(', ')}. Other figures ${GEOGRAPHIC_NOT_AVAILABLE}.`;
   }
-  const note = areaWithheldNote(m, input.up, input.unitToMetres, input.verticalUnitToMetres);
+  const note = areaWithheldNote(m, input.up, input.unitToMetres, input.verticalUnitToMetres)
+    ?? angleWithheldNote(m, input.up, input.unitToMetres, input.verticalUnitToMetres);
   if (parts.length === 0) return note ?? '';
   const line = `Measured (${input.unitLabel}): ${parts.join(', ')}`;
   return note ? `${line}. ${note}` : line;
+}
+
+/** The reason a clamped (2D) placemark geometry would collapse, or null. */
+function kmlCollapse(m: Measurement, input: KmlExportInput): string | null {
+  const area = isAreaKind(m.kind);
+  if (m.points.length < (area ? 3 : 2)) return null;
+  const plan = m.points.map((p) => {
+    const [lon, lat] = input.toLonLat(p);
+    return [Number(fmt(lon)), Number(fmt(lat))];
+  });
+  // A non-finite position is coord()'s refusal to make, not a collapse.
+  if (plan.some((q) => !Number.isFinite(q[0]) || !Number.isFinite(q[1]))) return null;
+  return collapsedGeometryReason(area ? 'Polygon' : 'LineString', plan);
 }
 
 /** Area-like kinds become a closed <Polygon>; everything else a <LineString>. */
@@ -363,8 +390,14 @@ function measurementPlacemark(m: Measurement, input: KmlExportInput): string | n
     (m.kind === 'volume' && reducedSampleCaveat(m.volume?.withheld)) || '',
     caveatBlock(input),
   ];
-  const desc = description(lines);
   const withAltitude = altMode(input).mode === 'absolute';
+  // Clamped to ground, the geometry is its lon/lat plan alone. A vertical wall
+  // or a purely vertical line collapses there (the GeoJSON writer's rule), so
+  // the placemark keeps its description and carries no geometry. With
+  // absolute altitude KML draws the 3D shape, which stays valid.
+  const collapsed = withAltitude ? null : kmlCollapse(m, input);
+  const desc = description(collapsed ? [...lines, collapsed] : lines);
+  if (collapsed) return ['<Placemark>', `<name>${esc(m.name)}</name>`, desc, '</Placemark>'].join('');
 
   if (isAreaKind(m.kind)) {
     if (m.points.length < 3) return null;

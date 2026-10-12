@@ -664,13 +664,11 @@ describe('MEAS-ANGLE / N4 — registered failure modes', () => {
     expect(angleAtVertex([1, 0, 0], [0, 0, 0], [2, 0, 0])).toBe(0);
   });
 
-  it('AMBIGUITY (documented): a degenerate ray also returns 0 — same value as a real 0° angle', () => {
-    // `angleAtVertex` returns 0 for a coincident pick so a half-placed
-    // measurement reads cleanly. That sentinel is INDISTINGUISHABLE from
-    // a genuine 0° fold-back (asserted directly above). Callers must
-    // track placement state separately; the core cannot tell them apart.
-    expect(angleAtVertex([0, 0, 0], [0, 0, 0], [1, 0, 0])).toBe(0);
-    expect(angleAtVertex([1, 0, 0], [0, 0, 0], [0, 0, 0])).toBe(0);
+  it('a zero-length arm is undefined (NaN), distinct from a real 0° angle', () => {
+    // The 0 sentinel this used to return was indistinguishable from a genuine
+    // 0° fold-back (asserted directly above); NaN keeps them apart.
+    expect(angleAtVertex([0, 0, 0], [0, 0, 0], [1, 0, 0])).toBeNaN();
+    expect(angleAtVertex([1, 0, 0], [0, 0, 0], [0, 0, 0])).toBeNaN();
   });
 
   it('a non-finite pick yields NaN rather than a plausible angle', () => {

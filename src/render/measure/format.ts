@@ -206,6 +206,14 @@ export function formatAngle(degrees: number): string {
   return Number.isFinite(degrees) ? `${degrees.toFixed(1)}°` : '—';
 }
 
+/** The readout for an angle whose arm has zero length (see `angleAtVertex`). */
+export const ANGLE_UNDEFINED_READOUT = 'undefined (zero-length arm)';
+
+/** Format an angle at a vertex; a non-finite value means an arm has zero length. */
+export function formatArmAngle(degrees: number): string {
+  return Number.isFinite(degrees) ? formatAngle(degrees) : ANGLE_UNDEFINED_READOUT;
+}
+
 /**
  * Format a slope grade as a percentage. A non-finite grade means the pair is
  * vertical (zero run), which reads as "vertical" rather than a number.

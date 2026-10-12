@@ -246,7 +246,8 @@ export function valueForDimension(
 
     case 'angle':
       if (m.kind === 'angle' && p.length >= 3) {
-        return angleAtVertex(p[0], p[1], p[2]);
+        const deg = angleAtVertex(p[0], p[1], p[2]);
+        return Number.isFinite(deg) ? deg : null;
       }
       return null;
 
