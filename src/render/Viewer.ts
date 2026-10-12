@@ -117,7 +117,7 @@ import { followPerspective, LensShift } from './camera/orthoCamera';
 import { projectionFromLegacyFov } from './camera/orthoProjection';
 export type { CameraPresetName, StandardView } from './camera/cameraPresets';
 export { chooseRenderBackendForPage } from './viewerRenderBootstrap';
-import { stableHeadingDeg } from './viewCubeMath';
+import type { CameraOrientation, SceneVec } from './viewCubeMath';
 import type { VolumeBudgetDecision } from './measure/volumeBudget';
 
 /** Return shape from {@link Viewer.computeLassoVolume}. */
@@ -4054,15 +4054,8 @@ export class Viewer {
   }
 
   /**
-   * Jump the camera to a named pose — Top, Iso, Oblique, or Planar. The
-   * geometry math lives in the pure `cameraPresets` module so it can be
-   * unit-tested and shared with the v0.3.9 command palette and workflow
-   * recorder without anyone reaching into three.js types.
-   *
-   * Returns `true` when the tween fired (a scan was loaded), `false`
-   * when no visible cloud means no bounding sphere to fit. The caller
-   * (keyboard handler, command palette, palette UI) can surface that
-   * state if it cares.
+   * Jump the camera to a named pose — Top, Iso, Oblique, or Planar (pure math
+   * in `cameraPresets`). True when the tween fired, false with no visible cloud.
    */
   setCameraPreset(name: CameraPresetName): boolean {
     const input = this._presetInput();
@@ -4090,26 +4083,30 @@ export class Viewer {
     return this._orthographic;
   }
 
-  /**
-   * Snap to one of the six standard axis-aligned views (Top / Bottom / Front /
-   * Back / Left / Right) — the Polycam-style "look straight at a face" framing
-   * that makes a wall or floor read flat for measuring. Honours the current
-   * projection (perspective or orthographic). Returns false when no scan
-   * is loaded.
-   */
-  /**
-   * The camera's heading around the world up axis, in degrees [0, 360), for the
-   * on-canvas compass gizmo. Projects the camera forward vector onto the ground
-   * plane (the two non-up axes) and measures its bearing. Pure-math lives in
-   * `viewCubeMath.ts`; this only feeds it the camera/up geometry.
-   */
-  cameraHeadingDeg(): number {
-    const fwd = this._camera.getWorldDirection(new THREE.Vector3());
-    const east = this._horizontalAxis();
-    const north = new THREE.Vector3().crossVectors(this._worldUp, east).normalize();
-    return stableHeadingDeg(fwd.dot(east), fwd.dot(north)); // NaN near vertical: the compass holds its last heading
+  /** Camera forward/up in the scene basis [east, north, up] (north = `_horizontalAxis`, east = north × up), as plain data for the ViewCube. */
+  cameraOrientation(): CameraOrientation {
+    const [e, n, u] = this._sceneBasis(), q = this._camera.quaternion;
+    const f = new THREE.Vector3(0, 0, -1).applyQuaternion(q), up = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+    return { forward: [f.dot(e), f.dot(n), f.dot(u)], up: [up.dot(e), up.dot(n), up.dot(u)], upIsZ: u.z === 1 };
   }
 
+  /** Turn to `dir` (pivot → camera, scene basis) around the current pivot at the current distance; false with no scan. */
+  orientView(dir: SceneVec): boolean {
+    if (!this._presetInput()) return false;
+    this._setLensShift(null);
+    this._nav.setMode('orbit');
+    const [e, n, u] = this._sceneBasis(), t = new THREE.Vector3(...this._nav.getPose().target);
+    const w = e.multiplyScalar(dir[0]).addScaledVector(n, dir[1]).addScaledVector(u, dir[2]).normalize();
+    this._nav.tweenTo(t.clone().addScaledVector(w, this._camera.position.distanceTo(t)), t, 0.6);
+    return true;
+  }
+
+  private _sceneBasis(): [THREE.Vector3, THREE.Vector3, THREE.Vector3] {
+    const n = this._horizontalAxis(), u = this._worldUp.clone();
+    return [new THREE.Vector3().crossVectors(n, u), n, u];
+  }
+
+  /** Snap to a standard axis-aligned view, refitted to the scan, in the current projection; false with no scan. */
   setStandardView(view: StandardView): boolean {
     const input = this._presetInput();
     if (!input) return false;

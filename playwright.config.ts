@@ -146,7 +146,12 @@ export default defineConfig({
           // different origin and the tour overlay is back. Deploy-root runs
           // move both host and port.
           origin: SERVER_URL,
-          localStorage: [{ name: 'olv:tour:v1:completed', value: '1' }],
+          // The one-time navigation hint (NavBar FIRST_USE_HINT_KEY) is seeded
+          // as seen for the same reason; navFirstUse.spec.ts clears it.
+          localStorage: [
+            { name: 'olv:tour:v1:completed', value: '1' },
+            { name: 'olv.nav.firstUseHint', value: '1' },
+          ],
         },
       ],
     },

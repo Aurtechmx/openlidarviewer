@@ -54,7 +54,7 @@ export function contributeViewActions(deps: ViewActionDeps): Action[] {
       id: 'view.compass',
       title: 'Toggle compass',
       section: 'View',
-      hint: 'Show or hide the on-canvas compass — north plus the standard-view snaps.',
+      hint: 'Show or hide the on-canvas view cube: turn to any face, edge or corner.',
       keywords: ['compass', 'viewcube', 'north', 'rose', 'orientation', 'heading', 'gizmo'],
       run: () => deps.compass.setEnabled(!deps.compass.isEnabled()),
     },

@@ -238,6 +238,7 @@ function harness(opts: HarnessOptions = {}) {
       setMode: vi.fn(),
       flashHelp: vi.fn(),
       flashTouchHint: vi.fn(),
+      flashFirstUseHint: vi.fn(),
     } as unknown as OpenScanDeps['navBar'],
     bookmarks: { clear: calls.bookmarksClear },
     layerService: { refreshCrsFlags: vi.fn() },

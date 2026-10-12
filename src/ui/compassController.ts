@@ -26,15 +26,15 @@
 
 import { loadViewCube } from '../lazyChunks';
 import { storageGet, storageSet } from './safeStorage';
-import type { StandardView } from '../render/viewCubeMath';
+import type { CameraOrientation, CubeOrientation, CubeTarget, StandardView } from '../render/viewCubeMath';
 import type { ViewCubeHandle, ViewCubeOptions } from './viewCube';
 
 /** The slice of the Viewer the compass reads. */
 export interface CompassViewer {
   /** Open clouds — the compass stays down while this is empty. */
   clouds(): { readonly length: number };
-  /** Camera heading in degrees, read once per frame; NaN near vertical (rose holds). */
-  cameraHeadingDeg(): number;
+  /** Camera orientation in the scene basis (scene up axis), read once per drawn frame. */
+  cameraOrientation(): CameraOrientation;
   /**
    * Run a listener after every drawn frame; returns the unsubscribe.
    *
@@ -46,6 +46,10 @@ export interface CompassViewer {
   onDrawnFrame(listener: () => void): () => void;
   /** Snap the camera to one of the gizmo's faces (fallback when no `onView` is routed). */
   setStandardView(view: StandardView): unknown;
+  /** Turn the camera to a cube direction around the current pivot (fallback for `onOrient`). */
+  orientView(dir: CubeOrientation['dir']): unknown;
+  /** Fit the whole scan (the cube's Home control). */
+  frameAll(): unknown;
 }
 
 /**
@@ -59,6 +63,13 @@ export interface CompassPlatform {
   /** Persisted preference; null when unset or unreadable (private mode). */
   readPref(): string | null;
   writePref(value: string): void;
+  /**
+   * Whether the viewport is phone-sized. A phone keeps the cube off unless the
+   * user turned it on: at 390 px the top-right corner holds the header
+   * controls and the project card, and a touch-sized cube (156 px) would cover
+   * a fifth of the scan. Optional; absent means not a phone.
+   */
+  isPhone?(): boolean;
 }
 
 export interface CompassControllerOptions {
@@ -87,7 +98,14 @@ export interface CompassControllerOptions {
    * the NavBar's view buttons do. Without it the compass falls back to the
    * viewer's bare `setStandardView`, which knows nothing about Plan View.
    */
-  onView?: (view: StandardView) => void;
+  onView?: (view: StandardView, orientation: CubeOrientation) => void;
+  /**
+   * Route an edge or corner click. The shell passes navBarWiring's
+   * `onOrientView`, which also tells Plan View the camera left the top view.
+   */
+  onOrient?: (target: CubeTarget, orientation: CubeOrientation) => void;
+  /** The Home control. Defaults to the viewer's `frameAll`. */
+  onHome?: () => void;
 }
 
 export interface CompassController {
@@ -107,6 +125,7 @@ export function browserCompassPlatform(): CompassPlatform {
   return {
     readPref: () => storageGet(COMPASS_PREF_KEY),
     writePref: (value) => storageSet(COMPASS_PREF_KEY, value),
+    isPhone: () => typeof matchMedia === 'function' && matchMedia('(max-width: 767px)').matches,
   };
 }
 
@@ -123,7 +142,13 @@ export function createCompassController(opts: CompassControllerOptions): Compass
   let enabled = ((): boolean => {
     if (opts.urlParams.get('viewcube') === '0') return false;
     if (opts.urlParams.has('viewcube')) return true;
-    return platform.readPref() === 'on';
+    // On by default for everyone who has not turned it off; a phone keeps it
+    // off until asked (see CompassPlatform.isPhone). An explicit stored choice
+    // wins either way.
+    const pref = platform.readPref();
+    if (pref === 'on') return true;
+    if (pref === 'off') return false;
+    return !(platform.isPhone?.() ?? false);
   })();
   let viewer: CompassViewer | null = null;
   let handle: ViewCubeHandle | null = null;
@@ -143,13 +168,17 @@ export function createCompassController(opts: CompassControllerOptions): Compass
       if (!enabled || handle || v.clouds().length === 0) return;
       const cube = mountViewCube({
         host: opts.host(),
-        getHeading: () => v.cameraHeadingDeg(),
-        isGeographic: opts.cardinalsAreGeographic ?? ((): boolean => false),
+        getOrientation: () => v.cameraOrientation(),
+        // N/E/S/W only when the CRS is known AND the scene is Z-up: on a Y-up
+        // scan the horizontal axes are not a map grid.
+        isGeographic: () => (opts.cardinalsAreGeographic?.() ?? false) && v.cameraOrientation().upIsZ,
         onView: opts.onView ?? ((view) => void v.setStandardView(view)),
+        onOrient: opts.onOrient ?? ((_t, o) => void v.orientView(o.dir)),
+        onHome: opts.onHome ?? ((): void => void v.frameAll()),
       });
       handle = cube;
       // One update straight away: the first drawn frame may be a while off on
-      // a parked camera, and the rose must not sit at north until then.
+      // a parked camera, and the cube must not sit unturned until then.
       cube.update();
       unsubscribe = v.onDrawnFrame(() => cube.update());
     })

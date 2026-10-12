@@ -752,17 +752,13 @@ stage.canvas.addEventListener('contextmenu', (e) => {
   });
 });
 
-// v0.5.3 — on-canvas compass / ViewCube. Promoted from the v0.5.2 URL-only flag
-// to a discoverable, persisted control: toggle it from the command palette
-// ("Toggle compass"), and the choice is remembered. It stays OFF by default —
-// the app's left and right edges are full-height panel columns (left panels and
-// the Inspector), so a persistent gizmo has no free corner to occupy without
-// overlapping them; the user opts in when they want it. `?viewcube=1` forces it
-// on, `?viewcube=0` off. Life cycle lives in ui/compassController.ts.
+// The on-canvas ViewCube: on by default with a scan open (off on phones until
+// asked), placed top-right clear of the right rail; "Toggle compass" in the
+// palette and `?viewcube=1|0` override. Life cycle: ui/compassController.ts.
 const compass = createCompassController({
-  host: () => stage.overlay, urlParams, onView: (view) => navWiring.callbacks.onStandardView(view), // same path (and Plan View rule) as the NavBar buttons
-  // Cardinals only when georeferenced; local scans show truthful local axes.
-  cardinalsAreGeographic: () => crsIsKnown(crsService.current()),
+  host: () => stage.overlay, urlParams, onView: (view, o) => navWiring.callbacks.onStandardView(view, o), // same path (and Plan View rule) as the NavBar buttons
+  onOrient: (_t, o) => navWiring.onOrientView(o.dir), onHome: () => navWiring.callbacks.onReset(),
+  cardinalsAreGeographic: () => crsIsKnown(crsService.current()), // local scans show truthful view names
 });
 void viewerLoaded.then((v) => compass.attachViewer(v));
 

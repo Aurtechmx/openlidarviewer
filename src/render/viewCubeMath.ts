@@ -5,54 +5,16 @@
  * DOM, so it is unit-tested in Node and the lazy widget (`src/ui/viewCube.ts`)
  * stays a thin renderer over it.
  *
- * The gizmo does two jobs:
- *   1. Show which way the camera is facing — a compass rose that rotates with
- *      the camera's heading around the world up axis.
- *   2. Snap to a standard view when a face / cardinal is clicked — the same six
- *      axis-aligned views the toolbar already exposes (v0.4.6).
+ * The cube does two jobs:
+ *   1. Show which way the camera is facing — it turns with the camera's full
+ *      orientation (pitch, yaw and roll) in the scene's own up-axis frame.
+ *   2. Turn the camera when a face, edge or corner is clicked: the faces are
+ *      the six axis-aligned views the toolbar already exposes (v0.4.6), the
+ *      edges and corners the 20 directions between them.
  */
 
 /** The six axis-aligned standard views the gizmo can snap to. */
 export type StandardView = 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right';
-
-/** Where a face sits around the rose. */
-export type CompassFacePosition = 'top' | 'right' | 'bottom' | 'left';
-
-/**
- * A clickable rose face. It carries TWO labels because the rose only has
- * cardinal directions when the scan's orientation is geographically known.
- * Even then the rose follows the scan's +Y axis, which is GRID north on a
- * projected CRS (true north differs by the meridian convergence, 1.29 degrees
- * in UTM 12N at 109 W, 40 N), so the top face reads "Grid N":
- *
- *   - `geo` (N/E/S/W) is shown ONLY when the active scan has a known geographic
- *     frame (a projected or geographic CRS). Then the cardinals are meaningful.
- *   - `local` (B/R/F/L) is the truthful fallback for a local / unknown-CRS scan.
- *     The rose's directions are derived from the scan's own axes, not from any
- *     coordinate system (`Viewer._horizontalAxis` is a synthetic worldUp-cross,
- *     with no CRS input), so calling them North/East for a local scan would
- *     assert geography the data does not carry. The faces still snap to the same
- *     Back/Right/Front/Left standard views — that is what B/R/F/L name.
- */
-export interface CompassFace {
-  readonly view: StandardView;
-  readonly position: CompassFacePosition;
-  readonly geo: string;
-  readonly local: string;
-}
-
-/** Clickable compass faces, in render order around the rose (top face first). */
-export const COMPASS_FACES: readonly CompassFace[] = [
-  { view: 'back', position: 'top', geo: 'Grid N', local: 'B' },
-  { view: 'right', position: 'right', geo: 'E', local: 'R' },
-  { view: 'front', position: 'bottom', geo: 'S', local: 'F' },
-  { view: 'left', position: 'left', geo: 'W', local: 'L' },
-];
-
-/** The label a face shows: geographic cardinal when known, else truthful local. */
-export function compassFaceLabel(face: CompassFace, geographic: boolean): string {
-  return geographic ? face.geo : face.local;
-}
 
 /**
  * Camera heading around the world up axis, in degrees [0, 360), from the
@@ -68,24 +30,6 @@ export function compassHeadingDeg(forwardEast: number, forwardNorth: number): nu
   if (forwardEast === 0 && forwardNorth === 0) return 0;
   const deg = (Math.atan2(forwardEast, forwardNorth) * 180) / Math.PI;
   return ((deg % 360) + 360) % 360;
-}
-
-/** Nearest cardinal label for a heading in degrees. */
-export function nearestCardinal(headingDeg: number): 'N' | 'E' | 'S' | 'W' {
-  const h = ((headingDeg % 360) + 360) % 360;
-  if (h < 45 || h >= 315) return 'N';
-  if (h < 135) return 'E';
-  if (h < 225) return 'S';
-  return 'W';
-}
-
-/**
- * The CSS rotation (degrees) to apply to the compass rose so that world North
- * stays pinned to screen-up as the camera turns. The rose counter-rotates the
- * heading.
- */
-export function roseRotationDeg(headingDeg: number): number {
-  return -(((headingDeg % 360) + 360) % 360);
 }
 
 /**
@@ -126,4 +70,303 @@ export function unwrapAngleDeg(prevDisplayDeg: number, nextCanonicalDeg: number)
   let delta = (((nextCanonicalDeg - prev) % 360) + 360) % 360; // [0, 360)
   if (delta > 180) delta -= 360;
   return prev + delta;
+}
+
+/*
+ * The 3D ViewCube.
+ *
+ * Everything below works in the SCENE BASIS: three orthonormal axes
+ * `[east, north, up]`, where `up` is the scene's declared up axis, `north` is
+ * the Viewer's stable horizontal axis (`_horizontalAxis`, the +Y axis of a
+ * Z-up scan, which is grid north on a projected CRS) and `east = north × up`.
+ * The Viewer converts to and from world space; nothing here knows three.js.
+ */
+
+/** A vector in the scene basis: `[east, north, up]`. */
+export type SceneVec = readonly [number, number, number];
+
+/** Sign of one basis component of a cube target: -1, 0 or +1. */
+export type CubeSign = -1 | 0 | 1;
+
+/** What part of the cube a target is. */
+export type CubeTargetKind = 'face' | 'edge' | 'corner';
+
+/** One of the 26 clickable cube targets. */
+export interface CubeTarget {
+  /** Stable id, e.g. `top`, `north-east`, `top-south-west`. */
+  readonly id: string;
+  readonly kind: CubeTargetKind;
+  /** Which side of the cube along `[east, north, up]`. */
+  readonly signs: readonly [CubeSign, CubeSign, CubeSign];
+  /** For a face: the standard view it reproduces (same direction conventions). */
+  readonly view: StandardView | null;
+}
+
+/** Camera direction for a cube target: `dir` points from the pivot to the camera. */
+export interface CubeOrientation {
+  readonly dir: SceneVec;
+  /** The camera's screen-up for that view, orthogonal to `dir`. */
+  readonly up: SceneVec;
+}
+
+/**
+ * The faces, keyed by the standard view whose direction they reproduce. These
+ * are the conventions of `standardViewPose` (cameraPresets.ts) restated in the
+ * scene basis: front looks from +horizontal (+north), right from
+ * `up × horizontal` (-east), top from +up.
+ */
+const FACE_SIGNS: Readonly<Record<StandardView, readonly [CubeSign, CubeSign, CubeSign]>> = {
+  top: [0, 0, 1],
+  bottom: [0, 0, -1],
+  front: [0, 1, 0],
+  back: [0, -1, 0],
+  right: [-1, 0, 0],
+  left: [1, 0, 0],
+};
+
+const AXIS_WORDS: readonly (readonly [string, string])[] = [
+  ['east', 'west'],
+  ['north', 'south'],
+  ['top', 'bottom'],
+];
+
+function targetId(signs: readonly [CubeSign, CubeSign, CubeSign]): string {
+  // Vertical first, then north/south, then east/west: "top-north-east".
+  const parts: string[] = [];
+  for (const axis of [2, 1, 0]) {
+    const s = signs[axis];
+    if (s !== 0) parts.push(AXIS_WORDS[axis][s > 0 ? 0 : 1]);
+  }
+  return parts.join('-');
+}
+
+function viewForSigns(signs: readonly [CubeSign, CubeSign, CubeSign]): StandardView | null {
+  for (const [view, s] of Object.entries(FACE_SIGNS) as [StandardView, readonly CubeSign[]][]) {
+    if (s[0] === signs[0] && s[1] === signs[1] && s[2] === signs[2]) return view;
+  }
+  return null;
+}
+
+/** All 26 targets: 6 faces, then 12 edges, then 8 corners. */
+export const CUBE_TARGETS: readonly CubeTarget[] = ((): CubeTarget[] => {
+  const out: CubeTarget[] = [];
+  const signs: CubeSign[] = [-1, 0, 1];
+  for (const e of signs) for (const n of signs) for (const u of signs) {
+    const s: [CubeSign, CubeSign, CubeSign] = [e, n, u];
+    const nonZero = s.filter((v) => v !== 0).length;
+    if (nonZero === 0) continue;
+    const kind: CubeTargetKind = nonZero === 1 ? 'face' : nonZero === 2 ? 'edge' : 'corner';
+    out.push({ id: targetId(s), kind, signs: s, view: viewForSigns(s) });
+  }
+  const rank: Record<CubeTargetKind, number> = { face: 0, edge: 1, corner: 2 };
+  return out.sort((a, b) => rank[a.kind] - rank[b.kind]);
+})();
+
+/** The target for a standard view's face. */
+export function cubeTargetForView(view: StandardView): CubeTarget {
+  const t = CUBE_TARGETS.find((c) => c.view === view);
+  if (!t) throw new Error(`no cube face for ${view}`);
+  return t;
+}
+
+/** Tilt off the pole for straight-down / straight-up views, as `standardViewPose` uses. */
+const POLE_TILT_RAD = Math.PI / 180;
+
+function norm(v: SceneVec): SceneVec {
+  const l = Math.hypot(v[0], v[1], v[2]);
+  return l > 0 ? [v[0] / l, v[1] / l, v[2] / l] : [0, 0, 0];
+}
+
+function dot(a: SceneVec, b: SceneVec): number {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function cross(a: SceneVec, b: SceneVec): SceneVec {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+}
+
+/**
+ * Camera direction and screen-up for a cube target. A target with no
+ * horizontal component (top / bottom) is nudged 1° toward +north, exactly like
+ * the standard top / bottom views, so orbit controls keep a defined "right".
+ * Screen-up is the scene up axis made orthogonal to the direction.
+ */
+export function cubeTargetOrientation(target: CubeTarget): CubeOrientation {
+  const [e, n, u] = target.signs;
+  let dir: SceneVec;
+  if (e === 0 && n === 0) {
+    dir = [0, Math.sin(POLE_TILT_RAD), u * Math.cos(POLE_TILT_RAD)];
+  } else {
+    dir = norm([e, n, u]);
+  }
+  const upAxis: SceneVec = [0, 0, 1];
+  const d = dot(upAxis, dir);
+  const up = norm([upAxis[0] - d * dir[0], upAxis[1] - d * dir[1], upAxis[2] - d * dir[2]]);
+  return { dir, up };
+}
+
+/** The camera's orientation in the scene basis, as the Viewer reports it. */
+export interface CameraOrientation {
+  /** Unit view direction (where the camera looks). */
+  readonly forward: SceneVec;
+  /** Unit screen-up of the camera. */
+  readonly up: SceneVec;
+  /** Whether the scene's up axis is +Z (survey convention) rather than +Y. */
+  readonly upIsZ: boolean;
+}
+
+/**
+ * CSS `matrix3d` (column-major, 16 numbers) that draws scene-basis geometry as
+ * the camera sees it: screen x = camera right, y = camera DOWN (CSS), z toward
+ * the viewer. Feeding the camera's live orientation makes the cube follow
+ * pitch, yaw and roll, not just heading.
+ */
+export function cubeViewMatrix(o: CameraOrientation): number[] {
+  const f = norm(o.forward);
+  // Re-orthogonalise up against forward (the camera's own may drift a hair).
+  const d = dot(o.up, f);
+  const up = norm([o.up[0] - d * f[0], o.up[1] - d * f[1], o.up[2] - d * f[2]]);
+  const right = cross(f, up);
+  const m: number[] = [];
+  for (let axis = 0; axis < 3; axis++) {
+    m.push(right[axis], -up[axis], -f[axis], 0);
+  }
+  m.push(0, 0, 0, 1);
+  return m;
+}
+
+/** Project a scene-basis point through {@link cubeViewMatrix}: [x, y-down, z-toward-viewer]. */
+export function projectCubePoint(matrix: readonly number[], p: SceneVec): SceneVec {
+  return [
+    matrix[0] * p[0] + matrix[4] * p[1] + matrix[8] * p[2],
+    matrix[1] * p[0] + matrix[5] * p[1] + matrix[9] * p[2],
+    matrix[2] * p[0] + matrix[6] * p[1] + matrix[10] * p[2],
+  ];
+}
+
+/**
+ * The CSS `matrix3d` placing a face element (a square in its own x-right /
+ * y-down plane) on the unit cube's face at `half` px from the centre. The face
+ * is laid out as the camera would see it from that face's own view, so its
+ * label reads upright when the cube is turned to it.
+ */
+export function cubeFaceMatrix(view: StandardView, half: number): number[] {
+  const { dir, up } = cubeTargetOrientation(cubeTargetForView(view));
+  const f: SceneVec = [-dir[0], -dir[1], -dir[2]];
+  const x = cross(f, up);
+  const normal = norm(FACE_SIGNS[view] as SceneVec);
+  return [
+    x[0], x[1], x[2], 0,
+    -up[0], -up[1], -up[2], 0,
+    normal[0], normal[1], normal[2], 0,
+    normal[0] * half, normal[1] * half, normal[2] * half, 1,
+  ];
+}
+
+/**
+ * Which face the camera is looking at squarely: the face whose outward normal
+ * is within ~10° of the direction back to the camera. Null between faces.
+ */
+export function activeCubeFace(o: CameraOrientation, cosLimit = 0.985): StandardView | null {
+  const back = norm([-o.forward[0], -o.forward[1], -o.forward[2]]);
+  let best: StandardView | null = null;
+  let bestDot = cosLimit;
+  for (const [view, s] of Object.entries(FACE_SIGNS) as [StandardView, SceneVec][]) {
+    const c = dot(back, s);
+    if (c >= bestDot) { bestDot = c; best = view; }
+  }
+  return best;
+}
+
+/**
+ * The face label policy for the cube.
+ *
+ *   - `geographic`: the scene is Z-up AND its CRS is known, so +north is the
+ *     CRS's +Y axis (grid north on a projected CRS). The four side faces read
+ *     N / E / S / W by the direction they face; top and bottom read Top /
+ *     Bottom.
+ *   - otherwise: truthful local names. A local / unknown-CRS scan, or a Y-up
+ *     scan whose horizontal axes are not a map grid, never gets N/E labels it
+ *     cannot substantiate; its faces carry the standard view names.
+ */
+export function cubeFaceLabel(view: StandardView, geographic: boolean): string {
+  if (geographic) {
+    const s = FACE_SIGNS[view];
+    if (s[1] === 1) return 'N';
+    if (s[1] === -1) return 'S';
+    if (s[0] === 1) return 'E';
+    if (s[0] === -1) return 'W';
+  }
+  return VIEW_TITLE[view];
+}
+
+const VIEW_TITLE: Readonly<Record<StandardView, string>> = {
+  top: 'Top', bottom: 'Bottom', front: 'Front', back: 'Back', left: 'Left', right: 'Right',
+};
+
+/**
+ * Accessible name for a cube target, honest about the scan's frame. Phrased as
+ * "… face / edge / corner" so it never collides with the toolbar's own "Top
+ * view" / "Front view (axis aligned)" buttons.
+ */
+export function cubeTargetName(target: CubeTarget, geographic: boolean): string {
+  if (target.view) {
+    const label = cubeFaceLabel(target.view, geographic);
+    if (geographic && label.length === 1) {
+      const word = { N: 'Grid north', S: 'South', E: 'East', W: 'West' }[label as 'N' | 'S' | 'E' | 'W'];
+      return `${word} face`;
+    }
+    return `${label} face`;
+  }
+  const words = target.id.split('-').map((w) => {
+    if (geographic) return w;
+    // Local frame: speak in standard-view terms, never compass words.
+    return { north: 'front', south: 'back', east: 'left', west: 'right', top: 'top', bottom: 'bottom' }[w] ?? w;
+  });
+  const name = words.join('-');
+  return `${name[0].toUpperCase()}${name.slice(1)} ${target.kind}`;
+}
+
+/**
+ * An axis-aligned rectangle the cube must not cover, in the host's coordinate
+ * space.
+ */
+export interface PlacementRect { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number }
+
+/**
+ * Where to put the cube in its host, or null when no clear place exists.
+ *
+ * The preferred place is the top-right corner. Every position built from the
+ * corner and from the edges of each obstacle (just left of, just right of,
+ * just below or just above it) is tried, and the clear, in-host position
+ * nearest the corner wins, so the cube moves as little as it must. Returning
+ * null means the cube should be hidden rather than drawn over a control: it
+ * never covers one.
+ */
+export function placeCube(
+  host: { readonly width: number; readonly height: number },
+  size: number | { readonly width: number; readonly height: number },
+  obstacles: readonly PlacementRect[],
+  margin = 14,
+  gap = 10,
+): { readonly left: number; readonly top: number } | null {
+  const w = typeof size === 'number' ? size : size.width;
+  const h = typeof size === 'number' ? size : size.height;
+  const cornerLeft = host.width - margin - w;
+  const xs = [cornerLeft, ...obstacles.flatMap((o) => [o.left - gap - w, o.right + gap])];
+  const ys = [margin, ...obstacles.flatMap((o) => [o.bottom + gap, o.top - gap - h])];
+  const clear = (l: number, t: number): boolean =>
+    obstacles.every((o) => !(l < o.right + gap && l + w > o.left - gap && t < o.bottom + gap && t + h > o.top - gap));
+  const inside = (l: number, t: number): boolean =>
+    l >= margin && t >= margin && l + w <= host.width - margin && t + h <= host.height - margin;
+  let best: { left: number; top: number } | null = null;
+  let bestD = Infinity;
+  for (const l of xs) {
+    for (const t of ys) {
+      if (!inside(l, t) || !clear(l, t)) continue;
+      const d = (l - cornerLeft) ** 2 + (t - margin) ** 2;
+      if (d < bestD) { bestD = d; best = { left: Math.round(l), top: Math.round(t) }; }
+    }
+  }
+  return best;
 }

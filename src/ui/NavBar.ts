@@ -33,9 +33,12 @@ export interface NavBarCallbacks {
   onCameraPreset: (name: CameraPresetName) => void;
   /**
    * The user tapped one of the six standard axis-aligned views (Top / Bottom /
-   * Front / Back / Left / Right) — Viewer.setStandardView().
+   * Front / Back / Left / Right) — Viewer.setStandardView(). The ViewCube
+   * passes `orientation` too: the same view, turned to around the current
+   * pivot at the current distance instead of refitted, so a cube click never
+   * resets the zoom.
    */
-  onStandardView: (view: StandardView) => void;
+  onStandardView: (view: StandardView, orientation?: { readonly dir: readonly [number, number, number] }) => void;
   /** The user toggled the orthographic (parallel) projection. */
   onOrthographic: (on: boolean) => void;
   /**
@@ -52,13 +55,8 @@ interface ModeDef {
   label: string;
   hint: string;
   /**
-   * Where the mode sits on the triangle, in screen-reader-friendly
-   * prose. The triangle has Orbit at the top vertex, Walk at the
-   * bottom-left vertex, and Fly at the bottom-right vertex (see the
-   * SVG polygon coordinates below). Folded into each button's
-   * `aria-label` so a screen-reader user can navigate the spatial
-   * arrangement the same way a sighted user does.
-   * v0.3.10 a11y patch #376.
+   * Where the mode sits in the segmented selector, in screen-reader prose
+   * ("1 of 4"), folded into the button's `aria-label`.
    */
   spatial: string;
   /** Monoline SVG icon — 24×24 viewBox, `currentColor` stroke. */
@@ -69,7 +67,7 @@ const MODES: ModeDef[] = [
   {
     mode: 'orbit',
     label: 'Orbit',
-    spatial: 'top of triangle',
+    spatial: '1 of 4',
     hint: 'Inspect from outside — drag to rotate, scroll to zoom, double-click to focus on a point',
     // Curved arrow orbiting a central point.
     icon: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -81,7 +79,7 @@ const MODES: ModeDef[] = [
   {
     mode: 'walk',
     label: 'Walk',
-    spatial: 'bottom-left of triangle',
+    spatial: '2 of 4',
     hint: 'First-person — WASD on the level, Space/C to change height',
     // Walking figure — simple stick + leg motion.
     icon: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -95,7 +93,7 @@ const MODES: ModeDef[] = [
   {
     mode: 'fly',
     label: 'Fly',
-    spatial: 'bottom-right of triangle',
+    spatial: '3 of 4',
     hint: 'Free flight — WASD follows where you look',
     // Paper-plane in motion.
     icon: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -105,16 +103,14 @@ const MODES: ModeDef[] = [
 ];
 
 /**
- * The v0.5.5 hand tool (P1) — a fourth mode rendered as its own circular pad
- * beside the triangle rather than as a fourth vertex: the trio composition is
- * the established rotate/travel metaphor, while Pan is a grab-the-scene tool.
+ * The v0.5.5 hand tool (P1) — the fourth segment of the mode selector.
  * Hidden (with its legend entries) when the `?handPan=off` dev flag disables
  * the tool — see `setPanAvailable`.
  */
 const PAN_MODE: ModeDef = {
   mode: 'pan',
   label: 'Pan',
-  spatial: 'left of triangle',
+  spatial: '4 of 4',
   hint: 'Pan view — grab the scene and drag it; scroll still zooms (G or 4)',
   // An open hand, original artwork in the dockIcons house style
   // (24×24, currentColor, 1.6 px stroke, round caps/joins).
@@ -156,11 +152,26 @@ function readStoredHelpPinned(): boolean {
   return stored === '1';
 }
 
+/** Gap kept between a bottom toast and the top of the mode row. */
+const NAV_TOAST_GAP_PX = 12;
+
 /** Space kept between the framed scan and the top of the mode triangle. */
 const NAV_FRAMING_GAP_PX = 12;
 
 /** Storage key for the legend's own open/closed state, independent of the panel. */
 const LEGEND_OPEN_KEY = 'olv.nav.legendOpen';
+
+/** The prompt's text while navigating Walk / Fly without the cursor captured. */
+const PROMPT_LOOK = 'Click the scan to look around';
+const PROMPT_LOOK_SUB = 'WASD to move · Esc or click to release';
+/** The prompt while a modal tool owns clicks — the Help guide's own sentence. */
+const PROMPT_TOOL = 'Hold Space while a tool is active to rotate or pan, then release to resume.';
+
+const TOUCH_HINT_TEXT = 'Drag to rotate · Pinch to zoom · Two fingers to pan';
+/** The one-time desktop hint, and the flag that records it was shown. */
+const FIRST_USE_HINT_TEXT = 'Drag to orbit · Scroll to zoom · Double-click to focus';
+const FIRST_USE_HINT_KEY = 'olv.nav.firstUseHint';
+const FIRST_USE_HINT_MS = 12000;
 
 /** How long the touch-gesture hint stays up when nobody touches the scan. */
 const TOUCH_HINT_MS = 6500;
@@ -226,8 +237,17 @@ export class NavBar {
   private readonly _speed: HTMLElement;
   /** The mode triangle's row: the part of the bar that stays up over the scan. */
   private readonly _navRow: HTMLElement;
-  /** The button beside the mode triangle that shows or hides the panel. */
+  /** The button beside the mode selector that shows or hides the panel. */
   private readonly _panelToggle: HTMLButtonElement;
+  /** The prompt's two lines, rewritten between the look prompt and the tool tip. */
+  private readonly _promptMain: HTMLElement;
+  private readonly _promptSub: HTMLElement;
+  /** The touch hint's text: the phone gestures, or the one-time desktop hint. */
+  private readonly _touchHintText: HTMLElement;
+  /** The "More" disclosure (six axis views) and whether it is open. */
+  private readonly _moreToggle: HTMLButtonElement;
+  private readonly _moreMenu: HTMLElement;
+  private _moreOpen = false;
   private readonly _modeButtons = new Map<NavMode, HTMLButtonElement>();
   /** The Pan (hand tool) pad — hidden when `?handPan=off` disables it. */
   private readonly _panBtn!: HTMLButtonElement;
@@ -269,19 +289,11 @@ export class NavBar {
   constructor(callbacks: NavBarCallbacks) {
     this._cb = callbacks;
 
-    // ── Mode triangle ─────────────────────────────────────────────────────
-    // v0.3.6 discoverability fix: the previous flat segmented control was
-    // a low-contrast row of three text labels that most users never
-    // noticed. The triangle composition makes the trio read as a single
-    // navigation tool — three vertex buttons connected by a dashed cyan
-    // outline, with a centre Reset action at the triangle's centroid.
-    const triangleOutline = el('div', {
-      className: 'olv-modes-tri-bg',
-      unsafeHtml: `<svg viewBox="0 0 140 110" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-<polygon points="70,18 22,92 118,92" fill="none" stroke="rgba(0,178,255,0.32)" stroke-width="1.1" stroke-dasharray="3 4" stroke-linejoin="round"/>
-<polygon points="70,18 22,92 118,92" fill="rgba(0,178,255,0.025)" stroke="none"/>
-</svg>`,
-    });
+    // ── Mode selector ─────────────────────────────────────────────────────
+    // One compact segmented control, Orbit | Walk | Fly | Pan. It replaced the
+    // v0.3.6 triangle of round pads, which took 235 × 108 px of the stage's
+    // bottom-centre for four choices; a segmented row reads as one choice of
+    // four at a fraction of the area, and the labels stay visible.
     const segments = MODES.map((def) => {
       // v0.3.10 a11y patch #376 — the icon SVG is decorative (the
       // visible text label below carries the meaning); marking the
@@ -293,11 +305,8 @@ export class NavBar {
       const button = el('button', {
         className: `olv-mode olv-mode-${def.mode}`,
         title: def.hint,
-        // Spatial aria-label: a sighted user sees Orbit at the top
-        // vertex of the triangle, Walk bottom-left, Fly bottom-right.
-        // A screen-reader user gets the same arrangement spelled out,
-        // plus the hint so they don't have to hover to learn what the
-        // mode does. v0.3.10 a11y patch #376.
+        // Position in the selector plus the hint, so a screen-reader user
+        // does not have to hover to learn what the mode does.
         ariaLabel: `${def.label} mode, ${def.spatial}. ${def.hint}`,
       }, [iconWrap, labelEl]);
       // `aria-pressed` is the canonical attribute for a toggle button
@@ -311,9 +320,8 @@ export class NavBar {
       this._modeButtons.set(def.mode, button);
       return button;
     });
-    // Pan (hand tool, v0.5.5 P1) — a fourth mode pad docked to the left of
-    // the triangle. Same construction as the vertex buttons so `_render()`
-    // drives its active state + aria-pressed through `_modeButtons`.
+    // Pan (hand tool, v0.5.5 P1) — the fourth segment. Same construction as
+    // the others so `_render()` drives its active state through `_modeButtons`.
     {
       const def = PAN_MODE;
       // The extra `olv-mode-pan-icon` class keeps this unsafeHtml call site
@@ -336,9 +344,7 @@ export class NavBar {
       this._panBtn = button;
       segments.push(button);
     }
-    // Centre Reset button — sits at the triangle's centroid. Compact,
-    // ringed in cyan so it reads as a peer to the three modes without
-    // competing for primary attention.
+    // Frame all — a compact icon button beside the selector.
     const resetBtn = el('button', {
       className: 'olv-mode-reset',
       title: 'Frame all (R): fit the camera to the entire scan',
@@ -356,22 +362,9 @@ export class NavBar {
       resetBtn.blur();
       this._cb.onReset();
     });
-    const switcher = el('div', { className: 'olv-modes olv-modes-triangle' }, [
-      triangleOutline,
-      resetBtn,
-      ...segments,
-    ]);
-    // v0.3.10 a11y patch #376 — group the three mode buttons + the
-    // centre Reset under one role with a name that describes the
-    // spatial arrangement. Screen-reader users hear "Navigation
-    // mode, group" when entering the cluster instead of three
-    // unrelated toggles plus a reset button.
+    const switcher = el('div', { className: 'olv-modes olv-modes-segmented' }, segments);
     switcher.setAttribute('role', 'group');
-    switcher.setAttribute(
-      'aria-label',
-      'Navigation mode — Orbit (top), Walk (bottom-left), Fly (bottom-right), ' +
-        'Pan (left). The centre button resets the camera to fit the whole scan.',
-    );
+    switcher.setAttribute('aria-label', 'Navigation mode: Orbit, Walk, Fly or Pan');
 
     // ── Speed slider (walk / fly only) ────────────────────────────────────
     const slider = el('input', {
@@ -465,6 +458,11 @@ export class NavBar {
     // Distinct row class (NOT `olv-cam-presets`) so the camera-preset specs'
     // `.olv-cam-presets` locators keep resolving to the single "Camera" row.
     const viewsRow = el('div', { className: 'olv-cam-views' });
+    // The six axis views live in the nav row's "More" disclosure, not in this
+    // panel: the panel starts closed, and the views must stay one click away
+    // with the ViewCube off. The palette lists them too.
+    const axisViews = el('div', { className: 'olv-cam-views olv-nav-more-views', ariaLabel: 'Axis views' });
+    axisViews.setAttribute('role', 'group');
     for (const view of STANDARD_VIEW_ORDER) {
       const label = STANDARD_VIEW_LABEL[view];
       const btn = el('button', {
@@ -475,9 +473,10 @@ export class NavBar {
       btn.append(el('span', { className: 'olv-cam-chip-label', text: label }));
       btn.addEventListener('click', () => {
         btn.blur();
+        this.setMoreOpen(false);
         callbacks.onStandardView(view);
       });
-      viewsRow.append(btn);
+      axisViews.append(btn);
     }
     // The orthographic toggle — a pressed-state chip (parallel projection on/
     // off). Distinct shape vocabulary (the only toggle in the row) so it reads
@@ -567,6 +566,7 @@ export class NavBar {
     if (typeof window !== 'undefined') {
       const onPointerDown = (e: Event): void => {
         const target = e.target as Element | null;
+        if (this._moreOpen && target?.closest?.('.olv-nav-more-wrap') == null) this.setMoreOpen(false);
         if (target?.closest?.('.olv-navbar') != null) return;
         yieldWhileDragging(true);
       };
@@ -610,16 +610,60 @@ export class NavBar {
       this._panelToggle.blur();
       this.toggleNavigationPanel();
     });
-    this._navRow = el('div', { className: 'olv-nav-row' }, [switcher, this._panelToggle, this._speed]);
+    // "More": a disclosure holding the six axis views. Opened only by a click
+    // (never by navigation), closed by Escape, an outside press or a choice, and
+    // not persisted, so it never comes back open on its own.
+    this._moreToggle = el('button', {
+      className: 'olv-nav-more',
+      type: 'button',
+      text: 'More',
+      title: 'More views: Top, Bottom, Front, Back, Left and Right',
+      ariaLabel: 'More views',
+    });
+    this._moreToggle.setAttribute('aria-expanded', 'false');
+    this._moreToggle.setAttribute('aria-haspopup', 'true');
+    this._moreToggle.addEventListener('click', () => this.setMoreOpen(!this._moreOpen));
+    this._moreMenu = el('div', { className: 'olv-nav-more-menu olv-hidden' }, [axisViews]);
+    this._moreMenu.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      this.setMoreOpen(false);
+      this._moreToggle.focus();
+    });
+    const more = el('div', { className: 'olv-nav-more-wrap' }, [this._moreToggle, this._moreMenu]);
+    this._navRow = el('div', { className: 'olv-nav-row' }, [switcher, resetBtn, more, this._panelToggle, this._speed]);
     this.element = el('div', { className: 'olv-navbar' }, [this._hud, this._navRow]);
+    // Layout clearance for the bottom toast lane: how far above the viewport's
+    // bottom edge the mode row's top sits, plus a gap, published as
+    // --olv-nav-clear so a toast (e.g. "Terrain scan ready… Analyse terrain")
+    // is lifted clear of the row instead of sitting on it. 0 while the bar is
+    // hidden (empty screen, phones). The observer is released by dispose().
+    if (typeof ResizeObserver === 'function' && typeof document !== 'undefined' && document.documentElement) {
+      const publish = (): void => {
+        const r = this._navRow.getBoundingClientRect();
+        const clear = r.height > 0 ? Math.max(0, Math.round(window.innerHeight - r.top + NAV_TOAST_GAP_PX)) : 0;
+        document.documentElement.style.setProperty('--olv-nav-clear', `${clear}px`);
+      };
+      const ro = new ResizeObserver(publish);
+      ro.observe(this._navRow);
+      window.addEventListener('resize', publish);
+      // The bar rises in with a transform; re-measure once it has landed.
+      this.element.addEventListener('animationend', publish);
+      this.element.addEventListener('transitionend', publish);
+      this._teardown.add(() => {
+        ro.disconnect();
+        window.removeEventListener('resize', publish);
+        this.element.removeEventListener('animationend', publish);
+        this.element.removeEventListener('transitionend', publish);
+      });
+    }
 
-    this.prompt = el('div', { className: 'olv-nav-prompt' }, [
-      el('span', { text: 'Click the scan to look around' }),
-      // A click releases the cursor as well as taking it (NavController.
-      // _handleCanvasClick), which is the only mouse-driven way back to the
-      // dock while the pointer is locked. Both ways out are named here.
-      el('span', { className: 'olv-nav-prompt-sub', text: 'WASD to move · Esc or click to release' }),
-    ]);
+    this._promptMain = el('span', { text: PROMPT_LOOK });
+    // A click releases the cursor as well as taking it (NavController.
+    // _handleCanvasClick), which is the only mouse-driven way back to the
+    // dock while the pointer is locked. Both ways out are named here.
+    this._promptSub = el('span', { className: 'olv-nav-prompt-sub', text: PROMPT_LOOK_SUB });
+    this.prompt = el('div', { className: 'olv-nav-prompt' }, [this._promptMain, this._promptSub]);
 
     // ── Touch-gesture hint (phones) ───────────────────────────────────────
     const touchDismiss = el('button', {
@@ -629,10 +673,8 @@ export class NavBar {
       tip: 'Dismiss this hint.',
     });
     touchDismiss.addEventListener('click', () => this.hideTouchHint());
-    this.touchHint = el('div', { className: 'olv-touch-hint' }, [
-      el('span', { text: 'Drag to rotate · Pinch to zoom · Two fingers to pan' }),
-      touchDismiss,
-    ]);
+    this._touchHintText = el('span', { text: TOUCH_HINT_TEXT });
+    this.touchHint = el('div', { className: 'olv-touch-hint' }, [this._touchHintText, touchDismiss]);
 
     this._render();
   }
@@ -642,11 +684,36 @@ export class NavBar {
    * hidden on larger screens), then let it fade away on its own.
    */
   flashTouchHint(): void {
+    this.touchHint.classList.remove('olv-first-hint');
+    this._touchHintText.textContent = TOUCH_HINT_TEXT;
     this.touchHint.classList.add('olv-visible');
     // One transient card at a time on a phone; the timer starts once shown.
     appTransientLane().claim(this.touchHint, () => {
       if (this._touchTimer !== null) clearTimeout(this._touchTimer);
       this._touchTimer = window.setTimeout(() => this.hideTouchHint(), TOUCH_HINT_MS);
+    }, {
+      onBack: () => {
+        if (this._touchTimer !== null) clearTimeout(this._touchTimer);
+        this._touchTimer = null;
+      },
+    });
+  }
+
+  /**
+   * The one-time desktop hint after the first scan opens: drag, scroll and
+   * double-click, on the touch hint's card and lane. Shown once ever: the
+   * flag is stored when it is shown, so neither a dismissal nor the next scan
+   * brings it back. It yields after the first drag on the scan like the touch
+   * hint, and leaves on its own after a while.
+   */
+  flashFirstUseHint(): void {
+    if (storageGet(FIRST_USE_HINT_KEY) !== null) return;
+    storageSet(FIRST_USE_HINT_KEY, '1');
+    this._touchHintText.textContent = FIRST_USE_HINT_TEXT;
+    this.touchHint.classList.add('olv-first-hint', 'olv-visible');
+    appTransientLane().claim(this.touchHint, () => {
+      if (this._touchTimer !== null) clearTimeout(this._touchTimer);
+      this._touchTimer = window.setTimeout(() => this.hideTouchHint(), FIRST_USE_HINT_MS);
     }, {
       onBack: () => {
         if (this._touchTimer !== null) clearTimeout(this._touchTimer);
@@ -676,8 +743,20 @@ export class NavBar {
       clearTimeout(this._touchYieldTimer);
       this._touchYieldTimer = null;
     }
-    this.touchHint.classList.remove('olv-visible');
+    this.touchHint.classList.remove('olv-visible', 'olv-first-hint');
     appTransientLane().release(this.touchHint);
+  }
+
+  /** Open or close the "More" axis-view disclosure. Never persisted. */
+  setMoreOpen(open: boolean): void {
+    this._moreOpen = open;
+    this._moreMenu.classList.toggle('olv-hidden', !open);
+    this._moreToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  /** Whether the "More" disclosure is open. */
+  isMoreOpen(): boolean {
+    return this._moreOpen;
   }
 
   /** Reflect the current navigation mode (no callback fired). */
@@ -877,11 +956,14 @@ export class NavBar {
     this._legendToggle.title = `${legendLabel} (H)`;
     this._legendToggle.setAttribute('aria-label', legendLabel);
     this._legendToggle.setAttribute('aria-expanded', this._helpPinned ? 'true' : 'false');
-    // The prompt appears only when navigating without the cursor captured —
-    // and never while the Measure tool owns clicks.
-    this.prompt.classList.toggle(
-      'olv-visible',
-      navigating && !this._locked && !this._measuring,
-    );
+    // The prompt appears when navigating without the cursor captured. While a
+    // modal tool (measure, inspect, annotate) owns clicks it carries the
+    // hold-Space tip instead, in a quieter form at the bottom of the stage.
+    const look = navigating && !this._locked && !this._measuring;
+    this.prompt.classList.toggle('olv-nav-prompt-tool', this._measuring);
+    this._promptMain.textContent = this._measuring ? PROMPT_TOOL : PROMPT_LOOK;
+    this._promptSub.textContent = this._measuring ? '' : PROMPT_LOOK_SUB;
+    this._promptSub.classList.toggle('olv-hidden', this._measuring);
+    this.prompt.classList.toggle('olv-visible', look || this._measuring);
   }
 }

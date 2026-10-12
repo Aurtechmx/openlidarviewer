@@ -98,18 +98,22 @@ test.describe('prefers-reduced-motion', () => {
 
   test('a camera preset lands without a long tween', async ({ page }) => {
     await loadReduced(page);
-    const chip = (name: string) =>
-      page.locator('.olv-cam-views .olv-cam-chip').filter({ hasText: new RegExp(`^${name}$`) });
+    // The axis views live in the nav row's "More" disclosure; a choice closes it.
+    const chip = async (name: string) => {
+      const more = page.locator('.olv-nav-more');
+      if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
+      return page.locator('.olv-nav-more-views .olv-cam-chip').filter({ hasText: new RegExp(`^${name}$`) });
+    };
     const toast = page.locator('.olv-lasso-toast');
     // Start from a known pose that differs from Top: the framed view after
     // open can already be at (or near) the Top pose on some viewports.
     const beforeFront = await page.evaluate(() => (window as unknown as { __olvPoses: number[][] }).__olvPoses.length);
-    await chip('Front').click();
+    await (await chip('Front')).click();
     await expect(toast).toHaveText('View · Front.');
     const from = await settledPose(page, beforeFront);
     const mark = await page.evaluate(() => (window as unknown as { __olvPoses: number[][] }).__olvPoses.length);
 
-    await chip('Top').click();
+    await (await chip('Top')).click();
     await expect(toast).toHaveText('View · Top.');
     // Wait on the loop having reported a pose that differs from Front (the
     // real signal the preset applied), then let it run on for well over a

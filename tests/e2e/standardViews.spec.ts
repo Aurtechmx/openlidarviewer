@@ -31,15 +31,22 @@ async function loadSample(page: Page): Promise<void> {
 /** The six standard views in their display order. */
 const VIEW_NAMES = ['Top', 'Bottom', 'Front', 'Back', 'Left', 'Right'] as const;
 
-/** The dedicated "Views" row (its own class, distinct from `.olv-cam-presets`). */
+/** The panel's "Views" row: the Ortho and Plan toggles (distinct from `.olv-cam-presets`). */
 function viewsRow(page: Page): Locator {
-  return page.locator('.olv-cam-views');
+  return page.locator('.olv-cam-views:not(.olv-nav-more-views)');
 }
 
-test.describe('standard views — NavBar "Views" row', () => {
-  test('the row mounts a chip for all six axis-aligned views', async ({ page }) => {
+/** The six axis views, in the nav row's "More" disclosure; opens it if closed. */
+async function axisViews(page: Page): Promise<Locator> {
+  const more = page.locator('.olv-nav-more');
+  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
+  return page.locator('.olv-nav-more-views');
+}
+
+test.describe('standard views — NavBar "More" disclosure', () => {
+  test('the disclosure mounts a chip for all six axis-aligned views', async ({ page }) => {
     await loadSample(page);
-    const row = viewsRow(page);
+    const row = await axisViews(page);
     await expect(row).toBeVisible();
     for (const name of VIEW_NAMES) {
       const chip = row.locator('.olv-cam-chip').filter({ hasText: new RegExp(`^${name}$`) });
@@ -57,9 +64,10 @@ test.describe('standard views — NavBar "Views" row', () => {
     });
 
     await loadSample(page);
-    const row = viewsRow(page);
     const toast = page.locator('.olv-lasso-toast');
     for (const name of VIEW_NAMES) {
+      // A choice closes the disclosure, so each view reopens it.
+      const row = await axisViews(page);
       await row.locator('.olv-cam-chip').filter({ hasText: new RegExp(`^${name}$`) }).click();
       await expect(toast).toHaveText(`View · ${name}.`);
     }
@@ -139,7 +147,7 @@ test.describe('plan view', () => {
     await plan.click();
     await expect(plan).toHaveAttribute('aria-pressed', 'true');
 
-    await row.locator('.olv-cam-chip').filter({ hasText: /^Front$/ }).click();
+    await (await axisViews(page)).locator('.olv-cam-chip').filter({ hasText: /^Front$/ }).click();
     await expect(plan).toHaveAttribute('aria-pressed', 'false');
   });
 });

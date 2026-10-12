@@ -94,9 +94,10 @@ describe('the NavBar', () => {
     const chips = root.byClass('olv-cam-chip');
     const expected = [
       ...CAMERA_PRESET_ORDER.map((n) => cameraPresetTitle(CAMERA_PRESET_LABEL[n])),
-      ...STANDARD_VIEW_ORDER.map((v) => standardViewTitle(STANDARD_VIEW_LABEL[v])),
       ACTION_TITLES['camera.orthographic'],
       ACTION_TITLES['camera.plan-view'],
+      // The six axis views sit in the nav row's "More" disclosure, after the panel.
+      ...STANDARD_VIEW_ORDER.map((v) => standardViewTitle(STANDARD_VIEW_LABEL[v])),
     ];
     expect(chips.map((c) => c.getAttribute('aria-label'))).toEqual(expected);
     for (const c of chips) {

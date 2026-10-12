@@ -624,6 +624,7 @@ export async function attachStaticCloud(
   deps.navBar.flashHelp();
   document.body.classList.add('olv-has-scan');
   if (deps.isPhone()) deps.navBar.flashTouchHint();
+  else deps.navBar.flashFirstUseHint();
 
   // Only a fresh project resets saved work; an additive open keeps the layer
   // that is still on screen. tests/additiveOpenKeepsWork.test.ts pins this.

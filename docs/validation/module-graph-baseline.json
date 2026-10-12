@@ -155,8 +155,8 @@
       ]
     },
     "src/render/Viewer.ts": {
-      "runtime": 75,
-      "typeOnly": 17,
+      "runtime": 74,
+      "typeOnly": 18,
       "dynamic": 1,
       "modules": [
         "src/io/coordinateBridge.ts",
@@ -227,7 +227,6 @@
         "src/render/terrainStreamSample.ts",
         "src/render/touchTapGate.ts",
         "src/render/touchTracker.ts",
-        "src/render/viewCubeMath.ts",
         "src/render/viewerRenderBootstrap.ts",
         "src/terrain/canonicalFrame.ts",
         "src/terrain/scanShape.ts",

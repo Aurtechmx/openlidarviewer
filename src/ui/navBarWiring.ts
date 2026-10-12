@@ -55,6 +55,12 @@ export interface NavBarWiring {
    * by a mode shortcut drops Plan's pending mode change.
    */
   readonly navModeChanged: (mode: NavMode, byKey?: boolean) => void;
+  /**
+   * Turn the camera to a ViewCube edge or corner direction (pivot → camera, in
+   * the scene basis) around the current pivot. Tells Plan View the camera has
+   * left the top view, so its chip cannot stay on.
+   */
+  readonly onOrientView: (dir: readonly [number, number, number]) => void;
   /** Show or hide the Navigation panel, as its button beside the mode triangle does. */
   readonly toggleNavigationPanel: () => void;
 }
@@ -109,8 +115,10 @@ export function createNavBarWiring(deps: NavBarWiringDeps): NavBarWiring {
       plan?.noteCameraPreset(name);
       deps.toast(`Camera · ${titleCase(name)} view.`);
     },
-    onStandardView: (view) => {
-      if (!deps.getViewer()?.setStandardView(view)) return;
+    onStandardView: (view, orientation) => {
+      const viewer = deps.getViewer();
+      const fired = orientation ? viewer?.orientView(orientation.dir) : viewer?.setStandardView(view);
+      if (!fired) return;
       plan?.noteStandardView(view);
       deps.toast(`View · ${titleCase(view)}.`);
     },
@@ -132,6 +140,10 @@ export function createNavBarWiring(deps: NavBarWiringDeps): NavBarWiring {
     navModeChanged: (mode, byKey) => {
       deps.getNavBar()?.setMode(mode);
       if (byKey) plan?.noteManualNavigation();
+    },
+    onOrientView: (dir) => {
+      if (!deps.getViewer()?.orientView(dir)) return;
+      plan?.noteCustomView();
     },
     toggleNavigationPanel: () => deps.getNavBar()?.toggleNavigationPanel(),
   };

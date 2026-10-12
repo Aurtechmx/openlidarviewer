@@ -55,11 +55,10 @@ describe('tablet touch targets', () => {
     expect(body).toMatch(/min-width: 48px; min-height: 48px/);
   });
 
-  it('gives Frame all 48 px and moves the neighbouring pads out', () => {
+  it('gives the mode segments, Frame all and More 44 px targets', () => {
     const body = mediaBody(CSS);
-    expect(body).toMatch(/\.olv-modes-triangle \.olv-mode-reset \{ width: 48px; height: 48px; \}/);
-    expect(body).toContain('.olv-mode-walk { left: -7px; }');
-    expect(body).toContain('.olv-mode-fly { right: -7px; }');
+    expect(body).toContain('.olv-modes-segmented .olv-mode { height: 44px; min-width: 44px; }');
+    expect(body).toContain('.olv-mode-reset, .olv-nav-more { width: 44px; height: 44px; }');
   });
 
   it('sizes the navigation card, empty state, palette and tour controls at 44 px', () => {
@@ -70,34 +69,20 @@ describe('tablet touch targets', () => {
     expect(body).toMatch(/min-height: 44px; min-width: 44px;/);
   });
 
-  it('keeps the five view cube buttons apart at every heading', () => {
-    const body = mediaBody(CSS);
-    const cube = Number(/\.olv-viewcube \{ width: (\d+)px !important; height: \1px !important; \}/.exec(body)?.[1]);
-    const face = Number(/\.olv-viewcube-rose button \{[^}]*?width: (\d+)px !important;[^}]*?height: \1px !important/.exec(body)?.[1]);
-    const top = Number(/\.olv-viewcube > button \{ width: (\d+)px !important; height: \1px !important; \}/.exec(body)?.[1]);
-    expect(body).toMatch(/\.olv-viewcube-rose button \{[^}]*border-radius: 50% !important/);
-    // Every face is a fixed-width circle, so a long label wraps and cannot widen the face.
-    expect(body).not.toMatch(/\.olv-viewcube-rose button \{[^}]*width: auto/);
-    expect(body).toMatch(/\.olv-viewcube-rose button \{[^}]*white-space: normal/);
-    // Geometry owned by viewCube.ts: the rose inset and how far a face sits outside it.
+  it('sizes the view cube for touch: 44 px edge and corner targets, a 44 px Home, the cube inside its box', () => {
+    // The cube owns its touch geometry (its lazy viewCube.css, plus script-set sizes),
+    // so the tablet stylesheet no longer carries cube rules.
+    expect(mediaBody(CSS)).not.toMatch(/\.olv-viewcube[^-]/);
     const src = readFileSync(fileURLToPath(new URL('../src/ui/viewCube.ts', import.meta.url)), 'utf8');
-    const inset = Number(/inset:(\d+)px/.exec(src)?.[1]);
-    const out = Number(/top:-(\d+)px;left:50%/.exec(src)?.[1]);
-    expect([cube, face, top, inset, out].every(Number.isFinite)).toBe(true);
-    const roseRadius = cube / 2 - inset;
-    // Face centre sits (roseRadius + out - face / 2) from the rose centre, along one of four axes.
-    const faceCentre = roseRadius + out - face / 2;
-    // Distance from the cube centre to the face centre does not change when the rose turns, and the
-    // faces are circles, so two circles of radius face / 2 and top / 2 stay clear when it is at least the sum.
-    expect(faceCentre).toBeGreaterThanOrEqual(face / 2 + top / 2);
-    // Neighbouring faces are 90 degrees apart on that ring.
-    expect(faceCentre * Math.SQRT2).toBeGreaterThanOrEqual(face);
-  });
-
-  it('moves the view cube right of the open left rail', () => {
-    const body = mediaBody(CSS);
-    expect(body).toContain("body:has(.olv-left-panels:not(.olv-rail-collapsed)) .olv-viewcube {");
-    expect(body).toContain('left: calc(var(--olv-rail-width) + 32px) !important;');
+    const m = /coarse: \{ box: (\d+), half: (\d+), hit: (\d+), home: (\d+) \}/.exec(src);
+    expect(m).not.toBeNull();
+    const [box, half, hit, home] = m!.slice(1).map(Number);
+    expect(hit).toBeGreaterThanOrEqual(44);
+    expect(home).toBeGreaterThanOrEqual(44);
+    // The cube's widest silhouette (a corner-on view) is its space diagonal.
+    expect(2 * half * Math.sqrt(3)).toBeLessThanOrEqual(box);
+    const css = readFileSync(fileURLToPath(new URL('../src/ui/viewCube.css', import.meta.url)), 'utf8');
+    expect(css).toMatch(/@media \(pointer:coarse\)\{[^\n]*\.olv-viewcube-home\{width:44px;height:44px\}/);
   });
 
   it('wraps the class visibility checkbox in a label that is a 44 px box under the query only', () => {

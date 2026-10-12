@@ -30,8 +30,10 @@ function fakeViewer(cloudCount = 1): CompassViewer & {
   const v = {
     count: cloudCount,
     clouds: () => ({ length: v.count }),
-    cameraHeadingDeg: () => 42,
+    cameraOrientation: () => ({ forward: [0, -1, 0] as const, up: [0, 0, 1] as const, upIsZ: true }),
     setStandardView: () => undefined,
+    orientView: () => true,
+    frameAll: () => undefined,
     onDrawnFrame: (listener: () => void) => {
       subscribed.add(listener);
       return () => subscribed.delete(listener);
@@ -47,11 +49,12 @@ interface Harness {
   stored(): string | null;
 }
 
-function harness(initialPref: string | null = null): Harness {
+function harness(initialPref: string | null = null, phone = false): Harness {
   let pref = initialPref;
   const platform: CompassPlatform = {
     readPref: () => pref,
     writePref: (value) => { pref = value; },
+    isPhone: () => phone,
   };
   return { platform, stored: () => pref };
 }
@@ -59,12 +62,13 @@ function harness(initialPref: string | null = null): Harness {
 /** A ViewCube stand-in whose load can be resolved by hand. */
 function fakeCube() {
   const state = { mounts: 0, updates: 0, disposes: 0, resolve: (): void => {} };
-  const loadCube = (): Promise<() => { update: () => void; dispose: () => void }> =>
+  const loadCube = (): Promise<() => { update: () => void; place: () => void; dispose: () => void }> =>
     new Promise((res) => {
       state.resolve = () => res(() => {
         state.mounts += 1;
         return {
           update: () => { state.updates += 1; },
+          place: () => {},
           dispose: () => { state.disposes += 1; },
         };
       });
@@ -90,10 +94,20 @@ function build(
 }
 
 describe('compass preference', () => {
-  it('is off by default and on when the stored preference says so', () => {
-    expect(build(null).c.isEnabled()).toBe(false);
+  it('is on by default and respects an explicit stored choice either way', () => {
+    expect(build(null).c.isEnabled()).toBe(true);
     expect(build('off').c.isEnabled()).toBe(false);
     expect(build('on').c.isEnabled()).toBe(true);
+  });
+
+  it('stays off by default on a phone, but a stored ON or ?viewcube=1 still wins', () => {
+    const phone = (pref: string | null, search = ''): boolean => {
+      const h = harness(pref, true);
+      return createCompassController({ host, urlParams: new URLSearchParams(search), platform: h.platform, loadCube: fakeCube().loadCube }).isEnabled();
+    };
+    expect(phone(null)).toBe(false);
+    expect(phone('on')).toBe(true);
+    expect(phone(null, '?viewcube=1')).toBe(true);
   });
 
   it('lets ?viewcube override the stored preference in both directions', () => {
@@ -234,7 +248,7 @@ describe('compass face routing (spec 1.4)', () => {
       onView,
       loadCube: () => Promise.resolve((o) => {
         captured = o as unknown as { onView: (v: never) => void };
-        return { update: () => {}, dispose: () => {} };
+        return { update: () => {}, place: () => {}, dispose: () => {} };
       }),
     });
     c.attachViewer(v);
@@ -254,5 +268,89 @@ describe('compass face routing (spec 1.4)', () => {
     const { click, viewerCalls } = await mountWith();
     click('left');
     expect(viewerCalls).toEqual(['left']);
+  });
+});
+
+describe('cube edge, corner and Home routing', () => {
+  type Captured = { onOrient: (t: unknown, o: { dir: readonly number[] }) => void; onHome: () => void; isGeographic: () => boolean };
+  async function mount(opts: { onOrient?: (t: unknown, o: { dir: readonly number[] }) => void; onHome?: () => void; geographic?: boolean; upIsZ?: boolean }) {
+    const h = harness('on');
+    let captured: Captured | null = null;
+    const calls: string[] = [];
+    const v = {
+      ...fakeViewer(1),
+      cameraOrientation: () => ({ forward: [0, -1, 0] as const, up: [0, 0, 1] as const, upIsZ: opts.upIsZ ?? true }),
+      orientView: (dir: readonly number[]) => { calls.push(`orient ${dir.join(',')}`); return true; },
+      frameAll: () => { calls.push('frameAll'); },
+    };
+    const c = createCompassController({
+      host,
+      urlParams: new URLSearchParams(''),
+      platform: h.platform,
+      onOrient: opts.onOrient as never,
+      onHome: opts.onHome,
+      cardinalsAreGeographic: () => opts.geographic ?? false,
+      loadCube: () => Promise.resolve((o) => {
+        captured = o as unknown as Captured;
+        return { update: () => {}, place: () => {}, dispose: () => {} };
+      }),
+    });
+    c.attachViewer(v);
+    await Promise.resolve(); await Promise.resolve();
+    return { cube: captured!, calls };
+  }
+
+  it('routes edges and corners through the supplied callback, and falls back to orientView', async () => {
+    const routed: string[] = [];
+    const a = await mount({ onOrient: (_t, o) => routed.push(o.dir.join(',')) });
+    a.cube.onOrient({}, { dir: [1, 0, 0] });
+    expect(routed).toEqual(['1,0,0']);
+    expect(a.calls).toEqual([]);
+    const b = await mount({});
+    b.cube.onOrient({}, { dir: [0, 1, 0] });
+    expect(b.calls).toEqual(['orient 0,1,0']);
+  });
+
+  it('Home calls the supplied Fit, else frameAll', async () => {
+    let homes = 0;
+    (await mount({ onHome: () => { homes += 1; } })).cube.onHome();
+    expect(homes).toBe(1);
+    const b = await mount({});
+    b.cube.onHome();
+    expect(b.calls).toEqual(['frameAll']);
+  });
+
+  it('shows cardinals only for a known CRS on a Z-up scene', async () => {
+    expect((await mount({ geographic: true })).cube.isGeographic()).toBe(true);
+    expect((await mount({ geographic: false })).cube.isGeographic()).toBe(false);
+    // A Y-up scan's horizontal axes are not a map grid, CRS or not.
+    expect((await mount({ geographic: true, upIsZ: false })).cube.isGeographic()).toBe(false);
+  });
+});
+
+describe('rapid open / close during the lazy load', () => {
+  it('leaves no widget and no subscription after open-close-open-close before the chunk lands', async () => {
+    const { c, cube } = build('on');
+    const v = fakeViewer(1);
+    c.attachViewer(v);
+    v.count = 0; c.refresh();
+    v.count = 1; c.refresh();
+    v.count = 0; c.refresh();
+    cube.state.resolve();
+    await Promise.resolve(); await Promise.resolve();
+    expect(cube.state.mounts).toBe(0);
+    expect(v.listeners()).toBe(0);
+  });
+
+  it('mounts exactly one widget with one subscription when the last state is open', async () => {
+    const { c, cube } = build('on');
+    const v = fakeViewer(1);
+    c.attachViewer(v);
+    v.count = 0; c.refresh();
+    v.count = 1; c.refresh();
+    cube.state.resolve();
+    await Promise.resolve(); await Promise.resolve();
+    expect(cube.state.mounts).toBe(1);
+    expect(v.listeners()).toBe(1);
   });
 });
