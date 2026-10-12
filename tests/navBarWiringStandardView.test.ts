@@ -165,7 +165,8 @@ describe('palette and shortcut routes while Plan View is on', () => {
   it('frame all, from the bar, the palette or the R key, leaves plan mode', async () => {
     const a = await inPlan();
     a.wiring.frameAll();
-    expect(a.calls).toEqual(['frameAll']);
+    // Plan mode hands the drag back to the mode before it (orbit here).
+    expect(a.calls).toEqual(['frameAll', 'mode:orbit']);
     expect(a.planStates.at(-1)).toBe(false);
 
     const b = await inPlan();
@@ -173,16 +174,17 @@ describe('palette and shortcut routes while Plan View is on', () => {
     expect(b.planStates.at(-1)).toBe(false);
 
     const c = await inPlan();
-    // The viewer already framed on R; the note only updates plan mode.
+    // The viewer already framed on R; the note moves no camera, it only ends
+    // plan mode and puts back the mode before it.
     c.wiring.noteFrameAll();
-    expect(c.calls).toEqual([]);
+    expect(c.calls).toEqual(['mode:orbit']);
     expect(c.planStates.at(-1)).toBe(false);
   });
 
   it('a camera preset shortcut tells plan mode', async () => {
     const { wiring, calls, planStates } = await inPlan();
     expect(wiring.applyCameraPreset('oblique')).toBe(true);
-    expect(calls).toEqual(['preset:oblique']);
+    expect(calls).toEqual(['preset:oblique', 'mode:orbit']);
     expect(planStates.at(-1)).toBe(false);
   });
 

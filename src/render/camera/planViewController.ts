@@ -274,10 +274,42 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
     if (stalled) deps.onStatus?.(PLAN_VIEW_UNFINISHED_MESSAGE);
   }
 
+  /**
+   * Put back the navigation mode plan mode replaced, after any camera move
+   * that ended it has landed (a mode change would stop the tween short). Only
+   * for a claim that was announced: an entry that never landed never took the
+   * mode, and the user may have chosen one since.
+   */
+  function restoreMode(v: PlanViewViewport, mode: NavMode): void {
+    const scheduledUnder = generation;
+    let rewaits = 0;
+    const settle = (): void => {
+      if (scheduledUnder !== generation) return;
+      if (v.cameraTweening === true) {
+        if (v.cameraTweenOutcome === 'cancelled' || rewaits > PLAN_VIEW_MAX_REWAITS) return;
+        rewaits += 1;
+        wait(settle);
+        return;
+      }
+      // The user took the camera before it arrived; the mode is theirs now.
+      if (rewaits > 0 && v.cameraTweenOutcome === 'cancelled') return;
+      if (v.navMode !== mode) v.setMode(mode);
+    };
+    if (v.cameraTweening === true) {
+      rewaits = 1;
+      wait(settle);
+    } else settle();
+  }
+
   /** Re-check plan mode's claim about the scene against what the scene now is. */
   function evaluate(orthographic: boolean): void {
     if (!state.active) return;
-    if (!planViewSurvives(orthographic, viewIsTop)) drop();
+    if (planViewSurvives(orthographic, viewIsTop)) return;
+    // Every exit leaves the mode the user had before plan mode, as the toggle does.
+    const mode = announced ? (state.restore?.mode ?? 'orbit') : null;
+    drop();
+    const v = deps.viewport();
+    if (mode && v) restoreMode(v, mode);
   }
 
   function leaveNow(v: PlanViewViewport): void {

@@ -18,7 +18,8 @@ import { contributeExportActions } from '../src/app/actions/exportActions';
 import { contributeWorkflowActions } from '../src/app/actions/workflowActions';
 import { contributeHelpActions } from '../src/app/actions/helpActions';
 import { WORKFLOW_RECORDER_ENABLED } from '../src/ui/WorkflowController';
-import { findDuplicateIds } from '../src/ui/actionRegistry';
+import { findDuplicateIds, rankActions } from '../src/ui/actionRegistry';
+import { loggedAction } from '../src/app/actionDefinitions';
 
 const toast = vi.fn();
 
@@ -47,6 +48,24 @@ describe('action contributors', () => {
     expect(planView.setOrthographic).toHaveBeenCalledWith(true);
     expect(viewer.setOrthographic).not.toHaveBeenCalled();
     expect(actions.every((a) => a.section === 'Camera')).toBe(true);
+  });
+
+  it('the projection command names perspective while the scene is orthographic, and "perspective" finds it', () => {
+    const viewer = { orthographic: false };
+    const planView = {
+      togglePlanView: vi.fn(), notePlanViewPreset: vi.fn(), toggleNavigationPanel: vi.fn(),
+      showStandardView: vi.fn(() => true), setOrthographic: vi.fn(() => true), frameAll: vi.fn(),
+    };
+    // Wrapped as the registry wraps it, so the live title survives the copy.
+    const actions = contributeCameraActions({ getViewer: () => viewer as never, planView, capture: vi.fn(), showLassoToast: toast }).map(loggedAction);
+    const projection = actions.find((a) => a.id === 'camera.orthographic')!;
+    expect(projection.title).toBe('Orthographic projection');
+    viewer.orthographic = true;
+    expect(projection.title).toBe('Switch to perspective projection');
+    expect(rankActions('perspective', actions)[0]?.action.id).toBe('camera.orthographic');
+    viewer.orthographic = false;
+    expect(projection.title).toBe('Orthographic projection');
+    expect(rankActions('perspective', actions)[0]?.action.id).toBe('camera.orthographic');
   });
 
   it('view actions route theme, compass, handedness and view states', () => {

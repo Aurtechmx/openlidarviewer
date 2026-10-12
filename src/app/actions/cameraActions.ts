@@ -19,7 +19,7 @@ import {
   type CameraPresetName,
   type StandardView,
 } from '../../render/camera/cameraPresets';
-import { cameraPresetTitle, standardViewTitle } from '../../ui/actionNames';
+import { cameraPresetTitle, standardViewTitle, PERSPECTIVE } from '../../ui/actionNames';
 import { actionTitle } from '../../ui/actionDescriptors';
 
 /** The plan-mode surface the palette needs; `navBarWiring` satisfies it. */
@@ -118,7 +118,13 @@ export function contributeCameraActions(deps: CameraActionDeps): Action[] {
   }
   actions.push({
     id: 'camera.orthographic',
-    title: actionTitle('camera.orthographic'),
+    // Names the projection the command switches to, so "perspective" reads as
+    // what it does while the scene is orthographic.
+    get title(): string {
+      let ortho = false;
+      try { ortho = deps.getViewer()?.orthographic === true; } catch { /* viewer not loaded yet */ }
+      return ortho ? PERSPECTIVE : actionTitle('camera.orthographic');
+    },
     section: 'Camera',
     hint: 'Parallel projection, so equal lengths measure equal on screen.',
     keywords: ['ortho', 'parallel', 'projection', 'perspective', '2d'],

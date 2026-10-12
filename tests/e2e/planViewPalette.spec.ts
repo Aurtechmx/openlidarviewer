@@ -35,6 +35,13 @@ async function runFromPalette(page: Page, title: string): Promise<void> {
   await expect(page.locator('.olv-palette')).toBeHidden();
 }
 
+/** The navigation mode the bar shows as pressed. */
+async function expectMode(page: Page, mode: 'orbit' | 'pan'): Promise<void> {
+  await expect(page.locator(`.olv-mode-${mode}`).first()).toHaveAttribute('aria-pressed', 'true');
+  const other = mode === 'orbit' ? 'pan' : 'orbit';
+  await expect(page.locator(`.olv-mode-${other}`).first()).toHaveAttribute('aria-pressed', 'false');
+}
+
 async function enterPlan(page: Page): Promise<void> {
   const { plan, ortho } = chips(page);
   await plan.click();
@@ -75,7 +82,8 @@ test.describe('plan view — command palette', () => {
     await enterPlan(page);
     const { plan, ortho } = chips(page);
 
-    await runFromPalette(page, 'Orthographic projection');
+    // While the scene is parallel, the command names what it switches to.
+    await runFromPalette(page, 'Switch to perspective projection');
     await expect(page.locator('.olv-lasso-toast')).toHaveText('Camera · orthographic off.');
     await expect(plan).toHaveAttribute('aria-pressed', 'false');
     await expect(ortho).toHaveAttribute('aria-pressed', 'false');
@@ -86,6 +94,40 @@ test.describe('plan view — command palette', () => {
     await expect(ortho).toHaveAttribute('aria-pressed', 'true');
     await expect(plan).toHaveAttribute('aria-pressed', 'false');
     expect(errors).toEqual([]);
+  });
+
+  // Every way out of Plan View hands the drag back to the mode it found.
+  for (const exit of ['the Plan chip', 'Front view from the palette', 'the palette projection toggle'] as const) {
+    test(`leaving through ${exit} restores Orbit`, async ({ page }) => {
+      const errors = collectErrors(page);
+      await loadSample(page);
+      await expectMode(page, 'orbit');
+      await enterPlan(page);
+      await expectMode(page, 'pan');
+
+      if (exit === 'the Plan chip') await chips(page).plan.click();
+      else if (exit === 'Front view from the palette') await runFromPalette(page, 'Front view (axis aligned)');
+      else await runFromPalette(page, 'Switch to perspective projection');
+
+      await expect(chips(page).plan).toHaveAttribute('aria-pressed', 'false');
+      await expectMode(page, 'orbit');
+      // Past any settle window, nothing flips it back to the hand tool.
+      await page.waitForTimeout(1_500);
+      await expectMode(page, 'orbit');
+      expect(errors).toEqual([]);
+    });
+  }
+
+  test('searching "perspective" finds the projection command', async ({ page }) => {
+    await loadSample(page);
+    await page.keyboard.press('ControlOrMeta+KeyK');
+    await page.locator('.olv-palette-input').fill('perspective');
+    await expect(page.locator('.olv-palette-row-title').first()).toHaveText('Orthographic projection');
+    await page.keyboard.press('Escape');
+    await enterPlan(page);
+    await page.keyboard.press('ControlOrMeta+KeyK');
+    await page.locator('.olv-palette-input').fill('perspective');
+    await expect(page.locator('.olv-palette-row-title').first()).toHaveText('Switch to perspective projection');
   });
 
   test('Front view while Plan View is still entering cancels it, and the chips match the viewer', async ({ page }) => {
@@ -104,7 +146,7 @@ test.describe('plan view — command palette', () => {
     // Whatever the projection ended as, the Ortho chip says it: toggling from
     // the palette must report the opposite of what the chip showed.
     const wasOrtho = (await ortho.getAttribute('aria-pressed')) === 'true';
-    await runFromPalette(page, 'Orthographic projection');
+    await runFromPalette(page, wasOrtho ? 'Switch to perspective projection' : 'Orthographic projection');
     await expect(page.locator('.olv-lasso-toast')).toHaveText(`Camera · orthographic ${wasOrtho ? 'off' : 'on'}.`);
     await expect(ortho).toHaveAttribute('aria-pressed', wasOrtho ? 'false' : 'true');
     await expect(plan).toHaveAttribute('aria-pressed', 'false');
