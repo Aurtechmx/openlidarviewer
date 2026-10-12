@@ -1,5 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
-import { activate, dropTinyPly } from './helpers';
+import { activate, dropTinyPly, useAdvancedInspector } from './helpers';
+
+// These specs drive the Inspector's Advanced sections.
+test.beforeEach(async ({ page }) => useAdvancedInspector(page));
 
 /**
  * Visuals Studio — mobile viewport contract.

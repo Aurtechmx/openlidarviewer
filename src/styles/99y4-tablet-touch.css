@@ -21,6 +21,10 @@
     display: inline-flex; align-items: center; justify-content: center;
   }
 
+  /* Dataset Intelligence terms are keyboard- and touch-focusable tooltip
+     triggers, so they carry the same 44 px floor as other targets. */
+  .olv-di-row-name[tabindex] { min-height: 44px; display: inline-flex; align-items: center; }
+
   /* Other controls outside the rail, dock and dialog containers. */
   .olv-navbar button, .olv-navbar select,
   .olv-empty button, .olv-empty summary,

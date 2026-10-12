@@ -12,7 +12,10 @@ import {
   sha256Hex,
   startJourney,
 } from './helpers/journey';
-import { denseGridPlyBytes, pinNavigationPanel, showWorkspaceMode, waitForCameraSettled } from '../helpers';
+import { denseGridPlyBytes, pinNavigationPanel, showWorkspaceMode, waitForCameraSettled, useAdvancedInspector } from '../helpers';
+
+// These specs drive the Inspector's Advanced sections.
+test.beforeEach(async ({ page }) => useAdvancedInspector(page));
 
 test.skip(() => test.info().project.use.hasTouch === true, 'desktop journey; the phone section is covered by referencePlane.spec.ts');
 

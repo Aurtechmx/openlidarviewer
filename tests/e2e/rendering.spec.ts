@@ -1,6 +1,9 @@
 import { test, expect, type Page } from '@playwright/test';
 import { isBenignPageError } from './pageErrors';
-import { dropTinyPly } from './helpers';
+import { dropTinyPly, useAdvancedInspector } from './helpers';
+
+// These specs drive the Inspector's Advanced sections.
+test.beforeEach(async ({ page }) => useAdvancedInspector(page));
 
 /**
  * Render-quality controls coverage. Toggling Eye Dome Lighting switches the

@@ -348,6 +348,9 @@ for (const width of [768, 800, 880, 900, 1024, 1280]) {
         return out;
       });
       expect(hits).toEqual([]);
+      // The transient scan-ready toast floats over whichever rail control sits
+      // at its height; wait it out, as the docked-key test above does.
+      await expect(page.locator('.olv-lasso-toast.olv-visible')).toHaveCount(0, { timeout: 10_000 });
       expect(await coveredControls(page)).toEqual([]);
     });
   }

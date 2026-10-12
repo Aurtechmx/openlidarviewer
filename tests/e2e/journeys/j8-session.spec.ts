@@ -8,7 +8,10 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { buildSurveyLas14, cameraPose, downloadBytes, dropBytes, openWith, startJourney } from './helpers/journey';
-import { openToolPage, pinNavigationPanel, reloadSettled, waitForCameraSettled } from '../helpers';
+import { openToolPage, pinNavigationPanel, reloadSettled, waitForCameraSettled, useAdvancedInspector } from '../helpers';
+
+// These specs drive the Inspector's Advanced sections.
+test.beforeEach(async ({ page }) => useAdvancedInspector(page));
 
 test.skip(() => test.info().project.use.hasTouch === true, 'desktop journey');
 

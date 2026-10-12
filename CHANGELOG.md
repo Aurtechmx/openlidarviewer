@@ -155,6 +155,10 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - On the map sheet, accuracy rows longer than the right column are shortened or wrapped, the sample note has its own row, and the readiness note moves below the rows.
 - Technical report section headings are no longer underlined, and the closing caveat lines up with the findings list above it.
 
+### Changed
+
+- The View Inspector opens in Basic detail, with a Basic | Advanced switch at the top. Basic keeps colour mode, quick appearance presets, point size, the essential rendering toggles, saved views, layers, the dataset summary, layer health and the coordinate system. Advanced adds the full Visuals Studio, detailed rendering and navigation settings, white balance, the reference plane, the elevation and intensity filters, provenance, the scan report, Detail and session stats. Sections stay mounted and keep their open state. While Basic hides an active filter, declared limitations or scan report warnings, a notice names it and shows the section in one click, and links that open a hidden section reveal it. The choice is stored with the other Inspector section states.
+
 ## [0.7.0-alpha.1] - 2026-09-18
 
 A development cut on the way to v0.7.0. It carries no DOI, and its test figures

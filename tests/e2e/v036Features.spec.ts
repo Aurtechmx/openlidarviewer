@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test';
-import { dropTinyPly } from './helpers';
+import { dropTinyPly, useAdvancedInspector } from './helpers';
 import { isBenignPageError } from './pageErrors';
+
+// These specs drive the Inspector's Advanced sections.
+test.beforeEach(async ({ page }) => useAdvancedInspector(page));
 
 /**
  * tests/e2e/v036Features.spec.ts
