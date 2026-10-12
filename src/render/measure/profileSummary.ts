@@ -424,6 +424,7 @@ function heightColumnToken(reference: VerticalReference): string {
 export function profileCsvRefusal(
   s: { readonly trust?: { readonly reasons: readonly string[] } },
   geographicCrs: boolean | undefined,
+  verticalRefused?: boolean,
 ): string | null {
   // Either source is enough. A summary without trust proves nothing about the
   // frame, so the active CRS is checked as well rather than trusting absence.
@@ -431,8 +432,10 @@ export function profileCsvRefusal(
   if (geographic) return GEOGRAPHIC_CRS_MEASURE_NOTICE;
   // A frame with no local vertical refuses the profile's elevations too; the
   // live grade carries that reason on the trust record.
-  const vertical = s.trust?.reasons.find((r) => r.includes(VERTICAL_NOT_AVAILABLE));
-  return vertical ?? null;
+  // The live flag counts as well as the trust record, as for the geographic case.
+  const fromTrust = s.trust?.reasons.find((r) => r.includes(VERTICAL_NOT_AVAILABLE));
+  if (fromTrust) return fromTrust;
+  return verticalRefused === true ? `Profile elevations ${VERTICAL_NOT_AVAILABLE}.` : null;
 }
 
 export function buildProfileCsv(

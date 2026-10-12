@@ -32,6 +32,8 @@ import { VERTICAL_NOT_AVAILABLE } from '../src/render/measure/types';
 import type { CrsInfo } from '../src/io/crs';
 import { spatialContextFrom } from '../src/geo/SpatialContext';
 import { gradeMeasurement } from '../src/render/measure/measurementTrust';
+import { aggregate as aggregateMeasurements } from '../src/render/measure/measurementChains';
+import { profileCsvRefusal } from '../src/render/measure/profileSummary';
 
 stubDownloadGlobals('blob:owner-frame');
 
@@ -348,5 +350,88 @@ describe('owner and active frames swapped across UTM, geographic, Web Mercator a
     await exportMeasurementIntegrityReport(w.deps);
     expect(w.reportCalls).toEqual([]);
     expect(w.refusals[0]).toMatch(/a\.las and b\.las/);
+  });
+});
+
+describe('a projected frame that refuses only the vertical (depth-positive-down)', () => {
+  const depthDown: CrsInfo = { ...utm, name: 'WGS 84 / UTM zone 12N + NAVD88 depth', verticalAxisDown: true } as CrsInfo;
+  const on = (id: string, kind: Measurement['kind'], points: Measurement['points']): Measurement =>
+    ({ id, name: id, kind, points, pickLayers: ['layer-a'], owner: { layerId: 'layer-a', frame: 'project' } });
+  const pts2: Measurement['points'] = [[0, 0, 0], [10, 0, 5]];
+  const ms: Measurement[] = [
+    on('dist', 'distance', pts2),
+    { ...on('area', 'area', [[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0]]), closed: true },
+    on('height', 'height', [[0, 0, 0], [0, 0, 5]]),
+    on('slope', 'slope', pts2),
+    on('profile', 'profile', pts2),
+  ];
+  const kept = ['dist', 'area'];
+  const withheld = ['height', 'slope', 'profile'];
+
+  test('the frame refuses vertical only', () => {
+    const c = spatialContextFrom(depthDown);
+    expect(c.verticalMetricRefused).toBe(true);
+    expect(c.horizontalMetricRefused).toBe(false);
+  });
+
+  test('CSV and GeoJSON keep distance and area, and withhold the rest', async () => {
+    const csv = world(depthDown, utm, { ms });
+    await exportMeasurementsFile('csv', csv.deps);
+    const [header, ...rows] = csv.files[0]!.text.trim().split('\n');
+    const cols = header!.split(',');
+    const figures = (r: string) => r.split(',').slice(cols.indexOf('vertices') + 1).some((c) => c !== '' && Number.isFinite(Number(c)));
+    for (const r of rows) {
+      const id = r.split(',')[0]!;
+      if (kept.includes(id)) expect(figures(r)).toBe(true);
+      if (withheld.includes(id)) expect(figures(r)).toBe(false);
+    }
+    const gj = world(depthDown, utm, { ms });
+    await exportMeasurementsFile('geojson', gj.deps);
+    for (const f of JSON.parse(gj.files[0]!.text).features as Array<{ properties: Record<string, unknown> }>) {
+      const id = f.properties.id as string;
+      expect(f.properties.not_available != null).toBe(withheld.includes(id));
+    }
+  });
+
+  test('the integrity report records null findings for the withheld kinds', async () => {
+    const w = world(depthDown, utm, { ms });
+    await exportMeasurementIntegrityReport(w.deps);
+    const byLabel = new Map((JSON.parse(w.files[0]!.text).findings as Array<{ label: string; value: number | null }>).map((f) => [f.label, f.value]));
+    for (const id of kept) expect(byLabel.get(id)).not.toBeNull();
+    for (const id of withheld) expect(byLabel.get(id)).toBeNull();
+  });
+
+  test('the PDF rows and the KML description follow the frame', async () => {
+    const c = await pdfInputs(world(depthDown, utm, { active: 'a', ms }));
+    const rows = rowsOf(c);
+    for (const r of rows) expect(/not available/.test(r.value)).toBe(withheld.includes(r.name));
+    const k = await kmlOf(world(depthDown, utm, { active: 'a', ms }));
+    if (k.text !== null) {
+      expect(k.text).toContain(VERTICAL_NOT_AVAILABLE);
+      expect(k.text).toMatch(/length_m=11\.18/);
+      expect(k.text).toMatch(/area_m2=100/);
+    }
+  });
+
+  test('the measurement chains refuse height, grade and volume but sum length and area', () => {
+    const scale = { verticalRefused: true };
+    for (const d of ['height', 'grade', 'volume-fill'] as const) {
+      expect(aggregateMeasurements(ms, 'sum', d, [0, 0, 1], 1, 1, scale).refusal).toBe(VERTICAL_NOT_AVAILABLE);
+    }
+    expect(aggregateMeasurements([ms[0]!], 'sum', 'length', [0, 0, 1], 1, 1, scale).refusal).toBeUndefined();
+    expect(aggregateMeasurements([ms[1]!], 'sum', 'area', [0, 0, 1], 1, 1, scale).refusal).toBeUndefined();
+  });
+
+  test('the profile CSV is refused from the live flag alone, and says why', () => {
+    const r = profileCsvRefusal({}, false, true);
+    expect(r).toContain(VERTICAL_NOT_AVAILABLE);
+    expect(r).not.toMatch(/degrees/i);
+    expect(profileCsvRefusal({ trust: { reasons: [] } }, false, true)).toContain(VERTICAL_NOT_AVAILABLE);
+    expect(profileCsvRefusal({}, false, false)).toBeNull();
+  });
+
+  test('every vertical-reading kind is refused, including volume', () => {
+    const rows = buildMeasurementRows([on('vol', 'volume', pts2), ...ms], 'metric', 1, [0, 0, 1], 1, true, false, true);
+    expect(rows.filter((r) => /not available/.test(r.value)).map((r) => r.name).sort()).toEqual(['height', 'profile', 'slope', 'vol']);
   });
 });

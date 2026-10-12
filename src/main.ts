@@ -1672,7 +1672,7 @@ void viewerLoaded.then(() => {
     // caveat. One boolean, one seam, so the two can never disagree.
     viewer.measure.setGeographicCrs(ctx.horizontalMetricRefused, ctx.verticalMetricRefused); // degrees, Web Mercator grid or geocentric; no local vertical
     viewer.measure.setProjectedCrs(ctx.kind === 'projected' && ctx.epsg != null); // grid-north bearing label
-    measureMount.setGeographicNotice(ctx.horizontalMetricRefused);
+    measureMount.setGeographicNotice(ctx.horizontalMetricRefused, ctx.verticalMetricRefused);
     // Colorbar legend — same context, `'horizontal-when-known'` policy: an
     // explicit vertical unit wins, else the horizontal one WHEN really declared
     // (an unknown CRS reports a pass-through 1 that must not read as metres).
