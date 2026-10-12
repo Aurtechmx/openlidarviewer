@@ -26,6 +26,7 @@ import { takePendingSessionRestore } from './pendingSessionRestore';
 export { clearPendingSessionRestore } from './pendingSessionRestore';
 import { rememberCloudFile } from '../io/sourceFiles';
 import { detectCopc } from '../io/copc/copcDetect';
+import { recogniseUnsupported, recognisedUnsupportedMessage } from '../io/recognisedUnsupported';
 import { formatProgress } from '../io/loadProgress';
 import { describeLoadError, LoadError } from '../io/loadErrors';
 import { LoadCancelledError } from '../io/loadFile';
@@ -287,6 +288,14 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     // times, sequentially, on the main thread. The range-source module for
     // COPC is part of the lazy COPC chunk.
     const headSlice = await file.slice(0, HEADER_PEEK_BYTES).arrayBuffer();
+    // A format OLV can name but not read (Autodesk ReCap RCS / RCP) stops here,
+    // before any loader, with what the file is and how to get a readable copy.
+    const recognised = recogniseUnsupported(headSlice, file.name);
+    if (recognised) {
+      deps.dropZone.setCancelHandler(null);
+      deps.dropZone.setError(recognisedUnsupportedMessage(recognised));
+      return;
+    }
     if (detectCopc(headSlice).isCopc) {
       await deps.openLocalCopc(file, controller.signal);
       return;

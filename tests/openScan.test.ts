@@ -379,3 +379,77 @@ describe('openScan reads the file prefix once', () => {
     expect(options.head).toBe(head);
   });
 });
+
+describe('openScan — recognised but unsupported formats', () => {
+  /** A synthetic head: the given ASCII prefix and zero filler. */
+  function head(prefix: string, size = 256): ArrayBuffer {
+    const u8 = new Uint8Array(size);
+    for (let i = 0; i < prefix.length; i++) u8[i] = prefix.charCodeAt(i);
+    return u8.buffer;
+  }
+
+  /** A File stand-in that records every slice it is asked for. */
+  function recordingFile(name: string, bytes: ArrayBuffer) {
+    const slices: Array<[number | undefined, number | undefined]> = [];
+    const file = {
+      name,
+      size: 5_000_000_000,
+      slice: (start?: number, end?: number) => {
+        slices.push([start, end]);
+        return { arrayBuffer: async () => bytes };
+      },
+      arrayBuffer: () => { throw new Error('whole-file read'); },
+      stream: () => { throw new Error('whole-file stream'); },
+    } as unknown as File;
+    return { file, slices };
+  }
+
+  const RCS_MESSAGE =
+    "Autodesk ReCap scan (.rcs) — not supported yet. OpenLiDARViewer can't read ReCap's RCS " +
+    'format yet. In Autodesk ReCap, export the scan as E57 or LAS, then open that file here.';
+  const RCP_MESSAGE =
+    "Autodesk ReCap project (.rcp) — not supported yet. This is a ReCap project file. It points " +
+    "to .rcs scans, which OpenLiDARViewer can't read yet. Export the scans from ReCap as E57 or LAS.";
+
+  it('an ADOCT file named .rcs shows the RCS message and runs no loader', async () => {
+    const { openLocalHeavyLas } = await import('../src/app/openLocalHeavyLas');
+    vi.mocked(openLocalHeavyLas).mockClear();
+    const { file, slices } = recordingFile('sample.rcs', head('ADOCT'));
+    const { deps, calls } = makeDeps();
+    await openScan(file, deps);
+    expect(calls.setError).toHaveBeenCalledTimes(1);
+    expect(calls.setError).toHaveBeenCalledWith(RCS_MESSAGE);
+    expect(calls.loadLocalSource).not.toHaveBeenCalled();
+    expect(calls.openLocalCopc).not.toHaveBeenCalled();
+    expect(openLocalHeavyLas).not.toHaveBeenCalled();
+    expect(calls.closeStreaming).not.toHaveBeenCalled();
+    // Only the one head slice is read; the file body is never touched.
+    expect(slices).toEqual([[0, 64 * 1024]]);
+    expect(calls.setLoading).toHaveBeenLastCalledWith(false);
+  });
+
+  it('an ADOCT file under another name is still recognised as RCS', async () => {
+    const { file } = recordingFile('capture.bin', head('ADOCT'));
+    const { deps, calls } = makeDeps();
+    await openScan(file, deps);
+    expect(calls.setError).toHaveBeenCalledWith(RCS_MESSAGE);
+    expect(calls.loadLocalSource).not.toHaveBeenCalled();
+  });
+
+  it('a .rcs file without the magic takes the normal path', async () => {
+    const { file } = recordingFile('sample.rcs', head('NOTRCS'));
+    const { deps, calls } = makeDeps();
+    await openScan(file, deps);
+    expect(calls.loadLocalSource).toHaveBeenCalledTimes(1);
+    expect(calls.setError).not.toHaveBeenCalledWith(RCS_MESSAGE);
+  });
+
+  it('a .rcp file shows the RCP message and runs no loader', async () => {
+    const { file, slices } = recordingFile('site.rcp', head('<?xml version="1.0"?>'));
+    const { deps, calls } = makeDeps();
+    await openScan(file, deps);
+    expect(calls.setError).toHaveBeenCalledWith(RCP_MESSAGE);
+    expect(calls.loadLocalSource).not.toHaveBeenCalled();
+    expect(slices).toHaveLength(1);
+  });
+});

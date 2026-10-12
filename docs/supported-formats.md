@@ -22,6 +22,15 @@ Format support is still evolving. This page separates what works today from what
 | `COPC` | Cloud-optimised LiDAR | `.copc.laz`; opened by progressive octree streaming: see [streaming.md](streaming.md) |
 | `EPT` | Entwine Point Tile | `ept.json` manifest + hierarchy + tiles; binary and laszip tile decode; local and remote: see [streaming.md](streaming.md) |
 
+## Recognised, not supported yet
+
+These formats are named when opened, so the message says what the file is and what to do. They are not read, and they are not counted as supported formats.
+
+| Format | How it is recognised | What to do |
+|---|---|---|
+| Autodesk ReCap scan (`.rcs`) | By content: the file starts with the bytes `ADOCT`, whatever its extension. A `.rcs` file without them gets the normal unknown-format handling. | In Autodesk ReCap, export the scan as E57 or LAS, then open that file. |
+| Autodesk ReCap project (`.rcp`) | By the `.rcp` extension only, unless the bytes are a format OLV reads. | The project points to `.rcs` scans. Export the scans from ReCap as E57 or LAS. |
+
 ## Current export targets
 
 `PLY`, `OBJ`, `XYZ`, and `CSV`, re-exported in real-world (global) coordinates, plus `PNG` snapshots of the current view (orthographic RGB, height map, intensity, classification, depth, normal, contour with legend customisation). Multi-page PDF technical reports (cover page + dataset summary + embedded image exports + annotations + measurements + technical notes; three built-in templates including a cloud-derived Scan QA report) ship as of v0.3.3. Working state (camera, render settings, colour mode, annotations, measurements, scan metadata) round-trips through the `.olvsession` JSON package.
