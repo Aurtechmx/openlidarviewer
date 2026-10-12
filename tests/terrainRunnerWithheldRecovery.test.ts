@@ -29,6 +29,7 @@ import type { CrsService } from '../src/geo/CrsService';
 import type { AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
 
 import { WITHHELD_GATHER_MAX_SOURCE_BYTES } from '../src/terrain/ground/withheldAwareTerrainGather';
+import { MAX_WHOLE_FILE_BYTES } from '../src/io/loadPlan';
 import { setTerrainCoreClientFactory } from '../src/terrain/worker/computeTerrainCoreAsync';
 import { computeTerrainCore, type TerrainCoreParams } from '../src/terrain/contour/analyseContours';
 
@@ -290,6 +291,28 @@ describe('an oversized source is refused before it is read', () => {
     expect(updates[0].dtm.withheldExcluded ?? null).toBeNull();
     expect(statuses.some((s) => s.includes(RECOVERED_STATUS_FRAGMENT))).toBe(false);
   }, 120_000);
+
+  it('the gather ceiling sits inside the whole-file cap', () => {
+    expect(WITHHELD_GATHER_MAX_SOURCE_BYTES).toBeLessThanOrEqual(MAX_WHOLE_FILE_BYTES);
+  });
+
+  it.each([MAX_WHOLE_FILE_BYTES + 1, 4_000_000_000, 4 * 1024 ** 3])(
+    'a %d-byte File over the whole-file cap is never read',
+    async (size) => {
+      const { file, read } = sizedFile(size);
+      const gatherSpy = vi.spyOn(gatherModule, 'gatherWithheldAwareTerrainCore');
+      const { runner, updates } = harness({
+        getActiveId: () => 'scan-1',
+        getRecoverySource: () => file,
+      });
+      await runner.run();
+      expect(read).not.toHaveBeenCalled();
+      expect(gatherSpy).not.toHaveBeenCalled();
+      expect(updates).toHaveLength(1);
+      expect(updates[0].dtm.withheldExcluded ?? null).toBeNull();
+    },
+    120_000,
+  );
 
   it('a File at the ceiling still takes the recovery path', async () => {
     const { file, read } = sizedFile(WITHHELD_GATHER_MAX_SOURCE_BYTES);

@@ -74,6 +74,7 @@ import {
 // Tiny pure constant (no heavy terrain code rides along) — the unit-aware
 // cell floor must agree with the metres-per-degree scale the pipeline uses.
 import { METRES_PER_DEGREE } from '../terrain/ground/horizontalScale';
+import { exceedsWholeFileCap } from '../io/loadPlan';
 // Honest vertical-unit label for the Contour Studio launch frame (feet vs metres).
 import { verticalUnitLabel } from '../units/units';
 // The in-memory Float32 precision policy the Contour Studio deliverables gate on.
@@ -377,7 +378,8 @@ async function recoverWithheldAwareCore(
     const { gatherWithheldAwareTerrainCore, WITHHELD_GATHER_MAX_SOURCE_BYTES } = await loadWithheldAwareTerrainGather();
     // The gather refuses `buffer.byteLength` over this ceiling; checking
     // `file.size` first refuses an oversized source before it is read at all.
-    if (signal.aborted || file.size > WITHHELD_GATHER_MAX_SOURCE_BYTES) return null;
+    // The whole-file cap holds here too, whatever the gather ceiling is set to.
+    if (signal.aborted || exceedsWholeFileCap(file.size) || file.size > WITHHELD_GATHER_MAX_SOURCE_BYTES) return null;
     // An abort during the read is caught by the gather, which refuses an
     // aborted signal before it decodes anything.
     const buffer = await file.arrayBuffer();
