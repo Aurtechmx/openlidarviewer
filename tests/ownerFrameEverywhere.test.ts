@@ -4,11 +4,10 @@
  * frame, permissions, classification epoch or dataset identity for a
  * measurement taken on another scan.
  *
- * The first block ports an external audit's six reproductions (all six failed
- * before this fix). Two were adapted to the rule the fix applies, and the
- * comment on each says how. The second block swaps the active and owning scans
- * across UTM, geographic, Web Mercator and geocentric frames for every
- * measurement output: CSV, GeoJSON, KML, integrity report and PDF.
+ * The first block covers one case per output that used to borrow the active
+ * scan's context. The second block swaps the active and owning scans across
+ * UTM, geographic, Web Mercator and geocentric frames for every measurement
+ * output: CSV, GeoJSON, KML, integrity report and PDF.
  */
 
 import { describe, test, expect } from 'vitest';
@@ -166,7 +165,7 @@ async function kmlOf(w: ReturnType<typeof world>): Promise<{ text: string | null
   return { text, error };
 }
 
-describe('audit reproductions (Oct 12): owner context is never borrowed', () => {
+describe('owner context is never borrowed', () => {
   test('non-active Web Mercator owner keeps the measurement refusal', async () => {
     const w = world(mercator);
     await exportMeasurementsFile('csv', w.deps);
@@ -183,10 +182,9 @@ describe('audit reproductions (Oct 12): owner context is never borrowed', () => 
     expect(w.reportCalls[0]?.[7]).toBe(3);
   });
 
-  // Adapted: the audit asserted that B's PDF prints A's measurement at 10.00 m.
-  // The rule applied is stricter: a scan-specific PDF holds only that scan's
-  // measurements, so B's report withholds A's 10 m measurement and states why
-  // (never 3.0480 m), and A's own report prints it at 10.00 m.
+  // A scan-specific PDF holds only that scan's measurements: B's report
+  // withholds A's 10 m measurement and states why (never 3.0480 m), and A's
+  // own report prints it at 10 m.
   test('PDF does not scale owner A measurements by active B feet', async () => {
     const onB = await pdfInputs(world(utm, foot, { active: 'b' }));
     expect(onB.measurements).toEqual([]);
@@ -195,8 +193,8 @@ describe('audit reproductions (Oct 12): owner context is never borrowed', () => 
     expect(rowsOf(onA)[0]!.value).toMatch(/^10\.00+ m$/);
   });
 
-  // Adapted: the row builder takes the frame's vertical permission as its own
-  // argument (SpatialContext.verticalMetricRefused) beside the horizontal one.
+  // The row builder takes the frame's vertical permission
+  // (SpatialContext.verticalMetricRefused) beside the horizontal one.
   test('geocentric refusal also withholds height: ECEF Z is not local elevation', () => {
     const ctx = spatialContextFrom(geocentric);
     expect(ctx.verticalMetricRefused).toBe(true);
