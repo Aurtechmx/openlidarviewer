@@ -208,6 +208,17 @@ describe('summariseE57Scans', () => {
     expect(pre.skippedRecordCount).toBe(40);
   });
 
+  it('a scan whose pose is refused is skipped like the loader skips it', () => {
+    const pre = summariseE57Scans([
+      scan('placed', 100, [...XYZ, ...RGB]),
+      { ...scan('unplaced', 40, XYZ), poseRefused: 'pose rotation quaternion is degenerate' },
+    ]);
+    expect(pre.attributes.hasColor).toBe(true);
+    expect(pre.mergeableScanCount).toBe(1);
+    expect(pre.recordCount).toBe(100);
+    expect(pre.skippedRecordCount).toBe(40);
+  });
+
   it('a file with no mergeable scan declares no attributes and no records', () => {
     const pre = summariseE57Scans([scan('spherical', 40, ['sphericalRange'])]);
     expect(pre.recordCount).toBe(0);
@@ -255,8 +266,11 @@ describe('the consumed-field predicate', () => {
     expect(e57FieldIsConsumed('rlms:amplitude')).toBe(false);
   });
 
-  it('accepts exactly the twelve fields the merge consumes', () => {
-    expect(E57_CONSUMED_FIELDS.size).toBe(12);
+  it('accepts exactly the fourteen fields the merge consumes', () => {
+    // Twelve point fields plus the two attribute-invalid flags the merge counts.
+    expect(E57_CONSUMED_FIELDS.size).toBe(14);
+    expect(e57FieldIsConsumed('isColorInvalid')).toBe(true);
+    expect(e57FieldIsConsumed('isIntensityInvalid')).toBe(true);
     for (const name of E57_CONSUMED_FIELDS) expect(e57FieldIsConsumed(name)).toBe(true);
   });
 });

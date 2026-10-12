@@ -44,6 +44,10 @@ export const E57_CONSUMED_FIELDS: ReadonlySet<string> = new Set([
   'cartesianY',
   'cartesianZ',
   'cartesianInvalidState',
+  // Read so points whose colour or intensity the file flags invalid can be
+  // counted and kept out of the intensity range (`loadE57`).
+  'isColorInvalid',
+  'isIntensityInvalid',
   'colorRed',
   'colorGreen',
   'colorBlue',
@@ -165,7 +169,12 @@ export function summariseE57Scans(
     columnBytes +=
       scan.recordCount * (consumed * E57_COLUMN_BYTES + e57StructuredBytesPerRecordForScan(scan, fileBytes));
     structuredGridBytes += e57StructuredGridBytes(scan, fileBytes);
-    if (names.bare.has('cartesianX') && names.bare.has('cartesianY') && names.bare.has('cartesianZ')) {
+    // A scan whose pose is refused is skipped by the loader, exactly as one
+    // without Cartesian X/Y/Z is.
+    if (
+      !scan.poseRefused &&
+      names.bare.has('cartesianX') && names.bare.has('cartesianY') && names.bare.has('cartesianZ')
+    ) {
       mergeable.push(names);
       recordCount += scan.recordCount;
     } else {

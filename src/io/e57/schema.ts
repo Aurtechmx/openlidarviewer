@@ -112,6 +112,12 @@ export interface E57Scan {
   prototype: E57Field[];
   pose: E57Pose | null;
   /**
+   * Why this scan's pose cannot be used, when it cannot: a rotation component
+   * written but not a finite number, or a degenerate quaternion. `pose` is
+   * then null, and the loader skips the scan rather than place it by a guess.
+   */
+  poseRefused?: string;
+  /**
    * Per-channel colour range used for 0–255 normalisation: the declared
    * `colorLimits`, else the colour fields' declared Integer bounds; null when
    * neither is available.
@@ -177,7 +183,7 @@ export interface E57DocumentSchema {
   sourceMetadata: E57SourceMetadata | null;
   /**
    * Non-fatal anomalies found while interpreting the XML (e.g. a pose
-   * quaternion that had to be normalised or replaced with the identity).
+   * quaternion that had to be normalised).
    * The loader carries these to the user as load warnings.
    */
   warnings: string[];
@@ -316,6 +322,24 @@ const QUAT_NORM_TOLERANCE = 1e-6;
 const QUAT_DEGENERATE_NORM = 1e-6;
 
 /**
+ * One rotation component. Absent (no element, or an empty one) → `missing`,
+ * the spec default. Present but not a finite number → null: a malformed value
+ * the caller must not replace with a default.
+ */
+function quatComponent(rot: XmlNode | undefined, name: string, missing: number): number | null {
+  const node = rot ? child(rot, name) : undefined;
+  if (!node || node.text.trim() === '') return missing;
+  const v = Number(node.text);
+  return Number.isFinite(v) ? v : null;
+}
+
+/** A pose as read: the placement, or why the scan cannot be placed. */
+interface PoseRead {
+  pose: E57Pose | null;
+  refused?: string;
+}
+
+/**
  * Read an optional pose (rotation quaternion + translation).
  *
  * Quaternion policy (documented so it can be argued with): the rotation
@@ -323,30 +347,39 @@ const QUAT_DEGENERATE_NORM = 1e-6;
  * SCALES the geometry, and a zero / non-finite one collapses it. So:
  *   - near-unit (within {@link QUAT_NORM_TOLERANCE}) → used as-is;
  *   - finite but non-unit → normalised, with a warning recording the norm;
- *   - degenerate (non-finite norm, or norm ≈ 0) → the identity rotation,
- *     with a warning — a possibly-misplaced but finite scan beats NaN
- *     geometry, and the warning keeps the substitution honest.
+ *   - a component written but not a finite number, or a degenerate
+ *     quaternion (non-finite norm, or norm ≈ 0) → REFUSED. Any rotation put
+ *     in its place would be a guess that places the scan wrongly, so the
+ *     scan is skipped by the loader, which reports why.
+ * An absent component takes its default (w = 1, x = y = z = 0). Translation
+ * components that are present but non-finite throw ({@link numTextStrict}).
  */
-function readPose(scan: XmlNode, scanName: string, warnings: string[]): E57Pose | null {
+function readPose(scan: XmlNode, scanName: string, warnings: string[]): PoseRead {
   const pose = child(scan, 'pose');
-  if (!pose) return null;
+  if (!pose) return { pose: null };
   const rot = child(pose, 'rotation');
   const tr = child(pose, 'translation');
-  let rotation: [number, number, number, number] = [
-    rot ? numText(child(rot, 'w'), 1) : 1,
-    rot ? numText(child(rot, 'x')) : 0,
-    rot ? numText(child(rot, 'y')) : 0,
-    rot ? numText(child(rot, 'z')) : 0,
+  const translation: [number, number, number] = [
+    numTextStrict(tr ? child(tr, 'x') : undefined, 'translation.x'),
+    numTextStrict(tr ? child(tr, 'y') : undefined, 'translation.y'),
+    numTextStrict(tr ? child(tr, 'z') : undefined, 'translation.z'),
   ];
+  const parts: number[] = [];
+  for (const [name, missing] of [['w', 1], ['x', 0], ['y', 0], ['z', 0]] as const) {
+    const v = quatComponent(rot, name, missing);
+    if (v === null) {
+      const raw = (rot && child(rot, name)?.text) ?? '';
+      const shown = raw.replace(/\s+/g, ' ').trim().slice(0, 40);
+      return { pose: null, refused: `pose rotation ${name} is not a finite number ("${shown}")` };
+    }
+    parts.push(v);
+  }
+  let rotation: [number, number, number, number] = [parts[0], parts[1], parts[2], parts[3]];
   const norm = Math.hypot(rotation[0], rotation[1], rotation[2], rotation[3]);
   if (!Number.isFinite(norm) || norm < QUAT_DEGENERATE_NORM) {
-    warnings.push(
-      `Scan "${scanName}": pose rotation quaternion is degenerate (zero or ` +
-        `non-finite) — using the identity rotation; this scan's placement ` +
-        `may be wrong.`,
-    );
-    rotation = [1, 0, 0, 0];
-  } else if (Math.abs(norm - 1) > QUAT_NORM_TOLERANCE) {
+    return { pose: null, refused: 'pose rotation quaternion is degenerate (zero or non-finite norm)' };
+  }
+  if (Math.abs(norm - 1) > QUAT_NORM_TOLERANCE) {
     warnings.push(
       `Scan "${scanName}": pose rotation quaternion has norm ` +
         `${norm.toFixed(6)} (expected 1) — normalised before use.`,
@@ -358,14 +391,7 @@ function readPose(scan: XmlNode, scanName: string, warnings: string[]): E57Pose 
       rotation[3] / norm,
     ];
   }
-  return {
-    rotation,
-    translation: [
-      numTextStrict(tr ? child(tr, 'x') : undefined, 'translation.x'),
-      numTextStrict(tr ? child(tr, 'y') : undefined, 'translation.y'),
-      numTextStrict(tr ? child(tr, 'z') : undefined, 'translation.z'),
-    ],
-  };
+  return { pose: { rotation, translation } };
 }
 
 /**
@@ -512,15 +538,22 @@ function readScan(scan: XmlNode, warnings: string[]): E57Scan {
   const name = child(scan, 'name')?.text ?? 'Scan';
 
   const prototype = proto.children.map(readField);
+  // Read in the order the fields were always validated, so the first error a
+  // malformed file reports is unchanged.
+  const recordCount = readRecordCount(points);
+  const fileOffset = attrNum(points, 'fileOffset', 0);
+  const indexBounds = readIndexBounds(scan);
+  const placed = readPose(scan, name, warnings);
   return {
     name,
     guid: child(scan, 'guid')?.text ?? '',
-    recordCount: readRecordCount(points),
-    fileOffset: attrNum(points, 'fileOffset', 0),
+    recordCount,
+    fileOffset,
     prototype,
-    indexBounds: readIndexBounds(scan),
+    indexBounds,
     structuredFields: readStructuredFields(prototype),
-    pose: readPose(scan, name, warnings),
+    pose: placed.pose,
+    ...(placed.refused ? { poseRefused: placed.refused } : {}),
     colorLimits: readColorLimits(child(scan, 'colorLimits'), prototype),
     intensityLimits: readRange(child(scan, 'intensityLimits'), 'intensityMinimum', 'intensityMaximum'),
   };

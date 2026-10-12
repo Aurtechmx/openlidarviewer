@@ -52,6 +52,7 @@ import type { CrsOriginInput } from '../science/crsOrigin';
 import { exportDigestLines, type ExportDigests } from '../science/exportDigestRecord';
 import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
 import type { PointCloud, SourceMetadata, DeclaredMetadataField } from '../model/PointCloud';
+import { intensityNormalisationLine } from '../model/PointCloud';
 import { sourcePositions } from '../model/pointFrames';
 
 /** The export formats this module produces. */
@@ -275,6 +276,7 @@ export function toXyz(cloud: PointCloud, delimiter = ' ', resolvedIsGeographic?:
   // column rather than writing values from the wrong points.
   const intensity =
     cloud.intensity?.length === n ? cloud.intensity : undefined;
+  const intensityNote = intensity ? intensityNormalisationLine(cloud.metadata) : null;
   const classification =
     cloud.classification?.length === n
       ? cloud.classification
@@ -284,7 +286,9 @@ export function toXyz(cloud: PointCloud, delimiter = ' ', resolvedIsGeographic?:
     'y',
     'z',
     ...(colors ? ['r', 'g', 'b'] : []),
-    ...(intensity ? ['intensity'] : []),
+    // An E57 intensity rescaled at load is named as normalised: it is a
+    // display mapping onto 0–65535, not the source value.
+    ...(intensity ? [intensityNote ? 'intensity_normalised' : 'intensity'] : []),
     ...(classification ? ['classification'] : []),
   ];
   // Honest provenance: when the classification column was DERIVED by the
@@ -306,6 +310,7 @@ export function toXyz(cloud: PointCloud, delimiter = ' ', resolvedIsGeographic?:
     const subset = subsetLine(cloud);
     if (subset) lines.push(`# ${subset}`);
     if (derivedNote) lines.push(derivedNote);
+    if (intensityNote) lines.push(`# ${intensityNote}`);
     for (const l of droppedChannelLines(cloud, { intensity: true, classification: true }, []))
       lines.push(`# ${l}`);
     if (omitted > 0) lines.push(`# ${omittedPointsLine(omitted)}`);

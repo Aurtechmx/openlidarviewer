@@ -15,6 +15,7 @@ import { truncationOf } from '../io/truncation';
 import { safeEntryName, singleLine } from '../export/safeText';
 import { classEditLine, classesEdited, pointBasisOfCloud, softwareLine, sourceFileLine } from '../export/exportProvenanceLines';
 import type { PointCloud } from '../model/PointCloud';
+import { intensityNormalisationLine } from '../model/PointCloud';
 import { sourcePositions } from '../model/pointFrames';
 import { classifyScanShape } from '../terrain/scanShape';
 import { isZUpFormat } from '../io/sniffFormat';
@@ -155,11 +156,14 @@ export function convertCloud(
 
   function run(): { file: ConvertedFile | null; report: ConvertReport } {
   const mode = opts.crsMode ?? 'keep';
+  const intensityLine = cloud.intensity ? intensityNormalisationLine(cloud.metadata) : null;
   const lines = [
     ...(opts.digests ? exportDigestLines(opts.digests) : []),
     ...(opts.displaySample ? [displaySampleLine(opts.displaySample)] : []),
     pointBasisFor(cloud, opts),
     ...(opts.scopeNote ? [opts.scopeNote] : []),
+    // XYZ output carries no intensity column, so it has nothing to qualify.
+    ...(intensityLine && opts.format !== 'xyz' ? [intensityLine] : []),
     classEditLine(
       opts.classesEdited ?? classesEdited({ provenance: cloud.classificationProvenance, editEpoch: 0 }),
       opts.omitClassification === true,

@@ -50,6 +50,57 @@ export interface SourceMetadata {
 }
 
 /**
+ * How one E57 scan's intensity reached the 0–65535 store at load:
+ *  - `declared-limits`: (v − minimum) / (maximum − minimum) · 65535, from the
+ *    scan's declared `intensityLimits`;
+ *  - `observed-unit-range`: v · 65535, because no usable limits were declared
+ *    and the largest valid value (`maximum`) was at most 1;
+ *  - `raw`: rounded and clamped only.
+ */
+export interface IntensityScanMapping {
+  readonly scan: string;
+  readonly rule: 'declared-limits' | 'observed-unit-range' | 'raw';
+  readonly minimum?: number;
+  readonly maximum?: number;
+}
+
+/**
+ * E57 intensity as loaded: a per-scan display normalisation onto 0–65535, not
+ * calibrated reflectance. The source values are not retained.
+ */
+export interface IntensityNormalisation {
+  /** True when at least one scan's values were rescaled (not only rounded and clamped). */
+  readonly rescaled: boolean;
+  readonly scans: readonly IntensityScanMapping[];
+}
+
+/** Scans listed by name in {@link intensityNormalisationLine} before the rest are counted. */
+const NORMALISATION_SCANS_LISTED = 4;
+
+function describeMapping(m: IntensityScanMapping): string {
+  const name = `"${m.scan.replace(/\s+/g, ' ').slice(0, 60)}"`;
+  if (m.rule === 'declared-limits') return `${name} declared limits ${m.minimum}..${m.maximum}`;
+  if (m.rule === 'observed-unit-range') return `${name} observed unit range, ×65535`;
+  return `${name} source values, rounded and clamped`;
+}
+
+/**
+ * One line stating that the intensity channel was normalised, for export
+ * headers and provenance. Null when nothing was rescaled, so a raw-intensity
+ * export stays as it was.
+ */
+export function intensityNormalisationLine(meta: CloudMetadata | undefined): string | null {
+  const n = meta?.intensityNormalisation;
+  if (!n || !n.rescaled) return null;
+  const listed = n.scans.slice(0, NORMALISATION_SCANS_LISTED).map(describeMapping);
+  const more = n.scans.length - listed.length;
+  return (
+    'intensity: normalised to 0–65535 per scan for display, not calibrated reflectance; ' +
+    `source values not retained (${listed.join('; ')}${more > 0 ? `; ${more} more scan(s)` : ''})`
+  );
+}
+
+/**
  * Provenance metadata recovered from a file header, when the format carries
  * it. Every field is optional — most scan files fill in only some, or none.
  */
@@ -144,6 +195,11 @@ export interface CloudMetadata {
    * cleanly-loaded one.
    */
   loadWarnings?: readonly string[];
+  /**
+   * E57 only: the per-scan rule that mapped intensity onto the 0–65535 store.
+   * Exports that write intensity name it as normalised from this.
+   */
+  intensityNormalisation?: IntensityNormalisation;
   /**
    * Set when the body holds fewer point records than the header declares: the
    * records read and the declared count. The cloud then covers part of the

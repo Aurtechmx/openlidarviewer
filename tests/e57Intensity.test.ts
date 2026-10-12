@@ -154,7 +154,8 @@ describe('loadE57 — unit-range float intensity (the binarization bug)', () => 
     );
     const cloud = await loadE57(new ArrayBuffer(0), 'sample.e57', { plan: READ_EVERY_RECORD });
     const rows = toCsv(cloud).trim().split('\n');
-    expect(rows[0]).toBe('x,y,z,intensity');
+    // Rescaled at load, so the column is named as normalised.
+    expect(rows[0]).toBe('x,y,z,intensity_normalised');
     const written = rows.slice(1).map((r) => Number(r.split(',')[3]));
     expect(written).toEqual([0, 31475, 65535]);
     // The binarized signature — at most {0, 1} — must be gone.
