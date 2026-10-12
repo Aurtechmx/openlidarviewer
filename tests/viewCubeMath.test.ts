@@ -228,32 +228,58 @@ describe('labels — no fabricated geography', () => {
 
 describe('placeCube — collision-aware top-right placement', () => {
   const host = { width: 1440, height: 800 };
+  const clearOf = (p: { left: number; top: number }, size: number, o: { left: number; top: number; right: number; bottom: number }, gap = 10): boolean =>
+    p.left >= o.right + gap || p.left + size <= o.left - gap || p.top >= o.bottom + gap || p.top + size <= o.top - gap;
+
   test('top-right of the stage when nothing is in the way', () => {
     expect(placeCube(host, 112, [])).toEqual({ left: 1440 - 14 - 112, top: 14 });
   });
   test('left of the expanded right rail, never over it', () => {
     const rail = { left: 1096, top: 0, right: 1426, bottom: 800 };
-    const p = placeCube(host, 112, [rail]);
+    const p = placeCube(host, 112, [rail])!;
     expect(p.left + 112).toBeLessThanOrEqual(rail.left - 10);
     expect(p.top).toBe(14);
   });
   test('below the header and a floating colour key, still at the right edge', () => {
-    const header = { left: 0, top: 0, right: 1440, bottom: 56, push: 'down' as const };
-    const key = { left: 1094, top: 64, right: 1374, bottom: 230, push: 'down' as const };
-    const p = placeCube(host, 112, [header, key]);
+    const header = { left: 0, top: 0, right: 1440, bottom: 56 };
+    const key = { left: 1094, top: 64, right: 1374, bottom: 230 };
+    const p = placeCube(host, 112, [header, key])!;
     expect(p.left).toBe(1440 - 14 - 112);
     expect(p.top).toBeGreaterThanOrEqual(230);
   });
-  test('a left push with no room left steps down instead', () => {
-    const narrow = placeCube({ width: 400, height: 800 }, 112, [{ left: 20, top: 0, right: 400, bottom: 100 }]);
-    expect(narrow.top).toBeGreaterThanOrEqual(100);
+  test('a covered corner with no room left steps down', () => {
+    const p = placeCube({ width: 400, height: 800 }, 112, [{ left: 20, top: 0, right: 400, bottom: 100 }])!;
+    expect(p.top).toBeGreaterThanOrEqual(100);
   });
   test('rail and header together: left of the rail, below the header', () => {
     const p = placeCube(host, 112, [
-      { left: 0, top: 0, right: 1440, bottom: 56, push: 'down' },
+      { left: 0, top: 0, right: 1440, bottom: 56 },
       { left: 1096, top: 66, right: 1426, bottom: 800 },
-    ]);
+    ])!;
     expect(p.left + 112).toBeLessThanOrEqual(1096 - 10);
     expect(p.top).toBeGreaterThanOrEqual(56);
+  });
+  test('above an active-tool pill when the stage is too short to sit beside or below it', () => {
+    const measure = { left: 340, top: 56, right: 1100, bottom: 250 };
+    const pill = { left: 430, top: 430, right: 620, bottom: 465 };
+    const sized = { width: 1024, height: 768 };
+    const p = placeCube(sized, 156, [measure, pill]);
+    expect(p).not.toBeNull();
+    expect(clearOf(p!, 156, measure)).toBe(true);
+    expect(clearOf(p!, 156, pill)).toBe(true);
+  });
+  test('returns null when nothing clear exists, so the cube is hidden rather than drawn over a control', () => {
+    const everything = { left: 0, top: 0, right: 400, bottom: 400 };
+    expect(placeCube({ width: 400, height: 400 }, 112, [everything])).toBeNull();
+  });
+  test('never returns a place that covers any obstacle', () => {
+    const boxes = [
+      { left: 1000, top: 40, right: 1420, bottom: 300 },
+      { left: 300, top: 600, right: 900, bottom: 760 },
+      { left: 0, top: 0, right: 1440, bottom: 40 },
+    ];
+    const p = placeCube(host, 120, boxes);
+    expect(p).not.toBeNull();
+    for (const b of boxes) expect(clearOf(p!, 120, b)).toBe(true);
   });
 });

@@ -328,42 +328,45 @@ export function cubeTargetName(target: CubeTarget, geographic: boolean): string 
 }
 
 /**
- * Where to put the cube in its host: the top-right corner of the free stage.
- * Each obstacle says which way it pushes the cube: a side column (the expanded
- * right rail, its tab) pushes it LEFT, so it never sits over the rail; a band
- * across the top (the header, a floating colour key) pushes it DOWN, so it
- * stays at the right edge below it. When a leftward step would leave the
- * stage, the cube steps down instead. Rects are in the host's coordinate
- * space. Returns the cube's top-left.
+ * An axis-aligned rectangle the cube must not cover, in the host's coordinate
+ * space.
  */
-export interface PlacementRect {
-  readonly left: number;
-  readonly top: number;
-  readonly right: number;
-  readonly bottom: number;
-  /** Which way this obstacle moves the cube. Defaults to `left`. */
-  readonly push?: 'left' | 'down';
-}
+export interface PlacementRect { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number }
 
+/**
+ * Where to put the cube in its host, or null when no clear place exists.
+ *
+ * The preferred place is the top-right corner. Every position built from the
+ * corner and from the edges of each obstacle (just left of, just right of,
+ * just below or just above it) is tried, and the clear, in-host position
+ * nearest the corner wins, so the cube moves as little as it must. Returning
+ * null means the cube should be hidden rather than drawn over a control: it
+ * never covers one.
+ */
 export function placeCube(
   host: { readonly width: number; readonly height: number },
   size: number | { readonly width: number; readonly height: number },
   obstacles: readonly PlacementRect[],
   margin = 14,
   gap = 10,
-): { readonly left: number; readonly top: number } {
+): { readonly left: number; readonly top: number } | null {
   const w = typeof size === 'number' ? size : size.width;
   const h = typeof size === 'number' ? size : size.height;
-  let left = host.width - margin - w;
-  let top = margin;
-  const hits = (l: number, t: number): PlacementRect | undefined =>
-    obstacles.find((o) => l < o.right + gap && l + w > o.left - gap && t < o.bottom + gap && t + h > o.top - gap);
-  for (let i = 0; i < 12; i++) {
-    const o = hits(left, top);
-    if (!o) break;
-    const stepLeft = o.left - gap - w;
-    if ((o.push ?? 'left') === 'left' && stepLeft >= margin) left = stepLeft;
-    else top = o.bottom + gap;
+  const cornerLeft = host.width - margin - w;
+  const xs = [cornerLeft, ...obstacles.flatMap((o) => [o.left - gap - w, o.right + gap])];
+  const ys = [margin, ...obstacles.flatMap((o) => [o.bottom + gap, o.top - gap - h])];
+  const clear = (l: number, t: number): boolean =>
+    obstacles.every((o) => !(l < o.right + gap && l + w > o.left - gap && t < o.bottom + gap && t + h > o.top - gap));
+  const inside = (l: number, t: number): boolean =>
+    l >= margin && t >= margin && l + w <= host.width - margin && t + h <= host.height - margin;
+  let best: { left: number; top: number } | null = null;
+  let bestD = Infinity;
+  for (const l of xs) {
+    for (const t of ys) {
+      if (!inside(l, t) || !clear(l, t)) continue;
+      const d = (l - cornerLeft) ** 2 + (t - margin) ** 2;
+      if (d < bestD) { bestD = d; best = { left: Math.round(l), top: Math.round(t) }; }
+    }
   }
-  return { left: Math.max(margin, left), top: Math.min(Math.max(margin, top), Math.max(margin, host.height - h - margin)) };
+  return best;
 }

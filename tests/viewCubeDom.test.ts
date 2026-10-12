@@ -99,7 +99,7 @@ async function mount(opts: {
     onView: (v, o) => calls.views.push([v, o]),
     onOrient: (t, o) => calls.orients.push([t, o]),
     onHome: () => { calls.homes += 1; },
-    obstacles: () => (opts.obstacles ?? []).map((el) => ({ el: el as unknown as Element, push: 'left' as const })),
+    obstacles: () => (opts.obstacles ?? []).map((el) => ({ el: el as unknown as Element })),
   });
   const root = host.children[0];
   const cube = root.all().find((e) => e.className === 'olv-viewcube-cube')!;

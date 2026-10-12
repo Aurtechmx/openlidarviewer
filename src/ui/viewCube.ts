@@ -52,9 +52,8 @@ export interface ViewCubeOptions {
   /** The Home control: refit the whole scan (the existing Frame all). */
   readonly onHome: () => void;
   /**
-   * Elements the cube must stay clear of, and which way each pushes it.
-   * Defaults to the expanded right rail and its tab (left), and the header and
-   * a floating colour key (down).
+   * Elements the cube must stay clear of. Defaults to the rails, the header,
+   * the colour key, the measure bar and the active-tool pill.
    */
   readonly obstacles?: () => readonly CubeObstacle[];
 }
@@ -62,7 +61,6 @@ export interface ViewCubeOptions {
 /** An element the cube keeps clear of, and the way it moves the cube. */
 export interface CubeObstacle {
   readonly el: Element;
-  readonly push: 'left' | 'down';
 }
 
 export interface ViewCubeHandle {
@@ -113,19 +111,25 @@ function homeIcon(): Element | null {
   return svg;
 }
 
-/** The default obstacles: rail and rail tab push left; header and floating colour key push down. */
+/** The default obstacles: everything the cube must not cover on the stage. */
 function defaultObstacles(): CubeObstacle[] {
   if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return [];
-  const all = (sel: string, push: CubeObstacle['push']): CubeObstacle[] =>
-    [...document.querySelectorAll(sel)].map((el) => ({ el, push }));
-  return [
-    ...all('.olv-right-rail:not(.olv-right-collapsed)', 'left'),
-    ...all('.olv-right-rail-tab', 'left'),
-    ...all('.olv-topbar', 'down'),
-    ...all('.olv-measure-bar', 'down'),
-    ...all('.olv-colorbar-floating', 'down'),
-  ];
+  return [...document.querySelectorAll(OBSTACLE_SELECTOR)].map((el) => ({ el }));
 }
+
+/** What the cube keeps clear of: the rails and their tabs, the header, the stage's floating cards, the tool dock, the navigation row, the measure bar and the active-tool pill. */
+const OBSTACLE_SELECTOR = [
+  '.olv-right-rail:not(.olv-right-collapsed)',
+  '.olv-right-rail-tab',
+  '.olv-left-panels:not(.olv-rail-collapsed)',
+  '.olv-topbar',
+  '.olv-colorbar-floating',
+  '.olv-measure-bar:not(.olv-hidden)',
+  '.olv-ati:not(.olv-hidden)',
+  '.olv-navbar',
+  '.olv-nav-prompt-tool',
+  '.olv-dock',
+].join(', ');
 
 function fmt(n: number): string {
   return (Math.round(n * 1000) / 1000).toString();
@@ -256,20 +260,25 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
     const h = host.getBoundingClientRect();
     if (h.width === 0 || h.height === 0) return;
     const rects: PlacementRect[] = [];
-    for (const { el, push } of obstacles()) {
+    for (const { el } of obstacles()) {
       const r = el.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) continue;
       // Only what actually sits over the stage counts.
       if (r.right <= h.left || r.left >= h.right || r.bottom <= h.top || r.top >= h.bottom) continue;
-      rects.push({ left: r.left - h.left, top: r.top - h.top, right: r.right - h.left, bottom: r.bottom - h.top, push });
+      rects.push({ left: r.left - h.left, top: r.top - h.top, right: r.right - h.left, bottom: r.bottom - h.top });
     }
     const p = placeCube({ width: h.width, height: h.height }, { width: geo.box, height }, rects);
-    const next = `left:${Math.round(p.left)}px;top:${Math.round(p.top)}px`;
+    // Nowhere clear to stand: hide the cube rather than draw it over a control.
+    // Its views stay in the More menu and the command palette.
+    const next = p === null ? 'hidden' : `left:${p.left}px;top:${p.top}px`;
     if (next === lastPlacement) return;
     lastPlacement = next;
-    root.style.left = `${Math.round(p.left)}px`;
-    root.style.top = `${Math.round(p.top)}px`;
-    root.style.right = 'auto';
+    root.style.display = p === null ? 'none' : '';
+    if (p !== null) {
+      root.style.left = `${p.left}px`;
+      root.style.top = `${p.top}px`;
+      root.style.right = 'auto';
+    }
   };
 
   // Re-place on stage resize, on rail resize, on the rail collapsing or
@@ -278,7 +287,8 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
   const cleanups: (() => void)[] = [];
   // Placement reads a few rects; every trigger below is already coalesced by
   // the browser (observers batch per frame), so it runs directly.
-  const schedule = (): void => place();
+  const schedules: (() => void)[] = [];
+  const schedule = (): void => { place(); for (const f of schedules) f(); };
   if (typeof ResizeObserver === 'function') {
     const ro = new ResizeObserver(schedule);
     ro.observe(opts.host);
@@ -289,17 +299,37 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
     // Obstacles come and go (the colour key floats only while the rail is
     // collapsed, and can mount after the cube): watch class flips and mounts
     // in the page, and re-place only when one touches an obstacle.
-    const OBSTACLE = '.olv-right-rail, .olv-right-rail-tab, .olv-topbar, .olv-colorbar, .olv-measure-bar';
-    const touches = (n: Node): boolean => n instanceof Element && (n.matches(OBSTACLE) || n.querySelector(OBSTACLE) !== null);
+    const touches = (n: Node): boolean => n instanceof Element && (n.matches(OBSTACLE_SELECTOR) || n.querySelector(OBSTACLE_SELECTOR) !== null);
     if (typeof MutationObserver === 'function' && document.body) {
+      // Class and style changes matter: the active-tool pill is seated by its
+      // inline style, and the rails and bars toggle by class.
       const mo = new MutationObserver((records) => {
         for (const r of records) {
-          if (touches(r.target) || [...r.addedNodes].some(touches)) { schedule(); return; }
+          if (touches(r.target) || [...r.addedNodes].some(touches) || [...r.removedNodes].some(touches)) { schedule(); return; }
         }
       });
-      mo.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
+      mo.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style'] });
       cleanups.push(() => mo.disconnect());
     }
+    // An obstacle that slides in (the active-tool pill rises, the measure bar
+    // drops) is measured mid-transition, so re-place when its motion ends, and
+    // once more after a short settle for anything that moved without an event.
+    const motionEnd = (e: Event): void => {
+      if (e.target instanceof Element && (e.target.matches(OBSTACLE_SELECTOR) || e.target.closest(OBSTACLE_SELECTOR))) schedule();
+    };
+    document.addEventListener('transitionend', motionEnd, true);
+    document.addEventListener('animationend', motionEnd, true);
+    cleanups.push(() => {
+      document.removeEventListener('transitionend', motionEnd, true);
+      document.removeEventListener('animationend', motionEnd, true);
+    });
+    let settle: ReturnType<typeof setTimeout> | null = null;
+    const settled = (): void => {
+      if (settle !== null) clearTimeout(settle);
+      settle = setTimeout(() => { settle = null; place(); }, 450);
+    };
+    cleanups.push(() => { if (settle !== null) clearTimeout(settle); });
+    schedules.push(settled);
     const rail = document.querySelector('.olv-right-rail');
     if (rail) {
       rail.addEventListener('transitionend', schedule);
