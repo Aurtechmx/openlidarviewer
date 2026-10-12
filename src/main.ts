@@ -2783,7 +2783,7 @@ void viewerLoaded.then(() => {
   viewer.measure.setOnChange(refreshMeasurePanel);
   // Profile kind is a cross-section workflow: hide the Analyse panel (its state
   // saved for the workbench close to restore) and bring Measurements forward.
-  viewer.measure.setOnKindChange((kind) => {
+  viewer.measure.setOnKindChange((kind) => { clipFlow.dismissCard(); // a new kind starts a new measurement
     if (kind === 'profile') {
       analyseProfileVisibility.hideForProfile();
       measureMount.showDesired();
