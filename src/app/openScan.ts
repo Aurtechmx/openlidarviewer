@@ -369,7 +369,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       file,
       {
         onProgress: (u) => {
-          if (controller.signal.aborted) return;
+          if (controller.signal.aborted === true) return;
           if (!deps.dropZone.setStageProgress) {
             deps.dropZone.setProgress(formatProgress(u), u.fraction);
             return;
