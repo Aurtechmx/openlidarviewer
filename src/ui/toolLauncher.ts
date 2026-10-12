@@ -82,49 +82,77 @@ export function createToolLauncher(deps: ToolLauncherDeps): ToolLauncher {
   const element = el('section', { className: 'olv-tool-launcher' }, [head, rows, counts]);
   element.setAttribute('aria-label', 'Tools');
 
-  const bound: Array<{ node: HTMLElement; fn: () => void }> = [];
+  /**
+   * One row per tool id, kept across refreshes. A refresh rewrites a row's
+   * text and gate in place, so an unchanged row keeps its DOM identity, its
+   * focus and hover, and its one click listener. The listener reads the row's
+   * current action, so it never needs rebinding.
+   */
+  interface Row { button: HTMLButtonElement; title: HTMLElement; hint: HTMLElement; key: HTMLElement; action: Action; fn: () => void }
+  const byId = new Map<string, Row>();
   let disposed = false;
+  /** Bumped per refresh; an async registry read applies only if still current. */
+  let generation = 0;
 
-  function clearRows(): void {
-    for (const { node, fn } of bound) node.removeEventListener('click', fn);
-    bound.length = 0;
-    rows.replaceChildren();
+  function makeRow(action: Action): Row {
+    const button = el('button', { className: 'olv-tl-row', type: 'button' }) as HTMLButtonElement;
+    button.title = ''; // the host's gate reason, written by render()
+    const title = el('span', { className: 'olv-tl-title' });
+    const hint = el('span', { className: 'olv-tl-hint' });
+    const key = el('kbd', { className: 'olv-tl-key' });
+    button.append(title, hint, key);
+    const row: Row = { button, title, hint, key, action, fn: () => {} };
+    row.fn = (): void => {
+      if (button.disabled) return;
+      if (!deps.resume?.(row.action.id)) row.action.run();
+    };
+    button.addEventListener('click', row.fn);
+    return row;
   }
 
-  function addRow(action: Action, reason: string | null): void {
-    const chip = action.keys ? el('kbd', { className: 'olv-tl-key', text: action.keys }) : null;
-    const button = el('button', { className: 'olv-tl-row', type: 'button' }) as HTMLButtonElement;
-    button.append(el('span', { className: 'olv-tl-title', text: action.title }));
-    if (action.hint) button.append(el('span', { className: 'olv-tl-hint', text: action.hint }));
-    if (chip) button.append(chip);
-    if (reason) {
-      button.disabled = true;
-      button.title = reason;
-    } else {
-      const fn = (): void => { if (!deps.resume?.(action.id)) action.run(); };
-      button.addEventListener('click', fn);
-      bound.push({ node: button, fn });
-    }
-    rows.append(button);
+  function setText(node: HTMLElement, text: string): void {
+    if (node.textContent !== text) node.textContent = text;
+    node.hidden = !text;
   }
 
   function render(actions: readonly Action[]): void {
     if (disposed) return;
     const reason = deps.disabledReason?.() ?? null;
-    clearRows();
+    const order: HTMLElement[] = [];
+    const seen = new Set<string>();
     for (const id of TOOL_IDS) {
       const action = actions.find((a) => a.id === id);
-      if (action) addRow(action, reason);
+      if (!action) continue;
+      seen.add(id);
+      let row = byId.get(id);
+      if (!row) { row = makeRow(action); byId.set(id, row); }
+      row.action = action;
+      setText(row.title, action.title);
+      setText(row.hint, action.hint ?? '');
+      setText(row.key, action.keys ?? '');
+      row.button.disabled = !!reason;
+      row.button.title = reason ?? '';
+      order.push(row.button);
     }
+    for (const [id, row] of byId) {
+      if (seen.has(id)) continue;
+      row.button.removeEventListener('click', row.fn);
+      row.button.remove();
+      byId.delete(id);
+    }
+    // Re-append only when the order changed, so a focused row is never moved.
+    const current = Array.from(rows.children);
+    if (current.length !== order.length || order.some((n, i) => current[i] !== n)) rows.replaceChildren(...order);
     const c = deps.counts();
     countsValue.textContent = `${plural(c.measurements, 'measurement')} · ${plural(c.annotations, 'annotation')}`;
   }
 
   function refresh(): void {
     if (disposed) return;
+    const gen = ++generation;
     const actions = deps.getActions();
     if (Array.isArray(actions)) render(actions as readonly Action[]);
-    else void Promise.resolve(actions).then(render);
+    else void Promise.resolve(actions).then((list) => { if (gen === generation) render(list); });
   }
 
   refresh();
@@ -134,7 +162,10 @@ export function createToolLauncher(deps: ToolLauncherDeps): ToolLauncher {
     refresh,
     dispose: () => {
       disposed = true;
-      clearRows();
+      generation++;
+      for (const row of byId.values()) row.button.removeEventListener('click', row.fn);
+      byId.clear();
+      rows.replaceChildren();
     },
   };
 }

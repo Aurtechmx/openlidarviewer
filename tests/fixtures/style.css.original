@@ -12584,6 +12584,72 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
     left: calc(var(--olv-rail-width) + 32px) !important;
   }
 }
+/* Active-tool pill: the pointer tool that owns the clicks, its Finish and
+   Cancel, and persistent display state as a quieter chip. Bottom-centre, just
+   above the navigation widget (app/activeToolStatus.ts measures it). */
+.olv-ati {
+  position: absolute; z-index: var(--z-hud);
+  bottom: var(--space-xl);
+  left: calc(50% + (var(--olv-rail-width, 0px) - var(--olv-right-rail-width, 0px)) / 2);
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: var(--space-sm);
+  max-width: calc(100% - 2 * var(--space-xl)); box-sizing: border-box;
+  padding: var(--space-2xs) var(--space-2xs) var(--space-2xs) var(--space-lg);
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-pill); box-shadow: var(--shadow-floating);
+  font-size: var(--text-xs); color: var(--text);
+  pointer-events: auto; white-space: nowrap;
+}
+.olv-ati.olv-hidden, .olv-ati[hidden] { display: none; }
+.olv-ati-status { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; font-weight: 600; }
+.olv-ati-status::before {
+  content: ''; flex: none; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.olv-ati-label { overflow: hidden; text-overflow: ellipsis; }
+.olv-ati-chips { display: flex; gap: var(--space-xs); }
+.olv-ati-chips[hidden] { display: none; }
+.olv-ati-chip {
+  font-size: var(--text-2xs); color: var(--text-dim);
+  border: 1px dashed var(--hairline-strong); border-radius: var(--radius-pill);
+  padding: 0 var(--space-sm);
+}
+.olv-ati-btn {
+  display: inline-flex; align-items: center; gap: var(--space-xs);
+  min-height: var(--control-h); padding: 0 var(--space-md);
+  font: inherit; color: var(--text); cursor: pointer;
+  background: none; border: 1px solid var(--hairline-strong); border-radius: var(--radius-pill);
+}
+.olv-ati-btn[hidden], .olv-ati-btn.olv-hidden { display: none; }
+.olv-ati-finish { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.olv-ati-btn:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.olv-ati-btn:active { transform: var(--btn-press); }
+@media (hover: hover) {
+  .olv-ati-cancel:hover { border-color: var(--accent); }
+}
+.olv-ati-key {
+  font-family: var(--mono, ui-monospace, monospace); font-size: var(--text-2xs); color: var(--text-dim);
+}
+/* The pill names the mode and holds Finish, so the tools' bars drop their own
+   badge and Finish and keep the step-by-step instruction: nothing twice. */
+body:has(.olv-ati:not(.olv-hidden)) :is(.olv-measure-badge, .olv-anno-hint-badge, .olv-measure-bar .olv-measure-finish) { display: none; }
+
+/* Touch: 44 px targets. The script seats the pill above the navigation
+   widget, the phone sheet or the dock; these offsets are the fallback. */
+@media (pointer: coarse) {
+  .olv-ati-btn { min-height: var(--target-touch); min-width: var(--target-touch); }
+  .olv-ati-key { display: none; }
+}
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .olv-ati {
+    left: 50%;
+    bottom: calc(var(--olv-sheet-peek, 96px) + var(--space-md) + env(safe-area-inset-bottom));
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .olv-ati { animation: olv-ati-in var(--dur-fast) var(--ease-standard); transition: bottom var(--dur-base) var(--ease-standard); }
+}
+@keyframes olv-ati-in { from { opacity: 0; transform: translate(-50%, 4px); } }
 /* ── Windows High Contrast / forced-colors ──────────────────────────────────
    Windows High Contrast replaces the author palette with a small system one.
    Backgrounds, borders and shadows are forced, `backdrop-filter` stops

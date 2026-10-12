@@ -37,7 +37,8 @@ describe('tablet touch targets', () => {
     const c = STYLE_ORDER.indexOf('99z-forced-colors.css');
     expect(a).toBeGreaterThanOrEqual(0);
     expect(b).toBe(a + 1);
-    expect(c).toBe(b + 1);
+    expect(c).toBeGreaterThan(b);
+    expect(c).toBe(STYLE_ORDER.length - 1);
   });
 
   it('keeps every sizing rule inside the query', () => {

@@ -119,4 +119,78 @@ describe('tool launcher', () => {
     h.refresh();
     expect(h.rows()).toHaveLength(0);
   });
+
+  it('a refresh keeps each unchanged row: same node, its focus, one listener', async () => {
+    const h = await make();
+    const before = h.rows();
+    before[1].focus();
+    for (let i = 0; i < 5; i++) h.refresh();
+    const after = h.rows();
+    expect(after).toHaveLength(before.length);
+    after.forEach((r, i) => expect(r).toBe(before[i]));
+    expect(after[1].focused).toBe(true);
+    expect(after.every((r) => r.listenerCount('click') === 1)).toBe(true);
+  });
+
+  it('a refresh updates a row in place when its descriptor changes', async () => {
+    const run = vi.fn();
+    let title = 'Measure';
+    const { createToolLauncher } = await import('../src/ui/toolLauncher');
+    const l = createToolLauncher({
+      getActions: () => [{ id: 'tool.measure', title, section: 'Tools', run }],
+      counts: () => ({ measurements: 0, annotations: 0 }),
+    });
+    const row = (l.element as unknown as FakeEl).findAll((e) => e.hasClass('olv-tl-row'))[0];
+    title = 'Measure (renamed)';
+    l.refresh();
+    const again = (l.element as unknown as FakeEl).findAll((e) => e.hasClass('olv-tl-row'))[0];
+    expect(again).toBe(row);
+    expect(again.findAll((e) => e.hasClass('olv-tl-title'))[0].ownText).toBe('Measure (renamed)');
+    again.fire('click');
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a stale async registry read that resolves after a newer one', async () => {
+    const { createToolLauncher } = await import('../src/ui/toolLauncher');
+    const resolvers: Array<(a: readonly Action[]) => void> = [];
+    const l = createToolLauncher({
+      getActions: () => new Promise<readonly Action[]>((r) => resolvers.push(r)),
+      counts: () => ({ measurements: 0, annotations: 0 }),
+    });
+    l.refresh();
+    const mk = (title: string): Action[] => [{ id: 'tool.measure', title, section: 'Tools', run: () => {} }];
+    resolvers[1](mk('Newest'));
+    await flush();
+    resolvers[0](mk('Stale'));
+    await flush();
+    const titles = (l.element as unknown as FakeEl).findAll((e) => e.hasClass('olv-tl-title')).map((t) => t.ownText);
+    expect(titles).toEqual(['Newest']);
+  });
+
+  it('reopening a tool that is on resumes its page instead of toggling it off', async () => {
+    const run = vi.fn();
+    const resume = vi.fn(() => true);
+    const { createToolLauncher } = await import('../src/ui/toolLauncher');
+    const l = createToolLauncher({
+      getActions: () => [{ id: 'tool.measure', title: 'Measure', section: 'Tools', run }],
+      counts: () => ({ measurements: 0, annotations: 0 }),
+      resume,
+    });
+    (l.element as unknown as FakeEl).findAll((e) => e.hasClass('olv-tl-row'))[0].fire('click');
+    expect(resume).toHaveBeenCalledWith('tool.measure');
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('a pending async read after dispose never renders', async () => {
+    const { createToolLauncher } = await import('../src/ui/toolLauncher');
+    let resolve: (a: readonly Action[]) => void = () => {};
+    const l = createToolLauncher({
+      getActions: () => new Promise<readonly Action[]>((r) => { resolve = r; }),
+      counts: () => ({ measurements: 0, annotations: 0 }),
+    });
+    l.dispose();
+    resolve([{ id: 'tool.measure', title: 'Measure', section: 'Tools', run: () => {} }]);
+    await flush();
+    expect((l.element as unknown as FakeEl).findAll((e) => e.hasClass('olv-tl-row'))).toHaveLength(0);
+  });
 });

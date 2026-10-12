@@ -735,6 +735,9 @@ export const loadActionRegistry = () => import('./app/actionDefinitions');
  */
 export const loadToolLauncher = () => import('./ui/toolLauncher');
 
+/** The active-tool pill and its read of the controllers (only after the Viewer resolves). */
+export const loadActiveToolStatus = () => import('./app/activeToolStatus');
+
 /**
  * The desktop rail, the phone sheet and the Tools route (workspaceShell.ts).
  * Nothing shows the rail before the Viewer resolves, so its wiring rides this

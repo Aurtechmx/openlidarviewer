@@ -70,6 +70,7 @@ describe('the reference plane cannot reach a data path', () => {
       'src/ui/StreamingPanel.ts': 'DOM',
       'src/app/workspace/workspaceRouter.ts': 'DOM',
       'src/app/workspace/modeHome.ts': 'DOM',
+      'src/ui/toolLauncher.ts': 'DOM: launcher row order',
       'src/app/sessionLog/sessionLogRecorder.ts': 'DOM',
       'src/io/wktParser.ts': 'WKT parse tree',
       'src/io/crs.ts': 'WKT parse tree',
