@@ -146,7 +146,7 @@ function announce(message: string): void {
  * Copy text to the clipboard. Uses the async Clipboard API, falling back to a
  * hidden-textarea `execCommand` for older or non-secure contexts.
  */
-async function copyToClipboard(text: string): Promise<boolean> {
+export async function copyToClipboard(text: string): Promise<boolean> {
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);

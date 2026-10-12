@@ -63,7 +63,7 @@ import { noteEdit, pickUndo, pickRedo, withSuppressed } from './ui/undoRouter';
 // The Measurements panel is lazy-mounted on the first scan load (never in the
 // empty-state shell); its whole mount lifecycle lives in `measurePanelMount.ts`,
 // which pulls the panel class through `loadMeasurePanel()` inside `ensure()`.
-import { createMeasurePanelMount, createAnalyseProfileVisibility, useBoxAsClip } from './app/measurePanelMount';
+import { createMeasurePanelMount, createAnalyseProfileVisibility, createClipFlowFromShell } from './app/measurePanelMount';
 import { createProcessStudioFromShell } from './app/processStudioMount';
 import { readTerrainComputePath } from './app/terrainComputePath';
 import { lazyCoordinateHud } from './app/coordinateHudLazy';
@@ -1198,8 +1198,7 @@ const crsCoordinator = createCrsCoordinator({
 const workflowController = new WorkflowController(showLassoToast);
 // The one scene-tool command every entry point runs (dock, key, palette, launcher).
 function runTool(tool: SceneTool): void {
-  runSceneTool({ viewer: () => viewer, workflow: workflowController, toggleClip: () => clipPanel.toggleEnabled(),
-    openPage: (page) => workspaceShell?.openToolPage(page) }, tool);
+  runSceneTool({ viewer: () => { clipFlow.dismissCard(); return viewer; }, workflow: workflowController, toggleClip: () => clipPanel.toggleEnabled(), openPage: (page) => workspaceShell?.openToolPage(page) }, tool);
 }
 if (WORKFLOW_RECORDER_ENABLED) {
   // The recorder badge is always present when enabled; the heavier settings
@@ -1630,7 +1629,7 @@ const measureMount = createMeasurePanelMount({
   recordUsage, getScanBaseName: () => baseName(scans.activeCloud()?.name ?? lastCloudName),
   workbenchStage: stage,
   onWorkbenchClose: () => analyseProfileVisibility.restore(),
-  onUseAsClip: (id) => useBoxAsClip({ measurements: () => viewer.measure.getMeasurements(), activeLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null), layerCount: () => viewer.clouds().length, adoptClip: (c) => clipPanel.adoptBounds(c), openClipPage: () => workspaceShell?.openToolPage('clip'), toast: showLassoToast }, id),
+  onUseAsClip: (id) => clipFlow.isolate(id),
 });
 // Save the AnalysePanel's visibility when a profile hides it, and restore that
 // exact state on the workbench close (kind-change fires on open, not on close).
@@ -1641,7 +1640,7 @@ const analyseProfileVisibility = createAnalyseProfileVisibility({
   setDockActive: (v) => dock.setAnalyseActive(v),
 });
 /** Refresh the Measurements panel's contents and visibility (thin delegate). */
-const refreshMeasurePanel = (): void => { measureMount.refresh(); refreshToolLauncher(); };
+const refreshMeasurePanel = (): void => { measureMount.refresh(); refreshToolLauncher(); clipFlow.onMeasurementsChanged(); };
 
 // B2 (v0.4.5) — feed the measure stack the SAME render-units to metres seam
 // the terrain/space paths read (`crsService.linearUnitToMetres`). Render space
@@ -2531,14 +2530,15 @@ exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
 // planes) with an exact CPU kept-count. The keep/cull math is the pure
 // `clipBox` core; this panel + the viewer wiring realise it.
 const clipPanel = new ClipPanel({
-  // `viewer?.` — ClipPanel's constructor calls setVisible(false) → onApply(null)
-  // synchronously, which fires before the deferred Viewer is assigned (it's
-  // `null` until the first scan loads). Clearing a clip on a non-existent viewer
-  // is a no-op, so guard like every other boot-reachable viewer callback here.
+  // `viewer?.`: the constructor's setVisible(false) → onApply(null) fires before
+  // the deferred Viewer exists, and clearing a clip on none is a no-op.
   onApply: (clip: ClipBox | null) => viewer?.setClip(clip),
   fitBounds: () => scans.activeCloud()?.bounds() ?? null,
   keptCount: () => (scans.activeId ? viewer.clipKeptCount(scans.activeId) : null),
 });
+const clipFlow = createClipFlowFromShell({ clipPanel, overlay: stage.overlay, viewer: () => viewer, ready: () => viewerReady, toast: showLassoToast, runTool,
+  activeLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null),
+  openPage: (p) => workspaceShell?.openToolPage(p), measurePanel: () => measureMount.panel });
 
 // The Tools tab held only the Clip box until a tool had been used, so it could
 // not say what the tab was for. This card (lazy chunk) lists the tools from the
@@ -4023,7 +4023,7 @@ function resetToEmptyState(): void {
   // No scan open → take the compass down (nothing to orient).
   compass.refresh();
   // Hiding the clip panel also clears the active clip (see ClipPanel.setVisible).
-  clipPanel.setVisible(false);
+  clipPanel.setVisible(false); clipFlow.reset();
   // Hide + clear the Analyse panel so it doesn't linger with stale terrain
   // results after the scan is closed. v0.4.0. Null-safe (lazy-mounted); also
   // reset the tracked desired state so a fresh open starts hidden/collapsed.
