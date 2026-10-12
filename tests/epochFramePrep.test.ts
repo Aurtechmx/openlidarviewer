@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest';
 import { CrsService, type CrsOverridePort } from '../src/geo/CrsService';
 import type { CrsInfo } from '../src/io/crs';
 import type { CrsOverride } from '../src/geo/CrsOverrideStore';
-import { prepareEpochFrames, epochUnitMismatchLines } from '../src/app/epochFramePrep';
+import { prepareEpochFrames, epochUnitMismatchLines, compareSuggestionAllowed } from '../src/app/epochFramePrep';
 
 function makePort(): CrsOverridePort {
   const store = new Map<string, CrsOverride>();
@@ -84,5 +84,40 @@ describe('epochUnitMismatchLines', () => {
     expect(lines[0]).toBe('A (before) → B (after)');
     expect(lines[1]).toMatch(/different vertical units/i);
     expect(lines).toHaveLength(2);
+  });
+});
+
+describe('compareSuggestionAllowed', () => {
+  const UTM13N: CrsInfo = { ...UTM12N, name: 'WGS 84 / UTM zone 13N', epsg: 32613 };
+  const truncated = (name: string, crs: CrsInfo) => {
+    const e = epoch(name, crs);
+    return { ...e, metadata: { crs, truncation: { read: 4, declared: 2601 } } };
+  };
+
+  it('offers a pair on one declared CRS and linear unit', () => {
+    expect(compareSuggestionAllowed(new CrsService(makePort()), [epoch('a.las', UTM12N), epoch('b.las', UTM12N)])).toBe(true);
+  });
+
+  it('withholds a pair whose CRS is unknown on either side', () => {
+    const svc = new CrsService(makePort());
+    expect(compareSuggestionAllowed(svc, [epoch('a.las', undefined), epoch('b.las', undefined)])).toBe(false);
+    expect(compareSuggestionAllowed(svc, [epoch('a.las', undefined), epoch('b.las', UTM12N)])).toBe(false);
+  });
+
+  it('withholds a pair on different CRSs', () => {
+    expect(compareSuggestionAllowed(new CrsService(makePort()), [epoch('a.las', UTM12N), epoch('b.las', UTM13N)])).toBe(false);
+  });
+
+  it('withholds anything but exactly two present scans', () => {
+    const svc = new CrsService(makePort());
+    expect(compareSuggestionAllowed(svc, [epoch('a.las', UTM12N)])).toBe(false);
+    expect(compareSuggestionAllowed(svc, [epoch('a.las', UTM12N), undefined])).toBe(false);
+    expect(compareSuggestionAllowed(svc, [epoch('a.las', UTM12N), epoch('b.las', UTM12N), epoch('c.las', UTM12N)])).toBe(false);
+  });
+
+  it('withholds a pair with a truncated scan', () => {
+    const svc = new CrsService(makePort());
+    expect(compareSuggestionAllowed(svc, [epoch('a.las', UTM12N), truncated('b.las', UTM12N)])).toBe(false);
+    expect(compareSuggestionAllowed(svc, [epoch('a.las', undefined), truncated('b.las', UTM12N)])).toBe(false);
   });
 });

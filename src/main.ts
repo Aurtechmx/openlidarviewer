@@ -245,7 +245,7 @@ import { CatalogPanel, buildCuratedDemoSample } from './ui/CatalogPanel';
 import type { StreamingReportCloud } from './app/streamingScanReport'; import { runStreamingModules, preloadStreamingReport } from './app/streamingReportSeam';
 import { CrsService } from './geo/CrsService';
 import { verticalMetresPerUnit, volumeUnitCaveat } from './geo/SpatialContext';
-import { prepareEpochFrames, epochUnitMismatchLines } from './app/epochFramePrep';
+import { prepareEpochFrames, epochUnitMismatchLines, compareSuggestionAllowed } from './app/epochFramePrep';
 // Shared vertical-unit labeller (already eager via terrainAnalysisRunner) —
 // feeds the colorbar legend's elevation unit from the resolved CRS.
 import { verticalUnitLabel } from './units/units';
@@ -808,12 +808,12 @@ let _lastInstantScanLabel: string | undefined;
  */
 function showInstantAnswer(scanLabel: string): void {
   const answer = planInstantAnswer({
-    cloudCount: viewer.clouds().length,
+    cloudCount: viewer.clouds().length, compareReady: compareSuggestionAllowed(crsService, viewer.clouds().map((id) => viewer.getCloud(id))),
     scanShape: captureProvenance.verdict(),
     scanLabel, priorScanLabel: _lastInstantScanLabel,
     crsKnown: crsIsKnown(crsService.current()),
   });
-  _lastInstantScanLabel = scanLabel;
+  _lastInstantScanLabel = scanLabel; if (!answer) return; // two scans that cannot support a comparison get no prompt
   showLassoToast(answer.message, {
     label: answer.actionLabel,
     onClick: () => {

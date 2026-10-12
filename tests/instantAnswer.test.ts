@@ -12,7 +12,8 @@ describe('planInstantAnswer', () => {
       scanShape: 'terrain',
       scanLabel: 'after.las',
       priorScanLabel: 'before.las',
-    });
+      compareReady: true,
+    })!;
     expect(a.action).toBe('compare');
     expect(a.message).toContain('before.las');
     expect(a.message).toContain('after.las');
@@ -20,26 +21,31 @@ describe('planInstantAnswer', () => {
 
   it('compare wins regardless of the new scan shape', () => {
     for (const shape of ['terrain', 'object', 'interior', null] as const) {
-      expect(planInstantAnswer({ cloudCount: 2, scanShape: shape }).action).toBe('compare');
+      expect(planInstantAnswer({ cloudCount: 2, scanShape: shape, compareReady: true })!.action).toBe('compare');
     }
   });
 
+  it('two scans that cannot support a comparison get no prompt', () => {
+    expect(planInstantAnswer({ cloudCount: 2, scanShape: 'terrain', compareReady: false })).toBeNull();
+    expect(planInstantAnswer({ cloudCount: 2, scanShape: 'terrain' })).toBeNull();
+  });
+
   it('a single terrain scan offers terrain analysis', () => {
-    const a = planInstantAnswer({ cloudCount: 1, scanShape: 'terrain' });
+    const a = planInstantAnswer({ cloudCount: 1, scanShape: 'terrain' })!;
     expect(a.action).toBe('terrain');
     expect(a.actionLabel).toMatch(/terrain/i);
   });
 
   it('a single object scan offers volume', () => {
-    expect(planInstantAnswer({ cloudCount: 1, scanShape: 'object' }).action).toBe('volume');
+    expect(planInstantAnswer({ cloudCount: 1, scanShape: 'object' })!.action).toBe('volume');
   });
 
   it('a single interior scan offers the floor plan', () => {
-    expect(planInstantAnswer({ cloudCount: 1, scanShape: 'interior' }).action).toBe('floorplan');
+    expect(planInstantAnswer({ cloudCount: 1, scanShape: 'interior' })!.action).toBe('floorplan');
   });
 
   it('an undecidable shape falls back to terrain', () => {
-    expect(planInstantAnswer({ cloudCount: 1, scanShape: null }).action).toBe('terrain');
+    expect(planInstantAnswer({ cloudCount: 1, scanShape: null })!.action).toBe('terrain');
   });
 
   it('every answer carries the no-upload promise', () => {
@@ -47,14 +53,14 @@ describe('planInstantAnswer', () => {
       { cloudCount: 1, scanShape: 'terrain' },
       { cloudCount: 1, scanShape: 'object' },
       { cloudCount: 1, scanShape: 'interior' },
-      { cloudCount: 2, scanShape: 'terrain' },
+      { cloudCount: 2, scanShape: 'terrain', compareReady: true },
     ];
     for (const c of cases) {
-      expect(planInstantAnswer(c).message.toLowerCase()).toMatch(/nothing (uploaded|leaves)/);
+      expect(planInstantAnswer(c)!.message.toLowerCase()).toMatch(/nothing (uploaded|leaves)/);
     }
   });
   it('a terrain scan with an unknown CRS states the unit caveat in the prompt', () => {
-    const a = planInstantAnswer({ cloudCount: 1, scanShape: 'terrain', crsKnown: false });
+    const a = planInstantAnswer({ cloudCount: 1, scanShape: 'terrain', crsKnown: false })!;
     expect(a.action).toBe('terrain');
     expect(a.message).toMatch(/CRS unknown/);
     expect(a.message).toMatch(/source units/);
@@ -63,7 +69,7 @@ describe('planInstantAnswer', () => {
   });
 
   it('a known CRS keeps the plain terrain prompt', () => {
-    const a = planInstantAnswer({ cloudCount: 1, scanShape: 'terrain', crsKnown: true });
+    const a = planInstantAnswer({ cloudCount: 1, scanShape: 'terrain', crsKnown: true })!;
     expect(a.message).not.toMatch(/unknown/);
   });
 });
