@@ -146,7 +146,7 @@ test('unreadable bytes get the open advice and keep the loaded scene', async ({ 
   await page.dispatchEvent('body', 'drop', { dataTransfer });
 
   await expect(page.locator('.olv-toast')).toHaveClass(/olv-toast-error/, { timeout: 30_000 });
-  await expect(page.locator('.olv-toast-text')).toContainText('To view a scan, open an E57 or LAS version of the file.');
+  await expect(page.locator('.olv-toast-text')).toContainText('To view a scan, open it as LAS/LAZ, E57, PLY, PCD, PTX, PTS or XYZ.');
   await expect(page.locator('.olv-toast').getByRole('button', { name: 'Copy report', exact: true })).toBeVisible();
   await expect(page.locator('.olv-empty')).toBeHidden();
   expect(await points()).toBe(before);

@@ -319,7 +319,7 @@ describe('failure report', () => {
     expect(openFailureSummary(facts)).toMatch(/not recognised as a point cloud/);
     expect(openFailureSummary(facts)).toBe(
       'This file was not recognised as a point cloud (binary, 4.8 MiB). The bytes look compressed or encrypted, ' +
-        'so no structure can be read from them. To view a scan, open an E57 or LAS version of the file. ' +
+        'so no structure can be read from them. To view a scan, open it as LAS/LAZ, E57, PLY, PCD, PTX, PTS or XYZ. ' +
         'Copy report for details.',
     );
     expect(openFailureSummary(facts)).not.toMatch(/%|confidence/i);
@@ -350,7 +350,9 @@ describe('failure report', () => {
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
     const facts = buildOpenFailureFacts(chooseFormat(inp(png, 'png')), png, png.length, 'photo.png');
     expect(openFailureSummary(facts)).toMatch(/PNG image, not a point cloud/);
-    expect(openFailureSummary(facts)).toMatch(/To view a scan, open an E57 or LAS version of the file\.$/);
+    expect(openFailureSummary(facts)).toBe(
+      'This file is a PNG image, not a point cloud. To view a scan, open it as LAS/LAZ, E57, PLY, PCD, PTX, PTS or XYZ.',
+    );
     const zip = new Uint8Array([0x50, 0x4b, 3, 4, 0, 0]);
     expect(openFailureSummary(buildOpenFailureFacts(chooseFormat(inp(zip, 'zip')), zip, 6, 'a.zip'))).toMatch(/Extract it/);
   });

@@ -15,7 +15,6 @@
  */
 import { byteEntropy, detectStride, extensionOf, looksLikeText, type ProbeDecision } from './formatProbes';
 import { formatByteSize } from '../formatByteSize';
-import { OPEN_SCAN_ADVICE } from '../loadErrors';
 import type { ProbeBound } from './progressiveProbe';
 
 export interface OpenFailureFacts {
@@ -115,15 +114,25 @@ function article(word: string): string {
   return /^[aeiou]/i.test(word) ? 'an' : 'a';
 }
 
+/**
+ * The open advice, left out when the first explanation already recommends a
+ * format to export or tells the user to extract an archive.
+ */
+function openAdvice(first: string): string {
+  if (first.includes(OPEN_FORMATS) || first.includes('Extract it')) return '';
+  return `To view a scan, open it as ${OPEN_FORMATS}.`;
+}
+
 /** The short message the toast shows. */
 export function openFailureSummary(f: OpenFailureFacts): string {
+  const first = f.explanations[0] ?? '';
   if (f.verdict === 'NOT_POINT_CLOUD' && f.signature) {
-    return `This file is ${article(f.signature)} ${f.signature}, not a point cloud. ${f.explanations[0] ?? ''} ${OPEN_SCAN_ADVICE}`
-      .replace(/\s+/g, ' ')
-      .trim();
+    const prefix = `This file is ${article(f.signature)} ${f.signature}, not a point cloud.`;
+    const detail = first === `It is ${article(f.signature)} ${f.signature}, not a point cloud.` ? '' : first;
+    return `${prefix} ${detail} ${openAdvice(first)}`.replace(/\s+/g, ' ').trim();
   }
   const kind = f.content === 'empty' ? 'empty' : `${f.content}, ${formatByteSize(f.sizeBytes)}`;
-  return `This file was not recognised as a point cloud (${kind}). ${f.explanations[0] ?? ''} ${OPEN_SCAN_ADVICE} Copy report for details.`
+  return `This file was not recognised as a point cloud (${kind}). ${first} ${openAdvice(first)} Copy report for details.`
     .replace(/\s+/g, ' ')
     .trim();
 }

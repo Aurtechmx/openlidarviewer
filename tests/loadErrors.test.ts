@@ -3,7 +3,6 @@ import {
   describeLoadError,
   classifyLoadError,
   messageForCategory,
-  OPEN_SCAN_ADVICE,
 } from '../src/io/loadErrors';
 import type { LoadErrorCategory } from '../src/io/loadErrors';
 
@@ -25,11 +24,17 @@ test('a typed LoadError is described by its own category', () => {
   );
 });
 
-test('the unsupported-format message carries the open advice', () => {
-  const m = messageForCategory('unsupported-format');
-  expect(m).toContain(OPEN_SCAN_ADVICE);
-  expect(OPEN_SCAN_ADVICE).toBe('To view a scan, open an E57 or LAS version of the file.');
-  expect(OPEN_SCAN_ADVICE).not.toMatch(/not supported/i);
+test('unsupported-format errors keep their own wording', () => {
+  expect(messageForCategory('unsupported-format')).toBe("This file type isn't supported yet.");
+  for (const msg of [
+    'Not an E57 file: bad signature',
+    'Paste the tileset.json URL to open 3D Tiles',
+    'PNTS Draco data is not supported',
+    'This URL is not a COPC file',
+  ]) {
+    expect(describeLoadError(new LoadError('unsupported-format', msg))).toBe("This file type isn't supported yet.");
+    expect(describeLoadError(new LoadError('unsupported-format', msg, 'report'))).toBe(msg);
+  }
 });
 
 test('every category maps to a non-empty, user-facing message', () => {
