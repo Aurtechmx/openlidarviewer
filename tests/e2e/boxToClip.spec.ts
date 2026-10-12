@@ -1,18 +1,16 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { dropDenseGridPly, openToolPage } from './helpers';
 
-/**
- * A completed Box measurement becomes the clipping region from its row in the
- * Measurements panel: the Clip page opens with the box's bounds, enabled,
- * keeping the inside, and the kept count settles.
- */
-test('Box measurement → Use as clipping region → the Clip page shows its bounds', async ({ page }) => {
+type Point = { x: number; y: number; z: number };
+
+/** Load the dense grid, open Measure and commit one Box from corner `a` to corner `b`. */
+async function drawBox(page: Page, a: Point, b: Point): Promise<void> {
   await page.goto('/?test=1');
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await openToolPage(page, 'Measure');
   await page.waitForFunction(() => !!(window as unknown as { __OLV_TEST_API__?: unknown }).__OLV_TEST_API__);
-  await page.evaluate(() => {
+  await page.evaluate(([p, q]) => {
     const api = (window as unknown as { __OLV_TEST_API__: {
       setMeasureMode: (on: boolean) => void;
       setMeasureKind: (k: string) => void;
@@ -21,10 +19,19 @@ test('Box measurement → Use as clipping region → the Clip page shows its bou
     } }).__OLV_TEST_API__;
     api.setMeasureMode(true);
     api.setMeasureKind('box');
-    api.placeMeasurementPoint({ x: 2, y: 2, z: 2 });
-    api.placeMeasurementPoint({ x: -2, y: -2, z: -2 });
+    api.placeMeasurementPoint(p);
+    api.placeMeasurementPoint(q);
     if (api.getMeasurementCount() !== 1) throw new Error(`box not committed: ${api.getMeasurementCount()}`);
-  });
+  }, [a, b] as const);
+}
+
+/**
+ * A completed Box measurement becomes the clipping region from its row in the
+ * Measurements panel: the Clip page opens with the box's bounds, enabled,
+ * keeping the inside, and the kept count settles.
+ */
+test('Box measurement → Use as clipping region → the Clip page shows its bounds', async ({ page }) => {
+  await drawBox(page, { x: 2, y: 2, z: 2 }, { x: -2, y: -2, z: -2 });
 
   const action = page.locator('.olv-mp-use-clip');
   await expect(action).toHaveCount(1, { timeout: 10_000 });
@@ -49,24 +56,7 @@ test('Box measurement → Use as clipping region → the Clip page shows its bou
  * cm or dm³.
  */
 test('Box measurement on a no-CRS cloud → the scene label reads unit unverified', async ({ page }) => {
-  await page.goto('/?test=1');
-  await dropDenseGridPly(page);
-  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await openToolPage(page, 'Measure');
-  await page.waitForFunction(() => !!(window as unknown as { __OLV_TEST_API__?: unknown }).__OLV_TEST_API__);
-  await page.evaluate(() => {
-    const api = (window as unknown as { __OLV_TEST_API__: {
-      setMeasureMode: (on: boolean) => void;
-      setMeasureKind: (k: string) => void;
-      placeMeasurementPoint: (p: { x: number; y: number; z: number }) => void;
-      getMeasurementCount: () => number;
-    } }).__OLV_TEST_API__;
-    api.setMeasureMode(true);
-    api.setMeasureKind('box');
-    api.placeMeasurementPoint({ x: 1.5, y: 0.5, z: 0.002 });
-    api.placeMeasurementPoint({ x: -1.5, y: -0.5, z: -0.002 });
-    if (api.getMeasurementCount() !== 1) throw new Error(`box not committed: ${api.getMeasurementCount()}`);
-  });
+  await drawBox(page, { x: 1.5, y: 0.5, z: 0.002 }, { x: -1.5, y: -0.5, z: -0.002 });
 
   const label = page.locator('text.olv-m-label-primary');
   await expect(label).toHaveCount(1, { timeout: 10_000 });
