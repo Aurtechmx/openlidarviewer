@@ -1,9 +1,9 @@
 /**
  * themeToggle.test.ts
  *
- * The v0.4.3 header theme control — a single shape-morphing button that
- * lives in the top bar (relocated from the Inspector chip rail). Clicking
- * it cycles Dark → Light → High-contrast → Dark, routes the choice through
+ * The header theme control — a single shape-morphing button that lives in
+ * the top bar. Clicking it cycles Blue → Field → High contrast → Blue,
+ * keeps keyboard focus, routes the choice through
  * the host's `onChange` callback (which owns `applyTheme` + persistence),
  * and re-labels itself for screen readers. `setTheme` lets an external
  * change (command palette, workflow replay, boot) keep the button in sync
@@ -60,7 +60,8 @@ class FakeEl {
   addEventListener(type: string, fn: ClickHandler): void {
     if (type === 'click') this._clickHandlers.push(fn);
   }
-  blur(): void { /* focus is a no-op in the stub */ }
+  blurred = 0;
+  blur(): void { this.blurred += 1; }
   /** Test helper: simulate a user click. */
   fireClick(): void { for (const fn of this._clickHandlers) fn(); }
   /** Find the first descendant (or self) carrying the given class. */
@@ -92,92 +93,69 @@ function activeIcon(root: FakeEl): ThemeName | null {
   const lit = root.findAll('olv-theme-icon-active');
   if (lit.length !== 1) return null;
   const ds = lit[0].attrs['data-theme'];
-  return (ds === 'dark' || ds === 'light' || ds === 'high-contrast') ? ds : null;
+  return ds === 'dark' || ds === 'field' || ds === 'high-contrast' ? ds : null;
 }
 
-describe('ThemeToggle — header shape-morphing button', () => {
-  it('renders a real <button type="button"> with all three icon states', async () => {
+describe('ThemeToggle — Blue, Field and High contrast', () => {
+  it('is a button with one icon per palette and the current one lit', async () => {
     const { ThemeToggle } = await import('../src/ui/ThemeToggle');
-    const toggle = new ThemeToggle({ initial: 'dark' });
-    const root = toggle.element as unknown as FakeEl;
-    expect(root.tagName.toLowerCase()).toBe('button');
+    const root = new ThemeToggle({ initial: 'dark' }).element as unknown as FakeEl;
     expect(root.type).toBe('button');
-    expect(root.classList.contains('olv-theme-toggle')).toBe(true);
-    // One icon group per theme — the morph cross-fades between them.
-    const icons = root.findAll('olv-theme-icon');
-    const themes = icons.map((i) => i.attrs['data-theme']).sort();
-    expect(themes).toEqual(['dark', 'high-contrast', 'light']);
+    const themes = root.findAll('olv-theme-icon').map((i) => i.attrs['data-theme']);
+    expect(themes).toEqual(['dark', 'field', 'high-contrast']);
+    expect(activeIcon(root)).toBe('dark');
   });
 
-  it('lights the icon matching the initial theme and labels it', async () => {
-    const { ThemeToggle } = await import('../src/ui/ThemeToggle');
-    const toggle = new ThemeToggle({ initial: 'light' });
-    const root = toggle.element as unknown as FakeEl;
-    expect(activeIcon(root)).toBe('light');
-    expect(root.getAttribute('aria-label')).toContain('Light');
-    expect(root.getAttribute('aria-label')!.toLowerCase()).toContain('change');
-  });
-
-  it('cycles dark → light → high-contrast → dark on click', async () => {
+  it('cycles Blue → Field → High contrast → Blue and reports each choice', async () => {
     const { ThemeToggle } = await import('../src/ui/ThemeToggle');
     const seen: ThemeName[] = [];
     const toggle = new ThemeToggle({ initial: 'dark', onChange: (n) => seen.push(n) });
     const root = toggle.element as unknown as FakeEl;
-
     root.fireClick();
-    expect(activeIcon(root)).toBe('light');
+    expect(activeIcon(root)).toBe('field');
     root.fireClick();
     expect(activeIcon(root)).toBe('high-contrast');
     root.fireClick();
     expect(activeIcon(root)).toBe('dark');
-
-    expect(seen).toEqual(['light', 'high-contrast', 'dark']);
+    expect(seen).toEqual(['field', 'high-contrast', 'dark']);
+    expect(toggle.theme).toBe('dark');
   });
 
-  it('fires onChange with the next theme name on each click', async () => {
+  it.each([
+    ['dark', 'Theme: Blue — switch to Field'],
+    ['field', 'Theme: Field — switch to High contrast'],
+    ['high-contrast', 'Theme: High contrast — switch to Blue'],
+  ] as const)('announces the current and next palette from %s', async (initial, label) => {
+    const { ThemeToggle } = await import('../src/ui/ThemeToggle');
+    const root = new ThemeToggle({ initial }).element as unknown as FakeEl;
+    expect(root.attrs['aria-label']).toBe(label);
+    expect(root.attrs['title']).toBe(label);
+  });
+
+  it('keeps keyboard focus on the button after a press', async () => {
+    const { ThemeToggle } = await import('../src/ui/ThemeToggle');
+    const root = new ThemeToggle({ initial: 'dark' }).element as unknown as FakeEl;
+    root.fireClick();
+    root.fireClick();
+    expect(root.blurred).toBe(0);
+  });
+
+  it('setTheme syncs the icon and label without firing onChange', async () => {
     const { ThemeToggle } = await import('../src/ui/ThemeToggle');
     const seen: ThemeName[] = [];
-    const toggle = new ThemeToggle({ initial: 'high-contrast', onChange: (n) => seen.push(n) });
+    const toggle = new ThemeToggle({ initial: 'dark', onChange: (n) => seen.push(n) });
     const root = toggle.element as unknown as FakeEl;
-    root.fireClick(); // high-contrast → dark
-    root.fireClick(); // dark → light
-    expect(seen).toEqual(['dark', 'light']);
-  });
-
-  it('updates the aria-label to name the current theme on each cycle', async () => {
-    const { ThemeToggle } = await import('../src/ui/ThemeToggle');
-    const toggle = new ThemeToggle({ initial: 'dark' });
-    const root = toggle.element as unknown as FakeEl;
-    expect(root.getAttribute('aria-label')).toContain('Dark');
-    root.fireClick();
-    expect(root.getAttribute('aria-label')).toContain('Light');
-    root.fireClick();
-    expect(root.getAttribute('aria-label')).toContain('High contrast');
-  });
-
-  it('sets a title tooltip that tracks the current theme', async () => {
-    const { ThemeToggle } = await import('../src/ui/ThemeToggle');
-    const toggle = new ThemeToggle({ initial: 'dark' });
-    const root = toggle.element as unknown as FakeEl;
-    expect(root.getAttribute('title')).toContain('Dark');
-    root.fireClick();
-    expect(root.getAttribute('title')).toContain('Light');
-  });
-
-  it('setTheme updates the icon + label without firing onChange', async () => {
-    const { ThemeToggle } = await import('../src/ui/ThemeToggle');
-    let fired = 0;
-    const toggle = new ThemeToggle({ initial: 'dark', onChange: () => { fired++; } });
-    const root = toggle.element as unknown as FakeEl;
-
     toggle.setTheme('high-contrast');
+    expect(toggle.theme).toBe('high-contrast');
     expect(activeIcon(root)).toBe('high-contrast');
-    expect(root.getAttribute('aria-label')).toContain('High contrast');
-    expect(fired).toBe(0);
+    expect(root.attrs['aria-label']).toContain('switch to Blue');
+    expect(seen).toEqual([]);
+  });
 
-    // And a subsequent click resumes the cycle from the externally-set value.
-    root.fireClick();
-    expect(activeIcon(root)).toBe('dark');
-    expect(fired).toBe(1);
+  it('works without a host callback', async () => {
+    const { ThemeToggle } = await import('../src/ui/ThemeToggle');
+    const toggle = new ThemeToggle({ initial: 'field' });
+    expect(() => (toggle.element as unknown as FakeEl).fireClick()).not.toThrow();
+    expect(toggle.theme).toBe('high-contrast');
   });
 });

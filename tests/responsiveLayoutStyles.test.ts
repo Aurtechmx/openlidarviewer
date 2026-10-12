@@ -122,7 +122,7 @@ describe('SHELL-F6 — .olv-ws-body joins the classic-scrollbar lists', () => {
 });
 
 // CRITIC-GAP-1: light-theme rating scale contrast.
-describe('CRITIC-GAP-1 — light-theme rating scale clears WCAG AA', () => {
+describe('CRITIC-GAP-1 — Field and High contrast rating scales stay readable', () => {
   function hexToRgb(hex: string): [number, number, number] {
     const h = hex.replace('#', '');
     return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as [number, number, number];
@@ -141,32 +141,38 @@ describe('CRITIC-GAP-1 — light-theme rating scale clears WCAG AA', () => {
     return (hi + 0.05) / (lo + 0.05);
   }
 
-  const lightBlock = (() => {
+  const block = (selector: string): string => {
     const text = css('03-theme-rails.css');
-    const start = text.indexOf('body.olv-theme-light {');
+    const start = text.indexOf(`${selector} {`);
     const end = text.indexOf('\n}', start);
     return text.slice(start, end);
-  })();
+  };
+  const hexIn = (body: string, token: string): string | null =>
+    body.match(new RegExp(`${token}:\\s*(#[0-9a-fA-F]{6})`))?.[1] ?? null;
 
   const tokens = ['--rating-excellent', '--rating-strong', '--rating-good', '--rating-moderate', '--rating-weak'];
+  const palettes = [
+    { selector: 'body.olv-theme-field', floor: 4.5 },
+    { selector: 'body.olv-theme-high-contrast', floor: 7 },
+  ];
 
-  it('every rating token is overridden in body.olv-theme-light (not inherited from the dark :root)', () => {
-    for (const t of tokens) {
-      expect(lightBlock, `${t} must be set in the light theme block`).toMatch(
-        new RegExp(`${t}:\\s*#[0-9a-fA-F]{6}`),
-      );
-    }
-  });
+  for (const { selector, floor } of palettes) {
+    it(`every rating token is overridden in ${selector} (not inherited from the dark :root)`, () => {
+      const body = block(selector);
+      for (const t of tokens) expect(hexIn(body, t), `${t} must be set in ${selector}`).not.toBeNull();
+    });
 
-  it('each overridden value clears 4.5:1 against both --bg (#f4f6fb) and --panel (#ffffff)', () => {
-    for (const t of tokens) {
-      const m = lightBlock.match(new RegExp(`${t}:\\s*(#[0-9a-fA-F]{6})`));
-      expect(m, `${t} value found`).not.toBeNull();
-      const hex = m![1];
-      expect(contrast(hex, '#f4f6fb'), `${t} ${hex} vs --bg`).toBeGreaterThanOrEqual(4.5);
-      expect(contrast(hex, '#ffffff'), `${t} ${hex} vs --panel`).toBeGreaterThanOrEqual(4.5);
-    }
-  });
+    it(`${selector}: each overridden value clears ${floor}:1 against both --bg and --panel`, () => {
+      const body = block(selector);
+      const bg = hexIn(body, '--bg')!;
+      const panel = hexIn(body, '--panel')!;
+      for (const t of tokens) {
+        const hex = hexIn(body, t)!;
+        expect(contrast(hex, bg), `${t} ${hex} vs --bg`).toBeGreaterThanOrEqual(floor);
+        expect(contrast(hex, panel), `${t} ${hex} vs --panel`).toBeGreaterThanOrEqual(floor);
+      }
+    });
+  }
 });
 
 // CRITIC-GAP-3: per-layer isolate/lock phone touch targets.

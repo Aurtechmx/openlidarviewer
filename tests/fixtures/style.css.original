@@ -39,6 +39,53 @@
   size-adjust: 101.02%; ascent-override: 103.94%; descent-override: 34.65%; line-gap-override: 9.9%;
 }
 :root {
+  --stage-ui-background: radial-gradient(ellipse at 50% 45%, #0c1224 0%, #070a14 70%, #050810 100%);
+  --ui-surface-11-17-33-a-0p92: rgba(11, 17, 33, 0.92);
+  --ui-surface-10-14-26-a-0p92: rgba(10, 14, 26, 0.92);
+  --ui-surface-11-17-33-a-0p82: rgba(11, 17, 33,0.82);
+  --ui-surface-11-17-33-a-0p86: rgba(11, 17, 33,0.86);
+  --ui-surface-11-17-33-a-0p9: rgba(11, 17, 33,0.9);
+  --ui-surface-11-17-33-a-0p94: rgba(11, 17, 33, 0.94);
+  --ui-surface-8-13-20-a-0p82: rgba(8, 13, 20, 0.82);
+  --ui-surface-8-13-20-a-0p9: rgba(8, 13, 20, 0.9);
+  --ui-surface-8-13-26-a-0p94: rgba(8, 13, 26, 0.94);
+  --ui-surface-11-17-33-a-0p55: rgba(11, 17, 33, 0.55);
+  --ui-surface-11-17-33-a-0p96: rgba(11, 17, 33, 0.96);
+  --ui-surface-6-10-20-a-0p66: rgba(6, 10, 20, 0.66);
+  --ui-surface-6-10-20-a-0p5: rgba(6, 10, 20, 0.5);
+  --ui-surface-11-17-33-a-0p78: rgba(11, 17, 33, 0.78);
+  --ui-surface-5-8-16-a-0p66: rgba(5, 8, 16, 0.66);
+  /* Interface literal bridges: exact Blue values; Field and High contrast override them in 03-theme-rails.css. */
+  --ui-accent-a0p55: rgba(0, 178, 255, 0.55);
+  --ui-surface-8-14-28-a0p66: rgba(8, 14, 28, 0.66);
+  --ui-accent-a0p10: rgba(0, 178, 255, 0.10);
+  --ui-accent-a0p3: rgba(0, 178, 255, 0.3);
+  --ui-accent-a0p045: rgba(0, 178, 255, 0.045);
+  --ui-accent-a0p42: rgba(0, 178, 255, 0.42);
+  --ui-accent-a0p4: rgba(0, 178, 255, 0.4);
+  --ui-accent-a0p08: rgba(0, 178, 255, 0.08);
+  --ui-accent-a0p16: rgba(0, 178, 255, 0.16);
+  --ui-accent-a0p34: rgba(0, 178, 255, 0.34);
+  --ui-accent-a0p22: rgba(0, 178, 255, 0.22);
+  --ui-accent-a0p6: rgba(0, 178, 255, 0.6);
+  --ui-accent-a0p24: rgba(0, 178, 255, 0.24);
+  --ui-accent-a0p28: rgba(0, 178, 255, 0.28);
+  --ui-accent-a0p65: rgba(0, 178, 255, 0.65);
+  --ui-surface-deep: #030817;
+  --ui-accent-a0p98: rgba(0, 178, 255, 0.98);
+  --ui-accent-a0p12: rgba(0, 178, 255, 0.12);
+  --ui-accent-a0p38: rgba(0, 178, 255, 0.38);
+  --ui-edge-a0p42: rgba(140, 170, 230, 0.42);
+  --ui-accent-a0p14: rgba(0, 178, 255, 0.14);
+  --ui-accent-a0p5: rgba(0, 178, 255, 0.5);
+  --ui-accent-solid: #00b2ff;
+  --ui-accent-a0p32: rgba(0, 178, 255, 0.32);
+  --ui-accent-a0p85: rgba(0, 178, 255, 0.85);
+  --ui-accent-a0p04: rgba(0, 178, 255, 0.04);
+  --ui-accent-a0p20: rgba(0, 178, 255, 0.20);
+  --ui-accent-a0p18: rgba(0, 178, 255, 0.18);
+  --ui-surface-8-14-28-a0p95: rgba(8, 14, 28, 0.95);
+  --ui-surface-8-14-28-a1: rgba(8, 14, 28, 1);
   color-scheme: dark;
   /* OpenLiDARViewer brand palette */
   --bg: #030817;          /* Deep Navy */
@@ -49,7 +96,7 @@
    * lighter than --panel with a soft lift shadow; secondary stacked
    * panels read RECESSIVE — a translucent, near-transparent fill so
    * the eye lands on the one surface that matters. Both ride the
-   * theme rails (overridden in the Light + High-contrast blocks).
+   * theme rails (overridden in the Field and High contrast blocks).
    */
   --panel-raised: #16203a;          /* a step up from --panel — holds the verdict + active rail */
   --panel-recessive: rgba(15, 23, 42, 0.55); /* demoted stacked panels — hairline-led, low fill */
@@ -74,8 +121,8 @@
   --lab-caveat-fill-on-light: rgba(184, 134, 11, 0.14);
   --accent-soft: rgba(0, 178, 255, 0.16);
   /* Ink colour for text/glyphs ON a solid --accent fill (primary
-   * action recipe, v0.4.6). Dark on the bright electric-blue here;
-   * the Light theme keeps it white for WCAG AA on its deeper accent. */
+   * action recipe, v0.4.6). Dark on the bright electric-blue here and
+   * in the other palettes (03-theme-rails.css). */
   --on-accent: #030817;
   /* Readiness rating scale — semantic, colourblind-paired with the word. */
   --rating-excellent: #34d399;
@@ -276,7 +323,7 @@
    * semantic tokens so the layer order is explicit in one place instead of
    * scattered magic integers. Ordered low → high; the integers are the exact
    * values the sheet has always used. z-index does NOT vary by theme, so these
-   * live only here (never in the Light / High-contrast / forced-colors rails).
+   * live only here (never in the Field / High contrast / forced-colors rails).
    * Where two siblings deliberately differ by 1, the site uses
    * calc(var(--z-role) + 1) so the lift is visible and the integer preserved.
    */
@@ -298,19 +345,6 @@
   --z-modal-top: 90;      /* badge + shortcut sheet (91 = modal-top + 1) */
   --z-palette: 100;       /* command palette */
   --z-max: 200;           /* onboarding tour overlay, top of stack */
-}
-
-
-/* The withheld state hue on the Light and High-contrast rails, kept beside the
- * :root value so each rail clears 4.5:1 on its own --bg and --panel
- * (tests/stateTokenContrast.test.ts). */
-body.olv-theme-light {
-  --state-withheld: #be185d;
-  /* Accent for small text on white, where --accent reads 3.9:1. */
-  --accent-text: #005f8c;
-}
-body.olv-theme-high-contrast {
-  --state-withheld: #f9a8d4;
 }
 /*
  * The top-centre lane. One band hosts the transient centred surfaces — the
@@ -357,7 +391,7 @@ body.olv-theme-high-contrast {
   background: #ff7a7a;
   animation: olv-workflow-pulse 1.4s ease-in-out infinite;
 }
-.olv-workflow-badge-playing { border-color: rgba(0, 178, 255, 0.55); }
+.olv-workflow-badge-playing { border-color: var(--ui-accent-a0p55); }
 .olv-workflow-badge-playing .olv-workflow-badge-dot { background: var(--accent); }
 @keyframes olv-workflow-pulse {
   0%, 100% { opacity: 1; }
@@ -387,7 +421,7 @@ body.olv-theme-high-contrast {
 }
 .olv-palette-backdrop {
   position: absolute; inset: 0;
-  background: rgba(8, 14, 28, 0.66);
+  background: var(--ui-surface-8-14-28-a0p66);
   -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
 }
 .olv-palette-card {
@@ -441,8 +475,8 @@ body.olv-theme-high-contrast {
 .olv-palette-row-key {
   font-family: var(--mono); font-size: var(--text-xs);
   color: var(--accent);
-  background: rgba(0, 178, 255, 0.10);
-  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  background: var(--ui-accent-a0p10);
+  border: 0.5px solid var(--ui-accent-a0p3);
   border-radius: var(--radius-xs); padding: var(--space-2xs) var(--space-sm);
   flex-shrink: 0;
 }
@@ -563,104 +597,275 @@ body.olv-theme-high-contrast {
   .olv-theme-icon { transform: scale(1) rotate(0); }
 }
 
-/*
- * v0.3.9 Theme system — Light + High-contrast.
- *
- * The :root palette above is the Dark default. Switching themes is
- * a body-class swap (`olv-theme-light` / `olv-theme-high-contrast`)
- * that overrides the same CSS variables — no per-component
- * rewrites, no JS-side colour poking. See `src/ui/themes.ts` for
- * the pure registry and the persistence path.
- *
- * Light theme — inverted background, preserved cyan accent. Tuned
- * for office-lighting readability: panels lift to a near-white,
- * text drops to a near-black, hairlines deepen to a visible
- * indigo, and the accent stays the brand's electric-blue so a
- * returning user reads the same affordances.
- */
-body.olv-theme-light {
-  --lab-frame: var(--lab-frame-on-light);
-  --lab-caveat-ink: var(--lab-caveat-ink-on-light);
-  --lab-caveat-fill: var(--lab-caveat-fill-on-light);
-  color-scheme: light;
-  --bg: #f4f6fb;
-  --panel: #ffffff;
-  --hairline: rgba(35, 60, 110, 0.20);
-  --text: #0a1430;
-  --text-dim: #46546e;
-  --text-faint: #5d6a87; /* darkened from #7682a0 to clear WCAG AA (≥4.5:1) on the light --bg */
-  --warn: #7d5b07; /* darkened from #b8860b, which read 2.9:1 on the near-white caption fill */
-  --accent: #0088c8;
-  --accent-soft: rgba(0, 136, 200, 0.18);
-  /* The phone sheet and dock follow the theme surface. */
-  --m-glass-raised: var(--panel);
-  /* Deeper violet so the blocked verdict stays legible on the near-white panel. */
-  --rating-blocked: #7c3aed;
-  /* The rest of the readiness scale, darkened the same way as --rating-blocked
-   * above: the :root values are tuned for the near-black dark --bg and read
-   * 1.4:1-2.6:1 here, well under the 4.5:1 AA floor this rail otherwise holds.
-   * Hue order (green > green > amber > orange > red) is preserved; each value
-   * clears 4.5:1 on both --bg and --panel with headroom. */
-  --rating-excellent: #1a7856;
-  --rating-strong: #247b41;
-  --rating-good: #896303;
-  --rating-moderate: #ac4f04;
-  --rating-weak: #d50b0b;
-  /*
-   * v0.4.6 two-tier surfaces in Light. The default --panel is pure
-   * white, so a RAISED surface must read by going *up* (it can't —
-   * white is the ceiling) — instead it stays crisp white and earns a
-   * firmer edge + lift shadow, while RECESSIVE panels drop to the
-   * page tint so the rank survives on near-white. WCAG AA holds: text
-   * tokens are unchanged and both fills stay light.
-   */
-  --panel-raised: #ffffff;
-  --panel-recessive: rgba(244, 246, 251, 0.72); /* the --bg tint — recedes against white raised */
-  --shadow-raised: 0 8px 22px -12px rgba(30, 50, 95, 0.28), 0 0 0 0.5px rgba(35, 60, 110, 0.10);
-  --hairline-strong: rgba(35, 60, 110, 0.34);
-  --caveat-tint: color-mix(in srgb, var(--rating-good) 16%, white);
-  /* Near-white ground: the same three layers, pitched down so a floating card
-     separates without printing a grey halo on the page. */
-  --shadow-floating:
-    0 0 0 0.5px rgba(35, 60, 110, 0.16),
-    0 4px 10px -4px rgba(30, 50, 95, 0.14),
-    0 16px 34px -18px rgba(30, 50, 95, 0.26);
+/* Interface palettes. Blue is the :root default in 01-tokens.css and takes no
+ * body class. Field and High contrast override the same role tokens and the
+ * same literal bridges (`--ui-*`), so a component that reads a token follows
+ * all three. These are interface palettes only: data colormaps, legend ramps,
+ * RGB appearance presets and report themes are separate and unchanged. */
+
+/* Field: graphite surfaces, off-white type, teal interaction accents and a
+ * warm caution ink. Every text and status ink clears 4.5:1 on --bg, --panel
+ * and --panel-raised (tests/fieldPalette.test.ts). */
+body.olv-theme-field {
+  color-scheme: dark;
+  --ui-surface-tint: #222629;
+  --ui-edge-tint: #9fb8b4;
+  --bg: #1c2127;
+  --panel: #262e30;
+  --panel-raised: #303a3b;
+  --panel-recessive: color-mix(in srgb, var(--ui-surface-tint) 92%, transparent);
+  --text: #f4f7f6;
+  --text-dim: #c2ceca;
+  --text-faint: #a9b9b4;
+  --hairline: color-mix(in srgb, var(--ui-edge-tint) 25%, transparent);
+  --hairline-strong: color-mix(in srgb, var(--ui-edge-tint) 50%, transparent);
+  --accent: #8fe0d5;
+  --accent-text: var(--accent);
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --focus-ring: 2px solid var(--accent);
+  --on-accent: #1c2127;
+  --cyan: var(--accent);
+  --teal: var(--accent);
+  --ice: #d1e8e2;
+  --brand-gradient: linear-gradient(90deg, var(--accent), var(--ice));
+  --warn: #ffcb9a;
+  --rating-excellent: #a6d86d;
+  --rating-strong: #a1dfb8;
+  --rating-good: #f2cf86;
+  --rating-moderate: #ffbc86;
+  --rating-weak: #ffabab;
+  --rating-blocked: #ddc0fa;
+  --state-withheld: #f6b6d4;
+  --hover-wash: color-mix(in srgb, var(--ice) 6%, transparent);
+  --m-glass-raised: var(--panel-raised);
+  --lab-frame: var(--hairline-strong);
+  --lab-caveat-ink: var(--warn);
+  --lab-caveat-fill: color-mix(in srgb, var(--warn) 12%, transparent);
+  --lab-glow: color-mix(in srgb, var(--accent) 20%, transparent);
+  --shadow-raised: 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+  --shadow-floating: 0 0 0 1px color-mix(in srgb, var(--ui-edge-tint) 20%, transparent), 0 12px 32px -12px rgba(0, 0, 0, 0.5);
+  --caveat-tint: color-mix(in srgb, var(--rating-good) 12%, transparent);
+  /* Literal bridges: the same opacity steps as Blue, in Field's hues. */
+  --stage-ui-background: radial-gradient(ellipse at 50% 45%, var(--panel-raised) 0%, var(--ui-surface-tint) 70%, var(--bg) 100%);
+  --ui-surface-11-17-33-a-0p92: color-mix(in srgb, var(--ui-surface-tint) 92%, transparent);
+  --ui-surface-10-14-26-a-0p92: color-mix(in srgb, var(--ui-surface-tint) 92%, transparent);
+  --ui-surface-11-17-33-a-0p82: color-mix(in srgb, var(--ui-surface-tint) 82%, transparent);
+  --ui-surface-11-17-33-a-0p86: color-mix(in srgb, var(--ui-surface-tint) 86%, transparent);
+  --ui-surface-11-17-33-a-0p9: color-mix(in srgb, var(--ui-surface-tint) 90%, transparent);
+  --ui-surface-11-17-33-a-0p94: color-mix(in srgb, var(--ui-surface-tint) 94%, transparent);
+  --ui-surface-8-13-20-a-0p82: color-mix(in srgb, var(--ui-surface-tint) 82%, transparent);
+  --ui-surface-8-13-20-a-0p9: color-mix(in srgb, var(--ui-surface-tint) 90%, transparent);
+  --ui-surface-8-13-26-a-0p94: color-mix(in srgb, var(--ui-surface-tint) 94%, transparent);
+  --ui-surface-11-17-33-a-0p55: color-mix(in srgb, var(--ui-surface-tint) 55%, transparent);
+  --ui-surface-11-17-33-a-0p96: color-mix(in srgb, var(--ui-surface-tint) 96%, transparent);
+  --ui-surface-6-10-20-a-0p66: color-mix(in srgb, var(--ui-surface-tint) 66%, transparent);
+  --ui-surface-6-10-20-a-0p5: color-mix(in srgb, var(--ui-surface-tint) 50%, transparent);
+  --ui-surface-11-17-33-a-0p78: color-mix(in srgb, var(--ui-surface-tint) 78%, transparent);
+  --ui-surface-5-8-16-a-0p66: color-mix(in srgb, var(--ui-surface-tint) 66%, transparent);
+  --ui-accent-a0p55: color-mix(in srgb, var(--accent) 55%, transparent);
+  --ui-surface-8-14-28-a0p66: color-mix(in srgb, var(--ui-surface-tint) 66%, transparent);
+  --ui-accent-a0p10: color-mix(in srgb, var(--accent) 10%, transparent);
+  --ui-accent-a0p3: color-mix(in srgb, var(--accent) 30%, transparent);
+  --ui-accent-a0p045: color-mix(in srgb, var(--accent) 4.5%, transparent);
+  --ui-accent-a0p42: color-mix(in srgb, var(--accent) 42%, transparent);
+  --ui-accent-a0p4: color-mix(in srgb, var(--accent) 40%, transparent);
+  --ui-accent-a0p08: color-mix(in srgb, var(--accent) 8%, transparent);
+  --ui-accent-a0p16: color-mix(in srgb, var(--accent) 16%, transparent);
+  --ui-accent-a0p34: color-mix(in srgb, var(--accent) 34%, transparent);
+  --ui-accent-a0p22: color-mix(in srgb, var(--accent) 22%, transparent);
+  --ui-accent-a0p6: color-mix(in srgb, var(--accent) 60%, transparent);
+  --ui-accent-a0p24: color-mix(in srgb, var(--accent) 24%, transparent);
+  --ui-accent-a0p28: color-mix(in srgb, var(--accent) 28%, transparent);
+  --ui-accent-a0p65: color-mix(in srgb, var(--accent) 65%, transparent);
+  --ui-surface-deep: var(--bg);
+  --ui-accent-a0p98: color-mix(in srgb, var(--accent) 98%, transparent);
+  --ui-accent-a0p12: color-mix(in srgb, var(--accent) 12%, transparent);
+  --ui-accent-a0p38: color-mix(in srgb, var(--accent) 38%, transparent);
+  --ui-edge-a0p42: color-mix(in srgb, var(--ui-edge-tint) 42%, transparent);
+  --ui-accent-a0p14: color-mix(in srgb, var(--accent) 14%, transparent);
+  --ui-accent-a0p5: color-mix(in srgb, var(--accent) 50%, transparent);
+  --ui-accent-solid: var(--accent);
+  --ui-accent-a0p32: color-mix(in srgb, var(--accent) 32%, transparent);
+  --ui-accent-a0p85: color-mix(in srgb, var(--accent) 85%, transparent);
+  --ui-accent-a0p04: color-mix(in srgb, var(--accent) 4%, transparent);
+  --ui-accent-a0p20: color-mix(in srgb, var(--accent) 20%, transparent);
+  --ui-accent-a0p18: color-mix(in srgb, var(--accent) 18%, transparent);
+  --ui-surface-8-14-28-a0p95: color-mix(in srgb, var(--ui-surface-tint) 95%, transparent);
+  --ui-surface-8-14-28-a1: var(--ui-surface-tint);
 }
 
-/*
- * High-contrast theme — maximum readability for low-vision users.
- * Pure black background, pure white text, every hairline becomes a
- * solid 1 px border at full opacity. WCAG AA on every text-on-bg
- * pair (text 21:1, dim 12.6:1, faint 4.6:1).
- */
+/* High contrast: a pure black page, opaque surfaces, solid white edges and a
+ * thick yellow focus ring. Text, icon, status and accent inks clear 7:1 on
+ * every surface, and the filled primary action clears 7:1
+ * (tests/themeHighContrast.test.ts). Status still reads by its word and
+ * icon; colour only reinforces it. This is a strong palette for low vision,
+ * not a certified accessibility mode; the operating system's forced colours
+ * (99z-forced-colors.css) remain the final override. */
 body.olv-theme-high-contrast {
-  --lab-frame: var(--text);
-  --lab-caveat-fill: transparent;
   color-scheme: dark;
   --bg: #000000;
   --panel: #0a0a0a;
-  --hairline: rgba(255, 255, 255, 0.55);
+  --panel-raised: #161616;
+  --panel-recessive: var(--panel);
   --text: #ffffff;
-  --text-dim: #d9d9d9;
-  --text-faint: #b3b3b3;
-  --warn: #f0b429; /* brightened for this rail: 8.8:1 on the caption fill, 10.6:1 on --panel */
-  --accent: #5cd7ff;
-  --accent-soft: rgba(92, 215, 255, 0.28);
-  /* Bright violet — high luminance against pure black, holds WCAG AA. */
-  --rating-blocked: #d8b4fe;
-  /*
-   * v0.4.6 two-tier surfaces in High-contrast. The palette is
-   * intentionally flattened, so the rank is carried by a FULL-opacity
-   * border (not fill alpha) on the raised surface and a near-black
-   * recessive fill — the verdict still reads by its word + colour, per
-   * the audit's high-contrast rule. Caveat keeps a solid full-strength
-   * rule so it never disappears.
-   */
-  --panel-raised: #141414;
-  --panel-recessive: #050505;
+  --text-dim: #e8e8e8;
+  --text-faint: #d0d0d0;
+  --hairline: #bdbdbd;
+  --hairline-strong: #ffffff;
+  --accent: #66dcff;
+  --accent-text: var(--accent);
+  --hc-accent-wash: #0d2f3a;
+  /* Modal and palette backdrops: a dark scrim, the one translucent layer. */
+  --hc-scrim: rgba(0, 0, 0, 0.85);
+  --accent-soft: var(--hc-accent-wash);
+  --on-accent: #000000;
+  --hc-focus: #ffe14d;
+  --focus-ring: 3px solid var(--hc-focus);
+  --focus-ring-offset: 2px;
+  --cyan: var(--accent);
+  --teal: var(--accent);
+  --ice: var(--text);
+  --brand-gradient: linear-gradient(90deg, var(--accent), var(--accent));
+  --warn: #ffd34d;
+  --rating-excellent: #6ff0a8;
+  --rating-strong: #b4f5d4;
+  --rating-good: #ffd34d;
+  --rating-moderate: #ffb877;
+  --rating-weak: #ffa3a3;
+  --rating-blocked: #dcbcff;
+  --state-withheld: #ffb0dc;
+  --hover-wash: #262626;
+  --m-glass: var(--panel);
+  --m-glass-raised: var(--panel-raised);
+  --m-edge: var(--hairline);
+  --m-edge-strong: var(--accent);
+  --m-active-glow: transparent;
+  --m-accent-1: var(--accent);
+  --m-accent-2: var(--accent);
+  --m-accent-grad: linear-gradient(135deg, var(--accent), var(--accent));
+  --m-on: var(--rating-excellent);
+  --m-glass-shadow: none;
+  --m-chrome-lift: none;
+  --lab-frame: var(--text);
+  --lab-caveat-ink: var(--warn);
+  --lab-caveat-fill: transparent;
+  --lab-glow: transparent;
   --shadow-raised: none;
-  --hairline-strong: rgba(255, 255, 255, 0.85);
-  --caveat-tint: rgba(250, 204, 21, 0.16);
+  --shadow-floating: 0 0 0 2px var(--hairline-strong);
+  --caveat-tint: #2b2408;
+  /* Literal bridges: opaque surfaces, solid accent edges, opaque washes, no glow. */
+  --stage-ui-background: var(--bg);
+  --ui-surface-11-17-33-a-0p92: var(--panel);
+  --ui-surface-10-14-26-a-0p92: var(--panel);
+  --ui-surface-11-17-33-a-0p82: var(--panel);
+  --ui-surface-11-17-33-a-0p86: var(--panel);
+  --ui-surface-11-17-33-a-0p9: var(--panel);
+  --ui-surface-11-17-33-a-0p94: var(--panel);
+  --ui-surface-8-13-20-a-0p82: var(--panel);
+  --ui-surface-8-13-20-a-0p9: var(--panel);
+  --ui-surface-8-13-26-a-0p94: var(--panel);
+  --ui-surface-11-17-33-a-0p55: var(--hc-scrim);
+  --ui-surface-11-17-33-a-0p96: var(--panel);
+  --ui-surface-6-10-20-a-0p66: var(--hc-scrim);
+  --ui-surface-6-10-20-a-0p5: var(--hc-scrim);
+  --ui-surface-11-17-33-a-0p78: var(--panel);
+  --ui-surface-5-8-16-a-0p66: var(--hc-scrim);
+  --ui-accent-a0p55: var(--accent);
+  --ui-surface-8-14-28-a0p66: var(--hc-scrim);
+  --ui-accent-a0p10: var(--hc-accent-wash);
+  --ui-accent-a0p3: var(--accent);
+  --ui-accent-a0p045: var(--hc-accent-wash);
+  --ui-accent-a0p42: var(--accent);
+  --ui-accent-a0p4: var(--accent);
+  --ui-accent-a0p08: var(--hc-accent-wash);
+  --ui-accent-a0p16: var(--hc-accent-wash);
+  --ui-accent-a0p34: var(--accent);
+  --ui-accent-a0p22: var(--accent);
+  --ui-accent-a0p6: var(--accent);
+  --ui-accent-a0p24: var(--hc-accent-wash);
+  --ui-accent-a0p28: var(--accent);
+  --ui-accent-a0p65: var(--accent);
+  --ui-surface-deep: var(--on-accent);
+  --ui-accent-a0p98: var(--accent);
+  --ui-accent-a0p12: var(--bg);
+  --ui-accent-a0p38: var(--bg);
+  --ui-edge-a0p42: var(--hairline-strong);
+  --ui-accent-a0p14: var(--hc-accent-wash);
+  --ui-accent-a0p5: var(--accent);
+  --ui-accent-solid: var(--accent);
+  --ui-accent-a0p32: var(--accent);
+  --ui-accent-a0p85: var(--accent);
+  --ui-accent-a0p04: var(--hc-accent-wash);
+  --ui-accent-a0p20: var(--accent);
+  --ui-accent-a0p18: var(--hc-accent-wash);
+  --ui-surface-8-14-28-a0p95: var(--panel);
+  --ui-surface-8-14-28-a1: var(--on-accent);
+}
+
+/* Tokens that :root derives from other tokens resolve where they are declared,
+ * so each palette re-declares them against its own role tokens. */
+body.olv-theme-field,
+body.olv-theme-high-contrast {
+  --state-measured: var(--rating-excellent);
+  --state-preview: var(--rating-moderate);
+  --state-review: var(--rating-weak);
+  --state-blocked: var(--rating-blocked);
+  --state-derived: var(--accent);
+  --state-info: var(--text-dim);
+  --caveat-rule: var(--rating-good);
+}
+
+/* High-contrast component rules. Skipped under forced colours, which keeps
+ * the last word. Edges are 2 px solid on panels, inputs, buttons and menus;
+ * focus is a 3 px ring; blur and glow are removed so nothing softens an edge
+ * or the text behind it. */
+@media (forced-colors: none) {
+  body.olv-theme-high-contrast *,
+  body.olv-theme-high-contrast *::before,
+  body.olv-theme-high-contrast *::after {
+    text-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  body.olv-theme-high-contrast :is(button:not(.olv-viewcube-spot), select, textarea, input:not([type='range'], [type='checkbox'], [type='radio'], [type='color'], [type='file'])),
+  body.olv-theme-high-contrast :is([role='dialog'], [role='alertdialog'], [role='menu'], [role='listbox'], [role='tooltip'], [role='tablist'], dialog),
+  body.olv-theme-high-contrast :is(.olv-inspector, .olv-streaming-panel, .olv-left-panels > *, .olv-inspect-card, .olv-project-card,
+    .olv-shortcuts-card, .olv-tour-card, .olv-wfc-card, .olv-help-card, .olv-palette-card, .olv-modal, .olv-bc-dialog,
+    .olv-nav-hud, .olv-nav-prompt, .olv-nav-more-menu, .olv-quality-pop, .olv-probe-readout, .olv-measure-bar, .olv-measure-hint,
+    .olv-lasso-toast, .olv-toast, .olv-rvc, .olv-dock, .olv-rail-tab, .olv-right-rail-tab, .olv-mobile-sheet, .olv-result-card,
+    .olv-tip-layer, .olv-anno-editor, .olv-colorbar, .olv-layerhealth-card, .olv-ati, .olv-state-strip) {
+    border: 2px solid var(--hairline-strong);
+  }
+  body.olv-theme-high-contrast :is(table, th, td) {
+    border: 2px solid var(--hairline);
+    border-collapse: collapse;
+  }
+  body.olv-theme-high-contrast :is(button, select, input, textarea):disabled {
+    border-style: dashed;
+    border-color: var(--text-faint);
+    color: var(--text-faint);
+  }
+  /* States that a colour change alone would carry also take a solid outline. */
+  body.olv-theme-high-contrast :is(button, a, [role='tab'], [role='option'], [role='menuitem'], [role='menuitemradio'], [role='radio']):is(.is-active, .is-on, [aria-pressed='true'], [aria-selected='true'], [aria-current='true'], [aria-current='page']) {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  /* Active tools, tabs and tooltips drop their accent glow; the outline above
+     marks the state instead. */
+  body.olv-theme-high-contrast .olv-empty::before { display: none; }
+  body.olv-theme-high-contrast :is(.olv-tool, .olv-ws-tab, .olv-mode, .olv-msheet-tab, .olv-tip-layer, .olv-open-btn),
+  body.olv-theme-high-contrast :is(.olv-tool, .olv-ws-tab, .olv-mode, .olv-msheet-tab, .olv-open-btn):hover {
+    box-shadow: none;
+  }
+  /* Focus comes last so it is never hidden by a state outline. */
+  body.olv-theme-high-contrast :focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+    box-shadow: none;
+  }
+  body.olv-theme-high-contrast :is(input, select, textarea):focus-visible {
+    outline-offset: -3px;
+  }
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -695,7 +900,7 @@ button:disabled { cursor: not-allowed; }
 .olv-stage {
   position: relative; height: 100%; width: 100%;
   background:
-    radial-gradient(ellipse at 50% 45%, #0c1224 0%, #070a14 70%, #050810 100%);
+    var(--stage-ui-background);
 }
 .olv-stage::after {
   /* Cinematic vignette — darkens the corners ~22%, fades to neutral by
@@ -761,13 +966,6 @@ button:disabled { cursor: not-allowed; }
  * wordmark, set in Olv Font Medium with the brand tracking. */
 .olv-wordmark-mark { display: block; width: 28px; height: 28px; flex: none; }
 .olv-wordmark-text { letter-spacing: -0.02em; font-kerning: normal; }
-/* Light theme: the light-background lockup. The <img> keeps its box and the
- * deeper-blue emblem paints as its background in place of the default one. */
-body.olv-theme-light .olv-wordmark-mark,
-body.olv-theme-light .olv-empty-hero-mark {
-  object-position: -9999px 0;
-  background: url("/brand-mark-light.svg") center / contain no-repeat;
-}
 .olv-topbar-right { display: flex; align-items: center; gap: var(--space-lg); }
 /*
  * v0.4.6 trust signal (design audit 2.4). "Private · on your device"
@@ -918,8 +1116,8 @@ body.olv-theme-light .olv-empty-hero-mark {
   transform: translateX(-50%);
   background: radial-gradient(
     circle at center,
-    rgba(0, 178, 255, 0.10) 0%,
-    rgba(0, 178, 255, 0.045) 32%,
+    var(--ui-accent-a0p10) 0%,
+    var(--ui-accent-a0p045) 32%,
     transparent 68%
   );
   pointer-events: none;
@@ -927,23 +1125,13 @@ body.olv-theme-light .olv-empty-hero-mark {
 }
 /* Every child sits above the wash; the wash must never eat a click. */
 .olv-empty > * { position: relative; z-index: var(--z-content); }
-/* On the light theme the same wash reads as a smudge on near-white rather than
- * depth, so it drops to a trace — enough to seat the hero, not enough to tint. */
-body.olv-theme-light .olv-empty::before {
-  background: radial-gradient(
-    circle at center,
-    rgba(0, 130, 200, 0.055) 0%,
-    rgba(0, 130, 200, 0.022) 32%,
-    transparent 68%
-  );
-}
 
 .olv-empty {
   position: absolute; inset: 0;
   /* Opaque themed backdrop for the splash. The stage behind carries the dark
    * "sky" preset (an inline style the renderer sets for point-cloud contrast),
-   * which is right behind a loaded cloud but leaves Light-theme text stranded
-   * on a dark field before any scan opens. The empty state is full-bleed and
+   * which is right behind a loaded cloud but would leave the splash on the
+   * renderer's field rather than the theme's page before any scan opens. The empty state is full-bleed and
    * hidden the moment a scan loads, so painting it with the theme background
    * makes the whole splash follow the theme without touching the viewer sky. */
   background: var(--bg);
@@ -1148,7 +1336,7 @@ body.olv-theme-light .olv-empty::before {
  * cue from one that expands into prose).
  */
 .olv-pc-search-disclosure[open] {
-  border-left: 2px solid rgba(0, 178, 255, 0.55);
+  border-left: 2px solid var(--ui-accent-a0p55);
   padding-left: var(--space-lg);
   margin-left: -12px;
 }
@@ -1639,7 +1827,7 @@ body.olv-theme-light .olv-empty::before {
      currentTime 0 (opacity permanently 0, unhoverable) for as long as the
      render loop kept the thread saturated. A plain background has no such
      dependency. */
-  background: rgba(11, 17, 33, 0.92);
+  background: var(--ui-surface-11-17-33-a-0p92);
   border: 0.5px solid var(--accent);
   border-radius: var(--radius-pill);
   box-shadow: var(--shadow-floating);
@@ -1684,7 +1872,7 @@ body.olv-theme-light .olv-empty::before {
   background: var(--panel);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
-  border: 0.5px solid rgba(0, 178, 255, 0.42);
+  border: 0.5px solid var(--ui-accent-a0p42);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-floating);
   opacity: 0;
@@ -1845,7 +2033,7 @@ body.olv-theme-light .olv-empty::before {
 .olv-chip:hover { color: var(--text); }
 .olv-chip-active {
   color: var(--accent); background: var(--accent-soft);
-  border-color: rgba(0, 178, 255, 0.4);
+  border-color: var(--ui-accent-a0p4);
 }
 .olv-chip-disabled {
   opacity: 0.45; cursor: not-allowed; color: var(--text-faint);
@@ -2086,7 +2274,7 @@ body.olv-theme-light .olv-empty::before {
   position: absolute; top: auto; left: auto; bottom: 14px; right: 14px;
   z-index: var(--z-raised);
   max-width: 320px; max-height: 60vh; overflow-y: auto;
-  background: rgba(10, 14, 26, 0.92);
+  background: var(--ui-surface-10-14-26-a-0p92);
   border: 0.5px solid var(--hairline);
   border-radius: var(--radius-md); padding: var(--space-lg) var(--space-xl);
   pointer-events: none;
@@ -2403,7 +2591,6 @@ body.olv-theme-light .olv-empty::before {
 .olv-mode-reset:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .olv-mode-reset:active { transform: scale(0.94); }
 .olv-mode-reset svg { width: 18px; height: 18px; display: block; }
-body[data-theme="high-contrast"] .olv-mode-reset { border: 2px solid var(--accent); }
 
 /* "More" — the six axis views, in a popover above the row. */
 .olv-nav-more-wrap { position: relative; display: inline-flex; }
@@ -2442,7 +2629,7 @@ body[data-theme="high-contrast"] .olv-mode-reset { border: 2px solid var(--accen
 .olv-mode:active { transform: scale(0.95); }
 .olv-mode-active {
   color: var(--accent); background: var(--accent-soft);
-  box-shadow: inset 0 0 0 0.5px rgba(0, 178, 255, 0.4);
+  box-shadow: inset 0 0 0 0.5px var(--ui-accent-a0p4);
 }
 
 /* Speed slider — beside the selector, shown in Walk and Fly only. */
@@ -2463,7 +2650,7 @@ body[data-theme="high-contrast"] .olv-mode-reset { border: 2px solid var(--accen
 
 /* Controls HUD */
 .olv-nav-hud {
-  background: rgba(11, 17, 33,0.82);
+  background: var(--ui-surface-11-17-33-a-0p82);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border: 0.5px solid var(--hairline);
   border-radius: var(--radius-lg);
@@ -2567,7 +2754,7 @@ body[data-theme="high-contrast"] .olv-mode-reset { border: 2px solid var(--accen
 .olv-cam-chip:hover,
 .olv-nav-panel-toggle:hover {
   color: var(--text); border-color: var(--accent);
-  background: rgba(0, 178, 255, 0.08);
+  background: var(--ui-accent-a0p08);
 }
 .olv-cam-chip:active,
 .olv-nav-panel-toggle:active { transform: scale(0.96); }
@@ -2578,8 +2765,8 @@ body[data-theme="high-contrast"] .olv-mode-reset { border: 2px solid var(--accen
 .olv-cam-chip-key {
   font-family: var(--mono); font-size: var(--text-2xs);
   color: var(--accent);
-  background: rgba(0, 178, 255, 0.10);
-  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  background: var(--ui-accent-a0p10);
+  border: 0.5px solid var(--ui-accent-a0p3);
   border-radius: var(--radius-xs); padding: 1px var(--space-xs); min-width: 14px; text-align: center;
 }
 .olv-cam-chip-label { font-size: var(--text-xs); }
@@ -2588,8 +2775,8 @@ body[data-theme="high-contrast"] .olv-mode-reset { border: 2px solid var(--accen
 .olv-ortho-toggle.is-on,
 .olv-plan-toggle.is-on {
   color: var(--accent);
-  border-color: rgba(0, 178, 255, 0.55);
-  background: rgba(0, 178, 255, 0.16);
+  border-color: var(--ui-accent-a0p55);
+  background: var(--ui-accent-a0p16);
 }
 
 /* Centred "click to look" prompt */
@@ -2597,9 +2784,9 @@ body[data-theme="high-contrast"] .olv-mode-reset { border: 2px solid var(--accen
   position: absolute; top: 46%; left: 50%;
   transform: translate(-50%, -50%);
   display: flex; flex-direction: column; align-items: center; gap: var(--space-xs);
-  background: rgba(11, 17, 33,0.86);
+  background: var(--ui-surface-11-17-33-a-0p86);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  border: 0.5px solid rgba(0, 178, 255, 0.34);
+  border: 0.5px solid var(--ui-accent-a0p34);
   border-radius: 12px; padding: var(--space-xl) var(--space-4xl);
   font-size: var(--text-md); color: var(--text);
   pointer-events: none; /* clicks pass through to the canvas */
@@ -2637,8 +2824,8 @@ body[data-theme="high-contrast"] .olv-mode-reset { border: 2px solid var(--accen
 .olv-nav-prompt-sub { font-size: var(--text-xs); color: var(--text-faint); font-variant-numeric: tabular-nums; }
 
 @keyframes olv-prompt-breathe {
-  0%, 100% { border-color: rgba(0, 178, 255, 0.22); }
-  50% { border-color: rgba(0, 178, 255, 0.6); }
+  0%, 100% { border-color: var(--ui-accent-a0p22); }
+  50% { border-color: var(--ui-accent-a0p6); }
 }
 
 /* Utility — always wins over a component's own `display`. */
@@ -2822,11 +3009,11 @@ body:has(.olv-right-rail.olv-right-collapsed) .olv-navbar { --olv-nb-r: 0px; }
 .olv-view-save {
   width: 100%; font-size: var(--text-xs); color: var(--accent);
   background: var(--accent-soft);
-  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  border: 0.5px solid var(--ui-accent-a0p3);
   border-radius: var(--radius-sm); padding: var(--space-sm);
   transition: background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
-.olv-view-save:hover { background: rgba(0, 178, 255, 0.24); }
+.olv-view-save:hover { background: var(--ui-accent-a0p24); }
 .olv-view-save:active { transform: scale(0.98); }
 /* Provenance — capture-type fingerprint surfaced near the dataset metadata. */
 /* Coordinate reference system (CRS) section in the Inspector. The
@@ -3038,16 +3225,16 @@ body:has(.olv-right-rail.olv-right-collapsed) .olv-navbar { --olv-nb-r: 0px; }
   border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
   transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
 }
-.olv-view-name:hover { border-color: rgba(0, 178, 255, 0.4); }
+.olv-view-name:hover { border-color: var(--ui-accent-a0p4); }
 .olv-view-name:focus-visible { outline: none; border-color: var(--accent); }
 .olv-view-go {
   flex-shrink: 0; font-size: var(--text-xs); color: var(--accent);
   background: var(--accent-soft);
-  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  border: 0.5px solid var(--ui-accent-a0p3);
   border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg);
   transition: background var(--dur-fast) var(--ease-standard);
 }
-.olv-view-go:hover { background: rgba(0, 178, 255, 0.24); }
+.olv-view-go:hover { background: var(--ui-accent-a0p24); }
 .olv-view-go:active { transform: scale(0.98); }
 
 /* "Project ready" summary card. Centred in the band between the two rails
@@ -3060,9 +3247,9 @@ body:has(.olv-right-rail.olv-right-collapsed) .olv-navbar { --olv-nb-r: 0px; }
   left: calc(50vw + (var(--olv-rail-width) - var(--olv-right-rail-width)) / 2);
   transform: translateX(-50%) translateY(-6px);
   width: clamp(200px, calc(100vw - 44px - var(--olv-rail-width) - var(--olv-right-rail-width)), 290px);
-  background: rgba(11, 17, 33,0.9);
+  background: var(--ui-surface-11-17-33-a-0p9);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-  border: 0.5px solid rgba(0, 178, 255, 0.28);
+  border: 0.5px solid var(--ui-accent-a0p28);
   border-radius: var(--radius-xl); padding: var(--space-xl) var(--space-2xl);
   box-shadow: var(--shadow-floating);
   opacity: 0; pointer-events: none;
@@ -3312,15 +3499,11 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
    flare, two flat dotted rings with a band of light travelling round each (the
    two turn opposite ways), and a mirrored, tapering axis of dots lit outward
    from the centre. Brand tokens: --accent for the sphere and halo, --cyan for
-   the dots, --ice for highlights; the light theme uses its own --accent for
-   the dots. Transform and opacity only; one 2.8 s loop; nothing flashes. */
+   the dots, --ice for highlights; each interface palette sets all three.
+   Transform and opacity only; one 2.8 s loop; nothing flashes. */
 .olv-busy-scan--emblem {
   --olv-bse-dot: var(--cyan);
   --olv-bse-hi: var(--ice);
-}
-body.olv-theme-light .olv-busy-scan--emblem {
-  --olv-bse-dot: var(--accent);
-  --olv-bse-hi: var(--cyan);
 }
 .olv-bse-halo { fill: var(--accent); opacity: 0.16; }
 .olv-bse-streak { fill: var(--olv-bse-hi); opacity: 0.55; }
@@ -3446,8 +3629,8 @@ body.olv-theme-light .olv-busy-scan--emblem {
 .olv-tool-active {
   color: var(--accent);
   background: var(--accent-soft);
-  border-color: rgba(0, 178, 255, 0.65);
-  box-shadow: 0 0 16px rgba(0, 178, 255, 0.22);
+  border-color: var(--ui-accent-a0p65);
+  box-shadow: 0 0 16px var(--ui-accent-a0p22);
 }
 
 /* The SVG layer that draws markers, lines and labels */
@@ -3461,7 +3644,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
   stroke: var(--accent); stroke-width: 1.75; stroke-dasharray: 6 4;
 }
 .olv-measure-dot {
-  fill: var(--accent); stroke: #030817; stroke-width: 1.65;
+  fill: var(--accent); stroke: var(--ui-surface-deep); stroke-width: 1.65;
 }
 .olv-measure-dot-pending {
   fill: none; stroke: var(--accent); stroke-width: 2.2;
@@ -3478,7 +3661,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
  * the canvas without reading the tooltip.
  */
 .olv-measure-dot-snap {
-  fill: var(--cyan, #00f0ff); stroke: #030817; stroke-width: 1.65;
+  fill: var(--cyan, #00f0ff); stroke: var(--ui-surface-deep); stroke-width: 1.65;
 }
 /*
  * Profile-station markers — the small dim dots at evenly-spaced chainages
@@ -3489,10 +3672,10 @@ body.olv-theme-light .olv-busy-scan--emblem {
  * screenshot export read identically — keep the two in sync.
  */
 .olv-measure-dot-station {
-  fill: rgba(0, 178, 255, 0.55); stroke: #030817; stroke-width: 1;
+  fill: var(--ui-accent-a0p55); stroke: var(--ui-surface-deep); stroke-width: 1;
 }
 .olv-measure-dot-station.is-active {
-  fill: rgba(0, 178, 255, 0.98); stroke: #030817; stroke-width: 1.4;
+  fill: var(--ui-accent-a0p98); stroke: var(--ui-surface-deep); stroke-width: 1.4;
 }
 .olv-measure-snap-ring {
   fill: none;
@@ -3512,16 +3695,16 @@ body.olv-theme-light .olv-busy-scan--emblem {
   fill: var(--accent);
   font: 600 12px var(--font); font-variant-numeric: tabular-nums;
   paint-order: stroke;
-  stroke: #030817; stroke-width: 4px; stroke-linejoin: round;
+  stroke: var(--ui-surface-deep); stroke-width: 4px; stroke-linejoin: round;
 }
 
 /* The instruction hint shown while measuring */
 .olv-measure-hint {
   position: absolute; top: var(--olv-lane-top); left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; gap: var(--space-2xl);
-  background: rgba(11, 17, 33,0.9);
+  background: var(--ui-surface-11-17-33-a-0p9);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-  border: 0.5px solid rgba(0, 178, 255, 0.34);
+  border: 0.5px solid var(--ui-accent-a0p34);
   border-radius: var(--radius-lg); padding: var(--space-lg) var(--space-xl);
   box-shadow: var(--shadow-floating);
 }
@@ -3535,7 +3718,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
 .olv-measure-badge {
   font-size: var(--text-2xs); color: var(--accent);
   background: var(--accent-soft);
-  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  border: 0.5px solid var(--ui-accent-a0p3);
   border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-md);
   letter-spacing: 0.05em; text-transform: uppercase;
 }
@@ -3571,9 +3754,9 @@ body.olv-theme-light .olv-busy-scan--emblem {
 .olv-measure-done {
   color: var(--accent-text, var(--accent));
   background: var(--accent-soft);
-  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  border: 0.5px solid var(--ui-accent-a0p3);
 }
-.olv-measure-done:hover { background: rgba(0, 178, 255, 0.24); }
+.olv-measure-done:hover { background: var(--ui-accent-a0p24); }
 .olv-measure-clear:active, .olv-measure-done:active { transform: scale(0.95); }
 .olv-measure-clear:focus-visible, .olv-measure-done:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
@@ -3584,7 +3767,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-inspect-halo { fill: var(--accent); opacity: 0.2; }
 .olv-inspect-dot {
-  fill: var(--cyan); stroke: #030817; stroke-width: 1.5;
+  fill: var(--cyan); stroke: var(--ui-surface-deep); stroke-width: 1.5;
 }
 
 .olv-inspect-card {
@@ -3594,9 +3777,9 @@ body.olv-theme-light .olv-busy-scan--emblem {
      the card is the focused pick result, the HUD is ambient. Below the dock
      (z:20). */
   z-index: calc(var(--z-panel) + 1);
-  background: rgba(11, 17, 33, 0.94);
+  background: var(--ui-surface-11-17-33-a-0p94);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-  border: 0.5px solid rgba(0, 178, 255, 0.34);
+  border: 0.5px solid var(--ui-accent-a0p34);
   border-radius: var(--radius-lg); padding: var(--space-xl) var(--space-xl);
   pointer-events: auto;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
@@ -3638,11 +3821,11 @@ body.olv-theme-light .olv-busy-scan--emblem {
 .olv-inspect-copy {
   font-size: var(--text-xs); color: var(--accent);
   background: var(--accent-soft);
-  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  border: 0.5px solid var(--ui-accent-a0p3);
   border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-xl);
   transition: background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
-.olv-inspect-copy:hover { background: rgba(0, 178, 255, 0.24); }
+.olv-inspect-copy:hover { background: var(--ui-accent-a0p24); }
 .olv-inspect-copy:active { transform: scale(0.95); }
 .olv-inspect-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .olv-inspect-copied { font-size: var(--text-xs); color: var(--teal); }
@@ -3689,8 +3872,8 @@ body.olv-theme-light .olv-busy-scan--emblem {
   --olv-cta-shadow:
     0 1px 0 rgba(255, 255, 255, 0.22) inset,
     0 1px 2px rgba(0, 0, 0, 0.35),
-    0 4px 12px rgba(0, 178, 255, 0.22),
-    0 12px 32px rgba(0, 178, 255, 0.12);
+    0 4px 12px var(--ui-accent-a0p22),
+    0 12px 32px var(--ui-accent-a0p12);
   border: none; border-radius: 12px; padding: var(--space-xl) var(--space-3xl);
   box-shadow: var(--olv-cta-shadow);
   transition: box-shadow var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
@@ -3702,7 +3885,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
   .olv-open-btn:hover {
     box-shadow:
       0 1px 0 rgba(255, 255, 255, 0.22) inset,
-      0 8px 30px rgba(0, 178, 255, 0.38);
+      0 8px 30px var(--ui-accent-a0p38);
   }
 }
 .olv-open-btn:active { transform: scale(0.96); }
@@ -3969,9 +4152,9 @@ body.olv-theme-light .olv-busy-scan--emblem {
     bottom: calc(148px + env(safe-area-inset-bottom));
     display: flex; align-items: center; gap: var(--space-md);
     max-width: min(420px, calc(100vw - 24px));
-    background: rgba(11, 17, 33, 0.92);
+    background: var(--ui-surface-11-17-33-a-0p92);
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-    border: 0.5px solid rgba(0, 178, 255, 0.34);
+    border: 0.5px solid var(--ui-accent-a0p34);
     border-radius: var(--radius-lg); padding: var(--space-lg) var(--space-lg) var(--space-lg) var(--space-2xl);
     font-size: var(--text-sm); color: var(--text); text-align: left;
     opacity: 0; pointer-events: none;
@@ -3999,9 +4182,9 @@ body.olv-theme-light .olv-busy-scan--emblem {
     bottom: calc(14px + env(safe-area-inset-bottom));
     z-index: var(--z-sheet);
     font-size: var(--text-sm); font-weight: 500; color: var(--accent);
-    background: rgba(11, 17, 33, 0.92);
+    background: var(--ui-surface-11-17-33-a-0p92);
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-    border: 0.5px solid rgba(0, 178, 255, 0.42);
+    border: 0.5px solid var(--ui-accent-a0p42);
     border-radius: var(--radius-lg); padding: 0 var(--space-2xl);
     min-height: 44px;
     transition: transform 90ms var(--ease-standard);
@@ -4051,7 +4234,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
     position: absolute; top: 6px; left: 50%;
     transform: translateX(-50%);
     width: 38px; height: 4px; border-radius: 2px;
-    background: rgba(140, 170, 230, 0.42);
+    background: var(--ui-edge-a0p42);
   }
 
   /* Sheet header doubles as a tap-to-toggle handle. It sits at the very
@@ -4248,19 +4431,19 @@ body.olv-theme-light .olv-busy-scan--emblem {
    with the legacy distance measure tool above.
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-m-fill {
-  fill: rgba(0, 178, 255, 0.14);
+  fill: var(--ui-accent-a0p14);
   stroke: var(--accent);
   /* fill outline + leader strokes bumped ~10%. */
   stroke-width: 1.45;
   stroke-dasharray: 5 4;
 }
 .olv-m-preview { opacity: 0.5; }
-.olv-m-leader { stroke: rgba(0, 178, 255, 0.5); stroke-width: 1.1; }
+.olv-m-leader { stroke: var(--ui-accent-a0p5); stroke-width: 1.1; }
 .olv-m-label-primary { font-size: var(--text-md); }
 .olv-m-handle { pointer-events: all; fill: transparent; cursor: grab; }
 /* The handle is invisible until the pointer is over it; the cursor alone was
    the only cue that a vertex can be dragged. */
-.olv-m-handle:hover { fill: rgba(0, 178, 255, 0.28); stroke: var(--accent); stroke-width: 1; }
+.olv-m-handle:hover { fill: var(--ui-accent-a0p28); stroke: var(--accent); stroke-width: 1; }
 .olv-m-handle:active { cursor: grabbing; }
 
 /* ── Annotation markers ──────────────────────────────────────────────────── */
@@ -4271,8 +4454,8 @@ body.olv-theme-light .olv-busy-scan--emblem {
 }
 .olv-anno-marker { pointer-events: auto; cursor: pointer; }
 /* Dark halo keeps the marker readable over a dense, bright cloud. */
-.olv-anno-halo { fill: rgba(8, 13, 20, 0.82); }
-.olv-anno-disc { stroke: rgba(8, 13, 20, 0.9); stroke-width: 1; }
+.olv-anno-halo { fill: var(--ui-surface-8-13-20-a-0p82); }
+.olv-anno-disc { stroke: var(--ui-surface-8-13-20-a-0p9); stroke-width: 1; }
 .olv-anno-num {
   font-size: var(--text-sm); font-weight: 600; user-select: none;
 }
@@ -4369,11 +4552,11 @@ body.olv-theme-light .olv-busy-scan--emblem {
   font-size: var(--text-xs); padding: var(--space-sm) var(--space-xl); cursor: pointer; border-radius: var(--radius-sm);
   color: var(--accent);
   background: var(--accent-soft);
-  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  border: 0.5px solid var(--ui-accent-a0p3);
   font-weight: 600;
   transition: background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
-.olv-anno-editor-save:hover { background: rgba(0, 178, 255, 0.24); }
+.olv-anno-editor-save:hover { background: var(--ui-accent-a0p24); }
 .olv-anno-editor-save:active { transform: scale(0.96); }
 
 /* ── Annotation hint bar ─────────────────────────────────────────────────── */
@@ -4407,7 +4590,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
   gap: var(--space-sm); z-index: calc(var(--z-float) + 1);
   background: var(--panel);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
-  border: 0.5px solid rgba(0, 178, 255, 0.28);
+  border: 0.5px solid var(--ui-accent-a0p28);
   border-radius: var(--radius-lg); padding: var(--space-sm) var(--space-lg);
   /* Stay clear of the side panels (~300 px each) so it never overlaps them. */
   width: max-content; max-width: calc(100vw - 680px);
@@ -4438,7 +4621,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
 .olv-mkind:active { transform: scale(0.96); }
 .olv-mkind-active {
   color: var(--accent-text, var(--accent)); background: var(--accent-soft);
-  border-color: rgba(0, 178, 255, 0.4);
+  border-color: var(--ui-accent-a0p4);
 }
 /* Auxiliary kind button (Lasso volume).
  *
@@ -4497,12 +4680,12 @@ body.olv-theme-light .olv-busy-scan--emblem {
 .olv-measure-finish {
   font-size: var(--text-xs); color: var(--accent);
   background: var(--accent-soft);
-  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  border: 0.5px solid var(--ui-accent-a0p3);
   border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg);
   font-weight: 500;
   transition: background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
-.olv-measure-finish:hover { background: rgba(0, 178, 255, 0.24); }
+.olv-measure-finish:hover { background: var(--ui-accent-a0p24); }
 .olv-measure-finish:active { transform: scale(0.96); }
 
 /* ── Icon-first measurement controls (v0.4.6) ──────────────────────────────
@@ -4552,13 +4735,13 @@ body.olv-theme-light .olv-busy-scan--emblem {
 .olv-tip-layer {
   position: fixed; top: 0; left: 0;
   padding: 4px 9px; border-radius: var(--radius-sm);
-  background: rgba(8, 13, 26, 0.94);
+  background: var(--ui-surface-8-13-26-a-0p94);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  border: 0.5px solid rgba(0, 178, 255, 0.42);
+  border: 0.5px solid var(--ui-accent-a0p42);
   color: var(--text); font-size: var(--text-2xs); font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em; white-space: normal; max-width: 260px; width: max-content;
   line-height: 1.2;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 14px rgba(0, 178, 255, 0.14);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 14px var(--ui-accent-a0p14);
   /* `pointer-events: none` while hidden: the layer persists at its LAST
    * shown position between hovers (it is created once, lazily, then
    * repositioned rather than removed), so leaving hit-testing on here would
@@ -4573,9 +4756,9 @@ body.olv-theme-light .olv-busy-scan--emblem {
 .olv-tip-layer::before {
   content: ''; position: absolute; left: var(--olv-tip-connector-x, 50%);
   width: 7px; height: 7px; transform: translateX(-50%) rotate(45deg);
-  background: rgba(8, 13, 26, 0.94);
-  border-left: 0.5px solid rgba(0, 178, 255, 0.42);
-  border-top: 0.5px solid rgba(0, 178, 255, 0.42);
+  background: var(--ui-surface-8-13-26-a-0p94);
+  border-left: 0.5px solid var(--ui-accent-a0p42);
+  border-top: 0.5px solid var(--ui-accent-a0p42);
 }
 /* Below the anchor (default): connector sits on the tip box's top edge. */
 .olv-tip-layer:not([data-placement="above"])::before { top: -3.5px; }
@@ -4584,8 +4767,8 @@ body.olv-theme-light .olv-busy-scan--emblem {
 .olv-tip-layer[data-placement="above"]::before {
   bottom: -3.5px; top: auto;
   border-left: none; border-top: none;
-  border-right: 0.5px solid rgba(0, 178, 255, 0.42);
-  border-bottom: 0.5px solid rgba(0, 178, 255, 0.42);
+  border-right: 0.5px solid var(--ui-accent-a0p42);
+  border-bottom: 0.5px solid var(--ui-accent-a0p42);
 }
 .olv-tip-layer--visible { opacity: 1; pointer-events: auto; }
 @media (hover: none) {
@@ -4920,8 +5103,8 @@ body.olv-theme-light .olv-busy-scan--emblem {
 
    Sized at 10px rather than the hairline a dark UI invites: the thumb is a
    drag target, and the panel it scrolls was just made hit-testable so it
-   could be dragged at all. Both colours are tokens, so light, dark and the
-   high-contrast theme all follow without a second rule. The track stays
+   could be dragged at all. Both colours are tokens, so Blue, Field and High
+   contrast all follow without a second rule. The track stays
    transparent, letting the panel fill show through, so the gutter reads as
    part of the surface instead of a channel cut into it. */
 /* The standard properties are scoped to Firefox on purpose. Setting
@@ -5738,12 +5921,12 @@ body.olv-theme-light .olv-busy-scan--emblem {
   border-color: rgba(255, 255, 255, 0.18);
 }
 .olv-mp-vex-chip-active {
-  color: var(--accent, #00b2ff);
-  background: rgba(0, 178, 255, 0.08);
-  border-color: rgba(0, 178, 255, 0.32);
+  color: var(--accent, var(--ui-accent-solid));
+  background: var(--ui-accent-a0p08);
+  border-color: var(--ui-accent-a0p32);
 }
 .olv-mp-vex-chip:focus-visible {
-  outline: 2px solid var(--accent, #00b2ff); outline-offset: 2px;
+  outline: 2px solid var(--accent, var(--ui-accent-solid)); outline-offset: 2px;
 }
 .olv-mp-chart-empty {
   font-size: var(--text-xs); color: var(--text-faint); font-style: italic;
@@ -6491,7 +6674,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
 .olv-shortcuts-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(11, 17, 33, 0.55);
+  background: var(--ui-surface-11-17-33-a-0p55);
   -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
   pointer-events: auto;
@@ -6504,7 +6687,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
   flex-direction: column;
   pointer-events: auto;
   padding: var(--space-2xl);
-  background: rgba(11, 17, 33, 0.96);
+  background: var(--ui-surface-11-17-33-a-0p96);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border: 0.5px solid var(--accent);
@@ -6520,7 +6703,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
 }
 .olv-wfc-backdrop {
   position: absolute; inset: 0;
-  background: rgba(11, 17, 33, 0.55);
+  background: var(--ui-surface-11-17-33-a-0p55);
   -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
   pointer-events: auto;
 }
@@ -6531,7 +6714,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
   display: flex; flex-direction: column; gap: var(--space-lg);
   pointer-events: auto;
   padding: var(--space-2xl);
-  background: rgba(11, 17, 33, 0.96);
+  background: var(--ui-surface-11-17-33-a-0p96);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border: 0.5px solid var(--accent); border-radius: 14px;
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
@@ -6651,7 +6834,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
   transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
 }
 .olv-shortcuts-row:hover {
-  background: rgba(0, 178, 255, 0.08);
+  background: var(--ui-accent-a0p08);
   color: var(--text);
 }
 .olv-shortcuts-row-text {
@@ -6725,7 +6908,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
   width: min(360px, calc(100vw - 32px));
   pointer-events: auto;
   padding: var(--space-2xl) var(--space-3xl);
-  background: rgba(11, 17, 33, 0.96);
+  background: var(--ui-surface-11-17-33-a-0p96);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   border: 0.5px solid var(--accent);
@@ -6786,12 +6969,12 @@ body.olv-theme-light .olv-busy-scan--emblem {
 .olv-tour-btn:hover { color: var(--text); }
 .olv-tour-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
 .olv-tour-btn-primary {
-  color: #030817;
-  background: #00b2ff;
-  border-color: rgba(0, 178, 255, 0.85);
+  color: var(--ui-surface-deep);
+  background: var(--ui-accent-solid);
+  border-color: var(--ui-accent-a0p85);
   font-weight: 600;
 }
-.olv-tour-btn-primary:hover { background: #1ec0ff; color: #030817; }
+.olv-tour-btn-primary:hover { background: #1ec0ff; color: var(--ui-surface-deep); }
 .olv-tour-skip {
   display: block;
   margin-top: var(--space-lg);
@@ -7140,7 +7323,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
   position: absolute; inset: 0; z-index: var(--z-backdrop);
   display: flex; align-items: center; justify-content: center;
   padding: var(--space-4xl);
-  background: rgba(6, 10, 20, 0.66);
+  background: var(--ui-surface-6-10-20-a-0p66);
   -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
 }
 .olv-help-card {
@@ -7203,7 +7386,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
   position: fixed; inset: 0; z-index: var(--z-modal);
   display: flex; align-items: center; justify-content: center;
   padding: var(--space-4xl);
-  background: rgba(6, 10, 20, 0.66);
+  background: var(--ui-surface-6-10-20-a-0p66);
   -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
 }
 .olv-modal {
@@ -7250,7 +7433,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
 .olv-result-focus {
   /* A lighter, blurred scrim than the confirm modal so the isolated result
      still reads against a hint of the cloud behind it. */
-  background: rgba(6, 10, 20, 0.5);
+  background: var(--ui-surface-6-10-20-a-0p5);
   -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
 .olv-result-focus .olv-modal {
@@ -7425,9 +7608,9 @@ body.olv-theme-light .olv-busy-scan--emblem {
   /* Follows the cursor while the user orbits — it must never block a drag. */
   pointer-events: none;
   max-width: 232px;
-  background: rgba(11, 17, 33, 0.94);
+  background: var(--ui-surface-11-17-33-a-0p94);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  border: 0.5px solid rgba(0, 178, 255, 0.34);
+  border: 0.5px solid var(--ui-accent-a0p34);
   border-radius: var(--radius-md); padding: var(--space-md) var(--space-lg);
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
 }
@@ -7512,9 +7695,9 @@ body.olv-theme-light .olv-busy-scan--emblem {
     max-width: calc(100vw - 28px);
     /* Glass chip — translucent, blurred, hairline-bordered — instead
        of an opaque black slab that read as oversized on a phone. */
-    background: rgba(11, 17, 33, 0.78);
+    background: var(--ui-surface-11-17-33-a-0p78);
     -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
-    border: 0.5px solid rgba(0, 178, 255, 0.22);
+    border: 0.5px solid var(--ui-accent-a0p22);
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.34);
   }
   .olv-streaming-panel.olv-collapsed .olv-streaming-title,
@@ -7543,7 +7726,7 @@ body.olv-theme-light .olv-busy-scan--emblem {
     /* Panel surface, blurred, hairline-bordered, soft-shadowed. */
     background: var(--panel);
     -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
-    border: 0.5px solid rgba(0, 178, 255, 0.22);
+    border: 0.5px solid var(--ui-accent-a0p22);
     box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
     overflow-y: auto; overflow-x: hidden;
     scrollbar-width: none;
@@ -7660,8 +7843,8 @@ body:not(.olv-has-scan) .olv-touch-hint { display: none !important; }
   gap: var(--space-sm);
   font-size: var(--text-sm);
   color: var(--text-dim);
-  background: rgba(0, 178, 255, 0.04);
-  border: 0.5px solid rgba(0, 178, 255, 0.20);
+  background: var(--ui-accent-a0p04);
+  border: 0.5px solid var(--ui-accent-a0p20);
   border-radius: var(--radius-pill);
   padding: var(--space-sm) var(--space-xl) var(--space-sm) var(--space-lg);
   transition: border-color var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard), background var(--dur-base) var(--ease-standard);
@@ -7670,8 +7853,8 @@ body:not(.olv-has-scan) .olv-touch-hint { display: none !important; }
 }
 .olv-capture-chip:hover {
   color: var(--text);
-  background: rgba(0, 178, 255, 0.08);
-  border-color: rgba(0, 178, 255, 0.5);
+  background: var(--ui-accent-a0p08);
+  border-color: var(--ui-accent-a0p5);
 }
 .olv-capture-chip-icon {
   display: inline-flex;
@@ -8084,8 +8267,8 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   width: 6px;
   height: 6px;
   border-radius: 1px;
-  background: var(--accent, #00b2ff);
-  box-shadow: 0 0 0 3px rgba(0, 178, 255, 0.18);
+  background: var(--accent, var(--ui-accent-solid));
+  box-shadow: 0 0 0 3px var(--ui-accent-a0p18);
   flex-shrink: 0;
 }
 .olv-getstarted-steps {
@@ -8119,7 +8302,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   height: 22px;
   border-radius: 50%;
   border: 1.5px solid rgba(255, 255, 255, 0.16);
-  background: rgba(8, 14, 28, 0.95);
+  background: var(--ui-surface-8-14-28-a0p95);
   display: grid;
   place-items: center;
   font-variant-numeric: tabular-nums;
@@ -8156,13 +8339,13 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 }
 /* Active state — "you are here" pulse on the dot + brighter title. */
 .olv-getstarted-step-active .olv-getstarted-dot {
-  border-color: var(--accent, #00b2ff);
-  color: var(--accent, #00b2ff);
-  background: rgba(0, 178, 255, 0.08);
-  box-shadow: 0 0 0 3px rgba(0, 178, 255, 0.16);
+  border-color: var(--accent, var(--ui-accent-solid));
+  color: var(--accent, var(--ui-accent-solid));
+  background: var(--ui-accent-a0p08);
+  box-shadow: 0 0 0 3px var(--ui-accent-a0p16);
 }
 .olv-getstarted-step-active .olv-getstarted-title {
-  color: var(--accent, #00b2ff);
+  color: var(--accent, var(--ui-accent-solid));
 }
 .olv-getstarted-step-active .olv-getstarted-sub {
   color: var(--text);
@@ -8171,16 +8354,16 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 /* Done state — filled accent dot; dim the title slightly so the active
  * "you are here" remains the loudest. */
 .olv-getstarted-step-done .olv-getstarted-dot {
-  background: var(--accent, #00b2ff);
-  border-color: var(--accent, #00b2ff);
-  color: rgba(8, 14, 28, 1);
+  background: var(--accent, var(--ui-accent-solid));
+  border-color: var(--accent, var(--ui-accent-solid));
+  color: var(--ui-surface-8-14-28-a1);
 }
 .olv-getstarted-step-done .olv-getstarted-title {
   color: var(--text);
 }
 @keyframes olv-getstarted-pulse {
-  0%, 100% { box-shadow: 0 0 0 3px rgba(0, 178, 255, 0.16); }
-  50%      { box-shadow: 0 0 0 6px rgba(0, 178, 255, 0.10); }
+  0%, 100% { box-shadow: 0 0 0 3px var(--ui-accent-a0p16); }
+  50%      { box-shadow: 0 0 0 6px var(--ui-accent-a0p10); }
 }
 @media (prefers-reduced-motion: reduce) {
   .olv-getstarted-step-active .olv-getstarted-dot { animation: none; }
@@ -8596,7 +8779,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   position: fixed; inset: 0; z-index: var(--z-backdrop);
   display: flex; align-items: center; justify-content: center;
   padding: var(--space-2xl);
-  background: rgba(5, 8, 16, 0.66);
+  background: var(--ui-surface-5-8-16-a-0p66);
   backdrop-filter: blur(3px);
   overscroll-behavior: contain;
 }
@@ -8974,24 +9157,6 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-analyse-assessment.is-blocked .olv-analyse-assess-verdict { color: var(--rating-blocked); }
 .olv-analyse-assessment.is-blocked .olv-analyse-assess-caution { color: var(--rating-blocked); }
 .olv-analyse-assess-not { font-size: var(--text-xs); color: var(--text-faint); margin-top: var(--space-2xs); }
-
-/*
- * v0.4.6 Light-theme verdict contrast (design audit 1.1 + 3.5). The
- * verdict word is now a large --text-2xl hero on a near-white raised
- * card, so the bright dark-theme rating hues (amber/red/emerald) fail
- * WCAG AA on white. Darken JUST the verdict + caution word in Light
- * (the rating tokens stay bright for borders/tints elsewhere). Each
- * value clears ≥4.5:1 on the tinted-white card. Blocked already uses
- * the Light-darkened --rating-blocked (#7c3aed), so it's left alone.
- */
-body.olv-theme-light .olv-analyse-assessment.is-good .olv-analyse-assess-verdict { color: #0a7a47; }
-body.olv-theme-light .olv-analyse-assessment.is-preview .olv-analyse-assess-verdict,
-body.olv-theme-light .olv-analyse-assessment.is-preview .olv-analyse-assess-caution { color: #a8480a; }
-body.olv-theme-light .olv-analyse-assessment.is-limited .olv-analyse-assess-verdict,
-body.olv-theme-light .olv-analyse-assessment.is-limited .olv-analyse-assess-caution { color: #b91c1c; }
-/* The second-axis (export) verdict word shares the same hues — keep it AA too. */
-body.olv-theme-light .olv-analyse-assess-export.is-good .olv-analyse-assess-export-verdict { color: #0a7a47; }
-body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-export-verdict { color: #a8480a; }
 
 /* Export readiness — the SECOND axis, distinct from surface quality. Its colour
    reuses the rating tokens so it never introduces a new hardcoded hue. */
@@ -9904,8 +10069,8 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
  * `--accent` tokens, but an outline over a soft tint instead of the solid fill,
  * so the panel keeps a single loudest action. Emphasis is carried by border
  * weight and font weight as well as hue, and the label stays `--text` rather
- * than `--accent`, which keeps the text contrast well clear of AA in Dark,
- * Light and High-contrast (all three define `--accent` and `--accent-soft`).
+ * than `--accent`, which keeps the text contrast well clear of AA in Blue,
+ * Field and High contrast (all three define `--accent` and `--accent-soft`).
  */
 .olv-reclass-auto {
   color: var(--text);
@@ -10047,7 +10212,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
     position: absolute; top: 6px; left: 50%;
     transform: translateX(-50%);
     width: 38px; height: 4px; border-radius: 2px;
-    background: rgba(140, 170, 230, 0.42);
+    background: var(--ui-edge-a0p42);
   }
   .olv-msheet-tabs {
     display: flex; flex: 1 1 auto; gap: 2px;

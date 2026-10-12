@@ -19,7 +19,7 @@
   position: fixed; inset: 0; z-index: var(--z-backdrop);
   display: flex; align-items: center; justify-content: center;
   padding: var(--space-2xl);
-  background: rgba(5, 8, 16, 0.66);
+  background: var(--ui-surface-5-8-16-a-0p66);
   backdrop-filter: blur(3px);
   overscroll-behavior: contain;
 }

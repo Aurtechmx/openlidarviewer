@@ -312,7 +312,7 @@
      currentTime 0 (opacity permanently 0, unhoverable) for as long as the
      render loop kept the thread saturated. A plain background has no such
      dependency. */
-  background: rgba(11, 17, 33, 0.92);
+  background: var(--ui-surface-11-17-33-a-0p92);
   border: 0.5px solid var(--accent);
   border-radius: var(--radius-pill);
   box-shadow: var(--shadow-floating);
@@ -357,7 +357,7 @@
   background: var(--panel);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
-  border: 0.5px solid rgba(0, 178, 255, 0.42);
+  border: 0.5px solid var(--ui-accent-a0p42);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-floating);
   opacity: 0;
@@ -518,7 +518,7 @@
 .olv-chip:hover { color: var(--text); }
 .olv-chip-active {
   color: var(--accent); background: var(--accent-soft);
-  border-color: rgba(0, 178, 255, 0.4);
+  border-color: var(--ui-accent-a0p4);
 }
 .olv-chip-disabled {
   opacity: 0.45; cursor: not-allowed; color: var(--text-faint);

@@ -1,7 +1,7 @@
 /**
  * headerControls.ts — the top bar's right-cluster controls.
  *
- * The theme toggle cycles Dark, Light and High-contrast; back-to-centre
+ * The theme toggle cycles Blue, Field and High contrast; back-to-centre
  * performs the same reset the navigation keybinding does, for the case where
  * no key is available; the performance control is the Speed ↔ Quality master
  * dial. All mount left of the GitHub link, and all are no-ops in embed mode,

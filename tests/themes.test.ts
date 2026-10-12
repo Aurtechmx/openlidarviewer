@@ -1,9 +1,10 @@
 /**
  * themes.test.ts
  *
- * Contract tests for the v0.3.9 theme system pure-data module.
- * Covers: registry stability, body-class application, persistence
- * I/O safety, malformed-payload resilience.
+ * Contract tests for the interface-theme registry (Blue, Field, High
+ * contrast). Covers: registry stability, retired-name migration, workflow
+ * name normalisation, body-class application, persistence I/O safety and
+ * malformed-payload resilience.
  *
  * The default vitest environment is `node` (the project keeps its
  * tests DOM-free for speed). We stub the body element and
@@ -15,7 +16,9 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import {
   applyTheme,
+  isKnownThemeName,
   isThemeName,
+  normalizeThemeName,
   readPersistedTheme,
   THEME_BODY_CLASS,
   THEME_HINT,
@@ -45,7 +48,11 @@ function makeBody(): ThemeBody & { classes: Set<string> } {
 
 describe('theme registry', () => {
   it('ships exactly three theme names in stable display order', () => {
-    expect(THEME_ORDER).toEqual(['dark', 'light', 'high-contrast']);
+    expect(THEME_ORDER).toEqual(['dark', 'field', 'high-contrast']);
+  });
+
+  it('labels them Blue, Field and High contrast', () => {
+    expect(THEME_ORDER.map((n) => THEME_LABEL[n])).toEqual(['Blue', 'Field', 'High contrast']);
   });
 
   it('every theme has a label, a hint, and a body class entry', () => {
@@ -61,19 +68,25 @@ describe('theme registry', () => {
   });
 
   it('non-default themes carry a unique body class', () => {
-    const light = THEME_BODY_CLASS.light;
-    const hc = THEME_BODY_CLASS['high-contrast'];
-    expect(light).toBeTruthy();
-    expect(hc).toBeTruthy();
-    expect(light).not.toBe(hc);
+    expect(THEME_BODY_CLASS.field).toBe('olv-theme-field');
+    expect(THEME_BODY_CLASS['high-contrast']).toBe('olv-theme-high-contrast');
+  });
+
+  it('does not offer the retired light theme', () => {
+    expect(THEME_ORDER).not.toContain('light');
+    expect(Object.values(THEME_LABEL)).not.toContain('Light');
   });
 });
 
 describe('isThemeName — type guard', () => {
-  it('accepts every known theme name', () => {
+  it('accepts every active theme name', () => {
     expect(isThemeName('dark')).toBe(true);
-    expect(isThemeName('light')).toBe(true);
+    expect(isThemeName('field')).toBe(true);
     expect(isThemeName('high-contrast')).toBe(true);
+  });
+
+  it('does not accept the retired light name as an active theme', () => {
+    expect(isThemeName('light')).toBe(false);
   });
 
   it('rejects unknown strings + non-strings', () => {
@@ -87,37 +100,68 @@ describe('isThemeName — type guard', () => {
   });
 });
 
+describe('normalizeThemeName — retired names and workflow replay', () => {
+  it('keeps every active name as it is', () => {
+    for (const name of THEME_ORDER) expect(normalizeThemeName(name)).toBe(name);
+  });
+
+  it('moves the retired light name to Field', () => {
+    expect(normalizeThemeName('light')).toBe('field');
+  });
+
+  it('keeps High contrast as High contrast', () => {
+    expect(normalizeThemeName('high-contrast')).toBe('high-contrast');
+  });
+
+  it.each([undefined, null, '', 'unknown', 'Light', 42, {}])('falls back to Blue for %s', (value) => {
+    expect(normalizeThemeName(value)).toBe('dark');
+  });
+
+  it('recognises active and retired names for workflow replay, and nothing else', () => {
+    for (const name of ['dark', 'field', 'high-contrast', 'light']) expect(isKnownThemeName(name)).toBe(true);
+    for (const value of ['', 'midnight', 'constructor', 'toString', null, 7]) expect(isKnownThemeName(value)).toBe(false);
+  });
+});
+
 describe('applyTheme — body-class swap', () => {
   it('adds the body class for a non-default theme', () => {
     const body = makeBody();
-    applyTheme(body, 'light');
-    expect(body.classes.has('olv-theme-light')).toBe(true);
+    applyTheme(body, 'field');
+    expect(body.classes.has('olv-theme-field')).toBe(true);
   });
 
   it('removes any previous theme class when switching', () => {
     const body = makeBody();
-    applyTheme(body, 'light');
+    applyTheme(body, 'field');
     applyTheme(body, 'high-contrast');
-    expect(body.classes.has('olv-theme-light')).toBe(false);
+    expect(body.classes.has('olv-theme-field')).toBe(false);
     expect(body.classes.has('olv-theme-high-contrast')).toBe(true);
   });
 
   it('leaves the body without any theme class for "dark"', () => {
     const body = makeBody();
-    applyTheme(body, 'light');
+    applyTheme(body, 'high-contrast');
     applyTheme(body, 'dark');
-    expect(body.classes.has('olv-theme-light')).toBe(false);
+    expect(body.classes.has('olv-theme-field')).toBe(false);
     expect(body.classes.has('olv-theme-high-contrast')).toBe(false);
   });
 
-  it('is idempotent — repeated application leaves the class once', () => {
+  it('cleans a stale retired light class', () => {
     const body = makeBody();
-    applyTheme(body, 'light');
-    applyTheme(body, 'light');
-    const matches = Array.from(body.classes).filter(
-      (c) => c === 'olv-theme-light',
-    );
-    expect(matches).toHaveLength(1);
+    body.classes.add('olv-theme-light');
+    applyTheme(body, 'field');
+    expect([...body.classes].sort()).toEqual(['olv-theme-field']);
+  });
+
+  it('is idempotent — repeated application leaves the class once', () => {
+    for (const name of THEME_ORDER) {
+      const body = makeBody();
+      applyTheme(body, name);
+      const once = [...body.classes].sort();
+      applyTheme(body, name);
+      expect([...body.classes].sort()).toEqual(once);
+      expect(body.classes.size).toBe(THEME_BODY_CLASS[name] ? 1 : 0);
+    }
   });
 
   it('preserves unrelated body classes the host has set', () => {
@@ -201,9 +245,51 @@ describe('persistence — read + write', () => {
     expect(readPersistedTheme()).toBe('dark');
   });
 
+  it('round-trips every active theme', () => {
+    for (const name of THEME_ORDER) {
+      writePersistedTheme(name);
+      expect(readPersistedTheme()).toBe(name);
+    }
+  });
+
   it('writePersistedTheme stores under the documented key', () => {
-    writePersistedTheme('light');
-    expect(storage.store[THEME_STORAGE_KEY]).toBe('light');
+    writePersistedTheme('field');
+    expect(storage.store[THEME_STORAGE_KEY]).toBe('field');
+  });
+
+  it('migrates a saved light preference to Field and rewrites it once', () => {
+    storage.setItem(THEME_STORAGE_KEY, 'light');
+    let writes = 0;
+    const set = storage.setItem;
+    storage.setItem = (k, v) => { writes += 1; set(k, v); };
+    expect(readPersistedTheme()).toBe('field');
+    expect(storage.store[THEME_STORAGE_KEY]).toBe('field');
+    expect(readPersistedTheme()).toBe('field');
+    expect(writes).toBe(1);
+  });
+
+  it('keeps a saved high-contrast preference and does not rewrite it', () => {
+    storage.setItem(THEME_STORAGE_KEY, 'high-contrast');
+    let writes = 0;
+    storage.setItem = () => { writes += 1; };
+    expect(readPersistedTheme()).toBe('high-contrast');
+    expect(writes).toBe(0);
+  });
+
+  it('a malformed value is not rewritten', () => {
+    storage.setItem(THEME_STORAGE_KEY, 'midnight');
+    let writes = 0;
+    storage.setItem = () => { writes += 1; };
+    expect(readPersistedTheme()).toBe('dark');
+    expect(writes).toBe(0);
+  });
+
+  it('a legacy light migration survives a storage write failure', () => {
+    storage.setItem(THEME_STORAGE_KEY, 'light');
+    storage.setItem = () => {
+      throw new Error('Quota exceeded');
+    };
+    expect(readPersistedTheme()).toBe('field');
   });
 
   it('write does not throw when localStorage throws on setItem', () => {
@@ -212,7 +298,7 @@ describe('persistence — read + write', () => {
     storage.setItem = () => {
       throw new Error('Quota exceeded');
     };
-    expect(() => writePersistedTheme('light')).not.toThrow();
+    expect(() => writePersistedTheme('field')).not.toThrow();
   });
 
   it('read does not throw when localStorage throws on getItem', () => {

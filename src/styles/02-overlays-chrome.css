@@ -43,7 +43,7 @@
   background: #ff7a7a;
   animation: olv-workflow-pulse 1.4s ease-in-out infinite;
 }
-.olv-workflow-badge-playing { border-color: rgba(0, 178, 255, 0.55); }
+.olv-workflow-badge-playing { border-color: var(--ui-accent-a0p55); }
 .olv-workflow-badge-playing .olv-workflow-badge-dot { background: var(--accent); }
 @keyframes olv-workflow-pulse {
   0%, 100% { opacity: 1; }
@@ -73,7 +73,7 @@
 }
 .olv-palette-backdrop {
   position: absolute; inset: 0;
-  background: rgba(8, 14, 28, 0.66);
+  background: var(--ui-surface-8-14-28-a0p66);
   -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
 }
 .olv-palette-card {
@@ -127,8 +127,8 @@
 .olv-palette-row-key {
   font-family: var(--mono); font-size: var(--text-xs);
   color: var(--accent);
-  background: rgba(0, 178, 255, 0.10);
-  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  background: var(--ui-accent-a0p10);
+  border: 0.5px solid var(--ui-accent-a0p3);
   border-radius: var(--radius-xs); padding: var(--space-2xs) var(--space-sm);
   flex-shrink: 0;
 }

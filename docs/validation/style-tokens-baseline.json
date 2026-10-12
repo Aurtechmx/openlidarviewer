@@ -1,36 +1,36 @@
 {
   "$comment": "Shrink-only. Colour literals and px font sizes per stylesheet outside 01-tokens.css; see scripts/lint-style-tokens.mjs. Bank a drop with `node scripts/lint-style-tokens.mjs --update`.",
   "totals": {
-    "colours": 495,
+    "colours": 356,
     "pxFonts": 3
   },
   "files": {
     "src/styles/02-overlays-chrome.css": {
-      "colours": 12,
-      "pxFonts": 0
-    },
-    "src/styles/03-theme-rails.css": {
-      "colours": 37,
-      "pxFonts": 0
-    },
-    "src/styles/10-stage.css": {
-      "colours": 6,
-      "pxFonts": 0
-    },
-    "src/styles/30-empty-state.css": {
       "colours": 8,
       "pxFonts": 0
     },
+    "src/styles/03-theme-rails.css": {
+      "colours": 44,
+      "pxFonts": 0
+    },
+    "src/styles/10-stage.css": {
+      "colours": 3,
+      "pxFonts": 0
+    },
+    "src/styles/30-empty-state.css": {
+      "colours": 3,
+      "pxFonts": 0
+    },
     "src/styles/40-inspector.css": {
-      "colours": 20,
+      "colours": 17,
       "pxFonts": 0
     },
     "src/styles/45-dock-and-panels.css": {
-      "colours": 24,
+      "colours": 23,
       "pxFonts": 0
     },
     "src/styles/50-navigation-bar.css": {
-      "colours": 39,
+      "colours": 8,
       "pxFonts": 0
     },
     "src/styles/55-micro-interactions.css": {
@@ -38,19 +38,19 @@
       "pxFonts": 0
     },
     "src/styles/56-inspector-panels.css": {
-      "colours": 13,
+      "colours": 6,
       "pxFonts": 0
     },
     "src/styles/60-measure-inspect.css": {
-      "colours": 28,
+      "colours": 9,
       "pxFonts": 1
     },
     "src/styles/65-mobile-touch.css": {
-      "colours": 19,
+      "colours": 11,
       "pxFonts": 1
     },
     "src/styles/70-measurement-panels.css": {
-      "colours": 32,
+      "colours": 13,
       "pxFonts": 0
     },
     "src/styles/72-panel-rails.css": {
@@ -62,7 +62,7 @@
       "pxFonts": 0
     },
     "src/styles/74-inspector-profile.css": {
-      "colours": 27,
+      "colours": 23,
       "pxFonts": 0
     },
     "src/styles/76-classification.css": {
@@ -70,7 +70,7 @@
       "pxFonts": 0
     },
     "src/styles/78-shortcuts-recorder-tour.css": {
-      "colours": 23,
+      "colours": 13,
       "pxFonts": 0
     },
     "src/styles/79-annotations-panel.css": {
@@ -78,15 +78,15 @@
       "pxFonts": 0
     },
     "src/styles/80-modal-system.css": {
-      "colours": 12,
+      "colours": 7,
       "pxFonts": 0
     },
     "src/styles/83-mobile-audit.css": {
-      "colours": 22,
+      "colours": 15,
       "pxFonts": 1
     },
     "src/styles/86-dataset-intel-analyse.css": {
-      "colours": 36,
+      "colours": 23,
       "pxFonts": 0
     },
     "src/styles/89-data-fitness.css": {
@@ -94,11 +94,11 @@
       "pxFonts": 0
     },
     "src/styles/90-converter-export.css": {
-      "colours": 11,
+      "colours": 10,
       "pxFonts": 0
     },
     "src/styles/92-terrain-verdict.css": {
-      "colours": 10,
+      "colours": 5,
       "pxFonts": 0
     },
     "src/styles/94-scan-type.css": {
@@ -110,7 +110,7 @@
       "pxFonts": 0
     },
     "src/styles/96-phone-sheet-story.css": {
-      "colours": 17,
+      "colours": 16,
       "pxFonts": 0
     },
     "src/styles/97-contour-studio.css": {

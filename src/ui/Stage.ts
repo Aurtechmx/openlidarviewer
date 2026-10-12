@@ -89,8 +89,7 @@ const CELLULAR_WARN_BYTES = 250_000_000;
 
 /**
  * The OpenLiDARViewer brand emblem, `public/brand-mark.svg` (vector, written
- * by scripts/make-brand-rasters.py; the light theme paints
- * `brand-mark-light.svg` in its place from CSS). Rendered with `<img src>` rather than
+ * by scripts/make-brand-rasters.py). Rendered with `<img src>` rather than
  * inline SVG so the asset ships byte-faithful and never enters the
  * `unsafeHtml` escape hatch. `BASE_URL` keeps the reference correct under
  * the relative-base (`./`) production build.

@@ -39,8 +39,8 @@ function tokenIn(css: string, block: string, name: string): string {
 
 const RAILS = [
   { name: 'dark', block: ':root', css: tokens, bg: tokenIn(tokens, ':root', '--bg'), panel: tokenIn(tokens, ':root', '--panel'), blocked: tokenIn(tokens, ':root', '--rating-blocked') },
-  { name: 'light', block: 'body.olv-theme-light', css: tokens, bg: tokenIn(rails, 'body.olv-theme-light', '--bg'), panel: tokenIn(rails, 'body.olv-theme-light', '--panel'), blocked: tokenIn(rails, 'body.olv-theme-light', '--rating-blocked') },
-  { name: 'high contrast', block: 'body.olv-theme-high-contrast', css: tokens, bg: tokenIn(rails, 'body.olv-theme-high-contrast', '--bg'), panel: tokenIn(rails, 'body.olv-theme-high-contrast', '--panel'), blocked: tokenIn(rails, 'body.olv-theme-high-contrast', '--rating-blocked') },
+  { name: 'field', block: 'body.olv-theme-field', css: rails, bg: tokenIn(rails, 'body.olv-theme-field', '--bg'), panel: tokenIn(rails, 'body.olv-theme-field', '--panel'), blocked: tokenIn(rails, 'body.olv-theme-field', '--rating-blocked') },
+  { name: 'high contrast', block: 'body.olv-theme-high-contrast', css: rails, bg: tokenIn(rails, 'body.olv-theme-high-contrast', '--bg'), panel: tokenIn(rails, 'body.olv-theme-high-contrast', '--panel'), blocked: tokenIn(rails, 'body.olv-theme-high-contrast', '--rating-blocked') },
 ];
 
 describe('the withheld state token', () => {

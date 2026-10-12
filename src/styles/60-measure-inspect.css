@@ -4,8 +4,8 @@
 .olv-tool-active {
   color: var(--accent);
   background: var(--accent-soft);
-  border-color: rgba(0, 178, 255, 0.65);
-  box-shadow: 0 0 16px rgba(0, 178, 255, 0.22);
+  border-color: var(--ui-accent-a0p65);
+  box-shadow: 0 0 16px var(--ui-accent-a0p22);
 }
 
 /* The SVG layer that draws markers, lines and labels */
@@ -19,7 +19,7 @@
   stroke: var(--accent); stroke-width: 1.75; stroke-dasharray: 6 4;
 }
 .olv-measure-dot {
-  fill: var(--accent); stroke: #030817; stroke-width: 1.65;
+  fill: var(--accent); stroke: var(--ui-surface-deep); stroke-width: 1.65;
 }
 .olv-measure-dot-pending {
   fill: none; stroke: var(--accent); stroke-width: 2.2;
@@ -36,7 +36,7 @@
  * the canvas without reading the tooltip.
  */
 .olv-measure-dot-snap {
-  fill: var(--cyan, #00f0ff); stroke: #030817; stroke-width: 1.65;
+  fill: var(--cyan, #00f0ff); stroke: var(--ui-surface-deep); stroke-width: 1.65;
 }
 /*
  * Profile-station markers — the small dim dots at evenly-spaced chainages
@@ -47,10 +47,10 @@
  * screenshot export read identically — keep the two in sync.
  */
 .olv-measure-dot-station {
-  fill: rgba(0, 178, 255, 0.55); stroke: #030817; stroke-width: 1;
+  fill: var(--ui-accent-a0p55); stroke: var(--ui-surface-deep); stroke-width: 1;
 }
 .olv-measure-dot-station.is-active {
-  fill: rgba(0, 178, 255, 0.98); stroke: #030817; stroke-width: 1.4;
+  fill: var(--ui-accent-a0p98); stroke: var(--ui-surface-deep); stroke-width: 1.4;
 }
 .olv-measure-snap-ring {
   fill: none;
@@ -70,16 +70,16 @@
   fill: var(--accent);
   font: 600 12px var(--font); font-variant-numeric: tabular-nums;
   paint-order: stroke;
-  stroke: #030817; stroke-width: 4px; stroke-linejoin: round;
+  stroke: var(--ui-surface-deep); stroke-width: 4px; stroke-linejoin: round;
 }
 
 /* The instruction hint shown while measuring */
 .olv-measure-hint {
   position: absolute; top: var(--olv-lane-top); left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; gap: var(--space-2xl);
-  background: rgba(11, 17, 33,0.9);
+  background: var(--ui-surface-11-17-33-a-0p9);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-  border: 0.5px solid rgba(0, 178, 255, 0.34);
+  border: 0.5px solid var(--ui-accent-a0p34);
   border-radius: var(--radius-lg); padding: var(--space-lg) var(--space-xl);
   box-shadow: var(--shadow-floating);
 }
@@ -93,7 +93,7 @@
 .olv-measure-badge {
   font-size: var(--text-2xs); color: var(--accent);
   background: var(--accent-soft);
-  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  border: 0.5px solid var(--ui-accent-a0p3);
   border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-md);
   letter-spacing: 0.05em; text-transform: uppercase;
 }
@@ -129,9 +129,9 @@
 .olv-measure-done {
   color: var(--accent-text, var(--accent));
   background: var(--accent-soft);
-  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  border: 0.5px solid var(--ui-accent-a0p3);
 }
-.olv-measure-done:hover { background: rgba(0, 178, 255, 0.24); }
+.olv-measure-done:hover { background: var(--ui-accent-a0p24); }
 .olv-measure-clear:active, .olv-measure-done:active { transform: scale(0.95); }
 .olv-measure-clear:focus-visible, .olv-measure-done:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
@@ -142,7 +142,7 @@
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-inspect-halo { fill: var(--accent); opacity: 0.2; }
 .olv-inspect-dot {
-  fill: var(--cyan); stroke: #030817; stroke-width: 1.5;
+  fill: var(--cyan); stroke: var(--ui-surface-deep); stroke-width: 1.5;
 }
 
 .olv-inspect-card {
@@ -152,9 +152,9 @@
      the card is the focused pick result, the HUD is ambient. Below the dock
      (z:20). */
   z-index: calc(var(--z-panel) + 1);
-  background: rgba(11, 17, 33, 0.94);
+  background: var(--ui-surface-11-17-33-a-0p94);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-  border: 0.5px solid rgba(0, 178, 255, 0.34);
+  border: 0.5px solid var(--ui-accent-a0p34);
   border-radius: var(--radius-lg); padding: var(--space-xl) var(--space-xl);
   pointer-events: auto;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
@@ -196,11 +196,11 @@
 .olv-inspect-copy {
   font-size: var(--text-xs); color: var(--accent);
   background: var(--accent-soft);
-  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  border: 0.5px solid var(--ui-accent-a0p3);
   border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-xl);
   transition: background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
-.olv-inspect-copy:hover { background: rgba(0, 178, 255, 0.24); }
+.olv-inspect-copy:hover { background: var(--ui-accent-a0p24); }
 .olv-inspect-copy:active { transform: scale(0.95); }
 .olv-inspect-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .olv-inspect-copied { font-size: var(--text-xs); color: var(--teal); }

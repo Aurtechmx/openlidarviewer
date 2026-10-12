@@ -65,24 +65,6 @@
 .olv-analyse-assessment.is-blocked .olv-analyse-assess-caution { color: var(--rating-blocked); }
 .olv-analyse-assess-not { font-size: var(--text-xs); color: var(--text-faint); margin-top: var(--space-2xs); }
 
-/*
- * v0.4.6 Light-theme verdict contrast (design audit 1.1 + 3.5). The
- * verdict word is now a large --text-2xl hero on a near-white raised
- * card, so the bright dark-theme rating hues (amber/red/emerald) fail
- * WCAG AA on white. Darken JUST the verdict + caution word in Light
- * (the rating tokens stay bright for borders/tints elsewhere). Each
- * value clears ≥4.5:1 on the tinted-white card. Blocked already uses
- * the Light-darkened --rating-blocked (#7c3aed), so it's left alone.
- */
-body.olv-theme-light .olv-analyse-assessment.is-good .olv-analyse-assess-verdict { color: #0a7a47; }
-body.olv-theme-light .olv-analyse-assessment.is-preview .olv-analyse-assess-verdict,
-body.olv-theme-light .olv-analyse-assessment.is-preview .olv-analyse-assess-caution { color: #a8480a; }
-body.olv-theme-light .olv-analyse-assessment.is-limited .olv-analyse-assess-verdict,
-body.olv-theme-light .olv-analyse-assessment.is-limited .olv-analyse-assess-caution { color: #b91c1c; }
-/* The second-axis (export) verdict word shares the same hues — keep it AA too. */
-body.olv-theme-light .olv-analyse-assess-export.is-good .olv-analyse-assess-export-verdict { color: #0a7a47; }
-body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-export-verdict { color: #a8480a; }
-
 /* Export readiness — the SECOND axis, distinct from surface quality. Its colour
    reuses the rating tokens so it never introduces a new hardcoded hue. */
 .olv-analyse-assess-export {

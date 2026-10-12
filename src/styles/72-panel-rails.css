@@ -215,8 +215,8 @@
 
    Sized at 10px rather than the hairline a dark UI invites: the thumb is a
    drag target, and the panel it scrolls was just made hit-testable so it
-   could be dragged at all. Both colours are tokens, so light, dark and the
-   high-contrast theme all follow without a second rule. The track stays
+   could be dragged at all. Both colours are tokens, so Blue, Field and High
+   contrast all follow without a second rule. The track stays
    transparent, letting the panel fill show through, so the gutter reads as
    part of the surface instead of a channel cut into it. */
 /* The standard properties are scoped to Firefox on purpose. Setting

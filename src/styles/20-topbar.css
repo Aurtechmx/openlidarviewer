@@ -25,13 +25,6 @@
  * wordmark, set in Olv Font Medium with the brand tracking. */
 .olv-wordmark-mark { display: block; width: 28px; height: 28px; flex: none; }
 .olv-wordmark-text { letter-spacing: -0.02em; font-kerning: normal; }
-/* Light theme: the light-background lockup. The <img> keeps its box and the
- * deeper-blue emblem paints as its background in place of the default one. */
-body.olv-theme-light .olv-wordmark-mark,
-body.olv-theme-light .olv-empty-hero-mark {
-  object-position: -9999px 0;
-  background: url("/brand-mark-light.svg") center / contain no-repeat;
-}
 .olv-topbar-right { display: flex; align-items: center; gap: var(--space-lg); }
 /*
  * v0.4.6 trust signal (design audit 2.4). "Private · on your device"

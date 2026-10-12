@@ -76,9 +76,9 @@
     max-width: calc(100vw - 28px);
     /* Glass chip — translucent, blurred, hairline-bordered — instead
        of an opaque black slab that read as oversized on a phone. */
-    background: rgba(11, 17, 33, 0.78);
+    background: var(--ui-surface-11-17-33-a-0p78);
     -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
-    border: 0.5px solid rgba(0, 178, 255, 0.22);
+    border: 0.5px solid var(--ui-accent-a0p22);
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.34);
   }
   .olv-streaming-panel.olv-collapsed .olv-streaming-title,
@@ -107,7 +107,7 @@
     /* Panel surface, blurred, hairline-bordered, soft-shadowed. */
     background: var(--panel);
     -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
-    border: 0.5px solid rgba(0, 178, 255, 0.22);
+    border: 0.5px solid var(--ui-accent-a0p22);
     box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
     overflow-y: auto; overflow-x: hidden;
     scrollbar-width: none;
@@ -224,8 +224,8 @@ body:not(.olv-has-scan) .olv-touch-hint { display: none !important; }
   gap: var(--space-sm);
   font-size: var(--text-sm);
   color: var(--text-dim);
-  background: rgba(0, 178, 255, 0.04);
-  border: 0.5px solid rgba(0, 178, 255, 0.20);
+  background: var(--ui-accent-a0p04);
+  border: 0.5px solid var(--ui-accent-a0p20);
   border-radius: var(--radius-pill);
   padding: var(--space-sm) var(--space-xl) var(--space-sm) var(--space-lg);
   transition: border-color var(--dur-base) var(--ease-standard), color var(--dur-base) var(--ease-standard), background var(--dur-base) var(--ease-standard);
@@ -234,8 +234,8 @@ body:not(.olv-has-scan) .olv-touch-hint { display: none !important; }
 }
 .olv-capture-chip:hover {
   color: var(--text);
-  background: rgba(0, 178, 255, 0.08);
-  border-color: rgba(0, 178, 255, 0.5);
+  background: var(--ui-accent-a0p08);
+  border-color: var(--ui-accent-a0p5);
 }
 .olv-capture-chip-icon {
   display: inline-flex;

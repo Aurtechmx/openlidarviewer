@@ -4,19 +4,19 @@
    with the legacy distance measure tool above.
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-m-fill {
-  fill: rgba(0, 178, 255, 0.14);
+  fill: var(--ui-accent-a0p14);
   stroke: var(--accent);
   /* fill outline + leader strokes bumped ~10%. */
   stroke-width: 1.45;
   stroke-dasharray: 5 4;
 }
 .olv-m-preview { opacity: 0.5; }
-.olv-m-leader { stroke: rgba(0, 178, 255, 0.5); stroke-width: 1.1; }
+.olv-m-leader { stroke: var(--ui-accent-a0p5); stroke-width: 1.1; }
 .olv-m-label-primary { font-size: var(--text-md); }
 .olv-m-handle { pointer-events: all; fill: transparent; cursor: grab; }
 /* The handle is invisible until the pointer is over it; the cursor alone was
    the only cue that a vertex can be dragged. */
-.olv-m-handle:hover { fill: rgba(0, 178, 255, 0.28); stroke: var(--accent); stroke-width: 1; }
+.olv-m-handle:hover { fill: var(--ui-accent-a0p28); stroke: var(--accent); stroke-width: 1; }
 .olv-m-handle:active { cursor: grabbing; }
 
 /* ── Annotation markers ──────────────────────────────────────────────────── */
@@ -27,8 +27,8 @@
 }
 .olv-anno-marker { pointer-events: auto; cursor: pointer; }
 /* Dark halo keeps the marker readable over a dense, bright cloud. */
-.olv-anno-halo { fill: rgba(8, 13, 20, 0.82); }
-.olv-anno-disc { stroke: rgba(8, 13, 20, 0.9); stroke-width: 1; }
+.olv-anno-halo { fill: var(--ui-surface-8-13-20-a-0p82); }
+.olv-anno-disc { stroke: var(--ui-surface-8-13-20-a-0p9); stroke-width: 1; }
 .olv-anno-num {
   font-size: var(--text-sm); font-weight: 600; user-select: none;
 }
@@ -125,11 +125,11 @@
   font-size: var(--text-xs); padding: var(--space-sm) var(--space-xl); cursor: pointer; border-radius: var(--radius-sm);
   color: var(--accent);
   background: var(--accent-soft);
-  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  border: 0.5px solid var(--ui-accent-a0p3);
   font-weight: 600;
   transition: background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
-.olv-anno-editor-save:hover { background: rgba(0, 178, 255, 0.24); }
+.olv-anno-editor-save:hover { background: var(--ui-accent-a0p24); }
 .olv-anno-editor-save:active { transform: scale(0.96); }
 
 /* ── Annotation hint bar ─────────────────────────────────────────────────── */
@@ -163,7 +163,7 @@
   gap: var(--space-sm); z-index: calc(var(--z-float) + 1);
   background: var(--panel);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
-  border: 0.5px solid rgba(0, 178, 255, 0.28);
+  border: 0.5px solid var(--ui-accent-a0p28);
   border-radius: var(--radius-lg); padding: var(--space-sm) var(--space-lg);
   /* Stay clear of the side panels (~300 px each) so it never overlaps them. */
   width: max-content; max-width: calc(100vw - 680px);
@@ -194,7 +194,7 @@
 .olv-mkind:active { transform: scale(0.96); }
 .olv-mkind-active {
   color: var(--accent-text, var(--accent)); background: var(--accent-soft);
-  border-color: rgba(0, 178, 255, 0.4);
+  border-color: var(--ui-accent-a0p4);
 }
 /* Auxiliary kind button (Lasso volume).
  *
@@ -253,12 +253,12 @@
 .olv-measure-finish {
   font-size: var(--text-xs); color: var(--accent);
   background: var(--accent-soft);
-  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  border: 0.5px solid var(--ui-accent-a0p3);
   border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg);
   font-weight: 500;
   transition: background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
-.olv-measure-finish:hover { background: rgba(0, 178, 255, 0.24); }
+.olv-measure-finish:hover { background: var(--ui-accent-a0p24); }
 .olv-measure-finish:active { transform: scale(0.96); }
 
 /* ── Icon-first measurement controls (v0.4.6) ──────────────────────────────
@@ -308,13 +308,13 @@
 .olv-tip-layer {
   position: fixed; top: 0; left: 0;
   padding: 4px 9px; border-radius: var(--radius-sm);
-  background: rgba(8, 13, 26, 0.94);
+  background: var(--ui-surface-8-13-26-a-0p94);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  border: 0.5px solid rgba(0, 178, 255, 0.42);
+  border: 0.5px solid var(--ui-accent-a0p42);
   color: var(--text); font-size: var(--text-2xs); font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em; white-space: normal; max-width: 260px; width: max-content;
   line-height: 1.2;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 14px rgba(0, 178, 255, 0.14);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 14px var(--ui-accent-a0p14);
   /* `pointer-events: none` while hidden: the layer persists at its LAST
    * shown position between hovers (it is created once, lazily, then
    * repositioned rather than removed), so leaving hit-testing on here would
@@ -329,9 +329,9 @@
 .olv-tip-layer::before {
   content: ''; position: absolute; left: var(--olv-tip-connector-x, 50%);
   width: 7px; height: 7px; transform: translateX(-50%) rotate(45deg);
-  background: rgba(8, 13, 26, 0.94);
-  border-left: 0.5px solid rgba(0, 178, 255, 0.42);
-  border-top: 0.5px solid rgba(0, 178, 255, 0.42);
+  background: var(--ui-surface-8-13-26-a-0p94);
+  border-left: 0.5px solid var(--ui-accent-a0p42);
+  border-top: 0.5px solid var(--ui-accent-a0p42);
 }
 /* Below the anchor (default): connector sits on the tip box's top edge. */
 .olv-tip-layer:not([data-placement="above"])::before { top: -3.5px; }
@@ -340,8 +340,8 @@
 .olv-tip-layer[data-placement="above"]::before {
   bottom: -3.5px; top: auto;
   border-left: none; border-top: none;
-  border-right: 0.5px solid rgba(0, 178, 255, 0.42);
-  border-bottom: 0.5px solid rgba(0, 178, 255, 0.42);
+  border-right: 0.5px solid var(--ui-accent-a0p42);
+  border-bottom: 0.5px solid var(--ui-accent-a0p42);
 }
 .olv-tip-layer--visible { opacity: 1; pointer-events: auto; }
 @media (hover: none) {
