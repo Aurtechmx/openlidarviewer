@@ -45,6 +45,7 @@ import { triggerDownload } from '../io/download';
 import type { MetadataInputs, ReportProvenanceFingerprint } from '../report';
 import type { ScanQualityFacts } from '../report/ReportScanQuality';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
+import type { PointCloud } from '../model/PointCloud';
 import type { Viewer } from '../render/Viewer';
 import type { DropZone } from '../ui/DropZone';
 import type { ScanService } from './ScanService';
@@ -135,6 +136,23 @@ export function footprintToMetadataExtent(
 }
 
 /**
+ * Origin + resolved CRS + name for ONE static cloud: the frame its measurements
+ * and points are placed back into. {@link exportGeoContext} calls it for the
+ * active scan; the measurement export calls it for the scan a measurement was
+ * taken on, so a non-active owner is described by its own CRS, not the active
+ * scan's.
+ */
+export function geoContextForCloud(c: PointCloud, crs: ResolvedCrs | null): GeoExportContext {
+  const declared = c.declaredPointCount;
+  const coverageNote = truncationNote(c);
+  const basis = coverageNote ? 'partial' : declared != null && declared > c.pointCount ? 'sampled' : declared != null ? 'full' : null;
+  return {
+    origin: c.sourceOrigin, crsName: effectiveCrsName(crs), name: c.name, crs, source: { key: c, streamed: false },
+    interpretation: { ...sourceInterpretationOf(c.metadata?.interpretationLevel ?? null, basis), coverageNote },
+  };
+}
+
+/**
  * Origin + CRS + name for the ACTIVE scan, static OR streaming — the frame the
  * Products-lane exporters place local points back into.
  */
@@ -204,15 +222,7 @@ export function exportGeoContext(deps: ReportExportDeps): GeoExportContext {
   if (deps.scans.activeId) {
     const c = viewer.getCloud(deps.scans.activeId);
     // SOURCE frame (float64-transform.md step 2): sessions save + import here.
-    if (c) {
-      const declared = c.declaredPointCount;
-      const coverageNote = truncationNote(c);
-      const basis = coverageNote ? 'partial' : declared != null && declared > c.pointCount ? 'sampled' : declared != null ? 'full' : null;
-      return {
-        origin: c.sourceOrigin, crsName, name: c.name, crs, source: { key: c, streamed: false },
-        interpretation: { ...sourceInterpretationOf(c.metadata?.interpretationLevel ?? null, basis), coverageNote },
-      };
-    }
+    if (c) return geoContextForCloud(c, crs);
   }
   const sc = viewer.streamingCloud;
   if (sc) {
