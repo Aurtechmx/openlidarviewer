@@ -2323,7 +2323,15 @@ export class MeasureController {
    */
   private _refuseGeographicLabels(m: Measurement, labels: OverlayLabel[], from: number): void {
     const refusal = frameRefusalText(m.kind, this._geographicCrs, this._verticalRefused);
-    if (refusal === null || labels.length <= from) return;
+    if (labels.length <= from) return;
+    if (refusal === null) {
+      if (!this._geographicCrs) return;
+      // A height keeps its vertical figure; its horizontal leg is degrees,
+      // which the panel never shows, so the scene drops it too.
+      const kept = labels.splice(from).filter((l) => l.primary);
+      labels.push(...kept);
+      return;
+    }
     const added = labels.splice(from);
     const head = added.find((l) => l.primary) ?? added[0];
     labels.push({ ...head, text: refusal, primary: true });
@@ -2469,17 +2477,8 @@ export class MeasureController {
         { a: elbow, b, style: 'preview' },
       );
       L.push(
-        {
-          anchor: midpoint(a, b),
-          text: formatProfileHeadline(
-            // Isotropic points: length and drop share the horizontal factor.
-            pm.length3d * this._unitToMetres,
-            pm.verticalDrop * this._unitToMetres,
-            pm.gradePercent,
-            this._units,
-          ),
-          primary: true,
-        },
+        // The panel's own headline, so the scene shows the same units.
+        { anchor: midpoint(a, b), text: this._headlineText(m), primary: true },
         {
           anchor: midpoint(elbow, b),
           text: this._fmtLen(Math.abs(pm.verticalDrop)),
@@ -2537,24 +2536,8 @@ export class MeasureController {
       for (const [aI, bI] of BOX_EDGES) {
         E.push({ a: corners[aI], b: corners[bI], style: 'solid' });
       }
-      const metrics = boxMetrics(box, this._worldUp);
-      const centre: Vec3 = [
-        (box.min[0] + box.max[0]) * 0.5,
-        (box.min[1] + box.max[1]) * 0.5,
-        (box.min[2] + box.max[2]) * 0.5,
-      ];
-      L.push({
-        anchor: centre,
-        text: formatBoxHeadline(
-          // Horizontal axes ×f, height ×vertical factor, volume f²·vertical.
-          metrics.width * this._unitToMetres,
-          metrics.depth * this._unitToMetres,
-          metrics.height * this._effVertical(),
-          metrics.volume * this._unitToMetres * this._unitToMetres * this._effVertical(),
-          this._units,
-        ),
-        primary: true,
-      });
+      // The panel's own headline, so the scene shows the same units.
+      L.push({ anchor: boxCentre(box), text: this._headlineText(m), primary: true });
     }
   }
 
@@ -2684,7 +2667,6 @@ export class MeasureController {
       // run/drop ghost — but the live label carries the combined profile
       // readout (length · Δh · grade).
       const elbow = elbowPoint(pts[0], cur, this._worldUp);
-      const pm = profileMetrics(...this._iso([pts[0], cur]) as [Vec3, Vec3], this._worldUp);
       E.push(
         { a: pts[0], b: cur, style: 'preview' },
         { a: pts[0], b: elbow, style: 'preview' },
@@ -2692,13 +2674,7 @@ export class MeasureController {
       );
       L.push({
         anchor: midpoint(pts[0], cur),
-        text: formatProfileHeadline(
-          // Isotropic points: length and drop share the horizontal factor.
-          pm.length3d * this._unitToMetres,
-          pm.verticalDrop * this._unitToMetres,
-          pm.gradePercent,
-          this._units,
-        ),
+        text: this._headlineText({ ...d, points: [pts[0], cur] }),
         primary: true,
       });
     }
@@ -2711,26 +2687,22 @@ export class MeasureController {
       for (const [aI, bI] of BOX_EDGES) {
         E.push({ a: corners[aI], b: corners[bI], style: 'preview' });
       }
-      const metrics = boxMetrics(box, this._worldUp);
-      const centre: Vec3 = [
-        (box.min[0] + box.max[0]) * 0.5,
-        (box.min[1] + box.max[1]) * 0.5,
-        (box.min[2] + box.max[2]) * 0.5,
-      ];
       L.push({
-        anchor: centre,
-        text: formatBoxHeadline(
-          // Horizontal axes ×f, height ×vertical factor, volume f²·vertical.
-          metrics.width * this._unitToMetres,
-          metrics.depth * this._unitToMetres,
-          metrics.height * this._effVertical(),
-          metrics.volume * this._unitToMetres * this._unitToMetres * this._effVertical(),
-          this._units,
-        ),
+        anchor: boxCentre(box),
+        text: this._headlineText({ ...d, points: [pts[0], cur] }),
         primary: true,
       });
     }
   }
+}
+
+/** Centre of an axis-aligned box. */
+function boxCentre(box: { min: Vec3; max: Vec3 }): Vec3 {
+  return [
+    (box.min[0] + box.max[0]) * 0.5,
+    (box.min[1] + box.max[1]) * 0.5,
+    (box.min[2] + box.max[2]) * 0.5,
+  ];
 }
 
 /** Midpoint of two points. */

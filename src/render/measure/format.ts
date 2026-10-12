@@ -268,10 +268,13 @@ export function formatProfileHeadline(
   verticalDrop: number,
   gradePercent: number,
   system: UnitSystem,
-  fmtLen: (v: number) => string = (v) => formatLength(v, system),
+  fmtLen?: (v: number) => string,
 ): string {
-  const len = fmtLen(length3d);
-  const drop = fmtLen(Math.abs(verticalDrop));
+  // Without an override the length and the drop share one unit and one
+  // decimal count, set by the length, so the line never reads "m" beside "cm".
+  const [len, drop] = fmtLen
+    ? [fmtLen(length3d), fmtLen(Math.abs(verticalDrop))]
+    : formatLengthsInSharedUnit([length3d, Math.abs(verticalDrop)], system);
   const grade = formatGrade(gradePercent);
   let sign: string;
   if (verticalDrop < 0) sign = '−';
@@ -350,14 +353,60 @@ export function formatBoxHeadline(
   height: number,
   volume: number,
   system: UnitSystem,
-  fmtLen: (v: number) => string = (v) => formatLength(v, system),
+  fmtLen?: (v: number) => string,
   fmtVol: (v: number) => string = (v) => formatVolume(v, system),
 ): string {
-  const w = fmtLen(width);
-  const d = fmtLen(depth);
-  const h = fmtLen(height);
-  const v = fmtVol(volume);
+  if (fmtLen) return `${fmtLen(width)} × ${fmtLen(depth)} × ${fmtLen(height)}  · ${fmtVol(volume)}`;
+  // One unit for the three sides, at one decimal count, and the volume in the
+  // cube of that unit: "13.200 m × 4.800 m × 0.005 m · 0.31680 m³", never
+  // "13.200 m × 4.8000 m × 0.5000 cm · 317 dm³".
+  const unit = sharedLengthUnit(Math.max(...[width, depth, height].map(finiteAbs)), system);
+  const [w, d, h] = [width, depth, height].map((x) => inSharedUnit(x, unit));
+  let v = '—';
+  if (Number.isFinite(volume) && volume >= 0) {
+    const cubic = volume * unit.perMetre ** 3;
+    v = `${grouped(cubic, displayDecimals(cubic, 0, 6))} ${unit.unit}³`;
+  }
   return `${w} × ${d} × ${h}  · ${v}`;
+}
+
+/** The unit and decimal count a set of lengths on one readout line shares. */
+interface SharedLengthUnit {
+  readonly perMetre: number;
+  readonly unit: 'cm' | 'm' | 'in' | 'ft';
+  readonly decimals: number;
+}
+
+function finiteAbs(v: number): number {
+  return Number.isFinite(v) ? Math.abs(v) : 0;
+}
+
+/**
+ * The unit the largest figure on a line (`bandMetres`) would get, and the
+ * decimal count that figure earns under {@link displayDecimals}. Like
+ * {@link formatLengthInBandOf}, a shared band stops at metres or feet.
+ */
+function sharedLengthUnit(bandMetres: number, system: UnitSystem): SharedLengthUnit {
+  const band = finiteAbs(bandMetres);
+  const pick = (perMetre: number, unit: SharedLengthUnit['unit'], minDecimals: number): SharedLengthUnit =>
+    ({ perMetre, unit, decimals: displayDecimals(band * perMetre, minDecimals, 4) });
+  if (system === 'metric') return band < 1 ? pick(100, 'cm', 1) : pick(1, 'm', 2);
+  return band * FEET_PER_METRE < 1 ? pick(FEET_PER_METRE * 12, 'in', 1) : pick(FEET_PER_METRE, 'ft', 2);
+}
+
+function inSharedUnit(metres: number, unit: SharedLengthUnit): string {
+  return Number.isFinite(metres) ? `${(metres * unit.perMetre).toFixed(unit.decimals)} ${unit.unit}` : '—';
+}
+
+/**
+ * Format several lengths that sit on one readout line in ONE unit at ONE
+ * decimal count, both set by the largest. An unverified unit prints each value
+ * in source units instead (see {@link formatUnitUnverified}).
+ */
+export function formatLengthsInSharedUnit(metres: readonly number[], system: DisplayUnits): string[] {
+  if (system === 'unverified') return metres.map(formatUnitUnverified);
+  const unit = sharedLengthUnit(Math.max(0, ...metres.map(finiteAbs)), system);
+  return metres.map((m) => inSharedUnit(m, unit));
 }
 
 /** The suffix a value carries when the scan's horizontal unit is unknown. */
