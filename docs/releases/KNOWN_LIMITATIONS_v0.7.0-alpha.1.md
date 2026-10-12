@@ -478,12 +478,21 @@ that record. A measurement with no pick record, such as one from an older
 session, is placed through the scan it was recorded on only when the open
 scans place a point the same way, and is refused otherwise. A
 measurement with no recorded scan, one whose points sit on scans whose heights
-are not in one frame, or a set spanning scans that declare different coordinate
-systems is refused rather than exported. A session saved with one scan and
+are not in one frame is refused rather than exported. Each measurement is
+written with the coordinate system, unit scales, up axis and source digest of
+the scan it was taken on, whichever scan is active. Measurements on scans whose
+coordinate frames differ (a different CRS, linear or vertical unit, vertical
+datum or up axis) are refused together, with a message naming the scans and
+their CRS ("Measurements on A (EPSG:32612) and B (EPSG:32613) use different
+coordinate frames; export one scan's measurements at a time"). Nothing is
+converted between frames; export each scan's measurements on its own. A session saved with one scan and
 restored with two open is placed through the scan it matches; when that scan
 cannot be identified, close the other scans and export again. The integrity
-and findings reports name the active scan; they carry lengths and areas, not
-coordinates. The site KML is written only while one scan is open.
+report names the scan its measurements were taken on, under the same
+different-frame refusal, and the findings list takes its unit scales from that
+scan; the findings report file itself still names the active scan. The PDF
+report's measurement table reads the active scan's unit scales. These reports
+carry lengths and areas, not coordinates. The site KML is written only while one scan is open.
 
 The tabular exports round to three decimals. A value of 0.0005 and above keeps
 three decimals; a smaller nonzero value keeps three significant digits, down to

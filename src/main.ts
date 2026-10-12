@@ -2363,7 +2363,7 @@ const kmlDeps: KmlActionDeps = {
 const measurementExportActionDeps = (v: Viewer): MeasurementExportActionDeps => ({
   measure: v.measure,
   geo: exportGeoContext,
-  layers: { view: v, stableIdFor: runtime.layerIdentity.stableIdFor }, refuse: (m) => dropZone.setError(m), upAxis: () => sourceUpAxis(crsService.context().upAxis, scans.activeCloud()?.sourceFormat, !!viewer?.streamingCloud),
+  layers: { view: v, stableIdFor: runtime.layerIdentity.stableIdFor }, frameSource: { activeId: () => scans.activeId, activeGeo: exportGeoContext, activeUpAxis: () => sourceUpAxis(crsService.context().upAxis, scans.activeCloud()?.sourceFormat, !!viewer?.streamingCloud), cloud: (id) => v.getCloud(id), classificationEpoch: (id) => v.classificationEpoch(id), crs: crsService }, refuse: (m) => dropZone.setError(m), upAxis: () => sourceUpAxis(crsService.context().upAxis, scans.activeCloud()?.sourceFormat, !!viewer?.streamingCloud),
   baseName,
   downloadText,
   loadMeasurementExport,

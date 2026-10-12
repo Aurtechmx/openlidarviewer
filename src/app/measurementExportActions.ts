@@ -15,6 +15,7 @@ import type { GeoJsonLonLat, MeasurementExportContext } from '../export/measurem
 import type { SpatialUpAxis } from '../geo/SpatialContext';
 import type { ReportFinding } from '../render/measure/reportManifest';
 import type { GeoExportContext } from './reportExport';
+import { framesOfApp, resolveOwnerFrame, type AppFrameSource, type ExportFrame, type OwnerRef } from './measurementExportFrame';
 
 import { activeScanBasisOf, type ActiveScanBasis } from './measurementScanHooks';
 import { appToast } from '../ui/panelChrome';
@@ -70,6 +71,13 @@ export interface MeasurementExportActionDeps {
    */
   readonly layers?: { readonly view: ExportLayerView; readonly stableIdFor: (viewerId: string) => string | null };
   /**
+   * The complete export frame of any open scan (origin, resolved CRS, unit
+   * scales, up-axis, labels). With several scans open, a measurement is exported
+   * through the frame of the scan it was taken on, never the active scan's.
+   * Omitted: the active frame from `geo()` and the measure view, as before.
+   */
+  readonly frameSource?: AppFrameSource;
+  /**
    * The resolved up-axis of the active scan. The GeoJSON places X/Y as the
    * ground plane, so it refuses a frame that is not Z-up, as the KML does.
    */
@@ -93,6 +101,8 @@ export interface MeasurementExportActionDeps {
 
 /** One open layer, as the measurement export places points through it. */
 export interface ExportLayer {
+  /** The viewer's id for the layer. */
+  readonly viewerId: string;
   /** Stable layer id (`model/layerIdentity`), or null when none was bound. */
   readonly stableId: string | null;
   /** Display name: the file name. */
@@ -117,7 +127,7 @@ export function exportLayersOf(v: ExportLayerView, stableIdFor: (viewerId: strin
   for (const id of v.clouds()) {
     const c = v.getCloud(id);
     if (!c) continue;
-    out.push({ stableId: stableIdFor(id), name: c.name, sourceOrigin: c.sourceOrigin, projectOffset: v.layerProjectOffset(id), crsName: c.metadata?.crs?.name ?? null });
+    out.push({ viewerId: id, stableId: stableIdFor(id), name: c.name, sourceOrigin: c.sourceOrigin, projectOffset: v.layerProjectOffset(id), crsName: c.metadata?.crs?.name ?? null });
   }
   return out;
 }
@@ -126,6 +136,7 @@ export function exportLayersOf(v: ExportLayerView, stableIdFor: (viewerId: strin
 interface Placed {
   readonly base: readonly [number, number, number];
   readonly names: readonly string[];
+  readonly owners: readonly OwnerRef[];
 }
 
 /**
@@ -141,6 +152,8 @@ interface Placed {
 function ownLayers(
   measurements: readonly Measurement[],
   layers: readonly ExportLayer[],
+  /** False when the per-scan frame check runs instead, so it can name the scans. */
+  declaredCrsCheck: boolean,
 ): { byId: Map<string, Placed> } | { refused: string } {
   const byId = new Map<string, Placed>();
   let unknown = 0;
@@ -170,7 +183,7 @@ function ownLayers(
     });
     if (bases.some((v) => v.some((c, i) => Math.abs(c - bases[0]![i]!) > 1e-6))) split.push(m.name);
     for (const l of ls) crs.add(l!.crsName);
-    byId.set(m.id, { base: bases[0]!, names: [...new Set(ls.map((l) => l!.name))].sort((a, b) => a.localeCompare(b)) });
+    byId.set(m.id, { base: bases[0]!, names: [...new Set(ls.map((l) => l!.name))].sort((a, b) => a.localeCompare(b)), owners: (ls as ExportLayer[]).map((l) => ({ viewerId: l.viewerId, name: l.name })) });
   }
   if (unknown > 0) {
     return { refused: `Not exported: ${unknown} of ${measurements.length} measurements have no record of the scan their points were picked on, so their coordinates cannot be placed. Close every scan but the one the measurements were taken on, then export again.` };
@@ -178,7 +191,7 @@ function ownLayers(
   if (split.length > 0) {
     return { refused: `Not exported: ${split.join(', ')} has points on scans whose heights are not in one frame. Delete it or measure on one scan, then export again.` };
   }
-  if (crs.size > 1) {
+  if (declaredCrsCheck && crs.size > 1) {
     return { refused: 'Not exported: the measurements come from scans with different coordinate systems. Export them one scan at a time.' };
   }
   return { byId };
@@ -250,6 +263,30 @@ function refusedForClosedScan(measurements: readonly Measurement[], deps: Measur
   return true;
 }
 
+/**
+ * The frame of the scan(s) the measurements were taken on, for the report
+ * exports: null (keep the active frame) with one scan open, no frame source, or
+ * no measurement naming a scan; the refusal sentence when the owners do not
+ * share a frame. Unowned measurements keep meaning the active scan.
+ */
+function ownerFrameFor(
+  measurements: readonly Measurement[],
+  deps: MeasurementExportActionDeps,
+): { frame: ExportFrame | null; owners: readonly OwnerRef[] } | { refused: string } {
+  const layers = deps.layers ? exportLayersOf(deps.layers.view, deps.layers.stableIdFor) : [];
+  if (!deps.frameSource || layers.length < 2) return { frame: null, owners: [] };
+  const entries = measurements.map((m): OwnerRef[] => {
+    const ids = m.pickLayers && m.pickLayers.length > 0 ? m.pickLayers : m.owner?.layerId ? [m.owner.layerId] : [];
+    return ids.flatMap((id) => layers.filter((l) => l.stableId === id).map((l) => ({ viewerId: l.viewerId, name: l.name })));
+  });
+  return resolveOwnerFrame(entries, framesOfApp(deps.frameSource));
+}
+
+/** The scan stem a report names: the one owner, or the owners joined. */
+function ownerStem(owners: readonly OwnerRef[], baseName: (n: string) => string): string {
+  return [...new Set(owners.map((o) => baseName(o.name)))].sort((a, b) => a.localeCompare(b)).join('+');
+}
+
 /** Export the placed measurements as an open GeoJSON or CSV file. */
 export async function exportMeasurementsFile(
   format: 'geojson' | 'csv',
@@ -261,21 +298,35 @@ export async function exportMeasurementsFile(
   if (measurements.length === 0) return;
   const layers = deps.layers ? exportLayersOf(deps.layers.view, deps.layers.stableIdFor) : [];
   if (refusedForClosedScan(measurements, deps)) return;
-  const own = layers.length > 1 ? ownLayers(measurements, layers) : null;
+  const own = layers.length > 1 ? ownLayers(measurements, layers, !deps.frameSource) : null;
   if (own && 'refused' in own) {
     deps.refuse?.(own.refused);
     return;
+  }
+  // Several scans: the file is described by the frame of the scan(s) the
+  // measurements were taken on, and refused when they do not share one.
+  let owned: ExportFrame | null = null;
+  let ownerCount = 0;
+  if (own && deps.frameSource) {
+    const r = resolveOwnerFrame(measurements.map((m) => own.byId.get(m.id)!.owners), framesOfApp(deps.frameSource));
+    if ('refused' in r) {
+      deps.refuse?.(r.refused);
+      return;
+    }
+    owned = r.frame;
+    ownerCount = r.owners.length;
   }
   // Measurement points are LOCAL (recentered); add the origin back to land them
   // in the source projected/local frame. `geo()` resolves the origin for
   // streaming scans too (renderOrigin) — a static-only read would export at
   // render-frame coordinates.
-  const geo = deps.geo();
+  const activeGeo = deps.geo();
+  const geo = owned ? owned.geo : activeGeo;
   const origin: [number, number, number] = [geo.origin[0], geo.origin[1], geo.origin[2]];
   const generatedAt = deps.now();
   let lonLat: GeoJsonLonLat | undefined;
   if (format === 'geojson') {
-    const placed = geoJsonLonLat(geo, deps.upAxis?.() ?? 'unknown');
+    const placed = geoJsonLonLat(geo, owned ? owned.upAxis : deps.upAxis?.() ?? 'unknown');
     if ('refused' in placed) {
       deps.refuse?.(placed.refused);
       return;
@@ -287,14 +338,21 @@ export async function exportMeasurementsFile(
   // it holds; the digest and data basis describe the active scan, so they are
   // stated only when it is the one source.
   const sources = own ? [...new Set([...own.byId.values()].flatMap((p) => p.names))].sort((a, b) => a.localeCompare(b)) : null;
-  const activeOnly = !sources || (sources.length === 1 && sources[0] === geo.name);
+  // The digest and data basis describe one source: with owner frames that is
+  // the single owning scan, otherwise the active scan when it is the only source.
+  const activeOnly = !sources || (owned ? ownerCount === 1 : sources.length === 1 && sources[0] === geo.name);
+
   const stems = sources ? sources.map(deps.baseName) : geo.name ? [deps.baseName(geo.name)] : [];
   const singleSource = geo.name ? deps.baseName(geo.name) : null;
   const sourceOfId = own ? new Map([...own.byId].map(([id, p]) => [id, p.names.map(deps.baseName).join('+')])) : null;
   // Read with the rest of the scan state, before the lazy import yields.
-  const scanBasis = deps.activeScanBasis
-    ? deps.activeScanBasis()
-    : activeScanBasisOf(geo.source, deps.activeClassificationEpoch());
+  // An owning scan states its own point basis and class-edit state, from its own
+  // source and edit epoch; only the active scan reads the injected readers.
+  const scanBasis = owned
+    ? activeScanBasisOf(geo.source, owned.classificationEpoch)
+    : deps.activeScanBasis
+      ? deps.activeScanBasis()
+      : activeScanBasisOf(geo.source, deps.activeClassificationEpoch());
   const exporter = await deps.loadMeasurementExport();
   const { measurementsToGeoJSON, measurementsToCsv, resolveExportDigests } = exporter;
   const digests = await resolveExportDigests(activeOnly ? geo.source : undefined, geo.crs);
@@ -308,16 +366,16 @@ export async function exportMeasurementsFile(
       : (p) => [p[0] + origin[0], p[1] + origin[1], p[2] + origin[2]],
     sourceOf: sourceOfId ? (m) => sourceOfId.get(m.id)! : () => singleSource,
     up: snap.worldUp,
-    unitToMetres: snap.unitToMetres,
-    verticalUnitToMetres: snap.verticalUnitToMetres,
+    unitToMetres: owned ? owned.unitToMetres : snap.unitToMetres,
+    verticalUnitToMetres: owned ? owned.verticalUnitToMetres : snap.verticalUnitToMetres,
     crsName: geo.crsName,
     // The RESOLVED frame's own answer, not a literal. A geographic frame has no
     // scalar metres-per-unit at all, so it is neither verified nor convertible.
-    geographic: snap.geographicCrs,
+    geographic: owned ? owned.geographic : snap.geographicCrs,
     // A local / unknown-unit scan has an inert factor of 1, so the `_m` columns
     // are nominal, not metres — the evidence note then says so (M1). An angular
     // frame is unverified for a stronger reason: no scalar could make it metres.
-    unitsVerified: snap.unitsVerified,
+    unitsVerified: owned ? owned.unitsVerified : snap.unitsVerified,
     lonLat,
     provenance: {
       generatedAt,
@@ -484,29 +542,39 @@ export async function exportMeasurementIntegrityReport(
   const ms = snap.measurements;
   if (ms.length === 0) return;
   if (refusedForClosedScan(ms, deps)) return;
-  const geo = deps.geo();
+  const owned = ownerFrameFor(ms, deps);
+  if ('refused' in owned) {
+    deps.refuse?.(owned.refused);
+    return;
+  }
+  const geo = owned.frame ? owned.frame.geo : deps.geo();
   // Every scan-bound fact is read BEFORE the lazy import, so the report is one
   // scan's account of itself. The frame, unit scales, class epoch and
   // unit-known flag were read AFTER the await, so a scan swap while the chunk
   // loaded signed A's geometry and name with B's up vector, unit scale and
   // classification epoch — inside a file called an integrity report.
-  const { worldUp, unitToMetres, verticalUnitToMetres } = snap;
+  const { worldUp } = snap;
+  const unitToMetres = owned.frame ? owned.frame.unitToMetres : snap.unitToMetres;
+  const verticalUnitToMetres = owned.frame ? owned.frame.verticalUnitToMetres : snap.verticalUnitToMetres;
   const classificationEpoch = deps.activeClassificationEpoch();
   // Local / unknown-unit scan → the findings' metre labels are nominal (M1).
   // A GEOGRAPHIC frame is unverified for a stronger reason than an unknown
   // one: no scalar metres-per-degree exists, so there is nothing to convert
   // by. The CSV/GeoJSON action next door has always read it this way; this
   // path read the bare `crsKnown` and so called a lon/lat scan unit-verified.
-  const crsKnown = snap.unitsVerified;
+  const crsKnown = owned.frame ? owned.frame.unitsVerified : snap.unitsVerified;
+  const geographic = owned.frame ? owned.frame.geographic : snap.geographicCrs;
   const generatedAt = deps.now();
   const { integrityReportFile, resolveExportDigests, signReportText } = await deps.loadMeasurementReport();
-  const digests = await resolveExportDigests(geo.source, geo.crs);
+  // The digest describes one source file; with several owning scans in one frame it is omitted.
+  const digests = await resolveExportDigests(owned.owners.length > 1 ? undefined : geo.source, geo.crs);
+  const scanName = owned.owners.length > 1 ? ownerStem(owned.owners, deps.baseName) : geo.name ? deps.baseName(geo.name) : 'scan';
   const f = integrityReportFile(
     ms,
     worldUp,
     unitToMetres,
     verticalUnitToMetres,
-    geo.name ? deps.baseName(geo.name) : 'scan',
+    scanName,
     geo.crsName,
     generatedAt,
     classificationEpoch,
@@ -516,7 +584,7 @@ export async function exportMeasurementIntegrityReport(
     digests,
     // The flag the live grade refuses on: every kind but a height is
     // recorded as a null finding with the reason.
-    snap.geographicCrs,
+    geographic,
   );
   const out = await textToWrite(f.text, deps, signReportText);
   if (out !== null) deps.downloadText(f.filename, out);
@@ -534,15 +602,20 @@ export async function collectMeasurementFindings(
   const { measure } = deps;
   const ms = measure.getMeasurements();
   if (ms.length === 0) return [];
+  const owned = ownerFrameFor(ms, deps);
+  if ('refused' in owned) {
+    deps.refuse?.(owned.refused);
+    return [];
+  }
   // Same discipline: the frame the measurements were taken in, captured with
   // them rather than re-read after the import.
   const worldUp = measure.worldUp;
-  const unitToMetres = measure.unitToMetres;
-  const verticalUnitToMetres = measure.verticalUnitToMetres;
+  const unitToMetres = owned.frame ? owned.frame.unitToMetres : measure.unitToMetres;
+  const verticalUnitToMetres = owned.frame ? owned.frame.verticalUnitToMetres : measure.verticalUnitToMetres;
   // A geographic frame refuses what the live grade refuses, and an
   // unconfirmed scale is not labelled metres.
-  const geographic = measure.geographicCrs;
-  const unitsVerified = measure.crsKnown && !geographic;
+  const geographic = owned.frame ? owned.frame.geographic : measure.geographicCrs;
+  const unitsVerified = owned.frame ? owned.frame.unitsVerified : measure.crsKnown && !geographic;
   const { measurementsToFindings } = await deps.loadMeasurementReport();
   return measurementsToFindings(ms, worldUp, unitToMetres, verticalUnitToMetres, { geographic, unitsVerified });
 }
