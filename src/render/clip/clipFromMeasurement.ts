@@ -12,9 +12,18 @@
  *     single layer is open (the session's one origin is that layer's), because
  *     with several layers open nothing says which scan its corners belong to.
  *     Coordinates are never copied across datasets;
- *   - degenerate boxes are refused: a zero (or sub-epsilon) extent on ANY axis
- *     would clip everything away (keep-inside) or nothing (keep-outside), and
- *     neither is what the user drew;
+ *   - degenerate boxes are refused: a zero (or sub-epsilon) extent on either
+ *     horizontal axis would clip everything away (keep-inside) or nothing
+ *     (keep-outside), and neither is what the user drew;
+ *   - a FLAT box is given a height. Two corners picked on the ground differ by
+ *     centimetres in height, so the box they span is a slab a few centimetres
+ *     thick and isolating it shows a 2D slice of the scan. When the box's
+ *     height along the up axis is under {@link FLAT_BOX_FRACTION} of the scan's
+ *     vertical range, the clip's height is the scan's whole vertical extent and
+ *     the result says so (`heightExtended`). With no vertical extent supplied the
+ *     decision falls back to refusing a box with a zero extent on any axis, so a
+ *     truly degenerate box is never accepted. The measurement itself is never
+ *     touched;
  *   - the corners are normalised with `boxFromCorners`, so reversed corners give
  *     the same box.
  *
@@ -27,7 +36,9 @@
 
 import type { Vec3 } from '../measure/types';
 import { boxFromCorners } from '../measure/geometry';
-import type { ClipBox } from './clipBox';
+import type { ClipBox, VerticalExtent } from './clipBox';
+
+export type { VerticalExtent };
 
 /** The slice of a measurement this decision reads. */
 export interface BoxMeasurementLike {
@@ -43,13 +54,26 @@ export interface ClipTargetContext {
   readonly activeLayerId: string | null;
   /** Open layer count. */
   readonly layerCount: number;
+  /**
+   * The scan's vertical extent along its up axis, in the clip's frame (the
+   * project frame). Absent when unknown: only an exactly flat box is refused.
+   */
+  readonly vertical?: VerticalExtent | null;
 }
+
+/** A box thinner than this fraction of the scan's vertical range counts as flat. */
+export const FLAT_BOX_FRACTION = 0.05;
 
 /** Smallest extent (render units) a clip-box axis may have. */
 export const MIN_CLIP_EXTENT = 1e-9;
 
 export type ClipFromBoxResult =
-  | { readonly ok: true; readonly clip: ClipBox }
+  | {
+      readonly ok: true;
+      readonly clip: ClipBox;
+      /** Set when a flat box was given the scan's full height: the drawn height and the one used. */
+      readonly heightExtended?: { readonly axis: 0 | 1 | 2; readonly drawn: number; readonly min: number; readonly max: number };
+    }
   | { readonly ok: false; readonly reason: string };
 
 const finite3 = (p: Vec3 | undefined): p is Vec3 =>
@@ -76,13 +100,28 @@ export function clipFromBoxMeasurement(
     return { ok: false, reason: 'This box does not say which scan it belongs to, so it cannot clip one of several open scans.' };
   }
   const box = boxFromCorners(a, b);
+  const v = ctx.vertical && ctx.vertical.max > ctx.vertical.min ? ctx.vertical : null;
+  const up = v ? v.axis : null;
   for (let i = 0; i < 3; i++) {
+    // With a known vertical extent the height is judged below, not refused here.
+    if (i === up) continue;
     if (!(box.max[i] - box.min[i] > MIN_CLIP_EXTENT)) {
       return { ok: false, reason: `This box is flat along ${'XYZ'[i]}, so it cannot enclose any points.` };
     }
   }
-  return {
-    ok: true,
-    clip: { box: { min: [...box.min], max: [...box.max] }, mode: 'keep-inside', enabled: true },
-  };
+  const min: [number, number, number] = [...box.min];
+  const max: [number, number, number] = [...box.max];
+  let heightExtended: { axis: 0 | 1 | 2; drawn: number; min: number; max: number } | undefined;
+  if (v && up !== null) {
+    const drawn = box.max[up] - box.min[up];
+    if (drawn < (v.max - v.min) * FLAT_BOX_FRACTION) {
+      // A little margin so a rounding step never trims the top or bottom points.
+      const pad = (v.max - v.min) * 0.01;
+      min[up] = Math.min(box.min[up], v.min - pad);
+      max[up] = Math.max(box.max[up], v.max + pad);
+      heightExtended = { axis: v.axis, drawn, min: min[up], max: max[up] };
+    }
+  }
+  const clip: ClipBox = { box: { min, max }, mode: 'keep-inside', enabled: true };
+  return heightExtended ? { ok: true, clip, heightExtended } : { ok: true, clip };
 }

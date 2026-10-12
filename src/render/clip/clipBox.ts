@@ -105,3 +105,64 @@ export function countKept(clip: ClipBox, positions: Float32Array): number {
   }
   return kept;
 }
+
+/**
+ * A pick predicate that also refuses points the clip hides, so a click, a
+ * double-click focus, a hover probe or a measurement vertex can never land on a
+ * point the user cannot see. `positions` is the buffer the pick scans and
+ * `offset` its translation into the clip's frame (the layer placement; zero for
+ * a streaming node). Returns `inner` untouched when no clip is active, so the
+ * all-visible hot path makes no per-point call.
+ */
+export function clipPickAccept(
+  clip: ClipBox | null | undefined,
+  positions: ArrayLike<number>,
+  offset: readonly [number, number, number],
+  inner?: (index: number) => boolean,
+): ((index: number) => boolean) | undefined {
+  if (!clip?.enabled) return inner;
+  const { min, max } = clip.box;
+  const keepInside = clip.mode === 'keep-inside';
+  const [dx, dy, dz] = offset;
+  // Inlined (no tuple per point): a pick may ask this of many points.
+  return (i: number): boolean => {
+    if (inner !== undefined && !inner(i)) return false;
+    const x = positions[i * 3] + dx;
+    const y = positions[i * 3 + 1] + dy;
+    const z = positions[i * 3 + 2] + dz;
+    const inside = x >= min[0] && x <= max[0] && y >= min[1] && y <= max[1] && z >= min[2] && z <= max[2];
+    return keepInside ? inside : !inside;
+  };
+}
+
+/** A scan's extent along its up axis, in the clip's frame. */
+export interface VerticalExtent {
+  /** Index of the up axis in a Vec3: 2 for Z-up scans, 1 for Y-up. */
+  readonly axis: 0 | 1 | 2;
+  readonly min: number;
+  readonly max: number;
+}
+
+/** The extent of `bounds` ([minx, miny, minz, maxx, maxy, maxz]) along `axis`, or null with no bounds. */
+export function verticalExtentOf(
+  bounds: readonly number[] | null | undefined,
+  axis: 1 | 2,
+): VerticalExtent | null {
+  return bounds ? { axis, min: bounds[axis], max: bounds[3 + axis] } : null;
+}
+
+/**
+ * The region to frame for a keep-inside clip: the clip's box trimmed to the
+ * data (a flat box is given the scan's height plus a margin, which would
+ * otherwise frame empty space). Null for no clip, an Outside clip, no data or a
+ * box that misses the data.
+ */
+export function clipFrameBounds(
+  clip: ClipBox | null | undefined,
+  data: readonly number[] | null | undefined,
+): { min: Vec3; max: Vec3 } | null {
+  if (!clip?.enabled || clip.mode !== 'keep-inside' || !data) return null;
+  const min: Vec3 = [Math.max(clip.box.min[0], data[0]), Math.max(clip.box.min[1], data[1]), Math.max(clip.box.min[2], data[2])];
+  const max: Vec3 = [Math.min(clip.box.max[0], data[3]), Math.min(clip.box.max[1], data[4]), Math.min(clip.box.max[2], data[5])];
+  return max[0] > min[0] && max[1] > min[1] && max[2] > min[2] ? { min, max } : null;
+}

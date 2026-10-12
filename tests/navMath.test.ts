@@ -441,3 +441,33 @@ describe('orbitOffset', () => {
     expect(mag(out)).toBeCloseTo(10, 6);
   });
 });
+
+describe('nearestPointAlongRay accept predicate cost', () => {
+  const origin: Vec3 = [0, 0, 0];
+  const dir: Vec3 = [0, 0, 1];
+
+  test('asks the predicate about far fewer points than the cloud holds, with the same winner as filtering first', () => {
+    // 20,000 points whose angular miss grows with the index: after the first few
+    // nothing improves, so the predicate is never asked about the rest.
+    const n = 20000;
+    const pts = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { pts[i * 3] = (i + 1) * 0.01; pts[i * 3 + 1] = 0; pts[i * 3 + 2] = 10; }
+    let calls = 0;
+    const accept = (i: number): boolean => { calls++; return i % 2 === 1; };
+    const lazy = nearestPointAlongRay(pts, origin, dir, accept);
+    // The reference: filter first, then take the nearest.
+    const even = new Float32Array((n / 2) * 3);
+    for (let k = 0; k < n / 2; k++) even.set(pts.subarray(k * 6 + 3, k * 6 + 6), k * 3);
+    const ref = nearestPointAlongRay(even, origin, dir);
+    expect(lazy!.index).toBe(ref!.index * 2 + 1);
+    expect(lazy!.point).toEqual(ref!.point);
+    expect(calls).toBeLessThan(n / 100);
+  });
+
+  test('a rejected improvement does not become the winner', () => {
+    // Index 1 is nearer the ray but rejected; index 0 must win.
+    const pts = new Float32Array([5, 0, 10, 1, 0, 10]);
+    const hit = nearestPointAlongRay(pts, origin, dir, (i) => i === 0);
+    expect(hit!.index).toBe(0);
+  });
+});

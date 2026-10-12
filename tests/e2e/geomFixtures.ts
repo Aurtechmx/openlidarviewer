@@ -92,3 +92,34 @@ export async function dropBytes(page: Page, bytes: Uint8Array, name: string): Pr
   );
   await page.dispatchEvent('body', 'drop', { dataTransfer: dt });
 }
+
+/**
+ * `tower`: a non-planar scan with vertical structure, for the clip specs. A
+ * 40 x 30 m ground at height 0 with 2 cm of deterministic noise (as a real
+ * ground return has), and an 8 m tall 5 x 5 m tower (four walls and a roof) at
+ * x 15..20, y 10..15. No CRS, so its local frame is the file's own: the origin
+ * is floor(min), which puts the ground near local height 1.
+ */
+export function towerPoints(): GlobalPoints {
+  const xs: number[] = [];
+  const ys: number[] = [];
+  const zs: number[] = [];
+  const add = (x: number, y: number, z: number): void => { xs.push(x); ys.push(y); zs.push(z); };
+  let k = 0;
+  const noise = (): number => { k = (k * 1103515245 + 12345) & 0x7fffffff; return (k / 0x7fffffff - 0.5) * 0.04; };
+  for (let i = 0; i <= 200; i++) for (let j = 0; j <= 150; j++) add(i * 0.2, j * 0.2, noise());
+  for (let h = 0; h <= 40; h++) {
+    for (let t = 0; t <= 25; t++) {
+      const z = h * 0.2;
+      const u = t * 0.2;
+      add(15 + u, 10, z); add(15 + u, 15, z); add(15, 10 + u, z); add(20, 10 + u, z);
+    }
+  }
+  for (let i = 0; i <= 25; i++) for (let j = 0; j <= 25; j++) add(15 + i * 0.2, 10 + j * 0.2, 8);
+  return { count: xs.length, x: Float64Array.from(xs), y: Float64Array.from(ys), z: Float64Array.from(zs) };
+}
+
+/** The tower scan as LAS bytes. */
+export async function towerLas(): Promise<Uint8Array> {
+  return (await writer())(towerPoints(), {});
+}

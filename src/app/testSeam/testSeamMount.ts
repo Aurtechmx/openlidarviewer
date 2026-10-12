@@ -51,9 +51,18 @@ export function mountTestSeam(deps: TestSeamDeps): void {
       placePoint(p.x, p.y, p.z, p.layer);
     },
     finishMeasurement: () => v.measure.finishCurrent(),
+    // The live clip box and its exact CPU kept count for the active scan, so a
+    // spec can assert what the viewer was told to clip, not only what the
+    // panel says.
+    getClipState: () => {
+      const id = deps.getActiveScanId();
+      const clip = v.getClip();
+      return { clip: clip ? { box: clip.box, mode: clip.mode, enabled: clip.enabled } : null, count: id ? v.clipKeptCount(id) : null };
+    },
     clearMeasurements: () => v.clearMeasurements(),
     getMeasurementCount: () => v.measure.getMeasurements().length,
     layerProjectPoints: (i: number) => v.layerProjectPoints(i), getCameraPose: () => v.getCameraPose(),
+    applyCameraPose: (pose: Parameters<typeof v.applyCameraPose>[0]) => v.applyCameraPose(pose),
     // A scene point projected to page coordinates through the camera the last
     // frame drew with, so a spec can click a known scan point in any projection.
     projectToClient: (p: { x: number; y: number; z: number }): { x: number; y: number } | null => {

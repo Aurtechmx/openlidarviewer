@@ -88,7 +88,7 @@ import { computeSharedElevationRange, elevationOptsFor, applyElevationColors } f
 import { type ActiveColorbar } from './activeColorbar';
 import type { SnapshotHost, SnapshotOptions } from './snapshot';
 import { runRenderFrame, feedFrameMs, governDpr, governPoints, type RenderLoopHost } from './renderLoop';
-import { type ClipBox, clipKeepsPoint, countKept } from './clip/clipBox';
+import { type ClipBox, type VerticalExtent, ClipBoxGpu, clipFrameBounds, clipKeepsPoint, clipPickAccept, countKept, verticalExtentOf } from './clip/clipGpu';
 import { edlDefaultEnabled, EDL_DEFAULTS } from './edl';
 import { angularVelocity } from './angularVelocity';
 import { refinementDprTarget, shouldApplyDpr, DPR_MOTION_FLOOR } from './adaptiveDpr';
@@ -299,27 +299,6 @@ import type {
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal data per loaded cloud
 // ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Six three.js clipping planes for a clip box, in render-local/world space.
- * keep-inside → inward-facing planes (a fragment survives only inside ALL of
- * them, the default intersection). keep-outside → the same planes negated, used
- * with `clipIntersection = true` so a fragment survives if it's outside ANY
- * face (i.e. outside the box). A three.js plane clips where n·p + c < 0.
- */
-function clipBoxPlanes(clip: ClipBox): THREE.Plane[] {
-  const { min, max } = clip.box;
-  const planes = [
-    new THREE.Plane(new THREE.Vector3(1, 0, 0), -min[0]), // keep x ≥ min.x
-    new THREE.Plane(new THREE.Vector3(-1, 0, 0), max[0]), // keep x ≤ max.x
-    new THREE.Plane(new THREE.Vector3(0, 1, 0), -min[1]),
-    new THREE.Plane(new THREE.Vector3(0, -1, 0), max[1]),
-    new THREE.Plane(new THREE.Vector3(0, 0, 1), -min[2]),
-    new THREE.Plane(new THREE.Vector3(0, 0, -1), max[2]),
-  ];
-  if (clip.mode === 'keep-outside') for (const p of planes) p.negate();
-  return planes;
-}
 
 interface CloudEntry {
   cloud: PointCloud;
@@ -663,8 +642,10 @@ export class Viewer {
    * it reads is held here; requested from the app layer, not the render loop.
    */
   readonly profileSeam: ProfileSectionSeam;
-  /** The active clip box (GPU clipping planes + CPU kept-count), or null. */
+  /** The active clip box (GPU size-graph fold + CPU kept-count), or null. */
   private _clip: ClipBox | null = null;
+  /** The GPU half of the clip: a per-point keep multiplier in the size graph. */
+  private readonly _clipGpu = new ClipBoxGpu();
   private _nextId = 0;
 
   // ── Streaming COPC subsystem (set while a streaming cloud is open) ───────
@@ -1530,11 +1511,8 @@ export class Viewer {
     this._materialsWithElev.add(material);
     // Record intensity carriers so `_applySizeMode` folds the intensity multiply.
     if (intenAttr !== null) this._materialsWithInten.add(material);
-    // A cloud added while a clip is active inherits it from its first frame.
-    if (this._clip?.enabled) {
-      material.clippingPlanes = clipBoxPlanes(this._clip);
-      material.clipIntersection = this._clip.mode === 'keep-outside';
-    }
+    // A cloud added while a clip is active inherits it from its first frame:
+    // `_applySizeMode` below folds the clip multiplier in while one is on.
     this._applySizeMode(material);
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -2210,33 +2188,43 @@ export class Viewer {
 
   /**
    * Apply (or clear) an axis-aligned clip box. The keep/cull decision is the
-   * pure {@link clipKeepsPoint} contract; here it is realised on the GPU via
-   * three.js clipping planes — six inward planes intersected for keep-inside,
-   * six outward planes unioned (`clipIntersection`) for keep-outside. The box is
-   * in render-local space, the same frame as the measurement geometry it reuses.
+   * pure {@link clipKeepsPoint} contract; here it is realised on the GPU as a
+   * per-point keep multiplier in the size graph (`ClipBoxGpu`: a point outside
+   * the kept region collapses to a zero-size sprite). The box is in the project
+   * frame, the same frame as the measurement geometry it reuses.
    * Pass `null` or a disabled clip to render everything again.
    *
-   * NOTE: the GPU result needs a device to verify; the kept-count
-   * ({@link clipKeptCount}) and clip state are exact and testable without one.
+   * The kept-count ({@link clipKeptCount}) is the exact CPU count; the e2e
+   * `clipRender` spec reads the drawn pixels back to prove the GPU agrees.
    */
   setClip(clip: ClipBox | null): void {
     this._clip = clip;
     const active = clip?.enabled === true;
-    // `localClippingEnabled` is a WebGLRenderer flag not yet typed on
-    // WebGPURenderer; set it through a guarded cast so it takes effect on the
-    // WebGL-2 fallback and on any WebGPU build that honours it. The in-viewport
-    // clip is the piece to confirm on a device; the kept-count is exact either way.
-    (this._renderer as unknown as { localClippingEnabled?: boolean }).localClippingEnabled = active;
-    const planes = active ? clipBoxPlanes(clip) : null;
-    const intersection = active && clip.mode === 'keep-outside';
-    const apply = (m: THREE.PointsNodeMaterial): void => {
-      m.clippingPlanes = planes;
-      m.clipIntersection = intersection;
-      m.needsUpdate = true;
-    };
-    for (const entry of this._clouds.values()) apply(entry.material);
-    for (const m of this._streamingMaterials()) apply(m);
+    // Not `material.clippingPlanes`: WebGPURenderer ignores it (see clipGpu.ts).
+    const wasActive = this._clipGpu.isActive();
+    this._clipGpu.apply(clip);
+    // On/off changes the size graph's SHAPE, so rebuild pipelines on that
+    // transition only; moving the box or switching Inside/Outside while active
+    // is a uniform-only change.
+    if (wasActive !== active) this._reapplyAllSizeModes();
     this._demand.changed('clip');
+  }
+
+  /** The visible scan's extent along its up axis in the clip's frame (see `clipFromBoxMeasurement`). */
+  clipVerticalExtent(): VerticalExtent | null {
+    return verticalExtentOf(this.mergedVisibleBounds(), this._worldUp.z === 1 ? 2 : 1);
+  }
+
+  /**
+   * Glide the camera to the kept volume of a keep-inside clip, so the orbit
+   * pivot sits in what is drawn rather than at the old scan centre. False when
+   * there is no such clip.
+   */
+  frameClip(): boolean {
+    const b = clipFrameBounds(this._clip, this.mergedVisibleBounds());
+    if (!b) return false;
+    this._frameBox(new THREE.Box3(new THREE.Vector3(...b.min), new THREE.Vector3(...b.max)));
+    return true;
   }
 
   /** The active clip box, or null when none is set. */
@@ -4790,6 +4778,8 @@ export class Viewer {
     const foldClass = this._materialsWithClass.has(material) && this._classFiltered;
     const foldElev = this._materialsWithElev.has(material) && this._elevGpu.isActive();
     const foldInten = this._materialsWithInten.has(material) && this._intenFilterEnabled.value !== 0;
+    // The clip needs `aPos`, which every mesh from the shared builder carries.
+    const foldClip = this._materialsWithElev.has(material) && this._clipGpu.isActive();
     // A streaming node mid-dissolve folds a per-point opaque dither (same
     // size×mask shape as the filters); dropped again the moment it settles.
     const foldFade = this._materialsWithFade.has(material);
@@ -4797,7 +4787,7 @@ export class Viewer {
     // mode, and never on a static cloud (which is not registered at all), so the
     // no-fold fast path below still resolves to exactly `base` for static clouds.
     const foldLod = this._lodSize.has(material, this._pointSizeMode);
-    if (!foldClass && !foldElev && !foldInten && !foldFade && !foldLod) {
+    if (!foldClass && !foldElev && !foldInten && !foldFade && !foldLod && !foldClip) {
       material.sizeNode = base as typeof material.sizeNode;
       return;
     }
@@ -4809,6 +4799,7 @@ export class Viewer {
     if (foldElev) node = node.mul(this._elevGpu.maskMultiplier(material));
     if (foldClass) node = node.mul(this._classMaskMultiplier());
     if (foldInten) node = node.mul(this._intenMaskMultiplier());
+    if (foldClip) node = node.mul(this._clipGpu.maskMultiplier());
     if (foldFade) node = node.mul(this._fadeMaskMultiplier(material));
     material.sizeNode = node as typeof material.sizeNode;
   }
@@ -5447,8 +5438,8 @@ export class Viewer {
       })),
       [o.x, o.y, o.z],
       [d.x, d.y, d.z],
-      anyFilter
-        ? (node) => this._pickAccept(node.positions, node.classification, node.intensity, filterWindow)
+      anyFilter || this._clip?.enabled
+        ? (node) => this._pickAccept(node.positions, node.classification, node.intensity, filterWindow, [0, 0, 0])
         : undefined,
     );
     if (!pick) return null;
@@ -5527,8 +5518,12 @@ export class Viewer {
     classification: ArrayLike<number> | null | undefined,
     intensity: ArrayLike<number> | null | undefined,
     window: PointFilterWindow,
+    clipOffset?: readonly [number, number, number],
   ): ((index: number) => boolean) | undefined {
-    return buildPointFilterAccept(positions, classification, intensity, window);
+    const accept = buildPointFilterAccept(positions, classification, intensity, window);
+    // A clipped-away point is not on screen, so a pick (given the buffer's
+    // offset into the clip's frame) cannot land on it either.
+    return clipOffset ? clipPickAccept(this._clip, positions, clipOffset, accept) : accept;
   }
 
   private _pickDetailed(
@@ -5555,7 +5550,7 @@ export class Viewer {
         cloud.positions,
         [rayO[0], rayO[1], rayO[2]],
         [d.x, d.y, d.z],
-        this._pickAccept(cloud.positions, cloud.classification, cloud.intensity, filterWindow),
+        this._pickAccept(cloud.positions, cloud.classification, cloud.intensity, filterWindow, accumulatorOffset(placement)),
       );
       if (!hit) continue;
       const score = hit.offset / hit.along; // angular miss
