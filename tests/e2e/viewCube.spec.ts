@@ -61,3 +61,32 @@ test('closing the scan takes the cube down; reopening mounts exactly one', async
   await page.waitForTimeout(500);
   await expect(page.locator('.olv-viewcube')).toHaveCount(1);
 });
+
+test('while orbiting, every shown cube target hit-tests to itself (no face under an edge, no edge under an edge)', async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/?test=1&viewcube=1');
+  await dropDenseGridPly(page);
+  await expect(page.locator('.olv-viewcube')).toBeVisible({ timeout: 20_000 });
+  const canvas = page.locator('canvas').first();
+  const box = (await canvas.boundingBox())!;
+  const covered = (): Promise<string[]> => page.evaluate(() => {
+    const out: string[] = [];
+    for (const b of document.querySelectorAll<HTMLElement>('.olv-viewcube button')) {
+      const r = b.getBoundingClientRect();
+      if (r.width === 0 || getComputedStyle(b).visibility === 'hidden' || b.hidden) continue;
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      if (hit && !b.contains(hit)) out.push(`${b.getAttribute('data-testid')} under ${(hit as HTMLElement).getAttribute('data-testid') ?? hit.className}`);
+    }
+    return out;
+  });
+  expect(await covered()).toEqual([]);
+  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.5);
+  await page.mouse.down();
+  for (let i = 1; i <= 24; i++) {
+    await page.mouse.move(box.x + box.width * (0.3 + i * 0.025), box.y + box.height * (0.5 + Math.sin(i / 3) * 0.2), { steps: 3 });
+    await page.waitForTimeout(60);
+    expect(await covered(), `step ${i}`).toEqual([]);
+  }
+  await page.mouse.up();
+});

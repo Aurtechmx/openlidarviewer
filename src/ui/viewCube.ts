@@ -19,17 +19,15 @@ import {
   CUBE_TARGETS,
   activeCubeFace,
   cubeFaceLabel,
-  cubeFaceMatrix,
   cubeTargetName,
   cubeTargetOrientation,
   cubeViewMatrix,
+  layoutCubeTargets,
   placeCube,
-  projectCubePoint,
   type CameraOrientation,
   type CubeOrientation,
   type CubeTarget,
   type PlacementRect,
-  type SceneVec,
   type StandardView,
 } from '../render/viewCubeMath';
 import './viewCube.css';
@@ -81,15 +79,10 @@ function matches(query: string): boolean {
   }
 }
 
-/** Outward normal of each face in the scene basis [east, north, up]. */
-const FACE_NORMALS: Readonly<Record<StandardView, SceneVec>> = {
-  top: [0, 0, 1], bottom: [0, 0, -1], front: [0, 1, 0], back: [0, -1, 0], right: [-1, 0, 0], left: [1, 0, 0],
-};
-
 /** Desktop and touch geometry, in CSS px. */
 const SIZE = {
   fine: { box: 120, half: 34, hit: 22, home: 24 },
-  coarse: { box: 156, half: 42, hit: 44, home: 44 },
+  coarse: { box: 156, half: 45, hit: 44, home: 44 },
 } as const;
 
 
@@ -180,9 +173,8 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
     b.setAttribute('data-shade', view === 'top' ? 'top' : view === 'bottom' ? 'bottom' : 'side');
     b.title = cubeTargetName(t, false); // replaced by applyLabels with the frame-aware name
     const side = geo.half * 2;
-    b.style.cssText =
-      `width:${side}px;height:${side}px;left:${-geo.half}px;top:${-geo.half}px;` +
-      `transform:matrix3d(${cubeFaceMatrix(view, geo.half).map(fmt).join(',')});`;
+    // Placed and shaped each frame from the projected geometry (a 2D affine map).
+    b.style.cssText = `width:${side}px;height:${side}px;left:${-geo.half}px;top:${-geo.half}px;`;
     b.addEventListener('click', (e) => {
       e.stopPropagation();
       choose(t);
@@ -192,7 +184,8 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
   }
 
   // ── Edges and corners: small dots in 2D over the projected cube ───────
-  const spots: { readonly target: CubeTarget; readonly el: HTMLButtonElement; readonly at: SceneVec }[] = [];
+  const spots: { readonly target: CubeTarget; readonly el: HTMLButtonElement }[] = [];
+  const spotsById = new Map<string, { readonly el: HTMLButtonElement }>();
   for (const t of CUBE_TARGETS) {
     if (t.kind === 'face') continue;
     const b = document.createElement('button');
@@ -209,7 +202,8 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
       choose(t);
     });
     stage.appendChild(b);
-    spots.push({ target: t, el: b, at: [t.signs[0] * geo.half, t.signs[1] * geo.half, t.signs[2] * geo.half] });
+    spots.push({ target: t, el: b });
+    spotsById.set(t.id, { el: b });
   }
 
   // ── Home ──────────────────────────────────────────────────────────────
@@ -346,33 +340,35 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
   place();
 
   // ── Per-frame follow ──────────────────────────────────────────────────
-  let lastTransform = '';
+  // Every face and spot is placed from `layoutCubeTargets`, plain geometry, as
+  // a 2D transform: no CSS 3D, so no browser decides what a press hits. A face
+  // turned away is hidden; an edge or corner that would sit over a face centre
+  // or another spot is hidden too (see the layout for the rule).
+  let lastKey = '';
   let lastActive: StandardView | null | undefined;
   const update = (): void => {
     applyLabels(isGeographic());
     const o = opts.getOrientation();
     if (!o) return;
     const m = cubeViewMatrix(o);
-    const transform = `matrix3d(${m.map(fmt).join(',')})`;
-    if (transform === lastTransform) return; // the camera did not turn
-    lastTransform = transform;
-    cube.style.transform = transform;
-    const centre = geo.box / 2;
-    for (const s of spots) {
-      const [x, y, z] = projectCubePoint(m, s.at);
-      // Only the edges and corners on the near side are clickable.
-      const visible = z > geo.half * 0.15;
-      s.el.hidden = !visible;
-      if (visible) {
-        s.el.style.left = `${fmt(centre + x)}px`;
-        s.el.style.top = `${fmt(centre + y)}px`;
-      }
-    }
-    // A face turned away (or edge-on) is neither drawn nor clickable, so it can
-    // never sit under, or over, another control.
+    const key = m.map(fmt).join(',');
+    if (key === lastKey) return; // the camera did not turn
+    lastKey = key;
+    const layout = layoutCubeTargets(m, geo.half, geo.hit);
     for (const [view, el] of faces) {
-      const n = projectCubePoint(m, FACE_NORMALS[view]);
-      el.style.visibility = n[2] > 0.12 ? 'inherit' : 'hidden';
+      const f = layout.faces[view];
+      el.style.visibility = f.visible ? 'inherit' : 'hidden';
+      if (f.visible) el.style.transform = `matrix(${f.affine.map(fmt).join(',')})`;
+    }
+    const centre = geo.box / 2;
+    for (const sp of layout.spots) {
+      const spot = spotsById.get(sp.id);
+      if (!spot) continue;
+      spot.el.hidden = !sp.visible;
+      if (sp.visible) {
+        spot.el.style.left = `${fmt(centre + sp.x)}px`;
+        spot.el.style.top = `${fmt(centre + sp.y)}px`;
+      }
     }
     const active = activeCubeFace(o);
     if (active !== lastActive) {

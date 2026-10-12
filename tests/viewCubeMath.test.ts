@@ -283,3 +283,99 @@ describe('placeCube — collision-aware top-right placement', () => {
     for (const b of boxes) expect(clearOf(p!, 120, b)).toBe(true);
   });
 });
+
+import { layoutCubeTargets, CUBE_FACE_MIN_DEPTH, CUBE_FACE_NORMALS } from '../src/render/viewCubeMath';
+
+describe('layoutCubeTargets — the 26 targets partition the cube at every camera orientation', () => {
+  // A camera orientation in the scene basis [east, north, up] from yaw, pitch and roll (degrees).
+  function orientation(yaw: number, pitch: number, roll: number) {
+    const r = (d: number): number => (d * Math.PI) / 180;
+    const [sy, cy, sp, cp, sr, cr] = [Math.sin(r(yaw)), Math.cos(r(yaw)), Math.sin(r(pitch)), Math.cos(r(pitch)), Math.sin(r(roll)), Math.cos(r(roll))];
+    const forward: SceneVec = [cp * sy, cp * cy, sp];
+    const upBase: SceneVec = [-sp * sy, -sp * cy, cp];
+    const right: SceneVec = [
+      forward[1] * upBase[2] - forward[2] * upBase[1],
+      forward[2] * upBase[0] - forward[0] * upBase[2],
+      forward[0] * upBase[1] - forward[1] * upBase[0],
+    ];
+    const up: SceneVec = [cr * upBase[0] + sr * right[0], cr * upBase[1] + sr * right[1], cr * upBase[2] + sr * right[2]];
+    return { forward, up, upIsZ: true };
+  }
+
+  /** Is the point inside the face's projected parallelogram (a square mapped by the affine)? */
+  function insideFace(a: readonly number[], half: number, x: number, y: number): boolean {
+    const [m00, m10, m01, m11, tx, ty] = a;
+    const det = m00 * m11 - m01 * m10;
+    if (Math.abs(det) < 1e-9) return false;
+    const dx = x - tx;
+    const dy = y - ty;
+    const lx = (m11 * dx - m01 * dy) / det;
+    const ly = (-m10 * dx + m00 * dy) / det;
+    return Math.abs(lx) < half && Math.abs(ly) < half;
+  }
+
+  for (const [name, half, hit] of [['desktop', 34, 22], ['touch', 45, 44]] as const) {
+    test(`${name}: every shown target's centre belongs to that target alone, over a yaw/pitch/roll sweep`, () => {
+      let swept = 0;
+      for (let yaw = 0; yaw < 360; yaw += 15) {
+        for (let pitch = -90; pitch <= 90; pitch += 15) {
+          for (let roll = 0; roll < 360; roll += 30) {
+            const m = cubeViewMatrix(orientation(yaw, pitch, roll));
+            const { faces, spots } = layoutCubeTargets(m, half, hit);
+            const where = `yaw ${yaw} pitch ${pitch} roll ${roll}`;
+            const shownFaces = VIEWS.filter((v) => faces[v].visible);
+            const shownSpots = spots.filter((s) => s.visible);
+            expect(shownFaces.length, `a face is toward the viewer at ${where}`).toBeGreaterThanOrEqual(1);
+            // Spots are drawn above faces: no shown spot's circle may cover any shown target's centre.
+            for (const s of shownSpots) {
+              for (const v of shownFaces) {
+                expect(Math.hypot(s.x - faces[v].cx, s.y - faces[v].cy), `${s.id} over the ${v} face centre at ${where}`).toBeGreaterThanOrEqual(hit / 2);
+              }
+              for (const o of shownSpots) {
+                if (o !== s) expect(Math.hypot(s.x - o.x, s.y - o.y), `${s.id} and ${o.id} overlap at ${where}`).toBeGreaterThanOrEqual(hit);
+              }
+            }
+            // The visible faces tile the silhouette: a face's centre is inside no other shown face.
+            for (const v of shownFaces) {
+              for (const o of shownFaces) {
+                if (o !== v) expect(insideFace(faces[o].affine, half, faces[v].cx, faces[v].cy), `${v} centre inside ${o} at ${where}`).toBe(false);
+              }
+              expect(insideFace(faces[v].affine, half, faces[v].cx, faces[v].cy), `${v} centre inside itself at ${where}`).toBe(true);
+            }
+            // The bounding-box centre a hit test would read is the projected face centre (the parallelogram is symmetric).
+            for (const v of shownFaces) {
+              const [a, b, c, d, e, f] = faces[v].affine;
+              const xs = [-1, 1].flatMap((sx) => [-1, 1].map((sy) => e + (a * sx + c * sy) * half));
+              const ys = [-1, 1].flatMap((sx) => [-1, 1].map((sy) => f + (b * sx + d * sy) * half));
+              expect((Math.min(...xs) + Math.max(...xs)) / 2).toBeCloseTo(faces[v].cx, 6);
+              expect((Math.min(...ys) + Math.max(...ys)) / 2).toBeCloseTo(faces[v].cy, 6);
+            }
+            swept += 1;
+          }
+        }
+      }
+      expect(swept).toBe(24 * 13 * 12);
+    });
+  }
+
+  test('a visible face is toward the viewer by more than the minimum depth', () => {
+    const m = cubeViewMatrix(orientation(40, 25, 0));
+    const { faces } = layoutCubeTargets(m, 34, 22);
+    for (const v of VIEWS) {
+      const depth = projectCubePoint(m, CUBE_FACE_NORMALS[v])[2];
+      expect(faces[v].visible).toBe(depth > CUBE_FACE_MIN_DEPTH);
+    }
+  });
+
+  test('straight-on views keep the useful targets: the near face plus its 8 edges and corners', () => {
+    for (const view of ['top', 'front'] as const) {
+      const o = cubeTargetOrientation(cubeTargetForView(view));
+      const m = cubeViewMatrix({ forward: [-o.dir[0], -o.dir[1], -o.dir[2]], up: o.up, upIsZ: true });
+      for (const [half, hit] of [[34, 22], [45, 44]] as const) {
+        const { faces, spots } = layoutCubeTargets(m, half, hit);
+        expect(faces[view].visible).toBe(true);
+        expect(spots.filter((s) => s.visible).length).toBeGreaterThanOrEqual(8);
+      }
+    }
+  });
+});

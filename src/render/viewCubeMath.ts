@@ -263,6 +263,90 @@ export function cubeFaceMatrix(view: StandardView, half: number): number[] {
   ];
 }
 
+/** Outward normal of each face in the scene basis [east, north, up]. */
+export const CUBE_FACE_NORMALS: Readonly<Record<StandardView, SceneVec>> = {
+  top: [0, 0, 1], bottom: [0, 0, -1], front: [0, 1, 0], back: [0, -1, 0], right: [-1, 0, 0], left: [1, 0, 0],
+};
+
+/** A face whose outward normal points toward the viewer by less than this is turned away or edge-on. */
+export const CUBE_FACE_MIN_DEPTH = 0.12;
+
+/** CSS `matrix(a, b, c, d, e, f)` numbers. */
+export type Affine2D = readonly [number, number, number, number, number, number];
+
+/** One face's place on screen, relative to the cube's centre. */
+export interface CubeFaceLayout {
+  /** Whether the face is turned toward the viewer enough to be drawn and pressed. */
+  readonly visible: boolean;
+  /** A square of side `2 * half`, centred on the origin, mapped to the projected face (a parallelogram: the view is orthographic). */
+  readonly affine: Affine2D;
+  /** The projected face centre; also the centre of its bounding box. */
+  readonly cx: number;
+  readonly cy: number;
+}
+
+/** One edge or corner target's place on screen, relative to the cube's centre. */
+export interface CubeSpotLayout {
+  readonly id: string;
+  /** Whether it is shown and pressable: on the near side, and clear of every other target. */
+  readonly visible: boolean;
+  readonly x: number;
+  readonly y: number;
+}
+
+export interface CubeHitLayout {
+  readonly faces: Readonly<Record<StandardView, CubeFaceLayout>>;
+  readonly spots: readonly CubeSpotLayout[];
+}
+
+/**
+ * The whole screen layout of the cube's 26 targets for one view matrix, as
+ * plain geometry, so the hit regions never depend on how a browser hit-tests
+ * CSS 3D.
+ *
+ * The view is orthographic, so every visible face is a parallelogram and the
+ * visible faces tile the cube's silhouette without overlapping. Edge and
+ * corner targets are circles of diameter `hit` drawn ABOVE the faces. They
+ * are admitted front-most first, and one is dropped when it would sit within
+ * a diameter of an admitted spot or cover a visible face's centre. So at every
+ * orientation each shown target's centre belongs to that target alone, and no
+ * two circles overlap: a press on a face can never fire an edge or corner.
+ */
+export function layoutCubeTargets(m: readonly number[], half: number, hit: number): CubeHitLayout {
+  const faces = {} as Record<StandardView, CubeFaceLayout>;
+  const faceCentres: { x: number; y: number }[] = [];
+  for (const view of Object.keys(CUBE_FACE_NORMALS) as StandardView[]) {
+    const n = CUBE_FACE_NORMALS[view];
+    const c = projectCubePoint(m, [n[0] * half, n[1] * half, n[2] * half]);
+    const { dir, up } = cubeTargetOrientation(cubeTargetForView(view));
+    const f: SceneVec = [-dir[0], -dir[1], -dir[2]];
+    const xAxis = cross(f, up);
+    const yAxis: SceneVec = [-up[0], -up[1], -up[2]];
+    const px = projectCubePoint(m, xAxis);
+    const py = projectCubePoint(m, yAxis);
+    const visible = projectCubePoint(m, n)[2] > CUBE_FACE_MIN_DEPTH;
+    faces[view] = { visible, affine: [px[0], px[1], py[0], py[1], c[0], c[1]], cx: c[0], cy: c[1] };
+    if (visible) faceCentres.push({ x: c[0], y: c[1] });
+  }
+  const candidates = CUBE_TARGETS.filter((t) => t.kind !== 'face').map((t) => {
+    const [x, y, z] = projectCubePoint(m, [t.signs[0] * half, t.signs[1] * half, t.signs[2] * half]);
+    return { id: t.id, x, y, z };
+  });
+  // Front-most first; the id breaks exact ties so the result is deterministic.
+  const order = [...candidates].sort((a, b) => b.z - a.z || (a.id < b.id ? -1 : 1));
+  const admitted: { x: number; y: number }[] = [];
+  const shown = new Set<string>();
+  for (const c of order) {
+    if (c.z <= half * 0.15) continue; // far side
+    const clearOfFaces = faceCentres.every((f) => Math.hypot(f.x - c.x, f.y - c.y) >= hit / 2);
+    const clearOfSpots = admitted.every((a) => Math.hypot(a.x - c.x, a.y - c.y) >= hit);
+    if (!clearOfFaces || !clearOfSpots) continue;
+    admitted.push({ x: c.x, y: c.y });
+    shown.add(c.id);
+  }
+  return { faces, spots: candidates.map((c) => ({ id: c.id, visible: shown.has(c.id), x: c.x, y: c.y })) };
+}
+
 /**
  * Which face the camera is looking at squarely: the face whose outward normal
  * is within ~10° of the direction back to the camera. Null between faces.
