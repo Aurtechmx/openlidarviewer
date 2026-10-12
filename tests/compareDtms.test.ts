@@ -426,10 +426,11 @@ describe('the uncertainty band says what it rests on', () => {
     expect(lines.some((l) => /this build's default/.test(l))).toBe(false);
   });
 
-  it('says the registration term is a 3-D residual, not a vertical sigma', () => {
+  it('names the registration term as a stable-area vertical sigma, never a fit residual', () => {
     const [a, b] = pair();
     const lines = summarizeChange(compareDtms(a, b), { horizontalUnitToMetres: 1, registrationSigmaM: 0.02 });
-    expect(lines.some((l) => /3-D RMS residual/.test(l)), 'the ICP residual read as a vertical sigma').toBe(true);
-    expect(lines.some((l) => /proxy for vertical registration error/.test(l))).toBe(true);
+    expect(lines.some((l) => /vertical σ measured on stable reference areas/.test(l))).toBe(true);
+    const none = summarizeChange(compareDtms(a, b), { horizontalUnitToMetres: 1, registrationSigmaM: 0 });
+    expect(none.some((l) => /fit residuals are not a\s+substitute/.test(l))).toBe(true);
   });
 });

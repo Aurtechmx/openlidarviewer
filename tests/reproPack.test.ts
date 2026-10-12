@@ -121,7 +121,7 @@ describe('reproducibility + calibration', () => {
     const errXY = Math.hypot(r.alignment.translation[0] + 4, r.alignment.translation[1] - 3);
     metrics.M2_alignment_recovery = {
       appliedShiftXYm: [round(r.alignment.translation[0]), round(r.alignment.translation[1])],
-      residualM: round(r.alignment.rmsResidualM),
+      residualM: round(r.alignment.solverResidualM),
       recoveryErrorM: round(errXY),
     };
     expect(r.alignment.applied).toBe(true);

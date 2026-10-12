@@ -4191,11 +4191,11 @@ function compareLoadedLayers(): void {
       // comparison refuses volumes rather than printing degree² figures as m³.
       const cmp = compareDtms(dtms.before, dtms.after, {
         ...frames, // isGeographic + horizontalUnitKnown + horizontalUnitToMetres, from the two contexts
-        verticalUnitToMetres: ctxA.verticalUnitToMetres, levelOfDetection: propagatedLevelOfDetection({ sigmaZBeforeM: dtms.sigmaZ?.before, sigmaZAfterM: dtms.sigmaZ?.after, sigmaRegM: alignment.applied ? alignment.rmsResidualM : null, verticalUnitKnown: verticalMetresPerUnit(ctxA, 'horizontal-when-known') !== undefined, horizontalUnitKnown: frames.horizontalUnitKnown }), // Z keeps its OWN declared scale; LoD per Wheaton et al. (2010) in metres, like the DoD it thresholds; a term whose unit has no metre factor is treated as missing
+        verticalUnitToMetres: ctxA.verticalUnitToMetres, levelOfDetection: propagatedLevelOfDetection({ sigmaZBeforeM: dtms.sigmaZ?.before, sigmaZAfterM: dtms.sigmaZ?.after, sigmaRegM: null, verticalUnitKnown: verticalMetresPerUnit(ctxA, 'horizontal-when-known') !== undefined, horizontalUnitKnown: frames.horizontalUnitKnown }), // Z keeps its OWN declared scale; LoD per Wheaton et al. (2010) in metres, like the DoD it thresholds; σreg needs a stable-area assessment (none yet), never a fit residual
       });
       if (!current()) return;
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
-      const resultLines = [header, summarizeAlignment(alignment), summarizeRegistration(buildRegistrationArtifact(alignment, { targetId: ids[0], targetName: a.name, sourceId: ids[1], sourceName: b.name }, Date.now())), ...lines, ...summarizeChange(cmp, { registrationSigmaM: alignment.applied ? alignment.rmsResidualM : 0, horizontalUnitToMetres: frames.horizontalUnitToMetres })];
+      const resultLines = [header, summarizeAlignment(alignment), summarizeRegistration(buildRegistrationArtifact(alignment, { targetId: ids[0], targetName: a.name, sourceId: ids[1], sourceName: b.name }, Date.now())), ...lines, ...summarizeChange(cmp, { registrationSigmaM: 0, horizontalUnitToMetres: frames.horizontalUnitToMetres })];
       inspector.setCompareResult(resultLines);
       // A georeferenced .asc of the signed difference, origin at the world-frame
       // corner. Cell values are converted from metres to the source linear unit so

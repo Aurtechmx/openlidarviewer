@@ -48,20 +48,25 @@ describe('propagated level of detection', () => {
     expect(text).toMatch(/0\.255 m \(propagated, 95 %\)/);
     expect(text).toMatch(/before σz 30\.0 mm/);
     expect(text).toMatch(/after σz 40\.0 mm/);
-    expect(text).toMatch(/3-D RMS, a proxy: fit misfit, not shown to bound vertical registration error/);
+    expect(text).toMatch(/σreg \(stable-area vertical assessment\) 120\.0 mm/);
+    expect(text).not.toMatch(/conservative/);
     expect(text).toMatch(/Wheaton et al\. 2010/);
   });
 
-  it('falls back to the fixed 0.1 m, labelled assumed, when a term is missing', () => {
+  it('labels a partial budget incomplete and never drops below the known component', () => {
     for (const missing of ['sigmaZBeforeM', 'sigmaZAfterM', 'sigmaRegM'] as const) {
       const lod = propagatedLevelOfDetection({ ...KNOWN, [missing]: null });
-      expect(lod.basis).toBe('assumed');
-      expect(lod.valueM).toBe(0.1);
+      const rest = Object.entries(KNOWN).filter(([k]) => k !== missing).map(([, v]) => v);
+      const known = 1.96 * Math.hypot(...rest);
+      expect(lod.basis).toBe('incomplete');
+      expect(lod.knownComponentM).toBeCloseTo(known, 12);
+      expect(lod.valueM).toBeCloseTo(Math.max(known, 0.1), 12);
+      expect(lod.valueM).toBeGreaterThanOrEqual(known);
       expect(lod.missing).toHaveLength(1);
-      expect(describeLevelOfDetection(lod).join('\n')).toMatch(/assumed, not measured/);
+      expect(describeLevelOfDetection(lod).join('\n')).toMatch(/incomplete — lower bound, missing:/);
     }
-    // A zero registration RMS (no alignment applied) is a missing term, not a perfect fit.
-    expect(propagatedLevelOfDetection({ ...KNOWN, sigmaRegM: 0 }).basis).toBe('assumed');
+    // A zero σreg (no assessment) is a missing term, not a perfect registration.
+    expect(propagatedLevelOfDetection({ ...KNOWN, sigmaRegM: 0 }).basis).toBe('incomplete');
   });
 
   it('keeps a user override and labels it user-set', () => {
@@ -200,8 +205,8 @@ describe('LoD units: every term and the DoD it thresholds are metres', () => {
     const lod = propagatedLevelOfDetection({
       sigmaZBeforeM: 0.03, sigmaZAfterM: 0.04, sigmaRegM: 0.12, horizontalUnitKnown: false,
     });
-    expect(lod.basis).toBe('assumed');
+    expect(lod.basis).toBe('incomplete');
     expect(lod.sigmaZBeforeM).toBe(0.03);
-    expect(lod.missing).toEqual(['registration σ (horizontal unit unknown, cannot be expressed in metres)']);
+    expect(lod.missing).toEqual(['registration σreg (horizontal unit unknown, cannot be expressed in metres)']);
   });
 });

@@ -49,8 +49,10 @@ export interface RegistrationArtifact {
   readonly refused: boolean;
   /** Which degrees of freedom the applied transform used. */
   readonly appliedDof: EpochAppliedDof;
-  /** Final RMS residual of the fit, in metres. */
-  readonly rmsResidualM: number;
+  /** RMS residual of the solver's yaw + x/y/z fit, in metres (not what was applied). */
+  readonly solverResidualM: number;
+  /** RMS residual re-measured at the pose actually applied (identity if none), in metres. */
+  readonly appliedTransformResidualM: number;
   /** Solved yaw about vertical, in degrees. */
   readonly yawDeg: number;
   /** Solved translation (metres) mapping source onto target. */
@@ -74,7 +76,8 @@ export function buildRegistrationArtifact(
     applied: alignment.applied,
     refused: alignment.refused,
     appliedDof: alignment.appliedDof,
-    rmsResidualM: alignment.rmsResidualM,
+    solverResidualM: alignment.solverResidualM,
+    appliedTransformResidualM: alignment.appliedTransformResidualM,
     yawDeg: alignment.yawDeg,
     translation: alignment.translation,
     overlapFraction: alignment.overlapFraction,
@@ -92,11 +95,12 @@ export function summarizeRegistration(a: RegistrationArtifact): string {
   if (a.applied) {
     return (
       `Registration: applied (${a.appliedDof}) — ` +
-      `residual ${a.rmsResidualM.toFixed(3)} m, overlap ${Math.round(a.overlapFraction * 100)}% · ${m}`
+      `residual at applied pose ${a.appliedTransformResidualM.toFixed(3)} m, ` +
+      `solver fit residual ${a.solverResidualM.toFixed(3)} m, overlap ${Math.round(a.overlapFraction * 100)}% · ${m}`
     );
   }
   if (a.refused) {
-    return `Registration: refused — residual ${a.rmsResidualM.toFixed(3)} m exceeded the gate; epochs compared unshifted · ${m}`;
+    return `Registration: refused — solver fit residual ${a.solverResidualM.toFixed(3)} m exceeded the gate; epochs compared unshifted · ${m}`;
   }
   return `Registration: not applied — epochs compared in their own frames · ${m}`;
 }

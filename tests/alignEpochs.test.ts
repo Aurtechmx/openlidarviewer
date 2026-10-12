@@ -41,7 +41,7 @@ describe('alignEpochClouds', () => {
     expect(alignment.applied).toBe(true);
     // Identical geometry registers fully, so the overlap is surfaced and high (#2).
     expect(alignment.overlapFraction).toBeGreaterThan(0.9);
-    expect(alignment.rmsResidualM).toBeLessThan(1e-3);
+    expect(alignment.solverResidualM).toBeLessThan(1e-3);
     expect(Math.abs(alignment.yawDeg)).toBeLessThan(0.1);
     expect(Math.hypot(alignment.translation[0], alignment.translation[1])).toBeLessThan(1e-2);
     expect(after.positions).toHaveLength(b.positions.length);
@@ -115,7 +115,7 @@ describe('alignEpochClouds', () => {
     expect(r.alignment.applied).toBe(true);
     expect(Math.abs(r.alignment.yawDeg)).toBeGreaterThan(1.0);
     expect(Math.abs(r.alignment.yawDeg)).toBeLessThan(3.0);
-    expect(r.alignment.rmsResidualM).toBeLessThan(0.2);
+    expect(r.alignment.solverResidualM).toBeLessThan(0.2);
   });
 
   test('too few points is degenerate and leaves the cloud untouched', () => {
@@ -220,7 +220,7 @@ describe('alignEpochClouds', () => {
     const shiftM = Math.hypot(r.alignment.translation[0], r.alignment.translation[1]);
     expect(shiftM).toBeGreaterThan(2.9); // 10 ft ≈ 3.048 m …
     expect(shiftM).toBeLessThan(3.2); // … NOT 10
-    expect(r.alignment.rmsResidualM).toBeLessThan(0.05); // metres, near-exact fit
+    expect(r.alignment.solverResidualM).toBeLessThan(0.05); // metres, near-exact fit
   });
 
   test('the residual gate is honoured in metres on a foot-CRS cloud', () => {
@@ -240,8 +240,8 @@ describe('alignEpochClouds', () => {
     const before: EpochCloud = { ...cloudFrom(base), linearUnitToMetres: ftToM };
     const after: EpochCloud = { ...cloudFrom(jittered), linearUnitToMetres: ftToM };
     const r = alignEpochClouds(before, after, { maxResidualM: 0.1 });
-    expect(r.alignment.rmsResidualM).toBeGreaterThan(0.02); // sanity: real jitter…
-    expect(r.alignment.rmsResidualM).toBeLessThan(0.1); // …but under the gate in METRES
+    expect(r.alignment.solverResidualM).toBeGreaterThan(0.02); // sanity: real jitter…
+    expect(r.alignment.solverResidualM).toBeLessThan(0.1); // …but under the gate in METRES
     expect(r.alignment.refused).toBe(false);
     expect(r.alignment.applied).toBe(true);
   });
@@ -313,7 +313,7 @@ describe('spatial preflight precedes the fit', () => {
     const r = alignEpochClouds(cloud(), cloud({ crs: 'EPSG:25829' }));
     // Infinity, never 0 — a zero residual reads as a PERFECT fit, which is
     // the opposite of what "no fit was attempted" means.
-    expect(r.alignment.rmsResidualM).toBe(Infinity);
+    expect(r.alignment.solverResidualM).toBe(Infinity);
     expect(r.alignment.attempted).toBe(false);
   });
 
@@ -439,7 +439,8 @@ describe('unknown projected linear unit withholds the metre figures', () => {
     expect(r.alignment.horizontalUnitUnknown).not.toBe(true);
     const s = summarizeAlignment(r.alignment);
     expect(s).toMatch(/m shift/i);
-    expect(s).toMatch(/m residual/i);
+    expect(s).toMatch(/residual at the applied pose \d+\.\d+ m/i);
+    expect(s).toMatch(/solver fit residual .*\d+\.\d+ m/i);
   });
 
   test('a CRS-bearing epoch vs a CRS-less epoch derives the gate closed and withholds the shift/residual', () => {
