@@ -125,7 +125,7 @@ describe('dismissing the navigation legend keeps the view controls', () => {
     const src = await readActionDefinitions();
     expect(src).toContain('camera.view-');
     expect(src).toContain('STANDARD_VIEW_ORDER');
-    expect(src).toContain('setStandardView(view)');
+    expect(src).toContain('showStandardView(view)');
   });
 
   it('leaves the orthographic toggle reachable from the command palette', async () => {

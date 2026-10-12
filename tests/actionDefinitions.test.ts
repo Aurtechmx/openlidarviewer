@@ -284,6 +284,10 @@ function harness(opts: { getViewer?: () => FakeViewer } = {}): Harness {
       togglePlanView: self.togglePlanView,
       notePlanViewPreset: self.notePlanViewPreset,
       toggleNavigationPanel: self.toggleNavigationPanel,
+      showStandardView: () => true,
+      setOrthographic: () => true,
+      // As navBarWiring does: the viewer frames, then plan mode is told.
+      frameAll: () => (deps.getViewer().frameAll as () => void)(),
     },
   };
 

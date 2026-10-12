@@ -1296,10 +1296,10 @@ function ensureShortcutSheet(onReady?: (sheet: ShortcutSheet) => void): Promise<
 function dispatchWorkflowEvent(event: WorkflowEvent): void {
   switch (event.type) {
     case 'camera-preset':
-      viewer.setCameraPreset(event.name as 'top' | 'iso' | 'oblique' | 'planar');
+      navWiring.applyCameraPreset(event.name as 'top' | 'iso' | 'oblique' | 'planar');
       break;
     case 'frame-all':
-      viewer.frameAll();
+      navWiring.frameAll();
       break;
     case 'theme':
       if (event.name === 'dark' || event.name === 'light' || event.name === 'high-contrast') {
@@ -1529,7 +1529,7 @@ const keyBindingDeps: KeyBindingDeps = {
         showLassoToast('Lasso volume armed — draw a shape on the canvas.');
       }
     },
-    setCameraPreset: (preset) => viewer?.setCameraPreset(preset),
+    setCameraPreset: (preset) => navWiring.applyCameraPreset(preset), // tells Plan View too
     toast: (message) => showLassoToast(message),
     openCommandPalette: openCommandPalette,
     toggleShortcutSheet: () => void ensureShortcutSheet((sheet) => sheet.toggle()).catch(() => {}), // already reported via the toast
@@ -1546,7 +1546,7 @@ stage.addTeardown(installKeyDispatch(buildViewerKeyBindings(keyBindingDeps), key
 const helpOverlay = createHelpOverlayLazy(stage.overlay, { getActions: () => ensureActionRegistry(), toast: { show: showLassoToast }, trigger: buttonLazyTrigger(() => dock.dock.querySelector<HTMLButtonElement>('.olv-tool-help')) }); // lazy chunk, see helpOverlayLazy.ts
 
 const dock = new ToolDock({
-  onFrameAll: () => viewer.frameAll(),
+  onFrameAll: () => navWiring.frameAll(),
   onSnapshot: () => void saveSnapshot(),
   onShare: () => void copyShareLink(),
   onMeasureToggle: () => { runTool('measure'); },
@@ -2732,7 +2732,7 @@ function refreshClassLegend(classification?: ArrayLike<number>, sample?: { reado
 // to be deferred.
 void viewerLoaded.then(() => {
   viewer.setNavListeners({
-    onModeChange: navWiring.navModeChanged,
+    onModeChange: navWiring.navModeChanged, onReset: navWiring.noteFrameAll, // R frames all, which ends Plan View
     onPointerLockChange: (locked) => navBar.setLocked(locked),
     onToggleHelp: () => { if (!dialogOpen()) navBar.toggleHelp(); }, // H leaves the navigation help alone behind an open dialog
   });
@@ -3460,13 +3460,13 @@ const viewStateCoordinator = createViewStateCoordinator({
 
 function captureViewState(): ViewStateBundle { return viewStateCoordinator.capture(); }
 
-function applyViewState(vs: ViewStateBundle): void { viewStateCoordinator.apply(vs); }
+function applyViewState(vs: ViewStateBundle): void { navWiring.restoreCamera(() => viewStateCoordinator.apply(vs)); }
 
 function saveCurrentView(): void { viewStateCoordinator.saveCurrentView(); }
 
 function refreshViewsUI(): void { viewStateCoordinator.refreshViewsUi(); }
 
-function applyView(index: number): void { viewStateCoordinator.applyView(index); }
+function applyView(index: number): void { navWiring.restoreCamera(() => viewStateCoordinator.applyView(index)); }
 
 /**
  * Copy a link that reproduces the current view — camera, colour mode, point

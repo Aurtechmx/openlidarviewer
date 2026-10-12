@@ -19,7 +19,7 @@
  */
 
 import type { NavBar, NavBarCallbacks } from './NavBar';
-import type { CameraPresetName } from '../render/camera/cameraPresets';
+import type { CameraPresetName, StandardView } from '../render/camera/cameraPresets';
 import type { Viewer } from '../render/Viewer';
 import type { NavMode } from '../render/NavController';
 import type { PlanViewController } from '../render/camera/planViewController';
@@ -50,6 +50,25 @@ export interface NavBarWiring {
    * mode stops claiming a scene the user has aimed away from.
    */
   readonly notePlanViewPreset: (name: CameraPresetName) => void;
+  /**
+   * Aim the camera at a standard view and tell Plan View, without a toast.
+   * The bar, the ViewCube and the palette all reach the camera through these
+   * four, so Plan View hears about every route. False when nothing moved.
+   */
+  readonly showStandardView: (view: StandardView) => boolean;
+  /** Switch the projection, tell Plan View and sync the Ortho chip. */
+  readonly setOrthographic: (on: boolean) => boolean;
+  /** Jump to a camera preset and tell Plan View. False when nothing moved. */
+  readonly applyCameraPreset: (name: CameraPresetName) => boolean;
+  /** Frame all: an oblique overview, so Plan View no longer holds. */
+  readonly frameAll: () => void;
+  /** Frame all already ran inside the viewer (its R key); tell Plan View. */
+  readonly noteFrameAll: () => void;
+  /**
+   * Run a saved-view restore, then drop Plan View without touching the camera
+   * and re-read the Ortho chip: the restore set pose and projection itself.
+   */
+  readonly restoreCamera: (restore: () => void) => void;
   /**
    * The viewer's navigation mode changed. The bar follows it, and a change made
    * by a mode shortcut drops Plan's pending mode change.
@@ -103,28 +122,58 @@ export function createNavBarWiring(deps: NavBarWiringDeps): NavBarWiring {
     (await planController()).toggle();
   };
 
+  /** The Ortho chip follows the viewer, whoever changed the projection. */
+  const syncOrthoChip = (): void => {
+    const viewer = deps.getViewer();
+    if (viewer) deps.getNavBar()?.setOrthographicActive(viewer.orthographic);
+  };
+
+  // The one place a camera move reaches Plan View. The viewer runs first and
+  // the note follows, so the note sees the scene as the user left it.
+  const showStandardView = (view: StandardView): boolean => {
+    if (!deps.getViewer()?.setStandardView(view)) return false;
+    plan?.noteStandardView(view);
+    return true;
+  };
+  const setOrthographic = (on: boolean): boolean => {
+    const fired = deps.getViewer()?.setOrthographic(on) ?? false;
+    plan?.noteOrthographic(on);
+    syncOrthoChip();
+    return fired;
+  };
+  const applyCameraPreset = (name: CameraPresetName): boolean => {
+    if (!deps.getViewer()?.setCameraPreset(name)) return false;
+    plan?.noteCameraPreset(name);
+    return true;
+  };
+  // Frame all tilts to the oblique overview, which is no standard view.
+  const noteFrameAll = (): void => plan?.noteCustomView();
+  const frameAll = (): void => {
+    deps.getViewer()?.frameAll();
+    noteFrameAll();
+  };
+
   const callbacks: NavBarCallbacks = {
     onMode: (mode) => {
       deps.getViewer()?.setMode(mode);
       plan?.noteManualNavigation();
     },
     onSpeed: (multiplier) => deps.getViewer()?.setNavSpeed(multiplier),
-    onReset: () => deps.getViewer()?.frameAll(),
+    onReset: frameAll,
     onCameraPreset: (name) => {
-      if (!deps.getViewer()?.setCameraPreset(name)) return;
-      plan?.noteCameraPreset(name);
+      if (!applyCameraPreset(name)) return;
       deps.toast(`Camera · ${titleCase(name)} view.`);
     },
     onStandardView: (view, orientation) => {
-      const viewer = deps.getViewer();
-      const fired = orientation ? viewer?.orientView(orientation.dir) : viewer?.setStandardView(view);
-      if (!fired) return;
-      plan?.noteStandardView(view);
+      if (orientation) {
+        // The ViewCube turns in place around the pivot rather than refitting.
+        if (!deps.getViewer()?.orientView(orientation.dir)) return;
+        plan?.noteStandardView(view);
+      } else if (!showStandardView(view)) return;
       deps.toast(`View · ${titleCase(view)}.`);
     },
     onOrthographic: (on) => {
-      deps.getViewer()?.setOrthographic(on);
-      plan?.noteOrthographic(on);
+      setOrthographic(on);
       deps.toast(on ? 'Orthographic (parallel) view on.' : 'Perspective view restored.');
     },
     onPlanView: () => void togglePlanView(),
@@ -137,6 +186,16 @@ export function createNavBarWiring(deps: NavBarWiringDeps): NavBarWiring {
     togglePlanView,
     resetPlanView: () => plan?.reset(),
     notePlanViewPreset: (name) => plan?.noteCameraPreset(name),
+    showStandardView,
+    setOrthographic,
+    applyCameraPreset,
+    frameAll,
+    noteFrameAll,
+    restoreCamera: (restore) => {
+      restore();
+      plan?.reset();
+      syncOrthoChip();
+    },
     navModeChanged: (mode, byKey) => {
       deps.getNavBar()?.setMode(mode);
       if (byKey) plan?.noteManualNavigation();

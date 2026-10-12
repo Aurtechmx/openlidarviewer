@@ -17,6 +17,7 @@ import {
   STANDARD_VIEW_ORDER,
   STANDARD_VIEW_LABEL,
   type CameraPresetName,
+  type StandardView,
 } from '../../render/camera/cameraPresets';
 import { cameraPresetTitle, standardViewTitle } from '../../ui/actionNames';
 import { actionTitle } from '../../ui/actionDescriptors';
@@ -30,6 +31,14 @@ export interface PlanViewActions {
    * every route that aims it.
    */
   notePlanViewPreset: (name: CameraPresetName) => void;
+  /**
+   * The standard views, the projection and Frame all go through the same
+   * routes the navigation bar uses, so they end plan mode the way its buttons
+   * do. Each returns false (or does nothing) when the camera did not move.
+   */
+  showStandardView: (view: StandardView) => boolean;
+  setOrthographic: (on: boolean) => boolean;
+  frameAll: () => void;
   /** Show or hide the Navigation panel (camera presets, views, Ortho, Plan). */
   toggleNavigationPanel: () => void;
 }
@@ -102,7 +111,7 @@ export function contributeCameraActions(deps: CameraActionDeps): Action[] {
       hint: `Look straight along the ${label.toLowerCase()} axis.`,
       keywords: ['view', 'axis', 'square', 'face', 'elevation', 'plan'],
       run: () => {
-        if (!deps.getViewer().setStandardView(view)) return;
+        if (!deps.planView.showStandardView(view)) return;
         deps.showLassoToast(`Camera · ${label} view.`);
       },
     });
@@ -114,9 +123,8 @@ export function contributeCameraActions(deps: CameraActionDeps): Action[] {
     hint: 'Parallel projection, so equal lengths measure equal on screen.',
     keywords: ['ortho', 'parallel', 'projection', 'perspective', '2d'],
     run: () => {
-      const viewer = deps.getViewer();
-      const on = !viewer.orthographic;
-      if (!viewer.setOrthographic(on)) return;
+      const on = !deps.getViewer().orthographic;
+      if (!deps.planView.setOrthographic(on)) return;
       deps.showLassoToast(`Camera · orthographic ${on ? 'on' : 'off'}.`);
     },
   });
@@ -129,7 +137,7 @@ export function contributeCameraActions(deps: CameraActionDeps): Action[] {
     hint: 'Fit the camera to every visible cloud.',
     keywords: ['fit', 'reset', 'center', 'centre'],
     run: () => {
-      deps.getViewer().frameAll();
+      deps.planView.frameAll();
       deps.capture({ type: 'frame-all' });
     },
   });

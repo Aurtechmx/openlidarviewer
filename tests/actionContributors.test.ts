@@ -26,14 +26,26 @@ describe('action contributors', () => {
   it('camera actions need the viewer, plan view, capture and toast only', () => {
     const viewer = { setCameraPreset: vi.fn(() => true), setStandardView: vi.fn(() => true), setOrthographic: vi.fn(() => true), orthographic: false, frameAll: vi.fn() };
     const capture = vi.fn();
-    const planView = { togglePlanView: vi.fn(), notePlanViewPreset: vi.fn(), toggleNavigationPanel: vi.fn() };
+    const planView = {
+      togglePlanView: vi.fn(), notePlanViewPreset: vi.fn(), toggleNavigationPanel: vi.fn(),
+      showStandardView: vi.fn(() => true), setOrthographic: vi.fn(() => true), frameAll: vi.fn(),
+    };
     const actions = contributeCameraActions({ getViewer: () => viewer as never, planView, capture, showLassoToast: toast });
     expect(actions.map((a) => a.id)).toEqual(expect.arrayContaining(['camera.top', 'camera.plan-view', 'camera.orthographic', 'camera.frame-all']));
     actions.find((a) => a.id === 'camera.top')!.run();
     expect(planView.notePlanViewPreset).toHaveBeenCalledWith('top');
     expect(capture).toHaveBeenCalledWith({ type: 'camera-preset', name: 'top' });
     actions.find((a) => a.id === 'camera.frame-all')!.run();
-    expect(viewer.frameAll).toHaveBeenCalled();
+    expect(planView.frameAll).toHaveBeenCalled();
+    expect(viewer.frameAll).not.toHaveBeenCalled();
+    // The standard views and the projection take the navigation bar's routes,
+    // so Plan View hears about them; the palette never aims the camera itself.
+    actions.find((a) => a.id === 'camera.view-front')!.run();
+    expect(planView.showStandardView).toHaveBeenCalledWith('front');
+    expect(viewer.setStandardView).not.toHaveBeenCalled();
+    actions.find((a) => a.id === 'camera.orthographic')!.run();
+    expect(planView.setOrthographic).toHaveBeenCalledWith(true);
+    expect(viewer.setOrthographic).not.toHaveBeenCalled();
     expect(actions.every((a) => a.section === 'Camera')).toBe(true);
   });
 
@@ -89,7 +101,7 @@ describe('action contributors', () => {
 
   it('ids are unique across every contributor', () => {
     const all = [
-      ...contributeCameraActions({ getViewer: () => ({}) as never, planView: { togglePlanView() {}, notePlanViewPreset() {}, toggleNavigationPanel() {} }, capture: vi.fn(), showLassoToast: toast }),
+      ...contributeCameraActions({ getViewer: () => ({}) as never, planView: { togglePlanView() {}, notePlanViewPreset() {}, toggleNavigationPanel() {}, showStandardView: () => true, setOrthographic: () => true, frameAll() {} }, capture: vi.fn(), showLassoToast: toast }),
       ...contributeViewActions({ setTheme: vi.fn(), capture: vi.fn(), compass: {} as never, bookmarks: {} as never, toggleOrbitInvert: vi.fn(), resetNavigation: vi.fn(), toggleReferencePlane: vi.fn(), showTouchGestures: vi.fn(), hasScan: () => false, saveCurrentView: vi.fn(), applyView: vi.fn(), showLassoToast: toast }),
       ...contributeToolActions({ getViewer: () => ({}) as never, workflowController: {} as never, lassoVolumeTool: {} as never, syncLassoButton: vi.fn(), runDeriveClassification: vi.fn(), runFillUnclassified: vi.fn(), showLassoToast: toast, runTool: vi.fn() }),
       ...contributeAnalysisActions({ terrainAnalysisEntry: {} as never, observatoryEntry: {} as never, buildCurrentStoryInputs: () => ({}) as never }),
