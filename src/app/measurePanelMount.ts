@@ -270,6 +270,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
           // is not called metres.
           {
             geographic: viewer.measure.geographicCrs,
+            verticalRefused: viewer.measure.verticalRefused,
             unitsVerified: viewer.measure.crsKnown && !viewer.measure.geographicCrs,
           },
         );

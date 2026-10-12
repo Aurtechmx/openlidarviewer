@@ -1427,6 +1427,10 @@ async function renderMeasurements(
     doc, accent, theme, organisation,
   );
   cursor = drawSectionHeader(cursor, `Measurements (${inputs.measurements.length})`, accent, bold);
+  if (inputs.measurementsWithheld) {
+    cursor = ensureSpace(cursor, sectionKeepTogetherSpace(inputs.measurementsWithheld, body), doc, accent, theme, organisation);
+    cursor = drawBodyLine(cursor, inputs.measurementsWithheld, body, ctx);
+  }
   if (inputs.measurements.length === 0) {
     cursor = drawBodyLine(cursor, mPlaceholder, body, ctx);
     return { page: cursor.page, y: cursor.y - 10 };

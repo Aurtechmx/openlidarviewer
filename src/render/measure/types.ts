@@ -70,12 +70,46 @@ export function geographicRefusesKind(kind: MeasurementKind): boolean {
 }
 
 /**
+ * Kinds whose figure reads Z as a positive-up local elevation: a height, a
+ * grade, a profile's rise and a volume's cut/fill. A frame with no valid local
+ * vertical (geocentric, depth-positive-down) refuses these, whatever its
+ * horizontal frame allows.
+ */
+export function verticalRefusesKind(kind: MeasurementKind): boolean {
+  return kind === 'height' || kind === 'slope' || kind === 'profile' || kind === 'volume';
+}
+
+/**
+ * THE kind refusal, from the frame's two canonical permissions
+ * (`SpatialContext.horizontalMetricRefused` / `verticalMetricRefused`). The
+ * live grade, the overlay labels and every export call this one rule, so a
+ * figure the panel withholds never leaves in a file.
+ */
+export function frameRefusesKind(kind: MeasurementKind, horizontalRefused: boolean, verticalRefused = false): boolean {
+  return frameRefusalText(kind, horizontalRefused, verticalRefused) !== null;
+}
+
+/** The sentence a refused figure prints in place of its number, or null when it is allowed. */
+export function frameRefusalText(kind: MeasurementKind, horizontalRefused: boolean, verticalRefused = false): string | null {
+  if (verticalRefused && verticalRefusesKind(kind)) return VERTICAL_NOT_AVAILABLE;
+  if (horizontalRefused && geographicRefusesKind(kind)) return GEOGRAPHIC_NOT_AVAILABLE;
+  return null;
+}
+
+/**
  * What a published surface (PDF row, CSV/GeoJSON note, KML description,
  * report finding) prints in place of a figure the live tool refuses on a
  * geographic frame. One string so every export reads the same.
  */
 export const GEOGRAPHIC_NOT_AVAILABLE =
   'not available: horizontal CRS units are not ground distances (geographic degrees, Web Mercator grid or geocentric frame)';
+
+/**
+ * What a published surface prints in place of a figure that needs a local
+ * vertical the frame does not have (a geocentric Z axis, or a depth-down one).
+ */
+export const VERTICAL_NOT_AVAILABLE =
+  'not available: the frame has no valid local vertical (geocentric axis or depth-positive-down reference), so this is not an elevation figure';
 
 /** Unit system for displayed values; toggled live from the Measurements panel. */
 export type UnitSystem = 'metric' | 'imperial';

@@ -16,6 +16,7 @@ import type { SpatialUpAxis } from '../geo/SpatialContext';
 import type { ReportFinding } from '../render/measure/reportManifest';
 import type { GeoExportContext } from './reportExport';
 import { framesOfApp, resolveOwnerFrame, type AppFrameSource, type ExportFrame, type OwnerRef } from './measurementExportFrame';
+import { measurementsOwnedByActive, type OwnershipView } from './measurementOwnership';
 
 import { activeScanBasisOf, type ActiveScanBasis } from './measurementScanHooks';
 import { appToast } from '../ui/panelChrome';
@@ -47,6 +48,12 @@ export interface MeasureExportView {
    * columns by a scalar factor that cannot exist for an angular frame.
    */
   readonly geographicCrs: boolean;
+  /**
+   * True when the frame has no valid local vertical (geocentric, depth-down):
+   * `SpatialContext.verticalMetricRefused`, as the live controller holds it.
+   * Absent reads false.
+   */
+  readonly verticalRefused?: boolean;
 }
 
 export interface MeasurementExportActionDeps {
@@ -208,6 +215,7 @@ interface MeasureSnapshot {
   readonly unitToMetres: number;
   readonly verticalUnitToMetres: number;
   readonly geographicCrs: boolean;
+  readonly verticalRefused: boolean;
   /** Linear scale known and the frame not angular: the metre columns are real metres. */
   readonly unitsVerified: boolean;
 }
@@ -221,8 +229,20 @@ function snapshotMeasure(measure: MeasureExportView): MeasureSnapshot {
     unitToMetres: measure.unitToMetres,
     verticalUnitToMetres: measure.verticalUnitToMetres,
     geographicCrs: measure.geographicCrs,
+    verticalRefused: measure.verticalRefused === true,
     unitsVerified: measure.crsKnown && !measure.geographicCrs,
   };
+}
+
+/**
+ * The open layers and the active scan, for deciding which measurements a
+ * scan-specific output (the findings ledger) may hold. With no frame source,
+ * the one open layer is the active scan.
+ */
+function ownershipViewFor(deps: MeasurementExportActionDeps): OwnershipView {
+  const layers = deps.layers ? exportLayersOf(deps.layers.view, deps.layers.stableIdFor) : [];
+  const activeViewerId = deps.frameSource ? deps.frameSource.activeId() : layers.length === 1 ? layers[0]!.viewerId : null;
+  return { layers: layers.map((l) => ({ viewerId: l.viewerId, stableId: l.stableId, name: l.name })), activeViewerId };
 }
 
 /**
@@ -280,11 +300,6 @@ function ownerFrameFor(
     return ids.flatMap((id) => layers.filter((l) => l.stableId === id).map((l) => ({ viewerId: l.viewerId, name: l.name })));
   });
   return resolveOwnerFrame(entries, framesOfApp(deps.frameSource));
-}
-
-/** The scan stem a report names: the one owner, or the owners joined. */
-function ownerStem(owners: readonly OwnerRef[], baseName: (n: string) => string): string {
-  return [...new Set(owners.map((o) => baseName(o.name)))].sort((a, b) => a.localeCompare(b)).join('+');
 }
 
 /** Export the placed measurements as an open GeoJSON or CSV file. */
@@ -372,6 +387,7 @@ export async function exportMeasurementsFile(
     // The RESOLVED frame's own answer, not a literal. A geographic frame has no
     // scalar metres-per-unit at all, so it is neither verified nor convertible.
     geographic: owned ? owned.geographic : snap.geographicCrs,
+    verticalRefused: owned ? owned.verticalRefused : snap.verticalRefused,
     // A local / unknown-unit scan has an inert factor of 1, so the `_m` columns
     // are nominal, not metres — the evidence note then says so (M1). An angular
     // frame is unverified for a stronger reason: no scalar could make it metres.
@@ -547,6 +563,13 @@ export async function exportMeasurementIntegrityReport(
     deps.refuse?.(owned.refused);
     return;
   }
+  // The report records ONE dataset identity, digest and classification epoch,
+  // so it cannot carry several scans' provenance: measurements taken on more
+  // than one scan are refused rather than stamped with one scan's state.
+  if (owned.owners.length > 1) {
+    deps.refuse?.(`Not exported: the measurements were taken on ${[...new Set(owned.owners.map((o) => o.name))].sort((a, b) => a.localeCompare(b)).join(' and ')}. An integrity report records one scan's identity and classification epoch; export one scan's measurements at a time.`);
+    return;
+  }
   const geo = owned.frame ? owned.frame.geo : deps.geo();
   // Every scan-bound fact is read BEFORE the lazy import, so the report is one
   // scan's account of itself. The frame, unit scales, class epoch and
@@ -556,7 +579,9 @@ export async function exportMeasurementIntegrityReport(
   const { worldUp } = snap;
   const unitToMetres = owned.frame ? owned.frame.unitToMetres : snap.unitToMetres;
   const verticalUnitToMetres = owned.frame ? owned.frame.verticalUnitToMetres : snap.verticalUnitToMetres;
-  const classificationEpoch = deps.activeClassificationEpoch();
+  // The OWNING scan's epoch: a report naming scan A must not record the class
+  // edits of whichever scan is active.
+  const classificationEpoch = owned.frame ? owned.frame.classificationEpoch : deps.activeClassificationEpoch();
   // Local / unknown-unit scan → the findings' metre labels are nominal (M1).
   // A GEOGRAPHIC frame is unverified for a stronger reason than an unknown
   // one: no scalar metres-per-degree exists, so there is nothing to convert
@@ -564,11 +589,12 @@ export async function exportMeasurementIntegrityReport(
   // path read the bare `crsKnown` and so called a lon/lat scan unit-verified.
   const crsKnown = owned.frame ? owned.frame.unitsVerified : snap.unitsVerified;
   const geographic = owned.frame ? owned.frame.geographic : snap.geographicCrs;
+  const verticalRefused = owned.frame ? owned.frame.verticalRefused : snap.verticalRefused;
   const generatedAt = deps.now();
   const { integrityReportFile, resolveExportDigests, signReportText } = await deps.loadMeasurementReport();
   // The digest describes one source file; with several owning scans in one frame it is omitted.
-  const digests = await resolveExportDigests(owned.owners.length > 1 ? undefined : geo.source, geo.crs);
-  const scanName = owned.owners.length > 1 ? ownerStem(owned.owners, deps.baseName) : geo.name ? deps.baseName(geo.name) : 'scan';
+  const digests = await resolveExportDigests(geo.source, geo.crs);
+  const scanName = geo.name ? deps.baseName(geo.name) : 'scan';
   const f = integrityReportFile(
     ms,
     worldUp,
@@ -585,6 +611,7 @@ export async function exportMeasurementIntegrityReport(
     // The flag the live grade refuses on: every kind but a height is
     // recorded as a null finding with the reason.
     geographic,
+    verticalRefused,
   );
   const out = await textToWrite(f.text, deps, signReportText);
   if (out !== null) deps.downloadText(f.filename, out);
@@ -595,32 +622,41 @@ export async function exportMeasurementIntegrityReport(
  * The panel's "Add current measurements" button drives this; the conversion
  * lives in the lazy report chunk, so the call is async. Returns an empty array
  * when nothing is placed.
+ *
+ * The ledger belongs to the ACTIVE scan and its report carries that scan's
+ * dataset identity, so only measurements the active scan owns become findings,
+ * in that scan's own units and permissions. A measurement taken on another
+ * scan, on a scan that is no longer open, or with no resolvable owner is
+ * withheld and the refusal says why; its numbers are never relabelled with
+ * the active scan's units or identity.
  */
 export async function collectMeasurementFindings(
   deps: MeasurementExportActionDeps,
 ): Promise<readonly ReportFinding[]> {
-  const { measure } = deps;
-  const ms = measure.getMeasurements();
-  if (ms.length === 0) return [];
-  const owned = ownerFrameFor(ms, deps);
-  if ('refused' in owned) {
-    deps.refuse?.(owned.refused);
-    return [];
-  }
-  // Same discipline: the frame the measurements were taken in, captured with
-  // them rather than re-read after the import.
-  const worldUp = measure.worldUp;
-  const unitToMetres = owned.frame ? owned.frame.unitToMetres : measure.unitToMetres;
-  const verticalUnitToMetres = owned.frame ? owned.frame.verticalUnitToMetres : measure.verticalUnitToMetres;
-  // A geographic frame refuses what the live grade refuses, and an
-  // unconfirmed scale is not labelled metres.
-  const geographic = owned.frame ? owned.frame.geographic : measure.geographicCrs;
-  const unitsVerified = owned.frame ? owned.frame.unitsVerified : measure.crsKnown && !geographic;
+  // Read at one instant, before the lazy import.
+  const snap = snapshotMeasure(deps.measure);
+  if (snap.measurements.length === 0) return [];
+  const { own, withheld } = measurementsOwnedByActive(snap.measurements, ownershipViewFor(deps));
+  if (withheld) deps.refuse?.(`Not added as findings: ${withheld}`);
+  if (own.length === 0) return [];
+  // The active scan's frame, from the canonical context when the app supplies
+  // it, else the live measure view (fed from the same context).
+  const frame = deps.frameSource ? framesOfApp(deps.frameSource).active() : null;
+  const unitToMetres = frame ? frame.unitToMetres : snap.unitToMetres;
+  const verticalUnitToMetres = frame ? frame.verticalUnitToMetres : snap.verticalUnitToMetres;
+  const geographic = frame ? frame.geographic : snap.geographicCrs;
+  const verticalRefused = frame ? frame.verticalRefused : snap.verticalRefused;
+  const unitsVerified = frame ? frame.unitsVerified : snap.unitsVerified;
   const { measurementsToFindings } = await deps.loadMeasurementReport();
-  return measurementsToFindings(ms, worldUp, unitToMetres, verticalUnitToMetres, { geographic, unitsVerified });
+  return measurementsToFindings(own, snap.worldUp, unitToMetres, verticalUnitToMetres, { geographic, unitsVerified, verticalRefused });
 }
 
-/** Export the curated findings ledger as the signed integrity report (JSON). */
+/**
+ * Export the curated findings ledger as the signed integrity report (JSON).
+ * The ledger holds only the active scan's findings (see
+ * {@link collectMeasurementFindings}), and the caller checks that scan is still
+ * active, so the dataset identity, CRS, digest and epoch are that scan's own.
+ */
 export async function exportFindingsReport(
   deps: MeasurementExportActionDeps,
   findings: readonly ReportFinding[],
@@ -630,6 +666,7 @@ export async function exportFindingsReport(
   const classificationEpoch = deps.activeClassificationEpoch();
   // Geographic reads as unverified here too — see `exportIntegrityReport`.
   const geographic = deps.measure.geographicCrs;
+  const verticalRefused = deps.measure.verticalRefused === true;
   const crsKnown = deps.measure.crsKnown && !geographic;
   const { findingsReportFile, resolveExportDigests, signReportText } = await deps.loadMeasurementReport();
   const digests = await resolveExportDigests(geo.source, geo.crs);
@@ -645,6 +682,7 @@ export async function exportFindingsReport(
     undefined,
     digests,
     geographic,
+    verticalRefused,
   );
   const out = await textToWrite(f.text, deps, signReportText);
   if (out !== null) deps.downloadText(f.filename, out);

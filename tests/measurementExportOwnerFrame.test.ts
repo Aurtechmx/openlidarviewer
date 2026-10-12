@@ -161,14 +161,16 @@ describe('measurement export uses the owning scan frame', () => {
     expect(onB.reportCalls[0]).toEqual(onA.reportCalls[0]);
   });
 
-  it('the integrity report and findings refuse mixed frames', async () => {
+  it('the integrity report refuses mixed frames; findings keep only the active scan\'s and withhold the rest', async () => {
     const w = world([A, B], 'a');
     const d = w.make([w.dist('m1', A), w.dist('m2', B)]);
     await exportMeasurementIntegrityReport(d);
     expect(w.reportCalls).toEqual([]);
-    expect(await collectMeasurementFindings(d)).toEqual([]);
+    const findings = await collectMeasurementFindings(d);
+    expect(findings.map((f) => f.label)).toEqual(['Distance m1']);
     expect(w.refusals).toHaveLength(2);
     expect(w.refusals[0]).toContain('different coordinate frames');
+    expect(w.refusals[1]).toContain('taken on b.las');
   });
 
   it('a measurement with no recorded owner keeps exporting through the active frame', async () => {

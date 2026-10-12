@@ -42,11 +42,10 @@ import { formatArea, displayDecimals } from '../render/measure/format';
 // CRS printed wrong (pass-6 M6). measurementMetrics returns metres already, in
 // the scene's real up-axis and per-axis units; this module only formats them.
 import {
-  GEOGRAPHIC_NOT_AVAILABLE,
   areaWithheldNote,
-  geographicRefusesKind,
   measurementMetrics,
   reducedSampleCaveat,
+  refusalNote,
 } from '../export/measurementExport';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -361,16 +360,23 @@ export function buildMeasurementRows(
    * block. Defaults false, so every projected report is unchanged.
    */
   geographicCrs = false,
+  /**
+   * True when the frame has no valid local vertical (geocentric, or a
+   * depth-positive-down reference): a height, grade, profile or volume then
+   * reads "not available" too. `SpatialContext.verticalMetricRefused`.
+   */
+  verticalRefused = false,
 ): readonly ReportMeasurementRow[] {
   const f = Number.isFinite(unitToMetres) && unitToMetres > 0 ? unitToMetres : 1;
   const vf = Number.isFinite(verticalToMetres) && verticalToMetres > 0 ? verticalToMetres : f;
   return measurements.map((m) => {
-    const refused = geographicCrs && geographicRefusesKind(m.kind);
+    const note = refusalNote(m, geographicCrs, verticalRefused);
+    const refused = note !== null;
     return {
       name: m.name,
       kind: m.kind,
-      value: refused
-        ? GEOGRAPHIC_NOT_AVAILABLE
+      value: note !== null
+        ? note
         : computeValue(m, unitSystem, worldUp, f, vf, unitsVerified),
       pointCount: m.points.length,
       ...(m.kind === 'volume' && !refused && reducedSampleCaveat(m.volume?.withheld)

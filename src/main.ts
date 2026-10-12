@@ -44,7 +44,7 @@ import {
   type OpenStreamingDeps,
 } from './app/openStreaming';
 import {
-  generateReportPdf as runGenerateReportPdf,
+  generateReportPdf as runGenerateReportPdf, ownershipViewOf,
   exportGeoContext as runExportGeoContext,
   type GeoExportContext,
   type ReportExportDeps,
@@ -1670,7 +1670,7 @@ void viewerLoaded.then(() => {
     // X/Y are degrees, Z is linear. The controller refuses the affected
     // trust grades + captions the hint; the panel shows the persistent
     // caveat. One boolean, one seam, so the two can never disagree.
-    viewer.measure.setGeographicCrs(ctx.horizontalMetricRefused); // degrees, Web Mercator grid or geocentric
+    viewer.measure.setGeographicCrs(ctx.horizontalMetricRefused, ctx.verticalMetricRefused); // degrees, Web Mercator grid or geocentric; no local vertical
     viewer.measure.setProjectedCrs(ctx.kind === 'projected' && ctx.epsg != null); // grid-north bearing label
     measureMount.setGeographicNotice(ctx.horizontalMetricRefused);
     // Colorbar legend — same context, `'horizontal-when-known'` policy: an
@@ -2317,9 +2317,9 @@ const kmlDeps: KmlActionDeps = {
   hasViewer: () => Boolean(viewer),
   geo: exportGeoContext,
   crsCurrent: () => crsService.current(),
-  upAxis: () => crsService.context().upAxis, isGeographic: () => crsService.context().isGeographic, // RESOLVED axis and frame
+  upAxis: () => crsService.context().upAxis, isGeographic: () => crsService.context().horizontalMetricRefused, verticalRefused: () => crsService.context().verticalMetricRefused, // RESOLVED axis and frame permissions
   annotations: () => viewer?.annotate.getAnnotations() ?? [],
-  measurements: () => viewer?.measure.getMeasurements() ?? [], layerCount: () => viewer?.clouds().length ?? 0,
+  measurements: () => viewer?.measure.getMeasurements() ?? [], layerCount: () => viewer?.clouds().length ?? 0, measurementOwnership: () => (viewer ? ownershipViewOf(viewer, runtime.layerIdentity.stableIdFor, scans.activeId) : { layers: [], activeViewerId: null }),
   viewpoints: () => viewBookmarks.savedViews.map(
     (v) => ({ name: v.name, position: v.pose.position, target: v.pose.target }),
   ),
@@ -3700,7 +3700,7 @@ const openStreamingDeps: OpenStreamingDeps = {
 const reportExportDeps: ReportExportDeps = {
   get viewerReady() { return ensureViewer(); },
   getViewer: () => viewer,
-  scans,
+  scans, measurementOwnership: () => ownershipViewOf(viewer, runtime.layerIdentity.stableIdFor, scans.activeId),
   crsCurrent: () => crsService.current(),
   classScopeStamp: currentClassScopeStamp,
   baseName,

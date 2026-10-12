@@ -53,6 +53,10 @@ import type { loadReportEngine } from '../lazyChunks';
 import { streamingFormatToken } from '../render/streaming/StreamingSource';
 import { classificationCoverage } from '../render/class/classificationCoverage';
 import { truncationNote, truncationOf, truncationText } from '../io/truncation';
+import { measurementsOwnedByActive, type OwnershipView } from './measurementOwnership';
+
+/** Re-exported so the shell wires report and KML ownership from one import. */
+export { ownershipViewOf } from './measurementOwnership';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure decisions the extraction exposes — decidable without a Viewer, the report
@@ -196,6 +200,12 @@ export interface ReportExportDeps {
   dropZone: Pick<DropZone, 'setError'>;
   /** `?debug=1` — console diagnostics for the wrapped, defensive blocks. */
   readonly debug: boolean;
+  /**
+   * The open layers and the active scan, so the report holds only the
+   * measurements the active scan owns. Omitted: no layer is known, so only a
+   * measurement that records no scan is the active scan's.
+   */
+  readonly measurementOwnership?: () => OwnershipView;
 }
 
 /**
@@ -470,6 +480,15 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
       ],
     };
   }
+  // The report describes the ACTIVE scan and converts with its units, frame and
+  // permissions, so it holds only the measurements that scan owns. Another
+  // scan's measurement (or one whose scan is closed or unrecorded) is withheld,
+  // and the Measurements section states why, rather than being printed through
+  // this scan's conversion factor.
+  const owned = measurementsOwnedByActive(
+    viewer.measure.getMeasurements(),
+    deps.measurementOwnership ? deps.measurementOwnership() : { layers: [], activeViewerId: deps.scans.activeId ?? null },
+  );
   const inputs = report.composeReportInputs({
     templateId: validatedTemplateId,
     scanQualityFacts,
@@ -478,7 +497,8 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     metadata,
     visuals: [],          // user-pre-rendered Studio exports
     annotations: viewer.annotate.getAnnotations(),
-    measurements: viewer.measure.getMeasurements(),
+    measurements: owned.own,
+    measurementsWithheld: owned.withheld,
     unitSystem: viewer.measure.unitSystem,
     // Render-units → metres, the SAME factor the live measure readouts apply
     // (B2, v0.4.5) — so the report PDF's measurement values agree with the
@@ -497,6 +517,8 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     // The flag the live Measure tool refuses on, so the PDF withholds the same
     // grades, angles and lengths the panel marks as not distances.
     geographicCrs: viewer.measure.geographicCrs,
+    // No local vertical (geocentric, depth-down): heights are withheld too.
+    verticalRefused: viewer.measure.verticalRefused === true,
     provenance: provenanceFp,
     // The file's own declared source metadata (E57 today) — verbatim,
     // rendered by the report's "Declared source metadata" section under the

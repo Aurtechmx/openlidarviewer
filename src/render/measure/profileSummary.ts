@@ -20,6 +20,7 @@
  */
 
 import type { ProfileChartSample } from './types';
+import { VERTICAL_NOT_AVAILABLE } from './types';
 import { formatStationing, formatGradePercent, profileSampleCovered } from './civilProfileStats';
 import { GEOGRAPHIC_CRS_MEASURE_NOTICE, formatElevation, formatRise, formatLength, formatUnitUnverified, unitToken, type DisplayUnits } from './format';
 // Height headings come from one vocabulary, where "Elevation" is earned by an
@@ -427,7 +428,11 @@ export function profileCsvRefusal(
   // Either source is enough. A summary without trust proves nothing about the
   // frame, so the active CRS is checked as well rather than trusting absence.
   const geographic = geographicCrs === true || s.trust?.reasons.includes(GEOGRAPHIC_CRS_MEASURE_NOTICE) === true;
-  return geographic ? GEOGRAPHIC_CRS_MEASURE_NOTICE : null;
+  if (geographic) return GEOGRAPHIC_CRS_MEASURE_NOTICE;
+  // A frame with no local vertical refuses the profile's elevations too; the
+  // live grade carries that reason on the trust record.
+  const vertical = s.trust?.reasons.find((r) => r.includes(VERTICAL_NOT_AVAILABLE));
+  return vertical ?? null;
 }
 
 export function buildProfileCsv(
