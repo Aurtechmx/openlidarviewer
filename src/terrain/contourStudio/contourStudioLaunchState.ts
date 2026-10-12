@@ -61,7 +61,7 @@ export interface ContourStudioPrerequisites {
    * named only the first of those. Optional: a caller that cannot say leaves it
    * out and gets a reason that names the requirement instead of guessing.
    */
-  readonly crsKind?: 'local' | 'projected' | 'geographic' | 'unknown';
+  readonly crsKind?: 'local' | 'projected' | 'geographic' | 'geocentric' | 'unknown';
   /**
    * How much of the scan the analysis read, as the capability model states it.
    * A sample or a resident streaming set can build a surface for inspection;
@@ -142,6 +142,8 @@ const REASON = {
     'The current CRS is geographic; validated area and scale calculations require a projected frame.',
   localCrs:
     'The current CRS is a local frame; validated area and scale calculations require a projected frame.',
+  geocentricCrs:
+    'The current CRS is geocentric (Earth-centred X/Y/Z); validated area and scale calculations require a projected frame.',
   unprojectedCrs:
     'Validated area and scale calculations require a projected frame, which this scan does not have.',
   sparseSupport: 'Terrain support is too sparse for a contour deliverable.',
@@ -168,6 +170,7 @@ const REASON = {
 function unprojectedReason(kind: ContourStudioPrerequisites['crsKind']): string {
   if (kind === 'geographic') return REASON.geographicCrs;
   if (kind === 'local') return REASON.localCrs;
+  if (kind === 'geocentric') return REASON.geocentricCrs;
   return REASON.unprojectedCrs;
 }
 

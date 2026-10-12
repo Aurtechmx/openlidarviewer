@@ -101,9 +101,9 @@ export function unverifiedUnitsCaveat(unitsVerified: boolean): string {
 export function geographicRefusalCaveat(geographic: boolean): string {
   if (!geographic) return '';
   return (
-    ' Geographic CRS (degrees): X/Y are in degrees, not metres, so lengths, ' +
-    'areas, grades, angles, profiles and volumes are not available and are ' +
-    'left empty (degrees are not distances). Heights are kept. Reproject to a ' +
+    ' Geographic CRS (degrees), Web Mercator grid or geocentric frame: X/Y are ' +
+    'not ground metres, so lengths, areas, grades, angles, profiles and volumes ' +
+    'are not available and are left empty. Heights are kept. Reproject to a ' +
     'projected CRS for measurement work.'
   );
 }

@@ -152,9 +152,9 @@ describe('geographic CRS: the audit fixture', () => {
     expect(dist.length_source).toBe('');
     expect(profile.length_source).toBe('');
     expect(profile.grade_pct).toBe('');
-    expect(slope.evidence).toContain('geographic CRS');
+    expect(slope.evidence).toContain('geographic degrees');
     expect(height.vertical_source).toBe('1');
-    expect(height.evidence).not.toContain('geographic CRS');
+    expect(height.evidence).not.toContain('geographic degrees');
   });
 
   it('the GeoJSON nulls the refused figures and names the frame in its evidence', () => {

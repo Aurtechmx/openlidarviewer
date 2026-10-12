@@ -123,6 +123,40 @@ export interface CrsInfo {
    * assertion, e.g. "swisstopo LV95".
    */
   readonly catalogue?: string;
+  /**
+   * Set when the CRS is geocentric (Earth-centred Cartesian X/Y/Z): a WKT1
+   * GEOCCS, a WKT2 geodetic CRS with a Cartesian coordinate system, GeoTIFF
+   * model type 3, or a known geocentric EPSG code. Its Z is not elevation and
+   * its X/Y are not a ground plane, so no metric, terrain or elevation
+   * workflow may read it as one.
+   */
+  readonly geocentric?: boolean;
+  /**
+   * Set when the vertical CRS's axis points DOWN (a depth axis, e.g. NAVD88
+   * depth, MSL depth), whether a known depth code or a WKT AXIS[..., DOWN].
+   * Elevation workflows assume positive-up heights and refuse it.
+   */
+  readonly verticalAxisDown?: boolean;
+}
+
+/**
+ * Geocentric (Earth-centred Cartesian) CRS codes. Not exhaustive: a code
+ * outside this set is still recognised from its WKT or GeoTIFF model type.
+ */
+const GEOCENTRIC_EPSG: ReadonlySet<number> = new Set([
+  4978, // WGS 84
+  4328, // WGS 84 (geocentric, deprecated)
+  4936, // ETRS89
+  4919, // ITRF2000
+  4896, // ITRF2005
+  5332, // ITRF2008
+  7789, // ITRF2014
+  9988, // ITRF2020
+]);
+
+/** Whether `epsg` is a known geocentric CRS code. */
+export function isGeocentricEpsg(epsg: number | undefined): boolean {
+  return epsg !== undefined && GEOCENTRIC_EPSG.has(epsg);
 }
 
 /**
@@ -571,9 +605,15 @@ export function crsFromWkt(wkt: string): CrsInfo {
   // projected linear one at the top level (metres / feet / etc.). We need
   // the LAST one in the horizontal slice for projected CRSs. For geographic
   // CRSs the unit is degrees and the "linear" field falls back to 'unknown'.
+  const projectedPresent = horizNodes.some((n) => isProjectedKeyword(n.keyword));
+  // A geodetic root is geocentric (Cartesian X/Y/Z from the Earth's centre) or,
+  // with an ellipsoidal CS, geographic. Read as projected, a geocentric CRS
+  // passed every metric gate with a metre unit and its Z read as elevation.
+  const geodeticNode = projectedPresent ? undefined : horizNodes.find((n) => isGeodeticKeyword(n.keyword));
+  const geocentric = (geodeticNode !== undefined && isGeocentricNode(geodeticNode)) || isGeocentricEpsg(epsg);
   const isGeographic =
-    !horizNodes.some((n) => isProjectedKeyword(n.keyword)) &&
-    horizNodes.some((n) => isGeographicKeyword(n.keyword));
+    !projectedPresent && !geocentric &&
+    horizNodes.some((n) => isGeographicKeyword(n.keyword) || (isGeodeticKeyword(n.keyword) && csTypeOf(n) === 'ellipsoidal'));
   let linearUnit: CrsLinearUnit = 'unknown';
   let linearUnitToMetres = 1;
   if (!isGeographic) {
@@ -615,6 +655,8 @@ export function crsFromWkt(wkt: string): CrsInfo {
     verticalDatum: vUnit.datumLabel ?? vert.name,
     ...verticalUnitFields(vUnit),
     horizontalDatum,
+    ...(geocentric ? { geocentric: true } : {}),
+    ...(verticalNode && verticalAxisIsDown(verticalNode) ? { verticalAxisDown: true } : {}),
   };
 }
 
@@ -684,7 +726,39 @@ function isCompoundKeyword(k: string): boolean {
 
 /** A horizontal CRS node — the one whose name and authority describe the frame. */
 function isHorizontalCrsKeyword(k: string): boolean {
-  return isProjectedKeyword(k) || isGeographicKeyword(k);
+  return isProjectedKeyword(k) || isGeographicKeyword(k) || isGeodeticKeyword(k);
+}
+
+/**
+ * The geodetic-CRS keywords whose coordinate system decides their shape: WKT1
+ * `GEOCCS` (always geocentric) and WKT2 `GEODCRS` / `GEODETICCRS` (geocentric
+ * with a Cartesian CS, geographic with an ellipsoidal one).
+ */
+function isGeodeticKeyword(k: string): boolean {
+  return k === 'GEOCCS' || k === 'GEODCRS' || k === 'GEODETICCRS';
+}
+
+/** The `CS[<type>, n]` type of a WKT2 CRS node's own coordinate system, lowercased. */
+function csTypeOf(node: WktNode): string | undefined {
+  for (const c of node.children) {
+    if (c.type !== 'node' || c.node.keyword !== 'CS') continue;
+    const t = c.node.children[0];
+    if (t?.type === 'keyword' || t?.type === 'string') return t.value.toLowerCase();
+  }
+  return undefined;
+}
+
+/** Whether a geodetic node is geocentric (GEOCCS, or a Cartesian GEODCRS). */
+function isGeocentricNode(node: WktNode): boolean {
+  if (node.keyword === 'GEOCCS') return true;
+  return isGeodeticKeyword(node.keyword) && csTypeOf(node) === 'cartesian';
+}
+
+/** Whether a vertical CRS node declares a DOWN axis (a depth axis). */
+function verticalAxisIsDown(vert: WktNode): boolean {
+  return collectWktNodes(vert).some(
+    (n) => n.keyword === 'AXIS' && n.children.some((c) => c.type === 'keyword' && c.value.toLowerCase() === 'down'),
+  );
 }
 
 /**
@@ -919,11 +993,13 @@ export function crsFromGeoTiff(
    * GeographicTypeGeoKey. A projected CRS commonly names its base geographic
    * CRS in 2048 as well, so the projected key wins when both are present.
    */
-  const isGeographic =
-    modelType !== undefined
-      ? modelType === 2
-      : projected === undefined && geodetic !== undefined;
   const epsg = projected ?? geodetic;
+  // Model type 3 is geocentric; so is a geocentric code with no model type.
+  const geocentric = modelType === 3 || (modelType === undefined && projected === undefined && isGeocentricEpsg(geodetic));
+  const isGeographic =
+    !geocentric && (modelType !== undefined
+      ? modelType === 2
+      : projected === undefined && geodetic !== undefined);
   const projectedCitation = readGeoTiffCitation(
     geoAsciiBytes,
     projectedCitationOffset,
@@ -1033,6 +1109,7 @@ export function crsFromGeoTiff(
     verticalEpsg,
     verticalDatum,
     ...verticalUnitFields(vUnit),
+    ...(geocentric ? { geocentric: true } : {}),
   };
 }
 
@@ -1081,6 +1158,7 @@ export function crsFromEpsg(horizontalEpsg: number, params: EpsgCrsParams = {}):
     verticalDatum,
     verticalLinearUnit: vUnit.unit,
     verticalUnitToMetres: vUnit.toMetres,
+    ...(isGeocentricEpsg(horizontalEpsg) ? { geocentric: true } : {}),
   };
 }
 

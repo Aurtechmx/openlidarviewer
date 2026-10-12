@@ -63,7 +63,7 @@ export class ScanFootprintError extends Error {}
  * service.
  */
 export interface FootprintCrs {
-  readonly kind: 'local' | 'projected' | 'geographic' | 'unknown';
+  readonly kind: 'local' | 'projected' | 'geographic' | 'geocentric' | 'unknown';
   readonly confidence: 'high' | 'medium' | 'low' | 'none';
   readonly userConfirmed: boolean;
 }
@@ -99,6 +99,10 @@ export type FootprintShape = 'bounding rectangle' | 'point-cloud outline';
  * same bar the site KML export applies.
  */
 export function footprintCrsRefusal(crs: FootprintCrs | null | undefined): string | null {
+  if (crs?.kind === 'geocentric') {
+    return 'The scan is in a geocentric coordinate system (Earth-centred X/Y/Z), which has no ground plane to draw an outline on. '
+      + 'Reproject to a projected or geographic CRS, then export again.';
+  }
   if (!crs || crs.kind === 'local' || crs.kind === 'unknown') {
     return 'The scan has no known coordinate system, so its outline cannot be placed on a map. '
       + 'Set the coordinate system in the Inspector, then export again.';

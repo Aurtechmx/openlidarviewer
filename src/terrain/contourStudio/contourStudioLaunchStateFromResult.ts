@@ -38,7 +38,7 @@ export interface LaunchFrameContext {
    * no CRS alike, and the reason used to call all three geographic. Optional so
    * a caller without the kind states the requirement rather than a frame.
    */
-  readonly crsKind?: 'local' | 'projected' | 'geographic' | 'unknown';
+  readonly crsKind?: 'local' | 'projected' | 'geographic' | 'geocentric' | 'unknown';
   /**
    * The scan's coverage as the capability model states it, from `ScanFacts`,
    * not from the grid's extent: a strided static read is `sampled` while its
