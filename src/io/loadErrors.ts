@@ -41,9 +41,12 @@ export class LoadError extends Error {
   }
 }
 
+/** Neutral advice shown when a file cannot be read as a point cloud. */
+export const OPEN_SCAN_ADVICE = 'To view a scan, open an E57 or LAS version of the file.';
+
 /** The clear, user-facing message for each failure category. */
 const CATEGORY_MESSAGE: Record<LoadErrorCategory, string> = {
-  'unsupported-format': "This file type isn't supported yet.",
+  'unsupported-format': `This file type isn't supported yet. ${OPEN_SCAN_ADVICE}`,
   'malformed-file': 'This file could not be read — it may be malformed or incomplete.',
   'memory-constraint': "This file is too large for this device's memory.",
   'gpu-limitation':

@@ -3,6 +3,7 @@ import {
   describeLoadError,
   classifyLoadError,
   messageForCategory,
+  OPEN_SCAN_ADVICE,
 } from '../src/io/loadErrors';
 import type { LoadErrorCategory } from '../src/io/loadErrors';
 
@@ -22,6 +23,13 @@ test('a typed LoadError is described by its own category', () => {
   expect(describeLoadError(new LoadError('memory-constraint', 'oom at 0x0'))).toBe(
     messageForCategory('memory-constraint'),
   );
+});
+
+test('the unsupported-format message carries the open advice', () => {
+  const m = messageForCategory('unsupported-format');
+  expect(m).toContain(OPEN_SCAN_ADVICE);
+  expect(OPEN_SCAN_ADVICE).toBe('To view a scan, open an E57 or LAS version of the file.');
+  expect(OPEN_SCAN_ADVICE).not.toMatch(/not supported/i);
 });
 
 test('every category maps to a non-empty, user-facing message', () => {

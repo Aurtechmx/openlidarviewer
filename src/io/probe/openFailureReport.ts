@@ -15,6 +15,7 @@
  */
 import { byteEntropy, detectStride, extensionOf, looksLikeText, type ProbeDecision } from './formatProbes';
 import { formatByteSize } from '../formatByteSize';
+import { OPEN_SCAN_ADVICE } from '../loadErrors';
 import type { ProbeBound } from './progressiveProbe';
 
 export interface OpenFailureFacts {
@@ -117,10 +118,12 @@ function article(word: string): string {
 /** The short message the toast shows. */
 export function openFailureSummary(f: OpenFailureFacts): string {
   if (f.verdict === 'NOT_POINT_CLOUD' && f.signature) {
-    return `This file is ${article(f.signature)} ${f.signature}, not a point cloud. ${f.explanations[0] ?? ''}`.trim();
+    return `This file is ${article(f.signature)} ${f.signature}, not a point cloud. ${f.explanations[0] ?? ''} ${OPEN_SCAN_ADVICE}`
+      .replace(/\s+/g, ' ')
+      .trim();
   }
   const kind = f.content === 'empty' ? 'empty' : `${f.content}, ${formatByteSize(f.sizeBytes)}`;
-  return `This file was not recognised as a point cloud (${kind}). ${f.explanations[0] ?? ''} Copy report for details.`
+  return `This file was not recognised as a point cloud (${kind}). ${f.explanations[0] ?? ''} ${OPEN_SCAN_ADVICE} Copy report for details.`
     .replace(/\s+/g, ' ')
     .trim();
 }

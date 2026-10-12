@@ -114,6 +114,45 @@ test('a failed open leaves the loaded project untouched', async ({ page }) => {
   expect(await points()).toBe(before);
 });
 
+test('unreadable bytes get the open advice and keep the loaded scene', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(`console.error: ${m.text()}`); });
+
+  const bytes = readFileSync(fileURLToPath(new URL('../../public/samples/tiny.las', import.meta.url)));
+  await drop(page, [...bytes], 'tiny.las');
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 30_000 });
+  const points = () =>
+    page.evaluate(() =>
+      (window as unknown as { __OLV_TEST_API__: { seedUniformClass(c: number): number } }).__OLV_TEST_API__.seedUniformClass(1),
+    );
+  await expect.poll(points, { timeout: 20_000 }).toBeGreaterThan(0);
+  const before = await points();
+
+  // About 3 MB of pseudo-random bytes, built in the page so the payload stays small.
+  const dataTransfer = await page.evaluateHandle(() => {
+    const b = new Uint8Array(3 * 1024 * 1024);
+    let x = 2463534242;
+    for (let i = 0; i < b.length; i++) {
+      x ^= x << 13; x >>>= 0;
+      x ^= x >>> 17;
+      x ^= x << 5; x >>>= 0;
+      b[i] = x & 0xff;
+    }
+    const dt = new DataTransfer();
+    dt.items.add(new File([b], 'survey.dat'));
+    return dt;
+  });
+  await page.dispatchEvent('body', 'drop', { dataTransfer });
+
+  await expect(page.locator('.olv-toast')).toHaveClass(/olv-toast-error/, { timeout: 30_000 });
+  await expect(page.locator('.olv-toast-text')).toContainText('To view a scan, open an E57 or LAS version of the file.');
+  await expect(page.locator('.olv-toast').getByRole('button', { name: 'Copy report', exact: true })).toBeVisible();
+  await expect(page.locator('.olv-empty')).toBeHidden();
+  expect(await points()).toBe(before);
+  expect(errors).toEqual([]);
+});
+
 test('an extension-less XYZ text file opens with the PROBABLE notice and level', async ({ page }) => {
   const rows = Array.from({ length: 40 }, (_, i) => `${(i % 8) * 1.5} ${Math.floor(i / 8) * 2.25} ${(i % 5) * 0.4}`);
   const text = rows.join('\n') + '\n';

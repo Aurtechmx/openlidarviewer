@@ -31,6 +31,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 - The "Two scans loaded" before/after prompt is offered only when both scans declare the same CRS and linear unit and neither is a truncated load. Otherwise no prompt is shown; Compare in the Inspector is unchanged.
 - Interface themes are now Blue, Field and an upgraded High contrast; the Light theme is retired and saved Light choices move to Field. High contrast now uses a pure black page, opaque panels, 2 px solid edges and a 3 px focus ring.
+- A file that cannot be read as a point cloud now also says "To view a scan, open an E57 or LAS version of the file." The reason and Copy report stay as before.
 - The navigation modes are one compact segmented control, Orbit | Walk | Fly | Pan, with Frame all beside it, in place of the triangle of round pads. Shortcuts, pointer lock, the Pan availability rule, the speed slider, the camera presets, orthographic, Plan View and the Navigation panel (H) behave as before.
 - The six axis views (Top, Bottom, Front, Back, Left, Right) moved from the Navigation panel to a "More" menu beside the mode selector, so they stay one click away with the panel closed or the view cube off. They are still in the command palette. The menu opens only when clicked and is not remembered.
 - The view cube is on by default once a scan is open, except on phone-width screens, where it stays off until turned on; a stored off choice is kept. "Toggle compass" in the command palette and `?viewcube=1` / `?viewcube=0` still switch it.
