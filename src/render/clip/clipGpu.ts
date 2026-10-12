@@ -4,17 +4,12 @@
  * The GPU side of the clip box: a per-point keep multiplier folded into the
  * point size graph, exactly as the elevation and class filters are.
  *
- * WHY NOT THREE.JS CLIP PLANES. The viewer draws with WebGPURenderer (WebGPU
- * and its WebGL 2 backend), which ignores `material.clippingPlanes` and
- * `renderer.localClippingEnabled`. Setting them left the whole scan drawing
- * while the readout said "1,093 of 35,291 points". Its own mechanism, a
- * ClippingGroup in the scene graph, works for a keep-inside box but not for
- * keep-outside: an intersection of three or more planes (a box has six) is not
- * applied, and a group whose plane count or mode changes keeps its old shader.
- * Both were measured in a real browser. A per-point size multiply has neither
- * problem: the box and the mode are plain uniforms, so editing the bounds or
- * switching Inside/Outside needs no rebuild, and a hidden point collapses to a
- * zero-size sprite (the CPU rule, `clipKeepsPoint`, applied per point).
+ * Not three.js clip planes: WebGPURenderer ignores `material.clippingPlanes`,
+ * and its ClippingGroup does not apply a six-plane keep-outside box or rebuild
+ * its shader when the mode changes. The box and the mode here are plain
+ * uniforms, so editing the bounds or switching Inside/Outside needs no rebuild,
+ * and a hidden point collapses to a zero-size sprite (the CPU rule,
+ * `clipKeepsPoint`, applied per point).
  *
  * The box is in the PROJECT frame, the frame the CPU kept-count and the
  * measurements use. A point's project position is its instanced `aPos` through

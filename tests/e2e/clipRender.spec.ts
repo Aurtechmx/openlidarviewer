@@ -4,31 +4,13 @@ import { openToolPage } from './helpers';
 import { dropBytes, geomFixtures, towerLas, towerPoints } from './geomFixtures';
 
 /**
- * The clip box must change what is DRAWN, not only what the panel says.
+ * The clip box must change what is drawn, not only what the panel says. These
+ * specs read the drawn pixels back: Inside and Outside, a bounds edit, Fit to
+ * scan, Clear, a placed layer, a Box drawn on the ground (3D volume, not a
+ * slab), picking that skips clipped-away points, and an orbit frame-time guard.
  *
- * Reported on the built zip: the clip box "doesn't actually work, stays in 2D,
- * and orbit and movement becomes slow and weird near the clipped area". The
- * causes were three, each pinned here against a real browser:
- *
- *   1. WebGPURenderer (WebGPU and its WebGL 2 backend) ignores
- *      `material.clippingPlanes`; clip planes only act through a ClippingGroup.
- *      The viewer set the former, so the whole scan kept drawing while the
- *      readout said "1,093 of 35,291 points". Its own mechanism, a
- *      ClippingGroup, was measured too: it clips a keep-inside box but does not
- *      apply a six-plane keep-outside one, so the clip is a per-point test in
- *      the size graph instead. These specs read the drawn pixels back, which is
- *      what the old kept-count tests could not see.
- *   2. A Box drawn from two picks on the ground is a few centimetres tall, so
- *      isolating it was a slab (a 2D slice). A flat box now takes the scan's
- *      height.
- *   3. Picking ignored the clip, so a double-click, F, the hover probe and a
- *      measurement vertex landed on points that were clipped away: focus flew to
- *      an invisible point and the orbit pivot sat in empty space.
- *
- * Coordinates below are the scan's local frame (the origin is floor(min), so the
- * ground, near height 0 in the file, sits near local height 1).
- *
- * Set OLV_CLIP_SHOTS=<dir> to also write the screenshots the review looked at.
+ * Coordinates are the scan's local frame (origin floor(min)), so the ground
+ * sits near local height 1. Set OLV_CLIP_SHOTS=<dir> to write screenshots.
  */
 const SHOTS = process.env.OLV_CLIP_SHOTS;
 const GZ = 1; // ground height, local frame
