@@ -139,19 +139,21 @@ describe('ViewCube DOM', () => {
 
   it('turns with the camera, writes nothing when it did not turn, and holds on a null orientation', async () => {
     let o: CameraOrientation | null = LEVEL_NORTH;
-    const { handle, cube } = await mount({ orientation: () => o });
-    const first = cube.style.transform;
-    expect(first).toMatch(/^matrix3d\(/);
-    const writes = cube.style.transformWrites;
+    const { handle, root } = await mount({ orientation: () => o });
+    const top = root.byTestId('viewcube-back'); // level, looking north: the south face is toward us
+    const first = top.style.transform;
+    expect(first).toMatch(/^matrix\(/); // a 2D affine map: no CSS 3D for a browser to hit-test
+    expect(root.all().some((e) => /matrix3d|preserve-3d/.test(e.style.transform + e.style.cssText))).toBe(false);
+    const writes = top.style.transformWrites;
     handle.update();
-    expect(cube.style.transformWrites).toBe(writes);
+    expect(top.style.transformWrites).toBe(writes);
     o = { forward: [0, 0.6, -0.8], up: [0, 0.8, 0.6], upIsZ: true }; // pitched down
     handle.update();
-    expect(cube.style.transform).not.toBe(first);
-    const pitched = cube.style.transform;
+    expect(top.style.transform).not.toBe(first);
+    const pitched = top.style.transform;
     o = null;
     handle.update();
-    expect(cube.style.transform).toBe(pitched);
+    expect(top.style.transform).toBe(pitched);
   });
 
   it('shows only the near-side edges and corners and marks the squarely faced face', async () => {

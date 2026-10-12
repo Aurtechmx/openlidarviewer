@@ -73,7 +73,7 @@ test('cube, compact navigation and first-use guidance, end to end', async ({ pag
   await expect(cube.locator('.olv-viewcube-face[aria-current="true"]')).toHaveCount(0);
 
   // ── Orbit by dragging the scan: the cube follows ───────────────────
-  const before = await cube.locator('.olv-viewcube-cube').evaluate((el) => (el as HTMLElement).style.transform);
+  const before = await cube.locator('.olv-viewcube-face').evaluateAll((els) => els.map((el) => (el as HTMLElement).style.transform).join('|'));
   const canvas = page.locator('canvas').first();
   const box = (await canvas.boundingBox())!;
   await page.mouse.move(box.x + box.width * 0.45, box.y + box.height * 0.5);
@@ -81,7 +81,7 @@ test('cube, compact navigation and first-use guidance, end to end', async ({ pag
   await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.45, { steps: 12 });
   await page.mouse.up();
   await waitForCameraSettled(page);
-  const after = await cube.locator('.olv-viewcube-cube').evaluate((el) => (el as HTMLElement).style.transform);
+  const after = await cube.locator('.olv-viewcube-face').evaluateAll((els) => els.map((el) => (el as HTMLElement).style.transform).join('|'));
   expect(after).not.toBe(before);
 
   // ── Plan View on, then a cube corner turns it off ──────────────────

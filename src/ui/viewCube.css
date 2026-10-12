@@ -1,12 +1,12 @@
 /* The ViewCube (viewCube.ts). Loaded with the lazy cube chunk, never eagerly.
-   Sizes, positions and the 3D transforms are set from script; this sheet owns
+   Sizes, positions and the 2D transforms are set from script; this sheet owns
    the look: faces, depth shading, hover and focus, and the coarse-pointer sizes. */
 .olv-viewcube{position:absolute;z-index:12;pointer-events:none;user-select:none;-webkit-user-select:none}
 .olv-viewcube-stage{position:absolute;left:0;top:0;pointer-events:auto;touch-action:none}
-.olv-viewcube-cube{position:absolute;left:50%;top:50%;width:0;height:0;transform-style:preserve-3d}
+.olv-viewcube-cube{position:absolute;left:50%;top:50%;width:0;height:0}
 .olv-viewcube-face{position:absolute;box-sizing:border-box;margin:0;padding:0;display:flex;align-items:center;justify-content:center;
   border:1px solid var(--hairline-strong);background:var(--panel-raised);color:var(--text);cursor:pointer;
-  font-family:var(--font);font-weight:600;font-size:var(--text-2xs);line-height:1;letter-spacing:.02em;backface-visibility:hidden;-webkit-backface-visibility:hidden;
+  font-family:var(--font);font-weight:600;font-size:var(--text-2xs);line-height:1;letter-spacing:.02em;
   transition:background-color 120ms ease-out,color 120ms ease-out}
 .olv-viewcube-face[data-shade="top"]{box-shadow:inset 0 0 0 999px color-mix(in srgb,var(--text) 7%,transparent)}
 .olv-viewcube-face[data-shade="side"]{box-shadow:inset 0 0 0 999px color-mix(in srgb,var(--bg) 12%,transparent)}
