@@ -27,6 +27,14 @@ import {
 } from './recoveryJournal';
 import { recoveryEnabled, setRecoveryEnabled, setRecoveryStatus } from './recoveryStatus';
 import { appTransientLane } from '../../ui/transientLane';
+import { seatClear, watchSeat } from '../../ui/hudSeat';
+
+/**
+ * What the notice lifts above at the bottom left: the dock, the phone strip
+ * and sheet, the navigation row, a bottom toast, the first-run hint, the
+ * active-tool pill and the hold-Space hint.
+ */
+const NOTICE_CLEAR_OF = ['.olv-dock', '.olv-state-strip', '.olv-mobile-sheet:not(.olv-hidden)', '.olv-navbar', '.olv-lasso-toast.olv-visible', '.olv-touch-hint.olv-visible', '.olv-ati:not(.olv-hidden)', '.olv-nav-prompt-tool.olv-visible'];
 
 export interface RecoveryDeps {
   readonly lifetime: AppLifetime;
@@ -81,6 +89,7 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
   // A source finished opening. The store may still be opening.
   let sourceOpen = false;
   let notice: HTMLElement | null = null;
+  let unseat: () => void = () => {};
   let off = false;
   // True while a restore runs, so a source that finishes loading meanwhile does not offer it again.
   let restoring = false;
@@ -107,6 +116,8 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
 
   const hideNotice = (): void => {
     if (notice) appTransientLane().release(notice);
+    unseat();
+    unseat = () => {};
     notice?.remove();
     notice = null;
   };
@@ -116,7 +127,7 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
     const el = document.createElement('div');
     el.className = 'olv-toast olv-recovery-notice';
     el.setAttribute('role', 'status');
-    Object.assign(el.style, { position: 'fixed', top: 'auto', bottom: '16px', left: '16px', transform: 'none', zIndex: '40', maxWidth: 'min(360px, calc(100vw - 32px))' });
+    Object.assign(el.style, { position: 'fixed', top: 'auto', bottom: 'calc(16px + var(--olv-seat, 0px))', left: '16px', transform: 'none', zIndex: '40', maxWidth: 'min(360px, calc(100vw - 32px))' });
     const p = document.createElement('div');
     p.className = 'olv-toast-text';
     p.textContent = text;
@@ -136,6 +147,7 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
     notice = el;
     // On a phone the notice waits behind any other transient card.
     appTransientLane().claim(el);
+    unseat = watchSeat(el, NOTICE_CLEAR_OF, () => seatClear(el, NOTICE_CLEAR_OF, 'up'));
   };
 
   /** Drop the pending entry and the notice, and void every write in flight. */

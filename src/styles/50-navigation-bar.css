@@ -280,7 +280,9 @@ body[data-theme="high-contrast"] .olv-mode-reset { border: 2px solid var(--accen
 }
 .olv-nav-prompt.olv-visible { opacity: 1; animation: olv-prompt-breathe 2.6s ease-in-out infinite; }
 .olv-nav-prompt.olv-nav-prompt-tool {
-  top: auto; bottom: 132px; transform: translateX(-50%);
+  /* Lifted above a bottom toast or the first-run hint in its column (NavBar
+     writes --olv-seat), which otherwise land on the same line. */
+  top: auto; bottom: calc(132px + var(--olv-seat, 0px)); transform: translateX(-50%);
   padding: var(--space-sm) var(--space-xl); font-size: var(--text-xs); color: var(--text-dim);
   border-radius: var(--radius-md); max-width: min(520px, calc(100% - 32px)); text-align: center;
 }

@@ -190,9 +190,10 @@ export function wireActiveToolIndicator(d: ActiveToolWiringDeps): ActiveToolWiri
 /**
  * What owns the bottom of the scene. The pill sits above every one of these
  * that shares its column: the navigation widget, a bottom toast, the touch
- * hint, the phone state strip and sheet, the dock.
+ * hint, the tools' hold-Space prompt, the phone state strip and sheet, the
+ * dock.
  */
-const FLOOR = ['.olv-navbar', '.olv-lasso-toast.olv-visible', '.olv-touch-hint.olv-visible', '.olv-state-strip', '.olv-mobile-sheet', '.olv-dock'];
+const FLOOR = ['.olv-navbar', '.olv-lasso-toast.olv-visible', '.olv-touch-hint.olv-visible', '.olv-nav-prompt-tool.olv-visible', '.olv-state-strip', '.olv-mobile-sheet', '.olv-dock'];
 
 /** Tool columns at the scene's side edge (the phone measure rail). */
 const SIDE = ['.olv-mkinds', '.olv-measure-actions'];
@@ -220,10 +221,13 @@ function watchPillFloor(host: HTMLElement, pill: HTMLElement, seat: () => void):
   track();
   const mo = new MO((records) => {
     if (records.every((r) => r.target === pill || pill.contains(r.target))) return;
+    // A style write matters only on the hold-Space hint, whose --olv-seat lift
+    // moves the floor the pill sits above.
+    if (records.every((r) => r.attributeName === 'style' && !(r.target as Element).matches?.('.olv-nav-prompt-tool'))) return;
     if (records.some((r) => r.type === 'childList')) track();
     seat();
   });
-  mo.observe(body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'hidden'] });
+  mo.observe(body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'hidden', 'style'] });
   const ends = ['transitionend', 'animationend'] as const;
   for (const t of ends) doc.addEventListener(t, seat, true);
   return () => {
