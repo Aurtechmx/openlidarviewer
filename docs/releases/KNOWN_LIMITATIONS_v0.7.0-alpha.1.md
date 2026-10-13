@@ -617,6 +617,14 @@ closes the stream. A local LAS or LAZ file too heavy for memory streams from
 disk. It replaces an open stream, with that stream's class legend counts, scan
 report and confidence, and keeps the static layers open.
 
+## E57 attributes have no per-point availability
+
+E57 intensity is stored normalised to 0–65535 per scan; the source values are
+not retained, and it is not calibrated reflectance. Colour or intensity a file
+flags invalid, and a channel some merged scans lack, are reported in the load
+warnings rather than masked per point. Per-point attribute masks and raw
+intensity retention are planned.
+
 ## No cross-CRS reprojection
 
 Unchanged from prior releases. Scans must share a coordinate reference system to

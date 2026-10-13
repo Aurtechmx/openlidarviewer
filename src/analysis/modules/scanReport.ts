@@ -342,7 +342,14 @@ export const scanReport: AnalysisModule = {
       ...draw,
       // Attribute coverage.
       rowInfo('RGB', cloud.colors !== undefined ? 'Yes' : 'No'),
-      rowInfo('Intensity', cloud.intensity !== undefined ? 'Yes' : 'No'),
+      rowInfo(
+        'Intensity',
+        cloud.intensity === undefined
+          ? 'No'
+          : cloud.metadata?.intensityNormalisation?.rescaled
+            ? 'Yes (normalised to 0–65535 for display, not calibrated reflectance)'
+            : 'Yes',
+      ),
     );
     // A cloud can carry the classification dimension while every point is still
     // unassigned (ASPRS 0 = never classified, 1 = unclassified). A bare "Yes"

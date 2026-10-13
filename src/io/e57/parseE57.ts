@@ -64,6 +64,8 @@ export interface E57ScanData {
   declaration?: E57Scan;
   /** Rigid-body placement in the file's global frame, or null for identity. */
   pose: E57Pose | null;
+  /** Set when the scan's pose cannot be used (`E57Scan.poseRefused`); the loader skips the scan. */
+  poseRefused?: string;
   /** Per-channel colour range for 0–255 normalisation, or null. */
   colorLimits: E57ColorLimits | null;
   /** Declared intensity limits, or null. */
@@ -86,8 +88,8 @@ export interface E57ParseResult {
    */
   sourceMetadata: E57SourceMetadata | null;
   /**
-   * Non-fatal anomalies found while interpreting the file (a normalised or
-   * degenerate pose quaternion, for example). The loader surfaces these as
+   * Non-fatal anomalies found while interpreting the file (a normalised pose
+   * quaternion, for example). The loader surfaces these as
    * user-visible load warnings.
    */
   warnings: string[];
@@ -179,6 +181,7 @@ export function parseE57(buffer: ArrayBuffer, opts?: ParseE57Options): E57ParseR
       fields: scan.prototype,
       declaration: scan,
       pose: scan.pose,
+      ...(scan.poseRefused ? { poseRefused: scan.poseRefused } : {}),
       colorLimits: scan.colorLimits,
       intensityLimits: scan.intensityLimits,
       columns: decodeCompressedVector(

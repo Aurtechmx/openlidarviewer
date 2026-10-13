@@ -3,9 +3,12 @@
  *
  * The rotation formula downstream assumes a UNIT quaternion: a non-unit one
  * silently scales the merged geometry and a zero one collapses it. readPose
- * therefore normalises finite non-unit quaternions (with a warning) and
- * substitutes the identity for degenerate ones (with a warning). Pinned here
- * against hand-written XML so the policy cannot regress silently.
+ * therefore normalises finite non-unit quaternions (with a warning). A
+ * degenerate quaternion, or a rotation component that is present but not a
+ * finite number, refuses the scan's placement (`poseRefused`) instead of
+ * substituting a guessed rotation; the loader skips that scan. A component
+ * that is absent takes its default. Pinned here against hand-written XML so
+ * the policy cannot regress silently.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -61,15 +64,38 @@ describe('readPose — quaternion validation policy', () => {
     expect(doc.warnings).toHaveLength(1);
   });
 
-  it('substitutes the identity for a zero quaternion, with a warning', () => {
+  it('refuses a zero quaternion instead of substituting the identity', () => {
     const doc = readE57Document(parseXml(docWith(poseXml(0, 0, 0, 0))));
-    expect(doc.scans[0].pose?.rotation).toEqual([1, 0, 0, 0]);
-    // Translation survives — only the rotation was unusable.
-    expect(doc.scans[0].pose?.translation).toEqual([1, 2, 3]);
-    expect(doc.warnings).toHaveLength(1);
-    expect(doc.warnings[0]).toMatch(/"roof"/);
-    expect(doc.warnings[0]).toMatch(/degenerate/);
-    expect(doc.warnings[0]).toMatch(/identity/);
+    expect(doc.scans[0].pose).toBeNull();
+    expect(doc.scans[0].poseRefused).toMatch(/degenerate/);
+    // The loader reports the refusal when it skips the scan.
+    expect(doc.warnings).toEqual([]);
+  });
+
+  it('refuses a rotation component that is present but not a number', () => {
+    const xml = poseXml(1, 0, 0, 0).replace('<x type="Float">0</x>', '<x type="Float">abc</x>');
+    const doc = readE57Document(parseXml(docWith(xml)));
+    expect(doc.scans[0].pose).toBeNull();
+    expect(doc.scans[0].poseRefused).toMatch(/rotation x/);
+    expect(doc.scans[0].poseRefused).toMatch(/"abc"/);
+  });
+
+  it('refuses a NaN rotation component', () => {
+    const doc = readE57Document(parseXml(docWith(poseXml(NaN, 0, 0, 0))));
+    expect(doc.scans[0].pose).toBeNull();
+    expect(doc.scans[0].poseRefused).toMatch(/rotation w/);
+  });
+
+  it('defaults rotation components that are absent', () => {
+    const xml =
+      '<pose type="Structure"><rotation type="Structure"><z type="Float">1</z></rotation>' +
+      '<translation type="Structure"><x type="Float">1</x></translation></pose>';
+    const doc = readE57Document(parseXml(docWith(xml)));
+    // w defaults to 1, x/y to 0: [1, 0, 0, 1] has norm √2 and is normalised.
+    expect(doc.scans[0].poseRefused).toBeUndefined();
+    expect(doc.scans[0].pose?.rotation[0]).toBeCloseTo(Math.SQRT1_2);
+    expect(doc.scans[0].pose?.rotation[3]).toBeCloseTo(Math.SQRT1_2);
+    expect(doc.scans[0].pose?.translation).toEqual([1, 0, 0]);
   });
 
   it('emits no warnings for a scan without a pose', () => {

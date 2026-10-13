@@ -20,7 +20,7 @@ import type { E57DecodePlan } from './loadPlan';
 import { formatByteSize } from './formatByteSize';
 import { LoadError } from './loadErrors';
 import { PointCloud } from '../model/PointCloud';
-import type { CloudMetadata } from '../model/PointCloud';
+import type { CloudMetadata, IntensityScanMapping } from '../model/PointCloud';
 import { declaredCaptureFromSourceMetadata } from '../diagnostics/declaredCapture';
 import { sanitizeAndRecenter } from './sanitizeCloud';
 import { remapFrames } from './organizedRangeRemap';
@@ -45,6 +45,25 @@ function clampU16(v: number): number {
   return Math.round(v);
 }
 
+/** Scans named in a load warning before the rest are counted. */
+const SCANS_NAMED = 5;
+
+/** `"A", "B"` (and N more), for a load warning. */
+function scanList(scans: readonly E57ScanData[]): string {
+  const named = scans.slice(0, SCANS_NAMED).map((s) => `"${s.name}"`).join(', ');
+  const more = scans.length - SCANS_NAMED;
+  return more > 0 ? `${named} and ${more} more` : named;
+}
+
+/** The affine intensity map for one scan, and the rule that produced it. */
+interface IntensityMap {
+  scale: number;
+  bias: number;
+  rule: IntensityScanMapping['rule'];
+  minimum?: number;
+  maximum?: number;
+}
+
 /**
  * The affine map `v → v · scale + bias` that takes a scan's raw intensity to
  * the 0–65535 store.
@@ -59,17 +78,25 @@ function clampU16(v: number): number {
  * (observed max ≤ 1, common for float intensity) is scaled by 65535; a wider
  * range is taken as a raw value and only clamped.
  */
-function intensityMapFor(scan: E57ScanData): { scale: number; bias: number } {
+function intensityMapFor(scan: E57ScanData): IntensityMap {
   const col = scan.columns.intensity;
-  if (!col) return { scale: 1, bias: 0 };
+  if (!col) return { scale: 1, bias: 0, rule: 'raw' };
   const lim = scan.intensityLimits;
   if (lim && lim.maximum > lim.minimum) {
     const scale = 65535 / (lim.maximum - lim.minimum);
-    return { scale, bias: -lim.minimum * scale };
+    return { scale, bias: -lim.minimum * scale, rule: 'declared-limits', minimum: lim.minimum, maximum: lim.maximum };
   }
+  // A value the file flags invalid (`isIntensityInvalid` ≠ 0) is not a
+  // measurement, so it does not decide the observed range.
+  const flagged = scan.columns.isIntensityInvalid;
   let max = 0;
-  for (const v of col) if (v > max) max = v;
-  return { scale: max > 0 && max <= 1 ? 65535 : 1, bias: 0 };
+  for (let i = 0; i < col.length; i++) {
+    if (flagged && flagged[i] !== 0) continue;
+    if (col[i] > max) max = col[i];
+  }
+  return max > 0 && max <= 1
+    ? { scale: 65535, bias: 0, rule: 'observed-unit-range', maximum: max }
+    : { scale: 1, bias: 0, rule: 'raw' };
 }
 
 /** One colour channel's map to 0–255: (v − min) / (max − min) · 255, or identity without a range. */
@@ -329,21 +356,39 @@ export async function loadE57(
   // skipping its points left `total − written` phantom points frozen at the
   // local origin (the pre-v0.5.4 behaviour) — silent data corruption. The
   // skipped scan is named in a load warning so the user knows the merged
-  // cloud is a subset of the file. Parser-level anomalies (a normalised or
-  // degenerate pose quaternion) ride the same channel.
+  // cloud is a subset of the file. A scan whose pose the schema refused is
+  // skipped and named the same way, and parser-level anomalies (a normalised
+  // pose quaternion) ride the same channel.
   const warnings: string[] = [...parsed.warnings];
   const scans: E57ScanData[] = [];
+  const unplaced: E57ScanData[] = [];
   for (const scan of parsed.scans) {
     const col = scan.columns;
-    if (col.cartesianX && col.cartesianY && col.cartesianZ) {
-      scans.push(scan);
-    } else {
+    if (!(col.cartesianX && col.cartesianY && col.cartesianZ)) {
       warnings.push(
         `Scan "${scan.name}" carries no Cartesian X/Y/Z (spherical-only scans ` +
           `are not supported) — skipped ${scan.declaredRecordCount.toLocaleString('en-US')} ` +
           `point record(s).`,
       );
+    } else if (scan.poseRefused) {
+      // No rotation is substituted for one the file wrote but that cannot be
+      // used: any substitute would place the scan wrongly.
+      unplaced.push(scan);
+      warnings.push(
+        `Scan "${scan.name}" skipped: its ${scan.poseRefused}, so it cannot be placed — ` +
+          `${scan.declaredRecordCount.toLocaleString('en-US')} point record(s) not loaded.`,
+      );
+    } else {
+      scans.push(scan);
     }
+  }
+  if (scans.length === 0 && unplaced.length > 0) {
+    throw new LoadError(
+      'malformed-file',
+      `E57: no scan could be placed. ${unplaced
+        .map((s) => `Scan "${s.name}": ${s.poseRefused}.`)
+        .join(' ')}`,
+    );
   }
 
   // An attribute is merged only when every MERGED scan provides it — a skipped
@@ -360,12 +405,29 @@ export async function loadE57(
     if (cols[bare]) return bare;
     return Object.keys(cols).find((k) => localName(k) === bare);
   };
-  const hasColor = has('colorRed') && has('colorGreen') && has('colorBlue');
+  const carries: Record<'colour' | 'intensity' | 'classification' | 'normals', (s: E57ScanData) => boolean> = {
+    colour: (s) => !!(s.columns.colorRed && s.columns.colorGreen && s.columns.colorBlue),
+    intensity: (s) => s.columns.intensity !== undefined,
+    classification: (s) => s.columns.classification !== undefined,
+    normals: (s) => !!(normalKey(s.columns, 'X') && normalKey(s.columns, 'Y') && normalKey(s.columns, 'Z')),
+  };
+  const hasColor = scans.every(carries.colour);
   const hasIntensity = has('intensity');
   const hasClassification = has('classification');
-  const hasNormals = scans.every(
-    (s) => normalKey(s.columns, 'X') && normalKey(s.columns, 'Y') && normalKey(s.columns, 'Z'),
-  );
+  const hasNormals = scans.every(carries.normals);
+  // A channel some merged scans carry and others lack is dropped from the whole
+  // cloud. Say so, naming the scans that lack it. Per-point availability masks,
+  // which would keep the channel for the scans that have it, are future work.
+  for (const [channel, carried] of Object.entries(carries)) {
+    const lacking = scans.filter((s) => !carried(s));
+    if (lacking.length > 0 && lacking.length < scans.length) {
+      warnings.push(
+        `The ${channel} channel is dropped from the merged cloud: ` +
+          `${lacking.length === 1 ? 'scan' : 'scans'} ${scanList(lacking)} ` +
+          `${lacking.length === 1 ? 'does' : 'do'} not carry it.`,
+      );
+    }
+  }
 
   let total = 0;
   for (const scan of scans) total += countValid(scan);
@@ -399,6 +461,8 @@ export async function loadE57(
   // Pre-sanitation ranges: `w` only ever increments here, so a scan's
   // survivors are already contiguous before sanitation runs (O0 §2.1).
   const preStations: AcquisitionStation[] = [];
+  const intensityMappings: IntensityScanMapping[] = [];
+  let intensityRescaled = false;
   let scanOrdinal = 0;
   for (const scan of scans) {
     scanOrdinal++;
@@ -414,7 +478,25 @@ export async function loadE57(
     const cR = colorMapFor(scan.colorLimits?.red);
     const cG = colorMapFor(scan.colorLimits?.green);
     const cB = colorMapFor(scan.colorLimits?.blue);
-    const iMap = intensity ? intensityMapFor(scan) : { scale: 1, bias: 0 };
+    const iMap: IntensityMap = intensity ? intensityMapFor(scan) : { scale: 1, bias: 0, rule: 'raw' };
+    if (intensity) {
+      const { rule, minimum, maximum } = iMap;
+      intensityMappings.push({
+        scan: scan.name,
+        rule,
+        ...(minimum !== undefined ? { minimum } : {}),
+        ...(maximum !== undefined ? { maximum } : {}),
+      });
+      if (iMap.scale !== 1 || iMap.bias !== 0) intensityRescaled = true;
+    }
+    // Per-point attribute flags. The cloud has no per-point "unavailable"
+    // representation for colour or intensity (per-point attribute masks are
+    // future work), so a flagged point keeps its geometry and the value the
+    // file wrote; it is counted and reported, never rewritten as a zero.
+    const colourFlags = colors ? col.isColorInvalid : undefined;
+    const intensityFlags = intensity ? col.isIntensityInvalid : undefined;
+    let colourFlagged = 0;
+    let intensityFlagged = 0;
     // Resolve the (possibly namespaced) normal columns once per scan, not per
     // point. `hasNormals` guarantees all three keys resolve on every merged scan.
     const nX = normals ? col[normalKey(col, 'X')!] : undefined;
@@ -431,6 +513,8 @@ export async function loadE57(
         continue;
       }
       grid?.place(i, w);
+      if (colourFlags && colourFlags[i] !== 0) colourFlagged++;
+      if (intensityFlags && intensityFlags[i] !== 0) intensityFlagged++;
 
       let px = cx[i];
       let py = cy[i];
@@ -476,6 +560,17 @@ export async function loadE57(
         normals[w * 3 + 2] = nz;
       }
       w++;
+    }
+    if (colourFlagged > 0 || intensityFlagged > 0) {
+      const parts = [
+        ...(colourFlagged > 0 ? [`${colourFlagged.toLocaleString('en-US')} point(s) with invalid colour`] : []),
+        ...(intensityFlagged > 0 ? [`${intensityFlagged.toLocaleString('en-US')} point(s) with invalid intensity`] : []),
+      ];
+      warnings.push(
+        `Scan "${scan.name}" flags ${parts.join(' and ')}. Their positions are kept; ` +
+          `the flagged values are shown as the file wrote them but are not measurements` +
+          `${intensityFlagged > 0 ? ', and flagged intensity is left out of the observed intensity range' : ''}.`,
+      );
     }
     preStations.push({
       id: `scan-${scanOrdinal}`,
@@ -602,6 +697,9 @@ export async function loadE57(
     loadStride: stride,
     metadata: {
       ...e57Metadata(parsed.metadata, parsed.sourceMetadata, scans.length, warnings),
+      ...(clean.attributes.intensity
+        ? { intensityNormalisation: { rescaled: intensityRescaled, scans: intensityMappings } }
+        : {}),
       e57FullDecodeEstimateBytes: plan.fullDecodeEstimateBytes,
     },
   });
