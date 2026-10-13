@@ -1,101 +1,272 @@
-/*
- * v0.3.9 Theme system — Light + High-contrast.
- *
- * The :root palette above is the Dark default. Switching themes is
- * a body-class swap (`olv-theme-light` / `olv-theme-high-contrast`)
- * that overrides the same CSS variables — no per-component
- * rewrites, no JS-side colour poking. See `src/ui/themes.ts` for
- * the pure registry and the persistence path.
- *
- * Light theme — inverted background, preserved cyan accent. Tuned
- * for office-lighting readability: panels lift to a near-white,
- * text drops to a near-black, hairlines deepen to a visible
- * indigo, and the accent stays the brand's electric-blue so a
- * returning user reads the same affordances.
- */
-body.olv-theme-light {
-  --lab-frame: var(--lab-frame-on-light);
-  --lab-caveat-ink: var(--lab-caveat-ink-on-light);
-  --lab-caveat-fill: var(--lab-caveat-fill-on-light);
-  color-scheme: light;
-  --bg: #f4f6fb;
-  --panel: #ffffff;
-  --hairline: rgba(35, 60, 110, 0.20);
-  --text: #0a1430;
-  --text-dim: #46546e;
-  --text-faint: #5d6a87; /* darkened from #7682a0 to clear WCAG AA (≥4.5:1) on the light --bg */
-  --warn: #7d5b07; /* darkened from #b8860b, which read 2.9:1 on the near-white caption fill */
-  --accent: #0088c8;
-  --accent-soft: rgba(0, 136, 200, 0.18);
-  /* The phone sheet and dock follow the theme surface. */
-  --m-glass-raised: var(--panel);
-  /* Deeper violet so the blocked verdict stays legible on the near-white panel. */
-  --rating-blocked: #7c3aed;
-  /* The rest of the readiness scale, darkened the same way as --rating-blocked
-   * above: the :root values are tuned for the near-black dark --bg and read
-   * 1.4:1-2.6:1 here, well under the 4.5:1 AA floor this rail otherwise holds.
-   * Hue order (green > green > amber > orange > red) is preserved; each value
-   * clears 4.5:1 on both --bg and --panel with headroom. */
-  --rating-excellent: #1a7856;
-  --rating-strong: #247b41;
-  --rating-good: #896303;
-  --rating-moderate: #ac4f04;
-  --rating-weak: #d50b0b;
-  /*
-   * v0.4.6 two-tier surfaces in Light. The default --panel is pure
-   * white, so a RAISED surface must read by going *up* (it can't —
-   * white is the ceiling) — instead it stays crisp white and earns a
-   * firmer edge + lift shadow, while RECESSIVE panels drop to the
-   * page tint so the rank survives on near-white. WCAG AA holds: text
-   * tokens are unchanged and both fills stay light.
-   */
-  --panel-raised: #ffffff;
-  --panel-recessive: rgba(244, 246, 251, 0.72); /* the --bg tint — recedes against white raised */
-  --shadow-raised: 0 8px 22px -12px rgba(30, 50, 95, 0.28), 0 0 0 0.5px rgba(35, 60, 110, 0.10);
-  --hairline-strong: rgba(35, 60, 110, 0.34);
-  --caveat-tint: color-mix(in srgb, var(--rating-good) 16%, white);
-  /* Near-white ground: the same three layers, pitched down so a floating card
-     separates without printing a grey halo on the page. */
-  --shadow-floating:
-    0 0 0 0.5px rgba(35, 60, 110, 0.16),
-    0 4px 10px -4px rgba(30, 50, 95, 0.14),
-    0 16px 34px -18px rgba(30, 50, 95, 0.26);
+/* Interface palettes. Blue is the :root default in 01-tokens.css and takes no
+ * body class. Field and High contrast override the same role tokens and the
+ * same literal bridges (`--ui-*`), so a component that reads a token follows
+ * all three. These are interface palettes only: data colormaps, legend ramps,
+ * RGB appearance presets and report themes are separate and unchanged. */
+
+/* Field: graphite surfaces, off-white type, teal interaction accents and a
+ * warm caution ink. Every text and status ink clears 4.5:1 on --bg, --panel
+ * and --panel-raised (tests/fieldPalette.test.ts). */
+body.olv-theme-field {
+  color-scheme: dark;
+  --ui-surface-tint: #222629;
+  --ui-edge-tint: #9fb8b4;
+  --bg: #1c2127;
+  --panel: #262e30;
+  --panel-raised: #303a3b;
+  --panel-recessive: color-mix(in srgb, var(--ui-surface-tint) 92%, transparent);
+  --text: #f4f7f6;
+  --text-dim: #c2ceca;
+  --text-faint: #a9b9b4;
+  --hairline: color-mix(in srgb, var(--ui-edge-tint) 25%, transparent);
+  --hairline-strong: color-mix(in srgb, var(--ui-edge-tint) 50%, transparent);
+  --accent: #8fe0d5;
+  --accent-text: var(--accent);
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --focus-ring: 2px solid var(--accent);
+  --on-accent: #1c2127;
+  --cyan: var(--accent);
+  --teal: var(--accent);
+  --ice: #d1e8e2;
+  --brand-gradient: linear-gradient(90deg, var(--accent), var(--ice));
+  --warn: #ffcb9a;
+  --rating-excellent: #a6d86d;
+  --rating-strong: #a1dfb8;
+  --rating-good: #f2cf86;
+  --rating-moderate: #ffbc86;
+  --rating-weak: #ffabab;
+  --rating-blocked: #ddc0fa;
+  --state-withheld: #f6b6d4;
+  --hover-wash: color-mix(in srgb, var(--ice) 6%, transparent);
+  --m-glass-raised: var(--panel-raised);
+  --lab-frame: var(--hairline-strong);
+  --lab-caveat-ink: var(--warn);
+  --lab-caveat-fill: color-mix(in srgb, var(--warn) 12%, transparent);
+  --lab-glow: color-mix(in srgb, var(--accent) 20%, transparent);
+  --shadow-raised: 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+  --shadow-floating: 0 0 0 1px color-mix(in srgb, var(--ui-edge-tint) 20%, transparent), 0 12px 32px -12px rgba(0, 0, 0, 0.5);
+  --caveat-tint: color-mix(in srgb, var(--rating-good) 12%, transparent);
+  /* Literal bridges: the same opacity steps as Blue, in Field's hues. */
+  --stage-ui-background: radial-gradient(ellipse at 50% 45%, var(--panel-raised) 0%, var(--ui-surface-tint) 70%, var(--bg) 100%);
+  --ui-surface-11-17-33-a-0p92: color-mix(in srgb, var(--ui-surface-tint) 92%, transparent);
+  --ui-surface-10-14-26-a-0p92: color-mix(in srgb, var(--ui-surface-tint) 92%, transparent);
+  --ui-surface-11-17-33-a-0p82: color-mix(in srgb, var(--ui-surface-tint) 82%, transparent);
+  --ui-surface-11-17-33-a-0p86: color-mix(in srgb, var(--ui-surface-tint) 86%, transparent);
+  --ui-surface-11-17-33-a-0p9: color-mix(in srgb, var(--ui-surface-tint) 90%, transparent);
+  --ui-surface-11-17-33-a-0p94: color-mix(in srgb, var(--ui-surface-tint) 94%, transparent);
+  --ui-surface-8-13-20-a-0p82: color-mix(in srgb, var(--ui-surface-tint) 82%, transparent);
+  --ui-surface-8-13-20-a-0p9: color-mix(in srgb, var(--ui-surface-tint) 90%, transparent);
+  --ui-surface-8-13-26-a-0p94: color-mix(in srgb, var(--ui-surface-tint) 94%, transparent);
+  --ui-surface-11-17-33-a-0p55: color-mix(in srgb, var(--ui-surface-tint) 55%, transparent);
+  --ui-surface-11-17-33-a-0p96: color-mix(in srgb, var(--ui-surface-tint) 96%, transparent);
+  --ui-surface-6-10-20-a-0p66: color-mix(in srgb, var(--ui-surface-tint) 66%, transparent);
+  --ui-surface-6-10-20-a-0p5: color-mix(in srgb, var(--ui-surface-tint) 50%, transparent);
+  --ui-surface-11-17-33-a-0p78: color-mix(in srgb, var(--ui-surface-tint) 78%, transparent);
+  --ui-surface-5-8-16-a-0p66: color-mix(in srgb, var(--ui-surface-tint) 66%, transparent);
+  --ui-accent-a0p55: color-mix(in srgb, var(--accent) 55%, transparent);
+  --ui-surface-8-14-28-a0p66: color-mix(in srgb, var(--ui-surface-tint) 66%, transparent);
+  --ui-accent-a0p10: color-mix(in srgb, var(--accent) 10%, transparent);
+  --ui-accent-a0p3: color-mix(in srgb, var(--accent) 30%, transparent);
+  --ui-accent-a0p045: color-mix(in srgb, var(--accent) 4.5%, transparent);
+  --ui-accent-a0p42: color-mix(in srgb, var(--accent) 42%, transparent);
+  --ui-accent-a0p4: color-mix(in srgb, var(--accent) 40%, transparent);
+  --ui-accent-a0p08: color-mix(in srgb, var(--accent) 8%, transparent);
+  --ui-accent-a0p16: color-mix(in srgb, var(--accent) 16%, transparent);
+  --ui-accent-a0p34: color-mix(in srgb, var(--accent) 34%, transparent);
+  --ui-accent-a0p22: color-mix(in srgb, var(--accent) 22%, transparent);
+  --ui-accent-a0p6: color-mix(in srgb, var(--accent) 60%, transparent);
+  --ui-accent-a0p24: color-mix(in srgb, var(--accent) 24%, transparent);
+  --ui-accent-a0p28: color-mix(in srgb, var(--accent) 28%, transparent);
+  --ui-accent-a0p65: color-mix(in srgb, var(--accent) 65%, transparent);
+  --ui-surface-deep: var(--bg);
+  --ui-accent-a0p98: color-mix(in srgb, var(--accent) 98%, transparent);
+  --ui-accent-a0p12: color-mix(in srgb, var(--accent) 12%, transparent);
+  --ui-accent-a0p38: color-mix(in srgb, var(--accent) 38%, transparent);
+  --ui-edge-a0p42: color-mix(in srgb, var(--ui-edge-tint) 42%, transparent);
+  --ui-accent-a0p14: color-mix(in srgb, var(--accent) 14%, transparent);
+  --ui-accent-a0p5: color-mix(in srgb, var(--accent) 50%, transparent);
+  --ui-accent-solid: var(--accent);
+  --ui-accent-a0p32: color-mix(in srgb, var(--accent) 32%, transparent);
+  --ui-accent-a0p85: color-mix(in srgb, var(--accent) 85%, transparent);
+  --ui-accent-a0p04: color-mix(in srgb, var(--accent) 4%, transparent);
+  --ui-accent-a0p20: color-mix(in srgb, var(--accent) 20%, transparent);
+  --ui-accent-a0p18: color-mix(in srgb, var(--accent) 18%, transparent);
+  --ui-surface-8-14-28-a0p95: color-mix(in srgb, var(--ui-surface-tint) 95%, transparent);
+  --ui-surface-8-14-28-a1: var(--ui-surface-tint);
 }
 
-/*
- * High-contrast theme — maximum readability for low-vision users.
- * Pure black background, pure white text, every hairline becomes a
- * solid 1 px border at full opacity. WCAG AA on every text-on-bg
- * pair (text 21:1, dim 12.6:1, faint 4.6:1).
- */
+/* High contrast: a pure black page, opaque surfaces, solid white edges and a
+ * thick yellow focus ring. Text, icon, status and accent inks clear 7:1 on
+ * every surface, and the filled primary action clears 7:1
+ * (tests/themeHighContrast.test.ts). Status still reads by its word and
+ * icon; colour only reinforces it. This is a strong palette for low vision,
+ * not a certified accessibility mode; the operating system's forced colours
+ * (99z-forced-colors.css) remain the final override. */
 body.olv-theme-high-contrast {
-  --lab-frame: var(--text);
-  --lab-caveat-fill: transparent;
   color-scheme: dark;
   --bg: #000000;
   --panel: #0a0a0a;
-  --hairline: rgba(255, 255, 255, 0.55);
+  --panel-raised: #161616;
+  --panel-recessive: var(--panel);
   --text: #ffffff;
-  --text-dim: #d9d9d9;
-  --text-faint: #b3b3b3;
-  --warn: #f0b429; /* brightened for this rail: 8.8:1 on the caption fill, 10.6:1 on --panel */
-  --accent: #5cd7ff;
-  --accent-soft: rgba(92, 215, 255, 0.28);
-  /* Bright violet — high luminance against pure black, holds WCAG AA. */
-  --rating-blocked: #d8b4fe;
-  /*
-   * v0.4.6 two-tier surfaces in High-contrast. The palette is
-   * intentionally flattened, so the rank is carried by a FULL-opacity
-   * border (not fill alpha) on the raised surface and a near-black
-   * recessive fill — the verdict still reads by its word + colour, per
-   * the audit's high-contrast rule. Caveat keeps a solid full-strength
-   * rule so it never disappears.
-   */
-  --panel-raised: #141414;
-  --panel-recessive: #050505;
+  --text-dim: #e8e8e8;
+  --text-faint: #d0d0d0;
+  --hairline: #bdbdbd;
+  --hairline-strong: #ffffff;
+  --accent: #66dcff;
+  --accent-text: var(--accent);
+  --hc-accent-wash: #0d2f3a;
+  /* Modal and palette backdrops: a dark scrim, the one translucent layer. */
+  --hc-scrim: rgba(0, 0, 0, 0.85);
+  --accent-soft: var(--hc-accent-wash);
+  --on-accent: #000000;
+  --hc-focus: #ffe14d;
+  --focus-ring: 3px solid var(--hc-focus);
+  --focus-ring-offset: 2px;
+  --cyan: var(--accent);
+  --teal: var(--accent);
+  --ice: var(--text);
+  --brand-gradient: linear-gradient(90deg, var(--accent), var(--accent));
+  --warn: #ffd34d;
+  --rating-excellent: #6ff0a8;
+  --rating-strong: #b4f5d4;
+  --rating-good: #ffd34d;
+  --rating-moderate: #ffb877;
+  --rating-weak: #ffa3a3;
+  --rating-blocked: #dcbcff;
+  --state-withheld: #ffb0dc;
+  --hover-wash: #262626;
+  --m-glass: var(--panel);
+  --m-glass-raised: var(--panel-raised);
+  --m-edge: var(--hairline);
+  --m-edge-strong: var(--accent);
+  --m-active-glow: transparent;
+  --m-accent-1: var(--accent);
+  --m-accent-2: var(--accent);
+  --m-accent-grad: linear-gradient(135deg, var(--accent), var(--accent));
+  --m-on: var(--rating-excellent);
+  --m-glass-shadow: none;
+  --m-chrome-lift: none;
+  --lab-frame: var(--text);
+  --lab-caveat-ink: var(--warn);
+  --lab-caveat-fill: transparent;
+  --lab-glow: transparent;
   --shadow-raised: none;
-  --hairline-strong: rgba(255, 255, 255, 0.85);
-  --caveat-tint: rgba(250, 204, 21, 0.16);
+  --shadow-floating: 0 0 0 2px var(--hairline-strong);
+  --caveat-tint: #2b2408;
+  /* Literal bridges: opaque surfaces, solid accent edges, opaque washes, no glow. */
+  --stage-ui-background: var(--bg);
+  --ui-surface-11-17-33-a-0p92: var(--panel);
+  --ui-surface-10-14-26-a-0p92: var(--panel);
+  --ui-surface-11-17-33-a-0p82: var(--panel);
+  --ui-surface-11-17-33-a-0p86: var(--panel);
+  --ui-surface-11-17-33-a-0p9: var(--panel);
+  --ui-surface-11-17-33-a-0p94: var(--panel);
+  --ui-surface-8-13-20-a-0p82: var(--panel);
+  --ui-surface-8-13-20-a-0p9: var(--panel);
+  --ui-surface-8-13-26-a-0p94: var(--panel);
+  --ui-surface-11-17-33-a-0p55: var(--hc-scrim);
+  --ui-surface-11-17-33-a-0p96: var(--panel);
+  --ui-surface-6-10-20-a-0p66: var(--hc-scrim);
+  --ui-surface-6-10-20-a-0p5: var(--hc-scrim);
+  --ui-surface-11-17-33-a-0p78: var(--panel);
+  --ui-surface-5-8-16-a-0p66: var(--hc-scrim);
+  --ui-accent-a0p55: var(--accent);
+  --ui-surface-8-14-28-a0p66: var(--hc-scrim);
+  --ui-accent-a0p10: var(--hc-accent-wash);
+  --ui-accent-a0p3: var(--accent);
+  --ui-accent-a0p045: var(--hc-accent-wash);
+  --ui-accent-a0p42: var(--accent);
+  --ui-accent-a0p4: var(--accent);
+  --ui-accent-a0p08: var(--hc-accent-wash);
+  --ui-accent-a0p16: var(--hc-accent-wash);
+  --ui-accent-a0p34: var(--accent);
+  --ui-accent-a0p22: var(--accent);
+  --ui-accent-a0p6: var(--accent);
+  --ui-accent-a0p24: var(--hc-accent-wash);
+  --ui-accent-a0p28: var(--accent);
+  --ui-accent-a0p65: var(--accent);
+  --ui-surface-deep: var(--on-accent);
+  --ui-accent-a0p98: var(--accent);
+  --ui-accent-a0p12: var(--bg);
+  --ui-accent-a0p38: var(--bg);
+  --ui-edge-a0p42: var(--hairline-strong);
+  --ui-accent-a0p14: var(--hc-accent-wash);
+  --ui-accent-a0p5: var(--accent);
+  --ui-accent-solid: var(--accent);
+  --ui-accent-a0p32: var(--accent);
+  --ui-accent-a0p85: var(--accent);
+  --ui-accent-a0p04: var(--hc-accent-wash);
+  --ui-accent-a0p20: var(--accent);
+  --ui-accent-a0p18: var(--hc-accent-wash);
+  --ui-surface-8-14-28-a0p95: var(--panel);
+  --ui-surface-8-14-28-a1: var(--on-accent);
+}
+
+/* Tokens that :root derives from other tokens resolve where they are declared,
+ * so each palette re-declares them against its own role tokens. */
+body.olv-theme-field,
+body.olv-theme-high-contrast {
+  --state-measured: var(--rating-excellent);
+  --state-preview: var(--rating-moderate);
+  --state-review: var(--rating-weak);
+  --state-blocked: var(--rating-blocked);
+  --state-derived: var(--accent);
+  --state-info: var(--text-dim);
+  --caveat-rule: var(--rating-good);
+}
+
+/* High-contrast component rules. Skipped under forced colours, which keeps
+ * the last word. Edges are 2 px solid on panels, inputs, buttons and menus;
+ * focus is a 3 px ring; blur and glow are removed so nothing softens an edge
+ * or the text behind it. */
+@media (forced-colors: none) {
+  body.olv-theme-high-contrast *,
+  body.olv-theme-high-contrast *::before,
+  body.olv-theme-high-contrast *::after {
+    text-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  body.olv-theme-high-contrast :is(button:not(.olv-viewcube-spot), select, textarea, input:not([type='range'], [type='checkbox'], [type='radio'], [type='color'], [type='file'])),
+  body.olv-theme-high-contrast :is([role='dialog'], [role='alertdialog'], [role='menu'], [role='listbox'], [role='tooltip'], [role='tablist'], dialog),
+  body.olv-theme-high-contrast :is(.olv-inspector, .olv-streaming-panel, .olv-left-panels > *, .olv-inspect-card, .olv-project-card,
+    .olv-shortcuts-card, .olv-tour-card, .olv-wfc-card, .olv-help-card, .olv-palette-card, .olv-modal, .olv-bc-dialog,
+    .olv-nav-hud, .olv-nav-prompt, .olv-nav-more-menu, .olv-quality-pop, .olv-probe-readout, .olv-measure-bar, .olv-measure-hint,
+    .olv-lasso-toast, .olv-toast, .olv-rvc, .olv-dock, .olv-rail-tab, .olv-right-rail-tab, .olv-mobile-sheet, .olv-result-card,
+    .olv-tip-layer, .olv-anno-editor, .olv-colorbar, .olv-layerhealth-card, .olv-ati, .olv-state-strip) {
+    border: 2px solid var(--hairline-strong);
+  }
+  body.olv-theme-high-contrast :is(table, th, td) {
+    border: 2px solid var(--hairline);
+    border-collapse: collapse;
+  }
+  body.olv-theme-high-contrast :is(button, select, input, textarea):disabled {
+    border-style: dashed;
+    border-color: var(--text-faint);
+    color: var(--text-faint);
+  }
+  /* States that a colour change alone would carry also take a solid outline. */
+  body.olv-theme-high-contrast :is(button, a, [role='tab'], [role='option'], [role='menuitem'], [role='menuitemradio'], [role='radio']):is(.is-active, .is-on, [aria-pressed='true'], [aria-selected='true'], [aria-current='true'], [aria-current='page']) {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  /* Active tools, tabs and tooltips drop their accent glow; the outline above
+     marks the state instead. */
+  body.olv-theme-high-contrast .olv-empty::before { display: none; }
+  body.olv-theme-high-contrast :is(.olv-tool, .olv-ws-tab, .olv-mode, .olv-msheet-tab, .olv-tip-layer, .olv-open-btn),
+  body.olv-theme-high-contrast :is(.olv-tool, .olv-ws-tab, .olv-mode, .olv-msheet-tab, .olv-open-btn):hover {
+    box-shadow: none;
+  }
+  /* Focus comes last so it is never hidden by a state outline. */
+  body.olv-theme-high-contrast :focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+    box-shadow: none;
+  }
+  body.olv-theme-high-contrast :is(input, select, textarea):focus-visible {
+    outline-offset: -3px;
+  }
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }

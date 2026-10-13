@@ -42,7 +42,7 @@ It is a viewer and an inspection tool, not a GIS or a survey-grade processing su
 - Measure distance, polyline, area, height, angle, slope, cross-section profile, and volume cut/fill, with editable points and JSON session export/import.
 - Run a confidence-aware DTM and contour pipeline: ground classification, gridded DTM with hold-out RMSE, surface models, and evidence-gated contour and DEM export.
 - Click any point to read its coordinates, intensity, classification, GPS time and colour. The Scan Intelligence panel summarises the dataset, and findings can be annotated and composed into multi-page PDF reports.
-- Switch themes (Dark / Light / High-contrast), drive everything from a command palette (`Cmd-K`), and work one-handed on mobile.
+- Switch interface themes (Blue / Field / High contrast), drive everything from a command palette (`Cmd-K`), and work one-handed on mobile.
 
 OpenLiDARViewer does not claim survey-grade measurement or support for every LiDAR format. Capabilities are described honestly (see [Limitations](#limitations) and the details below).
 
@@ -179,7 +179,7 @@ See [`docs/terrain-intelligence.md`](docs/terrain-intelligence.md), [`docs/valid
 <details>
 <summary><b>Interface & accessibility</b></summary>
 
-- Theme system (Dark, Light, High-contrast) with a persisted preference
+- Interface themes (Blue, Field, High contrast) with a persisted preference
 - A colourblind-safe (Okabe-Ito) classification palette, toggled from the Classes panel, so ground, vegetation, buildings, and water stay distinguishable under the common colour-vision deficiencies
 - Command palette (`Cmd-K` / `Ctrl-K`) for keyboard-first access to every tool, mode, theme, and export
 - Searchable shortcut sheet (`?`) listing every keybinding, plus a built-in help overlay

@@ -189,8 +189,8 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   width: 6px;
   height: 6px;
   border-radius: 1px;
-  background: var(--accent, #00b2ff);
-  box-shadow: 0 0 0 3px rgba(0, 178, 255, 0.18);
+  background: var(--accent, var(--ui-accent-solid));
+  box-shadow: 0 0 0 3px var(--ui-accent-a0p18);
   flex-shrink: 0;
 }
 .olv-getstarted-steps {
@@ -224,7 +224,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   height: 22px;
   border-radius: 50%;
   border: 1.5px solid rgba(255, 255, 255, 0.16);
-  background: rgba(8, 14, 28, 0.95);
+  background: var(--ui-surface-8-14-28-a0p95);
   display: grid;
   place-items: center;
   font-variant-numeric: tabular-nums;
@@ -261,13 +261,13 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 }
 /* Active state — "you are here" pulse on the dot + brighter title. */
 .olv-getstarted-step-active .olv-getstarted-dot {
-  border-color: var(--accent, #00b2ff);
-  color: var(--accent, #00b2ff);
-  background: rgba(0, 178, 255, 0.08);
-  box-shadow: 0 0 0 3px rgba(0, 178, 255, 0.16);
+  border-color: var(--accent, var(--ui-accent-solid));
+  color: var(--accent, var(--ui-accent-solid));
+  background: var(--ui-accent-a0p08);
+  box-shadow: 0 0 0 3px var(--ui-accent-a0p16);
 }
 .olv-getstarted-step-active .olv-getstarted-title {
-  color: var(--accent, #00b2ff);
+  color: var(--accent, var(--ui-accent-solid));
 }
 .olv-getstarted-step-active .olv-getstarted-sub {
   color: var(--text);
@@ -276,16 +276,16 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 /* Done state — filled accent dot; dim the title slightly so the active
  * "you are here" remains the loudest. */
 .olv-getstarted-step-done .olv-getstarted-dot {
-  background: var(--accent, #00b2ff);
-  border-color: var(--accent, #00b2ff);
-  color: rgba(8, 14, 28, 1);
+  background: var(--accent, var(--ui-accent-solid));
+  border-color: var(--accent, var(--ui-accent-solid));
+  color: var(--ui-surface-8-14-28-a1);
 }
 .olv-getstarted-step-done .olv-getstarted-title {
   color: var(--text);
 }
 @keyframes olv-getstarted-pulse {
-  0%, 100% { box-shadow: 0 0 0 3px rgba(0, 178, 255, 0.16); }
-  50%      { box-shadow: 0 0 0 6px rgba(0, 178, 255, 0.10); }
+  0%, 100% { box-shadow: 0 0 0 3px var(--ui-accent-a0p16); }
+  50%      { box-shadow: 0 0 0 6px var(--ui-accent-a0p10); }
 }
 @media (prefers-reduced-motion: reduce) {
   .olv-getstarted-step-active .olv-getstarted-dot { animation: none; }

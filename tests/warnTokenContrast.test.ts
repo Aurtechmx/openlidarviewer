@@ -60,9 +60,9 @@ const rails = read('src/styles/03-theme-rails.css');
 const RAILS: ReadonlyArray<{ name: string; warn: string; panel: string }> = [
   { name: 'default dark', warn: tokenIn(tokens, ':root', '--warn'), panel: '#0b1020' },
   {
-    name: 'light',
-    warn: tokenIn(rails, 'body.olv-theme-light', '--warn'),
-    panel: tokenIn(rails, 'body.olv-theme-light', '--panel'),
+    name: 'field',
+    warn: tokenIn(rails, 'body.olv-theme-field', '--warn'),
+    panel: tokenIn(rails, 'body.olv-theme-field', '--panel'),
   },
   {
     name: 'high contrast',

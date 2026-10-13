@@ -25,6 +25,7 @@ import {
   applyTheme,
   readPersistedTheme,
   writePersistedTheme,
+  isKnownThemeName, normalizeThemeName,
   type ThemeName,
 } from './ui/themes';
 import type { ShortcutSheet } from './ui/ShortcutSheet';
@@ -1302,10 +1303,8 @@ function dispatchWorkflowEvent(event: WorkflowEvent): void {
       navWiring.frameAll();
       break;
     case 'theme':
-      if (event.name === 'dark' || event.name === 'light' || event.name === 'high-contrast') {
-        // setTheme keeps the header toggle's icon in sync.
-        setTheme(event.name);
-      }
+      // Retired names (light) open their successor; setTheme keeps the header toggle in sync.
+      if (isKnownThemeName(event.name)) setTheme(normalizeThemeName(event.name));
       break;
     case 'tool': {
       const desired = event.on;

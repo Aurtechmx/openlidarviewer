@@ -105,7 +105,7 @@
   position: absolute; top: auto; left: auto; bottom: 14px; right: 14px;
   z-index: var(--z-raised);
   max-width: 320px; max-height: 60vh; overflow-y: auto;
-  background: rgba(10, 14, 26, 0.92);
+  background: var(--ui-surface-10-14-26-a-0p92);
   border: 0.5px solid var(--hairline);
   border-radius: var(--radius-md); padding: var(--space-lg) var(--space-xl);
   pointer-events: none;

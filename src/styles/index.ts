@@ -11,7 +11,7 @@
 
 import './01-tokens.css'; // Design tokens: brand palette, spacing scale, radii, motion, type scale (:root).
 import './02-overlays-chrome.css'; // Top-edge chrome and overlays: workflow-recorder badge, command palette, header theme toggle, full-screen toggle.
-import './03-theme-rails.css'; // Light and high-contrast theme rails. They override the base tokens, so they stay in place right after 01.
+import './03-theme-rails.css'; // Field and High contrast interface palettes. They override the base tokens, so they stay in place right after 01.
 import './10-stage.css'; // Stage container and canvas overlay.
 import './20-topbar.css'; // Top bar: brand mark and lock glyph.
 import './30-empty-state.css'; // Empty state: hero, splash, workflow rail, sample and tour, catalog panel, open-from-URL.

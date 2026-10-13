@@ -5,7 +5,7 @@
   position: absolute; inset: 0; z-index: var(--z-backdrop);
   display: flex; align-items: center; justify-content: center;
   padding: var(--space-4xl);
-  background: rgba(6, 10, 20, 0.66);
+  background: var(--ui-surface-6-10-20-a-0p66);
   -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
 }
 .olv-help-card {
@@ -68,7 +68,7 @@
   position: fixed; inset: 0; z-index: var(--z-modal);
   display: flex; align-items: center; justify-content: center;
   padding: var(--space-4xl);
-  background: rgba(6, 10, 20, 0.66);
+  background: var(--ui-surface-6-10-20-a-0p66);
   -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
 }
 .olv-modal {
@@ -115,7 +115,7 @@
 .olv-result-focus {
   /* A lighter, blurred scrim than the confirm modal so the isolated result
      still reads against a hint of the cloud behind it. */
-  background: rgba(6, 10, 20, 0.5);
+  background: var(--ui-surface-6-10-20-a-0p5);
   -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
 .olv-result-focus .olv-modal {
@@ -290,9 +290,9 @@
   /* Follows the cursor while the user orbits — it must never block a drag. */
   pointer-events: none;
   max-width: 232px;
-  background: rgba(11, 17, 33, 0.94);
+  background: var(--ui-surface-11-17-33-a-0p94);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  border: 0.5px solid rgba(0, 178, 255, 0.34);
+  border: 0.5px solid var(--ui-accent-a0p34);
   border-radius: var(--radius-md); padding: var(--space-md) var(--space-lg);
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
 }

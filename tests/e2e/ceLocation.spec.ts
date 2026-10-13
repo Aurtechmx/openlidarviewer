@@ -90,7 +90,7 @@ test.describe('location bar', () => {
   test('desktop: visible in every theme and under forced colours', async ({ page }) => {
     await openScan(page);
     await openToolPage(page, 'Measure');
-    for (const theme of ['Light theme', 'High contrast theme', 'Dark theme']) {
+    for (const theme of ['Field theme', 'High contrast theme', 'Blue theme']) {
       await page.keyboard.press('ControlOrMeta+KeyK');
       await page.locator('.olv-palette-input').fill(theme);
       await expect(page.locator('.olv-palette-row').first()).toContainText(theme);

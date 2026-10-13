@@ -125,15 +125,11 @@
    flare, two flat dotted rings with a band of light travelling round each (the
    two turn opposite ways), and a mirrored, tapering axis of dots lit outward
    from the centre. Brand tokens: --accent for the sphere and halo, --cyan for
-   the dots, --ice for highlights; the light theme uses its own --accent for
-   the dots. Transform and opacity only; one 2.8 s loop; nothing flashes. */
+   the dots, --ice for highlights; each interface palette sets all three.
+   Transform and opacity only; one 2.8 s loop; nothing flashes. */
 .olv-busy-scan--emblem {
   --olv-bse-dot: var(--cyan);
   --olv-bse-hi: var(--ice);
-}
-body.olv-theme-light .olv-busy-scan--emblem {
-  --olv-bse-dot: var(--accent);
-  --olv-bse-hi: var(--cyan);
 }
 .olv-bse-halo { fill: var(--accent); opacity: 0.16; }
 .olv-bse-streak { fill: var(--olv-bse-hi); opacity: 0.55; }

@@ -120,7 +120,7 @@ test.describe('workflow recorder — capture into a live session', () => {
     await pressRecordToggle(page);
     // Fire a few actions via the command palette so capture()
     // exercises each event type variant.
-    for (const query of ['Top view', 'Dark theme', 'Frame all']) {
+    for (const query of ['Top view', 'Blue theme', 'Frame all']) {
       await page.keyboard.press('ControlOrMeta+KeyK');
       await page.locator('.olv-palette-input').fill(query);
       await page.locator('.olv-palette-input').press('Enter');

@@ -76,7 +76,6 @@
 .olv-mode-reset:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .olv-mode-reset:active { transform: scale(0.94); }
 .olv-mode-reset svg { width: 18px; height: 18px; display: block; }
-body[data-theme="high-contrast"] .olv-mode-reset { border: 2px solid var(--accent); }
 
 /* "More" — the six axis views, in a popover above the row. */
 .olv-nav-more-wrap { position: relative; display: inline-flex; }
@@ -115,7 +114,7 @@ body[data-theme="high-contrast"] .olv-mode-reset { border: 2px solid var(--accen
 .olv-mode:active { transform: scale(0.95); }
 .olv-mode-active {
   color: var(--accent); background: var(--accent-soft);
-  box-shadow: inset 0 0 0 0.5px rgba(0, 178, 255, 0.4);
+  box-shadow: inset 0 0 0 0.5px var(--ui-accent-a0p4);
 }
 
 /* Speed slider — beside the selector, shown in Walk and Fly only. */
@@ -136,7 +135,7 @@ body[data-theme="high-contrast"] .olv-mode-reset { border: 2px solid var(--accen
 
 /* Controls HUD */
 .olv-nav-hud {
-  background: rgba(11, 17, 33,0.82);
+  background: var(--ui-surface-11-17-33-a-0p82);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border: 0.5px solid var(--hairline);
   border-radius: var(--radius-lg);
@@ -240,7 +239,7 @@ body[data-theme="high-contrast"] .olv-mode-reset { border: 2px solid var(--accen
 .olv-cam-chip:hover,
 .olv-nav-panel-toggle:hover {
   color: var(--text); border-color: var(--accent);
-  background: rgba(0, 178, 255, 0.08);
+  background: var(--ui-accent-a0p08);
 }
 .olv-cam-chip:active,
 .olv-nav-panel-toggle:active { transform: scale(0.96); }
@@ -251,8 +250,8 @@ body[data-theme="high-contrast"] .olv-mode-reset { border: 2px solid var(--accen
 .olv-cam-chip-key {
   font-family: var(--mono); font-size: var(--text-2xs);
   color: var(--accent);
-  background: rgba(0, 178, 255, 0.10);
-  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  background: var(--ui-accent-a0p10);
+  border: 0.5px solid var(--ui-accent-a0p3);
   border-radius: var(--radius-xs); padding: 1px var(--space-xs); min-width: 14px; text-align: center;
 }
 .olv-cam-chip-label { font-size: var(--text-xs); }
@@ -261,8 +260,8 @@ body[data-theme="high-contrast"] .olv-mode-reset { border: 2px solid var(--accen
 .olv-ortho-toggle.is-on,
 .olv-plan-toggle.is-on {
   color: var(--accent);
-  border-color: rgba(0, 178, 255, 0.55);
-  background: rgba(0, 178, 255, 0.16);
+  border-color: var(--ui-accent-a0p55);
+  background: var(--ui-accent-a0p16);
 }
 
 /* Centred "click to look" prompt */
@@ -270,9 +269,9 @@ body[data-theme="high-contrast"] .olv-mode-reset { border: 2px solid var(--accen
   position: absolute; top: 46%; left: 50%;
   transform: translate(-50%, -50%);
   display: flex; flex-direction: column; align-items: center; gap: var(--space-xs);
-  background: rgba(11, 17, 33,0.86);
+  background: var(--ui-surface-11-17-33-a-0p86);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  border: 0.5px solid rgba(0, 178, 255, 0.34);
+  border: 0.5px solid var(--ui-accent-a0p34);
   border-radius: 12px; padding: var(--space-xl) var(--space-4xl);
   font-size: var(--text-md); color: var(--text);
   pointer-events: none; /* clicks pass through to the canvas */
@@ -310,8 +309,8 @@ body[data-theme="high-contrast"] .olv-mode-reset { border: 2px solid var(--accen
 .olv-nav-prompt-sub { font-size: var(--text-xs); color: var(--text-faint); font-variant-numeric: tabular-nums; }
 
 @keyframes olv-prompt-breathe {
-  0%, 100% { border-color: rgba(0, 178, 255, 0.22); }
-  50% { border-color: rgba(0, 178, 255, 0.6); }
+  0%, 100% { border-color: var(--ui-accent-a0p22); }
+  50% { border-color: var(--ui-accent-a0p6); }
 }
 
 /* Utility — always wins over a component's own `display`. */

@@ -1,32 +1,20 @@
 /**
  * ThemeToggle.ts
  *
- * The v0.4.3 header theme control — a single, creative shape-morphing
- * button that lives in the top bar (relocated from the Inspector's
- * "Scan Intelligence" chip rail). One tap cycles the palette:
+ * The header theme control. One press cycles the interface palette:
  *
- *     Dark → Light → High-contrast → Dark
+ *     Blue → Field → High contrast → Blue
  *
- * It owns NO theming logic. The actual body-class swap + localStorage
- * persistence live in `themes.ts` / `main.ts`; this control just renders
- * the right icon, announces the current theme, and calls back `onChange`
- * with the NEXT theme when clicked. `setTheme(name)` lets an external
- * change (command palette, workflow replay, boot-time restore) keep the
- * button in sync WITHOUT re-firing `onChange` — same separation the old
- * chip rail used (`syncTheme` vs the click handler).
+ * It owns no theming logic: the body-class swap and persistence live in
+ * `themes.ts` / `main.ts`. This control renders the current icon, announces
+ * the current and next palette, and calls back `onChange` with the next one.
+ * `setTheme(name)` keeps it in sync with an external change (command palette,
+ * workflow replay, boot restore) without re-firing `onChange`. The button
+ * keeps keyboard focus after a press.
  *
- * The morph: three inline-SVG icon states are stacked in the same box —
- *   • dark           → a crescent moon,
- *   • light          → a sun (filled disc + rays),
- *   • high-contrast  → a split / half-filled circle (the classic
- *                      contrast glyph).
- * Only one carries `olv-theme-icon-active` at a time; CSS cross-fades the
- * incoming one in (opacity + a small scale/rotate) over `--dur-base`. A
- * clean cross-fade rather than a single morphing path keeps each glyph
- * crisp at ~18 px and avoids a brittle path-interpolation animation; the
- * `prefers-reduced-motion` guard in CSS drops the transition entirely.
- * Everything is drawn with `currentColor` so the icon inherits the header
- * text colour and stays visible in all three themes.
+ * One inline-SVG icon per palette is stacked in the same box; only the active
+ * one carries `olv-theme-icon-active` and CSS cross-fades it in. Icons use
+ * `currentColor`, so they follow the header text colour in every palette.
  */
 
 import { el } from './dom';
@@ -49,15 +37,10 @@ const ICON_SVG: Readonly<Record<ThemeName, string>> = {
   // Crescent moon — a disc with an offset disc punched out via even-odd.
   dark: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
 <path fill="currentColor" fill-rule="evenodd" d="M14.8 3.2a9 9 0 1 0 6 16.4A7.4 7.4 0 0 1 14.8 3.2Z"/></svg>`,
-  // Sun — a filled core disc ringed by eight rays.
-  light: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-<circle cx="12" cy="12" r="4.6" fill="currentColor"/>
-<g stroke="currentColor" stroke-width="2" stroke-linecap="round">
-<line x1="12" y1="1.6" x2="12" y2="4.2"/><line x1="12" y1="19.8" x2="12" y2="22.4"/>
-<line x1="1.6" y1="12" x2="4.2" y2="12"/><line x1="19.8" y1="12" x2="22.4" y2="12"/>
-<line x1="4.6" y1="4.6" x2="6.4" y2="6.4"/><line x1="17.6" y1="17.6" x2="19.4" y2="19.4"/>
-<line x1="4.6" y1="19.4" x2="6.4" y2="17.6"/><line x1="17.6" y1="6.4" x2="19.4" y2="4.6"/></g></svg>`,
-  // High-contrast — a circle with the right half filled (classic glyph).
+  // Terrain-line glyph for the Field palette.
+  field: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+<path d="M3 17 9 7l4 6 3-4 5 8M3 20h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  // High contrast — a circle with the right half filled (the contrast glyph).
   'high-contrast': `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
 <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/>
 <path fill="currentColor" d="M12 3a9 9 0 0 1 0 18Z"/></svg>`,
@@ -65,7 +48,7 @@ const ICON_SVG: Readonly<Record<ThemeName, string>> = {
 
 /** Build the rotating per-theme aria-label / tooltip text. */
 function describeLabel(name: ThemeName): string {
-  return `Theme: ${THEME_LABEL[name]} — click to change`;
+  return `Theme: ${THEME_LABEL[name]} — switch to ${THEME_LABEL[nextTheme(name)]}`;
 }
 
 export class ThemeToggle {
@@ -81,7 +64,7 @@ export class ThemeToggle {
 
     const button = el('button', {
       className: 'olv-theme-toggle',
-      tip: 'Cycle the interface theme (dark, light, high-contrast).',
+      tip: 'Cycle the interface palette: Blue, Field, High contrast.',
     }) as HTMLButtonElement;
     button.type = 'button';
 
@@ -98,7 +81,6 @@ export class ThemeToggle {
     }
 
     button.addEventListener('click', () => {
-      button.blur();
       const next = nextTheme(this._current);
       this._current = next;
       this._render();
@@ -135,7 +117,7 @@ export class ThemeToggle {
   }
 }
 
-/** The next theme in the Dark → Light → High-contrast → Dark cycle. */
+/** The next palette in the Blue → Field → High contrast → Blue cycle. */
 function nextTheme(current: ThemeName): ThemeName {
   const i = THEME_ORDER.indexOf(current);
   // Unknown value (shouldn't happen) falls back to the start of the cycle.

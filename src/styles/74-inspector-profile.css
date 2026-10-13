@@ -207,12 +207,12 @@
   border-color: rgba(255, 255, 255, 0.18);
 }
 .olv-mp-vex-chip-active {
-  color: var(--accent, #00b2ff);
-  background: rgba(0, 178, 255, 0.08);
-  border-color: rgba(0, 178, 255, 0.32);
+  color: var(--accent, var(--ui-accent-solid));
+  background: var(--ui-accent-a0p08);
+  border-color: var(--ui-accent-a0p32);
 }
 .olv-mp-vex-chip:focus-visible {
-  outline: 2px solid var(--accent, #00b2ff); outline-offset: 2px;
+  outline: 2px solid var(--accent, var(--ui-accent-solid)); outline-offset: 2px;
 }
 .olv-mp-chart-empty {
   font-size: var(--text-xs); color: var(--text-faint); font-style: italic;

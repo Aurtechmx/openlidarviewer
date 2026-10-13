@@ -83,7 +83,7 @@
     position: absolute; top: 6px; left: 50%;
     transform: translateX(-50%);
     width: 38px; height: 4px; border-radius: 2px;
-    background: rgba(140, 170, 230, 0.42);
+    background: var(--ui-edge-a0p42);
   }
   .olv-msheet-tabs {
     display: flex; flex: 1 1 auto; gap: 2px;

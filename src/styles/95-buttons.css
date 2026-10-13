@@ -163,8 +163,8 @@
  * `--accent` tokens, but an outline over a soft tint instead of the solid fill,
  * so the panel keeps a single loudest action. Emphasis is carried by border
  * weight and font weight as well as hue, and the label stays `--text` rather
- * than `--accent`, which keeps the text contrast well clear of AA in Dark,
- * Light and High-contrast (all three define `--accent` and `--accent-soft`).
+ * than `--accent`, which keeps the text contrast well clear of AA in Blue,
+ * Field and High contrast (all three define `--accent` and `--accent-soft`).
  */
 .olv-reclass-auto {
   color: var(--text);

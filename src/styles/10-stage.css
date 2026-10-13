@@ -6,7 +6,7 @@
 .olv-stage {
   position: relative; height: 100%; width: 100%;
   background:
-    radial-gradient(ellipse at 50% 45%, #0c1224 0%, #070a14 70%, #050810 100%);
+    var(--stage-ui-background);
 }
 .olv-stage::after {
   /* Cinematic vignette — darkens the corners ~22%, fades to neutral by

@@ -39,6 +39,53 @@
   size-adjust: 101.02%; ascent-override: 103.94%; descent-override: 34.65%; line-gap-override: 9.9%;
 }
 :root {
+  --stage-ui-background: radial-gradient(ellipse at 50% 45%, #0c1224 0%, #070a14 70%, #050810 100%);
+  --ui-surface-11-17-33-a-0p92: rgba(11, 17, 33, 0.92);
+  --ui-surface-10-14-26-a-0p92: rgba(10, 14, 26, 0.92);
+  --ui-surface-11-17-33-a-0p82: rgba(11, 17, 33,0.82);
+  --ui-surface-11-17-33-a-0p86: rgba(11, 17, 33,0.86);
+  --ui-surface-11-17-33-a-0p9: rgba(11, 17, 33,0.9);
+  --ui-surface-11-17-33-a-0p94: rgba(11, 17, 33, 0.94);
+  --ui-surface-8-13-20-a-0p82: rgba(8, 13, 20, 0.82);
+  --ui-surface-8-13-20-a-0p9: rgba(8, 13, 20, 0.9);
+  --ui-surface-8-13-26-a-0p94: rgba(8, 13, 26, 0.94);
+  --ui-surface-11-17-33-a-0p55: rgba(11, 17, 33, 0.55);
+  --ui-surface-11-17-33-a-0p96: rgba(11, 17, 33, 0.96);
+  --ui-surface-6-10-20-a-0p66: rgba(6, 10, 20, 0.66);
+  --ui-surface-6-10-20-a-0p5: rgba(6, 10, 20, 0.5);
+  --ui-surface-11-17-33-a-0p78: rgba(11, 17, 33, 0.78);
+  --ui-surface-5-8-16-a-0p66: rgba(5, 8, 16, 0.66);
+  /* Interface literal bridges: exact Blue values; Field and High contrast override them in 03-theme-rails.css. */
+  --ui-accent-a0p55: rgba(0, 178, 255, 0.55);
+  --ui-surface-8-14-28-a0p66: rgba(8, 14, 28, 0.66);
+  --ui-accent-a0p10: rgba(0, 178, 255, 0.10);
+  --ui-accent-a0p3: rgba(0, 178, 255, 0.3);
+  --ui-accent-a0p045: rgba(0, 178, 255, 0.045);
+  --ui-accent-a0p42: rgba(0, 178, 255, 0.42);
+  --ui-accent-a0p4: rgba(0, 178, 255, 0.4);
+  --ui-accent-a0p08: rgba(0, 178, 255, 0.08);
+  --ui-accent-a0p16: rgba(0, 178, 255, 0.16);
+  --ui-accent-a0p34: rgba(0, 178, 255, 0.34);
+  --ui-accent-a0p22: rgba(0, 178, 255, 0.22);
+  --ui-accent-a0p6: rgba(0, 178, 255, 0.6);
+  --ui-accent-a0p24: rgba(0, 178, 255, 0.24);
+  --ui-accent-a0p28: rgba(0, 178, 255, 0.28);
+  --ui-accent-a0p65: rgba(0, 178, 255, 0.65);
+  --ui-surface-deep: #030817;
+  --ui-accent-a0p98: rgba(0, 178, 255, 0.98);
+  --ui-accent-a0p12: rgba(0, 178, 255, 0.12);
+  --ui-accent-a0p38: rgba(0, 178, 255, 0.38);
+  --ui-edge-a0p42: rgba(140, 170, 230, 0.42);
+  --ui-accent-a0p14: rgba(0, 178, 255, 0.14);
+  --ui-accent-a0p5: rgba(0, 178, 255, 0.5);
+  --ui-accent-solid: #00b2ff;
+  --ui-accent-a0p32: rgba(0, 178, 255, 0.32);
+  --ui-accent-a0p85: rgba(0, 178, 255, 0.85);
+  --ui-accent-a0p04: rgba(0, 178, 255, 0.04);
+  --ui-accent-a0p20: rgba(0, 178, 255, 0.20);
+  --ui-accent-a0p18: rgba(0, 178, 255, 0.18);
+  --ui-surface-8-14-28-a0p95: rgba(8, 14, 28, 0.95);
+  --ui-surface-8-14-28-a1: rgba(8, 14, 28, 1);
   color-scheme: dark;
   /* OpenLiDARViewer brand palette */
   --bg: #030817;          /* Deep Navy */
@@ -49,7 +96,7 @@
    * lighter than --panel with a soft lift shadow; secondary stacked
    * panels read RECESSIVE — a translucent, near-transparent fill so
    * the eye lands on the one surface that matters. Both ride the
-   * theme rails (overridden in the Light + High-contrast blocks).
+   * theme rails (overridden in the Field and High contrast blocks).
    */
   --panel-raised: #16203a;          /* a step up from --panel — holds the verdict + active rail */
   --panel-recessive: rgba(15, 23, 42, 0.55); /* demoted stacked panels — hairline-led, low fill */
@@ -74,8 +121,8 @@
   --lab-caveat-fill-on-light: rgba(184, 134, 11, 0.14);
   --accent-soft: rgba(0, 178, 255, 0.16);
   /* Ink colour for text/glyphs ON a solid --accent fill (primary
-   * action recipe, v0.4.6). Dark on the bright electric-blue here;
-   * the Light theme keeps it white for WCAG AA on its deeper accent. */
+   * action recipe, v0.4.6). Dark on the bright electric-blue here and
+   * in the other palettes (03-theme-rails.css). */
   --on-accent: #030817;
   /* Readiness rating scale — semantic, colourblind-paired with the word. */
   --rating-excellent: #34d399;
@@ -276,7 +323,7 @@
    * semantic tokens so the layer order is explicit in one place instead of
    * scattered magic integers. Ordered low → high; the integers are the exact
    * values the sheet has always used. z-index does NOT vary by theme, so these
-   * live only here (never in the Light / High-contrast / forced-colors rails).
+   * live only here (never in the Field / High contrast / forced-colors rails).
    * Where two siblings deliberately differ by 1, the site uses
    * calc(var(--z-role) + 1) so the lift is visible and the integer preserved.
    */
@@ -298,17 +345,4 @@
   --z-modal-top: 90;      /* badge + shortcut sheet (91 = modal-top + 1) */
   --z-palette: 100;       /* command palette */
   --z-max: 200;           /* onboarding tour overlay, top of stack */
-}
-
-
-/* The withheld state hue on the Light and High-contrast rails, kept beside the
- * :root value so each rail clears 4.5:1 on its own --bg and --panel
- * (tests/stateTokenContrast.test.ts). */
-body.olv-theme-light {
-  --state-withheld: #be185d;
-  /* Accent for small text on white, where --accent reads 3.9:1. */
-  --accent-text: #005f8c;
-}
-body.olv-theme-high-contrast {
-  --state-withheld: #f9a8d4;
 }
