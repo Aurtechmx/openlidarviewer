@@ -40,6 +40,13 @@ export interface InstantAnswerInput {
    * the units were known.
    */
   readonly crsKnown?: boolean;
+  /**
+   * True only when the two loaded scans can support a change comparison: a
+   * shared, resolvable frame and linear unit, and neither a truncated load.
+   * See `compareSuggestionAllowed` in `app/epochFramePrep.ts`. Anything else,
+   * including absent, offers nothing for a two-scan load.
+   */
+  readonly compareReady?: boolean;
 }
 
 /** The terrain prompt for a scan whose CRS is unknown. */
@@ -56,14 +63,16 @@ export interface InstantAnswer {
 }
 
 /**
- * Decide the instant answer for a freshly-loaded scan. A second scan always
- * takes precedence with the before/after offer (two epochs is an unambiguous
- * intent); otherwise route by detected shape, defaulting to terrain.
+ * Decide the instant answer for a freshly-loaded scan. A second scan takes
+ * precedence with the before/after offer when the pair can support it, and
+ * offers nothing (null) when it cannot; otherwise route by detected shape,
+ * defaulting to terrain.
  */
-export function planInstantAnswer(input: InstantAnswerInput): InstantAnswer {
+export function planInstantAnswer(input: InstantAnswerInput): InstantAnswer | null {
   // Exactly two scans is the before/after case the comparison runs on; with a
   // third loaded, the new scan routes by its own shape instead.
   if (input.cloudCount === 2) {
+    if (input.compareReady !== true) return null;
     const pair = input.priorScanLabel
       ? `“${input.priorScanLabel}” vs “${input.scanLabel ?? 'this scan'}”`
       : 'the two scans';

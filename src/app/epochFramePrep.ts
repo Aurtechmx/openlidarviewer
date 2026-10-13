@@ -19,7 +19,9 @@ import type { CrsInfo } from '../io/crs';
 import { sceneUpAxisPolicy, type SourceFormat } from '../io/sniffFormat';
 import type { CrsService } from '../geo/CrsService';
 import { elevationWorkflowRefusal, spatialContextFrom, type SpatialContext } from '../geo/SpatialContext';
+import { truncationOf, type Truncation } from '../io/truncation';
 import {
+  compareSpatialFrames,
   epochFrameFacts,
   epochFrameOptions,
   epochVerticalScalesComparable,
@@ -46,6 +48,8 @@ export type PreparedEpochCloud = {
 export interface PreparedEpochFrames {
   /** The BEFORE epoch's context — its vertical factor scales the Δz result. */
   readonly ctxA: SpatialContext;
+  /** The AFTER epoch's context. */
+  readonly ctxB: SpatialContext;
   /** False when the epochs cannot be honestly compared; `reason` says why. */
   readonly comparable: boolean;
   /** Why the comparison was refused, or null when it may proceed. */
@@ -137,6 +141,7 @@ export function prepareEpochFrames(
   else if (!axisOk) reason = 'up-axis';
   return {
     ctxA,
+    ctxB,
     comparable: reason === null,
     reason,
     frameRefusal,
@@ -144,4 +149,31 @@ export function prepareEpochFrames(
     beforeCloud: { positions: a.positions, origin: a.sourceOrigin, ...epochFrameFacts(ctxA) },
     afterCloud: { positions: b.positions, origin: b.sourceOrigin, ...epochFrameFacts(ctxB) },
   };
+}
+
+/** An epoch as the compare suggestion reads it: frame inputs plus any truncation. */
+export type CompareSuggestionEpoch = EpochFrameInput & {
+  readonly metadata?: { readonly crs?: CrsInfo | null; readonly truncation?: Truncation } | null;
+};
+
+/**
+ * Whether the app may suggest a before/after comparison for the loaded scans:
+ * exactly two, both present.
+ *
+ * Stricter than the compare run itself, which still runs on request and states
+ * its caveats: a suggestion is only made when the comparison
+ * {@link prepareEpochFrames} would allow is also planimetrically sound by
+ * {@link compareSpatialFrames} (both CRS declared and the same, both linear
+ * units known and equal, not geographic), and neither scan is a truncated load.
+ */
+export function compareSuggestionAllowed(
+  crsService: CrsService,
+  clouds: readonly (CompareSuggestionEpoch | undefined)[],
+): boolean {
+  const [a, b] = clouds;
+  if (clouds.length !== 2 || !a || !b) return false;
+  if (truncationOf(a) !== null || truncationOf(b) !== null) return false;
+  const prepared = prepareEpochFrames(crsService, a, b);
+  if (!prepared.comparable) return false;
+  return compareSpatialFrames(prepared.ctxA, prepared.ctxB).planimetricComparable;
 }

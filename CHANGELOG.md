@@ -29,6 +29,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Changed
 
+- The "Two scans loaded" before/after prompt is offered only when both scans declare the same CRS and linear unit and neither is a truncated load. Otherwise no prompt is shown; Compare in the Inspector is unchanged.
 - The navigation modes are one compact segmented control, Orbit | Walk | Fly | Pan, with Frame all beside it, in place of the triangle of round pads. Shortcuts, pointer lock, the Pan availability rule, the speed slider, the camera presets, orthographic, Plan View and the Navigation panel (H) behave as before.
 - The six axis views (Top, Bottom, Front, Back, Left, Right) moved from the Navigation panel to a "More" menu beside the mode selector, so they stay one click away with the panel closed or the view cube off. They are still in the command palette. The menu opens only when clicked and is not remembered.
 - The view cube is on by default once a scan is open, except on phone-width screens, where it stays off until turned on; a stored off choice is kept. "Toggle compass" in the command palette and `?viewcube=1` / `?viewcube=0` still switch it.
