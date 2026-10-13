@@ -24,6 +24,19 @@ test('a typed LoadError is described by its own category', () => {
   );
 });
 
+test('unsupported-format errors keep their own wording', () => {
+  expect(messageForCategory('unsupported-format')).toBe("This file type isn't supported yet.");
+  for (const msg of [
+    'Not an E57 file: bad signature',
+    'Paste the tileset.json URL to open 3D Tiles',
+    'PNTS Draco data is not supported',
+    'This URL is not a COPC file',
+  ]) {
+    expect(describeLoadError(new LoadError('unsupported-format', msg))).toBe("This file type isn't supported yet.");
+    expect(describeLoadError(new LoadError('unsupported-format', msg, 'report'))).toBe(msg);
+  }
+});
+
 test('every category maps to a non-empty, user-facing message', () => {
   for (const category of ALL_CATEGORIES) {
     expect(messageForCategory(category).length).toBeGreaterThan(0);
