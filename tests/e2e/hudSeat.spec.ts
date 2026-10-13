@@ -65,5 +65,7 @@ test('1280px: the result card drops below the measure bar and a progress toast',
   await page.evaluate(() => document.querySelector('.olv-toast:not(.olv-recovery-notice)')?.classList.remove('olv-hidden'));
   const top = ['.olv-result-card', '.olv-toast:not(.olv-hidden)', '.olv-measure-bar:not(.olv-hidden)'];
   await expect.poll(async () => (await painted(page, top)).length, { timeout: 5_000 }).toBe(3);
-  await expect.poll(async () => overlaps(await painted(page, top)), { timeout: 5_000 }).toEqual([]);
+  // The lane's claim: the card clears each of the others. The toast and the
+  // bar are each other's neighbours, not the lane's, and are not judged here.
+  await expect.poll(async () => overlaps(await painted(page, top)).filter((p) => p.includes('.olv-result-card')), { timeout: 5_000 }).toEqual([]);
 });

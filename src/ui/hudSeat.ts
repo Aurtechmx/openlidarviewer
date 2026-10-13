@@ -53,6 +53,8 @@ export function seatShift(top: number, bottom: number, boxes: readonly DOMRect[]
       ? Math.max(shift, ...hit.map((r) => r.bottom + gap - top))
       : Math.max(shift, ...hit.map((r) => bottom - (r.top - gap)));
   }
+  // A lifted surface stays on screen: never past 8 px from the top edge.
+  if (dir === 'up') shift = Math.min(shift, Math.max(0, top - 8));
   return Math.max(0, Math.round(shift));
 }
 
@@ -65,18 +67,24 @@ export function seatShift(top: number, bottom: number, boxes: readonly DOMRect[]
 export function seatClear(self: HTMLElement, selectors: readonly string[], dir: 'down' | 'up', gap = 8): void {
   const doc = self.ownerDocument;
   if (!doc || !self.isConnected) return;
-  self.style.removeProperty('--olv-seat');
-  const base = paintedBox(self);
-  if (!base) return;
+  const box = paintedBox(self);
+  if (!box) return;
+  // Undo the shift already applied, to get the stylesheet place without
+  // touching the DOM: a down shift moves the box down, an up shift moves it up.
+  const cur = parseFloat(self.style.getPropertyValue('--olv-seat')) || 0;
+  const top = box.top + (dir === 'down' ? -cur : cur);
+  const bottom = box.bottom + (dir === 'down' ? -cur : cur);
   const mid = (doc.defaultView?.innerHeight ?? 0) / 2;
-  const shift = seatShift(base.top, base.bottom, boxesInColumn(doc, selectors, base.left, base.right, self), dir, mid, gap);
+  const shift = seatShift(top, bottom, boxesInColumn(doc, selectors, box.left, box.right, self), dir, mid, gap);
+  if (shift === Math.round(cur)) return;
   if (shift > 0) self.style.setProperty('--olv-seat', `${shift}px`);
+  else self.style.removeProperty('--olv-seat');
 }
 
 /**
  * Run `seat` (coalesced to one call per microtask) whenever something it
- * depends on may have moved: any element's class or hidden flag changes or
- * nodes are added or removed, `self` or a match of `selectors` resizes, the
+ * depends on may have moved: a tracked element's class or hidden flag changes or
+ * tracked nodes are added or removed, `self` or a match of `selectors` resizes, the
  * window resizes, or a transition or animation ends. Seating writes only a
  * custom property on `self`, which none of these observe, so it cannot loop.
  * Returns the disposer.
@@ -108,7 +116,18 @@ export function watchSeat(self: HTMLElement, selectors: readonly string[], seat:
   }
   ro.observe(self);
   track();
-  const mo = new MO(later);
+  const mo = new MO((records) => {
+    for (const r of records) {
+      if (self.contains(r.target)) continue;
+      if (r.type === 'attributes') {
+        if ((r.target as Element).matches?.(tracked)) { later(); return; }
+        continue;
+      }
+      for (const n of [...Array.from(r.addedNodes), ...Array.from(r.removedNodes)]) {
+        if (n.nodeType === 1 && ((n as Element).matches(tracked) || (n as Element).querySelector(tracked))) { later(); return; }
+      }
+    }
+  });
   mo.observe(body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'hidden'] });
   const win = doc.defaultView;
   win?.addEventListener('resize', later);

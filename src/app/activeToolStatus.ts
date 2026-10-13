@@ -221,10 +221,13 @@ function watchPillFloor(host: HTMLElement, pill: HTMLElement, seat: () => void):
   track();
   const mo = new MO((records) => {
     if (records.every((r) => r.target === pill || pill.contains(r.target))) return;
+    // A style write matters only on the hold-Space hint, whose --olv-seat lift
+    // moves the floor the pill sits above.
+    if (records.every((r) => r.attributeName === 'style' && !(r.target as Element).matches?.('.olv-nav-prompt-tool'))) return;
     if (records.some((r) => r.type === 'childList')) track();
     seat();
   });
-  mo.observe(body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'hidden'] });
+  mo.observe(body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'hidden', 'style'] });
   const ends = ['transitionend', 'animationend'] as const;
   for (const t of ends) doc.addEventListener(t, seat, true);
   return () => {

@@ -28,3 +28,10 @@ describe('seatShift', () => {
     expect(seatShift(300, 640, [box(100, 350)], 'up', 400)).toBe(0);
   });
 });
+
+describe('seatShift clamp', () => {
+  it('never lifts a surface above 8 px from the top edge', () => {
+    // A 40 px surface at 30..70 over a box that would ask for a 200 px lift.
+    expect(seatShift(30, 70, [box(0, 90)], 'up', 10)).toBe(22);
+  });
+});
