@@ -2526,8 +2526,8 @@ wireFrameChange({
 });
 exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
 
-// Clip box — an axis-aligned slab the viewer renders through (GPU clipping
-// planes) with an exact CPU kept-count. The keep/cull math is the pure
+// Clip box — an axis-aligned box the viewer renders through (a GPU per-point
+// keep test in the size graph) with an exact CPU kept-count. The keep/cull math is the pure
 // `clipBox` core; this panel + the viewer wiring realise it.
 const clipPanel = new ClipPanel({
   // `viewer?.`: the constructor's setVisible(false) → onApply(null) fires before

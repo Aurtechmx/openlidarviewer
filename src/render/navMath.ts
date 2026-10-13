@@ -301,7 +301,6 @@ export function nearestPointAlongRay(
   let bestPerpSq = 0;
   let bestAlong = 0;
   for (let i = 0; i < positions.length; i += 3) {
-    if (accept !== undefined && !accept(i / 3)) continue;
     const vx = positions[i] - origin[0];
     const vy = positions[i + 1] - origin[1];
     const vz = positions[i + 2] - origin[2];
@@ -313,6 +312,10 @@ export function nearestPointAlongRay(
     const perpSq = cx * cx + cy * cy + cz * cz;
     const scoreSq = perpSq / (along * along); // squared angular miss
     if (scoreSq < bestScoreSq) {
+      // Asked only of a point that would win: the winner among accepted points
+      // is the same, and a filter or clip that costs a call per point is paid
+      // for the handful of improvements, not for every point in the cloud.
+      if (accept !== undefined && !accept(i / 3)) continue;
       bestScoreSq = scoreSq;
       bestIndex = i;
       bestPerpSq = perpSq;
