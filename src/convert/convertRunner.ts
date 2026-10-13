@@ -18,6 +18,7 @@ import type { PointCloud } from '../model/PointCloud';
 import { convertCloud } from './convertCloud';
 import type { ConvertOptions, ConvertedFile, ConvertReport } from './types';
 import { formatByteSize } from '../io/formatByteSize';
+import { MAX_WHOLE_FILE_BYTES } from '../io/loadPlan';
 
 /** A file handle a batch input reads from — the subset {@link guardedBatchInput} needs. */
 export interface BatchFileSource {
@@ -47,12 +48,14 @@ export function oversizeBatchFileMessage(
  * per-file error instead of crashing the page. Pure and DOM-free.
  */
 export function guardedBatchInput(file: BatchFileSource, ceilingBytes: number): BatchInput {
+  // The whole-file cap holds whatever the device-derived ceiling says.
+  const limit = Math.min(ceilingBytes, MAX_WHOLE_FILE_BYTES);
   return {
     name: file.name,
     sizeBytes: file.size,
     bytes: () =>
-      file.size > ceilingBytes
-        ? Promise.reject(new RangeError(oversizeBatchFileMessage(file.name, file.size, ceilingBytes)))
+      file.size > limit
+        ? Promise.reject(new RangeError(oversizeBatchFileMessage(file.name, file.size, limit)))
         : file.arrayBuffer(),
   };
 }

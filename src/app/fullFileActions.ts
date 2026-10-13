@@ -19,8 +19,10 @@ import {
   E57_COLUMN_BYTES,
   E57_DECODE_CEILING_BYTES,
   estimateMemoryBytes,
+  exceedsWholeFileCap,
   memoryCeilingBytes,
   planLoad,
+  WHOLE_FILE_TOO_LARGE_MESSAGE,
   type PointAttributes,
 } from '../io/loadPlan';
 import { GPU_HARD_POINT_CEILING, deviceTier, type DeviceTier } from '../render/deviceProfile';
@@ -161,6 +163,9 @@ export function assessFullFile(f: FullFileLayerFacts | null, device: FullFileDev
     const allows = memoryEstimated ? `about ${formatGb(ceilingBytes)} (estimated)` : `about ${formatGb(ceilingBytes)}`;
     return { ...base, allowed: false, reason: `Exporting every point needs about ${formatGb(estimateBytes)}; this device allows ${allows}.` };
   }
+  // The re-decode reads the whole file into one buffer, so the size cap refuses
+  // it whatever the device reports.
+  if (exceedsWholeFileCap(f.fileBytes)) return { ...base, allowed: false, reason: WHOLE_FILE_TOO_LARGE_MESSAGE };
   const gate = evaluateFullResClassExport({ fullRes: true, includeClassification: f.includeClassification, hasClassEdits: f.hasClassEdits });
   if (!gate.allowed) return { ...base, allowed: false, reason: gate.reason };
   return { ...base, allowed: true };
@@ -351,7 +356,7 @@ export function assessReload(f: FullFileLayerFacts | null, device: ReloadDevice)
   }
   if (device.isMobile) return { ...base, allowed: false, reason: `${held}. A denser reload is not offered on a phone or tablet.` };
   if (device.tier === 'low') return { ...base, allowed: false, reason: `${held}. This device is in the low performance tier, so a denser reload is not offered.` };
-  if (plan.buildThenStream) {
+  if (plan.buildThenStream && plan.mayExceedCeiling) {
     // planLoad routes a LAS or LAZ this large to the out-of-core tile build: it
     // would open as a streamed scan, not as the denser loaded layer a reload makes.
     return { ...base, allowed: false, reason: `${held}. Loading more needs about ${gb}, over the ${ceiling} this device allows for a loaded layer. At that size the file opens as a streamed scan, and a reload only replaces a loaded layer.` };
@@ -359,6 +364,9 @@ export function assessReload(f: FullFileLayerFacts | null, device: ReloadDevice)
   if (plan.mayExceedCeiling) {
     return { ...base, allowed: false, reason: `${held}. A denser reload needs about ${gb}, more than the ${ceiling} this device allows.` };
   }
+  // Over the whole-file cap a LAS/LAZ opens as a streamed scan and any other
+  // format is refused, so a reload cannot replace a loaded layer either way.
+  if (exceedsWholeFileCap(f.fileBytes)) return { ...base, allowed: false, reason: `${held}. ${WHOLE_FILE_TOO_LARGE_MESSAGE}` };
   if (target <= f.resident) return { ...base, allowed: false, reason: `${held}. A reload would not add points on this device.` };
   return { ...base, allowed: true };
 }
