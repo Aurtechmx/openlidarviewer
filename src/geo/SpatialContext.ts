@@ -146,6 +146,16 @@ export interface SpatialContext {
    * refusal reads this one flag.
    */
   readonly horizontalMetricRefused: boolean;
+  /**
+   * Whether VERTICAL metrics (a height, and the grades, profiles and volumes
+   * that read Z as positive-up elevation) are refused because the frame has no
+   * valid local vertical: a geocentric frame (its Z axis points at the North
+   * Pole, not up at the site) or a depth-positive-down reference (every rise
+   * reads as a fall). Independent of {@link horizontalMetricRefused}: a
+   * geographic or Web Mercator frame refuses lengths yet keeps a height. The
+   * live Measure tool and every measurement export read this one flag.
+   */
+  readonly verticalMetricRefused: boolean;
 
   // ── Up axis / basis ──────────────────────────────────────────────────────
   /** Which storage axis is elevation; `'unknown'` when undetected. */
@@ -283,6 +293,7 @@ export function spatialContextFrom(
     verticalReferenceKnown: verticalReference !== 'unknown',
     verticalAxisDown: verticalReference === 'depth' || crs?.verticalAxisDown === true,
     horizontalMetricRefused: resolved.kind === 'geographic' || refusesHorizontalGround(verdict.validity),
+    verticalMetricRefused: resolved.kind === 'geocentric' || verticalReference === 'depth' || crs?.verticalAxisDown === true,
 
     upAxis: placement.upAxis ?? 'unknown',
 

@@ -185,7 +185,7 @@ export function spaceContextStillCurrent(
 export interface PinnableExportDeps {
   readonly geo: () => unknown;
   readonly activeClassificationEpoch: () => number;
-  readonly measure: { readonly crsKnown: boolean; readonly geographicCrs: boolean };
+  readonly measure: { readonly crsKnown: boolean; readonly geographicCrs: boolean; readonly verticalRefused?: boolean };
 }
 
 /** Freeze the scan-dependent reads of `deps` at this moment. */
@@ -195,6 +195,7 @@ export function pinFindingsExportDeps<D extends PinnableExportDeps>(deps: D): D 
   const measure = Object.create(deps.measure, {
     crsKnown: { value: deps.measure.crsKnown },
     geographicCrs: { value: deps.measure.geographicCrs },
+    verticalRefused: { value: deps.measure.verticalRefused === true },
   }) as D['measure'];
   return { ...deps, measure, geo: () => geo, activeClassificationEpoch: () => epoch };
 }

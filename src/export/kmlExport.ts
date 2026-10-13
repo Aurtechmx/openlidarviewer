@@ -27,9 +27,8 @@ import type { Annotation } from '../render/annotate/types';
 import type { Measurement, Vec3 } from '../render/measure/types';
 import { isComplete, reducedSampleCaveat } from '../render/measure/types';
 import {
-  GEOGRAPHIC_NOT_AVAILABLE,
   geographicFilter,
-  geographicRefuses,
+  refusalNote,
   measurementMetrics,
   plainDecimal,
   areaWithheldNote,
@@ -109,6 +108,17 @@ export interface KmlExportInput {
    * the rest are not available. Defaults false.
    */
   readonly geographic?: boolean;
+  /**
+   * True when the frame has no valid local vertical (geocentric, depth-down):
+   * heights, grades, profiles and volumes are withheld too. Defaults false.
+   */
+  readonly verticalRefused?: boolean;
+  /**
+   * Why measurements were left out of this file (taken on another scan, or on
+   * one whose owner cannot be resolved). Stated in the document; absent when
+   * every measurement belongs to the scan this file describes.
+   */
+  readonly withheldMeasurements?: string | null;
 }
 
 /**
@@ -344,12 +354,12 @@ function annotationPlacemark(a: Annotation, input: KmlExportInput): string {
  */
 function metricsLine(m: Measurement, input: KmlExportInput): string {
   const all = measurementMetrics(m, input.up, input.unitToMetres, input.verticalUnitToMetres);
-  const metrics = geographicFilter(all, m, input.geographic);
+  const metrics = geographicFilter(all, m, input.geographic, input.verticalRefused);
   const parts = Object.entries(metrics).filter(([, v]) => v !== null).map(([k, v]) => `${k}=${typeof v === 'number' ? plainDecimal(v) : v}`);
-  const refused = geographicRefuses(m, input.geographic) && Object.keys(all).length > 0;
-  if (refused) {
-    if (parts.length === 0) return `Figures ${GEOGRAPHIC_NOT_AVAILABLE}.`;
-    return `Measured (${input.unitLabel}): ${parts.join(', ')}. Other figures ${GEOGRAPHIC_NOT_AVAILABLE}.`;
+  const note0 = refusalNote(m, input.geographic, input.verticalRefused);
+  if (note0 && Object.keys(all).length > 0) {
+    if (parts.length === 0) return `Figures ${note0}.`;
+    return `Measured (${input.unitLabel}): ${parts.join(', ')}. Other figures ${note0}.`;
   }
   const note = areaWithheldNote(m, input.up, input.unitToMetres, input.verticalUnitToMetres)
     ?? angleWithheldNote(m, input.up, input.unitToMetres, input.verticalUnitToMetres);
@@ -528,6 +538,7 @@ export function buildKml(input: KmlExportInput, digests?: ExportDigests): string
     // transformation; the file says so
     // next to the CRS rather than letting the coordinates read as exact WGS 84.
     input.toLonLat.datumCaveat ?? '',
+    input.withheldMeasurements ?? '',
     input.notSurveyGradeNote,
     ...(input.provenance ? [lightProvenanceLine(lightProvenance(input.provenance))] : []),
   ]);

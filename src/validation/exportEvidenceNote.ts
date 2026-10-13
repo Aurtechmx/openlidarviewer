@@ -108,6 +108,19 @@ export function geographicRefusalCaveat(geographic: boolean): string {
   );
 }
 
+/**
+ * The note an export carries when the frame has no valid local vertical
+ * (`SpatialContext.verticalMetricRefused`). Empty otherwise, so every other
+ * export (and its digest) is unchanged.
+ */
+export function verticalRefusalCaveat(refused: boolean): string {
+  if (!refused) return '';
+  return (
+    ' No valid local vertical (geocentric axis or depth-positive-down reference): ' +
+    'heights, grades, profiles and volumes are not available and are left empty.'
+  );
+}
+
 export function evidenceStatus(claimId: string): EvidenceStatus {
   const d = exportGate(claimId);
   if (d.exploratoryOnly) return 'exploratory';

@@ -375,6 +375,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 97 for the shell, 74 for the renderer and 23 for the Analyse panel,
+across 1125 modules with no dependency cycles.
 across 1124 modules with no dependency cycles.
 
 ## The shell has little headroom
@@ -487,12 +488,25 @@ their CRS ("Measurements on A (EPSG:32612) and B (EPSG:32613) use different
 coordinate frames; export one scan's measurements at a time"). Nothing is
 converted between frames; export each scan's measurements on its own. A session saved with one scan and
 restored with two open is placed through the scan it matches; when that scan
-cannot be identified, close the other scans and export again. The integrity
-report names the scan its measurements were taken on, under the same
-different-frame refusal, and the findings list takes its unit scales from that
-scan; the findings report file itself still names the active scan. The PDF
-report's measurement table reads the active scan's unit scales. These reports
-carry lengths and areas, not coordinates. The site KML is written only while one scan is open.
+cannot be identified, close the other scans and export again.
+
+The release rule for every measurement output is: when a measurement's owning
+scan, its frame or its permissions cannot be resolved, the result is withheld;
+an output never borrows the active scan's units, frame, permissions,
+classification epoch or dataset identity. The integrity report names the scan
+its measurements were taken on and records that scan's classification epoch; a
+report spanning two scans is refused, because it holds one dataset identity and
+one epoch. The PDF report, the site KML and the saved findings describe the
+active scan and hold only the measurements it owns; a measurement taken on
+another scan, on a closed scan, or with no record of its scan while several
+are open is left out, and the PDF and KML state how many were withheld and why
+(the findings list says so when they are added). Make the owning scan active to
+report its measurements. A frame's permissions come from one place for the
+live tool and every export: a geographic, Web Mercator or geocentric frame
+refuses lengths, areas, grades and volumes, and a geocentric or
+depth-positive-down frame also refuses heights, because its Z axis is not a
+local vertical. These reports carry lengths and areas, not coordinates. The
+site KML is written only while one scan is open.
 
 The tabular exports round to three decimals. A value of 0.0005 and above keeps
 three decimals; a smaller nonzero value keeps three significant digits, down to

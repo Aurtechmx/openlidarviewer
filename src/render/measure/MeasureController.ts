@@ -32,7 +32,7 @@ import type {
   UnitSystem,
   VolumeRecord,
 } from './types';
-import { GEOGRAPHIC_NOT_AVAILABLE, MIN_POINTS, isFull, reducedSampleClause } from './types';
+import { GEOGRAPHIC_NOT_AVAILABLE, MIN_POINTS, VERTICAL_NOT_AVAILABLE, frameRefusalText, isFull, reducedSampleClause } from './types';
 import type { WorkOwnership } from '../../model/workOwnership';
 import type { ProfileProvenance } from './profileProvenance';
 import type { WithheldReadCounts } from '../../science/withheldCounts';
@@ -65,7 +65,7 @@ import {
   type SnapResult,
   type Segments,
 } from './snap';
-import { gradeMeasurement, geographicRefusesKind, type MeasurementTrust } from './measurementTrust';
+import { gradeMeasurement, type MeasurementTrust } from './measurementTrust';
 import {
   formatLengthRender,
   formatAreaRender,
@@ -565,6 +565,7 @@ export class MeasureController {
    * the red refusal (see {@link gradeMeasurement}).
    */
   private _geographicCrs = false;
+  private _verticalRefused = false;
   /**
    * True when the active scan's CRS is PROJECTED with an EPSG code, so +Y is
    * grid north. A local engineering CRS can declare metres (`_crsKnown`) and
@@ -965,6 +966,16 @@ export class MeasureController {
   }
 
   /**
+   * True when the active frame has no valid local vertical (geocentric, or a
+   * depth-positive-down reference): heights, grades, profiles and volumes are
+   * refused. `SpatialContext.verticalMetricRefused`, set with the horizontal
+   * flag by {@link setGeographicCrs}.
+   */
+  get verticalRefused(): boolean {
+    return this._verticalRefused;
+  }
+
+  /**
    * Flag the active scan's CRS as geographic (degrees). Fed from the same
    * CrsService subscription that injects `unitToMetres` / `crsKnown`.
    * Measurements keep working in raw render units, but every hint re-render
@@ -973,9 +984,10 @@ export class MeasureController {
    * metres is the audit-flagged failure mode. Symmetric on clear (a user
    * override to a projected CRS restores the ordinary grades).
    */
-  setGeographicCrs(isGeographic: boolean): void {
-    if (isGeographic === this._geographicCrs) return;
+  setGeographicCrs(isGeographic: boolean, verticalRefused = false): void {
+    if (isGeographic === this._geographicCrs && verticalRefused === this._verticalRefused) return;
     this._geographicCrs = isGeographic;
+    this._verticalRefused = verticalRefused;
     for (const m of this._measurements) m.trust = this._gradeMeasurement(m);
     this._updateHint();
     this._emitChange();
@@ -1912,8 +1924,8 @@ export class MeasureController {
       // unit-free unless the axes share a scale: it is invariant under UNIFORM
       // scaling only, so an arm mixing degree horizontal with linear vertical
       // gives a raw-coordinate angle that is physically wrong (pass-6 M3).
-      geographicCrs:
-        this._geographicCrs && geographicRefusesKind(m.kind),
+      geographicCrs: frameRefusalText(m.kind, this._geographicCrs, this._verticalRefused) === GEOGRAPHIC_NOT_AVAILABLE,
+      verticalRefused: frameRefusalText(m.kind, this._geographicCrs, this._verticalRefused) === VERTICAL_NOT_AVAILABLE,
     });
   }
 
@@ -2195,6 +2207,8 @@ export class MeasureController {
       } else if (this._unitUnverified()) {
         hint = `${hint} · ${UNIT_UNVERIFIED_MEASURE_NOTICE}`;
       }
+      // No local vertical (geocentric, depth-down): heights are refused too.
+      if (this._verticalRefused) hint = `${hint} — Heights ${VERTICAL_NOT_AVAILABLE}.`;
       this._setHintText(hint);
     }
     this._updateFinishBtnVisibility();
@@ -2308,10 +2322,11 @@ export class MeasureController {
    * the headline reads the refusal and the secondary labels are dropped.
    */
   private _refuseGeographicLabels(m: Measurement, labels: OverlayLabel[], from: number): void {
-    if (!this._geographicCrs || !geographicRefusesKind(m.kind) || labels.length <= from) return;
+    const refusal = frameRefusalText(m.kind, this._geographicCrs, this._verticalRefused);
+    if (refusal === null || labels.length <= from) return;
     const added = labels.splice(from);
     const head = added.find((l) => l.primary) ?? added[0];
-    labels.push({ ...head, text: GEOGRAPHIC_NOT_AVAILABLE, primary: true });
+    labels.push({ ...head, text: refusal, primary: true });
   }
 
   /** Add a committed measurement's geometry to the draw model. */

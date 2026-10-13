@@ -81,6 +81,14 @@ export interface ComposeReportInputs {
    * "not available" in place of its number. Defaults false.
    */
   readonly geographicCrs?: boolean;
+  /** True when the frame has no valid local vertical; see `buildMeasurementRows`. */
+  readonly verticalRefused?: boolean;
+  /**
+   * Why measurements were left out of this scan's report (taken on another
+   * scan, or on one whose owner cannot be resolved). Printed under the
+   * Measurements heading; omitted when nothing was withheld.
+   */
+  readonly measurementsWithheld?: string | null;
   readonly technicalNotes?: string;
   /**
    * Provenance fingerprint from the classifier. When supplied AND the
@@ -145,7 +153,9 @@ export function composeReportInputs(input: ComposeReportInputs): ReportInputs {
       input.verticalToMetres ?? input.unitToMetres ?? 1,
       input.unitsVerified ?? true,
       input.geographicCrs ?? false,
+      input.verticalRefused ?? false,
     ),
+    ...(input.measurementsWithheld ? { measurementsWithheld: input.measurementsWithheld } : {}),
     technicalNotes: input.technicalNotes,
     provenance: input.provenance,
     sourceMetadata: input.sourceMetadata,

@@ -223,6 +223,13 @@ export interface ReportInputs {
   readonly visuals: readonly ReportVisualAsset[];
   readonly annotations: readonly ReportAnnotationRow[];
   readonly measurements: readonly ReportMeasurementRow[];
+  /**
+   * Why measurements were left out of the table: each was taken on a scan
+   * other than the one this report describes, or on one whose owner cannot be
+   * resolved. A report never prints another scan's measurement through this
+   * scan's units, frame or permissions.
+   */
+  readonly measurementsWithheld?: string;
   /** Free-form Markdown-ish notes appended to the report. Optional. */
   readonly technicalNotes?: string;
   /**

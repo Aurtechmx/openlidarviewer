@@ -40,7 +40,7 @@
 
 import { areaRingVerdict } from './areaValidity';
 import type { Measurement, MeasurementKind } from './types';
-import { GEOGRAPHIC_NOT_AVAILABLE } from './types';
+import { GEOGRAPHIC_NOT_AVAILABLE, VERTICAL_NOT_AVAILABLE } from './types';
 import {
   angleAtVertex,
   boxFromCorners,
@@ -95,6 +95,11 @@ export interface ChainScale {
   readonly unitsVerified?: boolean;
   /** True on a geographic (degree) frame: every dimension but height is refused. */
   readonly geographic?: boolean;
+  /**
+   * True when the frame has no valid local vertical (geocentric, depth-down):
+   * height, grade and the volume dimensions are refused too.
+   */
+  readonly verticalRefused?: boolean;
 }
 
 /**
@@ -276,6 +281,10 @@ export function aggregate(
   scale: ChainScale = {},
 ): ChainResult {
   const totalCount = measurements.length;
+  // No local vertical: every dimension that reads Z as elevation is refused.
+  if (scale.verticalRefused === true && (dimension === 'height' || dimension === 'grade' || dimension.startsWith('volume'))) {
+    return { value: Number.NaN, unit: '', contributingCount: 0, totalCount, operation, dimension, refusal: VERTICAL_NOT_AVAILABLE };
+  }
   // A geographic frame refuses every figure that mixes degree X/Y with a
   // linear Z; only a height (along up, in the Z unit) is left.
   if (scale.geographic === true && dimension !== 'height') {

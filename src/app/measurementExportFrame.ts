@@ -30,9 +30,18 @@ export interface ExportFrame {
   readonly geo: GeoExportContext;
   readonly unitToMetres: number;
   readonly verticalUnitToMetres: number;
-  /** The horizontal frame is angular (lon/lat degrees). */
+  /**
+   * Horizontal ground metrics are refused: `SpatialContext.horizontalMetricRefused`
+   * (geographic degrees, a Web Mercator grid or a geocentric frame). The same
+   * flag the live Measure tool refuses on.
+   */
   readonly geographic: boolean;
-  /** Linear scale known and the frame not angular: the metre columns are real metres. */
+  /**
+   * Vertical metrics are refused: `SpatialContext.verticalMetricRefused`
+   * (geocentric, depth-positive-down). The same flag the live tool reads.
+   */
+  readonly verticalRefused: boolean;
+  /** Linear scale known and horizontal metrics permitted: the metre columns are real metres. */
   readonly unitsVerified: boolean;
   readonly upAxis: SpatialUpAxis;
   /** The scan's own classification edit epoch (0 when none), for its class-edit state. */
@@ -43,13 +52,20 @@ export interface ExportFrame {
   readonly label: string;
 }
 
-/** The frame scalars of a resolved spatial context, the same rules the live measure tool applies. */
-export function frameScalars(ctx: SpatialContext): Pick<ExportFrame, 'unitToMetres' | 'verticalUnitToMetres' | 'geographic' | 'unitsVerified'> {
+/**
+ * The frame scalars and permissions of a resolved spatial context. The
+ * permissions are the CANONICAL ones the live Measure tool is fed from the same
+ * context (`main.ts` hands `horizontalMetricRefused` / `verticalMetricRefused`
+ * to the controller): there is no second rule here. A known metre unit alone
+ * never authorizes a distance; the frame must also permit horizontal metrics.
+ */
+export function frameScalars(ctx: SpatialContext): Pick<ExportFrame, 'unitToMetres' | 'verticalUnitToMetres' | 'geographic' | 'verticalRefused' | 'unitsVerified'> {
   return {
     unitToMetres: ctx.linearUnitToMetres,
     verticalUnitToMetres: verticalMetresPerUnit(ctx, 'horizontal') ?? 1,
-    geographic: ctx.isGeographic,
-    unitsVerified: ctx.linearUnitKnown && !ctx.isGeographic,
+    geographic: ctx.horizontalMetricRefused,
+    verticalRefused: ctx.verticalMetricRefused,
+    unitsVerified: ctx.linearUnitKnown && !ctx.horizontalMetricRefused,
   };
 }
 
@@ -58,7 +74,7 @@ export function exportFrameOf(geo: GeoExportContext, ctx: SpatialContext, upAxis
   const scalars = frameScalars(ctx);
   const key = JSON.stringify([
     ctx.kind, ctx.epsg ?? null, geo.crsName ?? null, ctx.linearUnit,
-    scalars.unitToMetres, scalars.verticalUnitToMetres, scalars.geographic, scalars.unitsVerified,
+    scalars.unitToMetres, scalars.verticalUnitToMetres, scalars.geographic, scalars.verticalRefused, scalars.unitsVerified,
     ctx.verticalReference, ctx.verticalDatum ?? null, ctx.verticalEpsg ?? null, upAxis,
   ]);
   const label = ctx.epsg != null ? `EPSG:${ctx.epsg}` : geo.crsName ?? 'no CRS';
@@ -136,10 +152,10 @@ export function mixedFrameRefusal(groups: readonly { frame: ExportFrame; names: 
 
 /**
  * The single frame a set of measurements shares, or the refusal. Each entry is
- * the scans one measurement was taken on; an empty entry is a measurement with
- * no recorded owner, which keeps meaning the active scan (the legacy rule).
- * Returns `owners` empty when no measurement names a scan, so the caller keeps
- * its active-scan path unchanged.
+ * the scans one measurement was taken on. This runs only while several scans
+ * are open, so an empty entry (a measurement with no recorded owner) has no
+ * resolvable owner, and the export is refused rather than borrowing the active
+ * scan's frame.
  */
 export function resolveOwnerFrame(
   entries: readonly (readonly OwnerRef[])[],
@@ -152,10 +168,10 @@ export function resolveOwnerFrame(
     g.names.add(name);
     groups.set(frame.key, g);
   };
-  let unowned = false;
+  let unowned = 0;
   for (const e of entries) {
     if (e.length === 0) {
-      unowned = true;
+      unowned++;
       continue;
     }
     for (const o of e) {
@@ -165,11 +181,10 @@ export function resolveOwnerFrame(
       add(f, o.name);
     }
   }
-  if (owners.size === 0) return { frame: null, owners: [] };
-  if (unowned) {
-    const a = frames.active();
-    add(a, a.geo.name ?? 'the active scan');
+  if (unowned > 0) {
+    return { refused: `Not exported: ${unowned} of ${entries.length} measurements ${unowned === 1 ? 'has' : 'have'} no record of the scan ${unowned === 1 ? 'it was' : 'they were'} taken on, so ${unowned === 1 ? 'its' : 'their'} units and frame cannot be resolved while several scans are open. Close every scan but the one the measurements were taken on, then export again.` };
   }
+  if (owners.size === 0) return { frame: null, owners: [] };
   if (groups.size > 1) {
     return { refused: mixedFrameRefusal([...groups.values()].map((g) => ({ frame: g.frame, names: [...g.names].sort((a, b) => a.localeCompare(b)) }))) };
   }

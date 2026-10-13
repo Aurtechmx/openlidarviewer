@@ -92,7 +92,7 @@ export interface MeasurePanelMount {
    */
   setMountElement(fn: ((el: HTMLElement) => void) | null): void;
   /** Track + apply the geographic-CRS caveat (replayed on a later mount). */
-  setGeographicNotice(value: boolean): void;
+  setGeographicNotice(value: boolean, verticalRefused?: boolean): void;
   /** Mark the panel as desired-visible and show it if already mounted. */
   showDesired(): void;
   /** Hide the panel and drop the tracked desired-visible intent. */
@@ -123,6 +123,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
   // (the dynamic import resolves later) replays the correct state on hydrate.
   let desiredVisible = false;
   let geographicNotice = false;
+  let verticalNotice = false;
   // High-water mark for measurement count — used to detect new placements.
   let lastMeasurementCount = 0;
 
@@ -270,6 +271,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
           // is not called metres.
           {
             geographic: viewer.measure.geographicCrs,
+            verticalRefused: viewer.measure.verticalRefused,
             unitsVerified: viewer.measure.crsKnown && !viewer.measure.geographicCrs,
           },
         );
@@ -350,7 +352,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
    */
   function hydrate(): void {
     if (!panel) return;
-    panel.setGeographicNotice(geographicNotice);
+    panel.setGeographicNotice(geographicNotice, verticalNotice);
     // Recompute contents + visibility from live controller state (summaries,
     // confidence context, measure mode). This also replays `desiredVisible`
     // when the profile-kind switch asked the panel forward before it existed.
@@ -393,9 +395,10 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       // resolved between column build and here), place it now.
       if (fn && panel) fn(panel.element);
     },
-    setGeographicNotice(value) {
+    setGeographicNotice(value, verticalRefused = false) {
       geographicNotice = value;
-      panel?.setGeographicNotice(value);
+      verticalNotice = verticalRefused;
+      panel?.setGeographicNotice(value, verticalRefused);
     },
     showDesired() {
       desiredVisible = true;

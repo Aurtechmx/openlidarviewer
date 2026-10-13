@@ -373,6 +373,8 @@ export class MeasurePanel {
   private readonly _geoNotice: HTMLElement;
   /** Whether the active CRS is geographic, as last set by {@link setGeographicNotice}. */
   private _geographicCrs = false;
+  /** Whether the active frame has no valid local vertical, as last set by {@link setGeographicNotice}. */
+  private _verticalRefused = false;
   /**
    * Active `ResizeObserver` instances created for the profile-chart
    * persistence path. Each `_renderList()` call detaches and replaces
@@ -602,8 +604,9 @@ export class MeasurePanel {
    * controller's `setGeographicCrs`), so the panel and the hint bar can
    * never disagree about the active frame.
    */
-  setGeographicNotice(show: boolean): void {
+  setGeographicNotice(show: boolean, verticalRefused = false): void {
     this._geographicCrs = show;
+    this._verticalRefused = verticalRefused;
     this._geoNotice.classList.toggle('olv-hidden', !show);
   }
 
@@ -805,7 +808,8 @@ export class MeasurePanel {
     // The sheet prints grades and chainages, which a geographic frame refuses,
     // exactly as the profile CSV is refused. The docked workbench comes through
     // here too, so the refusal covers both controls.
-    if (profileCsvRefusal(s, this._geographicCrs)) throw new Error(GEOGRAPHIC_CRS_MEASURE_NOTICE);
+    const refusal = profileCsvRefusal(s, this._geographicCrs, this._verticalRefused);
+    if (refusal) throw new Error(refusal);
     // The frame the section was measured in, captured with it. Both were read
     // after the chunk await, so a scan swap while pdf-lib loaded labelled this
     // profile's geometry with the next scan's CRS and unit system.
@@ -869,7 +873,7 @@ export class MeasurePanel {
 
   /** Disable a profile CSV button, with the reason as its tooltip, when the export is refused. */
   private _applyCsvRefusal(button: HTMLButtonElement, s: MeasurementSummary): void {
-    const refusal = profileCsvRefusal(s, this._geographicCrs);
+    const refusal = profileCsvRefusal(s, this._geographicCrs, this._verticalRefused);
     if (!refusal) return;
     button.disabled = true;
     button.title = refusal;
@@ -877,7 +881,7 @@ export class MeasurePanel {
 
   private _exportProfileCsv(s: MeasurementSummary): void {
     if (!s.profileChart || s.profileChart.length < 2) return;
-    if (profileCsvRefusal(s, this._geographicCrs)) return;
+    if (profileCsvRefusal(s, this._geographicCrs, this._verticalRefused)) return;
     const system = this._displayUnits(s);
     const csv = buildProfileCsv(
       s.profileChart,

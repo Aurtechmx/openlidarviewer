@@ -48,6 +48,7 @@ import type { SpatialUpAxis } from '../geo/SpatialContext';
 import type { Annotation } from '../render/annotate/types';
 import type { Measurement, Vec3 } from '../render/measure/types';
 import type { loadKmlExport } from '../lazyChunks';
+import { measurementsOwnedByActive, type OwnershipView } from './measurementOwnership';
 
 /** Whether a product can be exported right now, and why not when it cannot. */
 export interface KmlActionStatus {
@@ -107,6 +108,17 @@ export interface KmlActionDeps {
    * figures, as the live Measure tool allows.
    */
   readonly isGeographic?: () => boolean;
+  /**
+   * True when the active frame has no valid local vertical (geocentric,
+   * depth-down): `SpatialContext.verticalMetricRefused`. Heights are withheld too.
+   */
+  readonly verticalRefused?: () => boolean;
+  /**
+   * The open layers and the active scan, so the site file places only the
+   * measurements the active scan owns. Omitted: only a measurement recording
+   * no scan is the active scan's.
+   */
+  readonly measurementOwnership?: () => OwnershipView;
   /** The active scan's horizontal extent in LOCAL space, or null when none. */
   readonly scanExtent: () => ScanExtentReading | null;
   /**
@@ -229,9 +241,14 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
   // were read after it, so a placement made (or a scan opened) during the import
   // produced a file mixing one moment's frame with another's contents. One
   // reading of the session, then the load.
+  // Every feature is placed through the ACTIVE scan's origin, mapper and
+  // units, so a measurement taken on any other scan (or one whose scan is
+  // closed or unrecorded) is withheld and the document says why.
+  const owned = measurementsOwnedByActive(deps.measurements(), deps.measurementOwnership ? deps.measurementOwnership() : { layers: [], activeViewerId: null });
   const input: KmlExportInput = {
     annotations: deps.annotations(),
-    measurements: deps.measurements(),
+    measurements: owned.own,
+    withheldMeasurements: owned.withheld,
     // Saved views become <LookAt> placemarks in the same LOCAL render frame as
     // the measurements, so the injected transform places them correctly.
     viewpoints: deps.viewpoints(),
@@ -256,6 +273,7 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
     // A degree frame: measurements the live tool refuses publish no
     // grade, angle or length.
     geographic: deps.isGeographic?.() ?? false,
+    verticalRefused: deps.verticalRefused?.() ?? false,
     toLonLat,
     notSurveyGradeNote: NOT_SURVEY_GRADE,
     // The scan's outline, placed through the same mapper as every feature. The

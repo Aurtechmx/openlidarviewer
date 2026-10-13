@@ -24,7 +24,7 @@
 import {
   GEOGRAPHIC_CRS_MEASURE_NOTICE,
 } from './format';
-import { geographicRefusesKind } from './types';
+import { VERTICAL_NOT_AVAILABLE, geographicRefusesKind } from './types';
 
 // The kind rule lives with the kind union; re-exported for the live grade's callers.
 export { geographicRefusesKind };
@@ -61,6 +61,12 @@ export interface MeasurementTrustInput {
    * flagged).
    */
   readonly geographicCrs?: boolean;
+  /**
+   * True when this measurement's number reads Z as a local elevation on a
+   * frame that has none (geocentric, depth-positive-down). A refusal like
+   * {@link geographicCrs}; the caller scopes it with `frameRefusalText`.
+   */
+  readonly verticalRefused?: boolean;
 }
 
 export interface MeasurementTrust {
@@ -145,9 +151,14 @@ export function gradeMeasurement(input: MeasurementTrustInput): MeasurementTrust
   // Geographic (degree) frame: the figure mixes degree X/Y with a linear Z,
   // so it is WRONG as a distance, not merely uncertified — a refusal, not a
   // caution. Shares the hint/panel copy so the wording cannot fork.
-  const geographicRefusal = input.geographicCrs === true;
+  const verticalRefusal = input.verticalRefused === true;
+  const geographicRefusal = input.geographicCrs === true && !verticalRefusal;
   if (geographicRefusal) {
     reasons.push(GEOGRAPHIC_CRS_MEASURE_NOTICE);
+    grade = 'red';
+  }
+  if (verticalRefusal) {
+    reasons.push(`Height ${VERTICAL_NOT_AVAILABLE}.`);
     grade = 'red';
   }
 
@@ -156,9 +167,10 @@ export function gradeMeasurement(input: MeasurementTrustInput): MeasurementTrust
     if (grade === 'green') grade = 'yellow';
   }
 
-  const presentable = !anyVoid && !geographicRefusal;
+  const presentable = !anyVoid && !geographicRefusal && !verticalRefusal;
   let caption: string;
-  if (geographicRefusal) caption = 'Unverified — degrees are not distances (geographic CRS)';
+  if (verticalRefusal) caption = 'Unverified — this frame has no local vertical (geocentric or depth-down)';
+  else if (geographicRefusal) caption = 'Unverified — degrees are not distances (geographic CRS)';
   else if (grade === 'green') caption = 'Verified — well supported by measured points';
   else if (grade === 'yellow') caption = 'Caution — loosely supported or unverified scale';
   else caption = 'Unverified — an endpoint has no points to measure';
