@@ -22,6 +22,8 @@
 
 export const FRAME_ALL = 'Frame all';
 export const ORTHOGRAPHIC = 'Orthographic projection';
+/** The projection command's title while the scene is already orthographic. */
+export const PERSPECTIVE = 'Switch to perspective projection';
 export const PLAN_VIEW = 'Plan view';
 export const NAVIGATION_PANEL = 'Show navigation panel';
 export const MEASURE = 'Measure';

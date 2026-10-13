@@ -15,6 +15,6 @@ export function buildTestActionRegistry(): Action[] {
     runFillUnclassified: async () => undefined, runTool: noop, buildCurrentStoryInputs: () => ({}) as never, startWorkflowRecording: noop,
     dispatchWorkflowEvent: noop, ensureWorkflowConfigPanel: async () => ({}) as never, ensureShortcutSheet: async () => ({}) as never,
     hasScan: () => false, saveCurrentView: noop, applyView: noop, toggleOrbitInvert: noop, resetNavigation: noop, toggleReferencePlane: noop,
-    planView: { togglePlanView: noop, notePlanViewPreset: noop, toggleNavigationPanel: noop },
+    planView: { togglePlanView: noop, notePlanViewPreset: noop, toggleNavigationPanel: noop, showStandardView: noop, setOrthographic: noop, frameAll: noop },
   } as unknown as ActionRegistryDeps);
 }

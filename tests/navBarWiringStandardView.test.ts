@@ -20,9 +20,11 @@ function setup() {
     // The ViewCube's turn-in-place: keeps pivot and distance, so it never refits.
     orientView(dir: readonly number[]) { calls.push(`orient:${dir.map((d) => Math.round(d * 100) / 100).join(',')}`); this.navMode = 'orbit'; return true; },
     frameAll() { calls.push('frameAll'); },
+    setCameraPreset(name: string) { calls.push(`preset:${name}`); return true; },
   };
   const planStates: boolean[] = [];
-  const bar = { setPlanActive: (on: boolean) => planStates.push(on), setOrthographicActive: () => {} };
+  const orthoChip: boolean[] = [];
+  const bar = { setPlanActive: (on: boolean) => planStates.push(on), setOrthographicActive: (on: boolean) => orthoChip.push(on) };
   const pending: (() => void)[] = [];
   const wiring = createNavBarWiring({
     getViewer: () => viewer as unknown as Viewer,
@@ -31,7 +33,7 @@ function setup() {
     defer: (fn) => { pending.push(fn); },
   });
   const settle = (): void => { for (const fn of pending.splice(0)) fn(); };
-  return { wiring, calls, planStates, settle };
+  return { wiring, viewer, calls, planStates, orthoChip, settle };
 }
 
 describe('standard view while Plan View is on', () => {
@@ -97,6 +99,109 @@ describe('ViewCube clicks', () => {
     const { wiring, calls, planStates } = setup();
     wiring.onOrientView([0, 0.7, 0.7]);
     expect(calls).toEqual(['orient:0,0.7,0.7']);
+    expect(planStates).toEqual([]);
+  });
+});
+
+describe('palette and shortcut routes while Plan View is on', () => {
+  async function inPlan() {
+    const t = setup();
+    await t.wiring.togglePlanView();
+    t.settle();
+    expect(t.planStates.at(-1)).toBe(true);
+    t.calls.length = 0;
+    return t;
+  }
+
+  it('showStandardView leaves plan mode with one camera call', async () => {
+    const { wiring, calls, planStates, settle } = await inPlan();
+    expect(wiring.showStandardView('front')).toBe(true);
+    settle();
+    expect(calls.filter((c) => c.startsWith('view:'))).toEqual(['view:front']);
+    expect(planStates.at(-1)).toBe(false);
+    // The camera call is all: no restore of the pre-plan view follows.
+    expect(calls).toEqual(['view:front']);
+  });
+
+  it('showStandardView to top keeps plan mode', async () => {
+    const { wiring, planStates, settle } = await inPlan();
+    wiring.showStandardView('top');
+    settle();
+    expect(planStates.at(-1)).toBe(true);
+  });
+
+  it('setOrthographic(false) leaves plan mode and the Ortho chip follows the viewer', async () => {
+    const { wiring, viewer, planStates, orthoChip, settle } = await inPlan();
+    expect(wiring.setOrthographic(false)).toBe(true);
+    settle();
+    expect(viewer.orthographic).toBe(false);
+    expect(planStates.at(-1)).toBe(false);
+    expect(orthoChip.at(-1)).toBe(false);
+  });
+
+  it('a rapid repeat leaves plan mode once and ends on the last projection', async () => {
+    const { wiring, viewer, planStates, orthoChip, settle } = await inPlan();
+    wiring.setOrthographic(false);
+    wiring.setOrthographic(true);
+    settle();
+    expect(planStates.filter((s) => !s)).toHaveLength(1);
+    expect(planStates.at(-1)).toBe(false);
+    expect(viewer.orthographic).toBe(true);
+    expect(orthoChip.at(-1)).toBe(true);
+  });
+
+  it('a standard view before the entry lands cancels it and nothing lights late', async () => {
+    const { wiring, calls, planStates, orthoChip, viewer, settle } = setup();
+    await wiring.togglePlanView();
+    wiring.showStandardView('front');
+    settle();
+    expect(planStates.includes(true)).toBe(false);
+    // The entry's projection is put back, and the chip says so.
+    expect(viewer.orthographic).toBe(false);
+    expect(orthoChip.at(-1)).toBe(false);
+    expect(calls.filter((c) => c.startsWith('mode:'))).toEqual([]);
+  });
+
+  it('frame all, from the bar, the palette or the R key, leaves plan mode', async () => {
+    const a = await inPlan();
+    a.wiring.frameAll();
+    // Plan mode hands the drag back to the mode before it (orbit here).
+    expect(a.calls).toEqual(['frameAll', 'mode:orbit']);
+    expect(a.planStates.at(-1)).toBe(false);
+
+    const b = await inPlan();
+    b.wiring.callbacks.onReset();
+    expect(b.planStates.at(-1)).toBe(false);
+
+    const c = await inPlan();
+    // The viewer already framed on R; the note moves no camera, it only ends
+    // plan mode and puts back the mode before it.
+    c.wiring.noteFrameAll();
+    expect(c.calls).toEqual(['mode:orbit']);
+    expect(c.planStates.at(-1)).toBe(false);
+  });
+
+  it('a camera preset shortcut tells plan mode', async () => {
+    const { wiring, calls, planStates } = await inPlan();
+    expect(wiring.applyCameraPreset('oblique')).toBe(true);
+    expect(calls).toEqual(['preset:oblique', 'mode:orbit']);
+    expect(planStates.at(-1)).toBe(false);
+  });
+
+  it('a saved-view restore drops plan mode without moving the camera again', async () => {
+    const { wiring, viewer, calls, planStates, orthoChip } = await inPlan();
+    wiring.restoreCamera(() => { calls.push('restore'); viewer.orthographic = false; });
+    expect(calls).toEqual(['restore']);
+    expect(planStates.at(-1)).toBe(false);
+    expect(orthoChip.at(-1)).toBe(false);
+  });
+
+  it('routes before Plan View was ever used load nothing and still move the camera', () => {
+    const { wiring, calls, planStates } = setup();
+    wiring.showStandardView('front');
+    wiring.setOrthographic(true);
+    wiring.frameAll();
+    expect(calls).toEqual(['view:front', 'ortho:true', 'frameAll']);
     expect(planStates).toEqual([]);
   });
 });

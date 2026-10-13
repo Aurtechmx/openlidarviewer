@@ -26,7 +26,7 @@
  */
 
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import type { NavMode } from '../src/render/NavController';
+import type { NavMode, TweenOutcome } from '../src/render/NavController';
 import type { StandardView } from '../src/render/camera/cameraPresets';
 import {
   createPlanViewController,
@@ -42,6 +42,8 @@ class FakeViewport implements PlanViewViewport {
   navMode: NavMode = 'orbit';
   orthographic = false;
   handPanEnabled = true;
+  cameraTweening?: boolean;
+  cameraTweenOutcome?: TweenOutcome;
   /** False stands in for "no scan loaded", which is what returns false. */
   hasScan = true;
   /** Every call, in order, so a test can pin the sequence and not just the end. */
@@ -247,8 +249,9 @@ describe('leaving plan view', () => {
 
 describe('when the user changes the scene by hand', () => {
   /** An active plan session with the entry work already applied. */
-  function entered() {
+  function entered(startMode: NavMode = 'orbit') {
     const v = new FakeViewport();
+    v.navMode = startMode;
     const c = controller(v);
     c.plan.toggle();
     c.settle();
@@ -264,9 +267,46 @@ describe('when the user changes the scene by hand', () => {
 
     expect(plan.active).toBe(false);
     expect(changes.at(-1)).toEqual({ active: false, reason: 'drift' });
-    // Dropping is not leaving: the user already has the scene they asked for,
-    // and a restore here would undo their own click.
-    expect(v.calls).toEqual([]);
+    // Dropping is not leaving: the projection the user chose stays. Only the
+    // hand tool plan mode switched on goes back to the mode before it.
+    expect(v.calls).toEqual(['mode:orbit']);
+  });
+
+  it('every exit leaves the mode the user had before plan mode', () => {
+    // The projection toggle: no tween, so the mode goes back at once.
+    const byProjection = entered('fly');
+    expect(byProjection.v.navMode).toBe('pan');
+    byProjection.v.orthographic = false;
+    byProjection.plan.noteOrthographic(false);
+    expect(byProjection.v.navMode).toBe('fly');
+
+    // A standard view: the viewer hands the camera to orbit and tweens; the
+    // mode waits for the tween to land, as the toggle's does.
+    const byView = entered('fly');
+    byView.v.setStandardView('front');
+    byView.v.cameraTweening = true;
+    byView.plan.noteStandardView('front');
+    expect(byView.v.navMode).toBe('orbit');
+    byView.v.cameraTweening = false;
+    byView.settle();
+    expect(byView.v.navMode).toBe('fly');
+
+    // And the toggle itself, for comparison.
+    const byToggle = entered('fly');
+    byToggle.plan.toggle();
+    byToggle.settle();
+    expect(byToggle.v.navMode).toBe('fly');
+  });
+
+  it('leaves a mode the user took during the move alone', () => {
+    const { v, plan, settle } = entered('fly');
+    v.setStandardView('front');
+    v.cameraTweening = true;
+    plan.noteStandardView('front');
+    v.cameraTweening = false;
+    v.cameraTweenOutcome = 'cancelled';
+    settle();
+    expect(v.navMode).toBe('orbit');
   });
 
   it('drops the claim when the camera is aimed anywhere but straight down', () => {

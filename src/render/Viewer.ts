@@ -357,6 +357,8 @@ export interface NavListeners {
   onModeChange?: (mode: NavMode, byKey?: boolean) => void;
   onPointerLockChange?: (locked: boolean) => void;
   onToggleHelp?: () => void;
+  /** The R key framed all; the camera is already moving. */
+  onReset?: () => void;
 }
 
 /** UI-facing measurement events the app can subscribe to. */
@@ -1068,7 +1070,7 @@ export class Viewer {
       onModeChange: (m, byKey) => this._navListeners.onModeChange?.(m, byKey),
       onPointerLockChange: (l) => this._navListeners.onPointerLockChange?.(l),
       onToggleHelp: () => this._navListeners.onToggleHelp?.(),
-      onReset: () => this.frameAll(),
+      onReset: () => { this.frameAll(); this._navListeners.onReset?.(); },
       onFocusCenter: () => this._focusCenter(),
       isOrthographic: () => this._orthographic,
     });
@@ -3459,10 +3461,8 @@ export class Viewer {
     this._nav.setSpeedMultiplier(multiplier);
   }
 
-  /** Subscribe to navigation events (mode change, pointer lock, help toggle). */
-  setNavListeners(listeners: NavListeners): void {
-    this._navListeners = listeners;
-  }
+  /** Subscribe to navigation events (mode change, pointer lock, help toggle, R). */
+  setNavListeners(listeners: NavListeners): void { this._navListeners = listeners; }
 
   /** Capture the current camera viewpoint for a saved view. */
   getCameraPose(): CameraPose {
