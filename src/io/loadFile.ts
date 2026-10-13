@@ -29,6 +29,7 @@ import type { LoadTelemetry } from './loadTelemetry';
 import { formatInfo } from './formatInfo';
 import type { SourceMetadata } from './PointCloudSource';
 import { buildPreloadSummary } from './preloadSummary';
+import { loadScopeForMode } from './loadScope';
 import { LoadError } from './loadErrors';
 import type { LoadErrorCategory } from './loadErrors';
 import type { OrganizedRangeSet } from '../model/OrganizedRange';
@@ -68,8 +69,10 @@ export interface LoadCallbacks {
    * Multi-line preload summary, emitted once the format has been detected —
    * the format, the source size, the point count where the header reveals one,
    * and how the file will be loaded. Shown for every format, before the decode.
+   * The second argument is the same preflight as structured facts, so a caller
+   * can show the format and scope without reading them back out of the lines.
    */
-  onPreload?: (lines: string[]) => void;
+  onPreload?: (lines: string[], meta?: SourceMetadata) => void;
   /**
    * Each decoded chunk's positions as the decode runs, so a stand-in can fill
    * in before the resolved result supersedes it. Pooled `.laz` loads only; a
@@ -438,12 +441,15 @@ function buildSourceMetadata(file: File, preflight: FilePreflight): SourceMetada
     meta.estimatedPointCount = plan.sourceCount;
     meta.loadModeSummary =
       plan.mode === 'all' ? 'Standard load' : 'Large-file optimization enabled';
+    meta.loadScope = loadScopeForMode(plan.mode);
   } else if (preflight.e57) {
     // E57's declared record total is read from its XML section, so it can state
     // a real count and a real mode up front exactly as LAS does.
     meta.estimatedPointCount = preflight.e57.plan.sourceCount;
     meta.loadModeSummary =
       preflight.e57.plan.mode === 'all' ? 'Standard load' : 'Large-file optimization enabled';
+    // A plan that does not fit is a refusal; it gets no scope.
+    if (preflight.e57.plan.fits) meta.loadScope = loadScopeForMode(preflight.e57.plan.mode);
   } else if (headerPointCount !== undefined) {
     meta.estimatedPointCount = headerPointCount;
   }
@@ -584,23 +590,56 @@ const READ_CHUNK_BYTES = 64 * 1024 * 1024;
  * makes the cancel window one chunk, not the whole file. A file at or below one
  * chunk takes the single-read path (the cancel window is already tiny and
  * slicing would only add copies).
+ *
+ * `onBytes`, when given, reports bytes copied so far against the file size: 0
+ * before the first read (when the file is not empty), after each chunk, and the
+ * full size exactly once on success. Cancellation is checked after every read,
+ * before reporting, so a cancelled or failed read never reports completion. The
+ * single-read path reports only its start and end.
  */
 export async function readWholeFileAbortable(
   file: File,
   signal: AbortSignal | undefined,
+  onBytes?: (bytesRead: number, totalBytes: number) => void,
 ): Promise<ArrayBuffer> {
   const total = file.size;
   if (signal?.aborted) throw new LoadCancelledError();
-  if (total <= READ_CHUNK_BYTES) return file.arrayBuffer();
+  if (total > 0) onBytes?.(0, total);
+  if (total <= READ_CHUNK_BYTES) {
+    if (!onBytes) return file.arrayBuffer();
+    const whole = await file.arrayBuffer();
+    if (signal?.aborted) throw new LoadCancelledError();
+    onBytes(total, total);
+    return whole;
+  }
   const dest = new Uint8Array(total);
   let offset = 0;
   while (offset < total) {
     if (signal?.aborted) throw new LoadCancelledError();
     const end = Math.min(offset + READ_CHUNK_BYTES, total);
-    dest.set(new Uint8Array(await file.slice(offset, end).arrayBuffer()), offset);
+    const chunk = await file.slice(offset, end).arrayBuffer();
+    if (onBytes && signal?.aborted) throw new LoadCancelledError();
+    dest.set(new Uint8Array(chunk), offset);
     offset = end;
+    onBytes?.(offset, total);
   }
   return dest.buffer;
+}
+
+/**
+ * The `reading-file` stage update for a main-thread read: bytes copied against
+ * the file size, with a fraction in [0, 1]. An empty file has no fraction. This
+ * is the read only; decoding is reported by its own stages afterwards.
+ */
+export function readProgress(
+  onProgress: (update: ProgressUpdate) => void,
+): (bytesRead: number, totalBytes: number) => void {
+  return (bytesRead, totalBytes) =>
+    onProgress({
+      stage: 'reading-file',
+      detail: `${formatByteSize(bytesRead)} of ${formatByteSize(totalBytes)}`,
+      fraction: totalBytes > 0 ? Math.min(1, Math.max(0, bytesRead / totalBytes)) : undefined,
+    });
 }
 
 /**
@@ -634,7 +673,8 @@ export async function loadFile(
   const { format, plan } = preflight;
   throwIfCancelled();
   // The universal preload summary — shown for every format, before the decode.
-  onPreload?.(buildPreloadSummary(buildSourceMetadata(file, preflight)));
+  const sourceMeta = buildSourceMetadata(file, preflight);
+  onPreload?.(buildPreloadSummary(sourceMeta), sourceMeta);
   const sniffMs = performance.now() - startedAt;
 
   // --- Refuse here, before a byte of the body is read. ---
@@ -656,11 +696,13 @@ export async function loadFile(
   // so neither thread holds the compressed file whole. Every other format is
   // read here and its bytes transferred.
   const sendFile = format === 'laz' && plan !== undefined;
-  onProgress?.({ stage: 'reading-file' });
+  // The File handed to the worker has no main-thread read to measure, so that
+  // stage stays indeterminate. A main-thread read reports the bytes it copied.
+  if (sendFile) onProgress?.({ stage: 'reading-file' });
   const readStartedAt = performance.now();
   // Abort-aware: a cancel during a multi-gigabyte read stops within one chunk
   // instead of after the whole file has been materialised.
-  const buffer = sendFile ? null : await readWholeFileAbortable(file, signal);
+  const buffer = sendFile ? null : await readWholeFileAbortable(file, signal, onProgress && readProgress(onProgress));
   // No whole-file read happened when the File was sent; the row is omitted
   // rather than reported as zero, and the worker's ranged reads fill in.
   const fileReadMs = sendFile ? undefined : performance.now() - readStartedAt;

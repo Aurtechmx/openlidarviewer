@@ -342,5 +342,27 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .olv-toast.is-opening .olv-toast-dot { animation: none; }
+  .olv-toast-bar-fill { transition: none; }
+}
+/* File context above the progress line: the name, then what preflight found.
+   One line; the name gives way first (ellipsis) so Cancel and the facts stay
+   in the card. The whole name stays in the DOM for assistive technology. */
+.olv-toast-context {
+  display: flex; align-items: baseline; gap: var(--space-xs); min-width: 0;
+  font-size: var(--text-xs); color: var(--text-dim); line-height: 1.4;
+}
+.olv-toast-file {
+  flex: 0 100 auto; min-width: 3ch; color: var(--text); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.olv-toast-sep { flex: none; }
+.olv-toast-facts {
+  flex: 0 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* A preflight warning stays under the progress line for the whole open. */
+.olv-toast-note {
+  font-size: var(--text-xs); color: var(--warn); line-height: 1.4;
+  overflow-wrap: anywhere; min-width: 0;
 }
 

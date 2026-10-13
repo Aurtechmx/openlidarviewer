@@ -24,6 +24,7 @@
  */
 
 import type { SourceFormat } from './sniffFormat';
+import type { LoadScope } from './loadScope';
 import type { LoadResult, LoadCallbacks, LoadOptions } from './loadFile';
 
 /**
@@ -45,6 +46,12 @@ export interface SourceMetadata {
   estimatedPointCount?: number;
   /** One-line description of the chosen load strategy, when known. */
   loadModeSummary?: string;
+  /**
+   * How much of the file the planned load covers, read off the plan's decode
+   * mode. Undefined when no plan decides it before decoding, or when the plan
+   * already refuses the open. Display only.
+   */
+  loadScope?: LoadScope;
   /**
    * A pre-decode caution shown before the (expensive) parse — e.g. a large
    * non-LAS file that decodes fully in memory and may spike RAM. Undefined when

@@ -26,7 +26,9 @@ import { takePendingSessionRestore } from './pendingSessionRestore';
 export { clearPendingSessionRestore } from './pendingSessionRestore';
 import { rememberCloudFile } from '../io/sourceFiles';
 import { detectCopc } from '../io/copc/copcDetect';
-import { formatProgress } from '../io/loadProgress';
+import { formatProgress, loadStageLabel } from '../io/loadProgress';
+import { loadContextFacts, streamingContextFacts } from '../io/loadScope';
+import { sniffFormat } from '../io/sniffFormat';
 import { describeLoadError, LoadError } from '../io/loadErrors';
 import { LoadCancelledError } from '../io/loadFile';
 import { HEADER_PEEK_BYTES, openLocalHeavyLas, describeHeavyRefusal } from './openLocalHeavyLas';
@@ -47,7 +49,7 @@ import type { ExportPanel } from '../ui/ExportPanel';
 import type { ToolDock } from '../ui/toolDock';
 import type { NavBar } from '../ui/NavBar';
 import type { DebugOverlay } from '../ui/DebugOverlay';
-import type { DropZone } from '../ui/DropZone';
+import type { DropZone, LoadContext } from '../ui/DropZone';
 import { announceProjectReady } from '../ui/ProjectCard';
 import type { Stage } from '../ui/Stage';
 import type { ScanService } from './ScanService';
@@ -115,7 +117,7 @@ export interface OpenScanDeps {
   dropZone: Pick<
     DropZone,
     'setOpening' | 'setCancelHandler' | 'setProgress' | 'setPreload' | 'setError'
-  > & Partial<Pick<DropZone, 'finish'>>;
+  > & Partial<Pick<DropZone, 'finish' | 'operation' | 'setFileContext' | 'setStageProgress' | 'setCancelled'>>;
   /** Open a local COPC file through the streaming pipeline (wraps the range source + `openStreamingCopc`). */
   openLocalCopc: (file: File, signal: AbortSignal) => Promise<void>;
   /** Load a dropped / opened file through the static loader (wraps `new LocalFileSource(file).load(...)`). */
@@ -275,7 +277,12 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
   // Blue blinking "Opening …" — the prominent first feedback, matching the
   // catalog status vocabulary so device and public-dataset loads read the same.
   // The load's staged progress (decoding / uploading / rendering) supersedes it.
-  deps.dropZone.setOpening(`Opening ${file.name}…`);
+  deps.dropZone.setOpening(`Opening ${file.name}…`, file.name);
+  // The status updates below carry this open's id, so one that lands after
+  // the open has ended cannot draw over the next.
+  const op = deps.dropZone.operation;
+  const showFacts = (facts: LoadContext): void =>
+    deps.dropZone.setFileContext?.(facts, op);
   deps.dropZone.setCancelHandler(() => controller.abort());
   try {
     // ensure the lazy-loaded Viewer is ready before touching it.
@@ -288,6 +295,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     // COPC is part of the lazy COPC chunk.
     const headSlice = await file.slice(0, HEADER_PEEK_BYTES).arrayBuffer();
     if (detectCopc(headSlice).isCopc) {
+      showFacts(streamingContextFacts('copc'));
       await deps.openLocalCopc(file, controller.signal);
       return;
     }
@@ -301,6 +309,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     // the file IS heavy and the out-of-core path could not run: the whole-file
     // loader would face the same too-large allocation, so this REFUSES with a
     // named reason instead of falling through into an out-of-memory crash.
+    let streamed = false;
     const heavy = await openLocalHeavyLas(file, controller.signal, {
       viewerReady: deps.viewerReady,
       getViewer: deps.getViewer,
@@ -315,7 +324,16 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
         typeof document !== 'undefined' && document.body
           ? document.body
           : { classList: { add: () => {} } },
-      setPhase: (phase) => deps.dropZone.setProgress(phase),
+      setPhase: (phase) => {
+        // Called only once the file is routed out of core, so the scope is known.
+        if (!streamed) {
+          streamed = true;
+          const format = sniffFormat(headSlice, file.name);
+          showFacts(streamingContextFacts(format === 'unknown' ? undefined : format));
+        }
+        if (deps.dropZone.setStageProgress) deps.dropZone.setStageProgress(phase, undefined, { op, stage: phase });
+        else deps.dropZone.setProgress(phase);
+      },
       debug: deps.debug,
       streaming: deps.getStreamingDeps(),
     }, { head: headSlice });
@@ -327,7 +345,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     }
     if (heavy.status === 'cancelled') {
       deps.dropZone.setCancelHandler(null);
-      deps.dropZone.setProgress(null);
+      showCancelled(deps);
       return;
     }
     // A CONFIRMED-heavy file whose out-of-core index could not be built must NOT
@@ -350,8 +368,25 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     const result = await deps.loadLocalSource(
       file,
       {
-        onProgress: (u) => deps.dropZone.setProgress(formatProgress(u), u.fraction),
-        onPreload: (lines) => deps.dropZone.setPreload(lines),
+        onProgress: (u) => {
+          if (controller.signal.aborted === true) return;
+          if (!deps.dropZone.setStageProgress) {
+            deps.dropZone.setProgress(formatProgress(u), u.fraction);
+            return;
+          }
+          // Reading the file is not the import: its fraction fills the bar but
+          // not the busy scan's trail, which follows the decode.
+          deps.dropZone.setStageProgress(formatProgress(u), u.fraction, {
+            op,
+            stage: u.stage,
+            announce: loadStageLabel(u.stage),
+            trail: u.stage !== 'reading-file',
+          });
+        },
+        onPreload: (lines, meta) => {
+          if (meta && deps.dropZone.setFileContext) showFacts(loadContextFacts(meta));
+          else deps.dropZone.setPreload(lines);
+        },
         onPreviewChunk: (chunk) => {
           if (controller.signal.aborted) return;
           if (preview) return preview.append(chunk);
@@ -378,7 +413,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     if (preview) takeDownPreview(deps, preview);
     if (err instanceof LoadCancelledError) {
       // A cancelled load is a quiet no-op — no error toast, nothing was added.
-      deps.dropZone.setProgress(null);
+      showCancelled(deps);
     } else {
       // The toast shows a clear, categorised message; the raw error still
       // reaches the console for developers under ?debug=1.
@@ -393,6 +428,12 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
   } finally {
     deps.setLoading(false);
   }
+}
+
+/** Hide the status for a cancelled open, saying so politely where supported. */
+function showCancelled(deps: OpenScanDeps): void {
+  if (deps.dropZone.setCancelled) deps.dropZone.setCancelled();
+  else deps.dropZone.setProgress(null);
 }
 
 /**

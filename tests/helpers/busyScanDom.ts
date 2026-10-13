@@ -52,6 +52,9 @@ export class Node0 {
     this.attrs[k] = v;
     if (k === 'class') this.className = v;
   }
+  removeAttribute(k: string): void {
+    delete this.attrs[k];
+  }
   getAttribute(k: string): string | null {
     if (k === 'class') return this.className;
     return this.attrs[k] ?? null;

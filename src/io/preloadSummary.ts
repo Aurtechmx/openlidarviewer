@@ -13,6 +13,7 @@
 
 import type { SourceMetadata } from './PointCloudSource';
 import { formatPointCount } from './loadPlan';
+import { knownPointCount, loadScopeLabel } from './loadScope';
 // Re-exported for back-compat: existing callers import formatByteSize from here.
 // The implementation now lives in its own leaf module so the UI panels can
 // share it without pulling in loadPlan.
@@ -27,11 +28,17 @@ import { formatByteSize } from './formatByteSize';
  */
 export function buildPreloadSummary(meta: SourceMetadata): string[] {
   const lines = [`${meta.label} detected`];
-  if (meta.estimatedPointCount !== undefined) {
-    lines.push(`${formatPointCount(meta.estimatedPointCount)} source points`);
+  // A count the header does not state (or states as zero) is left out rather
+  // than printed as 0 or estimated.
+  const count = knownPointCount(meta.estimatedPointCount);
+  if (count !== undefined) {
+    lines.push(`${formatPointCount(count)} source points`);
   }
   lines.push(formatByteSize(meta.byteSize));
-  if (meta.loadModeSummary) lines.push(meta.loadModeSummary);
+  // The scope label is read off the plan's mode; the older summary string is
+  // the fallback for metadata that carries no scope.
+  const scope = meta.loadScope ? loadScopeLabel(meta.loadScope) : meta.loadModeSummary;
+  if (scope) lines.push(scope);
   // A pre-decode caution (e.g. large non-LAS RAM spike) belongs in the summary
   // the user reads before committing to the parse — prefixed so it reads as a
   // warning, not another neutral fact.
