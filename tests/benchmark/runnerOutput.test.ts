@@ -11,7 +11,7 @@
  * row in a CSV), and require a non-empty problem list. A verifier that passes a
  * doctored tree is worse than no verifier, because it certifies it.
  */
-import { describe, test, expect, beforeAll } from 'vitest';
+import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { nodeSha256Hex } from '../../benchmarks/framework/node';
 import { tmpdir, homedir, userInfo } from 'node:os';
@@ -75,13 +75,24 @@ beforeAll(() => {
   scaling = runScalingSuite(TINY_SCALING);
 }, 120_000);
 
+/** Every temp directory this file creates, removed once the file finishes. */
+const tempDirs: string[] = [];
+function tempDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  tempDirs.push(dir);
+  return dir;
+}
+afterAll(() => {
+  for (const dir of tempDirs) rmSync(dir, { recursive: true, force: true });
+});
+
 /** Publish into a fresh temp tree and return its `latest/` directory. */
 function publish(overrides: Partial<Parameters<typeof writeResults>[0]> = {}): {
   root: string;
   latest: string;
   archive: string;
 } {
-  const root = mkdtempSync(join(tmpdir(), 'olv-bench-'));
+  const root = tempDir('olv-bench-');
   const outcome = writeResults({
     command: 'test',
     startedAtUtc: START,
@@ -312,7 +323,7 @@ describe('the written tree', () => {
     expect(manifest.notRun).toEqual([]);
     // With a declared seam, the overview states it in the suite table.
     const withSeam = publish({
-      resultsDir: mkdtempSync(join(tmpdir(), 'olv-bench-seam-')),
+      resultsDir: tempDir('olv-bench-seam-'),
       notRun: [{ suiteId: 'browser', reason: 'needs a browser' }],
     });
     expect(readFileSync(join(withSeam.latest, 'summary.md'), 'utf8')).toContain('| browser | not run |');
@@ -339,7 +350,7 @@ describe('the written tree', () => {
   });
 
   test('replaces latest/ rather than leaving a previous suite behind', () => {
-    const root = mkdtempSync(join(tmpdir(), 'olv-bench-'));
+    const root = tempDir('olv-bench-');
     writeResults({
       command: 'both',
       startedAtUtc: START,
@@ -639,7 +650,7 @@ describe('the verifier', () => {
   });
 
   test('fails on a missing tree rather than reporting success over nothing', () => {
-    const outcome = verifyResultsDir(join(mkdtempSync(join(tmpdir(), 'olv-empty-')), 'absent'));
+    const outcome = verifyResultsDir(join(tempDir('olv-empty-'), 'absent'));
     expect(outcome.ok).toBe(false);
     expect(outcome.problems.join('\n')).toMatch(/manifest\.json: missing/);
   });
