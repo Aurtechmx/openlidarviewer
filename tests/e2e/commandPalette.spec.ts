@@ -128,8 +128,8 @@ test.describe('command palette filtering + ranking', () => {
     await page.locator('.olv-palette-input').fill('theme');
     const rows = page.locator('.olv-palette-row');
     expect(await rows.count()).toBeGreaterThanOrEqual(3);
-    await expect(page.locator('.olv-palette-row', { hasText: 'Dark theme' })).toBeVisible();
-    await expect(page.locator('.olv-palette-row', { hasText: 'Light theme' })).toBeVisible();
+    await expect(page.locator('.olv-palette-row', { hasText: 'Blue theme' })).toBeVisible();
+    await expect(page.locator('.olv-palette-row', { hasText: 'Field theme' })).toBeVisible();
     await expect(page.locator('.olv-palette-row', { hasText: 'High contrast theme' })).toBeVisible();
   });
 
