@@ -73,7 +73,7 @@ function legacyOverlapDropRefusal(points: number): string {
 import { writeLas, writeLas14 } from './writeLas';
 import { planQuantisation } from './lasQuantisation';
 import { spatialContextFrom } from '../geo/SpatialContext';
-import { writeXyz, writeAsc } from './writeAscii';
+import { writeXyzBytes, writeAscBytes } from './writeAscii';
 import { reprojectGlobal } from './reproject';
 import type { TransformProvenance } from './transformProvenance';
 import { isGeographicEpsg, epsgLabel, epsgToProj4, epsgDatumFamily } from './epsg';
@@ -538,11 +538,10 @@ export function convertCloud(
     const dropped = asciiDroppedFieldsEvent(g, opts.format === 'asc' ? 'asc' : 'xyz');
     if (dropped) record(dropped);
     const asciiProvenance = [...asciiProvenanceBase, ...events.map(eventRecordLine)];
-    const text =
+    bytes =
       opts.format === 'asc'
-        ? writeAsc(g, { precision: opts.asciiPrecision, epsg: outEpsg, crsName: sourceCrs?.name ?? null, geographic: geo, datumNote, provenance: asciiProvenance })
-        : writeXyz(g, opts.asciiPrecision ?? 3, geo, datumNote, asciiProvenance, { epsg: outEpsg, crsName: sourceCrs?.name ?? null });
-    bytes = new TextEncoder().encode(text);
+        ? writeAscBytes(g, { precision: opts.asciiPrecision, epsg: outEpsg, crsName: sourceCrs?.name ?? null, geographic: geo, datumNote, provenance: asciiProvenance })
+        : writeXyzBytes(g, opts.asciiPrecision ?? 3, geo, datumNote, asciiProvenance, { epsg: outEpsg, crsName: sourceCrs?.name ?? null });
   }
 
   log.push({ level: 'info', message: `Wrote ${g.count.toLocaleString()} points as ${spec.label}.` });

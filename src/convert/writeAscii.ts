@@ -12,6 +12,7 @@
 
 import type { GlobalPoints } from './globalPoints';
 import { singleLine } from '../export/safeText';
+import { StringLineSink, Utf8ChunkSink, type LineSink } from '../io/textChunks';
 
 function fmt(v: number, precision: number): string {
   return v.toFixed(precision);
@@ -51,11 +52,46 @@ export function crsComment(epsg: number | null | undefined, crsName: string | nu
   return '# crs: none recorded (coordinates unchanged from the source)';
 }
 
+type XyzCrs = { readonly epsg?: number | null; readonly crsName?: string | null };
+
+/** Emit the XYZ file, one line at a time, to `sink`. The single place its rows are formatted. */
+function emitXyz(
+  sink: LineSink,
+  g: GlobalPoints,
+  precision: number,
+  geographic: boolean | undefined,
+  datumNote: string | null | undefined,
+  provenance: readonly string[] | null | undefined,
+  crs: XyzCrs | undefined,
+): void {
+  if (crs) {
+    sink.line('# OpenLiDARViewer XYZ export');
+    sink.line(crsComment(crs.epsg, crs.crsName));
+  }
+  const note = datumTransformComment(datumNote);
+  if (note) sink.line(note);
+  for (const l of provenance ?? []) sink.line(`# ${singleLine(l)}`);
+  const c = g.colors;
+  const h = horizontalPrecision(precision, geographic);
+  for (let i = 0; i < g.count; i++) {
+    const base = `${fmt(g.x[i], h)} ${fmt(g.y[i], h)} ${fmt(g.z[i], precision)}`;
+    if (c) {
+      // A colour the source flags invalid is unavailable, not a measured value.
+      sink.line(g.attributeInvalid && (g.attributeInvalid[i] & 1) !== 0
+        ? `${base} nan nan nan`
+        : `${base} ${c[i * 3]} ${c[i * 3 + 1]} ${c[i * 3 + 2]}`);
+    } else {
+      sink.line(base);
+    }
+  }
+}
+
 /**
  * Write space-delimited `x y z` (+ `r g b` when the cloud has colour). A
  * non-empty `datumNote` prepends a `# datum-transform:` comment; `loadXyz`
  * skips `#` lines, so the note never corrupts the point list. When `crs` is
- * given, a product line and a `# crs:` line open the file.
+ * given, a product line and a `# crs:` line open the file. Every line, the
+ * last included, ends in a newline; nothing written is an empty string.
  */
 export function writeXyz(
   g: GlobalPoints,
@@ -63,32 +99,62 @@ export function writeXyz(
   geographic?: boolean,
   datumNote?: string | null,
   provenance?: readonly string[] | null,
-  crs?: { readonly epsg?: number | null; readonly crsName?: string | null },
+  crs?: XyzCrs,
 ): string {
-  const lines: string[] = [];
-  if (crs) {
-    lines.push('# OpenLiDARViewer XYZ export');
-    lines.push(crsComment(crs.epsg, crs.crsName));
-  }
-  const note = datumTransformComment(datumNote);
-  if (note) lines.push(note);
-  for (const l of provenance ?? []) lines.push(`# ${singleLine(l)}`);
-  const c = g.colors;
-  const h = horizontalPrecision(precision, geographic);
+  const sink = new StringLineSink();
+  emitXyz(sink, g, precision, geographic, datumNote, provenance, crs);
+  return sink.text();
+}
+
+/** {@link writeXyz} as UTF-8 byte chunks, so a large cloud never builds one huge string. */
+export function writeXyzBytes(
+  g: GlobalPoints,
+  precision = 3,
+  geographic?: boolean,
+  datumNote?: string | null,
+  provenance?: readonly string[] | null,
+  crs?: XyzCrs,
+  chunkChars?: number,
+): Uint8Array {
+  const sink = new Utf8ChunkSink(chunkChars);
+  emitXyz(sink, g, precision, geographic, datumNote, provenance, crs);
+  return sink.bytes();
+}
+
+export interface AscOptions {
+  precision?: number;
+  crsName?: string | null;
+  epsg?: number | null;
+  /** True when the output frame is geographic (lon/lat degrees). */
+  geographic?: boolean;
+  /**
+   * Full APPROXIMATE-datum note (e.g. `APPROXIMATE — …`) for a reproject whose
+   * datum leg is only best-effort. Emitted as a `# datum-transform:` comment
+   * beside the `# crs:` line; absent/empty ⇒ no line (the exact path stays
+   * byte-clean).
+   */
+  datumNote?: string | null;
+  /** Provenance lines (software, source file and SHA-256, CRS origin, point basis, class edits), each written as a `#` comment. */
+  provenance?: readonly string[] | null;
+}
+
+/** Emit the ASC file, one line at a time, to `sink`. The single place its rows are formatted. */
+function emitAsc(sink: LineSink, g: GlobalPoints, opts: AscOptions): void {
+  const precision = opts.precision ?? 3;
+  const h = horizontalPrecision(precision, opts.geographic);
+  const hasI = g.intensity != null;
+  sink.line('# OpenLiDARViewer ASC export');
+  sink.line(crsComment(opts.epsg, opts.crsName));
+  const datumComment = datumTransformComment(opts.datumNote);
+  if (datumComment) sink.line(datumComment);
+  for (const l of opts.provenance ?? []) sink.line(`# ${singleLine(l)}`);
+  sink.line(`# columns: x y z${hasI ? ' intensity' : ''}`);
+
+  const it = g.intensity;
   for (let i = 0; i < g.count; i++) {
     const base = `${fmt(g.x[i], h)} ${fmt(g.y[i], h)} ${fmt(g.z[i], precision)}`;
-    if (c) {
-      // A colour the source flags invalid is unavailable, not a measured value.
-      lines.push(g.attributeInvalid && (g.attributeInvalid[i] & 1) !== 0
-        ? `${base} nan nan nan`
-        : `${base} ${c[i * 3]} ${c[i * 3 + 1]} ${c[i * 3 + 2]}`);
-    } else {
-      lines.push(base);
-    }
+    sink.line(it ? `${base} ${g.attributeInvalid && (g.attributeInvalid[i] & 2) !== 0 ? 'nan' : it[i]}` : base);
   }
-  // Trailing newline whenever anything was written (a header-only file still
-  // ends in a newline). With no note this is exactly `g.count > 0` as before.
-  return lines.join('\n') + (lines.length > 0 ? '\n' : '');
 }
 
 /**
@@ -96,40 +162,15 @@ export function writeXyz(
  * (+ `intensity` when present). The header lets a reader recover the CRS that
  * ASCII otherwise can't carry.
  */
-export function writeAsc(
-  g: GlobalPoints,
-  opts: {
-    precision?: number;
-    crsName?: string | null;
-    epsg?: number | null;
-    /** True when the output frame is geographic (lon/lat degrees). */
-    geographic?: boolean;
-    /**
-     * Full APPROXIMATE-datum note (e.g. `APPROXIMATE — …`) for a reproject whose
-     * datum leg is only best-effort. Emitted as a `# datum-transform:` comment
-     * beside the `# crs:` line; absent/empty ⇒ no line (the exact path stays
-     * byte-clean).
-     */
-    datumNote?: string | null;
-    /** Provenance lines (software, source file and SHA-256, CRS origin, point basis, class edits), each written as a `#` comment. */
-    provenance?: readonly string[] | null;
-  } = {},
-): string {
-  const precision = opts.precision ?? 3;
-  const h = horizontalPrecision(precision, opts.geographic);
-  const hasI = g.intensity != null;
-  const header: string[] = ['# OpenLiDARViewer ASC export'];
-  header.push(crsComment(opts.epsg, opts.crsName));
-  const datumComment = datumTransformComment(opts.datumNote);
-  if (datumComment) header.push(datumComment);
-  for (const l of opts.provenance ?? []) header.push(`# ${singleLine(l)}`);
-  header.push(`# columns: x y z${hasI ? ' intensity' : ''}`);
+export function writeAsc(g: GlobalPoints, opts: AscOptions = {}): string {
+  const sink = new StringLineSink();
+  emitAsc(sink, g, opts);
+  return sink.text();
+}
 
-  const lines: string[] = [header.join('\n')];
-  const it = g.intensity;
-  for (let i = 0; i < g.count; i++) {
-    const base = `${fmt(g.x[i], h)} ${fmt(g.y[i], h)} ${fmt(g.z[i], precision)}`;
-    lines.push(it ? `${base} ${g.attributeInvalid && (g.attributeInvalid[i] & 2) !== 0 ? 'nan' : it[i]}` : base);
-  }
-  return lines.join('\n') + '\n';
+/** {@link writeAsc} as UTF-8 byte chunks, so a large cloud never builds one huge string. */
+export function writeAscBytes(g: GlobalPoints, opts: AscOptions = {}, chunkChars?: number): Uint8Array {
+  const sink = new Utf8ChunkSink(chunkChars);
+  emitAsc(sink, g, opts);
+  return sink.bytes();
 }

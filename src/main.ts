@@ -2375,7 +2375,7 @@ const exportPanel = new ExportPanel({
   exportHealth: () => (hasScan() ? buildExportHealth(buildCurrentStoryInputs()) : null),
   onExport: (format) => {
     const cloud = scans.activeCloud();
-    if (cloud) return settleFileExport(loadExporters().then(async (m) => downloadText(`${baseName(cloud.name)}.${format}`, await m.exportCloudWithDigests(cloud, format, crsService.context().isGeographic, exportGeoContext()))), dropZone);
+    if (cloud) return settleFileExport(loadExporters().then(async (m) => downloadFileBytes(`${baseName(cloud.name)}.${format}`, await m.exportCloudBytesWithDigests(cloud, format, crsService.context().isGeographic, exportGeoContext()), 'text/plain')), dropZone);
   },
   onExportImage: (mode) =>
     exportImageAction(mode, {

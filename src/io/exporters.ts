@@ -54,6 +54,7 @@ import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
 import type { PointCloud, SourceMetadata, DeclaredMetadataField } from '../model/PointCloud';
 import { ATTR_COLOUR_INVALID, ATTR_INTENSITY_INVALID, countAttributeInvalid, intensityNormalisationLine } from '../model/PointCloud';
 import { sourcePositions } from '../model/pointFrames';
+import { StringLineSink, Utf8ChunkSink, type LineSink } from './textChunks';
 
 /** The export formats this module produces. */
 export type ExportFormat = 'xyz' | 'csv' | 'ply' | 'obj';
@@ -266,21 +267,8 @@ function colourOmittedLine(bad: number, format: string): string {
   return `colour omitted: ${bad.toLocaleString('en-US')} point${bad === 1 ? ' is' : 's are'} flagged invalid by the source and ${format} colour has no null value`;
 }
 
-/**
- * Serialise to plain-text XYZ (or CSV when `delimiter` is `,`).
- * Columns: `x y z`, then — each only when the cloud carries the channel —
- * `r g b` (0–255), `intensity` (the 16-bit store, 0–65535; unit-range float
- * sources are rescaled ×65535 at load) and `classification` (raw ASPRS
- * code). A CSV always gets a header row naming the columns; an XYZ gets
- * `#` comment lines (provenance, channel notes, `# columns: …`) only when
- * there is something to say — a plain x-y-z file stays byte-identical to
- * earlier releases. Importers — ours included — skip `#` comment lines by
- * long-standing XYZ convention. A CSV never gets comment lines: naive CSV
- * parsers must always see the header row first, except that a cloud with
- * values the file flags invalid writes those fields empty (CSV) or `nan`
- * (XYZ), and says so in one leading `#` note.
- */
-export function toXyz(cloud: PointCloud, delimiter = ' ', resolvedIsGeographic?: boolean, digests?: ExportDigests): string {
+/** Emit the XYZ/CSV file one line at a time. The single place its rows are formatted. */
+function emitXyz(sink: LineSink, cloud: PointCloud, delimiter: string, resolvedIsGeographic: boolean | undefined, digests: ExportDigests | undefined): void {
   // World coordinates come from the SOURCE origin, which is fixed for the
   // cloud's life. `origin` moves when a layer mounts into a project frame;
   // sourceOrigin does not, so an export stays in the file's real-world frame
@@ -294,7 +282,8 @@ export function toXyz(cloud: PointCloud, delimiter = ' ', resolvedIsGeographic?:
   const { colors } = cloud;
   const n = cloud.pointCount;
   const omitted = n - finitePointCount(positions, n);
-  const lines: string[] = [];
+  let written = 0;
+  const lines = { push: (l: string): void => { sink.line(l); written++; } };
   const csv = delimiter === ',';
   const hcoord = horizontalCoordFormatter(cloud, resolvedIsGeographic);
   // Length guards: a malformed cloud with a misaligned channel drops the
@@ -364,7 +353,35 @@ export function toXyz(cloud: PointCloud, delimiter = ' ', resolvedIsGeographic?:
     if (classification) row.push(classification[i]);
     lines.push(row.join(delimiter));
   }
-  return lines.join('\n') + '\n';
+  // Nothing written still ends in a newline.
+  if (written === 0) sink.line('');
+}
+
+/** {@link toXyz} as UTF-8 byte chunks, so a large cloud never builds one huge string. */
+export function toXyzBytes(cloud: PointCloud, delimiter = ' ', resolvedIsGeographic?: boolean, digests?: ExportDigests, chunkChars?: number): Uint8Array {
+  const sink = new Utf8ChunkSink(chunkChars);
+  emitXyz(sink, cloud, delimiter, resolvedIsGeographic, digests);
+  return sink.bytes();
+}
+
+/**
+ * Serialise to plain-text XYZ (or CSV when `delimiter` is `,`).
+ * Columns: `x y z`, then — each only when the cloud carries the channel —
+ * `r g b` (0–255), `intensity` (the 16-bit store, 0–65535; unit-range float
+ * sources are rescaled ×65535 at load) and `classification` (raw ASPRS
+ * code). A CSV always gets a header row naming the columns; an XYZ gets
+ * `#` comment lines (provenance, channel notes, `# columns: …`) only when
+ * there is something to say — a plain x-y-z file stays byte-identical to
+ * earlier releases. Importers — ours included — skip `#` comment lines by
+ * long-standing XYZ convention. A CSV never gets comment lines: naive CSV
+ * parsers must always see the header row first, except that a cloud with
+ * values the file flags invalid writes those fields empty (CSV) or `nan`
+ * (XYZ), and says so in one leading `#` note.
+ */
+export function toXyz(cloud: PointCloud, delimiter = ' ', resolvedIsGeographic?: boolean, digests?: ExportDigests): string {
+  const sink = new StringLineSink();
+  emitXyz(sink, cloud, delimiter, resolvedIsGeographic, digests);
+  return sink.text();
 }
 
 /** Serialise to CSV — comma-delimited XYZ with a header row. */
@@ -372,8 +389,8 @@ export function toCsv(cloud: PointCloud, resolvedIsGeographic?: boolean): string
   return toXyz(cloud, ',', resolvedIsGeographic);
 }
 
-/** Serialise to ASCII PLY, with `uchar` RGB when the cloud carries colour. */
-export function toPly(cloud: PointCloud, resolvedIsGeographic?: boolean, digests?: ExportDigests): string {
+/** Emit the ASCII PLY file one line at a time. The single place its rows are formatted. */
+function emitPly(sink: LineSink, cloud: PointCloud, resolvedIsGeographic: boolean | undefined, digests: ExportDigests | undefined): void {
   // World coordinates come from the SOURCE origin, which is fixed for the
   // cloud's life. `origin` moves when a layer mounts into a project frame;
   // sourceOrigin does not, so an export stays in the file's real-world frame
@@ -415,7 +432,7 @@ export function toPly(cloud: PointCloud, resolvedIsGeographic?: boolean, digests
   }
   header.push('end_header');
 
-  const lines: string[] = [header.join('\n')];
+  sink.line(header.join('\n'));
   const w: [number, number, number] = [0, 0, 0];
   for (let i = 0; i < n; i++) {
     if (!isFinitePoint(positions, i)) continue;
@@ -424,21 +441,29 @@ export function toPly(cloud: PointCloud, resolvedIsGeographic?: boolean, digests
     const y = hcoord(w[1]);
     const z = coord(w[2]);
     if (colors) {
-      lines.push(`${x} ${y} ${z} ${colors[i * 3]} ${colors[i * 3 + 1]} ${colors[i * 3 + 2]}`);
+      sink.line(`${x} ${y} ${z} ${colors[i * 3]} ${colors[i * 3 + 1]} ${colors[i * 3 + 2]}`);
     } else {
-      lines.push(`${x} ${y} ${z}`);
+      sink.line(`${x} ${y} ${z}`);
     }
   }
-  return lines.join('\n') + '\n';
 }
 
-/**
- * Serialise to OBJ as a vertex-only cloud. Colour, when present, is written
- * with the widely-supported `v x y z r g b` extension (channels in 0–1).
- * OBJ has no standard slot for intensity or classification, so those
- * channels are disclosed as omitted rather than dropped silently.
- */
-export function toObj(cloud: PointCloud, resolvedIsGeographic?: boolean, digests?: ExportDigests): string {
+/** {@link toPly} as UTF-8 byte chunks, so a large cloud never builds one huge string. */
+export function toPlyBytes(cloud: PointCloud, resolvedIsGeographic?: boolean, digests?: ExportDigests, chunkChars?: number): Uint8Array {
+  const sink = new Utf8ChunkSink(chunkChars);
+  emitPly(sink, cloud, resolvedIsGeographic, digests);
+  return sink.bytes();
+}
+
+/** Serialise to ASCII PLY, with `uchar` RGB when the cloud carries colour. */
+export function toPly(cloud: PointCloud, resolvedIsGeographic?: boolean, digests?: ExportDigests): string {
+  const sink = new StringLineSink();
+  emitPly(sink, cloud, resolvedIsGeographic, digests);
+  return sink.text();
+}
+
+/** Emit the OBJ file one line at a time. The single place its rows are formatted. */
+function emitObj(sink: LineSink, cloud: PointCloud, resolvedIsGeographic: boolean | undefined, digests: ExportDigests | undefined): void {
   // World coordinates come from the SOURCE origin, which is fixed for the
   // cloud's life. `origin` moves when a layer mounts into a project frame;
   // sourceOrigin does not, so an export stays in the file's real-world frame
@@ -456,7 +481,7 @@ export function toObj(cloud: PointCloud, resolvedIsGeographic?: boolean, digests
   const omitted = n - finite;
   const hcoord = horizontalCoordFormatter(cloud, resolvedIsGeographic);
 
-  const lines: string[] = [
+  const header: string[] = [
     '# OpenLiDARViewer point-cloud export',
     `# ${finite} points`,
     ...provenanceLines(cloud).map((l) => `# ${l}`),
@@ -466,6 +491,7 @@ export function toObj(cloud: PointCloud, resolvedIsGeographic?: boolean, digests
     ...(badColour > 0 ? [`# ${colourOmittedLine(badColour, 'OBJ')}`] : []),
     ...(omitted > 0 ? [`# ${omittedPointsLine(omitted)}`] : []),
   ];
+  for (const l of header) sink.line(l);
   const w: [number, number, number] = [0, 0, 0];
   for (let i = 0; i < n; i++) {
     if (!isFinitePoint(positions, i)) continue;
@@ -477,12 +503,30 @@ export function toObj(cloud: PointCloud, resolvedIsGeographic?: boolean, digests
       const r = (colors[i * 3] / 255).toFixed(4);
       const g = (colors[i * 3 + 1] / 255).toFixed(4);
       const b = (colors[i * 3 + 2] / 255).toFixed(4);
-      lines.push(`v ${x} ${y} ${z} ${r} ${g} ${b}`);
+      sink.line(`v ${x} ${y} ${z} ${r} ${g} ${b}`);
     } else {
-      lines.push(`v ${x} ${y} ${z}`);
+      sink.line(`v ${x} ${y} ${z}`);
     }
   }
-  return lines.join('\n') + '\n';
+}
+
+/** {@link toObj} as UTF-8 byte chunks, so a large cloud never builds one huge string. */
+export function toObjBytes(cloud: PointCloud, resolvedIsGeographic?: boolean, digests?: ExportDigests, chunkChars?: number): Uint8Array {
+  const sink = new Utf8ChunkSink(chunkChars);
+  emitObj(sink, cloud, resolvedIsGeographic, digests);
+  return sink.bytes();
+}
+
+/**
+ * Serialise to OBJ as a vertex-only cloud. Colour, when present, is written
+ * with the widely-supported `v x y z r g b` extension (channels in 0–1).
+ * OBJ has no standard slot for intensity or classification, so those
+ * channels are disclosed as omitted rather than dropped silently.
+ */
+export function toObj(cloud: PointCloud, resolvedIsGeographic?: boolean, digests?: ExportDigests): string {
+  const sink = new StringLineSink();
+  emitObj(sink, cloud, resolvedIsGeographic, digests);
+  return sink.text();
 }
 
 /** Serialise `cloud` to `format`. */
@@ -504,6 +548,26 @@ export function exportCloud(
   }
 }
 
+/** {@link exportCloud} as UTF-8 bytes, built in chunks. */
+export function exportCloudBytes(
+  cloud: PointCloud,
+  format: ExportFormat,
+  resolvedIsGeographic?: boolean,
+  digests?: ExportDigests,
+  chunkChars?: number,
+): Uint8Array {
+  switch (format) {
+    case 'xyz': return toXyzBytes(cloud, ' ', resolvedIsGeographic, digests, chunkChars);
+    case 'csv': return toXyzBytes(cloud, ',', resolvedIsGeographic, undefined, chunkChars);
+    case 'ply': return toPlyBytes(cloud, resolvedIsGeographic, digests, chunkChars);
+    case 'obj': return toObjBytes(cloud, resolvedIsGeographic, digests, chunkChars);
+    default: {
+      const exhaustive: never = format;
+      throw new Error(`Unknown export format: ${String(exhaustive)}`);
+    }
+  }
+}
+
 /**
  * The Export panel's point-cloud file: resolves the source-file digest (hashed
  * off the main thread) and the CRS origin for the provenance header, then
@@ -516,4 +580,14 @@ export async function exportCloudWithDigests(
   geo: { readonly source?: ExportSourceRef; readonly crs?: CrsOriginInput | null },
 ): Promise<string> {
   return exportCloud(cloud, format, resolvedIsGeographic, await resolveExportDigests(geo.source, geo.crs));
+}
+
+/** {@link exportCloudWithDigests} as bytes: the form the download path uses, safe for clouds past the string limit. */
+export async function exportCloudBytesWithDigests(
+  cloud: PointCloud,
+  format: ExportFormat,
+  resolvedIsGeographic: boolean,
+  geo: { readonly source?: ExportSourceRef; readonly crs?: CrsOriginInput | null },
+): Promise<Uint8Array> {
+  return exportCloudBytes(cloud, format, resolvedIsGeographic, await resolveExportDigests(geo.source, geo.crs));
 }
