@@ -36,7 +36,7 @@ not reach the deployed app or the production component set.
 | Canonical Node | 22.18.0 (`.nvmrc`) |
 | Canonical npm | 10.9.3 (`package.json` `packageManager`) |
 | `package-lock` lockfileVersion | 3 |
-| SBOM | CycloneDX 1.6, root `openlidarviewer@0.7.0`, 37 components |
+| SBOM | CycloneDX 1.6, root `openlidarviewer@0.7.0`, 36 components besides the root |
 
 The CycloneDX bill of materials for the production dependency set is in
 [sbom.json](../../sbom.json). Licences are credited in
