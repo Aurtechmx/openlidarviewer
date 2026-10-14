@@ -59,14 +59,33 @@ async function journalWork(page: Page): Promise<Pose> {
   await placeDistance(page);
   await expect.poll(() => measurementCount(page)).toBe(1);
   await page.keyboard.press('Escape');
+  const framed = await cameraPose(page);
   const box = (await page.locator('canvas').first().boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.wheel(0, 240);
-  await page.waitForTimeout(600);
+  // The restore check below needs a saved pose that differs from a fresh
+  // framing. Under load a single wheel can land before the canvas takes input,
+  // so keep zooming until the camera has really moved.
+  await expect
+    .poll(async () => {
+      await page.mouse.wheel(0, 240);
+      const p = await cameraPose(page);
+      return Math.max(...p.position.map((v, i) => Math.abs(v - framed.position[i])));
+    }, { timeout: 15_000, intervals: [300, 600, 1000] })
+    .toBeGreaterThan(1e-2);
   // Any interaction re-arms the debounce; the last one is the wheel above.
   await page.mouse.wheel(0, 1);
   await expect.poll(() => journal(page), { timeout: 15_000 }).toEqual([['tiny.ply', 1]]);
-  return cameraPose(page);
+  // Wait for the camera to settle before reading the pose the journal holds.
+  let last = await cameraPose(page);
+  await expect
+    .poll(async () => {
+      const p = await cameraPose(page);
+      const moved = Math.max(...p.position.map((v, i) => Math.abs(v - last.position[i])));
+      last = p;
+      return moved;
+    }, { timeout: 10_000, intervals: [250] })
+    .toBeLessThan(1e-6);
+  return last;
 }
 
 test('reload, reopen the same file, restore: measurement and camera come back', async ({ page }) => {
