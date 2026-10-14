@@ -129,18 +129,18 @@ describe('buildKml — coordinates', () => {
   // one the geometry is 2D by policy; that case is covered by the
   // "omits the third ordinate" test below.
   it('annotation coordinates are lon,lat,alt in that order', () => {
-    const kml = buildKml(input({ measurements: [], viewpoints: [], annotations: [annotation()], verticalDatum: 'EPSG:5703', verticalUnitToMetres: 1 }));
+    const kml = buildKml(input({ measurements: [], viewpoints: [], annotations: [annotation()], verticalDatum: 'EPSG:5773', verticalUnitToMetres: 1 }));
     // local (1,2,3) → (101, 52, 3) = lon,lat,alt.
     expect(kml).toContain('<coordinates>101,52,3</coordinates>');
   });
 
   it('polyline coordinates are a space-separated lon,lat,alt list, closed not applied', () => {
-    const kml = buildKml(input({ annotations: [], viewpoints: [], measurements: [polyline], verticalDatum: 'EPSG:5703', verticalUnitToMetres: 1 }));
+    const kml = buildKml(input({ annotations: [], viewpoints: [], measurements: [polyline], verticalDatum: 'EPSG:5773', verticalUnitToMetres: 1 }));
     expect(kml).toContain('<coordinates>100,50,0 110,50,0 110,60,0</coordinates>');
   });
 
   it('area polygon ring is closed (first vertex repeated last)', () => {
-    const kml = buildKml(input({ annotations: [], viewpoints: [], measurements: [area], verticalDatum: 'EPSG:5703', verticalUnitToMetres: 1 }));
+    const kml = buildKml(input({ annotations: [], viewpoints: [], measurements: [area], verticalDatum: 'EPSG:5773', verticalUnitToMetres: 1 }));
     expect(kml).toContain(
       '<coordinates>100,50,0 110,50,0 110,60,0 100,60,0 100,50,0</coordinates>',
     );
@@ -161,7 +161,7 @@ describe('buildKml — polygon styling', () => {
   // Google Earth is an opaque white fill that hides the map. The export declares
   // its own outline plus a translucent fill instead.
   it('an area polygon references a declared, non-opaque style', () => {
-    const kml = buildKml(input({ annotations: [], viewpoints: [], measurements: [area], verticalDatum: 'EPSG:5703', verticalUnitToMetres: 1 }));
+    const kml = buildKml(input({ annotations: [], viewpoints: [], measurements: [area], verticalDatum: 'EPSG:5773', verticalUnitToMetres: 1 }));
     expect(count(kml, '<Style id="olv-area">')).toBe(1);
     expect(kml).toContain('<styleUrl>#olv-area</styleUrl>');
     // aabbggrr: the fill's alpha byte is 0x26, not the 0xff of an opaque fill.
@@ -186,7 +186,7 @@ describe('buildKml — measured values', () => {
   });
 
   it('reports raw metres for a metric scan (unitToMetres = 1)', () => {
-    const kml = buildKml(input({ annotations: [], viewpoints: [], measurements: [polyline], verticalDatum: 'EPSG:5703', verticalUnitToMetres: 1 }));
+    const kml = buildKml(input({ annotations: [], viewpoints: [], measurements: [polyline], verticalDatum: 'EPSG:5773', verticalUnitToMetres: 1 }));
     expect(kml).toContain('length_m=20');
   });
 });
@@ -281,7 +281,7 @@ describe('buildKml — a coordinate it cannot express is refused', () => {
  */
 describe('KML altitude mode', () => {
   it('claims absolute only for a declared metric vertical datum', () => {
-    expect(kmlAltitudeMode('EPSG:5703', 1).mode).toBe('absolute');
+    expect(kmlAltitudeMode('EPSG:5773', 1).mode).toBe('absolute');
     // This line used to assert that an UNDECLARED vertical unit still counted
     // as metres. It encoded the defect: absence of a unit is not evidence of
     // one, and the value can arrive via a path that substitutes the
@@ -304,7 +304,7 @@ describe('KML altitude mode', () => {
   it('always explains the treatment in words', () => {
     expect(kmlAltitudeMode(null, 1).reason).toMatch(/no vertical datum|not authoritative/i);
     expect(kmlAltitudeMode('EPSG:6360', 0.3048).reason).toMatch(/metres/i);
-    expect(kmlAltitudeMode('EPSG:5703', 1).reason).toContain('EPSG:5703');
+    expect(kmlAltitudeMode('EPSG:5773', 1).reason).toContain('EPSG:5773');
   });
 });
 
@@ -313,7 +313,7 @@ describe('KML viewpoint follows the same altitude policy', () => {
     // A file whose measurements are clamped because the vertical reference is
     // unproven must not place its camera on a sea-level altitude.
     const clamped = buildKml(input({ verticalDatum: null }));
-    const declared = buildKml(input({ verticalDatum: 'EPSG:5703', verticalUnitToMetres: 1 }));
+    const declared = buildKml(input({ verticalDatum: 'EPSG:5773', verticalUnitToMetres: 1 }));
     if (clamped.includes('<LookAt>')) {
       expect(clamped.split('<LookAt>')[1]).toContain('clampToGround');
       expect(declared.split('<LookAt>')[1]).toContain('absolute');
@@ -335,10 +335,24 @@ describe('KML viewpoint follows the same altitude policy', () => {
  * clamped: the unproven altitude must not be written into the geometry at all.
  */
 describe('KML altitude — only proven sea-level heights are claimed', () => {
-  it('accepts the metric orthometric allow-list', () => {
-    for (const d of ['EPSG:5703', 'NAVD88', 'EPSG:5714', 'EPSG:3855', 'EPSG:5773']) {
-      expect(kmlAltitudeMode(d, 1).mode).toBe('absolute');
+  it('claims absolute only for the EGM96 geoid KML is defined against', () => {
+    expect(kmlAltitudeMode('EPSG:5773', 1).mode).toBe('absolute');
+  });
+
+  it('clamps other metric orthometric heights: no conversion to EGM96 is applied', () => {
+    for (const d of ['EPSG:5703', 'NAVD88', 'EPSG:5714', 'EPSG:3855']) {
+      const r = kmlAltitudeMode(d, 1);
+      expect(r.mode).toBe('clampToGround');
+      expect(r.reason).toMatch(/EGM96/);
+      expect(r.reason).toMatch(/no conversion/);
     }
+  });
+
+  it('keeps the source elevation, unit and datum in the description when it clamps', () => {
+    const kml = buildKml(input({ annotations: [annotation()], measurements: [], viewpoints: [], verticalDatum: 'EPSG:5703', verticalUnitToMetres: 1 }));
+    expect(kml).toContain('<altitudeMode>clampToGround</altitudeMode>');
+    expect(kml).not.toContain('<altitudeMode>absolute</altitudeMode>');
+    expect(kml).toMatch(/Source elevation: 3 .*vertical datum: EPSG:5703/);
   });
 
   it('does NOT claim absolute for a WGS 84 ellipsoidal height', () => {
@@ -364,8 +378,8 @@ describe('KML altitude — only proven sea-level heights are claimed', () => {
     }
   });
 
-  it('keeps the third ordinate only for a proven metric orthometric datum', () => {
-    const kml = buildKml(input({ verticalDatum: 'EPSG:5703', verticalUnitToMetres: 1 }));
+  it('keeps the third ordinate only for a EGM96 geoid height', () => {
+    const kml = buildKml(input({ verticalDatum: 'EPSG:5773', verticalUnitToMetres: 1 }));
     expect(kml).toContain('<altitudeMode>absolute</altitudeMode>');
     expect(kml).toContain('<coordinates>101,52,3</coordinates>');
   });
@@ -409,7 +423,7 @@ describe('KML absolute requires a stated metric vertical unit', () => {
   });
 
   it('still allows absolute when metres are explicitly stated', () => {
-    expect(kmlAltitudeMode('EPSG:5703', 1).mode).toBe('absolute');
+    expect(kmlAltitudeMode('EPSG:5773', 1).mode).toBe('absolute');
   });
 
   it('says the unit was the reason, not the datum', () => {

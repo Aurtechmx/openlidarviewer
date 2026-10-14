@@ -193,19 +193,24 @@ export function kmlAltitudeMode(
     };
   }
   // OGC KML 2.2/2.3 define `absolute` as height above sea level, which readers
-  // realise as the EGM96 geoid. Only an EGM96 height means exactly that; any
-  // other orthometric datum (NAVD88, EGM2008, local MSL) is written unconverted
-  // — no geoid model is applied — and the note says so rather than implying the
-  // reader's sea level and the source's are the same surface.
-  const egm96 = verticalReferenceKey({ id: 'kml', verticalDatum: declared }) === 'epsg:5773';
+  // realise as the EGM96 geoid. Only an EGM96 height means exactly that. Any
+  // other orthometric datum (NAVD88, EGM2008, local MSL) is a different surface
+  // and no geoid conversion is applied here, so its heights are clamped to
+  // ground rather than written as if they were EGM96. The source elevation, unit
+  // and datum stay in each feature's description.
+  if (verticalReferenceKey({ id: 'kml', verticalDatum: declared }) !== 'epsg:5773') {
+    return {
+      mode: 'clampToGround',
+      reason:
+        `Heights are clamped to ground: ${declared} is a metric height above mean sea level, but KML `
+        + 'absolute altitude is referenced to the EGM96 geoid and no conversion to it is applied. '
+        + 'The source elevation, unit and datum are stated in each description; altitudes in this '
+        + 'file are not authoritative.',
+    };
+  }
   return {
     mode: 'absolute',
-    reason: egm96
-      ? `Altitudes are absolute metres above mean sea level on ${declared}.`
-      : `Altitudes are absolute metres above mean sea level on ${declared}, written unconverted. `
-        + `KML absolute altitude is referenced to the EGM96 geoid; ${declared} heights differ from `
-        + 'EGM96 by up to about 1–2 m depending on location, so a viewer may place features that far '
-        + 'above or below their true height.',
+    reason: `Altitudes are absolute metres above mean sea level on ${declared}.`,
   };
 }
 

@@ -66,15 +66,15 @@ describe('GeoJSON height policy (RFC 7946 ellipsoidal heights)', () => {
   });
 });
 
-describe('KML absolute altitude states the geoid mismatch', () => {
-  it('names EGM96 and the NAVD88 offset when writing NAVD88 as absolute', () => {
+describe('KML absolute altitude is claimed only on the EGM96 geoid', () => {
+  it('clamps NAVD88 and names EGM96 as the reason, with no offset estimate', () => {
     const r = kmlAltitudeMode('NAVD88', 1);
-    expect(r.mode).toBe('absolute');
+    expect(r.mode).toBe('clampToGround');
     expect(r.reason).toMatch(/EGM96/);
-    expect(r.reason).toMatch(/1–2 m/);
+    expect(r.reason).not.toMatch(/1–2 m/);
   });
-  it('makes no mismatch claim for an EGM96 height', () => {
-    expect(kmlAltitudeMode('EPSG:5773', 1).reason).not.toMatch(/differ/);
+  it('writes an EGM96 height as absolute', () => {
+    expect(kmlAltitudeMode('EPSG:5773', 1).mode).toBe('absolute');
   });
 });
 
@@ -115,7 +115,7 @@ describe('collapsed geometry', () => {
   });
 
   it('KML with absolute altitude keeps the 3D wall polygon', () => {
-    expect(buildKml(kmlInput({ verticalDatum: 'EPSG:5703' }))).toContain('<Polygon>');
+    expect(buildKml(kmlInput({ verticalDatum: 'EPSG:5773' }))).toContain('<Polygon>');
   });
 });
 

@@ -654,10 +654,12 @@ unconverted in each feature's `elevations_source`, with their datum and unit in
 the collection's `vertical_reference`; a reader who needs ellipsoidal heights
 must apply a geoid model (for NAVD88, GEOID18) themselves.
 
-The Site KML writes a metric sea-level height (NAVD88, MSL, EGM2008 or EGM96)
-as `absolute` altitude without conversion. KML absolute altitude is referenced
-to the EGM96 geoid, so a non-EGM96 height can sit up to about 1 to 2 m above or
-below its true position in a viewer. The KML note states this.
+The Site KML writes `absolute` altitude only for an EGM96 geoid height in
+metres, the surface KML defines `absolute` against. A NAVD88, EGM2008 or other
+metric mean-sea-level height is not converted to EGM96, so it is clamped to
+ground instead of being written as if it were. The source elevation, unit and
+datum stay in each feature's description, and the document note states why. No
+geoid conversion is applied by OLV.
 
 A measurement with no shape in longitude and latitude (a vertical wall area, a
 purely vertical distance) is exported with no geometry and a stated reason.
