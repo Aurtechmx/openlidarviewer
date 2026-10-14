@@ -423,3 +423,35 @@ describe('layoutCubeTargets: every shown target meets the 24 CSS px minimum targ
     });
   }
 });
+
+describe('cube keyboard order and keys', () => {
+  it('orders all 26 targets: faces, then edges, then corners, with no repeats', async () => {
+    const { CUBE_KEY_ORDER } = await import('../src/render/viewCubeMath');
+    expect(CUBE_KEY_ORDER).toHaveLength(26);
+    expect(new Set(CUBE_KEY_ORDER.map((t) => t.id)).size).toBe(26);
+    expect(CUBE_KEY_ORDER.slice(0, 6).map((t) => t.view)).toEqual(['top', 'front', 'right', 'back', 'left', 'bottom']);
+    expect(CUBE_KEY_ORDER.slice(6, 18).every((t) => t.kind === 'edge')).toBe(true);
+    expect(CUBE_KEY_ORDER.slice(18).every((t) => t.kind === 'corner')).toBe(true);
+  });
+
+  it('steps with the arrows (wrapping), jumps with Home/End and ignores other keys', async () => {
+    const { cubeKeyStep } = await import('../src/render/viewCubeMath');
+    expect(cubeKeyStep('ArrowRight', 0, 26)).toBe(1);
+    expect(cubeKeyStep('ArrowDown', 25, 26)).toBe(0);
+    expect(cubeKeyStep('ArrowLeft', 0, 26)).toBe(25);
+    expect(cubeKeyStep('ArrowUp', 5, 26)).toBe(4);
+    expect(cubeKeyStep('Home', 13, 26)).toBe(0);
+    expect(cubeKeyStep('End', 2, 26)).toBe(25);
+    expect(cubeKeyStep('Enter', 2, 26)).toBeNull();
+    expect(cubeKeyStep('a', 2, 26)).toBeNull();
+  });
+
+  it('names each target by what it does', async () => {
+    const { cubeTargetActionName } = await import('../src/render/viewCubeMath');
+    const byId = (id: string) => CUBE_TARGETS.find((t) => t.id === id)!;
+    expect(cubeTargetActionName(byId('bottom-south-east'), false)).toBe('View from bottom, back, left');
+    expect(cubeTargetActionName(byId('top'), false)).toBe('View from top');
+    expect(cubeTargetActionName(cubeTargetForView('front'), true)).toBe('View from grid north');
+    expect(cubeTargetActionName(byId('top-north'), true)).toBe('View from top, north');
+  });
+});

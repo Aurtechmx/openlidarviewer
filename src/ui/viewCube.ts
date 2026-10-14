@@ -9,6 +9,13 @@
  * through the app's custom properties, so the eager stylesheet does not grow.
  * Sizes and transforms are set through the CSSOM, which the CSP permits.
  *
+ * Keyboard: the 26 targets form one roving-tabindex toolbar in a fixed order
+ * (`CUBE_KEY_ORDER`), entered with Tab. The arrow keys move, Home and End
+ * jump, Enter and Space choose. A target hidden for pointers at the current
+ * orientation still takes focus: it is drawn as an outline at its projected
+ * place, with its name in a caption beside the cube, and stays unpressable by
+ * pointer.
+ *
  * The geometry (targets, directions, matrices, placement) lives in
  * `src/render/viewCubeMath.ts` and is unit-tested; this file is the thin DOM
  * renderer over it. The host supplies callbacks, so the widget never imports
@@ -16,10 +23,13 @@
  */
 
 import {
+  CUBE_KEY_ORDER,
   CUBE_SIZE,
   CUBE_TARGETS,
   activeCubeFace,
   cubeFaceLabel,
+  cubeKeyStep,
+  cubeTargetActionName,
   cubeTargetName,
   cubeTargetOrientation,
   cubeViewMatrix,
@@ -30,7 +40,9 @@ import {
   type CubeTarget,
   type PlacementRect,
   type StandardView,
+  type CubeHitLayout,
 } from '../render/viewCubeMath';
+import { announcePolite } from './politeAnnounce';
 import './viewCube.css';
 
 export interface ViewCubeOptions {
@@ -123,6 +135,10 @@ const OBSTACLE_SELECTOR = [
   '.olv-clip-indicator',
 ].join(', ');
 
+function cubeTargetForViewId(view: StandardView): string {
+  return CUBE_TARGETS.find((t) => t.view === view)?.id ?? view;
+}
+
 function fmt(n: number): string {
   return (Math.round(n * 1000) / 1000).toString();
 }
@@ -135,7 +151,7 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
   const root = document.createElement('div');
   root.className = 'olv-viewcube';
   root.setAttribute('role', 'group');
-  root.setAttribute('aria-label', 'View cube: choose a face, edge or corner to turn the camera');
+  root.setAttribute('aria-label', 'View cube');
   root.setAttribute('data-testid', 'viewcube');
   // The stage is the cube's square; Home sits in a strip below it, so it never
   // covers an edge or corner target.
@@ -145,7 +161,18 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
   const stage = document.createElement('div');
   stage.className = 'olv-viewcube-stage';
   stage.style.cssText = `width:${geo.box}px;height:${geo.box}px;`;
+  stage.setAttribute('role', 'toolbar');
+  stage.setAttribute('aria-label', 'View cube: 26 views. Arrow keys move between them, Enter turns the camera');
   root.appendChild(stage);
+
+  // The name of the focused target, beside the cube: the visible cue for a
+  // target that is focused while hidden for pointers. Screen readers get the
+  // button's own name, so this stays out of the accessibility tree.
+  const caption = document.createElement('div');
+  caption.className = 'olv-viewcube-caption';
+  caption.setAttribute('aria-hidden', 'true');
+  caption.hidden = true;
+  root.appendChild(caption);
 
   const cube = document.createElement('div');
   cube.className = 'olv-viewcube-cube';
@@ -155,6 +182,7 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
     const o = cubeTargetOrientation(target);
     if (target.view) opts.onView(target.view, o);
     else opts.onOrient(target, o);
+    if (typeof document.querySelector === 'function') announcePolite(`Camera turned: ${cubeTargetActionName(target, isGeographic()).toLowerCase()}`);
   };
 
   // ── Faces ─────────────────────────────────────────────────────────────
@@ -167,6 +195,7 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
     b.className = 'olv-viewcube-face';
     b.setAttribute('data-testid', `viewcube-${view}`);
     b.setAttribute('data-shade', view === 'top' ? 'top' : view === 'bottom' ? 'bottom' : 'side');
+    b.tabIndex = -1; // roving: see the keyboard section below
     b.title = cubeTargetName(t, false); // replaced by applyLabels with the frame-aware name
     const side = geo.half * 2;
     // Placed and shaped each frame from the projected geometry (a 2D affine map).
@@ -188,9 +217,7 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
     b.type = 'button';
     b.className = 'olv-viewcube-spot';
     b.setAttribute('data-testid', `viewcube-${t.id}`);
-    // Pointer and touch shortcuts; the faces, Home and the command palette carry
-    // the keyboard path, so these stay out of the tab order.
-    b.tabIndex = -1;
+    b.tabIndex = -1; // roving: see the keyboard section below
     b.title = cubeTargetName(t, false); // replaced by applyLabels with the frame-aware name
     b.style.cssText = `width:${geo.hit}px;height:${geo.hit}px;`;
     b.addEventListener('click', (e) => {
@@ -201,6 +228,53 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
     spots.push({ target: t, el: b });
     spotsById.set(t.id, { el: b });
   }
+
+  // ── Keyboard: one roving tab stop over all 26 targets ─────────────────
+  const elById = new Map<string, HTMLButtonElement>();
+  for (const [view, el] of faces) elById.set(CUBE_TARGETS.find((t) => t.view === view)!.id, el);
+  for (const sp of spots) elById.set(sp.target.id, sp.el);
+  let rovingIndex = 0;
+  /** The id of the target holding focus, or null when focus is elsewhere. */
+  let kbdId: string | null = null;
+  const setRoving = (index: number): void => {
+    rovingIndex = index;
+    CUBE_KEY_ORDER.forEach((t, i) => {
+      const el = elById.get(t.id);
+      if (el) el.tabIndex = i === index ? 0 : -1;
+    });
+  };
+  setRoving(0);
+  const indexOf = (el: unknown): number => CUBE_KEY_ORDER.findIndex((t) => elById.get(t.id) === el);
+  stage.addEventListener('keydown', (e: KeyboardEvent) => {
+    const from = indexOf(e.target);
+    if (from < 0) return;
+    const to = cubeKeyStep(e.key, from, CUBE_KEY_ORDER.length);
+    if (to === null) return;
+    e.preventDefault();
+    e.stopPropagation(); // the arrows and Home must not also orbit or refit the camera
+    setRoving(to);
+    const id = CUBE_KEY_ORDER[to].id;
+    kbdId = id; // shown before focus: a hidden element cannot take it
+    render();
+    elById.get(id)?.focus({ preventScroll: true });
+  });
+  stage.addEventListener('focusin', (e: FocusEvent) => {
+    const i = indexOf(e.target);
+    if (i < 0) return;
+    if (i !== rovingIndex) setRoving(i);
+    kbdId = CUBE_KEY_ORDER[i].id;
+    render();
+  });
+  // Checked a tick later: moving focus can hide the target being left, and the
+  // blur that causes arrives before the next target has focus.
+  stage.addEventListener('focusout', () => {
+    setTimeout(() => {
+      const active = typeof document.activeElement === 'undefined' ? null : document.activeElement;
+      if (active && stage.contains(active)) return;
+      kbdId = null;
+      render();
+    }, 0);
+  });
 
   // ── Home ──────────────────────────────────────────────────────────────
   const home = document.createElement('button');
@@ -229,16 +303,15 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
       if (!el) continue;
       const label = cubeFaceLabel(view, geographic);
       el.textContent = label;
-      const name = cubeTargetName(t, geographic);
-      el.setAttribute('aria-label', name);
-      el.title = name;
+      el.setAttribute('aria-label', cubeTargetActionName(t, geographic));
+      el.title = cubeTargetName(t, geographic);
       el.setAttribute('data-north', geographic && label === 'N' ? 'true' : 'false');
     }
     for (const s of spots) {
-      const name = cubeTargetName(s.target, geographic);
-      s.el.setAttribute('aria-label', name);
-      s.el.title = name;
+      s.el.setAttribute('aria-label', cubeTargetActionName(s.target, geographic));
+      s.el.title = cubeTargetName(s.target, geographic);
     }
+    if (kbdId !== null) render();
   };
   applyLabels(isGeographic());
 
@@ -341,6 +414,35 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
   // turned away is hidden; an edge or corner that would sit over a face centre
   // or another spot is hidden too (see the layout for the rule).
   let lastKey = '';
+  let lastLayout: CubeHitLayout | null = null;
+  // Draws the last layout. A target that is focused while hidden for pointers
+  // is drawn too, marked `is-kbd-only`: an outline that takes no pointer input.
+  function render(): void {
+    const layout = lastLayout;
+    if (!layout) return;
+    for (const [view, el] of faces) {
+      const f = layout.faces[view];
+      const kbdOnly = !f.visible && kbdId === cubeTargetForViewId(view);
+      el.classList.toggle('is-kbd-only', kbdOnly);
+      el.style.visibility = f.visible || kbdOnly ? 'inherit' : 'hidden';
+      if (f.visible || kbdOnly) el.style.transform = `matrix(${f.affine.map(fmt).join(',')})`;
+    }
+    const centre = geo.box / 2;
+    for (const sp of layout.spots) {
+      const spot = spotsById.get(sp.id);
+      if (!spot) continue;
+      const kbdOnly = !sp.visible && kbdId === sp.id;
+      spot.el.classList.toggle('is-kbd-only', kbdOnly);
+      spot.el.hidden = !sp.visible && !kbdOnly;
+      if (sp.visible || kbdOnly) {
+        spot.el.style.left = `${fmt(centre + sp.x)}px`;
+        spot.el.style.top = `${fmt(centre + sp.y)}px`;
+      }
+    }
+    const focused = kbdId === null ? undefined : CUBE_TARGETS.find((t) => t.id === kbdId);
+    caption.hidden = !focused;
+    caption.textContent = focused ? cubeTargetName(focused, lastGeographic ?? false) : '';
+  }
   let lastActive: StandardView | null | undefined;
   const update = (): void => {
     applyLabels(isGeographic());
@@ -350,22 +452,8 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
     const key = m.map(fmt).join(',');
     if (key === lastKey) return; // the camera did not turn
     lastKey = key;
-    const layout = layoutCubeTargets(m, geo.half, geo.hit);
-    for (const [view, el] of faces) {
-      const f = layout.faces[view];
-      el.style.visibility = f.visible ? 'inherit' : 'hidden';
-      if (f.visible) el.style.transform = `matrix(${f.affine.map(fmt).join(',')})`;
-    }
-    const centre = geo.box / 2;
-    for (const sp of layout.spots) {
-      const spot = spotsById.get(sp.id);
-      if (!spot) continue;
-      spot.el.hidden = !sp.visible;
-      if (sp.visible) {
-        spot.el.style.left = `${fmt(centre + sp.x)}px`;
-        spot.el.style.top = `${fmt(centre + sp.y)}px`;
-      }
-    }
+    lastLayout = layoutCubeTargets(m, geo.half, geo.hit);
+    render();
     const active = activeCubeFace(o);
     if (active !== lastActive) {
       for (const [view, el] of faces) {

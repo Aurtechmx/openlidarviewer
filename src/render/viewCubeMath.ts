@@ -428,6 +428,58 @@ export function cubeTargetName(target: CubeTarget, geographic: boolean): string 
 }
 
 /**
+ * What a cube target does, as its accessible name: "View from top" or
+ * "View from bottom, back, left". Uses the same frame rule as
+ * `cubeTargetName`: compass words only on a geographic frame.
+ */
+export function cubeTargetActionName(target: CubeTarget, geographic: boolean): string {
+  if (target.view) {
+    const name = cubeTargetName(target, geographic).replace(/ face$/, '');
+    return `View from ${name[0].toLowerCase()}${name.slice(1)}`;
+  }
+  const words = cubeTargetName(target, geographic).replace(/ (edge|corner)$/, '').toLowerCase().split('-');
+  return `View from ${words.join(', ')}`;
+}
+
+/** The faces in keyboard order: top, then the four sides going round, then bottom. */
+const KEY_FACE_ORDER: readonly StandardView[] = ['top', 'front', 'right', 'back', 'left', 'bottom'];
+
+/**
+ * The fixed keyboard order of all 26 targets: the six faces, then the twelve
+ * edges, then the eight corners. It never depends on the camera, so every view
+ * is the same number of arrow presses away at any orientation.
+ */
+export const CUBE_KEY_ORDER: readonly CubeTarget[] = [
+  ...KEY_FACE_ORDER.map((v) => cubeTargetForView(v)),
+  ...CUBE_TARGETS.filter((t) => t.kind === 'edge'),
+  ...CUBE_TARGETS.filter((t) => t.kind === 'corner'),
+];
+
+/**
+ * The roving-focus step for a key pressed on target `index` of `count`: the
+ * index to move to, or null when the key is not the cube's to handle. Right
+ * and Down move forward, Left and Up move back (both wrap); Home and End jump
+ * to the first and last target.
+ */
+export function cubeKeyStep(key: string, index: number, count: number): number | null {
+  if (count <= 0) return null;
+  switch (key) {
+    case 'ArrowRight':
+    case 'ArrowDown':
+      return (index + 1) % count;
+    case 'ArrowLeft':
+    case 'ArrowUp':
+      return (index - 1 + count) % count;
+    case 'Home':
+      return 0;
+    case 'End':
+      return count - 1;
+    default:
+      return null;
+  }
+}
+
+/**
  * An axis-aligned rectangle the cube must not cover, in the host's coordinate
  * space.
  */
