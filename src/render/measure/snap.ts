@@ -182,38 +182,14 @@ export const ON_RETURN_SPACING_FRACTION = 0.5;
 const EXACT_HIT = 1e-9;
 
 /**
- * Distance from point `i` to its nearest other point, searched in the 5x5x5
- * cells around it. Coincident points are ignored. Returns 0 when no neighbour
- * lies within two cell edges (an isolated point), so the result never exceeds
- * twice the cell size.
+ * Distance from point `i` to its nearest other point within two cell edges.
+ * Returns 0 for an isolated point (no neighbour that close), so the result
+ * never exceeds twice the cell size.
  */
-export function localPointSpacing(index: PointSnapIndex, i: number): number {
-  const { positions, cellSize, min, dims, cells } = index;
-  if (!Number.isFinite(cellSize)) return 0;
-  const x = positions[i * 3], y = positions[i * 3 + 1], z = positions[i * 3 + 2];
-  const cx = Math.min(dims[0] - 1, Math.floor((x - min[0]) / cellSize));
-  const cy = Math.min(dims[1] - 1, Math.floor((y - min[1]) / cellSize));
-  const cz = Math.min(dims[2] - 1, Math.floor((z - min[2]) / cellSize));
-  const cap2 = 4 * cellSize * cellSize;
-  let best2 = cap2;
-  for (let dx = -2; dx <= 2; dx++) {
-    for (let dy = -2; dy <= 2; dy++) {
-      for (let dz = -2; dz <= 2; dz++) {
-        const ix = cx + dx, iy = cy + dy, iz = cz + dz;
-        if (ix < 0 || iy < 0 || iz < 0 || ix >= dims[0] || iy >= dims[1] || iz >= dims[2]) continue;
-        const bucket = cells.get(cellKey(ix, iy, iz, dims));
-        if (bucket === undefined) continue;
-        for (const j of bucket) {
-          if (j === i) continue;
-          const d2 = dist2(positions[j * 3], positions[j * 3 + 1], positions[j * 3 + 2], [x, y, z]);
-          if (d2 > 0 && d2 < best2) best2 = d2;
-        }
-      }
-    }
-  }
-  // No neighbour within two cell edges: the point is isolated and has no local
-  // spacing to measure a tolerance against.
-  return best2 >= cap2 ? 0 : Math.sqrt(best2);
+export function localPointSpacing(index: PointSnapIndex, i: number, from: Vec3): number {
+  if (!Number.isFinite(index.cellSize)) return 0;
+  const next = snapToNearestPoint(index, from, index.cellSize * 2, i);
+  return next === null ? 0 : next.distance;
 }
 
 /**
@@ -230,7 +206,7 @@ export function isOnMeasuredReturn(index: PointSnapIndex, query: Vec3): boolean 
   const near = snapToNearestPoint(index, query, index.cellSize * ON_RETURN_SPACING_FRACTION);
   if (near === null || near.pointIndex === undefined) return false;
   if (near.distance <= EXACT_HIT) return true;
-  return near.distance <= localPointSpacing(index, near.pointIndex) * ON_RETURN_SPACING_FRACTION;
+  return near.distance <= localPointSpacing(index, near.pointIndex, near.position) * ON_RETURN_SPACING_FRACTION;
 }
 
 // -- nearest actual point ----------------------------------------------------
@@ -240,6 +216,7 @@ export function isOnMeasuredReturn(index: PointSnapIndex, query: Vec3): boolean 
  * returned as a `kind: 'point'` result with `pointIndex` set. Deterministic:
  * an exact distance tie resolves to the lowest point index. Returns `null` when
  * the cloud is empty, `maxDistance` is non-positive, or no point is in range.
+ * `excludeIndex` skips one point, to find a point's nearest neighbour.
  *
  * Searches outward from the query's cell in expanding shells, stopping once the
  * shell's guaranteed-minimum distance exceeds both `maxDistance` and the best
@@ -249,6 +226,7 @@ export function snapToNearestPoint(
   index: PointSnapIndex,
   query: Vec3,
   maxDistance: number,
+  excludeIndex = -1,
 ): SnapResult | null {
   if (index.count === 0 || !(maxDistance > 0)) return null;
 
@@ -259,6 +237,7 @@ export function snapToNearestPoint(
   let bestD2 = Infinity;
 
   const consider = (i: number): void => {
+    if (i === excludeIndex) return;
     const d2 = dist2(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2], query);
     if (d2 > maxD2) return;
     if (d2 < bestD2 || (d2 === bestD2 && (bestIndex < 0 || i < bestIndex))) {

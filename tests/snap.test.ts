@@ -301,7 +301,16 @@ describe('cell size and the on-a-return test', () => {
   it('the tolerance does not grow with the extent of a sparse cloud', () => {
     const idx = buildPointSnapIndex(cloud([[0, 0, 0], [1000, 0, 0], [0, 1000, 0], [1000, 1000, 0]]));
     expect(isOnMeasuredReturn(idx, [0, 0, 0])).toBe(true);
-    expect(isOnMeasuredReturn(idx, [0, 0, 1])).toBe(false);
+    expect(isOnMeasuredReturn(idx, [0, 0, 400])).toBe(false);
+    expect(isOnMeasuredReturn(idx, [0, 0, 100])).toBe(true);
+  });
+
+  it('an isolated point only counts as a return on an exact hit', () => {
+    const pts: Array<[number, number, number]> = [[1000, 1000, 0]];
+    for (let x = 0; x < 10; x++) for (let y = 0; y < 10; y++) pts.push([x, y, 0]);
+    const idx = buildPointSnapIndex(cloud(pts));
+    expect(isOnMeasuredReturn(idx, [1000, 1000, 0])).toBe(true);
+    expect(isOnMeasuredReturn(idx, [1000, 1000, 1])).toBe(false);
   });
 
   it('an ordinary 3D cloud: a point is on a return, a point half a spacing away is not', () => {

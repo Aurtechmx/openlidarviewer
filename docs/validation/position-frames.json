@@ -473,13 +473,6 @@
     },
     {
       "file": "src/render/measure/snap.ts",
-      "symbol": "localPointSpacing",
-      "frame": "source-local",
-      "reads": 1,
-      "why": "Same index, same contract: spacing is measured between indexed points in the frame the index was built in."
-    },
-    {
-      "file": "src/render/measure/snap.ts",
       "symbol": "snapToNearestPoint",
       "frame": "source-local",
       "reads": 1,
