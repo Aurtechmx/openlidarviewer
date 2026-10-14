@@ -207,6 +207,53 @@ function collectNode(
 }
 
 /**
+ * The glTF JSON of a `.gltf` file or of a GLB's first (JSON) chunk, or null
+ * when it cannot be read; loaders.gl then reports the malformed file itself.
+ */
+function gltfJson(buffer: ArrayBuffer, sourceFormat: 'glb' | 'gltf'): unknown {
+  try {
+    const bytes = new Uint8Array(buffer);
+    let text: string;
+    if (sourceFormat === 'glb' || (bytes.length >= 4 && bytes[0] === 0x67 && bytes[1] === 0x6c && bytes[2] === 0x54 && bytes[3] === 0x46)) {
+      if (bytes.length < 20) return null;
+      const view = new DataView(buffer);
+      const chunkLength = view.getUint32(12, true);
+      const chunkType = view.getUint32(16, true);
+      if (chunkType !== 0x4e4f534a || 20 + chunkLength > bytes.length) return null; // 'JSON'
+      text = new TextDecoder().decode(bytes.subarray(20, 20 + chunkLength));
+    } else {
+      text = new TextDecoder().decode(bytes);
+    }
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * URIs in `buffers` and `images` that point outside the file. A local open
+ * resolves nothing outside the file: loaders.gl would otherwise fetch an
+ * absolute http(s) URI, which sends a request to a host the file names
+ * without the user asking.
+ */
+export function externalGltfUris(buffer: ArrayBuffer, sourceFormat: 'glb' | 'gltf'): string[] {
+  const doc = gltfJson(buffer, sourceFormat) as { buffers?: unknown; images?: unknown } | null;
+  if (!doc || typeof doc !== 'object') return [];
+  const out: string[] = [];
+  for (const list of [doc.buffers, doc.images]) {
+    if (!Array.isArray(list)) continue;
+    for (const entry of list) {
+      const uri = (entry as { uri?: unknown } | null)?.uri;
+      if (typeof uri === 'string' && !/^data:/i.test(uri.trim())) out.push(uri);
+    }
+  }
+  return out;
+}
+
+const EXTERNAL_GLTF_MESSAGE =
+  'This glTF references external files (e.g. buffer.bin or a web address) that a single-file open does not load. Export as GLB, or a self-contained .gltf with embedded/data-URI buffers.';
+
+/**
  * Load a `.glb` / `.gltf` asset into a `PointCloud` of its mesh vertices.
  *
  * @param buffer       Raw file bytes.
@@ -225,6 +272,8 @@ export async function loadGltf(
   // format extensions are excluded because their preprocess step probes
   // browser image support by building an `Image` even when the asset has no
   // textures (loaders.gl excludes an extension whose key maps to `false`).
+  // Refuse before parsing: nothing outside the file is requested.
+  if (externalGltfUris(buffer, sourceFormat).length > 0) throw new Error(EXTERNAL_GLTF_MESSAGE);
   const raw = await parse(buffer, GLTFLoader, {
     ...LOCAL_ONLY_LOADER_OPTIONS,
     gltf: {
@@ -238,9 +287,7 @@ export async function loadGltf(
     // instead of loaders.gl's internal "'baseUrl' must be provided…" error.
     const msg = err instanceof Error ? err.message : String(err);
     if (/baseUrl/i.test(msg)) {
-      throw new Error(
-        'This glTF references external files (e.g. buffer.bin) that a single-file open cannot resolve. Export as GLB, or a self-contained .gltf with embedded/data-URI buffers.',
-      );
+      throw new Error(EXTERNAL_GLTF_MESSAGE);
     }
     throw err;
   });

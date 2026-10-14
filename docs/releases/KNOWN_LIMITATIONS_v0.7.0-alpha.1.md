@@ -375,7 +375,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 97 for the shell, 74 for the renderer and 23 for the Analyse panel,
-across 1129 modules with no dependency cycles.
+across 1130 modules with no dependency cycles.
 across 1124 modules with no dependency cycles.
 
 ## The shell has little headroom
@@ -630,6 +630,21 @@ open and every static layer, and opening a static file while a stream is open
 closes the stream. A local LAS or LAZ file too heavy for memory streams from
 disk. It replaces an open stream, with that stream's class legend counts, scan
 report and confidence, and keeps the static layers open.
+
+## Large E57 files are refused; spherical-only E57 scans are skipped
+
+An E57 file is decoded whole in memory, and the plan reserves two copies of the
+file plus a fixed allowance before any point is decoded, under a decode ceiling
+of 2,000,000,000 bytes. An E57 of about 900 MB or more therefore cannot be
+opened on any device: it is refused before its points are read, with the reason
+stated. A smaller E57 that does not fit the device's memory opens as a strided
+sample, and the scan report says so. Opening multi-gigabyte E57 files (for
+example 4 GB) is not supported in this release; convert them to LAS/LAZ or COPC
+to open them.
+
+A scan that stores only spherical coordinates (range, azimuth, elevation) and no
+Cartesian X/Y/Z is skipped with a warning that names it and its record count. A
+file whose scans are all spherical-only opens no points.
 
 ## E57 intensity is normalised; a missing channel is dropped
 

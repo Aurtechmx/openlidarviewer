@@ -110,7 +110,7 @@ export async function parseBuffer(
       : pickLoader(format);
   // The chunked text loaders (XYZ/CSV, PTS) report decode progress; binary
   // loaders ignore the callback.
-  const cloud = await loader(buffer, name, onProgress);
+  const cloud = await loader(buffer, name, onProgress, { pointSemantics });
   assertNonEmptyCloud(cloud);
   const originalPointCount = cloud.pointCount;
 

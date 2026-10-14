@@ -12,7 +12,8 @@
  */
 
 import type { MeasurementSummary } from '../render/measure/MeasureController';
-import { UNIT_UNVERIFIED_MEASURE_NOTICE } from '../render/measure/format';
+import { UNIT_UNVERIFIED_MEASURE_NOTICE, VOLUME_ESTIMATE_NOTICE } from '../render/measure/format';
+import { sceneCaveatLines, type MeasureSceneContext } from '../render/measure/measureConfidence';
 
 /** How much the headline can be trusted, in the order a reader must see it. */
 export type ResultStatus = 'ok' | 'unit-unverified' | 'not-presentable' | 'no-value';
@@ -36,7 +37,12 @@ export interface ResultModel {
 const NO_VALUE = '—';
 export const NO_VALUE_TEXT = 'No value to report';
 
-export function buildResultModel(s: MeasurementSummary): ResultModel {
+/**
+ * `scene` is the same set of facts the Measurements panel grades the row
+ * against, so a figure the panel calls approximate is never a bare number on
+ * the card or in the copied text.
+ */
+export function buildResultModel(s: MeasurementSummary, scene: MeasureSceneContext): ResultModel {
   const raw = (s.value ?? '').trim();
   const hasValue = raw !== '' && raw !== NO_VALUE;
   const trust = s.trust;
@@ -54,6 +60,14 @@ export function buildResultModel(s: MeasurementSummary): ResultModel {
     caveat = UNIT_UNVERIFIED_MEASURE_NOTICE;
   } else if (trust && trust.grade !== 'green') {
     caveat = trust.caption;
+  }
+
+  if (hasValue) {
+    // The unit notice above is already the headline; do not state it twice.
+    const facts = status === 'unit-unverified' ? { ...scene, unitVerified: true } : scene;
+    const more = sceneCaveatLines(s, facts);
+    if (s.kind === 'volume') more.push(VOLUME_ESTIMATE_NOTICE);
+    if (more.length > 0) caveat = [caveat, ...more].filter((x): x is string => !!x).join('; ');
   }
 
   const value = hasValue ? raw : NO_VALUE_TEXT;

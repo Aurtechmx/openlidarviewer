@@ -42,6 +42,12 @@ describe('computeCivilProfileStats', () => {
     expect(stats.stations[1].gradeToNext).toBeNull();
     // mean grade uses first/last covered (0→20): (56-50)/20
     expect(stats.meanGrade).toBeCloseTo(6 / 20, 6);
+    expect(stats.meanGradeGaps).toBe(1);
+  });
+
+  it('counts no missing stations between the endpoints of a gap-free profile', () => {
+    expect(computeCivilProfileStats([s(0, 50), s(10, 53), s(20, 56)]).meanGradeGaps).toBe(0);
+    expect(computeCivilProfileStats([s(0, NaN), s(10, 53), s(20, 56), s(30, NaN)]).meanGradeGaps).toBe(0);
   });
 
   it('returns nulls when nothing is covered', () => {

@@ -162,3 +162,33 @@ export function layerContextOf(
   if (states.includes('incompatible')) return 'incomparable';
   return states.every((s) => s === 'verified') ? 'all-verified' : 'mixed';
 }
+
+/** The one-line text a context state is shown with: the label, then why. */
+export function confidenceText(conf: MeasureConfidence): string {
+  return conf.level === 'verified' ? conf.label : `${conf.label} — ${conf.reason}`;
+}
+
+/** Whether a measurement's figures include a height, a rise, a slant or a grade. */
+export function summaryUsesHeight(s: {
+  readonly kind: MeasurementKind;
+  readonly lineMetrics?: unknown;
+  readonly areaMetrics?: unknown;
+}): boolean {
+  return !!s.lineMetrics || !!s.areaMetrics || s.kind === 'height' || s.kind === 'volume';
+}
+
+/**
+ * The scene caveats that apply to one measurement, in reading order. The
+ * Measurements panel draws these as its context line and vertical-unit note;
+ * the result card and Copy print the same lines. Empty when nothing applies.
+ */
+export function sceneCaveatLines(
+  s: { readonly kind: MeasurementKind; readonly lineMetrics?: unknown; readonly areaMetrics?: unknown },
+  scene: MeasureSceneContext,
+): string[] {
+  const lines: string[] = [];
+  const conf = confidenceForKind(s.kind, scene);
+  if (conf.level !== 'verified') lines.push(confidenceText(conf));
+  if (scene.verticalUnitBorrowed && summaryUsesHeight(s)) lines.push(VERTICAL_UNIT_BORROWED_NOTE);
+  return lines;
+}

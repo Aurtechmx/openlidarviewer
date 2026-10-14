@@ -24,11 +24,20 @@ import type { ProgressUpdate } from './loadProgress';
  *
  * `onProgress` is optional and used only by the chunked text loaders
  * (XYZ/CSV, PTS) to report decode progress; binary loaders ignore it.
+ *
+ * `options` carries decode switches a format may honour. `pointSemantics`
+ * (LAS/LAZ only) allocates scan angle, user data, scanner channel, scan
+ * direction and edge-of-flight-line; other formats ignore it.
  */
+export interface LoaderOptions {
+  pointSemantics?: boolean;
+}
+
 export type LoaderFn = (
   buffer: ArrayBuffer,
   name: string,
   onProgress?: (update: ProgressUpdate) => void,
+  options?: LoaderOptions,
 ) => Promise<PointCloud>;
 
 /**
@@ -37,8 +46,10 @@ export type LoaderFn = (
  * separate, lazily-fetched chunk.
  */
 const LOADERS: Record<SourceFormat, LoaderFn> = {
-  las: async (buffer, name) => (await import('./loadLas')).loadLas(buffer, 'las', name),
-  laz: async (buffer, name) => (await import('./loadLas')).loadLas(buffer, 'laz', name),
+  las: async (buffer, name, onProgress, options) =>
+    (await import('./loadLas')).loadLas(buffer, 'las', name, 1, onProgress, options?.pointSemantics),
+  laz: async (buffer, name, onProgress, options) =>
+    (await import('./loadLas')).loadLas(buffer, 'laz', name, 1, onProgress, options?.pointSemantics),
   e57: async (buffer, name) => (await import('./loadE57')).loadE57(buffer, name),
   ply: async (buffer, name) => (await import('./loadPly')).loadPly(buffer, name),
   obj: async (buffer, name) => (await import('./loadObj')).loadObj(buffer, name),

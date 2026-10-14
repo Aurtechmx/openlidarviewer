@@ -82,6 +82,28 @@ export function seatClear(self: HTMLElement, selectors: readonly string[], dir: 
 }
 
 /**
+ * Cap `self`'s height so its bottom stays `gap` above the highest match of
+ * `floors` in its column that starts below its top. Written as
+ * `--olv-seat-max` (pixels), removed when nothing sits below. A surface that
+ * grows (a result card gaining caveat lines) then scrolls inside itself
+ * instead of covering the controls at the bottom of the stage.
+ */
+export function seatFit(self: HTMLElement, floors: readonly string[], gap = 8): void {
+  const doc = self.ownerDocument;
+  if (!doc || !self.isConnected) return;
+  const box = paintedBox(self);
+  if (!box) return;
+  let floor = Infinity;
+  for (const r of boxesInColumn(doc, floors, box.left, box.right, self)) {
+    if (r.top > box.top && r.top < floor) floor = r.top;
+  }
+  const next = Number.isFinite(floor) ? `${Math.max(0, Math.floor(floor - box.top - gap))}px` : '';
+  if (next === self.style.getPropertyValue('--olv-seat-max')) return;
+  if (next) self.style.setProperty('--olv-seat-max', next);
+  else self.style.removeProperty('--olv-seat-max');
+}
+
+/**
  * Run `seat` (coalesced to one call per microtask) whenever something it
  * depends on may have moved: a tracked element's class or hidden flag changes or
  * tracked nodes are added or removed, `self` or a match of `selectors` resizes, the

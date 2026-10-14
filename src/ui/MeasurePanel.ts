@@ -76,6 +76,8 @@ import { breakdownParts } from './measureBreakdownRow';
 // the dumb view that renders the state it derives.
 import {
   confidenceForKind,
+  confidenceText,
+  summaryUsesHeight,
   UNRESOLVED_SCENE_CONTEXT,
   VERTICAL_UNIT_BORROWED_NOTE,
   type MeasureSceneContext,
@@ -1427,7 +1429,7 @@ export class MeasurePanel {
     const confLine = el('div', {
       className: `olv-mp-confidence olv-mp-confidence-${conf.level}`,
       text: conf.label,
-      title: conf.level === 'verified' ? conf.label : `${conf.label} — ${conf.reason}`,
+      title: confidenceText(conf),
     });
 
     // Distance / Area: the values the same picks already fixed. Reading a run,
@@ -1452,8 +1454,7 @@ export class MeasurePanel {
     // A rise, slant, grade, height or volume on a file with no vertical unit
     // borrows the horizontal one; say so beside the figures, as the reference
     // plane does.
-    const usesHeight = !!s.lineMetrics || !!s.areaMetrics || s.kind === 'height' || s.kind === 'volume';
-    const vunitNote = this._confidenceScene?.verticalUnitBorrowed && usesHeight
+    const vunitNote = this._confidenceScene?.verticalUnitBorrowed && summaryUsesHeight(s)
       ? el('div', { className: 'olv-mp-chart-caveat olv-mp-vunit-note', text: VERTICAL_UNIT_BORROWED_NOTE })
       : null;
     const breakdownEls = [breakdownLine, vunitNote].filter((e): e is HTMLDivElement => e !== null);

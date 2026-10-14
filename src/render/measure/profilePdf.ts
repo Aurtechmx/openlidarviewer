@@ -1403,7 +1403,8 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       // its second half trimmed off, and a trimmed height is a wrong height.
       span: 2,
     },
-    { label: 'MEAN GRADE (%)', value: bare(formatGradePercent(stats.meanGrade)) },
+    // Two cells wide: the label is longer than one cell holds.
+    { label: 'ENDPOINT GRADIENT (%)', value: bare(formatGradePercent(stats.meanGrade)), span: 2 },
     // Signed steepest grade: the panel, the callout, and this KPI must agree on
     // sign for one profile. stats.maxGrade is an unsigned magnitude; intel.maxGrade
     // is the signed steepest-section grade (same segment). The ratio/degrees row
@@ -1452,9 +1453,12 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
           : `Summed rise and fall over covered station pairs. Rise or fall across a gap is not counted (${gapCount} gap ${gapCount === 1 ? 'station' : 'stations'}), so gain minus loss can differ from the net change.`,
     },
     {
-      item: 'Mean grade',
+      item: 'Endpoint gradient',
       value: `${formatGradePercent(stats.meanGrade)}  (${formatGradeRatio(stats.meanGrade)}, ${formatGradeDegrees(stats.meanGrade)})`,
-      remark: 'Net grade end to end. Local grades reach the maximum below.',
+      remark:
+        stats.meanGradeGaps === 0
+          ? 'Net grade between the first and last covered stations. Local grades reach the maximum below.'
+          : `Net grade between the first and last covered stations; it spans ${stats.meanGradeGaps} missing ${stats.meanGradeGaps === 1 ? 'station' : 'stations'}, so it is not an observed slope. Local grades reach the maximum below.`,
     },
     {
       item: 'Max grade (ratio, angle)',

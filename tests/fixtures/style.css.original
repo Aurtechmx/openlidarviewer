@@ -2487,6 +2487,11 @@ button:disabled { cursor: not-allowed; }
   border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-lg); cursor: pointer;
 }
 .olv-toast-cancel:hover { opacity: 1; border-color: var(--accent); }
+/* Two Cancel controls can share the row during a multi-file drop; both keep a
+ * 24 px target and may wrap under the text instead of overflowing. */
+.olv-toast-cancel { min-height: 24px; }
+.olv-toast-row:has(.olv-toast-cancel:not(.olv-hidden) ~ .olv-toast-cancel:not(.olv-hidden)) { flex-wrap: wrap; }
+.olv-toast-queue { flex: none; white-space: nowrap; }
 .olv-toast-bar { height: 3px; border-radius: 2px; background: var(--hairline); overflow: hidden; }
 .olv-toast-bar-fill {
   display: block; height: 100%; width: 0%;
@@ -4854,6 +4859,7 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
   top: calc(var(--olv-rail-top) + var(--olv-seat, 0px));
   display: flex; flex-direction: column; align-items: center; gap: var(--space-sm);
   width: max-content; max-width: min(520px, calc(100vw - 680px));
+  max-height: var(--olv-seat-max, none);
   z-index: var(--z-float); pointer-events: none;
 }
 @media (max-width: 1023px) {
@@ -4874,7 +4880,7 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   box-shadow: var(--shadow-floating); color: var(--text); font-size: var(--text-sm);
 }
-.olv-result-card { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-lg) var(--space-xl); min-width: 240px; }
+.olv-result-card { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-lg) var(--space-xl); min-width: 240px; min-height: 0; overflow-y: auto; }
 .olv-result-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-lg); }
 .olv-result-label { font-size: var(--text-xs); color: var(--text-dim); overflow-wrap: anywhere; }
 .olv-result-dismiss {

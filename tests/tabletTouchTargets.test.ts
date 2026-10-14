@@ -73,7 +73,7 @@ describe('tablet touch targets', () => {
     // The cube owns its touch geometry (its lazy viewCube.css, plus script-set sizes),
     // so the tablet stylesheet no longer carries cube rules.
     expect(mediaBody(CSS)).not.toMatch(/\.olv-viewcube[^-]/);
-    const src = readFileSync(fileURLToPath(new URL('../src/ui/viewCube.ts', import.meta.url)), 'utf8');
+    const src = readFileSync(fileURLToPath(new URL('../src/render/viewCubeMath.ts', import.meta.url)), 'utf8');
     const m = /coarse: \{ box: (\d+), half: (\d+), hit: (\d+), home: (\d+) \}/.exec(src);
     expect(m).not.toBeNull();
     const [box, half, hit, home] = m!.slice(1).map(Number);

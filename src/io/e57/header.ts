@@ -58,6 +58,12 @@ const SUPPORTED_VERSION_MAJOR = 1;
  */
 const MIN_PAGE_SIZE = 64;
 const MAX_PAGE_SIZE = 1024 * 1024;
+/**
+ * Largest XML section this reader accepts. Real E57 schemas are a few MB; the
+ * whole section is read and decoded before any point, so an unbounded length
+ * could exhaust memory first.
+ */
+export const MAX_XML_BYTES = 64 * 1024 * 1024;
 
 /**
  * Read one of the header's uint64 fields as a JavaScript number, refusing any
@@ -136,12 +142,21 @@ export function parseE57Header(buffer: ArrayBuffer, fileBytes = buffer.byteLengt
     );
   }
 
+  const xmlLogicalLength = readUint64(view, 32, 'the XML section length');
+  if (xmlLogicalLength > MAX_XML_BYTES) {
+    throw new LoadError(
+      'malformed-file',
+      `E57 file is malformed: it declares an XML section of ${xmlLogicalLength} bytes, ` +
+        `more than the ${MAX_XML_BYTES} this reader accepts (E57 schemas are a few MB).`,
+    );
+  }
+
   return {
     versionMajor,
     versionMinor,
     filePhysicalLength,
     xmlPhysicalOffset: readUint64(view, 24, 'the XML section offset'),
-    xmlLogicalLength: readUint64(view, 32, 'the XML section length'),
+    xmlLogicalLength,
     pageSize,
   };
 }

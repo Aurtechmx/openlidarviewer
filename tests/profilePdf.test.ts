@@ -892,3 +892,20 @@ describe('truncated static source (partial-static read scope)', () => {
     expect(text).not.toContain('Truncated');
   });
 });
+
+describe('endpoint gradient on the sheet', () => {
+  it('names the row Endpoint gradient and says it spans a missing station', async () => {
+    const samples = ramp(5);
+    samples[2] = { distance: 4, height: NaN };
+    const text = drawnPdfProse(await buildProfilePdf({ name: 'Gappy', samples, generatedAt: FIXED_DATE }));
+    expect(text).toContain('Endpoint gradient');
+    expect(text).toContain('spans 1 missing station,');
+    expect(text).not.toContain('Mean grade');
+  });
+
+  it('adds no gap wording when every station between the endpoints is covered', async () => {
+    const text = drawnPdfProse(await buildProfilePdf({ name: 'Whole', samples: ramp(5), generatedAt: FIXED_DATE }));
+    expect(text).toContain('Endpoint gradient');
+    expect(text).not.toContain('missing station');
+  });
+});

@@ -21,7 +21,7 @@
 
 import type { ProfileChartSample } from './types';
 import { VERTICAL_NOT_AVAILABLE } from './types';
-import { formatStationing, formatGradePercent, profileSampleCovered } from './civilProfileStats';
+import { formatStationing, formatGradePercent, formatEndpointGradient, profileSampleCovered } from './civilProfileStats';
 import { GEOGRAPHIC_CRS_MEASURE_NOTICE, formatElevation, formatRise, formatLength, formatUnitUnverified, unitToken, type DisplayUnits } from './format';
 // Height headings come from one vocabulary, where "Elevation" is earned by an
 // orthometric reference and by nothing else. The panel, the station table, the
@@ -65,10 +65,14 @@ export interface ProfileSummaryData {
   /** Total descent (as a positive number): Σ |negative deltas|. */
   readonly lossM: number | null;
   /**
-   * Net average grade: (last covered elevation − first covered elevation) /
+   * Endpoint gradient: (last covered elevation − first covered elevation) /
    * chainage run between those two stations. Signed; null below 2 covered.
+   * Stations between the two may be missing; see `endpointGaps`. The field
+   * keeps its earlier name so saved data and callers are unaffected.
    */
   readonly averageGrade: number | null;
+  /** Missing stations between the first and last covered ones, which `averageGrade` spans. */
+  readonly endpointGaps: number;
   /** The steepest segment's signed grade (largest |grade|), or null. */
   readonly maxGrade: number | null;
   /** Where that steepest segment lies (first such segment on a tie). */
@@ -182,7 +186,9 @@ export function computeProfileSummary(
   }
 
   let averageGrade: number | null = null;
+  let endpointGaps = 0;
   if (firstHit >= 0 && lastHit > firstHit) {
+    for (let i = firstHit + 1; i < lastHit; i++) if (!profileSampleCovered(samples[i])) endpointGaps++;
     const run = samples[lastHit].distance - samples[firstHit].distance;
     if (run > 1e-9) {
       averageGrade = (samples[lastHit].height - samples[firstHit].height) / run;
@@ -195,6 +201,7 @@ export function computeProfileSummary(
     gainM: segments > 0 ? gain : null,
     lossM: segments > 0 ? loss : null,
     averageGrade,
+    endpointGaps,
     maxGrade: steepest ? steepest.grade : null,
     steepest,
     highest,
@@ -307,7 +314,7 @@ export function profileSummaryRows(
           ? '—'
           : `+${rise(s.gainM)} / −${rise(s.lossM)}`,
     },
-    { label: 'Avg grade', value: formatGradePercent(s.averageGrade) },
+    { label: 'Endpoint gradient', value: formatEndpointGradient(s.averageGrade, s.endpointGaps) },
     { label: 'Max grade', value: formatGradePercent(s.maxGrade) },
     {
       label: 'Steepest section',
