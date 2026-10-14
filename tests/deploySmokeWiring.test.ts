@@ -79,10 +79,13 @@ describe('serve-deploy-bytes on an occupied port', () => {
     writeFileSync(join(dir, 'index.html'), '<!doctype html>');
     // Occupy a port, then ask the server for the same one.
     const squatter = createServer();
-    const port: number = await new Promise((res) => {
-      squatter.listen(0, '127.0.0.1', () => res((squatter.address() as { port: number }).port));
-    });
     try {
+      // A listen failure (a sandbox that forbids binding, say) rejects with the
+      // cause instead of timing out on a callback that never runs.
+      const port: number = await new Promise((res, rej) => {
+        squatter.once('error', (e) => rej(new Error(`cannot bind a loopback port for this test: ${e.message}`)));
+        squatter.listen(0, '127.0.0.1', () => res((squatter.address() as { port: number }).port));
+      });
       const code: number = await new Promise((res) => {
         const p = spawn(process.execPath, ['scripts/serve-deploy-bytes.mjs'], {
           cwd: ROOT,
@@ -95,7 +98,7 @@ describe('serve-deploy-bytes on an occupied port', () => {
       // already listening.
       expect(code).not.toBe(0);
     } finally {
-      squatter.close();
+      if (squatter.listening) squatter.close();
       rmSync(dir, { recursive: true, force: true });
     }
   });

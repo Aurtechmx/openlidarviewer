@@ -109,12 +109,14 @@ describe('measurement GeoJSON in WGS 84', () => {
     expect(lonLat.features[1].properties.area_m2).toBe(200);
   });
 
-  it('writes a height only when the source is already WGS 84 ellipsoidal metres (RFC 7946), unlike the KML', () => {
+  it('writes a height only when the source is already WGS 84 ellipsoidal metres (RFC 7946), and the KML only on the EGM96 geoid', () => {
     const navd: ResolvedCrs = { ...UTM12, verticalDatum: 'NAVD88', verticalUnitToMetres: 1 };
     const fc = JSON.parse(measurementsToGeoJSON([DIST], ctx(placed(navd))));
     expect(fc.features[0].geometry.coordinates[0]).toHaveLength(2);
     expect(fc.features[0].properties.elevations_source[0]).toBe(103);
-    expect(kmlCoordinates(navd, DIST)[0]).toHaveLength(3);
+    expect(kmlCoordinates(navd, DIST)[0]).toHaveLength(2);
+    const egm96: ResolvedCrs = { ...UTM12, verticalDatum: 'EPSG:5773', verticalUnitToMetres: 1 };
+    expect(kmlCoordinates(egm96, DIST)[0]).toHaveLength(3);
     const ellipsoidal: ResolvedCrs = { ...UTM12, verticalDatum: 'EPSG:4979', verticalUnitToMetres: 1 };
     const e = JSON.parse(measurementsToGeoJSON([DIST], ctx(placed(ellipsoidal)))).features[0].geometry.coordinates[0];
     expect(e).toHaveLength(3);
