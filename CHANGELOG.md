@@ -46,6 +46,9 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- A local glTF or GLB that names an external buffer or image (a relative file or a web address) is refused before parsing. Opening it no longer makes the browser request an address named inside the file.
+- The E57 reader refuses an XML section larger than 64 MB and XML nested deeper than 256 levels with a clear error, instead of exhausting memory or the call stack.
+- The latest-result card no longer covers the active tool's Finish and Cancel controls when it grows: it stays above the bottom controls and scrolls inside itself.
 - The view cube no longer shows click targets under 24 by 24 CSS px. Edge and corner targets are 24 px, and a face seen at a glancing angle that would project narrower than 24 px is hidden until the camera turns further (its view stays in the navigation menu and the command palette). This fixes an intermittent WCAG 2.2 target-size failure that depended on the cube's orientation.
 - Converted LAS and LAZ files keep scan angle, user data, scanner channel, scan direction and edge-of-flight-line. The full-resolution decode behind the converter did not allocate those channels, so a converted LAS that carried them lost them; sources without them convert to the same bytes as before.
 - XYZ, CSV, ASC, PLY and OBJ exports are written in 4 MiB byte chunks instead of one string, so a full-resolution export of tens of millions of points no longer fails with "Invalid string length" and needs about a third less peak memory. The output bytes are unchanged.
