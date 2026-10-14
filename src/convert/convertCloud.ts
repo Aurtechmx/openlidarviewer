@@ -15,7 +15,7 @@ import { truncationOf } from '../io/truncation';
 import { safeEntryName, singleLine } from '../export/safeText';
 import { classEditLine, classesEdited, pointBasisOfCloud, softwareLine, sourceFileLine } from '../export/exportProvenanceLines';
 import type { PointCloud } from '../model/PointCloud';
-import { intensityNormalisationLine } from '../model/PointCloud';
+import { ATTR_COLOUR_INVALID, ATTR_INTENSITY_INVALID, countAttributeInvalid, intensityNormalisationLine } from '../model/PointCloud';
 import { sourcePositions } from '../model/pointFrames';
 import { classifyScanShape } from '../terrain/scanShape';
 import { isZUpFormat } from '../io/sniffFormat';
@@ -307,6 +307,37 @@ export function convertCloud(
   if (opts.omitClassification && g.classification) {
     g = { ...g, classification: undefined };
     log.push({ level: 'info', message: 'Classification omitted at the user’s request — written as class 0.' });
+  }
+
+  // Colour / intensity the source flags invalid have no null value in LAS, so
+  // the attribute is left out of the whole file there; the ASCII writers write
+  // `nan` for the flagged rows instead. Either way the file says so.
+  {
+    const isLas = opts.format === 'las' || opts.format === 'las14';
+    const carriesColour = isLas || opts.format === 'xyz';
+    const carriesIntensity = isLas || opts.format === 'asc';
+    const badColour = carriesColour && g.colors ? countAttributeInvalid(g.attributeInvalid, ATTR_COLOUR_INVALID, g.count) : 0;
+    const badIntensity = carriesIntensity && g.intensity ? countAttributeInvalid(g.attributeInvalid, ATTR_INTENSITY_INVALID, g.count) : 0;
+    const pts = (k: number): string => `${k.toLocaleString('en-US')} point${k === 1 ? '' : 's'}`;
+    const names = [badColour > 0 ? `colour (${pts(badColour)})` : '', badIntensity > 0 ? `intensity (${pts(badIntensity)})` : ''].filter(Boolean).join(' and ');
+    if (names) {
+      if (isLas) {
+        g = { ...g, ...(badColour > 0 ? { colors: undefined } : {}), ...(badIntensity > 0 ? { intensity: undefined } : {}) };
+      }
+      record({
+        id: 'attribute-invalid',
+        kind: 'dropped',
+        level: 'warn',
+        points: Math.max(badColour, badIntensity),
+        message: isLas
+          ? `The source flags ${names} as invalid and LAS has no null value, so ${[
+              badColour > 0 ? 'colour is left out of the whole file (a point format without colour is written)' : '',
+              badIntensity > 0 ? 'intensity is left out of the whole file (the field holds 0 for every point and carries no measurement)' : '',
+            ].filter(Boolean).join(' and ')}.`
+          : `The source flags ${names} as invalid; those values are written as nan, meaning unavailable.`,
+        acknowledged: false,
+      });
+    }
   }
 
   const geo = outEpsg != null ? isGeographicEpsg(outEpsg) : false;

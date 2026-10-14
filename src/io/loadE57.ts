@@ -19,7 +19,7 @@ import { planE57Decode, e57TooLargeMessage, e57NoPlanMessage } from './loadPlan'
 import type { E57DecodePlan } from './loadPlan';
 import { formatByteSize } from './formatByteSize';
 import { LoadError } from './loadErrors';
-import { PointCloud } from '../model/PointCloud';
+import { ATTR_COLOUR_INVALID, ATTR_INTENSITY_INVALID, PointCloud } from '../model/PointCloud';
 import type { CloudMetadata, IntensityScanMapping } from '../model/PointCloud';
 import { declaredCaptureFromSourceMetadata } from '../diagnostics/declaredCapture';
 import { sanitizeAndRecenter } from './sanitizeCloud';
@@ -438,6 +438,14 @@ export async function loadE57(
   const intensity = hasIntensity ? new Uint16Array(total) : undefined;
   const classification = hasClassification ? new Uint8Array(total) : undefined;
   const normals = hasNormals ? new Float32Array(total * 3) : undefined;
+  // Per-point validity bits for the colour / intensity this cloud keeps, built
+  // only when a merged scan carries a flag column for a kept channel and
+  // dropped again below if no point turned out to be flagged.
+  const wantsMask = scans.some(
+    (s) => (colors !== undefined && s.columns.isColorInvalid) || (intensity !== undefined && s.columns.isIntensityInvalid),
+  );
+  const attributeInvalid = wantsMask ? new Uint8Array(total) : undefined;
+  let anyInvalid = false;
 
   // One grid per SCAN. E57 topology is per scan, and this loader emits one
   // merged cloud with no scan boundary in it, so a single merged grid would
@@ -489,10 +497,9 @@ export async function loadE57(
       });
       if (iMap.scale !== 1 || iMap.bias !== 0) intensityRescaled = true;
     }
-    // Per-point attribute flags. The cloud has no per-point "unavailable"
-    // representation for colour or intensity (per-point attribute masks are
-    // future work), so a flagged point keeps its geometry and the value the
-    // file wrote; it is counted and reported, never rewritten as a zero.
+    // Per-point attribute flags. A flagged point keeps its geometry; its
+    // colour / intensity is recorded in `attributeInvalid` so it is never
+    // displayed, summarised or exported as a measurement.
     const colourFlags = colors ? col.isColorInvalid : undefined;
     const intensityFlags = intensity ? col.isIntensityInvalid : undefined;
     let colourFlagged = 0;
@@ -513,8 +520,14 @@ export async function loadE57(
         continue;
       }
       grid?.place(i, w);
-      if (colourFlags && colourFlags[i] !== 0) colourFlagged++;
-      if (intensityFlags && intensityFlags[i] !== 0) intensityFlagged++;
+      if (colourFlags && colourFlags[i] !== 0) {
+        colourFlagged++;
+        if (attributeInvalid) attributeInvalid[w] |= ATTR_COLOUR_INVALID;
+      }
+      if (intensityFlags && intensityFlags[i] !== 0) {
+        intensityFlagged++;
+        if (attributeInvalid) attributeInvalid[w] |= ATTR_INTENSITY_INVALID;
+      }
 
       let px = cx[i];
       let py = cy[i];
@@ -562,14 +575,15 @@ export async function loadE57(
       w++;
     }
     if (colourFlagged > 0 || intensityFlagged > 0) {
+      anyInvalid = true;
       const parts = [
         ...(colourFlagged > 0 ? [`${colourFlagged.toLocaleString('en-US')} point(s) with invalid colour`] : []),
         ...(intensityFlagged > 0 ? [`${intensityFlagged.toLocaleString('en-US')} point(s) with invalid intensity`] : []),
       ];
       warnings.push(
         `Scan "${scan.name}" flags ${parts.join(' and ')}. Their positions are kept; ` +
-          `the flagged values are shown as the file wrote them but are not measurements` +
-          `${intensityFlagged > 0 ? ', and flagged intensity is left out of the observed intensity range' : ''}.`,
+          `the flagged values are masked: not shown, left out of statistics, and exported as empty or nan ` +
+          `(or the attribute is omitted where the format has no null).`,
       );
     }
     preStations.push({
@@ -613,7 +627,7 @@ export async function loadE57(
   // warning list the skipped-scan and normalised-pose notes already use.
   const clean = sanitizeAndRecenter(
     global,
-    { colors, intensity, classification, normals },
+    { colors, intensity, classification, normals, ...(anyInvalid ? { attributeInvalid } : {}) },
     // Asked for whenever a grid OR the station sidecar depends on the answer.
     // `preStations` is non-empty whenever `scans` is (one station per merged
     // scan), which is always true here (an earlier check throws on `total ===
@@ -687,6 +701,7 @@ export async function loadE57(
     intensity: clean.attributes.intensity,
     classification: clean.attributes.classification,
     normals: clean.attributes.normals,
+    attributeInvalid: clean.attributes.attributeInvalid,
     origin: clean.origin,
     sourceFormat: 'e57',
     name,

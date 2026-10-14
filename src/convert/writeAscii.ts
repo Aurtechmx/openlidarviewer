@@ -78,7 +78,10 @@ export function writeXyz(
   for (let i = 0; i < g.count; i++) {
     const base = `${fmt(g.x[i], h)} ${fmt(g.y[i], h)} ${fmt(g.z[i], precision)}`;
     if (c) {
-      lines.push(`${base} ${c[i * 3]} ${c[i * 3 + 1]} ${c[i * 3 + 2]}`);
+      // A colour the source flags invalid is unavailable, not a measured value.
+      lines.push(g.attributeInvalid && (g.attributeInvalid[i] & 1) !== 0
+        ? `${base} nan nan nan`
+        : `${base} ${c[i * 3]} ${c[i * 3 + 1]} ${c[i * 3 + 2]}`);
     } else {
       lines.push(base);
     }
@@ -126,7 +129,7 @@ export function writeAsc(
   const it = g.intensity;
   for (let i = 0; i < g.count; i++) {
     const base = `${fmt(g.x[i], h)} ${fmt(g.y[i], h)} ${fmt(g.z[i], precision)}`;
-    lines.push(it ? `${base} ${it[i]}` : base);
+    lines.push(it ? `${base} ${g.attributeInvalid && (g.attributeInvalid[i] & 2) !== 0 ? 'nan' : it[i]}` : base);
   }
   return lines.join('\n') + '\n';
 }

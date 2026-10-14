@@ -52,7 +52,7 @@ import type { CrsOriginInput } from '../science/crsOrigin';
 import { exportDigestLines, type ExportDigests } from '../science/exportDigestRecord';
 import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
 import type { PointCloud, SourceMetadata, DeclaredMetadataField } from '../model/PointCloud';
-import { intensityNormalisationLine } from '../model/PointCloud';
+import { ATTR_COLOUR_INVALID, ATTR_INTENSITY_INVALID, countAttributeInvalid, intensityNormalisationLine } from '../model/PointCloud';
 import { sourcePositions } from '../model/pointFrames';
 
 /** The export formats this module produces. */
@@ -243,6 +243,29 @@ function droppedChannelLines(
   );
 }
 
+/** Flagged-invalid counts for the colour and intensity this export would write. */
+function invalidCounts(cloud: PointCloud, colour: boolean, intensity: boolean): { colour: number; intensity: number } {
+  const n = cloud.pointCount;
+  const mask = cloud.attributeInvalid?.length === n ? cloud.attributeInvalid : undefined;
+  return {
+    colour: colour ? countAttributeInvalid(mask, ATTR_COLOUR_INVALID, n) : 0,
+    intensity: intensity ? countAttributeInvalid(mask, ATTR_INTENSITY_INVALID, n) : 0,
+  };
+}
+
+/** Names the attributes a file flags invalid, with the counts: "colour (2 points) and intensity (1 point)". */
+function invalidSummary(c: { colour: number; intensity: number }): string {
+  const part = (name: string, k: number): string => `${name} (${k.toLocaleString('en-US')} point${k === 1 ? '' : 's'})`;
+  return [c.colour > 0 ? part('colour', c.colour) : '', c.intensity > 0 ? part('intensity', c.intensity) : '']
+    .filter(Boolean)
+    .join(' and ');
+}
+
+/** The line for a format with no null colour: the colour is left out of the whole file. */
+function colourOmittedLine(bad: number, format: string): string {
+  return `colour omitted: ${bad.toLocaleString('en-US')} point${bad === 1 ? ' is' : 's are'} flagged invalid by the source and ${format} colour has no null value`;
+}
+
 /**
  * Serialise to plain-text XYZ (or CSV when `delimiter` is `,`).
  * Columns: `x y z`, then — each only when the cloud carries the channel —
@@ -253,7 +276,9 @@ function droppedChannelLines(
  * there is something to say — a plain x-y-z file stays byte-identical to
  * earlier releases. Importers — ours included — skip `#` comment lines by
  * long-standing XYZ convention. A CSV never gets comment lines: naive CSV
- * parsers must always see the header row first.
+ * parsers must always see the header row first, except that a cloud with
+ * values the file flags invalid writes those fields empty (CSV) or `nan`
+ * (XYZ), and says so in one leading `#` note.
  */
 export function toXyz(cloud: PointCloud, delimiter = ' ', resolvedIsGeographic?: boolean, digests?: ExportDigests): string {
   // World coordinates come from the SOURCE origin, which is fixed for the
@@ -281,6 +306,11 @@ export function toXyz(cloud: PointCloud, delimiter = ' ', resolvedIsGeographic?:
     cloud.classification?.length === n
       ? cloud.classification
       : undefined;
+  const bad = invalidCounts(cloud, colors !== undefined, intensity !== undefined);
+  const invalidNote = bad.colour + bad.intensity > 0
+    ? `${invalidSummary(bad)} flagged invalid by the source: written as ${csv ? 'an empty field' : 'nan'}, meaning unavailable`
+    : null;
+  const mask = cloud.attributeInvalid;
   const columns = [
     'x',
     'y',
@@ -303,14 +333,17 @@ export function toXyz(cloud: PointCloud, delimiter = ' ', resolvedIsGeographic?:
         `${cloud.derivedMethod ? `, ${cloud.derivedMethod}` : ''} — ` +
         'not survey-grade; validate before relying on it)'
       : prov === 'cleared' ? `# classification: CLEARED (${CLEARED_CLASS_NOTE})` : null;
-  if (csv) lines.push(columns.join(','));
-  else {
+  if (csv) {
+    if (invalidNote) lines.push(`# ${invalidNote}`);
+    lines.push(columns.join(','));
+  } else {
     for (const l of provenanceLines(cloud)) lines.push(`# ${l}`);
     for (const l of digestLines(digests)) lines.push(`# ${l}`);
     const subset = subsetLine(cloud);
     if (subset) lines.push(`# ${subset}`);
     if (derivedNote) lines.push(derivedNote);
     if (intensityNote) lines.push(`# ${intensityNote}`);
+    if (invalidNote) lines.push(`# ${invalidNote}`);
     for (const l of droppedChannelLines(cloud, { intensity: true, classification: true }, []))
       lines.push(`# ${l}`);
     if (omitted > 0) lines.push(`# ${omittedPointsLine(omitted)}`);
@@ -322,8 +355,12 @@ export function toXyz(cloud: PointCloud, delimiter = ' ', resolvedIsGeographic?:
     if (!isFinitePoint(positions, i)) continue;
     cloud.worldXYZ(i, w);
     const row: Array<string | number> = [hcoord(w[0]), hcoord(w[1]), coord(w[2])];
-    if (colors) row.push(colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
-    if (intensity) row.push(intensity[i]);
+    const none = csv ? '' : 'nan';
+    if (colors) {
+      if (mask && (mask[i] & ATTR_COLOUR_INVALID) !== 0) row.push(none, none, none);
+      else row.push(colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
+    }
+    if (intensity) row.push(mask && (mask[i] & ATTR_INTENSITY_INVALID) !== 0 ? none : intensity[i]);
     if (classification) row.push(classification[i]);
     lines.push(row.join(delimiter));
   }
@@ -347,8 +384,9 @@ export function toPly(cloud: PointCloud, resolvedIsGeographic?: boolean, digests
   // file sat outside it. Finiteness does not depend on frame, but the read
   // being declared does.
   const positions = sourcePositions(cloud);
-  const { colors } = cloud;
   const n = cloud.pointCount;
+  const badColour = invalidCounts(cloud, cloud.colors !== undefined, false).colour;
+  const colors = badColour > 0 ? undefined : cloud.colors;
   const finite = finitePointCount(positions, n);
   const omitted = n - finite;
   const hcoord = horizontalCoordFormatter(cloud, resolvedIsGeographic);
@@ -365,6 +403,7 @@ export function toPly(cloud: PointCloud, resolvedIsGeographic?: boolean, digests
     ...digestLines(digests).map((l) => `comment ${l}`),
     ...(subsetLine(cloud) ? [`comment ${subsetLine(cloud)}`] : []),
     ...droppedChannelLines(cloud, {}, []).map((l) => `comment ${l}`),
+    ...(badColour > 0 ? [`comment ${colourOmittedLine(badColour, 'PLY')}`] : []),
     ...(omitted > 0 ? [`comment ${omittedPointsLine(omitted)}`] : []),
     `element vertex ${finite}`,
     'property double x',
@@ -410,8 +449,9 @@ export function toObj(cloud: PointCloud, resolvedIsGeographic?: boolean, digests
   // file sat outside it. Finiteness does not depend on frame, but the read
   // being declared does.
   const positions = sourcePositions(cloud);
-  const { colors } = cloud;
   const n = cloud.pointCount;
+  const badColour = invalidCounts(cloud, cloud.colors !== undefined, false).colour;
+  const colors = badColour > 0 ? undefined : cloud.colors;
   const finite = finitePointCount(positions, n);
   const omitted = n - finite;
   const hcoord = horizontalCoordFormatter(cloud, resolvedIsGeographic);
@@ -423,6 +463,7 @@ export function toObj(cloud: PointCloud, resolvedIsGeographic?: boolean, digests
     ...digestLines(digests).map((l) => `# ${l}`),
     ...(subsetLine(cloud) ? [`# ${subsetLine(cloud)}`] : []),
     ...droppedChannelLines(cloud, {}, ['intensity', 'classification']).map((l) => `# ${l}`),
+    ...(badColour > 0 ? [`# ${colourOmittedLine(badColour, 'OBJ')}`] : []),
     ...(omitted > 0 ? [`# ${omittedPointsLine(omitted)}`] : []),
   ];
   const w: [number, number, number] = [0, 0, 0];

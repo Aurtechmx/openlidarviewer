@@ -1133,7 +1133,7 @@ const inspector = new Inspector({
     if (!cloud || !cloud.colors) return;
     void loadRgbAutoNormalize().then(({ rgbAutoNormalize }) => {
       if (scans.activeId !== id) return; // scan changed while we waited
-      const suggestion = rgbAutoNormalize({ colorsU8: cloud.colors! });
+      const suggestion = rgbAutoNormalize({ colorsU8: cloud.colors!, invalid: cloud.attributeInvalid });
       if (!suggestion) return;
       visuals.applyRgbAppearance(suggestion.settings);
     });

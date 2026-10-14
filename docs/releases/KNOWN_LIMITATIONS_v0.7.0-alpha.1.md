@@ -631,13 +631,18 @@ closes the stream. A local LAS or LAZ file too heavy for memory streams from
 disk. It replaces an open stream, with that stream's class legend counts, scan
 report and confidence, and keeps the static layers open.
 
-## E57 attributes have no per-point availability
+## E57 intensity is normalised; a missing channel is dropped
 
 E57 intensity is stored normalised to 0–65535 per scan; the source values are
 not retained, and it is not calibrated reflectance. Colour or intensity a file
-flags invalid, and a channel some merged scans lack, are reported in the load
-warnings rather than masked per point. Per-point attribute masks and raw
-intensity retention are planned.
+flags invalid is masked per point: the point keeps its position, the value is
+drawn in the neutral grey, left out of intensity ranges, the colour balance and
+voxel means, and written as an empty CSV field or `nan` in XYZ and ASC. PLY and
+OBJ omit colour, and LAS omits colour and intensity, for the whole file when any
+exported point is flagged, because those formats have no null value; the
+conversion record states the count. A channel some merged scans lack is still
+dropped from the merged cloud and reported in the load warnings rather than
+masked per point. Raw intensity retention is planned.
 
 ## No cross-CRS reprojection
 

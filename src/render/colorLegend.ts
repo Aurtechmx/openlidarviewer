@@ -19,7 +19,7 @@
 import { rampRangeForMode, type ColorMode } from './colorModes';
 import { buildActiveColorbarSpec, type ActiveColorbar } from './activeColorbar';
 import { isZUpFormat } from '../io/sniffFormat';
-import type { PointCloud } from '../model/PointCloud';
+import { ATTR_INTENSITY_INVALID, type PointCloud } from '../model/PointCloud';
 import type { StreamingColorRanges } from './streaming/streamingColors';
 
 /** The streaming slice the legend reads — a structural subset of the session. */
@@ -66,11 +66,13 @@ export interface ColorLegend {
 /** Min/max over one or more intensity buffers, or null when none are finite. */
 function intensityRange(
   buffers: readonly ArrayLike<number>[],
+  invalid?: ArrayLike<number>,
 ): { min: number; max: number } | null {
   let min = Infinity;
   let max = -Infinity;
   for (const buf of buffers) {
     for (let i = 0; i < buf.length; i++) {
+      if (invalid && (invalid[i] & ATTR_INTENSITY_INVALID) !== 0) continue;
       const v = buf[i];
       if (v < min) min = v;
       if (v > max) max = v;
@@ -209,8 +211,9 @@ export function buildColorLegend(host: ColorLegendHost): ColorLegend {
      * channel. O(n) over the intensity array — run once on load.
      */
     intensityExtent(): { min: number; max: number } | null {
-      const inten = host.firstStaticCloud()?.intensity;
-      if (inten && inten.length > 0) return intensityRange([inten]);
+      const first = host.firstStaticCloud();
+      const inten = first?.intensity;
+      if (inten && inten.length > 0) return intensityRange([inten], first.attributeInvalid);
       // Streaming: LAS headers carry no intensity range, so scan the resident
       // chunks' intensity buffers. Called once when the streaming scan seeds
       // its control, so the O(resident) pass is paid a single time and the

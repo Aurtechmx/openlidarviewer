@@ -127,6 +127,7 @@ interface CloudPayload {
   scannerChannel?: Uint8Array;
   scanDirection?: Uint8Array;
   edgeOfFlightLine?: Uint8Array;
+  attributeInvalid?: Uint8Array;
   pointSourceId?: Uint16Array;
   gpsTime?: Float64Array;
   organizedRange?: OrganizedRangeSet;

@@ -1,4 +1,4 @@
-import { PointCloud } from '../model/PointCloud';
+import { ATTR_COLOUR_INVALID, ATTR_INTENSITY_INVALID, PointCloud } from '../model/PointCloud';
 import { sourcePositions } from '../model/pointFrames';
 import { withLinkageUnavailable } from '../model/OrganizedRange';
 
@@ -29,7 +29,9 @@ export function voxelIndexInRange(g: number): boolean {
  *
  * Points are bucketed into a regular grid of cubic voxels of side `voxelSize`.
  * Each occupied voxel collapses to one output point at the centroid of its
- * members; colour and intensity are averaged. Classification and the LAS
+ * members; colour and intensity are averaged over the members whose value is
+ * valid (a flagged value never enters a mean, and a voxel with no valid member
+ * is flagged in the output). Classification and the LAS
  * inspection extras (return number/count, point source ID, GPS time) are
  * per-record metadata, not quantities to average — the first member's values
  * are kept, the same contract classification has always used.
@@ -52,6 +54,7 @@ export function voxelDownsample(cloud: PointCloud, voxelSize: number): PointClou
   const returnCount = cloud.returnCount;
   const pointSourceId = cloud.pointSourceId;
   const gpsTime = cloud.gpsTime;
+  const mask = cloud.attributeInvalid;
 
   // Per-voxel running sums in typed arrays indexed by a first-seen slot, with
   // the voxel lookup in an open-addressing table over the packed numeric key.
@@ -64,6 +67,7 @@ export function voxelDownsample(cloud: PointCloud, voxelSize: number): PointClou
     extras: classification !== undefined || returnNumber !== undefined
       || returnCount !== undefined || pointSourceId !== undefined,
     gpsTime: gpsTime !== undefined,
+    mask: mask !== undefined,
   });
 
   for (let i = 0; i < count; i++) {
@@ -78,12 +82,17 @@ export function voxelDownsample(cloud: PointCloud, voxelSize: number): PointClou
     acc.sumX[slot] += x;
     acc.sumY[slot] += y;
     acc.sumZ[slot] += z;
-    if (colors !== undefined) {
+    const bits = mask !== undefined ? mask[i] : 0;
+    if (colors !== undefined && (bits & ATTR_COLOUR_INVALID) === 0) {
       acc.sumR[slot] += colors[i * 3];
       acc.sumG[slot] += colors[i * 3 + 1];
       acc.sumB[slot] += colors[i * 3 + 2];
+      if (mask !== undefined) acc.colourN[slot]++;
     }
-    if (intensity !== undefined) acc.sumI[slot] += intensity[i];
+    if (intensity !== undefined && (bits & ATTR_INTENSITY_INVALID) === 0) {
+      acc.sumI[slot] += intensity[i];
+      if (mask !== undefined) acc.intensityN[slot]++;
+    }
     if (acc.counts[slot] === 0) {
       if (classification !== undefined) acc.firstClass[slot] = classification[i];
       if (returnNumber !== undefined) acc.firstReturnNumber[slot] = returnNumber[i];
@@ -112,6 +121,9 @@ export interface VoxelSums {
   readonly firstSourceId: ArrayLike<number>;
   readonly firstGpsTime: ArrayLike<number>;
   readonly counts: ArrayLike<number>;
+  /** Members with a valid colour / intensity, per slot; present only for a cloud with an attribute mask. */
+  readonly colourN?: ArrayLike<number>;
+  readonly intensityN?: ArrayLike<number>;
 }
 
 /**
@@ -135,6 +147,7 @@ export function emitVoxelCloud(cloud: PointCloud, out: number, acc: VoxelSums): 
   const outReturnCount = returnCount !== undefined ? new Uint8Array(out) : undefined;
   const outSourceId = pointSourceId !== undefined ? new Uint16Array(out) : undefined;
   const outGpsTime = gpsTime !== undefined ? new Float64Array(out) : undefined;
+  const outInvalid = cloud.attributeInvalid !== undefined ? new Uint8Array(out) : undefined;
 
   for (let s = 0; s < out; s++) {
     const n = acc.counts[s];
@@ -142,11 +155,18 @@ export function emitVoxelCloud(cloud: PointCloud, out: number, acc: VoxelSums): 
     outPositions[s * 3 + 1] = acc.sumY[s] / n;
     outPositions[s * 3 + 2] = acc.sumZ[s] / n;
     if (outColors !== undefined) {
-      outColors[s * 3] = Math.round(acc.sumR[s] / n);
-      outColors[s * 3 + 1] = Math.round(acc.sumG[s] / n);
-      outColors[s * 3 + 2] = Math.round(acc.sumB[s] / n);
+      const m = acc.colourN && outInvalid ? acc.colourN[s] : n;
+      if (m > 0) {
+        outColors[s * 3] = Math.round(acc.sumR[s] / m);
+        outColors[s * 3 + 1] = Math.round(acc.sumG[s] / m);
+        outColors[s * 3 + 2] = Math.round(acc.sumB[s] / m);
+      } else if (outInvalid) outInvalid[s] |= ATTR_COLOUR_INVALID;
     }
-    if (outIntensity !== undefined) outIntensity[s] = Math.round(acc.sumI[s] / n);
+    if (outIntensity !== undefined) {
+      const m = acc.intensityN && outInvalid ? acc.intensityN[s] : n;
+      if (m > 0) outIntensity[s] = Math.round(acc.sumI[s] / m);
+      else if (outInvalid) outInvalid[s] |= ATTR_INTENSITY_INVALID;
+    }
     if (outClass !== undefined) outClass[s] = acc.firstClass[s];
     if (outReturnNumber !== undefined) outReturnNumber[s] = acc.firstReturnNumber[s];
     if (outReturnCount !== undefined) outReturnCount[s] = acc.firstReturnCount[s];
@@ -163,6 +183,7 @@ export function emitVoxelCloud(cloud: PointCloud, out: number, acc: VoxelSums): 
     returnCount: outReturnCount,
     pointSourceId: outSourceId,
     gpsTime: outGpsTime,
+    attributeInvalid: outInvalid,
     origin: cloud.origin,
     sourceFormat: cloud.sourceFormat,
     name: cloud.name,
@@ -220,6 +241,8 @@ class VoxelAccumulator {
   sumG: Float64Array;
   sumB: Float64Array;
   sumI: Float64Array;
+  colourN: Int32Array;
+  intensityN: Int32Array;
   firstClass: Int32Array;
   firstReturnNumber: Int32Array;
   firstReturnCount: Int32Array;
@@ -234,7 +257,7 @@ class VoxelAccumulator {
 
   constructor(
     capacity: number,
-    wants: { colors: boolean; intensity: boolean; extras: boolean; gpsTime: boolean },
+    wants: { colors: boolean; intensity: boolean; extras: boolean; gpsTime: boolean; mask: boolean },
   ) {
     this._capacity = Math.max(1, capacity);
     this.sumX = new Float64Array(this._capacity);
@@ -246,6 +269,8 @@ class VoxelAccumulator {
     this.sumB = wants.colors ? new Float64Array(this._capacity) : none;
     this.sumI = wants.intensity ? new Float64Array(this._capacity) : none;
     const noInts = new Int32Array(0);
+    this.colourN = wants.mask && wants.colors ? new Int32Array(this._capacity) : noInts;
+    this.intensityN = wants.mask && wants.intensity ? new Int32Array(this._capacity) : noInts;
     this.firstClass = wants.extras ? new Int32Array(this._capacity) : noInts;
     this.firstReturnNumber = wants.extras ? new Int32Array(this._capacity) : noInts;
     this.firstReturnCount = wants.extras ? new Int32Array(this._capacity) : noInts;
@@ -309,6 +334,8 @@ class VoxelAccumulator {
     this.sumG = widen(this.sumG);
     this.sumB = widen(this.sumB);
     this.sumI = widen(this.sumI);
+    this.colourN = widen(this.colourN);
+    this.intensityN = widen(this.intensityN);
     this.firstClass = widen(this.firstClass);
     this.firstReturnNumber = widen(this.firstReturnNumber);
     this.firstReturnCount = widen(this.firstReturnCount);

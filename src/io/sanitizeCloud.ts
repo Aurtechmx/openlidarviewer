@@ -61,6 +61,7 @@ export interface CloudAttributes {
   scannerChannel?: Uint8Array;
   scanDirection?: Uint8Array;
   edgeOfFlightLine?: Uint8Array;
+  attributeInvalid?: Uint8Array;
   pointSourceId?: Uint16Array;
   gpsTime?: Float64Array;
 }
@@ -79,6 +80,7 @@ const ATTRIBUTE_WIDTH: Record<keyof CloudAttributes, number> = {
   scannerChannel: 1,
   scanDirection: 1,
   edgeOfFlightLine: 1,
+  attributeInvalid: 1,
   pointSourceId: 1,
   gpsTime: 1,
 };

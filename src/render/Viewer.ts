@@ -5641,10 +5641,10 @@ export class Viewer {
     point: THREE.Vector3;
   }): PointInfo {
     const { cloud, index, point } = hit;
-    const rgb: [number, number, number] | null = cloud.colors
+    const normals = cloud.normals, flags = cloud.attributeInvalid?.[index] ?? 0;
+    const rgb: [number, number, number] | null = cloud.colors && (flags & 1) === 0
       ? [cloud.colors[index * 3], cloud.colors[index * 3 + 1], cloud.colors[index * 3 + 2]]
       : null;
-    const normals = cloud.normals;
     return makePointInfo({
       geographicHorizontal: this._inspectGeographicHorizontal,
       layer: cloud.name, pointFormat: cloud.metadata?.pointFormat,
@@ -5655,7 +5655,7 @@ export class Viewer {
       local: cloud.worldXYZ(index),
       origin: [0, 0, 0],
       distance: this._camera.position.distanceTo(point),
-      intensity: cloud.intensity ? cloud.intensity[index] : null,
+      intensity: cloud.intensity && (flags & 2) === 0 ? cloud.intensity[index] : null,
       classification: cloud.classification ? cloud.classification[index] : null, classificationDerived: cloud.classificationIsDerived,
       rgb,
       // inspection extras — passed only when the cloud carries them.
