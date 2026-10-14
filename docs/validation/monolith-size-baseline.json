@@ -1,7 +1,7 @@
 {
   "files": {
     "src/main.ts": {
-      "lines": 4308,
+      "lines": 4302,
       "goal": 2500
     },
     "src/render/Viewer.ts": {
@@ -14,13 +14,13 @@
       "lines": 3511
     },
     "src/ui/Inspector.ts": {
-      "lines": 2691
+      "lines": 2771
     },
     "src/render/measure/MeasureController.ts": {
-      "lines": 2755
+      "lines": 2744
     },
     "src/ui/MeasurePanel.ts": {
-      "lines": 2397
+      "lines": 2417
     },
     "src/render/measure/profilePdf.ts": {
       "lines": 2094
@@ -29,7 +29,7 @@
       "lines": 1867
     },
     "src/terrain/contour/analyseContours.ts": {
-      "lines": 1765
+      "lines": 1768
     }
   }
 }

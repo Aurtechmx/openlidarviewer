@@ -485,7 +485,7 @@ export function snapToIntersections(
  * On a near-tie, how much closer a geometry snap must be than a real point
  * snap to win. Within this margin we prefer the honest measured return.
  */
-const POINT_PREFERENCE_MARGIN = 1e-6;
+export const POINT_PREFERENCE_MARGIN = 1e-6;
 
 /**
  * Closest snap across all categories — real point, endpoint, midpoint, or

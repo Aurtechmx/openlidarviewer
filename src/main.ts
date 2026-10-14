@@ -2665,10 +2665,6 @@ function revealAnalysePanel(name: string, settled = true): void {
   lastCloudName = baseName(name); recovery?.onSourceLoaded();
   exportPanel.setVisible(true);
   exportPanel.refresh();
-  // Build the measure snap index from the resident cloud (static scans only;
-  // a streaming scan has no resident array, so snapping stays off and says so).
-  const snapCloud = scans.activeCloud();
-  viewer.measure.setSnapSource(snapCloud?.positions ?? null);
   // Reveal the clip control and seed its box from this scan's bounds (disabled
   // until the user enables it). Skip the reseed when the viewer already holds
   // a clip — a session restore may have landed one before the scan revealed,
@@ -4125,8 +4121,6 @@ function resetToEmptyState(): void {
   scans.clear();
   bookmarks.clear();
   viewer.annotate.clear();
-  // Drop the snap index so a future scan can't snap to the previous cloud.
-  viewer.measure.setSnapSource(null);
   refreshMeasurePanel();
   refreshAnnotationPanel();
 }

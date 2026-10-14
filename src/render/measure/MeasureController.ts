@@ -56,16 +56,8 @@ import {
 import { resizeBoxByCorner, BOX_CORNER_INDICES, type BoxCornerIndex } from './boxEdit';
 import { areaBreakdown, lineBreakdown } from './measureBreakdown';
 import type { AreaBreakdown, LineBreakdown } from './measureBreakdown';
-import {
-  buildPointSnapIndex,
-  snapToNearestPoint,
-  isOnMeasuredReturn,
-  snapBest,
-  countPointsWithinRadius,
-  type PointSnapIndex,
-  type SnapResult,
-  type Segments,
-} from './snap';
+import type { SnapResult, Segments } from './snap';
+import { ProjectSnapIndex, eligibleSnapLayers, type SnapLayerEntry } from './projectSnap';
 import { gradeMeasurement, type MeasurementTrust } from './measurementTrust';
 import {
   formatLengthRender,
@@ -552,7 +544,7 @@ export class MeasureController {
   // canvas are cached each frame so the place handler can size the snap radius.
   private static readonly SNAP_RADIUS_PX = 14;
   private _snapMode: SnapMode = 'off';
-  private _snapIndex: PointSnapIndex | null = null;
+  private readonly _snap = new ProjectSnapIndex((task) => { setTimeout(task, 0); });
   private _lastSnap: SnapResult | null = null;
   // Whether the active scan has a known CRS with real-world units. Separate from
   // `_unitToMetres` (which is 1 for a metric CRS AND a CRS-less cloud).
@@ -1577,13 +1569,20 @@ export class MeasureController {
   }
 
   /**
-   * Provide (or clear) the resident cloud positions the point-snap index is
-   * built from. Called on load with the display cloud's xyz array, and with
-   * `null` on reset / for a streaming scan that has no resident array to snap to.
+   * Where the snap layers come from: every visible, unlocked static layer with
+   * its placement offset (none for a streaming scan, which has no resident
+   * array, so snapping stays off). Pulled lazily after {@link invalidateSnap}.
    */
-  setSnapSource(positions: Float32Array | null): void {
-    this._snapIndex =
-      positions && positions.length >= 3 ? buildPointSnapIndex(positions) : null;
+  setSnapLayers(
+    entries: () => Iterable<readonly [string, SnapLayerEntry]>,
+    streaming: () => boolean,
+  ): void {
+    this._snap.setProvider(() => eligibleSnapLayers(entries(), streaming()));
+  }
+
+  /** The eligible layer set, a layer's visibility or lock, or a placement changed. */
+  invalidateSnap(): void {
+    this._snap.invalidate();
   }
 
   /** The active snap mode. */
@@ -1627,16 +1626,16 @@ export class MeasureController {
    * geometry mode also considers measurement vertices / midpoints / crossings.
    */
   private _resolveSnap(query: Vec3): SnapResult | null {
-    if (this._snapMode === 'off' || !this._snapIndex) return null;
+    if (this._snapMode === 'off' || !this._snap.available) return null;
     const cam = this._lastCamera;
     const canvas = this._lastCanvas;
     if (!cam || !canvas) return null;
     const maxDistance = this._snapWorldRadius(query, cam, canvas);
     if (!(maxDistance > 0)) return null;
     if (this._snapMode === 'point') {
-      return snapToNearestPoint(this._snapIndex, query, maxDistance);
+      return this._snap.nearest(query, maxDistance);
     }
-    return snapBest(this._snapIndex, this._snapSegments(), query, maxDistance);
+    return this._snap.best(this._snapSegments(), query, maxDistance);
   }
 
   /** Existing measurement polylines (committed + in-progress draft) for geometry snaps. */
@@ -1903,18 +1902,9 @@ export class MeasureController {
    * void reads as unsupported.
    */
   private _gradeMeasurement(m: Measurement): MeasurementTrust | undefined {
-    const idx = this._snapIndex;
-    if (!idx) return undefined;
-    const useGrid = Number.isFinite(idx.cellSize) && idx.cellSize > 0;
-    const radius = useGrid ? idx.cellSize * 4 : 0;
-    // "On a real return" = on a measured point (a snapped vertex) or within
-    // half the local point spacing of one. Derived from the cloud, not a
-    // placement-time flag, so the grade stays correct after a vertex is
-    // dragged (re-graded on drag-end).
-    const vertices = m.points.map((p) => ({
-      snappedToPoint: isOnMeasuredReturn(idx, p),
-      pointsWithinRadius: useGrid ? countPointsWithinRadius(idx, p, radius) : idx.count,
-    }));
+    const snap = this._snap;
+    if (!snap.available) return undefined;
+    const vertices = m.points.map((p) => snap.support(p));
     return gradeMeasurement({
       vertices,
       crsKnown: this._crsKnown,

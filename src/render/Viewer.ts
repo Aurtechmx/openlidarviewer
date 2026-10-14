@@ -1077,9 +1077,8 @@ export class Viewer {
 
     // Picking tools — while one is active, a canvas click picks a point.
     this._canvas = canvas;
-    this._measure = new MeasureController({
-      onExit: () => this.setMeasureMode(false),
-    });
+    this._measure = new MeasureController({ onExit: () => this.setMeasureMode(false) });
+    this._measure.setSnapLayers(() => this._clouds, () => !!this._streaming);
     this._measure.setPicker((ndcX, ndcY) => {
       const hit = this._pickDetailed(ndcX, ndcY), p = hit?.point ?? this._pickStreaming(ndcX, ndcY);
       return p ? { point: [p.x, p.y, p.z], layer: hit?.cloud } : null;
@@ -1668,6 +1667,7 @@ export class Viewer {
    * kind of claim about the same frame, so it answers to the same gate.
    */
   private _refreshMeasureDatum(): void {
+    this._measure.invalidateSnap();
     const origins: Array<readonly number[] | null> = [];
     if (this._streaming) origins.push(this._streaming.cloud.renderOrigin ?? null);
     // SOURCE origins (float64-transform.md step 2): equal to live origins
@@ -2185,7 +2185,7 @@ export class Viewer {
   /** Show or hide a cloud. */
   setCloudVisible(id: string, visible: boolean): void {
     const entry = this._clouds.get(id);
-    if (entry) { entry.mesh.visible = visible; this._demand.changed('style'); }
+    if (entry) { entry.mesh.visible = visible; this._measure.invalidateSnap(); this._demand.changed('style'); }
   }
 
   /**
@@ -2247,7 +2247,7 @@ export class Viewer {
   /** Exclude (or re-include) a cloud from picking / measuring / inspecting. */
   setCloudLocked(id: string, locked: boolean): void {
     const entry = this._clouds.get(id);
-    if (entry) entry.locked = locked;
+    if (entry) { entry.locked = locked; this._measure.invalidateSnap(); }
   }
 
   /** Whether a cloud is currently locked out of picking. */
