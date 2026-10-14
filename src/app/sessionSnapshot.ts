@@ -16,6 +16,7 @@ import type { StoredView } from './appContext';
 import type { WorkplaneSettings } from '../model/workplaneSettings';
 import { isZUpFormat } from '../io/sniffFormat';
 import { TERRAIN_METRIC_VERSION } from '../terrain/datasetIntelligence';
+import { partitionSessionWork, type OwnershipView } from './measurementOwnership';
 import { buildSessionProjectFrame, type SessionFrameInput, type SessionProjectFrame } from '../io/sessionFrame';
 
 export type SessionWriterModules = typeof import('../io/session') &
@@ -44,6 +45,13 @@ export interface SessionSnapshotDeps {
   projectFrame?(): SessionFrameInput | null;
   /** SHA-256 of the active scan's source bytes, when already computed. */
   sourceSha256?(): string | null;
+  /**
+   * The open layers, for checking that saved work belongs to the scan being
+   * saved. Absent: every item is written as recorded.
+   */
+  ownershipView?(): OwnershipView;
+  /** Told when work was left out of the file, with the reason. */
+  onWithheld?(message: string): void;
   readonly appVersion: string;
 }
 
@@ -134,6 +142,15 @@ export function serializeActiveSession(
   // rationale (the v5 clip write-side fix, the hidden-codes contract, the
   // emit-only-when-set discipline) lives on captureViewState itself.
   const viewState = deps.captureViewState();
+  // Work taken on a scan that is no longer open is never written under this
+  // scan's name, origin and frame: it is left out, and the reason is given.
+  const view = deps.ownershipView?.();
+  const m = view ? partitionSessionWork(viewer.measure.getMeasurements(), view) : { keep: viewer.measure.getMeasurements(), leftOut: 0 };
+  const a = view ? partitionSessionWork(viewer.annotate.getAnnotations(), view) : { keep: viewer.annotate.getAnnotations(), leftOut: 0 };
+  if (m.leftOut + a.leftOut > 0) {
+    const n = m.leftOut + a.leftOut;
+    deps.onWithheld?.(`${n} measurement${n === 1 ? '' : 's'} or annotation${n === 1 ? '' : 's'} left out of the session: taken on a scan that is no longer open, so there is no frame to save ${n === 1 ? 'it' : 'them'} in.`);
+  }
   const projectFrame = liveProjectFrame(deps);
   return serializeSession({
     upAxis,
@@ -149,8 +166,8 @@ export function serializeActiveSession(
     // view (e.g. restored from a v6 file) spreads nothing and keeps its exact
     // v6 byte-shape.
     views: deps.savedViews().map((v) => ({ name: v.name, camera: v.pose, ...(v.state ?? {}) })),
-    measurements: viewer.measure.getMeasurements(),
-    annotations: viewer.annotate.getAnnotations(),
+    measurements: m.keep,
+    annotations: a.keep,
     camera: viewState.camera,
     render: viewState.render,
     colorMode: viewState.colorMode,

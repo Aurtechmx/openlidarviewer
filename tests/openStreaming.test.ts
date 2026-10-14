@@ -518,6 +518,8 @@ function makeCopcDeps(over: { openRejects?: boolean; attachRejects?: boolean; pr
     attachStreamingCloud,
     setMode: vi.fn(),
     frameAll: vi.fn(),
+    measure: { clear: vi.fn(), claimUnowned: vi.fn() },
+    annotate: { clear: vi.fn(), claimUnowned: vi.fn() },
     availableImageExportModes: () => [],
   } as unknown as Viewer;
 
@@ -651,6 +653,29 @@ describe('openStreamingCopc — transactional replacement (gate F4)', () => {
     expect(calls.openSpy).toHaveBeenCalledTimes(1);
     expect(calls.clearOpenStaticLayers).toHaveBeenCalledTimes(1);
     expect(calls.attachStreamingCloud).toHaveBeenCalledTimes(1);
+  });
+
+  it('Cancel on the replace question leaves the current scene and its work untouched', async () => {
+    const { deps, calls } = makeCopcDeps({ priorStreamingCloud: false, staticLayers: 1 });
+    const replaceGuard = vi.fn(async () => 'cancel' as const);
+    await expect(
+      openStreamingCopc({ kind: () => 'local-file' } as unknown as RangeSource, 'scan.copc.laz', new AbortController().signal, { ...deps, replaceGuard }),
+    ).rejects.toThrow(/cancel/i);
+    expect(replaceGuard).toHaveBeenCalledWith({ kind: 'scan', name: 'scan.copc.laz' });
+    expect(calls.attachStreamingCloud).not.toHaveBeenCalled();
+    expect(calls.clearOpenStaticLayers).not.toHaveBeenCalled();
+    expect(deps.bookmarks.clear).not.toHaveBeenCalled();
+  });
+
+  it('Replace clears the old work only after the new scan has committed', async () => {
+    const { deps, calls } = makeCopcDeps({ priorStreamingCloud: false, staticLayers: 1 });
+    const order: string[] = [];
+    calls.attachStreamingCloud.mockImplementation(async () => { order.push('attach'); });
+    (deps.bookmarks.clear as ReturnType<typeof vi.fn>).mockImplementation(() => { order.push('clearWork'); });
+    await openStreamingCopc({ kind: () => 'local-file' } as unknown as RangeSource, 'scan.copc.laz', new AbortController().signal, { ...deps, replaceGuard: async () => 'replace' });
+    expect(order[0]).toBe('attach');
+    expect(order).toContain('clearWork');
+    expect(deps.refreshViewsUI).toHaveBeenCalled();
   });
 
   it('preserves the static scene when the ATTACH itself fails (pass-7 A)', async () => {

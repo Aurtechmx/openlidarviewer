@@ -205,7 +205,7 @@ import {
   loadMeasurementExport,
   loadMeasurementReport,
   loadKmlExport,
-  loadConfirmFullExport, loadCloseScanGuard,
+  loadConfirmFullExport, loadCloseScanGuard, loadDiscardGuard,
   loadFloorPlanConfidence,
   loadFullCloudGradeAction,
   loadSession,
@@ -3525,7 +3525,7 @@ async function exportSession(): Promise<boolean> {
     // Both lazy imports resolve before any state is read; their exports spread into one deps object.
     load: async () => ({ ...(await loadSession()), ...(await loadExportProvenance()), ...(await loadSessionSnapshot()) }),
     write: (json) => { downloadText(`${baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? 'openlidarviewer')}.olvsession`, json); const note = sessionSaveNotice(activeScanHasClassEdits(scans.activeId, viewer)); if (note) showLassoToast(note); },
-    serialize: (m) => m.serializeActiveSession(m, sessionSnapshotDeps),
+    serialize: (m) => m.serializeActiveSession(m, { ...sessionSnapshotDeps, onWithheld: showLassoToast }),
   });
 }
 
@@ -3534,7 +3534,7 @@ const sessionSnapshotDeps: SessionSnapshotDeps = {
   verticalUnitToMetres: () => verticalMetresPerUnit(crsService.context(), 'horizontal-when-known') ?? null,
   captureViewState, savedViews: () => viewBookmarks.savedViews, origin: () => exportGeoContext().origin,
   referencePlane: () => inspector.referencePlane?.sessionState(),
-  crs: () => crsService.current(), layerGroups: () => inspector.layerGroupsForSession(), appVersion: __APP_VERSION__,
+  crs: () => crsService.current(), ownershipView: () => ownershipViewOf(viewer, runtime.layerIdentity.stableIdFor, scans.activeId), layerGroups: () => inspector.layerGroupsForSession(), appVersion: __APP_VERSION__,
   projectFrame: () => projectFrameInputFrom({ frame: projectFrame.frame, layerIds: layerService.buildLayerInfos().map((i) => i.id), cloud: (id) => viewer?.getCloud(id), record: (id) => runtime.layerIdentity.recordFor(id), placement: layerService.placementOf }) };
 
 /**
@@ -3560,10 +3560,10 @@ const sessionIoDeps: SessionIoDeps = {
   restoreReferencePlane: (settings) => void inspector.referencePlane?.restore(settings),
   setCrsOverride: (args) => { crsService.setOverride(args); },
   showToast: showLassoToast,
-  setDropError: (message) => dropZone.setError(message),
+  setDropError: (message) => dropZone.setError(message), confirmReplace: (req) => requestReplace(req), currentViews: () => viewBookmarks.savedViews,
 };
 
-async function importSession(file: File, opts: { skipScanConfirm?: boolean } = {}): Promise<boolean> {
+async function importSession(file: File, opts: { skipScanConfirm?: boolean; reapply?: boolean } = {}): Promise<boolean> {
   return loadSessionIo().then((mod) => mod.importSession(file, opts, sessionIoDeps)).catch((err) => { sessionIoDeps.setDropError(err instanceof Error ? err.message : 'Could not load the session importer.'); return false; }); // chunk-load failure reports via setDropError, never an unhandled rejection
 }
 
@@ -3591,7 +3591,7 @@ const openScanDeps: OpenScanDeps = {
   isTouchFirst: isTouchFirstDevice,
   deviceMemoryGB,
   stage,
-  closeStreaming,
+  closeStreaming, replaceGuard: (req) => requestReplace(req),
   scans,
   layerIdentity: runtime.layerIdentity,
   inspector,
@@ -3669,7 +3669,7 @@ const openStreamingDeps: OpenStreamingDeps = {
   bookmarks,
   isPhone,
   closeStreaming,
-  clearOpenStaticLayers,
+  clearOpenStaticLayers, replaceGuard: (req) => requestReplace(req),
   resetStreamState,
   startStreamingStatusPolling: () => streamingUi.startPolling(),
   revealStreamingChrome: () => revealStreamingScanChrome({
@@ -4270,7 +4270,7 @@ function closeScan(): void { // the guarded entry is requestCloseScan
   layers.solo = null; recovery?.clear();
   resetToEmptyState();
 }
-let closeGuard: Promise<() => Promise<boolean>> | null = null; const requestCloseScan = (): Promise<boolean> => (closeGuard ??= loadCloseScanGuard().then((m) => m.createCloseScanGuard({ close: closeScan, saveSession: exportSession, onSaveFailed: () => showLassoToast('Session not saved. The scan is still open.'), work: discardableWork }))).then((g) => g());
+const requestReplace = (req: import('./app/discardGuard').ReplaceRequest): Promise<import('./app/discardGuard').ReplaceOutcome> => loadDiscardGuard().then((m) => m.requestReplace(req, { work: discardableWork, saveSession: exportSession, snapshot: async () => (await recovery?.snapshotNow()) === true, notify: showLassoToast })); let closeGuard: Promise<() => Promise<boolean>> | null = null; const requestCloseScan = (): Promise<boolean> => (closeGuard ??= loadCloseScanGuard().then((m) => m.createCloseScanGuard({ close: closeScan, saveSession: exportSession, onSaveFailed: () => showLassoToast('Session not saved. The scan is still open.'), work: discardableWork }))).then((g) => g());
 function discardableWork() {
   return ({ measurements: viewerReady ? viewer.measure.getMeasurements().length : 0, annotations: viewerReady ? viewer.annotate.getAnnotations().length : 0, views: viewBookmarks.savedViews.length, classEdits: activeScanHasClassEdits(scans.activeId, viewer), results: workspaceShell?.readyResultCount() ?? 0, pendingRecovery: recovery?.hasPending() ?? false });
 }

@@ -37,6 +37,8 @@ function deps(doc = DOC) {
     }),
     setMode: vi.fn(),
     frameAll: vi.fn(),
+    measure: { clear: vi.fn(), claimUnowned: vi.fn() },
+    annotate: { clear: vi.fn(), claimUnowned: vi.fn() },
     // The per-mode image-export gating the streaming opens read off the live
     // scene. A tileset carries no intensity / classification / normals, so the
     // map a real viewer returns for one disables those modes at the source.

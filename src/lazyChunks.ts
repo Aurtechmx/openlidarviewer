@@ -510,6 +510,7 @@ export const loadMeasurementReport = () => import('./export/measurementReport');
 export const loadKmlExport = () => import('./export/kmlExport');
 export const loadConfirmFullExport = () => import('./convert/confirmFullExport');
 export const loadCloseScanGuard = () => import('./app/closeScanGuard');
+export const loadDiscardGuard = () => import('./app/discardGuard');
 export const loadFloorPlanConfidence = () =>
   import('./terrain/space/floorplan/floorPlanConfidence');
 export const loadFullCloudGradeAction = () =>

@@ -49,10 +49,12 @@ import type { AnalysisRow } from '../analysis/ModuleApi';
 import {
   activateCommittedStreamingCloud,
   enterStreamingInspectorMode,
+  guardReplacedWork,
   isAbortError,
   linkAbortSignals,
   publishStreamingDetail,
   resetClassificationUi,
+  settleReplacedWork,
   shouldDropCandidateOnPostCommitCancel,
   shouldTidyFailedStreamingOpen,
   type OpenStreamingDeps,
@@ -232,6 +234,7 @@ export async function openRemoteTileset(
     // Captured BEFORE the attach commits, so the post-commit cancel handling
     // below knows which scene the user would still have.
     const replacingStatic = viewer.clouds().length > 0;
+    const replaced = await guardReplacedWork(deps, cloud.name);
     await viewer.attachStreamingCloud(
       cloud,
       // The decoder settles this layer's colour meaning on its first tile with
@@ -259,6 +262,7 @@ export async function openRemoteTileset(
       throw new LoadCancelledError();
     }
     deps.clearOpenStaticLayers();
+    settleReplacedWork(deps, replaced);
     // The candidate is the sole committed scene now, so a later throw must not
     // tear it down in the catch.
     committed = true;

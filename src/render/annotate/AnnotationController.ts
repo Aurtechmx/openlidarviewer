@@ -307,6 +307,11 @@ export class AnnotationController {
     this._ownerProvider = provider;
   }
 
+  /** Give every annotation without an owner this one (its layer is being retired). */
+  claimUnowned(layerId: string): void {
+    for (const a of this._annotations) if (!a.owner) a.owner = { layerId, frame: 'project' };
+  }
+
   /** Report a click that missed the cloud — no annotation is created. */
   pickMissed(): void {
     this._setHint('No point there — click directly on the scan');

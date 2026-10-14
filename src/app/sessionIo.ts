@@ -55,6 +55,8 @@ import {
 } from './sessionScanFacts';
 import { formatBytesIn } from '../io/formatByteSize';
 import { markPendingSessionRestore } from './pendingSessionRestore';
+import type { ReplaceOutcome, ReplaceRequest } from './discardGuard';
+import type { StoredView } from './appContext';
 
 // Re-exported so `sessionIo`'s public API is unchanged — `openScan.ts` reads
 // `scanFactsFromStatic` off `./sessionScanFacts` directly (the hot scan-open path
@@ -153,6 +155,13 @@ export interface SessionIoDeps {
   applyViewState: (vs: ViewStateBundle) => void;
   /** Restore the author's CRS override (`crsService.setOverride`). */
   setCrsOverride: (args: Parameters<CrsService['setOverride']>[0]) => void;
+  /**
+   * Ask before the file replaces measurements, annotations or saved views that
+   * are already open. Absent: nothing is asked.
+   */
+  confirmReplace?: (req: ReplaceRequest) => Promise<ReplaceOutcome>;
+  /** The saved views now open, for telling whether the file adds anything. */
+  currentViews?: () => readonly StoredView[];
   /** Fire a toast, optionally with one action button. */
   showToast: (
     message: string,
@@ -178,14 +187,33 @@ function declaredSpatialForActiveScan(viewer: Viewer, deps: SessionIoDeps): Decl
   return {};
 }
 
+const byId = <T extends { id: string }>(items: readonly T[]): T[] => [...items].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+/**
+ * Whether the file holds exactly the work already open, so importing it
+ * discards nothing. Any difference at all counts as different.
+ */
+export function sameSessionWork(
+  open: { measurements: readonly { id: string }[]; annotations: readonly { id: string }[]; views: readonly StoredView[] },
+  file: { measurements: readonly { id: string }[]; annotations: readonly { id: string }[]; views: readonly { name: string; camera: unknown }[] },
+): boolean {
+  if (open.measurements.length !== file.measurements.length || open.annotations.length !== file.annotations.length || open.views.length !== file.views.length) return false;
+  if (JSON.stringify(byId(open.measurements)) !== JSON.stringify(byId(file.measurements))) return false;
+  if (JSON.stringify(byId(open.annotations)) !== JSON.stringify(byId(file.annotations))) return false;
+  return open.views.every((v, i) => !v.state && v.name === file.views[i]!.name && JSON.stringify(v.pose) === JSON.stringify(file.views[i]!.camera));
+}
+
 /**
  * Import an inspection session: restore measurements, annotations and views.
  * `skipScanConfirm` is set only by the "Apply anyway" action after a partial
  * scan-identity match, so the same restore re-runs past the confirmation gate.
+ * `reapply` is set when a session imported before any scan was open is applied
+ * again onto the scan that has just opened: the work in the viewer is that
+ * session's own, so nothing is asked.
  */
 export async function importSession(
   file: File,
-  opts: { skipScanConfirm?: boolean },
+  opts: { skipScanConfirm?: boolean; reapply?: boolean },
   deps: SessionIoDeps,
 ): Promise<boolean> {
   // Set once the session's work is in the scene, so a later failure still reports it applied.
@@ -268,7 +296,7 @@ export async function importSession(
           deps.showToast(
             `This session's scan couldn't be fully verified${whyDetail}. ` +
               'Applying it may place its measurements on the wrong scan.',
-            { label: 'Apply anyway', onClick: () => void importSession(file, { skipScanConfirm: true }, deps) },
+            { label: 'Apply anyway', onClick: () => void importSession(file, { ...opts, skipScanConfirm: true }, deps) },
           );
           return false;
         }
@@ -352,6 +380,24 @@ export async function importSession(
       if (!haveCloud) return importSession(file, opts, deps);
       deps.showToast('Session not applied — the active scan changed while it was importing.');
       return false;
+    }
+    // The file is parsed, matched and rebased by here, so a bad file has
+    // changed nothing. If it would replace work already open, ask first; the
+    // CRS override below is the first change.
+    if (deps.confirmReplace && !opts.reapply) {
+      const identical = sameSessionWork(
+        { measurements: viewer.measure.getMeasurements(), annotations: viewer.annotate.getAnnotations(), views: deps.currentViews?.() ?? [] },
+        geo,
+      );
+      const outcome = await deps.confirmReplace({ kind: 'import', name: file.name, identical });
+      if (outcome === 'cancel') {
+        deps.showToast('Session not imported. Your current work is unchanged.');
+        return false;
+      }
+      if (outcome === 'replace' && targetChanged()) {
+        deps.showToast('Session not applied — the active scan changed while it was importing.');
+        return false;
+      }
     }
     // Commit the author's CRS override HERE — after every preflight and the
     // active-scan guard, but BEFORE any state that derives physical units is

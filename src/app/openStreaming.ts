@@ -27,6 +27,8 @@
 
 import { LoadCancelledError } from '../io/loadFile';
 import { dropPendingSessionForStream } from './pendingSessionRestore';
+import type { ReplaceOutcome, ReplaceRequest } from './discardGuard';
+import { RETIRED_SCAN_OWNER } from './measurementOwnership';
 import { describeLoadError } from '../io/loadErrors';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
 import { remoteCopcName, remoteEptName } from './remoteSourceNaming';
@@ -177,6 +179,31 @@ export function shouldDropCandidateOnPostCommitCancel(
   aborted: boolean,
 ): boolean {
   return replacingStatic && aborted;
+}
+
+/**
+ * Before a streamed scan replaces the open scene: ask whether the work on it
+ * may go. Cancel throws {@link LoadCancelledError} with nothing changed.
+ */
+export async function guardReplacedWork(deps: Pick<OpenStreamingDeps, 'replaceGuard'>, name: string): Promise<ReplaceOutcome> {
+  const outcome = (await deps.replaceGuard?.({ kind: 'scan', name })) ?? 'none';
+  if (outcome === 'cancel') throw new LoadCancelledError();
+  return outcome;
+}
+
+/**
+ * After the replacement committed. A confirmed Replace clears the old work.
+ * Any work still there (none was asked about) is marked as belonging to the
+ * retired scan, so a saved session never writes it under the new scan.
+ */
+export function settleReplacedWork(deps: Pick<OpenStreamingDeps, 'getViewer' | 'bookmarks' | 'refreshViewsUI'>, outcome: ReplaceOutcome): void {
+  const v = deps.getViewer();
+  if (outcome === 'replace') {
+    v.measure.clear(); v.annotate.clear(); deps.bookmarks.clear(); deps.refreshViewsUI();
+    return;
+  }
+  v.measure.claimUnowned(RETIRED_SCAN_OWNER);
+  v.annotate.claimUnowned(RETIRED_SCAN_OWNER);
 }
 
 /**
@@ -462,6 +489,8 @@ export interface OpenStreamingDeps {
   closeStreaming: () => void;
   /** Free the open static layers — a streaming scan is exclusive. */
   clearOpenStaticLayers: () => void;
+  /** Ask before work that the replacement would discard is lost. */
+  replaceGuard?: (req: ReplaceRequest) => Promise<ReplaceOutcome>;
   /** Drop the previous stream's class tally, report cloud and confidence. */
   resetStreamState: () => void;
   /** Start the ~4 Hz streaming-status poll that drives the panel. */
@@ -575,6 +604,7 @@ export async function openStreamingCopc(
   // Whether this replaces STATIC layers — captured before the attach commits so
   // the post-attach cancel handling below knows which scene the user still has.
   const replacingStatic = viewer.clouds().length > 0;
+  const replaced = await guardReplacedWork(deps, displayName);
   // attachStreamingCloud observes `signal` and aborts BEFORE its internal commit,
   // so a cancel during the build keeps the previous scene (blocker #4). Passing it
   // makes a streaming→streaming replace transactional.
@@ -597,6 +627,7 @@ export async function openStreamingCopc(
   }
   // The attach succeeded — now it is safe to retire the static layers.
   deps.clearOpenStaticLayers();
+  settleReplacedWork(deps, replaced);
   // COMMIT APPLICATION METADATA: the scene is now the sole valid one, so publish
   // its CRS / provenance / usage to global state (blocker #3 — never before the
   // commit). Shared with the EPT path.
@@ -868,6 +899,7 @@ export async function handleRemoteEpt(
     // Whether this replaces STATIC layers — captured before the commit so the
     // post-attach cancel handling knows which scene the user still has.
     const replacingStatic = viewer.clouds().length > 0;
+    const replaced = await guardReplacedWork(deps, remoteEptName(url));
     // attachStreamingCloud observes the load-cancel signal and aborts BEFORE its
     // internal commit, so a cancel during the build keeps the previous scene and a
     // failed candidate B never disposes a valid streaming A (blocker #4).
@@ -888,6 +920,7 @@ export async function handleRemoteEpt(
       throw new LoadCancelledError();
     }
     deps.clearOpenStaticLayers();
+    settleReplacedWork(deps, replaced);
     // The candidate is now the sole committed scene — a later-step throw must not
     // tear it down in the catch (blocker #4A).
     committed = true;
