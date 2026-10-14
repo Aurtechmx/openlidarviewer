@@ -20,7 +20,7 @@ import { buildResultModel } from './measureResultModel';
 import { MeasureResultCard } from '../ui/MeasureResultCard';
 import { ClipIndicator, type ClipIndicatorSource } from '../ui/ClipIndicator';
 import { el } from '../ui/dom';
-import { seatClear, watchSeat } from '../ui/hudSeat';
+import { seatClear, seatFit, watchSeat } from '../ui/hudSeat';
 import { copyToClipboard } from '../render/InspectTool';
 import type { MeasurementSummary } from '../render/measure/MeasureController';
 import type { MeasureSceneContext } from '../render/measure/measureConfidence';
@@ -76,6 +76,8 @@ export interface ClipFlow {
  * the project card, wherever they share its column at the top of the stage.
  */
 const LANE_CLEAR_OF = ['.olv-measure-bar:not(.olv-hidden)', '.olv-toast:not(.olv-hidden)', '.olv-project-card.olv-visible'];
+/** What the lane must end above: the active-tool pill, the navigation row and the dock at the bottom. */
+const LANE_FLOORS = ['.olv-ati:not(.olv-hidden)', '.olv-navbar', '.olv-dock'];
 
 export function createClipFlow(deps: ClipFlowDeps): ClipFlow {
   /** Set by Draw clipping box; names the card's clip action "Isolate this box". */
@@ -107,7 +109,10 @@ export function createClipFlow(deps: ClipFlowDeps): ClipFlow {
   // The lane drops below whatever shares its column at the top of the stage:
   // the measurement toolbar, a progress toast, the project card. Each changes
   // size and comes and goes, so they are watched rather than assumed.
-  const unwatch = watchSeat(lane, LANE_CLEAR_OF, () => seatClear(lane, LANE_CLEAR_OF, 'down'));
+  const unwatch = watchSeat(lane, [...LANE_CLEAR_OF, ...LANE_FLOORS], () => {
+    seatClear(lane, LANE_CLEAR_OF, 'down');
+    seatFit(lane, LANE_FLOORS);
+  });
 
   function dismissCard(): void {
     drawIntent = false;
