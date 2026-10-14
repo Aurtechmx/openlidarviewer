@@ -171,7 +171,7 @@ export function gradeMeasurement(input: MeasurementTrustInput): MeasurementTrust
   let caption: string;
   if (verticalRefusal) caption = 'Unverified — this frame has no local vertical (geocentric or depth-down)';
   else if (geographicRefusal) caption = 'Unverified — degrees are not distances (geographic CRS)';
-  else if (grade === 'green') caption = 'Verified — well supported by measured points';
+  else if (grade === 'green') caption = 'Supported — close to measured points';
   else if (grade === 'yellow') caption = 'Caution — loosely supported or unverified scale';
   else caption = 'Unverified — an endpoint has no points to measure';
 
@@ -185,7 +185,7 @@ export interface EvidenceSummary {
   readonly green: number;
   readonly yellow: number;
   readonly red: number;
-  /** One-line breakdown, e.g. "5 measurements — 3 verified, 1 caution, 1 unverified". */
+  /** One-line breakdown, e.g. "5 measurements — 3 supported, 1 caution, 1 unverified". */
   readonly line: string;
 }
 
@@ -208,7 +208,7 @@ export function summarizeMeasurementTrust(
   }
   const total = green + yellow + red;
   const parts: string[] = [];
-  if (green) parts.push(`${green} verified`);
+  if (green) parts.push(`${green} supported`);
   if (yellow) parts.push(`${yellow} caution`);
   if (red) parts.push(`${red} unverified`);
   let line: string;

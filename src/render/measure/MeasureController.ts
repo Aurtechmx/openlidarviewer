@@ -59,6 +59,7 @@ import type { AreaBreakdown, LineBreakdown } from './measureBreakdown';
 import {
   buildPointSnapIndex,
   snapToNearestPoint,
+  isOnMeasuredReturn,
   snapBest,
   countPointsWithinRadius,
   type PointSnapIndex,
@@ -1906,12 +1907,12 @@ export class MeasureController {
     if (!idx) return undefined;
     const useGrid = Number.isFinite(idx.cellSize) && idx.cellSize > 0;
     const radius = useGrid ? idx.cellSize * 4 : 0;
-    // "On a real return" = a measured point within half a cell of the vertex.
-    // Derived from the cloud, not a placement-time flag, so the grade stays
-    // correct after a vertex is dragged (re-graded on drag-end).
-    const onPointEps = useGrid ? idx.cellSize * 0.5 : 1e-6;
+    // "On a real return" = on a measured point (a snapped vertex) or within
+    // half the local point spacing of one. Derived from the cloud, not a
+    // placement-time flag, so the grade stays correct after a vertex is
+    // dragged (re-graded on drag-end).
     const vertices = m.points.map((p) => ({
-      snappedToPoint: snapToNearestPoint(idx, p, onPointEps) !== null,
+      snappedToPoint: isOnMeasuredReturn(idx, p),
       pointsWithinRadius: useGrid ? countPointsWithinRadius(idx, p, radius) : idx.count,
     }));
     return gradeMeasurement({

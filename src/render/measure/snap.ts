@@ -129,14 +129,22 @@ export function buildPointSnapIndex(positions: Float32Array): PointSnapIndex {
   const spanX = maxX - minX;
   const spanY = maxY - minY;
   const spanZ = maxZ - minZ;
-  // Derive a cell size aiming at ~1 point/cell: cbrt(volume / count). Fall back
-  // to the largest finite span (a flat/line cloud) and finally to a unit cell.
-  const volume = Math.max(spanX, 0) * Math.max(spanY, 0) * Math.max(spanZ, 0);
-  let cellSize = volume > 0 ? Math.cbrt(volume / count) : 0;
-  if (!(cellSize > 0)) {
-    const maxSpan = Math.max(spanX, spanY, spanZ);
-    cellSize = maxSpan > 0 ? maxSpan : 1;
+  // Derive a cell size aiming at about one point per cell from the extents
+  // that are not flat: (product of non-flat spans / n) ^ (1 / number of
+  // non-flat axes). A planar cloud gets a 2D cell and a line a 1D cell, so the
+  // cell tracks point spacing rather than the extent of the whole cloud. For
+  // an ordinary 3D cloud this is cbrt(volume / count), as before. A cloud whose
+  // points are all identical keeps a unit cell.
+  let product = 1;
+  let axes = 0;
+  for (const span of [spanX, spanY, spanZ]) {
+    if (span > 0) {
+      product *= span;
+      axes++;
+    }
   }
+  let cellSize = axes > 0 ? Math.pow(product / count, 1 / axes) : 0;
+  if (!(cellSize > 0) || !Number.isFinite(cellSize)) cellSize = 1;
 
   const dims: [number, number, number] = [
     Math.max(1, Math.floor(spanX / cellSize) + 1),
@@ -163,6 +171,66 @@ export function buildPointSnapIndex(positions: Float32Array): PointSnapIndex {
     dims,
     cells,
   };
+}
+
+// -- on a measured return ------------------------------------------------------
+
+/** A vertex is "on a return" within this fraction of the local point spacing. */
+export const ON_RETURN_SPACING_FRACTION = 0.5;
+
+/** A vertex exactly on a point (a snapped vertex) is on that return at any spacing. */
+const EXACT_HIT = 1e-9;
+
+/**
+ * Distance from point `i` to its nearest other point, searched in the 5x5x5
+ * cells around it. Coincident points are ignored. Returns 0 when no neighbour
+ * lies within two cell edges (an isolated point), so the result never exceeds
+ * twice the cell size.
+ */
+export function localPointSpacing(index: PointSnapIndex, i: number): number {
+  const { positions, cellSize, min, dims, cells } = index;
+  if (!Number.isFinite(cellSize)) return 0;
+  const x = positions[i * 3], y = positions[i * 3 + 1], z = positions[i * 3 + 2];
+  const cx = Math.min(dims[0] - 1, Math.floor((x - min[0]) / cellSize));
+  const cy = Math.min(dims[1] - 1, Math.floor((y - min[1]) / cellSize));
+  const cz = Math.min(dims[2] - 1, Math.floor((z - min[2]) / cellSize));
+  const cap2 = 4 * cellSize * cellSize;
+  let best2 = cap2;
+  for (let dx = -2; dx <= 2; dx++) {
+    for (let dy = -2; dy <= 2; dy++) {
+      for (let dz = -2; dz <= 2; dz++) {
+        const ix = cx + dx, iy = cy + dy, iz = cz + dz;
+        if (ix < 0 || iy < 0 || iz < 0 || ix >= dims[0] || iy >= dims[1] || iz >= dims[2]) continue;
+        const bucket = cells.get(cellKey(ix, iy, iz, dims));
+        if (bucket === undefined) continue;
+        for (const j of bucket) {
+          if (j === i) continue;
+          const d2 = dist2(positions[j * 3], positions[j * 3 + 1], positions[j * 3 + 2], [x, y, z]);
+          if (d2 > 0 && d2 < best2) best2 = d2;
+        }
+      }
+    }
+  }
+  // No neighbour within two cell edges: the point is isolated and has no local
+  // spacing to measure a tolerance against.
+  return best2 >= cap2 ? 0 : Math.sqrt(best2);
+}
+
+/**
+ * Is `query` on a real measured return? True when it coincides with a cloud
+ * point (a vertex that was snapped to one), or when the nearest point lies
+ * within {@link ON_RETURN_SPACING_FRACTION} of that point's own local spacing.
+ * An isolated point has no local spacing, so only an exact hit counts.
+ * The tolerance is bounded by half a cell (the snap search radius), so it follows point density and
+ * never grows with the extent of the cloud.
+ */
+export function isOnMeasuredReturn(index: PointSnapIndex, query: Vec3): boolean {
+  if (index.count === 0) return false;
+  if (!Number.isFinite(index.cellSize)) return snapToNearestPoint(index, query, 1e-6) !== null;
+  const near = snapToNearestPoint(index, query, index.cellSize * ON_RETURN_SPACING_FRACTION);
+  if (near === null || near.pointIndex === undefined) return false;
+  if (near.distance <= EXACT_HIT) return true;
+  return near.distance <= localPointSpacing(index, near.pointIndex) * ON_RETURN_SPACING_FRACTION;
 }
 
 // -- nearest actual point ----------------------------------------------------
