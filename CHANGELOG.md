@@ -46,6 +46,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- The view cube no longer shows click targets under 24 by 24 CSS px. Edge and corner targets are 24 px, and a face seen at a glancing angle that would project narrower than 24 px is hidden until the camera turns further (its view stays in the navigation menu and the command palette). This fixes an intermittent WCAG 2.2 target-size failure that depended on the cube's orientation.
 - The Site KML writes absolute altitude only for an EGM96 geoid height. NAVD88, EGM2008 and other metric sea-level heights are no longer written as if they were EGM96: they are clamped to ground with the source elevation, unit and datum kept in each description.
 - The "Analysed basis" line on the contour map, terrain report and DEM package no longer calls a further-reduced analysis the "display sample". When the analysis used a subsample of the loaded display sample, it now says so and gives the loaded count, for example "267,595 of 6,983,766 points (analysed subsample of the display sample, 2,408,349 loaded)".
 - Keyboard navigation (Fly, Walk) no longer stops after a streaming COPC or EPT file replaces a static scan. Navigation now stays on while either a static layer or a streaming scene is present.

@@ -16,6 +16,7 @@
  */
 
 import {
+  CUBE_SIZE,
   CUBE_TARGETS,
   activeCubeFace,
   cubeFaceLabel,
@@ -79,11 +80,6 @@ function matches(query: string): boolean {
   }
 }
 
-/** Desktop and touch geometry, in CSS px. */
-const SIZE = {
-  fine: { box: 120, half: 34, hit: 22, home: 24 },
-  coarse: { box: 156, half: 45, hit: 44, home: 44 },
-} as const;
 
 
 /** The Home glyph, built as DOM (no markup strings): a roof over a box. */
@@ -133,7 +129,7 @@ function fmt(n: number): string {
 
 /** Mount the cube. Returns a handle with `update()`, `place()` and `dispose()`. */
 export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
-  const geo = matches('(pointer: coarse)') ? SIZE.coarse : SIZE.fine;
+  const geo = matches('(pointer: coarse)') ? CUBE_SIZE.coarse : CUBE_SIZE.fine;
   const isGeographic = opts.isGeographic ?? ((): boolean => false);
 
   const root = document.createElement('div');

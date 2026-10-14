@@ -284,7 +284,7 @@ describe('placeCube — collision-aware top-right placement', () => {
   });
 });
 
-import { layoutCubeTargets, CUBE_FACE_MIN_DEPTH, CUBE_FACE_NORMALS } from '../src/render/viewCubeMath';
+import { layoutCubeTargets, CUBE_FACE_MIN_DEPTH, CUBE_FACE_NORMALS, CUBE_SIZE } from '../src/render/viewCubeMath';
 
 describe('layoutCubeTargets — the 26 targets partition the cube at every camera orientation', () => {
   // A camera orientation in the scene basis [east, north, up] from yaw, pitch and roll (degrees).
@@ -314,7 +314,7 @@ describe('layoutCubeTargets — the 26 targets partition the cube at every camer
     return Math.abs(lx) < half && Math.abs(ly) < half;
   }
 
-  for (const [name, half, hit] of [['desktop', 34, 22], ['touch', 45, 44]] as const) {
+  for (const [name, half, hit] of [['desktop', 34, 24], ['touch', 45, 44]] as const) {
     test(`${name}: every shown target's centre belongs to that target alone, over a yaw/pitch/roll sweep`, () => {
       let swept = 0;
       for (let yaw = 0; yaw < 360; yaw += 15) {
@@ -360,7 +360,7 @@ describe('layoutCubeTargets — the 26 targets partition the cube at every camer
 
   test('a visible face is toward the viewer by more than the minimum depth', () => {
     const m = cubeViewMatrix(orientation(40, 25, 0));
-    const { faces } = layoutCubeTargets(m, 34, 22);
+    const { faces } = layoutCubeTargets(m, 34, 24);
     for (const v of VIEWS) {
       const depth = projectCubePoint(m, CUBE_FACE_NORMALS[v])[2];
       expect(faces[v].visible).toBe(depth > CUBE_FACE_MIN_DEPTH);
@@ -371,11 +371,55 @@ describe('layoutCubeTargets — the 26 targets partition the cube at every camer
     for (const view of ['top', 'front'] as const) {
       const o = cubeTargetOrientation(cubeTargetForView(view));
       const m = cubeViewMatrix({ forward: [-o.dir[0], -o.dir[1], -o.dir[2]], up: o.up, upIsZ: true });
-      for (const [half, hit] of [[34, 22], [45, 44]] as const) {
+      for (const [half, hit] of [[34, 24], [45, 44]] as const) {
         const { faces, spots } = layoutCubeTargets(m, half, hit);
         expect(faces[view].visible).toBe(true);
         expect(spots.filter((s) => s.visible).length).toBeGreaterThanOrEqual(8);
       }
     }
   });
+});
+
+describe('layoutCubeTargets: every shown target meets the 24 CSS px minimum target size', () => {
+  const MIN = 24;
+  function orient(yaw: number, pitch: number, roll: number) {
+    const r = (d: number): number => (d * Math.PI) / 180;
+    const [sy, cy, sp, cp, sr, cr] = [Math.sin(r(yaw)), Math.cos(r(yaw)), Math.sin(r(pitch)), Math.cos(r(pitch)), Math.sin(r(roll)), Math.cos(r(roll))];
+    const forward: SceneVec = [cp * sy, cp * cy, sp];
+    const upBase: SceneVec = [-sp * sy, -sp * cy, cp];
+    const right: SceneVec = [
+      forward[1] * upBase[2] - forward[2] * upBase[1],
+      forward[2] * upBase[0] - forward[0] * upBase[2],
+      forward[0] * upBase[1] - forward[1] * upBase[0],
+    ];
+    const up: SceneVec = [cr * upBase[0] + sr * right[0], cr * upBase[1] + sr * right[1], cr * upBase[2] + sr * right[2]];
+    return { forward, up, upIsZ: true };
+  }
+
+  for (const [name, geo] of Object.entries(CUBE_SIZE)) {
+    // Default view, glancing views (a face a few degrees off edge-on) and a sweep.
+    const poses: [number, number, number][] = [[0, 0, 0], [180, 0, 0], [0, 85, 0], [5, 5, 0], [84, 10, 0], [-84, 3, 0], [3, 50, 0], [45, 35, 0], [89, 0, 0]];
+    for (let yaw = 0; yaw < 360; yaw += 7) for (let pitch = -90; pitch <= 90; pitch += 7) poses.push([yaw, pitch, (yaw * 3) % 360]);
+
+    test(`${name} pointer: faces and spots are at least ${MIN}px, with no undersized neighbour`, () => {
+      for (const [yaw, pitch, roll] of poses) {
+        const where = `yaw ${yaw} pitch ${pitch} roll ${roll}`;
+        const m = cubeViewMatrix(orient(yaw, pitch, roll));
+        const { faces, spots } = layoutCubeTargets(m, geo.half, geo.hit);
+        for (const v of VIEWS) {
+          const f = faces[v];
+          if (!f.visible) continue;
+          const [a, b, c, d] = f.affine;
+          const w = 2 * geo.half * (Math.abs(a) + Math.abs(c));
+          const h = 2 * geo.half * (Math.abs(b) + Math.abs(d));
+          expect(Math.min(w, h), `${v} face ${w.toFixed(1)}x${h.toFixed(1)} at ${where}`).toBeGreaterThanOrEqual(MIN - 1e-6);
+        }
+        const shown = spots.filter((s) => s.visible);
+        for (const s of shown) {
+          expect(geo.hit, `${s.id} target size`).toBeGreaterThanOrEqual(MIN);
+          for (const o of shown) if (o !== s) expect(Math.hypot(s.x - o.x, s.y - o.y), `${s.id}/${o.id} spacing at ${where}`).toBeGreaterThanOrEqual(MIN - 1e-6);
+        }
+      }
+    });
+  }
 });

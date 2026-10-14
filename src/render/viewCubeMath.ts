@@ -268,6 +268,15 @@ export const CUBE_FACE_NORMALS: Readonly<Record<StandardView, SceneVec>> = {
   top: [0, 0, 1], bottom: [0, 0, -1], front: [0, 1, 0], back: [0, -1, 0], right: [-1, 0, 0], left: [1, 0, 0],
 };
 
+/** Desktop (fine pointer) and touch (coarse pointer) cube geometry, in CSS px: stage box, face half-side, edge/corner target size, Home size. */
+export const CUBE_SIZE = {
+  fine: { box: 120, half: 34, hit: 24, home: 24 },
+  coarse: { box: 156, half: 45, hit: 44, home: 44 },
+} as const;
+
+/** WCAG 2.2 target size minimum (SC 2.5.8), CSS px: no shown face may project to a box narrower than this, and `hit` is never below it. */
+export const CUBE_MIN_TARGET = 24;
+
 /** A face whose outward normal points toward the viewer by less than this is turned away or edge-on. */
 export const CUBE_FACE_MIN_DEPTH = 0.12;
 
@@ -311,6 +320,8 @@ export interface CubeHitLayout {
  * a diameter of an admitted spot or cover a visible face's centre. So at every
  * orientation each shown target's centre belongs to that target alone, and no
  * two circles overlap: a press on a face can never fire an edge or corner.
+ * Every shown face is at least `CUBE_MIN_TARGET` wide and tall, and `hit`
+ * should be too, so no shown target needs the spacing exemption.
  */
 export function layoutCubeTargets(m: readonly number[], half: number, hit: number): CubeHitLayout {
   const faces = {} as Record<StandardView, CubeFaceLayout>;
@@ -324,7 +335,12 @@ export function layoutCubeTargets(m: readonly number[], half: number, hit: numbe
     const yAxis: SceneVec = [-up[0], -up[1], -up[2]];
     const px = projectCubePoint(m, xAxis);
     const py = projectCubePoint(m, yAxis);
-    const visible = projectCubePoint(m, n)[2] > CUBE_FACE_MIN_DEPTH;
+    // A face seen at a glancing angle projects to a sliver; below the minimum
+    // target size on either side it is not drawn or pressable (its view stays
+    // reachable through the neighbouring faces, the Home strip's menu and the palette).
+    const w = 2 * half * (Math.abs(px[0]) + Math.abs(py[0]));
+    const h = 2 * half * (Math.abs(px[1]) + Math.abs(py[1]));
+    const visible = projectCubePoint(m, n)[2] > CUBE_FACE_MIN_DEPTH && Math.min(w, h) >= CUBE_MIN_TARGET;
     faces[view] = { visible, affine: [px[0], px[1], py[0], py[1], c[0], c[1]], cx: c[0], cy: c[1] };
     if (visible) faceCentres.push({ x: c[0], y: c[1] });
   }
