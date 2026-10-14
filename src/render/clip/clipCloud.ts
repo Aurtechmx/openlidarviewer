@@ -97,6 +97,7 @@ export function clipCloud(
     scannerChannel: filterChannel(cloud.scannerChannel, keep, n),
     scanDirection: filterChannel(cloud.scanDirection, keep, n),
     edgeOfFlightLine: filterChannel(cloud.edgeOfFlightLine, keep, n),
+    attributeInvalid: filterChannel(cloud.attributeInvalid, keep, n),
     pointSourceId: filterChannel(cloud.pointSourceId, keep, n),
     gpsTime: filterChannel(cloud.gpsTime, keep, n),
     origin: cloud.origin,

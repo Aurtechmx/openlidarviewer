@@ -87,3 +87,38 @@ describe('analysed basis', () => {
     expect(provenanceLines(p).some((l) => /^Analysed basis\s+unknown$/.test(l))).toBe(true);
   });
 });
+
+describe('analysed basis of a display sample the analysis reduced further', () => {
+  const facts = { coverage: 'sampled', pointCount: 2_408_349 } as const;
+
+  it('names the subsample and the loaded count, not "display sample" alone', () => {
+    const b = analysedBasisOf(facts, 267_595, 6_983_766, null, 2_408_349);
+    expect(b.residentPointCount).toBe(2_408_349);
+    expect(b.loadStride).toBeNull();
+    expect(analysedBasisLine(b)).toBe(
+      '267,595 of 6,983,766 points (analysed subsample of the display sample, 2,408,349 loaded); whole-dataset support not claimed',
+    );
+  });
+
+  it('does not report a file stride for a subsample of the loaded points', () => {
+    // 6,983,766 / 3,491,883 is a whole number, but the analysed set came from
+    // the loaded points, not from reading every second record of the file.
+    const b = analysedBasisOf(facts, 3_491_883, 6_983_766, null, 5_000_000);
+    expect(b.loadStride).toBeNull();
+    expect(analysedBasisLine(b)).toContain('analysed subsample of the display sample');
+  });
+
+  it('reads as before when the analysis used every loaded point', () => {
+    const b = analysedBasisOf(facts, 2_408_349, 6_983_766, null, 2_408_349);
+    expect(b.residentPointCount).toBeUndefined();
+    expect(analysedBasisLine(b)).toBe(
+      '2,408,349 of 6,983,766 points (display sample); whole-dataset support not claimed',
+    );
+  });
+
+  it('keeps the stride wording for an unreduced strided read', () => {
+    const b = analysedBasisOf(facts, 3_491_883, 6_983_766, null, 3_491_883);
+    expect(b.loadStride).toBe(2);
+    expect(analysedBasisLine(b)).toContain('display sample, stride 2');
+  });
+});

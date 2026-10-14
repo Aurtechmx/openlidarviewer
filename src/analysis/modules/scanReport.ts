@@ -1,5 +1,5 @@
 import type { AnalysisModule, AnalysisResult, AnalysisRow, RunOptions } from '../ModuleApi';
-import type { PointCloud } from '../../model/PointCloud';
+import { ATTR_COLOUR_INVALID, ATTR_INTENSITY_INVALID, countAttributeInvalid, type PointCloud } from '../../model/PointCloud';
 import { sourcePositions } from '../../model/pointFrames';
 import type { ClassScope } from '../../render/class/classScope';
 import type { SpatialContext } from '../../geo/SpatialContext';
@@ -11,6 +11,12 @@ import { inMemoryPrecisionRows } from '../inMemoryPrecisionRows';
 import { drawPrecisionRows } from '../drawPrecisionRows';
 import { evaluateDrawPrecision, tileFromLocalFloat32 } from '../../science/drawPrecision';
 import { SCAN_DENSITY_METHOD_TAG } from '../streamingExtentRows';
+
+/** ", N flagged invalid and masked" when the file flags points whose `bit` attribute is not a measurement. */
+function maskedNote(cloud: PointCloud, bit: number): string {
+  const n = countAttributeInvalid(cloud.attributeInvalid, bit, cloud.pointCount);
+  return n > 0 ? ` (${n.toLocaleString('en-US')} flagged invalid by the file, masked and left out of statistics)` : '';
+}
 
 export { SCAN_DENSITY_METHOD_TAG };
 import { isWithheld } from '../../science/withheldPolicy';
@@ -341,14 +347,14 @@ export const scanReport: AnalysisModule = {
       ...inMemoryPrecisionRows(precision),
       ...draw,
       // Attribute coverage.
-      rowInfo('RGB', cloud.colors !== undefined ? 'Yes' : 'No'),
+      rowInfo('RGB', cloud.colors !== undefined ? 'Yes' + maskedNote(cloud, ATTR_COLOUR_INVALID) : 'No'),
       rowInfo(
         'Intensity',
         cloud.intensity === undefined
           ? 'No'
-          : cloud.metadata?.intensityNormalisation?.rescaled
+          : (cloud.metadata?.intensityNormalisation?.rescaled
             ? 'Yes (normalised to 0–65535 for display, not calibrated reflectance)'
-            : 'Yes',
+            : 'Yes') + maskedNote(cloud, ATTR_INTENSITY_INVALID),
       ),
     );
     // A cloud can carry the classification dimension while every point is still

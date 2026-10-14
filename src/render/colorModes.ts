@@ -13,7 +13,7 @@
  */
 
 import { clamp, clamp01 } from '../numeric';
-import type { PointCloud } from '../model/PointCloud';
+import { ATTR_COLOUR_INVALID, ATTR_INTENSITY_INVALID, type PointCloud } from '../model/PointCloud';
 import { sourcePositions } from '../model/pointFrames';
 import { densityForChunk, densityCellSizeFor } from './densityColors';
 import { computeElevationRange, computeScalarRange } from './elevationRange';
@@ -728,10 +728,17 @@ export interface ColorForModeOptions {
  * pipeline's `scalarRangeOf` delegates here, so the static and streaming
  * seeding semantics for non-finite values can never drift apart.
  */
-export function finiteMinMax(values: ArrayLike<number>, count: number): { min: number; max: number } {
+export function finiteMinMax(
+  values: ArrayLike<number>,
+  count: number,
+  /** Points whose `invalid` byte has `bit` set are not measurements and are skipped. */
+  invalid?: ArrayLike<number>,
+  bit = 0,
+): { min: number; max: number } {
   let min = Number.POSITIVE_INFINITY;
   let max = Number.NEGATIVE_INFINITY;
   for (let i = 0; i < count; i++) {
+    if (invalid && (invalid[i] & bit) !== 0) continue;
     const v = values[i];
     if (!Number.isFinite(v)) continue;
     if (v < min) min = v;
@@ -764,7 +771,7 @@ export function rampRangeForMode(
     case 'intensity': {
       // Raw finite min/max — matches the intensity case in colorForMode.
       if (!cloud.intensity) return null;
-      return finiteMinMax(cloud.intensity, n);
+      return finiteMinMax(cloud.intensity, n, cloud.attributeInvalid, ATTR_INTENSITY_INVALID);
     }
     case 'gpsTime': {
       // Percentile-clipped (default p5–p95) — see the gpsTime case below.
@@ -820,6 +827,25 @@ function mustRampRange(
   return r;
 }
 
+/** The grey for a point that states no value for the active channel (also used for flagged-invalid values). */
+export const UNSTATED_COLOUR_GREY = 128;
+
+/**
+ * `rgb` with every point whose `invalid` byte has `bit` set painted the neutral
+ * unstated grey. Returns `rgb` itself when no point is flagged, so a cloud
+ * without flags renders from the same buffer as before.
+ */
+function maskInvalid(rgb: Uint8Array, invalid: Uint8Array | undefined, bit: number): Uint8Array {
+  if (!invalid) return rgb;
+  let out: Uint8Array | null = null;
+  for (let i = 0; i < invalid.length; i++) {
+    if ((invalid[i] & bit) === 0) continue;
+    out ??= rgb.slice();
+    out.fill(UNSTATED_COLOUR_GREY, i * 3, i * 3 + 3);
+  }
+  return out ?? rgb;
+}
+
 export function colorForMode(
   mode: ColorMode,
   cloud: PointCloud,
@@ -833,7 +859,7 @@ export function colorForMode(
       if (!cloud.colors) {
         throw new Error(`colorForMode('rgb'): cloud "${cloud.name}" has no colors attribute`);
       }
-      return cloud.colors;
+      return maskInvalid(cloud.colors, cloud.attributeInvalid, ATTR_COLOUR_INVALID);
     }
 
     // ── intensity ───────────────────────────────────────────────────────────
@@ -844,7 +870,7 @@ export function colorForMode(
       // Range through the shared legend seam (raw finite min/max) so the
       // colorbar labels exactly the window these greys normalise against.
       const { min, max } = mustRampRange(rampRangeForMode('intensity', cloud, opts), 'intensity');
-      return colorByIntensity(cloud.intensity, n, min, max);
+      return maskInvalid(colorByIntensity(cloud.intensity, n, min, max), cloud.attributeInvalid, ATTR_INTENSITY_INVALID);
     }
 
     // ── gpsTime (continuous scalar, Cividis ramp) ─────────────────────────────

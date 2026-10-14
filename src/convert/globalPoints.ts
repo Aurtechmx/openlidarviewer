@@ -39,6 +39,8 @@ export interface GlobalPoints {
   readonly scanDirection?: Uint8Array;
   /** Edge-of-flight-line flag, 0 or 1. */
   readonly edgeOfFlightLine?: Uint8Array;
+  /** Attribute validity bits (colour 1, intensity 2); absent means all valid. */
+  readonly attributeInvalid?: Uint8Array;
 }
 
 /**
@@ -78,6 +80,7 @@ export function cloudToGlobal(cloud: PointCloud): GlobalPoints {
     scannerChannel: cloud.scannerChannel,
     scanDirection: cloud.scanDirection,
     edgeOfFlightLine: cloud.edgeOfFlightLine,
+    attributeInvalid: cloud.attributeInvalid,
   };
 }
 

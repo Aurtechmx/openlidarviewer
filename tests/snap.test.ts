@@ -10,6 +10,7 @@ import {
   buildPointSnapIndex,
   snapToNearestPoint,
   countPointsWithinRadius,
+  isOnMeasuredReturn,
   snapToVertices,
   snapToMidpoints,
   snapToIntersections,
@@ -243,5 +244,81 @@ describe('countPointsWithinRadius', () => {
     const index = buildPointSnapIndex(cloud([[0, 0, 0], [1, 0, 0]]));
     expect(countPointsWithinRadius(index, [100, 100, 100], 1)).toBe(0);
     expect(countPointsWithinRadius(index, [0, 0, 0], 0)).toBe(0);
+  });
+});
+
+describe('cell size and the on-a-return test', () => {
+  const grid = (): Float32Array => {
+    const pts: Array<[number, number, number]> = [];
+    for (let x = 0; x < 10; x++) for (let y = 0; y < 10; y++) pts.push([x, y, 0]);
+    return cloud(pts);
+  };
+
+  it('sizes a planar grid by its spacing, not its largest span', () => {
+    const idx = buildPointSnapIndex(grid());
+    expect(idx.cellSize).toBeGreaterThan(0.5);
+    expect(idx.cellSize).toBeLessThan(1.5);
+  });
+
+  it('sizes a line by its spacing', () => {
+    const pts: Array<[number, number, number]> = [];
+    for (let i = 0; i < 100; i++) pts.push([i, 0, 0]);
+    const idx = buildPointSnapIndex(cloud(pts));
+    expect(idx.cellSize).toBeCloseTo(99 / 100, 6);
+  });
+
+  it('keeps a unit cell when every point is identical', () => {
+    expect(buildPointSnapIndex(cloud([[2, 2, 2], [2, 2, 2]])).cellSize).toBe(1);
+  });
+
+  it('keeps cbrt(volume / count) for an ordinary 3D cloud', () => {
+    const pts: Array<[number, number, number]> = [];
+    for (let x = 0; x < 5; x++) for (let y = 0; y < 5; y++) for (let z = 0; z < 5; z++) pts.push([x, y, z]);
+    const idx = buildPointSnapIndex(cloud(pts));
+    expect(idx.cellSize).toBeCloseTo(Math.cbrt(64 / 125), 6);
+  });
+
+  it('snaps on a planar grid to the true nearest point', () => {
+    const idx = buildPointSnapIndex(grid());
+    expect(snapToNearestPoint(idx, [4.1, 5.2, 0.3], 2)!.position).toEqual([4, 5, 0]);
+  });
+
+  it('a vertex 1 m above a planar grid is not on a return; on the surface it is', () => {
+    const idx = buildPointSnapIndex(grid());
+    expect(isOnMeasuredReturn(idx, [4, 5, 1])).toBe(false);
+    expect(isOnMeasuredReturn(idx, [4, 5, 0])).toBe(true);
+    expect(isOnMeasuredReturn(idx, [4.1, 5.1, 0.05])).toBe(true);
+  });
+
+  it('a vertex off a line is not on a return', () => {
+    const pts: Array<[number, number, number]> = [];
+    for (let i = 0; i < 100; i++) pts.push([i, 0, 0]);
+    const idx = buildPointSnapIndex(cloud(pts));
+    expect(isOnMeasuredReturn(idx, [50, 0, 1])).toBe(false);
+    expect(isOnMeasuredReturn(idx, [50, 0, 0])).toBe(true);
+  });
+
+  it('the tolerance does not grow with the extent of a sparse cloud', () => {
+    const idx = buildPointSnapIndex(cloud([[0, 0, 0], [1000, 0, 0], [0, 1000, 0], [1000, 1000, 0]]));
+    expect(isOnMeasuredReturn(idx, [0, 0, 0])).toBe(true);
+    expect(isOnMeasuredReturn(idx, [0, 0, 400])).toBe(false);
+    expect(isOnMeasuredReturn(idx, [0, 0, 100])).toBe(true);
+  });
+
+  it('an isolated point only counts as a return on an exact hit', () => {
+    const pts: Array<[number, number, number]> = [[1000, 1000, 0]];
+    for (let x = 0; x < 10; x++) for (let y = 0; y < 10; y++) pts.push([x, y, 0]);
+    const idx = buildPointSnapIndex(cloud(pts));
+    expect(isOnMeasuredReturn(idx, [1000, 1000, 0])).toBe(true);
+    expect(isOnMeasuredReturn(idx, [1000, 1000, 1])).toBe(false);
+  });
+
+  it('an ordinary 3D cloud: a point is on a return, a point half a spacing away is not', () => {
+    const pts: Array<[number, number, number]> = [];
+    for (let x = 0; x < 5; x++) for (let y = 0; y < 5; y++) for (let z = 0; z < 5; z++) pts.push([x, y, z]);
+    const idx = buildPointSnapIndex(cloud(pts));
+    expect(isOnMeasuredReturn(idx, [2, 2, 2])).toBe(true);
+    expect(isOnMeasuredReturn(idx, [2.2, 2, 2])).toBe(true);
+    expect(isOnMeasuredReturn(idx, [2.5, 2.5, 2.5])).toBe(false);
   });
 });

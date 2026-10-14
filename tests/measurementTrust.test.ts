@@ -16,7 +16,7 @@ describe('gradeMeasurement', () => {
     const t = gradeMeasurement({ vertices: [strong, strong], crsKnown: true });
     expect(t.grade).toBe('green');
     expect(t.presentable).toBe(true);
-    expect(t.caption.toLowerCase()).toContain('verified');
+    expect(t.caption).toBe('Supported — close to measured points');
   });
 
   it('red and not presentable when an endpoint sits in a void', () => {
@@ -98,7 +98,7 @@ describe('summarizeMeasurementTrust (Evidence Capsule roll-up)', () => {
   it('counts grades and writes a one-line breakdown', () => {
     const s = summarizeMeasurementTrust([g, y, r, undefined]);
     expect(s).toMatchObject({ total: 3, green: 1, yellow: 1, red: 1 });
-    expect(s.line).toBe('3 measurements — 1 verified, 1 caution, 1 unverified');
+    expect(s.line).toBe('3 measurements — 1 supported, 1 caution, 1 unverified');
   });
 
   it('ignores ungraded (undefined) entries and handles an all-empty input', () => {
@@ -108,6 +108,6 @@ describe('summarizeMeasurementTrust (Evidence Capsule roll-up)', () => {
 
   it('singular phrasing for one measurement, omits empty buckets', () => {
     const s = summarizeMeasurementTrust([g]);
-    expect(s.line).toBe('1 measurement — 1 verified');
+    expect(s.line).toBe('1 measurement — 1 supported');
   });
 });

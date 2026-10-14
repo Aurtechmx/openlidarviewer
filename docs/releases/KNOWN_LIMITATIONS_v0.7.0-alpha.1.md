@@ -356,7 +356,7 @@ for this development cut: that evidence comes from the engines themselves.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,308 lines, thirty fewer since the Save view snapshot
+`src/main.ts` is 4,302 lines, thirty fewer since the Save view snapshot
 moved to its own lazy module, the Analyse panel's longitude and latitude
 wiring moved to the mapper module and the view cube's wiring was condensed, and
 `src/render/Viewer.ts` is 5,953, two hundred and seventy lines
@@ -375,7 +375,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 97 for the shell, 74 for the renderer and 23 for the Analyse panel,
-across 1127 modules with no dependency cycles.
+across 1129 modules with no dependency cycles.
 across 1124 modules with no dependency cycles.
 
 ## The shell has little headroom
@@ -631,13 +631,18 @@ closes the stream. A local LAS or LAZ file too heavy for memory streams from
 disk. It replaces an open stream, with that stream's class legend counts, scan
 report and confidence, and keeps the static layers open.
 
-## E57 attributes have no per-point availability
+## E57 intensity is normalised; a missing channel is dropped
 
 E57 intensity is stored normalised to 0–65535 per scan; the source values are
 not retained, and it is not calibrated reflectance. Colour or intensity a file
-flags invalid, and a channel some merged scans lack, are reported in the load
-warnings rather than masked per point. Per-point attribute masks and raw
-intensity retention are planned.
+flags invalid is masked per point: the point keeps its position, the value is
+drawn in the neutral grey, left out of intensity ranges, the colour balance and
+voxel means, and written as an empty CSV field or `nan` in XYZ and ASC. PLY and
+OBJ omit colour, and LAS omits colour and intensity, for the whole file when any
+exported point is flagged, because those formats have no null value; the
+conversion record states the count. A channel some merged scans lack is still
+dropped from the merged cloud and reported in the load warnings rather than
+masked per point. Raw intensity retention is planned.
 
 ## No cross-CRS reprojection
 

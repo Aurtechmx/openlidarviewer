@@ -13,6 +13,26 @@ import type { VolumeRecord } from './types';
 const HIGH_CONFIDENCE_POINTS = 1000;
 /** ...and medium; below this is low. */
 const MEDIUM_CONFIDENCE_POINTS = 100;
+/**
+ * Footprint coverage below which confidence is 'low' whatever the point count.
+ * Coverage is the smaller of the measured share (`coverageFraction`) and the
+ * share inside the scanned extent (`1 - excludedFraction`). More points packed
+ * into the observed part say nothing about the unobserved part.
+ */
+const LOW_CONFIDENCE_COVERAGE = 0.5;
+/** Footprint coverage below which confidence is at most 'medium'. */
+const MEDIUM_CONFIDENCE_COVERAGE = 0.8;
+/** Reason shown when no measured point supports the footprint. */
+export const NO_USABLE_COVERAGE_REASON =
+  'No usable coverage: no measured points fall inside this footprint. Redraw the footprint over scanned ground, or include more of the scan.';
+
+/** Smallest observed share of the footprint the result reports, or undefined when it reports none. */
+function observedCoverage(result: VolumeResult): number | undefined {
+  const parts: number[] = [];
+  if (result.coverageFraction !== undefined && Number.isFinite(result.coverageFraction)) parts.push(result.coverageFraction);
+  if (result.excludedFraction !== undefined && Number.isFinite(result.excludedFraction)) parts.push(1 - result.excludedFraction);
+  return parts.length > 0 ? Math.min(...parts) : undefined;
+}
 
 /**
  * Shape a `VolumeResult` into the stored `VolumeRecord`.
@@ -46,6 +66,12 @@ export function deriveVolumeRecord(
   if (inPoly >= HIGH_CONFIDENCE_POINTS) confidence = 'high';
   else if (inPoly >= MEDIUM_CONFIDENCE_POINTS) confidence = 'medium';
   else confidence = 'low';
+  // Confidence labels sufficiency of observations, not accuracy.
+  const coverage = observedCoverage(result);
+  if (coverage !== undefined) {
+    if (coverage < LOW_CONFIDENCE_COVERAGE) confidence = 'low';
+    else if (coverage < MEDIUM_CONFIDENCE_COVERAGE && confidence === 'high') confidence = 'medium';
+  }
   const record: VolumeRecord = {
     fill: result.fill,
     cut: result.cut,
@@ -73,13 +99,17 @@ export function deriveVolumeRecord(
   // More than a quarter of the surface interpolated: low confidence whatever
   // the point count. More than half: no figure at all, under a stated reason.
   if (result.interpolationVerdict === 'low-confidence') record.confidence = 'low';
-  if (result.interpolationVerdict === 'withheld') {
+  // No measured point supports the footprint: its volume is unknown, not zero.
+  const noCoverage = result.pointsInPolygon === 0 || (result.coverageFraction !== undefined && result.coverageFraction <= 0);
+  if (noCoverage || result.interpolationVerdict === 'withheld') {
     record.confidence = 'low';
     delete record.fill;
     delete record.cut;
     delete record.net;
     record.gridAuthority = 'withheld';
-    record.gridAuthorityReason = result.withheldReason ?? 'too much of the footprint interpolated';
+    record.gridAuthorityReason = noCoverage
+      ? NO_USABLE_COVERAGE_REASON
+      : result.withheldReason ?? 'too much of the footprint interpolated';
   }
   return record;
 }

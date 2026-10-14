@@ -84,6 +84,8 @@ export interface RgbAutoNormalizeSuggestion {
 export interface RgbAutoNormalizeInput {
   /** Interleaved sRGB Uint8 colours, length 3·N. */
   colorsU8: Uint8Array;
+  /** Per-point attribute validity bits (bit 0 = colour invalid); flagged points are not sampled. */
+  invalid?: Uint8Array;
   /**
    * Sampling stride. The analyser walks one point every `stride`,
    * so a stride of 64 gives 1 / 64th of the cloud at ~16 µs per sample.
@@ -124,6 +126,7 @@ export function rgbAutoNormalize(
   let chromaSumSq = 0;
   let chromaCount = 0;
   for (let i = 0; i < totalPoints; i += stride) {
+    if (input.invalid && (input.invalid[i] & 1) !== 0) continue; // flagged colour: not a measurement
     const r = input.colorsU8[i * 3] / 255;
     const g = input.colorsU8[i * 3 + 1] / 255;
     const b = input.colorsU8[i * 3 + 2] / 255;

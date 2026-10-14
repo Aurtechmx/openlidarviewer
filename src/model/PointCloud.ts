@@ -100,6 +100,19 @@ export function intensityNormalisationLine(meta: CloudMetadata | undefined): str
   );
 }
 
+/** {@link PointCloud.attributeInvalid} bit: the point's colour is flagged invalid. */
+export const ATTR_COLOUR_INVALID = 1;
+/** {@link PointCloud.attributeInvalid} bit: the point's intensity is flagged invalid. */
+export const ATTR_INTENSITY_INVALID = 2;
+
+/** How many points of `mask` carry `bit` among the first `count`. */
+export function countAttributeInvalid(mask: Uint8Array | undefined, bit: number, count: number): number {
+  if (!mask) return 0;
+  let n = 0;
+  for (let i = 0; i < count; i++) if ((mask[i] & bit) !== 0) n++;
+  return n;
+}
+
 /**
  * Provenance metadata recovered from a file header, when the format carries
  * it. Every field is optional — most scan files fill in only some, or none.
@@ -272,6 +285,13 @@ export interface PointCloudOptions {
   scanDirection?: Uint8Array;
   /** Optional per-point LAS edge-of-flight-line flag (0 or 1). */
   edgeOfFlightLine?: Uint8Array;
+  /**
+   * Optional per-point attribute validity mask: bit 0 = colour invalid,
+   * bit 1 = intensity invalid (see {@link ATTR_COLOUR_INVALID}). Absent means
+   * every value is valid. The point keeps its geometry; the flagged value is
+   * not a measurement and must not be displayed, summarised or exported as one.
+   */
+  attributeInvalid?: Uint8Array;
   /** Optional per-point LAS point source ID (the originating flight line). */
   pointSourceId?: Uint16Array;
   /** Optional per-point LAS GPS time, in the file's GPS-time encoding. */
@@ -372,6 +392,7 @@ export class PointCloud {
   readonly scannerChannel?: Uint8Array;
   readonly scanDirection?: Uint8Array;
   readonly edgeOfFlightLine?: Uint8Array;
+  readonly attributeInvalid?: Uint8Array;
   readonly pointSourceId?: Uint16Array;
   readonly gpsTime?: Float64Array;
   /** Source acquisition topology. See {@link PointCloudOptions.organizedRange}. */
@@ -462,6 +483,7 @@ export class PointCloud {
     expectLength('scannerChannel', options.scannerChannel, count);
     expectLength('scanDirection', options.scanDirection, count);
     expectLength('edgeOfFlightLine', options.edgeOfFlightLine, count);
+    expectLength('attributeInvalid', options.attributeInvalid, count);
     expectLength('pointSourceId', options.pointSourceId, count);
     expectLength('gpsTime', options.gpsTime, count);
 
@@ -478,6 +500,7 @@ export class PointCloud {
     this.scannerChannel = options.scannerChannel;
     this.scanDirection = options.scanDirection;
     this.edgeOfFlightLine = options.edgeOfFlightLine;
+    this.attributeInvalid = options.attributeInvalid;
     this.pointSourceId = options.pointSourceId;
     this.gpsTime = options.gpsTime;
     this.organizedRange = options.organizedRange;

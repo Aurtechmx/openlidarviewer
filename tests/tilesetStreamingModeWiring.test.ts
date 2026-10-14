@@ -67,6 +67,8 @@ function harness() {
     }),
     setMode: vi.fn(),
     frameAll: vi.fn(),
+    measure: { clear: vi.fn(), claimUnowned: vi.fn() },
+    annotate: { clear: vi.fn(), claimUnowned: vi.fn() },
     get streamingCloud() {
       return attached;
     },

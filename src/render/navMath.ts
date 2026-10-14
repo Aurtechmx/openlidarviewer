@@ -330,3 +330,13 @@ export function nearestPointAlongRay(
     along: bestAlong,
   };
 }
+
+/**
+ * Whether navigation (orbit, fly, walk, keyboard movement) has anything to
+ * navigate: a static layer, or a streaming scene. Removing the last static layer
+ * while a streaming scene remains must not switch navigation off, which is what
+ * a static-only check did when a streaming file replaced a static one.
+ */
+export function navigationAvailable(staticLayerCount: number, streamingActive: boolean): boolean {
+  return staticLayerCount > 0 || streamingActive;
+}

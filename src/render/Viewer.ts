@@ -230,7 +230,7 @@ import {
 } from './recordSelection';
 
 import type { PointInfo } from './pointInfo';
-import { speedForSize, nearestPointAlongRay } from './navMath';
+import { speedForSize, nearestPointAlongRay, navigationAvailable } from './navMath';
 import {
   mergePlacedBounds,
   isIdentityPlacement,
@@ -1077,9 +1077,8 @@ export class Viewer {
 
     // Picking tools — while one is active, a canvas click picks a point.
     this._canvas = canvas;
-    this._measure = new MeasureController({
-      onExit: () => this.setMeasureMode(false),
-    });
+    this._measure = new MeasureController({ onExit: () => this.setMeasureMode(false) });
+    this._measure.setSnapLayers(() => this._clouds, () => !!this._streaming);
     this._measure.setPicker((ndcX, ndcY) => {
       const hit = this._pickDetailed(ndcX, ndcY), p = hit?.point ?? this._pickStreaming(ndcX, ndcY);
       return p ? { point: [p.x, p.y, p.z], layer: hit?.cloud } : null;
@@ -1668,6 +1667,7 @@ export class Viewer {
    * kind of claim about the same frame, so it answers to the same gate.
    */
   private _refreshMeasureDatum(): void {
+    this._measure.invalidateSnap();
     const origins: Array<readonly number[] | null> = [];
     if (this._streaming) origins.push(this._streaming.cloud.renderOrigin ?? null);
     // SOURCE origins (float64-transform.md step 2): equal to live origins
@@ -1697,7 +1697,7 @@ export class Viewer {
     // (if any). Without this, the clamp would still reference the streaming
     // cloud's bounds after detach.
     this._orbitClampAabb = this._visibleCloudAabb();
-    if (this._clouds.size === 0) this._nav.setHasCloud(false);
+    this._nav.setHasCloud(navigationAvailable(this._clouds.size, this._streaming !== null));
     // Dropping a cloud can RESOLVE an origin conflict as easily as adding one
     // created it — re-ask rather than leave a refusal outliving its cause.
     this._refreshMeasureDatum();
@@ -1989,7 +1989,7 @@ export class Viewer {
     // Same reason as the streaming detach: the scene's datum is whatever the
     // REMAINING clouds agree on.
     this._refreshMeasureDatum();
-    if (this._clouds.size === 0) this._nav.setHasCloud(false);
+    this._nav.setHasCloud(navigationAvailable(this._clouds.size, this._streaming !== null));
     // A removed layer shrinks the shared elevation window when on.
     this.refreshProjectSharedElevation();
     // Removing the active cloud can hide (or re-target) the legend.
@@ -2185,7 +2185,7 @@ export class Viewer {
   /** Show or hide a cloud. */
   setCloudVisible(id: string, visible: boolean): void {
     const entry = this._clouds.get(id);
-    if (entry) { entry.mesh.visible = visible; this._demand.changed('style'); }
+    if (entry) { entry.mesh.visible = visible; this._measure.invalidateSnap(); this._demand.changed('style'); }
   }
 
   /**
@@ -2247,7 +2247,7 @@ export class Viewer {
   /** Exclude (or re-include) a cloud from picking / measuring / inspecting. */
   setCloudLocked(id: string, locked: boolean): void {
     const entry = this._clouds.get(id);
-    if (entry) entry.locked = locked;
+    if (entry) { entry.locked = locked; this._measure.invalidateSnap(); }
   }
 
   /** Whether a cloud is currently locked out of picking. */
@@ -4009,7 +4009,7 @@ export class Viewer {
 
   /** The stand-in is gone; navigation follows the layers again. */
   previewCloudEnded(): void {
-    this._nav.setHasCloud(this._clouds.size > 0 || this._streaming !== null);
+    this._nav.setHasCloud(navigationAvailable(this._clouds.size, this._streaming !== null));
   }
 
   /** Tween the camera to an oblique fit of `box`. */
@@ -5641,10 +5641,10 @@ export class Viewer {
     point: THREE.Vector3;
   }): PointInfo {
     const { cloud, index, point } = hit;
-    const rgb: [number, number, number] | null = cloud.colors
+    const normals = cloud.normals, flags = cloud.attributeInvalid?.[index] ?? 0;
+    const rgb: [number, number, number] | null = cloud.colors && (flags & 1) === 0
       ? [cloud.colors[index * 3], cloud.colors[index * 3 + 1], cloud.colors[index * 3 + 2]]
       : null;
-    const normals = cloud.normals;
     return makePointInfo({
       geographicHorizontal: this._inspectGeographicHorizontal,
       layer: cloud.name, pointFormat: cloud.metadata?.pointFormat,
@@ -5655,7 +5655,7 @@ export class Viewer {
       local: cloud.worldXYZ(index),
       origin: [0, 0, 0],
       distance: this._camera.position.distanceTo(point),
-      intensity: cloud.intensity ? cloud.intensity[index] : null,
+      intensity: cloud.intensity && (flags & 2) === 0 ? cloud.intensity[index] : null,
       classification: cloud.classification ? cloud.classification[index] : null, classificationDerived: cloud.classificationIsDerived,
       rgb,
       // inspection extras — passed only when the cloud carries them.

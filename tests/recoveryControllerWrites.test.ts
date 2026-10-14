@@ -662,3 +662,24 @@ describe('a write for another source never evicts saved work', () => {
     expect(app.snapshots.length).toBeGreaterThan(2);
   });
 });
+
+describe('snapshotNow, taken before work is replaced', () => {
+  it('stores the current session as saved work that later writes leave alone', async () => {
+    const s = fakeStore();
+    const app = await start(s.store);
+    app.handle.onSourceLoaded();
+    const stored = app.handle.snapshotNow();
+    app.snapshots.at(-1)!.resolve(session(2));
+    expect(await stored).toBe(true);
+    expect(s.entries.get(SITE_KEY)?.measurements).toBe(2);
+    expect(app.handle.hasPending()).toBe(true);
+  });
+  it('reports false and stores nothing for a session with no work', async () => {
+    const s = fakeStore();
+    const app = await start(s.store);
+    const stored = app.handle.snapshotNow();
+    app.snapshots.at(-1)!.resolve(session(0));
+    expect(await stored).toBe(false);
+    expect(s.entries.size).toBe(0);
+  });
+});

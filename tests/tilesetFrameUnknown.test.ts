@@ -84,6 +84,8 @@ function deps() {
     attachStreamingCloud: vi.fn(async () => {}),
     setMode: vi.fn(),
     frameAll: vi.fn(),
+    measure: { clear: vi.fn(), claimUnowned: vi.fn() },
+    annotate: { clear: vi.fn(), claimUnowned: vi.fn() },
     availableImageExportModes: () => new Map(),
   };
   const setReport = vi.fn();

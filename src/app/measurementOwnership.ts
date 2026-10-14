@@ -17,6 +17,13 @@
 
 import type { Measurement } from '../render/measure/types';
 
+/**
+ * The owner given to work left behind when its scan was replaced. It names no
+ * open layer, so every consumer treats the work as taken on a scan that is no
+ * longer open.
+ */
+export const RETIRED_SCAN_OWNER = 'retired-scan';
+
 /** One open layer, as ownership reads it. */
 export interface OwnershipLayer {
   readonly viewerId: string;
@@ -45,8 +52,11 @@ export type OwnershipVerdict =
   /** Records no scan while several are open. */
   | { readonly kind: 'unrecorded' };
 
+/** What ownership reads off a measurement or an annotation. */
+export type OwnedItem = Pick<Measurement, 'owner' | 'pickLayers'>;
+
 /** The layer ids a measurement names: its pick record, else its owner. */
-export function ownerIdsOf(m: Measurement): readonly string[] {
+export function ownerIdsOf(m: OwnedItem): readonly string[] {
   if (m.pickLayers && m.pickLayers.length > 0) return m.pickLayers;
   return m.owner?.layerId ? [m.owner.layerId] : [];
 }
@@ -57,7 +67,7 @@ export function ownerIdsOf(m: Measurement): readonly string[] {
  * open layer, or a streamed scan with no static layer open); otherwise its
  * owner is unresolved and it is withheld.
  */
-export function ownershipOf(m: Measurement, view: OwnershipView): OwnershipVerdict {
+export function ownershipOf(m: OwnedItem, view: OwnershipView): OwnershipVerdict {
   const ids = ownerIdsOf(m);
   if (ids.length === 0) {
     const sole = view.layers.length === 0 || (view.layers.length === 1 && view.layers[0]!.viewerId === view.activeViewerId);
@@ -134,4 +144,21 @@ export function ownershipViewOf(
     if (c) layers.push({ viewerId: id, stableId: stableIdFor(id), name: c.name });
   }
   return { layers, activeViewerId };
+}
+
+/**
+ * Split saved work into what a session of the active scan may hold and what it
+ * must leave out. Work whose scan is no longer open, or that more than one open
+ * layer claims, has no frame to be written in, so it is left out and counted.
+ * Work on another open layer keeps its own recorded owner and is kept.
+ */
+export function partitionSessionWork<T extends OwnedItem>(
+  items: readonly T[],
+  view: OwnershipView,
+): { readonly keep: T[]; readonly leftOut: number } {
+  const keep = items.filter((i) => {
+    const kind = ownershipOf(i, view).kind;
+    return kind !== 'closed' && kind !== 'ambiguous';
+  });
+  return { keep, leftOut: items.length - keep.length };
 }

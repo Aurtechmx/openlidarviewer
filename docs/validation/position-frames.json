@@ -261,13 +261,6 @@
     },
     {
       "file": "src/main.ts",
-      "symbol": "revealAnalysePanel",
-      "frame": "source-local",
-      "reads": 1,
-      "why": "The measure snap index is built from the active STATIC layer own buffer. Identity placement makes this equal to the project frame today; it is one of the consumers the fold must reach before multi-layer mounting is enabled."
-    },
-    {
-      "file": "src/main.ts",
       "symbol": "scanHullPositions",
       "frame": "source-local",
       "reads": 1,

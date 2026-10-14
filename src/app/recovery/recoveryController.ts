@@ -55,6 +55,11 @@ export interface RecoveryHandle {
   clear(): void;
   /** True while saved work from an earlier visit is waiting to be restored or discarded. */
   hasPending(): boolean;
+  /**
+   * Store the current session now, as saved work waiting to be restored, before
+   * something replaces it. Resolves true once the entry is stored.
+   */
+  snapshotNow(): Promise<boolean>;
 }
 
 const plural = (n: number, one: string): string => `${n} ${one}${n === 1 ? '' : 's'}`;
@@ -324,6 +329,24 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
       matchSource();
     },
     hasPending: () => saved.length > 0,
+    async snapshotNow() {
+      const s = store;
+      if (!s || off || !recoveryEnabled()) return false;
+      const json = await deps.serialize().catch(() => null);
+      if (!json || off || !recoveryEnabled()) return false;
+      const built = buildEntry(json, Date.now());
+      if ('skip' in built || held(built.entry.key)) return false;
+      try {
+        await s.put(built.entry, saved.map((e) => e.key));
+      } catch {
+        return false;
+      }
+      // Held from now on: later writes never replace it, and reopening the file offers it back.
+      saved = [built.entry, ...saved];
+      pending = built.entry;
+      if (sourceOpen) matchSource();
+      return true;
+    },
     clear() {
       sourceOpen = false;
       invalidate();

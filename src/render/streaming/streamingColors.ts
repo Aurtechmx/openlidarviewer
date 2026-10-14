@@ -19,6 +19,7 @@ import {
   colorByNormal,
   colorByScalar,
   finiteMinMax,
+  UNSTATED_COLOUR_GREY,
 } from '../colorModes';
 import { densityForChunk, defaultCellSizeForSpacing } from '../densityColors';
 import type { DecodedChunk } from '../../io/copc/copcChunkDecode';
@@ -58,7 +59,7 @@ let _rgbWorkOut: Uint8Array | null = null;
  * absent, so the point inspector, the resident-snapshot export and the patch
  * view all keep reporting that these points state nothing.
  */
-export const UNSTATED_COLOUR_GREY = 128;
+export { UNSTATED_COLOUR_GREY };
 
 /**
  * The flat buffer for a mode whose channel the chunk does not carry.
