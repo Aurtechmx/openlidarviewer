@@ -53,6 +53,8 @@ export interface CivilProfileStats {
    * null when fewer than two stations are covered.
    */
   readonly meanGrade: number | null;
+  /** Missing stations between the first and last covered ones, which `meanGrade` spans. */
+  readonly meanGradeGaps: number;
   /** Largest |grade| over any adjacent covered pair, or null. */
   readonly maxGrade: number | null;
   /** Every station, in order. */
@@ -132,7 +134,9 @@ export function computeCivilProfileStats(
     minElevation != null && maxElevation != null ? maxElevation - minElevation : null;
 
   let meanGrade: number | null = null;
+  let meanGradeGaps = 0;
   if (firstHit >= 0 && lastHit > firstHit) {
+    meanGradeGaps = lastHit - firstHit + 1 - stations.slice(firstHit, lastHit + 1).filter((st) => st.elevation != null).length;
     const run = stations[lastHit].chainage - stations[firstHit].chainage;
     if (Math.abs(run) > 1e-9) {
       meanGrade =
@@ -148,6 +152,7 @@ export function computeCivilProfileStats(
     maxElevation,
     reliefSpan,
     meanGrade,
+    meanGradeGaps,
     maxGrade,
     stations,
   };
@@ -175,6 +180,17 @@ export function formatStationing(chainageM: number): string {
 export function formatGradePercent(grade: number | null): string {
   if (grade == null || !Number.isFinite(grade)) return '—';
   return `${(grade * 100).toFixed(2)}%`;
+}
+
+/**
+ * The endpoint gradient as text: the grade, and when stations are missing
+ * between the two it is read from, how many. It is the net change between the
+ * first and last covered stations, so it can span stations that have no data.
+ */
+export function formatEndpointGradient(grade: number | null, missingBetween: number): string {
+  const text = formatGradePercent(grade);
+  if (grade == null || !Number.isFinite(grade) || missingBetween <= 0) return text;
+  return `${text} (spans ${missingBetween} missing station${missingBetween === 1 ? '' : 's'})`;
 }
 
 /** Grade as a 1:n ratio string, e.g. 0.02 → "1:50". Flat → "level". */

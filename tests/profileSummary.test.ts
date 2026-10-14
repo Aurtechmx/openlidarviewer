@@ -58,7 +58,7 @@ describe('computeProfileSummary', () => {
     expect(s.lossM).toBeCloseTo(2, 12);
   });
 
-  it('average grade is the net over the covered span: +6 %', () => {
+  it('endpoint gradient is the net over the covered span: +6 %', () => {
     expect(s.averageGrade).toBeCloseTo(0.06, 12);
   });
 
@@ -129,6 +129,63 @@ describe('formatStation', () => {
   });
 });
 
+describe('endpoint gradient row', () => {
+  const rowsFor = (samples: ProfileChartSample[]) =>
+    new Map(profileSummaryRows(computeProfileSummary(samples), 'metric', 'orthometric').map((r) => [r.label, r.value]));
+
+  it('is no longer labelled as an average', () => {
+    const labels = profileSummaryRows(computeProfileSummary(FIXTURE), 'metric', 'orthometric').map((r) => r.label);
+    expect(labels).toContain('Endpoint gradient');
+    expect(labels).not.toContain('Avg grade');
+  });
+
+  it('discloses the missing station between two covered stations', () => {
+    const rows = rowsFor([
+      { distance: 0, height: 0, count: 5 },
+      { distance: 10, height: Number.NaN, count: 0 },
+      { distance: 20, height: 10, count: 5 },
+    ]);
+    expect(rows.get('Endpoint gradient')).toBe('50.00% (spans 1 missing station)');
+    // The observed-segment rows stay unavailable: no adjacent covered pair exists.
+    expect(rows.get('Max grade')).toBe('—');
+    expect(rows.get('Height gain / loss')).toBe('—');
+  });
+
+  it('counts every missing station and pluralises', () => {
+    const rows = rowsFor([
+      { distance: 0, height: 0, count: 5 },
+      { distance: 10, height: Number.NaN, count: 0 },
+      { distance: 20, height: Number.NaN, count: 0 },
+      { distance: 30, height: 3, count: 5 },
+    ]);
+    expect(rows.get('Endpoint gradient')).toBe('10.00% (spans 2 missing stations)');
+  });
+
+  it('reads plainly when no station is missing between the endpoints', () => {
+    const rows = rowsFor([
+      { distance: 0, height: 0, count: 5 },
+      { distance: 10, height: 1, count: 5 },
+      { distance: 20, height: 2, count: 5 },
+    ]);
+    expect(rows.get('Endpoint gradient')).toBe('10.00%');
+  });
+
+  it('does not count uncovered stations outside the first and last covered ones', () => {
+    const rows = rowsFor([
+      { distance: 0, height: Number.NaN, count: 0 },
+      { distance: 10, height: 0, count: 5 },
+      { distance: 20, height: 1, count: 5 },
+      { distance: 30, height: Number.NaN, count: 0 },
+    ]);
+    expect(rows.get('Endpoint gradient')).toBe('10.00%');
+  });
+
+  it('is a dash when fewer than two stations are covered', () => {
+    const rows = rowsFor([{ distance: 0, height: 1, count: 5 }, { distance: 10, height: Number.NaN, count: 0 }]);
+    expect(rows.get('Endpoint gradient')).toBe('—');
+  });
+});
+
 describe('profileSummaryRows', () => {
   it('metric rows carry the hand-computed values', () => {
     const rows = profileSummaryRows(computeProfileSummary(FIXTURE), 'metric', 'orthometric');
@@ -136,7 +193,8 @@ describe('profileSummaryRows', () => {
     // Length is a distance → adaptive 5-sig-fig precision ("50.000 m").
     expect(byLabel.get('Length')).toBe('50.000 m');
     expect(byLabel.get('Height gain / loss')).toBe('+2.00 m / −2.00 m');
-    expect(byLabel.get('Avg grade')).toBe('6.00%');
+    // The fixture has one missing station between its first and last covered ones.
+    expect(byLabel.get('Endpoint gradient')).toBe('6.00% (spans 1 missing station)');
     expect(byLabel.get('Max grade')).toBe('20.00%');
     expect(byLabel.get('Steepest section')).toBe('0+000.00 → 0+010.00 (20.00%)');
     expect(byLabel.get('Highest elevation')).toBe('14.00 m at 0+040.00');
@@ -148,7 +206,7 @@ describe('profileSummaryRows', () => {
     const byLabel = new Map(rows.map((r) => [r.label, r.value]));
     // 50 m = 164.04 ft; 14 m = 45.93 ft; grades are unit-free.
     expect(byLabel.get('Length')).toBe('164.04 ft');
-    expect(byLabel.get('Avg grade')).toBe('6.00%');
+    expect(byLabel.get('Endpoint gradient')).toBe('6.00% (spans 1 missing station)');
     expect(byLabel.get('Highest elevation')).toBe('45.93 ft at 1+31.23');
   });
 
@@ -491,7 +549,7 @@ describe('a refused datum degrades to local heights, visibly', () => {
       new Map(profileSummaryRows(computeProfileSummary(samples), 'metric', reference).map((r) => [r.label, r.value]));
     const a = rowsOf('orthometric', scaleProfileSamples(LOCAL, 1, 830.03));
     const b = rowsOf('local', scaleProfileSamples(LOCAL, 1, null));
-    for (const label of ['Length', 'Height gain / loss', 'Avg grade', 'Max grade', 'Steepest section']) {
+    for (const label of ['Length', 'Height gain / loss', 'Endpoint gradient', 'Max grade', 'Steepest section']) {
       expect(b.get(label)).toBe(a.get(label));
     }
   });
