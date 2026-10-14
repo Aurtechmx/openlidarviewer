@@ -26,8 +26,9 @@ export interface AnalysedBasis {
    */
   readonly interpretationLevel?: string | null;
   /**
-   * Streaming only: points resident when the analysis ran, recorded when the
-   * analysed set is a strided subsample of them. Absent otherwise.
+   * Points resident (loaded) when the analysis ran, recorded when the analysed
+   * set is a strided subsample of them: a streaming scan's resident set, or a
+   * display sample that the analysis reduced further. Absent otherwise.
    */
   readonly residentPointCount?: number;
   /**
@@ -58,7 +59,10 @@ export function analysedBasisOf(
   const stated = declaredPointCount ?? facts.pointCount;
   const declared = stated != null && Number.isFinite(stated) && stated > 0 ? stated : null;
   let loadStride: number | null = null;
-  if (facts.coverage === 'sampled' && declared != null && analysedPointCount > 0 && declared > analysedPointCount) {
+  // A display sample the analysis reduced further: the analysed count is a
+  // subsample of the loaded points, so it is not a stride of the file.
+  const reducedFurther = facts.coverage === 'sampled' && (residentPointCount ?? 0) > analysedPointCount;
+  if (!reducedFurther && facts.coverage === 'sampled' && declared != null && analysedPointCount > 0 && declared > analysedPointCount) {
     const ratio = declared / analysedPointCount;
     const whole = Math.round(ratio);
     // A decimated read keeps every stride-th point, so the ratio is a whole
@@ -69,7 +73,7 @@ export function analysedBasisOf(
   return {
     analysedPointCount, declaredPointCount: declared, coverage: facts.coverage, loadStride,
     ...(interpretationLevel !== undefined ? { interpretationLevel } : {}),
-    ...(facts.coverage === 'resident-only' && (residentPointCount ?? 0) > analysedPointCount ? { residentPointCount } : {}),
+    ...((facts.coverage === 'resident-only' || reducedFurther) && (residentPointCount ?? 0) > analysedPointCount ? { residentPointCount } : {}),
     ...((withheldExcludedCount ?? 0) > 0 ? { withheldExcludedCount } : {}),
   };
 }
@@ -85,6 +89,7 @@ export function analysedBasisLine(b: AnalysedBasis | null | undefined): string {
   const r = b.residentPointCount;
   const how = b.coverage === 'partial' ? 'truncated file' : b.coverage === 'resident-only'
     ? (r ? `analysed subsample of the ${set}, ${fmt(r)} resident` : set)
+    : r ? `analysed subsample of the display sample, ${fmt(r)} loaded`
     : `display sample${b.loadStride != null ? `, stride ${b.loadStride}` : ''}`;
   return `${fmt(b.analysedPointCount)}${of} points (${how}); whole-dataset support not claimed`;
 }
