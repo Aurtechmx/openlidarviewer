@@ -230,7 +230,7 @@ import {
 } from './recordSelection';
 
 import type { PointInfo } from './pointInfo';
-import { speedForSize, nearestPointAlongRay } from './navMath';
+import { speedForSize, nearestPointAlongRay, navigationAvailable } from './navMath';
 import {
   mergePlacedBounds,
   isIdentityPlacement,
@@ -1697,7 +1697,7 @@ export class Viewer {
     // (if any). Without this, the clamp would still reference the streaming
     // cloud's bounds after detach.
     this._orbitClampAabb = this._visibleCloudAabb();
-    if (this._clouds.size === 0) this._nav.setHasCloud(false);
+    this._nav.setHasCloud(navigationAvailable(this._clouds.size, this._streaming !== null));
     // Dropping a cloud can RESOLVE an origin conflict as easily as adding one
     // created it — re-ask rather than leave a refusal outliving its cause.
     this._refreshMeasureDatum();
@@ -1989,7 +1989,7 @@ export class Viewer {
     // Same reason as the streaming detach: the scene's datum is whatever the
     // REMAINING clouds agree on.
     this._refreshMeasureDatum();
-    if (this._clouds.size === 0) this._nav.setHasCloud(false);
+    this._nav.setHasCloud(navigationAvailable(this._clouds.size, this._streaming !== null));
     // A removed layer shrinks the shared elevation window when on.
     this.refreshProjectSharedElevation();
     // Removing the active cloud can hide (or re-target) the legend.
@@ -4009,7 +4009,7 @@ export class Viewer {
 
   /** The stand-in is gone; navigation follows the layers again. */
   previewCloudEnded(): void {
-    this._nav.setHasCloud(this._clouds.size > 0 || this._streaming !== null);
+    this._nav.setHasCloud(navigationAvailable(this._clouds.size, this._streaming !== null));
   }
 
   /** Tween the camera to an oblique fit of `box`. */
