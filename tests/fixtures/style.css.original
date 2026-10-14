@@ -2487,6 +2487,11 @@ button:disabled { cursor: not-allowed; }
   border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-lg); cursor: pointer;
 }
 .olv-toast-cancel:hover { opacity: 1; border-color: var(--accent); }
+/* Two Cancel controls can share the row during a multi-file drop; both keep a
+ * 24 px target and may wrap under the text instead of overflowing. */
+.olv-toast-cancel { min-height: 24px; }
+.olv-toast-row:has(.olv-toast-cancel:not(.olv-hidden) ~ .olv-toast-cancel:not(.olv-hidden)) { flex-wrap: wrap; }
+.olv-toast-queue { flex: none; white-space: nowrap; }
 .olv-toast-bar { height: 3px; border-radius: 2px; background: var(--hairline); overflow: hidden; }
 .olv-toast-bar-fill {
   display: block; height: 100%; width: 0%;

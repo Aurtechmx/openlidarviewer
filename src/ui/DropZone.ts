@@ -25,6 +25,16 @@ export interface StageOptions {
   readonly trail?: boolean;
 }
 
+/** One multi-file drop being opened in turn. */
+interface DropQueue {
+  /** Files in the drop. */
+  readonly total: number;
+  /** One-based position of the file being opened. */
+  index: number;
+  /** Set by "Cancel remaining files": no later file in this drop starts. */
+  stopped: boolean;
+}
+
 /** Shown beside the file name until the format and scope are known. */
 export const CHECKING_FILE = 'Checking file…';
 
@@ -50,6 +60,11 @@ export class DropZone {
   /** The busy slot; carries the progressbar role while a load runs. */
   private readonly _mark: HTMLElement;
   private readonly _cancel: HTMLButtonElement;
+  /** Cancels the current file and empties the rest of a multi-file drop. */
+  private readonly _cancelRest: HTMLButtonElement;
+  /** "Opening 2 of 3 —" ahead of the file name while a multi-file drop runs. */
+  private readonly _queueLabel: HTMLElement;
+  private _queue: DropQueue | null = null;
   /** Copies the open failure report; shown only with an error that has one. */
   private readonly _copy: HTMLButtonElement;
   private _report = '';
@@ -109,6 +124,18 @@ export class DropZone {
     this._cancel.classList.add('olv-hidden');
     this._cancel.addEventListener('click', () => this._onCancel?.());
 
+    this._cancelRest = el('button', {
+      className: 'olv-toast-cancel olv-hidden',
+      text: 'Cancel remaining files',
+      ariaLabel: 'Cancel this file and the remaining files',
+    });
+    this._cancelRest.type = 'button';
+    this._cancelRest.addEventListener('click', () => {
+      if (this._queue) this._queue.stopped = true;
+      this._onCancel?.();
+    });
+    this._queueLabel = el('span', { className: 'olv-toast-queue olv-hidden' });
+
     this._copy = el('button', {
       className: 'olv-toast-cancel olv-hidden',
       text: 'Copy report',
@@ -138,7 +165,7 @@ export class DropZone {
     this._facts = el('span', { className: 'olv-toast-facts' });
     const sep = el('span', { className: 'olv-toast-sep', text: '·' });
     sep.setAttribute('aria-hidden', 'true');
-    this._context = el('div', { className: 'olv-toast-context olv-hidden' }, [this._file, sep, this._facts]);
+    this._context = el('div', { className: 'olv-toast-context olv-hidden' }, [this._queueLabel, this._file, sep, this._facts]);
     this._note = el('div', { className: 'olv-toast-note olv-hidden' });
     const mark = el('span', { className: 'olv-toast-mark' }, [
       el('span', { className: 'olv-toast-dot' }),
@@ -153,6 +180,7 @@ export class DropZone {
       mark,
       this._text,
       this._cancel,
+      this._cancelRest,
       this._copy,
     ]);
     // Visibility is driven by .olv-hidden so theming + reduced-motion
@@ -203,19 +231,59 @@ export class DropZone {
   /**
    * Open dropped files one after another. The loader takes one scan at a time,
    * so these are awaited in sequence; a file that fails surfaces its own error
-   * toast and does not stop the rest.
+   * toast and does not stop the rest. "Cancel this file" stops the current
+   * file and the queue goes on; "Cancel remaining files" also empties it.
    */
   private async _openSequentially(
     files: readonly File[],
     onFile: (file: File) => void | Promise<void>,
   ): Promise<void> {
-    for (const file of files) {
-      try {
-        await onFile(file);
-      } catch {
-        // The load reports its own failure; continue with the remaining files.
+    const queue: DropQueue = { total: files.length, index: 0, stopped: false };
+    this._queue = files.length > 1 ? queue : null;
+    try {
+      for (const file of files) {
+        if (queue.stopped) break;
+        queue.index++;
+        this._syncCancel();
+        try {
+          await onFile(file);
+        } catch {
+          // The load reports its own failure; continue with the remaining files.
+        }
       }
+    } finally {
+      if (this._queue === queue) this._queue = null;
+      this._syncCancel();
     }
+    if (queue.stopped && queue.index < queue.total) {
+      const left = queue.total - queue.index;
+      this._announce(`Skipped ${left} remaining ${left === 1 ? 'file' : 'files'}.`, true);
+    }
+  }
+
+  /** Files still to open after the current one; 0 outside a multi-file drop. */
+  get remainingFiles(): number {
+    const q = this._queue;
+    return q && !q.stopped ? q.total - q.index : 0;
+  }
+
+  /** Show "Opening 2 of 3 —" and the right Cancel controls for the queue state. */
+  private _syncCancel(): void {
+    const q = this._queue;
+    const active = this._onCancel !== null;
+    const left = this.remainingFiles;
+    const multi = q !== null && left > 0;
+    this._cancel.classList.toggle('olv-hidden', !active);
+    this._cancel.textContent = multi ? 'Cancel this file' : 'Cancel';
+    this._cancel.setAttribute('aria-label', multi ? 'Cancel loading this file' : 'Cancel loading');
+    this._cancelRest.classList.toggle('olv-hidden', !(active && multi));
+    this._cancelRest.setAttribute(
+      'aria-label',
+      `Cancel this file and the ${left} remaining ${left === 1 ? 'file' : 'files'}`,
+    );
+    const showLabel = q !== null && this._name !== '';
+    this._queueLabel.textContent = showLabel ? `Opening ${q.index} of ${q.total} —` : '';
+    this._queueLabel.classList.toggle('olv-hidden', !showLabel);
   }
 
   /** Cancel a pending error auto-hide so it cannot hide a newer toast state. */
@@ -258,6 +326,7 @@ export class DropZone {
       this._facts.textContent = CHECKING_FILE;
       this._context.classList.remove('olv-hidden');
     }
+    this._syncCancel();
     // The name is already on the context line; the progress line says what is
     // happening. The polite region names the file once, here.
     this._text.textContent = fileName ? 'Opening…' : text;
@@ -443,7 +512,7 @@ export class DropZone {
   setCancelled(): void {
     const name = this._name;
     this._onCancel = null;
-    this._cancel.classList.add('olv-hidden');
+    this._syncCancel();
     this._hide();
     this._announce(name ? `Cancelled opening ${name}.` : 'Loading cancelled.', true);
   }
@@ -469,7 +538,7 @@ export class DropZone {
     this._endOperation();
     const token = ++this._token;
     this._onCancel = null;
-    this._cancel.classList.add('olv-hidden');
+    this._syncCancel();
     if (name) this._announce(`Opened ${name}.`, true);
     return this._scan.complete().then(() => {
       if (token !== this._token) return false;
@@ -504,7 +573,7 @@ export class DropZone {
    */
   setCancelHandler(handler: (() => void) | null): void {
     this._onCancel = handler;
-    this._cancel.classList.toggle('olv-hidden', handler === null);
+    this._syncCancel();
   }
 
   /**
@@ -524,7 +593,7 @@ export class DropZone {
       this._copy.classList.remove('olv-hidden');
     }
     this._onCancel = null;
-    this._cancel.classList.add('olv-hidden');
+    this._syncCancel();
     this._setBar(undefined);
     this._clearMeter();
     this.toast.classList.remove('is-opening', 'is-busy');
