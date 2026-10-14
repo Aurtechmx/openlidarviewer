@@ -50,7 +50,7 @@ Converted XYZ, ASC and LAS files record the software and version, the source fil
 
 ### Navigation and layout
 
-- An interactive view cube, on by default except at phone width. Its click targets are at least 24 by 24 CSS px, and faces, edges and corners no longer overlap at any orientation.
+- An interactive view cube, on by default except at phone width. Its click targets are at least 24 by 24 CSS px, and faces, edges and corners no longer overlap at any orientation. All 26 views can be reached from the keyboard at any orientation: Tab enters the cube, the arrow keys move between views and Enter turns the camera.
 - Navigation modes are one segmented control, Orbit | Walk | Fly | Pan; the six axis views moved to a "More" menu. Focus mode gives the scan the whole window.
 - Plan View turns off when the command palette, Frame all, the keys or a saved-view restore change the view or projection, and returns to the navigation mode used before it.
 - Keyboard navigation keeps working after a streaming COPC or EPT file replaces a static scan.
@@ -66,9 +66,11 @@ Converted XYZ, ASC and LAS files record the software and version, the source fil
 - A file that cannot be read as a point cloud names the formats that open and suggests opening an E57 or LAS version.
 - Opening a streamed scan over an open one, and importing a session over existing work, asks Save session / Replace / Cancel. Replace keeps a recovery snapshot.
 - The "Two scans loaded" before/after prompt is offered only when both scans declare the same CRS and linear unit and neither is a truncated load.
+- A local glTF or GLB that names an external buffer or image (a relative file or a web address) is refused before parsing, so opening a file never makes the browser request an address named inside it.
 
 ### E57
 
+- The E57 reader refuses an XML section larger than 64 MB or nested deeper than 256 levels with a clear error.
 - Colour and intensity that the file flags invalid are masked per point. The point keeps its position; the flagged value is drawn grey, left out of ranges, colour balance and voxel means, and exported as an empty field or `nan`. PLY, OBJ and LAS omit the attribute for the whole file when any exported point is flagged, and the file says so.
 - Intensity with declared limits is normalised over the declared range, so a signed range keeps its negative values. Colour is normalised per channel by its declared limits, so 16-bit colour is no longer clipped to 255.
 - A scan whose pose rotation is malformed or degenerate is skipped instead of placed with the identity rotation. Channels dropped because some merged scans lack them are named.
