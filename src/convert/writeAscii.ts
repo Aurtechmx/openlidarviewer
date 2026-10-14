@@ -11,6 +11,7 @@
  */
 
 import type { GlobalPoints } from './globalPoints';
+import { ATTR_COLOUR_INVALID, ATTR_INTENSITY_INVALID } from '../model/PointCloud';
 import { singleLine } from '../export/safeText';
 import { StringLineSink, Utf8ChunkSink, type LineSink } from '../io/textChunks';
 
@@ -77,7 +78,7 @@ function emitXyz(
     const base = `${fmt(g.x[i], h)} ${fmt(g.y[i], h)} ${fmt(g.z[i], precision)}`;
     if (c) {
       // A colour the source flags invalid is unavailable, not a measured value.
-      sink.line(g.attributeInvalid && (g.attributeInvalid[i] & 1) !== 0
+      sink.line(g.attributeInvalid && (g.attributeInvalid[i] & ATTR_COLOUR_INVALID) !== 0
         ? `${base} nan nan nan`
         : `${base} ${c[i * 3]} ${c[i * 3 + 1]} ${c[i * 3 + 2]}`);
     } else {
@@ -153,7 +154,7 @@ function emitAsc(sink: LineSink, g: GlobalPoints, opts: AscOptions): void {
   const it = g.intensity;
   for (let i = 0; i < g.count; i++) {
     const base = `${fmt(g.x[i], h)} ${fmt(g.y[i], h)} ${fmt(g.z[i], precision)}`;
-    sink.line(it ? `${base} ${g.attributeInvalid && (g.attributeInvalid[i] & 2) !== 0 ? 'nan' : it[i]}` : base);
+    sink.line(it ? `${base} ${g.attributeInvalid && (g.attributeInvalid[i] & ATTR_INTENSITY_INVALID) !== 0 ? 'nan' : it[i]}` : base);
   }
 }
 

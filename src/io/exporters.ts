@@ -299,7 +299,8 @@ function emitXyz(sink: LineSink, cloud: PointCloud, delimiter: string, resolvedI
   const invalidNote = bad.colour + bad.intensity > 0
     ? `${invalidSummary(bad)} flagged invalid by the source: written as ${csv ? 'an empty field' : 'nan'}, meaning unavailable`
     : null;
-  const mask = cloud.attributeInvalid;
+  // Same rule as the header note: a mask that does not match the points is dropped.
+  const mask = cloud.attributeInvalid?.length === n ? cloud.attributeInvalid : undefined;
   const columns = [
     'x',
     'y',
