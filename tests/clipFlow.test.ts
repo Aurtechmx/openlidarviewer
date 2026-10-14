@@ -51,6 +51,7 @@ async function make(opts: { ms?: BoxMeasurementLike[]; ctx?: typeof one; measure
       openClipPage: () => log.pages.push('clip'), toast: (m) => log.toasts.push(m),
     },
     summaries: () => state.sums,
+    scene: () => ({ datumResolved: true, layers: 'single', verticalReferenceKnown: true }),
     measureOn: () => state.on,
     runMeasureTool: () => { log.runs++; state.on = true; flow.dismissCard(); },
     openMeasurePage: () => { log.opens++; },

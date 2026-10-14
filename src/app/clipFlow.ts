@@ -23,6 +23,9 @@ import { el } from '../ui/dom';
 import { seatClear, watchSeat } from '../ui/hudSeat';
 import { copyToClipboard } from '../render/InspectTool';
 import type { MeasurementSummary } from '../render/measure/MeasureController';
+import type { MeasureSceneContext } from '../render/measure/measureConfidence';
+import type { CrsService } from '../geo/CrsService';
+import { buildMeasureConfidenceContext } from './measureConfidenceContext';
 import type { Viewer } from '../render/Viewer';
 import type { MeasurePanel } from '../ui/MeasurePanel';
 
@@ -38,6 +41,8 @@ export interface ClipFlowDeps {
   readonly box: BoxToClipDeps;
   /** Completed measurements' summaries (the Measurements list's own text). */
   readonly summaries: () => readonly MeasurementSummary[];
+  /** The scene facts the Measurements panel grades each row against. */
+  readonly scene: () => MeasureSceneContext;
   readonly measureOn: () => boolean;
   /** The canonical scene-tool command for Measure (records, opens the page). */
   readonly runMeasureTool: () => void;
@@ -134,12 +139,12 @@ export function createClipFlow(deps: ClipFlowDeps): ClipFlow {
         lastId = s.id;
         // A box that follows Draw clipping box is the one being isolated;
         // any other result leaves that intent for the box still to come.
-        card.show(buildResultModel(s), s.kind === 'box' ? clipLabel() : 'Use as clipping region');
+        card.show(buildResultModel(s, deps.scene()), s.kind === 'box' ? clipLabel() : 'Use as clipping region');
         return;
       }
       lastId = s.id;
       // Edited or renamed in place: keep the card on the same figure as the list.
-      if (card.shownId === s.id) card.show(buildResultModel(s), s.kind === 'box' ? clipLabel() : 'Use as clipping region');
+      if (card.shownId === s.id) card.show(buildResultModel(s, deps.scene()), s.kind === 'box' ? clipLabel() : 'Use as clipping region');
       else if (card.shownId !== null && !all.some((x) => x.id === card.shownId)) dismissCard();
     },
     dismissCard,
@@ -170,6 +175,8 @@ export interface ClipFlowShell {
   /** The shell's one scene-tool command (dock, key, palette, launcher). */
   readonly runTool: (tool: 'measure') => void;
   readonly toast: (message: string) => void;
+  /** The CRS service the panel's scene facts are read from. */
+  readonly crs: Pick<CrsService, 'current' | 'context'>;
 }
 
 /** Build the flow from the shell and give the Clip page its entry point. */
@@ -189,6 +196,7 @@ export function createClipFlowFromShell(sh: ClipFlowShell): ClipFlow {
       toast: sh.toast,
     },
     summaries: () => (sh.ready() ? v().measure.getSummaries() : []),
+    scene: () => buildMeasureConfidenceContext(v(), sh.crs.current(), sh.crs.context()),
     measureOn: () => sh.ready() && v().measureMode,
     runMeasureTool: () => sh.runTool('measure'),
     openMeasurePage: () => sh.openPage('measure'),

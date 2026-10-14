@@ -2537,7 +2537,7 @@ const clipPanel = new ClipPanel({
 });
 const clipFlow = createClipFlowFromShell({ clipPanel, overlay: stage.overlay, viewer: () => viewer, ready: () => viewerReady, toast: showLassoToast, runTool,
   activeLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null),
-  openPage: (p) => workspaceShell?.openToolPage(p), measurePanel: () => measureMount.panel });
+  openPage: (p) => workspaceShell?.openToolPage(p), measurePanel: () => measureMount.panel, crs: crsService });
 
 // The Tools tab held only the Clip box until a tool had been used, so it could
 // not say what the tab was for. This card (lazy chunk) lists the tools from the
