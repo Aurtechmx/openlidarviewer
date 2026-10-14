@@ -21,6 +21,9 @@ function isSpace(c: string): boolean {
 }
 
 /** Parse a well-formed XML document into an element tree. */
+/** Deepest element nesting the E57 XML reader accepts. */
+export const MAX_XML_DEPTH = 256;
+
 export function parseXml(source: string): XmlNode {
   let i = 0;
   const n = source.length;
@@ -56,7 +59,11 @@ export function parseXml(source: string): XmlNode {
     return attrs;
   };
 
+  // Real E57 schemas nest a few dozen levels. A cap turns a hostile document
+  // into a clear error instead of exhausting the call stack.
+  let depth = 0;
   const parseElement = (): XmlNode => {
+    if (++depth > MAX_XML_DEPTH) throw new Error(`Invalid XML: nesting deeper than ${MAX_XML_DEPTH} levels.`);
     i++; // consume '<'
     let name = '';
     while (i < n && !isSpace(source[i]) && source[i] !== '>' && source[i] !== '/') {
@@ -66,10 +73,12 @@ export function parseXml(source: string): XmlNode {
     skipSpace();
     if (source[i] === '/') {
       i += 2; // '/>'
+      depth--;
       return node;
     }
     i++; // consume '>'
     parseContent(node);
+    depth--;
     return node;
   };
 
