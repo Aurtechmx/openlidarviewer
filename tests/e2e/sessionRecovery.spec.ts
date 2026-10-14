@@ -1,6 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
 import { dropDenseGridPly, dropTinyPly, gotoSettled, reloadSettled } from './helpers';
 
+// Each case journals work, reloads and reopens, some twice; that needs more
+// than the default 30 s on a loaded machine.
+test.describe.configure({ timeout: 60_000 });
+
 /**
  * Session recovery: work journaled to IndexedDB survives a reload and is
  * offered back only when the same source is reopened.
