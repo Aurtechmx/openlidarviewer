@@ -1,15 +1,21 @@
 /* ── Data Fitness scorecard — verdict-led panel (one verdict + traffic-light
    rows with friendly metaphor icons + shape-distinct tone glyphs). ─────────── */
 .olv-analyse-fitness { display: flex; flex-direction: column; gap: var(--space-xs); margin-bottom: var(--space-md); }
+/* The verdict sentence wears the honesty primitive (`.olv-caveat`): a 2 px
+   rule keyed to the state over a faint tint of the same hue, body text at
+   --text-sm. It leads the results by position and by being the only sentence
+   in --text, not by bold type or a heavier bar than every other note. */
 .olv-fit-verdict {
+  --fit-rule: var(--hairline-strong);
   display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-xs);
-  font-size: var(--text-sm); font-weight: 600; color: var(--text);
-  padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.03); border-left: 3px solid var(--hairline);
+  font-size: var(--text-sm); font-weight: 500; line-height: 1.45; color: var(--text);
+  padding: var(--space-sm) var(--space-md); border-radius: 2px;
+  background: color-mix(in srgb, var(--fit-rule) 9%, transparent);
+  border-left: 2px solid var(--fit-rule);
 }
-.olv-fit-verdict.is-ready { border-left-color: var(--rating-excellent); }
-.olv-fit-verdict.is-okay { border-left-color: var(--rating-good); }
-.olv-fit-verdict.is-review { border-left-color: var(--warn); }
+.olv-fit-verdict.is-ready { --fit-rule: var(--rating-excellent); }
+.olv-fit-verdict.is-okay { --fit-rule: var(--rating-good); }
+.olv-fit-verdict.is-review { --fit-rule: var(--warn); }
 .olv-fit-verdict-text { flex: 1 1 auto; min-width: 0; }
 .olv-fit-badge {
   flex: 0 0 auto; font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em;
@@ -40,18 +46,7 @@
 /* Caveats collapsed behind a "Notes" disclosure — they restate the checklist in
    longer form, so they stay one tap away instead of stacking under it. */
 .olv-fit-caveats { margin-top: var(--space-2xs); display: flex; flex-direction: column; gap: var(--space-2xs); }
-.olv-fit-caveats-summary {
-  cursor: pointer; list-style: none; user-select: none;
-  font-size: var(--text-2xs); font-weight: 500; color: var(--text-faint);
-  padding: var(--space-2xs) 0;
-}
-.olv-fit-caveats-summary::-webkit-details-marker { display: none; }
-.olv-fit-caveats-summary::before {
-  content: '▸'; display: inline-block; margin-right: var(--space-2xs);
-  font-size: 0.85em; transition: transform 120ms ease;
-}
-.olv-fit-caveats[open] > .olv-fit-caveats-summary::before,
-.olv-fit-checks[open] > .olv-fit-caveats-summary::before { transform: rotate(90deg); }
+/* The summary itself wears the shared disclosure row in 92-terrain-verdict.css. */
 
 /* Recommended grid / interval. */
 .olv-analyse-recommend-box { display: flex; flex-direction: column; gap: var(--space-2xs); margin: var(--space-sm) 0; }
