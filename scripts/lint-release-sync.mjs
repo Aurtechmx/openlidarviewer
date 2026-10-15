@@ -225,7 +225,7 @@ try {
 // reports are the opposite: each release gets a NEW file, the previous one stays
 // on disk, and every prose reference to it keeps resolving — so a stale link is
 // silent and points a reviewer at the wrong release's evidence. That is exactly
-// what happened at alpha.2: README, AI_ASSISTANCE, ARTIFACT_EVALUATION and the
+// what happened at alpha.2: README, ARTIFACT_EVALUATION and the
 // docs-site include all still named the alpha.1 validation report.
 // READINESS_REPORT is deliberately NOT here. It is internal go/no-go
 // deliberation, export-ignored from the source archive, so requiring it would
@@ -284,7 +284,6 @@ if (!existsSync(resolve(ROOT, releasePage))) {
 // link still resolves, so nothing else can notice it is pointing backwards.
 const REFERRERS = [
   'README.md',
-  'docs/project/AI_ASSISTANCE.md',
   'ARTIFACT_EVALUATION.md',
   'docs-site/reproducibility/validation-report.md',
   // The unversioned reproducibility entry point points at the current

@@ -52,8 +52,8 @@ READINESS_REPORT_*.md export-ignore
 # the repository and in history.
 #
 # NOT excluded: VALIDATION_REPORT_v0.5.9.md, which this release inherits its
-# terrain/measurement claims from and which README, ARTIFACT_EVALUATION and
-# AI_ASSISTANCE all link to. It is load-bearing evidence, not clutter.
+# terrain/measurement claims from and which README and ARTIFACT_EVALUATION
+# link to. It is load-bearing evidence, not clutter.
 VALIDATION_REPORT_v0.6.0-alpha.1.md export-ignore
 REPRODUCIBILITY_v0.6.0-alpha.1.md export-ignore
 # The scholarly archive carries exactly one truth-document set — the shipped
