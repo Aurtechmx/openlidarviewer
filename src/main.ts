@@ -1186,7 +1186,7 @@ const crsCoordinator = createCrsCoordinator({
   getViewer: () => viewer,
   isViewerReady: () => viewerReady,
   getActiveId: () => scans.activeId,
-  debug,
+  debug, onOverrideApplied: () => { layerService.refreshCrsFlags(); layerService.applyVisibility(); },
 });
 
 // v0.3.9 — workflow recorder. The host owns the controller so it can
