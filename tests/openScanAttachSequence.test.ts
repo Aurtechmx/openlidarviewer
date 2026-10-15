@@ -27,6 +27,7 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 
 import { openScan, type OpenScanDeps } from '../src/app/openScan';
+import { clearPendingSessionRestore, holdSessionWork, markPendingSessionRestore } from '../src/app/pendingSessionRestore';
 import * as THREE from 'three/webgpu';
 import { Viewer } from '../src/render/Viewer';
 import type { Inspector } from '../src/ui/Inspector';
@@ -465,6 +466,33 @@ describe('what the completed attach leaves behind', () => {
     expect(getLayerCount()).toBe(1);
     h.calls.setActive('cloud-2');
     expect(getActiveId()).toBe('cloud-2');
+  });
+
+  it('offers held session work to the scan that has just opened', async () => {
+    const h = harness();
+    const restoreHeldWork = vi.fn(async () => 0);
+    holdSessionWork({ upAxis: 'z', projectOrigin: [0, 0, 0], layers: [], measurements: [{ id: 'm' } as never], annotations: [] });
+    try {
+      await openScan(fakeFile(), { ...h.deps, restoreHeldWork });
+      expect(restoreHeldWork).toHaveBeenCalledWith('cloud-1');
+    } finally {
+      clearPendingSessionRestore();
+    }
+  });
+
+  it('does not offer held work when nothing is held, or when a waiting session is applied instead', async () => {
+    const h = harness();
+    const restoreHeldWork = vi.fn(async () => 0);
+    await openScan(fakeFile(), { ...h.deps, restoreHeldWork });
+    expect(restoreHeldWork).not.toHaveBeenCalled();
+    holdSessionWork({ upAxis: 'z', projectOrigin: [0, 0, 0], layers: [], measurements: [{ id: 'm' } as never], annotations: [] });
+    markPendingSessionRestore(fakeFile('s.olvsession'));
+    try {
+      await openScan(fakeFile(), { ...h.deps, restoreHeldWork });
+      expect(restoreHeldWork).not.toHaveBeenCalled();
+    } finally {
+      clearPendingSessionRestore();
+    }
   });
 
   it('fills the Scan Report when the main thread goes idle', async () => {

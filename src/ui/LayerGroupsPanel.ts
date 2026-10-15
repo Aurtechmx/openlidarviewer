@@ -155,6 +155,14 @@ export class LayerGroupsPanel {
     }
   }
 
+  /**
+   * The layer `to` replaces `from` (a density reload): it takes `from`'s place
+   * in its group, so closing `from` afterwards leaves the group intact.
+   */
+  handOverLayer(from: string, to: string): void {
+    if (this._store.replaceMember(from, to)) this.render();
+  }
+
   /** Drop every group. The layers themselves are untouched. */
   reset(): void {
     for (const group of this._store.groups()) this._store.delete(group.id);

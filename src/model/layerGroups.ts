@@ -224,6 +224,23 @@ export class LayerGroupStore {
     return true;
   }
 
+  /**
+   * Put `to` where `from` is, in the same group at the same position: the same
+   * source reopened in its place (a density reload). `to` leaves any group it
+   * was already in. False, and nothing changed, when `from` is ungrouped.
+   */
+  replaceMember(from: string, to: string): boolean {
+    const groupId = this._owner.get(from);
+    if (groupId === undefined || from === to) return false;
+    const previous = this._owner.get(to);
+    if (previous !== undefined) this._detach(previous, to);
+    const group = this._byId.get(groupId)!;
+    group.memberIds[group.memberIds.indexOf(from)] = to;
+    this._owner.delete(from);
+    this._owner.set(to, groupId);
+    return true;
+  }
+
   /** Drop one closed layer from whatever group held it. False when ungrouped. */
   forgetLayer(layerId: string): boolean {
     const owner = this._owner.get(layerId);

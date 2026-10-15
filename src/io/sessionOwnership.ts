@@ -22,7 +22,8 @@
  */
 
 import type { InspectionSession } from './session';
-import { frameAnchorLayerId, frameLayer, shiftAnnotation, shiftMeasurement, type SessionProjectFrame } from './sessionFrame';
+import { frameAnchorLayerId, frameLayer, shiftAnnotation, shiftMeasurement, type SessionLayerRecord, type SessionProjectFrame } from './sessionFrame';
+import { fingerprintKey } from '../model/layerIdentity';
 import { sourceLocalOwnership, type WorkOwnership } from '../model/workOwnership';
 import type { Measurement } from '../render/measure/types';
 import type { Annotation } from '../render/annotate/types';
@@ -239,6 +240,34 @@ export function mapSingleScanSession(
     byId.set(id, ids.size === 1 && activeLayerId ? { kind: 'resolved', liveId: activeLayerId } : { kind: 'ambiguous' });
   }
   return { byId };
+}
+
+/**
+ * Records for the layers a session with no project frame names, so work held
+ * from it can be written into a frame and read back in the same place.
+ *
+ * Such a file has one frame, `session.origin`, so every record is a layer in
+ * its own frame at that origin. The file's own layer (`session.layerId`) is
+ * keyed on the facts its scan summary states, so a later open of that exact
+ * scan can be matched to it. Every other id has no source evidence at all and
+ * gets a key with no content facts, which never matches an open layer.
+ */
+export function framelessHeldRecords(session: InspectionSession, layerIds: Iterable<string>): SessionLayerRecord[] {
+  const o = session.origin;
+  const summary = session.scanSummary;
+  return [...layerIds].map((layerId) => {
+    const own = !!summary && layerId === session.layerId;
+    return {
+      layerId,
+      sourceFingerprint: own
+        ? fingerprintKey({ fileName: summary.fileName, sourcePoints: summary.sourcePoints, width: summary.width, depth: summary.depth, height: summary.height, epsg: summary.epsg, crs: summary.crs, origin: [o[0], o[1], o[2]] })
+        : fingerprintKey({}),
+      sourceName: own ? summary.fileName : '',
+      sourceOrigin: [o[0], o[1], o[2]],
+      sourceToProject: [0, 0, 0],
+      upAxis: session.upAxis,
+    };
+  });
 }
 
 /**

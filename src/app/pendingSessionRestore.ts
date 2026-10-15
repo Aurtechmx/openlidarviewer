@@ -17,6 +17,8 @@ let pending: File | null = null;
  * Restored work whose scan is not open (or is open more than once). It is not
  * placed in the scene, so no output can use it, and the next session save
  * writes it back with the records it is read through, so it is never lost.
+ * Opening a scan it maps to places it (`restoreHeldSessionWork` in
+ * `sessionIo.ts`) and removes it from here.
  */
 let held: HeldSessionWork | null = null;
 

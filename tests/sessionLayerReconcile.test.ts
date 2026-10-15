@@ -24,7 +24,7 @@ import {
 } from '../src/io/sessionOwnership';
 import { carryHeldSessionWork, recordBase, type SessionLayerRecord, type SessionProjectFrame } from '../src/io/sessionFrame';
 import { fingerprintKey } from '../src/model/layerIdentity';
-import { importSession, type SessionIoDeps, type SessionModule } from '../src/app/sessionIo';
+import { importSession, restoreHeldSessionWork, type SessionIoDeps, type SessionModule } from '../src/app/sessionIo';
 import { serializeActiveSession, type SessionSnapshotDeps } from '../src/app/sessionSnapshot';
 import { projectFrameInputFrom, sceneOriginFor } from '../src/app/projectFrame';
 import { clearPendingSessionRestore, heldSessionWork } from '../src/app/pendingSessionRestore';
@@ -33,6 +33,7 @@ import { createLayerIdentityService } from '../src/app/layerIdentityService';
 import { exportLayerHooks } from '../src/ui/ExportPanel';
 import { PointCloud } from '../src/model/PointCloud';
 import type { Measurement } from '../src/render/measure/types';
+import type { Annotation } from '../src/render/annotate/types';
 import type { InspectionSession } from '../src/io/session';
 
 type V3 = [number, number, number];
@@ -56,6 +57,9 @@ const keyOf = (s: Scan): string => fingerprintKey({
   fileName: s.name, sourcePoints: s.points, width: s.span[0], depth: s.span[1], height: s.span[2], epsg: 32613, crs: 'UTM 13N', origin: s.so,
 });
 
+/** The CRS every test scan declares, matching the fingerprints above. */
+const UTM13 = { name: 'UTM 13N', epsg: 32613, linearUnit: 'metre' };
+
 const evidence = (id: string, s: Scan): LiveLayerEvidence => ({ layerId: id, fingerprint: keyOf(s), sourceOrigin: s.so, upAxis: 'z', epsg: 32613 });
 
 /** The project origin of a set of open scans: the per-axis floor, as the app takes it. */
@@ -71,12 +75,22 @@ class Page {
   static serial = 0;
   readonly ids: string[];
   measurements: Measurement[] = [];
+  annotations: Annotation[] = [];
   readonly toasts: string[] = [];
-  readonly scans: readonly Scan[];
+  groups: unknown[] = [];
+  readonly scans: Scan[];
+  private readonly serial: number;
   constructor(scans: readonly Scan[]) {
-    this.scans = scans;
-    const n = ++Page.serial;
-    this.ids = scans.map((s) => `page${n}-${s.name}`);
+    this.scans = [...scans];
+    this.serial = ++Page.serial;
+    this.ids = scans.map((s, i) => `page${this.serial}-${i}-${s.name}`);
+  }
+  /** Open one more scan in this page, as the last (active) layer; returns its id. */
+  open(s: Scan): string {
+    this.scans.push(s);
+    const id = `page${this.serial}-${this.scans.length - 1}-${s.name}`;
+    this.ids.push(id);
+    return id;
   }
   get frameOrigin(): V3 | null {
     return this.scans.length >= 2 ? projectOriginOf(this.scans) : null;
@@ -98,7 +112,7 @@ class Page {
       sourceFormat: 'las',
       sourceOrigin: s.so,
       bounds: () => ({ min: [0, 0, 0], max: s.span }),
-      metadata: { crs: null },
+      metadata: { crs: UTM13 },
     }));
     const viewer = {
       clouds: () => clouds.map((_, i) => this.viewerId(i)),
@@ -106,7 +120,7 @@ class Page {
       streamingCloud: null,
       getCloud: (id: string) => clouds[Number(id.slice(6))],
       measure: { loadMeasurements: (m: Measurement[]) => { this.measurements = m; }, getMeasurements: () => this.measurements },
-      annotate: { loadAnnotations: () => {}, getAnnotations: () => [] },
+      annotate: { loadAnnotations: (a: Annotation[]) => { this.annotations = a; }, getAnnotations: () => this.annotations },
     };
     const module: SessionModule = { parseSession, rebaseSessionGeometry, matchSessionToScan, detectSessionSpatialConflict, sessionScanOrigin };
     return {
@@ -123,7 +137,7 @@ class Page {
       liveLayers: () => this.scans.map((s, i) => evidence(this.ids[i]!, s)),
       bookmarks: { restore: () => {}, names: () => [] },
       setInspectorViews: () => {},
-      restoreLayerGroups: () => {},
+      restoreLayerGroups: (g) => { this.groups = [...g]; },
       refreshMeasurePanel: () => {},
       refreshAnnotationPanel: () => {},
       applyViewState: () => {},
@@ -136,13 +150,13 @@ class Page {
   saveDeps(): SessionSnapshotDeps {
     const active = this.scans[this.activeIndex]!;
     const cloud = {
-      name: active.name, pointCount: active.points, sourceFormat: 'las', sourceOrigin: active.so,
+      name: active.name, pointCount: active.points, sourceFormat: 'las', sourceOrigin: active.so, metadata: { crs: UTM13 },
       bounds: () => ({ min: [0, 0, 0], max: active.span }),
     };
     const viewer = {
       streamingCloud: null,
       measure: { unitSystem: 'metric', getMeasurements: () => this.measurements },
-      annotate: { getAnnotations: () => [] },
+      annotate: { getAnnotations: () => this.annotations },
     };
     const frame = this.frameOrigin;
     return {
@@ -522,5 +536,153 @@ describe('density reload hands the layer identity and its work to the replacemen
     await reopen('old', 10000);
     expect([...w.clouds.keys()]).toEqual(['old']);
     expect(w.ids.stableIdFor('old')).toBe(w.oldId);
+  });
+});
+
+// A third scan of the survey, and a scan below all of them, which keeps the
+// second page's project origin fixed while scans are opened into it.
+const C: Scan = { name: 'geom-c.las', points: 777, span: [5, 5, 1], so: [500_050, 4_000_100, 60] };
+const D: Scan = { name: 'geom-d.las', points: 4242, span: [8, 8, 2], so: [499_000, 3_999_000, 0] };
+const ON_C: V3[] = [[500_051, 4_000_101, 60], [500_053, 4_000_104, 61]];
+
+/** Page 1: A, B and C open; one measurement on each of A and B, one across A and C, one annotation on A. */
+function threeScanSave(): InspectionSession {
+  const p = new Page([A, B, C]);
+  const [a, b, c] = p.ids as [string, string, string];
+  p.measurements = [
+    takenOn('mA', a, p.layerOrigin(a)!, ON_A, [a]),
+    takenOn('mB', b, p.layerOrigin(b)!, ON_B, [b]),
+    takenOn('mAC', a, p.layerOrigin(a)!, [ON_A[0]!, ON_C[0]!], [a, c]),
+  ];
+  const la = p.layerOrigin(a)!;
+  p.annotations = [{
+    id: 'nA', text: 'crack', localPosition: { x: 500_005 - la[0], y: 4_000_003 - la[1], z: 100 - la[2] },
+    owner: { layerId: a, frame: 'project' },
+  } as unknown as Annotation];
+  return p.save();
+}
+
+describe('held work is restored when its scan opens later in the same page', () => {
+  it('opening the missing scan restores its work in place, empties the held store and says so', async () => {
+    const saved = threeScanSave();
+    const p = new Page([B, D]);
+    expect(await p.import(saved)).toBe(true);
+    expect(p.measurements.map((m) => m.id)).toEqual(['mB']);
+    expect(heldSessionWork()?.measurements.map((m) => m.id).sort()).toEqual(['mA', 'mAC']);
+
+    const a = p.open(A);
+    expect(await restoreHeldSessionWork(p.importDeps(), a)).toBe(2);
+    expect(p.measurements.map((m) => m.id).sort()).toEqual(['mA', 'mB']);
+    expect(p.annotations.map((n) => n.id)).toEqual(['nA']);
+    expect(p.measurements.find((m) => m.id === 'mA')!.owner!.layerId).toBe(a);
+    expect(p.world().mA).toEqual(ON_A);
+    expect(p.toasts.at(-1)).toBe('Restored 1 measurement and 1 annotation from the session onto “geom-a.las”. 1 item is still waiting for another scan.');
+    // The item that also names C still waits for C.
+    expect(heldSessionWork()?.measurements.map((m) => m.id)).toEqual(['mAC']);
+    expect(heldSessionWork()?.annotations).toEqual([]);
+
+    const c = p.open(C);
+    expect(await restoreHeldSessionWork(p.importDeps(), c)).toBe(1);
+    expect(p.toasts.at(-1)).toBe('Restored 1 measurement and 0 annotations from the session onto “geom-c.las”.');
+    expect(heldSessionWork()).toBeNull();
+    expect(p.world().mAC).toEqual([ON_A[0], ON_C[0]]);
+
+    // Saved and read back in a fresh page, every coordinate is where it was.
+    const again = p.save();
+    expect(fileWorld(again)).toEqual({ mA: ON_A, mB: ON_B, mAC: [ON_A[0], ON_C[0]] });
+  });
+
+  it('opening an unrelated scan leaves the held work alone and says nothing', async () => {
+    const saved = threeScanSave();
+    const p = new Page([B, D]);
+    await p.import(saved);
+    const before = p.toasts.length;
+    const e = p.open({ ...D, name: 'other.las', so: [499_500, 3_999_500, 10] });
+    expect(await restoreHeldSessionWork(p.importDeps(), e)).toBe(0);
+    expect(p.toasts.length).toBe(before);
+    expect(heldSessionWork()?.measurements.map((m) => m.id).sort()).toEqual(['mA', 'mAC']);
+  });
+
+  it('a second copy of a source already open is ambiguous: the work stays held', async () => {
+    const saved = threeScanSave();
+    const p = new Page([B, D]);
+    await p.import(saved);
+    p.open(A);
+    const second = p.open(A);
+    expect(await restoreHeldSessionWork(p.importDeps(), second)).toBe(0);
+    expect(p.measurements.map((m) => m.id)).toEqual(['mB']);
+    expect(heldSessionWork()?.measurements.map((m) => m.id).sort()).toEqual(['mA', 'mAC']);
+  });
+
+  it('a layer with no identity, or no held work, restores nothing', async () => {
+    const p = new Page([B, D]);
+    expect(await restoreHeldSessionWork(p.importDeps(), null)).toBe(0);
+    expect(await restoreHeldSessionWork(p.importDeps(), p.ids[0]!)).toBe(0);
+  });
+});
+
+describe('a session with no project frame that names several scans', () => {
+  const X_WORLD: V3[] = [[500_102, 4_000_002, 51], [500_103, 4_000_003, 51]];
+  /** A one-scan file over B whose work names B and a second, unrecorded scan. */
+  function framelessFile(): InspectionSession {
+    const base = new Page([B]).save();
+    expect(base.projectFrame).toBeUndefined();
+    const local = (w: V3[]): number[][] => w.map((q) => q.map((c, k) => c - base.origin[k]!));
+    return {
+      ...base,
+      layerId: 'saved-b',
+      measurements: [
+        { id: 'mB', kind: 'distance', name: 'mB', points: local(ON_B), owner: { layerId: 'saved-b', frame: 'source-local' } },
+        { id: 'mX', kind: 'distance', name: 'mX', points: local(X_WORLD), owner: { layerId: 'saved-x', frame: 'source-local' } },
+      ] as Measurement[],
+    };
+  }
+
+  it('is held with its owner ids and disclosed, not reported as not restored', async () => {
+    const p = new Page([B]);
+    expect(await p.import(framelessFile())).toBe(true);
+    expect(p.measurements).toEqual([]);
+    const toast = p.toasts.join(' ');
+    expect(toast).not.toMatch(/not restored/);
+    expect(toast).toMatch(/2 items name several scans and the session records no project frame to tell them apart, so they were not placed\. Saving the session keeps them\./);
+    const held = heldSessionWork()!;
+    expect(held.measurements.map((m) => m.owner!.layerId)).toEqual(['saved-b', 'saved-x']);
+    expect(held.layers.map((l) => l.layerId)).toEqual(['saved-b', 'saved-x']);
+  });
+
+  it('a save writes it back in place, and a fresh page restores what it can establish and holds the rest', async () => {
+    const p = new Page([B]);
+    await p.import(framelessFile());
+    const resaved = p.save();
+    expect(resaved.measurements.map((m) => m.id).sort()).toEqual(['mB', 'mX']);
+    expect(fileWorld(resaved)).toEqual({ mB: ON_B, mX: X_WORLD });
+
+    clearPendingSessionRestore();
+    const fresh = new Page([B]);
+    await fresh.import(resaved);
+    // The file's own scan is identified by its summary facts; the other id has no evidence at all.
+    expect(fresh.measurements.map((m) => m.id)).toEqual(['mB']);
+    expect(fresh.world().mB).toEqual(ON_B);
+    expect(heldSessionWork()?.measurements.map((m) => m.id)).toEqual(['mX']);
+    expect(fileWorld(fresh.save())).toEqual({ mB: ON_B, mX: X_WORLD });
+  });
+
+  it('work the file marks as project-frame is still reported as not restored', async () => {
+    const f = framelessFile();
+    f.measurements[1] = { ...f.measurements[1]!, owner: { layerId: 'saved-x', frame: 'project' } };
+    const p = new Page([B]);
+    await p.import(f);
+    expect(p.toasts.join(' ')).toMatch(/1 item was not restored: the session names several scans but records no project frame/);
+    expect(heldSessionWork()?.measurements.map((m) => m.id)).toEqual(['mB']);
+  });
+});
+
+describe('layer groups in a session read in a fresh page', () => {
+  it('name the open layers, not the ids the saving page minted', async () => {
+    const saved = firstSave();
+    const file = { ...saved, layerGroups: [{ id: 'g', name: 'Survey', memberIds: [saved.projectFrame!.layers.find((l) => l.sourceName === A.name)!.layerId] }] };
+    const p = new Page([B, A]);
+    await p.import(file);
+    expect(p.groups).toEqual([{ id: 'g', name: 'Survey', memberIds: [p.ids[1]] }]);
   });
 });

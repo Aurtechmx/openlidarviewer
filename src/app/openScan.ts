@@ -22,7 +22,7 @@ import { takeReloadBudget } from './fullFileActions';
 import { sourcePositions } from '../model/pointFrames';
 import { isSessionFile } from '../io/sessionFile';
 import { scanFactsFromStatic } from './sessionScanFacts';
-import { takePendingSessionRestore } from './pendingSessionRestore';
+import { heldSessionWork, takePendingSessionRestore } from './pendingSessionRestore';
 export { clearPendingSessionRestore, heldSessionWork } from './pendingSessionRestore';
 import { rememberCloudFile } from '../io/sourceFiles';
 import { detectCopc } from '../io/copc/copcDetect';
@@ -106,6 +106,11 @@ export interface OpenScanDeps {
   getViewer: () => Viewer;
   /** Route an `.olvsession` to the session loader (the shell's `importSession`). */
   importSession: (file: File, opts?: { reapply?: boolean }) => Promise<unknown>;
+  /**
+   * Restore session work an earlier import held for a scan that was not open,
+   * when it belongs to the layer with this viewer id (just opened).
+   */
+  restoreHeldWork?: (viewerId: string) => Promise<unknown>;
   /** True while a load is in flight — the one-load-at-a-time guard. */
   isLoading: () => boolean;
   /** Claim / release the load flag. Claimed synchronously; released in `finally`. */
@@ -804,6 +809,10 @@ export async function attachStaticCloud(
       deps.refreshAnnotationPanel();
     });
   }
+
+  // Work an earlier import held because its scan was not open is placed on
+  // this scan when it maps to it. A waiting session is applied whole instead.
+  if (!pendingSession && heldSessionWork()) void deps.restoreHeldWork?.(id);
 
   // The render-quality controls reflect the viewer's state — EDL defaults
   // depend on the GPU backend, known only once `viewer.ready` resolved.

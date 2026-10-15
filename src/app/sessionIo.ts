@@ -55,7 +55,7 @@ import {
   type StaticScanCloud,
 } from './sessionScanFacts';
 import { formatBytesIn } from '../io/formatByteSize';
-import { holdSessionWork, markPendingSessionRestore } from './pendingSessionRestore';
+import { heldSessionWork, holdSessionWork, markPendingSessionRestore } from './pendingSessionRestore';
 import type { ReplaceOutcome, ReplaceRequest } from './discardGuard';
 import type { StoredView } from './appContext';
 import type { Measurement } from '../render/measure/types';
@@ -214,6 +214,14 @@ function savesProjectFrame(
   return !!so && !!o && o.some((c, k) => c !== so[k]);
 }
 
+/** Every layer id held work names, as owner or pick layer. */
+function heldLayerIds(held: { measurements: readonly Measurement[]; annotations: readonly Annotation[] }): Set<string> {
+  const ids = new Set<string>();
+  for (const m of held.measurements) for (const id of [m.owner?.layerId, ...(m.pickLayers ?? [])]) if (id) ids.add(id);
+  for (const a of held.annotations) if (a.owner?.layerId) ids.add(a.owner.layerId);
+  return ids;
+}
+
 /** The file names of the scans held work waits for, as the file recorded them. */
 function unmatchedNames(
   held: { measurements: readonly Measurement[]; annotations: readonly Annotation[] },
@@ -222,11 +230,9 @@ function unmatchedNames(
   kind: PersistedLayerMatch['kind'],
 ): string[] {
   if (!frame || !mapping) return [];
-  const ids = new Set<string>();
-  for (const m of held.measurements) for (const id of [m.owner?.layerId, ...(m.pickLayers ?? [])]) if (id) ids.add(id);
-  for (const a of held.annotations) if (a.owner?.layerId) ids.add(a.owner.layerId);
+  const ids = heldLayerIds(held);
   const names = frame.layers
-    .filter((l) => ids.has(l.layerId) && [...mapping.byId].some(([saved, m]) => m.kind === kind && (saved === l.layerId || `${saved}~unmatched` === l.layerId)))
+    .filter((l) => l.sourceName !== '' && ids.has(l.layerId) && [...mapping.byId].some(([saved, m]) => m.kind === kind && (saved === l.layerId || `${saved}~unmatched` === l.layerId)))
     .map((l) => `“${l.sourceName}”`);
   return [...new Set(names)].sort((a, b) => a.localeCompare(b));
 }
@@ -576,27 +582,30 @@ export async function importSession(
     applied = true;
     // Work that names a scan not open here is kept, unplaced, with the frame
     // records it is read through, and written back by the next save. A file
-    // with no project frame has no records to keep it with, so its unmatched
-    // work is reported as not restored instead.
-    const heldCount = held.measurements.length + held.annotations.length;
+    // with no project frame is one frame at its origin, so its held work gets
+    // records at that origin. Work it marks as project-frame cannot be placed
+    // in any frame (the file does not say where that frame was) and is
+    // reported as not restored.
     const heldFrame = work.projectFrame;
     let frameless = 0;
-    if (heldCount > 0 && heldFrame) {
-      const named = new Set<string>();
-      for (const m of held.measurements) {
-        if (m.owner?.layerId) named.add(m.owner.layerId);
-        for (const id of m.pickLayers ?? []) named.add(id);
-      }
-      for (const a of held.annotations) if (a.owner?.layerId) named.add(a.owner.layerId);
+    let framelessHeld = 0;
+    if (!heldFrame) {
+      const placeable = <T extends { owner?: WorkOwnership }>(x: T): boolean => x.owner?.frame !== 'project';
+      const kept = { measurements: held.measurements.filter(placeable), annotations: held.annotations.filter(placeable) };
+      framelessHeld = kept.measurements.length + kept.annotations.length;
+      frameless = held.measurements.length + held.annotations.length - framelessHeld;
+      held = kept;
+    }
+    if (held.measurements.length + held.annotations.length > 0) {
+      const named = heldLayerIds(held);
       holdSessionWork({
         upAxis: session.upAxis,
-        projectOrigin: heldFrame.projectOrigin,
-        layers: heldFrame.layers.filter((l) => named.has(l.layerId)),
+        projectOrigin: heldFrame ? heldFrame.projectOrigin : [session.origin[0], session.origin[1], session.origin[2]],
+        layers: heldFrame ? heldFrame.layers.filter((l) => named.has(l.layerId)) : ownershipModule.framelessHeldRecords(work, named),
         measurements: held.measurements,
         annotations: held.annotations,
       });
     } else {
-      frameless = heldCount;
       holdSessionWork(null);
     }
     // With no scan open the work waits, in the session's own frame, for its
@@ -615,7 +624,8 @@ export async function importSession(
     deps.setInspectorViews(deps.bookmarks.names());
     // Groups are additive within v8: a file written before the field existed
     // carries none, and the panel is left exactly as the user arranged it.
-    if (session.layerGroups) deps.restoreLayerGroups(session.layerGroups);
+    // Members are read through the id mapping, so they name the open layers.
+    if (work.layerGroups) deps.restoreLayerGroups(work.layerGroups);
     // A view setting, additive within v8: absent leaves the plane as it is.
     if (session.referencePlane) deps.restoreReferencePlane?.(session.referencePlane);
     deps.refreshMeasurePanel();
@@ -644,7 +654,7 @@ export async function importSession(
     // an empty scene silently.
     const restored =
       geo.measurements.length + geo.annotations.length + geo.views.length;
-    const waitingFor = frameless > 0 ? [] : unmatchedNames(held, work.projectFrame, mapping, 'missing');
+    const waitingFor = unmatchedNames(held, work.projectFrame, mapping, 'missing');
     const wantFile = session.scanSummary?.fileName;
     // When the user reached here via "Apply anyway", record that the restore
     // proceeded on an unverified scan match rather than a confirmed one.
@@ -667,13 +677,18 @@ export async function importSession(
         ? ` ${frameless} item${frameless === 1 ? ' was' : 's were'} not restored: the session names several scans `
           + 'but records no project frame to tell them apart.'
         : '')
-      + (frameless === 0 && waiting > 0
+      + (framelessHeld > 0
+        ? ` ${framelessHeld} item${framelessHeld === 1 ? ' names' : 's name'} several scans and the session records no project frame `
+          + `to tell them apart, so ${framelessHeld === 1 ? 'it was' : 'they were'} not placed. Saving the session keeps `
+          + (framelessHeld === 1 ? 'it.' : 'them.')
+        : '')
+      + (heldFrame && waiting > 0
         ? ` ${waiting} item${waiting === 1 ? ' is' : 's are'} waiting for ${waiting === 1 ? 'its scan' : 'their scans'}`
           + (waitingFor.length > 0 ? ` (${waitingFor.join(', ')})` : '')
           + ': open it and import the session again. Saving the session keeps '
           + (waiting === 1 ? 'it.' : 'them.')
         : '')
-      + (frameless === 0 && ambiguous > 0
+      + (heldFrame && ambiguous > 0
         ? ` ${ambiguous} item${ambiguous === 1 ? ' names a scan' : 's name scans'} that more than one open scan matches, `
           + `so ${ambiguous === 1 ? 'it was' : 'they were'} not placed. Saving the session keeps `
           + (ambiguous === 1 ? 'it.' : 'them.')
@@ -719,4 +734,90 @@ export async function importSession(
     deps.setDropError(err instanceof Error ? err.message : 'Could not import the session');
   }
   return applied;
+}
+
+const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/**
+ * Restore held session work onto a scan opened after the import.
+ *
+ * `openedLayerId` is the stable id of the layer that has just opened. The held
+ * records are mapped onto the open layers under the import's own rule (exact
+ * fingerprint, file origin, axis and EPSG), and an item is restored only when
+ * every layer it names maps to an open layer and one of them is the opened
+ * one. Restored items are rebased and restated exactly as the import places
+ * them, and leave the held store; the rest stay held, to be written back by
+ * the next save. Returns how many items were restored.
+ */
+export async function restoreHeldSessionWork(deps: SessionIoDeps, openedLayerId: string | null): Promise<number> {
+  const held = heldSessionWork();
+  if (!held || !openedLayerId || !deps.liveLayers) return 0;
+  const [{ rebaseSessionGeometry }, own] = await Promise.all([deps.loadSession(), loadSessionOwnership(), deps.viewerReady]);
+  // Another import or a reset may have replaced the held work meanwhile.
+  if (heldSessionWork() !== held) return 0;
+  const live = deps.liveLayers();
+  if (!live.some((l) => l.layerId === openedLayerId)) return 0;
+  const frame = { projectOrigin: held.projectOrigin, layers: held.layers };
+  const mapping = own.mapSessionLayers(frame, live);
+  const target = held.layers.find((l) => {
+    const m = mapping.byId.get(l.layerId);
+    return m?.kind === 'resolved' && m.liveId === openedLayerId;
+  });
+  if (!target) return 0;
+  const viewer = deps.getViewer();
+  const liveIds = new Set(live.map((l) => l.layerId));
+  const session: InspectionSession = {
+    app: 'OpenLiDARViewer', kind: 'measurement-session', version: 8, upAxis: held.upAxis,
+    origin: [held.projectOrigin[0], held.projectOrigin[1], held.projectOrigin[2]], unitSystem: viewer.measure.unitSystem,
+    views: [], measurements: [...held.measurements], annotations: [...held.annotations], projectFrame: frame,
+  };
+  const work = own.remapSessionLayerIds(session, mapping, liveIds);
+  const unresolved = new Map<string, 'missing' | 'ambiguous'>();
+  for (const [savedId, m] of mapping.byId) {
+    if (m.kind !== 'resolved') unresolved.set(liveIds.has(savedId) ? `${savedId}~unmatched` : savedId, m.kind);
+  }
+  const part = own.partitionHeldWork(work, unresolved);
+  // Only work on the scan that has just opened, and never over an item already in the scene.
+  const takenIds = new Set([...viewer.measure.getMeasurements().map((m) => m.id), ...viewer.annotate.getAnnotations().map((a) => a.id)]);
+  const onOpened = (x: { id: string; owner?: WorkOwnership; pickLayers?: readonly string[] }): boolean =>
+    !takenIds.has(x.id) && (x.owner?.layerId === openedLayerId || (x.pickLayers ?? []).includes(openedLayerId));
+  const geo = rebaseSessionGeometry(
+    { ...work, measurements: part.measurements.filter(onOpened), annotations: part.annotations.filter(onOpened) },
+    deps.exportOrigin(),
+    { layerOrigin: deps.layerOrigin, projectOrigin: deps.projectOrigin?.() ?? null },
+  );
+  const unrebased = new Set(geo.unrebased);
+  const evidence = new Map(live.map((l) => [l.layerId, l]));
+  const exportOrigin = deps.exportOrigin();
+  const placed = own.normalizeRestoredOwners(
+    geo.measurements,
+    geo.annotations,
+    (id, owner) => (unrebased.has(id) ? 'source' : owner.frame === 'project' ? 'layer' : 'export'),
+    held.upAxis,
+    {
+      liveIds,
+      hasProjectFrame: savesProjectFrame(viewer.clouds().length, live, deps.layerOrigin),
+      layerOrigin: (id) => deps.layerOrigin?.(id) ?? null,
+      exportOrigin: [exportOrigin[0], exportOrigin[1], exportOrigin[2]],
+      sourceOrigin: (id) => evidence.get(id)?.sourceOrigin ?? null,
+    },
+  );
+  const restored = placed.measurements.length + placed.annotations.length;
+  if (restored === 0) return 0;
+  if (placed.measurements.length > 0) viewer.measure.loadMeasurements([...viewer.measure.getMeasurements(), ...placed.measurements]);
+  if (placed.annotations.length > 0) viewer.annotate.loadAnnotations([...viewer.annotate.getAnnotations(), ...placed.annotations]);
+  // The rest stay held exactly as they were, with the records they name.
+  const done = new Set([...placed.measurements.map((m) => m.id), ...placed.annotations.map((a) => a.id)]);
+  const rest = { measurements: held.measurements.filter((m) => !done.has(m.id)), annotations: held.annotations.filter((a) => !done.has(a.id)) };
+  const named = heldLayerIds(rest);
+  holdSessionWork({ ...held, layers: held.layers.filter((l) => named.has(l.layerId)), ...rest });
+  deps.refreshMeasurePanel();
+  deps.refreshAnnotationPanel();
+  const left = rest.measurements.length + rest.annotations.length;
+  deps.showToast(
+    `Restored ${plural(placed.measurements.length, 'measurement')} and ${plural(placed.annotations.length, 'annotation')} `
+      + `from the session onto “${target.sourceName || 'the opened scan'}”.`
+      + (left > 0 ? ` ${plural(left, 'item')} ${left === 1 ? 'is' : 'are'} still waiting for another scan.` : ''),
+  );
+  return restored;
 }

@@ -2015,6 +2015,17 @@ export class Inspector {
   }
 
 
+  /**
+   * The layer `to` was handed the identity of `from`, the same source reopened
+   * in its place: its row reports the kept stable id, and it takes `from`'s
+   * place in its group before `from` is closed.
+   */
+  handOverLayer(from: string, to: string, stableId: string | null): void {
+    const facts = this._layerFacts.get(to);
+    if (facts) facts.stableId = stableId;
+    this._groups?.handOverLayer(from, to);
+  }
+
   /** Remove a cloud's layer row. */
   removeCloud(id: string): void {
     this._layerRows.get(id)?.remove();

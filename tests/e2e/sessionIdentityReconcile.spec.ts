@@ -249,4 +249,32 @@ test.describe('session layer identity across a fresh page', () => {
     // Both reopened: both measurements are back, with their original readouts.
     await cycle(browser, info, [a, b], resaved, { count: 2, readouts: before });
   });
+  test('a scan opened after the import, in the same page, gets its held work back', async ({ browser }, info) => {
+    const f = await geomFixtures();
+    const a = { bytes: f.geomA, name: 'geom-a.las' };
+    const b = { bytes: f.geomB, name: 'geom-b.las' };
+    const page = await freshPage(browser, info);
+    await open(page, [a, b]);
+    await measure(page, [[4, 2, 1], [7, 6, 1]], 'geom-a.las');
+    await measure(page, [[101, 1, 0], [104, 5, 0]], 'geom-b.las');
+    const before = await readouts(page);
+    const saved = await save(page);
+    await page.context().close();
+
+    const later = await freshPage(browser, info);
+    await open(later, [b]);
+    await importSession(later, saved);
+    await expect.poll(() => toasts(later), { timeout: 60_000 }).toMatch(/1 item is waiting for its scan/);
+    await expect.poll(() => count(later), { timeout: 30_000 }).toBe(1);
+    // Opening A restores its measurement without a second import.
+    await dropBytes(later, a.bytes, a.name);
+    await expect(later.locator('.olv-layer')).toHaveCount(2, { timeout: 90_000 });
+    await expect.poll(() => toasts(later), { timeout: 60_000 }).toMatch(/Restored 1 measurement and 0 annotations from the session onto “geom-a\.las”\./);
+    await expect.poll(() => count(later), { timeout: 30_000 }).toBe(2);
+    expect([...await readouts(later)].sort()).toEqual([...before].sort());
+    const resaved = await save(later);
+    expect(worldPoints(resaved)).toEqual(worldPoints(saved));
+    expect(ownerNames(resaved)).toEqual(ownerNames(saved));
+    await later.context().close();
+  });
 });

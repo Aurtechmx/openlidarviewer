@@ -2416,7 +2416,7 @@ const exportPanel = new ExportPanel({
   // snapshot just to test it for null.
   isStreamingPending: () => viewer?.streamingCloud != null && viewer.exportFrontierPointTotal() === 0,
   getActiveClip: () => viewer.getClip(), getActiveClipOffset: () => (scans.activeId ? viewer.layerProjectOffset(scans.activeId) : null), getActiveScanId: () => scans.activeExportTargetId(),
-  ...exportLayerHooks({ scans: { get activeId() { return scans.activeId; }, setActive: activateLayer }, viewer: () => viewer, sourceFiles: sourceFileById, reduced: reducedById, reopen: handleFile, removeLayer: removeCloud, notify: showLassoToast, findingsRevision: (id) => exportPanel.findingsLedger()?.revisionFor(id) ?? 0, inCompare: (id) => inspector.compareDifference.involves(id), handOver: (from, to) => handOverLayerWork(runtime.layerIdentity, viewer, from, to) }),
+  ...exportLayerHooks({ scans: { get activeId() { return scans.activeId; }, setActive: activateLayer }, viewer: () => viewer, sourceFiles: sourceFileById, reduced: reducedById, reopen: handleFile, removeLayer: removeCloud, notify: showLassoToast, findingsRevision: (id) => exportPanel.findingsLedger()?.revisionFor(id) ?? 0, inCompare: (id) => inspector.compareDifference.involves(id), handOver: (from, to) => handOverLayerWork(runtime.layerIdentity, viewer, from, to, inspector) }),
   hasClassEdits: () => activeScanHasClassEdits(scans.activeId, viewer),
   // A streaming snapshot exports only resident points, so it is a reduced subset
   // until the whole cloud lands — flagged so the status reads "reduced view".
@@ -2829,7 +2829,7 @@ if (__OLV_TEST_SEAM__ && testApi) {
     getViewer: ensureViewer,
     getActiveScanId: () => scans.activeId,
     showReclassify: () => showReclassifyUi(),
-    refreshReclassify: () => reclassifyUi?.refresh(), activeGeo: () => ({ ...exportGeoContext(), epsg: crsService.context().epsg ?? null }),
+    refreshReclassify: () => reclassifyUi?.refresh(), activeGeo: () => ({ ...exportGeoContext(), epsg: crsService.context().epsg ?? null }), reloadLayer: (id, budget) => exportPanel.reloadLayer(id, budget),
   }));
 }
 
@@ -3534,7 +3534,7 @@ async function importSession(file: File, opts: { skipScanConfirm?: boolean; reap
 const openScanDeps: OpenScanDeps = {
   get viewerReady() { return ensureViewer(); },
   getViewer: () => viewer,
-  importSession,
+  importSession, restoreHeldWork: (v) => loadSessionIo().then((m) => m.restoreHeldSessionWork(sessionIoDeps, runtime.layerIdentity.stableIdFor(v))).catch(() => 0),
   isLoading: () => loading,
   setLoading: (v) => { loading = v; },
   showToast: showLassoToast,
