@@ -4977,14 +4977,12 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
 .olv-rail-tab {
   position: absolute; top: 50%; transform: translateY(-50%);
   /* Flush to the panel's edge (column: left 14px + its width), overlapping the
-     shared hairline by 1px so panel and handle read as one surface.
-     `--olv-ws-gutter` is the scrollbar gutter the scrolling body reserves,
-     measured at mount because CSS cannot ask for it. It is zero where
-     scrollbars overlay and nine where they are classic, and subtracting it is
-     what keeps the handle against the CARD rather than against the rail box:
-     without it Chrome shows a strip of scene between a panel and its own
-     collapse control, and a machine with overlay scrollbars shows none. */
-  left: calc(14px + var(--olv-rail-width) - 1px - var(--olv-ws-gutter, 0px));
+     shared hairline by 1px so panel and handle read as one surface. The task
+     card is the scrolling body itself (99y3-workspace-polish.css), so its
+     edge is the rail's edge whatever scrollbar gutter the body reserves: the
+     gutter sits inside the card, as the View rail's scrollbar does, and the
+     content inset absorbs it (`--olv-ws-gutter`). */
+  left: calc(14px + var(--olv-rail-width) - 1px);
   display: flex; align-items: center; justify-content: center;
   width: 22px; height: 64px; padding: 0;
   color: var(--text-dim);
@@ -5582,7 +5580,9 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
 .olv-ah-badge.is-blocked { background: var(--bad-bg, rgba(224, 64, 72, 0.18)); color: var(--bad, #f08a92); }
 .olv-ah-badge.is-present { background: var(--accent-soft); color: var(--text); }
 .olv-ah-row.is-child { margin-left: var(--space-xl); }
-.olv-at-link.is-primary { background: var(--accent-soft); border-color: var(--accent); }
+/* The page's next step: the View rail's notice recipe (`.olv-detail-notice`),
+   a soft accent fill under a firmer hairline, not a fully outlined bar. */
+.olv-at-link.is-primary { background: var(--accent-soft); border-color: var(--hairline-strong); }
 .olv-ah-badge.is-ready::before { content: '✓ '; }
 .olv-ah-badge.is-review::before { content: '⚠ '; }
 .olv-ah-badge.is-blocked::before { content: '✕ '; }
@@ -5624,7 +5624,6 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
 }
 .olv-at-reason { flex: 1 1 12rem; min-width: 0; }
 .olv-why { margin: var(--space-sm) 0; font-size: var(--text-xs); }
-.olv-why-summary { cursor: pointer; color: var(--text-dim); font-weight: 600; }
 .olv-why-reason { margin: var(--space-xs) 0 0; color: var(--text-dim); line-height: 1.4; }
 .olv-analyse-page .olv-analyse-panel,
 .olv-analyse-page .olv-object-panel,
@@ -6510,42 +6509,53 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
      row's hover title for anything that still clips. */
   width: 248px; box-sizing: border-box;
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 10px; padding: 12px;
+  border-radius: var(--radius-lg); padding: var(--space-xl);
 }
-.olv-cl-title { font-size: var(--text-sm); font-weight: 500; margin-bottom: 10px; }
+.olv-cl-title { font-size: var(--text-sm); font-weight: 500; margin-bottom: var(--space-lg); }
 
-/* Manual classification-edit panel — mounts directly beneath .olv-class-panel,
-   so it borrows the same 248px dock chrome to read as a first-class sibling.
-   Controls stack in full-width rows; the primary "Reclassify (lasso)" action is
-   full width so its label can never clip in the cramped left dock. */
+/* Manual classification editing. The editor mounts inside the Classes panel
+   (main.ts appends it to the legend), so it is a SECTION of that panel, not a
+   card inside it: a hairline and a section label, the same as the View rail's
+   "Color by" or "Quick appearance". Its buttons are the View rail's chips
+   (`.olv-chip`, set in reclassifyUi.ts); only layout lives here. */
 .olv-reclass-panel {
-  width: 248px; box-sizing: border-box; margin-top: var(--space-md);
-  background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 10px; padding: 12px;
-  display: flex; flex-direction: column; gap: var(--space-sm);
+  box-sizing: border-box;
+  margin-top: var(--space-2xl); padding-top: var(--space-md);
+  border-top: 0.5px solid var(--hairline);
+  display: flex; flex-direction: column; gap: var(--space-md);
 }
-.olv-reclass-head { font-size: var(--text-sm); font-weight: 500; margin-bottom: var(--space-2xs); }
+/* The section label: `.olv-section-label` metrics (40-inspector.css). */
+.olv-reclass-head {
+  font-size: var(--text-xs); color: var(--text-faint); font-weight: 600;
+  letter-spacing: 0.01em;
+}
+/* The target class: the View rail's field recipe (`.olv-elev-input`) at the
+   shared control height, so it lines up with the chips beside it. */
 .olv-reclass-select {
-  width: 100%; box-sizing: border-box; font: inherit; font-size: var(--text-sm);
-  color: var(--text); background: transparent; border: 0.5px solid var(--hairline);
-  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md); cursor: pointer;
+  width: 100%; box-sizing: border-box; min-height: var(--control-h);
+  font: inherit; font-size: var(--text-xs);
+  color: var(--text); background: var(--hover-wash); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: 0 var(--space-md); cursor: pointer;
 }
-.olv-reclass-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-color: var(--accent); }
+.olv-reclass-select:hover { border-color: var(--hairline-strong); }
+.olv-reclass-select:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); border-color: var(--accent); }
 /* The native <option> popup is drawn by the OS, not the panel: on Chrome for
    Windows it inherits the select's light `color` but paints over the system's
    white popup background, so the list reads white-on-white. Pin explicit,
    legible colours on the options themselves. */
 .olv-reclass-select option { color: #17181c; background: #ffffff; }
-.olv-reclass-go { width: 100%; text-align: center; }
-/* Auto-classify: the panel's emphasised action. Only layout lives here. The
-   accent emphasis is declared in the unified button block at the end of this
-   file, because the button also carries `.olv-bc-pill`, whose base rule sits
-   later in the source at the same specificity and would otherwise reset the
-   fill, border and colour back to the plain pill. */
+/* Auto-classify: the section's emphasised action. A chip in the accent
+   language of the View rail's selected chip, carried by weight as well as hue,
+   so the panel keeps one emphasised action without a second button shape. */
 .olv-reclass-auto {
-  width: 100%;
-  text-align: center;
-  margin-bottom: var(--space-sm);
+  color: var(--accent-text, var(--accent));
+  background: var(--accent-soft);
+  border-color: var(--ui-accent-a0p4);
+  font-weight: 600;
+}
+.olv-reclass-auto:not(:disabled):hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
 }
 /* In-flight derive: dim the button and spin a ring before the label. */
 .olv-reclass-auto-loading {
@@ -6572,19 +6582,22 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
 @media (prefers-reduced-motion: reduce) {
   .olv-reclass-auto-loading::before { animation: none; }
 }
-.olv-reclass-actions { display: flex; gap: var(--space-sm); }
-.olv-reclass-actions .olv-bc-pill { flex: 1; text-align: center; }
-/* Auto-classify and Clear classes share one row; the auto button drops its
-   own full-width + bottom gap there. */
-.olv-reclass-whole .olv-reclass-auto { width: auto; margin-bottom: 0; }
+/* Chip rows: the View rail's `.olv-chips` rhythm. Chips keep their natural
+   width and wrap; nothing stretches into a full-width bar. */
+.olv-reclass-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); }
+/* Zero specificity, so the 44 px large-touch floor still wins on touch. */
+:where(.olv-reclass-actions > .olv-chip) { min-height: var(--control-h); }
+/* Undo and Redo sit at the end of the lasso row as one compact pair. */
+.olv-reclass-history { display: inline-flex; gap: var(--space-xs); margin-left: auto; }
 /* Level-1 inline note (UX-D10): the cleared / derived working layer with its
    Undo and Restore links. */
 .olv-reclass-note {
-  font-size: var(--text-xs); line-height: 1.4; color: var(--text-dim);
-  background: var(--accent-soft); border: 0.5px solid var(--hairline);
-  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
+  font-size: var(--text-xs); line-height: 1.45; color: var(--text-dim);
+  background: var(--accent-soft); border-left: 2px solid var(--accent);
+  border-radius: 2px; padding: var(--space-sm) var(--space-md);
 }
-.olv-reclass-hint { font-size: var(--text-xs); line-height: 1.4; color: var(--text-faint); }
+/* The limits line reads as the View rail's chip note (`.olv-chips-note`). */
+.olv-reclass-hint { margin-top: calc(-1 * var(--space-xs)); font-size: var(--text-2xs); line-height: 1.4; color: var(--text-faint); }
 .olv-reclass-link {
   font: inherit; color: var(--accent); background: none; border: 0; padding: 0;
   cursor: pointer; text-decoration: underline;
@@ -6593,94 +6606,103 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
 .olv-reclass-link:focus-visible { outline: var(--focus-ring); outline-offset: 2px; }
 /* The "Filtered — showing N of M classes" banner — persistent while filtered. */
 .olv-cl-banner {
-  font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--accent);
+  font-size: var(--text-xs); line-height: 1.45; font-variant-numeric: tabular-nums;
+  color: var(--accent-text, var(--accent));
   background: var(--accent-soft);
-  border: 0.5px solid var(--hairline);
-  border-radius: var(--radius-sm);
+  border-left: 2px solid var(--accent);
+  border-radius: 2px;
   padding: var(--space-sm) var(--space-md);
   margin-bottom: var(--space-md);
 }
-/* The provenance caption — a quiet amber note for a figure whose basis a
-   reader would otherwise have to assume. One rule rather than one per panel:
-   a caption that looks the same everywhere is read the same everywhere, and
-   the profile workbench's ground-basis note means what this one means.
+/* The provenance caption: the one quiet note for a figure whose basis a
+   reader would otherwise have to assume (the display-sample disclosure, the
+   heuristic-classes stamp, the streaming basis). It wears the app's honesty
+   primitive, `.olv-caveat` (86-dataset-intel-analyse.css): a 2 px amber rule
+   and a faint tint, body text in --text-dim, so it reads exactly like the
+   View rail's "Display sample" note instead of a filled amber alert box. The
+   words carry the meaning; the rule only marks it as a limit.
    `.olv-workbench-basis` adds only its own spacing, in 74. */
 .olv-cl-derived,
 .olv-cl-samplenote,
 .olv-cl-streamnote,
 .olv-cl-unavailable,
 .olv-workbench-basis {
-  /* Same metrics as `.olv-cl-banner` above, on the token scale: the two sit
-     in one panel and read as one family, so a half-pixel apart in type size
-     is a difference the eye catches without being able to name. */
-  font-size: var(--text-xs); line-height: 1.35; color: var(--warn);
-  background: color-mix(in srgb, var(--warn) 12%, transparent);
-  border: 0.5px solid color-mix(in srgb, var(--warn) 35%, transparent);
-  border-radius: var(--radius-sm);
+  font-size: var(--text-xs); line-height: 1.45; color: var(--text-dim);
+  background: color-mix(in srgb, var(--warn) 9%, transparent);
+  border-left: 2px solid var(--warn);
+  border-radius: 2px;
   padding: var(--space-sm) var(--space-md);
   margin-bottom: var(--space-md);
+  overflow-wrap: anywhere;
 }
-.olv-cl-list { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+/* One class per row, the View rail's row rhythm: checkbox, swatch, name, a
+   right-aligned tabular count, then the Solo toggle. Rows sit on the shared
+   control height so the list reads as one even column. */
+.olv-cl-list { display: flex; flex-direction: column; gap: 0; min-width: 0; margin: 0 calc(-1 * var(--space-xs)); }
 .olv-cl-row {
-  display: flex; align-items: center; gap: 6px; min-width: 0;
-  transition: opacity 130ms ease;
+  display: flex; align-items: center; gap: var(--space-md); min-width: 0;
+  min-height: var(--control-h); padding: 0 var(--space-xs);
+  border-radius: var(--radius-sm);
+  transition: opacity var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard);
 }
+.olv-cl-row:hover { background: var(--hover-wash); }
 /* A hidden class reads dimmed so the legend always mirrors the canvas. */
 .olv-cl-row.is-hidden { opacity: 0.42; }
-.olv-cl-check { flex-shrink: 0; margin: 0; cursor: pointer; }
+.olv-cl-row.is-hidden:hover, .olv-cl-row.is-hidden:focus-within { opacity: 0.72; }
+.olv-cl-check { flex-shrink: 0; margin: 0; cursor: pointer; accent-color: var(--accent); }
 .olv-cl-swatch {
-  flex-shrink: 0; width: 11px; height: 11px;
-  border-radius: 3px; border: 0.5px solid rgba(255, 255, 255, 0.22);
+  flex-shrink: 0; width: 10px; height: 10px;
+  border-radius: 3px; box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.22);
 }
 .olv-cl-name {
-  flex: 1 1 auto; min-width: 0; font-size: var(--text-xs); color: var(--text);
+  flex: 1 1 auto; min-width: 0; font-size: var(--text-sm); color: var(--text);
   font-family: var(--font);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* Tabular figures so counts line up column-right as they refine while streaming. */
 .olv-cl-count {
-  flex-shrink: 0; font-size: var(--text-body); font-variant-numeric: tabular-nums;
+  flex-shrink: 0; font-size: var(--text-xs); font-variant-numeric: tabular-nums;
   color: var(--text-dim); text-align: right;
 }
+/* Solo: a compact icon toggle at the end of the row, quiet until the row is
+   hovered or the control is focused. The word stays in the DOM for the
+   accessible name and the title; the glyph carries it visually. */
 .olv-cl-solo {
-  flex-shrink: 0; font-size: var(--text-micro); color: var(--text-faint);
-  background: rgba(255, 255, 255, 0.04);
-  border: 0.5px solid var(--hairline);
-  border-radius: 5px; padding: 2px 5px;
-  transition: color 130ms ease, border-color 130ms ease;
+  flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0;
+  color: var(--text-faint); background: transparent;
+  border: 0.5px solid transparent; border-radius: var(--radius-sm);
+  cursor: pointer;
 }
-.olv-cl-solo:hover { color: var(--text); border-color: var(--accent); }
-.olv-cl-solo:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-color: var(--accent); }
-/* Solo as a glyph + label (isolate "stacked layers" mark before the word). */
-.olv-cl-solo-ico { display: inline-flex; align-items: center; gap: 4px; }
-.olv-cl-solo-ico svg { width: 12px; height: 12px; flex: none; display: block; }
+.olv-cl-row:hover .olv-cl-solo:not(:disabled) { border-color: var(--hairline); background: var(--hover-wash); }
+.olv-cl-solo:not(:disabled):hover { color: var(--accent-text, var(--accent)); border-color: var(--ui-accent-a0p4); background: var(--accent-soft); }
+.olv-cl-solo-ico svg { width: 14px; height: 14px; flex: none; display: block; }
+.olv-cl-solo-label {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
 .olv-cl-empty { font-size: var(--text-xs); color: var(--text-faint); }
+/* Under the list: Show all as a chip and the palette option on its own line,
+   on the same hairline-and-gap rhythm as the View rail's sections. */
 .olv-cl-footer {
-  display: flex; flex-wrap: wrap; gap: 6px;
-  /* Same separator rhythm the Analyse sections keep. */
-  margin-top: var(--space-md); padding-top: var(--space-sm);
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-md);
+  margin-top: var(--space-md); padding-top: var(--space-md);
   border-top: 0.5px solid var(--hairline);
 }
-/* Colourblind-safe palette toggle — drops to its own full-width line under the
- * Show-all button. A quiet checkbox row; the class swatches recolour live. */
+/* Colourblind-safe palette toggle — a quiet checkbox row; the class swatches recolour live. */
 .olv-cl-cvd {
   flex: 1 0 100%;
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; gap: var(--space-md);
+  min-height: 24px;
   font-size: var(--text-xs); color: var(--text-dim);
   cursor: pointer;
-  transition: color 130ms ease;
+  transition: color var(--dur-fast) var(--ease-standard);
 }
 .olv-cl-cvd:hover { color: var(--text); }
 .olv-cl-cvd-input { accent-color: var(--accent); margin: 0; cursor: pointer; }
-.olv-cl-showall {
-  flex: 1; font-size: var(--text-xs); color: var(--text-dim);
-  background: rgba(255, 255, 255, 0.04);
-  border: 0.5px solid var(--hairline);
-  border-radius: var(--radius-sm); padding: 6px;
-  transition: color 130ms ease, border-color 130ms ease;
-}
-.olv-cl-showall:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
-.olv-cl-showall:disabled { opacity: 0.4; cursor: default; }
+/* Show all is a `.olv-chip` (ClassLegendPanel.ts); its disabled state is the
+   shared one in 95-buttons.css. */
+.olv-cl-showall { min-height: var(--control-h); }
 
 .olv-cl-row-hint {
   margin: 0 0 var(--space-2xs);
@@ -8425,14 +8447,19 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 }
 .olv-analyse-run:hover { background: var(--accent-soft); }
 .olv-analyse-run:disabled { opacity: 0.6; cursor: default; }
-/* Once results exist the action becomes a quiet "Re-run" — visual weight
-   follows importance, so the data leads, not the button. */
+/* Once results exist the action becomes a quiet "Re-run": the View rail's
+   chip (`.olv-chip`) at its natural width, so the data leads, not a
+   full-width bar. */
 .olv-analyse-run.is-rerun {
-  color: var(--text-dim); background: rgba(255, 255, 255, 0.04);
+  width: auto;
+  padding: var(--space-xs) var(--space-md); border-radius: var(--radius-sm);
+  color: var(--text-dim); background: var(--hover-wash);
   border-color: var(--hairline); font-weight: 400;
 }
+/* Zero specificity, so the 44 px large-touch floor still wins on touch. */
+:where(.olv-analyse-run.is-rerun) { min-height: var(--control-h); }
 .olv-analyse-run.is-rerun:hover {
-  color: var(--text); border-color: var(--accent); background: rgba(255, 255, 255, 0.08);
+  color: var(--text); border-color: var(--hairline-strong); background: var(--hover-wash);
 }
 
 /* Analyse panel collapse — the only left panel collapsible on every
@@ -8662,15 +8689,21 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 /* ── Data Fitness scorecard — verdict-led panel (one verdict + traffic-light
    rows with friendly metaphor icons + shape-distinct tone glyphs). ─────────── */
 .olv-analyse-fitness { display: flex; flex-direction: column; gap: var(--space-xs); margin-bottom: var(--space-md); }
+/* The verdict sentence wears the honesty primitive (`.olv-caveat`): a 2 px
+   rule keyed to the state over a faint tint of the same hue, body text at
+   --text-sm. It leads the results by position and by being the only sentence
+   in --text, not by bold type or a heavier bar than every other note. */
 .olv-fit-verdict {
+  --fit-rule: var(--hairline-strong);
   display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-xs);
-  font-size: var(--text-sm); font-weight: 600; color: var(--text);
-  padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.03); border-left: 3px solid var(--hairline);
+  font-size: var(--text-sm); font-weight: 500; line-height: 1.45; color: var(--text);
+  padding: var(--space-sm) var(--space-md); border-radius: 2px;
+  background: color-mix(in srgb, var(--fit-rule) 9%, transparent);
+  border-left: 2px solid var(--fit-rule);
 }
-.olv-fit-verdict.is-ready { border-left-color: var(--rating-excellent); }
-.olv-fit-verdict.is-okay { border-left-color: var(--rating-good); }
-.olv-fit-verdict.is-review { border-left-color: var(--warn); }
+.olv-fit-verdict.is-ready { --fit-rule: var(--rating-excellent); }
+.olv-fit-verdict.is-okay { --fit-rule: var(--rating-good); }
+.olv-fit-verdict.is-review { --fit-rule: var(--warn); }
 .olv-fit-verdict-text { flex: 1 1 auto; min-width: 0; }
 .olv-fit-badge {
   flex: 0 0 auto; font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em;
@@ -8701,18 +8734,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 /* Caveats collapsed behind a "Notes" disclosure — they restate the checklist in
    longer form, so they stay one tap away instead of stacking under it. */
 .olv-fit-caveats { margin-top: var(--space-2xs); display: flex; flex-direction: column; gap: var(--space-2xs); }
-.olv-fit-caveats-summary {
-  cursor: pointer; list-style: none; user-select: none;
-  font-size: var(--text-2xs); font-weight: 500; color: var(--text-faint);
-  padding: var(--space-2xs) 0;
-}
-.olv-fit-caveats-summary::-webkit-details-marker { display: none; }
-.olv-fit-caveats-summary::before {
-  content: '▸'; display: inline-block; margin-right: var(--space-2xs);
-  font-size: 0.85em; transition: transform 120ms ease;
-}
-.olv-fit-caveats[open] > .olv-fit-caveats-summary::before,
-.olv-fit-checks[open] > .olv-fit-caveats-summary::before { transform: rotate(90deg); }
+/* The summary itself wears the shared disclosure row in 92-terrain-verdict.css. */
 
 /* Recommended grid / interval. */
 .olv-analyse-recommend-box { display: flex; flex-direction: column; gap: var(--space-2xs); margin: var(--space-sm) 0; }
@@ -9119,30 +9141,65 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-sign-key[hidden] { display: none; }
 .olv-sign-label:focus-visible, .olv-sign-key:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .olv-sign .olv-export-fullres-hint { overflow-wrap: anywhere; }
-/* Composite terrain quality score in the Analyse panel. */
-/* Terrain assessment — the single top-level verdict above all metrics. */
-/*
- * v0.4.6 verdict-as-hero (design audit 1.1 + 1.2). The assessment is
- * the single richest, most differentiated output of the engine, so it
- * reads as the one RAISED surface in the left stack: a lift shadow, a
- * firmer 4px left-accent rail, and a faint FULL-CARD tint keyed to the
- * rating (extended from the old blocked-only treatment to every
- * state). The verdict word jumps to --text-2xl and the surrounding
- * eyebrows drop to --text-faint so the verdict is the only loud thing
- * in the card — the eye's natural landing point.
- */
+/* ── Terrain page disclosures ──────────────────────────────────────────────
+   Every "▸ more" row on the Terrain page (Why?, Validation detail, Notes,
+   Workflow detail, the cause line, Surface model stats, All metrics, Derived
+   complexity, Evidence) is the View rail's disclosure row (`.olv-section-
+   summary`, 40-inspector.css): sentence-case label at --text-xs/600 in
+   --text-faint, a drawn caret that turns on open, a 24 px pointer target. One
+   rule, so the nine summaries cannot drift apart again in glyph, size or
+   weight. Colour exceptions follow it (the cause line keeps its caution hue). */
+:is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-workflow-details-summary,
+  .olv-analyse-why-summary, .olv-analyse-assess-metrics-summary,
+  .olv-analyse-derived-label, .olv-analyse-details-summary) {
+  display: flex; align-items: center; gap: var(--space-sm);
+  min-height: 24px; padding: 0;
+  cursor: pointer; list-style: none; user-select: none;
+  font-family: var(--font); font-size: var(--text-xs); font-weight: 600;
+  letter-spacing: 0.01em; text-transform: none; color: var(--text-faint);
+  transition: color var(--dur-fast) var(--ease-standard);
+}
+:is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-workflow-details-summary,
+  .olv-analyse-why-summary, .olv-analyse-assess-metrics-summary,
+  .olv-analyse-derived-label, .olv-analyse-details-summary)::-webkit-details-marker { display: none; }
+:is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-workflow-details-summary,
+  .olv-analyse-why-summary, .olv-analyse-assess-metrics-summary,
+  .olv-analyse-derived-label, .olv-analyse-details-summary)::before {
+  content: '';
+  flex-shrink: 0;
+  width: 0; height: 0;
+  border-left: 4px solid currentColor;
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  transition: transform var(--dur-fast) var(--ease-standard);
+}
+details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-workflow-details-summary,
+  .olv-analyse-why-summary, .olv-analyse-assess-metrics-summary,
+  .olv-analyse-derived-label, .olv-analyse-details-summary)::before { transform: rotate(90deg); }
+:is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-workflow-details-summary,
+  .olv-analyse-assess-metrics-summary, .olv-analyse-derived-label,
+  .olv-analyse-details-summary):hover { color: var(--text-dim); }
+:is(.olv-fit-caveats-summary, .olv-analyse-workflow-details-summary, .olv-analyse-why-summary,
+  .olv-analyse-assess-metrics-summary, .olv-analyse-derived-label,
+  .olv-analyse-details-summary):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+@media (prefers-reduced-motion: reduce) {
+  :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-workflow-details-summary,
+    .olv-analyse-why-summary, .olv-analyse-assess-metrics-summary,
+    .olv-analyse-derived-label, .olv-analyse-details-summary)::before { transition: none; }
+}
+
+/* Terrain assessment: export readiness and the products it grades. It is a
+   SECTION of the Terrain page, not a raised card inside the page card: a
+   hairline above it, no fill, no shadow, no left accent rail. The state is
+   carried where a reader looks for it, by the verdict word in its rating
+   colour (and the glyph and word beside each product), never by hue alone. */
 .olv-analyse-assessment {
-  margin-bottom: var(--space-lg); padding: var(--space-xl) var(--space-2xl); border-radius: var(--radius-md);
-  border: 0.5px solid var(--hairline-strong); border-left-width: 4px;
-  background: var(--panel-raised);
-  box-shadow: var(--shadow-raised);
-  /* Arrival motion (design audit 1.1 + 3.4): the verdict rises + fades in
-     a touch slower than the readiness cards so it resolves LAST and loudest,
-     the eye's natural landing point. Reuses the canonical olv-ready-in. */
+  margin-bottom: var(--space-lg);
+  padding-top: var(--space-md);
+  border-top: 0.5px solid var(--hairline);
+  /* Arrival motion: the verdict rises and fades in a touch after the
+     readiness rows, so it resolves last. Reuses the canonical olv-ready-in. */
   animation: olv-ready-in var(--dur-slow) 120ms ease both;
-  /* The rating tint is layered ON the raised fill via a low-alpha
-     gradient set per state below, so the card carries the verdict
-     colour as a coherent region, not just a stripe. */
 }
 @media (prefers-reduced-motion: reduce) {
   .olv-analyse-assessment { animation: none; }
@@ -9156,32 +9213,13 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-analyse-assess-reason { font-size: var(--text-xs); color: var(--text-dim); margin-top: var(--space-sm); overflow-wrap: anywhere; }
 .olv-analyse-assess-use { font-size: var(--text-xs); color: var(--text-faint); margin-top: 3px; }
 .olv-analyse-assess-caution { font-size: var(--text-xs); color: var(--text-faint); margin-top: var(--space-2xs); }
-/* Full-card rating tint — ALL states now (was blocked-only). Low-alpha
-   color-mix over the raised fill so the verdict colour subtly suffuses
-   the whole region. Colour is reinforcement; the WORD carries it. */
-.olv-analyse-assessment.is-good {
-  border-left-color: var(--rating-excellent);
-  background: linear-gradient(0deg, color-mix(in srgb, var(--rating-excellent) 6%, transparent), color-mix(in srgb, var(--rating-excellent) 6%, transparent)), var(--panel-raised);
-}
 .olv-analyse-assessment.is-good .olv-analyse-assess-verdict { color: var(--rating-excellent); }
-.olv-analyse-assessment.is-preview {
-  border-left-color: var(--rating-moderate);
-  background: linear-gradient(0deg, color-mix(in srgb, var(--rating-moderate) 6%, transparent), color-mix(in srgb, var(--rating-moderate) 6%, transparent)), var(--panel-raised);
-}
 .olv-analyse-assessment.is-preview .olv-analyse-assess-verdict { color: var(--rating-moderate); }
 .olv-analyse-assessment.is-preview .olv-analyse-assess-caution { color: var(--rating-moderate); }
-.olv-analyse-assessment.is-limited {
-  border-left-color: var(--rating-weak);
-  background: linear-gradient(0deg, color-mix(in srgb, var(--rating-weak) 6%, transparent), color-mix(in srgb, var(--rating-weak) 6%, transparent)), var(--panel-raised);
-}
 .olv-analyse-assessment.is-limited .olv-analyse-assess-verdict { color: var(--rating-weak); }
 .olv-analyse-assessment.is-limited .olv-analyse-assess-caution { color: var(--rating-weak); }
 /* Blocked — a distinct, accessible violet so it never reads as "just a worse
    Limited". The gate stopped this surface; the colour says so unambiguously. */
-.olv-analyse-assessment.is-blocked {
-  border-left-color: var(--rating-blocked);
-  background: linear-gradient(0deg, color-mix(in srgb, var(--rating-blocked) 8%, transparent), color-mix(in srgb, var(--rating-blocked) 8%, transparent)), var(--panel-raised);
-}
 .olv-analyse-assessment.is-blocked .olv-analyse-assess-verdict { color: var(--rating-blocked); }
 .olv-analyse-assessment.is-blocked .olv-analyse-assess-caution { color: var(--rating-blocked); }
 .olv-analyse-assess-not { font-size: var(--text-xs); color: var(--text-faint); margin-top: var(--space-2xs); }
@@ -9208,16 +9246,6 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-analyse-derived {
   margin-top: var(--space-lg);
 }
-.olv-analyse-derived-label {
-  cursor: pointer; list-style: none; user-select: none;
-  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em; color: var(--text-faint);
-}
-.olv-analyse-derived-label::-webkit-details-marker { display: none; }
-.olv-analyse-derived-label::before {
-  content: '▸'; display: inline-block; margin-right: var(--space-2xs);
-  font-size: 0.85em; transition: transform 120ms ease;
-}
-.olv-analyse-derived[open] > .olv-analyse-derived-label::before { transform: rotate(90deg); }
 .olv-analyse-derived-value {
   font-size: var(--text-body); color: var(--text-dim); overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums; margin-top: var(--space-xs);
@@ -9259,25 +9287,11 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-analyse-assess-metricwrap .olv-analyse-assess-metrics { margin-top: 0; }
 .olv-analyse-assess-metrics.is-primary { margin-bottom: var(--space-sm); }
 .olv-analyse-assess-metrics-all { margin-top: var(--space-2xs); }
-.olv-analyse-assess-metrics-summary {
-  cursor: pointer; list-style: none;
-  font-family: var(--font); font-size: var(--text-2xs); font-weight: 500;
-  color: var(--text-faint); letter-spacing: 0.02em;
-  padding: var(--space-2xs) 0; user-select: none;
-}
-.olv-analyse-assess-metrics-summary::-webkit-details-marker { display: none; }
-.olv-analyse-assess-metrics-summary::before {
-  content: '▸'; display: inline-block; margin-right: var(--space-2xs);
-  font-size: 0.85em; transition: transform 120ms ease;
-}
-.olv-analyse-assess-metrics-all[open] > .olv-analyse-assess-metrics-summary::before,
-.olv-analyse-assess-metricwrap[open] > .olv-analyse-assess-metrics-summary::before {
-  transform: rotate(90deg);
-}
 .olv-analyse-assess-metricgroup { margin-top: var(--space-xs); }
+/* Group names read as written, like every other sub-label on the page. */
 .olv-analyse-assess-metricgroup-name {
   font-family: var(--font); font-size: var(--text-2xs); font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint);
+  text-transform: none; letter-spacing: 0.01em; color: var(--text-faint);
   margin-bottom: var(--space-2xs);
 }
 /* A cluster whose chips are all "unknown" (e.g. Georef with no CRS/datum) is
@@ -9404,14 +9418,6 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 /* The original "Recommended workflow" checklist, kept available but collapsed
    beneath the products list (same expander vocabulary as .olv-analyse-why). */
 .olv-analyse-workflow-details { margin-top: var(--space-xs); }
-.olv-analyse-workflow-details-summary {
-  cursor: pointer; list-style: none; user-select: none;
-  font-size: var(--text-2xs); font-weight: 500;
-  letter-spacing: 0.04em; color: var(--text-faint);
-}
-.olv-analyse-workflow-details-summary::-webkit-details-marker { display: none; }
-.olv-analyse-workflow-details-summary::before { content: '▸ '; }
-.olv-analyse-workflow-details[open] .olv-analyse-workflow-details-summary::before { content: '▾ '; }
 /* Inside the expander the checklist doesn't need its own top rule — the
    summary line already separates it. */
 .olv-analyse-workflow-details .olv-analyse-workflow {
@@ -9421,14 +9427,8 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 /* "Why? — what's holding this back" — a collapsed honest cause/fix surface,
    shown only when the verdict is short of fully-good. */
 .olv-analyse-why { margin-top: var(--space-sm); }
-.olv-analyse-why-summary {
-  cursor: pointer; list-style: none; user-select: none;
-  font-size: var(--text-2xs); font-weight: 500;
-  letter-spacing: 0.04em; color: var(--rating-moderate);
-}
-.olv-analyse-why-summary::-webkit-details-marker { display: none; }
-.olv-analyse-why-summary::before { content: '▸ '; }
-.olv-analyse-why[open] .olv-analyse-why-summary::before { content: '▾ '; }
+/* The cause line keeps its caution hue: it names what holds the verdict back. */
+.olv-analyse-why-summary { color: var(--rating-moderate); }
 /* v0.4.6 (design audit 2.1): cause/fix sub-eyebrow → sentence-case sans. */
 .olv-analyse-why-subhead {
   font-family: var(--font); font-size: var(--text-2xs); font-weight: 600;
@@ -9444,19 +9444,6 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 
 /* Collapsible "Details" expander — holds the drill-down metrics under the hero. */
 .olv-analyse-details { margin-bottom: var(--space-lg); }
-.olv-analyse-details-summary {
-  cursor: pointer; list-style: none; user-select: none;
-  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em; color: var(--text-dim);
-  padding: var(--space-sm) 0; display: flex; align-items: center; gap: var(--space-sm);
-  border-bottom: 0.5px solid var(--hairline);
-}
-.olv-analyse-details-summary::-webkit-details-marker { display: none; }
-.olv-analyse-details-summary::before {
-  content: '▸'; font-size: var(--text-micro); color: var(--text-faint);
-  transition: transform var(--dur-fast) var(--ease-standard);
-}
-.olv-analyse-details[open] > .olv-analyse-details-summary::before { transform: rotate(90deg); }
-.olv-analyse-details-summary:hover { color: var(--text); }
 .olv-analyse-details[open] > .olv-analyse-details-summary { margin-bottom: var(--space-md); }
 
 .olv-analyse-score { margin-bottom: var(--space-xl); }
@@ -10082,36 +10069,6 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-bc-convert:not(:disabled):active,
 .olv-modal-cta:not(:disabled):active {
   transform: var(--btn-press);
-}
-
-/*
- * Auto-classify (Edit classes panel) emphasis.
- *
- * The button carries `.olv-bc-pill` for its shape, and that base rule sits
- * later in this file at the same specificity, so any emphasis declared next to
- * the panel is reset back to the plain transparent pill. Users read the result
- * as a low-emphasis control and miss the action. Declaring it here, in the
- * block that already wins on source order, is what makes it visible.
- *
- * It borrows the export CTA's accent language one step down: the same
- * `--accent` tokens, but an outline over a soft tint instead of the solid fill,
- * so the panel keeps a single loudest action. Emphasis is carried by border
- * weight and font weight as well as hue, and the label stays `--text` rather
- * than `--accent`, which keeps the text contrast well clear of AA in Blue,
- * Field and High contrast (all three define `--accent` and `--accent-soft`).
- */
-.olv-reclass-auto {
-  color: var(--text);
-  background: var(--accent-soft);
-  border: 1px solid var(--accent);
-  font-weight: 600;
-}
-/* Hover needs the extra `:not(.is-disabled)` to outrank the equally late
-   `.olv-bc-pill:hover:not(.is-disabled):not(.is-active)`. */
-.olv-reclass-auto:not(:disabled):not(.is-disabled):hover {
-  color: var(--text);
-  background: color-mix(in srgb, var(--accent) 26%, transparent);
-  border-color: var(--accent);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -12501,13 +12458,29 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
     padding: 0 var(--space-2xs) var(--space-2xs);
   }
 
-  /* The task surface: the visible mode host. */
-  .olv-left-panels .olv-ws-mode.is-active {
-    gap: 0;
-    padding: var(--space-lg) var(--space-xl);
+  /* The task surface. Its card edge belongs to the scroller (.olv-ws-body),
+     not to the mode host inside it: with the edge on the host, a long page
+     ran past the scroller's bottom with no edge of its own, so its last line
+     read as sliding under the Results shelf, and its top edge scrolled away
+     above the sticky title. On the scroller, the rounded edge is exactly
+     where content is clipped, top and bottom. */
+  .olv-left-panels.olv-ws-ready .olv-ws-body {
     background: var(--panel);
     border: 0.5px solid var(--hairline);
     border-radius: var(--radius-md);
+  }
+  /* The scrollbar gutter the body reserves (`--olv-ws-gutter`, measured by
+     scrollbarGutter.ts) is inside the card, so the right inset gives that
+     much back: content sits the same distance from both card edges. */
+  .olv-left-panels .olv-ws-mode.is-active {
+    --ws-inset-end: max(0px, calc(var(--space-xl) - var(--olv-ws-gutter, 0px)));
+    gap: 0;
+    padding: var(--space-lg) var(--ws-inset-end) var(--space-lg) var(--space-xl);
+  }
+  /* A page leads with its sticky task header, which carries the top inset
+     itself, so the title keeps its breathing room once the page scrolls. */
+  .olv-left-panels .olv-ws-mode.is-active.has-page {
+    padding-top: 0;
   }
 
   /* Everything the host holds drops its own card chrome and inset; the host
@@ -12530,12 +12503,17 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
     padding-top: 0;
   }
 
-  /* Task header: Back, then the page title as the heading of the surface. */
+  /* Task header: Back, then the page title as the heading of the surface.
+     It spans the full card width and closes with a hairline, so content that
+     scrolls up passes under a visible edge instead of being cut mid-line. */
   .olv-left-panels .olv-ws-task {
-    padding: 0 0 var(--space-md);
+    width: auto;
+    margin: 0 calc(-1 * var(--ws-inset-end, var(--space-xl))) var(--space-md) calc(-1 * var(--space-xl));
+    padding: var(--space-lg) var(--ws-inset-end, var(--space-xl)) var(--space-md) var(--space-xl);
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-2xs);
+    border-bottom: 0.5px solid var(--hairline);
   }
   .olv-left-panels .olv-ws-back {
     min-height: 44px;
