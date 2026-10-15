@@ -259,6 +259,9 @@
   }
   .olv-colorbar-close { display: inline-flex; align-items: center; justify-content: center; }
   .olv-lasso-toast-action, .olv-toast-cancel { min-height: 44px; min-width: 44px; }
+  /* The recommended-view chip that follows the Project card. */
+  .olv-rvc-apply, .olv-rvc-dismiss { min-height: 44px; min-width: 44px; }
+  .olv-rvc-dismiss { display: inline-flex; align-items: center; justify-content: center; }
 }
 
 /* Phone: the colour legend starts as its one-line head (ColorbarOverlay.ts);
