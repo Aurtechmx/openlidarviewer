@@ -123,15 +123,22 @@ describe('publishing it', () => {
 });
 
 describe('the stylesheet consumes it', () => {
-  it('subtracts the gutter from the handle offset, with a zero fallback', async () => {
-    const css = await import('node:fs').then((fs) =>
-      fs.readFileSync(new URL('../src/styles/72-panel-rails.css', import.meta.url), 'utf8'));
+  const read = async (rel: string): Promise<string> =>
+    import('node:fs').then((fs) => fs.readFileSync(new URL(rel, import.meta.url), 'utf8'));
+
+  it('gives the gutter back from the task card\'s right inset, with a zero fallback', async () => {
+    const css = await read('../src/styles/99y3-workspace-polish.css');
+    // The task card is the scrolling body, so the gutter sits inside the card;
+    // the content inset absorbs it so content is equidistant from both edges.
     // The fallback matters: a build where nothing published the property must
-    // land on the geometry the rule had before this existed.
-    // The property the module writes and the one the rule reads are the same
-    // string, which nothing else checks and a rename would quietly break.
+    // land on the plain inset. The property the module writes and the one the
+    // rule reads are the same string, which a rename would quietly break.
     expect(GUTTER_PROPERTY).toBe('--olv-ws-gutter');
-    expect(css).toContain(`var(${GUTTER_PROPERTY}, 0px)`);
-    expect(css).toMatch(/left:\s*calc\(14px \+ var\(--olv-rail-width\) - 1px - var\(--olv-ws-gutter, 0px\)\)/);
+    expect(css).toContain(`calc(var(--space-xl) - var(${GUTTER_PROPERTY}, 0px))`);
+  });
+
+  it('keeps the handle on the card edge, which is the rail edge', async () => {
+    const css = await read('../src/styles/72-panel-rails.css');
+    expect(css).toMatch(/left:\s*calc\(14px \+ var\(--olv-rail-width\) - 1px\);/);
   });
 });
