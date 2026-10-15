@@ -103,7 +103,7 @@ describe('project-frame snapping across layers', () => {
     layers.length = 0;
     s.invalidate();
     expect(s.available).toBe(false);
-    expect(s.support(at([0, 0, 0]))).toEqual({ snappedToPoint: false, pointsWithinRadius: 0 });
+    expect(s.support(at([0, 0, 0]))).toEqual({ snappedToPoint: false, pointsWithinRadius: 0, onReducedSample: false });
   });
 
   it('a single unplaced scan matches the plain index', () => {
