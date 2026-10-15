@@ -241,6 +241,17 @@ function checkDuplicatePoints(cloud: PointCloud): AnalysisRow {
   if (n === 0) {
     return { label: 'Duplicate Points', value: 'N/A (empty cloud)', status: 'info' };
   }
+  // One averaged centroid per occupied voxel cannot collide with another, so
+  // scanning a voxel-reduced sample can only ever find "None" — a vacuous
+  // result that would read as a finding about the file. Say it was not checked.
+  const basis = sampleBasis(cloud);
+  if (basis.kind === 'voxel') {
+    return {
+      label: 'Duplicate Points',
+      value: 'Not checked — the display sample is voxel-reduced, so duplicates cannot be detected; run on a full-resolution load',
+      status: 'info',
+    };
+  }
 
   // An open-addressed index table, NOT a `Set` of `"x,y,z"` strings.
   //
@@ -293,18 +304,10 @@ function checkDuplicatePoints(cloud: PointCloud): AnalysisRow {
       status: 'warn',
     };
   }
-  // A clean scan of voxel centroids is a property of the sampler, not of the
-  // file (one averaged point per voxel cannot collide), so it is reported as
-  // a neutral fact with its basis rather than a pass.
-  const basis = sampleBasis(cloud);
   if (basis.kind === 'full') {
     return { label: 'Duplicate Points', value: 'None', status: 'pass' };
   }
-  return {
-    label: 'Duplicate Points',
-    value: `None — ${basis.note}`,
-    status: basis.kind === 'voxel' ? 'info' : 'pass',
-  };
+  return { label: 'Duplicate Points', value: `None — ${basis.note}`, status: 'pass' };
 }
 
 function checkStrayOutliers(cloud: PointCloud): AnalysisRow {

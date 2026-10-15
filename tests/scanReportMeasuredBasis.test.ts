@@ -38,13 +38,15 @@ function fullCloud(): PointCloud {
 }
 
 describe('Health Check — duplicate / outlier rows name their sample', () => {
-  test('(1) voxel centroids: Duplicate Points is info with the basis, not a pass on the file', () => {
+  test('(1) voxel centroids: Duplicate Points is "Not checked", never "None"', () => {
+    // One averaged centroid per voxel cannot collide, so a scan of them is
+    // vacuous: "None" would read as a finding about the file.
     const row = rowByLabel(healthCheck.run(voxelCloud()).rows, 'Duplicate Points');
     expect(row.status).toBe('info');
-    expect(row.value).toContain('None');
-    expect(row.value).toContain('4-point display sample');
-    expect(row.value).toContain('voxel centroids');
-    expect(row.value).toContain('not run on the full cloud');
+    expect(row.value).not.toContain('None');
+    expect(row.value).toBe(
+      'Not checked — the display sample is voxel-reduced, so duplicates cannot be detected; run on a full-resolution load',
+    );
   });
   test('(1) stride-only sample keeps pass but names the sample', () => {
     const row = rowByLabel(healthCheck.run(stridedCloud()).rows, 'Duplicate Points');
