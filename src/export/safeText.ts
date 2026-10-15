@@ -49,6 +49,30 @@ export function singleLine(text: string): string {
   return text.replace(CONTROL, ' ').replace(INVISIBLE, '');
 }
 
+/**
+ * Fold text to 7-bit ASCII, for a LAS VLR text field or an ASCII PLY/OBJ/XYZ
+ * comment. The typographic glyphs the app's own notes use (em/en dash, approx,
+ * arrow, middle dot, times) map to their ASCII sense; accented letters lose
+ * their accent; anything else non-ASCII becomes `?`, so a stray glyph never
+ * silently drops a word.
+ */
+export function asciiFold(s: string): string {
+  return s
+    .replace(/[\u2010-\u2015\u2212]/g, '-')
+    .replace(/\u2248/g, '~=')
+    .replace(/\u2192/g, '->')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/\u2026/g, '...')
+    .replace(/\u00b7/g, '-')
+    .replace(/\u00d7/g, 'x')
+    .replace(/\u00a9/g, '(c)')
+    .replace(/\u00a0/g, ' ')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x00-\x7f]/g, '?');
+}
+
 /** Cut `name` to `MAX_ENTRY_NAME_BYTES`, keeping a short extension and whole code points. */
 function capBytes(name: string): string {
   if (utf8Length(name) <= MAX_ENTRY_NAME_BYTES) return name;
