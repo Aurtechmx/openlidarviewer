@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildMeasurementRows } from '../src/report/ReportMeasurementSection';
-import { volumeCaveatClauses, volumeWithheldClause } from '../src/render/measure/volumeCaveats';
+import { volumeCaveatClauses, volumeWithheldClause } from '../src/render/measure/format';
 import type { Measurement, VolumeRecord } from '../src/render/measure/types';
 
 const square: [number, number, number][] = [[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0]];

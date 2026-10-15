@@ -34,7 +34,7 @@ import {
 // polygon reads the same units in the PDF report as on the overlay — the same
 // surface that produced it. Length and volume keep this module's own
 // cm/ha-free report conventions; only area was drifting (acre vs sq ft).
-import { formatArea, displayDecimals } from '../render/measure/format';
+import { formatArea, displayDecimals, volumeCaveatClauses, volumeFiguresWithheld, volumeWithheldClause } from '../render/measure/format';
 // The headline VALUES come from the one shared metrics function every other
 // surface (live panel, CSV, GeoJSON, KML, integrity) uses, so the PDF can never
 // diverge again — it was its own second engine that assumed X/Y horizontal +
@@ -47,7 +47,6 @@ import {
   reducedSampleCaveat,
   refusalNote,
 } from '../export/measurementExport';
-import { volumeCaveatClauses, volumeFiguresWithheld, volumeWithheldClause } from '../render/measure/volumeCaveats';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Inline math

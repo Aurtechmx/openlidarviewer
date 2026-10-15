@@ -12,7 +12,8 @@
  * surfaces. The imperial branch and the angle / grade formatters live here too.
  */
 
-import type { UnitSystem } from './types';
+import { reducedSampleClause, type UnitSystem, type VolumeRecord } from './types';
+import { noiseExcludedClause } from '../../terrain/ground/classificationFilter';
 // Metres → feet, single-sourced: this module used to keep its own copy.
 import { FT_PER_M as FEET_PER_METRE } from '../../units/units';
 
@@ -459,4 +460,56 @@ export function formatRise(metres: number, feetPerMetre: number, unit: string): 
 export function shownSpan(low: number, high: number, scale: number): string {
   const r = (x: number) => Math.round(x * scale * 100);
   return ((r(high) - r(low)) / 100).toFixed(2);
+}
+
+// ── Volume caveats ──────────────────────────────────────────────────────────
+// The clauses a volume figure must carry wherever it is printed (the live
+// headline and the PDF report row), so every surface reads the same caveats.
+
+/** Interpolated share above which a volume figure is low confidence. */
+export const LOW_CONFIDENCE_INTERPOLATED_FRACTION = 0.25;
+/** Left-out share below which the "outside scan" clause is not shown. */
+const EXCLUDED_FRACTION_SHOWN = 0.005;
+
+/**
+ * The caveat clauses that follow a volume's fill / cut / net figures, in the
+ * headline's order: interpolated share (and low confidence), the share left
+ * out as outside the scan, PREVIEW (with its reason when one is stated),
+ * noise points excluded, and the reduced-sample notice. Empty clauses are
+ * dropped; join with " · ".
+ */
+export function volumeCaveatClauses(v: VolumeRecord): string[] {
+  const out: string[] = [];
+  if (v.interpolatedFraction !== undefined) {
+    out.push(`${(v.interpolatedFraction * 100).toFixed(0)}% interpolated` +
+      (v.interpolatedFraction > LOW_CONFIDENCE_INTERPOLATED_FRACTION ? ' (low confidence)' : ''));
+    if (v.excludedFraction !== undefined && v.excludedFraction > EXCLUDED_FRACTION_SHOWN) {
+      out.push(`${(v.excludedFraction * 100).toFixed(0)}% outside scan, left out`);
+    }
+  }
+  if (v.gridAuthority === 'preview') {
+    out.push(v.gridAuthorityReason ? `PREVIEW (${v.gridAuthorityReason})` : 'PREVIEW');
+  }
+  const noise = noiseExcludedClause(v.withheld?.noiseExcluded);
+  if (noise) out.push(noise);
+  const reduced = reducedSampleClause(v.withheld);
+  if (reduced) out.push(reduced);
+  return out;
+}
+
+/** True when the record carries no fill / cut / net (a withheld grid figure). */
+export function volumeFiguresWithheld(v: VolumeRecord): boolean {
+  return v.fill === undefined || v.cut === undefined || v.net === undefined;
+}
+
+/**
+ * The text that stands in for fill / cut / net when they are withheld: the
+ * reason, and the point-sample cross-check when the record kept one.
+ * `fmtVolume` formats a native-unit volume (render units³) for display.
+ */
+export function volumeWithheldClause(v: VolumeRecord, fmtVolume: (renderUnitsCubed: number) => string): string {
+  const cc = v.crossCheck;
+  const reason = v.gridAuthorityReason ? ` (${v.gridAuthorityReason})` : '';
+  return `${cc ? 'grid ' : ''}volume withheld${reason}` +
+    (cc ? ` · cut-fill cross-check net ${fmtVolume(Math.abs(cc.net))} ${cc.net < 0 ? 'cut' : 'fill'}` : '');
 }
