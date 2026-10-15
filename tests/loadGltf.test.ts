@@ -268,3 +268,51 @@ describe('loadGltf — cyclic node graph', () => {
     expect(pc.positions[0]).toBeCloseTo(7, 4);
   });
 });
+
+/**
+ * glTF requires the node hierarchy to be a set of disjoint trees: no node is
+ * the child of more than one parent. A graph that reuses a child at every
+ * level doubles the walk per level, so 40 levels would mean 2^40 visits.
+ */
+describe('loadGltf — node graph that is not a tree', () => {
+  test('a node reached twice is refused instead of walked again', async () => {
+    const levels = 40;
+    const nodes: Array<Record<string, unknown>> = [];
+    for (let i = 0; i < levels; i++) nodes.push({ children: [i + 1, i + 1] });
+    nodes.push({ mesh: 0 });
+    const started = Date.now();
+    await expect(loadGltf(gltfWithNodeGraph(nodes), 'gltf')).rejects.toThrow(/not a tree/i);
+    expect(Date.now() - started).toBeLessThan(5000);
+  });
+
+  test('a scene listing the same root twice is refused', async () => {
+    const buf = gltfWithNodeGraph([{ mesh: 0 }]);
+    const doc = JSON.parse(new TextDecoder().decode(buf));
+    doc.scenes = [{ nodes: [0, 0] }];
+    await expect(
+      loadGltf(new TextEncoder().encode(JSON.stringify(doc)).buffer as ArrayBuffer, 'gltf'),
+    ).rejects.toThrow(/not a tree/i);
+  });
+
+  test('sibling nodes sharing one mesh still load (mesh reuse is legal)', async () => {
+    const pc = await loadGltf(
+      gltfWithNodeGraph([
+        { children: [1, 2] },
+        { mesh: 0, translation: [1, 0, 0] },
+        { mesh: 0, translation: [2, 0, 0] },
+      ]),
+      'gltf',
+    );
+    expect(pc.pointCount).toBe(2);
+  });
+
+  test('the total emitted vertex count is capped', async () => {
+    const nodes: Array<Record<string, unknown>> = [{ children: [1, 2, 3, 4] }];
+    for (let i = 0; i < 4; i++) nodes.push({ mesh: 0, translation: [i, 0, 0] });
+    await expect(
+      loadGltf(gltfWithNodeGraph(nodes), 'gltf', 'cap.gltf', { maxVertices: 3 }),
+    ).rejects.toThrow(/more than 3 vertices/);
+    const pc = await loadGltf(gltfWithNodeGraph(nodes), 'gltf', 'cap.gltf', { maxVertices: 4 });
+    expect(pc.pointCount).toBe(4);
+  });
+});

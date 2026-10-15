@@ -15,6 +15,7 @@ import { PointCloud } from '../model/PointCloud';
 import { sanitizeLocalCloud, withLoadWarning } from './sanitizeCloud';
 import { authoredNormals } from './authoredNormals';
 import type { SourceFormat } from './sniffFormat';
+import { LoadError } from './loadErrors';
 
 /** A postprocessed glTF node — only the fields this loader touches. */
 interface GltfNode {
@@ -85,6 +86,30 @@ function localMatrix(node: GltfNode): Matrix4 {
 const MAX_NODE_DEPTH = 256;
 
 /**
+ * Most vertices one glTF open emits. Mesh reuse is legal, so a small file can
+ * place one mesh under many nodes; the total is bounded here rather than by
+ * the file size. 25 million is six times the display point budget and about
+ * 300 MB as float32 positions, well past any capture this loader opens, while
+ * keeping the staging arrays (positions, colours, normals) inside a tab.
+ */
+export const MAX_GLTF_VERTICES = 25_000_000;
+
+/** State shared across one scene walk. */
+interface NodeWalk {
+  /** Nodes already walked; glTF forbids a node having two parents. */
+  visited: Set<GltfNode>;
+  maxVertices: number;
+}
+
+/** Refuse a node reached a second time in one walk. */
+function notATree(): Error {
+  return new Error(
+    'glTF node hierarchy is not a tree: a node is reached more than once, so the ' +
+      "asset's node graph is cyclic or malformed (the glTF spec requires each node to have at most one parent).",
+  );
+}
+
+/**
  * Recursively collect transformed vertex positions and (optional) colours from
  * a node and its descendants.
  */
@@ -96,8 +121,11 @@ function collectNode(
   colorSeen: { any: boolean },
   normals: number[],
   normalSeen: { missing: boolean },
+  walk: NodeWalk,
   depth = 0,
 ): void {
+  if (walk.visited.has(node)) throw notATree();
+  walk.visited.add(node);
   if (depth > MAX_NODE_DEPTH) {
     throw new Error(
       `glTF node hierarchy is deeper than ${MAX_NODE_DEPTH} levels — the asset's ` +
@@ -112,6 +140,12 @@ function collectNode(
       if (!posAttr) continue;
       const src = posAttr.value;
       const vertexCount = Math.floor(src.length / 3);
+      if (positions.length / 3 + vertexCount > walk.maxVertices) {
+        throw new LoadError(
+          'memory-constraint',
+          `glTF asset emits more than ${walk.maxVertices} vertices across its nodes; it is too large to open.`,
+        );
+      }
 
       const colAttr = primitive.attributes.COLOR_0;
       // postProcessGLTF reports the per-element width as `components`
@@ -201,7 +235,7 @@ function collectNode(
 
   if (node.children) {
     for (const child of node.children) {
-      collectNode(child, world, positions, colors, colorSeen, normals, normalSeen, depth + 1);
+      collectNode(child, world, positions, colors, colorSeen, normals, normalSeen, walk, depth + 1);
     }
   }
 }
@@ -264,6 +298,7 @@ export async function loadGltf(
   buffer: ArrayBuffer,
   sourceFormat: 'glb' | 'gltf',
   name = `cloud.${sourceFormat}`,
+  options: { maxVertices?: number } = {},
 ): Promise<PointCloud> {
   // Nothing here touches images: the loader keeps vertex geometry only, and
   // the image paths need the DOM `Image` constructor, which the parse worker
@@ -337,6 +372,7 @@ export async function loadGltf(
   const normals: number[] = [];
   const normalSeen = { missing: false };
   const identity = new Matrix4();
+  const walk: NodeWalk = { visited: new Set(), maxVertices: options.maxVertices ?? MAX_GLTF_VERTICES };
 
   // Walk ONE scene — the default one.
   //
@@ -356,11 +392,14 @@ export async function loadGltf(
   const roots = defaultScene ? (defaultScene.nodes ?? []) : [];
   if (roots.length > 0) {
     for (const root of roots) {
-      collectNode(root, identity, positions, colors, colorSeen, normals, normalSeen);
+      collectNode(root, identity, positions, colors, colorSeen, normals, normalSeen, walk);
     }
   } else if (gltf.nodes) {
+    // No scene: every node is walked as a root unless an earlier walk
+    // already reached it as a descendant.
     for (const node of gltf.nodes) {
-      collectNode(node, identity, positions, colors, colorSeen, normals, normalSeen);
+      if (walk.visited.has(node)) continue;
+      collectNode(node, identity, positions, colors, colorSeen, normals, normalSeen, walk);
     }
   }
 
