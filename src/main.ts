@@ -2319,7 +2319,7 @@ const kmlDeps: KmlActionDeps = {
   crsCurrent: () => crsService.current(),
   upAxis: () => crsService.context().upAxis, isGeographic: () => crsService.context().horizontalMetricRefused, verticalRefused: () => crsService.context().verticalMetricRefused, // RESOLVED axis and frame permissions
   annotations: () => viewer?.annotate.getAnnotations() ?? [],
-  measurements: () => viewer?.measure.getMeasurements() ?? [], layerCount: () => viewer?.clouds().length ?? 0, measurementOwnership: () => (viewer ? ownershipViewOf(viewer, runtime.layerIdentity.stableIdFor, scans.activeId) : { layers: [], activeViewerId: null }),
+  measurements: () => viewer?.measure.getMeasurements() ?? [], layerCount: () => viewer?.clouds().length ?? 0, sceneOffset: () => (scans.activeId ? viewer?.layerProjectOffset(scans.activeId) ?? null : null), measurementOwnership: () => (viewer ? ownershipViewOf(viewer, runtime.layerIdentity.stableIdFor, scans.activeId) : { layers: [], activeViewerId: null }),
   viewpoints: () => viewBookmarks.savedViews.map(
     (v) => ({ name: v.name, position: v.pose.position, target: v.pose.target }),
   ),

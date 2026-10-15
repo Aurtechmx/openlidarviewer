@@ -37,10 +37,10 @@ export interface SessionSnapshotDeps {
   /** The reference plane's settings, or undefined when it was never used. */
   referencePlane?(): WorkplaneSettings | undefined;
   /**
-   * The live project frame when two or more static layers share one: its
-   * origin and every layer's record input. Null for a single scan, a streaming
-   * scene, or a layer with no proven identity, where the single-origin reading
-   * applies exactly as before.
+   * The live project frame when two or more static layers share one, or the
+   * one open layer is still placed in it: its origin and every layer's record
+   * input. Null for a single unplaced scan, a streaming scene, or a layer with
+   * no proven identity, where the single-origin reading applies exactly as before.
    */
   projectFrame?(): SessionFrameInput | null;
   /** SHA-256 of the active scan's source bytes, when already computed. */
@@ -59,10 +59,12 @@ export interface SessionSnapshotDeps {
  * The frame block to write, or undefined when there is none or it cannot be
  * built consistently. A frame that will not build is left out rather than
  * written wrong; the origin it would have named is still what `origin()` returns.
+ * One layer writes a frame only while it is placed in it: an unplaced lone
+ * scan keeps the single-origin byte shape.
  */
 function liveProjectFrame(deps: SessionSnapshotDeps): SessionProjectFrame | undefined {
   const input = deps.projectFrame?.() ?? null;
-  if (!input || input.layers.length < 2) return undefined;
+  if (!input || input.layers.length === 0 || (input.layers.length === 1 && !input.layers[0]!.placed)) return undefined;
   try {
     return buildSessionProjectFrame(input);
   } catch {
@@ -154,11 +156,11 @@ export function serializeActiveSession(
   const projectFrame = liveProjectFrame(deps);
   return serializeSession({
     upAxis,
-    // The frame every saved coordinate is local to. With two or more scans
-    // that is the project frame, wherever it is anchored, and the origin comes
-    // from the frame block itself so the two can never disagree. Otherwise it
-    // is the scene's single frame: the static cloud's origin, else the
-    // streaming renderOrigin, else zero.
+    // The frame every saved coordinate is local to. With two or more scans, or
+    // one still placed in the project frame, that is the project frame, and
+    // the origin comes from the frame block itself so the two can never
+    // disagree. Otherwise it is the scene's single frame: the static cloud's
+    // origin, else the streaming renderOrigin, else zero.
     origin: projectFrame ? [...projectFrame.projectOrigin] : [...deps.origin()],
     ...(projectFrame ? { projectFrame } : {}),
     unitSystem: viewer.measure.unitSystem,

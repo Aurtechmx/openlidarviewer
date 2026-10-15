@@ -161,6 +161,8 @@ function ownLayers(
   layers: readonly ExportLayer[],
   /** False when the per-scan frame check runs instead, so it can name the scans. */
   declaredCrsCheck: boolean,
+  /** The layer a measurement recording no scan was taken on, when that is known. */
+  fallbackLayerId: string | null = null,
 ): { byId: Map<string, Placed> } | { refused: string } {
   const byId = new Map<string, Placed>();
   let unknown = 0;
@@ -177,7 +179,7 @@ function ownLayers(
       unknown++;
       continue;
     }
-    const ids = picked ? m.pickLayers! : m.owner?.layerId ? [m.owner.layerId] : [];
+    const ids = picked ? m.pickLayers! : m.owner?.layerId ? [m.owner.layerId] : fallbackLayerId ? [fallbackLayerId] : [];
     const ls = ids.map((id) => layers.find((x) => x.stableId === id));
     if (ls.length === 0 || ls.some((l) => !l)) {
       unknown++;
@@ -202,6 +204,18 @@ function ownLayers(
     return { refused: 'Not exported: the measurements come from scans with different coordinate systems. Export them one scan at a time.' };
   }
   return { byId };
+}
+
+/**
+ * The one open layer, when it is the active scan and still placed in the
+ * project frame (its anchor closed, the frame kept). Its scene coordinates are
+ * then local to the project origin, not its file origin, so its points leave
+ * through {@link ownLayers} like any multi-layer export. Null otherwise.
+ */
+function solePlacedLayer(layers: readonly ExportLayer[], deps: MeasurementExportActionDeps): ExportLayer | null {
+  const l = layers.length === 1 ? layers[0]! : null;
+  if (!l?.projectOffset || l.projectOffset.every((c) => c === 0)) return null;
+  return !deps.frameSource || deps.frameSource.activeId() === l.viewerId ? l : null;
 }
 
 /**
@@ -309,7 +323,8 @@ export async function exportMeasurementsFile(
   if (!exportable.kept) return;
   const measurements = exportable.kept;
   const withheld = exportable.withheld;
-  const own = layers.length > 1 ? ownLayers(measurements, layers, !deps.frameSource) : null;
+  const sole = solePlacedLayer(layers, deps);
+  const own = layers.length > 1 || sole ? ownLayers(measurements, layers, !deps.frameSource, sole?.stableId ?? null) : null;
   if (own && 'refused' in own) {
     deps.refuse?.(own.refused);
     return;

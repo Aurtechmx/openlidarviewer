@@ -24,9 +24,9 @@ const RECORDS: Record<string, { layerId: string; fingerprint: string; displayNam
 };
 const ORIGINS: Record<string, V3> = { a: A_ORIGIN, b: B_ORIGIN };
 
-function sources(ids: string[]): ProjectFrameSources {
+function sources(ids: string[], frameOrigin: V3 = A_ORIGIN): ProjectFrameSources {
   return {
-    frame: { projectOrigin: A_ORIGIN },
+    frame: { projectOrigin: frameOrigin },
     layerIds: ids,
     cloud: (id) => ({ sourceOrigin: ORIGINS[id]!, sourceFormat: 'las' }),
     record: (id) => RECORDS[id] ?? null,
@@ -34,7 +34,7 @@ function sources(ids: string[]): ProjectFrameSources {
   };
 }
 
-function deps(activeOrigin: V3, ids: string[], withFrame = true): SessionSnapshotDeps {
+function deps(activeOrigin: V3, ids: string[], withFrame = true, frameOrigin: V3 = A_ORIGIN): SessionSnapshotDeps {
   // B is the active scan. A measurement placed on B with both scans open is
   // stored project-local: x = 102 is the survey easting 500102.
   const measurement = {
@@ -62,7 +62,7 @@ function deps(activeOrigin: V3, ids: string[], withFrame = true): SessionSnapsho
     crs: () => null,
     layerGroups: () => [],
     appVersion: 'test',
-    ...(withFrame ? { projectFrame: () => projectFrameInputFrom(sources(ids)) } : {}),
+    ...(withFrame ? { projectFrame: () => projectFrameInputFrom(sources(ids, frameOrigin)) } : {}),
   };
 }
 
@@ -85,9 +85,10 @@ describe('session save with two scans open', () => {
 
 describe('single-scan and older sessions', () => {
   it('a single-scan save writes exactly what it wrote without a frame', () => {
-    expect(projectFrameInputFrom(sources(['b']))).toBeNull();
+    // A lone scan anchors the frame at its own origin, so it is not placed.
+    expect(projectFrameInputFrom(sources(['b'], B_ORIGIN))).toBeNull();
     vi.useFakeTimers({ now: new Date('2026-01-01T00:00:00Z') });
-    const withDep = serializeActiveSession(sessionIo, deps(B_ORIGIN, ['b']));
+    const withDep = serializeActiveSession(sessionIo, deps(B_ORIGIN, ['b'], true, B_ORIGIN));
     const without = serializeActiveSession(sessionIo, deps(B_ORIGIN, ['b'], false));
     vi.useRealTimers();
     expect(withDep).toBe(without);

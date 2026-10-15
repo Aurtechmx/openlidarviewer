@@ -257,12 +257,26 @@ export interface ProjectFrameSources {
 }
 
 /**
- * The frame input for a session save: null unless two or more static layers
- * are open, each with a source origin and a proven identity. A partial frame
- * is never written; the single-origin reading applies instead.
+ * The frame input for a session save: null unless every open static layer has
+ * a source origin and a proven identity, and either two or more are open or
+ * the one open layer is still placed in the project frame (its anchor closed,
+ * the frame kept). A partial frame is never written; the single-origin reading
+ * applies instead.
+ *
+ * A lone placed layer's scene coordinates are local to its scene origin, so
+ * that origin is written as the project origin. A horizontal-only placement
+ * then carries a zero Z offset, exactly as the scene does.
  */
 export function projectFrameInputFrom(src: ProjectFrameSources): SessionFrameInput | null {
-  if (!src.frame || src.layerIds.length < 2) return null;
+  if (!src.frame || src.layerIds.length === 0) return null;
+  let p = src.frame.projectOrigin;
+  if (src.layerIds.length === 1) {
+    const id = src.layerIds[0]!;
+    const so = src.cloud(id)?.sourceOrigin;
+    if (!so) return null;
+    p = sceneOriginFor(p, so, src.placement(id));
+    if (p.every((c, i) => c === so[i])) return null;
+  }
   const layers: SessionFrameInput['layers'][number][] = [];
   for (const id of src.layerIds) {
     const cloud = src.cloud(id);
@@ -280,7 +294,6 @@ export function projectFrameInputFrom(src: ProjectFrameSources): SessionFrameInp
       placedVertically: placement?.vertical ?? true,
     });
   }
-  const p = src.frame.projectOrigin;
   return { projectOrigin: [p[0], p[1], p[2]], layers };
 }
 

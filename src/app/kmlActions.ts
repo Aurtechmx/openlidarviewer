@@ -90,6 +90,12 @@ export interface KmlActionDeps {
    * scan's origin, so it is written only while one scan is open.
    */
   readonly layerCount?: () => number;
+  /**
+   * The active layer's placement offset into the project frame, or null when
+   * unplaced. Features, measurements and views are in scene coordinates; a
+   * placed layer's scene is its file frame shifted by this offset.
+   */
+  readonly sceneOffset?: () => readonly [number, number, number] | null;
   /** Saved camera views, in LOCAL render space. */
   readonly viewpoints: () => readonly KmlViewpoint[];
   /** World up vector for the measurement metrics. */
@@ -228,7 +234,11 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
     deps.setError(`KML export stopped. ${mapper.reason}`);
     return;
   }
-  const toLonLat = mapper.map;
+  // The mapper is built on the file origin; scene points first undo a placement.
+  const d = deps.sceneOffset?.() ?? null;
+  const toLonLat: LocalToLonLatSourceZ = d
+    ? Object.assign((p: readonly [number, number, number]) => mapper.map([p[0] - d[0], p[1] - d[1], p[2] - d[2]]), { datumCaveat: mapper.map.datumCaveat })
+    : mapper.map;
   // Re-checked here, not just in the status: the status renders the button, and
   // the axis can resolve differently by the time it is clicked.
   const axisRefusal = lonLatUpAxisRefusal(deps.upAxis());
@@ -279,8 +289,9 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
     // The scan's outline, placed through the same mapper as every feature. The
     // footprint gate is the one the scan-area export applies: a Y-up extent's
     // X/Y rectangle is not a ground outline, so it is left out rather than
-    // drawn wrong; a conversion failure likewise omits the outline.
-    siteOutline: siteOutlineFor(deps, toLonLat),
+    // drawn wrong; a conversion failure likewise omits the outline. The extent
+    // is in the file's own frame, so it takes the unshifted mapper.
+    siteOutline: siteOutlineFor(deps, mapper.map),
     provenance: {
       generatedAt: new Date().toISOString(),
       source: geo.name ? deps.baseName(geo.name) : null,
