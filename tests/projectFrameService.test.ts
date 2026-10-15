@@ -343,3 +343,45 @@ describe('vertical anchor is drawn only from verified layers', () => {
     expect(s.frame!.projectOrigin[2]).toBe(20);
   });
 });
+
+describe('project frame — the anchor outlives a demotion', () => {
+  it('keeps the origin while a layer that anchored it is still open, even unaligned', () => {
+    const s = svc();
+    s.reconcile([
+      { id: 'a', sourceOrigin: [500_000, 4_500_000, 100] },
+      { id: 'b', sourceOrigin: [500_100, 4_500_000, 140] },
+    ]);
+    s.reconcile([
+      { id: 'a', sourceOrigin: [500_000, 4_500_000, 100], alignedToProject: false },
+      { id: 'b', sourceOrigin: [500_100, 4_500_000, 140], alignedToProject: false },
+      { id: 'c', sourceOrigin: [300_000, 4_400_000, 90] },
+    ]);
+    expect(s.frame?.projectOrigin).toEqual([500_000, 4_500_000, 100]);
+  });
+
+  it('keeps the origin through a pass in which no layer is aligned', () => {
+    const s = svc();
+    s.reconcile([{ id: 'a', sourceOrigin: [500_000, 4_500_000, 100] }]);
+    s.reconcile([
+      { id: 'a', sourceOrigin: [500_000, 4_500_000, 100], alignedToProject: false },
+      { id: 'c', sourceOrigin: [300_000, 4_400_000, 90], alignedToProject: false },
+    ]);
+    expect(s.frame).toBeNull();
+    s.reconcile([
+      { id: 'a', sourceOrigin: [500_000, 4_500_000, 100], alignedToProject: false },
+      { id: 'c', sourceOrigin: [300_000, 4_400_000, 90] },
+    ]);
+    expect(s.frame?.projectOrigin).toEqual([500_000, 4_500_000, 100]);
+  });
+
+  it('still re-anchors once every layer that anchored it has closed', () => {
+    const s = svc();
+    s.reconcile([{ id: 'a', sourceOrigin: [500_000, 4_500_000, 100] }]);
+    s.reconcile([
+      { id: 'a', sourceOrigin: [500_000, 4_500_000, 100], alignedToProject: false },
+      { id: 'c', sourceOrigin: [300_000, 4_400_000, 90], alignedToProject: false },
+    ]);
+    s.reconcile([{ id: 'c', sourceOrigin: [300_000, 4_400_000, 90] }]);
+    expect(s.frame?.projectOrigin).toEqual([300_000, 4_400_000, 90]);
+  });
+});

@@ -88,7 +88,7 @@ export function verticalReferenceKey(l: CompatibilityInput): string | null {
  * matches another identical name. Two layers with no declaration share a
  * `null` key, which is deliberately NOT a match — see the classifier.
  */
-function horizontalKey(l: CompatibilityInput): string | null {
+export function horizontalKey(l: CompatibilityInput): string | null {
   if (l.epsg !== undefined && Number.isFinite(l.epsg)) return `epsg:${l.epsg}`;
   const name = l.crsName?.trim();
   return name ? `name:${name.toLowerCase()}` : null;

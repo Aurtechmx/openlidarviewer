@@ -880,3 +880,102 @@ describe('unmounted layers are disclosed, not silently dropped', () => {
     expect(t.unmountedCalls.at(-1)).toEqual([]);
   });
 });
+
+/**
+ * A placed layer stays where it is while it stays open. Its user work —
+ * measurements, annotations, clip box, saved views — is stored in scene
+ * coordinates and is not moved, and exports convert through the layer's
+ * CURRENT placement. Re-judging the whole group on every add or remove let a
+ * newcomer change an existing layer's verdict and therefore its placement.
+ */
+describe('adding or removing a layer never re-places another', () => {
+  const navd = (epsg: number) => ({ epsg, verticalDatum: 'EPSG:5703' });
+  // A layer opened after `setup` needs the shape `setup` gives the initial set:
+  // a file origin and declared units.
+  const opened = (origin: readonly [number, number, number], crs: FakeCrs): FakeCloud => ({
+    origin,
+    sourceOrigin: [origin[0], origin[1], origin[2]],
+    metadata: { crs: { linearUnitToMetres: 1, verticalUnitToMetres: 1, ...crs } },
+  });
+
+  it('keeps a verified layer in height when a layer without a vertical datum is added', () => {
+    const clouds: Record<string, FakeCloud> = {
+      a: { origin: [500_000, 4_500_000, 100], metadata: { crs: navd(26910) } },
+      b: { origin: [500_100, 4_500_000, 140], metadata: { crs: navd(26910) } },
+    };
+    const t = setup(clouds);
+    t.service.refreshCrsFlags();
+    const before = t.rebaseCalls.get('b');
+    expect(before).toEqual([500_000, 4_500_000, 100]);
+    expect(t.compatCalls.get('b')).toBe('verified');
+
+    clouds.c = opened([500_200, 4_500_000, 90], { epsg: 26910 });
+    t.service.refreshCrsFlags();
+    expect(t.rebaseCalls.get('b')).toEqual(before);
+    expect(t.compatCalls.get('b')).toBe('verified');
+    expect(t.service.placementOf('b')).toEqual({ vertical: true });
+    // The newcomer is the one judged against the frame: X/Y only, own height.
+    expect(t.compatCalls.get('c')).toBe('horizontal-only');
+    expect(t.rebaseCalls.get('c')).toEqual([500_000, 4_500_000, 90]);
+    expect(t.projectFrame.frame?.projectOrigin).toEqual([500_000, 4_500_000, 100]);
+  });
+
+  it('leaves the verified layer unchanged when that layer is removed again', () => {
+    const clouds: Record<string, FakeCloud> = {
+      a: { origin: [500_000, 4_500_000, 100], metadata: { crs: navd(26910) } },
+      b: { origin: [500_100, 4_500_000, 140], metadata: { crs: navd(26910) } },
+    };
+    const t = setup(clouds);
+    t.service.refreshCrsFlags();
+    const before = t.rebaseCalls.get('b');
+    clouds.c = opened([500_200, 4_500_000, 90], { epsg: 26910 });
+    t.service.refreshCrsFlags();
+    delete clouds.c;
+    t.service.refreshCrsFlags();
+    expect(t.rebaseCalls.get('b')).toEqual(before);
+    expect(t.compatCalls.get('b')).toBe('verified');
+    expect(t.restoreCalls).not.toContain('b');
+  });
+
+  it('keeps a placed pair when two layers in another CRS are added', () => {
+    const clouds: Record<string, FakeCloud> = {
+      a: { origin: [500_000, 4_500_000, 100], metadata: { crs: navd(32613) } },
+      b: { origin: [500_100, 4_500_000, 140], metadata: { crs: navd(32613) } },
+    };
+    const t = setup(clouds);
+    t.service.refreshCrsFlags();
+    const before = t.rebaseCalls.get('b');
+    clouds.c = opened([300_000, 4_400_000, 90], navd(26913));
+    clouds.d = opened([300_100, 4_400_000, 90], navd(26913));
+    t.service.refreshCrsFlags();
+    expect(t.rebaseCalls.get('b')).toEqual(before);
+    expect(t.compatCalls.get('b')).toBe('verified');
+    expect(t.projectFrame.frame?.projectOrigin).toEqual([500_000, 4_500_000, 100]);
+    // The newcomers are the ones held out — not the pair already placed.
+    expect(t.compatCalls.get('c')).toBe('incompatible');
+    expect(t.compatCalls.get('d')).toBe('incompatible');
+    expect(t.rebaseCalls.has('c')).toBe(false);
+    expect(t.rebaseCalls.has('d')).toBe(false);
+    expect([...t.projectFrame.unaligned].sort()).toEqual(['c', 'd']);
+    expect(t.unmountedCalls.at(-1)).toEqual(['c', 'd']);
+  });
+
+  it('flags a single incompatible newcomer rather than the layers already placed', () => {
+    const clouds: Record<string, FakeCloud> = {
+      a: { origin: [500_000, 4_500_000, 100], metadata: { crs: navd(32613) } },
+    };
+    const t = setup(clouds);
+    t.service.refreshCrsFlags();
+    clouds.b = opened([500_100, 4_500_000, 140], navd(32613));
+    t.service.refreshCrsFlags();
+    const before = t.rebaseCalls.get('b');
+    // With A and B open, a 1-1 tie can no longer be manufactured, but a
+    // newcomer whose key would sort first must still not win the frame.
+    clouds.z = opened([300_000, 4_400_000, 90], navd(2000));
+    t.service.refreshCrsFlags();
+    expect(t.rebaseCalls.get('b')).toEqual(before);
+    expect(t.compatCalls.get('a')).toBe('verified');
+    expect(t.compatCalls.get('z')).toBe('incompatible');
+    expect(t.projectFrame.unaligned).toEqual(['z']);
+  });
+});

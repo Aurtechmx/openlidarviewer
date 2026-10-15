@@ -23,8 +23,12 @@ import {
   classifyLayerCompatibility,
   alignsHorizontally,
   alignsVertically,
+  horizontalKey as compatibilityKey,
+  verticalReferenceKey,
+  type CompatibilityInput,
   type LayerCompatibility,
 } from '../model/layerCompatibility';
+import { compareCodeUnits } from '../canonicalHash';
 import { loadLayerHealth } from '../lazyChunks';
 import { isLinearUnitKnown } from '../geo/CoordinateTypes';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
@@ -127,6 +131,93 @@ export const REBASE_QUANTUM_BUDGET_M = 0.001;
  * placement is the identity.
  */
 export const MULTI_LAYER_MOUNT_ENABLED = true;
+
+/**
+ * Everything a layer's classification depends on from the layer itself. When
+ * it changes, the layer's earlier verdict no longer describes it.
+ */
+function compatibilitySignature(l: CompatibilityInput): string {
+  return `${compatibilityKey(l) ?? ''}|${verticalReferenceKey(l) ?? ''}`;
+}
+
+/** A verdict reached against siblings, with the facts it was drawn from. */
+interface PriorCompatibility {
+  readonly state: LayerCompatibility;
+  readonly signature: string;
+}
+
+/**
+ * Classify a layer set in which some layers were already judged.
+ *
+ * A layer whose verdict was reached against siblings, and whose own CRS facts
+ * have not changed since, keeps that verdict: its placement follows from it,
+ * and work drawn on it is stored where it was then placed. Re-judging the whole
+ * group on every change let an unrelated newcomer — one without a vertical
+ * datum, or a tie of layers in another CRS — demote layers that were already
+ * placed and move them off their own measurements.
+ *
+ * Every other layer is judged against the frame those established layers
+ * define: their horizontal CRS, and their shared vertical reference when they
+ * are verified. A newcomer that does not match is the one held out. With no
+ * established layer, or none established in a shared frame, the set is
+ * classified afresh.
+ */
+function classifyKeepingPrior(
+  layers: readonly CompatibilityInput[],
+  prior: ReadonlyMap<string, PriorCompatibility>,
+): Map<string, LayerCompatibility> {
+  const fresh = classifyLayerCompatibility(layers);
+  const established = layers.filter(
+    (l) => prior.get(l.id)?.signature === compatibilitySignature(l),
+  );
+  if (established.length === 0) return fresh;
+
+  const out = new Map<string, LayerCompatibility>();
+  for (const l of established) out.set(l.id, prior.get(l.id)!.state);
+
+  const inFrame = established.filter((l) => alignsHorizontally(prior.get(l.id)!.state));
+  const counts = new Map<string, number>();
+  for (const l of inFrame) {
+    const key = compatibilityKey(l);
+    if (key !== null) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  let referenceKey: string | null = null;
+  let best = -1;
+  for (const key of [...counts.keys()].sort(compareCodeUnits)) {
+    const n = counts.get(key) ?? 0;
+    if (n > best) {
+      best = n;
+      referenceKey = key;
+    }
+  }
+  const verifiedVerticals = inFrame
+    .filter((l) => prior.get(l.id)!.state === 'verified' && compatibilityKey(l) === referenceKey)
+    .map((l) => verticalReferenceKey(l));
+  const referenceVertical =
+    verifiedVerticals.length > 0
+    && verifiedVerticals.every((v) => v !== null && v === verifiedVerticals[0])
+      ? verifiedVerticals[0]
+      : null;
+
+  for (const l of layers) {
+    if (out.has(l.id)) continue;
+    if (referenceKey === null) {
+      out.set(l.id, fresh.get(l.id) ?? 'unknown');
+      continue;
+    }
+    const key = compatibilityKey(l);
+    if (key === null) out.set(l.id, 'unknown');
+    else if (key !== referenceKey) out.set(l.id, 'incompatible');
+    else {
+      const vertical = verticalReferenceKey(l);
+      out.set(
+        l.id,
+        referenceVertical !== null && vertical === referenceVertical ? 'verified' : 'horizontal-only',
+      );
+    }
+  }
+  return out;
+}
 
 /**
  * What a mount would cost this layer, expressed in metres — or null when that
@@ -238,6 +329,8 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
    * a shared spatial frame at all, which is exactly what "skip" says.
    */
   let lastCompatibility = new Map<string, LayerCompatibility>();
+  /** Verdicts reached against siblings, kept while each layer's own CRS facts hold. */
+  let priorJudgement = new Map<string, PriorCompatibility>();
   let lastUnmounted: string[] = [];
   /** Per-layer placement from the last frame pass: null when unmounted, else whether Z is shared. */
   let lastPlacement = new Map<string, { readonly vertical: boolean }>();
@@ -258,19 +351,28 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
     // A vertically-unconfirmed pair is no longer folded in wholesale. It
     // aligns in X/Y, where the agreement is real, and keeps its own Z — the
     // doubt now gates the product instead of only annotating it.
-    const compat = classifyLayerCompatibility(
-      infos.map((i) => ({
-        id: i.id, epsg: i.epsg, crsName: i.crsName,
-        verticalDatum: i.verticalDatum, verticalEpsg: i.verticalEpsg,
-      })),
-    );
-    // A sole layer classifies as `verified` by convention, but a survivor of a
-    // close was judged against its siblings. Keeping that judgement keeps its
-    // placement: re-judging it alone demanded a vertical unit the pair never
-    // needed, cleared the placement and moved the layer off its measurements.
-    if (infos.length === 1 && lastCompatibility.has(infos[0]!.id)) {
-      compat.set(infos[0]!.id, lastCompatibility.get(infos[0]!.id)!);
+    const inputs = infos.map((i) => ({
+      id: i.id, epsg: i.epsg, crsName: i.crsName,
+      verticalDatum: i.verticalDatum, verticalEpsg: i.verticalEpsg,
+    }));
+    // A placement is sticky while its layer stays open. A layer judged against
+    // siblings keeps that verdict — and so its placement — through any later
+    // add or close, until its OWN CRS facts change. Only the newcomers are
+    // judged, against the frame the established layers define, so a layer with
+    // no vertical datum or a tie of layers in another CRS is held out itself
+    // instead of re-placing layers whose work is already drawn where they sit.
+    // A sole layer's `verified` is a convention, not a judgement, so it is not
+    // remembered: the first sibling to arrive judges the pair afresh.
+    const compat = classifyKeepingPrior(inputs, priorJudgement);
+    const nextPrior = new Map<string, PriorCompatibility>();
+    for (const input of inputs) {
+      const signature = compatibilitySignature(input);
+      const kept = priorJudgement.get(input.id)?.signature === signature;
+      if (kept || inputs.length > 1) {
+        nextPrior.set(input.id, { state: compat.get(input.id) ?? 'unknown', signature });
+      }
     }
+    priorJudgement = nextPrior;
     lastCompatibility = compat;
     const stateOf = (id: string): LayerCompatibility => compat.get(id) ?? 'unknown';
     const layers: ProjectFrameLayer[] = [];
