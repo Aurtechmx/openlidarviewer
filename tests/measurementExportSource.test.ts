@@ -390,7 +390,7 @@ describe('a streamed scan with no static layer open', () => {
     // rather than drop the one it cannot place.
     expect(out.refusals).toHaveLength(1);
     expect(out.refusals[0]).toMatch(/integrity report must account for every measurement/);
-    expect(out.downloads.some((d) => /findings|integrity|\.json$/.test(d.filename) && d.text.includes('"findings"'))).toBe(false);
+    expect(out.downloads.some((d) => (/findings|integrity/.test(d.filename) || /\.json$/.test(d.filename)) && d.text.includes('"findings"'))).toBe(false);
     const [geojson, csv] = out.downloads;
     const fc = JSON.parse(geojson!.text);
     expect(fc.features.map((f: { properties: { id: string } }) => f.properties.id)).toEqual(['new']);
