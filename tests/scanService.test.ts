@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createScanService } from '../src/app/ScanService';
+import { createScanService, survivorAfterRemoval } from '../src/app/ScanService';
 import { createAppContext } from '../src/app/appContext';
 import type { Viewer } from '../src/render/Viewer';
 import type { PointCloud } from '../src/model/PointCloud';
@@ -57,5 +57,32 @@ describe('ScanService', () => {
     const svc = createScanService({ getViewer: () => viewerWith({}), context: ctx });
     svc.setActive('cloud-1');
     expect(ctx.scan.activeId).toBe('cloud-1');
+  });
+});
+
+describe('survivorAfterRemoval', () => {
+  it('promotes the next layer in open order when the active layer is removed', () => {
+    expect(survivorAfterRemoval(['a', 'b', 'c'], 'b', 'b')).toBe('c');
+  });
+
+  it('promotes the previous layer when the removed active layer was last', () => {
+    expect(survivorAfterRemoval(['a', 'b', 'c'], 'c', 'c')).toBe('b');
+  });
+
+  it('keeps the active layer when another layer is removed', () => {
+    expect(survivorAfterRemoval(['a', 'b', 'c'], 'a', 'c')).toBe('c');
+    expect(survivorAfterRemoval(['a', 'b'], 'b', 'a')).toBe('a');
+  });
+
+  it('has no survivor when the last layer is removed', () => {
+    expect(survivorAfterRemoval(['a'], 'a', 'a')).toBeNull();
+  });
+
+  it('promotes nothing when no static layer was active (a streaming scan keeps the identity)', () => {
+    expect(survivorAfterRemoval(['a', 'b'], 'a', null)).toBeNull();
+  });
+
+  it('promotes nothing for an id that is not open', () => {
+    expect(survivorAfterRemoval(['a', 'b'], 'x', 'x')).toBeNull();
   });
 });

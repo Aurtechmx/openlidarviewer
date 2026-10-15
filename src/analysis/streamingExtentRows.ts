@@ -1,6 +1,6 @@
 import type { SpatialContext } from '../geo/SpatialContext';
 import { describeWithheldRead, withheldReadCounts } from '../science/withheldCounts';
-import { heightScale } from '../geo/SpatialContext';
+import { groundMetresPermitted, heightScale, heightUnitsPermitted, horizontalGroundRefusal } from '../geo/SpatialContext';
 
 /** One extent/density/spacing row the streaming Scan-report emits. */
 export interface ExtentRowSpec {
@@ -18,9 +18,12 @@ export interface StreamingExtentResult {
   /**
    * Whether the source CRS declares a real linear unit. false when the CRS is
    * absent or carries `linearUnit: 'unknown'` — in which case the rows are in
-   * raw source units and NOT labelled "m" / "pts/m²".
+   * raw source units and NOT labelled "m" / "pts/m²". Also false on a Web
+   * Mercator grid or a geocentric frame, whose metres are not ground metres.
    */
   readonly unitConfirmed: boolean;
+  /** Why a frame that names a metre unit is not ground metres; null otherwise. */
+  readonly refusalReason: string | null;
   readonly rows: readonly ExtentRowSpec[];
 }
 
@@ -57,14 +60,17 @@ export function streamingExtentRows(
   ctx: SpatialContext,
   sourcePointCount: number | null,
 ): StreamingExtentResult {
-  const unitConfirmed = ctx.linearUnitKnown;
+  // A Web Mercator grid or a geocentric frame names metres, but its X/Y spans
+  // are not ground metres; they stay in source units like an unknown unit.
+  const unitConfirmed = groundMetresPermitted(ctx);
+  const refusalReason = horizontalGroundRefusal(ctx);
 
   // Apply the metre factor ONLY when the unit is real. Otherwise the span stays
   // in raw source units (factor 1) and is not labelled "m".
   const mpu = unitConfirmed ? ctx.linearUnitToMetres : 1;
   // The height converts only with a declared vertical unit, as in the static
   // scan report: without one it stays in source units and says so.
-  const { factor: vmpu, suffix: heightUnit } = heightScale(ctx, unitConfirmed);
+  const { factor: vmpu, suffix: heightUnit } = heightScale(ctx, heightUnitsPermitted(ctx));
 
   const w = (header.max[0] - header.min[0]) * mpu;
   const d = (header.max[1] - header.min[1]) * mpu;
@@ -98,5 +104,5 @@ export function streamingExtentRows(
     );
   }
 
-  return { unitConfirmed, rows };
+  return { unitConfirmed, refusalReason, rows };
 }

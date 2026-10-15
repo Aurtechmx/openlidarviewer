@@ -31,6 +31,7 @@
  * "fall back". Falling a heavy file through to the whole-file loader would trade
  * a clean refusal for an out-of-memory crash; that is the outcome this guards.
  */
+import { lasOriginFor } from '../io/lasDataOrigin';
 import type { RangeSource } from '../io/range/RangeSource';
 import { LocalFileRangeSource } from '../io/range/LocalFileRangeSource';
 import { parseLasHeader, pointFormatHasRgb } from '../io/lasHeader';
@@ -137,12 +138,10 @@ async function peekLasHeaderFacts(
   } catch {
     return null;
   }
-  const origin: [number, number, number] = [
-    Math.floor(header.min[0]),
-    Math.floor(header.min[1]),
-    Math.floor(header.min[2]),
-  ];
-  const ctx = decodeContext(header, origin);
+  // The origin here only feeds the decode context the record schema is read
+  // from; the schema does not depend on it. The build itself derives its origin
+  // with the same rule the whole-file loader uses (see lasOriginFor).
+  const ctx = decodeContext(header, lasOriginFor(header, null).origin);
   const schema = tileSchemaForHeader(header.pointFormat, ctx);
   const attributes: PointAttributes = {
     hasColor: pointFormatHasRgb(header.pointFormat),

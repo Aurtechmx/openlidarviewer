@@ -182,28 +182,82 @@ export function shouldDropCandidateOnPostCommitCancel(
 }
 
 /**
+ * The answer to the replace question, and the work it covered. `seen` lists
+ * the measurement and annotation ids present when the question was asked, or
+ * is null when the viewer could not be read (every item then counts as seen).
+ */
+export interface ReplaceDecision {
+  readonly outcome: ReplaceOutcome;
+  readonly name: string;
+  readonly seen: { readonly measurements: ReadonlySet<string>; readonly annotations: ReadonlySet<string> } | null;
+}
+
+type WorkStores = {
+  measure: { getMeasurements?(): readonly { id: string }[]; removeMeasurement?(id: string): unknown };
+  annotate: { getAnnotations?(): readonly { id: string }[]; remove?(id: string): void };
+};
+
+/**
  * Before a streamed scan replaces the open scene: ask whether the work on it
  * may go. Cancel throws {@link LoadCancelledError} with nothing changed.
  */
-export async function guardReplacedWork(deps: Pick<OpenStreamingDeps, 'replaceGuard'>, name: string): Promise<ReplaceOutcome> {
+export async function guardReplacedWork(
+  deps: Pick<OpenStreamingDeps, 'replaceGuard'> & Partial<Pick<OpenStreamingDeps, 'getViewer'>>,
+  name: string,
+): Promise<ReplaceDecision> {
+  const v = deps.getViewer?.() as WorkStores | undefined;
+  const ms = v?.measure.getMeasurements?.();
+  const as = v?.annotate.getAnnotations?.();
+  const seen = ms && as ? { measurements: new Set(ms.map((m) => m.id)), annotations: new Set(as.map((a) => a.id)) } : null;
   const outcome = (await deps.replaceGuard?.({ kind: 'scan', name })) ?? 'none';
   if (outcome === 'cancel') throw new LoadCancelledError();
-  return outcome;
+  return { outcome, name, seen };
 }
 
 /**
- * After the replacement committed. A confirmed Replace clears the old work.
- * Any work still there (none was asked about) is marked as belonging to the
- * retired scan, so a saved session never writes it under the new scan.
+ * After the replacement committed.
+ *
+ * Work the question covered: a confirmed Replace clears it; otherwise (nothing
+ * was asked) it is marked as belonging to the retired scan, so a saved session
+ * never writes it under the new scan.
+ *
+ * Work placed while the new scan was preparing was never in the question, so
+ * the answer does not discard it. It was placed on the scene being replaced, so
+ * it is not given to the new scan either: it is kept, marked as taken on the
+ * replaced scan (sessions and exports of the new scan leave it out and say
+ * so), and the user is told how many items that is.
  */
-export function settleReplacedWork(deps: Pick<OpenStreamingDeps, 'getViewer' | 'bookmarks' | 'refreshViewsUI'>, outcome: ReplaceOutcome): void {
+export function settleReplacedWork(
+  deps: Pick<OpenStreamingDeps, 'getViewer' | 'bookmarks' | 'refreshViewsUI'> & Partial<Pick<OpenStreamingDeps, 'showToast'>>,
+  decision: ReplaceDecision,
+): void {
   const v = deps.getViewer();
-  if (outcome === 'replace') {
-    v.measure.clear(); v.annotate.clear(); deps.bookmarks.clear(); deps.refreshViewsUI();
-    return;
+  const stores = v as unknown as WorkStores;
+  const seen = decision.seen;
+  const laterM = seen ? (stores.measure.getMeasurements?.() ?? []).filter((m) => !seen.measurements.has(m.id)).length : 0;
+  const laterA = seen ? (stores.annotate.getAnnotations?.() ?? []).filter((a) => !seen.annotations.has(a.id)).length : 0;
+  if (decision.outcome === 'replace') {
+    if (laterM + laterA === 0) {
+      v.measure.clear(); v.annotate.clear();
+    } else {
+      for (const id of seen!.measurements) stores.measure.removeMeasurement?.(id);
+      for (const id of seen!.annotations) stores.annotate.remove?.(id);
+    }
+    deps.bookmarks.clear(); deps.refreshViewsUI();
+    if (laterM + laterA === 0) return;
   }
   v.measure.claimUnowned(RETIRED_SCAN_OWNER);
   v.annotate.claimUnowned(RETIRED_SCAN_OWNER);
+  if (laterM + laterA > 0) deps.showToast?.(preparedWorkMessage(laterM, laterA, decision.name));
+}
+
+/** The notice for work placed on the replaced scene while the new scan was preparing. */
+export function preparedWorkMessage(measurements: number, annotations: number, name: string): string {
+  const parts: string[] = [];
+  if (measurements) parts.push(`${measurements} measurement${measurements === 1 ? '' : 's'}`);
+  if (annotations) parts.push(`${annotations} annotation${annotations === 1 ? '' : 's'}`);
+  const n = measurements + annotations;
+  return `${parts.join(' and ')} placed while ${name} was opening ${n === 1 ? 'was' : 'were'} taken on the replaced scan. ${n === 1 ? 'It is' : 'They are'} kept, but left out of sessions and exports of ${name}. Delete ${n === 1 ? 'it' : 'them'} if not needed.`;
 }
 
 /**

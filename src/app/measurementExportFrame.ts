@@ -23,6 +23,7 @@ import { datasetIdentity } from '../geo/CrsService';
 import { sourceUpAxis } from '../io/sniffFormat';
 import { geoContextForCloud } from './reportExport';
 import { spatialContextFrom, verticalMetresPerUnit, type SpatialContext, type SpatialUpAxis } from '../geo/SpatialContext';
+import type { MeasureUnitFrame } from '../render/measure/types';
 
 /** One scan's complete export frame. */
 export interface ExportFrame {
@@ -67,6 +68,31 @@ export function frameScalars(ctx: SpatialContext): Pick<ExportFrame, 'unitToMetr
     verticalRefused: ctx.verticalMetricRefused,
     unitsVerified: ctx.linearUnitKnown && !ctx.horizontalMetricRefused,
   };
+}
+
+/**
+ * The live Measure tool's unit frame for a resolved spatial context: the same
+ * scalars and permissions as {@link frameScalars}, so a panel row and an
+ * exported value of one measurement use one factor. `crsKnown` is the linear
+ * unit alone (the trust grade's scale signal); the grade applies the
+ * geographic refusal separately.
+ */
+export function measureUnitFrameOf(ctx: SpatialContext): MeasureUnitFrame {
+  const s = frameScalars(ctx);
+  return {
+    unitToMetres: s.unitToMetres,
+    verticalUnitToMetres: s.verticalUnitToMetres,
+    verticalUnitKnown: verticalMetresPerUnit(ctx, 'none') !== undefined,
+    crsKnown: ctx.linearUnitKnown,
+    geographic: s.geographic,
+    verticalRefused: s.verticalRefused,
+    projected: ctx.kind === 'projected' && ctx.epsg != null,
+  };
+}
+
+/** A non-active scan's own spatial context: its resolved CRS, a remembered override included. */
+export function scanContextOf(crs: Pick<CrsService, 'resolveFor'>, c: PointCloud): SpatialContext {
+  return spatialContextFrom(crs.resolveFor({ name: c.name, detected: c.metadata?.crs ?? undefined, source: 'las-vlr', identity: datasetIdentity(c) }));
 }
 
 /** Build a frame from a scan's geo context, spatial context and resolved up-axis. */

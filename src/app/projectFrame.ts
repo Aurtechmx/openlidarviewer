@@ -104,6 +104,8 @@ export function createProjectFrameService(context: AppContext): ProjectFrameServ
    * no longer matches and re-anchors.
    */
   let anchoredFrom = new Map<string, string>();
+  /** The origin those layers chose; outlives a pass in which none of them aligns. */
+  let anchorOrigin: Vec3 | null = null;
   const originKey = (o: readonly [number, number, number]): string => `${o[0]},${o[1]},${o[2]}`;
 
   /**
@@ -136,7 +138,18 @@ export function createProjectFrameService(context: AppContext): ProjectFrameServ
 
     if (state.sources.size === 0) {
       state.frame = null;
+      anchoredFrom = new Map();
+      anchorOrigin = null;
       return;
+    }
+
+    // Layers that anchored the current origin and are still open, unchanged —
+    // aligned or not. A layer demoted out of the frame still carries work drawn
+    // while it was placed against this origin, so its presence holds the origin.
+    const survivors = new Map<string, string>();
+    for (const layer of state.sources.values()) {
+      const key = originKey(layer.sourceOrigin);
+      if (anchoredFrom.get(layer.id) === key) survivors.set(layer.id, key);
     }
 
     const aligned: ProjectFrameLayer[] = [];
@@ -154,6 +167,7 @@ export function createProjectFrameService(context: AppContext): ProjectFrameServ
       // Every layer disagrees with the project, so there is no shared frame to
       // anchor. Each still mounts in its own frame below.
       state.frame = null;
+      anchoredFrom = survivors;
       for (const layer of state.sources.values()) {
         state.transforms.set(
           layer.id,
@@ -168,15 +182,14 @@ export function createProjectFrameService(context: AppContext): ProjectFrameServ
     // describes neither layer.
     //
     // The anchor persists while it still DESCRIBES this set — that is, while
-    // some layer that has been in the frame is still here, unchanged. Layers are seeded
+    // some layer that has been in the frame is still here, unchanged, whether or
+    // not it is still aligned. Layers are seeded
     // from their FILE origins, so recomputing the minimum on every change would
     // walk the anchor whenever a sibling closed, and nothing compensates the
     // camera for a rebase: already-mounted data would visibly jump for no
     // reason the user caused. A layer re-registered at a new origin, or a set
     // replaced wholesale, matches nothing and re-anchors as it should.
-    const stillDescribed = aligned.some(
-      (l) => anchoredFrom.get(l.id) === originKey(l.sourceOrigin),
-    );
+    const stillDescribed = survivors.size > 0 && anchorOrigin !== null;
     // X/Y and Z are anchored from DIFFERENT sets. Every aligned layer shares
     // the horizontal frame, so all of them may set the horizontal origin. Only
     // a vertically-verified layer may set the Z origin: a horizontal-only
@@ -190,8 +203,8 @@ export function createProjectFrameService(context: AppContext): ProjectFrameServ
     const horizontal = chooseProjectOrigin(aligned.map((l) => l.sourceOrigin));
     const vertical = chooseProjectOrigin(zSource.map((l) => l.sourceOrigin));
     const origin =
-      stillDescribed && state.frame
-        ? state.frame.projectOrigin
+      stillDescribed && anchorOrigin
+        ? anchorOrigin
         : ([horizontal[0], horizontal[1], vertical[2]] as Vec3);
     // Every layer that has shared the frame describes it from then on, so the
     // origin holds while ANY of them is still open. Closing the layer that
@@ -199,7 +212,11 @@ export function createProjectFrameService(context: AppContext): ProjectFrameServ
     // the clip box, saved views and the camera all stay in the project frame
     // and nothing rebases them. Only an empty set or a wholesale replace (no
     // surviving member) re-anchors.
-    anchoredFrom = new Map(aligned.map((l) => [l.id, originKey(l.sourceOrigin)]));
+    anchoredFrom = new Map([
+      ...(stillDescribed ? survivors : []),
+      ...aligned.map((l) => [l.id, originKey(l.sourceOrigin)] as const),
+    ]);
+    anchorOrigin = origin;
     state.frame = createProjectFrame(origin, { crs: frameCrsLabel(aligned) ?? undefined });
 
     for (const layer of state.sources.values()) {
@@ -257,12 +274,26 @@ export interface ProjectFrameSources {
 }
 
 /**
- * The frame input for a session save: null unless two or more static layers
- * are open, each with a source origin and a proven identity. A partial frame
- * is never written; the single-origin reading applies instead.
+ * The frame input for a session save: null unless every open static layer has
+ * a source origin and a proven identity, and either two or more are open or
+ * the one open layer is still placed in the project frame (its anchor closed,
+ * the frame kept). A partial frame is never written; the single-origin reading
+ * applies instead.
+ *
+ * A lone placed layer's scene coordinates are local to its scene origin, so
+ * that origin is written as the project origin. A horizontal-only placement
+ * then carries a zero Z offset, exactly as the scene does.
  */
 export function projectFrameInputFrom(src: ProjectFrameSources): SessionFrameInput | null {
-  if (!src.frame || src.layerIds.length < 2) return null;
+  if (!src.frame || src.layerIds.length === 0) return null;
+  let p = src.frame.projectOrigin;
+  if (src.layerIds.length === 1) {
+    const id = src.layerIds[0]!;
+    const so = src.cloud(id)?.sourceOrigin;
+    if (!so) return null;
+    p = sceneOriginFor(p, so, src.placement(id));
+    if (p.every((c, i) => c === so[i])) return null;
+  }
   const layers: SessionFrameInput['layers'][number][] = [];
   for (const id of src.layerIds) {
     const cloud = src.cloud(id);
@@ -280,7 +311,6 @@ export function projectFrameInputFrom(src: ProjectFrameSources): SessionFrameInp
       placedVertically: placement?.vertical ?? true,
     });
   }
-  const p = src.frame.projectOrigin;
   return { projectOrigin: [p[0], p[1], p[2]], layers };
 }
 

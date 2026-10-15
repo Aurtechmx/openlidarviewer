@@ -17,6 +17,7 @@ import {
 } from '../src/app/measurementExportActions';
 import { UTM13, utm13LonLat } from './helpers/geoJsonLonLat';
 import * as serializers from '../src/export/measurementExport';
+import * as reportModule from '../src/export/measurementReport';
 import type { Measurement } from '../src/render/measure/types';
 import type { GeoExportContext } from '../src/app/reportExport';
 
@@ -335,5 +336,75 @@ describe('a change while the serializer chunk loads', () => {
     expect(cell('source')).toBe('geom-a');
     expect(Number(cell(cols.find((c) => /length|value|distance/i.test(c) && c.endsWith('_m'))!))).toBeCloseTo(10, 6);
     expect(downloads[0].text).not.toMatch(/geom-b|0\.3048|\b99\b|\b77\b/);
+  });
+});
+
+describe('a streamed scan with no static layer open', () => {
+  // A COPC replaced the scan the first distance was taken on; the second was
+  // placed on the stream itself. No static layer is open.
+  const STREAM_ORIGIN: V3 = [500_000, 4_000_000, 0];
+  const noLayers: ExportLayerView = { clouds: () => [], getCloud: () => undefined, layerProjectOffset: () => null };
+  const retired = owned('old', 'retired-scan', [[0, 0, 0], [5, 0, 0]], false);
+  const current = owned('new', undefined, [[1, 1, 0], [4, 1, 0]]);
+
+  async function runStream(ms: Measurement[]) {
+    const downloads: { filename: string; text: string }[] = [];
+    const refusals: string[] = [];
+    const notes: string[] = [];
+    const deps: MeasurementExportActionDeps = {
+      measure: { getMeasurements: () => ms, worldUp: [0, 0, 1], unitToMetres: 1, verticalUnitToMetres: 1, crsKnown: true, geographicCrs: false },
+      geo: () => GEO('new.copc.laz', STREAM_ORIGIN),
+      upAxis: () => 'z',
+      layers: { view: noLayers, stableIdFor: () => null },
+      refuse: (m) => refusals.push(m),
+      notify: (m) => notes.push(m),
+      baseName: (n) => n.replace(/\.[^.]+$/, '').replace(/\.copc$/, ''),
+      downloadText: (filename, text) => downloads.push({ filename, text }),
+      loadMeasurementExport: async () => ({
+        ...serializers,
+        resolveExportDigests: async () => ({ sourceSha256: null, sourceSha256Note: 'not supplied', crsOrigin: null } as never),
+      }),
+      loadMeasurementReport: async () => ({
+        ...reportModule,
+        resolveExportDigests: async () => ({ sourceSha256: null, sourceSha256Note: 'not supplied', crsOrigin: null } as never),
+      }),
+      activeClassificationEpoch: () => 0,
+      appVersion: '0.0.0',
+      now: () => '2026-01-01T00:00:00.000Z',
+    };
+    await exportMeasurementsFile('geojson', deps);
+    await exportMeasurementsFile('csv', deps);
+    await exportMeasurementIntegrityReport(deps);
+    return { downloads, refusals, notes };
+  }
+
+  it('writes no file under the stream for work left from the replaced scan', async () => {
+    const out = await runStream([retired]);
+    expect(out.downloads).toEqual([]);
+    expect(out.refusals).toEqual(Array(3).fill('Not exported: 1 measurement was taken on a scan that is no longer open. Reopen it or delete them, then export again.'));
+  });
+
+  it('exports the work taken on the stream itself and withholds the rest, saying why; the signed report refuses', async () => {
+    const out = await runStream([retired, current]);
+    // A signed integrity report must account for every record: it refuses
+    // rather than drop the one it cannot place.
+    expect(out.refusals).toHaveLength(1);
+    expect(out.refusals[0]).toMatch(/integrity report must account for every measurement/);
+    expect(out.downloads.some((d) => (/findings|integrity/.test(d.filename) || /\.json$/.test(d.filename)) && d.text.includes('"findings"'))).toBe(false);
+    const [geojson, csv] = out.downloads;
+    const fc = JSON.parse(geojson!.text);
+    expect(fc.features.map((f: { properties: { id: string } }) => f.properties.id)).toEqual(['new']);
+    expect(csv!.text.split('\n').filter((l) => l.length > 0)).toHaveLength(2);
+    expect(csv!.text).not.toContain('old');
+    expect(out.notes.filter((n) => n.includes('1 measurement withheld: taken on a scan that is no longer open'))).toHaveLength(2);
+  });
+
+  it('leaves the bytes of a stream-only export unchanged', async () => {
+    const withRetired = await runStream([retired, current]);
+    const alone = await runStream([current]);
+    // The GeoJSON and CSV files are identical; only the alone run also writes the report.
+    expect(withRetired.downloads.map((d) => d.text)).toEqual(alone.downloads.slice(0, withRetired.downloads.length).map((d) => d.text));
+    expect(alone.downloads.length).toBe(withRetired.downloads.length + 1);
+    expect(alone.notes.some((n) => n.includes('withheld'))).toBe(false);
   });
 });

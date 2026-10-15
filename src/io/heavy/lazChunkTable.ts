@@ -133,7 +133,7 @@ interface LaszipVlr {
 }
 
 /** Find and parse the laszip VLR in the head slice, or null when absent. */
-function findLaszipVlr(head: ArrayBuffer): LaszipVlr | null {
+export function findLaszipVlr(head: ArrayBuffer): LaszipVlr | null {
   const view = new DataView(head);
   if (head.byteLength < OFFSET_VLR_COUNT + 4) return null;
   const headerSize = view.getUint16(OFFSET_HEADER_SIZE, true);

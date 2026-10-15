@@ -11,7 +11,12 @@
 
 import proj4 from 'proj4';
 import type { GlobalPoints } from './globalPoints';
-import { epsgToProj4, datumShiftCaveat } from './epsg';
+import {
+  epsgToProj4,
+  datumShiftCaveat,
+  GEOCENTRIC_REPROJECT_REFUSAL,
+  isGeocentricProj4,
+} from './epsg';
 import {
   buildTransformProvenance,
   type TransformCrsHints,
@@ -73,6 +78,20 @@ export function reprojectGlobal(
   }
   if (!dstDef) {
     return { points: g, transformed: false, note: `cannot resolve target EPSG:${dstEpsg} — coordinates left unchanged`, datumCaveat: null, provenance };
+  }
+
+  // A geocentric CRS has three coupled metric axes. The transform below maps
+  // X/Y and carries Z through, which for ECEF writes wrong X/Y and the old
+  // elevation as the geocentric Z, so refuse rather than report success.
+  if (isGeocentricProj4(srcDef) || isGeocentricProj4(dstDef)) {
+    const which = isGeocentricProj4(srcDef) ? `source EPSG:${srcEpsg}` : `target EPSG:${dstEpsg}`;
+    return {
+      points: g,
+      transformed: false,
+      note: `${which} is geocentric (ECEF); ${GEOCENTRIC_REPROJECT_REFUSAL} Coordinates left unchanged`,
+      datumCaveat: null,
+      provenance,
+    };
   }
 
   try {

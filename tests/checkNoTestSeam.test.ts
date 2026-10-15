@@ -13,12 +13,24 @@ describe('check-no-test-seam', () => {
   it('every marker still names real seam code', () => {
     const seam =
       readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8') +
-      readFileSync(new URL('../src/app/testSeam/testSeamMount.ts', import.meta.url), 'utf8');
+      readFileSync(new URL('../src/app/testSeam/testSeamMount.ts', import.meta.url), 'utf8') +
+      readFileSync(new URL('../src/terrain/engine/TerrainRasterEngine.ts', import.meta.url), 'utf8');
     for (const m of TEST_SEAM_MARKERS as string[]) expect(seam, m).toContain(m);
   });
 
   it('flags a bundle that mounts the seam and passes one that does not', () => {
     expect(findTestSeamMarkers('window.__OLV_TEST_API__={version:"1"}')).toEqual(['__OLV_TEST_API__']);
     expect(findTestSeamMarkers('console.log("hello")')).toEqual([]);
+  });
+
+  it('the terrain engine verification hook is a marker and is set and read only under the seam flag', () => {
+    expect(TEST_SEAM_MARKERS).toContain('__olvTerrainRasterEngine');
+    for (const path of ['../src/terrain/engine/TerrainRasterEngine.ts', '../src/app/terrainComputePath.ts']) {
+      const src = readFileSync(new URL(path, import.meta.url), 'utf8');
+      const guard = src.search(/__OLV_TEST_SEAM__ &&|!__OLV_TEST_SEAM__/);
+      const firstUse = src.search(/\)\.__olvTerrainRasterEngine/);
+      expect(guard, path).toBeGreaterThanOrEqual(0);
+      expect(firstUse, path).toBeGreaterThan(guard);
+    }
   });
 });

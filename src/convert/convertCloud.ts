@@ -76,7 +76,14 @@ import { spatialContextFrom } from '../geo/SpatialContext';
 import { writeXyzBytes, writeAscBytes } from './writeAscii';
 import { reprojectGlobal } from './reproject';
 import type { TransformProvenance } from './transformProvenance';
-import { isGeographicEpsg, epsgLabel, epsgToProj4, epsgDatumFamily } from './epsg';
+import {
+  isGeographicEpsg,
+  epsgLabel,
+  epsgToProj4,
+  epsgDatumFamily,
+  isGeocentricEpsg,
+  GEOCENTRIC_REPROJECT_REFUSAL,
+} from './epsg';
 import {
   CONVERT_FORMATS,
   type ConvertOptions,
@@ -268,6 +275,10 @@ export function convertCloud(
         'Reproject refused: OLV has no NAD27 datum grids and would apply no NAD27 shift (tens of metres). '
         + 'Reproject with PROJ, GDAL or PDAL using the NADCON or NTv2 grids instead.',
       );
+    }
+    // A geocentric CRS needs a 3-D transform the reprojector does not perform.
+    if (isGeocentricEpsg(sourceEpsg) || isGeocentricEpsg(opts.targetEpsg)) {
+      return fail(`Reproject refused: ${GEOCENTRIC_REPROJECT_REFUSAL}`);
     }
     const r = reprojectGlobal(g, sourceEpsg, opts.targetEpsg, { sourceCrs });
     g = r.points;

@@ -25,14 +25,14 @@ from the tree and fails when a cell drifts.
 |---|---|---:|---|
 | Core numerics | `src/process`, `src/numeric.ts`, `src/units` | ~3.3k | Compensated sums, Welford, unit types. No dependencies. |
 | Model | `src/model` | ~3.9k | `PointCloud`, layer model. Plain data. |
-| Geo | `src/geo` | ~5.5k | CRS math, `ProjectSpatialFrame`, transforms. |
+| Geo | `src/geo` | ~5.6k | CRS math, `ProjectSpatialFrame`, transforms. |
 | Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~51k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. UI-free by lint. |
 | I/O | `src/io` | ~40k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
 | Render | `src/render` | ~81k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
 | Export / report | `src/export`, `src/report`, `src/convert` | ~19k | Studio exporters, PDF/report builders, batch conversion. |
-| Application services | `src/app` | ~29k | Composition root and the services that own shared state. |
+| Application services | `src/app` | ~30k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~44k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 4,302 | Wiring. A monolith under decomposition. |
+| Shell | `src/main.ts` | 4,283 | Wiring. A monolith under decomposition. |
 
 ## Composition root
 
@@ -102,7 +102,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-`src/main.ts` (4,302): the largest blocks, which are the extraction
+`src/main.ts` (4,283): the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` is a thin assembler in `src/app/actionDefinitions.ts` over

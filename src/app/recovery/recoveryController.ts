@@ -9,7 +9,13 @@
  * several sources; the newest entry for the reopened one is offered. Restoring goes
  * through the normal session import, which checks the match again.
  *
- * Storage failures turn the journal off and record why for Copy diagnostics.
+ * Saved work waiting to be restored, and work kept before a Replace, is held
+ * under its own key, so the open source's live entry keeps being written
+ * beside it. Closing a scan removes only that source's live entry.
+ *
+ * A write refused for its size or the storage quota is skipped and noted;
+ * other storage failures turn the journal off and record why for Copy
+ * diagnostics.
  */
 import type { AppLifetime } from '../appLifetime';
 import { matchSessionToScan, type SessionScanSummary } from '../../io/session';
@@ -20,6 +26,8 @@ import {
   isStale,
   newestMatch,
   fingerprintKey,
+  heldKey,
+  isSizeRefusal,
   openRecoveryStore,
   pruneStale,
   type RecoveryEntry,
@@ -51,7 +59,10 @@ export interface RecoveryDeps {
 export interface RecoveryHandle {
   /** Call after a source finishes opening. */
   onSourceLoaded(): void;
-  /** Explicit close: drop every journal entry and the notice. */
+  /**
+   * The open source closed: drop its live journal entry and the notice. Work
+   * held for a restore (from an earlier visit, another file or a Replace) stays.
+   */
   clear(): void;
   /** True while saved work from an earlier visit is waiting to be restored or discarded. */
   hasPending(): boolean;
@@ -82,6 +93,7 @@ const summaryOf = (json: string): SessionScanSummary | undefined => {
 };
 
 let activeHandle: RecoveryHandle | null = null;
+let activeWipe: (() => Promise<void> | undefined) | null = null;
 
 export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
   let store: RecoveryStore | null = null;
@@ -91,6 +103,14 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
   // store so its count and byte caps never evict one.
   let saved: RecoveryEntry[] = [];
   const held = (key: string | null): boolean => saved.some((e) => e.key === key);
+  // The same saved work, though a write may have moved it to its held key since.
+  const sameWork = (a: RecoveryEntry, b: RecoveryEntry): boolean => a === b || (a.savedAt === b.savedAt && a.json === b.json);
+  // The live entry this visit wrote for the open source; closing it removes only this.
+  let liveKey: string | null = null;
+  // The open source's scan summary, read when it was matched.
+  let openSummary: SessionScanSummary | undefined;
+  // Restored entries, deleted once the next live write for their source stores the work they brought back.
+  let retired: RecoveryEntry[] = [];
   // A source finished opening. The store may still be opening.
   let sourceOpen = false;
   let notice: HTMLElement | null = null;
@@ -98,7 +118,7 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
   let off = false;
   // True while a restore runs, so a source that finishes loading meanwhile does not offer it again.
   let restoring = false;
-  // Set by the first clear. A clear asked for before the store opens is applied once it does.
+  // Set by Clear all or Turn off. One asked for before the store opens is applied once it does.
   let cleared = false;
   // Clear, Turn off, closing a source and loading one each move this on. A
   // write reads it before it serializes and stores nothing once it has moved.
@@ -163,12 +183,23 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
     hideNotice();
   };
 
+  /** Offer the next saved work that matches the open source, if any. */
+  const offerNext = (): void => {
+    const next = sourceOpen ? newestMatch(saved, openSummary, Date.now(), matchSessionToScan) : null;
+    if (next) {
+      pending = next;
+      offerRestore(next);
+    }
+  };
+
   const discard = (): void => {
     const e = pending;
     pending = null;
     hideNotice();
     saved = saved.filter((x) => x !== e);
-    if (e) enqueue(() => store?.remove(e.key).catch(() => disable('remove-failed')));
+    // A write that moved the entry aside meanwhile stored the live entry under its old key.
+    if (e) enqueue(() => (e.key === liveKey ? undefined : store?.remove(e.key).catch(() => disable('remove-failed'))));
+    offerNext();
   };
 
   /** Delete the whole journal now, without waiting on queued writes. */
@@ -214,6 +245,27 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
   const stale = (gen: number): boolean =>
     gen !== generation || off || !recoveryEnabled() || deps.isLoading() || deps.lifetime.signal.aborted;
 
+  /**
+   * Saved work from an earlier visit sits under the live key of the source it
+   * was saved over. Copy it to its held key before the first live write for
+   * that source replaces it. Rejects, storing nothing, when it does not fit.
+   */
+  const moveAside = async (s: RecoveryStore, e: RecoveryEntry): Promise<void> => {
+    const moved: RecoveryEntry = { ...e, key: heldKey(e) };
+    // The copy replaces the entry, so the original need not be kept beside it.
+    await s.put(moved, saved.filter((x) => x !== e).map((x) => x.key));
+    if (saved.includes(e)) {
+      saved = saved.map((x) => (x === e ? moved : x));
+      if (pending === e) pending = moved;
+    } else if (retired.includes(e)) {
+      // Restored meanwhile: the copy goes once the live entry holds that work.
+      retired = retired.map((x) => (x === e ? moved : x));
+    } else {
+      // Discarded meanwhile: the copy is not wanted either.
+      await s.remove(moved.key).catch(() => {});
+    }
+  };
+
   const write = async (): Promise<void> => {
     if (!off && !recoveryEnabled()) disable('user');
     const gen = generation;
@@ -231,16 +283,28 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
       if (key && !held(key)) await s.remove(key).catch(() => {});
       return;
     }
-    // Never overwrite work that is waiting to be restored or discarded.
-    if (held(built.entry.key)) return;
+    const live = built.entry;
     try {
-      await s.put(built.entry, saved.map((e) => e.key));
+      // Never overwrite work that is waiting to be restored or discarded.
+      const occupant = saved.find((e) => e.key === live.key);
+      if (occupant) {
+        await moveAside(s, occupant);
+        if (stale(gen)) return;
+      }
+      liveKey = live.key;
+      await s.put(live, saved.map((e) => e.key));
       setRecoveryStatus(`on:${s.backend}`);
     } catch (err) {
       // The journal is full of work waiting to be restored: skip this write.
       if (err instanceof Error && err.message === 'held-full') return setRecoveryStatus(`on:${s.backend}:skipped-full`);
-      disable(`write-failed:${err instanceof Error ? err.name : 'error'}`);
+      // Too large for this store, or over the browser's quota: skip this write, keep journaling.
+      if (isSizeRefusal(err)) return setRecoveryStatus(`on:${s.backend}:${(err as Error).message === 'too-large-for-localstorage' ? 'skipped-too-large' : 'skipped-quota'}`);
+      return disable(`write-failed:${err instanceof Error ? err.name : 'error'}`);
     }
+    // Restored work is now in the live entry: its held copy can go.
+    const done = retired.filter((e) => fingerprintKey(e.summary) === live.key && e.key !== live.key && !held(e.key));
+    retired = retired.filter((e) => !done.includes(e));
+    for (const e of done) await s.remove(e.key).catch(() => {});
   };
 
   const debounce = createDebouncer(() => enqueue(write), DEBOUNCE_MS);
@@ -294,7 +358,8 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
       // Another load, a clear, Turn off or shutdown since: this answer is out of date.
       if (gen !== generation || restoring || off || deps.lifetime.signal.aborted) return;
       const now = Date.now();
-      const e = newestMatch(saved, json ? summaryOf(json) : undefined, now, matchSessionToScan);
+      openSummary = json ? summaryOf(json) : undefined;
+      const e = newestMatch(saved, openSummary, now, matchSessionToScan);
       const newest = saved.find((x) => !isStale(x, now));
       pending = e ?? newest ?? null;
       if (e) offerRestore(e);
@@ -314,18 +379,24 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
     restoring = true;
     const applied = await deps.restore(e.json).catch(() => false);
     restoring = false;
-    if (pending !== e) return;
+    // A write may have moved the entry to its held key meanwhile.
+    const cur = pending;
+    if (!cur || !sameWork(cur, e)) return;
     if (applied === true) {
       pending = null;
-      saved = saved.filter((x) => x !== e);
+      saved = saved.filter((x) => x !== cur);
+      retired.push(cur);
       hideNotice();
-    } else offerRestore(e);
+      offerNext();
+    } else offerRestore(cur);
   };
 
   activeHandle = {
     onSourceLoaded() {
       generation += 1;
       sourceOpen = true;
+      liveKey = null;
+      openSummary = undefined;
       matchSource();
     },
     hasPending: () => saved.length > 0,
@@ -335,31 +406,43 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
       const json = await deps.serialize().catch(() => null);
       if (!json || off || !recoveryEnabled()) return false;
       const built = buildEntry(json, Date.now());
-      if ('skip' in built || held(built.entry.key)) return false;
+      if ('skip' in built) return false;
+      // Under its held key, so live writes for this source go on beside it.
+      const entry: RecoveryEntry = { ...built.entry, key: heldKey(built.entry) };
+      if (held(entry.key)) return false;
       try {
-        await s.put(built.entry, saved.map((e) => e.key));
+        await s.put(entry, saved.map((e) => e.key));
       } catch {
         return false;
       }
       // Held from now on: later writes never replace it, and reopening the file offers it back.
-      saved = [built.entry, ...saved];
-      pending = built.entry;
+      saved = [entry, ...saved];
+      pending = entry;
       if (sourceOpen) matchSource();
       return true;
     },
     clear() {
       sourceOpen = false;
-      invalidate();
+      openSummary = undefined;
+      // Writes still serializing for the closed source store nothing.
+      generation += 1;
+      pending = null;
+      hideNotice();
       debounce.cancel();
-      void wipe()?.catch(() => {});
+      // Goes out at once: a put already sent is applied first, then removed by this.
+      const k = liveKey;
+      liveKey = null;
+      if (k && !held(k)) void store?.remove(k).catch(() => {});
     },
   };
+  activeWipe = wipe;
   return activeHandle;
 }
 
 /** Delete every journal entry, whatever store holds them. Used by Clear recovery data and when the user turns recovery off. */
 export async function clearRecoveryJournal(): Promise<void> {
   activeHandle?.clear();
+  await activeWipe?.()?.catch(() => {});
   const store = await openRecoveryStore({
     indexedDB: typeof indexedDB === 'undefined' ? undefined : indexedDB,
     localStorage: (() => { try { return localStorage; } catch { return undefined; } })(),

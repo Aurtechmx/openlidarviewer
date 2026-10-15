@@ -18,12 +18,14 @@ import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-/** Strings that exist only in the guarded test seam (src/app/testSeam/testSeamMount.ts). */
+/** Strings that exist only in code guarded by `__OLV_TEST_SEAM__` (src/app/testSeam/testSeamMount.ts and the terrain engine hook). */
 export const TEST_SEAM_MARKERS = [
   '__OLV_TEST_API__',
   '__OLV_TEST_SEAM__',
   'placeMeasurementPoint',
   'is for Playwright only',
+  // The terrain engine's verification hook (src/terrain/engine/TerrainRasterEngine.ts).
+  '__olvTerrainRasterEngine',
 ];
 
 /** Every marker found in `text`. */

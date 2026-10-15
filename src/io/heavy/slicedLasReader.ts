@@ -19,6 +19,7 @@
  */
 import type { RangeSource } from '../range/RangeSource';
 import { parseLasHeader, pointFormatHasRgb, type LasHeader } from '../lasHeader';
+import { lasOriginFor, recordWorld } from '../lasDataOrigin';
 import {
   allocRawPoints,
   decodeContext,
@@ -45,8 +46,9 @@ export interface SlicedLasOptions {
   /** Points per batch. The default keeps a batch under ~10 MB decoded. */
   readonly batchPoints?: number;
   /**
-   * Recentring origin. Defaults to the floored header minimum — the same
-   * origin the whole-file loader derives, so batch positions line up with it.
+   * Recentring origin. Defaults to the origin the whole-file loader derives
+   * ({@link lasOriginFor}: the floored header minimum, or the floored record 0
+   * when the header bounds do not enclose it), so batch positions line up.
    */
   readonly origin?: [number, number, number];
   readonly signal?: AbortSignal;
@@ -81,6 +83,10 @@ export interface SlicedLasOpen {
    */
   readonly complete: boolean;
   readonly origin: [number, number, number];
+  /** False when the header min/max do not enclose record 0 (see {@link lasOriginFor}). */
+  readonly boundsTrusted: boolean;
+  /** Set when the header bounds were not trusted; a load warning to surface. */
+  readonly originWarning?: string;
   /** Read one batch of `count` records starting at `firstPointIndex`. */
   readBatch(firstPointIndex: number, count: number): Promise<SlicedLasBatch>;
   /** Iterate every batch in file order. */
@@ -108,8 +114,18 @@ export async function openSlicedLas(
   const declaredPointCount = header.pointCount;
   const complete = readablePointCount >= declaredPointCount;
 
-  const origin: [number, number, number] =
-    options.origin ?? [Math.floor(header.min[0]), Math.floor(header.min[1]), Math.floor(header.min[2])];
+  // Record 0's coordinates, from the head read when it already covers them.
+  let record0: [number, number, number] | null = null;
+  if (readablePointCount > 0) {
+    const at = header.offsetToPointData;
+    const bytes =
+      at + 12 <= head.byteLength
+        ? head.slice(at, at + 12)
+        : await range.readRange(at, 12, options.signal);
+    if (bytes.byteLength >= 12) record0 = recordWorld(new DataView(bytes), 0, header);
+  }
+  const choice = lasOriginFor(header, record0);
+  const origin: [number, number, number] = options.origin ?? choice.origin;
   const ctx = decodeContext(header, origin);
   const hasColor = pointFormatHasRgb(header.pointFormat);
   const hasGps = ctx.gpsTimeOffset !== null;
@@ -162,5 +178,15 @@ export async function openSlicedLas(
     }
   }
 
-  return { header, readablePointCount, declaredPointCount, complete, origin, readBatch, batches };
+  return {
+    header,
+    readablePointCount,
+    declaredPointCount,
+    complete,
+    origin,
+    boundsTrusted: choice.boundsTrusted,
+    originWarning: choice.warning,
+    readBatch,
+    batches,
+  };
 }

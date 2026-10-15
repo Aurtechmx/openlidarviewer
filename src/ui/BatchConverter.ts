@@ -18,7 +18,7 @@ import { wireDialogA11y, focusableIn, type DialogA11yHandle } from './Modal';
 import { downloadBytes } from '../io/download';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import { decodeFull } from '../convert/decodeFull';
-import { epsgFieldProblem, parseEpsgField } from '../convert/epsg';
+import { epsgFieldProblem, geocentricReprojectProblem, parseEpsgField } from '../convert/epsg';
 import { runBatch, summariseBatch, guardedBatchInput, type BatchInput, type BatchItemResult } from '../convert/convertRunner';
 import { conversionNotes } from './conversionNotes';
 import { memoryCeilingBytes } from '../io/loadPlan';
@@ -373,7 +373,8 @@ export class BatchConverter {
     const target = parseEpsg(this._targetEpsg);
     const epsgProblem =
       (this._crsMode !== 'keep' ? epsgFieldProblem(this._targetEpsg, 'target') : null) ??
-      (this._crsMode === 'reproject' ? epsgFieldProblem(this._sourceEpsg, 'source') : null);
+      (this._crsMode === 'reproject' ? epsgFieldProblem(this._sourceEpsg, 'source') : null) ??
+      (this._crsMode === 'reproject' ? geocentricReprojectProblem(this._sourceEpsg, this._targetEpsg) : null);
     if (epsgProblem) return { ok: false, reason: epsgProblem };
     if (this._crsMode === 'assign' && target == null) {
       return { ok: false, reason: 'Enter the EPSG code to assign.' };

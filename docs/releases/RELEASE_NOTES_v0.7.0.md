@@ -65,6 +65,12 @@ Converted XYZ, ASC and LAS files record the software and version, the source fil
 - Whole-file loading is capped at 1 GiB. A larger LAS or LAZ opens out-of-core; any other format, full-resolution export, reload or batch conversion over the cap is refused before the file is read.
 - A file that cannot be read as a point cloud names the formats that open and suggests opening an E57 or LAS version.
 - Opening a streamed scan over an open one, and importing a session over existing work, asks Save session / Replace / Cancel. Replace keeps a recovery snapshot.
+- Opening a large local LAS or LAZ over an open stream asks the same question before any work starts. Close and every scan replacement ask before discarding class edits on any open layer, naming the layers and pointing to the LAS export that keeps them.
+- With only a streamed scan open, measurements left from a replaced scan are withheld from CSV and GeoJSON exports instead of being written under the stream's name and origin, and the signed integrity report refuses rather than leave records out.
+- Layers keep their placement while other layers open or close, a lone remaining layer exports and saves through its placement, removing the active layer activates the next one, and each measurement reads out in its own scan's units.
+- Binary PLY headers with CRLF or non-ASCII text read correctly; malformed PLY and glTF graphs are refused; KML descriptions are escaped as HTML.
+- PDF volume rows state coverage and preview caveats, and Web Mercator or geocentric frames no longer report extents or density in ground metres.
+- Recovery work survives Close scan and keeps journaling beside saved work; LAS/LAZ files with wrong header bounds keep full coordinate precision; geocentric reprojection is refused.
 - The "Two scans loaded" before/after prompt is offered only when both scans declare the same CRS and linear unit and neither is a truncated load.
 - A local glTF or GLB that names an external buffer or image (a relative file or a web address) is refused before parsing, so opening a file never makes the browser request an address named inside it.
 

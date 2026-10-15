@@ -22,7 +22,7 @@ export function buildMeasureConfidenceContext(
     | null
     | undefined,
   /** The spatial context, for whether heights borrow the horizontal unit. */
-  spatial?: { readonly verticalUnitToMetres?: number; readonly linearUnitKnown: boolean; readonly isGeographic: boolean } | null,
+  spatial?: { readonly verticalUnitToMetres?: number; readonly verticalScaleKnown?: boolean; readonly linearUnitKnown: boolean; readonly isGeographic: boolean } | null,
 ): MeasureSceneContext {
   // Roadmap P1 #6: a height/volume measurement is only "datum resolved" when
   // the vertical reference is actually KNOWN — not merely when a datum STRING
@@ -44,9 +44,11 @@ export function buildMeasureConfidenceContext(
     // until the compatibility ladder upgrades it (layerContextOf).
     layers: viewer.clouds().length <= 1 ? 'single' : 'mixed',
     verticalReferenceKnown: reference !== 'unknown',
-    // An unknown horizontal unit is not metres. A geographic frame carries its
-    // own caveat and is graded elsewhere.
-    unitVerified: viewer.measure.crsKnown !== false || !!viewer.measure.geographicCrs,
+    // An unknown horizontal unit is not metres. A geographic frame has no
+    // linear horizontal unit; the one figure it permits (a height) is metres
+    // only when the file declares a valid vertical unit.
+    unitVerified: viewer.measure.crsKnown !== false ||
+      (!!viewer.measure.geographicCrs && spatial != null && spatial.verticalUnitToMetres !== undefined && spatial.verticalScaleKnown !== false),
     // Heights borrow the horizontal unit exactly when verticalMetresPerUnit's
     // 'horizontal-when-known' policy does: no vertical unit declared, a known
     // horizontal unit, and a projected (not geographic) frame.

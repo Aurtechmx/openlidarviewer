@@ -44,6 +44,8 @@ export interface SnapLayerSource {
   readonly local: Float32Array;
   /** Source-local to project translation (zero for an unplaced layer). */
   readonly offset: Vec3;
+  /** The layer holds voxel centroids of a reduced display sample, not returns. */
+  readonly reduced?: boolean;
 }
 
 /** A snap hit with the layer it came from (`position` is in the project frame). */
@@ -53,12 +55,18 @@ export type ProjectSnapResult = SnapResult & { layerId: string };
 export interface VertexSupport {
   snappedToPoint: boolean;
   pointsWithinRadius: number;
+  /**
+   * The vertex sits only on points of a voxel-reduced layer: a centroid of the
+   * display sample, not a return. False when a whole layer has a point there.
+   */
+  onReducedSample: boolean;
 }
 
 interface ReadyLayer {
   readonly id: string;
   readonly index: PointSnapIndex;
   readonly offset: Vec3;
+  readonly reduced: boolean;
 }
 
 export class ProjectSnapIndex {
@@ -152,6 +160,7 @@ export class ProjectSnapIndex {
   support(p: Vec3): VertexSupport {
     const layers = this._ready();
     let snapped = false;
+    let onWhole = false;
     let within = 0;
     for (const layer of layers) {
       const q = toLayer(p, layer.offset);
@@ -160,11 +169,12 @@ export class ProjectSnapIndex {
       // On a real return by the bounded local-spacing rule, per layer.
       const onPoint = isOnMeasuredReturn(idx, q);
       if (onPoint) snapped = true;
+      if (onPoint && !layer.reduced) onWhole = true;
       if (useGrid) within += countPointsWithinRadius(idx, q, idx.cellSize * 4);
       else if (layers.length === 1) within += idx.count;
       else if (onPoint) within += 1;
     }
-    return { snappedToPoint: snapped, pointsWithinRadius: within };
+    return { snappedToPoint: snapped, pointsWithinRadius: within, onReducedSample: snapped && !onWhole };
   }
 
   private _ready(): ReadyLayer[] {
@@ -177,7 +187,7 @@ export class ProjectSnapIndex {
         index = buildPointSnapIndex(src.local);
         this._grids.set(src.local, index);
       }
-      out.push({ id: src.id, index, offset: src.offset });
+      out.push({ id: src.id, index, offset: src.offset, reduced: src.reduced === true });
     }
     // Id order makes cross-layer ties independent of load order.
     out.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -213,7 +223,10 @@ export function eligibleSnapLayers(
   if (streaming) return out;
   for (const [id, e] of entries) {
     if (!e.mesh.visible || e.locked) continue;
-    out.push({ id, local: sourcePositions(e.cloud), offset: e.placement?.sourceToProject ?? [0, 0, 0] });
+    out.push({
+      id, local: sourcePositions(e.cloud), offset: e.placement?.sourceToProject ?? [0, 0, 0],
+      reduced: e.cloud.pointReduction === 'voxel-centroids',
+    });
   }
   return out;
 }

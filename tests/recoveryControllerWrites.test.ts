@@ -26,9 +26,9 @@ vi.mock('../src/app/recovery/recoveryJournal', async (importOriginal) => {
   return { ...actual, openRecoveryStore: async () => fake.store };
 });
 
-import { startRecovery, type RecoveryHandle } from '../src/app/recovery/recoveryController';
+import { clearRecoveryJournal, startRecovery, type RecoveryHandle } from '../src/app/recovery/recoveryController';
 import { buildEntry, fingerprintKey } from '../src/app/recovery/recoveryJournal';
-import { setRecoveryEnabled } from '../src/app/recovery/recoveryStatus';
+import { recoveryStatus, setRecoveryEnabled } from '../src/app/recovery/recoveryStatus';
 
 interface Deferred<T> {
   readonly promise: Promise<T>;
@@ -97,7 +97,8 @@ function fakeStore(initial: RecoveryEntry[] = []) {
       return inOrder(() => { entries.clear(); });
     },
     async list() {
-      const read = [...entries.values()];
+      // Newest first, as the real stores return them.
+      const read = [...entries.values()].sort((a, b) => b.savedAt - a.savedAt);
       if (heldList) await heldList.promise;
       return read;
     },
@@ -215,7 +216,7 @@ async function start(store: RecoveryStore | Promise<RecoveryStore>) {
 }
 
 describe('a recovery snapshot that went out of date while it was being taken is never stored', () => {
-  it('Clear (closing the scan) while the session serializes', async () => {
+  it('closing the scan while the session serializes', async () => {
     const s = fakeStore();
     const app = await start(s.store);
     await app.editAndHide();
@@ -225,7 +226,7 @@ describe('a recovery snapshot that went out of date while it was being taken is 
     app.snapshots[0].resolve(session(1));
     await drain();
 
-    expect(s.log).toEqual(['clear']);
+    expect(s.log).toEqual([]);
     expect(s.entries.size).toBe(0);
   });
 
@@ -305,21 +306,18 @@ describe('a recovery snapshot that went out of date while it was being taken is 
 });
 
 describe('clears go out at once, and writes run in the order they were asked for', () => {
-  it('Clear deletes the journal while a snapshot is still being taken', async () => {
-    const s = fakeStore([entryFor(session(2, OTHER))]);
+  it('closing the scan while a snapshot is still being taken stores nothing and keeps saved work for other files', async () => {
+    const other = entryFor(session(2, OTHER));
+    const s = fakeStore([other]);
     const app = await start(s.store);
     await app.editAndHide();
     expect(app.snapshots).toHaveLength(1);
 
     app.handle.clear();
-    await drain();
-    expect(s.log).toEqual(['clear']);
-    expect(s.entries.size).toBe(0);
-
     app.snapshots[0].resolve(session(1));
     await drain();
-    expect(s.log).toEqual(['clear']);
-    expect(s.entries.size).toBe(0);
+    expect(s.log).toEqual([]);
+    expect([...s.entries.values()]).toEqual([other]);
   });
 
   it('Turn off deletes the journal while a snapshot is still being taken', async () => {
@@ -332,7 +330,7 @@ describe('clears go out at once, and writes run in the order they were asked for
     expect(s.entries.size).toBe(0);
   });
 
-  it('a Clear asked for while a put is in flight goes out at once and is applied after that put', async () => {
+  it('closing the scan while a put is in flight removes that entry at once, applied after the put', async () => {
     const s = fakeStore();
     const app = await start(s.store);
     const put = s.holdPuts();
@@ -343,7 +341,7 @@ describe('clears go out at once, and writes run in the order they were asked for
 
     app.handle.clear();
     await drain();
-    expect(s.log).toEqual(['put site.las 1', 'clear']);
+    expect(s.log).toEqual(['put site.las 1', 'remove site.las']);
 
     put.resolve();
     await drain();
@@ -451,8 +449,11 @@ describe('the restore offer stays until the saved work is back on screen', () =>
     await app.editAndHide();
     app.snapshots.at(-1)!.resolve(session(1));
     await drain();
-    expect(s.log).toEqual([]);
-    expect(s.entries.get(SITE_KEY)).toBe(saved);
+    // The saved work is kept unchanged under its held key; the new work is journaled beside it.
+    const stored = [...s.entries.values()];
+    expect(stored.find((e) => e.key !== SITE_KEY)?.json).toBe(saved.json);
+    expect(s.entries.get(SITE_KEY)?.measurements).toBe(1);
+    expect(app.buttons()).toContain('Restore previous work');
   });
 
   it('a file that finishes opening during a restore does not offer it again', async () => {
@@ -477,27 +478,33 @@ describe('the restore offer stays until the saved work is back on screen', () =>
     app.snapshots.at(-1)!.resolve(session(5));
     await drain();
 
-    expect(s.log).toEqual([]);
-    expect(s.entries.get(SITE_KEY)).toBe(saved);
+    // Copied to its held key before the live write for the file replaces the old slot.
+    expect(s.log).toEqual(['put site.las 2', 'put site.las 5']);
+    const kept = [...s.entries.values()].filter((e) => e.key !== SITE_KEY);
+    expect(kept).toHaveLength(1);
+    expect(kept[0].json).toBe(saved.json);
+    expect(kept[0].savedAt).toBe(saved.savedAt);
   });
 });
 
 describe('a clear asked for before the journal is ready', () => {
-  it('is applied when the store opens, and nothing is offered', async () => {
+  it('Clear recovery data is applied when the store opens, and nothing is offered', async () => {
     const s = fakeStore([entryFor(session(2))]);
     const opening = deferred<RecoveryStore>();
     const app = await start(opening.promise);
 
-    app.handle.clear();
+    const cleared = clearRecoveryJournal();
     opening.resolve(s.store);
     await drain();
+    await cleared;
 
     expect(app.buttons()).toEqual([]);
-    expect(s.log).toEqual(['clear']);
+    expect(s.log).toContain('clear');
+    expect(s.log.every((l) => l === 'clear')).toBe(true);
     expect(s.entries.size).toBe(0);
   });
 
-  it('during the startup read keeps the entry it read from being offered', async () => {
+  it('closing the scan during the startup read keeps the saved work and still offers it', async () => {
     const s = fakeStore([entryFor(session(2))]);
     const list = s.holdLists();
     const app = await start(s.store);
@@ -506,8 +513,9 @@ describe('a clear asked for before the journal is ready', () => {
     list.resolve();
     await drain();
 
-    expect(app.buttons()).toEqual([]);
-    expect(s.entries.size).toBe(0);
+    expect(app.buttons()).toContain('Discard this work');
+    expect(s.log).toEqual([]);
+    expect(s.entries.size).toBe(1);
   });
 
   it('the Clear button confirms the deletion', async () => {
@@ -671,7 +679,7 @@ describe('snapshotNow, taken before work is replaced', () => {
     const stored = app.handle.snapshotNow();
     app.snapshots.at(-1)!.resolve(session(2));
     expect(await stored).toBe(true);
-    expect(s.entries.get(SITE_KEY)?.measurements).toBe(2);
+    expect([...s.entries.values()].map((e) => e.measurements)).toEqual([2]);
     expect(app.handle.hasPending()).toBe(true);
   });
   it('reports false and stores nothing for a session with no work', async () => {
@@ -681,5 +689,179 @@ describe('snapshotNow, taken before work is replaced', () => {
     app.snapshots.at(-1)!.resolve(session(0));
     expect(await stored).toBe(false);
     expect(s.entries.size).toBe(0);
+  });
+});
+
+describe('closing the scan removes only that scan\'s own recovery entry', () => {
+  it('keeps the work a Replace kept for recovery', async () => {
+    const s = fakeStore();
+    const app = await start(s.store);
+    app.handle.onSourceLoaded();
+    const stored = app.handle.snapshotNow();
+    app.snapshots.at(-1)!.resolve(session(2));
+    expect(await stored).toBe(true);
+
+    app.handle.clear();
+    await drain();
+
+    expect(s.log).not.toContain('clear');
+    expect([...s.entries.values()].map((e) => e.measurements)).toEqual([2]);
+  });
+
+  it('keeps saved work for other files that was offered at boot', async () => {
+    const other = entryFor(session(4, OTHER));
+    const s = fakeStore([other]);
+    const app = await start(s.store);
+    app.handle.onSourceLoaded();
+    app.snapshots.at(-1)!.resolve(session(0));
+    await drain();
+    await app.editAndHide();
+    app.snapshots.at(-1)!.resolve(session(1));
+    await drain();
+    expect(s.entries.get(SITE_KEY)?.measurements).toBe(1);
+
+    app.handle.clear();
+    await drain();
+
+    expect(s.log).not.toContain('clear');
+    expect(s.entries.has(SITE_KEY)).toBe(false);
+    expect([...s.entries.values()]).toEqual([other]);
+    // Reopening that file still offers its saved work.
+    app.handle.onSourceLoaded();
+    app.snapshots.at(-1)!.resolve(session(0, OTHER));
+    await drain();
+    expect(app.noticeText()).toContain('This file matches your unsaved work: 4 measurements on other.las');
+  });
+
+  it('a later write still never evicts the saved work kept across the close', async () => {
+    const other = entryFor(session(4, OTHER));
+    const s = fakeStore([other]);
+    let passed: readonly string[] = [];
+    s.store.put = ((orig) => (e: RecoveryEntry, keep?: readonly string[]) => {
+      passed = keep ?? [];
+      return orig(e, keep);
+    })(s.store.put.bind(s.store));
+    const app = await start(s.store);
+    app.handle.clear();
+    app.handle.onSourceLoaded();
+    await app.editAndHide();
+    app.snapshots.at(-1)!.resolve(session(1));
+    await drain();
+    expect(passed).toEqual([other.key]);
+  });
+});
+
+describe('work on a file whose earlier work is held is still journaled', () => {
+  it('a reopened file with saved work waiting keeps journaling new work beside it', async () => {
+    const saved = entryFor(session(2));
+    const s = fakeStore([saved]);
+    const app = await start(s.store);
+    app.handle.onSourceLoaded();
+    app.snapshots[0].resolve(session(0));
+    await drain();
+    expect(app.buttons()).toContain('Restore previous work');
+
+    await app.editAndHide();
+    app.snapshots.at(-1)!.resolve(session(5));
+    await drain();
+
+    const stored = [...s.entries.values()];
+    // The saved work is unchanged, and the new work is stored as well.
+    expect(stored.find((e) => e.json === saved.json)).toBeDefined();
+    expect(stored.find((e) => e.measurements === 5)).toBeDefined();
+    expect(stored).toHaveLength(2);
+    // The offer on screen still restores the saved work.
+    await app.click('Restore previous work');
+    expect(app.restores).toHaveLength(1);
+  });
+
+  it('restoring the moved work releases its held copy once the live entry stores it', async () => {
+    const saved = entryFor(session(2));
+    const s = fakeStore([saved]);
+    const app = await start(s.store);
+    app.handle.onSourceLoaded();
+    app.snapshots[0].resolve(session(0));
+    await drain();
+    await app.editAndHide();
+    app.snapshots.at(-1)!.resolve(session(1));
+    await drain();
+    expect(s.entries.size).toBe(2);
+
+    await app.click('Restore previous work');
+    app.restores[0].resolve(true);
+    await drain();
+    expect(app.handle.hasPending()).toBe(false);
+    // Until the restored work reaches the live entry, its held copy stays.
+    expect(s.entries.size).toBe(2);
+
+    await app.editAndHide();
+    app.snapshots.at(-1)!.resolve(session(2));
+    await drain();
+    expect([...s.entries.keys()]).toEqual([SITE_KEY]);
+    expect(s.entries.get(SITE_KEY)?.measurements).toBe(2);
+  });
+
+  it('work after a Replace snapshot is journaled, and the snapshot is kept', async () => {
+    const s = fakeStore();
+    const app = await start(s.store);
+    app.handle.onSourceLoaded();
+    const stored = app.handle.snapshotNow();
+    app.snapshots.at(-1)!.resolve(session(2));
+    expect(await stored).toBe(true);
+
+    await app.editAndHide();
+    app.snapshots.at(-1)!.resolve(session(7));
+    await drain();
+
+    expect([...s.entries.values()].map((e) => e.measurements).sort()).toEqual([2, 7]);
+    expect(s.entries.get(SITE_KEY)?.measurements).toBe(7);
+  });
+
+  it('after a reload both are offered for the file, newest first', async () => {
+    const s = fakeStore();
+    const first = await start(s.store);
+    first.handle.onSourceLoaded();
+    const stored = first.handle.snapshotNow();
+    first.snapshots.at(-1)!.resolve(session(2));
+    await stored;
+    await new Promise((r) => setTimeout(r, 2));
+    await first.editAndHide();
+    first.snapshots.at(-1)!.resolve(session(7));
+    await drain();
+    first.lifetime.abort();
+
+    const app = await start(s.store);
+    app.handle.onSourceLoaded();
+    app.snapshots.at(-1)!.resolve(session(0));
+    await drain();
+    expect(app.noticeText()).toContain('7 measurements on site.las');
+    await app.click('Discard this work');
+    expect(app.noticeText()).toContain('2 measurements on site.las');
+    expect(app.buttons()).toContain('Restore previous work');
+  });
+});
+
+describe('a write the store refuses for its size skips that write and keeps recovery on', () => {
+  it.each([
+    ['too large for localStorage', () => new Error('too-large-for-localstorage'), 'skipped-too-large'],
+    ['over the storage quota', () => Object.assign(new Error('quota'), { name: 'QuotaExceededError' }), 'skipped-quota'],
+  ])('%s', async (_label, error, token) => {
+    const s = fakeStore();
+    let refuse = true;
+    s.store.put = ((orig) => (e: RecoveryEntry, keep?: readonly string[]) =>
+      refuse ? Promise.reject(error()) : orig(e, keep))(s.store.put.bind(s.store));
+    const app = await start(s.store);
+    await app.editAndHide();
+    app.snapshots.at(-1)!.resolve(session(1));
+    await drain();
+    expect(recoveryStatus()).toBe(`on:indexeddb:${token}`);
+
+    refuse = false;
+    await app.editAndHide();
+    expect(app.snapshots).toHaveLength(2);
+    app.snapshots.at(-1)!.resolve(session(1));
+    await drain();
+    expect(s.entries.get(SITE_KEY)?.measurements).toBe(1);
+    expect(recoveryStatus()).toBe('on:indexeddb');
   });
 });

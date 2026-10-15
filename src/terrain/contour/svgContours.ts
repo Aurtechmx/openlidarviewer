@@ -173,6 +173,15 @@ function titleLines(model: ContourFeatureModel, prov: ExportProvenance | undefin
   return lines;
 }
 
+/**
+ * Text that is safe inside an XML comment: XML forbids `--` within a comment
+ * and a comment ending in `-`, and a file name can hold either.
+ */
+function commentText(text: string): string {
+  const t = text.replace(/-(?=-)/g, '- ');
+  return t.endsWith('-') ? `${t} ` : t;
+}
+
 /** Render the contour model as a topographic SVG sheet. */
 export function svgContours(model: ContourFeatureModel, params: SvgContourParams = {}): string {
   const stroke = params.stroke ?? '#5a3a1e';
@@ -184,8 +193,8 @@ export function svgContours(model: ContourFeatureModel, params: SvgContourParams
   const prov = params.provenance;
 
   const provStamp = prov
-    ? `<metadata><!--\n${provenanceLines(prov).map(xmlEscape).join('\n')}\n--></metadata>`
-    : `<!-- contour style: ${contourShapeStyleLabel(model.contourStyle)} -->`;
+    ? `<metadata><!--${commentText(`\n${provenanceLines(prov).map(xmlEscape).join('\n')}\n`)}--></metadata>`
+    : `<!--${commentText(` contour style: ${contourShapeStyleLabel(model.contourStyle)} `)}-->`;
 
   if (!model.bbox || model.features.length === 0) {
     return `<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" viewBox="0 0 1 1">${provStamp}</svg>`;

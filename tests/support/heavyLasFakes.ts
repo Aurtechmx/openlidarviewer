@@ -49,15 +49,61 @@ export function counting(inner: RangeSource): RangeSource {
   return new InstrumentedRangeSource(inner, () => {});
 }
 
+/** One saved item as the work stores hold it. */
+export interface FakeWorkItem {
+  id: string;
+  owner?: { layerId: string; frame: 'project' };
+  pickLayers?: string[];
+}
+
+/**
+ * Measurement and annotation stores with the calls the replace path makes:
+ * list, remove one, clear all, and stamp the unowned with an owner.
+ */
+export function fakeWork() {
+  const store = (items: FakeWorkItem[], stampPicks: boolean) => ({
+    items,
+    clear: vi.fn(() => { items.length = 0; }),
+    claimUnowned: vi.fn((layerId: string) => {
+      for (const i of items) {
+        if (!i.owner) i.owner = { layerId, frame: 'project' };
+        if (stampPicks && !i.pickLayers) i.pickLayers = [layerId];
+      }
+    }),
+    removeOne: (id: string) => {
+      const at = items.findIndex((i) => i.id === id);
+      if (at >= 0) items.splice(at, 1);
+    },
+  });
+  const m = store([], true);
+  const a = store([], false);
+  return {
+    measure: {
+      clear: m.clear,
+      claimUnowned: m.claimUnowned,
+      getMeasurements: () => m.items,
+      removeMeasurement: vi.fn((id: string) => { m.removeOne(id); return null; }),
+    },
+    annotate: {
+      clear: a.clear,
+      claimUnowned: a.claimUnowned,
+      getAnnotations: () => a.items,
+      remove: vi.fn((id: string) => { a.removeOne(id); }),
+    },
+  };
+}
+
 export function fakeViewer(opts: { hasStreamingCloud?: boolean } = {}) {
   const viewer = {
+    ...fakeWork(),
     ready: Promise.resolve(),
     attachStreamingCloud: vi.fn(async () => {}),
+    detachStreamingCloud: vi.fn(),
     activeBackend: () => 'webgl2' as const,
     availableImageExportModes: vi.fn(() => new Map()),
     setMode: vi.fn(),
     frameAll: vi.fn(),
-    clouds: () => [],
+    clouds: (): string[] => [],
     ...(opts.hasStreamingCloud ? { hasStreamingCloud: true } : {}),
   };
   return viewer;
@@ -170,8 +216,10 @@ export function makeDeps(opts: { hasStreamingCloud?: boolean } = {}) {
   return { deps, viewer, s };
 }
 
-export function makeEnv(range: RangeSource): HeavyLasBridgeEnv {
-  const opfs = fakeOpfs({ syncAccess: true, fileMove: true });
+export function makeEnv(
+  range: RangeSource,
+  opfs: ReturnType<typeof fakeOpfs> = fakeOpfs({ syncAccess: true, fileMove: true }),
+): HeavyLasBridgeEnv {
   const reading: StorageEstimateReading = { available: true, quotaBytes: 200_000_000_000, usageBytes: 0 };
   return {
     capable: () => true,
@@ -180,6 +228,7 @@ export function makeEnv(range: RangeSource): HeavyLasBridgeEnv {
     readStorage: async () => reading,
     async runIndex(req) {
       return buildLocalOocStore(range, opfs.root, req.storeName, {
+        kind: req.kind,
         pointsPerLeaf: req.pointsPerLeaf,
         memoryBudgetBytes: req.memoryBudgetBytes,
         maxDepth: req.maxDepth,

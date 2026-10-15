@@ -58,6 +58,11 @@ export interface HeavyLasBridgeDeps {
    * just the dock and inspector `revealStreamingScanChrome` turns on.
    */
   readonly streaming: OpenStreamingDeps;
+  /**
+   * The stable layer id of an open static layer, so the work on static layers
+   * that stay open keeps its owner. Absent, static work is left unstamped.
+   */
+  stableLayerId?(viewerId: string): string | null;
 }
 
 /** The light seams the decision half needs — no out-of-core weight. */

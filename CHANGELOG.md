@@ -4,7 +4,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
-## [0.7.0] - 2026-10-14
+## [0.7.0] - 2026-10-15
 
 ### Added
 
@@ -49,6 +49,21 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- Opening a large local LAS or LAZ over an open stream now offers Save / Replace / Cancel before any work starts, and applies the answer only after the new scan opens. Cancel, a cancelled or failed index build and a failed attach leave the previous scan and its measurements, annotations and saved views unchanged. Saved views are cleared only by Replace, work left over a replaced stream is never saved under the new file, and static layers keep their work and saved views.
+- Close scan and opening a COPC, EPT or 3D Tiles scan over open layers now ask before discarding class edits on any open layer, not only the active one, including a hidden or locked layer. The question names the edited layers and points to exporting each as LAS, since the session file does not store class edits. Removing one layer from the Layers list asks only when that layer has class edits.
+- With only a streamed scan open, CSV and GeoJSON exports no longer include measurements left from a replaced scan under the stream's name and origin; they leave them out and say why, as the session, KML and PDF report already did. Work placed while a streamed scan is opening is no longer discarded by the earlier Replace answer or given to the new scan; it is kept as work on the replaced scan and the user is told.
+- A signed measurement integrity report refuses, naming the measurements it cannot place, instead of leaving records out of the file.
+- With one layer left open after the first layer closed, GeoJSON, site KML and the session now place its work through its placement in the project frame, not its file origin, so coordinates and reopened sessions no longer shift by that offset.
+- Opening or closing a layer no longer moves the layers already open: each keeps its placement while it stays open, a newly opened layer that does not fit the frame is the one held out, and the project origin holds while any layer that anchored it is open. A CRS override re-judges the frame at once.
+- Each measurement reads out in the units of the scan it was taken on; switching the active scan no longer rescales measurements taken on another scan with different units. A height on a geographic CRS with no declared vertical unit is marked unit-unverified instead of metres.
+- Removing the active layer makes the next open layer active and re-resolves its CRS, provenance and dataset card, instead of leaving exports with no active scan.
+- A binary PLY with a CRLF or non-ASCII header now reads its body at the right byte; a PLY element with records but no properties, or a header longer than 64 KiB, is refused. A glTF node reached twice in one walk is refused and a glTF open emits at most 25 million vertices.
+- KML descriptions are HTML-escaped before XML escaping, and contour SVG comments stay well-formed when a file name contains "--". The terrain engine verification hook is registered only in test builds.
+- PDF report volume rows carry the same interpolated, outside-scan, preview, noise and reduced-sample clauses as the live readout, and a withheld volume states its reason.
+- On Web Mercator and geocentric frames the scan report, streamed extents, PDF footprint and full-cloud grade no longer state widths, depths or densities in ground metres; they state why.
+- An endpoint snapped to a voxel centroid of a reduced display sample is graded caution, not a measured return.
+- Close scan keeps recovery work saved for other files and the work a Replace kept, and new work on a file that has saved recovery work is journaled beside it instead of being skipped. A write too large for the store is skipped without turning recovery off. A session whose origin is present but malformed is refused.
+- A LAS or LAZ whose header bounds do not enclose its points takes its local origin from the points, so coordinates keep full precision, and says so. Reprojection to or from a geocentric CRS (EPSG:4978) is refused instead of writing wrong coordinates.
 - A local glTF or GLB that names an external buffer or image (a relative file or a web address) is refused before parsing. Opening it no longer makes the browser request an address named inside the file.
 - The E57 reader refuses an XML section larger than 64 MB and XML nested deeper than 256 levels with a clear error, instead of exhausting memory or the call stack.
 - The latest-result card no longer covers the active tool's Finish and Cancel controls when it grows: it stays above the bottom controls and scrolls inside itself.

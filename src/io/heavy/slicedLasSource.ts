@@ -50,12 +50,11 @@ export async function openSlicedLasSource(
   const schema = tileSchemaForHeader(opened.header.pointFormat, ctx);
   const recordBytes = tileRecordBytes(schema);
 
-  const header = sliceSourceHeader(
-    opened.header.min,
-    opened.header.max,
-    opened.origin,
-    opened.readablePointCount,
-  );
+  // Header bounds that do not enclose the data cannot stand in for the bounds
+  // pass; the indexer measures instead.
+  const header = opened.boundsTrusted
+    ? sliceSourceHeader(opened.header.min, opened.header.max, opened.origin, opened.readablePointCount)
+    : undefined;
 
   const source: PointSource = {
     header,

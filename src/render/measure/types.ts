@@ -483,3 +483,49 @@ export function reductionExportFields(w: VolumeWithheldCounts): Record<string, s
     ...(caveat ? { reduction_caveat: caveat } : {}),
   };
 }
+
+/**
+ * The unit authority a measurement's readouts are converted with: the factors
+ * and frame verdicts of the layer it was taken on. Render space keeps each
+ * layer's source units, so these belong to the layer, not to the active scan.
+ */
+export interface MeasureUnitFrame {
+  readonly unitToMetres: number;
+  /** Up-axis factor; null rides the horizontal one. */
+  readonly verticalUnitToMetres: number | null;
+  /**
+   * The file declares a valid vertical unit. On a geographic frame the
+   * horizontal factor is not a linear unit, so without one a height has no
+   * known unit at all.
+   */
+  readonly verticalUnitKnown: boolean;
+  readonly crsKnown: boolean;
+  readonly geographic: boolean;
+  readonly verticalRefused: boolean;
+  /** Projected with an EPSG code, so +Y is grid north. */
+  readonly projected: boolean;
+}
+
+/**
+ * The frame of work whose units cannot be resolved: it names a layer that is
+ * not open (or that several open layers carry), or it spans layers with
+ * different units. No factor applies, so its values read as unverified.
+ */
+export const UNRESOLVED_UNIT_FRAME: MeasureUnitFrame = Object.freeze({
+  unitToMetres: 1,
+  verticalUnitToMetres: null,
+  verticalUnitKnown: false,
+  crsKnown: false,
+  geographic: false,
+  verticalRefused: false,
+  projected: false,
+});
+
+/** Whether two unit frames convert every readout identically. */
+export function sameUnitFrame(a: MeasureUnitFrame, b: MeasureUnitFrame): boolean {
+  return a.unitToMetres === b.unitToMetres &&
+    (a.verticalUnitToMetres ?? a.unitToMetres) === (b.verticalUnitToMetres ?? b.unitToMetres) &&
+    a.verticalUnitKnown === b.verticalUnitKnown &&
+    a.crsKnown === b.crsKnown && a.geographic === b.geographic &&
+    a.verticalRefused === b.verticalRefused && a.projected === b.projected;
+}

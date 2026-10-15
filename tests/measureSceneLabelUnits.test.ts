@@ -29,6 +29,8 @@ interface Frame {
   crsKnown?: boolean;
   unitToMetres?: number;
   geographic?: boolean;
+  /** The file declares a vertical unit (what makes a geographic height metres). */
+  verticalUnitKnown?: boolean;
   units?: UnitSystem;
 }
 
@@ -41,6 +43,7 @@ async function render(m: Measurement, f: Frame = {}): Promise<{ value: string; l
   measure.setCrsKnown(f.crsKnown ?? false);
   measure.setUnitToMetres(f.unitToMetres ?? 1);
   measure.setGeographicCrs(f.geographic ?? false);
+  measure.setVerticalUnitKnown(f.verticalUnitKnown ?? false);
   if (f.units) measure.setUnitSystem(f.units);
   measure.loadMeasurements([structuredClone(m)]);
   const value = measure.getSummaries()[0].value;
@@ -122,7 +125,7 @@ describe('scene labels: refused figures', () => {
     const h = mk('height', [[0, 0, 0], [0.001, 0.001, 12]]);
     const projected = await render(h, { crsKnown: true });
     expect(projected.labels).toHaveLength(2);
-    const geo = await render(h, { crsKnown: true, geographic: true });
+    const geo = await render(h, { crsKnown: true, geographic: true, verticalUnitKnown: true });
     expect(geo.labels).toEqual([{ text: projected.labels.find((l) => l.primary)!.text, primary: true }]);
     expect(geo.labels[0].text).toBe(geo.value);
   });

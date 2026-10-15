@@ -5,7 +5,7 @@ import {
 } from '../src/app/closeScanGuard';
 import type { ConfirmChoice, ConfirmOptions } from '../src/ui/Modal';
 
-const NONE: DiscardableWork = { measurements: 0, annotations: 0, views: 0, classEdits: false, results: 0, pendingRecovery: false };
+const NONE: DiscardableWork = { measurements: 0, annotations: 0, views: 0, classEdits: false, results: 0 };
 
 function setup(work: Partial<DiscardableWork>, choice: ConfirmChoice = 'cancel', withSave = true) {
   const close = vi.fn();
@@ -30,7 +30,6 @@ describe('close scan guard', () => {
     ['saved views', { views: 3 }],
     ['class edits', { classEdits: true }],
     ['ready results', { results: 1 }],
-    ['a pending recovery journal', { pendingRecovery: true }],
   ])('asks first for %s', async (_n, work) => {
     const t = setup(work);
     expect(hasDiscardableWork({ ...NONE, ...work })).toBe(true);
@@ -120,7 +119,8 @@ describe('close scan guard', () => {
     expect(t.close).toHaveBeenCalledTimes(1);
   });
 
-  it('describes a recovery-only journal', () => {
-    expect(describeDiscardableWork({ ...NONE, pendingRecovery: true })).toBe('work saved for recovery in this browser');
+  it('never names work held in the recovery journal, which closing keeps', () => {
+    expect(describeDiscardableWork({ ...NONE, measurements: 1 })).toBe('1 measurement');
+    expect(describeDiscardableWork(NONE)).toBe('');
   });
 });

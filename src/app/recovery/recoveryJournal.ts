@@ -9,9 +9,14 @@
  * source produces the same key AND `matchSessionToScan` calls it a strong
  * match.
  *
+ * Each source has one live entry under its fingerprint key. Work held for a
+ * restore (read at boot, or kept before a Replace) is stored under
+ * {@link heldKey}, so the live entry keeps being written beside it.
+ *
  * Storage is IndexedDB, falling back to localStorage for entries up to
- * {@link LOCAL_STORAGE_MAX_BYTES}. Any failure disables the journal; it never
- * throws into the app.
+ * {@link LOCAL_STORAGE_MAX_BYTES}. A write refused for its size or the quota
+ * is skipped; any other failure disables the journal. It never throws into
+ * the app.
  */
 import { settle } from '../settle';
 import type { ScanMatch, SessionScanSummary } from '../../io/session';
@@ -86,6 +91,18 @@ export function fingerprintKey(s: Partial<SessionScanSummary> | undefined): stri
   return [s.fileName.toLowerCase(), s.sourcePoints ?? '', fmt(s.width), fmt(s.depth), fmt(s.height), s.epsg ?? ''].join('|');
 }
 
+/**
+ * The store key for work held for restore, apart from the source's live entry
+ * (keyed by {@link fingerprintKey}) so writes for the open source never replace it.
+ */
+export const heldKey = (e: RecoveryEntry): string => `${fingerprintKey(e.summary) ?? e.key}#${e.savedAt}`;
+
+/** Whether a failed put was the browser's storage quota or an entry too large for the store: skip it, keep journaling. */
+export const isSizeRefusal = (err: unknown): boolean => {
+  const { name, message } = (err ?? {}) as { name?: unknown; message?: unknown };
+  return message === 'too-large-for-localstorage' || name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED';
+};
+
 export type BuildResult =
   | { readonly entry: RecoveryEntry }
   | { readonly skip: 'no-source' | 'no-work' | 'too-large' | 'unreadable' };
@@ -124,7 +141,7 @@ export function entryMatchesSource(
   match: (summary: SessionScanSummary, loaded: SessionScanSummary) => ScanMatch,
 ): boolean {
   const key = fingerprintKey(loaded);
-  if (!loaded || key === null || key !== entry.key) return false;
+  if (!loaded || key === null || key !== fingerprintKey(entry.summary)) return false;
   return match(entry.summary, loaded).verdict === 'strong';
 }
 

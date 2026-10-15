@@ -50,6 +50,8 @@ export interface CrsCoordinatorDeps {
   getActiveId: () => string | null;
   /** Mirrors main.ts's `debug` flag for the diagnostic warning paths. */
   debug: boolean;
+  /** Re-judge the open layers' shared frame after an override changes a layer's CRS. */
+  onOverrideApplied?: () => void;
 }
 
 export interface CrsCoordinator {
@@ -239,6 +241,7 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     } else if (staticCloud) {
       refreshCrsForStaticCloud(staticCloud);
     }
+    deps.onOverrideApplied?.();
   }
 
   function clearDatasetKey(): void {

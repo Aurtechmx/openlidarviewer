@@ -157,6 +157,14 @@ describe('runFullCloudGrade — unit-confirmation gate', () => {
     await runWithCrs(null, { ...CRS_BASE, linearUnit: 'metre', linearUnitToMetres: 1 });
     expect(vi.mocked(summarizeSampleGrade).mock.calls[0][1]).toBe(false);
   });
+
+  it.each([
+    ['Web Mercator', { ...CRS_BASE, name: 'WGS 84 / Pseudo-Mercator', epsg: 3857, linearUnit: 'metre', linearUnitToMetres: 1 }],
+    ['geocentric', { ...CRS_BASE, name: 'WGS 84 geocentric', epsg: 4978, geocentric: true, linearUnit: 'metre', linearUnitToMetres: 1 }],
+  ])('summarises unconfirmed on a %s frame (metre unit, not ground metres)', async (_l, crs) => {
+    await runWithCrs(crs);
+    expect(vi.mocked(summarizeSampleGrade).mock.calls[0][1]).toBe(false);
+  });
 });
 
 describe('runFullCloudGrade — a source that states no point total', () => {

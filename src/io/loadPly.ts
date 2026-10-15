@@ -38,26 +38,84 @@ const PLY_SCALAR_BYTES: Record<string, number> = {
   double: 8, float64: 8,
 };
 
+/** Longest header this loader reads; a real PLY header is a few hundred bytes. */
+const PLY_HEADER_PROBE_BYTES = 65536;
+
+/**
+ * Find the header in the raw bytes. Returns the header text (decoded one byte
+ * per character, so string offsets are byte offsets) and the byte offset where
+ * the body starts, just past `end_header` and its LF or CRLF. `null` when the
+ * probe holds no `end_header` line; a file longer than the probe is refused
+ * then, since its header (if any) is too long to check.
+ */
+function locatePlyHeader(buffer: ArrayBuffer): { text: string; bodyOffset: number } | null {
+  const probe = new TextDecoder('latin1').decode(
+    new Uint8Array(buffer, 0, Math.min(buffer.byteLength, PLY_HEADER_PROBE_BYTES)),
+  );
+  const end = /end_header\r?\n/.exec(probe);
+  if (!end) {
+    if (buffer.byteLength > PLY_HEADER_PROBE_BYTES && probe.startsWith('ply')) {
+      throw new LoadError(
+        'malformed-file',
+        `malformed PLY: no end_header within the first ${PLY_HEADER_PROBE_BYTES} bytes; the header is too long to read.`,
+      );
+    }
+    return null;
+  }
+  const bodyOffset = end.index + end[0].length;
+  return { text: probe.slice(0, bodyOffset), bodyOffset };
+}
+
+/**
+ * The buffer to hand the PLY parser, and the byte offset of its body.
+ *
+ * loaders.gl measures the header in decoded characters and stops it at the
+ * first whitespace after `end_header`, then uses that as the byte offset of a
+ * binary body. A CRLF header (one byte short) or a non-ASCII comment (a
+ * multi-byte character counted once) shifts every binary read. For a binary
+ * body whose header is not already plain ASCII with LF line ends, the header
+ * is rewritten that way (CR dropped, each non-ASCII byte replaced with `?`)
+ * ahead of the original body bytes, so the parser's count and the byte
+ * offset agree. Any other input is returned unchanged.
+ */
+export function plyParseInput(buffer: ArrayBuffer): { buffer: ArrayBuffer; bodyOffset: number | null } {
+  const header = locatePlyHeader(buffer);
+  if (!header) return { buffer, bodyOffset: null };
+  if (!/^format\s+binary_/m.test(header.text)) return { buffer, bodyOffset: header.bodyOffset };
+  // eslint-disable-next-line no-control-regex
+  const clean = header.text.replace(/\r\n/g, '\n').replace(/[^\x00-\x7f]/g, '?');
+  if (clean === header.text) return { buffer, bodyOffset: header.bodyOffset };
+  const body = new Uint8Array(buffer, header.bodyOffset);
+  const out = new Uint8Array(clean.length + body.length);
+  for (let i = 0; i < clean.length; i++) out[i] = clean.charCodeAt(i);
+  out.set(body, clean.length);
+  return { buffer: out.buffer, bodyOffset: clean.length };
+}
+
 /**
  * Refuse a PLY whose element counts cannot fit in its body, before the parser
  * sizes arrays from them. Each element needs at least its fixed-width bytes
  * (a list at least its length prefix) in a binary body, and at least one
  * character plus a separator per property in an ascii one. That floor is a
- * physical bound, so an honest file always passes it.
+ * physical bound, so an honest file always passes it. An element with a
+ * nonzero count and no properties has no such floor, so it is refused.
  */
 function assertPlyCountsPlausible(buffer: ArrayBuffer): void {
-  const probe = new TextDecoder('latin1').decode(new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 65536)));
-  const end = /end_header\r?\n/.exec(probe);
-  if (!end) return; // not ours to judge; the parser reports a missing header
+  const header = locatePlyHeader(buffer);
+  if (!header) return; // not ours to judge; the parser reports a missing header
   const fail = (why: string): never => {
     throw new LoadError('malformed-file', `malformed PLY: ${why}`);
   };
-  const lines = probe.slice(0, end.index).split(/\r?\n/);
+  const lines = header.text.split(/\r?\n/);
   const ascii = lines.some((l) => /^format\s+ascii\b/.test(l.trim()));
   let minBytes = 0;
-  let current: { count: number; bytes: number } | null = null;
+  let current: { name: string; count: number; bytes: number } | null = null;
   const close = (): void => {
-    if (current) minBytes += current.count * current.bytes;
+    if (!current) return;
+    if (current.count > 0 && current.bytes === 0) {
+      fail(`element ${current.name} declares ${current.count} records but no properties.`);
+    }
+    minBytes += current.count * current.bytes;
   };
   for (const raw of lines) {
     const tok = raw.trim().split(/\s+/);
@@ -65,7 +123,7 @@ function assertPlyCountsPlausible(buffer: ArrayBuffer): void {
       close();
       const count = Number(tok[2]);
       if (!Number.isSafeInteger(count) || count < 0) fail(`invalid ${tok[1]} count "${tok[2]}".`);
-      current = { count, bytes: 0 };
+      current = { name: tok[1], count, bytes: 0 };
     } else if (tok[0] === 'property' && current) {
       if (ascii) current.bytes += 2;
       else if (tok[1] === 'list') current.bytes += PLY_SCALAR_BYTES[tok[2]] ?? 1;
@@ -73,7 +131,7 @@ function assertPlyCountsPlausible(buffer: ArrayBuffer): void {
     }
   }
   close();
-  const body = buffer.byteLength - (end.index + end[0].length);
+  const body = buffer.byteLength - header.bodyOffset;
   // The last ascii record may end without a trailing newline.
   if (minBytes - (ascii ? 1 : 0) > body) {
     fail(`the header declares at least ${minBytes} bytes of records, but the body holds ${body}.`);
@@ -194,13 +252,15 @@ function readBinaryDoubleVertices(
   buffer: ArrayBuffer,
   header: PlyHeaderData | undefined,
   expectedCount: number,
+  bodyOffset: number | null,
 ): Float64Array | null {
   if (header === undefined) return null;
   const littleEndian = header.format === 'binary_little_endian';
   const bigEndian = header.format === 'binary_big_endian';
   if (!littleEndian && !bigEndian) return null;
-  const headerLength = header.headerLength;
-  if (typeof headerLength !== 'number' || headerLength <= 0) return null;
+  // The byte offset found in the raw bytes, not loaders.gl's character count.
+  const headerLength = bodyOffset;
+  if (headerLength === null || headerLength <= 0) return null;
   const vertex = header.elements?.[0];
   if (vertex?.name !== 'vertex' || vertex?.count !== expectedCount) return null;
   const props = vertex.properties;
@@ -250,7 +310,8 @@ function readBinaryDoubleVertices(
  */
 export async function loadPly(buffer: ArrayBuffer, name = 'cloud.ply'): Promise<PointCloud> {
   assertPlyCountsPlausible(buffer);
-  const mesh = await parse(buffer, PLYLoader, LOCAL_ONLY_LOADER_OPTIONS);
+  const input = plyParseInput(buffer);
+  const mesh = await parse(input.buffer, PLYLoader, LOCAL_ONLY_LOADER_OPTIONS);
   const attributes = mesh.attributes;
 
   const positionAttr = attributes.POSITION;
@@ -267,7 +328,7 @@ export async function loadPly(buffer: ArrayBuffer, name = 'cloud.ply'): Promise<
     positionAttr.value instanceof Float64Array
       ? positionAttr.value
       : (readAsciiVertices(buffer, header, pointCount) ??
-        readBinaryDoubleVertices(buffer, header, pointCount) ??
+        readBinaryDoubleVertices(input.buffer, header, pointCount, input.bodyOffset) ??
         Float64Array.from(positionAttr.value));
 
   // COLOR_0 is optional. PLY commonly stores rgb (size 3) or rgba (size 4);

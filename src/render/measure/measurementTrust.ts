@@ -40,6 +40,12 @@ export interface VertexSupport {
    * caller's choice (a few nominal point spacings); this only compares counts.
    */
   readonly pointsWithinRadius: number;
+  /**
+   * The endpoint snapped only to a voxel centroid of a reduced display sample
+   * (`ProjectSnapIndex.support`). A centroid is not a return, so such an
+   * endpoint is at best loosely supported. Absent reads as false.
+   */
+  readonly onReducedSample?: boolean;
 }
 
 export interface MeasurementTrustInput {
@@ -67,6 +73,15 @@ export interface MeasurementTrustInput {
    * {@link geographicCrs}; the caller scopes it with `frameRefusalText`.
    */
   readonly verticalRefused?: boolean;
+  /**
+   * True when the frame is geographic, whatever the kind. Its scale signal is
+   * then the vertical unit (the only linear unit a permitted figure, a
+   * height, uses), not {@link crsKnown}: a geographic CRS has no linear
+   * horizontal unit, yet it is a CRS.
+   */
+  readonly frameGeographic?: boolean;
+  /** The file declares a valid vertical unit. Read with {@link frameGeographic}. */
+  readonly verticalUnitKnown?: boolean;
 }
 
 export interface MeasurementTrust {
@@ -92,9 +107,13 @@ const SPARSE_FLOOR = 4;
 
 type VertexTier = 'strong' | 'weak' | 'void';
 
+/** The reason an endpoint on a voxel centroid gives, in place of "measured return". */
+export const VOXEL_CENTROID_REASON =
+  'An endpoint snapped to a voxel centroid of the display sample, not a return; the scan was reduced for display.';
+
 function vertexTier(v: VertexSupport): VertexTier {
   if (v.pointsWithinRadius < SPARSE_FLOOR && !v.snappedToPoint) return 'void';
-  if (v.snappedToPoint && v.pointsWithinRadius >= DENSE_SUPPORT) return 'strong';
+  if (v.snappedToPoint && v.pointsWithinRadius >= DENSE_SUPPORT && v.onReducedSample !== true) return 'strong';
   return 'weak';
 }
 
@@ -116,9 +135,11 @@ export function gradeMeasurement(input: MeasurementTrustInput): MeasurementTrust
   let worst: VertexTier = 'strong';
   let anyVoid = false;
   let snappedCount = 0;
+  let onCentroid = false;
   for (const v of input.vertices) {
     const tier = vertexTier(v);
     if (v.snappedToPoint) snappedCount++;
+    if (v.snappedToPoint && v.onReducedSample === true) onCentroid = true;
     if (tier === 'void') anyVoid = true;
     if (tier === 'weak' && worst === 'strong') worst = 'weak';
     if (tier === 'void') worst = 'void';
@@ -133,7 +154,9 @@ export function gradeMeasurement(input: MeasurementTrustInput): MeasurementTrust
   if (anyVoid) {
     reasons.push('An endpoint sits in empty space — no measured returns nearby. The position is interpolated, not observed.');
   } else if (worst === 'weak') {
-    if (snappedCount < input.vertices.length) {
+    if (onCentroid) {
+      reasons.push(VOXEL_CENTROID_REASON);
+    } else if (snappedCount < input.vertices.length) {
       reasons.push('An endpoint did not land on a measured return.');
     } else {
       reasons.push('Endpoints landed on measured returns, but the surrounding data is sparse, so the position is loosely constrained.');
@@ -142,17 +165,24 @@ export function gradeMeasurement(input: MeasurementTrustInput): MeasurementTrust
     reasons.push('Every endpoint snapped to a measured return in a dense neighbourhood.');
   }
 
-  // Scale: a CRS-less cloud's lengths are in source units, not verified metres.
-  if (!input.crsKnown) {
-    reasons.push('No CRS on this cloud — lengths are in the source file’s units and can’t be certified as metres.');
-    if (grade === 'green') grade = 'yellow'; // can’t certify metric → cap at caution
-  }
-
   // Geographic (degree) frame: the figure mixes degree X/Y with a linear Z,
   // so it is WRONG as a distance, not merely uncertified — a refusal, not a
   // caution. Shares the hint/panel copy so the wording cannot fork.
   const verticalRefusal = input.verticalRefused === true;
   const geographicRefusal = input.geographicCrs === true && !verticalRefusal;
+
+  // Scale: a CRS-less cloud's lengths are in source units, not verified metres.
+  // A geographic frame has a CRS but no linear horizontal unit; the figure it
+  // permits (a height) is certified by a declared vertical unit alone.
+  if (input.frameGeographic === true) {
+    if (!geographicRefusal && !verticalRefusal && input.verticalUnitKnown !== true) {
+      reasons.push('Geographic CRS with no declared vertical unit — heights are in the source file’s units and can’t be certified as metres.');
+      if (grade === 'green') grade = 'yellow';
+    }
+  } else if (!input.crsKnown) {
+    reasons.push('No CRS on this cloud — lengths are in the source file’s units and can’t be certified as metres.');
+    if (grade === 'green') grade = 'yellow'; // can’t certify metric → cap at caution
+  }
   if (geographicRefusal) {
     reasons.push(GEOGRAPHIC_CRS_MEASURE_NOTICE);
     grade = 'red';
@@ -172,6 +202,7 @@ export function gradeMeasurement(input: MeasurementTrustInput): MeasurementTrust
   if (verticalRefusal) caption = 'Unverified — this frame has no local vertical (geocentric or depth-down)';
   else if (geographicRefusal) caption = 'Unverified — degrees are not distances (geographic CRS)';
   else if (grade === 'green') caption = 'Supported — close to measured points';
+  else if (grade === 'yellow' && onCentroid) caption = 'Caution — snapped to the reduced display sample, not returns';
   else if (grade === 'yellow') caption = 'Caution — loosely supported or unverified scale';
   else caption = 'Unverified — an endpoint has no points to measure';
 

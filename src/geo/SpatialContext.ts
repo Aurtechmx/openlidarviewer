@@ -318,6 +318,39 @@ export const DEPTH_AXIS_REFUSAL =
   'Depth-positive-down vertical reference; elevation workflows refuse it until normalisation is supported.';
 
 /**
+ * Why horizontal ground metrics (extents in metres, densities in pts/m²) are
+ * refused on a frame that names a metre unit, or `null`: a geocentric frame
+ * has no ground plane, and a Web Mercator grid's metres grow with latitude.
+ * A geographic frame is refused by its unknown linear unit instead.
+ */
+export function horizontalGroundRefusal(ctx: SpatialContext): string | null {
+  if (ctx.kind === 'geocentric') return GEOCENTRIC_REASON;
+  if (ctx.metricValidity === 'grid-only') return WEB_MERCATOR_REASON;
+  return null;
+}
+
+/**
+ * Whether horizontal spans may be printed as ground metres and densities as
+ * pts/m²: the linear unit is real AND the frame is a ground plane. A Web
+ * Mercator grid or a geocentric frame declares metres yet fails the second
+ * half (its reason is {@link horizontalGroundRefusal}). Keys off
+ * `linearUnitKnown`, not `metricClaimsPermitted`, so the extent reports keep
+ * their documented behaviour on every other frame.
+ */
+export function groundMetresPermitted(ctx: SpatialContext): boolean {
+  return ctx.linearUnitKnown && !ctx.horizontalMetricRefused;
+}
+
+/**
+ * Whether a height span may be converted with the frame's units: the linear
+ * unit is real and the frame has a local vertical. A Web Mercator grid keeps
+ * its heights; a geocentric frame's Z span is not a height.
+ */
+export function heightUnitsPermitted(ctx: SpatialContext): boolean {
+  return ctx.linearUnitKnown && !ctx.verticalMetricRefused;
+}
+
+/**
  * Why an elevation workflow (terrain analysis, contours, DEM export, flow,
  * access, epoch comparison) must refuse this frame, or `null` when it may run.
  *

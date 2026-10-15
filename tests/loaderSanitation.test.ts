@@ -60,14 +60,25 @@ function makeLas(
   view.setFloat64(131, scale[0], true);
   view.setFloat64(139, scale[1], true);
   view.setFloat64(147, scale[2], true);
-  // Offsets stay 0; bounds are declared as a finite unit box (the header guard
-  // only requires them finite, and the origin is floored from min).
-  view.setFloat64(179, 1, true); // max x
-  view.setFloat64(187, 0, true); // min x
-  view.setFloat64(195, 1, true); // max y
-  view.setFloat64(203, 0, true); // min y
-  view.setFloat64(211, 1, true); // max z
-  view.setFloat64(219, 0, true); // min z
+  // Offsets stay 0; bounds enclose the finite records, as a clean writer's do
+  // (the loader warns when record 0 falls outside them).
+  const lo = [Infinity, Infinity, Infinity];
+  const hi = [-Infinity, -Infinity, -Infinity];
+  for (const r of records) {
+    [r.x, r.y, r.z].forEach((v, a) => {
+      const w = v * scale[a]!;
+      if (!Number.isFinite(w)) return;
+      lo[a] = Math.min(lo[a]!, w);
+      hi[a] = Math.max(hi[a]!, w);
+    });
+  }
+  const bound = (v: number): number => (Number.isFinite(v) ? v : 0);
+  view.setFloat64(179, bound(hi[0]!), true); // max x
+  view.setFloat64(187, bound(lo[0]!), true); // min x
+  view.setFloat64(195, bound(hi[1]!), true); // max y
+  view.setFloat64(203, bound(lo[1]!), true); // min y
+  view.setFloat64(211, bound(hi[2]!), true); // max z
+  view.setFloat64(219, bound(lo[2]!), true); // min z
   records.forEach((r, i) => {
     const base = HEADER_SIZE + i * RECORD_LENGTH;
     view.setInt32(base, r.x, true);

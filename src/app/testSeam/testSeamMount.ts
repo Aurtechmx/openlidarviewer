@@ -26,6 +26,8 @@ export interface TestSeamDeps {
   showReclassify: () => Promise<void> | void;
   /** Re-sync the reclassify panel's undo/redo state, if mounted. */
   refreshReclassify: () => void;
+  /** The export frame and resolved CRS code of the active scan. */
+  activeGeo?: () => { name: string | null; origin: readonly number[]; epsg: number | null };
 }
 
 export function mountTestSeam(deps: TestSeamDeps): void {
@@ -123,6 +125,18 @@ export function mountTestSeam(deps: TestSeamDeps): void {
       v.applyClassVisibility(visibility);
       const id = deps.getActiveScanId();
       return id ? v.classFilterDrawnCount(id) : -1;
+    },
+    // Every static layer's class state, read without changing the active one.
+    layerClassStates: (): Array<{ name: string; classAt0: number; epoch: number; canUndo: boolean }> =>
+      v.clouds().map((id) => {
+        const cloud = v.getCloud(id);
+        return { name: cloud?.name ?? id, classAt0: cloud?.classification?.[0] ?? -1, epoch: v.classificationEpoch(id), canUndo: v.canUndoClassification(id) };
+      }),
+    // The active layer's name, export frame and resolved CRS, so a spec can
+    // check every scan-scoped reader moved together.
+    activeScan: () => {
+      const id = deps.getActiveScanId();
+      return { activeName: id ? v.getCloud(id)?.name ?? null : null, geo: deps.activeGeo?.() ?? null };
     },
     classAt: (i: number): number => {
       const id = deps.getActiveScanId();

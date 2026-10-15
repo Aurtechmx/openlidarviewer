@@ -76,7 +76,7 @@ interface Harness {
   coordinator: ReturnType<typeof createCrsCoordinator>;
 }
 
-function harness(opts: { viewerReady?: boolean; activeId?: string | null } = {}): Harness {
+function harness(opts: { viewerReady?: boolean; activeId?: string | null; onOverrideApplied?: () => void } = {}): Harness {
   const port = memoryPort();
   const service = new CrsService(port);
   const setInspectCoordinateContext = vi.fn();
@@ -91,6 +91,7 @@ function harness(opts: { viewerReady?: boolean; activeId?: string | null } = {})
     isViewerReady: () => opts.viewerReady ?? true,
     getActiveId: () => opts.activeId ?? null,
     debug: false,
+    onOverrideApplied: opts.onOverrideApplied,
   });
   return { service, port, setInspectCoordinateContext, viewer, coordinator };
 }
@@ -218,6 +219,23 @@ describe('refreshCrsForStaticCloud — the LAS/LAZ VLR path', () => {
 });
 
 describe('handleCrsOverride — one resolver owns the resolved units', () => {
+  it('asks the layers to re-judge their shared frame once the override is applied', () => {
+    const onOverrideApplied = vi.fn();
+    const h = harness({ activeId: 'cloud-1', onOverrideApplied });
+    h.coordinator.refreshCrsForStaticCloud({ name: 'site/points.laz', metadata: { crs: UTM12N } });
+    expect(onOverrideApplied).not.toHaveBeenCalled();
+    h.coordinator.handleCrsOverride({ epsg: 26912, kind: 'projected' });
+    expect(onOverrideApplied).toHaveBeenCalledTimes(1);
+    expect(h.service.current()?.epsg).toBe(26912);
+  });
+
+  it('asks nothing when no scan is tracked', () => {
+    const onOverrideApplied = vi.fn();
+    const h = harness({ onOverrideApplied });
+    h.coordinator.handleCrsOverride({ epsg: 26912, kind: 'projected' });
+    expect(onOverrideApplied).not.toHaveBeenCalled();
+  });
+
   it('does nothing until a scan has been tracked', () => {
     const h = harness();
     h.coordinator.handleCrsOverride({ epsg: 32612, kind: 'projected' });

@@ -729,8 +729,10 @@ export function getLastTerrainRasterComputePath(): TerrainRasterComputeStatus {
 // (tests/e2e/gpuDerivatives.spec.ts): lets the spec init the engine and read
 // the probe verdict on a real WebGPU device. Main thread only (workers and
 // Node have no `window`); registering a debug handle has no behavioural
-// effect on the pipeline.
-if (typeof window !== 'undefined') {
+// effect on the pipeline. Compiled in only where `__OLV_TEST_SEAM__` is true
+// (the dev server and the Playwright build); scripts/check-no-test-seam.mjs
+// asserts the shipped build does not name it.
+if (typeof __OLV_TEST_SEAM__ !== 'undefined' && __OLV_TEST_SEAM__ && typeof window !== 'undefined') {
   (window as unknown as Record<string, unknown>).__olvTerrainRasterEngine = {
     init: () => getTerrainRasterEngine().init(),
     getComputePath: getLastTerrainRasterComputePath,

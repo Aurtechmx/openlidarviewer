@@ -14,6 +14,7 @@
 
 import { openConfirmChoice, type ConfirmChoice, type ConfirmOptions } from '../ui/Modal';
 import { describeDiscardableWork, hasDiscardableWork, type DiscardableWork } from './closeScanGuard';
+import { keepClassEditsLine } from './classEditLayers';
 
 /** What is replacing the work: a scan opened over the current one, or a session file imported. */
 export interface ReplaceRequest {
@@ -22,6 +23,11 @@ export interface ReplaceRequest {
   readonly name: string;
   /** The incoming session carries exactly the work already open, so nothing is lost. */
   readonly identical?: boolean;
+  /**
+   * Narrow the work counts to what this request actually discards, when that
+   * is less than the whole scene (a stream replaced while static layers stay).
+   */
+  readonly scope?: (work: DiscardableWork) => DiscardableWork;
 }
 
 /** `none`: nothing at risk, no question asked. `replace`: go ahead and discard. `cancel`: change nothing. */
@@ -45,13 +51,19 @@ export interface ReplaceGuardDeps {
  * and the recovery journal alone.
  */
 export function workAtRisk(work: DiscardableWork, kind: ReplaceRequest['kind']): DiscardableWork {
-  if (kind === 'scan') return { ...work, results: 0, pendingRecovery: false };
-  return { ...work, classEdits: false, results: 0, pendingRecovery: false };
+  if (kind === 'scan') return { ...work, results: 0 };
+  return { ...work, classEdits: false, results: 0 };
 }
 
 /** Whether the request would discard anything. */
 export function wouldLoseWork(work: DiscardableWork, req: ReplaceRequest): boolean {
-  return !req.identical && hasDiscardableWork(workAtRisk(work, req.kind));
+  return !req.identical && hasDiscardableWork(requestedWork(work, req));
+}
+
+/** The work at risk for `req`, narrowed by its scope when it has one. */
+function requestedWork(work: DiscardableWork, req: ReplaceRequest): DiscardableWork {
+  const atRisk = workAtRisk(work, req.kind);
+  return req.scope ? req.scope(atRisk) : atRisk;
 }
 
 let pending: Promise<ReplaceOutcome> | null = null;
@@ -63,7 +75,7 @@ let pending: Promise<ReplaceOutcome> | null = null;
 export function requestReplace(req: ReplaceRequest, deps: ReplaceGuardDeps): Promise<ReplaceOutcome> {
   if (pending) return Promise.resolve('cancel');
   const run = async (): Promise<ReplaceOutcome> => {
-    const work = workAtRisk(deps.work(), req.kind);
+    const work = requestedWork(deps.work(), req);
     if (!wouldLoseWork(deps.work(), req)) return 'none';
     const storable = work.measurements > 0 || work.annotations > 0 || work.views > 0;
     const save = storable ? deps.saveSession : undefined;
@@ -73,9 +85,9 @@ export function requestReplace(req: ReplaceRequest, deps: ReplaceGuardDeps): Pro
         ? `Opening ${req.name} replaces the open scan and discards ${what}.`
         : `Importing ${req.name} replaces ${what} in the viewer.`,
     ];
-    if (save) lines.push('Save the current session first to keep it.');
+    if (save) lines.push(work.classEdits ? 'Save the current session first to keep the measurements, annotations and views.' : 'Save the current session first to keep it.');
     else lines.push('This cannot be undone from the viewer.');
-    if (work.classEdits) lines.push('The session file does not store class edits. Export the scan as LAS to keep them.');
+    if (work.classEdits) lines.push(keepClassEditsLine(work.classEditLayers ?? []));
     const choice = await (deps.confirm ?? openConfirmChoice)({
       title: req.kind === 'scan' ? 'Replace the open scan?' : 'Replace the current work?',
       message: lines.join('\n'),

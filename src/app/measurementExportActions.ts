@@ -16,7 +16,7 @@ import type { SpatialUpAxis } from '../geo/SpatialContext';
 import type { ReportFinding } from '../render/measure/reportManifest';
 import type { GeoExportContext } from './reportExport';
 import { framesOfApp, resolveOwnerFrame, type AppFrameSource, type ExportFrame, type OwnerRef } from './measurementExportFrame';
-import { measurementsOwnedByActive, type OwnershipView } from './measurementOwnership';
+import { measurementsOwnedByActive, ownershipOf, partitionSessionWork, type OwnershipView } from './measurementOwnership';
 
 import { activeScanBasisOf, type ActiveScanBasis } from './measurementScanHooks';
 import { appToast } from '../ui/panelChrome';
@@ -161,6 +161,8 @@ function ownLayers(
   layers: readonly ExportLayer[],
   /** False when the per-scan frame check runs instead, so it can name the scans. */
   declaredCrsCheck: boolean,
+  /** The layer a measurement recording no scan was taken on, when that is known. */
+  fallbackLayerId: string | null = null,
 ): { byId: Map<string, Placed> } | { refused: string } {
   const byId = new Map<string, Placed>();
   let unknown = 0;
@@ -177,7 +179,7 @@ function ownLayers(
       unknown++;
       continue;
     }
-    const ids = picked ? m.pickLayers! : m.owner?.layerId ? [m.owner.layerId] : [];
+    const ids = picked ? m.pickLayers! : m.owner?.layerId ? [m.owner.layerId] : fallbackLayerId ? [fallbackLayerId] : [];
     const ls = ids.map((id) => layers.find((x) => x.stableId === id));
     if (ls.length === 0 || ls.some((l) => !l)) {
       unknown++;
@@ -202,6 +204,18 @@ function ownLayers(
     return { refused: 'Not exported: the measurements come from scans with different coordinate systems. Export them one scan at a time.' };
   }
   return { byId };
+}
+
+/**
+ * The one open layer, when it is the active scan and still placed in the
+ * project frame (its anchor closed, the frame kept). Its scene coordinates are
+ * then local to the project origin, not its file origin, so its points leave
+ * through {@link ownLayers} like any multi-layer export. Null otherwise.
+ */
+function solePlacedLayer(layers: readonly ExportLayer[], deps: MeasurementExportActionDeps): ExportLayer | null {
+  const l = layers.length === 1 ? layers[0]! : null;
+  if (!l?.projectOffset || l.projectOffset.every((c) => c === 0)) return null;
+  return !deps.frameSource || deps.frameSource.activeId() === l.viewerId ? l : null;
 }
 
 /**
@@ -246,41 +260,35 @@ function ownershipViewFor(deps: MeasurementExportActionDeps): OwnershipView {
 }
 
 /**
- * Count the measurements that name a scan (by pick record or owner) that is no
- * longer open. Measurements survive closing their scan, so without this check
- * they would be placed through whichever scan is open now, under its name.
+ * The measurements a file export may hold, by the rule the session uses
+ * ({@link partitionSessionWork}): work that names a scan that is no longer
+ * open, or a scan more than one open layer matches, has no frame to be written
+ * in. It holds no layer of the scene, so it is never placed through the active
+ * scan's origin or named after it. This holds with no static layer open too: a
+ * streamed scan's own work records no scan, and work left from a replaced scan
+ * names one that is gone.
+ *
+ * The rest is kept and the left-out work is counted in `withheld`. When nothing
+ * is left, the export is refused with the sentence that says what to do, and
+ * `kept` is null.
  */
-function closedScanCount(measurements: readonly Measurement[], layers: readonly ExportLayer[]): number {
-  const open = new Set(layers.map((l) => l.stableId).filter((id): id is string => id !== null));
-  let n = 0;
-  for (const m of measurements) {
-    const ids = [...(m.pickLayers ?? []), ...(m.owner?.layerId ? [m.owner.layerId] : [])];
-    if (ids.some((id) => !open.has(id))) n++;
-  }
-  return n;
-}
-
-/**
- * Refuse (and say why) when any measurement was taken on a scan that is no
- * longer open, or names a scan more than one open layer matches. True when
- * refused.
- */
-function refusedForClosedScan(measurements: readonly Measurement[], deps: MeasurementExportActionDeps): boolean {
-  const layers = deps.layers ? exportLayersOf(deps.layers.view, deps.layers.stableIdFor) : [];
-  if (layers.length === 0) return false;
-  // An owner id two open layers both carry names neither of them: placing the
-  // measurement through the first match would be a guess.
-  const held = new Map<string, number>();
-  for (const l of layers) if (l.stableId !== null) held.set(l.stableId, (held.get(l.stableId) ?? 0) + 1);
-  const shared = measurements.filter((m) => [...(m.pickLayers ?? []), ...(m.owner?.layerId ? [m.owner.layerId] : [])].some((id) => (held.get(id) ?? 0) > 1)).length;
+function exportableMeasurements(
+  measurements: readonly Measurement[],
+  deps: MeasurementExportActionDeps,
+): { kept: Measurement[]; withheld: string | null } | { kept: null } {
+  const view = ownershipViewFor(deps);
+  const { keep } = partitionSessionWork(measurements, view);
+  if (keep.length === measurements.length) return { kept: keep, withheld: null };
+  const left = measurements.filter((m) => !keep.includes(m));
+  if (keep.length > 0) return { kept: keep, withheld: measurementsOwnedByActive(left, view).withheld };
+  const shared = left.filter((m) => ownershipOf(m, view).kind === 'ambiguous').length;
   if (shared > 0) {
     deps.refuse?.(`Not exported: ${shared} ${shared === 1 ? 'measurement names' : 'measurements name'} a scan that more than one open scan matches. Close all but one of those scans, then export again.`);
-    return true;
+  } else {
+    const closed = left.length;
+    deps.refuse?.(`Not exported: ${closed} ${closed === 1 ? 'measurement was' : 'measurements were'} taken on a scan that is no longer open. Reopen it or delete them, then export again.`);
   }
-  const closed = closedScanCount(measurements, layers);
-  if (closed === 0) return false;
-  deps.refuse?.(`Not exported: ${closed} ${closed === 1 ? 'measurement was' : 'measurements were'} taken on a scan that is no longer open. Reopen it or delete them, then export again.`);
-  return true;
+  return { kept: null };
 }
 
 /**
@@ -309,11 +317,14 @@ export async function exportMeasurementsFile(
 ): Promise<void> {
   // Everything the file is built from is read here, before the first await.
   const snap = snapshotMeasure(deps.measure);
-  const measurements = snap.measurements;
-  if (measurements.length === 0) return;
+  if (snap.measurements.length === 0) return;
   const layers = deps.layers ? exportLayersOf(deps.layers.view, deps.layers.stableIdFor) : [];
-  if (refusedForClosedScan(measurements, deps)) return;
-  const own = layers.length > 1 ? ownLayers(measurements, layers, !deps.frameSource) : null;
+  const exportable = exportableMeasurements(snap.measurements, deps);
+  if (!exportable.kept) return;
+  const measurements = exportable.kept;
+  const withheld = exportable.withheld;
+  const sole = solePlacedLayer(layers, deps);
+  const own = layers.length > 1 || sole ? ownLayers(measurements, layers, !deps.frameSource, sole?.stableId ?? null) : null;
   if (own && 'refused' in own) {
     deps.refuse?.(own.refused);
     return;
@@ -416,12 +427,16 @@ export async function exportMeasurementsFile(
   const stem = stems.length > 0 ? stems.join('+') : 'measurements';
   const filename = `${stem}-measurements.${format === 'geojson' ? 'geojson' : 'csv'}`;
   deps.downloadText(filename, text);
-  if (format === 'geojson' || !ctx.provenance) return;
+  if (format === 'geojson' || !ctx.provenance) {
+    if (withheld) (deps.notify ?? appToast().show)(withheld);
+    return;
+  }
   // A CSV has no comment slot every parser skips, so its provenance rides in a sidecar.
   const basis = csvBasis(scanBasis, activeOnly, sources?.length ?? 1, geo.name);
   const sidecar = exporter.provenanceSidecarName(filename);
   deps.downloadText(sidecar, exporter.measurementCsvProvenance(ctx.provenance, basis));
-  (deps.notify ?? appToast().show)(csvSavedMessage(filename, sidecar));
+  const saved = csvSavedMessage(filename, sidecar);
+  (deps.notify ?? appToast().show)(withheld ? `${saved} ${withheld}` : saved);
 }
 
 /**
@@ -555,9 +570,16 @@ export async function exportMeasurementIntegrityReport(
   deps: MeasurementExportActionDeps,
 ): Promise<void> {
   const snap = snapshotMeasure(deps.measure);
-  const ms = snap.measurements;
-  if (ms.length === 0) return;
-  if (refusedForClosedScan(ms, deps)) return;
+  if (snap.measurements.length === 0) return;
+  const exportable = exportableMeasurements(snap.measurements, deps);
+  if (!exportable.kept) return;
+  // A signed report that silently left records out would misstate what was
+  // measured: refuse instead, and say which measurements cannot be placed.
+  if (exportable.withheld) {
+    deps.refuse?.(`Not exported: ${exportable.withheld} An integrity report must account for every measurement; delete or reopen those, then export again.`);
+    return;
+  }
+  const ms = exportable.kept;
   const owned = ownerFrameFor(ms, deps);
   if ('refused' in owned) {
     deps.refuse?.(owned.refused);
@@ -614,7 +636,8 @@ export async function exportMeasurementIntegrityReport(
     verticalRefused,
   );
   const out = await textToWrite(f.text, deps, signReportText);
-  if (out !== null) deps.downloadText(f.filename, out);
+  if (out === null) return;
+  deps.downloadText(f.filename, out);
 }
 
 /**

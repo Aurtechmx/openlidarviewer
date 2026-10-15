@@ -80,7 +80,7 @@ import type { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
-import { activeScanHasClassEdits, afterClassEdit, classCountsOf, noteClassificationEdited, wireFrameChange } from './app/classLegendRefresh';
+import { activeScanHasClassEdits, afterClassEdit, classCountsOf, editedStaticLayerNames, layerRemovalClassEditsLine, noteClassificationEdited, staticClassEditWork, wireFrameChange } from './app/classLegendRefresh';
 import type { ClassifyActionsDeps } from './app/classifyActions';
 import { buildExportHealth, densityStoryFields, footprintAreaM2, type ScanStoryInputs } from './intelligence/scanStory';
 import { fullScope, scopeFrom, scopeStamp, type ClassScope } from './render/class/classScope';
@@ -245,7 +245,7 @@ import { CatalogPanel, buildCuratedDemoSample } from './ui/CatalogPanel';
 // streaming clouds expose `.crs()` returning the same shape.
 import type { StreamingReportCloud } from './app/streamingScanReport'; import { runStreamingModules, preloadStreamingReport } from './app/streamingReportSeam';
 import { CrsService } from './geo/CrsService';
-import { verticalMetresPerUnit, volumeUnitCaveat } from './geo/SpatialContext';
+import { groundMetresPermitted, verticalMetresPerUnit, volumeUnitCaveat } from './geo/SpatialContext';
 import { prepareEpochFrames, epochUnitMismatchLines, compareSuggestionAllowed } from './app/epochFramePrep';
 // Shared vertical-unit labeller (already eager via terrainAnalysisRunner) —
 // feeds the colorbar legend's elevation unit from the resolved CRS.
@@ -261,7 +261,7 @@ import { placedWorldOrigin } from './terrain/canonicalFrame';
 import { createAppRuntime } from './app/AppRuntime';
 import { createLayerService } from './app/LayerService';
 import { createViewBookmarks } from './app/viewBookmarks';
-import { createScanService } from './app/ScanService';
+import { createScanService, survivorAfterRemoval } from './app/ScanService';
 import { createScanRouteService } from './app/ScanRouteService';
 import { createProjectFrameService, projectFrameInputFrom, sessionImportOrigins } from './app/projectFrame';
 
@@ -1079,7 +1079,7 @@ const inspector = new Inspector({
     persistPrefs();
   },
   onToggleVisible: (id, visible) => layerService.setVisible(id, visible),
-  onRemove: (id) => removeCloud(id),
+  onRemove: (id) => removeCloud(id), removalClassEditsLine: (id) => layerRemovalClassEditsLine(id, viewer),
   onToggleSolo: (id) => layerService.toggleSolo(id),
   onToggleLock: (id, locked) => viewer.setCloudLocked(id, locked),
   onCompareLayers: compareLoadedLayers,
@@ -1186,7 +1186,7 @@ const crsCoordinator = createCrsCoordinator({
   getViewer: () => viewer,
   isViewerReady: () => viewerReady,
   getActiveId: () => scans.activeId,
-  debug,
+  debug, onOverrideApplied: () => { layerService.refreshCrsFlags(); layerService.applyVisibility(); },
 });
 
 // v0.3.9 — workflow recorder. The host owns the controller so it can
@@ -1641,37 +1641,18 @@ const analyseProfileVisibility = createAnalyseProfileVisibility({
 /** Refresh the Measurements panel's contents and visibility (thin delegate). */
 const refreshMeasurePanel = (): void => { measureMount.refresh(); refreshToolLauncher(); clipFlow.onMeasurementsChanged(); };
 
-// B2 (v0.4.5) — feed the measure stack the SAME render-units to metres seam
-// the terrain/space paths read (`crsService.linearUnitToMetres`). Render space
-// keeps the scan's source units, so a foot-CRS scan must scale every measure
-// readout once, at the controller boundary; the subscription keeps a late
-// resolve or a user override in lockstep. Deferred behind viewerLoaded because
-// `viewer` is null until the lazy chunk resolves and CrsService.subscribe fires
-// synchronously on registration; subscribing inside the .then still seeds the
-// CURRENT factor and re-fires on every later resolve/override.
+// B2 (v0.4.5) — feed the measure stack the active scan's render-units to metres
+// seam (`crsService.context()`); render space keeps each scan's source units.
+// Work taken on another open layer reads out in THAT layer's units and frame
+// verdicts (measureLayerUnits). Deferred behind viewerLoaded: `viewer` is null
+// until the lazy chunk resolves, and subscribe fires synchronously.
 void viewerLoaded.then(() => {
+  const measureUnits = measureMount.bindUnitFrames({ activeId: () => scans.activeId, clouds: () => viewer.clouds(), cloud: (id) => viewer.getCloud(id), stableIdFor: runtime.layerIdentity.stableIdFor });
   crsService.subscribe(() => {
-    // The ONE context for the active scan (the service invalidates it before it
-    // broadcasts, so this is always the CRS that just landed). Measure scale,
-    // trust grade, geographic refusal and the colorbar unit all read it, so the
-    // HUD and the legend cannot describe different frames.
+    // One context for the active scan: measure scale, trust grade, geographic
+    // refusal and the colorbar unit all read it.
     const ctx = crsService.context();
-    viewer.measure.setUnitToMetres(ctx.linearUnitToMetres);
-    // Compound CRS: the height axis may carry its OWN linear unit (UTM metres +
-    // a NAVD88 height in US survey feet). Heights / box height / cut-fill
-    // thickness scale by it, and absent one the GeoTIFF convention follows the
-    // horizontal factor, so single-unit CRSs stay byte-identical.
-    viewer.measure.setVerticalUnitToMetres(verticalMetresPerUnit(ctx, 'horizontal') ?? 1);
-    // A CRS is "known" for the measurement trust grade when one resolved with a
-    // real linear unit. Distinct from the unit factor: a metric (UTM) survey has
-    // factor 1 yet a fully-known CRS, so the factor alone can't certify scale.
-    viewer.measure.setCrsKnown(ctx.linearUnitKnown);
-    // A GEOGRAPHIC (degree) CRS can't be repaired by any scalar factor —
-    // X/Y are degrees, Z is linear. The controller refuses the affected
-    // trust grades + captions the hint; the panel shows the persistent
-    // caveat. One boolean, one seam, so the two can never disagree.
-    viewer.measure.setGeographicCrs(ctx.horizontalMetricRefused, ctx.verticalMetricRefused); // degrees, Web Mercator grid or geocentric; no local vertical
-    viewer.measure.setProjectedCrs(ctx.kind === 'projected' && ctx.epsg != null); // grid-north bearing label
+    measureUnits.onCrsChange();
     measureMount.setGeographicNotice(ctx.horizontalMetricRefused, ctx.verticalMetricRefused);
     // Colorbar legend — same context, `'horizontal-when-known'` policy: an
     // explicit vertical unit wins, else the horizontal one WHEN really declared
@@ -2319,7 +2300,7 @@ const kmlDeps: KmlActionDeps = {
   crsCurrent: () => crsService.current(),
   upAxis: () => crsService.context().upAxis, isGeographic: () => crsService.context().horizontalMetricRefused, verticalRefused: () => crsService.context().verticalMetricRefused, // RESOLVED axis and frame permissions
   annotations: () => viewer?.annotate.getAnnotations() ?? [],
-  measurements: () => viewer?.measure.getMeasurements() ?? [], layerCount: () => viewer?.clouds().length ?? 0, measurementOwnership: () => (viewer ? ownershipViewOf(viewer, runtime.layerIdentity.stableIdFor, scans.activeId) : { layers: [], activeViewerId: null }),
+  measurements: () => viewer?.measure.getMeasurements() ?? [], layerCount: () => viewer?.clouds().length ?? 0, sceneOffset: () => (scans.activeId ? viewer?.layerProjectOffset(scans.activeId) ?? null : null), measurementOwnership: () => (viewer ? ownershipViewOf(viewer, runtime.layerIdentity.stableIdFor, scans.activeId) : { layers: [], activeViewerId: null }),
   viewpoints: () => viewBookmarks.savedViews.map(
     (v) => ({ name: v.name, position: v.pose.position, target: v.pose.target }),
   ),
@@ -2458,7 +2439,7 @@ const exportPanel = new ExportPanel({
   // snapshot just to test it for null.
   isStreamingPending: () => viewer?.streamingCloud != null && viewer.exportFrontierPointTotal() === 0,
   getActiveClip: () => viewer.getClip(), getActiveClipOffset: () => (scans.activeId ? viewer.layerProjectOffset(scans.activeId) : null), getActiveScanId: () => scans.activeExportTargetId(),
-  ...exportLayerHooks({ scans, viewer: () => viewer, sourceFiles: sourceFileById, reduced: reducedById, reopen: handleFile, removeLayer: removeCloud, notify: showLassoToast, findingsRevision: (id) => exportPanel.findingsLedger()?.revisionFor(id) ?? 0, inCompare: (id) => inspector.compareDifference.involves(id) }),
+  ...exportLayerHooks({ scans: { get activeId() { return scans.activeId; }, setActive: activateLayer }, viewer: () => viewer, sourceFiles: sourceFileById, reduced: reducedById, reopen: handleFile, removeLayer: removeCloud, notify: showLassoToast, findingsRevision: (id) => exportPanel.findingsLedger()?.revisionFor(id) ?? 0, inCompare: (id) => inspector.compareDifference.involves(id) }),
   hasClassEdits: () => activeScanHasClassEdits(scans.activeId, viewer),
   // A streaming snapshot exports only resident points, so it is a reduced subset
   // until the whole cloud lands — flagged so the status reads "reduced view".
@@ -2871,7 +2852,7 @@ if (__OLV_TEST_SEAM__ && testApi) {
     getViewer: ensureViewer,
     getActiveScanId: () => scans.activeId,
     showReclassify: () => showReclassifyUi(),
-    refreshReclassify: () => reclassifyUi?.refresh(),
+    refreshReclassify: () => reclassifyUi?.refresh(), activeGeo: () => ({ ...exportGeoContext(), epsg: crsService.context().epsg ?? null }),
   }));
 }
 
@@ -3524,7 +3505,7 @@ async function exportSession(): Promise<boolean> {
     refuse: () => showLassoToast(SESSION_EXPORT_SCAN_CHANGED_REFUSAL),
     // Both lazy imports resolve before any state is read; their exports spread into one deps object.
     load: async () => ({ ...(await loadSession()), ...(await loadExportProvenance()), ...(await loadSessionSnapshot()) }),
-    write: (json) => { downloadText(`${baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? 'openlidarviewer')}.olvsession`, json); const note = sessionSaveNotice(activeScanHasClassEdits(scans.activeId, viewer)); if (note) showLassoToast(note); },
+    write: (json) => { downloadText(`${baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? 'openlidarviewer')}.olvsession`, json); const note = sessionSaveNotice(editedStaticLayerNames(viewer).length > 0); if (note) showLassoToast(note); },
     serialize: (m) => m.serializeActiveSession(m, { ...sessionSnapshotDeps, onWithheld: showLassoToast }),
   });
 }
@@ -3969,7 +3950,7 @@ function showProjectCard(cloud: PointCloud, totalCount: number): void {
     format: cloud.sourceFormat, interpretationLevel: cloud.metadata?.interpretationLevel, truncation: cloud.metadata?.truncation,
     shownCount: cloud.pointCount,
     totalCount,
-    ...describeProjectSize(b.min, b.max, { upAxis: c.upAxis, linearUnitKnown: c.linearUnitKnown, linearUnitToMetres: c.linearUnitToMetres, verticalUnitToMetres: verticalMetresPerUnit(c, 'horizontal') ?? undefined }),
+    ...describeProjectSize(b.min, b.max, { upAxis: c.upAxis, linearUnitKnown: groundMetresPermitted(c), linearUnitToMetres: c.linearUnitToMetres, verticalUnitToMetres: verticalMetresPerUnit(c, 'horizontal') ?? undefined }),
     hasRgb: cloud.colors !== undefined,
     hasIntensity: cloud.intensity !== undefined,
     hasClassification: cloud.classification !== undefined,
@@ -4217,21 +4198,21 @@ function compareLoadedLayers(): void {
 }
 
 
+function activateLayer(id: string): void { if (scans.activeId === id) return; scans.setActive(id); const c = scans.activeCloud(); if (c) { crsCoordinator.refreshCrsForStaticCloud(c); inspectorCards.refreshProvenance(c, id); inspectorCards.refreshDatasetIntelligenceFromStaticCloud(c); } } // select a static layer and re-resolve its CRS (so the measure units), provenance and dataset card
 function removeCloud(id: string): void {
-  viewer.removeCloud(id);
+  const next = survivorAfterRemoval(viewer.clouds(), id, scans.activeId); viewer.removeCloud(id); // removing the active layer promotes a survivor
   inspector.removeCloud(id);
   sourceFileById.delete(id);
   reducedById.delete(id);
   layerVisible.delete(id);
   if (layers.solo === id) layers.solo = null;
-  scans.clearIf(id); inspector.compareDifference.dropStale(); // a comparison on this scan goes with it
+  if (next && next !== scans.activeId) activateLayer(next); else scans.clearIf(id); inspector.compareDifference.dropStale(); // a comparison on this scan goes with it
   captureProvenance.clearIf(id); exportPanel.forgetFindingsFor(id); // a removed scan's saved findings go with it
   if (viewer.clouds().length === 0) resetToEmptyState();
   else {
     layerService.refreshCrsFlags();
     layerService.applyVisibility();
-    inspector.setElevationExtent(viewer.elevationExtent());
-    inspector.setIntensityExtent(viewer.intensityExtent());
+    inspector.setElevationExtent(viewer.elevationExtent()); inspector.setIntensityExtent(viewer.intensityExtent());
     syncProjectElevationScale();
   }
 }
@@ -4272,7 +4253,7 @@ function closeScan(): void { // the guarded entry is requestCloseScan
 }
 const requestReplace = (req: import('./app/discardGuard').ReplaceRequest): Promise<import('./app/discardGuard').ReplaceOutcome> => loadDiscardGuard().then((m) => m.requestReplace(req, { work: discardableWork, saveSession: exportSession, snapshot: async () => (await recovery?.snapshotNow()) === true, notify: showLassoToast })); let closeGuard: Promise<() => Promise<boolean>> | null = null; const requestCloseScan = (): Promise<boolean> => (closeGuard ??= loadCloseScanGuard().then((m) => m.createCloseScanGuard({ close: closeScan, saveSession: exportSession, onSaveFailed: () => showLassoToast('Session not saved. The scan is still open.'), work: discardableWork }))).then((g) => g());
 function discardableWork() {
-  return ({ measurements: viewerReady ? viewer.measure.getMeasurements().length : 0, annotations: viewerReady ? viewer.annotate.getAnnotations().length : 0, views: viewBookmarks.savedViews.length, classEdits: activeScanHasClassEdits(scans.activeId, viewer), results: workspaceShell?.readyResultCount() ?? 0, pendingRecovery: recovery?.hasPending() ?? false });
+  return ({ measurements: viewerReady ? viewer.measure.getMeasurements().length : 0, annotations: viewerReady ? viewer.annotate.getAnnotations().length : 0, views: viewBookmarks.savedViews.length, ...staticClassEditWork(viewer), results: workspaceShell?.readyResultCount() ?? 0 });
 }
 
 /** Save the current view as a PNG (`app/snapshotAction.ts`, a lazy chunk). */
