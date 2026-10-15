@@ -16,14 +16,12 @@
  *
  * Enclosure alone misses a min left at zero beside a correct max: record 0 sits
  * inside [0, max], yet origin 0 at a 4.5e6 m northing leaves a 0.5 m Float32
- * step. So the bounds are also untrusted when record 0 lies so far above the
- * min that its residual from floor(min) would land on a Float32 step coarser
- * than {@link PRECISION_GRADE_THRESHOLDS_M}.fine (the 1 mm rebase budget). A file
- * whose honest box fits that budget from its min can never trip this, wherever
- * record 0 sits inside it (a GPS-time-sorted file may start mid-box), so honest
- * bounds keep exactly the origin they always had. An honest box wider than the
- * budget already overflows it from floor(min); recentring on record 0 then
- * never widens the largest residual, which stays within the box's extent.
+ * step. So the bounds are also untrusted on an axis whose min is exactly zero
+ * while record 0 lies so far from zero that its Float32 step is coarser than
+ * {@link PRECISION_GRADE_THRESHOLDS_M}.fine (the 1 mm rebase budget). Any other
+ * box that encloses record 0 keeps floor(min) as its origin, wherever record 0
+ * sits inside it, so honest bounds (including boxes wider than the budget) keep
+ * exactly the origin they always had and carry no warning.
  * Pure; every path shares it.
  */
 import { float32Spacing, PRECISION_GRADE_THRESHOLDS_M } from '../geo/inMemoryPrecision';
@@ -94,8 +92,9 @@ export function lasOriginFor(
   for (let a = 0; enclosed && a < 3; a++) {
     const step = Math.abs(header.scale[a]);
     if (record0[a] < header.min[a] - step || record0[a] > header.max[a] + step) enclosed = false;
-    // Inside the box, but too far above the min for floor(min) to hold it.
-    else if (float32Spacing(record0[a] - Math.floor(header.min[a])) > PRECISION_GRADE_THRESHOLDS_M.fine) enclosed = false;
+    // A min left at zero by the writer, with the points far above it: floor(min)
+    // cannot hold them. An honest wide box keeps its own min.
+    else if (header.min[a] === 0 && float32Spacing(record0[a]) > PRECISION_GRADE_THRESHOLDS_M.fine) enclosed = false;
   }
   if (enclosed) return { origin: computeOrigin(header.min), boundsTrusted: true };
   return {

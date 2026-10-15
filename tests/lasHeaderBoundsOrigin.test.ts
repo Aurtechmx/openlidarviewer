@@ -178,6 +178,17 @@ describe('LAS origin when the header bounds do not enclose the data', () => {
       expect(lasOriginFor(header, r0)).toEqual({ origin: [500000, 4500000, 50], boundsTrusted: true });
     }
   });
+
+  it('keeps an honest box wider than the Float32 budget, with no warning', () => {
+    // A 40 km corridor whose first record sits 30 km above the min: the header
+    // is honest, so the origin stays on its min and nothing is flagged.
+    const header = {
+      min: [500000, 4500000, 50] as [number, number, number],
+      max: [540000, 4501000, 300] as [number, number, number],
+      scale: [0.01, 0.01, 0.01] as [number, number, number],
+    };
+    expect(lasOriginFor(header, [530000.5, 4500500.5, 120])).toEqual({ origin: [500000, 4500000, 50], boundsTrusted: true });
+  });
 });
 
 describe('LAZ origin when the header bounds do not enclose the data', () => {
