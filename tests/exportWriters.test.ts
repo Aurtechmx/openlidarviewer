@@ -183,6 +183,22 @@ describe('svgContours', () => {
     expect(svg).toMatch(/not survey-grade/i);
   });
 
+  it('keeps the provenance comment well-formed when a source name holds "--"', () => {
+    // XML forbids "--" inside a comment and a comment ending in "-".
+    const svg = svgContours(model([feat('solid', [[0, 0], [10, 0]], 10, true)]), {
+      provenance: { ...PROV, source: 'site--a---b-' },
+    });
+    const bodies = [...svg.matchAll(/<!--([\s\S]*?)-->/g)].map((m) => m[1]);
+    expect(bodies.length).toBeGreaterThan(0);
+    for (const body of bodies) {
+      expect(body).not.toContain('--');
+      expect(body.endsWith('-')).toBe(false);
+    }
+    // The first "-->" closes the metadata comment, so nothing leaks out of it.
+    expect(svg).toMatch(/<metadata><!--[\s\S]*?--><\/metadata>/);
+    expect(svg).toContain('site- -a- - -b-');
+  });
+
   it('labels the vertical RMSEz in metres even on a feet-unit sheet', () => {
     // rmseZM is metre-denominated (the *M contract; holdoutRmse scales by
     // verticalUnitToMetres), while unitLabel is the sheet's linear unit. A
