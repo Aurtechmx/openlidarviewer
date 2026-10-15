@@ -321,9 +321,18 @@ function caveatBlock(input: KmlExportInput): string {
   return `CRS: ${crs}. Units: ${input.unitLabel}. ${altMode(input).reason} ${input.notSurveyGradeNote}`;
 }
 
-/** Build an escaped <description> from plain text lines. */
+/**
+ * Build a <description> from plain text lines. Readers render the decoded
+ * description as HTML, so each line is HTML-escaped first (a note is user
+ * text and must not become markup), lines are joined with `<br>`, and the
+ * result is XML-escaped for the KML document.
+ */
 function description(lines: readonly string[]): string {
-  const body = lines.filter((l) => l.length > 0).join('\n');
+  const body = lines
+    .filter((l) => l.length > 0)
+    .flatMap((l) => l.split(/\r?\n/))
+    .map(esc)
+    .join('<br>');
   return `<description>${esc(body)}</description>`;
 }
 

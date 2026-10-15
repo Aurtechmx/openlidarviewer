@@ -462,3 +462,34 @@ describe('KML description never invents a vertical unit', () => {
     expect(kml).toMatch(/1 unit = 0\.3048 m/);
   });
 });
+
+/**
+ * Google Earth and other readers render <description> as HTML. A note is user
+ * text, so after XML decoding it must still carry no markup of its own.
+ */
+describe('KML description is inert HTML', () => {
+  const xmlDecode = (s: string): string =>
+    s
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&apos;', "'")
+      .replaceAll('&amp;', '&');
+
+  it('a note holding a tag decodes to escaped text, with only <br> line breaks', () => {
+    const kml = buildKml(
+      input({
+        annotations: [annotation({ note: '<img src=x onerror=alert(1)>\nsecond line & "quoted"' })],
+        measurements: [],
+        viewpoints: [],
+      }),
+    );
+    const descriptions = [...kml.matchAll(/<description>([\s\S]*?)<\/description>/g)].map((m) => xmlDecode(m[1]));
+    const placemark = descriptions.find((d) => d.includes('onerror'));
+    expect(placemark).toBeDefined();
+    expect(placemark).not.toMatch(/<img/i);
+    expect(placemark).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(placemark).toContain('<br>second line &amp; &quot;quoted&quot;');
+    for (const d of descriptions) expect(d.replaceAll('<br>', '')).not.toMatch(/</);
+  });
+});
