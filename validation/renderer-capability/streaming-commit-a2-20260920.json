@@ -12,7 +12,7 @@
   },
   "dataset": { "name": "swisssurface3D 2022 sample", "file": "2485_1109.copc.laz", "knownNodes": 485, "sourcePoints": 15680312 },
   "protocol": {
-    "runner": "_private/a2-bench/run.mjs",
+    "runner": "local benchmark runner (not part of this repository)",
     "trace": "Launch the sample, poll residency for 20 s, then three scripted orbit legs of 24 pointer moves each with 4 s between them, then 3 s settle. Frame deltas are sampled by requestAnimationFrame and only the post-settle orbit window is aggregated.",
     "isolation": "A fresh browser PROCESS per condition, which the first attempts did not have.",
     "repetitions": "2 per condition, interleaved immediate, metered, metered, immediate.",

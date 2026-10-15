@@ -3,7 +3,7 @@
   "note": "A capability probe, not a benchmark. It answers what a real device can carry, which the tier ladder has always taken as input and nothing had ever measured. It carries no frame times and is deliberately not in manifest.schema.json's shape, because that schema describes a baseline-versus-continuity comparison and no such comparison has been run.",
   "measuredAt": "2026-09-20",
   "commit": "6ce80c797d3adc87404067d074c3457d1f908086",
-  "method": "_private/device-probe/index.html served from the dev server and opened in the browser. Each capability is exercised rather than queried: the WebGL 2 row creates an R32F texture, attaches it to a framebuffer and reads checkFramebufferStatus; the WebGPU row creates all three history surfaces as render attachments and destroys them.",
+  "method": "A local capability probe page (not part of this repository) served from the dev server and opened in the browser. Each capability is exercised rather than queried: the WebGL 2 row creates an R32F texture, attaches it to a framebuffer and reads checkFramebufferStatus; the WebGPU row creates all three history surfaces as render attachments and destroys them.",
   "host": {
     "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.76 Safari/537.36",
     "os": "macOS",

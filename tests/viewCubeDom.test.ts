@@ -46,6 +46,11 @@ class FakeEl {
   appendChild(c: FakeEl): FakeEl { this.children.push(c); return c; }
   addEventListener(t: string, fn: (e: { stopPropagation(): void }) => void): void { (this.listeners[t] ??= []).push(fn); }
   click(): void { for (const fn of this.listeners.click ?? []) fn({ stopPropagation: () => {} }); }
+  dispatch(type: string, e: Record<string, unknown>): void {
+    for (const fn of this.listeners[type] ?? []) fn({ stopPropagation: () => {}, preventDefault: () => {}, ...e } as { stopPropagation(): void });
+  }
+  focus(): void {}
+  contains(n: unknown): boolean { return this.all().includes(n as FakeEl); }
   blur(): void {}
   remove(): void { this.removed = true; }
   getBoundingClientRect(): FakeEl['rect'] { return this.rect; }
@@ -115,13 +120,58 @@ describe('ViewCube DOM', () => {
     expect(root.byTestId('viewcube-home').attrs['aria-label']).toBe('View cube home: frame all');
   });
 
-  it('faces and Home are buttons in the tab order; spots are pointer shortcuts out of it', async () => {
+  it('the 26 targets are one roving tab stop in a toolbar; Home is its own stop', async () => {
     const { root } = await mount();
-    for (const f of root.all().filter((e) => e.className === 'olv-viewcube-face')) {
-      expect(f.tag).toBe('button');
-      expect(f.tabIndex).toBe(0);
+    const stage = root.all().find((e) => e.className === 'olv-viewcube-stage')!;
+    expect(stage.attrs.role).toBe('toolbar');
+    const targets = root.all().filter((e) => e.className === 'olv-viewcube-face' || e.className === 'olv-viewcube-spot');
+    expect(targets).toHaveLength(26);
+    for (const t of targets) expect(t.tag).toBe('button');
+    expect(targets.filter((t) => t.tabIndex === 0).map((t) => t.attrs['data-testid'])).toEqual(['viewcube-top']);
+    expect(root.byTestId('viewcube-home').tabIndex).toBe(0);
+  });
+
+  it('arrow keys reach every target, a hidden one is shown for focus only, and Enter chooses it', async () => {
+    const { root, calls } = await mount({ orientation: () => ({ forward: [0, -1, 0], up: [0, 0, 1], upIsZ: true }) });
+    const stage = root.all().find((e) => e.className === 'olv-viewcube-stage')!;
+    const { CUBE_KEY_ORDER } = await import('../src/render/viewCubeMath');
+    let focused = root.byTestId('viewcube-top');
+    const seen: string[] = [];
+    for (let i = 0; i < 26; i++) {
+      seen.push(focused.attrs['data-testid']);
+      let prevented = false;
+      stage.dispatch('keydown', { key: 'ArrowRight', target: focused, preventDefault: () => { prevented = true; } });
+      expect(prevented).toBe(true);
+      focused = root.all().find((e) => e.tabIndex === 0 && /olv-viewcube-(face|spot)/.test(e.className))!;
     }
-    for (const s of root.all().filter((e) => e.className === 'olv-viewcube-spot')) expect(s.tabIndex).toBe(-1);
+    expect(seen).toEqual(CUBE_KEY_ORDER.map((t) => `viewcube-${t.view ?? t.id}`));
+    expect(focused.attrs['data-testid']).toBe('viewcube-top'); // wrapped
+    stage.dispatch('keydown', { key: 'End', target: focused, preventDefault: () => {} });
+    const last = root.byTestId(`viewcube-${CUBE_KEY_ORDER[25].view ?? CUBE_KEY_ORDER[25].id}`);
+    expect(last.tabIndex).toBe(0);
+    // Looking south, the bottom-south-west corner is on the far side: hidden for pointers, shown for focus.
+    const corner = root.byTestId('viewcube-bottom-south-west');
+    expect(corner.hidden).toBe(true);
+    const idx = CUBE_KEY_ORDER.findIndex((t) => t.id === 'bottom-south-west');
+    stage.dispatch('focusin', { target: root.byTestId(`viewcube-${CUBE_KEY_ORDER[idx].id}`) });
+    expect(corner.hidden).toBe(false);
+    expect(corner.classes.has('is-kbd-only')).toBe(true);
+    expect(corner.attrs['aria-label']).toBe('View from bottom, back, right');
+    corner.click();
+    expect(calls.orients.map(([t]) => t.id)).toEqual(['bottom-south-west']);
+    (g.document as Record<string, unknown>).activeElement = null;
+    stage.dispatch('focusout', { target: corner, relatedTarget: null });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(corner.hidden).toBe(true);
+    expect(corner.classes.has('is-kbd-only')).toBe(false);
+  });
+
+  it('leaves other keys alone', async () => {
+    const { root } = await mount();
+    const stage = root.all().find((e) => e.className === 'olv-viewcube-stage')!;
+    let prevented = false;
+    stage.dispatch('keydown', { key: 'r', target: root.byTestId('viewcube-top'), preventDefault: () => { prevented = true; } });
+    expect(prevented).toBe(false);
   });
 
   it('routes a face to onView with its orientation, an edge or corner to onOrient, Home to onHome', async () => {
