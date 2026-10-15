@@ -16,7 +16,7 @@
  * `docs/architecture/architecture-map.md`).
  */
 
-import { rampRangeForMode, type ColorMode } from './colorModes';
+import { INTENSITY_PERCENTILE_TRIM, rampRangeForMode, type ColorMode } from './colorModes';
 import { buildActiveColorbarSpec, type ActiveColorbar } from './activeColorbar';
 import { isZUpFormat } from '../io/sniffFormat';
 import { ATTR_INTENSITY_INVALID, type PointCloud } from '../model/PointCloud';
@@ -121,6 +121,8 @@ export function buildColorLegend(host: ColorLegendHost): ColorLegend {
             break;
           case 'intensity':
             range = seeded ? { min: r.minIntensity, max: r.maxIntensity } : null;
+            // Seeded by intensityRangeOf with the same p2–p98 clip.
+            trim = INTENSITY_PERCENTILE_TRIM;
             break;
           case 'gpsTime':
             range = seeded ? { min: r.minGpsTime, max: r.maxGpsTime } : null;
@@ -165,6 +167,7 @@ export function buildColorLegend(host: ColorLegendHost): ColorLegend {
       let trimPercent = 0;
       if (mode === 'elevation') trimPercent = host.heightPercentileTrim();
       else if (mode === 'gpsTime') trimPercent = 5;
+      else if (mode === 'intensity') trimPercent = INTENSITY_PERCENTILE_TRIM;
       return buildActiveColorbarSpec({
         mode,
         range: display,

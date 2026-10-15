@@ -21,8 +21,8 @@
  *     "p5–p95 window".
  *   - **intensity** — a GRAYSCALE bar, because `colorByIntensity` paints
  *     grayscale; no unit, because LAS intensity is a dimensionless DN
- *     whose scaling the app cannot vouch for; and a "loaded sample range"
- *     note, because the raw min/max is scanned over the resident points.
+ *     whose scaling the app cannot vouch for; and a note naming the p2–p98
+ *     window and the loaded sample it was taken from.
  *   - **gpsTime** — normalised to seconds from the ramp window's start.
  *     Absolute GPS adjusted standard times are ~3e8 s, so raw ticks would be
  *     unreadable noise; the colour pass already normalises against the
@@ -148,6 +148,13 @@ export function buildActiveColorbarSpec(source: ActiveColorbarSource): ActiveCol
       };
     }
     case 'intensity': {
+      const n = source.sampleCount;
+      const note =
+        windowNote && typeof n === 'number' && Number.isFinite(n) && n > 0
+          ? `${windowNote.replace(' window', '')} of a ${n.toLocaleString('en-US')}-point sample of the loaded cloud`
+          : windowNote
+            ? `${windowNote}, loaded sample range`
+            : 'loaded sample range';
       return {
         mode: 'intensity',
         spec: {
@@ -156,7 +163,7 @@ export function buildActiveColorbarSpec(source: ActiveColorbarSource): ActiveCol
           max: range.max,
           label: 'Intensity',
         },
-        note: windowNote ? `${windowNote}, loaded sample range` : 'loaded sample range',
+        note,
       };
     }
     case 'gpsTime': {

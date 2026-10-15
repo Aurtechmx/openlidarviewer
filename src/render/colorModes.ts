@@ -540,7 +540,9 @@ export function colorByIntensity(
   const out = new Uint8Array(count * 3);
   const range = maxI - minI;
   for (let i = 0; i < count; i++) {
-    const grey = range === 0 ? 0 : Math.round(((intensity[i] - minI) / range) * 255);
+    // Clamped: the default window is percentile-clipped, so values past
+    // either end must pin to black / white rather than wrap in the Uint8Array.
+    const grey = range === 0 ? 0 : Math.round(clamp01((intensity[i] - minI) / range) * 255);
     out[i * 3] = grey;
     out[i * 3 + 1] = grey;
     out[i * 3 + 2] = grey;
@@ -759,6 +761,48 @@ export function finiteMinMax(
 }
 
 /**
+ * Symmetric percentile trim of the DEFAULT intensity window (2 → p2–p98).
+ * A raw min/max lets a handful of saturated returns (16-bit intensity pinned at
+ * 65 535) own the top of the ramp and wash every real return out to mid grey.
+ */
+export const INTENSITY_PERCENTILE_TRIM = 2;
+
+/**
+ * The default intensity window: p2–p98 over the shared percentile core
+ * (the one gpsTime and elevation use), with flagged-invalid values left out.
+ * Falls back to the true finite extremes when the clipped band collapses
+ * (almost every value identical) but the data still spans a range.
+ */
+export function intensityWindow(
+  intensity: ArrayLike<number>,
+  count: number,
+  invalid?: ArrayLike<number>,
+): { min: number; max: number; sampleCount: number } {
+  let values: ArrayLike<number> = intensity;
+  if (invalid) {
+    let masked: Float32Array | null = null;
+    for (let i = 0; i < count; i++) {
+      if ((invalid[i] & ATTR_INTENSITY_INVALID) === 0) continue;
+      if (!masked) {
+        masked = new Float32Array(count);
+        for (let j = 0; j < count; j++) masked[j] = intensity[j];
+      }
+      masked[i] = Number.NaN; // the core skips non-finite values
+    }
+    if (masked) values = masked;
+  }
+  const r = computeScalarRange(values, {
+    count,
+    lowerPercentile: INTENSITY_PERCENTILE_TRIM,
+    upperPercentile: 100 - INTENSITY_PERCENTILE_TRIM,
+  });
+  if (r.max <= r.min && r.trueMax > r.trueMin) {
+    return { min: r.trueMin, max: r.trueMax, sampleCount: r.sampleCount };
+  }
+  return { min: r.min, max: r.max, sampleCount: r.sampleCount };
+}
+
+/**
  * The ramp window a continuous scalar mode paints across — the SAME range
  * `colorForMode` feeds its colouring pass, extracted so a legend (the live
  * colorbar overlay, the snapshot burn-in) can label the exact window the
@@ -780,9 +824,9 @@ export function rampRangeForMode(
   const n = cloud.pointCount;
   switch (mode) {
     case 'intensity': {
-      // Raw finite min/max — matches the intensity case in colorForMode.
+      // Percentile-clipped (p2–p98) — see intensityWindow.
       if (!cloud.intensity) return null;
-      return finiteMinMax(cloud.intensity, n, cloud.attributeInvalid, ATTR_INTENSITY_INVALID);
+      return intensityWindow(cloud.intensity, n, cloud.attributeInvalid);
     }
     case 'gpsTime': {
       // Percentile-clipped (default p5–p95) — see the gpsTime case below.
@@ -878,7 +922,7 @@ export function colorForMode(
       if (!cloud.intensity) {
         throw new Error(`colorForMode('intensity'): cloud "${cloud.name}" has no intensity attribute`);
       }
-      // Range through the shared legend seam (raw finite min/max) so the
+      // Range through the shared legend seam (the p2–p98 window) so the
       // colorbar labels exactly the window these greys normalise against.
       const { min, max } = mustRampRange(rampRangeForMode('intensity', cloud, opts), 'intensity');
       return maskInvalid(colorByIntensity(cloud.intensity, n, min, max), cloud.attributeInvalid, ATTR_INTENSITY_INVALID);
