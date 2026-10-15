@@ -33,9 +33,8 @@ import type {
   ExportFactory,
   ExportResult,
 } from './types';
-import { runStudioExport } from './BaseExportMode';
+import { runStudioExport, sourceHeightExtent } from './BaseExportMode';
 import { formatElevation, linearUnitOf } from './ScanReportRenderer';
-import { sourceHeightExtent } from './heightExtent';
 
 export const depthMapExporter: ExportFactory = {
   mode: 'depth',
@@ -44,12 +43,12 @@ export const depthMapExporter: ExportFactory = {
   isAvailable(context: ExportContext): boolean {
     // Same gate as Height Map — needs a non-degenerate Z extent so
     // there's depth variation to encode.
-    const h = sourceHeightExtent(context);
+    const h = sourceHeightExtent(context.adapter);
     return h !== null && h.range > 1e-4;
   },
 
   unavailableReason(context: ExportContext): string {
-    const h = sourceHeightExtent(context);
+    const h = sourceHeightExtent(context.adapter);
     if (!h) return 'No cloud is loaded.';
     if (h.range <= 1e-4) {
       return 'Cloud has no measurable depth range.';
@@ -63,7 +62,7 @@ export const depthMapExporter: ExportFactory = {
   ): Promise<ExportResult> {
     // Source heights on the up axis — the same values the elevation colorbar
     // labels, not the render-local bounds.
-    const h = sourceHeightExtent(context);
+    const h = sourceHeightExtent(context.adapter);
     if (!h) {
       throw new Error('Depth Map: no cloud loaded — cannot describe the export.');
     }

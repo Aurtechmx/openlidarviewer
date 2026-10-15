@@ -38,9 +38,8 @@ import type {
   ExportResult,
   LegendPalette,
 } from './types';
-import { runStudioExport } from './BaseExportMode';
+import { runStudioExport, sourceHeightExtent } from './BaseExportMode';
 import { formatElevation, formatLinear, linearUnitLabel, linearUnitOf } from './ScanReportRenderer';
-import { sourceHeightExtent } from './heightExtent';
 
 const DEFAULT_INTERVAL_M = 5;
 const DEFAULT_OVERLAY: ContourOptions['overlay'] = 'transparent';
@@ -51,7 +50,7 @@ export const contourMapExporter: ExportFactory = {
   label: 'Contour Map',
 
   isAvailable(context: ExportContext): boolean {
-    const h = sourceHeightExtent(context);
+    const h = sourceHeightExtent(context.adapter);
     if (!h) return false;
     // Contour math is only meaningful when there's at least one full
     // interval of elevation change. Default interval is 5 m, but accept
@@ -61,7 +60,7 @@ export const contourMapExporter: ExportFactory = {
   },
 
   unavailableReason(context: ExportContext): string {
-    const h = sourceHeightExtent(context);
+    const h = sourceHeightExtent(context.adapter);
     if (!h) return 'No cloud is loaded.';
     if (h.range <= 0.1) {
       return 'Cloud has < 10 cm of elevation range — no contour lines to draw.';
@@ -74,7 +73,7 @@ export const contourMapExporter: ExportFactory = {
     options: ContourOptions,
   ): Promise<ExportResult> {
     // Source heights on the up axis, matching the elevation colorbar labels.
-    const h = sourceHeightExtent(context);
+    const h = sourceHeightExtent(context.adapter);
     if (!h) {
       throw new Error('Contour: no cloud loaded — cannot describe the export.');
     }

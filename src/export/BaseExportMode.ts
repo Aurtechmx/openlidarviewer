@@ -36,6 +36,7 @@ import type { CommonExportOptions, ExportContext, ExportMode, ExportResult, Expo
 import {
   composeClassScopeBannerOntoBlob,
   composeScanReportOntoBlob,
+  formatElevation,
   formatInt,
   formatLinear,
   formatTimestamp,
@@ -178,6 +179,46 @@ export function topDownOrthoCameraForAabb(
  */
 const STUDIO_VERSION = __APP_VERSION__;
 
+/** What to call each component in a card row, so "Min Y" says which it is. */
+const AXIS_NAME = ['X', 'Y', 'Z'] as const;
+
+export interface SourceHeightExtent {
+  readonly min: number;
+  readonly max: number;
+  readonly range: number;
+  /** Axis name of the up axis ("Z" for survey sources, "Y" for a Y-up mesh). */
+  readonly axis: 'X' | 'Y' | 'Z';
+}
+
+/**
+ * The scan's height extent in SOURCE units, for card rows.
+ *
+ * `adapter.localBoundsAabb()` is measured in the render frame, which the
+ * loaders shift by a per-cloud origin so Float32 positions stay precise. Card
+ * rows that print elevations must add that origin back on the up axis, the
+ * same reconstruction the elevation colorbar performs for its labels, or a
+ * tile at −7.86…39.72 m loaded with a −8 m origin reads "14.0 cm … 47.7 m".
+ * Shared by the height, depth and contour cards and the Height base row.
+ */
+export function sourceHeightExtent(adapter: ExportSceneAdapter): SourceHeightExtent | null {
+  // The TIGHT data box (streaming's octree cube over-reports height), the
+  // same box the Height row reads, so Min/Max and Height agree.
+  const aabb = adapter.dataBoundsAabb?.() ?? adapter.localBoundsAabb();
+  if (!aabb) return null;
+  const axis = adapter.worldUpAxis();
+  const origin = adapter.heightOrigin?.() ?? 0;
+  const min = aabb[axis] + origin;
+  const max = aabb[axis + 3] + origin;
+  return { min, max, range: aabb[axis + 3] - aabb[axis], axis: AXIS_NAME[axis] };
+}
+
+/** Whether the loaded points are a subset of the source (stride, voxel, or streamed LOD). */
+function isDisplaySample(adapter: ExportSceneAdapter): boolean {
+  const source = adapter.sourcePointCount();
+  const resident = adapter.residentPointCount?.();
+  return source !== null && typeof resident === 'number' && resident < source;
+}
+
 /**
  * The standard set of scan-report rows every Studio export carries. Mode
  * exporters extend this with their own mode-specific rows (ramp choice,
@@ -192,25 +233,37 @@ export function baseReportRows(
   // hardcoded metre. Unknown/absent unit ⇒ metre default.
   const unit = linearUnitOf(adapter.crsLabel()?.unit);
   const uLabel = linearUnitLabel(unit);
+  const source = adapter.sourcePointCount();
   const rows: ScanReportRow[] = [
-    {
-      label: 'Points',
-      value: adapter.sourcePointCount() === null
-        ? 'Unknown'
-        : formatInt(adapter.sourcePointCount() as number),
-    },
+    { label: 'Points', value: source === null ? 'Unknown' : formatInt(source) },
   ];
+  // The image is drawn from the LOADED points. When that is a subset of the
+  // file, "Points" alone reads as if every record was rendered.
+  const sampled = isDisplaySample(adapter);
+  if (sampled && source !== null) {
+    rows.push({
+      label: 'Rendered from',
+      value: `${formatInt(adapter.residentPointCount())} of ${formatInt(source)} points (display sample)`,
+    });
+  }
   // Extent/density use the TIGHT data AABB (streaming's octree cube inflates
   // height ~7× and deflates density); falls back to the passed AABB.
   const box = adapter.dataBoundsAabb() ?? aabb;
   if (box) {
-    const w = box[3] - box[0];
-    const d = box[4] - box[1];
-    const h = box[5] - box[2];
+    // Height is read on the up axis and printed as the difference of the two
+    // elevations a height card prints (each rounded as printed), so Height,
+    // Min and Max on one card always add up. Width/Depth are the other two axes.
+    const up = adapter.worldUpAxis?.() ?? 2;
+    const [ax, ay] = ([0, 1, 2] as const).filter((i) => i !== up);
+    const w = box[ax + 3] - box[ax];
+    const d = box[ay + 3] - box[ay];
+    const origin = adapter.heightOrigin?.() ?? 0;
+    const printed = (v: number) => Number((v + origin).toFixed(2));
+    const h = printed(box[up + 3]) - printed(box[up]);
     rows.push(
       { label: 'Width',  value: formatLinear(w, unit) },
       { label: 'Depth',  value: formatLinear(d, unit) },
-      { label: 'Height', value: formatLinear(h, unit) },
+      { label: 'Height', value: formatElevation(h, unit) },
     );
     // Density — points per square unit on the XY footprint.
     const total = adapter.sourcePointCount();
@@ -242,7 +295,10 @@ export function baseReportRows(
     classificationValue = 'Yes';
   } else {
     const classified = assigned > 0 ? 'classified' : 'unclassified';
-    classificationValue = `Present, ${classified} (${(assigned * 100).toFixed(1)} % coverage)`;
+    // The fraction is counted over the loaded points, so on a display sample
+    // it is the sample's coverage, not the file's.
+    const basis = sampled ? ' of the display sample' : '';
+    classificationValue = `Present, ${classified} (${(assigned * 100).toFixed(1)} % coverage${basis})`;
   }
   rows.push({ label: 'Classification', value: classificationValue });
   // CRS provenance, when the source file declares one. This

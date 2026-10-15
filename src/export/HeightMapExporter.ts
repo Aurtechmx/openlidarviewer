@@ -22,9 +22,8 @@ import type {
   HeightMapOptions,
   HeightMapRamp,
 } from './types';
-import { runStudioExport } from './BaseExportMode';
+import { runStudioExport, sourceHeightExtent } from './BaseExportMode';
 import { formatElevation, linearUnitOf } from './ScanReportRenderer';
-import { sourceHeightExtent } from './heightExtent';
 
 /** Default resolution presets used by the Studio panel. */
 export const HEIGHT_MAP_RESOLUTIONS = [1024, 2048, 4096] as const;
@@ -51,7 +50,7 @@ function heightExtent(context: ExportContext): {
   readonly range: number;
   readonly label: (side: 'Min' | 'Max') => string;
 } | null {
-  const h = sourceHeightExtent(context);
+  const h = sourceHeightExtent(context.adapter);
   if (!h) return null;
   return { min: h.min, max: h.max, range: h.range, label: (side) => `${side} ${h.axis}` };
 }
