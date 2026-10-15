@@ -28,6 +28,8 @@
  *
  * Pure, RangeSource-only — Node-testable over an ArrayBufferRangeSource.
  */
+import { lasOriginFor } from '../lasDataOrigin';
+import { lazRecord0 } from './lazRecord0';
 import type { RangeSource } from '../range/RangeSource';
 import { decodeContext, finalizeRawColors } from '../lasDecodeShared';
 import { openSlicedLas } from './slicedLasReader';
@@ -148,6 +150,8 @@ async function sampleLas(
   const perBand = Math.max(1, Math.min(Math.floor(target / bands), Math.floor(total / bands)));
 
   const chunks: Uint8Array[] = [];
+  // Sampled positions, kept only to frame a file whose header bounds are untrusted.
+  const positions: Float32Array[] = [];
   let sampled = 0;
   for (let b = 0; b < bands && sampled < target; b++) {
     signal?.throwIfAborted();
@@ -155,11 +159,14 @@ async function sampleLas(
     const count = Math.min(perBand, target - sampled);
     const batch = await opened.readBatch(start, count);
     chunks.push(packBatch(batch.raw, batch.count, schema, recordBytes));
+    if (!opened.boundsTrusted) positions.push(batch.raw.positions.subarray(0, batch.count * 3));
     sampled += batch.count;
   }
   if (sampled === 0) return null;
 
-  const { min, max } = localExtent(opened.header.min, opened.header.max, opened.origin);
+  const { min, max } = opened.boundsTrusted
+    ? localExtent(opened.header.min, opened.header.max, opened.origin)
+    : extentOf(positions);
   return {
     records: concat(chunks, sampled * recordBytes),
     recordBytes,
@@ -194,11 +201,8 @@ async function sampleLaz(
   const total = header.pointCount;
   if (total < MIN_PREVIEW_POINTS) return null;
 
-  const origin: [number, number, number] = [
-    Math.floor(header.min[0]),
-    Math.floor(header.min[1]),
-    Math.floor(header.min[2]),
-  ];
+  const choice = lasOriginFor(header, await lazRecord0(range, header, undefined, signal));
+  const origin = choice.origin;
   const ctx = decodeContext(header, origin);
   const schema = tileSchemaForHeader(header.pointFormat, ctx);
   const recordBytes = tileRecordBytes(schema);
@@ -210,6 +214,8 @@ async function sampleLaz(
   const stride = chunks.length / wanted;
 
   const packed: Uint8Array[] = [];
+  // Sampled positions, kept only to frame a file whose header bounds are untrusted.
+  const positions: Float32Array[] = [];
   let sampled = 0;
   for (let i = 0; i < wanted && sampled < target; i++) {
     signal?.throwIfAborted();
@@ -247,11 +253,14 @@ async function sampleLaz(
     finalizeRawColors(raw);
     const take = Math.min(c.pointCount, target - sampled);
     packed.push(packBatch(raw, take, schema, recordBytes));
+    if (!choice.boundsTrusted) positions.push(raw.positions.subarray(0, take * 3));
     sampled += take;
   }
   if (sampled === 0) return null;
 
-  const { min, max } = localExtent(header.min, header.max, origin);
+  const { min, max } = choice.boundsTrusted
+    ? localExtent(header.min, header.max, origin)
+    : extentOf(positions);
   return {
     records: concat(packed, sampled * recordBytes),
     recordBytes,
@@ -261,6 +270,32 @@ async function sampleLaz(
     localMin: min,
     localMax: max,
   };
+}
+
+/** Local extent of the sampled positions themselves. */
+function extentOf(parts: readonly Float32Array[]): {
+  min: [number, number, number];
+  max: [number, number, number];
+} {
+  const min: [number, number, number] = [Infinity, Infinity, Infinity];
+  const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+  for (const p of parts) {
+    for (let i = 0; i + 2 < p.length; i += 3) {
+      for (let a = 0; a < 3; a++) {
+        const v = p[i + a];
+        if (!Number.isFinite(v)) continue;
+        if (v < min[a]) min[a] = v;
+        if (v > max[a]) max[a] = v;
+      }
+    }
+  }
+  for (let a = 0; a < 3; a++) {
+    if (!(min[a] <= max[a])) {
+      min[a] = 0;
+      max[a] = 0;
+    }
+  }
+  return { min, max };
 }
 
 /** Pack the first `count` points of a decoded batch into tile records. */

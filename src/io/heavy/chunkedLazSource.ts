@@ -25,6 +25,8 @@
  * testable through laz-perf's WASM decoder; the browser passes an OPFS-file
  * RangeSource and an OPFS spill store.
  */
+import { lasOriginFor } from '../lasDataOrigin';
+import { lazRecord0 } from './lazRecord0';
 import type { RangeSource } from '../range/RangeSource';
 import { parseLasHeader, type LasHeader } from '../lasHeader';
 import {
@@ -215,19 +217,20 @@ export async function openChunkedLazSource(
     );
   }
 
-  const origin: [number, number, number] =
-    options.origin ?? [
-      Math.floor(header.min[0]),
-      Math.floor(header.min[1]),
-      Math.floor(header.min[2]),
-    ];
+  // The whole-file loader's origin rule: the floored header minimum, or the
+  // floored record 0 when the header bounds do not enclose it.
+  const choice = lasOriginFor(header, await lazRecord0(range, header, probe, options.signal));
+  const origin: [number, number, number] = options.origin ?? choice.origin;
   const ctx = decodeContext(header, origin);
   const schema = tileSchemaForHeader(header.pointFormat, ctx);
   const recordBytes = tileRecordBytes(schema);
   const chunks = table.chunks;
   const window = Math.max(1, Math.floor(options.chunkWindow ?? DEFAULT_CHUNK_WINDOW));
 
-  const sourceHeader = chunkedSourceHeader(header.min, header.max, origin, header.pointCount);
+  // Untrusted header bounds cannot stand in for the bounds pass.
+  const sourceHeader = choice.boundsTrusted
+    ? chunkedSourceHeader(header.min, header.max, origin, header.pointCount)
+    : undefined;
 
   const source: PointSource = {
     header: sourceHeader,

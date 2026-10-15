@@ -39,12 +39,13 @@ import { bufferRangeReader, resolveLasCrs, type ByteRangeReader } from './crs';
 import { LoadError } from './loadErrors';
 import { compressedBytesPerPointFloor, validateDeclaredPointCount } from './validateCount';
 import type { LasHeader } from './lasHeader';
-import { computeOrigin } from './coordinateBridge';
+import { lasOriginFor, lasRecord0, type LasOriginChoice } from './lasDataOrigin';
 import { sanitizeLocalCloud, withLoadWarning } from './sanitizeCloud';
 import { truncationText, type Truncation } from './truncation';
 import { makePrng, pickInBucket, STRIDE_SAMPLE_SEED } from './strideSample';
 import type { ProgressUpdate } from './loadProgress';
 import type { RangeSource } from './range/RangeSource';
+import { ArrayBufferRangeSource } from './range/ArrayBufferRangeSource';
 import type { DecodePoolPolicy } from './heavy/worker/lazChunkWorkerClient';
 import {
   allocRawPoints,
@@ -200,12 +201,10 @@ export async function loadLas(
 ): Promise<PointCloud> {
   const header = parseLasHeader(buffer);
   await attachEvlrCrs(header, buffer, bufferRangeReader(buffer), buffer.byteLength);
-  // Origin from the floored header min — known before decoding, so records
-  // are converted straight into local coordinates.
-  const origin = computeOrigin(header.min);
   let truncation: Truncation | undefined;
+  let choice: LasOriginChoice;
   const toCloud = (raw: RawPoints): PointCloud =>
-    cloudFromRaw(raw, header, origin, sourceFormat, name, stride, truncation);
+    cloudFromRaw(raw, header, choice.origin, sourceFormat, name, stride, truncation, choice.warning);
 
   let raw: RawPoints;
   if (sourceFormat === 'laz') {
@@ -217,6 +216,12 @@ export async function loadLas(
       compressedBytesPerPointFloor(header.pointDataRecordLength),
       'LAZ',
     );
+    // Origin from the floored header min, or from record 0 when the header
+    // bounds do not enclose it — known before decoding, so records are
+    // converted straight into local coordinates.
+    const { lazRecord0 } = await import('./heavy/lazRecord0');
+    choice = lasOriginFor(header, await lazRecord0(new ArrayBufferRangeSource(buffer), header, buffer));
+    const origin = choice.origin;
     // Lazy chunk: pulls laz-perf + the embedded WASM only when a `.laz`
     // file is actually opened. Uncompressed `.las` files never download it.
     const { decodeLaz } = await import('./lazDecode');
@@ -233,7 +238,8 @@ export async function loadLas(
     ).decodeLazPooled(buffer, header, origin, { stride, onProgress, pointSemantics });
     raw = pooled ?? (await decodeLaz(buffer, header, origin, stride, onProgress, pointSemantics));
   } else {
-    raw = decodeLas(buffer, header, origin, stride, onProgress, pointSemantics);
+    choice = lasOriginFor(header, lasRecord0(buffer, header));
+    raw = decodeLas(buffer, header, choice.origin, stride, onProgress, pointSemantics);
     const held = recordsHeld(buffer, header);
     if (held < header.pointCount) truncation = { read: held, declared: header.pointCount };
   }
@@ -299,9 +305,6 @@ export async function loadLazFromFile(
     }
   }
   const header = parseLasHeader(head);
-  const origin = computeOrigin(header.min);
-  const toCloud = (raw: RawPoints): PointCloud =>
-    cloudFromRaw(raw, header, origin, 'laz', name, stride);
   // EVLR bytes read for the CRS, recorded in the ledger below.
   const evlrReads: Array<[number, number]> = [];
   await attachEvlrCrs(header, head, async (offset, length) => {
@@ -363,7 +366,15 @@ export async function loadLazFromFile(
       return bytes;
     },
   };
-  const frame = previewFrame(header, origin);
+  // Origin from record 0 when the header bounds do not enclose it. Read
+  // through the counted source so the ledger sees the bytes.
+  const { lazRecord0 } = await import('./heavy/lazRecord0');
+  const choice = lasOriginFor(header, await lazRecord0(counted, header, head));
+  const origin = choice.origin;
+  const toCloud = (raw: RawPoints): PointCloud =>
+    cloudFromRaw(raw, header, origin, 'laz', name, stride, undefined, choice.warning);
+  // Untrusted bounds cannot frame the preview either.
+  const frame = choice.boundsTrusted ? previewFrame(header, origin) : undefined;
   let expectedPoints = header.pointCount;
   const pooled = await decodeLazPooledFromSource(counted, header, origin, {
     stride,
@@ -486,6 +497,7 @@ function cloudFromRaw(
   name: string,
   stride: number,
   truncation?: Truncation,
+  originWarning?: string,
 ): PointCloud {
   const decodedPointCount = raw.positions.length / 3;
 
@@ -535,7 +547,10 @@ function cloudFromRaw(
     // Record the DELIBERATE decode stride (the display-sample cap) so the
     // Health Check can tell a capped load from genuine decode loss.
     loadStride: Math.max(1, Math.floor(stride)),
-    metadata: truncated(withLoadWarning(lasMetadata(header), clean.warning), truncation),
+    metadata: truncated(
+      withLoadWarning(withLoadWarning(lasMetadata(header), originWarning), clean.warning),
+      truncation,
+    ),
   });
 }
 
