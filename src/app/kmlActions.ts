@@ -272,9 +272,11 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
   // one whose owner cannot be resolved is withheld rather than placed at the
   // active scan's lon/lat for coordinates it never had there.
   const notes = annotationsOwnedByActive(deps.annotations(), view);
+  // Deep copies: the controllers hand out their live arrays and objects, so a
+  // note added or a vertex dragged during the import would otherwise reach it.
   const input: KmlExportInput = {
-    annotations: notes.own.map((a) => inSceneFrame(a, d)),
-    measurements: owned.own,
+    annotations: notes.own.map((a) => inSceneFrame(structuredClone(a), d)),
+    measurements: owned.own.map((m) => structuredClone(m)),
     withheldMeasurements: owned.withheld,
     withheldAnnotations: notes.withheld,
     // Saved views become <LookAt> placemarks in the same LOCAL render frame as

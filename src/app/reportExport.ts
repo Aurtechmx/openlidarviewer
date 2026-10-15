@@ -308,7 +308,12 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
   // the report flow needs the Viewer state; ensure it's loaded.
   await deps.viewerReady;
   const viewer = deps.getViewer();
-  const report = await deps.loadReportEngine();
+  // ONE request, captured from here to the engine load below with no await in
+  // between: the source, its frame and metadata, the capture fingerprint, the
+  // owned measurements and annotations (deep-copied) and the units. Loading the
+  // engine, hashing the source and rendering all yield, and another scan can
+  // open or become active meanwhile; nothing after the first await reads the
+  // live app, so the PDF describes the scan that was active at the click.
   const streamingCloud = viewer.streamingCloud;
   const staticCloud = deps.scans.activeCloud() ?? undefined;
   if (!streamingCloud && !staticCloud) {
@@ -441,26 +446,10 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
   } else {
     throw new Error('Load a scan first.');
   }
-  metadata = { ...metadata, digests: await report.resolveExportDigests({ key: (streamingCloud ?? staticCloud)!, streamed: !!streamingCloud }, activeCrs) };
+  // The digest is hashed from the source captured above, the one the rest of
+  // the report describes.
+  const digestSource = { key: (streamingCloud ?? staticCloud)!, streamed: !!streamingCloud };
 
-  // Derive the cover title from the actual template so each template
-  // produces a distinct, recognisable PDF. The user-reported bug — "all
-  // reports show the same export" — was driven by a hardcoded
-  // `title: 'Scan Report'` that made the cover identical across every
-  // template choice. Pulling `label` off `getReportTemplate(templateId)`
-  // gives "Survey Summary" or "Technical Report" as appropriate. The
-  // dataset name moves into the subtitle so both axes (template type,
-  // source scan) are surfaced on the cover.
-  //
-  // v0.5.5 P12 — legacy ids (engineering-inspection, qa-validation,
-  // terrain-review, technical-documentation, scan-acceptance) normalise
-  // to the nearest current template, so an id carried in old UI state or
-  // an external caller keeps working; the export filename follows the
-  // NORMALISED id.
-  const validatedTemplateId =
-    report.normalizeReportTemplateId(templateId) ?? report.DEFAULT_TEMPLATE_ID;
-  const template = report.getReportTemplate(validatedTemplateId);
-  const coverTitle = template?.label ?? 'Scan Report';
   // The capture-type fingerprint the Inspector's Provenance card is showing,
   // read from the shared store rather than re-classified here. Re-classifying
   // let the PDF and the panel state opposite capture types for the same scan:
@@ -520,15 +509,12 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     viewer.measure.getMeasurements(),
     deps.measurementOwnership ? deps.measurementOwnership() : { layers: [], activeViewerId: deps.scans.activeId ?? null },
   );
-  const inputs = report.composeReportInputs({
-    templateId: validatedTemplateId,
+  const captured = {
     scanQualityFacts,
-    title: coverTitle,
     subtitle: metadata.fileName,
-    metadata,
     visuals: [],          // user-pre-rendered Studio exports
-    annotations: viewer.annotate.getAnnotations(),
-    measurements: owned.own,
+    annotations: viewer.annotate.getAnnotations().map((a) => structuredClone(a)),
+    measurements: owned.own.map((m) => structuredClone(m)),
     measurementsWithheld: owned.withheld,
     unitSystem: viewer.measure.unitSystem,
     // Render-units → metres, the SAME factor the live measure readouts apply
@@ -558,7 +544,29 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     // "declared by the file, not verified" disclosure. Undefined (streaming
     // sources, metadata-less files) omits the section entirely.
     sourceMetadata: staticCloud?.metadata?.sourceMetadata,
-  });
+  };
+
+  const report = await deps.loadReportEngine();
+  metadata = { ...metadata, digests: await report.resolveExportDigests(digestSource, activeCrs) };
+  // Derive the cover title from the actual template so each template
+  // produces a distinct, recognisable PDF. The user-reported bug — "all
+  // reports show the same export" — was driven by a hardcoded
+  // `title: 'Scan Report'` that made the cover identical across every
+  // template choice. Pulling `label` off `getReportTemplate(templateId)`
+  // gives "Survey Summary" or "Technical Report" as appropriate. The
+  // dataset name moves into the subtitle so both axes (template type,
+  // source scan) are surfaced on the cover.
+  //
+  // v0.5.5 P12 — legacy ids (engineering-inspection, qa-validation,
+  // terrain-review, technical-documentation, scan-acceptance) normalise
+  // to the nearest current template, so an id carried in old UI state or
+  // an external caller keeps working; the export filename follows the
+  // NORMALISED id.
+  const validatedTemplateId =
+    report.normalizeReportTemplateId(templateId) ?? report.DEFAULT_TEMPLATE_ID;
+  const template = report.getReportTemplate(validatedTemplateId);
+  const coverTitle = template?.label ?? 'Scan Report';
+  const inputs = report.composeReportInputs({ ...captured, templateId: validatedTemplateId, title: coverTitle, metadata });
 
   const result = await report.generateReport(inputs);
   // The download filename now mirrors the template choice so the

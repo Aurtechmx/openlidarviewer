@@ -9,6 +9,10 @@
  * PNG. Packaging failures fall back to the bare PNG rather than sinking an
  * export that already rendered.
  *
+ * The quick-format point export (PLY, OBJ, XYZ, CSV) settles here too:
+ * {@link runPointExport} captures its request through `pointExportRequest.ts`
+ * and reports the outcome through {@link settleFileExport}.
+ *
  * The viewer and the drop zone are read through getters: both are assigned later
  * in main's boot than the ExportPanel is constructed, so the callback closes over
  * the getters, not the values.
@@ -21,6 +25,8 @@ import { loadPngWorldFile } from '../lazyChunks';
 import { triggerDownload } from '../io/download';
 import { sameExportTarget, EXPORT_SCAN_CHANGED_REFUSAL } from '../export/exportScanIdentity';
 import { recordErrorLedger } from './staleChunkReload';
+import { capturePointExportRequest, writePointExport, type PointExportRequestDeps } from './pointExportRequest';
+import type { ExportFormat } from '../io/exporters';
 
 /** The progress surface the action drives (a `DropZone`, structurally). */
 export interface ExportImageProgress {
@@ -150,4 +156,24 @@ export function settleFileExport(work: PromiseLike<unknown>, progress: ExportIma
       progress.setError(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
     },
   );
+}
+
+/**
+ * The quick-format button: capture the request, refuse it plainly when there
+ * is nothing to write, otherwise write it and settle the outcome through the
+ * shared export toast. Resolves once the button may be used again.
+ */
+export function runPointExport(
+  format: ExportFormat,
+  deps: PointExportRequestDeps,
+  io: Parameters<typeof writePointExport>[1] & { readonly progress: ExportImageProgress },
+): Promise<void> | undefined {
+  const captured = capturePointExportRequest(format, deps);
+  if (!captured) return undefined;
+  if ('refusal' in captured) {
+    io.progress.setError(captured.refusal);
+    // Settled at once, so the button is usable again straight away.
+    return Promise.resolve();
+  }
+  return settleFileExport(writePointExport(captured.request, io), io.progress);
 }

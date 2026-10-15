@@ -4,6 +4,13 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
+### Fixed
+
+- The quick-format PLY, OBJ, XYZ and CSV export buttons honour an active clip box. They keep the same points as Export, through the same clip and placement step, state "Clipped: k of n points" in the PLY, OBJ and XYZ header and add `-clip` to the file name. A clip that keeps no points is refused with a message and the buttons stay usable.
+- A quick-format point export describes the scan that was active when its button was pressed. The points, clip, CRS, coordinate precision, source SHA-256 and file name are captured before the writer loads, so a scan opened while the writer loads or the source is hashed no longer reaches the file.
+- The PDF report describes the scan that was active when Report PDF was pressed. Its metadata, capture fingerprint, measurements, annotations, units and source SHA-256 are captured before the report engine loads, so a scan opened or a measurement added while the engine loads or the source is hashed no longer reaches the report.
+- Site KML copies the annotations and measurements when it is requested, so a note added or a vertex moved while the KML writer loads no longer reaches the file.
+
 ## [0.7.0] - 2026-10-15
 
 ### Added

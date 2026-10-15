@@ -109,7 +109,7 @@ import {
 import { makeExportCrsResolver, resolvedExportCrs } from './app/exportCrsResolver';
 import { createInspectorVisualCoordinator } from './app/inspectorVisualCoordinator';
 import type { MeasurementExportActionDeps } from './app/measurementExportActions';
-import { exportImageAction, settleFileExport } from './app/exportImageAction';
+import { exportImageAction, runPointExport } from './app/exportImageAction';
 import { ClipPanel } from './ui/ClipPanel';
 import type { ClipBox } from './render/clip/clipBox';
 // Two-epoch change detection is loaded on demand (it pulls the terrain
@@ -2354,10 +2354,7 @@ const measurementExportActionDeps = (v: Viewer): MeasurementExportActionDeps => 
 
 const exportPanel = new ExportPanel({
   exportHealth: () => (hasScan() ? buildExportHealth(buildCurrentStoryInputs()) : null),
-  onExport: (format) => {
-    const cloud = scans.activeCloud();
-    if (cloud) return settleFileExport(loadExporters().then(async (m) => downloadFileBytes(m.pointExportFileName(baseName(cloud.name), cloud, format), await m.exportCloudBytesWithDigests(cloud, format, crsService.context().isGeographic, exportGeoContext()), 'text/plain')), dropZone);
-  },
+  onExport: (format) => runPointExport(format, { activeCloud: () => scans.activeCloud(), clip: () => viewer?.getClip() ?? null, clipOffset: () => (scans.activeId ? viewer.layerProjectOffset(scans.activeId) : null), crs: () => crsService.current(), isGeographic: () => crsService.context().isGeographic, baseName }, { loadExporters, download: downloadFileBytes, progress: dropZone }),
   onExportImage: (mode) =>
     exportImageAction(mode, {
       getViewer: () => viewer,
