@@ -117,13 +117,14 @@ describe('clipping a classified cloud', () => {
     expect(Array.from(out.classification!)).toEqual([2]);
   });
 
-  it('keeps cleared classes cleared, without a second kept original', () => {
+  it('keeps cleared classes cleared, with the producer codes of the kept points', () => {
     const c = source();
     recordClassEdit(new ClassEditHistory(), c, (b) => b.fill(1), 'cleared');
     const out = clipCloud(c, KEEP_FIRST);
     expect(Array.from(out.classification!)).toEqual([1]);
     expect(out.classificationProvenance).toBe('cleared');
-    expect(out.originalClassification).toBeUndefined();
+    // Export reads the producer codes to keep their source meaning (legacy 8 and 12).
+    expect(Array.from(out.originalClassification!)).toEqual([2]);
   });
 
   it('carries the classifier method of derived classes', () => {

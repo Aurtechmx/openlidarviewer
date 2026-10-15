@@ -616,10 +616,13 @@ export class PointCloud {
           `${this.pointCount} points — length mismatch.`,
       );
     }
+    // Replacing the source codes keeps a copy of them, as an in-place replace
+    // does, so export can still read the producer codes the derive kept.
+    const before = this._classification;
     this._classification = codes;
     // A fresh derive is BY DEFINITION current: it ran under the frame in force
     // now, so whatever invalidated the previous codes no longer applies.
-    this.setClassificationState('derived', method);
+    this.setClassificationState('derived', method, before !== codes ? before : undefined);
   }
 
   /** Undo of a first attach: drop the codes and return them for a Redo. */
