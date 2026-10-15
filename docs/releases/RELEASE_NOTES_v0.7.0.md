@@ -70,6 +70,7 @@ Converted XYZ, ASC and LAS files record the software and version, the source fil
 - Layers keep their placement while other layers open or close, a lone remaining layer exports and saves through its placement, removing the active layer activates the next one, and each measurement reads out in its own scan's units.
 - Binary PLY headers with CRLF or non-ASCII text read correctly; malformed PLY and glTF graphs are refused; KML descriptions are escaped as HTML.
 - PDF volume rows state coverage and preview caveats, and Web Mercator or geocentric frames no longer report extents or density in ground metres.
+- Recovery work survives Close scan and keeps journaling beside saved work; LAS/LAZ files with wrong header bounds keep full coordinate precision; geocentric reprojection is refused.
 - The "Two scans loaded" before/after prompt is offered only when both scans declare the same CRS and linear unit and neither is a truncated load.
 - A local glTF or GLB that names an external buffer or image (a relative file or a web address) is refused before parsing, so opening a file never makes the browser request an address named inside it.
 

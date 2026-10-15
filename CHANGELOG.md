@@ -62,6 +62,8 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - PDF report volume rows carry the same interpolated, outside-scan, preview, noise and reduced-sample clauses as the live readout, and a withheld volume states its reason.
 - On Web Mercator and geocentric frames the scan report, streamed extents, PDF footprint and full-cloud grade no longer state widths, depths or densities in ground metres; they state why.
 - An endpoint snapped to a voxel centroid of a reduced display sample is graded caution, not a measured return.
+- Close scan keeps recovery work saved for other files and the work a Replace kept, and new work on a file that has saved recovery work is journaled beside it instead of being skipped. A write too large for the store is skipped without turning recovery off. A session whose origin is present but malformed is refused.
+- A LAS or LAZ whose header bounds do not enclose its points takes its local origin from the points, so coordinates keep full precision, and says so. Reprojection to or from a geocentric CRS (EPSG:4978) is refused instead of writing wrong coordinates.
 - A local glTF or GLB that names an external buffer or image (a relative file or a web address) is refused before parsing. Opening it no longer makes the browser request an address named inside the file.
 - The E57 reader refuses an XML section larger than 64 MB and XML nested deeper than 256 levels with a clear error, instead of exhausting memory or the call stack.
 - The latest-result card no longer covers the active tool's Finish and Cancel controls when it grows: it stays above the bottom controls and scrolls inside itself.
