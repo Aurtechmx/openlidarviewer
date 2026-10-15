@@ -493,6 +493,12 @@ export interface MeasureUnitFrame {
   readonly unitToMetres: number;
   /** Up-axis factor; null rides the horizontal one. */
   readonly verticalUnitToMetres: number | null;
+  /**
+   * The file declares a valid vertical unit. On a geographic frame the
+   * horizontal factor is not a linear unit, so without one a height has no
+   * known unit at all.
+   */
+  readonly verticalUnitKnown: boolean;
   readonly crsKnown: boolean;
   readonly geographic: boolean;
   readonly verticalRefused: boolean;
@@ -508,6 +514,7 @@ export interface MeasureUnitFrame {
 export const UNRESOLVED_UNIT_FRAME: MeasureUnitFrame = Object.freeze({
   unitToMetres: 1,
   verticalUnitToMetres: null,
+  verticalUnitKnown: false,
   crsKnown: false,
   geographic: false,
   verticalRefused: false,
@@ -518,6 +525,7 @@ export const UNRESOLVED_UNIT_FRAME: MeasureUnitFrame = Object.freeze({
 export function sameUnitFrame(a: MeasureUnitFrame, b: MeasureUnitFrame): boolean {
   return a.unitToMetres === b.unitToMetres &&
     (a.verticalUnitToMetres ?? a.unitToMetres) === (b.verticalUnitToMetres ?? b.unitToMetres) &&
+    a.verticalUnitKnown === b.verticalUnitKnown &&
     a.crsKnown === b.crsKnown && a.geographic === b.geographic &&
     a.verticalRefused === b.verticalRefused && a.projected === b.projected;
 }

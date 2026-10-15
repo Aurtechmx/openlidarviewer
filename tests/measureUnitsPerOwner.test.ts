@@ -29,6 +29,7 @@ const US_SURVEY_FOOT = 1200 / 3937;
 const frame = (unitToMetres: number, over: Partial<MeasureUnitFrame> = {}): MeasureUnitFrame => ({
   unitToMetres,
   verticalUnitToMetres: unitToMetres,
+  verticalUnitKnown: true,
   crsKnown: true,
   geographic: false,
   verticalRefused: false,

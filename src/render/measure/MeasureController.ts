@@ -537,6 +537,12 @@ export class MeasureController {
    * refuse — see {@link _verticalUnitMismatch}.
    */
   private _verticalUnitToMetres: number | null = null;
+  /**
+   * The file declares a valid vertical unit. Read only on a geographic frame,
+   * where the horizontal factor is not a linear unit and a height without a
+   * declared vertical unit therefore has none.
+   */
+  private _verticalUnitKnown = false;
   // ── Snap (A1) ──────────────────────────────────────────────────────────────
   // Snapping a placed vertex to the nearest real return (honest default) or to
   // existing measurement geometry. `_snapIndex` is built from the resident
@@ -895,6 +901,14 @@ export class MeasureController {
     this._emitChange();
   }
 
+  /** Flag whether the file declares a valid vertical unit (see the field doc). */
+  setVerticalUnitKnown(known: boolean): void {
+    if (known === this._verticalUnitKnown) return;
+    this._verticalUnitKnown = known;
+    for (const m of this._measurements) m.trust = this._gradeMeasurement(m);
+    this._emitChange();
+  }
+
   /** The effective up-axis factor — the vertical override, else the horizontal. */
   private _effVertical(): number {
     return this._verticalUnitToMetres ?? this._unitToMetres;
@@ -1019,6 +1033,7 @@ export class MeasureController {
     return {
       unitToMetres: this._unitToMetres,
       verticalUnitToMetres: this._verticalUnitToMetres,
+      verticalUnitKnown: this._verticalUnitKnown,
       crsKnown: this._crsKnown,
       geographic: this._geographicCrs,
       verticalRefused: this._verticalRefused,
@@ -1058,6 +1073,7 @@ export class MeasureController {
     const set = (f: MeasureUnitFrame): void => {
       this._unitToMetres = f.unitToMetres;
       this._verticalUnitToMetres = f.verticalUnitToMetres;
+      this._verticalUnitKnown = f.verticalUnitKnown;
       this._crsKnown = f.crsKnown;
       this._geographicCrs = f.geographic;
       this._verticalRefused = f.verticalRefused;
@@ -1108,7 +1124,7 @@ export class MeasureController {
       kind: m.kind,
       name: m.name,
       value: this._headlineText(m),
-      ...(this._unitUnverified() ? { unitUnverified: true } : {}),
+      ...(this._unitUnverified() || (m.kind === 'height' && this._heightUnverified()) ? { unitUnverified: true } : {}),
       profileChart: m.profileChart
         ? scaleProfileSamples(m.profileChart, f, this._originUp, this._effVertical())
         : undefined,
@@ -2003,6 +2019,8 @@ export class MeasureController {
     return gradeMeasurement({
       vertices,
       crsKnown: this._crsKnown,
+      frameGeographic: this._geographicCrs,
+      verticalUnitKnown: this._verticalUnitKnown,
       residentOnly: m.volumeResidentOnly === true || m.profileChartResidentOnly === true,
       // Geographic (degree) frame: the refusal applies to every kind whose
       // NUMBER mixes degree X/Y with linear Z — lengths, areas, grades,
@@ -2143,6 +2161,15 @@ export class MeasureController {
     return !this._crsKnown && !this._geographicCrs;
   }
 
+  /**
+   * No known unit for a height. On a geographic frame the horizontal factor
+   * is degrees (an inert 1), so only a declared vertical unit makes a height
+   * metres; elsewhere a height follows the horizontal verdict.
+   */
+  private _heightUnverified(): boolean {
+    return this._geographicCrs ? !this._verticalUnitKnown : this._unitUnverified();
+  }
+
   private _fmtLen(renderUnits: number): string {
     if (this._unitUnverified()) return formatUnitUnverified(renderUnits);
     return formatLengthRender(renderUnits, this._unitToMetres, this._units);
@@ -2154,7 +2181,7 @@ export class MeasureController {
    * on a compound CRS it honours the height unit the horizontal factor can't.
    */
   private _fmtVertical(renderUnits: number): string {
-    if (this._unitUnverified()) return formatUnitUnverified(renderUnits);
+    if (this._heightUnverified()) return formatUnitUnverified(renderUnits);
     return formatLengthRender(renderUnits, this._effVertical(), this._units);
   }
 

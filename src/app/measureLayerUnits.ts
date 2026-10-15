@@ -75,6 +75,7 @@ export function bindMeasureUnitFrames(measure: MeasureController, src: LayerUnit
       const f = measureUnitFrameOf(src.crs.context());
       measure.setUnitToMetres(f.unitToMetres);
       measure.setVerticalUnitToMetres(f.verticalUnitToMetres ?? 1);
+      measure.setVerticalUnitKnown(f.verticalUnitKnown);
       measure.setCrsKnown(f.crsKnown);
       measure.setGeographicCrs(f.geographic, f.verticalRefused);
       measure.setProjectedCrs(f.projected);

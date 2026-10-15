@@ -67,6 +67,15 @@ export interface MeasurementTrustInput {
    * {@link geographicCrs}; the caller scopes it with `frameRefusalText`.
    */
   readonly verticalRefused?: boolean;
+  /**
+   * True when the frame is geographic, whatever the kind. Its scale signal is
+   * then the vertical unit (the only linear unit a permitted figure, a
+   * height, uses), not {@link crsKnown}: a geographic CRS has no linear
+   * horizontal unit, yet it is a CRS.
+   */
+  readonly frameGeographic?: boolean;
+  /** The file declares a valid vertical unit. Read with {@link frameGeographic}. */
+  readonly verticalUnitKnown?: boolean;
 }
 
 export interface MeasurementTrust {
@@ -142,17 +151,24 @@ export function gradeMeasurement(input: MeasurementTrustInput): MeasurementTrust
     reasons.push('Every endpoint snapped to a measured return in a dense neighbourhood.');
   }
 
-  // Scale: a CRS-less cloud's lengths are in source units, not verified metres.
-  if (!input.crsKnown) {
-    reasons.push('No CRS on this cloud — lengths are in the source file’s units and can’t be certified as metres.');
-    if (grade === 'green') grade = 'yellow'; // can’t certify metric → cap at caution
-  }
-
   // Geographic (degree) frame: the figure mixes degree X/Y with a linear Z,
   // so it is WRONG as a distance, not merely uncertified — a refusal, not a
   // caution. Shares the hint/panel copy so the wording cannot fork.
   const verticalRefusal = input.verticalRefused === true;
   const geographicRefusal = input.geographicCrs === true && !verticalRefusal;
+
+  // Scale: a CRS-less cloud's lengths are in source units, not verified metres.
+  // A geographic frame has a CRS but no linear horizontal unit; the figure it
+  // permits (a height) is certified by a declared vertical unit alone.
+  if (input.frameGeographic === true) {
+    if (!geographicRefusal && !verticalRefusal && input.verticalUnitKnown !== true) {
+      reasons.push('Geographic CRS with no declared vertical unit — heights are in the source file’s units and can’t be certified as metres.');
+      if (grade === 'green') grade = 'yellow';
+    }
+  } else if (!input.crsKnown) {
+    reasons.push('No CRS on this cloud — lengths are in the source file’s units and can’t be certified as metres.');
+    if (grade === 'green') grade = 'yellow'; // can’t certify metric → cap at caution
+  }
   if (geographicRefusal) {
     reasons.push(GEOGRAPHIC_CRS_MEASURE_NOTICE);
     grade = 'red';

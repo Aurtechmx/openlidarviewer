@@ -82,6 +82,7 @@ export function measureUnitFrameOf(ctx: SpatialContext): MeasureUnitFrame {
   return {
     unitToMetres: s.unitToMetres,
     verticalUnitToMetres: s.verticalUnitToMetres,
+    verticalUnitKnown: verticalMetresPerUnit(ctx, 'none') !== undefined,
     crsKnown: ctx.linearUnitKnown,
     geographic: s.geographic,
     verticalRefused: s.verticalRefused,
