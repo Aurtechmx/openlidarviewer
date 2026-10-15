@@ -270,6 +270,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - Export site KML is no longer offered when the file would hold only the note that measurements or annotations were withheld. Only measurements and annotations the active scan owns, saved views and the scan outline count as content. The export re-checks this, and that one scan is open, when clicked.
 - Visible interface text spells colour the British way throughout: the View panel section is "Colour by", and the streaming panel colour chip and its tooltips read "Colour". Code names, file formats and LAS field names are unchanged.
 - Caution reads in one colour in the left panels. A new --caution token, set per theme to the PREVIEW state colour, now draws the class panel captions, the Review verdict, the Terrain PREVIEW verdicts and statuses, the caution workflow glyph and the Analyse home needs badge, which used three different ambers.
+- The Export, converter, Clip and layer Compare buttons (.olv-bc-pill) are drawn as the View panel chip (.olv-chip): the same size, corners, hover, selected and disabled states, focus ring and press. The class name is kept.
 
 ### Changed
 

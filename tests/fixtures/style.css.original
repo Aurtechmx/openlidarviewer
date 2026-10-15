@@ -2032,21 +2032,30 @@ button:disabled { cursor: not-allowed; }
   font-variant: small-caps;
   letter-spacing: 0.02em;
 }
-.olv-chip {
+/* `.olv-bc-pill` (converter, Export, Clip, Compare) is the same button under
+   an older name, kept for its selectors; it takes the chip's rules here, with
+   `is-active` / `is-disabled` as its state classes. */
+.olv-chip,
+.olv-bc-pill {
   font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
   border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-md);
 }
-.olv-chip:hover { color: var(--text); }
-.olv-chip-active {
+.olv-chip:hover,
+.olv-bc-pill:hover { color: var(--text); }
+.olv-bc-pill { font-family: inherit; cursor: pointer; }
+.olv-chip-active,
+.olv-bc-pill.is-active {
   color: var(--accent); background: var(--accent-soft);
   border-color: var(--ui-accent-a0p4);
 }
-.olv-chip-disabled {
+.olv-chip-disabled,
+.olv-bc-pill.is-disabled {
   opacity: 0.45; cursor: not-allowed; color: var(--text-faint);
 }
-.olv-chip-disabled:hover { color: var(--text-faint); }
+.olv-chip-disabled:hover,
+.olv-bc-pill.is-disabled:hover { color: var(--text-faint); }
 /* Workflow rail (v0.4.5): "Custom" is a STATE chip, not an action — muted
    until the user's knobs deviate from every preset, then it lights via the
    shared .olv-chip-active vocabulary. */
@@ -2897,18 +2906,19 @@ body:has(.olv-right-rail.olv-right-collapsed) .olv-navbar { --olv-nb-r: 0px; }
 /* ───────────────────────────────────────────────────────────────────────────
    Micro-interactions — tactile feedback, eased states, entrance motion
    ─────────────────────────────────────────────────────────────────────────── */
-.olv-tool, .olv-chip, .olv-sample, .olv-github, .olv-layer-x {
+.olv-tool, .olv-chip, .olv-bc-pill, .olv-sample, .olv-github, .olv-layer-x {
   transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard),
     background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
 .olv-tool:active:not(:disabled),
 .olv-chip:active,
+.olv-bc-pill:active:not(.is-disabled),
 .olv-sample:active,
 .olv-layer-x:active { transform: var(--btn-press); }
 .olv-chip-active { transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard); }
 
 /* Keyboard focus — visible, on-brand, never on mouse click */
-.olv-tool:focus-visible, .olv-chip:focus-visible, .olv-mode:focus-visible,
+.olv-tool:focus-visible, .olv-chip:focus-visible, .olv-bc-pill:focus-visible, .olv-mode:focus-visible,
 .olv-sample:focus-visible, .olv-github:focus-visible, .olv-layer-x:focus-visible,
 .olv-slider:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
@@ -3875,7 +3885,7 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
   .olv-pc-countdown, .olv-measure-dot-pending, .olv-measure-snap-ring {
     animation: none;
   }
-  .olv-tool, .olv-chip, .olv-sample, .olv-github, .olv-layer-x,
+  .olv-tool, .olv-chip, .olv-bc-pill, .olv-sample, .olv-github, .olv-layer-x,
   .olv-mode, .olv-nav-prompt, .olv-project-card, .olv-export-btn,
   .olv-view-name, .olv-view-save, .olv-advanced-summary,
   .olv-advanced-summary::before,
@@ -8924,16 +8934,8 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-bc-file-del { background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: var(--text-xs); padding: var(--space-xs); border-radius: var(--radius-xs); }
 .olv-bc-file-del:hover { color: var(--rating-weak); }
 
-/* Pill groups — similarity = same shape/size; active state contrasts. */
+/* Pill groups: each `.olv-bc-pill` is drawn as a `.olv-chip` (40-inspector.css). */
 .olv-bc-pills { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
-.olv-bc-pill {
-  font: inherit; font-size: var(--text-sm); cursor: pointer;
-  padding: var(--space-sm) var(--space-xl); border-radius: var(--radius-pill);
-  border: 0.5px solid var(--hairline); background: transparent; color: var(--text-dim);
-}
-.olv-bc-pill:hover:not(.is-disabled):not(.is-active) { border-color: var(--accent); color: var(--text); }
-.olv-bc-pill.is-active { background: var(--accent-soft); border-color: var(--accent); color: var(--text); font-weight: 600; }
-.olv-bc-pill.is-disabled { opacity: 0.4; cursor: not-allowed; }
 
 .olv-bc-crs-extra { display: flex; flex-direction: column; gap: var(--space-md); margin-top: var(--space-md); }
 .olv-bc-field { display: flex; flex-direction: column; gap: var(--space-xs); }

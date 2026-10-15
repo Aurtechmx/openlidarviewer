@@ -212,7 +212,7 @@
   .olv-pc-countdown, .olv-measure-dot-pending, .olv-measure-snap-ring {
     animation: none;
   }
-  .olv-tool, .olv-chip, .olv-sample, .olv-github, .olv-layer-x,
+  .olv-tool, .olv-chip, .olv-bc-pill, .olv-sample, .olv-github, .olv-layer-x,
   .olv-mode, .olv-nav-prompt, .olv-project-card, .olv-export-btn,
   .olv-view-name, .olv-view-save, .olv-advanced-summary,
   .olv-advanced-summary::before,
