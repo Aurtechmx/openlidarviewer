@@ -46,7 +46,8 @@ export interface TerrainAccessPreview {
 /** Refuse for exactly the codes a caller might reasonably act on before a search. */
 export type TerrainAccessPreviewRefusalCode = Extract<
   TerrainAccessRefusalCode,
-  'NO_DTM' | 'UNITS_UNRESOLVED' | 'INVALID_PROFILE' | 'TOO_LARGE' | 'INSUFFICIENT_EVIDENCE'
+  | 'NO_DTM' | 'UNITS_UNRESOLVED' | 'INVALID_PROFILE' | 'TOO_LARGE' | 'INSUFFICIENT_EVIDENCE'
+  | 'OBSTRUCTION_EVIDENCE_UNAVAILABLE' | 'SURFACE_MISALIGNED' | 'INVALID_ROI'
 >;
 
 export function prepareTerrainAccessPreview(

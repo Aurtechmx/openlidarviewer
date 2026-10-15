@@ -111,14 +111,14 @@ describe('adversarial: vehicle width is not ignored through a narrow gap', () =>
 });
 
 describe('adversarial: an interpolated/low-confidence cell is never presented as measured', () => {
-  it('route diagnostics reports a low-confidence route cell in the low-confidence bucket, never in fractionMeasured', () => {
+  it('route diagnostics counts an interpolated cell as interpolated, never in fractionMeasured, and its weak confidence against the profile minimum', () => {
     const grid = gridOf([[0, 0, 0]], { coverage: new Uint8Array([2, 1, 2]), confidence: new Float32Array([100, 10, 100]) });
-    const profile = { ...PERMISSIVE, unknownPolicy: 'penalize' as const };
+    const profile = { ...PERMISSIVE, minimumTerrainConfidence: 50, unknownPolicy: 'penalize' as const };
     const features = prepareTerrainAccessFeatures(grid, profile);
     const diagnostics = computeRouteDiagnostics(grid, features, [0, 1, 2], DEFAULT_COST_WEIGHTS, profile);
     expect(diagnostics.fractionMeasured).toBeCloseTo(2 / 3, 6); // cells 0 and 2 only
-    expect(diagnostics.fractionLowConfidenceOrEdgeRisk).toBeCloseTo(1 / 3, 6); // cell 1, below the dashed threshold
-    expect(diagnostics.fractionInterpolated).toBeCloseTo(0, 6);
+    expect(diagnostics.fractionInterpolated).toBeCloseTo(1 / 3, 6); // cell 1
+    expect(diagnostics.fractionBelowProfileConfidence).toBeCloseTo(1 / 3, 6); // cell 1, below the profile's 50
   });
 });
 

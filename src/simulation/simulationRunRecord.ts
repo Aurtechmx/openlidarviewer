@@ -54,6 +54,15 @@ export interface SimulationSource {
    * a reader distinguishes from "unchanged" only by the null.
    */
   readonly terrainCoreDigest: string | null;
+  /**
+   * Which digest {@link analysisInputDigest} is, with its version (for
+   * Terrain Access, `terrainAccessInputDigest.ts`'s scheme: the surface plus
+   * confidence, scale, ROI and above-ground layer). Absent on records whose
+   * input digest is the surface digest alone.
+   */
+  readonly analysisInputDigestScheme?: string;
+  /** The surface-only digest (`dtmProductDigest`), when the input digest wraps it. */
+  readonly surfaceDigest?: string | null;
   /** How much of the source stood behind that input. */
   readonly basis: SimulationInputBasis;
 }
@@ -67,7 +76,12 @@ export interface SimulationModel {
 
 /** A completed run. */
 export interface FieldSimulationRunRecord {
-  readonly schemaVersion: 1;
+  /**
+   * 1 for every kind except Terrain Access, whose record is 2: its result
+   * carries the route's evidence split and the per-constraint evaluation
+   * status, and its source names the input digest scheme.
+   */
+  readonly schemaVersion: 1 | 2;
   /** Unique per run. Not part of the digest. */
   readonly id: string;
   /** ISO 8601. Not part of the digest. */
@@ -103,6 +117,9 @@ export function digestibleFields(
       sourceDigest: record.source.sourceDigest,
       analysisInputDigest: record.source.analysisInputDigest,
       terrainCoreDigest: record.source.terrainCoreDigest,
+      ...(record.source.analysisInputDigestScheme !== undefined
+        ? { analysisInputDigestScheme: record.source.analysisInputDigestScheme } : {}),
+      ...(record.source.surfaceDigest !== undefined ? { surfaceDigest: record.source.surfaceDigest } : {}),
       basis: record.source.basis,
     },
     model: record.model,

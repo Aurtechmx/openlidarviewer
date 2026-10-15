@@ -7,26 +7,28 @@
  * worst conditions along it — the whole point being that a route diagnostic
  * is inspectable, not a single opaque number.
  *
- * `fraction low-confidence/edge-risk cells` is computed from `grid.coverage`
- * and `grid.confidence` alone (measured cells always count as measured,
- * mirroring `dtmCellStatus.ts`'s precedence; a covered cell below the
- * project's shared `dashed` confidence threshold counts toward this bucket).
- * It does not reproduce `dtmCellStatus.ts`'s separate `edgeRisk` state, which
- * needs the DTM's `interpDistanceCells` — a field this module's grid does not
- * carry, by the same "know only what routing needs" discipline
- * `flowPulse/flowTypes.ts` documents. The governing prompt's own §12.9 list
- * groups "low-confidence/edge-risk" as one bucket, which is exactly what is
- * reported here; `basis.coverage` from the caller's `SimulationInputBasis`
- * says more about resident/sampled sources if the reader needs it.
+ * Evidence along the route is reported as two separate things:
+ *
+ *   - PROVENANCE (`fractionMeasured` / `fractionInterpolated`): the share of
+ *     route cells whose height was measured or interpolated, read from
+ *     `grid.coverage` alone. Null when the grid carries no coverage.
+ *   - WEAK EVIDENCE (`fractionBelowProfileConfidence`): the share of EVERY
+ *     route cell — measured or interpolated — whose confidence is below the
+ *     profile's own `minimumTerrainConfidence`, the threshold recorded in the
+ *     run. A measured cell is not exempt: few returns can make a measured cell
+ *     weak. The display thresholds in `cellConfidence.ts` play no part.
+ *
+ * No edge-risk figure is reported: that needs the DTM's `interpDistanceCells`
+ * or a support mask, which this module's grid does not carry.
  *
  * Pure data: no DOM, no three.js, no I/O. Deterministic.
  */
 
-import { EVIDENCE_THRESHOLDS } from '../../terrain/ground/cellConfidence';
 import { edgeGeometry, utilization, type CostWeights, type TerrainAccessFeatures } from './traversabilityCost';
 import type { TerrainAccessGrid } from './terrainAccessTypes';
 
 const MEASURED = 2;
+const INTERPOLATED = 1;
 
 /** A named cost term and how much of the route's total soft cost it explains. */
 export interface CostContributor {
@@ -76,10 +78,18 @@ export interface RouteDiagnostics {
   readonly maxLocalReliefM: number;
   readonly maxVrm: number;
   readonly minTerrainConfidence: number;
-  /** Null when `grid.coverage` was not supplied. */
+  /** Provenance: share of route cells measured. Null when `grid.coverage` was not supplied. */
   readonly fractionMeasured: number | null;
+  /** Provenance: share of route cells interpolated. Null when `grid.coverage` was not supplied. */
   readonly fractionInterpolated: number | null;
-  readonly fractionLowConfidenceOrEdgeRisk: number | null;
+  /**
+   * Share of all route cells whose confidence is below
+   * {@link profileMinimumTerrainConfidence}, whatever their provenance. Null
+   * only for an empty path.
+   */
+  readonly fractionBelowProfileConfidence: number | null;
+  /** The profile's `minimumTerrainConfidence` the share above was computed against. */
+  readonly profileMinimumTerrainConfidence: number;
   /** Ordered, largest contributor first. */
   readonly dominantCostContributors: readonly CostContributor[];
 }
@@ -95,6 +105,7 @@ export function computeRouteDiagnostics(
     readonly maxCrossSlope: number;
     readonly maxStepHeight: number;
     readonly maxRuggedness: number | null;
+    readonly minimumTerrainConfidence: number;
   },
 ): RouteDiagnostics {
   if (path.length === 0) {
@@ -102,7 +113,8 @@ export function computeRouteDiagnostics(
       cellCount: 0, horizontalLengthM: 0, length3dM: 0, totalAscentM: 0, totalDescentM: 0,
       maxLongitudinalGrade: 0, p95LongitudinalGrade: 0, maxCrossSlope: 0, p95CrossSlope: 0,
       maxEdgeStepM: 0, maxLocalReliefM: 0, maxVrm: 0, minTerrainConfidence: Number.NaN,
-      fractionMeasured: null, fractionInterpolated: null, fractionLowConfidenceOrEdgeRisk: null,
+      fractionMeasured: null, fractionInterpolated: null, fractionBelowProfileConfidence: null,
+      profileMinimumTerrainConfidence: profile.minimumTerrainConfidence,
       dominantCostContributors: [],
     };
   }
@@ -163,17 +175,15 @@ export function computeRouteDiagnostics(
 
   let measured = 0;
   let interpolated = 0;
-  let lowConfOrEdge = 0;
-  const coverageKnown = grid.coverage != null;
-  if (coverageKnown) {
-    for (const i of path) {
-      const cov = (grid.coverage as Uint8Array)[i];
-      if (cov === MEASURED) { measured++; continue; }
-      // Not measured: either interpolated-and-trusted, or low-confidence/edge-risk.
-      if (grid.confidence[i] < EVIDENCE_THRESHOLDS.dashed) lowConfOrEdge++;
-      else interpolated++;
-    }
+  let belowProfile = 0;
+  const coverage = grid.coverage;
+  for (const i of path) {
+    if (grid.confidence[i] < profile.minimumTerrainConfidence) belowProfile++;
+    if (!coverage) continue;
+    if (coverage[i] === MEASURED) measured++;
+    else if (coverage[i] === INTERPOLATED) interpolated++;
   }
+  const coverageKnown = coverage != null;
 
   const contributors: CostContributor[] = (Object.keys(contribSums) as (keyof typeof contribSums)[])
     .map((term) => ({ term, total: contribSums[term] }))
@@ -194,7 +204,8 @@ export function computeRouteDiagnostics(
     minTerrainConfidence: Number.isFinite(minTerrainConfidence) ? minTerrainConfidence : Number.NaN,
     fractionMeasured: coverageKnown ? measured / path.length : null,
     fractionInterpolated: coverageKnown ? interpolated / path.length : null,
-    fractionLowConfidenceOrEdgeRisk: coverageKnown ? lowConfOrEdge / path.length : null,
+    fractionBelowProfileConfidence: belowProfile / path.length,
+    profileMinimumTerrainConfidence: profile.minimumTerrainConfidence,
     dominantCostContributors: contributors,
   };
 }

@@ -51,7 +51,13 @@ import {
   type TerrainAccessPreview,
 } from '../../simulation/terrainAccess/terrainAccessPreview';
 import { whyNotSentence, type ElevationReference, type GridCell } from '../../simulation/terrainAccess/terrainAccessGridCursor';
-import type { HorizontalScale } from '../../simulation/terrainAccess/dtmTerrainAccessGrid';
+import {
+  aboveGroundAlignmentProblem, type AboveGroundSurface, type HorizontalScale,
+} from '../../simulation/terrainAccess/dtmTerrainAccessGrid';
+import { ABOVE_GROUND_UNAVAILABLE } from '../../simulation/terrainAccess/terrainAccessPrepare';
+import {
+  TERRAIN_ACCESS_INPUT_DIGEST_SCHEME, terrainAccessSimulationInputDigest,
+} from '../../simulation/terrainAccess/terrainAccessInputDigest';
 import type { TerrainAccessProfile } from '../../simulation/terrainAccess/terrainAccessTypes';
 import type { RouteDiagnostics } from '../../simulation/terrainAccess/routeDiagnostics';
 import { costDriversSentence } from '../../simulation/terrainAccess/terrainAccessExplain';
@@ -80,7 +86,6 @@ import { singleLine } from '../../export/safeText';
 import type { buildTerrainAccessPackage, TerrainAccessGridPlacement } from '../../export/terrainAccessPackage';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
 import { labRun, publishLabRun, takeResultReopen } from '../../app/results/resultSignals';
-import type { SurfaceGrid } from '../../terrain/surface/buildDsm';
 
 /** The analysed surface and the frame facts a Terrain Access run needs. */
 export interface TerrainAccessLabInput {
@@ -92,8 +97,12 @@ export interface TerrainAccessLabInput {
   readonly scale: HorizontalScale;
   readonly layerId: string | null;
   readonly filename: string | null;
-  /** Optional above-ground surface; obstruction is inactive without it (§12.4). */
-  readonly dsm?: SurfaceGrid | null;
+  /**
+   * Optional above-ground surface with its frame (§12.4). Without an aligned
+   * one the obstruction control is disabled and a profile that asks for the
+   * limit anyway is refused.
+   */
+  readonly dsm?: AboveGroundSurface | null;
   readonly sceneUpAxis?: 'z' | 'y' | null;
   readonly overlayHost?: TerrainAccessOverlayHost | null;
   readonly isStale?: () => boolean;
@@ -134,6 +143,20 @@ export function terrainAccessElevationReference(input: TerrainAccessLabInput): E
   return { originZ: input.worldOriginZ ?? null, unitLabel, metresPerVerticalUnit: zFactor };
 }
 
+/**
+ * Whether this input carries above-ground evidence aligned to its terrain, so
+ * an obstruction limit could be evaluated. A surface that cannot even be read
+ * counts as unavailable.
+ */
+export function terrainAccessAboveGroundAvailable(input: TerrainAccessLabInput | null): boolean {
+  if (!input?.dsm) return false;
+  try {
+    return aboveGroundAlignmentProblem(input.dtm, input.dsm) === null;
+  } catch {
+    return false;
+  }
+}
+
 const NO_IDENTITY = {
   layerId: null, filename: null, sourceDigest: null, analysisInputDigest: '',
   build: '', id: '', generatedAt: '', processingManifestHead: null,
@@ -144,6 +167,8 @@ function labIdentity(input: TerrainAccessLabInput): {
   readonly filename: string | null;
   readonly sourceDigest: string | null;
   readonly analysisInputDigest: string;
+  readonly analysisInputDigestScheme: string;
+  readonly surfaceDigest: string;
   readonly build: string;
   readonly id: string;
   readonly generatedAt: string;
@@ -154,7 +179,12 @@ function labIdentity(input: TerrainAccessLabInput): {
     layerId: input.layerId,
     filename: input.filename,
     sourceDigest: null,
-    get analysisInputDigest() { return dtmProductDigest(dtm); },
+    // Read only when a run seals its record, never for a refusal.
+    get analysisInputDigest() {
+      return terrainAccessSimulationInputDigest({ dtm, scale: input.scale, dsm: input.dsm ?? null, roi: null });
+    },
+    analysisInputDigestScheme: TERRAIN_ACCESS_INPUT_DIGEST_SCHEME,
+    get surfaceDigest() { return dtmProductDigest(dtm); },
     build: buildIdentityProvenance(),
     id: globalThis.crypto?.randomUUID?.() ?? `terrain-access-${Date.now()}`,
     generatedAt: new Date().toISOString(),
@@ -304,12 +334,21 @@ function row(label: string, value: string): HTMLElement {
   ]);
 }
 
-/** Measured, interpolated and low-confidence shares of the route's cells. */
+/** Measured/interpolated provenance of the route's cells, then the share below the profile's minimum confidence. */
 export function evidenceSplitText(d: RouteDiagnostics): string {
-  if (d.fractionMeasured == null || d.fractionInterpolated == null) return 'not recorded';
   const pct = (x: number): string => `${Math.round(x * 100)}%`;
-  const low = d.fractionLowConfidenceOrEdgeRisk ?? 0;
-  return `${pct(d.fractionMeasured)} measured, ${pct(d.fractionInterpolated)} interpolated, ${pct(low)} low confidence`;
+  const below = d.fractionBelowProfileConfidence == null
+    ? 'not recorded'
+    : `${pct(d.fractionBelowProfileConfidence)} below the profile's minimum confidence (${d.profileMinimumTerrainConfidence})`;
+  if (d.fractionMeasured == null || d.fractionInterpolated == null) return `provenance not recorded; ${below}`;
+  return `${pct(d.fractionMeasured)} measured, ${pct(d.fractionInterpolated)} interpolated; ${below}`;
+}
+
+/** The above-ground obstruction status the run record carries, in words. */
+function obstructionStatusText(status: unknown): string {
+  if (status === 'evaluated') return 'evaluated against the above-ground surface';
+  if (status === 'disabled') return 'off in this profile';
+  return ABOVE_GROUND_UNAVAILABLE;
 }
 
 /** The run's answer as a card: a refusal's named reason, or the route diagnostics.
@@ -339,6 +378,7 @@ export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | nu
     row('P95 longitudinal grade', `${d.p95LongitudinalGrade.toFixed(3)} (tangent), ${tangentToDegrees(d.p95LongitudinalGrade)}`),
     row('Total cost', `${outcome.cost.toFixed(1)} (distance in metres, weighted by the cost terms)`),
     row('Route cells by evidence', evidenceSplitText(d)),
+    row('Above-ground obstruction', obstructionStatusText((outcome.record.result.constraints as Record<string, unknown> | undefined)?.aboveGroundObstruction)),
     el('div', { className: 'olv-story-next', text: costDriversSentence(d.dominantCostContributors) }),
   );
   const list = el('ul', { className: 'olv-story-v' });
@@ -464,7 +504,7 @@ export const TERRAIN_CONFIDENCE_HINT =
 
 /** Build the mobility-profile form. Returns the element and a live-read accessor
  * for its current values — no field is pre-filled with a number (no preset). */
-export function buildProfileForm(onSubmit: () => void, blockedReason: string | null): {
+export function buildProfileForm(onSubmit: () => void, blockedReason: string | null, aboveGroundAvailable = false): {
   element: HTMLElement;
   values: () => TerrainAccessProfileFormValues;
   showProblems: (problems: readonly { field: string; reason: string }[]) => void;
@@ -492,7 +532,12 @@ export function buildProfileForm(onSubmit: () => void, blockedReason: string | n
 
   const obstacleToggle = document.createElement('input');
   obstacleToggle.type = 'checkbox';
-  const obstacleHeight = labeledInput('Obstacle height threshold', 'metres, above-ground');
+  obstacleToggle.className = 'olv-ta-obstacle-toggle';
+  // Without fresh, aligned above-ground evidence the limit could not be
+  // evaluated, so it cannot be turned on: the hint says why.
+  obstacleToggle.disabled = !aboveGroundAvailable;
+  const obstacleHeight = labeledInput('Obstacle height threshold',
+    aboveGroundAvailable ? 'metres, above-ground' : ABOVE_GROUND_UNAVAILABLE);
   obstacleHeight.input.disabled = true;
 
   const unknownPolicyCtl = segmentedControl<'block' | 'penalize'>(
@@ -518,7 +563,7 @@ export function buildProfileForm(onSubmit: () => void, blockedReason: string | n
     state.vehicleLengthEnabled = lengthToggle.checked;
     state.vehicleLengthM = vehicleLength.input.value;
     state.minimumTerrainConfidence = confidence.input.value;
-    state.obstacleHeightEnabled = obstacleToggle.checked;
+    state.obstacleHeightEnabled = aboveGroundAvailable && obstacleToggle.checked;
     state.obstacleHeightThresholdM = obstacleHeight.input.value;
     onSubmit();
   });
@@ -925,7 +970,7 @@ export function mountTerrainAccessInteractive(
       preview = terrainAccessFailure(err);
     }
     renderPreview();
-  }, blocker && input ? `Apply profile is off. ${blocker.note}` : null);
+  }, blocker && input ? `Apply profile is off. ${blocker.note}` : null, terrainAccessAboveGroundAvailable(input));
 
   function renderRoot(): void {
     // No ground surface: the form waits until there is one to screen.

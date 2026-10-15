@@ -39,7 +39,7 @@
  * Pure: no DOM, no three.js, no I/O.
  */
 
-import type { HorizontalScale, InterpolatedPolicy } from './dtmTerrainAccessGrid';
+import type { AboveGroundSurface, HorizontalScale, InterpolatedPolicy } from './dtmTerrainAccessGrid';
 import {
   buildTraversabilityMap,
   type CostWeights,
@@ -56,7 +56,6 @@ import { sealRunRecord, type FieldSimulationRunRecord } from '../simulationRunRe
 import type { TerrainAccessGrid, TerrainAccessProfile } from './terrainAccessTypes';
 import type { SimulationInputBasis } from '../simulationInputBasis';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
-import type { SurfaceGrid } from '../../terrain/surface/buildDsm';
 
 /** Why a run could not happen (§30). */
 export type TerrainAccessRefusalCode =
@@ -67,7 +66,13 @@ export type TerrainAccessRefusalCode =
   | 'END_BLOCKED'
   | 'NO_ROUTE'
   | 'INSUFFICIENT_EVIDENCE'
-  | 'TOO_LARGE';
+  | 'TOO_LARGE'
+  /** The profile sets an above-ground obstruction limit and no aligned above-ground surface exists. */
+  | 'OBSTRUCTION_EVIDENCE_UNAVAILABLE'
+  /** A supplied above-ground surface does not cover the same cells as the terrain. */
+  | 'SURFACE_MISALIGNED'
+  /** A declared region-of-interest mask does not fit the terrain grid. */
+  | 'INVALID_ROI';
 
 /** A run that did not happen, and the precondition that stopped it. */
 export interface TerrainAccessRefusal {
@@ -82,8 +87,8 @@ export interface TerrainAccessParams {
   readonly interpolated: InterpolatedPolicy;
   readonly maxCells: number;
   readonly withheldExcluded: boolean | null;
-  /** Above-ground surface, when available; optional per §12.4. */
-  readonly dsm?: SurfaceGrid | null;
+  /** Above-ground surface, when available; optional per §12.4, and checked for alignment. */
+  readonly dsm?: AboveGroundSurface | null;
   /** Region-of-interest mask, when the caller has declared one. */
   readonly roi?: Uint8Array | null;
   readonly weights?: CostWeights;
@@ -119,6 +124,10 @@ export interface TerrainAccessRunIdentity {
   readonly filename: string | null;
   readonly sourceDigest: string | null;
   readonly analysisInputDigest: string;
+  /** Which digest `analysisInputDigest` is; see `SimulationSource.analysisInputDigestScheme`. */
+  readonly analysisInputDigestScheme?: string;
+  /** The surface-only digest the input digest wraps, when there is one. */
+  readonly surfaceDigest?: string | null;
   /** Digest of the terrain-core method that built the input; see `SimulationSource`.
    * Optional and defaults to null — most callers have no terrain-core descriptor
    * to report and null is the honest default, never a fabricated one. */
@@ -128,6 +137,37 @@ export interface TerrainAccessRunIdentity {
   readonly generatedAt: string;
   readonly processingManifestHead: string | null;
 }
+
+/**
+ * Whether each limit a profile can declare was applied to this run:
+ * `evaluated` (applied to every cell), `disabled` (the profile left it off),
+ * `unavailable` (the evidence it needs is absent, so it could not have been
+ * applied — a profile that asks for it anyway is refused before a run), or
+ * `recorded-not-enforced` (kept in the record, not used by eligibility).
+ */
+export type TerrainAccessConstraintStatus = 'evaluated' | 'disabled' | 'unavailable' | 'recorded-not-enforced';
+
+/** The per-constraint status a run record carries under `result.constraints`. */
+export function terrainAccessConstraintStatus(
+  profile: TerrainAccessProfile,
+  grid: TerrainAccessGrid,
+): Readonly<Record<string, TerrainAccessConstraintStatus>> {
+  return {
+    longitudinalGrade: 'evaluated',
+    crossSlope: 'evaluated',
+    stepHeight: 'evaluated',
+    minimumTerrainConfidence: 'evaluated',
+    vehicleWidth: 'evaluated',
+    ruggedness: profile.maxRuggedness == null ? 'disabled' : 'evaluated',
+    vehicleLength: profile.vehicleLength == null ? 'disabled' : 'recorded-not-enforced',
+    aboveGroundObstruction: grid.heightAboveGround == null
+      ? 'unavailable'
+      : profile.obstacleHeightThreshold == null ? 'disabled' : 'evaluated',
+  };
+}
+
+/** The model a run record names, at the version that runs. */
+export const TERRAIN_ACCESS_MODEL = Object.freeze({ id: 'olv.simulation.terrain-access.astar', version: 1 });
 
 /** The registered methods a run uses, in the order it uses them. */
 export const TERRAIN_ACCESS_METHODS: readonly string[] = Object.freeze([
@@ -172,17 +212,23 @@ export function runTerrainAccess(
   }
 
   const diagnostics = computeRouteDiagnostics(grid, features, search.path, weights, profile);
+  const constraints = terrainAccessConstraintStatus(profile, grid);
+  // Cells on the route where an evaluated obstruction limit had no
+  // above-ground return to read: not known to be clear, so disclosed.
+  const obstructionUnevaluatedRouteCells = constraints.aboveGroundObstruction === 'evaluated'
+    ? search.path.filter((i) => features.obstruction[i] === 'not-evaluated').length
+    : null;
   const map = buildTraversabilityMap(grid, features, eligibility, profile, weights);
   const resultDigest = terrainAccessResultDigest(grid.cols, grid.rows, eligibility.blocked, search.path, search.cost);
 
   const limitations = [
     ...basisLimitations(basis, 'terrain-access'),
     ...gridWarnings,
-    ...modelLimitations(profile, diagnostics),
+    ...modelLimitations(profile, diagnostics, obstructionUnevaluatedRouteCells),
   ];
 
   const record = sealRunRecord({
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: identity.id,
     generatedAt: identity.generatedAt,
     build: identity.build,
@@ -193,9 +239,12 @@ export function runTerrainAccess(
       sourceDigest: identity.sourceDigest,
       analysisInputDigest: identity.analysisInputDigest,
       terrainCoreDigest: identity.terrainCoreDigest ?? null,
+      ...(identity.analysisInputDigestScheme !== undefined
+        ? { analysisInputDigestScheme: identity.analysisInputDigestScheme } : {}),
+      ...(identity.surfaceDigest !== undefined ? { surfaceDigest: identity.surfaceDigest } : {}),
       basis,
     },
-    model: { id: 'olv.simulation.terrain-access.astar', version: 1 },
+    model: { ...TERRAIN_ACCESS_MODEL },
     methods: TERRAIN_ACCESS_METHODS,
     parameters: {
       profile,
@@ -217,6 +266,12 @@ export function runTerrainAccess(
       maxLocalReliefM: diagnostics.maxLocalReliefM,
       maxVrm: diagnostics.maxVrm,
       minTerrainConfidence: diagnostics.minTerrainConfidence,
+      fractionMeasured: diagnostics.fractionMeasured,
+      fractionInterpolated: diagnostics.fractionInterpolated,
+      fractionBelowProfileConfidence: diagnostics.fractionBelowProfileConfidence,
+      profileMinimumTerrainConfidence: diagnostics.profileMinimumTerrainConfidence,
+      constraints,
+      obstructionUnevaluatedRouteCells,
       cost: search.cost,
       exploredCells: search.explored,
       resultDigest,
@@ -253,6 +308,7 @@ export function runTerrainAccess(
 function modelLimitations(
   profile: TerrainAccessProfile,
   diagnostics: RouteDiagnostics,
+  obstructionUnevaluatedRouteCells: number | null,
 ): readonly string[] {
   const out: string[] = [
     'A geometry-based traversability screening over the declared terrain and mobility limits. '
@@ -261,14 +317,21 @@ function modelLimitations(
     + 'vegetation compliance are not modelled.',
   ];
 
-  if (profile.unknownPolicy === 'penalize'
-    && diagnostics.fractionLowConfidenceOrEdgeRisk != null
-    && diagnostics.fractionLowConfidenceOrEdgeRisk > 0) {
+  const below = diagnostics.fractionBelowProfileConfidence;
+  if (below != null && below > 0) {
     out.push(
-      `The route crosses low-confidence/edge-risk cells under the 'penalize' policy: `
-      + `${(diagnostics.fractionLowConfidenceOrEdgeRisk * 100).toFixed(0)}% of route cells are below `
+      `The route crosses cells below the profile's minimum terrain confidence under the '${profile.unknownPolicy}' policy: `
+      + `${(below * 100).toFixed(0)}% of route cells are below `
       + `the declared minimum terrain confidence (${profile.minimumTerrainConfidence}). Those cells were `
       + 'not excluded, only cost-penalized.',
+    );
+  }
+
+  if (obstructionUnevaluatedRouteCells != null && obstructionUnevaluatedRouteCells > 0) {
+    out.push(
+      `The above-ground obstruction limit could not be checked on ${obstructionUnevaluatedRouteCells} of `
+      + `${diagnostics.cellCount} route cells: the surface has no above-ground evidence there, so those cells `
+      + 'are not known to be clear.',
     );
   }
 

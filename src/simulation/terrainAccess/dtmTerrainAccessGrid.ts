@@ -11,12 +11,20 @@
  * about what a cell of this DTM means.
  *
  * ── THE ABOVE-GROUND LAYER IS A SEPARATE, ALIGNED GRID ──────────────────────
- * `buildDsm.ts` documents that the DSM is "Built on the SAME grid as the DTM
- * so the two align cell-for-cell". This module trusts that documented
- * contract rather than re-deriving alignment: it requires the DSM's cols,
- * rows and cell size to equal the DTM's and refuses (returns a null height
- * layer with a warning) rather than resample or guess an alignment that was
- * not actually verified.
+ * Height above ground is `DSM − DTM` cell for cell, which is only meaningful
+ * when cell i of one grid covers the same ground as cell i of the other. Equal
+ * cols, rows and cell size are not enough: a surface with the same shape but a
+ * different origin would subtract heights from different places. So the
+ * surface must match the terrain's origin (within {@link ALIGNMENT_TOLERANCE}
+ * of a cell), array lengths, row orientation, horizontal CRS and vertical unit
+ * before anything is subtracted, and the surface must state its frame to be
+ * checked at all. Anything else is a typed `SURFACE_MISALIGNED` refusal — never
+ * a resample and never a guess.
+ *
+ * ── AN ROI MASK IS CHECKED, NOT WIDENED ─────────────────────────────────────
+ * A declared region of interest that does not fit the grid (wrong length, or
+ * values other than 0/1) is refused as `INVALID_ROI`. Ignoring it would route
+ * over the whole grid while the caller believed the run was confined.
  */
 
 import { horizontalCellMetresXY } from '../../terrain/ground/horizontalScale';
@@ -45,10 +53,86 @@ export type InterpolatedPolicy = 'route' | 'block';
 
 /** A terrain-access grid built from a DTM (+ optional DSM), with its basis. */
 export interface DtmTerrainAccessGrid {
+  readonly ok: true;
   readonly grid: TerrainAccessGrid;
   readonly basis: SimulationInputBasis;
-  /** Non-empty only when a supplied DSM could not be aligned to the DTM. */
+  /** Reserved for non-fatal notes about the inputs; empty today. */
   readonly warnings: readonly string[];
+}
+
+/** Why the inputs could not be combined into one grid. */
+export interface DtmTerrainAccessGridRefusal {
+  readonly ok: false;
+  readonly code: 'SURFACE_MISALIGNED' | 'INVALID_ROI';
+  readonly reason: string;
+}
+
+/** The only row orientation `buildDtmGrid` produces: row 0 at `originH2`, rows running north. */
+export const TERRAIN_GRID_ORIENTATION = 'rows-north-from-origin' as const;
+
+/** The frame an above-ground surface was built in, stated so alignment can be checked. */
+export interface AboveGroundFrame {
+  readonly crs: string | null;
+  readonly horizontalEpsg: number | null;
+  /** Metres per surface Z unit. Must equal the terrain's own factor. */
+  readonly verticalUnitToMetres: number | null;
+  readonly orientation: typeof TERRAIN_GRID_ORIENTATION;
+}
+
+/** An above-ground surface (DSM) with the frame it was built in. */
+export interface AboveGroundSurface extends SurfaceGrid {
+  readonly frame: AboveGroundFrame;
+}
+
+/** Largest origin or cell-size difference, as a fraction of a cell, still read as the same grid. */
+export const ALIGNMENT_TOLERANCE = 1e-6;
+
+/**
+ * Why `dsm` cannot be subtracted from `dtm` cell for cell, or null when it is
+ * aligned. Reads every field at runtime: the surface may come from a restored
+ * or programmatic caller whose object does not honour the type.
+ */
+export function aboveGroundAlignmentProblem(dtm: DtmGrid, dsm: AboveGroundSurface): string | null {
+  const n = dtm.cols * dtm.rows;
+  const tol = ALIGNMENT_TOLERANCE * dtm.cellSizeM;
+  const close = (a: number, b: number): boolean => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= tol;
+  if (dsm.cols !== dtm.cols || dsm.rows !== dtm.rows) {
+    return `its cols/rows (${dsm.cols}×${dsm.rows}) differ from the terrain's (${dtm.cols}×${dtm.rows})`;
+  }
+  if (!dsm.z || !dsm.coverage || dsm.z.length !== n || dsm.coverage.length !== n) {
+    return `its array lengths (${dsm.z?.length}, ${dsm.coverage?.length}) differ from the terrain's ${n} cells`;
+  }
+  if (!close(dsm.cellSizeM, dtm.cellSizeM)) {
+    return `its cell size (${dsm.cellSizeM}) differs from the terrain's (${dtm.cellSizeM})`;
+  }
+  if (!close(dsm.originH1, dtm.originH1) || !close(dsm.originH2, dtm.originH2)) {
+    return `its origin (${dsm.originH1}, ${dsm.originH2}) differs from the terrain's (${dtm.originH1}, ${dtm.originH2})`;
+  }
+  const frame = dsm.frame;
+  if (!frame) return 'it does not state the frame it was built in';
+  if (frame.orientation !== TERRAIN_GRID_ORIENTATION) {
+    return `its row orientation (${String(frame.orientation)}) differs from the terrain's (${TERRAIN_GRID_ORIENTATION})`;
+  }
+  if ((frame.crs ?? null) !== (dtm.crs ?? null) || (frame.horizontalEpsg ?? null) !== (dtm.horizontalEpsg ?? null)) {
+    return `its horizontal CRS (${frame.crs ?? 'none'}) differs from the terrain's (${dtm.crs ?? 'none'})`;
+  }
+  const fz = frame.verticalUnitToMetres;
+  const tz = dtm.verticalUnitToMetres;
+  if (fz == null || tz == null || !(Math.abs(fz - tz) <= 1e-12 * Math.max(1, Math.abs(tz)))) {
+    return `its vertical unit (${fz ?? 'unresolved'} m per unit) differs from the terrain's (${tz ?? 'unresolved'})`;
+  }
+  return null;
+}
+
+/** Why `roi` cannot confine a run over `n` cells, or null when it is a usable 0/1 mask. */
+export function roiMaskProblem(roi: Uint8Array, n: number): string | null {
+  if (!(roi instanceof Uint8Array) || roi.length !== n) {
+    return `it holds ${roi?.length} cells, not the terrain's ${n}`;
+  }
+  for (let i = 0; i < n; i++) {
+    if (roi[i] !== 0 && roi[i] !== 1) return `cell ${i} holds ${roi[i]}, not 0 or 1`;
+  }
+  return null;
 }
 
 /**
@@ -56,9 +140,9 @@ export interface DtmTerrainAccessGrid {
  * grid.
  *
  * `dsm` is optional: without it `heightAboveGround` is null and the
- * obstruction constraint in `traversabilityCost.ts` is simply inactive,
- * exactly as §12.4 of the governing prompt requires ("optionally use aligned
- * DSM/nDSM").
+ * obstruction constraint in `traversabilityCost.ts` cannot be evaluated
+ * (`terrainAccessPrepare.ts` refuses a profile that asks for it). A supplied
+ * surface that is not aligned, or an ROI mask that does not fit, is refused.
  */
 export function terrainDtmToAccessGrid(
   dtm: DtmGrid,
@@ -66,10 +150,10 @@ export function terrainDtmToAccessGrid(
   options: {
     readonly interpolated?: InterpolatedPolicy;
     readonly withheldExcluded?: boolean | null;
-    readonly dsm?: SurfaceGrid | null;
+    readonly dsm?: AboveGroundSurface | null;
     readonly roi?: Uint8Array | null;
   } = {},
-): DtmTerrainAccessGrid {
+): DtmTerrainAccessGrid | DtmTerrainAccessGridRefusal {
   const policy = options.interpolated ?? 'route';
   const n = dtm.cols * dtm.rows;
   // The traversability core reads z as metres (slope, step height, ascent),
@@ -123,31 +207,37 @@ export function terrainDtmToAccessGrid(
   let heightAboveGround: Float32Array | null = null;
   if (options.dsm) {
     const dsm = options.dsm;
-    if (dsm.cols !== dtm.cols || dsm.rows !== dtm.rows || dsm.cellSizeM !== dtm.cellSizeM) {
-      warnings.push(
-        'The supplied above-ground surface is not built on the same grid as the terrain '
-        + '(cols/rows/cell size differ), so above-ground obstruction evidence is withheld.',
-      );
-    } else {
-      const hag = new Float32Array(n);
-      for (let i = 0; i < n; i++) {
-        if (valid[i] === 0 || dsm.coverage[i] === 0) { hag[i] = Number.NaN; continue; }
-        hag[i] = dsm.z[i] * zToMetres - z[i];
-      }
-      heightAboveGround = hag;
+    const problem = aboveGroundAlignmentProblem(dtm, dsm);
+    if (problem) {
+      return {
+        ok: false, code: 'SURFACE_MISALIGNED',
+        reason: `The supplied above-ground surface is not aligned to the terrain grid: ${problem}. `
+          + 'Nothing is subtracted from a surface that does not cover the same cells.',
+      };
     }
+    const hag = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      if (valid[i] === 0 || dsm.coverage[i] === 0) { hag[i] = Number.NaN; continue; }
+      hag[i] = dsm.z[i] * zToMetres - z[i];
+    }
+    heightAboveGround = hag;
   }
 
   let allowed: Uint8Array | null = null;
   if (options.roi) {
-    if (options.roi.length !== n) {
-      warnings.push('The supplied ROI mask does not match the terrain grid size, so it is ignored.');
-    } else {
-      allowed = options.roi;
+    const problem = roiMaskProblem(options.roi, n);
+    if (problem) {
+      return {
+        ok: false, code: 'INVALID_ROI',
+        reason: `The declared region of interest does not fit the terrain grid: ${problem}. `
+          + 'The run is refused rather than widened to the whole grid.',
+      };
     }
+    allowed = options.roi;
   }
 
   return {
+    ok: true,
     grid: {
       z, valid, confidence, coverage, heightAboveGround, allowed,
       cols: dtm.cols, rows: dtm.rows,
