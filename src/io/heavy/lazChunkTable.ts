@@ -85,7 +85,7 @@ const LASZIP_USER_ID = 'laszip encoded';
 const LASZIP_RECORD_ID = 22204;
 
 /** Head read: the full VLR region, capped so a hostile header stays bounded. */
-const MAX_HEAD_BYTES = 4 * 1024 * 1024;
+export const MAX_HEAD_BYTES = 4 * 1024 * 1024;
 /**
  * Absurdity guard on the declared chunk count, checked BEFORE the two
  * `Float64Array(numChunks)` delta streams and the per-chunk range objects are
