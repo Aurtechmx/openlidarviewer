@@ -124,3 +124,48 @@ describe('a streaming resident snapshot discloses its scope', () => {
     expect(toXyz(c)).not.toMatch(/resident|streamed/i);
   });
 });
+
+describe('a voxel-reduced display sample says its rows are centroids', () => {
+  /** The common large-LAZ load: stride 2, then voxel centroids to the budget. */
+  function voxelSample(stride?: number): PointCloud {
+    const held = 250;
+    return new PointCloud({
+      positions: new Float32Array(held * 3),
+      intensity: new Uint16Array(held),
+      origin: [0, 0, 0],
+      sourceFormat: 'laz',
+      name: 'tile',
+      declaredPointCount: 1000,
+      ...(stride === undefined ? {} : { loadStride: stride }),
+      pointReduction: 'voxel-centroids',
+    });
+  }
+
+  it.each([
+    ['XYZ', (c: PointCloud) => commentLines(toXyz(c), '#')],
+    ['PLY', (c: PointCloud) => commentLines(toPly(c), 'comment')],
+    ['OBJ', (c: PointCloud) => commentLines(toObj(c), '#')],
+  ])('%s names the stride, the voxel step and the averaged values', (_f, notes) => {
+    const subset = notes(voxelSample(2)).find((l) => l.startsWith('SUBSET'));
+    expect(subset).toBeDefined();
+    expect(subset).toMatch(/load stride 2/);
+    expect(subset).toMatch(/voxel/i);
+    expect(subset).toMatch(/centroid/i);
+    expect(subset).toMatch(/averag/i);
+    expect(subset).toMatch(/not source records/i);
+    // The stride alone no longer reads as the whole story.
+    expect(subset).not.toMatch(/one record kept per 2 -+ this file/);
+  });
+
+  it('names the voxel step when no stride ran', () => {
+    const subset = commentLines(toXyz(voxelSample()), '#').find((l) => l.startsWith('SUBSET'));
+    expect(subset).toMatch(/voxel/i);
+    expect(subset).not.toMatch(/stride/);
+  });
+
+  it('a strided sample without voxel reduction keeps the record wording', () => {
+    const subset = commentLines(toXyz(sampledCloud(250, 1000, 4)), '#').find((l) => l.startsWith('SUBSET'));
+    expect(subset).toMatch(/one record kept per 4/);
+    expect(subset).not.toMatch(/voxel|centroid/i);
+  });
+});

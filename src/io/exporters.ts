@@ -128,10 +128,17 @@ function subsetLine(cloud: PointCloud): string | null {
     share = pct.toFixed(2);
   }
   const stride = cloud.loadStride;
-  const cause =
-    stride !== undefined && stride > 1
-      ? ` (load stride ${stride} — one record kept per ${stride})`
-      : '';
+  const strided = stride !== undefined && stride > 1;
+  // A voxel-reduced cloud holds centroids, not records: its positions and
+  // colour/intensity are averages over each voxel's members.
+  const voxel = cloud.pointReduction === 'voxel-centroids'
+    ? 'voxel-reduced: each point is a voxel centroid, its position, colour and ' +
+      'intensity averaged over the voxel\'s records, not source records'
+    : null;
+  let cause = '';
+  if (strided && voxel) cause = ` (load stride ${stride}, then ${voxel})`;
+  else if (strided) cause = ` (load stride ${stride} — one record kept per ${stride})`;
+  else if (voxel) cause = ` (${voxel})`;
   return (
     `SUBSET: ${held.toLocaleString('en-US')} of ${declared.toLocaleString('en-US')} ` +
     `points the source declared (${share} %)${cause} — this file is a sample of the ` +
