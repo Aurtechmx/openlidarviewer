@@ -252,12 +252,12 @@ describe('parseSession — tolerance', () => {
     // 'sideways' resolved to 'y'. It decides which component of a rebase delta
     // is elevation, so guessing it silently reinterprets the height of every
     // restored measurement. It now refuses; see the up-axis suite below.
+    // `origin` is not in that set either: see the origin suite below.
     const doc = {
       app: 'OpenLiDARViewer',
       kind: 'measurement-session',
       version: SESSION_VERSION,
       upAxis: 'z',
-      origin: 'nope',
       unitSystem: 'cubits',
       views: 'no',
       measurements: 'no',
@@ -1154,6 +1154,44 @@ describe('parseSession — the up-axis is read, never assumed', () => {
 
   it('names the offending value so the file can be repaired', () => {
     expect(parse('up')).toThrow(/up/);
+  });
+});
+
+/**
+ * The origin is the world offset every restored point is rebased by. A
+ * malformed one read as [0, 0, 0] moves every measurement by the scan's whole
+ * georeferenced offset, and a strong scan match then reports success. A file
+ * without an origin keeps the [0, 0, 0] default.
+ */
+describe('parseSession — a malformed origin is refused, never read as zero', () => {
+  const base = {
+    app: 'OpenLiDARViewer',
+    kind: 'measurement-session',
+    version: 7,
+    upAxis: 'z',
+    unitSystem: 'metric',
+    views: [],
+    measurements: [],
+    annotations: [],
+  };
+  const parse = (origin: unknown) => () => parseSession(JSON.stringify({ ...base, origin }));
+
+  it('reads a finite origin', () => {
+    expect(parse([500000, 4000000, 100])().origin).toEqual([500000, 4000000, 100]);
+  });
+
+  it('keeps the zero default when the origin is absent', () => {
+    expect(parse(undefined)().origin).toEqual([0, 0, 0]);
+  });
+
+  it.each([
+    ['a null component', [500000, null, 100]],
+    ['a string', 'nope'],
+    ['two components', [1, 2]],
+    ['null', null],
+    ['an object', { x: 1, y: 2, z: 3 }],
+  ])('refuses %s', (_label, origin) => {
+    expect(parse(origin)).toThrow(/origin/i);
   });
 });
 

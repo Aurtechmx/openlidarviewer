@@ -526,6 +526,22 @@ function parseUpAxis(raw: unknown): 'y' | 'z' {
   );
 }
 
+/**
+ * The world offset every restored point is rebased by. Absent reads as zero
+ * (files that predate it); present but not three finite numbers is refused,
+ * because reading it as zero would move every measurement by the scan's whole
+ * georeferenced offset.
+ */
+function parseOrigin(raw: unknown): Vec3 {
+  if (raw === undefined) return [0, 0, 0];
+  if (isVec3(raw)) return [raw[0], raw[1], raw[2]];
+  throw new Error(
+    `Session origin is ${JSON.stringify(raw)}; expected three finite numbers. ` +
+      `Refusing rather than reading it as zero, because the origin decides where ` +
+      `every restored measurement is placed.`,
+  );
+}
+
 // --- session resource ceilings ---------------------------------------------
 // A shared, corrupt or hostile `.olvsession` is untrusted input. These cap the
 // dimensions an over-large file can blow up on; each is far beyond any real
@@ -589,7 +605,7 @@ export function parseSession(text: string): InspectionSession {
     kind: 'measurement-session',
     version: SESSION_VERSION,
     upAxis: parseUpAxis(raw.upAxis),
-    origin: parseVec3(raw.origin),
+    origin: parseOrigin(raw.origin),
     unitSystem: raw.unitSystem === 'imperial' ? 'imperial' : 'metric',
     views: parseViews(raw.views),
     measurements: parseMeasurements(raw.measurements),
