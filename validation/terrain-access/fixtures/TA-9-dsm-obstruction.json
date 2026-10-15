@@ -1,6 +1,6 @@
 {
   "name": "TA-9-dsm-obstruction",
-  "why": "A flat, fully-supported terrain with an above-ground DSM return (heightAboveGround) over two cells of column 2, at rows 1 and 2, both exceeding the declared obstacleHeightThreshold, forcing a detour into row 3 — pinning that obstruction blocking (not step height or NoData) is what closes these two cells. Unlike TA-4's single-row detour, the flat terrain gives the bypass a genuine 4-way tie (enumerated by brute force over the whole grid): dropping into row 3 either diagonally or straight down at column 1, and climbing back out of row 3 either diagonally or straight across at column 3, are all equal-cost combinations, so this fixture is compared on cost/length/eligibility rather than an exact path.",
+  "why": "A flat, fully-supported terrain with an above-ground DSM return (heightAboveGround) over two cells of column 2, at rows 1 and 2, both exceeding the declared obstacleHeightThreshold, forcing a detour into row 3 — pinning that obstruction blocking (not step height or NoData) is what closes these two cells. A diagonal may not cut the corner of an obstructed cell, so the moves (2,1)-(3,2) and (3,2)-(2,3) are refused; the only least-cost route (enumerated by brute force over the whole grid) is (2,0)-(3,1)-(3,2)-(3,3)-(2,4): two diagonals and two orthogonal moves, cost 2 + 2 sqrt 2.",
   "cellMetresX": 1,
   "cellMetresY": 1,
   "z": [

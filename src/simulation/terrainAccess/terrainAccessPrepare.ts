@@ -156,6 +156,17 @@ export function prepareTerrainAccessRun(
 
   let eligibleCount = 0;
   for (const b of eligibility.blocked) if (b === 0) eligibleCount++;
+  if (eligibleCount === 0 && eligibilityBeforeWidth.blocked.some((b) => b === 0)) {
+    // Cells exist that the declared limits accept, but the footprint fits on
+    // none of them: say so, rather than reporting the map as supported.
+    const widthM = profile.vehicleWidth;
+    return {
+      ok: false, code: 'INSUFFICIENT_EVIDENCE',
+      reason: `The declared vehicle width (${widthM} m) fits nowhere on the supported terrain: every cell the `
+        + `profile's limits accept is closer than half that width (${widthM / 2} m) to unsupported terrain `
+        + 'or the survey edge. Declare a narrower vehicle, or analyse a wider extent.',
+    };
+  }
   if (eligibleCount === 0) {
     const top = topBlockReasonSentence(eligibility, profile);
     return {

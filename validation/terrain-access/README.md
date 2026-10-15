@@ -15,7 +15,15 @@ definitions rather than from the TypeScript:
   algorithm.
 - Vector Ruggedness Measure, Sappington, Longshore & Thompson (2007).
 - Hard eligibility and width clearance, the node/edge split
-  `src/simulation/terrainAccess/traversabilityCost.ts` documents.
+  `src/simulation/terrainAccess/traversabilityCost.ts` documents. Width
+  clearance measures from each cell centre to the nearest blocked cell
+  RECTANGLE and to the survey edge (outside the grid is unsupported); a cell
+  is refused when that distance is strictly less than half the width. A
+  diagonal move is refused when either orthogonal cell bordering it is
+  blocked, and for a positive width when the swept disc meets a blocked
+  rectangle mid-move. The oracle computes both by direct scan over every
+  blocked cell; the viewer uses a separable distance transform and a bounded
+  band search (`footprintClearance.ts`).
 - Directional longitudinal grade and cross slope, the gradient decomposition
   `src/simulation/terrainAccess/directionalGrade.ts` documents.
 - Least-cost routing, by Dijkstra, where the viewer runs A* with a
@@ -65,13 +73,13 @@ lowest-cost route, where exact-path comparison is meaningful.
 | `TA-1-flat-plane` | A flat plane under permissive limits routes near-diagonally at close to the Euclidean cost. |
 | `TA-2-tilted-plane-directional` | A tight cross-slope limit accepts the straight-downslope heading and rejects any heading that leaves it; cross slope is evaluated per heading, not as total slope. |
 | `TA-4-step-barrier` | A step too tall to cross forces a detour around the one open row; the direct corridor is provably unusable. |
-| `TA-5-width-clearance-narrow` / `-wide` | The same 1-cell gap is passable at zero vehicle width and unpassable once the declared width cannot clear it after dilation. |
+| `TA-5-width-clearance-narrow` / `-wide` | The same 1-cell gap in a full-height ROI wall is passable at zero vehicle width and unpassable at 2.5 m, while start and end stay eligible (1.5 m or more from every wall cell and the survey edge), so the wide case is a genuine `NO_ROUTE`. |
 | `TA-6-nodata-corridor` | A full-width NoData wall with no gap: NO_ROUTE, not a route that crosses it. |
 | `TA-7-low-confidence-block` / `-penalize` | The same weak-evidence cell is hard-excluded under `unknownPolicy: 'block'` and cost-penalized instead (and so eligible again) under `'penalize'`. |
 | `TA-8-ruggedness` / `-unset` | A rough spike forces a detour once `maxRuggedness` is declared, and does not when it is left `null`. |
 | `TA-3-cross-slope-trap` | A uniform plane whose direct row is closed by a single NoData cell; every detour requires a north/south move, and a tight `maxCrossSlope` rejects all of them even though the plane's total slope would pass either limit read as one scalar, so the outcome is `NO_ROUTE`. |
 | `TA-3-cross-slope-control` | The trap's control: same terrain and gap, `maxCrossSlope` loosened. FOUND, using a north/south move, so the trap's NO_ROUTE is shown to come from that one limit and nothing else. |
-| `TA-9-dsm-obstruction` | Above-ground DSM evidence (`heightAboveGround`), not terrain geometry, closes two cells and forces the same kind of detour TA-4 forces with a step. |
+| `TA-9-dsm-obstruction` | Above-ground DSM evidence (`heightAboveGround`), not terrain geometry, closes two cells and forces the same kind of detour TA-4 forces with a step. No diagonal cuts an obstructed cell's corner, which leaves one least-cost route. |
 | `TA-9-dsm-disabled-threshold` / `-nolayer` | The obstruction's two controls: the same DSM evidence with no threshold declared, and the same threshold with no DSM layer at all. Either way obstruction stays `not-evaluated` and the route runs straight through the cells TA-9 closes. |
 | `TA-10-anisotropic-grid` | `cellMetresX` and `cellMetresY` differ, as an unequal-metre geographic grid would; the route cost and the diagonal heading it depends on must reflect the true physical distances, not the raster index. |
 

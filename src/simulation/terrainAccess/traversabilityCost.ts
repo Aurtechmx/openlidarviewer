@@ -35,7 +35,7 @@ import { hornSlopeAspect } from '../../terrain/ground/terrainDerivatives';
 import { computeVRM } from '../../terrain/complexity/vectorRuggedness';
 import { computeLocalStep, edgeStep } from './localStep';
 import { classifyObstruction, type ObstructionState } from './obstacleEvidence';
-import { dilateBlocked } from './footprintClearance';
+import { diagonalSweepClear, dilateBlocked } from './footprintClearance';
 import { directionalSlope, gradientField, headingUnit, type GradientField } from './directionalGrade';
 import {
   TERRAIN_ACCESS_NEIGHBOURS,
@@ -133,6 +133,62 @@ export function applyWidthClearance(
     if (dilated[i] === 1 && eligibility.blocked[i] === 0) reason[i] = 'vehicle-width';
   }
   return { blocked: dilated, reason };
+}
+
+/** A cell blocked for one of the declared node reasons (not merely for width). */
+function supportBlocked(eligibility: NodeEligibility, index: number): boolean {
+  return eligibility.blocked[index] === 1 && eligibility.reason[index] !== 'vehicle-width';
+}
+
+/** Per-eligibility memo of the diagonal sweep check, keyed by width. Each
+ * diagonal is stored once, from its upper cell: index·2 + (dx === 1 ? 0 : 1);
+ * 0 = not computed, 1 = clear, 2 = refused. */
+const sweepMemo = new WeakMap<NodeEligibility, { width: number; state: Uint8Array }>();
+
+/**
+ * THE edge predicate every Terrain Access consumer shares (A*, the
+ * traversability map, the why-not inspector): may the centreline move from
+ * `fromIndex` by raster offset (dx, dy) at all? False when the destination is
+ * off the grid or node-blocked (post width-clearance), and, for a diagonal,
+ * when the move would cut the corner of an unsupported cell or sweep the
+ * declared width over unsupported area mid-move (see `footprintClearance.ts`).
+ * Says nothing about grade, cross slope or step — those are
+ * {@link evaluateEdge}'s, and apply only to moves this accepts.
+ */
+export function transitionAllowed(
+  grid: Pick<TerrainAccessGrid, 'cols' | 'rows' | 'cellMetresX' | 'cellMetresY'>,
+  eligibility: NodeEligibility,
+  profile: Pick<TerrainAccessProfile, 'vehicleWidth'>,
+  fromIndex: number,
+  dx: number,
+  dy: number,
+): boolean {
+  const { cols, rows } = grid;
+  const row = Math.floor(fromIndex / cols);
+  const col = fromIndex - row * cols;
+  const c = col + dx;
+  const r = row + dy;
+  if (c < 0 || c >= cols || r < 0 || r >= rows) return false;
+  if (eligibility.blocked[r * cols + c] === 1) return false;
+  if (dx === 0 || dy === 0) return true;
+
+  // Canonical form: every diagonal stored once, from its upper cell, heading down.
+  const top = dy === 1 ? fromIndex : r * cols + c;
+  const dir = dy === 1 ? dx : -dx;
+  let memo = sweepMemo.get(eligibility);
+  if (!memo || memo.width !== profile.vehicleWidth || memo.state.length !== cols * rows * 2) {
+    memo = { width: profile.vehicleWidth, state: new Uint8Array(cols * rows * 2) };
+    sweepMemo.set(eligibility, memo);
+  }
+  const slot = top * 2 + (dir === 1 ? 0 : 1);
+  if (memo.state[slot] === 0) {
+    const clear = diagonalSweepClear(
+      (i) => supportBlocked(eligibility, i), cols, rows, grid.cellMetresX, grid.cellMetresY,
+      profile.vehicleWidth, top, dir, 1,
+    );
+    memo.state[slot] = clear ? 1 : 2;
+  }
+  return memo.state[slot] === 1;
 }
 
 /** The pure geometry of one directed move — no profile, no blocking decision. */
@@ -317,11 +373,8 @@ export function buildTraversabilityMap(
 
       let best = Number.POSITIVE_INFINITY;
       for (const [dx, dy] of TERRAIN_ACCESS_NEIGHBOURS) {
-        const c = col + dx;
-        const r = row + dy;
-        if (c < 0 || c >= grid.cols || r < 0 || r >= grid.rows) continue;
-        const j = r * grid.cols + c;
-        if (eligibility.blocked[j] === 1) continue;
+        if (!transitionAllowed(grid, eligibility, profile, i, dx, dy)) continue;
+        const j = (row + dy) * grid.cols + col + dx;
         const cost = edgeCost(grid, features, profile, i, j, dx, dy, weights);
         if (cost == null) continue;
         const distance = Math.hypot(dx * grid.cellMetresX, dy * grid.cellMetresY);
@@ -383,11 +436,8 @@ export function whyNotEligible(
   let closestMargin = Number.POSITIVE_INFINITY;
 
   for (const [dx, dy] of TERRAIN_ACCESS_NEIGHBOURS) {
-    const c = col + dx;
-    const r = row + dy;
-    if (c < 0 || c >= grid.cols || r < 0 || r >= grid.rows) continue;
-    const j = r * grid.cols + c;
-    if (eligibility.blocked[j] === 1) continue;
+    if (!transitionAllowed(grid, eligibility, profile, index, dx, dy)) continue;
+    const j = (row + dy) * grid.cols + col + dx;
     const evalr = evaluateEdge(grid, features, profile, index, j, dx, dy);
     if (!evalr.blocked) { anyViable = true; break; }
     const margin =
@@ -404,7 +454,7 @@ export function whyNotEligible(
   return {
     eligible: false,
     category: 'blocked',
-    reasons: closestMiss ? [closestMiss] : [{ reason: 'no-data', detail: 'no in-bounds eligible neighbour to move to or from' }],
+    reasons: closestMiss ? [closestMiss] : [{ reason: 'no-data', detail: 'no eligible neighbour can be reached without crossing unsupported terrain' }],
   };
 }
 
@@ -423,7 +473,8 @@ function nodeDetail(
     case 'ruggedness':
       return `ruggedness ${features.vrm[index].toFixed(3)} > limit ${(profile.maxRuggedness ?? 0).toFixed(3)}`;
     case 'obstruction': return 'above-ground return evidence exceeds the declared threshold';
-    case 'vehicle-width': return 'too close to a blocked cell for the declared vehicle width to clear';
+    case 'vehicle-width':
+      return 'the declared vehicle width does not fit between this cell and the nearest unsupported cell or survey edge';
   }
 }
 
