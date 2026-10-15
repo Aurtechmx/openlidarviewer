@@ -67,6 +67,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - A LAS or LAZ whose header bounds do not enclose its points takes its local origin from the points, so coordinates keep full precision, and says so. Reprojection to or from a geocentric CRS (EPSG:4978) is refused instead of writing wrong coordinates.
 - Studio height, depth and contour cards report source heights. They had printed coordinates relative to the scan's internal origin, so a tile spanning -7.86 m to 39.72 m read 14.0 cm to 47.7 m.
 - A Studio card drawn from a display sample says so and gives the loaded and declared point counts. Its classification coverage names the display sample it was measured on.
+- On Web Mercator and geocentric frames, Studio cards give width and depth in source units with the reason and no density. Card heights use the vertical unit the colorbar shows, and when visible layers are not in one vertical frame the card leaves out the Z range and says why.
 - The scan report's duplicate check reports "Not checked" on a voxel-reduced display sample instead of "None", because voxel centroids cannot coincide.
 - A local glTF or GLB that names an external buffer or image (a relative file or a web address) is refused before parsing. Opening it no longer makes the browser request an address named inside the file.
 - The E57 reader refuses an XML section larger than 64 MB and XML nested deeper than 256 levels with a clear error, instead of exhausting memory or the call stack.
