@@ -1618,6 +1618,12 @@ export interface ExportLayerState {
   readonly findingsRevision?: (id: string) => number;
   /** The shown compare difference was computed on this layer. */
   readonly inCompare?: (id: string) => boolean;
+  /**
+   * Give the reloaded layer `to` the identity (and the work) of `from`, the
+   * same source it replaces. False when the identity cannot be handed over;
+   * the replacement is then refused rather than leaving the work ownerless.
+   */
+  readonly handOver?: (from: string, to: string) => boolean;
 }
 
 /** The panel's per-layer callbacks: `hasFullSource`, `activateLayer`, `layerSource`, `reloadLayer` and `notify`. */
@@ -1661,6 +1667,21 @@ export function exportLayerHooks(state: ExportLayerState): Pick<ExportPanelCallb
       }
       const changes = reloadStampChanges(stamp, stampOf(id));
       if (changes.length === 0) {
+        // The replacement is the same source (the same File, at the same
+        // origin), so it takes the original's identity before the original
+        // goes: work owned by the original stays owned, and work taken on the
+        // copy while it loaded moves over with it.
+        const fresh = added[0];
+        const so = (layer: string): readonly number[] | undefined => state.viewer()?.getCloud(layer)?.sourceOrigin;
+        const a = so(id);
+        const b = so(fresh);
+        const sameOrigin = !!a && !!b && a.every((c, k) => c === b[k]);
+        if (state.handOver && !(sameOrigin && state.handOver(id, fresh))) {
+          state.removeLayer(fresh);
+          state.scans.setActive(id);
+          state.notify('The reload was refused: the reloaded copy could not be confirmed as the same source, so the original layer and its work are kept.');
+          return;
+        }
         state.removeLayer(id);
         return;
       }

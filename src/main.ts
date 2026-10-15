@@ -35,7 +35,7 @@ import { findDuplicateIds, type Action } from './ui/actionRegistry';
 import { runSceneTool, type SceneTool } from './app/toggleTool';
 import type { SessionIoDeps } from './app/sessionIo';
 import type { SessionSnapshotDeps } from './app/sessionSnapshot';
-import { openScan, clearPendingSessionRestore, type OpenScanDeps } from './app/openScan';
+import { openScan, clearPendingSessionRestore, heldSessionWork, type OpenScanDeps } from './app/openScan';
 import {
   openStreamingCopc as runOpenStreamingCopc,
   handleRemoteEpt as runHandleRemoteEpt,
@@ -44,7 +44,7 @@ import {
   type OpenStreamingDeps,
 } from './app/openStreaming';
 import {
-  generateReportPdf as runGenerateReportPdf, ownershipViewOf,
+  generateReportPdf as runGenerateReportPdf, ownershipViewOf, handOverLayerWork,
   exportGeoContext as runExportGeoContext,
   type GeoExportContext,
   type ReportExportDeps,
@@ -2439,7 +2439,7 @@ const exportPanel = new ExportPanel({
   // snapshot just to test it for null.
   isStreamingPending: () => viewer?.streamingCloud != null && viewer.exportFrontierPointTotal() === 0,
   getActiveClip: () => viewer.getClip(), getActiveClipOffset: () => (scans.activeId ? viewer.layerProjectOffset(scans.activeId) : null), getActiveScanId: () => scans.activeExportTargetId(),
-  ...exportLayerHooks({ scans: { get activeId() { return scans.activeId; }, setActive: activateLayer }, viewer: () => viewer, sourceFiles: sourceFileById, reduced: reducedById, reopen: handleFile, removeLayer: removeCloud, notify: showLassoToast, findingsRevision: (id) => exportPanel.findingsLedger()?.revisionFor(id) ?? 0, inCompare: (id) => inspector.compareDifference.involves(id) }),
+  ...exportLayerHooks({ scans: { get activeId() { return scans.activeId; }, setActive: activateLayer }, viewer: () => viewer, sourceFiles: sourceFileById, reduced: reducedById, reopen: handleFile, removeLayer: removeCloud, notify: showLassoToast, findingsRevision: (id) => exportPanel.findingsLedger()?.revisionFor(id) ?? 0, inCompare: (id) => inspector.compareDifference.involves(id), handOver: (from, to) => handOverLayerWork(runtime.layerIdentity, viewer, from, to) }),
   hasClassEdits: () => activeScanHasClassEdits(scans.activeId, viewer),
   // A streaming snapshot exports only resident points, so it is a reduced subset
   // until the whole cloud lands — flagged so the status reads "reduced view".
@@ -3516,7 +3516,7 @@ const sessionSnapshotDeps: SessionSnapshotDeps = {
   captureViewState, savedViews: () => viewBookmarks.savedViews, origin: () => exportGeoContext().origin,
   referencePlane: () => inspector.referencePlane?.sessionState(),
   crs: () => crsService.current(), ownershipView: () => ownershipViewOf(viewer, runtime.layerIdentity.stableIdFor, scans.activeId), layerGroups: () => inspector.layerGroupsForSession(), appVersion: __APP_VERSION__,
-  projectFrame: () => projectFrameInputFrom({ frame: projectFrame.frame, layerIds: layerService.buildLayerInfos().map((i) => i.id), cloud: (id) => viewer?.getCloud(id), record: (id) => runtime.layerIdentity.recordFor(id), placement: layerService.placementOf }) };
+  heldWork: heldSessionWork, projectFrame: (force) => projectFrameInputFrom({ frame: projectFrame.frame, layerIds: layerService.buildLayerInfos().map((i) => i.id), cloud: (id) => viewer?.getCloud(id), record: (id) => runtime.layerIdentity.recordFor(id), placement: layerService.placementOf }, force) };
 
 /**
  * Session import — a thin caller over the extracted `src/app/sessionIo.ts`.
@@ -3531,7 +3531,7 @@ const sessionIoDeps: SessionIoDeps = {
   getActiveScanId: () => scans.activeId,
   getActiveLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null),
   getActiveCloud: () => scans.activeCloud(),
-  ...sessionImportOrigins({ frame: () => projectFrame.frame, activeId: () => (scans.activeCloud() ? scans.activeId : null), viewerIds: () => viewer?.clouds() ?? [], stableIdFor: (v) => runtime.layerIdentity.stableIdFor(v), cloud: (v) => viewer?.getCloud(v), placement: layerService.placementOf, fallback: () => exportGeoContext().origin }),
+  ...sessionImportOrigins({ frame: () => projectFrame.frame, activeId: () => (scans.activeCloud() ? scans.activeId : null), viewerIds: () => viewer?.clouds() ?? [], stableIdFor: (v) => runtime.layerIdentity.stableIdFor(v), cloud: (v) => viewer?.getCloud(v), placement: layerService.placementOf, fallback: () => exportGeoContext().origin, record: (v) => runtime.layerIdentity.recordFor(v) }),
   bookmarks,
   setInspectorViews: (names) => inspector.setViews(names),
   restoreLayerGroups: (groups) => inspector.restoreLayerGroups(groups),

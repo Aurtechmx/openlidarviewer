@@ -17,7 +17,7 @@ import type { WorkplaneSettings } from '../model/workplaneSettings';
 import { isZUpFormat } from '../io/sniffFormat';
 import { TERRAIN_METRIC_VERSION } from '../terrain/datasetIntelligence';
 import { partitionSessionWork, type OwnershipView } from './measurementOwnership';
-import { buildSessionProjectFrame, type SessionFrameInput, type SessionProjectFrame } from '../io/sessionFrame';
+import { buildSessionProjectFrame, carryHeldSessionWork, type HeldSessionWork, type SessionFrameInput, type SessionProjectFrame } from '../io/sessionFrame';
 
 export type SessionWriterModules = typeof import('../io/session') &
   Partial<typeof import('../terrain/export/exportProvenance')>;
@@ -41,8 +41,15 @@ export interface SessionSnapshotDeps {
    * one open layer is still placed in it: its origin and every layer's record
    * input. Null for a single unplaced scan, a streaming scene, or a layer with
    * no proven identity, where the single-origin reading applies exactly as before.
+   * `force` asks for a frame of one for a lone layer in its own frame, so held
+   * work has records to be read back through.
    */
-  projectFrame?(): SessionFrameInput | null;
+  projectFrame?(force?: boolean): SessionFrameInput | null;
+  /**
+   * Work a session import could not place because its scan is not open (or is
+   * open more than once). Written back with the records it is read through.
+   */
+  heldWork?(): HeldSessionWork | null;
   /** SHA-256 of the active scan's source bytes, when already computed. */
   sourceSha256?(): string | null;
   /**
@@ -62,9 +69,9 @@ export interface SessionSnapshotDeps {
  * One layer writes a frame only while it is placed in it: an unplaced lone
  * scan keeps the single-origin byte shape.
  */
-function liveProjectFrame(deps: SessionSnapshotDeps): SessionProjectFrame | undefined {
-  const input = deps.projectFrame?.() ?? null;
-  if (!input || input.layers.length === 0 || (input.layers.length === 1 && !input.layers[0]!.placed)) return undefined;
+function liveProjectFrame(deps: SessionSnapshotDeps, force = false): SessionProjectFrame | undefined {
+  const input = deps.projectFrame?.(force) ?? null;
+  if (!input || input.layers.length === 0 || (!force && input.layers.length === 1 && !input.layers[0]!.placed)) return undefined;
   try {
     return buildSessionProjectFrame(input);
   } catch {
@@ -153,7 +160,25 @@ export function serializeActiveSession(
     const n = m.leftOut + a.leftOut;
     deps.onWithheld?.(`${n} measurement${n === 1 ? '' : 's'} or annotation${n === 1 ? '' : 's'} left out of the session: taken on a scan that is no longer open, so there is no frame to save ${n === 1 ? 'it' : 'them'} in.`);
   }
-  const projectFrame = liveProjectFrame(deps);
+  // Held work goes back into the file with the records it is read through,
+  // moved into this file's frame without moving in the world. With no frame to
+  // write it in (no layer with a proven identity) it cannot be written, and
+  // the user is told rather than it vanishing.
+  const held = deps.heldWork?.() ?? null;
+  let projectFrame = liveProjectFrame(deps, held !== null);
+  let measurements = m.keep;
+  let annotations = a.keep;
+  if (held) {
+    if (projectFrame) {
+      const carried = carryHeldSessionWork(projectFrame, held);
+      projectFrame = carried.frame;
+      measurements = [...measurements, ...carried.measurements];
+      annotations = [...annotations, ...carried.annotations];
+    } else {
+      const n = held.measurements.length + held.annotations.length;
+      deps.onWithheld?.(`${n} restored item${n === 1 ? '' : 's'} waiting for ${n === 1 ? 'its scan' : 'their scans'} left out of the session: no open scan has a proven identity to record ${n === 1 ? 'it' : 'them'} against.`);
+    }
+  }
   return serializeSession({
     upAxis,
     // The frame every saved coordinate is local to. With two or more scans, or
@@ -168,8 +193,8 @@ export function serializeActiveSession(
     // view (e.g. restored from a v6 file) spreads nothing and keeps its exact
     // v6 byte-shape.
     views: deps.savedViews().map((v) => ({ name: v.name, camera: v.pose, ...(v.state ?? {}) })),
-    measurements: m.keep,
-    annotations: a.keep,
+    measurements,
+    annotations,
     camera: viewState.camera,
     render: viewState.render,
     colorMode: viewState.colorMode,

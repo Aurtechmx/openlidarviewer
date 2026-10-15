@@ -95,6 +95,16 @@ export interface LayerIdentityService {
     activeViewerId: () => string | null,
     layerCount: () => number,
   ): void;
+  /**
+   * Give the layer `toViewerId` the identity of `fromViewerId`: the same source
+   * reopened in its place (a density reload). The replacement takes the
+   * original's stable id, so work owned by the original stays owned; the id
+   * the replacement was minted is released and returned, so work stamped with
+   * it while both were open can be moved over. Null, and nothing changed, when
+   * either layer has no identity or the two records do not name the same file
+   * and source point count.
+   */
+  handOver(fromViewerId: string, toViewerId: string): { readonly kept: string; readonly released: string } | null;
 }
 
 export function createLayerIdentityService(
@@ -184,5 +194,20 @@ export function createLayerIdentityService(
 
   const recordFor = (viewerId: string): LayerRecord | null => byViewerId.get(viewerId) ?? null;
 
-  return { bindOnLoad, stableIdFor, recordFor, ownerForNewWork, ensureStoresWired };
+  const handOver = (fromViewerId: string, toViewerId: string): { kept: string; released: string } | null => {
+    const from = byViewerId.get(fromViewerId);
+    const to = byViewerId.get(toViewerId);
+    if (!from || !to || fromViewerId === toViewerId) return null;
+    // File name and source point count are the stride-independent part of the
+    // key; a reload changes neither.
+    const head = (k: string): string => k.split('\0').slice(0, 3).join('\0');
+    if (head(from.fingerprint) !== head(to.fingerprint)) return null;
+    // The replacement's own key is what a later open of this file produces at
+    // that density, so the kept id is bound to it.
+    byViewerId.set(toViewerId, registry.carryOver(from.layerId, to.fingerprint, to.displayName));
+    if (to.layerId !== from.layerId && ![...byViewerId.values()].some((r) => r.layerId === to.layerId)) registry.remove(to.layerId);
+    return { kept: from.layerId, released: to.layerId };
+  };
+
+  return { bindOnLoad, stableIdFor, recordFor, ownerForNewWork, ensureStoresWired, handOver };
 }

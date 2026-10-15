@@ -162,3 +162,54 @@ export function partitionSessionWork<T extends OwnedItem>(
   });
   return { keep, leftOut: items.length - keep.length };
 }
+
+/** Work whose owner and pick record can be renamed in place. */
+export interface RelabelableWork {
+  owner?: { readonly layerId?: string; readonly frame: 'source-local' | 'project'; readonly inferred?: boolean };
+  pickLayers?: string[];
+}
+
+/**
+ * Move work from one stable layer id to another, in place: owners and pick
+ * records naming `from` name `to` afterwards. Returns how many items changed.
+ * Used when a layer hands its identity to the same source reopened in its
+ * place, so work taken on the replacement before the hand-over is not left
+ * naming an id no layer holds.
+ */
+export function relabelWorkLayer(items: readonly RelabelableWork[], from: string, to: string): number {
+  let n = 0;
+  for (const item of items) {
+    let changed = false;
+    if (item.owner?.layerId === from) {
+      item.owner = { ...item.owner, layerId: to };
+      changed = true;
+    }
+    if (item.pickLayers?.includes(from)) {
+      const next = item.pickLayers.map((id) => (id === from ? to : id));
+      item.pickLayers = [...new Set(next)];
+      changed = true;
+    }
+    if (changed) n++;
+  }
+  return n;
+}
+
+/**
+ * Hand the identity of a reloaded layer to its replacement and move any work
+ * stamped with the replacement's own id onto the kept one. False when the
+ * identity service refuses (no identity, or not the same source).
+ */
+export function handOverLayerWork(
+  identity: { handOver(from: string, to: string): { readonly kept: string; readonly released: string } | null },
+  stores: { readonly measure: { getMeasurements(): RelabelableWork[] }; readonly annotate: { getAnnotations(): RelabelableWork[] } } | null | undefined,
+  fromViewerId: string,
+  toViewerId: string,
+): boolean {
+  const ids = identity.handOver(fromViewerId, toViewerId);
+  if (!ids) return false;
+  if (stores && ids.released !== ids.kept) {
+    relabelWorkLayer(stores.measure.getMeasurements(), ids.released, ids.kept);
+    relabelWorkLayer(stores.annotate.getAnnotations(), ids.released, ids.kept);
+  }
+  return true;
+}

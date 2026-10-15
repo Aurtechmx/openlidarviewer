@@ -56,7 +56,7 @@ import { truncationNote, truncationOf, truncationText } from '../io/truncation';
 import { measurementsOwnedByActive, type OwnershipView } from './measurementOwnership';
 
 /** Re-exported so the shell wires report and KML ownership from one import. */
-export { ownershipViewOf } from './measurementOwnership';
+export { ownershipViewOf, handOverLayerWork } from './measurementOwnership';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure decisions the extraction exposes — decidable without a Viewer, the report
