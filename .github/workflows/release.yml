@@ -244,10 +244,47 @@ jobs:
           retention-days: 30
           path: ${{ steps.stage.outputs.dir }}/
 
+  # ── Cross-platform CI passed at the same commit ───────────────────────────
+  # The gate above installs Chromium only and runs the deterministic project.
+  # Firefox, WebKit, Windows and the other blocking legs run in the CI
+  # workflow, which the same tag push starts; its `ci-green` job is the
+  # required check. This job reads the CI runs for the exact tagged commit
+  # through the GitHub API and passes only when a completed run there has
+  # `ci-green` and every job it needs at `success`. A missing run (after a
+  # short grace), a run still pending after the wait, or a cancelled, skipped
+  # or failed required job fails it. It starts after validate, so the wait
+  # overlaps the gate rather than following it.
+  ci-at-tag:
+    runs-on: ubuntu-latest
+    needs: validate
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+    timeout-minutes: 140
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: '.nvmrc'
+      - name: CI passed for the tagged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          SHA="$(git rev-parse HEAD)"
+          node scripts/check-ci-for-sha.mjs \
+            --repo "${{ github.repository }}" \
+            --sha "$SHA" \
+            --workflow ci.yml \
+            --timeout-minutes 120 \
+            --missing-grace-minutes 15 \
+            --interval-seconds 60
+
   # ── The single status to gate publication on ──────────────────────────────
   release-ready:
     runs-on: ubuntu-latest
-    needs: [validate, gate, stage]
+    needs: [validate, gate, stage, ci-at-tag]
     # This job only reports a status, so it needs no access to the repository.
     permissions: {}
     steps:

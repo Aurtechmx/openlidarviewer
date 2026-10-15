@@ -348,6 +348,11 @@ blocking a merge.
 Pre-merge checklist for any PR into `main`: all review threads resolved,
 `ci-green` passing, branch rebased on the latest `main`.
 
+The release workflow (`.github/workflows/release.yml`) does not repeat the
+Firefox, WebKit and Windows legs. Its `ci-at-tag` job checks through the GitHub
+API that a CI run at the tagged commit completed with `ci-green` and every job
+it needs at `success`, and `release-ready` depends on that job.
+
 ---
 
 ## 11. Coding standards
