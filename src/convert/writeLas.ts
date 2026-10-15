@@ -272,8 +272,10 @@ function snappedBounds(
  */
 function buildVerticalGeoKeys(opts: WriteLasOptions): Array<[number, number]> {
   const v = opts.verticalEpsg;
-  if (v == null || !(v > 0) || v > 65535) return [];
   const unit = opts.verticalUnitCode != null && opts.verticalUnitCode > 0 ? opts.verticalUnitCode : null;
+  // A vertical unit declared without a vertical CRS is still the unit of the
+  // Z values; dropping it would leave a reader to borrow the horizontal unit.
+  if (v == null || !(v > 0) || v > 65535) return unit != null ? [[4099, unit]] : [];
   // Readers (PDAL, GDAL) take the Z unit from the VerticalCSType code and
   // ignore VerticalUnits, so the code written is the one in the unit of the
   // Z values: 5703 with US survey feet is written as 6360.

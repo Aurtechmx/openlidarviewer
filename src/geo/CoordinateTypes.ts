@@ -148,6 +148,12 @@ export interface ResolvedCrs {
    * (the GeoTIFF default: vertical units follow the model's linear units).
    */
   readonly verticalUnitToMetres?: number;
+  /**
+   * Linear unit token of the Z axis, carried beside {@link verticalUnitToMetres}
+   * when the source declared one. Independent of {@link linearUnit}: a metre
+   * grid with NAVD88 heights in US survey feet keeps `'us-survey-foot'` here.
+   */
+  readonly verticalLinearUnit?: CrsLinearUnit;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -247,6 +253,7 @@ export function resolvedFromCrsInfo(
     verticalEpsg: info.verticalEpsg,
     verticalDatum: info.verticalDatum,
     verticalUnitToMetres: info.verticalUnitToMetres,
+    ...(info.verticalLinearUnit !== undefined ? { verticalLinearUnit: info.verticalLinearUnit } : {}),
     ...(info.verticalAxisDown ? { verticalAxisDown: true } : {}),
     // The WKT-declared datum (realization-preserving). CrsService fills the
     // registry fallback by EPSG when this is absent — kept out of here to avoid

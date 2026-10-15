@@ -739,6 +739,7 @@ export class CrsService {
       verticalEpsg: detected?.verticalEpsg,
       verticalDatum: detected?.verticalDatum,
       verticalUnitToMetres: detected?.verticalUnitToMetres,
+      ...(detected?.verticalLinearUnit !== undefined ? { verticalLinearUnit: detected.verticalLinearUnit } : {}),
     };
   }
 
