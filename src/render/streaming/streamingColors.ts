@@ -19,6 +19,7 @@ import {
   colorByNormal,
   colorByScalar,
   finiteMinMax,
+  intensityWindow,
   UNSTATED_COLOUR_GREY,
 } from '../colorModes';
 import { densityForChunk, defaultCellSizeForSpacing } from '../densityColors';
@@ -165,7 +166,9 @@ export function intensityRangeOf(
   decoded: DecodedChunk,
 ): { min: number; max: number } | null {
   if (!decoded.intensity) return null;
-  return scalarRangeOf(decoded.intensity, decoded.pointCount);
+  // The same p2–p98 window the static intensity mode paints against.
+  const r = intensityWindow(decoded.intensity, decoded.pointCount);
+  return { min: r.min, max: r.max };
 }
 
 /**

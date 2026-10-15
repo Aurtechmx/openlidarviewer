@@ -536,9 +536,8 @@ function parseOrigin(raw: unknown): Vec3 {
   if (raw === undefined) return [0, 0, 0];
   if (isVec3(raw)) return [raw[0], raw[1], raw[2]];
   throw new Error(
-    `Session origin is ${JSON.stringify(raw)}; expected three finite numbers. ` +
-      `Refusing rather than reading it as zero, because the origin decides where ` +
-      `every restored measurement is placed.`,
+    `Session not opened: its origin is not three finite numbers (${JSON.stringify(raw)?.slice(0, 80)}). ` +
+      `Restored measurements are placed from the origin, so the file cannot be read.`,
   );
 }
 

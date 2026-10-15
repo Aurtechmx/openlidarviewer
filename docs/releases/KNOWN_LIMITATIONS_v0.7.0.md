@@ -373,7 +373,6 @@ edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 97 for the shell, 74 for the renderer and 23 for the Analyse panel,
 across 1135 modules with no dependency cycles.
-across 1124 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -541,7 +540,8 @@ areas, grades, slopes and volumes are withheld and heights are kept; no
 scale-factor correction is applied. A geocentric code outside the built-in
 list is recognised only from its WKT or GeoTIFF model type. A WKT
 engineering CRS (ENGCRS, LOCAL_CS) is not yet classified as local and keeps
-its current handling.
+its current handling. Reproject refuses a geocentric source or target, because
+it maps only horizontal X and Y.
 
 ## Exports carry the geographic refusal, not the endpoint grade
 
@@ -642,6 +642,13 @@ to open them.
 A scan that stores only spherical coordinates (range, azimuth, elevation) and no
 Cartesian X/Y/Z is skipped with a warning that names it and its record count. A
 file whose scans are all spherical-only opens no points.
+
+## glTF and PLY files past the loader's limits are refused
+
+A glTF or GLB is refused when its node graph reaches the same node twice, or
+when opening it would emit more vertices than the loader's cap. A PLY is
+refused when an element declares records but no properties, or when its
+header is longer than 64 KiB.
 
 ## E57 intensity is normalised; a missing channel is dropped
 

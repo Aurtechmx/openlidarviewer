@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { loadGltf } from '../src/io/loadGltf';
+import { loadGltf, MAX_GLTF_VERTICES } from '../src/io/loadGltf';
+import { MAX_PNTS_TILE_POINTS } from '../src/io/tiles3d/pnts';
 
 const fixturePath = fileURLToPath(new URL('./fixtures/tiny.glb', import.meta.url));
 
@@ -314,5 +315,53 @@ describe('loadGltf — node graph that is not a tree', () => {
     ).rejects.toThrow(/more than 3 vertices/);
     const pc = await loadGltf(gltfWithNodeGraph(nodes), 'gltf', 'cap.gltf', { maxVertices: 4 });
     expect(pc.pointCount).toBe(4);
+  });
+});
+
+/** A .gltf whose one mesh holds `vertexCount` zero vertices, placed under `copies` sibling nodes. */
+function gltfReusedMesh(vertexCount: number, copies: number): ArrayBuffer {
+  const byteLength = vertexCount * 12;
+  const base64 = Buffer.alloc(byteLength).toString('base64');
+  const nodes: Array<Record<string, unknown>> = [
+    { children: Array.from({ length: copies }, (_, i) => i + 1) },
+  ];
+  for (let i = 0; i < copies; i++) nodes.push({ mesh: 0, translation: [i, 0, 0] });
+  const doc = {
+    asset: { version: '2.0' },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes,
+    meshes: [{ primitives: [{ attributes: { POSITION: 0 }, mode: 0 }] }],
+    accessors: [
+      { bufferView: 0, componentType: 5126, count: vertexCount, type: 'VEC3', min: [0, 0, 0], max: [0, 0, 0] },
+    ],
+    bufferViews: [{ buffer: 0, byteOffset: 0, byteLength }],
+    buffers: [{ byteLength, uri: `data:application/octet-stream;base64,${base64}` }],
+  };
+  return new TextEncoder().encode(JSON.stringify(doc)).buffer as ArrayBuffer;
+}
+
+/**
+ * Mesh reuse lets a small file emit many vertices. The cap matches the PNTS
+ * per-tile ceiling and is checked on the summed accessor counts before any
+ * vertex is staged.
+ */
+describe('loadGltf — vertex cap', () => {
+  test('the default cap matches the PNTS per-tile point ceiling', () => {
+    expect(MAX_GLTF_VERTICES).toBe(MAX_PNTS_TILE_POINTS);
+  });
+
+  test('a small file that reuses one mesh past the cap is refused before staging', async () => {
+    // 100,000 vertices (1.2 MB) under 81 nodes: 8,100,000 emitted vertices.
+    const file = gltfReusedMesh(100_000, 81);
+    const t0 = Date.now();
+    await expect(loadGltf(file, 'gltf', 'reuse.gltf')).rejects.toThrow(/more than 8000000 vertices/);
+    expect(Date.now() - t0).toBeLessThan(3000);
+  }, 60_000);
+
+  test('a reused mesh under the cap loads every copy', async () => {
+    const pc = await loadGltf(gltfReusedMesh(1000, 5), 'gltf', 'reuse.gltf');
+    expect(pc.pointCount).toBe(5000);
+    expect(pc.positions[3 * 4999] + pc.origin[0]).toBeCloseTo(4, 5);
   });
 });

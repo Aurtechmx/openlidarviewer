@@ -145,7 +145,8 @@ export function createProjectFrameService(context: AppContext): ProjectFrameServ
 
     // Layers that anchored the current origin and are still open, unchanged —
     // aligned or not. A layer demoted out of the frame still carries work drawn
-    // while it was placed against this origin, so its presence holds the origin.
+    // while it was placed against this origin, so its presence holds the origin
+    // as long as it shares the frame's CRS (see `holders` below).
     const survivors = new Map<string, string>();
     for (const layer of state.sources.values()) {
       const key = originKey(layer.sourceOrigin);
@@ -189,7 +190,19 @@ export function createProjectFrameService(context: AppContext): ProjectFrameServ
     // camera for a rebase: already-mounted data would visibly jump for no
     // reason the user caused. A layer re-registered at a new origin, or a set
     // replaced wholesale, matches nothing and re-anchors as it should.
-    const stillDescribed = survivors.size > 0 && anchorOrigin !== null;
+    //
+    // A holder must share the frame's horizontal CRS. A layer demoted because
+    // its CRS differs from the set that now defines the frame describes a
+    // different coordinate system, so its origin would label one CRS's frame
+    // with another's coordinates. Holders only count while their horizontal CRS
+    // key equals the frame's; when none does, the set re-anchors. A demotion on
+    // vertical grounds within the same CRS still holds the origin.
+    const frameKey = frameCrsLabel(aligned);
+    const holders = new Map<string, string>();
+    for (const [id, key] of survivors) {
+      if ((state.sources.get(id)?.crsKey ?? null) === frameKey) holders.set(id, key);
+    }
+    const stillDescribed = holders.size > 0 && anchorOrigin !== null;
     // X/Y and Z are anchored from DIFFERENT sets. Every aligned layer shares
     // the horizontal frame, so all of them may set the horizontal origin. Only
     // a vertically-verified layer may set the Z origin: a horizontal-only
@@ -207,17 +220,17 @@ export function createProjectFrameService(context: AppContext): ProjectFrameServ
         ? anchorOrigin
         : ([horizontal[0], horizontal[1], vertical[2]] as Vec3);
     // Every layer that has shared the frame describes it from then on, so the
-    // origin holds while ANY of them is still open. Closing the layer that
+    // origin holds while ANY of them in the frame's CRS is still open. Closing the layer that
     // chose the minimum must not move the origin: measurements, annotations,
     // the clip box, saved views and the camera all stay in the project frame
-    // and nothing rebases them. Only an empty set or a wholesale replace (no
-    // surviving member) re-anchors.
+    // and nothing rebases them. Only an empty set, a wholesale replace, or a
+    // CRS change of the aligned set (no surviving holder in its CRS) re-anchors.
     anchoredFrom = new Map([
-      ...(stillDescribed ? survivors : []),
+      ...(stillDescribed ? holders : []),
       ...aligned.map((l) => [l.id, originKey(l.sourceOrigin)] as const),
     ]);
     anchorOrigin = origin;
-    state.frame = createProjectFrame(origin, { crs: frameCrsLabel(aligned) ?? undefined });
+    state.frame = createProjectFrame(origin, { crs: frameKey ?? undefined });
 
     for (const layer of state.sources.values()) {
       // An unaligned layer is not reprojected, so it keeps its own frame: its

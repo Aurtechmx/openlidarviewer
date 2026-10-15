@@ -106,6 +106,19 @@ export interface ExportColorModeSnapshot {
   readonly streamingMode: ColorMode | null;
 }
 
+/**
+ * Whether the scene's coordinates may be printed as ground metres. Every
+ * visible layer must pass for the scene to pass.
+ */
+export interface ExportGroundFrame {
+  /** `groundMetresPermitted`: horizontal spans are ground lengths. */
+  readonly groundMetres: boolean;
+  /** `horizontalGroundRefusal` of the first refusing layer, or null. */
+  readonly groundRefusal: string | null;
+  /** `heightUnitsPermitted`: the up-axis span is a height in the frame's units. */
+  readonly heightUnits: boolean;
+}
+
 export interface ExportSceneAdapter {
   /** Force the runtime colour mode for the duration of a render call. */
   setExportColorMode(mode: ColorMode): void;
@@ -174,6 +187,25 @@ export interface ExportSceneAdapter {
    * card reported a horizontal extent as the elevation range the image spans.
    */
   worldUpAxis(): 0 | 1 | 2;
+  /**
+   * The up-axis component of the frame origin {@link localBoundsAabb} is
+   * measured from, so `aabb[up] + heightOrigin()` is a SOURCE height — the
+   * value the elevation colorbar labels. Optional: adapters without it report
+   * render-local heights.
+   */
+  heightOrigin?(): number | null;
+  /**
+   * The ground-metre verdict for the visible scene, from the SpatialContext
+   * gates the scan reports use. Null when nothing is loaded. Optional:
+   * adapters without it keep the CRS label's unit.
+   */
+  groundFrame?(): ExportGroundFrame | null;
+  /**
+   * The vertical unit label the elevation colorbar shows ('m' / 'ft'), or
+   * null when the vertical unit is unknown. Optional: adapters without it
+   * print up-axis rows in the horizontal unit.
+   */
+  verticalUnitLabel?(): string | null;
   /**
    * The TIGHT data AABB for report metadata (extent / density rows). Same as
    * {@link localBoundsAabb} for static clouds, but for streaming it is the true

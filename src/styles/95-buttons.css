@@ -150,36 +150,6 @@
   transform: var(--btn-press);
 }
 
-/*
- * Auto-classify (Edit classes panel) emphasis.
- *
- * The button carries `.olv-bc-pill` for its shape, and that base rule sits
- * later in this file at the same specificity, so any emphasis declared next to
- * the panel is reset back to the plain transparent pill. Users read the result
- * as a low-emphasis control and miss the action. Declaring it here, in the
- * block that already wins on source order, is what makes it visible.
- *
- * It borrows the export CTA's accent language one step down: the same
- * `--accent` tokens, but an outline over a soft tint instead of the solid fill,
- * so the panel keeps a single loudest action. Emphasis is carried by border
- * weight and font weight as well as hue, and the label stays `--text` rather
- * than `--accent`, which keeps the text contrast well clear of AA in Blue,
- * Field and High contrast (all three define `--accent` and `--accent-soft`).
- */
-.olv-reclass-auto {
-  color: var(--text);
-  background: var(--accent-soft);
-  border: 1px solid var(--accent);
-  font-weight: 600;
-}
-/* Hover needs the extra `:not(.is-disabled)` to outrank the equally late
-   `.olv-bc-pill:hover:not(.is-disabled):not(.is-active)`. */
-.olv-reclass-auto:not(:disabled):not(.is-disabled):hover {
-  color: var(--text);
-  background: color-mix(in srgb, var(--accent) 26%, transparent);
-  border-color: var(--accent);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .olv-export-btn,
   .olv-analyse-dl,

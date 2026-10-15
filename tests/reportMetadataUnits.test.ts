@@ -76,7 +76,7 @@ describe('buildDatasetSummary — fail closed on an unconfirmed unit', () => {
     const rows = buildDatasetSummary(UNCONFIRMED);
     const units = rows.filter((r) => r.label === 'Units');
     expect(units).toHaveLength(1); // the warning replaces the crsUnit row
-    expect(units[0]!.value).toMatch(/unconfirmed/i);
+    expect(units[0]!.value).toMatch(/not confirmed/i);
     expect(units[0]!.value).toMatch(/source units/i);
   });
 

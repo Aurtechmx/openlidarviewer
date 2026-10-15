@@ -444,6 +444,16 @@ export function formatLinear(value: number, unit: LinearUnit): string {
 }
 
 /**
+ * Format a signed ELEVATION in native CRS units — two decimals, sign kept.
+ * `formatLinear` is for lengths (it switches to cm below 1 m and so would
+ * print −7.86 m as "-786.0 cm"); a height on a datum is not a length.
+ */
+export function formatElevation(value: number, unit: LinearUnit): string {
+  const suffix = unit === 'foot' ? 'ft' : unit === 'unknown' ? 'units' : 'm';
+  return `${value.toFixed(2)} ${suffix}`;
+}
+
+/**
  * Format a YYYY-MM-DD HH:MM UTC timestamp, with the zone named. The footer
  * of every scan report. Pure function for testability.
  */

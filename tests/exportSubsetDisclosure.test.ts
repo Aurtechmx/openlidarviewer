@@ -12,7 +12,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import { PointCloud } from '../src/model/PointCloud';
-import { toXyz, toPly, toObj, toCsv } from '../src/io/exporters';
+import { toXyz, toPly, toObj, toCsv, pointExportFileName } from '../src/io/exporters';
+import { DISPLAY_SAMPLE_SUFFIX } from '../src/export/exportSummary';
 
 /** A cloud holding `held` points that declares `declared` came from the file. */
 function sampledCloud(held: number, declared?: number, loadStride?: number): PointCloud {
@@ -122,5 +123,73 @@ describe('a streaming resident snapshot discloses its scope', () => {
       declaredPointCount: 3,
     });
     expect(toXyz(c)).not.toMatch(/resident|streamed/i);
+  });
+});
+
+describe('a voxel-reduced display sample says its rows are centroids', () => {
+  /** The common large-LAZ load: stride 2, then voxel centroids to the budget. */
+  function voxelSample(stride?: number): PointCloud {
+    const held = 250;
+    return new PointCloud({
+      positions: new Float32Array(held * 3),
+      intensity: new Uint16Array(held),
+      origin: [0, 0, 0],
+      sourceFormat: 'laz',
+      name: 'tile',
+      declaredPointCount: 1000,
+      ...(stride === undefined ? {} : { loadStride: stride }),
+      pointReduction: 'voxel-centroids',
+    });
+  }
+
+  it.each([
+    ['XYZ', (c: PointCloud) => commentLines(toXyz(c), '#')],
+    ['PLY', (c: PointCloud) => commentLines(toPly(c), 'comment')],
+    ['OBJ', (c: PointCloud) => commentLines(toObj(c), '#')],
+  ])('%s names the stride, the voxel step and the averaged values', (_f, notes) => {
+    const subset = notes(voxelSample(2)).find((l) => l.startsWith('SUBSET'));
+    expect(subset).toBeDefined();
+    expect(subset).toMatch(/load stride 2/);
+    expect(subset).toMatch(/voxel/i);
+    expect(subset).toMatch(/centroid/i);
+    expect(subset).toMatch(/averag/i);
+    expect(subset).toMatch(/not source records/i);
+    // The stride alone no longer reads as the whole story.
+    expect(subset).not.toMatch(/one record kept per 2 -+ this file/);
+  });
+
+  it('names the voxel step when no stride ran', () => {
+    const subset = commentLines(toXyz(voxelSample()), '#').find((l) => l.startsWith('SUBSET'));
+    expect(subset).toMatch(/voxel/i);
+    expect(subset).not.toMatch(/stride/);
+  });
+
+  it('a strided sample without voxel reduction keeps the record wording', () => {
+    const subset = commentLines(toXyz(sampledCloud(250, 1000, 4)), '#').find((l) => l.startsWith('SUBSET'));
+    expect(subset).toMatch(/one record kept per 4/);
+    expect(subset).not.toMatch(/voxel|centroid/i);
+  });
+});
+
+describe('a sample point export says so in its filename', () => {
+  // CSV has no comment channel a parser tolerates, so the name carries the
+  // disclosure; every point format takes the same suffix the converter uses.
+  it.each(['csv', 'xyz', 'ply', 'obj'] as const)('%s: a subset is named -sample', (format) => {
+    expect(pointExportFileName('tile', sampledCloud(250, 1000, 4), format)).toBe(`tile${DISPLAY_SAMPLE_SUFFIX}.${format}`);
+  });
+
+  it('a streamed resident snapshot is a sample too', () => {
+    const c = new PointCloud({
+      positions: new Float32Array(9), origin: [0, 0, 0], sourceFormat: 'laz', name: 's',
+      declaredPointCount: 3, sourceDeclaredPointCount: 1000,
+    });
+    expect(pointExportFileName('s', c, 'csv')).toBe('s-sample.csv');
+  });
+
+  it.each([
+    ['holds every declared point', sampledCloud(1000, 1000)],
+    ['declares no count', sampledCloud(250)],
+  ])('a cloud that %s keeps the plain name', (_why, cloud) => {
+    expect(pointExportFileName('tile', cloud, 'csv')).toBe('tile.csv');
   });
 });

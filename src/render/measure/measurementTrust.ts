@@ -109,7 +109,7 @@ type VertexTier = 'strong' | 'weak' | 'void';
 
 /** The reason an endpoint on a voxel centroid gives, in place of "measured return". */
 export const VOXEL_CENTROID_REASON =
-  'An endpoint snapped to a voxel centroid of the display sample, not a return; the scan was reduced for display.';
+  'An endpoint snapped to a voxel centroid of the display sample, not a return. The scan was reduced for display.';
 
 function vertexTier(v: VertexSupport): VertexTier {
   if (v.pointsWithinRadius < SPARSE_FLOOR && !v.snappedToPoint) return 'void';
@@ -176,11 +176,11 @@ export function gradeMeasurement(input: MeasurementTrustInput): MeasurementTrust
   // permits (a height) is certified by a declared vertical unit alone.
   if (input.frameGeographic === true) {
     if (!geographicRefusal && !verticalRefusal && input.verticalUnitKnown !== true) {
-      reasons.push('Geographic CRS with no declared vertical unit — heights are in the source file’s units and can’t be certified as metres.');
+      reasons.push('Geographic CRS with no declared vertical unit. Heights are in the source file’s units, not verified metres.');
       if (grade === 'green') grade = 'yellow';
     }
   } else if (!input.crsKnown) {
-    reasons.push('No CRS on this cloud — lengths are in the source file’s units and can’t be certified as metres.');
+    reasons.push('No CRS on this cloud. Lengths are in the source file’s units, not verified metres.');
     if (grade === 'green') grade = 'yellow'; // can’t certify metric → cap at caution
   }
   if (geographicRefusal) {
@@ -202,7 +202,7 @@ export function gradeMeasurement(input: MeasurementTrustInput): MeasurementTrust
   if (verticalRefusal) caption = 'Unverified — this frame has no local vertical (geocentric or depth-down)';
   else if (geographicRefusal) caption = 'Unverified — degrees are not distances (geographic CRS)';
   else if (grade === 'green') caption = 'Supported — close to measured points';
-  else if (grade === 'yellow' && onCentroid) caption = 'Caution — snapped to the reduced display sample, not returns';
+  else if (grade === 'yellow' && onCentroid) caption = 'Caution: snapped to the reduced display sample, not returns';
   else if (grade === 'yellow') caption = 'Caution — loosely supported or unverified scale';
   else caption = 'Unverified — an endpoint has no points to measure';
 

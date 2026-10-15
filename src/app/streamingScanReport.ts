@@ -246,8 +246,8 @@ export function runStreamingModules(cloud: StreamingReportCloud, ctx: SpatialCon
       rows.push({
         label: 'Units',
         value: ext.refusalReason
-          ? `not ground metres — ${ext.refusalReason} Extents shown in source units.`
-          : 'unconfirmed — source CRS declares no linear unit; extents shown in source units',
+          ? `Not ground metres. ${ext.refusalReason} Extents are in source units.`
+          : 'Unit not confirmed: the source CRS declares no linear unit. Extents are in source units.',
         status: 'warn',
       });
     }

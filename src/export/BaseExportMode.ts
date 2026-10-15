@@ -36,13 +36,14 @@ import type { CommonExportOptions, ExportContext, ExportMode, ExportResult, Expo
 import {
   composeClassScopeBannerOntoBlob,
   composeScanReportOntoBlob,
+  formatElevation,
   formatInt,
   formatLinear,
   formatTimestamp,
   linearUnitLabel,
   linearUnitOf,
 } from './ScanReportRenderer';
-import type { ScanReportData, ScanReportRow } from './ScanReportRenderer';
+import type { LinearUnit, ScanReportData, ScanReportRow } from './ScanReportRenderer';
 import { stampFigureProvenanceOntoBlob } from './figureMetadata';
 import { presentationOfCapture } from './presentationMode';
 import { paletteLabelOfOptions } from './figureProvenance';
@@ -178,6 +179,80 @@ export function topDownOrthoCameraForAabb(
  */
 const STUDIO_VERSION = __APP_VERSION__;
 
+/** What to call each component in a card row, so "Min Y" says which it is. */
+const AXIS_NAME = ['X', 'Y', 'Z'] as const;
+
+export interface SourceHeightExtent {
+  /** Source heights; null when the visible layers share no vertical frame. */
+  readonly min: number | null;
+  readonly max: number | null;
+  readonly range: number;
+  /** Axis name of the up axis ("Z" for survey sources, "Y" for a Y-up mesh). */
+  readonly axis: 'X' | 'Y' | 'Z';
+  /** The unit up-axis values print in — the elevation colorbar's. */
+  readonly unit: LinearUnit;
+}
+
+/** The row value printed in place of Min/Max when no single vertical frame exists. */
+export const MIXED_VERTICAL_FRAME_NOTE = 'Omitted: visible layers are not in one vertical frame';
+
+/**
+ * The unit up-axis rows print in. A frame whose Z is not a height (geocentric,
+ * depth-down) prints source units; otherwise the colorbar's vertical unit, so
+ * a metre grid with US-survey-foot heights reads "ft" on both. Adapters that
+ * carry no vertical unit keep the horizontal one.
+ */
+export function verticalUnitOf(adapter: ExportSceneAdapter): LinearUnit {
+  if (adapter.groundFrame?.()?.heightUnits === false) return 'unknown';
+  if (adapter.verticalUnitLabel) return linearUnitOf(adapter.verticalUnitLabel());
+  return linearUnitOf(adapter.crsLabel()?.unit);
+}
+
+/**
+ * The scan's height extent in SOURCE units, for card rows.
+ *
+ * `adapter.localBoundsAabb()` is measured in the render frame, which the
+ * loaders shift by a per-cloud origin so Float32 positions stay precise. Card
+ * rows that print elevations must add that origin back on the up axis, the
+ * same reconstruction the elevation colorbar performs for its labels, or a
+ * tile at −7.86…39.72 m loaded with a −8 m origin reads "14.0 cm … 47.7 m".
+ * Shared by the height, depth and contour cards and the Height base row.
+ */
+export function sourceHeightExtent(adapter: ExportSceneAdapter): SourceHeightExtent | null {
+  // The TIGHT data box (streaming's octree cube over-reports height), the
+  // same box the Height row reads, so Min/Max and Height agree.
+  const aabb = adapter.dataBoundsAabb?.() ?? adapter.localBoundsAabb();
+  if (!aabb) return null;
+  const axis = adapter.worldUpAxis();
+  const origin = adapter.heightOrigin ? adapter.heightOrigin() : 0;
+  return {
+    min: origin === null ? null : aabb[axis] + origin,
+    max: origin === null ? null : aabb[axis + 3] + origin,
+    range: aabb[axis + 3] - aabb[axis],
+    axis: AXIS_NAME[axis],
+    unit: verticalUnitOf(adapter),
+  };
+}
+
+/**
+ * The two labelled up-axis rows (Min/Max, Near/Far), or one row saying why
+ * they are omitted when the visible layers share no vertical frame.
+ */
+export function heightExtentRows(h: SourceHeightExtent, low: string, high: string): ScanReportRow[] {
+  if (h.min === null || h.max === null) return [{ label: `${h.axis} range`, value: MIXED_VERTICAL_FRAME_NOTE }];
+  return [
+    { label: low, value: formatElevation(h.min, h.unit) },
+    { label: high, value: formatElevation(h.max, h.unit) },
+  ];
+}
+
+/** Whether the loaded points are a subset of the source (stride, voxel, or streamed LOD). */
+function isDisplaySample(adapter: ExportSceneAdapter): boolean {
+  const source = adapter.sourcePointCount();
+  const resident = adapter.residentPointCount?.();
+  return source !== null && typeof resident === 'number' && resident < source;
+}
+
 /**
  * The standard set of scan-report rows every Studio export carries. Mode
  * exporters extend this with their own mode-specific rows (ramp choice,
@@ -189,34 +264,50 @@ export function baseReportRows(
 ): ScanReportRow[] {
   // Coordinates are stored in the scan's native CRS units, so footprint
   // dimensions and density must carry the real unit (ft for foot CRSs), not a
-  // hardcoded metre. Unknown/absent unit ⇒ metre default.
-  const unit = linearUnitOf(adapter.crsLabel()?.unit);
+  // hardcoded metre. Unknown/absent unit ⇒ "units". A Web Mercator grid or a
+  // geocentric frame names metres that are not ground metres: its spans stay
+  // in source units and no density is printed (the scan reports' gate).
+  const frame = adapter.groundFrame?.() ?? null;
+  const groundRefusal = frame && !frame.groundMetres ? frame.groundRefusal : null;
+  const unit: LinearUnit = groundRefusal ? 'unknown' : linearUnitOf(adapter.crsLabel()?.unit);
   const uLabel = linearUnitLabel(unit);
+  const source = adapter.sourcePointCount();
   const rows: ScanReportRow[] = [
-    {
-      label: 'Points',
-      value: adapter.sourcePointCount() === null
-        ? 'Unknown'
-        : formatInt(adapter.sourcePointCount() as number),
-    },
+    { label: 'Points', value: source === null ? 'Unknown' : formatInt(source) },
   ];
+  // The image is drawn from the LOADED points. When that is a subset of the
+  // file, "Points" alone reads as if every record was rendered.
+  const sampled = isDisplaySample(adapter);
+  if (sampled && source !== null) {
+    rows.push({
+      label: 'Rendered from',
+      value: `${formatInt(adapter.residentPointCount())} of ${formatInt(source)} points (display sample)`,
+    });
+  }
   // Extent/density use the TIGHT data AABB (streaming's octree cube inflates
   // height ~7× and deflates density); falls back to the passed AABB.
   const box = adapter.dataBoundsAabb() ?? aabb;
   if (box) {
-    const w = box[3] - box[0];
-    const d = box[4] - box[1];
-    const h = box[5] - box[2];
+    // Height is read on the up axis and printed as the difference of the two
+    // elevations a height card prints (each rounded as printed), so Height,
+    // Min and Max on one card always add up. Width/Depth are the other two axes.
+    const up = adapter.worldUpAxis?.() ?? 2;
+    const [ax, ay] = ([0, 1, 2] as const).filter((i) => i !== up);
+    const w = box[ax + 3] - box[ax];
+    const d = box[ay + 3] - box[ay];
+    const origin = adapter.heightOrigin ? adapter.heightOrigin() : 0;
+    const printed = (v: number) => Number((v + (origin ?? 0)).toFixed(2));
+    const h = origin === null ? box[up + 3] - box[up] : printed(box[up + 3]) - printed(box[up]);
     rows.push(
       { label: 'Width',  value: formatLinear(w, unit) },
       { label: 'Depth',  value: formatLinear(d, unit) },
-      { label: 'Height', value: formatLinear(h, unit) },
+      { label: 'Height', value: formatElevation(h, verticalUnitOf(adapter)) },
     );
     // Density — points per square unit on the XY footprint.
     const total = adapter.sourcePointCount();
     // No total, no density. A stamped "0.0 pts/m²" reads as a measurement of an
     // empty scan rather than as an unanswered question.
-    if (w > 0 && d > 0 && total !== null) {
+    if (w > 0 && d > 0 && total !== null && !groundRefusal) {
       const density = total / (w * d);
       // One decimal, matching the Scan Report panel (`toFixed(0)` rounded
       // 2.586 pts/m² up to "3", disagreeing with the panel's "2.6").
@@ -242,19 +333,19 @@ export function baseReportRows(
     classificationValue = 'Yes';
   } else {
     const classified = assigned > 0 ? 'classified' : 'unclassified';
-    classificationValue = `Present, ${classified} (${(assigned * 100).toFixed(1)} % coverage)`;
+    // The fraction is counted over the loaded points, so on a display sample
+    // it is the sample's coverage, not the file's.
+    const basis = sampled ? ' of the display sample' : '';
+    classificationValue = `Present, ${classified} (${(assigned * 100).toFixed(1)} % coverage${basis})`;
   }
   rows.push({ label: 'Classification', value: classificationValue });
   // CRS provenance, when the source file declares one. This
   // is the row that makes the export research-grade: an analyst reading the
   // PNG later knows the datum and the linear unit the dimensions are in.
   const crs = adapter.crsLabel();
-  if (crs) {
-    rows.push(
-      { label: 'CRS',   value: crs.name },
-      { label: 'Units', value: crs.unit },
-    );
-  }
+  if (crs) rows.push({ label: 'CRS', value: crs.name });
+  if (groundRefusal) rows.push({ label: 'Units', value: `Not ground metres. ${groundRefusal}` });
+  else if (crs) rows.push({ label: 'Units', value: crs.unit });
   // Capture-type row — auto-computed from the provenance classifier so
   // every exported image carries the same Research-Derived capture
   // fingerprint the Inspector and PDF reports surface. Optional adapter

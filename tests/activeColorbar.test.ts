@@ -233,15 +233,54 @@ function makeScalarCloud(): PointCloud {
 }
 
 describe('rampRangeForMode — single source with colorForMode', () => {
-  it('intensity: raw finite min/max, and the colours prove it', () => {
+  it('intensity: the p2–p98 window, and the colours prove it', () => {
     const cloud = makeScalarCloud();
     const r = rampRangeForMode('intensity', cloud);
-    expect(r).toEqual({ min: 7, max: 900 });
+    // Four samples: p2 and p98 land on the first and last, so the window is
+    // the full span here; the saturated-tail case is pinned below.
+    expect(r).toEqual({ min: 7, max: 900, sampleCount: 4 });
     // colorForMode must paint against exactly this window: recomputing the
     // colours with the reported range is byte-identical.
     expect(colorForMode('intensity', cloud)).toEqual(
       colorByIntensity(cloud.intensity!, cloud.pointCount, r!.min, r!.max),
     );
+  });
+
+  it('intensity: a saturated tail does not stretch the default window', () => {
+    // 1 000 returns spread over 20 000–30 000 plus 15 saturated at 65 535: the
+    // raw max would compress every real return into the darker third of the ramp.
+    const n = 1015;
+    const intensity = new Uint16Array(n);
+    for (let i = 0; i < 1000; i++) intensity[i] = 20_000 + i * 10;
+    for (let i = 1000; i < n; i++) intensity[i] = 65_535;
+    const cloud = new PointCloud({
+      positions: new Float32Array(n * 3),
+      intensity,
+      origin: [0, 0, 0],
+      sourceFormat: 'las',
+      name: 'saturated.las',
+    });
+    const r = rampRangeForMode('intensity', cloud)!;
+    expect(r.max).toBeLessThan(30_000);
+    expect(r.min).toBeGreaterThan(20_000);
+    expect(r.sampleCount).toBe(n);
+    const colours = colorForMode('intensity', cloud);
+    expect(colours).toEqual(colorByIntensity(intensity, n, r.min, r.max));
+    // Values past the window clamp to the ends of the ramp instead of wrapping.
+    expect(colours[(n - 1) * 3]).toBe(255);
+    expect(colours[0]).toBe(0);
+  });
+
+  it('intensity: flagged-invalid values stay out of the window', () => {
+    const cloud = new PointCloud({
+      positions: new Float32Array(9),
+      intensity: new Uint16Array([10, 20, 60_000]),
+      attributeInvalid: new Uint8Array([0, 0, 2]),
+      origin: [0, 0, 0],
+      sourceFormat: 'e57',
+      name: 'masked.e57',
+    });
+    expect(rampRangeForMode('intensity', cloud)).toMatchObject({ min: 10, max: 20 });
   });
 
   it('returnNumber: raw finite min/max (deliberately unclipped ordinals)', () => {
@@ -299,7 +338,19 @@ describe('buildActiveColorbarSpec — stated sample bases', () => {
     expect(bar!.note).toBe('p5–p95 window');
   });
 
-  it('intensity says its raw window is the loaded sample range', () => {
+  it('intensity names the percentile sample its window came from', () => {
+    const bar = buildActiveColorbarSpec(
+      src({ mode: 'intensity', trimPercent: 2, sampleCount: 50_000 }),
+    );
+    expect(bar!.note).toBe('p2–p98 of a 50,000-point sample of the loaded cloud');
+  });
+
+  it('intensity without a sample count keeps the window and the loaded-sample basis', () => {
+    const bar = buildActiveColorbarSpec(src({ mode: 'intensity', trimPercent: 2 }));
+    expect(bar!.note).toBe('p2–p98 window, loaded sample range');
+  });
+
+  it('an untrimmed intensity window says it is the loaded sample range', () => {
     const bar = buildActiveColorbarSpec(src({ mode: 'intensity' }));
     expect(bar!.note).toBe('loaded sample range');
   });

@@ -278,7 +278,7 @@ export function convertCloud(
     }
     // A geocentric CRS needs a 3-D transform the reprojector does not perform.
     if (isGeocentricEpsg(sourceEpsg) || isGeocentricEpsg(opts.targetEpsg)) {
-      return fail(`Reproject refused: ${GEOCENTRIC_REPROJECT_REFUSAL}`);
+      return fail(GEOCENTRIC_REPROJECT_REFUSAL);
     }
     const r = reprojectGlobal(g, sourceEpsg, opts.targetEpsg, { sourceCrs });
     g = r.points;

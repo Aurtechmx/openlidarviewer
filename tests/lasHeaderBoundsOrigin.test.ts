@@ -150,6 +150,45 @@ describe('LAS origin when the header bounds do not enclose the data', () => {
     // No record to look at: the header origin, as before.
     expect(lasOriginFor(near, null)).toEqual({ origin: [10, 10, 10], boundsTrusted: true });
   });
+
+  it('takes the origin from the points when the min was left at zero but the max is right', () => {
+    // Record 0 lies inside [0, max], so enclosure alone accepts this header —
+    // but origin 0 at a 4.5e6 m northing leaves a Float32 step of 0.5 m.
+    const header = {
+      min: [0, 0, 0] as [number, number, number],
+      max: [500900, 4500900, 300] as [number, number, number],
+      scale: [0.01, 0.01, 0.01] as [number, number, number],
+    };
+    expect(lasOriginFor(header, [500100.25, 4500100.5, 120.3])).toEqual({
+      origin: [500100, 4500100, 120],
+      boundsTrusted: false,
+      warning: HEADER_BOUNDS_UNTRUSTED_WARNING,
+    });
+  });
+
+  it('keeps the header origin for honest bounds wherever record 0 sits inside them', () => {
+    // A file sorted by GPS time can start mid-box; a box that fits the Float32
+    // budget from its min keeps that min as the origin.
+    const header = {
+      min: [500000, 4500000, 50] as [number, number, number],
+      max: [502000, 4502000, 300] as [number, number, number],
+      scale: [0.001, 0.001, 0.001] as [number, number, number],
+    };
+    for (const r0 of [[500000.2, 4500000.3, 50.1], [501000.5, 4501000.5, 170], [502000, 4502000, 300]]) {
+      expect(lasOriginFor(header, r0)).toEqual({ origin: [500000, 4500000, 50], boundsTrusted: true });
+    }
+  });
+
+  it('keeps an honest box wider than the Float32 budget, with no warning', () => {
+    // A 40 km corridor whose first record sits 30 km above the min: the header
+    // is honest, so the origin stays on its min and nothing is flagged.
+    const header = {
+      min: [500000, 4500000, 50] as [number, number, number],
+      max: [540000, 4501000, 300] as [number, number, number],
+      scale: [0.01, 0.01, 0.01] as [number, number, number],
+    };
+    expect(lasOriginFor(header, [530000.5, 4500500.5, 120])).toEqual({ origin: [500000, 4500000, 50], boundsTrusted: true });
+  });
 });
 
 describe('LAZ origin when the header bounds do not enclose the data', () => {

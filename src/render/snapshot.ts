@@ -243,6 +243,50 @@ export function renderedBlob(gl: HTMLCanvasElement, renderFrame: () => void, bac
   return canvasToBlob(renderedCopy(gl, renderFrame, gl.width, gl.height, background));
 }
 
+/** The renderer calls {@link pinDrawingBuffer} needs (three's renderer fits). */
+export interface SizedRenderer {
+  getPixelRatio(): number;
+  setPixelRatio(value: number): void;
+  setSize(width: number, height: number, updateStyle?: boolean): void;
+}
+
+/**
+ * Put the drawing buffer back at exactly `width x height` device pixels at
+ * pixel ratio 1. Anything that ran since the capture sized the renderer (the
+ * live loop's adaptive pixel ratio, a resize handler) may have changed either;
+ * a buffer that already matches is left alone.
+ */
+export function pinDrawingBuffer(
+  renderer: SizedRenderer,
+  gl: { readonly width: number; readonly height: number },
+  width: number,
+  height: number,
+): void {
+  if (renderer.getPixelRatio() !== 1) renderer.setPixelRatio(1);
+  if (gl.width !== width || gl.height !== height) renderer.setSize(width, height, false);
+}
+
+/**
+ * Render a frame at exactly `width x height` pixels and encode it to a PNG. The
+ * buffer is re-pinned in the same task as the render and the copy, so the
+ * delivered image has the planned size whatever changed the renderer while the
+ * caller awaited its present cycles. Returns the delivered size with the blob.
+ */
+export async function renderedBlobAtSize(
+  gl: HTMLCanvasElement,
+  renderer: SizedRenderer,
+  width: number,
+  height: number,
+  renderFrame: () => void,
+  background?: unknown,
+): Promise<{ blob: Blob; widthPx: number; heightPx: number }> {
+  const copy = renderedCopy(gl, () => {
+    pinDrawingBuffer(renderer, gl, width, height);
+    renderFrame();
+  }, width, height, background);
+  return { blob: await canvasToBlob(copy), widthPx: copy.width, heightPx: copy.height };
+}
+
 /**
  * Render one frame and capture it as a PNG `Blob`. See the module doc for the
  * fast-path / compositor split.

@@ -7,13 +7,15 @@
  * first record uncompressed at the chunk's start, so a short prefix of chunk 0
  * holds record 0; it is decoded through laz-perf's chunk decoder all the same.
  * A pointwise LAZ (compressor 1) or a file without a laszip VLR yields null,
- * which keeps the header origin.
+ * which keeps the header origin, as does a file whose point data starts past
+ * the heavy path's head cap: the VLR region it would have to read is refused
+ * there too, so it is not read here either.
  */
 import type { RangeSource } from '../range/RangeSource';
 import type { LasHeader } from '../lasHeader';
 import { getLazPerf } from '../lazDecode';
 import { recordWorld, type Vec3 } from '../lasDataOrigin';
-import { findLaszipVlr } from './lazChunkTable';
+import { findLaszipVlr, MAX_HEAD_BYTES } from './lazChunkTable';
 
 /** Bytes read past record 0's length, for the chunk's leading fields. */
 const PREFIX_SLACK_BYTES = 256;
@@ -36,15 +38,15 @@ export async function lazRecord0(
 ): Promise<Vec3 | null> {
   if (!(header.pointCount > 0)) return null;
   try {
+    const start = header.offsetToPointData + CHUNK_TABLE_OFFSET_BYTES;
+    const headCovers = head !== undefined && head.byteLength >= header.offsetToPointData;
+    if (!headCovers && start > MAX_HEAD_BYTES) return null;
     const vlrHead =
-      head && head.byteLength >= header.offsetToPointData
-        ? head
-        : await range.readRange(0, header.offsetToPointData, signal);
+      headCovers && head ? head : await range.readRange(0, header.offsetToPointData, signal);
     const vlr = findLaszipVlr(vlrHead);
     if (!vlr || (vlr.compressor !== 2 && vlr.compressor !== 3)) return null;
 
     const recordLength = header.pointDataRecordLength;
-    const start = header.offsetToPointData + CHUNK_TABLE_OFFSET_BYTES;
     const size = await range.size();
     const length = Math.min(recordLength + PREFIX_SLACK_BYTES, size - start);
     if (length < recordLength) return null;

@@ -88,7 +88,7 @@ export function reprojectGlobal(
     return {
       points: g,
       transformed: false,
-      note: `${which} is geocentric (ECEF); ${GEOCENTRIC_REPROJECT_REFUSAL} Coordinates left unchanged`,
+      note: `${GEOCENTRIC_REPROJECT_REFUSAL} The ${which} is geocentric. Coordinates left unchanged.`,
       datumCaveat: null,
       provenance,
     };

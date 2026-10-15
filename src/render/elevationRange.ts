@@ -42,6 +42,8 @@ export interface ScalarRange {
   readonly trueMax: number;
   /** Sample count actually examined. */
   readonly sampleCount: number;
+  /** True when the percentile band collapsed and min/max are the true extremes. */
+  readonly collapsed?: boolean;
 }
 
 /** Options for `computeScalarRange`. */
@@ -232,7 +234,8 @@ function percentileRangeCore(
   // to the same value. In that case fall back to the true range so the
   // caller still receives a non-zero span (`colorByScalar` then gives
   // every point the bottom colour, which is correct).
-  if (min === max) {
+  const collapsed = min === max;
+  if (collapsed) {
     min = trueMin;
     max = trueMax;
   }
@@ -243,5 +246,6 @@ function percentileRangeCore(
     trueMin,
     trueMax,
     sampleCount: used,
+    ...(collapsed && trueMax > trueMin ? { collapsed: true } : {}),
   };
 }

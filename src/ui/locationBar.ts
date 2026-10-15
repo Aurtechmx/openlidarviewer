@@ -179,7 +179,20 @@ export function createLocationBar(d: LocationBarDeps): LocationBar {
     const b = backTarget(route, registry, ws);
     bar.back.hidden = !b;
     if (b) {
-      bar.back.textContent = b.label;
+      bar.back.dataset.kind = b.kind;
+      if (b.kind === 'route') {
+        // "← Data": the arrow and the destination are separate spans, so a wide
+        // header can show the arrow alone where the next crumb already names
+        // the destination (wayfinding.css). The text stays "← Data".
+        const dest = b.label.replace(/^←\s*/, '');
+        bar.back.replaceChildren(
+          el('span', { className: 'olv-loc-back-arrow', text: '←' }),
+          ' ',
+          el('span', { className: 'olv-loc-back-name', text: dest }),
+        );
+      } else {
+        bar.back.textContent = b.label;
+      }
       bar.back.setAttribute('aria-label', b.name);
     }
     const items: HTMLElement[] = [];

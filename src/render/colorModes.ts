@@ -312,29 +312,37 @@ function sampleRamp(
  * Categorical colour palette keyed by ASPRS class code.
  * Unmapped codes fall back to a deterministic hue derived from the code.
  * Values are [r, g, b] in 0-255.
+ *
+ * Tuned for the dark scene canvas: every swatch reaches WCAG 3:1 contrast
+ * against the default background, and the classes an aerial tile usually
+ * carries together (1, 2, 3, 4, 5, 6, 7, 9, 18, 20) sit at least CIEDE2000 20
+ * apart, so ground, ignored ground and unclassified no longer blur into one
+ * murky brown-grey. ASPRS conventions are kept: earth-tone ground, vegetation
+ * greens light to dark, red buildings, blue water, alarm hues for noise,
+ * purples for wires. Pinned by tests/classPaletteContrast.test.ts.
  */
 const CLASS_PALETTE: Readonly<Record<number, readonly [number, number, number]>> = {
   0:  [200, 200, 200],   // Created / never classified  — light grey
-  1:  [150, 150, 150],   // Unclassified               — mid grey
-  2:  [139,  90,  43],   // Ground                     — brown
-  3:  [  0, 160,  80],   // Low vegetation             — light green
-  4:  [  0, 120,  50],   // Medium vegetation          — mid green
-  5:  [  0,  80,  20],   // High vegetation            — dark green
-  6:  [220,  80,  80],   // Building                   — salmon red
-  7:  [255, 140,   0],   // Low point / noise          — orange
+  1:  [160, 160, 168],   // Unclassified               — cool mid grey
+  2:  [185, 125,  50],   // Ground                     — ochre earth
+  3:  [135, 240, 130],   // Low vegetation             — light green
+  4:  [ 65, 140,  70],   // Medium vegetation          — mid green
+  5:  [  0, 112, 122],   // High vegetation            — deep teal green
+  6:  [225,  50,  65],   // Building                   — red
+  7:  [250, 220,   0],   // Low point / noise          — alarm yellow
   8:  [200, 200,   0],   // Reserved                   — yellow
-  9:  [ 30, 100, 220],   // Water                      — blue
+  9:  [ 45, 175, 250],   // Water                      — blue
   10: [180, 220, 240],   // Rail                       — light blue
   11: [240, 240, 240],   // Road surface               — near-white
   12: [200, 180, 120],   // Overlap                    — tan
-  13: [120,  50, 200],   // Wire guard / shield        — purple
-  14: [ 80,  20, 160],   // Wire conductor / phase     — violet
+  13: [160, 100, 235],   // Wire guard / shield        — purple
+  14: [120,  85, 220],   // Wire conductor / phase     — violet
   15: [ 50, 200, 230],   // Transmission tower         — cyan
   16: [230, 180, 255],   // Wire connector             — light violet
   17: [255, 255,   0],   // Bridge deck                — bright yellow
-  18: [255,   0, 255],   // High noise                 — magenta
+  18: [215,  40, 200],   // High noise                 — magenta
   19: [120, 130, 150],   // Overhead structure         — slate
-  20: [110,  80,  50],   // Ignored ground             — dim brown (muted ground)
+  20: [245, 215, 185],   // Ignored ground             — pale sand (washed-out ground)
   21: [235, 245, 255],   // Snow                       — near-white blue tint
   22: [150, 120, 170],   // Temporal exclusion         — muted purple
 };
@@ -347,15 +355,18 @@ const CLASS_PALETTE: Readonly<Record<number, readonly [number, number, number]>>
  * red/green confusion. Here ground reads ORANGE, the three vegetation classes
  * are LIGHTNESS steps of bluish-green (separable even for monochromats),
  * buildings read VERMILLION, and water reads BLUE — separations that survive
- * every common CVD type. Greys for the unclassified codes are kept.
+ * every common CVD type. Greys for the unclassified codes are kept. High noise
+ * reads Okabe-Ito yellow and ignored ground a pale sand, so neither sits next
+ * to the vermillion / orange it used to shadow; held to the same contrast and
+ * separation checks as the default palette.
  */
 const CLASS_PALETTE_CVD: Readonly<Record<number, readonly [number, number, number]>> = {
   0:  [200, 200, 200],   // Created / never classified
   1:  [150, 150, 150],   // Unclassified
   2:  [230, 159,   0],   // Ground            — Okabe-Ito orange
-  3:  [120, 200, 170],   // Low vegetation    — bluish-green, light
-  4:  [  0, 158, 115],   // Medium vegetation — bluish-green
-  5:  [  0,  95,  70],   // High vegetation   — bluish-green, dark
+  3:  [170, 235, 215],   // Low vegetation    — bluish-green, light
+  4:  [  0, 165, 120],   // Medium vegetation — bluish-green
+  5:  [  0, 110,  95],   // High vegetation   — bluish-green, dark
   6:  [213,  94,   0],   // Building          — Okabe-Ito vermillion
   7:  [204, 121, 167],   // Low point / noise — reddish purple
   8:  [240, 228,  66],   // Reserved          — Okabe-Ito yellow
@@ -364,13 +375,13 @@ const CLASS_PALETTE_CVD: Readonly<Record<number, readonly [number, number, numbe
   11: [225, 225, 225],   // Road surface      — near-white
   12: [190, 160,  90],   // Overlap           — muted tan
   13: [150,  80, 120],   // Wire guard        — dark reddish purple
-  14: [110,  60, 140],   // Wire conductor    — violet
+  14: [140,  90, 180],   // Wire conductor    — violet
   15: [ 40, 120, 170],   // Transmission tower— dark sky blue
   16: [220, 160, 200],   // Wire connector    — light reddish purple
   17: [240, 228,  66],   // Bridge deck       — yellow
-  18: [240, 140,  90],   // High noise        — light vermillion
+  18: [240, 228,  66],   // High noise        — Okabe-Ito yellow
   19: [100, 110, 130],   // Overhead structure— dark slate
-  20: [140, 100,  60],   // Ignored ground    — dim brown
+  20: [245, 215, 185],   // Ignored ground    — pale sand
   21: [220, 235, 250],   // Snow              — pale blue-white
   22: [170, 140, 190],   // Temporal exclusion— light purple
 };
@@ -529,7 +540,9 @@ export function colorByIntensity(
   const out = new Uint8Array(count * 3);
   const range = maxI - minI;
   for (let i = 0; i < count; i++) {
-    const grey = range === 0 ? 0 : Math.round(((intensity[i] - minI) / range) * 255);
+    // Clamped: the default window is percentile-clipped, so values past
+    // either end must pin to black / white rather than wrap in the Uint8Array.
+    const grey = range === 0 ? 0 : Math.round(clamp01((intensity[i] - minI) / range) * 255);
     out[i * 3] = grey;
     out[i * 3 + 1] = grey;
     out[i * 3 + 2] = grey;
@@ -748,6 +761,50 @@ export function finiteMinMax(
 }
 
 /**
+ * Symmetric percentile trim of the DEFAULT intensity window (2 → p2–p98).
+ * A raw min/max lets a handful of saturated returns (16-bit intensity pinned at
+ * 65 535) own the top of the ramp and wash every real return out to mid grey.
+ */
+export const INTENSITY_PERCENTILE_TRIM = 2;
+
+/**
+ * The default intensity window: p2–p98 over the shared percentile core
+ * (the one gpsTime and elevation use), with flagged-invalid values left out.
+ * Falls back to the true finite extremes when the clipped band collapses
+ * (almost every value identical) but the data still spans a range, and says
+ * so with `fullRange`.
+ */
+export function intensityWindow(
+  intensity: ArrayLike<number>,
+  count: number,
+  invalid?: ArrayLike<number>,
+): { min: number; max: number; sampleCount: number; fullRange?: true } {
+  let values: ArrayLike<number> = intensity;
+  if (invalid) {
+    let masked: Float32Array | null = null;
+    for (let i = 0; i < count; i++) {
+      if ((invalid[i] & ATTR_INTENSITY_INVALID) === 0) continue;
+      if (!masked) {
+        masked = new Float32Array(count);
+        for (let j = 0; j < count; j++) masked[j] = intensity[j];
+      }
+      masked[i] = Number.NaN; // the core skips non-finite values
+    }
+    if (masked) values = masked;
+  }
+  const r = computeScalarRange(values, {
+    count,
+    lowerPercentile: INTENSITY_PERCENTILE_TRIM,
+    upperPercentile: 100 - INTENSITY_PERCENTILE_TRIM,
+  });
+  // `fullRange` marks the fallback so a legend does not label it p2–p98.
+  if (r.collapsed === true || (r.max <= r.min && r.trueMax > r.trueMin)) {
+    return { min: r.trueMin, max: r.trueMax, sampleCount: r.sampleCount, fullRange: true };
+  }
+  return { min: r.min, max: r.max, sampleCount: r.sampleCount };
+}
+
+/**
  * The ramp window a continuous scalar mode paints across — the SAME range
  * `colorForMode` feeds its colouring pass, extracted so a legend (the live
  * colorbar overlay, the snapshot burn-in) can label the exact window the
@@ -765,13 +822,13 @@ export function rampRangeForMode(
   mode: ColorMode,
   cloud: PointCloud,
   opts?: ColorForModeOptions,
-): { min: number; max: number; sampleCount?: number } | null {
+): { min: number; max: number; sampleCount?: number; fullRange?: boolean } | null {
   const n = cloud.pointCount;
   switch (mode) {
     case 'intensity': {
-      // Raw finite min/max — matches the intensity case in colorForMode.
+      // Percentile-clipped (p2–p98) — see intensityWindow.
       if (!cloud.intensity) return null;
-      return finiteMinMax(cloud.intensity, n, cloud.attributeInvalid, ATTR_INTENSITY_INVALID);
+      return intensityWindow(cloud.intensity, n, cloud.attributeInvalid);
     }
     case 'gpsTime': {
       // Percentile-clipped (default p5–p95) — see the gpsTime case below.
@@ -867,7 +924,7 @@ export function colorForMode(
       if (!cloud.intensity) {
         throw new Error(`colorForMode('intensity'): cloud "${cloud.name}" has no intensity attribute`);
       }
-      // Range through the shared legend seam (raw finite min/max) so the
+      // Range through the shared legend seam (the p2–p98 window) so the
       // colorbar labels exactly the window these greys normalise against.
       const { min, max } = mustRampRange(rampRangeForMode('intensity', cloud, opts), 'intensity');
       return maskInvalid(colorByIntensity(cloud.intensity, n, min, max), cloud.attributeInvalid, ATTR_INTENSITY_INVALID);

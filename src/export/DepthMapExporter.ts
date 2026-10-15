@@ -33,8 +33,7 @@ import type {
   ExportFactory,
   ExportResult,
 } from './types';
-import { runStudioExport } from './BaseExportMode';
-import { formatLinear, linearUnitOf } from './ScanReportRenderer';
+import { heightExtentRows, runStudioExport, sourceHeightExtent } from './BaseExportMode';
 
 export const depthMapExporter: ExportFactory = {
   mode: 'depth',
@@ -43,15 +42,14 @@ export const depthMapExporter: ExportFactory = {
   isAvailable(context: ExportContext): boolean {
     // Same gate as Height Map — needs a non-degenerate Z extent so
     // there's depth variation to encode.
-    const aabb = context.adapter.localBoundsAabb();
-    if (!aabb) return false;
-    return (aabb[5] - aabb[2]) > 1e-4;
+    const h = sourceHeightExtent(context.adapter);
+    return h !== null && h.range > 1e-4;
   },
 
   unavailableReason(context: ExportContext): string {
-    const aabb = context.adapter.localBoundsAabb();
-    if (!aabb) return 'No cloud is loaded.';
-    if ((aabb[5] - aabb[2]) <= 1e-4) {
+    const h = sourceHeightExtent(context.adapter);
+    if (!h) return 'No cloud is loaded.';
+    if (h.range <= 1e-4) {
       return 'Cloud has no measurable depth range.';
     }
     return 'Depth map is unavailable on this cloud.';
@@ -61,13 +59,13 @@ export const depthMapExporter: ExportFactory = {
     context: ExportContext,
     options: DepthMapOptions,
   ): Promise<ExportResult> {
-    const aabb = context.adapter.localBoundsAabb();
-    if (!aabb) {
+    // Source heights on the up axis — the same values the elevation colorbar
+    // labels, not the render-local bounds.
+    const h = sourceHeightExtent(context.adapter);
+    if (!h) {
       throw new Error('Depth Map: no cloud loaded — cannot describe the export.');
     }
     const invert = options.invert === true;
-    // Native CRS units — Near/Far Z must carry the real unit (ft for foot CRSs).
-    const unit = linearUnitOf(context.adapter.crsLabel()?.unit);
     return runStudioExport(
       context,
       'depth',
@@ -79,14 +77,13 @@ export const depthMapExporter: ExportFactory = {
       options,
       [
         { label: 'Encoding', value: invert ? 'far → white' : 'near → white' },
-        { label: 'Near Z',   value: formatLinear(aabb[2], unit) },
-        { label: 'Far Z',    value: formatLinear(aabb[5], unit) },
+        // Near/Far in the colorbar's vertical unit.
+        ...heightExtentRows(h, `Near ${h.axis}`, `Far ${h.axis}`),
         { label: 'Mode',     value: 'elevation proxy' },
       ],
       {
         invert: invert ? 'on' : 'off',
-        nearZ: aabb[2],
-        farZ: aabb[5],
+        ...(h.min === null || h.max === null ? {} : { nearZ: h.min, farZ: h.max }),
         depthMode: 'elevation-proxy',
       },
     );

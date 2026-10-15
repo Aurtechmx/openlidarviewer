@@ -585,6 +585,7 @@ export class Viewer {
   //    camera moves, driven by the P3 angular-velocity signal. Flag-gated. ──
   /** `?adaptiveDpr` dev flag (default on). Read once. */
   private readonly _adaptiveDpr: boolean = readDevFlags().adaptiveDpr;
+  private _captureHoldsBuffer = false; // `_renderAtSize` owns buffer size + ratio: adaptive DPR stands off
   /** Reused quaternion buffers for the angular-velocity read — no per-frame alloc. */
   private readonly _curCamQuat: [number, number, number, number] = [0, 0, 0, 0];
   private readonly _prevCamQuat: [number, number, number, number] = [0, 0, 0, 0];
@@ -4470,7 +4471,7 @@ export class Viewer {
         }
         return out;
       },
-      streaming: () => this._streaming, worldUpAxis: () => (this._worldUp.y === 1 ? 1 : 2),
+      streaming: () => this._streaming, worldUpAxis: () => (this._worldUp.y === 1 ? 1 : 2), elevationUnitLabel: () => this._elevationUnitLabel,
       setColorMode: (id, mode) => this.setColorMode(id, mode),
       setStreamingColorMode: (mode) => this.setStreamingColorMode(mode),
       setVisible: (id, visible) => this.setCloudVisible(id, visible),
@@ -4542,16 +4543,12 @@ export class Viewer {
     // Output size: requested width (default 2048), height from the
     // footprint aspect so pixels stay square to within the 1 px rounding the
     // world file's independent X/Y scales absorb exactly.
-    const blob = await this._renderAtSize(framing.widthPx, framing.heightPx, () => {
+    const shot = await this._renderAtSize(framing.widthPx, framing.heightPx, () => {
       this._renderer.render(this._scene, camera);
     });
-    return {
-      blob,
-      widthPx: framing.widthPx,
-      heightPx: framing.heightPx,
-      // The frustum-derived rectangle — exactly what the camera framed.
-      extent: framing.extent,
-    };
+    // The delivered PNG size (the world file divides the framed rectangle by
+    // it) and the frustum-derived rectangle the camera framed.
+    return { ...shot, extent: framing.extent };
   }
 
   /**
@@ -4577,10 +4574,13 @@ export class Viewer {
     outW: number,
     outH: number,
     renderFrame: () => void,
-  ): Promise<Blob> {
+  ): Promise<{ blob: Blob; widthPx: number; heightPx: number }> {
     const gl = this._renderer.domElement as HTMLCanvasElement;
     const prevSize = this._renderer.getSize(new THREE.Vector2());
     const prevRatio = this._renderer.getPixelRatio();
+    // The live loop keeps drawing while this awaits; its adaptive pixel ratio
+    // would re-apply the display ratio to the export-sized buffer.
+    this._captureHoldsBuffer = true;
     try {
       this._renderer.setPixelRatio(1);
       this._renderer.setSize(outW, outH, false);
@@ -4596,8 +4596,9 @@ export class Viewer {
       };
       await present();
       await present();
-      return await (await loadSnapshot()).renderedBlob(gl, renderFrame, this._scene.background);
+      return await (await loadSnapshot()).renderedBlobAtSize(gl, this._renderer, outW, outH, renderFrame, this._scene.background);
     } finally {
+      this._captureHoldsBuffer = false;
       this._renderer.setPixelRatio(prevRatio);
       this._renderer.setSize(prevSize.x, prevSize.y, false);
       // Resizing the canvas cleared it; repaint the live view at the restored size.
@@ -4648,10 +4649,9 @@ export class Viewer {
       try {
         camera.aspect = plan.aspect;
         camera.updateProjectionMatrix();
-        const blob = await this._renderAtSize(plan.widthPx, plan.heightPx, () => {
+        return await this._renderAtSize(plan.widthPx, plan.heightPx, () => {
           this._renderer.render(this._scene, camera);
         });
-        return { blob, widthPx: plan.widthPx, heightPx: plan.heightPx };
       } finally {
         camera.aspect = prevAspect;
         camera.updateProjectionMatrix();
@@ -5789,7 +5789,7 @@ export class Viewer {
       nowMs,
       readiness: this.refinementReadiness(),
     });
-    if (!this._adaptiveDpr || !rendered) return;
+    if (!this._adaptiveDpr || !rendered || this._captureHoldsBuffer) return;
     const q = this._camera.quaternion;
     this._curCamQuat[0] = q.x;
     this._curCamQuat[1] = q.y;

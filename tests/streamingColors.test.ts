@@ -8,6 +8,7 @@ import {
 } from '../src/render/streaming/streamingColors';
 import type { CopcMetadata } from '../src/io/copc/copcTypes';
 import type { DecodedChunk } from '../src/io/copc/copcChunkDecode';
+import { intensityWindow } from '../src/render/colorModes';
 
 function metadata(hasRgb: boolean, hasGpsTime = true): CopcMetadata {
   return {
@@ -153,10 +154,15 @@ test('scalarRangeOf skips non-finite values — one NaN timestamp must not poiso
   expect(scalarRangeOf(new Float64Array([NaN, NaN]), 2)).toEqual({ min: 0, max: 0 });
 });
 
-test('intensityRangeOf still matches the generic scalar range', () => {
-  const c = chunk(3, false);
-  c.intensity.set([10, 200, 55]);
-  expect(intensityRangeOf(c)).toEqual(scalarRangeOf(c.intensity, c.pointCount));
+test('intensityRangeOf seeds the same p2–p98 window the static intensity mode uses', () => {
+  // 200 returns over 1 000–1 995 plus 2 saturated at 65 535 (1 %): the window
+  // must not stretch to the saturated tail, and must equal the static window.
+  const c = chunk(202, false);
+  for (let i = 0; i < 200; i++) c.intensity[i] = 1000 + i * 5;
+  for (let i = 200; i < 202; i++) c.intensity[i] = 65535;
+  const w = intensityWindow(c.intensity, c.pointCount);
+  expect(intensityRangeOf(c)).toEqual({ min: w.min, max: w.max });
+  expect(w.max).toBeLessThan(2000);
 });
 
 test('gpsTime mode normalises huge Float64 times against the GLOBAL range', () => {

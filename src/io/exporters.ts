@@ -51,6 +51,7 @@ import { resolveExportDigests, type ExportSourceRef } from '../export/exportDige
 import type { CrsOriginInput } from '../science/crsOrigin';
 import { exportDigestLines, type ExportDigests } from '../science/exportDigestRecord';
 import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
+import { asciiFold } from '../export/safeText';
 import type { PointCloud, SourceMetadata, DeclaredMetadataField } from '../model/PointCloud';
 import { ATTR_COLOUR_INVALID, ATTR_INTENSITY_INVALID, countAttributeInvalid, intensityNormalisationLine } from '../model/PointCloud';
 import { sourcePositions } from '../model/pointFrames';
@@ -82,7 +83,7 @@ function finitePointCount(positions: Float32Array, n: number): number {
 
 /** Disclosure line for skipped non-finite points (comment prefix per format). */
 function omittedPointsLine(omitted: number): string {
-  return `${omitted} point${omitted === 1 ? '' : 's'} with non-finite coordinates — omitted`;
+  return `${omitted} point${omitted === 1 ? '' : 's'} with non-finite coordinates - omitted`;
 }
 
 /**
@@ -108,7 +109,7 @@ function subsetLine(cloud: PointCloud): string | null {
   if (src !== undefined && Number.isFinite(src) && cloud.pointCount < src) {
     return (
       `SUBSET: ${cloud.pointCount.toLocaleString('en-US')} of ` +
-      `${src.toLocaleString('en-US')} points the source declared — streamed ` +
+      `${src.toLocaleString('en-US')} points the source declared - streamed ` +
       `resident set at display resolution, not the whole scan`
     );
   }
@@ -128,13 +129,20 @@ function subsetLine(cloud: PointCloud): string | null {
     share = pct.toFixed(2);
   }
   const stride = cloud.loadStride;
-  const cause =
-    stride !== undefined && stride > 1
-      ? ` (load stride ${stride} — one record kept per ${stride})`
-      : '';
+  const strided = stride !== undefined && stride > 1;
+  // A voxel-reduced cloud holds centroids, not records: its positions and
+  // colour/intensity are averages over each voxel's members.
+  const voxel = cloud.pointReduction === 'voxel-centroids'
+    ? 'voxel-reduced: each point is a voxel centroid, its position, colour and ' +
+      'intensity averaged over the voxel\'s records, not source records'
+    : null;
+  let cause = '';
+  if (strided && voxel) cause = ` (load stride ${stride}, then ${voxel})`;
+  else if (strided) cause = ` (load stride ${stride} - one record kept per ${stride})`;
+  else if (voxel) cause = ` (${voxel})`;
   return (
     `SUBSET: ${held.toLocaleString('en-US')} of ${declared.toLocaleString('en-US')} ` +
-    `points the source declared (${share} %)${cause} — this file is a sample of the ` +
+    `points the source declared (${share} %)${cause} - this file is a sample of the ` +
     `scan, not the whole scan`
   );
 }
@@ -172,7 +180,7 @@ const DECLARED_VALUE_MAX = 160;
  */
 function declaredLine(v: string): string {
   const flat = v.replace(/\s+/g, ' ').trim();
-  return flat.length > DECLARED_VALUE_MAX ? `${flat.slice(0, DECLARED_VALUE_MAX)}…` : flat;
+  return flat.length > DECLARED_VALUE_MAX ? `${flat.slice(0, DECLARED_VALUE_MAX)}...` : flat;
 }
 
 /**
@@ -239,8 +247,8 @@ function droppedChannelLines(
   if (cloud.normals && !carried.normals) dropped.push('normals');
   return dropped.map((ch) =>
     unrepresentable.includes(ch)
-      ? `${ch} channel not representable in OBJ — omitted`
-      : `${ch} channel not written by this exporter — omitted`,
+      ? `${ch} channel not representable in OBJ - omitted`
+      : `${ch} channel not written by this exporter - omitted`,
   );
 }
 
@@ -320,24 +328,26 @@ function emitXyz(sink: LineSink, cloud: PointCloud, delimiter: string, resolvedI
   const derivedNote =
     prov === 'derived'
       ? '# classification: DERIVED (heuristic ground/vegetation/building' +
-        `${cloud.derivedMethod ? `, ${cloud.derivedMethod}` : ''} — ` +
+        `${cloud.derivedMethod ? `, ${cloud.derivedMethod}` : ''} - ` +
         'not survey-grade; validate before relying on it)'
       : prov === 'cleared' ? `# classification: CLEARED (${CLEARED_CLASS_NOTE})` : null;
+  // Comment lines are folded to ASCII: readers differ on the encoding they assume.
+  const note = (l: string): void => lines.push(asciiFold(l));
   if (csv) {
-    if (invalidNote) lines.push(`# ${invalidNote}`);
+    if (invalidNote) note(`# ${invalidNote}`);
     lines.push(columns.join(','));
   } else {
-    for (const l of provenanceLines(cloud)) lines.push(`# ${l}`);
-    for (const l of digestLines(digests)) lines.push(`# ${l}`);
+    for (const l of provenanceLines(cloud)) note(`# ${l}`);
+    for (const l of digestLines(digests)) note(`# ${l}`);
     const subset = subsetLine(cloud);
-    if (subset) lines.push(`# ${subset}`);
-    if (derivedNote) lines.push(derivedNote);
-    if (intensityNote) lines.push(`# ${intensityNote}`);
-    if (invalidNote) lines.push(`# ${invalidNote}`);
+    if (subset) note(`# ${subset}`);
+    if (derivedNote) note(derivedNote);
+    if (intensityNote) note(`# ${intensityNote}`);
+    if (invalidNote) note(`# ${invalidNote}`);
     for (const l of droppedChannelLines(cloud, { intensity: true, classification: true }, []))
-      lines.push(`# ${l}`);
-    if (omitted > 0) lines.push(`# ${omittedPointsLine(omitted)}`);
-    if (intensity || classification) lines.push(`# columns: ${columns.join(' ')}`);
+      note(`# ${l}`);
+    if (omitted > 0) note(`# ${omittedPointsLine(omitted)}`);
+    if (intensity || classification) note(`# columns: ${columns.join(' ')}`);
   }
 
   const w: [number, number, number] = [0, 0, 0];
@@ -433,7 +443,8 @@ function emitPly(sink: LineSink, cloud: PointCloud, resolvedIsGeographic: boolea
   }
   header.push('end_header');
 
-  sink.line(header.join('\n'));
+  // The ASCII PLY header is ASCII by spec, comments included.
+  sink.line(header.map(asciiFold).join('\n'));
   const w: [number, number, number] = [0, 0, 0];
   for (let i = 0; i < n; i++) {
     if (!isFinitePoint(positions, i)) continue;
@@ -492,7 +503,7 @@ function emitObj(sink: LineSink, cloud: PointCloud, resolvedIsGeographic: boolea
     ...(badColour > 0 ? [`# ${colourOmittedLine(badColour, 'OBJ')}`] : []),
     ...(omitted > 0 ? [`# ${omittedPointsLine(omitted)}`] : []),
   ];
-  for (const l of header) sink.line(l);
+  for (const l of header) sink.line(asciiFold(l));
   const w: [number, number, number] = [0, 0, 0];
   for (let i = 0; i < n; i++) {
     if (!isFinitePoint(positions, i)) continue;
@@ -547,6 +558,20 @@ export function exportCloud(
       throw new Error(`Unknown export format: ${String(exhaustive)}`);
     }
   }
+}
+
+/** The suffix a sample export carries in its name (the converter's `DISPLAY_SAMPLE_SUFFIX`). */
+const SAMPLE_SUFFIX = '-sample';
+
+/**
+ * The download name for a point export: `<base>.<format>`, or
+ * `<base>-sample.<format>` when the cloud is a subset of its source (the same
+ * test that writes the SUBSET line). CSV has no comment line a parser
+ * tolerates, so for it the name is where the sample is disclosed; every point
+ * format takes the suffix so the convention is one rule.
+ */
+export function pointExportFileName(base: string, cloud: PointCloud, format: ExportFormat): string {
+  return `${base}${subsetLine(cloud) !== null ? SAMPLE_SUFFIX : ''}.${format}`;
 }
 
 /** {@link exportCloud} as UTF-8 bytes, built in chunks. */

@@ -29,6 +29,7 @@
  */
 
 import { roundLegacyAngle } from './conversionEvents';
+import { asciiFold } from '../export/safeText';
 import type { GlobalPoints } from './globalPoints';
 import { resolveVerticalGeoKeys } from '../terrain/export/demGeoTiff';
 import { globalBounds } from './globalPoints';
@@ -353,21 +354,6 @@ function writeGeoKeyVlr(
  * surfaces it.
  */
 const TEXT_AREA_DESCRIPTION_RECORD_ID = 3;
-
-/**
- * Fold a note to the 7-bit ASCII a LAS VLR text field carries. The datum
- * caveats use typographic glyphs (—, ≈, →) that a bare `& 0x7f` would corrupt
- * into a different character; map the ones that appear to their ASCII sense and
- * replace anything else non-ASCII with `?`, so a stray glyph never silently
- * drops a word from a caveat. ASC/XYZ notes are UTF-8 and never come here.
- */
-function asciiFold(s: string): string {
-  return s
-    .replaceAll(/[—–]/g, '-')
-    .replaceAll(/≈/g, '~=')
-    .replaceAll(/→/g, '->')
-    .replaceAll(/[^\x00-\x7f]/g, '?');
-}
 
 /**
  * The Text Area Description payload to actually write, or null to omit the VLR.

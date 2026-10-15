@@ -93,7 +93,8 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
   // Every caller below overwrites this with a specific explanation; the
   // fallback only guards a future call site that forgets to.
   const mkBtn = (text: string, testid: string, extra = ''): HTMLButtonElement => {
-    const b = el('button', { className: `olv-bc-pill${extra ? ' ' + extra : ''}`, text }) as HTMLButtonElement;
+    // The View rail's chip: one compact button shape across both rails.
+    const b = el('button', { className: `olv-chip${extra ? ' ' + extra : ''}`, text }) as HTMLButtonElement;
     b.type = 'button';
     b.title = text;
     b.setAttribute('data-testid', testid);
@@ -243,9 +244,11 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
       : 'Classes derived for this session (heuristic)';
   }
 
-  // Full-width rows: header, the target-class select, the primary reclassify
-  // action, then an undo/redo pair — so the action label never shares a row
-  // with the wide select (which clipped it in the cramped left dock).
+  // A section of the Classes panel: its label, the whole-scan chips, then the
+  // target-class select on its own row (it is wide), then the lasso chip with
+  // the undo/redo pair beside it.
+  const history = el('div', { className: 'olv-reclass-history', ariaLabel: 'Class edit history' }, [undoBtn, redoBtn]);
+  history.setAttribute('role', 'group');
   const element = el('div', { className: 'olv-reclass-panel' }, [
     el('div', { className: 'olv-reclass-head', text: 'Edit classes' }),
     // Primary: derive the whole scan, or clear it. Manual class + lasso follow.
@@ -253,8 +256,10 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
     note,
     ...(autoBtn ? [limits] : []),
     select,
-    armBtn,
-    el('div', { className: 'olv-reclass-actions' }, [undoBtn, redoBtn]),
+    el('div', { className: 'olv-reclass-actions' }, [
+      armBtn,
+      history,
+    ]),
   ]);
   refresh();
 

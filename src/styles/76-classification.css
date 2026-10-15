@@ -6,42 +6,53 @@
      row's hover title for anything that still clips. */
   width: 248px; box-sizing: border-box;
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 10px; padding: 12px;
+  border-radius: var(--radius-lg); padding: var(--space-xl);
 }
-.olv-cl-title { font-size: var(--text-sm); font-weight: 500; margin-bottom: 10px; }
+.olv-cl-title { font-size: var(--text-sm); font-weight: 500; margin-bottom: var(--space-lg); }
 
-/* Manual classification-edit panel — mounts directly beneath .olv-class-panel,
-   so it borrows the same 248px dock chrome to read as a first-class sibling.
-   Controls stack in full-width rows; the primary "Reclassify (lasso)" action is
-   full width so its label can never clip in the cramped left dock. */
+/* Manual classification editing. The editor mounts inside the Classes panel
+   (main.ts appends it to the legend), so it is a SECTION of that panel, not a
+   card inside it: a hairline and a section label, the same as the View rail's
+   "Color by" or "Quick appearance". Its buttons are the View rail's chips
+   (`.olv-chip`, set in reclassifyUi.ts); only layout lives here. */
 .olv-reclass-panel {
-  width: 248px; box-sizing: border-box; margin-top: var(--space-md);
-  background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: 10px; padding: 12px;
-  display: flex; flex-direction: column; gap: var(--space-sm);
+  box-sizing: border-box;
+  margin-top: var(--space-2xl); padding-top: var(--space-md);
+  border-top: 0.5px solid var(--hairline);
+  display: flex; flex-direction: column; gap: var(--space-md);
 }
-.olv-reclass-head { font-size: var(--text-sm); font-weight: 500; margin-bottom: var(--space-2xs); }
+/* The section label: `.olv-section-label` metrics (40-inspector.css). */
+.olv-reclass-head {
+  font-size: var(--text-xs); color: var(--text-faint); font-weight: 600;
+  letter-spacing: 0.01em;
+}
+/* The target class: the View rail's field recipe (`.olv-elev-input`) at the
+   shared control height, so it lines up with the chips beside it. */
 .olv-reclass-select {
-  width: 100%; box-sizing: border-box; font: inherit; font-size: var(--text-sm);
-  color: var(--text); background: transparent; border: 0.5px solid var(--hairline);
-  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md); cursor: pointer;
+  width: 100%; box-sizing: border-box; min-height: var(--control-h);
+  font: inherit; font-size: var(--text-xs);
+  color: var(--text); background: var(--hover-wash); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: 0 var(--space-md); cursor: pointer;
 }
-.olv-reclass-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-color: var(--accent); }
+.olv-reclass-select:hover { border-color: var(--hairline-strong); }
+.olv-reclass-select:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); border-color: var(--accent); }
 /* The native <option> popup is drawn by the OS, not the panel: on Chrome for
    Windows it inherits the select's light `color` but paints over the system's
    white popup background, so the list reads white-on-white. Pin explicit,
    legible colours on the options themselves. */
 .olv-reclass-select option { color: #17181c; background: #ffffff; }
-.olv-reclass-go { width: 100%; text-align: center; }
-/* Auto-classify: the panel's emphasised action. Only layout lives here. The
-   accent emphasis is declared in the unified button block at the end of this
-   file, because the button also carries `.olv-bc-pill`, whose base rule sits
-   later in the source at the same specificity and would otherwise reset the
-   fill, border and colour back to the plain pill. */
+/* Auto-classify: the section's emphasised action. A chip in the accent
+   language of the View rail's selected chip, carried by weight as well as hue,
+   so the panel keeps one emphasised action without a second button shape. */
 .olv-reclass-auto {
-  width: 100%;
-  text-align: center;
-  margin-bottom: var(--space-sm);
+  color: var(--accent-text, var(--accent));
+  background: var(--accent-soft);
+  border-color: var(--ui-accent-a0p4);
+  font-weight: 600;
+}
+.olv-reclass-auto:not(:disabled):hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
 }
 /* In-flight derive: dim the button and spin a ring before the label. */
 .olv-reclass-auto-loading {
@@ -68,19 +79,22 @@
 @media (prefers-reduced-motion: reduce) {
   .olv-reclass-auto-loading::before { animation: none; }
 }
-.olv-reclass-actions { display: flex; gap: var(--space-sm); }
-.olv-reclass-actions .olv-bc-pill { flex: 1; text-align: center; }
-/* Auto-classify and Clear classes share one row; the auto button drops its
-   own full-width + bottom gap there. */
-.olv-reclass-whole .olv-reclass-auto { width: auto; margin-bottom: 0; }
+/* Chip rows: the View rail's `.olv-chips` rhythm. Chips keep their natural
+   width and wrap; nothing stretches into a full-width bar. */
+.olv-reclass-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); }
+/* Zero specificity, so the 44 px large-touch floor still wins on touch. */
+:where(.olv-reclass-actions > .olv-chip) { min-height: var(--control-h); }
+/* Undo and Redo sit at the end of the lasso row as one compact pair. */
+.olv-reclass-history { display: inline-flex; gap: var(--space-xs); margin-left: auto; }
 /* Level-1 inline note (UX-D10): the cleared / derived working layer with its
    Undo and Restore links. */
 .olv-reclass-note {
-  font-size: var(--text-xs); line-height: 1.4; color: var(--text-dim);
-  background: var(--accent-soft); border: 0.5px solid var(--hairline);
-  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
+  font-size: var(--text-xs); line-height: 1.45; color: var(--text-dim);
+  background: var(--accent-soft); border-left: 2px solid var(--accent);
+  border-radius: 2px; padding: var(--space-sm) var(--space-md);
 }
-.olv-reclass-hint { font-size: var(--text-xs); line-height: 1.4; color: var(--text-faint); }
+/* The limits line reads as the View rail's chip note (`.olv-chips-note`). */
+.olv-reclass-hint { margin-top: calc(-1 * var(--space-xs)); font-size: var(--text-2xs); line-height: 1.4; color: var(--text-faint); }
 .olv-reclass-link {
   font: inherit; color: var(--accent); background: none; border: 0; padding: 0;
   cursor: pointer; text-decoration: underline;
@@ -89,94 +103,103 @@
 .olv-reclass-link:focus-visible { outline: var(--focus-ring); outline-offset: 2px; }
 /* The "Filtered — showing N of M classes" banner — persistent while filtered. */
 .olv-cl-banner {
-  font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--accent);
+  font-size: var(--text-xs); line-height: 1.45; font-variant-numeric: tabular-nums;
+  color: var(--accent-text, var(--accent));
   background: var(--accent-soft);
-  border: 0.5px solid var(--hairline);
-  border-radius: var(--radius-sm);
+  border-left: 2px solid var(--accent);
+  border-radius: 2px;
   padding: var(--space-sm) var(--space-md);
   margin-bottom: var(--space-md);
 }
-/* The provenance caption — a quiet amber note for a figure whose basis a
-   reader would otherwise have to assume. One rule rather than one per panel:
-   a caption that looks the same everywhere is read the same everywhere, and
-   the profile workbench's ground-basis note means what this one means.
+/* The provenance caption: the one quiet note for a figure whose basis a
+   reader would otherwise have to assume (the display-sample disclosure, the
+   heuristic-classes stamp, the streaming basis). It wears the app's honesty
+   primitive, `.olv-caveat` (86-dataset-intel-analyse.css): a 2 px amber rule
+   and a faint tint, body text in --text-dim, so it reads exactly like the
+   View rail's "Display sample" note instead of a filled amber alert box. The
+   words carry the meaning; the rule only marks it as a limit.
    `.olv-workbench-basis` adds only its own spacing, in 74. */
 .olv-cl-derived,
 .olv-cl-samplenote,
 .olv-cl-streamnote,
 .olv-cl-unavailable,
 .olv-workbench-basis {
-  /* Same metrics as `.olv-cl-banner` above, on the token scale: the two sit
-     in one panel and read as one family, so a half-pixel apart in type size
-     is a difference the eye catches without being able to name. */
-  font-size: var(--text-xs); line-height: 1.35; color: var(--warn);
-  background: color-mix(in srgb, var(--warn) 12%, transparent);
-  border: 0.5px solid color-mix(in srgb, var(--warn) 35%, transparent);
-  border-radius: var(--radius-sm);
+  font-size: var(--text-xs); line-height: 1.45; color: var(--text-dim);
+  background: color-mix(in srgb, var(--warn) 9%, transparent);
+  border-left: 2px solid var(--warn);
+  border-radius: 2px;
   padding: var(--space-sm) var(--space-md);
   margin-bottom: var(--space-md);
+  overflow-wrap: anywhere;
 }
-.olv-cl-list { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+/* One class per row, the View rail's row rhythm: checkbox, swatch, name, a
+   right-aligned tabular count, then the Solo toggle. Rows sit on the shared
+   control height so the list reads as one even column. */
+.olv-cl-list { display: flex; flex-direction: column; gap: 0; min-width: 0; margin: 0 calc(-1 * var(--space-xs)); }
 .olv-cl-row {
-  display: flex; align-items: center; gap: 6px; min-width: 0;
-  transition: opacity 130ms ease;
+  display: flex; align-items: center; gap: var(--space-md); min-width: 0;
+  min-height: var(--control-h); padding: 0 var(--space-xs);
+  border-radius: var(--radius-sm);
+  transition: opacity var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard);
 }
+.olv-cl-row:hover { background: var(--hover-wash); }
 /* A hidden class reads dimmed so the legend always mirrors the canvas. */
 .olv-cl-row.is-hidden { opacity: 0.42; }
-.olv-cl-check { flex-shrink: 0; margin: 0; cursor: pointer; }
+.olv-cl-row.is-hidden:hover, .olv-cl-row.is-hidden:focus-within { opacity: 0.72; }
+.olv-cl-check { flex-shrink: 0; margin: 0; cursor: pointer; accent-color: var(--accent); }
 .olv-cl-swatch {
-  flex-shrink: 0; width: 11px; height: 11px;
-  border-radius: 3px; border: 0.5px solid rgba(255, 255, 255, 0.22);
+  flex-shrink: 0; width: 10px; height: 10px;
+  border-radius: 3px; box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.22);
 }
 .olv-cl-name {
-  flex: 1 1 auto; min-width: 0; font-size: var(--text-xs); color: var(--text);
+  flex: 1 1 auto; min-width: 0; font-size: var(--text-sm); color: var(--text);
   font-family: var(--font);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* Tabular figures so counts line up column-right as they refine while streaming. */
 .olv-cl-count {
-  flex-shrink: 0; font-size: var(--text-body); font-variant-numeric: tabular-nums;
+  flex-shrink: 0; font-size: var(--text-xs); font-variant-numeric: tabular-nums;
   color: var(--text-dim); text-align: right;
 }
+/* Solo: a compact icon toggle at the end of the row, quiet until the row is
+   hovered or the control is focused. The word stays in the DOM for the
+   accessible name and the title; the glyph carries it visually. */
 .olv-cl-solo {
-  flex-shrink: 0; font-size: var(--text-micro); color: var(--text-faint);
-  background: rgba(255, 255, 255, 0.04);
-  border: 0.5px solid var(--hairline);
-  border-radius: 5px; padding: 2px 5px;
-  transition: color 130ms ease, border-color 130ms ease;
+  flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0;
+  color: var(--text-faint); background: transparent;
+  border: 0.5px solid transparent; border-radius: var(--radius-sm);
+  cursor: pointer;
 }
-.olv-cl-solo:hover { color: var(--text); border-color: var(--accent); }
-.olv-cl-solo:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-color: var(--accent); }
-/* Solo as a glyph + label (isolate "stacked layers" mark before the word). */
-.olv-cl-solo-ico { display: inline-flex; align-items: center; gap: 4px; }
-.olv-cl-solo-ico svg { width: 12px; height: 12px; flex: none; display: block; }
+.olv-cl-row:hover .olv-cl-solo:not(:disabled) { border-color: var(--hairline); background: var(--hover-wash); }
+.olv-cl-solo:not(:disabled):hover { color: var(--accent-text, var(--accent)); border-color: var(--ui-accent-a0p4); background: var(--accent-soft); }
+.olv-cl-solo-ico svg { width: 14px; height: 14px; flex: none; display: block; }
+.olv-cl-solo-label {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
 .olv-cl-empty { font-size: var(--text-xs); color: var(--text-faint); }
+/* Under the list: Show all as a chip and the palette option on its own line,
+   on the same hairline-and-gap rhythm as the View rail's sections. */
 .olv-cl-footer {
-  display: flex; flex-wrap: wrap; gap: 6px;
-  /* Same separator rhythm the Analyse sections keep. */
-  margin-top: var(--space-md); padding-top: var(--space-sm);
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-md);
+  margin-top: var(--space-md); padding-top: var(--space-md);
   border-top: 0.5px solid var(--hairline);
 }
-/* Colourblind-safe palette toggle — drops to its own full-width line under the
- * Show-all button. A quiet checkbox row; the class swatches recolour live. */
+/* Colourblind-safe palette toggle — a quiet checkbox row; the class swatches recolour live. */
 .olv-cl-cvd {
   flex: 1 0 100%;
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; gap: var(--space-md);
+  min-height: 24px;
   font-size: var(--text-xs); color: var(--text-dim);
   cursor: pointer;
-  transition: color 130ms ease;
+  transition: color var(--dur-fast) var(--ease-standard);
 }
 .olv-cl-cvd:hover { color: var(--text); }
 .olv-cl-cvd-input { accent-color: var(--accent); margin: 0; cursor: pointer; }
-.olv-cl-showall {
-  flex: 1; font-size: var(--text-xs); color: var(--text-dim);
-  background: rgba(255, 255, 255, 0.04);
-  border: 0.5px solid var(--hairline);
-  border-radius: var(--radius-sm); padding: 6px;
-  transition: color 130ms ease, border-color 130ms ease;
-}
-.olv-cl-showall:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
-.olv-cl-showall:disabled { opacity: 0.4; cursor: default; }
+/* Show all is a `.olv-chip` (ClassLegendPanel.ts); its disabled state is the
+   shared one in 95-buttons.css. */
+.olv-cl-showall { min-height: var(--control-h); }
 
 .olv-cl-row-hint {
   margin: 0 0 var(--space-2xs);

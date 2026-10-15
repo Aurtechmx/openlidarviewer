@@ -319,14 +319,19 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 }
 .olv-analyse-run:hover { background: var(--accent-soft); }
 .olv-analyse-run:disabled { opacity: 0.6; cursor: default; }
-/* Once results exist the action becomes a quiet "Re-run" — visual weight
-   follows importance, so the data leads, not the button. */
+/* Once results exist the action becomes a quiet "Re-run": the View rail's
+   chip (`.olv-chip`) at its natural width, so the data leads, not a
+   full-width bar. */
 .olv-analyse-run.is-rerun {
-  color: var(--text-dim); background: rgba(255, 255, 255, 0.04);
+  width: auto;
+  padding: var(--space-xs) var(--space-md); border-radius: var(--radius-sm);
+  color: var(--text-dim); background: var(--hover-wash);
   border-color: var(--hairline); font-weight: 400;
 }
+/* Zero specificity, so the 44 px large-touch floor still wins on touch. */
+:where(.olv-analyse-run.is-rerun) { min-height: var(--control-h); }
 .olv-analyse-run.is-rerun:hover {
-  color: var(--text); border-color: var(--accent); background: rgba(255, 255, 255, 0.08);
+  color: var(--text); border-color: var(--hairline-strong); background: var(--hover-wash);
 }
 
 /* Analyse panel collapse — the only left panel collapsible on every

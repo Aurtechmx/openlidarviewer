@@ -13,9 +13,9 @@ import { classColor } from '../src/render/colorModes';
 
 describe('classColor', () => {
   it('returns the palette entry for mapped ASPRS codes', () => {
-    expect(classColor(2)).toEqual([139, 90, 43]); // Ground — brown
-    expect(classColor(6)).toEqual([220, 80, 80]); // Building — salmon
-    expect(classColor(9)).toEqual([30, 100, 220]); // Water — blue
+    expect(classColor(2)).toEqual([185, 125, 50]); // Ground — ochre earth
+    expect(classColor(6)).toEqual([225, 50, 65]); // Building — red
+    expect(classColor(9)).toEqual([45, 175, 250]); // Water — blue
   });
 
   it('maps the LAS 1.4 R15 standard classes 19–22 (not the hue fallback)', () => {
@@ -23,7 +23,7 @@ describe('classColor', () => {
     // hue; they now have dedicated palette entries so the legend reads the
     // class name's colour, not a generated one.
     expect(classColor(19)).toEqual([120, 130, 150]); // Overhead structure
-    expect(classColor(20)).toEqual([110, 80, 50]);   // Ignored ground
+    expect(classColor(20)).toEqual([245, 215, 185]); // Ignored ground
     expect(classColor(21)).toEqual([235, 245, 255]); // Snow
     expect(classColor(22)).toEqual([150, 120, 170]); // Temporal exclusion
   });
@@ -50,6 +50,6 @@ describe('classColor', () => {
   it('returns a fresh array each call (callers may mutate)', () => {
     const a = classColor(2);
     a[0] = 0;
-    expect(classColor(2)).toEqual([139, 90, 43]);
+    expect(classColor(2)).toEqual([185, 125, 50]);
   });
 });

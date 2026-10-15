@@ -65,14 +65,18 @@ Converted XYZ, ASC and LAS files record the software and version, the source fil
 - Whole-file loading is capped at 1 GiB. A larger LAS or LAZ opens out-of-core; any other format, full-resolution export, reload or batch conversion over the cap is refused before the file is read.
 - A file that cannot be read as a point cloud names the formats that open and suggests opening an E57 or LAS version.
 - Opening a streamed scan over an open one, and importing a session over existing work, asks Save session / Replace / Cancel. Replace keeps a recovery snapshot.
-- Opening a large local LAS or LAZ over an open stream asks the same question before any work starts. Close and every scan replacement ask before discarding class edits on any open layer, naming the layers and pointing to the LAS export that keeps them.
+- Opening a large local LAS or LAZ over an open stream asks the same question before any work starts. Close and every scan replacement ask before discarding class edits on any open layer, naming the layers and pointing to the LAS export at display resolution that keeps them.
 - With only a streamed scan open, measurements left from a replaced scan are withheld from CSV and GeoJSON exports instead of being written under the stream's name and origin, and the signed integrity report refuses rather than leave records out.
 - Layers keep their placement while other layers open or close, a lone remaining layer exports and saves through its placement, removing the active layer activates the next one, and each measurement reads out in its own scan's units.
 - Binary PLY headers with CRLF or non-ASCII text read correctly; malformed PLY and glTF graphs are refused; KML descriptions are escaped as HTML.
 - PDF volume rows state coverage and preview caveats, and Web Mercator or geocentric frames no longer report extents or density in ground metres.
-- Recovery work survives Close scan and keeps journaling beside saved work; LAS/LAZ files with wrong header bounds keep full coordinate precision; geocentric reprojection is refused.
+- Close scan keeps recovery work saved for other files and the work a Replace kept, and new work on a file that has saved recovery work is journaled beside it.
+- LAS and LAZ files whose header bounds do not enclose their points keep full coordinate precision. Reprojection to or from a geocentric CRS is refused.
 - The "Two scans loaded" before/after prompt is offered only when both scans declare the same CRS and linear unit and neither is a truncated load.
 - A local glTF or GLB that names an external buffer or image (a relative file or a web address) is refused before parsing, so opening a file never makes the browser request an address named inside it.
+- Studio height, depth and contour cards report source heights. They had printed coordinates relative to the scan's internal origin, so a tile spanning -7.86 m to 39.72 m read 14.0 cm to 47.7 m.
+- A Studio card drawn from a display sample says so and gives the loaded and declared point counts.
+- The scan report's duplicate check reads "Not checked" on a voxel-reduced display sample instead of "None".
 
 ### E57
 
@@ -131,6 +135,8 @@ These change figures that earlier builds reported. Each one has a regression tes
 - The hold-out RMSE says when its confidence interval is unavailable and why, instead of showing an interval with equal ends.
 - PNG exports are fully opaque in every browser engine. PDF reports continue long text on the next page, and report and Scan Report figures state UTC.
 - Terrain Access converts US survey foot elevations to metres for slope, step height and cost, where it read them as metres before.
+- The class palette has higher contrast against the dark canvas and wider separation between classes. Ground and Ignored Ground, which were nearly the same colour, are now clearly different. The colourblind palette is updated to match.
+- The intensity colour ramp defaults to the 2nd to 98th percentile of the loaded sample, so a few saturated returns no longer wash it out. The colorbar says which window and sample it uses.
 
 ## Evidence
 

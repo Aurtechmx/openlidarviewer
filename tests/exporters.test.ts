@@ -356,7 +356,7 @@ describe('declared-provenance headers (v0.5.4)', () => {
       .split('\n')
       .find((l) => l.startsWith('# declared limitations:'))!;
     expect(line.length).toBeLessThan(220);
-    expect(line.endsWith('…')).toBe(true);
+    expect(line.endsWith('...')).toBe(true);
   });
 });
 
@@ -364,7 +364,7 @@ describe('honest channel-drop disclosure (v0.5.4)', () => {
   test('OBJ discloses a dropped intensity channel', () => {
     const cloud = makeDeclaredCloud({ intensity: [18350] });
     expect(toObj(cloud)).toContain(
-      '# intensity channel not representable in OBJ — omitted',
+      '# intensity channel not representable in OBJ - omitted',
     );
   });
 
@@ -372,25 +372,25 @@ describe('honest channel-drop disclosure (v0.5.4)', () => {
     const cloud = makeCloud([0, 0, 0], [0, 0, 0]);
     cloud.attachDerivedClassification(new Uint8Array([2]));
     expect(toObj(cloud)).toContain(
-      '# classification channel not representable in OBJ — omitted',
+      '# classification channel not representable in OBJ - omitted',
     );
     const withNormals = makeDeclaredCloud({ normals: [0, 0, 1] });
     expect(toObj(withNormals)).toContain(
-      '# normals channel not written by this exporter — omitted',
+      '# normals channel not written by this exporter - omitted',
     );
   });
 
   test('PLY discloses dropped intensity / classification / normals as comments', () => {
     const cloud = makeDeclaredCloud({ intensity: [18350], normals: [0, 0, 1] });
     const header = toPly(cloud).split('end_header')[0];
-    expect(header).toContain('comment intensity channel not written by this exporter — omitted');
-    expect(header).toContain('comment normals channel not written by this exporter — omitted');
+    expect(header).toContain('comment intensity channel not written by this exporter - omitted');
+    expect(header).toContain('comment normals channel not written by this exporter - omitted');
   });
 
   test('XYZ discloses dropped normals (intensity/classification are carried as columns)', () => {
     const cloud = makeDeclaredCloud({ intensity: [18350], normals: [0, 0, 1] });
     const text = toXyz(cloud);
-    expect(text).toContain('# normals channel not written by this exporter — omitted');
+    expect(text).toContain('# normals channel not written by this exporter - omitted');
     expect(text).not.toContain('# intensity channel');
     // The intensity COLUMN is present — the channel is carried, not dropped.
     expect(text).toContain('# columns: x y z r g b intensity');
@@ -465,7 +465,7 @@ describe('non-finite points are omitted and the omission is disclosed', () => {
   test('toXyz writes no NaN token and discloses the omission count', () => {
     const text = toXyz(nanCloud());
     expect(text).not.toContain('NaN');
-    expect(text).toContain('# 1 point with non-finite coordinates — omitted');
+    expect(text).toContain('# 1 point with non-finite coordinates - omitted');
     expect(text.trim().split('\n').filter((l) => !l.startsWith('#'))).toHaveLength(1);
   });
 
@@ -473,7 +473,7 @@ describe('non-finite points are omitted and the omission is disclosed', () => {
     const text = toPly(nanCloud());
     expect(text).not.toContain('NaN');
     expect(text).toContain('element vertex 1');
-    expect(text).toContain('comment 1 point with non-finite coordinates — omitted');
+    expect(text).toContain('comment 1 point with non-finite coordinates - omitted');
     expect(text.split('end_header\n')[1].trim().split('\n')).toHaveLength(1);
   });
 
@@ -481,7 +481,7 @@ describe('non-finite points are omitted and the omission is disclosed', () => {
     const text = toObj(nanCloud());
     expect(text).not.toContain('NaN');
     expect(text).toContain('# 1 points');
-    expect(text).toContain('# 1 point with non-finite coordinates — omitted');
+    expect(text).toContain('# 1 point with non-finite coordinates - omitted');
     expect(text.split('\n').filter((l) => l.startsWith('v '))).toHaveLength(1);
   });
 });
@@ -503,5 +503,47 @@ describe('exportCloud — resolved CRS drives lat/lon precision (audit blocker)'
 
   test('no resolved flag falls back to the declared CRS (projected → 3 dp)', () => {
     expect(exportCloud(declaredProjectedLatLon(), 'xyz').trim()).toBe('12.846 -33.646 100.250');
+  });
+});
+
+describe('PLY/OBJ/XYZ comment lines are ASCII', () => {
+  // ASCII PLY's header is ASCII by spec, and OBJ/XYZ readers vary in what
+  // encoding they assume for comments. The writer's own text uses ASCII
+  // punctuation; a declared value from the source is folded.
+  const cloud = (): PointCloud => {
+    const c = new PointCloud({
+      positions: Float32Array.of(0, 0, 0, NaN, NaN, NaN),
+      intensity: Uint16Array.of(5, 6),
+      normals: Float32Array.of(0, 0, 1, 0, 0, 1),
+      origin: [0, 0, 0],
+      sourceFormat: 'laz',
+      name: 'tile',
+      declaredPointCount: 10,
+      loadStride: 2,
+      pointReduction: 'voxel-centroids',
+      metadata: {
+        sourceMetadata: {
+          standard: [{ name: 'license', value: 'CC BY 4.0 — Zürich © 2026' }],
+          extensions: [],
+        },
+      } as unknown as PointCloud['metadata'],
+    });
+    c.attachDerivedClassification(Uint8Array.of(2, 2));
+    return c;
+  };
+  const comments = (text: string, marker: string): string[] =>
+    text.split('\n').filter((l) => l.startsWith(marker));
+
+  test.each([
+    ['PLY', () => comments(toPly(cloud()).split('end_header')[0]!, 'comment')],
+    ['OBJ', () => comments(toObj(cloud()), '#')],
+    ['XYZ', () => comments(toXyz(cloud()), '#')],
+  ])('%s', (_f, lines) => {
+    const out = lines();
+    expect(out.some((l) => /SUBSET/.test(l))).toBe(true);
+    expect(out.some((l) => /omitted/.test(l))).toBe(true);
+    for (const l of out) expect(l, l).toMatch(/^[\x20-\x7e]*$/);
+    // A declared value keeps its letters, folded to ASCII.
+    expect(out.some((l) => l.includes('CC BY 4.0 - Zurich'))).toBe(true);
   });
 });

@@ -12,14 +12,24 @@
  * header box by more than one scale step on any axis, or the box itself is not
  * a box (a non-finite value, or a min above its max), the header bounds are not
  * trusted: the origin is the floored record 0 instead, and the load carries
- * {@link HEADER_BOUNDS_UNTRUSTED_WARNING}. A file whose bounds enclose record 0
- * gets exactly the origin it always did. Pure; every path shares it.
+ * {@link HEADER_BOUNDS_UNTRUSTED_WARNING}.
+ *
+ * Enclosure alone misses a min left at zero beside a correct max: record 0 sits
+ * inside [0, max], yet origin 0 at a 4.5e6 m northing leaves a 0.5 m Float32
+ * step. So the bounds are also untrusted on an axis whose min is exactly zero
+ * while record 0 lies so far from zero that its Float32 step is coarser than
+ * {@link PRECISION_GRADE_THRESHOLDS_M}.fine (the 1 mm rebase budget). Any other
+ * box that encloses record 0 keeps floor(min) as its origin, wherever record 0
+ * sits inside it, so honest bounds (including boxes wider than the budget) keep
+ * exactly the origin they always had and carry no warning.
+ * Pure; every path shares it.
  */
+import { float32Spacing, PRECISION_GRADE_THRESHOLDS_M } from '../geo/inMemoryPrecision';
 import { computeOrigin } from './coordinateBridge';
 import type { LasHeader } from './lasHeader';
 
 export const HEADER_BOUNDS_UNTRUSTED_WARNING =
-  'Header bounds do not enclose the data; origin taken from the points.';
+  'Header bounds do not describe the data; origin taken from the points.';
 
 export type Vec3 = [number, number, number];
 
@@ -82,6 +92,9 @@ export function lasOriginFor(
   for (let a = 0; enclosed && a < 3; a++) {
     const step = Math.abs(header.scale[a]);
     if (record0[a] < header.min[a] - step || record0[a] > header.max[a] + step) enclosed = false;
+    // A min left at zero by the writer, with the points far above it: floor(min)
+    // cannot hold them. An honest wide box keeps its own min.
+    else if (header.min[a] === 0 && float32Spacing(record0[a]) > PRECISION_GRADE_THRESHOLDS_M.fine) enclosed = false;
   }
   if (enclosed) return { origin: computeOrigin(header.min), boundsTrusted: true };
   return {

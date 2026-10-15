@@ -51,7 +51,7 @@ describe('runStreamingModules', () => {
     const rows = runStreamingModules(cloud(), spatialContextFrom(null));
     const units = rows.find((r) => r.label === 'Units');
     expect(units?.status).toBe('warn');
-    expect(units?.value).toMatch(/unconfirmed/);
+    expect(units?.value).toMatch(/Unit not confirmed/);
   });
 
   it('stamps header-derived figures as not class-scoped while a class filter is active', () => {

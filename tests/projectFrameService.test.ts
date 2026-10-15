@@ -374,6 +374,31 @@ describe('project frame — the anchor outlives a demotion', () => {
     expect(s.frame?.projectOrigin).toEqual([500_000, 4_500_000, 100]);
   });
 
+  it('keeps the origin when the demoted anchor shares the frame CRS', () => {
+    const s = svc();
+    s.reconcile([
+      { id: 'a', sourceOrigin: [500_000, 4_500_000, 100], crsKey: 'epsg:32633' },
+      { id: 'b', sourceOrigin: [500_100, 4_500_000, 140], crsKey: 'epsg:32633' },
+    ]);
+    s.reconcile([
+      { id: 'a', sourceOrigin: [500_000, 4_500_000, 100], crsKey: 'epsg:32633', alignedToProject: false },
+      { id: 'b', sourceOrigin: [500_100, 4_500_000, 140], crsKey: 'epsg:32633' },
+    ]);
+    expect(s.frame?.projectOrigin).toEqual([500_000, 4_500_000, 100]);
+  });
+
+  it('re-anchors when every open anchor is in a different CRS than the aligned set', () => {
+    const s = svc();
+    s.reconcile([{ id: 'a', sourceOrigin: [500_000, 5_000_000, 100], crsKey: 'epsg:32633' }]);
+    s.reconcile([
+      { id: 'a', sourceOrigin: [500_000, 5_000_000, 100], crsKey: 'epsg:32633', alignedToProject: false },
+      { id: 'b', sourceOrigin: [650_000, 6_860_000, 40], crsKey: 'epsg:2154' },
+    ]);
+    expect(s.frame?.crs).toBe('epsg:2154');
+    expect(s.frame?.projectOrigin).toEqual([650_000, 6_860_000, 40]);
+    expect(s.transformFor('b')?.sourceToProject).toEqual([0, 0, 0]);
+  });
+
   it('still re-anchors once every layer that anchored it has closed', () => {
     const s = svc();
     s.reconcile([{ id: 'a', sourceOrigin: [500_000, 4_500_000, 100] }]);

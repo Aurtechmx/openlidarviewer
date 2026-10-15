@@ -35,6 +35,11 @@ export interface MetadataInputs {
   readonly heightUnitGap?: HeightUnitGap;
   /** Noise classes 7 or 18 sit inside the extent, so the Height row says so like the on-screen Scan Report. */
   readonly heightIncludesNoise?: boolean;
+  /**
+   * Lowest and highest elevation of the points, in the source frame and in
+   * Height's unit (metres, or source units when Height is). Absent: no rows.
+   */
+  readonly elevationRange?: { readonly min: number; readonly max: number };
   /** Source point density in pts/m² on the XY footprint. NaN when unknown. */
   readonly density: number;
   readonly hasRgb: boolean;
@@ -149,13 +154,26 @@ export function extentRows(inputs: {
   readonly heightUnit?: HeightUnitGap;
   /** Append the noise-class qualifier to the Height value. */
   readonly includesNoise?: boolean;
+  /** Source-frame Min/Max elevation in Height's unit; rows follow Height when set. */
+  readonly elevation?: { readonly min: number; readonly max: number };
 }): Array<{ label: string; value: string }> {
   const noise = inputs.includesNoise ? HEIGHT_INCLUDES_NOISE_SUFFIX : '';
+  // Elevations are absolute values, so they keep centimetres whatever unit the
+  // spans above settle on, and they share Height's unit and noise note.
+  const elevationRows = (unit: (v: number) => string): Array<{ label: string; value: string }> => {
+    const e = inputs.elevation;
+    if (!e || !Number.isFinite(e.min) || !Number.isFinite(e.max)) return [];
+    return [
+      { label: 'Min elevation', value: unit(e.min) + noise },
+      { label: 'Max elevation', value: unit(e.max) + noise },
+    ];
+  };
   if (!inputs.unitKnown) {
     return [
       { label: 'Width', value: formatSourceUnits(inputs.width) },
       { label: 'Depth', value: formatSourceUnits(inputs.depth) },
       { label: 'Height', value: formatSourceUnits(inputs.height) + noise },
+      ...elevationRows((v) => `${v.toFixed(2)} (source units)`),
     ];
   }
   const gap = inputs.heightUnit;
@@ -175,6 +193,7 @@ export function extentRows(inputs: {
         ? fmt(h)
         : Number.isFinite(h) ? `${h.toFixed(1)}${HEIGHT_UNIT_GAP_SUFFIX[gap]}` : 'unknown') + (Number.isFinite(h) ? noise : ''),
     },
+    ...elevationRows((v) => (gap === undefined ? `${v.toFixed(2)} m` : `${v.toFixed(2)}${HEIGHT_UNIT_GAP_SUFFIX[gap]}`)),
   ];
 }
 
@@ -317,8 +336,8 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
     rows.push({
       label: 'Units',
       value: inputs.extentUnitRefusal
-        ? `Not ground metres — ${inputs.extentUnitRefusal} Extents in source units.`
-        : 'Unconfirmed — extents in source units',
+        ? `Not ground metres. ${inputs.extentUnitRefusal} Extents are in source units.`
+        : 'Unit not confirmed. Extents are in source units.',
     });
   }
   rows.push(
@@ -329,6 +348,7 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
       unitKnown: !unitsUnconfirmed,
       ...(inputs.heightIncludesNoise ? { includesNoise: true } : {}),
       ...(inputs.heightUnitGap ? { heightUnit: inputs.heightUnitGap } : {}),
+      ...(inputs.elevationRange ? { elevation: inputs.elevationRange } : {}),
     }),
   );
   if (Number.isFinite(inputs.density) && inputs.density > 0) {

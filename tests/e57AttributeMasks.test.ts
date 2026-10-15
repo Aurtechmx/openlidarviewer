@@ -370,6 +370,6 @@ describe('a cloud with no flagged values exports byte-identically', () => {
 
   it('draws and ranges the same as before', () => {
     expect(colorForMode('rgb', zeroed())).toBe(colors);
-    expect(rampRangeForMode('intensity', zeroed())).toEqual({ min: 7, max: 8 });
+    expect(rampRangeForMode('intensity', zeroed())).toMatchObject({ min: 7, max: 8 });
   });
 });

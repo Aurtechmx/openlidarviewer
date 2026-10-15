@@ -205,7 +205,7 @@ export function spacingRowFor(
     return copcRow('— (geographic CRS)', 'Spacing is not a linear distance for a geographic (degrees) CRS.');
   }
   if (crs?.horizontalMetricRefused) {
-    return copcRow(`${spacing.toFixed(2)} (source units)`, 'This frame\'s grid units are not ground metres — spacing shown in source units.');
+    return copcRow(`${spacing.toFixed(2)} (source units)`, 'This frame\'s grid units are not ground metres. Spacing is in source units.');
   }
   if (crs?.linearUnit === 'metre') {
     return copcRow(`${spacing.toFixed(2)} m`, 'Root-node point spacing in metres.');

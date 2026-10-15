@@ -8,14 +8,13 @@
  * scrollbar is reserved whether or not one is showing. How much space that is
  * depends on the platform rather than on this stylesheet: a classic scrollbar
  * takes the styled nine pixels permanently, and an overlay scrollbar takes
- * none. The panel card is laid out inside that content box either way.
+ * none.
  *
- * The rail's collapse handle is positioned against the rail's outer edge and
- * is meant to overlap the panel's hairline by a pixel, so the two read as one
- * surface. Where a gutter is reserved, the card stops short of that edge by
- * the gutter width and the handle detaches, which is a visible strip of scene
- * between a panel and its own control. Chrome shows it and a machine with
- * overlay scrollbars does not, which is why it survived review.
+ * The task card is the scrolling body itself, so its edge is where content is
+ * clipped and the rail's collapse handle sits on it. The gutter is therefore
+ * inside the card, and the card's right content inset gives that width back
+ * (99y3-workspace-polish.css), so content sits the same distance from both
+ * card edges whether the platform's scrollbars are classic or overlay.
  *
  * The nine pixels are this application's own doing rather than the platform's.
  * `.olv-ws-body::-webkit-scrollbar` sets that width, so the gutter is reserved
@@ -25,11 +24,11 @@
  * and not from a scratch div. Firefox takes `scrollbar-width: thin` instead
  * and lands on its own number, which is the other reason not to hard-code one.
  *
- * Zero is the safe answer and the one an unmeasurable environment gets, since
- * it restores the geometry the stylesheet had before this existed.
+ * Zero is the safe answer and the one an unmeasurable environment gets: the
+ * card then keeps its plain inset.
  */
 
-/** The property the rail stylesheet subtracts from the handle's offset. */
+/** The property the rail stylesheet subtracts from the task card's right inset. */
 export const GUTTER_PROPERTY = '--olv-ws-gutter';
 
 /**

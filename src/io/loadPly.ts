@@ -44,26 +44,55 @@ const PLY_HEADER_PROBE_BYTES = 65536;
 /**
  * Find the header in the raw bytes. Returns the header text (decoded one byte
  * per character, so string offsets are byte offsets) and the byte offset where
- * the body starts, just past `end_header` and its LF or CRLF. `null` when the
- * probe holds no `end_header` line; a file longer than the probe is refused
- * then, since its header (if any) is too long to check.
+ * the body starts, just past the `end_header` line and its LF or CRLF. Only a
+ * line that reads exactly `end_header` (leading whitespace and a trailing CR
+ * allowed) ends the header; the word inside a comment or any other line does
+ * not. `null` when the probe holds no such line; a file longer than the probe
+ * is refused then, since its header (if any) is too long to check.
  */
 function locatePlyHeader(buffer: ArrayBuffer): { text: string; bodyOffset: number } | null {
   const probe = new TextDecoder('latin1').decode(
     new Uint8Array(buffer, 0, Math.min(buffer.byteLength, PLY_HEADER_PROBE_BYTES)),
   );
-  const end = /end_header\r?\n/.exec(probe);
-  if (!end) {
-    if (buffer.byteLength > PLY_HEADER_PROBE_BYTES && probe.startsWith('ply')) {
-      throw new LoadError(
-        'malformed-file',
-        `malformed PLY: no end_header within the first ${PLY_HEADER_PROBE_BYTES} bytes; the header is too long to read.`,
-      );
-    }
-    return null;
+  let lineStart = 0;
+  for (;;) {
+    const nl = probe.indexOf('\n', lineStart);
+    if (nl < 0) break;
+    const line = probe.slice(lineStart, nl).replace(/\r$/, '').trimStart();
+    if (line === 'end_header') return { text: probe.slice(0, nl + 1), bodyOffset: nl + 1 };
+    lineStart = nl + 1;
   }
-  const bodyOffset = end.index + end[0].length;
-  return { text: probe.slice(0, bodyOffset), bodyOffset };
+  if (buffer.byteLength > PLY_HEADER_PROBE_BYTES && probe.startsWith('ply')) {
+    throw new LoadError(
+      'malformed-file',
+      `malformed PLY: no end_header within the first ${PLY_HEADER_PROBE_BYTES} bytes; the header is too long to read.`,
+    );
+  }
+  return null;
+}
+
+const END_HEADER_BYTES = Array.from('end_header', (c) => c.charCodeAt(0));
+
+/**
+ * True when the ASCII bytes `end_header` occur anywhere at or after `from`.
+ * The PLY parser takes its header up to the last `end_header` in the whole
+ * file, so any later occurrence would make it read a different header from
+ * the one checked here. ASCII bytes decode to themselves under UTF-8, so a
+ * byte search finds exactly what the parser's text search would.
+ */
+function containsEndHeader(buffer: ArrayBuffer, from: number): boolean {
+  const bytes = new Uint8Array(buffer);
+  const last = bytes.length - END_HEADER_BYTES.length;
+  let i = from;
+  while (i <= last) {
+    i = bytes.indexOf(END_HEADER_BYTES[0], i);
+    if (i < 0 || i > last) return false;
+    let k = 1;
+    while (k < END_HEADER_BYTES.length && bytes[i + k] === END_HEADER_BYTES[k]) k++;
+    if (k === END_HEADER_BYTES.length) return true;
+    i++;
+  }
+  return false;
 }
 
 /**
@@ -102,10 +131,18 @@ export function plyParseInput(buffer: ArrayBuffer): { buffer: ArrayBuffer; bodyO
  */
 function assertPlyCountsPlausible(buffer: ArrayBuffer): void {
   const header = locatePlyHeader(buffer);
-  if (!header) return; // not ours to judge; the parser reports a missing header
   const fail = (why: string): never => {
     throw new LoadError('malformed-file', `malformed PLY: ${why}`);
   };
+  if (!header) {
+    // No terminator line: the parser reports a missing header, unless the
+    // word appears elsewhere and it would take that as the terminator.
+    if (containsEndHeader(buffer, 0)) fail('end_header is not on a line of its own.');
+    return;
+  }
+  if (containsEndHeader(buffer, header.bodyOffset)) {
+    fail('the body repeats the end_header marker, so the header boundary is ambiguous.');
+  }
   const lines = header.text.split(/\r?\n/);
   const ascii = lines.some((l) => /^format\s+ascii\b/.test(l.trim()));
   let minBytes = 0;

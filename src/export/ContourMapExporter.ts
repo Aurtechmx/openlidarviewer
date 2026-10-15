@@ -38,8 +38,8 @@ import type {
   ExportResult,
   LegendPalette,
 } from './types';
-import { runStudioExport } from './BaseExportMode';
-import { formatLinear, linearUnitLabel, linearUnitOf } from './ScanReportRenderer';
+import { MIXED_VERTICAL_FRAME_NOTE, runStudioExport, sourceHeightExtent } from './BaseExportMode';
+import { formatElevation, formatLinear, linearUnitLabel } from './ScanReportRenderer';
 
 const DEFAULT_INTERVAL_M = 5;
 const DEFAULT_OVERLAY: ContourOptions['overlay'] = 'transparent';
@@ -50,19 +50,19 @@ export const contourMapExporter: ExportFactory = {
   label: 'Contour Map',
 
   isAvailable(context: ExportContext): boolean {
-    const aabb = context.adapter.localBoundsAabb();
-    if (!aabb) return false;
+    const h = sourceHeightExtent(context.adapter);
+    if (!h) return false;
     // Contour math is only meaningful when there's at least one full
     // interval of elevation change. Default interval is 5 m, but accept
     // any cloud with > 0.1 m of Z range — caller can dial the interval
     // smaller for low-relief scans.
-    return (aabb[5] - aabb[2]) > 0.1;
+    return h.range > 0.1;
   },
 
   unavailableReason(context: ExportContext): string {
-    const aabb = context.adapter.localBoundsAabb();
-    if (!aabb) return 'No cloud is loaded.';
-    if ((aabb[5] - aabb[2]) <= 0.1) {
+    const h = sourceHeightExtent(context.adapter);
+    if (!h) return 'No cloud is loaded.';
+    if (h.range <= 0.1) {
       return 'Cloud has < 10 cm of elevation range — no contour lines to draw.';
     }
     return 'Contour Map is unavailable on this cloud.';
@@ -72,8 +72,9 @@ export const contourMapExporter: ExportFactory = {
     context: ExportContext,
     options: ContourOptions,
   ): Promise<ExportResult> {
-    const aabb = context.adapter.localBoundsAabb();
-    if (!aabb) {
+    // Source heights on the up axis, matching the elevation colorbar labels.
+    const h = sourceHeightExtent(context.adapter);
+    if (!h) {
       throw new Error('Contour: no cloud loaded — cannot describe the export.');
     }
     const interval = options.interval ?? DEFAULT_INTERVAL_M;
@@ -84,11 +85,11 @@ export const contourMapExporter: ExportFactory = {
     // Sanity bound — too tight an interval at huge Z ranges produces
     // hundreds of thousands of line segments and bloats the PNG. Clamp
     // to keep render time bounded.
-    // Coordinates are native CRS units — a foot scan's interval and Z-range
-    // must read "ft", never a hardcoded "m". Unknown unit ⇒ metre default.
-    const unit = linearUnitOf(context.adapter.crsLabel()?.unit);
+    // The interval and Z range are vertical: they read in the colorbar's
+    // vertical unit ("ft" for US-survey-foot heights on a metre grid).
+    const unit = h.unit;
     const uLabel = linearUnitLabel(unit);
-    const zRange = aabb[5] - aabb[2];
+    const zRange = h.range;
     const expectedLines = Math.ceil(zRange / Math.max(interval, 0.01));
     if (expectedLines > 4096) {
       throw new Error(
@@ -116,7 +117,9 @@ export const contourMapExporter: ExportFactory = {
         { label: 'Labels',    value: showLabels ? 'on' : 'off' },
         { label: 'Overlay',   value: overlay },
         { label: 'Palette',   value: palette },
-        { label: 'Z range',   value: `${formatLinear(aabb[2], unit)} – ${formatLinear(aabb[5], unit)}` },
+        h.min === null || h.max === null
+          ? { label: `${h.axis} range`, value: MIXED_VERTICAL_FRAME_NOTE }
+          : { label: 'Z range', value: `${formatElevation(h.min, unit)} – ${formatElevation(h.max, unit)}` },
       ],
       {
         interval,

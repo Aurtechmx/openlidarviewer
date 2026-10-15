@@ -318,8 +318,8 @@ export function isGeocentricEpsg(epsg: number): boolean {
 
 /** Why a reprojection to or from a geocentric CRS is refused. */
 export const GEOCENTRIC_REPROJECT_REFUSAL =
-  'Reprojection to or from a geocentric (ECEF) CRS such as EPSG:4978 is not supported: ' +
-  'it needs a full 3-D transform and this converter maps only horizontal X/Y.';
+  'Reprojection to or from a geocentric (ECEF) CRS such as EPSG:4978 is refused, because ' +
+  'it needs a full 3-D transform and this converter maps only horizontal X and Y.';
 
 /**
  * The refusal to show when a reproject's source or target field names a
