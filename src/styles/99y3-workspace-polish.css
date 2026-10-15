@@ -188,12 +188,18 @@
 }
 
 /* The task header stays at the top of the scroller while a long page scrolls,
-   so Back and the page title are always on screen. */
-.olv-ws-task:not([hidden]) {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: var(--panel);
+   so Back and the page title are always on screen. On a short window the rail
+   is too short to give the header its own band (it would cover the controls
+   under it), so there it scrolls with the page. Where it is sticky, a control
+   scrolled into view lands below it (WCAG 2.2 2.4.11, Focus Not Obscured). */
+@media (min-height: 701px) {
+  .olv-ws-task:not([hidden]) {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--panel);
+  }
+  .olv-ws-body:has(.olv-ws-task:not([hidden])) { scroll-padding-top: 104px; }
 }
 
 /* Target size (WCAG 2.2 AA 2.5.8) on pointer layouts: every small inline
