@@ -1297,7 +1297,7 @@ export class Viewer {
         // A stopped scheduler ignores wakes, so anything that asked for a
         // frame while the tab was hidden is still recorded and the restart
         // serves it.
-        if (this._renderer !== undefined) this._startLoop();
+        if (this._renderer !== undefined) void this.ready.then(() => { if (!document.hidden) this._startLoop(); }, () => {}); // never before the backend init settles
       }
     };
     this._watchDevice();
