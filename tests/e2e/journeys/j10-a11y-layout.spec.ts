@@ -125,12 +125,21 @@ test.describe('J10 touch (P3)', { tag: '@touch' }, () => {
       const small = await page.evaluate(() => {
         const out: string[] = [];
         for (const el of document.querySelectorAll<HTMLElement>('button, [role="button"], a[href], input, select, [role="tab"]')) {
-          const r = el.getBoundingClientRect();
+          if (el.getBoundingClientRect().width === 0) continue;
+          // A tap on a label activates its input, so an input inside a label
+          // is measured by the label: the layer checkboxes keep their 12 px
+          // box inside a 44 px label (.olv-check-hit) on a large touch screen.
+          const r = (el.tagName === 'INPUT' ? el.closest('label') ?? el : el).getBoundingClientRect();
           if (r.width === 0 || r.height === 0) continue;
           if (r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) continue;
           const cs = getComputedStyle(el);
           if (cs.visibility === 'hidden' || cs.pointerEvents === 'none') continue;
-          if (r.width < 44 || r.height < 44) out.push(`${Math.round(r.width)}x${Math.round(r.height)} ${el.tagName.toLowerCase()}.${String(el.className).slice(0, 40)} "${(el.getAttribute('aria-label') ?? el.textContent ?? '').trim().slice(0, 30)}"`);
+          // A view cube face is a projected square: turned toward the edge of
+          // the cube it narrows below 44 px while its neighbour widens. Its
+          // floor is the cube's own 24 px (CUBE_MIN_TARGET, WCAG 2.5.8); the
+          // cube's edge and corner spots carry the 44 px targets.
+          const min = el.classList.contains('olv-viewcube-face') ? 24 : 44;
+          if (r.width < min || r.height < min) out.push(`${Math.round(r.width)}x${Math.round(r.height)} ${el.tagName.toLowerCase()}.${String(el.className).slice(0, 40)} "${(el.getAttribute('aria-label') ?? el.textContent ?? '').trim().slice(0, 30)}"`);
         }
         return out;
       });
