@@ -82,12 +82,21 @@ export interface CrsOverride {
    *
    * Absent on legacy entries. A legacy entry, or one without `min`, is offered
    * to the user as a suggestion and never applied silently.
+   *
+   * `digest` names its scheme (`olvsrc1-file:...`) and is compared only with a
+   * digest of the same scheme. `catalogItem` is set on a record written for a
+   * catalogue pick (a Planetary Computer item, recorded before the file is
+   * opened): it then applies only to a source opened from that item.
    */
   readonly identity?: {
     readonly pointCount?: number;
     readonly extent?: readonly [number, number, number];
     readonly min?: readonly [number, number, number];
     readonly digest?: string;
+    readonly catalogItem?: {
+      readonly id: string;
+      readonly bbox: readonly [number, number, number, number];
+    };
   };
   /**
    * Version of the identity recorded above. 2 = records the source position

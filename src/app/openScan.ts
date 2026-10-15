@@ -33,6 +33,7 @@ import { describeLoadError, LoadError } from '../io/loadErrors';
 import { LoadCancelledError } from '../io/loadFile';
 import type { ReplaceOutcome, ReplaceRequest } from './discardGuard';
 import { HEADER_PEEK_BYTES, openLocalHeavyLas, describeHeavyRefusal } from './openLocalHeavyLas';
+import { fileSourceFingerprint } from '../io/sourceFingerprint';
 import type { OpenStreamingDeps } from './openStreaming';
 import { availableModes } from '../render/colorModes';
 import { recommendColorMode } from '../render/colorModeRecommend';
@@ -302,6 +303,9 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       await deps.openLocalCopc(file, controller.signal);
       return;
     }
+    // The CRS identity's content fingerprint: this head plus one tail slice,
+    // hashed while the file decodes. Never a whole-file read.
+    const sourceDigest = fileSourceFingerprint(file, headSlice);
     // A large uncompressed LAS whose whole-file load would exceed the memory
     // ceiling is built into an out-of-core OPFS tile store and streamed, rather
     // than materialised as one ArrayBuffer. The bridge reads only the header
@@ -340,6 +344,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       debug: deps.debug,
       streaming: deps.getStreamingDeps(),
       stableLayerId: (id) => deps.layerIdentity.stableIdFor(id),
+      sourceDigest,
     }, { head: headSlice });
     if (heavy.status === 'attached') {
       deps.dropZone.setCancelHandler(null);
@@ -411,7 +416,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
         head: headSlice,
       },
     );
-    await attachStaticCloud(result, { file, signal: controller.signal, preview }, deps);
+    await attachStaticCloud(result, { file, signal: controller.signal, preview, sourceDigest }, deps);
   } catch (err) {
     deps.dropZone.setCancelHandler(null);
     if (preview) takeDownPreview(deps, preview);
@@ -500,6 +505,8 @@ export interface AttachedCloudSource {
    * second time.
    */
   readonly preview?: PreviewCloudHandle | null;
+  /** The source's content fingerprint, stamped on the cloud before its CRS resolves. */
+  readonly sourceDigest?: Promise<string | null>;
 }
 
 /**
@@ -521,6 +528,7 @@ export async function attachStaticCloud(
 ): Promise<void> {
   const viewer = deps.getViewer();
   await viewer.ready;
+  if (source.sourceDigest) result.cloud.sourceDigest = (await source.sourceDigest) ?? null;
 
   // NB: static layers are ADDITIVE — dropping/opening a second scan keeps the
   // first as a separate layer (the LAYERS panel lists each with its own ✕ to

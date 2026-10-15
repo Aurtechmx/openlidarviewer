@@ -267,6 +267,11 @@ export class OlvTileSource implements StreamingSource {
   readonly frame: SpatialFrame;
 
   readonly octree: OlvTileOctree;
+  /**
+   * Content fingerprint of the source file (`io/sourceFingerprint`), stamped
+   * by the open before the CRS is resolved. Null when none was taken.
+   */
+  sourceDigest: string | null = null;
 
   private readonly _store: TileStoreReader;
   private readonly _tiles: TileBytesReader;

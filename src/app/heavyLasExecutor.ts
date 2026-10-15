@@ -689,6 +689,8 @@ async function attachHeavyStream(
   // is the replaced work cleared or stamped as the retired scan's.
   deps.streaming.resetStreamState();
   settleHeavyReplace(deps, replace);
+  // Already settled: the open started it from the file's head and tail.
+  source.sourceDigest = (await deps.sourceDigest?.catch(() => null)) ?? null;
   revealHeavyStreamingSurfaces(source, deps.streaming);
 }
 

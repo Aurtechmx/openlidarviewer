@@ -275,10 +275,7 @@ import { createProjectFrameService, projectFrameInputFrom, sessionImportOrigins 
  * alongside the CRS — that pair has no other natural home.
  */
 const crsService = new CrsService();
-import {
-  keyForDataset as crsKeyForDataset,
-  setOverride as setCrsOverrideForDataset,
-} from './geo/CrsOverrideStore';
+import { recordCatalogueCrs } from './app/pcCatalogueCrs';
 
 // A pointer to the open-source repository for anyone who opens the console on
 // the live site. The deployed bundle is compact-transformed; the readable source — and
@@ -403,28 +400,11 @@ const catalogPanel = new CatalogPanel({
   // usually already cached — cuts ~200–800 ms off perceived first-paint
   // because the chunk download hides behind think-time.
   onPickIntent: (url: string) => prewarmForUrl(url),
-  // v0.3.6 PC STAC integration. When the user picks a result from the
-  // Planetary Computer "Search by location" panel, store the item's
-  // EPSG in the CRS override store before dispatching the URL. This
-  // short-circuits the LAS VLR probe — the streaming pipeline asks the
-  // override store first and never spends ~500-700 ms decoding the
-  // header for CRS metadata it already has.
+  // v0.3.6 PC STAC integration. A pick records the item's catalogue EPSG
+  // for the stream opened from that item only (app/pcCatalogueCrs.ts).
   onPickPcItem: (item) => {
     recordUsage('scan-open', 'pc-stac');
-    if (item.epsg) {
-      try {
-        // The dataset key is derived from the URL/name the streaming
-        // pipeline will use. We mirror the same `keyForDataset` so the
-        // override resolves on the first lookup.
-        const datasetKey = crsKeyForDataset(item.id);
-        setCrsOverrideForDataset(datasetKey, {
-          epsg: item.epsg,
-          kind: 'projected',
-        });
-      } catch (err) {
-        if (debug) console.warn('[crs] PC EPSG short-circuit failed', err);
-      }
-    }
+    try { recordCatalogueCrs(item); } catch (err) { if (debug) console.warn('[crs] PC catalogue EPSG record failed', err); }
     // SAS-sign the raw blob URL before handing it to the streaming pipeline.
     // Without this step the Azure Blob host returns HTTP 409 on the first
     // range request — Planetary Computer assets require a short-lived
@@ -1186,7 +1166,7 @@ const crsCoordinator = createCrsCoordinator({
   getViewer: () => viewer,
   isViewerReady: () => viewerReady,
   getActiveId: () => scans.activeId,
-  debug, onOverrideApplied: () => { layerService.refreshCrsFlags(); layerService.applyVisibility(); }, notify: (m, a) => appToast().show(m, a),
+  debug, onOverrideApplied: () => { layerService.refreshCrsFlags(); layerService.applyVisibility(); }, notify: (m, a) => appToast().show(m, a), showSuggestion: (s, a) => inspector.setCrsSuggestion(s, a),
 });
 
 // v0.3.9 — workflow recorder. The host owns the controller so it can

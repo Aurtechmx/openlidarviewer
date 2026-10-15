@@ -437,6 +437,12 @@ export class PointCloud {
    */
   readonly sourceDeclaredPointCount?: number;
   readonly metadata?: CloudMetadata;
+  /**
+   * Versioned content fingerprint of the source file (`io/sourceFingerprint`),
+   * set once by the open before the cloud is attached. Null when the open had
+   * no file bytes to take it from or Web Crypto was unavailable.
+   */
+  sourceDigest: string | null = null;
 
   /**
    * Cached min/max bounds. Positions are immutable, so the O(n) scan in

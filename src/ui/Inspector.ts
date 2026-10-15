@@ -683,6 +683,13 @@ export class Inspector {
   private readonly _crsBody: HTMLElement;
   /** The whole Coordinate-system collapsible — hidden for local-frame profiles. */
   private readonly _crsSection: HTMLElement | null = null;
+  /**
+   * Persistent offer of a CRS remembered for a file with this name but not
+   * applied (the toast for it leaves after 8 s). A sibling of `_crsBody`,
+   * which the lazy `renderCrs` replaces on every CRS change.
+   */
+  private readonly _crsSuggestion = el('div', { className: 'olv-crs-warning-soft olv-crs-suggestion olv-hidden' });
+  private _crsSuggestionHandlers: { readonly apply: () => void; readonly dismiss: () => void } | undefined;
   /** Caller registers this to react to user CRS overrides. */
   private _onCrsOverride: ((override: CrsOverride) => void) | null = null;
   /** The lazy `renderCrs` chunk, once loaded — see `_renderProvenanceFn`. */
@@ -1387,7 +1394,9 @@ export class Inspector {
       if (referencePlaneSection.open) void this.referencePlane?.open();
     });
 
-    this._crsSection = collapsibleSection('Coordinate system', this._crsBody);
+    this._crsSuggestion.setAttribute('role', 'status');
+    this._crsSuggestion.setAttribute('aria-live', 'polite');
+    this._crsSection = collapsibleSection('Coordinate system', el('div', { className: 'olv-crs-wrap' }, [this._crsSuggestion, this._crsBody]));
     // Task frequency order: appearance (Rendering holds the navigation
     // group), filters, saved views, then the scan facts.
     this.element = el('aside', { className: 'olv-inspector' }, [
@@ -2627,6 +2636,40 @@ export class Inspector {
       renderCrs(this._crsBody, resolved, (o) => this._onCrsOverride?.(o));
       this._deliverDeferredCrsFocus();
     });
+  }
+
+  /**
+   * Show (or, with null, hide) the offer of a CRS remembered for a file with
+   * this name that was not applied. Apply and Dismiss call `handlers`.
+   */
+  setCrsSuggestion(
+    suggestion: { readonly epsg: number | null } | null,
+    handlers?: { readonly apply: () => void; readonly dismiss: () => void },
+  ): void {
+    const box = this._crsSuggestion;
+    this._crsSuggestionHandlers = suggestion ? handlers : undefined;
+    box.classList.toggle('olv-hidden', !suggestion);
+    if (!suggestion) { box.replaceChildren(); return; }
+    const label = suggestion.epsg !== null ? `EPSG:${suggestion.epsg}` : 'Local coordinates';
+    const message = `A CRS (${label}) was remembered for a file with this name.`;
+    // Same offer re-published by a re-resolve: keep the node so it is not announced again.
+    if (box.firstElementChild?.textContent === message) return;
+    const button = (text: string, tip: string, run: () => void): HTMLButtonElement => {
+      const b = el('button', { className: 'olv-inline-retry', type: 'button', text, tip }) as HTMLButtonElement;
+      b.addEventListener('click', run);
+      return b;
+    };
+    box.replaceChildren(
+      el('span', { text: message }),
+      el('div', { className: 'olv-crs-suggestion-actions' }, [
+        button('Apply', 'Apply the remembered coordinate system to this file.', () => this._crsSuggestionHandlers?.apply()),
+        button('Dismiss', 'Keep this file\'s own coordinate system and hide this notice.', () => {
+          const h = this._crsSuggestionHandlers;
+          this.setCrsSuggestion(null);
+          h?.dismiss();
+        }),
+      ]),
+    );
   }
 
   /** Load (and cache) the `renderCrs` chunk. Dedupes concurrent calls. */

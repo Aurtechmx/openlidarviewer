@@ -159,6 +159,8 @@ export function datasetIdentity(cloud: {
   readonly renderOrigin?: readonly number[];
   /** A content digest of the source, when the caller already holds one. */
   readonly sourceDigest?: string | null;
+  /** The catalogue item a stream was opened from, when it was picked from one. */
+  readonly catalogItem?: CatalogItemIdentity | null;
 } | null | undefined): DatasetIdentity | undefined {
   if (!cloud) return undefined;
   const pointCount = cloud.sourceDeclaredPointCount
@@ -192,13 +194,21 @@ export function datasetIdentity(cloud: {
     if (m.every(Number.isFinite)) min = [m[0], m[1], m[2]];
   }
   const digest = cloud.sourceDigest ?? undefined;
-  if (pointCount === undefined && !extent && !digest) return undefined;
+  const item = cloud.catalogItem ?? undefined;
+  if (pointCount === undefined && !extent && !digest && !item) return undefined;
   return {
     ...(pointCount !== undefined ? { pointCount } : {}),
     ...(extent ? { extent } : {}),
     ...(min ? { min } : {}),
     ...(digest ? { digest } : {}),
+    ...(item ? { catalogItem: { id: item.id, bbox: [item.bbox[0], item.bbox[1], item.bbox[2], item.bbox[3]] as const } } : {}),
   };
+}
+
+/** A catalogue item a source was opened from: its id and WGS84 bbox. */
+export interface CatalogItemIdentity {
+  readonly id: string;
+  readonly bbox: readonly [number, number, number, number];
 }
 
 /** The facts a dataset is identified by. See {@link datasetIdentity}. */
@@ -207,8 +217,30 @@ export interface DatasetIdentity {
   readonly extent?: readonly [number, number, number];
   /** Absolute bounds minimum in the source frame, rounded to 1 mm. */
   readonly min?: readonly [number, number, number];
-  /** Content digest of the source, when available. */
+  /**
+   * Content fingerprint of the source, when available. Names its scheme
+   * (`olvsrc1-file:...`, see `io/sourceFingerprint.ts`); two digests are
+   * compared only when their schemes match.
+   */
   readonly digest?: string;
+  /** The catalogue item the source was opened from, when it was picked from one. */
+  readonly catalogItem?: CatalogItemIdentity;
+}
+
+/** The scheme a digest names (the part before ':'), or '' when it names none. */
+function digestScheme(d: string): string {
+  const i = d.indexOf(':');
+  return i < 0 ? '' : d.slice(0, i);
+}
+
+/** Two digests taken the same way, so that comparing them means something. */
+function comparableDigests(a: string | undefined, b: string | undefined): boolean {
+  return !!a && !!b && digestScheme(a) === digestScheme(b);
+}
+
+function sameBbox(a: readonly number[], b: readonly number[]): boolean {
+  // The stored side comes from localStorage, so its shape is not trusted.
+  return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 1e-9);
 }
 
 /** Version of the identity a new override records. 2 = includes `min`. */
@@ -261,12 +293,24 @@ export function classifyOverrideMatch(
       && override.detectedEpsg !== detected.epsg);
   if (declarationDiffers) return { kind: 'different' };
   const stored = override.identity;
-  if (stored?.digest && loaded?.digest && stored.digest !== loaded.digest) return { kind: 'different' };
+  const digestsComparable = comparableDigests(stored?.digest, loaded?.digest);
+  if (digestsComparable && stored?.digest !== loaded?.digest) return { kind: 'different' };
   if (!sameDataset(stored, loaded)) return { kind: 'different' };
+
+  // A record made for a catalogue item (a Planetary Computer pick, written
+  // before the file was opened, so it holds no declaration or position) belongs
+  // to a source opened from that item. Another item is a different source; a
+  // source not opened from the catalogue cannot be confirmed either way.
+  const item = stored?.catalogItem;
+  if (item && override.identityVersion === OVERRIDE_IDENTITY_VERSION) {
+    const other = loaded?.catalogItem;
+    if (!other) return { kind: 'candidate', reason: 'identity-missing' };
+    return other.id === item.id && sameBbox(other.bbox, item.bbox) ? { kind: 'verified' } : { kind: 'different' };
+  }
 
   const legacy = override.identityVersion !== OVERRIDE_IDENTITY_VERSION || !observed;
   if (legacy) return { kind: 'candidate', reason: 'legacy' };
-  if (stored?.digest && loaded?.digest) return { kind: 'verified' };
+  if (digestsComparable) return { kind: 'verified' };
   // Position and spans are required on both sides. The point count is compared
   // whenever both sides state it (above) but is not required: a stream may not
   // know its total yet, and the count is translation-invariant anyway.

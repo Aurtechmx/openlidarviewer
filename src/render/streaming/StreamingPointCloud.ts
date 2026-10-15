@@ -103,6 +103,14 @@ export class StreamingPointCloud implements StreamingSource {
     return this.source.metadata;
   }
 
+  /** Content fingerprint of the bytes the open read; see {@link CopcSource.sourceDigest}. */
+  get sourceDigest(): string | null {
+    return this.source.sourceDigest;
+  }
+
+  /** Catalogue item this stream was opened from, set by the open when it was picked from one. */
+  catalogItem: { readonly id: string; readonly bbox: readonly [number, number, number, number] } | null = null;
+
   /** Total points in the source file — not the displayed count. */
   get sourcePointCount(): number {
     return this.metadata.header.pointCount;

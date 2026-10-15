@@ -63,6 +63,12 @@ export interface HeavyLasBridgeDeps {
    * that stay open keeps its owner. Absent, static work is left unstamped.
    */
   stableLayerId?(viewerId: string): string | null;
+  /**
+   * The source file's content fingerprint (`io/sourceFingerprint`), taken by
+   * the open from its head and tail. Stamped on the tile source before its CRS
+   * is resolved. Absent or null, the CRS identity uses metadata facts only.
+   */
+  readonly sourceDigest?: Promise<string | null>;
 }
 
 /** The light seams the decision half needs — no out-of-core weight. */

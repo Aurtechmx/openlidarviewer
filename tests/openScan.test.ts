@@ -364,16 +364,22 @@ describe('openScan reads the file prefix once', () => {
   it('slices the file a single time before the loader, and hands the bytes on', async () => {
     // A non-COPC head: the sniff, the heavy peek and the loader's preflight
     // all consume the one 64 KiB read. The stand-in counts every slice.
-    let slices = 0;
+    // The CRS identity's content fingerprint reuses that head and adds one
+    // tail slice of at most 64 KiB; it never reads the prefix again.
+    const slices: Array<[number, number]> = [];
     const head = new ArrayBuffer(65_536);
     const file = {
       name: 'plain.laz',
       size: 10_000_000,
-      slice: () => { slices += 1; return { arrayBuffer: async () => head }; },
+      slice: (start = 0, end = 10_000_000) => {
+        slices.push([start, end]);
+        return { arrayBuffer: async () => (start === 0 ? head : new ArrayBuffer(end - start)) };
+      },
     } as unknown as File;
     const { deps, calls } = makeDeps();
     await openScan(file, deps);
-    expect(slices).toBe(1);
+    expect(slices.filter(([start]) => start === 0)).toHaveLength(1);
+    expect(slices.filter(([start]) => start !== 0)).toEqual([[10_000_000 - 65_536, 10_000_000]]);
     expect(calls.loadLocalSource).toHaveBeenCalledTimes(1);
     const options = (calls.loadLocalSource.mock.calls[0] as unknown as [File, unknown, { head?: ArrayBuffer }])[2];
     expect(options.head).toBe(head);

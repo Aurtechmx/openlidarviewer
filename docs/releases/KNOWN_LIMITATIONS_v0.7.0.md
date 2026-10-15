@@ -353,9 +353,10 @@ consecutive passes, counted by `scripts/ios-streak.mjs`.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,280 lines, fifty-two fewer since the Save view snapshot
+`src/main.ts` is 4,260 lines, seventy-two fewer since the Save view snapshot
 moved to its own lazy module, the Analyse panel's longitude and latitude
-wiring moved to the mapper module and the view cube's wiring was condensed, and
+wiring moved to the mapper module, the Planetary Computer CRS record moved to
+its own module and the view cube's wiring was condensed, and
 `src/render/Viewer.ts` is 5,946, two hundred and seventy-seven lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own

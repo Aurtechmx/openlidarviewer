@@ -3052,6 +3052,9 @@ body:has(.olv-right-rail.olv-right-collapsed) .olv-navbar { --olv-nb-r: 0px; }
  * warnings get a coloured left rail so they read as advice, not as
  * decoration. */
 .olv-crs { display: flex; flex-direction: column; gap: var(--space-md); }
+.olv-crs-wrap { display: flex; flex-direction: column; gap: var(--space-md); }
+.olv-crs-suggestion { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-crs-suggestion-actions { display: flex; gap: var(--space-sm); }
 .olv-crs-summary { display: flex; flex-direction: column; gap: var(--space-2xs); }
 .olv-crs-name { font-size: var(--text-sm); color: var(--text); font-weight: 500; }
 .olv-crs-epsg {
