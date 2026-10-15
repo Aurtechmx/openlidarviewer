@@ -47,6 +47,7 @@ import {
   reducedSampleCaveat,
   refusalNote,
 } from '../export/measurementExport';
+import { volumeCaveatClauses, volumeFiguresWithheld, volumeWithheldClause } from '../render/measure/volumeCaveats';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Inline math
@@ -178,16 +179,23 @@ function computeValue(
     case 'box':
       return mm.volume_m3 != null ? formatVolume(mm.volume_m3, system, verified) : '—';
     case 'volume': {
-      // Mirror the live headline exactly (see MeasureController._headlineText)
-      // so the PDF and the panel agree to the digit.
+      // Mirror the live headline (see MeasureController._headlineText) so the
+      // PDF and the panel agree to the digit, caveats included: the clauses
+      // come from the one builder both surfaces share (volumeCaveats).
       if (mm.area_m2 == null) return '—';
       const area = formatAreaHonest(mm.area_m2, system, verified);
-      if (mm.cut_m3 == null) return `${area} footprint · cut/fill —`;
+      const v = m.volume;
+      if (!v) return `${area} footprint · cut/fill —`;
+      const vol = unitToMetres * unitToMetres * verticalToMetres;
+      if (volumeFiguresWithheld(v) || mm.cut_m3 == null) {
+        return `${area} · ${volumeWithheldClause(v, (n) => formatVolume(n * vol, system, verified))}`;
+      }
       const fill = formatVolume(Math.max(0, mm.fill_m3 ?? 0), system, verified);
       const cut = formatVolume(Math.max(0, mm.cut_m3 ?? 0), system, verified);
       const net = formatVolume(Math.abs(mm.net_m3 ?? 0), system, verified);
       const netSign = (mm.net_m3 ?? 0) < 0 ? 'cut' : 'fill';
-      return `${area} · +${fill} fill · −${cut} cut · net ${net} ${netSign}`;
+      const caveats = volumeCaveatClauses(v).map((c) => ` · ${c}`).join('');
+      return `${area} · +${fill} fill · −${cut} cut · net ${net} ${netSign}${caveats}`;
     }
     // Unreachable by type: the arms above cover the union. Kept as the
     // runtime fallback for a kind arriving from outside the type system, and
