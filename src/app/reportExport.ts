@@ -141,6 +141,30 @@ export function footprintToMetadataExtent(
 }
 
 /**
+ * The scan's lowest and highest elevation in the source frame (local bounds
+ * plus the source origin), in the unit the report prints Height in: metres when
+ * the footprint converted Height to metres, raw source units otherwise. The
+ * elevation axis is Z for Z-up formats and Y for Y-up meshes.
+ */
+export function sourceElevationRange(
+  b: { readonly min: readonly number[]; readonly max: readonly number[] },
+  origin: readonly number[] | undefined,
+  zUp: boolean,
+  fp: Footprint,
+  verticalUnitToMetres: number | undefined,
+): { min: number; max: number } | undefined {
+  const axis = zUp ? 2 : 1;
+  // Without the origin the source frame is unknown, so nothing is stated.
+  const o = origin?.[axis];
+  if (o === undefined) return undefined;
+  const min = b.min[axis]! + o;
+  const max = b.max[axis]! + o;
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return undefined;
+  const toMetres = fp.unitStatus === 'confirmed' && fp.heightUnitGap === null ? (verticalUnitToMetres as number) : 1;
+  return { min: min * toMetres, max: max * toMetres };
+}
+
+/**
  * Origin + resolved CRS + name for ONE static cloud: the frame its measurements
  * and points are placed back into. {@link exportGeoContext} calls it for the
  * active scan; the measurement export calls it for the scan a measurement was
@@ -333,6 +357,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
       zUp: true,
     });
     const ext = footprintToMetadataExtent(fp);
+    const elevationRange = sourceElevationRange({ min: [b[0], b[1], b[2]], max: [b[3], b[4], b[5]] }, streamingCloud.renderOrigin, true, fp, ctx.verticalUnitToMetres);
     const modes = streamingCloud.availableColorModes();
     // Streaming-preview accounting — how much of the cloud is resident at
     // export time. Surfaced as a "Loaded" row so the PDF discloses that a
@@ -352,6 +377,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
         nodes: nodeCounts.resident,
         totalNodes: nodeCounts.known,
       },
+      ...(elevationRange ? { elevationRange } : {}),
       ...(activeCrsLabel ? { crsName: activeCrsLabel, crsUnit: activeCrs?.linearUnit } : {}),
       // Class-filter honesty — when a filter narrows the live view, disclose
       // it so the PDF's full-cloud figures aren't read as filter-scoped.
@@ -389,6 +415,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
       zUp: isZUpFormat(staticCloud.sourceFormat),
     });
     const ext = footprintToMetadataExtent(fp);
+    const elevationRange = sourceElevationRange(b, staticCloud.sourceOrigin, isZUpFormat(staticCloud.sourceFormat), fp, ctx.verticalUnitToMetres);
     metadata = {
       fileName: staticCloud.name,
       format: staticCloud.metadata?.interpretationLevel
@@ -401,6 +428,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
       hasClassification: !!staticCloud.classification,
       ...classificationShare(staticCloud),
       ...(staticCloud.classification && hasNoiseClassPoints(staticCloud.classification, staticCloud.pointCount) ? { heightIncludesNoise: true } : {}),
+      ...(elevationRange ? { elevationRange } : {}),
       ...(activeCrsLabel ? { crsName: activeCrsLabel, crsUnit: activeCrs?.linearUnit } : {}),
       // Class-filter honesty — when a filter narrows the live view, disclose
       // it so the PDF's full-cloud figures aren't read as filter-scoped.
