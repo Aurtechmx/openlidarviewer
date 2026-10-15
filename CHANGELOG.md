@@ -31,6 +31,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Changed
 
+- The georeferenced orthographic PNG (PNG + .pgw + .prj) now has transparent no-data: pixels with no points have alpha 0 and pixels with points have alpha 255, with no partly transparent pixels. The PNG carries an `olv:nodata` text chunk that says so. The world file, the raster size and the colours of covered pixels are unchanged. Screen rendering and every other snapshot or export stay opaque.
 - The Data › Classes and Analyse › Terrain pages use the View panel's chips, section labels, rows and notes. The header Back shows only its arrow where the next crumb already names the page, and the left panel's card edge sits on its scroller, so content no longer runs under the Results bar or the page title.
 - The "Two scans loaded" before/after prompt is offered only when both scans declare the same CRS and linear unit and neither is a truncated load. Otherwise no prompt is shown; Compare in the Inspector is unchanged.
 - Interface themes are now Blue, Field and an upgraded High contrast; the Light theme is retired and saved Light choices move to Field. High contrast now uses a pure black page, opaque panels, 2 px solid edges and a 3 px focus ring.

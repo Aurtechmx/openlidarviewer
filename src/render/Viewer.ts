@@ -86,7 +86,7 @@ import { colorForMode, defaultMode, refreshClassificationColours } from './color
 import type { ColorMode, CoverageColorGrid, ColorForModeOptions } from './colorModes';
 import { computeSharedElevationRange, elevationOptsFor, applyElevationColors } from './projectElevationScale';
 import { type ActiveColorbar } from './activeColorbar';
-import type { SnapshotHost, SnapshotOptions } from './snapshot';
+import type { NoDataCapture, SizedCapture, SnapshotHost, SnapshotOptions } from './snapshot';
 import { runRenderFrame, feedFrameMs, governDpr, governPoints, type RenderLoopHost } from './renderLoop';
 import { type ClipBox, type VerticalExtent, ClipBoxGpu, clipFrameBounds, clipKeepsPoint, clipPickAccept, countKept, verticalExtentOf } from './clip/clipGpu';
 import { edlDefaultEnabled, EDL_DEFAULTS } from './edl';
@@ -4511,6 +4511,7 @@ export class Viewer {
     widthPx: number;
     heightPx: number;
     extent: { minX: number; minY: number; maxX: number; maxY: number };
+    noDataTransparent?: boolean;
   } | null> {
     // A "top-down" framed render points the ortho camera down −Z and pairs the
     // raster with a north-up world file — X easting, Y northing. In a Y-up
@@ -4547,9 +4548,11 @@ export class Viewer {
     // Output size: requested width (default 2048), height from the
     // footprint aspect so pixels stay square to within the 1 px rounding the
     // world file's independent X/Y scales absorb exactly.
+    // No-data pixels ship transparent: captured on a black and a white clear and composed (`orthoNoData.ts`).
+    const noData = { scene: this._scene, dark: new THREE.Color(0, 0, 0), light: new THREE.Color(1, 1, 1) };
     const shot = await this._renderAtSize(framing.widthPx, framing.heightPx, () => {
       this._renderer.render(this._scene, camera);
-    });
+    }, noData);
     // The delivered PNG size (the world file divides the framed rectangle by
     // it) and the frustum-derived rectangle the camera framed.
     return { ...shot, extent: framing.extent };
@@ -4578,7 +4581,8 @@ export class Viewer {
     outW: number,
     outH: number,
     renderFrame: () => void,
-  ): Promise<{ blob: Blob; widthPx: number; heightPx: number }> {
+    noData?: NoDataCapture,
+  ): Promise<SizedCapture> {
     const gl = this._renderer.domElement as HTMLCanvasElement;
     const prevSize = this._renderer.getSize(new THREE.Vector2());
     const prevRatio = this._renderer.getPixelRatio();
@@ -4588,19 +4592,8 @@ export class Viewer {
     try {
       this._renderer.setPixelRatio(1);
       this._renderer.setSize(outW, outH, false);
-      const present = (): Promise<void> => {
-        renderFrame();
-        return new Promise((resolve) => {
-          if (typeof requestAnimationFrame === 'function') {
-            requestAnimationFrame(() => resolve());
-          } else {
-            setTimeout(resolve, 0);
-          }
-        });
-      };
-      await present();
-      await present();
-      return await (await loadSnapshot()).renderedBlobAtSize(gl, this._renderer, outW, outH, renderFrame, this._scene.background);
+      const snap = await loadSnapshot();
+      return await snap.presentedBlobAtSize(gl, this._renderer, outW, outH, renderFrame, this._scene.background, noData);
     } finally {
       this._captureHoldsBuffer = false;
       this._renderer.setPixelRatio(prevRatio);

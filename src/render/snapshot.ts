@@ -22,6 +22,7 @@ import { computeScaleBar, pixelsPerMetreAt } from './scaleBar';
 import { burnInColorbarLayout, type ActiveColorbar } from './activeColorbar';
 import { colorbarStops, niceTicks, formatColorbarValue } from './colorbar';
 import { DERIVED_COLOR_NOTE, isDerivedColorMode } from './colorModeProvenance';
+import { composeNoDataAlpha } from './export/orthoNoData';
 
 export interface SnapshotOptions {
   /** Include the annotation markers. */
@@ -285,6 +286,86 @@ export async function renderedBlobAtSize(
     renderFrame();
   }, width, height, background);
   return { blob: await canvasToBlob(copy), widthPx: copy.width, heightPx: copy.height };
+}
+
+/** Run one render, then wait one animation frame so the frame is presented. */
+export function presentFrame(renderFrame: () => void): Promise<void> {
+  renderFrame();
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => resolve());
+    else setTimeout(resolve, 0);
+  });
+}
+
+/**
+ * The scene whose background a no-data capture swaps, and the two clear
+ * colours it swaps in (three.js colours equal to black and white; see
+ * `export/orthoNoData.ts`).
+ */
+export interface NoDataCapture {
+  readonly scene: { background: unknown };
+  readonly dark: unknown;
+  readonly light: unknown;
+}
+
+/** What {@link presentedBlobAtSize} delivers. */
+export interface SizedCapture {
+  blob: Blob;
+  widthPx: number;
+  heightPx: number;
+  /** True when no-data pixels were written with alpha 0. */
+  noDataTransparent?: boolean;
+}
+
+/**
+ * Capture a frame at exactly `width x height` after two render and present
+ * cycles (a single un-awaited render on WebGPU can capture the previous frame).
+ *
+ * With `noData`, the frame is captured once on a black clear and once on a
+ * white clear, each after its own two present cycles so neither copy can hold
+ * a frame drawn on the other clear. The pair is composed into one PNG whose
+ * no-data pixels have alpha 0 (`composeNoDataAlpha`). The scene background is
+ * restored in a `finally`.
+ */
+export async function presentedBlobAtSize(
+  gl: HTMLCanvasElement,
+  renderer: SizedRenderer,
+  width: number,
+  height: number,
+  renderFrame: () => void,
+  background?: unknown,
+  noData?: NoDataCapture,
+): Promise<SizedCapture> {
+  if (!noData) {
+    await presentFrame(renderFrame);
+    await presentFrame(renderFrame);
+    return renderedBlobAtSize(gl, renderer, width, height, renderFrame, background);
+  }
+  const scene = noData.scene;
+  const prev = scene.background;
+  const pixels: ImageData[] = [];
+  let first: HTMLCanvasElement | null = null;
+  try {
+    for (const clear of [noData.dark, noData.light]) {
+      scene.background = clear;
+      await presentFrame(renderFrame);
+      await presentFrame(renderFrame);
+      const copy = renderedCopy(gl, () => {
+        pinDrawingBuffer(renderer, gl, width, height);
+        renderFrame();
+      }, width, height, clear);
+      const ctx = copy === gl ? null : copy.getContext('2d');
+      if (!ctx) throw new Error('No-data capture needs a 2-D canvas context');
+      pixels.push(ctx.getImageData(0, 0, width, height));
+      first ??= copy;
+    }
+  } finally {
+    scene.background = prev;
+  }
+  const [dark, light] = pixels as [ImageData, ImageData];
+  composeNoDataAlpha(dark.data, light.data, dark.data);
+  first!.getContext('2d')!.putImageData(dark, 0, 0);
+  return { blob: await canvasToBlob(first!), widthPx: width, heightPx: height, noDataTransparent: true };
 }
 
 /**

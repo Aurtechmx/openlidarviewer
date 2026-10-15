@@ -268,6 +268,7 @@ function georefAdapter(opts: {
   aabb?: readonly [number, number, number, number, number, number] | null;
   framed?: boolean;
   framedReturnsNull?: boolean;
+  framedTransparent?: boolean;
 }): ExportSceneAdapter & { framedCalls: Array<{ widthPx?: number }> } {
   const base = stubAdapter({ aabb: opts.aabb });
   const framedCalls: Array<{ widthPx?: number }> = [];
@@ -287,10 +288,11 @@ function georefAdapter(opts: {
             // Hand-computed fixture: AABB [0,0,0,10,10,5] → footprint 10 × 10
             // → at widthPx 200 the height is 200 (square footprint).
             return {
-              blob: new Blob(['png'], { type: 'image/png' }),
+              blob: new Blob([opts.framedTransparent ? TINY_PNG : 'png'], { type: 'image/png' }),
               widthPx: o.widthPx ?? 2048,
               heightPx: o.widthPx ?? 2048,
               extent: { minX: 0, minY: 0, maxX: 10, maxY: 10 },
+              ...(opts.framedTransparent ? { noDataTransparent: true } : {}),
             };
           },
         }),
@@ -356,6 +358,33 @@ test('orthographic-rgb render: georeferenced path returns worldFile data verbati
   // WKT is trimmed before it travels — the .prj must not carry padding.
   expect(result.worldFile?.wkt).toBe('PROJCS["test"]');
   expect(result.metadata?.framing).toBe('top-down orthographic');
+});
+
+// A minimal valid 1x1 PNG (signature, IHDR, IDAT, IEND) for the text-chunk path.
+const TINY_PNG = new Uint8Array([
+  137, 80, 78, 71, 13, 10, 26, 10,
+  0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, 0, 0, 0, 58, 126, 155, 85,
+  0, 0, 0, 10, 73, 68, 65, 84, 120, 156, 99, 168, 7, 0, 0, 129, 0, 128, 211, 148, 83, 74,
+  0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+]);
+
+test('orthographic-rgb render: transparent no-data is disclosed in metadata and in the PNG', async () => {
+  const { readPngTextChunks } = await import('../src/export/pngTextChunks');
+  const { NODATA_TRANSPARENT_NOTE } = await import('../src/export/OrthographicRgbExporter');
+  const adapter = georefAdapter({ worldOrigin: { x: 1, y: 2 }, wkt: 'PROJCS["x"]', framedTransparent: true });
+  const result = await orthographicRgbExporter.render(stubContext(adapter), { width: 200 });
+  expect(result.metadata?.noData).toBe(NODATA_TRANSPARENT_NOTE);
+  const png = new Uint8Array(await result.blob.arrayBuffer());
+  expect(readPngTextChunks(png)).toEqual([{ keyword: 'olv:nodata', text: NODATA_TRANSPARENT_NOTE }]);
+  // The pixel chunks are unchanged: only a text chunk is spliced in before IEND.
+  expect([...png.subarray(0, 55)]).toEqual([...TINY_PNG.subarray(0, 55)]);
+});
+
+test('orthographic-rgb render: an opaque framed render does not claim transparency', async () => {
+  const adapter = georefAdapter({ worldOrigin: { x: 1, y: 2 }, wkt: 'PROJCS["x"]' });
+  const result = await orthographicRgbExporter.render(stubContext(adapter), { width: 200 });
+  expect(String(result.metadata?.noData)).toMatch(/opaque/);
+  expect(await result.blob.text()).toBe('png');
 });
 
 test('orthographic-rgb render: worldFile feeds buildStudioPngPackage end-to-end', async () => {
