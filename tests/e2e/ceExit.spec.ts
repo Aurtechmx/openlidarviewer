@@ -129,7 +129,7 @@ test.describe('one exit convention', () => {
   test.slow();
 
   for (const [name, size] of [['desktop 1440x900', DESKTOP], ['phone 390x844', PHONE]] as const) {
-    test(`${name}: every route, workspace and lab has a named Back; no dead ends`, async ({ page }) => {
+    test(`${name}: every route, workspace and lab has a named Back; no dead ends`, { tag: size === DESKTOP ? '@desktop-only' : [] }, async ({ page }) => {
       test.setTimeout(300_000);
       const { visited, deadEnds } = await sweep(page, size);
       test.info().annotations.push({ type: 'surfaces', description: visited.join('; ') }, { type: 'dead ends', description: String(deadEnds.length) });

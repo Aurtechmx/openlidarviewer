@@ -230,7 +230,7 @@ async function pinch(page: Page, c: { x: number; y: number }, r0: number, r1: nu
   }, [c.x, c.y, r0, r1] as const);
 }
 
-test.describe('J3 navigate (touch, P3)', () => {
+test.describe('J3 navigate (touch, P3)', { tag: '@touch' }, () => {
   test.skip(() => test.info().project.use.hasTouch !== true, 'touch journey runs on webkit-mobile');
 
   test('P3: pinch keeps the pinched point under the fingers, and Frame all is reachable by touch', async ({ page }, info) => {

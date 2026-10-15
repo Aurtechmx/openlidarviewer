@@ -189,7 +189,7 @@ const scanVisibleShare = (page: Page): Promise<number> =>
     return hit / (cols * rows);
   });
 
-test.describe('J1 phone first open', () => {
+test.describe('J1 phone first open', { tag: ['@touch', '@phone-only'] }, () => {
   test.skip(() => test.info().project.use.hasTouch !== true, 'phone journey runs on webkit-mobile');
 
   test('P3: after opening a scan, one transient card shows and the scan fills at least 60% of the screen', async ({ page }, info) => {

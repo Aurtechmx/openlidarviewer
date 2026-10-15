@@ -109,7 +109,7 @@ test.describe('J10 desktop', () => {
   });
 });
 
-test.describe('J10 touch (P3)', () => {
+test.describe('J10 touch (P3)', { tag: '@touch' }, () => {
   test.skip(() => test.info().project.use.hasTouch !== true, 'touch journey runs on webkit-mobile');
 
   test('P3: on a phone nothing overflows and every visible control is at least 44 px', async ({ page }, info) => {

@@ -181,7 +181,7 @@ async function readPose(page: Page): Promise<string> {
   return pose;
 }
 
-test.describe('mobile touch model — twist + pinch + pan decomposition', () => {
+test.describe('mobile touch model — twist + pinch + pan decomposition', { tag: '@touch' }, () => {
   test('a single-finger double-tap focuses the camera on a point (dblclick does not fire on touch)', async ({
     page,
   }) => {
@@ -383,7 +383,7 @@ async function oneFingerDrag(page: Page, from: { x: number; y: number }, to: { x
   );
 }
 
-test.describe('touch moves the scene the way the fingers move (Z-up survey)', () => {
+test.describe('touch moves the scene the way the fingers move (Z-up survey)', { tag: '@touch' }, () => {
   test('a one-finger drag up carries the ground under the finger up', async ({ page, browserName }) => {
     // Desktop Firefox does not start OrbitControls' drag from a synthetic touch
     // pointer. The mouse and finger share one orbit path, which

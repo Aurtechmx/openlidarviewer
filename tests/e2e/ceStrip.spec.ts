@@ -113,7 +113,9 @@ const FIXTURES: Record<string, (page: Page) => Promise<void>> = {
 
 test.describe('state strip', () => {
   for (const [name, open] of Object.entries(FIXTURES)) {
-    test(`${name}: every fact is visible without hover`, async ({ page }) => {
+    // Runs at the project's own viewport, which the default config sets to a
+    // desktop size; the stale fixture runs terrain at that size first.
+    test(`${name}: every fact is visible without hover`, { tag: '@desktop-only' }, async ({ page }) => {
       test.setTimeout(name === 'stale' ? 150_000 : 60_000);
       await start(page);
       await open(page);
@@ -121,7 +123,7 @@ test.describe('state strip', () => {
       await shoot(page, `${name}-desktop`);
     });
 
-    test(`${name}: phone, the strip sits above the dock`, async ({ page }) => {
+    test(`${name}: phone, the strip sits above the dock`, { tag: name === 'stale' ? '@desktop-only' : '@touch' }, async ({ page }) => {
       test.setTimeout(name === 'stale' ? 150_000 : 60_000);
       // The stale fixture runs terrain at desktop size, then narrows to a phone.
       if (name !== 'stale') await page.setViewportSize({ width: 390, height: 844 });
@@ -140,7 +142,7 @@ test.describe('state strip', () => {
     });
   }
 
-  test('each item opens where its fact is explained', async ({ page }) => {
+  test('each item opens where its fact is explained', { tag: '@desktop-only' }, async ({ page }) => {
     test.setTimeout(60_000);
     await start(page);
     await FIXTURES['unknown-vertical']!(page);

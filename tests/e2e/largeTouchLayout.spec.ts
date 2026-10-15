@@ -163,7 +163,7 @@ async function noHorizontalScroll(page: Page): Promise<void> {
 }
 
 for (const size of [{ width: 1280, height: 800 }, { width: 1024, height: 768 }]) {
-  test.describe(`large-touch ${size.width}x${size.height}`, () => {
+  test.describe(`large-touch ${size.width}x${size.height}`, { tag: '@touch' }, () => {
     test.use({ viewport: size, hasTouch: true, isMobile: false });
 
     test('scan, dock, rails and a measurement all work by tap with 44 px targets', async ({ page }, info) => {
@@ -284,7 +284,7 @@ for (const size of [{ width: 1280, height: 800 }, { width: 1024, height: 768 }])
 }
 
 for (const size of [{ width: 1440, height: 900 }, { width: 1280, height: 800 }, { width: 1024, height: 768 }]) {
-  test.describe(`fine pointer ${size.width}x${size.height}`, () => {
+  test.describe(`fine pointer ${size.width}x${size.height}`, { tag: '@desktop-only' }, () => {
     test.use({ viewport: size });
 
     test('keeps the desktop density, and nothing sits over a control', async ({ page }, info) => {
@@ -316,7 +316,7 @@ for (const width of [768, 800, 880, 900, 1024, 1280]) {
     const title = left === 'both'
       ? `fine pointer ${width}x800, both rails expanded: the project card clears both rails and their tabs`
       : `fine pointer ${width}x800, left rail ${left}: the project card clears the rails and the floating key`;
-    test(title, async ({ page }) => {
+    test(title, { tag: '@desktop-only' }, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 });
       await openScan(page);
       const leftTab = page.locator('.olv-rail-tab');

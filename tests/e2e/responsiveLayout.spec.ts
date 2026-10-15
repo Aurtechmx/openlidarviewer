@@ -161,7 +161,7 @@ async function assertNoOverflowOrClipping(page: Page, when: string): Promise<voi
   ).toEqual([]);
 }
 
-test.describe('responsive layout — no overflow, no clipped controls', () => {
+test.describe('responsive layout — no overflow, no clipped controls', { tag: '@desktop-only' }, () => {
   test('the empty state holds at every width', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('.olv-empty-title')).toBeVisible();
@@ -282,7 +282,7 @@ test.describe('responsive layout — findings the generic sweep cannot trigger',
   });
 });
 
-test('the landing mark stays below the header at 800 px wide', async ({ page }) => {
+test('the landing mark stays below the header at 800 px wide', { tag: '@desktop-only' }, async ({ page }) => {
   for (const height of [470, 900]) {
     await page.setViewportSize({ width: 800, height });
     await page.goto('/');
@@ -303,7 +303,7 @@ test('the landing mark stays below the header at 800 px wide', async ({ page }) 
 });
 
 for (const [width, height] of [[1280, 720], [1023, 768], [768, 1024]]) {
-  test(`the side rails start below the location bar, and the bar keeps the current page at ${width}x${height}`, async ({ page }) => {
+  test(`the side rails start below the location bar, and the bar keeps the current page at ${width}x${height}`, { tag: '@desktop-only' }, async ({ page }) => {
     await page.setViewportSize({ width, height });
     await page.goto('/?test=1');
     await dropTerrainAccessUtmLas(page);
@@ -364,7 +364,7 @@ async function contrasts(page: Page, selectors: string[]): Promise<Record<string
 }
 
 for (const theme of ['light', 'dark']) {
-  test(`measure text and the toast meet AA in the ${theme} theme`, async ({ page }) => {
+  test(`measure text and the toast meet AA in the ${theme} theme`, { tag: '@desktop-only' }, async ({ page }) => {
     await page.addInitScript((t) => localStorage.setItem('olv-theme', t), theme);
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto('/?test=1');
