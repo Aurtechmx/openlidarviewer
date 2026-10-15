@@ -175,6 +175,13 @@ export interface ExportSceneAdapter {
    */
   worldUpAxis(): 0 | 1 | 2;
   /**
+   * The up-axis component of the frame origin {@link localBoundsAabb} is
+   * measured from, so `aabb[up] + heightOrigin()` is a SOURCE height — the
+   * value the elevation colorbar labels. Optional: adapters without it report
+   * render-local heights.
+   */
+  heightOrigin?(): number;
+  /**
    * The TIGHT data AABB for report metadata (extent / density rows). Same as
    * {@link localBoundsAabb} for static clouds, but for streaming it is the true
    * data extent rather than the octree root cube — which over-reports height

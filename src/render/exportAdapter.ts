@@ -536,6 +536,19 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
     worldUpAxis(): 0 | 1 | 2 {
       return host.worldUpAxis?.() ?? 2;
     },
+    heightOrigin(): number {
+      // localBoundsAabb() is in the render frame. Streaming shifts by its
+      // render origin; static layers render in the project frame, whose origin
+      // is any visible layer's sourceOrigin minus its sourceToProject (a lone
+      // unplaced layer's own sourceOrigin, as the elevation legend reads).
+      const axis = this.worldUpAxis();
+      const streaming = host.streaming();
+      if (streaming) return streaming.cloud.renderOrigin[axis] ?? 0;
+      const first = visibleEntries()[0];
+      if (!first) return 0;
+      const shift = first.placement?.sourceToProject[axis] ?? 0;
+      return (first.cloud.sourceOrigin?.[axis] ?? 0) - shift;
+    },
     localBoundsAabb(): readonly [number, number, number, number, number, number] | null {
       // Streaming first — it has authoritative bounds from the COPC header.
       const streaming = host.streaming();

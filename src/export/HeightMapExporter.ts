@@ -23,7 +23,8 @@ import type {
   HeightMapRamp,
 } from './types';
 import { runStudioExport } from './BaseExportMode';
-import { formatLinear, linearUnitOf } from './ScanReportRenderer';
+import { formatElevation, linearUnitOf } from './ScanReportRenderer';
+import { sourceHeightExtent } from './heightExtent';
 
 /** Default resolution presets used by the Studio panel. */
 export const HEIGHT_MAP_RESOLUTIONS = [1024, 2048, 4096] as const;
@@ -38,22 +39,11 @@ export const HEIGHT_MAP_RAMPS: readonly HeightMapRamp[] = [
   'topo',
 ];
 
-/** What to call each component in the card row, so "Min Y" says which it is. */
-const AXIS_NAME = ['X', 'Y', 'Z'] as const;
-
 /**
- * The scan's HEIGHT extent, read off the axis that actually points up.
- *
- * The raster this exporter captures is coloured by the runtime's `elevation`
- * mode, which is axis-aware. The card beside it read `aabb[2]`/`aabb[5]`
- * regardless, so on a Y-up mesh a 40 m wide, 6 m tall scan passed the
- * availability gate on its horizontal span and printed "Min Z -20 / Max Z 20"
- * against a ramp covering the true 0-6 m. The georeferenced top-down ortho
- * path already declines on a Y-up frame for the same reason; this one drew
- * the picture correctly and mislabelled it.
- *
- * The row label follows the axis too, so "Min Y" on a Y-up mesh says which
- * number the reader is looking at rather than asserting a Z that is not one.
+ * The scan's HEIGHT extent, read off the axis that actually points up and in
+ * SOURCE units (the frame origin added back), so the card's Min/Max match the
+ * elevation colorbar beside it. The row label follows the axis too, so "Min Y"
+ * on a Y-up mesh says which number the reader is looking at.
  */
 function heightExtent(context: ExportContext): {
   readonly min: number;
@@ -61,13 +51,9 @@ function heightExtent(context: ExportContext): {
   readonly range: number;
   readonly label: (side: 'Min' | 'Max') => string;
 } | null {
-  const aabb = context.adapter.localBoundsAabb();
-  if (!aabb) return null;
-  const axis = context.adapter.worldUpAxis();
-  const min = aabb[axis];
-  const max = aabb[axis + 3];
-  const name = AXIS_NAME[axis];
-  return { min, max, range: max - min, label: (side) => `${side} ${name}` };
+  const h = sourceHeightExtent(context);
+  if (!h) return null;
+  return { min: h.min, max: h.max, range: h.range, label: (side) => `${side} ${h.axis}` };
 }
 
 export const heightMapExporter: ExportFactory = {
@@ -114,8 +100,8 @@ export const heightMapExporter: ExportFactory = {
       'elevation',
       options,
       [
-        { label: h.label('Min'), value: formatLinear(h.min, unit) },
-        { label: h.label('Max'), value: formatLinear(h.max, unit) },
+        { label: h.label('Min'), value: formatElevation(h.min, unit) },
+        { label: h.label('Max'), value: formatElevation(h.max, unit) },
       ],
       {
         minZ: h.min,
