@@ -8,7 +8,11 @@ import { requestReplace, wouldLoseWork, workAtRisk, type ReplaceGuardDeps } from
 import type { DiscardableWork } from '../src/app/closeScanGuard';
 import { guardReplacedWork, settleReplacedWork } from '../src/app/openStreaming';
 import { LoadCancelledError } from '../src/io/loadFile';
-import { partitionSessionWork, RETIRED_SCAN_OWNER, type OwnershipView } from '../src/app/measurementOwnership';
+import { measurementsOwnedByActive, partitionSessionWork, RETIRED_SCAN_OWNER, type OwnershipView } from '../src/app/measurementOwnership';
+import { exportMeasurementIntegrityReport, exportMeasurementsFile, type MeasurementExportActionDeps } from '../src/app/measurementExportActions';
+import * as measurementExport from '../src/export/measurementExport';
+import * as measurementReport from '../src/export/measurementReport';
+import { UTM13 } from './helpers/geoJsonLonLat';
 import { serializeActiveSession, type SessionSnapshotDeps } from '../src/app/sessionSnapshot';
 import * as sessionIo from '../src/io/session';
 import { parseSession } from '../src/io/session';
@@ -138,10 +142,113 @@ describe('a streamed scan opened over existing work', () => {
   it('with no guard wired, nothing is asked and leftover work is marked as belonging to the retired scan', async () => {
     const v = fakeViewer([{ id: 'm1' }]);
     const out = await guardReplacedWork({}, 'x');
-    expect(out).toBe('none');
+    expect(out.outcome).toBe('none');
     settleReplacedWork({ getViewer: () => v as never, bookmarks: { clear: vi.fn() }, refreshViewsUI: vi.fn() }, out);
     expect(v.measurements[0]!.owner).toEqual({ layerId: RETIRED_SCAN_OWNER, frame: 'project' });
     expect(v.annotations[0]!.owner).toEqual({ layerId: RETIRED_SCAN_OWNER, frame: 'project' });
+  });
+});
+
+// A viewer whose stores also list and remove items, so work placed while the
+// replacement prepares can be told apart from the work the dialog covered.
+function listingViewer(initial: string[]) {
+  type Item = { id: string; owner?: { layerId: string; frame: 'project' }; pickLayers?: string[] };
+  const measurements: Item[] = initial.map((id) => ({ id }));
+  const annotations: Item[] = initial.map((id) => ({ id: `n${id}` }));
+  const claim = (list: Item[]) => (layerId: string) => { for (const i of list) if (!i.owner) i.owner = { layerId, frame: 'project' }; };
+  const drop = (list: Item[]) => (id: string) => { const k = list.findIndex((i) => i.id === id); if (k >= 0) list.splice(k, 1); return null; };
+  return {
+    measurements, annotations,
+    measure: { clear: vi.fn(() => { measurements.length = 0; }), claimUnowned: claim(measurements), getMeasurements: () => measurements, removeMeasurement: drop(measurements) },
+    annotate: { clear: vi.fn(() => { annotations.length = 0; }), claimUnowned: claim(annotations), getAnnotations: () => annotations, remove: drop(annotations) },
+  };
+}
+
+describe('work placed while a streamed scan prepares', () => {
+  const streamView: OwnershipView = { layers: [], activeViewerId: null };
+
+  it('Replace discards only the work the dialog named, and the later work is kept, not adopted by the new scan', async () => {
+    const v = listingViewer(['seen']);
+    const showToast = vi.fn();
+    const deps = { getViewer: () => v as never, replaceGuard: async () => 'replace' as const, bookmarks: { clear: vi.fn() }, refreshViewsUI: vi.fn(), showToast };
+    const decision = await guardReplacedWork(deps, 'big.copc.laz');
+    v.measurements.push({ id: 'later' });
+    settleReplacedWork(deps, decision);
+    expect(v.measurements.map((m) => m.id)).toEqual(['later']);
+    expect(v.annotations).toHaveLength(0);
+    expect(partitionSessionWork(v.measurements, streamView).keep).toHaveLength(0);
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('1 measurement placed while big.copc.laz was opening'));
+  });
+
+  it('with nothing at risk when asked, work placed afterwards is not silently given to the new scan', async () => {
+    const v = listingViewer([]);
+    const showToast = vi.fn();
+    const deps = { getViewer: () => v as never, replaceGuard: async () => 'none' as const, bookmarks: { clear: vi.fn() }, refreshViewsUI: vi.fn(), showToast };
+    const decision = await guardReplacedWork(deps, 'big.copc.laz');
+    v.measurements.push({ id: 'later' });
+    settleReplacedWork(deps, decision);
+    expect(v.measurements.map((m) => m.id)).toEqual(['later']);
+    expect(partitionSessionWork(v.measurements, streamView).keep).toHaveLength(0);
+    expect(showToast).toHaveBeenCalledWith(expect.stringContaining('1 measurement placed while big.copc.laz was opening'));
+  });
+
+  it('says nothing when no work was placed while the scan prepared', async () => {
+    const v = listingViewer(['seen']);
+    const showToast = vi.fn();
+    const deps = { getViewer: () => v as never, replaceGuard: async () => 'replace' as const, bookmarks: { clear: vi.fn() }, refreshViewsUI: vi.fn(), showToast };
+    settleReplacedWork(deps, await guardReplacedWork(deps, 'x'));
+    expect(v.measure.clear).toHaveBeenCalled();
+    expect(showToast).not.toHaveBeenCalled();
+  });
+});
+
+describe('the session and every export of a streamed scan agree on the records they hold', () => {
+  const streamView: OwnershipView = { layers: [], activeViewerId: null };
+  const retired = { id: 'old', kind: 'distance' as const, name: 'Distance old', points: [[0, 0, 0], [5, 0, 0]] as Array<[number, number, number]>, owner: { layerId: RETIRED_SCAN_OWNER, frame: 'project' as const } };
+  const current = { id: 'new', kind: 'distance' as const, name: 'Distance new', points: [[1, 1, 0], [4, 1, 0]] as Array<[number, number, number]> };
+
+  it('holds the work on the stream and leaves out the work on the replaced scan, in the session, CSV, GeoJSON, integrity report, KML and PDF', async () => {
+    const ms = [retired, current];
+    const session = parseSession(serializeActiveSession(sessionIo, {
+      getViewer: () => ({
+        streamingCloud: { name: 'new.copc.laz', sourcePointCount: 10, dataBounds: () => [0, 0, 0, 1, 1, 1], crs: () => null },
+        measure: { unitSystem: 'metric', getMeasurements: () => ms },
+        annotate: { getAnnotations: () => [] },
+      }) as never,
+      activeCloud: () => null, analysedResult: () => null, verticalUnitToMetres: () => null,
+      captureViewState: () => ({}) as never, savedViews: () => [], origin: () => [0, 0, 0], crs: () => null, layerGroups: () => [],
+      appVersion: 'test', ownershipView: () => streamView,
+    }));
+    const sessionIds = session.measurements.map((m) => m.id);
+
+    const files: Record<string, string> = {};
+    const deps: MeasurementExportActionDeps = {
+      measure: { getMeasurements: () => ms, worldUp: [0, 0, 1], unitToMetres: 1, verticalUnitToMetres: 1, crsKnown: true, geographicCrs: false },
+      geo: () => ({ origin: [500_000, 4_000_000, 0], crsName: 'WGS 84 / UTM zone 13N', name: 'new.copc.laz', crs: UTM13 }),
+      upAxis: () => 'z',
+      layers: { view: { clouds: () => [], getCloud: () => undefined, layerProjectOffset: () => null }, stableIdFor: () => null },
+      refuse: () => undefined, notify: () => undefined,
+      baseName: (n) => n.replace(/\.[^.]+$/, ''),
+      downloadText: (filename, text) => { files[filename.split('.').pop()!] = text; },
+      loadMeasurementExport: async () => ({ ...measurementExport, resolveExportDigests: async () => ({ sourceSha256: null, sourceSha256Note: 'not supplied', crsOrigin: null } as never) }),
+      loadMeasurementReport: async () => ({ ...measurementReport, resolveExportDigests: async () => ({ sourceSha256: null, sourceSha256Note: 'not supplied', crsOrigin: null } as never) }),
+      activeClassificationEpoch: () => 0, appVersion: '0.0.0', now: () => '2026-01-01T00:00:00.000Z',
+    };
+    await exportMeasurementsFile('csv', deps);
+    await exportMeasurementsFile('geojson', deps);
+    await exportMeasurementIntegrityReport(deps);
+    const csvIds = files.csv!.split('\n').slice(1).filter((l) => l.length > 0).map((l) => l.split(',')[0]);
+    const geoIds = JSON.parse(files.geojson!).features.map((f: { properties: { id: string } }) => f.properties.id);
+    const reportLabels = JSON.parse(files.json!).findings.map((f: { label: string }) => f.label);
+    // KML and the PDF report keep what measurementsOwnedByActive keeps.
+    const scanSpecific = measurementsOwnedByActive(ms, streamView);
+
+    expect(sessionIds).toEqual(['new']);
+    expect(csvIds).toEqual(sessionIds);
+    expect(geoIds).toEqual(sessionIds);
+    expect(reportLabels).toEqual(['Distance new']);
+    expect(scanSpecific.own.map((m) => m.id)).toEqual(sessionIds);
+    expect(scanSpecific.withheld).toContain('no longer open');
   });
 });
 
