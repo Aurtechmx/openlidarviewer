@@ -87,6 +87,38 @@ describe('loadPly: count plausibility has no gaps', () => {
     await expect(loadPly(enc.encode(head).buffer as ArrayBuffer)).rejects.toThrow(/no properties/);
   });
 
+  test('an end_header inside a comment does not end the header early', async () => {
+    const head =
+      'ply\nformat binary_little_endian 1.0\ncomment written before end_header\n' +
+      'comment end_header\nelement vertex 1000000000000000\nend_header\n';
+    const t0 = Date.now();
+    await expect(loadPly(enc.encode(head).buffer as ArrayBuffer)).rejects.toThrow(/no properties/);
+    expect(Date.now() - t0).toBeLessThan(2000);
+  });
+
+  test('an element declared after a comment end_header is still checked', async () => {
+    const head =
+      'ply\nformat binary_little_endian 1.0\ncomment end_header\nelement vertex 1\n' +
+      'property float x\nproperty float y\nproperty float z\nelement junk 30000000\nend_header\n';
+    const bytes = new Uint8Array(enc.encode(head).length + 12);
+    bytes.set(enc.encode(head));
+    await expect(loadPly(bytes.buffer)).rejects.toThrow(/junk.*no properties/);
+  });
+
+  test('refuses an end_header that is not on a line of its own', async () => {
+    const head = 'ply\nformat ascii 1.0\nelement junk 9000000000000000\ncomment end_header\n';
+    await expect(loadPly(enc.encode(head).buffer as ArrayBuffer)).rejects.toThrow(/end_header/);
+  });
+
+  test('refuses a body that repeats the end_header marker', async () => {
+    const head =
+      'ply\nformat binary_little_endian 1.0\nelement vertex 1\nproperty float x\n' +
+      'property float y\nproperty float z\nend_header\n';
+    const tail = 'element junk 9000000000000000\nend_header\n';
+    const bytes = enc.encode(head + 'abcdefghijkl' + tail);
+    await expect(loadPly(bytes.buffer as ArrayBuffer)).rejects.toThrow(/end_header/);
+  });
+
   test('refuses a header that runs past the probe window', async () => {
     const pad = Array.from({ length: 2000 }, () => 'comment ' + 'x'.repeat(40)).join('\n');
     const head = `ply\nformat binary_little_endian 1.0\n${pad}\nelement vertex 1000000000\nproperty double x\nproperty double y\nproperty double z\nend_header\n`;
