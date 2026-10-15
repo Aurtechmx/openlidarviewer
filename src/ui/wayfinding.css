@@ -21,16 +21,30 @@
   color: var(--text-dim);
 }
 .olv-loc[hidden] { display: none; }
+/* In the header the bar is a pill of the same size and type as the privacy
+   badge and Focus (30 px, --text-xs), centred in the --loc-bar-h row. A touch
+   screen keeps the full row height, so every crumb stays a 44 px target. */
 .olv-topbar > .olv-loc {
   flex: 1 1 auto;
+  align-self: center;
   margin: 0 auto 0 var(--space-2xl);
-  padding: 0 var(--space-md);
-  height: var(--loc-bar-h);
+  padding: 0 var(--space-sm);
+  height: 30px;
+  font-size: var(--text-xs);
   background: var(--panel);
   border: 0.5px solid var(--hairline);
   border-radius: var(--radius-pill);
   max-width: max-content;
   overflow: hidden;
+}
+.olv-topbar > .olv-loc .olv-loc-crumb,
+.olv-topbar > .olv-loc .olv-loc-back,
+.olv-topbar > .olv-loc .olv-loc-here { min-height: 22px; padding-block: 0; }
+.olv-topbar > .olv-loc .olv-loc-here { display: inline-flex; align-items: center; }
+@media (pointer: coarse) {
+  .olv-topbar > .olv-loc { height: var(--loc-bar-h); font-size: var(--text-sm); }
+  .olv-topbar > .olv-loc .olv-loc-crumb,
+  .olv-topbar > .olv-loc .olv-loc-back { min-height: 44px; }
 }
 /* The current page shrinks; the rest keep their width instead of overlapping. */
 .olv-loc-back, .olv-loc-crumbs > li:not(:last-child) { flex-shrink: 0; }
