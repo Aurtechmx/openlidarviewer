@@ -15,13 +15,13 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
-import { dropDenseGridPly, dropTinyLas, placeTestDistance, showWorkspaceMode, terrainResultDigest } from './helpers';
+import { dropDenseGridPly, dropTinyLas, placeTestDistance, settleLocation, showWorkspaceMode, taskBack, clickTaskBack, terrainResultDigest } from './helpers';
 
 const MULTICHUNK = fileURLToPath(new URL('../fixtures/multichunk.laz', import.meta.url));
 const shelf = (page: Page) => page.locator('#olv-left-panels .olv-results-shelf');
 const modeHost = (page: Page, m: string) => page.locator(`#olv-ws-mode-${m}`);
 const taskTitle = (page: Page, m: string) => page.locator(`#olv-ws-mode-${m} .olv-ws-task-title`);
-const backBtn = (page: Page, m: string) => page.locator(`#olv-ws-mode-${m} .olv-ws-back`);
+const backBtn = (page: Page, m: string) => taskBack(page, m);
 
 /** The UX rules every stop in the rail must keep. */
 async function expectWorkspaceRules(page: Page): Promise<void> {
@@ -58,13 +58,15 @@ async function expectWorkspaceRules(page: Page): Promise<void> {
     const active = Array.from(rail.querySelectorAll('.olv-ws-mode')).filter((m) => vis(m));
     const host = active[0] as HTMLElement | undefined;
     const onPage = !!host?.classList.contains('has-page');
-    const back = host?.querySelector('.olv-ws-back');
+    // The rail's Back, or the header's while the header names the same place.
+    const railBack = host?.querySelector('.olv-ws-back');
+    const headerBack = document.querySelector('.olv-topbar > .olv-loc > .olv-loc-back');
     const inView = (el: Element): boolean => {
       const b = el.getBoundingClientRect();
       const box = rail.getBoundingClientRect();
       return b.top >= box.top - 1 && b.bottom <= box.bottom + 1;
     };
-    return { surfaces: active.length, depth, chain, nested, onPage, backShown: !!back && vis(back) && inView(back) };
+    return { surfaces: active.length, depth, chain, nested, onPage, backShown: (!!railBack && vis(railBack) && inView(railBack)) || (!!headerBack && vis(headerBack)) };
   });
   expect(r.surfaces, 'one task surface per mode').toBe(1);
   expect(r.depth, `bordered nesting depth: ${r.chain}`).toBeLessThanOrEqual(2);
@@ -104,6 +106,7 @@ test.describe('workspace journeys', () => {
     await expectWorkspaceRules(page);
 
     // Keyboard Back: focus the button and press Enter.
+    await settleLocation(page);
     await backBtn(page, 'data').focus();
     await page.keyboard.press('Enter');
     await expect(data.locator(':is(.olv-data-class-open, .olv-data-row):visible', { hasText: 'Classes' })).toBeVisible();
@@ -180,7 +183,7 @@ test.describe('workspace journeys', () => {
     expect(again.digest).toBe(first.digest);
     expect(again.tagged).toBe(first.count);
 
-    await backBtn(page, 'analyse').click();
+    await clickTaskBack(page, 'analyse');
     await expect(modeHost(page, 'analyse').locator('.olv-analyse-home')).toBeVisible();
     await expectWorkspaceRules(page);
   });
@@ -242,6 +245,7 @@ test.describe('workspace a11y', () => {
     await showWorkspaceMode(page, 'work');
     await expect(page.locator('.olv-ws-tab[data-mode="work"]')).toHaveAttribute('aria-selected', 'true');
     await page.locator('.olv-tool-launcher .olv-tl-row', { hasText: 'Measure' }).click();
+    await settleLocation(page);
     const back = backBtn(page, 'work');
     await page.keyboard.press('Shift'); // a key first, so focus counts as keyboard focus
     await back.focus();

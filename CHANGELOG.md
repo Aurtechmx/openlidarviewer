@@ -271,6 +271,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - Visible interface text spells colour the British way throughout: the View panel section is "Colour by", and the streaming panel colour chip and its tooltips read "Colour". Code names, file formats and LAS field names are unchanged.
 - Caution reads in one colour in the left panels. A new --caution token, set per theme to the PREVIEW state colour, now draws the class panel captions, the Review verdict, the Terrain PREVIEW verdicts and statuses, the caution workflow glyph and the Analyse home needs badge, which used three different ambers.
 - The Export, converter, Clip and layer Compare buttons (.olv-bc-pill) are drawn as the View panel chip (.olv-chip): the same size, corners, hover, selected and disabled states, focus ring and press. The class name is kept.
+- On desktop the rail task header no longer repeats the header Back ("← Data" twice): while the location bar shows a Back to the same place, the rail shows only the page title. The rail keeps its Back while a workspace is open, when the header Back closes that workspace, and on the phone sheet.
 
 ### Changed
 

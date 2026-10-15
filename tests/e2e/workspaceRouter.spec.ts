@@ -8,7 +8,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
-import { showWorkspaceMode } from './helpers';
+import { settleLocation, showWorkspaceMode, taskBack } from './helpers';
 
 const FIXTURE = fileURLToPath(new URL('../fixtures/multichunk.laz', import.meta.url));
 
@@ -52,7 +52,8 @@ test.describe('workspace route', () => {
     await expect(launcher).toBeHidden();
 
     // Back is a real button: keyboard reaches and activates it.
-    const back = task.locator('.olv-ws-back');
+    await settleLocation(page);
+    const back = taskBack(page, 'work');
     await expect(back).toHaveText(/Tools/);
     await back.focus();
     await page.keyboard.press('Enter');

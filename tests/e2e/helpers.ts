@@ -74,6 +74,44 @@ export async function openClassesPage(page: Page): Promise<void> {
  * shows/collapses doesn't need to ripple through each of them.
  */
 /**
+ * The Back that leaves a mode's task page. While the header location bar
+ * shows a Back to the parent (the root carries `olv-has-header-back`), the
+ * rail's task header shows only the title, so this is the header's Back; on a
+ * phone, or while a workspace's own close holds the header Back, it is the
+ * rail's. One selector picks by the same class the stylesheet reads, so it
+ * matches exactly one control in every state.
+ */
+export function taskBack(page: Page, mode: string): Locator {
+  return page.locator(
+    `html.olv-has-header-back .olv-topbar > .olv-loc > .olv-loc-back, html:not(.olv-has-header-back) #olv-ws-mode-${mode} > .olv-ws-task > .olv-ws-back`,
+  );
+}
+
+/**
+ * Wait until the location bar has repainted for the current route. It repaints
+ * once per animation frame, so after a navigation or a workspace opening the
+ * header Back (and which of the two Backs shows) can be one frame behind.
+ */
+export async function settleLocation(page: Page): Promise<void> {
+  await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+}
+
+/** Click a mode's task Back once the location bar has caught up. */
+export async function clickTaskBack(page: Page, mode: string): Promise<void> {
+  await settleLocation(page);
+  await taskBack(page, mode).click();
+}
+
+/** Go Back until the mode shows its home. */
+export async function backToModeHome(page: Page, mode: string): Promise<void> {
+  await settleLocation(page);
+  while (await taskBack(page, mode).isVisible()) {
+    await taskBack(page, mode).click();
+    await settleLocation(page);
+  }
+}
+
+/**
  * Open a scene tool's page in the Tools mode through its launcher row. The
  * Tools home shows only the launcher; each tool's panel is a page of its own.
  */
@@ -81,8 +119,7 @@ export async function openToolPage(page: Page, title: 'Measure' | 'Annotate' | '
   await showWorkspaceMode(page, 'work');
   const heading = page.locator('#olv-ws-mode-work .olv-ws-task-title');
   if ((await heading.isVisible()) && (await heading.textContent()) === title) return;
-  const back = page.locator('#olv-ws-mode-work .olv-ws-back');
-  if (await back.isVisible()) await back.click();
+  await backToModeHome(page, 'work');
   await page.locator('.olv-tool-launcher .olv-tl-row', { hasText: title }).click();
 }
 
@@ -124,8 +161,7 @@ export async function openAnalysePage(
   const heading = page.locator('#olv-ws-mode-analyse .olv-ws-task-title');
   const want = { terrain: 'Terrain', contours: 'Contours', objects: 'Objects & Space', features: 'Feature candidates', range: 'Range frames' }[target];
   if ((await heading.isVisible()) && (await heading.textContent()) === want) return;
-  const back = page.locator('#olv-ws-mode-analyse .olv-ws-back');
-  while (await back.isVisible()) await back.click();
+  await backToModeHome(page, 'analyse');
   const row = target === 'contours' ? 'terrain' : target;
   await page.locator(`.olv-ah-row[data-analysis="${row}"] .olv-ah-open`).click({ timeout: 20_000 });
   if (target === 'contours') await page.locator('.olv-at-link').click();

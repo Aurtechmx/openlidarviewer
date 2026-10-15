@@ -6,7 +6,7 @@
  * Deterministic project, committed classified `tiny.las` and the dense grid.
  */
 import { test, expect } from '@playwright/test';
-import { dropDenseGridPly, dropTinyLas, firePaletteAction, showWorkspaceMode } from './helpers';
+import { dropDenseGridPly, dropTinyLas, firePaletteAction, showWorkspaceMode, clickTaskBack } from './helpers';
 
 test.describe('Data home', () => {
   test.slow();
@@ -47,7 +47,7 @@ test.describe('Data home', () => {
     await check.uncheck();
     await expect(legend.locator('.olv-cl-banner')).toBeVisible();
 
-    await home.locator('.olv-ws-back').click();
+    await clickTaskBack(page, 'data');
     await expect(legend).toBeHidden();
     await expect(classesRow).toBeVisible();
     // Navigation is presentation only: the hidden class stays hidden.

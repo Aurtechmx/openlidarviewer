@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import {
   TERRAIN_ACCESS_BOX, dropDenseGridPly, dropTerrainAccessBoxLas, dropTerrainAccessUtmLas, firePaletteAction,
-  openAnalysePanel as openAnalyse,
+  openAnalysePanel as openAnalyse, clickTaskBack,
 } from './helpers';
 
 /**
@@ -213,7 +213,7 @@ test('profile, start/goal by keyboard and click, run, route shown, why-not, expo
   // persisted-overlay behaviour): reopening the Lab shows the toggle already
   // pressed, because it is the SAME persisted overlay still attached to the
   // scan, not a fresh one reset to off.
-  await page.locator('#olv-ws-mode-analyse > .olv-ws-task .olv-ws-back').click();
+  await clickTaskBack(page, 'analyse');
   await expect(page.locator('.olv-analyse-page[data-page="terrain-access"]')).toBeHidden();
   await openTerrainAccess(page);
   // A prior preview is not remembered across opens (only the overlay is),

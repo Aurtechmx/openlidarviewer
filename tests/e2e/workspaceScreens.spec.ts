@@ -8,7 +8,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { dropDenseGridPly, placeTestDistance } from './helpers';
+import { backToModeHome, dropDenseGridPly, placeTestDistance } from './helpers';
 
 const OUT = process.env.OLV_UX_SHOTS;
 
@@ -35,15 +35,15 @@ async function mode(page: Page, m: Mode): Promise<void> {
 
 async function home(page: Page, m: Mode): Promise<void> {
   await mode(page, m);
-  const back = page.locator(`#olv-ws-mode-${m} .olv-ws-back`);
-  while (await back.isVisible()) await back.click();
+  await backToModeHome(page, m);
 }
 
 async function layoutFacts(page: Page): Promise<Record<string, unknown>> {
   return page.evaluate(() => {
     const host = Array.from(document.querySelectorAll<HTMLElement>('.olv-ws-mode.is-active')).find((m) => m.getBoundingClientRect().height > 0);
     const title = host?.querySelector<HTMLElement>('.olv-ws-task-title');
-    const back = host?.querySelector<HTMLElement>('.olv-ws-back');
+    const back = [host?.querySelector<HTMLElement>('.olv-ws-back'), document.querySelector<HTMLElement>('.olv-topbar > .olv-loc > .olv-loc-back')]
+      .find((b) => b && !b.closest('[hidden]') && b.getBoundingClientRect().width > 0);
     const inView = (el: HTMLElement | null | undefined): boolean => {
       if (!el) return false;
       const r = el.getBoundingClientRect();
