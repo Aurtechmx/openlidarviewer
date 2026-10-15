@@ -455,6 +455,11 @@ async function openRenderingSection(page: import('@playwright/test').Page): Prom
     // showing; selecting a tab opens the body.
     await viewTab.click();
     await expect(viewTab).toHaveAttribute('aria-selected', 'true');
+  } else if (await page.locator('.olv-right-rail.olv-right-collapsed').count()) {
+    // A large touch screen in portrait (an iPad) opens a scan with the right
+    // rail collapsed off the edge; its tab slides it in, as a user would.
+    await page.locator('.olv-right-rail-tab').click();
+    await expect(page.locator('.olv-right-rail')).not.toHaveClass(/olv-right-collapsed/);
   }
   await expect(renderingDetails.locator('summary')).toBeVisible({ timeout: 10_000 });
 
