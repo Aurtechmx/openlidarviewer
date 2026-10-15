@@ -81,6 +81,27 @@ export function isZUpFormat(format: SourceFormat): boolean {
   );
 }
 
+/** A layer's up vector from its source format: Z for survey formats, Y otherwise. */
+export function upOfFormat(format: SourceFormat): [number, number, number] {
+  return isZUpFormat(format) ? [0, 0, 1] : [0, 1, 0];
+}
+
+/**
+ * The up the scene navigates by. Every layer keeps its source axes in the
+ * shared render space (a LAS survey Z-up, a PLY or glTF capture Y-up), but
+ * navigation, the standard views and the view cube need one: the layer `id`
+ * names when it is open (the active one), else the last added, else null (no
+ * static layer: keep the current up). Stored geometry never moves, and a
+ * measurement reads along its own layer's up, not this one.
+ */
+export function sceneUpOf(
+  layers: ReadonlyMap<string, { readonly cloud: { readonly sourceFormat: SourceFormat } }>,
+  id: string | null,
+): [number, number, number] | null {
+  const layer = (id !== null ? layers.get(id) : undefined) ?? [...layers.values()].pop();
+  return layer ? upOfFormat(layer.cloud.sourceFormat) : null;
+}
+
 /**
  * The up-axis a lon/lat placement may rely on. A resolved axis wins. When
  * detection left it undetermined, LAS/LAZ and the COPC/EPT streams built on

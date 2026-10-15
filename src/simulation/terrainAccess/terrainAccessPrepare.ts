@@ -13,7 +13,9 @@
  * Pure: no DOM, no three.js, no I/O.
  */
 
-import { terrainDtmToAccessGrid, type HorizontalScale, type InterpolatedPolicy } from './dtmTerrainAccessGrid';
+import {
+  terrainDtmToAccessGrid, type AboveGroundSurface, type HorizontalScale, type InterpolatedPolicy,
+} from './dtmTerrainAccessGrid';
 import {
   DEFAULT_COST_WEIGHTS,
   applyWidthClearance,
@@ -28,15 +30,21 @@ import { topBlockReasonSentence } from './terrainAccessExplain';
 import type { SimulationInputBasis } from '../simulationInputBasis';
 import type { TerrainAccessRefusal } from './terrainAccessRunner';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
-import type { SurfaceGrid } from '../../terrain/surface/buildDsm';
+
+/**
+ * The one sentence for an above-ground obstruction limit that cannot be
+ * evaluated: shown beside the disabled form control and at the head of the
+ * refusal a restored or programmatic profile gets, so both say the same thing.
+ */
+export const ABOVE_GROUND_UNAVAILABLE = 'Above-ground evidence unavailable; this constraint cannot be evaluated.';
 
 /** What a run or a preview needs in common, before either search or eligibility differ. */
 export interface TerrainAccessPrepareParams {
   readonly interpolated: InterpolatedPolicy;
   readonly maxCells: number;
   readonly withheldExcluded: boolean | null;
-  /** Above-ground surface, when available; optional per §12.4. */
-  readonly dsm?: SurfaceGrid | null;
+  /** Above-ground surface, when available; optional per §12.4, and checked for alignment. */
+  readonly dsm?: AboveGroundSurface | null;
   /** Region-of-interest mask, when the caller has declared one. */
   readonly roi?: Uint8Array | null;
   readonly weights?: CostWeights;
@@ -112,12 +120,26 @@ export function prepareTerrainAccessRun(
     };
   }
 
-  const { grid, basis, warnings: gridWarnings } = terrainDtmToAccessGrid(dtm, scale, {
+  const built = terrainDtmToAccessGrid(dtm, scale, {
     interpolated: params.interpolated,
     withheldExcluded: params.withheldExcluded,
     dsm: params.dsm,
     roi: params.roi,
   });
+  if (!built.ok) return built;
+  const { grid, basis, warnings: gridWarnings } = built;
+
+  // An obstruction limit with no above-ground layer would leave every cell
+  // 'not-evaluated', which eligibility does not block: the run would carry the
+  // limit in its parameters while never applying it. Refuse instead.
+  if (profile.obstacleHeightThreshold != null && grid.heightAboveGround == null) {
+    return {
+      ok: false, code: 'OBSTRUCTION_EVIDENCE_UNAVAILABLE',
+      reason: `${ABOVE_GROUND_UNAVAILABLE} The profile sets an above-ground obstruction limit of `
+        + `${profile.obstacleHeightThreshold} m, but no aligned above-ground surface is available for this terrain. `
+        + 'Turn the obstruction limit off to run without it.',
+    };
+  }
 
   if (basis.measuredCells === 0) {
     return {
@@ -134,6 +156,17 @@ export function prepareTerrainAccessRun(
 
   let eligibleCount = 0;
   for (const b of eligibility.blocked) if (b === 0) eligibleCount++;
+  if (eligibleCount === 0 && eligibilityBeforeWidth.blocked.some((b) => b === 0)) {
+    // Cells exist that the declared limits accept, but the footprint fits on
+    // none of them: say so, rather than reporting the map as supported.
+    const widthM = profile.vehicleWidth;
+    return {
+      ok: false, code: 'INSUFFICIENT_EVIDENCE',
+      reason: `The declared vehicle width (${widthM} m) fits nowhere on the supported terrain: every cell the `
+        + `profile's limits accept is closer than half that width (${widthM / 2} m) to unsupported terrain `
+        + 'or the survey edge. Declare a narrower vehicle, or analyse a wider extent.',
+    };
+  }
   if (eligibleCount === 0) {
     const top = topBlockReasonSentence(eligibility, profile);
     return {

@@ -9,7 +9,26 @@
  * importer.
  */
 
+import type { HeldSessionWork } from '../io/sessionFrame';
+
 let pending: File | null = null;
+
+/**
+ * Restored work whose scan is not open (or is open more than once). It is not
+ * placed in the scene, so no output can use it, and the next session save
+ * writes it back with the records it is read through, so it is never lost.
+ */
+let held: HeldSessionWork | null = null;
+
+/** Record (or with null, forget) the work an import could not place. */
+export function holdSessionWork(work: HeldSessionWork | null): void {
+  held = work && work.measurements.length + work.annotations.length > 0 ? work : null;
+}
+
+/** The work an import could not place, or null. */
+export function heldSessionWork(): HeldSessionWork | null {
+  return held;
+}
 
 /** Record (or with null, forget) the session waiting for its scan. */
 export function markPendingSessionRestore(file: File | null): void {
@@ -23,9 +42,10 @@ export function takePendingSessionRestore(): File | null {
   return file;
 }
 
-/** Forget the waiting session: the scene was reset or closed. */
+/** Forget the waiting session and any held work: the scene was reset or closed. */
 export function clearPendingSessionRestore(): void {
   pending = null;
+  held = null;
 }
 
 /**

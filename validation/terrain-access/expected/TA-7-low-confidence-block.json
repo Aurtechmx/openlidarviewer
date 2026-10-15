@@ -6,12 +6,13 @@
   "path": [
     0,
     1,
-    7,
+    2,
+    8,
     13,
     18,
     24
   ],
-  "cost": 6.242640687,
+  "cost": 6.828427125,
   "eligibleCount": 24,
   "blockedReasonCounts": {
     "low-confidence": 1

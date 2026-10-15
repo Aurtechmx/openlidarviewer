@@ -35,7 +35,7 @@ import { findDuplicateIds, type Action } from './ui/actionRegistry';
 import { runSceneTool, type SceneTool } from './app/toggleTool';
 import type { SessionIoDeps } from './app/sessionIo';
 import type { SessionSnapshotDeps } from './app/sessionSnapshot';
-import { openScan, clearPendingSessionRestore, type OpenScanDeps } from './app/openScan';
+import { openScan, clearPendingSessionRestore, heldSessionWork, type OpenScanDeps } from './app/openScan';
 import {
   openStreamingCopc as runOpenStreamingCopc,
   handleRemoteEpt as runHandleRemoteEpt,
@@ -44,7 +44,7 @@ import {
   type OpenStreamingDeps,
 } from './app/openStreaming';
 import {
-  generateReportPdf as runGenerateReportPdf, ownershipViewOf,
+  generateReportPdf as runGenerateReportPdf, ownershipViewOf, handOverLayerWork,
   exportGeoContext as runExportGeoContext,
   type GeoExportContext,
   type ReportExportDeps,
@@ -109,7 +109,7 @@ import {
 import { makeExportCrsResolver, resolvedExportCrs } from './app/exportCrsResolver';
 import { createInspectorVisualCoordinator } from './app/inspectorVisualCoordinator';
 import type { MeasurementExportActionDeps } from './app/measurementExportActions';
-import { exportImageAction, settleFileExport } from './app/exportImageAction';
+import { exportImageAction, runPointExport } from './app/exportImageAction';
 import { ClipPanel } from './ui/ClipPanel';
 import type { ClipBox } from './render/clip/clipBox';
 // Two-epoch change detection is loaded on demand (it pulls the terrain
@@ -244,7 +244,7 @@ import { CatalogPanel, buildCuratedDemoSample } from './ui/CatalogPanel';
 // section. Static clouds carry `metadata.crs` (CrsInfo from src/io/crs);
 // streaming clouds expose `.crs()` returning the same shape.
 import type { StreamingReportCloud } from './app/streamingScanReport'; import { runStreamingModules, preloadStreamingReport } from './app/streamingReportSeam';
-import { CrsService } from './geo/CrsService';
+import { CrsService, datasetIdentity } from './geo/CrsService';
 import { groundMetresPermitted, verticalMetresPerUnit, volumeUnitCaveat } from './geo/SpatialContext';
 import { prepareEpochFrames, epochUnitMismatchLines, compareSuggestionAllowed } from './app/epochFramePrep';
 // Shared vertical-unit labeller (already eager via terrainAnalysisRunner) —
@@ -530,7 +530,7 @@ const viewerLoaded: Promise<Viewer> = viewerStarted.then(async () => {
   viewer.setExportCrsResolver(makeExportCrsResolver({
     current: () => crsService.current(),
     resolveForCloud: (cloud) =>
-      crsService.resolveFor({ name: cloud.name, detected: cloud.metadata?.crs ?? undefined, source: 'las-vlr' }),
+      crsService.resolveFor({ name: cloud.name, detected: cloud.metadata?.crs ?? undefined, source: 'las-vlr', identity: datasetIdentity(cloud) }),
     activeCloud: () => (scans.activeId ? viewer!.getCloud(scans.activeId) ?? null : null),
   }));
   viewer.setResolvedActiveCrs(() => resolvedExportCrs(crsService.current())); // STREAMING export CRS
@@ -1042,7 +1042,7 @@ const layerService = createLayerService({
   context: runtime.context,
   refreshCompass: () => compass.refresh(),
   projectFrame,
-  resolveCrs: (name, detected) => crsService.resolveFor({ name, detected: detected ?? undefined, source: 'las-vlr' }),
+  resolveCrs: (name, detected, identity) => crsService.resolveFor({ name, detected: detected ?? undefined, source: 'las-vlr', identity }),
 });
 
 const inspector = new Inspector({
@@ -1186,7 +1186,7 @@ const crsCoordinator = createCrsCoordinator({
   getViewer: () => viewer,
   isViewerReady: () => viewerReady,
   getActiveId: () => scans.activeId,
-  debug, onOverrideApplied: () => { layerService.refreshCrsFlags(); layerService.applyVisibility(); },
+  debug, onOverrideApplied: () => { layerService.refreshCrsFlags(); layerService.applyVisibility(); }, notify: (m, a) => appToast().show(m, a),
 });
 
 // v0.3.9 — workflow recorder. The host owns the controller so it can
@@ -1647,7 +1647,7 @@ const refreshMeasurePanel = (): void => { measureMount.refresh(); refreshToolLau
 // verdicts (measureLayerUnits). Deferred behind viewerLoaded: `viewer` is null
 // until the lazy chunk resolves, and subscribe fires synchronously.
 void viewerLoaded.then(() => {
-  const measureUnits = measureMount.bindUnitFrames({ activeId: () => scans.activeId, clouds: () => viewer.clouds(), cloud: (id) => viewer.getCloud(id), stableIdFor: runtime.layerIdentity.stableIdFor });
+  const measureUnits = measureMount.bindUnitFrames({ activeId: () => scans.activeId, clouds: () => viewer.clouds(), cloud: (id) => viewer.getCloud(id), stableIdFor: runtime.layerIdentity.stableIdFor }); scans.onActiveChange(() => viewer.alignUpToLayer(scans.activeId)); // navigation up follows the active layer
   crsService.subscribe(() => {
     // One context for the active scan: measure scale, trust grade, geographic
     // refusal and the colorbar unit all read it.
@@ -1872,7 +1872,7 @@ const classLegendPanel = new ClassLegendPanel();
 const processStudio = createProcessStudioFromShell({
   getViewer: () => viewer, getActiveCloud: () => scans.activeCloud(), getActiveLayerId: () => scans.activeExportTargetId(),
   crsService, classLegend: classLegendPanel,
-  resolveLayerCrs: (name, detected) => crsService.resolveFor({ name, detected: detected ?? undefined, source: 'las-vlr' }),
+  resolveLayerCrs: (name, detected, identity) => crsService.resolveFor({ name, detected: detected ?? undefined, source: 'las-vlr', identity }),
   soloLayer: (id) => layerService.soloOnly(id), classifyScan: () => { void runDeriveClassification(); },
   focusCrs: () => { inspector.focusCrsOverride(); }, focusLayers: () => { inspector.focusLayers(); }, addDataset: () => { stage.promptAddDataset(); },
 });
@@ -2288,6 +2288,8 @@ function streamingExportCloud(): PointCloud | null {
 
 /** Origin + CRS + name for the active scan; the rules live in `src/app/reportExport.ts`. */
 function exportGeoContext(): GeoExportContext { return runExportGeoContext(reportExportDeps); }
+/** The active scan's up-axis through the format/frame policy every lon/lat and frame gate shares (`sourceUpAxis`). */
+const activeUpAxis = () => sourceUpAxis(crsService.context().upAxis, scans.activeCloud()?.sourceFormat, !!viewer?.streamingCloud);
 
 /**
  * The running-app seam the two Google Earth products write through (see
@@ -2298,12 +2300,10 @@ const kmlDeps: KmlActionDeps = {
   hasViewer: () => Boolean(viewer),
   geo: exportGeoContext,
   crsCurrent: () => crsService.current(),
-  upAxis: () => crsService.context().upAxis, isGeographic: () => crsService.context().horizontalMetricRefused, verticalRefused: () => crsService.context().verticalMetricRefused, // RESOLVED axis and frame permissions
+  upAxis: activeUpAxis, isGeographic: () => crsService.context().horizontalMetricRefused, verticalRefused: () => crsService.context().verticalMetricRefused, // RESOLVED axis and frame permissions
   annotations: () => viewer?.annotate.getAnnotations() ?? [],
   measurements: () => viewer?.measure.getMeasurements() ?? [], layerCount: () => viewer?.clouds().length ?? 0, sceneOffset: () => (scans.activeId ? viewer?.layerProjectOffset(scans.activeId) ?? null : null), measurementOwnership: () => (viewer ? ownershipViewOf(viewer, runtime.layerIdentity.stableIdFor, scans.activeId) : { layers: [], activeViewerId: null }),
-  viewpoints: () => viewBookmarks.savedViews.map(
-    (v) => ({ name: v.name, position: v.pose.position, target: v.pose.target }),
-  ),
+  viewpoints: () => viewBookmarks.savedViews.map((v) => ({ name: v.name, position: v.pose.position, target: v.pose.target })),
   worldUp: () => viewer.measure.worldUp,
   unitToMetres: () => viewer.measure.unitToMetres,
   // Static: the bounds of the points actually loaded. Streaming: the LAS header
@@ -2342,7 +2342,7 @@ const kmlDeps: KmlActionDeps = {
 const measurementExportActionDeps = (v: Viewer): MeasurementExportActionDeps => ({
   measure: v.measure,
   geo: exportGeoContext,
-  layers: { view: v, stableIdFor: runtime.layerIdentity.stableIdFor }, frameSource: { activeId: () => scans.activeId, activeGeo: exportGeoContext, activeUpAxis: () => sourceUpAxis(crsService.context().upAxis, scans.activeCloud()?.sourceFormat, !!viewer?.streamingCloud), cloud: (id) => v.getCloud(id), classificationEpoch: (id) => v.classificationEpoch(id), crs: crsService }, refuse: (m) => dropZone.setError(m), upAxis: () => sourceUpAxis(crsService.context().upAxis, scans.activeCloud()?.sourceFormat, !!viewer?.streamingCloud),
+  layers: { view: v, stableIdFor: runtime.layerIdentity.stableIdFor }, frameSource: { activeId: () => scans.activeId, activeGeo: exportGeoContext, activeUpAxis, cloud: (id) => v.getCloud(id), classificationEpoch: (id) => v.classificationEpoch(id), crs: crsService }, refuse: (m) => dropZone.setError(m), upAxis: activeUpAxis,
   baseName,
   downloadText,
   loadMeasurementExport,
@@ -2354,10 +2354,7 @@ const measurementExportActionDeps = (v: Viewer): MeasurementExportActionDeps => 
 
 const exportPanel = new ExportPanel({
   exportHealth: () => (hasScan() ? buildExportHealth(buildCurrentStoryInputs()) : null),
-  onExport: (format) => {
-    const cloud = scans.activeCloud();
-    if (cloud) return settleFileExport(loadExporters().then(async (m) => downloadFileBytes(m.pointExportFileName(baseName(cloud.name), cloud, format), await m.exportCloudBytesWithDigests(cloud, format, crsService.context().isGeographic, exportGeoContext()), 'text/plain')), dropZone);
-  },
+  onExport: (format) => runPointExport(format, { activeCloud: () => scans.activeCloud(), clip: () => viewer?.getClip() ?? null, clipOffset: () => (scans.activeId ? viewer.layerProjectOffset(scans.activeId) : null), crs: () => crsService.current(), isGeographic: () => crsService.context().isGeographic, baseName }, { loadExporters, download: downloadFileBytes, progress: dropZone }),
   onExportImage: (mode) =>
     exportImageAction(mode, {
       getViewer: () => viewer,
@@ -2439,7 +2436,7 @@ const exportPanel = new ExportPanel({
   // snapshot just to test it for null.
   isStreamingPending: () => viewer?.streamingCloud != null && viewer.exportFrontierPointTotal() === 0,
   getActiveClip: () => viewer.getClip(), getActiveClipOffset: () => (scans.activeId ? viewer.layerProjectOffset(scans.activeId) : null), getActiveScanId: () => scans.activeExportTargetId(),
-  ...exportLayerHooks({ scans: { get activeId() { return scans.activeId; }, setActive: activateLayer }, viewer: () => viewer, sourceFiles: sourceFileById, reduced: reducedById, reopen: handleFile, removeLayer: removeCloud, notify: showLassoToast, findingsRevision: (id) => exportPanel.findingsLedger()?.revisionFor(id) ?? 0, inCompare: (id) => inspector.compareDifference.involves(id) }),
+  ...exportLayerHooks({ scans: { get activeId() { return scans.activeId; }, setActive: activateLayer }, viewer: () => viewer, sourceFiles: sourceFileById, reduced: reducedById, reopen: handleFile, removeLayer: removeCloud, notify: showLassoToast, findingsRevision: (id) => exportPanel.findingsLedger()?.revisionFor(id) ?? 0, inCompare: (id) => inspector.compareDifference.involves(id), handOver: (from, to) => handOverLayerWork(runtime.layerIdentity, viewer, from, to) }),
   hasClassEdits: () => activeScanHasClassEdits(scans.activeId, viewer),
   // A streaming snapshot exports only resident points, so it is a reduced subset
   // until the whole cloud lands — flagged so the status reads "reduced view".
@@ -2745,7 +2742,7 @@ void viewerLoaded.then(() => {
     onHoverInfo: lazyCoordinateHud({
       mount: (el) => stage.overlay.append(el),
       activeCrs: () => crsService.current() ?? undefined,
-      upAxis: () => crsService.context().upAxis,
+      upAxis: activeUpAxis,
     }),
   });
   viewer.setAnnotateListeners({
@@ -3516,7 +3513,7 @@ const sessionSnapshotDeps: SessionSnapshotDeps = {
   captureViewState, savedViews: () => viewBookmarks.savedViews, origin: () => exportGeoContext().origin,
   referencePlane: () => inspector.referencePlane?.sessionState(),
   crs: () => crsService.current(), ownershipView: () => ownershipViewOf(viewer, runtime.layerIdentity.stableIdFor, scans.activeId), layerGroups: () => inspector.layerGroupsForSession(), appVersion: __APP_VERSION__,
-  projectFrame: () => projectFrameInputFrom({ frame: projectFrame.frame, layerIds: layerService.buildLayerInfos().map((i) => i.id), cloud: (id) => viewer?.getCloud(id), record: (id) => runtime.layerIdentity.recordFor(id), placement: layerService.placementOf }) };
+  heldWork: heldSessionWork, projectFrame: (force) => projectFrameInputFrom({ frame: projectFrame.frame, layerIds: layerService.buildLayerInfos().map((i) => i.id), cloud: (id) => viewer?.getCloud(id), record: (id) => runtime.layerIdentity.recordFor(id), placement: layerService.placementOf }, force) };
 
 /**
  * Session import — a thin caller over the extracted `src/app/sessionIo.ts`.
@@ -3531,7 +3528,7 @@ const sessionIoDeps: SessionIoDeps = {
   getActiveScanId: () => scans.activeId,
   getActiveLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null),
   getActiveCloud: () => scans.activeCloud(),
-  ...sessionImportOrigins({ frame: () => projectFrame.frame, activeId: () => (scans.activeCloud() ? scans.activeId : null), viewerIds: () => viewer?.clouds() ?? [], stableIdFor: (v) => runtime.layerIdentity.stableIdFor(v), cloud: (v) => viewer?.getCloud(v), placement: layerService.placementOf, fallback: () => exportGeoContext().origin }),
+  ...sessionImportOrigins({ frame: () => projectFrame.frame, activeId: () => (scans.activeCloud() ? scans.activeId : null), viewerIds: () => viewer?.clouds() ?? [], stableIdFor: (v) => runtime.layerIdentity.stableIdFor(v), cloud: (v) => viewer?.getCloud(v), placement: layerService.placementOf, fallback: () => exportGeoContext().origin, record: (v) => runtime.layerIdentity.recordFor(v) }),
   bookmarks,
   setInspectorViews: (names) => inspector.setViews(names),
   restoreLayerGroups: (groups) => inspector.restoreLayerGroups(groups),
@@ -4182,7 +4179,7 @@ function compareLoadedLayers(): void {
         gridUnitToMetres === 1
           ? cmp.result.diff
           : cmp.result.diff.map((v) => v / gridUnitToMetres);
-      const rasterCrs = crsService.resolveFor({ name: a.name, detected: a.metadata?.crs ?? undefined, source: 'las-vlr' });
+      const rasterCrs = crsService.resolveFor({ name: a.name, detected: a.metadata?.crs ?? undefined, source: 'las-vlr', identity: datasetIdentity(a) });
       const grid = { diff: ascDiff, ncols: dtms.cols, nrows: dtms.rows, cellSizeM: dtms.cellSizeM, xllCorner: dtms.before.originH1, yllCorner: dtms.before.originH2 };
       try {
         inspector.compareDifference.hold({ stem: `${baseName(a.name)}-to-${baseName(b.name)}-difference`, ...packageChangeRaster(grid, { crs: rasterCrs, valueUnit: gridUnitToMetres === 1 ? 'metre' : rasterCrs.linearUnit, beforeScan: a.name, afterScan: b.name }) });

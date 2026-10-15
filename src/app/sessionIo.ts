@@ -41,6 +41,7 @@ import type {
   SessionSpatialVerdict,
 } from '../io/session';
 import type { WorkOwnership } from '../model/workOwnership';
+import type { LiveLayerEvidence, PersistedLayerMatch, SessionLayerMapping } from '../io/sessionOwnership';
 import {
   loadSessionOwnership,
   loadVerifySessionManifest,
@@ -54,9 +55,11 @@ import {
   type StaticScanCloud,
 } from './sessionScanFacts';
 import { formatBytesIn } from '../io/formatByteSize';
-import { markPendingSessionRestore } from './pendingSessionRestore';
+import { holdSessionWork, markPendingSessionRestore } from './pendingSessionRestore';
 import type { ReplaceOutcome, ReplaceRequest } from './discardGuard';
 import type { StoredView } from './appContext';
+import type { Measurement } from '../render/measure/types';
+import type { Annotation } from '../render/annotate/types';
 
 // Re-exported so `sessionIo`'s public API is unchanged — `openScan.ts` reads
 // `scanFactsFromStatic` off `./sessionScanFacts` directly (the hot scan-open path
@@ -135,6 +138,11 @@ export interface SessionIoDeps {
   layerOrigin?: (layerId: string) => readonly [number, number, number] | null;
   /** The live project origin, or null when no project frame is set. */
   projectOrigin?: () => readonly [number, number, number] | null;
+  /**
+   * The open static layers with the source evidence their ids are bound on.
+   * Present: saved layer ids are mapped onto these before anything is placed.
+   */
+  liveLayers?: () => readonly LiveLayerEvidence[];
   /** Saved-view store: `restore` replaces the list, `names` feeds the Inspector. */
   bookmarks: Pick<ViewBookmarksService, 'restore' | 'names'>;
   /** Push the restored view names into the Inspector panel. */
@@ -185,6 +193,42 @@ function declaredSpatialForActiveScan(viewer: Viewer, deps: SessionIoDeps): Decl
   const staticCloud = id ? viewer.getCloud(id) : undefined;
   if (staticCloud) return declaredSpatialFromStatic(staticCloud);
   return {};
+}
+
+/**
+ * Whether a save of this scene writes a project frame, which is when work on
+ * it is `project` work: every open layer has a proven identity, and either two
+ * or more are open or the one open layer is still placed off its own origin.
+ * A lone layer in its own frame is saved without one, so its work is
+ * `source-local`.
+ */
+function savesProjectFrame(
+  openCount: number,
+  live: readonly LiveLayerEvidence[],
+  layerOrigin: SessionIoDeps['layerOrigin'],
+): boolean {
+  if (openCount === 0 || live.length !== openCount) return false;
+  if (live.length >= 2) return true;
+  const so = live[0]!.sourceOrigin;
+  const o = layerOrigin?.(live[0]!.layerId) ?? null;
+  return !!so && !!o && o.some((c, k) => c !== so[k]);
+}
+
+/** The file names of the scans held work waits for, as the file recorded them. */
+function unmatchedNames(
+  held: { measurements: readonly Measurement[]; annotations: readonly Annotation[] },
+  frame: InspectionSession['projectFrame'],
+  mapping: SessionLayerMapping | null,
+  kind: PersistedLayerMatch['kind'],
+): string[] {
+  if (!frame || !mapping) return [];
+  const ids = new Set<string>();
+  for (const m of held.measurements) for (const id of [m.owner?.layerId, ...(m.pickLayers ?? [])]) if (id) ids.add(id);
+  for (const a of held.annotations) if (a.owner?.layerId) ids.add(a.owner.layerId);
+  const names = frame.layers
+    .filter((l) => ids.has(l.layerId) && [...mapping.byId].some(([saved, m]) => m.kind === kind && (saved === l.layerId || `${saved}~unmatched` === l.layerId)))
+    .map((l) => `“${l.sourceName}”`);
+  return [...new Set(names)].sort((a, b) => a.localeCompare(b));
 }
 
 const byId = <T extends { id: string }>(items: readonly T[]): T[] => [...items].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -239,6 +283,9 @@ export async function importSession(
     const { parseSession, rebaseSessionGeometry, matchSessionToScan, detectSessionSpatialConflict, sessionScanOrigin } =
       await deps.loadSession();
     const session = parseSession(await file.text());
+    // Lazy: the ownership resolver lives off the index chunk — session restore is
+    // on-demand, so its cost belongs on the restore path, not the initial load.
+    const ownershipModule = await loadSessionOwnership();
     // If an older build wrote this session, a newer one may grade or label the
     // scan differently — surface that so the user can re-save. Absent stamp
     // (pre-v6 file) reads as "an earlier version".
@@ -260,12 +307,23 @@ export async function importSession(
     const targetId = deps.getActiveScanId();
     const targetStreamingCloud = viewer.streamingCloud;
     const targetStaticCloud = targetId ? viewer.getCloud(targetId) : undefined;
+    // The saved layer ids are this file's page's ids, not this page's. Each
+    // layer the file's project frame records is matched to an open layer on its
+    // source evidence (fingerprint, file origin, axis, EPSG) before anything is
+    // checked or placed. A frame layer that is matched is a verified scan of
+    // this session, a stronger check than the one summary scan below.
+    const live = haveCloud ? deps.liveLayers?.() ?? null : null;
+    const frameMapping: SessionLayerMapping | null = live && session.projectFrame
+      ? ownershipModule.mapSessionLayers(session.projectFrame, live)
+      : null;
+    const frameVerified = !!frameMapping && [...frameMapping.byId.values()].some((m) => m.kind === 'resolved');
     // Guard the rebase: a session's geometry is local to the scan it was
     // captured over, so realigning it onto the loaded cloud is only correct when
     // that IS its scan. Compare the session's stored fingerprint (built the same
     // way exportSession writes it) against the loaded scan. A clear conflict is
     // refused rather than silently realigned onto the wrong scan; a partial
     // match asks the user to confirm before anything is applied.
+    let scanMatch: ScanMatch | undefined;
     if (haveCloud) {
       const streamingCloud = viewer.streamingCloud;
       const staticCloud = deps.getActiveCloud() ?? undefined;
@@ -278,7 +336,8 @@ export async function importSession(
       let match: ScanMatch | undefined;
       if (loadedFacts) {
         match = matchSessionToScan(session.scanSummary, loadedFacts, sessionScanOrigin?.(session));
-        if (match.verdict === 'conflict') {
+        scanMatch = match;
+        if (match.verdict === 'conflict' && !frameVerified) {
           const why = match.reasons[0] ?? 'its scan fingerprint does not match';
           const want = session.scanSummary?.fileName;
           deps.showToast(
@@ -287,7 +346,7 @@ export async function importSession(
           );
           return false;
         }
-        if (match.verdict === 'partial' && !opts.skipScanConfirm) {
+        if (match.verdict === 'partial' && !opts.skipScanConfirm && !frameVerified) {
           // Not a clear conflict, but not a confirmed match — don't touch the
           // scene until the user opts in. "Apply anyway" re-imports with the
           // check skipped, so the same restore proceeds on their confirmation.
@@ -348,8 +407,38 @@ export async function importSession(
         }
       }
     }
+    // A file with no project frame describes one scan, the one the summary
+    // check just matched to the active layer; the one id it names is that
+    // layer's. Then every saved id is rewritten to the open layer it maps to,
+    // and work naming a layer that is not open (or is open more than once) is
+    // held back, unplaced, to be written into the next save.
+    const scanVerified = scanMatch?.verdict === 'strong' || (scanMatch?.verdict === 'partial' && !!opts.skipScanConfirm);
+    const mapping = frameMapping
+      ?? (live && !session.projectFrame && scanVerified && deps.getActiveLayerId()
+        ? ownershipModule.mapSingleScanSession(session, deps.getActiveLayerId())
+        : null);
+    let work = session;
+    let held: { measurements: Measurement[]; annotations: Annotation[] } = { measurements: [], annotations: [] };
+    let waiting = 0;
+    let ambiguous = 0;
+    if (mapping && live) {
+      const liveIds = new Set(live.map((l) => l.layerId));
+      work = ownershipModule.remapSessionLayerIds(session, mapping, liveIds);
+      const activeId = deps.getActiveLayerId();
+      // The single scan's own id anchors its work in the session's one frame.
+      if (!session.projectFrame && activeId && [...mapping.byId.values()].some((m) => m.kind === 'resolved')) work = { ...work, layerId: activeId };
+      const unresolved = new Map<string, 'missing' | 'ambiguous'>();
+      for (const [savedId, m] of mapping.byId) {
+        if (m.kind !== 'resolved') unresolved.set(liveIds.has(savedId) ? `${savedId}~unmatched` : savedId, m.kind);
+      }
+      const part = ownershipModule.partitionHeldWork(work, unresolved);
+      work = { ...work, measurements: part.measurements, annotations: part.annotations };
+      held = part.held;
+      waiting = part.missing;
+      ambiguous = part.ambiguous;
+    }
     const geo = haveCloud
-      ? rebaseSessionGeometry(session, deps.exportOrigin(), { layerOrigin: deps.layerOrigin, projectOrigin: deps.projectOrigin?.() ?? null })
+      ? rebaseSessionGeometry(work, deps.exportOrigin(), { layerOrigin: deps.layerOrigin, projectOrigin: deps.projectOrigin?.() ?? null })
       : {
           measurements: session.measurements,
           annotations: session.annotations,
@@ -357,6 +446,7 @@ export async function importSession(
           camera: session.camera,
           clip: session.clip,
           delta: [0, 0, 0] as const,
+          unrebased: [] as readonly string[],
           refused: [] as readonly string[],
         };
     const rebased = geo.delta[0] !== 0 || geo.delta[1] !== 0 || geo.delta[2] !== 0;
@@ -371,7 +461,7 @@ export async function importSession(
     // over and matches against it.
     // Lazy: the ownership migrator lives off the index chunk — session restore is
     // on-demand, so its cost belongs on the restore path, not the initial load.
-    const { migrateSessionOwnership } = await loadSessionOwnership();
+    const { migrateSessionOwnership } = ownershipModule;
     const targetChanged = (): boolean =>
       deps.getActiveScanId() !== targetId ||
       viewer.streamingCloud !== targetStreamingCloud ||
@@ -442,22 +532,73 @@ export async function importSession(
     // metadata about which frame the coordinates are already in, so it moves no
     // geometry. When the active layer carries no proven identity, the work is
     // left unattributed rather than given a guessed owner (fail closed).
-    const ownership = migrateSessionOwnership(session, {
+    const ownership = migrateSessionOwnership(work, {
       loadedLayerId: deps.getActiveLayerId() ?? undefined,
     });
     const measureOwners = new Map<string, WorkOwnership>();
     for (const m of ownership.measurements) if (m.owner) measureOwners.set(m.id, m.owner);
     const annotationOwners = new Map<string, WorkOwnership>();
     for (const a of ownership.annotations) if (a.owner) annotationOwners.set(a.id, a.owner);
-    const ownedMeasurements = geo.measurements.map((m) =>
+    // Declared owners that name an open layer are restated the way this scene
+    // holds work on that layer, so the next save writes a file the next import
+    // reads back in the same place. Only after the ids were mapped: an owner
+    // that was never matched is left exactly as the file wrote it.
+    let restoredMeasurements: Measurement[] = geo.measurements;
+    let restoredAnnotations: Annotation[] = geo.annotations;
+    if (mapping && live && haveCloud) {
+      const unrebased = new Set(geo.unrebased);
+      const evidence = new Map(live.map((l) => [l.layerId, l]));
+      const exportOrigin = deps.exportOrigin();
+      const normalized = ownershipModule.normalizeRestoredOwners(
+        geo.measurements,
+        geo.annotations,
+        (id, owner) => (unrebased.has(id) ? 'source' : owner.frame === 'project' ? 'layer' : 'export'),
+        session.upAxis,
+        {
+          liveIds: new Set(evidence.keys()),
+          hasProjectFrame: savesProjectFrame(viewer.clouds().length, live, deps.layerOrigin),
+          layerOrigin: (id) => deps.layerOrigin?.(id) ?? null,
+          exportOrigin: [exportOrigin[0], exportOrigin[1], exportOrigin[2]],
+          sourceOrigin: (id) => evidence.get(id)?.sourceOrigin ?? null,
+        },
+      );
+      restoredMeasurements = normalized.measurements;
+      restoredAnnotations = normalized.annotations;
+    }
+    const ownedMeasurements = restoredMeasurements.map((m) =>
       m.owner || !measureOwners.has(m.id) ? m : { ...m, owner: measureOwners.get(m.id) },
     );
-    const ownedAnnotations = geo.annotations.map((a) =>
+    const ownedAnnotations = restoredAnnotations.map((a) =>
       a.owner || !annotationOwners.has(a.id) ? a : { ...a, owner: annotationOwners.get(a.id) },
     );
     viewer.measure.loadMeasurements(ownedMeasurements);
     viewer.annotate.loadAnnotations(ownedAnnotations);
     applied = true;
+    // Work that names a scan not open here is kept, unplaced, with the frame
+    // records it is read through, and written back by the next save. A file
+    // with no project frame has no records to keep it with, so its unmatched
+    // work is reported as not restored instead.
+    const heldCount = held.measurements.length + held.annotations.length;
+    const heldFrame = work.projectFrame;
+    let frameless = 0;
+    if (heldCount > 0 && heldFrame) {
+      const named = new Set<string>();
+      for (const m of held.measurements) {
+        if (m.owner?.layerId) named.add(m.owner.layerId);
+        for (const id of m.pickLayers ?? []) named.add(id);
+      }
+      for (const a of held.annotations) if (a.owner?.layerId) named.add(a.owner.layerId);
+      holdSessionWork({
+        upAxis: session.upAxis,
+        projectOrigin: heldFrame.projectOrigin,
+        layers: heldFrame.layers.filter((l) => named.has(l.layerId)),
+        measurements: held.measurements,
+        annotations: held.annotations,
+      });
+    } else {
+      frameless = heldCount;
+      holdSessionWork(null);
+    }
     // With no scan open the work waits, in the session's own frame, for its
     // scan; the next fresh open applies this file again onto that scan.
     markPendingSessionRestore(haveCloud ? null : file);
@@ -503,6 +644,7 @@ export async function importSession(
     // an empty scene silently.
     const restored =
       geo.measurements.length + geo.annotations.length + geo.views.length;
+    const waitingFor = frameless > 0 ? [] : unmatchedNames(held, work.projectFrame, mapping, 'missing');
     const wantFile = session.scanSummary?.fileName;
     // When the user reached here via "Apply anyway", record that the restore
     // proceeded on an unverified scan match rather than a confirmed one.
@@ -516,14 +658,30 @@ export async function importSession(
     // Work the file marks as placed in a project frame it does not record is
     // left out, because there is no way to tell where that frame was anchored.
     const refusedCount = geo.refused.length;
-    const refusedNote = refusedCount > 0
-      ? ` ${refusedCount} item${refusedCount === 1 ? ' was' : 's were'} not restored: the session `
-        + 'does not record the multi-scan project frame they were placed in.'
-      : '';
+    const refusedNote = (refusedCount > 0
+      ? ` ${refusedCount} item${refusedCount === 1 ? ' was' : 's were'} not restored: ` + (session.projectFrame
+        ? 'the session’s project frame has no record of the scan they were placed on.'
+        : 'the session does not record the multi-scan project frame they were placed in.')
+      : '')
+      + (frameless > 0
+        ? ` ${frameless} item${frameless === 1 ? ' was' : 's were'} not restored: the session names several scans `
+          + 'but records no project frame to tell them apart.'
+        : '')
+      + (frameless === 0 && waiting > 0
+        ? ` ${waiting} item${waiting === 1 ? ' is' : 's are'} waiting for ${waiting === 1 ? 'its scan' : 'their scans'}`
+          + (waitingFor.length > 0 ? ` (${waitingFor.join(', ')})` : '')
+          + ': open it and import the session again. Saving the session keeps '
+          + (waiting === 1 ? 'it.' : 'them.')
+        : '')
+      + (frameless === 0 && ambiguous > 0
+        ? ` ${ambiguous} item${ambiguous === 1 ? ' names a scan' : 's name scans'} that more than one open scan matches, `
+          + `so ${ambiguous === 1 ? 'it was' : 'they were'} not placed. Saving the session keeps `
+          + (ambiguous === 1 ? 'it.' : 'them.')
+        : '');
     // Evidence Capsule: lead with the honesty roll-up when the shared session
     // carries graded measurements — the recipient sees the trust picture, not
     // just a count.
-    const evidence = summarizeMeasurementTrust(session.measurements.map((m) => m.trust));
+    const evidence = summarizeMeasurementTrust(geo.measurements.map((m) => m.trust));
     const lead = evidence.total > 0 ? `Evidence restored — ${evidence.line}.` : null;
     // Verify the embedded processing manifest and disclose one integrity line.
     // This never rejects the session (an absent, legacy, or tampered manifest

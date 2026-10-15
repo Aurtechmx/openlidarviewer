@@ -24,7 +24,7 @@
 import {
   GEOGRAPHIC_CRS_MEASURE_NOTICE,
 } from './format';
-import { VERTICAL_NOT_AVAILABLE, geographicRefusesKind } from './types';
+import { UP_AXIS_CONFLICT, VERTICAL_NOT_AVAILABLE, geographicRefusesKind } from './types';
 
 // The kind rule lives with the kind union; re-exported for the live grade's callers.
 export { geographicRefusesKind };
@@ -73,6 +73,12 @@ export interface MeasurementTrustInput {
    * {@link geographicCrs}; the caller scopes it with `frameRefusalText`.
    */
   readonly verticalRefused?: boolean;
+  /**
+   * True when this measurement's number reads along an up axis and its points
+   * sit on layers whose up axes differ (a Z-up survey and a Y-up scan). There
+   * is no shared vertical, so the figure is refused.
+   */
+  readonly upConflict?: boolean;
   /**
    * True when the frame is geographic, whatever the kind. Its scale signal is
    * then the vertical unit (the only linear unit a permitted figure, a
@@ -191,15 +197,21 @@ export function gradeMeasurement(input: MeasurementTrustInput): MeasurementTrust
     reasons.push(`Height ${VERTICAL_NOT_AVAILABLE}.`);
     grade = 'red';
   }
+  const upConflict = input.upConflict === true;
+  if (upConflict) {
+    reasons.push(`Value ${UP_AXIS_CONFLICT}.`);
+    grade = 'red';
+  }
 
   if (input.residentOnly) {
     reasons.push('Only the loaded subset of a streaming cloud was measured — the full-resolution data may shift this.');
     if (grade === 'green') grade = 'yellow';
   }
 
-  const presentable = !anyVoid && !geographicRefusal && !verticalRefusal;
+  const presentable = !anyVoid && !geographicRefusal && !verticalRefusal && !upConflict;
   let caption: string;
-  if (verticalRefusal) caption = 'Unverified — this frame has no local vertical (geocentric or depth-down)';
+  if (upConflict) caption = 'Unverified — the points sit on layers with different up axes';
+  else if (verticalRefusal) caption = 'Unverified — this frame has no local vertical (geocentric or depth-down)';
   else if (geographicRefusal) caption = 'Unverified — degrees are not distances (geographic CRS)';
   else if (grade === 'green') caption = 'Supported — close to measured points';
   else if (grade === 'yellow' && onCentroid) caption = 'Caution: snapped to the reduced display sample, not returns';

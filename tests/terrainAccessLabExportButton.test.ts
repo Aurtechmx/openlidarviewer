@@ -110,21 +110,30 @@ describe('Terrain Access Lab export button', () => {
 });
 
 describe('Terrain Access Lab failures', () => {
-  // A surface that throws on any read once armed stands in for an internal failure.
-  function trap(): { dsm: unknown; arm: () => void } {
+  // A terrain whose elevations throw once armed stands in for an internal failure.
+  function trap(): { dtm: DtmGrid; arm: () => void } {
     let armed = false;
-    const dsm = new Proxy({ cols: 99, rows: 99, cellSizeM: 1 }, {
+    const dtm = new Proxy(flatDtm(4, 3), {
       get(target, prop) {
-        if (armed) throw new Error('boom');
-        return (target as Record<string | symbol, unknown>)[prop];
+        if (armed && prop === 'z') throw new Error('boom');
+        return (target as unknown as Record<string | symbol, unknown>)[prop];
       },
     });
-    return { dsm, arm: () => { armed = true; } };
+    return { dtm, arm: () => { armed = true; } };
+  }
+
+  function mountTrapped(dtm: DtmGrid): { lab: Lab; root: FakeEl } {
+    const lab = mountTerrainAccessInteractive({
+      dtm,
+      scale: { isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: true },
+      layerId: 'layer-a', filename: 'site', verticalScaleResolved: true,
+    });
+    return { lab, root: lab.element as unknown as FakeEl };
   }
 
   it('a run that throws restores the controls and shows a failure card', async () => {
     const t = trap();
-    const { lab, root } = mount(t.dsm);
+    const { lab, root } = mountTrapped(t.dtm);
     applyProfile(root);
     setEndpoints(root);
     t.arm();
@@ -138,11 +147,37 @@ describe('Terrain Access Lab failures', () => {
 
   it('a preview that throws shows a failure and a way back to the form', () => {
     const t = trap();
+    const { lab, root } = mountTrapped(t.dtm);
     t.arm();
-    const { lab, root } = mount(t.dsm);
     applyProfile(root);
     expect(root.textContent).toContain('could not finish: boom');
     expect(byClass(root, 'olv-ta-retry')).toBeTruthy();
+    lab.dispose();
+  });
+});
+
+describe('Terrain Access Lab above-ground obstruction control', () => {
+  it('is disabled, with the reason, when no aligned above-ground evidence is supplied', () => {
+    const { lab, root } = mount();
+    const toggle = byClass(root, 'olv-ta-obstacle-toggle') as unknown as { disabled: boolean };
+    expect(toggle.disabled).toBe(true);
+    expect(root.textContent).toContain('Above-ground evidence unavailable; this constraint cannot be evaluated.');
+    lab.dispose();
+  });
+
+  it('is disabled for a supplied surface that is not aligned to the terrain', () => {
+    const { lab, root } = mount({ z: new Float32Array(4), coverage: new Uint8Array(4), cols: 2, rows: 2, cellSizeM: 1, originH1: 0, originH2: 0 });
+    expect((byClass(root, 'olv-ta-obstacle-toggle') as unknown as { disabled: boolean }).disabled).toBe(true);
+    lab.dispose();
+  });
+
+  it('is enabled when an aligned surface is supplied', () => {
+    const { lab, root } = mount({
+      z: new Float32Array(12), coverage: new Uint8Array(12).fill(1), cols: 4, rows: 3, cellSizeM: 1, originH1: 0, originH2: 0,
+      frame: { crs: 'EPSG:32610', horizontalEpsg: 32610, verticalUnitToMetres: 1, orientation: 'rows-north-from-origin' },
+    });
+    expect((byClass(root, 'olv-ta-obstacle-toggle') as unknown as { disabled: boolean }).disabled).toBe(false);
+    expect(root.textContent).not.toContain('Above-ground evidence unavailable');
     lab.dispose();
   });
 });

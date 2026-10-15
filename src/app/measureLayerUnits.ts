@@ -11,6 +11,10 @@
  * layer is resolved from its own CRS (a remembered override included), as the
  * per-scan export frame does. A layer id that no open layer carries, or that
  * more than one carries, has no frame: its work reads as unverified.
+ *
+ * The frame also carries the layer's own up axis (Z for a survey format, Y for
+ * a mesh format), so a height reads along the axis its layer was captured in,
+ * not along whichever up the active scan gave the scene.
  */
 
 import type { PointCloud } from '../model/PointCloud';
@@ -18,6 +22,7 @@ import type { CrsService } from '../geo/CrsService';
 import type { MeasureController } from '../render/measure/MeasureController';
 import { UNRESOLVED_UNIT_FRAME, sameUnitFrame, type MeasureUnitFrame } from '../render/measure/types';
 import { measureUnitFrameOf, scanContextOf } from './measurementExportFrame';
+import { upOfFormat } from '../io/sniffFormat';
 
 /** The slice of the app a layer's unit frame is resolved from. */
 export interface LayerUnitSource {
@@ -62,8 +67,8 @@ export function bindMeasureUnitFrames(measure: MeasureController, src: LayerUnit
     if (matches.length === 1) {
       const id = matches[0]!;
       const c = src.cloud(id);
-      if (id === src.activeId()) out = measureUnitFrameOf(src.crs.context());
-      else if (c) out = measureUnitFrameOf(scanContextOf(src.crs, c));
+      if (id === src.activeId()) out = { ...measureUnitFrameOf(src.crs.context()), ...(c ? { up: upOfFormat(c.sourceFormat) } : {}) };
+      else if (c) out = { ...measureUnitFrameOf(scanContextOf(src.crs, c)), up: upOfFormat(c.sourceFormat) };
     }
     memo.set(layerId, out);
     return out;
@@ -93,6 +98,8 @@ export function bindMeasureUnitFrames(measure: MeasureController, src: LayerUnit
 export function chainUnitFrame(frames: readonly MeasureUnitFrame[]): { frame: MeasureUnitFrame } | { refusal: string } {
   const first = frames[0];
   if (!first) return { frame: UNRESOLVED_UNIT_FRAME };
+  const up = (f: MeasureUnitFrame): string => (f.up ? f.up.join(',') : 'scene');
+  if (frames.some((f) => f.upConflict === true || up(f) !== up(first))) return { refusal: 'not combined: the selected measurements sit on layers with different up axes' };
   if (frames.every((f) => sameUnitFrame(f, first))) return { frame: first };
   return { refusal: 'not combined: the selected measurements were taken on scans with different units' };
 }

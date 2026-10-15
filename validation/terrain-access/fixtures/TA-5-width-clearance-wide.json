@@ -1,17 +1,25 @@
 {
   "name": "TA-5-width-clearance-wide",
-  "why": "The same layout as TA-5-width-clearance-narrow, but a 2.5 m vehicle width cannot clear the 1-cell gap once the wall segments are dilated by half the width, and start/end (2 m from the gap) are far enough away that dilation does not reach them: the outcome is a genuine NO_ROUTE, not a START/END block.",
+  "why": "The layout of TA-5-width-clearance-narrow with a 2.5 m vehicle width (radius 1.25 m). Clearance is measured to the excluded cell rectangles and to the survey edge. The gap cell (3,4) is 0.5 m from the wall above and below it, so it is refused; columns 3 and 5 are 0.5 m from the wall, rows 0 and 6 and columns 0 and 8 are 0.5 m from the survey edge. What remains is columns 1-2 and 6-7 of rows 1-5 (1.5 m or more from every wall cell and edge): 20 cells, two disconnected 2 x 5 blocks. Start (3,1) and end (3,7) are eligible, so the outcome is a genuine NO_ROUTE, not a START/END block.",
   "cellMetresX": 1,
   "cellMetresY": 1,
   "z": [
-    [0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0]
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0]
   ],
   "allowed": [
-    [1, 1, 0, 1, 1, 1],
-    [1, 1, 1, 1, 1, 1],
-    [1, 1, 0, 1, 1, 1]
+    [1, 1, 1, 1, 0, 1, 1, 1, 1],
+    [1, 1, 1, 1, 0, 1, 1, 1, 1],
+    [1, 1, 1, 1, 0, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 0, 1, 1, 1, 1],
+    [1, 1, 1, 1, 0, 1, 1, 1, 1],
+    [1, 1, 1, 1, 0, 1, 1, 1, 1]
   ],
   "profile": {
     "name": "wide-vehicle",
@@ -25,6 +33,6 @@
     "unknownPolicy": "block",
     "obstacleHeightThreshold": null
   },
-  "start": [0, 0],
-  "end": [0, 5]
+  "start": [3, 1],
+  "end": [3, 7]
 }

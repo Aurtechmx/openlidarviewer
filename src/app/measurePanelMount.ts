@@ -274,8 +274,9 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
           // The scene's real up-axis, NOT a hard-coded Z-up: on a Y-up dataset
           // the literal [0,0,1] made every vertical chain sum 0 while the
           // individual Height tool (which uses worldUp) read the true value —
-          // a row said 10 m, the sum said 0 (pass-6 M5).
-          viewer.measure.worldUp,
+          // a row said 10 m, the sum said 0 (pass-6 M5). The measurements'
+          // own layer up, which the frame check above found shared.
+          f.up ?? viewer.measure.worldUp,
           f.unitToMetres,
           // The vertical axis keeps its OWN unit factor: a compound CRS (metre
           // grid + US-foot heights) must scale a height sum and volume by feet,

@@ -31,6 +31,7 @@ import {
 } from '../geo/ProjectSpatialFrame';
 import { isZUpFormat, type SourceFormat } from '../io/sniffFormat';
 import type { SessionFrameInput } from '../io/sessionFrame';
+import type { LiveLayerEvidence } from '../io/sessionOwnership';
 import type { AppContext } from './appContext';
 
 type Vec3 = readonly [number, number, number];
@@ -297,16 +298,21 @@ export interface ProjectFrameSources {
  * that origin is written as the project origin. A horizontal-only placement
  * then carries a zero Z offset, exactly as the scene does.
  */
-export function projectFrameInputFrom(src: ProjectFrameSources): SessionFrameInput | null {
-  if (!src.frame || src.layerIds.length === 0) return null;
-  let p = src.frame.projectOrigin;
+export function projectFrameInputFrom(src: ProjectFrameSources, force = false): SessionFrameInput | null {
+  if (src.layerIds.length === 0) return null;
+  // `force`: a save that carries held work needs records to read it through,
+  // so a lone layer in its own frame is written as a frame of one, its origin
+  // the project origin.
+  if (!src.frame && !(force && src.layerIds.length === 1)) return null;
+  let p = src.frame?.projectOrigin ?? null;
   if (src.layerIds.length === 1) {
     const id = src.layerIds[0]!;
     const so = src.cloud(id)?.sourceOrigin;
     if (!so) return null;
     p = sceneOriginFor(p, so, src.placement(id));
-    if (p.every((c, i) => c === so[i])) return null;
+    if (!force && p.every((c, i) => c === so[i])) return null;
   }
+  if (!p) return null;
   const layers: SessionFrameInput['layers'][number][] = [];
   for (const id of src.layerIds) {
     const cloud = src.cloud(id);
@@ -366,10 +372,16 @@ export interface SessionImportSources {
   activeId(): string | null;
   viewerIds(): readonly string[];
   stableIdFor(viewerId: string): string | null;
-  cloud(viewerId: string): { readonly sourceOrigin?: V3 } | null | undefined;
+  cloud(viewerId: string): {
+    readonly sourceOrigin?: V3;
+    readonly sourceFormat?: SourceFormat;
+    readonly metadata?: { readonly crs?: { readonly epsg?: number | null } | null } | null;
+  } | null | undefined;
   placement(viewerId: string): { readonly vertical: boolean } | null;
   /** The scene origin when no static scan is active. */
   fallback(): V3;
+  /** The identity record bound to a viewer id: stable id and fingerprint key. */
+  record?(viewerId: string): { readonly layerId: string; readonly fingerprint: string } | null;
 }
 
 /**
@@ -380,6 +392,7 @@ export function sessionImportOrigins(src: SessionImportSources): {
   exportOrigin: () => V3;
   layerOrigin: (layerId: string) => V3 | null;
   projectOrigin: () => V3 | null;
+  liveLayers?: () => readonly LiveLayerEvidence[];
 } {
   const layerSources = (): LayerOriginSources => ({
     projectOrigin: src.frame()?.projectOrigin,
@@ -396,5 +409,25 @@ export function sessionImportOrigins(src: SessionImportSources): {
     },
     layerOrigin: (layerId) => layerSceneOrigin(layerId, layerSources()),
     projectOrigin: () => src.frame()?.projectOrigin ?? null,
+    ...(src.record ? { liveLayers: () => liveLayerEvidence(src) } : {}),
   };
+}
+
+/** Every open layer with a bound identity, with the source facts it is matched on. */
+function liveLayerEvidence(src: SessionImportSources): LiveLayerEvidence[] {
+  const out: LiveLayerEvidence[] = [];
+  for (const v of src.viewerIds()) {
+    const rec = src.record?.(v);
+    const cloud = src.cloud(v);
+    if (!rec || !cloud) continue;
+    const so = cloud.sourceOrigin;
+    out.push({
+      layerId: rec.layerId,
+      fingerprint: rec.fingerprint,
+      sourceOrigin: so ? [so[0], so[1], so[2]] : null,
+      upAxis: cloud.sourceFormat && isZUpFormat(cloud.sourceFormat) ? 'z' : 'y',
+      epsg: cloud.metadata?.crs?.epsg ?? null,
+    });
+  }
+  return out;
 }

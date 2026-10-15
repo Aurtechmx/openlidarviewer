@@ -126,6 +126,9 @@ const TIE_FREE = new Set([
   'TA-2-tilted-plane-directional.json',
   'TA-3-cross-slope-trap.json', // NO_ROUTE either way; path is trivially []
   'TA-4-step-barrier.json',
+  // TA-5-narrow: the straight row-3 line through the gap is the only route
+  // of cost 6 (brute-forced; any diagonal pays √2 for one column of progress).
+  'TA-5-width-clearance-narrow.json',
   'TA-5-width-clearance-wide.json', // NO_ROUTE either way; path is trivially []
   'TA-6-nodata-corridor.json', // NO_ROUTE either way; path is trivially []
   'TA-8-ruggedness.json',
@@ -134,6 +137,10 @@ const TIE_FREE = new Set([
   // line is the unique shortest path; no detour candidate exists to tie with.
   'TA-9-dsm-disabled-threshold.json',
   'TA-9-dsm-disabled-nolayer.json',
+  // TA-9-dsm-obstruction: once a diagonal may not cut an obstructed cell's
+  // corner, the detour via (3,1)–(3,3) is the single least-cost route
+  // (brute-forced: no other cell lies on any route of equal cost).
+  'TA-9-dsm-obstruction.json',
   // TA-10: brute-forced over every monotone lattice path from start to end
   // (E/S/SE steps). The anisotropic tilt makes the diagonal route strictly
   // cheaper than every alternative, not tied with one.

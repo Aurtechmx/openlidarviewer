@@ -74,7 +74,7 @@ describe('run card', () => {
     const text = rec(lab.renderTerrainAccessRunCard(run)).textContent;
     expect(text).toContain('P95 longitudinal grade');
     expect(text).toContain(`Total cost ${run.cost.toFixed(1)}`);
-    expect(text).toContain('100% measured, 0% interpolated, 0% low confidence');
+    expect(text).toContain('100% measured, 0% interpolated; 0% below the profile\'s minimum confidence (0)');
   });
 
   it('a route with no extra cost says the cost is distance alone', () => {

@@ -44,7 +44,9 @@ const profile = (over: Partial<TerrainAccessProfile> = {}): TerrainAccessProfile
 
 describe('vertical unit', () => {
   it('converts grid z to metres once', () => {
-    const { grid } = terrainDtmToAccessGrid(ramp(10, FT), RESOLVED);
+    const built = terrainDtmToAccessGrid(ramp(10, FT), RESOLVED);
+    if (!built.ok) throw new Error(built.reason);
+    const { grid } = built;
     expect(grid.z[4]).toBeCloseTo(40 * FT, 4);
   });
 

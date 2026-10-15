@@ -7,16 +7,18 @@
     21,
     14,
     7,
+    0,
     1,
     2,
     3,
     4,
     5,
+    6,
     13,
     20,
     27
   ],
-  "cost": 12.448983628,
+  "cost": 13.607489395,
   "eligibleCount": 24,
   "blockedReasonCounts": {
     "ruggedness": 25

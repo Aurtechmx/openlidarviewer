@@ -52,6 +52,12 @@ export interface CrsCoordinatorDeps {
   debug: boolean;
   /** Re-judge the open layers' shared frame after an override changes a layer's CRS. */
   onOverrideApplied?: () => void;
+  /**
+   * Show a message with one action (the app toast). Used to offer a CRS that
+   * was remembered for a file with this name but could not be verified as
+   * belonging to this file, so it was not applied.
+   */
+  notify?: (message: string, action: { readonly label: string; readonly onClick: () => void }) => void;
 }
 
 export interface CrsCoordinator {
@@ -124,6 +130,35 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     currentCrsDatasetKey = crsKeyForDataset(cloudName);
   }
 
+  /** Suggestions already offered, so re-resolving the same scan does not repeat the toast. */
+  const offered = new Set<string>();
+
+  /**
+   * Offer a remembered-but-unverified override for the active scan. Applying it
+   * goes through `crsService.acceptOverrideSuggestion`, which records this
+   * source's identity, then refreshes like any other override.
+   */
+  function offerSuggestion(identity: ReturnType<typeof datasetIdentity>): void {
+    const s = crsService.overrideSuggestion();
+    if (!s || !deps.notify) return;
+    const token = `${s.datasetKey}|${s.kind}|${s.epsg}|${JSON.stringify(identity ?? null)}`;
+    if (offered.has(token)) return;
+    offered.add(token);
+    const label = s.epsg !== null ? `EPSG:${s.epsg}` : 'Local coordinates';
+    deps.notify(
+      `A CRS (${label}) was remembered for a file with this name. It was not applied because this file could not be confirmed as the same source. Apply it to this file?`,
+      {
+        label: 'Apply',
+        onClick: () => {
+          // Only while the same suggestion is still pending for the active scan.
+          const now = crsService.overrideSuggestion();
+          if (!now || now.datasetKey !== s.datasetKey || now.epsg !== s.epsg || now.kind !== s.kind) return;
+          handleCrsOverride({ epsg: s.epsg, kind: s.kind });
+        },
+      },
+    );
+  }
+
   function refreshCrsForStaticCloud(cloud: {
     readonly name: string;
     readonly origin?: readonly [number, number, number];
@@ -136,6 +171,7 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     readonly bounds?: () => { readonly min: readonly number[]; readonly max: readonly number[] };
   }): void {
     trackDataset(cloud.name);
+    const identity = datasetIdentity(cloud);
     // Publish to the central service so subscribers (today: the lasso
     // volume gate via `crsService.validation()`; tomorrow: the inspector
     // override panel via `crsService.subscribe`) see the same value
@@ -149,8 +185,9 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
       source: 'las-vlr',
       // Tells this dataset apart from an unrelated one of the same name before
       // a remembered override is applied to it.
-      identity: datasetIdentity(cloud),
+      identity,
     });
+    offerSuggestion(identity);
     // Push the origin + CRS into the point inspector so World + Lat/Lon
     // rows render against the loaded scan. Wrapped in a viewer-loaded
     // guard because the viewer chunk may still be loading the very first
@@ -173,6 +210,7 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
   }): void {
     const source: CrsSource = crsSourceForKind(cloud.kind);
     trackDataset(cloud.name);
+    const identity = datasetIdentity(cloud);
     // Inspector listens via the boot-time `crsService.subscribe`; no
     // direct push needed.
     const resolved = crsService.resolveForScan({
@@ -181,8 +219,9 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
       source,
       // The static path already does this. Without it a remembered override
       // keyed on the filename reattaches to any same-named stream.
-      identity: datasetIdentity(cloud),
+      identity,
     });
+    offerSuggestion(identity);
     if (isViewerReady()) {
       try {
         getViewer().setInspectCoordinateContext({

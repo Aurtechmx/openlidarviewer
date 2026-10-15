@@ -63,7 +63,7 @@ import {
   FULL_RES_CLASS_EDITS_MID_EXPORT_REFUSAL,
 } from '../export/fullResClassGuard';
 import { collectForOpenScan, findingsScanOpen, sameExportTarget, EXPORT_SCAN_CHANGED_REFUSAL } from '../export/exportScanIdentity';
-import { clipCloud } from '../render/clip/clipCloud';
+import { prepareExportScope } from '../render/clip/clipExportScope';
 import type { ClipBox } from '../render/clip/clipBox';
 import { clipScope, clipScopeText, subscribeClipScope } from '../render/clip/clipScope';
 import type { ExportFormat } from '../io/exporters';
@@ -286,22 +286,8 @@ export interface TerrainExportsLane {
   run(kind: 'dem' | 'contours', btn?: HTMLButtonElement): TerrainLaneOutcome | Promise<TerrainLaneOutcome> | void;
 }
 
-/**
- * The offset that places `cloud` in the project frame. The layer's offset is
- * stated against the displayed cloud's source origin; a full-resolution
- * re-decode may carry a different one, and the difference is folded in.
- */
-export function clipFrameOffset(
-  offset: readonly [number, number, number] | null,
-  displayOrigin: readonly [number, number, number] | null,
-  cloud: PointCloud,
-): readonly [number, number, number] | null {
-  const o = cloud.sourceOrigin;
-  const d = displayOrigin ?? o;
-  const t = offset ?? [0, 0, 0];
-  const out: [number, number, number] = [t[0] + o[0] - d[0], t[1] + o[1] - d[1], t[2] + o[2] - d[2]];
-  return out.every((v) => v === 0) ? null : out;
-}
+/** Re-exported: the scope step the conversion and quick exports share owns it. */
+export { clipFrameOffset } from '../render/clip/clipExportScope';
 
 /** Thrown when a findings chunk resolves undefined. */
 const FINDINGS_LOAD_FAILED = 'Saved findings could not load.';
@@ -1495,10 +1481,8 @@ export class ExportPanel {
       }
       // Respect an active clip: export only the points inside (or outside) the
       // box the user had set when they pressed Export (captured above).
-      const clipped = clip?.enabled;
-      const cloud = clipped ? clipCloud(sourceCloud, clip, clipFrameOffset(clipOffset, displayOrigin, sourceCloud)) : sourceCloud;
-      const scopeNote = cloud === sourceCloud ? null
-        : clipScopeText({ kept: cloud.pointCount, total: sourceCloud.pointCount });
+      // The same scope step the quick-format buttons take.
+      const { cloud, scopeNote } = prepareExportScope(sourceCloud, { clip, clipOffset, displayOrigin });
       // Without the full-resolution re-decode a reduced scan exports its display
       // sample; the file's provenance, its name and the status all say so.
       const displaySample = !useFull && this._cb.isReduced() ? displaySampleOf(sourceCloud) : null;
@@ -1618,6 +1602,12 @@ export interface ExportLayerState {
   readonly findingsRevision?: (id: string) => number;
   /** The shown compare difference was computed on this layer. */
   readonly inCompare?: (id: string) => boolean;
+  /**
+   * Give the reloaded layer `to` the identity (and the work) of `from`, the
+   * same source it replaces. False when the identity cannot be handed over;
+   * the replacement is then refused rather than leaving the work ownerless.
+   */
+  readonly handOver?: (from: string, to: string) => boolean;
 }
 
 /** The panel's per-layer callbacks: `hasFullSource`, `activateLayer`, `layerSource`, `reloadLayer` and `notify`. */
@@ -1661,6 +1651,21 @@ export function exportLayerHooks(state: ExportLayerState): Pick<ExportPanelCallb
       }
       const changes = reloadStampChanges(stamp, stampOf(id));
       if (changes.length === 0) {
+        // The replacement is the same source (the same File, at the same
+        // origin), so it takes the original's identity before the original
+        // goes: work owned by the original stays owned, and work taken on the
+        // copy while it loaded moves over with it.
+        const fresh = added[0];
+        const so = (layer: string): readonly number[] | undefined => state.viewer()?.getCloud(layer)?.sourceOrigin;
+        const a = so(id);
+        const b = so(fresh);
+        const sameOrigin = !!a && !!b && a.every((c, k) => c === b[k]);
+        if (state.handOver && !(sameOrigin && state.handOver(id, fresh))) {
+          state.removeLayer(fresh);
+          state.scans.setActive(id);
+          state.notify('The reload was refused: the reloaded copy could not be confirmed as the same source, so the original layer and its work are kept.');
+          return;
+        }
         state.removeLayer(id);
         return;
       }

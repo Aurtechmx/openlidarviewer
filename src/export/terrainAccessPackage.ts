@@ -144,7 +144,8 @@ function diagnosticsCsv(result: TerrainAccessResult): string {
     ['minTerrainConfidence', String(d.minTerrainConfidence)],
     ['fractionMeasured', d.fractionMeasured == null ? '' : String(d.fractionMeasured)],
     ['fractionInterpolated', d.fractionInterpolated == null ? '' : String(d.fractionInterpolated)],
-    ['fractionLowConfidenceOrEdgeRisk', d.fractionLowConfidenceOrEdgeRisk == null ? '' : String(d.fractionLowConfidenceOrEdgeRisk)],
+    ['fractionBelowProfileConfidence', d.fractionBelowProfileConfidence == null ? '' : String(d.fractionBelowProfileConfidence)],
+    ['profileMinimumTerrainConfidence', String(d.profileMinimumTerrainConfidence)],
     ['cost', String(result.cost)],
     ['exploredCells', String(result.explored)],
     ['resultDigest', String(result.record.result.resultDigest)],
@@ -246,6 +247,18 @@ function rasterCellLine(cell: number, frame: TerrainAccessCoordinateFrame): stri
   return `${cell} (${frame === 'scan-crs' ? 'CRS' : 'source'} units, as written in the .asc file)`;
 }
 
+/** One README line per declared constraint and whether the run applied it. */
+function constraintLines(constraints: unknown): string[] {
+  if (!constraints || typeof constraints !== 'object') return ['  not recorded'];
+  const label: Record<string, string> = {
+    longitudinalGrade: 'Longitudinal grade', crossSlope: 'Cross slope', stepHeight: 'Step height',
+    minimumTerrainConfidence: 'Minimum confidence', vehicleWidth: 'Vehicle width', ruggedness: 'Ruggedness',
+    vehicleLength: 'Vehicle length', aboveGroundObstruction: 'Above-ground obstruction',
+  };
+  return Object.entries(constraints as Record<string, unknown>)
+    .map(([k, v]) => `  ${label[k] ?? k}   ${String(v)}`);
+}
+
 /** The reproduction steps and honest limitations a reader needs, per §22/§23. */
 function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
   readonly basename: string;
@@ -321,9 +334,13 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
     `  Max step (limit applies here)   ${d.maxEdgeStepM.toFixed(3)} m`,
     `  Terrain relief within the footprint window   ${d.maxLocalReliefM.toFixed(3)} m`,
     `  Min terrain confidence ${Number.isFinite(d.minTerrainConfidence) ? d.minTerrainConfidence.toFixed(0) : 'n/a'}`,
+    `  Below profile minimum confidence (${d.profileMinimumTerrainConfidence})   ${d.fractionBelowProfileConfidence == null ? 'n/a' : `${(d.fractionBelowProfileConfidence * 100).toFixed(0)}% of route cells`}`,
     `  Cost                   ${result.cost}`,
     `  Result digest          ${r.result.resultDigest}`,
     `  Run record digest      ${r.digest}`,
+    '',
+    'Constraints (evaluated, disabled, unavailable, or recorded but not enforced)',
+    ...constraintLines(r.result.constraints),
     '',
     'Limitations',
     ...r.limitations.map((l) => `  - ${l}`),

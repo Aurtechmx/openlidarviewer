@@ -75,9 +75,20 @@ V-shaped valley floor, where the centred Horn gradient is zero, is still
 gated on its real rise. The same per-edge figures feed the limit check, the
 cost and the route diagnostics.
 
-Eligible cells are then dilated by half the declared vehicle width
-(`footprintClearance.ts`), so a passage narrower than the vehicle is
-excluded even where its centre cells are individually clear. Every eligible
+Width clearance (`footprintClearance.ts`) treats each cell as its
+rectangle and the vehicle as a disc of half the declared width. A cell is
+refused when its centre is strictly closer than that half-width to a
+hard-blocked cell's rectangle or to the survey edge; outside the grid counts
+as unsupported. A vehicle exactly as wide as a corridor touches both sides
+and fits; a wider one does not. When no cell the limits accept can hold the
+footprint, the run is refused and the reason names the width.
+
+A diagonal move is refused when either orthogonal cell beside it is
+hard-blocked, at any width, so a route never passes the shared corner of
+two unsupported cells. For a positive width the disc swept along the
+diagonal must also stay clear of every hard-blocked rectangle, not only at
+the two cell centres. A* search, the traversability map and the why-not
+inspector apply this one edge rule. Every eligible
 edge carries a declared, bounded soft cost, `distance * (1 + sum of weight *
 utilization)`, that rises linearly with how much of a limit a move actually
 uses.
@@ -171,8 +182,8 @@ re-decode that strides down to a point budget is now stamped `'sampled'`
 there (`computeTerrainCore`'s own fix), so Terrain Access states the same
 sampled-vs-full basis honestly without any change of its own.
 
-Vehicle length is recorded, not enforced. Eligibility is width-only
-morphological dilation. A full swept-body orientation check would need a
+Vehicle length is recorded, not enforced. Eligibility is a width-only
+disc clearance. A full swept-body orientation check would need a
 heading-aware collision test this release does not implement.
 
 No field or vehicle trial exists. The independent Python oracle

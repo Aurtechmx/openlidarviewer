@@ -22,7 +22,13 @@ in another language, and by a different search algorithm:
                             obstruction, width clearance) and edge-level
                             (longitudinal grade, cross slope, step height)
                             blocking, kept separate exactly as the viewer's
-                            traversabilityCost.ts documents.
+                            traversabilityCost.ts documents. Width clearance
+                            measures to blocked cell RECTANGLES and treats
+                            outside the grid as unsupported; a diagonal may
+                            not cut an unsupported cell's corner or sweep
+                            the width over one (footprintClearance.ts).
+                            Computed here by direct scan, where the viewer
+                            runs a separable distance transform.
   Least-cost routing      - Dijkstra (no heuristic), where the viewer runs A*
                             with a planimetric-distance heuristic. Different
                             algorithms for the same declared cost graph: if
@@ -330,36 +336,107 @@ def node_eligibility(valid, confidence, allowed, vrm, obstruction, cols, rows, p
     return blocked, reason
 
 
-def _dilate_from_seed(out, blocked, cols, rows, mx, my, seed, rcx, rcy, radius_m):
-    out[seed] = True
-    sr, sc = divmod(seed, cols)
-    for dr in range(-rcy, rcy + 1):
-        r = sr + dr
-        if r < 0 or r >= rows:
+# Width clearance. A cell is the rectangle mx x my around its centre; the
+# body is a disc of radius width/2. Unsupported area = every node-blocked
+# cell's rectangle plus everything outside the grid. A cell is refused when
+# its centre is STRICTLY closer than the radius to unsupported area (a body
+# exactly as wide as a corridor touches both walls and fits). Squared
+# distances are compared with a relative tolerance of 1e-12.
+#
+# Written as a direct scan over every blocked rectangle (O(n^2) on these
+# small fixtures), where the viewer runs a separable distance transform.
+
+TOUCH_TOLERANCE = 1e-12
+
+
+def _intrudes(d2, r2):
+    return d2 < r2 * (1 - TOUCH_TOLERANCE)
+
+
+def _rect_gap(offset_cells, size):
+    """Distance along one axis from a cell centre to a cell `offset_cells` away."""
+    return max(abs(offset_cells) * size - size / 2, 0.0)
+
+
+def _clearance_sq(blocked, cols, rows, mx, my, i):
+    r, c = divmod(i, cols)
+    best = min(
+        ((c + 0.5) * mx) ** 2, ((cols - c - 0.5) * mx) ** 2,
+        ((r + 0.5) * my) ** 2, ((rows - r - 0.5) * my) ** 2,
+    )
+    for j in range(cols * rows):
+        if not blocked[j]:
             continue
-        for dc in range(-rcx, rcx + 1):
-            c = sc + dc
-            if c < 0 or c >= cols:
-                continue
-            j = r * cols + c
-            if out[j]:
-                continue
-            if math.hypot(dc * mx, dr * my) <= radius_m:
-                out[j] = True
+        br, bc = divmod(j, cols)
+        d2 = _rect_gap(bc - c, mx) ** 2 + _rect_gap(br - r, my) ** 2
+        if d2 < best:
+            best = d2
+    return best
 
 
 def dilate_blocked(blocked, cols, rows, mx, my, width):
     n = cols * rows
-    out = [False] * n
     radius_m = width / 2 if (not math.isnan(width) and width > 0) else 0
     if radius_m <= 0:
         return list(blocked)
-    rcx = math.ceil(radius_m / mx) if mx > 0 else 0
-    rcy = math.ceil(radius_m / my) if my > 0 else 0
-    seeds = [i for i in range(n) if blocked[i]]
-    for seed in seeds:
-        _dilate_from_seed(out, blocked, cols, rows, mx, my, seed, rcx, rcy, radius_m)
-    return out
+    r2 = radius_m * radius_m
+    return [blocked[i] or _intrudes(_clearance_sq(blocked, cols, rows, mx, my, i), r2) for i in range(n)]
+
+
+# Diagonal moves. The centreline of a diagonal passes the corner shared by
+# the two orthogonal cells bordering it, so the move is refused when either
+# of those is node-blocked, at any width. For a positive width the swept
+# disc must also stay off every blocked rectangle along the whole segment,
+# not only at its ends: the exact segment-to-rectangle distance is the
+# minimum of each segment end to the rectangle and each rectangle corner to
+# the segment. Orthogonal moves need no extra check (along an axis-aligned
+# centre-to-centre segment the distance to a grid-aligned rectangle, and to
+# the survey edge, is smallest at an endpoint).
+
+def _point_rect_sq(px, py, x0, x1, y0, y1):
+    dx = x0 - px if px < x0 else (px - x1 if px > x1 else 0.0)
+    dy = y0 - py if py < y0 else (py - y1 if py > y1 else 0.0)
+    return dx * dx + dy * dy
+
+
+def _point_segment_sq(px, py, ax, ay, bx, by):
+    ex, ey = bx - ax, by - ay
+    t = ((px - ax) * ex + (py - ay) * ey) / (ex * ex + ey * ey)
+    t = min(1.0, max(0.0, t))
+    dx, dy = px - (ax + t * ex), py - (ay + t * ey)
+    return dx * dx + dy * dy
+
+
+def _segment_rect_sq(ax, ay, bx, by, x0, x1, y0, y1):
+    corners = ((x0, y0), (x0, y1), (x1, y0), (x1, y1))
+    return min(
+        _point_rect_sq(ax, ay, x0, x1, y0, y1),
+        _point_rect_sq(bx, by, x0, x1, y0, y1),
+        *(_point_segment_sq(px, py, ax, ay, bx, by) for px, py in corners),
+    )
+
+
+def diagonal_clear(support_blocked, cols, rows, mx, my, width, i, dx, dy):
+    if dx == 0 or dy == 0:
+        return True
+    r, c = divmod(i, cols)
+    if support_blocked[r * cols + c + dx] or support_blocked[(r + dy) * cols + c]:
+        return False
+    radius_m = width / 2 if (not math.isnan(width) and width > 0) else 0
+    if radius_m <= 0:
+        return True
+    r2 = radius_m * radius_m
+    ax, ay = c * mx, r * my
+    bx, by = (c + dx) * mx, (r + dy) * my
+    for j in range(cols * rows):
+        if not support_blocked[j]:
+            continue
+        br, bc = divmod(j, cols)
+        x0, x1 = (bc - 0.5) * mx, (bc + 0.5) * mx
+        y0, y1 = (br - 0.5) * my, (br + 0.5) * my
+        if _intrudes(_segment_rect_sq(ax, ay, bx, by, x0, x1, y0, y1), r2):
+            return False
+    return True
 
 
 @dataclass
@@ -376,6 +453,8 @@ class Terrain:
     rows: int
     mx: float
     my: float
+    support_blocked: list = None
+    width: float = 0.0
 
 
 def edge_geometry(terrain, a, b, dx, dy):
@@ -440,6 +519,9 @@ def _relax_neighbours(terrain, blocked, profile, weights, i, dist, prev, closed,
             continue
         j = r * terrain.cols + c
         if closed[j] or blocked[j]:
+            continue
+        if not diagonal_clear(terrain.support_blocked, terrain.cols, terrain.rows, terrain.mx, terrain.my,
+                              terrain.width, i, dx, dy):
             continue
         cost = edge_cost(terrain, profile, weights, i, j, dx, dy)
         if cost is None:
@@ -556,9 +638,11 @@ def compute(path):
     blocked, reason = node_eligibility(valid, confidence, allowed, vrm, obstruction, cols, rows, profile)
     dilated = dilate_blocked(blocked, cols, rows, mx, my, profile["vehicleWidth"])
     reason = _reason_counts_with_dilation(blocked, reason, dilated)
+    support_blocked = blocked
     blocked = dilated
 
-    terrain = Terrain(z, valid, confidence, vrm, grad_e, grad_n, cols, rows, mx, my)
+    terrain = Terrain(z, valid, confidence, vrm, grad_e, grad_n, cols, rows, mx, my,
+                      support_blocked, float(profile["vehicleWidth"]))
     start = spec["start"][0] * cols + spec["start"][1]
     end = spec["end"][0] * cols + spec["end"][1]
     outcome, path_cells, cost, _explored = dijkstra(terrain, blocked, profile, weights, start, end)

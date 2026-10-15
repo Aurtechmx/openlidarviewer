@@ -82,7 +82,8 @@ describe('main.ts export callbacks hand back their promise', () => {
   };
 
   it('returns the format export, so its button waits for it', () => {
-    expect(callback('onExport')).toMatch(/return settleFileExport\(/);
+    // runPointExport hands back settleFileExport's promise (pointExportRequest.test.ts).
+    expect(callback('onExport')).toMatch(/onExport: \(format\) => runPointExport\(/);
   });
 
   it('returns the image export, so its button waits for it', () => {

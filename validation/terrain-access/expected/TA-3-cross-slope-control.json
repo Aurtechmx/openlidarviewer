@@ -5,12 +5,12 @@
   "outcome": "FOUND",
   "path": [
     10,
-    11,
+    16,
     17,
-    13,
+    18,
     14
   ],
-  "cost": 8.177936504,
+  "cost": 8.202936504,
   "eligibleCount": 24,
   "blockedReasonCounts": {
     "no-data": 1

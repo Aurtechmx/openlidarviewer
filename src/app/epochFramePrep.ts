@@ -17,7 +17,7 @@
 
 import type { CrsInfo } from '../io/crs';
 import { sceneUpAxisPolicy, type SourceFormat } from '../io/sniffFormat';
-import type { CrsService } from '../geo/CrsService';
+import { datasetIdentity, type CrsService } from '../geo/CrsService';
 import { elevationWorkflowRefusal, spatialContextFrom, type SpatialContext } from '../geo/SpatialContext';
 import { truncationOf, type Truncation } from '../io/truncation';
 import {
@@ -37,6 +37,10 @@ export interface EpochFrameInput {
   readonly positions: Float32Array;
   readonly sourceOrigin?: readonly [number, number, number];
   readonly metadata?: { readonly crs?: CrsInfo | null } | null;
+  /** Source total and bounds, so a remembered CRS override is verified against this epoch. */
+  readonly sourceDeclaredPointCount?: number;
+  readonly pointCount?: number;
+  readonly bounds?: () => { readonly min: readonly number[]; readonly max: readonly number[] };
 }
 
 /** One epoch cloud handed to the aligner / DTM builder (facts spread in). */
@@ -124,10 +128,10 @@ export function prepareEpochFrames(
   b: EpochFrameInput,
 ): PreparedEpochFrames {
   const ctxA = spatialContextFrom(
-    crsService.resolveFor({ name: a.name, detected: a.metadata?.crs ?? undefined, source: 'las-vlr' }),
+    crsService.resolveFor({ name: a.name, detected: a.metadata?.crs ?? undefined, source: 'las-vlr', identity: datasetIdentity(a) }),
   );
   const ctxB = spatialContextFrom(
-    crsService.resolveFor({ name: b.name, detected: b.metadata?.crs ?? undefined, source: 'las-vlr' }),
+    crsService.resolveFor({ name: b.name, detected: b.metadata?.crs ?? undefined, source: 'las-vlr', identity: datasetIdentity(b) }),
   );
   // A depth-down, geocentric or Web Mercator epoch is refused before anything
   // else: d = (after − before) would read a depth decrease (a physical rise) as

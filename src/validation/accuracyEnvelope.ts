@@ -45,8 +45,18 @@ export interface ScanContext {
 /** An absolute-accuracy claim, scoped to the envelope it was measured in. */
 export interface AccuracyClaim {
   readonly id: string;
+  /** Root-mean-square error in metres: finite and non-negative. */
   readonly rmseM: number;
+  /** Independent checkpoints behind the figure: a positive integer, at least {@link minSample}. */
   readonly n: number;
+  /**
+   * The study's own sample rule: the smallest checkpoint count it accepts for
+   * a figure (the `minSample` a `checkpointAccuracy.ts` run was configured
+   * with). A positive integer; a claim without one is refused.
+   */
+  readonly minSample: number;
+  /** Where the figure comes from (study id, report path or DOI). Required. */
+  readonly evidenceRef: string;
   readonly envelope: ValidationEnvelope;
   /**
    * True when the checkpoint truth and the gridded points share an upstream
@@ -87,12 +97,42 @@ export interface AccuracyDecision {
 }
 
 /**
- * Fail-closed accuracy display: return the figure ONLY when the scan is inside
- * the claim's validated envelope; otherwise refuse with a reason. A refusal is
- * not "no accuracy" — it is "this scan was not validated", which the UI states
- * rather than showing a number that does not apply.
+ * Why a claim itself cannot support a figure, before any envelope question:
+ * an RMSE that is not a finite non-negative length, a sample count that is not
+ * a positive integer meeting the study's own minimum, or no evidence reference.
+ * Null when the claim is sound. The claim may arrive from a JSON file, so every
+ * field is checked at runtime rather than trusted from its type.
+ */
+export function accuracyClaimProblem(claim: AccuracyClaim): AccuracyDecision | null {
+  const refuse = (reasonCode: string, reason: string): AccuracyDecision => ({ allowed: false, reason, reasonCode });
+  if (typeof claim.rmseM !== 'number' || !Number.isFinite(claim.rmseM) || claim.rmseM < 0) {
+    return refuse('INVALID_RMSE', `The accuracy claim's RMSE (${String(claim.rmseM)}) is not a finite non-negative length, so no figure is shown.`);
+  }
+  if (!Number.isInteger(claim.n) || claim.n < 1) {
+    return refuse('INVALID_SAMPLE_COUNT', `The accuracy claim's checkpoint count (${String(claim.n)}) is not a positive integer, so no figure is shown.`);
+  }
+  if (!Number.isInteger(claim.minSample) || claim.minSample < 1) {
+    return refuse('INVALID_SAMPLE_RULE', 'The accuracy claim does not state its study\'s minimum checkpoint count as a positive integer, so no figure is shown.');
+  }
+  if (claim.n < claim.minSample) {
+    return refuse('BELOW_STUDY_MINIMUM', `The accuracy claim rests on ${claim.n} checkpoints, below the ${claim.minSample} its study requires, so no figure is shown.`);
+  }
+  if (typeof claim.evidenceRef !== 'string' || claim.evidenceRef.trim() === '') {
+    return refuse('MISSING_EVIDENCE', 'The accuracy claim cites no evidence, so no figure is shown.');
+  }
+  return null;
+}
+
+/**
+ * Fail-closed accuracy display: return the figure ONLY when the claim itself is
+ * sound (see {@link accuracyClaimProblem}) and the scan is inside the claim's
+ * validated envelope; otherwise refuse with a reason. A refusal is not "no
+ * accuracy" — it is "this scan was not validated", which the UI states rather
+ * than showing a number that does not apply.
  */
 export function accuracyFigureFor(scan: ScanContext, claim: AccuracyClaim): AccuracyDecision {
+  const problem = accuracyClaimProblem(claim);
+  if (problem) return problem;
   if (!isWithinEnvelope(claim.envelope, scan)) {
     return {
       allowed: false,
@@ -100,7 +140,7 @@ export function accuracyFigureFor(scan: ScanContext, claim: AccuracyClaim): Accu
       reasonCode: 'OUTSIDE_ENVELOPE',
     };
   }
-  return { allowed: true, rmseM: claim.rmseM, reason: `Within the validated envelope (N=${claim.n}).`, reasonCode: 'WITHIN_ENVELOPE' };
+  return { allowed: true, rmseM: claim.rmseM, reason: `Within the validated envelope (N=${claim.n}; evidence: ${claim.evidenceRef}).`, reasonCode: 'WITHIN_ENVELOPE' };
 }
 
 /**

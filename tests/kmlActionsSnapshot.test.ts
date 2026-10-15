@@ -81,4 +81,44 @@ describe('exportSiteKml — one reading of the session, then the write', () => {
     expect(input.measurements.map((m) => m.id)).toEqual(['m1']);
     expect(input.unitToMetres).toBe(1);
   });
+
+  it('copies the annotations and measurements, so an in-place edit during the import stays out', async () => {
+    // The live controllers hand out their own arrays and objects: a new note is
+    // pushed onto the same array, and a dragged vertex edits the same point.
+    const annotations: Array<{ id: string; title: string }> = [{ id: 'a1', title: 'NOTE-A' }];
+    const m1 = measurement('m1');
+    let built: KmlExportInput | null = null;
+    const deps = {
+      hasViewer: () => true,
+      geo: () => ({ origin: [0, 0, 0] as [number, number, number], crsName: 'WGS 84', name: 'site.las' }),
+      crsCurrent: () => GEOGRAPHIC,
+      upAxis: () => 'z',
+      annotations: () => annotations,
+      measurements: () => [m1],
+      viewpoints: () => [],
+      worldUp: () => [0, 0, 1] as [number, number, number],
+      unitToMetres: () => 1,
+      scanExtent: () => null,
+      scanHullPositions: () => null,
+      baseName: (n: string) => n.replace(/\.[^.]+$/, ''),
+      downloadText: () => {},
+      setError: () => {},
+      loadKmlExport: async () => {
+        await new Promise((r) => setTimeout(r, 0));
+        annotations.push({ id: 'a2', title: 'NOTE-LATER' });
+        (m1.points[1] as number[])[0] = 99;
+        return {
+          buildKml: (input: KmlExportInput) => { built = input; return '<kml/>'; },
+          KmlCoordinateError: class extends Error {},
+          resolveExportDigests,
+        };
+      },
+    } as unknown as KmlActionDeps;
+
+    await exportSiteKml(deps);
+
+    const input = built as unknown as KmlExportInput;
+    expect(input.annotations.map((a) => a.id)).toEqual(['a1']);
+    expect(input.measurements[0]!.points[1]).toEqual([1, 1, 1]);
+  });
 });

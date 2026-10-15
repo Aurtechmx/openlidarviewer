@@ -81,6 +81,9 @@ export function parseResolvedCrs(v: unknown): SerializedResolvedCrs | null {
     ...(isFiniteNumber(v.verticalUnitToMetres) && v.verticalUnitToMetres > 0
       ? { verticalUnitToMetres: v.verticalUnitToMetres }
       : {}),
+    ...(typeof v.verticalLinearUnit === 'string' && CRS_LINEAR_UNITS.includes(v.verticalLinearUnit as never)
+      ? { verticalLinearUnit: v.verticalLinearUnit as ResolvedCrs['linearUnit'] }
+      : {}),
     ...(typeof v.horizontalDatum === 'string' && v.horizontalDatum.length > 0
       ? { horizontalDatum: v.horizontalDatum }
       : {}),

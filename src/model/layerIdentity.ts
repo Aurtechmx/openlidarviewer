@@ -185,6 +185,19 @@ export class LayerIdentityRegistry {
     return { layerId, displayName, fingerprint: key };
   }
 
+  /**
+   * Carry a live id over to a replacement of the same source whose fingerprint
+   * key differs only by what was read of it (a reload at another density
+   * recomputes the extents). The id keeps its owner's work; the key now in use
+   * remembers it for a later reopen.
+   */
+  carryOver(layerId: string, key: string, displayName: string): LayerRecord {
+    this.byFingerprint.set(key, layerId);
+    const record: LayerRecord = { layerId, displayName, fingerprint: key };
+    this.records.set(layerId, record);
+    return record;
+  }
+
   /** Change a layer's display label. Identity is untouched. */
   rename(layerId: string, displayName: string): LayerRecord | null {
     const prev = this.records.get(layerId);

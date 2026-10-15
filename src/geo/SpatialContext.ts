@@ -50,6 +50,7 @@ import { GEOCENTRIC_REASON, WEB_MERCATOR_REASON, refusesHorizontalGround, valida
 import type { VerticalReference } from './height';
 import { HEIGHT_UNIT_GAP_SUFFIX, verticalReferenceFromDatum } from './height';
 import type { LayerSpatialTransform, ProjectSpatialFrame } from './ProjectSpatialFrame';
+import { UNIT_FACTORS } from '../units/units';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Up axis
@@ -108,11 +109,11 @@ export interface SpatialContext {
    */
   readonly verticalUnitToMetres?: number;
   /**
-   * Linear unit TOKEN of the Z axis when the source declared one distinct from
-   * the horizontal unit. Only a raw {@link CrsInfo} carries this; a
-   * {@link ResolvedCrs} does not model it, so a context built from one reports
-   * `undefined` — the honest "not stated here", never the horizontal token
-   * standing in for it.
+   * Linear unit TOKEN of the Z axis when the source declared a vertical unit.
+   * Read from either input shape; when only a factor survives, the token is
+   * the unit that factor is exactly (`'unknown'` for any other factor).
+   * `undefined` means no vertical unit was declared — never the horizontal
+   * token standing in for it.
    */
   readonly verticalLinearUnit?: CrsLinearUnit;
   /**
@@ -263,16 +264,13 @@ export function spatialContextFrom(
 
   const layerTransform = placement.layerTransform;
 
-  // The vertical unit TOKEN exists only on the raw CrsInfo shape. Reading it
-  // off a ResolvedCrs would need a field that type does not have, so the
-  // discriminant that told the two apart above tells them apart here too, and
-  // a ResolvedCrs-built context reports `undefined` rather than borrowing the
-  // horizontal token.
-  const verticalLinearUnit =
-    crs != null && !('kind' in crs) ? crs.verticalLinearUnit : undefined;
+  // The vertical unit TOKEN, from either shape. A source that kept only the
+  // factor gets the unit that factor exactly is, never the horizontal token.
   const verticalScale = crs?.verticalUnitToMetres;
   const verticalScaleKnown =
     verticalScale !== undefined && Number.isFinite(verticalScale) && verticalScale > 0;
+  const verticalLinearUnit =
+    crs?.verticalLinearUnit ?? (verticalScale !== undefined ? linearUnitForFactor(verticalScale) : undefined);
 
   return {
     crsName: resolved.name,
@@ -307,6 +305,17 @@ export function spatialContextFrom(
 
     metricClaimsPermitted,
   };
+}
+
+/**
+ * The named linear unit whose metres-per-unit is exactly `factor`, or
+ * `'unknown'` for any other value (including a non-finite one).
+ */
+export function linearUnitForFactor(factor: number): CrsLinearUnit {
+  if (factor === 1) return 'metre';
+  if (Math.abs(factor - UNIT_FACTORS.M_PER_FT) < 1e-12) return 'foot';
+  if (Math.abs(factor - UNIT_FACTORS.M_PER_US_FT) < 1e-12) return 'us-survey-foot';
+  return 'unknown';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

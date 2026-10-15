@@ -16,6 +16,8 @@ const MARSH: AccuracyClaim = {
   id: 'DTM-VERTICAL-ABSOLUTE/marsh-island',
   rmseM: 0.028,
   n: 101,
+  minSample: 20,
+  evidenceRef: 'validation/terrain-field/README.md#marsh-island',
   envelope: {
     biomes: ['coastal-marsh'],
     reliefBands: ['flat'],
@@ -78,5 +80,55 @@ describe('shared-solution confounder caps the evidence level', () => {
 
   it('the cap never RAISES a level (a lower nominal stays where it is)', () => {
     expect(confounderCappedLevel('E3_SYNTHETICALLY_VALIDATED', MARSH)).toBe('E3_SYNTHETICALLY_VALIDATED');
+  });
+});
+
+describe('an accuracy figure needs a sound statistic and a cited study', () => {
+  const scan: ScanContext = { biome: 'plain', reliefBand: 'flat', sensorClass: 'uav-lidar', datumMatch: 'matched' };
+  const claim: AccuracyClaim = {
+    ...MARSH,
+    envelope: { biomes: ['plain'], reliefBands: ['flat'], sensorClasses: ['uav-lidar'], datumMatch: 'matched' },
+  };
+
+  it('a sound claim inside its envelope is still allowed', () => {
+    expect(accuracyFigureFor(scan, claim)).toMatchObject({ allowed: true, rmseM: 0.028, reasonCode: 'WITHIN_ENVELOPE' });
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1, -1e-9])('refuses RMSE %s', (rmseM) => {
+    const d = accuracyFigureFor(scan, { ...claim, rmseM });
+    expect(d).toMatchObject({ allowed: false, reasonCode: 'INVALID_RMSE' });
+    expect(d.rmseM).toBeUndefined();
+  });
+
+  it('accepts an RMSE of exactly zero', () => {
+    expect(accuracyFigureFor(scan, { ...claim, rmseM: 0 }).allowed).toBe(true);
+  });
+
+  it.each([0, -3, 2.5, Number.NaN, Number.POSITIVE_INFINITY])('refuses a sample count of %s', (n) => {
+    const d = accuracyFigureFor(scan, { ...claim, n });
+    expect(d).toMatchObject({ allowed: false, reasonCode: 'INVALID_SAMPLE_COUNT' });
+    expect(d.rmseM).toBeUndefined();
+  });
+
+  it('refuses a sample count below the study\'s own minimum, and a missing or malformed minimum', () => {
+    expect(accuracyFigureFor(scan, { ...claim, n: 19 })).toMatchObject({ allowed: false, reasonCode: 'BELOW_STUDY_MINIMUM' });
+    expect(accuracyFigureFor(scan, { ...claim, n: 20 }).allowed).toBe(true);
+    for (const minSample of [undefined, 0, 1.5, -1, Number.NaN]) {
+      expect(accuracyFigureFor(scan, { ...claim, minSample: minSample as number }))
+        .toMatchObject({ allowed: false, reasonCode: 'INVALID_SAMPLE_RULE' });
+    }
+  });
+
+  it('refuses a claim with no evidence reference', () => {
+    for (const evidenceRef of [undefined, '', '   ']) {
+      expect(accuracyFigureFor(scan, { ...claim, evidenceRef: evidenceRef as string }))
+        .toMatchObject({ allowed: false, reasonCode: 'MISSING_EVIDENCE' });
+    }
+  });
+
+  it('the audit reproduction (RMSE -1, n 0) is refused', () => {
+    const d = accuracyFigureFor(scan, { id: 'audit', rmseM: -1, n: 0, sharedSolutionWithReference: true, envelope: claim.envelope } as AccuracyClaim);
+    expect(d.allowed).toBe(false);
+    expect(d.rmseM).toBeUndefined();
   });
 });

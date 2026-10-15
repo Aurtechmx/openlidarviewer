@@ -31,6 +31,8 @@
 
 import { parseResolvedCrs, type SerializedResolvedCrs } from './sessionCrs';
 import type { WorkOwnership } from '../model/workOwnership';
+import type { Measurement } from '../render/measure/types';
+import type { Annotation } from '../render/annotate/types';
 
 export type { SerializedResolvedCrs };
 
@@ -402,4 +404,128 @@ export function assertOwnershipWithinFrame(
       + 'Refusing rather than guessing, because work whose owning layer is missing would '
       + 'otherwise be read in whatever frame happens to be open.',
   );
+}
+
+// --- moving work between frames ----------------------------------------------
+
+/** A measurement with every stored coordinate moved by `d`. Elevation-only values move by the up component. */
+export function shiftMeasurement(m: Measurement, d: Vec3, upAxis: 'y' | 'z'): Measurement {
+  if (d[0] === 0 && d[1] === 0 && d[2] === 0) return { ...m, points: m.points.map((p) => [p[0], p[1], p[2]]) };
+  const elev = upAxis === 'z' ? d[2] : d[1];
+  const next: Measurement = { ...m, points: m.points.map((p) => [p[0] + d[0], p[1] + d[1], p[2] + d[2]]) };
+  if (m.profileChart) {
+    next.profileChart = m.profileChart.map((s) => ({ ...s, height: Number.isFinite(s.height) ? s.height + elev : s.height }));
+  }
+  if (m.volume) next.volume = { ...m.volume, referenceZ: m.volume.referenceZ + elev };
+  return next;
+}
+
+/** An annotation with its local anchor and jump-to camera moved by `d`. Its world position does not move. */
+export function shiftAnnotation(a: Annotation, d: Vec3): Annotation {
+  const next: Annotation = {
+    ...a,
+    localPosition: { x: a.localPosition.x + d[0], y: a.localPosition.y + d[1], z: a.localPosition.z + d[2] },
+  };
+  if (a.cameraState) {
+    const c = a.cameraState;
+    next.cameraState = {
+      ...c,
+      position: [c.position[0] + d[0], c.position[1] + d[1], c.position[2] + d[2]],
+      target: [c.target[0] + d[0], c.target[1] + d[1], c.target[2] + d[2]],
+    };
+  }
+  return next;
+}
+
+/**
+ * Restored work whose layer is not open: kept exactly as the file stated it,
+ * with the frame records it is read through, so the next save writes it back.
+ */
+export interface HeldSessionWork {
+  readonly upAxis: 'y' | 'z';
+  /** The project origin of the file the work came from. */
+  readonly projectOrigin: Vec3;
+  /** The records of every layer the held work names. */
+  readonly layers: readonly SessionLayerRecord[];
+  readonly measurements: readonly Measurement[];
+  readonly annotations: readonly Annotation[];
+}
+
+/** The origin a record's project-frame work is local to: `sourceOrigin - sourceToProject`. */
+export function recordBase(r: SessionLayerRecord): Vec3 {
+  return [r.sourceOrigin[0] - r.sourceToProject[0], r.sourceOrigin[1] - r.sourceToProject[1], r.sourceOrigin[2] - r.sourceToProject[2]];
+}
+
+const sameOrigin = (a: Vec3, b: Vec3): boolean => [0, 1, 2].every((k) => Math.abs(a[k]! - b[k]!) <= 1e-6);
+
+/**
+ * Write held work into the frame being saved.
+ *
+ * A held layer's record is re-expressed against the new project origin with the
+ * same placement it had (horizontal and vertical placement kept as recorded),
+ * and its work is moved by exactly the change of the origin it is local to, so
+ * every world coordinate is unchanged. When one layer of the new frame carries
+ * the same source (fingerprint, origin and axis), the held work is that
+ * layer's and is written under its id instead of a second record.
+ */
+export function carryHeldSessionWork(
+  frame: SessionProjectFrame,
+  held: HeldSessionWork,
+): { readonly frame: SessionProjectFrame; readonly measurements: Measurement[]; readonly annotations: Annotation[] } {
+  const P = frame.projectOrigin;
+  const P1 = held.projectOrigin;
+  const taken = new Set(frame.layers.map((l) => l.layerId));
+  const added: SessionLayerRecord[] = [];
+  const idOf = new Map<string, string>();
+  const oldRec = new Map(held.layers.map((r) => [r.layerId, r]));
+  const newRec = new Map<string, SessionLayerRecord>();
+  for (const r of held.layers) {
+    const same = frame.layers.filter((l) => l.sourceFingerprint === r.sourceFingerprint && sameOrigin(l.sourceOrigin, r.sourceOrigin) && l.upAxis === r.upAxis);
+    if (same.length === 1) {
+      idOf.set(r.layerId, same[0]!.layerId);
+      newRec.set(r.layerId, same[0]!);
+      continue;
+    }
+    const placedH = r.sourceToProject[0] !== 0 || r.sourceToProject[1] !== 0
+      || (r.sourceOrigin[0] === P1[0] && r.sourceOrigin[1] === P1[1]);
+    const placedV = r.sourceToProject[2] !== 0 || r.sourceOrigin[2] === P1[2];
+    let id = r.layerId;
+    while (taken.has(id)) id = `${id}~held`;
+    taken.add(id);
+    const rec: SessionLayerRecord = {
+      ...r,
+      layerId: id,
+      sourceToProject: [
+        placedH ? r.sourceOrigin[0] - P[0] : 0,
+        placedH ? r.sourceOrigin[1] - P[1] : 0,
+        placedV ? r.sourceOrigin[2] - P[2] : 0,
+      ],
+    };
+    idOf.set(r.layerId, id);
+    newRec.set(r.layerId, rec);
+    added.push(rec);
+  }
+  const rename = (v: string): string => idOf.get(v) ?? v;
+  /** Old and new origin the stored coordinates are local to. */
+  const shiftFor = (owner: WorkOwnership | undefined): Vec3 => {
+    if (!owner) return [P1[0] - P[0], P1[1] - P[1], P1[2] - P[2]];
+    const o = owner.layerId ? oldRec.get(owner.layerId) : undefined;
+    const n = owner.layerId ? newRec.get(owner.layerId) : undefined;
+    if (!o || !n) return [0, 0, 0];
+    const from = owner.frame === 'project' ? recordBase(o) : o.sourceOrigin;
+    const to = owner.frame === 'project' ? recordBase(n) : n.sourceOrigin;
+    return [from[0] - to[0], from[1] - to[1], from[2] - to[2]];
+  };
+  const owned = <T extends { owner?: WorkOwnership }>(x: T): T =>
+    x.owner?.layerId ? { ...x, owner: { ...x.owner, layerId: rename(x.owner.layerId) } } : x;
+  const measurements = held.measurements.map((m) => {
+    const next = owned(shiftMeasurement(m, shiftFor(m.owner), held.upAxis));
+    if (m.pickLayers) next.pickLayers = m.pickLayers.map(rename);
+    if (m.profileProvenance) {
+      next.profileProvenance = { ...m.profileProvenance, sources: m.profileProvenance.sources.map((x) => ({ ...x, layerId: rename(x.layerId) })) };
+    }
+    return next;
+  });
+  const annotations = held.annotations.map((a) => owned(shiftAnnotation(a, shiftFor(a.owner))));
+  return { frame: added.length > 0 ? { projectOrigin: P, layers: [...frame.layers, ...added] } : frame, measurements, annotations };
 }

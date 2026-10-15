@@ -34,15 +34,17 @@
  *
  * ── NEVER CROSSES A BLOCKED CELL ─────────────────────────────────────────
  * A cell whose `eligibility.blocked` bit is set is never pushed onto the open
- * set, in either direction, and an edge `evaluateEdge` reports as blocked is
- * skipped before a cost is even computed for it. No blocked cell can
+ * set, in either direction, a diagonal that would cut the corner of an
+ * unsupported cell (or sweep the declared width over one) is refused by the
+ * shared `transitionAllowed` predicate, and an edge `evaluateEdge` reports as
+ * blocked is skipped before a cost is even computed for it. No blocked cell can
  * therefore ever receive a finite `g`, so none can appear in a reconstructed
  * path — pinned directly by test rather than only implied by the search.
  *
  * Pure data: no DOM, no three.js, no I/O. Deterministic.
  */
 
-import { edgeCost } from './traversabilityCost';
+import { edgeCost, transitionAllowed } from './traversabilityCost';
 import { TERRAIN_ACCESS_NEIGHBOURS, type TerrainAccessGrid, type TerrainAccessProfile } from './terrainAccessTypes';
 import type { CostWeights, NodeEligibility, TerrainAccessFeatures } from './traversabilityCost';
 
@@ -177,11 +179,11 @@ export function aStarTerrain(
     const row = Math.floor(i / grid.cols);
     const col = i - row * grid.cols;
     for (const [dx, dy] of TERRAIN_ACCESS_NEIGHBOURS) {
-      const c = col + dx;
-      const r = row + dy;
-      if (c < 0 || c >= grid.cols || r < 0 || r >= grid.rows) continue;
-      const j = r * grid.cols + c;
-      if (closed[j] === 1 || eligibility.blocked[j] === 1) continue;
+      // The shared edge predicate: in bounds, destination eligible, and for a
+      // diagonal no corner cut and no swept-width overlap (footprintClearance.ts).
+      if (!transitionAllowed(grid, eligibility, profile, i, dx, dy)) continue;
+      const j = (row + dy) * grid.cols + col + dx;
+      if (closed[j] === 1) continue;
       const cost = edgeCost(grid, features, profile, i, j, dx, dy, weights);
       if (cost == null) continue; // edge itself hard-blocked
       const tentative = gScore[i] + cost;

@@ -72,7 +72,8 @@ function legacyOverlapDropRefusal(points: number): string {
 }
 import { writeLas, writeLas14 } from './writeLas';
 import { planQuantisation } from './lasQuantisation';
-import { spatialContextFrom } from '../geo/SpatialContext';
+import { spatialContextFrom, verticalMetresPerUnit } from '../geo/SpatialContext';
+import { planLasVertical, verifyLasVertical } from './lasVerticalIdentity';
 import { writeXyzBytes, writeAscBytes } from './writeAscii';
 import { reprojectGlobal } from './reproject';
 import type { TransformProvenance } from './transformProvenance';
@@ -120,6 +121,18 @@ function baseName(name: string): string {
   const stem = slash >= 0 ? name.slice(slash + 1) : name;
   const dot = stem.lastIndexOf('.');
   return dot > 0 ? stem.slice(0, dot) : stem;
+}
+
+/** Z range of the points the writer emits. */
+function zRange(g: { readonly count: number; readonly z: Float64Array }): { min: number; max: number } {
+  let min = Infinity;
+  let max = -Infinity;
+  for (let i = 0; i < g.count; i++) {
+    const z = g.z[i];
+    if (z < min) min = z;
+    if (z > max) max = z;
+  }
+  return { min, max };
 }
 
 /** True when a reprojection crosses into or out of NAD27. */
@@ -396,14 +409,13 @@ export function convertCloud(
     } else {
       linearUnitCode = null;
     }
-    // Vertical unit: Z is untouched by every mode, so its unit is the SOURCE's
-    // declared vertical unit — falling back to the source's horizontal family
-    // (the GeoTIFF convention that vertical tracks the model's units), never
-    // the OUTPUT horizontal. Reprojecting a foot-height file to metre eastings
-    // used to relabel its unchanged Z as metres.
-    const verticalUnitCode = sourceCrs
-      ? unitToGeoTiff(srcCtx.verticalLinearUnit ?? srcCtx.linearUnit)
-      : null;
+    // Vertical CRS and unit: Z is untouched by every mode, so the output
+    // declares the SOURCE's own vertical unit, never the horizontal one in its
+    // place; an unreadable one is left undeclared and a contradictory one
+    // refuses (see lasVerticalIdentity.ts).
+    const vertical = planLasVertical(srcCtx, sourceCrs != null, mode);
+    if (!vertical.ok) return fail(vertical.message, crsNote);
+    if (vertical.warning) log.push({ level: 'warn', message: vertical.warning });
     // Keep the source file's own scale and offset when they can represent
     // these coordinates; otherwise re-quantise, and say which in the file.
     const quantPlan = planQuantisation(g, cloud.metadata?.sourceQuantisation, {
@@ -447,8 +459,8 @@ export function convertCloud(
         epsg: outEpsg ?? undefined,
         isGeographic: geo,
         linearUnitCode,
-        verticalEpsg: srcCtx.verticalEpsg ?? null,
-        verticalUnitCode,
+        verticalEpsg: vertical.verticalEpsg,
+        verticalUnitCode: vertical.unitCode,
         wkt,
         description: datumNote,
         provenance: record14.lines,
@@ -536,13 +548,16 @@ export function convertCloud(
         epsg: outEpsg ?? undefined,
         isGeographic: geo,
         linearUnitCode,
-        verticalEpsg: srcCtx.verticalEpsg ?? null,
-        verticalUnitCode,
+        verticalEpsg: vertical.verticalEpsg,
+        verticalUnitCode: vertical.unitCode,
         description: datumNote,
         provenance: recordLegacy.lines,
         quantisation: quantPlan.use ?? undefined,
       });
     }
+    const z = zRange(g);
+    const verticalProblem = verifyLasVertical(bytes, vertical, z.min, z.max, (crs) => verticalMetresPerUnit(spatialContextFrom(crs), 'horizontal-when-known'));
+    if (verticalProblem) return fail(verticalProblem, crsNote);
   } else {
     // ASCII holds fewer columns than the cloud: say which were left out, here
     // and in the file's own header.

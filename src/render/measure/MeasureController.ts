@@ -32,7 +32,7 @@ import type {
   UnitSystem,
   VolumeRecord,
 } from './types';
-import { GEOGRAPHIC_NOT_AVAILABLE, MIN_POINTS, UNRESOLVED_UNIT_FRAME, VERTICAL_NOT_AVAILABLE, frameRefusalText, isFull, reducedSampleClause, sameUnitFrame, type MeasureUnitFrame } from './types';
+import { GEOGRAPHIC_NOT_AVAILABLE, MIN_POINTS, UNRESOLVED_UNIT_FRAME, UP_AXIS_CONFLICT, VERTICAL_NOT_AVAILABLE, frameRefusalText, isFull, reducedSampleClause, sameUnitFrame, sameUp, upAxisRefusesKind, type MeasureUnitFrame } from './types';
 import type { WorkOwnership } from '../../model/workOwnership';
 import type { ProfileProvenance } from './profileProvenance';
 import type { WithheldReadCounts } from '../../science/withheldCounts';
@@ -455,6 +455,7 @@ export class MeasureController {
     | ((
         polygon: ReadonlyArray<Vec3>,
         referenceZ: number,
+        up?: Vec3,
       ) => VolumeRecord | { record: VolumeRecord; residentOnly: boolean } | null)
     | null = null;
   /**
@@ -516,6 +517,10 @@ export class MeasureController {
    * arrives, which is also the honest answer for a scan at the world origin.
    */
   private _originUp: number | null = 0;
+  /** The scene's render origin as `setContext` last gave it (undefined: never), so a layer's own up can reduce it. */
+  private _origin: Vec3 | null | undefined = undefined;
+  /** True while `_inFrameOf` holds work whose points sit on layers with different up axes. */
+  private _upConflict = false;
   private _units: UnitSystem = 'metric';
   /**
    * Render-units → metres factor from the scan's CRS (B2, v0.4.5). Render
@@ -1038,6 +1043,7 @@ export class MeasureController {
       geographic: this._geographicCrs,
       verticalRefused: this._verticalRefused,
       projected: this._projectedCrs,
+      up: this._worldUp,
     };
   }
 
@@ -1050,7 +1056,19 @@ export class MeasureController {
     if (frames.every((f) => f === null)) return null;
     const active = this._activeUnitFrame();
     const own = frames.map((f) => f ?? active);
-    return own.every((f) => sameUnitFrame(f, own[0]!)) ? own[0]! : UNRESOLVED_UNIT_FRAME;
+    const units = own.every((f) => sameUnitFrame(f, own[0]!)) ? own[0]! : UNRESOLVED_UNIT_FRAME;
+    // The up axis is the layers' own, never the scene's: a Z-up survey keeps Z
+    // while a Y-up scan drives navigation. Layers that disagree share no vertical.
+    const ups = own.map((f) => f.up ?? this._worldUp);
+    return ups.every((u) => sameUp(u, ups[0]!)) ? { ...units, up: ups[0]!, upConflict: false } : { ...units, up: this._worldUp, upConflict: true };
+  }
+
+  /**
+   * The up vector `m`'s figures are read along: its layer's own up, else the
+   * scene's (also when `m` is omitted). Exports use it so a file agrees with the panel.
+   */
+  upFor(m?: Measurement): Vec3 {
+    return (m && !this._inOwnFrame ? this._ownUnitFrame(m)?.up : null) ?? this._worldUp;
   }
 
   /**
@@ -1070,7 +1088,12 @@ export class MeasureController {
     const own = this._inOwnFrame ? null : this._ownUnitFrame(m);
     if (!own) return fn();
     const saved = this._activeUnitFrame();
+    const savedOriginUp = this._originUp;
     const set = (f: MeasureUnitFrame): void => {
+      // Up and the datum it reduces the origin along travel with the frame.
+      this._worldUp = f.up ?? saved.up!;
+      this._upConflict = f.upConflict === true;
+      this._originUp = f === saved || !this._origin ? savedOriginUp : elevationDatumOffset(this._origin, this._worldUp);
       this._unitToMetres = f.unitToMetres;
       this._verticalUnitToMetres = f.verticalUnitToMetres;
       this._verticalUnitKnown = f.verticalUnitKnown;
@@ -1148,11 +1171,11 @@ export class MeasureController {
       // headline uses: horizontal quantities by `f`, the rise by the up-axis
       // factor. No geometry is recomputed here.
       lineMetrics:
-        m.kind === 'distance' && m.points.length >= 2
+        m.kind === 'distance' && m.points.length >= 2 && !this._upConflict
           ? lineBreakdown(m.points[0], m.points[1], this._worldUp, f, this._effVertical())
           : undefined,
       areaMetrics:
-        m.kind === 'area' && m.points.length >= 3 && areaRingVerdictCached(m.points).ok
+        m.kind === 'area' && m.points.length >= 3 && areaRingVerdictCached(m.points).ok && !this._upConflict
           ? areaBreakdown(m.points, this._worldUp, f, this._effVertical())
           : undefined,
       volumeResidentOnly: m.volumeResidentOnly,
@@ -1292,8 +1315,9 @@ export class MeasureController {
     // exact inverse, so what the user typed is what the sampler walks. The
     // normalisation is pure + tested in profileSampler.ts.
     const opts = normaliseResampleParams(params, this.unitFrameOf(m).unitToMetres);
+    const sampler = this._profileSampler;
     try {
-      const result = this._profileSampler(m.points[0], m.points[1], opts);
+      const result = this._inFrameOf(m, () => sampler(m.points[0], m.points[1], opts));
       if (!result) return false;
       this._stampProfileSample(m, result);
     } catch {
@@ -1324,11 +1348,11 @@ export class MeasureController {
     for (const m of this._measurements) {
       if (m.kind !== 'profile' || m.points.length < 2 || !m.profileChart) continue;
       try {
-        const result = sampler(m.points[0], m.points[1], {
+        const result = this._inFrameOf(m, () => sampler(m.points[0], m.points[1], {
           corridorWidth: m.profileCorridorWidth ?? null,
           groundPercentile: m.profileGroundPercentile ?? null,
-          sampleCount: m.profileChart.length,
-        });
+          sampleCount: m.profileChart!.length,
+        }));
         if (!result) continue;
         this._stampProfileSample(m, result);
         changed = true;
@@ -1350,6 +1374,7 @@ export class MeasureController {
       | ((
           polygon: ReadonlyArray<Vec3>,
           referenceZ: number,
+          up?: Vec3,
         ) =>
           | VolumeRecord
           | { record: VolumeRecord; residentOnly: boolean }
@@ -1451,7 +1476,7 @@ export class MeasureController {
   private _placeOnVertex(id: string, vi: number, clientX: number, clientY: number): void {
     const m = this._measurements.find((x) => x.id === id);
     let p: Vec3 | undefined;
-    if (m?.kind === 'box' && m.points.length >= 2) p = boxCorners(boxFromCorners(m.points[0], m.points[1]), this._worldUp)[vi];
+    if (m?.kind === 'box' && m.points.length >= 2) p = boxCorners(boxFromCorners(m.points[0], m.points[1]), this.upFor(m))[vi];
     else p = m?.points[vi];
     if (!p) return;
     const r = this._lastCanvas?.getBoundingClientRect();
@@ -1572,6 +1597,7 @@ export class MeasureController {
    */
   setContext(ctx: { worldUp: Vec3; origin: Vec3 | null }): void {
     const nextUp = ctx.origin ? elevationDatumOffset(ctx.origin, ctx.worldUp) : null;
+    this._origin = ctx.origin;
     // Guarded like every other presentational setter here: the viewer re-asks
     // for the datum on every change to the cloud set, and most of those leave
     // the frame alone — an unconditional emit would repaint the panel for a
@@ -1954,7 +1980,9 @@ export class MeasureController {
         // pre-preference behaviour.
         const stored = decodeSamplerParams(storageGet(PROFILE_SAMPLER_DEFAULTS_KEY));
         const opts = stored ? normaliseResampleParams(stored, this.unitFrameOf(m).unitToMetres) : undefined;
-        const result = this._profileSampler(m.points[0], m.points[1], opts);
+        // In the owner's frame: the profile is cut along its layer's own up.
+        const sampler = this._profileSampler;
+        const result = this._inFrameOf(m, () => sampler(m.points[0], m.points[1], opts));
         if (result) this._stampProfileSample(m, result);
       } catch {
         // Sampler errors must not poison the measurement; the scalar
@@ -1971,8 +1999,8 @@ export class MeasureController {
       m.points.length >= MIN_POINTS.volume
     ) {
       try {
-        const refZ = autoReferenceZ(m.points, this._worldUp);
-        const result = this._volumeSampler(m.points, refZ);
+        const up = this.upFor(m);
+        const result = this._volumeSampler(m.points, autoReferenceZ(m.points, up), up);
         if (result) {
           // Normalise legacy (raw VolumeRecord) and current
           // ({record, residentOnly}) sampler return shapes. The detection
@@ -2031,6 +2059,7 @@ export class MeasureController {
       // gives a raw-coordinate angle that is physically wrong (pass-6 M3).
       geographicCrs: frameRefusalText(m.kind, this._geographicCrs, this._verticalRefused) === GEOGRAPHIC_NOT_AVAILABLE,
       verticalRefused: frameRefusalText(m.kind, this._geographicCrs, this._verticalRefused) === VERTICAL_NOT_AVAILABLE,
+      upConflict: this._upConflict && upAxisRefusesKind(m.kind),
     });
   }
 
@@ -2113,7 +2142,7 @@ export class MeasureController {
         boxFromCorners(m.points[0], m.points[1]),
         drag.vi as BoxCornerIndex,
         [point[0], point[1], point[2]],
-        this._worldUp,
+        this.upFor(m),
       );
       m.points[0] = [next.min[0], next.min[1], next.min[2]];
       m.points[1] = [next.max[0], next.max[1], next.max[2]];
@@ -2214,10 +2243,13 @@ export class MeasureController {
     // Every figure that combines the horizontal and vertical axes is computed
     // on the isotropic points, so a compound CRS reads what the export writes.
     const q = this._iso(p);
+    if (this._upConflict && upAxisRefusesKind(m.kind)) return UP_AXIS_CONFLICT;
     switch (m.kind) {
       case 'distance': {
         if (p.length < 2) return '—';
         const len = this._fmtLen(distance(q[0], q[1]));
+        // A bearing is taken in the plane normal to up; mixed ups have none.
+        if (this._upConflict) return len;
         const az = bearingDegrees(p[0], p[1], this._worldUp);
         // Append the bearing when the segment has a horizontal run, labelled
         // with what it is measured from. It is taken against +Y, which is grid
@@ -2444,7 +2476,7 @@ export class MeasureController {
    * the headline reads the refusal and the secondary labels are dropped.
    */
   private _refuseGeographicLabels(m: Measurement, labels: OverlayLabel[], from: number): void {
-    const refusal = frameRefusalText(m.kind, this._geographicCrs, this._verticalRefused);
+    const refusal = this._upConflict && upAxisRefusesKind(m.kind) ? UP_AXIS_CONFLICT : frameRefusalText(m.kind, this._geographicCrs, this._verticalRefused);
     if (labels.length <= from) return;
     if (refusal === null) {
       if (!this._geographicCrs) return;
