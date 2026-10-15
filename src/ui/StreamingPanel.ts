@@ -123,7 +123,7 @@ export interface StreamingPanelCallbacks {
 
 /** Friendly labels for each colour mode. */
 const MODE_LABEL: Record<ColorMode, string> = {
-  rgb: 'Color',
+  rgb: 'Colour',
   intensity: 'Intensity',
   elevation: 'Height',
   classification: 'Class',
@@ -139,16 +139,16 @@ const MODE_LABEL: Record<ColorMode, string> = {
 };
 
 const MODE_TIP: Record<ColorMode, string> = {
-  rgb: 'Color points using their captured RGB values.',
-  intensity: 'Color points by the strength of the returned laser pulse.',
-  elevation: 'Color points by height, low to high.',
-  classification: 'Color points by their assigned class (ground, vegetation, building, …).',
-  normal: 'Color points by surface-normal direction.',
-  density: 'Color points by local point density.',
-  gpsTime: 'Color points by the GPS timestamp of capture.',
-  returnNumber: 'Color points by which laser return (1st, 2nd, …) they are.',
-  coverage: 'Color cells by whether the scan reached them at all.',
-  confidence: 'Color cells by how confident the derived value at that cell is.',
+  rgb: 'Colour points using their captured RGB values.',
+  intensity: 'Colour points by the strength of the returned laser pulse.',
+  elevation: 'Colour points by height, low to high.',
+  classification: 'Colour points by their assigned class (ground, vegetation, building, …).',
+  normal: 'Colour points by surface-normal direction.',
+  density: 'Colour points by local point density.',
+  gpsTime: 'Colour points by the GPS timestamp of capture.',
+  returnNumber: 'Colour points by which laser return (1st, 2nd, …) they are.',
+  coverage: 'Colour cells by whether the scan reached them at all.',
+  confidence: 'Colour cells by how confident the derived value at that cell is.',
 };
 
 const QUALITIES: StreamingQuality[] = ['low', 'balanced', 'high'];

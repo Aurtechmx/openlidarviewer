@@ -1168,7 +1168,7 @@ export class Inspector {
       this._heightTrimRow,
       this._projectScaleRow,
     ]);
-    this._colorBySection = section('Color by', colorByBody);
+    this._colorBySection = section('Colour by', colorByBody);
 
     // Range filters (v0.5.6): elevation (world-unit height) and intensity
     // (raw units). Both hide points outside the window and share one builder.

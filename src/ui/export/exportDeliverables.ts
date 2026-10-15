@@ -107,7 +107,7 @@ const IMAGE_EXPORT_BUTTONS: ReadonlyArray<{
     label: 'View capture',
     title:
       'Captures the current on-screen view in whatever colour mode is active. ' +
-      'To get a distinct image, switch the Color by chip before clicking — ' +
+      'To get a distinct image, switch the Colour by chip before clicking — ' +
       'otherwise this matches Height Map when you are viewing in elevation. ' +
       'Georeferenced scans (known CRS + world origin) instead download a ' +
       'top-down ortho ZIP with .pgw/.prj sidecars that GIS tools place directly.',
