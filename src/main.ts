@@ -4253,7 +4253,7 @@ function closeScan(): void { // the guarded entry is requestCloseScan
 }
 const requestReplace = (req: import('./app/discardGuard').ReplaceRequest): Promise<import('./app/discardGuard').ReplaceOutcome> => loadDiscardGuard().then((m) => m.requestReplace(req, { work: discardableWork, saveSession: exportSession, snapshot: async () => (await recovery?.snapshotNow()) === true, notify: showLassoToast })); let closeGuard: Promise<() => Promise<boolean>> | null = null; const requestCloseScan = (): Promise<boolean> => (closeGuard ??= loadCloseScanGuard().then((m) => m.createCloseScanGuard({ close: closeScan, saveSession: exportSession, onSaveFailed: () => showLassoToast('Session not saved. The scan is still open.'), work: discardableWork }))).then((g) => g());
 function discardableWork() {
-  return ({ measurements: viewerReady ? viewer.measure.getMeasurements().length : 0, annotations: viewerReady ? viewer.annotate.getAnnotations().length : 0, views: viewBookmarks.savedViews.length, ...staticClassEditWork(viewer), results: workspaceShell?.readyResultCount() ?? 0, pendingRecovery: recovery?.hasPending() ?? false });
+  return ({ measurements: viewerReady ? viewer.measure.getMeasurements().length : 0, annotations: viewerReady ? viewer.annotate.getAnnotations().length : 0, views: viewBookmarks.savedViews.length, ...staticClassEditWork(viewer), results: workspaceShell?.readyResultCount() ?? 0 });
 }
 
 /** Save the current view as a PNG (`app/snapshotAction.ts`, a lazy chunk). */

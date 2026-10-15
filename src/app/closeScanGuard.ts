@@ -1,9 +1,11 @@
 /**
  * closeScanGuard.ts
  *
- * Closing a scan removes every cloud, clears the layer state and empties the
- * crash-recovery journal, so measurements, annotations, saved views, class
- * edits and computed results go with it. This asks first when any of that
+ * Closing a scan removes every cloud, clears the layer state and drops the
+ * scan's own crash-recovery entry, so measurements, annotations, saved views,
+ * class edits and computed results go with it. Work held in the recovery
+ * journal for a restore (from an earlier visit, another file or a Replace)
+ * stays. This asks first when any of that
  * exists, and closes straight away when none does.
  *
  * The guard is for the user-facing Close scan control only. Programmatic
@@ -24,13 +26,11 @@ export interface DiscardableWork {
   readonly classEditLayers?: readonly string[];
   /** Ready results held by the Analyse, Observatory, lab and findings owners. */
   readonly results: number;
-  /** Saved work waiting in the recovery journal. */
-  readonly pendingRecovery: boolean;
 }
 
 export interface CloseScanGuardDeps {
   work(): DiscardableWork;
-  /** Remove the scan and clear the recovery journal. */
+  /** Remove the scan and its live recovery entry. */
   close(): void;
   /** Download the session file. Resolves true only once a file was written. Absent when there is no save action. */
   saveSession?(): Promise<boolean>;
@@ -44,7 +44,7 @@ const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n =
 
 /** Whether any kind of discardable work exists. */
 export function hasDiscardableWork(w: DiscardableWork): boolean {
-  return w.measurements > 0 || w.annotations > 0 || w.views > 0 || w.classEdits || w.results > 0 || w.pendingRecovery;
+  return w.measurements > 0 || w.annotations > 0 || w.views > 0 || w.classEdits || w.results > 0;
 }
 
 /** One line naming what closing discards. */
@@ -55,7 +55,6 @@ export function describeDiscardableWork(w: DiscardableWork): string {
   if (w.views) parts.push(plural(w.views, 'saved view'));
   if (w.classEdits) parts.push(describeClassEdits(w.classEditLayers ?? []));
   if (w.results) parts.push(plural(w.results, 'computed result'));
-  if (w.pendingRecovery && parts.length === 0) parts.push('work saved for recovery in this browser');
   return parts.join(', ');
 }
 

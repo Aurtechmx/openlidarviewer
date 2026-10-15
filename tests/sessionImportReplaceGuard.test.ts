@@ -35,7 +35,7 @@ function harness(open: Measurement[], choice: 'confirm' | 'alternate' | 'cancel'
     measure: { loadMeasurements, getMeasurements: () => store.measurements },
     annotate: { loadAnnotations, getAnnotations: () => [] },
   };
-  const work = (): DiscardableWork => ({ measurements: store.measurements.length, annotations: 0, views: 0, classEdits: false, results: 0, pendingRecovery: false });
+  const work = (): DiscardableWork => ({ measurements: store.measurements.length, annotations: 0, views: 0, classEdits: false, results: 0 });
   const guard: ReplaceGuardDeps = { work, confirm, saveSession, snapshot };
   const deps: SessionIoDeps = {
     viewerReady: Promise.resolve(), getViewer: () => viewer as unknown as Viewer, loadSession: async () => realModule, appVersion: '0.6.3',

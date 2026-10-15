@@ -34,7 +34,7 @@ function fakeViewer(layers: Record<string, FakeLayer>): ClassEditLayerReader & {
   };
 }
 
-const NO_WORK: DiscardableWork = { measurements: 0, annotations: 0, views: 0, classEdits: false, results: 0, pendingRecovery: false };
+const NO_WORK: DiscardableWork = { measurements: 0, annotations: 0, views: 0, classEdits: false, results: 0 };
 
 /** Edited LAS A opened first, then clean PLY B, which is now active. */
 const editedThenClean = () => fakeViewer({

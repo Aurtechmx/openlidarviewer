@@ -77,7 +77,6 @@ function setup(opts: Setup = {}) {
           views,
           classEdits: false,
           results: 0,
-          pendingRecovery: false,
         }),
         saveSession,
         snapshot: async () => false,

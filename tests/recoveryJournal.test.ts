@@ -4,6 +4,7 @@ import {
   createDebouncer,
   createLocalStore,
   entryMatchesSource,
+  heldKey,
   fingerprintKey,
   LOCAL_STORAGE_MAX_BYTES,
   MAX_ENTRIES,
@@ -81,6 +82,10 @@ describe('entryMatchesSource', () => {
   });
   it('refuses when nothing is loaded', () => {
     expect(entryMatchesSource(e, undefined, matchSessionToScan)).toBe(false);
+  });
+  it('matches an entry held under its own key by the source it was saved over', () => {
+    expect(entryMatchesSource({ ...e, key: heldKey(e) }, { ...summary }, matchSessionToScan)).toBe(true);
+    expect(heldKey(e)).not.toBe(e.key);
   });
   it('refuses when the key agrees but the scan match is not strong', () => {
     const partial = () => ({ verdict: 'partial' as const, reasons: [] });

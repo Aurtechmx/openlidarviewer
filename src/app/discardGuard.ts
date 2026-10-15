@@ -51,8 +51,8 @@ export interface ReplaceGuardDeps {
  * and the recovery journal alone.
  */
 export function workAtRisk(work: DiscardableWork, kind: ReplaceRequest['kind']): DiscardableWork {
-  if (kind === 'scan') return { ...work, results: 0, pendingRecovery: false };
-  return { ...work, classEdits: false, results: 0, pendingRecovery: false };
+  if (kind === 'scan') return { ...work, results: 0 };
+  return { ...work, classEdits: false, results: 0 };
 }
 
 /** Whether the request would discard anything. */

@@ -17,7 +17,7 @@ import { serializeActiveSession, type SessionSnapshotDeps } from '../src/app/ses
 import * as sessionIo from '../src/io/session';
 import { parseSession } from '../src/io/session';
 
-const none: DiscardableWork = { measurements: 0, annotations: 0, views: 0, classEdits: false, results: 0, pendingRecovery: false };
+const none: DiscardableWork = { measurements: 0, annotations: 0, views: 0, classEdits: false, results: 0 };
 const some = (over: Partial<DiscardableWork> = {}): DiscardableWork => ({ ...none, measurements: 2, ...over });
 
 function guardDeps(work: DiscardableWork, over: Partial<ReplaceGuardDeps> = {}) {
@@ -36,8 +36,8 @@ describe('work detection', () => {
     expect(wouldLoseWork({ ...none, views: 1 }, { kind: 'scan', name: 'a' })).toBe(true);
     expect(wouldLoseWork({ ...none, classEdits: true }, { kind: 'scan', name: 'a' })).toBe(true);
   });
-  it('ignores computed results and the recovery journal, which a replacement does not discard', () => {
-    expect(wouldLoseWork({ ...none, results: 3, pendingRecovery: true }, { kind: 'scan', name: 'a' })).toBe(false);
+  it('ignores computed results, which a replacement does not discard', () => {
+    expect(wouldLoseWork({ ...none, results: 3 }, { kind: 'scan', name: 'a' })).toBe(false);
   });
   it('counts only measurements, annotations and views for an import', () => {
     expect(workAtRisk(some({ classEdits: true, results: 1 }), 'import')).toEqual({ ...none, measurements: 2 });
