@@ -35,7 +35,7 @@ import { pointBasisLine } from '../export/exportSummary';
 import { sourceInterpretationOf, type SourceInterpretationRecord } from '../science/sourceInterpretation';
 import { footprintMetres } from '../report/reportFootprint';
 import type { Footprint } from '../report/reportFootprint';
-import { spatialContextFrom } from '../geo/SpatialContext';
+import { horizontalGroundRefusal, spatialContextFrom } from '../geo/SpatialContext';
 import { hasNoiseClassPoints } from '../geo/height';
 import { isZUpFormat } from '../io/sniffFormat';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
@@ -116,7 +116,7 @@ export { isNonTerrainVerdict };
  */
 export function footprintToMetadataExtent(
   fp: Footprint,
-): Pick<MetadataInputs, 'width' | 'depth' | 'height' | 'density' | 'extentUnitStatus' | 'heightUnitGap'> {
+): Pick<MetadataInputs, 'width' | 'depth' | 'height' | 'density' | 'extentUnitStatus' | 'extentUnitRefusal' | 'heightUnitGap'> {
   if (fp.unitStatus === 'confirmed') {
     // The height has its own unit: metres only when a valid vertical unit is
     // declared, otherwise the source span and the reason it is not metres.
@@ -136,6 +136,7 @@ export function footprintToMetadataExtent(
     height: fp.heightSourceUnits,
     density: Number.NaN,
     extentUnitStatus: 'unknown',
+    ...(fp.refusalReason ? { extentUnitRefusal: fp.refusalReason } : {}),
   };
 }
 
@@ -327,6 +328,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
       linearUnitToMetres: ctx.linearUnitToMetres,
       verticalUnitToMetres: ctx.verticalUnitToMetres,
       linearUnitKnown: ctx.linearUnitKnown,
+      horizontalRefusal: horizontalGroundRefusal(ctx) ?? undefined,
       // COPC and EPT are Z-up by spec.
       zUp: true,
     });
@@ -381,6 +383,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
       linearUnitToMetres: ctx.linearUnitToMetres,
       verticalUnitToMetres: ctx.verticalUnitToMetres,
       linearUnitKnown: ctx.linearUnitKnown,
+      horizontalRefusal: horizontalGroundRefusal(ctx) ?? undefined,
       // Mesh formats load Y-up, so the PDF reads the same axes as the
       // on-screen Scan Report rather than assuming Z.
       zUp: isZUpFormat(staticCloud.sourceFormat),

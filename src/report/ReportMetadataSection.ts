@@ -73,6 +73,11 @@ export interface MetadataInputs {
    */
   readonly extentUnitStatus?: 'confirmed' | 'unknown';
   /**
+   * With `extentUnitStatus: 'unknown'`: why a frame whose unit is known is
+   * still not ground metres (Web Mercator, geocentric). Printed in the Units row.
+   */
+  readonly extentUnitRefusal?: string;
+  /**
    * Active class-filter scope stamp — e.g. `"Ground + Building · 2 of 5
    * classes"`. Present ONLY while a class filter narrows the live view at
    * export time. When set, the dataset-summary table prepends an honesty row
@@ -309,7 +314,12 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
   // confirmed unit (or the absent default) is byte-identical to before.
   const unitsUnconfirmed = inputs.extentUnitStatus === 'unknown';
   if (unitsUnconfirmed) {
-    rows.push({ label: 'Units', value: 'Unconfirmed — extents in source units' });
+    rows.push({
+      label: 'Units',
+      value: inputs.extentUnitRefusal
+        ? `Not ground metres — ${inputs.extentUnitRefusal} Extents in source units.`
+        : 'Unconfirmed — extents in source units',
+    });
   }
   rows.push(
     ...extentRows({

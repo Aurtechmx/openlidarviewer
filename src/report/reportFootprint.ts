@@ -42,6 +42,13 @@ export interface FootprintInput {
    */
   readonly linearUnitKnown: boolean;
   /**
+   * Why the frame's metres are not ground metres although its unit is known
+   * (Web Mercator grid, geocentric frame — `horizontalGroundRefusal`). When
+   * set, the footprint is returned in source units with no density, exactly
+   * as for an unknown unit, and carries the reason.
+   */
+  readonly horizontalRefusal?: string;
+  /**
    * Whether the source frame is Z-up. LAS-family, COPC and EPT are Z-up by
    * spec; PLY, OBJ and glTF load in their native Y-up frame, where Y carries
    * height and Z carries ground depth. Defaults to `true`, so a caller that
@@ -96,6 +103,8 @@ export interface FootprintUnknownUnit {
   readonly depthSourceUnits: number;
   /** Height span in raw source units. */
   readonly heightSourceUnits: number;
+  /** Set when the unit is known but the frame is not a ground plane in metres. */
+  readonly refusalReason?: string;
 }
 
 /** Discriminated on {@link FootprintConfirmed.unitStatus} vs {@link FootprintUnknownUnit.unitStatus}. */
@@ -125,12 +134,13 @@ export function footprintMetres(input: FootprintInput): Footprint {
   const spanDepth = zUp ? input.extentY : input.extentZ;
   const spanHeight = zUp ? input.extentZ : input.extentY;
 
-  if (!input.linearUnitKnown) {
+  if (!input.linearUnitKnown || input.horizontalRefusal) {
     return {
       unitStatus: 'unknown',
       widthSourceUnits: spanWidth,
       depthSourceUnits: spanDepth,
       heightSourceUnits: spanHeight,
+      ...(input.linearUnitKnown && input.horizontalRefusal ? { refusalReason: input.horizontalRefusal } : {}),
     };
   }
 

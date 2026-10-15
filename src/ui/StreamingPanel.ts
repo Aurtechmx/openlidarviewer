@@ -36,6 +36,11 @@ export interface SpacingCrs {
   readonly linearUnitToMetres?: number;
   /** Geographic (degrees) CRS — a linear spacing is undefined. */
   readonly isGeographic?: boolean;
+  /**
+   * The frame names a linear unit but its X/Y are not ground metres (Web
+   * Mercator grid, geocentric): spacing stays in source units.
+   */
+  readonly horizontalMetricRefused?: boolean;
 }
 
 /** Live status numbers for the panel. */
@@ -198,6 +203,9 @@ export function spacingRowFor(
     // Degrees of longitude are not a linear distance; a "spacing in metres"
     // would be latitude-dependent and is not defined here.
     return copcRow('— (geographic CRS)', 'Spacing is not a linear distance for a geographic (degrees) CRS.');
+  }
+  if (crs?.horizontalMetricRefused) {
+    return copcRow(`${spacing.toFixed(2)} (source units)`, 'This frame\'s grid units are not ground metres — spacing shown in source units.');
   }
   if (crs?.linearUnit === 'metre') {
     return copcRow(`${spacing.toFixed(2)} m`, 'Root-node point spacing in metres.');

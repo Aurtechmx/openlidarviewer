@@ -21,7 +21,7 @@ import type { StreamingSource } from './StreamingSource';
 import type { ChunkDecoder } from '../../io/copc/copcChunkDecode';
 import { gradeFullCloud } from './fullCloudGradeAdapter';
 import { gradeSampleDensity, summarizeSampleGrade } from './sampleGrade';
-import { verticalMetresPerUnit, type SpatialContext } from '../../geo/SpatialContext';
+import { groundMetresPermitted, verticalMetresPerUnit, type SpatialContext } from '../../geo/SpatialContext';
 
 /**
  * The narrow slice of the Viewer this action reads — the active streaming
@@ -77,7 +77,9 @@ export async function runFullCloudGrade(deps: {
   // ONE context for this grade — the resolved one the rest of the app reads, so
   // the unit gate, the horizontal factor and the vertical factor here agree with
   // the measure tool and the scan report.
-  const unitConfirmed = ctx.linearUnitKnown;
+  // A Web Mercator grid or geocentric frame names metres that are not ground
+  // metres, so its density tier is withheld like an unknown unit's.
+  const unitConfirmed = groundMetresPermitted(ctx);
   const metresPerUnit = unitConfirmed ? ctx.linearUnitToMetres : 1;
   // Z gets the vertical unit when the CRS declares one separately (e.g. NAVD88
   // feet over a metre grid); otherwise it follows the horizontal factor.

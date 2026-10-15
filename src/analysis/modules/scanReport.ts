@@ -3,7 +3,7 @@ import { ATTR_COLOUR_INVALID, ATTR_INTENSITY_INVALID, countAttributeInvalid, typ
 import { sourcePositions } from '../../model/pointFrames';
 import type { ClassScope } from '../../render/class/classScope';
 import type { SpatialContext } from '../../geo/SpatialContext';
-import { heightScale, spatialContextFrom } from '../../geo/SpatialContext';
+import { groundMetresPermitted, heightScale, heightUnitsPermitted, horizontalGroundRefusal, spatialContextFrom } from '../../geo/SpatialContext';
 import { isZUpFormat } from '../../io/sniffFormat';
 import { heightLabel, HEIGHT_INCLUDES_NOISE_SUFFIX } from '../../geo/height';
 import { estimateInMemoryPrecision } from '../../geo/inMemoryPrecision';
@@ -49,6 +49,8 @@ function formatLength(metres: number): string {
 export interface ScanReportUnitBasis {
   /** Whether the CRS declares a real, resolved linear unit (metres claimable). */
   readonly unitKnown: boolean;
+  /** Why a frame that names a metre unit is still not ground metres; null otherwise. */
+  readonly refusalReason: string | null;
   /** Horizontal source→metre factor; 1 (identity) when the unit is unconfirmed. */
   readonly mpu: number;
   /** Vertical source→metre factor; 1 (identity) when the unit is unconfirmed. */
@@ -81,6 +83,9 @@ export interface ScanReportUnitBasis {
  * unconfirmed the factor stays 1, the raw source span is shown, and the "m" /
  * "pts/m²" claim is withheld.
  *
+ * A frame whose unit is real but whose X/Y are not a ground plane in metres
+ * (Web Mercator, geocentric) is refused too, through `groundMetresPermitted`.
+ *
  * NOTE: the gate is `linearUnitKnown`, NOT `metricClaimsPermitted`. The two agree
  * on every well-formed CRS but diverge on a corrupt `linearUnit: 'metre'` with a
  * non-finite `linearUnitToMetres`, where the ladder blocks the metric headline
@@ -88,11 +93,14 @@ export interface ScanReportUnitBasis {
  * declared unit, so preserving the prior behaviour means reading `linearUnitKnown`.
  */
 export function scanReportUnitBasis(ctx: SpatialContext): ScanReportUnitBasis {
-  const unitKnown = ctx.linearUnitKnown;
+  // A Web Mercator grid or a geocentric frame names metres, but its X/Y spans
+  // are not ground metres: they stay in source units and the reason is stated.
+  const unitKnown = groundMetresPermitted(ctx);
   const mpu = unitKnown ? ctx.linearUnitToMetres : 1;
-  const height = heightScale(ctx, unitKnown);
+  const height = heightScale(ctx, heightUnitsPermitted(ctx));
   return {
     unitKnown,
+    refusalReason: horizontalGroundRefusal(ctx),
     mpu,
     vmpu: height.factor,
     lengthUnit: unitKnown ? ' m' : ' (source units)',
@@ -255,6 +263,7 @@ export const scanReport: AnalysisModule = {
     const width = spanX * mpu;
     const depth = (zUp ? spanY : spanZ) * mpu;
     const height = (zUp ? spanZ : spanY) * vmpu;
+    if (basis.refusalReason) rows.push(rowWarn('Units', `Not ground metres — ${basis.refusalReason}`));
     rows.push(
       withScope(rowInfo('Width', `${width.toFixed(1)}${basis.lengthUnit}`), scope),
       withScope(rowInfo('Depth', `${depth.toFixed(1)}${basis.lengthUnit}`), scope),
