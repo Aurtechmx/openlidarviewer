@@ -265,6 +265,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - The relief Colour label is no longer cut off by the colour select.
 - On the map sheet, accuracy rows longer than the right column are shortened or wrapped, the sample note has its own row, and the readiness note moves below the rows.
 - Technical report section headings are no longer underlined, and the closing caveat lines up with the findings list above it.
+- A PREVIEW volume in the Measurements panel now states its reason in brackets, as the PDF report row does. The panel and the PDF build the volume caveat and withheld wording from the same functions.
 
 ### Changed
 

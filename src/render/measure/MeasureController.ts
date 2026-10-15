@@ -13,7 +13,6 @@
  */
 
 import { areaRingVerdictCached } from './areaValidity';
-import { noiseExcludedClause } from '../../terrain/ground/classificationFilter';
 import type * as THREE from 'three/webgpu';
 import { el, politeStatus } from '../../ui/dom';
 import {
@@ -32,7 +31,7 @@ import type {
   UnitSystem,
   VolumeRecord,
 } from './types';
-import { GEOGRAPHIC_NOT_AVAILABLE, MIN_POINTS, UNRESOLVED_UNIT_FRAME, UP_AXIS_CONFLICT, VERTICAL_NOT_AVAILABLE, frameRefusalText, isFull, reducedSampleClause, sameUnitFrame, sameUp, upAxisRefusesKind, type MeasureUnitFrame } from './types';
+import { GEOGRAPHIC_NOT_AVAILABLE, MIN_POINTS, UNRESOLVED_UNIT_FRAME, UP_AXIS_CONFLICT, VERTICAL_NOT_AVAILABLE, frameRefusalText, isFull, sameUnitFrame, sameUp, upAxisRefusesKind, type MeasureUnitFrame } from './types';
 import type { WorkOwnership } from '../../model/workOwnership';
 import type { ProfileProvenance } from './profileProvenance';
 import type { WithheldReadCounts } from '../../science/withheldCounts';
@@ -75,6 +74,9 @@ import {
   formatUnitUnverified,
   UNIT_UNVERIFIED_MEASURE_NOTICE,
   GEOGRAPHIC_CRS_MEASURE_NOTICE,
+  volumeCaveatClauses,
+  volumeFiguresWithheld,
+  volumeWithheldClause,
 } from './format';
 // B2 (v0.4.5) — one unit seam: the chart series is converted render-units →
 // metres in `getSummaries` by the same module the panel/CSV/PDF read, so
@@ -2317,25 +2319,17 @@ export class MeasureController {
         // A withheld grid figure carries no fill/cut/net at all — never a
         // borrowed cut-and-fill number under the grid's name. The point-sample
         // cross-check, when the record kept one, is the only number left to show.
-        if (v.fill === undefined || v.cut === undefined || v.net === undefined) {
-          const cc = v.crossCheck, reason = v.gridAuthorityReason ? ` (${v.gridAuthorityReason})` : '';
-          return `${area} · ${cc ? 'grid ' : ''}volume withheld${reason}` +
-            (cc ? ` · cut-fill cross-check net ${this._fmtCutFill(Math.abs(cc.net))} ${cc.net < 0 ? 'cut' : 'fill'}` : '');
+        // The clauses come from the builders the PDF report row uses.
+        const { fill: vf, cut: vc, net: vn } = v;
+        if (volumeFiguresWithheld(v) || vf === undefined || vc === undefined || vn === undefined) {
+          return `${area} · ${volumeWithheldClause(v, (n) => this._fmtCutFill(n))}`;
         }
-        const fill = this._fmtCutFill(Math.max(0, v.fill));
-        const cut = this._fmtCutFill(Math.max(0, v.cut));
-        const net = this._fmtCutFill(Math.abs(v.net));
-        const netSign = v.net < 0 ? 'cut' : 'fill';
-        const preview = v.gridAuthority === 'preview' ? ' · PREVIEW' : '';
-        const covered = v.interpolatedFraction !== undefined
-          ? ` · ${(v.interpolatedFraction * 100).toFixed(0)}% interpolated` +
-            (v.interpolatedFraction > 0.25 ? ' (low confidence)' : '') +
-            (v.excludedFraction !== undefined && v.excludedFraction > 0.005
-              ? ` · ${(v.excludedFraction * 100).toFixed(0)}% outside scan, left out` : '')
-          : '';
-        const noise = noiseExcludedClause(v.withheld?.noiseExcluded);
-        const unavailable = reducedSampleClause(v.withheld);
-        return `${area} · +${fill} fill · −${cut} cut · net ${net} ${netSign}${covered}${preview}${noise ? ` · ${noise}` : ''}${unavailable ? ` · ${unavailable}` : ''}`;
+        const fill = this._fmtCutFill(Math.max(0, vf));
+        const cut = this._fmtCutFill(Math.max(0, vc));
+        const net = this._fmtCutFill(Math.abs(vn));
+        const netSign = vn < 0 ? 'cut' : 'fill';
+        const caveats = volumeCaveatClauses(v).map((c) => ` · ${c}`).join('');
+        return `${area} · +${fill} fill · −${cut} cut · net ${net} ${netSign}${caveats}`;
       }
     }
   }
