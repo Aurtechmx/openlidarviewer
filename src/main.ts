@@ -2288,6 +2288,8 @@ function streamingExportCloud(): PointCloud | null {
 
 /** Origin + CRS + name for the active scan; the rules live in `src/app/reportExport.ts`. */
 function exportGeoContext(): GeoExportContext { return runExportGeoContext(reportExportDeps); }
+/** The active scan's up-axis through the format/frame policy every lon/lat and frame gate shares (`sourceUpAxis`). */
+const activeUpAxis = () => sourceUpAxis(crsService.context().upAxis, scans.activeCloud()?.sourceFormat, !!viewer?.streamingCloud);
 
 /**
  * The running-app seam the two Google Earth products write through (see
@@ -2298,12 +2300,10 @@ const kmlDeps: KmlActionDeps = {
   hasViewer: () => Boolean(viewer),
   geo: exportGeoContext,
   crsCurrent: () => crsService.current(),
-  upAxis: () => crsService.context().upAxis, isGeographic: () => crsService.context().horizontalMetricRefused, verticalRefused: () => crsService.context().verticalMetricRefused, // RESOLVED axis and frame permissions
+  upAxis: activeUpAxis, isGeographic: () => crsService.context().horizontalMetricRefused, verticalRefused: () => crsService.context().verticalMetricRefused, // RESOLVED axis and frame permissions
   annotations: () => viewer?.annotate.getAnnotations() ?? [],
   measurements: () => viewer?.measure.getMeasurements() ?? [], layerCount: () => viewer?.clouds().length ?? 0, sceneOffset: () => (scans.activeId ? viewer?.layerProjectOffset(scans.activeId) ?? null : null), measurementOwnership: () => (viewer ? ownershipViewOf(viewer, runtime.layerIdentity.stableIdFor, scans.activeId) : { layers: [], activeViewerId: null }),
-  viewpoints: () => viewBookmarks.savedViews.map(
-    (v) => ({ name: v.name, position: v.pose.position, target: v.pose.target }),
-  ),
+  viewpoints: () => viewBookmarks.savedViews.map((v) => ({ name: v.name, position: v.pose.position, target: v.pose.target })),
   worldUp: () => viewer.measure.worldUp,
   unitToMetres: () => viewer.measure.unitToMetres,
   // Static: the bounds of the points actually loaded. Streaming: the LAS header
@@ -2342,7 +2342,7 @@ const kmlDeps: KmlActionDeps = {
 const measurementExportActionDeps = (v: Viewer): MeasurementExportActionDeps => ({
   measure: v.measure,
   geo: exportGeoContext,
-  layers: { view: v, stableIdFor: runtime.layerIdentity.stableIdFor }, frameSource: { activeId: () => scans.activeId, activeGeo: exportGeoContext, activeUpAxis: () => sourceUpAxis(crsService.context().upAxis, scans.activeCloud()?.sourceFormat, !!viewer?.streamingCloud), cloud: (id) => v.getCloud(id), classificationEpoch: (id) => v.classificationEpoch(id), crs: crsService }, refuse: (m) => dropZone.setError(m), upAxis: () => sourceUpAxis(crsService.context().upAxis, scans.activeCloud()?.sourceFormat, !!viewer?.streamingCloud),
+  layers: { view: v, stableIdFor: runtime.layerIdentity.stableIdFor }, frameSource: { activeId: () => scans.activeId, activeGeo: exportGeoContext, activeUpAxis, cloud: (id) => v.getCloud(id), classificationEpoch: (id) => v.classificationEpoch(id), crs: crsService }, refuse: (m) => dropZone.setError(m), upAxis: activeUpAxis,
   baseName,
   downloadText,
   loadMeasurementExport,
@@ -2745,7 +2745,7 @@ void viewerLoaded.then(() => {
     onHoverInfo: lazyCoordinateHud({
       mount: (el) => stage.overlay.append(el),
       activeCrs: () => crsService.current() ?? undefined,
-      upAxis: () => crsService.context().upAxis,
+      upAxis: activeUpAxis,
     }),
   });
   viewer.setAnnotateListeners({

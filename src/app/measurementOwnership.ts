@@ -83,7 +83,7 @@ export function ownershipOf(m: OwnedItem, view: OwnershipView): OwnershipVerdict
 }
 
 /** The measurements an output for the active scan may hold, and the sentence for the rest. */
-export interface OwnedMeasurements<M extends Measurement> {
+export interface OwnedMeasurements<M extends OwnedItem> {
   readonly own: M[];
   /** How many were left out. */
   readonly withheldCount: number;
@@ -93,20 +93,23 @@ export interface OwnedMeasurements<M extends Measurement> {
 
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 
-/**
- * Split `measurements` into those the active scan owns and the withheld rest,
- * with one sentence naming each reason.
- */
-export function measurementsOwnedByActive<M extends Measurement>(
-  measurements: readonly M[],
-  view: OwnershipView,
-): OwnedMeasurements<M> {
-  const own: M[] = [];
+/** How the withheld sentence names the work: its noun and the verb for making it. */
+interface WorkNoun {
+  readonly one: string;
+  readonly many: string;
+  readonly made: string;
+}
+
+const MEASUREMENT: WorkNoun = { one: 'measurement', many: 'measurements', made: 'taken' };
+const ANNOTATION: WorkNoun = { one: 'annotation', many: 'annotations', made: 'placed' };
+
+function workOwnedByActive<T extends OwnedItem>(items: readonly T[], view: OwnershipView, noun: WorkNoun): OwnedMeasurements<T> {
+  const own: T[] = [];
   const other = new Map<string, number>();
   let closed = 0;
   let ambiguous = 0;
   let unrecorded = 0;
-  for (const m of measurements) {
+  for (const m of items) {
     const v = ownershipOf(m, view);
     if (v.kind === 'own') own.push(m);
     else if (v.kind === 'other') {
@@ -116,20 +119,42 @@ export function measurementsOwnedByActive<M extends Measurement>(
     else if (v.kind === 'ambiguous') ambiguous++;
     else unrecorded++;
   }
-  const withheldCount = measurements.length - own.length;
+  const withheldCount = items.length - own.length;
   if (withheldCount === 0) return { own, withheldCount, withheld: null };
   // One reason reads without an inner count; several are each counted.
   const counted: Array<[number, string]> = [];
-  for (const [names, n] of other) counted.push([n, `taken on ${names}; make that scan active to report ${n === 1 ? 'it' : 'them'} in its own units and frame`]);
-  if (closed > 0) counted.push([closed, 'taken on a scan that is no longer open, so the units and frame cannot be resolved']);
+  for (const [names, n] of other) counted.push([n, `${noun.made} on ${names}; make that scan active to report ${n === 1 ? 'it' : 'them'} in its own units and frame`]);
+  if (closed > 0) counted.push([closed, `${noun.made} on a scan that is no longer open, so the units and frame cannot be resolved`]);
   if (ambiguous > 0) counted.push([ambiguous, 'naming a scan that more than one open scan matches']);
-  if (unrecorded > 0) counted.push([unrecorded, 'with no record of the scan they were taken on while several scans are open']);
+  if (unrecorded > 0) counted.push([unrecorded, `with no record of the scan they were ${noun.made} on while several scans are open`]);
   const parts = counted.length === 1 ? [counted[0]![1]] : counted.map(([n, why]) => `${n} ${why}`);
   return {
     own,
     withheldCount,
-    withheld: `${plural(withheldCount, 'measurement', 'measurements')} withheld: ${parts.join('; ')}.`,
+    withheld: `${plural(withheldCount, noun.one, noun.many)} withheld: ${parts.join('; ')}.`,
   };
+}
+
+/**
+ * Split `measurements` into those the active scan owns and the withheld rest,
+ * with one sentence naming each reason.
+ */
+export function measurementsOwnedByActive<M extends Measurement>(
+  measurements: readonly M[],
+  view: OwnershipView,
+): OwnedMeasurements<M> {
+  return workOwnedByActive(measurements, view, MEASUREMENT);
+}
+
+/**
+ * The same split for annotations. Ownership is the stable layer id in
+ * `owner`; the display-name `layerId` is a label and is never consulted.
+ */
+export function annotationsOwnedByActive<A extends OwnedItem>(
+  annotations: readonly A[],
+  view: OwnershipView,
+): OwnedMeasurements<A> {
+  return workOwnedByActive(annotations, view, ANNOTATION);
 }
 
 /** The ownership view of a viewer: its open layers and the active scan. */

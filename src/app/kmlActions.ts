@@ -48,7 +48,7 @@ import type { SpatialUpAxis } from '../geo/SpatialContext';
 import type { Annotation } from '../render/annotate/types';
 import type { Measurement, Vec3 } from '../render/measure/types';
 import type { loadKmlExport } from '../lazyChunks';
-import { measurementsOwnedByActive, type OwnershipView } from './measurementOwnership';
+import { annotationsOwnedByActive, measurementsOwnedByActive, type OwnershipView } from './measurementOwnership';
 
 /** Whether a product can be exported right now, and why not when it cannot. */
 export interface KmlActionStatus {
@@ -187,6 +187,18 @@ function siteOutlineFor(deps: KmlActionDeps, toLonLat: LocalToLonLatSourceZ): Km
 }
 
 /**
+ * An annotation the active scan owns, expressed in the scene frame `toLonLat`
+ * undoes. A `source-local` owner's coordinates are already in the active
+ * scan's file frame (the frame the mapper is built on), so the placement is
+ * added back for `toLonLat` to remove; everything else is already scene-frame.
+ */
+function inSceneFrame(a: Annotation, d: readonly [number, number, number] | null): Annotation {
+  if (!d || a.owner?.frame !== 'source-local') return a;
+  const p = a.localPosition;
+  return { ...a, localPosition: { x: p.x + d[0], y: p.y + d[1], z: p.z + d[2] } };
+}
+
+/**
  * Whether the SITE KML can be written, with the reason when it cannot.
  * Resolves origin/CRS for static AND streaming, because a georeferenced streaming scan
  * can place KML too.
@@ -254,11 +266,17 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
   // Every feature is placed through the ACTIVE scan's origin, mapper and
   // units, so a measurement taken on any other scan (or one whose scan is
   // closed or unrecorded) is withheld and the document says why.
-  const owned = measurementsOwnedByActive(deps.measurements(), deps.measurementOwnership ? deps.measurementOwnership() : { layers: [], activeViewerId: null });
+  const view = deps.measurementOwnership ? deps.measurementOwnership() : { layers: [], activeViewerId: null };
+  const owned = measurementsOwnedByActive(deps.measurements(), view);
+  // Annotations by the same rule: one placed on another scan, a closed one, or
+  // one whose owner cannot be resolved is withheld rather than placed at the
+  // active scan's lon/lat for coordinates it never had there.
+  const notes = annotationsOwnedByActive(deps.annotations(), view);
   const input: KmlExportInput = {
-    annotations: deps.annotations(),
+    annotations: notes.own.map((a) => inSceneFrame(a, d)),
     measurements: owned.own,
     withheldMeasurements: owned.withheld,
+    withheldAnnotations: notes.withheld,
     // Saved views become <LookAt> placemarks in the same LOCAL render frame as
     // the measurements, so the injected transform places them correctly.
     viewpoints: deps.viewpoints(),

@@ -119,6 +119,8 @@ export interface KmlExportInput {
    * every measurement belongs to the scan this file describes.
    */
   readonly withheldMeasurements?: string | null;
+  /** Why annotations were left out, on the same ownership terms as measurements. */
+  readonly withheldAnnotations?: string | null;
 }
 
 /**
@@ -553,6 +555,7 @@ export function buildKml(input: KmlExportInput, digests?: ExportDigests): string
     // next to the CRS rather than letting the coordinates read as exact WGS 84.
     input.toLonLat.datumCaveat ?? '',
     input.withheldMeasurements ?? '',
+    input.withheldAnnotations ?? '',
     input.notSurveyGradeNote,
     ...(input.provenance ? [lightProvenanceLine(lightProvenance(input.provenance))] : []),
   ]);
