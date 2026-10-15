@@ -124,6 +124,12 @@ export function mountTestSeam(deps: TestSeamDeps): void {
       const id = deps.getActiveScanId();
       return id ? v.classFilterDrawnCount(id) : -1;
     },
+    // Every static layer's class state, read without changing the active one.
+    layerClassStates: (): Array<{ name: string; classAt0: number; epoch: number; canUndo: boolean }> =>
+      v.clouds().map((id) => {
+        const cloud = v.getCloud(id);
+        return { name: cloud?.name ?? id, classAt0: cloud?.classification?.[0] ?? -1, epoch: v.classificationEpoch(id), canUndo: v.canUndoClassification(id) };
+      }),
     classAt: (i: number): number => {
       const id = deps.getActiveScanId();
       const c = id ? v.getCloud(id)?.classification : undefined;

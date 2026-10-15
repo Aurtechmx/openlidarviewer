@@ -7,6 +7,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 ### Fixed
 
 - Opening a large local LAS or LAZ over an open stream now offers Save / Replace / Cancel before any work starts, and applies the answer only after the new scan opens. Cancel, a cancelled or failed index build and a failed attach leave the previous scan and its measurements, annotations and saved views unchanged. Saved views are cleared only by Replace, work left over a replaced stream is never saved under the new file, and static layers keep their work and saved views.
+- Close scan and opening a COPC, EPT or 3D Tiles scan over open layers now ask before discarding class edits on any open layer, not only the active one, including a hidden or locked layer. The question names the edited layers and points to exporting each as LAS, since the session file does not store class edits. Removing one layer from the Layers list asks only when that layer has class edits.
 
 ## [0.7.0] - 2026-10-14
 

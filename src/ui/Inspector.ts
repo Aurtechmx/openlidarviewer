@@ -121,6 +121,8 @@ export interface InspectorCallbacks {
   onPointSize: (size: number) => void;
   onToggleVisible: (id: string, visible: boolean) => void;
   onRemove: (id: string) => void;
+  /** When a layer's classes differ from its file: how to keep them before it is removed. Null otherwise. */
+  removalClassEditsLine?: (id: string) => string | null;
   /** Isolate a layer (show only it); calling again on the active layer clears isolate. */
   onToggleSolo?: (id: string) => void;
   /** Lock a layer out of picking / measuring (it stays drawn). */
@@ -1551,18 +1553,24 @@ export class Inspector {
         // survive that — `MeasureController.clear()` takes no snapshot, so
         // there is no undo, unlike the annotation clear beside it. The
         // tooltip promises only a removal from the scene, so the confirm
-        // states the rest. A removal that leaves another layer behind is not
-        // destructive and stays one click.
-        if (!removalClosesScan(this._layerRows.size)) {
+        // states the rest. Class edits live only in the layer's buffer, so
+        // removing an edited layer asks too. Any other removal that leaves a
+        // layer behind is not destructive and stays one click.
+        const closes = removalClosesScan(this._layerRows.size);
+        const keepEdits = this._cb.removalClassEditsLine?.(id) ?? null;
+        const edited = keepEdits !== null;
+        if (!closes && !edited) {
           this._cb.onRemove(id);
           return;
         }
+        const lines = closes
+          ? [`Removing ${name} closes the scan.`, 'Placed measurements, saved views and annotations are cleared. Measurements cannot be restored.']
+          : [`Removing ${name} discards its class edits.`];
+        if (keepEdits) lines.push(keepEdits);
         void openConfirm({
-          title: 'Close this scan?',
-          message:
-            `Removing ${name} closes the scan.\n` +
-            'Placed measurements, saved views and annotations are cleared. Measurements cannot be restored.',
-          confirmLabel: 'Remove and close',
+          title: closes ? 'Close this scan?' : `Remove ${name}?`,
+          message: lines.join('\n'),
+          confirmLabel: closes ? 'Remove and close' : 'Remove',
           returnFocusTo: remove,
         }).then((ok) => {
           if (ok) this._cb.onRemove(id);

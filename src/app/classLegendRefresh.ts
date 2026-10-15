@@ -27,6 +27,7 @@
 
 import { classificationDiffersFromSource } from '../export/fullResClassGuard';
 export { classificationDiffersFromSource };
+export { editedStaticLayerNames, layerRemovalClassEditsLine, staticClassEditWork } from './classEditLayers';
 
 /**
  * Whether the active static scan's classes differ from its file. One reading

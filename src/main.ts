@@ -80,7 +80,7 @@ import type { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
-import { activeScanHasClassEdits, afterClassEdit, classCountsOf, noteClassificationEdited, wireFrameChange } from './app/classLegendRefresh';
+import { activeScanHasClassEdits, afterClassEdit, classCountsOf, editedStaticLayerNames, layerRemovalClassEditsLine, noteClassificationEdited, staticClassEditWork, wireFrameChange } from './app/classLegendRefresh';
 import type { ClassifyActionsDeps } from './app/classifyActions';
 import { buildExportHealth, densityStoryFields, footprintAreaM2, type ScanStoryInputs } from './intelligence/scanStory';
 import { fullScope, scopeFrom, scopeStamp, type ClassScope } from './render/class/classScope';
@@ -1079,7 +1079,7 @@ const inspector = new Inspector({
     persistPrefs();
   },
   onToggleVisible: (id, visible) => layerService.setVisible(id, visible),
-  onRemove: (id) => removeCloud(id),
+  onRemove: (id) => removeCloud(id), removalClassEditsLine: (id) => layerRemovalClassEditsLine(id, viewer),
   onToggleSolo: (id) => layerService.toggleSolo(id),
   onToggleLock: (id, locked) => viewer.setCloudLocked(id, locked),
   onCompareLayers: compareLoadedLayers,
@@ -3524,7 +3524,7 @@ async function exportSession(): Promise<boolean> {
     refuse: () => showLassoToast(SESSION_EXPORT_SCAN_CHANGED_REFUSAL),
     // Both lazy imports resolve before any state is read; their exports spread into one deps object.
     load: async () => ({ ...(await loadSession()), ...(await loadExportProvenance()), ...(await loadSessionSnapshot()) }),
-    write: (json) => { downloadText(`${baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? 'openlidarviewer')}.olvsession`, json); const note = sessionSaveNotice(activeScanHasClassEdits(scans.activeId, viewer)); if (note) showLassoToast(note); },
+    write: (json) => { downloadText(`${baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? 'openlidarviewer')}.olvsession`, json); const note = sessionSaveNotice(editedStaticLayerNames(viewer).length > 0); if (note) showLassoToast(note); },
     serialize: (m) => m.serializeActiveSession(m, { ...sessionSnapshotDeps, onWithheld: showLassoToast }),
   });
 }
@@ -4272,7 +4272,7 @@ function closeScan(): void { // the guarded entry is requestCloseScan
 }
 const requestReplace = (req: import('./app/discardGuard').ReplaceRequest): Promise<import('./app/discardGuard').ReplaceOutcome> => loadDiscardGuard().then((m) => m.requestReplace(req, { work: discardableWork, saveSession: exportSession, snapshot: async () => (await recovery?.snapshotNow()) === true, notify: showLassoToast })); let closeGuard: Promise<() => Promise<boolean>> | null = null; const requestCloseScan = (): Promise<boolean> => (closeGuard ??= loadCloseScanGuard().then((m) => m.createCloseScanGuard({ close: closeScan, saveSession: exportSession, onSaveFailed: () => showLassoToast('Session not saved. The scan is still open.'), work: discardableWork }))).then((g) => g());
 function discardableWork() {
-  return ({ measurements: viewerReady ? viewer.measure.getMeasurements().length : 0, annotations: viewerReady ? viewer.annotate.getAnnotations().length : 0, views: viewBookmarks.savedViews.length, classEdits: activeScanHasClassEdits(scans.activeId, viewer), results: workspaceShell?.readyResultCount() ?? 0, pendingRecovery: recovery?.hasPending() ?? false });
+  return ({ measurements: viewerReady ? viewer.measure.getMeasurements().length : 0, annotations: viewerReady ? viewer.annotate.getAnnotations().length : 0, views: viewBookmarks.savedViews.length, ...staticClassEditWork(viewer), results: workspaceShell?.readyResultCount() ?? 0, pendingRecovery: recovery?.hasPending() ?? false });
 }
 
 /** Save the current view as a PNG (`app/snapshotAction.ts`, a lazy chunk). */

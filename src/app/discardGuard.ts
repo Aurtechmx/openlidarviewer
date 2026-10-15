@@ -14,6 +14,7 @@
 
 import { openConfirmChoice, type ConfirmChoice, type ConfirmOptions } from '../ui/Modal';
 import { describeDiscardableWork, hasDiscardableWork, type DiscardableWork } from './closeScanGuard';
+import { keepClassEditsLine } from './classEditLayers';
 
 /** What is replacing the work: a scan opened over the current one, or a session file imported. */
 export interface ReplaceRequest {
@@ -84,9 +85,9 @@ export function requestReplace(req: ReplaceRequest, deps: ReplaceGuardDeps): Pro
         ? `Opening ${req.name} replaces the open scan and discards ${what}.`
         : `Importing ${req.name} replaces ${what} in the viewer.`,
     ];
-    if (save) lines.push('Save the current session first to keep it.');
+    if (save) lines.push(work.classEdits ? 'Save the current session first to keep the measurements, annotations and views.' : 'Save the current session first to keep it.');
     else lines.push('This cannot be undone from the viewer.');
-    if (work.classEdits) lines.push('The session file does not store class edits. Export the scan as LAS to keep them.');
+    if (work.classEdits) lines.push(keepClassEditsLine(work.classEditLayers ?? []));
     const choice = await (deps.confirm ?? openConfirmChoice)({
       title: req.kind === 'scan' ? 'Replace the open scan?' : 'Replace the current work?',
       message: lines.join('\n'),
