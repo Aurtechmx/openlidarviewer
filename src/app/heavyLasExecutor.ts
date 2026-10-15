@@ -71,6 +71,7 @@ import type { RangeSource } from '../io/range/RangeSource';
 import { LoadError } from '../io/loadErrors';
 import { resolveLasCrsFromRange, type CrsInfo } from '../io/crs';
 import { LoadCancelledError } from '../io/loadFile';
+import { askHeavyReplace, settleHeavyReplace, type HeavyReplacePlan } from './heavyReplace';
 import type {
   HeavyLasBridgeDeps,
   HeavyLasBridgeEnv,
@@ -280,6 +281,7 @@ async function tryReopen(
   signal: AbortSignal,
   locks: ReturnType<typeof resolveLockManager>,
   crs: CrsInfo | null,
+  replace: HeavyReplacePlan,
 ): Promise<HeavyOpenResult | null> {
   const map = await readCacheMap(root);
   // Reuse is authorised by the whole-file content digest, not the quick locator:
@@ -297,7 +299,7 @@ async function tryReopen(
     return null;
   }
   try {
-    await attachHeavyStream(opened.source, opened.decoder, deps, signal);
+    await attachHeavyStream(opened.source, opened.decoder, deps, signal, replace);
   } catch (err) {
     await opened.source.close().catch(() => {});
     if (signal.aborted || isCancel(err)) return { status: 'cancelled' };
@@ -418,6 +420,12 @@ export async function executeHeavyLasBuild(
   const root = await getOpfsRoot();
   if (root === null) return { status: 'unavailable', heavy: true, reason: 'no OPFS root' };
 
+  // Asked once, before any work: whether the stream this open replaces, and
+  // the work on it, may go. Applied only after the new source commits, so a
+  // cancel or a failure from here on leaves both as they are.
+  const replace = await askHeavyReplace(deps, file.name);
+  if (replace === null || signal.aborted) return { status: 'cancelled' };
+
   // The tile store keeps no projection, so the CRS is read here from the source
   // file: the header, the VLR block and any LAS 1.4 EVLRs, by bounded range
   // reads that never touch the point data.
@@ -459,7 +467,7 @@ export async function executeHeavyLasBuild(
       const digest = await sourceDigest();
       if (signal.aborted) return { status: 'cancelled' };
       if (digest) {
-        const reopened = await tryReopen(root, generation, digest, file, deps, signal, resolveLockManager(), crs);
+        const reopened = await tryReopen(root, generation, digest, file, deps, signal, resolveLockManager(), crs, replace);
         if (reopened) return reopened;
       }
     }
@@ -602,7 +610,7 @@ export async function executeHeavyLasBuild(
     // attach resolves, ownership passes to the committed streaming session and
     // its own teardown removes the store, so this guard steps aside.
     try {
-      await attachHeavyStream(source, decoder, deps, signal);
+      await attachHeavyStream(source, decoder, deps, signal, replace);
     } catch (err) {
       await source.close().catch((closeErr) => {
         if (deps.debug) console.warn('[heavy-las] store cleanup after attach failure failed', closeErr);
@@ -673,11 +681,14 @@ async function attachHeavyStream(
   decoder: TileChunkDecoder,
   deps: HeavyLasBridgeDeps,
   signal: AbortSignal,
+  replace: HeavyReplacePlan,
 ): Promise<void> {
   await attachStreamingScan(source, decoder, deps, signal);
   // The attach has committed: drop the previous stream's state, as the COPC,
-  // EPT and 3D Tiles opens do. Static layers stay open on this path.
+  // EPT and 3D Tiles opens do. Static layers stay open on this path. Only now
+  // is the replaced work cleared or stamped as the retired scan's.
   deps.streaming.resetStreamState();
+  settleHeavyReplace(deps, replace);
   revealHeavyStreamingSurfaces(source, deps.streaming);
 }
 
@@ -741,7 +752,7 @@ async function attachStreamingScan(
  *    it as the SOURCE figure against the separately-counted resident set, not
  *    as the number of points on the GPU.
  *  - `activateCommittedStreamingCloud` (usage, provenance, CRS), the Analyse
- *    rail, the export pre-warm, a fresh saved-views list, the status poll.
+ *    rail, the export pre-warm, the saved-views refresh, the status poll.
  *
  * SKIP, because the source cannot honestly fill them:
  *  - `setSourceUrl`: the store is built from a LOCAL file with no publisher to
@@ -785,8 +796,8 @@ function revealHeavyStreamingSurfaces(source: OlvTileSource, s: OpenStreamingDep
   s.revealAnalysePanel(source.name, false);
   s.streamingPanel.show();
 
+  // Saved views are cleared only by a confirmed Replace (settleHeavyReplace).
   try {
-    s.bookmarks.clear();
     s.refreshViewsUI();
   } catch (err) {
     if (s.debug) console.warn('[views] saved-views refresh (heavy) threw', err);

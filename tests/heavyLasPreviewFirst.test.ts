@@ -38,6 +38,7 @@ import {
 } from '../src/app/openLocalHeavyLas';
 import type { StorageEstimateReading } from '../src/io/heavy/storagePreflight';
 import type { Viewer } from '../src/render/Viewer';
+import { fakeWork } from './support/heavyLasFakes';
 
 const WORLD_MIN = [400000, 5200000, 55] as const;
 
@@ -103,6 +104,7 @@ function fakeViewer() {
     current = null;
   });
   const viewer = {
+    ...fakeWork(),
     ready: Promise.resolve(),
     attachStreamingCloud,
     detachStreamingCloud,

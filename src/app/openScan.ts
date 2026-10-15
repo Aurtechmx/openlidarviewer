@@ -339,6 +339,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       },
       debug: deps.debug,
       streaming: deps.getStreamingDeps(),
+      stableLayerId: (id) => deps.layerIdentity.stableIdFor(id),
     }, { head: headSlice });
     if (heavy.status === 'attached') {
       deps.dropZone.setCancelHandler(null);
