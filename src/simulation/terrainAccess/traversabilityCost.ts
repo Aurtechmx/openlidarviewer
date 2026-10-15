@@ -31,7 +31,7 @@
  * Pure data: no DOM, no three.js, no I/O. Deterministic.
  */
 
-import { hornSlopeAspect } from '../../terrain/ground/terrainDerivatives';
+import { hornSlopeAspect, synthesisedNeighbourMask } from '../../terrain/ground/terrainDerivatives';
 import { computeVRM } from '../../terrain/complexity/vectorRuggedness';
 import { computeLocalStep, edgeStep } from './localStep';
 import { classifyObstruction, type ObstructionState } from './obstacleEvidence';
@@ -39,6 +39,7 @@ import { diagonalSweepClear, dilateBlocked } from './footprintClearance';
 import { directionalSlope, gradientField, headingUnit, type GradientField } from './directionalGrade';
 import {
   TERRAIN_ACCESS_NEIGHBOURS,
+  resolveEvidenceGapPolicy,
   type BlockReason,
   type EdgeBlockReason,
   type NodeBlockReason,
@@ -61,6 +62,14 @@ export interface TerrainAccessFeatures {
   /** The §12.4 local-step diagnostic (3×3 footprint), metres. */
   readonly localStep: Float32Array;
   readonly obstruction: readonly ObstructionState[];
+  /**
+   * 1 where the cell's Horn window used a synthesised neighbour (the grid's
+   * outer ring, or a void beside it), so its slope and aspect are an
+   * estimate; 0 where all nine values were read from the grid, and at an
+   * invalid cell. Computed on the same masked heights the slope is, by
+   * `synthesisedNeighbourMask` (`terrainDerivatives.ts`).
+   */
+  readonly derivativeSynthesised: Uint8Array;
 }
 
 /** Build every terrain feature the cost model reads, once, from the grid. */
@@ -85,7 +94,8 @@ export function prepareTerrainAccessFeatures(
   });
   const localStep = computeLocalStep(grid, (LOCAL_WINDOW_CELLS - 1) / 2);
   const obstruction = classifyObstruction(grid, profile.obstacleHeightThreshold);
-  return { slope, aspect, gradient, vrm: vrmResult.vrm, localStep, obstruction };
+  const derivativeSynthesised = synthesisedNeighbourMask(maskedZ, grid.cols, grid.rows);
+  return { slope, aspect, gradient, vrm: vrmResult.vrm, localStep, obstruction, derivativeSynthesised };
 }
 
 /** Per-cell node eligibility: blocked flag + the reason, before width clearance. */
@@ -96,13 +106,17 @@ export interface NodeEligibility {
 
 /**
  * Direction-independent eligibility: NoData, ROI, support, ruggedness,
- * obstruction. Does not yet account for vehicle width — see
- * {@link applyWidthClearance}.
+ * obstruction, then, under the conservative evidence policy, a cell with no
+ * above-ground return while an obstruction limit is evaluated, and a cell
+ * whose slope used a synthesised neighbour. Does not yet account for vehicle
+ * width — see {@link applyWidthClearance}.
  */
 export function nodeEligibility(grid: TerrainAccessGrid, features: TerrainAccessFeatures, profile: TerrainAccessProfile): NodeEligibility {
   const n = grid.cols * grid.rows;
   const blocked = new Uint8Array(n);
   const reason: (NodeBlockReason | null)[] = new Array(n).fill(null);
+  const conservative = resolveEvidenceGapPolicy(profile) === 'conservative';
+  const obstructionEvaluated = profile.obstacleHeightThreshold != null && grid.heightAboveGround != null;
 
   for (let i = 0; i < n; i++) {
     if (grid.valid[i] === 0) { blocked[i] = 1; reason[i] = 'no-data'; continue; }
@@ -114,7 +128,12 @@ export function nodeEligibility(grid: TerrainAccessGrid, features: TerrainAccess
       const v = features.vrm[i];
       if (Number.isFinite(v) && v > profile.maxRuggedness) { blocked[i] = 1; reason[i] = 'ruggedness'; continue; }
     }
-    if (features.obstruction[i] === 'obstructed') { blocked[i] = 1; reason[i] = 'obstruction'; }
+    if (features.obstruction[i] === 'obstructed') { blocked[i] = 1; reason[i] = 'obstruction'; continue; }
+    if (!conservative) continue;
+    if (obstructionEvaluated && features.obstruction[i] === 'not-evaluated') {
+      blocked[i] = 1; reason[i] = 'obstruction-unknown'; continue;
+    }
+    if (features.derivativeSynthesised[i] === 1) { blocked[i] = 1; reason[i] = 'derivative-support'; }
   }
   return { blocked, reason };
 }
@@ -411,7 +430,9 @@ export interface WhyNotResult {
   readonly reasons: readonly WhyNotReason[];
 }
 
-const UNKNOWN_REASONS: ReadonlySet<NodeBlockReason> = new Set(['no-data', 'low-confidence']);
+const UNKNOWN_REASONS: ReadonlySet<NodeBlockReason> = new Set([
+  'no-data', 'low-confidence', 'obstruction-unknown', 'derivative-support',
+]);
 
 const tangentToDeg = (t: number): string => ((Math.atan(t) * 180) / Math.PI).toFixed(1);
 
@@ -473,6 +494,11 @@ function nodeDetail(
     case 'ruggedness':
       return `ruggedness ${features.vrm[index].toFixed(3)} > limit ${(profile.maxRuggedness ?? 0).toFixed(3)}`;
     case 'obstruction': return 'above-ground return evidence exceeds the declared threshold';
+    case 'obstruction-unknown':
+      return 'no above-ground return here, so the obstruction limit cannot be checked; the conservative evidence policy blocks it';
+    case 'derivative-support':
+      return 'slope and aspect here were computed with at least one synthesised neighbour (grid edge or void); '
+        + 'the conservative evidence policy blocks it';
     case 'vehicle-width':
       return 'the declared vehicle width does not fit between this cell and the nearest unsupported cell or survey edge';
   }

@@ -47,7 +47,7 @@ export interface TerrainAccessPreview {
 export type TerrainAccessPreviewRefusalCode = Extract<
   TerrainAccessRefusalCode,
   | 'NO_DTM' | 'UNITS_UNRESOLVED' | 'INVALID_PROFILE' | 'TOO_LARGE' | 'INSUFFICIENT_EVIDENCE'
-  | 'OBSTRUCTION_EVIDENCE_UNAVAILABLE' | 'SURFACE_MISALIGNED' | 'INVALID_ROI'
+  | 'OBSTRUCTION_EVIDENCE_UNAVAILABLE' | 'SURFACE_MISALIGNED' | 'SURFACE_STALE' | 'INVALID_ROI'
 >;
 
 export function prepareTerrainAccessPreview(

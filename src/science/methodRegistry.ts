@@ -729,10 +729,14 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       + 'distance-scaled cost from declared, bounded utilization weights. An '
       + 'edge\'s longitudinal grade is the largest of the directional Horn grade '
       + 'at either endpoint and the edge\'s own rise over run; its cross slope is '
-      + 'the larger perpendicular Horn component of the two endpoints.',
+      + 'the larger perpendicular Horn component of the two endpoints. A declared '
+      + 'evidence-gap policy decides cells whose slope used a synthesised Horn '
+      + 'neighbour (outer ring or beside a void) and, when the obstruction limit is '
+      + 'evaluated, cells with no above-ground return: conservative blocks them, '
+      + 'exploratory allows them and reports their share of the route.',
     'Internal composition (declared multi-term utilization cost); no single source method.',
     ['src/simulation/terrainAccess/traversabilityCost.ts'],
-    2,
+    3,
   ),
   'olv.simulation.terrain-access.astar': terrainAccessMethod(
     'olv.simulation.terrain-access.astar',

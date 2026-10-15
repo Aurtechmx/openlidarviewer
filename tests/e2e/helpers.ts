@@ -335,6 +335,57 @@ export async function dropTerrainAccessUtmLas(page: Page): Promise<void> {
   await page.dispatchEvent('body', 'drop', { dataTransfer });
 }
 
+/** Where the raised box of {@link dropTerrainAccessBoxLas} sits, in the scan CRS. */
+export const TERRAIN_ACCESS_BOX = Object.freeze({
+  originX: 500_000, originY: 4_100_000, sizeM: 12,
+  xMin: 4.5, xMax: 7.5, yMin: 1.5, yMax: 10.5, heightM: 3,
+});
+
+/**
+ * Drop a LAS (UTM zone 13N, metres) of a 12 m square of ground at 0.125 m
+ * spacing, a gentle 1 cm/m east-rising plane classified ground (ASPRS 2), with
+ * a raised box: a second return 3 m above the ground, classified building
+ * (ASPRS 6), over x 4.5..7.5 m and y 1.5..10.5 m. The ground under the box is
+ * still measured, so the DTM stays continuous and only the DSM carries the
+ * box; the strips below y 1.5 m and above y 10.5 m leave a way round. The
+ * spacing is half the 0.25 m cell the terrain run picks for this extent, so
+ * every cell holds returns.
+ */
+export async function dropTerrainAccessBoxLas(page: Page): Promise<void> {
+  (globalThis as Record<string, unknown>).__BUILD_IDENTITY__ ??= {
+    version: '0.0.0-test', commit: 'unknown', dirty: false, builtAt: '1970-01-01T00:00:00.000Z',
+  };
+  const { writeLas } = await import('../../src/convert/writeLas');
+  const b = TERRAIN_ACCESS_BOX;
+  const step = 0.125;
+  const n = Math.round(b.sizeM / step);
+  const xs: number[] = [];
+  const ys: number[] = [];
+  const zs: number[] = [];
+  const cls: number[] = [];
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const px = (i + 0.5) * step;
+      const py = (j + 0.5) * step;
+      const ground = 200 + 0.01 * px;
+      xs.push(b.originX + px); ys.push(b.originY + py); zs.push(ground); cls.push(2);
+      if (px >= b.xMin && px <= b.xMax && py >= b.yMin && py <= b.yMax) {
+        xs.push(b.originX + px); ys.push(b.originY + py); zs.push(ground + b.heightM); cls.push(6);
+      }
+    }
+  }
+  const bytes = writeLas({
+    count: xs.length, x: Float64Array.from(xs), y: Float64Array.from(ys), z: Float64Array.from(zs),
+    classification: Uint8Array.from(cls),
+  }, { epsg: 32613, isGeographic: false, linearUnitCode: 9001 });
+  const dataTransfer = await page.evaluateHandle((data) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([new Uint8Array(data)], 'terrain-access-box-utm.las'));
+    return dt;
+  }, [...bytes]);
+  await page.dispatchEvent('body', 'drop', { dataTransfer });
+}
+
 /**
  * Drop a synthesised PTX — a scanner file that carries its ACQUISITION GRID.
  *

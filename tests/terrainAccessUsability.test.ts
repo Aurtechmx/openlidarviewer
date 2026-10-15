@@ -133,9 +133,14 @@ describe('profile form', () => {
       n.children.forEach(walk);
     };
     walk(form);
-    expect(tips).toEqual([
+    expect(tips.slice(0, 2)).toEqual([
       'Treat cells below the minimum confidence as impassable.',
       'Allow cells below the minimum confidence, at an extra route cost.',
+    ]);
+    // The evidence-gap policy follows, exploratory first.
+    expect(tips.slice(2)).toEqual([
+      'Allow cells at the grid edge, beside a void or with no above-ground return, and report their share.',
+      'Treat cells at the grid edge, beside a void or with no above-ground return as impassable.',
     ]);
   });
 });

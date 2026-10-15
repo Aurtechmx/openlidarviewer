@@ -56,6 +56,8 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
   ],
   'olv.simulation.terrain-access.cost-map': [
     'tests/terrainAccessTraversabilityCost.test.ts',
+    'tests/terrainAccessDerivativeSupport.test.ts',
+    'tests/terrainAccessAboveGroundEvidence.test.ts',
   ],
   'olv.simulation.terrain-access.astar': [
     'tests/terrainAccessAStar.test.ts',

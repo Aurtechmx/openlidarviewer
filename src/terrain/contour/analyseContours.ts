@@ -57,6 +57,7 @@ import {
   emptySurfaceGrid,
   surfaceStats,
   heightAboveGround,
+  type SurfaceGrid,
   type SurfaceStats,
   type CanopyHeight,
 } from '../surface/buildDsm';
@@ -444,6 +445,9 @@ export interface TerrainCore {
   /** Surface models: top-surface DSM, height-above-ground, slope, hillshade. */
   readonly surface: {
     readonly dsm: SurfaceStats;
+    /** The top-surface DSM itself, on exactly the DTM grid (same origin, cols, rows,
+     *  cell size), Z in the DTM's own vertical unit; NaN where a cell has no return. */
+    readonly dsmGrid: SurfaceGrid;
     readonly canopy: CanopyHeight;
     readonly slope: SlopeStats;
     readonly hillshade: HillshadeResult;
@@ -598,6 +602,9 @@ export interface AnalyseContoursResult {
   /** Surface models: top-surface DSM, height-above-ground, slope, hillshade. */
   readonly surface: {
     readonly dsm: SurfaceStats;
+    /** The top-surface DSM itself, on exactly the DTM grid (same origin, cols, rows,
+     *  cell size), Z in the DTM's own vertical unit; NaN where a cell has no return. */
+    readonly dsmGrid: SurfaceGrid;
     readonly canopy: CanopyHeight;
     readonly slope: SlopeStats;
     readonly hillshade: HillshadeResult;
@@ -1455,6 +1462,7 @@ export function computeTerrainCore(
   }
   const surface = {
     dsm: surfaceStats(dsm),
+    dsmGrid: dsm,
     canopy: heightAboveGround(dsm, dtm.z, dtm.coverage),
     slope: slopeStats(slopeDegField, dtm.coverage),
     hillshade: engine.hillshadeSync(sa.slope, sa.aspect, dtm.coverage, dtm.cols, dtm.rows),

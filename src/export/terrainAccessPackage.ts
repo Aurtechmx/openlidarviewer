@@ -146,6 +146,9 @@ function diagnosticsCsv(result: TerrainAccessResult): string {
     ['fractionInterpolated', d.fractionInterpolated == null ? '' : String(d.fractionInterpolated)],
     ['fractionBelowProfileConfidence', d.fractionBelowProfileConfidence == null ? '' : String(d.fractionBelowProfileConfidence)],
     ['profileMinimumTerrainConfidence', String(d.profileMinimumTerrainConfidence)],
+    ['derivativeSynthesisedRouteCells', String(d.derivativeSynthesisedRouteCells)],
+    ['fractionDerivativeSynthesised', d.fractionDerivativeSynthesised == null ? '' : String(d.fractionDerivativeSynthesised)],
+    ['evidenceGapPolicy', String(result.record.result.evidenceGapPolicy ?? '')],
     ['cost', String(result.cost)],
     ['exploredCells', String(result.explored)],
     ['resultDigest', String(result.record.result.resultDigest)],
@@ -254,6 +257,7 @@ function constraintLines(constraints: unknown): string[] {
     longitudinalGrade: 'Longitudinal grade', crossSlope: 'Cross slope', stepHeight: 'Step height',
     minimumTerrainConfidence: 'Minimum confidence', vehicleWidth: 'Vehicle width', ruggedness: 'Ruggedness',
     vehicleLength: 'Vehicle length', aboveGroundObstruction: 'Above-ground obstruction',
+    derivativeSupport: 'Slope from a synthesised neighbour',
   };
   return Object.entries(constraints as Record<string, unknown>)
     .map(([k, v]) => `  ${label[k] ?? k}   ${String(v)}`);
@@ -335,6 +339,7 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
     `  Terrain relief within the footprint window   ${d.maxLocalReliefM.toFixed(3)} m`,
     `  Min terrain confidence ${Number.isFinite(d.minTerrainConfidence) ? d.minTerrainConfidence.toFixed(0) : 'n/a'}`,
     `  Below profile minimum confidence (${d.profileMinimumTerrainConfidence})   ${d.fractionBelowProfileConfidence == null ? 'n/a' : `${(d.fractionBelowProfileConfidence * 100).toFixed(0)}% of route cells`}`,
+    `  Slope from a synthesised neighbour   ${d.fractionDerivativeSynthesised == null ? 'n/a' : `${d.derivativeSynthesisedRouteCells} route cells (${(d.fractionDerivativeSynthesised * 100).toFixed(0)}%)`}, evidence-gap policy ${String(r.result.evidenceGapPolicy ?? 'not recorded')}`,
     `  Cost                   ${result.cost}`,
     `  Result digest          ${r.result.resultDigest}`,
     `  Run record digest      ${r.digest}`,

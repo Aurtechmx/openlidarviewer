@@ -61,6 +61,8 @@ function reasonClause(reason: NodeBlockReason, profile: TerrainAccessProfile, on
     case 'low-confidence': return `${be} below terrain confidence ${profile.minimumTerrainConfidence}`;
     case 'ruggedness': return `${one ? 'exceeds' : 'exceed'} the ruggedness limit ${profile.maxRuggedness}`;
     case 'obstruction': return `${one ? 'carries' : 'carry'} an above-ground obstruction`;
+    case 'obstruction-unknown': return `${one ? 'has' : 'have'} no above-ground return to check the obstruction limit against`;
+    case 'derivative-support': return `${one ? 'has a slope' : 'have slopes'} computed with a synthesised neighbour`;
     case 'vehicle-width':
       return `${be} too close to unsupported terrain or the survey edge for the ${profile.vehicleWidth} m vehicle width`;
   }

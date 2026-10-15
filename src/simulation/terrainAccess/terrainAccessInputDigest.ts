@@ -20,8 +20,12 @@
  *     east–west cell length is derived at, the unit-to-metres factor, and
  *     whether it resolved;
  *   - SHA-256 of the ROI mask, or null for none;
- *   - the above-ground surface identity: its geometry, frame, and SHA-256 of
- *     its heights and coverage, or null for none;
+ *   - the above-ground surface identity: its geometry, frame, the digest of
+ *     the terrain it is bound to, and SHA-256 of its heights and coverage, or
+ *     null for none;
+ *   - the evidence-gap policy (conservative or exploratory), which decides
+ *     whether cells with a synthesised-neighbour slope or no above-ground
+ *     return are blocked;
  *   - the routing method ids and the model id/version.
  *
  * Presentation state (camera, theme, scene axis, world origin, labels) and the
@@ -36,10 +40,11 @@ import { sha256Hex } from '../../terrain/export/sha256';
 import { dtmProductDigest } from '../../science/dtmProductDigest';
 import { TERRAIN_ACCESS_METHODS, TERRAIN_ACCESS_MODEL } from './terrainAccessRunner';
 import type { AboveGroundSurface, HorizontalScale } from './dtmTerrainAccessGrid';
+import type { EvidenceGapPolicy } from './terrainAccessTypes';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
 
 /** Names this digest and its encoding version. Recorded beside the digest in the run record. */
-export const TERRAIN_ACCESS_INPUT_DIGEST_SCHEME = 'olv.simulation.terrain-access.input-digest.v1';
+export const TERRAIN_ACCESS_INPUT_DIGEST_SCHEME = 'olv.simulation.terrain-access.input-digest.v2';
 
 /** Everything the digest reads. */
 export interface TerrainAccessDigestInput {
@@ -47,6 +52,8 @@ export interface TerrainAccessDigestInput {
   readonly scale: HorizontalScale;
   readonly dsm: AboveGroundSurface | null;
   readonly roi: Uint8Array | null;
+  /** The resolved policy (`resolveEvidenceGapPolicy`), never the profile's unset field. */
+  readonly evidenceGapPolicy: EvidenceGapPolicy;
 }
 
 function float32Digest(values: ArrayLike<number>): string {
@@ -72,6 +79,7 @@ function surfaceIdentity(dsm: AboveGroundSurface | null): Record<string, unknown
         orientation: dsm.frame.orientation ?? null,
       }
       : null,
+    terrainDigest: typeof dsm.terrainDigest === 'string' ? dsm.terrainDigest : null,
     zDigest: float32Digest(dsm.z),
     coverageDigest: sha256Hex(dsm.coverage),
   };
@@ -79,7 +87,7 @@ function surfaceIdentity(dsm: AboveGroundSurface | null): Record<string, unknown
 
 /** SHA-256 (lowercase hex) over every input a Terrain Access run reads; see the module doc. */
 export function terrainAccessSimulationInputDigest(input: TerrainAccessDigestInput): string {
-  const { dtm, scale, dsm, roi } = input;
+  const { dtm, scale, dsm, roi, evidenceGapPolicy } = input;
   // A fixed literal, so JSON.stringify's insertion order is the canonical order.
   const header = JSON.stringify({
     scheme: TERRAIN_ACCESS_INPUT_DIGEST_SCHEME,
@@ -94,6 +102,7 @@ export function terrainAccessSimulationInputDigest(input: TerrainAccessDigestInp
     },
     roiDigest: roi ? sha256Hex(roi) : null,
     aboveGround: surfaceIdentity(dsm),
+    evidenceGapPolicy,
     methods: [...TERRAIN_ACCESS_METHODS],
     model: TERRAIN_ACCESS_MODEL,
   });

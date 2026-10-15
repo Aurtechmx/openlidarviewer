@@ -54,11 +54,12 @@ import { whyNotSentence, type ElevationReference, type GridCell } from '../../si
 import {
   aboveGroundAlignmentProblem, type AboveGroundSurface, type HorizontalScale,
 } from '../../simulation/terrainAccess/dtmTerrainAccessGrid';
+import { aboveGroundBindingProblem } from '../../simulation/terrainAccess/aboveGroundSurface';
 import { ABOVE_GROUND_UNAVAILABLE } from '../../simulation/terrainAccess/terrainAccessPrepare';
 import {
   TERRAIN_ACCESS_INPUT_DIGEST_SCHEME, terrainAccessSimulationInputDigest,
 } from '../../simulation/terrainAccess/terrainAccessInputDigest';
-import type { TerrainAccessProfile } from '../../simulation/terrainAccess/terrainAccessTypes';
+import { resolveEvidenceGapPolicy, type TerrainAccessProfile } from '../../simulation/terrainAccess/terrainAccessTypes';
 import type { RouteDiagnostics } from '../../simulation/terrainAccess/routeDiagnostics';
 import { costDriversSentence } from '../../simulation/terrainAccess/terrainAccessExplain';
 import { dtmProductDigest } from '../../science/dtmProductDigest';
@@ -98,7 +99,8 @@ export interface TerrainAccessLabInput {
   readonly layerId: string | null;
   readonly filename: string | null;
   /**
-   * Optional above-ground surface with its frame (§12.4). Without an aligned
+   * Optional above-ground surface with its frame (§12.4), built from the DSM
+   * of the same terrain run and bound to its DTM. Without an aligned, bound
    * one the obstruction control is disabled and a profile that asks for the
    * limit anyway is refused.
    */
@@ -151,7 +153,8 @@ export function terrainAccessElevationReference(input: TerrainAccessLabInput): E
 export function terrainAccessAboveGroundAvailable(input: TerrainAccessLabInput | null): boolean {
   if (!input?.dsm) return false;
   try {
-    return aboveGroundAlignmentProblem(input.dtm, input.dsm) === null;
+    return aboveGroundAlignmentProblem(input.dtm, input.dsm) === null
+      && aboveGroundBindingProblem(input.dtm, input.dsm) === null;
   } catch {
     return false;
   }
@@ -162,7 +165,7 @@ const NO_IDENTITY = {
   build: '', id: '', generatedAt: '', processingManifestHead: null,
 } as const;
 
-function labIdentity(input: TerrainAccessLabInput): {
+function labIdentity(input: TerrainAccessLabInput, profile: TerrainAccessProfile): {
   readonly layerId: string | null;
   readonly filename: string | null;
   readonly sourceDigest: string | null;
@@ -181,7 +184,10 @@ function labIdentity(input: TerrainAccessLabInput): {
     sourceDigest: null,
     // Read only when a run seals its record, never for a refusal.
     get analysisInputDigest() {
-      return terrainAccessSimulationInputDigest({ dtm, scale: input.scale, dsm: input.dsm ?? null, roi: null });
+      return terrainAccessSimulationInputDigest({
+        dtm, scale: input.scale, dsm: input.dsm ?? null, roi: null,
+        evidenceGapPolicy: resolveEvidenceGapPolicy(profile),
+      });
     },
     analysisInputDigestScheme: TERRAIN_ACCESS_INPUT_DIGEST_SCHEME,
     get surfaceDigest() { return dtmProductDigest(dtm); },
@@ -261,7 +267,7 @@ export function runLabTerrainAccess(
   return runTerrainAccess(input.dtm, input.scale, profile, startIndex, endIndex, {
     ...PREVIEW_PARAMS(),
     dsm: input.dsm ?? null,
-  }, labIdentity(input));
+  }, labIdentity(input, profile));
 }
 
 /** Result of {@link buildTerrainAccessExport}: bytes/filename to download, or a refusal reason. */
@@ -345,10 +351,20 @@ export function evidenceSplitText(d: RouteDiagnostics): string {
 }
 
 /** The above-ground obstruction status the run record carries, in words. */
-function obstructionStatusText(status: unknown): string {
-  if (status === 'evaluated') return 'evaluated against the above-ground surface';
+function obstructionStatusText(status: unknown, unknownPolicy: unknown): string {
+  if (status === 'evaluated') {
+    if (unknownPolicy === 'block') return 'evaluated against the above-ground surface; cells with no return blocked (conservative)';
+    return 'evaluated against the above-ground surface; cells with no return allowed and disclosed (exploratory)';
+  }
   if (status === 'disabled') return 'off in this profile';
   return ABOVE_GROUND_UNAVAILABLE;
+}
+
+/** The derivative-support row: the route's share of cells whose slope used a synthesised neighbour. */
+export function derivativeSupportText(d: RouteDiagnostics, policy: unknown): string {
+  if (policy === 'block') return 'cells with a synthesised neighbour blocked (conservative)';
+  const share = d.fractionDerivativeSynthesised == null ? 'not recorded' : `${Math.round(d.fractionDerivativeSynthesised * 100)}% of route cells`;
+  return `${share}, allowed and disclosed (exploratory)`;
 }
 
 /** The run's answer as a card: a refusal's named reason, or the route diagnostics.
@@ -378,7 +394,11 @@ export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | nu
     row('P95 longitudinal grade', `${d.p95LongitudinalGrade.toFixed(3)} (tangent), ${tangentToDegrees(d.p95LongitudinalGrade)}`),
     row('Total cost', `${outcome.cost.toFixed(1)} (distance in metres, weighted by the cost terms)`),
     row('Route cells by evidence', evidenceSplitText(d)),
-    row('Above-ground obstruction', obstructionStatusText((outcome.record.result.constraints as Record<string, unknown> | undefined)?.aboveGroundObstruction)),
+    row('Above-ground obstruction', obstructionStatusText(
+      (outcome.record.result.constraints as Record<string, unknown> | undefined)?.aboveGroundObstruction,
+      outcome.record.result.unknownObstructionPolicy,
+    )),
+    row('Slope from a synthesised neighbour', derivativeSupportText(d, outcome.record.result.derivativeSupportPolicy)),
     el('div', { className: 'olv-story-next', text: costDriversSentence(d.dominantCostContributors) }),
   );
   const list = el('ul', { className: 'olv-story-v' });
@@ -550,6 +570,16 @@ export function buildProfileForm(onSubmit: () => void, blockedReason: string | n
     (value) => { state.unknownPolicy = value; unknownPolicyCtl.sync(); },
   );
 
+  const evidenceGapCtl = segmentedControl<'conservative' | 'exploratory'>(
+    'Evidence-gap policy',
+    [
+      { value: 'exploratory', label: 'Allow, disclose', tip: 'Allow cells at the grid edge, beside a void or with no above-ground return, and report their share.' },
+      { value: 'conservative', label: 'Block gaps', tip: 'Treat cells at the grid edge, beside a void or with no above-ground return as impassable.' },
+    ],
+    () => state.evidenceGapPolicy,
+    (value) => { state.evidenceGapPolicy = value; evidenceGapCtl.sync(); },
+  );
+
   const problemsBox = el('div', { className: 'olv-ta-form-problems' });
   const submitBtn = button('Apply profile', 'olv-ta-form-submit', 'Apply this traversability profile to the current run.');
   submitBtn.addEventListener('click', () => {
@@ -585,6 +615,10 @@ export function buildProfileForm(onSubmit: () => void, blockedReason: string | n
     el('div', { className: 'olv-ta-field' }, [
       el('span', { className: 'olv-ta-field-label', text: 'Weak-evidence policy' }),
       unknownPolicyCtl.element,
+    ]),
+    el('div', { className: 'olv-ta-field' }, [
+      el('span', { className: 'olv-ta-field-label', text: 'Evidence-gap policy' }),
+      evidenceGapCtl.element,
     ]),
   ]);
   const element = el('form', { className: 'olv-ta-form' }, [

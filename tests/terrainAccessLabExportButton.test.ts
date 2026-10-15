@@ -7,6 +7,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { FakeEl, installLiveFakeDom } from './helpers/liveFakeDom';
 import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
+import { dtmProductDigest } from '../src/science/dtmProductDigest';
 
 beforeAll(() => {
   installLiveFakeDom();
@@ -171,13 +172,24 @@ describe('Terrain Access Lab above-ground obstruction control', () => {
     lab.dispose();
   });
 
-  it('is enabled when an aligned surface is supplied', () => {
-    const { lab, root } = mount({
-      z: new Float32Array(12), coverage: new Uint8Array(12).fill(1), cols: 4, rows: 3, cellSizeM: 1, originH1: 0, originH2: 0,
-      frame: { crs: 'EPSG:32610', horizontalEpsg: 32610, verticalUnitToMetres: 1, orientation: 'rows-north-from-origin' },
-    });
+  const alignedTo = (terrainDigest?: string) => ({
+    z: new Float32Array(12), coverage: new Uint8Array(12).fill(1), cols: 4, rows: 3, cellSizeM: 1, originH1: 0, originH2: 0,
+    frame: { crs: 'EPSG:32610', horizontalEpsg: 32610, verticalUnitToMetres: 1, orientation: 'rows-north-from-origin' },
+    ...(terrainDigest !== undefined ? { terrainDigest } : {}),
+  });
+
+  it('is enabled when an aligned surface bound to this terrain is supplied', () => {
+    const { lab, root } = mount(alignedTo(dtmProductDigest(flatDtm(4, 3))));
     expect((byClass(root, 'olv-ta-obstacle-toggle') as unknown as { disabled: boolean }).disabled).toBe(false);
     expect(root.textContent).not.toContain('Above-ground evidence unavailable');
     lab.dispose();
+  });
+
+  it('is disabled for an aligned surface bound to no terrain, or to another one', () => {
+    for (const dsm of [alignedTo(), alignedTo('0'.repeat(64))]) {
+      const { lab, root } = mount(dsm);
+      expect((byClass(root, 'olv-ta-obstacle-toggle') as unknown as { disabled: boolean }).disabled).toBe(true);
+      lab.dispose();
+    }
   });
 });

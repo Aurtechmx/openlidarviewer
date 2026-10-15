@@ -53,7 +53,9 @@ import { computeRouteDiagnostics, type RouteDiagnostics } from './routeDiagnosti
 import { terrainAccessResultDigest } from './terrainAccessDigest';
 import { basisLimitations } from '../simulationInputBasis';
 import { sealRunRecord, type FieldSimulationRunRecord } from '../simulationRunRecord';
-import type { TerrainAccessGrid, TerrainAccessProfile } from './terrainAccessTypes';
+import {
+  resolveEvidenceGapPolicy, type EvidenceGapPolicy, type TerrainAccessGrid, type TerrainAccessProfile,
+} from './terrainAccessTypes';
 import type { SimulationInputBasis } from '../simulationInputBasis';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
 
@@ -71,6 +73,8 @@ export type TerrainAccessRefusalCode =
   | 'OBSTRUCTION_EVIDENCE_UNAVAILABLE'
   /** A supplied above-ground surface does not cover the same cells as the terrain. */
   | 'SURFACE_MISALIGNED'
+  /** A supplied above-ground surface was built with a different terrain surface. */
+  | 'SURFACE_STALE'
   /** A declared region-of-interest mask does not fit the terrain grid. */
   | 'INVALID_ROI';
 
@@ -142,10 +146,11 @@ export interface TerrainAccessRunIdentity {
  * Whether each limit a profile can declare was applied to this run:
  * `evaluated` (applied to every cell), `disabled` (the profile left it off),
  * `unavailable` (the evidence it needs is absent, so it could not have been
- * applied — a profile that asks for it anyway is refused before a run), or
- * `recorded-not-enforced` (kept in the record, not used by eligibility).
+ * applied — a profile that asks for it anyway is refused before a run),
+ * `recorded-not-enforced` (kept in the record, not used by eligibility), or
+ * `disclosed` (computed for every cell and reported, not used to block).
  */
-export type TerrainAccessConstraintStatus = 'evaluated' | 'disabled' | 'unavailable' | 'recorded-not-enforced';
+export type TerrainAccessConstraintStatus = 'evaluated' | 'disabled' | 'unavailable' | 'recorded-not-enforced' | 'disclosed';
 
 /** The per-constraint status a run record carries under `result.constraints`. */
 export function terrainAccessConstraintStatus(
@@ -163,6 +168,28 @@ export function terrainAccessConstraintStatus(
     aboveGroundObstruction: grid.heightAboveGround == null
       ? 'unavailable'
       : profile.obstacleHeightThreshold == null ? 'disabled' : 'evaluated',
+    derivativeSupport: resolveEvidenceGapPolicy(profile) === 'conservative' ? 'evaluated' : 'disclosed',
+  };
+}
+
+/** What the run does with a cell whose evidence has a gap, per gap, as the record states it. */
+export interface EvidenceGapTreatment {
+  readonly evidenceGapPolicy: EvidenceGapPolicy;
+  /** A cell whose slope used a synthesised neighbour. */
+  readonly derivativeSupportPolicy: 'block' | 'disclose';
+  /** A cell with no above-ground return; null when no obstruction limit is evaluated. */
+  readonly unknownObstructionPolicy: 'block' | 'disclose' | null;
+}
+
+/** The evidence-gap treatment a run with `profile` over `grid` applies. */
+export function evidenceGapTreatment(profile: TerrainAccessProfile, grid: TerrainAccessGrid): EvidenceGapTreatment {
+  const policy = resolveEvidenceGapPolicy(profile);
+  const action = policy === 'conservative' ? 'block' : 'disclose';
+  const obstructionEvaluated = profile.obstacleHeightThreshold != null && grid.heightAboveGround != null;
+  return {
+    evidenceGapPolicy: policy,
+    derivativeSupportPolicy: action,
+    unknownObstructionPolicy: obstructionEvaluated ? action : null,
   };
 }
 
@@ -218,6 +245,13 @@ export function runTerrainAccess(
   const obstructionUnevaluatedRouteCells = constraints.aboveGroundObstruction === 'evaluated'
     ? search.path.filter((i) => features.obstruction[i] === 'not-evaluated').length
     : null;
+  const gaps = evidenceGapTreatment(profile, grid);
+  let derivativeSynthesisedGridCells = 0;
+  for (let i = 0; i < features.derivativeSynthesised.length; i++) {
+    if (grid.valid[i] === 1 && features.derivativeSynthesised[i] === 1) derivativeSynthesisedGridCells++;
+  }
+  let gapBlockedCells = 0;
+  for (const r of eligibility.reason) if (r === 'derivative-support' || r === 'obstruction-unknown') gapBlockedCells++;
   const map = buildTraversabilityMap(grid, features, eligibility, profile, weights);
   const resultDigest = terrainAccessResultDigest(grid.cols, grid.rows, eligibility.blocked, search.path, search.cost);
 
@@ -225,6 +259,7 @@ export function runTerrainAccess(
     ...basisLimitations(basis, 'terrain-access'),
     ...gridWarnings,
     ...modelLimitations(profile, diagnostics, obstructionUnevaluatedRouteCells),
+    ...evidenceGapLimitations(gaps, diagnostics, gapBlockedCells),
   ];
 
   const record = sealRunRecord({
@@ -253,6 +288,7 @@ export function runTerrainAccess(
       weights,
       startIndex,
       endIndex,
+      evidenceGapPolicy: gaps.evidenceGapPolicy,
     },
     result: {
       cellCount: diagnostics.cellCount,
@@ -271,6 +307,13 @@ export function runTerrainAccess(
       fractionBelowProfileConfidence: diagnostics.fractionBelowProfileConfidence,
       profileMinimumTerrainConfidence: diagnostics.profileMinimumTerrainConfidence,
       constraints,
+      evidenceGapPolicy: gaps.evidenceGapPolicy,
+      derivativeSupportPolicy: gaps.derivativeSupportPolicy,
+      unknownObstructionPolicy: gaps.unknownObstructionPolicy,
+      derivativeSynthesisedGridCells,
+      derivativeSynthesisedRouteCells: diagnostics.derivativeSynthesisedRouteCells,
+      fractionDerivativeSynthesised: diagnostics.fractionDerivativeSynthesised,
+      evidenceGapBlockedCells: gapBlockedCells,
       obstructionUnevaluatedRouteCells,
       cost: search.cost,
       exploredCells: search.explored,
@@ -343,4 +386,33 @@ function modelLimitations(
   }
 
   return out;
+}
+
+/**
+ * What the evidence-gap policy obliges the result to disclose: under
+ * exploratory, the route cells whose slope used a synthesised neighbour;
+ * under conservative, how many cells the policy blocked. The obstruction
+ * cells with no return are disclosed by {@link modelLimitations}.
+ */
+function evidenceGapLimitations(
+  gaps: EvidenceGapTreatment,
+  diagnostics: RouteDiagnostics,
+  gapBlockedCells: number,
+): readonly string[] {
+  if (gaps.evidenceGapPolicy === 'conservative') {
+    if (gapBlockedCells === 0) return [];
+    return [
+      `The conservative evidence policy blocked ${gapBlockedCells} cells whose slope used a synthesised `
+      + 'neighbour (the grid\'s outer ring or beside a void), or, when the obstruction limit is evaluated, '
+      + 'that have no above-ground return.',
+    ];
+  }
+  const flagged = diagnostics.derivativeSynthesisedRouteCells;
+  if (flagged === 0) return [];
+  const pct = Math.round((100 * flagged) / diagnostics.cellCount);
+  return [
+    `${flagged} of ${diagnostics.cellCount} route cells (${pct}%) have a slope and aspect computed with at least `
+    + 'one synthesised neighbour (the grid\'s outer ring, or beside a void), so their grade and cross slope are '
+    + 'estimates. The exploratory evidence policy allowed them.',
+  ];
 }

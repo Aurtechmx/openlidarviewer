@@ -18,8 +18,11 @@
  *     run. A measured cell is not exempt: few returns can make a measured cell
  *     weak. The display thresholds in `cellConfidence.ts` play no part.
  *
- * No edge-risk figure is reported: that needs the DTM's `interpDistanceCells`
- * or a support mask, which this module's grid does not carry.
+ *   - DERIVATIVE SUPPORT (`fractionDerivativeSynthesised`): the share of route
+ *     cells whose slope and aspect used a synthesised neighbour.
+ *
+ * No edge-risk figure is reported: that needs the DTM's `interpDistanceCells`,
+ * which this module's grid does not carry.
  *
  * Pure data: no DOM, no three.js, no I/O. Deterministic.
  */
@@ -90,6 +93,15 @@ export interface RouteDiagnostics {
   readonly fractionBelowProfileConfidence: number | null;
   /** The profile's `minimumTerrainConfidence` the share above was computed against. */
   readonly profileMinimumTerrainConfidence: number;
+  /**
+   * Route cells whose slope and aspect used a synthesised neighbour
+   * (`TerrainAccessFeatures.derivativeSynthesised`): the grid's outer ring,
+   * or a cell beside a void. Zero under the conservative evidence policy,
+   * which blocks them.
+   */
+  readonly derivativeSynthesisedRouteCells: number;
+  /** {@link derivativeSynthesisedRouteCells} over all route cells. Null only for an empty path. */
+  readonly fractionDerivativeSynthesised: number | null;
   /** Ordered, largest contributor first. */
   readonly dominantCostContributors: readonly CostContributor[];
 }
@@ -115,6 +127,7 @@ export function computeRouteDiagnostics(
       maxEdgeStepM: 0, maxLocalReliefM: 0, maxVrm: 0, minTerrainConfidence: Number.NaN,
       fractionMeasured: null, fractionInterpolated: null, fractionBelowProfileConfidence: null,
       profileMinimumTerrainConfidence: profile.minimumTerrainConfidence,
+      derivativeSynthesisedRouteCells: 0, fractionDerivativeSynthesised: null,
       dominantCostContributors: [],
     };
   }
@@ -176,9 +189,11 @@ export function computeRouteDiagnostics(
   let measured = 0;
   let interpolated = 0;
   let belowProfile = 0;
+  let synthesised = 0;
   const coverage = grid.coverage;
   for (const i of path) {
     if (grid.confidence[i] < profile.minimumTerrainConfidence) belowProfile++;
+    if (features.derivativeSynthesised[i] === 1) synthesised++;
     if (!coverage) continue;
     if (coverage[i] === MEASURED) measured++;
     else if (coverage[i] === INTERPOLATED) interpolated++;
@@ -206,6 +221,8 @@ export function computeRouteDiagnostics(
     fractionInterpolated: coverageKnown ? interpolated / path.length : null,
     fractionBelowProfileConfidence: belowProfile / path.length,
     profileMinimumTerrainConfidence: profile.minimumTerrainConfidence,
+    derivativeSynthesisedRouteCells: synthesised,
+    fractionDerivativeSynthesised: synthesised / path.length,
     dominantCostContributors: contributors,
   };
 }
