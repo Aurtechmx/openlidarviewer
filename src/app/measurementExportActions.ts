@@ -558,6 +558,12 @@ export async function exportMeasurementIntegrityReport(
   if (snap.measurements.length === 0) return;
   const exportable = exportableMeasurements(snap.measurements, deps);
   if (!exportable.kept) return;
+  // A signed report that silently left records out would misstate what was
+  // measured: refuse instead, and say which measurements cannot be placed.
+  if (exportable.withheld) {
+    deps.refuse?.(`Not exported: ${exportable.withheld} An integrity report must account for every measurement; delete or reopen those, then export again.`);
+    return;
+  }
   const ms = exportable.kept;
   const owned = ownerFrameFor(ms, deps);
   if ('refused' in owned) {
@@ -617,7 +623,6 @@ export async function exportMeasurementIntegrityReport(
   const out = await textToWrite(f.text, deps, signReportText);
   if (out === null) return;
   deps.downloadText(f.filename, out);
-  if (exportable.withheld) (deps.notify ?? appToast().show)(exportable.withheld);
 }
 
 /**

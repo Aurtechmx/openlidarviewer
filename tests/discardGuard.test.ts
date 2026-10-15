@@ -207,7 +207,7 @@ describe('the session and every export of a streamed scan agree on the records t
   const retired = { id: 'old', kind: 'distance' as const, name: 'Distance old', points: [[0, 0, 0], [5, 0, 0]] as Array<[number, number, number]>, owner: { layerId: RETIRED_SCAN_OWNER, frame: 'project' as const } };
   const current = { id: 'new', kind: 'distance' as const, name: 'Distance new', points: [[1, 1, 0], [4, 1, 0]] as Array<[number, number, number]> };
 
-  it('holds the work on the stream and leaves out the work on the replaced scan, in the session, CSV, GeoJSON, integrity report, KML and PDF', async () => {
+  it('holds the work on the stream and leaves out the work on the replaced scan, in the session, CSV, GeoJSON, KML and PDF, and the integrity report refuses rather than drop a record', async () => {
     const ms = [retired, current];
     const session = parseSession(serializeActiveSession(sessionIo, {
       getViewer: () => ({
@@ -222,12 +222,13 @@ describe('the session and every export of a streamed scan agree on the records t
     const sessionIds = session.measurements.map((m) => m.id);
 
     const files: Record<string, string> = {};
+    const refusals: string[] = [];
     const deps: MeasurementExportActionDeps = {
       measure: { getMeasurements: () => ms, worldUp: [0, 0, 1], unitToMetres: 1, verticalUnitToMetres: 1, crsKnown: true, geographicCrs: false },
       geo: () => ({ origin: [500_000, 4_000_000, 0], crsName: 'WGS 84 / UTM zone 13N', name: 'new.copc.laz', crs: UTM13 }),
       upAxis: () => 'z',
       layers: { view: { clouds: () => [], getCloud: () => undefined, layerProjectOffset: () => null }, stableIdFor: () => null },
-      refuse: () => undefined, notify: () => undefined,
+      refuse: (msg) => { refusals.push(msg); }, notify: () => undefined,
       baseName: (n) => n.replace(/\.[^.]+$/, ''),
       downloadText: (filename, text) => { files[filename.split('.').pop()!] = text; },
       loadMeasurementExport: async () => ({ ...measurementExport, resolveExportDigests: async () => ({ sourceSha256: null, sourceSha256Note: 'not supplied', crsOrigin: null } as never) }),
@@ -239,14 +240,15 @@ describe('the session and every export of a streamed scan agree on the records t
     await exportMeasurementIntegrityReport(deps);
     const csvIds = files.csv!.split('\n').slice(1).filter((l) => l.length > 0).map((l) => l.split(',')[0]);
     const geoIds = JSON.parse(files.geojson!).features.map((f: { properties: { id: string } }) => f.properties.id);
-    const reportLabels = JSON.parse(files.json!).findings.map((f: { label: string }) => f.label);
     // KML and the PDF report keep what measurementsOwnedByActive keeps.
     const scanSpecific = measurementsOwnedByActive(ms, streamView);
 
     expect(sessionIds).toEqual(['new']);
     expect(csvIds).toEqual(sessionIds);
     expect(geoIds).toEqual(sessionIds);
-    expect(reportLabels).toEqual(['Distance new']);
+    // A signed report must account for every record, so it is refused.
+    expect(files.json).toBeUndefined();
+    expect(refusals.some((r) => /integrity report must account for every measurement/.test(r))).toBe(true);
     expect(scanSpecific.own.map((m) => m.id)).toEqual(sessionIds);
     expect(scanSpecific.withheld).toContain('no longer open');
   });

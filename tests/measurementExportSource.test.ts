@@ -384,22 +384,27 @@ describe('a streamed scan with no static layer open', () => {
     expect(out.refusals).toEqual(Array(3).fill('Not exported: 1 measurement was taken on a scan that is no longer open. Reopen it or delete them, then export again.'));
   });
 
-  it('exports the work taken on the stream itself and withholds the rest, saying why', async () => {
+  it('exports the work taken on the stream itself and withholds the rest, saying why; the signed report refuses', async () => {
     const out = await runStream([retired, current]);
-    expect(out.refusals).toEqual([]);
-    const [geojson, csv, , report] = out.downloads;
+    // A signed integrity report must account for every record: it refuses
+    // rather than drop the one it cannot place.
+    expect(out.refusals).toHaveLength(1);
+    expect(out.refusals[0]).toMatch(/integrity report must account for every measurement/);
+    expect(out.downloads.some((d) => /findings|integrity|\.json$/.test(d.filename) && d.text.includes('"findings"'))).toBe(false);
+    const [geojson, csv] = out.downloads;
     const fc = JSON.parse(geojson!.text);
     expect(fc.features.map((f: { properties: { id: string } }) => f.properties.id)).toEqual(['new']);
     expect(csv!.text.split('\n').filter((l) => l.length > 0)).toHaveLength(2);
     expect(csv!.text).not.toContain('old');
-    expect(JSON.parse(report!.text).findings.map((f: { label: string }) => f.label)).toEqual(['Distance new']);
-    expect(out.notes.filter((n) => n.includes('1 measurement withheld: taken on a scan that is no longer open'))).toHaveLength(3);
+    expect(out.notes.filter((n) => n.includes('1 measurement withheld: taken on a scan that is no longer open'))).toHaveLength(2);
   });
 
   it('leaves the bytes of a stream-only export unchanged', async () => {
     const withRetired = await runStream([retired, current]);
     const alone = await runStream([current]);
-    expect(withRetired.downloads.map((d) => d.text)).toEqual(alone.downloads.map((d) => d.text));
+    // The GeoJSON and CSV files are identical; only the alone run also writes the report.
+    expect(withRetired.downloads.map((d) => d.text)).toEqual(alone.downloads.slice(0, withRetired.downloads.length).map((d) => d.text));
+    expect(alone.downloads.length).toBe(withRetired.downloads.length + 1);
     expect(alone.notes.some((n) => n.includes('withheld'))).toBe(false);
   });
 });

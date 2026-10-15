@@ -18,7 +18,7 @@ import { LoadCancelledError } from '../io/loadFile';
 import type { DiscardableWork } from './closeScanGuard';
 import type { ReplaceOutcome } from './discardGuard';
 import { RETIRED_SCAN_OWNER, ownerIdsOf, type OwnedItem } from './measurementOwnership';
-import { guardReplacedWork, settleReplacedWork } from './openStreaming';
+import { guardReplacedWork, settleReplacedWork, type ReplaceDecision } from './openStreaming';
 import type { HeavyLasBridgeDeps } from './heavyLasTypes';
 
 /** The decision taken before the open, applied after its commit. */
@@ -27,6 +27,8 @@ export interface HeavyReplacePlan {
   readonly replacingStream: boolean;
   /** The guard's answer; `none` when nothing was asked. */
   readonly outcome: ReplaceOutcome;
+  /** What the question saw, so a Replace removes only the work it named. Null when nothing was asked. */
+  readonly decision: ReplaceDecision | null;
   /** Stable ids of the static layers open at the start; they stay open. */
   readonly staticOwners: readonly string[];
   /** How many static layers were open at the start. */
@@ -50,7 +52,7 @@ export async function askHeavyReplace(deps: HeavyLasBridgeDeps, name: string): P
     .map((id) => deps.stableLayerId?.(id) ?? null)
     .filter((id): id is string => id !== null);
   const replacingStream = viewer.hasStreamingCloud === true;
-  if (!replacingStream) return { replacingStream, outcome: 'none', staticOwners, staticCount: statics.length };
+  if (!replacingStream) return { replacingStream, outcome: 'none', decision: null, staticOwners, staticCount: statics.length };
   // With static layers staying open, only the stream's work is at risk: work
   // owned by a static layer stays, and so do the saved views.
   const scope = statics.length === 0 ? undefined : (work: DiscardableWork): DiscardableWork => ({
@@ -60,11 +62,14 @@ export async function askHeavyReplace(deps: HeavyLasBridgeDeps, name: string): P
     views: 0,
   });
   try {
-    const outcome = await guardReplacedWork(
-      { replaceGuard: deps.streaming.replaceGuard && ((req) => deps.streaming.replaceGuard!({ ...req, ...(scope ? { scope } : {}) })) },
+    const decision = await guardReplacedWork(
+      {
+        replaceGuard: deps.streaming.replaceGuard && ((req) => deps.streaming.replaceGuard!({ ...req, ...(scope ? { scope } : {}) })),
+        getViewer: deps.streaming.getViewer,
+      },
       name,
     );
-    return { replacingStream, outcome, staticOwners, staticCount: statics.length };
+    return { replacingStream, outcome: decision.outcome, decision, staticOwners, staticCount: statics.length };
   } catch (err) {
     if (err instanceof LoadCancelledError) return null;
     throw err;
@@ -89,16 +94,21 @@ export function settleHeavyReplace(deps: HeavyLasBridgeDeps, plan: HeavyReplaceP
     return;
   }
   if (plan.staticCount === 0) {
-    settleReplacedWork(deps.streaming, plan.outcome);
+    settleReplacedWork(deps.streaming, plan.decision ?? { outcome: plan.outcome, name: '', seen: null });
     return;
   }
   if (plan.outcome === 'replace') {
+    // Only the work the question named: anything placed while the file was
+    // being prepared was never offered for discard.
+    const seen = plan.decision?.seen ?? null;
     for (const m of viewer.measure.getMeasurements()) {
-      if (!ownedByStatic(m, plan.staticOwners)) viewer.measure.removeMeasurement(m.id);
+      if (!ownedByStatic(m, plan.staticOwners) && (!seen || seen.measurements.has(m.id))) viewer.measure.removeMeasurement(m.id);
     }
     for (const a of viewer.annotate.getAnnotations()) {
-      if (!ownedByStatic(a, plan.staticOwners)) viewer.annotate.remove(a.id);
+      if (!ownedByStatic(a, plan.staticOwners) && (!seen || seen.annotations.has(a.id))) viewer.annotate.remove(a.id);
     }
+    viewer.measure.claimUnowned(RETIRED_SCAN_OWNER);
+    viewer.annotate.claimUnowned(RETIRED_SCAN_OWNER);
     return;
   }
   viewer.measure.claimUnowned(RETIRED_SCAN_OWNER);

@@ -4,13 +4,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
-### Fixed
-
-- Opening a large local LAS or LAZ over an open stream now offers Save / Replace / Cancel before any work starts, and applies the answer only after the new scan opens. Cancel, a cancelled or failed index build and a failed attach leave the previous scan and its measurements, annotations and saved views unchanged. Saved views are cleared only by Replace, work left over a replaced stream is never saved under the new file, and static layers keep their work and saved views.
-- Close scan and opening a COPC, EPT or 3D Tiles scan over open layers now ask before discarding class edits on any open layer, not only the active one, including a hidden or locked layer. The question names the edited layers and points to exporting each as LAS, since the session file does not store class edits. Removing one layer from the Layers list asks only when that layer has class edits.
-- With only a streamed scan open, CSV, GeoJSON and integrity-report exports no longer include measurements left from a replaced scan under the stream's name and origin; they leave them out and say why, as the session, KML and PDF report already did. Work placed while a streamed scan is opening is no longer discarded by the earlier Replace answer or given to the new scan; it is kept as work on the replaced scan and the user is told.
-
-## [0.7.0] - 2026-10-14
+## [0.7.0] - 2026-10-15
 
 ### Added
 
@@ -55,6 +49,10 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- Opening a large local LAS or LAZ over an open stream now offers Save / Replace / Cancel before any work starts, and applies the answer only after the new scan opens. Cancel, a cancelled or failed index build and a failed attach leave the previous scan and its measurements, annotations and saved views unchanged. Saved views are cleared only by Replace, work left over a replaced stream is never saved under the new file, and static layers keep their work and saved views.
+- Close scan and opening a COPC, EPT or 3D Tiles scan over open layers now ask before discarding class edits on any open layer, not only the active one, including a hidden or locked layer. The question names the edited layers and points to exporting each as LAS, since the session file does not store class edits. Removing one layer from the Layers list asks only when that layer has class edits.
+- With only a streamed scan open, CSV and GeoJSON exports no longer include measurements left from a replaced scan under the stream's name and origin; they leave them out and say why, as the session, KML and PDF report already did. Work placed while a streamed scan is opening is no longer discarded by the earlier Replace answer or given to the new scan; it is kept as work on the replaced scan and the user is told.
+- A signed measurement integrity report refuses, naming the measurements it cannot place, instead of leaving records out of the file.
 - A local glTF or GLB that names an external buffer or image (a relative file or a web address) is refused before parsing. Opening it no longer makes the browser request an address named inside the file.
 - The E57 reader refuses an XML section larger than 64 MB and XML nested deeper than 256 levels with a clear error, instead of exhausting memory or the call stack.
 - The latest-result card no longer covers the active tool's Finish and Cancel controls when it grows: it stays above the bottom controls and scrolls inside itself.
