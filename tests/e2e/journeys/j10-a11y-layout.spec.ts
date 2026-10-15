@@ -139,7 +139,9 @@ test.describe('J10 touch (P3)', { tag: '@touch' }, () => {
           // floor is the cube's own 24 px (CUBE_MIN_TARGET, WCAG 2.5.8); the
           // cube's edge and corner spots carry the 44 px targets.
           const min = el.classList.contains('olv-viewcube-face') ? 24 : 44;
-          if (r.width < min || r.height < min) out.push(`${Math.round(r.width)}x${Math.round(r.height)} ${el.tagName.toLowerCase()}.${String(el.className).slice(0, 40)} "${(el.getAttribute('aria-label') ?? el.textContent ?? '').trim().slice(0, 30)}"`);
+          // Half a pixel of slack, as J11 and largeTouchLayout allow: at the
+          // Pixel 7's 2.625 device pixel ratio a 44 px box can measure 43.99.
+          if (r.width < min - 0.5 || r.height < min - 0.5) out.push(`${Math.round(r.width)}x${Math.round(r.height)} ${el.tagName.toLowerCase()}.${String(el.className).slice(0, 40)} "${(el.getAttribute('aria-label') ?? el.textContent ?? '').trim().slice(0, 30)}"`);
         }
         return out;
       });
