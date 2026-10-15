@@ -26,6 +26,8 @@ export interface TestSeamDeps {
   showReclassify: () => Promise<void> | void;
   /** Re-sync the reclassify panel's undo/redo state, if mounted. */
   refreshReclassify: () => void;
+  /** The export frame and resolved CRS code of the active scan. */
+  activeGeo?: () => { name: string | null; origin: readonly number[]; epsg: number | null };
 }
 
 export function mountTestSeam(deps: TestSeamDeps): void {
@@ -130,6 +132,12 @@ export function mountTestSeam(deps: TestSeamDeps): void {
         const cloud = v.getCloud(id);
         return { name: cloud?.name ?? id, classAt0: cloud?.classification?.[0] ?? -1, epoch: v.classificationEpoch(id), canUndo: v.canUndoClassification(id) };
       }),
+    // The active layer's name, export frame and resolved CRS, so a spec can
+    // check every scan-scoped reader moved together.
+    activeScan: () => {
+      const id = deps.getActiveScanId();
+      return { activeName: id ? v.getCloud(id)?.name ?? null : null, geo: deps.activeGeo?.() ?? null };
+    },
     classAt: (i: number): number => {
       const id = deps.getActiveScanId();
       const c = id ? v.getCloud(id)?.classification : undefined;

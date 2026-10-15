@@ -261,7 +261,7 @@ import { placedWorldOrigin } from './terrain/canonicalFrame';
 import { createAppRuntime } from './app/AppRuntime';
 import { createLayerService } from './app/LayerService';
 import { createViewBookmarks } from './app/viewBookmarks';
-import { createScanService } from './app/ScanService';
+import { createScanService, survivorAfterRemoval } from './app/ScanService';
 import { createScanRouteService } from './app/ScanRouteService';
 import { createProjectFrameService, projectFrameInputFrom, sessionImportOrigins } from './app/projectFrame';
 
@@ -2439,7 +2439,7 @@ const exportPanel = new ExportPanel({
   // snapshot just to test it for null.
   isStreamingPending: () => viewer?.streamingCloud != null && viewer.exportFrontierPointTotal() === 0,
   getActiveClip: () => viewer.getClip(), getActiveClipOffset: () => (scans.activeId ? viewer.layerProjectOffset(scans.activeId) : null), getActiveScanId: () => scans.activeExportTargetId(),
-  ...exportLayerHooks({ scans, viewer: () => viewer, sourceFiles: sourceFileById, reduced: reducedById, reopen: handleFile, removeLayer: removeCloud, notify: showLassoToast, findingsRevision: (id) => exportPanel.findingsLedger()?.revisionFor(id) ?? 0, inCompare: (id) => inspector.compareDifference.involves(id) }),
+  ...exportLayerHooks({ scans: { get activeId() { return scans.activeId; }, setActive: activateLayer }, viewer: () => viewer, sourceFiles: sourceFileById, reduced: reducedById, reopen: handleFile, removeLayer: removeCloud, notify: showLassoToast, findingsRevision: (id) => exportPanel.findingsLedger()?.revisionFor(id) ?? 0, inCompare: (id) => inspector.compareDifference.involves(id) }),
   hasClassEdits: () => activeScanHasClassEdits(scans.activeId, viewer),
   // A streaming snapshot exports only resident points, so it is a reduced subset
   // until the whole cloud lands — flagged so the status reads "reduced view".
@@ -2852,7 +2852,7 @@ if (__OLV_TEST_SEAM__ && testApi) {
     getViewer: ensureViewer,
     getActiveScanId: () => scans.activeId,
     showReclassify: () => showReclassifyUi(),
-    refreshReclassify: () => reclassifyUi?.refresh(),
+    refreshReclassify: () => reclassifyUi?.refresh(), activeGeo: () => ({ ...exportGeoContext(), epsg: crsService.context().epsg ?? null }),
   }));
 }
 
@@ -4198,21 +4198,21 @@ function compareLoadedLayers(): void {
 }
 
 
+function activateLayer(id: string): void { if (scans.activeId === id) return; scans.setActive(id); const c = scans.activeCloud(); if (c) { crsCoordinator.refreshCrsForStaticCloud(c); inspectorCards.refreshProvenance(c, id); inspectorCards.refreshDatasetIntelligenceFromStaticCloud(c); } } // select a static layer and re-resolve its CRS (so the measure units), provenance and dataset card
 function removeCloud(id: string): void {
-  viewer.removeCloud(id);
+  const next = survivorAfterRemoval(viewer.clouds(), id, scans.activeId); viewer.removeCloud(id); // removing the active layer promotes a survivor
   inspector.removeCloud(id);
   sourceFileById.delete(id);
   reducedById.delete(id);
   layerVisible.delete(id);
   if (layers.solo === id) layers.solo = null;
-  scans.clearIf(id); inspector.compareDifference.dropStale(); // a comparison on this scan goes with it
+  if (next && next !== scans.activeId) activateLayer(next); else scans.clearIf(id); inspector.compareDifference.dropStale(); // a comparison on this scan goes with it
   captureProvenance.clearIf(id); exportPanel.forgetFindingsFor(id); // a removed scan's saved findings go with it
   if (viewer.clouds().length === 0) resetToEmptyState();
   else {
     layerService.refreshCrsFlags();
     layerService.applyVisibility();
-    inspector.setElevationExtent(viewer.elevationExtent());
-    inspector.setIntensityExtent(viewer.intensityExtent());
+    inspector.setElevationExtent(viewer.elevationExtent()); inspector.setIntensityExtent(viewer.intensityExtent());
     syncProjectElevationScale();
   }
 }

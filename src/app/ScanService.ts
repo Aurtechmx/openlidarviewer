@@ -117,3 +117,17 @@ export function createScanService(deps: ScanServiceDeps): ScanService {
     },
   };
 }
+
+/**
+ * The layer that should be active once `removedId` is removed, given the open
+ * layers in panel order (`order`, before the removal) and the active layer.
+ * Removing another layer keeps the active one. Removing the active layer moves
+ * to the next layer, else the previous one, else none. With no static layer
+ * active (a streaming scan, or nothing) nothing is promoted.
+ */
+export function survivorAfterRemoval(order: readonly string[], removedId: string, activeId: string | null): string | null {
+  if (activeId !== removedId) return activeId;
+  const i = order.indexOf(removedId);
+  if (i < 0) return null;
+  return order[i + 1] ?? order[i - 1] ?? null;
+}
