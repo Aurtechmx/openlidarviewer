@@ -1685,7 +1685,7 @@ export class Viewer {
 
   /** Navigation, standard views and the view cube take layer `id`'s up, else the last added's (`sceneUpOf`);
    *  stored geometry is untouched, and each measurement keeps reading along its own layer's up. */
-  alignUpToLayer(id: string | null, refreshDatum = false): void { this._upAuthority = id; const up = sceneUpOf(this._clouds, id), moved = up !== null && this._worldUp.toArray().join() !== up.join(); if (up) this._worldUp.fromArray(up); if (moved || refreshDatum) { this._nav.setWorldUp(this._worldUp); this._refreshMeasureDatum(); } }
+  alignUpToLayer(id: string | null, refreshDatum = false): void { this._upAuthority = id; const up = sceneUpOf(this._clouds, id), moved = up !== null && this._worldUp.toArray().join() !== up.join(); if (up) { this._worldUp.fromArray(up); } if (moved || refreshDatum) { this._nav.setWorldUp(this._worldUp); this._refreshMeasureDatum(); } }
   /** Size navigation, clip planes and the orbit pivot again from every visible cloud, with the up axis from the last-added one. */
   reconfigureForClouds(): void { if (this._clouds.size > 0) this._configureForClouds(); }
 

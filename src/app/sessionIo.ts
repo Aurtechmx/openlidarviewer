@@ -228,7 +228,7 @@ function unmatchedNames(
   const names = frame.layers
     .filter((l) => ids.has(l.layerId) && [...mapping.byId].some(([saved, m]) => m.kind === kind && (saved === l.layerId || `${saved}~unmatched` === l.layerId)))
     .map((l) => `“${l.sourceName}”`);
-  return [...new Set(names)].sort();
+  return [...new Set(names)].sort((a, b) => a.localeCompare(b));
 }
 
 const byId = <T extends { id: string }>(items: readonly T[]): T[] => [...items].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
