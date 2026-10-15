@@ -92,3 +92,61 @@ export function topBlockReasonSentence(eligibility: NodeEligibility, profile: Te
   const noun = one ? 'cell' : 'cells';
   return `${countText(topCount)} ${noun} ${reasonClause(top, profile, one)}.`;
 }
+
+/** The slope-derived limits whose status can be `estimated`. */
+export type DerivativeEstimatedConstraint = 'longitudinalGrade' | 'crossSlope' | 'ruggedness';
+
+/** Route cells behind one `estimated` status, from `RouteDiagnostics`. */
+export interface DerivativeEstimateCounts {
+  readonly routeCells: number;
+  readonly boundaryRouteCells: number;
+  readonly holeRouteCells: number;
+}
+
+const ESTIMATE_SUBJECT: Readonly<Record<DerivativeEstimatedConstraint, string>> = Object.freeze({
+  longitudinalGrade: 'Longitudinal grade',
+  crossSlope: 'Cross-slope',
+  ruggedness: 'Ruggedness',
+});
+
+const cellsText = (n: number, kind: 'route' | 'grid'): string => `${countText(n)} ${kind} ${n === 1 ? 'cell' : 'cells'}`;
+
+/**
+ * The one sentence that states a limit was estimated rather than evaluated.
+ * The run card, the limitations, the diagnostics CSV, the README and the run
+ * record all carry this exact string, so the wording cannot drift between them.
+ */
+export function derivativeEstimateStatement(
+  constraint: DerivativeEstimatedConstraint,
+  counts: DerivativeEstimateCounts,
+): string {
+  const head = `${ESTIMATE_SUBJECT[constraint]} estimated from substituted neighbours on ${cellsText(counts.routeCells, 'route')}`;
+  if (constraint === 'ruggedness') return `${head} (its window holds a cell whose slope used a substituted neighbour).`;
+  return `${head} (${countText(counts.boundaryRouteCells)} at the outer boundary, `
+    + `${countText(counts.holeRouteCells)} beside interior NoData holes).`;
+}
+
+/** The preview's grid-wide form of {@link derivativeEstimateStatement}, under the exploratory policy. */
+export function derivativeEstimateGridStatement(cells: number, boundary: number, hole: number): string {
+  return `Longitudinal grade and cross-slope estimated from substituted neighbours on ${cellsText(cells, 'grid')} `
+    + `(${countText(boundary)} at the outer boundary, ${countText(hole)} beside interior NoData holes). `
+    + 'The exploratory evidence policy allows these cells; a route over them reports those limits as estimated.';
+}
+
+/** The why-not inspector's clause for one cell whose slope used a substituted neighbour. */
+export function derivativeEstimateCellClause(boundary: boolean): string {
+  return `grade and cross-slope here are estimated from substituted neighbours (${boundary ? 'outer boundary' : 'interior NoData hole'})`;
+}
+
+/** Reader names for the keys of a run record's `result.constraints`, shared by the run card and the README. */
+export const TERRAIN_ACCESS_CONSTRAINT_LABEL: Readonly<Record<string, string>> = Object.freeze({
+  longitudinalGrade: 'Longitudinal grade',
+  crossSlope: 'Cross slope',
+  stepHeight: 'Step height',
+  minimumTerrainConfidence: 'Minimum confidence',
+  vehicleWidth: 'Vehicle width',
+  ruggedness: 'Ruggedness',
+  vehicleLength: 'Vehicle length',
+  aboveGroundObstruction: 'Above-ground obstruction',
+  derivativeSupport: 'Slope from a synthesised neighbour',
+});

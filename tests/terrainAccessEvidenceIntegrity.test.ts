@@ -116,8 +116,10 @@ describe('above-ground obstruction is never accepted without aligned evidence', 
     expect(without.ok).toBe(true);
     if (!without.ok) return;
     expect(without.record.schemaVersion).toBe(2);
+    // A 1×3 grid is all outer ring: every slope used a substituted neighbour,
+    // so the slope-derived limits are estimated under the default exploratory policy.
     expect(without.record.result.constraints).toEqual({
-      longitudinalGrade: 'evaluated', crossSlope: 'evaluated', stepHeight: 'evaluated',
+      longitudinalGrade: 'estimated', crossSlope: 'estimated', stepHeight: 'evaluated',
       minimumTerrainConfidence: 'evaluated', vehicleWidth: 'evaluated',
       ruggedness: 'disabled', vehicleLength: 'recorded-not-enforced', aboveGroundObstruction: 'unavailable',
       derivativeSupport: 'disclosed',
@@ -265,7 +267,7 @@ describe('the simulation input digest moves with every routing input', () => {
   it('is deterministic and versioned', () => {
     expect(terrainAccessSimulationInputDigest(base)).toBe(ref);
     expect(ref).toMatch(/^[0-9a-f]{64}$/);
-    expect(TERRAIN_ACCESS_INPUT_DIGEST_SCHEME).toMatch(/v2$/);
+    expect(TERRAIN_ACCESS_INPUT_DIGEST_SCHEME).toMatch(/v3$/);
   });
 
   it('is the run\'s analysisInputDigest, and presentation state does not move it', () => {

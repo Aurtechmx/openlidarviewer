@@ -13,9 +13,12 @@
  */
 
 import { cellIndex, resolveElevation, type ElevationReference as BaseElevationReference, type GridCell } from '../flowPulse/flowGridCursor';
-import { whyNotEligible, type TerrainAccessFeatures, type NodeEligibility, type TraversabilityMapCell } from './traversabilityCost';
+import {
+  DERIVATIVE_CAUSE_BOUNDARY, whyNotEligible,
+  type TerrainAccessFeatures, type NodeEligibility, type TraversabilityMapCell,
+} from './traversabilityCost';
 import type { TerrainAccessGrid, TerrainAccessProfile } from './terrainAccessTypes';
-import { TERRAIN_ACCESS_STATE_LABEL } from './terrainAccessExplain';
+import { derivativeEstimateCellClause, TERRAIN_ACCESS_STATE_LABEL } from './terrainAccessExplain';
 
 export {
   cellIndex, cellAt, clampCell, moveCursor, pixelToCell,
@@ -106,10 +109,15 @@ export function whyNotSentence(
   const i = cellIndex(grid.cols, cell);
   if (grid.valid[i] === 0) return `Column ${cell.col}, row ${cell.row}: no elevation is known at this cell.`;
   const result = whyNotEligible(grid, features, eligibility, profile, i);
+  // A cell the policy allowed although its slope used a substituted neighbour:
+  // the same `estimated` status a route over it reports.
+  const estimate = features.derivativeSynthesised[i] === 1 && eligibility.reason[i] !== 'derivative-support'
+    ? `; ${derivativeEstimateCellClause(features.derivativeSupportCause[i] === DERIVATIVE_CAUSE_BOUNDARY)}`
+    : '';
   if (result.eligible) {
-    return `Column ${cell.col}, row ${cell.row}: eligible — at least one neighbouring move is within the declared limits.`;
+    return `Column ${cell.col}, row ${cell.row}: eligible — at least one neighbouring move is within the declared limits${estimate}.`;
   }
   const detail = result.reasons.map((r) => r.detail).join('; ');
   const prefix = result.category === 'unknown' ? 'withheld (insufficient evidence)' : 'blocked';
-  return `Column ${cell.col}, row ${cell.row}: ${prefix} — ${detail}.`;
+  return `Column ${cell.col}, row ${cell.row}: ${prefix} — ${detail}${estimate}.`;
 }

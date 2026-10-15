@@ -735,7 +735,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       + 'evaluated, cells with no above-ground return: conservative blocks them, '
       + 'exploratory allows them and reports their share of the route.',
     'Internal composition (declared multi-term utilization cost); no single source method.',
-    ['src/simulation/terrainAccess/traversabilityCost.ts'],
+    ['src/simulation/terrainAccess/traversabilityCost.ts', 'src/simulation/terrainAccess/footprintClearance.ts'],
     3,
   ),
   'olv.simulation.terrain-access.astar': terrainAccessMethod(
@@ -744,9 +744,14 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     'Least-cost route search with a planimetric-distance admissible '
       + 'heuristic and a fixed, documented tie-break (lower f, then lower h, '
       + 'then lower cell index), over cells the cost-map hard-eligibility pass '
-      + 'accepted. Never expands a hard-blocked cell or a hard-blocked edge.',
+      + 'accepted. Never expands a hard-blocked cell or a hard-blocked edge. '
+      + 'v2 takes moves through the cost map\'s shared transition rule: a diagonal '
+      + 'that cuts the corner of an unsupported cell, or sweeps the declared width '
+      + 'over unsupported area mid-move, is refused, and width clearance is measured '
+      + 'to cell rectangles.',
     'Hart, Nilsson & Raphael (1968), doi:10.1109/TSSC.1968.300136 (A*)',
     ['src/simulation/terrainAccess/aStarTerrain.ts'],
+    2,
   ),
   // The seven ids below are registered EARLY, before their methods exist,
   // under the maintainer's Observatory decision-rule approval

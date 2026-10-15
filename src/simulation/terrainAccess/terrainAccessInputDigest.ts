@@ -26,7 +26,9 @@
  *   - the evidence-gap policy (conservative or exploratory), which decides
  *     whether cells with a synthesised-neighbour slope or no above-ground
  *     return are blocked;
- *   - the routing method ids and the model id/version.
+ *   - every routing method as an explicit {id, version} pair read from the
+ *     registry, and the model id/version, so a method version change alone
+ *     moves the digest (v2 wrote the method ids only).
  *
  * Presentation state (camera, theme, scene axis, world origin, labels) and the
  * run's id and timestamp are not inputs and are not read. Unset numbers are
@@ -38,13 +40,14 @@
 
 import { sha256Hex } from '../../terrain/export/sha256';
 import { dtmProductDigest } from '../../science/dtmProductDigest';
+import { methodRef } from '../../science/methodRegistry';
 import { TERRAIN_ACCESS_METHODS, TERRAIN_ACCESS_MODEL } from './terrainAccessRunner';
 import type { AboveGroundSurface, HorizontalScale } from './dtmTerrainAccessGrid';
 import type { EvidenceGapPolicy } from './terrainAccessTypes';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
 
 /** Names this digest and its encoding version. Recorded beside the digest in the run record. */
-export const TERRAIN_ACCESS_INPUT_DIGEST_SCHEME = 'olv.simulation.terrain-access.input-digest.v2';
+export const TERRAIN_ACCESS_INPUT_DIGEST_SCHEME = 'olv.simulation.terrain-access.input-digest.v3';
 
 /** Everything the digest reads. */
 export interface TerrainAccessDigestInput {
@@ -103,8 +106,11 @@ export function terrainAccessSimulationInputDigest(input: TerrainAccessDigestInp
     roiDigest: roi ? sha256Hex(roi) : null,
     aboveGround: surfaceIdentity(dsm),
     evidenceGapPolicy,
-    methods: [...TERRAIN_ACCESS_METHODS],
-    model: TERRAIN_ACCESS_MODEL,
+    methods: TERRAIN_ACCESS_METHODS.map((id) => {
+      const ref = methodRef(id);
+      return { id: ref.id, version: ref.version };
+    }),
+    model: methodRef(TERRAIN_ACCESS_MODEL.id),
   });
   return sha256Hex(new TextEncoder().encode(header));
 }

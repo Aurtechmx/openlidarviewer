@@ -58,10 +58,14 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
     'tests/terrainAccessTraversabilityCost.test.ts',
     'tests/terrainAccessDerivativeSupport.test.ts',
     'tests/terrainAccessAboveGroundEvidence.test.ts',
+    'tests/terrainAccessFootprintClearance.test.ts',
+    'tests/terrainAccessFootprintGeometry.test.ts',
+    'tests/terrainAccessEstimatedConstraints.test.ts',
   ],
   'olv.simulation.terrain-access.astar': [
     'tests/terrainAccessAStar.test.ts',
     'tests/terrainAccessOracleAgreement.test.ts',
+    'tests/terrainAccessMethodVersions.test.ts',
   ],
   'olv.density.scan-report': ['tests/scanReportWithheld.test.ts', 'tests/scanReportUnits.test.ts'],
   'olv.profile.corridor-percentile': [

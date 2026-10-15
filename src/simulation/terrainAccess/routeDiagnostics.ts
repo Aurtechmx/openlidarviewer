@@ -19,7 +19,9 @@
  *     weak. The display thresholds in `cellConfidence.ts` play no part.
  *
  *   - DERIVATIVE SUPPORT (`fractionDerivativeSynthesised`): the share of route
- *     cells whose slope and aspect used a synthesised neighbour.
+ *     cells whose slope and aspect used a synthesised neighbour, split by
+ *     cause (outer boundary or interior NoData hole), and the route cells
+ *     whose 3×3 ruggedness window holds such a cell.
  *
  * No edge-risk figure is reported: that needs the DTM's `interpDistanceCells`,
  * which this module's grid does not carry.
@@ -27,7 +29,10 @@
  * Pure data: no DOM, no three.js, no I/O. Deterministic.
  */
 
-import { edgeGeometry, utilization, type CostWeights, type TerrainAccessFeatures } from './traversabilityCost';
+import {
+  DERIVATIVE_CAUSE_BOUNDARY, DERIVATIVE_CAUSE_HOLE, edgeGeometry, utilization,
+  type CostWeights, type TerrainAccessFeatures,
+} from './traversabilityCost';
 import type { TerrainAccessGrid } from './terrainAccessTypes';
 
 const MEASURED = 2;
@@ -102,8 +107,30 @@ export interface RouteDiagnostics {
   readonly derivativeSynthesisedRouteCells: number;
   /** {@link derivativeSynthesisedRouteCells} over all route cells. Null only for an empty path. */
   readonly fractionDerivativeSynthesised: number | null;
+  /** Of {@link derivativeSynthesisedRouteCells}, those at the outer boundary (grid edge or NoData reaching it). */
+  readonly derivativeSynthesisedBoundaryRouteCells: number;
+  /** Of {@link derivativeSynthesisedRouteCells}, those beside an interior NoData hole only. */
+  readonly derivativeSynthesisedHoleRouteCells: number;
+  /**
+   * Route cells whose 3×3 ruggedness (VRM) window holds a cell flagged in
+   * `derivativeSynthesised`, itself included: their VRM reads at least one
+   * slope computed with a substituted neighbour.
+   */
+  readonly ruggednessSynthesisedRouteCells: number;
   /** Ordered, largest contributor first. */
   readonly dominantCostContributors: readonly CostContributor[];
+}
+
+/** True when the 3×3 window around `index` (clipped to the grid) holds a flagged cell. */
+function windowHoldsFlagged(mask: Uint8Array, cols: number, rows: number, index: number): boolean {
+  const row = Math.floor(index / cols);
+  const col = index - row * cols;
+  for (let r = Math.max(0, row - 1); r <= Math.min(rows - 1, row + 1); r++) {
+    for (let c = Math.max(0, col - 1); c <= Math.min(cols - 1, col + 1); c++) {
+      if (mask[r * cols + c] === 1) return true;
+    }
+  }
+  return false;
 }
 
 /** Compute {@link RouteDiagnostics} for a found path (start..goal inclusive). */
@@ -128,6 +155,8 @@ export function computeRouteDiagnostics(
       fractionMeasured: null, fractionInterpolated: null, fractionBelowProfileConfidence: null,
       profileMinimumTerrainConfidence: profile.minimumTerrainConfidence,
       derivativeSynthesisedRouteCells: 0, fractionDerivativeSynthesised: null,
+      derivativeSynthesisedBoundaryRouteCells: 0, derivativeSynthesisedHoleRouteCells: 0,
+      ruggednessSynthesisedRouteCells: 0,
       dominantCostContributors: [],
     };
   }
@@ -190,10 +219,17 @@ export function computeRouteDiagnostics(
   let interpolated = 0;
   let belowProfile = 0;
   let synthesised = 0;
+  let synthesisedBoundary = 0;
+  let synthesisedHole = 0;
+  let ruggednessSynthesised = 0;
   const coverage = grid.coverage;
   for (const i of path) {
     if (grid.confidence[i] < profile.minimumTerrainConfidence) belowProfile++;
     if (features.derivativeSynthesised[i] === 1) synthesised++;
+    const cause = features.derivativeSupportCause[i];
+    if (cause === DERIVATIVE_CAUSE_BOUNDARY) synthesisedBoundary++;
+    else if (cause === DERIVATIVE_CAUSE_HOLE) synthesisedHole++;
+    if (windowHoldsFlagged(features.derivativeSynthesised, grid.cols, grid.rows, i)) ruggednessSynthesised++;
     if (!coverage) continue;
     if (coverage[i] === MEASURED) measured++;
     else if (coverage[i] === INTERPOLATED) interpolated++;
@@ -223,6 +259,9 @@ export function computeRouteDiagnostics(
     profileMinimumTerrainConfidence: profile.minimumTerrainConfidence,
     derivativeSynthesisedRouteCells: synthesised,
     fractionDerivativeSynthesised: synthesised / path.length,
+    derivativeSynthesisedBoundaryRouteCells: synthesisedBoundary,
+    derivativeSynthesisedHoleRouteCells: synthesisedHole,
+    ruggednessSynthesisedRouteCells: ruggednessSynthesised,
     dominantCostContributors: contributors,
   };
 }

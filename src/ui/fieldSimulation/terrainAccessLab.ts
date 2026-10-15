@@ -61,7 +61,7 @@ import {
 } from '../../simulation/terrainAccess/terrainAccessInputDigest';
 import { resolveEvidenceGapPolicy, type TerrainAccessProfile } from '../../simulation/terrainAccess/terrainAccessTypes';
 import type { RouteDiagnostics } from '../../simulation/terrainAccess/routeDiagnostics';
-import { costDriversSentence } from '../../simulation/terrainAccess/terrainAccessExplain';
+import { costDriversSentence, TERRAIN_ACCESS_CONSTRAINT_LABEL } from '../../simulation/terrainAccess/terrainAccessExplain';
 import { dtmProductDigest } from '../../science/dtmProductDigest';
 import { buildIdentityProvenance } from '../../build/buildIdentity';
 import { verticalUnitLabel } from '../../units/units';
@@ -367,6 +367,22 @@ export function derivativeSupportText(d: RouteDiagnostics, policy: unknown): str
   return `${share}, allowed and disclosed (exploratory)`;
 }
 
+/**
+ * One row per limit the run record marks `estimated`, then the record's own
+ * sentence for each as a warning, so the card and the export say the same thing.
+ */
+function estimatedConstraintNodes(constraints: unknown, estimates: unknown): HTMLElement[] {
+  if (!constraints || typeof constraints !== 'object') return [];
+  const rows = Object.entries(constraints as Record<string, unknown>)
+    .filter(([, status]) => status === 'estimated')
+    .map(([key]) => row(TERRAIN_ACCESS_CONSTRAINT_LABEL[key] ?? key, 'estimated'));
+  const sentences = estimates && typeof estimates === 'object' ? Object.values(estimates as Record<string, unknown>) : [];
+  return [
+    ...rows,
+    ...sentences.map((text) => el('div', { className: 'olv-story-next olv-lab-caveat', text: String(text) })),
+  ];
+}
+
 /** The run's answer as a card: a refusal's named reason, or the route diagnostics.
  * §22: never a safety/passability word appears here. */
 export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | null): HTMLElement {
@@ -399,6 +415,7 @@ export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | nu
       outcome.record.result.unknownObstructionPolicy,
     )),
     row('Slope from a synthesised neighbour', derivativeSupportText(d, outcome.record.result.derivativeSupportPolicy)),
+    ...estimatedConstraintNodes(outcome.record.result.constraints, outcome.record.result.constraintEstimates),
     el('div', { className: 'olv-story-next', text: costDriversSentence(d.dominantCostContributors) }),
   );
   const list = el('ul', { className: 'olv-story-v' });

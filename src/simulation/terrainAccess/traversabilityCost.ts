@@ -70,6 +70,65 @@ export interface TerrainAccessFeatures {
    * `synthesisedNeighbourMask` (`terrainDerivatives.ts`).
    */
   readonly derivativeSynthesised: Uint8Array;
+  /**
+   * Why {@link derivativeSynthesised} flagged a cell: 0 where it did not,
+   * {@link DERIVATIVE_CAUSE_BOUNDARY} where the window leaves the grid or
+   * touches NoData connected to the grid edge (the survey's outer boundary),
+   * {@link DERIVATIVE_CAUSE_HOLE} where it touches only interior NoData holes.
+   */
+  readonly derivativeSupportCause: Uint8Array;
+}
+
+/** {@link TerrainAccessFeatures.derivativeSupportCause}: window extrapolated at the outer boundary. */
+export const DERIVATIVE_CAUSE_BOUNDARY = 1;
+/** {@link TerrainAccessFeatures.derivativeSupportCause}: centre substituted beside an interior NoData hole. */
+export const DERIVATIVE_CAUSE_HOLE = 2;
+
+/**
+ * Split a synthesised-neighbour `mask` by cause. NoData reachable from the
+ * grid edge through NoData (8-connected) is the survey's outer boundary; any
+ * other NoData is an interior hole. A flagged cell whose window leaves the
+ * grid or touches boundary NoData is {@link DERIVATIVE_CAUSE_BOUNDARY}, even
+ * when it also touches a hole; otherwise {@link DERIVATIVE_CAUSE_HOLE}.
+ */
+export function derivativeSupportCause(z: Float32Array, mask: Uint8Array, cols: number, rows: number): Uint8Array {
+  const n = cols * rows;
+  const cause = new Uint8Array(n);
+  const outer = new Uint8Array(n);
+  const stack: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const row = Math.floor(i / cols);
+    const col = i - row * cols;
+    const edge = row === 0 || col === 0 || row === rows - 1 || col === cols - 1;
+    if (edge && !Number.isFinite(z[i])) { outer[i] = 1; stack.push(i); }
+  }
+  while (stack.length > 0) {
+    const i = stack.pop() as number;
+    const row = Math.floor(i / cols);
+    const col = i - row * cols;
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        const r = row + dr;
+        const c = col + dc;
+        if (r < 0 || c < 0 || r >= rows || c >= cols) continue;
+        const j = r * cols + c;
+        if (outer[j] === 0 && !Number.isFinite(z[j])) { outer[j] = 1; stack.push(j); }
+      }
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    if (mask[i] === 0) continue;
+    const row = Math.floor(i / cols);
+    const col = i - row * cols;
+    let boundary = row === 0 || col === 0 || row === rows - 1 || col === cols - 1;
+    for (let dr = -1; dr <= 1 && !boundary; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (outer[(row + dr) * cols + col + dc] === 1) { boundary = true; break; }
+      }
+    }
+    cause[i] = boundary ? DERIVATIVE_CAUSE_BOUNDARY : DERIVATIVE_CAUSE_HOLE;
+  }
+  return cause;
 }
 
 /** Build every terrain feature the cost model reads, once, from the grid. */
@@ -95,7 +154,11 @@ export function prepareTerrainAccessFeatures(
   const localStep = computeLocalStep(grid, (LOCAL_WINDOW_CELLS - 1) / 2);
   const obstruction = classifyObstruction(grid, profile.obstacleHeightThreshold);
   const derivativeSynthesised = synthesisedNeighbourMask(maskedZ, grid.cols, grid.rows);
-  return { slope, aspect, gradient, vrm: vrmResult.vrm, localStep, obstruction, derivativeSynthesised };
+  const supportCause = derivativeSupportCause(maskedZ, derivativeSynthesised, grid.cols, grid.rows);
+  return {
+    slope, aspect, gradient, vrm: vrmResult.vrm, localStep, obstruction, derivativeSynthesised,
+    derivativeSupportCause: supportCause,
+  };
 }
 
 /** Per-cell node eligibility: blocked flag + the reason, before width clearance. */
