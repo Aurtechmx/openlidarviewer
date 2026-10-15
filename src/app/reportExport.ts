@@ -538,7 +538,9 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     // Scene up-axis and vertical factor, so the PDF matches the live tool on a
     // Y-up scan and a compound CRS (M6) — the same inputs the panel derives its
     // readouts from, now that the report shares measurementMetrics.
-    worldUp: viewer.measure.worldUp,
+    // The owning layer's own up (every measurement here is the active scan's),
+    // so a Z-up survey's heights survive a Y-up scan being open beside it.
+    worldUp: viewer.measure.upFor?.(owned.own[0]) ?? viewer.measure.worldUp,
     verticalToMetres: viewer.measure.verticalUnitToMetres,
     // The SAME rule the CSV / GeoJSON exports use for `unitsVerified`. The
     // factor above is an inert 1 when this is false, so without it the PDF

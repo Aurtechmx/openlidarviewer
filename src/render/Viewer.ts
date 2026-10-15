@@ -78,7 +78,7 @@ import {
 } from './gpuErrorLedger';
 import { computeExportFrontier, type FrontierNode } from './streaming/exportFrontier';
 import { intensityFilterUniform } from './intensityFilterUniform';
-import { isZUpFormat, sceneUpAxisPolicy } from '../io/sniffFormat';
+import { isZUpFormat, sceneUpAxisPolicy, sceneUpOf } from '../io/sniffFormat';
 import { classifyScanShape } from '../terrain/scanShape';
 import { yUpToCanonicalZUp } from '../terrain/canonicalFrame';
 import type { SourceFormat } from '../io/sniffFormat';
@@ -873,6 +873,8 @@ export class Viewer {
   // ── Navigation state ─────────────────────────────────────────────────────
   /** The cloud's vertical axis — Z for LAS/LAZ surveys, Y for phone scans. */
   private readonly _worldUp = new THREE.Vector3(0, 1, 0);
+  /** Viewer id of the layer navigation takes its up from (the active one), or null for the last added. */
+  private _upAuthority: string | null = null;
 
   /** True orthographic (parallel) projection toggle — drives `_activeCamera`. */
   private _orthographic = false;
@@ -1122,22 +1124,21 @@ export class Viewer {
       streamingMayCombine: (staticCount) => this._streamingMayCombine(staticCount),
       // The configured world up, not a hardcoded [0,0,1]: a Y-up phone scan
       // gets cut along the wrong axis otherwise (v0.4.4 audit, B1).
-      worldUp: (): Vec3 => [this._worldUp.x, this._worldUp.y, this._worldUp.z],
+      worldUp: (): Vec3 => this._measure.worldUp, // the scene's, or the measurement's own layer's while it samples
       streamingCoverage: () => this._streamingCoverage(),
     });
     this._measure.setProfileSampler((a, b, opts) => this.profileSeam.sampleSeries(a, b, opts));
     // Volume sampler: visible, unlocked clouds plus resident streaming nodes,
     // with their flags and classes so Withheld and noise points stay out.
-    // `up` is the configured world up, matching `autoReferenceZ` (v0.4.4 B1).
+    // `up` is the measurement's own layer up, matching `autoReferenceZ` (v0.4.4 B1).
     this._measure.setVolumeSampler(
-      (polygon, referenceZ): { record: VolumeRecord; residentOnly: boolean } | null => {
+      (polygon, referenceZ, up: Vec3 = this._measure.worldUp): { record: VolumeRecord; residentOnly: boolean } | null => {
         const { buffers, total, streamingPoints, reductions } = gatherVolumeBuffers(
           integrableClouds(this._clouds.values()),
           (n) => (this._streamingMayCombine(n) ? [...this._streamingPickData.values()].map((e) => e.decoded) : []),
           cloudReduction,
         );
         if (total === 0) return null;
-        const up: Vec3 = [this._worldUp.x, this._worldUp.y, this._worldUp.z];
         // Resident-only whenever streaming bytes were in the walk (audit #8).
         return { record: samplePolygonVolume(buffers, total, polygon, referenceZ, up, reductions), residentOnly: streamingPoints > 0 };
       },
@@ -1394,7 +1395,7 @@ export class Viewer {
     this._organized.register(id, cloud);
     // A new frame-sharing cloud changes the shared elevation window when on.
     this.refreshProjectSharedElevation();
-    this._configureForClouds(cloud);
+    this._configureForClouds();
     // A first cloud can arrive already in a scalar default mode (elevation
     // on a colourless scan) without any setColorMode call — the legend must
     // appear for it too.
@@ -1682,8 +1683,11 @@ export class Viewer {
     });
   }
 
+  /** Navigation, standard views and the view cube take layer `id`'s up, else the last added's (`sceneUpOf`);
+   *  stored geometry is untouched, and each measurement keeps reading along its own layer's up. */
+  alignUpToLayer(id: string | null, refreshDatum = false): void { this._upAuthority = id; const up = sceneUpOf(this._clouds, id), moved = up !== null && this._worldUp.toArray().join() !== up.join(); if (up) this._worldUp.fromArray(up); if (moved || refreshDatum) { this._nav.setWorldUp(this._worldUp); this._refreshMeasureDatum(); } }
   /** Size navigation, clip planes and the orbit pivot again from every visible cloud, with the up axis from the last-added one. */
-  reconfigureForClouds(): void { const last = [...this._clouds.values()].pop(); if (last) this._configureForClouds(last.cloud); }
+  reconfigureForClouds(): void { if (this._clouds.size > 0) this._configureForClouds(); }
 
   /** Detach and fully dispose the current streaming cloud, if any. */
   detachStreamingCloud(): void {
@@ -1988,8 +1992,8 @@ export class Viewer {
     // doesn't leave the camera clamping to its ghost bounds.
     this._orbitClampAabb = this._visibleCloudAabb();
     // Same reason as the streaming detach: the scene's datum is whatever the
-    // REMAINING clouds agree on.
-    this._refreshMeasureDatum();
+    // REMAINING clouds agree on. Navigation up returns to a survivor's.
+    this.alignUpToLayer(this._upAuthority === id ? null : this._upAuthority, true);
     this._nav.setHasCloud(navigationAvailable(this._clouds.size, this._streaming !== null));
     // A removed layer shrinks the shared elevation window when on.
     this.refreshProjectSharedElevation();
@@ -4912,13 +4916,9 @@ export class Viewer {
   }
 
   /** Configure navigation (up-axis, speed, clip planes) for the loaded clouds. */
-  private _configureForClouds(latest: PointCloud): void {
-    // LAS/LAZ/XYZ/E57 surveys are Z-up; phone-scan formats are Y-up.
-    const zUp = isZUpFormat(latest.sourceFormat);
-    this._worldUp.set(0, 0, zUp ? 1 : 0);
-    if (!zUp) this._worldUp.set(0, 1, 0);
-    this._nav.setWorldUp(this._worldUp);
-    this._refreshMeasureDatum();
+  private _configureForClouds(): void {
+    // LAS/LAZ/XYZ/E57 surveys are Z-up; phone-scan formats are Y-up. Up follows the last added until it is activated.
+    this.alignUpToLayer(null, true);
 
     const sphere = this._visibleBoundingSphere();
     const size = sphere ? sphere.radius * 2 : 100;

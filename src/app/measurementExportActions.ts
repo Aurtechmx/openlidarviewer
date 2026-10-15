@@ -34,6 +34,11 @@ export type { ActiveScanBasis } from './measurementScanHooks';
 export interface MeasureExportView {
   getMeasurements(): readonly Measurement[];
   readonly worldUp: Vec3;
+  /**
+   * The up vector a measurement's figures are read along: its own layer's
+   * (Z for a survey, Y for a mesh scan), not the scene's. Absent: `worldUp`.
+   */
+  upFor?(m: Measurement): Vec3;
   readonly unitToMetres: number;
   readonly verticalUnitToMetres: number;
   /** True when the scan's linear scale is known — drives the M1 units caveat. */
@@ -226,6 +231,8 @@ function solePlacedLayer(layers: readonly ExportLayer[], deps: MeasurementExport
 interface MeasureSnapshot {
   readonly measurements: readonly Measurement[];
   readonly worldUp: Vec3;
+  /** Each measurement's own layer up, by id, read with the rest. */
+  readonly upOf: ReadonlyMap<string, Vec3>;
   readonly unitToMetres: number;
   readonly verticalUnitToMetres: number;
   readonly geographicCrs: boolean;
@@ -237,15 +244,32 @@ interface MeasureSnapshot {
 function snapshotMeasure(measure: MeasureExportView): MeasureSnapshot {
   const measurements = measure.getMeasurements().map((m) => structuredClone(m));
   const w = measure.worldUp;
+  const upOf = new Map(measure.getMeasurements().map((m): [string, Vec3] => {
+    const u = measure.upFor ? measure.upFor(m) : w;
+    return [m.id, [u[0], u[1], u[2]]];
+  }));
   return {
     measurements,
     worldUp: [w[0], w[1], w[2]],
+    upOf,
     unitToMetres: measure.unitToMetres,
     verticalUnitToMetres: measure.verticalUnitToMetres,
     geographicCrs: measure.geographicCrs,
     verticalRefused: measure.verticalRefused === true,
     unitsVerified: measure.crsKnown && !measure.geographicCrs,
   };
+}
+
+/**
+ * The one up axis a set of measurements is written along: each one's own
+ * layer up. A file has one up; measurements on layers with different up axes
+ * (a Z-up survey and a Y-up scan) are refused rather than written along one.
+ */
+function sharedUp(measurements: readonly Measurement[], snap: MeasureSnapshot): Vec3 | { refused: string } {
+  const ups = measurements.map((m) => snap.upOf.get(m.id) ?? snap.worldUp);
+  const first = ups[0] ?? snap.worldUp;
+  if (ups.every((u) => u[0] === first[0] && u[1] === first[1] && u[2] === first[2])) return first;
+  return { refused: 'Not exported: the measurements sit on layers with different up axes, so their heights do not share one vertical. Export one scan\'s measurements at a time.' };
 }
 
 /**
@@ -323,6 +347,11 @@ export async function exportMeasurementsFile(
   if (!exportable.kept) return;
   const measurements = exportable.kept;
   const withheld = exportable.withheld;
+  const up = sharedUp(measurements, snap);
+  if ('refused' in up) {
+    deps.refuse?.(up.refused);
+    return;
+  }
   const sole = solePlacedLayer(layers, deps);
   const own = layers.length > 1 || sole ? ownLayers(measurements, layers, !deps.frameSource, sole?.stableId ?? null) : null;
   if (own && 'refused' in own) {
@@ -391,7 +420,9 @@ export async function exportMeasurementsFile(
         }
       : (p) => [p[0] + origin[0], p[1] + origin[1], p[2] + origin[2]],
     sourceOf: sourceOfId ? (m) => sourceOfId.get(m.id)! : () => singleSource,
-    up: snap.worldUp,
+    // The measurements' own layer up, never the scene's: a Y-up scan made
+    // active must not zero a Z-up survey's heights.
+    up,
     unitToMetres: owned ? owned.unitToMetres : snap.unitToMetres,
     verticalUnitToMetres: owned ? owned.verticalUnitToMetres : snap.verticalUnitToMetres,
     crsName: geo.crsName,
@@ -598,7 +629,11 @@ export async function exportMeasurementIntegrityReport(
   // unit-known flag were read AFTER the await, so a scan swap while the chunk
   // loaded signed A's geometry and name with B's up vector, unit scale and
   // classification epoch — inside a file called an integrity report.
-  const { worldUp } = snap;
+  const worldUp = sharedUp(ms, snap);
+  if ('refused' in worldUp) {
+    deps.refuse?.(worldUp.refused);
+    return;
+  }
   const unitToMetres = owned.frame ? owned.frame.unitToMetres : snap.unitToMetres;
   const verticalUnitToMetres = owned.frame ? owned.frame.verticalUnitToMetres : snap.verticalUnitToMetres;
   // The OWNING scan's epoch: a report naming scan A must not record the class
@@ -670,8 +705,13 @@ export async function collectMeasurementFindings(
   const geographic = frame ? frame.geographic : snap.geographicCrs;
   const verticalRefused = frame ? frame.verticalRefused : snap.verticalRefused;
   const unitsVerified = frame ? frame.unitsVerified : snap.unitsVerified;
+  const up = sharedUp(own, snap);
+  if ('refused' in up) {
+    deps.refuse?.(`Not added as findings: ${up.refused.replace(/^Not exported: /, '')}`);
+    return [];
+  }
   const { measurementsToFindings } = await deps.loadMeasurementReport();
-  return measurementsToFindings(own, snap.worldUp, unitToMetres, verticalUnitToMetres, { geographic, unitsVerified, verticalRefused });
+  return measurementsToFindings(own, up, unitToMetres, verticalUnitToMetres, { geographic, unitsVerified, verticalRefused });
 }
 
 /**

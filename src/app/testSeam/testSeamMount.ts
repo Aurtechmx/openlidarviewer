@@ -65,6 +65,13 @@ export function mountTestSeam(deps: TestSeamDeps): void {
     getMeasurementCount: () => v.measure.getMeasurements().length,
     layerProjectPoints: (i: number) => v.layerProjectPoints(i), getCameraPose: () => v.getCameraPose(),
     applyCameraPose: (pose: Parameters<typeof v.applyCameraPose>[0]) => v.applyCameraPose(pose),
+    // The scene up navigation, standard views and the view cube use, and the
+    // camera's own up, so a spec can check both follow the active layer.
+    sceneUp: () => {
+      const s = v as unknown as { _worldUp: { x: number; y: number; z: number }; _camera: { up: { x: number; y: number; z: number } } };
+      const a = (u: { x: number; y: number; z: number }): number[] => [u.x, u.y, u.z].map((c) => Math.round(c * 1e6) / 1e6 + 0);
+      return { world: a(s._worldUp), camera: a(s._camera.up) };
+    },
     // A scene point projected to page coordinates through the camera the last
     // frame drew with, so a spec can click a known scan point in any projection.
     projectToClient: (p: { x: number; y: number; z: number }): { x: number; y: number } | null => {

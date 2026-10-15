@@ -1647,7 +1647,7 @@ const refreshMeasurePanel = (): void => { measureMount.refresh(); refreshToolLau
 // verdicts (measureLayerUnits). Deferred behind viewerLoaded: `viewer` is null
 // until the lazy chunk resolves, and subscribe fires synchronously.
 void viewerLoaded.then(() => {
-  const measureUnits = measureMount.bindUnitFrames({ activeId: () => scans.activeId, clouds: () => viewer.clouds(), cloud: (id) => viewer.getCloud(id), stableIdFor: runtime.layerIdentity.stableIdFor });
+  const measureUnits = measureMount.bindUnitFrames({ activeId: () => scans.activeId, clouds: () => viewer.clouds(), cloud: (id) => viewer.getCloud(id), stableIdFor: runtime.layerIdentity.stableIdFor }); scans.onActiveChange(() => viewer.alignUpToLayer(scans.activeId)); // navigation up follows the active layer
   crsService.subscribe(() => {
     // One context for the active scan: measure scale, trust grade, geographic
     // refusal and the colorbar unit all read it.

@@ -504,6 +504,27 @@ export interface MeasureUnitFrame {
   readonly verticalRefused: boolean;
   /** Projected with an EPSG code, so +Y is grid north. */
   readonly projected: boolean;
+  /**
+   * The layer's own up axis: Z for a survey format, Y for a mesh format.
+   * Absent: the scene's up. Layers share one render space but not one up, so
+   * a height, grade, profile, box or cut/fill reads along this vector.
+   */
+  readonly up?: Vec3;
+  /** The points sit on layers with different up axes: no vertical is shared. */
+  readonly upConflict?: boolean;
+}
+
+/** What an up-dependent figure prints when its points span layers with different up axes. */
+export const UP_AXIS_CONFLICT = 'not combined: the points sit on layers with different up axes';
+
+/** Kinds whose figure reads along the up axis (a 3D length, a polyline, a tilted area and an angle do not). */
+export function upAxisRefusesKind(kind: MeasurementKind): boolean {
+  return kind === 'height' || kind === 'slope' || kind === 'profile' || kind === 'box' || kind === 'volume';
+}
+
+/** Whether two up vectors are the same axis. */
+export function sameUp(a: Vec3, b: Vec3): boolean {
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
 }
 
 /**
