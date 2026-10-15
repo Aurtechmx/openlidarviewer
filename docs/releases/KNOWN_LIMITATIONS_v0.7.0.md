@@ -50,12 +50,15 @@ recovery journal does not keep class edits either, and a streaming scan cannot
 be reclassified, so Save session gives no warning there. Storing an edit log
 keyed to the source file's SHA-256 is planned for v0.7.1.
 
-## A Safari chunk failure online can still reload the page
+## A Safari chunk failure does not reload the page by itself
 
 When a lazy part of the app fails to load while the browser reports a
-connection, the page reloads only if the server no longer has the file. Safari
-names no file in that error, so on a connection that reports online but has no
-uplink, Safari still reloads the page once, as before.
+connection, the page reloads on its own only when the server confirms the file
+is gone. Safari names no file in that error, so the cause cannot be checked and
+the page is kept: a notice offers Retry, and a reload is offered only after a
+failed retry or a second failure, through a dialog that says what reloading
+would discard. A Safari tab left open across a new deploy therefore needs that
+explicit reload to load the new version.
 
 ## Clear classifications holds for one session on a loaded scan
 
@@ -841,17 +844,11 @@ hold-out RMSEz over the whole surface: a point-vs-surface residual with the
 ground re-classified from the training points only, and it includes the
 epoch's own bias. It is not checkpoint accuracy and not a per-cell DEM
 uncertainty. The 95 % level holds only if the errors are normal, independent
-and unbiased. σreg is the alignment's 3-D RMS residual, a proxy (fit misfit;
-not shown to bound vertical registration error; alignment does not solve z).
-The vertical registration error is not measured on its own. When no alignment is applied or a hold-out cannot run,
-the threshold falls back to a fixed 0.1 m and the result labels it "assumed,
-not measured". The difference raster (.asc) has no header field for the
-(Wheaton et al. 2010, uniform form). Each σz is that epoch's hold-out RMSEz over
-the whole surface, not a per-cell field. σreg must be the vertical registration
-error measured on stable reference areas; the app has no stable-area assessment
-yet, so σreg is unavailable. The alignment's residuals (at the applied pose, and
-the solver's own fit) are reported but are fit statistics and are not used as
-σreg. With σreg missing and both σz measured, the threshold is
+and unbiased. σreg must be the vertical registration error measured on stable
+reference areas; the app has no stable-area assessment yet, so σreg is
+unavailable. The alignment's residuals (at the applied pose, and the solver's
+own fit) are reported but are fit statistics and are not used as σreg. With
+σreg missing and both σz measured, the threshold is
 max(1.96·√(σz_before² + σz_after²), 0.1 m) and is labelled "incomplete — lower
 bound"; significance counts and detectable volumes carry the same label, and the
 raw net volume is unthresholded. Only when no term is known does it fall back to
