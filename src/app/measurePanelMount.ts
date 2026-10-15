@@ -18,6 +18,7 @@
  */
 
 import { aggregate as aggregateMeasurements } from '../render/measure/measurementChains';
+import { bindMeasureUnitFrames, chainUnitFrame, type LayerUnitSource, type MeasureUnitFrames } from './measureLayerUnits';
 import { buildMeasureConfidenceContext } from './measureConfidenceContext';
 import { loadMeasurePanel, loadProfileWorkbenchRuntime } from '../lazyChunks';
 import { retryableOnce, mountPanelOnce } from './lazySurfaceLoad';
@@ -97,6 +98,12 @@ export interface MeasurePanelMount {
   showDesired(): void;
   /** Hide the panel and drop the tracked desired-visible intent. */
   hide(): void;
+  /**
+   * Feed the controller the active scan's unit frame and every other open
+   * layer's, so work reads out in the units of the layer it was taken on.
+   * Call once the viewer exists; drive the result from the CRS subscription.
+   */
+  bindUnitFrames(src: Omit<LayerUnitSource, 'crs'>): MeasureUnitFrames;
 }
 
 /**
@@ -252,6 +259,14 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
         const all = viewer.measure.getMeasurements();
         const wanted = new Set(ids);
         const selected = all.filter((m) => wanted.has(m.id));
+        // Each measurement's own unit frame (the layer it was taken on), so a
+        // chain over a foot scan sums feet-as-metres correctly whichever scan
+        // is active; values from scans with different units are not summed.
+        const shared = chainUnitFrame(selected.length > 0 ? selected.map((m) => viewer.measure.unitFrameOf(m)) : [viewer.measure.unitFrameOf()]);
+        if ('refusal' in shared) {
+          return { value: Number.NaN, unit: '', contributingCount: 0, totalCount: selected.length, operation, dimension, refusal: shared.refusal };
+        }
+        const f = shared.frame;
         return aggregateMeasurements(
           selected,
           operation,
@@ -261,19 +276,15 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
           // individual Height tool (which uses worldUp) read the true value —
           // a row said 10 m, the sum said 0 (pass-6 M5).
           viewer.measure.worldUp,
-          viewer.measure.unitToMetres,
+          f.unitToMetres,
           // The vertical axis keeps its OWN unit factor: a compound CRS (metre
           // grid + US-foot heights) must scale a height sum and volume by feet,
           // not by the horizontal metre factor (audit #8).
-          viewer.measure.verticalUnitToMetres,
+          f.verticalUnitToMetres ?? f.unitToMetres,
           // The same frame verdicts the live grade and the exports read: a
           // geographic frame refuses all but height, and an unconfirmed scale
           // is not called metres.
-          {
-            geographic: viewer.measure.geographicCrs,
-            verticalRefused: viewer.measure.verticalRefused,
-            unitsVerified: viewer.measure.crsKnown && !viewer.measure.geographicCrs,
-          },
+          { geographic: f.geographic, verticalRefused: f.verticalRefused, unitsVerified: f.crsKnown && !f.geographic },
         );
       },
       // v0.3.10 Profile-as-Deliverable — expose the controller's unit
@@ -411,6 +422,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       panel?.setVisible(false);
       desiredVisible = false;
     },
+    bindUnitFrames: (src) => bindMeasureUnitFrames(deps.getViewer().measure, { ...src, crs: deps.crsService }),
   };
 }
 

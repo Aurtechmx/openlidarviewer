@@ -32,7 +32,7 @@ import type {
   UnitSystem,
   VolumeRecord,
 } from './types';
-import { GEOGRAPHIC_NOT_AVAILABLE, MIN_POINTS, VERTICAL_NOT_AVAILABLE, frameRefusalText, isFull, reducedSampleClause } from './types';
+import { GEOGRAPHIC_NOT_AVAILABLE, MIN_POINTS, UNRESOLVED_UNIT_FRAME, VERTICAL_NOT_AVAILABLE, frameRefusalText, isFull, reducedSampleClause, sameUnitFrame, type MeasureUnitFrame } from './types';
 import type { WorkOwnership } from '../../model/workOwnership';
 import type { ProfileProvenance } from './profileProvenance';
 import type { WithheldReadCounts } from '../../science/withheldCounts';
@@ -566,6 +566,13 @@ export class MeasureController {
    * still have no north at all; the distance bearing reads "grid" only here.
    */
   private _projectedCrs = false;
+  /**
+   * The unit frame of the layer with this stable id, or null to use the active
+   * scan's (the fields above). Null resolver: every measurement uses them.
+   */
+  private _unitResolver: ((layerId: string) => MeasureUnitFrame | null) | null = null;
+  /** True while the fields above hold one measurement's own frame (see {@link _inFrameOf}). */
+  private _inOwnFrame = false;
   private _lastCamera: THREE.PerspectiveCamera | null = null;
   private _lastCanvas: HTMLCanvasElement | null = null;
   private readonly _snapBtn: HTMLButtonElement | null = null;
@@ -987,6 +994,85 @@ export class MeasureController {
     this._emitChange();
   }
 
+  /**
+   * Resolve a layer's unit frame by its stable id. With it set, a measurement
+   * that names the layer(s) it was taken on (`pickLayers`, else its owner)
+   * reads out in that layer's units and frame verdicts, whichever scan is
+   * active; one spanning layers whose frames differ reads as unverified
+   * ({@link UNRESOLVED_UNIT_FRAME}). A null answer, or work naming no layer,
+   * keeps the active scan's factors.
+   */
+  setUnitResolver(resolve: ((layerId: string) => MeasureUnitFrame | null) | null): void {
+    this._unitResolver = resolve;
+    this.refreshUnitFrames();
+  }
+
+  /** Re-read every measurement's unit frame: re-grade and re-emit. */
+  refreshUnitFrames(): void {
+    for (const m of this._measurements) m.trust = this._gradeMeasurement(m);
+    this._updateHint();
+    this._emitChange();
+  }
+
+  /** The active scan's unit frame (the controller-wide fields). */
+  private _activeUnitFrame(): MeasureUnitFrame {
+    return {
+      unitToMetres: this._unitToMetres,
+      verticalUnitToMetres: this._verticalUnitToMetres,
+      crsKnown: this._crsKnown,
+      geographic: this._geographicCrs,
+      verticalRefused: this._verticalRefused,
+      projected: this._projectedCrs,
+    };
+  }
+
+  /** The frame of the layer(s) `m` was taken on, or null to use the active scan's. */
+  private _ownUnitFrame(m: Measurement): MeasureUnitFrame | null {
+    const resolve = this._unitResolver;
+    if (!resolve) return null;
+    const ids = m.pickLayers && m.pickLayers.length > 0 ? m.pickLayers : m.owner?.layerId ? [m.owner.layerId] : [];
+    const frames = ids.map((id) => resolve(id));
+    if (frames.every((f) => f === null)) return null;
+    const active = this._activeUnitFrame();
+    const own = frames.map((f) => f ?? active);
+    return own.every((f) => sameUnitFrame(f, own[0]!)) ? own[0]! : UNRESOLVED_UNIT_FRAME;
+  }
+
+  /**
+   * The unit frame `m`'s readouts are converted with (the active scan's when
+   * `m` is omitted). Chain totals read it so a sum agrees with the panel rows.
+   */
+  unitFrameOf(m?: Measurement): MeasureUnitFrame {
+    return (m && !this._inOwnFrame ? this._ownUnitFrame(m) : null) ?? this._activeUnitFrame();
+  }
+
+  /**
+   * Run `fn` with the unit fields holding `m`'s own frame, restored after.
+   * Every readout path (formatters, grade, frame refusals, profile scaling)
+   * reads those fields, so one swap covers them all. Synchronous only.
+   */
+  private _inFrameOf<T>(m: Measurement, fn: () => T): T {
+    const own = this._inOwnFrame ? null : this._ownUnitFrame(m);
+    if (!own) return fn();
+    const saved = this._activeUnitFrame();
+    const set = (f: MeasureUnitFrame): void => {
+      this._unitToMetres = f.unitToMetres;
+      this._verticalUnitToMetres = f.verticalUnitToMetres;
+      this._crsKnown = f.crsKnown;
+      this._geographicCrs = f.geographic;
+      this._verticalRefused = f.verticalRefused;
+      this._projectedCrs = f.projected;
+    };
+    set(own);
+    this._inOwnFrame = true;
+    try {
+      return fn();
+    } finally {
+      set(saved);
+      this._inOwnFrame = false;
+    }
+  }
+
   /** A snapshot of all completed measurements. */
   getMeasurements(): Measurement[] {
     return this._measurements;
@@ -1011,8 +1097,13 @@ export class MeasureController {
     // source elevations in metres, so neither step can be applied twice or
     // forgotten by one of them. Re-derived per call: a late CRS resolve or
     // user override re-emits change and the next refresh re-scales.
+    // Each row in the frame of the layer it was taken on (see `_inFrameOf`).
+    return this._measurements.map((m) => this._inFrameOf(m, () => this._summaryOf(m)));
+  }
+
+  private _summaryOf(m: Measurement): MeasurementSummary {
     const f = this._unitToMetres;
-    return this._measurements.map((m) => ({
+    return {
       id: m.id,
       kind: m.kind,
       name: m.name,
@@ -1050,7 +1141,7 @@ export class MeasureController {
           : undefined,
       volumeResidentOnly: m.volumeResidentOnly,
       trust: m.trust,
-    }));
+    };
   }
 
   /**
@@ -1184,7 +1275,7 @@ export class MeasureController {
     // through the same B2 factor the summary boundary applies forward — the
     // exact inverse, so what the user typed is what the sampler walks. The
     // normalisation is pure + tested in profileSampler.ts.
-    const opts = normaliseResampleParams(params, this._unitToMetres);
+    const opts = normaliseResampleParams(params, this.unitFrameOf(m).unitToMetres);
     try {
       const result = this._profileSampler(m.points[0], m.points[1], opts);
       if (!result) return false;
@@ -1828,7 +1919,7 @@ export class MeasureController {
     // An angle with a zero-length arm has no defined value; like a refused Area
     // ring it is not committed. The coincident point is dropped so the draft
     // stays open for a different third point.
-    if (m.kind === 'angle' && !Number.isFinite(angleAtVertex(...(this._iso(m.points) as [Vec3, Vec3, Vec3])))) {
+    if (m.kind === 'angle' && !Number.isFinite(this._inFrameOf(m, () => angleAtVertex(...(this._iso(m.points) as [Vec3, Vec3, Vec3]))))) {
       m.points.pop();
       this._setHintText(`Angle not saved. ${ANGLE_UNDEFINED_READOUT}: a point coincides with the vertex. Pick a different point.`);
       return;
@@ -1846,7 +1937,7 @@ export class MeasureController {
         // decodes to null and the standing defaults apply — exactly the
         // pre-preference behaviour.
         const stored = decodeSamplerParams(storageGet(PROFILE_SAMPLER_DEFAULTS_KEY));
-        const opts = stored ? normaliseResampleParams(stored, this._unitToMetres) : undefined;
+        const opts = stored ? normaliseResampleParams(stored, this.unitFrameOf(m).unitToMetres) : undefined;
         const result = this._profileSampler(m.points[0], m.points[1], opts);
         if (result) this._stampProfileSample(m, result);
       } catch {
@@ -1902,8 +1993,12 @@ export class MeasureController {
    * void reads as unsupported.
    */
   private _gradeMeasurement(m: Measurement): MeasurementTrust | undefined {
+    if (!this._snap.available) return undefined;
+    return this._inFrameOf(m, () => this._gradeInFrame(m));
+  }
+
+  private _gradeInFrame(m: Measurement): MeasurementTrust {
     const snap = this._snap;
-    if (!snap.available) return undefined;
     const vertices = m.points.map((p) => snap.support(p));
     return gradeMeasurement({
       vertices,
@@ -2190,7 +2285,9 @@ export class MeasureController {
     if (this._active) {
       // Honest units: a geographic scan measures degrees, not metres — every
       // hint carries the caveat so a raw number is never read as a distance.
-      let hint = this._snapHintPrefix() + this._composeHint();
+      // The draft's running figures in the frame of the layer it is picked on.
+      const d = this._draft;
+      let hint = this._snapHintPrefix() + (d ? this._inFrameOf(d, () => this._composeHint()) : this._composeHint());
       // Honest units: geographic degrees are the stronger caveat; a compound
       // CRS's vertical/horizontal unit clash is the next — a raw number never
       // reads as a trustworthy distance without its caveat.
@@ -2294,15 +2391,21 @@ export class MeasureController {
     const edges: OverlayEdge[] = [];
     const polygons: OverlayPolygon[] = [];
     const labels: OverlayLabel[] = [];
+    // Each measurement's labels in the frame of the layer it was taken on.
     for (const m of this._measurements) {
       const from = labels.length;
-      this._appendMeasurement(m, vertices, edges, polygons, labels);
-      this._refuseGeographicLabels(m, labels, from);
+      this._inFrameOf(m, () => {
+        this._appendMeasurement(m, vertices, edges, polygons, labels);
+        this._refuseGeographicLabels(m, labels, from);
+      });
     }
-    if (this._draft) {
+    const d = this._draft;
+    if (d) {
       const from = labels.length;
-      this._appendDraft(this._draft, vertices, edges, polygons, labels);
-      this._refuseGeographicLabels(this._draft, labels, from);
+      this._inFrameOf(d, () => {
+        this._appendDraft(d, vertices, edges, polygons, labels);
+        this._refuseGeographicLabels(d, labels, from);
+      });
     }
     return { polygons, edges, vertices, labels };
   }

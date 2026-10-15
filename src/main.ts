@@ -1641,37 +1641,18 @@ const analyseProfileVisibility = createAnalyseProfileVisibility({
 /** Refresh the Measurements panel's contents and visibility (thin delegate). */
 const refreshMeasurePanel = (): void => { measureMount.refresh(); refreshToolLauncher(); clipFlow.onMeasurementsChanged(); };
 
-// B2 (v0.4.5) — feed the measure stack the SAME render-units to metres seam
-// the terrain/space paths read (`crsService.linearUnitToMetres`). Render space
-// keeps the scan's source units, so a foot-CRS scan must scale every measure
-// readout once, at the controller boundary; the subscription keeps a late
-// resolve or a user override in lockstep. Deferred behind viewerLoaded because
-// `viewer` is null until the lazy chunk resolves and CrsService.subscribe fires
-// synchronously on registration; subscribing inside the .then still seeds the
-// CURRENT factor and re-fires on every later resolve/override.
+// B2 (v0.4.5) — feed the measure stack the active scan's render-units to metres
+// seam (`crsService.context()`); render space keeps each scan's source units.
+// Work taken on another open layer reads out in THAT layer's units and frame
+// verdicts (measureLayerUnits). Deferred behind viewerLoaded: `viewer` is null
+// until the lazy chunk resolves, and subscribe fires synchronously.
 void viewerLoaded.then(() => {
+  const measureUnits = measureMount.bindUnitFrames({ activeId: () => scans.activeId, clouds: () => viewer.clouds(), cloud: (id) => viewer.getCloud(id), stableIdFor: runtime.layerIdentity.stableIdFor });
   crsService.subscribe(() => {
-    // The ONE context for the active scan (the service invalidates it before it
-    // broadcasts, so this is always the CRS that just landed). Measure scale,
-    // trust grade, geographic refusal and the colorbar unit all read it, so the
-    // HUD and the legend cannot describe different frames.
+    // One context for the active scan: measure scale, trust grade, geographic
+    // refusal and the colorbar unit all read it.
     const ctx = crsService.context();
-    viewer.measure.setUnitToMetres(ctx.linearUnitToMetres);
-    // Compound CRS: the height axis may carry its OWN linear unit (UTM metres +
-    // a NAVD88 height in US survey feet). Heights / box height / cut-fill
-    // thickness scale by it, and absent one the GeoTIFF convention follows the
-    // horizontal factor, so single-unit CRSs stay byte-identical.
-    viewer.measure.setVerticalUnitToMetres(verticalMetresPerUnit(ctx, 'horizontal') ?? 1);
-    // A CRS is "known" for the measurement trust grade when one resolved with a
-    // real linear unit. Distinct from the unit factor: a metric (UTM) survey has
-    // factor 1 yet a fully-known CRS, so the factor alone can't certify scale.
-    viewer.measure.setCrsKnown(ctx.linearUnitKnown);
-    // A GEOGRAPHIC (degree) CRS can't be repaired by any scalar factor —
-    // X/Y are degrees, Z is linear. The controller refuses the affected
-    // trust grades + captions the hint; the panel shows the persistent
-    // caveat. One boolean, one seam, so the two can never disagree.
-    viewer.measure.setGeographicCrs(ctx.horizontalMetricRefused, ctx.verticalMetricRefused); // degrees, Web Mercator grid or geocentric; no local vertical
-    viewer.measure.setProjectedCrs(ctx.kind === 'projected' && ctx.epsg != null); // grid-north bearing label
+    measureUnits.onCrsChange();
     measureMount.setGeographicNotice(ctx.horizontalMetricRefused, ctx.verticalMetricRefused);
     // Colorbar legend — same context, `'horizontal-when-known'` policy: an
     // explicit vertical unit wins, else the horizontal one WHEN really declared
