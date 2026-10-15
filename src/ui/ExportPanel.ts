@@ -44,7 +44,7 @@ import type { CrsInfo } from '../io/crs';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { PointCloud } from '../model/PointCloud';
 import { gzipConvertedFile, gzipAvailable } from '../convert/gzip';
-import { epsgFieldProblem, parseEpsgField } from '../convert/epsg';
+import { epsgFieldProblem, geocentricReprojectProblem, parseEpsgField } from '../convert/epsg';
 import { buildExportSummary, displaySampleOf, displaySampleStatus, type ClassificationProvenance, type ExportSummaryInput } from '../export/exportSummary';
 import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
 import {
@@ -1390,7 +1390,8 @@ export class ExportPanel {
     const target = parseEpsg(this._targetEpsg);
     const epsgProblem =
       (this._crsMode !== 'keep' ? epsgFieldProblem(this._targetEpsg, 'target') : null) ??
-      (this._crsMode === 'reproject' ? epsgFieldProblem(this._sourceEpsg, 'source') : null);
+      (this._crsMode === 'reproject' ? epsgFieldProblem(this._sourceEpsg, 'source') : null) ??
+      (this._crsMode === 'reproject' ? geocentricReprojectProblem(this._sourceEpsg, this._targetEpsg) : null);
     if (epsgProblem) {
       this._setStatus(epsgProblem, 'warn');
       return;

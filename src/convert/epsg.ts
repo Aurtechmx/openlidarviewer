@@ -305,3 +305,31 @@ export function epsgFieldProblem(text: string, what: string): string | null {
   if (text.trim() === '' || parseEpsgField(text) !== null) return null;
   return `The ${what} EPSG must be a whole number such as 32614, or EPSG:32614.`;
 }
+
+/** True when a proj4 definition describes a geocentric (ECEF) CRS. */
+export function isGeocentricProj4(def: string | null): boolean {
+  return def != null && /(^|\s)\+proj=geocent(\s|$)/.test(def);
+}
+
+/** True when `epsg` resolves to a geocentric (ECEF) definition, e.g. 4978. */
+export function isGeocentricEpsg(epsg: number): boolean {
+  return isGeocentricProj4(epsgToProj4(epsg));
+}
+
+/** Why a reprojection to or from a geocentric CRS is refused. */
+export const GEOCENTRIC_REPROJECT_REFUSAL =
+  'Reprojection to or from a geocentric (ECEF) CRS such as EPSG:4978 is not supported: ' +
+  'it needs a full 3-D transform and this converter maps only horizontal X/Y.';
+
+/**
+ * The refusal to show when a reproject's source or target field names a
+ * geocentric CRS, or null. Empty or invalid fields are left to
+ * {@link epsgFieldProblem}.
+ */
+export function geocentricReprojectProblem(sourceText: string, targetText: string): string | null {
+  for (const text of [sourceText, targetText]) {
+    const code = parseEpsgField(text);
+    if (code !== null && isGeocentricEpsg(code)) return GEOCENTRIC_REPROJECT_REFUSAL;
+  }
+  return null;
+}
