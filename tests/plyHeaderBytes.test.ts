@@ -68,12 +68,14 @@ describe('loadPly: binary body offset is measured in bytes', () => {
     const buf = binaryPly('\r\n', 'Généré', 'double');
     const input = plyParseInput(buf);
     const bytes = new Uint8Array(input.buffer);
-    const headerText = new TextDecoder('latin1').decode(bytes.subarray(0, input.bodyOffset));
+    const bodyOffset = input.bodyOffset ?? -1;
+    expect(bodyOffset).toBeGreaterThan(0);
+    const headerText = new TextDecoder('latin1').decode(bytes.subarray(0, bodyOffset));
     expect(headerText).not.toMatch(/\r|[^\x00-\x7f]/);
     expect(headerText.endsWith('end_header\n')).toBe(true);
     const src = new Uint8Array(buf);
     const bodyLen = POINTS.length * 3 * 8;
-    expect(bytes.subarray(input.bodyOffset)).toEqual(src.subarray(src.length - bodyLen));
+    expect(bytes.subarray(bodyOffset)).toEqual(src.subarray(src.length - bodyLen));
   });
 });
 
