@@ -4540,10 +4540,14 @@ export class Viewer {
     camera.updateMatrixWorld();
     camera.updateProjectionMatrix();
 
+    // Output size: requested width (default 2048), height from the
+    // footprint aspect so pixels stay square to within the 1 px rounding the
+    // world file's independent X/Y scales absorb exactly.
     const shot = await this._renderAtSize(framing.widthPx, framing.heightPx, () => {
       this._renderer.render(this._scene, camera);
     });
-    // The delivered PNG size and the frustum-derived rectangle the camera framed.
+    // The delivered PNG size (the world file divides the framed rectangle by
+    // it) and the frustum-derived rectangle the camera framed.
     return { ...shot, extent: framing.extent };
   }
 
@@ -4574,6 +4578,8 @@ export class Viewer {
     const gl = this._renderer.domElement as HTMLCanvasElement;
     const prevSize = this._renderer.getSize(new THREE.Vector2());
     const prevRatio = this._renderer.getPixelRatio();
+    // The live loop keeps drawing while this awaits; its adaptive pixel ratio
+    // would re-apply the display ratio to the export-sized buffer.
     this._captureHoldsBuffer = true;
     try {
       this._renderer.setPixelRatio(1);
