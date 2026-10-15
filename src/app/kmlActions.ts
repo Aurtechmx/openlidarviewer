@@ -199,6 +199,16 @@ function inSceneFrame(a: Annotation, d: readonly [number, number, number] | null
 }
 
 /**
+ * A measurement the active scan owns, in the scene frame `toLonLat` undoes, by
+ * the annotation rule above. Points picked through `pickLayers` are scene-frame
+ * whatever the owner says, as the measurement file export reads them.
+ */
+function measurementInSceneFrame(m: Measurement, d: readonly [number, number, number] | null): Measurement {
+  if (!d || m.owner?.frame !== 'source-local' || (m.pickLayers?.length ?? 0) > 0) return m;
+  return { ...m, points: m.points.map((p): Vec3 => [p[0] + d[0], p[1] + d[1], p[2] + d[2]]) };
+}
+
+/**
  * Whether the SITE KML can be written, with the reason when it cannot.
  * Resolves origin/CRS for static AND streaming, because a georeferenced streaming scan
  * can place KML too.
@@ -276,7 +286,7 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
   // note added or a vertex dragged during the import would otherwise reach it.
   const input: KmlExportInput = {
     annotations: notes.own.map((a) => inSceneFrame(structuredClone(a), d)),
-    measurements: owned.own.map((m) => structuredClone(m)),
+    measurements: owned.own.map((m) => measurementInSceneFrame(structuredClone(m), d)),
     withheldMeasurements: owned.withheld,
     withheldAnnotations: notes.withheld,
     // Saved views become <LookAt> placemarks in the same LOCAL render frame as
