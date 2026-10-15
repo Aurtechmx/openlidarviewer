@@ -137,6 +137,10 @@
    * and word carry the state; these only reinforce it. */
   --state-measured: var(--rating-excellent);
   --state-preview: var(--rating-moderate);
+  /* One hue for "caution" in the left panels (class captions, review and
+   * preview verdicts, needs-review badges). The preview state's hue, so a
+   * caution and a PREVIEW read alike, and distinct from the "okay" rating. */
+  --caution: var(--rating-moderate);
   --state-review: var(--rating-weak);
   --state-blocked: var(--rating-blocked);
   /* Withheld has its own hue: a value held back is not a closed gate. */
@@ -811,6 +815,7 @@ body.olv-theme-field,
 body.olv-theme-high-contrast {
   --state-measured: var(--rating-excellent);
   --state-preview: var(--rating-moderate);
+  --caution: var(--rating-moderate);
   --state-review: var(--rating-weak);
   --state-blocked: var(--rating-blocked);
   --state-derived: var(--accent);
@@ -5582,7 +5587,7 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
 }
 .olv-ah-badge.is-ready { background: var(--good-bg, rgba(52, 168, 83, 0.18)); color: var(--good, #6ee7a0); }
 .olv-ah-badge.is-review,
-.olv-ah-badge.is-needs { background: var(--warn-bg, rgba(230, 180, 40, 0.18)); color: var(--warn, #e9d16b); }
+.olv-ah-badge.is-needs { background: color-mix(in srgb, var(--caution) 18%, transparent); color: var(--caution); }
 .olv-ah-badge.is-blocked { background: var(--bad-bg, rgba(224, 64, 72, 0.18)); color: var(--bad, #f08a92); }
 .olv-ah-badge.is-present { background: var(--accent-soft); color: var(--text); }
 .olv-ah-row.is-child { margin-left: var(--space-xl); }
@@ -6634,8 +6639,8 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
 .olv-cl-unavailable,
 .olv-workbench-basis {
   font-size: var(--text-xs); line-height: 1.45; color: var(--text-dim);
-  background: color-mix(in srgb, var(--warn) 9%, transparent);
-  border-left: 2px solid var(--warn);
+  background: color-mix(in srgb, var(--caution) 9%, transparent);
+  border-left: 2px solid var(--caution);
   border-radius: 2px;
   padding: var(--space-sm) var(--space-md);
   margin-bottom: var(--space-md);
@@ -8723,7 +8728,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 }
 .olv-fit-verdict.is-ready { --fit-rule: var(--rating-excellent); }
 .olv-fit-verdict.is-okay { --fit-rule: var(--rating-good); }
-.olv-fit-verdict.is-review { --fit-rule: var(--warn); }
+.olv-fit-verdict.is-review { --fit-rule: var(--caution); }
 .olv-fit-verdict-text { flex: 1 1 auto; min-width: 0; }
 .olv-fit-badge {
   flex: 0 0 auto; font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em;
@@ -9234,8 +9239,8 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
 .olv-analyse-assess-use { font-size: var(--text-xs); color: var(--text-faint); margin-top: 3px; }
 .olv-analyse-assess-caution { font-size: var(--text-xs); color: var(--text-faint); margin-top: var(--space-2xs); }
 .olv-analyse-assessment.is-good .olv-analyse-assess-verdict { color: var(--rating-excellent); }
-.olv-analyse-assessment.is-preview .olv-analyse-assess-verdict { color: var(--rating-moderate); }
-.olv-analyse-assessment.is-preview .olv-analyse-assess-caution { color: var(--rating-moderate); }
+.olv-analyse-assessment.is-preview .olv-analyse-assess-verdict { color: var(--caution); }
+.olv-analyse-assessment.is-preview .olv-analyse-assess-caution { color: var(--caution); }
 .olv-analyse-assessment.is-limited .olv-analyse-assess-verdict { color: var(--rating-weak); }
 .olv-analyse-assessment.is-limited .olv-analyse-assess-caution { color: var(--rating-weak); }
 /* Blocked — a distinct, accessible violet so it never reads as "just a worse
@@ -9256,7 +9261,7 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
 .olv-analyse-assess-export-verdict { font-size: var(--text-sm); font-weight: 600; }
 .olv-analyse-assess-export-reason { font-size: var(--text-xs); color: var(--text-dim); overflow-wrap: anywhere; }
 .olv-analyse-assess-export.is-good .olv-analyse-assess-export-verdict { color: var(--rating-excellent); }
-.olv-analyse-assess-export.is-preview .olv-analyse-assess-export-verdict { color: var(--rating-moderate); }
+.olv-analyse-assess-export.is-preview .olv-analyse-assess-export-verdict { color: var(--caution); }
 .olv-analyse-assess-export.is-blocked .olv-analyse-assess-export-verdict { color: var(--rating-blocked); }
 
 /* Derived complexity (v0.5.4) — one compact line under the assessment: the
@@ -9343,7 +9348,7 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
 .olv-analyse-workflow-label { font-size: var(--text-xs); color: var(--text-dim); }
 .olv-analyse-workflow-note { font-size: var(--text-2xs); color: var(--text-faint); overflow-wrap: anywhere; }
 .olv-analyse-workflow-row.is-good .olv-analyse-workflow-glyph { color: var(--rating-excellent); }
-.olv-analyse-workflow-row.is-caution .olv-analyse-workflow-glyph { color: var(--rating-good); }
+.olv-analyse-workflow-row.is-caution .olv-analyse-workflow-glyph { color: var(--caution); }
 .olv-analyse-workflow-row.is-blocked .olv-analyse-workflow-glyph { color: var(--rating-blocked); }
 .olv-analyse-workflow-row.is-blocked .olv-analyse-workflow-label { color: var(--text-faint); }
 
@@ -9430,7 +9435,7 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
 .olv-analyse-product.is-ready .olv-analyse-product-glyph,
 .olv-analyse-product.is-ready .olv-analyse-product-status { color: var(--rating-excellent); }
 .olv-analyse-product.is-preview .olv-analyse-product-glyph,
-.olv-analyse-product.is-preview .olv-analyse-product-status { color: var(--rating-good); }
+.olv-analyse-product.is-preview .olv-analyse-product-status { color: var(--caution); }
 .olv-analyse-product.is-blocked .olv-analyse-product-glyph,
 .olv-analyse-product.is-blocked .olv-analyse-product-status { color: var(--rating-blocked); }
 .olv-analyse-product.is-blocked .olv-analyse-product-label { color: var(--text-faint); }
@@ -9448,7 +9453,7 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
    shown only when the verdict is short of fully-good. */
 .olv-analyse-why { margin-top: var(--space-sm); }
 /* The cause line keeps its caution hue: it names what holds the verdict back. */
-.olv-analyse-why-summary { color: var(--rating-moderate); }
+.olv-analyse-why-summary { color: var(--caution); }
 /* v0.4.6 (design audit 2.1): cause/fix sub-eyebrow → sentence-case sans. */
 .olv-analyse-why-subhead {
   font-family: var(--font); font-size: var(--text-2xs); font-weight: 600;
