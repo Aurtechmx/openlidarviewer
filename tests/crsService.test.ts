@@ -28,6 +28,15 @@ function makePort(): CrsOverridePort & {
   };
 }
 
+/**
+ * The identity a stored override needs to be applied silently: a record that
+ * observed the file's declaration and its position, matched by the loaded scan.
+ */
+const ID = { pointCount: 1000, extent: [10, 10, 1] as [number, number, number], min: [100, 200, 0] as [number, number, number] };
+function verified(o: Omit<CrsOverride, 'identity' | 'identityVersion' | 'detectedEpsgObserved'>): CrsOverride {
+  return { ...o, detectedEpsgObserved: true, identity: ID, identityVersion: 2 };
+}
+
 const NAD83_UTM_18N: CrsInfo = {
   source: 'wkt',
   name: 'NAD83 / UTM zone 18N',
@@ -127,16 +136,18 @@ describe('CrsService.resolveForScan — detection path', () => {
 describe('CrsService.resolveForScan — override precedence', () => {
   it('uses a persisted override over the detected CRS', () => {
     const port = makePort();
-    port.store.set('east levee.copc.laz', {
+    port.store.set('east levee.copc.laz', verified({
       epsg: 32618,
       kind: 'projected',
       updatedAt: Date.now(),
-    });
+      detectedEpsg: NAD83_UTM_18N.epsg,
+    }));
     const svc = new CrsService(port);
     const resolved = svc.resolveForScan({
       name: 'east levee.copc.laz',
       detected: NAD83_UTM_18N,
       source: 'copc-meta',
+      identity: ID,
     });
     expect(resolved.epsg).toBe(32618);
     expect(resolved.source).toBe('user-override');
@@ -177,29 +188,34 @@ describe('CrsService.resolveForScan — override precedence', () => {
 
   it('still applies the override when the file declares what it declared before', () => {
     const port = makePort();
-    port.store.set('points.laz', {
+    port.store.set('points.laz', verified({
       epsg: 32612, kind: 'projected', updatedAt: Date.now(), detectedEpsg: 26913,
-    });
+    }));
     const resolved = new CrsService(port).resolveForScan({
       name: 'points.laz',
       detected: { ...NAD83_UTM_18N, epsg: 26913 },
       source: 'las-vlr',
+      identity: ID,
     });
     expect(resolved.epsg).toBe(32612);
     expect(resolved.source).toBe('user-override');
   });
 
-  it('applies an override with no recorded declaration, as before', () => {
-    // Entries stored before this field existed carry no evidence either way;
-    // discarding them would silently drop a user's saved choice.
+  it('offers, but does not apply, a legacy override with no recorded declaration or position', () => {
+    // A legacy entry cannot be verified as belonging to this file, so it must
+    // not replace the file's own declaration. The choice is kept and offered.
     const port = makePort();
     port.store.set('points.laz', { epsg: 32612, kind: 'projected', updatedAt: Date.now() });
-    const resolved = new CrsService(port).resolveForScan({
+    const svc = new CrsService(port);
+    const resolved = svc.resolveForScan({
       name: 'points.laz',
       detected: { ...NAD83_UTM_18N, epsg: 2276 },
       source: 'las-vlr',
+      identity: ID,
     });
-    expect(resolved.epsg).toBe(32612);
+    expect(resolved.epsg).toBe(2276);
+    expect(svc.overrideSuggestion()).toMatchObject({ epsg: 32612, reason: 'legacy' });
+    expect(port.store.has('points.laz')).toBe(true);
   });
 
   it('keeps the detected foot unit when the override names the SAME EPSG', () => {
@@ -213,12 +229,14 @@ describe('CrsService.resolveForScan — override precedence', () => {
       isGeographic: false,
     };
     const port = makePort();
-    port.store.set('site.laz', { epsg: 2231, kind: 'projected', updatedAt: Date.now() });
+    port.store.set('site.laz', verified({ epsg: 2231, kind: 'projected', updatedAt: Date.now(), detectedEpsg: 2231 }));
     const resolved = new CrsService(port).resolveForScan({
       name: 'site.laz',
       detected: detectedFeet,
       source: 'las-vlr',
+      identity: ID,
     });
+    expect(resolved.source).toBe('user-override');
     expect(resolved.epsg).toBe(2231);
     expect(resolved.linearUnitToMetres).toBeCloseTo(US_FOOT, 9);
     expect(resolved.linearUnit).toBe('us-survey-foot');
@@ -230,32 +248,36 @@ describe('CrsService.resolveForScan — override precedence', () => {
       wkt: 'PROJCS["NAD83 / UTM zone 18N",GEOGCS["NAD83",DATUM["..."]],PROJECTION["Transverse_Mercator"]]',
     };
     const port = makePort();
-    port.store.set('match.laz', {
+    port.store.set('match.laz', verified({
       epsg: 26918,
       kind: 'projected',
       updatedAt: Date.now(),
-    });
+      detectedEpsg: 26918,
+    }));
     const svc = new CrsService(port);
     const resolved = svc.resolveForScan({
       name: 'match.laz',
       detected,
       source: 'las-vlr',
+      identity: ID,
     });
+    expect(resolved.source).toBe('user-override');
     expect(resolved.wkt).toContain('PROJCS');
   });
 
   it('falls back to local override when override is the local sentinel', () => {
     const port = makePort();
-    port.store.set('phone.ply', {
+    port.store.set('phone.ply', verified({
       epsg: null,
       kind: 'local',
       updatedAt: Date.now(),
-    });
+    }));
     const svc = new CrsService(port);
     const resolved = svc.resolveForScan({
       name: 'phone.ply',
       detected: undefined,
       source: 'las-vlr',
+      identity: ID,
     });
     expect(resolved.kind).toBe('local');
     expect(resolved.userConfirmed).toBe(true);
@@ -514,16 +536,17 @@ describe('CrsService.displayLabel', () => {
 
   it('reads "Local coordinates" for a local-kind CRS', () => {
     const port = makePort();
-    port.store.set('phone.ply', {
+    port.store.set('phone.ply', verified({
       epsg: null,
       kind: 'local',
       updatedAt: Date.now(),
-    });
+    }));
     const svc = new CrsService(port);
     svc.resolveForScan({
       name: 'phone.ply',
       detected: undefined,
       source: 'las-vlr',
+      identity: ID,
     });
     expect(svc.displayLabel()).toBe('Local coordinates');
   });
@@ -666,9 +689,9 @@ describe('CrsService — resolveFor resolves any cloud without mutating state', 
     // Active scan is dataset A.
     svc.resolveForScan({ name: 'a.laz', detected: NAD83_UTM_18N, source: 'las-vlr' });
     // A persisted override exists for a DIFFERENT dataset B.
-    port.set('b.laz', { epsg: 32612, kind: 'projected', detectedEpsg: 26918 });
+    port.set('b.laz', { epsg: 32612, kind: 'projected', detectedEpsg: 26918, detectedEpsgObserved: true, identity: ID, identityVersion: 2 });
     const before = svc.current();
-    const resolvedB = svc.resolveFor({ name: 'b.laz', detected: NAD83_UTM_18N, source: 'las-vlr' });
+    const resolvedB = svc.resolveFor({ name: 'b.laz', detected: NAD83_UTM_18N, source: 'las-vlr', identity: ID });
     // B resolves to its override…
     expect(resolvedB.epsg).toBe(32612);
     // …without disturbing the active scan (A) or its dataset key.
@@ -704,14 +727,14 @@ describe('CrsService — detected vs local are distinct (C3)', () => {
   it("'local' PERSISTS a genuine local-coordinates override (does not revert to detected)", () => {
     const port = makePort();
     const svc = new CrsService(port);
-    svc.resolveForScan({ name: 's.laz', detected: NAD83_UTM_18N, source: 'las-vlr' });
+    svc.resolveForScan({ name: 's.laz', detected: NAD83_UTM_18N, source: 'las-vlr', identity: ID });
     const r = svc.setOverride({ override: { epsg: null, kind: 'local' }, detected: NAD83_UTM_18N, source: 'las-vlr' });
     expect(r?.kind).toBe('local');
     // The override is stored (not cleared)…
     expect(port.store.get('s.laz')?.kind).toBe('local');
     // …and survives a re-resolve of the same scan — it does NOT fall back to
     // the detected 26918 the way the old collided sentinel did.
-    const reresolved = svc.resolveForScan({ name: 's.laz', detected: NAD83_UTM_18N, source: 'las-vlr' });
+    const reresolved = svc.resolveForScan({ name: 's.laz', detected: NAD83_UTM_18N, source: 'las-vlr', identity: ID });
     expect(reresolved.kind).toBe('local');
   });
 });

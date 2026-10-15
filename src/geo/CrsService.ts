@@ -95,12 +95,13 @@ function spanRelDiff(a: number, b: number): number | null {
 }
 
 /**
- * Whether a remembered override's dataset and the one being opened are the same.
+ * Whether a remembered override's dataset and the one being opened positively
+ * DISAGREE on point count or bounds spans.
  *
  * Only ever returns false on POSITIVE disagreement: if either side recorded no
- * identity, this cannot tell them apart and says so by returning true, leaving
- * the older name-and-declaration comparison as the only gate. That keeps a
- * legacy entry and a caller with no cloud in hand working exactly as before.
+ * identity, this cannot tell them apart and says so by returning true. That is
+ * not a verified match — {@link classifyOverrideMatch} additionally requires
+ * the source position before an override is applied.
  *
  * The tolerances mirror `matchSessionToScan`, which fingerprints a scan on the
  * same two facts for the same reason: 1% on each bounds span, 0.5% on the point
@@ -125,26 +126,40 @@ export function sameDataset(
   return true;
 }
 
+/** Round an absolute coordinate to 1 mm, so float noise is not a difference. */
+function roundMm(v: number): number {
+  return Math.round(v * 1000) / 1000;
+}
+
 /**
- * A scan's identity for override matching: its source point total and the x/y/z
- * spans of its bounds. Structural, so any object carrying these fields works.
- * Returns undefined when neither fact is available, which reads as "cannot tell"
- * rather than "different".
+ * A scan's identity for override matching: its source point total, the x/y/z
+ * spans of its bounds, and the absolute bounds minimum in the source frame
+ * (local bounds minimum plus the source/render origin, rounded to 1 mm).
+ * Structural, so any object carrying these fields works. Returns undefined when
+ * no fact is available.
+ *
+ * The position is what tells two same-shaped files apart: spans and count
+ * survive any translation, so a survey and a copy shifted 100 km matched on
+ * everything recorded before it.
  */
 export function datasetIdentity(cloud: {
   readonly declaredPointCount?: number;
   readonly sourceDeclaredPointCount?: number;
   readonly pointCount?: number;
   readonly bounds?: () => { readonly min: readonly number[]; readonly max: readonly number[] };
-  // A STREAMING source states the same two facts in its own shape: a declared
-  // source total, and bounds as one flat [minX,minY,minZ,maxX,maxY,maxZ]. It
-  // was left out, so a streaming scan reached the resolver with no identity at
-  // all and two same-named COPC/EPT datasets still collided on a remembered
-  // override — the very case the static path was fixed for.
+  /** Static clouds: the frame `bounds()` is relative to. */
+  readonly sourceOrigin?: readonly number[];
+  readonly origin?: readonly number[];
+  // A STREAMING source states the same facts in its own shape: a declared
+  // source total, bounds as one flat [minX,minY,minZ,maxX,maxY,maxZ] in render
+  // space, and the render origin they are relative to.
   readonly sourcePointCount?: number | null;
   readonly dataBounds?: () => readonly number[] | null | undefined;
   readonly localBounds?: () => readonly number[] | null | undefined;
-} | null | undefined): ResolveForScanInput['identity'] {
+  readonly renderOrigin?: readonly number[];
+  /** A content digest of the source, when the caller already holds one. */
+  readonly sourceDigest?: string | null;
+} | null | undefined): DatasetIdentity | undefined {
   if (!cloud) return undefined;
   const pointCount = cloud.sourceDeclaredPointCount
     ?? cloud.declaredPointCount
@@ -152,19 +167,120 @@ export function datasetIdentity(cloud: {
     ?? cloud.pointCount
     ?? undefined;
   let extent: [number, number, number] | undefined;
+  let localMin: readonly number[] | undefined;
   try {
     const b = cloud.bounds?.();
-    if (b) extent = [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]];
-    else {
+    if (b) {
+      extent = [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]];
+      localMin = b.min;
+    } else {
       // Prefer the tight data bounds; the octree cube is a last resort.
       const f = (cloud.dataBounds ?? cloud.localBounds)?.();
-      if (f && f.length >= 6) extent = [f[3] - f[0], f[4] - f[1], f[5] - f[2]];
+      if (f && f.length >= 6) {
+        extent = [f[3] - f[0], f[4] - f[1], f[5] - f[2]];
+        localMin = [f[0], f[1], f[2]];
+      }
     }
   } catch {
     extent = undefined;
+    localMin = undefined;
   }
-  if (pointCount === undefined && !extent) return undefined;
-  return { ...(pointCount !== undefined ? { pointCount } : {}), ...(extent ? { extent } : {}) };
+  const o = cloud.sourceOrigin ?? cloud.origin ?? cloud.renderOrigin ?? [0, 0, 0];
+  let min: [number, number, number] | undefined;
+  if (localMin) {
+    const m = [0, 1, 2].map((i) => roundMm((o[i] ?? 0) + localMin[i]));
+    if (m.every(Number.isFinite)) min = [m[0], m[1], m[2]];
+  }
+  const digest = cloud.sourceDigest ?? undefined;
+  if (pointCount === undefined && !extent && !digest) return undefined;
+  return {
+    ...(pointCount !== undefined ? { pointCount } : {}),
+    ...(extent ? { extent } : {}),
+    ...(min ? { min } : {}),
+    ...(digest ? { digest } : {}),
+  };
+}
+
+/** The facts a dataset is identified by. See {@link datasetIdentity}. */
+export interface DatasetIdentity {
+  readonly pointCount?: number;
+  readonly extent?: readonly [number, number, number];
+  /** Absolute bounds minimum in the source frame, rounded to 1 mm. */
+  readonly min?: readonly [number, number, number];
+  /** Content digest of the source, when available. */
+  readonly digest?: string;
+}
+
+/** Version of the identity a new override records. 2 = includes `min`. */
+export const OVERRIDE_IDENTITY_VERSION = 2;
+
+/**
+ * How a remembered override relates to the dataset being opened.
+ *
+ * - `verified`: every strong fact agrees (declaration, spans, absolute
+ *   position, and the count where both state one; or an equal content
+ *   digest). Applied as user-confirmed.
+ * - `candidate`: nothing positively disagrees on name, declaration, count or
+ *   spans, but the position differs or a fact is missing (including every
+ *   legacy record). Offered as a suggestion, never applied silently.
+ * - `different`: a positive disagreement on declaration, count, spans or
+ *   digest. Neither applied nor suggested.
+ */
+export type OverrideMatch =
+  | { readonly kind: 'verified' }
+  | { readonly kind: 'candidate'; readonly reason: OverrideSuggestionReason }
+  | { readonly kind: 'different' };
+
+/** Why a remembered override was only suggested. */
+export type OverrideSuggestionReason = 'legacy' | 'identity-missing' | 'position-differs';
+
+/** A remembered override offered for, but not applied to, the active scan. */
+export interface OverrideSuggestion {
+  readonly datasetKey: string;
+  readonly epsg: number | null;
+  /** The kinds `setOverride` can re-apply; any other stored kind is not offered. */
+  readonly kind: 'projected' | 'geographic' | 'local';
+  readonly reason: OverrideSuggestionReason;
+}
+
+/**
+ * Classify a stored override against the dataset being opened. Pure.
+ */
+export function classifyOverrideMatch(
+  override: CrsOverride,
+  detected: CrsInfo | undefined,
+  loaded: DatasetIdentity | undefined,
+): OverrideMatch {
+  const observed = override.detectedEpsgObserved === true;
+  // Declaration: a record that observed it must agree exactly (including "both
+  // declared nothing"); a legacy record disagrees only when both sides state one.
+  const declarationDiffers = observed
+    ? override.detectedEpsg !== detected?.epsg
+    : (override.detectedEpsg !== undefined
+      && detected?.epsg !== undefined
+      && override.detectedEpsg !== detected.epsg);
+  if (declarationDiffers) return { kind: 'different' };
+  const stored = override.identity;
+  if (stored?.digest && loaded?.digest && stored.digest !== loaded.digest) return { kind: 'different' };
+  if (!sameDataset(stored, loaded)) return { kind: 'different' };
+
+  const legacy = override.identityVersion !== OVERRIDE_IDENTITY_VERSION || !observed;
+  if (legacy) return { kind: 'candidate', reason: 'legacy' };
+  if (stored?.digest && loaded?.digest) return { kind: 'verified' };
+  // Position and spans are required on both sides. The point count is compared
+  // whenever both sides state it (above) but is not required: a stream may not
+  // know its total yet, and the count is translation-invariant anyway.
+  if (!stored || !loaded || !stored.extent || !loaded.extent || !stored.min || !loaded.min) {
+    return { kind: 'candidate', reason: 'identity-missing' };
+  }
+  for (let i = 0; i < 3; i++) {
+    const span = stored.extent[i];
+    const tol = Math.max(Number.isFinite(span) && span > 0 ? span * 0.01 : 0, 0.01);
+    if (!(Math.abs(stored.min[i] - loaded.min[i]) <= tol)) {
+      return { kind: 'candidate', reason: 'position-differs' };
+    }
+  }
+  return { kind: 'verified' };
 }
 
 export interface ResolveForScanInput {
@@ -178,15 +294,12 @@ export interface ResolveForScanInput {
   /** Where the detection came from — drives the source label. */
   readonly source: CrsSource;
   /**
-   * The scan's own size and shape, for telling two same-named datasets apart
-   * before a remembered override is applied to the wrong one. Omitted by a
-   * caller that has no cloud in hand, which leaves the older name-and-
-   * declaration comparison in force rather than dropping the user's choice.
+   * The scan's own size, shape and position, for telling two same-named
+   * datasets apart before a remembered override is applied to the wrong one.
+   * Without it a remembered override cannot be verified, so it is not applied
+   * (the active scan gets it as a suggestion instead).
    */
-  readonly identity?: {
-    readonly pointCount?: number;
-    readonly extent?: readonly [number, number, number];
-  };
+  readonly identity?: DatasetIdentity;
 }
 
 /**
@@ -233,7 +346,12 @@ export class CrsService {
    * records WHICH dataset the choice was made for without every caller having
    * to pass it again.
    */
-  private _currentIdentity: ResolveForScanInput['identity'];
+  private _currentIdentity: DatasetIdentity | undefined;
+  /** The active scan's detection, for applying an accepted suggestion. */
+  private _currentDetected: CrsInfo | undefined;
+  private _currentSource: CrsSource = 'las-vlr';
+  /** A remembered override offered for the active scan but not applied. */
+  private _suggestion: OverrideSuggestion | null = null;
 
   constructor(port: CrsOverridePort = DEFAULT_CRS_OVERRIDE_PORT) {
     this._port = port;
@@ -279,9 +397,42 @@ export class CrsService {
   resolveForScan(input: ResolveForScanInput): ResolvedCrs {
     this._currentDatasetKey = keyForDataset(input.name);
     this._currentIdentity = input.identity;
-    const resolved = this._resolve(input);
+    this._currentDetected = input.detected;
+    this._currentSource = input.source;
+    const { resolved, suggestion } = this._resolveWithMatch(input);
+    this._suggestion = suggestion;
     this._setCurrent(resolved);
     return resolved;
+  }
+
+  /**
+   * A remembered override for a file with the active scan's name that could not
+   * be verified as belonging to this file (legacy record, missing facts, or a
+   * different position), or `null`. It was NOT applied; the UI offers it.
+   */
+  overrideSuggestion(): OverrideSuggestion | null {
+    return this._suggestion;
+  }
+
+  /**
+   * Apply the pending suggestion to the active scan as the user's own choice:
+   * re-records the override against this scan's identity, so the next reopen
+   * of the same source verifies and applies it. Returns the new CRS, or `null`
+   * when there is no suggestion.
+   */
+  acceptOverrideSuggestion(): ResolvedCrs | null {
+    const s = this._suggestion;
+    if (!s || s.datasetKey !== this._currentDatasetKey) return null;
+    return this.setOverride({
+      override: { epsg: s.epsg, kind: s.kind },
+      detected: this._currentDetected,
+      source: this._currentSource,
+    });
+  }
+
+  /** Drop the pending suggestion without applying it. */
+  dismissOverrideSuggestion(): void {
+    this._suggestion = null;
   }
 
   /**
@@ -302,36 +453,36 @@ export class CrsService {
   }
 
   private _resolve(input: ResolveForScanInput): ResolvedCrs {
+    return this._resolveWithMatch(input).resolved;
+  }
+
+  /**
+   * An override belongs to the file it was made for. The key is the dataset
+   * NAME, so `site-a/points.laz` and an unrelated `site-b/points.laz` collide.
+   * Only a verified match (see {@link classifyOverrideMatch}) is applied; a
+   * candidate is returned as a suggestion and the file resolves from its own
+   * declaration, so a remembered choice never silently replaces another
+   * source's CRS.
+   */
+  private _resolveWithMatch(input: ResolveForScanInput): {
+    readonly resolved: ResolvedCrs;
+    readonly suggestion: OverrideSuggestion | null;
+  } {
     const datasetKey = keyForDataset(input.name);
     const override = this._port.get(datasetKey);
-    // An override belongs to the file it was made for. The key is the dataset
-    // NAME, so `site-a/points.laz` and an unrelated `site-b/points.laz` collide
-    // and the stored choice would outrank the second file's own correct
-    // declaration, at high confidence. Comparing the declaration recorded with
-    // the override tells them apart — and still lets a user override a file's
-    // own wrong CRS, because that file declares the same thing every reopen.
-    // A legacy entry recorded no observation at all, so it keeps the original
-    // fail-open: dropping it would discard a choice the user really made.
-    // Anything written since records what the file declared — including that it
-    // declared NOTHING — so "both saw no declaration" is now a positive match
-    // rather than an absence of evidence, and "one declared, one did not" is a
-    // mismatch instead of a pass.
-    const observed = override?.detectedEpsgObserved === true;
-    const declarationMatches = !observed
-      ? (override?.detectedEpsg === undefined
-        || input.detected?.epsg === undefined
-        || override.detectedEpsg === input.detected.epsg)
-      : override?.detectedEpsg === input.detected?.epsg;
-    // A matching declaration is not identity when BOTH sides declared nothing —
-    // which is the usual state of a scan someone overrides. The dataset's own
-    // size and shape settle it where both are known; where they are not, the
-    // comparison is the weaker one it always was.
-    const belongsToThisFile = declarationMatches
-      && sameDataset(override?.identity, input.identity);
-    const applicable = override && belongsToThisFile ? override : undefined;
-    return this._resolveDatum(applicable
-      ? this._fromOverride(applicable, input.detected)
-      : (resolvedFromCrsInfo(input.detected, input.source) ?? unknownCrs()));
+    const match = override ? classifyOverrideMatch(override, input.detected, input.identity) : undefined;
+    if (override && match?.kind === 'verified') {
+      return { resolved: this._resolveDatum(this._fromOverride(override, input.detected)), suggestion: null };
+    }
+    const resolved = this._resolveDatum(resolvedFromCrsInfo(input.detected, input.source) ?? unknownCrs());
+    // Nothing to offer when the remembered choice is what the file already says.
+    const redundant = override?.epsg !== null && override?.epsg === resolved.epsg && override?.kind === resolved.kind;
+    const k = override?.kind;
+    const suggestion = override && match?.kind === 'candidate' && !redundant
+      && (k === 'projected' || k === 'geographic' || k === 'local')
+      ? { datasetKey, epsg: override.epsg, kind: k, reason: match.reason }
+      : null;
+    return { resolved, suggestion };
   }
 
   /**
@@ -360,6 +511,7 @@ export class CrsService {
     readonly source: CrsSource;
   }): ResolvedCrs | null {
     if (!this._currentDatasetKey) return null;
+    this._suggestion = null;
     if (args.override.kind === 'detected') {
       this._port.clear(this._currentDatasetKey);
       const resolved = this._resolveDatum(
@@ -380,6 +532,7 @@ export class CrsService {
       // mistaken for the same dataset.
       detectedEpsgObserved: true,
       ...(this._currentIdentity ? { identity: this._currentIdentity } : {}),
+      identityVersion: OVERRIDE_IDENTITY_VERSION,
     });
     const override = this._port.get(this._currentDatasetKey);
     if (!override) return this._current;
@@ -391,6 +544,7 @@ export class CrsService {
   /** Clear the active scan's CRS state. Used on close. */
   clear(): void {
     this._currentDatasetKey = undefined;
+    this._suggestion = null;
     this._setCurrent(null);
   }
 

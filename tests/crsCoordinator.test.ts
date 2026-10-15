@@ -218,6 +218,20 @@ describe('refreshCrsForStaticCloud — the LAS/LAZ VLR path', () => {
   });
 });
 
+/**
+ * The size, shape and position a loaded cloud reports. A remembered override is
+ * re-applied on the refresh after a pick only when the cloud identifies itself.
+ */
+const FACTS = {
+  pointCount: 1000,
+  sourceOrigin: [500_000, 4_000_000, 0] as [number, number, number],
+  bounds: () => ({ min: [0, 0, 0], max: [10, 10, 1] }),
+};
+const STREAM_FACTS = {
+  sourcePointCount: 1000,
+  dataBounds: () => [0, 0, 0, 10, 10, 1] as readonly number[],
+};
+
 describe('handleCrsOverride — one resolver owns the resolved units', () => {
   it('asks the layers to re-judge their shared frame once the override is applied', () => {
     const onOverrideApplied = vi.fn();
@@ -259,10 +273,12 @@ describe('handleCrsOverride — one resolver owns the resolved units', () => {
     h.viewer.getCloud.mockReturnValue({
       name: 'site/points.laz',
       metadata: { crs: UTM12N },
+      ...FACTS,
     });
     h.coordinator.refreshCrsForStaticCloud({
       name: 'site/points.laz',
       metadata: { crs: UTM12N },
+      ...FACTS,
     });
     h.coordinator.handleCrsOverride({ epsg: 26912, kind: 'projected' });
     const stored = h.port.entries.get(keyForDataset('site/points.laz'));
@@ -281,15 +297,18 @@ describe('handleCrsOverride — one resolver owns the resolved units', () => {
     h.viewer.getCloud.mockReturnValue({
       name: 'survey/az.las',
       metadata: { crs: STATE_PLANE_FEET },
+      ...FACTS,
     });
     h.coordinator.refreshCrsForStaticCloud({
       name: 'survey/az.las',
       metadata: { crs: STATE_PLANE_FEET },
+      ...FACTS,
     });
     h.coordinator.handleCrsOverride({ epsg: 2223, kind: 'projected' });
 
     const resolved = h.service.current();
     expect(resolved?.epsg).toBe(2223);
+    expect(resolved?.userConfirmed).toBe(true);
     expect(resolved?.linearUnit).toBe('us-survey-foot');
     expect(resolved?.linearUnitToMetres).toBeCloseTo(1200 / 3937, 12);
     expect(resolved?.linearUnitToMetres).not.toBe(1);
@@ -304,10 +323,12 @@ describe('handleCrsOverride — one resolver owns the resolved units', () => {
     h.viewer.getCloud.mockReturnValue({
       name: 'scan/phone.las',
       metadata: { crs: UTM12N },
+      ...FACTS,
     });
     h.coordinator.refreshCrsForStaticCloud({
       name: 'scan/phone.las',
       metadata: { crs: UTM12N },
+      ...FACTS,
     });
 
     h.coordinator.handleCrsOverride({ epsg: null, kind: 'local' });
@@ -344,6 +365,7 @@ describe('handleCrsOverride — one resolver owns the resolved units', () => {
       kind: 'copc' as const,
       renderOrigin: [10, 20, 30] as const,
       crs: () => UTM12N,
+      ...STREAM_FACTS,
     };
     h.viewer.streamingCloud = cloud;
     h.viewer.getCloud.mockReturnValue({
@@ -403,16 +425,18 @@ describe('refreshCrsForStreamingCloud — a persisted override needs dataset ide
     expect(h.service.current()?.epsg).toBe(32612);
   });
 
-  it('leaves a stream that states no identity on the old name-only comparison', () => {
+  it('offers, but does not apply, an override to a stream that states no identity', () => {
     const h = harness();
     const bare = (name: string) => ({ name, kind: 'copc' as const, crs: () => undefined });
     h.coordinator.refreshCrsForStreamingCloud(bare('survey.copc.laz'));
     h.service.setOverride({
       override: { epsg: 32612, kind: 'projected' }, detected: undefined, source: 'copc-meta',
     });
-    // No identity on either side means "cannot tell", which must not become
-    // "different" — that would silently drop a choice the user really made.
+    // No identity on either side cannot verify the source, so the remembered
+    // choice is kept and offered rather than applied silently.
     h.coordinator.refreshCrsForStreamingCloud(bare('survey.copc.laz'));
-    expect(h.service.current()?.epsg).toBe(32612);
+    expect(h.service.current()?.epsg).toBeUndefined();
+    expect(h.service.overrideSuggestion()).toMatchObject({ epsg: 32612, reason: 'identity-missing' });
+    expect(h.port.entries.has('survey.copc.laz')).toBe(true);
   });
 });

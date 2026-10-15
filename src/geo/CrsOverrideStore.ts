@@ -75,12 +75,25 @@ export interface CrsOverride {
    * hand wherever the override is resolved, and the session-restore path
    * (`matchSessionToScan`) fingerprints a scan on exactly the same pair.
    *
-   * Absent on legacy entries, which keep their previous behaviour.
+   * Spans alone are not an identity either: two same-shaped files translated
+   * apart matched. `min` is the absolute bounds minimum in the source frame
+   * (rounded to 1 mm), which places the dataset; `digest` is a content digest
+   * of the source when the caller holds one.
+   *
+   * Absent on legacy entries. A legacy entry, or one without `min`, is offered
+   * to the user as a suggestion and never applied silently.
    */
   readonly identity?: {
     readonly pointCount?: number;
     readonly extent?: readonly [number, number, number];
+    readonly min?: readonly [number, number, number];
+    readonly digest?: string;
   };
+  /**
+   * Version of the identity recorded above. 2 = records the source position
+   * (`identity.min`). Absent = legacy, which can only ever be a suggestion.
+   */
+  readonly identityVersion?: number;
 }
 
 interface StoredEnvelope {

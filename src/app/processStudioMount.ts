@@ -31,6 +31,7 @@ import { deriveScanFacts } from '../process/scanFacts';
 import type { RawScanSignals } from '../process/scanFacts';
 import type { ScanFacts, ProductId } from '../process/ProcessPlan';
 import type { CrsInfo } from '../io/crs';
+import { datasetIdentity, type DatasetIdentity } from '../geo/CrsService';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { MeasurementKind } from '../render/measure/types';
 import type { PreflightActionId, PreflightInput, ToolId } from '../process/toolPreflight';
@@ -427,7 +428,7 @@ export interface ProcessStudioShell {
     classificationIsDerived(): boolean;
   };
   /** Resolve a NON-active layer's CRS the way the Inspector shows it (override applied). */
-  resolveLayerCrs(name: string, detected: CrsInfo | null | undefined): CrsInfo | ResolvedCrs | null;
+  resolveLayerCrs(name: string, detected: CrsInfo | null | undefined, identity?: DatasetIdentity): CrsInfo | ResolvedCrs | null;
   /** Isolate one layer (the `solo-active-layer` remediation). */
   soloLayer(id: string): void;
   /** Derive classes for the active scan (the `classify-scan` remediation). */
@@ -459,7 +460,7 @@ function companionSignals(shell: ProcessStudioShell): readonly RawScanSignals[] 
     out.push({
       kind: 'static',
       pointCount: cloud.pointCount,
-      crs: shell.resolveLayerCrs(cloud.name, cloud.metadata?.crs),
+      crs: shell.resolveLayerCrs(cloud.name, cloud.metadata?.crs, datasetIdentity(cloud)),
     });
   }
   return out;

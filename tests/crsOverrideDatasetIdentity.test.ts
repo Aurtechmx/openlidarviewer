@@ -36,6 +36,7 @@ const scan = (name: string, pointCount: number, span: number) => ({
   identity: {
     pointCount,
     extent: [span, span, span / 10] as [number, number, number],
+    min: [500_000, 4_000_000, 0] as [number, number, number],
   },
 });
 
@@ -114,6 +115,15 @@ describe('datasetIdentity', () => {
   it('returns undefined when nothing identifying is available', () => {
     expect(datasetIdentity({})).toBeUndefined();
     expect(datasetIdentity(null)).toBeUndefined();
+  });
+
+  it('places the dataset by its absolute bounds minimum', () => {
+    const id = datasetIdentity({
+      pointCount: 5,
+      sourceOrigin: [1000, 2000, 30],
+      bounds: () => ({ min: [1, 2, 3], max: [11, 12, 13] }),
+    });
+    expect(id?.min).toEqual([1001, 2002, 33]);
   });
 
   it('survives a throwing bounds()', () => {

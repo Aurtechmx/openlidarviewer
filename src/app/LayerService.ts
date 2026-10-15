@@ -33,6 +33,7 @@ import { loadLayerHealth } from '../lazyChunks';
 import { isLinearUnitKnown } from '../geo/CoordinateTypes';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { CrsInfo } from '../io/crs';
+import { datasetIdentity, type DatasetIdentity } from '../geo/CrsService';
 import type { AppContext } from './appContext';
 import type { ProjectFrameService, ProjectFrameLayer } from './projectFrame';
 import { truncationNote } from '../io/truncation';
@@ -55,7 +56,7 @@ export interface LayerServiceDeps {
    * (C8). Wired to `crsService.resolveFor`; per-cloud and non-mutating, so every
    * layer resolves independently regardless of which scan is active.
    */
-  resolveCrs: (name: string, detected: CrsInfo | null | undefined) => ResolvedCrs;
+  resolveCrs: (name: string, detected: CrsInfo | null | undefined, identity?: DatasetIdentity) => ResolvedCrs;
   /**
    * Override {@link MULTI_LAYER_MOUNT_ENABLED}. Exists so both states stay
    * under test: the mount is disabled by default in v0.6.0, and its behaviour
@@ -283,7 +284,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
       // Resolve through the service (detected + override), not raw metadata, so
       // a CRS the user corrected in the Inspector drives layer compatibility /
       // mount / project-frame decisions too (C8).
-      const crs = deps.resolveCrs(c?.name ?? id, c?.metadata?.crs);
+      const crs = deps.resolveCrs(c?.name ?? id, c?.metadata?.crs, datasetIdentity(c));
       // A genuinely-unknown resolved CRS (no detection, no override) must carry
       // the same "nothing declared" shape a raw null used to — undefined name /
       // unit / geographic — so the compatibility classifier still reads it as
@@ -513,7 +514,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
         const c = viewer2.getCloud(info.id);
         // Same resolved CRS the compatibility flags above used (C8) — the health
         // card must not report the raw file CRS the user already overrode.
-        const crs = deps.resolveCrs(c?.name ?? info.id, c?.metadata?.crs);
+        const crs = deps.resolveCrs(c?.name ?? info.id, c?.metadata?.crs, datasetIdentity(c));
         const inFrame =
           frame2 != null && !lastUnmounted.includes(info.id) &&
           !deps.projectFrame.unaligned.includes(info.id);

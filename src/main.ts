@@ -244,7 +244,7 @@ import { CatalogPanel, buildCuratedDemoSample } from './ui/CatalogPanel';
 // section. Static clouds carry `metadata.crs` (CrsInfo from src/io/crs);
 // streaming clouds expose `.crs()` returning the same shape.
 import type { StreamingReportCloud } from './app/streamingScanReport'; import { runStreamingModules, preloadStreamingReport } from './app/streamingReportSeam';
-import { CrsService } from './geo/CrsService';
+import { CrsService, datasetIdentity } from './geo/CrsService';
 import { groundMetresPermitted, verticalMetresPerUnit, volumeUnitCaveat } from './geo/SpatialContext';
 import { prepareEpochFrames, epochUnitMismatchLines, compareSuggestionAllowed } from './app/epochFramePrep';
 // Shared vertical-unit labeller (already eager via terrainAnalysisRunner) —
@@ -530,7 +530,7 @@ const viewerLoaded: Promise<Viewer> = viewerStarted.then(async () => {
   viewer.setExportCrsResolver(makeExportCrsResolver({
     current: () => crsService.current(),
     resolveForCloud: (cloud) =>
-      crsService.resolveFor({ name: cloud.name, detected: cloud.metadata?.crs ?? undefined, source: 'las-vlr' }),
+      crsService.resolveFor({ name: cloud.name, detected: cloud.metadata?.crs ?? undefined, source: 'las-vlr', identity: datasetIdentity(cloud) }),
     activeCloud: () => (scans.activeId ? viewer!.getCloud(scans.activeId) ?? null : null),
   }));
   viewer.setResolvedActiveCrs(() => resolvedExportCrs(crsService.current())); // STREAMING export CRS
@@ -1042,7 +1042,7 @@ const layerService = createLayerService({
   context: runtime.context,
   refreshCompass: () => compass.refresh(),
   projectFrame,
-  resolveCrs: (name, detected) => crsService.resolveFor({ name, detected: detected ?? undefined, source: 'las-vlr' }),
+  resolveCrs: (name, detected, identity) => crsService.resolveFor({ name, detected: detected ?? undefined, source: 'las-vlr', identity }),
 });
 
 const inspector = new Inspector({
@@ -1186,7 +1186,7 @@ const crsCoordinator = createCrsCoordinator({
   getViewer: () => viewer,
   isViewerReady: () => viewerReady,
   getActiveId: () => scans.activeId,
-  debug, onOverrideApplied: () => { layerService.refreshCrsFlags(); layerService.applyVisibility(); },
+  debug, onOverrideApplied: () => { layerService.refreshCrsFlags(); layerService.applyVisibility(); }, notify: (m, a) => appToast().show(m, a),
 });
 
 // v0.3.9 — workflow recorder. The host owns the controller so it can
@@ -1872,7 +1872,7 @@ const classLegendPanel = new ClassLegendPanel();
 const processStudio = createProcessStudioFromShell({
   getViewer: () => viewer, getActiveCloud: () => scans.activeCloud(), getActiveLayerId: () => scans.activeExportTargetId(),
   crsService, classLegend: classLegendPanel,
-  resolveLayerCrs: (name, detected) => crsService.resolveFor({ name, detected: detected ?? undefined, source: 'las-vlr' }),
+  resolveLayerCrs: (name, detected, identity) => crsService.resolveFor({ name, detected: detected ?? undefined, source: 'las-vlr', identity }),
   soloLayer: (id) => layerService.soloOnly(id), classifyScan: () => { void runDeriveClassification(); },
   focusCrs: () => { inspector.focusCrsOverride(); }, focusLayers: () => { inspector.focusLayers(); }, addDataset: () => { stage.promptAddDataset(); },
 });
@@ -4182,7 +4182,7 @@ function compareLoadedLayers(): void {
         gridUnitToMetres === 1
           ? cmp.result.diff
           : cmp.result.diff.map((v) => v / gridUnitToMetres);
-      const rasterCrs = crsService.resolveFor({ name: a.name, detected: a.metadata?.crs ?? undefined, source: 'las-vlr' });
+      const rasterCrs = crsService.resolveFor({ name: a.name, detected: a.metadata?.crs ?? undefined, source: 'las-vlr', identity: datasetIdentity(a) });
       const grid = { diff: ascDiff, ncols: dtms.cols, nrows: dtms.rows, cellSizeM: dtms.cellSizeM, xllCorner: dtms.before.originH1, yllCorner: dtms.before.originH2 };
       try {
         inspector.compareDifference.hold({ stem: `${baseName(a.name)}-to-${baseName(b.name)}-difference`, ...packageChangeRaster(grid, { crs: rasterCrs, valueUnit: gridUnitToMetres === 1 ? 'metre' : rasterCrs.linearUnit, beforeScan: a.name, afterScan: b.name }) });

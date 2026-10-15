@@ -59,7 +59,7 @@ describe('datasetIdentity reads the streaming shape', () => {
       pointCount: 4_000_000,
       bounds: () => ({ min: [0, 0, 0], max: [100, 200, 30] }),
     });
-    expect(id).toEqual({ pointCount: 90_000_000, extent: [100, 200, 30] });
+    expect(id).toEqual({ pointCount: 90_000_000, extent: [100, 200, 30], min: [0, 0, 0] });
   });
 });
 
