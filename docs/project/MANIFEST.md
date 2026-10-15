@@ -41,7 +41,6 @@ development runs.
 - `docs/project/DEPENDENCIES.md`: the committed dependency baseline.
 - `sbom.json`: a CycloneDX software bill of materials.
 - `docs/project/THIRD_PARTY_NOTICES.md`: third-party licenses.
-- `docs/project/AI_ASSISTANCE.md`: how generative AI tools were and were not used.
 
 ## Layout
 

@@ -18,7 +18,8 @@
  * Shown on real pointer hover (`pointerType === 'mouse'`; `(hover: none)`
  * devices never call `showTip` from a pointer event, matching the old
  * `@media (hover: none)` suppression) and on `:focus-visible` (keyboard
- * focus, not a mouse-driven focus). Hidden on Escape, `pointerleave` /
+ * focus, not a mouse-driven focus). Hidden on a mouse press on the anchor
+ * (until the pointer leaves it), Escape, `pointerleave` /
  * `pointerout` off the anchor, `focusout` off the anchor, `scroll`, and
  * `resize` — a stale position after any of those is worse than no tip.
  *
@@ -45,6 +46,12 @@ let layerDoc: Document | null = null;
 let activeAnchor: HTMLElement | null = null;
 /** A `title` lifted off `activeAnchor` while its tip shows; restored on hide. */
 let liftedTitle: string | null = null;
+/**
+ * The control last pressed with the mouse. Its tip stays hidden until the
+ * pointer leaves it: the shown layer takes pointer input, so a tip left up
+ * after a press covers whatever sits under it until the pointer moves.
+ */
+let pressedAnchor: HTMLElement | null = null;
 
 const TIP_SELECTOR = '[data-tip], [title]';
 
@@ -149,7 +156,7 @@ export function installTipLayer(doc: Document): void {
     if (pe.pointerType && pe.pointerType !== 'mouse') return; // touch: no hover tip
     if (prefersNoHover(doc)) return;
     const anchor = closestTipAnchor(doc, event.target);
-    if (anchor) showTip(doc, anchor, true);
+    if (anchor && anchor !== pressedAnchor) showTip(doc, anchor, true);
   });
 
   // Large-touch layout: no hover exists, so a tip is reached by long-press.
@@ -167,6 +174,14 @@ export function installTipLayer(doc: Document): void {
     const pe = event as PointerEvent;
     cancelPress();
     swallowClick = false;
+    if (pe.pointerType === 'mouse') {
+      const target = pe.target as Node | null;
+      if (activeAnchor && target && activeAnchor.contains(target)) {
+        pressedAnchor = activeAnchor;
+        hideTip();
+      }
+      return;
+    }
     if (pe.pointerType !== 'touch') return;
     if (activeAnchor) hideTip();
     if (!view?.matchMedia?.(LARGE_TOUCH_LAYOUT_QUERY).matches) return;
@@ -203,8 +218,12 @@ export function installTipLayer(doc: Document): void {
   });
 
   doc.addEventListener('pointerout', (event) => {
-    if (!activeAnchor) return;
     const pe = event as PointerEvent;
+    if (pressedAnchor) {
+      const to = pe.relatedTarget as Node | null;
+      if (!to || !pressedAnchor.contains(to)) pressedAnchor = null;
+    }
+    if (!activeAnchor) return;
     if (pe.pointerType === 'touch') return; // a lifted finger "leaves"; a long-press tip stays until the next tap
     // Duck-typed (`.contains`) rather than `instanceof Node`: the unit-test
     // DOM shim (no jsdom in this repo) has no global `Node`.

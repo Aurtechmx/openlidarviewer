@@ -306,11 +306,13 @@ export class Stage {
       el('span', { className: 'olv-wordmark-text', text: 'OpenLiDARViewer' }),
     );
 
+    // The detail carries its own class so the narrowest phones can collapse
+    // the pill to "Private" and keep every header control at 44 px. Clipped,
+    // not removed: the badge keeps its full text for a screen reader.
     const privacy = el('div', {
       className: 'olv-badge',
-      text: 'Private · on your device',
       title: 'Scans you open stay on your device. Remote datasets are downloaded from their hosts.',
-    });
+    }, ['Private', el('span', { className: 'olv-badge-detail', text: ' · on your device' })]);
     // GitHub link demoted to a ghost link (item 9) — text + arrow, no pill
     // background — so the "Private · on your device" trust signal stays the
     // dominant header element on mobile.

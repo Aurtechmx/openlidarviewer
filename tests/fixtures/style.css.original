@@ -554,6 +554,9 @@
 .olv-fs-toggle svg { width: 17px; height: 17px; display: block; }
 /* Rendered only while a scan is loaded. */
 /* Coarse-pointer touch target: 44 px minimum (28 px on fine pointers). */
+/* `flex: none`: a crowded header row must never squeeze the target; the
+   trust badge yields instead (83-mobile-audit.css). */
+.olv-fs-toggle { flex: none; }
 @media (pointer: coarse) {
   .olv-fs-toggle { width: 44px; height: 44px; }
   .olv-fs-toggle svg { width: 20px; height: 20px; }
@@ -8120,6 +8123,20 @@ body:not(.olv-has-scan) .olv-touch-hint { display: none !important; }
   .olv-url-btn { width: 100%; }
   .olv-url-controls { flex-direction: column; gap: var(--space-md); }
   .olv-url-rules { width: min(100%, 320px); }
+}
+/* Below 390 px the header row (mark, trust badge and three 44 px icon
+   controls) needs about 316 px and has at most 315, so the badge drops its
+   detail and reads "Private". Clipped, not removed, so a screen reader still
+   hears the whole badge; the title keeps the full sentence. */
+@media (max-width: 389px) {
+  .olv-badge-detail {
+    position: absolute;
+    width: 1px; height: 1px;
+    margin: -1px; padding: 0; border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 /* Existing @media (max-width: 767px) block already enforces 44 pt touch
    targets on .olv-url-input + .olv-url-btn; the dimension fix above

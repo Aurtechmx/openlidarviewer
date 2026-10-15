@@ -137,9 +137,6 @@ for (const rel of shipped) {
   // one place those shapes may legitimately appear.
   if (rel.endsWith('tests/hygienePatterns.test.ts')) continue;
   if (rel.endsWith('scripts/lib/hygienePatterns.mjs')) continue;
-  // AI_ASSISTANCE.md legitimately discusses AI assistance at a policy level, so
-  // it is exempt from the narration scan (never from the secret scans).
-  const narrationExempt = rel.endsWith('AI_ASSISTANCE.md');
   // A frozen record may promise a release that has since happened: that is what
   // it recorded on the day, and the project does not rewrite published history.
   // CHANGELOG sections and superseded release documents are therefore exempt
@@ -173,13 +170,11 @@ for (const rel of shipped) {
         `  • ${rel}:${i + 1}: "${promise}" — a promise about an unbuilt release in a shipped file; state what the software does now, or say plainly that it is not supported.`,
       );
     }
-    if (!narrationExempt) {
-      const narr = findNarration(line);
-      if (narr) {
-        problems.push(
-          `  • ${rel}:${i + 1}: "${narr}" — conversational/process narration in a shipped file; describe the software, not the conversation.`,
-        );
-      }
+    const narr = findNarration(line);
+    if (narr) {
+      problems.push(
+        `  • ${rel}:${i + 1}: "${narr}" — conversational/process narration in a shipped file; describe the software, not the conversation.`,
+      );
     }
     if (ALLOW.some((re) => re.test(line))) return;
     for (const re of BANNED) {

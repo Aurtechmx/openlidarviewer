@@ -277,6 +277,14 @@ export const CUBE_SIZE = {
 /** WCAG 2.2 target size minimum (SC 2.5.8), CSS px: no shown face may project to a box narrower than this, and `hit` is never below it. */
 export const CUBE_MIN_TARGET = 24;
 
+/**
+ * Clearance, CSS px, between a face centre and the edge of a spot's box. The
+ * browser snaps a box with fractional `left` / `top` to its layout grid when it
+ * hit-tests (WebKit by up to ~0.75 px), so a centre exactly on the box edge can
+ * land inside it.
+ */
+export const CUBE_HIT_SNAP = 1;
+
 /** A face whose outward normal points toward the viewer by less than this is turned away or edge-on. */
 export const CUBE_FACE_MIN_DEPTH = 0.12;
 
@@ -315,11 +323,14 @@ export interface CubeHitLayout {
  *
  * The view is orthographic, so every visible face is a parallelogram and the
  * visible faces tile the cube's silhouette without overlapping. Edge and
- * corner targets are circles of diameter `hit` drawn ABOVE the faces. They
- * are admitted front-most first, and one is dropped when it would sit within
- * a diameter of an admitted spot or cover a visible face's centre. So at every
- * orientation each shown target's centre belongs to that target alone, and no
- * two circles overlap: a press on a face can never fire an edge or corner.
+ * corner targets are drawn ABOVE the faces as round dots, but their hit
+ * region is the whole `hit` x `hit` box: WebKit does not clip hit testing to
+ * the rounded corners, so the rules below treat each spot as its square box.
+ * Spots are admitted front-most first, and one is dropped when its box would
+ * overlap an admitted spot's box or come within `CUBE_HIT_SNAP` of a visible
+ * face's centre. So at every orientation each shown target's centre belongs
+ * to that target alone, and no two boxes overlap: a press on a face can never
+ * fire an edge or corner.
  * Every shown face is at least `CUBE_MIN_TARGET` wide and tall, and `hit`
  * should be too, so no shown target needs the spacing exemption.
  */
@@ -354,8 +365,10 @@ export function layoutCubeTargets(m: readonly number[], half: number, hit: numbe
   const shown = new Set<string>();
   for (const c of order) {
     if (c.z <= half * 0.15) continue; // far side
-    const clearOfFaces = faceCentres.every((f) => Math.hypot(f.x - c.x, f.y - c.y) >= hit / 2);
-    const clearOfSpots = admitted.every((a) => Math.hypot(a.x - c.x, a.y - c.y) >= hit);
+    // Chebyshev distance: how far apart two axis-aligned boxes' centres are.
+    const apart = (p: { x: number; y: number }): number => Math.max(Math.abs(p.x - c.x), Math.abs(p.y - c.y));
+    const clearOfFaces = faceCentres.every((f) => apart(f) >= hit / 2 + CUBE_HIT_SNAP);
+    const clearOfSpots = admitted.every((a) => apart(a) >= hit);
     if (!clearOfFaces || !clearOfSpots) continue;
     admitted.push({ x: c.x, y: c.y });
     shown.add(c.id);

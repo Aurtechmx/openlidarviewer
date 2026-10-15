@@ -51,6 +51,9 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- On 320 to 389 px phones the header full-screen toggle keeps its 44 px touch target and the quality button stays on screen; the privacy badge shortens to "Private" there, and screen readers still hear the full text.
+- On Safari, pressing a view cube face no longer sometimes turns the camera to a nearby edge or corner.
+- A hover tip hides when its control is pressed, instead of staying over the controls beneath it until the pointer moves.
 - Opening a large local LAS or LAZ over an open stream now offers Save / Replace / Cancel before any work starts, and applies the answer only after the new scan opens. If the user chooses Cancel, or the new file fails to open or is cancelled while it loads, the previous scan and its measurements, annotations and saved views stay as they were. Saved views are cleared only by Replace, work left over a replaced stream is never saved under the new file, and static layers keep their work and saved views.
 - Close scan and opening a COPC, EPT or 3D Tiles scan over open layers now ask before discarding class edits on any open layer, not only the active one, including a hidden or locked layer. The question names the edited layers and points to exporting each as LAS, since the session file does not store class edits. Removing one layer from the Layers list asks only when that layer has class edits.
 - With only a streamed scan open, CSV and GeoJSON exports no longer include measurements left from a replaced scan under the stream's name and origin; they leave them out and say why, as the session, KML and PDF report already did. Work placed while a streamed scan is opening is no longer discarded by the earlier Replace answer or given to the new scan; it is kept as work on the replaced scan and the user is told.

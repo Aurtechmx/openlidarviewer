@@ -310,6 +310,33 @@ describe('installTipLayer', () => {
     expect(layer.hasClass('olv-tip-layer--visible')).toBe(false);
   });
 
+  it('hides when the anchor is pressed with the mouse, and stays hidden until the pointer leaves it', () => {
+    // A visible tip takes pointer input, so one left up after a press covers
+    // whatever sits under it (the Walk mode button under the Plan view chip).
+    const anchor = anchorWithTip('x');
+    const child = new FakeElement('span');
+    child.parent = anchor;
+    env.fire('pointerover', { target: anchor, pointerType: 'mouse' });
+    const layer = env.layer();
+    env.fire('pointerdown', { target: anchor, pointerType: 'mouse' });
+    expect(layer.hasClass('olv-tip-layer--visible')).toBe(false);
+    // Still over the pressed control (onto its own child): no re-show.
+    env.fire('pointerover', { target: child, pointerType: 'mouse' });
+    expect(layer.hasClass('olv-tip-layer--visible')).toBe(false);
+    // Leaving and coming back shows it again.
+    env.fire('pointerout', { target: anchor, relatedTarget: null, pointerType: 'mouse' });
+    env.fire('pointerover', { target: anchor, pointerType: 'mouse' });
+    expect(layer.hasClass('olv-tip-layer--visible')).toBe(true);
+  });
+
+  it('a mouse press elsewhere leaves the shown tip alone', () => {
+    const anchor = anchorWithTip('x');
+    const other = new FakeElement('div');
+    env.fire('pointerover', { target: anchor, pointerType: 'mouse' });
+    env.fire('pointerdown', { target: other, pointerType: 'mouse' });
+    expect(env.layer().hasClass('olv-tip-layer--visible')).toBe(true);
+  });
+
   it('stays visible when pointerout moves to a child of the anchor', () => {
     const anchor = anchorWithTip('x');
     const child = new FakeElement('span');

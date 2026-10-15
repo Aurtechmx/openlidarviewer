@@ -95,7 +95,6 @@ The whole collection lives in [validation/](validation/), and these are the entr
 | [project/STABILITY_POLICY.md](project/STABILITY_POLICY.md) | What may change between versions, and what may not. |
 | [project/SUPPORT.md](project/SUPPORT.md) | Where to ask, and what to include when you do. |
 | [collaboration/RESEARCH_COLLABORATION.md](collaboration/RESEARCH_COLLABORATION.md) | Working with the project on research. |
-| [project/AI_ASSISTANCE.md](project/AI_ASSISTANCE.md) | How AI assistance is used here, and how it is disclosed. |
 | [AUTHORS.md](AUTHORS.md) | Who maintains the project. |
 | [research-notes.md](research-notes.md) | The question the project started from, and what has come of it. |
 

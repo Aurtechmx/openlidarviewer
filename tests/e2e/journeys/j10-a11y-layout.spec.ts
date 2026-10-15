@@ -138,4 +138,32 @@ test.describe('J10 touch (P3)', () => {
       expect(small, 'visible controls smaller than 44 x 44 px').toEqual([]);
     });
   });
+
+  for (const width of [320, 375]) {
+    test(`P3: at ${width} px every header control is 44 px and inside the viewport`, async ({ page }, info) => {
+      // The header at 320 and 375 px (iPhone SE generations) asked for more
+      // room than it had, and the full-screen toggle was squeezed to 21 px.
+      await page.setViewportSize({ width, height: 667 });
+      const j = startJourney(page, info, 'j10');
+      await j.step('open the LAZ', () => openWith(page, fixtureBytes('multichunk.laz'), 'multichunk.laz'));
+      await j.step('header controls', async () => {
+        const bad = await page.evaluate(() => {
+          const out: string[] = [];
+          for (const el of document.querySelectorAll<HTMLElement>('.olv-topbar button, .olv-topbar a[href], .olv-topbar .olv-badge')) {
+            const r = el.getBoundingClientRect();
+            if (r.width === 0 || r.height === 0) continue;
+            const name = `${el.tagName.toLowerCase()}.${String(el.className).slice(0, 40)}`;
+            if (r.left < 0 || r.right > innerWidth) out.push(`${name} outside the viewport (${Math.round(r.left)}..${Math.round(r.right)})`);
+            if (el.matches('button, a[href]') && (r.width < 44 || r.height < 44)) out.push(`${name} ${Math.round(r.width)}x${Math.round(r.height)}`);
+          }
+          return out;
+        });
+        expect(bad).toEqual([]);
+      });
+      await j.step('the trust badge still names privacy', async () => {
+        await expect(page.locator('.olv-topbar .olv-badge')).toBeVisible();
+        await expect(page.locator('.olv-topbar .olv-badge')).toContainText('Private');
+      });
+    });
+  }
 });
