@@ -4471,7 +4471,7 @@ export class Viewer {
         }
         return out;
       },
-      streaming: () => this._streaming, worldUpAxis: () => (this._worldUp.y === 1 ? 1 : 2),
+      streaming: () => this._streaming, worldUpAxis: () => (this._worldUp.y === 1 ? 1 : 2), elevationUnitLabel: () => this._elevationUnitLabel,
       setColorMode: (id, mode) => this.setColorMode(id, mode),
       setStreamingColorMode: (mode) => this.setStreamingColorMode(mode),
       setVisible: (id, visible) => this.setCloudVisible(id, visible),

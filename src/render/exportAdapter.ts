@@ -26,8 +26,9 @@ import type { PointCloud } from '../model/PointCloud';
 import type { StreamingSource } from './streaming/StreamingSource';
 import type { LayerSpatialTransform } from '../geo/ProjectSpatialFrame';
 import { placeAabb } from './layerPlacement';
-import type { ExportSceneAdapter, FigureViewContext, ExportColorModeSnapshot, FigureProvenanceSource, FigureClipSummary } from '../export/types';
-import type { CrsOriginInput } from '../science/crsOrigin';
+import type { ExportSceneAdapter, FigureViewContext, ExportColorModeSnapshot, FigureProvenanceSource, FigureClipSummary, ExportGroundFrame } from '../export/types';
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
+import { extentFrameVerdict, type ExtentFrameVerdict } from '../analysis/streamingExtentRows';
 import { linearUnitLabel } from '../io/crs';
 // The shared capture verdict for `captureLabel`. It surfaces capture-type plus
 // confidence into every exported image's scan-report card, from the same store
@@ -75,8 +76,8 @@ export interface ExportCloudCrs {
   readonly name: string | null;
   readonly unit: string | null;
   readonly epsg: number | null;
-  /** The resolved CRS itself, for the CRS-origin record; absent when no resolver is wired. */
-  readonly resolved?: CrsOriginInput | null;
+  /** The resolved CRS itself, for the CRS-origin record and the ground-metre verdict; absent when no resolver is wired. */
+  readonly resolved?: ResolvedCrs | null;
 }
 
 export interface ExportAdapterHost {
@@ -88,6 +89,12 @@ export interface ExportAdapterHost {
    * reproduces the previous behaviour exactly.
    */
   worldUpAxis?: () => 0 | 1 | 2;
+  /**
+   * The vertical unit label the elevation colorbar shows ('m' / 'ft'), or null
+   * when unknown. Omitted in the pure-adapter tests: the card then uses the
+   * horizontal unit.
+   */
+  elevationUnitLabel?: () => string | null;
   /**
    * The RESOLVED CRS for a static cloud (CRS authority, override applied), or
    * omitted when the host wires no resolver — then the adapter falls back to the
@@ -196,6 +203,19 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
   // it did not contribute (pass-7 #4/#6/#7).
   const visibleEntries = (): ExportAdapterCloud[] =>
     [...host.clouds().values()].filter((c) => c.visible);
+  // The scan reports' frame verdict per rendered source, from the RESOLVED CRS
+  // when a resolver is wired (override applied), else the declared one.
+  const sceneVerdicts = (): ExtentFrameVerdict[] => {
+    const streaming = host.streaming();
+    if (streaming) {
+      const rc = host.resolvedActiveCrs?.();
+      return [extentFrameVerdict(rc?.resolved !== undefined ? rc.resolved : streaming.cloud.crs())];
+    }
+    return visibleEntries().map(({ cloud }) => {
+      const rc = host.resolveCloudCrs?.(cloud);
+      return extentFrameVerdict(rc?.resolved !== undefined ? rc.resolved : cloud.metadata?.crs);
+    });
+  };
   return {
     setExportColorMode(mode: ColorMode): void {
       // Apply to every loaded cloud + the streaming subsystem so every
@@ -536,19 +556,35 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
     worldUpAxis(): 0 | 1 | 2 {
       return host.worldUpAxis?.() ?? 2;
     },
-    heightOrigin(): number {
+    heightOrigin(): number | null {
       // localBoundsAabb() is in the render frame. Streaming shifts by its
-      // render origin; static layers render in the project frame, whose origin
-      // is any visible layer's sourceOrigin minus its sourceToProject (a lone
-      // unplaced layer's own sourceOrigin, as the elevation legend reads).
+      // render origin; a static layer renders in the project frame, whose
+      // origin is its sourceOrigin minus its sourceToProject (a lone unplaced
+      // layer's own sourceOrigin, as the elevation legend reads). Every visible
+      // layer must resolve to the same origin: otherwise no one number turns
+      // the combined box into source heights, and null says so.
       const axis = this.worldUpAxis();
       const streaming = host.streaming();
       if (streaming) return streaming.cloud.renderOrigin[axis] ?? 0;
-      const first = visibleEntries()[0];
-      if (!first) return 0;
-      const shift = first.placement?.sourceToProject[axis] ?? 0;
-      return (first.cloud.sourceOrigin?.[axis] ?? 0) - shift;
+      let origin: number | null = null;
+      for (const { cloud, placement } of visibleEntries()) {
+        const o = (cloud.sourceOrigin?.[axis] ?? 0) - (placement?.sourceToProject[axis] ?? 0);
+        if (origin === null) origin = o;
+        else if (Math.abs(o - origin) > 1e-6 * Math.max(1, Math.abs(origin))) return null;
+      }
+      return origin ?? 0;
     },
+    groundFrame(): ExportGroundFrame | null {
+      // Every visible source must pass for the scene to pass.
+      const verdicts = sceneVerdicts();
+      if (verdicts.length === 0) return null;
+      return {
+        groundMetres: verdicts.every((v) => v.groundMetres),
+        groundRefusal: verdicts.find((v) => v.groundRefusal !== null)?.groundRefusal ?? null,
+        heightUnits: verdicts.every((v) => v.heightUnits),
+      };
+    },
+    ...(host.elevationUnitLabel ? { verticalUnitLabel: host.elevationUnitLabel } : {}),
     localBoundsAabb(): readonly [number, number, number, number, number, number] | null {
       // Streaming first — it has authoritative bounds from the COPC header.
       const streaming = host.streaming();

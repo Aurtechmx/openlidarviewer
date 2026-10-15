@@ -771,13 +771,14 @@ export const INTENSITY_PERCENTILE_TRIM = 2;
  * The default intensity window: p2–p98 over the shared percentile core
  * (the one gpsTime and elevation use), with flagged-invalid values left out.
  * Falls back to the true finite extremes when the clipped band collapses
- * (almost every value identical) but the data still spans a range.
+ * (almost every value identical) but the data still spans a range, and says
+ * so with `fullRange`.
  */
 export function intensityWindow(
   intensity: ArrayLike<number>,
   count: number,
   invalid?: ArrayLike<number>,
-): { min: number; max: number; sampleCount: number } {
+): { min: number; max: number; sampleCount: number; fullRange?: true } {
   let values: ArrayLike<number> = intensity;
   if (invalid) {
     let masked: Float32Array | null = null;
@@ -796,8 +797,9 @@ export function intensityWindow(
     lowerPercentile: INTENSITY_PERCENTILE_TRIM,
     upperPercentile: 100 - INTENSITY_PERCENTILE_TRIM,
   });
-  if (r.max <= r.min && r.trueMax > r.trueMin) {
-    return { min: r.trueMin, max: r.trueMax, sampleCount: r.sampleCount };
+  // `fullRange` marks the fallback so a legend does not label it p2–p98.
+  if (r.collapsed === true || (r.max <= r.min && r.trueMax > r.trueMin)) {
+    return { min: r.trueMin, max: r.trueMax, sampleCount: r.sampleCount, fullRange: true };
   }
   return { min: r.min, max: r.max, sampleCount: r.sampleCount };
 }
@@ -820,7 +822,7 @@ export function rampRangeForMode(
   mode: ColorMode,
   cloud: PointCloud,
   opts?: ColorForModeOptions,
-): { min: number; max: number; sampleCount?: number } | null {
+): { min: number; max: number; sampleCount?: number; fullRange?: boolean } | null {
   const n = cloud.pointCount;
   switch (mode) {
     case 'intensity': {

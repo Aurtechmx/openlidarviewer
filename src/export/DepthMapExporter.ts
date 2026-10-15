@@ -33,8 +33,7 @@ import type {
   ExportFactory,
   ExportResult,
 } from './types';
-import { runStudioExport, sourceHeightExtent } from './BaseExportMode';
-import { formatElevation, linearUnitOf } from './ScanReportRenderer';
+import { heightExtentRows, runStudioExport, sourceHeightExtent } from './BaseExportMode';
 
 export const depthMapExporter: ExportFactory = {
   mode: 'depth',
@@ -67,8 +66,6 @@ export const depthMapExporter: ExportFactory = {
       throw new Error('Depth Map: no cloud loaded — cannot describe the export.');
     }
     const invert = options.invert === true;
-    // Native CRS units — Near/Far Z must carry the real unit (ft for foot CRSs).
-    const unit = linearUnitOf(context.adapter.crsLabel()?.unit);
     return runStudioExport(
       context,
       'depth',
@@ -80,14 +77,13 @@ export const depthMapExporter: ExportFactory = {
       options,
       [
         { label: 'Encoding', value: invert ? 'far → white' : 'near → white' },
-        { label: `Near ${h.axis}`, value: formatElevation(h.min, unit) },
-        { label: `Far ${h.axis}`,  value: formatElevation(h.max, unit) },
+        // Near/Far in the colorbar's vertical unit.
+        ...heightExtentRows(h, `Near ${h.axis}`, `Far ${h.axis}`),
         { label: 'Mode',     value: 'elevation proxy' },
       ],
       {
         invert: invert ? 'on' : 'off',
-        nearZ: h.min,
-        farZ: h.max,
+        ...(h.min === null || h.max === null ? {} : { nearZ: h.min, farZ: h.max }),
         depthMode: 'elevation-proxy',
       },
     );

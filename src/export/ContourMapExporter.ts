@@ -38,8 +38,8 @@ import type {
   ExportResult,
   LegendPalette,
 } from './types';
-import { runStudioExport, sourceHeightExtent } from './BaseExportMode';
-import { formatElevation, formatLinear, linearUnitLabel, linearUnitOf } from './ScanReportRenderer';
+import { MIXED_VERTICAL_FRAME_NOTE, runStudioExport, sourceHeightExtent } from './BaseExportMode';
+import { formatElevation, formatLinear, linearUnitLabel } from './ScanReportRenderer';
 
 const DEFAULT_INTERVAL_M = 5;
 const DEFAULT_OVERLAY: ContourOptions['overlay'] = 'transparent';
@@ -85,9 +85,9 @@ export const contourMapExporter: ExportFactory = {
     // Sanity bound — too tight an interval at huge Z ranges produces
     // hundreds of thousands of line segments and bloats the PNG. Clamp
     // to keep render time bounded.
-    // Coordinates are native CRS units — a foot scan's interval and Z-range
-    // must read "ft", never a hardcoded "m". Unknown unit ⇒ metre default.
-    const unit = linearUnitOf(context.adapter.crsLabel()?.unit);
+    // The interval and Z range are vertical: they read in the colorbar's
+    // vertical unit ("ft" for US-survey-foot heights on a metre grid).
+    const unit = h.unit;
     const uLabel = linearUnitLabel(unit);
     const zRange = h.range;
     const expectedLines = Math.ceil(zRange / Math.max(interval, 0.01));
@@ -117,7 +117,9 @@ export const contourMapExporter: ExportFactory = {
         { label: 'Labels',    value: showLabels ? 'on' : 'off' },
         { label: 'Overlay',   value: overlay },
         { label: 'Palette',   value: palette },
-        { label: 'Z range',   value: `${formatElevation(h.min, unit)} – ${formatElevation(h.max, unit)}` },
+        h.min === null || h.max === null
+          ? { label: `${h.axis} range`, value: MIXED_VERTICAL_FRAME_NOTE }
+          : { label: 'Z range', value: `${formatElevation(h.min, unit)} – ${formatElevation(h.max, unit)}` },
       ],
       {
         interval,

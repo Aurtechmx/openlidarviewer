@@ -1,6 +1,8 @@
 import type { SpatialContext } from '../geo/SpatialContext';
 import { describeWithheldRead, withheldReadCounts } from '../science/withheldCounts';
-import { groundMetresPermitted, heightScale, heightUnitsPermitted, horizontalGroundRefusal } from '../geo/SpatialContext';
+import { groundMetresPermitted, heightScale, heightUnitsPermitted, horizontalGroundRefusal, spatialContextFrom } from '../geo/SpatialContext';
+import type { CrsInfo } from '../io/crs';
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
 
 /** One extent/density/spacing row the streaming Scan-report emits. */
 export interface ExtentRowSpec {
@@ -25,6 +27,30 @@ export interface StreamingExtentResult {
   /** Why a frame that names a metre unit is not ground metres; null otherwise. */
   readonly refusalReason: string | null;
   readonly rows: readonly ExtentRowSpec[];
+}
+
+/** The frame verdict the extent rows apply, for reports that build their own rows. */
+export interface ExtentFrameVerdict {
+  /** Horizontal spans may print as ground metres and densities as pts/m². */
+  readonly groundMetres: boolean;
+  /** Why a frame that names metres is not ground metres; null otherwise. */
+  readonly groundRefusal: string | null;
+  /** The up-axis span is a height in the frame's units. */
+  readonly heightUnits: boolean;
+}
+
+/**
+ * The verdict {@link streamingExtentRows} applies, for one source's CRS. The
+ * Studio export card reads it so its Width/Depth/Density and height rows follow
+ * the same gates as the scan reports.
+ */
+export function extentFrameVerdict(crs: CrsInfo | ResolvedCrs | null | undefined): ExtentFrameVerdict {
+  const ctx = spatialContextFrom(crs);
+  return {
+    groundMetres: groundMetresPermitted(ctx),
+    groundRefusal: horizontalGroundRefusal(ctx),
+    heightUnits: heightUnitsPermitted(ctx),
+  };
 }
 
 /**

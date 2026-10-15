@@ -75,6 +75,11 @@ export interface ActiveColorbarSource {
    */
   readonly sampleCount?: number;
   /**
+   * Intensity only: the percentile band collapsed and `range` is the full
+   * finite range of the loaded sample, so no percentile window is claimed.
+   */
+  readonly fullRange?: boolean;
+  /**
    * Elevation unit label from the CRS service ('m' / 'ft'), or null when the
    * CRS (or its vertical unit) is unknown. Honesty rule: null ⇒ the legend
    * shows bare numbers, never a guessed unit.
@@ -149,8 +154,9 @@ export function buildActiveColorbarSpec(source: ActiveColorbarSource): ActiveCol
     }
     case 'intensity': {
       const n = source.sampleCount;
-      const note =
-        windowNote && typeof n === 'number' && Number.isFinite(n) && n > 0
+      const note = source.fullRange
+        ? 'full range of the loaded sample'
+        : windowNote && typeof n === 'number' && Number.isFinite(n) && n > 0
           ? `${windowNote.replace(' window', '')} of a ${n.toLocaleString('en-US')}-point sample of the loaded cloud`
           : windowNote
             ? `${windowNote}, loaded sample range`

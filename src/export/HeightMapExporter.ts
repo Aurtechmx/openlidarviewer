@@ -22,8 +22,7 @@ import type {
   HeightMapOptions,
   HeightMapRamp,
 } from './types';
-import { runStudioExport, sourceHeightExtent } from './BaseExportMode';
-import { formatElevation, linearUnitOf } from './ScanReportRenderer';
+import { heightExtentRows, runStudioExport, sourceHeightExtent } from './BaseExportMode';
 
 /** Default resolution presets used by the Studio panel. */
 export const HEIGHT_MAP_RESOLUTIONS = [1024, 2048, 4096] as const;
@@ -44,15 +43,8 @@ export const HEIGHT_MAP_RAMPS: readonly HeightMapRamp[] = [
  * elevation colorbar beside it. The row label follows the axis too, so "Min Y"
  * on a Y-up mesh says which number the reader is looking at.
  */
-function heightExtent(context: ExportContext): {
-  readonly min: number;
-  readonly max: number;
-  readonly range: number;
-  readonly label: (side: 'Min' | 'Max') => string;
-} | null {
-  const h = sourceHeightExtent(context.adapter);
-  if (!h) return null;
-  return { min: h.min, max: h.max, range: h.range, label: (side) => `${side} ${h.axis}` };
+function heightExtent(context: ExportContext) {
+  return sourceHeightExtent(context.adapter);
 }
 
 export const heightMapExporter: ExportFactory = {
@@ -79,9 +71,6 @@ export const heightMapExporter: ExportFactory = {
     if (h === null) {
       throw new Error('HeightMap: no cloud loaded — cannot describe the export.');
     }
-    // Native CRS units — Min/Max Z must carry the real unit (ft for foot CRSs).
-    const unit = linearUnitOf(context.adapter.crsLabel()?.unit);
-
     // Honesty: `options.ramp` is accepted for API / preset compatibility but is
     // NOT applied to the raster. The export forces the runtime into its fixed
     // `elevation` colour mode and captures that via `adapter.snapshot()`; the
@@ -98,14 +87,9 @@ export const heightMapExporter: ExportFactory = {
       'Height Map',
       'elevation',
       options,
-      [
-        { label: h.label('Min'), value: formatElevation(h.min, unit) },
-        { label: h.label('Max'), value: formatElevation(h.max, unit) },
-      ],
-      {
-        minZ: h.min,
-        maxZ: h.max,
-      },
+      // Min/Max in the colorbar's vertical unit, labelled by the up axis.
+      heightExtentRows(h, `Min ${h.axis}`, `Max ${h.axis}`),
+      h.min === null || h.max === null ? {} : { minZ: h.min, maxZ: h.max },
     );
   },
 };
