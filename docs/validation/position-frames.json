@@ -127,6 +127,20 @@
       "why": "First out-of-core pass reads each decoded batch to compute the cloud's min/max extent; the octree grid it seeds is defined in the same source frame the loader produced."
     },
     {
+      "file": "src/io/heavy/previewSampler.ts",
+      "symbol": "sampleLas",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Preview of a file whose header bounds do not enclose its points: the sampled decoded batch is read to measure the preview extent, in the same source-local frame the batch was decoded into around the origin."
+    },
+    {
+      "file": "src/io/heavy/previewSampler.ts",
+      "symbol": "sampleLaz",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Preview of a file whose header bounds do not enclose its points: the sampled decoded batch is read to measure the preview extent, in the same source-local frame the batch was decoded into around the origin."
+    },
+    {
       "file": "src/io/heavy/slicedLasSource.ts",
       "symbol": "openSlicedLasSource",
       "frame": "source-local",

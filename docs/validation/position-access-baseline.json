@@ -1,5 +1,5 @@
 {
-  "total": 167,
+  "total": 169,
   "files": {
     "src/app/classifyActions.ts": 1,
     "src/app/epochFramePrep.ts": 2,
@@ -14,6 +14,7 @@
     "src/io/heavy/chunkedLazSource.ts": 1,
     "src/io/heavy/decodeLazChunked.ts": 2,
     "src/io/heavy/oocIndexer.ts": 2,
+    "src/io/heavy/previewSampler.ts": 2,
     "src/io/heavy/slicedLasSource.ts": 1,
     "src/io/heavy/tileChunkDecoder.ts": 1,
     "src/io/heavy/tileRecord.ts": 3,
