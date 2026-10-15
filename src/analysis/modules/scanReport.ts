@@ -263,7 +263,7 @@ export const scanReport: AnalysisModule = {
     const width = spanX * mpu;
     const depth = (zUp ? spanY : spanZ) * mpu;
     const height = (zUp ? spanZ : spanY) * vmpu;
-    if (basis.refusalReason) rows.push(rowWarn('Units', `Not ground metres — ${basis.refusalReason}`));
+    if (basis.refusalReason) rows.push(rowWarn('Units', `Not ground metres: ${basis.refusalReason}`));
     rows.push(
       withScope(rowInfo('Width', `${width.toFixed(1)}${basis.lengthUnit}`), scope),
       withScope(rowInfo('Depth', `${depth.toFixed(1)}${basis.lengthUnit}`), scope),

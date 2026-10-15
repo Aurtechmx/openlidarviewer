@@ -45,7 +45,7 @@ describe('Health Check — duplicate / outlier rows name their sample', () => {
     expect(row.status).toBe('info');
     expect(row.value).not.toContain('None');
     expect(row.value).toBe(
-      'Not checked — the display sample is voxel-reduced, so duplicates cannot be detected; run on a full-resolution load',
+      'Not checked: the display sample is voxel-reduced, so duplicates cannot be detected. Run on a full-resolution load.',
     );
   });
   test('(1) stride-only sample keeps pass but names the sample', () => {

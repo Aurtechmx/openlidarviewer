@@ -248,7 +248,7 @@ function checkDuplicatePoints(cloud: PointCloud): AnalysisRow {
   if (basis.kind === 'voxel') {
     return {
       label: 'Duplicate Points',
-      value: 'Not checked — the display sample is voxel-reduced, so duplicates cannot be detected; run on a full-resolution load',
+      value: 'Not checked: the display sample is voxel-reduced, so duplicates cannot be detected. Run on a full-resolution load.',
       status: 'info',
     };
   }
@@ -307,7 +307,7 @@ function checkDuplicatePoints(cloud: PointCloud): AnalysisRow {
   if (basis.kind === 'full') {
     return { label: 'Duplicate Points', value: 'None', status: 'pass' };
   }
-  return { label: 'Duplicate Points', value: `None — ${basis.note}`, status: 'pass' };
+  return { label: 'Duplicate Points', value: `None (${basis.note})`, status: 'pass' };
 }
 
 function checkStrayOutliers(cloud: PointCloud): AnalysisRow {

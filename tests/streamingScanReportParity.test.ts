@@ -90,7 +90,7 @@ function streamingRowsFor(cloud: ReportCloud, frame: SpatialContext): AnalysisRo
     if (!ext.unitConfirmed) {
       rows.push({
         label: 'Units',
-        value: 'unconfirmed — source CRS declares no linear unit; extents shown in source units',
+        value: 'Unit not confirmed: the source CRS declares no linear unit. Extents are in source units.',
         status: 'warn',
       });
     }

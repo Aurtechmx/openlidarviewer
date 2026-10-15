@@ -336,8 +336,8 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
     rows.push({
       label: 'Units',
       value: inputs.extentUnitRefusal
-        ? `Not ground metres — ${inputs.extentUnitRefusal} Extents in source units.`
-        : 'Unconfirmed — extents in source units',
+        ? `Not ground metres. ${inputs.extentUnitRefusal} Extents are in source units.`
+        : 'Unit not confirmed. Extents are in source units.',
     });
   }
   rows.push(
