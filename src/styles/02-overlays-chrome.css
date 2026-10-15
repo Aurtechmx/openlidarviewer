@@ -206,6 +206,9 @@
 .olv-fs-toggle svg { width: 17px; height: 17px; display: block; }
 /* Rendered only while a scan is loaded. */
 /* Coarse-pointer touch target: 44 px minimum (28 px on fine pointers). */
+/* `flex: none`: a crowded header row must never squeeze the target; the
+   trust badge yields instead (83-mobile-audit.css). */
+.olv-fs-toggle { flex: none; }
 @media (pointer: coarse) {
   .olv-fs-toggle { width: 44px; height: 44px; }
   .olv-fs-toggle svg { width: 20px; height: 20px; }
