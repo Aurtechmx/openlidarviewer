@@ -5237,7 +5237,7 @@ export class Viewer {
       const k = px(), d = cam.position.distanceTo(tgt);
       const c = this._controls, f = d > 1e-9 ? Math.min(Math.max(d * (1 - delta.dPinch), c.minDistance), c.maxDistance) / d : 1;
       cam.position.sub(tgt).multiplyScalar(f).add(tgt);
-      if (delta.at) shift((delta.at.x - (h * cam.aspect) / 2) * k * (1 - f), (h / 2 - delta.at.y - (this._orthographic ? (this._lens.value * h) / 2 : 0)) * k * (1 - f));
+      if (delta.at) shift((delta.at.x - (h * cam.aspect) / 2) * k * (1 - f), (h / 2 - delta.at.y - (this._lens.value * h) / 2) * k * (1 - f));
     }
 
     // ── twist / yaw around world up ────────────────────────────────────
