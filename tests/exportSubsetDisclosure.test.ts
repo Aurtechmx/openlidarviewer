@@ -12,7 +12,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import { PointCloud } from '../src/model/PointCloud';
-import { toXyz, toPly, toObj, toCsv } from '../src/io/exporters';
+import { toXyz, toPly, toObj, toCsv, pointExportFileName } from '../src/io/exporters';
+import { DISPLAY_SAMPLE_SUFFIX } from '../src/export/exportSummary';
 
 /** A cloud holding `held` points that declares `declared` came from the file. */
 function sampledCloud(held: number, declared?: number, loadStride?: number): PointCloud {
@@ -167,5 +168,28 @@ describe('a voxel-reduced display sample says its rows are centroids', () => {
     const subset = commentLines(toXyz(sampledCloud(250, 1000, 4)), '#').find((l) => l.startsWith('SUBSET'));
     expect(subset).toMatch(/one record kept per 4/);
     expect(subset).not.toMatch(/voxel|centroid/i);
+  });
+});
+
+describe('a sample point export says so in its filename', () => {
+  // CSV has no comment channel a parser tolerates, so the name carries the
+  // disclosure; every point format takes the same suffix the converter uses.
+  it.each(['csv', 'xyz', 'ply', 'obj'] as const)('%s: a subset is named -sample', (format) => {
+    expect(pointExportFileName('tile', sampledCloud(250, 1000, 4), format)).toBe(`tile${DISPLAY_SAMPLE_SUFFIX}.${format}`);
+  });
+
+  it('a streamed resident snapshot is a sample too', () => {
+    const c = new PointCloud({
+      positions: new Float32Array(9), origin: [0, 0, 0], sourceFormat: 'laz', name: 's',
+      declaredPointCount: 3, sourceDeclaredPointCount: 1000,
+    });
+    expect(pointExportFileName('s', c, 'csv')).toBe('s-sample.csv');
+  });
+
+  it.each([
+    ['holds every declared point', sampledCloud(1000, 1000)],
+    ['declares no count', sampledCloud(250)],
+  ])('a cloud that %s keeps the plain name', (_why, cloud) => {
+    expect(pointExportFileName('tile', cloud, 'csv')).toBe('tile.csv');
   });
 });

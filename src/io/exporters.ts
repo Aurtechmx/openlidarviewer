@@ -556,6 +556,20 @@ export function exportCloud(
   }
 }
 
+/** The suffix a sample export carries in its name (the converter's `DISPLAY_SAMPLE_SUFFIX`). */
+const SAMPLE_SUFFIX = '-sample';
+
+/**
+ * The download name for a point export: `<base>.<format>`, or
+ * `<base>-sample.<format>` when the cloud is a subset of its source (the same
+ * test that writes the SUBSET line). CSV has no comment line a parser
+ * tolerates, so for it the name is where the sample is disclosed; every point
+ * format takes the suffix so the convention is one rule.
+ */
+export function pointExportFileName(base: string, cloud: PointCloud, format: ExportFormat): string {
+  return `${base}${subsetLine(cloud) !== null ? SAMPLE_SUFFIX : ''}.${format}`;
+}
+
 /** {@link exportCloud} as UTF-8 bytes, built in chunks. */
 export function exportCloudBytes(
   cloud: PointCloud,
