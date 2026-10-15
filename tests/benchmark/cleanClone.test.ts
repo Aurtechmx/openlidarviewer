@@ -77,6 +77,14 @@ describe('the battery registry', () => {
     }
   });
 
+  it('skips archive portability with a reason when there is no repository and no archive', () => {
+    const s = SUITES.find((x: { id: string }) => x.id === 'archive-portability');
+    expect(typeof s.requires).toBe('function');
+    expect(s.requires({ OLV_ARCHIVE_DIR: '/extracted' })).toBeNull();
+    // This checkout has a .git, so the repository branch applies here.
+    expect(s.requires({})).toBeNull();
+  });
+
   it('runs every registered suite in the verify tier', () => {
     expect(suitesForTier('verify').map((s: { id: string }) => s.id)).toEqual(
       SUITES.map((s: { id: string }) => s.id),

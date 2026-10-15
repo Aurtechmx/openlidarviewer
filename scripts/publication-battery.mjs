@@ -27,7 +27,7 @@
  * `tests/benchmark/cleanClone.test.ts`.
  */
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
@@ -98,6 +98,13 @@ export const SUITES = Object.freeze([
     tiers: ['quick', 'verify'],
     required: true,
     claim: 'an extracted release archive resolves every link, import and documented script with no repository around it',
+    // A Git-free source extraction has no repository to build the archive
+    // from. The suite is then recorded as skipped with the way to run it,
+    // never as a pass.
+    requires: (env) =>
+      env.OLV_ARCHIVE_DIR || existsSync(join(REPO_ROOT, '.git'))
+        ? null
+        : 'repository-only check: no .git here to build the source archive from. Set OLV_ARCHIVE_DIR to a source archive extracted outside this directory, or run `npm run benchmark:archive-portability -- --archive <dir>`.',
   },
   {
     id: 'clean-clone',

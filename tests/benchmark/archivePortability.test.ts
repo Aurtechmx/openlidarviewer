@@ -14,7 +14,7 @@
  */
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error — plain .mjs tooling module, no type declarations
-import { bareSpecifier, markdownTargets, linkCandidates, importSpecifiers, scriptFileTargets, documentedScripts, manifestInventoryPaths, classifyMarkdownReferences, rootDocumentReferences, readsPackageFromNodeModules } from '../../scripts/verify-archive-portability.mjs';
+import { bareSpecifier, markdownTargets, linkCandidates, importSpecifiers, scriptFileTargets, documentedScripts, manifestInventoryPaths, classifyMarkdownReferences, rootDocumentReferences, readsPackageFromNodeModules, archiveSource } from '../../scripts/verify-archive-portability.mjs';
 
 describe('bareSpecifier', () => {
   it('names the package for bare and scoped specifiers', () => {
@@ -217,5 +217,23 @@ describe('readsPackageFromNodeModules', () => {
   it('needs both halves of a scoped name, not either one', () => {
     expect(readsPackageFromNodeModules(['node_modules/@fontsource-variable/roboto'], '@fontsource-variable/inter')).toBe(false);
     expect(readsPackageFromNodeModules(['node_modules/other-scope/inter'], '@fontsource-variable/inter')).toBe(false);
+  });
+});
+
+describe('archiveSource', () => {
+  it('uses --archive first, then OLV_ARCHIVE_DIR', () => {
+    expect(archiveSource({ explicit: '/x', envDir: '/y', repoPresent: false })).toEqual({ mode: 'explicit', dir: '/x' });
+    expect(archiveSource({ explicit: undefined, envDir: '/y', repoPresent: true })).toEqual({ mode: 'explicit', dir: '/y' });
+  });
+
+  it('builds from the repository when one is present', () => {
+    expect(archiveSource({ explicit: undefined, envDir: undefined, repoPresent: true }).mode).toBe('build');
+  });
+
+  it('skips a Git-free extraction run without an archive, naming how to run it', () => {
+    const r = archiveSource({ explicit: undefined, envDir: undefined, repoPresent: false });
+    expect(r.mode).toBe('skip');
+    expect(r.reason).toMatch(/^skipped: repository-only check/);
+    expect(r.reason).toMatch(/--archive <extracted-dir>/);
   });
 });
