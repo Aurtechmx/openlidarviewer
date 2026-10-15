@@ -88,17 +88,43 @@ const MAX_NODE_DEPTH = 256;
 /**
  * Most vertices one glTF open emits. Mesh reuse is legal, so a small file can
  * place one mesh under many nodes; the total is bounded here rather than by
- * the file size. 25 million is six times the display point budget and about
- * 300 MB as float32 positions, well past any capture this loader opens, while
- * keeping the staging arrays (positions, colours, normals) inside a tab.
+ * the file size. It matches the per-tile PNTS ceiling (`MAX_PNTS_TILE_POINTS`):
+ * twice the display point budget, and at most 216 MB across the float32
+ * positions, sRGB colours and float32 normals staged for it. The total is
+ * summed from the primitives' vertex counts before any of them is staged.
  */
-export const MAX_GLTF_VERTICES = 25_000_000;
+export const MAX_GLTF_VERTICES = 8_000_000;
 
 /** State shared across one scene walk. */
 interface NodeWalk {
   /** Nodes already walked; glTF forbids a node having two parents. */
   visited: Set<GltfNode>;
   maxVertices: number;
+  /** Every primitive the walk emits, in order, with its node's world matrix. */
+  placed: PlacedPrimitive[];
+  /** Sum of the placed primitives' vertex counts. */
+  vertexCount: number;
+}
+
+/** One mesh primitive under one node, as the walk found it. */
+interface PlacedPrimitive {
+  primitive: GltfPrimitive;
+  /** The primitive's POSITION values. */
+  src: ArrayLike<number>;
+  world: Matrix4;
+  vertexCount: number;
+}
+
+/** Output arrays sized from the walk's vertex total, and the cursor into them. */
+interface Staging {
+  /** Transformed vertex positions, xyz per vertex. */
+  xyz: Float32Array;
+  /** sRGB colour bytes, rgb per vertex. */
+  rgb: Uint8Array | null;
+  /** Unit normals, xyz per vertex. */
+  nrm: Float32Array | null;
+  /** Vertices written so far. */
+  at: number;
 }
 
 /** Refuse a node reached a second time in one walk. */
@@ -110,20 +136,12 @@ function notATree(): Error {
 }
 
 /**
- * Recursively collect transformed vertex positions and (optional) colours from
- * a node and its descendants.
+ * Recursively list the mesh primitives a node and its descendants place, with
+ * each node's world matrix, and refuse the walk once their summed vertex count
+ * passes the cap. Nothing is staged here, so the refusal comes before any
+ * output array is allocated.
  */
-function collectNode(
-  node: GltfNode,
-  parentWorld: Matrix4,
-  positions: number[],
-  colors: number[],
-  colorSeen: { any: boolean },
-  normals: number[],
-  normalSeen: { missing: boolean },
-  walk: NodeWalk,
-  depth = 0,
-): void {
+function collectNode(node: GltfNode, parentWorld: Matrix4, walk: NodeWalk, depth = 0): void {
   if (walk.visited.has(node)) throw notATree();
   walk.visited.add(node);
   if (depth > MAX_NODE_DEPTH) {
@@ -138,106 +156,117 @@ function collectNode(
     for (const primitive of node.mesh.primitives) {
       const posAttr = primitive.attributes.POSITION;
       if (!posAttr) continue;
-      const src = posAttr.value;
-      const vertexCount = Math.floor(src.length / 3);
-      if (positions.length / 3 + vertexCount > walk.maxVertices) {
+      const vertexCount = Math.floor(posAttr.value.length / 3);
+      if (walk.vertexCount + vertexCount > walk.maxVertices) {
         throw new LoadError(
           'memory-constraint',
           `glTF asset emits more than ${walk.maxVertices} vertices across its nodes; it is too large to open.`,
         );
       }
-
-      const colAttr = primitive.attributes.COLOR_0;
-      // postProcessGLTF reports the per-element width as `components`
-      // (VEC3 = 3, VEC4 = 4); reading a VEC4 colour at a stride of 3 walks
-      // the alpha channel into the next vertex's red.
-      const colSize = colAttr?.components ?? colAttr?.size ?? 3;
-      // glTF 2.0 defines COLOR_0 as LINEAR RGB for every component type:
-      // FLOAT in [0, 1], and UNSIGNED_BYTE / UNSIGNED_SHORT, which the spec
-      // requires to be `normalized`, as fractions of their type maximum. A
-      // non-conforming integer accessor without the flag is read the same
-      // way, since no other reading of an integer colour is meaningful.
-      // Cloud colour bytes are sRGB-encoded (colorEncode.ts decodes them
-      // with the EOTF on upload), so each component is normalised to [0, 1]
-      // here and then encoded with the sRGB OETF. Storing the linear value
-      // directly as a byte made midtones render too dark (linear 0.5 showed
-      // as sRGB 128 instead of 188). Alpha is not carried.
-      let colScale = 1;
-      if (colAttr) {
-        const cv = colAttr.value;
-        if (cv instanceof Uint8Array || cv instanceof Uint8ClampedArray) colScale = 1 / 255;
-        else if (cv instanceof Uint16Array) colScale = 1 / 65535;
-      }
-      const normAttr = primitive.attributes.NORMAL;
-      const primNormals = normAttr ? authoredNormals(normAttr.value, vertexCount, normAttr.components ?? normAttr.size ?? 3) : undefined;
-      if (primNormals) {
-        // Normals transform by the inverse-transpose of the node's upper 3x3,
-        // not the matrix itself: under a non-uniform scale the plain matrix
-        // tilts a normal off its surface. The cofactor matrix equals
-        // det * inverse-transpose, so it stays defined for a singular node; the
-        // sign of det keeps a mirrored node's normals facing out.
-        const [a, b, c, , d, e, f, , g, h, k] = world.elements;
-        const c00 = e * k - f * h, c01 = f * g - d * k, c02 = d * h - e * g;
-        const c10 = c * h - b * k, c11 = a * k - c * g, c12 = b * g - a * h;
-        const c20 = b * f - c * e, c21 = c * d - a * f, c22 = a * e - b * d;
-        const det = a * c00 + b * c01 + c * c02;
-        const sign = det < 0 ? -1 : 1;
-        for (let i = 0; i < vertexCount; i++) {
-          const x = primNormals[i * 3];
-          const y = primNormals[i * 3 + 1];
-          const z = primNormals[i * 3 + 2];
-          const nx = c00 * x + c10 * y + c20 * z;
-          const ny = c01 * x + c11 * y + c21 * z;
-          const nz = c02 * x + c12 * y + c22 * z;
-          const len = Math.hypot(nx, ny, nz);
-          // A singular node can flatten a normal to zero; it has no direction
-          // left, so the channel is dropped rather than carried as non-unit.
-          if (!(len > 1e-12)) {
-            normalSeen.missing = true;
-            normals.push(0, 0, 0);
-            continue;
-          }
-          normals.push((sign * nx) / len, (sign * ny) / len, (sign * nz) / len);
-        }
-      } else {
-        normalSeen.missing = true;
-      }
-
-      for (let i = 0; i < vertexCount; i++) {
-        // Apply the node's world transform so multi-node scans line up.
-        const x = src[i * 3 + 0];
-        const y = src[i * 3 + 1];
-        const z = src[i * 3 + 2];
-        const e = world.elements;
-        positions.push(
-          e[0] * x + e[4] * y + e[8] * z + e[12],
-          e[1] * x + e[5] * y + e[9] * z + e[13],
-          e[2] * x + e[6] * y + e[10] * z + e[14],
-        );
-
-        if (colAttr) {
-          colorSeen.any = true;
-          // linearToSrgb clamps to [0, 1], so a gamut excursion or a
-          // out-of-range value cannot overflow the Uint8 stride.
-          colors.push(
-            Math.round(255 * linearToSrgb(colAttr.value[i * colSize + 0] * colScale)),
-            Math.round(255 * linearToSrgb(colAttr.value[i * colSize + 1] * colScale)),
-            Math.round(255 * linearToSrgb(colAttr.value[i * colSize + 2] * colScale)),
-          );
-        } else {
-          // Pad with opaque white so the colour buffer stays aligned even
-          // when only some primitives carry COLOR_0.
-          colors.push(255, 255, 255);
-        }
-      }
+      walk.vertexCount += vertexCount;
+      walk.placed.push({ primitive, src: posAttr.value, world, vertexCount });
     }
   }
 
   if (node.children) {
-    for (const child of node.children) {
-      collectNode(child, world, positions, colors, colorSeen, normals, normalSeen, walk, depth + 1);
+    for (const child of node.children) collectNode(child, world, walk, depth + 1);
+  }
+}
+
+/**
+ * Write one placed primitive's transformed positions, colours and normals into
+ * the staging arrays at the cursor. Drops the normal channel (sets it to null)
+ * when the primitive has no usable normals, since a partial channel would
+ * misalign with the positions.
+ */
+function stagePrimitive({ primitive, src, world, vertexCount }: PlacedPrimitive, out: Staging): void {
+  const base = out.at;
+  const colAttr = primitive.attributes.COLOR_0;
+  // postProcessGLTF reports the per-element width as `components`
+  // (VEC3 = 3, VEC4 = 4); reading a VEC4 colour at a stride of 3 walks
+  // the alpha channel into the next vertex's red.
+  const colSize = colAttr?.components ?? colAttr?.size ?? 3;
+  // glTF 2.0 defines COLOR_0 as LINEAR RGB for every component type:
+  // FLOAT in [0, 1], and UNSIGNED_BYTE / UNSIGNED_SHORT, which the spec
+  // requires to be `normalized`, as fractions of their type maximum. A
+  // non-conforming integer accessor without the flag is read the same
+  // way, since no other reading of an integer colour is meaningful.
+  // Cloud colour bytes are sRGB-encoded (colorEncode.ts decodes them
+  // with the EOTF on upload), so each component is normalised to [0, 1]
+  // here and then encoded with the sRGB OETF. Storing the linear value
+  // directly as a byte made midtones render too dark (linear 0.5 showed
+  // as sRGB 128 instead of 188). Alpha is not carried.
+  let colScale = 1;
+  if (colAttr) {
+    const cv = colAttr.value;
+    if (cv instanceof Uint8Array || cv instanceof Uint8ClampedArray) colScale = 1 / 255;
+    else if (cv instanceof Uint16Array) colScale = 1 / 65535;
+  }
+  const normAttr = primitive.attributes.NORMAL;
+  const primNormals = normAttr ? authoredNormals(normAttr.value, vertexCount, normAttr.components ?? normAttr.size ?? 3) : undefined;
+  if (primNormals) {
+    // Normals transform by the inverse-transpose of the node's upper 3x3,
+    // not the matrix itself: under a non-uniform scale the plain matrix
+    // tilts a normal off its surface. The cofactor matrix equals
+    // det * inverse-transpose, so it stays defined for a singular node; the
+    // sign of det keeps a mirrored node's normals facing out.
+    const [a, b, c, , d, e, f, , g, h, k] = world.elements;
+    const c00 = e * k - f * h, c01 = f * g - d * k, c02 = d * h - e * g;
+    const c10 = c * h - b * k, c11 = a * k - c * g, c12 = b * g - a * h;
+    const c20 = b * f - c * e, c21 = c * d - a * f, c22 = a * e - b * d;
+    const det = a * c00 + b * c01 + c * c02;
+    const sign = det < 0 ? -1 : 1;
+    const normals = out.nrm;
+    for (let i = 0; normals && i < vertexCount; i++) {
+      const x = primNormals[i * 3];
+      const y = primNormals[i * 3 + 1];
+      const z = primNormals[i * 3 + 2];
+      const nx = c00 * x + c10 * y + c20 * z;
+      const ny = c01 * x + c11 * y + c21 * z;
+      const nz = c02 * x + c12 * y + c22 * z;
+      const len = Math.hypot(nx, ny, nz);
+      // A singular node can flatten a normal to zero; it has no direction
+      // left, so the channel is dropped rather than carried as non-unit.
+      if (!(len > 1e-12)) {
+        out.nrm = null;
+        break;
+      }
+      const o = (base + i) * 3;
+      normals[o] = (sign * nx) / len;
+      normals[o + 1] = (sign * ny) / len;
+      normals[o + 2] = (sign * nz) / len;
+    }
+  } else {
+    out.nrm = null;
+  }
+
+  const { xyz, rgb } = out;
+  for (let i = 0; i < vertexCount; i++) {
+    // Apply the node's world transform so multi-node scans line up.
+    const x = src[i * 3 + 0];
+    const y = src[i * 3 + 1];
+    const z = src[i * 3 + 2];
+    const e = world.elements;
+    const o = (base + i) * 3;
+    xyz[o] = e[0] * x + e[4] * y + e[8] * z + e[12];
+    xyz[o + 1] = e[1] * x + e[5] * y + e[9] * z + e[13];
+    xyz[o + 2] = e[2] * x + e[6] * y + e[10] * z + e[14];
+
+    if (rgb) {
+      if (colAttr) {
+        // linearToSrgb clamps to [0, 1], so a gamut excursion or a
+        // out-of-range value cannot overflow the Uint8 stride.
+        rgb[o] = Math.round(255 * linearToSrgb(colAttr.value[i * colSize + 0] * colScale));
+        rgb[o + 1] = Math.round(255 * linearToSrgb(colAttr.value[i * colSize + 1] * colScale));
+        rgb[o + 2] = Math.round(255 * linearToSrgb(colAttr.value[i * colSize + 2] * colScale));
+      } else {
+        // Pad with opaque white so the colour buffer stays aligned even
+        // when only some primitives carry COLOR_0.
+        rgb[o] = rgb[o + 1] = rgb[o + 2] = 255;
+      }
     }
   }
+  out.at += vertexCount;
 }
 
 /**
@@ -364,15 +393,13 @@ export async function loadGltf(
     (rawJson?.images?.length ?? gltf.images?.length ?? 0) > 0
     || (rawJson?.materials?.length ?? gltf.materials?.length ?? 0) > 0;
 
-  const positions: number[] = [];
-  const colors: number[] = [];
-  const colorSeen = { any: false };
-  // Normals are kept only when every primitive supplies a usable set; a
-  // partial channel would misalign with the positions.
-  const normals: number[] = [];
-  const normalSeen = { missing: false };
   const identity = new Matrix4();
-  const walk: NodeWalk = { visited: new Set(), maxVertices: options.maxVertices ?? MAX_GLTF_VERTICES };
+  const walk: NodeWalk = {
+    visited: new Set(),
+    maxVertices: options.maxVertices ?? MAX_GLTF_VERTICES,
+    placed: [],
+    vertexCount: 0,
+  };
 
   // Walk ONE scene — the default one.
   //
@@ -392,29 +419,41 @@ export async function loadGltf(
   const roots = defaultScene ? (defaultScene.nodes ?? []) : [];
   if (roots.length > 0) {
     for (const root of roots) {
-      collectNode(root, identity, positions, colors, colorSeen, normals, normalSeen, walk);
+      collectNode(root, identity, walk);
     }
   } else if (gltf.nodes) {
     // No scene: every node is walked as a root unless an earlier walk
     // already reached it as a descendant.
     for (const node of gltf.nodes) {
       if (walk.visited.has(node)) continue;
-      collectNode(node, identity, positions, colors, colorSeen, normals, normalSeen, walk);
+      collectNode(node, identity, walk);
     }
   }
 
-  if (positions.length === 0) {
+  if (walk.vertexCount === 0) {
     throw new Error('glTF asset contains no mesh POSITION data');
   }
+
+  // Stage into arrays sized from the walk's total. Colours are kept when any
+  // primitive carries COLOR_0; normals only when every primitive supplies a
+  // usable set, since a partial channel would misalign with the positions.
+  const total = walk.vertexCount;
+  const out: Staging = {
+    xyz: new Float32Array(total * 3),
+    rgb: walk.placed.some((p) => p.vertexCount > 0 && p.primitive.attributes.COLOR_0) ? new Uint8Array(total * 3) : null,
+    nrm: walk.placed.every((p) => p.primitive.attributes.NORMAL) ? new Float32Array(total * 3) : null,
+    at: 0,
+  };
+  for (const placed of walk.placed) stagePrimitive(placed, out);
 
   // glTF vertices are already local — the asset carries no georeferencing, so
   // the origin stays zero and there is no origin to protect. A node transform
   // can still produce an unplaceable vertex from placeable inputs (a degenerate
   // or non-finite matrix multiplies through), so the same policy every other
   // loader answers to applies here too.
-  const clean = sanitizeLocalCloud(new Float32Array(positions), {
-    colors: colorSeen.any ? new Uint8Array(colors) : undefined,
-    normals: normalSeen.missing ? undefined : new Float32Array(normals),
+  const clean = sanitizeLocalCloud(out.xyz, {
+    colors: out.rgb ?? undefined,
+    normals: out.nrm ?? undefined,
   });
 
   const declared =
