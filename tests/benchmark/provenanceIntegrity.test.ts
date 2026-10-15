@@ -28,8 +28,7 @@
  */
 
 import { describe, test, expect, beforeAll } from 'vitest';
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
@@ -76,6 +75,7 @@ import { verifyResultsDir } from '../../benchmarks/runner/verify';
 import type { ReproducibilityConfig } from '../../benchmarks/runner/config';
 import { nodeSha256Hex } from '../../benchmarks/framework/node';
 import { witnessSuite } from './reachability';
+import { useTempDirs } from '../helpers/tempDirs';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -647,13 +647,14 @@ const TINY_REPRO: ReproducibilityConfig = {
 
 describe('no self-blindness — the verifier over its own publication files', () => {
   let repro: ReturnType<typeof runReproducibilitySuite>;
+  const tempDir = useTempDirs();
 
   beforeAll(() => {
     repro = runReproducibilitySuite(TINY_REPRO);
   }, 300_000);
 
   function publish(): { root: string; latest: string } {
-    const root = mkdtempSync(join(tmpdir(), 'olv-prov-'));
+    const root = tempDir('olv-prov-');
     const outcome = writeResults({
       command: 'test',
       startedAtUtc: '2026-07-26T09:30:00.000Z',

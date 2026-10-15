@@ -8,9 +8,9 @@
  * The scripts are invoked as processes rather than imported, so these tests
  * cover the exit codes the release gate actually reads.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawnSync, execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -125,6 +125,9 @@ describe('defect chronology', () => {
   beforeAll(() => {
     scratch = mkdtempSync(resolve(tmpdir(), 'olv-chronology-'));
     baseline = JSON.parse(readFileSync(CHRONOLOGY, 'utf8')) as Chronology;
+  });
+  afterAll(() => {
+    if (scratch) rmSync(scratch, { recursive: true, force: true });
   });
 
   it('covers every registered defect', () => {

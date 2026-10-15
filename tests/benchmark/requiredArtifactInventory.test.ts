@@ -28,8 +28,7 @@
  * must not be able to satisfy or to break this file.
  */
 import { describe, test, expect, beforeAll } from 'vitest';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ReproducibilityConfig, ScalingConfig } from '../../benchmarks/runner/config';
 import { runReproducibilitySuite } from '../../benchmarks/runner/reproducibility';
@@ -37,6 +36,7 @@ import { runScalingSuite } from '../../benchmarks/runner/scaling';
 import { writeResults } from '../../benchmarks/runner/writer';
 import { requiredFiles, verifyResultsDir } from '../../benchmarks/runner/verify';
 import type { BenchmarkManifest } from '../../benchmarks/runner/writer';
+import { useTempDirs } from '../helpers/tempDirs';
 
 const TERRAIN = { cellSizeM: 2, crs: 'EPSG:32610', verticalDatum: 'EPSG:5703', holdoutSeed: 1 };
 
@@ -81,8 +81,10 @@ beforeAll(() => {
  * The root is created under the OS temp directory, never inside the repository,
  * so no file already on disk in a checkout can take part in the verdict.
  */
+const tempDir = useTempDirs();
+
 function publish(): { root: string; latest: string; archive: string } {
-  const root = mkdtempSync(join(tmpdir(), 'olv-required-'));
+  const root = tempDir('olv-required-');
   const outcome = writeResults({
     command: 'test',
     startedAtUtc: START,
