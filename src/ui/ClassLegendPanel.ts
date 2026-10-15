@@ -214,7 +214,7 @@ export class ClassLegendPanel {
     this._list = el('div', { className: 'olv-cl-list' });
 
     this._showAllBtn = el('button', {
-      className: 'olv-cl-showall',
+      className: 'olv-chip olv-cl-showall',
       text: 'Show all',
       title: 'Make every class visible again',
     });
