@@ -284,7 +284,7 @@ describe('placeCube — collision-aware top-right placement', () => {
   });
 });
 
-import { layoutCubeTargets, CUBE_FACE_MIN_DEPTH, CUBE_FACE_NORMALS, CUBE_SIZE } from '../src/render/viewCubeMath';
+import { layoutCubeTargets, CUBE_FACE_MIN_DEPTH, CUBE_FACE_NORMALS, CUBE_HIT_SNAP, CUBE_SIZE } from '../src/render/viewCubeMath';
 
 describe('layoutCubeTargets — the 26 targets partition the cube at every camera orientation', () => {
   // A camera orientation in the scene basis [east, north, up] from yaw, pitch and roll (degrees).
@@ -326,13 +326,17 @@ describe('layoutCubeTargets — the 26 targets partition the cube at every camer
             const shownFaces = VIEWS.filter((v) => faces[v].visible);
             const shownSpots = spots.filter((s) => s.visible);
             expect(shownFaces.length, `a face is toward the viewer at ${where}`).toBeGreaterThanOrEqual(1);
-            // Spots are drawn above faces: no shown spot's circle may cover any shown target's centre.
+            // Spots are drawn above faces. A spot's hit region is its square
+            // box (WebKit does not clip hit testing to the rounded corners),
+            // so no shown spot's box, grown by the pixel-snap margin, may
+            // cover any shown face's centre, and no two boxes may overlap.
+            const box = (ax: number, ay: number, bx: number, by: number): number => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
             for (const s of shownSpots) {
               for (const v of shownFaces) {
-                expect(Math.hypot(s.x - faces[v].cx, s.y - faces[v].cy), `${s.id} over the ${v} face centre at ${where}`).toBeGreaterThanOrEqual(hit / 2);
+                expect(box(s.x, s.y, faces[v].cx, faces[v].cy), `${s.id} over the ${v} face centre at ${where}`).toBeGreaterThanOrEqual(hit / 2 + CUBE_HIT_SNAP);
               }
               for (const o of shownSpots) {
-                if (o !== s) expect(Math.hypot(s.x - o.x, s.y - o.y), `${s.id} and ${o.id} overlap at ${where}`).toBeGreaterThanOrEqual(hit);
+                if (o !== s) expect(box(s.x, s.y, o.x, o.y), `${s.id} and ${o.id} overlap at ${where}`).toBeGreaterThanOrEqual(hit);
               }
             }
             // The visible faces tile the silhouette: a face's centre is inside no other shown face.
