@@ -176,6 +176,26 @@ test.describe('J11 tablet touch targets', () => {
     });
   }
 
+  for (const width of [768, 820]) {
+    test(`at ${width}x1024 portrait every header control is inside the viewport`, async ({ page }, info) => {
+      // At 768 px the 44 px header cluster ran 16 px past the right edge.
+      await page.setViewportSize({ width, height: 1024 });
+      await page.goto('/?test=1');
+      expect(await page.evaluate((q) => matchMedia(q).matches, LARGE_TOUCH_LAYOUT_QUERY), 'the large-touch layout query matches').toBe(true);
+      const j = startJourney(page, info, 'j11');
+      await j.step('open a scan', () => openWith(page, fixtureBytes('terrain-access-utm.las'), 'terrain-access-utm.las'));
+      await j.step('header controls', async () => {
+        const outside = await page.evaluate(() =>
+          [...document.querySelectorAll<HTMLElement>('.olv-topbar button, .olv-topbar a[href], .olv-topbar .olv-badge')]
+            .map((e) => ({ e, r: e.getBoundingClientRect() }))
+            .filter(({ r }) => r.width > 0 && (r.left < 0 || r.right > innerWidth))
+            .map(({ e, r }) => `${e.className} ${Math.round(r.left)}..${Math.round(r.right)}`));
+        expect(outside, `header controls outside a ${width} px viewport`).toEqual([]);
+        await expect(page.locator('.olv-github-credits')).toBeVisible();
+      });
+    });
+  }
+
   test('the view cube is measured and stays clear of the open left rail', async ({ page }, info) => {
     test.setTimeout(120_000);
     await page.setViewportSize({ width: 820, height: 1180 });

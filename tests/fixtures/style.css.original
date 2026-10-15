@@ -12839,6 +12839,14 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   .olv-clip-num { min-height: 44px; }
 }
 
+
+/* Portrait tablets narrower than 820 px (an iPad mini is 768 px): with every
+   header control at 44 px the right cluster is 589 px wide and the GitHub
+   link sat past the right edge. It goes here; the Credits page in the same
+   header links the source. 820 px and wider keep all three links. */
+@media (pointer: coarse) and (hover: none) and (min-width: 768px) and (max-width: 819px) and (min-height: 600px) {
+  .olv-github-source { display: none; }
+}
 /* Active-tool pill: the pointer tool that owns the clicks, its Finish and
    Cancel, and persistent display state as a quieter chip. Bottom-centre, just
    above the navigation widget (app/activeToolStatus.ts measures it). */
