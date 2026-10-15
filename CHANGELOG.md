@@ -267,6 +267,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - Technical report section headings are no longer underlined, and the closing caveat lines up with the findings list above it.
 - A PREVIEW volume in the Measurements panel now states its reason in brackets, as the PDF report row does. The panel and the PDF build the volume caveat and withheld wording from the same functions.
 - The site KML places a measurement whose owner records source-local coordinates at its file-frame position on a placed scan, as it already did for annotations. It was shifted by the placement offset.
+- Export site KML is no longer offered when the file would hold only the note that measurements or annotations were withheld. Only measurements and annotations the active scan owns, saved views and the scan outline count as content. The export re-checks this, and that one scan is open, when clicked.
 
 ### Changed
 

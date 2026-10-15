@@ -32,6 +32,11 @@ function note(title: string, local: [number, number, number], extra: Partial<Ann
 
 const ACTIVE_B: OwnershipView = { layers: [{ viewerId: 'b', stableId: 'stable-b', name: 'source-b.las' }], activeViewerId: 'b' };
 
+// A saved view gives each file placed content of its own, so a file whose
+// annotations are all withheld is still written and its withheld note can be
+// read; a file with nothing placed at all is not offered (kmlSiteContentGate).
+const ANCHOR_VIEW = { name: 'Anchor view', position: [0, 0, 10] };
+
 async function run(
   annotations: Annotation[],
   view: OwnershipView = ACTIVE_B,
@@ -43,7 +48,7 @@ async function run(
     hasViewer: () => true, geo: () => ({ origin: [10, 20, 0], crsName: 'WGS 84', name: 'source-b.las' }),
     crsCurrent: () => WGS84, upAxis: () => 'z', isGeographic: () => true, layerCount: () => 1,
     sceneOffset: () => sceneOffset,
-    annotations: () => annotations, measurements: () => [], viewpoints: () => [],
+    annotations: () => annotations, measurements: () => [], viewpoints: () => [ANCHOR_VIEW],
     worldUp: () => [0, 0, 1], unitToMetres: () => 1, scanExtent: () => null, scanHullPositions: () => null,
     measurementOwnership: () => view,
     baseName: (n: string) => n.replace(/\.[^.]+$/, ''), setError: (s: string) => errors.push(s),
